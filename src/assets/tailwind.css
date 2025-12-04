@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  body {
+    @apply bg-gradient-to-br from-slate-50 to-slate-100 dark:from-dark-900 dark:to-dark-800;
+    @apply text-slate-800 dark:text-slate-200;
+    @apply min-h-screen;
+  }
+}
+
+@layer components {
+  .btn { @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2; }
+  .btn-primary { @apply btn bg-primary-600 text-white hover:bg-primary-700 shadow-lg hover:shadow-xl focus:ring-primary-500 focus:ring-offset-white dark:focus:ring-offset-dark-800; }
+  .btn-secondary { @apply btn bg-slate-200 text-slate-700 hover:bg-slate-300 dark:bg-dark-600 dark:text-slate-200 dark:hover:bg-dark-500 focus:ring-slate-500 focus:ring-offset-white dark:focus:ring-offset-dark-800; }
+  .btn-danger { @apply btn bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 focus:ring-offset-white dark:focus:ring-offset-dark-800; }
+  .input { @apply w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-dark-600 bg-white dark:bg-dark-700 text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200; }
+  .card { @apply bg-white dark:bg-dark-700 rounded-xl shadow-lg hover:shadow-xl border border-slate-200 dark:border-dark-600 transition-all duration-300; }
+  .nav-link { @apply inline-flex items-center px-4 py-2 rounded-lg font-medium transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20; }
+  .nav-link.active { @apply bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400; }
+  .skeleton { @apply bg-slate-200 dark:bg-dark-600 animate-pulse rounded-lg; }
+}
+
+@layer utilities {
+  .glass {
+    @apply bg-white/80 dark:bg-dark-700/80 backdrop-blur-sm;
+    @apply border border-white/20 dark:border-dark-600/50;
+  }
+  
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-primary-600 to-primary-400;
+  }
+}

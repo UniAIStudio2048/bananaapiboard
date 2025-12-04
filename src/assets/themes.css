@@ -1,0 +1,287 @@
+/* 主题样式 - 现代简约风格 */
+
+/* 奶油绿主题 */
+.theme-creamGreen {
+  --bg-primary: #f0fdf4;
+  --bg-secondary: #dcfce7;
+  --bg-tertiary: #bbf7d0;
+  --text-primary: #14532d;
+  --text-secondary: #166534;
+  --text-tertiary: #16a34a;
+  --accent-primary: #22c55e;
+  --accent-secondary: #16a34a;
+  --border-color: #86efac;
+  --shadow-color: rgba(34, 197, 94, 0.1);
+}
+
+.theme-creamGreen .glass {
+  background: rgba(240, 253, 244, 0.8);
+  backdrop-filter: blur(10px);
+  border-color: rgba(134, 239, 172, 0.3);
+}
+
+.theme-creamGreen .card {
+  background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+  border-color: #86efac;
+}
+
+.theme-creamGreen .gradient-text {
+  background: linear-gradient(135deg, #16a34a 0%, #22c55e 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 热情橙主题 */
+.theme-warmOrange {
+  --bg-primary: #fff7ed;
+  --bg-secondary: #ffedd5;
+  --bg-tertiary: #fed7aa;
+  --text-primary: #7c2d12;
+  --text-secondary: #9a3412;
+  --text-tertiary: #ea580c;
+  --accent-primary: #f97316;
+  --accent-secondary: #ea580c;
+  --border-color: #fdba74;
+  --shadow-color: rgba(249, 115, 22, 0.1);
+}
+
+.theme-warmOrange .glass {
+  background: rgba(255, 247, 237, 0.8);
+  backdrop-filter: blur(10px);
+  border-color: rgba(253, 186, 116, 0.3);
+}
+
+.theme-warmOrange .card {
+  background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+  border-color: #fdba74;
+}
+
+.theme-warmOrange .gradient-text {
+  background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 浩瀚蓝主题 */
+.theme-oceanBlue {
+  --bg-primary: #0c4a6e;
+  --bg-secondary: #075985;
+  --bg-tertiary: #0369a1;
+  --text-primary: #e0f2fe;
+  --text-secondary: #bae6fd;
+  --text-tertiary: #7dd3fc;
+  --accent-primary: #38bdf8;
+  --accent-secondary: #0ea5e9;
+  --border-color: #0369a1;
+  --shadow-color: rgba(56, 189, 248, 0.2);
+}
+
+.theme-oceanBlue .glass {
+  background: rgba(12, 74, 110, 0.8);
+  backdrop-filter: blur(10px);
+  border-color: rgba(3, 105, 161, 0.5);
+}
+
+.theme-oceanBlue .card {
+  background: linear-gradient(135deg, #075985 0%, #0369a1 100%);
+  border-color: #0369a1;
+  color: #e0f2fe;
+}
+
+.theme-oceanBlue .gradient-text {
+  background: linear-gradient(135deg, #38bdf8 0%, #0ea5e9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* 奶油绿主题特定样式 */
+.theme-creamGreen body {
+  background-color: #f0fdf4;
+  color: #14532d;
+}
+
+.theme-creamGreen .nav-link {
+  color: #166534;
+}
+
+.theme-creamGreen .nav-link:hover {
+  background-color: #dcfce7;
+  color: #16a34a;
+}
+
+.theme-creamGreen .nav-link.active {
+  background-color: #bbf7d0;
+  color: #15803d;
+}
+
+/* 热情橙主题特定样式 */
+.theme-warmOrange body {
+  background-color: #fff7ed;
+  color: #7c2d12;
+}
+
+.theme-warmOrange .nav-link {
+  color: #9a3412;
+}
+
+.theme-warmOrange .nav-link:hover {
+  background-color: #ffedd5;
+  color: #ea580c;
+}
+
+.theme-warmOrange .nav-link.active {
+  background-color: #fed7aa;
+  color: #c2410c;
+}
+
+/* 浩瀚蓝主题特定样式 */
+.theme-oceanBlue body {
+  background-color: #0c4a6e;
+  color: #e0f2fe;
+}
+
+.theme-oceanBlue .nav-link {
+  color: #bae6fd;
+}
+
+.theme-oceanBlue .nav-link:hover {
+  background-color: #075985;
+  color: #7dd3fc;
+}
+
+.theme-oceanBlue .nav-link.active {
+  background-color: #0369a1;
+  color: #38bdf8;
+}
+
+/* 浩瀚蓝主题的文字颜色调整 */
+.theme-oceanBlue .text-slate-900 {
+  color: #e0f2fe !important;
+}
+
+.theme-oceanBlue .text-slate-700 {
+  color: #bae6fd !important;
+}
+
+.theme-oceanBlue .text-slate-600 {
+  color: #7dd3fc !important;
+}
+
+.theme-oceanBlue .text-slate-500 {
+  color: #38bdf8 !important;
+}
+
+/* 按钮和交互元素的主题适配 */
+.theme-creamGreen button:not(.bg-gradient-to-r):not(.bg-primary-600) {
+  background-color: #22c55e;
+  color: white;
+}
+
+.theme-creamGreen button:not(.bg-gradient-to-r):not(.bg-primary-600):hover {
+  background-color: #16a34a;
+}
+
+.theme-warmOrange button:not(.bg-gradient-to-r):not(.bg-primary-600) {
+  background-color: #f97316;
+  color: white;
+}
+
+.theme-warmOrange button:not(.bg-gradient-to-r):not(.bg-primary-600):hover {
+  background-color: #ea580c;
+}
+
+.theme-oceanBlue button:not(.bg-gradient-to-r):not(.bg-primary-600) {
+  background-color: #38bdf8;
+  color: #0c4a6e;
+}
+
+.theme-oceanBlue button:not(.bg-gradient-to-r):not(.bg-primary-600):hover {
+  background-color: #0ea5e9;
+}
+
+/* 输入框样式适配 */
+.theme-creamGreen input,
+.theme-creamGreen textarea,
+.theme-creamGreen select {
+  background-color: white;
+  border-color: #86efac;
+  color: #14532d;
+}
+
+.theme-creamGreen input:focus,
+.theme-creamGreen textarea:focus,
+.theme-creamGreen select:focus {
+  border-color: #22c55e;
+  ring-color: rgba(34, 197, 94, 0.3);
+}
+
+.theme-warmOrange input,
+.theme-warmOrange textarea,
+.theme-warmOrange select {
+  background-color: white;
+  border-color: #fdba74;
+  color: #7c2d12;
+}
+
+.theme-warmOrange input:focus,
+.theme-warmOrange textarea:focus,
+.theme-warmOrange select:focus {
+  border-color: #f97316;
+  ring-color: rgba(249, 115, 22, 0.3);
+}
+
+.theme-oceanBlue input,
+.theme-oceanBlue textarea,
+.theme-oceanBlue select {
+  background-color: #075985;
+  border-color: #0369a1;
+  color: #e0f2fe;
+}
+
+.theme-oceanBlue input:focus,
+.theme-oceanBlue textarea:focus,
+.theme-oceanBlue select:focus {
+  border-color: #38bdf8;
+  ring-color: rgba(56, 189, 248, 0.3);
+}
+
+/* 滚动条样式 */
+.theme-creamGreen::-webkit-scrollbar-thumb {
+  background-color: #22c55e;
+}
+
+.theme-warmOrange::-webkit-scrollbar-thumb {
+  background-color: #f97316;
+}
+
+.theme-oceanBlue::-webkit-scrollbar-thumb {
+  background-color: #38bdf8;
+}
+
+/* 阴影效果 */
+.theme-creamGreen .shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(34, 197, 94, 0.1), 0 10px 10px -5px rgba(34, 197, 94, 0.04);
+}
+
+.theme-warmOrange .shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(249, 115, 22, 0.1), 0 10px 10px -5px rgba(249, 115, 22, 0.04);
+}
+
+.theme-oceanBlue .shadow-xl {
+  box-shadow: 0 20px 25px -5px rgba(56, 189, 248, 0.2), 0 10px 10px -5px rgba(56, 189, 248, 0.1);
+}
+
+/* 平滑过渡 */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+
+
+
+
+
+

@@ -1,0 +1,38 @@
+{
+  "name": "ai-image-generator-frontend",
+  "version": "1.0.0",
+  "description": "AI图片/视频生成平台前端 - Vue 3 + Vite + TailwindCSS",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^3.4.29",
+    "vue-router": "^4.2.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/forms": "^0.5.10",
+    "@tailwindcss/typography": "^0.5.19",
+    "@vitejs/plugin-vue": "^5.0.5",
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.14",
+    "vite": "^5.3.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "vue3",
+    "vite",
+    "ai",
+    "image-generation",
+    "video-generation",
+    "tailwindcss"
+  ],
+  "license": "MIT"
+}
+

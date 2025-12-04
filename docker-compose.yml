@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE=${VITE_API_BASE}
+        - VITE_TENANT_ID=${VITE_TENANT_ID}
+        - VITE_TENANT_KEY=${VITE_TENANT_KEY}
+        - VITE_BRAND_NAME=${VITE_BRAND_NAME:-AI创作平台}
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+
