@@ -1083,14 +1083,22 @@ async function checkPaymentReturn() {
     
     if (now - paymentTime < fiveMinutes) {
       console.log('[User] 检测到支付返回，刷新用户信息...')
-      // 延迟2秒后刷新，给后端处理回调的时间
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      await load()
+      // 延迟5秒后刷新，给后端处理回调的时间
+      await new Promise(resolve => setTimeout(resolve, 5000))
+      
+      // 多次尝试刷新，确保获取到最新数据
+      for (let i = 0; i < 3; i++) {
+        await load()
+        if (i < 2) {
+          await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+      }
+      
       // 显示成功提示
       successMessage.value = '充值成功！余额已到账'
       setTimeout(() => {
         successMessage.value = ''
-      }, 3000)
+      }, 5000)
     }
   }
 }
@@ -1323,7 +1331,17 @@ onUnmounted(() => {
               <p class="text-xs text-slate-500 dark:text-slate-400">可用余额</p>
             </div>
           </div>
-          <p class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">账户余额</p>
+          <div class="flex items-center justify-between mb-3">
+            <p class="text-sm font-medium text-slate-700 dark:text-slate-300">账户余额</p>
+            <button
+              @click="load"
+              :disabled="loading"
+              class="text-xs px-2 py-1 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 rounded transition-colors disabled:opacity-50"
+              title="刷新余额"
+            >
+              🔄 {{ loading ? '刷新中...' : '刷新' }}
+            </button>
+          </div>
           <div class="space-y-2">
             <button
               @click="openTransferModal"
