@@ -260,12 +260,20 @@ async function generateVideo() {
   }
   
   loading.value = true
+  
+  // 保存当前输入，用于创建任务
+  const currentPrompt = prompt.value.trim()
+  const currentModel = model.value
+  const currentDuration = duration.value
+  const currentAspectRatio = aspectRatio.value
+  const currentPointsCost = currentPointsCost.value
+  
   try {
     const formData = new FormData()
-    formData.append('prompt', prompt.value.trim())
-    formData.append('model', model.value)
-    formData.append('aspect_ratio', aspectRatio.value)
-    formData.append('duration', duration.value)
+    formData.append('prompt', currentPrompt)
+    formData.append('model', currentModel)
+    formData.append('aspect_ratio', currentAspectRatio)
+    formData.append('duration', currentDuration)
     formData.append('hd', hd.value ? 'true' : 'false')
     formData.append('watermark', watermark.value ? 'true' : 'false')
     formData.append('private', isPrivate.value ? 'true' : 'false')
@@ -277,10 +285,10 @@ async function generateVideo() {
     }
     
     console.log('[video] 请求参数:', {
-      prompt: prompt.value.trim(),
-      model: model.value,
-      aspect_ratio: aspectRatio.value,
-      duration: duration.value,
+      prompt: currentPrompt,
+      model: currentModel,
+      aspect_ratio: currentAspectRatio,
+      duration: currentDuration,
       hd: hd.value,
       mode: mode.value,
       imageCount: imageFiles.value.length
@@ -291,6 +299,13 @@ async function generateVideo() {
     console.log('[video] 租户Headers:', getTenantHeaders())
     console.log('[video] 发起请求到 /api/videos/generate')
     
+    // 立即清空输入框和图片，恢复UI状态
+    clearImages()
+    prompt.value = ''
+    loading.value = false
+    successMessage.value = '任务已提交，正在处理...'
+    
+    // 异步发送请求，不阻塞UI
     const response = await fetch('/api/videos/generate', {
       method: 'POST',
       headers: {
@@ -321,23 +336,19 @@ async function generateVideo() {
     const task = {
       id: taskId,
       task_id: taskId,
-      prompt: prompt.value.trim(),
-      model: model.value,
-      duration: duration.value,
-      aspect_ratio: aspectRatio.value,
+      prompt: currentPrompt,
+      model: currentModel,
+      duration: currentDuration,
+      aspect_ratio: currentAspectRatio,
       status: data.status || 'pending',
       progress: data.progress || '排队中',
       created_at: Date.now(),
       video_url: data.video_url || null,
-      points_cost: currentPointsCost.value,
+      points_cost: currentPointsCost,
       fail_reason: null // 初始化失败原因
     }
     
     console.log('[video] 创建任务对象:', task)
-    
-    // 输出视频库只显示最新的一个视频（替换而非累积）
-    gallery.value = [task]
-    console.log('[video] 已添加到输出库')
     
     // 历史记录中添加（累积）
     history.value.unshift(task)
@@ -346,14 +357,20 @@ async function generateVideo() {
     startPolling(taskId)
     console.log('[video] 已启动轮询')
     
-    clearImages()
-    prompt.value = ''
-    successMessage.value = '任务已提交，等待生成...'
+    successMessage.value = '任务已提交，请在历史记录中查看进度'
     console.log('[video] 刷新用户信息')
     await refreshUser()
     console.log('[video] 视频生成流程完成')
+    
+    // 3秒后清除成功消息
+    setTimeout(() => {
+      if (successMessage.value === '任务已提交，请在历史记录中查看进度') {
+        successMessage.value = ''
+      }
+    }, 3000)
   } catch (e) {
     console.error('[video] generate error:', e)
+    loading.value = false
     if (e.status === 402 || e.message.includes('402')) {
       error.value = '积分不足，请先充值或使用兑换券'
     } else if (e.status === 401) {
@@ -370,8 +387,6 @@ async function generateVideo() {
     } else {
       error.value = e.message || '生成失败，请稍后再试'
     }
-  } finally {
-    loading.value = false
   }
 }
 
@@ -396,8 +411,8 @@ function mergeTaskUpdate(taskId, update) {
       list[index] = { ...list[index], ...update }
     }
   }
-  // 只更新 gallery 和 history 中已存在的任务
-  apply(gallery.value)
+  // 只更新 history 中已存在的任务
+  // gallery 不再使用，保持为空状态
   apply(history.value)
 }
 
@@ -499,21 +514,9 @@ async function loadHistory() {
     // 更新历史记录
     history.value = videos
     
-    // 将未完成的任务和最近完成的任务（24小时内）添加到 gallery 中显示
-    const RECENT_THRESHOLD = 24 * 60 * 60 * 1000 // 24小时
-    const recentVideos = videos.filter(item => {
-      const createdAt = item.created_at || 0
-      const elapsed = now - createdAt
-      // 显示进行中的任务 + 24小时内完成/失败的任务
-      return isProcessingStatus(item.status) || 
-             (elapsed <= RECENT_THRESHOLD && (isCompletedStatus(item.status) || isFailedStatus(item.status)))
-    }).slice(0, 6) // 最多显示6个
-    
-    // 如果 gallery 为空（页面刷新后），用最近的视频填充
-    if (gallery.value.length === 0 && recentVideos.length > 0) {
-      gallery.value = recentVideos
-      console.log('[VideoGeneration] 已从历史记录恢复输出库:', recentVideos.length, '个视频')
-    }
+    // gallery 保持为空，始终显示"开始创作"空状态
+    // 所有视频任务都在历史记录抽屉中查看
+    console.log('[VideoGeneration] 历史记录已加载，输出库保持空状态（显示"开始创作"）')
     
     // 对 history 中的未完成任务启动轮询（且未超时）
     const pendingTasks = videos.filter(item => {

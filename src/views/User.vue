@@ -777,12 +777,18 @@ async function submitTransfer() {
       'Content-Type': 'application/json'
     }
     
+    // 添加30秒超时控制
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 30000)
+    
     const res = await fetch('/api/user/balance-to-points', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ amount: amountInCents })
+      body: JSON.stringify({ amount: amountInCents }),
+      signal: controller.signal
     })
     
+    clearTimeout(timeoutId)
     const data = await res.json()
     
     if (!res.ok) {
@@ -830,7 +836,11 @@ async function submitTransfer() {
     }, 2000)
     
   } catch (e) {
-    transferError.value = e.message || '划转失败，请重试'
+    if (e.name === 'AbortError') {
+      transferError.value = '请求超时，请检查网络连接或稍后重试'
+    } else {
+      transferError.value = e.message || '划转失败，请重试'
+    }
   } finally {
     transferLoading.value = false
   }
