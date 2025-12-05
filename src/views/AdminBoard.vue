@@ -2669,7 +2669,7 @@ onUnmounted(() => {
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  SMTP服务器地址 *
+                  SMTP服务器地址 <span class="text-red-500">*</span>
                 </label>
                 <input
                   v-model="emailConfig.smtp_host"
@@ -2677,6 +2677,9 @@ onUnmounted(() => {
                   placeholder="例如: mailfun.net"
                   class="input"
                 />
+                <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ 新租户需自行填写SMTP服务器地址
+                </p>
               </div>
               
               <div>
@@ -2693,7 +2696,7 @@ onUnmounted(() => {
               
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  SMTP用户名 *
+                  SMTP用户名 <span class="text-red-500">*</span>
                 </label>
                 <input
                   v-model="emailConfig.smtp_user"
@@ -2701,11 +2704,14 @@ onUnmounted(() => {
                   placeholder="例如: fei-gua-yun/fei-gua-yun"
                   class="input"
                 />
+                <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ 新租户需自行填写SMTP用户名
+                </p>
               </div>
               
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  SMTP密码 *
+                  SMTP密码 <span class="text-red-500">*</span>
                 </label>
                 <input
                   v-model="emailConfig.smtp_password"
@@ -2713,11 +2719,14 @@ onUnmounted(() => {
                   placeholder="输入SMTP密码"
                   class="input"
                 />
+                <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ 新租户需自行填写SMTP密码
+                </p>
               </div>
               
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  发件人邮箱 *
+                  发件人邮箱 <span class="text-red-500">*</span>
                 </label>
                 <input
                   v-model="emailConfig.from_email"
@@ -2725,6 +2734,9 @@ onUnmounted(() => {
                   placeholder="例如: admin@mail.feiguayun.info"
                   class="input"
                 />
+                <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ 新租户需自行填写发件人邮箱
+                </p>
               </div>
               
               <div>
@@ -3864,7 +3876,7 @@ onUnmounted(() => {
               
               <div v-if="settings.voucher_external_link.enabled">
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  跳转链接
+                  跳转链接 <span class="text-red-500">*</span>
                 </label>
                 <input 
                   v-model="settings.voucher_external_link.url" 
@@ -3872,8 +3884,8 @@ onUnmounted(() => {
                   type="url" 
                   placeholder="例如：https://example.com 或 app://open"
                 />
-                <p class="mt-1 text-xs text-slate-500">
-                  支持 http/https 网址或 app:// 协议链接
+                <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ 新租户需自行填写跳转链接。支持 http/https 网址或 app:// 协议链接
                 </p>
               </div>
               
@@ -3967,10 +3979,12 @@ onUnmounted(() => {
               
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  API密钥
+                  API密钥 <span class="text-red-500">*</span>
                 </label>
                 <input v-model="settings.external_api_key" class="input" placeholder="sk-..." type="password" />
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">后端将使用此密钥调用外部生成接口</p>
+                <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ 新租户需自行填写API密钥。后端将使用此密钥调用外部生成接口
+                </p>
               </div>
               
               <div>
@@ -4010,10 +4024,12 @@ onUnmounted(() => {
               
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  API密钥
+                  API密钥 <span class="text-red-500">*</span>
                 </label>
                 <input v-model="settings.video_config.api_key" class="input" placeholder="sk-..." type="password" />
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">后端将使用此密钥调用视频生成接口</p>
+                <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                  ⚠️ 新租户需自行填写API密钥。后端将使用此密钥调用视频生成接口
+                </p>
               </div>
               
               <div>
