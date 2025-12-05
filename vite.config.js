@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 3000,
+      allowedHosts: true,  // 允许所有域名（Vite 5.x 正确写法）
       proxy: {
         '/api': {
           target: apiTarget,
@@ -60,4 +61,7 @@ export default defineConfig(({ mode }) => {
     }
   }
 })
+
+
+
 

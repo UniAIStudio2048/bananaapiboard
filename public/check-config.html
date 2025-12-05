@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>配置检查</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+    .box { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+    .success { background: #d4edda; color: #155724; }
+    .error { background: #f8d7da; color: #721c24; }
+    .warning { background: #fff3cd; color: #856404; }
+    button { padding: 10px 20px; margin: 5px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+    pre { white-space: pre-wrap; word-wrap: break-word; }
+  </style>
+</head>
+<body>
+  <h1>🔍 系统配置检查</h1>
+  
+  <div id="results"></div>
+  
+  <button onclick="checkAll()">🔄 重新检查</button>
+  <button onclick="initConfig()">⚙️ 初始化配置</button>
+  <button onclick="clearStorage()">🗑️ 清除缓存</button>
+
+  <script>
+    function checkAll() {
+      const results = document.getElementById('results');
+      results.innerHTML = '';
+      
+      // 1. 检查 system_config
+      const systemConfig = localStorage.getItem('system_config');
+      if (systemConfig) {
+        try {
+          const config = JSON.parse(systemConfig);
+          results.innerHTML += `
+            <div class="box success">
+              <h3>✅ system_config 已配置</h3>
+              <pre>${JSON.stringify(config, null, 2)}</pre>
+            </div>
+          `;
+        } catch (e) {
+          results.innerHTML += `
+            <div class="box error">
+              <h3>❌ system_config 格式错误</h3>
+              <p>${e.message}</p>
+            </div>
+          `;
+        }
+      } else {
+        results.innerHTML += `
+          <div class="box warning">
+            <h3>⚠️ system_config 未配置</h3>
+            <p>请点击「初始化配置」按钮</p>
+          </div>
+        `;
+      }
+      
+      // 2. 检查 token
+      const token = localStorage.getItem('token');
+      if (token) {
+        results.innerHTML += `
+          <div class="box success">
+            <h3>✅ Token 已存在</h3>
+            <p>${token.substring(0, 30)}...</p>
+          </div>
+        `;
+      } else {
+        results.innerHTML += `
+          <div class="box warning">
+            <h3>⚠️ 未登录</h3>
+            <p>请先登录</p>
+          </div>
+        `;
+      }
+      
+      // 3. 测试 API
+      testAPI();
+    }
+    
+    async function testAPI() {
+      const results = document.getElementById('results');
+      const token = localStorage.getItem('token');
+      
+      if (!token) {
+        results.innerHTML += `
+          <div class="box warning">
+            <h3>⚠️ 跳过 API 测试</h3>
+            <p>需要先登录</p>
+          </div>
+        `;
+        return;
+      }
+      
+      try {
+        const systemConfig = JSON.parse(localStorage.getItem('system_config') || '{}');
+        const headers = {
+          'Authorization': `Bearer ${token}`,
+          'X-Tenant-ID': systemConfig.tenantId || 'default-tenant-001',
+          'X-Tenant-Key': systemConfig.tenantKey || 'DEFAULT-LICENSE-KEY-001'
+        };
+        
+        results.innerHTML += `
+          <div class="box">
+            <h3>🔄 正在测试 API...</h3>
+            <p>请求头：</p>
+            <pre>${JSON.stringify(headers, null, 2)}</pre>
+          </div>
+        `;
+        
+        const response = await fetch('/api/admin/license-config', {
+          method: 'GET',
+          headers: headers
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+          results.innerHTML += `
+            <div class="box success">
+              <h3>✅ API 测试成功</h3>
+              <p>状态码: ${response.status}</p>
+              <pre>${JSON.stringify(data, null, 2)}</pre>
+            </div>
+          `;
+        } else {
+          results.innerHTML += `
+            <div class="box error">
+              <h3>❌ API 测试失败</h3>
+              <p>状态码: ${response.status}</p>
+              <pre>${JSON.stringify(data, null, 2)}</pre>
+            </div>
+          `;
+        }
+      } catch (e) {
+        results.innerHTML += `
+          <div class="box error">
+            <h3>❌ API 请求失败</h3>
+            <p>${e.message}</p>
+          </div>
+        `;
+      }
+    }
+    
+    function initConfig() {
+      const defaultConfig = {
+        tenantId: 'default-tenant-001',
+        tenantKey: 'DEFAULT-LICENSE-KEY-001',
+        brandName: '香蕉AI',
+        primaryColor: '#FBBF24'
+      };
+      localStorage.setItem('system_config', JSON.stringify(defaultConfig));
+      alert('✅ 配置已初始化！');
+      checkAll();
+    }
+    
+    function clearStorage() {
+      if (confirm('确定要清除所有缓存吗？（需要重新登录）')) {
+        localStorage.clear();
+        alert('✅ 缓存已清除！');
+        checkAll();
+      }
+    }
+    
+    // 页面加载时自动检查
+    window.onload = checkAll;
+  </script>
+</body>
+</html>
+

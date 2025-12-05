@@ -17,10 +17,22 @@
  * - VITE_FAVICON: Favicon URL
  */
 
+// 智能检测 API Base URL
+function getDefaultApiBase() {
+  // 确保在浏览器环境中运行
+  if (typeof window === 'undefined') {
+    return ''  // SSR 或初始化阶段，返回空字符串
+  }
+  
+  // 统一使用 Vite 代理，不直接访问后端
+  // 这样可以避免跨域问题和域名访问问题
+  return ''  // 空字符串表示使用 Vite 代理
+}
+
 // 默认配置
 const defaultConfig = {
   // API 配置
-  apiBase: '',  // 为空时使用相对路径，通过代理访问后端
+  apiBase: '',  // 初始为空，运行时动态检测
   
   // 租户标识
   tenantId: 'default-tenant-001',
@@ -46,7 +58,7 @@ const defaultConfig = {
 
 // 从环境变量读取配置
 const envConfig = {
-  apiBase: import.meta.env.VITE_API_BASE || defaultConfig.apiBase,
+  apiBase: import.meta.env.VITE_API_BASE || getDefaultApiBase(),
   tenantId: import.meta.env.VITE_TENANT_ID || defaultConfig.tenantId,
   tenantKey: import.meta.env.VITE_TENANT_KEY || defaultConfig.tenantKey,
   brand: {

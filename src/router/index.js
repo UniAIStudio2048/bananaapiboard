@@ -4,6 +4,7 @@ import Auth from '@/views/Auth.vue'
 import User from '@/views/User.vue'
 import Packages from '@/views/Packages.vue'
 import VideoGeneration from '@/views/VideoGeneration.vue'
+import AdminBoard from '@/views/AdminBoard.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -38,6 +39,12 @@ const router = createRouter({
       component: Packages,
       meta: { title: '套餐购买' }
     },
+    { 
+      path: '/adminboard', 
+      name: 'adminboard',
+      component: AdminBoard,
+      meta: { title: '管理后台' }
+    },
     // 404 重定向到首页
     {
       path: '/:pathMatch(.*)*',
@@ -53,4 +60,7 @@ router.beforeEach((to, from, next) => {
 })
 
 export default router
+
+
+
 
