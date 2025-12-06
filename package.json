@@ -1,6 +1,6 @@
 {
   "name": "ai-image-generator-frontend",
-  "version": "5.6.0",
+  "version": "5.6.3",
   "description": "AI图片/视频生成平台前端 - Vue 3 + Vite + TailwindCSS",
   "private": true,
   "type": "module",

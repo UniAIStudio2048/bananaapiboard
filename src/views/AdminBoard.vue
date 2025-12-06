@@ -207,7 +207,12 @@ const settings = ref({
     { milestone: 3, points: 30 },
     { milestone: 5, points: 60 },
     { milestone: 10, points: 100 }
-  ]
+  ],
+  icp_config: {
+    enabled: false,
+    icp_number: '',
+    icp_link: 'https://beian.miit.gov.cn/'
+  }
 })
 
 const listRangeStart = computed(() => total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1)
@@ -514,7 +519,8 @@ async function saveSettings() {
         points_cost: settings.value.points_cost,
         video_config: settings.value.video_config,
         voucher_external_link: settings.value.voucher_external_link,
-        invite_milestone_rewards: settings.value.invite_milestone_rewards
+        invite_milestone_rewards: settings.value.invite_milestone_rewards,
+        icp_config: settings.value.icp_config
       }) 
     })
     if (!r1 || !r1.ok) throw new Error('保存积分设置失败')
@@ -4095,6 +4101,58 @@ onUnmounted(() => {
               <div class="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
                 <p class="text-xs text-purple-700 dark:text-purple-300">
                   💡 提示：视频生成积分 = 基础积分（根据模型和时长） + HD附加积分（如果选择）
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 备案号设置 -->
+          <div class="pt-6 border-t border-slate-200 dark:border-dark-600">
+            <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
+              <span class="mr-2">📋</span>
+              网站备案设置
+            </h4>
+            <div class="space-y-4">
+              <div class="flex items-center">
+                <input 
+                  type="checkbox" 
+                  id="icp_enabled" 
+                  v-model="settings.icp_config.enabled"
+                  class="w-4 h-4 text-primary-600 bg-white dark:bg-dark-600 border-slate-300 dark:border-dark-500 rounded focus:ring-primary-500"
+                />
+                <label for="icp_enabled" class="ml-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+                  在页面底部显示备案号
+                </label>
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  ICP备案号
+                </label>
+                <input 
+                  v-model="settings.icp_config.icp_number" 
+                  class="input" 
+                  type="text" 
+                  placeholder="例如：京ICP备12345678号-1"
+                />
+              </div>
+              
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  备案查询链接
+                  <span class="text-xs text-slate-500 ml-1">(点击备案号跳转的地址)</span>
+                </label>
+                <input 
+                  v-model="settings.icp_config.icp_link" 
+                  class="input" 
+                  type="text" 
+                  placeholder="https://beian.miit.gov.cn/"
+                />
+              </div>
+              
+              <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                <p class="text-xs text-blue-700 dark:text-blue-300">
+                  💡 提示：启用后，备案号将显示在网站底部，点击可跳转到工信部备案查询网站
                 </p>
               </div>
             </div>

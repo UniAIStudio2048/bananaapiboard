@@ -16,6 +16,13 @@ const isWidescreenMode = ref(false)
 const inviteCode = ref('')
 const copySuccess = ref(false)
 
+// 备案号配置
+const icpConfig = ref({
+  enabled: false,
+  icp_number: '',
+  icp_link: 'https://beian.miit.gov.cn/'
+})
+
 // 切换主题
 function toggleTheme() {
   const newTheme = toggleThemeUtil()
@@ -33,9 +40,26 @@ async function refreshUserInfo() {
   })
 }
 
+// 加载备案号配置
+async function loadSiteConfig() {
+  try {
+    const r = await fetch('/api/site-config', {
+      headers: getTenantHeaders()
+    })
+    if (r.ok) {
+      const data = await r.json()
+      if (data.icp_config) {
+        icpConfig.value = data.icp_config
+      }
+    }
+  } catch (e) {
+    console.error('加载网站配置失败', e)
+  }
+}
+
 onMounted(async () => { 
   me.value = await getMe()
-  await loadInviteCode()
+  await Promise.all([loadInviteCode(), loadSiteConfig()])
   
   // 点击外部关闭下拉菜单
   document.addEventListener('click', closeMenus)
@@ -158,7 +182,7 @@ async function copyInviteLink() {
 </script>
 
 <template>
-  <div class="min-h-screen">
+  <div class="min-h-screen flex flex-col">
     <!-- 导航栏 -->
     <nav class="glass sticky top-0 z-50 border-b border-slate-200/50 dark:border-dark-600/50">
       <div class="mx-auto" 
@@ -522,9 +546,21 @@ async function copyInviteLink() {
     </nav>
 
     <!-- 主内容区 -->
-    <main>
+    <main class="flex-1">
       <RouterView />
     </main>
+    
+    <!-- 底部备案号 - 固定在页面最底部 -->
+    <footer v-if="icpConfig.enabled && icpConfig.icp_number" class="py-3 text-center border-t border-slate-200/50 dark:border-dark-600/50 bg-slate-50/80 dark:bg-dark-800/80 mt-auto">
+      <a 
+        :href="icpConfig.icp_link || 'https://beian.miit.gov.cn/'" 
+        target="_blank" 
+        rel="noopener noreferrer"
+        class="text-xs text-slate-400 dark:text-slate-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+      >
+        {{ icpConfig.icp_number }}
+      </a>
+    </footer>
   </div>
 </template>
 
