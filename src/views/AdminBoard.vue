@@ -100,7 +100,7 @@ const emailConfig = ref({
   smtp_user: '',
   smtp_password: '',
   from_email: '',
-  from_name: '香蕉AI',
+  from_name: '',
   require_email_verification: false,
   email_whitelist: []
 })
@@ -2674,7 +2674,7 @@ onUnmounted(() => {
                 <input
                   v-model="emailConfig.smtp_host"
                   type="text"
-                  placeholder="例如: mailfun.net"
+                  placeholder="例如: smtp.gmail.com"
                   class="input"
                 />
                 <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
@@ -2701,7 +2701,7 @@ onUnmounted(() => {
                 <input
                   v-model="emailConfig.smtp_user"
                   type="text"
-                  placeholder="例如: fei-gua-yun/fei-gua-yun"
+                  placeholder="例如: your-email@example.com"
                   class="input"
                 />
                 <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
@@ -2731,7 +2731,7 @@ onUnmounted(() => {
                 <input
                   v-model="emailConfig.from_email"
                   type="email"
-                  placeholder="例如: admin@mail.feiguayun.info"
+                  placeholder="例如: noreply@yourdomain.com"
                   class="input"
                 />
                 <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
@@ -2746,7 +2746,7 @@ onUnmounted(() => {
                 <input
                   v-model="emailConfig.from_name"
                   type="text"
-                  placeholder="例如: 香蕉AI"
+                  placeholder="例如: 您的应用名称"
                   class="input"
                 />
               </div>
