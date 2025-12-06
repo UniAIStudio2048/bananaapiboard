@@ -38,6 +38,36 @@ const videosTotal = ref(0)
 const videosHasMore = ref(true)
 const videosLoading = ref(false)
 
+// 图片筛选相关
+const imageFilter = ref({
+  rating: 0, // 0=全部, 1-5=具体星级
+  keyword: '', // 关键词搜索（提示词/备注）
+  dateFrom: '',
+  dateTo: '',
+  sortBy: 'date',
+  sortOrder: 'desc'
+})
+const imageSelectMode = ref(false)
+const selectedImages = ref(new Set())
+const imageDownloading = ref(false)
+
+// 视频筛选相关
+const videoFilter = ref({
+  rating: 0, // 0=全部, 1-5=具体星级
+  keyword: '', // 关键词搜索（提示词/备注）
+  dateFrom: '',
+  dateTo: '',
+  sortBy: 'date',
+  sortOrder: 'desc'
+})
+const videoSelectMode = ref(false)
+const selectedVideos = ref(new Set())
+const videoDownloading = ref(false)
+
+// 备注编辑
+const editingNote = ref(null) // { type: 'image'|'video', id: string, note: string }
+const noteInput = ref('')
+
 // 签到相关
 const checkinStatus = ref({
   hasCheckedInToday: false,
@@ -165,52 +195,413 @@ async function load() {
   }
 }
 
-// 加载更多图片
-async function loadMoreImages() {
-  if (imagesLoading.value || !imagesHasMore.value) return
+// 构建图片筛选URL参数
+function buildImageFilterParams() {
+  const params = new URLSearchParams()
+  params.set('limit', imagesLimit.value.toString())
+  
+  if (imageFilter.value.rating > 0) params.set('rating', imageFilter.value.rating.toString())
+  if (imageFilter.value.keyword && imageFilter.value.keyword.trim()) params.set('keyword', imageFilter.value.keyword.trim())
+  if (imageFilter.value.dateFrom) params.set('dateFrom', new Date(imageFilter.value.dateFrom).getTime().toString())
+  if (imageFilter.value.dateTo) params.set('dateTo', new Date(imageFilter.value.dateTo + 'T23:59:59').getTime().toString())
+  if (imageFilter.value.sortBy) params.set('sortBy', imageFilter.value.sortBy)
+  if (imageFilter.value.sortOrder) params.set('sortOrder', imageFilter.value.sortOrder)
+  
+  return params
+}
+
+// 构建视频筛选URL参数
+function buildVideoFilterParams() {
+  const params = new URLSearchParams()
+  params.set('limit', videosLimit.value.toString())
+  
+  if (videoFilter.value.rating > 0) params.set('rating', videoFilter.value.rating.toString())
+  if (videoFilter.value.keyword && videoFilter.value.keyword.trim()) params.set('keyword', videoFilter.value.keyword.trim())
+  if (videoFilter.value.dateFrom) params.set('dateFrom', new Date(videoFilter.value.dateFrom).getTime().toString())
+  if (videoFilter.value.dateTo) params.set('dateTo', new Date(videoFilter.value.dateTo + 'T23:59:59').getTime().toString())
+  if (videoFilter.value.sortBy) params.set('sortBy', videoFilter.value.sortBy)
+  if (videoFilter.value.sortOrder) params.set('sortOrder', videoFilter.value.sortOrder)
+  
+  return params
+}
+
+// 加载图片（带筛选）
+async function loadImages(reset = false) {
+  if (imagesLoading.value) return
   
   imagesLoading.value = true
   try {
     const headers = { ...getTenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-    const offset = recentImages.value.length
+    const params = buildImageFilterParams()
+    const offset = reset ? 0 : recentImages.value.length
+    params.set('offset', offset.toString())
     
-    const res = await fetch(`/api/user/recent-images?limit=${imagesLimit.value}&offset=${offset}`, { headers })
+    const res = await fetch(`/api/user/recent-images?${params.toString()}`, { headers })
     
     if (res.ok) {
       const data = await res.json()
-      recentImages.value = [...recentImages.value, ...data.images]
+      if (reset) {
+        recentImages.value = data.images
+        selectedImages.value = new Set()
+      } else {
+        recentImages.value = [...recentImages.value, ...data.images]
+      }
       imagesTotal.value = data.total || 0
       imagesHasMore.value = data.hasMore || false
     }
   } catch (e) {
-    console.error('加载更多图片失败:', e)
+    console.error('加载图片失败:', e)
   } finally {
     imagesLoading.value = false
   }
 }
 
-// 加载更多视频
-async function loadMoreVideos() {
-  if (videosLoading.value || !videosHasMore.value) return
+// 加载更多图片
+async function loadMoreImages() {
+  if (!imagesHasMore.value) return
+  await loadImages(false)
+}
+
+// 加载视频（带筛选）
+async function loadVideos(reset = false) {
+  if (videosLoading.value) return
   
   videosLoading.value = true
   try {
     const headers = { ...getTenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-    const offset = recentVideos.value.length
+    const params = buildVideoFilterParams()
+    const offset = reset ? 0 : recentVideos.value.length
+    params.set('offset', offset.toString())
     
-    const res = await fetch(`/api/user/recent-videos?limit=${videosLimit.value}&offset=${offset}`, { headers })
+    const res = await fetch(`/api/user/recent-videos?${params.toString()}`, { headers })
     
     if (res.ok) {
       const data = await res.json()
-      recentVideos.value = [...recentVideos.value, ...data.videos]
+      if (reset) {
+        recentVideos.value = data.videos
+        selectedVideos.value = new Set()
+      } else {
+        recentVideos.value = [...recentVideos.value, ...data.videos]
+      }
       videosTotal.value = data.total || 0
       videosHasMore.value = data.hasMore || false
     }
   } catch (e) {
-    console.error('加载更多视频失败:', e)
+    console.error('加载视频失败:', e)
   } finally {
     videosLoading.value = false
   }
+}
+
+// 加载更多视频
+async function loadMoreVideos() {
+  if (!videosHasMore.value) return
+  await loadVideos(false)
+}
+
+// 应用图片筛选
+async function applyImageFilter() {
+  await loadImages(true)
+}
+
+// 应用视频筛选
+async function applyVideoFilter() {
+  await loadVideos(true)
+}
+
+// 重置图片筛选
+async function resetImageFilter() {
+  imageFilter.value = {
+    rating: 0,
+    keyword: '',
+    dateFrom: '',
+    dateTo: '',
+    sortBy: 'date',
+    sortOrder: 'desc'
+  }
+  await loadImages(true)
+}
+
+// 重置视频筛选
+async function resetVideoFilter() {
+  videoFilter.value = {
+    rating: 0,
+    keyword: '',
+    dateFrom: '',
+    dateTo: '',
+    sortBy: 'date',
+    sortOrder: 'desc'
+  }
+  await loadVideos(true)
+}
+
+// 切换图片选择模式
+function toggleImageSelectMode() {
+  imageSelectMode.value = !imageSelectMode.value
+  if (!imageSelectMode.value) {
+    selectedImages.value = new Set()
+  }
+}
+
+// 切换视频选择模式
+function toggleVideoSelectMode() {
+  videoSelectMode.value = !videoSelectMode.value
+  if (!videoSelectMode.value) {
+    selectedVideos.value = new Set()
+  }
+}
+
+// 选择/取消选择图片
+function toggleImageSelection(imageId) {
+  const newSet = new Set(selectedImages.value)
+  if (newSet.has(imageId)) {
+    newSet.delete(imageId)
+  } else {
+    newSet.add(imageId)
+  }
+  selectedImages.value = newSet
+}
+
+// 选择/取消选择视频
+function toggleVideoSelection(videoId) {
+  const newSet = new Set(selectedVideos.value)
+  if (newSet.has(videoId)) {
+    newSet.delete(videoId)
+  } else {
+    newSet.add(videoId)
+  }
+  selectedVideos.value = newSet
+}
+
+// 全选/取消全选图片
+function toggleAllImages() {
+  if (selectedImages.value.size === recentImages.value.length) {
+    selectedImages.value = new Set()
+  } else {
+    selectedImages.value = new Set(recentImages.value.map(img => img.id))
+  }
+}
+
+// 全选/取消全选视频
+function toggleAllVideos() {
+  const completedVideos = recentVideos.value.filter(v => v.video_url)
+  if (selectedVideos.value.size === completedVideos.length) {
+    selectedVideos.value = new Set()
+  } else {
+    selectedVideos.value = new Set(completedVideos.map(v => v.id))
+  }
+}
+
+// 生成安全的文件名
+function sanitizeFilename(name) {
+  return name.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, '_').substring(0, 100)
+}
+
+// 下载单个文件
+async function downloadFile(url, filename) {
+  try {
+    const response = await fetch(url)
+    const blob = await response.blob()
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(link.href)
+  } catch (e) {
+    console.error('下载失败:', e)
+  }
+}
+
+// 批量下载图片
+async function batchDownloadImages() {
+  if (selectedImages.value.size === 0) {
+    showToast('请先选择要下载的图片', 'error')
+    return
+  }
+  
+  imageDownloading.value = true
+  const selectedList = recentImages.value.filter(img => selectedImages.value.has(img.id))
+  
+  try {
+    for (let i = 0; i < selectedList.length; i++) {
+      const img = selectedList[i]
+      // 如果有备注，使用备注作为文件名；否则使用默认名称
+      let filename
+      if (img.note && img.note.trim()) {
+        filename = `${sanitizeFilename(img.note)}.png`
+      } else {
+        filename = `image-${img.id.substring(0, 8)}.png`
+      }
+      
+      await downloadFile(img.url, filename)
+      
+      // 短暂延迟，避免同时下载太多文件
+      if (i < selectedList.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300))
+      }
+    }
+    
+    showToast(`成功下载 ${selectedList.length} 张图片`, 'success')
+    imageSelectMode.value = false
+    selectedImages.value = new Set()
+  } catch (e) {
+    showToast('批量下载失败', 'error')
+  } finally {
+    imageDownloading.value = false
+  }
+}
+
+// 批量下载视频
+async function batchDownloadVideos() {
+  if (selectedVideos.value.size === 0) {
+    showToast('请先选择要下载的视频', 'error')
+    return
+  }
+  
+  videoDownloading.value = true
+  const selectedList = recentVideos.value.filter(v => selectedVideos.value.has(v.id) && v.video_url)
+  
+  try {
+    for (let i = 0; i < selectedList.length; i++) {
+      const video = selectedList[i]
+      // 如果有备注，使用备注作为文件名；否则使用默认名称
+      let filename
+      if (video.note && video.note.trim()) {
+        filename = `${sanitizeFilename(video.note)}.mp4`
+      } else {
+        filename = `video-${video.id.substring(0, 8)}.mp4`
+      }
+      
+      await downloadFile(video.video_url, filename)
+      
+      // 短暂延迟，避免同时下载太多文件
+      if (i < selectedList.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+    }
+    
+    showToast(`成功下载 ${selectedList.length} 个视频`, 'success')
+    videoSelectMode.value = false
+    selectedVideos.value = new Set()
+  } catch (e) {
+    showToast('批量下载失败', 'error')
+  } finally {
+    videoDownloading.value = false
+  }
+}
+
+// 更新图片星标
+async function updateImageRating(imageId, rating) {
+  try {
+    const headers = { 
+      ...getTenantHeaders(), 
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+    const res = await fetch(`/api/images/history/${imageId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ rating })
+    })
+    
+    if (res.ok) {
+      // 更新本地数据
+      const idx = recentImages.value.findIndex(img => img.id === imageId)
+      if (idx !== -1) {
+        recentImages.value[idx].rating = rating
+      }
+      showToast(rating > 0 ? '已添加星标' : '已取消星标', 'success')
+    }
+  } catch (e) {
+    console.error('更新星标失败:', e)
+    showToast('更新失败', 'error')
+  }
+}
+
+// 更新视频星标
+async function updateVideoRating(videoId, rating) {
+  try {
+    const headers = { 
+      ...getTenantHeaders(), 
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+    const res = await fetch(`/api/videos/history/${videoId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ rating })
+    })
+    
+    if (res.ok) {
+      // 更新本地数据
+      const idx = recentVideos.value.findIndex(v => v.id === videoId)
+      if (idx !== -1) {
+        recentVideos.value[idx].rating = rating
+      }
+      showToast(rating > 0 ? '已添加星标' : '已取消星标', 'success')
+    }
+  } catch (e) {
+    console.error('更新星标失败:', e)
+    showToast('更新失败', 'error')
+  }
+}
+
+// 开始编辑备注
+function startEditNote(type, id, currentNote) {
+  editingNote.value = { type, id }
+  noteInput.value = currentNote || ''
+}
+
+// 保存备注
+async function saveNote() {
+  if (!editingNote.value) return
+  
+  const { type, id } = editingNote.value
+  const note = noteInput.value.trim()
+  
+  try {
+    const headers = { 
+      ...getTenantHeaders(), 
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+    const url = type === 'image' ? `/api/images/history/${id}` : `/api/videos/history/${id}`
+    
+    const res = await fetch(url, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ note })
+    })
+    
+    if (res.ok) {
+      // 更新本地数据
+      if (type === 'image') {
+        const idx = recentImages.value.findIndex(img => img.id === id)
+        if (idx !== -1) {
+          recentImages.value[idx].note = note
+        }
+      } else {
+        const idx = recentVideos.value.findIndex(v => v.id === id)
+        if (idx !== -1) {
+          recentVideos.value[idx].note = note
+        }
+      }
+      showToast('备注已保存', 'success')
+      editingNote.value = null
+      noteInput.value = ''
+    }
+  } catch (e) {
+    console.error('保存备注失败:', e)
+    showToast('保存失败', 'error')
+  }
+}
+
+// 取消编辑备注
+function cancelEditNote() {
+  editingNote.value = null
+  noteInput.value = ''
 }
 
 // 监听滚动事件实现无限滚动（图片）
@@ -1639,7 +2030,7 @@ onUnmounted(() => {
             </div>
             
             <!-- 重要提示：数据保留7天 -->
-            <div class="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-xl">
+            <div class="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-xl">
               <div class="flex items-start space-x-3">
                 <div class="flex-shrink-0 w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center">
                   <span class="text-xl">⚠️</span>
@@ -1657,6 +2048,121 @@ onUnmounted(() => {
                     <span>提示：点击图片可查看详情并下载</span>
                   </div>
                 </div>
+              </div>
+            </div>
+            
+            <!-- 筛选工具栏 -->
+            <div class="mb-4 p-4 bg-slate-50 dark:bg-dark-700 rounded-xl space-y-3">
+              <div class="flex flex-wrap items-center gap-3">
+                <!-- 星级筛选下拉 -->
+                <select
+                  v-model="imageFilter.rating"
+                  :class="[
+                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-all border',
+                    imageFilter.rating > 0 
+                      ? 'bg-amber-500 text-white border-amber-500' 
+                      : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-dark-500'
+                  ]"
+                >
+                  <option :value="0">⭐ 全部星级</option>
+                  <option :value="5">⭐⭐⭐⭐⭐ 5星</option>
+                  <option :value="4">⭐⭐⭐⭐ 4星</option>
+                  <option :value="3">⭐⭐⭐ 3星</option>
+                  <option :value="2">⭐⭐ 2星</option>
+                  <option :value="1">⭐ 1星</option>
+                </select>
+                
+                <!-- 关键词搜索 -->
+                <input
+                  v-model="imageFilter.keyword"
+                  type="text"
+                  placeholder="🔍 搜索提示词/备注..."
+                  class="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 w-48"
+                  @keyup.enter="applyImageFilter"
+                />
+                
+                <!-- 日期筛选 -->
+                <div class="flex items-center gap-2">
+                  <input
+                    v-model="imageFilter.dateFrom"
+                    type="date"
+                    class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                  />
+                  <span class="text-slate-400">-</span>
+                  <input
+                    v-model="imageFilter.dateTo"
+                    type="date"
+                    class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                  />
+                </div>
+                
+                <!-- 排序 -->
+                <select
+                  v-model="imageFilter.sortBy"
+                  class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                >
+                  <option value="date">按日期</option>
+                  <option value="rating">按星标</option>
+                </select>
+                <button
+                  @click="imageFilter.sortOrder = imageFilter.sortOrder === 'desc' ? 'asc' : 'desc'"
+                  class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-500"
+                >
+                  {{ imageFilter.sortOrder === 'desc' ? '↓ 降序' : '↑ 升序' }}
+                </button>
+                
+                <!-- 查询按钮 -->
+                <button
+                  @click="applyImageFilter"
+                  class="px-4 py-1.5 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-all flex items-center gap-1"
+                >
+                  🔍 查询
+                </button>
+                
+                <!-- 重置按钮 -->
+                <button
+                  @click="resetImageFilter"
+                  class="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-dark-400 transition-all"
+                >
+                  重置
+                </button>
+                
+                <!-- 分隔线 -->
+                <div class="flex-1"></div>
+                
+                <!-- 批量操作 -->
+                <button
+                  @click="toggleImageSelectMode"
+                  :class="[
+                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1',
+                    imageSelectMode 
+                      ? 'bg-primary-500 text-white' 
+                      : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-primary-900/20'
+                  ]"
+                >
+                  ☑️ {{ imageSelectMode ? '取消选择' : '批量选择' }}
+                </button>
+              </div>
+              
+              <!-- 批量操作栏 -->
+              <div v-if="imageSelectMode" class="flex items-center gap-3 pt-2 border-t border-slate-200 dark:border-dark-600">
+                <button
+                  @click="toggleAllImages"
+                  class="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-300 transition-all"
+                >
+                  {{ selectedImages.size === recentImages.length ? '取消全选' : '全选' }}
+                </button>
+                <span class="text-sm text-slate-500 dark:text-slate-400">
+                  已选择 {{ selectedImages.size }} 项
+                </span>
+                <button
+                  @click="batchDownloadImages"
+                  :disabled="selectedImages.size === 0 || imageDownloading"
+                  class="px-4 py-1.5 rounded-lg text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                >
+                  <span v-if="imageDownloading">⏳ 下载中...</span>
+                  <span v-else>⬇️ 批量下载</span>
+                </button>
               </div>
             </div>
             
@@ -1680,14 +2186,60 @@ onUnmounted(() => {
                 <div
                   v-for="image in recentImages"
                   :key="image.id"
-                  class="group relative aspect-square rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300"
+                  :class="[
+                    'group relative aspect-square rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300',
+                    imageSelectMode && selectedImages.has(image.id) ? 'ring-4 ring-primary-500' : ''
+                  ]"
+                  @click="imageSelectMode ? toggleImageSelection(image.id) : null"
                 >
                   <img :src="image.url" :alt="image.prompt" class="w-full h-full object-cover" loading="lazy" />
                   
+                  <!-- 选择复选框 -->
+                  <div v-if="imageSelectMode" class="absolute top-2 left-2 z-10">
+                    <div :class="[
+                      'w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all',
+                      selectedImages.has(image.id) 
+                        ? 'bg-primary-500 border-primary-500 text-white' 
+                        : 'bg-white/80 border-slate-300'
+                    ]">
+                      <span v-if="selectedImages.has(image.id)" class="text-xs">✓</span>
+                    </div>
+                  </div>
+                  
+                  <!-- 星标和备注标识 -->
+                  <div class="absolute top-2 right-2 flex items-center gap-1">
+                    <!-- 星级显示/编辑 -->
+                    <div v-if="!imageSelectMode" class="relative group/rating">
+                      <button
+                        :class="[
+                          'px-2 py-1 rounded-lg flex items-center gap-0.5 transition-all text-xs',
+                          image.rating > 0 
+                            ? 'bg-amber-500 text-white' 
+                            : 'bg-black/30 text-white/70 hover:bg-amber-500 hover:text-white'
+                        ]"
+                      >
+                        <span v-if="image.rating > 0">{{ '⭐'.repeat(image.rating) }}</span>
+                        <span v-else>☆</span>
+                      </button>
+                      <!-- 星级选择弹出 -->
+                      <div class="absolute right-0 top-full mt-1 hidden group-hover/rating:flex flex-col bg-white dark:bg-dark-700 rounded-lg shadow-xl border border-slate-200 dark:border-dark-600 overflow-hidden z-20">
+                        <button @click.stop="updateImageRating(image.id, 5)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐⭐ 5星</button>
+                        <button @click.stop="updateImageRating(image.id, 4)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐ 4星</button>
+                        <button @click.stop="updateImageRating(image.id, 3)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐ 3星</button>
+                        <button @click.stop="updateImageRating(image.id, 2)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐ 2星</button>
+                        <button @click.stop="updateImageRating(image.id, 1)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐ 1星</button>
+                        <button @click.stop="updateImageRating(image.id, 0)" class="px-3 py-1.5 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">✕ 清除</button>
+                      </div>
+                    </div>
+                    <div v-if="image.note" class="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs">
+                      📝
+                    </div>
+                  </div>
+                  
                   <!-- 悬停遮罩 -->
-                  <div class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-2">
+                  <div v-if="!imageSelectMode" class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-2">
                     <button
-                      @click="viewImage(image)"
+                      @click.stop="viewImage(image)"
                       class="p-2 bg-white/20 backdrop-blur rounded-lg hover:bg-white/30 transition-colors"
                       title="查看"
                     >
@@ -1696,9 +2248,18 @@ onUnmounted(() => {
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
                       </svg>
                     </button>
+                    <button
+                      @click.stop="startEditNote('image', image.id, image.note)"
+                      class="p-2 bg-blue-500/80 backdrop-blur rounded-lg hover:bg-blue-600 transition-colors"
+                      title="编辑备注"
+                    >
+                      <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                      </svg>
+                    </button>
                     <a
                       :href="image.url"
-                      :download="`image-${image.id}.png`"
+                      :download="image.note ? `${sanitizeFilename(image.note)}.png` : `image-${image.id}.png`"
                       class="p-2 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors"
                       title="下载"
                       @click.stop
@@ -1708,7 +2269,7 @@ onUnmounted(() => {
                       </svg>
                     </a>
                     <button
-                      @click="deleteImage(image.id)"
+                      @click.stop="deleteImage(image.id)"
                       class="p-2 bg-red-500/80 backdrop-blur rounded-lg hover:bg-red-600 transition-colors"
                       title="删除"
                     >
@@ -1720,6 +2281,7 @@ onUnmounted(() => {
                   
                   <!-- 信息标签 -->
                   <div class="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
+                    <p v-if="image.note" class="text-xs text-amber-300 font-medium truncate mb-0.5">📝 {{ image.note }}</p>
                     <p class="text-xs text-white truncate">{{ image.prompt }}</p>
                   </div>
                 </div>
@@ -1767,7 +2329,7 @@ onUnmounted(() => {
             </div>
             
             <!-- 重要提示：数据保留7天 -->
-            <div class="mb-6 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-xl">
+            <div class="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-xl">
               <div class="flex items-start space-x-3">
                 <div class="flex-shrink-0 w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center">
                   <span class="text-xl">⚠️</span>
@@ -1785,6 +2347,121 @@ onUnmounted(() => {
                     <span>提示：点击视频可查看详情并下载</span>
                   </div>
                 </div>
+              </div>
+            </div>
+            
+            <!-- 筛选工具栏 -->
+            <div class="mb-4 p-4 bg-slate-50 dark:bg-dark-700 rounded-xl space-y-3">
+              <div class="flex flex-wrap items-center gap-3">
+                <!-- 星级筛选下拉 -->
+                <select
+                  v-model="videoFilter.rating"
+                  :class="[
+                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-all border',
+                    videoFilter.rating > 0 
+                      ? 'bg-amber-500 text-white border-amber-500' 
+                      : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-dark-500'
+                  ]"
+                >
+                  <option :value="0">⭐ 全部星级</option>
+                  <option :value="5">⭐⭐⭐⭐⭐ 5星</option>
+                  <option :value="4">⭐⭐⭐⭐ 4星</option>
+                  <option :value="3">⭐⭐⭐ 3星</option>
+                  <option :value="2">⭐⭐ 2星</option>
+                  <option :value="1">⭐ 1星</option>
+                </select>
+                
+                <!-- 关键词搜索 -->
+                <input
+                  v-model="videoFilter.keyword"
+                  type="text"
+                  placeholder="🔍 搜索提示词/备注..."
+                  class="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 w-48"
+                  @keyup.enter="applyVideoFilter"
+                />
+                
+                <!-- 日期筛选 -->
+                <div class="flex items-center gap-2">
+                  <input
+                    v-model="videoFilter.dateFrom"
+                    type="date"
+                    class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                  />
+                  <span class="text-slate-400">-</span>
+                  <input
+                    v-model="videoFilter.dateTo"
+                    type="date"
+                    class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                  />
+                </div>
+                
+                <!-- 排序 -->
+                <select
+                  v-model="videoFilter.sortBy"
+                  class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                >
+                  <option value="date">按日期</option>
+                  <option value="rating">按星标</option>
+                </select>
+                <button
+                  @click="videoFilter.sortOrder = videoFilter.sortOrder === 'desc' ? 'asc' : 'desc'"
+                  class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-500"
+                >
+                  {{ videoFilter.sortOrder === 'desc' ? '↓ 降序' : '↑ 升序' }}
+                </button>
+                
+                <!-- 查询按钮 -->
+                <button
+                  @click="applyVideoFilter"
+                  class="px-4 py-1.5 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-all flex items-center gap-1"
+                >
+                  🔍 查询
+                </button>
+                
+                <!-- 重置按钮 -->
+                <button
+                  @click="resetVideoFilter"
+                  class="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-dark-400 transition-all"
+                >
+                  重置
+                </button>
+                
+                <!-- 分隔线 -->
+                <div class="flex-1"></div>
+                
+                <!-- 批量操作 -->
+                <button
+                  @click="toggleVideoSelectMode"
+                  :class="[
+                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1',
+                    videoSelectMode 
+                      ? 'bg-primary-500 text-white' 
+                      : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-primary-900/20'
+                  ]"
+                >
+                  ☑️ {{ videoSelectMode ? '取消选择' : '批量选择' }}
+                </button>
+              </div>
+              
+              <!-- 批量操作栏 -->
+              <div v-if="videoSelectMode" class="flex items-center gap-3 pt-2 border-t border-slate-200 dark:border-dark-600">
+                <button
+                  @click="toggleAllVideos"
+                  class="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-300 transition-all"
+                >
+                  {{ selectedVideos.size === recentVideos.filter(v => v.video_url).length ? '取消全选' : '全选已完成' }}
+                </button>
+                <span class="text-sm text-slate-500 dark:text-slate-400">
+                  已选择 {{ selectedVideos.size }} 项
+                </span>
+                <button
+                  @click="batchDownloadVideos"
+                  :disabled="selectedVideos.size === 0 || videoDownloading"
+                  class="px-4 py-1.5 rounded-lg text-sm font-medium bg-green-500 text-white hover:bg-green-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                >
+                  <span v-if="videoDownloading">⏳ 下载中...</span>
+                  <span v-else>⬇️ 批量下载</span>
+                </button>
               </div>
             </div>
             
@@ -1808,10 +2485,13 @@ onUnmounted(() => {
                 <div
                   v-for="video in recentVideos"
                   :key="video.id"
-                  class="group relative rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 bg-slate-50 dark:bg-dark-700"
+                  :class="[
+                    'group relative rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 bg-slate-50 dark:bg-dark-700',
+                    videoSelectMode && selectedVideos.has(video.id) ? 'ring-4 ring-primary-500' : ''
+                  ]"
                 >
                   <!-- 视频预览 -->
-                  <div class="aspect-video bg-black relative cursor-pointer" @click="viewVideo(video)">
+                  <div class="aspect-video bg-black relative cursor-pointer" @click="videoSelectMode && video.video_url ? toggleVideoSelection(video.id) : viewVideo(video)">
                     <video
                       v-if="video.video_url"
                       :src="video.video_url"
@@ -1825,8 +2505,50 @@ onUnmounted(() => {
                       <div v-if="video.progress" class="text-xs mt-1 opacity-75">{{ video.progress }}</div>
                     </div>
                     
+                    <!-- 选择复选框 -->
+                    <div v-if="videoSelectMode && video.video_url" class="absolute top-2 left-2 z-10">
+                      <div :class="[
+                        'w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all',
+                        selectedVideos.has(video.id) 
+                          ? 'bg-primary-500 border-primary-500 text-white' 
+                          : 'bg-white/80 border-slate-300'
+                      ]">
+                        <span v-if="selectedVideos.has(video.id)" class="text-xs">✓</span>
+                      </div>
+                    </div>
+                    
+                    <!-- 星标和备注标识 -->
+                    <div class="absolute top-2 right-2 flex items-center gap-1">
+                      <!-- 星级显示/编辑 -->
+                      <div v-if="!videoSelectMode" class="relative group/rating">
+                        <button
+                          :class="[
+                            'px-2 py-1 rounded-lg flex items-center gap-0.5 transition-all text-xs',
+                            video.rating > 0 
+                              ? 'bg-amber-500 text-white' 
+                              : 'bg-black/30 text-white/70 hover:bg-amber-500 hover:text-white'
+                          ]"
+                        >
+                          <span v-if="video.rating > 0">{{ '⭐'.repeat(video.rating) }}</span>
+                          <span v-else>☆</span>
+                        </button>
+                        <!-- 星级选择弹出 -->
+                        <div class="absolute right-0 top-full mt-1 hidden group-hover/rating:flex flex-col bg-white dark:bg-dark-700 rounded-lg shadow-xl border border-slate-200 dark:border-dark-600 overflow-hidden z-20">
+                          <button @click.stop="updateVideoRating(video.id, 5)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐⭐ 5星</button>
+                          <button @click.stop="updateVideoRating(video.id, 4)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐ 4星</button>
+                          <button @click.stop="updateVideoRating(video.id, 3)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐ 3星</button>
+                          <button @click.stop="updateVideoRating(video.id, 2)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐ 2星</button>
+                          <button @click.stop="updateVideoRating(video.id, 1)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐ 1星</button>
+                          <button @click.stop="updateVideoRating(video.id, 0)" class="px-3 py-1.5 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">✕ 清除</button>
+                        </div>
+                      </div>
+                      <div v-if="video.note" class="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs">
+                        📝
+                      </div>
+                    </div>
+                    
                     <!-- 悬停播放图标 -->
-                    <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <div v-if="!videoSelectMode" class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                       <div class="text-white text-5xl">▶️</div>
                     </div>
                     
@@ -1838,6 +2560,11 @@ onUnmounted(() => {
                   
                   <!-- 视频信息 -->
                   <div class="p-4 space-y-2">
+                    <!-- 备注显示 -->
+                    <p v-if="video.note" class="text-xs text-amber-600 dark:text-amber-400 font-medium truncate">
+                      📝 {{ video.note }}
+                    </p>
+                    
                     <p class="text-sm text-slate-900 dark:text-white line-clamp-2 font-medium">
                       {{ video.prompt }}
                     </p>
@@ -1864,10 +2591,17 @@ onUnmounted(() => {
                       >
                         👁️ 预览
                       </button>
+                      <button
+                        @click="startEditNote('video', video.id, video.note)"
+                        class="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs rounded-lg transition-colors"
+                        title="编辑备注"
+                      >
+                        📝
+                      </button>
                       <a
                         v-if="video.video_url"
                         :href="video.video_url"
-                        :download="`video-${video.id}.mp4`"
+                        :download="video.note ? `${sanitizeFilename(video.note)}.mp4` : `video-${video.id}.mp4`"
                         class="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg transition-colors text-center"
                         @click.stop
                       >
@@ -2885,9 +3619,40 @@ onUnmounted(() => {
         <div class="relative">
           <img :src="selectedImage.url" :alt="selectedImage.prompt" class="w-full h-auto rounded-xl shadow-2xl" />
           <div class="absolute top-4 right-4 flex space-x-2">
+            <!-- 星级选择器 -->
+            <div class="relative group/modalrating">
+              <button
+                :class="[
+                  'p-3 backdrop-blur rounded-lg transition-colors flex items-center gap-1',
+                  selectedImage.rating > 0 
+                    ? 'bg-amber-500 text-white' 
+                    : 'bg-white/20 hover:bg-amber-500'
+                ]"
+                title="评分"
+              >
+                <span v-if="selectedImage.rating > 0" class="text-sm">{{ '⭐'.repeat(selectedImage.rating) }}</span>
+                <span v-else class="text-xl">☆</span>
+              </button>
+              <!-- 星级选择弹出 -->
+              <div class="absolute right-0 top-full mt-1 hidden group-hover/modalrating:flex flex-col bg-white dark:bg-dark-700 rounded-lg shadow-xl border border-slate-200 dark:border-dark-600 overflow-hidden z-20">
+                <button @click.stop="updateImageRating(selectedImage.id, 5)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐⭐⭐ 5星</button>
+                <button @click.stop="updateImageRating(selectedImage.id, 4)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐⭐ 4星</button>
+                <button @click.stop="updateImageRating(selectedImage.id, 3)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐ 3星</button>
+                <button @click.stop="updateImageRating(selectedImage.id, 2)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐ 2星</button>
+                <button @click.stop="updateImageRating(selectedImage.id, 1)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐ 1星</button>
+                <button @click.stop="updateImageRating(selectedImage.id, 0)" class="px-3 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">✕ 清除评分</button>
+              </div>
+            </div>
+            <button
+              @click.stop="startEditNote('image', selectedImage.id, selectedImage.note)"
+              class="p-3 bg-blue-500/80 backdrop-blur rounded-lg hover:bg-blue-600 transition-colors"
+              title="编辑备注"
+            >
+              <span class="text-xl">📝</span>
+            </button>
             <a
               :href="selectedImage.url"
-              :download="`${selectedImage.model}-${selectedImage.id}.png`"
+              :download="selectedImage.note ? `${sanitizeFilename(selectedImage.note)}.png` : `${selectedImage.model}-${selectedImage.id}.png`"
               class="p-3 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors"
               title="下载图片"
               @click.stop
@@ -2907,10 +3672,23 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="mt-4 bg-white/10 backdrop-blur rounded-xl p-4">
+          <!-- 备注显示 -->
+          <div v-if="selectedImage.note" class="mb-3 p-2 bg-amber-500/20 rounded-lg">
+            <p class="text-amber-300 text-sm font-medium flex items-center">
+              <span class="mr-2">📝</span>
+              {{ selectedImage.note }}
+            </p>
+          </div>
+          
           <p class="text-white font-medium mb-2">{{ selectedImage.prompt }}</p>
           <div class="flex items-center justify-between text-sm text-white/70">
-            <span>{{ selectedImage.model }} · {{ selectedImage.aspectRatio }}</span>
+            <span>{{ selectedImage.model }} · {{ selectedImage.aspectRatio }} · {{ selectedImage.imageSize || 'N/A' }}</span>
             <span>{{ new Date(selectedImage.createdAt).toLocaleString() }}</span>
+          </div>
+          <div class="flex items-center space-x-2 mt-2">
+            <span v-if="selectedImage.rating > 0" class="text-sm font-medium px-2 py-1 bg-amber-500/20 text-amber-300 rounded">
+              {{ '⭐'.repeat(selectedImage.rating) }} {{ selectedImage.rating }}星
+            </span>
           </div>
           <div class="mt-3 pt-3 border-t border-white/20">
             <p class="text-xs text-amber-300 flex items-center">
@@ -2943,10 +3721,41 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="absolute top-4 right-4 flex space-x-2">
+            <!-- 星级选择器 -->
+            <div class="relative group/modalrating">
+              <button
+                :class="[
+                  'p-3 backdrop-blur rounded-lg transition-colors flex items-center gap-1',
+                  selectedVideo.rating > 0 
+                    ? 'bg-amber-500 text-white' 
+                    : 'bg-white/20 hover:bg-amber-500'
+                ]"
+                title="评分"
+              >
+                <span v-if="selectedVideo.rating > 0" class="text-sm">{{ '⭐'.repeat(selectedVideo.rating) }}</span>
+                <span v-else class="text-xl">☆</span>
+              </button>
+              <!-- 星级选择弹出 -->
+              <div class="absolute right-0 top-full mt-1 hidden group-hover/modalrating:flex flex-col bg-white dark:bg-dark-700 rounded-lg shadow-xl border border-slate-200 dark:border-dark-600 overflow-hidden z-20">
+                <button @click.stop="updateVideoRating(selectedVideo.id, 5)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐⭐⭐ 5星</button>
+                <button @click.stop="updateVideoRating(selectedVideo.id, 4)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐⭐ 4星</button>
+                <button @click.stop="updateVideoRating(selectedVideo.id, 3)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐⭐ 3星</button>
+                <button @click.stop="updateVideoRating(selectedVideo.id, 2)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐⭐ 2星</button>
+                <button @click.stop="updateVideoRating(selectedVideo.id, 1)" class="px-3 py-2 text-sm hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap text-slate-700 dark:text-slate-300">⭐ 1星</button>
+                <button @click.stop="updateVideoRating(selectedVideo.id, 0)" class="px-3 py-2 text-sm hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">✕ 清除评分</button>
+              </div>
+            </div>
+            <button
+              @click.stop="startEditNote('video', selectedVideo.id, selectedVideo.note)"
+              class="p-3 bg-blue-500/80 backdrop-blur rounded-lg hover:bg-blue-600 transition-colors"
+              title="编辑备注"
+            >
+              <span class="text-xl">📝</span>
+            </button>
             <a
               v-if="selectedVideo.video_url"
               :href="selectedVideo.video_url"
-              :download="`${selectedVideo.model}-${selectedVideo.id}.mp4`"
+              :download="selectedVideo.note ? `${sanitizeFilename(selectedVideo.note)}.mp4` : `${selectedVideo.model}-${selectedVideo.id}.mp4`"
               class="p-3 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors"
               title="下载视频"
               @click.stop
@@ -2966,6 +3775,14 @@ onUnmounted(() => {
           </div>
         </div>
         <div class="mt-4 bg-white/10 backdrop-blur rounded-xl p-4">
+          <!-- 备注显示 -->
+          <div v-if="selectedVideo.note" class="mb-3 p-2 bg-amber-500/20 rounded-lg">
+            <p class="text-amber-300 text-sm font-medium flex items-center">
+              <span class="mr-2">📝</span>
+              {{ selectedVideo.note }}
+            </p>
+          </div>
+          
           <p class="text-white font-medium mb-2">{{ selectedVideo.prompt }}</p>
           <div class="flex items-center justify-between text-sm text-white/70">
             <span>{{ selectedVideo.model }} · {{ selectedVideo.aspect_ratio }} · {{ selectedVideo.duration }}s</span>
@@ -2974,6 +3791,9 @@ onUnmounted(() => {
           <div class="flex items-center space-x-2 mt-2">
             <span :class="videoStatusColor(selectedVideo.status)" class="text-sm font-medium px-2 py-1 bg-white/10 rounded">
               {{ formatVideoStatus(selectedVideo.status) }}
+            </span>
+            <span v-if="selectedVideo.rating > 0" class="text-sm font-medium px-2 py-1 bg-amber-500/20 text-amber-300 rounded">
+              {{ '⭐'.repeat(selectedVideo.rating) }} {{ selectedVideo.rating }}星
             </span>
             <span v-if="selectedVideo.points_cost" class="text-sm text-white/70">
               消耗 {{ selectedVideo.points_cost }} 积分
@@ -2990,6 +3810,59 @@ onUnmounted(() => {
               视频将在7天后自动删除，请尽快保存到本地
             </p>
           </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 备注编辑模态框 -->
+    <div v-if="editingNote" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4" @click.self="cancelEditNote">
+      <div class="bg-white dark:bg-dark-700 rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div class="p-4 border-b border-slate-200 dark:border-dark-600 bg-gradient-to-r from-blue-500 to-indigo-500">
+          <div class="flex items-center justify-between">
+            <h3 class="text-lg font-bold text-white flex items-center">
+              <span class="mr-2">📝</span>
+              编辑备注
+            </h3>
+            <button @click="cancelEditNote" class="text-white/80 hover:text-white transition-colors">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+        
+        <div class="p-4 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              备注内容（用于下载时重命名文件）
+            </label>
+            <input
+              v-model="noteInput"
+              type="text"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-600 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="输入备注..."
+              maxlength="100"
+              @keyup.enter="saveNote"
+            />
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              最多100个字符，用于下载时作为文件名
+            </p>
+          </div>
+        </div>
+        
+        <div class="p-4 border-t border-slate-200 dark:border-dark-600 flex space-x-3">
+          <button 
+            @click="cancelEditNote"
+            class="flex-1 px-4 py-2 bg-slate-200 dark:bg-dark-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 dark:hover:bg-dark-500 transition-colors"
+          >
+            取消
+          </button>
+          <button 
+            @click="saveNote"
+            class="flex-1 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
+          >
+            保存
+          </button>
         </div>
       </div>
     </div>

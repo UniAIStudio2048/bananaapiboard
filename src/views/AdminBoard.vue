@@ -437,7 +437,8 @@ async function saveEdit() {
       email: editForm.value.email,
       role: editForm.value.role,
       points: editForm.value.points,
-      disabled: editForm.value.disabled
+      disabled: editForm.value.disabled,
+      concurrent_limit: editForm.value.concurrent_limit
     }
     
     // 只有填写了新密码才发送密码字段

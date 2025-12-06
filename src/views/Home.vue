@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { generateImage, buildDownloadUrl, uploadImages, getMe, redeemVoucher } from '@/api/client'
 import ImageAnnotator from '@/components/ImageAnnotator.vue'
 import MentionDropdown from '@/components/MentionDropdown.vue'
@@ -32,6 +33,9 @@ const isViewingReference = ref(false) // 是否在查看参考图片
 const unreadCount = ref(0) // 未读消息数
 const lastHistoryLength = ref(0) // 上次历史记录数量
 const layoutMode = ref('comfortable') // 布局模式：comfortable(舒适), widescreen(宽屏), vertical(竖屏)
+
+// 路由
+const router = useRouter()
 
 // 图片标注相关
 const imageAnnotatorRef = ref(null)
@@ -1006,8 +1010,11 @@ function download(url, filename) {
 function downloadHistoryImage(item) {
   if (!item || !item.url) return
   const timestamp = item.created || Math.floor(Date.now() / 1000)
-  const model = (item.model || 'image').replace(/[^a-zA-Z0-9-_]/g, '_')
-  const filename = `${model}_${timestamp}.png`
+  const modelName = (item.model || 'image').replace(/[^a-zA-Z0-9-_]/g, '_')
+  
+  // 如果有备注，将备注添加到文件名开头（移除特殊字符）
+  const notePrefix = item.note ? item.note.replace(/[^a-zA-Z0-9\u4e00-\u9fa5-_]/g, '_').slice(0, 50) + '_' : ''
+  const filename = `${notePrefix}${modelName}_${timestamp}.png`
   
   // 如果 URL 是相对路径（/api/images/file/xxx），使用完整路径
   let downloadUrl = item.url
@@ -1026,6 +1033,60 @@ function downloadHistoryImage(item) {
   link.href = downloadUrl
   link.download = filename
   link.click()
+}
+
+// 更新图片备注
+async function updateImageNote(item, note) {
+  if (!item || !item.id) return
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(`/api/images/history/${item.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getTenantHeaders(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ note })
+    })
+    if (response.ok) {
+      // 更新本地数据
+      const idx = history.value.findIndex(h => h.id === item.id)
+      if (idx !== -1) {
+        history.value[idx].note = note
+      }
+      console.log('[updateImageNote] 更新成功:', item.id, note)
+    }
+  } catch (e) {
+    console.error('[updateImageNote] 更新失败:', e)
+  }
+}
+
+// 更新图片星标
+async function updateImageRating(item, rating) {
+  if (!item || !item.id) return
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(`/api/images/history/${item.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getTenantHeaders(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ rating })
+    })
+    if (response.ok) {
+      // 更新本地数据
+      const idx = history.value.findIndex(h => h.id === item.id)
+      if (idx !== -1) {
+        history.value[idx].rating = rating
+      }
+      console.log('[updateImageRating] 更新成功:', item.id, rating)
+    }
+  } catch (e) {
+    console.error('[updateImageRating] 更新失败:', e)
+  }
 }
 
 // 从历史记录再次生成
@@ -1253,6 +1314,39 @@ async function loadImageToImg2Img(item) {
   }
 }
 
+// 发送图片到图生视频
+async function sendToVideoGeneration(item) {
+  console.log('[sendToVideoGeneration] 发送图片到图生视频:', item)
+  
+  if (!item || !item.url) {
+    error.value = '图片URL不可用'
+    setTimeout(() => { error.value = '' }, 3000)
+    return
+  }
+  
+  try {
+    // 显示加载提示
+    error.value = '正在准备图片，即将跳转到视频生成...'
+    
+    // 将图片URL保存到 sessionStorage，供视频生成页面使用
+    sessionStorage.setItem('videoGenerationImage', JSON.stringify({
+      url: item.url,
+      prompt: item.prompt || '',
+      timestamp: Date.now()
+    }))
+    
+    // 跳转到视频生成页面
+    router.push('/video')
+    
+    // 清除提示
+    error.value = ''
+  } catch (e) {
+    console.error('[sendToVideoGeneration] 发送失败:', e)
+    error.value = '操作失败，请重试'
+    setTimeout(() => { error.value = '' }, 3000)
+  }
+}
+
 // 删除历史记录
 async function deleteHistoryImage(item) {
   console.log('[deleteHistoryImage] 准备删除历史记录:', item.id)
@@ -1427,8 +1521,8 @@ const userPackageInfo = computed(() => {
                      me.value.package_points_expires_at && 
                      me.value.package_points_expires_at > Date.now()
   
-  // 如果套餐到期，并发限制重置为 1（普通用户）
-  const concurrentLimit = hasPackage ? (me.value.concurrent_limit || 1) : 1
+  // 并发限制：优先使用用户的 concurrent_limit（数据库设置值）
+  const concurrentLimit = me.value.concurrent_limit || 1
   
   return {
     hasPackage,
@@ -2515,21 +2609,102 @@ onUnmounted(() => {
               </div>
               
               <!-- 失败状态 -->
-              <div v-else-if="h.status === 'failed'" class="relative overflow-hidden aspect-video bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 group">
-                <div class="absolute inset-0 flex flex-col items-center justify-center p-3">
-                  <div class="text-2xl mb-2">❌</div>
-                  <p class="text-xs text-red-600 dark:text-red-400 font-semibold">生成失败</p>
-                  <p v-if="h.error" class="text-xs text-red-500 dark:text-red-400 mt-1 text-center">{{ h.error }}</p>
-                  <p class="text-xs text-green-600 dark:text-green-400 mt-2 font-medium">✓ 未扣除积分</p>
+              <div v-else-if="h.status === 'failed'" class="relative overflow-hidden">
+                <!-- 失败图标区域 -->
+                <div class="aspect-video bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 group relative">
+                  <div class="absolute inset-0 flex flex-col items-center justify-center p-3">
+                    <div class="text-2xl mb-1">❌</div>
+                    <p class="text-xs text-red-600 dark:text-red-400 font-semibold">生成失败</p>
+                    <p v-if="h.error" class="text-xs text-red-500 dark:text-red-400 mt-1 text-center line-clamp-2 px-2">{{ h.error }}</p>
+                    <p class="text-xs text-green-600 dark:text-green-400 mt-1 font-medium">✓ 未扣除积分</p>
+                  </div>
+                  <!-- 失败状态的操作按钮 - 右下角小按钮 -->
+                  <div class="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                    <button 
+                      @click.stop="regenerateFromHistory(h)"
+                      class="w-7 h-7 bg-green-500/80 hover:bg-green-600 backdrop-blur-sm text-white rounded-lg flex items-center justify-center transition-all transform hover:scale-105 shadow-md"
+                      title="再次生成"
+                    >
+                      🔄
+                    </button>
+                    <button 
+                      @click.stop="deleteHistoryImage(h)"
+                      class="w-7 h-7 bg-red-500/80 hover:bg-red-600 backdrop-blur-sm text-white rounded-lg flex items-center justify-center transition-all transform hover:scale-105 shadow-md"
+                      title="删除失败记录"
+                    >
+                      🗑️
+                    </button>
+                  </div>
                 </div>
-                <!-- 失败状态的删除按钮 -->
-                <button 
-                  @click.stop="deleteHistoryImage(h)"
-                  class="absolute top-2 right-2 w-8 h-8 bg-red-500/80 hover:bg-red-600 backdrop-blur-sm text-white rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform hover:scale-105 shadow-md"
-                  title="删除失败记录"
-                >
-                  🗑️
-                </button>
+                
+                <!-- 失败状态的信息栏 -->
+                <div class="p-2.5 bg-slate-50 dark:bg-dark-700">
+                  <div class="flex items-center justify-between text-xs">
+                    <div class="flex-1 truncate min-w-0">
+                      <p class="text-slate-600 dark:text-slate-400 font-semibold text-xs">
+                        {{ new Date(h.created * 1000).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) }}
+                      </p>
+                      <p class="text-slate-500 dark:text-slate-500 text-xs mt-0.5 truncate" v-if="h.prompt">
+                        {{ h.prompt }}
+                      </p>
+                    </div>
+                    <div class="flex items-center gap-1 ml-2 flex-shrink-0">
+                      <!-- 再次生成按钮 -->
+                      <button 
+                        @click.stop="regenerateFromHistory(h)"
+                        class="w-7 h-7 flex items-center justify-center bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition-all hover:scale-105"
+                        title="再次生成"
+                      >
+                        🔄
+                      </button>
+                      <!-- 删除按钮 -->
+                      <button 
+                        @click.stop="deleteHistoryImage(h)"
+                        class="w-7 h-7 flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-all hover:scale-105"
+                        title="删除记录"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <!-- 标签和星标 -->
+                  <div class="flex items-center justify-between mt-1.5">
+                    <div class="flex items-center gap-1">
+                      <span class="px-1.5 py-0.5 bg-slate-200 dark:bg-dark-600 text-slate-600 dark:text-slate-400 rounded text-xs font-medium">
+                        {{ h.size || '未知' }}
+                      </span>
+                      <span class="px-1.5 py-0.5 bg-slate-200 dark:bg-dark-600 text-slate-600 dark:text-slate-400 rounded text-xs font-medium">
+                        {{ h.aspect_ratio || '未知' }}
+                      </span>
+                    </div>
+                    <!-- 快捷星标 -->
+                    <div class="flex items-center gap-0.5" @click.stop>
+                      <button 
+                        v-for="star in 5" 
+                        :key="star"
+                        @click="updateImageRating(h, h.rating === star ? 0 : star)"
+                        class="text-sm transition-all hover:scale-125"
+                        :class="star <= (h.rating || 0) ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600 hover:text-yellow-300'"
+                        :title="`${star}星`"
+                      >
+                        ★
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <!-- 快捷备注 -->
+                  <div class="mt-1.5" @click.stop>
+                    <input
+                      type="text"
+                      :value="h.note || ''"
+                      @blur="(e) => updateImageNote(h, e.target.value)"
+                      @keyup.enter="(e) => { updateImageNote(h, e.target.value); e.target.blur() }"
+                      placeholder="添加备注（如分镜信息）..."
+                      class="w-full px-2 py-1 text-xs bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 text-slate-600 dark:text-slate-300 placeholder-slate-400"
+                    />
+                  </div>
+                </div>
               </div>
               
               <!-- 完成状态 -->
@@ -2562,6 +2737,14 @@ onUnmounted(() => {
                   
                   <!-- 快速操作按钮组 - 右上角 -->
                   <div class="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                    <!-- 发送到图生视频 -->
+                    <button 
+                      @click.stop="sendToVideoGeneration(h)"
+                      class="w-7 h-7 bg-pink-500/80 hover:bg-pink-600 backdrop-blur-sm text-white rounded-lg flex items-center justify-center transition-all transform hover:scale-105 shadow-md"
+                      title="发送到图生视频"
+                    >
+                      🎬
+                    </button>
                     <!-- 添加到图生图 -->
                     <button 
                       @click.stop="loadImageToImg2Img(h)"
@@ -2611,6 +2794,14 @@ onUnmounted(() => {
                       >
                         🔄
                       </button>
+                      <!-- 发送到图生视频按钮 -->
+                      <button 
+                        @click.stop="sendToVideoGeneration(h)"
+                        class="w-7 h-7 flex items-center justify-center bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400 rounded-lg hover:bg-pink-200 dark:hover:bg-pink-900/50 transition-all hover:scale-105"
+                        title="发送到图生视频"
+                      >
+                        🎬
+                      </button>
                       <!-- 添加到图生图按钮 -->
                       <button 
                         @click.stop="loadImageToImg2Img(h)"
@@ -2638,14 +2829,41 @@ onUnmounted(() => {
                     </div>
                   </div>
                   
-                  <!-- 标签 -->
-                  <div class="flex items-center gap-1 mt-1.5">
-                    <span class="px-1.5 py-0.5 bg-slate-200 dark:bg-dark-600 text-slate-600 dark:text-slate-400 rounded text-xs font-medium">
-                      {{ h.size }}
-                    </span>
-                    <span class="px-1.5 py-0.5 bg-slate-200 dark:bg-dark-600 text-slate-600 dark:text-slate-400 rounded text-xs font-medium">
-                      {{ h.aspect_ratio }}
-                    </span>
+                  <!-- 标签和星标 -->
+                  <div class="flex items-center justify-between mt-1.5">
+                    <div class="flex items-center gap-1">
+                      <span class="px-1.5 py-0.5 bg-slate-200 dark:bg-dark-600 text-slate-600 dark:text-slate-400 rounded text-xs font-medium">
+                        {{ h.size }}
+                      </span>
+                      <span class="px-1.5 py-0.5 bg-slate-200 dark:bg-dark-600 text-slate-600 dark:text-slate-400 rounded text-xs font-medium">
+                        {{ h.aspect_ratio }}
+                      </span>
+                    </div>
+                    <!-- 快捷星标 -->
+                    <div class="flex items-center gap-0.5" @click.stop>
+                      <button 
+                        v-for="star in 5" 
+                        :key="star"
+                        @click="updateImageRating(h, h.rating === star ? 0 : star)"
+                        class="text-sm transition-all hover:scale-125"
+                        :class="star <= (h.rating || 0) ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600 hover:text-yellow-300'"
+                        :title="`${star}星`"
+                      >
+                        ★
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <!-- 快捷备注 -->
+                  <div class="mt-1.5" @click.stop>
+                    <input
+                      type="text"
+                      :value="h.note || ''"
+                      @blur="(e) => updateImageNote(h, e.target.value)"
+                      @keyup.enter="(e) => { updateImageNote(h, e.target.value); e.target.blur() }"
+                      placeholder="添加备注（如分镜信息）..."
+                      class="w-full px-2 py-1 text-xs bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 text-slate-600 dark:text-slate-300 placeholder-slate-400"
+                    />
                   </div>
                 </div>
               </div>

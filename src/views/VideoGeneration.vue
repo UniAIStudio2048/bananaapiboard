@@ -266,7 +266,7 @@ async function generateVideo() {
   const currentModel = model.value
   const currentDuration = duration.value
   const currentAspectRatio = aspectRatio.value
-  const currentPointsCost = currentPointsCost.value
+  const pointsCost = currentPointsCost.value
   
   try {
     const formData = new FormData()
@@ -344,7 +344,7 @@ async function generateVideo() {
       progress: data.progress || '排队中',
       created_at: Date.now(),
       video_url: data.video_url || null,
-      points_cost: currentPointsCost,
+      points_cost: pointsCost,
       fail_reason: null // 初始化失败原因
     }
     
@@ -557,7 +557,10 @@ async function downloadVideo(item) {
   if (!item?.video_url) return
   try {
     const token = localStorage.getItem('token')
-    const filename = encodeURIComponent((item.prompt || 'video').slice(0, 20))
+    // 如果有备注，将备注添加到文件名开头（移除特殊字符）
+    const notePrefix = item.note ? item.note.replace(/[^a-zA-Z0-9\u4e00-\u9fa5-_]/g, '_').slice(0, 30) + '_' : ''
+    const promptPart = (item.prompt || 'video').slice(0, 20).replace(/[^a-zA-Z0-9\u4e00-\u9fa5-_]/g, '_')
+    const filename = encodeURIComponent(`${notePrefix}${promptPart}`)
     const response = await fetch(`/api/videos/download?url=${encodeURIComponent(item.video_url)}&name=${filename}.mp4`, {
       headers: { ...getTenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
     })
@@ -576,6 +579,68 @@ async function downloadVideo(item) {
   }
 }
 
+// 更新视频备注
+async function updateVideoNote(item, note) {
+  if (!item || !item.id) return
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(`/api/videos/history/${item.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getTenantHeaders(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ note })
+    })
+    if (response.ok) {
+      // 更新本地数据
+      const idx = history.value.findIndex(h => h.id === item.id)
+      if (idx !== -1) {
+        history.value[idx].note = note
+      }
+      const gIdx = gallery.value.findIndex(g => g.id === item.id)
+      if (gIdx !== -1) {
+        gallery.value[gIdx].note = note
+      }
+      console.log('[updateVideoNote] 更新成功:', item.id, note)
+    }
+  } catch (e) {
+    console.error('[updateVideoNote] 更新失败:', e)
+  }
+}
+
+// 更新视频星标
+async function updateVideoRating(item, rating) {
+  if (!item || !item.id) return
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(`/api/videos/history/${item.id}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getTenantHeaders(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ rating })
+    })
+    if (response.ok) {
+      // 更新本地数据
+      const idx = history.value.findIndex(h => h.id === item.id)
+      if (idx !== -1) {
+        history.value[idx].rating = rating
+      }
+      const gIdx = gallery.value.findIndex(g => g.id === item.id)
+      if (gIdx !== -1) {
+        gallery.value[gIdx].rating = rating
+      }
+      console.log('[updateVideoRating] 更新成功:', item.id, rating)
+    }
+  } catch (e) {
+    console.error('[updateVideoRating] 更新失败:', e)
+  }
+}
+
 function openVideoModal(item) {
   currentVideo.value = item
   showVideoModal.value = true
@@ -584,6 +649,82 @@ function openVideoModal(item) {
 function closeVideoModal() {
   showVideoModal.value = false
   currentVideo.value = null
+}
+
+// 从历史记录再次生成
+async function regenerateFromHistory(item) {
+  if (!item) return
+  
+  console.log('[VideoGeneration] 再次生成:', item)
+  
+  // 恢复参数到输入框
+  if (item.prompt) {
+    prompt.value = item.prompt
+  }
+  if (item.model) {
+    model.value = item.model
+  }
+  if (item.aspect_ratio) {
+    aspectRatio.value = item.aspect_ratio
+  }
+  if (item.duration) {
+    duration.value = String(item.duration)
+  }
+  
+  // 获取参考图片列表
+  const referenceImages = item.reference_images || (item.reference_image ? [item.reference_image] : [])
+  
+  // 如果有参考图片，切换到图生视频模式并加载图片
+  if (referenceImages.length > 0) {
+    mode.value = 'image'
+    
+    // 清空现有图片
+    clearImages()
+    
+    // 显示加载提示
+    successMessage.value = '正在加载参考图片...'
+    
+    try {
+      for (const imageUrl of referenceImages) {
+        console.log('[VideoGeneration] 加载参考图片:', imageUrl)
+        
+        try {
+          const response = await fetch(imageUrl)
+          if (response.ok) {
+            const blob = await response.blob()
+            const filename = imageUrl.split('/').pop() || `image-${Date.now()}.jpg`
+            const file = new File([blob], filename, { type: blob.type || 'image/jpeg' })
+            const previewUrl = URL.createObjectURL(blob)
+            
+            imageFiles.value.push(file)
+            previewUrls.value.push(previewUrl)
+          }
+        } catch (imgError) {
+          console.error('[VideoGeneration] 加载图片失败:', imageUrl, imgError)
+        }
+      }
+      
+      if (imageFiles.value.length > 0) {
+        successMessage.value = `已自动填充参数和${imageFiles.value.length}张参考图片`
+      } else {
+        successMessage.value = '已填充参数，但参考图片加载失败（可能已过期）'
+      }
+    } catch (e) {
+      console.error('[VideoGeneration] 加载参考图片失败:', e)
+      successMessage.value = '已填充参数，但参考图片加载失败'
+    }
+  } else {
+    mode.value = 'text'
+    successMessage.value = '已自动填充参数，可以直接生成或修改后生成'
+  }
+  
+  // 滚动到顶部
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+  
+  // 3秒后清除提示
+  setTimeout(() => {
+    successMessage.value = ''
+  }, 3000)
 }
 
 function toggleHistoryDrawer() {
@@ -612,6 +753,55 @@ onMounted(async () => {
   // 只加载历史记录到抽屉，不自动显示在输出视频库
   await loadHistory()
   // gallery 保持为空，等待用户生成新视频
+  
+  // 检查是否有从图片页面传来的数据
+  const videoGenerationData = sessionStorage.getItem('videoGenerationImage')
+  if (videoGenerationData) {
+    try {
+      const data = JSON.parse(videoGenerationData)
+      console.log('[VideoGeneration] 接收到图片数据:', data)
+      
+      // 检查数据是否过期（5分钟）
+      if (Date.now() - data.timestamp < 5 * 60 * 1000) {
+        // 切换到图生视频模式
+        mode.value = 'image'
+        
+        // 填充提示词
+        if (data.prompt) {
+          prompt.value = data.prompt
+        }
+        
+        // 加载图片
+        if (data.url) {
+          try {
+            const response = await fetch(data.url)
+            if (response.ok) {
+              const blob = await response.blob()
+              const filename = data.url.split('/').pop() || `image-${Date.now()}.jpg`
+              const file = new File([blob], filename, { type: blob.type || 'image/jpeg' })
+              const previewUrl = URL.createObjectURL(blob)
+              
+              imageFiles.value = [file]
+              previewUrls.value = [previewUrl]
+              
+              successMessage.value = '图片已加载，可以开始生成视频'
+              setTimeout(() => { successMessage.value = '' }, 3000)
+            }
+          } catch (e) {
+            console.error('[VideoGeneration] 加载图片失败:', e)
+            error.value = '图片加载失败，请重新上传'
+            setTimeout(() => { error.value = '' }, 3000)
+          }
+        }
+      }
+      
+      // 清除 sessionStorage 数据
+      sessionStorage.removeItem('videoGenerationImage')
+    } catch (e) {
+      console.error('[VideoGeneration] 解析图片数据失败:', e)
+      sessionStorage.removeItem('videoGenerationImage')
+    }
+  }
 })
 
 onUnmounted(() => {
@@ -1030,6 +1220,35 @@ onUnmounted(() => {
                   <span :class="statusColor(item.status)" class="font-medium">{{ formatStatus(item.status) }}</span>
                   <span class="text-slate-500 dark:text-slate-400">{{ formatTime(item.created_at) }}</span>
                 </div>
+                
+                <!-- 快捷星标 -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-0.5" @click.stop>
+                    <button 
+                      v-for="star in 5" 
+                      :key="star"
+                      @click="updateVideoRating(item, item.rating === star ? 0 : star)"
+                      class="text-sm transition-all hover:scale-125"
+                      :class="star <= (item.rating || 0) ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600 hover:text-yellow-300'"
+                      :title="`${star}星`"
+                    >
+                      ★
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- 快捷备注 -->
+                <div @click.stop>
+                  <input
+                    type="text"
+                    :value="item.note || ''"
+                    @blur="(e) => updateVideoNote(item, e.target.value)"
+                    @keyup.enter="(e) => { updateVideoNote(item, e.target.value); e.target.blur() }"
+                    placeholder="添加备注..."
+                    class="w-full px-2 py-1 text-xs bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 text-slate-600 dark:text-slate-300 placeholder-slate-400"
+                  />
+                </div>
+                
                 <div class="flex items-center gap-2 pt-2">
                   <button 
                     class="flex-1 btn-secondary text-xs py-2" 
@@ -1157,8 +1376,8 @@ onUnmounted(() => {
                 <div v-else-if="isFailedStatus(item.status)" class="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20">
                   <div class="text-3xl mb-2">❌</div>
                   <p class="text-xs text-red-600 dark:text-red-400 font-semibold">{{ formatStatus(item.status) }}</p>
-                  <p v-if="item.fail_reason" class="text-xs text-red-500 dark:text-red-500 mt-1 text-center px-4">{{ item.fail_reason }}</p>
-                  <p v-else class="text-xs text-green-600 dark:text-green-400 mt-1 font-medium">✓ 未扣除积分</p>
+                  <p v-if="item.fail_reason" class="text-xs text-red-500 dark:text-red-500 mt-1 text-center px-4 line-clamp-2">{{ item.fail_reason }}</p>
+                  <p class="text-xs text-green-600 dark:text-green-400 mt-1 font-medium">✓ 未扣除积分</p>
                 </div>
                 <!-- 其他未知状态 - 默认显示为等待中 -->
                 <div v-else class="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20">
@@ -1196,19 +1415,55 @@ onUnmounted(() => {
                   {{ item.prompt }}
                 </p>
 
-                <!-- 元数据 -->
-                <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                  <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">{{ item.model }}</span>
-                  <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">{{ item.aspect_ratio }}</span>
+                <!-- 元数据和星标 -->
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">{{ item.model }}</span>
+                    <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">{{ item.aspect_ratio }}</span>
+                  </div>
+                  <!-- 快捷星标 -->
+                  <div class="flex items-center gap-0.5" @click.stop>
+                    <button 
+                      v-for="star in 5" 
+                      :key="star"
+                      @click="updateVideoRating(item, item.rating === star ? 0 : star)"
+                      class="text-sm transition-all hover:scale-125"
+                      :class="star <= (item.rating || 0) ? 'text-yellow-400' : 'text-slate-300 dark:text-slate-600 hover:text-yellow-300'"
+                      :title="`${star}星`"
+                    >
+                      ★
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- 快捷备注 -->
+                <div @click.stop>
+                  <input
+                    type="text"
+                    :value="item.note || ''"
+                    @blur="(e) => updateVideoNote(item, e.target.value)"
+                    @keyup.enter="(e) => { updateVideoNote(item, e.target.value); e.target.blur() }"
+                    placeholder="添加备注（如分镜信息）..."
+                    class="w-full px-2 py-1 text-xs bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 rounded focus:outline-none focus:ring-1 focus:ring-primary-500 text-slate-600 dark:text-slate-300 placeholder-slate-400"
+                  />
                 </div>
 
                 <!-- 失败原因 -->
-                <p v-if="item.fail_reason" class="text-xs text-red-500 bg-red-50 dark:bg-red-900/20 p-2 rounded">
-                  {{ item.fail_reason }}
-                </p>
+                <div v-if="isFailedStatus(item.status)" class="text-xs bg-red-50 dark:bg-red-900/20 p-2 rounded space-y-1">
+                  <p v-if="item.fail_reason" class="text-red-500">{{ item.fail_reason }}</p>
+                  <p class="text-green-600 dark:text-green-400 font-medium">✓ 未扣除积分</p>
+                </div>
 
                 <!-- 操作按钮 -->
                 <div class="flex items-center gap-2 pt-2">
+                  <!-- 再次生成按钮 -->
+                  <button 
+                    class="w-10 h-8 rounded-lg bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 hover:bg-green-200 dark:hover:bg-green-900/50 transition-colors flex items-center justify-center"
+                    @click="regenerateFromHistory(item)"
+                    title="再次生成"
+                  >
+                    🔄
+                  </button>
                   <button 
                     class="flex-1 btn-secondary-small" 
                     @click="openVideoModal(item)"
@@ -1237,13 +1492,6 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
-
-    <!-- 遮罩层 -->
-    <div
-      v-if="isHistoryDrawerOpen"
-      class="fixed inset-0 bg-black/30 backdrop-blur-sm z-30 transition-opacity duration-300"
-      @click="toggleHistoryDrawer"
-    ></div>
   </div>
 
   <!-- 视频预览模态框 -->
