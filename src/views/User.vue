@@ -3010,7 +3010,10 @@ const getTransactionIcon = (type) => {
     'invite_reward': { icon: '🎉', bg: 'bg-pink-100 dark:bg-pink-900/20' },
     'daily_checkin': { icon: '📅', bg: 'bg-orange-100 dark:bg-orange-900/20' },
     'voucher_redeem': { icon: '🎫', bg: 'bg-pink-100 dark:bg-pink-900/20' },
-    'balance_to_points': { icon: '💎', bg: 'bg-blue-100 dark:bg-blue-900/20' }
+    'balance_to_points': { icon: '💎', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+    'package_grant': { icon: '📦', bg: 'bg-emerald-100 dark:bg-emerald-900/20' },
+    'video_refund': { icon: '🎬', bg: 'bg-cyan-100 dark:bg-cyan-900/20' },
+    'video_cost': { icon: '🎬', bg: 'bg-rose-100 dark:bg-rose-900/20' }
   }
   return icons[type] || { icon: '💎', bg: 'bg-slate-100 dark:bg-dark-600' }
 }
