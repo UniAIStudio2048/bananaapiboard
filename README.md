@@ -464,6 +464,296 @@ aws s3 sync dist/ s3://your-bucket/ --delete
 
 ---
 
+## 🔄 版本更新教程
+
+### 检查当前版本
+
+```bash
+# 查看当前分支
+git branch
+
+# 查看当前版本标签
+git describe --tags
+
+# 查看最近的提交
+git log --oneline -5
+```
+
+### 更新到最新版本
+
+#### 方式一：更新到最新主分支（推荐）
+
+```bash
+# 1. 备份当前 .env 配置文件（重要！）
+cp .env .env.backup
+
+# 2. 拉取最新代码
+git pull origin main
+
+# 3. 恢复配置文件
+cp .env.backup .env
+
+# 4. 重新安装依赖（如果 package.json 有更新）
+npm install
+
+# 5. 重启开发服务器
+npm run dev
+```
+
+#### 方式二：更新到指定版本标签
+
+```bash
+# 1. 查看所有可用版本
+git tag -l
+
+# 2. 更新到指定版本（例如 v5.7.1）
+git checkout v5.7.1
+
+# 3. 恢复配置文件（如果被覆盖）
+cp .env.backup .env
+
+# 4. 安装依赖
+npm install
+
+# 5. 重启服务
+npm run dev
+```
+
+#### 方式三：强制更新（慎用）
+
+⚠️ **警告**：此方式会丢弃所有本地修改！
+
+```bash
+# 1. 备份配置文件
+cp .env .env.backup
+cp -r public/custom-assets /tmp/custom-assets-backup  # 如果有自定义资源
+
+# 2. 强制拉取最新代码
+git fetch origin
+git reset --hard origin/main
+
+# 3. 恢复配置和自定义资源
+cp .env.backup .env
+cp -r /tmp/custom-assets-backup/* public/custom-assets/
+
+# 4. 重新安装依赖
+rm -rf node_modules package-lock.json
+npm install
+
+# 5. 重启服务
+npm run dev
+```
+
+### 查看版本更新日志
+
+```bash
+# 查看版本发布说明
+cat CHANGELOG.md
+
+# 或访问 GitHub Releases 页面
+# https://github.com/iblisbanana/bananaapiboard/releases
+```
+
+### 常见更新问题
+
+#### Q1: 更新后出现依赖错误？
+
+```bash
+# 清理并重新安装依赖
+rm -rf node_modules package-lock.json
+npm cache clean --force
+npm install
+```
+
+#### Q2: 更新后配置丢失？
+
+```bash
+# 从备份恢复
+cp .env.backup .env
+
+# 检查是否有新的配置项
+diff .env.example .env
+```
+
+#### Q3: 更新后样式错误？
+
+```bash
+# 清除构建缓存
+rm -rf dist/ node_modules/.vite/
+
+# 重新启动
+npm run dev
+```
+
+#### Q4: 如何回退到旧版本？
+
+```bash
+# 查看历史版本
+git tag -l
+
+# 回退到指定版本
+git checkout v5.6.4
+
+# 重新安装依赖
+npm install
+
+# 重启服务
+npm run dev
+```
+
+### 生产环境更新流程
+
+#### 使用 Nginx/Apache
+
+```bash
+# 1. 备份当前版本
+sudo cp -r /var/www/ai-platform /var/www/ai-platform.backup
+
+# 2. 在开发环境拉取最新代码并构建
+git pull origin main
+npm install
+npm run build
+
+# 3. 上传新版本到服务器
+rsync -avz dist/ user@server:/var/www/ai-platform/
+
+# 4. 重启 Nginx（如需要）
+sudo systemctl reload nginx
+```
+
+#### 使用 Docker
+
+```bash
+# 1. 拉取最新代码
+git pull origin main
+
+# 2. 重新构建镜像
+docker-compose build --no-cache
+
+# 3. 停止旧容器
+docker-compose down
+
+# 4. 启动新容器
+docker-compose up -d
+
+# 5. 查看日志
+docker-compose logs -f
+```
+
+### 自动化更新脚本
+
+创建更新脚本 `update.sh`：
+
+```bash
+#!/bin/bash
+
+echo "🔄 开始更新前端项目..."
+
+# 备份配置
+echo "📦 备份配置文件..."
+cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+
+# 拉取最新代码
+echo "⬇️ 拉取最新代码..."
+git pull origin main
+
+if [ $? -ne 0 ]; then
+    echo "❌ 代码拉取失败！"
+    exit 1
+fi
+
+# 恢复配置
+echo "🔧 恢复配置文件..."
+cp .env.backup.* .env 2>/dev/null || echo "配置文件无需恢复"
+
+# 安装依赖
+echo "📦 安装依赖..."
+npm install
+
+if [ $? -ne 0 ]; then
+    echo "❌ 依赖安装失败！"
+    exit 1
+fi
+
+# 构建（生产环境）
+if [ "$1" == "production" ]; then
+    echo "🏗️ 构建生产版本..."
+    npm run build
+    
+    if [ $? -ne 0 ]; then
+        echo "❌ 构建失败！"
+        exit 1
+    fi
+    
+    echo "✅ 生产版本构建完成！"
+else
+    echo "✅ 更新完成！使用 'npm run dev' 启动开发服务器"
+fi
+
+echo "🎉 更新成功！"
+```
+
+使用方法：
+
+```bash
+# 赋予执行权限
+chmod +x update.sh
+
+# 开发环境更新
+./update.sh
+
+# 生产环境更新（包含构建）
+./update.sh production
+```
+
+### 版本升级注意事项
+
+#### 大版本升级（如 v4.x → v5.x）
+
+⚠️ 大版本升级可能包含破坏性更改：
+
+1. **仔细阅读发布说明**：查看 CHANGELOG.md 和 GitHub Releases
+2. **检查配置变更**：对比 `.env.example` 是否有新增或修改的配置项
+3. **测试环境验证**：先在测试环境验证功能正常
+4. **备份数据**：确保有完整的备份
+5. **准备回退方案**：记录当前版本号，以便必要时回退
+
+#### 小版本更新（如 v5.6.x → v5.7.x）
+
+✅ 小版本更新通常向后兼容：
+
+1. 直接拉取最新代码
+2. 更新依赖
+3. 重启服务
+
+#### 补丁版本（如 v5.7.0 → v5.7.1）
+
+✅ 补丁版本仅包含错误修复：
+
+1. 快速更新即可
+2. 无需特殊处理
+
+### 版本订阅通知
+
+**推荐方式：**
+
+1. 在 GitHub 上 **Watch** 本项目，选择 "Releases only"
+2. 关注项目的 Release 页面
+3. 订阅项目更新邮件通知
+
+**手动检查更新：**
+
+```bash
+# 获取远程最新标签
+git fetch --tags
+
+# 对比本地和远程版本
+echo "本地版本: $(git describe --tags)"
+echo "最新版本: $(git describe --tags --abbrev=0 origin/main)"
+```
+
+---
+
 ## 📁 项目结构说明
 
 ```
