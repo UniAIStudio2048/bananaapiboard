@@ -54,7 +54,6 @@
 ### 操作系统
 
 - ✅ Linux (Ubuntu 20.04+, CentOS 7+, Debian 10+)
-- ✅ macOS (10.15+)
 - ✅ Windows (10+)
 
 ---
@@ -77,21 +76,33 @@ npm -v
 
 如果未安装，请访问 [Node.js 官网](https://nodejs.org/) 下载安装。
 
-**Linux/macOS 安装示例：**
+**Linux 安装示例：**
 
 ```bash
-# 使用 nvm 安装（推荐）
-curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
-nvm install 18
-nvm use 18
-
-# 或使用包管理器
 # Ubuntu/Debian
 sudo apt update
 sudo apt install nodejs npm
 
-# macOS (使用 Homebrew)
-brew install node
+# 或使用 nvm（推荐）
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+nvm install 18
+nvm use 18
+
+# CentOS/RHEL
+sudo yum install nodejs npm
+```
+
+**Windows 安装示例：**
+
+```powershell
+# 方式一：从官网下载安装包
+# 访问 https://nodejs.org/ 下载 Windows 安装包
+
+# 方式二：使用 Chocolatey
+choco install nodejs
+
+# 方式三：使用 Scoop
+scoop install nodejs
 ```
 
 ### 第二步：获取租户凭证
@@ -135,7 +146,7 @@ pnpm install
 # 如果遇到网络问题，可以使用国内镜像
 npm install --registry=https://registry.npmmirror.com
 
-# 如果遇到权限问题（Linux/macOS）
+# 如果遇到权限问题（Linux）
 sudo npm install
 
 # 清除缓存后重试
@@ -313,21 +324,25 @@ PORT=8080 npm run preview
 
 ### 部署方式
 
-#### 方式一：静态文件部署（推荐）
+#### 方式一：Linux 静态文件部署（Nginx）
 
-将 `dist/` 目录部署到任意静态文件服务器。
-
-**1. Nginx 部署**
+**1. 复制构建产物到服务器**
 
 ```bash
-# 复制构建产物到 Nginx 目录
+# 构建生产版本
+npm run build
+
+# 复制到 Nginx 默认目录
 sudo cp -r dist/* /var/www/html/
 
 # 或使用自定义目录
+sudo mkdir -p /var/www/ai-platform
 sudo cp -r dist/* /var/www/ai-platform/
 ```
 
-**Nginx 配置示例：**
+**2. Nginx 配置示例**
+
+创建或编辑配置文件 `/etc/nginx/sites-available/ai-platform`：
 
 ```nginx
 server {
@@ -351,7 +366,7 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # API 代理（可选，如果后端在同服务器）
+    # API 代理（可选）
     location /api {
         proxy_pass https://your-api-server.com;
         proxy_set_header Host $host;
@@ -362,50 +377,77 @@ server {
 }
 ```
 
-**2. Apache 部署**
-
-```apache
-<VirtualHost *:80>
-    ServerName your-domain.com
-    DocumentRoot /var/www/ai-platform
-
-    <Directory /var/www/ai-platform>
-        Options -Indexes +FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
-
-    # Vue Router History 模式支持
-    RewriteEngine On
-    RewriteBase /
-    RewriteRule ^index\.html$ - [L]
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule . /index.html [L]
-</VirtualHost>
-```
-
-**3. Vercel 部署**
+**3. 启用配置并重启 Nginx**
 
 ```bash
-# 安装 Vercel CLI
-npm i -g vercel
+# 创建软链接
+sudo ln -s /etc/nginx/sites-available/ai-platform /etc/nginx/sites-enabled/
 
-# 部署
-vercel
+# 测试配置
+sudo nginx -t
+
+# 重启 Nginx
+sudo systemctl restart nginx
 ```
 
-**4. Netlify 部署**
+#### 方式二：Windows 静态文件部署（IIS）
 
-```bash
-# 安装 Netlify CLI
-npm i -g netlify-cli
+**1. 安装 IIS 和 URL Rewrite 模块**
 
-# 部署
-netlify deploy --prod --dir=dist
+```powershell
+# 启用 IIS（以管理员身份运行 PowerShell）
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServerRole
+Enable-WindowsOptionalFeature -Online -FeatureName IIS-WebServer
+
+# 下载并安装 URL Rewrite 模块
+# https://www.iis.net/downloads/microsoft/url-rewrite
 ```
 
-#### 方式二：Docker 部署
+**2. 部署文件**
+
+```powershell
+# 构建生产版本
+npm run build
+
+# 复制到 IIS 目录（默认 C:\inetpub\wwwroot）
+Copy-Item -Path dist\* -Destination C:\inetpub\wwwroot\ai-platform\ -Recurse -Force
+```
+
+**3. 配置 web.config**
+
+在部署目录创建 `web.config` 文件：
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <system.webServer>
+        <rewrite>
+            <rules>
+                <rule name="Vue Router" stopProcessing="true">
+                    <match url=".*" />
+                    <conditions logicalGrouping="MatchAll">
+                        <add input="{REQUEST_FILENAME}" matchType="IsFile" negate="true" />
+                        <add input="{REQUEST_FILENAME}" matchType="IsDirectory" negate="true" />
+                    </conditions>
+                    <action type="Rewrite" url="/index.html" />
+                </rule>
+            </rules>
+        </rewrite>
+        <staticContent>
+            <mimeMap fileExtension=".json" mimeType="application/json" />
+        </staticContent>
+    </system.webServer>
+</configuration>
+```
+
+**4. 在 IIS 管理器中创建网站**
+
+- 打开 IIS 管理器
+- 右键点击"网站" → "添加网站"
+- 设置网站名称、物理路径、端口等
+- 启动网站
+
+#### 方式三：Docker 部署（跨平台）
 
 **使用项目提供的 Dockerfile：**
 
@@ -427,39 +469,17 @@ docker run -d \
 
 ```bash
 # 编辑 docker-compose.yml 中的环境变量
-nano docker-compose.yml
+nano docker-compose.yml  # Linux
+notepad docker-compose.yml  # Windows
 
 # 启动服务
 docker-compose up -d
 
 # 查看日志
 docker-compose logs -f
-```
 
-#### 方式三：云平台部署
-
-**1. 阿里云 OSS + CDN**
-
-```bash
-# 安装阿里云 CLI
-npm i -g @alicloud/cli
-
-# 上传到 OSS
-ossutil cp -r dist/ oss://your-bucket/ --update
-```
-
-**2. 腾讯云 COS**
-
-```bash
-# 使用 coscmd 上传
-coscmd upload -rs dist/ /
-```
-
-**3. AWS S3 + CloudFront**
-
-```bash
-# 使用 AWS CLI
-aws s3 sync dist/ s3://your-bucket/ --delete
+# 停止服务
+docker-compose down
 ```
 
 ---
@@ -603,25 +623,50 @@ npm run dev
 
 ### 生产环境更新流程
 
-#### 使用 Nginx/Apache
+#### Linux (Nginx)
 
 ```bash
 # 1. 备份当前版本
-sudo cp -r /var/www/ai-platform /var/www/ai-platform.backup
+sudo cp -r /var/www/ai-platform /var/www/ai-platform.backup.$(date +%Y%m%d)
 
-# 2. 在开发环境拉取最新代码并构建
+# 2. 拉取最新代码并构建
 git pull origin main
 npm install
 npm run build
 
-# 3. 上传新版本到服务器
-rsync -avz dist/ user@server:/var/www/ai-platform/
+# 3. 部署新版本
+sudo cp -r dist/* /var/www/ai-platform/
 
 # 4. 重启 Nginx（如需要）
 sudo systemctl reload nginx
+
+# 或使用 rsync 从本地上传到远程服务器
+rsync -avz dist/ user@server:/var/www/ai-platform/
 ```
 
-#### 使用 Docker
+#### Windows (IIS)
+
+```powershell
+# 1. 备份当前版本
+$backupDate = Get-Date -Format "yyyyMMdd"
+Copy-Item -Path C:\inetpub\wwwroot\ai-platform -Destination "C:\inetpub\wwwroot\ai-platform.backup.$backupDate" -Recurse
+
+# 2. 拉取最新代码并构建
+git pull origin main
+npm install
+npm run build
+
+# 3. 停止网站（在 IIS 管理器中或使用命令）
+Stop-WebSite -Name "AI Platform"
+
+# 4. 部署新版本
+Copy-Item -Path dist\* -Destination C:\inetpub\wwwroot\ai-platform\ -Recurse -Force
+
+# 5. 启动网站
+Start-WebSite -Name "AI Platform"
+```
+
+#### Docker (跨平台)
 
 ```bash
 # 1. 拉取最新代码
@@ -642,7 +687,9 @@ docker-compose logs -f
 
 ### 自动化更新脚本
 
-创建更新脚本 `update.sh`：
+#### Linux 更新脚本 (`update.sh`)
+
+创建 `update.sh` 脚本：
 
 ```bash
 #!/bin/bash
@@ -704,6 +751,74 @@ chmod +x update.sh
 
 # 生产环境更新（包含构建）
 ./update.sh production
+```
+
+#### Windows 更新脚本 (`update.ps1`)
+
+创建 `update.ps1` 脚本：
+
+```powershell
+# update.ps1
+Write-Host "🔄 开始更新前端项目..." -ForegroundColor Green
+
+# 备份配置
+Write-Host "📦 备份配置文件..." -ForegroundColor Yellow
+$backupName = ".env.backup.$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+Copy-Item .env $backupName -ErrorAction SilentlyContinue
+
+# 拉取最新代码
+Write-Host "⬇️ 拉取最新代码..." -ForegroundColor Yellow
+git pull origin main
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ 代码拉取失败！" -ForegroundColor Red
+    exit 1
+}
+
+# 恢复配置
+Write-Host "🔧 恢复配置文件..." -ForegroundColor Yellow
+if (Test-Path $backupName) {
+    Copy-Item $backupName .env
+}
+
+# 安装依赖
+Write-Host "📦 安装依赖..." -ForegroundColor Yellow
+npm install
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "❌ 依赖安装失败！" -ForegroundColor Red
+    exit 1
+}
+
+# 构建（生产环境）
+if ($args[0] -eq "production") {
+    Write-Host "🏗️ 构建生产版本..." -ForegroundColor Yellow
+    npm run build
+    
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "❌ 构建失败！" -ForegroundColor Red
+        exit 1
+    }
+    
+    Write-Host "✅ 生产版本构建完成！" -ForegroundColor Green
+} else {
+    Write-Host "✅ 更新完成！使用 'npm run dev' 启动开发服务器" -ForegroundColor Green
+}
+
+Write-Host "🎉 更新成功！" -ForegroundColor Green
+```
+
+使用方法：
+
+```powershell
+# 开发环境更新
+.\update.ps1
+
+# 生产环境更新（包含构建）
+.\update.ps1 production
+
+# 如果遇到执行策略限制，先运行：
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
 ### 版本升级注意事项
@@ -1005,16 +1120,33 @@ docker build \
 
 **解决方法：**
 
+**Linux 解决方法：**
+
 ```bash
 # 查找占用端口的进程
-# Linux/macOS
 lsof -i :3000
 
-# Windows
+# 或使用 netstat
+sudo netstat -tulpn | grep :3000
+
+# 杀死进程
+kill -9 [PID]
+
+# 或使用其他端口
+PORT=8080 npm run dev
+```
+
+**Windows 解决方法：**
+
+```powershell
+# 查找占用端口的进程
 netstat -ano | findstr :3000
 
-# 杀死进程或使用其他端口
-PORT=8080 npm run dev
+# 记录 PID 并杀死进程
+taskkill /F /PID [PID]
+
+# 或使用其他端口
+$env:PORT=8080; npm run dev
 ```
 
 ### Q8: 热重载不工作？
