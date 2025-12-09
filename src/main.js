@@ -73,15 +73,9 @@ async function initBrandConfig() {
       document.title = brand.name
     }
     
-    // 更新 favicon
-    if (brand.logo) {
-      const favicon = document.querySelector('link[rel="icon"]')
-      if (favicon) {
-        favicon.href = brand.favicon || brand.logo
-      }
-    }
+    // favicon 已在 loadBrandConfig 中通过 applyFavicon 自动应用
     
-    console.log('[系统初始化] 品牌配置已应用:', brand.name)
+    console.log('[系统初始化] 品牌配置已应用:', brand.name, '主题色:', brand.primaryColor)
   } catch (e) {
     console.error('[系统初始化] 品牌配置加载失败:', e)
   }

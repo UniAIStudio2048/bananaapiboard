@@ -175,7 +175,7 @@ export async function loadBrandConfig(forceReload = false) {
       runtimeConfig.brand = {
         name: data.brandName || runtimeConfig.brand.name,
         logo: data.brandLogo || runtimeConfig.brand.logo,
-        favicon: runtimeConfig.brand.favicon,
+        favicon: data.favicon || data.brandLogo || runtimeConfig.brand.favicon,
         primaryColor: data.primaryColor || runtimeConfig.brand.primaryColor,
         description: data.brandDescription || runtimeConfig.brand.description
       }
@@ -195,6 +195,9 @@ export async function loadBrandConfig(forceReload = false) {
       // 应用主题色到CSS变量
       applyThemeColor(runtimeConfig.brand.primaryColor)
       
+      // 应用favicon
+      applyFavicon(runtimeConfig.brand.favicon)
+      
       return runtimeConfig.brand
     } else {
       console.warn('[tenant] 品牌配置加载失败，使用默认配置')
@@ -206,6 +209,13 @@ export async function loadBrandConfig(forceReload = false) {
   return runtimeConfig.brand
 }
 
+// 将十六进制颜色转换为 RGB 空格分隔格式（用于 Tailwind）
+function hexToRgbSpace(hex) {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex)
+  if (!result) return null
+  return `${parseInt(result[1], 16)} ${parseInt(result[2], 16)} ${parseInt(result[3], 16)}`
+}
+
 // 应用主题色到CSS变量
 function applyThemeColor(color) {
   if (!color || typeof document === 'undefined') return
@@ -215,9 +225,70 @@ function applyThemeColor(color) {
     // 计算hover颜色（稍微深一点）
     const hoverColor = adjustColor(color, -20)
     document.documentElement.style.setProperty('--primary-color-hover', hoverColor)
+    
+    // 生成主题色的各种变体并设置 RGB 格式的 CSS 变量
+    const variants = [
+      { name: '50', amount: 90 },
+      { name: '100', amount: 70 },
+      { name: '200', amount: 50 },
+      { name: '300', amount: 30 },
+      { name: '400', amount: 10 },
+      { name: '500', amount: 0 },
+      { name: '600', amount: -10 },
+      { name: '700', amount: -25 },
+      { name: '800', amount: -40 },
+      { name: '900', amount: -55 },
+    ]
+    
+    for (const v of variants) {
+      const adjustedColor = v.amount === 0 ? color : adjustColor(color, v.amount)
+      const rgbValue = hexToRgbSpace(adjustedColor)
+      if (rgbValue) {
+        document.documentElement.style.setProperty(`--primary-${v.name}-rgb`, rgbValue)
+      }
+    }
+    
     console.log('[tenant] 主题色已应用:', color)
   } catch (e) {
     console.error('[tenant] 应用主题色失败:', e)
+  }
+}
+
+// 应用favicon
+function applyFavicon(faviconUrl) {
+  if (!faviconUrl || typeof document === 'undefined') return
+  
+  try {
+    // 更新现有的favicon link标签
+    let favicon = document.querySelector('link[rel="icon"]')
+    if (favicon) {
+      favicon.href = faviconUrl
+    } else {
+      // 如果不存在则创建
+      favicon = document.createElement('link')
+      favicon.rel = 'icon'
+      favicon.href = faviconUrl
+      document.head.appendChild(favicon)
+    }
+    
+    // 同时更新 shortcut icon（兼容旧浏览器）
+    let shortcutIcon = document.querySelector('link[rel="shortcut icon"]')
+    if (shortcutIcon) {
+      shortcutIcon.href = faviconUrl
+    }
+    
+    // 更新 apple-touch-icon（移动端）
+    let appleIcon = document.querySelector('link[rel="apple-touch-icon"]')
+    if (!appleIcon) {
+      appleIcon = document.createElement('link')
+      appleIcon.rel = 'apple-touch-icon'
+      document.head.appendChild(appleIcon)
+    }
+    appleIcon.href = faviconUrl
+    
+    console.log('[tenant] Favicon已应用:', faviconUrl)
+  } catch (e) {
+    console.error('[tenant] 应用Favicon失败:', e)
   }
 }
 

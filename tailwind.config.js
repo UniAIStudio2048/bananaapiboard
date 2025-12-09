@@ -8,17 +8,18 @@ export default {
   theme: {
     extend: {
       colors: {
+        // 主题色 - 使用 RGB 值支持透明度
         primary: {
-          50: '#fefce8',
-          100: '#fef9c3',
-          200: '#fef08a',
-          300: '#fde047',
-          400: '#facc15',
-          500: '#eab308',
-          600: '#ca8a04',
-          700: '#a16207',
-          800: '#854d0e',
-          900: '#713f12',
+          50: 'rgb(var(--primary-50-rgb, 254 252 232) / <alpha-value>)',
+          100: 'rgb(var(--primary-100-rgb, 254 249 195) / <alpha-value>)',
+          200: 'rgb(var(--primary-200-rgb, 254 240 138) / <alpha-value>)',
+          300: 'rgb(var(--primary-300-rgb, 253 224 71) / <alpha-value>)',
+          400: 'rgb(var(--primary-400-rgb, 250 204 21) / <alpha-value>)',
+          500: 'rgb(var(--primary-500-rgb, 234 179 8) / <alpha-value>)',
+          600: 'rgb(var(--primary-600-rgb, 202 138 4) / <alpha-value>)',
+          700: 'rgb(var(--primary-700-rgb, 161 98 7) / <alpha-value>)',
+          800: 'rgb(var(--primary-800-rgb, 133 77 14) / <alpha-value>)',
+          900: 'rgb(var(--primary-900-rgb, 113 63 18) / <alpha-value>)',
         },
         dark: {
           50: '#f8fafc',

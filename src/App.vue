@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { getMe } from '@/api/client'
 import { getTheme, toggleTheme as toggleThemeUtil } from '@/utils/theme'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getBrand, loadBrandConfig } from '@/config/tenant'
 import NotificationBar from '@/components/NotificationBar.vue'
 
 const me = ref(null)
@@ -16,6 +16,9 @@ const currentTheme = ref(getTheme())
 const isWidescreenMode = ref(false)
 const inviteCode = ref('')
 const copySuccess = ref(false)
+
+// 品牌配置（动态加载）
+const brandConfig = ref(getBrand())
 
 // 备案号配置
 const icpConfig = ref({
@@ -61,6 +64,15 @@ async function loadSiteConfig() {
 onMounted(async () => { 
   me.value = await getMe()
   await Promise.all([loadInviteCode(), loadSiteConfig()])
+  
+  // 加载并更新品牌配置
+  try {
+    const brand = await loadBrandConfig(true)  // 强制重新加载
+    brandConfig.value = brand
+    console.log('[App] 品牌配置已更新:', brand.name, brand.logo)
+  } catch (e) {
+    console.error('[App] 品牌配置加载失败:', e)
+  }
   
   // 点击外部关闭下拉菜单
   document.addEventListener('click', closeMenus)
@@ -192,10 +204,19 @@ async function copyInviteLink() {
           :class="isWidescreenMode && route.path === '/' ? 'px-4' : ''">
           <!-- Logo -->
           <div class="flex items-center space-x-3">
-            <div class="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-lg flex items-center justify-center">
+            <!-- 品牌Logo图片（如果已配置） -->
+            <img 
+              v-if="brandConfig.logo && brandConfig.logo !== '/logo.png'" 
+              :src="brandConfig.logo" 
+              :alt="brandConfig.name"
+              class="w-10 h-10 object-contain rounded-lg"
+            />
+            <!-- 默认Logo（如果没有配置自定义Logo） -->
+            <div v-else class="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-lg flex items-center justify-center">
               <span class="text-2xl">🍌</span>
             </div>
-            <span class="text-xl font-bold gradient-text">Nanobanana</span>
+            <!-- 品牌名称 -->
+            <span class="text-xl font-bold gradient-text">{{ brandConfig.name || 'Nanobanana' }}</span>
           </div>
 
           <!-- 桌面端导航 -->
