@@ -46,6 +46,19 @@ const defaultConfig = {
     description: 'AI 图像生成平台'
   },
   
+  // 模型名称配置（默认为空，使用原始名称）
+  modelNames: {
+    image: {
+      'nano-banana': '',
+      'nano-banana-hd': '',
+      'nano-banana-2': ''
+    },
+    video: {
+      'sora-2': '',
+      'sora-2-pro': ''
+    }
+  },
+  
   // 功能开关
   features: {
     enableVideo: true,      // 是否启用视频生成
@@ -114,8 +127,21 @@ export function updateRuntimeConfig(newConfig) {
 }
 
 // 从后端 API 加载品牌配置（公开接口，无需认证）
-export async function loadBrandConfig() {
+export async function loadBrandConfig(forceReload = false) {
   try {
+    // 检查是否需要强制重新加载
+    if (!forceReload) {
+      const lastUpdate = localStorage.getItem('brand_config_last_update')
+      if (lastUpdate) {
+        const timeSinceUpdate = Date.now() - parseInt(lastUpdate)
+        // 如果距离上次更新不到5分钟，使用缓存
+        if (timeSinceUpdate < 5 * 60 * 1000) {
+          console.log('[tenant] 使用缓存的品牌配置')
+          return runtimeConfig.brand
+        }
+      }
+    }
+    
     console.log('[tenant] 从后端加载品牌配置...')
     
     // 先尝试从 localStorage 获取租户信息
@@ -154,8 +180,17 @@ export async function loadBrandConfig() {
         description: data.brandDescription || runtimeConfig.brand.description
       }
       
+      // 更新模型名称配置
+      if (data.modelNames) {
+        runtimeConfig.modelNames = data.modelNames
+        console.log('[tenant] 模型名称配置已更新:', data.modelNames)
+      }
+      
       // 保存到本地存储
       saveToStorage(runtimeConfig)
+      
+      // 记录更新时间
+      localStorage.setItem('brand_config_last_update', Date.now().toString())
       
       // 应用主题色到CSS变量
       applyThemeColor(runtimeConfig.brand.primaryColor)
@@ -297,6 +332,20 @@ export const getTenantId = () => config.tenantId
 export const getTenantKey = () => config.tenantKey
 export const getBrand = () => config.brand
 export const getFeatures = () => config.features
+export const getModelNames = () => config.modelNames || defaultConfig.modelNames
+
+// 获取模型显示名称（如果自定义了则返回自定义名称，否则返回默认名称）
+export const getModelDisplayName = (modelKey, type = 'image') => {
+  const modelNames = getModelNames()
+  const customName = modelNames?.[type]?.[modelKey]
+  return customName || null // 返回null表示使用默认名称
+}
+
+// 强制刷新品牌配置（用于管理后台保存后立即刷新）
+export const refreshBrandConfig = async () => {
+  console.log('[tenant] 强制刷新品牌配置...')
+  return await loadBrandConfig(true)
+}
 
 // 生成带租户标识的请求头
 export const getTenantHeaders = () => {

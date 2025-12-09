@@ -1492,11 +1492,25 @@ onMounted(() => {
   
   // 监听页面可见性变化
   document.addEventListener('visibilitychange', handleVisibilityChange)
+  
+  // 监听兑换券入口点击事件
+  window.addEventListener('open-voucher-modal', openVoucherModal)
+  
+  // 监听用户信息更新事件（支付成功后刷新）
+  window.addEventListener('user-info-updated', handleUserInfoUpdated)
 })
+
+// 处理用户信息更新
+async function handleUserInfoUpdated() {
+  console.log('[Packages] 用户信息已更新，刷新页面数据')
+  await loadPackages()
+}
 
 // 组件卸载时移除监听
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('open-voucher-modal', openVoucherModal)
+  window.removeEventListener('user-info-updated', handleUserInfoUpdated)
 })
 </script>
 

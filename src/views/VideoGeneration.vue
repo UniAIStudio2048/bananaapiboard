@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getMe } from '@/api/client'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 
 const fileInputRef = ref(null)
@@ -75,6 +75,19 @@ const userPackageInfo = computed(() => {
     concurrentLimit: me.value.concurrent_limit || 1
   }
 })
+
+// 获取模型显示名称
+const getModelName = (modelKey) => {
+  const customName = getModelDisplayName(modelKey, 'video')
+  if (customName) return customName
+  
+  // 默认名称
+  const defaultNames = {
+    'sora-2': 'Sora 2',
+    'sora-2-pro': 'Sora 2 Pro'
+  }
+  return defaultNames[modelKey] || modelKey
+}
 
 function formatPointsTitle() {
   if (!me.value) return ''
@@ -851,8 +864,8 @@ onUnmounted(() => {
                 <span>模型</span>
               </label>
               <select v-model="model" class="input text-sm">
-                <option value="sora-2">Sora 2 · 标准</option>
-                <option value="sora-2-pro">Sora 2 Pro · 高级</option>
+                <option value="sora-2">{{ getModelName('sora-2') }} · 标准</option>
+                <option value="sora-2-pro">{{ getModelName('sora-2-pro') }} · 高级</option>
               </select>
             </div>
 

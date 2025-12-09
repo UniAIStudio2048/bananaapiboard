@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName } from '@/config/tenant'
 
 const router = useRouter()
 const me = ref(null)
@@ -217,6 +217,24 @@ const settings = ref({
 
 const listRangeStart = computed(() => total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1)
 const listRangeEnd = computed(() => Math.min(page.value * pageSize.value, total.value))
+
+// 获取模型显示名称
+const getModelName = (modelKey, type = 'image') => {
+  const customName = getModelDisplayName(modelKey, type)
+  if (customName) return customName
+  
+  // 默认名称
+  const defaultNames = {
+    // 图片模型
+    'nano-banana': 'Nano Banana',
+    'nano-banana-hd': 'Nano Banana HD',
+    'nano-banana-2': 'Nano Banana 2',
+    // 视频模型
+    'sora-2': 'Sora 2',
+    'sora-2-pro': 'Sora 2 Pro'
+  }
+  return defaultNames[modelKey] || modelKey
+}
 
 async function fetchWithAdminAuth(url, opts = {}) {
   const t = localStorage.getItem('token') || ''
@@ -3960,14 +3978,14 @@ onUnmounted(() => {
               <div class="grid grid-cols-2 gap-4">
                 <div>
                   <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Nano Banana
+                    {{ getModelName('nano-banana', 'image') }}
                   </label>
                   <input v-model.number="settings.points_cost['nano-banana']" class="input" type="number" min="0" />
                 </div>
                 
                 <div>
                   <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    Nano Banana HD
+                    {{ getModelName('nano-banana-hd', 'image') }}
                   </label>
                   <input v-model.number="settings.points_cost['nano-banana-hd']" class="input" type="number" min="0" />
                 </div>
@@ -3975,7 +3993,7 @@ onUnmounted(() => {
               
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-                  Nano Banana 2（按分辨率）
+                  {{ getModelName('nano-banana-2', 'image') }}（按分辨率）
                 </label>
                 <div class="grid grid-cols-3 gap-3 pl-4">
                   <div>
@@ -4092,7 +4110,7 @@ onUnmounted(() => {
                   <!-- Sora 2 -->
                   <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Sora 2
+                      {{ getModelName('sora-2', 'video') }}
                     </label>
                     <div class="grid grid-cols-2 gap-3">
                       <div>
@@ -4109,7 +4127,7 @@ onUnmounted(() => {
                   <!-- Sora 2 Pro -->
                   <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Sora 2 Pro
+                      {{ getModelName('sora-2-pro', 'video') }}
                     </label>
                     <div class="grid grid-cols-3 gap-3">
                       <div>

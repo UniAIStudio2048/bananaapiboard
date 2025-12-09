@@ -6,7 +6,7 @@ import ImageAnnotator from '@/components/ImageAnnotator.vue'
 import MentionDropdown from '@/components/MentionDropdown.vue'
 import PromptInputWithTags from '@/components/PromptInputWithTags.vue'
 import { labelToPromptText, indexToLabel } from '@/utils/imageAnnotation'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 
 const prompt = ref('')
@@ -1597,6 +1597,20 @@ const userPackageInfo = computed(() => {
 // 不再需要分辨率选项（已拆分为独立模型）
 const showResolutionOption = computed(() => model.value === 'nano-banana-2')
 
+// 获取模型显示名称
+const getModelName = (modelKey) => {
+  const customName = getModelDisplayName(modelKey, 'image')
+  if (customName) return customName
+  
+  // 默认名称
+  const defaultNames = {
+    'nano-banana': 'Nano Banana',
+    'nano-banana-hd': 'Nano Banana HD',
+    'nano-banana-2': 'Nano Banana 2'
+  }
+  return defaultNames[modelKey] || modelKey
+}
+
 // 生成占位图片（当图片加载失败时）
 function makePlaceholderImage(item) {
   const w = 400
@@ -1986,9 +2000,9 @@ onUnmounted(() => {
               <span>模型</span>
             </label>
             <select v-model="model" class="input text-sm">
-              <option value="nano-banana">Nano Banana (1积分)</option>
-              <option value="nano-banana-hd">Nano Banana HD (3积分)</option>
-              <option value="nano-banana-2">Nano Banana 2 ({{ pointsCostConfig['nano-banana-2'][imageSize] }}积分)</option>
+              <option value="nano-banana">{{ getModelName('nano-banana') }} (1积分)</option>
+              <option value="nano-banana-hd">{{ getModelName('nano-banana-hd') }} (3积分)</option>
+              <option value="nano-banana-2">{{ getModelName('nano-banana-2') }} ({{ pointsCostConfig['nano-banana-2'][imageSize] }}积分)</option>
             </select>
           </div>
 

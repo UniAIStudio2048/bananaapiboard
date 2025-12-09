@@ -1500,6 +1500,9 @@ async function checkPaymentReturn() {
       setTimeout(() => {
         successMessage.value = ''
       }, 5000)
+      
+      // 触发全局用户信息更新事件（更新导航栏）
+      window.dispatchEvent(new CustomEvent('user-info-updated'))
     }
   }
 }
@@ -1550,11 +1553,25 @@ onMounted(async () => {
   }
   window.addEventListener('storage', handleThemeChange)
   window.addEventListener('theme-changed', handleThemeChange)
+  
+  // 监听兑换券入口点击事件
+  window.addEventListener('open-voucher-modal', openVoucherModal)
+  
+  // 监听用户信息更新事件（支付成功后刷新）
+  window.addEventListener('user-info-updated', handleUserInfoUpdated)
 })
+
+// 处理用户信息更新
+async function handleUserInfoUpdated() {
+  console.log('[User] 用户信息已更新，刷新页面数据')
+  await load()
+}
 
 // 组件卸载时移除监听
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('open-voucher-modal', openVoucherModal)
+  window.removeEventListener('user-info-updated', handleUserInfoUpdated)
 })
 </script>
 
@@ -3878,6 +3895,7 @@ const getTransactionIcon = (type) => {
     'invitee_bonus': { icon: '⭐', bg: 'bg-purple-100 dark:bg-purple-900/20' },
     'generate_deduction': { icon: '🎨', bg: 'bg-orange-100 dark:bg-orange-900/20' },
     'generate_cost': { icon: '🎨', bg: 'bg-orange-100 dark:bg-orange-900/20' },
+    'generate_cost_package': { icon: '🎨', bg: 'bg-orange-100 dark:bg-orange-900/20' },
     'admin_recharge': { icon: '💰', bg: 'bg-amber-100 dark:bg-amber-900/20' },
     'purchase_points': { icon: '💳', bg: 'bg-indigo-100 dark:bg-indigo-900/20' },
     'invite_reward': { icon: '🎉', bg: 'bg-pink-100 dark:bg-pink-900/20' },
@@ -3885,8 +3903,15 @@ const getTransactionIcon = (type) => {
     'voucher_redeem': { icon: '🎫', bg: 'bg-pink-100 dark:bg-pink-900/20' },
     'balance_to_points': { icon: '💎', bg: 'bg-blue-100 dark:bg-blue-900/20' },
     'package_grant': { icon: '📦', bg: 'bg-emerald-100 dark:bg-emerald-900/20' },
+    'package_renewal': { icon: '🔄', bg: 'bg-emerald-100 dark:bg-emerald-900/20' },
     'video_refund': { icon: '🎬', bg: 'bg-cyan-100 dark:bg-cyan-900/20' },
-    'video_cost': { icon: '🎬', bg: 'bg-rose-100 dark:bg-rose-900/20' }
+    'video_cost': { icon: '🎬', bg: 'bg-rose-100 dark:bg-rose-900/20' },
+    'video_generation': { icon: '🎬', bg: 'bg-rose-100 dark:bg-rose-900/20' },
+    'points_to_balance': { icon: '💎', bg: 'bg-blue-100 dark:bg-blue-900/20' },
+    'refund': { icon: '↩️', bg: 'bg-green-100 dark:bg-green-900/20' },
+    'system_grant': { icon: '⚙️', bg: 'bg-slate-100 dark:bg-slate-900/20' },
+    'compensation': { icon: '🎁', bg: 'bg-green-100 dark:bg-green-900/20' },
+    'manual_adjust': { icon: '✏️', bg: 'bg-slate-100 dark:bg-slate-900/20' }
   }
   return icons[type] || { icon: '💎', bg: 'bg-slate-100 dark:bg-dark-600' }
 }
@@ -3898,12 +3923,23 @@ const getTransactionTypeText = (type) => {
     'invitee_bonus': '被邀请奖励',
     'generate_deduction': '图像生成消耗',
     'generate_cost': '图像生成消耗',
+    'generate_cost_package': '图像生成消耗',
     'admin_recharge': '管理员充值',
     'purchase_points': '积分购买',
     'invite_reward': '邀请奖励',
     'daily_checkin': '每日签到',
     'voucher_redeem': '兑换券兑换',
-    'balance_to_points': '余额划转'
+    'balance_to_points': '余额划转',
+    'package_grant': '套餐赠送',
+    'package_renewal': '套餐续费',
+    'video_refund': '视频退款',
+    'video_cost': '视频生成消耗',
+    'video_generation': '视频生成消耗',
+    'points_to_balance': '积分划转',
+    'refund': '退款',
+    'system_grant': '系统赠送',
+    'compensation': '补偿',
+    'manual_adjust': '手动调整'
   }
   return texts[type] || type
 }

@@ -173,13 +173,14 @@ onUnmounted(() => {
 <style scoped>
 .notification-wrapper {
   position: relative;
-  z-index: 100;
+  z-index: 30;
   --bg-color: #FEF3C7;
   --text-color: #92400E;
   --scroll-duration: 15s;
   display: flex;
   justify-content: center;
   padding: 6px 0;
+  pointer-events: none;
 }
 
 /* 展开状态的通知栏 */
@@ -188,21 +189,22 @@ onUnmounted(() => {
   align-items: center;
   background: var(--bg-color);
   color: var(--text-color);
-  padding: 0.4rem 0;
-  min-height: 30px;
-  width: 320px;
+  padding: 0.5rem 1.5rem;
+  min-height: 36px;
+  width: 520px;
   max-width: calc(100vw - 40px);
   overflow: hidden;
   position: relative;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  border-radius: 20px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s ease;
+  pointer-events: auto;
 }
 
 .notification-bar:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-  transform: translateY(-1px);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+  transform: translateY(-0.5px);
 }
 
 .notification-bar:active {
@@ -212,8 +214,9 @@ onUnmounted(() => {
 /* 滚动轨道 */
 .notification-track {
   overflow: hidden;
-  mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 8px), transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 8px, black calc(100% - 8px), transparent);
+  flex: 1;
+  mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
 }
 
 /* 滚动容器 */
@@ -244,10 +247,10 @@ onUnmounted(() => {
 }
 
 .notification-text {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
   letter-spacing: 0.01em;
-  line-height: 1.4;
+  line-height: 1.5;
   flex-shrink: 0;
 }
 
@@ -270,6 +273,7 @@ onUnmounted(() => {
   justify-content: center;
   padding: 2px 0;
   cursor: pointer;
+  pointer-events: auto;
 }
 
 .handle-pill {
@@ -278,16 +282,16 @@ onUnmounted(() => {
   gap: 4px;
   background: var(--bg-color);
   color: var(--text-color);
-  padding: 4px 12px;
-  border-radius: 0 0 12px 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 6px 16px;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
   transition: all 0.2s ease;
   position: relative;
 }
 
 .handle-pill:hover {
-  padding: 6px 14px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  padding: 7px 18px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
 }
 
 .handle-icon {
@@ -333,14 +337,14 @@ onUnmounted(() => {
   }
   
   .notification-bar {
-    padding: 0.35rem 0.75rem;
-    min-height: 26px;
+    padding: 0.4rem 1rem;
+    min-height: 32px;
     max-width: calc(100% - 16px);
-    border-radius: 16px;
+    border-radius: 6px;
   }
   
   .notification-text {
-    font-size: 0.75rem;
+    font-size: 0.8125rem;
   }
   
   .spacer {
@@ -365,11 +369,11 @@ onUnmounted(() => {
 /* 深色模式适配 */
 @media (prefers-color-scheme: dark) {
   .notification-bar {
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.25);
   }
   
   .handle-pill {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
   }
 }
 </style>
