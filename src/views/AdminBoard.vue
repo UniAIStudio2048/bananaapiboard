@@ -200,6 +200,9 @@ const settings = ref({
     points_cost: {
       'sora-2': { '10': 40, '15': 50 },
       'sora-2-pro': { '10': 600, '15': 700, '25': 900 },
+      'veo3.1-components': 100,
+      'veo3.1': 150,
+      'veo3.1-pro': 200,
       'hd_extra': 100
     }
   },
@@ -237,7 +240,10 @@ const getModelName = (modelKey, type = 'image') => {
     'nano-banana-2': 'Nano Banana 2',
     // 视频模型
     'sora-2': 'Sora 2',
-    'sora-2-pro': 'Sora 2 Pro'
+    'sora-2-pro': 'Sora 2 Pro',
+    'veo3.1-components': 'VEO 3.1',
+    'veo3.1': 'VEO 3.1 标准',
+    'veo3.1-pro': 'VEO 3.1 Pro'
   }
   return defaultNames[modelKey] || modelKey
 }
@@ -339,7 +345,10 @@ async function loadSettings() {
           'sora-2-pro': {
             ...defaultSettings.video_config.points_cost['sora-2-pro'],
             ...(data.video_config?.points_cost?.['sora-2-pro'] || {})
-          }
+          },
+          'veo3.1-components': data.video_config?.points_cost?.['veo3.1-components'] ?? defaultSettings.video_config.points_cost['veo3.1-components'],
+          'veo3.1': data.video_config?.points_cost?.['veo3.1'] ?? defaultSettings.video_config.points_cost['veo3.1'],
+          'veo3.1-pro': data.video_config?.points_cost?.['veo3.1-pro'] ?? defaultSettings.video_config.points_cost['veo3.1-pro']
         }
       },
       voucher_external_link: {
@@ -4225,10 +4234,39 @@ onUnmounted(() => {
                     </div>
                   </div>
                   
+                  <!-- VEO 3.1 系列 -->
+                  <div class="pt-3 border-t border-slate-200 dark:border-dark-600">
+                    <p class="text-xs text-blue-600 dark:text-blue-400 mb-3">🆕 VEO 3.1 系列（不支持时长选项，按次计费）</p>
+                    
+                    <!-- VEO 3.1 Components -->
+                    <div class="mb-3">
+                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        {{ getModelName('veo3.1-components', 'video') }} <span class="text-xs text-slate-500">（最多3图）</span>
+                      </label>
+                      <input v-model.number="settings.video_config.points_cost['veo3.1-components']" class="input text-sm w-32" type="number" min="0" />
+                    </div>
+                    
+                    <!-- VEO 3.1 -->
+                    <div class="mb-3">
+                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        {{ getModelName('veo3.1', 'video') }} <span class="text-xs text-slate-500">（最多2图/首尾帧）</span>
+                      </label>
+                      <input v-model.number="settings.video_config.points_cost['veo3.1']" class="input text-sm w-32" type="number" min="0" />
+                    </div>
+                    
+                    <!-- VEO 3.1 Pro -->
+                    <div>
+                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                        {{ getModelName('veo3.1-pro', 'video') }} <span class="text-xs text-slate-500">（最多2图/首尾帧）</span>
+                      </label>
+                      <input v-model.number="settings.video_config.points_cost['veo3.1-pro']" class="input text-sm w-32" type="number" min="0" />
+                    </div>
+                  </div>
+                  
                   <!-- HD附加积分 -->
                   <div>
                     <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      HD格式附加积分
+                      HD格式附加积分 <span class="text-xs text-slate-500">（仅适用于 Sora 系列）</span>
                     </label>
                     <input v-model.number="settings.video_config.points_cost.hd_extra" class="input" type="number" min="0" />
                     <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">选择HD格式时额外增加的积分</p>
@@ -4238,7 +4276,7 @@ onUnmounted(() => {
               
               <div class="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
                 <p class="text-xs text-purple-700 dark:text-purple-300">
-                  💡 提示：视频生成积分 = 基础积分（根据模型和时长） + HD附加积分（如果选择）
+                  💡 提示：Sora系列 = 基础积分（按时长） + HD附加积分；VEO系列 = 固定积分（按次）
                 </p>
               </div>
             </div>

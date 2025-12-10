@@ -55,7 +55,26 @@ const defaultConfig = {
     },
     video: {
       'sora-2': '',
-      'sora-2-pro': ''
+      'sora-2-pro': '',
+      'veo3.1-components': '',
+      'veo3.1': '',
+      'veo3.1-pro': ''
+    }
+  },
+  
+  // 模型启用/禁用配置
+  modelEnabled: {
+    image: {
+      'nano-banana': true,
+      'nano-banana-hd': true,
+      'nano-banana-2': true
+    },
+    video: {
+      'sora-2': true,
+      'sora-2-pro': true,
+      'veo3.1-components': true,
+      'veo3.1': true,
+      'veo3.1-pro': true
     }
   },
   
@@ -184,6 +203,12 @@ export async function loadBrandConfig(forceReload = false) {
       if (data.modelNames) {
         runtimeConfig.modelNames = data.modelNames
         console.log('[tenant] 模型名称配置已更新:', data.modelNames)
+      }
+      
+      // 更新模型启用/禁用配置
+      if (data.modelEnabled) {
+        runtimeConfig.modelEnabled = data.modelEnabled
+        console.log('[tenant] 模型启用配置已更新:', data.modelEnabled)
       }
       
       // 保存到本地存储
@@ -404,12 +429,19 @@ export const getTenantKey = () => config.tenantKey
 export const getBrand = () => config.brand
 export const getFeatures = () => config.features
 export const getModelNames = () => config.modelNames || defaultConfig.modelNames
+export const getModelEnabled = () => config.modelEnabled || defaultConfig.modelEnabled
 
 // 获取模型显示名称（如果自定义了则返回自定义名称，否则返回默认名称）
 export const getModelDisplayName = (modelKey, type = 'image') => {
   const modelNames = getModelNames()
   const customName = modelNames?.[type]?.[modelKey]
   return customName || null // 返回null表示使用默认名称
+}
+
+// 检查模型是否启用
+export const isModelEnabled = (modelKey, type = 'image') => {
+  const modelEnabled = getModelEnabled()
+  return modelEnabled?.[type]?.[modelKey] ?? true // 默认启用
 }
 
 // 强制刷新品牌配置（用于管理后台保存后立即刷新）

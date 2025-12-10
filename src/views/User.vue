@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { redeemVoucher } from '@/api/client'
 import { getTheme, setTheme, toggleTheme as toggleThemeUtil, themes } from '@/utils/theme'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName } from '@/config/tenant'
 
 const token = localStorage.getItem('token')
 const me = ref(null)
@@ -140,6 +140,36 @@ const billOrders = ref([])
 const billLoading = ref(false)
 const billPage = ref(1)
 const billTotal = ref(0)
+
+// 获取模型显示名称（图片）
+const getImageModelName = (modelKey) => {
+  const customName = getModelDisplayName(modelKey, 'image')
+  if (customName) return customName
+  
+  // 默认名称
+  const defaultNames = {
+    'nano-banana': 'Nano Banana',
+    'nano-banana-hd': 'Nano Banana HD',
+    'nano-banana-2': 'Nano Banana 2'
+  }
+  return defaultNames[modelKey] || modelKey
+}
+
+// 获取模型显示名称（视频）
+const getVideoModelName = (modelKey) => {
+  const customName = getModelDisplayName(modelKey, 'video')
+  if (customName) return customName
+  
+  // 默认名称
+  const defaultNames = {
+    'sora-2': 'Sora 2',
+    'sora-2-pro': 'Sora 2 Pro',
+    'veo3.1-components': 'VEO 3.1',
+    'veo3.1': 'VEO 3.1 标准',
+    'veo3.1-pro': 'VEO 3.1 Pro'
+  }
+  return defaultNames[modelKey] || modelKey
+}
 
 async function load() {
   error.value = ''
@@ -2596,7 +2626,7 @@ onUnmounted(() => {
                     </div>
                     
                     <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-600 rounded">{{ video.model }}</span>
+                      <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-600 rounded">{{ getVideoModelName(video.model) }}</span>
                       <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-600 rounded">{{ video.aspect_ratio }}</span>
                     </div>
                     
@@ -3699,7 +3729,7 @@ onUnmounted(() => {
           
           <p class="text-white font-medium mb-2">{{ selectedImage.prompt }}</p>
           <div class="flex items-center justify-between text-sm text-white/70">
-            <span>{{ selectedImage.model }} · {{ selectedImage.aspectRatio }} · {{ selectedImage.imageSize || 'N/A' }}</span>
+            <span>{{ getImageModelName(selectedImage.model) }} · {{ selectedImage.aspectRatio }} · {{ selectedImage.imageSize || 'N/A' }}</span>
             <span>{{ new Date(selectedImage.createdAt).toLocaleString() }}</span>
           </div>
           <div class="flex items-center space-x-2 mt-2">
@@ -3802,7 +3832,7 @@ onUnmounted(() => {
           
           <p class="text-white font-medium mb-2">{{ selectedVideo.prompt }}</p>
           <div class="flex items-center justify-between text-sm text-white/70">
-            <span>{{ selectedVideo.model }} · {{ selectedVideo.aspect_ratio }} · {{ selectedVideo.duration }}s</span>
+            <span>{{ getVideoModelName(selectedVideo.model) }} · {{ selectedVideo.aspect_ratio }} · {{ selectedVideo.duration }}s</span>
             <span>{{ new Date(selectedVideo.created_at).toLocaleString() }}</span>
           </div>
           <div class="flex items-center space-x-2 mt-2">

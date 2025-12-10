@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getMe } from '@/api/client'
-import { getTenantHeaders, getModelDisplayName } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName, isModelEnabled } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 
 const fileInputRef = ref(null)
@@ -11,10 +11,23 @@ const model = ref('sora-2')
 const aspectRatio = ref('16:9')
 const duration = ref('10')
 const hd = ref(false)
+
+// VEO3模型列表（不支持时长参数）
+const VEO3_MODELS = ['veo3.1-components', 'veo3.1', 'veo3.1-pro']
+
+// 当前模型是否为VEO3系列
+const isVeo3Model = computed(() => VEO3_MODELS.includes(model.value))
+
+// VEO3模型的图片数量限制
+const maxImagesForModel = computed(() => {
+  if (model.value === 'veo3.1-components') return 3
+  if (VEO3_MODELS.includes(model.value)) return 2
+  return 9 // 其他模型
+})
 const watermark = ref(false) // 默认false，隐藏选项
 const isPrivate = ref(true) // 默认true，隐藏选项
 
-// HD 选项是否可用（仅 PRO 模型可用）
+// HD 选项是否可用（仅 Sora PRO 模型可用，VEO3不支持）
 const isHdAvailable = computed(() => model.value === 'sora-2-pro')
 const loading = ref(false)
 const error = ref('')
@@ -38,11 +51,17 @@ const currentVideo = ref(null)
 const pointsCostConfig = ref({
   'sora-2': { '10': 20, '15': 30 },
   'sora-2-pro': { '10': 300, '15': 450, '25': 750 },
+  'veo3.1-components': 100,
+  'veo3.1': 150,
+  'veo3.1-pro': 200,
   hd_extra: 10
 })
 
-// 可用的时长选项（根据模型动态计算）
+// 可用的时长选项（根据模型动态计算，VEO3模型不支持时长选择）
 const availableDurations = computed(() => {
+  if (isVeo3Model.value) {
+    return [] // VEO3模型不支持时长选择
+  }
   const config = pointsCostConfig.value[model.value] || {}
   return Object.keys(config).filter(key => key !== 'hd_extra').sort((a, b) => Number(a) - Number(b))
 })
@@ -53,6 +72,11 @@ const totalPoints = computed(() => {
 })
 
 const currentPointsCost = computed(() => {
+  // VEO3模型使用固定积分
+  if (isVeo3Model.value) {
+    return pointsCostConfig.value[model.value] || 100
+  }
+  
   const modelConfig = pointsCostConfig.value[model.value] || {}
   let cost = modelConfig[duration.value] || 40
   if (hd.value && pointsCostConfig.value.hd_extra) {
@@ -84,7 +108,10 @@ const getModelName = (modelKey) => {
   // 默认名称
   const defaultNames = {
     'sora-2': 'Sora 2',
-    'sora-2-pro': 'Sora 2 Pro'
+    'sora-2-pro': 'Sora 2 Pro',
+    'veo3.1-components': 'VEO 3.1',
+    'veo3.1': 'VEO 3.1 标准',
+    'veo3.1-pro': 'VEO 3.1 Pro'
   }
   return defaultNames[modelKey] || modelKey
 }
@@ -126,7 +153,7 @@ function triggerFileDialog() {
 }
 
 function handleFiles(files) {
-  const MAX_FILES = 9
+  const MAX_FILES = maxImagesForModel.value
   const MAX_SIZE = 30 * 1024 * 1024
   const list = Array.from(files).filter(file => file.type.startsWith('image/'))
   const validFiles = []
@@ -751,11 +778,21 @@ watch(model, (newModel) => {
     hd.value = false
   }
   
-  // 检查当前时长是否在新模型的可用时长列表中
-  const availableDurs = availableDurations.value
-  if (availableDurs.length > 0 && !availableDurs.includes(duration.value)) {
-    duration.value = availableDurs[0]
-    console.log('[VideoGeneration] 模型切换，时长已调整为:', duration.value)
+  // VEO3模型不需要时长选项
+  if (VEO3_MODELS.includes(newModel)) {
+    console.log('[VideoGeneration] VEO3模型不支持时长选择')
+    // 如果上传的图片数量超过VEO3限制，提示用户
+    const maxImages = newModel === 'veo3.1-components' ? 3 : 2
+    if (imageFiles.value.length > maxImages) {
+      console.log(`[VideoGeneration] 图片数量 ${imageFiles.value.length} 超过VEO3限制 ${maxImages}`)
+    }
+  } else {
+    // 检查当前时长是否在新模型的可用时长列表中
+    const availableDurs = availableDurations.value
+    if (availableDurs.length > 0 && !availableDurs.includes(duration.value)) {
+      duration.value = availableDurs[0]
+      console.log('[VideoGeneration] 模型切换，时长已调整为:', duration.value)
+    }
   }
 })
 
@@ -766,6 +803,14 @@ onMounted(async () => {
   // 只加载历史记录到抽屉，不自动显示在输出视频库
   await loadHistory()
   // gallery 保持为空，等待用户生成新视频
+  
+  // 选择一个启用的默认模型
+  const enabledModels = ['sora-2', 'sora-2-pro', 'veo3.1-components', 'veo3.1', 'veo3.1-pro']
+    .filter(m => isModelEnabled(m, 'video'))
+  if (enabledModels.length > 0 && !enabledModels.includes(model.value)) {
+    model.value = enabledModels[0]
+    console.log('[VideoGeneration] 自动选择启用的模型:', model.value)
+  }
   
   // 检查是否有从图片页面传来的数据
   const videoGenerationData = sessionStorage.getItem('videoGenerationImage')
@@ -864,8 +909,15 @@ onUnmounted(() => {
                 <span>模型</span>
               </label>
               <select v-model="model" class="input text-sm">
-                <option value="sora-2">{{ getModelName('sora-2') }} · 标准</option>
-                <option value="sora-2-pro">{{ getModelName('sora-2-pro') }} · 高级</option>
+                <optgroup v-if="isModelEnabled('sora-2', 'video') || isModelEnabled('sora-2-pro', 'video')" label="Sora 系列">
+                  <option v-if="isModelEnabled('sora-2', 'video')" value="sora-2">{{ getModelName('sora-2') }} · 标准</option>
+                  <option v-if="isModelEnabled('sora-2-pro', 'video')" value="sora-2-pro">{{ getModelName('sora-2-pro') }} · 高级</option>
+                </optgroup>
+                <optgroup v-if="isModelEnabled('veo3.1-components', 'video') || isModelEnabled('veo3.1', 'video') || isModelEnabled('veo3.1-pro', 'video')" label="VEO 3.1 系列">
+                  <option v-if="isModelEnabled('veo3.1-components', 'video')" value="veo3.1-components">{{ getModelName('veo3.1-components') }} · 多图</option>
+                  <option v-if="isModelEnabled('veo3.1', 'video')" value="veo3.1">{{ getModelName('veo3.1') }} · 双帧</option>
+                  <option v-if="isModelEnabled('veo3.1-pro', 'video')" value="veo3.1-pro">{{ getModelName('veo3.1-pro') }} · 专业</option>
+                </optgroup>
               </select>
             </div>
 
@@ -881,8 +933,8 @@ onUnmounted(() => {
               </select>
             </div>
 
-            <!-- 视频长度 -->
-            <div>
+            <!-- 视频长度（VEO3模型不显示） -->
+            <div v-if="!isVeo3Model">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>⏱️</span>
                 <span>视频长度</span>
@@ -892,6 +944,15 @@ onUnmounted(() => {
                   {{ dur }} 秒
                 </option>
               </select>
+            </div>
+            
+            <!-- VEO3模型提示（仅在图生视频模式下显示） -->
+            <div v-if="isVeo3Model && mode === 'image'" class="p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+              <p class="text-xs text-blue-700 dark:text-blue-300">
+                <span class="font-semibold">{{ getModelName(model) }}</span> 
+                <span v-if="model === 'veo3.1-components'">支持最多 3 张参考图</span>
+                <span v-else>支持最多 2 张参考图（首尾帧）</span>
+              </p>
             </div>
 
             <!-- 选项 -->
@@ -930,13 +991,20 @@ onUnmounted(() => {
                   <span>上传参考图片</span>
                 </label>
                 <div class="text-xs text-slate-500 dark:text-slate-400">
-                  <span class="font-semibold text-primary-600 dark:text-primary-400">{{ imageFiles.length }}</span> / 9张
+                  <span class="font-semibold text-primary-600 dark:text-primary-400">{{ imageFiles.length }}</span> / {{ maxImagesForModel }}张
                 </div>
+              </div>
+              
+              <!-- 图片数量超限提示 -->
+              <div v-if="imageFiles.length > maxImagesForModel" class="p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <p class="text-xs text-amber-700 dark:text-amber-300">
+                  ⚠️ 当前模型最多支持 {{ maxImagesForModel }} 张图片，请删除多余图片或切换模型
+                </p>
               </div>
               
               <!-- 拖拽区域 -->
               <div 
-                v-if="imageFiles.length < 9"
+                v-if="imageFiles.length < maxImagesForModel"
                 @dragover="onDragOver"
                 @dragleave="onDragLeave"
                 @drop="onDrop"
@@ -963,12 +1031,12 @@ onUnmounted(() => {
 
               <!-- 已达上限提示 -->
               <div 
-                v-else
+                v-else-if="imageFiles.length >= maxImagesForModel"
                 class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-4 text-center bg-slate-50 dark:bg-dark-700/50"
               >
                 <div class="text-2xl mb-1">✅</div>
                 <p class="text-xs text-slate-600 dark:text-slate-400">
-                  已上传9张图片（已达上限）
+                  已上传 {{ imageFiles.length }} 张图片（已达上限）
                 </p>
               </div>
 
@@ -1431,7 +1499,7 @@ onUnmounted(() => {
                 <!-- 元数据和星标 -->
                 <div class="flex items-center justify-between">
                   <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                    <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">{{ item.model }}</span>
+                    <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">{{ getModelName(item.model) }}</span>
                     <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-700 rounded">{{ item.aspect_ratio }}</span>
                   </div>
                   <!-- 快捷星标 -->
