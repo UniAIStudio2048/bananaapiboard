@@ -1,0 +1,916 @@
+/* ========================================
+   Nano Banana AI - Creator Canvas Styles
+   深色主题画布样式
+   ======================================== */
+
+/* CSS 变量定义 */
+:root {
+  /* 背景色 - 深色渐变 */
+  --canvas-bg-primary: #0a0a0a;
+  --canvas-bg-secondary: #141414;
+  --canvas-bg-tertiary: #1a1a1a;
+  --canvas-bg-elevated: #242424;
+  
+  /* 边框色 */
+  --canvas-border-subtle: #2a2a2a;
+  --canvas-border-default: #3a3a3a;
+  --canvas-border-active: #4a4a4a;
+  
+  /* 文字色 */
+  --canvas-text-primary: #ffffff;
+  --canvas-text-secondary: #a0a0a0;
+  --canvas-text-tertiary: #666666;
+  --canvas-text-placeholder: #4a4a4a;
+  
+  /* 强调色 */
+  --canvas-accent-primary: #3b82f6;
+  --canvas-accent-success: #22c55e;
+  --canvas-accent-warning: #f59e0b;
+  --canvas-accent-error: #ef4444;
+  --canvas-accent-banana: #fbbf24;
+  
+  /* 连线色 */
+  --canvas-edge-default: #4a4a4a;
+  --canvas-edge-active: #3b82f6;
+  --canvas-edge-success: #22c55e;
+  
+  /* 阴影 */
+  --canvas-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --canvas-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
+  --canvas-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
+  --canvas-shadow-glow: 0 0 20px rgba(59, 130, 246, 0.3);
+  
+  /* 圆角 */
+  --canvas-radius-sm: 6px;
+  --canvas-radius-md: 10px;
+  --canvas-radius-lg: 16px;
+  --canvas-radius-xl: 20px;
+}
+
+/* ========================================
+   画布容器
+   ======================================== */
+.canvas-container {
+  width: 100%;
+  height: calc(100vh - 64px); /* 减去顶部导航高度 */
+  background: var(--canvas-bg-primary);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Vue Flow 画布样式覆盖 */
+.canvas-container .vue-flow {
+  background: var(--canvas-bg-primary);
+}
+
+.canvas-container .vue-flow__background {
+  background: var(--canvas-bg-primary);
+}
+
+/* 网格点样式 */
+.canvas-container .vue-flow__background pattern circle {
+  fill: var(--canvas-border-subtle);
+}
+
+/* ========================================
+   左侧工具栏
+   ======================================== */
+.canvas-toolbar {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+}
+
+.canvas-toolbar-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--canvas-radius-md);
+  background: transparent;
+  border: none;
+  color: var(--canvas-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 18px;
+}
+
+.canvas-toolbar-btn:hover {
+  background: var(--canvas-bg-elevated);
+  color: var(--canvas-text-primary);
+}
+
+.canvas-toolbar-btn.active {
+  background: var(--canvas-accent-primary);
+  color: white;
+}
+
+.canvas-toolbar-btn.primary {
+  width: 44px;
+  height: 44px;
+  background: white;
+  color: var(--canvas-bg-primary);
+  border-radius: 50%;
+  font-size: 24px;
+  font-weight: 300;
+  box-shadow: var(--canvas-shadow-md);
+}
+
+.canvas-toolbar-btn.primary:hover {
+  transform: scale(1.05);
+  box-shadow: var(--canvas-shadow-lg);
+}
+
+.canvas-toolbar-divider {
+  width: 24px;
+  height: 1px;
+  background: var(--canvas-border-subtle);
+  margin: 4px auto;
+}
+
+/* ========================================
+   底部输入面板
+   ======================================== */
+.canvas-bottom-panel {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 800px;
+  background: var(--canvas-bg-secondary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-lg);
+  padding: 16px;
+  z-index: 10;
+  box-shadow: var(--canvas-shadow-lg);
+}
+
+.canvas-bottom-panel-hint {
+  color: var(--canvas-text-tertiary);
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
+.canvas-input-wrapper {
+  background: var(--canvas-bg-tertiary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-md);
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.canvas-input-wrapper:focus-within {
+  border-color: var(--canvas-accent-primary);
+}
+
+.canvas-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--canvas-text-primary);
+  font-size: 14px;
+  resize: none;
+  min-height: 60px;
+  max-height: 150px;
+}
+
+.canvas-input::placeholder {
+  color: var(--canvas-text-placeholder);
+}
+
+.canvas-bottom-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.canvas-controls-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.canvas-controls-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.canvas-select {
+  background: var(--canvas-bg-tertiary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-sm);
+  color: var(--canvas-text-primary);
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+}
+
+.canvas-select:hover {
+  border-color: var(--canvas-border-active);
+}
+
+.canvas-generate-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--canvas-accent-primary);
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 18px;
+}
+
+.canvas-generate-btn:hover {
+  transform: scale(1.05);
+  box-shadow: var(--canvas-shadow-glow);
+}
+
+.canvas-generate-btn:disabled {
+  background: var(--canvas-border-default);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+/* ========================================
+   空白状态引导
+   ======================================== */
+.canvas-empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  z-index: 5;
+}
+
+.canvas-empty-icon {
+  font-size: 24px;
+  color: var(--canvas-accent-primary);
+  margin-bottom: 8px;
+}
+
+.canvas-empty-title {
+  color: var(--canvas-text-secondary);
+  font-size: 14px;
+  margin-bottom: 24px;
+}
+
+.canvas-empty-title strong {
+  color: var(--canvas-text-primary);
+}
+
+.canvas-quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.canvas-quick-btn {
+  background: var(--canvas-bg-tertiary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-sm);
+  color: var(--canvas-text-secondary);
+  padding: 10px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.canvas-quick-btn:hover {
+  border-color: var(--canvas-border-active);
+  color: var(--canvas-text-primary);
+  background: var(--canvas-bg-elevated);
+}
+
+.canvas-quick-btn .icon {
+  font-size: 16px;
+}
+
+/* ========================================
+   节点选择器面板
+   ======================================== */
+.node-selector {
+  position: fixed;
+  background: var(--canvas-bg-tertiary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-lg);
+  padding: 12px;
+  min-width: 220px;
+  z-index: 1000;
+  box-shadow: var(--canvas-shadow-lg);
+}
+
+.node-selector-title {
+  color: var(--canvas-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--canvas-border-subtle);
+  margin-bottom: 8px;
+}
+
+.node-selector-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: var(--canvas-radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.node-selector-item:hover {
+  background: var(--canvas-bg-elevated);
+}
+
+.node-selector-item.selected {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.node-selector-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--canvas-radius-sm);
+  background: var(--canvas-bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.node-selector-item.selected .node-selector-icon {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.node-selector-info {
+  flex: 1;
+}
+
+.node-selector-name {
+  color: var(--canvas-text-primary);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.node-selector-desc {
+  color: var(--canvas-text-tertiary);
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.node-selector-divider {
+  height: 1px;
+  background: var(--canvas-border-subtle);
+  margin: 8px 0;
+}
+
+/* ========================================
+   节点通用样式
+   ======================================== */
+.canvas-node {
+  background: var(--canvas-bg-tertiary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-md);
+  min-width: 240px;
+  max-width: 400px;
+  box-shadow: var(--canvas-shadow-md);
+  transition: all 0.2s ease;
+}
+
+.canvas-node:hover {
+  border-color: var(--canvas-border-active);
+}
+
+.canvas-node.selected {
+  border-color: var(--canvas-accent-primary);
+  box-shadow: var(--canvas-shadow-glow);
+}
+
+.canvas-node-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--canvas-border-subtle);
+}
+
+.canvas-node-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--canvas-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.canvas-node-title .icon {
+  font-size: 16px;
+}
+
+.canvas-node-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.canvas-node-action-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+  color: var(--canvas-text-tertiary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+
+.canvas-node-action-btn:hover {
+  background: var(--canvas-bg-elevated);
+  color: var(--canvas-text-primary);
+}
+
+.canvas-node-content {
+  padding: 14px;
+}
+
+.canvas-node-footer {
+  padding: 10px 14px;
+  border-top: 1px solid var(--canvas-border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* 节点内输入框 */
+.canvas-node-input {
+  width: 100%;
+  background: var(--canvas-bg-secondary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-sm);
+  color: var(--canvas-text-primary);
+  padding: 10px 12px;
+  font-size: 13px;
+  resize: none;
+  outline: none;
+  min-height: 80px;
+}
+
+.canvas-node-input:focus {
+  border-color: var(--canvas-accent-primary);
+}
+
+.canvas-node-input::placeholder {
+  color: var(--canvas-text-placeholder);
+}
+
+/* 节点内预览区域 */
+.canvas-node-preview {
+  background: var(--canvas-bg-secondary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-sm);
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.canvas-node-preview img {
+  max-width: 100%;
+  max-height: 200px;
+  object-fit: contain;
+}
+
+.canvas-node-preview-empty {
+  color: var(--canvas-text-placeholder);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px;
+}
+
+/* 节点状态 */
+.canvas-node.processing {
+  border-color: var(--canvas-accent-warning);
+}
+
+.canvas-node.success {
+  border-color: var(--canvas-accent-success);
+}
+
+.canvas-node.error {
+  border-color: var(--canvas-accent-error);
+}
+
+/* 节点内按钮 */
+.canvas-node-btn {
+  background: var(--canvas-accent-primary);
+  border: none;
+  border-radius: var(--canvas-radius-sm);
+  color: white;
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.canvas-node-btn:hover {
+  filter: brightness(1.1);
+}
+
+.canvas-node-btn:disabled {
+  background: var(--canvas-border-default);
+  cursor: not-allowed;
+}
+
+.canvas-node-btn.secondary {
+  background: var(--canvas-bg-elevated);
+  color: var(--canvas-text-secondary);
+}
+
+.canvas-node-btn.secondary:hover {
+  color: var(--canvas-text-primary);
+}
+
+/* ========================================
+   Vue Flow 节点选中样式修复
+   ======================================== */
+/* 完全移除 Vue Flow 默认的选中样式 */
+.vue-flow__node {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  background: transparent !important;
+}
+
+/* 编组节点放在最底层 */
+.vue-flow__node[data-type="group"],
+.vue-flow__node.vue-flow__node-group {
+  z-index: -1000 !important;
+}
+
+/* 普通节点确保在编组之上 */
+.vue-flow__node:not([data-type="group"]):not(.vue-flow__node-group) {
+  z-index: 1 !important;
+}
+
+.vue-flow__node.selected {
+  outline: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* 隐藏 Vue Flow 的选中边框 */
+.vue-flow__node.selected > div:first-child {
+  outline: none !important;
+}
+
+/* 关闭 Vue Flow 自带的节点边框样式 */
+.vue-flow__node .vue-flow__node-default {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
+
+/* 节点选中状态完全由组件内部控制，不使用 Vue Flow 默认样式 */
+
+/* 选区框样式（Shift+拖拽框选时） */
+.vue-flow__selection {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border: 1px dashed var(--canvas-accent-primary) !important;
+}
+
+/* 被框选的节点不添加额外边框 */
+.vue-flow__node.selectable.selected {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* ========================================
+   连接端口样式
+   ======================================== */
+.vue-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: var(--canvas-bg-secondary);
+  border: 2px solid var(--canvas-border-default);
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.vue-flow__handle:hover {
+  border-color: var(--canvas-accent-primary);
+  background: var(--canvas-accent-primary);
+  transform: scale(1.2);
+}
+
+.vue-flow__handle.connecting {
+  background: var(--canvas-accent-primary);
+  border-color: var(--canvas-accent-primary);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.2);
+}
+
+.vue-flow__handle-left {
+  left: -5px;
+}
+
+.vue-flow__handle-right {
+  right: -5px;
+}
+
+/* ========================================
+   连线样式
+   ======================================== */
+
+/* 确保连线容器在节点上层显示 */
+.vue-flow__edges {
+  z-index: 5 !important;
+}
+
+.vue-flow__edge-path {
+  stroke: #5a5a5a;
+  stroke-width: 2;
+  fill: none;
+}
+
+.vue-flow__edge:hover .vue-flow__edge-path {
+  stroke: #7a7a7a;
+  stroke-width: 3;
+}
+
+.vue-flow__edge.selected .vue-flow__edge-path {
+  stroke: var(--canvas-accent-primary, #3b82f6);
+  stroke-width: 3;
+}
+
+/* smoothstep 边的特殊样式 */
+.vue-flow__edge-smoothstep {
+  pointer-events: visibleStroke;
+}
+
+/* 连接线的交互区域 */
+.vue-flow__edge-interaction {
+  stroke-width: 20;
+  stroke: transparent;
+  fill: none;
+}
+
+.vue-flow__edge.animated .vue-flow__edge-path {
+  stroke-dasharray: 5;
+  animation: dashdraw 0.5s linear infinite;
+}
+
+@keyframes dashdraw {
+  from {
+    stroke-dashoffset: 10;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* ========================================
+   缩放控制
+   ======================================== */
+.canvas-zoom-controls {
+  position: absolute;
+  bottom: 24px;
+  left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--canvas-bg-secondary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-md);
+  padding: 6px 12px;
+  z-index: 10;
+}
+
+.canvas-zoom-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--canvas-radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--canvas-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.15s ease;
+}
+
+.canvas-zoom-btn:hover {
+  background: var(--canvas-bg-elevated);
+  color: var(--canvas-text-primary);
+}
+
+.canvas-zoom-value {
+  color: var(--canvas-text-secondary);
+  font-size: 12px;
+  min-width: 40px;
+  text-align: center;
+}
+
+/* ========================================
+   帮助按钮
+   ======================================== */
+.canvas-help-btn {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--canvas-accent-primary);
+  border: none;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  z-index: 10;
+  box-shadow: var(--canvas-shadow-md);
+  transition: all 0.2s ease;
+}
+
+.canvas-help-btn:hover {
+  transform: scale(1.05);
+}
+
+/* ========================================
+   右键菜单
+   ======================================== */
+.canvas-context-menu {
+  position: fixed;
+  background: var(--canvas-bg-tertiary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-md);
+  padding: 8px;
+  min-width: 180px;
+  z-index: 1000;
+  box-shadow: var(--canvas-shadow-lg);
+}
+
+.canvas-context-menu-title {
+  color: var(--canvas-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.canvas-context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--canvas-radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: var(--canvas-text-primary);
+  font-size: 13px;
+}
+
+.canvas-context-menu-item:hover {
+  background: var(--canvas-bg-elevated);
+}
+
+.canvas-context-menu-item .icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+}
+
+.canvas-context-menu-divider {
+  height: 1px;
+  background: var(--canvas-border-subtle);
+  margin: 6px 0;
+}
+
+/* ========================================
+   积分显示
+   ======================================== */
+.canvas-points-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--canvas-bg-tertiary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.canvas-points-cost {
+  color: var(--canvas-accent-banana);
+  font-weight: 500;
+}
+
+.canvas-points-remaining {
+  color: var(--canvas-text-tertiary);
+}
+
+/* ========================================
+   加载动画
+   ======================================== */
+.canvas-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--canvas-text-secondary);
+  font-size: 13px;
+}
+
+.canvas-loading-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--canvas-border-default);
+  border-top-color: var(--canvas-accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ========================================
+   工具提示
+   ======================================== */
+.canvas-tooltip {
+  position: absolute;
+  background: var(--canvas-bg-elevated);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--canvas-text-primary);
+  white-space: nowrap;
+  z-index: 1000;
+  box-shadow: var(--canvas-shadow-md);
+  pointer-events: none;
+}
+
+/* ========================================
+   响应式适配
+   ======================================== */
+@media (max-width: 768px) {
+  .canvas-bottom-panel {
+    width: 95%;
+    bottom: 12px;
+    padding: 12px;
+  }
+  
+  .canvas-toolbar {
+    left: 8px;
+  }
+  
+  .canvas-zoom-controls {
+    display: none;
+  }
+  
+  .canvas-quick-actions {
+    flex-direction: column;
+  }
+  
+  .canvas-quick-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+

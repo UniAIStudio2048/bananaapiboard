@@ -106,6 +106,7 @@ onUnmounted(() => {
 const generateMenuItems = [
   { path: '/', label: '图片生成', icon: '🎨' },
   { path: '/video', label: '视频生成', icon: '🎬' },
+  { path: '/canvas', label: '创作画布（beta）', icon: '🎯' },
 ]
 
 const navItems = [

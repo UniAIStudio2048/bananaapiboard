@@ -5,6 +5,7 @@ import User from '@/views/User.vue'
 import Packages from '@/views/Packages.vue'
 import VideoGeneration from '@/views/VideoGeneration.vue'
 import AdminBoard from '@/views/AdminBoard.vue'
+import Canvas from '@/views/Canvas.vue'
 
 const router = createRouter({
   history: createWebHistory(),
@@ -14,6 +15,12 @@ const router = createRouter({
       name: 'home',
       component: Home,
       meta: { title: '图片生成' }
+    },
+    {
+      path: '/canvas',
+      name: 'canvas',
+      component: Canvas,
+      meta: { title: '创作画布' }
     },
     { 
       path: '/video', 

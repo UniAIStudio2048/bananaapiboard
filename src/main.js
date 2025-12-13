@@ -1,7 +1,12 @@
 import './assets/tailwind.css'
 import './assets/themes.css'
 
+// VueFlow 核心样式 - 必须导入以正确渲染连线和图形
+import '@vue-flow/core/dist/style.css'
+import '@vue-flow/core/dist/theme-default.css'
+
 import { createApp } from 'vue'
+import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
 import { initTheme } from './utils/theme'
@@ -85,6 +90,8 @@ initSystemConfig()
 
 // 创建并挂载应用
 const app = createApp(App)
+const pinia = createPinia()
+app.use(pinia)
 app.use(router)
 
 // 应用挂载后加载品牌配置
