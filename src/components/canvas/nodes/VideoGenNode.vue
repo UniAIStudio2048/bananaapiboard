@@ -7,6 +7,9 @@ import { ref, computed, inject } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { generateVideoFromText, generateVideoFromImage, pollTaskStatus } from '@/api/canvas/nodes'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   id: String,
@@ -51,9 +54,20 @@ const contentStyle = computed(() => ({
 // 是否有输出
 const hasOutput = computed(() => !!props.data.output?.url)
 
-// 继承的数据
-const inheritedText = computed(() => props.data.inheritedData?.content || '')
-const inheritedImages = computed(() => props.data.inheritedData?.urls || [])
+// 检查是否有上游连接
+const hasUpstreamEdge = computed(() => {
+  return canvasStore.edges.some(edge => edge.target === props.id)
+})
+
+// 继承的数据（仅在有上游连接时使用）
+const inheritedText = computed(() => {
+  if (!hasUpstreamEdge.value) return ''
+  return props.data.inheritedData?.content || ''
+})
+const inheritedImages = computed(() => {
+  if (!hasUpstreamEdge.value) return []
+  return props.data.inheritedData?.urls || []
+})
 const isImageToVideo = computed(() => inheritedImages.value.length > 0)
 
 // 积分消耗计算
@@ -64,6 +78,7 @@ const pointsCost = computed(() => {
   }
   return costs[selectedModel.value]?.[selectedDuration.value] || 20
 })
+
 
 // 用户积分
 const userPoints = computed(() => {
@@ -151,7 +166,7 @@ function handleResizeEnd() {
 // 开始生成
 async function handleGenerate() {
   if (userPoints.value < pointsCost.value) {
-    alert('积分不足，请购买套餐')
+    alert(t('imageGen.insufficientPoints'))
     return
   }
   
@@ -344,8 +359,10 @@ function handleAddClick(event) {
         </div>
         
         <div class="gen-actions">
-          <!-- 积分显示 -->
-          <span class="points-cost">◆ {{ pointsCost }}</span>
+          <!-- 积分消耗显示 -->
+          <span class="points-cost-display">
+            {{ pointsCost }} {{ t('imageGen.points') }}
+          </span>
           
           <!-- 生成按钮 -->
           <button 
@@ -545,9 +562,27 @@ function handleAddClick(event) {
   gap: 8px;
 }
 
+/* 旧的积分显示 - 黑白灰风格（保留兼容） */
 .points-cost {
-  font-size: 12px;
-  color: var(--canvas-accent-banana);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 新的积分显示样式 - 黑白灰风格 */
+.points-cost-display {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
 }
 
 /* 端口样式 - 完全隐藏（但保留给 Vue Flow 用于边渲染） */

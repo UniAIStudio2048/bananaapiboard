@@ -7,7 +7,7 @@
 import { ref, computed, watch, nextTick, inject, onMounted } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
-import { getLLMConfig, chatWithLLM, chatWithLLMStream } from '@/api/canvas/llm'
+import { getLLMConfig, chatWithLLM } from '@/api/canvas/llm'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 
@@ -131,6 +131,17 @@ const selectedModelIcon = computed(() => {
 const currentModelCost = computed(() => {
   const model = availableModels.value.find(m => m.value === selectedModel.value)
   return model?.pointsCost || 1
+})
+
+// 格式化积分显示（支持小数点后2位）
+const formattedModelCost = computed(() => {
+  const cost = currentModelCost.value
+  // 如果是整数，直接显示整数
+  if (Number.isInteger(cost)) {
+    return cost.toString()
+  }
+  // 否则显示最多2位小数，去除末尾的0
+  return parseFloat(cost.toFixed(2)).toString()
 })
 
 // 用户积分
@@ -348,10 +359,24 @@ const upstreamText = computed(() => {
   return texts.join('\n\n')
 })
 
-// 兼容旧的 inheritedData（如果没有上游节点，则使用 props.data.inheritedData）
+// 检查是否有上游连接（通过检查边）
+const hasUpstreamEdge = computed(() => {
+  return canvasStore.edges.some(edge => edge.target === props.id)
+})
+
+// 兼容旧的 inheritedData（仅在有上游连接时使用）
 const inheritedContent = computed(() => props.data.inheritedData || null)
-const inheritedText = computed(() => upstreamText.value || inheritedContent.value?.content || '')
-const inheritedImages = computed(() => upstreamImages.value.length > 0 ? upstreamImages.value : (inheritedContent.value?.urls || []))
+// 当连接被删除后，不使用继承数据作为后备
+const inheritedText = computed(() => {
+  // 只有在有上游连接时才考虑返回文本
+  if (!hasUpstreamEdge.value) return ''
+  return upstreamText.value || ''
+})
+const inheritedImages = computed(() => {
+  // 只有在有上游连接时才考虑返回图片
+  if (!hasUpstreamEdge.value) return []
+  return upstreamImages.value
+})
 const hasUpstreamInput = computed(() => inheritedText.value || inheritedImages.value.length > 0)
 
 // 处理 LLM 对话
@@ -363,7 +388,7 @@ async function handleLLMGenerate() {
   
   // 检查积分（移除空值检查，允许任何情况下发送）
   if (userPoints.value < currentModelCost.value) {
-    alert('积分不足，请购买套餐')
+    alert(t('imageGen.insufficientPoints'))
     return
   }
   
@@ -424,104 +449,37 @@ async function handleLLMGenerate() {
       llmResponse: '' // 清空之前的响应
     })
     
-    // 先尝试流式输出，如果失败则回退到普通模式
-    let hasReceivedChunk = false
-    
+    // 使用非流式模式调用 LLM API（避免流式输出导致的状态闪烁问题）
     try {
-      // 使用流式输出调用 LLM API
-      await chatWithLLMStream({
+      const result = await chatWithLLM({
         messages,
         model: selectedModel.value,
         preset: selectedPreset.value || undefined,
         language: selectedLanguage.value || 'zh',
         images: processedImages.length > 0 ? processedImages : undefined,
-        
-        // 接收文本块的回调 - 实时更新节点内容
-        onChunk: (chunk, fullText) => {
-          hasReceivedChunk = true
-          canvasStore.updateNodeData(props.id, {
-            status: 'processing',
-            llmResponse: fullText // 实时更新显示的文本
-          })
-        },
-        
-        // 完成时的回调
-        onDone: (fullText) => {
-          canvasStore.updateNodeData(props.id, {
-            status: 'success',
-            output: {
-              type: 'text',
-              content: fullText
-            },
-            llmResponse: fullText
-          })
-          
-          // 刷新用户积分
-          window.dispatchEvent(new CustomEvent('user-info-updated'))
-          
-          isGenerating.value = false
-        },
-        
-        // 错误回调
-        onError: (error) => {
-          console.error('[TextNode] LLM 流式对话失败:', error)
-          
-          // 如果流式输出失败且还没接收到任何内容，回退到普通模式
-          if (!hasReceivedChunk) {
-            console.log('[TextNode] 流式输出失败，回退到普通模式')
-            fallbackToNormalMode()
-          } else {
-            canvasStore.updateNodeData(props.id, {
-              status: 'error',
-              error: error.message || 'LLM 对话失败'
-            })
-            alert(error.message || 'LLM 对话失败，请重试')
-            isGenerating.value = false
-          }
-        }
+        stream: false // 禁用流式输出
       })
       
-      // 如果没有接收到任何数据块，可能是后端不支持流式，回退到普通模式
-      if (!hasReceivedChunk) {
-        console.log('[TextNode] 未接收到流式数据，回退到普通模式')
-        await fallbackToNormalMode()
-      }
-    } catch (streamError) {
-      console.error('[TextNode] 流式调用异常，回退到普通模式:', streamError)
-      await fallbackToNormalMode()
-    }
-    
-    // 普通模式回退函数
-    async function fallbackToNormalMode() {
-      try {
-        const result = await chatWithLLM({
-          messages,
-          model: selectedModel.value,
-          preset: selectedPreset.value || undefined,
-          language: selectedLanguage.value || 'zh',
-          images: processedImages.length > 0 ? processedImages : undefined
-        })
-        
-        canvasStore.updateNodeData(props.id, {
-          status: 'success',
-          output: {
-            type: 'text',
-            content: result.result
-          },
-          llmResponse: result.result
-        })
-        
-        window.dispatchEvent(new CustomEvent('user-info-updated'))
-      } catch (fallbackError) {
-        console.error('[TextNode] 普通模式也失败:', fallbackError)
-        canvasStore.updateNodeData(props.id, {
-          status: 'error',
-          error: fallbackError.message || 'LLM 对话失败'
-        })
-        alert(fallbackError.message || 'LLM 对话失败，请重试')
-      } finally {
-        isGenerating.value = false
-      }
+      canvasStore.updateNodeData(props.id, {
+        status: 'success',
+        output: {
+          type: 'text',
+          content: result.result
+        },
+        llmResponse: result.result
+      })
+      
+      // 刷新用户积分
+      window.dispatchEvent(new CustomEvent('user-info-updated'))
+    } catch (llmError) {
+      console.error('[TextNode] LLM 对话失败:', llmError)
+      canvasStore.updateNodeData(props.id, {
+        status: 'error',
+        error: llmError.message || 'LLM 对话失败'
+      })
+      alert(llmError.message || 'LLM 对话失败，请重试')
+    } finally {
+      isGenerating.value = false
     }
     
   } catch (error) {
@@ -1677,6 +1635,11 @@ function handleResizeEnd() {
           <!-- 生成次数 -->
           <span class="generate-count">1x</span>
           
+          <!-- 积分消耗显示 -->
+          <span class="points-cost-display">
+            {{ formattedModelCost }} {{ t('imageGen.points') }}
+          </span>
+          
           <!-- 生成按钮 -->
           <button 
             class="generate-btn"
@@ -2783,6 +2746,18 @@ function handleResizeEnd() {
   color: var(--canvas-text-secondary, #a0a0a0);
   font-size: 14px;
   font-weight: 500;
+}
+
+/* 积分消耗显示 - 黑白灰风格 */
+.points-cost-display {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
 }
 
 /* 生成按钮 */

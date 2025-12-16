@@ -840,9 +840,13 @@ function handleKeyDown(event) {
   flex: 1;
 }
 
+/* 模型积分显示 - 黑白灰风格 */
 .model-option-cost {
-  color: var(--canvas-accent-banana, #fbbf24);
+  color: rgba(255, 255, 255, 0.6);
   font-size: 12px;
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 /* 生成次数 */

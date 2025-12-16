@@ -7,6 +7,9 @@ import { ref, computed, inject } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { enhancePrompt, describeImage, expandContent, getLLMCost } from '@/api/canvas/llm'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   id: String,
@@ -84,6 +87,17 @@ const outputText = computed(() => props.data.output?.content || '')
 
 // 积分消耗
 const pointsCost = computed(() => getLLMCost(typeConfig.value.action))
+
+// 格式化积分显示（支持小数点后2位）
+const formattedPointsCost = computed(() => {
+  const cost = pointsCost.value
+  // 如果是整数，直接显示整数
+  if (Number.isInteger(cost)) {
+    return cost.toString()
+  }
+  // 否则显示最多2位小数，去除末尾的0
+  return parseFloat(cost.toFixed(2)).toString()
+})
 
 // 用户积分
 const userPoints = computed(() => {
@@ -164,7 +178,7 @@ async function handleExecute() {
   }
   
   if (userPoints.value < pointsCost.value) {
-    alert('积分不足，请购买套餐')
+    alert(t('imageGen.insufficientPoints'))
     return
   }
   
@@ -304,7 +318,7 @@ function handleAddClick(event) {
       
       <!-- 操作按钮 -->
       <div class="llm-actions">
-        <span class="points-cost">◆ {{ pointsCost }}</span>
+        <span class="points-cost-display">{{ formattedPointsCost }} {{ t('imageGen.points') }}</span>
         
         <button 
           v-if="!outputText"
@@ -459,9 +473,27 @@ function handleAddClick(event) {
   border-top: 1px solid var(--canvas-border-subtle);
 }
 
+/* 旧的积分显示 - 黑白灰风格（保留兼容） */
 .points-cost {
-  font-size: 12px;
-  color: var(--canvas-accent-banana);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* 新的积分显示样式 - 黑白灰风格 */
+.points-cost-display {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
 }
 
 /* 端口样式 - 完全隐藏（但保留给 Vue Flow 用于边渲染） */

@@ -500,15 +500,15 @@ const confirmModeSelection = () => {
 function initScene() {
   const width = window.innerWidth
   const height = window.innerHeight
-  
+
   scene = new THREE.Scene()
   scene.background = new THREE.Color(0x020208)
-  
+
   camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 2000)
   camera.position.z = 600
-  
-  renderer = new THREE.WebGLRenderer({ 
-    canvas: canvas.value, 
+
+  renderer = new THREE.WebGLRenderer({
+    canvas: canvas.value,
     antialias: true,
     alpha: true,
     powerPreference: 'high-performance'
@@ -517,27 +517,27 @@ function initScene() {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 1.2
-  
+
   clock = new THREE.Clock()
-  
+
   createBlackHole()
   createParticleVortex()
   createCrystalShards()
   createEnergyRings()
   createBackgroundGrid()
   createAmbientParticles()
-  
+
   const ambientLight = new THREE.AmbientLight(0x111122, 0.5)
   scene.add(ambientLight)
-  
+
   const pointLight1 = new THREE.PointLight(0x00ffff, 2, 800)
   pointLight1.position.set(0, 0, 100)
   scene.add(pointLight1)
-  
+
   const pointLight2 = new THREE.PointLight(0x7700ff, 1.5, 600)
   pointLight2.position.set(-200, 100, 50)
   scene.add(pointLight2)
-  
+
   const pointLight3 = new THREE.PointLight(0xff00aa, 1, 500)
   pointLight3.position.set(200, -100, 50)
   scene.add(pointLight3)
@@ -856,7 +856,7 @@ function createAmbientParticles() {
 
 function animate() {
   animationId = requestAnimationFrame(animate)
-  
+
   const time = clock.getElapsedTime()
   
   mouseX += (targetMouseX - mouseX) * 0.05

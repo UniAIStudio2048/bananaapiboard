@@ -2,11 +2,18 @@
 /**
  * WorkflowPanel.vue - 统一的工作流面板
  * 整合"我的工作流"和"工作流模板"，支持标签切换
+ * 我的工作流现在分为：左边手动保存的工作流 | 右边历史记录工作流
  */
-import { ref, watch, onMounted, computed } from 'vue'
+import { ref, watch, onMounted, computed, nextTick, onUnmounted } from 'vue'
 import { getWorkflowList, deleteWorkflow, loadWorkflow, getStorageQuota, getWorkflowTemplates } from '@/api/canvas/workflow'
 import { useCanvasStore } from '@/stores/canvas'
 import { useI18n } from '@/i18n'
+import { 
+  getWorkflowHistory, 
+  deleteWorkflowHistory, 
+  clearWorkflowHistory,
+  formatSaveTime 
+} from '@/stores/canvas/workflowAutoSave'
 
 const { t } = useI18n()
 
@@ -29,10 +36,23 @@ const searchQuery = ref('')
 const selectedId = ref(null)
 const isDragging = ref(false)
 
+// ========== 历史工作流数据 ==========
+const historyWorkflows = ref([])
+const historyLoading = ref(false)
+const selectedHistoryId = ref(null)
+
 // ========== 工作流模板数据 ==========
 const templates = ref([])
 const templatesLoading = ref(false)
 const selectedCategory = ref('all')
+
+// ========== 缓存和延迟渲染 ==========
+const workflowsCached = ref(false)
+const templatesCached = ref(false)
+const lastWorkflowsLoad = ref(0)
+const lastTemplatesLoad = ref(0)
+const CACHE_DURATION = 60000 // 缓存有效期 60 秒
+const isContentReady = ref(false) // 延迟渲染标记
 
 // 分类（使用computed以便响应语言切换）
 const categories = computed(() => [
@@ -45,8 +65,12 @@ const categories = computed(() => [
 // 删除确认
 const deleteConfirm = ref({
   visible: false,
-  workflow: null
+  workflow: null,
+  isHistory: false  // 是否是历史记录
 })
+
+// 清空历史确认
+const clearHistoryConfirm = ref(false)
 
 // ========== 计算属性 ==========
 
@@ -60,6 +84,15 @@ const filteredWorkflows = computed(() => {
   )
 })
 
+// 筛选后的历史工作流
+const filteredHistoryWorkflows = computed(() => {
+  if (!searchQuery.value.trim()) return historyWorkflows.value
+  const query = searchQuery.value.toLowerCase()
+  return historyWorkflows.value.filter(w => 
+    w.name.toLowerCase().includes(query)
+  )
+})
+
 // 筛选后的模板
 const filteredTemplates = computed(() => {
   if (selectedCategory.value === 'all') {
@@ -70,21 +103,48 @@ const filteredTemplates = computed(() => {
 
 // ========== 加载函数 ==========
 
-// 加载我的工作流列表
-async function loadWorkflows() {
+// 加载我的工作流列表（带缓存）
+async function loadWorkflows(forceRefresh = false) {
+  const now = Date.now()
+  
+  // 如果有缓存且未过期，使用缓存
+  if (!forceRefresh && workflowsCached.value && (now - lastWorkflowsLoad.value < CACHE_DURATION)) {
+    console.log('[WorkflowPanel] 使用工作流缓存数据')
+    // 仍然检查是否需要切换到模板标签
+    if (workflows.value.length === 0 && historyWorkflows.value.length === 0 && activeTab.value === 'my') {
+      activeTab.value = 'templates'
+    }
+    return
+  }
+  
   loading.value = true
   try {
     const result = await getWorkflowList({ page: 1, pageSize: 50 })
     workflows.value = result.list || []
+    workflowsCached.value = true
+    lastWorkflowsLoad.value = now
     
-    // 如果我的工作流为空，自动切换到模板标签
-    if (workflows.value.length === 0 && activeTab.value === 'my') {
+    // 如果我的工作流和历史记录都为空，自动切换到模板标签
+    if (workflows.value.length === 0 && historyWorkflows.value.length === 0 && activeTab.value === 'my') {
       activeTab.value = 'templates'
     }
   } catch (error) {
     console.error('[WorkflowPanel] 加载失败:', error)
   } finally {
     loading.value = false
+  }
+}
+
+// 加载历史工作流
+function loadHistoryWorkflows() {
+  historyLoading.value = true
+  try {
+    historyWorkflows.value = getWorkflowHistory()
+  } catch (error) {
+    console.error('[WorkflowPanel] 加载历史工作流失败:', error)
+    historyWorkflows.value = []
+  } finally {
+    historyLoading.value = false
   }
 }
 
@@ -98,15 +158,27 @@ async function loadQuotaInfo() {
   }
 }
 
-// 加载模板
-async function loadTemplates() {
+// 加载模板（带缓存）
+async function loadTemplates(forceRefresh = false) {
+  const now = Date.now()
+  
+  // 如果有缓存且未过期，使用缓存
+  if (!forceRefresh && templatesCached.value && (now - lastTemplatesLoad.value < CACHE_DURATION)) {
+    console.log('[WorkflowPanel] 使用模板缓存数据')
+    return
+  }
+  
   templatesLoading.value = true
   try {
     const data = await getWorkflowTemplates()
     templates.value = data.templates || []
+    templatesCached.value = true
+    lastTemplatesLoad.value = now
   } catch (e) {
     console.error('加载模板失败:', e)
     templates.value = getBuiltinTemplates()
+    templatesCached.value = true
+    lastTemplatesLoad.value = now
   } finally {
     templatesLoading.value = false
   }
@@ -184,6 +256,7 @@ function getBuiltinTemplates() {
 
 // 选择工作流
 async function selectWorkflow(workflow) {
+  selectedHistoryId.value = null  // 清除历史选中
   if (selectedId.value === workflow.id) {
     // 双击加载
     await handleLoadMyWorkflow(workflow)
@@ -219,14 +292,14 @@ function handleNew() {
 }
 
 // 确认删除
-function confirmDelete(e, workflow) {
+function confirmDelete(e, workflow, isHistory = false) {
   e.stopPropagation()
-  deleteConfirm.value = { visible: true, workflow }
+  deleteConfirm.value = { visible: true, workflow, isHistory }
 }
 
 // 取消删除
 function cancelDelete() {
-  deleteConfirm.value = { visible: false, workflow: null }
+  deleteConfirm.value = { visible: false, workflow: null, isHistory: false }
 }
 
 // 执行删除
@@ -234,14 +307,61 @@ async function handleDelete() {
   if (!deleteConfirm.value.workflow) return
   
   try {
-    await deleteWorkflow(deleteConfirm.value.workflow.id)
-    await loadWorkflows()
-    await loadQuotaInfo()
+    if (deleteConfirm.value.isHistory) {
+      // 删除历史记录
+      deleteWorkflowHistory(deleteConfirm.value.workflow.id)
+      loadHistoryWorkflows()
+    } else {
+      // 删除数据库工作流
+      await deleteWorkflow(deleteConfirm.value.workflow.id)
+      await loadWorkflows()
+      await loadQuotaInfo()
+    }
     cancelDelete()
   } catch (error) {
     console.error('[WorkflowPanel] 删除失败:', error)
     alert('删除失败：' + error.message)
   }
+}
+
+// ========== 历史工作流操作 ==========
+
+// 选择历史工作流
+function selectHistoryWorkflow(workflow) {
+  selectedId.value = null  // 清除手动保存的选中
+  if (selectedHistoryId.value === workflow.id) {
+    // 双击加载
+    handleLoadHistoryWorkflow(workflow)
+  } else {
+    selectedHistoryId.value = workflow.id
+  }
+}
+
+// 加载历史工作流到画布
+function handleLoadHistoryWorkflow(historyWorkflow) {
+  try {
+    // 构造工作流对象
+    const workflow = {
+      id: null, // 历史记录不是已保存的工作流
+      name: historyWorkflow.name + ' (恢复)',
+      nodes: JSON.parse(JSON.stringify(historyWorkflow.nodes)),
+      edges: JSON.parse(JSON.stringify(historyWorkflow.edges)),
+      viewport: historyWorkflow.viewport || { x: 0, y: 0, zoom: 1 }
+    }
+    
+    emit('load', workflow)
+    emit('close')
+  } catch (error) {
+    console.error('[WorkflowPanel] 恢复历史工作流失败:', error)
+    alert('恢复失败：' + error.message)
+  }
+}
+
+// 清空所有历史
+function handleClearHistory() {
+  clearWorkflowHistory()
+  loadHistoryWorkflows()
+  clearHistoryConfirm.value = false
 }
 
 // 开始拖拽工作流
@@ -252,6 +372,26 @@ function handleDragStart(e, workflow) {
     type: 'workflow-merge',
     workflowId: workflow.id,
     workflowName: workflow.name
+  }))
+  e.dataTransfer.effectAllowed = 'copy'
+  
+  setTimeout(() => {
+    isDragging.value = true
+    emit('close')
+  }, 100)
+}
+
+// 拖拽历史工作流
+function handleHistoryDragStart(e, workflow) {
+  console.log('[WorkflowPanel] 开始拖拽历史工作流:', workflow.name)
+  
+  e.dataTransfer.setData('application/json', JSON.stringify({
+    type: 'template-merge',
+    template: {
+      name: workflow.name,
+      nodes: workflow.nodes,
+      edges: workflow.edges
+    }
   }))
   e.dataTransfer.effectAllowed = 'copy'
   
@@ -364,18 +504,32 @@ function formatDate(date) {
 // ========== 生命周期 ==========
 
 // 监听显示状态
-watch(() => props.visible, (visible) => {
+watch(() => props.visible, async (visible) => {
   if (visible) {
-    // 重置状态
-    activeTab.value = 'my'
+    // 重置选择状态（但保持 tab 和 filter 状态）
     selectedId.value = null
-    searchQuery.value = ''
-    selectedCategory.value = 'all'
+    selectedHistoryId.value = null
     
-    // 加载数据
-    loadWorkflows()
-    loadQuotaInfo()
-    loadTemplates()
+    // 延迟渲染内容，让面板动画先完成
+    isContentReady.value = false
+    
+    // 并行加载数据
+    Promise.all([
+      loadWorkflows(),
+      loadQuotaInfo(),
+      loadTemplates()
+    ])
+    
+    // 加载历史工作流
+    loadHistoryWorkflows()
+    
+    // 等待面板动画完成后再渲染内容
+    await nextTick()
+    setTimeout(() => {
+      isContentReady.value = true
+    }, 280)
+  } else {
+    isContentReady.value = false
   }
 })
 
@@ -389,6 +543,10 @@ function handleKeydown(e) {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
 })
 </script>
 
@@ -433,7 +591,9 @@ onMounted(() => {
               <circle cx="12" cy="7" r="4"/>
             </svg>
             {{ t('canvas.myWorkflows') }}
-            <span v-if="workflows.length > 0" class="tab-count">{{ workflows.length }}</span>
+            <span v-if="workflows.length > 0 || historyWorkflows.length > 0" class="tab-count">
+              {{ workflows.length + historyWorkflows.length }}
+            </span>
           </button>
           <button 
             class="tab-btn" 
@@ -489,80 +649,178 @@ onMounted(() => {
             </div>
           </div>
           
-          <!-- 工作流列表 -->
-          <div class="panel-content">
-            <div v-if="loading && workflows.length === 0" class="loading-state">
-              <div class="spinner"></div>
-            </div>
-            
-            <div v-else-if="workflows.length === 0" class="empty-state">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <rect x="3" y="3" width="7" height="7" rx="1"/>
-                <rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/>
-                <rect x="14" y="14" width="7" height="7" rx="1"/>
-              </svg>
-              <p>{{ t('canvas.noSavedWorkflows') }}</p>
-              <p class="empty-hint">{{ t('canvas.tryTemplates') }}</p>
-              <button class="switch-tab-btn" @click="activeTab = 'templates'">
-                {{ t('canvas.viewTemplates') }}
-              </button>
-            </div>
-            
-            <div v-else-if="filteredWorkflows.length === 0" class="empty-state">
-              <p>{{ t('canvas.noMatchingWorkflows') }}</p>
-            </div>
-            
-            <div v-else class="workflow-list">
-              <div
-                v-for="workflow in filteredWorkflows"
-                :key="workflow.id"
-                class="workflow-item"
-                :class="{ selected: selectedId === workflow.id }"
-                draggable="true"
-                @click="selectWorkflow(workflow)"
-                @dblclick="handleLoadMyWorkflow(workflow)"
-                @dragstart="handleDragStart($event, workflow)"
-                @dragend="handleDragEnd"
-              >
-                <div class="item-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <rect x="3" y="3" width="6" height="6" rx="1"/>
-                    <rect x="15" y="3" width="6" height="6" rx="1"/>
-                    <rect x="9" y="15" width="6" height="6" rx="1"/>
-                    <path d="M6 9v3h3M18 9v3h-3M12 15v-3"/>
-                  </svg>
+          <!-- 双列工作流列表 -->
+          <div class="panel-content two-columns">
+            <!-- 左侧：手动保存的工作流 -->
+            <div class="column saved-column">
+              <div class="column-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                  <polyline points="17 21 17 13 7 13 7 21"/>
+                  <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                <span>{{ t('canvas.savedWorkflows') }}</span>
+                <span class="column-count">{{ workflows.length }}</span>
+              </div>
+              
+              <div class="column-content">
+                <div v-if="loading && workflows.length === 0" class="loading-state">
+                  <div class="spinner"></div>
                 </div>
                 
-                <div class="item-info">
-                  <div class="item-name">{{ workflow.name }}</div>
-                  <div class="item-meta">
-                    <span>{{ workflow.node_count }} {{ t('canvas.nodeLabel') }}</span>
-                    <span>·</span>
-                    <span>{{ formatDate(workflow.updated_at) }}</span>
+                <div v-else-if="filteredWorkflows.length === 0" class="empty-state small">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/>
+                    <rect x="14" y="14" width="7" height="7" rx="1"/>
+                  </svg>
+                  <p>{{ searchQuery ? t('canvas.noMatchingWorkflows') : t('canvas.noSavedWorkflows') }}</p>
+                </div>
+                
+                <div v-else class="workflow-list">
+                  <div
+                    v-for="workflow in filteredWorkflows"
+                    :key="workflow.id"
+                    class="workflow-item"
+                    :class="{ selected: selectedId === workflow.id }"
+                    draggable="true"
+                    @click="selectWorkflow(workflow)"
+                    @dblclick="handleLoadMyWorkflow(workflow)"
+                    @dragstart="handleDragStart($event, workflow)"
+                    @dragend="handleDragEnd"
+                  >
+                    <div class="item-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="3" y="3" width="6" height="6" rx="1"/>
+                        <rect x="15" y="3" width="6" height="6" rx="1"/>
+                        <rect x="9" y="15" width="6" height="6" rx="1"/>
+                        <path d="M6 9v3h3M18 9v3h-3M12 15v-3"/>
+                      </svg>
+                    </div>
+                    
+                    <div class="item-info">
+                      <div class="item-name">{{ workflow.name }}</div>
+                      <div class="item-meta">
+                        <span>{{ workflow.node_count }} {{ t('canvas.nodeLabel') }}</span>
+                        <span>·</span>
+                        <span>{{ formatDate(workflow.updated_at) }}</span>
+                      </div>
+                    </div>
+                    
+                    <div class="item-actions">
+                      <button 
+                        class="action-btn load-btn" 
+                        @click.stop="handleLoadMyWorkflow(workflow)"
+                        :title="t('canvas.open')"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M5 12h14M12 5l7 7-7 7"/>
+                        </svg>
+                      </button>
+                      <button 
+                        class="action-btn delete-btn" 
+                        @click.stop="confirmDelete($event, workflow, false)"
+                        :title="t('common.delete')"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
+              </div>
+            </div>
+            
+            <!-- 右侧：历史记录工作流 -->
+            <div class="column history-column">
+              <div class="column-header">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <span>{{ t('canvas.historyWorkflows') }}</span>
+                <span class="column-count">{{ historyWorkflows.length }}</span>
+                <button 
+                  v-if="historyWorkflows.length > 0"
+                  class="clear-history-btn"
+                  @click="clearHistoryConfirm = true"
+                  :title="t('canvas.clearHistory')"
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                  </svg>
+                </button>
+              </div>
+              
+              <div class="column-content">
+                <div v-if="historyLoading && historyWorkflows.length === 0" class="loading-state">
+                  <div class="spinner"></div>
+                </div>
                 
-                <div class="item-actions">
-                  <button 
-                    class="action-btn load-btn" 
-                    @click.stop="handleLoadMyWorkflow(workflow)"
-                    :title="t('canvas.open')"
+                <div v-else-if="filteredHistoryWorkflows.length === 0" class="empty-state small">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <circle cx="12" cy="12" r="10"/>
+                    <polyline points="12 6 12 12 16 14"/>
+                  </svg>
+                  <p>{{ t('canvas.noHistoryWorkflows') }}</p>
+                  <p class="empty-hint">{{ t('canvas.historyAutoSaveHint') }}</p>
+                </div>
+                
+                <div v-else class="workflow-list">
+                  <div
+                    v-for="workflow in filteredHistoryWorkflows"
+                    :key="workflow.id"
+                    class="workflow-item history-item"
+                    :class="{ selected: selectedHistoryId === workflow.id }"
+                    draggable="true"
+                    @click="selectHistoryWorkflow(workflow)"
+                    @dblclick="handleLoadHistoryWorkflow(workflow)"
+                    @dragstart="handleHistoryDragStart($event, workflow)"
+                    @dragend="handleDragEnd"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M5 12h14M12 5l7 7-7 7"/>
-                    </svg>
-                  </button>
-                  <button 
-                    class="action-btn delete-btn" 
-                    @click.stop="confirmDelete($event, workflow)"
-                    :title="t('common.delete')"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <polyline points="3 6 5 6 21 6"/>
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                    </svg>
-                  </button>
+                    <div class="item-icon history-icon">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                      </svg>
+                    </div>
+                    
+                    <div class="item-info">
+                      <div class="item-name">{{ workflow.name }}</div>
+                      <div class="item-meta">
+                        <span>{{ workflow.nodeCount }} {{ t('canvas.nodeLabel') }}</span>
+                        <span>·</span>
+                        <span>{{ formatSaveTime(workflow.savedAt) }}</span>
+                      </div>
+                    </div>
+                    
+                    <div class="item-actions">
+                      <button 
+                        class="action-btn load-btn" 
+                        @click.stop="handleLoadHistoryWorkflow(workflow)"
+                        :title="t('canvas.restore')"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                          <path d="M3 3v5h5"/>
+                        </svg>
+                      </button>
+                      <button 
+                        class="action-btn delete-btn" 
+                        @click.stop="confirmDelete($event, workflow, true)"
+                        :title="t('common.delete')"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="3 6 5 6 21 6"/>
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -633,6 +891,19 @@ onMounted(() => {
             </div>
           </div>
         </Transition>
+        
+        <!-- 清空历史确认 -->
+        <Transition name="fade">
+          <div v-if="clearHistoryConfirm" class="delete-modal" @click.self="clearHistoryConfirm = false">
+            <div class="delete-dialog">
+              <p>{{ t('canvas.clearHistoryConfirm') }}</p>
+              <div class="delete-actions">
+                <button class="btn-cancel" @click="clearHistoryConfirm = false">{{ t('common.cancel') }}</button>
+                <button class="btn-confirm" @click="handleClearHistory">{{ t('canvas.clearAll') }}</button>
+              </div>
+            </div>
+          </div>
+        </Transition>
       </div>
     </div>
   </Transition>
@@ -660,9 +931,9 @@ onMounted(() => {
   pointer-events: auto;
 }
 
-/* 面板 */
+/* 面板 - 更宽以容纳双列 */
 .workflow-panel {
-  width: 420px;
+  width: 680px;
   max-height: calc(100vh - 120px);
   background: rgba(20, 20, 20, 0.95);
   backdrop-filter: blur(20px);
@@ -895,11 +1166,87 @@ onMounted(() => {
   color: white;
 }
 
-/* 内容区 */
+/* 内容区 - 双列布局 */
 .panel-content {
   flex: 1;
   overflow-y: auto;
   padding: 8px;
+}
+
+.panel-content.two-columns {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+}
+
+.column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.column-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.column-header svg {
+  opacity: 0.6;
+}
+
+.column-count {
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 2px 8px;
+  border-radius: 8px;
+  font-size: 11px;
+}
+
+.clear-history-btn {
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-left: 4px;
+}
+
+.clear-history-btn:hover {
+  background: rgba(255, 100, 100, 0.15);
+  color: #ff6b6b;
+}
+
+.column-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.column-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.column-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.column-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
 }
 
 .panel-content::-webkit-scrollbar {
@@ -951,6 +1298,18 @@ onMounted(() => {
   text-align: center;
 }
 
+.empty-state.small {
+  padding: 24px 12px;
+}
+
+.empty-state.small svg {
+  margin-bottom: 12px;
+}
+
+.empty-state.small p {
+  font-size: 12px;
+}
+
 .empty-state svg {
   margin-bottom: 16px;
   opacity: 0.5;
@@ -962,7 +1321,7 @@ onMounted(() => {
 }
 
 .empty-hint {
-  font-size: 12px;
+  font-size: 11px !important;
   color: rgba(255, 255, 255, 0.25);
 }
 
@@ -992,11 +1351,11 @@ onMounted(() => {
 .workflow-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 10px;
+  padding: 10px;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -1010,16 +1369,29 @@ onMounted(() => {
   border-color: rgba(255, 255, 255, 0.15);
 }
 
+.workflow-item.history-item {
+  border-left: 2px solid rgba(59, 130, 246, 0.3);
+}
+
+.workflow-item.history-item.selected {
+  border-left-color: #3b82f6;
+}
+
 .item-icon {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
+  border-radius: 6px;
   color: rgba(255, 255, 255, 0.5);
   flex-shrink: 0;
+}
+
+.item-icon.history-icon {
+  background: rgba(59, 130, 246, 0.15);
+  color: rgba(59, 130, 246, 0.8);
 }
 
 .item-info {
@@ -1028,26 +1400,26 @@ onMounted(() => {
 }
 
 .item-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   color: #fff;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .item-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 11px;
   color: rgba(255, 255, 255, 0.4);
 }
 
 .item-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   opacity: 0;
   transition: opacity 0.15s;
 }
@@ -1058,14 +1430,14 @@ onMounted(() => {
 }
 
 .action-btn {
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   transition: all 0.15s;
@@ -1252,7 +1624,7 @@ onMounted(() => {
 }
 
 /* 响应式 */
-@media (max-width: 640px) {
+@media (max-width: 800px) {
   .workflow-panel-overlay {
     padding: 20px;
     align-items: center;
@@ -1261,8 +1633,22 @@ onMounted(() => {
   
   .workflow-panel {
     width: 100%;
-    max-width: 420px;
+    max-width: 680px;
     max-height: calc(100vh - 40px);
+  }
+  
+  .panel-content.two-columns {
+    flex-direction: column;
+  }
+  
+  .column {
+    max-height: 250px;
+  }
+}
+
+@media (max-width: 640px) {
+  .workflow-panel {
+    max-width: 100%;
   }
 }
 </style>

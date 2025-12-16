@@ -5,7 +5,7 @@
  * 支持分类、标签、收藏、拖拽添加到画布
  * 支持全屏预览和应用到画布
  */
-import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getAssets, deleteAsset, toggleFavorite, updateAssetTags } from '@/api/canvas/assets'
 import { useI18n } from '@/i18n'
 
@@ -32,8 +32,19 @@ const showPreview = ref(false)
 const previewAsset = ref(null)
 const previewVideoRef = ref(null)
 
+// 右键菜单状态
+const showContextMenu = ref(false)
+const contextMenuPosition = ref({ x: 0, y: 0 })
+const contextMenuAsset = ref(null)
+
 // 视频缩略图缓存
 const videoThumbnails = ref({})
+
+// 数据缓存和延迟渲染
+const dataCached = ref(false)
+const lastLoadTime = ref(0)
+const CACHE_DURATION = 60000 // 缓存有效期 60 秒
+const isContentReady = ref(false) // 延迟渲染标记
 
 // 文件类型 - 存储翻译键，在模板中实时翻译
 const fileTypes = [
@@ -120,12 +131,22 @@ const assetStats = computed(() => {
 
 // ========== 方法 ==========
 
-// 加载资产列表
-async function loadAssets() {
+// 加载资产列表（带缓存）
+async function loadAssets(forceRefresh = false) {
+  const now = Date.now()
+  
+  // 如果有缓存且未过期，使用缓存
+  if (!forceRefresh && dataCached.value && (now - lastLoadTime.value < CACHE_DURATION)) {
+    console.log('[AssetPanel] 使用缓存数据')
+    return
+  }
+  
   loading.value = true
   try {
     const result = await getAssets()
     assets.value = result.assets || []
+    dataCached.value = true
+    lastLoadTime.value = now
   } catch (error) {
     console.error('[AssetPanel] 加载资产失败:', error)
   } finally {
@@ -223,6 +244,107 @@ function handleInsertAsset(asset) {
   emit('close')
 }
 
+// ========== 右键菜单 ==========
+
+// 打开右键菜单
+function handleContextMenu(e, asset) {
+  e.preventDefault()
+  e.stopPropagation()
+  contextMenuAsset.value = asset
+  contextMenuPosition.value = { x: e.clientX, y: e.clientY }
+  showContextMenu.value = true
+}
+
+// 关闭右键菜单
+function closeContextMenu() {
+  showContextMenu.value = false
+  contextMenuAsset.value = null
+}
+
+// 右键菜单 - 添加到画布
+function handleAddToCanvas() {
+  if (contextMenuAsset.value) {
+    emit('insert-asset', contextMenuAsset.value)
+    closeContextMenu()
+    emit('close')
+  }
+}
+
+// 右键菜单 - 下载资产
+async function handleDownload() {
+  if (!contextMenuAsset.value) return
+  
+  const asset = contextMenuAsset.value
+  try {
+    let downloadUrl = asset.url
+    let filename = asset.name || `asset_${asset.id}`
+    
+    // 根据类型确定文件扩展名
+    if (asset.type === 'text') {
+      // 文本资产创建 blob
+      const blob = new Blob([asset.content || ''], { type: 'text/plain;charset=utf-8' })
+      downloadUrl = URL.createObjectURL(blob)
+      filename = filename.endsWith('.txt') ? filename : `${filename}.txt`
+    } else if (asset.type === 'image' && !filename.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+      filename = `${filename}.png`
+    } else if (asset.type === 'video' && !filename.match(/\.(mp4|webm|mov)$/i)) {
+      filename = `${filename}.mp4`
+    } else if (asset.type === 'audio' && !filename.match(/\.(mp3|wav|ogg)$/i)) {
+      filename = `${filename}.mp3`
+    }
+    
+    // 创建下载链接
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    link.download = filename
+    link.target = '_blank'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
+    // 如果是 blob URL，释放
+    if (asset.type === 'text') {
+      URL.revokeObjectURL(downloadUrl)
+    }
+  } catch (error) {
+    console.error('[AssetPanel] 下载失败:', error)
+    alert(t('errors.downloadFailed') || '下载失败')
+  }
+  
+  closeContextMenu()
+}
+
+// 右键菜单 - 删除
+async function handleContextDelete() {
+  if (!contextMenuAsset.value) return
+  
+  const asset = contextMenuAsset.value
+  if (!confirm(t('canvas.assetPanel.deleteConfirm', { name: asset.name }))) {
+    closeContextMenu()
+    return
+  }
+  
+  try {
+    await deleteAsset(asset.id)
+    assets.value = assets.value.filter(a => a.id !== asset.id)
+  } catch (error) {
+    console.error('[AssetPanel] 删除资产失败:', error)
+    alert(t('errors.deleteFailed') + ': ' + error.message)
+  }
+  
+  closeContextMenu()
+}
+
+// 右键菜单 - 管理标签
+function handleContextTag() {
+  if (contextMenuAsset.value) {
+    editingAsset.value = contextMenuAsset.value
+    showTagManager.value = true
+    newTagInput.value = ''
+  }
+  closeContextMenu()
+}
+
 // 提取视频首帧作为缩略图
 function extractVideoThumbnail(asset) {
   if (asset.type !== 'video' || !asset.url) return
@@ -285,10 +407,16 @@ function handleDragStart(e, asset) {
   }))
   e.dataTransfer.effectAllowed = 'copy'
   
-  // 延迟关闭面板
-  setTimeout(() => {
-    emit('close')
-  }, 100)
+  // 设置拖拽图像（可选）
+  const dragImage = e.target.cloneNode(true)
+  dragImage.style.width = '120px'
+  dragImage.style.opacity = '0.8'
+  document.body.appendChild(dragImage)
+  e.dataTransfer.setDragImage(dragImage, 60, 60)
+  setTimeout(() => document.body.removeChild(dragImage), 0)
+  
+  // 不自动关闭面板，让用户可以继续拖拽
+  // 面板会在拖拽放置到画布后手动关闭（如果需要的话）
 }
 
 // 打开标签管理
@@ -344,9 +472,21 @@ function closeTagManager() {
 
 // ========== 生命周期 ==========
 
-watch(() => props.visible, (visible) => {
+watch(() => props.visible, async (visible) => {
   if (visible) {
+    // 加载数据
     loadAssets()
+    
+    // 延迟渲染内容，让面板动画先完成
+    isContentReady.value = false
+    await nextTick()
+    
+    // 等待面板动画完成后再渲染内容
+    setTimeout(() => {
+      isContentReady.value = true
+    }, 280)
+  } else {
+    isContentReady.value = false
   }
 })
 
@@ -354,7 +494,9 @@ watch(() => props.visible, (visible) => {
 function handleKeydown(e) {
   if (!props.visible) return
   if (e.key === 'Escape') {
-    if (showTagManager.value) {
+    if (showContextMenu.value) {
+      closeContextMenu()
+    } else if (showTagManager.value) {
       closeTagManager()
     } else {
       emit('close')
@@ -362,17 +504,33 @@ function handleKeydown(e) {
   }
 }
 
+// 点击外部关闭右键菜单
+function handleGlobalClick(e) {
+  if (showContextMenu.value) {
+    const menu = document.querySelector('.asset-context-menu')
+    if (menu && !menu.contains(e.target)) {
+      closeContextMenu()
+    }
+  }
+}
+
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
+  document.addEventListener('click', handleGlobalClick)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('click', handleGlobalClick)
 })
 </script>
 
 <template>
+  <!-- 侧边栏模式：不使用全屏遮罩，让拖拽可以直接到画布 -->
   <Transition name="panel">
     <div 
       v-if="visible" 
-      class="asset-panel-overlay"
-      @click.self="$emit('close')"
+      class="asset-panel-container"
     >
       <div class="asset-panel">
         <!-- 头部 -->
@@ -463,6 +621,7 @@ onMounted(() => {
               :class="[`type-${asset.type}`]"
               draggable="true"
               @click="handleAssetClick(asset)"
+              @contextmenu="handleContextMenu($event, asset)"
               @dragstart="handleDragStart($event, asset)"
             >
               <!-- 预览区 -->
@@ -563,6 +722,48 @@ onMounted(() => {
           <span class="tip">💡 {{ t('canvas.assetPanel.footerTip') }}</span>
         </div>
 
+        <!-- 右键菜单 -->
+        <Teleport to="body">
+          <Transition name="context-menu">
+            <div 
+              v-if="showContextMenu && contextMenuAsset" 
+              class="asset-context-menu"
+              :style="{ left: contextMenuPosition.x + 'px', top: contextMenuPosition.y + 'px' }"
+            >
+              <button class="context-menu-item" @click="handleAddToCanvas">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2"/>
+                  <path d="M12 8v8M8 12h8"/>
+                </svg>
+                <span>{{ t('canvas.assetPanel.addToCanvas') || '添加到画布' }}</span>
+              </button>
+              <button class="context-menu-item" @click="handleDownload">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span>{{ t('common.download') || '下载' }}</span>
+              </button>
+              <button class="context-menu-item" @click="handleContextTag">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                  <line x1="7" y1="7" x2="7.01" y2="7"/>
+                </svg>
+                <span>{{ t('canvas.assetPanel.manageTags') || '管理标签' }}</span>
+              </button>
+              <div class="context-menu-divider"></div>
+              <button class="context-menu-item danger" @click="handleContextDelete">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                </svg>
+                <span>{{ t('common.delete') || '删除' }}</span>
+              </button>
+            </div>
+          </Transition>
+        </Teleport>
+
         <!-- 标签管理弹窗 -->
         <Transition name="fade">
           <div v-if="showTagManager" class="tag-manager-overlay" @click.self="closeTagManager">
@@ -615,7 +816,7 @@ onMounted(() => {
       </div>
     </div>
   </Transition>
-  
+
   <!-- 全屏预览模态框 -->
   <Teleport to="body">
     <Transition name="preview">
@@ -704,23 +905,21 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* 遮罩层 */
-.asset-panel-overlay {
+/* 侧边栏容器 - 不阻挡拖拽 */
+.asset-panel-container {
   position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  top: 40px;
+  left: 90px;
+  bottom: 40px;
   z-index: 200;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 40px 0 40px 90px;
+  pointer-events: none; /* 让拖拽可以穿透 */
 }
 
 /* 面板 - 更大尺寸 */
 .asset-panel {
   width: 680px;
   max-height: calc(100vh - 80px);
+  height: 100%;
   background: linear-gradient(180deg, rgba(28, 28, 32, 0.98) 0%, rgba(20, 20, 24, 0.98) 100%);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -730,6 +929,7 @@ onMounted(() => {
   box-shadow: 
     0 24px 80px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  pointer-events: auto; /* 面板本身可以接收事件 */
 }
 
 /* 头部 */
@@ -1399,9 +1599,9 @@ onMounted(() => {
   transition: all 0.25s ease;
 }
 
-.panel-enter-from,
-.panel-leave-to {
-  opacity: 0;
+.panel-enter-active .asset-panel,
+.panel-leave-active .asset-panel {
+  transition: all 0.25s ease;
 }
 
 .panel-enter-from .asset-panel,
@@ -1422,10 +1622,11 @@ onMounted(() => {
 
 /* 响应式 */
 @media (max-width: 800px) {
-  .asset-panel-overlay {
-    padding: 20px;
-    align-items: center;
-    justify-content: center;
+  .asset-panel-container {
+    left: 20px;
+    right: 20px;
+    top: 20px;
+    bottom: 20px;
   }
   
   .asset-panel {
@@ -1649,6 +1850,78 @@ onMounted(() => {
 .preview-leave-to .asset-preview-modal {
   transform: scale(0.9);
   opacity: 0;
+}
+
+/* ========== 右键菜单 ========== */
+.asset-context-menu {
+  position: fixed;
+  min-width: 180px;
+  background: rgba(32, 32, 38, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 6px;
+  z-index: 10001;
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.context-menu-item svg {
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.context-menu-item:hover svg {
+  opacity: 1;
+}
+
+.context-menu-item.danger {
+  color: rgba(239, 68, 68, 0.9);
+}
+
+.context-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 6px 0;
+}
+
+/* 右键菜单动画 */
+.context-menu-enter-active,
+.context-menu-leave-active {
+  transition: all 0.15s ease;
+}
+
+.context-menu-enter-from,
+.context-menu-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
 }
 </style>
 

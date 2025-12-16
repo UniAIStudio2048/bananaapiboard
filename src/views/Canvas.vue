@@ -24,7 +24,9 @@ import HistoryPanel from '@/components/canvas/HistoryPanel.vue'
 import ImageEditMode from '@/components/canvas/ImageEditMode.vue'
 import InplaceImageEditor from '@/components/canvas/InplaceImageEditor.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
+import OnboardingGuide from '@/components/canvas/OnboardingGuide.vue'
 import { useI18n } from '@/i18n'
+import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoSave, manualSave as saveToHistory } from '@/stores/canvas/workflowAutoSave'
 
 // 导入画布样式
 import '@/styles/canvas.css'
@@ -57,6 +59,9 @@ const showAssetPanel = ref(false)
 
 // 历史记录面板
 const showHistoryPanel = ref(false)
+
+// 新手引导
+const showOnboarding = ref(false)
 
 // 自动保存定时器
 const autoSaveInterval = ref(null)
@@ -574,6 +579,39 @@ function stopAutoSave() {
   }
 }
 
+// 获取当前工作流数据（用于历史自动保存）
+function getCurrentWorkflowData() {
+  const currentTab = canvasStore.getCurrentTab()
+  if (!currentTab) return null
+  
+  // 同步当前画布状态到 tab
+  const workflowData = canvasStore.exportWorkflow()
+  
+  return {
+    name: currentTab.name || '未命名工作流',
+    tabId: currentTab.id,
+    workflowId: currentTab.workflowId,
+    nodes: workflowData.nodes,
+    edges: workflowData.edges,
+    viewport: workflowData.viewport
+  }
+}
+
+// 启动历史工作流自动保存（localStorage，1分钟间隔）
+function initHistoryAutoSave() {
+  startHistoryAutoSave(getCurrentWorkflowData)
+  console.log('[Canvas] 历史工作流自动保存已启动')
+}
+
+// 页面关闭前保存当前工作流到历史
+function handleBeforeUnload() {
+  const workflowData = getCurrentWorkflowData()
+  if (workflowData && workflowData.nodes && workflowData.nodes.length > 0) {
+    saveToHistory(workflowData)
+    console.log('[Canvas] 页面关闭前保存工作流到历史')
+  }
+}
+
 // 加载用户信息
 async function loadUserInfo() {
   try {
@@ -587,6 +625,30 @@ async function loadUserInfo() {
   } finally {
     loading.value = false
   }
+}
+
+// 检查并显示新手引导
+function checkOnboarding() {
+  const completed = localStorage.getItem('canvasOnboardingCompleted')
+  const enabled = localStorage.getItem('canvasOnboardingEnabled')
+  
+  // 如果从未完成过（新用户），或者用户启用了每次提示
+  if (!completed || enabled === 'true') {
+    // 延迟显示，让画布先渲染完成
+    setTimeout(() => {
+      showOnboarding.value = true
+    }, 500)
+  }
+}
+
+// 关闭新手引导
+function closeOnboarding() {
+  showOnboarding.value = false
+}
+
+// 新手引导完成回调
+function handleOnboardingComplete({ skipped }) {
+  console.log('[Canvas] 新手引导已完成', skipped ? '(跳过)' : '(完整)')
 }
 
 // 处理画布双击 - 双击空白处弹出节点选择器
@@ -611,22 +673,22 @@ function handleCanvasDoubleClick(event) {
   )
 }
 
-// 处理点击空白处
-function handleCanvasClick(event) {
-  // 如果刚刚通过连线拖拽打开了选择器，忽略这次点击
-  if (canvasStore.preventSelectorClose) {
-    console.log('[Canvas] 忽略点击，因为刚刚通过连线打开了选择器')
-    return
+// 处理画布空白区域点击（来自 CanvasBoard 的 pane-click 事件）
+function handlePaneClick(event) {
+  // 点击空白处时关闭资产面板
+  if (showAssetPanel.value) {
+    showAssetPanel.value = false
   }
   
-  // 关闭菜单
-  if (canvasStore.isNodeSelectorOpen) {
-    canvasStore.closeNodeSelector()
+  // 点击空白处时关闭历史记录面板
+  if (showHistoryPanel.value) {
+    showHistoryPanel.value = false
   }
-  canvasStore.closeAllContextMenus()
   
-  // 点击空白处时隐藏底部面板
-  canvasStore.isBottomPanelVisible = false
+  // 点击空白处时关闭工作流面板
+  if (showWorkflowPanel.value) {
+    showWorkflowPanel.value = false
+  }
 }
 
 // 处理画布右键菜单的上传事件
@@ -874,6 +936,12 @@ onMounted(async () => {
   // 初始化默认标签
   canvasStore.initDefaultTab()
   
+  // 启动历史工作流自动保存服务（localStorage 缓存）
+  initHistoryAutoSave()
+  
+  // 监听页面关闭事件，保存工作流到历史
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  
   // 检查URL参数，如果有load参数则加载工作流
   const loadWorkflowId = route.query.load
   if (loadWorkflowId && me.value) {
@@ -908,12 +976,17 @@ onMounted(async () => {
     requestAnimationFrame(() => {
       window.dispatchEvent(new Event('resize'))
     })
+    
+    // 检查是否需要显示新手引导
+    checkOnboarding()
   }, 150)
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
   stopAutoSave()
+  stopHistoryAutoSave()
 })
 </script>
 
@@ -976,9 +1049,9 @@ onUnmounted(() => {
     </div>
     
     <!-- 画布主体 -->
-    <div v-else class="canvas-container" @click="handleCanvasClick">
+    <div v-else class="canvas-container">
       <!-- 无限画布 - 使用 key 强制在就绪后重新挂载 -->
-      <CanvasBoard :key="'canvas-board-' + canvasReady" @dblclick="handleCanvasDoubleClick" />
+      <CanvasBoard :key="'canvas-board-' + canvasReady" @dblclick="handleCanvasDoubleClick" @pane-click="handlePaneClick" />
       
       <!-- 顶部标签栏 - 仅在有标签时显示 -->
       <div v-if="canvasStore.workflowTabs.length > 0" class="tabs-container">
@@ -1147,6 +1220,13 @@ onUnmounted(() => {
       
       <!-- 原地图片编辑器 - 用于重绘、擦除 -->
       <InplaceImageEditor />
+      
+      <!-- 新手引导 -->
+      <OnboardingGuide
+        :visible="showOnboarding"
+        @close="closeOnboarding"
+        @complete="handleOnboardingComplete"
+      />
     </div>
   </div>
 </template>

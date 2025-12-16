@@ -501,7 +501,7 @@ const referenceImages = computed(() => {
     if (customOrder.length > 0 && upstreamImages.length > 0) {
       const orderedImages = []
       const remainingImages = [...upstreamImages]
-      
+
       for (const url of customOrder) {
         const index = remainingImages.indexOf(url)
         if (index !== -1) {
@@ -509,28 +509,19 @@ const referenceImages = computed(() => {
           remainingImages.splice(index, 1)
         }
       }
-      
+
       orderedImages.push(...remainingImages)
       console.log('[ImageNode] 返回自定义顺序的上游图片:', orderedImages.length, '张')
       return orderedImages
     }
-    
+
     console.log('[ImageNode] 返回上游图片:', upstreamImages.length, '张')
     return upstreamImages
   }
-  
-  // 没有上游连接时，使用继承数据
-  if (props.data.inheritedData?.urls?.length > 0) {
-    console.log('[ImageNode] 使用继承数据:', props.data.inheritedData.urls.length, '张')
-    return props.data.inheritedData.urls
-  }
-  
-  if (props.data.referenceImages?.length > 0) {
-    console.log('[ImageNode] 使用 referenceImages:', props.data.referenceImages.length, '张')
-    return props.data.referenceImages
-  }
-  
-  console.log('[ImageNode] 没有参考图片')
+
+  // 没有上游连接时，不使用继承数据（继承数据仅在有活跃连接时有效）
+  // 当连接被删除后，应该清空显示，而不是继续显示旧的继承数据
+  console.log('[ImageNode] 没有上游连接，返回空数组')
   return []
 })
 
@@ -1383,7 +1374,7 @@ async function handleGenerate() {
   // 检查总积分是否足够（单次消耗 * 次数）
   const totalCost = currentPointsCost.value * selectedCount.value
   if (userPoints.value < totalCost) {
-    alert(`积分不足，${selectedCount.value}次生成需要 ${totalCost} 积分，您当前只有 ${userPoints.value} 积分`)
+    alert(t('imageGen.insufficientPointsDetail', { count: selectedCount.value, required: totalCost, current: userPoints.value }))
     return
   }
   
@@ -2531,6 +2522,11 @@ async function handleDrop(event) {
             {{ selectedCount }}x
           </span>
           
+          <!-- 积分消耗显示 -->
+          <span class="points-cost-display">
+            {{ currentPointsCost * selectedCount }} {{ t('imageGen.points') }}
+          </span>
+          
           <!-- 生成按钮 - 只在任务提交中禁用，节点生成中仍可点击发起新任务 -->
           <button 
             class="generate-btn"
@@ -3454,6 +3450,18 @@ async function handleDrop(event) {
 .count-display.clickable:hover {
   border-color: var(--canvas-accent-primary, #3b82f6);
   color: var(--canvas-accent-primary, #3b82f6);
+}
+
+/* 积分消耗显示 - 黑白灰风格 */
+.points-cost-display {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
 }
 
 .generate-btn {

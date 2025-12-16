@@ -7,6 +7,9 @@ import { ref, computed, inject, watch } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus } from '@/api/canvas/nodes'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   id: String,
@@ -209,7 +212,7 @@ function handleResizeEnd() {
 async function handleGenerate() {
   // 检查积分
   if (userPoints.value < pointsCost.value) {
-    alert('积分不足，请购买套餐')
+    alert(t('imageGen.insufficientPoints'))
     return
   }
   
@@ -443,7 +446,7 @@ function handleAddClick(event) {
         
         <div class="gen-actions">
           <!-- 积分显示 -->
-          <span class="points-cost">◆ {{ pointsCost }}</span>
+          <span class="points-cost">{{ pointsCost }} {{ t('imageGen.points') }}</span>
           
           <!-- 生成按钮 - 只在任务提交中禁用 -->
           <button 
@@ -734,9 +737,15 @@ function handleAddClick(event) {
   gap: 8px;
 }
 
+/* 积分显示 - 黑白灰风格 */
 .points-cost {
-  font-size: 12px;
-  color: var(--canvas-accent-banana);
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* 端口样式 - 完全隐藏（但保留给 Vue Flow 用于边渲染） */

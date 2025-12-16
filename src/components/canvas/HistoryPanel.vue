@@ -1,12 +1,22 @@
 <script setup>
 /**
  * HistoryPanel.vue - 历史记录面板
- * 使用虚拟滚动实现无限瀑布流，只渲染可视区域的内容
+ * 使用真正的虚拟滚动实现，只渲染可视区域的内容
  * 历史记录在服务器缓存7天，过期自动清理
  * 支持放大预览（滚轮缩放、拖拽平移）、下载、删除
+ * 支持右键菜单（加入资产、下载、添加到画布、预览、删除）
+ * 支持直接拖拽到画布
+ * 
+ * 性能优化:
+ * - 虚拟滚动: 只渲染可视区域内的项目
+ * - 数据缓存: 避免重复加载
+ * - 并行请求: 图片和视频同时获取
+ * - 延迟渲染: 面板动画完成后再渲染列表
+ * - 视频缩略图节流: 限制同时提取数量
  */
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
 import { getHistory, getHistoryDetail, deleteHistory } from '@/api/canvas/history'
+import { saveAsset } from '@/api/canvas/assets'
 import { useI18n } from '@/i18n'
 
 const { t, currentLanguage } = useI18n()
@@ -19,12 +29,19 @@ const emit = defineEmits(['close', 'apply-history'])
 
 // ========== 状态 ==========
 const loading = ref(false)
-const historyList = ref([])
+const historyList = shallowRef([]) // 使用 shallowRef 优化大数组
 const selectedType = ref('all') // all | image | video | audio
 const searchQuery = ref('')
 
 // 滚动容器引用
 const scrollContainerRef = ref(null)
+
+// ========== 虚拟滚动状态 ==========
+const ITEM_HEIGHT = 180 // 每个卡片的估计高度（包含间距）
+const BUFFER_COUNT = 6 // 上下缓冲区域的项目数
+const scrollTop = ref(0)
+const containerHeight = ref(600) // 容器高度
+const isContentReady = ref(false) // 内容是否准备好渲染（延迟渲染用）
 
 // 全屏预览状态
 const showPreview = ref(false)
@@ -40,6 +57,9 @@ const lastTranslate = ref({ x: 0, y: 0 })
 
 // 视频缩略图缓存
 const videoThumbnails = ref({})
+const videoThumbnailQueue = ref([]) // 待处理队列
+const processingThumbnails = ref(0) // 正在处理的数量
+const MAX_CONCURRENT_THUMBNAILS = 2 // 最大同时处理数
 
 // 图片加载失败的记录
 const imageLoadErrors = ref({})
@@ -47,6 +67,19 @@ const imageLoadErrors = ref({})
 // 删除确认弹窗状态
 const showDeleteConfirm = ref(false)
 const deleteTarget = ref(null)
+
+// 右键菜单状态
+const showContextMenu = ref(false)
+const contextMenuPosition = ref({ x: 0, y: 0 })
+const contextMenuItem = ref(null)
+
+// 数据缓存标记
+const dataCached = ref(false)
+const lastLoadTime = ref(0)
+const CACHE_DURATION = 60000 // 缓存有效期 60 秒
+
+// 保存中状态
+const savingAsset = ref(false)
 
 // 文件类型
 const fileTypes = [
@@ -78,6 +111,59 @@ const filteredHistory = computed(() => {
   return result
 })
 
+// ========== 虚拟滚动计算 ==========
+// 计算可见项目（使用瀑布流双列布局）
+const visibleItems = computed(() => {
+  if (!isContentReady.value) return []
+  
+  const items = filteredHistory.value
+  const total = items.length
+  
+  // 如果数据量小于 50，直接渲染全部（不需要虚拟滚动）
+  if (total <= 50) {
+    return items.map((item, index) => ({ item, index }))
+  }
+  
+  // 计算瀑布流中每行有 2 个项目
+  const itemsPerRow = 2
+  const rowHeight = ITEM_HEIGHT
+  
+  // 计算可见的行范围
+  const startRow = Math.max(0, Math.floor(scrollTop.value / rowHeight) - BUFFER_COUNT)
+  const endRow = Math.ceil((scrollTop.value + containerHeight.value) / rowHeight) + BUFFER_COUNT
+  
+  // 转换为项目索引范围
+  const startIndex = startRow * itemsPerRow
+  const endIndex = Math.min(total, (endRow + 1) * itemsPerRow)
+  
+  // 返回可见项目及其索引
+  const visible = []
+  for (let i = startIndex; i < endIndex; i++) {
+    if (items[i]) {
+      visible.push({ item: items[i], index: i })
+    }
+  }
+  
+  return visible
+})
+
+// 虚拟滚动的总高度（用于滚动条）
+const totalHeight = computed(() => {
+  const total = filteredHistory.value.length
+  const rows = Math.ceil(total / 2)
+  return rows * ITEM_HEIGHT
+})
+
+// 虚拟滚动的偏移量
+const offsetY = computed(() => {
+  const items = filteredHistory.value
+  if (items.length <= 50) return 0
+  
+  const itemsPerRow = 2
+  const startRow = Math.max(0, Math.floor(scrollTop.value / ITEM_HEIGHT) - BUFFER_COUNT)
+  return startRow * ITEM_HEIGHT
+})
+
 // 按类型分组的统计
 const historyStats = computed(() => {
   const stats = { all: 0, image: 0, video: 0, audio: 0 }
@@ -92,12 +178,40 @@ const historyStats = computed(() => {
 
 // ========== 方法 ==========
 
-// 加载历史记录（一次性加载全部，7天内）
-async function loadHistory() {
+// 处理滚动事件（节流）
+let scrollRAF = null
+function handleScroll(e) {
+  if (scrollRAF) return
+  
+  scrollRAF = requestAnimationFrame(() => {
+    scrollTop.value = e.target.scrollTop
+    scrollRAF = null
+  })
+}
+
+// 更新容器高度
+function updateContainerHeight() {
+  if (scrollContainerRef.value) {
+    containerHeight.value = scrollContainerRef.value.clientHeight
+  }
+}
+
+// 加载历史记录（带缓存）
+async function loadHistory(forceRefresh = false) {
+  const now = Date.now()
+  
+  // 如果有缓存且未过期，使用缓存
+  if (!forceRefresh && dataCached.value && (now - lastLoadTime.value < CACHE_DURATION)) {
+    console.log('[HistoryPanel] 使用缓存数据')
+    return
+  }
+  
   loading.value = true
   try {
     const result = await getHistory()
     historyList.value = result.history || []
+    dataCached.value = true
+    lastLoadTime.value = now
     console.log('[HistoryPanel] 加载历史记录:', historyList.value.length, '条')
   } catch (error) {
     console.error('[HistoryPanel] 加载历史记录失败:', error)
@@ -145,6 +259,7 @@ function formatSize(item) {
 // 删除历史记录 - 打开确认弹窗
 function handleDelete(e, item) {
   if (e) e.stopPropagation()
+  closeContextMenu()
   deleteTarget.value = item
   showDeleteConfirm.value = true
 }
@@ -181,6 +296,7 @@ async function confirmDelete() {
 // 下载文件
 function handleDownload(item) {
   if (!item.url) return
+  closeContextMenu()
   
   const a = document.createElement('a')
   a.href = item.url
@@ -206,6 +322,138 @@ function closePreview() {
   previewItem.value = null
   previewScale.value = 1
   previewTranslate.value = { x: 0, y: 0 }
+}
+
+// ========== 右键菜单 ==========
+
+// 打开右键菜单
+function handleContextMenu(e, item) {
+  e.preventDefault()
+  e.stopPropagation()
+  
+  contextMenuItem.value = item
+  contextMenuPosition.value = { x: e.clientX, y: e.clientY }
+  showContextMenu.value = true
+}
+
+// 关闭右键菜单
+function closeContextMenu() {
+  showContextMenu.value = false
+  contextMenuItem.value = null
+}
+
+// Toast 通知
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div')
+  toast.className = `history-toast history-toast-${type}`
+  toast.innerHTML = `
+    <span class="toast-icon">${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
+    <span class="toast-text">${message}</span>
+  `
+  toast.style.cssText = `
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: ${type === 'success' ? 'linear-gradient(135deg, #10b981, #059669)' : type === 'error' ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 'linear-gradient(135deg, #3b82f6, #2563eb)'};
+    color: white;
+    padding: 12px 20px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+    z-index: 100000;
+    animation: historyToastIn 0.3s ease;
+  `
+  
+  const style = document.createElement('style')
+  style.textContent = `
+    @keyframes historyToastIn {
+      from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+      to { opacity: 1; transform: translateX(-50%) translateY(0); }
+    }
+    @keyframes historyToastOut {
+      from { opacity: 1; transform: translateX(-50%) translateY(0); }
+      to { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+    }
+  `
+  document.head.appendChild(style)
+  document.body.appendChild(toast)
+  
+  setTimeout(() => {
+    toast.style.animation = 'historyToastOut 0.3s ease forwards'
+    setTimeout(() => {
+      toast.remove()
+      style.remove()
+    }, 300)
+  }, 2500)
+}
+
+// 加入我的资产
+async function handleAddToAssets(item) {
+  closeContextMenu()
+  
+  if (!item || !item.url) {
+    console.warn('[HistoryPanel] 无效的项目，无法加入资产')
+    showToast('无效的项目', 'error')
+    return
+  }
+  
+  savingAsset.value = true
+  
+  try {
+    await saveAsset({
+      type: item.type,
+      name: item.name || item.prompt?.slice(0, 30) || `${item.type}_${item.id}`,
+      url: item.url,
+      content: item.prompt || '',
+      source: 'history',
+      metadata: {
+        model: item.model,
+        prompt: item.prompt,
+        historyId: item.id
+      }
+    })
+    
+    // 显示成功提示
+    showToast(t('canvas.contextMenu.assetSaved', { type: t(`canvas.nodes.${item.type}`) }), 'success')
+  } catch (error) {
+    console.error('[HistoryPanel] 加入资产失败:', error)
+    showToast('加入资产失败：' + (error.message || '未知错误'), 'error')
+  } finally {
+    savingAsset.value = false
+  }
+}
+
+// 添加到画布
+async function handleAddToCanvas(item) {
+  closeContextMenu()
+  
+  try {
+    // 获取完整的历史记录详情（包含工作流快照）
+    const detail = await getHistoryDetail(item.id)
+    
+    emit('apply-history', {
+      ...item,
+      workflow_snapshot: detail.history?.workflow_snapshot || null
+    })
+    
+    emit('close')
+  } catch (error) {
+    console.error('[HistoryPanel] 获取历史记录详情失败:', error)
+    // 即使获取详情失败，也尝试应用基本信息
+    emit('apply-history', item)
+    emit('close')
+  }
+}
+
+// 预览
+function handlePreview(item) {
+  closeContextMenu()
+  handleHistoryClick(item)
 }
 
 // ========== 预览图片缩放和平移 ==========
@@ -302,15 +550,32 @@ async function applyToCanvas() {
   }
 }
 
-// 提取视频首帧作为缩略图
+// 提取视频首帧作为缩略图（带节流，限制并发）
 function extractVideoThumbnail(item) {
   if (item.type !== 'video' || !item.url) return
   if (videoThumbnails.value[item.id]) return
+  
+  // 如果正在处理的数量已达上限，加入队列
+  if (processingThumbnails.value >= MAX_CONCURRENT_THUMBNAILS) {
+    if (!videoThumbnailQueue.value.includes(item.id)) {
+      videoThumbnailQueue.value.push(item.id)
+    }
+    return
+  }
+  
+  processingThumbnails.value++
   
   const video = document.createElement('video')
   video.crossOrigin = 'anonymous'
   video.muted = true
   video.preload = 'metadata'
+  
+  const cleanup = () => {
+    video.remove()
+    processingThumbnails.value--
+    // 处理队列中的下一个
+    processNextThumbnail()
+  }
   
   video.onloadeddata = () => {
     video.currentTime = 0.1
@@ -319,31 +584,58 @@ function extractVideoThumbnail(item) {
   video.onseeked = () => {
     try {
       const canvas = document.createElement('canvas')
-      canvas.width = video.videoWidth || 320
-      canvas.height = video.videoHeight || 180
+      canvas.width = Math.min(video.videoWidth || 320, 320)
+      canvas.height = Math.min(video.videoHeight || 180, 180)
       const ctx = canvas.getContext('2d')
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-      videoThumbnails.value[item.id] = canvas.toDataURL('image/jpeg', 0.7)
+      videoThumbnails.value[item.id] = canvas.toDataURL('image/jpeg', 0.6)
     } catch (e) {
       console.warn('[HistoryPanel] 无法提取视频缩略图:', e)
     }
-    video.remove()
+    cleanup()
   }
   
   video.onerror = () => {
     console.warn('[HistoryPanel] 视频加载失败:', item.url)
-    video.remove()
+    cleanup()
   }
+  
+  // 设置超时，防止卡住
+  setTimeout(() => {
+    if (processingThumbnails.value > 0 && !videoThumbnails.value[item.id]) {
+      cleanup()
+    }
+  }, 5000)
   
   video.src = item.url
 }
 
-// 获取视频缩略图
+// 处理队列中的下一个缩略图
+function processNextThumbnail() {
+  if (videoThumbnailQueue.value.length === 0) return
+  if (processingThumbnails.value >= MAX_CONCURRENT_THUMBNAILS) return
+  
+  const nextId = videoThumbnailQueue.value.shift()
+  const item = historyList.value.find(h => h.id === nextId)
+  if (item) {
+    extractVideoThumbnail(item)
+  }
+}
+
+// 获取视频缩略图（优化版：不会重复触发）
 function getVideoThumbnail(item) {
   if (item.thumbnail_url) return item.thumbnail_url
   if (videoThumbnails.value[item.id]) return videoThumbnails.value[item.id]
   
-  nextTick(() => extractVideoThumbnail(item))
+  // 只有在可见区域内才触发提取
+  if (isContentReady.value && !videoThumbnailQueue.value.includes(item.id)) {
+    // 使用 requestIdleCallback 在空闲时处理
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(() => extractVideoThumbnail(item), { timeout: 2000 })
+    } else {
+      setTimeout(() => extractVideoThumbnail(item), 100)
+    }
+  }
   return null
 }
 
@@ -373,16 +665,42 @@ function handleDragStart(e, item) {
   }))
   e.dataTransfer.effectAllowed = 'copy'
   
-  setTimeout(() => {
-    emit('close')
-  }, 100)
+  // 创建拖拽预览图
+  if (item.type === 'image' && item.thumbnail_url) {
+    const img = new Image()
+    img.src = item.thumbnail_url
+    e.dataTransfer.setDragImage(img, 50, 50)
+  }
+}
+
+// 拖拽结束
+function handleDragEnd(e) {
+  // 拖拽结束后不自动关闭面板，让用户可以继续拖拽其他项目
 }
 
 // ========== 生命周期 ==========
 
-watch(() => props.visible, (visible) => {
+watch(() => props.visible, async (visible) => {
   if (visible) {
+    // 重置滚动位置
+    scrollTop.value = 0
+    
+    // 加载数据
     loadHistory()
+    
+    // 延迟渲染内容，让面板动画先完成
+    isContentReady.value = false
+    await nextTick()
+    
+    // 等待面板动画完成后再渲染内容（250ms 是动画时长）
+    setTimeout(() => {
+      isContentReady.value = true
+      updateContainerHeight()
+    }, 280)
+  } else {
+    // 面板关闭时重置状态
+    isContentReady.value = false
+    closeContextMenu()
   }
 })
 
@@ -390,7 +708,9 @@ watch(() => props.visible, (visible) => {
 function handleKeydown(e) {
   if (!props.visible) return
   if (e.key === 'Escape') {
-    if (showPreview.value) {
+    if (showContextMenu.value) {
+      closeContextMenu()
+    } else if (showPreview.value) {
       closePreview()
     } else {
       emit('close')
@@ -407,25 +727,61 @@ function handleGlobalMouseUp() {
   handlePreviewMouseUp()
 }
 
+// 全局点击事件（关闭右键菜单）
+function handleGlobalClick(e) {
+  if (showContextMenu.value) {
+    closeContextMenu()
+  }
+}
+
+// ResizeObserver 引用
+let resizeObserver = null
+
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
   document.addEventListener('mousemove', handleGlobalMouseMove)
   document.addEventListener('mouseup', handleGlobalMouseUp)
+  document.addEventListener('click', handleGlobalClick)
+  
+  // 监听容器大小变化
+  if (scrollContainerRef.value && 'ResizeObserver' in window) {
+    resizeObserver = new ResizeObserver(() => {
+      updateContainerHeight()
+    })
+    resizeObserver.observe(scrollContainerRef.value)
+  }
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('mousemove', handleGlobalMouseMove)
   document.removeEventListener('mouseup', handleGlobalMouseUp)
+  document.removeEventListener('click', handleGlobalClick)
+  
+  // 清理 ResizeObserver
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  
+  // 清理 RAF
+  if (scrollRAF) {
+    cancelAnimationFrame(scrollRAF)
+    scrollRAF = null
+  }
+  
+  // 清理视频缩略图队列
+  videoThumbnailQueue.value = []
+  processingThumbnails.value = 0
 })
 </script>
 
 <template>
+  <!-- 侧边栏模式：不使用全屏遮罩，让拖拽可以直接到画布 -->
   <Transition name="panel">
     <div 
       v-if="visible" 
-      class="history-panel-overlay"
-      @click.self="$emit('close')"
+      class="history-panel-wrapper"
     >
       <div class="history-panel">
         <!-- 头部 -->
@@ -476,10 +832,21 @@ onUnmounted(() => {
         </div>
 
         <!-- 历史记录列表 - 虚拟滚动 -->
-        <div class="history-list" ref="scrollContainerRef">
+        <div 
+          class="history-list" 
+          ref="scrollContainerRef"
+          @scroll="handleScroll"
+        >
           <div v-if="loading" class="loading-state">
             <div class="spinner"></div>
             <span>{{ t('common.loading') }}</span>
+          </div>
+          
+          <!-- 内容准备中的骨架屏 -->
+          <div v-else-if="!isContentReady && filteredHistory.length > 0" class="loading-state skeleton-loading">
+            <div class="skeleton-grid">
+              <div class="skeleton-card" v-for="i in 6" :key="i"></div>
+            </div>
           </div>
 
           <div v-else-if="filteredHistory.length === 0" class="empty-state">
@@ -494,17 +861,26 @@ onUnmounted(() => {
             <p class="empty-hint">{{ t('canvas.historyPanel.autoSaveHint') }}</p>
           </div>
 
-          <!-- 瀑布流列表 -->
-          <div v-else class="waterfall-container" ref="scrollContainerRef">
-            <div class="waterfall-grid">
+          <!-- 虚拟滚动列表 -->
+          <div 
+            v-else 
+            class="virtual-scroll-container"
+            :style="{ height: totalHeight + 'px' }"
+          >
+            <div 
+              class="waterfall-grid"
+              :style="{ transform: `translateY(${offsetY}px)` }"
+            >
               <div 
-                v-for="item in filteredHistory"
+                v-for="{ item, index } in visibleItems"
                 :key="item.id"
                 class="history-card"
                 :class="[`type-${item.type}`]"
                 draggable="true"
                 @click="handleHistoryClick(item)"
+                @contextmenu="handleContextMenu($event, item)"
                 @dragstart="handleDragStart($event, item)"
+                @dragend="handleDragEnd"
               >
                 <!-- 图片预览 -->
                 <template v-if="item.type === 'image'">
@@ -514,6 +890,7 @@ onUnmounted(() => {
                     :alt="item.name"
                     class="card-image"
                     loading="lazy"
+                    decoding="async"
                     @error="handleImageError(item)"
                   />
                   <div v-else class="card-placeholder image">
@@ -530,6 +907,7 @@ onUnmounted(() => {
                     :alt="item.name"
                     class="card-image"
                     loading="lazy"
+                    decoding="async"
                   />
                   <div v-else class="card-placeholder video">
                     <span class="placeholder-icon">▶</span>
@@ -576,6 +954,57 @@ onUnmounted(() => {
       </div>
     </div>
   </Transition>
+  
+  <!-- 右键菜单 -->
+  <Teleport to="body">
+    <Transition name="context-menu">
+      <div 
+        v-if="showContextMenu && contextMenuItem"
+        class="history-context-menu"
+        :style="{ left: contextMenuPosition.x + 'px', top: contextMenuPosition.y + 'px' }"
+        @click.stop
+      >
+        <div class="context-menu-item" @click="handlePreview(contextMenuItem)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+            <circle cx="12" cy="12" r="3"/>
+          </svg>
+          <span>{{ t('canvas.contextMenu.fullscreenPreview') }}</span>
+        </div>
+        <div class="context-menu-item" @click="handleAddToCanvas(contextMenuItem)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          <span>{{ t('canvas.historyPanel.applyToCanvas') }}</span>
+        </div>
+        <div class="context-menu-item" @click="handleAddToAssets(contextMenuItem)" :class="{ disabled: savingAsset }">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+          <span>{{ savingAsset ? t('canvas.contextMenu.saving') : t('canvas.contextMenu.addToAssets') }}</span>
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" @click="handleDownload(contextMenuItem)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>{{ contextMenuItem.type === 'video' ? t('canvas.contextMenu.downloadVideo') : t('canvas.contextMenu.downloadImage') }}</span>
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item danger" @click="handleDelete(null, contextMenuItem)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+          <span>{{ t('common.delete') }}</span>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
   
   <!-- 全屏预览模态框 - 支持缩放和平移 -->
   <Teleport to="body">
@@ -657,6 +1086,14 @@ onUnmounted(() => {
                 </svg>
                 {{ t('canvas.historyPanel.applyToCanvas') }}
               </button>
+              <button class="action-btn asset-btn" @click="handleAddToAssets(previewItem)" :disabled="savingAsset">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                  <polyline points="17 21 17 13 7 13 7 21"/>
+                  <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                {{ savingAsset ? t('canvas.contextMenu.saving') : t('canvas.contextMenu.addToAssets') }}
+              </button>
               <button class="action-btn download-btn" @click="handleDownload(previewItem)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -717,22 +1154,20 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* 遮罩层 */
-.history-panel-overlay {
+/* 侧边栏容器 - 无遮罩，不阻挡画布操作 */
+.history-panel-wrapper {
   position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
+  top: 40px;
+  left: 90px;
+  bottom: 40px;
   z-index: 200;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 40px 0 40px 90px;
+  pointer-events: none;
 }
 
 /* 面板 */
 .history-panel {
   width: 480px;
+  height: 100%;
   max-height: calc(100vh - 80px);
   background: linear-gradient(180deg, rgba(28, 28, 32, 0.98) 0%, rgba(20, 20, 24, 0.98) 100%);
   backdrop-filter: blur(20px);
@@ -743,6 +1178,7 @@ onUnmounted(() => {
   box-shadow: 
     0 24px 80px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  pointer-events: auto;
 }
 
 /* 头部 */
@@ -917,13 +1353,41 @@ onUnmounted(() => {
   border-radius: 2px;
 }
 
-.waterfall-container {
-  padding: 8px;
+/* 虚拟滚动容器 */
+.virtual-scroll-container {
+  position: relative;
+  width: 100%;
 }
 
 .waterfall-grid {
   columns: 2;
   column-gap: 4px;
+  padding: 8px;
+  will-change: transform;
+}
+
+/* 骨架屏样式 */
+.skeleton-loading {
+  padding: 8px;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+}
+
+.skeleton-card {
+  aspect-ratio: 1;
+  background: linear-gradient(90deg, #2a2a2e 25%, #3a3a3e 50%, #2a2a2e 75%);
+  background-size: 200% 100%;
+  border-radius: 4px;
+  animation: skeleton-shimmer 1.5s infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 /* 加载状态 */
@@ -989,10 +1453,14 @@ onUnmounted(() => {
   background: #1a1a1c;
   border-radius: 4px;
   overflow: hidden;
-  cursor: pointer;
+  cursor: grab;
   transition: all 0.15s;
   break-inside: avoid;
   margin-bottom: 4px;
+}
+
+.history-card:active {
+  cursor: grabbing;
 }
 
 .history-card:hover {
@@ -1172,6 +1640,71 @@ onUnmounted(() => {
   opacity: 0;
 }
 
+/* ========== 右键菜单 ========== */
+.history-context-menu {
+  position: fixed;
+  z-index: 10001;
+  min-width: 180px;
+  background: rgba(30, 30, 34, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.context-menu-item.danger {
+  color: #ef4444;
+}
+
+.context-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.context-menu-item.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.context-menu-item svg {
+  opacity: 0.7;
+  flex-shrink: 0;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 6px 0;
+}
+
+/* 右键菜单动画 */
+.context-menu-enter-active,
+.context-menu-leave-active {
+  transition: all 0.15s ease;
+}
+
+.context-menu-enter-from,
+.context-menu-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+
 /* ========== 全屏预览模态框 ========== */
 .history-preview-overlay {
   position: fixed;
@@ -1314,13 +1847,14 @@ onUnmounted(() => {
   gap: 8px;
   justify-content: center;
   padding-top: 8px;
+  flex-wrap: wrap;
 }
 
 .preview-actions .action-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 20px;
+  padding: 10px 16px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
@@ -1335,6 +1869,11 @@ onUnmounted(() => {
   color: #fff;
 }
 
+.preview-actions .action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .preview-actions .apply-btn {
   background: #fff;
   border-color: #fff;
@@ -1343,6 +1882,11 @@ onUnmounted(() => {
 
 .preview-actions .apply-btn:hover {
   background: #f0f0f0;
+}
+
+.preview-actions .asset-btn:hover {
+  background: rgba(59, 130, 246, 0.3);
+  border-color: rgba(59, 130, 246, 0.5);
 }
 
 .preview-actions .download-btn:hover {
@@ -1367,16 +1911,16 @@ onUnmounted(() => {
 
 /* 响应式 */
 @media (max-width: 800px) {
-  .history-panel-overlay {
-    padding: 20px;
-    align-items: center;
-    justify-content: center;
+  .history-panel-wrapper {
+    left: 20px;
+    right: 20px;
+    top: 20px;
+    bottom: 20px;
   }
   
   .history-panel {
     width: 100%;
     max-width: 480px;
-    max-height: calc(100vh - 40px);
   }
   
   .waterfall-grid {

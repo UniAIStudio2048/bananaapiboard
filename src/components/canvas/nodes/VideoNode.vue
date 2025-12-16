@@ -316,16 +316,25 @@ function collectUpstreamImages() {
 
 // 参考图片（来自左侧输入，支持多张图片，支持自定义顺序）
 const referenceImages = computed(() => {
+  // 首先检查是否有上游连接
+  const hasIncomingEdge = canvasStore.edges.some(edge => edge.target === props.id)
+
+  // 如果没有上游连接，直接返回空数组（不使用继承数据）
+  // 这确保了当连接被删除后，参考图片会被清空
+  if (!hasIncomingEdge) {
+    return []
+  }
+
   // 收集上游图片
   const upstreamImages = collectUpstreamImages()
-  
+
   // 如果有用户自定义的顺序，按顺序返回
   const customOrder = props.data.imageOrder || []
   if (customOrder.length > 0 && upstreamImages.length > 0) {
     // 按自定义顺序排列，同时包含新添加的图片
     const orderedImages = []
     const remainingImages = [...upstreamImages]
-    
+
     // 先按顺序添加已排序的图片
     for (const url of customOrder) {
       const index = remainingImages.indexOf(url)
@@ -334,35 +343,26 @@ const referenceImages = computed(() => {
         remainingImages.splice(index, 1)
       }
     }
-    
+
     // 再添加新图片（不在自定义顺序中的）
     orderedImages.push(...remainingImages)
-    
+
     return orderedImages
   }
-  
-  // 没有自定义顺序，直接返回上游图片
-  if (upstreamImages.length > 0) {
-    return upstreamImages
-  }
-  
-  // 其次使用继承的图片数据
-  if (props.data.inheritedData?.type === 'image' && props.data.inheritedData?.urls?.length > 0) {
-    return props.data.inheritedData.urls
-  }
-  
-  // 最后使用直接设置的 referenceImages
-  if (props.data.referenceImages?.length > 0) {
-    return props.data.referenceImages
-  }
-  
-  return []
+
+  // 返回上游图片（即使为空，也不使用继承数据）
+  return upstreamImages
 })
 const firstFrame = computed(() => referenceImages.value[0] || null)
 const lastFrame = computed(() => referenceImages.value[1] || referenceImages.value[0] || null)
 
 // 继承的文本提示词（来自上游文本节点）
+// 只有在有上游连接时才使用继承数据
 const inheritedPrompt = computed(() => {
+  // 检查是否有上游连接
+  const hasIncomingEdge = canvasStore.edges.some(edge => edge.target === props.id)
+  if (!hasIncomingEdge) return ''
+
   const data = props.data.inheritedData
   if (data?.type === 'text' && data?.content) {
     return data.content
@@ -443,6 +443,7 @@ const pointsCost = computed(() => {
   const modelConfig = pointsCostConfig.value[selectedModel.value] || {}
   return modelConfig[selectedDuration.value] || 20
 })
+
 
 // 用户积分
 const userPoints = computed(() => {
@@ -1045,7 +1046,7 @@ async function handleGenerate() {
   // 检查总积分是否足够（单次消耗 * 次数）
   const totalCost = pointsCost.value * selectedCount.value
   if (userPoints.value < totalCost) {
-    alert(`积分不足，${selectedCount.value}次生成需要 ${totalCost} 积分，您当前只有 ${userPoints.value} 积分`)
+    alert(t('imageGen.insufficientPointsDetail', { count: selectedCount.value, required: totalCost, current: userPoints.value }))
     return
   }
   
@@ -2112,6 +2113,11 @@ function closeFullscreenPreview() {
             {{ selectedCount }}x
           </span>
           
+          <!-- 积分消耗显示 -->
+          <span class="points-cost-display">
+            {{ pointsCost }} {{ t('imageGen.points') }}
+          </span>
+          
           <!-- 生成按钮 - 只在任务提交中禁用，节点生成中仍可点击发起新任务 -->
           <button 
             class="generate-btn"
@@ -2995,6 +3001,18 @@ function closeFullscreenPreview() {
 .count-display.clickable:hover {
   border-color: var(--canvas-accent-primary, #3b82f6);
   color: var(--canvas-accent-primary, #3b82f6);
+}
+
+/* 积分消耗显示 - 黑白灰风格 */
+.points-cost-display {
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
 }
 
 .generate-btn {

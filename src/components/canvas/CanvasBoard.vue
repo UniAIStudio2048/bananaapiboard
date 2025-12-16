@@ -37,8 +37,36 @@ import LLMNode from './nodes/LLMNode.vue'
 import PreviewNode from './nodes/PreviewNode.vue'
 import GroupNode from './nodes/GroupNode.vue'
 
-const emit = defineEmits(['dblclick', 'canvas-contextmenu'])
+const emit = defineEmits(['dblclick', 'canvas-contextmenu', 'pane-click'])
 const canvasStore = useCanvasStore()
+
+// 连线样式设置
+const edgeStyle = ref(localStorage.getItem('canvasEdgeStyle') || 'smoothstep')
+const isEdgeHidden = computed(() => edgeStyle.value === 'hidden')
+
+// 计算连线配置
+const defaultEdgeOptions = computed(() => ({
+  type: edgeStyle.value === 'hidden' ? 'smoothstep' : edgeStyle.value,
+  animated: false,
+  style: isEdgeHidden.value ? { opacity: 0 } : {}
+}))
+
+// 监听连线样式变化事件
+function handleEdgeStyleChange(event) {
+  const newStyle = event.detail?.style || 'smoothstep'
+  edgeStyle.value = newStyle
+  
+  // 更新所有现有连线的样式
+  canvasStore.edges.forEach(edge => {
+    if (newStyle === 'hidden') {
+      edge.type = 'smoothstep'
+      edge.style = { opacity: 0 }
+    } else {
+      edge.type = newStyle
+      edge.style = {}
+    }
+  })
+}
 
 // 记录最后的鼠标位置（用于粘贴）
 const lastMousePosition = ref({ x: 0, y: 0 })
@@ -375,6 +403,9 @@ onPaneClick((event) => {
   
   // 更新鼠标位置
   lastMousePosition.value = { x: event.clientX, y: event.clientY }
+  
+  // 通知父组件画布空白区域被点击（用于关闭侧边面板）
+  emit('pane-click', event)
 })
 
 // 处理画布右键（空白区域右键菜单）
@@ -1092,7 +1123,7 @@ async function handleFileDrop(event) {
   const canvasX = (mouseX - viewport.x) / viewport.zoom
   const canvasY = (mouseY - viewport.y) / viewport.zoom
   
-  // 检查是否是工作流/模板拖拽（来自 WorkflowPanel）
+  // 检查是否是工作流/模板/资产拖拽
   const jsonData = event.dataTransfer?.getData('application/json')
   if (jsonData) {
     try {
@@ -1121,6 +1152,84 @@ async function handleFileDrop(event) {
       if (data.type === 'template-merge' && data.template) {
         console.log('[CanvasBoard] 接收到模板拖放，合并:', data.template.name)
         canvasStore.mergeWorkflowToCanvas(data.template, { x: canvasX, y: canvasY })
+        return
+      }
+      
+      // 处理资产拖拽（来自 AssetPanel）
+      if (data.type === 'asset-insert' && data.asset) {
+        console.log('[CanvasBoard] 接收到资产拖放:', data.asset.name, data.asset.type)
+        
+        const asset = data.asset
+        const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        
+        // 根据资产类型创建相应的节点
+        switch (asset.type) {
+          case 'text':
+            canvasStore.addNode({
+              id: nodeId,
+              type: 'text-input',
+              position: { x: canvasX, y: canvasY },
+              data: {
+                title: asset.name || '文本资产',
+                text: asset.content || '',
+                fromAsset: true,
+                assetId: asset.id
+              }
+            })
+            break
+          case 'image':
+            canvasStore.addNode({
+              id: nodeId,
+              type: 'image-input',
+              position: { x: canvasX, y: canvasY },
+              data: {
+                title: asset.name || '图片资产',
+                label: asset.name || '图片',
+                sourceImages: [asset.url],
+                nodeRole: 'source',
+                fromAsset: true,
+                assetId: asset.id
+              }
+            })
+            break
+          case 'video':
+            canvasStore.addNode({
+              id: nodeId,
+              type: 'video',
+              position: { x: canvasX, y: canvasY },
+              data: {
+                title: asset.name || '视频资产',
+                label: asset.name || '视频',
+                status: 'success',
+                output: {
+                  type: 'video',
+                  url: asset.url
+                },
+                fromAsset: true,
+                assetId: asset.id
+              }
+            })
+            break
+          case 'audio':
+            canvasStore.addNode({
+              id: nodeId,
+              type: 'audio-input',
+              position: { x: canvasX, y: canvasY },
+              data: {
+                title: asset.name || '音频资产',
+                label: asset.name || '音频',
+                audioUrl: asset.url,
+                status: 'success',
+                output: {
+                  type: 'audio',
+                  url: asset.url
+                },
+                fromAsset: true,
+                assetId: asset.id
+              }
+            })
+            break
+        }
         return
       }
     } catch (e) {
@@ -1217,6 +1326,9 @@ onMounted(() => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('keyup', handleKeyUp)
   
+  // 添加连线样式变化事件监听
+  window.addEventListener('canvas-edge-style-change', handleEdgeStyleChange)
+  
   // 添加鼠标事件监听（用于空格+拖动平移）
   document.addEventListener('mousedown', handleMouseDown)
   document.addEventListener('mousemove', handleMouseMove)
@@ -1234,6 +1346,9 @@ onUnmounted(() => {
   // 移除键盘事件监听
   document.removeEventListener('keydown', handleKeyDown)
   document.removeEventListener('keyup', handleKeyUp)
+  
+  // 移除连线样式变化事件监听
+  window.removeEventListener('canvas-edge-style-change', handleEdgeStyleChange)
   
   // 移除鼠标事件监听
   document.removeEventListener('mousedown', handleMouseDown)
@@ -1281,7 +1396,7 @@ onUnmounted(() => {
       v-model:edges="canvasStore.edges"
       :node-types="nodeTypes"
       :default-viewport="{ x: 0, y: 0, zoom: 1 }"
-      :default-edge-options="{ type: 'smoothstep', animated: false }"
+      :default-edge-options="defaultEdgeOptions"
       :min-zoom="0.1"
       :max-zoom="5"
       :snap-to-grid="true"

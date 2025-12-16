@@ -76,6 +76,38 @@ const transferAmount = ref('')
 const transferLoading = ref(false)
 const exchangeRate = ref(10) // 1元 = 10积分
 
+// 新手引导设置
+const onboardingEnabled = ref(localStorage.getItem('canvasOnboardingEnabled') === 'true')
+
+// 连线样式设置
+const edgeStyleOptions = [
+  { value: 'smoothstep', labelKey: 'onboarding.settings.edgeStyleSmoothstep' },
+  { value: 'bezier', labelKey: 'onboarding.settings.edgeStyleBezier' },
+  { value: 'straight', labelKey: 'onboarding.settings.edgeStyleStraight' },
+  { value: 'hidden', labelKey: 'onboarding.settings.edgeStyleHidden' }
+]
+const selectedEdgeStyle = ref(localStorage.getItem('canvasEdgeStyle') || 'smoothstep')
+
+// 切换新手引导
+function toggleOnboarding(event) {
+  const enabled = event.target.checked
+  onboardingEnabled.value = enabled
+  localStorage.setItem('canvasOnboardingEnabled', enabled ? 'true' : 'false')
+  
+  // 如果打开了引导，同时重置完成状态，这样下次进入画布会显示
+  if (enabled) {
+    localStorage.removeItem('canvasOnboardingCompleted')
+  }
+}
+
+// 切换连线样式
+function changeEdgeStyle(style) {
+  selectedEdgeStyle.value = style
+  localStorage.setItem('canvasEdgeStyle', style)
+  // 通知画布更新连线样式
+  window.dispatchEvent(new CustomEvent('canvas-edge-style-change', { detail: { style } }))
+}
+
 // 自定义对话框
 const dialog = ref({
   visible: false,
@@ -1003,6 +1035,56 @@ function getLedgerTypeText(type) {
                   <span class="help-arrow">→</span>
                 </div>
               </div>
+              
+              <!-- 新手引导设置 -->
+              <div class="settings-section">
+                <div class="setting-item">
+                  <div class="setting-info">
+                    <span class="setting-label">{{ t('onboarding.settings.showOnboarding') }}</span>
+                    <span class="setting-desc">{{ t('onboarding.settings.showOnboardingDesc') }}</span>
+                  </div>
+                  <label class="toggle-switch">
+                    <input 
+                      type="checkbox" 
+                      :checked="onboardingEnabled"
+                      @change="toggleOnboarding"
+                    />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+                
+                <!-- 连线样式设置 -->
+                <div class="setting-item edge-style-setting">
+                  <div class="setting-info">
+                    <span class="setting-label">{{ t('onboarding.settings.edgeStyle') }}</span>
+                    <span class="setting-desc">{{ t('onboarding.settings.edgeStyleDesc') }}</span>
+                  </div>
+                </div>
+                <div class="edge-style-options">
+                  <button 
+                    v-for="option in edgeStyleOptions"
+                    :key="option.value"
+                    :class="['edge-style-btn', { active: selectedEdgeStyle === option.value }]"
+                    @click="changeEdgeStyle(option.value)"
+                  >
+                    <span class="edge-style-icon">
+                      <svg v-if="option.value === 'smoothstep'" viewBox="0 0 40 20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M2 16 H12 Q14 16 14 14 V6 Q14 4 16 4 H38" stroke-linecap="round" fill="none"/>
+                      </svg>
+                      <svg v-else-if="option.value === 'bezier'" viewBox="0 0 40 20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M2 16 C14 16, 26 4, 38 4" stroke-linecap="round" fill="none"/>
+                      </svg>
+                      <svg v-else-if="option.value === 'straight'" viewBox="0 0 40 20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M2 16 L38 4" stroke-linecap="round" fill="none"/>
+                      </svg>
+                      <svg v-else viewBox="0 0 40 20" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M2 10 H38" stroke-linecap="round" stroke-dasharray="4 3" opacity="0.4" fill="none"/>
+                      </svg>
+                    </span>
+                    <span class="edge-style-label">{{ t(option.labelKey) }}</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1128,7 +1210,7 @@ function getLedgerTypeText(type) {
 
           <!-- 自定义对话框 -->
           <Transition name="dialog">
-            <div v-if="dialog.visible" class="custom-dialog-overlay" @click.self="dialog.type === 'confirm' && dialog.onCancel?.()">
+            <div v-if="dialog.visible" class="custom-dialog-overlay" @click.stop @click.self="dialog.type === 'confirm' && dialog.onCancel?.()">
               <div class="custom-dialog">
                 <div class="dialog-header">
                   <h4 class="dialog-title">{{ dialog.title }}</h4>
@@ -2045,6 +2127,154 @@ function getLedgerTypeText(type) {
 .help-arrow {
   font-size: 16px;
   color: rgba(255, 255, 255, 0.4);
+}
+
+/* 新手引导设置 */
+.settings-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
+
+.setting-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.setting-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 500;
+}
+
+.setting-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.15);
+  transition: all 0.3s ease;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #fff;
+  transition: all 0.3s ease;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+  background-color: #1a1a1a;
+}
+
+.toggle-switch:hover .toggle-slider {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.toggle-switch input:checked:hover + .toggle-slider {
+  background: #fff;
+}
+
+/* 连线样式设置 */
+.edge-style-setting {
+  margin-bottom: 12px;
+}
+
+.edge-style-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.edge-style-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edge-style-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.edge-style-btn.active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.edge-style-icon {
+  width: 40px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.edge-style-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.edge-style-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-align: center;
 }
 
 /* 空提示 */

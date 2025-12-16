@@ -182,6 +182,7 @@ export default {
     balance: '余额',
     insufficientPoints: '积分不足',
     insufficientPointsDesc: '您的积分不足以完成此操作',
+    insufficientPointsDetail: '积分不足，{count}次生成需要 {required} 积分，您当前只有 {current} 积分',
     fastChannel: '高速通道',
     fastChannelDesc: '优先处理，速度更快',
     extraPoints: '附加 {0} 积分',
@@ -390,6 +391,15 @@ export default {
     doubleClickOpenDragMerge: '双击打开新标签 · 拖拽到画布合并',
     deleteConfirm: '确定删除 "{name}" ？',
     deleteWorkflow: '删除工作流',
+    // 历史工作流
+    savedWorkflows: '已保存',
+    historyWorkflows: '历史记录',
+    noHistoryWorkflows: '暂无历史记录',
+    historyAutoSaveHint: '编辑工作流时会自动保存到历史',
+    clearHistory: '清空历史',
+    clearHistoryConfirm: '确定清空所有历史记录吗？此操作不可撤销。',
+    clearAll: '清空全部',
+    restore: '恢复',
     // 分类
     categories: {
       all: '全部',
@@ -462,6 +472,7 @@ export default {
       size: '大小',
       createdAt: '创建时间',
       applyToCanvas: '应用到画布',
+      addToCanvas: '添加到画布',
       deleteConfirm: '确定删除 "{name}" 吗？',
       canvasGenerated: '画布生成'
     },
@@ -902,6 +913,50 @@ export default {
     gift: '赠送',
     deduct: '扣除',
     milestone: '里程碑奖励'
+  },
+
+  // 新手引导
+  onboarding: {
+    skip: '跳过',
+    prev: '上一步',
+    next: '下一步',
+    start: '开始创作',
+    welcome: {
+      title: '欢迎来到创作画布',
+      subtitle: '专业创作工具',
+      description: '这是一个强大的 AI 创作平台，通过节点式工作流，您可以轻松实现图片生成、视频制作等创意工作。'
+    },
+    toolbar: {
+      title: '工具栏',
+      subtitle: '核心功能入口',
+      description: '左侧工具栏集成了所有功能：新建节点、工作流管理、资源库、历史记录等。点击相应图标即可快速访问。'
+    },
+    nodes: {
+      title: '节点系统',
+      subtitle: '构建创意流程',
+      description: '每个节点代表一个功能模块。双击画布添加节点，拖拽连接点建立数据流，让 AI 按您设计的流程工作。'
+    },
+    workflow: {
+      title: '工作流',
+      subtitle: '保存与复用',
+      description: '将常用的创作流程保存为工作流，下次直接加载即可使用。还可以从模板库选择预设方案快速开始。'
+    },
+    tips: {
+      title: '快捷操作',
+      subtitle: '提升效率',
+      description: '双击空白处快速添加节点；右键打开快捷菜单；Ctrl+拖拽框选多节点；滚轮缩放画布。更多快捷键请点击右上角帮助。'
+    },
+    // 用户设置
+    settings: {
+      showOnboarding: '新手引导',
+      showOnboardingDesc: '每次进入画布时显示新手引导',
+      edgeStyle: '连线样式',
+      edgeStyleDesc: '设置节点之间连线的显示方式',
+      edgeStyleSmoothstep: '折线（默认）',
+      edgeStyleBezier: '曲线',
+      edgeStyleStraight: '直线',
+      edgeStyleHidden: '隐藏'
+    }
   }
 }
 

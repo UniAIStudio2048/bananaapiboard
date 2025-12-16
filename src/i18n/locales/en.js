@@ -182,6 +182,7 @@ export default {
     balance: 'Balance',
     insufficientPoints: 'Insufficient Points',
     insufficientPointsDesc: 'You don\'t have enough points for this operation',
+    insufficientPointsDetail: 'Insufficient points. {count} generation(s) require {required} points, you only have {current} points',
     fastChannel: 'Fast Channel',
     fastChannelDesc: 'Priority processing, faster speed',
     extraPoints: 'Extra {0} points',
@@ -390,6 +391,15 @@ export default {
     doubleClickOpenDragMerge: 'Double-click to open · Drag to merge',
     deleteConfirm: 'Delete "{name}"?',
     deleteWorkflow: 'Delete Workflow',
+    // History workflows
+    savedWorkflows: 'Saved',
+    historyWorkflows: 'History',
+    noHistoryWorkflows: 'No history records',
+    historyAutoSaveHint: 'Workflows are auto-saved to history while editing',
+    clearHistory: 'Clear History',
+    clearHistoryConfirm: 'Clear all history records? This cannot be undone.',
+    clearAll: 'Clear All',
+    restore: 'Restore',
     // Categories
     categories: {
       all: 'All',
@@ -901,5 +911,48 @@ export default {
     gift: 'Gift',
     deduct: 'Deduction',
     milestone: 'Milestone Reward'
+  },
+
+  // Onboarding Guide
+  onboarding: {
+    skip: 'Skip',
+    prev: 'Previous',
+    next: 'Next',
+    start: 'Start Creating',
+    welcome: {
+      title: 'Welcome to Canvas',
+      subtitle: 'Professional Creation Tool',
+      description: 'A powerful AI creation platform. Through node-based workflow, you can easily create images, videos, and more.'
+    },
+    toolbar: {
+      title: 'Toolbar',
+      subtitle: 'Core Features',
+      description: 'The left toolbar contains all features: create nodes, manage workflows, access resources, and view history. Click icons for quick access.'
+    },
+    nodes: {
+      title: 'Node System',
+      subtitle: 'Build Your Flow',
+      description: 'Each node represents a function. Double-click canvas to add nodes, drag connection points to establish data flow.'
+    },
+    workflow: {
+      title: 'Workflow',
+      subtitle: 'Save & Reuse',
+      description: 'Save your creation process as workflow for later use. Choose from template library to quick start.'
+    },
+    tips: {
+      title: 'Quick Tips',
+      subtitle: 'Boost Efficiency',
+      description: 'Double-click to add node; Right-click for menu; Ctrl+drag to select; Scroll to zoom. More shortcuts in help menu.'
+    },
+    settings: {
+      showOnboarding: 'Onboarding Guide',
+      showOnboardingDesc: 'Show onboarding guide when entering canvas',
+      edgeStyle: 'Edge Style',
+      edgeStyleDesc: 'Set the display style of connections between nodes',
+      edgeStyleSmoothstep: 'Smooth Step (Default)',
+      edgeStyleBezier: 'Bezier Curve',
+      edgeStyleStraight: 'Straight Line',
+      edgeStyleHidden: 'Hidden'
+    }
   }
 }

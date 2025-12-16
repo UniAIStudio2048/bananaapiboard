@@ -182,6 +182,7 @@ export default {
     balance: '残高',
     insufficientPoints: 'ポイント不足',
     insufficientPointsDesc: 'この操作に必要なポイントが不足しています',
+    insufficientPointsDetail: 'ポイント不足です。{count}回の生成には{required}ポイント必要ですが、現在{current}ポイントしかありません',
     fastChannel: '高速チャンネル',
     fastChannelDesc: '優先処理、より速い速度',
     extraPoints: '追加 {0} ポイント',

@@ -185,7 +185,7 @@ function handleUserUpdate() {
 </script>
 
 <template>
-  <div class="canvas-toolbar">
+  <div class="canvas-toolbar" @click.stop>
     <!-- 添加节点按钮（主按钮） -->
     <div 
       class="add-node-container"

@@ -178,6 +178,7 @@ export default {
     balance: '餘額',
     insufficientPoints: '積分不足',
     insufficientPointsDesc: '您的積分不足以完成此操作',
+    insufficientPointsDetail: '積分不足，{count}次生成需要 {required} 積分，您當前只有 {current} 積分',
     fastChannel: '高速通道',
     fastChannelDesc: '優先處理，速度更快',
     extraPoints: '附加 {0} 積分',
