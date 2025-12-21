@@ -25,6 +25,7 @@ import ImageEditMode from '@/components/canvas/ImageEditMode.vue'
 import InplaceImageEditor from '@/components/canvas/InplaceImageEditor.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import OnboardingGuide from '@/components/canvas/OnboardingGuide.vue'
+import AIAssistantPanel from '@/components/canvas/AIAssistantPanel.vue'
 import { useI18n } from '@/i18n'
 import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoSave, manualSave as saveToHistory } from '@/stores/canvas/workflowAutoSave'
 
@@ -62,6 +63,9 @@ const showHistoryPanel = ref(false)
 
 // 新手引导
 const showOnboarding = ref(false)
+
+// AI 灵感助手
+const showAIAssistant = ref(false)
 
 // 自动保存定时器
 const autoSaveInterval = ref(null)
@@ -239,9 +243,9 @@ function closeTemplates() {
 // 提供打开模板函数给子组件
 provide('openTemplates', openTemplates)
 
-// 打开工作流面板
+// 切换工作流面板（打开/关闭）
 function openWorkflowPanel() {
-  showWorkflowPanel.value = true
+  showWorkflowPanel.value = !showWorkflowPanel.value
 }
 
 // 关闭工作流面板
@@ -293,9 +297,9 @@ function handleTabSave(tabId) {
 // 提供打开工作流面板函数给子组件
 provide('openWorkflowPanel', openWorkflowPanel)
 
-// 打开资产面板
+// 切换资产面板（打开/关闭）
 function openAssetPanel() {
-  showAssetPanel.value = true
+  showAssetPanel.value = !showAssetPanel.value
 }
 
 // 关闭资产面板
@@ -382,9 +386,9 @@ function handleAssetInsert(asset) {
 // 提供打开资产面板函数给子组件
 provide('openAssetPanel', openAssetPanel)
 
-// 打开历史记录面板
+// 切换历史记录面板（打开/关闭）
 function openHistoryPanel() {
-  showHistoryPanel.value = true
+  showHistoryPanel.value = !showHistoryPanel.value
 }
 
 // 关闭历史记录面板
@@ -1079,13 +1083,20 @@ onUnmounted(() => {
       </div>
       
       <!-- 右上角控制区域 -->
-      <div class="canvas-top-right-controls">
+      <div class="canvas-top-right-controls" :class="{ 'panel-open': showAIAssistant }">
         <!-- 语言切换 -->
         <LanguageSwitcher :isDark="true" direction="down" :compact="true" />
         
-        <!-- 帮助按钮 -->
-        <button class="canvas-help-btn" :title="t('common.help')" @click="showHelp = true">?</button>
+        <!-- 帮助/快捷键按钮（仅图标） -->
+        <button class="canvas-icon-btn" :title="t('common.help')" @click="showHelp = true">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          </svg>
+        </button>
       </div>
+
       
       <!-- 帮助弹窗 -->
       <div v-if="showHelp" class="canvas-help-modal" @click.self="showHelp = false">
@@ -1227,6 +1238,52 @@ onUnmounted(() => {
         @close="closeOnboarding"
         @complete="handleOnboardingComplete"
       />
+
+      <!-- AI 灵感助手面板 -->
+      <AIAssistantPanel
+        :visible="showAIAssistant"
+        @close="showAIAssistant = false"
+      />
+
+      <!-- AI 助手触发按钮 - 苹果风格3D图标 -->
+      <button
+        class="ai-assistant-trigger"
+        :class="{ active: showAIAssistant }"
+        @click="showAIAssistant = !showAIAssistant"
+        :title="showAIAssistant ? '关闭 AI 助手' : '打开 AI 助手'"
+      >
+        <div class="trigger-icon">
+          <!-- 星光图标 - 灵感/AI -->
+          <svg viewBox="0 0 24 24" fill="none">
+            <defs>
+              <linearGradient id="sparkle-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#a78bfa"/>
+                <stop offset="50%" stop-color="#818cf8"/>
+                <stop offset="100%" stop-color="#6366f1"/>
+              </linearGradient>
+            </defs>
+            <!-- 主星 -->
+            <path
+              d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z"
+              fill="url(#sparkle-gradient)"
+            />
+            <!-- 小星1 -->
+            <path
+              d="M19 15L19.75 17.25L22 18L19.75 18.75L19 21L18.25 18.75L16 18L18.25 17.25L19 15Z"
+              fill="url(#sparkle-gradient)"
+              opacity="0.8"
+            />
+            <!-- 小星2 -->
+            <path
+              d="M5 15L5.5 16.5L7 17L5.5 17.5L5 19L4.5 17.5L3 17L4.5 16.5L5 15Z"
+              fill="url(#sparkle-gradient)"
+              opacity="0.6"
+            />
+          </svg>
+        </div>
+        <div class="trigger-glow"></div>
+      </button>
+
     </div>
   </div>
 </template>
@@ -1618,13 +1675,63 @@ onUnmounted(() => {
   z-index: 9000;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+  transition: right 0.25s ease;
 }
 
-.canvas-top-right-controls .canvas-help-btn {
-  position: static;
-  bottom: auto;
-  right: auto;
+/* 当 AI 面板打开时，右上角控制区域向左移动 */
+.canvas-top-right-controls.panel-open {
+  right: 444px; /* 面板宽度 420px + 24px 间距 */
+}
+
+.canvas-help-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: rgba(18, 18, 18, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(20px);
+}
+
+.canvas-help-btn:hover {
+  background: rgba(30, 30, 30, 0.98);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+  transform: translateY(-1px);
+}
+
+.canvas-help-btn .btn-label {
+  font-weight: 500;
+}
+
+/* 仅图标的按钮样式 */
+.canvas-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: rgba(18, 18, 18, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: all 0.25s ease;
+  backdrop-filter: blur(20px);
+}
+
+.canvas-icon-btn:hover {
+  background: rgba(30, 30, 30, 0.98);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.95);
+  transform: translateY(-1px);
 }
 
 /* 确保语言切换器在画布模式下样式正确 */
@@ -1642,5 +1749,101 @@ onUnmounted(() => {
   background: rgba(50, 50, 50, 0.95);
   border-color: rgba(255, 255, 255, 0.25);
 }
+
+/* AI 助手触发按钮 - 苹果风格3D效果 */
+.ai-assistant-trigger {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 8999;
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  background: linear-gradient(145deg, #2a2a2e 0%, #1a1a1e 100%);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  /* 3D 阴影效果 */
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 8px 16px rgba(0, 0, 0, 0.3),
+    0 16px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  /* 玻璃质感边框 */
+  outline: 1px solid rgba(255, 255, 255, 0.08);
+  outline-offset: -1px;
+}
+
+.ai-assistant-trigger .trigger-icon {
+  width: 26px;
+  height: 26px;
+  position: relative;
+  z-index: 2;
+  transition: transform 0.3s ease;
+}
+
+.ai-assistant-trigger .trigger-icon svg {
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.4));
+}
+
+.ai-assistant-trigger .trigger-glow {
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;
+  background: radial-gradient(circle at center, rgba(139, 92, 246, 0.3) 0%, transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1;
+}
+
+.ai-assistant-trigger:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.3),
+    0 12px 24px rgba(0, 0, 0, 0.3),
+    0 24px 48px rgba(0, 0, 0, 0.2),
+    0 0 40px rgba(139, 92, 246, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+}
+
+.ai-assistant-trigger:hover .trigger-icon {
+  transform: scale(1.1);
+}
+
+.ai-assistant-trigger:hover .trigger-glow {
+  opacity: 1;
+}
+
+.ai-assistant-trigger:active {
+  transform: translateY(-1px) scale(1.02);
+}
+
+.ai-assistant-trigger.active {
+  background: linear-gradient(145deg, #3a3a42 0%, #2a2a32 100%);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 8px 16px rgba(0, 0, 0, 0.3),
+    0 0 30px rgba(139, 92, 246, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+}
+
+.ai-assistant-trigger.active .trigger-glow {
+  opacity: 0.8;
+}
+
+/* 当 AI 面板打开时，按钮位置调整避免遮挡 */
+.ai-assistant-trigger.active {
+  right: 444px; /* 面板宽度 420px + 24px 间距 */
+}
+
+
 </style>
 

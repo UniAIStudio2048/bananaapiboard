@@ -8,10 +8,10 @@
  * - 选中输出节点时：底部弹出配置面板
  */
 import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
+import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages } from '@/api/canvas/nodes'
-import { getApiUrl } from '@/config/tenant'
+import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
@@ -27,6 +27,9 @@ const props = defineProps({
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
+
+// Vue Flow 实例 - 用于在节点尺寸变化时更新连线
+const { updateNodeInternals } = useVueFlow()
 
 // 文件上传引用
 const fileInputRef = ref(null)
@@ -45,6 +48,9 @@ const promptText = ref(props.data.prompt || '')
 const isDragOver = ref(false) // 拖拽悬停状态
 const isRefDragOver = ref(false) // 参考图片区域拖拽状态
 const refDragCounter = ref(0) // 参考图片拖拽计数器
+
+// 模型下拉框状态
+const isModelDropdownOpen = ref(false)
 
 // 图片列表拖拽排序状态
 const dragSortIndex = ref(-1)
@@ -84,31 +90,103 @@ function toggleCount() {
   selectedCount.value = nextCount
 }
 
-// 可用选项 - 与主页图片生成保持一致
-const models = [
-  { value: 'nano-banana', label: 'Nano Banana', icon: 'B', points: 1 },
-  { value: 'nano-banana-hd', label: 'Nano Banana HD', icon: 'HD', points: 3 },
-  { value: 'nano-banana-2', label: 'Nano Banana 2', icon: 'B2', points: null } // 积分根据尺寸变化
-]
+// 模型下拉框方法
+const dropdownDirection = ref('down') // 'down' 或 'up'
+const modelSelectorRef = ref(null)
 
-// 尺寸选项（仅 nano-banana-2 显示）
-const imageSizes = [
-  { value: '1K', label: '1K', points: 3 },
-  { value: '2K', label: '2K', points: 4 },
-  { value: '4K', label: '4K', points: 5 }
-]
+function toggleModelDropdown(event) {
+  event.stopPropagation()
+  
+  // 计算下拉方向
+  if (modelSelectorRef.value) {
+    const rect = modelSelectorRef.value.getBoundingClientRect()
+    const viewportHeight = window.innerHeight
+    const dropdownHeight = 280 // 下拉列表的预估高度
+    
+    // 如果下方空间不足，则向上展开
+    if (rect.bottom + dropdownHeight > viewportHeight && rect.top > dropdownHeight) {
+      dropdownDirection.value = 'up'
+    } else {
+      dropdownDirection.value = 'down'
+    }
+  }
+  
+  isModelDropdownOpen.value = !isModelDropdownOpen.value
+}
 
-// 是否显示尺寸选项
-const showResolutionOption = computed(() => selectedModel.value === 'nano-banana-2')
+function selectModel(modelValue) {
+  selectedModel.value = modelValue
+  isModelDropdownOpen.value = false
+}
+
+function handleModelDropdownClickOutside(event) {
+  // 检查点击是否在下拉框外
+  const dropdown = event.target.closest('.model-selector-custom')
+  if (!dropdown) {
+    isModelDropdownOpen.value = false
+  }
+}
+
+// 组件挂载时添加全局点击事件监听
+onMounted(() => {
+  document.addEventListener('click', handleModelDropdownClickOutside)
+})
+
+// 组件卸载时移除监听
+onUnmounted(() => {
+  document.removeEventListener('click', handleModelDropdownClickOutside)
+})
+
+// 可用选项 - 从配置动态获取，支持新增模型自动同步
+const models = computed(() => {
+  return getAvailableImageModels()
+})
+
+// 默认尺寸选项配置（当模型配置中没有指定积分时使用）
+const defaultSizePricing = { '1K': 3, '2K': 4, '4K': 5 }
+
+// 获取当前模型的尺寸选项（从模型配置中读取积分）
+const imageSizes = computed(() => {
+  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  const pointsCost = currentModel?.pointsCost
+  
+  // 如果是按分辨率计费且 pointsCost 是对象
+  if (currentModel?.hasResolutionPricing && typeof pointsCost === 'object') {
+    return [
+      { value: '1K', label: '1K', points: pointsCost['1k'] || pointsCost['1K'] || defaultSizePricing['1K'] },
+      { value: '2K', label: '2K', points: pointsCost['2k'] || pointsCost['2K'] || defaultSizePricing['2K'] },
+      { value: '4K', label: '4K', points: pointsCost['4k'] || pointsCost['4K'] || defaultSizePricing['4K'] }
+    ]
+  }
+  
+  // 默认尺寸配置
+  return [
+    { value: '1K', label: '1K', points: defaultSizePricing['1K'] },
+    { value: '2K', label: '2K', points: defaultSizePricing['2K'] },
+    { value: '4K', label: '4K', points: defaultSizePricing['4K'] }
+  ]
+})
+
+// 是否显示尺寸选项（从模型配置中读取 hasResolutionPricing）
+const showResolutionOption = computed(() => {
+  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  return currentModel?.hasResolutionPricing || false
+})
 
 // 计算当前积分消耗
 const currentPointsCost = computed(() => {
-  if (selectedModel.value === 'nano-banana-2') {
-    const sizeOption = imageSizes.find(s => s.value === imageSize.value)
-    return sizeOption?.points || 3
+  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  
+  // 按分辨率计费的模型
+  if (currentModel?.hasResolutionPricing) {
+    const sizeOption = imageSizes.value.find(s => s.value === imageSize.value)
+    return sizeOption?.points || defaultSizePricing['1K']
   }
-  const modelOption = models.find(m => m.value === selectedModel.value)
-  return modelOption?.points || 1
+  
+  // 其他模型使用固定积分
+  const pointsCost = currentModel?.pointsCost
+  // 如果 pointsCost 是数字则直接使用，否则默认为 1
+  return typeof pointsCost === 'number' ? pointsCost : 1
 })
 
 const aspectRatios = [
@@ -419,6 +497,11 @@ onMounted(() => {
     nodeRef.value.addEventListener('mousedown', handleNodeDragStart)
     document.addEventListener('mousemove', handleNodeDragMove)
     document.addEventListener('mouseup', handleNodeDragEnd)
+  }
+  
+  // 检查是否需要提取视频尾帧
+  if (props.data.needsFrameExtraction && props.data.videoUrl) {
+    extractLastFrameFromVideo()
   }
 })
 
@@ -788,6 +871,56 @@ async function handleFirstFrameVideoFlow(imageUrl) {
   })
   
   canvasStore.selectNode(newNodeId)
+}
+
+// 提取视频尾帧
+async function extractLastFrameFromVideo() {
+  try {
+    console.log('[ImageNode] 开始提取视频尾帧:', props.data.videoUrl)
+    
+    // 使用 Canvas 提取最后一帧（前端处理）
+    const video = document.createElement('video')
+    video.crossOrigin = 'anonymous'
+    video.src = props.data.videoUrl
+    
+    // 等待视频元数据加载
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = resolve
+      video.onerror = reject
+      video.load()
+    })
+    
+    // 跳转到最后一帧
+    video.currentTime = video.duration - 0.1 // 倒数第0.1秒
+    
+    // 等待帧加载
+    await new Promise((resolve) => {
+      video.onseeked = resolve
+    })
+    
+    // 创建 Canvas 并绘制当前帧
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+    
+    // 转换为 Base64
+    const frameDataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    
+    console.log('[ImageNode] 尾帧提取成功')
+    
+    // 更新节点数据
+    canvasStore.updateNodeData(props.id, {
+      sourceImages: [frameDataUrl],
+      nodeRole: 'source',
+      needsFrameExtraction: false // 标记已完成
+    })
+    
+  } catch (error) {
+    console.error('[ImageNode] 提取视频尾帧失败:', error)
+    errorMessage.value = '提取视频尾帧失败: ' + error.message
+  }
 }
 
 // 重新上传（源节点用）
@@ -1620,6 +1753,9 @@ function handleResizeMove(event) {
       nodeHeight.value = Math.max(200, resizeStart.value.height + deltaY / zoom)
     }
     
+    // 实时更新连线位置
+    updateNodeInternals(props.id)
+    
     resizeRafId = null
   })
 }
@@ -1637,6 +1773,11 @@ function handleResizeEnd() {
   canvasStore.updateNodeData(props.id, {
     width: nodeWidth.value,
     height: nodeHeight.value
+  })
+  
+  // 更新节点内部状态，确保连线位置跟随 Handle 位置变化
+  nextTick(() => {
+    updateNodeInternals(props.id)
   })
   
   document.removeEventListener('mousemove', handleResizeMove)
@@ -2119,14 +2260,6 @@ async function handleDrop(event) {
       @change="handleRefImageUpload"
     />
     
-    <!-- 左侧输入端口（必须在根元素下） -->
-    <Handle
-      type="target"
-      :position="Position.Left"
-      id="input"
-      class="node-handle node-handle-hidden"
-    />
-    
     <!-- 图片工具栏（选中且有图片时显示）- 与 TextNode 保持一致 -->
     <div v-if="showToolbar" class="image-toolbar">
       <button class="toolbar-btn" title="重绘" @mousedown.prevent="handleToolbarRepaint">
@@ -2210,6 +2343,14 @@ async function handleDrop(event) {
     
     <!-- 节点主体 -->
     <div class="node-wrapper">
+      <!-- 左侧输入端口 -->
+      <Handle
+        type="target"
+        :position="Position.Left"
+        id="input"
+        class="node-handle node-handle-hidden"
+      />
+
       <!-- 左侧添加按钮 -->
       <button 
         class="node-add-btn node-add-btn-left"
@@ -2399,15 +2540,15 @@ async function handleDrop(event) {
       >
         +
       </button>
+
+      <!-- 右侧输出端口 -->
+      <Handle
+        type="source"
+        :position="Position.Right"
+        id="output"
+        class="node-handle node-handle-hidden"
+      />
     </div>
-    
-    <!-- 右侧输出端口（必须在根元素下） -->
-    <Handle
-      type="source"
-      :position="Position.Right"
-      id="output"
-      class="node-handle node-handle-hidden"
-    />
     
     <!-- 底部配置面板（仅输出节点选中时显示，拖动和缩放时隐藏） -->
     <div v-if="showConfigPanel" class="config-panel" @mousedown.stop>
@@ -2477,15 +2618,42 @@ async function handleDrop(event) {
       <!-- 参数配置行 -->
       <div class="config-row">
         <div class="config-left">
-          <!-- 模型选择器 -->
-          <div class="model-selector">
-            <span class="model-icon">{{ models.find(m => m.value === selectedModel)?.icon || 'B' }}</span>
-            <select v-model="selectedModel" class="model-select-input">
-              <option v-for="m in models" :key="m.value" :value="m.value">
-                {{ m.label }}
-              </option>
-            </select>
-            <span class="select-arrow">▾</span>
+          <!-- 模型选择器（自定义下拉框，支持显示描述） -->
+          <div class="model-selector-custom" ref="modelSelectorRef" @click.stop>
+            <div 
+              class="model-selector-trigger"
+              @click="toggleModelDropdown"
+            >
+              <span class="model-icon">{{ models.find(m => m.value === selectedModel)?.icon || 'B' }}</span>
+              <span class="model-name">{{ models.find(m => m.value === selectedModel)?.label || selectedModel }}</span>
+              <span class="select-arrow" :class="{ 'arrow-up': isModelDropdownOpen }">▾</span>
+            </div>
+            
+            <!-- 下拉选项列表 -->
+            <Transition name="dropdown-fade">
+              <div 
+                v-if="isModelDropdownOpen" 
+                class="model-dropdown-list"
+                :class="{ 'dropdown-up': dropdownDirection === 'up' }"
+              >
+                <div 
+                  v-for="m in models" 
+                  :key="m.value"
+                  class="model-dropdown-item"
+                  :class="{ 'active': selectedModel === m.value }"
+                  @click="selectModel(m.value)"
+                >
+                  <div class="model-item-main">
+                    <span class="model-item-icon">{{ m.icon }}</span>
+                    <span class="model-item-label">{{ m.label }}</span>
+                    <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
+                  </div>
+                  <div v-if="m.description" class="model-item-desc">
+                    {{ m.description }}
+                  </div>
+                </div>
+              </div>
+            </Transition>
           </div>
           
           <!-- 比例选择（下拉框） -->
@@ -2498,7 +2666,7 @@ async function handleDrop(event) {
             </select>
           </div>
           
-          <!-- 尺寸切换（仅 nano-banana-2 显示） -->
+          <!-- 尺寸切换（根据模型配置显示） -->
           <div v-if="showResolutionOption" class="param-chip-group">
             <div 
               v-for="size in imageSizes" 
@@ -2684,6 +2852,7 @@ async function handleDrop(event) {
   position: relative;
   display: flex;
   align-items: center;
+  flex-direction: column;
 }
 
 /* 节点卡片 - 无边框设计 */
@@ -3066,7 +3235,7 @@ async function handleDrop(event) {
   background: var(--canvas-bg-elevated, #1e1e1e);
   border: 1px solid var(--canvas-border-default, #3a3a3a);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible; /* 允许下拉框超出显示 */
   z-index: 1000;
   pointer-events: auto;
 }
@@ -3304,8 +3473,13 @@ async function handleDrop(event) {
   flex-shrink: 0;
 }
 
-/* 模型选择器 */
-.model-selector {
+/* 模型选择器（自定义下拉框） */
+.model-selector-custom {
+  position: relative;
+  z-index: 100;
+}
+
+.model-selector-trigger {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3317,7 +3491,7 @@ async function handleDrop(event) {
   transition: all 0.2s;
 }
 
-.model-selector:hover {
+.model-selector-trigger:hover {
   border-color: var(--canvas-border-active, #4a4a4a);
 }
 
@@ -3325,36 +3499,112 @@ async function handleDrop(event) {
   font-size: 14px;
 }
 
-.model-select-input {
-  background: rgba(0, 0, 0, 0.4);
-  border: none;
+.model-name {
   color: #ffffff;
   font-size: 13px;
   font-weight: 500;
-  cursor: pointer;
-  outline: none;
-  padding: 2px 4px;
-  padding-right: 4px;
-  border-radius: 4px;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-}
-
-.model-select-input option {
-  background: #1a1a1a;
-  color: #ffffff;
-  padding: 8px;
-}
-
-.model-select-input:hover {
-  background: rgba(0, 0, 0, 0.6);
 }
 
 .select-arrow {
   color: var(--canvas-text-tertiary, #999);
   font-size: 10px;
   margin-left: -4px;
+  transition: transform 0.2s;
+}
+
+.select-arrow.arrow-up {
+  transform: rotate(180deg);
+}
+
+/* 下拉列表 */
+.model-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 220px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: #1a1a1a;
+  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+}
+
+/* 向上展开时的样式 */
+.model-dropdown-list.dropdown-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.model-dropdown-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.model-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.model-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.model-dropdown-item.active {
+  background: rgba(255, 193, 7, 0.12);
+}
+
+.model-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-item-icon {
+  font-size: 14px;
+}
+
+.model-item-label {
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  flex: 1;
+}
+
+.model-item-points {
+  font-size: 11px;
+  color: #ffc107;
+  background: rgba(255, 193, 7, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.model-item-desc {
+  margin-top: 4px;
+  padding-left: 22px;
+  font-size: 11px;
+  color: var(--canvas-text-tertiary, #888);
+  line-height: 1.4;
+}
+
+/* 下拉动画 */
+.dropdown-fade-enter-active,
+.dropdown-fade-leave-active {
+  transition: all 0.2s ease;
+}
+
+.dropdown-fade-enter-from,
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* 向上展开时的动画 */
+.model-dropdown-list.dropdown-up.dropdown-fade-enter-from,
+.model-dropdown-list.dropdown-up.dropdown-fade-leave-to {
+  transform: translateY(8px);
 }
 
 /* 比例选择器 */
@@ -3496,7 +3746,7 @@ async function handleDrop(event) {
   font-size: 14px;
 }
 
-/* ========== 端口样式 - 完全隐藏（但保留给 Vue Flow 用于边渲染） ========== */
+/* ========== 端口样式 - 位置与+按钮对齐（但视觉隐藏） ========== */
 .node-handle {
   width: 1px;
   height: 1px;
@@ -3510,6 +3760,25 @@ async function handleDrop(event) {
   opacity: 0 !important;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* 调整 Handle 位置与 + 按钮中心对齐 */
+/* Handle 现已移入 node-wrapper，直接居中对齐 */
+:deep(.vue-flow__handle.target) {
+  left: -34px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+:deep(.vue-flow__handle.source) {
+  right: -34px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+/* Resize 时禁用过渡，防止连线错位 */
+.image-node.resizing .node-card {
+  transition: none !important;
 }
 
 /* ========== 添加按钮 ========== */

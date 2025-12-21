@@ -528,7 +528,9 @@ export default {
       imageUpscale: { label: '超分放大', desc: '提升图片分辨率' },
       imageCutout: { label: '智能抠图', desc: '抠出图片主体' },
       imageExpand: { label: '图片扩展', desc: '扩展图片边缘' },
-      gridPreview: { label: '九宫格预览', desc: '九宫格展示多张图片' }
+      gridPreview: { label: '九宫格预览', desc: '九宫格展示多张图片' },
+      videoLastFrame: { label: '截取尾帧', desc: '提取视频最后一帧' },
+      videoDescribe: { label: '视频反推', desc: '视频反推提示词' }
     },
     // 图片节点快捷操作
     imageNode: {

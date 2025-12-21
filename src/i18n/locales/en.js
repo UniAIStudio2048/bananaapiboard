@@ -527,7 +527,9 @@ export default {
       imageUpscale: { label: 'Upscale', desc: 'Enhance image resolution' },
       imageCutout: { label: 'Cutout', desc: 'Extract image subject' },
       imageExpand: { label: 'Outpaint', desc: 'Expand image borders' },
-      gridPreview: { label: 'Grid Preview', desc: 'Display multiple images in grid' }
+      gridPreview: { label: 'Grid Preview', desc: 'Display multiple images in grid' },
+      videoLastFrame: { label: 'Extract Last Frame', desc: 'Extract last frame from video' },
+      videoDescribe: { label: 'Video Describe', desc: 'Reverse prompt from video' }
     },
     // Image node quick actions
     imageNode: {

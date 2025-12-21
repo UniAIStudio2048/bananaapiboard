@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getTenantHeaders, getModelDisplayName } from '@/config/tenant'
+import { getTenantHeaders } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 
 const router = useRouter()
@@ -175,38 +175,6 @@ const settings = ref({
   invitee_bonus: 0,
   default_concurrent_limit: 1,
   exchange_rate_points_per_currency: 10,
-  external_api_base: 'https://ai.comfly.chat',
-  external_api_key: '',
-  external_api_image_path: '/v1/images/generations',
-  public_url: '',
-  // 高速通道配置
-  fast_api_base: '',
-  fast_api_key: '',
-  fast_api_image_path: '/v1/images/generations',
-  fast_channel_enabled: false,
-  fast_channel_extra_points: 0,
-  points_cost: {
-    'nano-banana': 1,
-    'nano-banana-hd': 3,
-    'nano-banana-2': {
-      '1k': 3,
-      '2k': 4,
-      '4k': 5
-    }
-  },
-  video_config: {
-    api_base: 'https://ai.comfly.chat',
-    api_key: '',
-    api_path: '/v2/videos/generations',
-    points_cost: {
-      'sora-2': { '10': 40, '15': 50 },
-      'sora-2-pro': { '10': 600, '15': 700, '25': 900 },
-      'veo3.1-components': 100,
-      'veo3.1': 150,
-      'veo3.1-pro': 200,
-      'hd_extra': 100
-    }
-  },
   voucher_external_link: {
     enabled: false,
     button_text: '获取兑换券',
@@ -227,27 +195,6 @@ const settings = ref({
 
 const listRangeStart = computed(() => total.value === 0 ? 0 : (page.value - 1) * pageSize.value + 1)
 const listRangeEnd = computed(() => Math.min(page.value * pageSize.value, total.value))
-
-// 获取模型显示名称
-const getModelName = (modelKey, type = 'image') => {
-  const customName = getModelDisplayName(modelKey, type)
-  if (customName) return customName
-  
-  // 默认名称
-  const defaultNames = {
-    // 图片模型
-    'nano-banana': 'Nano Banana',
-    'nano-banana-hd': 'Nano Banana HD',
-    'nano-banana-2': 'Nano Banana 2',
-    // 视频模型
-    'sora-2': 'Sora 2',
-    'sora-2-pro': 'Sora 2 Pro',
-    'veo3.1-components': 'VEO 3.1',
-    'veo3.1': 'VEO 3.1 标准',
-    'veo3.1-pro': 'VEO 3.1 Pro'
-  }
-  return defaultNames[modelKey] || modelKey
-}
 
 async function fetchWithAdminAuth(url, opts = {}) {
   const t = localStorage.getItem('token') || ''
@@ -320,38 +267,15 @@ async function loadSettings() {
   if (r.ok) {
     const data = await r.json()
     // 深度合并嵌套对象，避免后端返回的数据覆盖默认的嵌套结构
+    // 注意：points_cost, video_config, external_api 等配置已迁移到租户管理平台(9000端口)管理
     const defaultSettings = settings.value
     settings.value = {
       ...defaultSettings,
-      ...data,
-      // 确保嵌套对象有完整结构
-      points_cost: {
-        ...defaultSettings.points_cost,
-        ...(data.points_cost || {}),
-        'nano-banana-2': {
-          ...defaultSettings.points_cost['nano-banana-2'],
-          ...(data.points_cost?.['nano-banana-2'] || {})
-        }
-      },
-      video_config: {
-        ...defaultSettings.video_config,
-        ...(data.video_config || {}),
-        points_cost: {
-          ...defaultSettings.video_config.points_cost,
-          ...(data.video_config?.points_cost || {}),
-          'sora-2': {
-            ...defaultSettings.video_config.points_cost['sora-2'],
-            ...(data.video_config?.points_cost?.['sora-2'] || {})
-          },
-          'sora-2-pro': {
-            ...defaultSettings.video_config.points_cost['sora-2-pro'],
-            ...(data.video_config?.points_cost?.['sora-2-pro'] || {})
-          },
-          'veo3.1-components': data.video_config?.points_cost?.['veo3.1-components'] ?? defaultSettings.video_config.points_cost['veo3.1-components'],
-          'veo3.1': data.video_config?.points_cost?.['veo3.1'] ?? defaultSettings.video_config.points_cost['veo3.1'],
-          'veo3.1-pro': data.video_config?.points_cost?.['veo3.1-pro'] ?? defaultSettings.video_config.points_cost['veo3.1-pro']
-        }
-      },
+      register_bonus: data.register_bonus ?? defaultSettings.register_bonus,
+      inviter_bonus: data.inviter_bonus ?? defaultSettings.inviter_bonus,
+      invitee_bonus: data.invitee_bonus ?? defaultSettings.invitee_bonus,
+      default_concurrent_limit: data.default_concurrent_limit ?? defaultSettings.default_concurrent_limit,
+      exchange_rate_points_per_currency: data.exchange_rate_points_per_currency ?? defaultSettings.exchange_rate_points_per_currency,
       voucher_external_link: {
         ...defaultSettings.voucher_external_link,
         ...(data.voucher_external_link || {})
@@ -363,20 +287,7 @@ async function loadSettings() {
       invite_milestone_rewards: data.invite_milestones || data.invite_milestone_rewards || defaultSettings.invite_milestone_rewards
     }
   }
-  
-  // 加载外部API配置
-  const r2 = await fetchWithAdminAuth('/api/admin/external-api')
-  if (r2 && r2.ok) {
-    const data = await r2.json()
-    settings.value.external_api_base = data.external_api_base || settings.value.external_api_base
-    settings.value.external_api_image_path = data.external_api_image_path || settings.value.external_api_image_path
-    settings.value.public_url = data.public_url || settings.value.public_url
-    // 高速通道配置
-    settings.value.fast_api_base = data.fast_api_base || ''
-    settings.value.fast_api_image_path = data.fast_api_image_path || '/v1/images/generations'
-    settings.value.fast_channel_enabled = data.fast_channel_enabled || false
-    settings.value.fast_channel_extra_points = data.fast_channel_extra_points || 0
-  }
+  // 注意：外部API配置（points_cost, video_config, external_api等）已迁移到租户管理平台(9000端口)管理，不再从此处加载
 }
 
 function openCreateModal() {
@@ -585,7 +496,8 @@ async function saveSettings() {
   success.value = ''
   
   try {
-    // 保存积分设置、积分扣除规则和视频配置
+    // 保存积分设置、兑换券配置、备案号配置等
+    // 注意：points_cost, video_config, external_api 等配置已迁移到租户管理平台(9000端口)管理
     const r1 = await fetchWithAdminAuth('/api/admin/settings', { 
       method: 'POST', 
       headers: { 'Content-Type': 'application/json' }, 
@@ -595,33 +507,15 @@ async function saveSettings() {
         invitee_bonus: settings.value.invitee_bonus,
         default_concurrent_limit: settings.value.default_concurrent_limit,
         exchange_rate_points_per_currency: settings.value.exchange_rate_points_per_currency,
-        points_cost: settings.value.points_cost,
-        video_config: settings.value.video_config,
         voucher_external_link: settings.value.voucher_external_link,
         invite_milestone_rewards: settings.value.invite_milestone_rewards,
         icp_config: settings.value.icp_config
+        // 注意：points_cost 和 video_config 已迁移到租户管理平台，不再从此处保存
       }) 
     })
-    if (!r1 || !r1.ok) throw new Error('保存积分设置失败')
+    if (!r1 || !r1.ok) throw new Error('保存设置失败')
     
-    // 保存外部API配置（图片）
-    const r2 = await fetchWithAdminAuth('/api/admin/external-api', { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify({ 
-        external_api_base: settings.value.external_api_base,
-        external_api_key: settings.value.external_api_key,
-        external_api_image_path: settings.value.external_api_image_path,
-        public_url: settings.value.public_url,
-        // 高速通道配置
-        fast_api_base: settings.value.fast_api_base,
-        fast_api_key: settings.value.fast_api_key,
-        fast_api_image_path: settings.value.fast_api_image_path,
-        fast_channel_enabled: settings.value.fast_channel_enabled,
-        fast_channel_extra_points: settings.value.fast_channel_extra_points
-      }) 
-    })
-    if (!r2 || !r2.ok) throw new Error('保存外部API配置失败')
+    // 注意：外部API配置已迁移到租户管理平台(9000端口)管理，不再从此处保存
     
     success.value = '设置保存成功'
     await loadSettings()
@@ -3991,294 +3885,6 @@ onUnmounted(() => {
                     在新标签页打开
                   </span>
                 </label>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 积分扣除规则设置 -->
-          <div class="pt-6 border-t border-slate-200 dark:border-dark-600">
-            <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
-              <span class="mr-2">🎨</span>
-              图片生成积分扣除规则
-            </h4>
-            <div class="space-y-4">
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    {{ getModelName('nano-banana', 'image') }}
-                  </label>
-                  <input v-model.number="settings.points_cost['nano-banana']" class="input" type="number" min="0" />
-                </div>
-                
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    {{ getModelName('nano-banana-hd', 'image') }}
-                  </label>
-                  <input v-model.number="settings.points_cost['nano-banana-hd']" class="input" type="number" min="0" />
-                </div>
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-                  {{ getModelName('nano-banana-2', 'image') }}（按分辨率）
-                </label>
-                <div class="grid grid-cols-3 gap-3 pl-4">
-                  <div>
-                    <label class="block text-xs text-slate-600 dark:text-slate-400 mb-1">
-                      1K 分辨率
-                    </label>
-                    <input v-model.number="settings.points_cost['nano-banana-2']['1k']" class="input text-sm" type="number" min="0" />
-                  </div>
-                  
-                  <div>
-                    <label class="block text-xs text-slate-600 dark:text-slate-400 mb-1">
-                      2K 分辨率
-                    </label>
-                    <input v-model.number="settings.points_cost['nano-banana-2']['2k']" class="input text-sm" type="number" min="0" />
-                  </div>
-                  
-                  <div>
-                    <label class="block text-xs text-slate-600 dark:text-slate-400 mb-1">
-                      4K 分辨率
-                    </label>
-                    <input v-model.number="settings.points_cost['nano-banana-2']['4k']" class="input text-sm" type="number" min="0" />
-                  </div>
-                </div>
-              </div>
-              
-              <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <p class="text-xs text-blue-700 dark:text-blue-300">
-                  💡 提示：每次生成图片时，系统会根据选择的模型和分辨率自动扣除对应的积分。
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 外部API设置 -->
-          <div class="pt-6 border-t border-slate-200 dark:border-dark-600">
-            <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
-              <span class="mr-2">🌐</span>
-              外部图像生成API配置
-            </h4>
-            <div class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  API基础地址
-                </label>
-                <input v-model="settings.external_api_base" class="input" placeholder="https://ai.comfly.chat" />
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  API密钥 <span class="text-red-500">*</span>
-                </label>
-                <input v-model="settings.external_api_key" class="input" placeholder="sk-..." type="password" />
-                <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ 新租户需自行填写API密钥。后端将使用此密钥调用外部生成接口
-                </p>
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  生成接口路径
-                </label>
-                <input v-model="settings.external_api_image_path" class="input" placeholder="/v1/images/generations" />
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  后端公网域名 <span class="text-red-500">*</span>
-                </label>
-                <input v-model="settings.public_url" class="input" placeholder="https://ozhqukpewgih.sealosbja.site" />
-                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  ⚠️ 图生图功能必须配置！外部AI服务需要通过公网访问上传的参考图片。
-                  <br />
-                  填写后端的公网访问地址（不是前端地址）
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 高速通道API配置 -->
-          <div class="pt-6 border-t border-slate-200 dark:border-dark-600">
-            <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
-              <span class="mr-2">⚡</span>
-              高速通道API配置
-            </h4>
-            <div class="space-y-4">
-              <div class="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-                <p class="text-xs text-amber-700 dark:text-amber-300">
-                  💡 高速通道使用独立的API密钥，建议用户在高峰时段使用。启用后用户可以选择使用高速通道生成图片，需要额外支付积分。
-                </p>
-              </div>
-              
-              <div class="flex items-center space-x-3">
-                <input 
-                  type="checkbox" 
-                  id="fast_channel_enabled" 
-                  v-model="settings.fast_channel_enabled" 
-                  class="w-4 h-4 text-primary-600 bg-white dark:bg-dark-700 border-slate-300 dark:border-dark-500 rounded focus:ring-primary-500"
-                />
-                <label for="fast_channel_enabled" class="text-sm font-medium text-slate-700 dark:text-slate-300">
-                  启用高速通道功能
-                </label>
-              </div>
-              
-              <div v-if="settings.fast_channel_enabled" class="space-y-4 pl-4 border-l-2 border-primary-300 dark:border-primary-700">
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    高速API基础地址
-                  </label>
-                  <input v-model="settings.fast_api_base" class="input" placeholder="https://ai.comfly.chat（留空则使用普通API地址）" />
-                </div>
-                
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    高速API密钥 <span class="text-red-500">*</span>
-                  </label>
-                  <input v-model="settings.fast_api_key" class="input" placeholder="sk-..." type="password" />
-                  <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                    ⚠️ 高速通道使用的独立API密钥，建议使用不同的账户以获得更高的并发限制
-                  </p>
-                </div>
-                
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    高速API接口路径
-                  </label>
-                  <input v-model="settings.fast_api_image_path" class="input" placeholder="/v1/images/generations" />
-                </div>
-                
-                <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                    高速通道附加积分 <span class="text-red-500">*</span>
-                  </label>
-                  <input v-model.number="settings.fast_channel_extra_points" class="input" type="number" min="0" placeholder="0" />
-                  <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                    使用高速通道时，在原有积分基础上额外扣除的积分数量。设为0表示不额外收费。
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 视频生成API配置 -->
-          <div class="pt-6 border-t border-slate-200 dark:border-dark-600">
-            <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
-              <span class="mr-2">🎬</span>
-              视频生成API配置
-            </h4>
-            <div class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  API基础地址
-                </label>
-                <input v-model="settings.video_config.api_base" class="input" placeholder="https://ai.comfly.chat" />
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  API密钥 <span class="text-red-500">*</span>
-                </label>
-                <input v-model="settings.video_config.api_key" class="input" placeholder="sk-..." type="password" />
-                <p class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                  ⚠️ 新租户需自行填写API密钥。后端将使用此密钥调用视频生成接口
-                </p>
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  生成接口路径
-                </label>
-                <input v-model="settings.video_config.api_path" class="input" placeholder="/v2/videos/generations" />
-              </div>
-              
-              <div class="pt-4">
-                <h5 class="text-sm font-semibold text-slate-800 dark:text-slate-200 mb-3">视频积分扣除规则</h5>
-                
-                <div class="space-y-4 pl-4">
-                  <!-- Sora 2 -->
-                  <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      {{ getModelName('sora-2', 'video') }}
-                    </label>
-                    <div class="grid grid-cols-2 gap-3">
-                      <div>
-                        <label class="block text-xs text-slate-600 dark:text-slate-400 mb-1">10秒</label>
-                        <input v-model.number="settings.video_config.points_cost['sora-2']['10']" class="input text-sm" type="number" min="0" />
-                      </div>
-                      <div>
-                        <label class="block text-xs text-slate-600 dark:text-slate-400 mb-1">15秒</label>
-                        <input v-model.number="settings.video_config.points_cost['sora-2']['15']" class="input text-sm" type="number" min="0" />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <!-- Sora 2 Pro -->
-                  <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      {{ getModelName('sora-2-pro', 'video') }}
-                    </label>
-                    <div class="grid grid-cols-3 gap-3">
-                      <div>
-                        <label class="block text-xs text-slate-600 dark:text-slate-400 mb-1">10秒</label>
-                        <input v-model.number="settings.video_config.points_cost['sora-2-pro']['10']" class="input text-sm" type="number" min="0" />
-                      </div>
-                      <div>
-                        <label class="block text-xs text-slate-600 dark:text-slate-400 mb-1">15秒</label>
-                        <input v-model.number="settings.video_config.points_cost['sora-2-pro']['15']" class="input text-sm" type="number" min="0" />
-                      </div>
-                      <div>
-                        <label class="block text-xs text-slate-600 dark:text-slate-400 mb-1">25秒</label>
-                        <input v-model.number="settings.video_config.points_cost['sora-2-pro']['25']" class="input text-sm" type="number" min="0" />
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <!-- VEO 3.1 系列 -->
-                  <div class="pt-3 border-t border-slate-200 dark:border-dark-600">
-                    <p class="text-xs text-blue-600 dark:text-blue-400 mb-3">🆕 VEO 3.1 系列（不支持时长选项，按次计费）</p>
-                    
-                    <!-- VEO 3.1 Components -->
-                    <div class="mb-3">
-                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                        {{ getModelName('veo3.1-components', 'video') }} <span class="text-xs text-slate-500">（最多3图）</span>
-                      </label>
-                      <input v-model.number="settings.video_config.points_cost['veo3.1-components']" class="input text-sm w-32" type="number" min="0" />
-                    </div>
-                    
-                    <!-- VEO 3.1 -->
-                    <div class="mb-3">
-                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                        {{ getModelName('veo3.1', 'video') }} <span class="text-xs text-slate-500">（最多2图/首尾帧）</span>
-                      </label>
-                      <input v-model.number="settings.video_config.points_cost['veo3.1']" class="input text-sm w-32" type="number" min="0" />
-                    </div>
-                    
-                    <!-- VEO 3.1 Pro -->
-                    <div>
-                      <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                        {{ getModelName('veo3.1-pro', 'video') }} <span class="text-xs text-slate-500">（最多2图/首尾帧）</span>
-                      </label>
-                      <input v-model.number="settings.video_config.points_cost['veo3.1-pro']" class="input text-sm w-32" type="number" min="0" />
-                    </div>
-                  </div>
-                  
-                  <!-- HD附加积分 -->
-                  <div>
-                    <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      HD格式附加积分 <span class="text-xs text-slate-500">（仅适用于 Sora 系列）</span>
-                    </label>
-                    <input v-model.number="settings.video_config.points_cost.hd_extra" class="input" type="number" min="0" />
-                    <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">选择HD格式时额外增加的积分</p>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg">
-                <p class="text-xs text-purple-700 dark:text-purple-300">
-                  💡 提示：Sora系列 = 基础积分（按时长） + HD附加积分；VEO系列 = 固定积分（按次）
-                </p>
               </div>
             </div>
           </div>

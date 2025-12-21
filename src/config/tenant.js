@@ -78,6 +78,18 @@ const defaultConfig = {
     }
   },
   
+  // 模型描述信息（用于画布模式下拉显示）
+  modelDescriptions: {
+    image: {},
+    video: {}
+  },
+  
+  // 模型积分配置
+  modelPricing: {
+    image: {},
+    video: {}
+  },
+  
   // 功能开关
   features: {
     enableVideo: true,      // 是否启用视频生成
@@ -153,8 +165,8 @@ export async function loadBrandConfig(forceReload = false) {
       const lastUpdate = localStorage.getItem('brand_config_last_update')
       if (lastUpdate) {
         const timeSinceUpdate = Date.now() - parseInt(lastUpdate)
-        // 如果距离上次更新不到5分钟，使用缓存
-        if (timeSinceUpdate < 5 * 60 * 1000) {
+        // 如果距离上次更新不到1分钟，使用缓存（减少缓存时间以便更快同步配置变更）
+        if (timeSinceUpdate < 1 * 60 * 1000) {
           console.log('[tenant] 使用缓存的品牌配置')
           return runtimeConfig.brand
         }
@@ -209,6 +221,18 @@ export async function loadBrandConfig(forceReload = false) {
       if (data.modelEnabled) {
         runtimeConfig.modelEnabled = data.modelEnabled
         console.log('[tenant] 模型启用配置已更新:', data.modelEnabled)
+      }
+      
+      // 更新模型描述配置
+      if (data.modelDescriptions) {
+        runtimeConfig.modelDescriptions = data.modelDescriptions
+        console.log('[tenant] 模型描述配置已更新:', data.modelDescriptions)
+      }
+      
+      // 更新模型积分配置
+      if (data.modelPricing) {
+        runtimeConfig.modelPricing = data.modelPricing
+        console.log('[tenant] 模型积分配置已更新:', data.modelPricing)
       }
       
       // 保存到本地存储
@@ -383,6 +407,9 @@ export async function loadRemoteConfig() {
 // 优先从 system_config 读取（系统配置页面设置的）
 try {
   const systemConfig = localStorage.getItem('system_config')
+  // 同时读取 tenant_config 获取已保存的模型配置
+  const savedTenantConfig = loadFromStorage()
+  
   if (systemConfig) {
     const parsed = JSON.parse(systemConfig)
     runtimeConfig = {
@@ -391,21 +418,23 @@ try {
       tenantKey: parsed.tenantKey || envConfig.tenantKey,
       brand: {
         name: parsed.brandName || envConfig.brand.name,
-        logo: envConfig.brand.logo,
-        favicon: envConfig.brand.favicon,
+        logo: savedTenantConfig?.brand?.logo || envConfig.brand.logo,
+        favicon: savedTenantConfig?.brand?.favicon || envConfig.brand.favicon,
         primaryColor: parsed.primaryColor || envConfig.brand.primaryColor,
-        description: envConfig.brand.description
+        description: savedTenantConfig?.brand?.description || envConfig.brand.description
       },
-      features: envConfig.features
+      features: envConfig.features,
+      // 优先使用已保存的模型配置，否则使用默认值
+      modelNames: savedTenantConfig?.modelNames || envConfig.modelNames,
+      modelEnabled: savedTenantConfig?.modelEnabled || envConfig.modelEnabled,
+      modelDescriptions: savedTenantConfig?.modelDescriptions || envConfig.modelDescriptions,
+      modelPricing: savedTenantConfig?.modelPricing || defaultConfig.modelPricing
     }
     console.log('[tenant] 从系统配置加载')
-  } else {
+  } else if (savedTenantConfig) {
     // 降级到 tenant_config
-    const storedConfig = loadFromStorage()
-    if (storedConfig) {
-      runtimeConfig = { ...envConfig, ...storedConfig }
-      console.log('[tenant] 从租户配置加载')
-    }
+    runtimeConfig = { ...envConfig, ...savedTenantConfig }
+    console.log('[tenant] 从租户配置加载')
   }
 } catch (e) {
   console.error('[tenant] 配置加载失败:', e)
@@ -430,6 +459,8 @@ export const getBrand = () => config.brand
 export const getFeatures = () => config.features
 export const getModelNames = () => config.modelNames || defaultConfig.modelNames
 export const getModelEnabled = () => config.modelEnabled || defaultConfig.modelEnabled
+export const getModelDescriptions = () => config.modelDescriptions || defaultConfig.modelDescriptions
+export const getModelPricing = () => config.modelPricing || defaultConfig.modelPricing
 
 // 获取模型显示名称（如果自定义了则返回自定义名称，否则返回默认名称）
 export const getModelDisplayName = (modelKey, type = 'image') => {
@@ -442,6 +473,118 @@ export const getModelDisplayName = (modelKey, type = 'image') => {
 export const isModelEnabled = (modelKey, type = 'image') => {
   const modelEnabled = getModelEnabled()
   return modelEnabled?.[type]?.[modelKey] ?? true // 默认启用
+}
+
+// 获取模型描述（如果有则返回描述，否则返回空字符串）
+export const getModelDescription = (modelKey, type = 'image') => {
+  const modelDescriptions = getModelDescriptions()
+  return modelDescriptions?.[type]?.[modelKey] || ''
+}
+
+// 获取所有可用的图片模型列表（从配置中动态获取）
+export const getAvailableImageModels = () => {
+  const modelNames = getModelNames()
+  const modelEnabled = getModelEnabled()
+  const modelDescriptions = getModelDescriptions()
+  const modelPricing = getModelPricing()
+  const imageModels = modelNames?.image || {}
+  const enabledModels = modelEnabled?.image || {}
+  const descriptions = modelDescriptions?.image || {}
+  const pricing = modelPricing?.image || {}
+  
+  // 默认模型配置（当没有任何配置时使用）
+  // 注意：description 应从租户管理后台(9000端口)配置，这里默认为空
+  const defaultModels = [
+    { value: 'nano-banana', label: 'Nano Banana', icon: '🍌', points: 1, description: '', hasResolutionPricing: false, pointsCost: 1 },
+    { value: 'nano-banana-hd', label: 'Nano Banana HD', icon: '🍌', points: 3, description: '', hasResolutionPricing: false, pointsCost: 3 },
+    { value: 'nano-banana-2', label: 'Nano Banana 2', icon: '🍌', points: null, description: '', hasResolutionPricing: true, pointsCost: { '1k': 3, '2k': 4, '4k': 5 } }
+  ]
+  
+  // 如果配置为空，返回默认模型
+  if (Object.keys(imageModels).length === 0) {
+    return defaultModels
+  }
+  
+  // 从配置中构建模型列表
+  const models = []
+  for (const [key, name] of Object.entries(imageModels)) {
+    // 只添加启用的模型
+    if (enabledModels[key] !== false) {
+      const modelPricingConfig = pricing[key] || {}
+      models.push({
+        value: key,
+        label: name || key,
+        icon: key.includes('gemini') ? 'G' : '🍌',
+        description: descriptions[key] || '',
+        // 积分配置
+        hasResolutionPricing: modelPricingConfig.hasResolutionPricing || false,
+        pointsCost: modelPricingConfig.pointsCost || 1
+      })
+    }
+  }
+  
+  return models.length > 0 ? models : defaultModels
+}
+
+// 获取所有可用的视频模型列表（从配置中动态获取）
+export const getAvailableVideoModels = () => {
+  // 注意：getVideoModels 函数在当前版本未实现，直接使用 fallback 逻辑
+  // 如果将来需要支持新格式配置，可以在这里添加 getVideoModels 函数的实现
+
+  const modelNames = getModelNames()
+  const modelEnabled = getModelEnabled()
+  const modelDescriptions = getModelDescriptions()
+  const modelPricing = getModelPricing()
+  const videoModels = modelNames?.video || {}
+  const enabledModels = modelEnabled?.video || {}
+  const descriptions = modelDescriptions?.video || {}
+  const pricing = modelPricing?.video || {}
+  
+  // 默认模型配置（包含积分配置和描述）- 使用黑白灰图标
+  const defaultModelConfig = {
+    'sora-2': { label: 'Sora 2', icon: '◆', description: 'OpenAI 旗舰视频生成模型，支持长达 60s 的高清视频', hasDurationPricing: true, pointsCost: { '10': 20, '15': 30 } },
+    'sora-2-pro': { label: 'Sora 2 Pro', icon: '★', description: '专业版 Sora 模型，更高分辨率和细节表现', hasDurationPricing: true, pointsCost: { '10': 300, '15': 450, '25': 750 } },
+    'veo3.1-components': { label: 'VEO 3.1', icon: '▣', description: 'Google DeepMind 最新视频模型，生成速度快，效果逼真', hasDurationPricing: false, pointsCost: 100 },
+    'veo3.1': { label: 'VEO 3.1 标准', icon: '▢', description: '标准版 VEO 模型，适合日常创作', hasDurationPricing: false, pointsCost: 150 },
+    'veo3.1-pro': { label: 'VEO 3.1 Pro', icon: '◈', description: '专业版 VEO 模型，支持更复杂的场景和运镜', hasDurationPricing: false, pointsCost: 200 },
+    // Kling（可灵）图生视频模型 - 只保留一个 Pro 模式
+    'kling-v2-6-pro': { label: 'Kling 2.6 Pro (首尾帧)', icon: '✨', description: '可灵 v2.6 专业版，支持首帧和尾帧控制', hasDurationPricing: true, pointsCost: { '5': 24, '10': 48 }, isImageToVideo: true }
+  }
+  
+  // 转换为数组格式的默认模型列表
+  const defaultModels = Object.entries(defaultModelConfig).map(([key, config]) => ({
+    value: key,
+    ...config
+  }))
+  
+  // 如果配置为空，返回默认模型
+  if (Object.keys(videoModels).length === 0) {
+    return defaultModels
+  }
+  
+  // 从配置中构建模型列表
+  const models = []
+  for (const [key, name] of Object.entries(videoModels)) {
+    // 只添加启用的模型
+    if (enabledModels[key] !== false) {
+      const modelPricingConfig = pricing[key] || {}
+      const defaultConfig = defaultModelConfig[key] || {}
+      
+      models.push({
+        value: key,
+        // 优先使用租户配置的名称，否则使用默认名称
+        label: name || defaultConfig.label || key,
+        icon: defaultConfig.icon || (key.includes('veo') ? '🎥' : '✨'),
+        // 优先使用租户配置的描述，否则使用默认描述
+        description: descriptions[key] || defaultConfig.description || '',
+        // 积分配置：优先使用租户配置，否则使用默认配置
+        hasDurationPricing: modelPricingConfig.hasDurationPricing ?? defaultConfig.hasDurationPricing ?? false,
+        pointsCost: modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1
+      })
+    }
+  }
+  
+  return models.length > 0 ? models : defaultModels
 }
 
 // 强制刷新品牌配置（用于管理后台保存后立即刷新）
@@ -480,9 +623,15 @@ export const getTenantHeaders = () => {
 
 // 生成完整的 API URL
 export const getApiUrl = (path) => {
+  // 在开发环境中，始终使用相对路径（通过 Vite 代理）
+  // 这可以避免 CORS 问题
+  if (import.meta.env.DEV) {
+    return path
+  }
   const base = config.apiBase || ''
   return `${base}${path}`
 }
 
 export default config
+
 

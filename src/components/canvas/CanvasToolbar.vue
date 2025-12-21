@@ -119,21 +119,21 @@ function handleOpenTemplates() {
   }
 }
 
-// 打开我的工作流面板
+// 切换我的工作流面板（打开/关闭）
 function openWorkflows() {
   if (openWorkflowPanel) {
     openWorkflowPanel()
   }
 }
 
-// 打开我的资产面板
+// 切换我的资产面板（打开/关闭）
 function openAssets() {
   if (openAssetPanel) {
     openAssetPanel()
   }
 }
 
-// 打开历史记录面板
+// 切换历史记录面板（打开/关闭）
 function openHistory() {
   if (openHistoryPanel) {
     openHistoryPanel()

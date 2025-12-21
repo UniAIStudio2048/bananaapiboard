@@ -47,7 +47,7 @@ export function getWorkflowHistory() {
 
 /**
  * 保存工作流到历史记录
- * @param {Object} workflow - 工作流数据 { name, nodes, edges, viewport, tabId }
+ * @param {Object} workflow - 工作流数据 { name, nodes, edges, viewport, tabId, workflowId }
  */
 export function saveWorkflowToHistory(workflow) {
   if (!workflow || !workflow.nodes || workflow.nodes.length === 0) {
@@ -55,7 +55,7 @@ export function saveWorkflowToHistory(workflow) {
   }
   
   try {
-    const history = getWorkflowHistory()
+    let history = getWorkflowHistory()
     
     // 生成唯一ID
     const historyId = `history-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`
@@ -91,6 +91,16 @@ export function saveWorkflowToHistory(workflow) {
           return false
         }
       }
+    }
+    
+    // 关键优化：如果是已保存的工作流（有workflowId），移除同一workflowId的旧记录
+    if (workflow.workflowId) {
+      history = history.filter(h => h.workflowId !== workflow.workflowId)
+      console.log(`[WorkflowAutoSave] 已移除同一工作流的旧历史记录: ${workflow.name}`)
+    } else if (workflow.tabId) {
+      // 如果是未保存的工作流，移除同一tabId的旧记录（保留最新的）
+      history = history.filter(h => h.tabId !== workflow.tabId)
+      console.log(`[WorkflowAutoSave] 已移除同一标签的旧历史记录: ${workflow.name}`)
     }
     
     // 添加到历史记录开头

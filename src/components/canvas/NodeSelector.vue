@@ -86,6 +86,7 @@ const panelStyle = computed(() => {
 // LLM 预设映射表：将 LLM 节点类型映射到文本节点 + 预设
 const LLM_PRESET_MAP = {
   'llm-prompt-enhance': 'prompt-enhance',
+  'llm-image-describe': 'image-describe',  // 图片描述 → 文本节点
   'llm-content-expand': 'content-expand',
   'llm-storyboard': 'storyboard'
 }
@@ -135,6 +136,46 @@ function selectNodeType(type) {
     actualNodeType = 'text-input'
     nodeData.selectedPreset = LLM_PRESET_MAP[type]
     nodeData.title = NODE_TYPE_CONFIG[type]?.label || '文本'
+  }
+  
+  // 特殊处理：9宫格分镜节点（从图片节点触发时）
+  if (type === 'grid-preview' && triggerNode.value) {
+    const sourceData = triggerNode.value.data
+    // 检查是否从图片节点触发
+    if (sourceData?.sourceImages?.length > 0 || sourceData?.output?.urls?.length > 0) {
+      // 设置默认提示词
+      nodeData.prompt = '根据图片内容生成9宫格分镜保持场景人物一致性'
+      // 设置默认比例为 16:9
+      nodeData.aspectRatio = '16:9'
+      // 标记这是9宫格模式
+      nodeData.gridMode = true
+      // 设置节点角色为输出（会生成图片）
+      nodeData.nodeRole = 'output'
+      // 设置生成数量为 9（但实际通过 count 参数控制）
+      nodeData.count = 9
+      // 设置标题
+      nodeData.title = '9宫格分镜'
+    }
+  }
+  
+  // 特殊处理：截取尾帧节点（从视频节点触发时）
+  if (type === 'video-last-frame' && triggerNode.value) {
+    const sourceData = triggerNode.value.data
+    // 检查是否从视频节点触发且有视频输出
+    if (sourceData?.output?.url) {
+      // 将节点类型改为图像节点
+      actualNodeType = 'image-input'
+      // 设置标题
+      nodeData.title = '尾帧图片'
+      // 设置节点角色为源节点（显示提取的图片）
+      nodeData.nodeRole = 'source'
+      // 标记这是从视频提取的
+      nodeData.extractedFromVideo = true
+      nodeData.videoUrl = sourceData.output.url
+      // 注意：实际的尾帧提取需要后端支持，这里先标记
+      // 前端会在节点挂载后调用后端API提取尾帧
+      nodeData.needsFrameExtraction = true
+    }
   }
   
   // 右侧添加：新节点接收来自触发节点的数据

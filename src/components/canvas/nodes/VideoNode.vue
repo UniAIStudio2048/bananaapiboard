@@ -8,10 +8,10 @@
  * - 右侧(+)：输出连接
  * - 底部配置面板：选中时显示，包含提示词输入和生成参数
  */
-import { ref, computed, inject, watch, onMounted } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
+import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
-import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl } from '@/config/tenant'
+import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels } from '@/config/tenant'
 import { uploadImages } from '@/api/canvas/nodes'
 import { useI18n } from '@/i18n'
 
@@ -26,6 +26,9 @@ const props = defineProps({
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
 
+// Vue Flow 实例 - 用于在节点尺寸变化时更新连线
+const { updateNodeInternals } = useVueFlow()
+
 // 标签编辑状态
 const isEditingLabel = ref(false)
 const labelInputRef = ref(null)
@@ -35,6 +38,9 @@ const localLabel = ref(props.data.label || 'Video')
 const isGenerating = ref(false)
 const errorMessage = ref('')
 const promptText = ref(props.data.prompt || '')
+
+// 模型下拉框状态
+const isModelDropdownOpen = ref(false)
 
 // 拖拽上传状态
 const isDragOver = ref(false)
@@ -77,54 +83,87 @@ function toggleCount() {
   selectedCount.value = nextCount
 }
 
+// 模型下拉框方法
+const dropdownDirection = ref('down') // 'down' 或 'up'
+const modelSelectorRef = ref(null)
+const modelDropdownListRef = ref(null)
+
+function toggleModelDropdown(event) {
+  event.stopPropagation()
+
+  // 计算下拉方向
+  if (modelSelectorRef.value) {
+    const rect = modelSelectorRef.value.getBoundingClientRect()
+    const viewportHeight = window.innerHeight
+    const dropdownHeight = 280 // 下拉列表的预估高度
+
+    // 如果下方空间不足，则向上展开
+    if (rect.bottom + dropdownHeight > viewportHeight && rect.top > dropdownHeight) {
+      dropdownDirection.value = 'up'
+    } else {
+      dropdownDirection.value = 'down'
+    }
+  }
+
+  isModelDropdownOpen.value = !isModelDropdownOpen.value
+}
+
+function selectModel(modelValue) {
+  selectedModel.value = modelValue
+  isModelDropdownOpen.value = false
+}
+
+function closeModelDropdown() {
+  isModelDropdownOpen.value = false
+}
+
+// 点击外部关闭下拉框
+function handleModelDropdownClickOutside(event) {
+  const dropdown = event.target.closest('.model-selector-custom')
+  if (!dropdown) {
+    isModelDropdownOpen.value = false
+  }
+}
+
+// 处理下拉列表的鼠标滚轮事件
+function handleDropdownWheel(event) {
+  event.stopPropagation()
+  // 允许滚动事件正常传播到下拉列表，阻止传播到画布
+}
+
+// 获取当前选中模型的显示名称
+const selectedModelLabel = computed(() => {
+  const model = models.value.find(m => m.value === selectedModel.value)
+  return model ? model.label : selectedModel.value
+})
+
 // VEO3模型列表（不支持时长参数）
 const VEO3_MODELS = ['veo3.1-components', 'veo3.1', 'veo3.1-pro']
 
 // 当前模型是否为VEO3系列
 const isVeo3Model = computed(() => VEO3_MODELS.includes(selectedModel.value))
 
-// 积分配置（从后端加载）
-const pointsCostConfig = ref({
-  'sora-2': { '10': 20, '15': 30 },
-  'sora-2-pro': { '10': 300, '15': 450, '25': 750 },
-  'veo3.1-components': 100,
-  'veo3.1': 150,
-  'veo3.1-pro': 200
+// 获取当前选中的模型对象
+const currentModelConfig = computed(() => {
+  return models.value.find(m => m.value === selectedModel.value) || {}
 })
 
 // 可用的时长选项（根据模型动态计算）
 const availableDurations = computed(() => {
-  if (isVeo3Model.value) {
-    return [] // VEO3模型不支持时长选择
+  // 如果模型不支持时长计费，返回空数组
+  if (!currentModelConfig.value.hasDurationPricing) {
+    return []
   }
-  const config = pointsCostConfig.value[selectedModel.value] || {}
-  return Object.keys(config).filter(key => key !== 'hd_extra').sort((a, b) => Number(a) - Number(b))
+  const pointsCostObj = currentModelConfig.value.pointsCost
+  if (typeof pointsCostObj !== 'object') {
+    return []
+  }
+  return Object.keys(pointsCostObj).filter(key => key !== 'hd_extra').sort((a, b) => Number(a) - Number(b))
 })
 
-// 获取模型显示名称
-function getModelName(modelKey) {
-  const customName = getModelDisplayName ? getModelDisplayName(modelKey, 'video') : null
-  if (customName) return customName
-  
-  const defaultNames = {
-    'sora-2': 'Sora 2',
-    'sora-2-pro': 'Sora 2 Pro',
-    'veo3.1-components': 'VEO 3.1',
-    'veo3.1': 'VEO 3.1 标准',
-    'veo3.1-pro': 'VEO 3.1 Pro'
-  }
-  return defaultNames[modelKey] || modelKey
-}
-
-// 可用模型列表（从启用的模型中筛选）
+// 可用模型列表（从配置动态获取，支持新增模型自动同步）
 const models = computed(() => {
-  const allModels = [
-    { value: 'sora-2', label: 'Sora 2', icon: '▶' },
-    { value: 'sora-2-pro', label: 'Sora 2 Pro', icon: '◆' },
-    { value: 'veo3.1-components', label: 'VEO 3.1', icon: '▶' },
-    { value: 'veo3.1', label: 'VEO 3.1 标准', icon: '▷' },
-    { value: 'veo3.1-pro', label: 'VEO 3.1 Pro', icon: '◇' }
-  ]
+  const allModels = getAvailableVideoModels()
   
   // 如果有模型启用检查函数，则过滤
   if (typeof isModelEnabled === 'function') {
@@ -146,24 +185,19 @@ const durations = computed(() => {
   }))
 })
 
-// 从后端加载视频配置
-async function loadVideoConfig() {
-  try {
-    const response = await fetch('/api/video/config', { headers: getTenantHeaders() })
-    if (response.ok) {
-      const data = await response.json()
-      if (data.points_cost) {
-        pointsCostConfig.value = data.points_cost
-        console.log('[VideoNode] 视频配置已加载:', data.points_cost)
-      }
-    }
-  } catch (e) {
-    console.error('[VideoNode] 加载视频配置失败:', e)
-  }
-}
-
+// 初始化时确保时长选项有效
 onMounted(() => {
-  loadVideoConfig()
+  // 如果当前模型支持时长选择，但当前选中的时长不在可用列表中，则重置为第一个可用时长
+  if (availableDurations.value.length > 0 && !availableDurations.value.includes(selectedDuration.value)) {
+    selectedDuration.value = availableDurations.value[0]
+  }
+  
+  // 添加点击外部关闭下拉框的事件监听
+  document.addEventListener('click', handleModelDropdownClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleModelDropdownClickOutside)
 })
 
 // 节点尺寸 - 视频节点使用16:9比例
@@ -433,15 +467,17 @@ watch(() => props.data.inheritedData, (newData) => {
   }
 }, { immediate: true })
 
-// 积分消耗计算
+// 积分消耗计算（从模型配置中读取）
 const pointsCost = computed(() => {
-  // VEO3模型使用固定积分
-  if (isVeo3Model.value) {
-    return pointsCostConfig.value[selectedModel.value] || 100
+  const modelPointsCost = currentModelConfig.value.pointsCost
+  
+  // 如果是按时长计费的模型
+  if (currentModelConfig.value.hasDurationPricing && typeof modelPointsCost === 'object') {
+    return modelPointsCost[selectedDuration.value] || 20
   }
   
-  const modelConfig = pointsCostConfig.value[selectedModel.value] || {}
-  return modelConfig[selectedDuration.value] || 20
+  // 固定积分模型
+  return typeof modelPointsCost === 'number' ? modelPointsCost : 1
 })
 
 
@@ -1292,6 +1328,9 @@ function handleResizeMove(event) {
       nodeHeight.value = Math.max(200, resizeStart.value.height + deltaY / zoom)
     }
     
+    // 实时更新连线位置
+    updateNodeInternals(props.id)
+    
     resizeRafId = null
   })
 }
@@ -1309,6 +1348,11 @@ function handleResizeEnd() {
   canvasStore.updateNodeData(props.id, {
     width: nodeWidth.value,
     height: nodeHeight.value
+  })
+  
+  // 更新节点内部状态，确保连线位置跟随 Handle 位置变化
+  nextTick(() => {
+    updateNodeInternals(props.id)
   })
   
   document.removeEventListener('mousemove', handleResizeMove)
@@ -1760,14 +1804,6 @@ function closeFullscreenPreview() {
 
 <template>
   <div :class="nodeClass" @contextmenu="handleContextMenu">
-    <!-- 左侧输入端口（隐藏但保留给 Vue Flow 用于边渲染） -->
-    <Handle
-      type="target"
-      :position="Position.Left"
-      id="input"
-      class="node-handle node-handle-hidden"
-    />
-    
     <!-- 节点标签 -->
     <div 
       v-if="!isEditingLabel" 
@@ -1791,6 +1827,14 @@ function closeFullscreenPreview() {
     
     <!-- 节点主体 -->
     <div class="node-wrapper">
+      <!-- 左侧输入端口 -->
+      <Handle
+        type="target"
+        :position="Position.Left"
+        id="input"
+        class="node-handle node-handle-hidden"
+      />
+
       <!-- 左侧添加按钮 -->
       <button 
         class="node-add-btn node-add-btn-left"
@@ -1959,15 +2003,15 @@ function closeFullscreenPreview() {
       >
         +
       </button>
+
+      <!-- 右侧输出端口 -->
+      <Handle
+        type="source"
+        :position="Position.Right"
+        id="output"
+        class="node-handle node-handle-hidden"
+      />
     </div>
-    
-    <!-- 右侧输出端口（隐藏但保留给 Vue Flow 用于边渲染） -->
-    <Handle
-      type="source"
-      :position="Position.Right"
-      id="output"
-      class="node-handle node-handle-hidden"
-    />
     
     <!-- 隐藏的文件上传 input（支持多选） -->
     <input 
@@ -2064,19 +2108,44 @@ function closeFullscreenPreview() {
       <!-- 参数配置行 -->
       <div class="config-row">
         <div class="config-left">
-          <!-- 模型选择器 -->
-          <div class="model-selector">
-            <span class="model-wave-icon">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M2 12h2l3-9 4 18 4-9 3 4h4"/>
-              </svg>
-            </span>
-            <select v-model="selectedModel" class="model-select-input">
-              <option v-for="model in models" :key="model.value" :value="model.value">
-                {{ model.label }}
-              </option>
-            </select>
-            <span class="select-arrow">▾</span>
+          <!-- 模型选择器（自定义下拉框，支持显示描述） -->
+          <div class="model-selector-custom" ref="modelSelectorRef" @click.stop>
+            <div 
+              class="model-selector-trigger"
+              @click="toggleModelDropdown"
+            >
+              <span class="model-icon">{{ models.find(m => m.value === selectedModel)?.icon || '🎬' }}</span>
+              <span class="model-name">{{ models.find(m => m.value === selectedModel)?.label || selectedModel }}</span>
+              <span class="select-arrow" :class="{ 'arrow-up': isModelDropdownOpen }">▾</span>
+            </div>
+            
+            <!-- 下拉选项列表 -->
+            <Transition name="dropdown-fade">
+              <div
+                v-if="isModelDropdownOpen"
+                ref="modelDropdownListRef"
+                class="model-dropdown-list"
+                :class="{ 'dropdown-up': dropdownDirection === 'up' }"
+                @wheel="handleDropdownWheel"
+              >
+                <div
+                  v-for="m in models"
+                  :key="m.value"
+                  class="model-dropdown-item"
+                  :class="{ 'active': selectedModel === m.value }"
+                  @click="selectModel(m.value)"
+                >
+                  <div class="model-item-main">
+                    <span class="model-item-icon">{{ m.icon }}</span>
+                    <span class="model-item-label">{{ m.label }}</span>
+                    <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
+                  </div>
+                  <div v-if="m.description" class="model-item-desc">
+                    {{ m.description }}
+                  </div>
+                </div>
+              </div>
+            </Transition>
           </div>
           
           <!-- 比例选择（下拉框） -->
@@ -2583,7 +2652,7 @@ function closeFullscreenPreview() {
   flex: 1;
 }
 
-/* 底部配置面板 - 自适应内容宽度，确保参数完整显示 */
+/* 底部配置面板 - 扁平化设计，与图片节点对齐 */
 .config-panel {
   position: absolute;
   top: calc(100% + 12px);
@@ -2595,7 +2664,7 @@ function closeFullscreenPreview() {
   background: var(--canvas-bg-elevated, #1e1e1e);
   border: 1px solid var(--canvas-border-default, #3a3a3a);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   animation: slideDown 0.2s ease;
   z-index: 1000;
   pointer-events: auto;
@@ -2604,11 +2673,11 @@ function closeFullscreenPreview() {
 @keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateX(-50%) translateY(-10px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateX(-50%) translateY(0);
   }
 }
 
@@ -2833,115 +2902,260 @@ function closeFullscreenPreview() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 8px 12px;
   border-top: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  gap: 16px;
+  gap: 12px;
   flex-wrap: nowrap;
+  min-height: 48px;
 }
 
 .config-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .config-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
-/* 模型选择器 */
-.model-selector {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
+/* 模型选择器（自定义下拉框）- 扁平化设计 */
+.model-selector-custom {
+  position: relative;
+  z-index: 100;
 }
 
-.model-selector:hover {
-  border-color: var(--canvas-border-active, #4a4a4a);
-}
-
-.model-wave-icon {
-  display: flex;
-  align-items: center;
-  color: var(--canvas-text-tertiary, #666);
-}
-
-.model-select-input {
-  background: rgba(0, 0, 0, 0.4);
-  border: none;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  outline: none;
-  padding: 2px 4px;
-  padding-right: 4px;
-  border-radius: 4px;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-}
-
-.model-select-input option {
-  background: #1a1a1a;
-  color: #ffffff;
-  padding: 8px;
-}
-
-.model-select-input:hover {
-  background: rgba(0, 0, 0, 0.6);
-}
-
-.select-arrow {
-  color: var(--canvas-text-tertiary, #999);
-  font-size: 10px;
-  margin-left: -4px;
-}
-
-/* 比例选择器 */
-.ratio-selector {
+.model-selector-trigger {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  border-radius: 8px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
+  min-height: 32px;
+}
+
+.model-selector-trigger:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.model-icon {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1;
+}
+
+.model-name {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.select-arrow {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 9px;
+  margin-left: auto;
+  transition: transform 0.2s;
+}
+
+.select-arrow.arrow-up {
+  transform: rotate(180deg);
+}
+
+/* 下拉列表 - 黑白灰滚动条 */
+.model-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  min-width: 220px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  z-index: 1000;
+  backdrop-filter: blur(8px);
+}
+
+/* 向上展开时的样式 */
+.model-dropdown-list.dropdown-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+/* 黑白灰滚动条样式 */
+.model-dropdown-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.model-dropdown-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 3px;
+}
+
+.model-dropdown-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.model-dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.model-dropdown-list::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.model-dropdown-item {
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.model-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.model-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.model-dropdown-item.active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.model-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-item-icon {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1;
+}
+
+.model-item-label {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 500;
+  flex: 1;
+}
+
+.model-item-points {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.model-item-desc {
+  margin-top: 4px;
+  padding-left: 21px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  line-height: 1.4;
+}
+
+/* 下拉动画 */
+.dropdown-fade-enter-active,
+.dropdown-fade-leave-active {
+  transition: all 0.2s ease;
+}
+
+.dropdown-fade-enter-from,
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.model-dropdown-list.dropdown-up.dropdown-fade-enter-from,
+.model-dropdown-list.dropdown-up.dropdown-fade-leave-to {
+  transform: translateY(8px);
+}
+
+/* 兼容旧样式名称 */
+.model-item-name {
+  color: var(--canvas-text-primary, #ffffff);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.model-item-desc {
+  color: var(--canvas-text-tertiary, #888);
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: normal;
+  word-break: break-word;
+}
+
+/* 下拉面板滚动条 */
+.model-dropdown-panel::-webkit-scrollbar {
+  width: 5px;
+}
+
+.model-dropdown-panel::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.model-dropdown-panel::-webkit-scrollbar-thumb {
+  background: var(--canvas-border-default, #3a3a3a);
+  border-radius: 3px;
+}
+
+.model-dropdown-panel::-webkit-scrollbar-thumb:hover {
+  background: var(--canvas-border-active, #4a4a4a);
+}
+
+/* 比例选择器 - 扁平化设计 */
+.ratio-selector {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-height: 32px;
 }
 
 .ratio-selector:hover {
-  border-color: var(--canvas-border-active, #4a4a4a);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .ratio-icon {
-  font-size: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .ratio-select-input {
-  background: rgba(0, 0, 0, 0.4);
+  background: transparent;
   border: none;
-  color: #ffffff;
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
   cursor: pointer;
   outline: none;
-  padding: 2px 4px;
-  border-radius: 4px;
+  padding: 0;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
-  padding-right: 2px;
 }
 
 .ratio-select-input option {
@@ -2951,31 +3165,35 @@ function closeFullscreenPreview() {
 }
 
 .ratio-select-input:hover {
-  background: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 1);
 }
 
-/* 参数选择芯片 */
+/* 参数选择芯片 - 扁平化设计 */
 .param-chip {
-  padding: 6px 12px;
-  background: transparent;
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
-  color: var(--canvas-text-secondary, #888);
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
   cursor: pointer;
   transition: all 0.2s;
   user-select: none;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
 }
 
 .param-chip:hover {
-  border-color: var(--canvas-border-active, #4a4a4a);
-  color: var(--canvas-text-primary, #fff);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .param-chip.active {
   background: rgba(59, 130, 246, 0.15);
-  border-color: var(--canvas-accent-primary, #3b82f6);
-  color: var(--canvas-accent-primary, #3b82f6);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: rgba(59, 130, 246, 0.9);
 }
 
 .param-chip-group {
@@ -2984,8 +3202,8 @@ function closeFullscreenPreview() {
 }
 
 .count-display {
-  font-size: 14px;
-  color: var(--canvas-text-secondary, #888);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
   font-weight: 500;
 }
 
@@ -2993,14 +3211,18 @@ function closeFullscreenPreview() {
   cursor: pointer;
   padding: 4px 10px;
   border-radius: 6px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   transition: all 0.2s;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
 }
 
 .count-display.clickable:hover {
-  border-color: var(--canvas-accent-primary, #3b82f6);
-  color: var(--canvas-accent-primary, #3b82f6);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: rgba(59, 130, 246, 0.9);
 }
 
 /* 积分消耗显示 - 黑白灰风格 */
@@ -3047,7 +3269,7 @@ function closeFullscreenPreview() {
   font-size: 14px;
 }
 
-/* 端口样式 - 完全隐藏（但保留给 Vue Flow 用于边渲染） */
+/* 端口样式 - 位置与+按钮对齐（但视觉隐藏） */
 .node-handle {
   width: 1px;
   height: 1px;
@@ -3061,6 +3283,25 @@ function closeFullscreenPreview() {
   opacity: 0 !important;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* 调整 Handle 位置与 + 按钮中心对齐 */
+/* Handle 现已移入 node-wrapper，直接居中对齐 */
+:deep(.vue-flow__handle.target) {
+  left: -34px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+:deep(.vue-flow__handle.source) {
+  right: -34px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+/* Resize 时禁用过渡，防止连线错位 */
+.video-node.resizing .node-card {
+  transition: none !important;
 }
 
 /* 添加按钮 */

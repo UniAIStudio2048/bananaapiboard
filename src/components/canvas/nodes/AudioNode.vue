@@ -10,7 +10,7 @@
  * - 快捷操作：图片对口型、音频生视频、音频提取文案
  */
 import { ref, computed, watch, nextTick } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
+import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
@@ -24,6 +24,9 @@ const props = defineProps({
 })
 
 const canvasStore = useCanvasStore()
+
+// Vue Flow 实例 - 用于在节点尺寸变化时更新连线
+const { updateNodeInternals } = useVueFlow()
 
 // 标签编辑状态
 const isEditingLabel = ref(false)
@@ -611,6 +614,9 @@ function handleResizeMove(event) {
       nodeHeight.value = Math.max(200, resizeStart.value.height + deltaY / zoom)
     }
     
+    // 实时更新连线位置
+    updateNodeInternals(props.id)
+    
     resizeRafId = null
   })
 }
@@ -627,6 +633,11 @@ function handleResizeEnd() {
   canvasStore.updateNodeData(props.id, {
     width: nodeWidth.value,
     height: nodeHeight.value
+  })
+  
+  // 更新节点内部状态，确保连线位置跟随 Handle 位置变化
+  nextTick(() => {
+    updateNodeInternals(props.id)
   })
   
   document.removeEventListener('mousemove', handleResizeMove)
@@ -1161,7 +1172,7 @@ function handleReupload() {
   font-weight: 500;
 }
 
-/* 端口样式 - 完全隐藏 */
+/* 端口样式 - 位置与+按钮对齐（但视觉隐藏） */
 .node-handle {
   width: 1px;
   height: 1px;
@@ -1175,6 +1186,19 @@ function handleReupload() {
   opacity: 0 !important;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* 调整 Handle 位置与 + 按钮中心对齐 */
+:deep(.vue-flow__handle.target) {
+  left: -39px !important;
+  top: calc(50% + 14px) !important;
+  transform: translateY(-50%) !important;
+}
+
+:deep(.vue-flow__handle.source) {
+  right: -39px !important;
+  top: calc(50% + 14px) !important;
+  transform: translateY(-50%) !important;
 }
 
 /* 添加按钮 */

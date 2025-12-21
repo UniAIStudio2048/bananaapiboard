@@ -113,15 +113,22 @@ async function handleSave() {
     // 调用API保存
     const result = await saveWorkflow(dataToSave)
     
+    // 后端返回格式: { id, success } 或 { workflow: { id, name, ... } }
+    const savedWorkflow = result.workflow || {
+      id: result.id || dataToSave.id,
+      name: dataToSave.name,
+      description: dataToSave.description
+    }
+    
     // 更新store中的工作流元信息
     canvasStore.workflowMeta = {
-      id: result.workflow.id,
-      name: result.workflow.name,
-      description: result.workflow.description
+      id: savedWorkflow.id,
+      name: savedWorkflow.name,
+      description: savedWorkflow.description
     }
     
     // 通知父组件
-    emit('saved', result.workflow)
+    emit('saved', savedWorkflow)
     
     // 关闭对话框
     emit('close')

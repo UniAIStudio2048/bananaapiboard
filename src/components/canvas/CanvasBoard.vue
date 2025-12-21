@@ -177,6 +177,7 @@ const nodeTypes = {
   'llm-image-describe': LLMNode,
   'llm-content-expand': LLMNode,
   'preview-output': PreviewNode,
+  'grid-preview': ImageNode,      // 9宫格分镜（使用 ImageNode，可以生成和输出图片）
   'group': GroupNode              // 编组节点
 }
 

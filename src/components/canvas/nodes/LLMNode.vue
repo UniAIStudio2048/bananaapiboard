@@ -3,8 +3,8 @@
  * LLMNode.vue - LLM 智能节点
  * 用于提示词优化、图片描述、内容扩写等
  */
-import { ref, computed, inject } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
+import { ref, computed, inject, nextTick } from 'vue'
+import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { enhancePrompt, describeImage, expandContent, getLLMCost } from '@/api/canvas/llm'
 import { useI18n } from '@/i18n'
@@ -19,6 +19,9 @@ const props = defineProps({
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
+
+// Vue Flow 实例 - 用于在节点尺寸变化时更新连线
+const { updateNodeInternals } = useVueFlow()
 
 // LLM 类型配置 - 黑白灰简洁风格
 const LLM_TYPES = {
@@ -154,6 +157,9 @@ function handleResizeMove(event) {
   if (resizeHandle.value === 'bottom' || resizeHandle.value === 'corner') {
     nodeHeight.value = Math.max(200, resizeStart.value.height + scaledDeltaY)
   }
+  
+  // 实时更新连线位置
+  updateNodeInternals(props.id)
 }
 
 // 结束调整尺寸
@@ -164,6 +170,11 @@ function handleResizeEnd() {
   canvasStore.updateNodeData(props.id, {
     width: nodeWidth.value,
     height: nodeHeight.value
+  })
+  
+  // 更新节点内部状态，确保连线位置跟随 Handle 位置变化
+  nextTick(() => {
+    updateNodeInternals(props.id)
   })
   
   document.removeEventListener('mousemove', handleResizeMove)
@@ -496,7 +507,7 @@ function handleAddClick(event) {
   white-space: nowrap;
 }
 
-/* 端口样式 - 完全隐藏（但保留给 Vue Flow 用于边渲染） */
+/* 端口样式 - 位置与+按钮对齐（但视觉隐藏） */
 .node-handle {
   width: 1px;
   height: 1px;
@@ -510,6 +521,19 @@ function handleAddClick(event) {
   opacity: 0 !important;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* 调整 Handle 位置与 + 按钮中心对齐 */
+:deep(.vue-flow__handle.target) {
+  left: -39px !important;
+  top: calc(50% + 14px) !important;
+  transform: translateY(-50%) !important;
+}
+
+:deep(.vue-flow__handle.source) {
+  right: -39px !important;
+  top: calc(50% + 14px) !important;
+  transform: translateY(-50%) !important;
 }
 
 .node-add-btn {

@@ -32,7 +32,11 @@ export const NODE_TYPES = {
   
   // 输出类
   PREVIEW_OUTPUT: 'preview-output',
-  GRID_PREVIEW: 'grid-preview'
+  GRID_PREVIEW: 'grid-preview',
+  
+  // 视频处理类
+  VIDEO_LAST_FRAME: 'video-last-frame',
+  LLM_VIDEO_DESCRIBE: 'llm-video-describe'
 }
 
 // 节点类型配置 - 黑白灰简洁风格图标
@@ -271,11 +275,39 @@ export const NODE_TYPE_CONFIG = {
     label: 'canvas.nodeConfig.gridPreview.label',
     description: 'canvas.nodeConfig.gridPreview.desc',
     icon: '⊞',
-    category: 'output',
+    category: 'generate',  // 改为 generate 类别，因为它会生成图片
     color: '#94a3b8',
     hasInput: true,
-    hasOutput: false,
-    inputType: 'image'
+    hasOutput: true,       // 改为 true，允许有下游输出
+    inputType: 'image',
+    outputType: 'image',   // 输出类型为图片
+    consumesPoints: true   // 消耗积分
+  },
+  
+  [NODE_TYPES.VIDEO_LAST_FRAME]: {
+    label: 'canvas.nodeConfig.videoLastFrame.label',
+    description: 'canvas.nodeConfig.videoLastFrame.desc',
+    icon: '▮',
+    category: 'video',
+    color: '#f97316',
+    hasInput: true,
+    hasOutput: true,
+    inputType: 'video',
+    outputType: 'image'
+  },
+  
+  [NODE_TYPES.LLM_VIDEO_DESCRIBE]: {
+    label: 'canvas.nodeConfig.videoDescribe.label',
+    description: 'canvas.nodeConfig.videoDescribe.desc',
+    icon: '▷◎',
+    category: 'llm',
+    color: '#14b8a6',
+    hasInput: true,
+    hasOutput: true,
+    inputType: 'video',
+    outputType: 'text',
+    consumesPoints: true,
+    pointsCost: 2
   }
 }
 
@@ -286,8 +318,7 @@ export const CONNECTION_RULES = {
     NODE_TYPES.TEXT_TO_VIDEO,
     NODE_TYPES.LLM_PROMPT_ENHANCE,
     NODE_TYPES.LLM_CONTENT_EXPAND,
-    NODE_TYPES.LLM_STORYBOARD,
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.LLM_STORYBOARD
   ],
   
   // 文本节点别名
@@ -296,36 +327,22 @@ export const CONNECTION_RULES = {
     NODE_TYPES.TEXT_TO_VIDEO,
     NODE_TYPES.LLM_PROMPT_ENHANCE,
     NODE_TYPES.LLM_CONTENT_EXPAND,
-    NODE_TYPES.LLM_STORYBOARD,
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.LLM_STORYBOARD
   ],
   
   [NODE_TYPES.IMAGE_INPUT]: [
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推/描述
-    NODE_TYPES.LLM_STORYBOARD,      // 图生分镜
-    NODE_TYPES.IMAGE_UPSCALE,       // 超分放大
-    NODE_TYPES.IMAGE_CUTOUT,        // 智能抠图
-    NODE_TYPES.IMAGE_REPAINT,       // 局部重绘
-    NODE_TYPES.IMAGE_ERASE,         // 智能擦除
-    NODE_TYPES.IMAGE_EXPAND,        // 图片扩展
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.GRID_PREVIEW         // 9宫格分镜
   ],
   
-  // 统一图片节点别名（上传的图片、生成的图片都可以继续向下连接）
-  // 按使用频率排序：图生图、图生视频、图片反推、分镜脚本...
+  // 统一图片节点别名
   'image': [
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推/描述
-    NODE_TYPES.LLM_STORYBOARD,      // 图生分镜
-    NODE_TYPES.IMAGE_UPSCALE,       // 超分放大
-    NODE_TYPES.IMAGE_CUTOUT,        // 智能抠图
-    NODE_TYPES.IMAGE_REPAINT,       // 局部重绘
-    NODE_TYPES.IMAGE_ERASE,         // 智能擦除
-    NODE_TYPES.IMAGE_EXPAND,        // 图片扩展
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.GRID_PREVIEW         // 9宫格分镜
   ],
   
   // 图生图节点别名
@@ -333,11 +350,12 @@ export const CONNECTION_RULES = {
     NODE_TYPES.IMAGE_TO_IMAGE,
     NODE_TYPES.IMAGE_TO_VIDEO,
     NODE_TYPES.LLM_IMAGE_DESCRIBE,
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.GRID_PREVIEW         // 9宫格分镜
   ],
   
   [NODE_TYPES.VIDEO_INPUT]: [
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
+    NODE_TYPES.LLM_VIDEO_DESCRIBE   // 视频反推
   ],
   
   [NODE_TYPES.AUDIO_INPUT]: [
@@ -355,12 +373,14 @@ export const CONNECTION_RULES = {
   
   // 统一视频节点别名
   'video': [
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
+    NODE_TYPES.LLM_VIDEO_DESCRIBE   // 视频反推
   ],
   
   // 视频生成节点别名
   'video-gen': [
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
+    NODE_TYPES.LLM_VIDEO_DESCRIBE   // 视频反推
   ],
   
   [NODE_TYPES.TEXT_TO_IMAGE]: [
@@ -384,11 +404,13 @@ export const CONNECTION_RULES = {
   ],
   
   [NODE_TYPES.TEXT_TO_VIDEO]: [
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
+    NODE_TYPES.LLM_VIDEO_DESCRIBE   // 视频反推
   ],
   
   [NODE_TYPES.IMAGE_TO_VIDEO]: [
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
+    NODE_TYPES.LLM_VIDEO_DESCRIBE   // 视频反推
   ],
   
   [NODE_TYPES.LLM_PROMPT_ENHANCE]: [
@@ -413,6 +435,14 @@ export const CONNECTION_RULES = {
     NODE_TYPES.TEXT_TO_IMAGE,
     NODE_TYPES.PREVIEW_OUTPUT,
     NODE_TYPES.GRID_PREVIEW
+  ],
+  
+  // 9宫格分镜节点的下游选项
+  [NODE_TYPES.GRID_PREVIEW]: [
+    NODE_TYPES.IMAGE_INPUT,      // 图片节点
+    NODE_TYPES.IMAGE_TO_IMAGE,   // 图生图
+    NODE_TYPES.IMAGE_TO_VIDEO,   // 图生视频
+    NODE_TYPES.PREVIEW_OUTPUT    // 预览输出
   ],
   
   // 图片编辑类节点的下游选项

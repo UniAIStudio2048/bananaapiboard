@@ -3,10 +3,11 @@
  * ImageGenNode.vue - 图片生成节点
  * 用于文生图和图生图
  */
-import { ref, computed, inject, watch } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
+import { ref, computed, inject, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus } from '@/api/canvas/nodes'
+import { getAvailableImageModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
@@ -20,6 +21,12 @@ const props = defineProps({
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
 
+// Vue Flow 实例 - 用于在节点尺寸变化时更新连线
+const { updateNodeInternals } = useVueFlow()
+
+// 模型下拉框状态
+const isModelDropdownOpen = ref(false)
+
 // 本地状态
 const isGenerating = ref(false)
 const errorMessage = ref('')
@@ -30,13 +37,10 @@ const selectedResolution = ref(props.data.resolution || '1024')
 const selectedAspectRatio = ref(props.data.aspectRatio || '1:1')
 const selectedCount = ref(props.data.count || 1)
 
-// 可用选项 - 黑白灰简洁风格
-const models = [
-  { value: 'banana-pro', label: 'Banana Pro', desc: '高质量通用模型' },
-  { value: 'banana-fast', label: 'Banana Fast', desc: '快速生成' },
-  { value: 'banana-anime', label: 'Banana Anime', desc: '动漫风格' },
-  { value: 'banana-realistic', label: 'Banana Realistic', desc: '写实风格' }
-]
+// 可用模型列表 - 从配置动态获取，支持新增模型自动同步
+const models = computed(() => {
+  return getAvailableImageModels()
+})
 
 const resolutions = [
   { value: '512', label: '512px' },
@@ -192,6 +196,9 @@ function handleResizeMove(event) {
   if (resizeHandle.value === 'bottom' || resizeHandle.value === 'corner') {
     nodeHeight.value = Math.max(200, resizeStart.value.height + scaledDeltaY)
   }
+  
+  // 实时更新连线位置
+  updateNodeInternals(props.id)
 }
 
 // 结束调整尺寸
@@ -202,6 +209,11 @@ function handleResizeEnd() {
   canvasStore.updateNodeData(props.id, {
     width: nodeWidth.value,
     height: nodeHeight.value
+  })
+  
+  // 更新节点内部状态，确保连线位置跟随 Handle 位置变化
+  nextTick(() => {
+    updateNodeInternals(props.id)
   })
   
   document.removeEventListener('mousemove', handleResizeMove)
@@ -356,6 +368,35 @@ function handleAddClick(event) {
     props.id
   )
 }
+
+// 模型下拉框方法
+function toggleModelDropdown(event) {
+  event.stopPropagation()
+  isModelDropdownOpen.value = !isModelDropdownOpen.value
+}
+
+function selectModel(modelValue) {
+  selectedModel.value = modelValue
+  isModelDropdownOpen.value = false
+}
+
+function handleModelDropdownClickOutside(event) {
+  // 检查点击是否在下拉框外
+  const dropdown = event.target.closest('.model-selector-custom')
+  if (!dropdown) {
+    isModelDropdownOpen.value = false
+  }
+}
+
+// 组件挂载时添加全局点击事件监听
+onMounted(() => {
+  document.addEventListener('click', handleModelDropdownClickOutside)
+})
+
+// 组件卸载时移除监听
+onUnmounted(() => {
+  document.removeEventListener('click', handleModelDropdownClickOutside)
+})
 </script>
 
 <template>
@@ -520,11 +561,38 @@ function handleAddClick(event) {
         <!-- 模型选择 -->
         <div class="setting-group">
           <label class="setting-label">模型</label>
-          <select v-model="selectedModel" class="setting-select">
-            <option v-for="model in models" :key="model.value" :value="model.value">
-              {{ model.label }}
-            </option>
-          </select>
+          <!-- 模型选择器（自定义下拉框，支持显示描述） -->
+          <div class="model-selector-custom" @click.stop>
+            <div 
+              class="model-selector-trigger"
+              @click="toggleModelDropdown"
+            >
+              <span class="model-icon">{{ models.find(m => m.value === selectedModel)?.icon || '⬡' }}</span>
+              <span class="model-name">{{ models.find(m => m.value === selectedModel)?.label || selectedModel }}</span>
+              <span class="select-arrow" :class="{ 'arrow-up': isModelDropdownOpen }">▾</span>
+            </div>
+            
+            <!-- 下拉选项列表 -->
+            <Transition name="dropdown-fade">
+              <div v-if="isModelDropdownOpen" class="model-dropdown-list">
+                <div 
+                  v-for="m in models" 
+                  :key="m.value"
+                  class="model-dropdown-item"
+                  :class="{ 'active': selectedModel === m.value }"
+                  @click="selectModel(m.value)"
+                >
+                  <div class="model-item-main">
+                    <span class="model-item-icon">{{ m.icon }}</span>
+                    <span class="model-item-label">{{ m.label }}</span>
+                  </div>
+                  <div v-if="m.description" class="model-item-desc">
+                    {{ m.description }}
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </div>
         </div>
         
         <!-- 分辨率选择 -->
@@ -748,7 +816,7 @@ function handleAddClick(event) {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* 端口样式 - 完全隐藏（但保留给 Vue Flow 用于边渲染） */
+/* 端口样式 - 位置与+按钮对齐（但视觉隐藏） */
 .node-handle {
   width: 1px;
   height: 1px;
@@ -762,6 +830,19 @@ function handleAddClick(event) {
   opacity: 0 !important;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* 调整 Handle 位置与 + 按钮中心对齐 */
+:deep(.vue-flow__handle.target) {
+  left: -39px !important;
+  top: calc(50% + 14px) !important;
+  transform: translateY(-50%) !important;
+}
+
+:deep(.vue-flow__handle.source) {
+  right: -39px !important;
+  top: calc(50% + 14px) !important;
+  transform: translateY(-50%) !important;
 }
 
 .node-add-btn {
@@ -987,6 +1068,136 @@ function handleAddClick(event) {
 
 .count-btn {
   min-width: 60px;
+}
+
+/* 模型选择器自定义样式 */
+.model-selector-custom {
+  position: relative;
+  width: 100%;
+}
+
+.model-selector-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--canvas-bg-secondary, #141414);
+  border: 1px solid var(--canvas-border-default, #3a3a3a);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.model-selector-trigger:hover {
+  border-color: var(--canvas-accent-primary, #3b82f6);
+}
+
+.model-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.model-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--canvas-text-primary, #fff);
+}
+
+.select-arrow {
+  font-size: 10px;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  transition: transform 0.2s ease;
+}
+
+.select-arrow.arrow-up {
+  transform: rotate(180deg);
+}
+
+.model-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--canvas-bg-elevated, #1e1e1e);
+  border: 1px solid var(--canvas-border-default, #3a3a3a);
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.model-dropdown-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
+}
+
+.model-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.model-dropdown-item:hover {
+  background: var(--canvas-bg-secondary, #252525);
+}
+
+.model-dropdown-item.active {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.model-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-item-icon {
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  width: 16px;
+  justify-content: center;
+}
+
+.model-item-icon-img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.model-item-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--canvas-text-primary, #fff);
+}
+
+.model-item-desc {
+  margin-top: 4px;
+  padding-left: 24px;
+  font-size: 11px;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  line-height: 1.4;
+}
+
+/* 下拉框动画 */
+.dropdown-fade-enter-active,
+.dropdown-fade-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.dropdown-fade-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 </style>
 

@@ -13,7 +13,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { getNodeConfig } from '@/config/canvas/nodeTypes'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages } from '@/api/canvas/nodes'
 import { getLLMConfig, chatWithLLM, describeImage } from '@/api/canvas/llm'
-import { getApiUrl } from '@/config/tenant'
+import { getApiUrl, getAvailableImageModels } from '@/config/tenant'
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
@@ -78,13 +78,8 @@ const availableModels = computed(() => {
     ]
   }
   
-  // 否则返回图片生成模型
-  return [
-    { value: 'gemini-3-pro', label: 'Gemini 3 Pro', icon: 'G' },
-    { value: 'nano-banana-2', label: 'Banana Pro', icon: '🍌' },
-    { value: 'nano-banana', label: 'Banana', icon: '🍌' },
-    { value: 'nano-banana-hd', label: 'Banana HD', icon: '🍌' }
-  ]
+  // 否则返回图片生成模型（从配置动态获取，支持新增模型自动同步）
+  return getAvailableImageModels()
 })
 
 // 当前选中模型的标签
@@ -589,11 +584,16 @@ function handleKeyDown(event) {
                 :class="{ active: selectedModel === model.value }"
                 @click.stop="selectModel(model.value)"
               >
-                <span class="model-option-icon" :class="{ 'llm-icon': isTextNode }">
-                  {{ model.icon }}
-                </span>
-                <span class="model-option-name">{{ model.label }}</span>
-                <span v-if="model.pointsCost" class="model-option-cost">💎{{ model.pointsCost }}</span>
+                <div class="model-option-main">
+                  <span class="model-option-icon" :class="{ 'llm-icon': isTextNode }">
+                    {{ model.icon }}
+                  </span>
+                  <span class="model-option-name">{{ model.label }}</span>
+                  <span v-if="model.pointsCost" class="model-option-cost">💎{{ model.pointsCost }}</span>
+                </div>
+                <div v-if="model.description" class="model-option-desc">
+                  {{ model.description }}
+                </div>
               </div>
             </div>
           </div>
@@ -802,8 +802,8 @@ function handleKeyDown(event) {
 
 .model-option {
   display: flex;
-  align-items: center;
-  gap: 10px;
+  flex-direction: column;
+  gap: 4px;
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
@@ -818,6 +818,12 @@ function handleKeyDown(event) {
   background: rgba(139, 92, 246, 0.15);
 }
 
+.model-option-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .model-option-icon {
   width: 24px;
   height: 24px;
@@ -828,6 +834,7 @@ function handleKeyDown(event) {
   justify-content: center;
   color: white;
   font-size: 14px;
+  flex-shrink: 0;
 }
 
 .model-option-icon.llm-icon {
@@ -838,6 +845,13 @@ function handleKeyDown(event) {
   color: var(--canvas-text-primary, #ffffff);
   font-size: 14px;
   flex: 1;
+}
+
+.model-option-desc {
+  margin-left: 34px;
+  font-size: 11px;
+  color: var(--canvas-text-tertiary, #888);
+  line-height: 1.4;
 }
 
 /* 模型积分显示 - 黑白灰风格 */

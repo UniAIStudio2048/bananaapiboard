@@ -24,6 +24,15 @@ const nodeClass = computed(() => ({
 const inheritedData = computed(() => props.data.inheritedData)
 const contentType = computed(() => inheritedData.value?.type || 'none')
 
+// 是否为9宫格模式
+const isGridMode = computed(() => props.data.gridMode === true || props.id.includes('grid-preview'))
+
+// 网格显示的图片列表
+const gridImages = computed(() => {
+  if (!isGridMode.value || contentType.value !== 'image') return []
+  return inheritedData.value?.urls || []
+})
+
 // 打开右键菜单
 function handleContextMenu(event) {
   event.preventDefault()
@@ -53,8 +62,8 @@ function fullscreen() {
     <!-- 节点头部 -->
     <div class="canvas-node-header">
       <div class="canvas-node-title">
-        <span class="icon">◉</span>
-        {{ data.title || '预览输出' }}
+        <span class="icon">{{ isGridMode ? '⊞' : '◉' }}</span>
+        {{ data.title || (isGridMode ? '9宫格分镜' : '预览输出') }}
       </div>
       <div class="canvas-node-actions">
         <button class="canvas-node-action-btn" title="下载" @click="download">↓</button>
@@ -65,8 +74,19 @@ function fullscreen() {
     <!-- 节点内容 -->
     <div class="canvas-node-content">
       <div class="canvas-node-preview">
+        <!-- 9宫格图片预览 -->
+        <div v-if="isGridMode && gridImages.length > 0" class="preview-grid">
+          <div 
+            v-for="(url, index) in gridImages.slice(0, 9)" 
+            :key="index" 
+            class="grid-item"
+          >
+            <img :src="url" :alt="`分镜 ${index + 1}`" />
+          </div>
+        </div>
+        
         <!-- 文本预览 -->
-        <div v-if="contentType === 'text'" class="preview-text">
+        <div v-else-if="contentType === 'text'" class="preview-text">
           {{ inheritedData?.content || '无内容' }}
         </div>
         
@@ -127,7 +147,30 @@ function fullscreen() {
   border-radius: var(--canvas-radius-sm);
 }
 
-/* 端口样式 - 完全隐藏（但保留给 Vue Flow 用于边渲染） */
+/* 9宫格布局样式 */
+.preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 8px;
+  max-width: 400px;
+}
+
+.grid-item {
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--canvas-bg-secondary, #f5f5f5);
+}
+
+.grid-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 端口样式 - 位置与+按钮对齐（但视觉隐藏） */
 .node-handle {
   width: 1px;
   height: 1px;
@@ -141,6 +184,13 @@ function fullscreen() {
   opacity: 0 !important;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* 调整 Handle 位置与 + 按钮中心对齐 */
+:deep(.vue-flow__handle.target) {
+  left: -39px !important;
+  top: calc(50% + 14px) !important;
+  transform: translateY(-50%) !important;
 }
 </style>
 

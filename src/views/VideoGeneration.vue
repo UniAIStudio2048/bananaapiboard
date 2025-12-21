@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getMe } from '@/api/client'
-import { getTenantHeaders, getModelDisplayName, isModelEnabled } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName, isModelEnabled, getAvailableVideoModels } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 
 const fileInputRef = ref(null)
@@ -48,14 +48,16 @@ const showVideoModal = ref(false)
 const currentVideo = ref(null)
 const videoPlayerRef = ref(null)
 
-// 积分配置（从后端加载）
-const pointsCostConfig = ref({
-  'sora-2': { '10': 20, '15': 30 },
-  'sora-2-pro': { '10': 300, '15': 450, '25': 750 },
-  'veo3.1-components': 100,
-  'veo3.1': 150,
-  'veo3.1-pro': 200,
-  hd_extra: 10
+// 积分配置（从租户配置动态获取）
+const pointsCostConfig = computed(() => {
+  const models = getAvailableVideoModels()
+  const config = { hd_extra: 10 }
+  for (const m of models) {
+    if (m.pointsCost) {
+      config[m.value] = m.pointsCost
+    }
+  }
+  return config
 })
 
 // 可用的时长选项（根据模型动态计算，VEO3模型不支持时长选择）
@@ -101,8 +103,17 @@ const userPackageInfo = computed(() => {
   }
 })
 
+// 获取可用的视频模型列表（从配置动态获取）
+const availableModels = computed(() => {
+  return getAvailableVideoModels()
+})
+
 // 获取模型显示名称
 const getModelName = (modelKey) => {
+  // 先从动态模型列表中找
+  const model = availableModels.value.find(m => m.value === modelKey)
+  if (model) return model.label
+  
   const customName = getModelDisplayName(modelKey, 'video')
   if (customName) return customName
   
@@ -126,23 +137,14 @@ async function refreshUser() {
   me.value = await getMe()
 }
 
-// 从后端加载视频配置
+// 从后端加载视频配置（积分配置现已从租户配置动态获取）
 async function loadVideoConfig() {
   try {
-    const response = await fetch('/api/video/config', { headers: getTenantHeaders() })
-    if (response.ok) {
-      const data = await response.json()
-      if (data.points_cost) {
-        pointsCostConfig.value = data.points_cost
-        console.log('[VideoGeneration] 视频配置已加载:', data.points_cost)
-        
-        // 如果当前时长在新配置中不可用，重置为第一个可用时长
-        const availableDurs = availableDurations.value
-        if (availableDurs.length > 0 && !availableDurs.includes(duration.value)) {
-          duration.value = availableDurs[0]
-          console.log('[VideoGeneration] 时长已重置为:', duration.value)
-        }
-      }
+    // 如果当前时长在新配置中不可用，重置为第一个可用时长
+    const availableDurs = availableDurations.value
+    if (availableDurs.length > 0 && !availableDurs.includes(duration.value)) {
+      duration.value = availableDurs[0]
+      console.log('[VideoGeneration] 时长已重置为:', duration.value)
     }
   } catch (e) {
     console.error('[VideoGeneration] 加载视频配置失败:', e)
@@ -830,11 +832,10 @@ onMounted(async () => {
   await loadHistory()
   // gallery 保持为空，等待用户生成新视频
   
-  // 选择一个启用的默认模型
-  const enabledModels = ['sora-2', 'sora-2-pro', 'veo3.1-components', 'veo3.1', 'veo3.1-pro']
-    .filter(m => isModelEnabled(m, 'video'))
-  if (enabledModels.length > 0 && !enabledModels.includes(model.value)) {
-    model.value = enabledModels[0]
+  // 选择一个启用的默认模型（从配置动态获取）
+  const enabledModels = availableModels.value
+  if (enabledModels.length > 0 && !enabledModels.find(m => m.value === model.value)) {
+    model.value = enabledModels[0].value
     console.log('[VideoGeneration] 自动选择启用的模型:', model.value)
   }
   
@@ -935,15 +936,9 @@ onUnmounted(() => {
                 <span>模型</span>
               </label>
               <select v-model="model" class="input text-sm">
-                <optgroup v-if="isModelEnabled('sora-2', 'video') || isModelEnabled('sora-2-pro', 'video')" label="Sora 系列">
-                  <option v-if="isModelEnabled('sora-2', 'video')" value="sora-2">{{ getModelName('sora-2') }} · 标准</option>
-                  <option v-if="isModelEnabled('sora-2-pro', 'video')" value="sora-2-pro">{{ getModelName('sora-2-pro') }} · 高级</option>
-                </optgroup>
-                <optgroup v-if="isModelEnabled('veo3.1-components', 'video') || isModelEnabled('veo3.1', 'video') || isModelEnabled('veo3.1-pro', 'video')" label="VEO 3.1 系列">
-                  <option v-if="isModelEnabled('veo3.1-components', 'video')" value="veo3.1-components">{{ getModelName('veo3.1-components') }} · 多图</option>
-                  <option v-if="isModelEnabled('veo3.1', 'video')" value="veo3.1">{{ getModelName('veo3.1') }} · 双帧</option>
-                  <option v-if="isModelEnabled('veo3.1-pro', 'video')" value="veo3.1-pro">{{ getModelName('veo3.1-pro') }} · 专业</option>
-                </optgroup>
+                <option v-for="m in availableModels" :key="m.value" :value="m.value">
+                  {{ m.label }}
+                </option>
               </select>
             </div>
 

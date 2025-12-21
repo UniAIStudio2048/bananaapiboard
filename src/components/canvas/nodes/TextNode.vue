@@ -5,7 +5,7 @@
  * 底部配置面板集成在节点内，紧贴节点卡片
  */
 import { ref, computed, watch, nextTick, inject, onMounted } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
+import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getLLMConfig, chatWithLLM } from '@/api/canvas/llm'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
@@ -21,6 +21,9 @@ const props = defineProps({
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
+
+// Vue Flow 实例 - 用于在节点尺寸变化时更新连线
+const { updateNodeInternals } = useVueFlow()
 
 // 本地文本状态
 const localText = ref(props.data.text || '')
@@ -1282,12 +1285,20 @@ function handleResizeMove(event) {
   if (resizeHandle.value === 'bottom' || resizeHandle.value === 'corner') {
     nodeHeight.value = Math.max(200, resizeStart.value.height + scaledDeltaY)
   }
+  
+  // 实时更新连线位置
+  updateNodeInternals(props.id)
 }
 
 // 结束调整尺寸
 function handleResizeEnd() {
   isResizing.value = false
   resizeHandle.value = null
+  
+  // 更新节点内部状态，确保连线位置跟随 Handle 位置变化
+  nextTick(() => {
+    updateNodeInternals(props.id)
+  })
   
   document.removeEventListener('mousemove', handleResizeMove)
   document.removeEventListener('mouseup', handleResizeEnd)
@@ -2161,7 +2172,7 @@ function handleResizeEnd() {
   flex: 1;
 }
 
-/* 连接端口 - 完全隐藏（但保留给 Vue Flow 用于边渲染） */
+/* 连接端口 - 位置与+按钮对齐（但视觉隐藏） */
 .node-handle {
   width: 1px;
   height: 1px;
@@ -2175,6 +2186,19 @@ function handleResizeEnd() {
   opacity: 0 !important;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* 调整 Handle 位置与 + 按钮中心对齐 */
+:deep(.vue-flow__handle.target) {
+  left: -39px !important;
+  top: calc(50% + 14px) !important;
+  transform: translateY(-50%) !important;
+}
+
+:deep(.vue-flow__handle.source) {
+  right: -39px !important;
+  top: calc(50% + 14px) !important;
+  transform: translateY(-50%) !important;
 }
 
 /* 添加按钮 */

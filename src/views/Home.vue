@@ -6,7 +6,7 @@ import ImageAnnotator from '@/components/ImageAnnotator.vue'
 import MentionDropdown from '@/components/MentionDropdown.vue'
 import PromptInputWithTags from '@/components/PromptInputWithTags.vue'
 import { labelToPromptText, indexToLabel } from '@/utils/imageAnnotation'
-import { getTenantHeaders, getModelDisplayName } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName, getAvailableImageModels } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import VirtualList from 'vue3-virtual-scroll-list'
 
@@ -50,16 +50,28 @@ const showMentionDropdown = ref(false)
 const mentionDropdownPosition = ref({ x: 0, y: 0 })
 const mentionTriggerIndex = ref(-1)
 
-// 积分扣除规则配置（与后端保持一致）
-const pointsCostConfig = ref({
-  'nano-banana': 1,
-  'nano-banana-hd': 3,
-  'nano-banana-2': {
-    '1K': 3,
-    '2K': 4,
-    '4K': 5
+// 积分扣除规则配置（从租户配置动态获取）
+const pointsCostConfig = computed(() => {
+  const models = getAvailableImageModels()
+  const config = {}
+  for (const m of models) {
+    config[m.value] = m.pointsCost || 1
   }
+  return config
 })
+
+// 获取模型积分消耗（用于下拉列表显示）
+function getModelPointsCost(modelKey) {
+  const config = pointsCostConfig.value[modelKey]
+  if (typeof config === 'object') {
+    // 对于有多档积分的模型，显示范围
+    const values = Object.values(config)
+    const min = Math.min(...values)
+    const max = Math.max(...values)
+    return min === max ? min : `${min}-${max}`
+  }
+  return config || 1
+}
 
 // 图片缩放和拖动相关
 const imageScale = ref(1) // 图片缩放比例
@@ -92,6 +104,19 @@ watch(mode, (newMode) => {
     model.value = 'nano-banana-2'
     imageSize.value = '4K'
     console.log('[mode-switch] 切换到图生图模式，已设置默认: 模型=nano-banana-2, 尺寸=4K')
+  }
+})
+
+// 监听模型切换，自动重置尺寸为新模型的默认值
+watch(model, (newModel) => {
+  const modelInfo = getAvailableImageModels().find(m => m.value === newModel)
+  const pointsCost = modelInfo?.pointsCost
+  
+  if (pointsCost && typeof pointsCost === 'object') {
+    // 模型有多档积分，设置为第一个尺寸
+    const firstSize = Object.keys(pointsCost)[0]?.toUpperCase() || '1K'
+    imageSize.value = firstSize
+    console.log('[model-switch] 模型切换，已设置尺寸:', firstSize)
   }
 })
 
@@ -1568,16 +1593,18 @@ const historyColsClass = computed(() => {
 
 // 计算当前选择需要的积分（不含高速通道附加）
 const currentPointsCost = computed(() => {
-  const config = pointsCostConfig.value
-  const modelConfig = config[model.value]
+  const modelInfo = availableModels.value.find(m => m.value === model.value)
+  const pointsCost = modelInfo?.pointsCost
   
-  // 如果是 nano-banana-2，根据尺寸计算积分
-  if (model.value === 'nano-banana-2' && typeof modelConfig === 'object') {
-    return modelConfig[imageSize.value] || 3
+  // 如果模型有多档积分（如1K、2K、4K），根据选择的尺寸计算
+  if (pointsCost && typeof pointsCost === 'object') {
+    // 尝试匹配尺寸（忽略大小写）
+    const sizeKey = Object.keys(pointsCost).find(k => k.toLowerCase() === imageSize.value.toLowerCase())
+    return pointsCost[sizeKey] || Object.values(pointsCost)[0] || 1
   }
   
-  // 其他模型直接返回积分
-  return modelConfig || 1
+  // 固定积分模型
+  return pointsCost || 1
 })
 
 // 计算总积分消耗（含高速通道附加）
@@ -1615,8 +1642,30 @@ const userPackageInfo = computed(() => {
   }
 })
 
-// 不再需要分辨率选项（已拆分为独立模型）
-const showResolutionOption = computed(() => model.value === 'nano-banana-2')
+// 当模型有多档积分时显示尺寸选项
+const showResolutionOption = computed(() => {
+  const modelInfo = availableModels.value.find(m => m.value === model.value)
+  return modelInfo?.hasResolutionPricing || (modelInfo?.pointsCost && typeof modelInfo.pointsCost === 'object')
+})
+
+// 获取当前模型的可用尺寸选项
+const availableResolutions = computed(() => {
+  const modelInfo = availableModels.value.find(m => m.value === model.value)
+  const pointsCost = modelInfo?.pointsCost
+  
+  if (pointsCost && typeof pointsCost === 'object') {
+    return Object.entries(pointsCost).map(([size, points]) => ({
+      value: size.toUpperCase(),
+      label: `${size.toUpperCase()} (${points}积分)`
+    }))
+  }
+  return []
+})
+
+// 获取可用的图片模型列表（从配置动态获取）
+const availableModels = computed(() => {
+  return getAvailableImageModels()
+})
 
 // 获取模型显示名称
 const getModelName = (modelKey) => {
@@ -2028,9 +2077,9 @@ onUnmounted(() => {
               <span>模型</span>
             </label>
             <select v-model="model" class="input text-sm">
-              <option value="nano-banana">{{ getModelName('nano-banana') }} (1积分)</option>
-              <option value="nano-banana-hd">{{ getModelName('nano-banana-hd') }} (3积分)</option>
-              <option value="nano-banana-2">{{ getModelName('nano-banana-2') }} ({{ pointsCostConfig['nano-banana-2'][imageSize] }}积分)</option>
+              <option v-for="m in availableModels" :key="m.value" :value="m.value">
+                {{ m.label }} ({{ getModelPointsCost(m.value) }}积分)
+              </option>
             </select>
           </div>
 
@@ -2057,7 +2106,7 @@ onUnmounted(() => {
               </select>
             </div>
 
-            <!-- 尺寸选项 - 仅 nano-banana-2 显示 -->
+            <!-- 尺寸选项 - 有多档积分的模型显示 -->
             <div v-if="showResolutionOption">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400"
                 :class="layoutMode === 'widescreen' ? 'mb-1' : 'mb-1.5'">
@@ -2065,9 +2114,9 @@ onUnmounted(() => {
                 <span>尺寸</span>
               </label>
               <select v-model="imageSize" class="input text-sm">
-                <option value="1K">1K (3积分)</option>
-                <option value="2K">2K (4积分)</option>
-                <option value="4K">4K (5积分)</option>
+                <option v-for="res in availableResolutions" :key="res.value" :value="res.value">
+                  {{ res.label }}
+                </option>
               </select>
             </div>
           </div>

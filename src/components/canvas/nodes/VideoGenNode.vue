@@ -3,10 +3,11 @@
  * VideoGenNode.vue - 视频生成节点
  * 用于文生视频和图生视频
  */
-import { ref, computed, inject } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
+import { ref, computed, inject, nextTick, onMounted, onUnmounted } from 'vue'
+import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { generateVideoFromText, generateVideoFromImage, pollTaskStatus } from '@/api/canvas/nodes'
+import { getAvailableVideoModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
@@ -20,10 +21,21 @@ const props = defineProps({
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
 
+// Vue Flow 实例 - 用于在节点尺寸变化时更新连线
+const { updateNodeInternals } = useVueFlow()
+
+// 模型下拉框状态
+const isModelDropdownOpen = ref(false)
+
 // 生成参数
 const selectedModel = ref(props.data.model || 'sora-2')
 const selectedDuration = ref(props.data.duration || '10')
 const selectedAspectRatio = ref(props.data.aspectRatio || '16:9')
+
+// 可用模型列表 - 从配置动态获取，支持新增模型自动同步
+const models = computed(() => {
+  return getAvailableVideoModels()
+})
 
 // 节点尺寸 - 视频生成节点使用16:9比例
 const nodeWidth = ref(props.data.width || 420)
@@ -70,13 +82,19 @@ const inheritedImages = computed(() => {
 })
 const isImageToVideo = computed(() => inheritedImages.value.length > 0)
 
-// 积分消耗计算
+// 积分消耗计算 - 从模型配置中读取
 const pointsCost = computed(() => {
-  const costs = {
-    'sora-2': { '10': 20, '15': 30 },
-    'sora-2-pro': { '10': 300, '15': 450, '25': 750 }
+  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  
+  // 按时长计费的模型（Sora 2、Sora 2 Pro）
+  if (currentModel?.hasDurationPricing) {
+    const durationCost = currentModel.pointsCost?.[selectedDuration.value]
+    if (durationCost) return durationCost
   }
-  return costs[selectedModel.value]?.[selectedDuration.value] || 20
+  
+  // 其他模型使用固定积分（VEO 3.1 系列）
+  const pointsCost = currentModel?.pointsCost
+  return typeof pointsCost === 'number' ? pointsCost : 20
 })
 
 
@@ -147,6 +165,9 @@ function handleResizeMove(event) {
   if (resizeHandle.value === 'bottom' || resizeHandle.value === 'corner') {
     nodeHeight.value = Math.max(200, resizeStart.value.height + scaledDeltaY)
   }
+  
+  // 实时更新连线位置
+  updateNodeInternals(props.id)
 }
 
 // 结束调整尺寸
@@ -159,9 +180,52 @@ function handleResizeEnd() {
     height: nodeHeight.value
   })
   
+  // 更新节点内部状态，确保连线位置跟随 Handle 位置变化
+  nextTick(() => {
+    updateNodeInternals(props.id)
+  })
+  
   document.removeEventListener('mousemove', handleResizeMove)
   document.removeEventListener('mouseup', handleResizeEnd)
 }
+
+// 模型下拉框方法
+function toggleModelDropdown(event) {
+  event.stopPropagation()
+  isModelDropdownOpen.value = !isModelDropdownOpen.value
+}
+
+function selectModel(modelValue) {
+  selectedModel.value = modelValue
+  isModelDropdownOpen.value = false
+  
+  // 更新可用时长选项（Sora 2 Pro 支持 25s）
+  const currentModel = models.value.find(m => m.value === modelValue)
+  if (currentModel?.hasDurationPricing) {
+    const durations = Object.keys(currentModel.pointsCost || {})
+    if (durations.length > 0 && !durations.includes(selectedDuration.value)) {
+      selectedDuration.value = durations[0]
+    }
+  }
+}
+
+function handleModelDropdownClickOutside(event) {
+  // 检查点击是否在下拉框外
+  const dropdown = event.target.closest('.model-selector-custom')
+  if (!dropdown) {
+    isModelDropdownOpen.value = false
+  }
+}
+
+// 组件挂载时添加全局点击事件监听
+onMounted(() => {
+  document.addEventListener('click', handleModelDropdownClickOutside)
+})
+
+// 组件卸载时移除监听
+onUnmounted(() => {
+  document.removeEventListener('click', handleModelDropdownClickOutside)
+})
 
 // 开始生成
 async function handleGenerate() {
@@ -339,11 +403,38 @@ function handleAddClick(event) {
       <!-- 生成控制 -->
       <div class="gen-controls">
         <div class="gen-params">
-          <!-- 模型选择 -->
-          <select v-model="selectedModel" class="param-select">
-            <option value="sora-2">Sora 2</option>
-            <option value="sora-2-pro">Sora Pro</option>
-          </select>
+          <!-- 模型选择器（自定义下拉框，支持显示描述） -->
+          <div class="model-selector-custom" @click.stop>
+            <div 
+              class="model-selector-trigger"
+              @click="toggleModelDropdown"
+            >
+              <span class="model-icon">{{ models.find(m => m.value === selectedModel)?.icon || '▶' }}</span>
+              <span class="model-name">{{ models.find(m => m.value === selectedModel)?.label || selectedModel }}</span>
+              <span class="select-arrow" :class="{ 'arrow-up': isModelDropdownOpen }">▾</span>
+            </div>
+            
+            <!-- 下拉选项列表 -->
+            <Transition name="dropdown-fade">
+              <div v-if="isModelDropdownOpen" class="model-dropdown-list">
+                <div 
+                  v-for="m in models" 
+                  :key="m.value"
+                  class="model-dropdown-item"
+                  :class="{ 'active': selectedModel === m.value }"
+                  @click="selectModel(m.value)"
+                >
+                  <div class="model-item-main">
+                    <span class="model-item-icon">{{ m.icon }}</span>
+                    <span class="model-item-label">{{ m.label }}</span>
+                  </div>
+                  <div v-if="m.description" class="model-item-desc">
+                    {{ m.description }}
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </div>
           
           <!-- 时长选择 -->
           <select v-model="selectedDuration" class="param-select">
@@ -585,7 +676,7 @@ function handleAddClick(event) {
   white-space: nowrap;
 }
 
-/* 端口样式 - 完全隐藏（但保留给 Vue Flow 用于边渲染） */
+/* 端口样式 - 位置与+按钮对齐（但视觉隐藏） */
 .node-handle {
   width: 1px;
   height: 1px;
@@ -599,6 +690,19 @@ function handleAddClick(event) {
   opacity: 0 !important;
   visibility: hidden;
   pointer-events: none;
+}
+
+/* 调整 Handle 位置与 + 按钮中心对齐 */
+:deep(.vue-flow__handle.target) {
+  left: -39px !important;
+  top: calc(50% + 14px) !important;
+  transform: translateY(-50%) !important;
+}
+
+:deep(.vue-flow__handle.source) {
+  right: -39px !important;
+  top: calc(50% + 14px) !important;
+  transform: translateY(-50%) !important;
 }
 
 .node-add-btn {
@@ -694,6 +798,132 @@ function handleAddClick(event) {
   cursor: nwse-resize;
   background: var(--canvas-accent-primary, #3b82f6);
   border-radius: 2px;
+}
+
+/* 模型选择器自定义样式 */
+.model-selector-custom {
+  position: relative;
+  min-width: 140px;
+}
+
+.model-selector-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: var(--canvas-bg-tertiary, #1a1a1a);
+  border: 1px solid var(--canvas-border-subtle, #3a3a3a);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.model-selector-trigger:hover {
+  background: var(--canvas-bg-secondary, #252525);
+  border-color: var(--canvas-border-default, #4a4a4a);
+}
+
+.model-icon {
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+}
+
+.model-icon-img {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+}
+
+.model-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--canvas-text-primary, #e5e5e5);
+}
+
+.select-arrow {
+  font-size: 10px;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  transition: transform 0.2s ease;
+}
+
+.select-arrow.arrow-up {
+  transform: rotate(180deg);
+}
+
+.model-dropdown-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--canvas-bg-elevated, #1e1e1e);
+  border: 1px solid var(--canvas-border-default, #3a3a3a);
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.model-dropdown-item {
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
+}
+
+.model-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.model-dropdown-item:hover {
+  background: var(--canvas-bg-secondary, #252525);
+}
+
+.model-dropdown-item.active {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.model-item-main {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.model-item-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.model-item-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--canvas-text-primary, #e5e5e5);
+}
+
+.model-item-desc {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  line-height: 1.4;
+}
+
+/* 下拉框动画 */
+.dropdown-fade-enter-active,
+.dropdown-fade-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.dropdown-fade-enter-from {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 </style>
 

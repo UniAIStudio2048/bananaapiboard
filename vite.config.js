@@ -23,6 +23,12 @@ export default defineConfig(({ mode }) => {
           secure: false,
           // 如果 VITE_API_BASE 不为空，则重写路径
           ...(env.VITE_API_BASE ? {} : {})
+        },
+        // 租户管理后台代理 - 不重写路径，因为 tenant-manager 使用 base: '/tenant-manager/'
+        '/tenant-manager': {
+          target: 'http://localhost:9000',
+          changeOrigin: true,
+          secure: false
         }
       }
     },
@@ -61,7 +67,3 @@ export default defineConfig(({ mode }) => {
     }
   }
 })
-
-
-
-
