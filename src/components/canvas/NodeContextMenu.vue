@@ -6,7 +6,7 @@
 import { ref, computed } from 'vue'
 import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
-import { getDownstreamOptions } from '@/config/canvas/nodeTypes'
+import { getDownstreamOptions, NODE_TYPES } from '@/config/canvas/nodeTypes'
 import { getTenantHeaders } from '@/config/tenant'
 import { saveAsset } from '@/api/canvas/assets'
 
@@ -208,6 +208,24 @@ function createDownstreamNode(type) {
     y: props.node.position.y
   }
   
+  // 如果是图片描述或视频描述，直接创建文本节点连接到当前节点
+  if (type === NODE_TYPES.LLM_IMAGE_DESCRIBE || type === NODE_TYPES.LLM_VIDEO_DESCRIBE || 
+      type === 'llm-image-describe' || type === 'llm-video-describe') {
+    const textNode = canvasStore.addNode({
+      type: 'text-input',
+      position,
+      data: {}
+    })
+    
+    canvasStore.addEdge({
+      source: props.node.id,
+      target: textNode.id
+    })
+    
+    emit('close')
+    return
+  }
+  
   const newNode = canvasStore.addNode({
     type,
     position,
@@ -358,15 +376,16 @@ async function addToMyAssets() {
     // 调用API保存
     const result = await saveAsset(assetData)
     
-    if (result.success) {
+    // 后端成功时返回 { id, url, name, type }，检查是否有 id 表示成功
+    if (result && result.id) {
       // 显示成功提示
-      showToast(t('canvas.contextMenu.assetSaved', { type: assetTypeName.value }), 'success')
+      showToast(`${assetTypeName.value}已加入我的资产`, 'success')
     } else {
-      throw new Error(result.error || t('common.failed'))
+      throw new Error(result?.error || '保存失败')
     }
   } catch (error) {
     console.error('加入资产失败:', error)
-    showToast(t('common.failed') + '：' + (error.message || t('common.unknownError')), 'error')
+    showToast('保存失败：' + (error.message || '未知错误'), 'error')
   } finally {
     isAddingAsset.value = false
     emit('close')
@@ -443,11 +462,11 @@ function handleMenuClick(event) {
       <!-- 视频特有选项 -->
       <template v-if="isVideoNodeWithOutput">
         <div class="canvas-context-menu-item" @click="fullscreenPreview">
-          <span class="icon">🔍</span>
+          <span class="icon">⊙</span>
           {{ $t('canvas.contextMenu.fullscreenPreview') }}
         </div>
         <div class="canvas-context-menu-item" @click="downloadVideo">
-          <span class="icon">⬇️</span>
+          <span class="icon">↓</span>
           {{ $t('canvas.contextMenu.downloadVideo') }}
         </div>
       </template>
@@ -455,7 +474,7 @@ function handleMenuClick(event) {
       <!-- 图片特有选项 -->
       <template v-if="isImageNodeWithOutput">
         <div class="canvas-context-menu-item" @click="downloadImage">
-          <span class="icon">⬇️</span>
+          <span class="icon">↓</span>
           {{ $t('canvas.contextMenu.downloadImage') }}
         </div>
       </template>
@@ -466,7 +485,7 @@ function handleMenuClick(event) {
         :class="{ loading: isAddingAsset }"
         @click="addToMyAssets"
       >
-        <span class="icon">{{ isAddingAsset ? '⏳' : '💾' }}</span>
+        <span class="icon">{{ isAddingAsset ? '◌' : '▣' }}</span>
         <span v-if="isAddingAsset">{{ $t('canvas.contextMenu.saving') }}</span>
         <span v-else>{{ $t('canvas.contextMenu.addToAssets') }}</span>
         <span class="permanent-badge">{{ $t('canvas.contextMenu.permanent') }}</span>
@@ -492,15 +511,15 @@ function handleMenuClick(event) {
     
     <!-- 节点操作 -->
     <div class="canvas-context-menu-item" @click="editNode">
-      <span class="icon">✏️</span>
+      <span class="icon">✎</span>
       {{ $t('canvas.contextMenu.editNode') }}
     </div>
     <div class="canvas-context-menu-item" @click="copyNode">
-      <span class="icon">📋</span>
+      <span class="icon">⧉</span>
       {{ $t('canvas.contextMenu.copyNode') }}
     </div>
     <div class="canvas-context-menu-item delete-item" @click="deleteNode">
-      <span class="icon">🗑</span>
+      <span class="icon">⌫</span>
       {{ $t('canvas.contextMenu.deleteNode') }}
     </div>
   </div>

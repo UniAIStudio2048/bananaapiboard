@@ -951,18 +951,23 @@ async function submitVoucher() {
       } else if (autoPurchaseResult.reason === 'no_package') {
         // 没有可购买的套餐
         voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额\n\n💡 ${autoPurchaseResult.message}`
+        await load() // 刷新用户信息
       } else if (autoPurchaseResult.reason === 'purchase_failed') {
         // 购买失败
         voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额\n\n⚠️ 自动购买套餐失败：${autoPurchaseResult.message}\n请手动前往套餐页面购买`
+        await load() // 刷新用户信息
       } else {
         // 其他情况（只兑换了积分没有余额等）
         voucherSuccess.value = result.message || `成功兑换 ${result.points} 积分！`
+        await load() // 刷新用户信息
       }
     } else if (result.points > 0) {
       // 只兑换了积分
       voucherSuccess.value = `✅ 成功兑换 ${result.points} 积分！`
+      await load() // 刷新用户信息
     } else {
       voucherSuccess.value = result.message || '兑换成功！'
+      await load() // 刷新用户信息
     }
     
     // 触发全局用户信息更新事件（更新导航栏）

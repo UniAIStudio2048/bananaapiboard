@@ -38,6 +38,7 @@ const activeMenu = ref('home')
 // 数据
 const ledger = ref([])
 const packages = ref([])
+const activePackage = ref(null) // 用户当前活跃套餐
 const invite = ref({ invite_code: '', uses: [] })
 const checkinStatus = ref({ hasCheckedInToday: false, consecutiveDays: 0 })
 const loading = ref(false)
@@ -70,6 +71,21 @@ const rechargeCouponCode = ref('')
 const appliedRechargeCoupon = ref(null)
 const rechargeCouponDiscount = ref(0)
 const rechargeCouponError = ref('')
+
+// 套餐购买面板
+const showPurchasePanel = ref(false)
+const selectedPackage = ref(null)
+const purchasePaymentMethod = ref(null)
+const purchaseLoading = ref(false)
+const purchaseError = ref('')
+const purchaseCouponCode = ref('')
+const appliedPurchaseCoupon = ref(null)
+const purchaseCouponDiscount = ref(0)
+const purchaseCouponError = ref('')
+// 内嵌支付状态
+const showPaymentEmbed = ref(false)
+const paymentUrl = ref('')
+const paymentCheckInterval = ref(null)
 
 // 余额划转
 const transferAmount = ref('')
@@ -215,11 +231,12 @@ async function loadData() {
   try {
     const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
     
-    const [ledgerRes, packagesRes, inviteRes, checkinRes] = await Promise.all([
+    const [ledgerRes, packagesRes, inviteRes, checkinRes, activePackageRes] = await Promise.all([
       fetch('/api/user/points', { headers }),
       fetch('/api/packages', { headers }),
       fetch('/api/user/invite-code', { headers }),
-      fetch('/api/user/checkin-status', { headers })
+      fetch('/api/user/checkin-status', { headers }),
+      fetch('/api/user/package', { headers })
     ])
     
     if (ledgerRes.ok) {
@@ -232,6 +249,10 @@ async function loadData() {
     }
     if (inviteRes.ok) invite.value = await inviteRes.json()
     if (checkinRes.ok) checkinStatus.value = await checkinRes.json()
+    if (activePackageRes.ok) {
+      const data = await activePackageRes.json()
+      activePackage.value = data.package || null
+    }
   } catch (e) {
     console.error('加载数据失败:', e)
   } finally {
@@ -354,6 +375,44 @@ async function changePassword() {
   }
 }
 
+// 套餐等级映射（用于没有level字段时的回退）
+const packageOrder = { daily: 1, weekly: 2, monthly: 3, quarterly: 4, yearly: 5, supmonthly: 4, quarter: 5, year: 6 }
+
+// 根据套餐类型获取等级（优先使用 packages 中的 level 字段）
+function getPackageLevel(type) {
+  const pkg = packages.value.find(p => p.type === type)
+  if (pkg && typeof pkg.level === 'number') {
+    return pkg.level
+  }
+  return packageOrder[type] || 0
+}
+
+// 获取当前用户套餐的等级
+function getCurrentPackageLevel() {
+  if (!activePackage.value) return 0
+  // 优先使用 user_packages 中存储的 package_level
+  if (typeof activePackage.value.package_level === 'number' && activePackage.value.package_level > 0) {
+    return activePackage.value.package_level
+  }
+  // 回退到根据类型查找
+  return getPackageLevel(activePackage.value.package_type)
+}
+
+// 判断是否为降级（降级不允许购买）
+function isDowngrade(type) {
+  if (!activePackage.value) {
+    return false
+  }
+  const currentLevel = getCurrentPackageLevel()
+  const newLevel = getPackageLevel(type)
+  return newLevel < currentLevel
+}
+
+// 判断是否为当前套餐（续费）
+function isCurrentPackage(type) {
+  return activePackage.value && activePackage.value.package_type === type
+}
+
 // 套餐悬浮处理
 function handlePackageMouseEnter(pkg, event) {
   hoveredPackage.value = pkg
@@ -369,52 +428,291 @@ function handlePackageMouseLeave() {
   hoveredPackage.value = null
 }
 
-// 购买套餐
+// 计算购买信息
+const purchaseInfo = computed(() => {
+  if (!selectedPackage.value || !props.userInfo) return null
+  
+  const pkg = selectedPackage.value
+  const balance = props.userInfo.balance || 0
+  
+  const isCurrent = isCurrentPackage(pkg.type)
+  const action = isCurrent ? '续费' : '购买'
+  
+  // 套餐价格
+  let finalPrice = pkg.price
+  
+  // 应用优惠券
+  const priceAfterCoupon = finalPrice - purchaseCouponDiscount.value
+  
+  // 计算余额使用
+  const balanceUsed = Math.min(balance, priceAfterCoupon)
+  
+  // 计算需要在线支付的金额
+  const needPay = priceAfterCoupon - balanceUsed
+  
+  return {
+    action,
+    isCurrent,
+    totalAmount: finalPrice,
+    couponDiscount: purchaseCouponDiscount.value,
+    priceAfterCoupon,
+    balance,
+    balanceUsed,
+    needPay: Math.max(0, needPay),
+    canPayWithBalance: balance >= priceAfterCoupon,
+    needOnlinePayment: needPay > 0
+  }
+})
+
+// 打开套餐购买面板
 async function purchasePackage(pkg) {
-  // 检查余额是否足够
-  if ((props.userInfo?.balance || 0) < pkg.price) {
-    showAlert(t('packages.insufficientBalance', { 
-      current: ((props.userInfo?.balance || 0) / 100).toFixed(2), 
-      required: (pkg.price / 100).toFixed(2) 
-    }))
+  // 检查是否为降级购买
+  if (isDowngrade(pkg.type)) {
+    showAlert('不支持降级套餐，请选择同级或更高级别的套餐')
     return
   }
   
-  const confirmed = await showConfirm(
-    t('packages.purchaseConfirmMsg', { 
-      name: pkg.name, 
-      price: (pkg.price / 100).toFixed(2), 
-      points: pkg.points 
-    }), 
-    t('packages.purchaseConfirm')
-  )
-  if (!confirmed) return
+  // 打开购买面板
+  selectedPackage.value = pkg
+  showPurchasePanel.value = true
+  purchasePaymentMethod.value = null
+  purchaseError.value = ''
+  purchaseCouponCode.value = ''
+  appliedPurchaseCoupon.value = null
+  purchaseCouponDiscount.value = 0
+  purchaseCouponError.value = ''
+  showPaymentEmbed.value = false
+  paymentUrl.value = ''
+  
+  // 加载支付方式
+  try {
+    const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
+    const res = await fetch('/api/user/payment-methods', { headers })
+    if (res.ok) {
+      const data = await res.json()
+      paymentMethods.value = data.methods || []
+      if (paymentMethods.value.length > 0) {
+        purchasePaymentMethod.value = paymentMethods.value[0].id
+      }
+    }
+  } catch (e) {
+    console.error('[purchasePackage] 加载支付方式失败:', e)
+  }
+}
+
+// 关闭购买面板
+function closePurchasePanel() {
+  showPurchasePanel.value = false
+  selectedPackage.value = null
+  showPaymentEmbed.value = false
+  paymentUrl.value = ''
+  // 清除支付检查定时器
+  if (paymentCheckInterval.value) {
+    clearInterval(paymentCheckInterval.value)
+    paymentCheckInterval.value = null
+  }
+}
+
+// 应用优惠券
+async function applyPurchaseCoupon() {
+  if (!purchaseCouponCode.value || !purchaseCouponCode.value.trim()) {
+    purchaseCouponError.value = '请输入优惠券码'
+    return
+  }
   
   try {
-    const headers = { 
-      ...getTenantHeaders(), 
+    const headers = {
+      ...getTenantHeaders(),
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
+    
+    const res = await fetch('/api/coupons/validate', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        code: purchaseCouponCode.value.trim().toUpperCase(),
+        package_id: selectedPackage.value?.id,
+        amount: selectedPackage.value?.price
+      })
+    })
+    
+    const data = await res.json()
+    
+    if (!res.ok) {
+      purchaseCouponError.value = data.message || '优惠券验证失败'
+      return
+    }
+    
+    appliedPurchaseCoupon.value = data.coupon
+    purchaseCouponDiscount.value = data.discount_amount
+    purchaseCouponError.value = ''
+    
+  } catch (e) {
+    console.error('[applyPurchaseCoupon] error:', e)
+    purchaseCouponError.value = '优惠券验证失败'
+  }
+}
+
+// 移除优惠券
+function removePurchaseCoupon() {
+  purchaseCouponCode.value = ''
+  appliedPurchaseCoupon.value = null
+  purchaseCouponDiscount.value = 0
+  purchaseCouponError.value = ''
+}
+
+// 确认购买
+async function confirmPurchase() {
+  if (purchaseLoading.value) return
+  
+  const info = purchaseInfo.value
+  if (!info) return
+  
+  // 如果需要在线支付但没有选择支付方式
+  if (info.needOnlinePayment && !purchasePaymentMethod.value) {
+    purchaseError.value = '请选择支付方式'
+    return
+  }
+  
+  try {
+    purchaseLoading.value = true
+    purchaseError.value = ''
+    
+    const headers = {
+      ...getTenantHeaders(),
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+    
+    const payload = {
+      package_id: selectedPackage.value.id
+    }
+    
+    // 如果使用了优惠券
+    if (appliedPurchaseCoupon.value) {
+      payload.coupon_code = purchaseCouponCode.value.trim().toUpperCase()
+    }
+    
+    // 如果需要在线支付
+    if (info.needOnlinePayment) {
+      payload.payment_method_id = purchasePaymentMethod.value
+    }
+    
     const res = await fetch('/api/packages/purchase', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ package_id: pkg.id })
+      body: JSON.stringify(payload)
     })
+    
     const data = await res.json()
     
-    if (res.ok && !data.pay_url) {
-      // 余额支付成功
-      showAlert(data.message || t('packages.purchaseSuccessMsg', { points: pkg.points }), `🎉 ${t('packages.purchaseSuccess')}`)
-      emit('update')
-    } else if (data.pay_url) {
-      // 需要跳转支付
-      window.open(data.pay_url, '_blank')
+    if (res.ok) {
+      if (data.pay_url) {
+        // 需要在线支付，在新窗口打开支付页面
+        paymentUrl.value = data.pay_url
+        showPaymentEmbed.value = true
+        
+        // 在新窗口打开支付页面
+        window.open(data.pay_url, '_blank', 'width=500,height=700,left=200,top=100')
+        
+        // 开始轮询支付状态
+        startPaymentCheck(data.order_id || data.order_no)
+      } else {
+        // 余额支付成功
+        showAlert(data.message || `🎉 套餐购买成功！获得 ${selectedPackage.value.points} 积分`, '购买成功')
+        closePurchasePanel()
+        emit('update')
+        await loadData() // 重新加载数据
+      }
     } else {
-      showAlert(data.message || data.error || t('packages.purchaseFailed'))
+      purchaseError.value = data.message || data.error || '购买失败，请重试'
     }
   } catch (e) {
-    showAlert(t('packages.purchaseFailed'))
+    console.error('[confirmPurchase] error:', e)
+    purchaseError.value = '购买失败，请重试'
+  } finally {
+    purchaseLoading.value = false
+  }
+}
+
+// 开始轮询支付状态
+function startPaymentCheck(orderId) {
+  if (!orderId) return
+  
+  // 每3秒检查一次支付状态
+  paymentCheckInterval.value = setInterval(async () => {
+    try {
+      const headers = {
+        ...getTenantHeaders(),
+        Authorization: `Bearer ${token}`
+      }
+      
+      const res = await fetch(`/api/orders/${orderId}/status`, { headers })
+      if (res.ok) {
+        const data = await res.json()
+        if (data.status === 'paid' || data.status === 'completed') {
+          // 支付成功
+          clearInterval(paymentCheckInterval.value)
+          paymentCheckInterval.value = null
+          showAlert(`🎉 支付成功！套餐已激活，获得 ${selectedPackage.value.points} 积分`, '支付成功')
+          closePurchasePanel()
+          emit('update')
+          await loadData()
+        } else if (data.status === 'failed' || data.status === 'cancelled') {
+          // 支付失败
+          clearInterval(paymentCheckInterval.value)
+          paymentCheckInterval.value = null
+          purchaseError.value = '支付已取消或失败'
+          showPaymentEmbed.value = false
+        }
+      }
+    } catch (e) {
+      console.error('[paymentCheck] error:', e)
+    }
+  }, 3000)
+}
+
+// 手动完成支付检查
+async function manualPaymentCheck() {
+  purchaseLoading.value = true
+  purchaseError.value = ''
+  try {
+    // 刷新用户数据
+    emit('update')
+    await loadData()
+    
+    // 检查套餐是否已激活
+    if (activePackage.value && activePackage.value.package_type === selectedPackage.value?.type) {
+      showAlert(`🎉 支付成功！套餐已激活，获得 ${selectedPackage.value.points} 积分`, '支付成功')
+      closePurchasePanel()
+    } else {
+      purchaseError.value = '支付尚未完成，请在新窗口完成支付后再点击确认'
+      showPaymentEmbed.value = true // 保持在等待状态
+    }
+  } catch (e) {
+    purchaseError.value = '检查支付状态失败，请稍后重试'
+  } finally {
+    purchaseLoading.value = false
+  }
+}
+
+// 重新打开支付窗口
+function openPaymentWindow() {
+  if (paymentUrl.value) {
+    window.open(paymentUrl.value, '_blank', 'width=500,height=700,left=200,top=100')
+  }
+}
+
+// 取消支付
+function cancelPayment() {
+  showPaymentEmbed.value = false
+  paymentUrl.value = ''
+  purchaseError.value = ''
+  // 清除支付检查定时器
+  if (paymentCheckInterval.value) {
+    clearInterval(paymentCheckInterval.value)
+    paymentCheckInterval.value = null
   }
 }
 
@@ -850,7 +1148,7 @@ function getLedgerTypeText(type) {
                 <div 
                   v-for="pkg in packages" 
                   :key="pkg.id"
-                  :class="['package-card', { popular: pkg.popular, hovered: hoveredPackage?.id === pkg.id }]"
+                  :class="['package-card', { popular: pkg.popular, hovered: hoveredPackage?.id === pkg.id, downgrade: isDowngrade(pkg.type) }]"
                   @mouseenter="handlePackageMouseEnter(pkg, $event)"
                   @mouseleave="handlePackageMouseLeave"
                 >
@@ -863,8 +1161,14 @@ function getLedgerTypeText(type) {
                     <span class="unit">/{{ pkg.duration_days }}{{ t('time.days') }}</span>
                   </div>
                   <div class="package-points">{{ pkg.points }} {{ t('user.points') }}</div>
-                  <button class="btn-purchase" @click="purchasePackage(pkg)">
-                    {{ t('packages.buy') }}
+                  <button 
+                    :class="['btn-purchase', { disabled: isDowngrade(pkg.type), current: isCurrentPackage(pkg.type) }]" 
+                    :disabled="isDowngrade(pkg.type)"
+                    @click="purchasePackage(pkg)"
+                  >
+                    <template v-if="isCurrentPackage(pkg.type)">续费</template>
+                    <template v-else-if="isDowngrade(pkg.type)">不可降级</template>
+                    <template v-else>{{ t('packages.buy') }}</template>
                   </button>
                 </div>
               </div>
@@ -1208,6 +1512,7 @@ function getLedgerTypeText(type) {
             </button>
           </div>
 
+
           <!-- 自定义对话框 -->
           <Transition name="dialog">
             <div v-if="dialog.visible" class="custom-dialog-overlay" @click.stop @click.self="dialog.type === 'confirm' && dialog.onCancel?.()">
@@ -1236,6 +1541,244 @@ function getLedgerTypeText(type) {
               </div>
             </div>
           </Transition>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+  
+  <!-- 套餐购买大弹窗（独立Teleport确保最高层级） -->
+  <Teleport to="body">
+    <Transition name="purchase-modal">
+      <div v-if="showPurchasePanel" class="purchase-modal-overlay" @click.self="closePurchasePanel">
+        <div class="purchase-modal">
+          <!-- 弹窗头部 -->
+          <div class="purchase-modal-header">
+            <h3>{{ purchaseInfo?.action || '购买' }}套餐</h3>
+            <button class="modal-close-btn" @click="closePurchasePanel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- 弹窗内容 -->
+          <div class="purchase-modal-body">
+            <!-- 等待支付视图 -->
+            <template v-if="showPaymentEmbed">
+              <div class="payment-waiting-view">
+                <div class="waiting-icon-container">
+                  <div class="waiting-icon-bg">
+                    <svg class="waiting-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    </svg>
+                  </div>
+                  <div class="waiting-pulse"></div>
+                </div>
+                
+                <h3 class="waiting-title">等待支付完成</h3>
+                <p class="waiting-desc">支付页面已在新窗口打开，请在新窗口完成支付</p>
+                
+                <div class="waiting-order-info">
+                  <div class="order-info-row">
+                    <span class="order-label">套餐</span>
+                    <span class="order-value">{{ selectedPackage?.name }}</span>
+                  </div>
+                  <div class="order-info-row">
+                    <span class="order-label">金额</span>
+                    <span class="order-value highlight">¥{{ ((purchaseInfo?.needPay || 0) / 100).toFixed(2) }}</span>
+                  </div>
+                </div>
+                
+                <div class="waiting-tips">
+                  <div class="tip-item">
+                    <span class="tip-number">1</span>
+                    <span class="tip-text">在新窗口完成支付</span>
+                  </div>
+                  <div class="tip-arrow">→</div>
+                  <div class="tip-item">
+                    <span class="tip-number">2</span>
+                    <span class="tip-text">返回点击确认按钮</span>
+                  </div>
+                  <div class="tip-arrow">→</div>
+                  <div class="tip-item">
+                    <span class="tip-number">3</span>
+                    <span class="tip-text">套餐自动激活</span>
+                  </div>
+                </div>
+                
+                <div class="waiting-actions">
+                  <button 
+                    class="btn-waiting-primary"
+                    @click="manualPaymentCheck"
+                    :disabled="purchaseLoading"
+                  >
+                    <span v-if="purchaseLoading" class="btn-loading-icon">⏳</span>
+                    {{ purchaseLoading ? '正在确认支付状态...' : '✓ 我已完成支付' }}
+                  </button>
+                  <button 
+                    class="btn-waiting-link"
+                    @click="openPaymentWindow"
+                  >
+                    🔗 重新打开支付页面
+                  </button>
+                  <button 
+                    class="btn-waiting-cancel"
+                    @click="cancelPayment"
+                  >
+                    取消支付
+                  </button>
+                </div>
+              </div>
+            </template>
+            
+            <!-- 购买确认视图 -->
+            <template v-else>
+              <div class="purchase-content-grid">
+                <!-- 左侧：套餐信息 -->
+                <div class="purchase-left">
+                  <div class="package-detail-card" v-if="selectedPackage">
+                    <div class="package-detail-header">
+                      <span class="package-detail-name">{{ selectedPackage.name }}</span>
+                      <span v-if="purchaseInfo?.isCurrent" class="package-current-tag">当前套餐</span>
+                    </div>
+                    <div class="package-detail-price">
+                      <span class="price-amount">¥{{ (selectedPackage.price / 100).toFixed(0) }}</span>
+                      <span class="price-unit">/{{ selectedPackage.duration_days }}天</span>
+                    </div>
+                    <div class="package-detail-features">
+                      <div class="feature-item">
+                        <span class="feature-icon">💎</span>
+                        <span class="feature-text">{{ selectedPackage.points }} 积分</span>
+                      </div>
+                      <div class="feature-item">
+                        <span class="feature-icon">⏱️</span>
+                        <span class="feature-text">{{ selectedPackage.duration_days }} 天有效期</span>
+                      </div>
+                      <div class="feature-item">
+                        <span class="feature-icon">⚡</span>
+                        <span class="feature-text">{{ selectedPackage.concurrent_limit || 1 }} 个并发</span>
+                      </div>
+                    </div>
+                    <p v-if="selectedPackage.description" class="package-detail-desc">
+                      {{ selectedPackage.description }}
+                    </p>
+                  </div>
+                </div>
+                
+                <!-- 右侧：支付信息 -->
+                <div class="purchase-right">
+                  <!-- 优惠券 -->
+                  <div class="purchase-section">
+                    <label class="section-label">优惠券</label>
+                    <div class="coupon-input-row">
+                      <input 
+                        v-model="purchaseCouponCode" 
+                        type="text" 
+                        class="coupon-input"
+                        placeholder="输入优惠券码（可选）"
+                        :disabled="!!appliedPurchaseCoupon"
+                        @input="purchaseCouponCode = purchaseCouponCode.toUpperCase()"
+                      />
+                      <button 
+                        v-if="!appliedPurchaseCoupon"
+                        class="btn-coupon-apply" 
+                        @click="applyPurchaseCoupon"
+                        :disabled="!purchaseCouponCode.trim()"
+                      >
+                        应用
+                      </button>
+                      <button 
+                        v-else
+                        class="btn-coupon-remove" 
+                        @click="removePurchaseCoupon"
+                      >
+                        移除
+                      </button>
+                    </div>
+                    <div v-if="purchaseCouponError" class="coupon-error">{{ purchaseCouponError }}</div>
+                    <div v-if="appliedPurchaseCoupon" class="coupon-success">
+                      ✓ 已优惠 ¥{{ (purchaseCouponDiscount / 100).toFixed(2) }}
+                    </div>
+                  </div>
+                  
+                  <!-- 支付方式 -->
+                  <div v-if="purchaseInfo?.needOnlinePayment && paymentMethods.length > 0" class="purchase-section">
+                    <label class="section-label">支付方式</label>
+                    <div class="payment-method-list">
+                      <label 
+                        v-for="method in paymentMethods" 
+                        :key="method.id"
+                        :class="['payment-method-option', { active: purchasePaymentMethod === method.id }]"
+                      >
+                        <input 
+                          type="radio" 
+                          :value="method.id" 
+                          v-model="purchasePaymentMethod"
+                          class="hidden"
+                        />
+                        <span class="method-radio"></span>
+                        <span class="method-label">{{ method.name }}</span>
+                      </label>
+                    </div>
+                  </div>
+                  
+                  <!-- 价格明细 -->
+                  <div class="purchase-section">
+                    <label class="section-label">支付明细</label>
+                    <div class="price-breakdown" v-if="purchaseInfo">
+                      <div class="price-line">
+                        <span>套餐价格</span>
+                        <span>¥{{ (purchaseInfo.totalAmount / 100).toFixed(2) }}</span>
+                      </div>
+                      <div v-if="purchaseInfo.couponDiscount > 0" class="price-line discount">
+                        <span>优惠券</span>
+                        <span>-¥{{ (purchaseInfo.couponDiscount / 100).toFixed(2) }}</span>
+                      </div>
+                      <div class="price-line">
+                        <span>账户余额</span>
+                        <span>¥{{ (purchaseInfo.balance / 100).toFixed(2) }}</span>
+                      </div>
+                      <div v-if="purchaseInfo.balanceUsed > 0" class="price-line used">
+                        <span>余额抵扣</span>
+                        <span>-¥{{ (purchaseInfo.balanceUsed / 100).toFixed(2) }}</span>
+                      </div>
+                      <div class="price-line final">
+                        <span>{{ purchaseInfo.needOnlinePayment ? '还需支付' : '余额支付' }}</span>
+                        <span class="final-amount">
+                          ¥{{ purchaseInfo.needOnlinePayment 
+                            ? (purchaseInfo.needPay / 100).toFixed(2) 
+                            : (purchaseInfo.balanceUsed / 100).toFixed(2) }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <!-- 错误提示 -->
+                  <div v-if="purchaseError" class="purchase-error">{{ purchaseError }}</div>
+                  
+                  <!-- 提示信息 -->
+                  <div class="purchase-hint">
+                    <span v-if="purchaseInfo?.canPayWithBalance">💡 余额充足，将直接从余额扣款</span>
+                    <span v-else>💡 余额不足 ¥{{ ((purchaseInfo?.needPay || 0) / 100).toFixed(2) }}，需在线支付</span>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+          
+          <!-- 弹窗底部 -->
+          <div v-if="!showPaymentEmbed" class="purchase-modal-footer">
+            <button class="btn-modal-cancel" @click="closePurchasePanel">
+              取消
+            </button>
+            <button 
+              class="btn-modal-confirm"
+              @click="confirmPurchase" 
+              :disabled="purchaseLoading || (purchaseInfo?.needOnlinePayment && !purchasePaymentMethod)"
+            >
+              {{ purchaseLoading ? '处理中...' : (purchaseInfo?.needOnlinePayment ? '去支付 →' : '确认购买') }}
+            </button>
+          </div>
         </div>
       </div>
     </Transition>
@@ -1708,9 +2251,35 @@ function getLedgerTypeText(type) {
   transition: all 0.2s;
 }
 
-.btn-purchase:hover {
+.btn-purchase:hover:not(:disabled) {
   background: #667eea;
   border-color: #667eea;
+}
+
+.btn-purchase.disabled,
+.btn-purchase:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* 降级套餐卡片样式 */
+.package-card.downgrade {
+  opacity: 0.6;
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+/* 续费按钮样式（当前套餐） */
+.btn-purchase.current {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.5);
+  color: #10b981;
+}
+
+.btn-purchase.current:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.3);
+  border-color: rgba(16, 185, 129, 0.7);
 }
 
 /* 套餐悬浮状态 */
@@ -2503,6 +3072,225 @@ function getLedgerTypeText(type) {
   color: rgba(251, 191, 36, 0.95);
 }
 
+/* 套餐购买面板 */
+.purchase-panel {
+  position: absolute;
+  inset: 0;
+  background: rgba(26, 26, 26, 0.98);
+  border-radius: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.purchase-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.purchase-header h4 {
+  margin: 0;
+  font-size: 18px;
+  color: #fff;
+}
+
+/* 套餐信息摘要 */
+.package-summary {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.summary-label {
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.summary-value {
+  color: rgba(255, 255, 255, 0.95);
+  font-weight: 500;
+}
+
+.summary-value.highlight {
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+/* 支付方式选择 */
+.payment-methods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.payment-method-item {
+  flex: 1;
+  min-width: 100px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.payment-method-item:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.payment-method-item.active {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: rgba(102, 126, 234, 0.5);
+}
+
+.payment-method-item .method-name {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.hidden {
+  display: none;
+}
+
+/* 价格汇总 */
+.price-summary {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.price-summary .price-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.price-summary .price-row.discount,
+.price-summary .price-row.used {
+  color: rgba(34, 197, 94, 0.9);
+}
+
+.price-summary .price-row.total {
+  padding-top: 10px;
+  margin-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.price-summary .total-price {
+  font-size: 20px;
+  color: #fbbf24;
+}
+
+/* 购买提示 */
+.purchase-tips {
+  margin-top: 8px;
+  padding: 12px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 8px;
+}
+
+.purchase-tips p {
+  margin: 0;
+  font-size: 12px;
+  color: rgba(59, 130, 246, 0.9);
+}
+
+/* 次要按钮 */
+.btn-secondary {
+  padding: 12px 24px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 8px;
+}
+
+.btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 内嵌支付 */
+.payment-embed-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+}
+
+.payment-embed-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  border-radius: 10px;
+  color: rgba(16, 185, 129, 0.95);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.payment-icon {
+  font-size: 20px;
+}
+
+.payment-embed-frame {
+  flex: 1;
+  min-height: 300px;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.payment-iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 300px;
+  border: none;
+}
+
+.payment-embed-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.payment-tip {
+  margin: 0;
+  text-align: center;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
 /* 消息提示 */
 .msg-error {
   padding: 10px 12px;
@@ -2634,6 +3422,680 @@ function getLedgerTypeText(type) {
 .dialog-leave-to .custom-dialog {
   transform: scale(0.9);
   opacity: 0;
+}
+
+/* ==================== 套餐购买大弹窗 ==================== */
+.purchase-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  padding: 20px;
+}
+
+.purchase-modal {
+  width: 100%;
+  max-width: 900px;
+  max-height: calc(100vh - 40px);
+  background: linear-gradient(145deg, rgba(32, 32, 38, 0.98) 0%, rgba(24, 24, 28, 0.98) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  box-shadow: 0 32px 64px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.purchase-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 28px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+.purchase-modal-header h3 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.modal-close-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.modal-close-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.purchase-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.purchase-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+
+/* 内容网格布局 */
+.purchase-content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 28px;
+}
+
+/* 左侧套餐卡片 */
+.purchase-left {
+  display: flex;
+  flex-direction: column;
+}
+
+.package-detail-card {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+  border: 1px solid rgba(102, 126, 234, 0.3);
+  border-radius: 16px;
+  padding: 24px;
+  height: 100%;
+}
+
+.package-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.package-detail-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.package-current-tag {
+  padding: 4px 10px;
+  background: rgba(16, 185, 129, 0.8);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+}
+
+.package-detail-price {
+  margin-bottom: 20px;
+}
+
+.price-amount {
+  font-size: 36px;
+  font-weight: 800;
+  color: #fbbf24;
+}
+
+.price-unit {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-left: 4px;
+}
+
+.package-detail-features {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.feature-icon {
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
+}
+
+.package-detail-desc {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.6;
+}
+
+/* 右侧支付信息 */
+.purchase-right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.purchase-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.section-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* 优惠券输入 */
+.coupon-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.coupon-input {
+  flex: 1;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.coupon-input:focus {
+  outline: none;
+  border-color: rgba(102, 126, 234, 0.5);
+  background: rgba(102, 126, 234, 0.1);
+}
+
+.coupon-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.coupon-input:disabled {
+  opacity: 0.6;
+}
+
+.btn-coupon-apply,
+.btn-coupon-remove {
+  padding: 12px 20px;
+  border: none;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-coupon-apply {
+  background: rgba(102, 126, 234, 0.9);
+  color: #fff;
+}
+
+.btn-coupon-apply:hover:not(:disabled) {
+  background: #667eea;
+}
+
+.btn-coupon-apply:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-coupon-remove {
+  background: rgba(239, 68, 68, 0.8);
+  color: #fff;
+}
+
+.btn-coupon-remove:hover {
+  background: #ef4444;
+}
+
+.coupon-error {
+  font-size: 13px;
+  color: #ef4444;
+}
+
+.coupon-success {
+  font-size: 13px;
+  color: #10b981;
+  font-weight: 500;
+}
+
+/* 支付方式 */
+.payment-method-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.payment-method-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.payment-method-option:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.payment-method-option.active {
+  background: rgba(102, 126, 234, 0.15);
+  border-color: rgba(102, 126, 234, 0.5);
+}
+
+.method-radio {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.payment-method-option.active .method-radio {
+  border-color: #667eea;
+}
+
+.payment-method-option.active .method-radio::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  background: #667eea;
+  border-radius: 50%;
+}
+
+.method-label {
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* 价格明细 */
+.price-breakdown {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.price-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.price-line.discount,
+.price-line.used {
+  color: #10b981;
+}
+
+.price-line.final {
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.final-amount {
+  font-size: 22px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+/* 提示和错误 */
+.purchase-error {
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  color: #ef4444;
+  font-size: 14px;
+}
+
+.purchase-hint {
+  padding: 12px 16px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 10px;
+  font-size: 13px;
+  color: rgba(59, 130, 246, 0.9);
+}
+
+/* 底部按钮 */
+.btn-modal-cancel {
+  padding: 14px 28px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-modal-cancel:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.btn-modal-confirm {
+  padding: 14px 36px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+}
+
+.btn-modal-confirm:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(102, 126, 234, 0.5);
+}
+
+.btn-modal-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* 等待支付视图 */
+.payment-waiting-view {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+}
+
+.waiting-icon-container {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  margin-bottom: 24px;
+}
+
+.waiting-icon-bg {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.waiting-icon {
+  width: 48px;
+  height: 48px;
+  color: #10b981;
+}
+
+.waiting-pulse {
+  position: absolute;
+  inset: -10px;
+  border: 2px solid rgba(16, 185, 129, 0.4);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.5; }
+}
+
+.waiting-title {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.waiting-desc {
+  margin: 0 0 28px 0;
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.waiting-order-info {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 16px 24px;
+  margin-bottom: 28px;
+  min-width: 280px;
+}
+
+.order-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.order-info-row:not(:last-child) {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.order-label {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.order-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.order-value.highlight {
+  color: #fbbf24;
+  font-size: 18px;
+}
+
+.waiting-tips {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+  padding: 16px 24px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 12px;
+}
+
+.tip-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tip-number {
+  width: 24px;
+  height: 24px;
+  background: rgba(59, 130, 246, 0.8);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.tip-text {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+}
+
+.tip-arrow {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.waiting-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 360px;
+}
+
+.btn-waiting-primary {
+  width: 100%;
+  padding: 16px 24px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border: none;
+  border-radius: 12px;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-waiting-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4);
+}
+
+.btn-waiting-primary:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.btn-loading-icon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.btn-waiting-link {
+  width: 100%;
+  padding: 14px 24px;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 10px;
+  color: rgba(59, 130, 246, 0.95);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-waiting-link:hover {
+  background: rgba(59, 130, 246, 0.25);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.btn-waiting-cancel {
+  width: 100%;
+  padding: 12px 24px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-waiting-cancel:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* 弹窗动画 */
+.purchase-modal-enter-active,
+.purchase-modal-leave-active {
+  transition: all 0.3s ease;
+}
+
+.purchase-modal-enter-from,
+.purchase-modal-leave-to {
+  opacity: 0;
+}
+
+.purchase-modal-enter-from .purchase-modal,
+.purchase-modal-leave-to .purchase-modal {
+  transform: scale(0.9) translateY(20px);
+  opacity: 0;
+}
+
+/* 响应式 */
+@media (max-width: 640px) {
+  .purchase-modal-overlay {
+    padding: 20px;
+  }
+  
+  .purchase-content-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  
+  .purchase-modal {
+    max-height: calc(100vh - 40px);
+  }
+  
+  .package-detail-card {
+    padding: 20px;
+  }
+  
+  .price-amount {
+    font-size: 28px;
+  }
 }
 </style>
 

@@ -403,39 +403,34 @@ export async function loadRemoteConfig() {
   return runtimeConfig
 }
 
-// 初始化：尝试从 localStorage 加载
-// 优先从 system_config 读取（系统配置页面设置的）
+// 初始化：环境变量的租户ID和密钥优先，其他配置从 localStorage 读取
+// 重要：确保前端始终使用 .env 中配置的租户ID
 try {
-  const systemConfig = localStorage.getItem('system_config')
-  // 同时读取 tenant_config 获取已保存的模型配置
+  // 同时读取 tenant_config 获取已保存的模型配置（品牌、模型等）
   const savedTenantConfig = loadFromStorage()
   
-  if (systemConfig) {
-    const parsed = JSON.parse(systemConfig)
-    runtimeConfig = {
-      apiBase: parsed.apiBase || envConfig.apiBase,
-      tenantId: parsed.tenantId || envConfig.tenantId,
-      tenantKey: parsed.tenantKey || envConfig.tenantKey,
-      brand: {
-        name: parsed.brandName || envConfig.brand.name,
-        logo: savedTenantConfig?.brand?.logo || envConfig.brand.logo,
-        favicon: savedTenantConfig?.brand?.favicon || envConfig.brand.favicon,
-        primaryColor: parsed.primaryColor || envConfig.brand.primaryColor,
-        description: savedTenantConfig?.brand?.description || envConfig.brand.description
-      },
-      features: envConfig.features,
-      // 优先使用已保存的模型配置，否则使用默认值
-      modelNames: savedTenantConfig?.modelNames || envConfig.modelNames,
-      modelEnabled: savedTenantConfig?.modelEnabled || envConfig.modelEnabled,
-      modelDescriptions: savedTenantConfig?.modelDescriptions || envConfig.modelDescriptions,
-      modelPricing: savedTenantConfig?.modelPricing || defaultConfig.modelPricing
-    }
-    console.log('[tenant] 从系统配置加载')
-  } else if (savedTenantConfig) {
-    // 降级到 tenant_config
-    runtimeConfig = { ...envConfig, ...savedTenantConfig }
-    console.log('[tenant] 从租户配置加载')
+  // 环境变量中的租户ID和密钥始终优先
+  // 这是多租户隔离的关键：每个租户前端必须使用自己的租户ID
+  runtimeConfig = {
+    apiBase: envConfig.apiBase,
+    tenantId: envConfig.tenantId,  // 始终使用环境变量的租户ID
+    tenantKey: envConfig.tenantKey,  // 始终使用环境变量的租户密钥
+    brand: {
+      name: savedTenantConfig?.brand?.name || envConfig.brand.name,
+      logo: savedTenantConfig?.brand?.logo || envConfig.brand.logo,
+      favicon: savedTenantConfig?.brand?.favicon || envConfig.brand.favicon,
+      primaryColor: savedTenantConfig?.brand?.primaryColor || envConfig.brand.primaryColor,
+      description: savedTenantConfig?.brand?.description || envConfig.brand.description
+    },
+    features: envConfig.features,
+    // 模型配置从缓存读取，否则使用默认值
+    modelNames: savedTenantConfig?.modelNames || envConfig.modelNames,
+    modelEnabled: savedTenantConfig?.modelEnabled || envConfig.modelEnabled,
+    modelDescriptions: savedTenantConfig?.modelDescriptions || envConfig.modelDescriptions,
+    modelPricing: savedTenantConfig?.modelPricing || defaultConfig.modelPricing
   }
+  
+  console.log('[tenant] 初始化完成，租户ID:', envConfig.tenantId)
 } catch (e) {
   console.error('[tenant] 配置加载失败:', e)
 }
@@ -594,26 +589,12 @@ export const refreshBrandConfig = async () => {
 }
 
 // 生成带租户标识的请求头
+// 重要：始终优先使用环境变量的租户配置，确保多租户隔离
 export const getTenantHeaders = () => {
-  // 每次都重新从localStorage读取，确保最新
-  try {
-    const systemConfig = localStorage.getItem('system_config')
-    if (systemConfig) {
-      const parsed = JSON.parse(systemConfig)
-      if (parsed.tenantId && parsed.tenantKey) {
-        return {
-          'X-Tenant-ID': parsed.tenantId,
-          'X-Tenant-Key': parsed.tenantKey
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('[tenant] 读取system_config失败:', e)
-  }
-  
-  // 降级使用内存中的配置，确保使用有效的默认值
-  const tenantId = config.tenantId || defaultConfig.tenantId
-  const tenantKey = config.tenantKey || defaultConfig.tenantKey
+  // 优先使用环境变量的配置（通过 envConfig）
+  // 这是在模块加载时从 import.meta.env 读取的
+  const tenantId = envConfig.tenantId
+  const tenantKey = envConfig.tenantKey
   
   return {
     'X-Tenant-ID': tenantId,

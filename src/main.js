@@ -22,6 +22,7 @@ initLogger({ enabled: false })
 
 // 初始化系统配置（从环境变量读取租户ID和密钥）
 // 注意：品牌配置（名称、Logo、主题色）从API动态获取，不再使用环境变量
+// 重要：环境变量的租户配置始终优先，确保前端使用正确的租户ID
 function initSystemConfig() {
   try {
     // 只从环境变量读取租户ID和密钥，品牌配置从API获取
@@ -32,37 +33,42 @@ function initSystemConfig() {
     }
     
     const existingConfig = localStorage.getItem('system_config')
+    let needUpdate = false
+    let oldTenantId = null
     
     if (!existingConfig) {
-      // 首次访问，直接设置环境变量的配置
-      localStorage.setItem('system_config', JSON.stringify(envConfig))
-      console.log('[系统初始化] 首次访问，已设置租户配置:', envConfig.tenantId)
+      // 首次访问
+      needUpdate = true
+      console.log('[系统初始化] 首次访问')
     } else {
-      // 已有配置，检查环境变量的租户ID是否变化
       try {
         const parsed = JSON.parse(existingConfig)
+        oldTenantId = parsed.tenantId
         
-        // 如果环境变量的租户ID与缓存不同，说明切换了租户，需要更新
+        // 检查环境变量的租户ID与缓存是否不同
         if (parsed.tenantId !== envConfig.tenantId || parsed.tenantKey !== envConfig.tenantKey) {
+          needUpdate = true
           console.log(`[系统初始化] 检测到租户变更: ${parsed.tenantId} -> ${envConfig.tenantId}`)
-          console.log('[系统初始化] 清除旧配置和登录状态...')
-          
-          // 清除旧的登录token和用户数据
-          localStorage.removeItem('token')
-          localStorage.removeItem('tenant_config')
-          
-          // 更新为新的租户配置
-          localStorage.setItem('system_config', JSON.stringify(envConfig))
-          console.log('[系统初始化] 已更新为新租户配置:', envConfig.tenantId)
-        } else {
-          console.log('[系统初始化] 租户配置未变化，继续使用:', parsed.tenantId)
         }
       } catch (e) {
-        // 配置解析失败，使用环境变量重新初始化
-        console.warn('[系统初始化] 配置解析失败，重新初始化')
-        localStorage.setItem('system_config', JSON.stringify(envConfig))
+        needUpdate = true
+        console.warn('[系统初始化] 配置解析失败')
       }
     }
+    
+    // 始终确保 system_config 使用环境变量的配置
+    // 这样可以保证每次启动都使用 .env 中配置的租户ID
+    localStorage.setItem('system_config', JSON.stringify(envConfig))
+    
+    if (needUpdate && oldTenantId && oldTenantId !== envConfig.tenantId) {
+      console.log('[系统初始化] 清除旧配置和登录状态...')
+      // 清除旧的登录token和用户数据
+      localStorage.removeItem('token')
+      localStorage.removeItem('tenant_config')
+      localStorage.removeItem('brand_config_last_update')
+    }
+    
+    console.log('[系统初始化] 当前租户配置:', envConfig.tenantId)
   } catch (e) {
     console.error('[系统初始化] 配置初始化失败:', e)
   }

@@ -119,6 +119,11 @@ function selectModel(modelValue) {
   isModelDropdownOpen.value = false
 }
 
+// 处理下拉列表滚轮事件，阻止传播到画布
+function handleDropdownWheel(event) {
+  event.stopPropagation()
+}
+
 function handleModelDropdownClickOutside(event) {
   // 检查点击是否在下拉框外
   const dropdown = event.target.closest('.model-selector-custom')
@@ -2635,6 +2640,7 @@ async function handleDrop(event) {
                 v-if="isModelDropdownOpen" 
                 class="model-dropdown-list"
                 :class="{ 'dropdown-up': dropdownDirection === 'up' }"
+                @wheel="handleDropdownWheel"
               >
                 <div 
                   v-for="m in models" 
@@ -3516,25 +3522,50 @@ async function handleDrop(event) {
   transform: rotate(180deg);
 }
 
-/* 下拉列表 */
+/* 下拉列表 - 黑白灰滚动条 */
 .model-dropdown-list {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
   min-width: 220px;
-  max-height: 280px;
+  max-height: 240px;
   overflow-y: auto;
-  background: #1a1a1a;
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  border-radius: 8px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   z-index: 1000;
+  backdrop-filter: blur(8px);
 }
 
 /* 向上展开时的样式 */
 .model-dropdown-list.dropdown-up {
   top: auto;
   bottom: calc(100% + 4px);
+}
+
+/* 黑白灰滚动条样式 */
+.model-dropdown-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.model-dropdown-list::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 3px;
+}
+
+.model-dropdown-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.model-dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.model-dropdown-list::-webkit-scrollbar-thumb:active {
+  background: rgba(255, 255, 255, 0.35);
 }
 
 .model-dropdown-item {
