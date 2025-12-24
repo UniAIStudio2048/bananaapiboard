@@ -91,17 +91,172 @@ const LLM_PRESET_MAP = {
   'llm-storyboard': 'storyboard'
 }
 
+// 处理音频节点的特殊操作
+function handleAudioOperation(operationType) {
+  if (!triggerNode.value) return
+
+  const audioNodeId = triggerNode.value.id
+  const audioPosition = triggerNode.value.position
+
+  if (operationType === 'audio-to-video') {
+    // 音频生视频：创建视频节点并连接
+    const videoPosition = {
+      x: audioPosition.x + 500,
+      y: audioPosition.y
+    }
+    const videoNode = canvasStore.addNode({
+      type: 'video',
+      position: videoPosition,
+      data: {
+        title: t('canvas.nodes.video'),
+        label: t('canvas.nodes.video'),
+        status: 'idle',
+        generationMode: 'audio-to-video'
+      }
+    })
+    if (videoNode?.id) {
+      canvasStore.addEdge({
+        source: audioNodeId,
+        target: videoNode.id,
+        sourceHandle: 'output',
+        targetHandle: 'input'
+      })
+      canvasStore.selectNode(videoNode.id)
+    }
+  } else if (operationType === 'audio-to-text') {
+    // 音频提取文案：创建文本节点并连接
+    const textPosition = {
+      x: audioPosition.x + 500,
+      y: audioPosition.y
+    }
+    const textNode = canvasStore.addNode({
+      type: 'text-input',
+      position: textPosition,
+      data: {
+        title: '提取文案',
+        text: '',
+        placeholder: '音频转文字结果将显示在这里...'
+      }
+    })
+    if (textNode?.id) {
+      canvasStore.addEdge({
+        source: audioNodeId,
+        target: textNode.id,
+        sourceHandle: 'output',
+        targetHandle: 'input'
+      })
+      canvasStore.selectNode(textNode.id)
+    }
+  } else if (operationType === 'audio-lip-sync') {
+    // 图片对口型：创建图片节点 + 视频节点，两者都连接到视频节点
+    const imagePosition = {
+      x: audioPosition.x,
+      y: audioPosition.y - 350
+    }
+    const imageNode = canvasStore.addNode({
+      type: 'image-input',
+      position: imagePosition,
+      data: {
+        title: '人物图片',
+        sourceImages: ['/logo.svg'],
+        status: 'success'
+      }
+    })
+
+    const videoPosition = {
+      x: audioPosition.x + 500,
+      y: audioPosition.y - 100
+    }
+    const videoNode = canvasStore.addNode({
+      type: 'video',
+      position: videoPosition,
+      data: {
+        title: t('canvas.nodes.video'),
+        label: t('canvas.nodes.video'),
+        status: 'idle',
+        generationMode: 'lip-sync'
+      }
+    })
+
+    if (imageNode?.id && videoNode?.id) {
+      // 连接图片节点到视频节点
+      canvasStore.addEdge({
+        source: imageNode.id,
+        target: videoNode.id,
+        sourceHandle: 'output',
+        targetHandle: 'input'
+      })
+      // 连接音频节点到视频节点
+      canvasStore.addEdge({
+        source: audioNodeId,
+        target: videoNode.id,
+        sourceHandle: 'output',
+        targetHandle: 'input'
+      })
+      canvasStore.selectNode(videoNode.id)
+    }
+  }
+}
+
+// 处理文本生成音乐操作
+function handleTextToMusic() {
+  if (!triggerNode.value) return
+
+  const textNodeId = triggerNode.value.id
+  const textPosition = triggerNode.value.position
+
+  // 创建音频节点并连接
+  const audioPosition = {
+    x: textPosition.x + 500,
+    y: textPosition.y
+  }
+  const audioNode = canvasStore.addNode({
+    type: 'audio-input',
+    position: audioPosition,
+    data: {
+      title: '生成音乐',
+      label: 'Audio',
+      status: 'idle',
+      generationMode: 'text-to-music'
+    }
+  })
+
+  if (audioNode?.id) {
+    canvasStore.addEdge({
+      source: textNodeId,
+      target: audioNode.id,
+      sourceHandle: 'output',
+      targetHandle: 'input'
+    })
+    canvasStore.selectNode(audioNode.id)
+  }
+}
+
 // 选择节点类型
 function selectNodeType(type) {
   selectedType.value = type
-  
+
+  // 特殊处理：音频节点的操作类型
+  if (type === 'audio-to-video' || type === 'audio-to-text' || type === 'audio-lip-sync') {
+    handleAudioOperation(type)
+    emit('close')
+    return
+  }
+
+  // 特殊处理：文本生成音乐
+  if (type === 'text-to-music') {
+    handleTextToMusic()
+    emit('close')
+    return
+  }
+
   // 计算新节点位置
   let position = { x: 200, y: 200 }
-  
+
   // 优先使用 store 中传入的 flowPosition
   if (canvasStore.nodeSelectorFlowPosition) {
     position = { ...canvasStore.nodeSelectorFlowPosition }
-    
+
     // 稍微偏移一点，让节点中心对准鼠标（假设节点宽240）
     position.x -= 120
     position.y -= 50

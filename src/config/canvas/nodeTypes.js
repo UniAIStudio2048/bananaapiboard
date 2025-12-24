@@ -36,7 +36,15 @@ export const NODE_TYPES = {
   
   // 视频处理类
   VIDEO_LAST_FRAME: 'video-last-frame',
-  LLM_VIDEO_DESCRIBE: 'llm-video-describe'
+  LLM_VIDEO_DESCRIBE: 'llm-video-describe',
+
+  // 音频处理类
+  AUDIO_TO_VIDEO: 'audio-to-video',
+  AUDIO_TO_TEXT: 'audio-to-text',
+  AUDIO_LIP_SYNC: 'audio-lip-sync',
+
+  // 文本生成音频
+  TEXT_TO_MUSIC: 'text-to-music'
 }
 
 // 节点类型配置 - 黑白灰简洁风格图标
@@ -308,6 +316,58 @@ export const NODE_TYPE_CONFIG = {
     outputType: 'text',
     consumesPoints: true,
     pointsCost: 2
+  },
+
+  // 音频处理节点
+  [NODE_TYPES.AUDIO_TO_VIDEO]: {
+    label: 'canvas.nodeConfig.audioToVideo.label',
+    description: 'canvas.nodeConfig.audioToVideo.desc',
+    icon: '♪▶',
+    category: 'generate',
+    color: '#f97316',
+    hasInput: true,
+    hasOutput: true,
+    inputType: 'audio',
+    outputType: 'video',
+    consumesPoints: true
+  },
+
+  [NODE_TYPES.AUDIO_TO_TEXT]: {
+    label: 'canvas.nodeConfig.audioToText.label',
+    description: 'canvas.nodeConfig.audioToText.desc',
+    icon: '♪Aa',
+    category: 'llm',
+    color: '#06b6d4',
+    hasInput: true,
+    hasOutput: true,
+    inputType: 'audio',
+    outputType: 'text'
+  },
+
+  [NODE_TYPES.AUDIO_LIP_SYNC]: {
+    label: 'canvas.nodeConfig.audioLipSync.label',
+    description: 'canvas.nodeConfig.audioLipSync.desc',
+    icon: '◐▶',
+    category: 'generate',
+    color: '#ec4899',
+    hasInput: true,
+    hasOutput: true,
+    inputType: 'audio+image',
+    outputType: 'video',
+    consumesPoints: true
+  },
+
+  [NODE_TYPES.TEXT_TO_MUSIC]: {
+    label: 'canvas.nodeConfig.textToMusic.label',
+    description: 'canvas.nodeConfig.textToMusic.desc',
+    icon: 'Aa♪',
+    category: 'generate',
+    color: '#a855f7',
+    hasInput: true,
+    hasOutput: true,
+    inputType: 'text',
+    outputType: 'audio',
+    consumesPoints: true
   }
 }
 
@@ -316,6 +376,7 @@ export const CONNECTION_RULES = {
   [NODE_TYPES.TEXT_INPUT]: [
     NODE_TYPES.TEXT_TO_IMAGE,
     NODE_TYPES.TEXT_TO_VIDEO,
+    NODE_TYPES.TEXT_TO_MUSIC,
     NODE_TYPES.LLM_PROMPT_ENHANCE,
     NODE_TYPES.LLM_CONTENT_EXPAND,
     NODE_TYPES.LLM_STORYBOARD
@@ -359,16 +420,22 @@ export const CONNECTION_RULES = {
   ],
   
   [NODE_TYPES.AUDIO_INPUT]: [
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.AUDIO_TO_VIDEO,
+    NODE_TYPES.AUDIO_TO_TEXT,
+    NODE_TYPES.AUDIO_LIP_SYNC
   ],
-  
+
   // 统一音频节点别名
   'audio': [
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.AUDIO_TO_VIDEO,
+    NODE_TYPES.AUDIO_TO_TEXT,
+    NODE_TYPES.AUDIO_LIP_SYNC
   ],
-  
+
   'audio-input': [
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.AUDIO_TO_VIDEO,
+    NODE_TYPES.AUDIO_TO_TEXT,
+    NODE_TYPES.AUDIO_LIP_SYNC
   ],
   
   // 统一视频节点别名

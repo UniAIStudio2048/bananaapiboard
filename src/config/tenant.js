@@ -570,8 +570,8 @@ export const getAvailableVideoModels = () => {
         // 优先使用租户配置的名称，否则使用默认名称
         label: name || defaultConfig.label || key,
         icon: defaultConfig.icon || (key.includes('veo') ? '🎥' : '✨'),
-        // 优先使用租户配置的描述，否则使用默认描述
-        description: descriptions[key] || defaultConfig.description || '',
+        // 只使用租户配置的描述，为空时不显示（与图像节点保持一致）
+        description: descriptions[key] || '',
         // 积分配置：优先使用租户配置，否则使用默认配置
         hasDurationPricing: modelPricingConfig.hasDurationPricing ?? defaultConfig.hasDurationPricing ?? false,
         pointsCost: modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1

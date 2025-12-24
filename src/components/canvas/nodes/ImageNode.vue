@@ -13,6 +13,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages } from '@/api/canvas/nodes'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
+import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 
 const { t } = useI18n()
 
@@ -76,17 +77,17 @@ const userConcurrentLimit = computed(() => {
 })
 
 // 切换生成次数
-function toggleCount() {
+async function toggleCount() {
   const currentIndex = countOptions.indexOf(selectedCount.value)
   const nextIndex = (currentIndex + 1) % countOptions.length
   const nextCount = countOptions[nextIndex]
-  
+
   // 检查是否超过用户套餐限制
   if (nextCount > userConcurrentLimit.value) {
-    alert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐以使用更多并发`)
+    await showAlert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐以使用更多并发`, '并发限制')
     return
   }
-  
+
   selectedCount.value = nextCount
 }
 
@@ -414,7 +415,7 @@ async function handleEditorSave(data) {
     }
   } catch (error) {
     console.error('[ImageNode] 保存图片失败:', error)
-    alert('保存图片失败，请重试')
+    await showAlert('保存图片失败，请重试', '错误')
   }
   
   closeImageEditor()
@@ -728,7 +729,7 @@ async function handleFileUpload(event) {
     }
   } catch (error) {
     console.error('[ImageNode] 上传失败:', error)
-    alert('图片上传失败，请重试')
+    await showAlert('图片上传失败，请重试', '错误')
   }
 }
 
@@ -1494,8 +1495,8 @@ async function handleGenerate() {
     finalPrompt = upstreamPrompt || userPrompt
   }
   
-  console.log('[ImageNode] 生成参数:', { 
-    userPrompt, 
+  console.log('[ImageNode] 生成参数:', {
+    userPrompt,
     upstreamPrompt,
     finalPrompt,
     model: selectedModel.value,
@@ -1503,22 +1504,22 @@ async function handleGenerate() {
     count: selectedCount.value,
     currentStatus: props.data.status
   })
-  
+
   if (referenceImages.value.length === 0 && !finalPrompt) {
-    alert('请输入提示词或连接参考图片')
+    await showAlert('请输入提示词或连接参考图片', '提示')
     return
   }
   
   // 检查总积分是否足够（单次消耗 * 次数）
   const totalCost = currentPointsCost.value * selectedCount.value
   if (userPoints.value < totalCost) {
-    alert(t('imageGen.insufficientPointsDetail', { count: selectedCount.value, required: totalCost, current: userPoints.value }))
+    await showInsufficientPointsDialog(totalCost, userPoints.value, selectedCount.value)
     return
   }
-  
+
   // 检查并发限制
   if (selectedCount.value > userConcurrentLimit.value) {
-    alert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐`)
+    await showAlert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐`, '并发限制')
     return
   }
   
@@ -1623,9 +1624,9 @@ async function handleGenerate() {
 async function handleGenerateSingle() {
   const upstreamPrompt = getUpstreamPrompt()
   const finalPrompt = promptText.value.trim() || upstreamPrompt
-  
+
   if (referenceImages.value.length === 0 && !finalPrompt) {
-    alert('请输入提示词或连接参考图片')
+    await showAlert('请输入提示词或连接参考图片', '提示')
     return
   }
   
@@ -2216,7 +2217,7 @@ async function handleDrop(event) {
   
   // 检查是否为图片文件
   if (!file.type.startsWith('image/')) {
-    alert('请拖入图片文件')
+    await showAlert('请拖入图片文件', '提示')
     return
   }
   
@@ -2238,7 +2239,7 @@ async function handleDrop(event) {
     })
   } catch (error) {
     console.error('[ImageNode] 拖拽上传失败:', error)
-    alert('图片上传失败，请重试')
+    await showAlert('图片上传失败，请重试', '错误')
   }
 }
 </script>

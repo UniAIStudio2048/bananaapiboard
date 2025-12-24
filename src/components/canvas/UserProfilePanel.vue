@@ -42,6 +42,7 @@ const activePackage = ref(null) // 用户当前活跃套餐
 const invite = ref({ invite_code: '', uses: [] })
 const checkinStatus = ref({ hasCheckedInToday: false, consecutiveDays: 0 })
 const loading = ref(false)
+const appSettings = ref({}) // 租户配置（包含邀请奖励积分等）
 
 // 套餐悬浮提示状态
 const hoveredPackage = ref(null)
@@ -227,18 +228,19 @@ watch(() => props.visible, async (val) => {
 async function loadData() {
   if (!token) return
   loading.value = true
-  
+
   try {
     const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
-    
-    const [ledgerRes, packagesRes, inviteRes, checkinRes, activePackageRes] = await Promise.all([
+
+    const [ledgerRes, packagesRes, inviteRes, checkinRes, activePackageRes, settingsRes] = await Promise.all([
       fetch('/api/user/points', { headers }),
       fetch('/api/packages', { headers }),
       fetch('/api/user/invite-code', { headers }),
       fetch('/api/user/checkin-status', { headers }),
-      fetch('/api/user/package', { headers })
+      fetch('/api/user/package', { headers }),
+      fetch('/api/settings/app', { headers }) // 🔧 新增：加载租户配置
     ])
-    
+
     if (ledgerRes.ok) {
       const data = await ledgerRes.json()
       ledger.value = Array.isArray(data) ? data : (data.records || data.ledger || [])
@@ -247,11 +249,20 @@ async function loadData() {
       const data = await packagesRes.json()
       packages.value = data.packages || []
     }
-    if (inviteRes.ok) invite.value = await inviteRes.json()
+    if (inviteRes.ok) {
+      const data = await inviteRes.json()
+      invite.value = data
+      console.log('[UserProfilePanel] 邀请数据:', data)
+    }
     if (checkinRes.ok) checkinStatus.value = await checkinRes.json()
     if (activePackageRes.ok) {
       const data = await activePackageRes.json()
       activePackage.value = data.package || null
+    }
+    if (settingsRes.ok) {
+      const data = await settingsRes.json()
+      appSettings.value = data.settings || data || {}
+      console.log('[UserProfilePanel] 租户配置:', appSettings.value)
     }
   } catch (e) {
     console.error('加载数据失败:', e)
@@ -1300,7 +1311,7 @@ function getLedgerTypeText(type) {
                   <span class="stat-label">{{ t('user.invited') }}</span>
                 </div>
                 <div class="stat">
-                  <span class="stat-num">{{ (invite.uses?.length || 0) * 10 }}</span>
+                  <span class="stat-num">{{ (invite.uses?.length || 0) * (appSettings.inviter_bonus || 10) }}</span>
                   <span class="stat-label">{{ t('user.earnedPoints') }}</span>
                 </div>
               </div>
@@ -1308,8 +1319,8 @@ function getLedgerTypeText(type) {
               <div class="invite-tips">
                 <h5>{{ t('user.inviteRules') }}</h5>
                 <ul>
-                  <li>{{ t('user.inviteRule1') }}</li>
-                  <li>{{ t('user.inviteRule2') }}</li>
+                  <li>每邀请一位好友注册，您获得 {{ appSettings.inviter_bonus || 10 }} 积分</li>
+                  <li>被邀请人也可获得 {{ appSettings.invitee_bonus || 5 }} 积分奖励</li>
                   <li>{{ t('user.inviteRule3') }}</li>
                 </ul>
               </div>

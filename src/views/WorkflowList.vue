@@ -3,7 +3,7 @@
  * WorkflowList.vue - 工作流列表页面
  * 无导航栏的全屏页面，黑白灰色系风格
  */
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onActivated } from 'vue'
 import { useRouter } from 'vue-router'
 import { getWorkflowList, deleteWorkflow, getStorageQuota } from '@/api/canvas/workflow'
 import { useCanvasStore } from '@/stores/canvas'
@@ -141,6 +141,15 @@ function changePage(page) {
 
 // 初始化
 onMounted(() => {
+  loadWorkflows()
+  loadQuota()
+})
+
+// 添加路由守卫，每次进入页面时刷新列表
+// 这样可以确保从其他页面保存工作流后跳转过来时能立即看到最新数据
+onActivated(() => {
+  // keep-alive组件被激活时重新加载数据
+  console.log('[WorkflowList] 页面被激活，刷新工作流列表')
   loadWorkflows()
   loadQuota()
 })

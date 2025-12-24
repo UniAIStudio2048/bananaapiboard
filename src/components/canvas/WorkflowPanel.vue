@@ -548,15 +548,25 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
 })
+
+// 🔧 新增：强制刷新工作流列表（供父组件调用）
+function forceRefresh() {
+  console.log('[WorkflowPanel] 强制刷新工作流列表')
+  loadWorkflows(true) // 传入true强制刷新，忽略缓存
+}
+
+// 暴露方法给父组件
+defineExpose({
+  forceRefresh
+})
 </script>
 
 <template>
   <Transition name="panel">
-    <div 
-      v-if="visible" 
-      class="workflow-panel-overlay" 
+    <div
+      v-if="visible"
+      class="workflow-panel-container"
       :class="{ 'is-dragging': isDragging }"
-      @click.self="$emit('close')"
     >
       <div class="workflow-panel">
         <!-- 头部 -->
@@ -910,24 +920,21 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* 遮罩层 */
-.workflow-panel-overlay {
+/* 侧边栏容器 - 不阻挡拖拽，没有遮罩 */
+.workflow-panel-container {
   position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
+  top: 60px;
+  left: 90px;
+  bottom: 60px;
   z-index: 200;
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 60px 0 60px 90px;
+  pointer-events: none; /* 让拖拽可以穿透到画布 */
 }
 
-.workflow-panel-overlay.is-dragging {
+.workflow-panel-container.is-dragging {
   pointer-events: none;
 }
 
-.workflow-panel-overlay.is-dragging .workflow-panel {
+.workflow-panel-container.is-dragging .workflow-panel {
   pointer-events: auto;
 }
 
@@ -935,6 +942,7 @@ onUnmounted(() => {
 .workflow-panel {
   width: 680px;
   max-height: calc(100vh - 120px);
+  height: 100%;
   background: rgba(20, 20, 20, 0.95);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -942,6 +950,7 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  pointer-events: auto; /* 面板本身可以接收事件 */
 }
 
 /* 头部 */
@@ -1602,9 +1611,9 @@ onUnmounted(() => {
   transition: all 0.25s ease;
 }
 
-.panel-enter-from,
-.panel-leave-to {
-  opacity: 0;
+.panel-enter-active .workflow-panel,
+.panel-leave-active .workflow-panel {
+  transition: all 0.25s ease;
 }
 
 .panel-enter-from .workflow-panel,
@@ -1625,22 +1634,23 @@ onUnmounted(() => {
 
 /* 响应式 */
 @media (max-width: 800px) {
-  .workflow-panel-overlay {
-    padding: 20px;
-    align-items: center;
-    justify-content: center;
+  .workflow-panel-container {
+    left: 20px;
+    right: 20px;
+    top: 20px;
+    bottom: 20px;
   }
-  
+
   .workflow-panel {
     width: 100%;
     max-width: 680px;
     max-height: calc(100vh - 40px);
   }
-  
+
   .panel-content.two-columns {
     flex-direction: column;
   }
-  
+
   .column {
     max-height: 250px;
   }

@@ -9,6 +9,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus } from '@/api/canvas/nodes'
 import { getAvailableImageModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
+import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 
 const { t } = useI18n()
 
@@ -224,14 +225,14 @@ function handleResizeEnd() {
 async function handleGenerate() {
   // 检查积分
   if (userPoints.value < pointsCost.value) {
-    alert(t('imageGen.insufficientPoints'))
+    await showInsufficientPointsDialog(pointsCost.value, userPoints.value, selectedCount.value)
     return
   }
-  
+
   // 检查输入
   const prompt = inheritedText.value || props.data.text || ''
   if (!prompt && inheritedImages.value.length === 0) {
-    alert('请先输入提示词或上传参考图片')
+    await showAlert('请先输入提示词或上传参考图片', '提示')
     return
   }
   
@@ -338,9 +339,9 @@ function handleRegenerate() {
 }
 
 // 使用图片编辑工具
-function useTool(action) {
+async function useTool(action) {
   console.log('使用工具:', action)
-  alert(`${action} 功能开发中...`)
+  await showAlert(`${action} 功能开发中...`, '提示')
 }
 
 // 下载图片

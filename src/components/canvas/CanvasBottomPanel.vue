@@ -14,6 +14,7 @@ import { getNodeConfig } from '@/config/canvas/nodeTypes'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages } from '@/api/canvas/nodes'
 import { getLLMConfig, chatWithLLM, describeImage } from '@/api/canvas/llm'
 import { getApiUrl, getAvailableImageModels } from '@/config/tenant'
+import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
@@ -236,13 +237,13 @@ async function handleGenerate() {
   
   // 检查输入
   if (!inputText.value.trim()) {
-    alert('请输入内容')
+    await showAlert('请输入内容', '提示')
     return
   }
-  
+
   // 检查积分
   if (userPoints.value < estimatedCost.value) {
-    alert('积分不足，请购买套餐')
+    await showInsufficientPointsDialog(estimatedCost.value, userPoints.value)
     return
   }
   

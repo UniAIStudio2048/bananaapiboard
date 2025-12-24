@@ -14,6 +14,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels } from '@/config/tenant'
 import { uploadImages } from '@/api/canvas/nodes'
 import { useI18n } from '@/i18n'
+import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 
 const { t } = useI18n()
 
@@ -1068,7 +1069,7 @@ async function handleGenerate() {
   })
   
   if (!finalPrompt && finalImages.length === 0) {
-    alert('请输入提示词或连接参考图片')
+    await showAlert('请输入提示词或连接参考图片', '提示')
     return
   }
   
@@ -1082,13 +1083,13 @@ async function handleGenerate() {
   // 检查总积分是否足够（单次消耗 * 次数）
   const totalCost = pointsCost.value * selectedCount.value
   if (userPoints.value < totalCost) {
-    alert(t('imageGen.insufficientPointsDetail', { count: selectedCount.value, required: totalCost, current: userPoints.value }))
+    await showInsufficientPointsDialog(totalCost, userPoints.value, selectedCount.value)
     return
   }
   
   // 检查并发限制
   if (selectedCount.value > userConcurrentLimit.value) {
-    alert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐`)
+    await showAlert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐`, '并发限制')
     return
   }
   

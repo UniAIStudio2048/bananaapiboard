@@ -1304,9 +1304,27 @@ async function handleFileDrop(event) {
   }
 }
 
+// 暴露给父组件的方法
+defineExpose({
+  // 设置缩放级别（不触发store更新，避免循环）
+  setZoom: (zoom, options = {}) => {
+    if (setViewport) {
+      const currentViewport = getViewport()
+      setViewport({
+        ...currentViewport,
+        zoom
+      }, { duration: options.duration || 200 })
+    }
+  },
+  // 获取当前视口
+  getViewport: () => {
+    return getViewport ? getViewport() : canvasStore.viewport
+  }
+})
+
 onMounted(() => {
   console.log('[CanvasBoard] 组件已挂载，开始初始化...')
-  
+
   // 初始化视口 - 增加延迟确保 VueFlow 完全就绪
   const initViewport = () => {
     try {
@@ -1317,7 +1335,7 @@ onMounted(() => {
       setTimeout(initViewport, 100)
     }
   }
-  
+
   // 等待足够长的时间确保 VueFlow 完全初始化
   setTimeout(() => {
     initViewport()

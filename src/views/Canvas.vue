@@ -28,6 +28,7 @@ import OnboardingGuide from '@/components/canvas/OnboardingGuide.vue'
 import AIAssistantPanel from '@/components/canvas/AIAssistantPanel.vue'
 import { useI18n } from '@/i18n'
 import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoSave, manualSave as saveToHistory } from '@/stores/canvas/workflowAutoSave'
+import { showAlert, showConfirm } from '@/composables/useCanvasDialog'
 
 // 导入画布样式
 import '@/styles/canvas.css'
@@ -54,12 +55,16 @@ const showSaveDialog = ref(false)
 
 // 工作流面板
 const showWorkflowPanel = ref(false)
+const workflowPanelRef = ref(null)
 
 // 资产面板
 const showAssetPanel = ref(false)
 
 // 历史记录面板
 const showHistoryPanel = ref(false)
+
+// CanvasBoard组件引用
+const canvasBoardRef = ref(null)
 
 // 新手引导
 const showOnboarding = ref(false)
@@ -515,18 +520,24 @@ function closeSaveDialog() {
 // 保存成功回调
 function handleWorkflowSaved(workflow) {
   console.log('[Canvas] 工作流保存成功:', workflow)
-  
+
   // 更新当前标签名称和工作流ID
   canvasStore.updateCurrentTabName(workflow.name)
   canvasStore.markCurrentTabSaved(workflow.id)
-  
+
   // 启用自动保存
   if (!autoSaveEnabled.value) {
     autoSaveEnabled.value = true
     startAutoSave()
   }
-  
+
   lastAutoSave.value = new Date()
+
+  // 🔧 修复：立即刷新工作流面板，确保用户能立即看到最新保存的工作流
+  if (workflowPanelRef.value && typeof workflowPanelRef.value.forceRefresh === 'function') {
+    workflowPanelRef.value.forceRefresh()
+    console.log('[Canvas] 已触发工作流面板刷新')
+  }
 }
 
 // 自动保存函数
@@ -792,13 +803,54 @@ function handleCanvasAddNode(position) {
   const flowPosition = (position.flowX !== undefined && position.flowY !== undefined)
     ? { x: position.flowX, y: position.flowY }
     : null
-    
+
   canvasStore.openNodeSelector(position, 'canvas', null, flowPosition)
+}
+
+// ========== 缩放控制 ==========
+// 缩放步进值
+const ZOOM_STEP = 0.1
+const MIN_ZOOM = 0.1  // 最小10%
+const MAX_ZOOM = 2.0  // 最大200%
+
+// 放大画布
+function handleZoomIn() {
+  const newZoom = Math.min(canvasStore.viewport.zoom + ZOOM_STEP, MAX_ZOOM)
+  canvasStore.updateViewport({
+    ...canvasStore.viewport,
+    zoom: newZoom
+  })
+}
+
+// 缩小画布
+function handleZoomOut() {
+  const newZoom = Math.max(canvasStore.viewport.zoom - ZOOM_STEP, MIN_ZOOM)
+  canvasStore.updateViewport({
+    ...canvasStore.viewport,
+    zoom: newZoom
+  })
+}
+
+// 滑块拖动处理
+function handleZoomSlider(event) {
+  const value = parseFloat(event.target.value)
+  canvasStore.updateViewport({
+    ...canvasStore.viewport,
+    zoom: value
+  })
+}
+
+// 重置缩放到100%
+function handleZoomReset() {
+  canvasStore.updateViewport({
+    ...canvasStore.viewport,
+    zoom: 1.0
+  })
 }
 
 // 键盘快捷键（页面级别）
 // 注意：大部分快捷键已移至 CanvasBoard.vue 中实现
-function handleKeyDown(event) {
+async function handleKeyDown(event) {
   // 检查是否在输入框或可编辑区域中
   const target = event.target
   const isInInput = target.tagName === 'INPUT' || 
@@ -823,7 +875,11 @@ function handleKeyDown(event) {
       
       // 如果是编组节点，需要特殊处理
       if (selectedNode?.type === 'group') {
-        if (confirm('确定要删除这个编组吗？编组内的节点将被恢复为独立节点。')) {
+        const confirmed = await showConfirm(
+          '编组内的节点将被恢复为独立节点',
+          '确定要删除这个编组吗？'
+        )
+        if (confirmed) {
           handleDisbandGroup()
         }
       } else {
@@ -855,71 +911,71 @@ function handleDisbandGroup() {
 }
 
 // 处理整组执行
-function handleExecuteGroup() {
+async function handleExecuteGroup() {
   if (selectedGroupNode.value) {
     const nodeIds = selectedGroupNode.value.data?.nodeIds || []
     console.log('[Canvas] 整组执行', nodeIds)
     // TODO: 实现批量执行逻辑
-    alert(`将执行编组内 ${nodeIds.length} 个节点的生成任务`)
+    await showAlert(`将执行编组内 ${nodeIds.length} 个节点的生成任务`, '整组执行')
   }
 }
 
 // 处理保存工作流
-function handleSaveWorkflow() {
+async function handleSaveWorkflow() {
   const workflow = canvasStore.exportWorkflow()
   console.log('[Canvas] 保存工作流', workflow)
   // TODO: 实现保存工作流逻辑
-  alert('工作流已保存（功能开发中）')
+  await showAlert('工作流已保存（功能开发中）', '提示')
 }
 
 // ========== 图像工具栏事件处理 ==========
 // 重绘（预留接口）
-function handleImageRepaint(data) {
+async function handleImageRepaint(data) {
   console.log('[Canvas] 图像重绘', data)
   // TODO: 接入重绘API
-  alert('重绘功能开发中，请稍后...')
+  await showAlert('重绘功能开发中，请稍后...', '提示')
 }
 
 // 擦除（预留接口）
-function handleImageErase(data) {
+async function handleImageErase(data) {
   console.log('[Canvas] 图像擦除', data)
   // TODO: 接入擦除API
-  alert('擦除功能开发中，请稍后...')
+  await showAlert('擦除功能开发中，请稍后...', '提示')
 }
 
 // 增强（预留接口）
-function handleImageEnhance(data) {
+async function handleImageEnhance(data) {
   console.log('[Canvas] 图像增强', data)
   // TODO: 接入图像增强/超分辨率API
-  alert('增强功能开发中，请稍后...')
+  await showAlert('增强功能开发中，请稍后...', '提示')
 }
 
 // 抠图（预留接口）
-function handleImageCutout(data) {
+async function handleImageCutout(data) {
   console.log('[Canvas] 图像抠图', data)
   // TODO: 接入抠图/去背景API
-  alert('抠图功能开发中，请稍后...')
+  await showAlert('抠图功能开发中，请稍后...', '提示')
 }
 
 // 扩图（预留接口）
-function handleImageExpand(data) {
+async function handleImageExpand(data) {
   console.log('[Canvas] 图像扩图', data)
   // TODO: 接入扩图/outpainting API
-  alert('扩图功能开发中，请稍后...')
+  await showAlert('扩图功能开发中，请稍后...', '提示')
 }
 
 // 标注（预留接口）
-function handleImageAnnotate(data) {
+async function handleImageAnnotate(data) {
   console.log('[Canvas] 图像标注', data)
   // TODO: 打开标注工具
-  alert('标注功能开发中，请稍后...')
+  await showAlert('标注功能开发中，请稍后...', '提示')
 }
 
 // 裁剪（预留接口，可后续实现裁剪组件）
-function handleImageCrop(data) {
+async function handleImageCrop(data) {
   console.log('[Canvas] 图像裁剪', data)
   // TODO: 打开裁剪工具
-  alert('裁剪功能开发中，请稍后...')
+  await showAlert('裁剪功能开发中，请稍后...', '提示')
 }
 
 // 下载
@@ -961,7 +1017,7 @@ onMounted(async () => {
       }
     } catch (error) {
       console.error('[Canvas] 加载工作流失败:', error)
-      alert('加载工作流失败：' + error.message)
+      await showAlert('加载工作流失败：' + error.message, '错误')
     }
   }
   
@@ -1075,11 +1131,25 @@ onUnmounted(() => {
       <!-- 空白状态引导 - 当画布为空或没有标签时显示 -->
       <CanvasEmptyState v-if="canvasStore.isEmpty || canvasStore.workflowTabs.length === 0" />
       
-      <!-- 缩放控制 -->
+      <!-- 缩放控制 - 滑块版本 -->
       <div class="canvas-zoom-controls">
-        <button class="canvas-zoom-btn" @click="() => {}">−</button>
-        <span class="canvas-zoom-value">{{ Math.round(canvasStore.viewport.zoom * 100) }}%</span>
-        <button class="canvas-zoom-btn" @click="() => {}">+</button>
+        <button class="canvas-zoom-btn" @click="handleZoomOut" :disabled="canvasStore.viewport.zoom <= MIN_ZOOM" title="缩小 (-)">−</button>
+        <input
+          type="range"
+          class="canvas-zoom-slider"
+          :min="MIN_ZOOM"
+          :max="MAX_ZOOM"
+          step="0.01"
+          :value="canvasStore.viewport.zoom"
+          @input="handleZoomSlider"
+          :title="`缩放: ${Math.round(canvasStore.viewport.zoom * 100)}%`"
+        />
+        <span
+          class="canvas-zoom-value"
+          @click="handleZoomReset"
+          :title="'点击重置为100%'"
+        >{{ Math.round(canvasStore.viewport.zoom * 100) }}%</span>
+        <button class="canvas-zoom-btn" @click="handleZoomIn" :disabled="canvasStore.viewport.zoom >= MAX_ZOOM" title="放大 (+)">+</button>
       </div>
       
       <!-- 右上角控制区域 -->
@@ -1187,6 +1257,7 @@ onUnmounted(() => {
       
       <!-- 工作流面板 -->
       <WorkflowPanel
+        ref="workflowPanelRef"
         :visible="showWorkflowPanel"
         @close="closeWorkflowPanel"
         @load="handleWorkflowLoaded"
@@ -1842,6 +1913,96 @@ onUnmounted(() => {
 /* 当 AI 面板打开时，按钮位置调整避免遮挡 */
 .ai-assistant-trigger.active {
   right: 444px; /* 面板宽度 420px + 24px 间距 */
+}
+
+/* 缩放滑块样式 */
+.canvas-zoom-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 120px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.canvas-zoom-slider:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* 滑块按钮 - WebKit浏览器 */
+.canvas-zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(145deg, #ffffff 0%, #e0e0e0 100%);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.canvas-zoom-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+.canvas-zoom-slider::-webkit-slider-thumb:active {
+  transform: scale(1.05);
+  background: linear-gradient(145deg, #e0e0e0 0%, #c0c0c0 100%);
+}
+
+/* 滑块按钮 - Firefox */
+.canvas-zoom-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  background: linear-gradient(145deg, #ffffff 0%, #e0e0e0 100%);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.canvas-zoom-slider::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+.canvas-zoom-slider::-moz-range-thumb:active {
+  transform: scale(1.05);
+  background: linear-gradient(145deg, #e0e0e0 0%, #c0c0c0 100%);
+}
+
+/* 滑块轨道 - Firefox */
+.canvas-zoom-slider::-moz-range-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+/* 百分比值可点击重置 */
+.canvas-zoom-value {
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s ease;
+}
+
+.canvas-zoom-value:hover {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 缩放按钮禁用状态 */
+.canvas-zoom-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.canvas-zoom-btn:disabled:hover {
+  background: transparent;
+  color: var(--canvas-text-secondary, rgba(255, 255, 255, 0.5));
 }
 
 
