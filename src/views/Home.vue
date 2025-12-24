@@ -92,11 +92,6 @@ const externalLinkConfig = ref({
   open_in_new_tab: true
 })
 
-// 高速通道配置
-const useFastChannel = ref(false) // 是否使用高速通道
-const fastChannelAvailable = ref(false) // 高速通道是否可用
-const fastChannelExtraPoints = ref(0) // 高速通道附加积分
-
 // 监听图生图模式切换，自动设置默认模型和尺寸
 watch(mode, (newMode) => {
   if (newMode === 'image') {
@@ -882,11 +877,6 @@ async function generate() {
       payload.image = images
     }
     
-    // 高速通道
-    if (useFastChannel.value && fastChannelAvailable.value) {
-      payload.use_fast_channel = true
-    }
-    
     // 调用生成API
     const j = await generateImage(payload)
     console.log('[generate] API响应:', j)
@@ -1609,12 +1599,7 @@ const currentPointsCost = computed(() => {
 
 // 计算总积分消耗（含高速通道附加）
 const totalPointsCost = computed(() => {
-  let cost = currentPointsCost.value
-  // 如果启用高速通道且高速通道可用，添加附加积分
-  if (useFastChannel.value && fastChannelAvailable.value) {
-    cost += fastChannelExtraPoints.value
-  }
-  return cost
+  return currentPointsCost.value
 })
 
 // 检查积分是否足够
@@ -1948,12 +1933,6 @@ async function tryAutoPurchasePackage(voucherBalance) {
 
 onMounted(async () => {
   me.value = await getMe()
-  
-  // 读取高速通道配置
-  if (me.value) {
-    fastChannelAvailable.value = me.value.fast_channel_available || false
-    fastChannelExtraPoints.value = me.value.fast_channel_extra_points || 0
-  }
   
   await loadHistory()
   
@@ -2330,34 +2309,6 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <!-- 高速通道开关 -->
-          <div v-if="fastChannelAvailable" 
-            class="flex items-center justify-between p-3 rounded-xl border transition-all duration-300"
-            :class="useFastChannel 
-              ? 'bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-amber-300 dark:border-amber-700' 
-              : 'bg-slate-50 dark:bg-dark-700 border-slate-200 dark:border-dark-500'"
-          >
-            <div class="flex items-center space-x-2">
-              <span class="text-lg">⚡</span>
-              <div>
-                <div class="text-sm font-medium text-slate-700 dark:text-slate-300">高速通道</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400">
-                  高峰期推荐，额外消耗 <span class="font-semibold text-amber-600 dark:text-amber-400">{{ fastChannelExtraPoints }}</span> 积分
-                </div>
-              </div>
-            </div>
-            <button 
-              @click="useFastChannel = !useFastChannel"
-              class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-              :class="useFastChannel ? 'bg-amber-500' : 'bg-slate-300 dark:bg-dark-500'"
-            >
-              <span 
-                class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                :class="useFastChannel ? 'translate-x-5' : 'translate-x-0'"
-              ></span>
-            </button>
-          </div>
-
           <!-- 生成按钮 -->
           <button 
             @click="generate" 
@@ -2373,7 +2324,7 @@ onUnmounted(() => {
               提交中...
             </span>
             <span v-else class="inline-flex items-center justify-center w-full">
-              <span class="mr-2">{{ useFastChannel && fastChannelAvailable ? '⚡' : '✨' }}</span>
+              <span class="mr-2">✨</span>
               <span :class="{'hidden xl:inline': layoutMode === 'widescreen'}">立即</span>
               <span>生成</span>
               <span class="ml-2 text-sm opacity-90">(消耗{{ totalPointsCost }}积分)</span>
@@ -2421,7 +2372,7 @@ onUnmounted(() => {
           <div v-if="me && !hasEnoughPoints" class="p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
             <p class="text-xs text-amber-700 dark:text-amber-400 flex items-center">
               <span class="mr-1.5">💰</span>
-              <span>积分不足！当前: {{ (me.package_points || 0) + (me.points || 0) }}，需要: {{ totalPointsCost }}{{ useFastChannel && fastChannelAvailable ? `（含高速通道附加${fastChannelExtraPoints}）` : '' }}</span>
+              <span>积分不足！当前: {{ (me.package_points || 0) + (me.points || 0) }}，需要: {{ totalPointsCost }}</span>
             </p>
           </div>
 
