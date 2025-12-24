@@ -811,41 +811,64 @@ function handleCanvasAddNode(position) {
 // 缩放步进值
 const ZOOM_STEP = 0.1
 const MIN_ZOOM = 0.1  // 最小10%
-const MAX_ZOOM = 2.0  // 最大200%
+const MAX_ZOOM = 5.0  // 最大500%
 
 // 放大画布
 function handleZoomIn() {
   const newZoom = Math.min(canvasStore.viewport.zoom + ZOOM_STEP, MAX_ZOOM)
-  canvasStore.updateViewport({
-    ...canvasStore.viewport,
-    zoom: newZoom
-  })
+  zoomToCenter(newZoom)
 }
 
 // 缩小画布
 function handleZoomOut() {
   const newZoom = Math.max(canvasStore.viewport.zoom - ZOOM_STEP, MIN_ZOOM)
-  canvasStore.updateViewport({
-    ...canvasStore.viewport,
-    zoom: newZoom
-  })
+  zoomToCenter(newZoom)
 }
 
 // 滑块拖动处理
 function handleZoomSlider(event) {
   const value = parseFloat(event.target.value)
+  zoomToCenter(value)
+}
+
+// 以画布中心点为锚点进行缩放
+function zoomToCenter(newZoom) {
+  // 获取画布容器
+  const canvasContainer = document.querySelector('.canvas-board')
+  if (!canvasContainer) {
+    // 如果没有找到容器，直接更新 zoom
+    canvasStore.updateViewport({
+      ...canvasStore.viewport,
+      zoom: newZoom
+    })
+    return
+  }
+  
+  const rect = canvasContainer.getBoundingClientRect()
+  const centerX = rect.width / 2
+  const centerY = rect.height / 2
+  
+  const oldZoom = canvasStore.viewport.zoom
+  const oldViewport = canvasStore.viewport
+  
+  // 计算画布中心点在画布坐标系中的位置
+  const canvasCenterX = (centerX - oldViewport.x) / oldZoom
+  const canvasCenterY = (centerY - oldViewport.y) / oldZoom
+  
+  // 计算新的偏移，使画布中心点保持在屏幕中心
+  const newX = centerX - canvasCenterX * newZoom
+  const newY = centerY - canvasCenterY * newZoom
+  
   canvasStore.updateViewport({
-    ...canvasStore.viewport,
-    zoom: value
+    x: newX,
+    y: newY,
+    zoom: newZoom
   })
 }
 
 // 重置缩放到100%
 function handleZoomReset() {
-  canvasStore.updateViewport({
-    ...canvasStore.viewport,
-    zoom: 1.0
-  })
+  zoomToCenter(1.0)
 }
 
 // 键盘快捷键（页面级别）
@@ -1132,7 +1155,7 @@ onUnmounted(() => {
       <CanvasEmptyState v-if="canvasStore.isEmpty || canvasStore.workflowTabs.length === 0" />
       
       <!-- 缩放控制 - 滑块版本 -->
-      <div class="canvas-zoom-controls">
+      <div class="canvas-zoom-controls" @mousedown.stop @touchstart.stop>
         <button class="canvas-zoom-btn" @click="handleZoomOut" :disabled="canvasStore.viewport.zoom <= MIN_ZOOM" title="缩小 (-)">−</button>
         <input
           type="range"
@@ -1142,6 +1165,8 @@ onUnmounted(() => {
           step="0.01"
           :value="canvasStore.viewport.zoom"
           @input="handleZoomSlider"
+          @mousedown.stop
+          @touchstart.stop
           :title="`缩放: ${Math.round(canvasStore.viewport.zoom * 100)}%`"
         />
         <span

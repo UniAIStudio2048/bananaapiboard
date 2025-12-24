@@ -754,9 +754,46 @@ function groupSelectedNodes() {
 }
 
 // 同步视口变化到 store
+// 标记是否正在从外部更新视口（用于避免循环更新）
+let isExternalViewportUpdate = false
+
 function handleViewportChange(viewport) {
+  // 如果是外部更新触发的，跳过同步到 store（避免循环）
+  if (isExternalViewportUpdate) return
   canvasStore.updateViewport(viewport)
 }
+
+// 监听 store 的 viewport 变化，同步到 VueFlow（支持滑块拖动等外部控制）
+watch(
+  () => canvasStore.viewport,
+  (newViewport) => {
+    if (!setViewport || !getViewport) return
+    
+    // 获取当前 VueFlow 的视口
+    const currentViewport = getViewport()
+    
+    // 检查是否需要更新（避免不必要的更新和循环）
+    const needsUpdate = 
+      Math.abs(currentViewport.x - newViewport.x) > 0.01 ||
+      Math.abs(currentViewport.y - newViewport.y) > 0.01 ||
+      Math.abs(currentViewport.zoom - newViewport.zoom) > 0.001
+    
+    if (needsUpdate) {
+      // 标记正在从外部更新，防止 handleViewportChange 触发循环
+      isExternalViewportUpdate = true
+      setViewport({
+        x: newViewport.x,
+        y: newViewport.y,
+        zoom: newViewport.zoom
+      })
+      // 延迟重置标志，确保 viewport-change 事件已被处理
+      setTimeout(() => {
+        isExternalViewportUpdate = false
+      }, 50)
+    }
+  },
+  { deep: true }
+)
 
 // 处理边的变化（包括删除）
 function handleEdgesChange(changes) {

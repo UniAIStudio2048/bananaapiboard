@@ -291,11 +291,10 @@ const showToolbar = computed(() => {
   return hasOutput.value || hasSourceImage.value
 })
 
-// 是否显示底部配置面板 - 与 TextNode 保持一致，选中即显示（源节点除外）
+// 是否显示底部配置面板 - 与 TextNode 保持一致，选中即显示
+// 修改：源节点也显示配置面板，以便添加参考图片
 const showConfigPanel = computed(() => {
-  if (!props.selected) return false
-  if (isSourceNode.value) return false
-  return true
+  return props.selected === true
 })
 
 
@@ -738,6 +737,12 @@ async function uploadImageFile(file) {
   try {
     // 立即上传到服务器获取真正的 URL
     console.log('[ImageNode] 上传图片文件到服务器:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
+    
+    // 检查文件大小（限制 10MB）
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('图片文件过大，请选择小于 10MB 的图片')
+    }
+    
     const urls = await uploadImages([file])
     if (urls && urls.length > 0) {
       console.log('[ImageNode] 图片上传成功，URL:', urls[0])
@@ -745,12 +750,20 @@ async function uploadImageFile(file) {
     }
     throw new Error('上传返回空URL')
   } catch (error) {
-    console.error('[ImageNode] 图片上传失败，回退到 base64:', error)
+    console.error('[ImageNode] 图片上传失败，错误:', error.message)
+    console.warn('[ImageNode] 尝试使用 base64 作为备选方案')
+    
     // 如果上传失败，回退到 base64（作为备用方案）
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target.result)
-      reader.onerror = reject
+      reader.onload = (e) => {
+        console.log('[ImageNode] base64 转换成功')
+        resolve(e.target.result)
+      }
+      reader.onerror = (err) => {
+        console.error('[ImageNode] base64 转换失败:', err)
+        reject(err)
+      }
       reader.readAsDataURL(file)
     })
   }
@@ -1977,24 +1990,68 @@ async function handleRefImageUpload(event) {
   const files = event.target.files
   if (!files || files.length === 0) return
   
+  // 先将 FileList 转换为数组，避免重置 input 后 FileList 被清空
+  // 因为 FileList 是 live collection，重置 input.value 会导致其清空
+  const fileArray = Array.from(files)
+  
+  console.log('[ImageNode] 处理参考图片上传，文件数量:', fileArray.length)
   event.target.value = '' // 重置 input
   
   try {
-    for (const file of files) {
-      if (file.type.startsWith('image/')) {
+    for (const file of fileArray) {
+      console.log('[ImageNode] 文件信息:', {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        lastModified: file.lastModified
+      })
+      
+      // 放宽条件：只要文件名是图片格式就允许上传
+      const isImageByName = /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(file.name)
+      const isImageByType = file.type && file.type.startsWith('image/')
+      
+      console.log('[ImageNode] 文件类型检查:', {
+        isImageByName,
+        isImageByType,
+        willUpload: isImageByName || isImageByType
+      })
+      
+      if (isImageByName || isImageByType) {
+        console.log('[ImageNode] 开始上传图片:', file.name)
         const imageUrl = await uploadImageFile(file)
-        createUpstreamImageNode(imageUrl)
+        console.log('[ImageNode] 图片上传成功，URL:', imageUrl, '准备创建上游节点')
+        
+        // 确保在下一个tick执行，避免可能的时序问题
+        await nextTick()
+        
+        try {
+          console.log('[ImageNode] 即将调用 createUpstreamImageNode')
+          createUpstreamImageNode(imageUrl)
+          console.log('[ImageNode] createUpstreamImageNode 调用完成')
+        } catch (nodeError) {
+          console.error('[ImageNode] 创建上游节点失败:', nodeError)
+          console.error('[ImageNode] 错误堆栈:', nodeError.stack)
+        }
+      } else {
+        console.warn('[ImageNode] 文件不是图片格式，已跳过:', file.name, '类型:', file.type)
       }
     }
   } catch (error) {
     console.error('[ImageNode] 参考图片上传失败:', error)
+    console.error('[ImageNode] 错误详情:', error.message)
+    console.error('[ImageNode] 错误堆栈:', error.stack)
   }
 }
 
 // 创建上游图片节点
 function createUpstreamImageNode(imageUrl) {
+  console.log('[ImageNode] createUpstreamImageNode 被调用，imageUrl:', imageUrl, '当前节点ID:', props.id)
+  
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
-  if (!currentNode) return
+  if (!currentNode) {
+    console.error('[ImageNode] 无法找到当前节点:', props.id)
+    return
+  }
   
   const existingUpstreamCount = canvasStore.edges.filter(e => e.target === props.id).length
   const offsetY = existingUpstreamCount * 200
@@ -2004,6 +2061,8 @@ function createUpstreamImageNode(imageUrl) {
     x: currentNode.position.x - 450,
     y: currentNode.position.y + offsetY - 100
   }
+  
+  console.log('[ImageNode] 准备创建新节点，ID:', newNodeId, '位置:', newNodePosition)
   
   // 使用 image-input 类型，与拖拽上传和文件选择器保持一致
   canvasStore.addNode({
@@ -2017,6 +2076,8 @@ function createUpstreamImageNode(imageUrl) {
     }
   })
   
+  console.log('[ImageNode] 节点创建完成，准备添加连接边')
+  
   canvasStore.addEdge({
     id: `edge_${newNodeId}_${props.id}`,
     source: newNodeId,
@@ -2025,11 +2086,15 @@ function createUpstreamImageNode(imageUrl) {
     targetHandle: 'input'
   })
   
+  console.log('[ImageNode] 连接边添加完成')
+  
   const currentOrder = props.data.imageOrder || [...referenceImages.value]
   canvasStore.updateNodeData(props.id, {
     imageOrder: [...currentOrder, imageUrl],
     hasUpstream: true
   })
+  
+  console.log('[ImageNode] 上游节点创建完成，imageOrder 已更新')
 }
 
 // 删除参考图片

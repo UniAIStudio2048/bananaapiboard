@@ -1383,10 +1383,15 @@ async function handleFrameFileChange(event) {
   const files = event.target.files
   if (!files || files.length === 0) return
   
+  // 先将 FileList 转换为数组，避免重置 input 后 FileList 被清空
+  // 因为 FileList 是 live collection，重置 input.value 会导致其清空
+  const fileArray = Array.from(files)
+  
+  console.log('[VideoNode] 处理参考图片上传，文件数量:', fileArray.length)
   event.target.value = '' // 重置 input
   
   try {
-    for (const file of files) {
+    for (const file of fileArray) {
       if (file.type.startsWith('image/')) {
         const imageUrl = await uploadImageFile(file)
         // 为每张图片创建上游节点
