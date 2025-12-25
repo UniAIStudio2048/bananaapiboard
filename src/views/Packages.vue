@@ -566,24 +566,31 @@
         </div>
         
         <div class="p-6 space-y-6">
-          <!-- 快捷金额选项 -->
-          <div>
+          <!-- 充值卡片选项 -->
+          <div v-if="rechargeCards.length > 0">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-              选择充值金额
+              选择充值卡片
             </label>
             <div class="grid grid-cols-3 gap-3">
               <button
-                v-for="amount in quickAmounts"
-                :key="amount"
-                @click="selectQuickAmount(amount)"
+                v-for="card in rechargeCards"
+                :key="card.id"
+                @click="selectRechargeCard(card)"
                 :class="[
-                  'py-3 px-4 rounded-xl font-medium text-center transition-all duration-200 border-2',
-                  rechargeAmount === amount
+                  'relative py-3 px-4 rounded-xl font-medium text-center transition-all duration-200 border-2',
+                  selectedRechargeCard?.id === card.id
                     ? 'bg-amber-500 text-white border-amber-500 shadow-lg scale-105'
                     : 'bg-white dark:bg-dark-600 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-dark-500 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'
                 ]"
               >
-                ¥{{ amount / 100 }}
+                <!-- 奖励标识：小星星 -->
+                <span v-if="card.bonus_enabled" class="absolute -top-1 -right-1 text-yellow-400 text-lg">★</span>
+                <div>¥{{ (card.amount / 100).toFixed(0) }}</div>
+                <!-- 奖励说明 -->
+                <div v-if="card.bonus_enabled" class="text-xs mt-1" :class="selectedRechargeCard?.id === card.id ? 'text-white/80' : 'text-amber-600 dark:text-amber-400'">
+                  <span v-if="card.bonus_type === 'random'">+{{ card.bonus_min }}~{{ card.bonus_max }} 随机积分奖励</span>
+                  <span v-else>+{{ card.bonus_fixed }} 积分奖励</span>
+                </div>
               </button>
             </div>
           </div>
@@ -603,7 +610,7 @@
                 step="0.01"
                 class="w-full pl-10 px-4 py-3 rounded-lg border border-slate-300 dark:border-dark-500 bg-white dark:bg-dark-600 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all text-lg"
                 placeholder="输入金额"
-                @input="rechargeAmount = ''"
+                @input="rechargeAmount = ''; selectedRechargeCard = null"
               />
             </div>
           </div>
@@ -645,6 +652,16 @@
               <span class="text-2xl font-bold text-green-600 dark:text-green-400">
                 ¥{{ (getFinalRechargeAmount() / 100).toFixed(2) }}
               </span>
+            </div>
+            <!-- 选中充值卡片的奖励信息 -->
+            <div v-if="selectedRechargeCard?.bonus_enabled" class="mt-2 pt-2 border-t border-green-200 dark:border-green-700">
+              <div class="flex items-center justify-between text-sm">
+                <span class="text-green-600 dark:text-green-400">🎁 充值奖励</span>
+                <span class="font-medium text-amber-600 dark:text-amber-400">
+                  <span v-if="selectedRechargeCard.bonus_type === 'random'">+{{ selectedRechargeCard.bonus_min }}~{{ selectedRechargeCard.bonus_max }} 随机积分奖励</span>
+                  <span v-else>+{{ selectedRechargeCard.bonus_fixed }} 积分奖励</span>
+                </span>
+              </div>
             </div>
           </div>
           
@@ -727,6 +744,8 @@ const rechargeLoading = ref(false)
 const rechargeError = ref('')
 const paymentMethods = ref([])
 const quickAmounts = [300, 500, 1000, 5000, 10000] // 单位：分
+const rechargeCards = ref([]) // 充值卡片列表
+const selectedRechargeCard = ref(null) // 选中的充值卡片
 
 // 使用后端返回的 level 字段来判断套餐等级
 // 注意：如果没有 level 字段，则回退到 packageOrder 映射
@@ -1136,23 +1155,35 @@ async function openRechargeModal() {
   rechargeAmount.value = ''
   rechargeCustomAmount.value = ''
   rechargeSelectedMethod.value = null
+  selectedRechargeCard.value = null
   rechargeError.value = ''
   
-  // 加载支付方式
+  // 并行加载支付方式和充值卡片
   try {
     const token = localStorage.getItem('token')
-    const res = await fetch('/api/user/payment-methods', {
-      headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
-      const data = await res.json()
+    const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
+    
+    const [paymentRes, cardsRes] = await Promise.all([
+      fetch('/api/user/payment-methods', { headers }),
+      fetch('/api/recharge-cards', { headers: getTenantHeaders() })
+    ])
+    
+    // 处理支付方式
+    if (paymentRes.ok) {
+      const data = await paymentRes.json()
       paymentMethods.value = data.methods || []
       if (paymentMethods.value.length > 0) {
         rechargeSelectedMethod.value = paymentMethods.value[0].id
       }
     }
+    
+    // 处理充值卡片
+    if (cardsRes.ok) {
+      const data = await cardsRes.json()
+      rechargeCards.value = data.recharge_cards || []
+    }
   } catch (e) {
-    console.error('[openRechargeModal] 加载支付方式失败:', e)
+    console.error('[openRechargeModal] 加载数据失败:', e)
   }
 }
 
@@ -1160,11 +1191,20 @@ function closeRechargeModal() {
   showRechargeModal.value = false
   rechargeAmount.value = ''
   rechargeCustomAmount.value = ''
+  selectedRechargeCard.value = null
   rechargeError.value = ''
 }
 
 function selectQuickAmount(amount) {
   rechargeAmount.value = amount
+  rechargeCustomAmount.value = ''
+  selectedRechargeCard.value = null
+}
+
+// 选择充值卡片
+function selectRechargeCard(card) {
+  selectedRechargeCard.value = card
+  rechargeAmount.value = card.amount
   rechargeCustomAmount.value = ''
 }
 
@@ -1202,6 +1242,16 @@ async function submitRecharge() {
   
   try {
     const token = localStorage.getItem('token')
+    const payload = {
+      amount: amount,
+      payment_method_id: rechargeSelectedMethod.value
+    }
+    
+    // 如果选择了充值卡片，传递卡片ID
+    if (selectedRechargeCard.value) {
+      payload.recharge_card_id = selectedRechargeCard.value.id
+    }
+    
     const res = await fetch('/api/user/recharge', {
       method: 'POST',
       headers: {
@@ -1209,10 +1259,7 @@ async function submitRecharge() {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        amount: amount,
-        payment_method_id: rechargeSelectedMethod.value
-      })
+      body: JSON.stringify(payload)
     })
     
     const data = await res.json()

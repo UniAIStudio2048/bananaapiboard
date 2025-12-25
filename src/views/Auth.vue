@@ -35,7 +35,20 @@ const resetMode = ref(false) // 密码重置模式
 const newPassword = ref('')
 const confirmPassword = ref('')
 const emailPrefix = ref('') // 邮箱前缀
-const emailSuffix = ref('qq.com') // 邮箱后缀，默认为qq.com
+const emailSuffix = ref('') // 邮箱后缀
+const emailAddress = ref('') // 完整邮箱地址（无白名单时使用）
+
+// 计算属性：是否需要显示独立的邮箱输入框
+const needSeparateEmailInput = computed(() => {
+  return mode.value === 'register' && emailConfig.value.require_email_verification
+})
+
+// 计算属性：是否有白名单
+const hasWhitelist = computed(() => {
+  return emailConfig.value.has_whitelist && 
+         Array.isArray(emailConfig.value.email_whitelist) && 
+         emailConfig.value.email_whitelist.length > 0
+})
 
 // 加载邀请奖励配置
 async function loadInviteRewards() {
@@ -81,12 +94,18 @@ const inviteRewardText = computed(() => {
 
 // 构建完整邮箱地址
 const fullEmail = computed(() => {
-  if (mode.value === 'register' && emailConfig.value.has_whitelist && emailConfig.value.email_whitelist.length > 0) {
-    // 注册模式且有白名单，使用前缀+后缀
-    if (emailPrefix.value && emailSuffix.value) {
-      return `${emailPrefix.value}@${emailSuffix.value}`
+  // 注册模式且需要邮箱验证
+  if (needSeparateEmailInput.value) {
+    if (hasWhitelist.value) {
+      // 有白名单，使用前缀+后缀
+      if (emailPrefix.value && emailSuffix.value) {
+        return `${emailPrefix.value}@${emailSuffix.value}`
+      }
+      return ''
+    } else {
+      // 无白名单，使用完整邮箱地址
+      return emailAddress.value
     }
-    return ''
   }
   // 其他情况使用原来的account字段
   return account.value
@@ -211,7 +230,13 @@ async function submit() {
   // 注册时检查邮箱验证要求
   if (mode.value === 'register' && emailConfig.value.require_email_verification) {
     if (!email) {
-      error.value = '请选择邮箱后缀'
+      error.value = hasWhitelist.value ? '请填写邮箱前缀并选择后缀' : '请输入邮箱地址'
+      return
+    }
+    // 验证邮箱格式
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      error.value = '请输入有效的邮箱地址'
       return
     }
     if (!emailCode.value) {
@@ -311,8 +336,8 @@ async function submit() {
 
         <!-- 表单 -->
         <form @submit.prevent="resetMode ? resetPassword() : submit()" class="space-y-6">
-          <!-- 注册模式且有白名单：显示用户名和邮箱分开的输入 -->
-          <div v-if="mode === 'register' && emailConfig.has_whitelist && emailConfig.email_whitelist.length > 0">
+          <!-- 注册模式且需要邮箱验证：显示用户名和邮箱分开的输入 -->
+          <div v-if="needSeparateEmailInput">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               👤 用户名 *
             </label>
@@ -325,7 +350,8 @@ async function submit() {
             />
           </div>
 
-          <div v-if="mode === 'register' && emailConfig.has_whitelist && emailConfig.email_whitelist.length > 0">
+          <!-- 有白名单：邮箱前缀+下拉选择后缀 -->
+          <div v-if="needSeparateEmailInput && hasWhitelist">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               📧 邮箱 *
             </label>
@@ -351,10 +377,27 @@ async function submit() {
                 </option>
               </select>
             </div>
+            <p class="text-xs text-amber-600 dark:text-amber-400 mt-1">
+              ⚠️ 仅白名单邮箱可以注册
+            </p>
           </div>
 
-          <!-- 其他模式：显示原来的邮箱/登录名输入框 -->
-          <div v-if="!(mode === 'register' && emailConfig.has_whitelist && emailConfig.email_whitelist.length > 0)">
+          <!-- 无白名单但需要验证：完整邮箱输入框 -->
+          <div v-if="needSeparateEmailInput && !hasWhitelist">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              📧 邮箱 *
+            </label>
+            <input 
+              v-model="emailAddress" 
+              type="email" 
+              class="input"
+              placeholder="请输入您的邮箱地址"
+              required
+            />
+          </div>
+
+          <!-- 其他模式（登录/不需要邮箱验证的注册）：显示原来的邮箱/登录名输入框 -->
+          <div v-if="!needSeparateEmailInput">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               📧 邮箱/登录名
             </label>
@@ -381,7 +424,7 @@ async function submit() {
           </div>
 
           <!-- 邮箱验证码（注册时且需要验证时显示，或密码重置时） -->
-          <div v-if="(mode === 'register' && emailConfig.require_email_verification) || resetMode">
+          <div v-if="needSeparateEmailInput || resetMode">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               📬 邮箱验证码 *
             </label>
@@ -403,9 +446,6 @@ async function submit() {
                 {{ sendingCode ? '发送中...' : codeSent ? `${countdown}秒后重发` : '发送验证码' }}
               </button>
             </div>
-            <p v-if="mode === 'register' && emailConfig.has_whitelist" class="text-xs text-amber-600 dark:text-amber-400 mt-1">
-              ⚠️ 仅白名单邮箱可以注册
-            </p>
           </div>
 
           <!-- 新密码（密码重置时显示） -->

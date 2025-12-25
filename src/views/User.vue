@@ -1,12 +1,39 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from '@/i18n'
 import { redeemVoucher } from '@/api/client'
 import { getTheme, setTheme, toggleTheme as toggleThemeUtil, themes } from '@/utils/theme'
 import { getTenantHeaders, getModelDisplayName } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 
+const { t } = useI18n()
+
 const route = useRoute()
+
+// 获取交易类型文字（使用i18n翻译）
+const getTransactionTypeText = (type) => {
+  // 尝试从 pointsType 中查找翻译
+  const pointsTypeKey = `pointsType.${type}`
+  const pointsTypeText = t(pointsTypeKey)
+  
+  // 如果找到翻译（不是key本身），返回翻译
+  if (pointsTypeText !== pointsTypeKey) {
+    return pointsTypeText
+  }
+  
+  // 否则尝试从 user.ledgerType 中查找翻译
+  const ledgerTypeKey = `user.ledgerType.${type}`
+  const ledgerTypeText = t(ledgerTypeKey)
+  
+  // 如果找到翻译（不是key本身），返回翻译
+  if (ledgerTypeText !== ledgerTypeKey) {
+    return ledgerTypeText
+  }
+  
+  // 都没找到，返回原始type
+  return type
+}
 
 const token = localStorage.getItem('token')
 const me = ref(null)
@@ -130,6 +157,20 @@ const transferError = ref('')
 const transferSuccess = ref('')
 const exchangeRate = ref(10)
 
+// 积分转让相关
+const pointsTransferForm = ref({
+  recipientQuery: '',         // 收款人搜索输入
+  selectedRecipient: null,    // 已选择的收款人 { id, username, email }
+  amount: null,               // 转让金额
+  memo: '',                   // 备注
+  recipientError: '',         // 收款人错误提示
+  amountError: ''             // 金额错误提示
+})
+const recipientSuggestions = ref([])  // 用户搜索建议列表
+const transferring = ref(false)        // 转账进行中
+let searchTimeout = null               // 防抖计时器
+const showTransferConfirmModal = ref(false)  // 显示转账确认弹窗
+
 // 充值相关
 const showRechargeModal = ref(false)
 const rechargeAmount = ref('')
@@ -139,12 +180,49 @@ const rechargeLoading = ref(false)
 const rechargeError = ref('')
 const paymentMethods = ref([])
 const quickAmounts = [300, 500, 1000, 5000, 10000] // 单位：分
+const rechargeCards = ref([]) // 充值卡片列表
+const selectedRechargeCard = ref(null) // 选中的充值卡片
 
 // 账单中心相关
 const billOrders = ref([])
 const billLoading = ref(false)
 const billPage = ref(1)
 const billTotal = ref(0)
+
+// 转让结果 Toast 通知相关
+const transferToast = ref({
+  show: false,
+  type: 'success', // success | error
+  title: '',
+  message: '',
+  icon: ''
+})
+let transferToastTimer = null
+
+// 显示转让结果 Toast 通知
+function showTransferToast(type, title, message, duration = 3000) {
+  if (transferToastTimer) {
+    clearTimeout(transferToastTimer)
+  }
+  transferToast.value = {
+    show: true,
+    type,
+    title,
+    message,
+    icon: type === 'success' ? '🎉' : '❌'
+  }
+  transferToastTimer = setTimeout(() => {
+    transferToast.value.show = false
+  }, duration)
+}
+
+// 关闭转让结果 Toast
+function closeTransferToast() {
+  transferToast.value.show = false
+  if (transferToastTimer) {
+    clearTimeout(transferToastTimer)
+  }
+}
 
 // 获取模型显示名称（图片）
 const getImageModelName = (modelKey) => {
@@ -941,11 +1019,19 @@ async function submitVoucher() {
           detailText = `\n• 有效期延长：${autoPurchaseResult.durationDays}天\n• 累加积分：+${autoPurchaseResult.points}\n• 并发限制：不变`
         } else if (autoPurchaseResult.isUpgrade) {
           actionText = '已自动升级'
-          detailText = `\n• 赠送积分：${autoPurchaseResult.points}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天\n• 原套餐剩余价值已自动折抵`
+          detailText = `
+• 赠送积分：${autoPurchaseResult.points}
+• 并发限制：${autoPurchaseResult.concurrentLimit}个
+• 有效期：${autoPurchaseResult.durationDays}天
+• 原套餐剩余价值已自动折抵`
         } else {
           detailText = `\n• 赠送积分：${autoPurchaseResult.points}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
         }
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额\n\n🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}\n\n💰 剩余余额：¥${(autoPurchaseResult.remainingBalance / 100).toFixed(2)}`
+        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额
+
+🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}
+
+💰 剩余余额：¥${(autoPurchaseResult.remainingBalance / 100).toFixed(2)}`
         // 刷新用户信息
         await load()
       } else if (autoPurchaseResult.reason === 'no_package') {
@@ -1302,27 +1388,199 @@ async function submitTransfer() {
   }
 }
 
+// 积分转让 - 是否可以转让（所有字段验证通过）
+const canTransfer = computed(() => {
+  return pointsTransferForm.value.selectedRecipient
+    && pointsTransferForm.value.amount > 0
+    && pointsTransferForm.value.amount <= (me.value?.points || 0)
+    && !pointsTransferForm.value.recipientError
+    && !pointsTransferForm.value.amountError
+})
+
+// 积分转让 - 处理收款人搜索（防抖300ms）
+function handleRecipientSearch() {
+  const query = pointsTransferForm.value.recipientQuery.trim()
+
+  // 清除已选择的收款人
+  if (pointsTransferForm.value.selectedRecipient) {
+    pointsTransferForm.value.selectedRecipient = null
+  }
+
+  // 清除错误提示
+  pointsTransferForm.value.recipientError = ''
+
+  // 清空建议列表
+  if (query.length < 3) {
+    recipientSuggestions.value = []
+    if (query.length > 0 && query.length < 3) {
+      pointsTransferForm.value.recipientError = '请至少输入3个字符'
+    }
+    return
+  }
+
+  // 防抖
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(async () => {
+    try {
+      const headers = {
+        ...getTenantHeaders(),
+        Authorization: `Bearer ${token}`
+      }
+      const res = await fetch(`/api/user/search-users?q=${encodeURIComponent(query)}`, { headers })
+
+      if (!res.ok) {
+        throw new Error('搜索失败')
+      }
+
+      const data = await res.json()
+      recipientSuggestions.value = data.users || []
+
+      if (data.users.length === 0) {
+        pointsTransferForm.value.recipientError = '未找到匹配的用户'
+      }
+    } catch (e) {
+      console.error('[search-users] error:', e)
+      pointsTransferForm.value.recipientError = '搜索失败，请重试'
+      recipientSuggestions.value = []
+    }
+  }, 300)
+}
+
+// 积分转让 - 选择收款人
+function selectRecipient(user) {
+  pointsTransferForm.value.selectedRecipient = user
+  pointsTransferForm.value.recipientQuery = user.username
+  recipientSuggestions.value = []
+  pointsTransferForm.value.recipientError = ''
+}
+
+// 积分转让 - 清除收款人选择
+function clearRecipient() {
+  pointsTransferForm.value.selectedRecipient = null
+  pointsTransferForm.value.recipientQuery = ''
+  pointsTransferForm.value.recipientError = ''
+  recipientSuggestions.value = []
+}
+
+// 积分转让 - 确认转让
+async function confirmTransfer() {
+  // 重新验证
+  pointsTransferForm.value.recipientError = ''
+  pointsTransferForm.value.amountError = ''
+
+  if (!pointsTransferForm.value.selectedRecipient) {
+    pointsTransferForm.value.recipientError = '请选择收款人'
+    return
+  }
+
+  const amount = parseInt(pointsTransferForm.value.amount)
+  if (!amount || amount <= 0) {
+    pointsTransferForm.value.amountError = '转让金额必须大于0'
+    return
+  }
+
+  if (amount > (me.value?.points || 0)) {
+    pointsTransferForm.value.amountError = '积分不足'
+    return
+  }
+
+  // 显示确认弹窗
+  showTransferConfirmModal.value = true
+}
+
+// 执行转账
+async function executeTransfer() {
+  showTransferConfirmModal.value = false
+  transferring.value = true
+
+  const amount = pointsTransferForm.value.amount
+
+  try {
+    const headers = {
+      ...getTenantHeaders(),
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    }
+
+    const res = await fetch('/api/user/transfer-points', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        to_user_id: pointsTransferForm.value.selectedRecipient.id,
+        amount: amount,
+        memo: pointsTransferForm.value.memo.trim()
+      })
+    })
+
+    const data = await res.json()
+
+    if (!res.ok) {
+      throw new Error(data.message || data.error || '转让失败')
+    }
+
+    // 成功提示 - 使用美观的 Toast 通知
+    showTransferToast(
+      'success',
+      '转让成功',
+      data.message || `成功转让 ${amount} 积分给 ${pointsTransferForm.value.selectedRecipient.username}`,
+      4000
+    )
+
+    // 重置表单
+    pointsTransferForm.value = {
+      recipientQuery: '',
+      selectedRecipient: null,
+      amount: null,
+      memo: '',
+      recipientError: '',
+      amountError: ''
+    }
+
+    // 刷新用户数据和流水
+    await load()
+
+  } catch (e) {
+    console.error('[transfer-points] error:', e)
+    showTransferToast('error', '转让失败', e.message, 4000)
+  } finally {
+    transferring.value = false
+  }
+}
+
 // 打开充值弹窗
 async function openRechargeModal() {
   showRechargeModal.value = true
   rechargeAmount.value = ''
   rechargeCustomAmount.value = ''
   rechargeSelectedMethod.value = null
+  selectedRechargeCard.value = null
   rechargeError.value = ''
-  
-  // 加载支付方式
+
+  // 并行加载支付方式和充值卡片
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
-    const res = await fetch('/api/user/payment-methods', { headers })
-    if (res.ok) {
-      const data = await res.json()
+
+    const [paymentRes, cardsRes] = await Promise.all([
+      fetch('/api/user/payment-methods', { headers }),
+      fetch('/api/recharge-cards', { headers: getTenantHeaders() })
+    ])
+
+    // 处理支付方式
+    if (paymentRes.ok) {
+      const data = await paymentRes.json()
       paymentMethods.value = data.methods || []
       if (paymentMethods.value.length > 0) {
         rechargeSelectedMethod.value = paymentMethods.value[0].id
       }
     }
+
+    // 处理充值卡片
+    if (cardsRes.ok) {
+      const data = await cardsRes.json()
+      rechargeCards.value = data.recharge_cards || []
+    }
   } catch (e) {
-    console.error('[openRechargeModal] 加载支付方式失败:', e)
+    console.error('[openRechargeModal] 加载数据失败:', e)
   }
 }
 
@@ -1331,13 +1589,22 @@ function closeRechargeModal() {
   showRechargeModal.value = false
   rechargeAmount.value = ''
   rechargeCustomAmount.value = ''
+  selectedRechargeCard.value = null
   rechargeError.value = ''
+}
+
+// 选择充值卡片
+function selectRechargeCard(card) {
+  selectedRechargeCard.value = card
+  rechargeAmount.value = card.amount
+  rechargeCustomAmount.value = ''
 }
 
 // 选择快捷金额
 function selectQuickAmount(amount) {
   rechargeAmount.value = amount
   rechargeCustomAmount.value = ''
+  selectedRechargeCard.value = null
 }
 
 // 获取最终充值金额（分）
@@ -1381,13 +1648,20 @@ async function submitRecharge() {
       'Content-Type': 'application/json'
     }
     
+    const requestBody = {
+      amount: amount,
+      payment_method_id: rechargeSelectedMethod.value
+    }
+
+    // 如果选择了充值卡片，传递卡片ID
+    if (selectedRechargeCard.value) {
+      requestBody.recharge_card_id = selectedRechargeCard.value.id
+    }
+
     const res = await fetch('/api/user/recharge', {
       method: 'POST',
       headers,
-      body: JSON.stringify({
-        amount: amount,
-        payment_method_id: rechargeSelectedMethod.value
-      })
+      body: JSON.stringify(requestBody)
     })
     
     const data = await res.json()
@@ -1765,22 +2039,8 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- 数据统计看板 -->
+      <!-- 积分数据看板 -->
       <div v-if="stats" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <!-- 生成图片数 -->
-        <div class="card p-6 hover:scale-105 transition-transform duration-300">
-          <div class="flex items-center justify-between mb-4">
-            <div class="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl flex items-center justify-center">
-              <span class="text-2xl">🎨</span>
-            </div>
-            <div class="text-right">
-              <p class="text-3xl font-bold gradient-text">{{ stats.successfulGenerations }}</p>
-              <p class="text-xs text-slate-500 dark:text-slate-400">总计 {{ stats.totalGenerations }}</p>
-            </div>
-          </div>
-          <p class="text-sm font-medium text-slate-700 dark:text-slate-300">生成图片</p>
-        </div>
-
         <!-- 套餐积分 -->
         <div class="card p-6 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-200 dark:border-amber-700">
           <div class="flex items-center space-x-3 mb-4">
@@ -1881,20 +2141,6 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 邀请人数 -->
-        <div class="card p-6 hover:scale-105 transition-transform duration-300">
-          <div class="flex items-center justify-between mb-4">
-            <div class="w-12 h-12 bg-gradient-to-br from-green-400 to-green-600 rounded-xl flex items-center justify-center">
-              <span class="text-2xl">🎁</span>
-            </div>
-            <div class="text-right">
-              <p class="text-3xl font-bold gradient-text">{{ stats.totalInvites }}</p>
-              <p class="text-xs text-slate-500 dark:text-slate-400">成功邀请</p>
-            </div>
-          </div>
-          <p class="text-sm font-medium text-slate-700 dark:text-slate-300">邀请好友</p>
-        </div>
-
         <!-- 总积分 -->
         <div class="card p-6 hover:scale-105 transition-transform duration-300 bg-gradient-to-br from-indigo-500 to-purple-600">
           <div class="flex items-center justify-between mb-4">
@@ -1907,6 +2153,48 @@ onUnmounted(() => {
             </div>
           </div>
           <p class="text-sm font-medium text-white">总积分</p>
+        </div>
+      </div>
+
+      <!-- 创作统计看板 -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <!-- 生图数量 -->
+        <div class="card p-5 bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 border border-blue-200 dark:border-blue-800 hover:shadow-lg transition-all duration-300">
+          <div class="flex items-center space-x-4">
+            <div class="w-14 h-14 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+              <span class="text-2xl">🖼️</span>
+            </div>
+            <div class="flex-1">
+              <p class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">生图数量</p>
+              <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ stats?.totalImages || 0 }} <span class="text-sm font-normal text-slate-500">张</span></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 生视频数量 -->
+        <div class="card p-5 bg-gradient-to-br from-rose-50 to-pink-50 dark:from-rose-900/20 dark:to-pink-900/20 border border-rose-200 dark:border-rose-800 hover:shadow-lg transition-all duration-300">
+          <div class="flex items-center space-x-4">
+            <div class="w-14 h-14 bg-gradient-to-br from-rose-500 to-pink-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+              <span class="text-2xl">🎬</span>
+            </div>
+            <div class="flex-1">
+              <p class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">生视频数量</p>
+              <p class="text-2xl font-bold text-rose-600 dark:text-rose-400">{{ stats?.totalVideos || 0 }} <span class="text-sm font-normal text-slate-500">段</span></p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 邀请好友 -->
+        <div class="card p-5 bg-gradient-to-br from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 border border-emerald-200 dark:border-emerald-800 hover:shadow-lg transition-all duration-300">
+          <div class="flex items-center space-x-4">
+            <div class="w-14 h-14 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
+              <span class="text-2xl">🎁</span>
+            </div>
+            <div class="flex-1">
+              <p class="text-sm font-medium text-slate-600 dark:text-slate-400 mb-1">邀请好友</p>
+              <p class="text-2xl font-bold text-emerald-600 dark:text-emerald-400">{{ stats?.totalInvites || 0 }} <span class="text-sm font-normal text-slate-500">人</span></p>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -2849,6 +3137,131 @@ onUnmounted(() => {
             </div>
           </div>
 
+          <!-- 积分转让卡片 -->
+          <div class="card p-6 mb-6 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border-2 border-emerald-200 dark:border-emerald-700">
+            <div class="flex items-center justify-between mb-6">
+              <h3 class="text-xl font-bold text-emerald-900 dark:text-emerald-100 flex items-center">
+                <span class="mr-2">💸</span>
+                积分转让
+              </h3>
+              <span class="text-sm text-emerald-700 dark:text-emerald-300">
+                仅支持永久积分转让
+              </span>
+            </div>
+
+            <div class="space-y-4">
+              <!-- 收款人选择 -->
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  收款人
+                </label>
+                <div class="relative">
+                  <input
+                    v-model="pointsTransferForm.recipientQuery"
+                    @input="handleRecipientSearch"
+                    type="text"
+                    placeholder="输入用户名或邮箱（至少3个字符）"
+                    class="w-full px-4 py-3 bg-white dark:bg-dark-700 border-2 border-slate-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                    :class="{ 'border-red-500': pointsTransferForm.recipientError }"
+                  />
+
+                  <!-- 用户搜索下拉列表 -->
+                  <div
+                    v-if="recipientSuggestions.length > 0"
+                    class="absolute z-10 w-full mt-2 bg-white dark:bg-dark-700 border-2 border-slate-300 dark:border-dark-600 rounded-lg shadow-lg max-h-64 overflow-y-auto"
+                  >
+                    <button
+                      v-for="user in recipientSuggestions"
+                      :key="user.id"
+                      @click="selectRecipient(user)"
+                      type="button"
+                      class="w-full px-4 py-3 text-left hover:bg-emerald-50 dark:hover:bg-emerald-900/20 transition-colors flex items-center justify-between"
+                    >
+                      <div>
+                        <p class="font-medium text-slate-900 dark:text-slate-100">{{ user.username }}</p>
+                        <p class="text-sm text-slate-500 dark:text-slate-400">{{ user.email }}</p>
+                      </div>
+                      <span class="text-emerald-600 dark:text-emerald-400">选择</span>
+                    </button>
+                  </div>
+
+                  <!-- 已选择的收款人 -->
+                  <div v-if="pointsTransferForm.selectedRecipient" class="mt-2 p-3 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg flex items-center justify-between">
+                    <div class="flex items-center">
+                      <span class="text-2xl mr-2">👤</span>
+                      <div>
+                        <p class="font-medium text-emerald-900 dark:text-emerald-100">{{ pointsTransferForm.selectedRecipient.username }}</p>
+                        <p class="text-sm text-emerald-700 dark:text-emerald-300">{{ pointsTransferForm.selectedRecipient.email }}</p>
+                      </div>
+                    </div>
+                    <button
+                      @click="clearRecipient"
+                      type="button"
+                      class="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+                <p v-if="pointsTransferForm.recipientError" class="mt-1 text-sm text-red-600 dark:text-red-400">
+                  {{ pointsTransferForm.recipientError }}
+                </p>
+              </div>
+
+              <!-- 转让金额 -->
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  转让金额
+                </label>
+                <input
+                  v-model.number="pointsTransferForm.amount"
+                  type="number"
+                  min="1"
+                  :max="me?.points || 0"
+                  placeholder="请输入转让积分数量"
+                  class="w-full px-4 py-3 bg-white dark:bg-dark-700 border-2 border-slate-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                  :class="{ 'border-red-500': pointsTransferForm.amountError }"
+                />
+                <div class="flex justify-between mt-1">
+                  <p v-if="pointsTransferForm.amountError" class="text-sm text-red-600 dark:text-red-400">
+                    {{ pointsTransferForm.amountError }}
+                  </p>
+                  <p class="text-sm text-slate-500 dark:text-slate-400 ml-auto">
+                    当前可用：{{ me?.points || 0 }} 积分
+                  </p>
+                </div>
+              </div>
+
+              <!-- 备注（可选） -->
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  备注（可选）
+                </label>
+                <input
+                  v-model="pointsTransferForm.memo"
+                  type="text"
+                  maxlength="50"
+                  placeholder="如：感谢帮助、赠送积分等"
+                  class="w-full px-4 py-3 bg-white dark:bg-dark-700 border-2 border-slate-300 dark:border-dark-600 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                />
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {{ pointsTransferForm.memo.length }}/50
+                </p>
+              </div>
+
+              <!-- 确认转让按钮 -->
+              <button
+                @click="confirmTransfer"
+                :disabled="!canTransfer || transferring"
+                type="button"
+                class="w-full px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold rounded-lg hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-105 active:scale-95"
+              >
+                <span v-if="!transferring">🚀 确认转让</span>
+                <span v-else>⏳ 处理中...</span>
+              </button>
+            </div>
+          </div>
+
           <!-- 积分流水和来源分析 -->
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <!-- 积分流水 -->
@@ -3614,8 +4027,41 @@ onUnmounted(() => {
         </div>
         
         <div class="p-6 space-y-6">
-          <!-- 快捷金额选项 -->
-          <div>
+          <!-- 充值卡片选项 -->
+          <div v-if="rechargeCards.length > 0">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+              选择充值卡片
+            </label>
+            <div class="grid grid-cols-3 gap-3">
+              <button
+                v-for="card in rechargeCards"
+                :key="card.id"
+                @click="selectRechargeCard(card)"
+                :class="[
+                  'relative py-3 px-4 rounded-xl font-medium text-center transition-all duration-200 border-2',
+                  selectedRechargeCard?.id === card.id
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-lg scale-105'
+                    : 'bg-white dark:bg-dark-600 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-dark-500 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                ]"
+              >
+                <!-- 奖励标识 -->
+                <div v-if="card.bonus_enabled" class="absolute -top-1 -right-1">
+                  <svg class="w-5 h-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                  </svg>
+                </div>
+                <div class="font-bold text-lg">¥{{ (card.amount / 100).toFixed(0) }}</div>
+                <!-- 奖励说明 -->
+                <div v-if="card.bonus_enabled" class="text-xs mt-1" :class="selectedRechargeCard?.id === card.id ? 'text-white/90' : 'text-amber-600 dark:text-amber-400'">
+                  <span v-if="card.bonus_type === 'random'">+{{ card.bonus_min }}~{{ card.bonus_max }}随机积分奖励</span>
+                  <span v-else>+{{ card.bonus_fixed }}积分奖励</span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- 快捷金额选项（如果没有卡片时显示） -->
+          <div v-else>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
               选择充值金额
             </label>
@@ -3651,7 +4097,7 @@ onUnmounted(() => {
                 step="0.01"
                 class="input w-full pl-10 text-lg"
                 placeholder="输入金额"
-                @input="rechargeAmount = ''"
+                @input="rechargeAmount = ''; selectedRechargeCard = null"
               />
             </div>
           </div>
@@ -3991,10 +4437,155 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
+
+  <!-- 积分转让确认弹窗 -->
+  <div v-if="showTransferConfirmModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" @click.self="showTransferConfirmModal = false">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden transform transition-all animate-scale-in">
+      <!-- 顶部装饰条 -->
+      <div class="h-1.5 bg-gradient-to-r from-slate-400 via-slate-500 to-slate-600"></div>
+
+      <!-- 标题区域 -->
+      <div class="px-6 pt-6 pb-4">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-3">
+            <div class="w-12 h-12 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-600 flex items-center justify-center shadow-inner">
+              <svg class="w-6 h-6 text-slate-600 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-xl font-bold text-slate-900 dark:text-white">确认转让</h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">请仔细核对转让信息</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 内容区域 -->
+      <div class="px-6 pb-6">
+        <div class="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-5 space-y-4">
+          <!-- 收款人信息 -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
+            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">收款人</span>
+            <div class="text-right">
+              <p class="font-semibold text-slate-900 dark:text-white">{{ pointsTransferForm.selectedRecipient?.username }}</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">{{ pointsTransferForm.selectedRecipient?.email }}</p>
+            </div>
+          </div>
+
+          <!-- 转让金额 -->
+          <div class="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
+            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">转让积分</span>
+            <span class="text-2xl font-bold text-slate-900 dark:text-white">{{ pointsTransferForm.amount }}</span>
+          </div>
+
+          <!-- 备注 -->
+          <div v-if="pointsTransferForm.memo" class="flex items-start justify-between pb-3 border-b border-slate-200 dark:border-slate-700">
+            <span class="text-sm font-medium text-slate-600 dark:text-slate-400">备注</span>
+            <span class="text-sm text-slate-700 dark:text-slate-300 text-right max-w-[200px]">{{ pointsTransferForm.memo }}</span>
+          </div>
+
+          <!-- 余额变化 -->
+          <div class="bg-white dark:bg-slate-800 rounded-lg p-4 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-slate-600 dark:text-slate-400">当前余额</span>
+              <span class="font-semibold text-slate-900 dark:text-white">{{ me?.points || 0 }} 积分</span>
+            </div>
+            <div class="flex items-center justify-center">
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+              </svg>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-slate-600 dark:text-slate-400">转让后余额</span>
+              <span class="font-bold text-lg text-slate-900 dark:text-white">{{ (me?.points || 0) - (pointsTransferForm.amount || 0) }} 积分</span>
+            </div>
+          </div>
+
+          <!-- 提示信息 -->
+          <div class="flex items-start space-x-2 text-xs text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 rounded-lg p-3">
+            <svg class="w-4 h-4 mt-0.5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+            </svg>
+            <p>积分转让后无法撤回，请确认收款人信息正确</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 按钮区域 -->
+      <div class="px-6 pb-6 flex space-x-3">
+        <button
+          @click="showTransferConfirmModal = false"
+          class="flex-1 px-6 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 font-semibold rounded-xl transition-all duration-200 hover:shadow-md"
+        >
+          取消
+        </button>
+        <button
+          @click="executeTransfer"
+          class="flex-1 px-6 py-3 bg-gradient-to-r from-slate-700 to-slate-800 hover:from-slate-800 hover:to-slate-900 dark:from-slate-600 dark:to-slate-700 dark:hover:from-slate-500 dark:hover:to-slate-600 text-white font-bold rounded-xl transition-all duration-200 hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98]"
+        >
+          确认转让
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast 通知组件 -->
+  <Teleport to="body">
+    <Transition name="toast-slide">
+      <div
+        v-if="transferToast.show"
+        class="fixed top-6 right-6 z-[9999] max-w-sm animate-slide-in"
+      >
+        <div
+          :class="[
+            'flex items-start gap-4 p-5 rounded-2xl shadow-2xl backdrop-blur-xl border',
+            transferToast.type === 'success'
+              ? 'bg-gradient-to-br from-green-500/95 to-emerald-600/95 border-green-400/30 text-white'
+              : 'bg-gradient-to-br from-red-500/95 to-rose-600/95 border-red-400/30 text-white'
+          ]"
+        >
+          <!-- 图标 -->
+          <div
+            :class="[
+              'flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center text-2xl',
+              transferToast.type === 'success' ? 'bg-white/20' : 'bg-white/20'
+            ]"
+          >
+            {{ transferToast.icon }}
+          </div>
+          
+          <!-- 内容 -->
+          <div class="flex-1 min-w-0">
+            <h4 class="font-bold text-lg leading-tight">{{ transferToast.title }}</h4>
+            <p class="mt-1 text-sm opacity-90 leading-relaxed">{{ transferToast.message }}</p>
+          </div>
+          
+          <!-- 关闭按钮 -->
+          <button
+            @click="closeTransferToast"
+            class="flex-shrink-0 w-8 h-8 rounded-lg bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+          >
+            <span class="text-lg">×</span>
+          </button>
+        </div>
+        
+        <!-- 进度条 -->
+        <div class="mt-2 h-1 rounded-full bg-white/20 overflow-hidden">
+          <div
+            :class="[
+              'h-full rounded-full animate-progress',
+              transferToast.type === 'success' ? 'bg-green-200' : 'bg-red-200'
+            ]"
+          ></div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script>
-// 辅助函数
+// 辅助函数：获取交易图标和背景样式
 const getTransactionIcon = (type) => {
   const icons = {
     'register_bonus': { icon: '🎁', bg: 'bg-green-100 dark:bg-green-900/20' },
@@ -4018,43 +4609,15 @@ const getTransactionIcon = (type) => {
     'refund': { icon: '↩️', bg: 'bg-green-100 dark:bg-green-900/20' },
     'system_grant': { icon: '⚙️', bg: 'bg-slate-100 dark:bg-slate-900/20' },
     'compensation': { icon: '🎁', bg: 'bg-green-100 dark:bg-green-900/20' },
-    'manual_adjust': { icon: '✏️', bg: 'bg-slate-100 dark:bg-slate-900/20' }
+    'manual_adjust': { icon: '✏️', bg: 'bg-slate-100 dark:bg-slate-900/20' },
+    'invitee_bonus': { icon: '⭐', bg: 'bg-purple-100 dark:bg-purple-900/20' }
   }
   return icons[type] || { icon: '💎', bg: 'bg-slate-100 dark:bg-dark-600' }
 }
 
-const getTransactionTypeText = (type) => {
-  const texts = {
-    'register_bonus': '注册赠送',
-    'inviter_bonus': '邀请奖励',
-    'invitee_bonus': '被邀请奖励',
-    'generate_deduction': '图像生成消耗',
-    'generate_cost': '图像生成消耗',
-    'generate_cost_package': '图像生成消耗',
-    'admin_recharge': '管理员充值',
-    'purchase_points': '积分购买',
-    'invite_reward': '邀请奖励',
-    'daily_checkin': '每日签到',
-    'voucher_redeem': '兑换券兑换',
-    'balance_to_points': '余额划转',
-    'package_grant': '套餐赠送',
-    'package_renewal': '套餐续费',
-    'video_refund': '视频退款',
-    'video_cost': '视频生成消耗',
-    'video_generation': '视频生成消耗',
-    'points_to_balance': '积分划转',
-    'refund': '退款',
-    'system_grant': '系统赠送',
-    'compensation': '补偿',
-    'manual_adjust': '手动调整'
-  }
-  return texts[type] || type
-}
-
 export default {
   methods: {
-    getTransactionIcon,
-    getTransactionTypeText
+    getTransactionIcon
   }
 }
 </script>
@@ -4123,6 +4686,54 @@ export default {
 
 .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: rgb(71 85 105);
+}
+
+/* Toast 通知动画 */
+.animate-slide-in {
+  animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(100px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+.animate-progress {
+  animation: progress 4s linear forwards;
+}
+
+@keyframes progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.toast-slide-enter-active {
+  animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.toast-slide-leave-active {
+  animation: slideOut 0.3s ease-in forwards;
+}
+
+@keyframes slideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100px) scale(0.9);
+  }
 }
 </style>
  

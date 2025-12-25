@@ -765,7 +765,9 @@ export default {
       deduct: '扣除',
       refund: '退款',
       voucher: '兑换券',
-      transfer: '余额划转'
+      transfer: '余额划转',
+      points_transfer_out: '积分转出',
+      points_transfer_in: '积分转入'
     }
   },
 
@@ -908,17 +910,41 @@ export default {
   // 积分类型
   pointsType: {
     register_bonus: '注册奖励',
+    invite_reward: '邀请奖励',
+    inviter_bonus: '邀请奖励',
     invite: '邀请奖励',
+    invitee_bonus: '被邀请奖励',
     invited: '被邀请奖励',
+    daily_checkin: '签到奖励',
     checkin: '签到奖励',
+    generate_cost: '生成消耗',
+    generate_cost_package: '生成消耗',
+    generate_deduction: '生成消耗',
     generate: '生成消耗',
+    video_cost: '视频生成消耗',
+    video_generation: '视频生成消耗',
     video_generate: '视频生成消耗',
+    video_refund: '视频退款',
+    ai_assistant: 'AI助手消耗',
+    package_expired: '套餐到期清零',
     refund: '退款',
+    voucher_redeem: '兑换券兑换',
     voucher: '兑换券',
+    purchase_points: '积分购买',
     purchase: '购买',
+    package_grant: '套餐赠送',
+    package_renewal: '套餐续费',
+    balance_to_points: '余额划转',
+    points_to_balance: '积分划转',
+    admin_recharge: '管理员充值',
+    system_grant: '系统赠送',
+    compensation: '补偿',
+    manual_adjust: '手动调整',
     gift: '赠送',
     deduct: '扣除',
-    milestone: '里程碑奖励'
+    milestone: '里程碑奖励',
+    points_transfer_out: '积分转出',
+    points_transfer_in: '积分转入'
   },
 
   // 新手引导

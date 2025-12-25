@@ -72,6 +72,12 @@ const rechargeCouponCode = ref('')
 const appliedRechargeCoupon = ref(null)
 const rechargeCouponDiscount = ref(0)
 const rechargeCouponError = ref('')
+const rechargeCards = ref([]) // 充值卡片列表
+const selectedRechargeCard = ref(null) // 选中的充值卡片
+// 充值支付等待状态
+const showRechargePaymentEmbed = ref(false)
+const rechargePaymentUrl = ref('')
+const rechargeOrderAmount = ref(0) // 记录当前充值金额
 
 // 套餐购买面板
 const showPurchasePanel = ref(false)
@@ -733,26 +739,46 @@ async function openRechargePanel() {
   rechargeAmount.value = 0
   rechargeCustomAmount.value = ''
   rechargeSelectedMethod.value = null
+  selectedRechargeCard.value = null
   rechargeError.value = ''
   rechargeCouponCode.value = ''
   appliedRechargeCoupon.value = null
   rechargeCouponDiscount.value = 0
   rechargeCouponError.value = ''
-  
-  // 加载支付方式
+
+  // 并行加载支付方式和充值卡片
   try {
     const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
-    const res = await fetch('/api/user/payment-methods', { headers })
-    if (res.ok) {
-      const data = await res.json()
+
+    const [paymentRes, cardsRes] = await Promise.all([
+      fetch('/api/user/payment-methods', { headers }),
+      fetch('/api/recharge-cards', { headers: getTenantHeaders() })
+    ])
+
+    // 处理支付方式
+    if (paymentRes.ok) {
+      const data = await paymentRes.json()
       paymentMethods.value = data.methods || []
       if (paymentMethods.value.length > 0) {
         rechargeSelectedMethod.value = paymentMethods.value[0].id
       }
     }
+
+    // 处理充值卡片
+    if (cardsRes.ok) {
+      const data = await cardsRes.json()
+      rechargeCards.value = data.recharge_cards || []
+    }
   } catch (e) {
-    console.error('[openRechargePanel] 加载支付方式失败:', e)
+    console.error('[openRechargePanel] 加载数据失败:', e)
   }
+}
+
+// 选择充值卡片
+function selectRechargeCard(card) {
+  selectedRechargeCard.value = card
+  rechargeAmount.value = card.amount
+  rechargeCustomAmount.value = ''
 }
 
 // 获取最终充值金额（分）
@@ -859,7 +885,12 @@ async function submitRecharge() {
       amount: amount,
       payment_method_id: rechargeSelectedMethod.value
     }
-    
+
+    // 如果选择了充值卡片，传递卡片ID
+    if (selectedRechargeCard.value) {
+      payload.recharge_card_id = selectedRechargeCard.value.id
+    }
+
     // 如果使用了优惠券，添加优惠券码
     if (appliedRechargeCoupon.value) {
       payload.coupon_code = rechargeCouponCode.value.trim().toUpperCase()
@@ -881,7 +912,13 @@ async function submitRecharge() {
     if (data.pay_url) {
       localStorage.setItem('pending_payment_refresh', 'true')
       localStorage.setItem('payment_timestamp', Date.now().toString())
-      window.location.href = data.pay_url
+      // 记录充值金额和支付URL
+      rechargePaymentUrl.value = data.pay_url
+      rechargeOrderAmount.value = amount
+      // 在新窗口打开支付页面
+      window.open(data.pay_url, '_blank', 'width=500,height=700,left=200,top=100')
+      // 显示等待支付视图
+      showRechargePaymentEmbed.value = true
     } else {
       showAlert(t('user.rechargeOrderCreated'), `✓ ${t('common.success')}`)
       showRechargePanel.value = false
@@ -892,6 +929,46 @@ async function submitRecharge() {
   } finally {
     rechargeLoading.value = false
   }
+}
+
+// 充值支付确认
+function confirmRechargePayment() {
+  rechargeLoading.value = true
+  rechargeError.value = ''
+  
+  // 刷新用户数据
+  emit('update')
+  loadData()
+  
+  // 延迟检查，给后端时间处理
+  setTimeout(() => {
+    rechargeLoading.value = false
+    showAlert(t('user.rechargeSuccess') || '充值成功！余额已到账', `🎉 ${t('common.success')}`)
+    closeRechargePaymentEmbed()
+    showRechargePanel.value = false
+  }, 1500)
+}
+
+// 重新打开充值支付窗口
+function openRechargePaymentWindow() {
+  if (rechargePaymentUrl.value) {
+    window.open(rechargePaymentUrl.value, '_blank', 'width=500,height=700,left=200,top=100')
+  }
+}
+
+// 取消充值支付
+function cancelRechargePayment() {
+  showRechargePaymentEmbed.value = false
+  rechargePaymentUrl.value = ''
+  rechargeOrderAmount.value = 0
+  rechargeError.value = ''
+}
+
+// 关闭充值支付等待视图
+function closeRechargePaymentEmbed() {
+  showRechargePaymentEmbed.value = false
+  rechargePaymentUrl.value = ''
+  rechargeOrderAmount.value = 0
 }
 
 // 余额划转
@@ -1007,10 +1084,26 @@ function getLedgerIconType(type) {
 
 // 获取积分类型文字
 function getLedgerTypeText(type) {
-  const key = `user.ledgerType.${type}`
-  const translated = t(key)
-  // 如果翻译返回的还是 key 本身，说明没找到翻译，返回原始类型
-  return translated === key ? type : translated
+  // 尝试从 pointsType 中查找翻译
+  const pointsTypeKey = `pointsType.${type}`
+  const pointsTypeText = t(pointsTypeKey)
+  
+  // 如果找到翻译（不是key本身），返回翻译
+  if (pointsTypeText !== pointsTypeKey) {
+    return pointsTypeText
+  }
+  
+  // 否则尝试从 user.ledgerType 中查找翻译
+  const ledgerTypeKey = `user.ledgerType.${type}`
+  const ledgerTypeText = t(ledgerTypeKey)
+  
+  // 如果找到翻译（不是key本身），返回翻译
+  if (ledgerTypeText !== ledgerTypeKey) {
+    return ledgerTypeText
+  }
+  
+  // 都没找到，返回原始type
+  return type
 }
 </script>
 
@@ -1415,18 +1508,106 @@ function getLedgerTypeText(type) {
           <div v-if="showRechargePanel" class="recharge-panel">
             <div class="recharge-header">
               <h4>{{ t('user.accountRecharge') }}</h4>
-              <button class="close-btn" @click="showRechargePanel = false">×</button>
+              <button class="close-btn" @click="showRechargePanel = false; closeRechargePaymentEmbed()">×</button>
             </div>
             
-            <!-- 快捷金额 -->
-            <div class="form-section">
+            <!-- 等待支付视图 -->
+            <template v-if="showRechargePaymentEmbed">
+              <div class="recharge-waiting-view">
+                <div class="waiting-icon-container">
+                  <div class="waiting-icon-bg">
+                    <svg class="waiting-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+                    </svg>
+                  </div>
+                  <div class="waiting-pulse"></div>
+                </div>
+                
+                <h3 class="waiting-title">等待支付完成</h3>
+                <p class="waiting-desc">支付页面已在新窗口打开，请在新窗口完成支付</p>
+                
+                <div class="waiting-order-info">
+                  <div class="order-info-row">
+                    <span class="order-label">充值金额</span>
+                    <span class="order-value highlight">¥{{ (rechargeOrderAmount / 100).toFixed(2) }}</span>
+                  </div>
+                </div>
+                
+                <div class="waiting-tips">
+                  <div class="tip-item">
+                    <span class="tip-number">1</span>
+                    <span class="tip-text">在新窗口完成支付</span>
+                  </div>
+                  <div class="tip-arrow">→</div>
+                  <div class="tip-item">
+                    <span class="tip-number">2</span>
+                    <span class="tip-text">返回点击确认按钮</span>
+                  </div>
+                  <div class="tip-arrow">→</div>
+                  <div class="tip-item">
+                    <span class="tip-number">3</span>
+                    <span class="tip-text">余额自动到账</span>
+                  </div>
+                </div>
+                
+                <div class="waiting-actions">
+                  <button 
+                    class="btn-waiting-primary"
+                    @click="confirmRechargePayment"
+                    :disabled="rechargeLoading"
+                  >
+                    <span v-if="rechargeLoading" class="btn-loading-icon">⏳</span>
+                    {{ rechargeLoading ? '正在确认支付状态...' : '✓ 我已完成支付' }}
+                  </button>
+                  <button 
+                    class="btn-waiting-link"
+                    @click="openRechargePaymentWindow"
+                  >
+                    🔗 重新打开支付页面
+                  </button>
+                  <button 
+                    class="btn-waiting-cancel"
+                    @click="cancelRechargePayment"
+                  >
+                    取消支付
+                  </button>
+                </div>
+              </div>
+            </template>
+            
+            <!-- 充值表单视图 -->
+            <template v-else>
+            <!-- 充值卡片选择 -->
+            <div v-if="rechargeCards.length > 0" class="form-section">
+              <label class="form-label">{{ t('user.selectRechargeCard') || '选择充值卡片' }}</label>
+              <div class="recharge-amounts">
+                <button
+                  v-for="card in rechargeCards"
+                  :key="card.id"
+                  :class="['amount-btn', 'card-btn-v2', { active: selectedRechargeCard?.id === card.id }]"
+                  @click="selectRechargeCard(card)"
+                >
+                  <!-- 奖励标识：白色小星星 -->
+                  <span v-if="card.bonus_enabled" class="bonus-star">★</span>
+                  <div class="card-amount-v2">¥{{ (card.amount / 100).toFixed(0) }}</div>
+                  <!-- 奖励说明：悬停时显示 -->
+                  <div v-if="card.bonus_enabled" class="card-bonus-hover">
+                    <span v-if="card.bonus_type === 'random'">+{{ card.bonus_min }}~{{ card.bonus_max }} 随机积分</span>
+                    <span v-else>+{{ card.bonus_fixed }} 积分奖励</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <!-- 快捷金额（如果没有充值卡片时显示） -->
+            <div v-else class="form-section">
               <label class="form-label">{{ t('user.selectAmount') }}</label>
               <div class="recharge-amounts">
-                <button 
-                  v-for="amount in quickAmounts" 
+                <button
+                  v-for="amount in quickAmounts"
                   :key="amount"
                   :class="['amount-btn', { active: rechargeAmount === amount }]"
-                  @click="rechargeAmount = amount; rechargeCustomAmount = ''"
+                  @click="rechargeAmount = amount; rechargeCustomAmount = ''; selectedRechargeCard = null"
                 >
                   ¥{{ (amount / 100).toFixed(0) }}
                 </button>
@@ -1521,6 +1702,7 @@ function getLedgerTypeText(type) {
             >
               {{ rechargeLoading ? t('user.processing') : t('user.confirmRecharge') }}
             </button>
+            </template>
           </div>
 
 
@@ -2959,6 +3141,147 @@ function getLedgerTypeText(type) {
   color: rgba(255, 255, 255, 0.95);
 }
 
+/* 充值卡片 - 黑白灰风格 V2 */
+.card-btn-v2 {
+  position: relative;
+  padding: 12px 10px;
+  background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.card-btn-v2:hover {
+  background: linear-gradient(145deg, #3a3a3a, #2a2a2a);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.card-btn-v2.active {
+  background: linear-gradient(145deg, #404040, #303030);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+}
+
+/* 白色小星星标识 - 右上角 */
+.bonus-star {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  color: #ffffff;
+  font-size: 10px;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+  opacity: 0.85;
+  transition: all 0.25s ease;
+  z-index: 2;
+}
+
+.card-btn-v2:hover .bonus-star {
+  opacity: 0;
+  transform: scale(0);
+}
+
+/* 金额样式 - 更小尺寸 */
+.card-amount-v2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: 0.3px;
+  transition: all 0.25s ease;
+}
+
+.card-btn-v2.active .card-amount-v2 {
+  color: #ffffff;
+}
+
+/* 奖励说明 - 默认隐藏，悬停时显示 */
+.card-bonus-hover {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 4px 6px;
+  background: rgba(60, 60, 60, 0.95);
+  border-radius: 0 0 9px 9px;
+  font-size: 10px;
+  color: #d0d0d0;
+  font-weight: 500;
+  opacity: 0;
+  transform: translateY(100%);
+  transition: all 0.25s ease;
+  white-space: nowrap;
+}
+
+.card-btn-v2:hover .card-bonus-hover {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 保留旧版卡片样式以兼容 */
+.card-btn {
+  position: relative;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #fff;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+}
+
+.card-btn:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.card-btn.active {
+  background: rgba(251, 191, 36, 0.15);
+  border-color: rgba(251, 191, 36, 0.5);
+}
+
+/* 保留旧版奖励样式以兼容 */
+.bonus-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(251, 191, 36, 0.2);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+/* 保留旧版金额样式 */
+.card-amount {
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+/* 保留旧版奖励文本 */
+.card-bonus {
+  font-size: 12px;
+  color: rgba(251, 191, 36, 0.9);
+  font-weight: 500;
+  margin-top: 4px;
+}
+
 /* 充值表单 */
 .form-section {
   display: flex;
@@ -3856,13 +4179,84 @@ function getLedgerTypeText(type) {
 }
 
 /* 等待支付视图 */
-.payment-waiting-view {
+.payment-waiting-view,
+.recharge-waiting-view {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 40px 20px;
   text-align: center;
+}
+
+/* 充值等待视图小尺寸优化 */
+.recharge-waiting-view {
+  padding: 24px 16px;
+}
+
+.recharge-waiting-view .waiting-icon-container {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 16px;
+}
+
+.recharge-waiting-view .waiting-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.recharge-waiting-view .waiting-title {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.recharge-waiting-view .waiting-desc {
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.recharge-waiting-view .waiting-order-info {
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  min-width: auto;
+}
+
+.recharge-waiting-view .waiting-tips {
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.recharge-waiting-view .tip-number {
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+}
+
+.recharge-waiting-view .tip-text {
+  font-size: 11px;
+}
+
+.recharge-waiting-view .tip-arrow {
+  font-size: 12px;
+}
+
+.recharge-waiting-view .waiting-actions {
+  gap: 8px;
+  max-width: 100%;
+}
+
+.recharge-waiting-view .btn-waiting-primary {
+  padding: 12px 16px;
+  font-size: 14px;
+}
+
+.recharge-waiting-view .btn-waiting-link,
+.recharge-waiting-view .btn-waiting-cancel {
+  padding: 10px 12px;
+  font-size: 12px;
 }
 
 .waiting-icon-container {

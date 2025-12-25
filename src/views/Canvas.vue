@@ -5,6 +5,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, provide, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getMe } from '@/api/client'
+import { getTenantHeaders } from '@/config/tenant'
 import { useCanvasStore } from '@/stores/canvas'
 import { loadWorkflow as loadWorkflowFromServer } from '@/api/canvas/workflow'
 import CanvasBoard from '@/components/canvas/CanvasBoard.vue'
@@ -81,6 +82,21 @@ const autoSaveEnabled = ref(false) // 只有保存过的工作流才启用自动
 const isTransitioning = ref(false)
 const showModePopup = ref(false)
 let modeHoverTimer = null
+
+// 积分转让
+const showPointsTransferModal = ref(false)
+const showTransferConfirmModal = ref(false)
+const pointsTransferForm = ref({
+  recipientQuery: '',
+  selectedRecipient: null,
+  amount: null,
+  memo: '',
+  recipientError: '',
+  amountError: ''
+})
+const recipientSuggestions = ref([])
+const transferring = ref(false)
+let searchTimeout = null
 
 // 鼠标进入模式切换按钮
 function handleModeSwitchEnter() {
