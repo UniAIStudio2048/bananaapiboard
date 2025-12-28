@@ -96,25 +96,25 @@ export function buildDownloadUrl(url, filename) {
 export async function getMe(forceRefresh = false) {
   const token = localStorage.getItem('token')
   if (!token) return null
-  
+
   try {
     // 添加超时控制，防止请求卡住
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 10000) // 10秒超时
-    
+
     // 添加时间戳参数避免缓存
-    const url = forceRefresh 
+    const url = forceRefresh
       ? getApiUrl(`/api/user/me?_t=${Date.now()}`)
       : getApiUrl('/api/user/me')
-    
-    const r = await fetch(url, { 
+
+    const r = await fetch(url, {
       headers: getHeaders(),
       signal: controller.signal,
       cache: forceRefresh ? 'no-store' : 'default' // 强制刷新时禁用缓存
     })
-    
+
     clearTimeout(timeoutId)
-    
+
     if (!r.ok) {
       // 如果返回401，可能是token过期，清除token
       if (r.status === 401) {
@@ -129,6 +129,30 @@ export async function getMe(forceRefresh = false) {
     } else {
       console.error('[getMe] 请求失败:', e)
     }
+    return null
+  }
+}
+
+export async function updateUserPreferences(preferences) {
+  const token = localStorage.getItem('token')
+  if (!token) return null
+
+  try {
+    const r = await fetch(getApiUrl('/api/user/preferences'), {
+      method: 'PUT',
+      headers: getHeaders({ json: true }),
+      body: JSON.stringify({ preferences })
+    })
+
+    if (!r.ok) {
+      console.error('[updateUserPreferences] 请求失败:', r.status)
+      return null
+    }
+
+    const data = await r.json()
+    return data
+  } catch (e) {
+    console.error('[updateUserPreferences] 请求失败:', e)
     return null
   }
 }

@@ -11,7 +11,7 @@ import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from '
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages } from '@/api/canvas/nodes'
-import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels } from '@/config/tenant'
+import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 
@@ -457,17 +457,31 @@ function handleEditorSaveMask(data) {
   closeImageEditor()
 }
 
-function handleToolbarDownload() {
+async function handleToolbarDownload() {
   if (!currentImageUrl.value) return
   
-  const link = document.createElement('a')
-  link.href = currentImageUrl.value
-  link.download = `image_${props.id || Date.now()}.png`
-  link.target = '_blank'
-  
-  if (currentImageUrl.value.startsWith('http') && !currentImageUrl.value.startsWith(window.location.origin)) {
-    window.open(currentImageUrl.value, '_blank')
-  } else {
+  try {
+    // 使用 fetch 获取图片 blob，支持跨域下载
+    const response = await fetch(currentImageUrl.value, {
+      headers: getTenantHeaders()
+    })
+    const blob = await response.blob()
+    
+    // 创建 blob URL 并下载
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `image_${props.id || Date.now()}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('[ImageNode] 下载图片失败:', error)
+    // 如果 fetch 失败，尝试直接下载
+    const link = document.createElement('a')
+    link.href = currentImageUrl.value
+    link.download = `image_${props.id || Date.now()}.png`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -4156,5 +4170,339 @@ async function handleDrop(event) {
 .modal-fade-enter-from .preview-image,
 .modal-fade-leave-to .preview-image {
   transform: scale(0.9);
+}
+</style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   ImageNode 白昼模式样式适配
+   ======================================== */
+:root.canvas-theme-light .image-node .quick-actions-title {
+  color: #f59e0b;
+}
+
+:root.canvas-theme-light .image-node .quick-action {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .quick-action:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .config-panel {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .image-node .panel-frames {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .image-node .panel-frames-label {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .image-node .panel-frames-hint {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .image-node .panel-frame-add {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #78716c;
+}
+
+:root.canvas-theme-light .image-node .panel-frame-add:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .prompt-area {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .image-node .prompt-input {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .prompt-input::placeholder {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .image-node .model-selector-trigger {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .image-node .model-selector-trigger:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .image-node .model-name {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .select-arrow {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .image-node .model-dropdown-list {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .image-node .model-dropdown-item {
+  border-bottom-color: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .image-node .model-dropdown-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .image-node .model-dropdown-item.active {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+:root.canvas-theme-light .image-node .model-item-name {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .model-item-desc {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .image-node .ratio-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .ratio-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .image-node .ratio-btn.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #3b82f6;
+}
+
+:root.canvas-theme-light .image-node .count-selector {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .points-display {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .image-node .points-cost {
+  color: #f59e0b;
+}
+
+:root.canvas-theme-light .image-node .ready-status {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .ready-hint {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .image-node .empty-state {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .model-dropdown-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .image-node .model-dropdown-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .image-node .model-dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* 模型下拉菜单项 - 白昼模式 */
+:root.canvas-theme-light .image-node .model-item-label {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .model-item-icon {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .model-item-points {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+/* 尺寸选择器 - 白昼模式 */
+:root.canvas-theme-light .image-node .size-selector {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .image-node .size-btn {
+  color: #57534e;
+  background: transparent;
+}
+
+:root.canvas-theme-light .image-node .size-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .image-node .size-btn.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+:root.canvas-theme-light .image-node .size-label {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .size-points {
+  color: #f59e0b;
+}
+
+/* 添加按钮 - 白昼模式 */
+:root.canvas-theme-light .image-node .add-frame-btn {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #78716c;
+}
+
+:root.canvas-theme-light .image-node .add-frame-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .add-label {
+  color: #f59e0b;
+}
+
+/* 比例选择器 - 白昼模式 */
+:root.canvas-theme-light .image-node .ratio-selector {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .image-node .ratio-selector:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .image-node .ratio-select-input {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .ratio-select-input option {
+  background: #ffffff;
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .ratio-select-input:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* 参数选择芯片 - 白昼模式 */
+:root.canvas-theme-light .image-node .param-chip {
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .param-chip:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .image-node .param-chip.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #3b82f6;
+}
+
+/* 生成按钮 - 白昼模式 */
+:root.canvas-theme-light .image-node .generate-btn:disabled {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* 积分显示 - 白昼模式 */
+:root.canvas-theme-light .image-node .points-cost-display {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+:root.canvas-theme-light .image-node .points-value {
+  color: #f59e0b;
+}
+
+:root.canvas-theme-light .image-node .points-label {
+  color: #78716c;
+}
+
+/* 批次显示 - 白昼模式 */
+:root.canvas-theme-light .image-node .count-display {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .count-display.clickable {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .count-display.clickable:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #3b82f6;
+}
+
+/* 图片节点工具栏 - 白昼模式 */
+:root.canvas-theme-light .image-node .image-toolbar {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .image-node .image-toolbar .toolbar-btn {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .image-toolbar .toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .image-toolbar .toolbar-divider {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* 上传按钮 - 白昼模式 */
+:root.canvas-theme-light .image-node .upload-overlay-btn {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .upload-overlay-btn:hover {
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #3b82f6;
+}
+
+/* 节点标签 - 白昼模式 */
+:root.canvas-theme-light .image-node .node-label {
+  color: #f59e0b;
 }
 </style>

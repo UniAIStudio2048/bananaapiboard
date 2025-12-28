@@ -604,7 +604,9 @@ export default {
       heading2: '标题2',
       heading3: '标题3',
       copy: '复制',
-      fullscreen: '全屏'
+      fullscreen: '全屏',
+      autoFormat: '自动排版',
+      splitScenes: '拆分分镜'
     }
   },
 

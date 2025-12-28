@@ -67,7 +67,9 @@ async function loadInviteRewards() {
 // 加载邮箱配置
 async function loadEmailConfig() {
   try {
-    const r = await fetch('/api/email/public-config')
+    const r = await fetch('/api/email/public-config', {
+      headers: getTenantHeaders()
+    })
     if (r.ok) {
       const data = await r.json()
       emailConfig.value = data

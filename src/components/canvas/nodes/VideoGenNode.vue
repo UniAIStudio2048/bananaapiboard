@@ -7,7 +7,7 @@ import { ref, computed, inject, nextTick, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { generateVideoFromText, generateVideoFromImage, pollTaskStatus } from '@/api/canvas/nodes'
-import { getAvailableVideoModels } from '@/config/tenant'
+import { getAvailableVideoModels, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
@@ -27,14 +27,21 @@ const { updateNodeInternals } = useVueFlow()
 // 模型下拉框状态
 const isModelDropdownOpen = ref(false)
 
-// 生成参数
-const selectedModel = ref(props.data.model || 'sora-2')
+// 生成参数 - 默认使用新版 sora2 整合模型
+const selectedModel = ref(props.data.model || 'sora2')
 const selectedDuration = ref(props.data.duration || '10')
 const selectedAspectRatio = ref(props.data.aspectRatio || '16:9')
 
-// 可用模型列表 - 从配置动态获取，支持新增模型自动同步
+// 可用模型列表 - 从配置动态获取，过滤掉旧版模型
 const models = computed(() => {
-  return getAvailableVideoModels()
+  const allModels = getAvailableVideoModels()
+  // 过滤掉旧版 sora-2 和 sora-2-pro，只保留新版 sora2 系列和其他模型
+  return allModels.filter(m => !['sora-2', 'sora-2-pro'].includes(m.value))
+})
+
+// 当前选中的模型配置
+const currentModelConfig = computed(() => {
+  return models.value.find(m => m.value === selectedModel.value) || {}
 })
 
 // 节点尺寸 - 视频生成节点使用16:9比例
@@ -104,12 +111,30 @@ const userPoints = computed(() => {
   return (userInfo.value.package_points || 0) + (userInfo.value.points || 0)
 })
 
-// 可用时长选项
+// 可用时长选项 - 从模型配置中读取
 const availableDurations = computed(() => {
-  if (selectedModel.value === 'sora-2-pro') {
+  const durations = currentModelConfig.value?.durations
+  if (durations && durations.length > 0) {
+    return durations
+  }
+  // 兜底默认值
+  if (selectedModel.value === 'sora2-pro' || selectedModel.value === 'sora-2-pro') {
     return ['10', '15', '25']
   }
   return ['10', '15']
+})
+
+// 可用方向选项 - 从模型配置中读取
+const availableAspectRatios = computed(() => {
+  const aspectRatios = currentModelConfig.value?.aspectRatios
+  if (aspectRatios && aspectRatios.length > 0) {
+    return aspectRatios
+  }
+  // 兜底默认值
+  return [
+    { value: '16:9', label: '横屏' },
+    { value: '9:16', label: '竖屏' }
+  ]
 })
 
 // 监听视频加载，自适应尺寸
@@ -199,13 +224,20 @@ function selectModel(modelValue) {
   selectedModel.value = modelValue
   isModelDropdownOpen.value = false
   
-  // 更新可用时长选项（Sora 2 Pro 支持 25s）
-  const currentModel = models.value.find(m => m.value === modelValue)
-  if (currentModel?.hasDurationPricing) {
-    const durations = Object.keys(currentModel.pointsCost || {})
-    if (durations.length > 0 && !durations.includes(selectedDuration.value)) {
-      selectedDuration.value = durations[0]
-    }
+  // 获取新模型的配置
+  const newModelConfig = models.value.find(m => m.value === modelValue)
+  
+  // 更新时长选项 - 使用模型配置的 durations 数组
+  const durations = newModelConfig?.durations || ['10', '15']
+  if (durations.length > 0 && !durations.includes(selectedDuration.value)) {
+    selectedDuration.value = durations[0]
+  }
+  
+  // 更新方向选项 - 使用模型配置的 aspectRatios 数组
+  const aspectRatios = newModelConfig?.aspectRatios || [{ value: '16:9', label: '横屏' }]
+  const aspectValues = aspectRatios.map(ar => ar.value)
+  if (aspectValues.length > 0 && !aspectValues.includes(selectedAspectRatio.value)) {
+    selectedAspectRatio.value = aspectValues[0]
   }
 }
 
@@ -310,9 +342,31 @@ function handleRegenerate() {
 }
 
 // 下载视频
-function downloadVideo() {
-  if (props.data.output?.url) {
-    window.open(props.data.output.url, '_blank')
+async function downloadVideo() {
+  if (!props.data.output?.url) return
+  
+  try {
+    const response = await fetch(props.data.output.url, {
+      headers: getTenantHeaders()
+    })
+    const blob = await response.blob()
+    
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `video_${props.id || Date.now()}.mp4`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('[VideoGenNode] 下载视频失败:', error)
+    const link = document.createElement('a')
+    link.href = props.data.output.url
+    link.download = `video_${props.id || Date.now()}.mp4`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 }
 
@@ -441,11 +495,13 @@ function handleAddClick(event) {
             <option v-for="d in availableDurations" :key="d" :value="d">{{ d }}s</option>
           </select>
           
-          <!-- 画幅选择 -->
+          <!-- 画幅/方向选择 - 从模型配置动态获取 -->
           <select v-model="selectedAspectRatio" class="param-select">
-            <option value="16:9">16:9</option>
-            <option value="9:16">9:16</option>
-            <option value="1:1">1:1</option>
+            <option 
+              v-for="ar in availableAspectRatios" 
+              :key="ar.value" 
+              :value="ar.value"
+            >{{ ar.label }}</option>
           </select>
         </div>
         

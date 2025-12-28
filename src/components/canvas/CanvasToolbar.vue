@@ -178,9 +178,15 @@ function closeProfilePanel() {
 }
 
 // 刷新用户信息
-function handleUserUpdate() {
-  // 触发父组件刷新用户信息
-  window.location.reload()
+async function handleUserUpdate() {
+  // 重新获取用户信息，包含最新的偏好设置
+  const { getMe } = await import('@/api/client')
+  const updatedUser = await getMe(true) // 强制刷新
+  if (updatedUser && userInfo) {
+    // 更新 userInfo ref
+    Object.assign(userInfo.value, updatedUser)
+    console.log('[CanvasToolbar] 用户信息已更新:', updatedUser)
+  }
 }
 </script>
 
@@ -533,6 +539,101 @@ function handleUserUpdate() {
   font-size: 12px;
   color: rgba(255, 255, 255, 0.4);
   line-height: 1.4;
+}
+
+</style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   CanvasToolbar 白昼模式样式适配
+   ======================================== */
+:root.canvas-theme-light .canvas-toolbar {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .canvas-toolbar .canvas-toolbar-btn {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .canvas-toolbar .canvas-toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+:root.canvas-theme-light .canvas-toolbar .add-btn {
+  background: #1c1917 !important;
+  color: #ffffff !important;
+}
+
+:root.canvas-theme-light .canvas-toolbar .add-btn:hover {
+  background: #292524 !important;
+  color: #ffffff !important;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .canvas-toolbar .user-btn {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .canvas-toolbar .user-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .canvas-toolbar .toolbar-divider {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .canvas-toolbar .node-panel {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .canvas-toolbar .node-panel-title {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .canvas-toolbar .node-panel-divider {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .canvas-toolbar .node-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .canvas-toolbar .node-icon {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.6);
+}
+
+:root.canvas-theme-light .canvas-toolbar .node-name {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .canvas-toolbar .node-tag {
+  color: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .canvas-toolbar .node-desc {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+/* 图标按钮 SVG 颜色 - 白昼模式 */
+:root.canvas-theme-light .canvas-toolbar .icon-btn svg {
+  stroke: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .canvas-toolbar .icon-btn:hover svg {
+  stroke: rgba(0, 0, 0, 0.8);
 }
 </style>
 

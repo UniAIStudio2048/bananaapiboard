@@ -301,5 +301,44 @@ function handleDoubleClickHint() {
 .icon-svg svg {
   display: block;
 }
+
+</style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   CanvasEmptyState 白昼模式样式适配
+   ======================================== */
+:root.canvas-theme-light .canvas-empty-state .canvas-empty-icon {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+:root.canvas-theme-light .canvas-empty-state .canvas-empty-title {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .canvas-empty-state .canvas-empty-title strong {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .canvas-empty-state .canvas-quick-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .canvas-empty-state .canvas-quick-btn:hover {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.25);
+  color: #3b82f6;
+}
+
+:root.canvas-theme-light .canvas-empty-state .icon-svg {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .canvas-empty-state .canvas-quick-btn:hover .icon-svg {
+  color: #3b82f6;
+}
 </style>
 

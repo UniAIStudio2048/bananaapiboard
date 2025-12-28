@@ -140,9 +140,9 @@ function handleMenuClick(event) {
       上传视频
       <span class="shortcut"></span>
     </div>
-    
+
     <div class="canvas-context-menu-divider"></div>
-    
+
     <!-- 添加节点 -->
     <div class="canvas-context-menu-item" @click="handleAddNode">
       <span class="icon">➕</span>

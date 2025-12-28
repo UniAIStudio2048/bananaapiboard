@@ -89,19 +89,19 @@ async function handleSave() {
     saveError.value = t('canvas.workflowNamePlaceholder')
     return
   }
-  
+
   if (canvasStore.nodes.length === 0) {
     saveError.value = t('canvas.emptyCanvas')
     return
   }
-  
+
   isSaving.value = true
   saveError.value = ''
-  
+
   try {
     // 导出工作流数据
     const workflowData = canvasStore.exportWorkflow()
-    
+
     // 添加名称和描述
     const dataToSave = {
       id: currentWorkflowId.value,
@@ -109,30 +109,30 @@ async function handleSave() {
       description: workflowDescription.value.trim(),
       ...workflowData
     }
-    
-    // 调用API保存
+
+    // 调用API保存（后端会异步处理文件上传）
     const result = await saveWorkflow(dataToSave)
-    
+
     // 后端返回格式: { id, success } 或 { workflow: { id, name, ... } }
     const savedWorkflow = result.workflow || {
       id: result.id || dataToSave.id,
       name: dataToSave.name,
       description: dataToSave.description
     }
-    
+
     // 更新store中的工作流元信息
     canvasStore.workflowMeta = {
       id: savedWorkflow.id,
       name: savedWorkflow.name,
       description: savedWorkflow.description
     }
-    
+
     // 通知父组件
     emit('saved', savedWorkflow)
-    
+
     // 关闭对话框
     emit('close')
-    
+
   } catch (error) {
     console.error('[SaveDialog] 保存失败:', error)
     saveError.value = error.message || '保存失败'

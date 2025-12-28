@@ -17,6 +17,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
 import { getHistory, getHistoryDetail, deleteHistory } from '@/api/canvas/history'
 import { saveAsset } from '@/api/canvas/assets'
+import { getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 
 const { t, currentLanguage } = useI18n()
@@ -57,6 +58,7 @@ const lastTranslate = ref({ x: 0, y: 0 })
 
 // 视频缩略图缓存
 const videoThumbnails = ref({})
+const videoAspectRatios = ref({}) // 视频宽高比缓存
 const videoThumbnailQueue = ref([]) // 待处理队列
 const processingThumbnails = ref(0) // 正在处理的数量
 const MAX_CONCURRENT_THUMBNAILS = 2 // 最大同时处理数
@@ -112,7 +114,7 @@ const filteredHistory = computed(() => {
 })
 
 // ========== 虚拟滚动计算 ==========
-// 计算可见项目（使用瀑布流双列布局）
+// 计算可见项目（使用双列布局）
 const visibleItems = computed(() => {
   if (!isContentReady.value) return []
   
@@ -124,17 +126,16 @@ const visibleItems = computed(() => {
     return items.map((item, index) => ({ item, index }))
   }
   
-  // 计算瀑布流中每行有 2 个项目
-  const itemsPerRow = 2
+  // 计算每行高度
   const rowHeight = ITEM_HEIGHT
   
   // 计算可见的行范围
   const startRow = Math.max(0, Math.floor(scrollTop.value / rowHeight) - BUFFER_COUNT)
   const endRow = Math.ceil((scrollTop.value + containerHeight.value) / rowHeight) + BUFFER_COUNT
   
-  // 转换为项目索引范围
-  const startIndex = startRow * itemsPerRow
-  const endIndex = Math.min(total, (endRow + 1) * itemsPerRow)
+  // 转换为项目索引范围（每行2个）
+  const startIndex = startRow * 2
+  const endIndex = Math.min(total, (endRow + 1) * 2)
   
   // 返回可见项目及其索引
   const visible = []
@@ -145,6 +146,16 @@ const visibleItems = computed(() => {
   }
   
   return visible
+})
+
+// 左列可见项目
+const leftVisibleItems = computed(() => {
+  return visibleItems.value.filter(item => item.index % 2 === 0)
+})
+
+// 右列可见项目
+const rightVisibleItems = computed(() => {
+  return visibleItems.value.filter(item => item.index % 2 === 1)
 })
 
 // 虚拟滚动的总高度（用于滚动条）
@@ -294,17 +305,33 @@ async function confirmDelete() {
 }
 
 // 下载文件
-function handleDownload(item) {
+async function handleDownload(item) {
   if (!item.url) return
   closeContextMenu()
   
-  const a = document.createElement('a')
-  a.href = item.url
-  a.download = item.name || `${item.type}_${item.id}`
-  a.target = '_blank'
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
+  try {
+    const response = await fetch(item.url, {
+      headers: getTenantHeaders()
+    })
+    const blob = await response.blob()
+    
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = item.name || `${item.type}_${item.id}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('[HistoryPanel] 下载文件失败:', error)
+    const a = document.createElement('a')
+    a.href = item.url
+    a.download = item.name || `${item.type}_${item.id}`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
 }
 
 // 点击历史记录 - 打开全屏预览
@@ -584,11 +611,25 @@ function extractVideoThumbnail(item) {
   video.onseeked = () => {
     try {
       const canvas = document.createElement('canvas')
-      canvas.width = Math.min(video.videoWidth || 320, 320)
-      canvas.height = Math.min(video.videoHeight || 180, 180)
+      const videoWidth = video.videoWidth || 320
+      const videoHeight = video.videoHeight || 180
+
+      // 保存视频的宽高比
+      videoAspectRatios.value[item.id] = videoWidth / videoHeight
+
+      // 计算缩略图尺寸，保持比例，限制最大边长为 480px 以保证清晰度
+      const maxDim = 480
+      let scale = 1
+      if (videoWidth > maxDim || videoHeight > maxDim) {
+        scale = Math.min(maxDim / videoWidth, maxDim / videoHeight)
+      }
+      
+      canvas.width = videoWidth * scale
+      canvas.height = videoHeight * scale
+      
       const ctx = canvas.getContext('2d')
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-      videoThumbnails.value[item.id] = canvas.toDataURL('image/jpeg', 0.6)
+      videoThumbnails.value[item.id] = canvas.toDataURL('image/jpeg', 0.7)
     } catch (e) {
       console.warn('[HistoryPanel] 无法提取视频缩略图:', e)
     }
@@ -626,7 +667,7 @@ function processNextThumbnail() {
 function getVideoThumbnail(item) {
   if (item.thumbnail_url) return item.thumbnail_url
   if (videoThumbnails.value[item.id]) return videoThumbnails.value[item.id]
-  
+
   // 只有在可见区域内才触发提取
   if (isContentReady.value && !videoThumbnailQueue.value.includes(item.id)) {
     // 使用 requestIdleCallback 在空闲时处理
@@ -637,6 +678,27 @@ function getVideoThumbnail(item) {
     }
   }
   return null
+}
+
+// 判断视频是否是竖屏（宽高比 < 1）
+function isPortraitVideo(item) {
+  if (item.type !== 'video') return false
+  // 先检查是否有缓存的宽高比
+  if (videoAspectRatios.value[item.id]) {
+    return videoAspectRatios.value[item.id] < 1
+  }
+  // 如果后端返回了 aspect_ratio 字段（如 "9:16"），解析它
+  if (item.aspect_ratio && typeof item.aspect_ratio === 'string') {
+    const parts = item.aspect_ratio.split(':')
+    if (parts.length === 2) {
+      const width = parseFloat(parts[0])
+      const height = parseFloat(parts[1])
+      if (!isNaN(width) && !isNaN(height)) {
+        return width / height < 1
+      }
+    }
+  }
+  return false
 }
 
 // 处理图片加载错误
@@ -872,74 +934,83 @@ onUnmounted(() => {
               :style="{ transform: `translateY(${offsetY}px)` }"
             >
               <div 
-                v-for="{ item, index } in visibleItems"
-                :key="item.id"
-                class="history-card"
-                :class="[`type-${item.type}`]"
-                draggable="true"
-                @click="handleHistoryClick(item)"
-                @contextmenu="handleContextMenu($event, item)"
-                @dragstart="handleDragStart($event, item)"
-                @dragend="handleDragEnd"
+                v-for="(columnItems, colIndex) in [leftVisibleItems, rightVisibleItems]"
+                :key="colIndex"
+                class="waterfall-column"
               >
-                <!-- 图片预览 -->
-                <template v-if="item.type === 'image'">
-                  <img 
-                    v-if="getPreviewContent(item) && !hasImageError(item)" 
-                    :src="getPreviewContent(item)" 
-                    :alt="item.name"
-                    class="card-image"
-                    loading="lazy"
-                    decoding="async"
-                    @error="handleImageError(item)"
-                  />
-                  <div v-else class="card-placeholder image">
-                    <span class="placeholder-icon">◫</span>
+                <div
+                  v-for="{ item, index } in columnItems"
+                  :key="item.id"
+                  class="history-card"
+                  :class="[
+                    `type-${item.type}`,
+                    { 'portrait-video': item.type === 'video' && isPortraitVideo(item) }
+                  ]"
+                  draggable="true"
+                  @click="handleHistoryClick(item)"
+                  @contextmenu="handleContextMenu($event, item)"
+                  @dragstart="handleDragStart($event, item)"
+                  @dragend="handleDragEnd"
+                >
+                  <!-- 图片预览 -->
+                  <template v-if="item.type === 'image'">
+                    <img 
+                      v-if="getPreviewContent(item) && !hasImageError(item)" 
+                      :src="getPreviewContent(item)" 
+                      :alt="item.name"
+                      class="card-image"
+                      loading="lazy"
+                      decoding="async"
+                      @error="handleImageError(item)"
+                    />
+                    <div v-else class="card-placeholder image">
+                      <span class="placeholder-icon">◫</span>
+                      <span class="placeholder-text" v-if="item.prompt">{{ item.prompt.length > 20 ? item.prompt.slice(0, 20) + '...' : item.prompt }}</span>
+                    </div>
+                  </template>
+                  
+                  <!-- 视频预览 -->
+                  <template v-else-if="item.type === 'video'">
+                    <img 
+                      v-if="getVideoThumbnail(item)" 
+                      :src="getVideoThumbnail(item)" 
+                      :alt="item.name"
+                      class="card-image"
+                      loading="lazy"
+                      decoding="async"
+                    />
+                    <div v-else class="card-placeholder video">
+                      <span class="placeholder-icon">▶</span>
+                    </div>
+                  </template>
+                  
+                  <!-- 音频占位符 -->
+                  <div v-else-if="item.type === 'audio'" class="card-placeholder audio">
+                    <span class="placeholder-icon">♪</span>
+                  </div>
+                  
+                  <!-- 其他类型占位符 -->
+                  <div v-else class="card-placeholder">
+                    <span class="placeholder-icon">◈</span>
                     <span class="placeholder-text" v-if="item.prompt">{{ item.prompt.length > 20 ? item.prompt.slice(0, 20) + '...' : item.prompt }}</span>
                   </div>
-                </template>
-                
-                <!-- 视频预览 -->
-                <template v-else-if="item.type === 'video'">
-                  <img 
-                    v-if="getVideoThumbnail(item)" 
-                    :src="getVideoThumbnail(item)" 
-                    :alt="item.name"
-                    class="card-image"
-                    loading="lazy"
-                    decoding="async"
-                  />
-                  <div v-else class="card-placeholder video">
-                    <span class="placeholder-icon">▶</span>
-                  </div>
-                </template>
-                
-                <!-- 音频占位符 -->
-                <div v-else-if="item.type === 'audio'" class="card-placeholder audio">
-                  <span class="placeholder-icon">♪</span>
-                </div>
-                
-                <!-- 其他类型占位符 -->
-                <div v-else class="card-placeholder">
-                  <span class="placeholder-icon">◈</span>
-                  <span class="placeholder-text" v-if="item.prompt">{{ item.prompt.length > 20 ? item.prompt.slice(0, 20) + '...' : item.prompt }}</span>
-                </div>
 
-                <!-- 视频标识 -->
-                <div v-if="item.type === 'video'" class="video-badge">▶</div>
+                  <!-- 视频标识 -->
+                  <div v-if="item.type === 'video'" class="video-badge">▶</div>
 
-                <!-- 悬停信息遮罩 -->
-                <div class="hover-overlay">
-                  <div class="overlay-content">
-                    <div class="overlay-model" v-if="item.model">{{ item.model }}</div>
-                    <div class="overlay-prompt" v-if="item.prompt">{{ item.prompt.length > 60 ? item.prompt.slice(0, 60) + '...' : item.prompt }}</div>
-                    <div class="overlay-time">{{ formatDate(item.created_at) }}</div>
+                  <!-- 悬停信息遮罩 -->
+                  <div class="hover-overlay">
+                    <div class="overlay-content">
+                      <div class="overlay-model" v-if="item.model">{{ item.model }}</div>
+                      <div class="overlay-prompt" v-if="item.prompt">{{ item.prompt.length > 60 ? item.prompt.slice(0, 60) + '...' : item.prompt }}</div>
+                      <div class="overlay-time">{{ formatDate(item.created_at) }}</div>
+                    </div>
+                    <button 
+                      class="overlay-delete"
+                      @click.stop="handleDelete($event, item)"
+                      :title="t('common.delete')"
+                    >×</button>
                   </div>
-                  <button 
-                    class="overlay-delete"
-                    @click.stop="handleDelete($event, item)"
-                    :title="t('common.delete')"
-                  >×</button>
                 </div>
               </div>
             </div>
@@ -1360,28 +1431,36 @@ onUnmounted(() => {
 }
 
 .waterfall-grid {
-  columns: 2;
-  column-gap: 4px;
-  padding: 8px;
+  display: flex;
+  gap: 8px; /* 列之间间隙 */
+  padding: 0 12px; /* 左右内边距 */
   will-change: transform;
+}
+
+.waterfall-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px; /* 卡片之间间隙 */
+  min-width: 0;
 }
 
 /* 骨架屏样式 */
 .skeleton-loading {
-  padding: 8px;
+  padding: 0 12px;
 }
 
 .skeleton-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 4px;
+  gap: 8px;
 }
 
 .skeleton-card {
   aspect-ratio: 1;
   background: linear-gradient(90deg, #2a2a2e 25%, #3a3a3e 50%, #2a2a2e 75%);
   background-size: 200% 100%;
-  border-radius: 4px;
+  border-radius: 8px;
   animation: skeleton-shimmer 1.5s infinite;
 }
 
@@ -1451,12 +1530,11 @@ onUnmounted(() => {
 .history-card {
   position: relative;
   background: #1a1a1c;
-  border-radius: 4px;
+  border-radius: 8px; /* 圆角 */
   overflow: hidden;
   cursor: grab;
   transition: all 0.15s;
-  break-inside: avoid;
-  margin-bottom: 4px;
+  /* margin-bottom由父容器gap控制 */
 }
 
 .history-card:active {
@@ -1466,6 +1544,7 @@ onUnmounted(() => {
 .history-card:hover {
   transform: scale(1.02);
   z-index: 10;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 
 .history-card:hover .hover-overlay {
@@ -1475,7 +1554,22 @@ onUnmounted(() => {
 /* 卡片图片 */
 .card-image {
   width: 100%;
+  /* 添加最大高度限制，防止超长图片影响体验 */
+  max-height: 480px; 
   display: block;
+  object-fit: cover;
+}
+
+/* 竖屏视频特殊样式 */
+.history-card.portrait-video {
+  /* 竖屏视频占满宽度，保持比例 */
+  aspect-ratio: 9 / 16 !important;
+  display: block;
+}
+
+.history-card.portrait-video .card-image {
+  width: 100%;
+  height: 100%;
   object-fit: cover;
 }
 
@@ -1502,6 +1596,12 @@ onUnmounted(() => {
 
 .card-placeholder.audio {
   background: linear-gradient(135deg, #1a5f3d 0%, #1a1a1c 100%);
+}
+
+/* 竖屏视频的占位符 */
+.history-card.portrait-video .card-placeholder {
+  aspect-ratio: 9 / 16;
+  min-height: 240px;
 }
 
 .placeholder-icon {
@@ -1921,10 +2021,6 @@ onUnmounted(() => {
   .history-panel {
     width: 100%;
     max-width: 480px;
-  }
-  
-  .waterfall-grid {
-    columns: 2;
   }
   
   .preview-actions {

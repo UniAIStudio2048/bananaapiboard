@@ -3,48 +3,86 @@
    深色主题画布样式
    ======================================== */
 
-/* CSS 变量定义 */
+/* CSS 变量定义 - 深色主题（默认） */
 :root {
   /* 背景色 - 深色渐变 */
   --canvas-bg-primary: #0a0a0a;
   --canvas-bg-secondary: #141414;
   --canvas-bg-tertiary: #1a1a1a;
   --canvas-bg-elevated: #242424;
-  
+
   /* 边框色 */
   --canvas-border-subtle: #2a2a2a;
   --canvas-border-default: #3a3a3a;
   --canvas-border-active: #4a4a4a;
-  
+
   /* 文字色 */
   --canvas-text-primary: #ffffff;
   --canvas-text-secondary: #a0a0a0;
   --canvas-text-tertiary: #666666;
   --canvas-text-placeholder: #4a4a4a;
-  
+
   /* 强调色 */
   --canvas-accent-primary: #3b82f6;
   --canvas-accent-success: #22c55e;
   --canvas-accent-warning: #f59e0b;
   --canvas-accent-error: #ef4444;
   --canvas-accent-banana: #fbbf24;
-  
+
   /* 连线色 */
   --canvas-edge-default: #4a4a4a;
   --canvas-edge-active: #3b82f6;
   --canvas-edge-success: #22c55e;
-  
+
   /* 阴影 */
   --canvas-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --canvas-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
   --canvas-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.5);
   --canvas-shadow-glow: 0 0 20px rgba(59, 130, 246, 0.3);
-  
+
   /* 圆角 */
   --canvas-radius-sm: 6px;
   --canvas-radius-md: 10px;
   --canvas-radius-lg: 16px;
   --canvas-radius-xl: 20px;
+}
+
+/* 白昼模式主题（参考 Figma/Miro 亮色主题） */
+:root.canvas-theme-light {
+  /* 背景色 - 温暖的浅灰色调，避免纯白 */
+  --canvas-bg-primary: #f5f5f4;
+  --canvas-bg-secondary: #fafaf9;
+  --canvas-bg-tertiary: #ffffff;
+  --canvas-bg-elevated: #ffffff;
+
+  /* 边框色 - 柔和的灰色边框 */
+  --canvas-border-subtle: #e7e5e4;
+  --canvas-border-default: #d6d3d1;
+  --canvas-border-active: #a8a29e;
+
+  /* 文字色 - 深灰色文字，避免纯黑 */
+  --canvas-text-primary: #1c1917;
+  --canvas-text-secondary: #57534e;
+  --canvas-text-tertiary: #78716c;
+  --canvas-text-placeholder: #a8a29e;
+
+  /* 强调色 - 保持一致 */
+  --canvas-accent-primary: #3b82f6;
+  --canvas-accent-success: #22c55e;
+  --canvas-accent-warning: #f59e0b;
+  --canvas-accent-error: #ef4444;
+  --canvas-accent-banana: #f59e0b;
+
+  /* 连线色 - 更深的灰色以在亮色背景上显示 */
+  --canvas-edge-default: #a8a29e;
+  --canvas-edge-active: #3b82f6;
+  --canvas-edge-success: #22c55e;
+
+  /* 阴影 - 柔和的浅色阴影 */
+  --canvas-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --canvas-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.08);
+  --canvas-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
+  --canvas-shadow-glow: 0 0 20px rgba(59, 130, 246, 0.15);
 }
 
 /* ========================================
@@ -1024,4 +1062,197 @@
 
 .animate-scale-in {
   animation: scale-in 0.2s ease-out;
+}
+
+/* ========================================
+   白昼模式额外样式适配
+   ======================================== */
+
+/* 白昼模式 - 工具栏按钮 */
+:root.canvas-theme-light .canvas-toolbar-btn {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: var(--canvas-text-secondary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .canvas-toolbar-btn:hover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  color: var(--canvas-text-primary);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .canvas-toolbar-btn.primary {
+  background: var(--canvas-text-primary);
+  color: #ffffff;
+  border: none;
+}
+
+/* 白昼模式 - 缩放控制 */
+:root.canvas-theme-light .canvas-zoom-controls {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .canvas-zoom-btn {
+  color: var(--canvas-text-secondary);
+}
+
+:root.canvas-theme-light .canvas-zoom-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--canvas-text-primary);
+}
+
+:root.canvas-theme-light .canvas-zoom-value {
+  color: var(--canvas-text-secondary);
+}
+
+:root.canvas-theme-light .canvas-zoom-slider {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .canvas-zoom-slider::-webkit-slider-runnable-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .canvas-zoom-slider::-webkit-slider-thumb {
+  background: var(--canvas-text-primary);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .canvas-zoom-slider::-moz-range-track {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .canvas-zoom-slider::-moz-range-thumb {
+  background: var(--canvas-text-primary);
+}
+
+/* 白昼模式 - 帮助按钮 */
+:root.canvas-theme-light .canvas-help-btn {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: var(--canvas-text-secondary);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .canvas-help-btn:hover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.15);
+  color: var(--canvas-text-primary);
+}
+
+/* 白昼模式 - 节点样式 */
+:root.canvas-theme-light .canvas-node {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .canvas-node:hover {
+  border-color: rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .canvas-node.selected {
+  border-color: var(--canvas-accent-primary);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2), 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .canvas-node-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .canvas-node-footer {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+/* 白昼模式 - 节点输入框 */
+:root.canvas-theme-light .canvas-node-input {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: var(--canvas-text-primary);
+}
+
+:root.canvas-theme-light .canvas-node-input:focus {
+  border-color: var(--canvas-accent-primary);
+  background: #ffffff;
+}
+
+/* 白昼模式 - 右键菜单 */
+:root.canvas-theme-light .canvas-context-menu {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .canvas-context-menu-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* 白昼模式 - 节点选择器 */
+:root.canvas-theme-light .node-selector {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .node-selector-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .node-selector-icon {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+/* 白昼模式 - 连接线 */
+:root.canvas-theme-light .vue-flow__edge-path {
+  stroke: #a8a29e;
+}
+
+:root.canvas-theme-light .vue-flow__edge:hover .vue-flow__edge-path {
+  stroke: #78716c;
+}
+
+/* 白昼模式 - 连接端口 */
+:root.canvas-theme-light .vue-flow__handle {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .vue-flow__handle:hover {
+  border-color: var(--canvas-accent-primary);
+  background: var(--canvas-accent-primary);
+}
+
+/* 白昼模式 - 节点两侧添加按钮 */
+:root.canvas-theme-light .node-add-btn {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .node-add-btn:hover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.25);
+  color: rgba(0, 0, 0, 0.8);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.12);
+}
+
+/* 确保白天模式下选中或悬停时按钮可见 */
+:root.canvas-theme-light .node-wrapper:hover .node-add-btn,
+:root.canvas-theme-light .text-node-card-wrapper:hover .node-add-btn,
+:root.canvas-theme-light .text-node.selected .node-add-btn,
+:root.canvas-theme-light .image-node.selected .node-add-btn,
+:root.canvas-theme-light .video-node.selected .node-add-btn,
+:root.canvas-theme-light .audio-node.selected .node-add-btn,
+:root.canvas-theme-light .canvas-node:hover .node-add-btn,
+:root.canvas-theme-light .image-gen-node.selected .node-add-btn,
+:root.canvas-theme-light .video-gen-node.selected .node-add-btn,
+:root.canvas-theme-light .llm-node.selected .node-add-btn {
+  opacity: 1;
 }

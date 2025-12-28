@@ -233,3 +233,90 @@ export const LLM_POINTS_COST = {
 export function getLLMCost(action) {
   return LLM_POINTS_COST[action] || 1
 }
+
+/**
+ * ======================================
+ * 用户自定义LLM预设管理API
+ * ======================================
+ */
+
+/**
+ * 获取用户自定义预设列表
+ * @returns {Promise<{success: boolean, presets: Array, total: number, limit: number}>}
+ */
+export async function getUserLLMPresets() {
+  const response = await fetch(getApiUrl('/api/canvas/llm/user-presets'), {
+    headers: getHeaders()
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || error.error || '获取预设列表失败')
+  }
+
+  return response.json()
+}
+
+/**
+ * 创建用户自定义预设
+ * @param {Object} params
+ * @param {string} params.name - 预设名称（必填，最长100字符）
+ * @param {string} params.systemPrompt - 系统提示词（必填，最长2048字符）
+ * @returns {Promise<{success: boolean, preset: Object}>}
+ */
+export async function createUserLLMPreset({ name, systemPrompt }) {
+  const response = await fetch(getApiUrl('/api/canvas/llm/user-presets'), {
+    method: 'POST',
+    headers: getHeaders({ json: true }),
+    body: JSON.stringify({ name, systemPrompt })
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || error.error || '创建预设失败')
+  }
+
+  return response.json()
+}
+
+/**
+ * 更新用户自定义预设
+ * @param {string} id - 预设ID
+ * @param {Object} params
+ * @param {string} [params.name] - 新的预设名称
+ * @param {string} [params.systemPrompt] - 新的系统提示词
+ * @returns {Promise<{success: boolean, preset: Object}>}
+ */
+export async function updateUserLLMPreset(id, { name, systemPrompt }) {
+  const response = await fetch(getApiUrl(`/api/canvas/llm/user-presets/${id}`), {
+    method: 'PUT',
+    headers: getHeaders({ json: true }),
+    body: JSON.stringify({ name, systemPrompt })
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || error.error || '更新预设失败')
+  }
+
+  return response.json()
+}
+
+/**
+ * 删除用户自定义预设
+ * @param {string} id - 预设ID
+ * @returns {Promise<{success: boolean, message: string}>}
+ */
+export async function deleteUserLLMPreset(id) {
+  const response = await fetch(getApiUrl(`/api/canvas/llm/user-presets/${id}`), {
+    method: 'DELETE',
+    headers: getHeaders()
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || error.error || '删除预设失败')
+  }
+
+  return response.json()
+}

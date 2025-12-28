@@ -5,7 +5,7 @@
  */
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { redeemVoucher as redeemVoucherApi } from '@/api/client'
+import { redeemVoucher as redeemVoucherApi, updateUserPreferences } from '@/api/client'
 import { getTenantHeaders } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { useI18n } from '@/i18n'
@@ -109,14 +109,29 @@ const edgeStyleOptions = [
   { value: 'straight', labelKey: 'onboarding.settings.edgeStyleStraight' },
   { value: 'hidden', labelKey: 'onboarding.settings.edgeStyleHidden' }
 ]
-const selectedEdgeStyle = ref(localStorage.getItem('canvasEdgeStyle') || 'smoothstep')
+
+// 初始化连线样式 - 优先从用户偏好加载，其次从localStorage，最后使用默认值
+const selectedEdgeStyle = ref(
+  props.userInfo?.preferences?.canvas?.edgeStyle ||
+  localStorage.getItem('canvasEdgeStyle') ||
+  'smoothstep'
+)
+
+// 监听用户信息变化，更新连线样式
+watch(() => props.userInfo?.preferences?.canvas?.edgeStyle, (newStyle) => {
+  if (newStyle && newStyle !== selectedEdgeStyle.value) {
+    selectedEdgeStyle.value = newStyle
+    localStorage.setItem('canvasEdgeStyle', newStyle)
+    window.dispatchEvent(new CustomEvent('canvas-edge-style-change', { detail: { style: newStyle } }))
+  }
+})
 
 // 切换新手引导
 function toggleOnboarding(event) {
   const enabled = event.target.checked
   onboardingEnabled.value = enabled
   localStorage.setItem('canvasOnboardingEnabled', enabled ? 'true' : 'false')
-  
+
   // 如果打开了引导，同时重置完成状态，这样下次进入画布会显示
   if (enabled) {
     localStorage.removeItem('canvasOnboardingCompleted')
@@ -124,11 +139,35 @@ function toggleOnboarding(event) {
 }
 
 // 切换连线样式
-function changeEdgeStyle(style) {
+async function changeEdgeStyle(style) {
   selectedEdgeStyle.value = style
   localStorage.setItem('canvasEdgeStyle', style)
+
   // 通知画布更新连线样式
   window.dispatchEvent(new CustomEvent('canvas-edge-style-change', { detail: { style } }))
+
+  // 保存到后端用户偏好
+  try {
+    const currentPreferences = props.userInfo?.preferences || {}
+    const updatedPreferences = {
+      ...currentPreferences,
+      canvas: {
+        ...(currentPreferences.canvas || {}),
+        edgeStyle: style
+      }
+    }
+
+    const result = await updateUserPreferences(updatedPreferences)
+    if (result) {
+      console.log('[UserProfilePanel] 连线样式偏好已保存到后端:', style)
+      // 通知父组件更新用户信息
+      emit('update')
+    } else {
+      console.warn('[UserProfilePanel] 保存连线样式偏好失败')
+    }
+  } catch (error) {
+    console.error('[UserProfilePanel] 保存连线样式偏好时出错:', error)
+  }
 }
 
 // 自定义对话框

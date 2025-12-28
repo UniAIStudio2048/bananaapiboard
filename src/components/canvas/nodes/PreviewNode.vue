@@ -5,6 +5,7 @@
 import { computed } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
+import { getTenantHeaders } from '@/config/tenant'
 
 const props = defineProps({
   id: String,
@@ -43,11 +44,42 @@ function handleContextMenu(event) {
 }
 
 // 下载
-function download() {
+async function download() {
+  let downloadUrl = ''
+  let fileName = ''
+  
   if (contentType.value === 'image' && inheritedData.value?.urls?.length) {
-    window.open(inheritedData.value.urls[0], '_blank')
+    downloadUrl = inheritedData.value.urls[0]
+    fileName = `image_${props.id || Date.now()}.png`
   } else if (contentType.value === 'video' && inheritedData.value?.url) {
-    window.open(inheritedData.value.url, '_blank')
+    downloadUrl = inheritedData.value.url
+    fileName = `video_${props.id || Date.now()}.mp4`
+  }
+  
+  if (!downloadUrl) return
+  
+  try {
+    const response = await fetch(downloadUrl, {
+      headers: getTenantHeaders()
+    })
+    const blob = await response.blob()
+    
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('[PreviewNode] 下载失败:', error)
+    const a = document.createElement('a')
+    a.href = downloadUrl
+    a.download = fileName
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
   }
 }
 

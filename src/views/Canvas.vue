@@ -4,7 +4,7 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted, provide, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { getMe } from '@/api/client'
+import { getMe, updateUserPreferences } from '@/api/client'
 import { getTenantHeaders } from '@/config/tenant'
 import { useCanvasStore } from '@/stores/canvas'
 import { loadWorkflow as loadWorkflowFromServer } from '@/api/canvas/workflow'
@@ -72,6 +72,9 @@ const showOnboarding = ref(false)
 
 // AI 灵感助手
 const showAIAssistant = ref(false)
+
+// 画布主题切换 (dark / light)
+const canvasTheme = ref('dark')
 
 // 自动保存定时器
 const autoSaveInterval = ref(null)
@@ -395,6 +398,17 @@ function handleAssetInsert(asset) {
         assetId: asset.id
       }
       break
+    case 'sora-character':
+      nodeType = 'character-card'
+      nodeData = {
+        title: asset.name || 'Sora角色',
+        name: asset.name || '未命名角色',
+        username: asset.metadata?.username || '',
+        avatar: asset.url || asset.thumbnail_url || '',
+        fromAsset: true,
+        assetId: asset.id
+      }
+      break
   }
   
   canvasStore.addNode({
@@ -457,7 +471,10 @@ function handleHistoryApply(historyItem) {
         fromHistory: true,
         historyId: historyItem.id,
         prompt: historyItem.prompt,
-        model: historyItem.model
+        model: historyItem.model,
+        // 传递 task_id 用于角色创建
+        taskId: historyItem.task_id,
+        soraTaskId: historyItem.task_id
       }
       break
     case 'audio':
@@ -1029,8 +1046,70 @@ function handleImagePreview(data) {
   // 预览功能已在 ImageToolbar 组件中实现
 }
 
+// 主题切换功能
+function toggleCanvasTheme() {
+  const newTheme = canvasTheme.value === 'dark' ? 'light' : 'dark'
+  applyCanvasTheme(newTheme)
+}
+
+// 应用画布主题
+function applyCanvasTheme(theme) {
+  canvasTheme.value = theme
+  const root = document.documentElement
+
+  if (theme === 'light') {
+    root.classList.add('canvas-theme-light')
+  } else {
+    root.classList.remove('canvas-theme-light')
+  }
+
+  // 保存到用户偏好
+  saveCanvasThemePreference(theme)
+}
+
+// 保存主题偏好到后端
+async function saveCanvasThemePreference(theme) {
+  try {
+    const currentPreferences = me.value?.preferences || {}
+    const updatedPreferences = {
+      ...currentPreferences,
+      canvas: {
+        ...(currentPreferences.canvas || {}),
+        theme: theme
+      }
+    }
+
+    const result = await updateUserPreferences(updatedPreferences)
+    if (result) {
+      console.log('[Canvas] 主题偏好已保存:', theme)
+      // 更新本地用户信息
+      if (me.value) {
+        me.value.preferences = updatedPreferences
+      }
+    }
+  } catch (error) {
+    console.error('[Canvas] 保存主题偏好失败:', error)
+  }
+}
+
+// 加载主题偏好
+function loadCanvasThemePreference() {
+  // 从用户偏好加载
+  const userTheme = me.value?.preferences?.canvas?.theme
+  if (userTheme) {
+    applyCanvasTheme(userTheme)
+    console.log('[Canvas] 已加载用户主题偏好:', userTheme)
+  } else {
+    // 默认使用深色主题
+    applyCanvasTheme('dark')
+  }
+}
+
 onMounted(async () => {
   await loadUserInfo()
+
+  // 加载画布主题偏好
+  loadCanvasThemePreference()
   
   // 初始化默认标签
   canvasStore.initDefaultTab()
@@ -1195,9 +1274,33 @@ onUnmounted(() => {
       
       <!-- 右上角控制区域 -->
       <div class="canvas-top-right-controls" :class="{ 'panel-open': showAIAssistant }">
+        <!-- 主题切换按钮 -->
+        <button
+          class="canvas-icon-btn canvas-theme-toggle"
+          :title="canvasTheme === 'dark' ? '切换到白昼模式' : '切换到夜晚模式'"
+          @click="toggleCanvasTheme"
+        >
+          <!-- 太阳图标（白昼模式） -->
+          <svg v-if="canvasTheme === 'dark'" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="4"/>
+            <path d="M12 2v2"/>
+            <path d="M12 20v2"/>
+            <path d="m4.93 4.93 1.41 1.41"/>
+            <path d="m17.66 17.66 1.41 1.41"/>
+            <path d="M2 12h2"/>
+            <path d="M20 12h2"/>
+            <path d="m6.34 17.66-1.41 1.41"/>
+            <path d="m19.07 4.93-1.41 1.41"/>
+          </svg>
+          <!-- 月亮图标（夜晚模式） -->
+          <svg v-else class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+
         <!-- 语言切换 -->
-        <LanguageSwitcher :isDark="true" direction="down" :compact="true" />
-        
+        <LanguageSwitcher :isDark="canvasTheme === 'dark'" direction="down" :compact="true" />
+
         <!-- 帮助/快捷键按钮（仅图标） -->
         <button class="canvas-icon-btn" :title="t('common.help')" @click="showHelp = true">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1281,7 +1384,7 @@ onUnmounted(() => {
         @upload="handleCanvasUpload"
         @add-node="handleCanvasAddNode"
       />
-      
+
       <!-- 工作流模板面板 -->
       <WorkflowTemplates
         :visible="showTemplates"
@@ -1846,6 +1949,24 @@ onUnmounted(() => {
   transform: translateY(-1px);
 }
 
+/* 亮色主题下的按钮样式 */
+:root.canvas-theme-light .canvas-icon-btn {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: rgba(28, 25, 23, 0.8);
+}
+
+:root.canvas-theme-light .canvas-icon-btn:hover {
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: rgba(28, 25, 23, 1);
+}
+
+/* 主题切换按钮特殊效果 */
+.canvas-theme-toggle:hover {
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
 /* 确保语言切换器在画布模式下样式正确 */
 .canvas-top-right-controls :deep(.language-switcher) {
   z-index: 9001;
@@ -2046,6 +2167,169 @@ onUnmounted(() => {
   color: var(--canvas-text-secondary, rgba(255, 255, 255, 0.5));
 }
 
+/* ========================================
+   白昼模式额外样式适配
+   ======================================== */
+
+/* 模式切换按钮 - 白昼模式 */
+:root.canvas-theme-light .mode-switch-icon {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .mode-switch-btn:hover .mode-switch-icon {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.15);
+  color: #1c1917;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .mode-switch-btn span {
+  color: #57534e;
+}
+
+/* 右上角控制按钮 - 白昼模式 */
+:root.canvas-theme-light .canvas-top-right-controls :deep(.lang-trigger) {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .canvas-top-right-controls :deep(.lang-trigger:hover) {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* AI 助手触发按钮 - 白昼模式 */
+:root.canvas-theme-light .ai-assistant-trigger {
+  background: linear-gradient(145deg, #ffffff 0%, #f5f5f4 100%);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.08),
+    0 8px 16px rgba(0, 0, 0, 0.08),
+    0 16px 32px rgba(0, 0, 0, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+  outline-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .ai-assistant-trigger:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow:
+    0 4px 8px rgba(0, 0, 0, 0.1),
+    0 12px 24px rgba(0, 0, 0, 0.1),
+    0 24px 48px rgba(0, 0, 0, 0.08),
+    0 0 40px rgba(139, 92, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .ai-assistant-trigger.active {
+  background: linear-gradient(145deg, #f5f5f4 0%, #e7e5e4 100%);
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.1),
+    0 8px 16px rgba(0, 0, 0, 0.1),
+    0 0 30px rgba(139, 92, 246, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .ai-assistant-trigger .trigger-icon svg {
+  filter: drop-shadow(0 2px 4px rgba(99, 102, 241, 0.3));
+}
+
+/* 缩放控制 - 白昼模式 */
+:root.canvas-theme-light .canvas-zoom-slider {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .canvas-zoom-slider:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .canvas-zoom-slider::-webkit-slider-thumb {
+  background: linear-gradient(145deg, #1c1917 0%, #292524 100%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .canvas-zoom-slider::-moz-range-thumb {
+  background: linear-gradient(145deg, #1c1917 0%, #292524 100%);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .canvas-zoom-slider::-moz-range-track {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .canvas-zoom-value {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .canvas-zoom-value:hover {
+  color: #1c1917;
+}
+
+/* 模式切换弹窗 - 白昼模式 */
+:root.canvas-theme-light .mode-popup-overlay {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+:root.canvas-theme-light .mode-popup {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .mode-popup-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .mode-popup-title {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .mode-popup-close {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+:root.canvas-theme-light .mode-popup-close:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+:root.canvas-theme-light .mode-popup-content p {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .mode-popup-hint {
+  color: #78716c !important;
+}
+
+:root.canvas-theme-light .mode-popup-actions {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .mode-popup-btn.cancel {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .mode-popup-btn.cancel:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .mode-popup-btn.confirm {
+  background: #1c1917;
+  color: #ffffff;
+}
+
+:root.canvas-theme-light .mode-popup-btn.confirm:hover {
+  background: #292524;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
 
 </style>
 

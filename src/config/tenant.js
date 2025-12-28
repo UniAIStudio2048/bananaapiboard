@@ -245,6 +245,18 @@ export async function loadBrandConfig(forceReload = false) {
         console.log('[tenant] 视频模型完整配置已更新:', data.video_models)
       }
       
+      // 更新 Sora 角色创建配置
+      if (data.soraCharacterConfig) {
+        runtimeConfig.soraCharacterConfig = data.soraCharacterConfig
+        console.log('[tenant] Sora 角色创建配置已更新:', data.soraCharacterConfig)
+      }
+      
+      // 更新 LLM/文本模型配置
+      if (data.llm_models) {
+        runtimeConfig.llm_models = data.llm_models
+        console.log('[tenant] LLM 模型配置已更新:', data.llm_models)
+      }
+      
       // 保存到本地存储
       saveToStorage(runtimeConfig)
       
@@ -467,6 +479,9 @@ export const getModelEnabled = () => config.modelEnabled || defaultConfig.modelE
 export const getModelDescriptions = () => config.modelDescriptions || defaultConfig.modelDescriptions
 export const getModelPricing = () => config.modelPricing || defaultConfig.modelPricing
 
+// 获取 Sora 角色创建配置（积分消耗等）
+export const getSoraCharacterConfig = () => config.soraCharacterConfig || { points_cost: 0 }
+
 // 获取模型显示名称（如果自定义了则返回自定义名称，否则返回默认名称）
 export const getModelDisplayName = (modelKey, type = 'image') => {
   const modelNames = getModelNames()
@@ -509,15 +524,59 @@ export const getAvailableImageModels = (mode = null) => {
     { value: 'nano-banana-2', label: 'Nano Banana 2', icon: '🍌', points: null, description: '', hasResolutionPricing: true, pointsCost: { '1k': 3, '2k': 4, '4k': 5 }, supportedModes: 'both' }
   ]
   
-  // 如果配置为空，返回默认模型（根据模式过滤）
-  if (Object.keys(imageModels).length === 0) {
-    return mode ? defaultModels.filter(m => {
+  // 根据模式过滤默认模型
+  const filterByMode = (models) => {
+    if (!mode) return models
+    return models.filter(m => {
       const supportedModes = m.supportedModes || 'both'
       return supportedModes === 'both' || supportedModes === mode
-    }) : defaultModels
+    })
   }
   
-  // 从配置中构建模型列表
+  // 优先使用 image_models 数组的顺序（保持后端配置的排序）
+  if (imageModelsConfig && Array.isArray(imageModelsConfig) && imageModelsConfig.length > 0) {
+    const models = []
+    
+    for (const modelConfig of imageModelsConfig) {
+      const key = modelConfig.name
+      if (!key) continue
+      
+      // 跳过禁用的模型
+      if (modelConfig.enabled === false || enabledModels[key] === false) continue
+      
+      const modelPricingConfig = pricing[key] || {}
+      const supportedModes = modelConfig.supportedModes || 'both'
+      
+      // 根据模式过滤
+      if (mode) {
+        if (mode === 't2i' && supportedModes === 'i2i') continue
+        if (mode === 'i2i' && supportedModes === 't2i') continue
+      }
+      
+      models.push({
+        value: key,
+        label: modelConfig.displayName || imageModels[key] || key,
+        icon: key.includes('gemini') ? 'G' : '🍌',
+        description: modelConfig.description || descriptions[key] || '',
+        // 积分配置
+        hasResolutionPricing: modelConfig.hasResolutionPricing || modelPricingConfig.hasResolutionPricing || false,
+        pointsCost: modelConfig.pointsCost || modelPricingConfig.pointsCost || 1,
+        supportedModes
+      })
+    }
+    
+    if (models.length > 0) {
+      console.log('[tenant] 图片模型列表已按后端配置排序:', models.map(m => m.value))
+      return models
+    }
+  }
+  
+  // 降级：如果配置为空，返回默认模型
+  if (Object.keys(imageModels).length === 0) {
+    return filterByMode(defaultModels)
+  }
+  
+  // 从旧格式配置中构建模型列表（不保证顺序）
   const models = []
   for (const [key, name] of Object.entries(imageModels)) {
     // 只添加启用的模型
@@ -541,22 +600,16 @@ export const getAvailableImageModels = (mode = null) => {
         // 积分配置
         hasResolutionPricing: modelPricingConfig.hasResolutionPricing || false,
         pointsCost: modelPricingConfig.pointsCost || 1,
-        supportedModes // 传递给前端，以便需要时使用
+        supportedModes
       })
     }
   }
   
-  return models.length > 0 ? models : (mode ? defaultModels.filter(m => {
-    const supportedModes = m.supportedModes || 'both'
-    return supportedModes === 'both' || supportedModes === mode
-  }) : defaultModels)
+  return models.length > 0 ? models : filterByMode(defaultModels)
 }
 
 // 获取所有可用的视频模型列表（从配置中动态获取）
 export const getAvailableVideoModels = () => {
-  // 注意：getVideoModels 函数在当前版本未实现，直接使用 fallback 逻辑
-  // 如果将来需要支持新格式配置，可以在这里添加 getVideoModels 函数的实现
-
   const modelNames = getModelNames()
   const modelEnabled = getModelEnabled()
   const modelDescriptions = getModelDescriptions()
@@ -566,15 +619,79 @@ export const getAvailableVideoModels = () => {
   const descriptions = modelDescriptions?.video || {}
   const pricing = modelPricing?.video || {}
   
+  // 获取新格式的模型配置（包含 durations、supportedModes 等完整配置）
+  const videoModelsConfig = config.video_models || []
+  
   // 默认模型配置（包含积分配置和描述）- 使用黑白灰图标
+  // 新版 Sora2 整合模型：前端只显示 sora2/sora2-pro，后端自动调度渠道
   const defaultModelConfig = {
-    'sora-2': { label: 'Sora 2', icon: '◆', description: 'OpenAI 旗舰视频生成模型，支持长达 60s 的高清视频', hasDurationPricing: true, pointsCost: { '10': 20, '15': 30 } },
-    'sora-2-pro': { label: 'Sora 2 Pro', icon: '★', description: '专业版 Sora 模型，更高分辨率和细节表现', hasDurationPricing: true, pointsCost: { '10': 300, '15': 450, '25': 750 } },
-    'veo3.1-components': { label: 'VEO 3.1', icon: '▣', description: 'Google DeepMind 最新视频模型，生成速度快，效果逼真', hasDurationPricing: false, pointsCost: 100 },
-    'veo3.1': { label: 'VEO 3.1 标准', icon: '▢', description: '标准版 VEO 模型，适合日常创作', hasDurationPricing: false, pointsCost: 150 },
-    'veo3.1-pro': { label: 'VEO 3.1 Pro', icon: '◈', description: '专业版 VEO 模型，支持更复杂的场景和运镜', hasDurationPricing: false, pointsCost: 200 },
-    // Kling（可灵）图生视频模型 - 只保留一个 Pro 模式
-    'kling-v2-6-pro': { label: 'Kling 2.6 Pro (首尾帧)', icon: '✨', description: '可灵 v2.6 专业版，支持首帧和尾帧控制', hasDurationPricing: true, pointsCost: { '5': 24, '10': 48 }, isImageToVideo: true }
+    // ==================== 新版 Sora2 整合模型 ====================
+    'sora2': { 
+      label: 'Sora 2', 
+      icon: '◆', 
+      description: 'OpenAI Sora 视频生成模型，支持文生视频和图生视频', 
+      hasDurationPricing: true, 
+      pointsCost: { '10': 20, '15': 30 },
+      // 支持的时长选项
+      durations: ['10', '15'],
+      // 支持的方向选项
+      aspectRatios: [
+        { value: '16:9', label: '横屏 (16:9)' },
+        { value: '9:16', label: '竖屏 (9:16)' }
+      ],
+      // 支持的模式：t2v=文生视频, i2v=图生视频
+      supportedModes: { t2v: true, i2v: true, a2v: false }
+    },
+    'sora2-pro': { 
+      label: 'Sora 2 Pro', 
+      icon: '★', 
+      description: '专业版 Sora 模型，更高分辨率和细节表现，支持25秒长视频', 
+      hasDurationPricing: true, 
+      pointsCost: { '10': 300, '15': 450, '25': 750 },
+      // Pro 支持 25s
+      durations: ['10', '15', '25'],
+      aspectRatios: [
+        { value: '16:9', label: '横屏 (16:9)' },
+        { value: '9:16', label: '竖屏 (9:16)' }
+      ],
+      supportedModes: { t2v: true, i2v: true, a2v: false }
+    },
+    // ==================== 旧版 Sora 模型（保持兼容）====================
+    'sora-2': { 
+      label: 'Sora 2 (旧版)', 
+      icon: '◇', 
+      description: '旧版 Sora 模型，建议使用新版 Sora 2', 
+      hasDurationPricing: true, 
+      pointsCost: { '10': 20, '15': 30 },
+      durations: ['10', '15'],
+      aspectRatios: [{ value: '16:9', label: '横屏 (16:9)' }],
+      supportedModes: { t2v: true, i2v: true, a2v: false }
+    },
+    'sora-2-pro': { 
+      label: 'Sora 2 Pro (旧版)', 
+      icon: '☆', 
+      description: '旧版专业版 Sora 模型', 
+      hasDurationPricing: true, 
+      pointsCost: { '10': 300, '15': 450, '25': 750 },
+      durations: ['10', '15', '25'],
+      aspectRatios: [{ value: '16:9', label: '横屏 (16:9)' }],
+      supportedModes: { t2v: true, i2v: true, a2v: false }
+    },
+    // ==================== VEO3 系列 ====================
+    'veo3.1-components': { label: 'VEO 3.1', icon: '▣', description: 'Google DeepMind 最新视频模型，生成速度快，效果逼真', hasDurationPricing: false, pointsCost: 100, supportedModes: { t2v: true, i2v: true, a2v: false } },
+    'veo3.1': { label: 'VEO 3.1 标准', icon: '▢', description: '标准版 VEO 模型，适合日常创作', hasDurationPricing: false, pointsCost: 150, supportedModes: { t2v: true, i2v: true, a2v: false } },
+    'veo3.1-pro': { label: 'VEO 3.1 Pro', icon: '◈', description: '专业版 VEO 模型，支持更复杂的场景和运镜', hasDurationPricing: false, pointsCost: 200, supportedModes: { t2v: true, i2v: true, a2v: false } },
+    // ==================== Kling（可灵）图生视频模型 ====================
+    'kling-v2-6-pro': { 
+      label: 'Kling 2.6 Pro (首尾帧)', 
+      icon: '✨', 
+      description: '可灵 v2.6 专业版，支持首帧和尾帧控制', 
+      hasDurationPricing: true, 
+      pointsCost: { '5': 24, '10': 48 }, 
+      durations: ['5', '10'],
+      isImageToVideo: true,
+      supportedModes: { t2v: false, i2v: true, a2v: false }
+    }
   }
   
   // 转换为数组格式的默认模型列表
@@ -583,12 +700,73 @@ export const getAvailableVideoModels = () => {
     ...config
   }))
   
-  // 如果配置为空，返回默认模型
+  // 优先使用 video_models 数组的顺序（保持后端配置的排序）
+  // 如果有新格式配置数组，按照数组顺序构建模型列表
+  if (videoModelsConfig && Array.isArray(videoModelsConfig) && videoModelsConfig.length > 0) {
+    const models = []
+    
+    for (const modelConfig of videoModelsConfig) {
+      const key = modelConfig.name
+      if (!key) continue
+      
+      // 跳过禁用的模型
+      if (modelConfig.enabled === false || enabledModels[key] === false) continue
+      
+      const modelPricingConfig = pricing[key] || {}
+      const defaultConfig = defaultModelConfig[key] || {}
+      
+      // 计算时长选项（优先级：新格式配置 > pointsCost提取 > 默认配置）
+      let modelDurations = defaultConfig.durations || ['10', '15']
+      const hasDurPricing = modelConfig.hasDurationPricing ?? modelPricingConfig.hasDurationPricing ?? defaultConfig.hasDurationPricing ?? false
+      const pCost = modelConfig.pointsCost || modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1
+      
+      // 优先使用新格式配置中的 durations（租户后台直接配置的时长选项）
+      if (modelConfig.durations && Array.isArray(modelConfig.durations) && modelConfig.durations.length > 0) {
+        // 确保时长为字符串格式
+        modelDurations = modelConfig.durations.map(d => String(d))
+      }
+      // 否则，如果租户配置了按时长计费且 pointsCost 是对象，从中提取时长选项
+      else if (hasDurPricing && typeof pCost === 'object' && pCost !== null) {
+        const durationsFromPricing = Object.keys(pCost).filter(k => k !== 'hd_extra').sort((a, b) => Number(a) - Number(b))
+        if (durationsFromPricing.length > 0) {
+          modelDurations = durationsFromPricing
+        }
+      }
+      
+      // 获取新格式配置中的 aspectRatios 和 supportedModes
+      const aspectRatios = modelConfig.aspectRatios || defaultConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }]
+      const supportedModes = modelConfig.supportedModes || defaultConfig.supportedModes || { t2v: true, i2v: true, a2v: false }
+      
+      models.push({
+        value: key,
+        // 优先使用租户配置的名称，否则使用默认名称
+        label: modelConfig.displayName || videoModels[key] || defaultConfig.label || key,
+        icon: defaultConfig.icon || (key.includes('veo') ? '🎥' : '✨'),
+        // 只使用租户配置的描述，为空时不显示
+        description: modelConfig.description || descriptions[key] || '',
+        // 积分配置
+        hasDurationPricing: hasDurPricing,
+        pointsCost: pCost,
+        // 时长选项
+        durations: modelDurations,
+        aspectRatios,
+        supportedModes,
+        isImageToVideo: modelConfig.isImageToVideo ?? defaultConfig.isImageToVideo ?? false
+      })
+    }
+    
+    if (models.length > 0) {
+      console.log('[tenant] 视频模型列表已按后端配置排序:', models.map(m => m.value))
+      return models
+    }
+  }
+  
+  // 降级：如果没有新格式配置，使用旧格式 modelNames 对象
   if (Object.keys(videoModels).length === 0) {
     return defaultModels
   }
   
-  // 从配置中构建模型列表
+  // 从旧格式配置中构建模型列表（不保证顺序）
   const models = []
   for (const [key, name] of Object.entries(videoModels)) {
     // 只添加启用的模型
@@ -596,21 +774,88 @@ export const getAvailableVideoModels = () => {
       const modelPricingConfig = pricing[key] || {}
       const defaultConfig = defaultModelConfig[key] || {}
       
+      // 查找新格式配置
+      const modelFullConfig = videoModelsConfig.find(m => m.name === key || m.id === key) || {}
+      
+      // 计算时长选项
+      let modelDurations = defaultConfig.durations || ['10', '15']
+      const hasDurPricing = modelPricingConfig.hasDurationPricing ?? defaultConfig.hasDurationPricing ?? false
+      const pCost = modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1
+      
+      if (modelFullConfig.durations && Array.isArray(modelFullConfig.durations) && modelFullConfig.durations.length > 0) {
+        modelDurations = modelFullConfig.durations.map(d => String(d))
+      } else if (hasDurPricing && typeof pCost === 'object' && pCost !== null) {
+        const durationsFromPricing = Object.keys(pCost).filter(k => k !== 'hd_extra').sort((a, b) => Number(a) - Number(b))
+        if (durationsFromPricing.length > 0) {
+          modelDurations = durationsFromPricing
+        }
+      }
+      
+      const aspectRatios = modelFullConfig.aspectRatios || defaultConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }]
+      const supportedModes = modelFullConfig.supportedModes || defaultConfig.supportedModes || { t2v: true, i2v: true, a2v: false }
+      
       models.push({
         value: key,
-        // 优先使用租户配置的名称，否则使用默认名称
         label: name || defaultConfig.label || key,
         icon: defaultConfig.icon || (key.includes('veo') ? '🎥' : '✨'),
-        // 只使用租户配置的描述，为空时不显示（与图像节点保持一致）
         description: descriptions[key] || '',
-        // 积分配置：优先使用租户配置，否则使用默认配置
-        hasDurationPricing: modelPricingConfig.hasDurationPricing ?? defaultConfig.hasDurationPricing ?? false,
-        pointsCost: modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1
+        hasDurationPricing: hasDurPricing,
+        pointsCost: pCost,
+        durations: modelDurations,
+        aspectRatios,
+        supportedModes,
+        isImageToVideo: modelFullConfig.isImageToVideo ?? defaultConfig.isImageToVideo ?? false
       })
     }
   }
   
   return models.length > 0 ? models : defaultModels
+}
+
+// 获取所有可用的 LLM/文本模型列表（从配置中动态获取）
+export const getAvailableLLMModels = () => {
+  // 获取租户配置的 LLM 模型列表
+  const llmModelsConfig = config.llm_models || []
+  
+  // 默认模型配置（当没有任何配置时使用）
+  const defaultModels = [
+    { id: 'gemini-2.5-pro', name: 'Gemini 2.5', icon: 'G', provider: 'google', pointsCost: 1 },
+    { id: 'gemini-3-pro-preview', name: 'Gemini 3 Pro', icon: 'G', provider: 'google', pointsCost: 2 },
+    { id: 'gpt-4o', name: 'GPT-4o', icon: 'O', provider: 'openai', pointsCost: 3 },
+    { id: 'claude-3', name: 'Claude 3', icon: 'C', provider: 'anthropic', pointsCost: 2 }
+  ]
+  
+  // 如果有租户配置，使用租户配置的模型
+  if (llmModelsConfig && Array.isArray(llmModelsConfig) && llmModelsConfig.length > 0) {
+    const models = []
+    
+    for (const modelConfig of llmModelsConfig) {
+      // 跳过禁用的模型
+      if (modelConfig.enabled === false) continue
+      
+      models.push({
+        id: modelConfig.id,
+        value: modelConfig.id, // 兼容前端选择器
+        name: modelConfig.name,
+        label: modelConfig.name, // 兼容前端选择器
+        icon: modelConfig.icon || 'G',
+        provider: modelConfig.provider || 'google',
+        pointsCost: modelConfig.pointsCost || 1
+      })
+    }
+    
+    if (models.length > 0) {
+      console.log('[tenant] LLM 模型列表已加载:', models.map(m => m.id))
+      return models
+    }
+  }
+  
+  // 降级：返回默认模型
+  return defaultModels.map(m => ({
+    ...m,
+    value: m.id,
+    label: m.name
+  }))
 }
 
 // 强制刷新品牌配置（用于管理后台保存后立即刷新）

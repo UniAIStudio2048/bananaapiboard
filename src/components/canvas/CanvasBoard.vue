@@ -18,7 +18,7 @@
  * - Ctrl+A：全选节点
  * - Ctrl+G：编组选中的节点
  */
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, inject } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -36,13 +36,39 @@ import VideoGenNode from './nodes/VideoGenNode.vue'
 import LLMNode from './nodes/LLMNode.vue'
 import PreviewNode from './nodes/PreviewNode.vue'
 import GroupNode from './nodes/GroupNode.vue'
+import CharacterCardNode from './nodes/CharacterCardNode.vue'
 
 const emit = defineEmits(['dblclick', 'canvas-contextmenu', 'pane-click'])
 const canvasStore = useCanvasStore()
 
-// 连线样式设置
-const edgeStyle = ref(localStorage.getItem('canvasEdgeStyle') || 'smoothstep')
+// 注入用户信息
+const userInfo = inject('userInfo', null)
+
+// 连线样式设置 - 优先从用户偏好加载，其次从localStorage，最后使用默认值
+const edgeStyle = ref(
+  userInfo?.value?.preferences?.canvas?.edgeStyle ||
+  localStorage.getItem('canvasEdgeStyle') ||
+  'smoothstep'
+)
 const isEdgeHidden = computed(() => edgeStyle.value === 'hidden')
+
+// 监听用户信息变化，更新连线样式
+watch(() => userInfo?.value?.preferences?.canvas?.edgeStyle, (newStyle) => {
+  if (newStyle && newStyle !== edgeStyle.value) {
+    edgeStyle.value = newStyle
+    localStorage.setItem('canvasEdgeStyle', newStyle)
+    // 更新所有现有连线的样式
+    canvasStore.edges.forEach(edge => {
+      if (newStyle === 'hidden') {
+        edge.type = 'smoothstep'
+        edge.style = { opacity: 0 }
+      } else {
+        edge.type = newStyle
+        edge.style = {}
+      }
+    })
+  }
+})
 
 // 计算连线配置
 const defaultEdgeOptions = computed(() => ({
@@ -178,7 +204,8 @@ const nodeTypes = {
   'llm-content-expand': LLMNode,
   'preview-output': PreviewNode,
   'grid-preview': ImageNode,      // 9宫格分镜（使用 ImageNode，可以生成和输出图片）
-  'group': GroupNode              // 编组节点
+  'group': GroupNode,             // 编组节点
+  'character-card': CharacterCardNode  // Sora角色卡节点
 }
 
 // 记录连线起始信息
@@ -532,6 +559,37 @@ function handleKeyDown(event) {
   
   // Ctrl+C 复制
   if (isCtrlOrCmd && event.key === 'c') {
+    // 检查是否有文本被选中（用户可能在复制文本）
+    const selection = window.getSelection()
+    const selectedText = selection?.toString() || ''
+
+    // 如果有文本被选中，检查焦点是否在特定区域
+    if (selectedText) {
+      const activeElement = document.activeElement
+      const selectionAnchor = selection?.anchorNode
+
+      // 检查是否在需要保留文本复制功能的区域内
+      const isInTextCopyArea =
+        // AI 灵感助手面板
+        activeElement?.closest?.('.ai-assistant-container') ||
+        selectionAnchor?.parentElement?.closest?.('.ai-assistant-container') ||
+        activeElement?.closest?.('.ai-message__text') ||
+        selectionAnchor?.parentElement?.closest?.('.ai-message__text') ||
+        // 节点标签编辑
+        activeElement?.closest?.('[contenteditable="true"]') ||
+        selectionAnchor?.parentElement?.closest?.('[contenteditable="true"]') ||
+        // 其他可能的文本编辑区域
+        activeElement?.classList?.contains('editable-text') ||
+        selectionAnchor?.parentElement?.classList?.contains('editable-text')
+
+      // 如果在文本复制区域中选中了文本，允许浏览器默认的复制行为
+      if (isInTextCopyArea) {
+        console.log('[Canvas] 检测到在文本区域复制，允许浏览器默认行为')
+        return
+      }
+    }
+
+    // 否则执行画布节点复制
     event.preventDefault()
     canvasStore.copySelectedNodes()
     return
@@ -1264,6 +1322,30 @@ async function handleFileDrop(event) {
                 },
                 fromAsset: true,
                 assetId: asset.id
+              }
+            })
+            break
+          case 'sora-character':
+            // Sora 角色卡节点 - 显示角色名称和 ID
+            const characterName = asset.name || '角色'
+            const characterUsername = asset.metadata?.username || ''
+            canvasStore.addNode({
+              id: nodeId,
+              type: 'video',
+              position: { x: canvasX, y: canvasY },
+              data: {
+                title: characterName,
+                label: `${characterName}\n@${characterUsername}`,
+                status: 'success',
+                output: {
+                  type: 'video',
+                  url: asset.url
+                },
+                fromAsset: true,
+                assetId: asset.id,
+                isSoraCharacter: true,
+                characterName: characterName,
+                characterUsername: characterUsername
               }
             })
             break

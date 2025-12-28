@@ -70,7 +70,11 @@
       </div>
 
       <!-- 主要内容 -->
-      <div class="ai-message__text" :class="{ 'is-loading': message.isStreaming && !message.content }">
+      <div
+        class="ai-message__text"
+        :class="{ 'is-loading': message.isStreaming && !message.content }"
+        @contextmenu="handleContextMenu"
+      >
         <template v-if="message.isStreaming && !message.content">
           <span class="loading-dots">AI 正在回复</span>
         </template>
@@ -78,6 +82,25 @@
           <div v-html="formattedContent"></div>
         </template>
       </div>
+
+      <!-- 右键菜单 -->
+      <Teleport to="body">
+        <div
+          v-if="showContextMenu"
+          ref="contextMenuRef"
+          class="ai-context-menu"
+          :style="{ top: contextMenuY + 'px', left: contextMenuX + 'px' }"
+          @click="handleCopyFromMenu"
+        >
+          <div class="ai-context-menu__item">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            <span>复制</span>
+          </div>
+        </div>
+      </Teleport>
 
       <!-- 附件预览 -->
       <div v-if="message.attachments?.length" class="ai-attachments">
@@ -112,7 +135,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 
@@ -134,6 +157,11 @@ const props = defineProps({
 defineEmits(['preview-image'])
 
 const showThinking = ref(false)
+const showContextMenu = ref(false)
+const contextMenuX = ref(0)
+const contextMenuY = ref(0)
+const contextMenuRef = ref(null)
+const selectedText = ref('')
 
 const userInitial = computed(() => {
   return props.userName.charAt(0).toUpperCase()
@@ -177,6 +205,78 @@ function formatTime(timestamp) {
     minute: '2-digit'
   })
 }
+
+// 右键菜单处理
+function handleContextMenu(event) {
+  event.preventDefault()
+
+  // 获取选中的文本
+  const selection = window.getSelection()
+  const text = selection?.toString() || ''
+
+  // 如果没有选中文本，复制整个消息内容
+  if (!text && props.message.content) {
+    selectedText.value = props.message.content
+  } else {
+    selectedText.value = text
+  }
+
+  // 设置菜单位置
+  contextMenuX.value = event.clientX
+  contextMenuY.value = event.clientY
+
+  // 显示菜单
+  showContextMenu.value = true
+}
+
+// 从菜单复制
+async function handleCopyFromMenu() {
+  try {
+    if (selectedText.value) {
+      await navigator.clipboard.writeText(selectedText.value)
+      console.log('[AI-Assistant] 已复制到剪贴板')
+    }
+  } catch (error) {
+    console.error('[AI-Assistant] 复制失败:', error)
+    // 降级方案：使用传统方法
+    fallbackCopy(selectedText.value)
+  } finally {
+    showContextMenu.value = false
+  }
+}
+
+// 降级复制方法
+function fallbackCopy(text) {
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  try {
+    document.execCommand('copy')
+    console.log('[AI-Assistant] 已复制到剪贴板（降级方法）')
+  } catch (error) {
+    console.error('[AI-Assistant] 降级复制也失败:', error)
+  }
+  document.body.removeChild(textarea)
+}
+
+// 点击外部关闭菜单
+function handleClickOutside(event) {
+  if (showContextMenu.value && contextMenuRef.value && !contextMenuRef.value.contains(event.target)) {
+    showContextMenu.value = false
+  }
+}
+
+// 生命周期
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 </script>
 
 <style scoped>
@@ -236,6 +336,11 @@ function formatTime(timestamp) {
   font-size: 14px;
   line-height: 1.6;
   word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  cursor: text;
 }
 
 .ai-message__text.is-loading {
@@ -414,5 +519,51 @@ function formatTime(timestamp) {
 
 .rotate-90 {
   transform: rotate(90deg);
+}
+
+/* 右键菜单 */
+.ai-context-menu {
+  position: fixed;
+  z-index: 10000;
+  background: rgba(30, 32, 40, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+  min-width: 120px;
+  animation: contextMenuFadeIn 0.15s ease;
+}
+
+@keyframes contextMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.ai-context-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ai-context-menu__item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 1);
+}
+
+.ai-context-menu__item svg {
+  flex-shrink: 0;
 }
 </style>

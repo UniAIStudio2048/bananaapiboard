@@ -6,7 +6,8 @@
  * 支持全屏预览和应用到画布
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { getAssets, deleteAsset, toggleFavorite, updateAssetTags } from '@/api/canvas/assets'
+import { getAssets, deleteAsset, toggleFavorite, updateAssetTags, updateAsset, saveAsset } from '@/api/canvas/assets'
+import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 
 const { t, currentLanguage } = useI18n()
@@ -32,6 +33,22 @@ const showPreview = ref(false)
 const previewAsset = ref(null)
 const previewVideoRef = ref(null)
 
+// 编辑名称状态
+const editingNameAssetId = ref(null)
+const editingNameValue = ref('')
+
+// 添加角色弹窗状态
+const showAddCharacterModal = ref(false)
+const addCharacterForm = ref({
+  name: '',
+  username: '',
+  file: null,
+  filePreview: null,
+  fileType: null // 'image' or 'video'
+})
+const addCharacterLoading = ref(false)
+const addCharacterError = ref('')
+
 // 右键菜单状态
 const showContextMenu = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
@@ -52,7 +69,8 @@ const fileTypes = [
   { key: 'text', labelKey: 'canvas.assetPanel.copywriting', icon: 'Aa' },
   { key: 'image', labelKey: 'canvas.nodes.image', icon: '◫' },
   { key: 'video', labelKey: 'canvas.nodes.video', icon: '▷' },
-  { key: 'audio', labelKey: 'canvas.nodes.audio', icon: '♪' }
+  { key: 'audio', labelKey: 'canvas.nodes.audio', icon: '♪' },
+  { key: 'sora-character', label: 'Sora角色库', icon: '👤' }
 ]
 
 // 快捷标签 - 存储翻译键，在模板中实时翻译
@@ -119,7 +137,7 @@ const filteredAssets = computed(() => {
 
 // 按类型分组的资产统计
 const assetStats = computed(() => {
-  const stats = { all: 0, text: 0, image: 0, video: 0, audio: 0 }
+  const stats = { all: 0, text: 0, image: 0, video: 0, audio: 0, 'sora-character': 0 }
   assets.value.forEach(a => {
     stats.all++
     if (stats[a.type] !== undefined) {
@@ -217,8 +235,69 @@ async function handleDelete(e, asset) {
   }
 }
 
-// 点击资产 - 打开全屏预览
+// 开始编辑名称
+function startEditName(e, asset) {
+  e.stopPropagation()
+  editingNameAssetId.value = asset.id
+  editingNameValue.value = asset.name
+}
+
+// 保存编辑的名称
+async function saveEditedName(asset) {
+  const newName = editingNameValue.value.trim()
+  if (!newName) {
+    editingNameAssetId.value = null
+    return
+  }
+  
+  if (newName === asset.name) {
+    editingNameAssetId.value = null
+    return
+  }
+  
+  try {
+    await updateAsset(asset.id, { name: newName })
+    // 更新本地数据
+    const assetIndex = assets.value.findIndex(a => a.id === asset.id)
+    if (assetIndex !== -1) {
+      assets.value[assetIndex].name = newName
+    }
+    editingNameAssetId.value = null
+  } catch (error) {
+    console.error('[AssetPanel] 更新名称失败:', error)
+    alert('更新名称失败: ' + error.message)
+  }
+}
+
+// 取消编辑名称
+function cancelEditName() {
+  editingNameAssetId.value = null
+  editingNameValue.value = ''
+}
+
+// 点击资产 - Sora 角色单击复制 ID，其他资产打开预览
 function handleAssetClick(asset) {
+  // Sora 角色：单击复制角色 ID
+  if (asset.type === 'sora-character') {
+    const username = getCharacterUsername(asset)
+    navigator.clipboard.writeText(`@${username}`).then(() => {
+      copyToastMessage.value = `已复制: @${username}`
+      copyToastVisible.value = true
+      setTimeout(() => {
+        copyToastVisible.value = false
+      }, 2000)
+    }).catch(err => {
+      console.error('复制失败:', err)
+    })
+    return
+  }
+  // 其他资产：打开全屏预览
+  previewAsset.value = asset
+  showPreview.value = true
+}
+
+// 双击资产 - 打开全屏预览（Sora 角色也支持）
+function handleAssetDoubleClick(asset) {
   previewAsset.value = asset
   showPreview.value = true
 }
@@ -392,18 +471,295 @@ function getVideoThumbnail(asset) {
   return null
 }
 
+// 获取角色 username（用于显示）
+function getCharacterUsername(asset) {
+  // 优先使用 metadata 中的 username
+  if (asset.metadata?.username) {
+    return asset.metadata.username
+  }
+  // 其次使用 metadata 中的 characterId
+  if (asset.metadata?.characterId) {
+    return asset.metadata.characterId
+  }
+  // 如果 name 看起来像 API 用户名（包含 . 且无空格）
+  if (asset.name && asset.name.includes('.') && !asset.name.includes(' ')) {
+    return asset.name
+  }
+  // 最后使用资产 ID 前 8 位
+  return asset.id?.slice(0, 8) || 'unknown'
+}
+
+// 获取角色状态（pending, processing, completed, failed）
+function getCharacterStatus(asset) {
+  // 优先使用 metadata 中的 status
+  if (asset.metadata?.status) {
+    return asset.metadata.status
+  }
+  // 默认返回 completed（如果有 URL 说明创建成功）
+  if (asset.url) {
+    return 'completed'
+  }
+  return 'pending'
+}
+
+// 获取角色创建失败原因
+function getCharacterFailReason(asset) {
+  if (asset.metadata?.fail_reason) {
+    return asset.metadata.fail_reason
+  }
+  return null
+}
+
+// 复制角色 ID 到剪贴板
+const copyToastVisible = ref(false)
+const copyToastMessage = ref('')
+
+// 角色视频播放（跨浏览器兼容）
+function handleCharacterVideoPlay(e) {
+  const video = e.target
+  if (video && video.paused) {
+    // 确保静音状态，避免自动播放策略限制
+    video.muted = true
+    const playPromise = video.play()
+    if (playPromise !== undefined) {
+      playPromise.catch(err => {
+        console.log('[AssetPanel] 视频播放失败:', err.message)
+      })
+    }
+  }
+}
+
+// 角色视频暂停
+function handleCharacterVideoPause(e) {
+  const video = e.target
+  if (video) {
+    video.pause()
+    video.currentTime = 0
+  }
+}
+
+// 角色视频加载错误处理
+function handleCharacterVideoError(e, asset) {
+  console.warn('[AssetPanel] 角色视频加载失败:', asset.url)
+  // 视频加载失败时隐藏视频元素，显示缩略图或占位符
+  const video = e.target
+  if (video) {
+    video.style.display = 'none'
+    // 尝试显示后备缩略图
+    const parent = video.parentElement
+    if (parent && !parent.querySelector('.character-thumbnail-fallback')) {
+      const thumbnail = getVideoThumbnail(asset)
+      if (thumbnail) {
+        const img = document.createElement('img')
+        img.src = thumbnail
+        img.alt = asset.name
+        img.className = 'character-thumbnail-fallback'
+        parent.appendChild(img)
+      }
+    }
+  }
+}
+
+async function copyCharacterId(e, asset) {
+  e.stopPropagation() // 阻止冒泡，避免触发预览
+  const username = getCharacterUsername(asset)
+  try {
+    await navigator.clipboard.writeText(`@${username}`)
+    copyToastMessage.value = `已复制: @${username}`
+    copyToastVisible.value = true
+    setTimeout(() => {
+      copyToastVisible.value = false
+    }, 2000)
+  } catch (err) {
+    console.error('复制失败:', err)
+  }
+}
+
+// ========== 添加角色功能 ==========
+
+// 打开添加角色弹窗
+function openAddCharacterModal() {
+  addCharacterForm.value = {
+    name: '',
+    username: '',
+    file: null,
+    filePreview: null,
+    fileType: null
+  }
+  addCharacterError.value = ''
+  showAddCharacterModal.value = true
+}
+
+// 关闭添加角色弹窗
+function closeAddCharacterModal() {
+  showAddCharacterModal.value = false
+  // 清理预览URL
+  if (addCharacterForm.value.filePreview) {
+    URL.revokeObjectURL(addCharacterForm.value.filePreview)
+  }
+}
+
+// 处理文件选择
+function handleCharacterFileSelect(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  
+  addCharacterError.value = ''
+  
+  // 检查文件类型
+  const isImage = file.type.startsWith('image/')
+  const isVideo = file.type.startsWith('video/')
+  
+  if (!isImage && !isVideo) {
+    addCharacterError.value = '请上传图片或视频文件'
+    return
+  }
+  
+  // 检查视频时长（3秒以下）
+  if (isVideo) {
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      if (video.duration > 3) {
+        addCharacterError.value = '视频时长不能超过3秒'
+        addCharacterForm.value.file = null
+        addCharacterForm.value.filePreview = null
+        addCharacterForm.value.fileType = null
+        URL.revokeObjectURL(video.src)
+        return
+      }
+      URL.revokeObjectURL(video.src)
+    }
+    video.src = URL.createObjectURL(file)
+  }
+  
+  // 清理之前的预览
+  if (addCharacterForm.value.filePreview) {
+    URL.revokeObjectURL(addCharacterForm.value.filePreview)
+  }
+  
+  addCharacterForm.value.file = file
+  addCharacterForm.value.filePreview = URL.createObjectURL(file)
+  addCharacterForm.value.fileType = isVideo ? 'video' : 'image'
+}
+
+// 提交添加角色
+async function submitAddCharacter() {
+  const { name, username, file, fileType } = addCharacterForm.value
+  
+  // 验证表单
+  if (!name?.trim()) {
+    addCharacterError.value = '请输入角色名称'
+    return
+  }
+  if (!username?.trim()) {
+    addCharacterError.value = '请输入角色ID（外部平台的用户名）'
+    return
+  }
+  if (!file) {
+    addCharacterError.value = '请上传角色图片或视频'
+    return
+  }
+  
+  addCharacterLoading.value = true
+  addCharacterError.value = ''
+  
+  try {
+    // 1. 先上传文件到服务器
+    const formData = new FormData()
+    
+    // 根据文件类型选择正确的 API 和字段名
+    const uploadUrl = fileType === 'video' 
+      ? `${getApiUrl('')}/api/videos/upload`
+      : `${getApiUrl('')}/api/images/upload`
+    
+    // 视频上传使用 'file' 字段，图片上传使用 'images' 字段
+    if (fileType === 'video') {
+      formData.append('file', file)
+    } else {
+      formData.append('images', file)
+    }
+    
+    const token = localStorage.getItem('token')
+    const uploadResponse = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        ...getTenantHeaders(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: formData
+    })
+    
+    if (!uploadResponse.ok) {
+      const err = await uploadResponse.json().catch(() => ({}))
+      throw new Error(err.error || err.message || '文件上传失败')
+    }
+    
+    const uploadResult = await uploadResponse.json()
+    const fileUrl = uploadResult.url || uploadResult.urls?.[0]
+    
+    if (!fileUrl) {
+      throw new Error('文件上传失败：未返回URL')
+    }
+    
+    // 2. 保存为 sora-character 资产
+    const assetData = {
+      type: 'sora-character',
+      name: name.trim(),
+      url: fileUrl,
+      thumbnail_url: fileType === 'image' ? fileUrl : null,
+      metadata: {
+        username: username.trim(),
+        source: 'manual',
+        status: 'completed'
+      }
+    }
+    
+    await saveAsset(assetData)
+    
+    // 3. 刷新资产列表
+    await loadAssets(true)
+    
+    // 4. 关闭弹窗
+    closeAddCharacterModal()
+    
+    // 5. 显示成功提示
+    copyToastMessage.value = `角色 "${name}" 添加成功！`
+    copyToastVisible.value = true
+    setTimeout(() => {
+      copyToastVisible.value = false
+    }, 2000)
+    
+  } catch (error) {
+    console.error('[AssetPanel] 添加角色失败:', error)
+    addCharacterError.value = error.message || '添加角色失败'
+  } finally {
+    addCharacterLoading.value = false
+  }
+}
+
 // 开始拖拽
 function handleDragStart(e, asset) {
+  // 为 sora-character 添加 metadata
+  const assetData = {
+    id: asset.id,
+    type: asset.type,
+    name: asset.name,
+    content: asset.content,
+    url: asset.url,
+    thumbnail_url: asset.thumbnail_url
+  }
+  
+  // 如果是 Sora 角色，添加 metadata 信息
+  if (asset.type === 'sora-character') {
+    assetData.metadata = asset.metadata || {}
+    assetData.metadata.username = getCharacterUsername(asset)
+    assetData.metadata.name = asset.name
+  }
+  
   e.dataTransfer.setData('application/json', JSON.stringify({
     type: 'asset-insert',
-    asset: {
-      id: asset.id,
-      type: asset.type,
-      name: asset.name,
-      content: asset.content,
-      url: asset.url,
-      thumbnail_url: asset.thumbnail_url
-    }
+    asset: assetData
   }))
   e.dataTransfer.effectAllowed = 'copy'
   
@@ -443,10 +799,18 @@ async function addTag() {
   
   try {
     await updateAssetTags(editingAsset.value.id, updatedTags)
+    // 更新编辑中的资产
     editingAsset.value.tags = updatedTags
+    // 同步更新资产列表中对应的资产
+    const assetInList = assets.value.find(a => a.id === editingAsset.value.id)
+    if (assetInList) {
+      assetInList.tags = updatedTags
+    }
     newTagInput.value = ''
+    console.log('[AssetPanel] 标签添加成功:', newTag)
   } catch (error) {
     console.error('[AssetPanel] 添加标签失败:', error)
+    alert('添加标签失败: ' + error.message)
   }
 }
 
@@ -458,9 +822,17 @@ async function removeTag(tag) {
   
   try {
     await updateAssetTags(editingAsset.value.id, updatedTags)
+    // 更新编辑中的资产
     editingAsset.value.tags = updatedTags
+    // 同步更新资产列表中对应的资产
+    const assetInList = assets.value.find(a => a.id === editingAsset.value.id)
+    if (assetInList) {
+      assetInList.tags = updatedTags
+    }
+    console.log('[AssetPanel] 标签移除成功:', tag)
   } catch (error) {
     console.error('[AssetPanel] 移除标签失败:', error)
+    alert('移除标签失败: ' + error.message)
   }
 }
 
@@ -514,14 +886,22 @@ function handleGlobalClick(e) {
   }
 }
 
+// 资产更新事件处理
+function handleAssetsUpdated() {
+  console.log('[AssetPanel] 收到资产更新事件，刷新数据')
+  loadAssets(true)
+}
+
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
   document.addEventListener('click', handleGlobalClick)
+  window.addEventListener('assets-updated', handleAssetsUpdated)
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', handleGlobalClick)
+  window.removeEventListener('assets-updated', handleAssetsUpdated)
 })
 </script>
 
@@ -554,17 +934,45 @@ onUnmounted(() => {
 
         <!-- 文件类型筛选 -->
         <div class="type-filter">
-          <button 
-            v-for="ft in fileTypes" 
-            :key="ft.key"
-            class="type-btn"
-            :class="{ active: selectedType === ft.key }"
-            @click="selectedType = ft.key"
-          >
-            <span class="type-icon">{{ ft.icon }}</span>
-            <span class="type-label">{{ t(ft.labelKey) }}</span>
-            <span class="type-count">{{ assetStats[ft.key] || 0 }}</span>
-          </button>
+          <template v-for="ft in fileTypes" :key="ft.key">
+            <!-- Sora角色库特殊处理：包含悬停弹出的添加角色按钮 -->
+            <div 
+              v-if="ft.key === 'sora-character'" 
+              class="sora-character-wrapper"
+            >
+              <button 
+                class="type-btn"
+                :class="{ active: selectedType === ft.key }"
+                @click="selectedType = ft.key"
+              >
+                <span class="type-icon">{{ ft.icon }}</span>
+                <span class="type-label">{{ ft.label }}</span>
+                <span class="type-count">{{ assetStats[ft.key] || 0 }}</span>
+              </button>
+              <!-- 悬停时弹出的添加角色按钮 -->
+              <div class="add-character-dropdown">
+                <button 
+                  class="add-character-btn"
+                  @click.stop="openAddCharacterModal"
+                  title="手动添加外部角色"
+                >
+                  <span class="btn-icon">+</span>
+                  <span class="btn-text">添加角色</span>
+                </button>
+              </div>
+            </div>
+            <!-- 其他类型按钮 -->
+            <button 
+              v-else
+              class="type-btn"
+              :class="{ active: selectedType === ft.key }"
+              @click="selectedType = ft.key"
+            >
+              <span class="type-icon">{{ ft.icon }}</span>
+              <span class="type-label">{{ ft.labelKey ? t(ft.labelKey) : ft.label }}</span>
+              <span class="type-count">{{ assetStats[ft.key] || 0 }}</span>
+            </button>
+          </template>
         </div>
 
         <!-- 标签筛选 -->
@@ -621,6 +1029,7 @@ onUnmounted(() => {
               :class="[`type-${asset.type}`]"
               draggable="true"
               @click="handleAssetClick(asset)"
+              @dblclick="handleAssetDoubleClick(asset)"
               @contextmenu="handleContextMenu($event, asset)"
               @dragstart="handleDragStart($event, asset)"
             >
@@ -658,11 +1067,112 @@ onUnmounted(() => {
                     <span></span><span></span><span></span><span></span><span></span>
                   </div>
                 </div>
+                
+                <!-- Sora 角色预览 - 显示裁剪后的视频 -->
+                <div v-else-if="asset.type === 'sora-character'" class="character-preview">
+                  <!-- 失败状态覆盖层 -->
+                  <div v-if="getCharacterStatus(asset) === 'failed'" class="character-failed-overlay">
+                    <div class="failed-icon">✕</div>
+                    <div class="failed-text">创建失败</div>
+                    <div v-if="getCharacterFailReason(asset)" class="failed-reason">{{ getCharacterFailReason(asset) }}</div>
+                  </div>
+                  
+                  <!-- 处理中状态覆盖层 -->
+                  <div v-else-if="getCharacterStatus(asset) === 'pending' || getCharacterStatus(asset) === 'processing'" class="character-pending-overlay">
+                    <div class="pending-spinner"></div>
+                    <div class="pending-text">创建中...</div>
+                  </div>
+                  
+                  <!-- 如果有视频 URL，显示视频（跨浏览器兼容） -->
+                  <video 
+                    v-if="asset.url && (asset.url.includes('/api/images/file/') || asset.url.includes('.mp4'))"
+                    :src="asset.url"
+                    :poster="getVideoThumbnail(asset)"
+                    class="character-video"
+                    muted
+                    loop
+                    playsinline
+                    webkit-playsinline
+                    x5-video-player-type="h5"
+                    x5-playsinline
+                    preload="metadata"
+                    crossorigin="anonymous"
+                    @mouseenter="handleCharacterVideoPlay($event)"
+                    @mouseleave="handleCharacterVideoPause($event)"
+                    @error="handleCharacterVideoError($event, asset)"
+                  />
+                  <!-- 否则显示缩略图 -->
+                  <img 
+                    v-else-if="getVideoThumbnail(asset)" 
+                    :src="getVideoThumbnail(asset)" 
+                    :alt="asset.name"
+                    class="character-thumbnail"
+                  />
+                  <!-- 无视频无缩略图时显示渐变背景 -->
+                  <div v-else class="character-placeholder"></div>
+                </div>
               </div>
 
               <!-- 信息区 -->
               <div class="asset-info">
-                <div class="asset-name">{{ asset.name }}</div>
+                <!-- Sora 角色：名称和角色ID并排显示 -->
+                <div v-if="asset.type === 'sora-character'" class="character-name-row">
+                  <!-- 左侧：角色名称 -->
+                  <div class="character-name-left">
+                    <template v-if="editingNameAssetId === asset.id">
+                      <input
+                        v-model="editingNameValue"
+                        class="name-edit-input"
+                        @blur="saveEditedName(asset)"
+                        @keyup.enter="saveEditedName(asset)"
+                        @keyup.escape="cancelEditName"
+                        @click.stop
+                        autofocus
+                      />
+                    </template>
+                    <template v-else>
+                      <span class="asset-name character-display-name" @dblclick="startEditName($event, asset)">
+                        {{ asset.name }}
+                      </span>
+                    </template>
+                  </div>
+                  <!-- 右侧：角色ID（点击复制） -->
+                  <span 
+                    class="character-username-tag clickable" 
+                    @click="copyCharacterId($event, asset)"
+                    title="点击复制角色ID"
+                  >
+                    @{{ getCharacterUsername(asset) }}
+                  </span>
+                </div>
+                
+                <!-- 非角色资产：正常显示可编辑名称 -->
+                <div v-else class="asset-name-container">
+                  <template v-if="editingNameAssetId === asset.id">
+                    <input
+                      v-model="editingNameValue"
+                      class="name-edit-input"
+                      @blur="saveEditedName(asset)"
+                      @keyup.enter="saveEditedName(asset)"
+                      @keyup.escape="cancelEditName"
+                      @click.stop
+                      autofocus
+                    />
+                  </template>
+                  <template v-else>
+                    <div class="asset-name" @dblclick="startEditName($event, asset)">
+                      {{ asset.name }}
+                    </div>
+                    <button 
+                      class="edit-name-btn" 
+                      @click="startEditName($event, asset)"
+                      title="编辑名称"
+                    >
+                      ✎
+                    </button>
+                  </template>
+                </div>
+                
                 <div class="asset-meta">
                   <span class="asset-size">{{ formatFileSize(asset.size) }}</span>
                   <span class="asset-time">{{ formatDate(asset.created_at) }}</span>
@@ -813,6 +1323,95 @@ onUnmounted(() => {
             </div>
           </div>
         </Transition>
+
+        <!-- 添加角色弹窗 -->
+        <Transition name="fade">
+          <div v-if="showAddCharacterModal" class="add-character-overlay" @click.self="closeAddCharacterModal">
+            <div class="add-character-modal">
+              <div class="add-character-header">
+                <h3>👤 添加外部角色</h3>
+                <button class="close-btn small" @click="closeAddCharacterModal">✕</button>
+              </div>
+              
+              <div class="add-character-content">
+                <p class="add-character-desc">
+                  添加在外部平台（如 Sora 官网）创建的角色到本地角色库，方便在生成时使用 @角色名 引用。
+                </p>
+                
+                <!-- 错误提示 -->
+                <div v-if="addCharacterError" class="add-character-error">
+                  {{ addCharacterError }}
+                </div>
+                
+                <!-- 文件上传区域 -->
+                <div class="file-upload-area">
+                  <label class="file-upload-label">
+                    <input 
+                      type="file" 
+                      accept="image/*,video/*"
+                      @change="handleCharacterFileSelect"
+                      :disabled="addCharacterLoading"
+                    />
+                    <div v-if="!addCharacterForm.filePreview" class="upload-placeholder">
+                      <div class="upload-icon">📁</div>
+                      <div class="upload-text">点击上传角色图片或视频</div>
+                      <div class="upload-hint">视频不超过3秒</div>
+                    </div>
+                    <div v-else class="upload-preview">
+                      <img 
+                        v-if="addCharacterForm.fileType === 'image'"
+                        :src="addCharacterForm.filePreview"
+                        alt="角色预览"
+                      />
+                      <video 
+                        v-else
+                        :src="addCharacterForm.filePreview"
+                        muted
+                        loop
+                        autoplay
+                        playsinline
+                      />
+                      <button class="remove-file-btn" @click.prevent="addCharacterForm.file = null; addCharacterForm.filePreview = null">✕</button>
+                    </div>
+                  </label>
+                </div>
+                
+                <!-- 表单字段 -->
+                <div class="form-field">
+                  <label>角色名称</label>
+                  <input 
+                    v-model="addCharacterForm.name"
+                    type="text"
+                    placeholder="例如：小王姐姐"
+                    :disabled="addCharacterLoading"
+                  />
+                  <span class="field-hint">用户在 prompt 中使用 @角色名称 来引用</span>
+                </div>
+                
+                <div class="form-field">
+                  <label>角色 ID（外部用户名）</label>
+                  <input 
+                    v-model="addCharacterForm.username"
+                    type="text"
+                    placeholder="例如：cncqaktt5.sunnysipst"
+                    :disabled="addCharacterLoading"
+                  />
+                  <span class="field-hint">外部平台生成的角色ID，系统会自动将 @角色名称 转换为此ID进行请求</span>
+                </div>
+              </div>
+              
+              <div class="add-character-footer">
+                <button class="cancel-btn" @click="closeAddCharacterModal" :disabled="addCharacterLoading">
+                  取消
+                </button>
+                <button class="submit-btn" @click="submitAddCharacter" :disabled="addCharacterLoading">
+                  <span v-if="addCharacterLoading" class="btn-spinner"></span>
+                  {{ addCharacterLoading ? '添加中...' : '添加角色' }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </Transition>
       </div>
     </div>
   </Transition>
@@ -902,6 +1501,15 @@ onUnmounted(() => {
       </div>
     </Transition>
   </Teleport>
+  
+  <!-- 复制成功提示 -->
+  <Teleport to="body">
+    <Transition name="toast">
+      <div v-if="copyToastVisible" class="copy-toast">
+        {{ copyToastMessage }}
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -917,7 +1525,7 @@ onUnmounted(() => {
 
 /* 面板 - 更大尺寸 */
 .asset-panel {
-  width: 680px;
+  width: 780px;
   max-height: calc(100vh - 80px);
   height: 100%;
   background: linear-gradient(180deg, rgba(28, 28, 32, 0.98) 0%, rgba(20, 20, 24, 0.98) 100%);
@@ -983,9 +1591,9 @@ onUnmounted(() => {
 /* 文件类型筛选 */
 .type-filter {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   padding: 16px 20px;
-  overflow-x: auto;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
@@ -1347,9 +1955,138 @@ onUnmounted(() => {
   50% { transform: scaleY(0.5); }
 }
 
+/* Sora 角色预览 */
+.character-preview {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.15) 100%);
+}
+
+.character-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.character-preview .character-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #1a1a2e;
+  /* 跨浏览器兼容 */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+}
+
+.character-preview .character-thumbnail,
+.character-preview .character-thumbnail-fallback {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: #1a1a2e;
+}
+
+.character-placeholder {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.3) 0%, rgba(139, 92, 246, 0.3) 100%);
+}
+
+/* 角色创建失败状态 */
+.character-failed-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(220, 38, 38, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  color: #fff;
+}
+
+.character-failed-overlay .failed-icon {
+  font-size: 28px;
+  font-weight: bold;
+  margin-bottom: 6px;
+  background: rgba(255, 255, 255, 0.2);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.character-failed-overlay .failed-text {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.character-failed-overlay .failed-reason {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.8);
+  text-align: center;
+  padding: 0 8px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 角色创建中状态 */
+.character-pending-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(59, 130, 246, 0.75);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  color: #fff;
+}
+
+.character-pending-overlay .pending-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 8px;
+}
+
+.character-pending-overlay .pending-text {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* 资产信息 */
 .asset-info {
   padding: 12px;
+}
+
+.asset-name-container {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 4px;
 }
 
 .asset-name {
@@ -1359,7 +2096,150 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-bottom: 6px;
+  flex: 1;
+  cursor: default;
+}
+
+.edit-name-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 12px;
+  transition: all 0.15s ease;
+}
+
+.asset-item:hover .edit-name-btn {
+  opacity: 1;
+}
+
+.edit-name-btn:hover {
+  color: #3b82f6;
+}
+
+.name-edit-input {
+  width: 100%;
+  padding: 4px 8px;
+  background: #2a2a2a;
+  border: 1px solid #3b82f6;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+}
+
+/* Sora 角色名称和ID并排显示 */
+.character-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 4px;
+  width: 100%;
+}
+
+.character-name-left {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.character-display-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+.character-info {
+  margin-bottom: 4px;
+}
+
+.character-username-tag {
+  display: inline-block;
+  font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+  font-size: 11px;
+  color: rgba(139, 92, 246, 0.95);
+  background: rgba(139, 92, 246, 0.15);
+  padding: 2px 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 50%;
+  flex-shrink: 0;
+}
+
+.character-username-tag.clickable {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.character-username-tag.clickable:hover {
+  background: rgba(139, 92, 246, 0.3);
+  color: rgba(167, 139, 250, 1);
+  transform: scale(1.02);
+}
+
+.character-username-tag.clickable:active {
+  transform: scale(0.98);
+}
+
+/* Sora 角色卡片 - 单击复制提示 */
+.asset-card.type-sora-character {
+  cursor: copy;
+}
+
+.asset-card.type-sora-character::after {
+  content: '📋 点击复制@ID';
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.85);
+  padding: 4px 10px;
+  border-radius: 6px;
+  opacity: 0;
+  transition: all 0.2s ease;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.asset-card.type-sora-character:hover::after {
+  opacity: 1;
+}
+
+/* 复制成功提示 */
+.copy-toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(34, 197, 94, 0.95);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 9999;
+  box-shadow: 0 4px 20px rgba(34, 197, 94, 0.4);
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+
+.toast-enter-from,
+.toast-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(20px);
 }
 
 .asset-meta {
@@ -1621,7 +2501,7 @@ onUnmounted(() => {
 }
 
 /* 响应式 */
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .asset-panel-container {
     left: 20px;
     right: 20px;
@@ -1631,7 +2511,7 @@ onUnmounted(() => {
   
   .asset-panel {
     width: 100%;
-    max-width: 580px;
+    max-width: 680px;
     max-height: calc(100vh - 40px);
   }
   
@@ -1923,5 +2803,343 @@ onUnmounted(() => {
   opacity: 0;
   transform: scale(0.95);
 }
+
+/* ========== Sora角色库悬停添加按钮 ========== */
+.sora-character-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.add-character-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.sora-character-wrapper:hover .add-character-dropdown {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(8px);
+  pointer-events: auto;
+}
+
+.add-character-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(59, 130, 246, 0.2) 100%);
+  border: 1px solid rgba(139, 92, 246, 0.5);
+  border-radius: 8px;
+  color: #c4b5fd;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(139, 92, 246, 0.1);
+  transition: all 0.2s ease;
+}
+
+.add-character-btn:hover {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.35) 0%, rgba(59, 130, 246, 0.3) 100%);
+  border-color: rgba(139, 92, 246, 0.7);
+  color: #e9d5ff;
+  transform: scale(1.02);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(139, 92, 246, 0.2);
+}
+
+.add-character-btn .btn-icon {
+  font-size: 14px;
+  font-weight: bold;
+  color: #a78bfa;
+}
+
+.add-character-btn .btn-text {
+  font-size: 12px;
+}
+
+/* 小箭头指示器 */
+.add-character-dropdown::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: rgba(139, 92, 246, 0.25);
+  border-left: 1px solid rgba(139, 92, 246, 0.5);
+  border-top: 1px solid rgba(139, 92, 246, 0.5);
+}
+
+/* ========== 添加角色弹窗 ========== */
+.add-character-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+}
+
+.add-character-modal {
+  width: 440px;
+  max-width: 90vw;
+  max-height: 90vh;
+  background: rgba(28, 28, 32, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+
+.add-character-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.add-character-header h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.add-character-content {
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.add-character-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.6;
+  margin: 0 0 20px 0;
+  padding: 12px 16px;
+  background: rgba(99, 102, 241, 0.1);
+  border-radius: 10px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.add-character-error {
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 10px;
+  color: #f87171;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+/* 文件上传区域 */
+.file-upload-area {
+  margin-bottom: 20px;
+}
+
+.file-upload-label {
+  display: block;
+  cursor: pointer;
+}
+
+.file-upload-label input[type="file"] {
+  display: none;
+}
+
+.upload-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 2px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 16px;
+  transition: all 0.2s ease;
+}
+
+.upload-placeholder:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+.upload-icon {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.upload-text {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 6px;
+}
+
+.upload-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.upload-preview {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.upload-preview img,
+.upload-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.remove-file-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  background: rgba(239, 68, 68, 0.9);
+  border: none;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.remove-file-btn:hover {
+  background: #ef4444;
+  transform: scale(1.1);
+}
+
+/* 表单字段 */
+.form-field {
+  margin-bottom: 20px;
+}
+
+.form-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 8px;
+}
+
+.form-field input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.form-field input:focus {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.form-field input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.field-hint {
+  display: block;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 6px;
+  line-height: 1.4;
+}
+
+/* 底部按钮 */
+.add-character-footer {
+  display: flex;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cancel-btn {
+  flex: 1;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.cancel-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.submit-btn {
+  flex: 1;
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.submit-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.4);
+}
+
+.submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
 </style>
+
 

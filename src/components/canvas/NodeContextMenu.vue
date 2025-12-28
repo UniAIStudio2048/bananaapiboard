@@ -298,7 +298,13 @@ async function downloadVideo() {
     emit('close')
   } catch (error) {
     console.error('下载视频失败:', error)
-    window.open(videoUrl.value, '_blank')
+    // 如果 fetch 失败，尝试直接下载（不打开新窗口）
+    const a = document.createElement('a')
+    a.href = videoUrl.value
+    a.download = `video_${Date.now()}.mp4`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
     emit('close')
   }
 }
@@ -327,7 +333,13 @@ async function downloadImage() {
     emit('close')
   } catch (error) {
     console.error('下载图片失败:', error)
-    window.open(imageUrl.value, '_blank')
+    // 如果 fetch 失败，尝试直接下载（不打开新窗口）
+    const a = document.createElement('a')
+    a.href = imageUrl.value
+    a.download = `image_${Date.now()}.png`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
     emit('close')
   }
 }

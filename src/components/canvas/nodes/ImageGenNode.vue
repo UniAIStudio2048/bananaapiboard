@@ -7,7 +7,7 @@ import { ref, computed, inject, watch, nextTick, onMounted, onUnmounted } from '
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus } from '@/api/canvas/nodes'
-import { getAvailableImageModels } from '@/config/tenant'
+import { getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 
@@ -345,9 +345,31 @@ async function useTool(action) {
 }
 
 // 下载图片
-function downloadImage() {
-  if (outputImages.value.length > 0) {
-    window.open(outputImages.value[0], '_blank')
+async function downloadImage() {
+  if (outputImages.value.length === 0) return
+  
+  try {
+    const response = await fetch(outputImages.value[0], {
+      headers: getTenantHeaders()
+    })
+    const blob = await response.blob()
+    
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `image_${props.id || Date.now()}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('[ImageGenNode] 下载图片失败:', error)
+    const link = document.createElement('a')
+    link.href = outputImages.value[0]
+    link.download = `image_${props.id || Date.now()}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 }
 

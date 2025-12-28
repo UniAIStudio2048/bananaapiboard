@@ -312,6 +312,66 @@
                 </Transition>
               </div>
 
+              <!-- 预设选择器 -->
+              <div class="preset-selector">
+                <button
+                  class="toolbar-btn preset-btn"
+                  @click.stop="showPresetDropdown = !showPresetDropdown"
+                >
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                  </svg>
+                  <span>{{ selectedPreset ? selectedPreset.name : '自定义预设' }}</span>
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 15l-6-6-6 6"/>
+                  </svg>
+                </button>
+
+                <!-- 预设下拉菜单 -->
+                <Transition name="dropdown">
+                  <div v-if="showPresetDropdown" class="preset-dropdown">
+                    <!-- 无预设选项 -->
+                    <button
+                      class="preset-option"
+                      :class="{ active: !selectedPreset }"
+                      @click.stop="selectPreset(null)"
+                    >
+                      <span class="preset-name">无预设</span>
+                      <svg v-if="!selectedPreset" class="w-4 h-4 check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </button>
+
+                    <div v-if="userPresets.length > 0" class="preset-divider"></div>
+
+                    <!-- 用户预设列表 -->
+                    <button
+                      v-for="preset in userPresets"
+                      :key="preset.id"
+                      class="preset-option"
+                      :class="{ active: selectedPreset?.id === preset.id }"
+                      @click.stop="selectPreset(preset)"
+                    >
+                      <span class="preset-name">{{ preset.name }}</span>
+                      <svg v-if="selectedPreset?.id === preset.id" class="w-4 h-4 check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </button>
+
+                    <div class="preset-divider"></div>
+
+                    <!-- 管理预设按钮 -->
+                    <button class="preset-option preset-manage" @click.stop="openPresetManagerFromDropdown">
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                      </svg>
+                      <span class="preset-name">管理预设...</span>
+                    </button>
+                  </div>
+                </Transition>
+              </div>
+
               <!-- 附件按钮 -->
               <button class="toolbar-btn" @click="triggerFileInput" title="添加附件">
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -373,11 +433,32 @@
       </div>
     </div>
   </Transition>
+
+  <!-- 预设管理器 -->
+  <PresetManager
+    :is-open="showPresetManager"
+    @close="closePresetManager"
+    @create="handleCreatePreset"
+    @edit="handleEditPreset"
+    @select="selectPreset"
+    @refresh="loadUserPresets"
+  />
+
+  <!-- 自定义预设对话框 -->
+  <CustomPresetDialog
+    :is-open="showCustomPresetDialog"
+    :preset="editingPreset"
+    @close="closePresetDialog"
+    @submit="handleSavePreset"
+    @temp-use="handleTempUsePreset"
+  />
 </template>
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, inject } from 'vue'
 import AIAssistantMessage from './AIAssistantMessage.vue'
+import PresetManager from './dialogs/PresetManager.vue'
+import CustomPresetDialog from './dialogs/CustomPresetDialog.vue'
 import {
   getAIAssistantConfig,
   sendMessage as apiSendMessage,
@@ -388,6 +469,11 @@ import {
   getModeIcon,
   uploadAttachments
 } from '@/api/canvas/ai-assistant'
+import {
+  getUserLLMPresets,
+  createUserLLMPreset,
+  updateUserLLMPreset
+} from '@/api/canvas/llm'
 
 const props = defineProps({
   visible: {
@@ -427,12 +513,20 @@ const deepThinkEnabled = ref(false)
 const webSearchEnabled = ref(false)
 
 const showModeDropdown = ref(false)
+const showPresetDropdown = ref(false)
 const showHistory = ref(false)
 
 const attachments = ref([])
 const isDragging = ref(false)
 const isUploading = ref(false) // 上传中状态
 let dragCounter = 0 // 用于跟踪拖拽进入/离开次数
+
+// 预设管理相关
+const userPresets = ref([])
+const selectedPreset = ref(null)
+const showPresetManager = ref(false)
+const showCustomPresetDialog = ref(false)
+const editingPreset = ref(null)
 
 // Refs
 const messagesRef = ref(null)
@@ -477,6 +571,16 @@ async function loadConfig() {
     }
   } catch (error) {
     console.error('[AI-Assistant] 加载配置失败:', error)
+  }
+}
+
+// 加载用户预设
+async function loadUserPresets() {
+  try {
+    const data = await getUserLLMPresets()
+    userPresets.value = data.presets || []
+  } catch (error) {
+    console.error('[AI-Assistant] 加载预设失败:', error)
   }
 }
 
@@ -540,6 +644,91 @@ async function deleteSessionItem(sessionId) {
 function sendQuickMessage(text) {
   inputText.value = text
   sendMessage()
+}
+
+// ========== 预设管理相关方法 ==========
+
+// 打开预设管理器
+function openPresetManager() {
+  showPresetManager.value = true
+}
+
+// 从下拉菜单打开预设管理器
+function openPresetManagerFromDropdown() {
+  console.log('[AI-Assistant] 打开预设管理器')
+  showPresetDropdown.value = false
+  showPresetManager.value = true
+  console.log('[AI-Assistant] showPresetManager =', showPresetManager.value)
+}
+
+// 关闭预设管理器
+function closePresetManager() {
+  showPresetManager.value = false
+}
+
+// 打开新建预设对话框
+function handleCreatePreset() {
+  editingPreset.value = null
+  showPresetManager.value = false
+  showCustomPresetDialog.value = true
+}
+
+// 打开编辑预设对话框
+function handleEditPreset(preset) {
+  editingPreset.value = preset
+  showPresetManager.value = false
+  showCustomPresetDialog.value = true
+}
+
+// 关闭预设对话框
+function closePresetDialog() {
+  showCustomPresetDialog.value = false
+  editingPreset.value = null
+}
+
+// 保存预设
+async function handleSavePreset(data) {
+  try {
+    if (editingPreset.value) {
+      // 更新现有预设
+      await updateUserLLMPreset(editingPreset.value.id, data)
+      console.log('[AI-Assistant] 预设已更新:', data.name)
+    } else {
+      // 创建新预设
+      const result = await createUserLLMPreset(data)
+      console.log('[AI-Assistant] 预设已创建:', data.name)
+      // 自动选中新创建的预设
+      selectedPreset.value = result.preset
+    }
+
+    // 重新加载预设列表
+    await loadUserPresets()
+    closePresetDialog()
+  } catch (error) {
+    console.error('[AI-Assistant] 保存预设失败:', error)
+    alert(error.message || '保存失败，请重试')
+  }
+}
+
+// 临时使用预设（不保存）
+function handleTempUsePreset(data) {
+  selectedPreset.value = {
+    id: 'temp',
+    name: '临时预设',
+    systemPrompt: data.systemPrompt
+  }
+  console.log('[AI-Assistant] 使用临时预设')
+}
+
+// 选择预设
+function selectPreset(preset) {
+  selectedPreset.value = preset
+  showPresetDropdown.value = false
+  if (preset) {
+    console.log('[AI-Assistant] 选中预设:', preset.name)
+  } else {
+    console.log('[AI-Assistant] 取消选择预设')
+  }
 }
 
 async function sendMessage() {
@@ -622,6 +811,7 @@ async function sendMessage() {
         web_search: webSearchEnabled.value
       },
       attachments: uploadedAttachments,
+      system_prompt: selectedPreset.value?.systemPrompt, // 使用选中的预设系统提示词
       onSession: (sessionId) => {
         currentSessionId.value = sessionId
       },
@@ -818,11 +1008,13 @@ watch(() => props.visible, (visible) => {
   if (visible) {
     loadConfig()
     loadSessions()
+    loadUserPresets()
     nextTick(() => {
       inputRef.value?.focus()
     })
   } else {
     showModeDropdown.value = false
+    showPresetDropdown.value = false
     showHistory.value = false
   }
 })
@@ -832,6 +1024,9 @@ function handleClickOutside(event) {
   if (showModeDropdown.value && !event.target.closest('.mode-selector')) {
     showModeDropdown.value = false
   }
+  if (showPresetDropdown.value && !event.target.closest('.preset-selector')) {
+    showPresetDropdown.value = false
+  }
 }
 
 onMounted(() => {
@@ -839,6 +1034,7 @@ onMounted(() => {
   if (props.visible) {
     loadConfig()
     loadSessions()
+    loadUserPresets()
   }
 })
 </script>
@@ -1483,6 +1679,83 @@ onMounted(() => {
   color: rgba(100, 180, 255, 1);
 }
 
+/* 预设选择器 */
+.preset-selector {
+  position: relative;
+}
+
+.preset-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+}
+
+.preset-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 200px;
+  max-width: 280px;
+  background: rgba(30, 32, 40, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.preset-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #d1d5db;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.preset-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.preset-option.active {
+  background: rgba(100, 150, 255, 0.15);
+  color: rgba(180, 200, 255, 1);
+}
+
+.preset-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 4px 0;
+}
+
+.preset-manage {
+  color: rgba(139, 92, 246, 0.9);
+  font-weight: 500;
+}
+
+.preset-manage:hover {
+  background: rgba(139, 92, 246, 0.15);
+  color: rgba(167, 139, 250, 1);
+}
+
 /* 下拉菜单动画 */
 .dropdown-enter-active,
 .dropdown-leave-active {
@@ -1579,5 +1852,180 @@ onMounted(() => {
 .messages-area::-webkit-scrollbar-thumb:hover,
 .history-list::-webkit-scrollbar-thumb:hover {
   background: #4b5563;
+}
+
+</style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   AIAssistantPanel 白昼模式样式适配
+   ======================================== */
+:root.canvas-theme-light .ai-assistant-panel {
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(20px);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .panel-header {
+  background: rgba(250, 250, 250, 0.98);
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .header-icon {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .header-title {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .header-btn {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .header-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .close-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .welcome-title {
+  color: #3b82f6;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .welcome-subtitle {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .tip-card {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .tip-card:hover {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: #3b82f6;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .input-area {
+  border-top-color: rgba(0, 0, 0, 0.06);
+  background: rgba(250, 250, 250, 0.8);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .input-textarea {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .input-textarea::placeholder {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .input-textarea:focus {
+  background: #ffffff;
+  border-color: rgba(59, 130, 246, 0.4);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .toolbar-btn {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .send-btn {
+  background: #3b82f6;
+  color: white;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .send-btn:hover {
+  background: #2563eb;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .model-selector {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .model-selector:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-drawer {
+  background: rgba(250, 250, 250, 0.98);
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-item {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-item:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-item.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-empty {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .messages-area::-webkit-scrollbar-thumb,
+:root.canvas-theme-light .ai-assistant-panel .history-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .messages-area::-webkit-scrollbar-thumb:hover,
+:root.canvas-theme-light .ai-assistant-panel .history-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* 消息气泡白昼模式 */
+:root.canvas-theme-light .ai-assistant-panel .message-user {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .message-user .message-text {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .message-assistant {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .message-assistant .message-text {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .message-time {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .message-actions button {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .message-actions button:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.7);
 }
 </style>

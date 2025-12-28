@@ -7,7 +7,7 @@ import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 const fileInputRef = ref(null)
 const prompt = ref('')
 const mode = ref('text') // text 或 image
-const model = ref('sora-2')
+const model = ref('sora2')  // 默认使用新版 sora2 整合模型
 const aspectRatio = ref('16:9')
 const duration = ref('10')
 const hd = ref(false)
@@ -17,6 +17,24 @@ const VEO3_MODELS = ['veo3.1-components', 'veo3.1', 'veo3.1-pro']
 
 // 当前模型是否为VEO3系列
 const isVeo3Model = computed(() => VEO3_MODELS.includes(model.value))
+
+// 当前选中模型的配置
+const currentModelConfig = computed(() => {
+  return availableModels.value.find(m => m.value === model.value) || {}
+})
+
+// 可用的方向选项 - 从模型配置中读取
+const availableAspectRatios = computed(() => {
+  const aspectRatios = currentModelConfig.value?.aspectRatios
+  if (aspectRatios && aspectRatios.length > 0) {
+    return aspectRatios
+  }
+  // 兜底默认值
+  return [
+    { value: '16:9', label: '横屏 (16:9)' },
+    { value: '9:16', label: '竖屏 (9:16)' }
+  ]
+})
 
 // VEO3模型的图片数量限制
 const maxImagesForModel = computed(() => {
@@ -28,7 +46,7 @@ const watermark = ref(false) // 默认false，隐藏选项
 const isPrivate = ref(true) // 默认true，隐藏选项
 
 // HD 选项是否可用（仅 Sora PRO 模型可用，VEO3不支持）
-const isHdAvailable = computed(() => model.value === 'sora-2-pro')
+const isHdAvailable = computed(() => model.value === 'sora2-pro' || model.value === 'sora-2-pro')
 const loading = ref(false)
 const error = ref('')
 const successMessage = ref('')
@@ -65,6 +83,12 @@ const availableDurations = computed(() => {
   if (isVeo3Model.value) {
     return [] // VEO3模型不支持时长选择
   }
+  // 优先使用模型配置中的 durations 数组
+  const modelDurations = currentModelConfig.value?.durations
+  if (modelDurations && modelDurations.length > 0) {
+    return modelDurations
+  }
+  // 兜底：从积分配置中获取
   const config = pointsCostConfig.value[model.value] || {}
   return Object.keys(config).filter(key => key !== 'hd_extra').sort((a, b) => Number(a) - Number(b))
 })
@@ -102,9 +126,11 @@ const userPackageInfo = computed(() => {
   }
 })
 
-// 获取可用的视频模型列表（从配置动态获取）
+// 获取可用的视频模型列表（从配置动态获取，过滤掉旧版模型）
 const availableModels = computed(() => {
-  return getAvailableVideoModels()
+  const allModels = getAvailableVideoModels()
+  // 过滤掉旧版 sora-2 和 sora-2-pro，只保留新版 sora2 系列和其他模型
+  return allModels.filter(m => !['sora-2', 'sora-2-pro'].includes(m.value))
 })
 
 // 获取模型显示名称
@@ -131,6 +157,26 @@ function formatPointsTitle() {
   if (!me.value) return ''
   return `套餐积分：${me.value.package_points || 0} | 永久积分：${me.value.points || 0}`
 }
+
+// 监听模型变化，更新时长和方向选项
+watch(model, (newModel) => {
+  const modelConfig = availableModels.value.find(m => m.value === newModel)
+  
+  // 更新时长选项
+  const durations = modelConfig?.durations || ['10', '15']
+  if (durations.length > 0 && !durations.includes(duration.value)) {
+    duration.value = durations[0]
+    console.log('[VideoGeneration] 时长已重置为:', duration.value)
+  }
+  
+  // 更新方向选项
+  const aspectRatios = modelConfig?.aspectRatios || [{ value: '16:9', label: '横屏' }]
+  const aspectValues = aspectRatios.map(ar => ar.value)
+  if (aspectValues.length > 0 && !aspectValues.includes(aspectRatio.value)) {
+    aspectRatio.value = aspectValues[0]
+    console.log('[VideoGeneration] 方向已重置为:', aspectRatio.value)
+  }
+})
 
 async function refreshUser() {
   me.value = await getMe()
@@ -941,15 +987,18 @@ onUnmounted(() => {
               </select>
             </div>
 
-            <!-- 画面比例 -->
+            <!-- 画面比例/方向 - 从模型配置动态获取 -->
             <div>
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>📐</span>
-                <span>画面比例</span>
+                <span>画面方向</span>
               </label>
               <select v-model="aspectRatio" class="input text-sm">
-                <option value="16:9">16:9 横屏</option>
-                <option value="9:16">9:16 竖屏</option>
+                <option 
+                  v-for="ar in availableAspectRatios" 
+                  :key="ar.value" 
+                  :value="ar.value"
+                >{{ ar.label }}</option>
               </select>
             </div>
 

@@ -1,12 +1,17 @@
 /**
  * Canvas 画布模式弹窗工具
  * 用于替代原生 alert/confirm，提供黑白灰风格的弹窗
+ * 包含 Toast 通知功能
  */
 import { ref, h, render } from 'vue'
 import CanvasDialog from '@/components/canvas/CanvasDialog.vue'
+import CanvasToast from '@/components/canvas/CanvasToast.vue'
 
 // 存储当前弹窗的容器
 let dialogContainer = null
+
+// Toast 容器
+let toastContainer = null
 
 /**
  * 显示弹窗
@@ -134,13 +139,47 @@ export function showInsufficientPointsDialog(required, current, count = 1) {
 }
 
 /**
+ * 显示 Toast 通知
+ * @param {String} message - 消息内容
+ * @param {String} type - 类型 'success' | 'error' | 'info' | 'warning'
+ * @param {Number} duration - 显示时长（毫秒），默认 2000
+ */
+export function showToast(message, type = 'success', duration = 2000) {
+  // 创建 Toast 容器
+  if (!toastContainer) {
+    toastContainer = document.createElement('div')
+    toastContainer.id = 'canvas-toast-container'
+    document.body.appendChild(toastContainer)
+  }
+
+  // 清理之前的 Toast
+  render(null, toastContainer)
+
+  // 处理关闭
+  function handleClose() {
+    render(null, toastContainer)
+  }
+
+  // 渲染 Toast
+  const vnode = h(CanvasToast, {
+    message,
+    type,
+    duration,
+    onClose: handleClose
+  })
+
+  render(vnode, toastContainer)
+}
+
+/**
  * Composable 用法
  */
 export function useCanvasDialog() {
   return {
     showAlert,
     showConfirm,
-    showInsufficientPointsDialog
+    showInsufficientPointsDialog,
+    showToast
   }
 }
 

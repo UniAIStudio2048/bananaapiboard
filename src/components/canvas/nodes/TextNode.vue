@@ -7,9 +7,12 @@
 import { ref, computed, watch, nextTick, inject, onMounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
-import { getLLMConfig, chatWithLLM } from '@/api/canvas/llm'
-import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { getLLMConfig, chatWithLLM, getUserLLMPresets, createUserLLMPreset, updateUserLLMPreset } from '@/api/canvas/llm'
+import { getAssets } from '@/api/canvas/assets'
+import { getApiUrl, getTenantHeaders, getAvailableLLMModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
+import CustomPresetDialog from '../dialogs/CustomPresetDialog.vue'
+import PresetManager from '../dialogs/PresetManager.vue'
 
 const { t } = useI18n()
 
@@ -31,18 +34,178 @@ const localText = ref(props.data.text || '')
 // 节点状态：'empty' | 'ready' | 'editing'
 const nodeState = ref(localText.value ? 'ready' : 'empty')
 
+// 角色提及相关
+const characters = ref([])
+const showMentionList = ref(false)
+const mentionListPosition = ref({ top: 0, left: 0 })
+const mentionQuery = ref('')
+const activeMentionIndex = ref(0)
+const mentionTarget = ref(null) // 'editor' | 'llm'
+let mentionRange = null // 用于 contenteditable
+let mentionStartPos = 0 // 用于 textarea
+
+// 过滤后的角色
+const filteredCharacters = computed(() => {
+  const query = mentionQuery.value.toLowerCase()
+  // 如果没有输入查询词，显示所有（前10个）
+  // 如果输入了查询词，按名称或username过滤
+  return characters.value.filter(c => {
+    if (!query) return true
+    const name = c.name || ''
+    const username = c.metadata?.username || ''
+    return name.toLowerCase().includes(query) || username.toLowerCase().includes(query)
+  }).slice(0, 10)
+})
+
 // 标签编辑状态
 const isEditingLabel = ref(false)
 const labelInputRef = ref(null)
 const localLabel = ref(props.data.label || 'Text')
 
+// 加载角色列表
+async function loadCharacters() {
+  try {
+    const result = await getAssets({ type: 'sora-character', pageSize: 100 })
+    characters.value = result.assets || []
+  } catch (error) {
+    console.error('[TextNode] 加载角色失败:', error)
+  }
+}
+
+// 处理提及输入（ContentEditable）
+function handleEditorInput(event) {
+  handleInput(event) // 原有逻辑
+  
+  const selection = window.getSelection()
+  if (!selection.rangeCount) return
+  
+  const range = selection.getRangeAt(0)
+  const text = range.startContainer.textContent || ''
+  const cursorIndex = range.startOffset
+  
+  // 查找光标前的 @
+  const textBeforeCursor = text.slice(0, cursorIndex)
+  const atIndex = textBeforeCursor.lastIndexOf('@')
+  
+  if (atIndex !== -1) {
+    // 检查 @ 前面是否有空格或是否是行首
+    const charBeforeAt = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' '
+    if (/\s/.test(charBeforeAt)) {
+      const query = textBeforeCursor.slice(atIndex + 1)
+      // 如果包含空格，则不认为是提及（除非允许含空格的名字，这里假设名字不含空格或很短）
+      if (!/\s/.test(query) && query.length < 20) {
+        showMentionList.value = true
+        mentionQuery.value = query
+        mentionTarget.value = 'editor'
+        mentionRange = range.cloneRange()
+        mentionRange.setStart(range.startContainer, atIndex)
+        mentionRange.setEnd(range.startContainer, cursorIndex)
+        
+        // 计算位置
+        const rect = range.getBoundingClientRect()
+        // 获取编辑器容器的位置
+        const containerRect = textareaRef.value?.getBoundingClientRect() || { top: 0, left: 0 }
+        
+        // 相对位置，或者 fixed 位置
+        // 这里使用 fixed 定位提到 body
+        mentionListPosition.value = {
+          top: rect.bottom + 5,
+          left: rect.left
+        }
+        return
+      }
+    }
+  }
+  
+  showMentionList.value = false
+}
+
+// 处理提及输入（Textarea）
+function handleLLMInput(event) {
+  const el = event.target
+  const cursorIndex = el.selectionStart
+  const text = el.value
+  const textBeforeCursor = text.slice(0, cursorIndex)
+  const atIndex = textBeforeCursor.lastIndexOf('@')
+  
+  if (atIndex !== -1) {
+    const charBeforeAt = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' '
+    if (/\s/.test(charBeforeAt)) {
+      const query = textBeforeCursor.slice(atIndex + 1)
+      if (!/\s/.test(query) && query.length < 20) {
+        showMentionList.value = true
+        mentionQuery.value = query
+        mentionTarget.value = 'llm'
+        mentionStartPos = atIndex
+        
+        // 计算 Textarea 光标位置（简化处理，可能不精确）
+        // 对于 textarea，精确获取光标像素位置比较复杂，这里简化为跟随 textarea 底部或固定位置
+        // 更好的方式是使用辅助 div 模拟
+        const rect = el.getBoundingClientRect()
+        mentionListPosition.value = {
+          top: rect.bottom + 5,
+          left: rect.left + 20 // 简化的左侧偏移
+        }
+        return
+      }
+    }
+  }
+  
+  showMentionList.value = false
+}
+
+// 选择角色
+function selectCharacter(character) {
+  const username = character.metadata?.username || character.name || 'unknown'
+  const textToInsert = `@${username} ` // 插入 @username 加一个空格
+  
+  if (mentionTarget.value === 'editor') {
+    // ContentEditable 插入
+    const selection = window.getSelection()
+    if (mentionRange) {
+      selection.removeAllRanges()
+      selection.addRange(mentionRange)
+      document.execCommand('insertText', false, textToInsert)
+      // 更新本地状态
+      localText.value = textareaRef.value.innerHTML
+    }
+  } else if (mentionTarget.value === 'llm') {
+    // Textarea 插入
+    const originalText = llmInputText.value
+    const before = originalText.slice(0, mentionStartPos)
+    const after = originalText.slice(mentionStartPos + mentionQuery.value.length + 1)
+    llmInputText.value = before + textToInsert + after
+    
+    // 恢复光标位置
+    nextTick(() => {
+      if (llmInputRef.value) {
+        llmInputRef.value.focus()
+        const newCursorPos = mentionStartPos + textToInsert.length
+        llmInputRef.value.setSelectionRange(newCursorPos, newCursorPos)
+      }
+    })
+  }
+  
+  showMentionList.value = false
+  mentionQuery.value = ''
+}
+
 // 编辑模式
 const isEditing = ref(false)
 const textareaRef = ref(null)
 
+// 选中文字右键菜单
+const showSelectionMenu = ref(false)
+const selectionMenuPosition = ref({ x: 0, y: 0 })
+const selectedText = ref('')
+
 // 节点尺寸 - 文本节点使用宽矩形，适合内容编辑
 const nodeWidth = ref(props.data.width || 400)
 const nodeHeight = ref(props.data.height || 280)
+
+// 全屏预览模式
+const isFullscreen = ref(false)
+const originalSize = ref({ width: 400, height: 280 })
 
 // 是否正在调整尺寸
 const isResizing = ref(false)
@@ -87,16 +250,128 @@ const llmConfig = ref({
   defaultModel: 'gemini-2.5-pro'
 })
 
+// 用户自定义预设
+const userPresets = ref([]) // 用户自定义预设列表
+const showCustomPresetDialog = ref(false) // 自定义预设对话框
+const showPresetManager = ref(false) // 预设管理抽屉
+const editingPreset = ref(null) // 正在编辑的预设
+const tempCustomPrompt = ref('') // 临时自定义提示词
+const presetManagerRef = ref(null) // 预设管理器引用
+
+// 加载用户自定义预设
+async function loadUserPresets() {
+  try {
+    const data = await getUserLLMPresets()
+    userPresets.value = data.presets || []
+    console.log('[TextNode] 用户自定义预设已加载:', userPresets.value.length)
+  } catch (error) {
+    console.error('[TextNode] 加载用户预设失败:', error)
+  }
+}
+
+// 打开自定义预设对话框（新建）
+function openCustomPresetDialog() {
+  editingPreset.value = null
+  showCustomPresetDialog.value = true
+}
+
+// 打开自定义预设对话框（编辑）
+function editCustomPreset(preset) {
+  editingPreset.value = preset
+  showCustomPresetDialog.value = true
+  showPresetManager.value = false
+}
+
+// 提交自定义预设（保存并使用）
+async function handlePresetSubmit(data) {
+  try {
+    if (editingPreset.value) {
+      // 更新现有预设
+      await updateUserLLMPreset(editingPreset.value.id, data)
+      console.log('[TextNode] 预设已更新')
+    } else {
+      // 创建新预设
+      const result = await createUserLLMPreset(data)
+      console.log('[TextNode] 预设已创建')
+
+      // 自动选择新创建的预设
+      selectedPreset.value = `user-${result.preset.id}`
+    }
+
+    // 重新加载预设列表
+    await loadUserPresets()
+
+    // 如果预设管理器打开，刷新它
+    if (presetManagerRef.value) {
+      presetManagerRef.value.loadPresets()
+    }
+
+    // 关闭对话框
+    showCustomPresetDialog.value = false
+  } catch (error) {
+    console.error('[TextNode] 保存预设失败:', error)
+    alert(error.message || '保存失败，请重试')
+  }
+}
+
+// 临时使用自定义提示词（不保存）
+function handleTempUse(data) {
+  tempCustomPrompt.value = data.systemPrompt
+  selectedPreset.value = 'temp-custom'
+  console.log('[TextNode] 使用临时自定义提示词')
+}
+
+// 打开预设管理器
+function openPresetManager() {
+  showPresetManager.value = true
+  showPresetDropdown.value = false
+}
+
 // 加载 LLM 配置
 async function loadLLMConfig() {
   try {
+    // 优先使用租户配置的模型列表（从 brand-config API 加载）
+    const tenantModels = getAvailableLLMModels()
+    if (tenantModels && tenantModels.length > 0) {
+      console.log('[TextNode] 使用租户配置的 LLM 模型:', tenantModels)
+      llmConfig.value = {
+        ...llmConfig.value,
+        enabled: true,
+        models: tenantModels
+      }
+      // 如果当前选中的模型不在租户模型列表中，使用第一个模型
+      const modelIds = tenantModels.map(m => m.id)
+      if (!modelIds.includes(selectedModel.value)) {
+        selectedModel.value = tenantModels[0].id
+      }
+    }
+    
+    // 然后尝试从 API 获取完整配置（包含 presets、languages 等）
     const config = await getLLMConfig()
-    llmConfig.value = config
-    if (config.defaultModel) {
-      selectedModel.value = config.defaultModel
+    if (config && config.models && config.models.length > 0) {
+      llmConfig.value = config
+      if (config.defaultModel) {
+        selectedModel.value = config.defaultModel
+      }
+    } else if (config) {
+      // 如果 API 返回了配置但模型为空，保留租户模型，合并其他配置
+      llmConfig.value = {
+        ...config,
+        enabled: true,
+        models: llmConfig.value.models // 保留租户模型
+      }
     }
   } catch (error) {
     console.error('[TextNode] 加载 LLM 配置失败:', error)
+    // 失败时使用租户模型
+    const tenantModels = getAvailableLLMModels()
+    if (tenantModels && tenantModels.length > 0) {
+      llmConfig.value = {
+        ...llmConfig.value,
+        enabled: true,
+        models: tenantModels
+      }
+    }
   }
 }
 
@@ -182,16 +457,76 @@ function selectModel(modelValue) {
 
 // 可用功能预设列表
 const availablePresets = computed(() => {
+  const presets = []
+
+  // 1. 添加租户配置的预设
   if (llmConfig.value.presets && llmConfig.value.presets.length > 0) {
-    return llmConfig.value.presets
+    presets.push(...llmConfig.value.presets)
   }
-  return []
+
+  // 2. 添加分隔线
+  if (presets.length > 0 && userPresets.value.length > 0) {
+    presets.push({ id: 'divider-1', type: 'divider' })
+  }
+
+  // 3. 添加用户自定义预设
+  if (userPresets.value.length > 0) {
+    presets.push(...userPresets.value.map(p => ({
+      id: `user-${p.id}`,
+      name: `📝 ${p.name}`,
+      type: 'user-custom',
+      systemPrompt: p.systemPrompt,
+      _rawId: p.id
+    })))
+  }
+
+  // 4. 添加临时自定义（如果正在使用）
+  if (selectedPreset.value === 'temp-custom') {
+    if (presets.length > 0) {
+      presets.push({ id: 'divider-2', type: 'divider' })
+    }
+    presets.push({
+      id: 'temp-custom',
+      name: '📌 临时自定义',
+      type: 'temp-custom'
+    })
+  }
+
+  // 5. 添加操作选项
+  if (presets.length > 0) {
+    presets.push({ id: 'divider-3', type: 'divider' })
+  }
+  presets.push({
+    id: 'action-new',
+    name: '+ 新建自定义预设',
+    type: 'action'
+  })
+  presets.push({
+    id: 'action-manage',
+    name: '⚙️ 管理我的预设',
+    type: 'action'
+  })
+
+  return presets
 })
 
 // 当前选中预设的名称
 const selectedPresetLabel = computed(() => {
   if (!selectedPreset.value) return '通用对话'
-  const preset = availablePresets.value.find(p => p.id === selectedPreset.value)
+
+  // 检查是否是用户自定义预设
+  if (selectedPreset.value.startsWith('user-')) {
+    const userPreset = userPresets.value.find(p => `user-${p.id}` === selectedPreset.value)
+    if (userPreset) return `📝 ${userPreset.name}`
+  }
+
+  // 检查是否是临时自定义
+  if (selectedPreset.value === 'temp-custom') {
+    return '📌 临时自定义'
+  }
+
+  // 查找租户预设
+  const preset = llmConfig.value.presets?.find(p => p.id === selectedPreset.value)
   return preset ? preset.name : '通用对话'
 })
 
@@ -208,6 +543,24 @@ function togglePresetDropdown(event) {
 
 // 选择功能预设
 function selectPreset(presetId) {
+  // 处理操作类型的选项
+  if (presetId === 'action-new') {
+    openCustomPresetDialog()
+    showPresetDropdown.value = false
+    return
+  }
+
+  if (presetId === 'action-manage') {
+    openPresetManager()
+    return
+  }
+
+  // 忽略分隔线
+  if (presetId.startsWith('divider-')) {
+    return
+  }
+
+  // 选择预设
   selectedPreset.value = presetId
   showPresetDropdown.value = false
 }
@@ -454,14 +807,29 @@ async function handleLLMGenerate() {
     
     // 使用非流式模式调用 LLM API（避免流式输出导致的状态闪烁问题）
     try {
-      const result = await chatWithLLM({
+      // 准备API参数
+      const apiParams = {
         messages,
         model: selectedModel.value,
-        preset: selectedPreset.value || undefined,
         language: selectedLanguage.value || 'zh',
         images: processedImages.length > 0 ? processedImages : undefined,
         stream: false // 禁用流式输出
-      })
+      }
+
+      // 处理预设类型
+      if (selectedPreset.value === 'temp-custom') {
+        // 临时自定义：使用customSystemPrompt
+        apiParams.customSystemPrompt = tempCustomPrompt.value
+      } else if (selectedPreset.value && selectedPreset.value.startsWith('user-')) {
+        // 用户自定义预设：使用userPresetId
+        const rawId = selectedPreset.value.replace('user-', '')
+        apiParams.userPresetId = rawId
+      } else if (selectedPreset.value) {
+        // 租户预设：使用preset字段
+        apiParams.preset = selectedPreset.value
+      }
+
+      const result = await chatWithLLM(apiParams)
       
       canvasStore.updateNodeData(props.id, {
         status: 'success',
@@ -549,29 +917,61 @@ async function uploadImagesToQiniu(imageUrls) {
 
 // 键盘快捷键
 function handleLLMKeyDown(event) {
+  // 如果提及列表是打开的，处理导航
+  if (showMentionList.value) {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      activeMentionIndex.value = Math.max(0, activeMentionIndex.value - 1)
+      return
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      activeMentionIndex.value = Math.min(filteredCharacters.value.length - 1, activeMentionIndex.value + 1)
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      if (filteredCharacters.value[activeMentionIndex.value]) {
+        selectCharacter(filteredCharacters.value[activeMentionIndex.value])
+      }
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      showMentionList.value = false
+      return
+    }
+  }
+
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     handleLLMGenerate()
   }
 }
 
-// 初始化加载 LLM 配置
-onMounted(() => {
-  loadLLMConfig()
-  
-  // 如果节点数据中指定了预设，自动选择该预设
-  if (props.data.selectedPreset) {
-    selectedPreset.value = props.data.selectedPreset
-    console.log('[TextNode] 自动选择预设:', props.data.selectedPreset)
-  }
-})
+// 格式化输入，高亮 username
+function formatText(text) {
+  if (!text) return ''
+  // 将 @username 替换为高亮 span
+  // 这里需要注意，username 可能包含下划线、点等，但不包含空格
+  return text.replace(/(@[a-zA-Z0-9_\.]+)/g, '<span class="mention-highlight">$1</span>')
+}
 
-// 节点样式类
+// 同步本地状态到 store
+watch(localText, (newText) => {
+  // 移除高亮标签后再保存到 store
+  // const cleanText = newText.replace(/<span class="mention-highlight">(@[a-zA-Z0-9_\.]+)<\/span>/g, '$1')
+  // contenteditable 的 innerHTML 可能会包含很多样式标签，如果只高亮显示，保存时需要清理
+  // 但为了简单，这里我们保存带有 span 的 HTML，只要后端能处理或者前端显示时能正常渲染
+  // 如果后端需要纯文本，提取纯文本发送给后端
+  canvasStore.updateNodeData(props.id, { text: newText })
+})
 const nodeClass = computed(() => ({
   'text-node': true,
   'selected': props.selected,
   'editing': isEditing.value,
-  'resizing': isResizing.value
+  'resizing': isResizing.value,
+  'fullscreen-mode': isFullscreen.value
 }))
 
 // 节点卡片样式
@@ -672,8 +1072,11 @@ const formatButtons = [
   { icon: 'H₂', titleKey: 'canvas.textNode.heading2', action: () => setFontSize(20) },
   { icon: 'H₃', titleKey: 'canvas.textNode.heading3', action: () => setFontSize(16) },
   { type: 'divider' },
+  { icon: '¶', titleKey: 'canvas.textNode.autoFormat', action: () => autoFormat() },
   { icon: '⧉', titleKey: 'canvas.textNode.copy', action: () => copyText() },
-  { icon: '⛶', titleKey: 'canvas.textNode.fullscreen', action: () => toggleFullscreen() }
+  { icon: () => isFullscreen.value ? '⛶' : '⛶', titleKey: 'canvas.textNode.fullscreen', action: () => toggleFullscreen(), isFullscreenBtn: true },
+  { type: 'divider' },
+  { icon: '✂', titleKey: 'canvas.textNode.splitScenes', action: () => splitSceneNodes() }
 ]
 
 // 准备编辑（点击"自己编写内容"）
@@ -989,14 +1392,118 @@ function copyText() {
 function toggleFullscreen() {
   event?.preventDefault()
   
-  // 如果不在编辑模式，先进入编辑模式
-  if (!isEditing.value) {
-    handleEdit()
+  if (isFullscreen.value) {
+    // 退出全屏模式 - 恢复原尺寸
+    nodeWidth.value = originalSize.value.width
+    nodeHeight.value = originalSize.value.height
+    isFullscreen.value = false
+    
+    // 更新节点数据
+    canvasStore.updateNodeData(props.id, {
+      width: nodeWidth.value,
+      height: nodeHeight.value
+    })
+  } else {
+    // 进入全屏模式 - 保存原尺寸
+    originalSize.value = {
+      width: nodeWidth.value,
+      height: nodeHeight.value
+    }
+    
+    // 计算文本内容需要的高度
+    const text = props.data.llmResponse || localText.value || props.data.text || ''
+    const plainText = extractPlainText(text)
+    
+    // 估算需要的尺寸
+    const charsPerLine = 50 // 假设每行50个字符
+    const lineHeight = 24 // 每行高度
+    const lines = Math.ceil(plainText.length / charsPerLine)
+    const contentHeight = lines * lineHeight
+    
+    // 计算新尺寸（宽度加大，高度自适应内容）
+    const newWidth = Math.max(600, nodeWidth.value * 1.5)
+    const newHeight = Math.max(400, Math.min(contentHeight + 150, 800)) // 最小400，最大800
+    
+    nodeWidth.value = newWidth
+    nodeHeight.value = newHeight
+    isFullscreen.value = true
+    
+    // 更新节点数据
+    canvasStore.updateNodeData(props.id, {
+      width: newWidth,
+      height: newHeight
+    })
   }
   
-  // TODO: 实现全屏功能
+  // 触发 Vue Flow 更新节点内部尺寸
+  nextTick(() => {
+    updateNodeInternals(props.id)
+  })
+}
+
+// 自动排版功能 - 将密集文本转换为段落形式
+function autoFormat() {
+  event?.preventDefault()
   
-  // 如果在编辑模式，恢复焦点
+  // 获取当前文本内容
+  let text = ''
+  if (isEditing.value && textareaRef.value) {
+    text = textareaRef.value.innerText || ''
+  } else {
+    text = props.data.llmResponse || localText.value || ''
+  }
+  
+  if (!text.trim()) return
+  
+  // 自动排版规则
+  let formattedText = text
+  
+  // 1. 识别分镜格式（如 "分镜1"、"分镜 1"、"镜头1" 等）
+  formattedText = formattedText.replace(/([。！？\.\!\?])\s*(分镜\s*\d+|镜头\s*\d+|场景\s*\d+|第\s*\d+\s*[幕镜场])/g, '$1\n\n$2')
+  
+  // 2. 识别时间标记（如 "0~3秒"、"3-6秒"、"0:00-0:03" 等）
+  formattedText = formattedText.replace(/([。！？\.\!\?"])\s*(\d+[~\-～—]\d+秒|\d+:\d+[~\-～—]\d+:\d+)/g, '$1\n\n$2')
+  
+  // 3. 在每个分镜/时间段开头添加换行（如果前面没有换行）
+  formattedText = formattedText.replace(/([^\n])(分镜\s*\d+|镜头\s*\d+|\d+[~\-～—]\d+秒)/g, '$1\n\n$2')
+  
+  // 4. 识别角色对话格式（如 "（旁白）"、"说："）
+  formattedText = formattedText.replace(/([。！？\.\!\?])\s*([（\(][^）\)]+[）\)]\s*[:：])/g, '$1\n\n$2')
+  
+  // 5. 规范化多余的换行符（超过2个换行变为2个）
+  formattedText = formattedText.replace(/\n{3,}/g, '\n\n')
+  
+  // 6. 去除开头的换行
+  formattedText = formattedText.replace(/^\n+/, '')
+  
+  // 7. 将换行转换为 HTML 换行标签（用于编辑器显示）
+  const htmlContent = formattedText
+    .split('\n\n')
+    .map(para => para.trim())
+    .filter(para => para.length > 0)
+    .map(para => `<p style="margin-bottom: 12px;">${para.replace(/\n/g, '<br>')}</p>`)
+    .join('')
+  
+  // 如果在编辑模式，直接更新编辑器内容
+  if (isEditing.value && textareaRef.value) {
+    textareaRef.value.innerHTML = htmlContent
+    localText.value = htmlContent
+    textareaRef.value.focus()
+  } else {
+    // 不在编辑模式，进入编辑模式后更新
+    handleEdit(() => {
+      if (textareaRef.value) {
+        textareaRef.value.innerHTML = htmlContent
+        localText.value = htmlContent
+      }
+    })
+  }
+  
+  // 更新节点数据
+  canvasStore.updateNodeData(props.id, {
+    text: htmlContent,
+    llmResponse: htmlContent
+  })
   if (isEditing.value) {
     textareaRef.value?.focus()
   }
@@ -1004,9 +1511,29 @@ function toggleFullscreen() {
 
 // 打开右键菜单
 function handleContextMenu(event) {
-  // 如果在编辑模式且右键点击的是编辑器，显示浏览器原生右键菜单（支持复制粘贴）
+  // 如果在编辑模式且右键点击的是编辑器
   if (isEditing.value && textareaRef.value?.contains(event.target)) {
-    return // 不阻止默认行为，显示浏览器原生菜单
+    // 检查是否有选中的文字
+    const selection = window.getSelection()
+    const selText = selection?.toString()?.trim()
+    
+    if (selText && selText.length > 0) {
+      // 有选中文字，显示自定义选中文字菜单
+      event.preventDefault()
+      selectedText.value = selText
+      selectionMenuPosition.value = { x: event.clientX, y: event.clientY }
+      showSelectionMenu.value = true
+      
+      // 添加点击外部关闭菜单
+      setTimeout(() => {
+        document.addEventListener('click', closeSelectionMenu)
+        document.addEventListener('contextmenu', closeSelectionMenu)
+      }, 100)
+      return
+    }
+    
+    // 没有选中文字，显示浏览器原生右键菜单（支持复制粘贴）
+    return
   }
   
   event.preventDefault()
@@ -1014,6 +1541,135 @@ function handleContextMenu(event) {
     { x: event.clientX, y: event.clientY },
     { id: props.id, type: 'text-input', position: { x: 0, y: 0 }, data: props.data }
   )
+}
+
+// 关闭选中文字菜单
+function closeSelectionMenu() {
+  showSelectionMenu.value = false
+  document.removeEventListener('click', closeSelectionMenu)
+  document.removeEventListener('contextmenu', closeSelectionMenu)
+}
+
+// 发送选中文字到文生图
+function sendSelectionToImage() {
+  if (!selectedText.value) return
+  
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return
+  
+  // 创建文本节点
+  const textNodeId = `text_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const textNodePosition = {
+    x: currentNode.position.x + (nodeWidth.value || 400) + 120,
+    y: currentNode.position.y
+  }
+  
+  canvasStore.addNode({
+    id: textNodeId,
+    type: 'text-input',
+    position: textNodePosition,
+    data: {
+      label: '文生图提示词',
+      text: selectedText.value,
+      status: 'idle'
+    }
+  })
+  
+  // 创建图像节点
+  const imageNodeId = `image_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const imageNodePosition = {
+    x: textNodePosition.x + 450,
+    y: textNodePosition.y
+  }
+  
+  canvasStore.addNode({
+    id: imageNodeId,
+    type: 'image-input',
+    position: imageNodePosition,
+    data: {
+      label: '图像生成',
+      status: 'idle'
+    }
+  })
+  
+  // 连接：当前节点 -> 文本节点 -> 图像节点
+  canvasStore.addEdge({
+    source: props.id,
+    target: textNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input'
+  })
+  
+  canvasStore.addEdge({
+    source: textNodeId,
+    target: imageNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input'
+  })
+  
+  closeSelectionMenu()
+  console.log('[TextNode] 发送到文生图:', selectedText.value.substring(0, 50))
+}
+
+// 发送选中文字到文生视频
+function sendSelectionToVideo() {
+  if (!selectedText.value) return
+  
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return
+  
+  // 创建文本节点
+  const textNodeId = `text_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const textNodePosition = {
+    x: currentNode.position.x + (nodeWidth.value || 400) + 120,
+    y: currentNode.position.y
+  }
+  
+  canvasStore.addNode({
+    id: textNodeId,
+    type: 'text-input',
+    position: textNodePosition,
+    data: {
+      label: '文生视频提示词',
+      text: selectedText.value,
+      status: 'idle'
+    }
+  })
+  
+  // 创建视频节点
+  const videoNodeId = `video_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const videoNodePosition = {
+    x: textNodePosition.x + 450,
+    y: textNodePosition.y
+  }
+  
+  canvasStore.addNode({
+    id: videoNodeId,
+    type: 'video-input',
+    position: videoNodePosition,
+    data: {
+      label: '视频生成',
+      status: 'idle'
+    }
+  })
+  
+  // 连接：当前节点 -> 文本节点 -> 视频节点
+  canvasStore.addEdge({
+    source: props.id,
+    target: textNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input'
+  })
+  
+  canvasStore.addEdge({
+    source: textNodeId,
+    target: videoNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input'
+  })
+  
+  closeSelectionMenu()
+  console.log('[TextNode] 发送到文生视频:', selectedText.value.substring(0, 50))
 }
 
 // ========== 添加按钮交互（单击/长按） ==========
@@ -1221,6 +1877,155 @@ function createImageGenNode() {
   })
 }
 
+// 拆分分镜节点
+function splitSceneNodes() {
+  // 优先使用 LLM 响应内容，其次是 localText，最后是 props.data.text
+  const rawText = props.data.llmResponse || localText.value || props.data.text || ''
+  
+  // 提取纯文本，去除 HTML 标签
+  const text = extractPlainText(rawText)
+
+  if (!text.trim()) {
+    alert('当前节点没有内容，无法拆分')
+    return
+  }
+
+  console.log('[TextNode] 拆分文本长度:', text.length)
+  console.log('[TextNode] 文本前100字符:', text.substring(0, 100))
+
+  // 匹配分镜标记：支持多种格式
+  // - 分镜1、分镜 1、分镜1:、分镜1：
+  // - **分镜1**、分镜1**
+  // - 【分镜1】、[分镜1]
+  // - Scene 1、scene1
+  const scenePattern = /(?:\*{0,2})(?:【|\[)?分镜\s*(\d+)(?:】|\])?(?:\*{0,2})(?:[：:])?\s*|(?:\*{0,2})(?:【|\[)?[Ss]cene\s*(\d+)(?:】|\])?(?:\*{0,2})(?:[：:])?\s*/g
+  
+  const sceneMatches = [...text.matchAll(scenePattern)]
+
+  if (sceneMatches.length === 0) {
+    // 尝试更宽松的匹配：查找 "分镜" + 数字
+    const loosePattern = /分镜\s*(\d+)/g
+    const looseMatches = [...text.matchAll(loosePattern)]
+    
+    if (looseMatches.length === 0) {
+      alert('未找到分镜标记（支持格式：分镜1、分镜 1、**分镜1**、【分镜1】、Scene 1 等）')
+      return
+    }
+    
+    // 使用宽松匹配结果
+    sceneMatches.push(...looseMatches)
+  }
+
+  console.log(`[TextNode] 找到 ${sceneMatches.length} 个分镜标记`)
+  console.log('[TextNode] 分镜位置:', sceneMatches.map(m => ({ 
+    num: m[1] || m[2], 
+    index: m.index, 
+    match: m[0] 
+  })))
+
+  // 提取每个分镜的内容
+  const scenes = []
+  for (let i = 0; i < sceneMatches.length; i++) {
+    const currentMatch = sceneMatches[i]
+    const sceneNumber = currentMatch[1] || currentMatch[2] // 支持两种捕获组
+    const startIndex = currentMatch.index
+
+    // 计算结束位置（下一个分镜的开始位置，或文本末尾）
+    const endIndex = i < sceneMatches.length - 1
+      ? sceneMatches[i + 1].index
+      : text.length
+
+    // 提取分镜内容（包括标题）
+    let sceneContent = text.substring(startIndex, endIndex).trim()
+
+    console.log(`[TextNode] 分镜 ${sceneNumber} 原始内容长度: ${sceneContent.length}`)
+
+    // 检查内容是否有效（至少要有一些实际内容，但降低阈值以支持短分镜）
+    if (sceneContent && sceneContent.length >= 5) {
+      scenes.push({
+        number: sceneNumber,
+        content: sceneContent
+      })
+    } else {
+      console.warn(`[TextNode] 分镜 ${sceneNumber} 内容太短，跳过`)
+    }
+  }
+
+  if (scenes.length === 0) {
+    alert('分镜内容为空，无法拆分')
+    return
+  }
+
+  console.log(`[TextNode] 提取到 ${scenes.length} 个有效分镜`)
+
+  // 获取当前节点信息
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) {
+    console.error('[TextNode] 未找到当前节点')
+    return
+  }
+
+  // 计算新节点的起始位置（在当前节点右侧）
+  const startX = currentNode.position.x + (nodeWidth.value || 400) + 120
+  const startY = currentNode.position.y
+  
+  // 动态计算垂直间距：根据内容长度估算节点高度
+  // 基础高度 + 每100字符增加一定高度
+  const calculateNodeHeight = (content) => {
+    const baseHeight = 180 // 基础高度（标题栏 + 边距）
+    const charsPerLine = 40 // 假设每行约40个字符
+    const lineHeight = 20 // 每行高度
+    const lines = Math.ceil(content.length / charsPerLine)
+    return Math.min(baseHeight + lines * lineHeight, 500) // 最大高度限制
+  }
+
+  // 批量创建分镜节点
+  let currentY = startY
+  const createdNodeIds = []
+  
+  scenes.forEach((scene, index) => {
+    const newNodeId = `scene_${Date.now()}_${index}_${Math.random().toString(36).substr(2, 9)}`
+    const newNodePosition = {
+      x: startX,
+      y: currentY
+    }
+
+    console.log(`[TextNode] 准备创建分镜 ${scene.number}，位置: (${startX}, ${currentY})`)
+
+    // 创建新文本节点 - 直接传递完整内容
+    canvasStore.addNode({
+      id: newNodeId,
+      type: 'text-input',  // 使用正确的节点类型
+      position: newNodePosition,
+      data: {
+        label: `分镜${scene.number}`,
+        text: scene.content,
+        status: 'idle'
+      }
+    })
+
+    createdNodeIds.push(newNodeId)
+    console.log(`[TextNode] 已创建分镜节点 ${scene.number}: ${newNodeId}`)
+
+    // 更新下一个节点的 Y 位置
+    currentY += calculateNodeHeight(scene.content) + 30 // 30px 间隙
+  })
+
+  // 可选：从原节点连接到第一个分镜节点
+  if (createdNodeIds.length > 0) {
+    canvasStore.addEdge({
+      source: props.id,
+      target: createdNodeIds[0],
+      sourceHandle: 'output',
+      targetHandle: 'input'
+    })
+  }
+
+  // 提示用户
+  console.log(`[TextNode] 所有分镜节点创建完成，共 ${scenes.length} 个`)
+  alert(`成功拆分为 ${scenes.length} 个分镜节点！节点已自动排列在右侧。`)
+}
+
 // 点击节点时选中，并显示底部 LLM 配置面板
 function handleNodeClick(e) {
   // 如果点击的是编辑器区域，不阻止事件，让编辑器正常工作
@@ -1294,15 +2099,21 @@ function handleResizeMove(event) {
 function handleResizeEnd() {
   isResizing.value = false
   resizeHandle.value = null
-  
+
   // 更新节点内部状态，确保连线位置跟随 Handle 位置变化
   nextTick(() => {
     updateNodeInternals(props.id)
   })
-  
+
   document.removeEventListener('mousemove', handleResizeMove)
   document.removeEventListener('mouseup', handleResizeEnd)
 }
+
+// 组件挂载时加载 LLM 配置和用户预设
+onMounted(() => {
+  loadLLMConfig()
+  loadUserPresets()
+})
 </script>
 
 <template>
@@ -1322,12 +2133,15 @@ function handleResizeEnd() {
         <button 
           v-else
           class="toolbar-btn"
-          :class="{ active: formatState[btn.format] }"
+          :class="{ 
+            active: formatState[btn.format],
+            'fullscreen-active': btn.isFullscreenBtn && isFullscreen
+          }"
           :style="btn.style"
-          :title="t(btn.titleKey)"
+          :title="btn.isFullscreenBtn ? (isFullscreen ? '退出全屏' : t(btn.titleKey)) : t(btn.titleKey)"
           @mousedown.prevent="btn.action"
         >
-          {{ btn.icon }}
+          {{ btn.isFullscreenBtn ? (isFullscreen ? '⛶' : '⛶') : btn.icon }}
         </button>
       </template>
     </div>
@@ -1431,6 +2245,7 @@ function handleResizeEnd() {
           @mouseup.stop
           @click.stop
           @dblclick.stop
+          @wheel.stop
         ></div>
         
         <!-- 非编辑模式下显示内容 -->
@@ -1443,7 +2258,7 @@ function handleResizeEnd() {
           </div>
           
           <!-- LLM 响应显示（生成中或已完成） -->
-          <div v-else-if="props.data.llmResponse" class="text-node-llm-response" :class="{ 'is-streaming': isGenerating || props.data.status === 'processing' }">
+          <div v-else-if="props.data.llmResponse" class="text-node-llm-response" :class="{ 'is-streaming': isGenerating || props.data.status === 'processing' }" @wheel.stop>
             <div class="llm-response-content">
               {{ props.data.llmResponse }}
               <span v-if="isGenerating || props.data.status === 'processing'" class="streaming-cursor">▊</span>
@@ -1460,6 +2275,7 @@ function handleResizeEnd() {
             v-else-if="localText" 
             class="text-node-display"
             v-html="localText"
+            @wheel.stop
           ></div>
           
           <!-- 待编辑状态（无内容）：显示双击提示 -->
@@ -1514,6 +2330,36 @@ function handleResizeEnd() {
       id="output"
       class="node-handle node-handle-hidden"
     />
+    
+    <!-- 选中文字右键菜单 -->
+    <Teleport to="body">
+      <div 
+        v-if="showSelectionMenu"
+        class="selection-context-menu"
+        :style="{ 
+          left: selectionMenuPosition.x + 'px', 
+          top: selectionMenuPosition.y + 'px' 
+        }"
+        @click.stop
+      >
+        <div class="selection-menu-title">发送选中文字到</div>
+        <div class="selection-menu-item" @click="sendSelectionToImage">
+          <span class="menu-icon">🖼️</span>
+          <span class="menu-label">文生图</span>
+          <span class="menu-desc">创建图像生成节点</span>
+        </div>
+        <div class="selection-menu-item" @click="sendSelectionToVideo">
+          <span class="menu-icon">🎬</span>
+          <span class="menu-label">文生视频</span>
+          <span class="menu-desc">创建视频生成节点</span>
+        </div>
+        <div class="selection-menu-divider"></div>
+        <div class="selection-menu-preview">
+          <div class="preview-label">选中内容：</div>
+          <div class="preview-text">{{ selectedText.length > 100 ? selectedText.substring(0, 100) + '...' : selectedText }}</div>
+        </div>
+      </div>
+    </Teleport>
     
     <!-- 底部 LLM 配置面板 - 紧贴节点卡片 -->
     <div v-if="selected" class="llm-config-panel" @click.stop>
@@ -1581,7 +2427,7 @@ function handleResizeEnd() {
             <span class="dropdown-arrow">▾</span>
             
             <!-- 下拉菜单 -->
-            <div v-if="showModelDropdown" class="model-dropdown" :class="{ 'dropdown-up': modelDropdownUp, 'dropdown-down': !modelDropdownUp }" @click.stop>
+            <div v-if="showModelDropdown" class="model-dropdown" :class="{ 'dropdown-up': modelDropdownUp, 'dropdown-down': !modelDropdownUp }" @click.stop @wheel.stop>
               <div 
                 v-for="model in availableModels" 
                 :key="model.value"
@@ -1602,7 +2448,7 @@ function handleResizeEnd() {
             <span class="dropdown-arrow">▾</span>
             
             <!-- 预设下拉菜单 -->
-            <div v-if="showPresetDropdown" class="preset-dropdown" :class="{ 'dropdown-up': presetDropdownUp, 'dropdown-down': !presetDropdownUp }" @click.stop>
+            <div v-if="showPresetDropdown" class="preset-dropdown" :class="{ 'dropdown-up': presetDropdownUp, 'dropdown-down': !presetDropdownUp }" @click.stop @wheel.stop>
               <div 
                 class="preset-option"
                 :class="{ active: !selectedPreset }"
@@ -1610,15 +2456,23 @@ function handleResizeEnd() {
               >
                 <span class="preset-option-name">通用对话</span>
               </div>
-              <div 
-                v-for="preset in availablePresets" 
-                :key="preset.id"
-                class="preset-option"
-                :class="{ active: selectedPreset === preset.id }"
-                @click.stop="selectPreset(preset.id)"
-              >
-                <span class="preset-option-name">{{ preset.name }}</span>
-              </div>
+              <template v-for="preset in availablePresets" :key="preset.id">
+                <!-- 分隔线 -->
+                <div v-if="preset.type === 'divider'" class="preset-divider"></div>
+
+                <!-- 普通预设选项 -->
+                <div
+                  v-else
+                  class="preset-option"
+                  :class="{
+                    active: selectedPreset === preset.id,
+                    'preset-action': preset.type === 'action'
+                  }"
+                  @click.stop="selectPreset(preset.id)"
+                >
+                  <span class="preset-option-name">{{ preset.name }}</span>
+                </div>
+              </template>
             </div>
           </div>
           
@@ -1628,7 +2482,7 @@ function handleResizeEnd() {
             <span class="dropdown-arrow">▾</span>
             
             <!-- 语言下拉菜单 -->
-            <div v-if="showLanguageDropdown" class="language-dropdown" :class="{ 'dropdown-up': languageDropdownUp, 'dropdown-down': !languageDropdownUp }" @click.stop>
+            <div v-if="showLanguageDropdown" class="language-dropdown" :class="{ 'dropdown-up': languageDropdownUp, 'dropdown-down': !languageDropdownUp }" @click.stop @wheel.stop>
               <div 
                 v-for="language in availableLanguages" 
                 :key="language.code"
@@ -1665,6 +2519,25 @@ function handleResizeEnd() {
       </div>
     </div>
   </div>
+
+  <!-- 自定义预设对话框 -->
+  <CustomPresetDialog
+    :isOpen="showCustomPresetDialog"
+    :preset="editingPreset"
+    @close="showCustomPresetDialog = false"
+    @submit="handlePresetSubmit"
+    @temp-use="handleTempUse"
+  />
+
+  <!-- 预设管理器 -->
+  <PresetManager
+    ref="presetManagerRef"
+    :isOpen="showPresetManager"
+    @close="showPresetManager = false"
+    @create="openCustomPresetDialog"
+    @edit="editCustomPreset"
+    @refresh="loadUserPresets"
+  />
 </template>
 
 <style scoped>
@@ -1913,6 +2786,30 @@ function handleResizeEnd() {
   outline: none;
 }
 
+/* 编辑器滚动条样式 - 黑夜模式 */
+.editor-content {
+  scrollbar-width: thin;
+  scrollbar-color: #555555 transparent;
+}
+
+.editor-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.editor-content::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.editor-content::-webkit-scrollbar-thumb {
+  background: #555555;
+  border-radius: 4px;
+}
+
+.editor-content::-webkit-scrollbar-thumb:hover {
+  background: #666666;
+}
+
 /* 格式样式 */
 .editor-content b,
 .editor-content strong {
@@ -1939,6 +2836,27 @@ function handleResizeEnd() {
   word-break: break-word;
   padding: 20px;
   cursor: text;
+  /* 滚动条样式 - 黑夜模式 */
+  scrollbar-width: thin;
+  scrollbar-color: #555555 transparent;
+}
+
+.text-node-display::-webkit-scrollbar {
+  width: 8px;
+}
+
+.text-node-display::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.text-node-display::-webkit-scrollbar-thumb {
+  background: #555555;
+  border-radius: 4px;
+}
+
+.text-node-display::-webkit-scrollbar-thumb:hover {
+  background: #666666;
 }
 
 /* 保留 HTML 格式样式 */
@@ -1988,6 +2906,27 @@ function handleResizeEnd() {
   overflow-y: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  /* 滚动条样式 - 黑夜模式 */
+  scrollbar-width: thin;
+  scrollbar-color: #555555 transparent;
+}
+
+.llm-response-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.llm-response-content::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 4px;
+}
+
+.llm-response-content::-webkit-scrollbar-thumb {
+  background: #555555;
+  border-radius: 4px;
+}
+
+.llm-response-content::-webkit-scrollbar-thumb:hover {
+  background: #666666;
 }
 
 .text-node-llm-response.is-streaming .llm-response-content {
@@ -2530,24 +3469,24 @@ function handleResizeEnd() {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  gap: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 100px;
+  transition: all 0.15s ease;
+  min-width: auto;
 }
 
 .preset-selector:hover {
-  border-color: var(--canvas-border-active, #4a4a4a);
+  background: var(--canvas-bg-tertiary, rgba(255, 255, 255, 0.06));
 }
 
 .preset-name {
-  color: var(--canvas-text-primary, #ffffff);
+  color: var(--canvas-text-secondary, #a0a0a0);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
 }
 
 /* 下拉菜单通用方向样式 */
@@ -2574,6 +3513,28 @@ function handleResizeEnd() {
   padding: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   z-index: 200;
+  /* 自定义滚动条 - 黑夜模式 */
+  scrollbar-width: thin;
+  scrollbar-color: #333333 transparent;
+}
+
+/* 预设下拉菜单滚动条 - Webkit浏览器（Chrome/Safari/Edge） */
+.preset-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.preset-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.preset-dropdown::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 3px;
+}
+
+.preset-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #444444;
 }
 
 .preset-option {
@@ -2598,27 +3559,48 @@ function handleResizeEnd() {
   font-size: 13px;
 }
 
+/* 预设分隔线 */
+.preset-divider {
+  height: 1px;
+  background: var(--canvas-border, rgba(255, 255, 255, 0.1));
+  margin: 6px 0;
+}
+
+/* 预设操作选项（新建、管理） */
+.preset-action {
+  color: var(--canvas-text-secondary, #a0a0a0);
+}
+
+.preset-action:hover {
+  color: var(--canvas-text-primary, #ffffff);
+  background: var(--canvas-bg-tertiary, rgba(255, 255, 255, 0.06));
+}
+
+.preset-action.active {
+  background: transparent;
+}
+
 /* 语言选择器 */
 .language-selector {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  gap: 4px;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 80px;
+  transition: all 0.15s ease;
+  min-width: auto;
 }
 
 .language-selector:hover {
-  border-color: var(--canvas-border-active, #4a4a4a);
+  background: var(--canvas-bg-tertiary, rgba(255, 255, 255, 0.06));
 }
 
 .language-name {
-  color: var(--canvas-text-primary, #ffffff);
+  color: var(--canvas-text-secondary, #a0a0a0);
   font-size: 13px;
   font-weight: 500;
 }
@@ -2636,6 +3618,28 @@ function handleResizeEnd() {
   padding: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   z-index: 200;
+  /* 自定义滚动条 - 黑夜模式 */
+  scrollbar-width: thin;
+  scrollbar-color: #333333 transparent;
+}
+
+/* 语言下拉菜单滚动条 - Webkit浏览器 */
+.language-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.language-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.language-dropdown::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 3px;
+}
+
+.language-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #444444;
 }
 
 .language-option {
@@ -2660,34 +3664,34 @@ function handleResizeEnd() {
   font-size: 13px;
 }
 
-/* 模型选择器 */
+/* 模型选择器 - 扁平化设计 */
 .model-selector {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  border-radius: 8px;
+  gap: 6px;
+  padding: 4px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
 }
 
 .model-selector:hover {
-  border-color: var(--canvas-border-active, #4a4a4a);
+  background: var(--canvas-bg-tertiary, rgba(255, 255, 255, 0.06));
 }
 
 .model-icon {
   width: 20px;
   height: 20px;
-  background: linear-gradient(135deg, #4285f4, #34a853);
+  background: linear-gradient(135deg, #8b5cf6, #ec4899);
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -2712,12 +3716,36 @@ function handleResizeEnd() {
   position: absolute;
   left: 0;
   min-width: 220px;
+  max-height: 320px;
+  overflow-y: auto;
   background: var(--canvas-bg-tertiary, #1a1a1a);
   border: 1px solid var(--canvas-border-subtle, #2a2a2a);
   border-radius: 12px;
   padding: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   z-index: 200;
+  /* 自定义滚动条 - 黑夜模式 */
+  scrollbar-width: thin;
+  scrollbar-color: #333333 transparent;
+}
+
+/* 模型下拉菜单滚动条 - Webkit浏览器 */
+.model-dropdown::-webkit-scrollbar {
+  width: 6px;
+}
+
+.model-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.model-dropdown::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 3px;
+}
+
+.model-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #444444;
 }
 
 .model-option {
@@ -2770,6 +3798,17 @@ function handleResizeEnd() {
   color: var(--canvas-text-secondary, #a0a0a0);
   font-size: 14px;
   font-weight: 500;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--canvas-bg-tertiary, #1a1a1a);
+  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.generate-count:hover {
+  border-color: var(--canvas-accent-primary, #3b82f6);
+  color: var(--canvas-accent-primary, #3b82f6);
 }
 
 /* 积分消耗显示 - 黑白灰风格 */
@@ -2810,5 +3849,408 @@ function handleResizeEnd() {
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+</style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   TextNode 白昼模式样式适配
+   ======================================== */
+:root.canvas-theme-light .text-node .node-content {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .text-node .text-area {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .text-node .text-area::placeholder {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .text-node .model-selector {
+  background: transparent;
+}
+
+:root.canvas-theme-light .text-node .model-selector:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .text-node .model-name {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .text-node .model-desc {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .text-node .model-dropdown {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  /* 白昼模式滚动条 */
+  scrollbar-color: #cccccc transparent;
+}
+
+:root.canvas-theme-light .text-node .model-dropdown::-webkit-scrollbar-thumb {
+  background: #cccccc;
+}
+
+:root.canvas-theme-light .text-node .model-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #aaaaaa;
+}
+
+:root.canvas-theme-light .text-node .model-option:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .text-node .model-option.active {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+:root.canvas-theme-light .text-node .option-name {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .text-node .option-desc {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .text-node .status-text {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .text-node .result-text {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .text-node .copy-btn {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .text-node .copy-btn:hover {
+  color: #1c1917;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .text-node .generate-btn:disabled {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* 积分显示 - 白昼模式 */
+:root.canvas-theme-light .text-node .points-cost-display {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+/* 批次显示 - 白昼模式 */
+:root.canvas-theme-light .text-node .generate-count {
+  color: #57534e;
+}
+
+/* 快捷操作 - 白昼模式 */
+:root.canvas-theme-light .text-node .quick-action {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .text-node .quick-action:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .text-node .quick-actions-title {
+  color: #f59e0b;
+}
+
+/* 配置面板 - 白昼模式 */
+:root.canvas-theme-light .text-node .config-panel {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .text-node .prompt-input {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .text-node .prompt-input::placeholder {
+  color: #a8a29e;
+}
+
+/* 选择器 - 白昼模式 */
+:root.canvas-theme-light .text-node .preset-selector,
+:root.canvas-theme-light .text-node .language-selector {
+  background: transparent;
+}
+
+:root.canvas-theme-light .text-node .preset-selector:hover,
+:root.canvas-theme-light .text-node .language-selector:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .text-node .preset-name,
+:root.canvas-theme-light .text-node .language-name {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .text-node .dropdown-arrow {
+  color: #78716c;
+}
+
+/* 下拉菜单 - 白昼模式 */
+:root.canvas-theme-light .text-node .preset-dropdown,
+:root.canvas-theme-light .text-node .language-dropdown {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  /* 白昼模式滚动条 */
+  scrollbar-color: #cccccc transparent;
+}
+
+:root.canvas-theme-light .text-node .preset-dropdown::-webkit-scrollbar-thumb,
+:root.canvas-theme-light .text-node .language-dropdown::-webkit-scrollbar-thumb {
+  background: #cccccc;
+}
+
+:root.canvas-theme-light .text-node .preset-dropdown::-webkit-scrollbar-thumb:hover,
+:root.canvas-theme-light .text-node .language-dropdown::-webkit-scrollbar-thumb:hover {
+  background: #aaaaaa;
+}
+
+:root.canvas-theme-light .text-node .preset-option,
+:root.canvas-theme-light .text-node .language-option {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .text-node .preset-option:hover,
+:root.canvas-theme-light .text-node .language-option:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .text-node .preset-option.active,
+:root.canvas-theme-light .text-node .language-option.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+/* 文本节点工具栏 - 白昼模式 */
+:root.canvas-theme-light .text-node .format-toolbar {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .text-node .toolbar-btn {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .text-node .toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .text-node .toolbar-btn.active {
+  background: rgba(0, 0, 0, 0.1);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .text-node .toolbar-divider {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+/* 批次选择器 - 白昼模式 */
+:root.canvas-theme-light .text-node .generate-count {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .text-node .generate-count:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #3b82f6;
+}
+
+/* ========== 选中文字右键菜单 ========== */
+.selection-context-menu {
+  position: fixed;
+  z-index: 10000;
+  background: rgba(20, 20, 20, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  padding: 8px;
+  min-width: 240px;
+  max-width: 320px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px);
+}
+
+.selection-menu-title {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 4px;
+}
+
+.selection-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.selection-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.selection-menu-item .menu-icon {
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
+}
+
+.selection-menu-item .menu-label {
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.selection-menu-item .menu-desc {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.selection-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 6px 0;
+}
+
+.selection-menu-preview {
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  margin-top: 4px;
+}
+
+.selection-menu-preview .preview-label {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+.selection-menu-preview .preview-text {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-all;
+}
+
+/* 选中文字菜单 - 白昼模式 */
+:root.canvas-theme-light .selection-context-menu {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .selection-menu-title {
+  color: rgba(0, 0, 0, 0.5);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .selection-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .selection-menu-item .menu-label {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .selection-menu-item .menu-desc {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+:root.canvas-theme-light .selection-menu-divider {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .selection-menu-preview {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .selection-menu-preview .preview-label {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .selection-menu-preview .preview-text {
+  color: rgba(0, 0, 0, 0.8);
+}
+
+/* ========== 全屏预览模式 ========== */
+.text-node.fullscreen-mode .text-node-card {
+  min-height: 400px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* 全屏模式下内容区域保持滚动但扩大显示区域 */
+.text-node.fullscreen-mode .editor-content,
+.text-node.fullscreen-mode .text-node-display,
+.text-node.fullscreen-mode .llm-response-content {
+  overflow-y: auto !important;
+  max-height: none !important;
+}
+
+/* 全屏按钮激活状态 */
+.toolbar-btn.fullscreen-active {
+  background: rgba(59, 130, 246, 0.2) !important;
+  color: #3b82f6 !important;
+  border-radius: 4px;
+}
+
+/* 全屏模式下节点边框高亮 */
+.text-node.fullscreen-mode.selected .text-node-card {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2), 0 8px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* 白昼模式 - 全屏 */
+:root.canvas-theme-light .text-node.fullscreen-mode .text-node-card {
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .text-node.fullscreen-mode.selected .text-node-card {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15), 0 8px 40px rgba(0, 0, 0, 0.15);
+}
+
+/* 白昼模式 - 内容区域滚动条 */
+:root.canvas-theme-light .text-node .editor-content,
+:root.canvas-theme-light .text-node .text-node-display,
+:root.canvas-theme-light .text-node .llm-response-content {
+  scrollbar-color: #c0c0c0 transparent;
+}
+
+:root.canvas-theme-light .text-node .editor-content::-webkit-scrollbar-thumb,
+:root.canvas-theme-light .text-node .text-node-display::-webkit-scrollbar-thumb,
+:root.canvas-theme-light .text-node .llm-response-content::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+}
+
+:root.canvas-theme-light .text-node .editor-content::-webkit-scrollbar-thumb:hover,
+:root.canvas-theme-light .text-node .text-node-display::-webkit-scrollbar-thumb:hover,
+:root.canvas-theme-light .text-node .llm-response-content::-webkit-scrollbar-thumb:hover {
+  background: #a0a0a0;
 }
 </style>

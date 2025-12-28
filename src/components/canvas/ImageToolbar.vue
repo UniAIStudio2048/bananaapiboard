@@ -15,6 +15,7 @@
  */
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
+import { getTenantHeaders } from '@/config/tenant'
 
 const props = defineProps({
   // 选中的图像节点
@@ -218,20 +219,32 @@ function handleCrop() {
 }
 
 // 下载 - 直接实现
-function handleDownload() {
+async function handleDownload() {
   console.log('[ImageToolbar] 下载', props.imageNode?.id)
   if (!imageUrl.value) return
   
-  // 创建下载链接
-  const link = document.createElement('a')
-  link.href = imageUrl.value
-  link.download = `image_${props.imageNode?.id || Date.now()}.png`
-  link.target = '_blank'
-  
-  // 如果是跨域图片，直接打开新窗口
-  if (imageUrl.value.startsWith('http') && !imageUrl.value.startsWith(window.location.origin)) {
-    window.open(imageUrl.value, '_blank')
-  } else {
+  try {
+    // 使用 fetch 获取图片 blob，支持跨域下载
+    const response = await fetch(imageUrl.value, {
+      headers: getTenantHeaders()
+    })
+    const blob = await response.blob()
+    
+    // 创建 blob URL 并下载
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `image_${props.imageNode?.id || Date.now()}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('[ImageToolbar] 下载图片失败:', error)
+    // 如果 fetch 失败，尝试直接下载
+    const link = document.createElement('a')
+    link.href = imageUrl.value
+    link.download = `image_${props.imageNode?.id || Date.now()}.png`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -577,6 +590,43 @@ onUnmounted(() => {
 .modal-fade-enter-from .preview-image,
 .modal-fade-leave-to .preview-image {
   transform: scale(0.9);
+}
+</style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   ImageToolbar 白昼模式样式适配
+   ======================================== */
+:root.canvas-theme-light .image-toolbar {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .image-toolbar .toolbar-divider {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .image-toolbar .toolbar-btn {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-toolbar .toolbar-btn:hover:not(.disabled) {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-toolbar .toolbar-btn:active:not(.disabled) {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .image-toolbar .btn-icon {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-toolbar .toolbar-btn:hover .btn-icon {
+  color: #1c1917;
 }
 </style>
 

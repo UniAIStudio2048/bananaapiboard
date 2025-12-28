@@ -599,7 +599,9 @@ export default {
       heading2: 'Heading 2',
       heading3: 'Heading 3',
       copy: 'Copy',
-      fullscreen: 'Fullscreen'
+      fullscreen: 'Fullscreen',
+      autoFormat: 'Auto Format',
+      splitScenes: 'Split Scenes'
     }
   },
 

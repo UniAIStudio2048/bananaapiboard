@@ -92,6 +92,7 @@ export async function getHistory(params = {}) {
           type: 'video',
           data: (data.videos || []).map(vid => ({
             id: vid.id || vid.task_id,
+            task_id: vid.task_id, // 用于角色创建
             type: 'video',
             name: vid.prompt ? vid.prompt.substring(0, 30) + (vid.prompt.length > 30 ? '...' : '') : '视频',
             url: vid.video_url || vid.url,

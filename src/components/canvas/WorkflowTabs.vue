@@ -809,4 +809,154 @@ onUnmounted(() => {
 .fade-leave-to {
   opacity: 0;
 }
+
+</style>
+
+<!-- 白昼模式样式（非 scoped，确保 :root 选择器生效） -->
+<style>
+/* ========================================
+   WorkflowTabs 白昼模式样式适配
+   ======================================== */
+:root.canvas-theme-light .workflow-tabs {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-item {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: transparent;
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-item:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-item.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-item.drag-over {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-icon {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-item.active .tab-icon {
+  color: rgba(59, 130, 246, 0.8);
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-name {
+  color: rgba(0, 0, 0, 0.65);
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-item.active .tab-name {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-name-input {
+  color: #1c1917;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-name-input:focus {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: #ffffff;
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-close {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+:root.canvas-theme-light .workflow-tabs .tab-close:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+:root.canvas-theme-light .workflow-tabs .new-tab-btn {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .workflow-tabs .new-tab-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: rgba(0, 0, 0, 0.8) !important;
+}
+
+:root.canvas-theme-light .workflow-tabs .more-tabs-btn {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .workflow-tabs .more-tabs-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+:root.canvas-theme-light .workflow-tabs .more-tabs-menu {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .workflow-tabs .more-tabs-item {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+:root.canvas-theme-light .workflow-tabs .more-tabs-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .workflow-tabs .more-tabs-item.active {
+  color: #1c1917;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+:root.canvas-theme-light .workflow-tabs .close-confirm-overlay {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+:root.canvas-theme-light .workflow-tabs .close-confirm-dialog {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .workflow-tabs .close-confirm-dialog p {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .workflow-tabs .btn-discard {
+  border-color: rgba(0, 0, 0, 0.15);
+  color: rgba(0, 0, 0, 0.6);
+}
+
+:root.canvas-theme-light .workflow-tabs .btn-discard:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+:root.canvas-theme-light .workflow-tabs .btn-cancel {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+:root.canvas-theme-light .workflow-tabs .btn-cancel:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .workflow-tabs .btn-save {
+  background: #1c1917;
+  color: #ffffff;
+}
+
+:root.canvas-theme-light .workflow-tabs .btn-save:hover {
+  background: #292524;
+}
 </style>
