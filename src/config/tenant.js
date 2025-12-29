@@ -734,7 +734,24 @@ export const getAvailableVideoModels = () => {
       }
       
       // 获取新格式配置中的 aspectRatios 和 supportedModes
-      const aspectRatios = modelConfig.aspectRatios || defaultConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }]
+      // 兼容两种格式：字符串数组或对象数组
+      let aspectRatios = modelConfig.aspectRatios || defaultConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }]
+      if (Array.isArray(aspectRatios) && aspectRatios.length > 0) {
+        aspectRatios = aspectRatios.map(ar => {
+          if (typeof ar === 'string') {
+            // 字符串转对象格式
+            const labelMap = {
+              '16:9': '横屏 (16:9)',
+              '9:16': '竖屏 (9:16)',
+              '1:1': '方形 (1:1)',
+              '4:3': '4:3',
+              '3:4': '3:4'
+            }
+            return { value: ar, label: labelMap[ar] || ar }
+          }
+          return ar
+        })
+      }
       const supportedModes = modelConfig.supportedModes || defaultConfig.supportedModes || { t2v: true, i2v: true, a2v: false }
       
       models.push({
@@ -791,7 +808,23 @@ export const getAvailableVideoModels = () => {
         }
       }
       
-      const aspectRatios = modelFullConfig.aspectRatios || defaultConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }]
+      // 兼容两种格式：字符串数组或对象数组
+      let aspectRatios = modelFullConfig.aspectRatios || defaultConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }]
+      if (Array.isArray(aspectRatios) && aspectRatios.length > 0) {
+        aspectRatios = aspectRatios.map(ar => {
+          if (typeof ar === 'string') {
+            const labelMap = {
+              '16:9': '横屏 (16:9)',
+              '9:16': '竖屏 (9:16)',
+              '1:1': '方形 (1:1)',
+              '4:3': '4:3',
+              '3:4': '3:4'
+            }
+            return { value: ar, label: labelMap[ar] || ar }
+          }
+          return ar
+        })
+      }
       const supportedModes = modelFullConfig.supportedModes || defaultConfig.supportedModes || { t2v: true, i2v: true, a2v: false }
       
       models.push({

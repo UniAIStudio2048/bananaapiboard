@@ -27,7 +27,26 @@ const currentModelConfig = computed(() => {
 const availableAspectRatios = computed(() => {
   const aspectRatios = currentModelConfig.value?.aspectRatios
   if (aspectRatios && aspectRatios.length > 0) {
-    return aspectRatios
+    // 兼容两种格式：字符串数组 ['16:9', '9:16'] 或对象数组 [{value, label}]
+    return aspectRatios.map(ar => {
+      // 如果是字符串，转换为对象格式
+      if (typeof ar === 'string') {
+        // 根据比例值生成友好的标签
+        const labelMap = {
+          '16:9': '横屏 (16:9)',
+          '9:16': '竖屏 (9:16)',
+          '1:1': '方形 (1:1)',
+          '4:3': '4:3',
+          '3:4': '3:4'
+        }
+        return {
+          value: ar,
+          label: labelMap[ar] || ar
+        }
+      }
+      // 如果已经是对象，直接返回
+      return ar
+    })
   }
   // 兜底默认值
   return [
@@ -161,17 +180,20 @@ function formatPointsTitle() {
 // 监听模型变化，更新时长和方向选项
 watch(model, (newModel) => {
   const modelConfig = availableModels.value.find(m => m.value === newModel)
-  
+
   // 更新时长选项
   const durations = modelConfig?.durations || ['10', '15']
   if (durations.length > 0 && !durations.includes(duration.value)) {
     duration.value = durations[0]
     console.log('[VideoGeneration] 时长已重置为:', duration.value)
   }
-  
-  // 更新方向选项
+
+  // 更新方向选项 - 兼容两种格式
   const aspectRatios = modelConfig?.aspectRatios || [{ value: '16:9', label: '横屏' }]
-  const aspectValues = aspectRatios.map(ar => ar.value)
+  const aspectValues = aspectRatios.map(ar => {
+    // 兼容字符串和对象格式
+    return typeof ar === 'string' ? ar : ar.value
+  })
   if (aspectValues.length > 0 && !aspectValues.includes(aspectRatio.value)) {
     aspectRatio.value = aspectValues[0]
     console.log('[VideoGeneration] 方向已重置为:', aspectRatio.value)
@@ -906,12 +928,19 @@ onMounted(async () => {
   // 只加载历史记录到抽屉，不自动显示在输出视频库
   await loadHistory()
   // gallery 保持为空，等待用户生成新视频
-  
+
   // 选择一个启用的默认模型（从配置动态获取）
   const enabledModels = availableModels.value
   if (enabledModels.length > 0 && !enabledModels.find(m => m.value === model.value)) {
     model.value = enabledModels[0].value
     console.log('[VideoGeneration] 自动选择启用的模型:', model.value)
+  }
+
+  // 确保 aspectRatio 有效（在可用选项中）
+  const availableRatioValues = availableAspectRatios.value.map(ar => ar.value)
+  if (availableRatioValues.length > 0 && !availableRatioValues.includes(aspectRatio.value)) {
+    aspectRatio.value = availableRatioValues[0]
+    console.log('[VideoGeneration] 画面方向已初始化为:', aspectRatio.value)
   }
   
   // 检查是否有从图片页面传来的数据
