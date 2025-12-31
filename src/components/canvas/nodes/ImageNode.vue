@@ -1032,7 +1032,7 @@ function triggerUpload(actionType) {
   fileInputRef.value?.click()
 }
 
-// 处理文件上传
+// 处理文件上传 - 优化为异步上传，秒加载体验
 async function handleFileUpload(event) {
   const files = event.target.files
   if (!files || files.length === 0) return
@@ -1045,29 +1045,81 @@ async function handleFileUpload(event) {
   pendingAction.value = null
   
   try {
-    // 读取图片为 base64 或上传到服务器
-    const imageUrl = await uploadImageFile(file)
+    // 🚀 优化：立即使用 blob URL 显示图片（秒加载）
+    const blobUrl = URL.createObjectURL(file)
+    console.log('[ImageNode] 秒加载 - 使用 blob URL 预览:', blobUrl)
     
+    // 立即执行流程，使用 blob URL 显示
     if (actionType === 'image-to-image') {
-      // 图生图流程：当前节点变成源节点，创建输出节点
-      await handleImageToImageFlow(imageUrl)
+      await handleImageToImageFlow(blobUrl)
     } else if (actionType === 'image-to-video') {
-      // 图生视频流程
-      await handleImageToVideoFlow(imageUrl)
+      await handleImageToVideoFlow(blobUrl)
     } else if (actionType === 'change-background') {
-      // 换背景流程
-      await handleChangeBackgroundFlow(imageUrl)
+      await handleChangeBackgroundFlow(blobUrl)
     } else if (actionType === 'first-frame-video') {
-      // 首帧图生视频流程
-      await handleFirstFrameVideoFlow(imageUrl)
+      await handleFirstFrameVideoFlow(blobUrl)
     }
+    
+    // 🔄 后台异步上传到服务器（不阻塞UI）
+    uploadImageFileAsync(file, blobUrl, props.id)
+    
   } catch (error) {
     console.error('[ImageNode] 上传失败:', error)
     await showAlert('图片上传失败，请重试', '错误')
   }
 }
 
-// 上传图片文件 - 立即上传到服务器获取 URL（与 Home.vue 保持一致）
+// 后台异步上传图片 - 上传完成后静默更新节点URL（不阻塞UI）
+async function uploadImageFileAsync(file, blobUrl, nodeId) {
+  try {
+    console.log('[ImageNode] 后台异步上传开始:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
+    
+    // 检查文件大小（限制 10MB）
+    if (file.size > 10 * 1024 * 1024) {
+      console.warn('[ImageNode] 文件过大，保持使用 blob URL')
+      return
+    }
+    
+    const urls = await uploadImages([file])
+    if (urls && urls.length > 0) {
+      const serverUrl = urls[0]
+      console.log('[ImageNode] 后台上传成功，服务器URL:', serverUrl)
+      
+      // 静默更新节点中的 URL（将 blob URL 替换为服务器 URL）
+      const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
+      if (currentNode) {
+        // 检查并更新 sourceImages 中的 blob URL
+        if (currentNode.data?.sourceImages?.includes(blobUrl)) {
+          const updatedSourceImages = currentNode.data.sourceImages.map(
+            url => url === blobUrl ? serverUrl : url
+          )
+          canvasStore.updateNodeData(nodeId, { sourceImages: updatedSourceImages })
+          console.log('[ImageNode] 已静默更新 sourceImages:', blobUrl.substring(0, 30), '->', serverUrl.substring(0, 60))
+        }
+        
+        // 也检查 output.urls（如果图片被移到了输出中）
+        if (currentNode.data?.output?.urls?.includes(blobUrl)) {
+          const updatedOutputUrls = currentNode.data.output.urls.map(
+            url => url === blobUrl ? serverUrl : url
+          )
+          canvasStore.updateNodeData(nodeId, { 
+            output: { ...currentNode.data.output, urls: updatedOutputUrls }
+          })
+          console.log('[ImageNode] 已静默更新 output.urls')
+        }
+      }
+      
+      // 释放 blob URL 内存
+      URL.revokeObjectURL(blobUrl)
+    }
+  } catch (error) {
+    console.warn('[ImageNode] 后台上传失败，保持使用 blob URL:', error.message)
+    // 上传失败时不影响用户体验，保持 blob URL 可用
+    // 在提交任务时，后端会处理 blob URL 转换
+  }
+}
+
+// 上传图片文件 - 立即上传到服务器获取 URL（同步版本，用于编辑等场景）
 async function uploadImageFile(file) {
   try {
     // 立即上传到服务器获取真正的 URL
@@ -1283,7 +1335,7 @@ function handleReupload() {
   fileInputRef.value?.click()
 }
 
-// 更新源图片（不创建新节点）
+// 更新源图片（不创建新节点）- 优化为秒加载
 async function updateSourceImage(event) {
   const files = event.target.files
   if (!files || files.length === 0) return
@@ -1292,18 +1344,25 @@ async function updateSourceImage(event) {
   event.target.value = ''
   
   try {
-    const imageUrl = await uploadImageFile(file)
+    // 🚀 立即使用 blob URL 显示（秒加载）
+    const blobUrl = URL.createObjectURL(file)
+    console.log('[ImageNode] 更新图片 - 秒加载 blob URL:', blobUrl)
+    
     canvasStore.updateNodeData(props.id, {
-      sourceImages: [imageUrl]
+      sourceImages: [blobUrl]
     })
     
     // 同时更新下游节点的参考图
     const edges = canvasStore.edges.filter(e => e.source === props.id)
     edges.forEach(edge => {
       canvasStore.updateNodeData(edge.target, {
-        referenceImages: [imageUrl]
+        referenceImages: [blobUrl]
       })
     })
+    
+    // 🔄 后台异步上传
+    uploadImageFileAsync(file, blobUrl, props.id)
+    
   } catch (error) {
     console.error('[ImageNode] 更新图片失败:', error)
   }

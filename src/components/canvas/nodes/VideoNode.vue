@@ -1396,14 +1396,37 @@ function handleResizeEnd() {
 }
 
 // ========== 首尾帧图片拖拽上传 ==========
-// 上传图片文件
-async function uploadImageFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => resolve(e.target.result)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
+// 后台异步上传图片 - 上传完成后静默更新节点URL
+async function uploadImageFileAsync(file, blobUrl, nodeId) {
+  try {
+    console.log('[VideoNode] 后台异步上传开始:', file.name)
+    
+    if (file.size > 10 * 1024 * 1024) {
+      console.warn('[VideoNode] 文件过大，保持使用 blob URL')
+      return
+    }
+    
+    const urls = await uploadImages([file])
+    if (urls && urls.length > 0) {
+      const serverUrl = urls[0]
+      console.log('[VideoNode] 后台上传成功，服务器URL:', serverUrl)
+      
+      // 静默更新节点中的 URL
+      const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
+      if (currentNode?.data?.sourceImages?.includes(blobUrl)) {
+        const updatedSourceImages = currentNode.data.sourceImages.map(
+          url => url === blobUrl ? serverUrl : url
+        )
+        canvasStore.updateNodeData(nodeId, { sourceImages: updatedSourceImages })
+        console.log('[VideoNode] 已静默更新 sourceImages')
+      }
+      
+      // 释放 blob URL 内存
+      URL.revokeObjectURL(blobUrl)
+    }
+  } catch (error) {
+    console.warn('[VideoNode] 后台上传失败，保持使用 blob URL:', error.message)
+  }
 }
 
 // 触发文件选择并创建左侧图片节点
@@ -1413,13 +1436,12 @@ function triggerFrameUpload() {
   }
 }
 
-// 处理文件选择 - 直接创建上游图片节点
+// 处理文件选择 - 直接创建上游图片节点（秒加载优化）
 async function handleFrameFileChange(event) {
   const files = event.target.files
   if (!files || files.length === 0) return
   
-  // 先将 FileList 转换为数组，避免重置 input 后 FileList 被清空
-  // 因为 FileList 是 live collection，重置 input.value 会导致其清空
+  // 先将 FileList 转换为数组
   const fileArray = Array.from(files)
   
   console.log('[VideoNode] 处理参考图片上传，文件数量:', fileArray.length)
@@ -1428,9 +1450,17 @@ async function handleFrameFileChange(event) {
   try {
     for (const file of fileArray) {
       if (file.type.startsWith('image/')) {
-        const imageUrl = await uploadImageFile(file)
-        // 为每张图片创建上游节点
-        createUpstreamImageNode(imageUrl)
+        // 🚀 秒加载：立即使用 blob URL
+        const blobUrl = URL.createObjectURL(file)
+        console.log('[VideoNode] 秒加载 - blob URL:', blobUrl)
+        
+        // 立即创建上游节点（使用 blob URL）
+        const nodeId = createUpstreamImageNode(blobUrl)
+        
+        // 🔄 后台异步上传
+        if (nodeId) {
+          uploadImageFileAsync(file, blobUrl, nodeId)
+        }
       }
     }
   } catch (error) {
@@ -1438,10 +1468,10 @@ async function handleFrameFileChange(event) {
   }
 }
 
-// 创建上游图片节点
+// 创建上游图片节点 - 返回创建的节点ID
 function createUpstreamImageNode(imageUrl) {
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
-  if (!currentNode) return
+  if (!currentNode) return null
   
   // 计算新节点位置（在当前节点左侧，根据已有上游节点数量垂直排列）
   const existingUpstreamCount = canvasStore.edges.filter(e => e.target === props.id).length
@@ -1473,6 +1503,8 @@ function createUpstreamImageNode(imageUrl) {
     sourceHandle: 'output',
     targetHandle: 'input'
   })
+  
+  return newNodeId
   
   // 更新图片顺序
   const currentOrder = props.data.imageOrder || [...referenceImages.value]
@@ -1552,9 +1584,17 @@ async function handleFrameDrop(event) {
   try {
     for (const file of files) {
       if (file.type.startsWith('image/')) {
-        const imageUrl = await uploadImageFile(file)
-        // 为每张图片创建上游节点
-        createUpstreamImageNode(imageUrl)
+        // 🚀 秒加载：立即使用 blob URL
+        const blobUrl = URL.createObjectURL(file)
+        console.log('[VideoNode] 拖拽上传 - 秒加载 blob URL:', blobUrl)
+        
+        // 立即创建上游节点
+        const nodeId = createUpstreamImageNode(blobUrl)
+        
+        // 🔄 后台异步上传
+        if (nodeId) {
+          uploadImageFileAsync(file, blobUrl, nodeId)
+        }
       }
     }
   } catch (error) {
