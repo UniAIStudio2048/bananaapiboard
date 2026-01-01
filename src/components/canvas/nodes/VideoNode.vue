@@ -967,8 +967,8 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
         tabId: currentTab?.id,
         metadata: {
           prompt: finalPrompt,
-          model: model.value,
-          aspectRatio: aspectRatio.value
+          model: selectedModel.value,
+          aspectRatio: selectedAspectRatio.value
         }
       })
       
