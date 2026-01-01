@@ -53,20 +53,26 @@ export async function getHistory(params = {}) {
         const data = await res.json()
         return { 
           type: 'image', 
-          data: (data.images || []).map(img => ({
-            id: img.id,
-            type: 'image',
-            name: img.prompt ? img.prompt.substring(0, 30) + (img.prompt.length > 30 ? '...' : '') : '图片',
-            url: img.url,
-            thumbnail_url: img.url,
-            prompt: img.prompt,
-            model: img.model,
-            status: img.status,
-            created_at: img.created ? new Date(img.created * 1000).toISOString() : null,
-            size: img.size,
-            aspect_ratio: img.aspect_ratio,
-            reference_images: img.reference_images
-          }))
+          data: (data.images || []).map(img => {
+            // 优先使用 user_prompt（用户原始输入），如果没有则回退到 prompt
+            const displayPrompt = img.user_prompt || img.prompt
+            return {
+              id: img.id,
+              type: 'image',
+              name: displayPrompt ? displayPrompt.substring(0, 30) + (displayPrompt.length > 30 ? '...' : '') : '图片',
+              url: img.url,
+              thumbnail_url: img.url,
+              prompt: displayPrompt, // 显示用户原始输入（不含预设）
+              fullPrompt: img.prompt, // 保留完整提示词（含预设）供查看
+              user_prompt: img.user_prompt, // 用户原始输入
+              model: img.model,
+              status: img.status,
+              created_at: img.created ? new Date(img.created * 1000).toISOString() : null,
+              size: img.size,
+              aspect_ratio: img.aspect_ratio,
+              reference_images: img.reference_images
+            }
+          })
         }
       })
       .catch(e => {
@@ -90,19 +96,25 @@ export async function getHistory(params = {}) {
         const data = await res.json()
         return {
           type: 'video',
-          data: (data.videos || []).map(vid => ({
-            id: vid.id || vid.task_id,
-            task_id: vid.task_id, // 用于角色创建
-            type: 'video',
-            name: vid.prompt ? vid.prompt.substring(0, 30) + (vid.prompt.length > 30 ? '...' : '') : '视频',
-            url: vid.video_url || vid.url,
-            thumbnail_url: vid.cover_url || vid.thumbnail_url,
-            prompt: vid.prompt,
-            model: vid.model,
-            status: vid.status === 'SUCCESS' ? 'completed' : vid.status,
-            aspect_ratio: vid.aspect_ratio,
-            created_at: vid.created_at
-          }))
+          data: (data.videos || []).map(vid => {
+            // 优先使用 user_prompt（用户原始输入），如果没有则回退到 prompt
+            const displayPrompt = vid.user_prompt || vid.prompt
+            return {
+              id: vid.id || vid.task_id,
+              task_id: vid.task_id, // 用于角色创建
+              type: 'video',
+              name: displayPrompt ? displayPrompt.substring(0, 30) + (displayPrompt.length > 30 ? '...' : '') : '视频',
+              url: vid.video_url || vid.url,
+              thumbnail_url: vid.cover_url || vid.thumbnail_url,
+              prompt: displayPrompt, // 显示用户原始输入
+              fullPrompt: vid.prompt, // 保留完整提示词
+              user_prompt: vid.user_prompt,
+              model: vid.model,
+              status: vid.status === 'SUCCESS' ? 'completed' : vid.status,
+              aspect_ratio: vid.aspect_ratio,
+              created_at: vid.created_at
+            }
+          })
         }
       })
       .catch(e => {
@@ -159,7 +171,7 @@ export async function getHistoryDetail(historyId) {
  */
 export async function deleteHistory(historyId, type = 'image') {
   const endpoint = type === 'video' 
-    ? `${getApiBase()}/api/video/tasks/${historyId}`
+    ? `${getApiBase()}/api/videos/history/${historyId}`
     : `${getApiBase()}/api/images/history/${historyId}`
     
   const response = await fetch(endpoint, {

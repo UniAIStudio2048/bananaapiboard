@@ -29,6 +29,7 @@ import OnboardingGuide from '@/components/canvas/OnboardingGuide.vue'
 import AIAssistantPanel from '@/components/canvas/AIAssistantPanel.vue'
 import { useI18n } from '@/i18n'
 import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoSave, manualSave as saveToHistory } from '@/stores/canvas/workflowAutoSave'
+import { initBackgroundTaskManager, getPendingTasks, subscribeTask, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import { showAlert, showConfirm } from '@/composables/useCanvasDialog'
 
 // 导入画布样式
@@ -335,10 +336,18 @@ function closeAssetPanel() {
 function handleAssetInsert(asset) {
   console.log('[Canvas] 插入资产:', asset)
   
-  // 根据资产类型创建相应的节点
+  // 计算当前画布视口中心偏左的位置
+  const viewport = canvasStore.viewport
+  const zoom = viewport.zoom || 1
+  
+  // 屏幕中心（考虑左侧工具栏约90px）
+  const screenCenterX = (window.innerWidth - 90) / 2 + 90
+  const screenCenterY = window.innerHeight / 2
+  
+  // 将屏幕坐标转换为画布坐标，并偏左200px
   const position = {
-    x: 300,
-    y: window.innerHeight / 2 - 100
+    x: (screenCenterX - viewport.x) / zoom - 200,
+    y: (screenCenterY - viewport.y) / zoom - 100
   }
   
   let nodeType = 'text-input'
@@ -435,10 +444,18 @@ function closeHistoryPanel() {
 function handleHistoryApply(historyItem) {
   console.log('[Canvas] 应用历史记录:', historyItem)
   
-  // 根据历史记录类型创建相应的节点
+  // 计算当前画布视口中心偏左的位置
+  const viewport = canvasStore.viewport
+  const zoom = viewport.zoom || 1
+  
+  // 屏幕中心（考虑左侧工具栏约90px）
+  const screenCenterX = (window.innerWidth - 90) / 2 + 90
+  const screenCenterY = window.innerHeight / 2
+  
+  // 将屏幕坐标转换为画布坐标，并偏左200px
   const position = {
-    x: 300,
-    y: window.innerHeight / 2 - 100
+    x: (screenCenterX - viewport.x) / zoom - 200,
+    y: (screenCenterY - viewport.y) / zoom - 100
   }
   
   let nodeType = 'image-input'
@@ -649,6 +666,88 @@ function getCurrentWorkflowData() {
 function initHistoryAutoSave() {
   startHistoryAutoSave(getCurrentWorkflowData)
   console.log('[Canvas] 历史工作流自动保存已启动')
+}
+
+// 恢复后台任务 - 为未完成的任务订阅更新
+function restoreBackgroundTasks() {
+  const pendingTasks = getPendingTasks()
+  console.log(`[Canvas] 恢复 ${pendingTasks.length} 个后台任务`)
+  
+  for (const task of pendingTasks) {
+    // 订阅任务更新
+    subscribeTask(task.taskId, {
+      onProgress: (updatedTask) => {
+        // 更新节点状态
+        updateNodeFromTask(updatedTask)
+      },
+      onComplete: (completedTask) => {
+        console.log('[Canvas] 后台任务完成:', completedTask.taskId)
+        updateNodeFromTask(completedTask)
+        // 延迟清理完成的任务
+        setTimeout(() => removeCompletedTask(completedTask.taskId), 5000)
+      },
+      onError: (failedTask) => {
+        console.log('[Canvas] 后台任务失败:', failedTask.taskId)
+        updateNodeFromTask(failedTask)
+        setTimeout(() => removeCompletedTask(failedTask.taskId), 5000)
+      }
+    })
+  }
+}
+
+// 根据任务更新节点状态
+function updateNodeFromTask(task) {
+  const node = canvasStore.nodes.find(n => n.id === task.nodeId)
+  if (!node) {
+    console.log(`[Canvas] 找不到任务关联的节点: ${task.nodeId}`)
+    return
+  }
+  
+  if (task.status === 'completed' && task.result) {
+    // 任务完成，更新节点数据
+    const result = task.result
+    
+    if (task.type === 'image') {
+      // 图片任务完成
+      const images = result.images || (result.url ? [{ url: result.url }] : [])
+      if (images.length > 0) {
+        canvasStore.updateNodeData(task.nodeId, {
+          status: 'completed',
+          output: {
+            ...node.data.output,
+            url: images[0].url,
+            images: images.map(img => img.url)
+          }
+        })
+      }
+    } else if (task.type === 'video') {
+      // 视频任务完成
+      if (result.url) {
+        canvasStore.updateNodeData(task.nodeId, {
+          status: 'completed',
+          output: {
+            ...node.data.output,
+            url: result.url,
+            thumbnail: result.thumbnail
+          }
+        })
+      }
+    }
+    
+    console.log(`[Canvas] 节点 ${task.nodeId} 已更新为完成状态`)
+  } else if (task.status === 'failed') {
+    // 任务失败
+    canvasStore.updateNodeData(task.nodeId, {
+      status: 'error',
+      error: task.error || '任务执行失败'
+    })
+  } else if (task.status === 'processing') {
+    // 任务进行中
+    canvasStore.updateNodeData(task.nodeId, {
+      status: 'running',
+      progress: task.progress
+    })
+  }
 }
 
 // 页面关闭前保存当前工作流到历史
@@ -1116,6 +1215,10 @@ onMounted(async () => {
   
   // 启动历史工作流自动保存服务（localStorage 缓存）
   initHistoryAutoSave()
+  
+  // 初始化后台任务管理器，恢复未完成的任务
+  initBackgroundTaskManager()
+  restoreBackgroundTasks()
   
   // 监听页面关闭事件，保存工作流到历史
   window.addEventListener('beforeunload', handleBeforeUnload)

@@ -11,6 +11,7 @@ import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from '
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages } from '@/api/canvas/nodes'
+import { registerTask } from '@/stores/canvas/backgroundTaskManager'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
@@ -1602,7 +1603,9 @@ function getUpstreamImagesRealtime() {
 }
 
 // 单次生成请求
-async function sendImageGenerateRequest(finalPrompt) {
+// @param {string} finalPrompt - 最终提示词（包含预设提示词）
+// @param {string} userPrompt - 用户原始输入（不含预设提示词，用于历史记录显示）
+async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
   // 直接从 store 获取上游节点的最新图片数据（确保数据实时性）
   const currentReferenceImages = getUpstreamImagesRealtime()
   
@@ -1619,6 +1622,7 @@ async function sendImageGenerateRequest(finalPrompt) {
   // 构建基础参数
   const baseParams = {
     prompt: finalPrompt || '保持原图风格',
+    userPrompt: userPrompt || finalPrompt || '', // 用户原始输入（不含预设，用于历史显示）
     model: selectedModel.value,
     aspectRatio: selectedAspectRatio.value,
     count: 1, // 单次请求固定为1
@@ -1775,18 +1779,36 @@ function createStackedOutputNodes(count, basePosition) {
 }
 
 // 单个节点执行生成任务（后台轮询，不阻塞UI）
-async function executeNodeGeneration(nodeId, finalPrompt, taskIndex) {
+// @param {string} nodeId - 节点ID
+// @param {string} finalPrompt - 最终提示词（包含预设）
+// @param {number} taskIndex - 任务索引
+// @param {string} userPrompt - 用户原始输入（不含预设，用于历史记录显示）
+async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt = null) {
   try {
     canvasStore.updateNodeData(nodeId, { 
       status: 'processing',
       progress: '生成中...'
     })
     
-    const result = await sendImageGenerateRequest(finalPrompt)
+    const result = await sendImageGenerateRequest(finalPrompt, userPrompt)
     
     if (result.task_id || result.id) {
       const taskId = result.task_id || result.id
       console.log(`[ImageNode] 任务 ${taskIndex + 1} 已提交:`, taskId)
+      
+      // 注册到后台任务管理器（即使用户离开画布也继续执行）
+      const currentTab = canvasStore.getCurrentTab()
+      registerTask({
+        taskId,
+        type: 'image',
+        nodeId,
+        tabId: currentTab?.id,
+        metadata: {
+          prompt: finalPrompt,
+          model: selectedModel.value,
+          imageSize: imageSize.value
+        }
+      })
       
       // 后台轮询，不阻塞（使用独立的 Promise，不 await）
       pollTaskStatus(taskId, 'image', {
@@ -1831,6 +1853,11 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex) {
     throw new Error('未获取到生成结果')
   } catch (error) {
     console.error(`[ImageNode] 任务 ${taskIndex + 1} 失败:`, error)
+    console.error(`[ImageNode] 错误详情:`, {
+      name: error.name,
+      message: error.message,
+      stack: error.stack
+    })
     canvasStore.updateNodeData(nodeId, {
       status: 'error',
       error: error.message
@@ -2007,13 +2034,14 @@ async function handleGenerate() {
   
   try {
     // 提交所有任务（任务提交后立即返回，不等待完成）
+    // basePrompt 是用户原始输入（不含预设提示词），用于历史记录显示
     const submitPromises = allNodeIds.map((nodeId, index) => {
       return new Promise(async (resolve) => {
         // 间隔发送请求
         if (index > 0) {
           await delay(CONCURRENT_INTERVAL * index)
         }
-        const result = await executeNodeGeneration(nodeId, finalPrompt, index)
+        const result = await executeNodeGeneration(nodeId, finalPrompt, index, basePrompt)
         resolve(result)
       })
     })

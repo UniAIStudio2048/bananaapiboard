@@ -19,12 +19,16 @@ function getHeaders(options = {}) {
  * 图片生成 - 文生图
  */
 export async function generateImageFromText(params) {
-  const { prompt, model = 'nano-banana-2', size = '1K', aspectRatio = 'auto', count = 1 } = params
+  const { prompt, userPrompt, model = 'nano-banana-2', image_size, size, aspectRatio = 'auto', count = 1 } = params
+  
+  // 优先使用 image_size，否则使用 size（向后兼容）
+  const finalImageSize = image_size || size || '1K'
   
   const body = {
     prompt,
+    user_prompt: userPrompt || prompt, // 用户原始输入（不含预设提示词）
     model,
-    image_size: size,
+    image_size: finalImageSize,
     aspect_ratio: aspectRatio,
     n: count,
     response_format: 'url'
@@ -49,7 +53,8 @@ export async function generateImageFromText(params) {
  */
 export async function generateImageFromImage(params) {
   const { 
-    prompt, 
+    prompt,
+    userPrompt, // 用户原始输入（不含预设提示词）
     images, 
     model = 'nano-banana-2', 
     image_size,  // 支持 image_size 参数
@@ -62,6 +67,7 @@ export async function generateImageFromImage(params) {
   
   const body = {
     prompt,
+    user_prompt: userPrompt || prompt, // 用户原始输入
     image: images, // 参考图URL数组
     model,
     image_size: finalImageSize,
@@ -71,6 +77,7 @@ export async function generateImageFromImage(params) {
   
   console.log('[API] 图生图请求参数:', { 
     prompt: prompt?.substring(0, 50), 
+    userPrompt: userPrompt?.substring(0, 50),
     model, 
     image_size: finalImageSize, 
     aspect_ratio: aspectRatio,
@@ -175,6 +182,22 @@ export async function getVideoTaskStatus(taskId) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     throw new Error(error.message || '查询任务状态失败')
+  }
+  
+  return response.json()
+}
+
+/**
+ * 查询视频高清放大任务状态
+ */
+export async function getVideoHdTaskStatus(taskId) {
+  const response = await fetch(getApiUrl(`/api/videos/hd-upscale/task/${taskId}`), {
+    headers: getHeaders()
+  })
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || '查询高清任务状态失败')
   }
   
   return response.json()

@@ -13,6 +13,7 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels } from '@/config/tenant'
 import { uploadImages } from '@/api/canvas/nodes'
+import { registerTask, subscribeTask } from '@/stores/canvas/backgroundTaskManager'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
@@ -956,6 +957,20 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
     
     if (taskId) {
       console.log(`[VideoNode] 任务 ${taskIndex + 1} 已提交:`, taskId)
+      
+      // 注册到后台任务管理器（即使用户离开画布也继续执行）
+      const currentTab = canvasStore.getCurrentTab()
+      registerTask({
+        taskId,
+        type: 'video',
+        nodeId,
+        tabId: currentTab?.id,
+        metadata: {
+          prompt: finalPrompt,
+          model: model.value,
+          aspectRatio: aspectRatio.value
+        }
+      })
       
       // 后台轮询，不阻塞
       pollVideoTaskForNode(taskId, nodeId).catch(error => {
@@ -1956,11 +1971,271 @@ const showToolbar = computed(() => {
 // 视频裁剪编辑器状态
 const showClipEditor = ref(false)
 
-// 工具栏处理函数
-function handleToolbarHD() {
+// 高清处理状态
+const isHDProcessing = ref(false)
+const hdTaskId = ref(null)
+const hdPollingTimer = ref(null)
+
+// 工具栏处理函数 - 高清放大（异步任务模式）
+async function handleToolbarHD() {
   console.log('[VideoNode] 工具栏：高清', props.id)
-  // 待开发功能
+  
+  const originalVideoUrl = props.data.output?.url
+  if (!originalVideoUrl && !normalizedVideoUrl.value) {
+    showToast('没有可处理的视频', 'error')
+    return
+  }
+  
+  if (isHDProcessing.value) {
+    showToast('正在处理中，请稍候', 'warning')
+    return
+  }
+  
+  try {
+    isHDProcessing.value = true
+    const token = localStorage.getItem('token')
+    
+    // 获取要处理的视频 URL
+    let videoUrlForHD = originalVideoUrl || normalizedVideoUrl.value
+    
+    // 检查是否是本地视频（blob URL 或 data URL 或相对路径）
+    const isLocalVideo = videoUrlForHD.startsWith('blob:') || 
+                         videoUrlForHD.startsWith('data:') ||
+                         videoUrlForHD.startsWith('/api/')
+    
+    if (isLocalVideo) {
+      showToast('上传视频到云端...', 'info')
+      
+      // 本地视频需要先上传到七牛云
+      if (videoUrlForHD.startsWith('blob:')) {
+        // 从 blob URL 获取视频并上传
+        console.log('[VideoNode] 从 blob URL 获取视频数据...')
+        let fileToUpload = props.data?.localFile
+        
+        if (!fileToUpload) {
+          const response = await fetch(videoUrlForHD)
+          const blob = await response.blob()
+          fileToUpload = new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' })
+        }
+        
+        const formData = new FormData()
+        formData.append('file', fileToUpload)
+        
+        const uploadResponse = await fetch('/api/videos/upload', {
+          method: 'POST',
+          headers: {
+            ...getTenantHeaders(),
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: formData
+        })
+        
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json().catch(() => ({}))
+          throw new Error(errorData.message || '视频上传失败')
+        }
+        
+        const uploadResult = await uploadResponse.json()
+        videoUrlForHD = uploadResult.url
+        console.log('[VideoNode] blob视频上传成功:', videoUrlForHD)
+        
+      } else {
+        // 相对路径或其他本地 URL，通过 API 上传到七牛云
+        let videoUrlForApi = videoUrlForHD
+        if (videoUrlForHD.startsWith('/api/')) {
+          videoUrlForApi = getApiUrl(videoUrlForHD)
+        }
+        
+        const uploadResponse = await fetch('/api/videos/upload-to-qiniu', {
+          method: 'POST',
+          headers: {
+            ...getTenantHeaders(),
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({ videoUrl: videoUrlForApi })
+        })
+        
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json().catch(() => ({}))
+          throw new Error(errorData.message || '视频上传失败')
+        }
+        
+        const uploadResult = await uploadResponse.json()
+        videoUrlForHD = uploadResult.url
+        console.log('[VideoNode] 本地视频上传成功:', videoUrlForHD)
+      }
+    }
+    
+    showToast('提交高清处理任务...', 'info')
+    
+    // 提交异步任务（使用七牛云 URL）
+    const response = await fetch('/api/videos/hd-upscale', {
+      method: 'POST',
+      headers: {
+        ...getTenantHeaders(),
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        videoUrl: videoUrlForHD,
+        nodeId: props.id
+      })
+    })
+    
+    const result = await response.json()
+    
+    if (!response.ok) {
+      if (result.error === 'insufficient_points') {
+        showInsufficientPointsDialog(result.message)
+      } else if (result.error === 'hd_not_configured') {
+        showAlert('功能未配置', result.message || '视频高清功能未配置，请联系管理员')
+      } else {
+        showToast(result.message || '高清处理失败', 'error')
+      }
+      isHDProcessing.value = false
+      return
+    }
+    
+    // 获取任务 ID，开始轮询
+    hdTaskId.value = result.taskId
+    console.log('[VideoNode] 高清任务已提交:', result.taskId)
+    showToast('高清任务已提交，后台处理中...', 'success')
+    
+    // 立即恢复按钮状态（任务在后台处理）
+    isHDProcessing.value = false
+    
+    // 注册到后台任务管理器
+    const currentTab = canvasStore.getCurrentTab()
+    registerTask({
+      taskId: result.taskId,
+      type: 'video-hd',
+      nodeId: props.id,
+      tabId: currentTab?.id,
+      metadata: {
+        sourceUrl: normalizedVideoUrl.value
+      }
+    })
+    
+    // 开始轮询任务状态（后台执行，不影响界面）
+    startHDTaskPolling(result.taskId)
+    
+  } catch (error) {
+    console.error('[VideoNode] 高清处理失败:', error)
+    showToast(error.message || '高清处理失败', 'error')
+    isHDProcessing.value = false
+  }
 }
+
+// 轮询高清任务状态（后台执行）
+function startHDTaskPolling(taskId) {
+  const pollInterval = 3000 // 3秒轮询一次
+  const maxPollTime = 16 * 60 * 1000 // 16分钟超时（比后端15分钟多1分钟）
+  const startTime = Date.now()
+  
+  const poll = async () => {
+    try {
+      // 检查前端超时
+      if (Date.now() - startTime > maxPollTime) {
+        console.log('[VideoNode] 高清任务轮询超时')
+        showToast('高清处理超时，请稍后在历史记录中查看', 'warning')
+        stopHDTaskPolling()
+        return
+      }
+      
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/videos/hd-upscale/task/${taskId}`, {
+        headers: {
+          ...getTenantHeaders(),
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      })
+      
+      if (!response.ok) {
+        console.error('[VideoNode] 查询任务状态失败')
+        return
+      }
+      
+      const taskStatus = await response.json()
+      console.log('[VideoNode] 高清任务状态:', taskStatus.status, taskStatus.progress)
+      
+      if (taskStatus.status === 'completed') {
+        // 任务完成
+        stopHDTaskPolling()
+        
+        // 创建新的视频节点展示高清结果
+        createHDResultNode(taskStatus.outputUrl, taskStatus.pointsCost)
+        
+        const costMsg = taskStatus.pointsDeducted && taskStatus.pointsCost > 0 
+          ? `，消耗 ${taskStatus.pointsCost} 积分` : ''
+        showToast(`高清处理完成${costMsg}`, 'success')
+        
+      } else if (taskStatus.status === 'failed' || taskStatus.status === 'timeout') {
+        // 任务失败或超时（不扣积分）
+        stopHDTaskPolling()
+        
+        if (taskStatus.status === 'timeout') {
+          showToast('高清处理超时（超过15分钟），未扣除积分', 'warning')
+        } else {
+          showToast(taskStatus.error || '高清处理失败，未扣除积分', 'error')
+        }
+      }
+      // processing 状态继续轮询
+      
+    } catch (error) {
+      console.error('[VideoNode] 轮询高清任务出错:', error)
+    }
+  }
+  
+  // 延迟5秒后开始第一次轮询（给后端时间处理）
+  setTimeout(() => {
+    poll()
+    // 设置定时器
+    hdPollingTimer.value = setInterval(poll, pollInterval)
+  }, 5000)
+}
+
+// 停止轮询
+function stopHDTaskPolling() {
+  if (hdPollingTimer.value) {
+    clearInterval(hdPollingTimer.value)
+    hdPollingTimer.value = null
+  }
+  hdTaskId.value = null
+}
+
+// 创建高清结果节点
+function createHDResultNode(outputUrl, pointsCost) {
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return
+  
+  const newNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const newNodePosition = {
+    x: currentNode.position.x + 380,
+    y: currentNode.position.y
+  }
+  
+  canvasStore.addNode({
+    id: newNodeId,
+    type: 'video',
+    position: newNodePosition,
+    data: {
+      label: '高清放大',
+      output: {
+        url: outputUrl,
+        sourceUrl: normalizedVideoUrl.value
+      },
+      hdUpscaled: true,
+      sourceNodeId: props.id,
+      pointsCost: pointsCost || 0
+    }
+  })
+}
+
+// 组件卸载时停止轮询
+onUnmounted(() => {
+  stopHDTaskPolling()
+})
 
 function handleToolbarAnalyze() {
   console.log('[VideoNode] 工具栏：解析', props.id)
@@ -2445,14 +2720,25 @@ function handleToolbarPreview() {
   <div :class="nodeClass" @contextmenu="handleContextMenu">
     <!-- 视频工具栏（选中且有视频时显示）- 与 ImageNode 保持一致 -->
     <div v-if="showToolbar" class="video-toolbar">
-      <button class="toolbar-btn" title="高清" @mousedown.prevent="handleToolbarHD">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <button 
+        class="toolbar-btn" 
+        :class="{ 'processing': isHDProcessing }"
+        title="高清放大" 
+        @mousedown.stop.prevent="handleToolbarHD"
+        @click.stop.prevent
+        :disabled="isHDProcessing"
+      >
+        <svg v-if="!isHDProcessing" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
           <text x="12" y="15" text-anchor="middle" font-size="8" font-weight="bold" fill="currentColor" stroke="none">HD</text>
         </svg>
-        <span>高清</span>
+        <svg v-else class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+        </svg>
+        <span>{{ isHDProcessing ? '处理中...' : '高清' }}</span>
       </button>
-      <button class="toolbar-btn" title="解析" @mousedown.prevent="handleToolbarAnalyze">
+      <button class="toolbar-btn" title="解析" @mousedown.stop.prevent="handleToolbarAnalyze" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
           <rect x="14" y="3" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
@@ -2461,7 +2747,7 @@ function handleToolbarPreview() {
         </svg>
         <span>解析</span>
       </button>
-      <button class="toolbar-btn" title="角色创建" @mousedown.prevent="handleToolbarCreateCharacter">
+      <button class="toolbar-btn" title="角色创建" @mousedown.stop.prevent="handleToolbarCreateCharacter" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="8" r="4" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -2470,12 +2756,12 @@ function handleToolbarPreview() {
         <span>角色创建</span>
       </button>
       <div class="toolbar-divider"></div>
-      <button class="toolbar-btn icon-only" title="下载" @mousedown.prevent="handleToolbarDownload">
+      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn icon-only" title="全屏预览" @mousedown.prevent="handleToolbarPreview">
+      <button class="toolbar-btn icon-only" title="全屏预览" @mousedown.stop.prevent="handleToolbarPreview" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
@@ -3216,6 +3502,29 @@ function handleToolbarPreview() {
 
 .video-toolbar .toolbar-btn.icon-only span {
   display: none;
+}
+
+.video-toolbar .toolbar-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.video-toolbar .toolbar-btn.processing {
+  background: rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+}
+
+.video-toolbar .toolbar-btn .animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .video-toolbar .toolbar-divider {

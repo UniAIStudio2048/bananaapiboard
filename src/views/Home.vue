@@ -1228,8 +1228,10 @@ async function regenerateFromHistory(item) {
   console.log('[regenerateFromHistory] reference_images:', item.reference_images)
   
   // 恢复参数到输入框
-  if (item.prompt) {
-    prompt.value = item.prompt
+  // 优先使用 user_prompt（用户原始输入，不含预设提示词）
+  const displayPrompt = item.user_prompt || item.prompt
+  if (displayPrompt) {
+    prompt.value = displayPrompt
   }
   if (item.model) {
     model.value = item.model

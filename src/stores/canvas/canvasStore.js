@@ -934,11 +934,14 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 在新标签中打开工作流
    */
   function openWorkflowInNewTab(workflow) {
-    // 检查是否已经在标签中打开
-    const existingTab = workflowTabs.value.find(t => t.workflowId === workflow.id)
-    if (existingTab) {
-      switchToTab(existingTab.id)
-      return existingTab
+    // 只有当 workflow.id 存在时才检查是否已经打开
+    // 历史工作流的 id 是 null，不应该匹配到其他 null id 的标签
+    if (workflow.id) {
+      const existingTab = workflowTabs.value.find(t => t.workflowId === workflow.id)
+      if (existingTab) {
+        switchToTab(existingTab.id)
+        return existingTab
+      }
     }
     
     // 创建新标签
