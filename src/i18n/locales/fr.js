@@ -504,7 +504,10 @@ export default {
       refVideo: 'Vidéo de référence',
       uploadFailed: 'Échec du téléchargement',
       generateFailed: 'Échec de génération',
-      generating: 'Génération...'
+      generating: 'Génération...',
+      trimFirstFrame: 'Supprimer la première image',
+      storyboardMode: 'Mode Storyboard',
+      styleLabel: 'Style'
     },
     audioNode: {
       lipSync: 'Synchronisation labiale',

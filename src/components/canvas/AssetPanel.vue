@@ -525,10 +525,15 @@ function extractVideoThumbnail(asset) {
 function getVideoThumbnail(asset) {
   if (asset.thumbnail_url) return asset.thumbnail_url
   if (videoThumbnails.value[asset.id]) return videoThumbnails.value[asset.id]
-  
-  // 触发提取
-  nextTick(() => extractVideoThumbnail(asset))
-  return null
+
+  // 立即触发提取（不使用 nextTick，确保尽快开始加载）
+  if (!videoThumbnails.value[`loading_${asset.id}`]) {
+    videoThumbnails.value[`loading_${asset.id}`] = true
+    extractVideoThumbnail(asset)
+  }
+
+  // 返回视频URL作为后备（某些浏览器可以直接显示视频首帧）
+  return asset.url
 }
 
 // 获取角色 username（用于显示）
@@ -1101,23 +1106,23 @@ onUnmounted(() => {
                 </div>
                 
                 <!-- 图片预览 -->
-                <img 
-                  v-else-if="asset.type === 'image'" 
-                  :src="getAssetPreview(asset)" 
+                <img
+                  v-else-if="asset.type === 'image'"
+                  :src="getAssetPreview(asset)"
                   :alt="asset.name"
                   class="image-preview"
+                  loading="eager"
+                  decoding="async"
                 />
-                
+
                 <!-- 视频预览 - 自动提取首帧 -->
                 <div v-else-if="asset.type === 'video'" class="video-preview">
-                  <img 
-                    v-if="getVideoThumbnail(asset)" 
-                    :src="getVideoThumbnail(asset)" 
+                  <img
+                    :src="getVideoThumbnail(asset)"
                     :alt="asset.name"
+                    loading="eager"
+                    decoding="async"
                   />
-                  <div v-else class="video-loading">
-                    <div class="mini-spinner"></div>
-                  </div>
                   <div class="video-play-icon">▶</div>
                 </div>
                 
@@ -1808,24 +1813,34 @@ onUnmounted(() => {
 .asset-list {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px 20px;
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   align-content: start;
+  /* 确保可以滚动 */
+  max-height: 100%;
+  min-height: 0;
 }
 
 .asset-list::-webkit-scrollbar {
-  width: 6px;
+  width: 8px;
 }
 
 .asset-list::-webkit-scrollbar-track {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 4px;
 }
 
 .asset-list::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.asset-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
 }
 
 /* 加载状态 */
@@ -1890,6 +1905,10 @@ onUnmounted(() => {
   overflow: hidden;
   cursor: pointer;
   transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  /* 设置最小高度确保卡片不会太扁 */
+  min-height: 240px;
 }
 
 .asset-card:hover {
@@ -1905,13 +1924,15 @@ onUnmounted(() => {
 
 /* 资产预览 - 更大尺寸 */
 .asset-preview {
-  height: 120px;
+  height: 160px;
+  min-height: 160px;
   background: rgba(0, 0, 0, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   position: relative;
+  flex-shrink: 0;
 }
 
 /* 视频加载中 */
@@ -2140,6 +2161,11 @@ onUnmounted(() => {
 /* 资产信息 */
 .asset-info {
   padding: 12px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
 }
 
 .asset-name-container {

@@ -433,7 +433,10 @@ export default {
       refVideo: 'فيديو مرجعي',
       uploadFailed: 'فشل رفع الفيديو',
       generateFailed: 'فشل التوليد',
-      generating: 'جاري التوليد...'
+      generating: 'جاري التوليد...',
+      trimFirstFrame: 'إزالة الإطار الأول',
+      storyboardMode: 'وضع القصة المصورة',
+      styleLabel: 'الأسلوب'
     },
     audioNode: {
       lipSync: 'مزامنة الشفاه',

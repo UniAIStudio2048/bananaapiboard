@@ -514,7 +514,10 @@ export default {
       refVideo: '참조 비디오',
       uploadFailed: '비디오 업로드 실패',
       generateFailed: '생성 실패',
-      generating: '생성 중...'
+      generating: '생성 중...',
+      trimFirstFrame: '첫 프레임 제거',
+      storyboardMode: '스토리보드 모드',
+      styleLabel: '스타일'
     },
     // 오디오 노드 빠른 작업
     audioNode: {

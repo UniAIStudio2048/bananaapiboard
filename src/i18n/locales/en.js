@@ -281,6 +281,7 @@ export default {
       saving: 'Saving...',
       editNode: 'Edit Node',
       copyNode: 'Copy Node',
+      pasteNode: 'Paste Node',
       deleteNode: 'Delete Node',
       assetSaved: '{type} added to my assets!',
       canvasGenerated: 'Canvas Generated'
@@ -563,7 +564,10 @@ export default {
       refVideo: 'Reference Video',
       uploadFailed: 'Video upload failed, please retry',
       generateFailed: 'Generation failed',
-      generating: 'Generating...'
+      generating: 'Generating...',
+      trimFirstFrame: 'Trim First Frame',
+      storyboardMode: 'Storyboard Mode',
+      styleLabel: 'Style'
     },
     // Audio node quick actions
     audioNode: {

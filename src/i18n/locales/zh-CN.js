@@ -281,6 +281,7 @@ export default {
       saving: '保存中...',
       editNode: '编辑节点',
       copyNode: '复制节点',
+      pasteNode: '粘贴节点',
       deleteNode: '删除节点',
       assetSaved: '{type}已加入我的资产！',
       canvasGenerated: '画布生成'
@@ -568,7 +569,10 @@ export default {
       refVideo: '参考视频',
       uploadFailed: '视频上传失败，请重试',
       generateFailed: '生成失败',
-      generating: '生成中...'
+      generating: '生成中...',
+      trimFirstFrame: '去掉首帧',
+      storyboardMode: '故事板模式',
+      styleLabel: '风格'
     },
     // 音频节点快捷操作
     audioNode: {

@@ -7,8 +7,9 @@ import { ref, computed } from 'vue'
 import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
 import { getDownstreamOptions, NODE_TYPES } from '@/config/canvas/nodeTypes'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { saveAsset } from '@/api/canvas/assets'
+import { uploadImages } from '@/api/canvas/nodes'
 
 const { t } = useI18n()
 
@@ -34,27 +35,45 @@ const isAddingAsset = ref(false)
 // 判断节点类型
 const nodeType = computed(() => props.node?.type || '')
 
-// 判断是否是视频节点且有输出
+// 判断是否是视频节点且有输出或上传内容
 const isVideoNodeWithOutput = computed(() => {
   if (!props.node) return false
   const type = nodeType.value
-  const isVideoType = type === 'video' || type === 'video-input' || type === 'video-gen' || 
-                      type === 'text-to-video' || type === 'image-to-video'
-  return isVideoType && props.node.data?.output?.url
+  // 所有视频相关的节点类型
+  const videoTypes = [
+    'video', 'video-input', 'video-gen',
+    'text-to-video', 'image-to-video', 'audio-to-video',
+    'video-last-frame'
+  ]
+  const isVideoType = videoTypes.includes(type)
+  // 检查输出或上传的视频
+  const hasOutput = props.node.data?.output?.url || 
+                    props.node.data?.videoUrl ||
+                    props.node.data?.sourceVideo // 用户上传的视频
+  return isVideoType && hasOutput
 })
 
-// 判断是否是图片节点且有输出
+// 判断是否是图片节点且有输出或上传内容
 const isImageNodeWithOutput = computed(() => {
   if (!props.node) return false
   const type = nodeType.value
-  const isImageType = type === 'image' || type === 'image-input' || type === 'image-gen' ||
-                      type === 'text-to-image' || type === 'preview' || type === 'preview-output'
-  const hasOutput = props.node.data?.output?.url || 
+  // 所有图片相关的节点类型
+  const imageTypes = [
+    'image', 'image-input', 'image-gen', 
+    'text-to-image', 'image-to-image',
+    'image-repaint', 'image-erase', 'image-upscale', 'image-cutout', 'image-expand',
+    'preview', 'preview-output'
+  ]
+  const isImageType = imageTypes.includes(type)
+  // 检查生成的输出
+  const hasGeneratedOutput = props.node.data?.output?.url || 
                     props.node.data?.output?.urls?.length > 0 ||
                     props.node.data?.imageUrl || 
                     props.node.data?.generatedImage ||
                     props.node.data?.url
-  return isImageType && hasOutput
+  // 检查用户上传的图片（sourceImages 是用户上传的图片数组）
+  const hasUploadedImages = props.node.data?.sourceImages?.length > 0
+  return isImageType && (hasGeneratedOutput || hasUploadedImages)
 })
 
 // 判断是否是文本节点且有内容
@@ -70,13 +89,20 @@ const isTextNodeWithContent = computed(() => {
   return isTextType && hasContent
 })
 
-// 判断是否是音频节点且有输出
+// 判断是否是音频节点且有输出或上传内容
 const isAudioNodeWithOutput = computed(() => {
   if (!props.node) return false
   const type = nodeType.value
-  const isAudioType = type === 'audio' || type === 'audio-input' || type === 'audio-gen' ||
-                      type === 'text-to-audio' || type === 'tts'
-  const hasOutput = props.node.data?.output?.url || props.node.data?.audioUrl
+  // 所有音频相关的节点类型
+  const audioTypes = [
+    'audio', 'audio-input', 'audio-gen',
+    'text-to-audio', 'tts', 'audio-to-text', 'audio-lip-sync'
+  ]
+  const isAudioType = audioTypes.includes(type)
+  // 检查输出或用户上传的音频
+  const hasOutput = props.node.data?.output?.url || 
+                    props.node.data?.audioUrl ||
+                    props.node.data?.sourceAudio // 用户上传的音频
   return isAudioType && hasOutput
 })
 
@@ -124,12 +150,20 @@ const assetTypeName = computed(() => {
 
 // 获取视频URL
 const videoUrl = computed(() => {
-  if (!props.node?.data?.output?.url) return ''
-  const url = props.node.data.output.url
-  if (url.startsWith('/api/')) return url
-  const match = url.match(/\/api\/images\/file\/[a-zA-Z0-9-]+/)
-  if (match) return match[0]
-  return url
+  const data = props.node?.data
+  if (!data) return ''
+  
+  // 优先使用输出的视频URL
+  if (data.output?.url) {
+    const url = data.output.url
+    if (url.startsWith('/api/')) return url
+    const match = url.match(/\/api\/images\/file\/[a-zA-Z0-9-]+/)
+    if (match) return match[0]
+    return url
+  }
+  
+  // 其次使用用户上传的视频
+  return data.videoUrl || data.sourceVideo || ''
 })
 
 // 获取图片URL（如果有多张图片，取第一张）
@@ -139,6 +173,8 @@ const imageUrl = computed(() => {
   // 优先使用 output.url，其次 output.urls[0]
   if (data.output?.url) return data.output.url
   if (data.output?.urls?.length > 0) return data.output.urls[0]
+  // 支持用户上传的图片（sourceImages 是用户上传的图片数组）
+  if (data.sourceImages?.length > 0) return data.sourceImages[0]
   return data.imageUrl || data.generatedImage || data.url || ''
 })
 
@@ -154,7 +190,8 @@ const textContent = computed(() => {
 const audioUrl = computed(() => {
   const data = props.node?.data
   if (!data) return ''
-  return data.output?.url || data.audioUrl || ''
+  // 支持输出和用户上传的音频
+  return data.output?.url || data.audioUrl || data.sourceAudio || ''
 })
 
 // 获取资产URL或内容
@@ -240,15 +277,25 @@ function createDownstreamNode(type) {
   emit('close')
 }
 
-// 编辑节点
-function editNode() {
-  canvasStore.selectNode(props.node.id)
+// 复制节点
+function copyNode() {
+  if (props.node) {
+    // 先选中当前节点
+    canvasStore.selectNode(props.node.id)
+    // 复制选中的节点
+    canvasStore.copySelectedNodes()
+  }
   emit('close')
 }
 
-// 复制节点
-function copyNode() {
-  alert('复制功能开发中...')
+// 粘贴节点
+function pasteNode() {
+  // 在当前节点右侧粘贴
+  const position = {
+    x: props.node.position.x + 300,
+    y: props.node.position.y
+  }
+  canvasStore.pasteNodes(position)
   emit('close')
 }
 
@@ -391,6 +438,85 @@ async function downloadImage() {
 
 // ========== 通用资产功能 ==========
 
+// 判断 URL 是否需要上传到云端（本地路径、blob、base64、相对路径等）
+function needsUploadToCloud(url) {
+  if (!url || typeof url !== 'string') return false
+  // 已经是七牛云或其他 CDN 的不需要上传
+  if (url.includes('files.nananobanana.cn') || 
+      url.includes('qiniucdn.com') || 
+      url.includes('clouddn.com')) return false
+  // blob URL 需要上传
+  if (url.startsWith('blob:')) return true
+  // base64 数据 URL 需要上传
+  if (url.startsWith('data:')) return true
+  // 本地 API 路径需要上传
+  if (url.startsWith('/api/images/file/') || url.startsWith('/storage/')) return true
+  // localhost 路径需要上传
+  if (url.includes('localhost') && url.includes('/api/')) return true
+  return false
+}
+
+// 将本地 URL 上传到云端获取永久 URL
+async function uploadToCloudForAsset(url, type = 'image') {
+  console.log('[NodeContextMenu] 上传到云端:', url?.substring(0, 60))
+  
+  try {
+    let blob
+    
+    // 处理 base64 数据 URL
+    if (url.startsWith('data:')) {
+      console.log('[NodeContextMenu] 处理 base64 数据 URL')
+      const response = await fetch(url)
+      blob = await response.blob()
+    } 
+    // 处理 blob URL
+    else if (url.startsWith('blob:')) {
+      console.log('[NodeContextMenu] 处理 blob URL')
+      const response = await fetch(url)
+      blob = await response.blob()
+    }
+    // 处理其他 URL（API 路径等）
+    else {
+      let fetchUrl = url
+      // 相对路径转完整 URL
+      if (url.startsWith('/api/') || url.startsWith('/storage/')) {
+        fetchUrl = getApiUrl(url)
+      }
+      
+      console.log('[NodeContextMenu] 获取文件:', fetchUrl?.substring(0, 80))
+      
+      // 获取文件内容
+      const response = await fetch(fetchUrl, {
+        headers: getTenantHeaders()
+      })
+      
+      if (!response.ok) {
+        throw new Error(`获取文件失败: ${response.status}`)
+      }
+      
+      blob = await response.blob()
+    }
+    
+    const ext = type === 'video' ? 'mp4' : type === 'audio' ? 'mp3' : 'png'
+    const mimeType = blob.type || (type === 'video' ? 'video/mp4' : type === 'audio' ? 'audio/mp3' : 'image/png')
+    const file = new File([blob], `asset_${Date.now()}.${ext}`, { type: mimeType })
+    
+    console.log('[NodeContextMenu] 上传文件:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
+    
+    // 上传到服务器（服务器会自动上传到七牛云）
+    const urls = await uploadImages([file])
+    if (urls && urls.length > 0) {
+      console.log('[NodeContextMenu] 上传成功，云端 URL:', urls[0])
+      return urls[0]
+    }
+    
+    throw new Error('上传返回空 URL')
+  } catch (error) {
+    console.error('[NodeContextMenu] 上传到云端失败:', error)
+    throw error
+  }
+}
+
 // 加入我的资产（通用方法，支持所有类型）
 async function addToMyAssets() {
   if (!canAddToAssets.value || isAddingAsset.value) return
@@ -423,11 +549,29 @@ async function addToMyAssets() {
       const shortContent = textContent.value.slice(0, 30).replace(/\n/g, ' ')
       assetData.name = shortContent + (textContent.value.length > 30 ? '...' : '')
     } else if (type === 'image') {
-      assetData.url = imageUrl.value
+      let url = imageUrl.value
+      // 如果是本地 URL，先上传到云端
+      if (needsUploadToCloud(url)) {
+        showToast('正在上传图片到云端...', 'info')
+        url = await uploadToCloudForAsset(url, 'image')
+      }
+      assetData.url = url
     } else if (type === 'video') {
-      assetData.url = videoUrl.value
+      let url = videoUrl.value
+      // 如果是本地 URL，先上传到云端
+      if (needsUploadToCloud(url)) {
+        showToast('正在上传视频到云端...', 'info')
+        url = await uploadToCloudForAsset(url, 'video')
+      }
+      assetData.url = url
     } else if (type === 'audio') {
-      assetData.url = audioUrl.value
+      let url = audioUrl.value
+      // 如果是本地 URL，先上传到云端
+      if (needsUploadToCloud(url)) {
+        showToast('正在上传音频到云端...', 'info')
+        url = await uploadToCloudForAsset(url, 'audio')
+      }
+      assetData.url = url
     }
     
     // 调用API保存
@@ -567,13 +711,17 @@ function handleMenuClick(event) {
     </template>
     
     <!-- 节点操作 -->
-    <div class="canvas-context-menu-item" @click="editNode">
-      <span class="icon">✎</span>
-      {{ $t('canvas.contextMenu.editNode') }}
-    </div>
     <div class="canvas-context-menu-item" @click="copyNode">
       <span class="icon">⧉</span>
       {{ $t('canvas.contextMenu.copyNode') }}
+    </div>
+    <div
+      class="canvas-context-menu-item"
+      :class="{ disabled: !canvasStore.hasClipboard }"
+      @click="canvasStore.hasClipboard && pasteNode()"
+    >
+      <span class="icon">📋</span>
+      {{ $t('canvas.contextMenu.pasteNode') }}
     </div>
     <div class="canvas-context-menu-item delete-item" @click="deleteNode">
       <span class="icon">⌫</span>
@@ -625,6 +773,12 @@ function handleMenuClick(event) {
 .delete-item:hover {
   background: rgba(239, 68, 68, 0.2) !important;
   color: #f87171;
+}
+
+.canvas-context-menu-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 /* 全屏预览模态框 */

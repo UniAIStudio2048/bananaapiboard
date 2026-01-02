@@ -175,7 +175,7 @@ export async function getImageTaskStatus(taskId) {
  * 查询视频任务状态
  */
 export async function getVideoTaskStatus(taskId) {
-  const response = await fetch(getApiUrl(`/api/video/tasks/${taskId}`), {
+  const response = await fetch(getApiUrl(`/api/videos/task/${taskId}`), {
     headers: getHeaders()
   })
   

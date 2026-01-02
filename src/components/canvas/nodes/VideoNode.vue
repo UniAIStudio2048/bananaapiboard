@@ -13,12 +13,12 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels } from '@/config/tenant'
 import { uploadImages } from '@/api/canvas/nodes'
-import { registerTask, subscribeTask } from '@/stores/canvas/backgroundTaskManager'
+import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 
-const { t } = useI18n()
+const { t, currentLanguage } = useI18n()
 
 const props = defineProps({
   id: String,
@@ -152,6 +152,58 @@ const VEO3_MODELS = ['veo3.1-components', 'veo3.1', 'veo3.1-pro']
 // 当前模型是否为VEO3系列
 const isVeo3Model = computed(() => VEO3_MODELS.includes(selectedModel.value))
 
+// Sora2模型列表（支持高级选项：trim、style、storyboard）
+const SORA2_MODELS = ['sora2', 'sora2-pro', 'sora-2', 'sora-2-pro']
+
+// 当前模型是否为Sora2系列
+const isSora2Model = computed(() => {
+  const modelName = selectedModel.value?.toLowerCase() || ''
+  return modelName.includes('sora2') || modelName.includes('sora-2')
+})
+
+// Sora2 高级选项
+const showSora2AdvancedOptions = ref(false)
+const trimFirstFrame = ref(false)  // 是否去掉首帧
+const storyboardMode = ref(false)  // 故事板模式
+const selectedStyles = ref([])     // 选中的风格标签（英文值数组）
+
+// Sora2 风格选项（支持多语言）
+const SORA2_STYLE_OPTIONS = [
+  { value: 'anime', labels: { 'zh-CN': '动漫', 'zh-TW': '動漫', 'en': 'Anime', 'ja': 'アニメ', 'ko': '애니메이션' } },
+  { value: 'selfie', labels: { 'zh-CN': '自拍', 'zh-TW': '自拍', 'en': 'Selfie', 'ja': 'セルフィー', 'ko': '셀카' } },
+  { value: 'golden', labels: { 'zh-CN': '金色', 'zh-TW': '金色', 'en': 'Golden', 'ja': 'ゴールデン', 'ko': '골든' } },
+  { value: 'handheld', labels: { 'zh-CN': '手持', 'zh-TW': '手持', 'en': 'Handheld', 'ja': 'ハンドヘルド', 'ko': '핸드헬드' } },
+  { value: 'festive', labels: { 'zh-CN': '节日', 'zh-TW': '節日', 'en': 'Festive', 'ja': 'フェスティブ', 'ko': '축제' } },
+  { value: 'retro', labels: { 'zh-CN': '复古', 'zh-TW': '復古', 'en': 'Retro', 'ja': 'レトロ', 'ko': '레트로' } },
+  { value: 'news', labels: { 'zh-CN': '新闻', 'zh-TW': '新聞', 'en': 'News', 'ja': 'ニュース', 'ko': '뉴스' } },
+  { value: 'chaos', labels: { 'zh-CN': '混乱', 'zh-TW': '混亂', 'en': 'Chaos', 'ja': 'カオス', 'ko': '카오스' } },
+  { value: 'vintage', labels: { 'zh-CN': '老式', 'zh-TW': '老式', 'en': 'Vintage', 'ja': 'ヴィンテージ', 'ko': '빈티지' } },
+  { value: 'comic', labels: { 'zh-CN': '漫画', 'zh-TW': '漫畫', 'en': 'Comic', 'ja': 'コミック', 'ko': '만화' } }
+]
+
+// 获取当前语言的风格标签
+const getStyleLabel = (style) => {
+  const lang = currentLanguage.value || 'zh-CN'
+  const langKey = lang.startsWith('zh') ? (lang.includes('TW') ? 'zh-TW' : 'zh-CN') : 
+                  ['en', 'ja', 'ko'].includes(lang) ? lang : 'en'
+  return style.labels[langKey] || style.labels['en']
+}
+
+// 切换风格标签选择
+const toggleStyle = (styleValue) => {
+  const index = selectedStyles.value.indexOf(styleValue)
+  if (index > -1) {
+    selectedStyles.value.splice(index, 1)
+  } else {
+    selectedStyles.value.push(styleValue)
+  }
+}
+
+// 检查风格是否被选中
+const isStyleSelected = (styleValue) => {
+  return selectedStyles.value.includes(styleValue)
+}
+
 // 获取当前选中的模型对象
 const currentModelConfig = computed(() => {
   return models.value.find(m => m.value === selectedModel.value) || {}
@@ -200,6 +252,102 @@ const durations = computed(() => {
   }))
 })
 
+// 处理后台任务完成事件
+function handleBackgroundTaskComplete(event) {
+  const { taskId, task } = event.detail
+  // 只处理属于当前节点的任务
+  if (task.nodeId !== props.id) return
+  
+  console.log(`[VideoNode] 后台任务完成事件: ${taskId}`, task)
+  
+  // 获取视频URL
+  const videoUrl = task.result?.video_url || task.result?.url
+  if (videoUrl) {
+    canvasStore.updateNodeData(props.id, {
+      status: 'success',
+      output: {
+        type: 'video',
+        url: videoUrl
+      },
+      taskId: taskId,
+      soraTaskId: task.result?.task_id || taskId
+    })
+  }
+  
+  // 移除已完成的任务
+  removeCompletedTask(taskId)
+}
+
+// 处理后台任务失败事件
+function handleBackgroundTaskFailed(event) {
+  const { taskId, task } = event.detail
+  if (task.nodeId !== props.id) return
+  
+  console.log(`[VideoNode] 后台任务失败事件: ${taskId}`, task)
+  
+  canvasStore.updateNodeData(props.id, {
+    status: 'error',
+    error: task.error || '视频生成失败'
+  })
+  
+  removeCompletedTask(taskId)
+}
+
+// 处理后台任务进度事件
+function handleBackgroundTaskProgress(event) {
+  const { taskId, task } = event.detail
+  if (task.nodeId !== props.id) return
+  
+  // 更新进度
+  if (task.result?.progress) {
+    canvasStore.updateNodeData(props.id, {
+      progress: task.result.progress
+    })
+  }
+}
+
+// 检查并恢复已完成的后台任务
+function checkAndRestoreBackgroundTasks() {
+  const nodeTasks = getTasksByNodeId(props.id)
+  
+  for (const task of nodeTasks) {
+    console.log(`[VideoNode] 检查后台任务: ${task.taskId}`, task.status)
+    
+    if (task.status === 'completed') {
+      const videoUrl = task.result?.video_url || task.result?.url
+      if (videoUrl) {
+        console.log(`[VideoNode] 恢复已完成的任务: ${task.taskId}`)
+        canvasStore.updateNodeData(props.id, {
+          status: 'success',
+          output: {
+            type: 'video',
+            url: videoUrl
+          },
+          taskId: task.taskId,
+          soraTaskId: task.result?.task_id || task.taskId
+        })
+        removeCompletedTask(task.taskId)
+      }
+    } else if (task.status === 'failed') {
+      console.log(`[VideoNode] 恢复失败的任务: ${task.taskId}`)
+      canvasStore.updateNodeData(props.id, {
+        status: 'error',
+        error: task.error || '视频生成失败'
+      })
+      removeCompletedTask(task.taskId)
+    } else if (task.status === 'processing' || task.status === 'pending') {
+      // 任务仍在进行中，更新进度显示
+      console.log(`[VideoNode] 任务仍在进行中: ${task.taskId}`)
+      if (props.data.status !== 'processing') {
+        canvasStore.updateNodeData(props.id, {
+          status: 'processing',
+          progress: task.result?.progress || task.progress || '生成中...'
+        })
+      }
+    }
+  }
+}
+
 // 初始化时确保时长选项有效
 onMounted(() => {
   // 如果当前模型支持时长选择，但当前选中的时长不在可用列表中，则重置为第一个可用时长
@@ -209,10 +357,23 @@ onMounted(() => {
   
   // 添加点击外部关闭下拉框的事件监听
   document.addEventListener('click', handleModelDropdownClickOutside)
+  
+  // 监听后台任务事件
+  window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
+  window.addEventListener('background-task-failed', handleBackgroundTaskFailed)
+  window.addEventListener('background-task-progress', handleBackgroundTaskProgress)
+  
+  // 检查是否有已完成的后台任务需要恢复
+  checkAndRestoreBackgroundTasks()
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleModelDropdownClickOutside)
+  
+  // 移除后台任务事件监听
+  window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
+  window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
+  window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
 })
 
 // 节点尺寸 - 视频节点使用16:9比例
@@ -868,6 +1029,22 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
     formData.append('duration', selectedDuration.value)
   }
   
+  // Sora2 模型特有参数
+  if (isSora2Model.value) {
+    // storyboard 故事板模式（默认关闭，开启时传 true）
+    if (storyboardMode.value) {
+      formData.append('storyboard', 'true')
+    }
+    // trim 参数（去掉首帧）
+    if (trimFirstFrame.value) {
+      formData.append('trim', 'true')
+    }
+    // style 参数（多选，逗号分隔）
+    if (selectedStyles.value.length > 0) {
+      formData.append('style', selectedStyles.value.join(','))
+    }
+  }
+  
   // 如果有参考图片，添加图片 URL
   if (finalImages.length > 0) {
     for (const imageUrl of finalImages) {
@@ -1013,6 +1190,12 @@ async function pollVideoTaskForNode(taskId, nodeId) {
   const startTime = Date.now()
   
   return new Promise((resolve, reject) => {
+    // 轮询状态：用于处理临时URL等待云存储URL的场景
+    const pollState = {
+      waitedForCloudUrl: false,
+      cloudUrlWaitCount: 0
+    }
+    
     const poll = async () => {
       try {
         // 检查超时
@@ -1046,6 +1229,25 @@ async function pollVideoTaskForNode(taskId, nodeId) {
         if (status === 'completed' || status === 'success') {
           const videoUrl = data.video_url || data.url
           if (videoUrl) {
+            // 检查是否是临时外部URL（如即梦视频的capcut.com URL）
+            // 这些临时URL可能有跨域问题或会过期，需要等待后端上传到云存储
+            const isTemporaryUrl = videoUrl.includes('capcut.com') || 
+                                   videoUrl.includes('bytedance.com') ||
+                                   videoUrl.includes('douyinvod.com')
+            
+            // 如果是临时URL，且还没有等待过云存储URL，继续轮询几次
+            if (isTemporaryUrl && !pollState.waitedForCloudUrl) {
+              pollState.cloudUrlWaitCount = (pollState.cloudUrlWaitCount || 0) + 1
+              // 最多额外等待3次（约12秒），让后端完成异步上传
+              if (pollState.cloudUrlWaitCount <= 3) {
+                console.log(`[VideoNode] 检测到临时URL，等待云存储URL (第${pollState.cloudUrlWaitCount}次)...`)
+                setTimeout(poll, POLL_INTERVAL)
+                return
+              }
+              pollState.waitedForCloudUrl = true
+              console.log('[VideoNode] 云存储URL等待超时，使用临时URL')
+            }
+            
             canvasStore.updateNodeData(nodeId, {
               status: 'success',
               output: {
@@ -1247,6 +1449,12 @@ async function pollVideoTask(taskId) {
   const POLL_INTERVAL = 4000 // 4秒轮询一次
   const startTime = Date.now()
   
+  // 轮询状态：用于处理临时URL等待云存储URL的场景
+  const pollState = {
+    waitedForCloudUrl: false,
+    cloudUrlWaitCount: 0
+  }
+  
   const poll = async () => {
     try {
       // 检查超时
@@ -1278,6 +1486,23 @@ async function pollVideoTask(taskId) {
       if (status === 'completed' || status === 'success') {
         const videoUrl = data.video_url || data.url
         if (videoUrl) {
+          // 检查是否是临时外部URL（如即梦视频的capcut.com URL）
+          const isTemporaryUrl = videoUrl.includes('capcut.com') || 
+                                 videoUrl.includes('bytedance.com') ||
+                                 videoUrl.includes('douyinvod.com')
+          
+          // 如果是临时URL，且还没有等待过云存储URL，继续轮询几次
+          if (isTemporaryUrl && !pollState.waitedForCloudUrl) {
+            pollState.cloudUrlWaitCount++
+            if (pollState.cloudUrlWaitCount <= 3) {
+              console.log(`[VideoNode] 检测到临时URL，等待云存储URL (第${pollState.cloudUrlWaitCount}次)...`)
+              setTimeout(poll, POLL_INTERVAL)
+              return
+            }
+            pollState.waitedForCloudUrl = true
+            console.log('[VideoNode] 云存储URL等待超时，使用临时URL')
+          }
+          
           canvasStore.updateNodeData(props.id, {
             status: 'success',
             output: {
@@ -1907,16 +2132,70 @@ function handleVideoTimeUpdate(event) {
   }
 }
 
-// 视频加载错误处理
-function handleVideoError(event) {
+// 视频加载错误处理 - 自动重新获取最新视频URL
+// 用于处理即梦等视频API返回临时URL后，后端异步上传到云存储的场景
+let videoRetryCount = 0
+const MAX_VIDEO_RETRY = 3
+
+async function handleVideoError(event) {
   const video = event.target
   const error = video.error
+  const taskId = props.data?.taskId || props.data?.soraTaskId
+  
   console.error('[VideoNode] 视频加载失败:', {
     originalUrl: props.data.output?.url?.substring(0, 60),
     normalizedUrl: normalizedVideoUrl.value?.substring(0, 60),
     errorCode: error?.code,
-    errorMessage: error?.message
+    errorMessage: error?.message,
+    taskId,
+    retryCount: videoRetryCount
   })
+  
+  // 如果有任务ID且还有重试次数，尝试重新获取最新的视频URL
+  if (taskId && videoRetryCount < MAX_VIDEO_RETRY) {
+    videoRetryCount++
+    console.log(`[VideoNode] 尝试重新获取视频URL (第${videoRetryCount}次)...`)
+    
+    try {
+      // 等待2秒后重试（给后端时间完成异步上传）
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
+      const token = localStorage.getItem('token')
+      const response = await fetch(`/api/videos/task/${taskId}`, {
+        headers: { 
+          ...getTenantHeaders(), 
+          ...(token ? { Authorization: `Bearer ${token}` } : {}) 
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        const newVideoUrl = data.video_url || data.url
+        
+        // 如果获取到新的视频URL且与当前不同，更新节点
+        if (newVideoUrl && newVideoUrl !== props.data.output?.url) {
+          console.log('[VideoNode] 获取到新的视频URL:', newVideoUrl.substring(0, 60))
+          canvasStore.updateNodeData(props.id, {
+            output: {
+              type: 'video',
+              url: newVideoUrl
+            }
+          })
+          // 重置重试计数（新URL可能也需要重试）
+          videoRetryCount = 0
+          return
+        }
+      }
+    } catch (e) {
+      console.error('[VideoNode] 重新获取视频URL失败:', e.message)
+    }
+  }
+  
+  // 超过最大重试次数，显示错误状态
+  if (videoRetryCount >= MAX_VIDEO_RETRY) {
+    console.error('[VideoNode] 视频重试次数已达上限，标记为错误状态')
+    // 不直接更新为错误状态，保留视频预览区域让用户可以手动重试
+  }
 }
 
 // 鼠标进入视频区域 - 自动播放（带声音）
@@ -3183,6 +3462,56 @@ function handleToolbarPreview() {
           </button>
         </div>
       </div>
+      
+      <!-- Sora2 高级选项 -->
+      <template v-if="isSora2Model">
+        <!-- 展开/收起按钮 -->
+        <button class="sora2-collapse-trigger" @click="showSora2AdvancedOptions = !showSora2AdvancedOptions">
+          <span class="sora2-collapse-icon" :class="{ 'expanded': showSora2AdvancedOptions }">∧</span>
+          <span>{{ showSora2AdvancedOptions ? t('common.collapse') : t('common.expand') }}</span>
+        </button>
+        
+        <!-- 高级选项内容 -->
+        <Transition name="slide-down">
+          <div v-if="showSora2AdvancedOptions" class="sora2-advanced-options">
+            <!-- 去掉首帧开关 -->
+            <div class="sora2-option-row">
+              <span class="sora2-option-label">{{ t('canvas.videoNode.trimFirstFrame') }}</span>
+              <label class="sora2-toggle-switch">
+                <input type="checkbox" v-model="trimFirstFrame" />
+                <span class="sora2-toggle-slider"></span>
+              </label>
+            </div>
+            
+            <!-- 故事板模式开关 -->
+            <div class="sora2-option-row">
+              <span class="sora2-option-label">{{ t('canvas.videoNode.storyboardMode') }}</span>
+              <label class="sora2-toggle-switch">
+                <input type="checkbox" v-model="storyboardMode" />
+                <span class="sora2-toggle-slider"></span>
+              </label>
+            </div>
+            
+            <!-- 风格标签选择 -->
+            <div class="sora2-option-row vertical">
+              <div class="sora2-option-header">
+                <span class="sora2-option-label">{{ t('canvas.videoNode.styleLabel') }}</span>
+                <span class="sora2-tag-count">({{ selectedStyles.length }}/{{ SORA2_STYLE_OPTIONS.length }})</span>
+              </div>
+              <div class="sora2-style-tags">
+                <button
+                  v-for="style in SORA2_STYLE_OPTIONS"
+                  :key="style.value"
+                  @click="toggleStyle(style.value)"
+                  :class="['sora2-style-tag', { selected: isStyleSelected(style.value) }]"
+                >
+                  {{ getStyleLabel(style) }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </Transition>
+      </template>
     </div>
   </div>
 </template>
@@ -4912,5 +5241,240 @@ function handleToolbarPreview() {
 /* 节点标签 - 白昼模式 */
 :root.canvas-theme-light .video-node .node-label {
   color: #3b82f6;
+}
+
+/* ==================== Sora2 高级选项样式 ==================== */
+
+/* 展开/收起按钮 */
+.sora2-collapse-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  border-top: 1px solid #2a2a2a;
+  color: #666666;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sora2-collapse-trigger:hover {
+  color: #888888;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sora2-collapse-icon {
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+.sora2-collapse-icon.expanded {
+  transform: rotate(180deg);
+}
+
+/* 高级选项容器 */
+.sora2-advanced-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border-top: 1px solid #2a2a2a;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* 选项行 */
+.sora2-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sora2-option-row.vertical {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.sora2-option-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.sora2-option-label {
+  font-size: 13px;
+  color: #cccccc;
+  font-weight: 500;
+}
+
+.sora2-tag-count {
+  font-size: 11px;
+  color: #555555;
+  margin-left: auto;
+}
+
+/* 开关样式 */
+.sora2-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+
+.sora2-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.sora2-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #333333;
+  border-radius: 22px;
+  transition: 0.3s;
+}
+
+.sora2-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #666666;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.sora2-toggle-switch input:checked + .sora2-toggle-slider {
+  background-color: #ffffff;
+}
+
+.sora2-toggle-switch input:checked + .sora2-toggle-slider:before {
+  transform: translateX(18px);
+  background-color: #000000;
+}
+
+/* 风格标签选择 */
+.sora2-style-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.sora2-style-tag {
+  padding: 5px 10px;
+  border: 1px solid #333333;
+  background: #252525;
+  color: #aaaaaa;
+  font-size: 12px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.sora2-style-tag:hover {
+  border-color: #555555;
+  background: #2a2a2a;
+  color: #ffffff;
+}
+
+.sora2-style-tag.selected {
+  border-color: #666666;
+  background: #ffffff;
+  color: #000000;
+  font-weight: 500;
+}
+
+/* 滑入动画 */
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.slide-down-enter-from,
+.slide-down-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.slide-down-enter-to,
+.slide-down-leave-from {
+  opacity: 1;
+  max-height: 300px;
+}
+
+/* Sora2 高级选项 - 白昼模式 */
+:root.canvas-theme-light .sora2-collapse-trigger {
+  border-top-color: rgba(0, 0, 0, 0.1);
+  color: #78716c;
+}
+
+:root.canvas-theme-light .sora2-collapse-trigger:hover {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .sora2-advanced-options {
+  border-top-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .sora2-option-label {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .sora2-tag-count {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .sora2-toggle-slider {
+  background-color: #e7e5e4;
+}
+
+:root.canvas-theme-light .sora2-toggle-slider:before {
+  background-color: #a8a29e;
+}
+
+:root.canvas-theme-light .sora2-toggle-switch input:checked + .sora2-toggle-slider {
+  background-color: #1c1917;
+}
+
+:root.canvas-theme-light .sora2-toggle-switch input:checked + .sora2-toggle-slider:before {
+  background-color: #ffffff;
+}
+
+:root.canvas-theme-light .sora2-style-tag {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: #f5f5f4;
+  color: #57534e;
+}
+
+:root.canvas-theme-light .sora2-style-tag:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  background: #e7e5e4;
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .sora2-style-tag.selected {
+  border-color: #1c1917;
+  background: #1c1917;
+  color: #ffffff;
 }
 </style>

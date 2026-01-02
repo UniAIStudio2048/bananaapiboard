@@ -443,7 +443,10 @@ export default {
       refVideo: '參考影片',
       uploadFailed: '影片上傳失敗，請重試',
       generateFailed: '生成失敗',
-      generating: '生成中...'
+      generating: '生成中...',
+      trimFirstFrame: '去掉首幀',
+      storyboardMode: '故事板模式',
+      styleLabel: '風格'
     },
     // 音訊節點快捷操作
     audioNode: {

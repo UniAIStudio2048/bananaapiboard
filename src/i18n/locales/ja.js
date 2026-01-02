@@ -281,6 +281,7 @@ export default {
       saving: '保存中...',
       editNode: 'ノードを編集',
       copyNode: 'ノードをコピー',
+      pasteNode: 'ノードを貼り付け',
       deleteNode: 'ノードを削除',
       assetSaved: '{type}がマイアセットに追加されました！',
       canvasGenerated: 'キャンバス生成'
@@ -514,7 +515,10 @@ export default {
       refVideo: '参照動画',
       uploadFailed: '動画のアップロードに失敗しました',
       generateFailed: '生成に失敗しました',
-      generating: '生成中...'
+      generating: '生成中...',
+      trimFirstFrame: '最初のフレームを削除',
+      storyboardMode: 'ストーリーボードモード',
+      styleLabel: 'スタイル'
     },
     // 音声ノードのクイックアクション
     audioNode: {

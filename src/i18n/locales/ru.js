@@ -433,7 +433,10 @@ export default {
       refVideo: 'Эталонное видео',
       uploadFailed: 'Ошибка загрузки видео',
       generateFailed: 'Ошибка генерации',
-      generating: 'Генерация...'
+      generating: 'Генерация...',
+      trimFirstFrame: 'Удалить первый кадр',
+      storyboardMode: 'Режим раскадровки',
+      styleLabel: 'Стиль'
     },
     audioNode: {
       lipSync: 'Синхронизация губ',

@@ -433,7 +433,10 @@ export default {
       refVideo: 'Referenzvideo',
       uploadFailed: 'Video-Upload fehlgeschlagen',
       generateFailed: 'Generierung fehlgeschlagen',
-      generating: 'Generiere...'
+      generating: 'Generiere...',
+      trimFirstFrame: 'Erstes Bild entfernen',
+      storyboardMode: 'Storyboard-Modus',
+      styleLabel: 'Stil'
     },
     audioNode: {
       lipSync: 'Lippensynchronisation',

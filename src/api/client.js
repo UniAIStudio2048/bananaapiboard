@@ -83,27 +83,15 @@ export async function uploadImages(files) {
   return j.urls || []
 }
 
-// 判断是否是七牛云 CDN URL（永久有效，可直接访问）
-function isQiniuCdnUrl(url) {
-  if (!url || typeof url !== 'string') return false
-  return url.includes('files.nananobanana.cn') ||  // 项目的七牛云域名
-         url.includes('qiniucdn.com') || 
-         url.includes('clouddn.com') || 
-         url.includes('qnssl.com') ||
-         url.includes('qbox.me')
-}
-
 export function buildDownloadUrl(url, filename) {
-  // 如果是七牛云 URL，直接返回原始 URL（永久有效链接，不需要代理）
-  if (isQiniuCdnUrl(url)) {
-    return url
-  }
-  
+  // 本地文件路径，使用专用下载接口
   if (url && url.startsWith('/api/images/file/')) {
     const id = url.split('/').pop()
     const q = filename ? `?filename=${encodeURIComponent(filename)}` : ''
     return getApiUrl(`/api/images/download/${id}${q}`)
   }
+  // 所有外部URL（包括七牛云），统一走后端代理下载
+  // 后端会设置 Content-Disposition: attachment 头，解决跨域下载问题
   const params = new URLSearchParams({ url, filename })
   return getApiUrl(`/api/images/download?${params.toString()}`)
 }

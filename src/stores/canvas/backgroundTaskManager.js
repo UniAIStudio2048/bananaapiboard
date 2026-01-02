@@ -149,16 +149,17 @@ function startPolling(taskId) {
         task.progress = result.progress
       }
       
-      // 检查是否完成
-      if (result.status === 'completed' || result.status === 'success' || result.url) {
+      // 检查是否完成（支持大小写状态）
+      const statusLower = (result.status || '').toLowerCase()
+      if (statusLower === 'completed' || statusLower === 'success' || result.url || result.video_url) {
         task.status = 'completed'
         task.result = result
         stopPolling(taskId)
         notifyTaskComplete(taskId, task)
         console.log(`[BackgroundTaskManager] 任务完成: ${taskId}`)
-      } else if (result.status === 'failed' || result.status === 'error') {
+      } else if (statusLower === 'failed' || statusLower === 'error' || statusLower === 'failure') {
         task.status = 'failed'
-        task.error = result.error || '任务执行失败'
+        task.error = result.error || result.fail_reason || '任务执行失败'
         stopPolling(taskId)
         notifyTaskFailed(taskId, task)
         console.log(`[BackgroundTaskManager] 任务失败: ${taskId}`)

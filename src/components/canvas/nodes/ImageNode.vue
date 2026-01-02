@@ -547,6 +547,11 @@ const isSourceNode = computed(() => {
   return props.data.nodeRole === 'source'
 })
 
+// 判断是否来自历史记录或资产（不显示上传按钮）
+const isFromHistoryOrAsset = computed(() => {
+  return props.data.fromHistory === true || props.data.fromAsset === true
+})
+
 // 判断是否有上游连接（用于显示输出状态而非快捷操作）
 // 动态检查是否真的有上游连接边，而不是依赖存储的状态
 const hasUpstream = computed(() => {
@@ -3049,8 +3054,8 @@ async function handleDrop(event) {
         </svg>
         <!-- ========== 源节点：显示上传的图片 ========== -->
         <template v-if="isSourceNode && hasSourceImage">
-          <!-- 上传按钮（右上角） -->
-          <button class="upload-overlay-btn" @click="handleReupload">
+          <!-- 上传按钮（右上角）- 只有本地上传的图片才显示，历史记录/资产中的不显示 -->
+          <button v-if="!isFromHistoryOrAsset" class="upload-overlay-btn" @click="handleReupload">
             <span class="upload-icon">↑</span>
             <span>上传</span>
           </button>
@@ -3681,21 +3686,25 @@ async function handleDrop(event) {
 }
 
 .source-image-preview img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
   border-radius: 12px;
   pointer-events: none;
   /* 添加轻微阴影增加层次感 */
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.2s ease, border 0.2s ease;
+  /* 选中时边框通过 border 实现，避免溢出 */
+  border: 2px solid transparent;
 }
 
 /* 源节点选中时 - 图片发光效果 */
 .image-node.is-source-node.selected .source-image-preview img {
+  border-color: var(--canvas-accent-primary, #3b82f6);
   box-shadow: 
     0 4px 20px rgba(0, 0, 0, 0.4),
-    0 0 0 2px var(--canvas-accent-primary, #3b82f6),
     0 0 20px rgba(59, 130, 246, 0.3);
 }
 
