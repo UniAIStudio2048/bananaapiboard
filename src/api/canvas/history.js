@@ -124,6 +124,47 @@ export async function getHistory(params = {}) {
     )
   }
   
+  // 音频历史请求
+  if (!params.type || params.type === 'all' || params.type === 'audio') {
+    requests.push(
+      fetch(`${getApiBase()}/api/music/history?_=${timestamp}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers,
+        cache: 'no-store'
+      })
+      .then(async res => {
+        if (!res.ok) return { type: 'audio', data: [] }
+        const data = await res.json()
+        return {
+          type: 'audio',
+          data: (data.data || []).filter(aud => aud.status === 'completed').map(aud => {
+            const displayTitle = aud.title || aud.prompt?.substring(0, 30) || '音乐'
+            return {
+              id: aud.id || aud.task_id,
+              task_id: aud.task_id,
+              type: 'audio',
+              name: displayTitle,
+              url: aud.audio_url,
+              thumbnail_url: aud.image_url || aud.image_large_url,
+              prompt: aud.prompt,
+              title: aud.title,
+              tags: aud.tags,
+              model: aud.model,
+              status: 'completed',
+              created_at: aud.created_at,
+              video_url: aud.video_url // 音乐MV
+            }
+          })
+        }
+      })
+      .catch(e => {
+        console.error('[History API] 获取音频历史失败:', e)
+        return { type: 'audio', data: [] }
+      })
+    )
+  }
+  
   // 并行执行所有请求
   const responses = await Promise.all(requests)
   
@@ -167,12 +208,17 @@ export async function getHistoryDetail(historyId) {
 /**
  * 删除历史记录
  * @param {string} historyId - 历史记录ID
- * @param {string} type - 类型 (image/video)
+ * @param {string} type - 类型 (image/video/audio)
  */
 export async function deleteHistory(historyId, type = 'image') {
-  const endpoint = type === 'video' 
-    ? `${getApiBase()}/api/videos/history/${historyId}`
-    : `${getApiBase()}/api/images/history/${historyId}`
+  let endpoint
+  if (type === 'video') {
+    endpoint = `${getApiBase()}/api/videos/history/${historyId}`
+  } else if (type === 'audio') {
+    endpoint = `${getApiBase()}/api/music/history/${historyId}`
+  } else {
+    endpoint = `${getApiBase()}/api/images/history/${historyId}`
+  }
     
   const response = await fetch(endpoint, {
     method: 'DELETE',

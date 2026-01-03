@@ -1096,6 +1096,17 @@ function goToHelp() {
   window.open('/help', '_blank')
 }
 
+// 打开帮助链接
+function openHelpLink(linkType) {
+  const helpLinks = appSettings.value.help_links || {}
+  const url = helpLinks[linkType]
+  if (url) {
+    window.open(url, '_blank')
+  } else {
+    console.warn(`[UserProfilePanel] 帮助链接未配置: ${linkType}`)
+  }
+}
+
 // 格式化时间
 function formatTime(ts) {
   return new Date(ts).toLocaleString('zh-CN')
@@ -1461,22 +1472,22 @@ function getLedgerTypeText(type) {
             <!-- 使用教程 -->
             <div v-else-if="activeMenu === 'help'" class="content-section">
               <div class="help-list">
-                <div class="help-item" @click="goToHelp">
+                <div class="help-item" @click="openHelpLink('quick_start')">
                   <span class="help-icon" v-html="icons.book"></span>
                   <span class="help-text">{{ t('user.quickStart') }}</span>
                   <span class="help-arrow">→</span>
                 </div>
-                <div class="help-item">
+                <div class="help-item" @click="openHelpLink('canvas_tutorial')">
                   <span class="help-icon" v-html="icons.brush"></span>
                   <span class="help-text">{{ t('user.canvasTutorial') }}</span>
                   <span class="help-arrow">→</span>
                 </div>
-                <div class="help-item">
+                <div class="help-item" @click="openHelpLink('ai_generate_tips')">
                   <span class="help-icon" v-html="icons.diamond"></span>
                   <span class="help-text">{{ t('user.aiGenerateTips') }}</span>
                   <span class="help-arrow">→</span>
                 </div>
-                <div class="help-item">
+                <div class="help-item" @click="openHelpLink('contact_support')">
                   <span class="help-icon" v-html="icons.message"></span>
                   <span class="help-text">{{ t('user.contactSupport') }}</span>
                   <span class="help-arrow">→</span>

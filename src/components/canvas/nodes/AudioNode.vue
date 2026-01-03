@@ -12,7 +12,7 @@
 import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
-import { getTenantHeaders, getAvailableMusicModels } from '@/config/tenant'
+import { getTenantHeaders, getAvailableMusicModels, refreshBrandConfig } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
@@ -78,6 +78,21 @@ watch(inheritedText, (newText) => {
     musicPrompt.value = newText
   }
 }, { immediate: true })
+
+// 监听音乐生成参数变化，保存到节点数据
+watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, makeInstrumental],
+  ([model, mode, prompt, t, tgs, ntgs, inst]) => {
+    canvasStore.updateNodeData(props.id, {
+      musicModel: model,
+      customMode: mode,
+      musicPrompt: prompt,
+      title: t,
+      tags: tgs,
+      negativeTags: ntgs,
+      makeInstrumental: inst
+    })
+  }
+)
 
 // 切换模型下拉框
 function toggleMusicModelDropdown(event) {
@@ -155,21 +170,40 @@ async function handleGenerateMusic() {
   })
 
   try {
-    const response = await apiClient.post('/api/music/generate', {
-      custom_mode: customMode.value ? '1' : '0',
-      prompt: musicPrompt.value,
-      title: customMode.value ? title.value : undefined,
-      tags: tags.value || undefined,
-      negative_tags: negativeTags.value || undefined,
-      model: selectedMusicModel.value,
-      make_instrumental: makeInstrumental.value ? '1' : '0'
-    }, {
-      headers: getTenantHeaders()
+    // 调试日志：确认发送前的参数值
+    console.log('[AudioNode] 发送参数:', {
+      customMode: customMode.value,
+      title: title.value,
+      tags: tags.value,
+      promptLength: musicPrompt.value?.length,
+      makeInstrumental: makeInstrumental.value
     })
     
-    console.log('[AudioNode] 音乐生成任务已提交:', response.data)
+    const requestBody = {
+      custom_mode: customMode.value ? '1' : '0',
+      prompt: musicPrompt.value,
+      model: selectedMusicModel.value,
+      make_instrumental: makeInstrumental.value ? '1' : '0'
+    }
+
+    // 自定义模式下才发送title（必填）
+    if (customMode.value && title.value) {
+      requestBody.title = title.value
+    }
+
+    // tags和negative_tags无论哪种模式都可以发送
+    if (tags.value) {
+      requestBody.tags = tags.value
+    }
+    if (negativeTags.value) {
+      requestBody.negative_tags = negativeTags.value
+    }
+
+    const response = await apiClient.post('/api/music/generate', requestBody)
     
-    const taskIds = response.data.task_ids || []
+    console.log('[AudioNode] 音乐生成任务已提交:', response)
+    
+    const taskIds = response.task_ids || []
     
     // 保存任务ID到节点数据
     canvasStore.updateNodeData(props.id, {
@@ -195,70 +229,98 @@ async function handleGenerateMusic() {
 
 // 轮询音乐生成状态
 async function pollMusicStatus(taskIds) {
-  const maxAttempts = 60 // 最多轮询2分钟
-  let attempts = 0
+  const startTime = Date.now()
+  const maxDuration = 15 * 60 * 1000 // 15分钟超时
+  const pollInterval = 3000 // 3秒轮询一次
   
   const poll = async () => {
-    if (attempts >= maxAttempts) {
+    const elapsed = Date.now() - startTime
+    const elapsedMinutes = Math.floor(elapsed / 60000)
+    const elapsedSeconds = Math.floor((elapsed % 60000) / 1000)
+    
+    // 15分钟超时
+    if (elapsed >= maxDuration) {
       canvasStore.updateNodeData(props.id, {
-        status: 'error',
-        error: '生成超时，请稍后查看历史记录'
+        status: 'timeout',
+        error: '生成超时（超过15分钟），请稍后查看历史记录'
       })
+      console.log('[AudioNode] 音乐生成超时')
       return
     }
     
-    attempts++
+    // 更新进度显示
+    canvasStore.updateNodeData(props.id, {
+      progress: `已等待 ${elapsedMinutes}:${elapsedSeconds.toString().padStart(2, '0')}`
+    })
     
     try {
       const promises = taskIds.map(taskId =>
-        apiClient.get(`/api/music/query/${taskId}`, {
-          headers: getTenantHeaders()
-        })
+        apiClient.get(`/api/music/query/${taskId}`)
       )
       
       const responses = await Promise.all(promises)
-      const histories = responses.map(r => r.data)
+      // apiClient 直接返回数据，不是 { data: ... } 格式
+      const results = responses.map(r => ({ status: r.status, data: r.data || r }))
       
-      const allCompleted = histories.every(h => h.status === 'completed')
-      const anyFailed = histories.some(h => h.status === 'failed')
-      const anyStreaming = histories.some(h => h.status === 'streaming')
+      console.log('[AudioNode] 轮询结果:', results)
+      
+      const allCompleted = results.every(r => r.status === 'completed')
+      const anyFailed = results.some(r => r.status === 'failed')
+      const anyStreaming = results.some(r => r.status === 'streaming')
       
       if (anyFailed) {
-        const failedSong = histories.find(h => h.status === 'failed')
+        const failedResult = results.find(r => r.status === 'failed')
         canvasStore.updateNodeData(props.id, {
           status: 'error',
-          error: failedSong.error_message || '生成失败',
-          musicHistory: histories
+          error: failedResult.data?.error_message || '生成失败',
+          progress: null
         })
+        console.log('[AudioNode] 音乐生成失败')
       } else if (allCompleted) {
         // 完成后更新节点数据
-        const firstSong = histories[0]
+        const firstResult = results[0]
+        const songData = firstResult.data
+        const songTitle = songData.title || '生成的音乐'
         canvasStore.updateNodeData(props.id, {
           status: 'success',
-          musicHistory: histories,
-          audioUrl: firstSong.audio_url || firstSong.audio_stream_url,
-          audioData: firstSong.audio_url || firstSong.audio_stream_url,
-          title: firstSong.title || '生成的音乐',
+          musicHistory: results.map(r => r.data),
+          audioUrl: songData.audio_url || songData.audio_stream_url,
+          audioData: songData.audio_url || songData.audio_stream_url,
+          title: songTitle,
+          label: songTitle, // 自动更新节点标签为歌曲名称
+          imageUrl: songData.image_large_url || songData.image_url,
+          videoUrl: songData.video_url,
+          progress: null,
           output: {
             type: 'audio',
-            url: firstSong.audio_url || firstSong.audio_stream_url
+            url: songData.audio_url || songData.audio_stream_url
           }
         })
+        // 同步更新本地标签显示
+        localLabel.value = songTitle
+        console.log('[AudioNode] ✅ 音乐生成完成:', songTitle)
         // 刷新用户积分
         window.dispatchEvent(new CustomEvent('user-info-updated'))
       } else if (anyStreaming) {
+        // 流式状态：音频预览就绪
+        const streamingResult = results.find(r => r.status === 'streaming')
         canvasStore.updateNodeData(props.id, {
           status: 'streaming',
-          musicHistory: histories
+          audioUrl: streamingResult.data?.audio_url,
+          title: streamingResult.data?.title,
+          imageUrl: streamingResult.data?.image_url
         })
-        setTimeout(poll, 2000)
+        console.log('[AudioNode] 音乐流式预览就绪')
+        setTimeout(poll, pollInterval)
       } else {
-        setTimeout(poll, 2000)
+        // 还在队列中
+        setTimeout(poll, pollInterval)
       }
       
     } catch (error) {
       console.error('[AudioNode] 轮询失败:', error)
-      setTimeout(poll, 2000)
+      // 网络错误继续重试
+      setTimeout(poll, pollInterval)
     }
   }
   
@@ -273,14 +335,60 @@ function handleMusicKeyDown(event) {
   }
 }
 
-// 组件挂载时添加全局点击事件监听
-onMounted(() => {
+// 自动调整文本框高度
+function autoResizeTextarea() {
+  const textarea = promptTextareaRef.value
+  if (!textarea) return
+  
+  // 重置高度以获取正确的 scrollHeight
+  textarea.style.height = 'auto'
+  
+  // 计算最小高度 (2行约48px) 和最大高度 (8行约200px)
+  const minHeight = 48
+  const maxHeight = 200
+  const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
+  
+  textarea.style.height = newHeight + 'px'
+}
+
+// 监听 musicPrompt 变化，自动调整高度
+watch(musicPrompt, () => {
+  nextTick(() => {
+    autoResizeTextarea()
+  })
+})
+
+// 处理提示词框滚轮事件（阻止冒泡，让滚轮作用于文本框滚动条）
+function handlePromptWheel(event) {
+  const textarea = promptTextareaRef.value
+  if (!textarea) return
+  
+  // 检查是否有内容需要滚动
+  const hasScroll = textarea.scrollHeight > textarea.clientHeight
+  if (hasScroll) {
+    // 阻止事件冒泡，让滚轮只作用于文本框
+    event.stopPropagation()
+  }
+}
+
+// 组件挂载时添加全局点击事件监听并刷新配置
+onMounted(async () => {
   document.addEventListener('click', handleMusicModelDropdownClickOutside)
+  document.addEventListener('click', handleSpeedDropdownClickOutside)
+  
+  // 刷新品牌配置以获取最新的音乐模型配置
+  try {
+    await refreshBrandConfig()
+    console.log('[AudioNode] 已刷新品牌配置，音乐模型:', musicModels.value)
+  } catch (e) {
+    console.warn('[AudioNode] 刷新品牌配置失败:', e)
+  }
 })
 
 // 组件卸载时移除监听
 onUnmounted(() => {
   document.removeEventListener('click', handleMusicModelDropdownClickOutside)
+  document.removeEventListener('click', handleSpeedDropdownClickOutside)
 })
 
 // 标签编辑状态
@@ -291,6 +399,7 @@ const localLabel = ref(props.data.label || 'Audio')
 // 文件上传引用
 const fileInputRef = ref(null)
 const audioRef = ref(null)
+const promptTextareaRef = ref(null)
 
 // 播放状态
 const isPlaying = ref(false)
@@ -299,6 +408,11 @@ const duration = ref(0)
 const volume = ref(props.data.volume ?? 1) // 音量 0-1
 const showVolumeIndicator = ref(false) // 是否显示音量指示器
 let volumeIndicatorTimer = null
+
+// 播放速度
+const playbackRate = ref(props.data.playbackRate || 1)
+const playbackRateOptions = [1, 1.25, 1.5, 1.75, 2, 2.5, 3]
+const showSpeedDropdown = ref(false)
 
 // 拖拽状态
 const isDragOver = ref(false)
@@ -328,9 +442,38 @@ const showConfigPanel = computed(() => {
   return props.selected === true
 })
 
+// ========== 音频工具栏相关 ==========
+// 是否显示工具栏（选中且有音频内容）- 与 ImageNode 保持一致
+const showToolbar = computed(() => {
+  return props.selected && hasAudio.value
+})
+
 // 是否有音频
 const hasAudio = computed(() => {
   return props.data?.audioUrl || props.data?.output?.url || props.data?.audioData
+})
+
+// 是否正在生成中
+const isGenerating = computed(() => {
+  const status = props.data?.status
+  return status === 'processing' || status === 'streaming' || status === 'queued'
+})
+
+// 生成状态信息
+const generatingStatus = computed(() => {
+  const status = props.data?.status
+  const progress = props.data?.progress
+  
+  if (status === 'processing' || status === 'queued') {
+    return { text: '生成中...', icon: '🎵', progress }
+  } else if (status === 'streaming') {
+    return { text: '流式预览就绪', icon: '🎶', progress }
+  } else if (status === 'timeout') {
+    return { text: '生成超时', icon: '⏰', progress: null }
+  } else if (status === 'error') {
+    return { text: props.data?.error || '生成失败', icon: '❌', progress: null }
+  }
+  return null
 })
 
 // 获取音频URL
@@ -623,6 +766,8 @@ function handleTimeUpdate() {
 function handleLoadedMetadata() {
   if (audioRef.value) {
     duration.value = audioRef.value.duration
+    // 应用保存的播放速度
+    audioRef.value.playbackRate = playbackRate.value
   }
 }
 
@@ -908,6 +1053,81 @@ function handleReupload() {
     status: 'idle'
   })
 }
+
+// ========== 工具栏处理函数 ==========
+
+// 下载音频
+async function handleToolbarDownload() {
+  const url = audioUrl.value
+  if (!url) return
+  
+  try {
+    let blob
+    
+    if (url.startsWith('data:')) {
+      // Base64 数据
+      const parts = url.split(',')
+      const mimeMatch = parts[0].match(/:(.*?);/)
+      const mime = mimeMatch ? mimeMatch[1] : 'audio/mpeg'
+      const binary = atob(parts[1])
+      const array = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) {
+        array[i] = binary.charCodeAt(i)
+      }
+      blob = new Blob([array], { type: mime })
+    } else {
+      // 远程 URL
+      const response = await fetch(url)
+      blob = await response.blob()
+    }
+    
+    // 创建下载链接
+    const downloadUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = downloadUrl
+    
+    // 生成文件名
+    const fileName = props.data?.title || props.data?.fileName || `audio_${Date.now()}`
+    const ext = blob.type.includes('mp3') ? '.mp3' : blob.type.includes('wav') ? '.wav' : '.mp3'
+    link.download = fileName.endsWith(ext) ? fileName : `${fileName}${ext}`
+    
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(downloadUrl)
+  } catch (error) {
+    console.error('[AudioNode] 下载失败:', error)
+  }
+}
+
+// 切换播放速度下拉
+function toggleSpeedDropdown(event) {
+  event.stopPropagation()
+  showSpeedDropdown.value = !showSpeedDropdown.value
+}
+
+// 选择播放速度
+function selectPlaybackRate(rate) {
+  playbackRate.value = rate
+  showSpeedDropdown.value = false
+  
+  // 更新音频元素的播放速度
+  if (audioRef.value) {
+    audioRef.value.playbackRate = rate
+  }
+  
+  // 保存到节点数据
+  canvasStore.updateNodeData(props.id, { playbackRate: rate })
+}
+
+// 点击外部关闭速度下拉
+function handleSpeedDropdownClickOutside(event) {
+  const dropdown = event.target.closest('.speed-dropdown')
+  if (!dropdown) {
+    showSpeedDropdown.value = false
+  }
+}
+
 </script>
 
 <template>
@@ -926,6 +1146,42 @@ function handleReupload() {
       id="input"
       class="node-handle node-handle-hidden"
     />
+    
+    <!-- 音频工具栏（选中且有音频时显示）- 与 ImageNode 保持一致 -->
+    <div v-if="showToolbar" class="audio-toolbar">
+      <!-- 倍速选择器 -->
+      <div class="speed-dropdown" @click.stop>
+        <button class="toolbar-btn speed-btn" title="播放速度" @click="toggleSpeedDropdown">
+          <span class="speed-value">{{ playbackRate }}x</span>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <!-- 速度下拉列表 -->
+        <Transition name="dropdown-fade">
+          <div v-if="showSpeedDropdown" class="speed-dropdown-list">
+            <div
+              v-for="rate in playbackRateOptions"
+              :key="rate"
+              class="speed-option"
+              :class="{ 'active': playbackRate === rate }"
+              @click="selectPlaybackRate(rate)"
+            >
+              {{ rate }}x
+            </div>
+          </div>
+        </Transition>
+      </div>
+      
+      <div class="toolbar-divider"></div>
+      
+      <!-- 下载按钮 -->
+      <button class="toolbar-btn icon-only" title="下载" @mousedown.prevent="handleToolbarDownload">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
     
     <!-- 节点标签 -->
     <div 
@@ -1038,6 +1294,23 @@ function handleReupload() {
           
         </div>
         
+        <!-- 生成中状态 -->
+        <div v-else-if="isGenerating || generatingStatus" class="node-content generating-state">
+          <div class="generating-indicator">
+            <div class="generating-icon" :class="{ spinning: isGenerating }">
+              {{ generatingStatus?.icon || '🎵' }}
+            </div>
+            <div class="generating-text">{{ generatingStatus?.text || '处理中...' }}</div>
+            <div v-if="generatingStatus?.progress" class="generating-progress">
+              {{ generatingStatus.progress }}
+            </div>
+            <!-- 流式预览：显示可播放的预览 -->
+            <div v-if="props.data?.status === 'streaming' && props.data?.audioUrl" class="streaming-preview">
+              <audio :src="props.data.audioUrl" controls class="streaming-audio"></audio>
+            </div>
+          </div>
+        </div>
+        
         <!-- 无音频时显示空状态 -->
         <div v-else class="node-content">
           <div class="empty-state">
@@ -1091,17 +1364,14 @@ function handleReupload() {
         <!-- 大文本输入区 -->
         <div class="prompt-area">
           <textarea
+            ref="promptTextareaRef"
             v-model="musicPrompt"
             class="prompt-textarea"
             placeholder="描述您想要的音乐。"
-            rows="4"
             @keydown="handleMusicKeyDown"
+            @wheel="handlePromptWheel"
+            @input="autoResizeTextarea"
           ></textarea>
-          <button class="expand-btn" title="展开">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
-            </svg>
-          </button>
         </div>
         
         <!-- 控制栏 -->
@@ -1123,7 +1393,12 @@ function handleReupload() {
             
             <!-- 模型下拉列表 -->
             <Transition name="dropdown-fade">
-              <div v-if="isMusicModelDropdownOpen" class="model-dropdown-list" @wheel="handleDropdownWheel">
+              <div 
+                v-if="isMusicModelDropdownOpen" 
+                class="model-dropdown-list"
+                :class="{ 'dropdown-up': dropdownDirection === 'up', 'dropdown-down': dropdownDirection === 'down' }"
+                @wheel="handleDropdownWheel"
+              >
                 <div
                   v-for="m in musicModels"
                   :key="m.value"
@@ -1248,6 +1523,119 @@ function handleReupload() {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+}
+
+/* ========== 音频工具栏（与 ImageNode 的 image-toolbar 保持一致） ========== */
+.audio-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 20px;
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.audio-toolbar .toolbar-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  border: none;
+  background: transparent;
+  color: #888;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.audio-toolbar .toolbar-btn:hover {
+  background: #3a3a3a;
+  color: #fff;
+}
+
+.audio-toolbar .toolbar-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.audio-toolbar .toolbar-btn.icon-only {
+  padding: 6px;
+}
+
+.audio-toolbar .toolbar-btn.icon-only span {
+  display: none;
+}
+
+.audio-toolbar .toolbar-divider {
+  width: 1px;
+  height: 20px;
+  background: #3a3a3a;
+  margin: 0 6px;
+}
+
+/* 倍速选择器 */
+.speed-dropdown {
+  position: relative;
+}
+
+.speed-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.speed-btn .speed-value {
+  font-weight: 500;
+  min-width: 32px;
+  text-align: center;
+}
+
+.speed-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.speed-dropdown-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e1e1e;
+  border: 1px solid #333333;
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  z-index: 300;
+  min-width: 80px;
+}
+
+.speed-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #888;
+  transition: all 0.15s;
+}
+
+.speed-option:hover {
+  background: #2a2a2a;
+  color: #fff;
+}
+
+.speed-option.active {
+  background: #3a3a3a;
+  color: #fff;
+  font-weight: 500;
 }
 
 /* 节点标签 */
@@ -1380,6 +1768,59 @@ function handleReupload() {
 
 .action-label {
   flex: 1;
+}
+
+/* 生成中状态 */
+.generating-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 120px;
+}
+
+.generating-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+}
+
+.generating-icon {
+  font-size: 32px;
+  animation: none;
+}
+
+.generating-icon.spinning {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.1); opacity: 0.8; }
+}
+
+.generating-text {
+  color: var(--canvas-text-secondary, #a0a0a0);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.generating-progress {
+  color: var(--canvas-accent-audio, #a855f7);
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.streaming-preview {
+  margin-top: 8px;
+  width: 100%;
+}
+
+.streaming-audio {
+  width: 100%;
+  height: 32px;
+  border-radius: 8px;
 }
 
 /* ========== 音频输出预览 ========== */
@@ -1724,47 +2165,58 @@ function handleReupload() {
 /* 提示词输入区域 */
 .prompt-area {
   position: relative;
-  padding: 20px 20px 16px;
+  padding: 16px 16px 12px;
 }
 
 .prompt-textarea {
   width: 100%;
-  min-height: 100px;
-  padding: 0;
+  min-height: 48px;
+  max-height: 200px;
+  padding: 4px 0;
   background: transparent;
   border: none;
   color: #ffffff;
-  font-size: 15px;
+  font-size: 14px;
   font-family: inherit;
   line-height: 1.6;
   resize: none;
   outline: none;
+  overflow-y: auto;
+  transition: height 0.15s ease;
+}
+
+/* 提示词框滚动条样式 - 黑白灰风格 */
+.prompt-textarea::-webkit-scrollbar {
+  width: 6px;
+}
+
+.prompt-textarea::-webkit-scrollbar-track {
+  background: rgba(60, 60, 60, 0.3);
+  border-radius: 3px;
+}
+
+.prompt-textarea::-webkit-scrollbar-thumb {
+  background: rgba(150, 150, 150, 0.6);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.prompt-textarea::-webkit-scrollbar-thumb:hover {
+  background: rgba(180, 180, 180, 0.8);
+}
+
+.prompt-textarea::-webkit-scrollbar-thumb:active {
+  background: rgba(200, 200, 200, 0.9);
+}
+
+/* Firefox 滚动条样式 */
+.prompt-textarea {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 150, 150, 0.6) rgba(60, 60, 60, 0.3);
 }
 
 .prompt-textarea::placeholder {
   color: #666666;
-}
-
-.expand-btn {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 28px;
-  height: 28px;
-  background: transparent;
-  border: none;
-  color: #666666;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s;
-}
-
-.expand-btn:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #ffffff;
 }
 
 /* 控制栏 */
@@ -1858,7 +2310,6 @@ function handleReupload() {
 /* 模型下拉列表 */
 .model-dropdown-list {
   position: absolute;
-  bottom: calc(100% + 8px);
   left: 0;
   right: 0;
   background: #1e1e1e;
@@ -1869,6 +2320,18 @@ function handleReupload() {
   z-index: 300;
   max-height: 300px;
   overflow-y: auto;
+}
+
+/* 向上弹出（默认） */
+.model-dropdown-list.dropdown-up {
+  bottom: calc(100% + 8px);
+  top: auto;
+}
+
+/* 向下弹出 */
+.model-dropdown-list.dropdown-down {
+  top: calc(100% + 8px);
+  bottom: auto;
 }
 
 .model-option {
@@ -1927,14 +2390,14 @@ function handleReupload() {
   white-space: nowrap;
 }
 
-/* 生成按钮 */
+/* 生成按钮 - 蓝色风格，与 ImageNode 一致 */
 .gen-btn {
-  width: 40px;
-  height: 40px;
-  background: #ffffff;
+  width: 36px;
+  height: 36px;
+  background: var(--canvas-accent-primary, #3b82f6);
   border: none;
   border-radius: 50%;
-  color: #000000;
+  color: #ffffff;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -1945,12 +2408,11 @@ function handleReupload() {
 
 .gen-btn:hover:not(:disabled) {
   transform: scale(1.05);
-  box-shadow: 0 4px 16px rgba(255, 255, 255, 0.2);
+  box-shadow: 0 0 16px rgba(59, 130, 246, 0.5);
 }
 
 .gen-btn:disabled {
-  background: #333333;
-  color: #666666;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 

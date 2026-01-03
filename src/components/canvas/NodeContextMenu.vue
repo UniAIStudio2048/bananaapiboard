@@ -520,76 +520,108 @@ async function uploadToCloudForAsset(url, type = 'image') {
 // 加入我的资产（通用方法，支持所有类型）
 async function addToMyAssets() {
   if (!canAddToAssets.value || isAddingAsset.value) return
-  
-  isAddingAsset.value = true
-  
+
+  const type = assetType.value
+  const now = new Date()
+  const timeStr = now.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+
+  // 构建资产数据
+  const assetData = {
+    type,
+    name: `${assetTypeName.value}_${timeStr}`,
+    source_node_id: props.node?.id,
+    source: 'canvas',
+    tags: [assetTypeName.value, t('canvas.contextMenu.canvasGenerated')]
+  }
+
+  // 获取需要保存的内容
+  let contentUrl = ''
+  if (type === 'text') {
+    assetData.content = textContent.value
+    // 使用内容前30个字符作为名称
+    const shortContent = textContent.value.slice(0, 30).replace(/\n/g, ' ')
+    assetData.name = shortContent + (textContent.value.length > 30 ? '...' : '')
+  } else if (type === 'image') {
+    contentUrl = imageUrl.value
+  } else if (type === 'video') {
+    contentUrl = videoUrl.value
+  } else if (type === 'audio') {
+    contentUrl = audioUrl.value
+  }
+
+  // 判断是否需要异步上传
+  const needsUpload = contentUrl && needsUploadToCloud(contentUrl)
+
+  if (needsUpload) {
+    // 异步上传模式：立即显示提示并关闭菜单，后台执行上传
+    isAddingAsset.value = true
+    showToast('开始添加到资产库...', 'info')
+    emit('close')
+
+    // 后台异步执行上传和保存
+    performAsyncUploadAndSave(assetData, contentUrl, type)
+      .then(() => {
+        showToast(`${assetTypeName.value}已成功加入资产库`, 'success')
+      })
+      .catch((error) => {
+        console.error('加入资产失败:', error)
+        showToast('添加失败：' + (error.message || '未知错误'), 'error')
+      })
+      .finally(() => {
+        isAddingAsset.value = false
+      })
+  } else {
+    // 同步模式：直接保存(文本内容或已有云端URL)
+    isAddingAsset.value = true
+
+    try {
+      if (contentUrl) {
+        assetData.url = contentUrl
+      }
+
+      const result = await saveAsset(assetData)
+
+      if (result && result.id) {
+        showToast(`${assetTypeName.value}已加入我的资产`, 'success')
+      } else {
+        throw new Error(result?.error || '保存失败')
+      }
+    } catch (error) {
+      console.error('加入资产失败:', error)
+      showToast('保存失败：' + (error.message || '未知错误'), 'error')
+    } finally {
+      isAddingAsset.value = false
+      emit('close')
+    }
+  }
+}
+
+// 异步上传并保存资产
+async function performAsyncUploadAndSave(assetData, contentUrl, type) {
   try {
-    const type = assetType.value
-    const now = new Date()
-    const timeStr = now.toLocaleString('zh-CN', { 
-      month: '2-digit', 
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-    
-    // 构建资产数据
-    const assetData = {
-      type,
-      name: `${assetTypeName.value}_${timeStr}`,
-      source_node_id: props.node?.id,
-      source: 'canvas',
-      tags: [assetTypeName.value, t('canvas.contextMenu.canvasGenerated')]
-    }
-    
-    // 根据类型设置内容
-    if (type === 'text') {
-      assetData.content = textContent.value
-      // 使用内容前30个字符作为名称
-      const shortContent = textContent.value.slice(0, 30).replace(/\n/g, ' ')
-      assetData.name = shortContent + (textContent.value.length > 30 ? '...' : '')
-    } else if (type === 'image') {
-      let url = imageUrl.value
-      // 如果是本地 URL，先上传到云端
-      if (needsUploadToCloud(url)) {
-        showToast('正在上传图片到云端...', 'info')
-        url = await uploadToCloudForAsset(url, 'image')
-      }
-      assetData.url = url
-    } else if (type === 'video') {
-      let url = videoUrl.value
-      // 如果是本地 URL，先上传到云端
-      if (needsUploadToCloud(url)) {
-        showToast('正在上传视频到云端...', 'info')
-        url = await uploadToCloudForAsset(url, 'video')
-      }
-      assetData.url = url
-    } else if (type === 'audio') {
-      let url = audioUrl.value
-      // 如果是本地 URL，先上传到云端
-      if (needsUploadToCloud(url)) {
-        showToast('正在上传音频到云端...', 'info')
-        url = await uploadToCloudForAsset(url, 'audio')
-      }
-      assetData.url = url
-    }
-    
-    // 调用API保存
+    // 上传到云端
+    console.log(`[NodeContextMenu] 异步上传${type}到云端...`)
+    const cloudUrl = await uploadToCloudForAsset(contentUrl, type)
+
+    // 更新资产数据
+    assetData.url = cloudUrl
+
+    // 保存到数据库
     const result = await saveAsset(assetData)
-    
-    // 后端成功时返回 { id, url, name, type }，检查是否有 id 表示成功
-    if (result && result.id) {
-      // 显示成功提示
-      showToast(`${assetTypeName.value}已加入我的资产`, 'success')
-    } else {
+
+    if (!result || !result.id) {
       throw new Error(result?.error || '保存失败')
     }
+
+    console.log(`[NodeContextMenu] ${type}资产保存成功:`, result.id)
   } catch (error) {
-    console.error('加入资产失败:', error)
-    showToast('保存失败：' + (error.message || '未知错误'), 'error')
-  } finally {
-    isAddingAsset.value = false
-    emit('close')
+    console.error(`[NodeContextMenu] 异步上传${type}失败:`, error)
+    throw error
   }
 }
 

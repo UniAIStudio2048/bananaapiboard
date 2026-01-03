@@ -21,6 +21,9 @@ const inviteRewards = ref({
   invitee_bonus: 0
 })
 
+// 注册与邀请设置
+const requireInviteCode = ref(false)
+
 // 邮箱验证相关
 const emailConfig = ref({
   require_email_verification: false,
@@ -50,7 +53,7 @@ const hasWhitelist = computed(() => {
          emailConfig.value.email_whitelist.length > 0
 })
 
-// 加载邀请奖励配置
+// 加载邀请奖励配置和注册设置
 async function loadInviteRewards() {
   try {
     const r = await fetch('/api/points-config')
@@ -59,8 +62,20 @@ async function loadInviteRewards() {
       if (data.inviter_bonus !== undefined) inviteRewards.value.inviter_bonus = data.inviter_bonus
       if (data.invitee_bonus !== undefined) inviteRewards.value.invitee_bonus = data.invitee_bonus
     }
+
+    // 加载注册与邀请设置
+    const settingsRes = await fetch('/api/settings/app', {
+      headers: getTenantHeaders()
+    })
+    if (settingsRes.ok) {
+      const settingsData = await settingsRes.json()
+      if (settingsData.settings?.require_invite_code !== undefined) {
+        requireInviteCode.value = settingsData.settings.require_invite_code
+        console.log('[Auth] 邀请码强制注册:', requireInviteCode.value)
+      }
+    }
   } catch (e) {
-    console.warn('加载邀请奖励配置失败', e)
+    console.warn('加载邀请配置失败', e)
   }
 }
 
@@ -228,7 +243,7 @@ async function submit() {
   
   // 获取实际使用的邮箱地址
   const email = fullEmail.value
-  
+
   // 注册时检查邮箱验证要求
   if (mode.value === 'register' && emailConfig.value.require_email_verification) {
     if (!email) {
@@ -246,7 +261,13 @@ async function submit() {
       return
     }
   }
-  
+
+  // 注册时检查邀请码要求
+  if (mode.value === 'register' && requireInviteCode.value && !inviteCode.value) {
+    error.value = '请输入邀请码，该租户已开启邀请码注册'
+    return
+  }
+
   loading.value = true
   try {
     const url = mode.value === 'register' ? '/api/auth/register' : '/api/auth/login'
@@ -481,15 +502,19 @@ async function submit() {
           <!-- 邀请码输入（仅注册时显示） -->
           <div v-if="mode === 'register' && !resetMode">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              🎁 邀请码（可选）
+              🎁 邀请码{{ requireInviteCode ? ' *' : '（可选）' }}
             </label>
-            <input 
-              v-model="inviteCode" 
-              type="text" 
+            <input
+              v-model="inviteCode"
+              type="text"
               class="input"
-              placeholder="请输入邀请码"
+              :placeholder="requireInviteCode ? '必填：请输入邀请码' : '请输入邀请码'"
+              :required="requireInviteCode"
             />
-            <p v-if="inviteRewardText" class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            <p v-if="requireInviteCode" class="mt-2 text-xs text-orange-500 dark:text-orange-400">
+              ⚠️ 该租户已开启邀请码注册，必须填写有效的邀请码
+            </p>
+            <p v-else-if="inviteRewardText" class="mt-2 text-xs text-slate-500 dark:text-slate-400">
               💡 填写邀请码即可获得奖励：{{ inviteRewardText }}
             </p>
           </div>
