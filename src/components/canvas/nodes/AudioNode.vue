@@ -2167,7 +2167,7 @@ function handleSpeedDropdownClickOutside(event) {
   border: 1px solid #2a2a2a;
   border-radius: 16px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
+  overflow: visible;
   z-index: 1000;
   pointer-events: auto;
 }
@@ -2333,7 +2333,7 @@ function handleSpeedDropdownClickOutside(event) {
   border-radius: 12px;
   padding: 8px;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
-  z-index: 300;
+  z-index: 9999;
   max-height: 300px;
   overflow-y: auto;
 }
@@ -2742,5 +2742,298 @@ function handleSpeedDropdownClickOutside(event) {
 .advanced-options::-webkit-scrollbar-thumb {
   background: #333333;
   border-radius: 3px;
+}
+</style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   AudioNode 白昼模式样式适配
+   ======================================== */
+
+/* 配置面板 - 白昼模式 */
+:root.canvas-theme-light .audio-node .config-panel {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* 音乐生成面板 */
+:root.canvas-theme-light .audio-node .music-gen-panel {
+  background: rgba(255, 255, 255, 0.98);
+}
+
+/* 提示词输入区域 */
+:root.canvas-theme-light .audio-node .prompt-area {
+  background: transparent;
+}
+
+:root.canvas-theme-light .audio-node .prompt-textarea {
+  background: transparent;
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-node .prompt-textarea::placeholder {
+  color: #a8a29e;
+}
+
+/* 控制栏 */
+:root.canvas-theme-light .audio-node .control-bar {
+  background: rgba(0, 0, 0, 0.02);
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+/* 类型选择器 */
+:root.canvas-theme-light .audio-node .type-selector {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .audio-node .type-selector:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .audio-node .type-icon {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .audio-node .type-label {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-node .type-arrow {
+  color: #78716c;
+}
+
+/* 模型选择器 */
+:root.canvas-theme-light .audio-node .model-trigger {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .audio-node .model-trigger:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .audio-node .model-icon {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .audio-node .model-name {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-node .model-arrow {
+  color: #78716c;
+}
+
+/* 模型下拉列表 */
+:root.canvas-theme-light .audio-node .model-dropdown-list {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .audio-node .model-option {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-node .model-option:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .audio-node .model-option.active {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+:root.canvas-theme-light .audio-node .option-name {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-node .option-desc {
+  color: #78716c;
+}
+
+/* 字数统计 */
+:root.canvas-theme-light .audio-node .char-count {
+  color: #a8a29e;
+}
+
+/* 积分徽章 */
+:root.canvas-theme-light .audio-node .points-badge {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .audio-node .points-icon {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .audio-node .points-value {
+  color: #1c1917;
+}
+
+/* 展开/收起按钮 */
+:root.canvas-theme-light .audio-node .collapse-trigger {
+  border-top-color: rgba(0, 0, 0, 0.06);
+  color: #78716c;
+}
+
+:root.canvas-theme-light .audio-node .collapse-trigger:hover {
+  background: rgba(0, 0, 0, 0.02);
+  color: #1c1917;
+}
+
+/* 高级选项 */
+:root.canvas-theme-light .audio-node .advanced-options {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .audio-node .option-label {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .audio-node .option-input {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-node .option-input:focus {
+  border-color: #3b82f6;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+:root.canvas-theme-light .audio-node .option-input::placeholder {
+  color: #a8a29e;
+}
+
+/* 开关 */
+:root.canvas-theme-light .audio-node .toggle-slider {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .audio-node .toggle-slider::before {
+  background: #78716c;
+}
+
+:root.canvas-theme-light .audio-node .toggle-switch input:checked + .toggle-slider {
+  background: #3b82f6;
+}
+
+:root.canvas-theme-light .audio-node .toggle-switch input:checked + .toggle-slider::before {
+  background: #ffffff;
+}
+
+/* 模式切换 */
+:root.canvas-theme-light .audio-node .mode-tabs {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .audio-node .mode-tab {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .audio-node .mode-tab:hover {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-node .mode-tab.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+/* 音频信息面板 */
+:root.canvas-theme-light .audio-node .audio-info-panel {
+  background: rgba(255, 255, 255, 0.98);
+}
+
+:root.canvas-theme-light .audio-node .audio-info-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .audio-node .audio-info-title {
+  color: #1c1917;
+}
+
+/* 音频操作按钮 */
+:root.canvas-theme-light .audio-node .audio-action-btn {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-node .audio-action-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* 工具栏 */
+:root.canvas-theme-light .audio-node .audio-toolbar {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .audio-node .audio-toolbar .toolbar-btn {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .audio-node .audio-toolbar .toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-node .audio-toolbar .toolbar-divider {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* 速度下拉 */
+:root.canvas-theme-light .audio-node .speed-dropdown-list {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .audio-node .speed-option {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .audio-node .speed-option:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-node .speed-option.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+/* 节点标签 */
+:root.canvas-theme-light .audio-node .node-label {
+  color: #a855f7;
+}
+
+/* 滚动条 */
+:root.canvas-theme-light .audio-node .model-dropdown-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .audio-node .model-dropdown-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .audio-node .model-dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .audio-node .prompt-textarea::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .audio-node .prompt-textarea::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .audio-node .prompt-textarea::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
 }
 </style>

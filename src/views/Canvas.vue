@@ -27,6 +27,8 @@ import InplaceImageEditor from '@/components/canvas/InplaceImageEditor.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import OnboardingGuide from '@/components/canvas/OnboardingGuide.vue'
 import AIAssistantPanel from '@/components/canvas/AIAssistantPanel.vue'
+import CanvasNotification from '@/components/canvas/CanvasNotification.vue'
+import CanvasSupport from '@/components/canvas/CanvasSupport.vue'
 import { useI18n } from '@/i18n'
 import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoSave, manualSave as saveToHistory } from '@/stores/canvas/workflowAutoSave'
 import { initBackgroundTaskManager, getPendingTasks, subscribeTask, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
@@ -1377,6 +1379,12 @@ onUnmounted(() => {
       
       <!-- 右上角控制区域 -->
       <div class="canvas-top-right-controls" :class="{ 'panel-open': showAIAssistant }">
+        <!-- 通知铃铛 -->
+        <CanvasNotification :theme="canvasTheme" />
+        
+        <!-- 客服支持 -->
+        <CanvasSupport :theme="canvasTheme" />
+
         <!-- 主题切换按钮 -->
         <button
           class="canvas-icon-btn canvas-theme-toggle"

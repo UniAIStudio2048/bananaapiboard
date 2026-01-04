@@ -5266,4 +5266,87 @@ async function handleDrop(event) {
 :root.canvas-theme-light .image-node .node-label {
   color: #f59e0b;
 }
+
+/* 预设选择器 - 白昼模式 */
+:root.canvas-theme-light .image-node .preset-selector-trigger {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .image-node .preset-selector-trigger:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .image-node .preset-icon {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .preset-name {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .preset-selector-trigger .select-arrow {
+  color: #78716c;
+}
+
+/* 预设下拉列表 - 白昼模式 */
+:root.canvas-theme-light .image-node .preset-dropdown-list {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-item {
+  border-bottom-color: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-item.active {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-divider {
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .image-node .divider-label {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .image-node .preset-item-label {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .preset-item-desc {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-item.preset-action {
+  color: #8b5cf6;
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-item.preset-action:hover {
+  background: rgba(139, 92, 246, 0.08);
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-item.preset-action .preset-item-label {
+  color: #8b5cf6;
+}
 </style>

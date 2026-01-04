@@ -102,6 +102,10 @@ const exchangeRate = ref(10) // 1元 = 10积分
 // 新手引导设置
 const onboardingEnabled = ref(localStorage.getItem('canvasOnboardingEnabled') === 'true')
 
+// 客服二维码弹窗
+const showSupportQrModal = ref(false)
+const supportQrImage = ref('')
+
 // 连线样式设置
 const edgeStyleOptions = [
   { value: 'smoothstep', labelKey: 'onboarding.settings.edgeStyleSmoothstep' },
@@ -1099,12 +1103,29 @@ function goToHelp() {
 // 打开帮助链接
 function openHelpLink(linkType) {
   const helpLinks = appSettings.value.help_links || {}
+  
+  // 特殊处理联系客服：如果有二维码图片，显示二维码弹窗
+  if (linkType === 'contact_support') {
+    const qrImage = helpLinks.contact_support_qr
+    if (qrImage) {
+      supportQrImage.value = qrImage
+      showSupportQrModal.value = true
+      return
+    }
+  }
+  
   const url = helpLinks[linkType]
   if (url) {
     window.open(url, '_blank')
   } else {
     console.warn(`[UserProfilePanel] 帮助链接未配置: ${linkType}`)
   }
+}
+
+// 关闭客服二维码弹窗
+function closeSupportQrModal() {
+  showSupportQrModal.value = false
+  supportQrImage.value = ''
 }
 
 // 格式化时间
@@ -2020,6 +2041,39 @@ function getLedgerTypeText(type) {
               :disabled="purchaseLoading || (purchaseInfo?.needOnlinePayment && !purchasePaymentMethod)"
             >
               {{ purchaseLoading ? '处理中...' : (purchaseInfo?.needOnlinePayment ? '去支付 →' : '确认购买') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 客服二维码弹窗 -->
+  <Teleport to="body">
+    <Transition name="modal-fade">
+      <div 
+        v-if="showSupportQrModal" 
+        class="support-qr-modal-overlay"
+        @click.self="closeSupportQrModal"
+      >
+        <div class="support-qr-modal">
+          <div class="support-qr-header">
+            <span>{{ t('user.contactSupport') }}</span>
+            <button class="support-qr-close" @click="closeSupportQrModal">×</button>
+          </div>
+          <div class="support-qr-body">
+            <img :src="supportQrImage" alt="客服二维码" class="support-qr-image" />
+            <p class="support-qr-tip">请使用微信扫描二维码</p>
+            <!-- 如果有链接也显示 -->
+            <button 
+              v-if="appSettings?.help_links?.contact_support"
+              class="support-qr-link-btn"
+              @click="() => { window.open(appSettings.help_links.contact_support, '_blank'); closeSupportQrModal(); }"
+            >
+              <svg class="link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              <span>{{ appSettings?.help_links?.contact_support_name || '在线客服' }}</span>
             </button>
           </div>
         </div>
@@ -4551,6 +4605,115 @@ function getLedgerTypeText(type) {
   .price-amount {
     font-size: 28px;
   }
+}
+
+/* 客服二维码弹窗 */
+.support-qr-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.support-qr-modal {
+  background: rgba(30, 30, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  min-width: 300px;
+  max-width: 360px;
+  overflow: hidden;
+}
+
+.support-qr-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.support-qr-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  border-radius: 6px;
+  font-size: 20px;
+  transition: all 0.2s;
+}
+
+.support-qr-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.support-qr-body {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.support-qr-image {
+  width: 200px;
+  height: 200px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: white;
+  padding: 8px;
+}
+
+.support-qr-tip {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0;
+}
+
+.support-qr-link-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  color: rgba(59, 130, 246, 1);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.support-qr-link-btn:hover {
+  background: rgba(59, 130, 246, 0.3);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.support-qr-link-btn .link-icon {
+  width: 16px;
+  height: 16px;
+}
+
+/* 弹窗淡入淡出动画 */
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.modal-fade-enter-from,
+.modal-fade-leave-to {
+  opacity: 0;
 }
 </style>
 

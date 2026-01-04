@@ -251,3 +251,72 @@ function handleCancel() {
   }
 }
 </style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   CanvasDialog 白昼模式样式适配
+   ======================================== */
+:root.canvas-theme-light .canvas-dialog-overlay {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+:root.canvas-theme-light .canvas-dialog {
+  background: linear-gradient(135deg, #ffffff 0%, #f8f8f8 100%);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.05) inset;
+}
+
+:root.canvas-theme-light .dialog-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .dialog-title {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .dialog-message {
+  color: #44403c;
+}
+
+:root.canvas-theme-light .dialog-detail {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .dialog-btn-cancel {
+  background: rgba(0, 0, 0, 0.04);
+  color: #57534e;
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .dialog-btn-cancel:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1c1917;
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+:root.canvas-theme-light .dialog-btn-confirm {
+  background: linear-gradient(135deg, #e5e5e5 0%, #d4d4d4 100%);
+  color: #1c1917;
+  border-color: rgba(0, 0, 0, 0.2);
+  box-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(0, 0, 0, 0.05) inset;
+}
+
+:root.canvas-theme-light .dialog-btn-confirm:hover {
+  background: linear-gradient(135deg, #f5f5f5 0%, #e5e5e5 100%);
+  border-color: rgba(0, 0, 0, 0.25);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.08) inset;
+}
+
+:root.canvas-theme-light .dialog-btn-confirm:active {
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(0, 0, 0, 0.05) inset;
+}
+</style>

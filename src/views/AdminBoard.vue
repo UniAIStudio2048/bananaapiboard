@@ -169,23 +169,13 @@ const rechargeForm = ref({ userId: '', username: '', amount: '', description: ''
 
 // 系统设置
 const showSettingsModal = ref(false)
-const settings = ref({ 
-  register_bonus: 0, 
-  inviter_bonus: 0, 
-  invitee_bonus: 0,
-  default_concurrent_limit: 1,
-  exchange_rate_points_per_currency: 10,
+const settings = ref({
   voucher_external_link: {
     enabled: false,
     button_text: '获取兑换券',
     url: '',
     open_in_new_tab: true
   },
-  invite_milestone_rewards: [
-    { milestone: 3, points: 30 },
-    { milestone: 5, points: 60 },
-    { milestone: 10, points: 100 }
-  ],
   icp_config: {
     enabled: false,
     icp_number: '',
@@ -267,15 +257,10 @@ async function loadSettings() {
   if (r.ok) {
     const data = await r.json()
     // 深度合并嵌套对象，避免后端返回的数据覆盖默认的嵌套结构
-    // 注意：points_cost, video_config, external_api 等配置已迁移到租户管理平台(9000端口)管理
+    // 注意：积分奖励、并发限制等配置已迁移到租户管理平台(9000端口)管理
     const defaultSettings = settings.value
     settings.value = {
       ...defaultSettings,
-      register_bonus: data.register_bonus ?? defaultSettings.register_bonus,
-      inviter_bonus: data.inviter_bonus ?? defaultSettings.inviter_bonus,
-      invitee_bonus: data.invitee_bonus ?? defaultSettings.invitee_bonus,
-      default_concurrent_limit: data.default_concurrent_limit ?? defaultSettings.default_concurrent_limit,
-      exchange_rate_points_per_currency: data.exchange_rate_points_per_currency ?? defaultSettings.exchange_rate_points_per_currency,
       voucher_external_link: {
         ...defaultSettings.voucher_external_link,
         ...(data.voucher_external_link || {})
@@ -283,8 +268,7 @@ async function loadSettings() {
       icp_config: {
         ...defaultSettings.icp_config,
         ...(data.icp_config || {})
-      },
-      invite_milestone_rewards: data.invite_milestones || data.invite_milestone_rewards || defaultSettings.invite_milestone_rewards
+      }
     }
   }
   // 注意：外部API配置（points_cost, video_config, external_api等）已迁移到租户管理平台(9000端口)管理，不再从此处加载
@@ -496,22 +480,15 @@ async function saveSettings() {
   success.value = ''
   
   try {
-    // 保存积分设置、兑换券配置、备案号配置等
-    // 注意：points_cost, video_config, external_api 等配置已迁移到租户管理平台(9000端口)管理
-    const r1 = await fetchWithAdminAuth('/api/admin/settings', { 
-      method: 'POST', 
-      headers: { 'Content-Type': 'application/json' }, 
-      body: JSON.stringify({ 
-        register_bonus: settings.value.register_bonus,
-        inviter_bonus: settings.value.inviter_bonus,
-        invitee_bonus: settings.value.invitee_bonus,
-        default_concurrent_limit: settings.value.default_concurrent_limit,
-        exchange_rate_points_per_currency: settings.value.exchange_rate_points_per_currency,
+    // 保存兑换券配置、备案号配置等
+    // 注意：积分奖励、并发限制等配置已迁移到租户管理平台(9000端口)管理
+    const r1 = await fetchWithAdminAuth('/api/admin/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         voucher_external_link: settings.value.voucher_external_link,
-        invite_milestone_rewards: settings.value.invite_milestone_rewards,
         icp_config: settings.value.icp_config
-        // 注意：points_cost 和 video_config 已迁移到租户管理平台，不再从此处保存
-      }) 
+      })
     })
     if (!r1 || !r1.ok) throw new Error('保存设置失败')
     
@@ -524,21 +501,9 @@ async function saveSettings() {
     }, 1000)
   } catch (e) { 
     error.value = e.message || '保存设置失败' 
-  } finally { 
-    loadingOps.value = false 
+  } finally {
+    loadingOps.value = false
   }
-}
-
-// 邀请进度奖励管理方法
-function addInviteMilestone() {
-  settings.value.invite_milestone_rewards.push({
-    milestone: 0,
-    points: 0
-  })
-}
-
-function removeInviteMilestone(index) {
-  settings.value.invite_milestone_rewards.splice(index, 1)
 }
 
 // 兑换券相关方法
@@ -3723,110 +3688,19 @@ onUnmounted(() => {
         </div>
         
         <div class="p-6 space-y-6">
-          <!-- 积分设置 -->
-          <div>
-            <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
-              <span class="mr-2">💎</span>
-              积分奖励设置
-            </h4>
-            <div class="space-y-4">
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  注册赠送积分
-                </label>
-                <input v-model.number="settings.register_bonus" class="input" type="number" min="0" />
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  邀请人奖励积分
-                </label>
-                <input v-model.number="settings.inviter_bonus" class="input" type="number" min="0" />
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  被邀请人奖励积分
-                </label>
-                <input v-model.number="settings.invitee_bonus" class="input" type="number" min="0" />
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  默认并发限制
-                  <span class="text-xs text-slate-500 ml-1">(新用户注册时和套餐到期后的并发数)</span>
-                </label>
-                <input v-model.number="settings.default_concurrent_limit" class="input" type="number" min="1" />
-              </div>
-              
-              <div class="pt-4 border-t border-slate-200 dark:border-dark-600">
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  💰 余额兑换率
-                  <span class="text-xs text-slate-500 ml-1">(1元 = N积分)</span>
-                </label>
-                <input 
-                  v-model.number="settings.exchange_rate_points_per_currency" 
-                  class="input" 
-                  type="number" 
-                  min="1" 
-                  max="1000"
-                  placeholder="10"
-                />
-                <p class="mt-1 text-xs text-slate-500">
-                  设置用户将余额划转为积分时的兑换比例，例如：10表示1元可兑换10积分
-                </p>
-              </div>
-            </div>
-            
-            <!-- 邀请进度奖励设置 -->
-            <div class="mt-6 pt-6 border-t border-slate-200 dark:border-dark-600">
-              <h5 class="font-semibold text-slate-900 dark:text-slate-100 mb-3 flex items-center">
-                <span class="mr-2">🎁</span>
-                邀请进度奖励
-                <span class="ml-2 text-xs font-normal text-slate-500">(用户达到邀请人数时自动发放)</span>
-              </h5>
-              <div class="space-y-3">
-                <div v-for="(milestone, index) in settings.invite_milestone_rewards" :key="index" class="flex items-center gap-3">
-                  <div class="flex-1">
-                    <label class="block text-xs text-slate-600 dark:text-slate-400 mb-1">邀请人数</label>
-                    <input 
-                      v-model.number="milestone.milestone" 
-                      class="input" 
-                      type="number" 
-                      min="1" 
-                      placeholder="邀请人数"
-                    />
-                  </div>
-                  <div class="flex-1">
-                    <label class="block text-xs text-slate-600 dark:text-slate-400 mb-1">奖励积分</label>
-                    <input 
-                      v-model.number="milestone.points" 
-                      class="input" 
-                      type="number" 
-                      min="0" 
-                      placeholder="奖励积分"
-                    />
-                  </div>
-                  <button 
-                    @click="removeInviteMilestone(index)"
-                    class="mt-5 px-3 py-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                    title="删除"
-                  >
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                    </svg>
-                  </button>
-                </div>
-                <button 
-                  @click="addInviteMilestone"
-                  class="w-full px-4 py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-primary-500 dark:hover:border-primary-500 text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 rounded-lg transition-colors"
-                >
-                  + 添加进度奖励
-                </button>
+          <!-- 提示信息 -->
+          <div class="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <div class="flex items-start gap-3">
+              <svg class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div class="text-sm text-blue-700 dark:text-blue-200">
+                <p class="font-medium mb-1">系统参数已迁移</p>
+                <p>积分奖励、默认并发限制、余额兑换率等系统参数已迁移到租户管理平台(9000端口)进行统一管理。请前往租户管理平台的"租户配置"页面进行设置。</p>
               </div>
             </div>
           </div>
-          
+
           <!-- 兑换券外部链接设置 -->
           <div class="pt-6 border-t border-slate-200 dark:border-dark-600">
             <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">

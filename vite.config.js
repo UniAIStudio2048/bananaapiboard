@@ -24,6 +24,11 @@ export default defineConfig(({ mode }) => {
           // 如果 VITE_API_BASE 不为空，则重写路径
           ...(env.VITE_API_BASE ? {} : {})
         },
+        '/storage': {
+          target: apiTarget,
+          changeOrigin: true,
+          secure: false
+        },
         // 租户管理后台代理 - 不重写路径，因为 tenant-manager 使用 base: '/tenant-manager/'
         '/tenant-manager': {
           target: 'http://localhost:9000',
@@ -38,6 +43,11 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       proxy: {
         '/api': {
+          target: apiTarget,
+          changeOrigin: true,
+          secure: false
+        },
+        '/storage': {
           target: apiTarget,
           changeOrigin: true,
           secure: false

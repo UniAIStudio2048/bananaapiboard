@@ -1732,3 +1732,66 @@ onUnmounted(() => {
 }
 </style>
 
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   ImageGenNode 白昼模式样式适配
+   ======================================== */
+
+/* 配置面板 - 白昼模式 */
+:root.canvas-theme-light .image-gen-node .config-panel {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .image-gen-node .settings-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .image-gen-node .settings-title {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-gen-node .setting-label {
+  color: #57534e;
+}
+
+/* 输入框和选择器 - 白昼模式 */
+:root.canvas-theme-light .image-gen-node .setting-input,
+:root.canvas-theme-light .image-gen-node .setting-select,
+:root.canvas-theme-light .image-gen-node .setting-textarea {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-gen-node .setting-input:focus,
+:root.canvas-theme-light .image-gen-node .setting-select:focus,
+:root.canvas-theme-light .image-gen-node .setting-textarea:focus {
+  border-color: #3b82f6;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+:root.canvas-theme-light .image-gen-node .setting-input::placeholder,
+:root.canvas-theme-light .image-gen-node .setting-textarea::placeholder {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .image-gen-node .setting-select option {
+  background: #ffffff;
+  color: #1c1917;
+}
+
+/* 复选框 - 白昼模式 */
+:root.canvas-theme-light .image-gen-node .setting-checkbox {
+  color: #1c1917;
+}
+
+/* 节点标题 - 白昼模式 */
+:root.canvas-theme-light .image-gen-node .node-label {
+  color: #f59e0b;
+}
+</style>
+

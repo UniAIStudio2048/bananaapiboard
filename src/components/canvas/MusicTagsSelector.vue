@@ -330,3 +330,55 @@ const emitUpdate = () => {
   font-weight: 500;
 }
 </style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   MusicTagsSelector 白昼模式样式适配
+   ======================================== */
+
+/* 滚动条 - 白昼模式 */
+:root.canvas-theme-light .music-tags-selector .tags-container::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .music-tags-selector .tags-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* 分类标题 - 白昼模式 */
+:root.canvas-theme-light .music-tags-selector .category-header {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .music-tags-selector .category-icon {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .music-tags-selector .category-title {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .music-tags-selector .tag-count {
+  color: #a8a29e;
+}
+
+/* 标签按钮 - 白昼模式 */
+:root.canvas-theme-light .music-tags-selector .tag-chip {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.03);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .music-tags-selector .tag-chip:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.06);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .music-tags-selector .tag-chip.selected {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+</style>

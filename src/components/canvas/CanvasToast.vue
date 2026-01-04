@@ -153,3 +153,61 @@ onMounted(() => {
 }
 </style>
 
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   CanvasToast 白昼模式样式适配
+   ======================================== */
+:root.canvas-theme-light .canvas-toast {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.05) inset;
+}
+
+:root.canvas-theme-light .toast-message {
+  color: #1c1917;
+}
+
+/* 成功样式 - 白昼模式 */
+:root.canvas-theme-light .toast-success {
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+:root.canvas-theme-light .toast-success .toast-icon {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+
+/* 错误样式 - 白昼模式 */
+:root.canvas-theme-light .toast-error {
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+:root.canvas-theme-light .toast-error .toast-icon {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+/* 信息样式 - 白昼模式 */
+:root.canvas-theme-light .toast-info {
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+:root.canvas-theme-light .toast-info .toast-icon {
+  background: rgba(59, 130, 246, 0.15);
+  color: #2563eb;
+}
+
+/* 警告样式 - 白昼模式 */
+:root.canvas-theme-light .toast-warning {
+  border-color: rgba(234, 179, 8, 0.3);
+}
+
+:root.canvas-theme-light .toast-warning .toast-icon {
+  background: rgba(234, 179, 8, 0.15);
+  color: #ca8a04;
+}
+</style>
+
