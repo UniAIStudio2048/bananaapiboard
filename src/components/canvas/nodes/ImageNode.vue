@@ -1296,37 +1296,26 @@ function handleEditorSaveMask(data) {
   closeImageEditor()
 }
 
-// 构建七牛云强制下载URL（使用attname参数）
-function buildQiniuForceDownloadUrl(url, filename) {
-  if (!url || !filename) return url
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}attname=${encodeURIComponent(filename)}`
-}
-
+// 统一使用后端代理下载，解决跨域和第三方CDN预览问题
 async function handleToolbarDownload() {
   if (!currentImageUrl.value) return
   
   const filename = `image_${props.id || Date.now()}.png`
   
-  // 如果是七牛云 URL，使用 attname 参数强制下载
-  if (isQiniuCdnUrl(currentImageUrl.value)) {
-    const link = document.createElement('a')
-    link.href = buildQiniuForceDownloadUrl(currentImageUrl.value, filename)
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    return
-  }
-  
   try {
-    // 使用 fetch 获取图片 blob，支持跨域下载
-    const response = await fetch(currentImageUrl.value, {
+    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
+    const { getApiUrl } = await import('@/config/tenant')
+    const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(currentImageUrl.value)}&filename=${encodeURIComponent(filename)}`)
+    
+    const response = await fetch(downloadUrl, {
       headers: getTenantHeaders()
     })
-    const blob = await response.blob()
     
-    // 创建 blob URL 并下载
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    
+    const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -1337,13 +1326,13 @@ async function handleToolbarDownload() {
     window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error('[ImageNode] 下载图片失败:', error)
-    // 如果 fetch 失败，尝试直接下载
-    const link = document.createElement('a')
-    link.href = currentImageUrl.value
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    // 如果 fetch 失败，使用后端代理页面下载
+    try {
+      const { getApiUrl } = await import('@/config/tenant')
+      window.location.href = getApiUrl(`/api/images/download?url=${encodeURIComponent(currentImageUrl.value)}&filename=${encodeURIComponent(filename)}`)
+    } catch (e) {
+      console.error('[ImageNode] 所有下载方式都失败:', e)
+    }
   }
 }
 
@@ -1437,83 +1426,52 @@ const sourceImages = computed(() => props.data.sourceImages || [])
 // 直接在 computed 中处理，确保响应式依赖被正确追踪
 const referenceImages = computed(() => {
   // 强制访问响应式数据的长度，确保依赖追踪
-  // 这样当 nodes 或 edges 数组变化时，computed 会重新计算
-  const allEdges = [...canvasStore.edges]  // 创建新数组确保响应式
-  const allNodes = [...canvasStore.nodes]  // 创建新数组确保响应式
+  const allEdges = [...canvasStore.edges]
+  const allNodes = [...canvasStore.nodes]
   
-  // 触发对所有节点 data 的访问，确保嵌套对象变化时也能重新计算
-  const nodesDataSnapshot = allNodes.map(n => ({
-    id: n.id,
-    type: n.type,
-    outputUrls: n.data?.output?.urls,
-    outputUrl: n.data?.output?.url,
-    sourceImages: n.data?.sourceImages
-  }))
-  
-  // 收集上游图片
-  const upstreamImages = []
+  // 优化：只处理与当前节点相关的边
   const upstreamEdges = allEdges.filter(e => e.target === props.id)
+  if (upstreamEdges.length === 0) {
+    return []
+  }
   
-  console.log('[ImageNode] referenceImages computed - 当前节点:', props.id, '上游边数:', upstreamEdges.length)
+  // 只收集上游节点的数据（而不是所有节点）
+  const upstreamNodeIds = new Set(upstreamEdges.map(e => e.source))
+  const upstreamImages = []
   
   for (const edge of upstreamEdges) {
-    // 从快照中查找节点数据（确保响应式追踪）
-    const nodeData = nodesDataSnapshot.find(n => n.id === edge.source)
-    if (!nodeData) {
-      console.log('[ImageNode] 未找到上游节点:', edge.source)
-      continue
-    }
+    const node = allNodes.find(n => n.id === edge.source)
+    if (!node?.data) continue
     
-    console.log('[ImageNode] 检查上游节点:', nodeData)
-    
-    // 处理所有可能包含图片的节点类型
     // 优先级：output.urls > output.url > sourceImages
-    if (nodeData.outputUrls?.length > 0) {
-      console.log('[ImageNode] 从 output.urls 获取图片:', nodeData.outputUrls.length, '张')
-      upstreamImages.push(...nodeData.outputUrls)
-    } else if (nodeData.outputUrl) {
-      console.log('[ImageNode] 从 output.url 获取图片:', nodeData.outputUrl.substring(0, 60))
-      upstreamImages.push(nodeData.outputUrl)
-    } else if (nodeData.sourceImages?.length > 0) {
-      console.log('[ImageNode] 从 sourceImages 获取图片:', nodeData.sourceImages.length, '张')
-      upstreamImages.push(...nodeData.sourceImages)
-    } else {
-      console.log('[ImageNode] 上游节点没有可用的图片数据')
+    if (node.data.output?.urls?.length > 0) {
+      upstreamImages.push(...node.data.output.urls)
+    } else if (node.data.output?.url) {
+      upstreamImages.push(node.data.output.url)
+    } else if (node.data.sourceImages?.length > 0) {
+      upstreamImages.push(...node.data.sourceImages)
     }
   }
   
-  console.log('[ImageNode] 收集到上游图片:', upstreamImages.length, '张', upstreamImages)
-  
-  // 只要有上游连接，就优先使用上游图片（即使上游还没有输出）
-  // 这确保了连接关系的正确性
-  if (upstreamEdges.length > 0) {
-    // 如果有用户自定义的顺序，按顺序返回
-    const customOrder = props.data.imageOrder || []
-    if (customOrder.length > 0 && upstreamImages.length > 0) {
-      const orderedImages = []
-      const remainingImages = [...upstreamImages]
+  // 如果有用户自定义的顺序，按顺序返回
+  const customOrder = props.data.imageOrder || []
+  if (customOrder.length > 0 && upstreamImages.length > 0) {
+    const orderedImages = []
+    const remainingImages = [...upstreamImages]
 
-      for (const url of customOrder) {
-        const index = remainingImages.indexOf(url)
-        if (index !== -1) {
-          orderedImages.push(url)
-          remainingImages.splice(index, 1)
-        }
+    for (const url of customOrder) {
+      const index = remainingImages.indexOf(url)
+      if (index !== -1) {
+        orderedImages.push(url)
+        remainingImages.splice(index, 1)
       }
-
-      orderedImages.push(...remainingImages)
-      console.log('[ImageNode] 返回自定义顺序的上游图片:', orderedImages.length, '张')
-      return orderedImages
     }
 
-    console.log('[ImageNode] 返回上游图片:', upstreamImages.length, '张')
-    return upstreamImages
+    orderedImages.push(...remainingImages)
+    return orderedImages
   }
 
-  // 没有上游连接时，不使用继承数据（继承数据仅在有活跃连接时有效）
-  // 当连接被删除后，应该清空显示，而不是继续显示旧的继承数据
-  console.log('[ImageNode] 没有上游连接，返回空数组')
-  return []
+  return upstreamImages
 })
 
 // 用户积分

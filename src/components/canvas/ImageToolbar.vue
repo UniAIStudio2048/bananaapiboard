@@ -514,54 +514,26 @@ function handleCrop() {
   })
 }
 
-// 判断是否是七牛云 CDN URL（永久有效，可直接访问）
-function isQiniuCdnUrl(url) {
-  if (!url || typeof url !== 'string') return false
-  return url.includes('files.nananobanana.cn') ||  // 项目的七牛云域名
-         url.includes('qiniucdn.com') || 
-         url.includes('clouddn.com') || 
-         url.includes('qnssl.com') ||
-         url.includes('qbox.me')
-}
-
-// 构建七牛云强制下载URL（使用attname参数）
-function buildQiniuForceDownloadUrl(url, filename) {
-  if (!url || !filename) return url
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}attname=${encodeURIComponent(filename)}`
-}
-
-// 下载 - 直接实现
+// 下载 - 统一使用后端代理下载，解决跨域和第三方CDN预览问题
 async function handleDownload() {
   console.log('[ImageToolbar] 下载', props.imageNode?.id)
   if (!imageUrl.value) return
   
   const filename = `image_${props.imageNode?.id || Date.now()}.png`
   
-  // 如果是七牛云 URL，使用 attname 参数强制下载
-  if (isQiniuCdnUrl(imageUrl.value)) {
-    const link = document.createElement('a')
-    link.href = buildQiniuForceDownloadUrl(imageUrl.value, filename)
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    
-    emit('download', { 
-      nodeId: props.imageNode?.id, 
-      imageUrl: imageUrl.value 
-    })
-    return
-  }
-  
   try {
-    // 使用 fetch 获取图片 blob，支持跨域下载
-    const response = await fetch(imageUrl.value, {
+    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
+    const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(imageUrl.value)}&filename=${encodeURIComponent(filename)}`)
+    
+    const response = await fetch(downloadUrl, {
       headers: getTenantHeaders()
     })
-    const blob = await response.blob()
     
-    // 创建 blob URL 并下载
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    
+    const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -572,13 +544,8 @@ async function handleDownload() {
     window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error('[ImageToolbar] 下载图片失败:', error)
-    // 如果 fetch 失败，尝试直接下载
-    const link = document.createElement('a')
-    link.href = imageUrl.value
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    // 如果 fetch 失败，使用后端代理页面下载
+    window.location.href = getApiUrl(`/api/images/download?url=${encodeURIComponent(imageUrl.value)}&filename=${encodeURIComponent(filename)}`)
   }
   
   emit('download', { 

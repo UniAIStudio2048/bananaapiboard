@@ -409,30 +409,27 @@ function buildQiniuForceDownloadUrl(url, filename) {
   return `${url}${separator}attname=${encodeURIComponent(filename)}`
 }
 
-// 下载图片
+// 统一使用后端代理下载图片，解决跨域和第三方CDN预览问题
 async function downloadImage() {
   if (outputImages.value.length === 0) return
   
   const imageUrl = outputImages.value[0]
   const filename = `image_${props.id || Date.now()}.png`
   
-  // 如果是七牛云 URL，使用 attname 参数强制下载
-  if (isQiniuCdnUrl(imageUrl)) {
-    const link = document.createElement('a')
-    link.href = buildQiniuForceDownloadUrl(imageUrl, filename)
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    return
-  }
-  
   try {
-    const response = await fetch(imageUrl, {
+    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
+    const { getApiUrl } = await import('@/config/tenant')
+    const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(filename)}`)
+    
+    const response = await fetch(downloadUrl, {
       headers: getTenantHeaders()
     })
-    const blob = await response.blob()
     
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    
+    const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
@@ -443,12 +440,13 @@ async function downloadImage() {
     window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error('[ImageGenNode] 下载图片失败:', error)
-    const link = document.createElement('a')
-    link.href = imageUrl
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+    // 回退：使用后端代理页面下载
+    try {
+      const { getApiUrl } = await import('@/config/tenant')
+      window.location.href = getApiUrl(`/api/images/download?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(filename)}`)
+    } catch (e) {
+      console.error('[ImageGenNode] 所有下载方式都失败:', e)
+    }
   }
 }
 

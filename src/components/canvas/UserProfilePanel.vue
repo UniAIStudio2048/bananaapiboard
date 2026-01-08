@@ -281,13 +281,14 @@ async function loadData() {
   try {
     const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
 
-    const [ledgerRes, packagesRes, inviteRes, checkinRes, activePackageRes, settingsRes] = await Promise.all([
+    const [ledgerRes, packagesRes, inviteRes, checkinRes, activePackageRes, settingsRes, pointsConfigRes] = await Promise.all([
       fetch('/api/user/points', { headers }),
       fetch('/api/packages', { headers }),
       fetch('/api/user/invite-code', { headers }),
       fetch('/api/user/checkin-status', { headers }),
       fetch('/api/user/package', { headers }),
-      fetch('/api/settings/app', { headers }) // 🔧 新增：加载租户配置
+      fetch('/api/settings/app', { headers }), // 🔧 加载租户配置
+      fetch('/api/points-config', { headers: getTenantHeaders() }) // 🔧 加载积分配置（包含汇率）
     ])
 
     if (ledgerRes.ok) {
@@ -312,6 +313,14 @@ async function loadData() {
       const data = await settingsRes.json()
       appSettings.value = data.settings || data || {}
       console.log('[UserProfilePanel] 租户配置:', appSettings.value)
+    }
+    // 🔧 加载积分配置（包含余额兑换汇率）
+    if (pointsConfigRes.ok) {
+      const configData = await pointsConfigRes.json()
+      if (configData.exchange_rate_points_per_currency) {
+        exchangeRate.value = Number(configData.exchange_rate_points_per_currency)
+        console.log('[UserProfilePanel] 余额兑换汇率:', exchangeRate.value)
+      }
     }
   } catch (e) {
     console.error('加载数据失败:', e)

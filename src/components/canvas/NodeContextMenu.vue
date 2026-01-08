@@ -340,30 +340,26 @@ function buildQiniuForceDownloadUrl(url, filename) {
   return `${url}${separator}attname=${encodeURIComponent(filename)}`
 }
 
-// 下载视频
+// 统一使用后端代理下载视频，解决跨域和第三方CDN预览问题
 async function downloadVideo() {
   if (!videoUrl.value) return
   
   const filename = `video_${Date.now()}.mp4`
   
-  // 如果是七牛云 URL，使用 attname 参数强制下载
-  if (isQiniuCdnUrl(videoUrl.value)) {
-    const a = document.createElement('a')
-    a.href = buildQiniuForceDownloadUrl(videoUrl.value, filename)
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    emit('close')
-    return
-  }
-  
   try {
-    const response = await fetch(videoUrl.value, {
+    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
+    const { getApiUrl } = await import('@/config/tenant')
+    const downloadUrl = getApiUrl(`/api/videos/download?url=${encodeURIComponent(videoUrl.value)}&name=${encodeURIComponent(filename)}`)
+    
+    const response = await fetch(downloadUrl, {
       headers: getTenantHeaders()
     })
-    const blob = await response.blob()
     
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    
+    const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -376,43 +372,39 @@ async function downloadVideo() {
     emit('close')
   } catch (error) {
     console.error('下载视频失败:', error)
-    // 如果 fetch 失败，尝试直接下载（不打开新窗口）
-    const a = document.createElement('a')
-    a.href = videoUrl.value
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    // 回退：使用后端代理页面下载
+    try {
+      const { getApiUrl } = await import('@/config/tenant')
+      window.location.href = getApiUrl(`/api/videos/download?url=${encodeURIComponent(videoUrl.value)}&name=${encodeURIComponent(filename)}`)
+    } catch (e) {
+      console.error('所有下载方式都失败:', e)
+    }
     emit('close')
   }
 }
 
 // ========== 图片节点功能 ==========
 
-// 下载图片
+// 统一使用后端代理下载图片，解决跨域和第三方CDN预览问题
 async function downloadImage() {
   if (!imageUrl.value) return
   
   const filename = `image_${Date.now()}.png`
   
-  // 如果是七牛云 URL，使用 attname 参数强制下载
-  if (isQiniuCdnUrl(imageUrl.value)) {
-    const a = document.createElement('a')
-    a.href = buildQiniuForceDownloadUrl(imageUrl.value, filename)
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    emit('close')
-    return
-  }
-  
   try {
-    const response = await fetch(imageUrl.value, {
+    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
+    const { getApiUrl } = await import('@/config/tenant')
+    const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(imageUrl.value)}&filename=${encodeURIComponent(filename)}`)
+    
+    const response = await fetch(downloadUrl, {
       headers: getTenantHeaders()
     })
-    const blob = await response.blob()
     
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    
+    const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -425,13 +417,13 @@ async function downloadImage() {
     emit('close')
   } catch (error) {
     console.error('下载图片失败:', error)
-    // 如果 fetch 失败，尝试直接下载（不打开新窗口）
-    const a = document.createElement('a')
-    a.href = imageUrl.value
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    // 回退：使用后端代理页面下载
+    try {
+      const { getApiUrl } = await import('@/config/tenant')
+      window.location.href = getApiUrl(`/api/images/download?url=${encodeURIComponent(imageUrl.value)}&filename=${encodeURIComponent(filename)}`)
+    } catch (e) {
+      console.error('所有下载方式都失败:', e)
+    }
     emit('close')
   }
 }

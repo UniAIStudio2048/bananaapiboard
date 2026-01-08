@@ -1056,16 +1056,20 @@ function handleReupload() {
 
 // ========== 工具栏处理函数 ==========
 
-// 下载音频
+// 统一使用后端代理下载音频，解决跨域和第三方CDN预览问题
 async function handleToolbarDownload() {
   const url = audioUrl.value
   if (!url) return
+  
+  // 生成文件名
+  const fileName = props.data?.title || props.data?.fileName || `audio_${Date.now()}`
+  const filename = fileName.endsWith('.mp3') || fileName.endsWith('.wav') ? fileName : `${fileName}.mp3`
   
   try {
     let blob
     
     if (url.startsWith('data:')) {
-      // Base64 数据
+      // Base64 数据 - 直接在本地处理
       const parts = url.split(',')
       const mimeMatch = parts[0].match(/:(.*?);/)
       const mime = mimeMatch ? mimeMatch[1] : 'audio/mpeg'
@@ -1076,8 +1080,18 @@ async function handleToolbarDownload() {
       }
       blob = new Blob([array], { type: mime })
     } else {
-      // 远程 URL
-      const response = await fetch(url)
+      // 远程 URL - 走后端代理下载
+      const { getApiUrl } = await import('@/config/tenant')
+      const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`)
+      
+      const response = await fetch(downloadUrl, {
+        headers: getTenantHeaders()
+      })
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
+      }
+      
       blob = await response.blob()
     }
     
@@ -1085,11 +1099,7 @@ async function handleToolbarDownload() {
     const downloadUrl = URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = downloadUrl
-    
-    // 生成文件名
-    const fileName = props.data?.title || props.data?.fileName || `audio_${Date.now()}`
-    const ext = blob.type.includes('mp3') ? '.mp3' : blob.type.includes('wav') ? '.wav' : '.mp3'
-    link.download = fileName.endsWith(ext) ? fileName : `${fileName}${ext}`
+    link.download = filename
     
     document.body.appendChild(link)
     link.click()
@@ -1097,6 +1107,13 @@ async function handleToolbarDownload() {
     URL.revokeObjectURL(downloadUrl)
   } catch (error) {
     console.error('[AudioNode] 下载失败:', error)
+    // 回退：使用后端代理页面下载
+    try {
+      const { getApiUrl } = await import('@/config/tenant')
+      window.location.href = getApiUrl(`/api/images/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`)
+    } catch (e) {
+      console.error('[AudioNode] 所有下载方式都失败:', e)
+    }
   }
 }
 

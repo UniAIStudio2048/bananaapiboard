@@ -43,55 +43,40 @@ function handleContextMenu(event) {
   )
 }
 
-// 判断是否是七牛云 CDN URL（永久有效，可直接访问）
-function isQiniuCdnUrl(url) {
-  if (!url || typeof url !== 'string') return false
-  return url.includes('files.nananobanana.cn') ||  // 项目的七牛云域名
-         url.includes('qiniucdn.com') || 
-         url.includes('clouddn.com') || 
-         url.includes('qnssl.com') ||
-         url.includes('qbox.me')
-}
-
-// 下载
+// 统一使用后端代理下载，解决跨域和第三方CDN预览问题
 async function download() {
-  let downloadUrl = ''
+  let mediaUrl = ''
   let fileName = ''
+  let isVideo = false
   
   if (contentType.value === 'image' && inheritedData.value?.urls?.length) {
-    downloadUrl = inheritedData.value.urls[0]
+    mediaUrl = inheritedData.value.urls[0]
     fileName = `image_${props.id || Date.now()}.png`
   } else if (contentType.value === 'video' && inheritedData.value?.url) {
-    downloadUrl = inheritedData.value.url
+    mediaUrl = inheritedData.value.url
     fileName = `video_${props.id || Date.now()}.mp4`
+    isVideo = true
   }
   
-  if (!downloadUrl) return
-  
-  // 构建七牛云强制下载URL（使用attname参数）
-  function buildQiniuForceDownloadUrl(url, filename) {
-    if (!url || !filename) return url
-    const separator = url.includes('?') ? '&' : '?'
-    return `${url}${separator}attname=${encodeURIComponent(filename)}`
-  }
-  
-  // 如果是七牛云 URL，使用 attname 参数强制下载
-  if (isQiniuCdnUrl(downloadUrl)) {
-    const a = document.createElement('a')
-    a.href = buildQiniuForceDownloadUrl(downloadUrl, fileName)
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    return
-  }
+  if (!mediaUrl) return
   
   try {
+    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
+    const { getApiUrl } = await import('@/config/tenant')
+    const proxyPath = isVideo
+      ? `/api/videos/download?url=${encodeURIComponent(mediaUrl)}&name=${encodeURIComponent(fileName)}`
+      : `/api/images/download?url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(fileName)}`
+    const downloadUrl = getApiUrl(proxyPath)
+    
     const response = await fetch(downloadUrl, {
       headers: getTenantHeaders()
     })
-    const blob = await response.blob()
     
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    
+    const blob = await response.blob()
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -102,12 +87,16 @@ async function download() {
     window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error('[PreviewNode] 下载失败:', error)
-    const a = document.createElement('a')
-    a.href = downloadUrl
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    // 回退：使用后端代理页面下载
+    try {
+      const { getApiUrl } = await import('@/config/tenant')
+      const proxyPath = isVideo
+        ? `/api/videos/download?url=${encodeURIComponent(mediaUrl)}&name=${encodeURIComponent(fileName)}`
+        : `/api/images/download?url=${encodeURIComponent(mediaUrl)}&filename=${encodeURIComponent(fileName)}`
+      window.location.href = getApiUrl(proxyPath)
+    } catch (e) {
+      console.error('[PreviewNode] 所有下载方式都失败:', e)
+    }
   }
 }
 

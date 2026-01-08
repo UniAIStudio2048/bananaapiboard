@@ -1906,7 +1906,8 @@ onMounted(async () => {
   
   // 加载兑换券外部链接配置和余额兑换率
   try {
-    const configRes = await fetch('/api/points-config')
+    // 🔧 添加租户头信息，确保读取租户特定配置
+    const configRes = await fetch('/api/points-config', { headers: getTenantHeaders() })
     if (configRes.ok) {
       const configData = await configRes.json()
       if (configData.voucher_external_link) {
@@ -1920,6 +1921,7 @@ onMounted(async () => {
       // 加载余额兑换率
       if (configData.exchange_rate_points_per_currency) {
         exchangeRate.value = Number(configData.exchange_rate_points_per_currency)
+        console.log('[User] 余额兑换汇率:', exchangeRate.value)
       }
     }
   } catch (e) {

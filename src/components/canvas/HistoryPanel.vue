@@ -378,7 +378,7 @@ function getFileExtension(type, url) {
   }
 }
 
-// 下载文件 - 统一使用 fetch + blob 方式强制下载
+// 统一使用后端代理下载，解决跨域和第三方CDN预览问题
 async function handleDownload(item) {
   if (!item.url) return
   closeContextMenu()
@@ -391,14 +391,18 @@ async function handleDownload(item) {
     filename += ext
   }
   
-  console.log('[HistoryPanel] 开始下载:', { url: item.url.substring(0, 60), filename, isQiniu: isQiniuCdnUrl(item.url) })
+  console.log('[HistoryPanel] 开始下载:', { url: item.url.substring(0, 60), filename })
   
   try {
-    // 统一使用 fetch + blob 方式强制下载（最可靠的方式）
-    // 七牛云 URL 支持跨域访问，可以直接 fetch
-    const fetchOptions = isQiniuCdnUrl(item.url) ? {} : { headers: getTenantHeaders() }
+    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
+    const proxyPath = item.type === 'video' 
+      ? `/api/videos/download?url=${encodeURIComponent(item.url)}&name=${encodeURIComponent(filename)}`
+      : `/api/images/download?url=${encodeURIComponent(item.url)}&filename=${encodeURIComponent(filename)}`
+    const downloadUrl = getApiUrl(proxyPath)
     
-    const response = await fetch(item.url, fetchOptions)
+    const response = await fetch(downloadUrl, {
+      headers: getTenantHeaders()
+    })
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
@@ -423,18 +427,13 @@ async function handleDownload(item) {
       window.URL.revokeObjectURL(blobUrl)
     }, 100)
   } catch (error) {
-    console.error('[HistoryPanel] fetch 下载失败:', error)
+    console.error('[HistoryPanel] 下载失败:', error)
     
-    // 如果 fetch 失败（可能是跨域问题），回退到 attname 参数方式
-    const a = document.createElement('a')
-    const separator = item.url.includes('?') ? '&' : '?'
-    a.href = `${item.url}${separator}attname=${encodeURIComponent(filename)}`
-    a.download = filename
-    a.target = '_self'
-    a.style.display = 'none'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    // 回退：使用后端代理页面下载
+    const proxyPath = item.type === 'video' 
+      ? `/api/videos/download?url=${encodeURIComponent(item.url)}&name=${encodeURIComponent(filename)}`
+      : `/api/images/download?url=${encodeURIComponent(item.url)}&filename=${encodeURIComponent(filename)}`
+    window.location.href = getApiUrl(proxyPath)
   }
 }
 

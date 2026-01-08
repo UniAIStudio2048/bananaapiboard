@@ -587,13 +587,7 @@ function isQiniuCdnUrl(url) {
 }
 
 // 构建七牛云强制下载URL（使用attname参数）
-function buildQiniuForceDownloadUrl(url, filename) {
-  if (!url || !filename) return url
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}attname=${encodeURIComponent(filename)}`
-}
-
-// 右键菜单 - 下载资产
+// 右键菜单 - 统一使用后端代理下载资产，解决跨域和第三方CDN预览问题
 async function handleDownload() {
   if (!contextMenuAsset.value) return
   
@@ -601,14 +595,14 @@ async function handleDownload() {
   closeContextMenu()
   
   try {
-    let downloadUrl = asset.url
+    let assetUrl = asset.url
     let filename = asset.name || `asset_${asset.id}`
     
     // 根据类型确定文件扩展名
     if (asset.type === 'text') {
       // 文本资产创建 blob
       const blob = new Blob([asset.content || ''], { type: 'text/plain;charset=utf-8' })
-      downloadUrl = URL.createObjectURL(blob)
+      const downloadUrl = URL.createObjectURL(blob)
       filename = filename.endsWith('.txt') ? filename : `${filename}.txt`
       
       // 文本类型直接下载 blob
@@ -632,14 +626,18 @@ async function handleDownload() {
       filename = `${filename}.mp3`
     }
     
-    console.log('[AssetPanel] 开始下载:', { url: downloadUrl.substring(0, 60), filename, isQiniu: isQiniuCdnUrl(downloadUrl) })
+    console.log('[AssetPanel] 开始下载:', { url: assetUrl.substring(0, 60), filename })
     
-    // 统一使用 fetch + blob 方式强制下载（最可靠的方式）
+    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
+    const proxyPath = asset.type === 'video' 
+      ? `/api/videos/download?url=${encodeURIComponent(assetUrl)}&name=${encodeURIComponent(filename)}`
+      : `/api/images/download?url=${encodeURIComponent(assetUrl)}&filename=${encodeURIComponent(filename)}`
+    const downloadUrl = getApiUrl(proxyPath)
+    
     try {
-      // 七牛云 URL 支持跨域访问，可以直接 fetch
-      const fetchOptions = isQiniuCdnUrl(downloadUrl) ? {} : { headers: getTenantHeaders() }
-      
-      const response = await fetch(downloadUrl, fetchOptions)
+      const response = await fetch(downloadUrl, {
+        headers: getTenantHeaders()
+      })
       
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
@@ -662,17 +660,9 @@ async function handleDownload() {
         URL.revokeObjectURL(blobUrl)
       }, 100)
     } catch (fetchError) {
-      console.warn('[AssetPanel] fetch 下载失败，尝试 attname 方式:', fetchError)
-      // fetch 失败时，回退到 attname 参数方式
-      const link = document.createElement('a')
-      const separator = downloadUrl.includes('?') ? '&' : '?'
-      link.href = `${downloadUrl}${separator}attname=${encodeURIComponent(filename)}`
-      link.download = filename
-      link.target = '_self'
-      link.style.display = 'none'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+      console.warn('[AssetPanel] fetch 下载失败，使用后端代理页面下载:', fetchError)
+      // 回退：使用后端代理页面下载
+      window.location.href = downloadUrl
     }
   } catch (error) {
     console.error('[AssetPanel] 下载失败:', error)

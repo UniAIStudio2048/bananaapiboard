@@ -739,13 +739,86 @@ export const useCanvasStore = defineStore('canvas', () => {
   }
   
   /**
-   * 加载工作流
+   * 加载工作流（优化版：骨架先行，媒体异步加载）
+   * 策略：先显示节点结构，然后异步加载图片/视频，提升流畅度
    */
   function loadWorkflow(workflow) {
-    nodes.value = workflow.nodes || []
-    edges.value = workflow.edges || []
+    const workflowNodes = workflow.nodes || []
+    const workflowEdges = workflow.edges || []
+    
+    // 1. 先创建骨架节点（移除大型媒体数据，加快首次渲染）
+    const skeletonNodes = workflowNodes.map(node => {
+      // 深拷贝节点，但标记媒体数据为"加载中"
+      const skeletonNode = JSON.parse(JSON.stringify(node))
+      
+      // 保存原始媒体数据的引用（用于异步加载）
+      const hasMediaData = skeletonNode.data && (
+        skeletonNode.data.sourceImages?.length > 0 ||
+        skeletonNode.data.output?.url ||
+        skeletonNode.data.output?.urls?.length > 0
+      )
+      
+      if (hasMediaData) {
+        // 标记为加载中状态
+        skeletonNode.data._mediaLoading = true
+        skeletonNode.data._originalMedia = {
+          sourceImages: skeletonNode.data.sourceImages,
+          output: skeletonNode.data.output
+        }
+        // 临时清空媒体数据（骨架模式）
+        skeletonNode.data.sourceImages = []
+        if (skeletonNode.data.output) {
+          skeletonNode.data.output = { ...skeletonNode.data.output, url: null, urls: [] }
+        }
+      }
+      
+      return skeletonNode
+    })
+    
+    // 2. 立即显示骨架结构
+    nodes.value = skeletonNodes
+    edges.value = workflowEdges
     if (workflow.viewport) {
       viewport.value = workflow.viewport
+    }
+    
+    // 3. 异步填充媒体数据（分批处理，避免卡顿）
+    const nodesWithMedia = skeletonNodes.filter(n => n.data?._mediaLoading)
+    if (nodesWithMedia.length > 0) {
+      // 使用 requestIdleCallback 或 setTimeout 异步加载
+      const loadMediaBatch = (startIndex) => {
+        const batchSize = 3 // 每批加载3个节点
+        const endIndex = Math.min(startIndex + batchSize, nodesWithMedia.length)
+        
+        for (let i = startIndex; i < endIndex; i++) {
+          const node = nodesWithMedia[i]
+          const nodeIndex = nodes.value.findIndex(n => n.id === node.id)
+          if (nodeIndex !== -1 && node.data._originalMedia) {
+            // 恢复媒体数据
+            const updatedNode = { ...nodes.value[nodeIndex] }
+            updatedNode.data = {
+              ...updatedNode.data,
+              sourceImages: node.data._originalMedia.sourceImages || [],
+              output: node.data._originalMedia.output || updatedNode.data.output,
+              _mediaLoading: false
+            }
+            delete updatedNode.data._originalMedia
+            nodes.value[nodeIndex] = updatedNode
+          }
+        }
+        
+        // 继续加载下一批
+        if (endIndex < nodesWithMedia.length) {
+          requestAnimationFrame(() => {
+            setTimeout(() => loadMediaBatch(endIndex), 50)
+          })
+        }
+      }
+      
+      // 延迟启动媒体加载，让骨架先渲染
+      requestAnimationFrame(() => {
+        setTimeout(() => loadMediaBatch(0), 100)
+      })
     }
   }
   

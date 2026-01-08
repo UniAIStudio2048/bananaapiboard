@@ -234,6 +234,36 @@ const isStyleSelected = (styleValue) => {
   return selectedStyles.value.includes(styleValue)
 }
 
+// ==================== Vidu 模型相关 ====================
+// 当前模型是否为 Vidu 系列
+const isViduModel = computed(() => {
+  const modelName = selectedModel.value?.toLowerCase() || ''
+  const apiType = currentModelConfig.value?.apiType || ''
+  return modelName.includes('vidu') || apiType === 'vidu'
+})
+
+// Vidu 图生视频模式选择
+const viduMode = ref(props.data.viduMode || 'auto')  // auto, i2v, start-end, reference
+
+// Vidu 模式选项
+const VIDU_MODE_OPTIONS = [
+  { value: 'auto', label: '自动选择', description: '根据图片数量自动选择', maxImages: 7 },
+  { value: 'i2v', label: '首帧驱动', description: '单图生成视频', maxImages: 1 },
+  { value: 'start-end', label: '首尾帧', description: '首帧到尾帧过渡', maxImages: 2, minImages: 2 },
+  { value: 'reference', label: '多图参考', description: '综合多图元素创作', maxImages: 7 }
+]
+
+// 当前 Vidu 模式配置
+const currentViduModeConfig = computed(() => {
+  return VIDU_MODE_OPTIONS.find(m => m.value === viduMode.value) || VIDU_MODE_OPTIONS[0]
+})
+
+// Vidu 模式下的最大图片数量
+const viduMaxImages = computed(() => {
+  if (!isViduModel.value) return 9
+  return currentViduModeConfig.value.maxImages
+})
+
 // 获取当前选中的模型对象
 const currentModelConfig = computed(() => {
   return models.value.find(m => m.value === selectedModel.value) || {}
@@ -544,54 +574,45 @@ const IMAGE_NODE_TYPES = [
   'image-expand'      // 图片扩展
 ]
 
-function collectUpstreamImages() {
-  const upstreamImages = []
-  const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
-  
-  for (const edge of upstreamEdges) {
-    const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
-    if (!sourceNode) continue
-    
-    // 图片节点：获取图片
-    if (IMAGE_NODE_TYPES.includes(sourceNode.type)) {
-      // 优先使用输出结果
-      if (sourceNode.data?.output?.urls?.length > 0) {
-        upstreamImages.push(...sourceNode.data.output.urls)
-      } else if (sourceNode.data?.output?.url) {
-        upstreamImages.push(sourceNode.data.output.url)
-      }
-      // 其次使用源图片
-      else if (sourceNode.data?.sourceImages?.length > 0) {
-        upstreamImages.push(...sourceNode.data.sourceImages)
-      }
-    }
-  }
-  
-  return upstreamImages
-}
-
 // 参考图片（来自左侧输入，支持多张图片，支持自定义顺序）
+// 优化版：减少不必要的计算和日志，提升加载性能
 const referenceImages = computed(() => {
-  // 首先检查是否有上游连接
-  const hasIncomingEdge = canvasStore.edges.some(edge => edge.target === props.id)
-
-  // 如果没有上游连接，直接返回空数组（不使用继承数据）
-  // 这确保了当连接被删除后，参考图片会被清空
-  if (!hasIncomingEdge) {
+  const allEdges = [...canvasStore.edges]
+  const allNodes = [...canvasStore.nodes]
+  
+  // 检查是否有上游连接
+  const upstreamEdges = allEdges.filter(edge => edge.target === props.id)
+  if (upstreamEdges.length === 0) {
     return []
   }
 
   // 收集上游图片
-  const upstreamImages = collectUpstreamImages()
+  const upstreamImages = []
+  
+  for (const edge of upstreamEdges) {
+    const sourceNode = allNodes.find(n => n.id === edge.source)
+    if (!sourceNode?.data || !IMAGE_NODE_TYPES.includes(sourceNode.type)) {
+      continue
+    }
+    
+    // 优先使用输出结果
+    if (sourceNode.data.output?.urls?.length > 0) {
+      upstreamImages.push(...sourceNode.data.output.urls)
+    } else if (sourceNode.data.output?.url) {
+      upstreamImages.push(sourceNode.data.output.url)
+    }
+    // 其次使用源图片
+    else if (sourceNode.data.sourceImages?.length > 0) {
+      upstreamImages.push(...sourceNode.data.sourceImages)
+    }
+  }
 
   // 如果有用户自定义的顺序，按顺序返回
   const customOrder = props.data.imageOrder || []
   if (customOrder.length > 0 && upstreamImages.length > 0) {
-    // 按自定义顺序排列，同时包含新添加的图片
     const orderedImages = []
     const remainingImages = [...upstreamImages]
 
-    // 先按顺序添加已排序的图片
     for (const url of customOrder) {
       const index = remainingImages.indexOf(url)
       if (index !== -1) {
@@ -600,13 +621,10 @@ const referenceImages = computed(() => {
       }
     }
 
-    // 再添加新图片（不在自定义顺序中的）
     orderedImages.push(...remainingImages)
-
     return orderedImages
   }
 
-  // 返回上游图片（即使为空，也不使用继承数据）
   return upstreamImages
 })
 const firstFrame = computed(() => referenceImages.value[0] || null)
@@ -1101,6 +1119,12 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
     if (selectedStyles.value.length > 0) {
       formData.append('style', selectedStyles.value.join(','))
     }
+  }
+  
+  // Vidu 模型特有参数：图生视频模式
+  if (isViduModel.value && finalImages.length > 0 && viduMode.value !== 'auto') {
+    formData.append('vidu_mode', viduMode.value)
+    console.log('[VideoNode] Vidu 模式参数:', viduMode.value)
   }
   
   // 如果有参考图片，添加图片 URL
@@ -2988,13 +3012,7 @@ async function addCharacterToAssets(characterId, videoUrl, apiResult, clipData) 
   }
 }
 
-// 构建七牛云强制下载URL（使用attname参数）
-function buildQiniuForceDownloadUrl(url, filename) {
-  if (!url || !filename) return url
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}attname=${encodeURIComponent(filename)}`
-}
-
+// 统一使用后端代理下载，解决跨域和第三方CDN预览问题
 async function handleToolbarDownload() {
   // 使用原始 URL（可能是七牛云地址），而不是 normalizedVideoUrl（可能被转换为相对路径）
   let videoUrl = props.data.output?.url
@@ -3002,47 +3020,16 @@ async function handleToolbarDownload() {
   
   const filename = `video_${props.id || Date.now()}.mp4`
   
-  console.log('[VideoNode] 开始下载:', { url: videoUrl.substring(0, 60), filename, isQiniu: isQiniuCdnUrl(videoUrl) })
-  
-  // 如果不是七牛云 URL，尝试查询获取七牛云 URL
-  if (!isQiniuCdnUrl(videoUrl)) {
-    console.log('[VideoNode] 非七牛云URL，尝试获取最新URL...')
-    const taskId = props.data.taskId || props.data.soraTaskId
-    if (taskId) {
-      try {
-        const { getVideoTaskStatus } = await import('@/api/canvas/nodes')
-        const result = await getVideoTaskStatus(taskId)
-        if (result.video_url && isQiniuCdnUrl(result.video_url)) {
-          videoUrl = result.video_url
-          console.log('[VideoNode] 获取到七牛云URL:', videoUrl.substring(0, 60))
-          // 更新节点数据
-          canvasStore.updateNodeData(props.id, {
-            output: { ...props.data.output, url: videoUrl }
-          })
-        }
-      } catch (e) {
-        console.warn('[VideoNode] 获取七牛云URL失败:', e.message)
-      }
-    }
-  }
+  console.log('[VideoNode] 开始下载:', { url: videoUrl.substring(0, 60), filename })
   
   try {
-    // 统一使用 fetch + blob 方式下载，确保文件名正确
-    let fetchUrl = videoUrl
-    let fetchOptions = {}
+    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
+    const { getApiUrl } = await import('@/config/tenant')
+    const downloadUrl = getApiUrl(`/api/videos/download?url=${encodeURIComponent(videoUrl)}&name=${encodeURIComponent(filename)}`)
     
-    if (isQiniuCdnUrl(videoUrl)) {
-      // 七牛云 URL：直接 fetch（七牛云支持 CORS）
-      console.log('[VideoNode] 使用七牛云直接下载')
-    } else {
-      // 非七牛云 URL：使用后端代理下载
-      console.log('[VideoNode] 使用后端代理下载')
-      const { getApiUrl } = await import('@/config/tenant')
-      fetchUrl = getApiUrl(`/api/videos/download?url=${encodeURIComponent(videoUrl)}&name=${encodeURIComponent(filename)}`)
-      fetchOptions = { headers: getTenantHeaders() }
-    }
-    
-    const response = await fetch(fetchUrl, fetchOptions)
+    const response = await fetch(downloadUrl, {
+      headers: getTenantHeaders()
+    })
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
@@ -3052,7 +3039,7 @@ async function handleToolbarDownload() {
     const blobUrl = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = blobUrl
-    link.download = filename  // fetch + blob 方式可以完全控制文件名
+    link.download = filename
     link.style.display = 'none'
     document.body.appendChild(link)
     link.click()
@@ -3229,7 +3216,6 @@ function handleToolbarPreview() {
         >
           <video 
             ref="videoPlayerRef"
-            :src="normalizedVideoUrl" 
             preload="auto"
             muted
             :loop="!data?.isCharacterNode"
@@ -3243,7 +3229,9 @@ function handleToolbarPreview() {
             @canplay="handleVideoCanPlay"
             @timeupdate="handleVideoTimeUpdate"
             @error="handleVideoError"
-          ></video>
+          >
+            <source :src="normalizedVideoUrl" type="video/mp4">
+          </video>
           <!-- 播放指示器已移除：首帧不显示播放按钮 -->
           <div class="video-overlay-actions">
             <button class="overlay-action-btn" @click.stop="openFullscreenPreview" title="全屏预览">
@@ -3363,14 +3351,15 @@ function handleToolbarPreview() {
       <div v-if="isFullscreenPreview" class="fullscreen-preview-overlay" @click="closeFullscreenPreview">
         <div class="fullscreen-preview-container" @click.stop>
           <video 
-            :src="normalizedVideoUrl" 
             controls 
             autoplay
             playsinline
             webkit-playsinline
             crossorigin="anonymous"
             class="fullscreen-video"
-          ></video>
+          >
+            <source :src="normalizedVideoUrl" type="video/mp4">
+          </video>
           <button class="fullscreen-close-btn" @click="closeFullscreenPreview">
             ✕
           </button>
@@ -3612,6 +3601,41 @@ function handleToolbarPreview() {
             </div>
           </div>
         </Transition>
+      </template>
+      
+      <!-- Vidu 图生视频模式选择 -->
+      <template v-if="isViduModel && referenceImages.length > 0">
+        <div class="vidu-mode-section">
+          <div class="vidu-mode-header">
+            <span class="vidu-mode-label">🎬 图生视频模式</span>
+            <span class="vidu-mode-hint">当前: {{ currentViduModeConfig.label }}</span>
+          </div>
+          <div class="vidu-mode-options">
+            <button
+              v-for="opt in VIDU_MODE_OPTIONS"
+              :key="opt.value"
+              @click="viduMode = opt.value"
+              :class="['vidu-mode-btn', { active: viduMode === opt.value }]"
+            >
+              <span class="vidu-mode-btn-label">{{ opt.label }}</span>
+              <span class="vidu-mode-btn-desc">{{ opt.maxImages === 7 ? '1-7张' : opt.minImages ? `${opt.minImages}张` : `${opt.maxImages}张` }}</span>
+            </button>
+          </div>
+          <!-- 模式说明提示 -->
+          <div v-if="viduMode === 'start-end'" class="vidu-mode-tip blue">
+            💡 首尾帧模式：第1张图为视频起始帧，第2张图为结束帧
+          </div>
+          <div v-else-if="viduMode === 'reference'" class="vidu-mode-tip purple">
+            💡 多图参考：AI 综合参考所有图片的风格、角色、场景创作
+          </div>
+          <!-- 图片数量验证提示 -->
+          <div v-if="viduMode === 'i2v' && referenceImages.length > 1" class="vidu-mode-tip warning">
+            ⚠️ 首帧驱动模式只支持1张图，将使用第1张图
+          </div>
+          <div v-if="viduMode === 'start-end' && referenceImages.length !== 2" class="vidu-mode-tip warning">
+            ⚠️ 首尾帧模式需要恰好2张图片
+          </div>
+        </div>
       </template>
     </div>
   </div>
@@ -5695,5 +5719,159 @@ function handleToolbarPreview() {
   border-color: #1c1917;
   background: #1c1917;
   color: #ffffff;
+}
+
+/* ==================== Vidu 图生视频模式样式 ==================== */
+.vidu-mode-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.vidu-mode-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.vidu-mode-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--canvas-text-primary, #e0e0e0);
+}
+
+.vidu-mode-hint {
+  font-size: 11px;
+  color: var(--canvas-text-muted, #888);
+}
+
+.vidu-mode-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.vidu-mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.vidu-mode-btn:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vidu-mode-btn.active {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.15);
+}
+
+.vidu-mode-btn-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--canvas-text-primary, #e0e0e0);
+}
+
+.vidu-mode-btn.active .vidu-mode-btn-label {
+  color: #a78bfa;
+}
+
+.vidu-mode-btn-desc {
+  font-size: 10px;
+  color: var(--canvas-text-muted, #888);
+  margin-top: 2px;
+}
+
+.vidu-mode-tip {
+  font-size: 11px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  line-height: 1.4;
+}
+
+.vidu-mode-tip.blue {
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.vidu-mode-tip.purple {
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  color: #a78bfa;
+}
+
+.vidu-mode-tip.warning {
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
+/* Vidu 模式 - 白昼模式 */
+:root.canvas-theme-light .vidu-mode-section {
+  border-top-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .vidu-mode-label {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .vidu-mode-hint {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .vidu-mode-btn {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .vidu-mode-btn:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .vidu-mode-btn.active {
+  border-color: #7c3aed;
+  background: rgba(124, 58, 237, 0.1);
+}
+
+:root.canvas-theme-light .vidu-mode-btn-label {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .vidu-mode-btn.active .vidu-mode-btn-label {
+  color: #7c3aed;
+}
+
+:root.canvas-theme-light .vidu-mode-btn-desc {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .vidu-mode-tip.blue {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.15);
+  color: #2563eb;
+}
+
+:root.canvas-theme-light .vidu-mode-tip.purple {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.15);
+  color: #7c3aed;
+}
+
+:root.canvas-theme-light .vidu-mode-tip.warning {
+  background: rgba(217, 119, 6, 0.08);
+  border-color: rgba(217, 119, 6, 0.15);
+  color: #d97706;
 }
 </style>

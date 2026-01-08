@@ -663,23 +663,7 @@ async function deleteHistory(item) {
   }
 }
 
-// 判断是否是七牛云 CDN URL（永久有效，可直接访问）
-function isQiniuCdnUrl(url) {
-  if (!url || typeof url !== 'string') return false
-  return url.includes('files.nananobanana.cn') ||  // 项目的七牛云域名
-         url.includes('qiniucdn.com') || 
-         url.includes('clouddn.com') || 
-         url.includes('qnssl.com') ||
-         url.includes('qbox.me')
-}
-
-// 构建七牛云强制下载URL（使用attname参数）
-function buildQiniuForceDownloadUrl(url, filename) {
-  if (!url || !filename) return url
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}attname=${encodeURIComponent(filename)}`
-}
-
+// 统一走后端代理下载视频，解决跨域和第三方CDN预览问题
 async function downloadVideo(item) {
   if (!item?.video_url) return
   try {
@@ -688,17 +672,8 @@ async function downloadVideo(item) {
     const promptPart = (item.prompt || 'video').slice(0, 20).replace(/[^a-zA-Z0-9\u4e00-\u9fa5-_]/g, '_')
     const filename = `${notePrefix}${promptPart}`
     
-    // 如果是七牛云 URL，使用 attname 参数强制下载
-    if (isQiniuCdnUrl(item.video_url)) {
-      const a = document.createElement('a')
-      a.href = buildQiniuForceDownloadUrl(item.video_url, `${filename}.mp4`)
-      a.download = `${filename}.mp4`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      return
-    }
-    
+    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
+    // 解决第三方CDN和七牛云的跨域下载问题
     const token = localStorage.getItem('token')
     const encodedFilename = encodeURIComponent(filename)
     const response = await fetch(`/api/videos/download?url=${encodeURIComponent(item.video_url)}&name=${encodedFilename}.mp4`, {

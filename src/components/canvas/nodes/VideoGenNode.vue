@@ -378,55 +378,23 @@ function buildQiniuForceDownloadUrl(url, filename) {
   return `${url}${separator}attname=${encodeURIComponent(filename)}`
 }
 
-// 下载视频 - 优先使用七牛云URL，对非七牛云URL使用后端代理
+// 统一使用后端代理下载视频，解决跨域和第三方CDN预览问题
 async function downloadVideo() {
   if (!props.data.output?.url) return
   
-  let videoUrl = props.data.output.url
+  const videoUrl = props.data.output.url
   const filename = `video_${props.id || Date.now()}.mp4`
   
-  console.log('[VideoGenNode] 开始下载:', { url: videoUrl.substring(0, 60), filename, isQiniu: isQiniuCdnUrl(videoUrl) })
-  
-  // 如果不是七牛云URL，尝试再次查询获取七牛云URL
-  if (!isQiniuCdnUrl(videoUrl)) {
-    console.log('[VideoGenNode] 非七牛云URL，尝试获取最新URL...')
-    try {
-      const { getVideoTaskStatus } = await import('@/api/canvas/nodes')
-      // 从节点数据中找任务ID（如果有的话）
-      const taskId = props.data.taskId
-      if (taskId) {
-        const result = await getVideoTaskStatus(taskId)
-        if (result.video_url && isQiniuCdnUrl(result.video_url)) {
-          videoUrl = result.video_url
-          console.log('[VideoGenNode] 获取到七牛云URL:', videoUrl.substring(0, 60))
-          // 更新节点数据
-          canvasStore.updateNodeData(props.id, {
-            output: { ...props.data.output, url: videoUrl }
-          })
-        }
-      }
-    } catch (e) {
-      console.warn('[VideoGenNode] 获取七牛云URL失败:', e.message)
-    }
-  }
+  console.log('[VideoGenNode] 开始下载:', { url: videoUrl.substring(0, 60), filename })
   
   try {
-    // 统一使用 fetch + blob 方式下载，确保文件名正确（包含 .mp4 后缀）
-    let fetchUrl = videoUrl
-    let fetchOptions = {}
+    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
+    const { getApiUrl } = await import('@/config/tenant')
+    const downloadUrl = getApiUrl(`/api/videos/download?url=${encodeURIComponent(videoUrl)}&name=${encodeURIComponent(filename)}`)
     
-    if (isQiniuCdnUrl(videoUrl)) {
-      // 七牛云 URL：直接 fetch（七牛云支持 CORS）
-      console.log('[VideoGenNode] 使用七牛云直接下载')
-    } else {
-      // 非七牛云 URL：使用后端代理下载
-      console.log('[VideoGenNode] 使用后端代理下载')
-      const { getApiUrl } = await import('@/config/tenant')
-      fetchUrl = getApiUrl(`/api/videos/download?url=${encodeURIComponent(videoUrl)}&name=${encodeURIComponent(filename)}`)
-      fetchOptions = { headers: getTenantHeaders() }
-    }
-    
-    const response = await fetch(fetchUrl, fetchOptions)
+    const response = await fetch(downloadUrl, {
+      headers: getTenantHeaders()
+    })
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
@@ -436,7 +404,7 @@ async function downloadVideo() {
     const blobUrl = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = blobUrl
-    link.download = filename  // fetch + blob 方式可以完全控制文件名
+    link.download = filename
     link.style.display = 'none'
     document.body.appendChild(link)
     link.click()
