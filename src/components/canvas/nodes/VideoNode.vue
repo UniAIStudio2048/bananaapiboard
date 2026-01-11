@@ -4536,23 +4536,9 @@ function handleToolbarPreview() {
   background: rgba(0, 0, 0, 0.2);
   border-radius: 8px;
   padding: 10px 12px;
-  max-height: 120px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.context-reference-content::-webkit-scrollbar {
-  width: 4px;
-}
-
-.context-reference-content::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.context-reference-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .prompt-section {
@@ -5346,10 +5332,6 @@ function handleToolbarPreview() {
 :root.canvas-theme-light .video-node .context-reference-content {
   background: rgba(0, 0, 0, 0.03);
   color: #57534e;
-}
-
-:root.canvas-theme-light .video-node .context-reference-content::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.15);
 }
 
 :root.canvas-theme-light .video-node .prompt-input {

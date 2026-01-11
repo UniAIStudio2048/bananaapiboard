@@ -128,11 +128,22 @@ const totalPoints = computed(() => {
 const currentPointsCost = computed(() => {
   // VEO3模型使用固定积分
   if (isVeo3Model.value) {
-    return pointsCostConfig.value[model.value] || 100
+    const veoConfig = pointsCostConfig.value[model.value]
+    // 如果是数字直接返回，如果是对象取默认值
+    return typeof veoConfig === 'number' ? veoConfig : (veoConfig || 100)
   }
   
-  const modelConfig = pointsCostConfig.value[model.value] || {}
-  let cost = modelConfig[duration.value] || 40
+  const modelConfig = pointsCostConfig.value[model.value]
+  // 如果 pointsCost 是数字（固定积分），直接使用
+  // 如果是对象（按时长计费），取对应时长的积分
+  let cost
+  if (typeof modelConfig === 'number') {
+    cost = modelConfig
+  } else if (typeof modelConfig === 'object' && modelConfig !== null) {
+    cost = modelConfig[duration.value] || 40
+  } else {
+    cost = 40
+  }
   if (hd.value && pointsCostConfig.value.hd_extra) {
     cost += pointsCostConfig.value.hd_extra
   }

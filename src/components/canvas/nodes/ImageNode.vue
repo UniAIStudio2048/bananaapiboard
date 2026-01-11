@@ -869,8 +869,25 @@ function handleClickOutside(event) {
 
 
 function handleToolbarExpand() {
-  console.log('[ImageNode] 工具栏：扩图', props.id)
+  console.log('[ImageNode] 工具栏：扩图(旧)', props.id)
   enterEditMode('expand') // 智能扩图（待接入 AI API）
+}
+
+// 新版扩图 - 点击扩图按钮（复用裁剪组件，进入扩图模式）
+function handleToolbarOutpaint() {
+  console.log('[ImageNode] 工具栏：扩图', props.id)
+  
+  const imageUrl = sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
+  if (!imageUrl) {
+    console.warn('[ImageNode] 扩图：没有图片')
+    showAlert('提示', '请先上传或生成图片')
+    return
+  }
+  
+  // 直接复用裁剪组件（支持扩图模式）
+  cropperImageUrl.value = imageUrl
+  cropperMode.value = 'outpaint' // 设置为扩图模式
+  showCropper.value = true
 }
 
 // 9宫格裁剪状态
@@ -879,9 +896,13 @@ const isGridCropping = ref(false)
 // 4宫格裁剪状态
 const isGrid4Cropping = ref(false)
 
+// 扩图状态（复用裁剪组件）
+const isOutpainting = ref(false)
+
 // 独立裁剪组件状态
 const showCropper = ref(false)
 const cropperImageUrl = ref('')
+const cropperMode = ref('crop') // 'crop' | 'outpaint'
 
 /**
  * 获取可用于 canvas 操作的图片 URL
@@ -1178,6 +1199,7 @@ function handleToolbarCrop() {
   
   // 打开新的裁剪组件
   cropperImageUrl.value = imageUrl
+  cropperMode.value = 'crop' // 设置为裁剪模式
   showCropper.value = true
 }
 
@@ -1231,6 +1253,156 @@ function handleCropSave(result) {
 function handleCropCancel() {
   showCropper.value = false
   cropperImageUrl.value = ''
+}
+
+// 处理扩图生成请求
+async function handleOutpaint(data) {
+  console.log('[ImageNode] 扩图请求', data)
+
+  // 关闭裁剪组件
+  showCropper.value = false
+  cropperImageUrl.value = ''
+
+  // 获取当前节点位置
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) {
+    showAlert('错误', '无法找到当前节点')
+    return
+  }
+
+  try {
+    // 1. 先将dataUrl转换为File对象
+    const response = await fetch(data.dataUrl)
+    const blob = await response.blob()
+    const file = new File([blob], 'outpaint_source.png', { type: 'image/png' })
+
+    // 2. 上传图片
+    const uploadedUrls = await uploadImages([file])
+    if (!uploadedUrls || uploadedUrls.length === 0) {
+      throw new Error('图片上传失败')
+    }
+    const uploadedImageUrl = uploadedUrls[0]
+    console.log('[ImageNode] 扩图源图已上传:', uploadedImageUrl)
+
+    // 3. 在当前节点右侧创建等待中的输出节点
+    const newNodeId = `outpaint_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const newNodePosition = {
+      x: currentNode.position.x + 380,
+      y: currentNode.position.y
+    }
+
+    // 创建等待中的节点（不显示系统提示词）
+    canvasStore.addNode({
+      id: newNodeId,
+      type: 'image',
+      position: newNodePosition,
+      data: {
+        label: '扩图',
+        sourceNodeId: props.id,
+        status: 'processing', // 使用 processing 状态显示"生成中"
+        progress: '生成中...',
+        model: 'gemini-3-pro-image-preview',
+        resolution: data.size || '2K',
+        outpaintInfo: {
+          width: data.width,
+          height: data.height,
+          originalWidth: data.originalWidth,
+          originalHeight: data.originalHeight
+        }
+      }
+    })
+
+    // 创建连接边
+    canvasStore.addEdge({
+      id: `edge_${props.id}_${newNodeId}`,
+      source: props.id,
+      target: newNodeId,
+      type: 'default'
+    })
+
+    console.log('[ImageNode] 已创建扩图节点和连接边 | 节点ID:', newNodeId)
+
+    // 4. 调用 nano-banana-pro API 生成扩图
+    const generateResult = await generateImageFromImage({
+      prompt: data.systemPrompt,
+      userPrompt: '扩图', // 用户原始输入：简单标记为"扩图"，不显示系统提示词
+      images: [uploadedImageUrl],
+      model: 'gemini-3-pro-image-preview',
+      image_size: data.size || '2K', // 用户选择的分辨率
+      aspectRatio: 'auto'
+    })
+
+    console.log('[ImageNode] 扩图任务已提交:', generateResult)
+
+    // 5. 注册后台任务轮询
+    if (generateResult.task_id) {
+      const taskId = generateResult.task_id
+      const currentTab = canvasStore.getCurrentTab()
+      
+      // 注册到后台任务管理器
+      registerTask({
+        taskId,
+        type: 'image',
+        nodeId: newNodeId,
+        tabId: currentTab?.id,
+        metadata: {
+          prompt: data.systemPrompt,
+          model: 'gemini-3-pro-image-preview',
+          imageSize: data.size || '2K'
+        }
+      })
+      
+      // 后台轮询，不阻塞
+      pollTaskStatus(taskId, 'image', {
+        interval: 2000,
+        timeout: 300000,
+        onProgress: (progress) => {
+          canvasStore.updateNodeData(newNodeId, {
+            progress: progress.status === 'processing' ? '扩图生成中...' : progress.status
+          })
+        }
+      }).then(finalResult => {
+        const imageUrl = finalResult.url || finalResult.urls?.[0] || finalResult.images?.[0]
+        if (imageUrl) {
+          // 更新节点为完成状态
+          canvasStore.updateNodeData(newNodeId, {
+            status: 'success',
+            output: {
+              type: 'image',
+              url: imageUrl,
+              urls: [imageUrl]
+            }
+          })
+          console.log('[ImageNode] 扩图完成:', imageUrl)
+        } else {
+          canvasStore.updateNodeData(newNodeId, {
+            status: 'error',
+            error: '未获取到扩图结果'
+          })
+        }
+      }).catch(error => {
+        console.error('[ImageNode] 扩图轮询失败:', error)
+        canvasStore.updateNodeData(newNodeId, {
+          status: 'error',
+          error: error.message || '扩图生成失败'
+        })
+      })
+    } else if (generateResult.url) {
+      // 直接返回结果（同步模式）
+      canvasStore.updateNodeData(newNodeId, {
+        status: 'completed',
+        output: {
+          url: generateResult.url,
+          urls: generateResult.urls || [generateResult.url]
+        }
+      })
+      console.log('[ImageNode] 扩图完成（同步）:', generateResult.url)
+    }
+
+  } catch (error) {
+    console.error('[ImageNode] 扩图失败:', error)
+    showAlert('扩图失败', error.message || '请稍后重试')
+  }
 }
 
 // 旧的编辑器相关函数（保留兼容性，可稍后移除）
@@ -3567,6 +3739,23 @@ async function handleDrop(event) {
           </div>
         </Transition>
       </div>
+      <button 
+        class="toolbar-btn" 
+        :class="{ 'is-processing': isOutpainting }"
+        title="扩图" 
+        @click.stop="handleToolbarOutpaint"
+        :disabled="isOutpainting"
+      >
+        <svg v-if="!isOutpainting" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="6" y="6" width="12" height="12" rx="1" stroke-dasharray="3 2"/>
+          <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" stroke-linecap="round"/>
+        </svg>
+        <svg v-else class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+        </svg>
+        <span>扩图</span>
+      </button>
       <button class="toolbar-btn" title="9宫格裁剪" @mousedown.prevent="handleToolbarGridCrop">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <!-- 外框 -->
@@ -4113,13 +4302,16 @@ async function handleDrop(event) {
     @select="handlePresetSelect"
   />
   
-  <!-- 独立裁剪组件 -->
+  <!-- 独立裁剪/扩图组件 -->
   <ImageCropper
     :visible="showCropper"
     :imageUrl="cropperImageUrl"
+    :mode="cropperMode"
     @save="handleCropSave"
     @cancel="handleCropCancel"
+    @outpaint="handleOutpaint"
   />
+  
 </template>
 
 <style scoped>
@@ -6271,4 +6463,5 @@ async function handleDrop(event) {
 :root.canvas-theme-light .image-node .preset-dropdown-item.preset-action .preset-item-label {
   color: #8b5cf6;
 }
+
 </style>

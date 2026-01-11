@@ -45,11 +45,13 @@ const saveButtonText = computed(() => {
 // 监听对话框打开
 watch(() => props.visible, async (visible) => {
   if (visible) {
+    // 🔧 重置状态
+    isSaving.value = false
     saveError.value = ''
-    
+
     // 加载配额信息
     await loadQuota()
-    
+
     // 如果有当前工作流ID，加载名称和描述
     const workflowMeta = canvasStore.workflowMeta
     if (workflowMeta) {
@@ -90,7 +92,8 @@ function calculateDataSize() {
   const workflowData = canvasStore.exportWorkflow()
   const nodesJson = JSON.stringify(workflowData.nodes || [])
   const edgesJson = JSON.stringify(workflowData.edges || [])
-  return Buffer.from(nodesJson + edgesJson, 'utf8').length
+  // 🔧 使用 Blob 计算字节大小（浏览器兼容）
+  return new Blob([nodesJson, edgesJson]).size
 }
 
 // 格式化数据大小为易读格式
@@ -127,6 +130,11 @@ function saveLocalBackup(workflowData, name) {
 
 // 保存工作流 - 🔧 优化：立即关闭对话框，后台异步处理
 async function handleSave() {
+  // 🔧 防止重复提交
+  if (isSaving.value) {
+    return
+  }
+
   // 验证
   if (!workflowName.value.trim()) {
     saveError.value = t('canvas.workflowNamePlaceholder')
@@ -146,12 +154,16 @@ async function handleSave() {
     return
   }
 
+  // 🔧 设置保存状态，禁用按钮
+  isSaving.value = true
+  saveError.value = ''
+
   // 导出工作流数据（在关闭对话框前导出，确保数据完整）
   const workflowData = canvasStore.exportWorkflow()
   const nameToSave = workflowName.value.trim()
   const descToSave = workflowDescription.value.trim()
   const idToSave = currentWorkflowId.value
-  
+
   // 🔧 保存前先创建本地备份（防止保存失败导致数据丢失）
   const backupKey = saveLocalBackup(workflowData, nameToSave)
 
@@ -173,7 +185,7 @@ async function handleSave() {
 
   // 🔧 立即关闭对话框，提升用户体验
   emit('close')
-  
+
   // 🔧 通知父组件：开始保存中
   emit('saving', { name: nameToSave })
 
@@ -209,7 +221,7 @@ async function handleSave() {
 
   } catch (error) {
     console.error('[SaveDialog] 保存失败:', error)
-    
+
     // 🔧 通知父组件：保存失败
     let errorMessage = error.message || '保存失败，请稍后重试'
     if (error.message.includes('过大') || error.message.includes('too large') || error.message.includes('413')) {
@@ -217,12 +229,15 @@ async function handleSave() {
     } else if (error.message.includes('database') || error.message.includes('数据库')) {
       errorMessage = '数据库错误，请稍后重试'
     }
-    
-    emit('error', { 
+
+    emit('error', {
       message: errorMessage,
       name: nameToSave,
       backupKey: backupKey // 传递备份 key，便于恢复
     })
+  } finally {
+    // 🔧 重置保存状态
+    isSaving.value = false
   }
 }
 

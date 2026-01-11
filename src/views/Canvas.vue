@@ -30,6 +30,7 @@ import AIAssistantPanel from '@/components/canvas/AIAssistantPanel.vue'
 import CanvasNotification from '@/components/canvas/CanvasNotification.vue'
 import CanvasSupport from '@/components/canvas/CanvasSupport.vue'
 import CanvasToast from '@/components/canvas/CanvasToast.vue'
+import PackageModal from '@/components/canvas/PackageModal.vue'
 import { useI18n } from '@/i18n'
 import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoSave, manualSave as saveToHistory } from '@/stores/canvas/workflowAutoSave'
 import { initBackgroundTaskManager, getPendingTasks, subscribeTask, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
@@ -76,6 +77,9 @@ const showOnboarding = ref(false)
 
 // AI 灵感助手
 const showAIAssistant = ref(false)
+
+// 套餐购买弹窗
+const showPackageModal = ref(false)
 
 // 画布主题切换 (dark / light)
 const canvasTheme = ref('dark')
@@ -1272,6 +1276,24 @@ async function saveCanvasThemePreference(theme) {
   }
 }
 
+// 打开套餐购买弹窗
+function openPackageModal() {
+  showPackageModal.value = true
+}
+
+// 关闭套餐购买弹窗
+function closePackageModal() {
+  showPackageModal.value = false
+}
+
+// 套餐购买成功回调
+function handlePurchaseSuccess(data) {
+  console.log('[Canvas] 套餐购买成功:', data)
+  displayToast('套餐购买成功！', 'success', 3000)
+  // 刷新用户信息
+  handleUserInfoUpdated()
+}
+
 // 加载主题偏好
 function loadCanvasThemePreference() {
   // 从用户偏好加载
@@ -1488,7 +1510,20 @@ onUnmounted(() => {
           </svg>
           <span class="points-value">{{ totalPoints }}</span>
         </div>
-        
+
+        <!-- 购物车按钮 -->
+        <button
+          class="canvas-icon-btn canvas-cart-btn"
+          title="套餐购买"
+          @click="openPackageModal"
+        >
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="9" cy="21" r="1"/>
+            <circle cx="20" cy="21" r="1"/>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+          </svg>
+        </button>
+
         <!-- 通知铃铛 -->
         <CanvasNotification :theme="canvasTheme" />
         
@@ -1731,6 +1766,13 @@ onUnmounted(() => {
       :type="toastType"
       :duration="toastDuration"
       @close="closeToast"
+    />
+
+    <!-- 套餐购买弹窗 -->
+    <PackageModal
+      :visible="showPackageModal"
+      @close="closePackageModal"
+      @purchase-success="handlePurchaseSuccess"
     />
   </div>
 </template>
@@ -2252,6 +2294,11 @@ onUnmounted(() => {
 /* 主题切换按钮特殊效果 */
 .canvas-theme-toggle:hover {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+}
+
+/* 购物车按钮特殊效果 */
+.canvas-cart-btn:hover {
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
 }
 
 /* 确保语言切换器在画布模式下样式正确 */
