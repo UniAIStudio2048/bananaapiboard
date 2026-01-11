@@ -873,7 +873,7 @@ onUnmounted(() => {
     </button>
     
     <!-- 底部配置面板 - 选中时显示 -->
-    <div v-if="selected" class="config-panel">
+    <div v-show="selected" class="config-panel">
       <div class="settings-header">
         <span class="settings-title">生成设置</span>
       </div>

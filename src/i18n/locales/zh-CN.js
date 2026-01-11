@@ -338,6 +338,7 @@ export default {
     collaborate: '协作',
     loading: '加载中...',
     preparingCanvas: '准备画布...',
+    pointsDetail: '可用积分（套餐积分 + 永久积分）',
     // 存储配额
     storageSpace: '存储空间',
     workflowCount: '工作流数量',

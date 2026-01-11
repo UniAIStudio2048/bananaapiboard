@@ -42,6 +42,10 @@ export async function generateImageFromText(params) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+    // 统一积分不足错误提示
+    if (error.error === 'insufficient_points' || response.status === 402) {
+      throw new Error('当前积分余额不足，任务提交失败')
+    }
     throw new Error(error.message || error.error || '图片生成失败')
   }
   
@@ -93,6 +97,10 @@ export async function generateImageFromImage(params) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     console.error('[API] 图生图请求失败:', error)
+    // 统一积分不足错误提示
+    if (error.error === 'insufficient_points' || response.status === 402) {
+      throw new Error('当前积分余额不足，任务提交失败')
+    }
     throw new Error(error.message || error.error || '图片生成失败')
   }
   
@@ -125,6 +133,10 @@ export async function generateVideoFromText(params) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+    // 统一积分不足错误提示
+    if (error.error === 'insufficient_points' || response.status === 402) {
+      throw new Error('当前积分余额不足，任务提交失败')
+    }
     throw new Error(error.message || error.error || '视频生成失败')
   }
   
@@ -158,6 +170,10 @@ export async function generateVideoFromImage(params) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+    // 统一积分不足错误提示
+    if (error.error === 'insufficient_points' || response.status === 402) {
+      throw new Error('当前积分余额不足，任务提交失败')
+    }
     throw new Error(error.message || error.error || '视频生成失败')
   }
   

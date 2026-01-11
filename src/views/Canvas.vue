@@ -153,6 +153,16 @@ async function confirmSwitchToSimpleMode() {
   }, 600)
 }
 
+// 计算用户积分总和（套餐积分 + 永久积分）
+const totalPoints = computed(() => {
+  if (!me.value) return 0
+  const packagePoints = parseFloat(me.value.package_points) || 0
+  const permanentPoints = parseFloat(me.value.points) || 0
+  const total = packagePoints + permanentPoints
+  // 格式化显示，整数不显示小数点
+  return total % 1 === 0 ? total.toFixed(0) : total.toFixed(2)
+})
+
 // 选中的编组节点
 const selectedGroupNode = computed(() => {
   // 检查 selectedNodeId
@@ -776,6 +786,21 @@ async function loadUserInfo() {
   }
 }
 
+// 处理用户信息更新事件
+async function handleUserInfoUpdated() {
+  try {
+    // 强制刷新用户信息，获取最新的积分余额
+    me.value = await getMe(true)
+    console.log('[Canvas] 用户信息已更新:', { 
+      points: me.value?.points, 
+      package_points: me.value?.package_points,
+      balance: me.value?.balance 
+    })
+  } catch (e) {
+    console.error('[Canvas] 刷新用户信息失败:', e)
+  }
+}
+
 // 检查并显示新手引导
 function checkOnboarding() {
   const completed = localStorage.getItem('canvasOnboardingCompleted')
@@ -1225,6 +1250,9 @@ onMounted(async () => {
   // 监听页面关闭事件，保存工作流到历史
   window.addEventListener('beforeunload', handleBeforeUnload)
   
+  // 监听用户信息更新事件，实时更新积分余额
+  window.addEventListener('user-info-updated', handleUserInfoUpdated)
+  
   // 检查URL参数，如果有load参数则加载工作流
   const loadWorkflowId = route.query.load
   if (loadWorkflowId && me.value) {
@@ -1268,6 +1296,7 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('user-info-updated', handleUserInfoUpdated)
   stopAutoSave()
   stopHistoryAutoSave()
 
@@ -1395,6 +1424,17 @@ onUnmounted(() => {
       
       <!-- 右上角控制区域 -->
       <div class="canvas-top-right-controls" :class="{ 'panel-open': showAIAssistant }">
+        <!-- 积分显示 -->
+        <div v-if="me" class="canvas-points-display" :title="t('canvas.pointsDetail')">
+          <svg class="points-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 6v12"/>
+            <path d="M8 10h8"/>
+            <path d="M8 14h8"/>
+          </svg>
+          <span class="points-value">{{ totalPoints }}</span>
+        </div>
+        
         <!-- 通知铃铛 -->
         <CanvasNotification :theme="canvasTheme" />
         
@@ -2019,6 +2059,61 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   transition: right 0.25s ease;
+}
+
+/* 积分显示 */
+.canvas-points-display {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: rgba(18, 18, 18, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 500;
+  backdrop-filter: blur(20px);
+  cursor: default;
+  transition: all 0.25s ease;
+}
+
+.canvas-points-display:hover {
+  background: rgba(30, 30, 30, 0.98);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.canvas-points-display .points-icon {
+  width: 16px;
+  height: 16px;
+  color: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+}
+
+.canvas-points-display .points-value {
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 积分显示 - 白昼模式 */
+:root.canvas-theme-light .canvas-points-display {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  color: rgba(28, 25, 23, 0.85);
+}
+
+:root.canvas-theme-light .canvas-points-display:hover {
+  background: rgba(255, 255, 255, 1);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .canvas-points-display .points-icon {
+  color: rgba(28, 25, 23, 0.85);
+}
+
+:root.canvas-theme-light .canvas-points-display .points-value {
+  color: rgba(28, 25, 23, 0.85);
 }
 
 /* 当 AI 面板打开时，右上角控制区域向左移动 */

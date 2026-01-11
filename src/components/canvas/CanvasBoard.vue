@@ -18,7 +18,7 @@
  * - Ctrl+A：全选节点
  * - Ctrl+G：编组选中的节点
  */
-import { ref, computed, watch, onMounted, onUnmounted, inject } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, inject, nextTick } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -112,6 +112,13 @@ const fileDragCounter = ref(0)
 const isSpacePressed = ref(false)
 const isPanning = ref(false)
 const panStart = ref({ x: 0, y: 0 })
+
+// 对齐辅助线状态
+const alignmentGuides = ref({
+  vertical: null,   // { x: number, startY: number, endY: number } | null
+  horizontal: null  // { y: number, startX: number, endX: number } | null
+})
+const snapPosition = ref({ x: null, y: null }) // 对齐吸附位置
 
 // Vue Flow 实例
 const { 
@@ -342,7 +349,25 @@ onConnect((connection) => {
 // 处理节点拖拽结束
 onNodeDragStop((event) => {
   const node = event.node
-  canvasStore.updateNodePosition(node.id, node.position)
+  
+  // 保存对齐位置的值（在清除之前）
+  const snapX = snapPosition.value.x
+  const snapY = snapPosition.value.y
+  const currentX = node.position.x
+  const currentY = node.position.y
+  
+  // 清除对齐辅助线
+  alignmentGuides.value = { vertical: null, horizontal: null }
+  snapPosition.value = { x: null, y: null }
+  
+  // 计算最终位置
+  const finalPosition = {
+    x: snapX !== null ? snapX : currentX,
+    y: snapY !== null ? snapY : currentY
+  }
+  
+  // 只使用 store 的更新方法，不直接修改 node.position
+  canvasStore.updateNodePosition(node.id, finalPosition)
   
   // 如果拖拽的是编组节点，同步更新组内节点位置
   if (node.type === 'group' && node.data?.nodeIds) {
@@ -354,6 +379,7 @@ onNodeDragStop((event) => {
     adjustGroupSizeForNode(node)
   }
 })
+
 
 // 处理节点拖拽中（实时同步）
 onNodeDrag((event) => {
@@ -368,7 +394,142 @@ onNodeDrag((event) => {
   if (node.type !== 'group' && node.data?.groupId) {
     adjustGroupSizeForNode(node)
   }
+  
+  // 计算对齐辅助线
+  calculateAlignmentGuides(node)
 })
+
+// 计算对齐辅助线
+function calculateAlignmentGuides(draggedNode) {
+  const SNAP_THRESHOLD = 10 // 对齐阈值（像素）
+  
+  // 获取当前节点的位置和尺寸
+  const nodeX = draggedNode.position.x
+  const nodeY = draggedNode.position.y
+  const nodeWidth = draggedNode.dimensions?.width || draggedNode.data?.width || 380
+  const nodeHeight = draggedNode.dimensions?.height || draggedNode.data?.height || 320
+  
+  // 计算节点的关键位置（左、右、中心、顶部、底部、中间）
+  const nodeLeft = nodeX
+  const nodeRight = nodeX + nodeWidth
+  const nodeCenterX = nodeX + nodeWidth / 2
+  const nodeTop = nodeY
+  const nodeBottom = nodeY + nodeHeight
+  const nodeCenterY = nodeY + nodeHeight / 2
+  
+  // 初始化对齐辅助线
+  alignmentGuides.value = { vertical: null, horizontal: null }
+  snapPosition.value = { x: null, y: null }
+  
+  // 查找附近的其他节点（排除当前节点和组内节点，因为组内节点会跟随组移动）
+  const nearbyNodes = canvasStore.nodes.filter(n => {
+    if (n.id === draggedNode.id) return false
+    if (n.type === 'group') return false // 排除编组节点
+    if (n.data?.groupId && n.data.groupId !== draggedNode.data?.groupId) return false // 排除其他组的节点
+    
+    // 粗略检查是否在附近（扩大范围以优化性能）
+    const nWidth = n.dimensions?.width || n.data?.width || 380
+    const nHeight = n.dimensions?.height || n.data?.height || 320
+    const nLeft = n.position.x
+    const nRight = n.position.x + nWidth
+    const nTop = n.position.y
+    const nBottom = n.position.y + nHeight
+    
+    // 检查是否有重叠或接近（扩展检查范围）
+    const margin = Math.max(nodeWidth, nodeHeight, nWidth, nHeight) + SNAP_THRESHOLD * 2
+    return !(
+      nodeRight < nLeft - margin ||
+      nodeLeft > nRight + margin ||
+      nodeBottom < nTop - margin ||
+      nodeTop > nBottom + margin
+    )
+  })
+  
+  let minVerticalDistance = SNAP_THRESHOLD
+  let minHorizontalDistance = SNAP_THRESHOLD
+  
+  // 检查每个附近节点
+  nearbyNodes.forEach(otherNode => {
+    const otherX = otherNode.position.x
+    const otherY = otherNode.position.y
+    const otherWidth = otherNode.dimensions?.width || otherNode.data?.width || 380
+    const otherHeight = otherNode.dimensions?.height || otherNode.data?.height || 320
+    
+    const otherLeft = otherX
+    const otherRight = otherX + otherWidth
+    const otherCenterX = otherX + otherWidth / 2
+    const otherTop = otherY
+    const otherBottom = otherY + otherHeight
+    const otherCenterY = otherY + otherHeight / 2
+    
+    // 检查垂直对齐（左、右、中心）
+    const distances = [
+      { type: 'left', distance: Math.abs(nodeLeft - otherLeft), target: otherLeft, nodePos: nodeLeft },
+      { type: 'right', distance: Math.abs(nodeRight - otherRight), target: otherRight, nodePos: nodeRight },
+      { type: 'center', distance: Math.abs(nodeCenterX - otherCenterX), target: otherCenterX, nodePos: nodeCenterX }
+    ]
+    
+    distances.forEach(({ type, distance, target }) => {
+      if (distance < minVerticalDistance) {
+        minVerticalDistance = distance
+        
+        // 计算辅助线的范围
+        const minY = Math.min(nodeTop, nodeBottom, otherTop, otherBottom)
+        const maxY = Math.max(nodeTop, nodeBottom, otherTop, otherBottom)
+        
+        alignmentGuides.value.vertical = {
+          x: target,
+          startY: minY - 50,
+          endY: maxY + 50
+        }
+        
+        // 计算吸附位置
+        if (type === 'left') {
+          snapPosition.value.x = otherLeft
+        } else if (type === 'right') {
+          snapPosition.value.x = otherRight - nodeWidth
+        } else if (type === 'center') {
+          snapPosition.value.x = otherCenterX - nodeWidth / 2
+        }
+      }
+    })
+    
+    // 检查水平对齐（顶部、底部、中间）
+    const vDistances = [
+      { type: 'top', distance: Math.abs(nodeTop - otherTop), target: otherTop, nodePos: nodeTop },
+      { type: 'bottom', distance: Math.abs(nodeBottom - otherBottom), target: otherBottom, nodePos: nodeBottom },
+      { type: 'center', distance: Math.abs(nodeCenterY - otherCenterY), target: otherCenterY, nodePos: nodeCenterY }
+    ]
+    
+    vDistances.forEach(({ type, distance, target }) => {
+      if (distance < minHorizontalDistance) {
+        minHorizontalDistance = distance
+        
+        // 计算辅助线的范围
+        const minX = Math.min(nodeLeft, nodeRight, otherLeft, otherRight)
+        const maxX = Math.max(nodeLeft, nodeRight, otherLeft, otherRight)
+        
+        alignmentGuides.value.horizontal = {
+          y: target,
+          startX: minX - 50,
+          endX: maxX + 50
+        }
+        
+        // 计算吸附位置
+        if (type === 'top') {
+          snapPosition.value.y = otherTop
+        } else if (type === 'bottom') {
+          snapPosition.value.y = otherBottom - nodeHeight
+        } else if (type === 'center') {
+          snapPosition.value.y = otherCenterY - nodeHeight / 2
+        }
+      }
+    })
+  })
+  
+  // 注意：不在这里修改节点位置，只在 onNodeDragStop 中应用对齐位置
+  // 这样可以避免干扰 Vue Flow 的拖拽机制
+}
 
 // 调整组大小以包含被拖拽的节点（只扩展不缩小）
 function adjustGroupSizeForNode(node) {
@@ -1238,6 +1399,40 @@ const getDragLinePath = computed(() => {
   return `M ${screenX1} ${screenY1} C ${screenX1 + controlOffset} ${screenY1}, ${screenX2 - controlOffset} ${screenY2}, ${screenX2} ${screenY2}`
 })
 
+// 对齐辅助线的屏幕坐标（转换为屏幕坐标用于SVG渲染）
+const alignmentGuidesScreen = computed(() => {
+  if (!alignmentGuides.value.vertical && !alignmentGuides.value.horizontal) {
+    return { vertical: null, horizontal: null }
+  }
+  
+  const viewport = canvasStore.viewport
+  
+  const result = {
+    vertical: null,
+    horizontal: null
+  }
+  
+  // 转换垂直辅助线
+  if (alignmentGuides.value.vertical) {
+    result.vertical = {
+      x: alignmentGuides.value.vertical.x * viewport.zoom + viewport.x,
+      startY: alignmentGuides.value.vertical.startY * viewport.zoom + viewport.y,
+      endY: alignmentGuides.value.vertical.endY * viewport.zoom + viewport.y
+    }
+  }
+  
+  // 转换水平辅助线
+  if (alignmentGuides.value.horizontal) {
+    result.horizontal = {
+      y: alignmentGuides.value.horizontal.y * viewport.zoom + viewport.y,
+      startX: alignmentGuides.value.horizontal.startX * viewport.zoom + viewport.x,
+      endX: alignmentGuides.value.horizontal.endX * viewport.zoom + viewport.x
+    }
+  }
+  
+  return result
+})
+
 // 查找目标节点
 function findTargetNode(element) {
   if (!element) return null
@@ -1821,6 +2016,36 @@ onUnmounted(() => {
         </svg>
       </template>
       
+      <!-- 对齐辅助线 -->
+      <template v-if="alignmentGuidesScreen.vertical || alignmentGuidesScreen.horizontal">
+        <svg class="alignment-guides">
+          <!-- 垂直辅助线 -->
+          <line
+            v-if="alignmentGuidesScreen.vertical"
+            :x1="alignmentGuidesScreen.vertical.x"
+            :y1="alignmentGuidesScreen.vertical.startY"
+            :x2="alignmentGuidesScreen.vertical.x"
+            :y2="alignmentGuidesScreen.vertical.endY"
+            stroke="#3b82f6"
+            stroke-width="1.5"
+            stroke-dasharray="4,4"
+            opacity="0.8"
+          />
+          <!-- 水平辅助线 -->
+          <line
+            v-if="alignmentGuidesScreen.horizontal"
+            :x1="alignmentGuidesScreen.horizontal.startX"
+            :y1="alignmentGuidesScreen.horizontal.y"
+            :x2="alignmentGuidesScreen.horizontal.endX"
+            :y2="alignmentGuidesScreen.horizontal.y"
+            stroke="#3b82f6"
+            stroke-width="1.5"
+            stroke-dasharray="4,4"
+            opacity="0.8"
+          />
+        </svg>
+      </template>
+      
       <!-- 小地图 (可选) -->
       <!-- <MiniMap /> -->
     </VueFlow>
@@ -1933,6 +2158,22 @@ onUnmounted(() => {
 .pending-connection-line path {
   filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.6));
   animation: pendingDashAnimation 0.8s linear infinite;
+}
+
+/* 对齐辅助线 */
+.alignment-guides {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1001;
+  overflow: visible;
+}
+
+.alignment-guides line {
+  filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.6));
 }
 
 @keyframes pendingDashAnimation {

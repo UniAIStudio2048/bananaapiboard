@@ -169,7 +169,12 @@ async function handleGenerate() {
 
   } catch (error) {
     console.error('[AudioGenNode] 生成失败:', error)
-    errorMessage.value = error.response?.data?.error || error.message || '生成失败'
+    // 统一积分不足错误提示
+    if (error.response?.data?.error === 'insufficient_points' || error.response?.status === 402) {
+      errorMessage.value = '当前积分余额不足，任务提交失败'
+    } else {
+      errorMessage.value = error.response?.data?.error || error.message || '生成失败'
+    }
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       error: errorMessage.value
@@ -512,7 +517,7 @@ onUnmounted(() => {
     />
 
     <!-- 底部配置面板 - 选中时显示 -->
-    <div v-if="selected" class="config-panel">
+    <div v-show="selected" class="config-panel">
       <div class="settings-header">
         <span class="settings-title">生成设置</span>
       </div>

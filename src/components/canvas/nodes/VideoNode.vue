@@ -2520,7 +2520,7 @@ async function handleToolbarHD() {
     
     if (!response.ok) {
       if (result.error === 'insufficient_points') {
-        showInsufficientPointsDialog(result.message)
+        showToast('当前积分余额不足，任务提交失败', 'error')
       } else if (result.error === 'hd_not_configured') {
         showAlert('功能未配置', result.message || '视频高清功能未配置，请联系管理员')
       } else {
@@ -3143,7 +3143,7 @@ function handleToolbarPreview() {
 <template>
   <div :class="nodeClass" @contextmenu="handleContextMenu">
     <!-- 视频工具栏（选中且有视频时显示）- 与 ImageNode 保持一致 -->
-    <div v-if="showToolbar" class="video-toolbar">
+    <div v-show="showToolbar" class="video-toolbar">
       <button 
         class="toolbar-btn" 
         :class="{ 'processing': isHDProcessing }"
@@ -3450,7 +3450,7 @@ function handleToolbarPreview() {
     />
     
     <!-- 底部配置面板（选中时显示） -->
-    <div v-if="selected" class="config-panel" @mousedown.stop>
+    <div v-show="selected" class="config-panel" @mousedown.stop>
       <!-- 参考图片预览（支持拖拽上传） -->
       <div 
         class="panel-frames"
@@ -4008,6 +4008,10 @@ function handleToolbarPreview() {
 
 /* ========== 视频工具栏（与 ImageNode 的 image-toolbar 保持一致） ========== */
 .video-toolbar {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 2px;
@@ -4015,8 +4019,9 @@ function handleToolbarPreview() {
   border: 1px solid #3a3a3a;
   border-radius: 20px;
   padding: 6px 12px;
-  margin-bottom: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  pointer-events: auto;
 }
 
 .video-toolbar .toolbar-btn {

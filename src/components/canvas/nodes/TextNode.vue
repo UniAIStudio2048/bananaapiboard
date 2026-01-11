@@ -2127,7 +2127,7 @@ onMounted(() => {
     />
     
     <!-- 格式工具栏（选中节点时显示） -->
-    <div v-if="selected" class="format-toolbar">
+    <div v-show="selected" class="format-toolbar">
       <template v-for="(btn, index) in formatButtons" :key="index">
         <div v-if="btn.type === 'divider'" class="toolbar-divider"></div>
         <button 
@@ -2362,7 +2362,7 @@ onMounted(() => {
     </Teleport>
     
     <!-- 底部 LLM 配置面板 - 紧贴节点卡片 -->
-    <div v-if="selected" class="llm-config-panel" @click.stop>
+    <div v-show="selected" class="llm-config-panel" @click.stop>
       <!-- 参考媒体区域（视频/图片/混合） -->
       <div v-if="inheritedImages.length > 0" class="reference-section">
         <span class="reference-label">{{ referenceLabel }}</span>
@@ -2550,6 +2550,10 @@ onMounted(() => {
 
 /* 格式工具栏 */
 .format-toolbar {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 2px;
@@ -2557,8 +2561,9 @@ onMounted(() => {
   border: 1px solid #3a3a3a;
   border-radius: 20px;
   padding: 6px 12px;
-  margin-bottom: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  pointer-events: auto;
 }
 
 .toolbar-btn {

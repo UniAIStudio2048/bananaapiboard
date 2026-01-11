@@ -3476,7 +3476,7 @@ async function handleDrop(event) {
     />
     
     <!-- 图片工具栏（选中且有图片时显示）- 与 TextNode 保持一致 -->
-    <div v-if="showToolbar" class="image-toolbar">
+    <div v-show="showToolbar" class="image-toolbar">
       <button class="toolbar-btn" title="重绘" @mousedown.prevent="handleToolbarRepaint">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"/>
@@ -3850,7 +3850,7 @@ async function handleDrop(event) {
     </div>
     
     <!-- 底部配置面板（仅输出节点选中时显示，拖动和缩放时隐藏） -->
-    <div v-if="showConfigPanel" class="config-panel" @mousedown.stop>
+    <div v-show="showConfigPanel" class="config-panel" @mousedown.stop>
       <!-- 参考图片预览（支持拖拽上传和排序） -->
       <div 
         class="panel-frames"
@@ -4145,6 +4145,10 @@ async function handleDrop(event) {
 
 /* ========== 图片工具栏（与 TextNode 的 format-toolbar 保持一致） ========== */
 .image-toolbar {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 2px;
@@ -4152,8 +4156,9 @@ async function handleDrop(event) {
   border: 1px solid #3a3a3a;
   border-radius: 20px;
   padding: 6px 12px;
-  margin-bottom: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  pointer-events: auto;
 }
 
 .image-toolbar .toolbar-btn {

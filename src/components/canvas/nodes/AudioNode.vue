@@ -1166,7 +1166,7 @@ function handleSpeedDropdownClickOutside(event) {
     />
     
     <!-- 音频工具栏（选中且有音频时显示）- 与 ImageNode 保持一致 -->
-    <div v-if="showToolbar" class="audio-toolbar">
+    <div v-show="showToolbar" class="audio-toolbar">
       <!-- 倍速选择器 -->
       <div class="speed-dropdown" @click.stop>
         <button class="toolbar-btn speed-btn" title="播放速度" @click="toggleSpeedDropdown">
@@ -1376,7 +1376,7 @@ function handleSpeedDropdownClickOutside(event) {
     </div>
     
     <!-- 底部配置面板（选中时显示） - 黑白现代风格 -->
-    <div v-if="showConfigPanel" class="config-panel" @mousedown.stop>
+    <div v-show="showConfigPanel" class="config-panel" @mousedown.stop>
       <!-- 音乐生成配置（无音频时显示） -->
       <div v-if="!hasAudio" class="music-gen-panel">
         <!-- 大文本输入区 -->
@@ -1561,6 +1561,10 @@ function handleSpeedDropdownClickOutside(event) {
 
 /* ========== 音频工具栏（与 ImageNode 的 image-toolbar 保持一致） ========== */
 .audio-toolbar {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 2px;
@@ -1568,8 +1572,9 @@ function handleSpeedDropdownClickOutside(event) {
   border: 1px solid #3a3a3a;
   border-radius: 20px;
   padding: 6px 12px;
-  margin-bottom: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  pointer-events: auto;
 }
 
 .audio-toolbar .toolbar-btn {
