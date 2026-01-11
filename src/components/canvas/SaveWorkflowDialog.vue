@@ -107,10 +107,11 @@ async function handleSave() {
       id: currentWorkflowId.value,
       name: workflowName.value.trim(),
       description: workflowDescription.value.trim(),
+      uploadToCloud: true, // 手动保存时上传到云存储
       ...workflowData
     }
 
-    // 调用API保存（后端会异步处理文件上传）
+    // 调用API保存（后端会异步处理文件上传到云存储）
     const result = await saveWorkflow(dataToSave)
 
     // 后端返回格式: { id, success } 或 { workflow: { id, name, ... } }

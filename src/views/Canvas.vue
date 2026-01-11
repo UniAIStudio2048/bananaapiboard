@@ -620,9 +620,11 @@ async function autoSaveWorkflow() {
     const { saveWorkflow } = await import('@/api/canvas/workflow')
     const workflowData = canvasStore.exportWorkflow()
     
+    // 自动保存时，设置 uploadToCloud=false，不上传云存储，只保存到数据库
     await saveWorkflow({
       id: currentTab.workflowId,
       name: currentTab.name,
+      uploadToCloud: false, // 自动保存不上传云存储
       ...workflowData
     })
     
