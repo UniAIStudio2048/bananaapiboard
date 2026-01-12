@@ -4,8 +4,8 @@
 VITE_API_BASE=
 
 # 租户凭证（默认租户）
-VITE_TENANT_ID=default-tenant-001
-VITE_TENANT_KEY=DEFAULT-LICENSE-KEY-001
+VITE_TENANT_ID=
+VITE_TENANT_KEY=
 
 # ============================================
 # 功能开关
