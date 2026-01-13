@@ -33,7 +33,6 @@ import VideoNode from './nodes/VideoNode.vue'
 import AudioNode from './nodes/AudioNode.vue'
 import ImageGenNode from './nodes/ImageGenNode.vue'
 import VideoGenNode from './nodes/VideoGenNode.vue'
-import AudioGenNode from './nodes/AudioGenNode.vue'
 import LLMNode from './nodes/LLMNode.vue'
 import PreviewNode from './nodes/PreviewNode.vue'
 import GroupNode from './nodes/GroupNode.vue'
@@ -201,7 +200,6 @@ const nodeTypes = {
   'video-input': VideoNode,       // 视频节点（上传+生成一体化）
   'audio-input': AudioNode,       // 音频节点（上传音频）
   'audio': AudioNode,             // 统一音频节点
-  'audio-gen': AudioGenNode,      // 音乐生成节点（Suno）
   'image': ImageNode,             // 统一图片节点
   'video': VideoNode,             // 统一视频节点
   'image-gen': ImageNode,         // 兼容：图片生成映射到 ImageNode

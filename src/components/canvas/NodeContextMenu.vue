@@ -95,7 +95,7 @@ const isAudioNodeWithOutput = computed(() => {
   const type = nodeType.value
   // 所有音频相关的节点类型
   const audioTypes = [
-    'audio', 'audio-input', 'audio-gen',
+    'audio', 'audio-input',
     'text-to-audio', 'tts', 'audio-to-text', 'audio-lip-sync'
   ]
   const isAudioType = audioTypes.includes(type)
@@ -245,17 +245,35 @@ function createDownstreamNode(type) {
     y: props.node.position.y
   }
   
-  // 如果是图片描述或视频描述，直接创建文本节点连接到当前节点
+  // 如果是图片描述或视频描述，创建反推节点，再连接到文本节点
   if (type === NODE_TYPES.LLM_IMAGE_DESCRIBE || type === NODE_TYPES.LLM_VIDEO_DESCRIBE || 
       type === 'llm-image-describe' || type === 'llm-video-describe') {
-    const textNode = canvasStore.addNode({
-      type: 'text-input',
+    // 1. 创建反推节点（图片反推或视频反推）
+    const describeNode = canvasStore.addNode({
+      type,
       position,
       data: {}
     })
     
+    // 2. 将当前节点（图片/视频）连接到反推节点
     canvasStore.addEdge({
       source: props.node.id,
+      target: describeNode.id
+    })
+    
+    // 3. 创建文本节点，放在反推节点右侧
+    const textNode = canvasStore.addNode({
+      type: 'text-input',
+      position: {
+        x: position.x + 300,
+        y: position.y
+      },
+      data: {}
+    })
+    
+    // 4. 将反推节点连接到文本节点（反推结果输出到文本）
+    canvasStore.addEdge({
+      source: describeNode.id,
       target: textNode.id
     })
     

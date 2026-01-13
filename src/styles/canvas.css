@@ -295,6 +295,15 @@
   transform: translate(-50%, -50%);
   text-align: center;
   z-index: 5;
+  transition: left 0.25s ease, transform 0.25s ease;
+  /* 确保按钮组有足够宽度显示 */
+  min-width: 480px;
+}
+
+/* 当 AI 面板打开时，空白状态区域向左调整以避免被遮挡 */
+.canvas-container.ai-panel-open .canvas-empty-state {
+  /* 动态调整：面板宽度通过 CSS 变量控制，默认 420px */
+  left: calc(50% - var(--ai-panel-offset, 210px));
 }
 
 .canvas-empty-icon {

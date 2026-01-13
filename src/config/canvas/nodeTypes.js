@@ -16,7 +16,6 @@ export const NODE_TYPES = {
   IMAGE_TO_IMAGE: 'image-to-image',
   TEXT_TO_VIDEO: 'text-to-video',
   IMAGE_TO_VIDEO: 'image-to-video',
-  AUDIO_GEN: 'audio-gen',
   
   // LLM 智能类
   LLM_PROMPT_ENHANCE: 'llm-prompt-enhance',
@@ -38,14 +37,12 @@ export const NODE_TYPES = {
   // 视频处理类
   VIDEO_LAST_FRAME: 'video-last-frame',
   LLM_VIDEO_DESCRIBE: 'llm-video-describe',
+  VIDEO_EDIT: 'video-edit',  // 视频编辑（连接下游视频节点）
 
   // 音频处理类
   AUDIO_TO_VIDEO: 'audio-to-video',
   AUDIO_TO_TEXT: 'audio-to-text',
-  AUDIO_LIP_SYNC: 'audio-lip-sync',
-
-  // 文本生成音频
-  TEXT_TO_MUSIC: 'text-to-music'
+  AUDIO_LIP_SYNC: 'audio-lip-sync'
 }
 
 // 节点类型配置 - 黑白灰简洁风格图标
@@ -144,19 +141,6 @@ export const NODE_TYPE_CONFIG = {
     hasOutput: true,
     inputType: 'image',
     outputType: 'video',
-    consumesPoints: true
-  },
-
-  [NODE_TYPES.AUDIO_GEN]: {
-    label: 'canvas.nodeConfig.audioGen.label',
-    description: 'canvas.nodeConfig.audioGen.desc',
-    icon: '♫',
-    category: 'generate',
-    color: '#a855f7',
-    hasInput: true,
-    hasOutput: true,
-    inputType: 'text',
-    outputType: 'audio',
     consumesPoints: true
   },
 
@@ -331,6 +315,18 @@ export const NODE_TYPE_CONFIG = {
     consumesPoints: true,
     pointsCost: 2
   },
+  
+  [NODE_TYPES.VIDEO_EDIT]: {
+    label: 'canvas.nodeConfig.videoEdit.label',
+    description: 'canvas.nodeConfig.videoEdit.desc',
+    icon: '▶✎',
+    category: 'video',
+    color: '#f97316',
+    hasInput: true,
+    hasOutput: true,
+    inputType: 'video',
+    outputType: 'video'
+  },
 
   // 音频处理节点
   [NODE_TYPES.AUDIO_TO_VIDEO]: {
@@ -369,19 +365,6 @@ export const NODE_TYPE_CONFIG = {
     inputType: 'audio+image',
     outputType: 'video',
     consumesPoints: true
-  },
-
-  [NODE_TYPES.TEXT_TO_MUSIC]: {
-    label: 'canvas.nodeConfig.textToMusic.label',
-    description: 'canvas.nodeConfig.textToMusic.desc',
-    icon: 'Aa♪',
-    category: 'generate',
-    color: '#a855f7',
-    hasInput: true,
-    hasOutput: true,
-    inputType: 'text',
-    outputType: 'audio',
-    consumesPoints: true
   }
 }
 
@@ -390,8 +373,6 @@ export const CONNECTION_RULES = {
   [NODE_TYPES.TEXT_INPUT]: [
     NODE_TYPES.TEXT_TO_IMAGE,
     NODE_TYPES.TEXT_TO_VIDEO,
-    NODE_TYPES.AUDIO_GEN,
-    NODE_TYPES.TEXT_TO_MUSIC,
     NODE_TYPES.LLM_PROMPT_ENHANCE,
     NODE_TYPES.LLM_CONTENT_EXPAND,
     NODE_TYPES.LLM_STORYBOARD
@@ -408,30 +389,25 @@ export const CONNECTION_RULES = {
   
   [NODE_TYPES.IMAGE_INPUT]: [
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
-    NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
-    NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推/描述
-    NODE_TYPES.GRID_PREVIEW         // 9宫格分镜
+    NODE_TYPES.IMAGE_TO_VIDEO       // 图生视频
   ],
   
   // 统一图片节点别名
   'image': [
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
-    NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
-    NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推/描述
-    NODE_TYPES.GRID_PREVIEW         // 9宫格分镜
+    NODE_TYPES.IMAGE_TO_VIDEO       // 图生视频
   ],
   
   // 图生图节点别名
   'image-gen': [
     NODE_TYPES.IMAGE_TO_IMAGE,
-    NODE_TYPES.IMAGE_TO_VIDEO,
-    NODE_TYPES.LLM_IMAGE_DESCRIBE,
-    NODE_TYPES.GRID_PREVIEW         // 9宫格分镜
+    NODE_TYPES.IMAGE_TO_VIDEO
   ],
   
   [NODE_TYPES.VIDEO_INPUT]: [
     NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
-    NODE_TYPES.LLM_VIDEO_DESCRIBE   // 视频反推
+    NODE_TYPES.LLM_VIDEO_DESCRIBE,  // 视频反推
+    NODE_TYPES.VIDEO_EDIT           // 视频编辑
   ],
   
   [NODE_TYPES.AUDIO_INPUT]: [
@@ -456,13 +432,15 @@ export const CONNECTION_RULES = {
   // 统一视频节点别名
   'video': [
     NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
-    NODE_TYPES.LLM_VIDEO_DESCRIBE   // 视频反推
+    NODE_TYPES.LLM_VIDEO_DESCRIBE,  // 视频反推
+    NODE_TYPES.VIDEO_EDIT           // 视频编辑
   ],
   
   // 视频生成节点别名
   'video-gen': [
     NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
-    NODE_TYPES.LLM_VIDEO_DESCRIBE   // 视频反推
+    NODE_TYPES.LLM_VIDEO_DESCRIBE,  // 视频反推
+    NODE_TYPES.VIDEO_EDIT           // 视频编辑
   ],
   
   [NODE_TYPES.TEXT_TO_IMAGE]: [
@@ -487,12 +465,14 @@ export const CONNECTION_RULES = {
   
   [NODE_TYPES.TEXT_TO_VIDEO]: [
     NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
-    NODE_TYPES.LLM_VIDEO_DESCRIBE   // 视频反推
+    NODE_TYPES.LLM_VIDEO_DESCRIBE,  // 视频反推
+    NODE_TYPES.VIDEO_EDIT           // 视频编辑
   ],
   
   [NODE_TYPES.IMAGE_TO_VIDEO]: [
     NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
-    NODE_TYPES.LLM_VIDEO_DESCRIBE   // 视频反推
+    NODE_TYPES.LLM_VIDEO_DESCRIBE,  // 视频反推
+    NODE_TYPES.VIDEO_EDIT           // 视频编辑
   ],
   
   [NODE_TYPES.LLM_PROMPT_ENHANCE]: [
@@ -562,7 +542,7 @@ export const NODE_CATEGORIES = {
   },
   generate: {
     label: '生成',
-    types: [NODE_TYPES.TEXT_TO_IMAGE, NODE_TYPES.IMAGE_TO_IMAGE, NODE_TYPES.TEXT_TO_VIDEO, NODE_TYPES.IMAGE_TO_VIDEO, NODE_TYPES.AUDIO_GEN]
+    types: [NODE_TYPES.TEXT_TO_IMAGE, NODE_TYPES.IMAGE_TO_IMAGE, NODE_TYPES.TEXT_TO_VIDEO, NODE_TYPES.IMAGE_TO_VIDEO]
   },
   llm: {
     label: 'AI 智能',

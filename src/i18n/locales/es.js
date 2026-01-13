@@ -641,6 +641,7 @@ export default {
     logout: 'Cerrar sesión',
     logoutConfirm: '¿Estás seguro de cerrar sesión?',
     rechargeAccount: 'Recargar cuenta',
+    selectRechargeCard: 'Seleccionar tarjeta de recarga',
     selectAmount: 'Seleccionar monto',
     orEnterCustomAmount: 'O ingrese monto personalizado (CNY)',
     paymentMethod: 'Método de pago',

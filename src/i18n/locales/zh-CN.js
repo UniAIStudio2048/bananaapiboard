@@ -534,6 +534,7 @@ export default {
       gridPreview: { label: '九宫格预览', desc: '九宫格展示多张图片' },
       videoLastFrame: { label: '截取尾帧', desc: '提取视频最后一帧' },
       videoDescribe: { label: '视频反推', desc: '视频反推提示词' },
+      videoEdit: { label: '视频编辑', desc: '编辑和处理视频' },
       audioToVideo: { label: '音频生视频', desc: '根据音频生成匹配的视频' },
       audioToText: { label: '音频提取文案', desc: '将音频转换为文字文案' },
       audioLipSync: { label: '图片对口型', desc: '根据音频为图片生成对口型视频' },
@@ -733,6 +734,7 @@ export default {
     redeemTip3: '兑换成功后积分立即到账',
     // 充值
     accountRecharge: '账户充值',
+    selectRechargeCard: '选择充值卡片',
     selectAmount: '选择金额',
     customAmountHint: '或输入自定义金额（元）',
     paymentMethod: '支付方式',

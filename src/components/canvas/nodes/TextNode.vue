@@ -1059,7 +1059,7 @@ const quickActions = [
   { icon: '✎', labelKey: 'canvas.textNode.writeContent', action: () => handlePrepareEdit() },
   { icon: '▶', labelKey: 'canvas.textNode.textToVideo', action: () => createNextNode('video-gen', t('canvas.textNode.videoGen')) },
   { icon: 'A+', labelKey: 'canvas.textNode.imageDescribePrompt', action: () => handleImageDescribe() },
-  { icon: '♪', labelKey: 'canvas.textNode.textToMusic', action: () => createNextNode('audio-gen', t('canvas.textNode.audioGen')) }
+  { icon: '♪', labelKey: 'canvas.textNode.textToMusic', action: () => createNextNode('audio', t('canvas.textNode.textToMusic')) }
 ]
 
 // 格式工具栏按钮（使用翻译键，在模板中翻译）

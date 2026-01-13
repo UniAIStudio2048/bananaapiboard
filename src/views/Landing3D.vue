@@ -114,13 +114,70 @@
             <p class="modal-subtitle">{{ authMode === 'login' ? t('auth.loginAccount') : t('auth.registerFreePoints') }}</p>
           </div>
 
-          <div class="auth-toggle">
+          <!-- 登录/注册切换 -->
+          <div v-if="!resetMode" class="auth-toggle">
             <button :class="['toggle-btn', { active: authMode === 'login' }]" @click="authMode = 'login'">{{ t('auth.login') }}</button>
             <button :class="['toggle-btn', { active: authMode === 'register' }]" @click="authMode = 'register'">{{ t('auth.register') }}</button>
             <div class="toggle-indicator" :style="{ transform: authMode === 'register' ? 'translateX(100%)' : 'translateX(0)' }"></div>
           </div>
 
-          <form @submit.prevent="submitAuth" class="auth-form">
+          <!-- 密码重置标题 -->
+          <div v-if="resetMode" class="reset-header">
+            <h3 class="reset-title">🔑 重置密码</h3>
+            <p class="reset-desc">请输入注册邮箱，我们将发送验证码到您的邮箱</p>
+          </div>
+
+          <!-- 密码重置表单 -->
+          <form v-if="resetMode" @submit.prevent="resetPassword" class="auth-form">
+            <div class="form-group">
+              <input v-model="account" type="email" class="form-input" placeholder="请输入注册邮箱" required />
+            </div>
+
+            <div class="form-group">
+              <div class="code-input-group">
+                <input 
+                  v-model="resetEmailCode" 
+                  type="text" 
+                  class="form-input code-input" 
+                  placeholder="请输入6位验证码"
+                  maxlength="6"
+                  required 
+                />
+                <button
+                  type="button"
+                  @click="sendResetVerificationCode"
+                  :disabled="resetSendingCode || resetCodeSent || !account"
+                  class="code-btn"
+                >
+                  {{ resetSendingCode ? '发送中...' : resetCodeSent ? `${resetCountdown}秒后重发` : '发送验证码' }}
+                </button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <input v-model="newPassword" type="password" class="form-input" placeholder="请输入新密码（至少6位）" required />
+            </div>
+
+            <div class="form-group">
+              <input v-model="confirmPassword" type="password" class="form-input" placeholder="请再次输入新密码" required />
+            </div>
+
+            <div v-if="authError" class="error-message">{{ authError }}</div>
+
+            <button type="submit" class="submit-btn" :disabled="authLoading">
+              <span v-if="authLoading" class="loading-spinner"></span>
+              <span v-else>重置密码</span>
+            </button>
+
+            <div class="reset-footer">
+              <button type="button" class="link-btn" @click="exitResetMode">
+                ← 返回登录
+              </button>
+            </div>
+          </form>
+
+          <!-- 登录/注册表单 -->
+          <form v-if="!resetMode" @submit.prevent="submitAuth" class="auth-form">
             <!-- 注册模式且有白名单：显示用户名和邮箱分开的输入 -->
             <div v-if="authMode === 'register' && emailConfig.has_whitelist && emailConfig.email_whitelist.length > 0" class="form-group">
               <input v-model="account" type="text" class="form-input" :placeholder="t('auth.username')" required />
@@ -188,6 +245,11 @@
             <button class="link-btn" @click="authMode = authMode === 'login' ? 'register' : 'login'">
               {{ authMode === 'login' ? t('auth.registerNow') : t('auth.loginNow') }}
             </button>
+            <div v-if="authMode === 'login'" class="forgot-password">
+              <button type="button" class="link-btn forgot-link" @click="enterResetMode">
+                忘记密码？
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -294,6 +356,15 @@ const inviteCode = ref('')
 const authLoading = ref(false)
 const authError = ref('')
 const selectedMode = ref('canvas')
+
+// 忘记密码相关
+const resetMode = ref(false) // 密码重置模式
+const newPassword = ref('')
+const confirmPassword = ref('')
+const resetCodeSent = ref(false)
+const resetCountdown = ref(0)
+const resetSendingCode = ref(false)
+const resetEmailCode = ref('')
 
 // 邮箱验证相关
 const emailConfig = ref({
@@ -402,6 +473,126 @@ async function sendVerificationCode() {
   } finally {
     sendingCode.value = false
   }
+}
+
+// 发送密码重置验证码
+async function sendResetVerificationCode() {
+  const email = account.value
+  if (!email) {
+    authError.value = t('auth.pleaseEnterEmail')
+    return
+  }
+
+  // 验证邮箱格式
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email)) {
+    authError.value = t('auth.invalidEmail')
+    return
+  }
+
+  resetSendingCode.value = true
+  authError.value = ''
+  
+  try {
+    const r = await fetch('/api/email/send-verification-code', {
+      method: 'POST',
+      headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: email, type: 'reset_password' })
+    })
+    
+    if (!r.ok) {
+      const data = await r.json()
+      throw new Error(data.message || '发送失败')
+    }
+    
+    resetCodeSent.value = true
+    
+    // 开始倒计时
+    resetCountdown.value = 60
+    const timer = setInterval(() => {
+      resetCountdown.value--
+      if (resetCountdown.value <= 0) {
+        clearInterval(timer)
+        resetCodeSent.value = false
+      }
+    }, 1000)
+    
+  } catch (e) {
+    authError.value = e.message || '发送验证码失败'
+  } finally {
+    resetSendingCode.value = false
+  }
+}
+
+// 重置密码
+async function resetPassword() {
+  authError.value = ''
+  
+  if (!account.value || !resetEmailCode.value || !newPassword.value) {
+    authError.value = '请填写所有必填项'
+    return
+  }
+  
+  if (newPassword.value !== confirmPassword.value) {
+    authError.value = '两次输入的密码不一致'
+    return
+  }
+  
+  if (newPassword.value.length < 6) {
+    authError.value = '密码长度至少6位'
+    return
+  }
+  
+  authLoading.value = true
+  
+  try {
+    const r = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: account.value,
+        code: resetEmailCode.value,
+        new_password: newPassword.value
+      })
+    })
+    
+    if (!r.ok) {
+      const data = await r.json()
+      throw new Error(data.message || '重置失败')
+    }
+    
+    // 重置成功，返回登录
+    authError.value = ''
+    resetMode.value = false
+    authMode.value = 'login'
+    resetEmailCode.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+    
+    // 显示成功提示（用 authError 临时显示成功信息，2秒后清除）
+    authError.value = '✅ 密码重置成功，请使用新密码登录'
+    setTimeout(() => { authError.value = '' }, 3000)
+    
+  } catch (e) {
+    authError.value = e.message || '密码重置失败'
+  } finally {
+    authLoading.value = false
+  }
+}
+
+// 进入忘记密码模式
+function enterResetMode() {
+  resetMode.value = true
+  authError.value = ''
+}
+
+// 返回登录模式
+function exitResetMode() {
+  resetMode.value = false
+  authError.value = ''
+  resetEmailCode.value = ''
+  newPassword.value = ''
+  confirmPassword.value = ''
 }
 
 const handleCTAClick = async () => {
@@ -2022,6 +2213,56 @@ onUnmounted(() => {
 
 .link-btn:hover {
   text-decoration: underline;
+}
+
+/* 忘记密码相关样式 */
+.forgot-password {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.forgot-link {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+}
+
+.forgot-link:hover {
+  color: #00ffff;
+}
+
+.reset-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.reset-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  margin: 0 0 8px 0;
+}
+
+.reset-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+  line-height: 1.5;
+}
+
+.reset-footer {
+  text-align: center;
+  margin-top: 16px;
+}
+
+.reset-footer .link-btn {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+}
+
+.reset-footer .link-btn:hover {
+  color: #00ffff;
 }
 
 /* Mode Modal */

@@ -17,6 +17,7 @@ import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } fr
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
+import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 
 const { t, currentLanguage } = useI18n()
 
@@ -326,7 +327,27 @@ function handleBackgroundTaskComplete(event) {
   
   console.log(`[VideoNode] 后台任务完成事件: ${taskId}`, task)
   
-  // 获取视频URL
+  // 处理高清任务完成
+  if (task.type === 'video-hd') {
+    const videoUrl = task.result?.outputUrl || task.result?.url
+    if (videoUrl) {
+      canvasStore.updateNodeData(props.id, {
+        status: 'success',
+        progress: null,
+        output: {
+          type: 'video',
+          url: videoUrl,
+          sourceUrl: task.metadata?.sourceUrl
+        },
+        pointsCost: task.result?.pointsCost || 0
+      })
+      showToast(`高清处理完成${task.result?.pointsCost > 0 ? `，消耗 ${task.result.pointsCost} 积分` : ''}`, 'success')
+    }
+    removeCompletedTask(taskId)
+    return
+  }
+  
+  // 获取视频URL（普通视频生成任务）
   const videoUrl = task.result?.video_url || task.result?.url
   if (videoUrl) {
     canvasStore.updateNodeData(props.id, {
@@ -351,6 +372,18 @@ function handleBackgroundTaskFailed(event) {
   
   console.log(`[VideoNode] 后台任务失败事件: ${taskId}`, task)
   
+  // 处理高清任务失败
+  if (task.type === 'video-hd') {
+    canvasStore.updateNodeData(props.id, {
+      status: 'error',
+      progress: null,
+      error: task.error || '高清处理失败'
+    })
+    showToast(task.error || '高清处理失败，未扣除积分', 'error')
+    removeCompletedTask(taskId)
+    return
+  }
+  
   canvasStore.updateNodeData(props.id, {
     status: 'error',
     error: task.error || '视频生成失败'
@@ -364,10 +397,11 @@ function handleBackgroundTaskProgress(event) {
   const { taskId, task } = event.detail
   if (task.nodeId !== props.id) return
   
-  // 更新进度
-  if (task.result?.progress) {
+  // 更新进度（支持高清任务和普通视频任务）
+  const progress = task.result?.progress || task.progress
+  if (progress) {
     canvasStore.updateNodeData(props.id, {
-      progress: task.result.progress
+      progress: progress
     })
   }
 }
@@ -377,9 +411,30 @@ function checkAndRestoreBackgroundTasks() {
   const nodeTasks = getTasksByNodeId(props.id)
   
   for (const task of nodeTasks) {
-    console.log(`[VideoNode] 检查后台任务: ${task.taskId}`, task.status)
+    console.log(`[VideoNode] 检查后台任务: ${task.taskId}`, task.status, task.type)
     
     if (task.status === 'completed') {
+      // 处理高清任务完成
+      if (task.type === 'video-hd') {
+        const videoUrl = task.result?.outputUrl || task.result?.url
+        if (videoUrl) {
+          console.log(`[VideoNode] 恢复已完成的高清任务: ${task.taskId}`)
+          canvasStore.updateNodeData(props.id, {
+            status: 'success',
+            progress: null,
+            output: {
+              type: 'video',
+              url: videoUrl,
+              sourceUrl: task.metadata?.sourceUrl
+            },
+            pointsCost: task.result?.pointsCost || 0
+          })
+          removeCompletedTask(task.taskId)
+        }
+        continue
+      }
+      
+      // 普通视频任务
       const videoUrl = task.result?.video_url || task.result?.url
       if (videoUrl) {
         console.log(`[VideoNode] 恢复已完成的任务: ${task.taskId}`)
@@ -396,18 +451,21 @@ function checkAndRestoreBackgroundTasks() {
       }
     } else if (task.status === 'failed') {
       console.log(`[VideoNode] 恢复失败的任务: ${task.taskId}`)
+      const errorMsg = task.type === 'video-hd' ? '高清处理失败' : '视频生成失败'
       canvasStore.updateNodeData(props.id, {
         status: 'error',
-        error: task.error || '视频生成失败'
+        progress: null,
+        error: task.error || errorMsg
       })
       removeCompletedTask(task.taskId)
     } else if (task.status === 'processing' || task.status === 'pending') {
       // 任务仍在进行中，更新进度显示
       console.log(`[VideoNode] 任务仍在进行中: ${task.taskId}`)
+      const progressText = task.type === 'video-hd' ? '高清处理中...' : '生成中...'
       if (props.data.status !== 'processing') {
         canvasStore.updateNodeData(props.id, {
           status: 'processing',
-          progress: task.result?.progress || task.progress || '生成中...'
+          progress: task.result?.progress || task.progress || progressText
         })
       }
     }
@@ -2404,10 +2462,11 @@ const showToolbar = computed(() => {
 // 视频裁剪编辑器状态
 const showClipEditor = ref(false)
 
-// 高清处理状态
+// 关键帧编辑器状态
+const showKeyframeEditor = ref(false)
+
+// 高清处理状态（仅用于按钮禁用状态，任务由 backgroundTaskManager 管理）
 const isHDProcessing = ref(false)
-const hdTaskId = ref(null)
-const hdPollingTimer = ref(null)
 
 // 工具栏处理函数 - 高清放大（异步任务模式）
 async function handleToolbarHD() {
@@ -2530,28 +2589,28 @@ async function handleToolbarHD() {
       return
     }
     
-    // 获取任务 ID，开始轮询
-    hdTaskId.value = result.taskId
+    // 获取任务 ID
     console.log('[VideoNode] 高清任务已提交:', result.taskId)
     showToast('高清任务已提交，后台处理中...', 'success')
     
     // 立即恢复按钮状态（任务在后台处理）
     isHDProcessing.value = false
     
+    // 立即创建一个"生成中"状态的节点
+    const hdResultNodeId = createHDProcessingNode(result.taskId)
+    
     // 注册到后台任务管理器
     const currentTab = canvasStore.getCurrentTab()
     registerTask({
       taskId: result.taskId,
       type: 'video-hd',
-      nodeId: props.id,
+      nodeId: hdResultNodeId, // 使用新创建的节点ID
       tabId: currentTab?.id,
       metadata: {
-        sourceUrl: normalizedVideoUrl.value
+        sourceUrl: normalizedVideoUrl.value,
+        sourceNodeId: props.id // 记录源节点ID
       }
     })
-    
-    // 开始轮询任务状态（后台执行，不影响界面）
-    startHDTaskPolling(result.taskId)
     
   } catch (error) {
     console.error('[VideoNode] 高清处理失败:', error)
@@ -2560,85 +2619,52 @@ async function handleToolbarHD() {
   }
 }
 
-// 轮询高清任务状态（后台执行）
-function startHDTaskPolling(taskId) {
-  const pollInterval = 3000 // 3秒轮询一次
-  const maxPollTime = 16 * 60 * 1000 // 16分钟超时（比后端15分钟多1分钟）
-  const startTime = Date.now()
+// 注：高清任务轮询已由 backgroundTaskManager 统一处理，不再需要 VideoNode 内部轮询
+
+// 创建高清处理中节点（立即显示在画布上）
+function createHDProcessingNode(taskId) {
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return null
   
-  const poll = async () => {
-    try {
-      // 检查前端超时
-      if (Date.now() - startTime > maxPollTime) {
-        console.log('[VideoNode] 高清任务轮询超时')
-        showToast('高清处理超时，请稍后在历史记录中查看', 'warning')
-        stopHDTaskPolling()
-        return
-      }
-      
-      const token = localStorage.getItem('token')
-      const response = await fetch(`/api/videos/hd-upscale/task/${taskId}`, {
-        headers: {
-          ...getTenantHeaders(),
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        }
-      })
-      
-      if (!response.ok) {
-        console.error('[VideoNode] 查询任务状态失败')
-        return
-      }
-      
-      const taskStatus = await response.json()
-      console.log('[VideoNode] 高清任务状态:', taskStatus.status, taskStatus.progress)
-      
-      if (taskStatus.status === 'completed') {
-        // 任务完成
-        stopHDTaskPolling()
-        
-        // 创建新的视频节点展示高清结果
-        createHDResultNode(taskStatus.outputUrl, taskStatus.pointsCost)
-        
-        const costMsg = taskStatus.pointsDeducted && taskStatus.pointsCost > 0 
-          ? `，消耗 ${taskStatus.pointsCost} 积分` : ''
-        showToast(`高清处理完成${costMsg}`, 'success')
-        
-      } else if (taskStatus.status === 'failed' || taskStatus.status === 'timeout') {
-        // 任务失败或超时（不扣积分）
-        stopHDTaskPolling()
-        
-        if (taskStatus.status === 'timeout') {
-          showToast('高清处理超时（超过15分钟），未扣除积分', 'warning')
-        } else {
-          showToast(taskStatus.error || '高清处理失败，未扣除积分', 'error')
-        }
-      }
-      // processing 状态继续轮询
-      
-    } catch (error) {
-      console.error('[VideoNode] 轮询高清任务出错:', error)
+  const newNodeId = `hd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const newNodePosition = {
+    x: currentNode.position.x + 380,
+    y: currentNode.position.y
+  }
+  
+  canvasStore.addNode({
+    id: newNodeId,
+    type: 'video',
+    position: newNodePosition,
+    data: {
+      label: '高清放大',
+      title: '高清放大',
+      status: 'processing',
+      progress: '高清处理中...',
+      taskId: taskId,
+      taskType: 'video-hd',
+      hdUpscaled: true,
+      sourceNodeId: props.id,
+      sourceUrl: normalizedVideoUrl.value
     }
-  }
+  })
   
-  // 延迟5秒后开始第一次轮询（给后端时间处理）
-  setTimeout(() => {
-    // 先创建定时器，确保 stopHDTaskPolling 能正确清除
-    hdPollingTimer.value = setInterval(poll, pollInterval)
-    // 再执行第一次轮询，如果任务已完成可以正确停止定时器
-    poll()
-  }, 5000)
+  // 创建从当前节点到新节点的连线
+  const edgeId = `edge-${props.id}-${newNodeId}-${Date.now()}`
+  canvasStore.addEdge({
+    id: edgeId,
+    source: props.id,
+    target: newNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input',
+    type: 'default'
+  })
+  
+  console.log('[VideoNode] 创建高清处理中节点:', newNodeId)
+  return newNodeId
 }
 
-// 停止轮询
-function stopHDTaskPolling() {
-  if (hdPollingTimer.value) {
-    clearInterval(hdPollingTimer.value)
-    hdPollingTimer.value = null
-  }
-  hdTaskId.value = null
-}
-
-// 创建高清结果节点
+// 创建高清结果节点（已废弃，改用 createHDProcessingNode + 后台任务管理器更新）
 function createHDResultNode(outputUrl, pointsCost) {
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) return
@@ -2666,10 +2692,7 @@ function createHDResultNode(outputUrl, pointsCost) {
   })
 }
 
-// 组件卸载时停止轮询
-onUnmounted(() => {
-  stopHDTaskPolling()
-})
+// 注：高清任务由 backgroundTaskManager 统一管理，组件卸载后任务继续在后台运行
 
 function handleToolbarAnalyze() {
   console.log('[VideoNode] 工具栏：解析', props.id)
@@ -2680,6 +2703,77 @@ function handleToolbarCreateCharacter() {
   console.log('[VideoNode] 工具栏：角色创建', props.id)
   if (!normalizedVideoUrl.value) return
   showClipEditor.value = true
+}
+
+// 工具栏：关键帧
+function handleToolbarKeyframe() {
+  console.log('[VideoNode] 工具栏：关键帧', props.id)
+  if (!normalizedVideoUrl.value) return
+  showKeyframeEditor.value = true
+}
+
+// 关闭关键帧编辑器
+function closeKeyframeEditor() {
+  showKeyframeEditor.value = false
+}
+
+// 确认创建关键帧节点
+function handleConfirmKeyframes(data) {
+  console.log('[VideoNode] 创建关键帧节点:', data)
+  const { keyframes } = data
+  
+  if (!keyframes || keyframes.length === 0) return
+  
+  // 获取当前节点位置
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return
+  
+  const baseX = currentNode.position.x + (currentNode.style?.width || 380) + 80
+  const baseY = currentNode.position.y
+  const nodeGap = 220 // 节点间距
+  
+  // 依次创建图片节点
+  const newNodeIds = []
+  keyframes.forEach((kf, index) => {
+    const newNodeId = `keyframe-${Date.now()}-${index}`
+    const newNodePosition = {
+      x: baseX,
+      y: baseY + index * nodeGap
+    }
+    
+    canvasStore.addNode({
+      id: newNodeId,
+      type: 'image',
+      position: newNodePosition,
+      data: {
+        label: `关键帧 ${index + 1}`,
+        title: `关键帧 ${index + 1}`,
+        time: kf.time,
+        urls: [kf.image],
+        output: {
+          type: 'image',
+          urls: [kf.image]
+        }
+      }
+    }, true)
+    
+    newNodeIds.push(newNodeId)
+    
+    // 创建从当前视频节点到新图片节点的连线
+    const edgeId = `edge-${props.id}-${newNodeId}-${Date.now()}`
+    canvasStore.addEdge({
+      id: edgeId,
+      source: props.id,
+      target: newNodeId,
+      sourceHandle: 'output',
+      targetHandle: 'input'
+    })
+  })
+  
+  // 关闭编辑器
+  closeKeyframeEditor()
+  
+  console.log('[VideoNode] 创建了', newNodeIds.length, '个关键帧节点')
 }
 
 // 关闭裁剪编辑器
@@ -3179,6 +3273,16 @@ function handleToolbarPreview() {
         </svg>
         <span>角色创建</span>
       </button>
+      <button class="toolbar-btn" title="关键帧" @mousedown.stop.prevent="handleToolbarKeyframe" @click.stop.prevent>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="6" width="20" height="12" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M12 6v12" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7 9v6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M17 9v6" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="12" cy="12" r="2" fill="currentColor"/>
+        </svg>
+        <span>关键帧</span>
+      </button>
       <div class="toolbar-divider"></div>
       <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -3447,6 +3551,15 @@ function handleToolbarPreview() {
       :sora-task-id="props.data?.soraTaskId || props.data?.taskId || ''"
       @close="closeClipEditor"
       @confirm="handleConfirmCreateCharacter"
+    />
+    
+    <!-- 关键帧编辑器 -->
+    <KeyframeEditor
+      v-if="showKeyframeEditor"
+      :video-url="normalizedVideoUrl"
+      :node-id="id"
+      @close="closeKeyframeEditor"
+      @confirm="handleConfirmKeyframes"
     />
     
     <!-- 底部配置面板（选中时显示） -->

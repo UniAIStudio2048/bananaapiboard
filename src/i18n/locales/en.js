@@ -727,6 +727,7 @@ export default {
     redeemTip3: 'Points are credited immediately after redemption',
     // Recharge
     accountRecharge: 'Account Recharge',
+    selectRechargeCard: 'Select Recharge Card',
     selectAmount: 'Select Amount',
     customAmountHint: 'Or enter custom amount (¥)',
     paymentMethod: 'Payment Method',

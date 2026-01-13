@@ -77,6 +77,7 @@ const showOnboarding = ref(false)
 
 // AI 灵感助手
 const showAIAssistant = ref(false)
+const aiPanelWidth = ref(0) // AI 面板宽度
 
 // 套餐购买弹窗
 const showPackageModal = ref(false)
@@ -790,6 +791,22 @@ function updateNodeFromTask(task) {
           }
         })
       }
+    } else if (task.type === 'video-hd') {
+      // 视频高清任务完成
+      const videoUrl = result.outputUrl || result.url
+      if (videoUrl) {
+        canvasStore.updateNodeData(task.nodeId, {
+          status: 'success',
+          progress: null,
+          output: {
+            type: 'video',
+            url: videoUrl,
+            sourceUrl: task.metadata?.sourceUrl
+          },
+          pointsCost: result.pointsCost || 0
+        })
+        console.log(`[Canvas] 高清任务完成，节点 ${task.nodeId} 已更新`)
+      }
     } else if (task.type === 'video') {
       // 视频任务完成
       if (result.url) {
@@ -807,15 +824,18 @@ function updateNodeFromTask(task) {
     console.log(`[Canvas] 节点 ${task.nodeId} 已更新为完成状态`)
   } else if (task.status === 'failed') {
     // 任务失败
+    const errorMsg = task.type === 'video-hd' ? '高清处理失败' : '任务执行失败'
     canvasStore.updateNodeData(task.nodeId, {
       status: 'error',
-      error: task.error || '任务执行失败'
+      progress: null,
+      error: task.error || errorMsg
     })
   } else if (task.status === 'processing') {
     // 任务进行中
+    const progressText = task.type === 'video-hd' ? '高清处理中...' : task.progress
     canvasStore.updateNodeData(task.nodeId, {
-      status: 'running',
-      progress: task.progress
+      status: 'processing',
+      progress: progressText || task.progress
     })
   }
 }
@@ -1098,8 +1118,21 @@ async function handleKeyDown(event) {
                     target.isContentEditable ||
                     target.closest('[contenteditable="true"]')
   
+  // Tab 键切换 AI 灵感助手面板（在任何情况下都生效）
+  if (event.key === 'Tab') {
+    event.preventDefault() // 完全阻止 Tab 的默认焦点切换行为
+    event.stopPropagation()
+    showAIAssistant.value = !showAIAssistant.value
+    return
+  }
+  
   // Escape 关闭弹窗
   if (event.key === 'Escape') {
+    // 如果 AI 助手面板打开，先关闭它
+    if (showAIAssistant.value) {
+      showAIAssistant.value = false
+      return
+    }
     canvasStore.closeNodeSelector()
     canvasStore.closeAllContextMenus()
     // 不清除选择，让用户可以继续操作选中的节点
@@ -1453,7 +1486,12 @@ onUnmounted(() => {
     </div>
     
     <!-- 画布主体 -->
-    <div v-else class="canvas-container">
+    <div 
+      v-else 
+      class="canvas-container" 
+      :class="{ 'ai-panel-open': showAIAssistant }"
+      :style="{ '--ai-panel-offset': (aiPanelWidth / 2) + 'px' }"
+    >
       <!-- 无限画布 - 使用 key 强制在就绪后重新挂载 -->
       <CanvasBoard :key="'canvas-board-' + canvasReady" @dblclick="handleCanvasDoubleClick" @pane-click="handlePaneClick" />
       
@@ -1499,7 +1537,11 @@ onUnmounted(() => {
       </div>
       
       <!-- 右上角控制区域 -->
-      <div class="canvas-top-right-controls" :class="{ 'panel-open': showAIAssistant }">
+      <div 
+        class="canvas-top-right-controls" 
+        :class="{ 'panel-open': showAIAssistant }"
+        :style="showAIAssistant ? { right: (aiPanelWidth + 24) + 'px' } : {}"
+      >
         <!-- 积分显示 -->
         <div v-if="me" class="canvas-points-display" :title="t('canvas.pointsDetail')">
           <svg class="points-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1601,6 +1643,7 @@ onUnmounted(() => {
                 <li><kbd>Delete</kbd> / <kbd>Backspace</kbd> {{ t('canvas.deleteSelected') }}</li>
                 <li><kbd>Escape</kbd> {{ t('canvas.closeDialog') }}</li>
                 <li><kbd>Ctrl+Enter</kbd> {{ t('canvas.startGenerate') }}</li>
+                <li><kbd>Tab</kbd> {{ t('canvas.toggleAIAssistant') || '展开/收起 AI 灵感助手' }}</li>
               </ul>
             </div>
             <div class="help-section">
@@ -1716,12 +1759,14 @@ onUnmounted(() => {
       <AIAssistantPanel
         :visible="showAIAssistant"
         @close="showAIAssistant = false"
+        @width-change="aiPanelWidth = $event"
       />
 
       <!-- AI 助手触发按钮 - 苹果风格3D图标 -->
       <button
         class="ai-assistant-trigger"
         :class="{ active: showAIAssistant }"
+        :style="showAIAssistant ? { right: (aiPanelWidth + 24) + 'px' } : {}"
         @click="showAIAssistant = !showAIAssistant"
         :title="showAIAssistant ? '关闭 AI 助手' : '打开 AI 助手'"
       >
@@ -2223,10 +2268,7 @@ onUnmounted(() => {
   color: rgba(28, 25, 23, 0.85);
 }
 
-/* 当 AI 面板打开时，右上角控制区域向左移动 */
-.canvas-top-right-controls.panel-open {
-  right: 444px; /* 面板宽度 420px + 24px 间距 */
-}
+/* 当 AI 面板打开时，右上角控制区域向左移动 - 通过内联样式动态控制 */
 
 .canvas-help-btn {
   display: flex;
@@ -2406,10 +2448,7 @@ onUnmounted(() => {
   opacity: 0.8;
 }
 
-/* 当 AI 面板打开时，按钮位置调整避免遮挡 */
-.ai-assistant-trigger.active {
-  right: 444px; /* 面板宽度 420px + 24px 间距 */
-}
+/* 当 AI 面板打开时，按钮位置调整避免遮挡 - 通过内联样式动态控制 */
 
 /* 缩放滑块样式 */
 .canvas-zoom-slider {

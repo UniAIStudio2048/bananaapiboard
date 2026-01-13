@@ -655,6 +655,7 @@ export default {
     logout: 'ログアウト',
     logoutConfirm: 'ログアウトしますか？',
     rechargeAccount: 'アカウントチャージ',
+    selectRechargeCard: 'チャージカードを選択',
     selectAmount: '金額を選択',
     orEnterCustomAmount: 'またはカスタム金額を入力（元）',
     paymentMethod: '支払い方法',

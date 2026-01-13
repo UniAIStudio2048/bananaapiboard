@@ -55,17 +55,17 @@ const horizontalAngle = ref(props.initialAngles.horizontal || 0)
 const verticalAngle = ref(props.initialAngles.vertical || 0)
 const zoomLevel = ref(props.initialAngles.zoom || 5)
 
-// 方位角映射表
+// 方位角映射表（修正：左右方向与相机实际位置对应）
 const AZIMUTH_MAP = [
   { min: 337.5, max: 360, label: 'front view' },
   { min: 0, max: 22.5, label: 'front view' },
-  { min: 22.5, max: 67.5, label: 'front-right quarter view' },
-  { min: 67.5, max: 112.5, label: 'right side view' },
-  { min: 112.5, max: 157.5, label: 'back-right quarter view' },
+  { min: 22.5, max: 67.5, label: 'front-left quarter view' },
+  { min: 67.5, max: 112.5, label: 'left side view' },
+  { min: 112.5, max: 157.5, label: 'back-left quarter view' },
   { min: 157.5, max: 202.5, label: 'back view' },
-  { min: 202.5, max: 247.5, label: 'back-left quarter view' },
-  { min: 247.5, max: 292.5, label: 'left side view' },
-  { min: 292.5, max: 337.5, label: 'front-left quarter view' }
+  { min: 202.5, max: 247.5, label: 'back-right quarter view' },
+  { min: 247.5, max: 292.5, label: 'right side view' },
+  { min: 292.5, max: 337.5, label: 'front-right quarter view' }
 ]
 
 // 仰角映射
@@ -424,17 +424,17 @@ function emitUpdate() {
   })
 }
 
-// 快捷预设
+// 快捷预设（修正：左右方向与相机实际位置对应）
 const presets = {
   azimuth: [
     { label: '正面', value: 0, icon: '⬆' },
-    { label: '右前', value: 45, icon: '↗' },
-    { label: '右侧', value: 90, icon: '➡' },
-    { label: '右后', value: 135, icon: '↘' },
+    { label: '左前', value: 45, icon: '↗' },
+    { label: '左侧', value: 90, icon: '➡' },
+    { label: '左后', value: 135, icon: '↘' },
     { label: '背面', value: 180, icon: '⬇' },
-    { label: '左后', value: 225, icon: '↙' },
-    { label: '左侧', value: 270, icon: '⬅' },
-    { label: '左前', value: 315, icon: '↖' }
+    { label: '右后', value: 225, icon: '↙' },
+    { label: '右侧', value: 270, icon: '⬅' },
+    { label: '右前', value: 315, icon: '↖' }
   ],
   elevation: [
     { label: '仰拍', value: -30 },

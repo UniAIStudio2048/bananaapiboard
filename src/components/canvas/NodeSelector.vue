@@ -68,9 +68,8 @@ const availableNodes = computed(() => {
   }
 
   // 点击工具栏+按钮时显示输入节点和生成节点
-  // 生成类节点，排除 audio-gen（已整合到 AudioNode）
+  // 生成类节点
   const generateNodes = NODE_CATEGORIES.generate.types
-    .filter(type => type !== 'audio-gen')
     .map(type => ({
       type,
       category: 'generate',
@@ -125,6 +124,7 @@ const panelStyle = computed(() => {
 const LLM_PRESET_MAP = {
   'llm-prompt-enhance': 'prompt-enhance',
   'llm-image-describe': 'image-describe',  // 图片描述 → 文本节点
+  'llm-video-describe': 'video-describe',  // 视频反推 → 文本节点
   'llm-content-expand': 'content-expand',
   'llm-storyboard': 'storyboard'
 }
@@ -236,40 +236,6 @@ function handleAudioOperation(operationType) {
   }
 }
 
-// 处理文本生成音乐操作
-function handleTextToMusic() {
-  if (!triggerNode.value) return
-
-  const textNodeId = triggerNode.value.id
-  const textPosition = triggerNode.value.position
-
-  // 创建音频节点并连接
-  const audioPosition = {
-    x: textPosition.x + 500,
-    y: textPosition.y
-  }
-  const audioNode = canvasStore.addNode({
-    type: 'audio-input',
-    position: audioPosition,
-    data: {
-      title: '生成音乐',
-      label: 'Audio',
-      status: 'idle',
-      generationMode: 'text-to-music'
-    }
-  })
-
-  if (audioNode?.id) {
-    canvasStore.addEdge({
-      source: textNodeId,
-      target: audioNode.id,
-      sourceHandle: 'output',
-      targetHandle: 'input'
-    })
-    canvasStore.selectNode(audioNode.id)
-  }
-}
-
 // 选择节点类型
 function selectNodeType(type) {
   selectedType.value = type
@@ -281,12 +247,6 @@ function selectNodeType(type) {
     return
   }
 
-  // 特殊处理：文本生成音乐
-  if (type === 'text-to-music') {
-    handleTextToMusic()
-    emit('close')
-    return
-  }
 
   // 计算新节点位置
   let position = { x: 200, y: 200 }
@@ -348,6 +308,31 @@ function selectNodeType(type) {
       nodeData.count = 9
       // 设置标题
       nodeData.title = '9宫格分镜'
+    }
+  }
+  
+  // 特殊处理：视频编辑节点（从视频节点触发时）
+  if (type === 'video-edit' && triggerNode.value) {
+    const sourceData = triggerNode.value.data
+    // 检查是否从视频节点触发且有视频输出
+    if (sourceData?.output?.url) {
+      // 将节点类型改为视频节点
+      actualNodeType = 'video'
+      // 设置标题
+      nodeData.title = '视频编辑'
+      nodeData.label = '视频编辑'
+      // 设置节点角色为编辑
+      nodeData.nodeRole = 'edit'
+      // 标记这是视频编辑模式
+      nodeData.editMode = true
+      // 传递源视频URL
+      nodeData.sourceVideoUrl = sourceData.output.url
+      // 设置输出为源视频（可以后续编辑）
+      nodeData.output = {
+        type: 'video',
+        url: sourceData.output.url
+      }
+      nodeData.status = 'success'
     }
   }
   

@@ -641,6 +641,7 @@ export default {
     logout: 'Déconnexion',
     logoutConfirm: 'Êtes-vous sûr de vouloir vous déconnecter ?',
     rechargeAccount: 'Recharger le compte',
+    selectRechargeCard: 'Sélectionner la carte de recharge',
     selectAmount: 'Sélectionner le montant',
     orEnterCustomAmount: 'Ou entrez un montant personnalisé (CNY)',
     paymentMethod: 'Mode de paiement',

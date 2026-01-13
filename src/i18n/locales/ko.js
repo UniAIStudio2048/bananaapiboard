@@ -654,6 +654,7 @@ export default {
     logout: '로그아웃',
     logoutConfirm: '로그아웃 하시겠습니까?',
     rechargeAccount: '계정 충전',
+    selectRechargeCard: '충전 카드 선택',
     selectAmount: '금액 선택',
     orEnterCustomAmount: '또는 사용자 정의 금액 입력 (위안)',
     paymentMethod: '결제 방법',

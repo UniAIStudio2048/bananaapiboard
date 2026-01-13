@@ -1,6 +1,13 @@
 <template>
   <Transition name="slide-right">
-    <div v-if="visible" class="ai-assistant-container">
+    <div v-if="visible" class="ai-assistant-container" :class="{ 'compact-mode': isCompactMode }" :style="containerStyle">
+      <!-- 左侧拖拽手柄 -->
+      <div 
+        class="resize-handle"
+        @mousedown.prevent="startResize"
+      >
+        <div class="resize-indicator"></div>
+      </div>
       <div class="ai-assistant-panel">
         <!-- 头部 -->
         <div class="panel-header">
@@ -482,7 +489,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'width-change'])
 
 // 注入用户信息
 const userInfo = inject('userInfo', { value: { username: 'User' } })
@@ -532,6 +539,26 @@ const editingPreset = ref(null)
 const messagesRef = ref(null)
 const inputRef = ref(null)
 const fileInputRef = ref(null)
+
+// 面板宽度调整相关
+const DEFAULT_WIDTH = 480 // 增加默认宽度以确保工具栏一行显示
+const MIN_WIDTH = 380
+const panelWidth = ref(DEFAULT_WIDTH)
+const isResizing = ref(false)
+
+// 计算最大宽度（屏幕的2/3）
+const maxWidth = computed(() => {
+  return Math.floor(window.innerWidth * 2 / 3)
+})
+
+// 容器样式
+const containerStyle = computed(() => ({
+  width: `${panelWidth.value}px`,
+  '--panel-width': `${panelWidth.value}px`
+}))
+
+// 判断面板是否为紧凑模式（宽度较小时）
+const isCompactMode = computed(() => panelWidth.value < 440)
 
 // 计算属性
 const selectedMode = computed(() => {
@@ -1003,6 +1030,36 @@ function formatFileSize(bytes) {
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
 }
 
+// 拖拽调整宽度方法
+function startResize(e) {
+  isResizing.value = true
+  const startX = e.clientX
+  const startWidth = panelWidth.value
+
+  function onMouseMove(moveEvent) {
+    if (!isResizing.value) return
+    // 向左拖拽增加宽度，向右拖拽减少宽度
+    const delta = startX - moveEvent.clientX
+    let newWidth = startWidth + delta
+    // 限制宽度范围
+    newWidth = Math.max(MIN_WIDTH, Math.min(maxWidth.value, newWidth))
+    panelWidth.value = newWidth
+  }
+
+  function onMouseUp() {
+    isResizing.value = false
+    document.removeEventListener('mousemove', onMouseMove)
+    document.removeEventListener('mouseup', onMouseUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }
+
+  document.body.style.cursor = 'ew-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+}
+
 // 监听可见性变化
 watch(() => props.visible, (visible) => {
   if (visible) {
@@ -1012,10 +1069,20 @@ watch(() => props.visible, (visible) => {
     nextTick(() => {
       inputRef.value?.focus()
     })
+    // 通知父组件面板宽度
+    emit('width-change', panelWidth.value)
   } else {
     showModeDropdown.value = false
     showPresetDropdown.value = false
     showHistory.value = false
+    emit('width-change', 0)
+  }
+})
+
+// 监听面板宽度变化
+watch(panelWidth, (newWidth) => {
+  if (props.visible) {
+    emit('width-change', newWidth)
   }
 })
 
@@ -1045,13 +1112,45 @@ onMounted(() => {
   top: 0;
   right: 0;
   bottom: 0;
-  width: 420px;
-  max-width: 100vw;
+  width: 480px;
+  max-width: 66.67vw; /* 最大不超过屏幕的2/3 */
+  min-width: 380px;
   z-index: 9000;
-  overflow: hidden;
+  overflow: visible; /* 允许下拉菜单溢出显示 */
+  display: flex;
+}
+
+/* 拖拽手柄 */
+.resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resize-handle:hover .resize-indicator,
+.resize-handle:active .resize-indicator {
+  opacity: 1;
+  background: rgba(100, 150, 255, 0.6);
+}
+
+.resize-indicator {
+  width: 4px;
+  height: 48px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  opacity: 0;
+  transition: all 0.2s ease;
 }
 
 .ai-assistant-panel {
+  flex: 1;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -1060,7 +1159,7 @@ onMounted(() => {
   pointer-events: auto;
   backdrop-filter: blur(20px);
   border-radius: 16px 0 0 16px;
-  overflow: hidden;
+  overflow: visible; /* 允许下拉菜单溢出显示 */
 }
 
 /* 头部 */
@@ -1071,6 +1170,7 @@ onMounted(() => {
   padding: 16px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   background: rgba(24, 24, 24, 0.95);
+  border-radius: 16px 0 0 0; /* 保持左上角圆角 */
 }
 
 .header-left {
@@ -1367,20 +1467,22 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
+  padding: 0 16px;
 }
 
 .tip-card {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 18px;
+  gap: 8px;
+  padding: 10px 14px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
+  border-radius: 12px;
   color: rgba(255, 255, 255, 0.7);
   font-size: 13px;
   cursor: pointer;
   transition: all 0.25s ease;
+  white-space: nowrap;
 }
 
 .tip-card:hover {
@@ -1388,6 +1490,13 @@ onMounted(() => {
   border-color: rgba(255, 255, 255, 0.15);
   color: rgba(255, 255, 255, 0.95);
   transform: translateY(-2px);
+}
+
+/* 紧凑模式下的提示卡片 */
+.ai-assistant-container.compact-mode .tip-card {
+  padding: 8px 12px;
+  font-size: 12px;
+  gap: 6px;
 }
 
 /* 附件预览 */
@@ -1499,9 +1608,11 @@ onMounted(() => {
   flex-direction: column;
   gap: 12px;
   padding: 16px;
+  padding-bottom: 20px; /* 增加底部内边距，确保发送按钮不被遮挡 */
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(18, 18, 18, 0.95);
   transition: all 0.3s ease;
+  flex-shrink: 0; /* 防止被压缩 */
 }
 
 .input-area.is-dragging {
@@ -1590,29 +1701,40 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
+  flex-wrap: nowrap; /* 不允许换行，保持一行 */
 }
 
-.toolbar-left,
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  overflow: visible; /* 允许下拉菜单溢出 */
+}
+
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  flex-shrink: 0; /* 确保右侧工具栏不被压缩 */
 }
 
 .toolbar-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
+  gap: 5px;
+  padding: 6px 10px;
   background: transparent;
   border: none;
-  border-radius: 10px;
+  border-radius: 8px;
   color: rgba(255, 255, 255, 0.6);
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .toolbar-btn:hover {
@@ -1621,7 +1743,14 @@ onMounted(() => {
 }
 
 .toolbar-btn.mode-btn {
-  padding: 8px 14px;
+  padding: 6px 10px;
+}
+
+/* 下拉按钮中的文字 - 限制最大宽度并显示省略号 */
+.toolbar-btn span {
+  max-width: 72px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* 模式选择器 */
@@ -1687,8 +1816,8 @@ onMounted(() => {
 .preset-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
+  gap: 5px;
+  padding: 6px 10px;
 }
 
 .preset-dropdown {
@@ -1769,8 +1898,8 @@ onMounted(() => {
 }
 
 .toolbar-btn.icon-btn {
-  padding: 8px;
-  min-width: 36px;
+  padding: 6px;
+  min-width: 32px;
   justify-content: center;
 }
 
@@ -1779,18 +1908,64 @@ onMounted(() => {
   color: rgba(150, 180, 255, 0.95);
 }
 
+/* 紧凑模式：当面板宽度较窄时自动应用 */
+.ai-assistant-container.compact-mode .input-toolbar {
+  gap: 4px;
+}
+
+.ai-assistant-container.compact-mode .toolbar-left {
+  gap: 2px;
+}
+
+.ai-assistant-container.compact-mode .toolbar-btn {
+  padding: 6px 8px;
+  font-size: 11px;
+  gap: 4px;
+}
+
+.ai-assistant-container.compact-mode .toolbar-btn span {
+  max-width: 56px;
+}
+
+/* 在紧凑模式下隐藏下拉箭头 */
+.ai-assistant-container.compact-mode .toolbar-btn .w-3:last-child {
+  display: none;
+}
+
+/* 响应式：移动端 */
+@media (max-width: 500px) {
+  .input-toolbar {
+    gap: 4px;
+  }
+  
+  .toolbar-left {
+    gap: 2px;
+  }
+  
+  .toolbar-btn {
+    padding: 6px 8px;
+    font-size: 11px;
+    gap: 4px;
+  }
+  
+  .toolbar-btn span {
+    max-width: 50px;
+  }
+}
+
 .send-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.9);
   color: rgba(0, 0, 0, 0.85);
   border: none;
   cursor: pointer;
   transition: all 0.2s;
+  flex-shrink: 0;
 }
 
 .send-btn:hover:not(:disabled) {
