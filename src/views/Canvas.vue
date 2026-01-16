@@ -32,7 +32,7 @@ import CanvasSupport from '@/components/canvas/CanvasSupport.vue'
 import CanvasToast from '@/components/canvas/CanvasToast.vue'
 import PackageModal from '@/components/canvas/PackageModal.vue'
 import { useI18n } from '@/i18n'
-import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoSave, manualSave as saveToHistory } from '@/stores/canvas/workflowAutoSave'
+import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoSave, manualSave as saveToHistory, getWorkflowHistory } from '@/stores/canvas/workflowAutoSave'
 import { initBackgroundTaskManager, getPendingTasks, subscribeTask, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import { showAlert, showConfirm } from '@/composables/useCanvasDialog'
 
@@ -762,6 +762,52 @@ function getCurrentWorkflowData() {
   }
 }
 
+// 🆕 自动恢复最近的工作流（刷新页面时使用）
+// 如果有 5 分钟内保存的工作流历史，自动恢复到画布
+function tryAutoRestoreRecentWorkflow() {
+  try {
+    const history = getWorkflowHistory()
+    if (!history || history.length === 0) {
+      console.log('[Canvas] 没有工作流历史记录')
+      return false
+    }
+    
+    // 获取最近的历史记录
+    const recentWorkflow = history[0]
+    const now = Date.now()
+    const savedAt = recentWorkflow.savedAt || 0
+    const ageMinutes = (now - savedAt) / (1000 * 60)
+    
+    // 只恢复 5 分钟内保存的工作流（避免恢复过旧的数据）
+    if (ageMinutes > 5) {
+      console.log(`[Canvas] 最近的工作流已过期 (${ageMinutes.toFixed(1)} 分钟前)，不自动恢复`)
+      return false
+    }
+    
+    // 检查是否有有效的节点数据
+    if (!recentWorkflow.nodes || recentWorkflow.nodes.length === 0) {
+      console.log('[Canvas] 最近的工作流没有节点数据')
+      return false
+    }
+    
+    console.log(`[Canvas] 自动恢复工作流: "${recentWorkflow.name}" | 节点数: ${recentWorkflow.nodeCount} | ${ageMinutes.toFixed(1)} 分钟前保存`)
+    
+    // 使用 canvasStore 恢复工作流
+    canvasStore.openWorkflowInNewTab({
+      id: recentWorkflow.workflowId || null,
+      name: recentWorkflow.name || '恢复的工作流',
+      nodes: recentWorkflow.nodes,
+      edges: recentWorkflow.edges || [],
+      viewport: recentWorkflow.viewport || { x: 0, y: 0, zoom: 1 }
+    })
+    
+    return true
+  } catch (error) {
+    console.error('[Canvas] 自动恢复工作流失败:', error)
+    return false
+  }
+}
+
 // 启动历史工作流自动保存（localStorage，1分钟间隔）
 function initHistoryAutoSave() {
   startHistoryAutoSave(getCurrentWorkflowData)
@@ -1438,8 +1484,13 @@ onMounted(async () => {
   // 加载画布主题偏好
   loadCanvasThemePreference()
   
-  // 初始化默认标签
-  canvasStore.initDefaultTab()
+  // 🆕 自动恢复：检查是否有最近的工作流历史（5分钟内），刷新后自动恢复
+  const autoRestored = tryAutoRestoreRecentWorkflow()
+  
+  // 如果没有自动恢复，则初始化默认标签
+  if (!autoRestored) {
+    canvasStore.initDefaultTab()
+  }
   
   // 启动历史工作流自动保存服务（localStorage 缓存）
   initHistoryAutoSave()

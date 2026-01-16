@@ -147,13 +147,13 @@ async function download() {
     window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error('[PreviewNode] 下载失败:', error)
-    // 回退：使用页面跳转下载
+    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
       const { buildDownloadUrl, buildVideoDownloadUrl } = await import('@/api/client')
       const downloadUrl = isVideo
         ? buildVideoDownloadUrl(mediaUrl, fileName)
         : buildDownloadUrl(mediaUrl, fileName)
-      window.location.href = downloadUrl
+      window.open(downloadUrl, '_blank')
     } catch (e) {
       console.error('[PreviewNode] 所有下载方式都失败:', e)
     }

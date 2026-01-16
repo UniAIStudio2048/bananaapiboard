@@ -269,7 +269,7 @@ export async function getUserLLMPresets() {
  * 创建用户自定义预设
  * @param {Object} params
  * @param {string} params.name - 预设名称（必填，最长100字符）
- * @param {string} params.systemPrompt - 系统提示词（必填，最长2048字符）
+ * @param {string} params.systemPrompt - 系统提示词（必填，最长6000字符）
  * @returns {Promise<{success: boolean, preset: Object}>}
  */
 export async function createUserLLMPreset({ name, systemPrompt }) {

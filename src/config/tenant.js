@@ -774,7 +774,9 @@ export const getAvailableVideoModels = () => {
     const models = []
     
     // 🔧 VEO 模型整合逻辑：收集所有 VEO 子模型，用于生成模式选项
-    const veoSubModels = []
+    // 🆕 区分普通 VEO 和 VEO 4K 组
+    const veoSubModels = []      // 普通 VEO 模型（不含 4k）
+    const veo4kSubModels = []    // VEO 4K 组（名字包含 4k）
     
     for (const modelConfig of videoModelsConfig) {
       const key = modelConfig.name
@@ -787,7 +789,12 @@ export const getAvailableVideoModels = () => {
                            (modelConfig.displayName || '').toLowerCase().includes('veo')
       
       if (isVeoSubModel) {
-        veoSubModels.push(modelConfig)
+        // 🆕 区分 4K 模型和普通模型
+        if (key.toLowerCase().includes('4k') || (modelConfig.displayName || '').toLowerCase().includes('4k')) {
+          veo4kSubModels.push(modelConfig)
+        } else {
+          veoSubModels.push(modelConfig)
+        }
       }
     }
     
@@ -890,7 +897,7 @@ export const getAvailableVideoModels = () => {
       console.log('[tenant] VEO 模型使用默认配置（租户未配置子模型）')
     }
     
-    // 构建 VEO 整合入口
+    // 构建 VEO 整合入口（普通 VEO，不含 4K）
     const veoEntry = {
       value: 'veo3',
       label: 'VEO 3.1',
@@ -912,9 +919,88 @@ export const getAvailableVideoModels = () => {
       defaultVeoResolution: '1080p'
     }
     
+    // 🆕 构建 VEO 4K 组整合入口
+    let veo4kEntry = null
+    if (veo4kSubModels.length > 0) {
+      // 从 4K 子模型生成模式选项
+      const veo4kModes = veo4kSubModels.map(m => {
+        const name = m.name || ''
+        const displayName = m.displayName || m.name || ''
+        const pointsCost = typeof m.pointsCost === 'number' ? m.pointsCost : 8
+        
+        // 根据名称推断模式类型
+        let modeValue = 'standard'
+        let modeLabel = '首尾帧'
+        let maxImages = 2
+        
+        if (name.includes('components') || displayName.includes('多图') || displayName.includes('参考')) {
+          modeValue = 'components'
+          modeLabel = '多图参考'
+          maxImages = 3
+        } else if (name.includes('pro') || displayName.includes('pro') || displayName.includes('Pro')) {
+          modeValue = 'pro'
+          modeLabel = 'Pro首尾帧'
+        } else {
+          modeValue = 'standard'
+          modeLabel = '首尾帧'
+        }
+        
+        return {
+          value: modeValue,
+          label: modeLabel,
+          description: m.description || '',
+          actualModel: name,
+          maxImages,
+          pointsCost,
+          supportedResolutions: ['4k']  // 4K 组只有 4K 清晰度
+        }
+      })
+      
+      // 按模式类型排序：standard -> components -> pro
+      const modeOrder = { standard: 0, components: 1, pro: 2 }
+      veo4kModes.sort((a, b) => (modeOrder[a.value] ?? 99) - (modeOrder[b.value] ?? 99))
+      
+      // 去重
+      const uniqueVeo4kModes = []
+      const seenModes4k = new Set()
+      for (const mode of veo4kModes) {
+        if (!seenModes4k.has(mode.value)) {
+          seenModes4k.add(mode.value)
+          uniqueVeo4kModes.push(mode)
+        }
+      }
+      
+      const veo4kPointsCost = uniqueVeo4kModes[0]?.pointsCost || 8
+      const veo4kAspectRatios = veo4kSubModels[0].aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }]
+      
+      veo4kEntry = {
+        value: 'veo4k',
+        label: 'VEO 4K',
+        icon: 'V',
+        description: 'VEO 3.1 4K 高清版，支持首尾帧、多图参考和Pro模式',
+        hasDurationPricing: false,
+        pointsCost: veo4kPointsCost,
+        durations: [],
+        aspectRatios: veo4kAspectRatios,
+        supportedModes: { t2v: true, i2v: true, a2v: false },
+        apiType: 'vectorengine',
+        isVeoModel: true,
+        isVeo4k: true,  // 🆕 标记为 VEO 4K 组
+        veoModes: uniqueVeo4kModes,
+        veoResolutions: [
+          { value: '4k', label: '4K', extraCost: 0 }  // 4K 组只有 4K 清晰度，无额外费用
+        ],
+        defaultVeoMode: uniqueVeo4kModes[0]?.value || 'standard',
+        defaultVeoResolution: '4k'
+      }
+      
+      console.log('[tenant] VEO 4K 组已整合，子模型数量:', veo4kSubModels.length, '模式:', uniqueVeo4kModes.map(m => m.label))
+    }
+    
     // 🔧 按原始配置顺序处理所有模型，在 VEO 位置插入整合入口
     // 遍历原始配置，保持顺序
     let veoInserted = false
+    let veo4kInserted = false
     
     for (let i = 0; i < videoModelsConfig.length; i++) {
       const modelConfig = videoModelsConfig[i]
@@ -929,14 +1015,30 @@ export const getAvailableVideoModels = () => {
                            key.toLowerCase().includes('veo3') ||
                            (modelConfig.displayName || '').toLowerCase().includes('veo')
       
-      // 🔧 遇到第一个 VEO 子模型时，插入 VEO 整合入口
-      if (isVeoSubModel && !veoInserted) {
+      // 🆕 检测是否是 VEO 4K 子模型
+      const isVeo4kSubModel = isVeoSubModel && (
+        key.toLowerCase().includes('4k') || 
+        (modelConfig.displayName || '').toLowerCase().includes('4k')
+      )
+      
+      // 🆕 遇到第一个 VEO 4K 子模型时，插入 VEO 4K 整合入口
+      if (isVeo4kSubModel && !veo4kInserted && veo4kEntry) {
+        models.push(veo4kEntry)
+        veo4kInserted = true
+        continue  // 跳过 VEO 4K 子模型，不单独显示
+      }
+      
+      // 跳过其他 VEO 4K 子模型
+      if (isVeo4kSubModel) continue
+      
+      // 🔧 遇到第一个普通 VEO 子模型时，插入 VEO 整合入口
+      if (isVeoSubModel && !veoInserted && veoSubModels.length > 0) {
         models.push(veoEntry)
         veoInserted = true
         continue  // 跳过 VEO 子模型，不单独显示
       }
       
-      // 跳过其他 VEO 子模型
+      // 跳过其他普通 VEO 子模型
       if (isVeoSubModel) continue
       
       const modelPricingConfig = pricing[key] || {}

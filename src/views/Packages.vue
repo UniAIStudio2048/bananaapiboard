@@ -703,11 +703,81 @@
         </div>
       </div>
     </div>
+
+    <!-- 支付二维码弹窗 -->
+    <div v-if="showPaymentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @click.self="closePaymentModal">
+      <div class="bg-white dark:bg-dark-700 rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+        <!-- 头部 -->
+        <div class="p-6 border-b border-slate-200 dark:border-dark-600">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xl font-bold text-slate-900 dark:text-white">扫码支付</h3>
+            <button @click="closePaymentModal" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- 二维码区域 -->
+        <div class="p-8">
+          <div class="flex flex-col items-center">
+            <!-- 二维码 -->
+            <div class="bg-white p-4 rounded-lg shadow-md mb-4">
+              <div id="payment-qrcode" class="w-64 h-64 flex items-center justify-center">
+                <div class="text-slate-400">加载中...</div>
+              </div>
+            </div>
+
+            <!-- 支付状态 -->
+            <div v-if="paymentStatus === 'pending'" class="text-center mb-4">
+              <p class="text-slate-600 dark:text-slate-400 mb-2">请使用支付宝扫码支付</p>
+              <p class="text-sm text-slate-500 dark:text-slate-500">订单号：{{ paymentOrderNo }}</p>
+            </div>
+
+            <div v-else-if="paymentStatus === 'checking'" class="text-center mb-4">
+              <div class="flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400 mb-2">
+                <svg class="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>正在确认支付...</span>
+              </div>
+            </div>
+
+            <div v-else-if="paymentStatus === 'paid'" class="text-center mb-4">
+              <div class="flex items-center justify-center gap-2 text-green-600 dark:text-green-400 mb-2">
+                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                </svg>
+                <span class="font-semibold">支付成功！</span>
+              </div>
+            </div>
+
+            <!-- 操作按钮 -->
+            <div class="flex gap-3 w-full">
+              <button
+                @click="closePaymentModal"
+                class="flex-1 px-4 py-3 border border-slate-300 dark:border-dark-500 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-dark-600 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                @click="confirmPaymentComplete"
+                class="flex-1 px-4 py-3 bg-gradient-to-r from-primary-500 to-primary-600 text-white rounded-lg hover:from-primary-600 hover:to-primary-700 transition-all"
+              >
+                {{ paymentStatus === 'paid' ? '已完成' : '支付已完成' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { redeemVoucher, getMe } from '@/api/client'
 import { getTenantHeaders } from '@/config/tenant'
@@ -746,6 +816,42 @@ const paymentMethods = ref([])
 const quickAmounts = [300, 500, 1000, 5000, 10000] // 单位：分
 const rechargeCards = ref([]) // 充值卡片列表
 const selectedRechargeCard = ref(null) // 选中的充值卡片
+
+// 支付弹窗相关
+const showPaymentModal = ref(false)
+const paymentQrCode = ref('')
+const paymentOrderNo = ref('')
+const paymentStatus = ref('pending') // pending, checking, paid, failed
+const paymentPollingTimer = ref(null)
+
+function resolveQrImageSrc(qrCode) {
+  const code = String(qrCode || '').trim()
+  if (!code) return ''
+  if (code.startsWith('data:image/')) return code
+  if (/^https?:\/\/.+\.(png|jpe?g|gif|webp)(\?.*)?$/i.test(code)) return code
+  return `https://api.qrserver.com/v1/create-qr-code/?size=256x256&data=${encodeURIComponent(code)}`
+}
+
+async function ensureQrLib() {
+  if (window.QRCode?.toDataURL) return true
+  const cdns = [
+    'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js',
+    'https://unpkg.com/qrcode@1.5.3/build/qrcode.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/qrcode/1.5.3/qrcode.min.js'
+  ]
+  for (const src of cdns) {
+    const loaded = await new Promise(resolve => {
+      const script = document.createElement('script')
+      script.src = src
+      script.async = true
+      script.onload = () => resolve(true)
+      script.onerror = () => resolve(false)
+      document.head.appendChild(script)
+    })
+    if (loaded && window.QRCode?.toDataURL) return true
+  }
+  return false
+}
 
 // 使用后端返回的 level 字段来判断套餐等级
 // 注意：如果没有 level 字段，则回退到 packageOrder 映射
@@ -1082,14 +1188,15 @@ async function confirmPurchase() {
     
     const token = localStorage.getItem('token')
     const payload = {
-      package_id: selectedPackage.value.id
+      package_id: selectedPackage.value.id,
+      frontend_url: window.location.origin
     }
-    
+
     // 如果使用了优惠券，添加优惠券码
     if (appliedCoupon.value) {
       payload.coupon_code = purchaseCouponCode.value
     }
-    
+
     // 如果需要在线支付，添加支付方式
     if (info.needOnlinePayment) {
       payload.payment_method_id = purchasePaymentMethod.value
@@ -1108,6 +1215,17 @@ async function confirmPurchase() {
     const data = await res.json()
     
     if (res.ok) {
+      // 如果返回了二维码支付，显示支付弹窗
+      if (data.payment_type === 'qrcode' && data.qr_code) {
+        paymentQrCode.value = data.qr_code
+        paymentOrderNo.value = data.order_no
+        paymentStatus.value = 'pending'
+        showPaymentModal.value = true
+        closePurchaseModal()
+        startPaymentPolling()
+        return
+      }
+
       // 如果返回了支付链接，跳转支付
       if (data.pay_url) {
         // 设置待刷新标记
@@ -1116,7 +1234,7 @@ async function confirmPurchase() {
         window.location.href = data.pay_url
         return
       }
-      
+
       // 余额支付成功，立即刷新用户信息
       if (data.user) {
         user.value = data.user
@@ -1244,9 +1362,10 @@ async function submitRecharge() {
     const token = localStorage.getItem('token')
     const payload = {
       amount: amount,
-      payment_method_id: rechargeSelectedMethod.value
+      payment_method_id: rechargeSelectedMethod.value,
+      frontend_url: window.location.origin
     }
-    
+
     // 如果选择了充值卡片，传递卡片ID
     if (selectedRechargeCard.value) {
       payload.recharge_card_id = selectedRechargeCard.value.id
@@ -1263,13 +1382,24 @@ async function submitRecharge() {
     })
     
     const data = await res.json()
-    
+
     if (!res.ok) {
       throw new Error(data.message || '创建订单失败')
     }
-    
-    // 跳转到支付页面前，设置待刷新标记
-    if (data.pay_url) {
+
+    // 根据支付类型决定是显示弹窗还是跳转
+    if (data.payment_type === 'qrcode' && data.qr_code) {
+      // 二维码支付：显示弹窗
+      paymentQrCode.value = data.qr_code
+      paymentOrderNo.value = data.order_no
+      paymentStatus.value = 'pending'
+      showPaymentModal.value = true
+      closeRechargeModal()
+
+      // 开始轮询支付状态
+      startPaymentPolling()
+    } else if (data.pay_url) {
+      // 跳转支付：保持原有行为
       localStorage.setItem('pending_payment_refresh', 'true')
       localStorage.setItem('payment_timestamp', Date.now().toString())
       window.location.href = data.pay_url
@@ -1279,6 +1409,75 @@ async function submitRecharge() {
   } finally {
     rechargeLoading.value = false
   }
+}
+
+// 支付弹窗相关函数
+function closePaymentModal() {
+  showPaymentModal.value = false
+  stopPaymentPolling()
+  paymentQrCode.value = ''
+  paymentOrderNo.value = ''
+  paymentStatus.value = 'pending'
+}
+
+function startPaymentPolling() {
+  // 清除之前的定时器
+  stopPaymentPolling()
+
+  // 立即检查一次
+  checkPaymentStatus()
+
+  // 每3秒检查一次支付状态
+  paymentPollingTimer.value = setInterval(() => {
+    checkPaymentStatus()
+  }, 3000)
+}
+
+function stopPaymentPolling() {
+  if (paymentPollingTimer.value) {
+    clearInterval(paymentPollingTimer.value)
+    paymentPollingTimer.value = null
+  }
+}
+
+async function checkPaymentStatus() {
+  if (!paymentOrderNo.value) return
+
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`/api/user-portal/pay/check/${paymentOrderNo.value}`, {
+      headers: {
+        ...getTenantHeaders(),
+        'Authorization': `Bearer ${token}`
+      }
+    })
+
+    const data = await res.json()
+
+    if (data.status === 'paid') {
+      paymentStatus.value = 'paid'
+      stopPaymentPolling()
+
+      // 刷新用户信息
+      setTimeout(async () => {
+        await loadUser()
+        closePaymentModal()
+      }, 1500)
+    } else if (data.status === 'checking') {
+      paymentStatus.value = 'checking'
+    }
+  } catch (e) {
+    console.error('检查支付状态失败:', e)
+  }
+}
+
+async function confirmPaymentComplete() {
+  if (paymentStatus.value === 'paid') {
+    closePaymentModal()
+    return
+  }
+  paymentStatus.value = 'checking'
+  await checkPaymentStatus()
 }
 
 // 兑换券相关函数
@@ -1552,6 +1751,42 @@ function handleVisibilityChange() {
     checkPaymentReturn()
   }
 }
+
+// 监听支付弹窗状态，生成二维码
+watch([showPaymentModal, paymentQrCode], async ([isShown, qrCode]) => {
+  if (isShown && qrCode) {
+    await nextTick()
+    const qrContainer = document.getElementById('payment-qrcode')
+    if (qrContainer) {
+      const img = document.createElement('img')
+      img.alt = 'Payment QR Code'
+      img.className = 'w-full h-full'
+      try {
+        if (await ensureQrLib()) {
+          img.src = await window.QRCode.toDataURL(qrCode, { width: 256, margin: 1 })
+        } else {
+          img.src = resolveQrImageSrc(qrCode)
+        }
+      } catch (e) {
+        img.src = resolveQrImageSrc(qrCode)
+      }
+      img.onerror = () => {
+        qrContainer.innerHTML = ''
+        if (paymentOrderNo.value) {
+          const link = document.createElement('a')
+          link.href = `/api/user-portal/pay/${paymentOrderNo.value}`
+          link.target = '_blank'
+          link.rel = 'noopener'
+          link.textContent = '二维码加载失败，点击打开支付页面'
+          link.className = 'text-blue-500 underline text-sm'
+          qrContainer.appendChild(link)
+        }
+      }
+      qrContainer.innerHTML = ''
+      qrContainer.appendChild(img)
+    }
+  }
+})
 
 onMounted(() => {
   loadPackages()

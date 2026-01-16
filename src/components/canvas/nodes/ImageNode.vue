@@ -1833,10 +1833,11 @@ async function handleToolbarDownload() {
     window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error('[ImageNode] 下载图片失败:', error)
-    // 如果 fetch 失败，使用后端代理页面下载
+    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
       const { getApiUrl } = await import('@/config/tenant')
-      window.location.href = getApiUrl(`/api/images/download?url=${encodeURIComponent(currentImageUrl.value)}&filename=${encodeURIComponent(filename)}`)
+      const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(currentImageUrl.value)}&filename=${encodeURIComponent(filename)}`)
+      window.open(downloadUrl, '_blank')
     } catch (e) {
       console.error('[ImageNode] 所有下载方式都失败:', e)
     }

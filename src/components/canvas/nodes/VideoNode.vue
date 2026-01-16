@@ -263,6 +263,129 @@ const VIDU_MODE_OPTIONS = [
   { value: 'reference', label: '多图参考', description: '综合多图元素创作', maxImages: 7 }
 ]
 
+// ==================== Kling 模型相关 ====================
+// 当前模型是否为 Kling（可灵）系列
+const isKlingModel = computed(() => {
+  const modelName = selectedModel.value?.toLowerCase() || ''
+  return modelName.includes('kling')
+})
+
+// Kling 高级选项 - 摄像机控制
+const showKlingAdvancedOptions = ref(false)
+const klingCameraEnabled = ref(props.data.klingCameraEnabled || false)  // 是否启用摄像机控制
+const klingCameraType = ref(props.data.klingCameraType || '')  // 运镜类型
+const klingCameraConfig = ref(props.data.klingCameraConfig || 'horizontal')  // simple 模式下的配置类型（6选1）
+const klingCameraValue = ref(props.data.klingCameraValue || 0)  // simple 模式下的数值 [-10, 10]
+
+// Kling 运镜类型选项
+const KLING_CAMERA_TYPES = [
+  { value: '', label: '智能匹配', description: '根据文本/图片自动选择' },
+  { value: 'simple', label: '简单运镜', description: '自定义单一方向运镜' },
+  { value: 'down_back', label: '下移拉远', description: '镜头下压并后退' },
+  { value: 'forward_up', label: '推进上移', description: '镜头前进并上仰' },
+  { value: 'right_turn_forward', label: '右旋推进', description: '先右旋转后前进' },
+  { value: 'left_turn_forward', label: '左旋推进', description: '先左旋并前进' }
+]
+
+// Kling simple 模式配置选项（6选1）
+const KLING_CAMERA_CONFIGS = [
+  { value: 'horizontal', label: '水平运镜', description: '沿x轴平移，负左正右' },
+  { value: 'vertical', label: '垂直运镜', description: '沿y轴平移，负下正上' },
+  { value: 'pan', label: '水平摇镜', description: '绕y轴旋转，负左正右' },
+  { value: 'tilt', label: '垂直摇镜', description: '绕x轴旋转，负下正上' },
+  { value: 'roll', label: '旋转运镜', description: '绕z轴旋转，负逆正顺' },
+  { value: 'zoom', label: '变焦', description: '焦距变化，负拉近正推远' }
+]
+
+// Kling 2.6+ 音频相关选项
+const klingSoundEnabled = ref(props.data.klingSoundEnabled || false)  // 是否生成声音
+const klingVoiceList = ref(props.data.klingVoiceList || [])  // 音色列表（最多2个）
+const klingVoiceInput = ref('')  // 音色ID输入框
+
+// 检测是否是 Kling 2.6+ 版本（支持音频功能）
+const isKling26Plus = computed(() => {
+  const modelName = selectedModel.value?.toLowerCase() || ''
+  // 检测 v2.6 或更高版本
+  return modelName.includes('kling') && (
+    modelName.includes('2.6') || 
+    modelName.includes('2-6') ||
+    modelName.includes('v2.6') ||
+    modelName.includes('v2-6') ||
+    // 未来版本
+    modelName.includes('2.7') ||
+    modelName.includes('2.8') ||
+    modelName.includes('2.9') ||
+    modelName.includes('3.0')
+  )
+})
+
+// 检测是否是 Kling Pro 模式（只有 Pro 模式支持生成声音）
+const isKlingProMode = computed(() => {
+  const modelName = selectedModel.value?.toLowerCase() || ''
+  // 检测模型名称中是否包含 pro
+  return modelName.includes('kling') && modelName.includes('pro')
+})
+
+// 添加音色到列表
+const addKlingVoice = () => {
+  const voiceId = klingVoiceInput.value.trim()
+  if (!voiceId) return
+  if (klingVoiceList.value.length >= 2) {
+    console.log('[VideoNode] Kling 音色列表已满（最多2个）')
+    return
+  }
+  if (klingVoiceList.value.includes(voiceId)) {
+    console.log('[VideoNode] Kling 音色已存在:', voiceId)
+    return
+  }
+  klingVoiceList.value.push(voiceId)
+  klingVoiceInput.value = ''
+}
+
+// 移除音色
+const removeKlingVoice = (voiceId) => {
+  const index = klingVoiceList.value.indexOf(voiceId)
+  if (index > -1) {
+    klingVoiceList.value.splice(index, 1)
+  }
+}
+
+// 构建 Kling camera_control 参数
+const buildKlingCameraControl = () => {
+  if (!klingCameraEnabled.value || !klingCameraType.value) {
+    return null
+  }
+  
+  const result = {
+    type: klingCameraType.value
+  }
+  
+  // 如果是 simple 类型，需要添加 config
+  if (klingCameraType.value === 'simple') {
+    const config = {
+      horizontal: 0,
+      vertical: 0,
+      pan: 0,
+      tilt: 0,
+      roll: 0,
+      zoom: 0
+    }
+    // 设置选中的配置项的值
+    config[klingCameraConfig.value] = klingCameraValue.value
+    result.config = config
+  }
+  
+  return result
+}
+
+// 构建 Kling voice_list 参数
+const buildKlingVoiceList = () => {
+  if (!klingSoundEnabled.value || klingVoiceList.value.length === 0) {
+    return null
+  }
+  return klingVoiceList.value.map(voiceId => ({ voice_id: voiceId }))
+}
+
 // 当前 Vidu 模式配置
 const currentViduModeConfig = computed(() => {
   return VIDU_MODE_OPTIONS.find(m => m.value === viduMode.value) || VIDU_MODE_OPTIONS[0]
@@ -897,6 +1020,11 @@ const pointsCost = computed(() => {
     cost = Math.ceil(cost * discount)
   }
   
+  // Kling 2.6+ Pro 声音模式：积分翻倍
+  if (isKlingProMode.value && klingSoundEnabled.value) {
+    cost = cost * 2
+  }
+  
   return cost
 })
 
@@ -1080,8 +1208,8 @@ function handleKeyframesToVideo() {
 }
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution], 
-  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes]) => {
+watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingSoundEnabled, klingVoiceList], 
+  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingSndEnabled, klingVoices]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       aspectRatio,
@@ -1092,18 +1220,53 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
       viduOffPeak: offPeak,
       viduResolution: resolution,
       veoMode: veoMd,
-      veoResolution: veoRes
+      veoResolution: veoRes,
+      // Kling 摄像机控制参数
+      klingCameraEnabled: klingCamEnabled,
+      klingCameraType: klingCamType,
+      klingCameraConfig: klingCamConfig,
+      klingCameraValue: klingCamValue,
+      // Kling 2.6+ 音频参数
+      klingSoundEnabled: klingSndEnabled,
+      klingVoiceList: klingVoices
     })
-  }
+  },
+  { deep: true }  // 深度监听数组变化
 )
 
-// 🔧 监听 VEO 模式切换，如果当前清晰度不被支持，自动切换到 1080p
+// 🔧 监听 VEO 模式切换，如果当前清晰度不被支持，自动切换到支持的第一个清晰度
 watch(veoMode, () => {
   if (!isVeoModel.value) return
   const currentMode = VEO_MODE_OPTIONS.value.find(m => m.value === veoMode.value)
   if (currentMode?.supportedResolutions && !currentMode.supportedResolutions.includes(veoResolution.value)) {
-    veoResolution.value = '1080p'
-    console.log('[VideoNode] VEO 模式切换，清晰度重置为 1080p')
+    // 🆕 优先切换到第一个支持的清晰度，而不是硬编码 1080p
+    veoResolution.value = currentMode.supportedResolutions[0] || '1080p'
+    console.log('[VideoNode] VEO 模式切换，清晰度重置为', veoResolution.value)
+  }
+})
+
+// 🆕 监听模型切换，如果是 VEO 4K 组，自动设置清晰度为 4K
+watch(selectedModel, () => {
+  const modelConfig = currentModelConfig.value
+  if (modelConfig?.isVeoModel && modelConfig?.isVeo4k) {
+    // VEO 4K 组只支持 4K 清晰度
+    veoResolution.value = '4k'
+    // 设置默认模式
+    if (modelConfig.defaultVeoMode) {
+      veoMode.value = modelConfig.defaultVeoMode
+    }
+    console.log('[VideoNode] 切换到 VEO 4K 组，清晰度设为 4K')
+  } else if (modelConfig?.isVeoModel && !modelConfig?.isVeo4k) {
+    // 普通 VEO 模型，如果当前是 4K 且不支持，切换到 1080p
+    const resolutions = modelConfig.veoResolutions || []
+    const supports4k = resolutions.some(r => r.value === '4k')
+    if (veoResolution.value === '4k' && !supports4k) {
+      veoResolution.value = '1080p'
+    }
+    // 设置默认模式
+    if (modelConfig.defaultVeoMode) {
+      veoMode.value = modelConfig.defaultVeoMode
+    }
   }
 })
 
@@ -1335,6 +1498,31 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
   if (isViduModel.value) {
     formData.append('resolution', viduResolution.value)
     console.log('[VideoNode] Vidu 清晰度:', viduResolution.value)
+  }
+  
+  // Kling 模型特有参数：摄像机控制
+  if (isKlingModel.value && klingCameraEnabled.value) {
+    const cameraControl = buildKlingCameraControl()
+    if (cameraControl) {
+      formData.append('camera_control', JSON.stringify(cameraControl))
+      console.log('[VideoNode] Kling 摄像机控制:', cameraControl)
+    }
+  }
+  
+  // Kling 2.6+ 模型特有参数：声音和音色
+  if (isKling26Plus.value) {
+    // sound 参数
+    formData.append('kling_sound', klingSoundEnabled.value ? 'on' : 'off')
+    console.log('[VideoNode] Kling 生成声音:', klingSoundEnabled.value ? 'on' : 'off')
+    
+    // voice_list 参数
+    if (klingSoundEnabled.value && klingVoiceList.value.length > 0) {
+      const voiceList = buildKlingVoiceList()
+      if (voiceList) {
+        formData.append('kling_voice_list', JSON.stringify(voiceList))
+        console.log('[VideoNode] Kling 音色列表:', voiceList)
+      }
+    }
   }
   
   // 如果有参考图片，添加图片 URL
@@ -3338,10 +3526,12 @@ async function handleToolbarDownload() {
     }, 100)
   } catch (error) {
     console.error('[VideoNode] 下载失败:', error)
-    // 最后的回退：使用后端代理页面下载
+    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
       const { getApiUrl } = await import('@/config/tenant')
-      window.location.href = getApiUrl(`/api/videos/download?url=${encodeURIComponent(videoUrl)}&name=${encodeURIComponent(filename)}`)
+      const downloadUrl = getApiUrl(`/api/videos/download?url=${encodeURIComponent(videoUrl)}&name=${encodeURIComponent(filename)}`)
+      // 使用 window.open 在新窗口打开，不会触发当前页面的离开提示
+      window.open(downloadUrl, '_blank')
     } catch (e) {
       console.error('[VideoNode] 所有下载方式都失败:', e)
     }
@@ -3927,6 +4117,150 @@ function handleToolbarPreview() {
                 </button>
               </div>
             </div>
+          </div>
+        </Transition>
+      </template>
+      
+      <!-- Kling 高级选项 - 摄像机控制 -->
+      <template v-if="isKlingModel">
+        <!-- 展开/收起按钮 -->
+        <button class="sora2-collapse-trigger" @click="showKlingAdvancedOptions = !showKlingAdvancedOptions">
+          <span class="sora2-collapse-icon" :class="{ 'expanded': showKlingAdvancedOptions }">∧</span>
+          <span>{{ showKlingAdvancedOptions ? '收起' : '扩展' }}</span>
+        </button>
+        
+        <!-- 高级选项内容 -->
+        <Transition name="slide-down">
+          <div v-if="showKlingAdvancedOptions" class="sora2-advanced-options kling-advanced">
+            <!-- 摄像机控制开关 -->
+            <div class="sora2-option-row">
+              <span class="sora2-option-label">🎥 摄像机控制</span>
+              <label class="sora2-toggle-switch">
+                <input type="checkbox" v-model="klingCameraEnabled" />
+                <span class="sora2-toggle-slider"></span>
+              </label>
+            </div>
+            
+            <!-- 启用后显示运镜类型选择 -->
+            <template v-if="klingCameraEnabled">
+              <!-- 运镜类型选择 -->
+              <div class="sora2-option-row vertical">
+                <span class="sora2-option-label">运镜类型</span>
+                <div class="kling-camera-types">
+                  <button
+                    v-for="type in KLING_CAMERA_TYPES"
+                    :key="type.value"
+                    @click="klingCameraType = type.value"
+                    :class="['kling-camera-type-btn', { active: klingCameraType === type.value }]"
+                    :title="type.description"
+                  >
+                    {{ type.label }}
+                  </button>
+                </div>
+              </div>
+              
+              <!-- simple 类型时显示配置选项 -->
+              <template v-if="klingCameraType === 'simple'">
+                <!-- 配置类型选择（6选1）-->
+                <div class="sora2-option-row vertical">
+                  <span class="sora2-option-label">运镜方向</span>
+                  <div class="kling-camera-configs">
+                    <button
+                      v-for="cfg in KLING_CAMERA_CONFIGS"
+                      :key="cfg.value"
+                      @click="klingCameraConfig = cfg.value"
+                      :class="['kling-camera-config-btn', { active: klingCameraConfig === cfg.value }]"
+                      :title="cfg.description"
+                    >
+                      {{ cfg.label }}
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- 数值滑块 -->
+                <div class="sora2-option-row vertical">
+                  <div class="kling-slider-header">
+                    <span class="sora2-option-label">运镜强度</span>
+                    <span class="kling-slider-value">{{ klingCameraValue }}</span>
+                  </div>
+                  <div class="kling-slider-container">
+                    <span class="kling-slider-label">-10</span>
+                    <input 
+                      type="range" 
+                      v-model.number="klingCameraValue" 
+                      min="-10" 
+                      max="10" 
+                      step="1"
+                      class="kling-slider"
+                    />
+                    <span class="kling-slider-label">+10</span>
+                  </div>
+                  <div class="kling-slider-hint">
+                    {{ KLING_CAMERA_CONFIGS.find(c => c.value === klingCameraConfig)?.description || '' }}
+                  </div>
+                </div>
+              </template>
+              
+              <!-- 其他运镜类型的说明 -->
+              <div v-if="klingCameraType && klingCameraType !== 'simple'" class="kling-camera-tip">
+                💡 {{ KLING_CAMERA_TYPES.find(t => t.value === klingCameraType)?.description || '' }}
+              </div>
+            </template>
+            
+            <!-- Kling 2.6+ Pro 音频选项（只有 Pro 模式支持声音生成）-->
+            <template v-if="isKling26Plus && isKlingProMode">
+              <div class="kling-section-divider"></div>
+              
+              <!-- 生成声音开关 -->
+              <div class="sora2-option-row">
+                <span class="sora2-option-label">🔊 生成声音 <span v-if="klingSoundEnabled" class="kling-sound-multiplier">(2x)</span></span>
+                <label class="sora2-toggle-switch">
+                  <input type="checkbox" v-model="klingSoundEnabled" />
+                  <span class="sora2-toggle-slider"></span>
+                </label>
+              </div>
+              
+              <!-- 启用声音后显示音色配置 -->
+              <template v-if="klingSoundEnabled">
+                <!-- 音色列表 - 独立容器确保样式隔离 -->
+                <div class="kling-voice-section">
+                  <div class="kling-voice-title">
+                    <span>音色列表</span>
+                    <span class="kling-voice-count">({{ klingVoiceList.length }}/2)</span>
+                  </div>
+                  
+                  <!-- 已添加的音色 -->
+                  <div v-if="klingVoiceList.length > 0" class="kling-voice-tags">
+                    <span 
+                      v-for="voiceId in klingVoiceList" 
+                      :key="voiceId" 
+                      class="kling-voice-tag"
+                    >
+                      {{ voiceId }}
+                      <button class="kling-voice-remove" @click="removeKlingVoice(voiceId)">×</button>
+                    </span>
+                  </div>
+                  
+                  <!-- 添加音色输入框 -->
+                  <div v-if="klingVoiceList.length < 2" class="kling-voice-input-row">
+                    <input 
+                      type="text" 
+                      v-model="klingVoiceInput"
+                      placeholder="输入音色ID"
+                      class="kling-voice-input"
+                      @keyup.enter="addKlingVoice"
+                    />
+                    <button class="kling-voice-add-btn" @click="addKlingVoice" :disabled="!klingVoiceInput.trim()">
+                      添加
+                    </button>
+                  </div>
+                  
+                  <div class="kling-voice-hint">
+                    💡 在 prompt 中使用 @音色ID 引用音色，最多添加2个
+                  </div>
+                </div>
+              </template>
+            </template>
           </div>
         </Transition>
       </template>
@@ -6132,6 +6466,414 @@ function handleToolbarPreview() {
 .slide-down-leave-from {
   opacity: 1;
   max-height: 300px;
+}
+
+/* ==================== Kling 摄像机控制样式 ==================== */
+.kling-advanced {
+  max-height: none; /* 移除高度限制，允许内容自然撑开 */
+}
+
+.kling-camera-types,
+.kling-camera-configs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.kling-camera-type-btn,
+.kling-camera-config-btn {
+  padding: 6px 10px;
+  border: 1px solid #444444;
+  border-radius: 6px;
+  background: #1e1e1e;
+  color: #a0a0a0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.kling-camera-type-btn:hover,
+.kling-camera-config-btn:hover {
+  border-color: #555555;
+  background: #2a2a2a;
+  color: #ffffff;
+}
+
+.kling-camera-type-btn.active,
+.kling-camera-config-btn.active {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.15);
+  color: #a78bfa;
+}
+
+.kling-slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.kling-slider-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #8b5cf6;
+  min-width: 32px;
+  text-align: right;
+}
+
+.kling-slider-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.kling-slider-label {
+  font-size: 11px;
+  color: #666666;
+  min-width: 24px;
+  text-align: center;
+}
+
+.kling-slider {
+  flex: 1;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, #ef4444 0%, #444444 50%, #22c55e 100%);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+.kling-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border: 2px solid #8b5cf6;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.kling-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border: 2px solid #8b5cf6;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.kling-slider-hint {
+  font-size: 11px;
+  color: #666666;
+  margin-top: 4px;
+  text-align: center;
+}
+
+.kling-camera-tip {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 6px;
+  font-size: 12px;
+  color: #a78bfa;
+}
+
+/* Kling 2.6+ 音频样式 */
+.kling-section-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(139, 92, 246, 0.3), transparent);
+  margin: 12px 0;
+}
+
+/* 音色列表独立容器 - 确保样式完全隔离 */
+.kling-voice-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 0 12px 0; /* 增加底部内边距 */
+  color: #cccccc;
+  width: 100%;
+}
+
+.kling-voice-title {
+  display: flex;
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #cccccc;
+}
+
+.kling-voice-title > span:first-child {
+  color: #cccccc;
+}
+
+.kling-voice-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  color: #cccccc;
+}
+
+.kling-voice-header .sora2-option-label {
+  color: #cccccc !important;
+}
+
+.kling-voice-title > span:first-child {
+  color: #e5e5e5 !important;
+  opacity: 1 !important;
+}
+
+.kling-voice-count {
+  font-size: 12px;
+  color: #a78bfa !important;
+  opacity: 1 !important;
+}
+
+/* 确保音色列表区域的所有文字颜色正确 */
+.kling-voice-section .kling-voice-input-row {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+  width: 100%;
+  color: #e0e0e0;
+}
+
+.kling-voice-section .kling-voice-input {
+  flex: 1;
+}
+
+.kling-voice-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.kling-voice-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 4px;
+  font-size: 12px;
+  color: #a78bfa;
+}
+
+.kling-voice-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: #a78bfa;
+  font-size: 14px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+
+.kling-voice-remove:hover {
+  opacity: 1;
+}
+
+.kling-voice-input-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.kling-voice-input {
+  flex: 1;
+  padding: 6px 10px;
+  background: #1e1e1e;
+  border: 1px solid #444444;
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.kling-voice-input:focus {
+  border-color: #8b5cf6;
+}
+
+.kling-voice-input::placeholder {
+  color: #666666;
+}
+
+.kling-voice-add-btn {
+  padding: 6px 12px;
+  background: rgba(139, 92, 246, 0.15);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 6px;
+  color: #a78bfa !important;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+  opacity: 1 !important;
+}
+
+.kling-voice-add-btn:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.25);
+  border-color: rgba(139, 92, 246, 0.5);
+}
+
+.kling-voice-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.kling-voice-hint {
+  font-size: 11px;
+  color: #666666 !important;
+  line-height: 1.4;
+}
+
+.kling-sound-multiplier {
+  color: #fbbf24;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+/* Kling 白昼模式 */
+:root.canvas-theme-light .kling-camera-type-btn,
+:root.canvas-theme-light .kling-camera-config-btn {
+  border-color: #e5e5e5;
+  background: #f8f8f8;
+  color: #666666;
+}
+
+:root.canvas-theme-light .kling-camera-type-btn:hover,
+:root.canvas-theme-light .kling-camera-config-btn:hover {
+  border-color: #d4d4d4;
+  background: #f0f0f0;
+  color: #333333;
+}
+
+:root.canvas-theme-light .kling-camera-type-btn.active,
+:root.canvas-theme-light .kling-camera-config-btn.active {
+  border-color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.1);
+  color: #7c3aed;
+}
+
+:root.canvas-theme-light .kling-slider-value {
+  color: #7c3aed;
+}
+
+:root.canvas-theme-light .kling-slider-label {
+  color: #999999;
+}
+
+:root.canvas-theme-light .kling-slider-hint {
+  color: #888888;
+}
+
+:root.canvas-theme-light .kling-camera-tip {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.2);
+  color: #7c3aed;
+}
+
+/* Kling 2.6+ 音频 - 白昼模式 */
+:root.canvas-theme-light .kling-section-divider {
+  background: linear-gradient(to right, transparent, rgba(139, 92, 246, 0.2), transparent);
+}
+
+:root.canvas-theme-light .kling-voice-count {
+  color: #7c3aed !important;
+}
+
+:root.canvas-theme-light .kling-voice-header .sora2-option-label {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .kling-voice-header {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .kling-voice-section {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .kling-voice-title {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .kling-voice-title > span:first-child {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .kling-voice-count {
+  color: #7c3aed !important;
+}
+
+:root.canvas-theme-light .kling-voice-add-btn {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.2);
+  color: #7c3aed !important;
+}
+
+
+:root.canvas-theme-light .kling-voice-tag {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.2);
+  color: #7c3aed;
+}
+
+:root.canvas-theme-light .kling-voice-remove {
+  color: #7c3aed;
+}
+
+:root.canvas-theme-light .kling-voice-input {
+  background: #f8f8f8;
+  border-color: #e5e5e5;
+  color: #333333;
+}
+
+:root.canvas-theme-light .kling-voice-input:focus {
+  border-color: #8b5cf6;
+}
+
+:root.canvas-theme-light .kling-voice-input::placeholder {
+  color: #999999;
+}
+
+:root.canvas-theme-light .kling-voice-add-btn {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.2);
+  color: #7c3aed;
+}
+
+:root.canvas-theme-light .kling-voice-add-btn:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+:root.canvas-theme-light .kling-voice-hint {
+  color: #888888 !important;
+}
+
+:root.canvas-theme-light .kling-sound-multiplier {
+  color: #d97706;
 }
 
 /* Sora2 高级选项 - 白昼模式 */

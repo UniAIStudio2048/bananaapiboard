@@ -1108,10 +1108,11 @@ async function handleToolbarDownload() {
     URL.revokeObjectURL(downloadUrl)
   } catch (error) {
     console.error('[AudioNode] 下载失败:', error)
-    // 回退：使用后端代理页面下载
+    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
       const { getApiUrl } = await import('@/config/tenant')
-      window.location.href = getApiUrl(`/api/images/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`)
+      const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`)
+      window.open(downloadUrl, '_blank')
     } catch (e) {
       console.error('[AudioNode] 所有下载方式都失败:', e)
     }
