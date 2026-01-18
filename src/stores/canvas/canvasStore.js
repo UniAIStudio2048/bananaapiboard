@@ -95,6 +95,11 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 添加节点
    */
   function addNode(node, skipHistory = false) {
+    // 如果没有工作流标签，先自动创建一个
+    if (workflowTabs.value.length === 0) {
+      createTab()
+    }
+    
     if (!skipHistory) {
       saveHistory() // 保存历史
     }
