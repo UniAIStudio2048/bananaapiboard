@@ -389,19 +389,22 @@ export const CONNECTION_RULES = {
   
   [NODE_TYPES.IMAGE_INPUT]: [
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
-    NODE_TYPES.IMAGE_TO_VIDEO       // 图生视频
+    NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
+    NODE_TYPES.LLM_IMAGE_DESCRIBE   // 图片反推
   ],
   
   // 统一图片节点别名
   'image': [
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
-    NODE_TYPES.IMAGE_TO_VIDEO       // 图生视频
+    NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
+    NODE_TYPES.LLM_IMAGE_DESCRIBE   // 图片反推
   ],
   
   // 图生图节点别名
   'image-gen': [
     NODE_TYPES.IMAGE_TO_IMAGE,
-    NODE_TYPES.IMAGE_TO_VIDEO
+    NODE_TYPES.IMAGE_TO_VIDEO,
+    NODE_TYPES.LLM_IMAGE_DESCRIBE   // 图片反推
   ],
   
   [NODE_TYPES.VIDEO_INPUT]: [

@@ -389,10 +389,20 @@ export function getTaskStats() {
   return { pending, processing, completed, failed, total: tasks.size }
 }
 
-// 页面卸载前保存状态
+// 页面卸载前保存状态并停止轮询
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
     saveTasksToStorage()
+    stopAllPolling()  // 🔧 确保停止所有轮询定时器
   })
+}
+
+/**
+ * 🔧 清理所有资源（组件卸载时调用）
+ */
+export function cleanup() {
+  stopAllPolling()
+  taskCallbacks.clear()
+  console.log('[BackgroundTaskManager] 已清理所有资源')
 }
 

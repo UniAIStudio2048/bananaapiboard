@@ -99,15 +99,97 @@ export function isQiniuCdnUrl(url) {
 }
 
 /**
+ * 获取七牛云原图 URL（去除所有图片处理参数）
+ * 七牛云图片处理参数格式：
+ * - ?imageView2/... - 图片基本处理
+ * - ?imageMogr2/... - 图片高级处理
+ * - |imageView2/... - 管道操作（多个处理连接）
+ * - ?imageInfo - 获取图片信息
+ * - ?exif - 获取EXIF信息
+ * - ?attname=xxx - 下载时的文件名（这个需要保留）
+ * 
+ * @param {string} url - 可能包含处理参数的七牛云 URL
+ * @returns {string} 原图 URL（不含处理参数，但保留 attname）
+ */
+export function getQiniuOriginalUrl(url) {
+  if (!url || typeof url !== 'string') return url
+  
+  // 如果不是七牛云 URL，直接返回
+  if (!isQiniuCdnUrl(url)) return url
+  
+  // 分离基础 URL 和查询参数
+  const questionMarkIndex = url.indexOf('?')
+  if (questionMarkIndex === -1) {
+    // 没有查询参数，检查管道操作符
+    const pipeIndex = url.indexOf('|')
+    if (pipeIndex !== -1) {
+      return url.substring(0, pipeIndex)
+    }
+    return url
+  }
+  
+  const baseUrl = url.substring(0, questionMarkIndex)
+  const queryString = url.substring(questionMarkIndex + 1)
+  
+  // 检查是否有管道操作符（在查询参数之后）
+  // 例如: ?xxx|imageView2/... 或 ?imageView2/...|imageMogr2/...
+  const cleanQueryString = queryString.split('|')[0]
+  
+  // 解析查询参数，只保留 attname 参数
+  const params = new URLSearchParams(cleanQueryString)
+  const attname = params.get('attname')
+  
+  // 检查查询参数是否以图片处理指令开头
+  const imageProcessingPrefixes = [
+    'imageView2', 'imageMogr2', 'imageInfo', 'exif', 
+    'watermark', 'roundPic', 'imageAve', 'imageslim'
+  ]
+  
+  const firstParam = cleanQueryString.split('&')[0]
+  const isImageProcessing = imageProcessingPrefixes.some(prefix => 
+    firstParam.startsWith(prefix) || firstParam.startsWith(prefix + '/')
+  )
+  
+  // 如果是图片处理参数，返回不带参数的基础 URL
+  // 如果有 attname，单独保留
+  if (isImageProcessing) {
+    return attname ? `${baseUrl}?attname=${encodeURIComponent(attname)}` : baseUrl
+  }
+  
+  // 不是图片处理参数，但可能混合了其他参数和图片处理
+  // 过滤掉图片处理相关的参数
+  const filteredParams = []
+  for (const [key, value] of params.entries()) {
+    const isProcessingParam = imageProcessingPrefixes.some(prefix => 
+      key.startsWith(prefix) || key === 'format'
+    )
+    if (!isProcessingParam) {
+      filteredParams.push(`${key}=${encodeURIComponent(value)}`)
+    }
+  }
+  
+  if (filteredParams.length > 0) {
+    return `${baseUrl}?${filteredParams.join('&')}`
+  }
+  
+  return baseUrl
+}
+
+/**
  * 构建七牛云强制下载 URL（使用 attname 参数）
+ * 会先去除图片处理参数，确保下载原图
  * @param {string} url - 七牛云 URL
  * @param {string} filename - 下载时的文件名
  * @returns {string}
  */
 export function buildQiniuForceDownloadUrl(url, filename) {
   if (!url || !filename) return url
-  const separator = url.includes('?') ? '&' : '?'
-  return `${url}${separator}attname=${encodeURIComponent(filename)}`
+  
+  // 🔧 修复：先去除图片处理参数，确保下载原图
+  const originalUrl = getQiniuOriginalUrl(url)
+  
+  const separator = originalUrl.includes('?') ? '&' : '?'
+  return `${originalUrl}${separator}attname=${encodeURIComponent(filename)}`
 }
 
 /**
@@ -115,6 +197,8 @@ export function buildQiniuForceDownloadUrl(url, filename) {
  * - 七牛云 URL：直接使用 attname 参数下载（节省服务器出站流量）
  * - 本地文件：使用后端下载接口
  * - 其他外部 URL：走后端代理下载（解决跨域问题）
+ * 
+ * 🔧 修复：所有情况下都确保下载原图，去除压缩/处理参数
  * @param {string} url - 要下载的资源 URL
  * @param {string} filename - 下载时的文件名
  * @returns {string}
@@ -128,13 +212,16 @@ export function buildDownloadUrl(url, filename) {
   }
   
   // 七牛云 URL：直接使用 attname 参数下载，不走后端代理（节省服务器流量）
+  // buildQiniuForceDownloadUrl 内部会先去除图片处理参数
   if (isQiniuCdnUrl(url)) {
     return buildQiniuForceDownloadUrl(url, filename || 'download')
   }
   
   // 其他外部 URL：走后端代理下载
   // 后端会设置 Content-Disposition: attachment 头，解决跨域下载问题
-  const params = new URLSearchParams({ url, filename })
+  // 🔧 先清理可能的七牛云处理参数（以防 URL 被误分类）
+  const cleanUrl = getQiniuOriginalUrl(url)
+  const params = new URLSearchParams({ url: cleanUrl, filename })
   return getApiUrl(`/api/images/download?${params.toString()}`)
 }
 
@@ -142,19 +229,24 @@ export function buildDownloadUrl(url, filename) {
  * 构建视频下载 URL
  * - 七牛云 URL：直接使用 attname 参数下载（节省服务器出站流量）
  * - 其他外部 URL：走后端代理下载（解决跨域问题）
+ * 
+ * 🔧 修复：所有情况下都确保下载原视频，去除处理参数
  * @param {string} url - 要下载的视频 URL
  * @param {string} filename - 下载时的文件名
  * @returns {string}
  */
 export function buildVideoDownloadUrl(url, filename) {
   // 七牛云 URL：直接使用 attname 参数下载，不走后端代理（节省服务器流量）
+  // buildQiniuForceDownloadUrl 内部会先去除处理参数
   if (isQiniuCdnUrl(url)) {
     return buildQiniuForceDownloadUrl(url, filename || 'video.mp4')
   }
   
   // 其他外部 URL：走后端代理下载
   // 后端会设置 Content-Disposition: attachment 头，解决跨域下载问题
-  return getApiUrl(`/api/videos/download?url=${encodeURIComponent(url)}&name=${encodeURIComponent(filename || 'video.mp4')}`)
+  // 🔧 先清理可能的七牛云处理参数
+  const cleanUrl = getQiniuOriginalUrl(url)
+  return getApiUrl(`/api/videos/download?url=${encodeURIComponent(cleanUrl)}&name=${encodeURIComponent(filename || 'video.mp4')}`)
 }
 
 export async function getMe(forceRefresh = false) {

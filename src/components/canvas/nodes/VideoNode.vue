@@ -239,10 +239,12 @@ const isStyleSelected = (styleValue) => {
 }
 
 // ==================== Vidu 模型相关 ====================
-// 当前模型是否为 Vidu 系列
+// 当前模型是否为 Vidu 系列（原生 API，非腾讯 AIGC）
 const isViduModel = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
   const apiType = currentModelConfig.value?.apiType || ''
+  // 腾讯 AIGC 的 Vidu 不支持原生 Vidu 的错峰、720P折扣等功能
+  if (apiType === 'tencentaigc') return false
   return modelName.includes('vidu') || apiType === 'vidu'
 })
 
@@ -264,10 +266,17 @@ const VIDU_MODE_OPTIONS = [
 ]
 
 // ==================== Kling 模型相关 ====================
-// 当前模型是否为 Kling（可灵）系列
+// 当前模型是否为 Kling（可灵）系列（原生 API，非腾讯 AIGC）
 const isKlingModel = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
+  // 腾讯 AIGC 的 Kling 不支持原生 Kling 的摄像机控制等功能
+  if (currentModelConfig.value?.apiType === 'tencentaigc') return false
   return modelName.includes('kling')
+})
+
+// 当前模型是否为腾讯 AIGC 模型
+const isTencentAigcModel = computed(() => {
+  return currentModelConfig.value?.apiType === 'tencentaigc'
 })
 
 // Kling 高级选项 - 摄像机控制
@@ -325,6 +334,75 @@ const isKlingProMode = computed(() => {
   // 检测模型名称中是否包含 pro
   return modelName.includes('kling') && modelName.includes('pro')
 })
+
+// 检测是否是 Kling 动作迁移模型（Motion Control）
+const isKlingMotionControl = computed(() => {
+  const modelName = selectedModel.value?.toLowerCase() || ''
+  return modelName.includes('kling') && modelName.includes('motion')
+})
+
+// Kling 动作迁移相关参数
+const klingMotionVideoUrl = ref(props.data.klingMotionVideoUrl || '')  // 参考视频URL
+const klingMotionMode = ref(props.data.klingMotionMode || 'std')  // std 或 pro
+const klingMotionVideoError = ref('')  // 视频验证错误信息
+const klingMotionVideoDuration = ref(0)  // 参考视频时长（秒）
+const klingMotionVideoLoading = ref(false)  // 视频加载中
+
+// 验证参考视频时长（最大30秒）
+const validateMotionVideoUrl = async (url) => {
+  if (!url) {
+    klingMotionVideoError.value = ''
+    klingMotionVideoDuration.value = 0
+    return
+  }
+  
+  klingMotionVideoLoading.value = true
+  klingMotionVideoError.value = ''
+  
+  try {
+    // 使用 HTML5 video 元素获取视频时长
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    
+    await new Promise((resolve, reject) => {
+      video.onloadedmetadata = () => {
+        klingMotionVideoDuration.value = Math.ceil(video.duration)
+        if (video.duration > 30) {
+          klingMotionVideoError.value = `视频时长 ${Math.ceil(video.duration)} 秒，超过最大限制 30 秒`
+        } else {
+          klingMotionVideoError.value = ''
+        }
+        resolve()
+      }
+      video.onerror = () => {
+        klingMotionVideoError.value = '无法加载视频，请检查URL是否正确'
+        reject(new Error('Video load failed'))
+      }
+      // 添加超时处理
+      setTimeout(() => {
+        if (!video.duration) {
+          klingMotionVideoError.value = '视频加载超时，请检查URL'
+          reject(new Error('Video load timeout'))
+        }
+      }, 10000)
+      video.src = url
+    })
+  } catch (e) {
+    console.error('[VideoNode] 验证视频失败:', e)
+  } finally {
+    klingMotionVideoLoading.value = false
+  }
+}
+
+// 监听参考视频URL变化，自动验证
+watch(klingMotionVideoUrl, (newUrl) => {
+  if (newUrl) {
+    validateMotionVideoUrl(newUrl)
+  } else {
+    klingMotionVideoError.value = ''
+    klingMotionVideoDuration.value = 0
+  }
+}, { immediate: true })
 
 // 添加音色到列表
 const addKlingVoice = () => {
@@ -420,10 +498,10 @@ const VEO_MODE_OPTIONS = computed(() => {
 })
 
 // VEO 清晰度选项（从模型配置获取）
+// 注意：普通 VEO 模型只支持 1080p，4K 选项已单独作为 VEO 4K 组
 const VEO_RESOLUTION_OPTIONS = computed(() => {
   return currentModelConfig.value?.veoResolutions || [
-    { value: '1080p', label: '1080P', extraCost: 0 },
-    { value: '4k', label: '4K', extraCost: 1 }
+    { value: '1080p', label: '1080P', extraCost: 0 }
   ]
 })
 
@@ -901,6 +979,42 @@ const referenceImages = computed(() => {
 const firstFrame = computed(() => referenceImages.value[0] || null)
 const lastFrame = computed(() => referenceImages.value[1] || referenceImages.value[0] || null)
 
+// 参考视频（来自上游视频节点）
+const VIDEO_NODE_TYPES = ['video', 'video-input', 'video-gen']
+
+const referenceVideos = computed(() => {
+  const allEdges = [...canvasStore.edges]
+  const allNodes = [...canvasStore.nodes]
+  
+  // 检查是否有上游连接
+  const upstreamEdges = allEdges.filter(edge => edge.target === props.id)
+  if (upstreamEdges.length === 0) {
+    return []
+  }
+
+  // 收集上游视频
+  const upstreamVideos = []
+  
+  for (const edge of upstreamEdges) {
+    const sourceNode = allNodes.find(n => n.id === edge.source)
+    if (!sourceNode?.data || !VIDEO_NODE_TYPES.includes(sourceNode.type)) {
+      continue
+    }
+    
+    // 获取视频输出URL
+    if (sourceNode.data.output?.url) {
+      upstreamVideos.push(sourceNode.data.output.url)
+    } else if (sourceNode.data.sourceVideo) {
+      upstreamVideos.push(sourceNode.data.sourceVideo)
+    }
+  }
+
+  return upstreamVideos
+})
+
+// 是否有参考视频
+const hasReferenceVideos = computed(() => referenceVideos.value.length > 0)
+
 // 继承的文本提示词（来自上游文本节点）
 // 只有在有上游连接时才使用继承数据
 const inheritedPrompt = computed(() => {
@@ -919,10 +1033,11 @@ const inheritedPrompt = computed(() => {
 function getUpstreamData() {
   // 查找所有连接到当前节点的上游边
   const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
-  if (upstreamEdges.length === 0) return { prompts: [], images: [] }
+  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [] }
   
   let prompts = []  // 改为数组，支持多个文本节点
   let images = []
+  let videos = []   // 新增：收集上游视频
   
   // 遍历所有上游节点，收集数据
   for (const edge of upstreamEdges) {
@@ -965,10 +1080,24 @@ function getUpstreamData() {
         images = [...images, ...sourceNode.data.sourceImages]
       }
     }
+    
+    // 视频节点：获取视频URL（用于动作迁移）
+    if (sourceNode.type === 'video') {
+      console.log('[VideoNode] 检测到视频节点:', {
+        type: sourceNode.type,
+        id: sourceNode.id,
+        outputUrl: sourceNode.data?.output?.url
+      })
+      
+      // 获取视频输出URL
+      if (sourceNode.data?.output?.url) {
+        videos.push(sourceNode.data.output.url)
+      }
+    }
   }
   
-  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images })
-  return { prompts, images }
+  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos })
+  return { prompts, images, videos }
 }
 
 // 实时获取上游文本内容（用于显示在"上下文文字参考"区域）
@@ -981,6 +1110,17 @@ const upstreamTextContent = computed(() => {
 // 是否有上游文本（用于控制显示）
 const hasUpstreamText = computed(() => {
   return upstreamTextContent.value.length > 0
+})
+
+// 获取上游视频URL（用于动作迁移模型）
+const upstreamVideoUrl = computed(() => {
+  const upstreamData = getUpstreamData()
+  return upstreamData.videos.length > 0 ? upstreamData.videos[0] : ''
+})
+
+// 是否有上游视频（用于控制显示）
+const hasUpstreamVideo = computed(() => {
+  return upstreamVideoUrl.value.length > 0
 })
 
 // 积分消耗计算（从模型配置中读取）
@@ -1028,6 +1168,14 @@ const pointsCost = computed(() => {
   return cost
 })
 
+// 动作迁移模型每秒积分（用于显示 "X积分/s" 格式）
+const motionCostPerSecond = computed(() => {
+  if (!isKlingMotionControl.value) return 0
+  const costPerSecond = currentModelConfig.value?.costPerSecond
+  if (!costPerSecond) return 6  // 默认值
+  // 根据当前选择的模式返回对应的每秒积分
+  return costPerSecond[klingMotionMode.value] || costPerSecond.std || 6
+})
 
 // 用户积分
 const userPoints = computed(() => {
@@ -1208,8 +1356,8 @@ function handleKeyframesToVideo() {
 }
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingSoundEnabled, klingVoiceList], 
-  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingSndEnabled, klingVoices]) => {
+watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingSoundEnabled, klingVoiceList, klingMotionVideoUrl, klingMotionMode], 
+  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingSndEnabled, klingVoices, motionVideoUrl, motionMode]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       aspectRatio,
@@ -1228,7 +1376,10 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
       klingCameraValue: klingCamValue,
       // Kling 2.6+ 音频参数
       klingSoundEnabled: klingSndEnabled,
-      klingVoiceList: klingVoices
+      klingVoiceList: klingVoices,
+      // Kling 动作迁移参数
+      klingMotionVideoUrl: motionVideoUrl,
+      klingMotionMode: motionMode
     })
   },
   { deep: true }  // 深度监听数组变化
@@ -1523,6 +1674,21 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
         console.log('[VideoNode] Kling 音色列表:', voiceList)
       }
     }
+  }
+  
+  // Kling 动作迁移模型特有参数
+  if (isKlingMotionControl.value) {
+    // 从上游视频节点获取参考视频
+    const motionVideoUrl = upstreamVideoUrl.value
+    if (!motionVideoUrl) {
+      throw new Error('请连接一个视频节点作为参考视频来源')
+    }
+    // 参考视频 URL（来自上游视频节点）
+    formData.append('kling_motion_video_url', motionVideoUrl)
+    console.log('[VideoNode] Kling 动作迁移参考视频（来自上游节点）:', motionVideoUrl)
+    // 模式参数
+    formData.append('kling_motion_mode', klingMotionMode.value)
+    console.log('[VideoNode] Kling 动作迁移模式:', klingMotionMode.value)
   }
   
   // 如果有参考图片，添加图片 URL
@@ -3487,6 +3653,7 @@ async function addCharacterToAssets(characterId, videoUrl, apiResult, clipData) 
 }
 
 // 统一使用后端代理下载，解决跨域和第三方CDN预览问题
+// 🔧 修复：确保下载原视频，去除七牛云压缩参数
 async function handleToolbarDownload() {
   // 使用原始 URL（可能是七牛云地址），而不是 normalizedVideoUrl（可能被转换为相对路径）
   let videoUrl = props.data.output?.url
@@ -3497,10 +3664,24 @@ async function handleToolbarDownload() {
   console.log('[VideoNode] 开始下载:', { url: videoUrl.substring(0, 60), filename })
   
   try {
-    // 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
-    const { getApiUrl } = await import('@/config/tenant')
-    const downloadUrl = getApiUrl(`/api/videos/download?url=${encodeURIComponent(videoUrl)}&name=${encodeURIComponent(filename)}`)
+    // 🔧 修复：使用 buildVideoDownloadUrl 构建下载链接，会自动清理七牛云压缩参数
+    const { buildVideoDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
+    const downloadUrl = buildVideoDownloadUrl(videoUrl, filename)
     
+    // 七牛云 URL 直接下载（节省服务器流量）
+    if (isQiniuCdnUrl(videoUrl)) {
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      console.log('[VideoNode] 七牛云直接下载原视频:', filename)
+      setTimeout(() => document.body.removeChild(link), 100)
+      return
+    }
+    
+    // 其他 URL 走后端代理下载
     const response = await fetch(downloadUrl, {
       headers: getTenantHeaders()
     })
@@ -3518,7 +3699,7 @@ async function handleToolbarDownload() {
     document.body.appendChild(link)
     link.click()
     
-    console.log('[VideoNode] 下载成功:', filename)
+    console.log('[VideoNode] 下载原视频成功:', filename)
     
     setTimeout(() => {
       document.body.removeChild(link)
@@ -3528,8 +3709,8 @@ async function handleToolbarDownload() {
     console.error('[VideoNode] 下载失败:', error)
     // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
-      const { getApiUrl } = await import('@/config/tenant')
-      const downloadUrl = getApiUrl(`/api/videos/download?url=${encodeURIComponent(videoUrl)}&name=${encodeURIComponent(filename)}`)
+      const { buildVideoDownloadUrl } = await import('@/api/client')
+      const downloadUrl = buildVideoDownloadUrl(videoUrl, filename)
       // 使用 window.open 在新窗口打开，不会触发当前页面的离开提示
       window.open(downloadUrl, '_blank')
     } catch (e) {
@@ -3885,10 +4066,19 @@ function handleToolbarPreview() {
         @drop="handleFrameDrop"
       >
         <div class="panel-frames-header">
-          <span class="panel-frames-label">参考图片</span>
+          <span class="panel-frames-label">{{ hasReferenceVideos ? '参考视频/图片' : '参考图片' }}</span>
           <span class="panel-frames-hint">拖拽图片到此处 · 拖动调整顺序</span>
         </div>
         <div class="panel-frames-list">
+          <!-- 参考视频（来自上游视频节点） -->
+          <div 
+            v-for="(video, index) in referenceVideos"
+            :key="'video-' + index"
+            class="panel-frame-item panel-frame-video"
+          >
+            <video :src="video" muted preload="metadata" class="video-thumb"></video>
+            <span class="panel-frame-label">▶</span>
+          </div>
           <!-- 现有图片（支持拖拽排序） -->
           <div 
             v-for="(img, index) in referenceImages" 
@@ -4005,8 +4195,26 @@ function handleToolbarPreview() {
             </select>
           </div>
           
-          <!-- 时长切换（VEO3模型不显示） -->
-          <div v-if="!isVeo3Model && durations.length > 0" class="param-chip-group">
+          <!-- 动作迁移模式切换（std/pro） -->
+          <div v-if="isKlingMotionControl" class="param-chip-group">
+            <div 
+              class="param-chip"
+              :class="{ active: klingMotionMode === 'std' }"
+              @click="klingMotionMode = 'std'"
+            >
+              标准
+            </div>
+            <div 
+              class="param-chip"
+              :class="{ active: klingMotionMode === 'pro' }"
+              @click="klingMotionMode = 'pro'"
+            >
+              专业
+            </div>
+          </div>
+          
+          <!-- 时长切换（VEO3模型和动作迁移模型不显示） -->
+          <div v-if="!isVeo3Model && !isKlingMotionControl && durations.length > 0" class="param-chip-group">
             <div 
               v-for="d in durations" 
               :key="d.value"
@@ -4054,7 +4262,12 @@ function handleToolbarPreview() {
           
           <!-- 积分消耗显示 -->
           <span class="points-cost-display">
-            {{ pointsCost }} {{ t('imageGen.points') }}
+            <template v-if="isKlingMotionControl">
+              {{ motionCostPerSecond }}积分/s
+            </template>
+            <template v-else>
+              {{ pointsCost }} {{ t('imageGen.points') }}
+            </template>
           </span>
           
           <!-- 生成按钮 - 只在任务提交中禁用，节点生成中仍可点击发起新任务 -->
@@ -4121,8 +4334,8 @@ function handleToolbarPreview() {
         </Transition>
       </template>
       
-      <!-- Kling 高级选项 - 摄像机控制 -->
-      <template v-if="isKlingModel">
+      <!-- Kling 高级选项 - 摄像机控制（动作迁移模型不显示） -->
+      <template v-if="isKlingModel && !isKlingMotionControl">
         <!-- 展开/收起按钮 -->
         <button class="sora2-collapse-trigger" @click="showKlingAdvancedOptions = !showKlingAdvancedOptions">
           <span class="sora2-collapse-icon" :class="{ 'expanded': showKlingAdvancedOptions }">∧</span>
@@ -4260,6 +4473,30 @@ function handleToolbarPreview() {
                   </div>
                 </div>
               </template>
+            </template>
+            
+            <!-- Kling 动作迁移配置（Motion Control） -->
+            <template v-if="isKlingMotionControl">
+              <div class="kling-section-divider"></div>
+              
+              <div class="kling-motion-section">
+                <div class="kling-motion-title">🎬 动作迁移配置</div>
+                
+                <!-- 参考视频来源提示 -->
+                <div class="sora2-option-row vertical">
+                  <div class="kling-motion-label-row">
+                    <span class="sora2-option-label">参考视频</span>
+                    <span v-if="hasUpstreamVideo" class="kling-motion-duration">✅ 已连接</span>
+                    <span v-else class="kling-motion-error-tag">❌ 未连接</span>
+                  </div>
+                  <div v-if="hasUpstreamVideo" class="kling-motion-hint">
+                    ✅ 参考视频来自上游视频节点，按实际秒数计费（最长30秒）
+                  </div>
+                  <div v-else class="kling-motion-error">
+                    ⚠️ 请连接一个视频节点作为参考视频来源
+                  </div>
+                </div>
+              </div>
             </template>
           </div>
         </Transition>
@@ -5027,6 +5264,36 @@ function handleToolbarPreview() {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  pointer-events: none;
+}
+
+/* 视频参考缩略图 */
+.panel-frame-video {
+  background: var(--canvas-bg-secondary, #1a1a1a);
+  cursor: default;
+}
+
+.panel-frame-video .video-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.panel-frame-video .panel-frame-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
   pointer-events: none;
 }
 
@@ -6830,6 +7097,188 @@ function handleToolbarPreview() {
   background: rgba(139, 92, 246, 0.1);
   border-color: rgba(139, 92, 246, 0.2);
   color: #7c3aed !important;
+}
+
+/* =============================================
+   Kling 动作迁移样式（Motion Control）
+   ============================================= */
+
+/* 动作迁移配置区域 */
+.kling-motion-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(139, 92, 246, 0.05);
+  border-radius: 8px;
+  border: 1px solid rgba(139, 92, 246, 0.15);
+}
+
+.kling-motion-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e0e0e0;
+  margin-bottom: 4px;
+}
+
+/* 必填标记 */
+.kling-required {
+  color: #ef4444;
+  font-weight: bold;
+}
+
+/* 参考视频输入框 */
+.kling-motion-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(30, 30, 30, 0.8);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 6px;
+  color: #e0e0e0;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.kling-motion-input:focus {
+  outline: none;
+  border-color: rgba(139, 92, 246, 0.6);
+  background: rgba(30, 30, 30, 0.95);
+}
+
+.kling-motion-input::placeholder {
+  color: #888888;
+}
+
+/* 提示文字 */
+.kling-motion-hint {
+  font-size: 11px;
+  color: #888888;
+  line-height: 1.4;
+}
+
+/* 模式选择按钮组 */
+.kling-motion-modes {
+  display: flex;
+  gap: 8px;
+}
+
+.kling-motion-mode-btn {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(30, 30, 30, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 6px;
+  color: #a0a0a0;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.kling-motion-mode-btn:hover {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.kling-motion-mode-btn.active {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: rgba(139, 92, 246, 0.5);
+  color: #e0e0e0;
+}
+
+/* 模式说明 */
+.kling-motion-mode-hint {
+  font-size: 11px;
+  color: #888888;
+  text-align: center;
+  margin-top: 4px;
+}
+
+/* 标签行（包含标签和状态） */
+.kling-motion-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+/* 加载中状态 */
+.kling-motion-loading {
+  font-size: 11px;
+  color: #f59e0b;
+}
+
+/* 视频时长显示 */
+.kling-motion-duration {
+  font-size: 11px;
+  color: #10b981;
+}
+
+/* 错误标签 */
+.kling-motion-error-tag {
+  font-size: 11px;
+  color: #ef4444;
+}
+
+/* 错误信息 */
+.kling-motion-error {
+  font-size: 11px;
+  color: #ef4444;
+  margin-top: 4px;
+}
+
+/* 输入框错误状态 */
+.kling-motion-input.has-error {
+  border-color: #ef4444;
+}
+
+/* 白昼模式 - 动作迁移 */
+:root.canvas-theme-light .kling-motion-section {
+  background: rgba(139, 92, 246, 0.05);
+  border-color: rgba(139, 92, 246, 0.1);
+}
+
+:root.canvas-theme-light .kling-motion-title {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .kling-motion-input {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(139, 92, 246, 0.2);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .kling-motion-input:focus {
+  background: #ffffff;
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+:root.canvas-theme-light .kling-motion-input::placeholder {
+  color: #9ca3af;
+}
+
+:root.canvas-theme-light .kling-motion-hint {
+  color: #6b7280;
+}
+
+:root.canvas-theme-light .kling-motion-mode-btn {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(139, 92, 246, 0.15);
+  color: #6b7280;
+}
+
+:root.canvas-theme-light .kling-motion-mode-btn:hover {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.25);
+}
+
+:root.canvas-theme-light .kling-motion-mode-btn.active {
+  background: rgba(139, 92, 246, 0.15);
+  border-color: rgba(139, 92, 246, 0.4);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .kling-motion-mode-hint {
+  color: #6b7280;
 }
 
 

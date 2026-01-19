@@ -10,7 +10,7 @@
 import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
-import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages } from '@/api/canvas/nodes'
+import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints } from '@/api/canvas/nodes'
 import { registerTask } from '@/stores/canvas/backgroundTaskManager'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
@@ -675,6 +675,16 @@ const hasSourceImage = computed(() =>
   props.data.sourceImages?.length > 0
 )
 
+// 是否有数据丢失（旧格式迁移时 blob URL 失效）
+const hasDataLost = computed(() => props.data._dataLost === true)
+const dataLostReason = computed(() => props.data._lostReason || '本地临时文件已失效')
+
+// 是否正在上传中
+const isUploading = computed(() => props.data.isUploading === true)
+
+// 是否上传失败
+const uploadFailed = computed(() => props.data.uploadFailed === true)
+
 // ========== 图片工具栏相关 ==========
 // 拖动和缩放状态
 const isDragging = ref(false)
@@ -1042,6 +1052,18 @@ async function handleToolbarGridCrop() {
   isGridCropping.value = true
   
   try {
+    // 先扣除积分
+    try {
+      const deductResult = await deductCropPoints('grid9')
+      if (deductResult.pointsCost > 0) {
+        console.log(`[ImageNode] 9宫格裁剪：已扣除 ${deductResult.pointsCost} 积分`)
+      }
+    } catch (deductError) {
+      console.error('[ImageNode] 9宫格裁剪：积分扣除失败', deductError)
+      showAlert('积分不足', deductError.message || '积分不足，无法执行裁剪操作')
+      isGridCropping.value = false
+      return
+    }
     // 加载图片 - 使用代理URL绕过CORS限制
     const img = new Image()
     img.crossOrigin = 'anonymous'
@@ -1161,6 +1183,18 @@ async function handleToolbarGrid4Crop() {
   isGrid4Cropping.value = true
   
   try {
+    // 先扣除积分
+    try {
+      const deductResult = await deductCropPoints('grid4')
+      if (deductResult.pointsCost > 0) {
+        console.log(`[ImageNode] 4宫格裁剪：已扣除 ${deductResult.pointsCost} 积分`)
+      }
+    } catch (deductError) {
+      console.error('[ImageNode] 4宫格裁剪：积分扣除失败', deductError)
+      showAlert('积分不足', deductError.message || '积分不足，无法执行裁剪操作')
+      isGrid4Cropping.value = false
+      return
+    }
     // 加载图片 - 使用代理URL绕过CORS限制
     const img = new Image()
     img.crossOrigin = 'anonymous'
@@ -1802,6 +1836,7 @@ function handleEditorSaveMask(data) {
 
 // 统一使用后端代理下载，解决跨域和第三方CDN预览问题
 // 对于 dataUrl 格式的图片（如裁剪后的图片），直接在前端下载
+// 🔧 修复：确保下载原图，去除七牛云压缩参数
 async function handleToolbarDownload() {
   if (!currentImageUrl.value) return
   
@@ -1842,10 +1877,24 @@ async function handleToolbarDownload() {
       return
     }
     
-    // 其他 URL 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
-    const { getApiUrl } = await import('@/config/tenant')
-    const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(imageUrl)}&filename=${encodeURIComponent(filename)}`)
+    // 🔧 修复：使用 buildDownloadUrl 构建下载链接，会自动清理七牛云压缩参数，确保下载原图
+    const { buildDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
+    const downloadUrl = buildDownloadUrl(imageUrl, filename)
     
+    // 七牛云 URL 直接下载（节省服务器流量）
+    if (isQiniuCdnUrl(imageUrl)) {
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      console.log('[ImageNode] 七牛云直接下载原图:', filename)
+      setTimeout(() => document.body.removeChild(link), 100)
+      return
+    }
+    
+    // 其他 URL 走后端代理下载
     const response = await fetch(downloadUrl, {
       headers: getTenantHeaders()
     })
@@ -1863,12 +1912,13 @@ async function handleToolbarDownload() {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
+    console.log('[ImageNode] 下载原图成功:', filename)
   } catch (error) {
     console.error('[ImageNode] 下载图片失败:', error)
     // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
-      const { getApiUrl } = await import('@/config/tenant')
-      const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(currentImageUrl.value)}&filename=${encodeURIComponent(filename)}`)
+      const { buildDownloadUrl } = await import('@/api/client')
+      const downloadUrl = buildDownloadUrl(currentImageUrl.value, filename)
       window.open(downloadUrl, '_blank')
     } catch (e) {
       console.error('[ImageNode] 所有下载方式都失败:', e)
@@ -2210,40 +2260,22 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
 }
 
 // 上传图片文件 - 立即上传到服务器获取 URL（同步版本，用于编辑等场景）
+// 注意：不再回退到 base64，因为 base64 会导致工作流数据过大无法保存
 async function uploadImageFile(file) {
-  try {
-    // 立即上传到服务器获取真正的 URL
-    console.log('[ImageNode] 上传图片文件到服务器:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
-    
-    // 检查文件大小（限制 10MB）
-    if (file.size > 10 * 1024 * 1024) {
-      throw new Error('图片文件过大，请选择小于 10MB 的图片')
-    }
-    
-    const urls = await uploadImages([file])
-    if (urls && urls.length > 0) {
-      console.log('[ImageNode] 图片上传成功，URL:', urls[0])
-      return urls[0]
-    }
-    throw new Error('上传返回空URL')
-  } catch (error) {
-    console.error('[ImageNode] 图片上传失败，错误:', error.message)
-    console.warn('[ImageNode] 尝试使用 base64 作为备选方案')
-    
-    // 如果上传失败，回退到 base64（作为备用方案）
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        console.log('[ImageNode] base64 转换成功')
-        resolve(e.target.result)
-      }
-      reader.onerror = (err) => {
-        console.error('[ImageNode] base64 转换失败:', err)
-        reject(err)
-      }
-      reader.readAsDataURL(file)
-    })
+  // 立即上传到服务器获取真正的 URL
+  console.log('[ImageNode] 上传图片文件到服务器:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
+  
+  // 检查文件大小（限制 10MB）
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error('图片文件过大，请选择小于 10MB 的图片')
   }
+  
+  const urls = await uploadImages([file])
+  if (urls && urls.length > 0) {
+    console.log('[ImageNode] 图片上传成功，URL:', urls[0])
+    return urls[0]
+  }
+  throw new Error('图片上传失败，请检查网络连接后重试')
 }
 
 // 图生图流程
@@ -4328,6 +4360,25 @@ async function handleDrop(event) {
               <div class="error-icon">❌</div>
               <div class="error-text">{{ data.error || errorMessage || '生成失败' }}</div>
               <button class="retry-btn" @click="handleRegenerate">重试</button>
+            </div>
+            
+            <!-- 数据丢失状态（旧格式 blob URL 失效） -->
+            <div v-else-if="hasDataLost" class="preview-error data-lost">
+              <div class="error-icon">⚠️</div>
+              <div class="error-text">{{ dataLostReason }}</div>
+              <button class="retry-btn" @click="triggerUpload('image-to-image')">重新上传</button>
+            </div>
+            
+            <!-- 上传中状态 -->
+            <div v-else-if="isUploading" class="preview-loading upload-progress">
+              <span class="processing-text">上传中...</span>
+            </div>
+            
+            <!-- 上传失败状态 -->
+            <div v-else-if="uploadFailed" class="preview-error upload-failed">
+              <div class="error-icon">⚠️</div>
+              <div class="error-text">文件上传失败，保存时数据可能丢失</div>
+              <button class="retry-btn" @click="triggerUpload('image-to-image')">重新上传</button>
             </div>
             
             <!-- 输出预览 -->

@@ -46,9 +46,17 @@ const currentModelConfig = computed(() => {
 })
 
 // 当前模型是否为 Vidu 系列（支持错峰模式）
+// 注意：腾讯 AIGC 的 Vidu 不支持错峰，需要排除
 const isViduModel = computed(() => {
   const modelConfig = currentModelConfig.value
+  // 腾讯 AIGC 模型不支持原生 Vidu 的错峰等功能
+  if (modelConfig?.apiType === 'tencentaigc') return false
   return modelConfig?.apiType === 'vidu' || selectedModel.value.toLowerCase().includes('vidu')
+})
+
+// 当前模型是否为腾讯 AIGC 模型（Kling/Hailuo/Vidu 通过腾讯云点播）
+const isTencentAigcModel = computed(() => {
+  return currentModelConfig.value?.apiType === 'tencentaigc'
 })
 
 // 节点尺寸 - 视频生成节点使用16:9比例
@@ -94,7 +102,24 @@ const inheritedImages = computed(() => {
   if (!hasUpstreamEdge.value) return []
   return props.data.inheritedData?.urls || []
 })
+
+// 继承的视频（来自上游视频节点）
+const inheritedVideos = computed(() => {
+  if (!hasUpstreamEdge.value) return []
+  const inherited = props.data.inheritedData
+  // 如果继承数据类型是视频，返回视频URL
+  if (inherited?.type === 'video' && inherited?.url) {
+    return [inherited.url]
+  }
+  return []
+})
+
+// 是否有上游图片或视频（用于判断生成模式）
 const isImageToVideo = computed(() => inheritedImages.value.length > 0)
+const isVideoToVideo = computed(() => inheritedVideos.value.length > 0)
+
+// 是否有任何参考素材（图片或视频）
+const hasReferenceMedia = computed(() => inheritedImages.value.length > 0 || inheritedVideos.value.length > 0)
 
 // 积分消耗计算 - 从模型配置中读取
 const pointsCost = computed(() => {
@@ -147,11 +172,20 @@ const availableAspectRatios = computed(() => {
   if (aspectRatios && aspectRatios.length > 0) {
     return aspectRatios
   }
+  // 如果配置明确为空数组，表示该模型不支持画面比例选择
+  if (Array.isArray(aspectRatios) && aspectRatios.length === 0) {
+    return []
+  }
   // 兜底默认值
   return [
     { value: '16:9', label: '横屏' },
     { value: '9:16', label: '竖屏' }
   ]
+})
+
+// 是否显示画面比例选择器
+const showAspectRatioSelector = computed(() => {
+  return availableAspectRatios.value.length > 0
 })
 
 // 监听视频加载，自适应尺寸
@@ -509,9 +543,9 @@ function handleAddClick(event) {
         
         <!-- 等待输入 -->
         <div v-else class="canvas-node-preview-empty">
-          <div v-if="inheritedText || inheritedImages.length">
+          <div v-if="inheritedText || hasReferenceMedia">
             <div class="inherited-label">
-              {{ isImageToVideo ? '参考图片已就绪' : '提示词已就绪' }}
+              {{ isVideoToVideo ? '参考视频已就绪' : (isImageToVideo ? '参考图片已就绪' : '提示词已就绪') }}
             </div>
             <div v-if="inheritedText" class="inherited-text">
               {{ inheritedText.slice(0, 80) }}{{ inheritedText.length > 80 ? '...' : '' }}
@@ -521,12 +555,23 @@ function handleAddClick(event) {
         </div>
       </div>
       
-      <!-- 参考图（图生视频模式） -->
-      <div v-if="inheritedImages.length > 0" class="reference-images">
-        <div class="reference-image">
+      <!-- 参考素材（图片或视频） -->
+      <div v-if="hasReferenceMedia" class="reference-images">
+        <!-- 参考视频缩略图 -->
+        <div v-if="inheritedVideos.length > 0" class="reference-image reference-video">
+          <video 
+            :src="inheritedVideos[0]" 
+            class="reference-video-thumbnail"
+            muted
+            preload="metadata"
+          ></video>
+          <div class="video-indicator">▶</div>
+        </div>
+        <!-- 参考图片缩略图 -->
+        <div v-else-if="inheritedImages.length > 0" class="reference-image">
           <img :src="inheritedImages[0]" alt="参考图" />
         </div>
-        <span class="reference-label">首帧参考图</span>
+        <span class="reference-label">{{ isVideoToVideo ? '参考视频' : '首帧参考图' }}</span>
       </div>
       
       <!-- 生成控制 -->
@@ -570,8 +615,8 @@ function handleAddClick(event) {
             <option v-for="d in availableDurations" :key="d" :value="d">{{ d }}s</option>
           </select>
           
-          <!-- 画幅/方向选择 - 从模型配置动态获取 -->
-          <select v-model="selectedAspectRatio" class="param-select">
+          <!-- 画幅/方向选择 - 从模型配置动态获取（部分模型不支持） -->
+          <select v-if="showAspectRatioSelector" v-model="selectedAspectRatio" class="param-select">
             <option 
               v-for="ar in availableAspectRatios" 
               :key="ar.value" 
@@ -751,6 +796,34 @@ function handleAddClick(event) {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* 视频参考缩略图样式 */
+.reference-image.reference-video {
+  position: relative;
+}
+
+.reference-video-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  color: white;
+  pointer-events: none;
 }
 
 .reference-label {

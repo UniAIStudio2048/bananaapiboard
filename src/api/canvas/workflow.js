@@ -301,3 +301,91 @@ export function deleteWorkflowLocal(workflowId) {
     throw error
   }
 }
+
+/**
+ * 上传画布媒体文件到云存储（图片、视频、音频）
+ * 这个函数用于将用户本地上传的文件异步上传到七牛云，避免工作流数据过大
+ * 
+ * @param {File} file - 要上传的文件
+ * @param {string} type - 文件类型：'image' | 'video' | 'audio'
+ * @returns {Promise<{url: string, isCloud: boolean}>}
+ */
+export async function uploadCanvasMedia(file, type = 'image') {
+  const token = localStorage.getItem('token')
+  const headers = {
+    ...getTenantHeaders(),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  }
+  
+  const formData = new FormData()
+  
+  // 根据文件类型选择不同的上传端点
+  let uploadUrl
+  if (type === 'image') {
+    formData.append('images', file)
+    uploadUrl = `${getApiBase()}/api/images/upload`
+  } else if (type === 'video') {
+    formData.append('file', file)
+    uploadUrl = `${getApiBase()}/api/videos/upload`
+  } else if (type === 'audio') {
+    formData.append('file', file)
+    uploadUrl = `${getApiBase()}/api/canvas/upload-audio`
+  } else {
+    throw new Error(`不支持的文件类型: ${type}`)
+  }
+  
+  console.log(`[Canvas] 开始上传${type}文件到云存储:`, file.name, '大小:', Math.round(file.size / 1024), 'KB')
+  
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    credentials: 'include',
+    headers,
+    body: formData
+  })
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || error.error || `${type}上传失败`)
+  }
+  
+  const data = await response.json()
+  const url = data.url || (data.urls && data.urls[0])
+  
+  if (!url) {
+    throw new Error('上传成功但未返回URL')
+  }
+  
+  console.log(`[Canvas] ${type}文件上传成功:`, url)
+  
+  return {
+    url,
+    isCloud: true
+  }
+}
+
+/**
+ * 批量上传画布媒体文件
+ * 
+ * @param {Array<{file: File, type: string, nodeId: string}>} files - 文件列表
+ * @param {Function} onProgress - 进度回调 (nodeId, status, url?)
+ * @returns {Promise<Map<string, string>>} - nodeId -> url 映射
+ */
+export async function uploadCanvasMediaBatch(files, onProgress) {
+  const results = new Map()
+  
+  for (const { file, type, nodeId } of files) {
+    try {
+      if (onProgress) onProgress(nodeId, 'uploading')
+      
+      const result = await uploadCanvasMedia(file, type)
+      results.set(nodeId, result.url)
+      
+      if (onProgress) onProgress(nodeId, 'success', result.url)
+    } catch (error) {
+      console.error(`[Canvas] 文件上传失败 (${nodeId}):`, error.message)
+      if (onProgress) onProgress(nodeId, 'error', null, error.message)
+    }
+  }
+  
+  return results
+}

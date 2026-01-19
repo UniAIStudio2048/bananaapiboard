@@ -25,8 +25,10 @@ export const useCanvasStore = defineStore('canvas', () => {
   // ========== 历史记录（撤销/重做） ==========
   const historyStack = ref([])     // 历史记录栈
   const historyIndex = ref(-1)     // 当前历史位置
-  const maxHistoryLength = 50      // 最大历史记录数
+  const maxHistoryLength = 20      // 🔧 进一步减小历史记录数，大画布性能优化
   const isHistoryAction = ref(false) // 是否正在执行历史操作（防止重复记录）
+  let lastHistorySaveTime = 0      // 🔧 上次保存历史的时间（节流用）
+  const HISTORY_THROTTLE_MS = 500  // 🔧 历史保存最小间隔（毫秒）- 增加到500ms减少内存压力
   
   // ========== 剪贴板 ==========
   const clipboard = ref(null)      // 复制的节点数据
@@ -79,6 +81,18 @@ export const useCanvasStore = defineStore('canvas', () => {
   const isEmpty = computed(() => nodes.value.length === 0)
   
   const nodeCount = computed(() => nodes.value.length)
+  
+  // 🔧 大画布性能模式计算属性
+  // 用于自动启用简化渲染，提升70-100+节点时的流畅性
+  const isLargeCanvas = computed(() => nodes.value.length > 30)  // 30+节点算大画布
+  const isVeryLargeCanvas = computed(() => nodes.value.length > 60) // 60+节点算超大画布
+  const performanceMode = computed(() => {
+    const count = nodes.value.length
+    if (count > 80) return 'minimal'  // 最小化渲染模式
+    if (count > 50) return 'reduced'  // 简化渲染模式
+    if (count > 30) return 'optimized' // 优化渲染模式
+    return 'full' // 完整渲染模式
+  })
   
   // 是否可以撤销
   const canUndo = computed(() => historyIndex.value > 0)
@@ -294,14 +308,78 @@ export const useCanvasStore = defineStore('canvas', () => {
   // ========== 历史记录操作（撤销/重做） ==========
   
   /**
+   * 🔧 清理节点数据用于历史记录（移除大型 base64 数据减少内存）
+   */
+  function cleanNodeForHistory(node) {
+    const cleaned = { ...node }
+    if (cleaned.data) {
+      cleaned.data = { ...cleaned.data }
+      // 移除可能很大的 base64 图片数据，只保留 URL 引用
+      if (cleaned.data.sourceImages) {
+        cleaned.data.sourceImages = cleaned.data.sourceImages.filter(url => 
+          typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')
+        )
+      }
+      // 清理 output 中的大数据
+      if (cleaned.data.output) {
+        cleaned.data.output = { ...cleaned.data.output }
+        if (cleaned.data.output.urls) {
+          cleaned.data.output.urls = cleaned.data.output.urls.filter(url =>
+            typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')
+          )
+        }
+      }
+      // 移除临时大数据字段
+      delete cleaned.data.imageData
+      delete cleaned.data.base64
+      delete cleaned.data.previewData
+    }
+    return cleaned
+  }
+
+  /**
    * 保存当前状态到历史记录
+   * 🔧 优化：添加节流和数据清理，减少内存占用
+   * 🔧 大画布优化：节点越多，历史越少，节流越长
    */
   function saveHistory() {
     // 如果正在执行历史操作，不保存
     if (isHistoryAction.value) return
     
+    const nodeCount = nodes.value.length
+    
+    // 🔧 大画布性能优化：节点越多，节流时间越长
+    let dynamicThrottle = HISTORY_THROTTLE_MS
+    if (nodeCount > 80) {
+      dynamicThrottle = 2000  // 80+节点：2秒节流
+    } else if (nodeCount > 50) {
+      dynamicThrottle = 1000  // 50-80节点：1秒节流
+    } else if (nodeCount > 30) {
+      dynamicThrottle = 800   // 30-50节点：800ms节流
+    }
+    
+    // 🔧 节流：避免频繁保存历史
+    const now = Date.now()
+    if (now - lastHistorySaveTime < dynamicThrottle) {
+      return
+    }
+    lastHistorySaveTime = now
+    
+    // 🔧 节点过多时大幅减少历史记录数量
+    let effectiveMaxHistory = maxHistoryLength
+    if (nodeCount > 80) {
+      effectiveMaxHistory = 5   // 80+节点：只保留5条历史
+    } else if (nodeCount > 50) {
+      effectiveMaxHistory = 8   // 50-80节点：保留8条历史
+    } else if (nodeCount > 30) {
+      effectiveMaxHistory = 12  // 30-50节点：保留12条历史
+    }
+    
+    // 🔧 清理节点数据，移除大型 base64 减少内存
+    const cleanedNodes = nodes.value.map(cleanNodeForHistory)
+    
     const state = {
-      nodes: JSON.parse(JSON.stringify(nodes.value)),
+      nodes: JSON.parse(JSON.stringify(cleanedNodes)),
       edges: JSON.parse(JSON.stringify(edges.value))
     }
     
@@ -314,11 +392,15 @@ export const useCanvasStore = defineStore('canvas', () => {
     historyStack.value.push(state)
     
     // 限制历史记录长度
-    if (historyStack.value.length > maxHistoryLength) {
+    while (historyStack.value.length > effectiveMaxHistory) {
       historyStack.value.shift()
-    } else {
-      historyIndex.value++
+      // 调整索引
+      if (historyIndex.value > 0) {
+        historyIndex.value--
+      }
     }
+    
+    historyIndex.value = historyStack.value.length - 1
   }
   
   /**
@@ -352,6 +434,42 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     isHistoryAction.value = false
   }
+
+  /**
+   * 🔧 清空历史记录（释放内存）
+   */
+  function clearHistory() {
+    historyStack.value = []
+    historyIndex.value = -1
+    console.log('[Canvas Store] 历史记录已清空，释放内存')
+  }
+
+  /**
+   * 🔧 获取内存使用估算（用于调试和监控）
+   */
+  function getMemoryStats() {
+    const nodesSize = JSON.stringify(nodes.value).length
+    const edgesSize = JSON.stringify(edges.value).length
+    const historySize = JSON.stringify(historyStack.value).length
+    const clipboardSize = clipboard.value ? JSON.stringify(clipboard.value).length : 0
+    
+    return {
+      nodeCount: nodes.value.length,
+      edgeCount: edges.value.length,
+      historyCount: historyStack.value.length,
+      estimatedMemoryKB: Math.round((nodesSize + edgesSize + historySize + clipboardSize) / 1024),
+      breakdown: {
+        nodesKB: Math.round(nodesSize / 1024),
+        edgesKB: Math.round(edgesSize / 1024),
+        historyKB: Math.round(historySize / 1024),
+        clipboardKB: Math.round(clipboardSize / 1024)
+      }
+    }
+  }
+
+  // 🔧 节点数量阈值警告（降低阈值以提前警告用户，保证70-100节点时的流畅性）
+  const NODE_WARNING_THRESHOLD = 50   // 50节点时开始警告
+  const NODE_CRITICAL_THRESHOLD = 100 // 100节点时进入危险区域
   
   // ========== 剪贴板操作 ==========
   
@@ -1257,6 +1375,11 @@ export const useCanvasStore = defineStore('canvas', () => {
     isEmpty,
     nodeCount,
     
+    // 🔧 大画布性能模式状态
+    isLargeCanvas,
+    isVeryLargeCanvas,
+    performanceMode,
+    
     // 历史记录状态
     canUndo,
     canRedo,
@@ -1295,6 +1418,10 @@ export const useCanvasStore = defineStore('canvas', () => {
     saveHistory,
     undo,
     redo,
+    clearHistory,
+    getMemoryStats,
+    NODE_WARNING_THRESHOLD,
+    NODE_CRITICAL_THRESHOLD,
     
     // 剪贴板操作
     copySelectedNodes,

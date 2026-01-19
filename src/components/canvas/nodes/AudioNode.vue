@@ -17,6 +17,7 @@ import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
 import apiClient from '@/api/client'
+import { uploadCanvasMedia } from '@/api/canvas/workflow'
 
 const { t } = useI18n()
 
@@ -453,6 +454,16 @@ const hasAudio = computed(() => {
   return props.data?.audioUrl || props.data?.output?.url || props.data?.audioData
 })
 
+// 是否有数据丢失（旧格式迁移时 blob URL 失效）
+const hasDataLost = computed(() => props.data._dataLost === true)
+const dataLostReason = computed(() => props.data._lostReason || '本地临时文件已失效')
+
+// 是否正在上传中
+const isUploading = computed(() => props.data.isUploading === true)
+
+// 是否上传失败
+const uploadFailed = computed(() => props.data.uploadFailed === true)
+
 // 是否正在生成中
 const isGenerating = computed(() => {
   const status = props.data?.status
@@ -702,7 +713,7 @@ function triggerUpload() {
   fileInputRef.value?.click()
 }
 
-// 处理文件上传
+// 处理文件上传 - 使用 blob URL 秒加载 + 后台异步上传到云存储
 async function handleFileUpload(event) {
   const files = event.target.files
   if (!files || files.length === 0) return
@@ -714,35 +725,75 @@ async function handleFileUpload(event) {
   }
   
   try {
-    const dataUrl = await readFileAsBase64(file)
+    // 🚀 使用 blob URL 实现秒加载预览
+    const blobUrl = URL.createObjectURL(file)
+    console.log('[AudioNode] 秒加载 - 使用 blob URL 预览:', blobUrl)
     
+    // 立即更新节点显示（使用 blob URL）
     canvasStore.updateNodeData(props.id, {
-      audioUrl: dataUrl,
-      audioData: dataUrl,
+      audioUrl: blobUrl,
       fileName: file.name,
       title: file.name,
       status: 'success',
       output: {
         type: 'audio',
-        url: dataUrl
-      }
+        url: blobUrl
+      },
+      isUploading: true // 标记正在上传
     })
+    
+    // 🔄 后台异步上传到云存储
+    uploadAudioFileAsync(file, blobUrl, props.id)
+    
   } catch (error) {
     console.error('[AudioNode] 上传失败:', error)
+    await showAlert('音频文件处理失败，请重试', '错误')
   }
   
   // 清空文件选择
   event.target.value = ''
 }
 
-// 读取文件为 Base64
-function readFileAsBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = (e) => resolve(e.target.result)
-    reader.onerror = reject
-    reader.readAsDataURL(file)
-  })
+// 后台异步上传音频文件到云存储
+async function uploadAudioFileAsync(file, blobUrl, nodeId) {
+  try {
+    console.log('[AudioNode] 后台异步上传音频开始:', file.name, '大小:', Math.round(file.size / 1024), 'KB')
+    
+    const result = await uploadCanvasMedia(file, 'audio')
+    const cloudUrl = result.url
+    
+    console.log('[AudioNode] 音频上传成功，云URL:', cloudUrl)
+    
+    // 更新节点数据，将 blob URL 替换为云存储 URL
+    const node = canvasStore.nodes.find(n => n.id === nodeId)
+    if (node) {
+      canvasStore.updateNodeData(nodeId, {
+        audioUrl: cloudUrl,
+        output: { ...node.data.output, url: cloudUrl },
+        isUploading: false
+      })
+      console.log('[AudioNode] 节点已更新为云存储URL')
+    }
+    
+    // 释放 blob URL 内存
+    try {
+      URL.revokeObjectURL(blobUrl)
+    } catch (e) {
+      // 忽略
+    }
+    
+  } catch (error) {
+    console.error('[AudioNode] 音频上传失败:', error.message)
+    // 上传失败时保留 blob URL，标记上传失败
+    const node = canvasStore.nodes.find(n => n.id === nodeId)
+    if (node) {
+      canvasStore.updateNodeData(nodeId, {
+        isUploading: false,
+        uploadFailed: true,
+        uploadError: error.message
+      })
+    }
+  }
 }
 
 // 切换播放/暂停
@@ -1058,6 +1109,7 @@ function handleReupload() {
 // ========== 工具栏处理函数 ==========
 
 // 统一使用后端代理下载音频，解决跨域和第三方CDN预览问题
+// 🔧 修复：确保下载原音频，去除七牛云压缩参数
 async function handleToolbarDownload() {
   const url = audioUrl.value
   if (!url) return
@@ -1081,10 +1133,24 @@ async function handleToolbarDownload() {
       }
       blob = new Blob([array], { type: mime })
     } else {
-      // 远程 URL - 走后端代理下载
-      const { getApiUrl } = await import('@/config/tenant')
-      const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`)
+      // 🔧 修复：使用 buildDownloadUrl 构建下载链接，会自动清理七牛云压缩参数
+      const { buildDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
+      const downloadUrl = buildDownloadUrl(url, filename)
       
+      // 七牛云 URL 直接下载（节省服务器流量）
+      if (isQiniuCdnUrl(url)) {
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = filename
+        link.style.display = 'none'
+        document.body.appendChild(link)
+        link.click()
+        console.log('[AudioNode] 七牛云直接下载原音频:', filename)
+        setTimeout(() => document.body.removeChild(link), 100)
+        return
+      }
+      
+      // 其他 URL 走后端代理下载
       const response = await fetch(downloadUrl, {
         headers: getTenantHeaders()
       })
@@ -1106,12 +1172,13 @@ async function handleToolbarDownload() {
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(downloadUrl)
+    console.log('[AudioNode] 下载原音频成功:', filename)
   } catch (error) {
     console.error('[AudioNode] 下载失败:', error)
     // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
-      const { getApiUrl } = await import('@/config/tenant')
-      const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`)
+      const { buildDownloadUrl } = await import('@/api/client')
+      const downloadUrl = buildDownloadUrl(url, filename)
       window.open(downloadUrl, '_blank')
     } catch (e) {
       console.error('[AudioNode] 所有下载方式都失败:', e)
@@ -1327,6 +1394,31 @@ function handleSpeedDropdownClickOutside(event) {
             <div v-if="props.data?.status === 'streaming' && props.data?.audioUrl" class="streaming-preview">
               <audio :src="props.data.audioUrl" controls class="streaming-audio"></audio>
             </div>
+          </div>
+        </div>
+        
+        <!-- 数据丢失状态（旧格式 blob URL 失效） -->
+        <div v-else-if="hasDataLost" class="node-content">
+          <div class="error-state data-lost">
+            <div class="error-icon">⚠️</div>
+            <div class="error-text">{{ dataLostReason }}</div>
+            <button class="retry-btn" @click="triggerUpload">重新上传</button>
+          </div>
+        </div>
+        
+        <!-- 上传中状态 -->
+        <div v-else-if="isUploading" class="node-content">
+          <div class="upload-progress">
+            <span class="processing-text">上传中...</span>
+          </div>
+        </div>
+        
+        <!-- 上传失败状态 -->
+        <div v-else-if="uploadFailed" class="node-content">
+          <div class="error-state upload-failed">
+            <div class="error-icon">⚠️</div>
+            <div class="error-text">文件上传失败，保存时数据可能丢失</div>
+            <button class="retry-btn" @click="triggerUpload">重新上传</button>
           </div>
         </div>
         
@@ -1775,6 +1867,58 @@ function handleSpeedDropdownClickOutside(event) {
 .empty-state {
   flex: 1;
   padding: 20px;
+}
+
+/* 错误/数据丢失状态 */
+.error-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+}
+
+.error-state .error-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+.error-state .error-text {
+  color: var(--canvas-text-secondary, #999);
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+
+.error-state .retry-btn {
+  padding: 8px 16px;
+  background: var(--canvas-accent-audio, #a855f7);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.error-state .retry-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+/* 上传进度状态 */
+.upload-progress {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-progress .processing-text {
+  color: var(--canvas-accent-audio, #a855f7);
+  font-size: 14px;
 }
 
 .hint-text {

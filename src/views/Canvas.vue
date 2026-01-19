@@ -33,8 +33,9 @@ import CanvasToast from '@/components/canvas/CanvasToast.vue'
 import PackageModal from '@/components/canvas/PackageModal.vue'
 import { useI18n } from '@/i18n'
 import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoSave, manualSave as saveToHistory, getWorkflowHistory } from '@/stores/canvas/workflowAutoSave'
-import { initBackgroundTaskManager, getPendingTasks, subscribeTask, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
+import { initBackgroundTaskManager, getPendingTasks, subscribeTask, removeCompletedTask, cleanup as cleanupBackgroundTasks } from '@/stores/canvas/backgroundTaskManager'
 import { showAlert, showConfirm } from '@/composables/useCanvasDialog'
+import { needsMigration, analyzeWorkflow, migrateWorkflowData } from '@/utils/workflowMigration'
 
 // 导入画布样式
 import '@/styles/canvas.css'
@@ -175,6 +176,53 @@ const totalPoints = computed(() => {
   return total % 1 === 0 ? total.toFixed(0) : total.toFixed(2)
 })
 
+// 🔧 监控节点数量，防止内存溢出 + 大画布性能优化提示
+let nodeCountWarningShown = false
+let nodeCountCriticalShown = false
+let performanceModeShown = false
+
+watch(() => canvasStore.nodes.length, (count) => {
+  const { NODE_WARNING_THRESHOLD, NODE_CRITICAL_THRESHOLD, performanceMode } = canvasStore
+  
+  // 🔧 大画布性能模式提示（30+节点时进入优化模式）
+  if (count > 30 && !performanceModeShown) {
+    performanceModeShown = true
+    const modeText = performanceMode === 'minimal' ? '最小化渲染' : 
+                     performanceMode === 'reduced' ? '简化渲染' : '优化渲染'
+    console.log(`[Canvas] 🚀 已启用 ${modeText} 模式 (${count} 个节点)`)
+    // 只在首次进入时轻提示，不打扰用户
+    if (count > 50) {
+      displayToast(`已启用${modeText}模式，提升画布流畅度`, 'info', 2000)
+    }
+  }
+  
+  // 警告阈值（50个节点）
+  if (count >= NODE_WARNING_THRESHOLD && !nodeCountWarningShown) {
+    nodeCountWarningShown = true
+    console.warn(`[Canvas] ⚠️ 节点数量较多 (${count})，已启用性能优化模式`)
+    displayToast(`画布节点较多 (${count} 个)，已自动优化性能`, 'warning', 4000)
+    
+    // 自动清理历史记录释放内存
+    canvasStore.clearHistory()
+  }
+  
+  // 危险阈值（100个节点）
+  if (count >= NODE_CRITICAL_THRESHOLD && !nodeCountCriticalShown) {
+    nodeCountCriticalShown = true
+    console.error(`[Canvas] 🚨 节点数量过多 (${count})，建议保存后清理`)
+    displayToast(`⚠️ 画布节点较多 (${count} 个)，建议保存后清理不需要的节点`, 'error', 6000)
+  }
+  
+  // 重置警告标志
+  if (count < 30) {
+    performanceModeShown = false
+  }
+  if (count < NODE_WARNING_THRESHOLD) {
+    nodeCountWarningShown = false
+    nodeCountCriticalShown = false
+  }
+}, { immediate: true })
+
 // 选中的编组节点
 const selectedGroupNode = computed(() => {
   // 检查 selectedNodeId
@@ -231,6 +279,24 @@ const showImageToolbar = computed(() => {
   return selectedImageNode.value !== null
 })
 
+// 🔧 缓存 DOM 元素引用，避免频繁查询
+let cachedCanvasBoardRect = null
+let lastRectUpdateTime = 0
+const RECT_CACHE_DURATION = 100 // 缓存100ms
+
+function getCanvasBoardRect() {
+  const now = Date.now()
+  if (cachedCanvasBoardRect && now - lastRectUpdateTime < RECT_CACHE_DURATION) {
+    return cachedCanvasBoardRect
+  }
+  const container = document.querySelector('.canvas-board')
+  if (container) {
+    cachedCanvasBoardRect = container.getBoundingClientRect()
+    lastRectUpdateTime = now
+  }
+  return cachedCanvasBoardRect
+}
+
 // 编组工具栏位置
 const groupToolbarPosition = computed(() => {
   if (!selectedGroupNode.value) return { x: 0, y: 0 }
@@ -239,10 +305,9 @@ const groupToolbarPosition = computed(() => {
   const viewport = canvasStore.viewport
   
   // 计算工具栏位置（在编组上方居中，保持一定距离）
-  const container = document.querySelector('.canvas-board')
-  if (!container) return { x: window.innerWidth / 2, y: 100 }
+  const rect = getCanvasBoardRect()
+  if (!rect) return { x: window.innerWidth / 2, y: 100 }
   
-  const rect = container.getBoundingClientRect()
   const nodeWidth = node.data?.width || 400
   
   const x = rect.left + (node.position.x * viewport.zoom) + viewport.x + (nodeWidth * viewport.zoom) / 2
@@ -259,12 +324,11 @@ const imageToolbarPosition = computed(() => {
   const node = selectedImageNode.value
   const viewport = canvasStore.viewport
   
-  const container = document.querySelector('.canvas-board')
-  if (!container) return { x: window.innerWidth / 2, y: 100 }
+  // 🔧 使用缓存的 rect，避免频繁 DOM 查询
+  const rect = getCanvasBoardRect()
+  if (!rect) return { x: window.innerWidth / 2, y: 100 }
   
-  const rect = container.getBoundingClientRect()
   const nodeWidth = node.data?.width || 380
-  const labelHeight = 28 // 节点标签高度
   
   // 计算节点在屏幕上的位置
   const x = rect.left + (node.position.x * viewport.zoom) + viewport.x + (nodeWidth * viewport.zoom) / 2
@@ -303,8 +367,65 @@ function closeWorkflowPanel() {
 }
 
 // 工作流加载后的回调（在新标签中打开）
-function handleWorkflowLoaded(workflow) {
+// 包含旧数据格式的自动迁移功能
+async function handleWorkflowLoaded(workflow) {
   console.log('[Canvas] 工作流已加载:', workflow.name)
+  
+  // 检测是否需要迁移（旧的 blob URL 或 base64 数据）
+  if (needsMigration(workflow)) {
+    console.log('[Canvas] 检测到需要迁移的旧数据格式')
+    const analysis = analyzeWorkflow(workflow)
+    
+    // 显示迁移提示
+    let migrationMessage = ''
+    if (analysis.blobUrls.length > 0) {
+      migrationMessage += `⚠️ ${analysis.blobUrls.length} 个本地临时文件已失效（无法恢复），将被清除\n`
+    }
+    if (analysis.base64Data.length > 0) {
+      migrationMessage += `📦 ${analysis.base64Data.length} 个文件使用旧格式存储，将自动迁移到云存储`
+    }
+    
+    // 如果有 base64 数据，执行迁移
+    if (analysis.base64Data.length > 0) {
+      try {
+        // 显示迁移中提示
+        displayToast('正在迁移旧数据到云存储...', 'info', 30000) // 30秒超时
+        
+        const result = await migrateWorkflowData(workflow, (current, total, status) => {
+          console.log(`[Canvas] 迁移进度: ${current}/${total} - ${status}`)
+        })
+        
+        // 更新工作流数据
+        workflow.nodes = result.nodes
+        
+        // 关闭迁移中提示，显示结果
+        closeToast()
+        
+        if (result.migratedCount > 0) {
+          displayToast(`✅ 已将 ${result.migratedCount} 个文件迁移到云存储`, 'success')
+        }
+        if (result.failedCount > 0) {
+          setTimeout(() => {
+            displayToast(`⚠️ ${result.failedCount} 个文件迁移失败`, 'warning')
+          }, 2000)
+        }
+        if (result.skippedBlobCount > 0) {
+          setTimeout(() => {
+            displayToast(`ℹ️ ${result.skippedBlobCount} 个临时文件已失效，需要重新上传`, 'info')
+          }, 4000)
+        }
+        
+      } catch (error) {
+        console.error('[Canvas] 数据迁移失败:', error)
+        closeToast()
+        displayToast('数据迁移失败: ' + error.message, 'error')
+      }
+    } else if (analysis.blobUrls.length > 0) {
+      // 只有 blob URL（无法恢复），给出提示
+      displayToast(`⚠️ ${analysis.blobUrls.length} 个本地临时文件已失效，需要重新上传`, 'warning')
+    }
+  }
+  
   // 在新标签中打开
   canvasStore.openWorkflowInNewTab(workflow)
   
@@ -666,14 +787,16 @@ async function autoSaveWorkflow() {
   try {
     const { saveWorkflow } = await import('@/api/canvas/workflow')
     
-    // 🔧 预检：计算数据大小，如果过大则跳过自动保存
+    // 🔧 预检：计算数据大小，如果过大则跳过自动保存（提升限制支持大画布）
     const nodesJson = JSON.stringify(workflowData.nodes || [])
     const edgesJson = JSON.stringify(workflowData.edges || [])
     const dataSize = new Blob([nodesJson, edgesJson]).size
-    const MAX_AUTO_SAVE_SIZE = 30 * 1024 * 1024 // 30MB
+    const MAX_AUTO_SAVE_SIZE = 100 * 1024 * 1024 // 100MB（支持大画布自动保存）
     
     if (dataSize > MAX_AUTO_SAVE_SIZE) {
       console.warn(`[Canvas] 自动保存跳过：数据过大 (${(dataSize / 1024 / 1024).toFixed(1)}MB)，请手动保存`)
+      // 大数据时给用户一个提示
+      displayToast(`工作流较大(${(dataSize / 1024 / 1024).toFixed(0)}MB)，请手动保存`, 'warning', 3000)
       return
     }
     
@@ -1552,21 +1675,18 @@ onUnmounted(() => {
   stopAutoSave()
   stopHistoryAutoSave()
 
-  // 清理所有 URL 对象,防止内存泄漏
-  previewUrls.value.forEach(url => {
-    try {
-      URL.revokeObjectURL(url)
-    } catch (e) {
-      console.warn('[Canvas] 清理URL失败:', e)
-    }
-  })
-  previewUrls.value = []
-  imageFiles.value = []
-
-  // 清理后台任务管理器
-  if (typeof window.backgroundTaskManager?.cleanup === 'function') {
-    window.backgroundTaskManager.cleanup()
+  // 🔧 清理定时器，防止内存泄漏
+  if (modeHoverTimer) {
+    clearTimeout(modeHoverTimer)
+    modeHoverTimer = null
   }
+  if (searchTimeout) {
+    clearTimeout(searchTimeout)
+    searchTimeout = null
+  }
+
+  // 🔧 清理后台任务管理器
+  cleanupBackgroundTasks()
 })
 </script>
 

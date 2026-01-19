@@ -24,6 +24,7 @@ import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { useCanvasStore } from '@/stores/canvas'
+import { uploadCanvasMedia } from '@/api/canvas/workflow'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -124,6 +125,9 @@ const isDraggingNode = ref(false)  // 是否正在拖拽节点
 const alignmentThrottleTimer = ref(null)  // 对齐辅助线计算节流定时器
 const lastAlignmentCalcTime = ref(0)  // 上次对齐计算时间
 const ALIGNMENT_THROTTLE_MS = 50  // 对齐计算最小间隔（毫秒）
+
+// 🔧 内存优化：追踪所有待执行的定时器，组件卸载时统一清理
+const pendingTimeouts = new Set()
 
 // Vue Flow 实例
 const { 
@@ -309,9 +313,11 @@ onConnectEnd((event) => {
       })
       
       // 延迟后重置标志（允许后续的点击关闭选择器）
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
+        pendingTimeouts.delete(timeoutId)
         justOpenedSelectorFromConnection.value = false
       }, 200)
+      pendingTimeouts.add(timeoutId)
     } else {
       console.log('[Canvas] 无法获取鼠标位置，不打开选择器')
     }
@@ -444,10 +450,11 @@ onNodeDrag((event) => {
 function calculateAlignmentGuides(draggedNode) {
   const SNAP_THRESHOLD = 10 // 对齐阈值（像素）
   
-  // 🚀 性能优化：节点数量过多时禁用对齐辅助线
+  // 🚀 性能优化：节点数量过多时禁用对齐辅助线（大画布优化）
   const totalNodes = canvasStore.nodes.length
-  if (totalNodes > 50) {
-    // 超过50个节点时，完全禁用对齐辅助线以提升性能
+  if (totalNodes > 30) {
+    // 超过30个节点时，完全禁用对齐辅助线以提升性能
+    // 这对于70-100+节点的大画布至关重要
     alignmentGuides.value = { vertical: null, horizontal: null }
     snapPosition.value = { x: null, y: null }
     return
@@ -1246,9 +1253,11 @@ watch(
         zoom: newViewport.zoom
       })
       // 延迟重置标志，确保 viewport-change 事件已被处理
-      setTimeout(() => {
+      const viewportTimeoutId = setTimeout(() => {
+        pendingTimeouts.delete(viewportTimeoutId)
         isExternalViewportUpdate = false
       }, 50)
+      pendingTimeouts.add(viewportTimeoutId)
     }
   },
   { deep: true }
@@ -1384,9 +1393,11 @@ function handleGlobalDragConnectionEnd(event) {
   if (!connected) {
     // 如果没有连接到节点，标记刚刚打开了选择器
     justOpenedSelectorFromConnection.value = true
-    setTimeout(() => {
+    const dragEndTimeoutId = setTimeout(() => {
+      pendingTimeouts.delete(dragEndTimeoutId)
       justOpenedSelectorFromConnection.value = false
     }, 200)
+    pendingTimeouts.add(dragEndTimeoutId)
   }
 }
 
@@ -1807,16 +1818,20 @@ async function handleFileDrop(event) {
   let offsetX = 0
   let offsetY = 0
   
+  // 收集需要上传的文件信息
+  const uploadTasks = []
+  
   for (const file of files) {
     const category = getFileCategory(file)
     if (!category) continue
     
     try {
       const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      // 🚀 使用 blob URL 实现秒加载预览
+      const blobUrl = URL.createObjectURL(file)
       
-      // 根据文件类型创建不同的节点
+      // 根据文件类型创建不同的节点（使用 blob URL 立即显示）
       if (category === 'image') {
-        const dataUrl = await readFileAsBase64(file)
         canvasStore.addNode({
           id: nodeId,
           type: 'image-input',
@@ -1824,12 +1839,13 @@ async function handleFileDrop(event) {
           data: {
             title: file.name || '图片',
             nodeRole: 'source',
-            sourceImages: [dataUrl]
+            sourceImages: [blobUrl],
+            isUploading: true // 标记正在上传
           }
         })
+        // 添加到上传队列
+        uploadTasks.push({ file, type: 'image', nodeId, blobUrl, field: 'sourceImages' })
       } else if (category === 'video') {
-        // 视频使用 Object URL，避免 base64 编码大文件导致性能问题
-        const objectUrl = URL.createObjectURL(file)
         canvasStore.addNode({
           id: nodeId,
           type: 'video',
@@ -1839,19 +1855,15 @@ async function handleFileDrop(event) {
             status: 'success',
             output: {
               type: 'video',
-              url: objectUrl
+              url: blobUrl
             },
-            // 保存原始文件引用，用于后续上传
-            localFile: file,
-            isLocalVideo: true
+            isUploading: true
           }
         })
+        uploadTasks.push({ file, type: 'video', nodeId, blobUrl, field: 'output.url' })
       } else if (category === 'audio') {
-        // 音频节点 - 使用 Object URL，避免 base64 编码大文件导致性能问题
-        const objectUrl = URL.createObjectURL(file)
-        // 提取文件名（不含扩展名）作为节点标题
         const fileName = file.name || '音频'
-        const displayName = fileName.replace(/\.[^/.]+$/, '') // 移除扩展名
+        const displayName = fileName.replace(/\.[^/.]+$/, '')
         
         canvasStore.addNode({
           id: nodeId,
@@ -1860,17 +1872,16 @@ async function handleFileDrop(event) {
           data: {
             title: displayName,
             label: displayName,
-            audioUrl: objectUrl,
+            audioUrl: blobUrl,
             status: 'success',
             output: {
               type: 'audio',
-              url: objectUrl
+              url: blobUrl
             },
-            // 保存原始文件引用，用于后续上传
-            localFile: file,
-            isLocalAudio: true
+            isUploading: true
           }
         })
+        uploadTasks.push({ file, type: 'audio', nodeId, blobUrl, field: 'audioUrl' })
         console.log('[CanvasBoard] 音频文件已添加到画布:', displayName)
       }
       
@@ -1879,7 +1890,78 @@ async function handleFileDrop(event) {
       offsetY += 50
       
     } catch (error) {
-      console.error('[CanvasBoard] 文件读取失败:', error)
+      console.error('[CanvasBoard] 文件创建节点失败:', error)
+    }
+  }
+  
+  // 🔄 后台异步上传所有文件到云存储
+  if (uploadTasks.length > 0) {
+    uploadFilesToCloud(uploadTasks)
+  }
+}
+
+/**
+ * 后台异步上传文件到云存储，上传完成后更新节点 URL
+ */
+async function uploadFilesToCloud(tasks) {
+  for (const task of tasks) {
+    const { file, type, nodeId, blobUrl, field } = task
+    
+    try {
+      console.log(`[CanvasBoard] 开始上传${type}到云存储:`, file.name, '大小:', Math.round(file.size / 1024), 'KB')
+      
+      const result = await uploadCanvasMedia(file, type)
+      const cloudUrl = result.url
+      
+      console.log(`[CanvasBoard] ${type}上传成功，云URL:`, cloudUrl)
+      
+      // 更新节点数据，将 blob URL 替换为云存储 URL
+      const node = canvasStore.nodes.find(n => n.id === nodeId)
+      if (node) {
+        if (type === 'image') {
+          // 图片节点：更新 sourceImages
+          const newSourceImages = node.data.sourceImages.map(url => url === blobUrl ? cloudUrl : url)
+          canvasStore.updateNodeData(nodeId, { 
+            sourceImages: newSourceImages,
+            isUploading: false
+          })
+        } else if (type === 'video') {
+          // 视频节点：更新 output.url
+          canvasStore.updateNodeData(nodeId, { 
+            output: { ...node.data.output, url: cloudUrl },
+            isUploading: false
+          })
+        } else if (type === 'audio') {
+          // 音频节点：更新 audioUrl 和 output.url
+          canvasStore.updateNodeData(nodeId, { 
+            audioUrl: cloudUrl,
+            output: { ...node.data.output, url: cloudUrl },
+            isUploading: false
+          })
+        }
+        
+        console.log(`[CanvasBoard] 节点 ${nodeId} 已更新为云存储URL`)
+      }
+      
+      // 释放 blob URL 内存
+      try {
+        URL.revokeObjectURL(blobUrl)
+      } catch (e) {
+        // 忽略
+      }
+      
+    } catch (error) {
+      console.error(`[CanvasBoard] ${type}上传失败:`, error.message)
+      // 上传失败时保留 blob URL，让用户可以继续使用
+      // 但标记上传失败，保存工作流时会提示用户
+      const node = canvasStore.nodes.find(n => n.id === nodeId)
+      if (node) {
+        canvasStore.updateNodeData(nodeId, { 
+          isUploading: false,
+          uploadFailed: true,
+          uploadError: error.message
+        })
+      }
     }
   }
 }
@@ -1912,14 +1994,20 @@ onMounted(() => {
       console.log('[CanvasBoard] 视口初始化完成')
     } catch (e) {
       console.warn('[CanvasBoard] fitView 失败，重试中...', e)
-      setTimeout(initViewport, 100)
+      const retryId = setTimeout(() => {
+        pendingTimeouts.delete(retryId)
+        initViewport()
+      }, 100)
+      pendingTimeouts.add(retryId)
     }
   }
 
   // 等待足够长的时间确保 VueFlow 完全初始化
-  setTimeout(() => {
+  const initTimeoutId = setTimeout(() => {
+    pendingTimeouts.delete(initTimeoutId)
     initViewport()
   }, 200)
+  pendingTimeouts.add(initTimeoutId)
   
   // 添加键盘事件监听
   document.addEventListener('keydown', handleKeyDown)
@@ -1967,6 +2055,16 @@ onUnmounted(() => {
   const listenerOptions = { capture: true }
   window.removeEventListener('mousemove', handleGlobalDragConnectionMove, listenerOptions)
   window.removeEventListener('mouseup', handleGlobalDragConnectionEnd, listenerOptions)
+  
+  // 🔧 清理对齐辅助线节流定时器，防止内存泄漏
+  if (alignmentThrottleTimer.value) {
+    cancelAnimationFrame(alignmentThrottleTimer.value)
+    alignmentThrottleTimer.value = null
+  }
+  
+  // 🔧 清理所有待执行的定时器
+  pendingTimeouts.forEach(id => clearTimeout(id))
+  pendingTimeouts.clear()
 })
 </script>
 

@@ -307,3 +307,28 @@ export function pollTaskStatus(taskId, type = 'image', options = {}) {
   })
 }
 
+/**
+ * 画布裁剪积分扣除
+ * @param {string} cropType - 'grid9' 或 'grid4'
+ * @returns {Promise<{success: boolean, pointsCost: number, message: string}>}
+ */
+export async function deductCropPoints(cropType) {
+  const response = await fetch(getApiUrl('/api/canvas/crop-deduct'), {
+    method: 'POST',
+    headers: getHeaders({ json: true }),
+    body: JSON.stringify({ cropType })
+  })
+  
+  const data = await response.json()
+  
+  if (!response.ok) {
+    // 积分不足时返回友好提示
+    if (data.error === 'insufficient_points') {
+      throw new Error(data.message || '积分不足')
+    }
+    throw new Error(data.message || data.error || '积分扣除失败')
+  }
+  
+  return data
+}
+

@@ -782,7 +782,8 @@ export default {
       voucher: '兑换券',
       transfer: '余额划转',
       points_transfer_out: '积分转出',
-      points_transfer_in: '积分转入'
+      points_transfer_in: '积分转入',
+      motion_control_refund: '动作迁移退款'
     }
   },
 
@@ -959,7 +960,8 @@ export default {
     deduct: '扣除',
     milestone: '里程碑奖励',
     points_transfer_out: '积分转出',
-    points_transfer_in: '积分转入'
+    points_transfer_in: '积分转入',
+    motion_control_refund: '动作迁移退款'
   },
 
   // 新手引导

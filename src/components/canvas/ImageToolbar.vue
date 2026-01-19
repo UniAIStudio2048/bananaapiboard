@@ -16,6 +16,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
+import { deductCropPoints } from '@/api/canvas/nodes'
 
 const props = defineProps({
   // 选中的图像节点
@@ -263,6 +264,19 @@ async function handleGridCrop() {
   isGridCropping.value = true
   
   try {
+    // 先扣除积分
+    try {
+      const deductResult = await deductCropPoints('grid9')
+      if (deductResult.pointsCost > 0) {
+        console.log(`[ImageToolbar] 9宫格裁剪：已扣除 ${deductResult.pointsCost} 积分`)
+      }
+    } catch (deductError) {
+      console.error('[ImageToolbar] 9宫格裁剪：积分扣除失败', deductError)
+      alert(deductError.message || '积分不足，无法执行裁剪操作')
+      isGridCropping.value = false
+      return
+    }
+    
     // 加载图片 - 使用代理URL绕过CORS限制
     const img = new Image()
     img.crossOrigin = 'anonymous'
@@ -383,6 +397,19 @@ async function handleGrid4Crop() {
   isGrid4Cropping.value = true
   
   try {
+    // 先扣除积分
+    try {
+      const deductResult = await deductCropPoints('grid4')
+      if (deductResult.pointsCost > 0) {
+        console.log(`[ImageToolbar] 4宫格裁剪：已扣除 ${deductResult.pointsCost} 积分`)
+      }
+    } catch (deductError) {
+      console.error('[ImageToolbar] 4宫格裁剪：积分扣除失败', deductError)
+      alert(deductError.message || '积分不足，无法执行裁剪操作')
+      isGrid4Cropping.value = false
+      return
+    }
+    
     // 加载图片 - 使用代理URL绕过CORS限制
     const img = new Image()
     img.crossOrigin = 'anonymous'
@@ -530,6 +557,7 @@ function dataUrlToBlob(dataUrl) {
 
 // 下载 - 统一使用后端代理下载，解决跨域和第三方CDN预览问题
 // 对于 dataUrl 格式的图片（如裁剪后的图片），直接在前端下载
+// 🔧 修复：确保下载原图，去除七牛云压缩参数
 async function handleDownload() {
   console.log('[ImageToolbar] 下载', props.imageNode?.id)
   if (!imageUrl.value) return
@@ -573,9 +601,25 @@ async function handleDownload() {
       return
     }
     
-    // 其他 URL 统一走后端代理下载，后端会设置 Content-Disposition: attachment 头
-    const downloadUrl = getApiUrl(`/api/images/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`)
+    // 🔧 修复：使用 buildDownloadUrl 构建下载链接，会自动清理七牛云压缩参数，确保下载原图
+    const { buildDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
+    const downloadUrl = buildDownloadUrl(url, filename)
     
+    // 七牛云 URL 直接下载（节省服务器流量）
+    if (isQiniuCdnUrl(url)) {
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      link.style.display = 'none'
+      document.body.appendChild(link)
+      link.click()
+      console.log('[ImageToolbar] 七牛云直接下载原图:', filename)
+      setTimeout(() => document.body.removeChild(link), 100)
+      emit('download', { nodeId: props.imageNode?.id, imageUrl: imageUrl.value })
+      return
+    }
+    
+    // 其他 URL 走后端代理下载
     const response = await fetch(downloadUrl, {
       headers: getTenantHeaders()
     })
@@ -593,10 +637,17 @@ async function handleDownload() {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(blobUrl)
+    console.log('[ImageToolbar] 下载原图成功:', filename)
   } catch (error) {
     console.error('[ImageToolbar] 下载图片失败:', error)
-    // 如果 fetch 失败，使用后端代理页面下载
-    window.location.href = getApiUrl(`/api/images/download?url=${encodeURIComponent(imageUrl.value)}&filename=${encodeURIComponent(filename)}`)
+    // 如果 fetch 失败，使用 buildDownloadUrl 构建页面下载链接
+    try {
+      const { buildDownloadUrl } = await import('@/api/client')
+      window.location.href = buildDownloadUrl(imageUrl.value, filename)
+    } catch (e) {
+      // 最后回退
+      window.location.href = getApiUrl(`/api/images/download?url=${encodeURIComponent(imageUrl.value)}&filename=${encodeURIComponent(filename)}`)
+    }
   }
   
   emit('download', { 

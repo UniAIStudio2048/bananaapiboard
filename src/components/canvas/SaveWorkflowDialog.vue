@@ -25,6 +25,7 @@ const workflowName = ref('')
 const workflowDescription = ref('')
 const isSaving = ref(false)
 const saveError = ref('')
+const lastSaveError = ref('') // 用于实现"双击确认"逻辑
 
 // 用户配额信息
 const quota = ref(null)
@@ -42,12 +43,33 @@ const saveButtonText = computed(() => {
   return isUpdate.value ? t('canvas.updateWorkflow') : t('canvas.saveWorkflow')
 })
 
+// 🔧 计算当前工作流数据大小（用于实时显示）
+const currentDataSize = computed(() => {
+  try {
+    const workflowData = canvasStore.exportWorkflow()
+    const nodesJson = JSON.stringify(workflowData.nodes || [])
+    const edgesJson = JSON.stringify(workflowData.edges || [])
+    return new Blob([nodesJson, edgesJson]).size
+  } catch (e) {
+    return 0
+  }
+})
+
+// 数据大小状态（用于显示颜色）
+const dataSizeStatus = computed(() => {
+  const size = currentDataSize.value
+  if (size > 300 * 1024 * 1024) return 'danger'  // >300MB 危险
+  if (size > 100 * 1024 * 1024) return 'warning' // >100MB 警告
+  return 'normal'
+})
+
 // 监听对话框打开
 watch(() => props.visible, async (visible) => {
   if (visible) {
     // 🔧 重置状态
     isSaving.value = false
     saveError.value = ''
+    lastSaveError.value = ''
 
     // 加载配额信息
     await loadQuota()
@@ -103,6 +125,58 @@ function formatDataSize(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
+// 检查是否有未上传完成的本地文件
+function checkLocalFiles() {
+  const issues = {
+    uploading: [],    // 正在上传
+    uploadFailed: [], // 上传失败
+    blobUrls: []      // 仍然是 blob URL
+  }
+  
+  for (const node of canvasStore.nodes) {
+    const data = node.data || {}
+    
+    // 检查正在上传的节点
+    if (data.isUploading) {
+      issues.uploading.push({
+        id: node.id,
+        type: node.type,
+        title: data.title || data.label || node.id
+      })
+    }
+    
+    // 检查上传失败的节点
+    if (data.uploadFailed) {
+      issues.uploadFailed.push({
+        id: node.id,
+        type: node.type,
+        title: data.title || data.label || node.id,
+        error: data.uploadError
+      })
+    }
+    
+    // 检查是否有 blob URL（表示还没上传成功）
+    const urlsToCheck = [
+      ...(data.sourceImages || []),
+      data.audioUrl,
+      data.output?.url
+    ].filter(Boolean)
+    
+    for (const url of urlsToCheck) {
+      if (typeof url === 'string' && url.startsWith('blob:')) {
+        issues.blobUrls.push({
+          id: node.id,
+          type: node.type,
+          title: data.title || data.label || node.id
+        })
+        break // 每个节点只记录一次
+      }
+    }
+  }
+  
+  return issues
+}
+
 // 保存到本地备份（用于恢复）
 function saveLocalBackup(workflowData, name) {
   try {
@@ -146,11 +220,55 @@ async function handleSave() {
     return
   }
 
+  // 🔧 检查是否有未上传完成的本地文件
+  const fileIssues = checkLocalFiles()
+  
+  // 如果有正在上传的文件，提示等待
+  if (fileIssues.uploading.length > 0) {
+    saveError.value = `有 ${fileIssues.uploading.length} 个文件正在上传中，请稍等片刻后再保存`
+    return
+  }
+  
+  // 如果有上传失败或未上传的 blob URL，给出警告
+  const failedCount = fileIssues.uploadFailed.length + fileIssues.blobUrls.length
+  if (failedCount > 0) {
+    const failedTitles = [
+      ...fileIssues.uploadFailed.map(n => n.title),
+      ...fileIssues.blobUrls.map(n => n.title)
+    ].slice(0, 3).join('、')
+    const moreText = failedCount > 3 ? `等 ${failedCount} 个` : ''
+    
+    // 显示警告但允许继续保存（用户可能想先保存，稍后修复）
+    saveError.value = `⚠️ "${failedTitles}"${moreText}节点包含本地文件未能上传到云端，保存后可能无法正常加载。建议删除这些节点后重新上传。`
+    // 不 return，继续保存（给用户选择的机会）
+    // 用户第二次点击保存时，如果错误信息相同，就允许保存
+    if (saveError.value === lastSaveError.value) {
+      saveError.value = '' // 清除错误，允许保存
+    } else {
+      lastSaveError.value = saveError.value
+      return
+    }
+  }
+
   // 🔧 预检：检查数据大小（同步检查，快速失败）
+  // 支持大画布：前端限制400MB，后端限制500MB
   const dataSize = calculateDataSize()
-  const MAX_SIZE = 80 * 1024 * 1024 // 80MB
+  const nodeCount = canvasStore.nodes.length
+  const MAX_SIZE = 400 * 1024 * 1024 // 400MB（支持70-100+节点的大工作流）
+  const WARN_SIZE = 100 * 1024 * 1024 // 100MB时警告
+  
+  // 显示数据大小和节点数量信息
+  console.log(`[SaveDialog] 工作流数据: ${formatDataSize(dataSize)}, 节点数: ${nodeCount}`)
+  
   if (dataSize > MAX_SIZE) {
-    saveError.value = `工作流数据过大 (${formatDataSize(dataSize)})，超过 80MB 限制。请删除一些节点或清理节点中的大图片。`
+    saveError.value = `工作流数据过大 (${formatDataSize(dataSize)})，超过 400MB 限制。请删除一些节点或清理节点中的大图片。`
+    return
+  }
+  
+  // 100MB以上给出警告但允许保存
+  if (dataSize > WARN_SIZE && saveError.value !== lastSaveError.value) {
+    saveError.value = `⚠️ 工作流数据较大 (${formatDataSize(dataSize)}, ${nodeCount}个节点)，保存可能需要较长时间。再次点击确认保存。`
+    lastSaveError.value = saveError.value
     return
   }
 
@@ -322,11 +440,22 @@ function handleClose() {
           <div class="workflow-info">
             <div class="info-item">
               <span class="info-label">{{ t('canvas.nodeCount') }}</span>
-              <span class="info-value">{{ canvasStore.nodes.length }}</span>
+              <span class="info-value" :class="{ 'large-count': canvasStore.nodes.length > 50 }">
+                {{ canvasStore.nodes.length }}
+                <span v-if="canvasStore.nodes.length > 50" class="info-badge">大画布</span>
+              </span>
             </div>
             <div class="info-item">
               <span class="info-label">{{ t('canvas.edgeCount') }}</span>
               <span class="info-value">{{ canvasStore.edges.length }}</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">数据大小</span>
+              <span class="info-value" :class="'size-' + dataSizeStatus">
+                {{ formatDataSize(currentDataSize) }}
+                <span v-if="dataSizeStatus === 'warning'" class="info-badge warning">较大</span>
+                <span v-if="dataSizeStatus === 'danger'" class="info-badge danger">过大</span>
+              </span>
             </div>
           </div>
         </form>
@@ -576,6 +705,45 @@ function handleClose() {
   font-size: 18px;
   font-weight: 600;
   color: #3b82f6;
+}
+
+/* 🔧 大画布和数据大小状态样式 */
+.info-value.large-count {
+  color: #f59e0b;
+}
+
+.info-value.size-normal {
+  color: #10b981;
+}
+
+.info-value.size-warning {
+  color: #f59e0b;
+}
+
+.info-value.size-danger {
+  color: #ef4444;
+}
+
+.info-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 6px;
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+  font-weight: 500;
+  vertical-align: middle;
+}
+
+.info-badge.warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: #f59e0b;
+}
+
+.info-badge.danger {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
 }
 
 /* 底部 */
