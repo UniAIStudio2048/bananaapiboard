@@ -564,6 +564,7 @@ export default {
       textToVideo: '文生视频',
       imageToVideo: '图生视频',
       keyframesToVideo: '首尾帧生视频',
+      motionImitation: '动作模仿',
       videoExtend: '视频延长',
       videoLoop: '视频循环',
       prompt: '提示词',

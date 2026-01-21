@@ -426,6 +426,7 @@ export default {
       textToVideo: 'Text zu Video',
       imageToVideo: 'Bild zu Video',
       keyframesToVideo: 'Keyframes zu Video',
+      motionImitation: 'Bewegungsimitation',
       videoExtend: 'Video verlängern',
       videoLoop: 'Video-Schleife',
       prompt: 'Prompt',

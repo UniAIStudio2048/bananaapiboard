@@ -436,6 +436,7 @@ export default {
       textToVideo: '文生影片',
       imageToVideo: '圖生影片',
       keyframesToVideo: '首尾幀生影片',
+      motionImitation: '動作模仿',
       videoExtend: '影片延長',
       videoLoop: '影片循環',
       prompt: '提示詞',

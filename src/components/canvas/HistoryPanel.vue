@@ -442,13 +442,13 @@ async function handleDownload(item) {
   } catch (error) {
     console.error('[HistoryPanel] 下载失败:', error)
     
-    // 回退：使用页面跳转下载
+    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
       const { buildDownloadUrl, buildVideoDownloadUrl } = await import('@/api/client')
       const downloadUrl = item.type === 'video'
         ? buildVideoDownloadUrl(item.url, filename)
         : buildDownloadUrl(item.url, filename)
-      window.location.href = downloadUrl
+      window.open(downloadUrl, '_blank')
     } catch (e) {
       console.error('[HistoryPanel] 所有下载方式都失败:', e)
     }
@@ -3089,5 +3089,455 @@ onUnmounted(() => {
 .modal-fade-enter-from .delete-confirm-modal,
 .modal-fade-leave-to .delete-confirm-modal {
   transform: scale(0.9) translateY(10px);
+}
+</style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   HistoryPanel 白昼模式样式适配
+   ======================================== */
+
+/* 全屏模式容器 */
+:root.canvas-theme-light .history-panel-wrapper.fullscreen {
+  background: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* 面板背景 */
+:root.canvas-theme-light .history-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 250, 252, 0.98) 100%) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 
+    0 24px 80px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.03) inset !important;
+}
+
+/* 头部 */
+:root.canvas-theme-light .history-panel .panel-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .history-panel .header-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .history-panel .header-title svg {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .history-panel .header-btn {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .history-panel .header-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .history-panel .header-btn.active {
+  background: rgba(59, 130, 246, 0.12) !important;
+  color: #3b82f6 !important;
+}
+
+:root.canvas-theme-light .history-panel .close-btn {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .history-panel .close-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1c1917 !important;
+}
+
+/* 批量操作栏 */
+:root.canvas-theme-light .history-panel .batch-action-bar {
+  background: rgba(59, 130, 246, 0.06) !important;
+  border-bottom-color: rgba(59, 130, 246, 0.15) !important;
+}
+
+:root.canvas-theme-light .history-panel .select-all-btn {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .history-panel .select-all-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .history-panel .select-count {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .history-panel .batch-download-btn {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+}
+
+/* 文件类型筛选 */
+:root.canvas-theme-light .history-panel .type-filter {
+  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .history-panel .type-btn {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .history-panel .type-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .history-panel .type-btn.active {
+  background: rgba(0, 0, 0, 0.08) !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .history-panel .type-count {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .history-panel .type-btn.active .type-count {
+  background: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+/* 搜索栏 */
+:root.canvas-theme-light .history-panel .search-bar {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .history-panel .search-bar:focus-within {
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .history-panel .search-bar svg {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .history-panel .search-input {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .history-panel .search-input::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .history-panel .search-clear {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .history-panel .search-clear:hover {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+/* 历史记录列表滚动条 */
+:root.canvas-theme-light .history-panel .history-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12) !important;
+}
+
+/* 骨架屏 */
+:root.canvas-theme-light .history-panel .skeleton-card {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%) !important;
+}
+
+/* 加载状态 */
+:root.canvas-theme-light .history-panel .loading-state {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .history-panel .spinner {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  border-top-color: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* 空状态 */
+:root.canvas-theme-light .history-panel .empty-state p {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .history-panel .empty-icon {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .history-panel .empty-hint {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .history-panel .empty-hint.retention {
+  color: rgba(180, 120, 60, 0.7) !important;
+}
+
+/* 历史记录卡片 */
+:root.canvas-theme-light .history-panel .history-card {
+  background: #fafafa !important;
+}
+
+:root.canvas-theme-light .history-panel .history-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .history-panel .history-card.selected {
+  box-shadow: 0 0 0 3px #3b82f6, 0 4px 12px rgba(59, 130, 246, 0.2) !important;
+}
+
+:root.canvas-theme-light .history-panel .history-card.selected::after {
+  background: rgba(59, 130, 246, 0.08) !important;
+}
+
+/* 复选框 */
+:root.canvas-theme-light .history-panel .select-checkbox {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+:root.canvas-theme-light .history-panel .select-checkbox:hover {
+  border-color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+}
+
+:root.canvas-theme-light .history-panel .select-checkbox.checked {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+}
+
+/* 卡片占位符 */
+:root.canvas-theme-light .history-panel .card-placeholder {
+  background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%) !important;
+}
+
+:root.canvas-theme-light .history-panel .card-placeholder.image {
+  background: linear-gradient(135deg, #e0e8f0 0%, #d8e0e8 100%) !important;
+}
+
+:root.canvas-theme-light .history-panel .card-placeholder.video {
+  background: linear-gradient(135deg, #ece0f0 0%, #e4d8e8 100%) !important;
+}
+
+:root.canvas-theme-light .history-panel .card-placeholder.audio {
+  background: linear-gradient(135deg, #e0f0e8 0%, #d8e8e0 100%) !important;
+}
+
+:root.canvas-theme-light .history-panel .placeholder-icon {
+  color: rgba(0, 0, 0, 0.3) !important;
+}
+
+:root.canvas-theme-light .history-panel .placeholder-text {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 音频标题覆盖层 */
+:root.canvas-theme-light .history-panel .audio-title-overlay {
+  background: linear-gradient(transparent, rgba(255, 255, 255, 0.95)) !important;
+}
+
+:root.canvas-theme-light .history-panel .audio-title {
+  color: #1c1917 !important;
+  text-shadow: none !important;
+}
+
+/* 视频标识 */
+:root.canvas-theme-light .history-panel .video-badge {
+  background: rgba(0, 0, 0, 0.6) !important;
+}
+
+/* 悬停信息遮罩 */
+:root.canvas-theme-light .history-panel .hover-overlay {
+  background: linear-gradient(to top, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.7) 50%, transparent 100%) !important;
+}
+
+:root.canvas-theme-light .history-panel .overlay-model {
+  color: #1c1917 !important;
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .history-panel .overlay-prompt {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .history-panel .overlay-time {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .history-panel .overlay-delete {
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .history-panel .overlay-delete:hover {
+  background: #ef4444 !important;
+  color: #fff !important;
+}
+
+/* 底部 */
+:root.canvas-theme-light .history-panel .panel-footer {
+  border-top-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .history-panel .stats {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .history-panel .retention-tip {
+  color: rgba(180, 120, 60, 0.8) !important;
+}
+
+:root.canvas-theme-light .history-panel .tip {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 右键菜单 */
+:root.canvas-theme-light .history-context-menu {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .history-context-menu .context-menu-item {
+  color: rgba(0, 0, 0, 0.8) !important;
+}
+
+:root.canvas-theme-light .history-context-menu .context-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+:root.canvas-theme-light .history-context-menu .context-menu-item.danger {
+  color: #ef4444 !important;
+}
+
+:root.canvas-theme-light .history-context-menu .context-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.08) !important;
+}
+
+:root.canvas-theme-light .history-context-menu .context-menu-divider {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 全屏预览 */
+:root.canvas-theme-light .history-preview-overlay {
+  background: rgba(255, 255, 255, 0.98) !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .close-preview-btn {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .close-preview-btn:hover {
+  background: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .preview-audio {
+  background: rgba(59, 130, 246, 0.04) !important;
+  border-color: rgba(59, 130, 246, 0.2) !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .audio-title-text {
+  color: #1c1917 !important;
+  text-shadow: none !important;
+}
+
+/* 底部信息栏 */
+:root.canvas-theme-light .history-preview-modal .preview-footer {
+  background: rgba(250, 250, 252, 0.98) !important;
+  border-top-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .info-tag {
+  color: rgba(0, 0, 0, 0.6) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .preview-prompt {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .preview-actions .action-btn {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .preview-actions .action-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .preview-actions .apply-btn {
+  background: #1c1917 !important;
+  border-color: #1c1917 !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .preview-actions .apply-btn:hover {
+  background: #292524 !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .preview-actions .asset-btn:hover {
+  background: rgba(59, 130, 246, 0.1) !important;
+  border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .preview-actions .delete-btn:hover {
+  background: rgba(239, 68, 68, 0.1) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #ef4444 !important;
+}
+
+/* 删除确认弹窗 */
+:root.canvas-theme-light .delete-confirm-overlay {
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .delete-confirm-modal {
+  background: linear-gradient(145deg, #ffffff, #fafafa) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 
+    0 25px 60px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.03) inset !important;
+}
+
+:root.canvas-theme-light .delete-confirm-modal .delete-modal-icon {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.08), rgba(239, 68, 68, 0.03)) !important;
+  border-color: rgba(239, 68, 68, 0.15) !important;
+}
+
+:root.canvas-theme-light .delete-confirm-modal .delete-modal-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .delete-confirm-modal .delete-modal-desc {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .delete-confirm-modal .delete-modal-preview {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .delete-confirm-modal .preview-placeholder {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.03), transparent) !important;
+  color: rgba(0, 0, 0, 0.25) !important;
+}
+
+:root.canvas-theme-light .delete-confirm-modal .cancel-btn {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .delete-confirm-modal .cancel-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .delete-confirm-modal .confirm-btn {
+  background: linear-gradient(135deg, #ef4444, #dc2626) !important;
 }
 </style>

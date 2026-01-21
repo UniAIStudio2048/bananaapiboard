@@ -40,6 +40,37 @@ const paymentUrl = ref('')
 const pendingOrderNo = ref('')
 const checkingPayment = ref(false)
 
+// 充值弹窗状态
+const showRechargeModal = ref(false)
+const rechargeAmount = ref(null)
+const lastRechargeAmount = ref(0) // 记录最后一次充值的金额，用于等待界面显示
+const customAmount = ref('')
+const rechargePaymentMethod = ref(null) // 在打开弹窗时设置默认值
+const rechargeCouponCode = ref('')
+const rechargeLoading = ref(false)
+const rechargeError = ref('')
+
+// 快捷充值金额（单位：分）
+const quickAmounts = [
+  { label: '¥3', value: 300 },
+  { label: '¥20', value: 2000 },
+  { label: '¥50', value: 5000 },
+  { label: '¥100', value: 10000 },
+  { label: '¥200', value: 20000 },
+  { label: '¥500', value: 50000 },
+  { label: '¥888', value: 88800 }
+]
+
+// 默认支付方式
+const defaultPaymentMethods = [
+  { id: 'alipay_wechat', name: '支付宝/微信' }
+]
+
+// 充值支付方式选项（优先使用后端返回的，否则使用默认）
+const rechargePaymentOptions = computed(() => {
+  return paymentMethods.value.length > 0 ? paymentMethods.value : defaultPaymentMethods
+})
+
 // 套餐等级映射
 const packageLevels = {
   daily: 1,
@@ -167,6 +198,150 @@ function closePurchaseModal() {
   appliedCoupon.value = null
   couponDiscount.value = 0
   couponError.value = ''
+  showPaymentWaiting.value = false
+  paymentUrl.value = ''
+  pendingOrderNo.value = ''
+}
+
+// 打开充值弹窗
+async function openRechargeModal() {
+  // 先重置状态
+  rechargeAmount.value = null
+  customAmount.value = ''
+  rechargeCouponCode.value = ''
+  rechargeError.value = ''
+  rechargePaymentMethod.value = null
+  
+  // 加载支付方式
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch('/api/user/payment-methods', {
+      headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
+    })
+    if (res.ok) {
+      const data = await res.json()
+      paymentMethods.value = data.methods || []
+    }
+  } catch (e) {
+    console.error('[openRechargeModal] 加载支付方式失败:', e)
+  }
+  
+  // 默认选中第一个支付方式（无论是从后端加载的还是默认的）
+  const options = rechargePaymentOptions.value
+  if (options.length > 0) {
+    rechargePaymentMethod.value = options[0].id
+  }
+  
+  // 加载完成后再显示弹窗
+  showRechargeModal.value = true
+}
+
+// 选择充值支付方式
+function selectRechargePaymentMethod(methodId) {
+  rechargePaymentMethod.value = methodId
+  rechargeError.value = '' // 清除错误提示
+}
+
+// 关闭充值弹窗
+function closeRechargeModal() {
+  showRechargeModal.value = false
+  rechargeAmount.value = null
+  customAmount.value = ''
+  rechargePaymentMethod.value = null
+  rechargeCouponCode.value = ''
+  rechargeError.value = ''
+}
+
+// 选择快捷金额
+function selectQuickAmount(amount) {
+  rechargeAmount.value = amount
+  customAmount.value = ''
+}
+
+// 获取实际充值金额（分）
+function getRechargeAmountInCents() {
+  if (rechargeAmount.value) {
+    return rechargeAmount.value
+  }
+  if (customAmount.value) {
+    const amount = parseFloat(customAmount.value)
+    if (!isNaN(amount) && amount > 0) {
+      return Math.round(amount * 100)
+    }
+  }
+  return 0
+}
+
+// 确认充值
+async function confirmRecharge() {
+  const amountInCents = getRechargeAmountInCents()
+  
+  if (amountInCents <= 0) {
+    rechargeError.value = '请选择或输入充值金额'
+    return
+  }
+  
+  // 验证支付方式
+  if (!rechargePaymentMethod.value) {
+    rechargeError.value = '请选择支付方式'
+    return
+  }
+  
+  const paymentMethod = rechargePaymentMethod.value
+  
+  rechargeLoading.value = true
+  rechargeError.value = ''
+  
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch('/api/user/recharge', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        ...getTenantHeaders()
+      },
+      body: JSON.stringify({
+        amount: amountInCents,
+        payment_method_id: paymentMethod
+      })
+    })
+    
+    const data = await response.json()
+    
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || data.error || '充值请求失败')
+    }
+    
+    // 如果是在线支付，显示支付等待界面
+    if (data.pay_url) {
+      paymentUrl.value = data.pay_url
+      pendingOrderNo.value = data.order_no
+      lastRechargeAmount.value = amountInCents
+      
+      closeRechargeModal()
+      
+      // 复用购买模态框的等待支付界面
+      showPaymentWaiting.value = true
+      showPurchaseModal.value = true
+      
+      // 打开支付页面
+      window.open(data.pay_url, '_blank', 'width=500,height=700')
+    } else {
+      // 直接充值成功（余额支付等）
+      closeRechargeModal()
+      // 刷新数据
+      await loadPackages()
+      emit('purchase-success')
+      // 触发全局用户信息更新事件
+      window.dispatchEvent(new CustomEvent('user-info-updated'))
+    }
+  } catch (err) {
+    console.error('充值失败:', err)
+    rechargeError.value = err.message || '充值失败，请稍后重试'
+  } finally {
+    rechargeLoading.value = false
+  }
 }
 
 // 计算支付信息
@@ -241,14 +416,15 @@ async function applyCoupon() {
 
     const data = await res.json()
 
-    if (res.ok && data.valid) {
-      appliedCoupon.value = data.coupon
-      couponDiscount.value = data.discount || 0
-    } else {
+    if (!res.ok) {
       couponError.value = data.message || '优惠券无效'
       appliedCoupon.value = null
       couponDiscount.value = 0
+      return
     }
+    
+    appliedCoupon.value = data.coupon
+    couponDiscount.value = data.discount_amount || 0
   } catch (e) {
     console.error('[applyCoupon] error:', e)
     couponError.value = '验证失败，请稍后重试'
@@ -506,6 +682,9 @@ watch(() => props.visible, (newVal) => {
               <span class="balance-label">账户余额</span>
               <span class="balance-value">¥{{ ((user?.balance || 0) / 100).toFixed(2) }}</span>
             </div>
+            <button type="button" class="recharge-entry-btn" @click.stop.prevent="openRechargeModal">
+              充值
+            </button>
           </div>
 
           <!-- 错误提示 -->
@@ -611,8 +790,8 @@ watch(() => props.visible, (newVal) => {
                   </svg>
                 </div>
                 <div class="modal-title-group">
-                  <h3 class="modal-title">确认{{ purchaseInfo?.action }}</h3>
-                  <p class="modal-subtitle">{{ selectedPackage?.name }}</p>
+                  <h3 class="modal-title">确认{{ selectedPackage ? purchaseInfo?.action : '充值' }}</h3>
+                  <p class="modal-subtitle">{{ selectedPackage ? selectedPackage.name : '账户充值' }}</p>
                 </div>
               </div>
               <button class="modal-close" @click="closePurchaseModal">
@@ -623,7 +802,7 @@ watch(() => props.visible, (newVal) => {
             </div>
 
             <!-- 内容 -->
-            <div v-if="selectedPackage && purchaseInfo" class="modal-body">
+            <div v-if="(selectedPackage && purchaseInfo) || showPaymentWaiting" class="modal-body">
               <!-- 等待支付视图 -->
               <template v-if="showPaymentWaiting">
                 <div class="payment-waiting">
@@ -647,13 +826,13 @@ watch(() => props.visible, (newVal) => {
                   <!-- 订单信息 -->
                   <div class="waiting-order-card">
                     <div class="order-info-row">
-                      <span class="order-info-label">套餐</span>
-                      <span class="order-info-value">{{ selectedPackage.name }}</span>
+                      <span class="order-info-label">{{ selectedPackage ? '套餐' : '项目' }}</span>
+                      <span class="order-info-value">{{ selectedPackage ? selectedPackage.name : '账户充值' }}</span>
                     </div>
                     <div class="order-info-divider"></div>
                     <div class="order-info-row">
                       <span class="order-info-label">支付金额</span>
-                      <span class="order-info-amount">¥{{ (purchaseInfo.needPay / 100).toFixed(2) }}</span>
+                      <span class="order-info-amount">¥{{ selectedPackage ? (purchaseInfo.needPay / 100).toFixed(2) : (lastRechargeAmount / 100).toFixed(2) }}</span>
                     </div>
                   </div>
                   
@@ -849,6 +1028,102 @@ watch(() => props.visible, (newVal) => {
           </div>
         </div>
       </Transition>
+
+      <!-- 充值弹窗 -->
+      <div v-if="showRechargeModal" class="recharge-modal-overlay" @click.self="closeRechargeModal">
+        <div class="recharge-modal-container">
+          <!-- 头部 -->
+          <div class="recharge-modal-header">
+            <h3>账户充值</h3>
+            <button class="close-btn" @click="closeRechargeModal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- 内容 -->
+          <div class="recharge-modal-body">
+            <!-- 快捷金额选择 -->
+            <div class="recharge-section">
+              <label class="section-label">选择充值金额</label>
+              <div class="quick-amounts">
+                <button
+                  v-for="item in quickAmounts"
+                  :key="item.value"
+                  class="amount-btn"
+                  :class="{ active: rechargeAmount === item.value }"
+                  @click="selectQuickAmount(item.value)"
+                >
+                  {{ item.label }}
+                </button>
+              </div>
+            </div>
+
+            <!-- 自定义金额 -->
+            <div class="recharge-section">
+              <label class="section-label">或输入自定义金额（元）</label>
+              <div class="custom-amount-wrapper">
+                <span class="currency-prefix">¥</span>
+                <input
+                  type="number"
+                  v-model="customAmount"
+                  placeholder="1-10000"
+                  min="1"
+                  max="10000"
+                  class="custom-amount-input"
+                  @input="rechargeAmount = null"
+                />
+              </div>
+            </div>
+
+            <!-- 支付方式 -->
+            <div class="recharge-section">
+              <label class="section-label">支付方式</label>
+              <div class="payment-methods" v-if="rechargePaymentOptions.length > 0">
+                <label
+                  v-for="method in rechargePaymentOptions"
+                  :key="method.id"
+                  class="payment-method-item"
+                  :class="{ active: rechargePaymentMethod === method.id }"
+                  @click="selectRechargePaymentMethod(method.id)"
+                >
+                  <input
+                    type="radio"
+                    :value="method.id"
+                    v-model="rechargePaymentMethod"
+                    class="hidden-radio"
+                    @change="rechargeError = ''"
+                  />
+                  <span class="method-icon">💰</span>
+                  <span class="method-name">{{ method.name }}</span>
+                </label>
+              </div>
+              <div v-else class="payment-methods-empty">
+                <span>暂无可用支付方式</span>
+              </div>
+            </div>
+
+            <!-- 错误提示 -->
+            <div v-if="rechargeError" class="recharge-error">
+              {{ rechargeError }}
+            </div>
+          </div>
+
+          <!-- 底部按钮 -->
+          <div class="recharge-modal-footer">
+            <button
+              class="confirm-recharge-btn"
+              @click="confirmRecharge"
+              :disabled="rechargeLoading || (getRechargeAmountInCents() <= 0)"
+            >
+              <span v-if="rechargeLoading" class="loading-dot"></span>
+              {{ rechargeLoading ? '处理中...' : '确认充值' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </Transition>
 </template>
@@ -1019,6 +1294,9 @@ watch(() => props.visible, (newVal) => {
   background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
   border: 1px solid #3a3a3a;
   border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .balance-content {
@@ -1036,13 +1314,34 @@ watch(() => props.visible, (newVal) => {
 .balance-label {
   font-size: 14px;
   color: #888888;
-  flex: 1;
 }
 
 .balance-value {
   font-size: 20px;
   font-weight: 600;
   color: #ffffff;
+}
+
+.recharge-entry-btn {
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 10;
+}
+
+.recharge-entry-btn:hover {
+  background: linear-gradient(135deg, #8b5cf6 0%, #818cf8 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
 }
 
 /* 错误横幅 */
@@ -2296,5 +2595,963 @@ watch(() => props.visible, (newVal) => {
     padding: 10px 24px;
     font-size: 14px;
   }
+}
+</style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   充值弹窗样式（必须在全局样式中）
+   ======================================== */
+.recharge-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10100;
+  padding: 20px;
+}
+
+.recharge-modal-container {
+  background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 380px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+  overflow: hidden;
+}
+
+.recharge-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.recharge-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.recharge-modal-header .close-btn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  cursor: pointer;
+  color: #666666;
+  transition: color 0.2s ease;
+  border-radius: 6px;
+}
+
+.recharge-modal-header .close-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.recharge-modal-header .close-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.recharge-modal-body {
+  padding: 24px;
+}
+
+.recharge-section {
+  margin-bottom: 20px;
+}
+
+.recharge-section:last-child {
+  margin-bottom: 0;
+}
+
+.section-label {
+  display: block;
+  font-size: 13px;
+  color: #888888;
+  margin-bottom: 12px;
+}
+
+.quick-amounts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.amount-btn {
+  padding: 14px 8px;
+  background: #1f1f1f;
+  border: 1px solid #333333;
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.amount-btn:hover {
+  background: #2a2a2a;
+  border-color: #444444;
+}
+
+.amount-btn.active {
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+  border-color: #7c3aed;
+}
+
+.custom-amount-wrapper {
+  display: flex;
+  align-items: center;
+  background: #1f1f1f;
+  border: 1px solid #333333;
+  border-radius: 10px;
+  padding: 0 16px;
+  transition: border-color 0.2s ease;
+}
+
+.custom-amount-wrapper:focus-within {
+  border-color: #7c3aed;
+}
+
+.currency-prefix {
+  color: #888888;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.custom-amount-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 14px 12px;
+  color: #ffffff;
+  font-size: 16px;
+}
+
+.custom-amount-input::placeholder {
+  color: #555555;
+}
+
+.custom-amount-input::-webkit-outer-spin-button,
+.custom-amount-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.payment-methods {
+  background: #1f1f1f;
+  border: 1px solid #333333;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.payment-method-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.payment-method-item:last-child {
+  border-bottom: none;
+}
+
+.payment-method-item:hover {
+  background: #252525;
+}
+
+.payment-method-item.active {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
+}
+
+.hidden-radio {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.method-icon {
+  font-size: 20px;
+}
+
+.method-name {
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.payment-methods-empty {
+  padding: 20px;
+  text-align: center;
+  color: #666666;
+  font-size: 14px;
+  background: #1f1f1f;
+  border: 1px solid #333333;
+  border-radius: 10px;
+}
+
+.coupon-input-wrapper {
+  display: flex;
+  gap: 10px;
+}
+
+.coupon-input {
+  flex: 1;
+  background: #1f1f1f;
+  border: 1px solid #333333;
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: #ffffff;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.coupon-input:focus {
+  border-color: #7c3aed;
+}
+
+.coupon-input::placeholder {
+  color: #555555;
+}
+
+.apply-coupon-btn {
+  padding: 12px 20px;
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.apply-coupon-btn:hover {
+  background: linear-gradient(135deg, #8b5cf6 0%, #818cf8 100%);
+}
+
+.recharge-error {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #f87171;
+  font-size: 13px;
+}
+
+.recharge-modal-footer {
+  padding: 20px 24px;
+  border-top: 1px solid #2a2a2a;
+}
+
+.confirm-recharge-btn {
+  width: 100%;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  border: none;
+  border-radius: 10px;
+  color: #ffffff;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.confirm-recharge-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.confirm-recharge-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ========================================
+   PackageModal 白昼模式样式适配
+   ======================================== */
+
+/* 主遮罩层 */
+:root.canvas-theme-light .package-modal-overlay {
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 主容器 */
+:root.canvas-theme-light .package-modal-container {
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* 头部 */
+:root.canvas-theme-light .package-modal-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .header-icon {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .header-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .close-btn {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .close-btn:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  color: #1c1917 !important;
+}
+
+/* 当前套餐横幅 */
+:root.canvas-theme-light .active-package-banner {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.05) 100%) !important;
+  border-color: rgba(99, 102, 241, 0.15) !important;
+}
+
+:root.canvas-theme-light .banner-icon {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+}
+
+:root.canvas-theme-light .banner-icon svg {
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .banner-label {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .banner-name {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .stat-label {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .stat-value {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .stat-divider {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 余额横幅 */
+:root.canvas-theme-light .balance-banner {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .balance-icon {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .balance-label {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.canvas-theme-light .balance-value {
+  color: #1c1917 !important;
+}
+
+/* 错误横幅 */
+:root.canvas-theme-light .error-banner {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+  color: #dc2626 !important;
+}
+
+/* 弹窗主体 */
+:root.canvas-theme-light .package-modal-body {
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent !important;
+}
+
+:root.canvas-theme-light .package-modal-body::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+:root.canvas-theme-light .package-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .package-modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2) !important;
+}
+
+/* 加载状态 */
+:root.canvas-theme-light .loading-spinner {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  border-top-color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .loading-state p {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 空状态 */
+:root.canvas-theme-light .empty-icon {
+  color: rgba(0, 0, 0, 0.2) !important;
+}
+
+:root.canvas-theme-light .empty-state p {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 套餐卡片 */
+:root.canvas-theme-light .package-card {
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .package-card:hover {
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .package-card.is-active {
+  border-color: #6366f1 !important;
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.05) 0%, #ffffff 100%) !important;
+}
+
+/* 推荐标签 */
+:root.canvas-theme-light .package-badge {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  color: #fff !important;
+}
+
+/* 套餐信息 */
+:root.canvas-theme-light .package-type {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .package-name {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .package-description {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.canvas-theme-light .price-symbol,
+:root.canvas-theme-light .price-value {
+  color: #1c1917 !important;
+}
+
+/* 特性列表 */
+:root.canvas-theme-light .feature-item {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .feature-icon {
+  color: #10b981 !important;
+}
+
+/* 购买按钮 */
+:root.canvas-theme-light .purchase-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .purchase-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+}
+
+:root.canvas-theme-light .purchase-btn.is-current {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+}
+
+:root.canvas-theme-light .purchase-btn.is-current:hover {
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
+}
+
+/* ========== 购买确认弹窗 ========== */
+:root.canvas-theme-light .purchase-modal-overlay {
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .purchase-modal {
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* 弹窗头部 */
+:root.canvas-theme-light .modal-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .modal-icon {
+  background: rgba(99, 102, 241, 0.1) !important;
+  border-color: rgba(99, 102, 241, 0.15) !important;
+}
+
+:root.canvas-theme-light .modal-icon svg {
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .modal-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .modal-subtitle {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .modal-close {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .modal-close:hover {
+  background: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+/* 套餐权益 */
+:root.canvas-theme-light .benefits-section {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+:root.canvas-theme-light .benefit-icon {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-color: rgba(99, 102, 241, 0.12) !important;
+}
+
+:root.canvas-theme-light .benefit-icon svg {
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .benefit-value {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .benefit-label {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+/* 价格计算区 */
+:root.canvas-theme-light .pricing-section {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+/* 优惠券 */
+:root.canvas-theme-light .coupon-input {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .coupon-input:focus {
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  background: #fff !important;
+}
+
+:root.canvas-theme-light .coupon-input::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .coupon-btn {
+  background: rgba(99, 102, 241, 0.1) !important;
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .coupon-btn:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.15) !important;
+}
+
+:root.canvas-theme-light .coupon-btn.remove {
+  color: #dc2626 !important;
+  background: rgba(220, 38, 38, 0.08) !important;
+}
+
+:root.canvas-theme-light .coupon-error {
+  color: #dc2626 !important;
+}
+
+:root.canvas-theme-light .coupon-success {
+  color: #059669 !important;
+}
+
+/* 价格明细 */
+:root.canvas-theme-light .price-breakdown {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .price-row {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .price-row.discount {
+  color: #059669 !important;
+}
+
+:root.canvas-theme-light .balance-hint {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 应付金额 */
+:root.canvas-theme-light .total-label {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .total-value {
+  color: #1c1917 !important;
+}
+
+/* 支付方式 */
+:root.canvas-theme-light .payment-label {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .payment-item {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+:root.canvas-theme-light .payment-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .payment-item.active {
+  border-color: #6366f1 !important;
+  background: rgba(99, 102, 241, 0.05) !important;
+}
+
+:root.canvas-theme-light .payment-radio-dot {
+  border-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+:root.canvas-theme-light .payment-item.active .payment-radio-dot {
+  border-color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .payment-item.active .payment-radio-dot::after {
+  background: #6366f1 !important;
+}
+
+:root.canvas-theme-light .payment-text {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .payment-item.active .payment-text {
+  color: #6366f1 !important;
+}
+
+/* 提示信息 */
+:root.canvas-theme-light .balance-tip {
+  background: rgba(16, 185, 129, 0.08) !important;
+  color: #059669 !important;
+}
+
+:root.canvas-theme-light .error-tip {
+  background: rgba(220, 38, 38, 0.08) !important;
+  color: #dc2626 !important;
+}
+
+/* 底部按钮 */
+:root.canvas-theme-light .modal-footer {
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .btn-cancel {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .btn-cancel:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .btn-confirm {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .btn-confirm:hover:not(:disabled) {
+  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.25) !important;
+}
+
+:root.canvas-theme-light .loading-dot {
+  border-top-color: #fff !important;
+}
+
+/* ========== 等待支付状态 ========== */
+:root.canvas-theme-light .waiting-header {
+  background: rgba(99, 102, 241, 0.05) !important;
+}
+
+:root.canvas-theme-light .waiting-icon-inner {
+  background: rgba(99, 102, 241, 0.1) !important;
+}
+
+:root.canvas-theme-light .waiting-icon-inner svg {
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .waiting-spinner {
+  border-top-color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .waiting-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .waiting-subtitle {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 订单信息卡片 */
+:root.canvas-theme-light .waiting-order-card {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+:root.canvas-theme-light .order-info-label {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .order-info-value {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .order-info-divider {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .order-info-amount {
+  color: #1c1917 !important;
+}
+
+/* 步骤指示器 */
+:root.canvas-theme-light .step-dot {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .step-dot.active {
+  background: rgba(99, 102, 241, 0.1) !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .step-line {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .waiting-steps-labels {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 等待支付错误 */
+:root.canvas-theme-light .waiting-error {
+  background: rgba(220, 38, 38, 0.08) !important;
+  color: #dc2626 !important;
+}
+
+/* 等待支付按钮 */
+:root.canvas-theme-light .waiting-btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .waiting-btn-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.25) !important;
+}
+
+:root.canvas-theme-light .waiting-btn-secondary {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .waiting-btn-secondary:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .waiting-btn-ghost {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .waiting-btn-ghost:hover {
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+/* ========== 充值按钮白昼模式 ========== */
+:root.canvas-theme-light .recharge-entry-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2) !important;
+}
+
+:root.canvas-theme-light .recharge-entry-btn:hover {
+  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%) !important;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+}
+
+/* ========== 充值弹窗白昼模式 ========== */
+:root.canvas-theme-light .recharge-modal-overlay {
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .recharge-modal-container {
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .recharge-modal-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .recharge-modal-header h3 {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .recharge-modal-header .close-btn {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .recharge-modal-header .close-btn:hover {
+  color: #1c1917 !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+:root.canvas-theme-light .section-label {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.canvas-theme-light .amount-btn {
+  background: #f5f5f5 !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .amount-btn:hover {
+  background: #eeeeee !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .amount-btn.active {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  border-color: #6366f1 !important;
+  color: #ffffff !important;
+}
+
+:root.canvas-theme-light .custom-amount-wrapper {
+  background: #f5f5f5 !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .custom-amount-wrapper:focus-within {
+  border-color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .currency-prefix {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .custom-amount-input {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .custom-amount-input::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .payment-methods {
+  background: #f5f5f5 !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .payment-method-item {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .payment-method-item:hover {
+  background: #eeeeee !important;
+}
+
+:root.canvas-theme-light .payment-method-item.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%) !important;
+}
+
+:root.canvas-theme-light .method-name {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .payment-methods-empty {
+  background: #f5f5f5 !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .coupon-input {
+  background: #f5f5f5 !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .coupon-input:focus {
+  border-color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .coupon-input::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .apply-coupon-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+}
+
+:root.canvas-theme-light .apply-coupon-btn:hover {
+  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%) !important;
+}
+
+:root.canvas-theme-light .recharge-error {
+  background: rgba(220, 38, 38, 0.08) !important;
+  border-color: rgba(220, 38, 38, 0.2) !important;
+  color: #dc2626 !important;
+}
+
+:root.canvas-theme-light .recharge-modal-footer {
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .confirm-recharge-btn {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+}
+
+:root.canvas-theme-light .confirm-recharge-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%) !important;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25) !important;
 }
 </style>

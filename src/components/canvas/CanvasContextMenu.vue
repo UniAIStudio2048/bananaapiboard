@@ -18,7 +18,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'upload', 'add-node'])
+const emit = defineEmits(['close', 'upload', 'add-node', 'group'])
 const canvasStore = useCanvasStore()
 
 // 菜单位置样式
@@ -52,11 +52,23 @@ const canRedo = computed(() => canvasStore.canRedo)
 // 是否有剪贴板内容
 const hasClipboard = computed(() => canvasStore.hasClipboard)
 
-// 是否有选中的节点
-const hasSelectedNodes = computed(() => canvasStore.selectedNodeId !== null)
+// 是否有选中的节点（1个或多个）
+const hasSelectedNodes = computed(() => {
+  return canvasStore.selectedNodeIds.length > 0 || canvasStore.selectedNodeId !== null
+})
 
-// 是否有多选节点（至少2个）
-const hasMultipleSelectedNodes = computed(() => canvasStore.selectedNodeIds.length >= 2)
+// 选中的节点数量
+const selectedCount = computed(() => {
+  // 优先使用 selectedNodeIds（框选多节点）
+  if (canvasStore.selectedNodeIds.length > 0) {
+    return canvasStore.selectedNodeIds.length
+  }
+  // 其次检查单选
+  return canvasStore.selectedNodeId ? 1 : 0
+})
+
+// 是否有多选节点（至少2个，可以编组）
+const hasMultipleSelectedNodes = computed(() => selectedCount.value >= 2)
 
 // 上传图片
 function handleUploadImage() {
@@ -90,12 +102,19 @@ function handleRedo() {
 
 // 复制选中的节点
 function handleCopy() {
-  canvasStore.copySelectedNodes()
+  // 确保有选中的节点才复制
+  if (canvasStore.selectedNodeIds.length > 0 || canvasStore.selectedNodeId) {
+    canvasStore.copySelectedNodes()
+  }
   emit('close')
 }
 
 // 粘贴节点
 function handlePaste() {
+  // 需要有剪贴板内容才能粘贴
+  if (!canvasStore.hasClipboard) {
+    return
+  }
   // 在鼠标位置粘贴
   canvasStore.pasteNodes(props.position)
   emit('close')
@@ -109,9 +128,35 @@ function handleSelectAll() {
 
 // 编组选中的节点
 function handleGroup() {
-  if (canvasStore.selectedNodeIds.length >= 2) {
-    canvasStore.createGroup(canvasStore.selectedNodeIds)
+  // 需要至少选中2个节点才能编组
+  if (selectedCount.value < 2) {
+    return
   }
+  
+  console.log('[ContextMenu] 触发编组事件')
+  // 发出编组事件，由 CanvasBoard 处理实际的编组逻辑
+  emit('group')
+  emit('close')
+}
+
+// 删除选中的节点
+function handleDeleteSelected() {
+  // 先获取要删除的节点ID列表
+  let nodeIdsToDelete = []
+  
+  if (canvasStore.selectedNodeIds.length > 0) {
+    nodeIdsToDelete = [...canvasStore.selectedNodeIds]
+  } else if (canvasStore.selectedNodeId) {
+    nodeIdsToDelete = [canvasStore.selectedNodeId]
+  }
+  
+  // 删除节点
+  nodeIdsToDelete.forEach(nodeId => {
+    canvasStore.removeNode(nodeId)
+  })
+  
+  // 清除选择状态
+  canvasStore.clearSelection()
   emit('close')
 }
 
@@ -128,108 +173,142 @@ function handleMenuClick(event) {
     @click="handleMenuClick"
     @contextmenu.prevent
   >
-    <!-- 上传 -->
-    <div class="canvas-context-menu-title">上传资源</div>
-    <div class="canvas-context-menu-item" @click="handleUploadImage">
-      <span class="icon">🖼️</span>
-      上传图片
-      <span class="shortcut"></span>
-    </div>
-    <div class="canvas-context-menu-item" @click="handleUploadVideo">
-      <span class="icon">🎬</span>
-      上传视频
-      <span class="shortcut"></span>
-    </div>
+    <!-- 当有节点被选中时，显示选中操作菜单 -->
+    <template v-if="selectedCount > 0">
+      <div class="canvas-context-menu-title">选中 {{ selectedCount }} 个节点</div>
+      
+      <!-- 编组选项（需要至少2个节点） -->
+      <div 
+        class="canvas-context-menu-item"
+        :class="{ disabled: selectedCount < 2 }"
+        @click="handleGroup"
+      >
+        <span class="icon">📦</span>
+        编组
+        <span class="shortcut">Ctrl+G</span>
+      </div>
+      
+      <div class="canvas-context-menu-divider"></div>
+      
+      <div class="canvas-context-menu-item" @click="handleCopy">
+        <span class="icon">📋</span>
+        复制选中
+        <span class="shortcut">Ctrl+C</span>
+      </div>
+      <div 
+        class="canvas-context-menu-item"
+        :class="{ disabled: !hasClipboard }"
+        @click="handlePaste"
+      >
+        <span class="icon">📄</span>
+        粘贴
+        <span class="shortcut">Ctrl+V</span>
+      </div>
+      
+      <div class="canvas-context-menu-divider"></div>
+      
+      <div class="canvas-context-menu-item delete-item" @click="handleDeleteSelected">
+        <span class="icon">🗑️</span>
+        删除选中
+        <span class="shortcut">Delete</span>
+      </div>
+    </template>
+    
+    <!-- 默认菜单（没有多选节点时） -->
+    <template v-else>
+      <!-- 上传 -->
+      <div class="canvas-context-menu-title">上传资源</div>
+      <div class="canvas-context-menu-item" @click="handleUploadImage">
+        <span class="icon">🖼️</span>
+        上传图片
+        <span class="shortcut"></span>
+      </div>
+      <div class="canvas-context-menu-item" @click="handleUploadVideo">
+        <span class="icon">🎬</span>
+        上传视频
+        <span class="shortcut"></span>
+      </div>
 
-    <div class="canvas-context-menu-divider"></div>
+      <div class="canvas-context-menu-divider"></div>
 
-    <!-- 添加节点 -->
-    <div class="canvas-context-menu-item" @click="handleAddNode">
-      <span class="icon">➕</span>
-      添加节点
-      <span class="shortcut">双击</span>
-    </div>
-    
-    <div class="canvas-context-menu-divider"></div>
-    
-    <!-- 编辑操作 -->
-    <div class="canvas-context-menu-title">编辑</div>
-    <div 
-      class="canvas-context-menu-item" 
-      :class="{ disabled: !canUndo }"
-      @click="canUndo && handleUndo()"
-    >
-      <span class="icon">↩️</span>
-      撤销
-      <span class="shortcut">Ctrl+Z</span>
-    </div>
-    <div 
-      class="canvas-context-menu-item"
-      :class="{ disabled: !canRedo }"
-      @click="canRedo && handleRedo()"
-    >
-      <span class="icon">↪️</span>
-      重做
-      <span class="shortcut">Ctrl+Y</span>
-    </div>
-    
-    <div class="canvas-context-menu-divider"></div>
-    
-    <div 
-      class="canvas-context-menu-item"
-      :class="{ disabled: !hasSelectedNodes }"
-      @click="hasSelectedNodes && handleCopy()"
-    >
-      <span class="icon">📋</span>
-      复制节点
-      <span class="shortcut">Ctrl+C</span>
-    </div>
-    <div 
-      class="canvas-context-menu-item"
-      :class="{ disabled: !hasClipboard }"
-      @click="hasClipboard && handlePaste()"
-    >
-      <span class="icon">📄</span>
-      粘贴节点
-      <span class="shortcut">Ctrl+V</span>
-    </div>
-    
-    <div class="canvas-context-menu-divider"></div>
-    
-    <div class="canvas-context-menu-item" @click="handleSelectAll">
-      <span class="icon">⬜</span>
-      全选
-      <span class="shortcut">Ctrl+A</span>
-    </div>
-    
-    <div 
-      class="canvas-context-menu-item"
-      :class="{ disabled: !hasMultipleSelectedNodes }"
-      @click="hasMultipleSelectedNodes && handleGroup()"
-    >
-      <span class="icon">📦</span>
-      编组
-      <span class="shortcut">Ctrl+G</span>
-    </div>
-    
-    <div class="canvas-context-menu-divider"></div>
-    
-    <!-- 快捷键提示 -->
-    <div class="canvas-context-menu-title">交互提示</div>
-    <div class="canvas-context-menu-hint">
-      <div class="hint-item">
-        <span class="hint-key">Ctrl + 拖动</span>
-        <span class="hint-desc">框选节点</span>
+      <!-- 添加节点 -->
+      <div class="canvas-context-menu-item" @click="handleAddNode">
+        <span class="icon">➕</span>
+        添加节点
+        <span class="shortcut">双击</span>
       </div>
-      <div class="hint-item">
-        <span class="hint-key">空格 + 拖动</span>
-        <span class="hint-desc">平移画布</span>
+      
+      <div class="canvas-context-menu-divider"></div>
+      
+      <!-- 编辑操作 -->
+      <div class="canvas-context-menu-title">编辑</div>
+      <div 
+        class="canvas-context-menu-item" 
+        :class="{ disabled: !canUndo }"
+        @click="canUndo && handleUndo()"
+      >
+        <span class="icon">↩️</span>
+        撤销
+        <span class="shortcut">Ctrl+Z</span>
       </div>
-      <div class="hint-item">
-        <span class="hint-key">滚轮</span>
-        <span class="hint-desc">缩放画布</span>
+      <div 
+        class="canvas-context-menu-item"
+        :class="{ disabled: !canRedo }"
+        @click="canRedo && handleRedo()"
+      >
+        <span class="icon">↪️</span>
+        重做
+        <span class="shortcut">Ctrl+Y</span>
       </div>
-    </div>
+      
+      <div class="canvas-context-menu-divider"></div>
+      
+      <div 
+        class="canvas-context-menu-item"
+        :class="{ disabled: !hasSelectedNodes }"
+        @click="hasSelectedNodes && handleCopy()"
+      >
+        <span class="icon">📋</span>
+        复制节点
+        <span class="shortcut">Ctrl+C</span>
+      </div>
+      <div 
+        class="canvas-context-menu-item"
+        :class="{ disabled: !hasClipboard }"
+        @click="hasClipboard && handlePaste()"
+      >
+        <span class="icon">📄</span>
+        粘贴节点
+        <span class="shortcut">Ctrl+V</span>
+      </div>
+      
+      <div class="canvas-context-menu-divider"></div>
+      
+      <div class="canvas-context-menu-item" @click="handleSelectAll">
+        <span class="icon">⬜</span>
+        全选
+        <span class="shortcut">Ctrl+A</span>
+      </div>
+      
+      <div class="canvas-context-menu-divider"></div>
+      
+      <!-- 快捷键提示 -->
+      <div class="canvas-context-menu-title">交互提示</div>
+      <div class="canvas-context-menu-hint">
+        <div class="hint-item">
+          <span class="hint-key">Ctrl + 拖动</span>
+          <span class="hint-desc">框选节点</span>
+        </div>
+        <div class="hint-item">
+          <span class="hint-key">空格 + 拖动</span>
+          <span class="hint-desc">平移画布</span>
+        </div>
+        <div class="hint-item">
+          <span class="hint-key">滚轮</span>
+          <span class="hint-desc">缩放画布</span>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -271,6 +350,15 @@ function handleMenuClick(event) {
 .canvas-context-menu-item.disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+.canvas-context-menu-item.delete-item {
+  color: #ef4444;
+}
+
+.canvas-context-menu-item.delete-item:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #dc2626;
 }
 
 .canvas-context-menu-item .icon {
@@ -364,6 +452,15 @@ function handleMenuClick(event) {
 
 :root.canvas-theme-light .hint-desc {
   color: #a8a29e;
+}
+
+:root.canvas-theme-light .canvas-context-menu-item.delete-item {
+  color: #dc2626;
+}
+
+:root.canvas-theme-light .canvas-context-menu-item.delete-item:hover {
+  background: rgba(220, 38, 38, 0.08);
+  color: #b91c1c;
 }
 </style>
 

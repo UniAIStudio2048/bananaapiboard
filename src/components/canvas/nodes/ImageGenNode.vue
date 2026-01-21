@@ -436,10 +436,10 @@ async function downloadImage() {
     window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error('[ImageGenNode] 下载图片失败:', error)
-    // 回退：使用页面跳转下载
+    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
       const { buildDownloadUrl } = await import('@/api/client')
-      window.location.href = buildDownloadUrl(imageUrl, filename)
+      window.open(buildDownloadUrl(imageUrl, filename), '_blank')
     } catch (e) {
       console.error('[ImageGenNode] 所有下载方式都失败:', e)
     }

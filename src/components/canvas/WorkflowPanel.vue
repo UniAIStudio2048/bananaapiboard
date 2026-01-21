@@ -1662,3 +1662,332 @@ defineExpose({
   }
 }
 </style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   WorkflowPanel 白昼模式样式适配
+   ======================================== */
+
+/* 面板背景 */
+:root.canvas-theme-light .workflow-panel {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 头部 */
+:root.canvas-theme-light .workflow-panel .panel-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .header-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .header-title svg {
+  opacity: 0.7 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .close-btn {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .close-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1c1917 !important;
+}
+
+/* 标签页 */
+:root.canvas-theme-light .workflow-panel .panel-tabs {
+  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .tab-btn {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .tab-btn:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: rgba(0, 0, 0, 0.8) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .tab-btn.active {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .tab-count {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .tab-btn.active .tab-count {
+  background: rgba(0, 0, 0, 0.12) !important;
+}
+
+/* 工具栏 */
+:root.canvas-theme-light .workflow-panel .panel-toolbar {
+  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .search-box {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .search-box svg {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .search-input {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .search-input::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .new-btn {
+  background: #1c1917 !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .workflow-panel .new-btn:hover {
+  background: #292524 !important;
+}
+
+/* 配额 */
+:root.canvas-theme-light .workflow-panel .quota-bar {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .quota-used {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .quota-total {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .quota-progress {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .quota-fill {
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 分类筛选 */
+:root.canvas-theme-light .workflow-panel .category-bar {
+  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .category-btn {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .category-btn:hover {
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .category-btn.active {
+  background: #3b82f6 !important;
+  border-color: #3b82f6 !important;
+  color: white !important;
+}
+
+/* 双列布局 */
+:root.canvas-theme-light .workflow-panel .column {
+  background: rgba(0, 0, 0, 0.015) !important;
+  border-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .column-header {
+  background: rgba(0, 0, 0, 0.025) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .column-count {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .clear-history-btn {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .clear-history-btn:hover {
+  background: rgba(255, 100, 100, 0.1) !important;
+  color: #ef4444 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .column-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .panel-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .panel-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2) !important;
+}
+
+/* 加载状态 */
+:root.canvas-theme-light .workflow-panel .loading-state .spinner {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  border-top-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 空状态 */
+:root.canvas-theme-light .workflow-panel .empty-state {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .empty-state p {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .empty-hint {
+  color: rgba(0, 0, 0, 0.3) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .switch-tab-btn {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .switch-tab-btn:hover {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 工作流列表项 */
+:root.canvas-theme-light .workflow-panel .workflow-item {
+  border-color: transparent !important;
+}
+
+:root.canvas-theme-light .workflow-panel .workflow-item:hover {
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .workflow-item.selected {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .workflow-item.history-item {
+  border-left-color: rgba(59, 130, 246, 0.25) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .workflow-item.history-item.selected {
+  border-left-color: #3b82f6 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .item-icon {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .item-icon.history-icon {
+  background: rgba(59, 130, 246, 0.1) !important;
+  color: rgba(59, 130, 246, 0.8) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .item-name {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .item-meta {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .action-btn {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .load-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .delete-btn:hover {
+  background: rgba(255, 100, 100, 0.1) !important;
+  color: #ef4444 !important;
+}
+
+/* 模板卡片 */
+:root.canvas-theme-light .workflow-panel .template-card {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .template-card:hover {
+  border-color: #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.04) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .template-icon {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .template-name {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .template-desc {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .node-count {
+  color: rgba(0, 0, 0, 0.45) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 底部 */
+:root.canvas-theme-light .workflow-panel .panel-footer {
+  border-top-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .tip {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 删除确认弹窗 */
+:root.canvas-theme-light .workflow-panel .delete-modal {
+  background: rgba(0, 0, 0, 0.3) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .delete-dialog {
+  background: #fff !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .delete-dialog p {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .btn-cancel {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .btn-cancel:hover {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .btn-confirm {
+  background: #ef4444 !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .workflow-panel .btn-confirm:hover {
+  background: #dc2626 !important;
+}
+</style>

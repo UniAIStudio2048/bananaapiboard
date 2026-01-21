@@ -664,9 +664,9 @@ async function handleDownload() {
         URL.revokeObjectURL(blobUrl)
       }, 100)
     } catch (fetchError) {
-      console.warn('[AssetPanel] fetch 下载失败，使用页面跳转下载:', fetchError)
-      // 回退：使用页面跳转下载
-      window.location.href = downloadUrl
+      console.warn('[AssetPanel] fetch 下载失败，使用新窗口下载:', fetchError)
+      // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
+      window.open(downloadUrl, '_blank')
     }
   } catch (error) {
     console.error('[AssetPanel] 下载失败:', error)
@@ -3479,4 +3479,527 @@ onUnmounted(() => {
 }
 </style>
 
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   AssetPanel 白昼模式样式适配
+   ======================================== */
 
+/* 面板背景 */
+:root.canvas-theme-light .asset-panel {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 250, 252, 0.98) 100%) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 
+    0 24px 80px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.03) inset !important;
+}
+
+/* 头部 */
+:root.canvas-theme-light .asset-panel .panel-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .asset-panel .header-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .asset-panel .header-title svg {
+  color: #7c3aed !important;
+}
+
+:root.canvas-theme-light .asset-panel .close-btn {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .asset-panel .close-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1c1917 !important;
+}
+
+/* 文件类型筛选 */
+:root.canvas-theme-light .asset-panel .type-filter {
+  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .asset-panel .type-btn {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .asset-panel .type-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .asset-panel .type-btn.active {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.12) 0%, rgba(99, 102, 241, 0.08) 100%) !important;
+  border-color: rgba(124, 58, 237, 0.3) !important;
+  color: #7c3aed !important;
+}
+
+:root.canvas-theme-light .asset-panel .type-count {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .asset-panel .type-btn.active .type-count {
+  background: rgba(124, 58, 237, 0.2) !important;
+  color: #6d28d9 !important;
+}
+
+/* 标签筛选 */
+:root.canvas-theme-light .asset-panel .tag-filter {
+  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-btn {
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-btn:hover {
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  color: rgba(0, 0, 0, 0.8) !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-btn.active {
+  background: rgba(0, 0, 0, 0.08) !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  color: #1c1917 !important;
+}
+
+/* 搜索栏 */
+:root.canvas-theme-light .asset-panel .search-bar {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .asset-panel .search-bar:focus-within {
+  border-color: rgba(124, 58, 237, 0.3) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .asset-panel .search-bar svg {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .asset-panel .search-input {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .asset-panel .search-input::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .asset-panel .search-clear {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .asset-panel .search-clear:hover {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+/* 资产列表 */
+:root.canvas-theme-light .asset-panel .asset-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+:root.canvas-theme-light .asset-panel .asset-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .asset-panel .asset-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2) !important;
+}
+
+/* 加载状态 */
+:root.canvas-theme-light .asset-panel .loading-state {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .asset-panel .spinner {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  border-top-color: #7c3aed !important;
+}
+
+/* 空状态 */
+:root.canvas-theme-light .asset-panel .empty-state p {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .asset-panel .empty-hint {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 资产卡片 */
+:root.canvas-theme-light .asset-panel .asset-card {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .asset-panel .asset-card:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+}
+
+/* 资产预览 */
+:root.canvas-theme-light .asset-panel .asset-preview {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .asset-panel .text-preview {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .asset-panel .audio-preview {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(124, 58, 237, 0.08) 100%) !important;
+}
+
+:root.canvas-theme-light .asset-panel .audio-wave span {
+  background: rgba(124, 58, 237, 0.5) !important;
+}
+
+/* 角色预览 */
+:root.canvas-theme-light .asset-panel .character-preview {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%) !important;
+}
+
+:root.canvas-theme-light .asset-panel .character-placeholder {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%) !important;
+}
+
+/* 资产信息 */
+:root.canvas-theme-light .asset-panel .asset-name {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .asset-panel .asset-meta {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .asset-panel .asset-tag {
+  background: rgba(124, 58, 237, 0.1) !important;
+  color: rgba(124, 58, 237, 0.85) !important;
+}
+
+:root.canvas-theme-light .asset-panel .asset-tag.more {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 角色用户名标签 */
+:root.canvas-theme-light .asset-panel .character-username-tag {
+  color: rgba(99, 102, 241, 0.9) !important;
+  background: rgba(99, 102, 241, 0.1) !important;
+}
+
+:root.canvas-theme-light .asset-panel .character-username-tag.clickable:hover {
+  background: rgba(99, 102, 241, 0.18) !important;
+  color: #6366f1 !important;
+}
+
+/* 操作按钮 */
+:root.canvas-theme-light .asset-panel .action-btn {
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .asset-panel .action-btn:hover {
+  background: rgba(255, 255, 255, 1) !important;
+}
+
+:root.canvas-theme-light .asset-panel .favorite-btn.active {
+  color: #f59e0b !important;
+}
+
+:root.canvas-theme-light .asset-panel .delete-btn:hover {
+  background: rgba(239, 68, 68, 0.9) !important;
+  color: #fff !important;
+}
+
+/* 底部 */
+:root.canvas-theme-light .asset-panel .panel-footer {
+  border-top-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .asset-panel .tip {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 标签管理弹窗 */
+:root.canvas-theme-light .asset-panel .tag-manager-overlay {
+  background: rgba(0, 0, 0, 0.3) !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-manager {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-manager-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-manager-header h3 {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .asset-panel .current-tags {
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+
+:root.canvas-theme-light .asset-panel .editable-tag {
+  background: rgba(124, 58, 237, 0.12) !important;
+  color: #7c3aed !important;
+}
+
+:root.canvas-theme-light .asset-panel .remove-tag {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .asset-panel .remove-tag:hover {
+  color: #ef4444 !important;
+}
+
+:root.canvas-theme-light .asset-panel .no-tags {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-input {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-input:focus {
+  border-color: rgba(124, 58, 237, 0.4) !important;
+}
+
+:root.canvas-theme-light .asset-panel .add-tag-btn {
+  background: #7c3aed !important;
+}
+
+:root.canvas-theme-light .asset-panel .add-tag-btn:hover {
+  background: #6d28d9 !important;
+}
+
+:root.canvas-theme-light .asset-panel .quick-tags-label {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .asset-panel .quick-tag-btn {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .asset-panel .quick-tag-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #1c1917 !important;
+}
+
+/* 右键菜单 */
+:root.canvas-theme-light .asset-context-menu {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.03) inset !important;
+}
+
+:root.canvas-theme-light .asset-context-menu .context-menu-item {
+  color: rgba(0, 0, 0, 0.8) !important;
+}
+
+:root.canvas-theme-light .asset-context-menu .context-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+:root.canvas-theme-light .asset-context-menu .context-menu-item.danger {
+  color: #ef4444 !important;
+}
+
+:root.canvas-theme-light .asset-context-menu .context-menu-item.danger:hover {
+  background: rgba(239, 68, 68, 0.08) !important;
+}
+
+:root.canvas-theme-light .asset-context-menu .context-menu-divider {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 全屏预览 */
+:root.canvas-theme-light .asset-preview-overlay {
+  background: rgba(255, 255, 255, 0.95) !important;
+}
+
+:root.canvas-theme-light .asset-preview-modal .preview-close-btn {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .asset-preview-modal .preview-close-btn:hover {
+  background: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .asset-preview-modal .preview-text {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .asset-preview-modal .preview-text h3 {
+  color: #1c1917 !important;
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .asset-preview-modal .preview-text .text-content {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .asset-preview-modal .preview-info {
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+
+:root.canvas-theme-light .asset-preview-modal .info-label {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .asset-preview-modal .info-value {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .asset-preview-modal .apply-btn {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%) !important;
+}
+
+:root.canvas-theme-light .asset-preview-modal .apply-btn:hover {
+  box-shadow: 0 8px 30px rgba(124, 58, 237, 0.35) !important;
+}
+
+/* 添加角色弹窗 */
+:root.canvas-theme-light .add-character-overlay {
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .add-character-modal {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .add-character-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .add-character-header h3 {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .add-character-desc {
+  color: rgba(0, 0, 0, 0.6) !important;
+  background: rgba(99, 102, 241, 0.06) !important;
+  border-color: rgba(99, 102, 241, 0.15) !important;
+}
+
+:root.canvas-theme-light .add-character-error {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+}
+
+:root.canvas-theme-light .upload-placeholder {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .upload-placeholder:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(124, 58, 237, 0.3) !important;
+}
+
+:root.canvas-theme-light .upload-text {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .upload-hint {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .form-field label {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+:root.canvas-theme-light .form-field input {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .form-field input:focus {
+  border-color: rgba(124, 58, 237, 0.4) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .form-field input::placeholder {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .field-hint {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .add-character-footer {
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .cancel-btn {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .cancel-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .submit-btn {
+  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%) !important;
+}
+
+/* Sora角色库悬停添加按钮 */
+:root.canvas-theme-light .add-character-btn {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.12) 0%, rgba(59, 130, 246, 0.1) 100%) !important;
+  border-color: rgba(124, 58, 237, 0.35) !important;
+  color: #7c3aed !important;
+}
+
+:root.canvas-theme-light .add-character-btn:hover {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.2) 0%, rgba(59, 130, 246, 0.15) 100%) !important;
+  border-color: rgba(124, 58, 237, 0.5) !important;
+  color: #6d28d9 !important;
+}
+
+:root.canvas-theme-light .add-character-btn .btn-icon {
+  color: #7c3aed !important;
+}
+
+:root.canvas-theme-light .add-character-dropdown::before {
+  background: rgba(124, 58, 237, 0.12) !important;
+  border-left-color: rgba(124, 58, 237, 0.35) !important;
+  border-top-color: rgba(124, 58, 237, 0.35) !important;
+}
+
+/* 复制成功提示 */
+:root.canvas-theme-light .copy-toast {
+  background: rgba(34, 197, 94, 0.95) !important;
+}
+
+/* 名称编辑输入框 */
+:root.canvas-theme-light .asset-panel .name-edit-input {
+  background: #fff !important;
+  border-color: #3b82f6 !important;
+  color: #1c1917 !important;
+}
+</style>

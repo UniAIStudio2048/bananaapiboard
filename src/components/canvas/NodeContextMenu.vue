@@ -387,10 +387,10 @@ async function downloadVideo() {
     emit('close')
   } catch (error) {
     console.error('下载视频失败:', error)
-    // 回退：使用页面跳转下载
+    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
       const { buildVideoDownloadUrl } = await import('@/api/client')
-      window.location.href = buildVideoDownloadUrl(videoUrl.value, filename)
+      window.open(buildVideoDownloadUrl(videoUrl.value, filename), '_blank')
     } catch (e) {
       console.error('所有下载方式都失败:', e)
     }
@@ -497,10 +497,10 @@ async function downloadImage() {
     emit('close')
   } catch (error) {
     console.error('下载图片失败:', error)
-    // 回退：使用页面跳转下载
+    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
       const { buildDownloadUrl } = await import('@/api/client')
-      window.location.href = buildDownloadUrl(imageUrl.value, filename)
+      window.open(buildDownloadUrl(imageUrl.value, filename), '_blank')
     } catch (e) {
       console.error('所有下载方式都失败:', e)
     }

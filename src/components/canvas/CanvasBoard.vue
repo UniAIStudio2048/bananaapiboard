@@ -824,6 +824,15 @@ onPaneContextMenu((event) => {
   // 关闭其他菜单
   canvasStore.closeNodeSelector()
   
+  // 🔧 确保选中状态是最新的（从 VueFlow 同步）
+  const currentSelectedNodes = getSelectedNodes.value
+  if (currentSelectedNodes.length > 0) {
+    const nodeIds = currentSelectedNodes.map(n => n.id)
+    selectedNodeIds.value = nodeIds
+    canvasStore.setSelectedNodeIds(nodeIds)
+    console.log('[Canvas] 右键菜单 - 同步选中节点:', nodeIds.length, '个')
+  }
+  
   // 记录鼠标位置
   lastMousePosition.value = { x: event.clientX, y: event.clientY }
   
@@ -1305,6 +1314,14 @@ function handleNativeContextMenu(event) {
   
   // 关闭其他菜单
   canvasStore.closeNodeSelector()
+  
+  // 🔧 确保选中状态是最新的（从 VueFlow 同步）
+  const currentSelectedNodes = getSelectedNodes.value
+  if (currentSelectedNodes.length > 0) {
+    const nodeIds = currentSelectedNodes.map(n => n.id)
+    selectedNodeIds.value = nodeIds
+    canvasStore.setSelectedNodeIds(nodeIds)
+  }
   
   // 记录鼠标位置
   lastMousePosition.value = { x: event.clientX, y: event.clientY }
@@ -1981,7 +1998,9 @@ defineExpose({
   // 获取当前视口
   getViewport: () => {
     return getViewport ? getViewport() : canvasStore.viewport
-  }
+  },
+  // 编组选中的节点
+  groupSelectedNodes
 })
 
 onMounted(() => {

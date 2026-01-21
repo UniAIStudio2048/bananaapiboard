@@ -790,3 +790,164 @@ function handleClose() {
 }
 </style>
 
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   SaveWorkflowDialog 白昼模式样式适配
+   ======================================== */
+
+/* 遮罩层 */
+:root.canvas-theme-light .dialog-overlay {
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 对话框容器 */
+:root.canvas-theme-light .dialog-container {
+  background: #ffffff !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 
+    0 24px 80px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 头部 */
+:root.canvas-theme-light .dialog-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .dialog-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .dialog-close {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .dialog-close:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1c1917 !important;
+}
+
+/* 配额信息 */
+:root.canvas-theme-light .quota-info {
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+
+:root.canvas-theme-light .quota-label {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .quota-value {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .quota-percentage {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .vip-tip {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.06)) !important;
+  border-color: rgba(99, 102, 241, 0.2) !important;
+  color: #6366f1 !important;
+}
+
+/* 表单 */
+:root.canvas-theme-light .form-label {
+  color: rgba(0, 0, 0, 0.75) !important;
+}
+
+:root.canvas-theme-light .form-input,
+:root.canvas-theme-light .form-textarea {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .form-input:focus,
+:root.canvas-theme-light .form-textarea:focus {
+  background: #fff !important;
+  border-color: rgba(59, 130, 246, 0.5) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+:root.canvas-theme-light .form-input::placeholder,
+:root.canvas-theme-light .form-textarea::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 错误信息 */
+:root.canvas-theme-light .error-message {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.25) !important;
+  color: #dc2626 !important;
+}
+
+/* 工作流信息 */
+:root.canvas-theme-light .workflow-info {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+:root.canvas-theme-light .info-label {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .info-value {
+  color: #3b82f6 !important;
+}
+
+:root.canvas-theme-light .info-value.large-count {
+  color: #d97706 !important;
+}
+
+:root.canvas-theme-light .info-value.size-normal {
+  color: #059669 !important;
+}
+
+:root.canvas-theme-light .info-value.size-warning {
+  color: #d97706 !important;
+}
+
+:root.canvas-theme-light .info-value.size-danger {
+  color: #dc2626 !important;
+}
+
+:root.canvas-theme-light .info-badge {
+  background: rgba(217, 119, 6, 0.12) !important;
+  color: #d97706 !important;
+}
+
+:root.canvas-theme-light .info-badge.warning {
+  background: rgba(217, 119, 6, 0.12) !important;
+  color: #d97706 !important;
+}
+
+:root.canvas-theme-light .info-badge.danger {
+  background: rgba(220, 38, 38, 0.1) !important;
+  color: #dc2626 !important;
+}
+
+/* 底部按钮 */
+:root.canvas-theme-light .dialog-footer {
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .btn-secondary {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .btn-secondary:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .btn-primary {
+  background: linear-gradient(135deg, #3b82f6, #2563eb) !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .btn-primary:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35) !important;
+}
+</style>
+

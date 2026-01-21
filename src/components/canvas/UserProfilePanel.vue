@@ -366,14 +366,150 @@ async function redeemVoucher() {
   
   try {
     const result = await redeemVoucherApi(voucherCode.value.trim())
-    voucherSuccess.value = result.message || t('voucher.redeemSuccess')
+    
+    // 获取兑换券的面值余额
+    const voucherBalance = result.balance || 0
+    
+    console.log('[Canvas/redeemVoucher] 兑换成功，兑换券面值余额:', voucherBalance, '分 (¥' + (voucherBalance/100).toFixed(2) + ')')
+    
+    // 如果兑换券有余额，尝试自动购买套餐
+    if (voucherBalance > 0) {
+      console.log('[Canvas/redeemVoucher] 开始自动购买套餐流程...')
+      const autoPurchaseResult = await tryAutoPurchasePackage(voucherBalance)
+      
+      if (autoPurchaseResult.success) {
+        // 自动购买成功
+        let actionText = '已自动购买'
+        let detailText = ''
+        if (autoPurchaseResult.isRenewal) {
+          actionText = '已自动续费'
+          detailText = `\n• 有效期延长：${autoPurchaseResult.durationDays}天\n• 累加积分：+${autoPurchaseResult.points}`
+        } else if (autoPurchaseResult.isUpgrade) {
+          actionText = '已自动升级'
+          detailText = `\n• 赠送积分：${autoPurchaseResult.points}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
+        } else {
+          detailText = `\n• 赠送积分：${autoPurchaseResult.points}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
+        }
+        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(voucherBalance / 100).toFixed(2)} 余额\n\n🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}\n\n💰 剩余余额：¥${(autoPurchaseResult.remainingBalance / 100).toFixed(2)}`
+      } else if (autoPurchaseResult.reason === 'no_package') {
+        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(voucherBalance / 100).toFixed(2)} 余额\n\n💡 ${autoPurchaseResult.message}`
+      } else if (autoPurchaseResult.reason === 'purchase_failed') {
+        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(voucherBalance / 100).toFixed(2)} 余额\n\n⚠️ 自动购买套餐失败：${autoPurchaseResult.message}`
+      } else {
+        voucherSuccess.value = result.message || t('voucher.redeemSuccess')
+      }
+    } else if (result.points > 0) {
+      voucherSuccess.value = `✅ 成功兑换 ${result.points} 积分！`
+    } else {
+      voucherSuccess.value = result.message || t('voucher.redeemSuccess')
+    }
+    
     voucherCode.value = ''
     emit('update')
-    setTimeout(() => { voucherSuccess.value = '' }, 3000)
+    // 延长显示时间让用户看到详情
+    setTimeout(() => { voucherSuccess.value = '' }, 8000)
   } catch (e) {
     voucherError.value = e.message || t('voucher.redeemFailed')
   } finally {
     voucherLoading.value = false
+  }
+}
+
+// 尝试自动购买套餐（使用兑换券面值余额）
+async function tryAutoPurchasePackage(voucherBalance) {
+  try {
+    if (!token) {
+      return { success: false, reason: 'no_token', message: '未登录' }
+    }
+    
+    console.log('[Canvas/tryAutoPurchasePackage] 兑换券面值:', voucherBalance, '分')
+    
+    // 获取套餐列表
+    const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
+    const pkgRes = await fetch('/api/packages', { headers })
+    if (!pkgRes.ok) {
+      return { success: false, reason: 'fetch_failed', message: '获取套餐列表失败' }
+    }
+    const pkgData = await pkgRes.json()
+    const pkgList = pkgData.packages || []
+    
+    if (pkgList.length === 0) {
+      return { success: false, reason: 'no_package', message: '暂无可用套餐' }
+    }
+    
+    // 获取当前用户套餐
+    const activeRes = await fetch('/api/user/package', { headers })
+    let currentPackage = null
+    if (activeRes.ok) {
+      const activeData = await activeRes.json()
+      currentPackage = activeData.package
+    }
+    
+    // 套餐等级定义
+    const packageOrder = { daily: 1, weekly: 2, monthly: 3, quarterly: 4, yearly: 5 }
+    const currentOrder = currentPackage ? (packageOrder[currentPackage.package_type] || 0) : 0
+    
+    // 找到兑换券面值范围内可以购买的套餐（同级续费或升级，不能降级）
+    const affordablePackages = pkgList.filter(pkg => {
+      if (pkg.price > voucherBalance) return false
+      const newOrder = packageOrder[pkg.type] || 0
+      if (currentPackage && newOrder < currentOrder) return false
+      return true
+    })
+    
+    if (affordablePackages.length === 0) {
+      const minPrice = pkgList.reduce((min, p) => (!min || p.price < min.price) ? p : min, null)?.price || 0
+      let hint = '兑换券面值不足以购买套餐'
+      if (minPrice > 0 && voucherBalance < minPrice) {
+        hint = `最低套餐需要 ¥${(minPrice/100).toFixed(2)}，兑换券面值 ¥${(voucherBalance/100).toFixed(2)} 不足`
+      }
+      return { success: false, reason: 'no_package', message: hint }
+    }
+    
+    // 按套餐等级排序，选择最大的
+    affordablePackages.sort((a, b) => (packageOrder[b.type] || 0) - (packageOrder[a.type] || 0))
+    
+    const selectedPackage = affordablePackages[0]
+    const selectedOrder = packageOrder[selectedPackage.type] || 0
+    const isRenewal = currentPackage && selectedOrder === currentOrder
+    const isUpgrade = currentPackage && selectedOrder > currentOrder
+    
+    console.log(`[Canvas/tryAutoPurchasePackage] 选择套餐: "${selectedPackage.name}" (${isRenewal ? '续费' : isUpgrade ? '升级' : '新购'})`)
+    
+    // 购买套餐
+    const purchaseRes = await fetch('/api/packages/purchase', {
+      method: 'POST',
+      headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ package_id: selectedPackage.id })
+    })
+    
+    const purchaseData = await purchaseRes.json()
+    
+    if (purchaseRes.ok && !purchaseData.pay_url) {
+      // 购买成功，获取最新余额
+      const userRes = await fetch('/api/user/me', { headers })
+      let remainingBalance = 0
+      if (userRes.ok) {
+        const userData = await userRes.json()
+        remainingBalance = userData.balance || 0
+      }
+      
+      return {
+        success: true,
+        packageName: selectedPackage.name,
+        points: selectedPackage.points,
+        isRenewal,
+        isUpgrade,
+        concurrentLimit: selectedPackage.concurrent_limit,
+        durationDays: selectedPackage.duration_days,
+        remainingBalance
+      }
+    } else {
+      return { success: false, reason: 'purchase_failed', message: purchaseData.message || '购买失败' }
+    }
+  } catch (e) {
+    console.error('[Canvas/tryAutoPurchasePackage] 异常:', e)
+    return { success: false, reason: 'error', message: e.message || '网络错误' }
   }
 }
 
@@ -596,12 +732,11 @@ async function applyPurchaseCoupon() {
       'Content-Type': 'application/json'
     }
     
-    const res = await fetch('/api/coupons/validate', {
+    const res = await fetch('/api/user/coupons/validate', {
       method: 'POST',
       headers,
       body: JSON.stringify({
         code: purchaseCouponCode.value.trim().toUpperCase(),
-        package_id: selectedPackage.value?.id,
         amount: selectedPackage.value?.price
       })
     })
@@ -5014,6 +5149,852 @@ function getLedgerTypeText(type) {
 .modal-fade-enter-from,
 .modal-fade-leave-to {
   opacity: 0;
+}
+</style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   UserProfilePanel 白昼模式样式适配
+   ======================================== */
+
+/* 面板背景 */
+:root.canvas-theme-light .profile-panel {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.03) inset !important;
+}
+
+/* 头部 */
+:root.canvas-theme-light .profile-panel .panel-header {
+  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .profile-panel .user-avatar {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+}
+
+:root.canvas-theme-light .profile-panel .user-name {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .user-level {
+  background: rgba(99, 102, 241, 0.1) !important;
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .profile-panel .close-btn {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .profile-panel .close-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1c1917 !important;
+}
+
+/* 积分信息 */
+:root.canvas-theme-light .profile-panel .points-section {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.03) 100%) !important;
+  border-color: rgba(99, 102, 241, 0.1) !important;
+}
+
+:root.canvas-theme-light .profile-panel .points-label {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.canvas-theme-light .profile-panel .points-value {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .points-detail {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .profile-panel .points-icon {
+  color: #f59e0b !important;
+}
+
+/* 余额信息 */
+:root.canvas-theme-light .profile-panel .balance-section {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .profile-panel .balance-label {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.canvas-theme-light .profile-panel .balance-value {
+  color: #1c1917 !important;
+}
+
+/* 菜单项 */
+:root.canvas-theme-light .profile-panel .menu-section {
+  border-top-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .profile-panel .menu-item {
+  color: rgba(0, 0, 0, 0.75) !important;
+}
+
+:root.canvas-theme-light .profile-panel .menu-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .menu-item.active {
+  background: rgba(99, 102, 241, 0.08) !important;
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .profile-panel .menu-item svg {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .profile-panel .menu-item:hover svg,
+:root.canvas-theme-light .profile-panel .menu-item.active svg {
+  color: currentColor !important;
+}
+
+:root.canvas-theme-light .profile-panel .menu-divider {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 内容区 */
+:root.canvas-theme-light .profile-panel .panel-content {
+  background: transparent !important;
+}
+
+:root.canvas-theme-light .profile-panel .panel-content::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+:root.canvas-theme-light .profile-panel .panel-content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .profile-panel .panel-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2) !important;
+}
+
+/* 子面板标题 */
+:root.canvas-theme-light .profile-panel .section-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .section-desc {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 卡片样式 */
+:root.canvas-theme-light .profile-panel .card,
+:root.canvas-theme-light .profile-panel .info-card,
+:root.canvas-theme-light .profile-panel .stat-card {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .profile-panel .card:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .profile-panel .card-title,
+:root.canvas-theme-light .profile-panel .stat-label {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.canvas-theme-light .profile-panel .card-value,
+:root.canvas-theme-light .profile-panel .stat-value {
+  color: #1c1917 !important;
+}
+
+/* 输入框 */
+:root.canvas-theme-light .profile-panel input,
+:root.canvas-theme-light .profile-panel textarea,
+:root.canvas-theme-light .profile-panel select {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel input:focus,
+:root.canvas-theme-light .profile-panel textarea:focus,
+:root.canvas-theme-light .profile-panel select:focus {
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+
+:root.canvas-theme-light .profile-panel input::placeholder,
+:root.canvas-theme-light .profile-panel textarea::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 按钮 */
+:root.canvas-theme-light .profile-panel .primary-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .profile-panel .primary-btn:hover {
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35) !important;
+}
+
+:root.canvas-theme-light .profile-panel .secondary-btn {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .profile-panel .secondary-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .danger-btn {
+  background: rgba(239, 68, 68, 0.08) !important;
+  color: #ef4444 !important;
+}
+
+:root.canvas-theme-light .profile-panel .danger-btn:hover {
+  background: rgba(239, 68, 68, 0.15) !important;
+}
+
+/* 套餐卡片 */
+:root.canvas-theme-light .profile-panel .package-card {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-card:hover {
+  border-color: rgba(99, 102, 241, 0.3) !important;
+  background: rgba(99, 102, 241, 0.03) !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-card.selected {
+  border-color: #6366f1 !important;
+  background: rgba(99, 102, 241, 0.06) !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-name {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-price {
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-desc {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-feature {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+/* 邀请码 */
+:root.canvas-theme-light .profile-panel .invite-code-box {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .invite-code {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .copy-btn {
+  background: #6366f1 !important;
+  color: #fff !important;
+}
+
+/* 账单列表 */
+:root.canvas-theme-light .profile-panel .ledger-item {
+  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .profile-panel .ledger-item:hover {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+:root.canvas-theme-light .profile-panel .ledger-desc {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .ledger-time {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .profile-panel .ledger-amount.positive {
+  color: #10b981 !important;
+}
+
+:root.canvas-theme-light .profile-panel .ledger-amount.negative {
+  color: #ef4444 !important;
+}
+
+/* 标签页 */
+:root.canvas-theme-light .profile-panel .tab-btn {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .profile-panel .tab-btn:hover {
+  color: rgba(0, 0, 0, 0.8) !important;
+}
+
+:root.canvas-theme-light .profile-panel .tab-btn.active {
+  color: #6366f1 !important;
+  border-bottom-color: #6366f1 !important;
+}
+
+/* 快捷金额按钮 */
+:root.canvas-theme-light .profile-panel .quick-amount-btn {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .profile-panel .quick-amount-btn:hover {
+  border-color: rgba(99, 102, 241, 0.3) !important;
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .profile-panel .quick-amount-btn.selected {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-color: #6366f1 !important;
+  color: #6366f1 !important;
+}
+
+/* 支付方式 */
+:root.canvas-theme-light .profile-panel .payment-method {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .payment-method:hover {
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .profile-panel .payment-method.selected {
+  border-color: #6366f1 !important;
+  background: rgba(99, 102, 241, 0.04) !important;
+}
+
+:root.canvas-theme-light .profile-panel .payment-method-name {
+  color: #1c1917 !important;
+}
+
+/* 设置项 */
+:root.canvas-theme-light .profile-panel .setting-item {
+  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .profile-panel .setting-label {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .setting-desc {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 开关按钮 */
+:root.canvas-theme-light .profile-panel .toggle-switch {
+  background: rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .profile-panel .toggle-switch.active {
+  background: #6366f1 !important;
+}
+
+/* 连线样式选择 */
+:root.canvas-theme-light .profile-panel .edge-style-btn {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .profile-panel .edge-style-btn:hover {
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .edge-style-btn.active {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-color: #6366f1 !important;
+  color: #6366f1 !important;
+}
+
+/* 对话框 */
+:root.canvas-theme-light .profile-panel .dialog-overlay {
+  background: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .profile-panel .dialog-content {
+  background: #fff !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .profile-panel .dialog-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .dialog-message {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+/* 充值卡片 */
+:root.canvas-theme-light .profile-panel .recharge-card {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .recharge-card:hover {
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+:root.canvas-theme-light .profile-panel .recharge-card.selected {
+  border-color: #6366f1 !important;
+  background: rgba(99, 102, 241, 0.04) !important;
+}
+
+:root.canvas-theme-light .profile-panel .recharge-amount {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .recharge-bonus {
+  color: #10b981 !important;
+}
+
+/* 空状态 */
+:root.canvas-theme-light .profile-panel .empty-state {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+:root.canvas-theme-light .profile-panel .empty-state svg {
+  color: rgba(0, 0, 0, 0.25) !important;
+}
+
+/* 提示信息 */
+:root.canvas-theme-light .profile-panel .tip,
+:root.canvas-theme-light .profile-panel .hint {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .profile-panel .success-text {
+  color: #10b981 !important;
+}
+
+:root.canvas-theme-light .profile-panel .error-text {
+  color: #ef4444 !important;
+}
+
+:root.canvas-theme-light .profile-panel .warning-text {
+  color: #f59e0b !important;
+}
+
+/* 标签 */
+:root.canvas-theme-light .profile-panel .tag {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .profile-panel .tag.primary {
+  background: rgba(99, 102, 241, 0.1) !important;
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .profile-panel .tag.success {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #10b981 !important;
+}
+
+/* 内嵌支付弹窗 */
+:root.canvas-theme-light .profile-panel .payment-embed-overlay {
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .profile-panel .payment-embed-modal {
+  background: #fff !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .profile-panel .payment-embed-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .payment-embed-title {
+  color: #1c1917 !important;
+}
+
+/* 签到状态 */
+:root.canvas-theme-light .profile-panel .checkin-btn {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+}
+
+:root.canvas-theme-light .profile-panel .checkin-btn.checked {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .profile-panel .checkin-info {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+/* 客服二维码弹窗 */
+:root.canvas-theme-light .profile-panel .support-qr-modal {
+  background: #fff !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .profile-panel .support-qr-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .support-qr-hint {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 分隔线 */
+:root.canvas-theme-light .profile-panel .divider {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 工具提示 */
+:root.canvas-theme-light .profile-panel .tooltip {
+  background: rgba(28, 25, 23, 0.95) !important;
+  color: #fff !important;
+}
+
+/* 优惠券输入 */
+:root.canvas-theme-light .profile-panel .coupon-input {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .profile-panel .coupon-apply-btn {
+  background: #6366f1 !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .profile-panel .coupon-success {
+  background: rgba(16, 185, 129, 0.08) !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+  color: #10b981 !important;
+}
+
+:root.canvas-theme-light .profile-panel .coupon-error {
+  color: #ef4444 !important;
+}
+
+/* 用户邮箱 */
+:root.canvas-theme-light .profile-panel .user-email {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 快捷数据区域 */
+:root.canvas-theme-light .profile-panel .quick-stats {
+  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .profile-panel .stat-item {
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+
+:root.canvas-theme-light .profile-panel .stat-icon {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .profile-panel .stat-value {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .stat-label {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+/* 导航菜单 */
+:root.canvas-theme-light .profile-panel .panel-nav {
+  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .profile-panel .nav-item {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .profile-panel .nav-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+:root.canvas-theme-light .profile-panel .nav-item.active {
+  background: rgba(99, 102, 241, 0.08) !important;
+  color: #6366f1 !important;
+  border-color: rgba(99, 102, 241, 0.2) !important;
+}
+
+:root.canvas-theme-light .profile-panel .nav-icon {
+  color: inherit !important;
+}
+
+/* 签到卡片 */
+:root.canvas-theme-light .profile-panel .checkin-card {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .checkin-days {
+  color: rgba(0, 0, 0, 0.75) !important;
+}
+
+:root.canvas-theme-light .profile-panel .checkin-btn.disabled {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 快捷操作按钮 */
+:root.canvas-theme-light .profile-panel .quick-actions {
+  /* 无需额外样式 */
+}
+
+:root.canvas-theme-light .profile-panel .action-btn {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .profile-panel .action-btn:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .profile-panel .action-btn.primary {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-color: rgba(99, 102, 241, 0.2) !important;
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .profile-panel .action-btn.primary:hover {
+  background: rgba(99, 102, 241, 0.12) !important;
+  border-color: rgba(99, 102, 241, 0.3) !important;
+}
+
+:root.canvas-theme-light .profile-panel .action-icon {
+  color: inherit !important;
+}
+
+/* 内容区分隔线 */
+:root.canvas-theme-light .profile-panel .content-section-title {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 表单样式 */
+:root.canvas-theme-light .profile-panel .form-group label {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+/* 按钮通用样式 */
+:root.canvas-theme-light .profile-panel .btn-primary {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .profile-panel .btn-primary:hover {
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35) !important;
+}
+
+/* 兑换表单 */
+:root.canvas-theme-light .profile-panel .voucher-form input {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .voucher-form input::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 提示框 */
+:root.canvas-theme-light .profile-panel .voucher-tips,
+:root.canvas-theme-light .profile-panel .invite-tips {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+:root.canvas-theme-light .profile-panel .voucher-tips h5,
+:root.canvas-theme-light .profile-panel .invite-tips h5 {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.canvas-theme-light .profile-panel .voucher-tips li,
+:root.canvas-theme-light .profile-panel .invite-tips li {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 邀请卡片 */
+:root.canvas-theme-light .profile-panel .invite-card {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .invite-card h4 {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.canvas-theme-light .profile-panel .invite-code {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .btn-copy {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .profile-panel .btn-copy:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .invite-stats .stat-num {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .invite-stats .stat-label {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+/* 帮助列表 */
+:root.canvas-theme-light .profile-panel .help-item {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .profile-panel .help-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .profile-panel .help-icon {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .profile-panel .help-text {
+  color: rgba(0, 0, 0, 0.75) !important;
+}
+
+:root.canvas-theme-light .profile-panel .help-arrow {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 设置区域 */
+:root.canvas-theme-light .profile-panel .settings-section {
+  border-top-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .profile-panel .setting-item {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .profile-panel .setting-label {
+  color: rgba(0, 0, 0, 0.85) !important;
+}
+
+:root.canvas-theme-light .profile-panel .setting-desc {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Toggle 开关 */
+:root.canvas-theme-light .profile-panel .toggle-slider {
+  background: rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .profile-panel .toggle-switch input:checked + .toggle-slider {
+  background: #6366f1 !important;
+}
+
+:root.canvas-theme-light .profile-panel .toggle-switch input:checked + .toggle-slider:before {
+  background-color: #fff !important;
+}
+
+/* 空状态提示 */
+:root.canvas-theme-light .profile-panel .empty-hint {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+/* 账单类型 */
+:root.canvas-theme-light .profile-panel .ledger-type {
+  color: rgba(0, 0, 0, 0.75) !important;
+}
+
+:root.canvas-theme-light .profile-panel .ledger-icon {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+/* 套餐状态 */
+:root.canvas-theme-light .profile-panel .package-status {
+  background: rgba(99, 102, 241, 0.06) !important;
+  border-color: rgba(99, 102, 241, 0.15) !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-badge {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-info {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .profile-panel .expire-hint {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+/* 套餐购买按钮 */
+:root.canvas-theme-light .profile-panel .btn-purchase {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .profile-panel .btn-purchase:hover {
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.35) !important;
+}
+
+:root.canvas-theme-light .profile-panel .btn-purchase.disabled {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .profile-panel .btn-purchase.current {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #10b981 !important;
+}
+
+/* 消息样式 */
+:root.canvas-theme-light .profile-panel .msg-error {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.2) !important;
+  color: #ef4444 !important;
+}
+
+:root.canvas-theme-light .profile-panel .msg-success {
+  background: rgba(16, 185, 129, 0.08) !important;
+  border-color: rgba(16, 185, 129, 0.2) !important;
+  color: #10b981 !important;
+}
+
+/* 套餐详情提示 */
+:root.canvas-theme-light .profile-panel .package-tooltip {
+  background: #fff !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-tooltip-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-tooltip-item {
+  color: rgba(0, 0, 0, 0.65) !important;
 }
 </style>
 

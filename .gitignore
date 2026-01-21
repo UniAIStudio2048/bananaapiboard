@@ -37,6 +37,8 @@ dist-ssr
 coverage
 *.lcov
 
+CLAUDE.md
+
 # Misc
 *.pem
 

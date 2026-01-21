@@ -1208,6 +1208,11 @@ const quickActions = [
     icon: '▶',
     labelKey: 'canvas.videoNode.keyframesToVideo', 
     action: () => handleKeyframesToVideo()
+  },
+  { 
+    icon: '↑',
+    labelKey: 'canvas.videoNode.motionImitation', 
+    action: () => handleMotionImitation()
   }
 ]
 
@@ -1346,6 +1351,86 @@ function handleKeyframesToVideo() {
   // 连接尾帧到视频节点
   canvasStore.addEdge({
     source: lastFrameId,
+    target: props.id,
+    sourceHandle: 'output',
+    targetHandle: 'input'
+  })
+  
+  // 选中当前视频节点
+  canvasStore.selectNode(props.id)
+}
+
+// 动作模仿：创建1个图片节点和1个视频节点（用于动作迁移模型）
+function handleMotionImitation() {
+  generationMode.value = 'motion'
+  
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return
+  
+  // 自动选择动作迁移模型（查找包含 'kling' 和 'motion' 的模型）
+  const motionControlModel = models.value.find(m => {
+    const modelValue = m.value?.toLowerCase() || ''
+    return modelValue.includes('kling') && modelValue.includes('motion')
+  })
+  
+  if (motionControlModel) {
+    selectedModel.value = motionControlModel.value
+    console.log('[VideoNode] 自动选择动作迁移模型:', motionControlModel.value)
+  } else {
+    console.warn('[VideoNode] 未找到动作迁移模型，请检查租户配置')
+  }
+  
+  const defaultImage = '/logo.svg'
+  
+  // 创建图片节点（上方 - 作为参考人物）
+  const imagePosition = {
+    x: currentNode.position.x - 450,
+    y: currentNode.position.y - 180
+  }
+  
+  const imageNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  
+  canvasStore.addNode({
+    id: imageNodeId,
+    type: 'image-input',
+    position: imagePosition,
+    data: {
+      title: '参考人物',
+      sourceImages: [defaultImage],
+      status: 'success'
+    }
+  })
+  
+  // 连接图片节点到视频节点
+  canvasStore.addEdge({
+    source: imageNodeId,
+    target: props.id,
+    sourceHandle: 'output',
+    targetHandle: 'input'
+  })
+  
+  // 创建视频输入节点（下方 - 作为动作参考视频）
+  const videoPosition = {
+    x: currentNode.position.x - 450,
+    y: currentNode.position.y + 180
+  }
+  
+  const videoNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  
+  canvasStore.addNode({
+    id: videoNodeId,
+    type: 'video-input',
+    position: videoPosition,
+    data: {
+      title: '动作视频',
+      nodeRole: 'source',
+      status: 'idle'
+    }
+  })
+  
+  // 连接视频节点到当前视频节点
+  canvasStore.addEdge({
+    source: videoNodeId,
     target: props.id,
     sourceHandle: 'output',
     targetHandle: 'input'
@@ -2317,7 +2402,7 @@ function handleResizeEnd() {
   document.removeEventListener('mouseup', handleResizeEnd)
 }
 
-// ========== 首尾帧图片拖拽上传 ==========
+// ========== 首尾帧图片/视频拖拽上传 ==========
 // 后台异步上传图片 - 上传完成后静默更新节点URL
 async function uploadImageFileAsync(file, blobUrl, nodeId) {
   try {
@@ -2351,6 +2436,49 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
   }
 }
 
+// 后台异步上传视频 - 上传完成后静默更新节点URL
+async function uploadVideoFileAsync(file, blobUrl, nodeId) {
+  try {
+    console.log('[VideoNode] 后台异步上传视频开始:', file.name)
+    
+    // 视频文件可能较大，放宽限制到 100MB
+    if (file.size > 100 * 1024 * 1024) {
+      console.warn('[VideoNode] 视频文件过大，保持使用 blob URL')
+      return
+    }
+    
+    // 使用 FormData 上传视频
+    const formData = new FormData()
+    formData.append('video', file)
+    
+    const response = await fetch('/api/upload/video', {
+      method: 'POST',
+      headers: getTenantHeaders(),
+      body: formData
+    })
+    
+    if (response.ok) {
+      const result = await response.json()
+      const serverUrl = result.url || result.video_url
+      if (serverUrl) {
+        console.log('[VideoNode] 视频后台上传成功，服务器URL:', serverUrl)
+        
+        // 静默更新节点中的 URL
+        const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
+        if (currentNode?.data?.sourceVideo === blobUrl) {
+          canvasStore.updateNodeData(nodeId, { sourceVideo: serverUrl })
+          console.log('[VideoNode] 已静默更新 sourceVideo')
+        }
+        
+        // 释放 blob URL 内存
+        URL.revokeObjectURL(blobUrl)
+      }
+    }
+  } catch (error) {
+    console.warn('[VideoNode] 视频后台上传失败，保持使用 blob URL:', error.message)
+  }
+}
+
 // 触发文件选择并创建左侧图片节点
 function triggerFrameUpload() {
   if (frameInputRef.value) {
@@ -2358,7 +2486,7 @@ function triggerFrameUpload() {
   }
 }
 
-// 处理文件选择 - 直接创建上游图片节点（秒加载优化）
+// 处理文件选择 - 直接创建上游图片/视频节点（秒加载优化）
 async function handleFrameFileChange(event) {
   const files = event.target.files
   if (!files || files.length === 0) return
@@ -2366,15 +2494,15 @@ async function handleFrameFileChange(event) {
   // 先将 FileList 转换为数组
   const fileArray = Array.from(files)
   
-  console.log('[VideoNode] 处理参考图片上传，文件数量:', fileArray.length)
+  console.log('[VideoNode] 处理参考文件上传，文件数量:', fileArray.length)
   event.target.value = '' // 重置 input
   
   try {
     for (const file of fileArray) {
       if (file.type.startsWith('image/')) {
-        // 🚀 秒加载：立即使用 blob URL
+        // 🚀 图片秒加载：立即使用 blob URL
         const blobUrl = URL.createObjectURL(file)
-        console.log('[VideoNode] 秒加载 - blob URL:', blobUrl)
+        console.log('[VideoNode] 图片秒加载 - blob URL:', blobUrl)
         
         // 立即创建上游节点（使用 blob URL）
         const nodeId = createUpstreamImageNode(blobUrl)
@@ -2382,6 +2510,18 @@ async function handleFrameFileChange(event) {
         // 🔄 后台异步上传
         if (nodeId) {
           uploadImageFileAsync(file, blobUrl, nodeId)
+        }
+      } else if (file.type.startsWith('video/')) {
+        // 🎬 视频秒加载：立即使用 blob URL
+        const blobUrl = URL.createObjectURL(file)
+        console.log('[VideoNode] 视频秒加载 - blob URL:', blobUrl)
+        
+        // 立即创建上游视频节点（使用 blob URL）
+        const nodeId = createUpstreamVideoNode(blobUrl)
+        
+        // 🔄 后台异步上传
+        if (nodeId) {
+          uploadVideoFileAsync(file, blobUrl, nodeId)
         }
       }
     }
@@ -2436,6 +2576,49 @@ function createUpstreamImageNode(imageUrl) {
   })
 }
 
+// 创建上游视频节点 - 返回创建的节点ID（用于视频参考/视频转视频）
+function createUpstreamVideoNode(videoUrl) {
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return null
+  
+  // 计算新节点位置（在当前节点左侧，根据已有上游节点数量垂直排列）
+  const existingUpstreamCount = canvasStore.edges.filter(e => e.target === props.id).length
+  const offsetY = existingUpstreamCount * 200
+  
+  const newNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const newNodePosition = {
+    x: currentNode.position.x - 500,
+    y: currentNode.position.y + offsetY - 100
+  }
+  
+  // 创建视频输入节点 - 使用 video-input 类型
+  canvasStore.addNode({
+    id: newNodeId,
+    type: 'video-input',
+    position: newNodePosition,
+    data: {
+      title: `参考视频 ${existingUpstreamCount + 1}`,
+      nodeRole: 'source',
+      sourceVideo: videoUrl,
+      output: {
+        type: 'video',
+        url: videoUrl
+      }
+    }
+  })
+  
+  // 创建连接
+  canvasStore.addEdge({
+    id: `edge_${newNodeId}_${props.id}`,
+    source: newNodeId,
+    target: props.id,
+    sourceHandle: 'output',
+    targetHandle: 'input'
+  })
+  
+  return newNodeId
+}
+
 // 判断是否为外部文件拖拽（非内部排序）
 function isExternalFileDrag(event) {
   const types = event.dataTransfer?.types || []
@@ -2488,7 +2671,7 @@ function handleFrameDragLeave(event) {
   }
 }
 
-// 拖拽放置 - 仅处理外部文件上传
+// 拖拽放置 - 仅处理外部文件上传（支持图片和视频）
 async function handleFrameDrop(event) {
   // 如果是内部排序拖拽，不在这里处理（由 handleImageDrop 处理）
   if (dragSortIndex.value !== -1) {
@@ -2506,9 +2689,9 @@ async function handleFrameDrop(event) {
   try {
     for (const file of files) {
       if (file.type.startsWith('image/')) {
-        // 🚀 秒加载：立即使用 blob URL
+        // 🚀 图片秒加载：立即使用 blob URL
         const blobUrl = URL.createObjectURL(file)
-        console.log('[VideoNode] 拖拽上传 - 秒加载 blob URL:', blobUrl)
+        console.log('[VideoNode] 拖拽上传图片 - 秒加载 blob URL:', blobUrl)
         
         // 立即创建上游节点
         const nodeId = createUpstreamImageNode(blobUrl)
@@ -2516,6 +2699,18 @@ async function handleFrameDrop(event) {
         // 🔄 后台异步上传
         if (nodeId) {
           uploadImageFileAsync(file, blobUrl, nodeId)
+        }
+      } else if (file.type.startsWith('video/')) {
+        // 🎬 视频秒加载：立即使用 blob URL
+        const blobUrl = URL.createObjectURL(file)
+        console.log('[VideoNode] 拖拽上传视频 - 秒加载 blob URL:', blobUrl)
+        
+        // 立即创建上游视频节点
+        const nodeId = createUpstreamVideoNode(blobUrl)
+        
+        // 🔄 后台异步上传
+        if (nodeId) {
+          uploadVideoFileAsync(file, blobUrl, nodeId)
         }
       }
     }
@@ -4003,11 +4198,11 @@ function handleToolbarPreview() {
       />
     </div>
     
-    <!-- 隐藏的文件上传 input（支持多选） -->
+    <!-- 隐藏的文件上传 input（支持多选，支持图片和视频） -->
     <input 
       ref="frameInputRef"
       type="file" 
-      accept="image/*"
+      accept="image/*,video/*"
       multiple
       class="hidden-file-input"
       @change="handleFrameFileChange"
@@ -4067,7 +4262,7 @@ function handleToolbarPreview() {
       >
         <div class="panel-frames-header">
           <span class="panel-frames-label">{{ hasReferenceVideos ? '参考视频/图片' : '参考图片' }}</span>
-          <span class="panel-frames-hint">拖拽图片到此处 · 拖动调整顺序</span>
+          <span class="panel-frames-hint">拖拽图片/视频到此处 · 拖动调整顺序</span>
         </div>
         <div class="panel-frames-list">
           <!-- 参考视频（来自上游视频节点） -->
@@ -4112,7 +4307,7 @@ function handleToolbarPreview() {
         </div>
         <!-- 拖拽覆盖层 -->
         <div v-if="isDragOver" class="panel-drag-overlay">
-          <span>释放以添加图片</span>
+          <span>释放以添加图片/视频</span>
         </div>
       </div>
       

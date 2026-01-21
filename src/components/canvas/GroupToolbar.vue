@@ -512,3 +512,73 @@ function handleClickOutside(event) {
 }
 </style>
 
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   GroupToolbar 白昼模式样式适配
+   ======================================== */
+
+/* 工具栏主容器 */
+:root.canvas-theme-light .group-toolbar {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* 工具栏按钮 */
+:root.canvas-theme-light .group-toolbar .toolbar-btn {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.canvas-theme-light .group-toolbar .toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1c1917 !important;
+}
+
+/* 整组执行按钮 */
+:root.canvas-theme-light .group-toolbar .toolbar-btn.execute-btn {
+  color: #059669 !important;
+}
+
+:root.canvas-theme-light .group-toolbar .toolbar-btn.execute-btn:hover {
+  background: rgba(16, 185, 129, 0.1) !important;
+  color: #047857 !important;
+}
+
+/* 分隔线 */
+:root.canvas-theme-light .group-toolbar .toolbar-divider {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* 颜色预览 */
+:root.canvas-theme-light .group-toolbar .color-preview {
+  border-color: rgba(0, 0, 0, 0.2) !important;
+}
+
+/* 颜色选择器下拉菜单 */
+:root.canvas-theme-light .group-toolbar .color-picker-dropdown {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.04) !important;
+}
+
+/* 布局按钮组 */
+:root.canvas-theme-light .group-toolbar .layout-btn-group {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .group-toolbar .layout-btn:hover {
+  background: rgba(59, 130, 246, 0.1) !important;
+  color: #3b82f6 !important;
+}
+
+/* 按钮文字 */
+:root.canvas-theme-light .group-toolbar .btn-text {
+  color: inherit !important;
+}
+</style>
+

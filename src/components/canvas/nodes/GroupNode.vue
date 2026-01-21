@@ -431,3 +431,52 @@ onUnmounted(() => {
   transform: translateY(-50%) scaleX(1.2);
 }
 </style>
+
+<!-- 白昼模式样式（非 scoped） -->
+<style>
+/* ========================================
+   GroupNode 白昼模式样式适配
+   ======================================== */
+
+/* 组标题文字 */
+:root.canvas-theme-light .group-node .group-header {
+  color: rgba(0, 0, 0, 0.7) !important;
+}
+
+:root.canvas-theme-light .group-node .group-name {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .group-node .group-name:hover {
+  color: rgba(0, 0, 0, 0.9) !important;
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 编辑输入框 */
+:root.canvas-theme-light .group-node .group-name-input {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(59, 130, 246, 0.5) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .group-node .group-name-input:focus {
+  border-color: rgba(59, 130, 246, 0.7) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15) !important;
+}
+
+/* 选中状态 */
+:root.canvas-theme-light .group-node.selected {
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
+}
+
+/* 缩放手柄 */
+:root.canvas-theme-light .group-node .resize-handle {
+  background: rgba(59, 130, 246, 0.8) !important;
+  border-color: rgba(100, 116, 139, 0.6) !important;
+}
+
+:root.canvas-theme-light .group-node .resize-handle:hover {
+  background: rgba(59, 130, 246, 0.95) !important;
+  border-color: rgba(100, 116, 139, 0.8) !important;
+}
+</style>

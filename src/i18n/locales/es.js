@@ -497,6 +497,7 @@ export default {
       textToVideo: 'Texto a Video',
       imageToVideo: 'Imagen a Video',
       keyframesToVideo: 'Fotogramas clave a Video',
+      motionImitation: 'Imitación de movimiento',
       videoExtend: 'Extender video',
       videoLoop: 'Video en bucle',
       prompt: 'Prompt',

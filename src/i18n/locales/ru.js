@@ -426,6 +426,7 @@ export default {
       textToVideo: 'Текст в Видео',
       imageToVideo: 'Изображение в Видео',
       keyframesToVideo: 'Ключевые кадры в Видео',
+      motionImitation: 'Имитация движения',
       videoExtend: 'Расширить видео',
       videoLoop: 'Зациклить видео',
       prompt: 'Промпт',

@@ -640,13 +640,13 @@ async function handleDownload() {
     console.log('[ImageToolbar] 下载原图成功:', filename)
   } catch (error) {
     console.error('[ImageToolbar] 下载图片失败:', error)
-    // 如果 fetch 失败，使用 buildDownloadUrl 构建页面下载链接
+    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
     try {
       const { buildDownloadUrl } = await import('@/api/client')
-      window.location.href = buildDownloadUrl(imageUrl.value, filename)
+      window.open(buildDownloadUrl(imageUrl.value, filename), '_blank')
     } catch (e) {
       // 最后回退
-      window.location.href = getApiUrl(`/api/images/download?url=${encodeURIComponent(imageUrl.value)}&filename=${encodeURIComponent(filename)}`)
+      window.open(getApiUrl(`/api/images/download?url=${encodeURIComponent(imageUrl.value)}&filename=${encodeURIComponent(filename)}`), '_blank')
     }
   }
   

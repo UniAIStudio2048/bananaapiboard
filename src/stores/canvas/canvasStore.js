@@ -436,12 +436,35 @@ export const useCanvasStore = defineStore('canvas', () => {
   }
 
   /**
-   * 🔧 清空历史记录（释放内存）
+   * 🔧 裁剪历史记录（释放内存，保留最近N个操作）
+   * @param {number} keepCount - 保留的历史记录数量，默认5个
+   */
+  function trimHistory(keepCount = 5) {
+    const currentLength = historyStack.value.length
+    if (currentLength <= keepCount) {
+      console.log(`[Canvas Store] 历史记录数量 (${currentLength}) 未超过保留数量 (${keepCount})，无需裁剪`)
+      return
+    }
+    
+    // 计算需要删除的数量
+    const removeCount = currentLength - keepCount
+    
+    // 从前面删除旧的历史记录
+    historyStack.value = historyStack.value.slice(removeCount)
+    
+    // 调整当前索引
+    historyIndex.value = Math.max(0, historyIndex.value - removeCount)
+    
+    console.log(`[Canvas Store] 历史记录已裁剪: 删除 ${removeCount} 条，保留最近 ${keepCount} 条`)
+  }
+
+  /**
+   * 🔧 清空历史记录（完全清空，释放所有内存）
    */
   function clearHistory() {
     historyStack.value = []
     historyIndex.value = -1
-    console.log('[Canvas Store] 历史记录已清空，释放内存')
+    console.log('[Canvas Store] 历史记录已完全清空，释放内存')
   }
 
   /**
@@ -1418,6 +1441,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     saveHistory,
     undo,
     redo,
+    trimHistory,
     clearHistory,
     getMemoryStats,
     NODE_WARNING_THRESHOLD,

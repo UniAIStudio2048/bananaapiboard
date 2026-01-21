@@ -508,6 +508,7 @@ export default {
       textToVideo: 'テキストから動画',
       imageToVideo: '画像から動画',
       keyframesToVideo: 'キーフレームから動画',
+      motionImitation: 'モーション模倣',
       videoExtend: '動画延長',
       videoLoop: '動画ループ',
       prompt: 'プロンプト',

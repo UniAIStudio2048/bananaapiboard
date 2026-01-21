@@ -507,6 +507,7 @@ export default {
       textToVideo: '텍스트에서 비디오',
       imageToVideo: '이미지에서 비디오',
       keyframesToVideo: '키프레임에서 비디오',
+      motionImitation: '모션 모방',
       videoExtend: '비디오 연장',
       videoLoop: '비디오 루프',
       prompt: '프롬프트',

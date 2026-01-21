@@ -176,7 +176,7 @@ const totalPoints = computed(() => {
   return total % 1 === 0 ? total.toFixed(0) : total.toFixed(2)
 })
 
-// 🔧 监控节点数量，防止内存溢出 + 大画布性能优化提示
+// 🔧 监控节点数量，防止内存溢出 + 大画布性能优化（静默处理，不打扰用户）
 let nodeCountWarningShown = false
 let nodeCountCriticalShown = false
 let performanceModeShown = false
@@ -184,33 +184,29 @@ let performanceModeShown = false
 watch(() => canvasStore.nodes.length, (count) => {
   const { NODE_WARNING_THRESHOLD, NODE_CRITICAL_THRESHOLD, performanceMode } = canvasStore
   
-  // 🔧 大画布性能模式提示（30+节点时进入优化模式）
+  // 🔧 大画布性能模式（30+节点时进入优化模式）- 静默处理
   if (count > 30 && !performanceModeShown) {
     performanceModeShown = true
     const modeText = performanceMode === 'minimal' ? '最小化渲染' : 
                      performanceMode === 'reduced' ? '简化渲染' : '优化渲染'
     console.log(`[Canvas] 🚀 已启用 ${modeText} 模式 (${count} 个节点)`)
-    // 只在首次进入时轻提示，不打扰用户
-    if (count > 50) {
-      displayToast(`已启用${modeText}模式，提升画布流畅度`, 'info', 2000)
-    }
+    // 静默处理，不显示 toast 提示
   }
   
-  // 警告阈值（50个节点）
+  // 警告阈值（50个节点）- 静默裁剪历史记录，保留最近5个操作
   if (count >= NODE_WARNING_THRESHOLD && !nodeCountWarningShown) {
     nodeCountWarningShown = true
-    console.warn(`[Canvas] ⚠️ 节点数量较多 (${count})，已启用性能优化模式`)
-    displayToast(`画布节点较多 (${count} 个)，已自动优化性能`, 'warning', 4000)
-    
-    // 自动清理历史记录释放内存
-    canvasStore.clearHistory()
+    console.log(`[Canvas] ⚠️ 节点数量较多 (${count})，已静默启用性能优化模式`)
+    // 静默裁剪历史记录，保留最近5个操作的撤销/重做能力
+    canvasStore.trimHistory(5)
   }
   
-  // 危险阈值（100个节点）
+  // 危险阈值（100个节点）- 静默自动保存
   if (count >= NODE_CRITICAL_THRESHOLD && !nodeCountCriticalShown) {
     nodeCountCriticalShown = true
-    console.error(`[Canvas] 🚨 节点数量过多 (${count})，建议保存后清理`)
-    displayToast(`⚠️ 画布节点较多 (${count} 个)，建议保存后清理不需要的节点`, 'error', 6000)
+    console.log(`[Canvas] 🚨 节点数量较多 (${count})，静默触发自动保存`)
+    // 静默自动保存，不打扰用户
+    autoSaveWorkflow()
   }
   
   // 重置警告标志
@@ -1040,6 +1036,16 @@ function updateNodeFromTask(task) {
 
 // 页面关闭前保存当前工作流
 function handleBeforeUnload(event) {
+  // 🔧 修复：在开发环境下，如果是 Vite HMR 触发的刷新，不显示弹窗
+  // Vite HMR 会在修改代码时触发 page reload，这会导致烦人的弹窗
+  const isDevMode = import.meta.env.DEV
+  const isViteHMR = isDevMode && (
+    // 检测是否是 Vite 触发的刷新（通过检查 performance timing）
+    performance.getEntriesByType && performance.getEntriesByType('navigation').some(
+      nav => nav.type === 'reload' && (Date.now() - nav.startTime) < 500
+    )
+  )
+  
   const workflowData = getCurrentWorkflowData()
   if (!workflowData || !workflowData.nodes || workflowData.nodes.length === 0) {
     return
@@ -1103,10 +1109,34 @@ function handleBeforeUnload(event) {
       console.warn('[Canvas] sendBeacon 保存失败:', e)
     }
     
-    // 3. 如果有未保存的更改，显示提示
-    event.preventDefault()
-    event.returnValue = '您有未保存的更改，确定要离开吗？'
-    return event.returnValue
+    // 3. 🔧 修复：只有当有实质性内容且未保存时才显示确认框
+    // 在开发模式下不显示弹窗，避免 Vite HMR 导致的烦人提示
+    if (isDevMode) {
+      console.log('[Canvas] 开发模式，跳过离开确认弹窗')
+      return
+    }
+    
+    // 检查是否有实质性内容（用户输入、生成结果等）
+    const hasSubstantialContent = workflowData.nodes.some(node => {
+      const data = node.data || {}
+      // 检查是否有用户输入的文本
+      if (data.prompt && data.prompt.trim()) return true
+      // 检查是否有生成的结果
+      if (data.output?.urls?.length > 0 || data.output?.url) return true
+      // 检查是否有上传的图片
+      if (data.sourceImages?.length > 0) return true
+      // 检查是否有视频结果
+      if (data.videoUrl) return true
+      return false
+    })
+    
+    // 只有当：1) 有实质性内容 2) 是新工作流（未保存过）才显示确认框
+    // 已保存过的工作流因为我们已经用 sendBeacon 保存了，所以不需要再提示
+    if (hasSubstantialContent && !currentTab.workflowId) {
+      event.preventDefault()
+      event.returnValue = '您有未保存的更改，确定要离开吗？'
+      return event.returnValue
+    }
   }
 }
 
@@ -1303,6 +1333,14 @@ function handleCanvasAddNode(position) {
     : null
 
   canvasStore.openNodeSelector(position, 'canvas', null, flowPosition)
+}
+
+// 处理画布右键菜单的编组事件
+function handleCanvasGroup() {
+  console.log('[Canvas] 右键菜单触发编组')
+  if (canvasBoardRef.value?.groupSelectedNodes) {
+    canvasBoardRef.value.groupSelectedNodes()
+  }
 }
 
 // ========== 缩放控制 ==========
@@ -1756,7 +1794,7 @@ onUnmounted(() => {
       :style="{ '--ai-panel-offset': (aiPanelWidth / 2) + 'px' }"
     >
       <!-- 无限画布 - 使用 key 强制在就绪后重新挂载 -->
-      <CanvasBoard :key="'canvas-board-' + canvasReady" @dblclick="handleCanvasDoubleClick" @pane-click="handlePaneClick" />
+      <CanvasBoard ref="canvasBoardRef" :key="'canvas-board-' + canvasReady" @dblclick="handleCanvasDoubleClick" @pane-click="handlePaneClick" />
       
       <!-- 顶部标签栏 - 仅在有标签时显示 -->
       <div v-if="canvasStore.workflowTabs.length > 0" class="tabs-container">
@@ -1945,6 +1983,7 @@ onUnmounted(() => {
         @close="canvasStore.closeCanvasContextMenu()"
         @upload="handleCanvasUpload"
         @add-node="handleCanvasAddNode"
+        @group="handleCanvasGroup"
       />
 
       <!-- 工作流模板面板 -->
