@@ -5288,6 +5288,30 @@ function getLedgerTypeText(type) {
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
+/* 余额划转区域 - 浅色模式 */
+:root.canvas-theme-light .profile-panel .transfer-section {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .transfer-hint {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .profile-panel .transfer-form input {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .transfer-form input::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .profile-panel .transfer-form input:focus {
+  border-color: #6366f1 !important;
+  background: rgba(99, 102, 241, 0.03) !important;
+}
+
 /* 卡片样式 */
 :root.canvas-theme-light .profile-panel .card,
 :root.canvas-theme-light .profile-panel .info-card,
@@ -5385,6 +5409,18 @@ function getLedgerTypeText(type) {
   color: #6366f1 !important;
 }
 
+:root.canvas-theme-light .profile-panel .package-price .price {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-price .unit {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .profile-panel .package-points {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
 :root.canvas-theme-light .profile-panel .package-desc {
   color: rgba(0, 0, 0, 0.5) !important;
 }
@@ -5408,13 +5444,28 @@ function getLedgerTypeText(type) {
   color: #fff !important;
 }
 
-/* 账单列表 */
+/* 积分记录列表 - 浅色模式 */
+:root.canvas-theme-light .profile-panel .ledger-list {
+  gap: 6px !important;
+}
+
 :root.canvas-theme-light .profile-panel .ledger-item {
-  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
+  background: rgba(0, 0, 0, 0.02) !important;
+  border: 1px solid rgba(0, 0, 0, 0.06) !important;
+  border-radius: 10px !important;
 }
 
 :root.canvas-theme-light .profile-panel .ledger-item:hover {
-  background: rgba(0, 0, 0, 0.02) !important;
+  background: rgba(99, 102, 241, 0.04) !important;
+  border-color: rgba(99, 102, 241, 0.15) !important;
+}
+
+:root.canvas-theme-light .profile-panel .ledger-icon {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .profile-panel .ledger-type {
+  color: #1c1917 !important;
 }
 
 :root.canvas-theme-light .profile-panel .ledger-desc {
@@ -5426,11 +5477,11 @@ function getLedgerTypeText(type) {
 }
 
 :root.canvas-theme-light .profile-panel .ledger-amount.positive {
-  color: #10b981 !important;
+  color: #059669 !important;
 }
 
 :root.canvas-theme-light .profile-panel .ledger-amount.negative {
-  color: #ef4444 !important;
+  color: #dc2626 !important;
 }
 
 /* 标签页 */
@@ -5982,19 +6033,45 @@ function getLedgerTypeText(type) {
   color: #10b981 !important;
 }
 
-/* 套餐详情提示 */
-:root.canvas-theme-light .profile-panel .package-tooltip {
-  background: #fff !important;
-  border-color: rgba(0, 0, 0, 0.1) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+/* 套餐详情提示 - 浅色模式适配（Teleport 到 body，需要直接选择器） */
+:root.canvas-theme-light .package-tooltip {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 0.98) 100%) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
 }
 
-:root.canvas-theme-light .profile-panel .package-tooltip-title {
+:root.canvas-theme-light .package-tooltip .tooltip-header {
+  border-bottom-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .package-tooltip .tooltip-name {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .profile-panel .package-tooltip-item {
+:root.canvas-theme-light .package-tooltip .tooltip-desc {
   color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .package-tooltip .detail-item {
+  color: rgba(0, 0, 0, 0.75) !important;
+}
+
+:root.canvas-theme-light .package-tooltip .detail-text strong {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .package-tooltip .detail-item.price-highlight {
+  border-top-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .package-tooltip .detail-item.price-highlight strong {
+  color: #5b6fe6 !important;
+}
+
+:root.canvas-theme-light .package-tooltip .tooltip-arrow {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-left-color: rgba(0, 0, 0, 0.12) !important;
+  border-bottom-color: rgba(0, 0, 0, 0.12) !important;
 }
 </style>
 

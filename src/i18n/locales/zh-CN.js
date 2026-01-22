@@ -784,7 +784,8 @@ export default {
       transfer: '余额划转',
       points_transfer_out: '积分转出',
       points_transfer_in: '积分转入',
-      motion_control_refund: '动作迁移退款'
+      motion_control_refund: '动作迁移退款',
+      canvas_crop: '画布裁剪'
     }
   },
 
@@ -962,7 +963,8 @@ export default {
     milestone: '里程碑奖励',
     points_transfer_out: '积分转出',
     points_transfer_in: '积分转入',
-    motion_control_refund: '动作迁移退款'
+    motion_control_refund: '动作迁移退款',
+    canvas_crop: '画布裁剪'
   },
 
   // 新手引导

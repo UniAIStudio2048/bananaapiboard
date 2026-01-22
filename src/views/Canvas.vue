@@ -36,6 +36,8 @@ import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoS
 import { initBackgroundTaskManager, getPendingTasks, subscribeTask, removeCompletedTask, cleanup as cleanupBackgroundTasks } from '@/stores/canvas/backgroundTaskManager'
 import { showAlert, showConfirm } from '@/composables/useCanvasDialog'
 import { needsMigration, analyzeWorkflow, migrateWorkflowData } from '@/utils/workflowMigration'
+// 🔧 画布诊断工具 - 用于调试画布强制重新加载问题
+import { initCanvasDiagnostic, printCanvasDiagnosticReport } from '@/utils/canvasDiagnostic'
 
 // 导入画布样式
 import '@/styles/canvas.css'
@@ -1640,6 +1642,10 @@ function loadCanvasThemePreference() {
 }
 
 onMounted(async () => {
+  // 🔧 初始化画布诊断工具 - 用于调试画布强制重新加载问题
+  // 在浏览器控制台运行 printCanvasDiagnosticReport() 查看诊断报告
+  initCanvasDiagnostic(canvasStore)
+  
   await loadUserInfo()
 
   // 加载画布主题偏好
