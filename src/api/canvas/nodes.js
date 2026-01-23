@@ -260,9 +260,17 @@ export async function uploadImages(files) {
  * 轮询任务状态直到完成
  * 后端图片任务状态: pending -> processing -> completed/failed
  * 当 status=completed 或者有 url 时表示完成
+ * 
+ * @param {string} taskId - 任务ID
+ * @param {string} type - 任务类型 'image' | 'video'
+ * @param {object} options - 选项
+ * @param {number} options.interval - 轮询间隔，默认 2000ms
+ * @param {number} options.timeout - 超时时间，图片默认 12 分钟，视频默认 45 分钟（与后端一致）
  */
 export function pollTaskStatus(taskId, type = 'image', options = {}) {
-  const { interval = 2000, timeout = 300000, onProgress } = options
+  // 视频生成需要更长时间，默认 45 分钟；图片默认 12 分钟
+  const defaultTimeout = type === 'video' ? 45 * 60 * 1000 : 12 * 60 * 1000
+  const { interval = 2000, timeout = defaultTimeout, onProgress } = options
   const getStatus = type === 'video' ? getVideoTaskStatus : getImageTaskStatus
   
   return new Promise((resolve, reject) => {

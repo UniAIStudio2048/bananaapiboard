@@ -1932,8 +1932,8 @@ function getOffPeakPollInterval(taskCreatedAt) {
 // 轮询视频任务状态（针对特定节点）
 async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreatedAt = null) {
   const token = localStorage.getItem('token')
-  // 错峰模式：最长48小时；普通模式：10分钟
-  const MAX_POLL_TIME = isOffPeak ? 48 * 60 * 60 * 1000 : 600000
+  // 错峰模式：最长48小时；普通模式：45分钟（与后端超时一致）
+  const MAX_POLL_TIME = isOffPeak ? 48 * 60 * 60 * 1000 : 45 * 60 * 1000
   const NORMAL_POLL_INTERVAL = 4000 // 普通模式4秒轮询一次
   const startTime = taskCreatedAt || Date.now()
   

@@ -349,9 +349,10 @@ async function handleGenerate() {
       })
     }
     
-    // 轮询任务状态
+    // 轮询任务状态（视频生成需要较长时间，超时设为45分钟，与后端一致）
     if (result.task_id) {
       const finalResult = await pollTaskStatus(result.task_id, 'video', {
+        timeout: 45 * 60 * 1000, // 45分钟，与后端超时一致
         onProgress: (status) => {
           console.log('[VideoGen] 任务进度:', status)
         }
