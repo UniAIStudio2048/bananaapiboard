@@ -477,6 +477,8 @@ onUnmounted(() => {
               </div>
             </label>
           </div>
+          <!-- Sora2 备注提示 -->
+          <p class="sora2-note">💡 当前 Sora2 从 URL 上传创建角色成功率较高，不支持真人</p>
         </div>
         
         <!-- 角色名称输入 -->
@@ -900,6 +902,18 @@ onUnmounted(() => {
 
 .mode-option.active .mode-title {
   color: #FBBF24;
+}
+
+/* Sora2 备注提示 */
+.sora2-note {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(251, 191, 36, 0.1);
+  border-left: 3px solid #FBBF24;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #999;
+  line-height: 1.5;
 }
 
 /* 角色名称输入 */
