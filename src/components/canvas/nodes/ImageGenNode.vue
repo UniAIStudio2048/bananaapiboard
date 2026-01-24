@@ -328,7 +328,7 @@ async function handleGenerate() {
       // 后台轮询任务状态（不阻塞UI）
       pollTaskStatus(taskId, 'image', {
         interval: 2000,
-        timeout: 300000,
+        timeout: 12 * 60 * 1000, // 12 分钟，与后端超时一致
         onProgress: (status) => {
           console.log('[ImageGenNode] 任务进度:', status)
         }

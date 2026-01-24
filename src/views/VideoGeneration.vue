@@ -14,8 +14,12 @@ const hd = ref(false)
 const offPeak = ref(false) // Vidu 错峰模式
 const resolution = ref('1080p') // Vidu 清晰度选项
 
-// VEO3模型列表（不支持时长参数）
-const VEO3_MODELS = ['veo3.1-components', 'veo3.1', 'veo3.1-pro']
+// VEO3模型列表（不支持时长参数选择，固定8秒）
+const VEO3_MODELS = [
+  'veo3.1-components', 'veo3.1', 'veo3.1-pro',
+  'veo3.1-4k', 'veo3.1-components-4k', 'veo3.1-pro-4k',
+  'veo_3_1-fast' // 新增的 VEO 快速版
+]
 
 // 当前模型是否为VEO3系列
 const isVeo3Model = computed(() => VEO3_MODELS.includes(model.value))
@@ -65,15 +69,17 @@ const availableAspectRatios = computed(() => {
 
 // VEO3模型的图片数量限制
 const maxImagesForModel = computed(() => {
-  if (model.value === 'veo3.1-components') return 3
+  // components 版本支持最多 3 张图
+  if (model.value === 'veo3.1-components' || model.value === 'veo3.1-components-4k') return 3
+  // 其他 VEO3 模型支持最多 2 张图（首尾帧）
   if (VEO3_MODELS.includes(model.value)) return 2
   return 9 // 其他模型
 })
 const watermark = ref(false) // 默认false，隐藏选项
 const isPrivate = ref(true) // 默认true，隐藏选项
 
-// HD 选项是否可用（仅 Sora PRO 模型可用，VEO3不支持）
-const isHdAvailable = computed(() => model.value === 'sora2-pro' || model.value === 'sora-2-pro')
+// HD 选项已弃用（Sora 新版本不再支持 HD 选项）
+const isHdAvailable = computed(() => false)
 const loading = ref(false)
 const error = ref('')
 const successMessage = ref('')
@@ -95,7 +101,7 @@ const videoPlayerRef = ref(null)
 
 // 积分配置（从租户配置动态获取）
 const pointsCostConfig = computed(() => {
-  const models = getAvailableVideoModels()
+  const models = getAvailableVideoModels({ disableVeoMerge: true })
   const config = { hd_extra: 10 }
   for (const m of models) {
     if (m.pointsCost) {
@@ -113,7 +119,8 @@ const availableDurations = computed(() => {
   // 优先使用模型配置中的 durations 数组
   const modelDurations = currentModelConfig.value?.durations
   if (modelDurations && modelDurations.length > 0) {
-    return modelDurations
+    // 🔧 确保时长为字符串格式（数据库配置可能返回数字）
+    return modelDurations.map(d => String(d))
   }
   // 兜底：从积分配置中获取
   const config = pointsCostConfig.value[model.value] || {}
@@ -179,11 +186,29 @@ const userPackageInfo = computed(() => {
   }
 })
 
-// 获取可用的视频模型列表（从配置动态获取，过滤掉旧版模型）
+// 获取可用的视频模型列表（从配置动态获取，根据当前模式过滤）
+// 🔧 新手模式禁用 VEO 整合，直接显示所有 VEO 子模型
 const availableModels = computed(() => {
-  const allModels = getAvailableVideoModels()
-  // 过滤掉旧版 sora-2 和 sora-2-pro，只保留新版 sora2 系列和其他模型
-  return allModels.filter(m => !['sora-2', 'sora-2-pro'].includes(m.value))
+  const allModels = getAvailableVideoModels({ disableVeoMerge: true })
+  
+  // 过滤掉旧版 sora-2 和 sora-2-pro
+  const filteredByVersion = allModels.filter(m => !['sora-2', 'sora-2-pro'].includes(m.value))
+  
+  // 🔧 根据当前模式过滤：text=t2v, image=i2v
+  const currentMode = mode.value === 'text' ? 't2v' : 'i2v'
+  
+  return filteredByVersion.filter(m => {
+    const supportedModes = m.supportedModes
+    if (!supportedModes) return true // 无配置默认支持所有模式
+    
+    // 支持两种格式：数组 ['t2v', 'i2v'] 或 对象 { t2v: true, i2v: true }
+    if (Array.isArray(supportedModes)) {
+      return supportedModes.includes(currentMode)
+    } else if (typeof supportedModes === 'object') {
+      return supportedModes[currentMode] === true
+    }
+    return true
+  })
 })
 
 // 获取模型显示名称
@@ -197,11 +222,21 @@ const getModelName = (modelKey) => {
   
   // 默认名称
   const defaultNames = {
+    // Sora 系列（新版）
+    'sora-2-33': 'Sora 2 普通版',
+    'sora2-pro': 'Sora 2 Pro',
+    'sora-2-duomi': 'Sora 2 角色创建版',
+    // Sora 系列（旧版，已弃用）
     'sora-2': 'Sora 2',
     'sora-2-pro': 'Sora 2 Pro',
+    // VEO 系列
     'veo3.1-components': 'VEO 3.1',
     'veo3.1': 'VEO 3.1 标准',
-    'veo3.1-pro': 'VEO 3.1 Pro'
+    'veo3.1-pro': 'VEO 3.1 Pro',
+    'veo3.1-4k': 'VEO 4K',
+    'veo3.1-components-4k': 'VEO 4K 多图',
+    'veo3.1-pro-4k': 'VEO 4K Pro',
+    'veo_3_1-fast': 'VEO 快速版'
   }
   return defaultNames[modelKey] || modelKey
 }
@@ -215,9 +250,9 @@ function formatPointsTitle() {
 watch(model, (newModel) => {
   const modelConfig = availableModels.value.find(m => m.value === newModel)
 
-  // 更新时长选项
-  const durations = modelConfig?.durations || ['10', '15']
-  if (durations.length > 0 && !durations.includes(duration.value)) {
+  // 更新时长选项（确保为字符串格式）
+  const durations = (modelConfig?.durations || ['10', '15']).map(d => String(d))
+  if (durations.length > 0 && !durations.includes(String(duration.value))) {
     duration.value = durations[0]
     console.log('[VideoGeneration] 时长已重置为:', duration.value)
   }
@@ -231,6 +266,19 @@ watch(model, (newModel) => {
   if (aspectValues.length > 0 && !aspectValues.includes(aspectRatio.value)) {
     aspectRatio.value = aspectValues[0]
     console.log('[VideoGeneration] 方向已重置为:', aspectRatio.value)
+  }
+})
+
+// 🔧 监听模式变化，检查当前模型是否支持新模式
+watch(mode, (newMode) => {
+  // 检查当前选中的模型是否在新模式的可用模型列表中
+  const modelsForNewMode = availableModels.value
+  const currentModelStillAvailable = modelsForNewMode.some(m => m.value === model.value)
+  
+  if (!currentModelStillAvailable && modelsForNewMode.length > 0) {
+    // 当前模型不支持新模式，切换到第一个支持的模型
+    model.value = modelsForNewMode[0].value
+    console.log('[VideoGeneration] 切换模式后自动选择模型:', model.value)
   }
 })
 
@@ -987,8 +1035,8 @@ function toggleHistoryDrawer() {
 
 // 监听模型变化
 watch(model, (newModel) => {
-  // 切换到非 PRO 模型时自动关闭 HD
-  if (newModel !== 'sora-2-pro' && hd.value) {
+  // HD 选项已弃用，始终关闭
+  if (hd.value) {
     hd.value = false
   }
   
@@ -999,11 +1047,11 @@ watch(model, (newModel) => {
     offPeak.value = false
   }
   
-  // VEO3模型不需要时长选项
+  // VEO3模型不需要时长选项（固定 8 秒）
   if (VEO3_MODELS.includes(newModel)) {
-    console.log('[VideoGeneration] VEO3模型不支持时长选择')
+    console.log('[VideoGeneration] VEO3模型不支持时长选择，固定8秒')
     // 如果上传的图片数量超过VEO3限制，提示用户
-    const maxImages = newModel === 'veo3.1-components' ? 3 : 2
+    const maxImages = (newModel === 'veo3.1-components' || newModel === 'veo3.1-components-4k') ? 3 : 2
     if (imageFiles.value.length > maxImages) {
       console.log(`[VideoGeneration] 图片数量 ${imageFiles.value.length} 超过VEO3限制 ${maxImages}`)
     }
@@ -1233,8 +1281,8 @@ onUnmounted(() => {
             <div v-if="isVeo3Model && mode === 'image'" class="p-2.5 bg-gray-100 dark:bg-gray-800/50 border border-gray-300 dark:border-gray-700 rounded-lg">
               <p class="text-xs text-gray-700 dark:text-gray-300">
                 <span class="font-semibold">{{ getModelName(model) }}</span> 
-                <span v-if="model === 'veo3.1-components'">支持最多 3 张参考图</span>
-                <span v-else>支持最多 2 张参考图（首尾帧）</span>
+                <span v-if="model === 'veo3.1-components' || model === 'veo3.1-components-4k'">支持最多 3 张参考图</span>
+                <span v-else>支持最多 2 张参考图（首尾帧），固定生成 8 秒视频</span>
               </p>
             </div>
 

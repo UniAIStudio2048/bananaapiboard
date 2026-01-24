@@ -684,7 +684,7 @@ async function pollAndUpdateNodes(taskId, nodeIds) {
   try {
     const result = await pollTaskStatus(taskId, 'image', {
       interval: 2000,
-      timeout: 300000,
+      timeout: 12 * 60 * 1000, // 12 分钟，与后端超时一致
       onProgress: (status) => {
         console.log('[InplaceImageEditor] 任务进度:', status)
       }

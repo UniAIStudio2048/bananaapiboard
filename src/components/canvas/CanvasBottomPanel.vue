@@ -479,7 +479,7 @@ async function handleImageGenerate(nodeId, nodeType) {
       // 后台轮询，不阻塞
       pollTaskStatus(taskId, 'image', {
         interval: 2000,
-        timeout: 300000
+        timeout: 12 * 60 * 1000 // 12 分钟，与后端超时一致
       }).then(finalResult => {
         const urls = finalResult.urls || finalResult.images || []
         canvasStore.updateNodeData(nodeId, {

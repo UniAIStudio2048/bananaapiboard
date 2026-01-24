@@ -483,6 +483,7 @@ onUnmounted(() => {
 })
 
 // 检查是否有图片输入（用于判断文生图/图生图模式）
+// 🔧 修复：直接使用 referenceImages 的长度判断，避免判断逻辑不一致
 const hasImageInput = computed(() => {
   // 1. 首先检查节点自身是否有参考图片（用户拖拽添加的）
   if (props.data?.sourceImages?.length > 0) {
@@ -512,6 +513,32 @@ const hasImageInput = computed(() => {
   return false
 })
 
+// 🔧 新增：用于 botType 显示判断的计算属性，直接检查 referenceImages 是否有值
+const hasReferenceImages = computed(() => {
+  // 检查 props.data 中的 sourceImages
+  if (props.data?.sourceImages?.length > 0) {
+    return true
+  }
+  
+  // 检查上游连接的节点的实际图片
+  const allEdges = [...canvasStore.edges]
+  const allNodes = [...canvasStore.nodes]
+  const upstreamEdges = allEdges.filter(e => e.target === props.id)
+  
+  for (const edge of upstreamEdges) {
+    const node = allNodes.find(n => n.id === edge.source)
+    if (!node?.data) continue
+    
+    // 只检查有实际图片 URL 的情况
+    if (node.data.output?.urls?.length > 0 ||
+        node.data.output?.url ||
+        node.data.sourceImages?.length > 0) {
+      return true
+    }
+  }
+  return false
+})
+
 // 可用选项 - 从配置动态获取，支持新增模型自动同步，根据是否有参考图片过滤
 const models = computed(() => {
   // 只有真正有图片输入时才是图生图模式，文本输入仍然是文生图模式
@@ -527,7 +554,6 @@ const isMJModel = computed(() => {
                modelName.includes('midjourney') || 
                modelName.includes('mjvector') ||
                modelName.includes('mj-')
-  console.log('[ImageNode] 当前模型:', selectedModel.value, '| isMJ:', isMJ)
   return isMJ
 })
 
@@ -1714,9 +1740,10 @@ async function handleOutpaint(data) {
       })
       
       // 后台轮询，不阻塞
+      // 🔧 修复：超时时间从 5 分钟改为 12 分钟
       pollTaskStatus(taskId, 'image', {
         interval: 2000,
-        timeout: 300000,
+        timeout: 12 * 60 * 1000, // 12 分钟
         onProgress: (progress) => {
           canvasStore.updateNodeData(newNodeId, {
             progress: progress.status === 'processing' ? '扩图生成中...' : progress.status
@@ -2934,9 +2961,10 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
       })
       
       // 后台轮询，不阻塞（使用独立的 Promise，不 await）
+      // 🔧 修复：超时时间从 5 分钟改为 12 分钟，与后端任务超时一致
       pollTaskStatus(taskId, 'image', {
         interval: 2000,
-        timeout: 300000,
+        timeout: 12 * 60 * 1000, // 12 分钟
         onProgress: (progress) => {
           canvasStore.updateNodeData(nodeId, { 
             progress: progress.status === 'processing' ? '生成中...' : progress.status
@@ -3226,9 +3254,10 @@ async function handleGenerateSingle() {
         const taskId = result.task_id || result.id
         
         if (i === generateCount - 1) {
+          // 🔧 修复：超时时间从 5 分钟改为 12 分钟
           const finalResult = await pollTaskStatus(taskId, 'image', {
             interval: 2000,
-            timeout: 300000
+            timeout: 12 * 60 * 1000 // 12 分钟
           })
           
           const imageUrl = finalResult.url || finalResult.urls?.[0] || finalResult.images?.[0]
@@ -4636,7 +4665,7 @@ async function handleDrop(event) {
           </div>
           
           <!-- MJ 模型 botType 切换器（写实/动漫） -->
-          <div v-if="isMJModel && hasImageInput" class="bot-type-selector">
+          <div v-if="isMJModel && referenceImages.length > 0" class="bot-type-selector">
             <div 
               v-for="option in botTypeOptions" 
               :key="option.value"
@@ -6132,12 +6161,12 @@ async function handleDrop(event) {
   gap: 6px;
 }
 
-/* MJ botType 选择器样式 - 黑白灰风格 */
+/* MJ botType 选择器样式 - 支持亮/暗主题 */
 .bot-type-selector {
   display: flex;
   gap: 2px;
   padding: 2px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--canvas-bg-tertiary, rgba(0, 0, 0, 0.06));
   border-radius: 6px;
 }
 
@@ -6148,16 +6177,16 @@ async function handleDrop(event) {
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--canvas-text-secondary, #666);
 }
 
 .bot-type-chip:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--canvas-text-primary, #333);
 }
 
 .bot-type-chip.active {
-  background: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.95);
+  background: var(--canvas-accent-primary, #3b82f6);
+  color: #fff;
 }
 
 .count-display {

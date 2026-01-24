@@ -62,14 +62,30 @@ const isCanvasDragging = ref(false)
 // 生成模式：image（图生视频）, text（纯文本）
 const generationMode = ref(props.data.generationMode || 'text')
 
-// 获取默认模型（使用模型列表的第一个，而不是硬编码）
-function getDefaultVideoModel() {
+// 获取默认模型（根据当前生成模式过滤后的第一个模型）
+function getDefaultVideoModel(mode = 'text') {
   const allModels = getAvailableVideoModels()
-  return allModels.length > 0 ? allModels[0].value : 'sora2'
+  
+  // 根据模式过滤模型
+  const currentMode = mode === 'text' ? 't2v' : 'i2v'
+  const filteredModels = allModels.filter(m => {
+    const supportedModes = m.supportedModes
+    if (!supportedModes) return true // 无配置默认支持所有模式
+    
+    // 支持两种格式：数组 ['t2v', 'i2v'] 或 对象 { t2v: true, i2v: true }
+    if (Array.isArray(supportedModes)) {
+      return supportedModes.includes(currentMode)
+    } else if (typeof supportedModes === 'object') {
+      return supportedModes[currentMode] === true
+    }
+    return true
+  })
+  
+  return filteredModels.length > 0 ? filteredModels[0].value : 'sora2'
 }
 
-// 生成参数 - 默认使用模型列表的第一个模型
-const selectedModel = ref(props.data.model || getDefaultVideoModel())
+// 生成参数 - 默认使用根据当前生成模式过滤后的第一个模型
+const selectedModel = ref(props.data.model || getDefaultVideoModel(props.data.generationMode || 'text'))
 const selectedAspectRatio = ref(props.data.aspectRatio || '16:9')
 const selectedDuration = ref(props.data.duration || '10')
 const selectedCount = ref(props.data.count || 1)
@@ -564,10 +580,39 @@ const models = computed(() => {
   const allModels = getAvailableVideoModels()
   
   // 如果有模型启用检查函数，则过滤
+  let filteredModels = allModels
   if (typeof isModelEnabled === 'function') {
-    return allModels.filter(m => isModelEnabled(m.value, 'video'))
+    filteredModels = allModels.filter(m => isModelEnabled(m.value, 'video'))
   }
-  return allModels
+  
+  // 🔧 根据当前生成模式过滤：text=t2v, image=i2v
+  const currentMode = generationMode.value === 'text' ? 't2v' : 'i2v'
+  
+  const result = filteredModels.filter(m => {
+    const supportedModes = m.supportedModes
+    if (!supportedModes) return true // 无配置默认支持所有模式
+    
+    // 支持两种格式：数组 ['t2v', 'i2v'] 或 对象 { t2v: true, i2v: true }
+    if (Array.isArray(supportedModes)) {
+      return supportedModes.includes(currentMode)
+    } else if (typeof supportedModes === 'object') {
+      return supportedModes[currentMode] === true
+    }
+    return true
+  })
+  
+  // 调试日志（仅在开发环境或需要时输出）
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[VideoNode] models 计算属性更新:', {
+      generationMode: generationMode.value,
+      currentMode,
+      allModelsCount: allModels.length,
+      filteredCount: result.length,
+      modelNames: result.map(m => m.value)
+    })
+  }
+  
+  return result
 })
 
 const aspectRatios = [
@@ -755,6 +800,18 @@ onMounted(() => {
   if (availableDurations.value.length > 0 && !availableDurations.value.includes(selectedDuration.value)) {
     selectedDuration.value = availableDurations.value[0]
   }
+  
+  // 🔧 初始化时检查当前模型是否支持当前的生成模式（使用 nextTick 确保计算属性已更新）
+  nextTick(() => {
+    const modelsForCurrentMode = models.value
+    const currentModelStillAvailable = modelsForCurrentMode.some(m => m.value === selectedModel.value)
+    
+    if (!currentModelStillAvailable && modelsForCurrentMode.length > 0) {
+      // 当前模型不支持当前模式，切换到第一个支持的模型
+      selectedModel.value = modelsForCurrentMode[0].value
+      console.log('[VideoNode] 初始化时自动选择模型（根据生成模式）:', selectedModel.value, '当前模式:', generationMode.value)
+    }
+  })
   
   // 添加点击外部关闭下拉框的事件监听
   document.addEventListener('click', handleModelDropdownClickOutside)
@@ -1566,6 +1623,28 @@ function setGenerationMode(mode) {
   generationMode.value = mode
   canvasStore.selectNode(props.id)
 }
+
+// 🔧 监听 props.data.generationMode 变化，确保 generationMode 与 props 同步
+watch(() => props.data.generationMode, (newMode) => {
+  if (newMode && newMode !== generationMode.value) {
+    generationMode.value = newMode
+    console.log('[VideoNode] 从 props 同步 generationMode:', newMode)
+  }
+}, { immediate: true })
+
+// 🔧 监听生成模式变化，检查当前模型是否支持新模式（immediate: true 确保初始化时也执行）
+watch(generationMode, (newMode) => {
+  console.log('[VideoNode] generationMode 变化:', newMode, '当前模型列表数量:', models.value.length)
+  // 检查当前选中的模型是否在新模式的可用模型列表中
+  const modelsForNewMode = models.value
+  const currentModelStillAvailable = modelsForNewMode.some(m => m.value === selectedModel.value)
+  
+  if (!currentModelStillAvailable && modelsForNewMode.length > 0) {
+    // 当前模型不支持新模式，切换到第一个支持的模型
+    selectedModel.value = modelsForNewMode[0].value
+    console.log('[VideoNode] 切换模式后自动选择模型:', selectedModel.value, '新模式:', newMode)
+  }
+}, { immediate: true })
 
 // 并发间隔时间（毫秒）
 const CONCURRENT_INTERVAL = 5000
@@ -5752,7 +5831,7 @@ function handleToolbarPreview() {
   top: calc(100% + 4px);
   left: 0;
   min-width: 220px;
-  max-height: 240px;
+  max-height: 360px; /* 增加高度，一次显示 6 个模型 */
   overflow-y: auto;
   background: rgba(20, 20, 20, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.1);

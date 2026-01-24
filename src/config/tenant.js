@@ -648,7 +648,10 @@ export const getAvailableImageModels = (mode = null) => {
 }
 
 // 获取所有可用的视频模型列表（从配置中动态获取）
-export const getAvailableVideoModels = () => {
+// @param {Object} options - 配置选项
+// @param {boolean} options.disableVeoMerge - 是否禁用 VEO 模型整合（新手模式需要禁用）
+export const getAvailableVideoModels = (options = {}) => {
+  const { disableVeoMerge = false } = options
   const modelNames = getModelNames()
   const modelEnabled = getModelEnabled()
   const modelDescriptions = getModelDescriptions()
@@ -1014,46 +1017,48 @@ export const getAvailableVideoModels = () => {
         (modelConfig.displayName || '').toLowerCase().includes('4k')
       )
       
-      // 🆕 遇到第一个 VEO 4K 子模型时，插入 VEO 4K 整合入口
-      if (isVeo4kSubModel && !veo4kInserted && veo4kEntry) {
-        models.push(veo4kEntry)
-        veo4kInserted = true
-        continue  // 跳过 VEO 4K 子模型，不单独显示
+      // 🔧 VEO 整合逻辑（仅在未禁用时执行）
+      if (!disableVeoMerge) {
+        // 🆕 遇到第一个 VEO 4K 子模型时，插入 VEO 4K 整合入口
+        if (isVeo4kSubModel && !veo4kInserted && veo4kEntry) {
+          models.push(veo4kEntry)
+          veo4kInserted = true
+          continue  // 跳过 VEO 4K 子模型，不单独显示
+        }
+        
+        // 跳过其他 VEO 4K 子模型
+        if (isVeo4kSubModel) continue
+        
+        // 🔧 遇到第一个普通 VEO 子模型时，插入 VEO 整合入口
+        if (isVeoSubModel && !veoInserted && veoSubModels.length > 0) {
+          models.push(veoEntry)
+          veoInserted = true
+          continue  // 跳过 VEO 子模型，不单独显示
+        }
+        
+        // 跳过其他普通 VEO 子模型
+        if (isVeoSubModel) continue
       }
-      
-      // 跳过其他 VEO 4K 子模型
-      if (isVeo4kSubModel) continue
-      
-      // 🔧 遇到第一个普通 VEO 子模型时，插入 VEO 整合入口
-      if (isVeoSubModel && !veoInserted && veoSubModels.length > 0) {
-        models.push(veoEntry)
-        veoInserted = true
-        continue  // 跳过 VEO 子模型，不单独显示
-      }
-      
-      // 跳过其他普通 VEO 子模型
-      if (isVeoSubModel) continue
+      // 🆕 禁用整合时，VEO 子模型会在下面正常添加到列表
       
       const modelPricingConfig = pricing[key] || {}
       const defaultConfig = defaultModelConfig[key] || {}
       
-      // 计算时长选项（优先级：新格式配置 > pointsCost提取 > 默认配置）
-      let modelDurations = defaultConfig.durations || ['10', '15']
+      // 计算时长选项（优先级：新格式配置 durations > 默认配置）
+      // 🔧 修复：不再从 pointsCost 提取时长，始终以 durations 配置为准
       const hasDurPricing = modelConfig.hasDurationPricing ?? modelPricingConfig.hasDurationPricing ?? defaultConfig.hasDurationPricing ?? false
       const pCost = modelConfig.pointsCost || modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1
       
-      // 优先使用新格式配置中的 durations（租户后台直接配置的时长选项）
+      // 优先使用后端配置的 durations，然后是默认配置
+      let modelDurations = ['10', '15'] // 最终兜底
       if (modelConfig.durations && Array.isArray(modelConfig.durations) && modelConfig.durations.length > 0) {
-        // 确保时长为字符串格式
+        // 使用后端配置的 durations（确保为字符串格式）
         modelDurations = modelConfig.durations.map(d => String(d))
+      } else if (defaultConfig.durations && defaultConfig.durations.length > 0) {
+        // 使用默认配置的 durations
+        modelDurations = defaultConfig.durations.map(d => String(d))
       }
-      // 否则，如果租户配置了按时长计费且 pointsCost 是对象，从中提取时长选项
-      else if (hasDurPricing && typeof pCost === 'object' && pCost !== null) {
-        const durationsFromPricing = Object.keys(pCost).filter(k => k !== 'hd_extra').sort((a, b) => Number(a) - Number(b))
-        if (durationsFromPricing.length > 0) {
-          modelDurations = durationsFromPricing
-        }
-      }
+      // 注意：不再从 pointsCost 提取时长，因为 pointsCost 可能包含历史遗留的计费键
       
       // 获取新格式配置中的 aspectRatios 和 supportedModes
       // 兼容两种格式：字符串数组或对象数组
@@ -1080,7 +1085,8 @@ export const getAvailableVideoModels = () => {
       const displayLabel = modelConfig.displayName || videoModels[key] || defaultConfig.label || key
       
       // 跳过隐藏的模型（如 VEO 子模型）
-      if (defaultConfig.hidden) continue
+      // 🔧 当禁用 VEO 整合时，不跳过 VEO 子模型
+      if (defaultConfig.hidden && !disableVeoMerge) continue
       
       models.push({
         value: key,
@@ -1116,7 +1122,8 @@ export const getAvailableVideoModels = () => {
     }
     
     // 如果没有 VEO 子模型配置，但需要显示默认 VEO，添加到末尾
-    if (!veoInserted) {
+    // 🔧 仅在未禁用整合时添加
+    if (!veoInserted && !disableVeoMerge) {
       models.push(veoEntry)
     }
     
@@ -1142,18 +1149,16 @@ export const getAvailableVideoModels = () => {
       // 查找新格式配置
       const modelFullConfig = videoModelsConfig.find(m => m.name === key || m.id === key) || {}
       
-      // 计算时长选项
-      let modelDurations = defaultConfig.durations || ['10', '15']
+      // 计算时长选项（优先级：后端配置 > 默认配置）
+      // 🔧 修复：不再从 pointsCost 提取时长
       const hasDurPricing = modelPricingConfig.hasDurationPricing ?? defaultConfig.hasDurationPricing ?? false
       const pCost = modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1
       
+      let modelDurations = ['10', '15'] // 最终兜底
       if (modelFullConfig.durations && Array.isArray(modelFullConfig.durations) && modelFullConfig.durations.length > 0) {
         modelDurations = modelFullConfig.durations.map(d => String(d))
-      } else if (hasDurPricing && typeof pCost === 'object' && pCost !== null) {
-        const durationsFromPricing = Object.keys(pCost).filter(k => k !== 'hd_extra').sort((a, b) => Number(a) - Number(b))
-        if (durationsFromPricing.length > 0) {
-          modelDurations = durationsFromPricing
-        }
+      } else if (defaultConfig.durations && defaultConfig.durations.length > 0) {
+        modelDurations = defaultConfig.durations.map(d => String(d))
       }
       
       // 兼容两种格式：字符串数组或对象数组
