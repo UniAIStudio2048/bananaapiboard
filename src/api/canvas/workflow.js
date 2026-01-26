@@ -100,6 +100,11 @@ export async function loadWorkflow(workflowId) {
 
 /**
  * 获取工作流列表
+ * @param {Object} params - 查询参数
+ * @param {number} params.page - 页码
+ * @param {number} params.pageSize - 每页数量
+ * @param {string} params.spaceType - 空间类型 (personal/team/all)
+ * @param {string} params.teamId - 团队ID (spaceType=team时需要)
  */
 export async function getWorkflowList(params = {}) {
   const queryParams = new URLSearchParams({
@@ -107,7 +112,9 @@ export async function getWorkflowList(params = {}) {
     pageSize: params.pageSize || 20,
     ...(params.status && { status: params.status }),
     ...(params.orderBy && { orderBy: params.orderBy }),
-    ...(params.orderDir && { orderDir: params.orderDir })
+    ...(params.orderDir && { orderDir: params.orderDir }),
+    ...(params.spaceType && { spaceType: params.spaceType }),
+    ...(params.teamId && { teamId: params.teamId })
   })
   
   const response = await fetch(`${getApiBase()}/api/canvas/workflows?${queryParams}`, {

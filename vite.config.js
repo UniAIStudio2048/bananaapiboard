@@ -16,6 +16,14 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 3000,
       allowedHosts: true,  // 允许所有域名（Vite 5.x 正确写法）
+      
+      // 🔧 HMR 配置：防止开发模式下意外刷新页面
+      hmr: {
+        // 禁用 overlay 错误弹窗（可能导致页面交互问题）
+        overlay: false,
+        // HMR 连接超时时间（毫秒），防止网络抖动导致重连刷新
+        timeout: 30000,
+      },
       proxy: {
         '/api': {
           target: apiTarget,

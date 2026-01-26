@@ -19,8 +19,11 @@ import { getHistory, getHistoryDetail, deleteHistory } from '@/api/canvas/histor
 import { saveAsset } from '@/api/canvas/assets'
 import { getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
+import { useTeamStore } from '@/stores/team'
+import SpaceSwitcher from './SpaceSwitcher.vue'
 
 const { t, currentLanguage } = useI18n()
+const teamStore = useTeamStore()
 
 const props = defineProps({
   visible: Boolean
@@ -33,6 +36,7 @@ const loading = ref(false)
 const historyList = shallowRef([]) // 使用 shallowRef 优化大数组
 const selectedType = ref('all') // all | image | video | audio
 const searchQuery = ref('')
+const spaceFilter = ref('current') // 空间筛选: 'current' | 'personal' | 'team-xxx' | 'all'
 
 // 全屏模式
 const isFullscreen = ref(false)
@@ -98,6 +102,11 @@ const contextMenuItem = ref(null)
 const dataCached = ref(false)
 const lastLoadTime = ref(0)
 const CACHE_DURATION = 60000 // 缓存有效期 60 秒
+
+// 团队空间实时同步
+const TEAM_SYNC_INTERVAL = 10000 // 团队空间同步间隔 10 秒
+let teamSyncTimer = null
+const lastSyncId = ref(null) // 记录最新一条记录的ID，用于检测新数据
 
 // 保存中状态
 const savingAsset = ref(false)
@@ -238,7 +247,7 @@ function updateContainerHeight() {
 async function loadHistory(forceRefresh = false) {
   const now = Date.now()
   
-  // 如果有缓存且未过期，使用缓存
+  // 如果有缓存且未过期，使用缓存（但空间切换时需要强制刷新）
   if (!forceRefresh && dataCached.value && (now - lastLoadTime.value < CACHE_DURATION)) {
     console.log('[HistoryPanel] 使用缓存数据')
     return
@@ -246,17 +255,110 @@ async function loadHistory(forceRefresh = false) {
   
   loading.value = true
   try {
-    const result = await getHistory()
+    // 获取空间筛选参数
+    const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
+    const result = await getHistory(spaceParams)
     historyList.value = result.history || []
     dataCached.value = true
     lastLoadTime.value = now
-    console.log('[HistoryPanel] 加载历史记录:', historyList.value.length, '条')
+    console.log('[HistoryPanel] 加载历史记录:', historyList.value.length, '条', spaceParams)
   } catch (error) {
     console.error('[HistoryPanel] 加载历史记录失败:', error)
   } finally {
     loading.value = false
   }
 }
+
+/**
+ * 团队空间实时同步 - 检查是否有新数据
+ * 通过比较最新记录ID来判断是否需要刷新
+ */
+async function checkTeamSync() {
+  // 仅在团队空间且面板可见时同步
+  if (!teamStore.isInTeamSpace.value || !props.visible) return
+  
+  // 仅在筛选当前空间时同步
+  if (spaceFilter.value !== 'current') return
+  
+  try {
+    const spaceParams = teamStore.getSpaceParams('current')
+    const result = await getHistory({ ...spaceParams, limit: 1 })
+    const latestHistory = result.history?.[0]
+    
+    if (latestHistory) {
+      // 如果有新数据（ID不同或首次同步）
+      if (lastSyncId.value !== null && lastSyncId.value !== latestHistory.id) {
+        console.log('[HistoryPanel] 检测到新数据，自动刷新')
+        dataCached.value = false
+        await loadHistory(true)
+      }
+      lastSyncId.value = latestHistory.id
+    }
+  } catch (error) {
+    console.error('[HistoryPanel] 团队同步检查失败:', error)
+  }
+}
+
+/**
+ * 启动团队空间实时同步
+ */
+function startTeamSync() {
+  stopTeamSync()
+  if (teamStore.isInTeamSpace.value && props.visible) {
+    // 记录当前最新ID
+    if (historyList.value.length > 0) {
+      lastSyncId.value = historyList.value[0].id
+    }
+    teamSyncTimer = setInterval(checkTeamSync, TEAM_SYNC_INTERVAL)
+    console.log('[HistoryPanel] 启动团队空间实时同步')
+  }
+}
+
+/**
+ * 停止团队空间实时同步
+ */
+function stopTeamSync() {
+  if (teamSyncTimer) {
+    clearInterval(teamSyncTimer)
+    teamSyncTimer = null
+    console.log('[HistoryPanel] 停止团队空间实时同步')
+  }
+}
+
+// 空间筛选变化时重新加载
+function handleSpaceChange(newSpace) {
+  spaceFilter.value = newSpace
+  dataCached.value = false // 清除缓存
+  loadHistory(true)
+  
+  // 重新评估是否需要同步
+  if (newSpace === 'current') {
+    startTeamSync()
+  } else {
+    stopTeamSync()
+  }
+}
+
+// 监听全局空间切换事件
+watch(() => teamStore.globalTeamId.value, () => {
+  if (spaceFilter.value === 'current') {
+    dataCached.value = false
+    loadHistory(true)
+  }
+  // 空间切换后重新评估同步状态
+  if (props.visible) {
+    startTeamSync()
+  }
+})
+
+// 监听团队空间状态变化，控制同步
+watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
+  if (isTeam && props.visible && spaceFilter.value === 'current') {
+    startTeamSync()
+  } else {
+    stopTeamSync()
+  }
+})
 
 // 为七牛云URL添加缩略图处理参数（仅用于列表缩略图，加快加载速度）
 function getQiniuThumbnailUrl(url, width = 400) {
@@ -930,6 +1032,8 @@ async function handleAddToAssets(item) {
   savingAsset.value = true
   
   try {
+    // 获取当前空间参数
+    const spaceParams = teamStore.getSpaceParams('current')
     await saveAsset({
       type: item.type,
       name: item.name || item.prompt?.slice(0, 30) || `${item.type}_${item.id}`,
@@ -940,7 +1044,10 @@ async function handleAddToAssets(item) {
         model: item.model,
         prompt: item.prompt,
         historyId: item.id
-      }
+      },
+      // 空间参数
+      spaceType: spaceParams.spaceType,
+      teamId: spaceParams.teamId
     })
     
     // 显示成功提示
@@ -1262,7 +1369,10 @@ watch(() => props.visible, async (visible) => {
     scrollTop.value = 0
     
     // 加载数据
-    loadHistory()
+    await loadHistory()
+    
+    // 启动团队空间实时同步
+    startTeamSync()
     
     // 延迟渲染内容，让面板动画先完成
     isContentReady.value = false
@@ -1277,6 +1387,9 @@ watch(() => props.visible, async (visible) => {
     // 面板关闭时重置状态
     isContentReady.value = false
     closeContextMenu()
+    
+    // 停止团队空间实时同步
+    stopTeamSync()
   }
 })
 
@@ -1333,6 +1446,9 @@ onUnmounted(() => {
   document.removeEventListener('mousemove', handleGlobalMouseMove)
   document.removeEventListener('mouseup', handleGlobalMouseUp)
   document.removeEventListener('click', handleGlobalClick)
+  
+  // 停止团队空间实时同步
+  stopTeamSync()
   
   // 清理 ResizeObserver
   if (resizeObserver) {
@@ -1409,6 +1525,13 @@ onUnmounted(() => {
             </button>
           </div>
         </div>
+        
+        <!-- 空间切换器 -->
+        <SpaceSwitcher 
+          v-model="spaceFilter" 
+          @change="handleSpaceChange"
+          :compact="!isFullscreen"
+        />
         
         <!-- 批量操作栏（选择模式下显示） -->
         <div v-if="isSelectMode" class="batch-action-bar">
@@ -1615,6 +1738,14 @@ onUnmounted(() => {
                       <div class="overlay-model" v-if="item.model">{{ item.model }}</div>
                       <div class="overlay-prompt" v-if="item.prompt">{{ item.prompt.length > 60 ? item.prompt.slice(0, 60) + '...' : item.prompt }}</div>
                       <div class="overlay-time">{{ formatDate(item.created_at) }}</div>
+                      <!-- 团队空间用户署名 -->
+                      <div v-if="teamStore.isInTeamSpace.value && item.last_updated_by_username" class="overlay-author">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                          <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                        {{ item.last_updated_by_username }}
+                      </div>
                     </div>
                     <button 
                       class="overlay-delete"
@@ -2527,6 +2658,21 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.5);
 }
 
+.overlay-author {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.overlay-author svg {
+  opacity: 0.7;
+}
+
 .overlay-delete {
   position: absolute;
   top: 6px;
@@ -3361,6 +3507,11 @@ onUnmounted(() => {
 
 :root.canvas-theme-light .history-panel .overlay-time {
   color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .history-panel .overlay-author {
+  color: rgba(0, 0, 0, 0.6) !important;
+  border-top-color: rgba(0, 0, 0, 0.1) !important;
 }
 
 :root.canvas-theme-light .history-panel .overlay-delete {

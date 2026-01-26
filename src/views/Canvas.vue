@@ -7,6 +7,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { getMe, updateUserPreferences } from '@/api/client'
 import { getTenantHeaders } from '@/config/tenant'
 import { useCanvasStore } from '@/stores/canvas'
+import { useTeamStore } from '@/stores/team'
 import { loadWorkflow as loadWorkflowFromServer } from '@/api/canvas/workflow'
 import CanvasBoard from '@/components/canvas/CanvasBoard.vue'
 import CanvasToolbar from '@/components/canvas/CanvasToolbar.vue'
@@ -47,6 +48,7 @@ const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const canvasStore = useCanvasStore()
+const teamStore = useTeamStore()
 
 // 用户信息
 const me = ref(null)
@@ -798,6 +800,9 @@ async function autoSaveWorkflow() {
       return
     }
     
+    // 获取当前空间参数
+    const spaceParams = teamStore.getSpaceParams('current')
+    
     // 🔧 新建工作流也支持自动保存（作为草稿）
     if (currentTab.workflowId) {
       // 已保存的工作流：更新保存
@@ -805,6 +810,8 @@ async function autoSaveWorkflow() {
         id: currentTab.workflowId,
         name: currentTab.name,
         uploadToCloud: false,
+        spaceType: spaceParams.spaceType,
+        teamId: spaceParams.teamId,
         ...workflowData
       })
       canvasStore.markCurrentTabSaved()
@@ -818,6 +825,8 @@ async function autoSaveWorkflow() {
           name: currentTab.name || `草稿_${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
           uploadToCloud: false,
           isDraft: true, // 标记为草稿
+          spaceType: spaceParams.spaceType,
+          teamId: spaceParams.teamId,
           ...workflowData
         })
         
@@ -1149,6 +1158,10 @@ async function loadUserInfo() {
     if (!me.value) {
       // 未登录，跳转到落地页
       router.push('/')
+    } else {
+      // 初始化团队空间
+      teamStore.setCurrentUserId(me.value.id)
+      await teamStore.restoreSpaceState()
     }
   } catch (e) {
     console.error('[Canvas] 加载用户信息失败:', e)
@@ -1169,6 +1182,40 @@ async function handleUserInfoUpdated() {
     })
   } catch (e) {
     console.error('[Canvas] 刷新用户信息失败:', e)
+  }
+}
+
+// 🔧 处理浏览器后退/前进按钮，防止意外离开画布
+function handlePopState(event) {
+  const workflowData = getCurrentWorkflowData()
+  const hasWork = workflowData?.nodes?.length > 0
+  
+  if (hasWork) {
+    // 有未保存的工作，阻止导航并提示用户
+    console.log('[Canvas] 检测到 popstate 事件，有未保存的工作')
+    
+    // 将用户推回当前页面
+    history.pushState(null, '', window.location.href)
+    
+    // 可以在这里显示一个确认对话框
+    // 暂时只记录日志，不打断用户操作
+  }
+}
+
+// 🔧 页面卸载时记录，用于调试意外刷新
+function handleUnload() {
+  // 记录卸载时间戳到 sessionStorage（localStorage 可能来不及写入）
+  try {
+    sessionStorage.setItem('canvas_unload_timestamp', Date.now().toString())
+    sessionStorage.setItem('canvas_unload_reason', 'unload_event')
+    
+    // 检查是否是正常退出（用户主动操作）还是异常退出
+    const workflowData = getCurrentWorkflowData()
+    if (workflowData?.nodes?.length > 0) {
+      sessionStorage.setItem('canvas_had_unsaved_work', 'true')
+    }
+  } catch (e) {
+    // 忽略
   }
 }
 
@@ -1659,6 +1706,24 @@ onMounted(async () => {
     canvasStore.initDefaultTab()
   }
   
+  // 🔧 检测是否是异常刷新后的恢复（用于调试页面意外刷新问题）
+  const lastUnloadTimestamp = sessionStorage.getItem('canvas_unload_timestamp')
+  const hadUnsavedWork = sessionStorage.getItem('canvas_had_unsaved_work')
+  if (lastUnloadTimestamp) {
+    const elapsed = Date.now() - parseInt(lastUnloadTimestamp)
+    // 如果距离上次卸载不到 3 秒，可能是异常刷新
+    if (elapsed < 3000) {
+      console.warn('[Canvas] ⚠️ 检测到可能的异常刷新，距上次卸载:', elapsed, 'ms')
+      if (hadUnsavedWork === 'true') {
+        console.warn('[Canvas] ⚠️ 上次退出时有未保存的工作')
+      }
+    }
+    // 清理标记
+    sessionStorage.removeItem('canvas_unload_timestamp')
+    sessionStorage.removeItem('canvas_had_unsaved_work')
+    sessionStorage.removeItem('canvas_unload_reason')
+  }
+  
   // 启动历史工作流自动保存服务（localStorage 缓存）
   initHistoryAutoSave()
   
@@ -1671,6 +1736,12 @@ onMounted(async () => {
   
   // 监听用户信息更新事件，实时更新积分余额
   window.addEventListener('user-info-updated', handleUserInfoUpdated)
+  
+  // 🔧 防止页面意外刷新：监听 popstate 事件（浏览器后退/前进）
+  window.addEventListener('popstate', handlePopState)
+  
+  // 🔧 防止页面意外刷新：监听 unload 事件，记录异常退出
+  window.addEventListener('unload', handleUnload)
   
   // 检查URL参数，如果有load参数则加载工作流
   const loadWorkflowId = route.query.load
@@ -1716,6 +1787,8 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('user-info-updated', handleUserInfoUpdated)
+  window.removeEventListener('popstate', handlePopState)
+  window.removeEventListener('unload', handleUnload)
   stopAutoSave()
   stopHistoryAutoSave()
 

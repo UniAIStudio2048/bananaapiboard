@@ -6,12 +6,14 @@
 import { ref, computed } from 'vue'
 import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
+import { useTeamStore } from '@/stores/team'
 import { getDownstreamOptions, NODE_TYPES } from '@/config/canvas/nodeTypes'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { saveAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
 
 const { t } = useI18n()
+const teamStore = useTeamStore()
 
 const props = defineProps({
   position: {
@@ -602,13 +604,19 @@ async function addToMyAssets() {
     minute: '2-digit'
   })
 
+  // 获取当前空间参数
+  const spaceParams = teamStore.getSpaceParams('current')
+  
   // 构建资产数据
   const assetData = {
     type,
     name: `${assetTypeName.value}_${timeStr}`,
     source_node_id: props.node?.id,
     source: 'canvas',
-    tags: [assetTypeName.value, t('canvas.contextMenu.canvasGenerated')]
+    tags: [assetTypeName.value, t('canvas.contextMenu.canvasGenerated')],
+    // 空间参数
+    spaceType: spaceParams.spaceType,
+    teamId: spaceParams.teamId
   }
 
   // 获取需要保存的内容

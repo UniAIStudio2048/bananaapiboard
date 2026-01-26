@@ -787,9 +787,13 @@ export const getAvailableVideoModels = (options = {}) => {
       if (modelConfig.enabled === false || enabledModels[key] === false) continue
       
       // 检测 VEO 模型（通过 apiType 或模型名称）
+      // 🔧 支持多种命名格式：veo3, veo_3, veo3.1, veo_3_1 等
+      const keyLower = key.toLowerCase()
+      const displayLower = (modelConfig.displayName || '').toLowerCase()
       const isVeoSubModel = modelConfig.apiType === 'vectorengine' || 
-                           key.toLowerCase().includes('veo3') ||
-                           (modelConfig.displayName || '').toLowerCase().includes('veo')
+                           keyLower.includes('veo3') ||
+                           keyLower.includes('veo_3') ||
+                           displayLower.includes('veo')
       
       if (isVeoSubModel) {
         // 🆕 区分 4K 模型和普通模型
@@ -820,9 +824,12 @@ export const getAvailableVideoModels = (options = {}) => {
     for (let i = 0; i < videoModelsConfig.length; i++) {
       const m = videoModelsConfig[i]
       if (m.enabled === false) continue
+      const mNameLower = (m.name || '').toLowerCase()
+      const mDisplayLower = (m.displayName || '').toLowerCase()
       const isVeo = m.apiType === 'vectorengine' || 
-                   (m.name || '').toLowerCase().includes('veo3') ||
-                   (m.displayName || '').toLowerCase().includes('veo')
+                   mNameLower.includes('veo3') ||
+                   mNameLower.includes('veo_3') ||
+                   mDisplayLower.includes('veo')
       if (isVeo) {
         veoInsertIndex = i
         break
@@ -921,7 +928,9 @@ export const getAvailableVideoModels = (options = {}) => {
       // 从 4K 子模型生成模式选项
       const veo4kModes = veo4kSubModels.map(m => {
         const name = m.name || ''
+        const nameLower = name.toLowerCase()
         const displayName = m.displayName || m.name || ''
+        const displayLower = displayName.toLowerCase()
         const pointsCost = typeof m.pointsCost === 'number' ? m.pointsCost : 8
         
         // 根据名称推断模式类型
@@ -929,11 +938,26 @@ export const getAvailableVideoModels = (options = {}) => {
         let modeLabel = '首尾帧'
         let maxImages = 2
         
-        if (name.includes('components') || displayName.includes('多图') || displayName.includes('参考')) {
+        // 🆕 先检测 fast-components 组合（fast多图参考）
+        const isFast = nameLower.includes('fast') || displayLower.includes('fast')
+        const isComponents = nameLower.includes('components') || displayName.includes('多图') || displayName.includes('参考')
+        const isPro = nameLower.includes('pro')
+        
+        if (isFast && isComponents) {
+          // fast多图参考
+          modeValue = 'fast-components'
+          modeLabel = 'fast多图参考'
+          maxImages = 3
+        } else if (isFast) {
+          // fast首尾帧
+          modeValue = 'fast'
+          modeLabel = 'fast首尾帧'
+          maxImages = 2
+        } else if (isComponents) {
           modeValue = 'components'
           modeLabel = '多图参考'
           maxImages = 3
-        } else if (name.includes('pro') || displayName.includes('pro') || displayName.includes('Pro')) {
+        } else if (isPro) {
           modeValue = 'pro'
           modeLabel = 'Pro首尾帧'
         } else {
@@ -952,8 +976,8 @@ export const getAvailableVideoModels = (options = {}) => {
         }
       })
       
-      // 按模式类型排序：standard -> components -> pro
-      const modeOrder = { standard: 0, components: 1, pro: 2 }
+      // 按模式类型排序：fast -> fast-components -> standard -> components -> pro
+      const modeOrder = { fast: 0, 'fast-components': 1, standard: 2, components: 3, pro: 4 }
       veo4kModes.sort((a, b) => (modeOrder[a.value] ?? 99) - (modeOrder[b.value] ?? 99))
       
       // 去重
@@ -973,7 +997,7 @@ export const getAvailableVideoModels = (options = {}) => {
         value: 'veo4k',
         label: 'VEO 4K',
         icon: 'V',
-        description: 'VEO 3.1 4K 高清版，支持首尾帧、多图参考和Pro模式',
+        description: 'VEO 3.1 4K 高清版，支持fast首尾帧、fast多图参考、首尾帧、多图参考和Pro模式',
         hasDurationPricing: false,
         pointsCost: veo4kPointsCost,
         durations: [],
@@ -1007,9 +1031,13 @@ export const getAvailableVideoModels = (options = {}) => {
       if (modelConfig.enabled === false || enabledModels[key] === false) continue
       
       // 检测是否是 VEO 子模型
+      // 🔧 支持多种命名格式：veo3, veo_3, veo3.1, veo_3_1 等
+      const keyLower2 = key.toLowerCase()
+      const displayLower2 = (modelConfig.displayName || '').toLowerCase()
       const isVeoSubModel = modelConfig.apiType === 'vectorengine' || 
-                           key.toLowerCase().includes('veo3') ||
-                           (modelConfig.displayName || '').toLowerCase().includes('veo')
+                           keyLower2.includes('veo3') ||
+                           keyLower2.includes('veo_3') ||
+                           displayLower2.includes('veo')
       
       // 🆕 检测是否是 VEO 4K 子模型
       const isVeo4kSubModel = isVeoSubModel && (

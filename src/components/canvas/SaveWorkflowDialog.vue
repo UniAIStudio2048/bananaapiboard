@@ -7,10 +7,12 @@
  */
 import { ref, computed, watch } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
+import { useTeamStore } from '@/stores/team'
 import { saveWorkflow, getStorageQuota } from '@/api/canvas/workflow'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
+const teamStore = useTeamStore()
 
 const props = defineProps({
   visible: Boolean
@@ -285,12 +287,17 @@ async function handleSave() {
   // 🔧 保存前先创建本地备份（防止保存失败导致数据丢失）
   const backupKey = saveLocalBackup(workflowData, nameToSave)
 
-  // 添加名称和描述
+  // 获取当前空间参数
+  const spaceParams = teamStore.getSpaceParams('current')
+  
+  // 添加名称、描述和空间信息
   const dataToSave = {
     id: idToSave,
     name: nameToSave,
     description: descToSave,
     uploadToCloud: true, // 手动保存时上传到云存储
+    spaceType: spaceParams.spaceType,
+    teamId: spaceParams.teamId,
     ...workflowData
   }
 

@@ -30,11 +30,23 @@ function getAuthHeaders() {
  * 优化：使用 Promise.allSettled 并行请求，提升加载速度
  * @param {Object} params - 查询参数
  * @param {string} params.type - 类型筛选 (image/video/audio)
+ * @param {string} params.spaceType - 空间类型 (personal/team/all)
+ * @param {string} params.teamId - 团队ID (spaceType=team时需要)
  */
 export async function getHistory(params = {}) {
   const results = []
   const timestamp = Date.now()
   const headers = getAuthHeaders()
+  
+  // 构建空间筛选参数
+  const spaceQuery = []
+  if (params.spaceType) {
+    spaceQuery.push(`spaceType=${params.spaceType}`)
+    if (params.spaceType === 'team' && params.teamId) {
+      spaceQuery.push(`teamId=${params.teamId}`)
+    }
+  }
+  const spaceQueryStr = spaceQuery.length > 0 ? `&${spaceQuery.join('&')}` : ''
   
   // 创建请求 Promise 数组
   const requests = []
@@ -42,7 +54,7 @@ export async function getHistory(params = {}) {
   // 图片历史请求
   if (!params.type || params.type === 'all' || params.type === 'image') {
     requests.push(
-      fetch(`${getApiBase()}/api/images/history?_=${timestamp}`, {
+      fetch(`${getApiBase()}/api/images/history?_=${timestamp}${spaceQueryStr}`, {
         method: 'GET',
         credentials: 'include',
         headers,
@@ -85,7 +97,7 @@ export async function getHistory(params = {}) {
   // 视频历史请求
   if (!params.type || params.type === 'all' || params.type === 'video') {
     requests.push(
-      fetch(`${getApiBase()}/api/videos/history?_=${timestamp}`, {
+      fetch(`${getApiBase()}/api/videos/history?_=${timestamp}${spaceQueryStr}`, {
         method: 'GET',
         credentials: 'include',
         headers,
@@ -127,7 +139,7 @@ export async function getHistory(params = {}) {
   // 音频历史请求
   if (!params.type || params.type === 'all' || params.type === 'audio') {
     requests.push(
-      fetch(`${getApiBase()}/api/music/history?_=${timestamp}`, {
+      fetch(`${getApiBase()}/api/music/history?_=${timestamp}${spaceQueryStr}`, {
         method: 'GET',
         credentials: 'include',
         headers,

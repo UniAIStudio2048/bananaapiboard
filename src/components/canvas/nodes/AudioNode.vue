@@ -1262,7 +1262,7 @@ function handleSpeedDropdownClickOutside(event) {
       <div class="toolbar-divider"></div>
       
       <!-- 下载按钮 -->
-      <button class="toolbar-btn icon-only" title="下载" @mousedown.prevent="handleToolbarDownload">
+      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>

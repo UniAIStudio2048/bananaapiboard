@@ -1058,7 +1058,12 @@ function getProxiedImageUrl(imageUrl) {
   return imageUrl
 }
 
-// 9宫格裁剪 - 将图片裁剪成9份并创建组
+// 辅助函数：等待下一帧渲染完成（用于异步分批创建节点，防止浏览器崩溃）
+function nextFrame() {
+  return new Promise(resolve => requestAnimationFrame(resolve))
+}
+
+// 9宫格裁剪 - 将图片裁剪成9份并创建组（优化版：异步分批创建，防止浏览器崩溃）
 async function handleToolbarGridCrop() {
   console.log('[ImageNode] 工具栏：9宫格裁剪', props.id)
   
@@ -1090,6 +1095,7 @@ async function handleToolbarGridCrop() {
       isGridCropping.value = false
       return
     }
+    
     // 加载图片 - 使用代理URL绕过CORS限制
     const img = new Image()
     img.crossOrigin = 'anonymous'
@@ -1110,10 +1116,26 @@ async function handleToolbarGridCrop() {
     const cellWidth = Math.floor(imgWidth / 3)
     const cellHeight = Math.floor(imgHeight / 3)
     
-    // 裁剪成9份
-    const croppedImages = []
+    // 计算节点布局参数
+    const nodeWidth = 300
+    const nodeHeight = 320
+    const gap = 20
+    
+    // 获取当前节点位置
+    const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+    const baseX = currentNode?.position?.x || 0
+    const baseY = currentNode?.position?.y || 0
+    const offsetX = 400 // 在原节点右侧
+    
+    // 🔧 优化：异步分批裁剪和创建节点，防止浏览器崩溃
+    const newNodeIds = []
+    const timestamp = Date.now()
+    
     for (let row = 0; row < 3; row++) {
       for (let col = 0; col < 3; col++) {
+        const index = row * 3 + col
+        
+        // 创建 canvas 并裁剪
         const canvas = document.createElement('canvas')
         canvas.width = cellWidth
         canvas.height = cellHeight
@@ -1131,52 +1153,46 @@ async function handleToolbarGridCrop() {
           cellHeight
         )
         
-        const dataUrl = canvas.toDataURL('image/png')
-        croppedImages.push({
-          index: row * 3 + col,
-          row,
-          col,
-          dataUrl
+        // 🔧 优化：使用 JPEG 格式并压缩，比 PNG 小很多（约减少 70% 体积）
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        
+        // 立即清理 canvas 引用，让 GC 可以回收
+        canvas.width = 0
+        canvas.height = 0
+        
+        // 创建节点
+        const nodeId = `grid-crop-${timestamp}-${index}`
+        const nodeX = baseX + offsetX + col * (nodeWidth + gap)
+        const nodeY = baseY + row * (nodeHeight + gap)
+        
+        canvasStore.addNode({
+          id: nodeId,
+          type: 'image',
+          position: { x: nodeX, y: nodeY },
+          data: {
+            label: `裁剪 ${row + 1}-${col + 1}`,
+            nodeRole: 'source',
+            sourceImages: [dataUrl],
+            isGenerated: true,
+            fromGridCrop: true
+          }
         })
+        
+        newNodeIds.push(nodeId)
+        
+        // 🔧 优化：每创建一个节点后，等待下一帧渲染，让浏览器有时间处理
+        await nextFrame()
+        
+        console.log(`[ImageNode] 9宫格裁剪：已创建节点 ${index + 1}/9`)
       }
     }
     
-    // 计算节点布局参数
-    const nodeWidth = 300
-    const nodeHeight = 320
-    const gap = 20
-    
-    // 获取当前节点位置
-    const currentNode = canvasStore.nodes.find(n => n.id === props.id)
-    const baseX = currentNode?.position?.x || 0
-    const baseY = currentNode?.position?.y || 0
-    const offsetX = 400 // 在原节点右侧
-    
-    // 创建9个图片节点
-    const newNodeIds = []
-    for (const item of croppedImages) {
-      const nodeId = `grid-crop-${Date.now()}-${item.index}`
-      const nodeX = baseX + offsetX + item.col * (nodeWidth + gap)
-      const nodeY = baseY + item.row * (nodeHeight + gap)
-      
-      canvasStore.addNode({
-        id: nodeId,
-        type: 'image',
-        position: { x: nodeX, y: nodeY },
-        data: {
-          label: `裁剪 ${item.row + 1}-${item.col + 1}`,
-          nodeRole: 'source',  // 必须设置为source才能显示sourceImages
-          sourceImages: [item.dataUrl],  // 使用sourceImages数组存储裁剪后的图片
-          isGenerated: true,
-          fromGridCrop: true  // 标记来源
-        }
-      })
-      
-      newNodeIds.push(nodeId)
-    }
+    // 清理原图引用
+    img.src = ''
     
     // 创建包含这9个节点的组
     if (newNodeIds.length === 9) {
+      await nextFrame() // 等待所有节点渲染完成
       canvasStore.createGroup(newNodeIds, '9宫格裁剪')
     }
     
@@ -1189,7 +1205,7 @@ async function handleToolbarGridCrop() {
   }
 }
 
-// 4宫格裁剪 - 将图片裁剪成4份并创建组 (2x2布局)
+// 4宫格裁剪 - 将图片裁剪成4份并创建组 (2x2布局)（优化版：异步分批创建，防止浏览器崩溃）
 async function handleToolbarGrid4Crop() {
   console.log('[ImageNode] 工具栏：4宫格裁剪', props.id)
   
@@ -1221,6 +1237,7 @@ async function handleToolbarGrid4Crop() {
       isGrid4Cropping.value = false
       return
     }
+    
     // 加载图片 - 使用代理URL绕过CORS限制
     const img = new Image()
     img.crossOrigin = 'anonymous'
@@ -1241,10 +1258,26 @@ async function handleToolbarGrid4Crop() {
     const cellWidth = Math.floor(imgWidth / 2)
     const cellHeight = Math.floor(imgHeight / 2)
     
-    // 裁剪成4份 (2x2)
-    const croppedImages = []
+    // 计算节点布局参数
+    const nodeWidth = 300
+    const nodeHeight = 320
+    const gap = 20
+    
+    // 获取当前节点位置
+    const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+    const baseX = currentNode?.position?.x || 0
+    const baseY = currentNode?.position?.y || 0
+    const offsetX = 400 // 在原节点右侧
+    
+    // 🔧 优化：异步分批裁剪和创建节点，防止浏览器崩溃
+    const newNodeIds = []
+    const timestamp = Date.now()
+    
     for (let row = 0; row < 2; row++) {
       for (let col = 0; col < 2; col++) {
+        const index = row * 2 + col
+        
+        // 创建 canvas 并裁剪
         const canvas = document.createElement('canvas')
         canvas.width = cellWidth
         canvas.height = cellHeight
@@ -1262,52 +1295,46 @@ async function handleToolbarGrid4Crop() {
           cellHeight
         )
         
-        const dataUrl = canvas.toDataURL('image/png')
-        croppedImages.push({
-          index: row * 2 + col,
-          row,
-          col,
-          dataUrl
+        // 🔧 优化：使用 JPEG 格式并压缩，比 PNG 小很多（约减少 70% 体积）
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        
+        // 立即清理 canvas 引用，让 GC 可以回收
+        canvas.width = 0
+        canvas.height = 0
+        
+        // 创建节点
+        const nodeId = `grid4-crop-${timestamp}-${index}`
+        const nodeX = baseX + offsetX + col * (nodeWidth + gap)
+        const nodeY = baseY + row * (nodeHeight + gap)
+        
+        canvasStore.addNode({
+          id: nodeId,
+          type: 'image',
+          position: { x: nodeX, y: nodeY },
+          data: {
+            label: `裁剪 ${row + 1}-${col + 1}`,
+            nodeRole: 'source',
+            sourceImages: [dataUrl],
+            isGenerated: true,
+            fromGridCrop: true
+          }
         })
+        
+        newNodeIds.push(nodeId)
+        
+        // 🔧 优化：每创建一个节点后，等待下一帧渲染，让浏览器有时间处理
+        await nextFrame()
+        
+        console.log(`[ImageNode] 4宫格裁剪：已创建节点 ${index + 1}/4`)
       }
     }
     
-    // 计算节点布局参数
-    const nodeWidth = 300
-    const nodeHeight = 320
-    const gap = 20
-    
-    // 获取当前节点位置
-    const currentNode = canvasStore.nodes.find(n => n.id === props.id)
-    const baseX = currentNode?.position?.x || 0
-    const baseY = currentNode?.position?.y || 0
-    const offsetX = 400 // 在原节点右侧
-    
-    // 创建4个图片节点
-    const newNodeIds = []
-    for (const item of croppedImages) {
-      const nodeId = `grid4-crop-${Date.now()}-${item.index}`
-      const nodeX = baseX + offsetX + item.col * (nodeWidth + gap)
-      const nodeY = baseY + item.row * (nodeHeight + gap)
-      
-      canvasStore.addNode({
-        id: nodeId,
-        type: 'image',
-        position: { x: nodeX, y: nodeY },
-        data: {
-          label: `裁剪 ${item.row + 1}-${item.col + 1}`,
-          nodeRole: 'source',  // 必须设置为source才能显示sourceImages
-          sourceImages: [item.dataUrl],  // 使用sourceImages数组存储裁剪后的图片
-          isGenerated: true,
-          fromGridCrop: true  // 标记来源
-        }
-      })
-      
-      newNodeIds.push(nodeId)
-    }
+    // 清理原图引用
+    img.src = ''
     
     // 创建包含这4个节点的组
     if (newNodeIds.length === 4) {
+      await nextFrame() // 等待所有节点渲染完成
       canvasStore.createGroup(newNodeIds, '4宫格裁剪')
     }
     
@@ -4041,20 +4068,20 @@ async function handleDrop(event) {
     
     <!-- 图片工具栏（选中且有图片时显示）- 与 TextNode 保持一致 -->
     <div v-show="showToolbar" class="image-toolbar">
-      <button class="toolbar-btn" title="重绘" @mousedown.prevent="handleToolbarRepaint">
+      <button class="toolbar-btn" title="重绘" @mousedown.stop.prevent="handleToolbarRepaint" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span>重绘</span>
       </button>
-      <button class="toolbar-btn" title="擦除" @mousedown.prevent="handleToolbarErase">
+      <button class="toolbar-btn" title="擦除" @mousedown.stop.prevent="handleToolbarErase" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M18.364 5.636a9 9 0 11-12.728 0M12 3v9" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M4.5 16.5l3-3 3 3-3 3-3-3z" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span>擦除</span>
       </button>
-      <button class="toolbar-btn" title="增强" @mousedown.prevent="handleToolbarEnhance">
+      <button class="toolbar-btn" title="增强" @mousedown.stop.prevent="handleToolbarEnhance" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
           <text x="12" y="15" text-anchor="middle" font-size="8" font-weight="bold" fill="currentColor" stroke="none">HD</text>
@@ -4148,7 +4175,7 @@ async function handleDrop(event) {
         </svg>
         <span>扩图</span>
       </button>
-      <button class="toolbar-btn" title="9宫格裁剪" @mousedown.prevent="handleToolbarGridCrop">
+      <button class="toolbar-btn" title="9宫格裁剪" @mousedown.stop.prevent="handleToolbarGridCrop" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <!-- 外框 -->
           <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -4161,7 +4188,7 @@ async function handleDrop(event) {
         </svg>
         <span>9宫格裁剪</span>
       </button>
-      <button class="toolbar-btn" title="4宫格裁剪" @mousedown.prevent="handleToolbarGrid4Crop">
+      <button class="toolbar-btn" title="4宫格裁剪" @mousedown.stop.prevent="handleToolbarGrid4Crop" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <!-- 外框 -->
           <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -4172,7 +4199,7 @@ async function handleDrop(event) {
         </svg>
         <span>4宫格裁剪</span>
       </button>
-      <button class="toolbar-btn" :class="{ active: show3DCamera }" title="3D相机角度" @mousedown.prevent="handleToolbar3DCamera">
+      <button class="toolbar-btn" :class="{ active: show3DCamera }" title="3D相机角度" @mousedown.stop.prevent="handleToolbar3DCamera" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <!-- 相机机身 -->
           <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z" stroke-linecap="round" stroke-linejoin="round"/>
@@ -4184,7 +4211,7 @@ async function handleDrop(event) {
         </svg>
         <span>角度</span>
       </button>
-      <button class="toolbar-btn" :class="{ active: showPose3DViewer }" title="3D姿态分析（正反打）" @mousedown.prevent="handleToolbarPose3D">
+      <button class="toolbar-btn" :class="{ active: showPose3DViewer }" title="3D姿态分析（正反打）" @mousedown.stop.prevent="handleToolbarPose3D" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <!-- 人物骨架 -->
           <circle cx="12" cy="4" r="2"/>
@@ -4200,23 +4227,23 @@ async function handleDrop(event) {
         <span>姿态</span>
       </button>
       <div class="toolbar-divider"></div>
-      <button class="toolbar-btn icon-only" title="标注" @mousedown.prevent="handleToolbarAnnotate">
+      <button class="toolbar-btn icon-only" title="标注" @mousedown.stop.prevent="handleToolbarAnnotate" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn icon-only" title="裁剪" @mousedown.prevent="handleToolbarCrop">
+      <button class="toolbar-btn icon-only" title="裁剪" @mousedown.stop.prevent="handleToolbarCrop" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M6 2v4M6 18v4M2 6h4M18 6h4M18 18h-8a2 2 0 01-2-2V6" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M6 6h10a2 2 0 012 2v10" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn icon-only" title="下载" @mousedown.prevent="handleToolbarDownload">
+      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn icon-only" title="放大预览" @mousedown.prevent="handleToolbarPreview">
+      <button class="toolbar-btn icon-only" title="放大预览" @mousedown.stop.prevent="handleToolbarPreview" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>

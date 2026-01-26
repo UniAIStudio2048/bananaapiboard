@@ -9,8 +9,10 @@ import { redeemVoucher as redeemVoucherApi, updateUserPreferences } from '@/api/
 import { getTenantHeaders } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { useI18n } from '@/i18n'
+import { useTeamStore } from '@/stores/team'
 
 const { t } = useI18n()
+const teamStore = useTeamStore()
 
 const props = defineProps({
   visible: {
@@ -105,6 +107,28 @@ const onboardingEnabled = ref(localStorage.getItem('canvasOnboardingEnabled') ==
 // 客服二维码弹窗
 const showSupportQrModal = ref(false)
 const supportQrImage = ref('')
+
+// 空间切换相关
+const showSpaceDropdown = ref(false)
+const showCreateTeamModal = ref(false)
+const createTeamForm = ref({ name: '', description: '' })
+const createTeamLoading = ref(false)
+const createTeamError = ref('')
+
+// 团队管理相关
+const showInviteMemberModal = ref(false)
+const inviteMemberForm = ref({ query: '', selectedUser: null, role: 'member', message: '' })
+const inviteSearchResults = ref([])
+const inviteSearchLoading = ref(false)
+const inviteLoading = ref(false)
+const showTeamSettingsModal = ref(false)
+const editingTeam = ref(null)
+const showTransferOwnershipModal = ref(false)
+const transferTargetUser = ref(null)
+// 成员管理弹窗
+const showMemberManageModal = ref(false)
+const memberManageTeam = ref(null)
+const memberManageLoading = ref(false)
 
 // 连线样式设置
 const edgeStyleOptions = [
@@ -231,6 +255,7 @@ function showConfirm(message, title) {
 const menuItems = computed(() => [
   { id: 'home', icon: 'home', label: t('user.home') },
   { id: 'profile', icon: 'settings', label: t('user.accountSettings') },
+  { id: 'teams', icon: 'users', label: '团队空间', badge: teamStore.pendingInvitationsCount.value > 0 ? teamStore.pendingInvitationsCount.value : null },
   { id: 'packages', icon: 'package', label: t('user.packages') },
   { id: 'points', icon: 'diamond', label: t('user.pointsManage') },
   { id: 'voucher', icon: 'ticket', label: t('user.redeemCenter') },
@@ -247,6 +272,7 @@ const icons = {
   ticket: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 9a3 3 0 013-3h14a3 3 0 013 3v0a3 3 0 01-3 3v0a3 3 0 00-3 3v0a3 3 0 01-3 3H5a3 3 0 01-3-3v-6z"/><path d="M13 6v2"/><path d="M13 12v2"/><path d="M13 16v2"/></svg>`,
   gift: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"/></svg>`,
   help: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  users: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>`,
   calendar: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`,
   credit: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>`,
   logout: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>`,
@@ -269,9 +295,27 @@ watch(() => props.visible, async (val) => {
         email: props.userInfo.email || '',
         bio: props.userInfo.bio || ''
       }
+      // 设置当前用户ID到 teamStore
+      teamStore.setCurrentUserId(props.userInfo.id)
     }
+    // 加载团队数据
+    await teamStore.loadMyTeams()
+    await teamStore.loadPendingInvitations()
   }
 }, { immediate: true })
+
+// 点击外部关闭空间下拉
+watch(() => showSpaceDropdown.value, (val) => {
+  if (val) {
+    const closeDropdown = (e) => {
+      if (!e.target.closest('.space-switcher-section')) {
+        showSpaceDropdown.value = false
+        document.removeEventListener('click', closeDropdown)
+      }
+    }
+    setTimeout(() => document.addEventListener('click', closeDropdown), 0)
+  }
+})
 
 // 加载数据
 async function loadData() {
@@ -332,6 +376,237 @@ async function loadData() {
 // 关闭面板
 function closePanel() {
   emit('close')
+}
+
+// ==================== 空间切换相关方法 ====================
+
+// 选择空间
+async function selectSpace(type, teamId = null) {
+  showSpaceDropdown.value = false
+  if (type === 'personal') {
+    teamStore.switchToPersonalSpace()
+  } else if (type === 'team' && teamId) {
+    await teamStore.switchToTeam(teamId)
+  }
+}
+
+// 获取角色标签
+function getRoleLabel(role) {
+  const labels = {
+    owner: '所有者',
+    admin: '管理员',
+    member: '成员'
+  }
+  return labels[role] || role
+}
+
+// 打开创建团队弹窗
+function openCreateTeamModal() {
+  showSpaceDropdown.value = false
+  createTeamForm.value = { name: '', description: '' }
+  createTeamError.value = ''
+  showCreateTeamModal.value = true
+}
+
+// 创建团队
+async function handleCreateTeam() {
+  if (!createTeamForm.value.name.trim()) {
+    createTeamError.value = '请输入团队名称'
+    return
+  }
+  
+  createTeamLoading.value = true
+  createTeamError.value = ''
+  
+  try {
+    const result = await teamStore.createTeam(
+      createTeamForm.value.name.trim(),
+      createTeamForm.value.description.trim()
+    )
+    
+    if (result.success) {
+      showCreateTeamModal.value = false
+      // 自动切换到新创建的团队
+      await teamStore.switchToTeam(result.team.id)
+    } else {
+      createTeamError.value = result.message || '创建失败'
+    }
+  } catch (error) {
+    console.error('[Team] 创建团队失败:', error)
+    createTeamError.value = '创建失败，请重试'
+  } finally {
+    createTeamLoading.value = false
+  }
+}
+
+// 接受邀请
+async function handleAcceptInvitation(inviteId) {
+  const result = await teamStore.acceptInvitation(inviteId)
+  if (result.success) {
+    showAlert('已加入团队', '成功')
+  } else {
+    showAlert(result.message || '加入失败', '错误')
+  }
+}
+
+// 拒绝邀请
+async function handleRejectInvitation(inviteId) {
+  const result = await teamStore.rejectInvitation(inviteId)
+  if (!result.success) {
+    showAlert(result.message || '操作失败', '错误')
+  }
+}
+
+// 打开邀请成员弹窗
+function openInviteMemberModal(team) {
+  editingTeam.value = team
+  inviteMemberForm.value = { query: '', selectedUser: null, role: 'member', message: '' }
+  inviteSearchResults.value = []
+  showInviteMemberModal.value = true
+}
+
+// 搜索用户
+let searchTimeout = null
+async function handleSearchUsers(query) {
+  if (searchTimeout) clearTimeout(searchTimeout)
+  
+  // 输入5个字符以上才触发搜索推荐
+  if (!query || query.trim().length < 5) {
+    inviteSearchResults.value = []
+    return
+  }
+  
+  // 防抖300ms后触发搜索
+  searchTimeout = setTimeout(async () => {
+    inviteSearchLoading.value = true
+    const result = await teamStore.searchUsers(query.trim(), editingTeam.value?.id)
+    inviteSearchResults.value = result.users || []
+    inviteSearchLoading.value = false
+  }, 300)
+}
+
+// 选择要邀请的用户
+function selectUserToInvite(user) {
+  inviteMemberForm.value.selectedUser = user
+  inviteMemberForm.value.query = user.username
+  inviteSearchResults.value = []
+}
+
+// 验证邮箱格式
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
+// 检查是否可以发送邀请（选中了用户 或 输入了有效邮箱）
+function canSendInvite() {
+  if (inviteMemberForm.value.selectedUser) return true
+  const query = inviteMemberForm.value.query?.trim()
+  return query && isValidEmail(query)
+}
+
+// 发送邀请
+async function handleInviteMember() {
+  const selectedUser = inviteMemberForm.value.selectedUser
+  const inputEmail = inviteMemberForm.value.query?.trim()
+  
+  // 如果选中了用户，使用用户ID邀请
+  // 否则检查是否输入了有效邮箱
+  if (!selectedUser && !isValidEmail(inputEmail)) {
+    showAlert('请选择要邀请的用户，或输入有效的邮箱地址', '提示')
+    return
+  }
+  
+  inviteLoading.value = true
+  try {
+    const result = await teamStore.inviteMember(
+      editingTeam.value.id,
+      selectedUser?.id || null,  // 用户ID（可选）
+      inviteMemberForm.value.role,
+      inviteMemberForm.value.message,
+      selectedUser ? null : inputEmail  // 邮箱（当没有选中用户时使用）
+    )
+    
+    if (result.success) {
+      showAlert('邀请已发送', '成功')
+      showInviteMemberModal.value = false
+    } else {
+      showAlert(result.message || '邀请失败', '错误')
+    }
+  } finally {
+    inviteLoading.value = false
+  }
+}
+
+// 打开成员管理弹窗
+async function openMemberManageModal(team) {
+  memberManageTeam.value = team
+  memberManageLoading.value = true
+  showMemberManageModal.value = true
+  await teamStore.loadTeamMembers(team.id)
+  memberManageLoading.value = false
+}
+
+// 移除成员
+async function handleRemoveMember(team, userId) {
+  const confirmed = await showConfirm('确定要移除该成员吗？')
+  if (!confirmed) return
+  
+  const result = await teamStore.removeMember(team.id, userId)
+  if (result.success) {
+    showAlert('已移除成员', '成功')
+  } else {
+    showAlert(result.message || '移除失败', '错误')
+  }
+}
+
+// 修改成员角色
+async function handleChangeMemberRole(team, userId, newRole) {
+  const result = await teamStore.changeMemberRole(team.id, userId, newRole)
+  if (result.success) {
+    showAlert('角色已更新', '成功')
+  } else {
+    showAlert(result.message || '修改失败', '错误')
+  }
+}
+
+// 退出团队
+async function handleLeaveTeam(team) {
+  const confirmed = await showConfirm(`确定要退出团队「${team.name}」吗？`)
+  if (!confirmed) return
+  
+  const result = await teamStore.leaveTeam(team.id)
+  if (result.success) {
+    showAlert('已退出团队', '成功')
+  } else {
+    showAlert(result.message || '退出失败', '错误')
+  }
+}
+
+// 解散团队
+async function handleDissolveTeam(team) {
+  const confirmed = await showConfirm(`确定要解散团队「${team.name}」吗？此操作不可恢复！`)
+  if (!confirmed) return
+  
+  const result = await teamStore.dissolveTeam(team.id)
+  if (result.success) {
+    showAlert('团队已解散', '成功')
+  } else {
+    showAlert(result.message || '解散失败', '错误')
+  }
+}
+
+// 转让所有权
+async function handleTransferOwnership(team, newOwnerId) {
+  const confirmed = await showConfirm('确定要转让团队所有权吗？您将变为管理员。')
+  if (!confirmed) return
+  
+  const result = await teamStore.transferOwnership(team.id, newOwnerId)
+  if (result.success) {
+    showAlert('所有权已转让', '成功')
+    showTransferOwnershipModal.value = false
+  } else {
+    showAlert(result.message || '转让失败', '错误')
+  }
 }
 
 // 签到
@@ -1341,6 +1616,53 @@ function getLedgerTypeText(type) {
             </div>
             <button class="close-btn" @click="closePanel">×</button>
           </div>
+          
+          <!-- 空间切换器 -->
+          <div class="space-switcher-section">
+            <div class="current-space" @click="showSpaceDropdown = !showSpaceDropdown">
+              <span class="space-icon">{{ teamStore.currentSpaceIcon.value }}</span>
+              <span class="space-name">{{ teamStore.currentSpaceLabel.value }}</span>
+              <span class="dropdown-arrow">▼</span>
+            </div>
+            <div v-if="showSpaceDropdown" class="space-dropdown" @click.stop>
+              <div 
+                class="space-option"
+                :class="{ active: teamStore.globalSpaceType.value === 'personal' }"
+                @click="selectSpace('personal')"
+              >
+                <span class="space-icon">👤</span>
+                <span>个人空间</span>
+                <span v-if="teamStore.globalSpaceType.value === 'personal'" class="check-mark">✓</span>
+              </div>
+              <div class="space-divider" v-if="teamStore.myTeams.value.length > 0"></div>
+              <div 
+                v-for="team in teamStore.myTeams.value"
+                :key="team.id"
+                class="space-option"
+                :class="{ active: teamStore.globalTeamId.value === team.id }"
+                @click="selectSpace('team', team.id)"
+              >
+                <span class="space-icon">👥</span>
+                <span class="team-name">{{ team.name }}</span>
+                <span class="team-meta">{{ team.member_count }}人 · {{ getRoleLabel(team.my_role) }}</span>
+                <span v-if="teamStore.globalTeamId.value === team.id" class="check-mark">✓</span>
+              </div>
+              <div class="space-divider"></div>
+              <div class="space-option create-team" @click="openCreateTeamModal">
+                <span class="space-icon">➕</span>
+                <span>创建团队空间</span>
+              </div>
+              <div 
+                v-if="teamStore.pendingInvitationsCount.value > 0" 
+                class="space-option invitations"
+                @click="activeMenu = 'teams'; showSpaceDropdown = false"
+              >
+                <span class="space-icon">📨</span>
+                <span>邀请通知</span>
+                <span class="invite-badge">{{ teamStore.pendingInvitationsCount.value }}</span>
+              </div>
+            </div>
+          </div>
 
           <!-- 快捷数据 -->
           <div class="quick-stats">
@@ -1371,6 +1693,7 @@ function getLedgerTypeText(type) {
             >
               <span class="nav-icon" v-html="icons[item.icon]"></span>
               <span class="nav-label">{{ item.label }}</span>
+              <span v-if="item.badge" class="nav-badge">{{ item.badge }}</span>
             </button>
           </nav>
 
@@ -1458,6 +1781,129 @@ function getLedgerTypeText(type) {
               <button class="btn-primary" @click="changePassword" :disabled="saveLoading">
                 {{ t('user.changePassword') }}
               </button>
+            </div>
+
+            <!-- 团队空间管理 -->
+            <div v-else-if="activeMenu === 'teams'" class="content-section teams-section">
+              <!-- 待处理邀请 -->
+              <div v-if="teamStore.pendingInvitations.value.length > 0" class="invitations-section">
+                <h4 class="section-title">
+                  📨 待处理邀请 ({{ teamStore.pendingInvitations.value.length }})
+                </h4>
+                <div class="invitation-list">
+                  <div 
+                    v-for="invite in teamStore.pendingInvitations.value" 
+                    :key="invite.id"
+                    class="invitation-card"
+                  >
+                    <div class="invitation-info">
+                      <div class="team-avatar">👥</div>
+                      <div class="invitation-details">
+                        <div class="team-name">{{ invite.team_name }}</div>
+                        <div class="inviter-info">{{ invite.inviter_username }} 邀请您加入</div>
+                        <div v-if="invite.message" class="invite-message">「{{ invite.message }}」</div>
+                      </div>
+                    </div>
+                    <div class="invitation-actions">
+                      <button class="btn-accept" @click="handleAcceptInvitation(invite.id)">接受</button>
+                      <button class="btn-reject" @click="handleRejectInvitation(invite.id)">拒绝</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 我的团队 -->
+              <div class="my-teams-section">
+                <div class="section-header">
+                  <h4 class="section-title">👥 我的团队 ({{ teamStore.myTeams.value.length }})</h4>
+                  <button class="btn-create-team" @click="openCreateTeamModal">
+                    <span>➕</span> 创建团队
+                  </button>
+                </div>
+                
+                <div v-if="teamStore.myTeams.value.length === 0" class="empty-teams">
+                  <p>您还没有加入任何团队</p>
+                  <p class="hint">创建团队或接受邀请来开始协作</p>
+                </div>
+                
+                <div v-else class="team-list">
+                  <div 
+                    v-for="team in teamStore.myTeams.value" 
+                    :key="team.id"
+                    class="team-card"
+                    :class="{ active: teamStore.globalTeamId.value === team.id }"
+                  >
+                    <!-- 第一行：头像 + 团队信息 + 角色 -->
+                    <div class="team-card-header">
+                      <div class="team-avatar-large">{{ team.name.charAt(0).toUpperCase() }}</div>
+                      <div class="team-details">
+                        <div class="team-name-row">
+                          <span class="team-name">{{ team.name }}</span>
+                          <span class="role-tag" :class="'role-' + team.my_role">{{ getRoleLabel(team.my_role) }}</span>
+                        </div>
+                        <div class="team-meta">{{ team.member_count }} 名成员</div>
+                      </div>
+                    </div>
+                    <!-- 第二行：操作按钮 -->
+                    <div class="team-card-actions">
+                      <button 
+                        v-if="team.my_role === 'owner' || team.my_role === 'admin'"
+                        class="btn-team-action"
+                        @click="openInviteMemberModal(team)"
+                        title="邀请成员"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+                          <circle cx="9" cy="7" r="4"/>
+                          <line x1="19" y1="8" x2="19" y2="14"/>
+                          <line x1="22" y1="11" x2="16" y2="11"/>
+                        </svg>
+                        <span>邀请</span>
+                      </button>
+                      <button 
+                        v-if="team.my_role === 'owner'"
+                        class="btn-team-action"
+                        @click="openMemberManageModal(team)"
+                        title="管理成员"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                          <circle cx="9" cy="7" r="4"/>
+                          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                        </svg>
+                        <span>管理</span>
+                      </button>
+                      <button 
+                        v-if="team.my_role === 'owner'"
+                        class="btn-team-action danger"
+                        @click="handleDissolveTeam(team)"
+                        title="解散团队"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M3 6h18"/>
+                          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+                          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+                        </svg>
+                        <span>解散</span>
+                      </button>
+                      <button 
+                        v-if="team.my_role !== 'owner'"
+                        class="btn-team-action"
+                        @click="handleLeaveTeam(team)"
+                        title="退出团队"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                          <polyline points="16 17 21 12 16 7"/>
+                          <line x1="21" y1="12" x2="9" y2="12"/>
+                        </svg>
+                        <span>退出</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <!-- 订阅套餐 -->
@@ -2224,6 +2670,181 @@ function getLedgerTypeText(type) {
       </div>
     </Transition>
   </Teleport>
+  
+  <!-- 创建团队弹窗 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showCreateTeamModal" class="modal-overlay" @click.self="showCreateTeamModal = false">
+        <div class="modal-content team-modal">
+          <div class="modal-header">
+            <h3>创建团队空间</h3>
+            <button class="modal-close" @click="showCreateTeamModal = false">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label>团队名称 <span class="required">*</span></label>
+              <input 
+                v-model="createTeamForm.name" 
+                type="text" 
+                placeholder="输入团队名称" 
+                maxlength="50"
+                @keyup.enter="handleCreateTeam"
+              />
+            </div>
+            <div class="form-group">
+              <label>团队描述</label>
+              <textarea 
+                v-model="createTeamForm.description" 
+                placeholder="简单描述您的团队（可选）" 
+                rows="3"
+                maxlength="200"
+              ></textarea>
+            </div>
+            <div v-if="createTeamError" class="error-message">{{ createTeamError }}</div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" @click="showCreateTeamModal = false">取消</button>
+            <button class="btn-confirm" @click="handleCreateTeam" :disabled="createTeamLoading">
+              {{ createTeamLoading ? '创建中...' : '创建团队' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+  
+  <!-- 邀请成员弹窗 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showInviteMemberModal" class="modal-overlay" @click.self="showInviteMemberModal = false">
+        <div class="modal-content team-modal">
+          <div class="modal-header">
+            <h3>邀请成员加入「{{ editingTeam?.name }}」</h3>
+            <button class="modal-close" @click="showInviteMemberModal = false">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label>搜索用户或输入邮箱</label>
+              <input 
+                v-model="inviteMemberForm.query" 
+                type="text" 
+                placeholder="输入用户名/邮箱搜索，或直接输入邮箱邀请" 
+                @input="handleSearchUsers(inviteMemberForm.query)"
+              />
+              <div v-if="inviteSearchLoading" class="search-loading">搜索中...</div>
+              <div v-else-if="inviteSearchResults.length > 0" class="search-results">
+                <div 
+                  v-for="user in inviteSearchResults" 
+                  :key="user.id"
+                  class="search-result-item"
+                  @click="selectUserToInvite(user)"
+                >
+                  <div class="user-avatar-small">{{ user.username.charAt(0).toUpperCase() }}</div>
+                  <div class="user-info-small">
+                    <div class="username">{{ user.username }}</div>
+                    <div class="email">{{ user.email }}</div>
+                  </div>
+                </div>
+              </div>
+              <div v-else-if="inviteMemberForm.query && inviteMemberForm.query.length >= 5 && !inviteSearchLoading" class="search-hint">
+                未找到用户？可直接输入完整邮箱发送邀请
+              </div>
+            </div>
+            <div v-if="inviteMemberForm.selectedUser" class="selected-user">
+              已选择: <strong>{{ inviteMemberForm.selectedUser.username }}</strong>
+            </div>
+            <div v-else-if="isValidEmail(inviteMemberForm.query)" class="selected-user email-invite">
+              将邀请邮箱: <strong>{{ inviteMemberForm.query }}</strong>
+            </div>
+            <div class="form-group">
+              <label>成员角色</label>
+              <select v-model="inviteMemberForm.role">
+                <option value="member">成员</option>
+                <option value="admin">管理员</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>邀请留言（可选）</label>
+              <input 
+                v-model="inviteMemberForm.message" 
+                type="text" 
+                placeholder="给对方的留言" 
+                maxlength="100"
+              />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" @click="showInviteMemberModal = false">取消</button>
+            <button class="btn-confirm" @click="handleInviteMember" :disabled="inviteLoading || !canSendInvite()">
+              {{ inviteLoading ? '发送中...' : '发送邀请' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 成员管理弹窗 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showMemberManageModal" class="modal-overlay" @click.self="showMemberManageModal = false">
+        <div class="modal-content team-modal member-manage-modal">
+          <div class="modal-header">
+            <h3>管理成员 - {{ memberManageTeam?.name }}</h3>
+            <button class="modal-close" @click="showMemberManageModal = false">×</button>
+          </div>
+          <div class="modal-body">
+            <div v-if="memberManageLoading" class="loading-hint">加载中...</div>
+            <div v-else-if="teamStore.teamMembers.value.length === 0" class="empty-hint">暂无成员</div>
+            <div v-else class="member-list">
+              <div 
+                v-for="member in teamStore.teamMembers.value" 
+                :key="member.user_id"
+                class="member-item"
+              >
+                <div class="member-info">
+                  <div class="member-avatar">{{ member.username?.charAt(0).toUpperCase() || '?' }}</div>
+                  <div class="member-details">
+                    <div class="member-name">{{ member.username || member.email }}</div>
+                    <div class="member-email">{{ member.email }}</div>
+                  </div>
+                </div>
+                <div class="member-controls">
+                  <!-- 角色选择器（不能修改自己，owner不能被修改） -->
+                  <select 
+                    v-if="member.role !== 'owner'"
+                    class="role-select"
+                    :value="member.role"
+                    @change="handleChangeMemberRole(memberManageTeam, member.user_id, $event.target.value)"
+                    :disabled="member.user_id === props.userInfo?.id"
+                  >
+                    <option value="admin">管理员</option>
+                    <option value="member">成员</option>
+                  </select>
+                  <span v-else class="role-label owner">所有者</span>
+                  <!-- 移除按钮（不能移除owner和自己） -->
+                  <button 
+                    v-if="member.role !== 'owner' && member.user_id !== props.userInfo?.id"
+                    class="btn-remove-member"
+                    @click="handleRemoveMember(memberManageTeam, member.user_id)"
+                    title="移除成员"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" @click="showMemberManageModal = false">关闭</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <style scoped>
@@ -2406,6 +3027,25 @@ function getLedgerTypeText(type) {
   flex: 1;
   overflow-y: auto;
   padding: 20px 24px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.panel-content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.panel-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panel-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+.panel-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .content-section {
@@ -5150,6 +5790,1103 @@ function getLedgerTypeText(type) {
 .modal-fade-leave-to {
   opacity: 0;
 }
+
+/* ==================== 空间切换器样式 ==================== */
+.space-switcher-section {
+  padding: 12px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
+}
+
+.current-space {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.current-space:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.current-space .space-icon {
+  font-size: 16px;
+}
+
+.current-space .space-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.current-space .dropdown-arrow {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  transition: transform 0.2s ease;
+}
+
+.space-dropdown {
+  position: absolute;
+  left: 24px;
+  right: 24px;
+  top: 100%;
+  margin-top: 4px;
+  background: rgba(30, 30, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.space-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.space-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.space-option.active {
+  background: rgba(251, 191, 36, 0.15);
+}
+
+.space-option .space-icon {
+  font-size: 14px;
+}
+
+.space-option .team-name {
+  flex: 1;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.space-option .team-meta {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.space-option .check-mark {
+  color: #FBBF24;
+  font-weight: bold;
+}
+
+.space-option.create-team {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.space-option.create-team:hover {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.space-option.invitations {
+  color: #60A5FA;
+}
+
+.space-option .invite-badge {
+  background: #EF4444;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.space-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 4px 0;
+}
+
+/* ==================== 导航菜单徽章 ==================== */
+.nav-item {
+  position: relative;
+}
+
+.nav-badge {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  background: #EF4444;
+  color: white;
+  font-size: 10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+/* ==================== 团队管理页面样式 ==================== */
+.teams-section {
+  padding: 0 !important;
+}
+
+.invitations-section {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(251, 191, 36, 0.05);
+}
+
+.invitation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.invitation-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.invitation-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.invitation-info .team-avatar {
+  font-size: 24px;
+}
+
+.invitation-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.invitation-details .team-name {
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  margin-bottom: 2px;
+}
+
+.invitation-details .inviter-info {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.invitation-details .invite-message {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font-style: italic;
+  margin-top: 4px;
+}
+
+.invitation-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-accept {
+  padding: 6px 12px;
+  background: #FBBF24;
+  color: #000;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-accept:hover {
+  background: #F59E0B;
+}
+
+.btn-reject {
+  padding: 6px 12px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-reject:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.my-teams-section {
+  padding: 16px 20px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.btn-create-team {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-create-team:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.empty-teams {
+  text-align: center;
+  padding: 40px 20px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.empty-teams .hint {
+  font-size: 12px;
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.team-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.team-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all 0.2s ease;
+}
+
+.team-card:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.team-card.active {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.team-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.team-avatar-large {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  flex-shrink: 0;
+}
+
+.team-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.team-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.team-name-row .team-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.team-details .team-meta {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* 角色标签 - 简约风格 */
+.role-tag {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.role-tag.role-owner {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.role-tag.role-admin {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.role-tag.role-member {
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 团队操作按钮行 */
+.team-card-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.team-details .team-description {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-team-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.btn-team-action span {
+  font-weight: 500;
+}
+
+.btn-team-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.btn-team-action.danger {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.btn-team-action.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+  color: rgba(239, 68, 68, 0.85);
+}
+
+/* ==================== 团队弹窗样式 ==================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+}
+
+.modal-content {
+  background: rgba(26, 26, 26, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+/* 弹窗动画 */
+.modal-enter-active,
+.modal-leave-active {
+  transition: all 0.25s ease;
+}
+
+.modal-enter-from,
+.modal-leave-to {
+  opacity: 0;
+}
+
+.modal-enter-from .modal-content,
+.modal-leave-to .modal-content {
+  transform: scale(0.95) translateY(-10px);
+}
+
+.modal-enter-active .modal-content,
+.modal-leave-active .modal-content {
+  transition: transform 0.25s ease;
+}
+
+.team-modal {
+  width: 400px;
+  max-width: 90vw;
+}
+
+.team-modal .modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.team-modal .modal-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.95);
+  margin: 0;
+}
+
+.team-modal .modal-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 20px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+}
+
+.team-modal .modal-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.team-modal .modal-body {
+  padding: 20px 24px;
+}
+
+.team-modal .form-group {
+  margin-bottom: 16px;
+}
+
+.team-modal .form-group label {
+  display: block;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 8px;
+}
+
+.team-modal .form-group label .required {
+  color: #EF4444;
+}
+
+.team-modal .form-group input,
+.team-modal .form-group textarea,
+.team-modal .form-group select {
+  width: 100%;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  transition: all 0.15s ease;
+}
+
+.team-modal .form-group input:focus,
+.team-modal .form-group textarea:focus,
+.team-modal .form-group select:focus {
+  outline: none;
+  border-color: rgba(251, 191, 36, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.team-modal .form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.team-modal .error-message {
+  color: #EF4444;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
+.team-modal .modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.team-modal .btn-cancel {
+  padding: 10px 20px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.team-modal .btn-cancel:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.team-modal .btn-confirm {
+  padding: 10px 20px;
+  background: #FBBF24;
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.team-modal .btn-confirm:hover:not(:disabled) {
+  background: #F59E0B;
+}
+
+.team-modal .btn-confirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ==================== 成员管理弹窗样式 ==================== */
+.member-manage-modal {
+  max-width: 480px;
+}
+
+.member-manage-modal .modal-body {
+  max-height: 400px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
+}
+
+.member-manage-modal .modal-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.member-manage-modal .modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.member-manage-modal .modal-body::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+}
+
+.member-manage-modal .modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.member-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  transition: all 0.15s ease;
+}
+
+.member-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.member-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.member-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  flex-shrink: 0;
+}
+
+.member-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.member-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-email {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.member-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.role-select {
+  padding: 6px 10px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.role-select:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.role-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.role-label {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.role-label.owner {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.btn-remove-member {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-remove-member:hover {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #EF4444;
+}
+
+.loading-hint {
+  text-align: center;
+  padding: 30px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+}
+
+/* 搜索结果 */
+.search-results {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  margin-top: 4px;
+  background: rgba(30, 30, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.search-result-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.user-avatar-small {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.user-info-small .username {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.user-info-small .email {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.search-loading {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.selected-user {
+  padding: 10px 14px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 16px;
+}
+
+.selected-user strong {
+  color: #FBBF24;
+}
+
+.selected-user.email-invite {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.selected-user.email-invite strong {
+  color: #3B82F6;
+}
+
+.search-hint {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 8px 0;
+}
+
+:root.canvas-theme-light .search-hint {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+/* 亮色主题适配 */
+:root.canvas-theme-light .space-switcher-section {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .current-space {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .current-space:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .current-space .space-name {
+  color: rgba(0, 0, 0, 0.9);
+}
+
+:root.canvas-theme-light .space-dropdown {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .space-option:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .space-option .team-name {
+  color: rgba(0, 0, 0, 0.9);
+}
+
+:root.canvas-theme-light .space-option .team-meta {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .btn-create-team {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.7);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .btn-create-team:hover {
+  background: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.9);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .space-option.create-team {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+:root.canvas-theme-light .space-option.create-team:hover {
+  color: rgba(0, 0, 0, 0.9);
+}
+
+:root.canvas-theme-light .team-card {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .team-card:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .team-card.active {
+  border-color: rgba(0, 0, 0, 0.15);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .team-name-row .team-name {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.canvas-theme-light .team-details .team-meta {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+:root.canvas-theme-light .role-tag.role-owner {
+  background: rgba(0, 0, 0, 0.07);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+:root.canvas-theme-light .role-tag.role-admin {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.55);
+}
+
+:root.canvas-theme-light .role-tag.role-member {
+  background: rgba(0, 0, 0, 0.03);
+  color: rgba(0, 0, 0, 0.45);
+}
+
+:root.canvas-theme-light .team-avatar-large {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.65);
+}
+
+:root.canvas-theme-light .team-card-actions {
+  border-top-color: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .btn-team-action {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .btn-team-action:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.75);
+}
+
+:root.canvas-theme-light .btn-team-action.danger:hover {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.18);
+  color: rgba(220, 38, 38, 0.85);
+}
+
+:root.canvas-theme-light .modal-content {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .team-modal .modal-header h3 {
+  color: rgba(0, 0, 0, 0.9);
+}
+
+:root.canvas-theme-light .team-modal .modal-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .team-modal .modal-close {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .team-modal .modal-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.9);
+}
+
+:root.canvas-theme-light .team-modal .form-group label {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+:root.canvas-theme-light .team-modal .form-group input,
+:root.canvas-theme-light .team-modal .form-group textarea,
+:root.canvas-theme-light .team-modal .form-group select {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.9);
+}
+
+:root.canvas-theme-light .team-modal .modal-footer {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .team-modal .btn-cancel {
+  color: rgba(0, 0, 0, 0.7);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .team-modal .btn-cancel:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+/* 成员管理弹窗浅色主题 */
+:root.canvas-theme-light .member-item {
+  background: rgba(0, 0, 0, 0.02);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .member-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .member-avatar {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+:root.canvas-theme-light .member-name {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.canvas-theme-light .member-email {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+:root.canvas-theme-light .role-select {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.75);
+}
+
+:root.canvas-theme-light .role-select:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .role-label.owner {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.8);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .btn-remove-member {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.45);
+}
+
+:root.canvas-theme-light .btn-remove-member:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.25);
+  color: #DC2626;
+}
+
+/* 成员管理弹窗滚动条浅色主题 */
+:root.canvas-theme-light .member-manage-modal .modal-body::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .member-manage-modal .modal-body::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
 </style>
 
 <!-- 白昼模式样式（非 scoped） -->
@@ -5383,6 +7120,27 @@ function getLedgerTypeText(type) {
 
 :root.canvas-theme-light .profile-panel .danger-btn:hover {
   background: rgba(239, 68, 68, 0.15) !important;
+}
+
+/* 底部退出登录按钮 */
+:root.canvas-theme-light .profile-panel .panel-footer {
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .logout-btn {
+  background: transparent !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .profile-panel .logout-btn:hover {
+  background: rgba(239, 68, 68, 0.08) !important;
+  border-color: rgba(239, 68, 68, 0.3) !important;
+  color: #ef4444 !important;
+}
+
+:root.canvas-theme-light .profile-panel .logout-icon {
+  color: inherit !important;
 }
 
 /* 套餐卡片 */

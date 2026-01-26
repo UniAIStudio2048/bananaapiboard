@@ -611,20 +611,24 @@ async function handleUserUpdate() {
 :root.canvas-theme-light .canvas-toolbar .node-icon {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.08);
-  color: rgba(0, 0, 0, 0.6);
+  color: rgba(0, 0, 0, 0.7);
 }
 
-:root.canvas-theme-light .canvas-toolbar .node-name {
+:root.canvas-theme-light .canvas-toolbar .node-label {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .canvas-toolbar .node-info .node-label {
   color: #1c1917;
 }
 
 :root.canvas-theme-light .canvas-toolbar .node-tag {
   color: rgba(0, 0, 0, 0.6);
-  background: rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.08);
 }
 
 :root.canvas-theme-light .canvas-toolbar .node-desc {
-  color: rgba(0, 0, 0, 0.45);
+  color: rgba(0, 0, 0, 0.5);
 }
 
 /* 图标按钮 SVG 颜色 - 白昼模式 */

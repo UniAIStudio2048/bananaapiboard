@@ -14,8 +14,11 @@ import {
   clearWorkflowHistory,
   formatSaveTime 
 } from '@/stores/canvas/workflowAutoSave'
+import { useTeamStore } from '@/stores/team'
+import SpaceSwitcher from './SpaceSwitcher.vue'
 
 const { t } = useI18n()
+const teamStore = useTeamStore()
 
 const props = defineProps({
   visible: Boolean
@@ -35,6 +38,7 @@ const quota = ref(null)
 const searchQuery = ref('')
 const selectedId = ref(null)
 const isDragging = ref(false)
+const spaceFilter = ref('current') // 空间筛选: 'current' | 'personal' | 'team-xxx' | 'all'
 
 // ========== 历史工作流数据 ==========
 const historyWorkflows = ref([])
@@ -53,6 +57,11 @@ const lastWorkflowsLoad = ref(0)
 const lastTemplatesLoad = ref(0)
 const CACHE_DURATION = 60000 // 缓存有效期 60 秒
 const isContentReady = ref(false) // 延迟渲染标记
+
+// 团队空间实时同步
+const TEAM_SYNC_INTERVAL = 10000 // 团队空间同步间隔 10 秒
+let teamSyncTimer = null
+const lastSyncId = ref(null) // 记录最新工作流的ID
 
 // 分类（使用computed以便响应语言切换）
 const categories = computed(() => [
@@ -107,7 +116,7 @@ const filteredTemplates = computed(() => {
 async function loadWorkflows(forceRefresh = false) {
   const now = Date.now()
   
-  // 如果有缓存且未过期，使用缓存
+  // 如果有缓存且未过期，使用缓存（但空间切换时需要强制刷新）
   if (!forceRefresh && workflowsCached.value && (now - lastWorkflowsLoad.value < CACHE_DURATION)) {
     console.log('[WorkflowPanel] 使用工作流缓存数据')
     // 仍然检查是否需要切换到模板标签
@@ -119,10 +128,13 @@ async function loadWorkflows(forceRefresh = false) {
   
   loading.value = true
   try {
-    const result = await getWorkflowList({ page: 1, pageSize: 50 })
+    // 获取空间筛选参数
+    const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
+    const result = await getWorkflowList({ page: 1, pageSize: 50, ...spaceParams })
     workflows.value = result.list || []
     workflowsCached.value = true
     lastWorkflowsLoad.value = now
+    console.log('[WorkflowPanel] 加载工作流:', workflows.value.length, '个', spaceParams)
     
     // 如果我的工作流和历史记录都为空，自动切换到模板标签
     if (workflows.value.length === 0 && historyWorkflows.value.length === 0 && activeTab.value === 'my') {
@@ -157,6 +169,99 @@ async function loadQuotaInfo() {
     console.error('[WorkflowPanel] 加载配额失败:', error)
   }
 }
+
+/**
+ * 团队空间实时同步 - 检查是否有新数据
+ */
+async function checkTeamSync() {
+  // 仅在团队空间且面板可见时同步
+  if (!teamStore.isInTeamSpace.value || !props.visible) return
+  
+  // 仅在筛选当前空间时同步
+  if (spaceFilter.value !== 'current') return
+  
+  // 仅在"我的工作流"标签页时同步
+  if (activeTab.value !== 'my') return
+  
+  try {
+    const spaceParams = teamStore.getSpaceParams('current')
+    const result = await getWorkflowList({ page: 1, pageSize: 1, ...spaceParams })
+    const latestWorkflow = result.list?.[0]
+    
+    if (latestWorkflow) {
+      // 如果有新数据（ID不同或首次同步）
+      if (lastSyncId.value !== null && lastSyncId.value !== latestWorkflow.id) {
+        console.log('[WorkflowPanel] 检测到新数据，自动刷新')
+        workflowsCached.value = false
+        await loadWorkflows(true)
+      }
+      lastSyncId.value = latestWorkflow.id
+    }
+  } catch (error) {
+    console.error('[WorkflowPanel] 团队同步检查失败:', error)
+  }
+}
+
+/**
+ * 启动团队空间实时同步
+ */
+function startTeamSync() {
+  stopTeamSync()
+  if (teamStore.isInTeamSpace.value && props.visible) {
+    // 记录当前最新ID
+    if (workflows.value.length > 0) {
+      lastSyncId.value = workflows.value[0].id
+    }
+    teamSyncTimer = setInterval(checkTeamSync, TEAM_SYNC_INTERVAL)
+    console.log('[WorkflowPanel] 启动团队空间实时同步')
+  }
+}
+
+/**
+ * 停止团队空间实时同步
+ */
+function stopTeamSync() {
+  if (teamSyncTimer) {
+    clearInterval(teamSyncTimer)
+    teamSyncTimer = null
+    console.log('[WorkflowPanel] 停止团队空间实时同步')
+  }
+}
+
+// 空间筛选变化时重新加载
+function handleSpaceChange(newSpace) {
+  spaceFilter.value = newSpace
+  workflowsCached.value = false // 清除缓存
+  loadWorkflows(true)
+  
+  // 重新评估是否需要同步
+  if (newSpace === 'current') {
+    startTeamSync()
+  } else {
+    stopTeamSync()
+  }
+}
+
+// 监听全局空间切换事件
+watch(() => teamStore.globalTeamId.value, () => {
+  if (spaceFilter.value === 'current') {
+    workflowsCached.value = false
+    loadWorkflows(true)
+  }
+  // 空间切换后重新评估同步状态
+  if (props.visible) {
+    startTeamSync()
+  }
+})
+
+// 监听团队空间状态变化，控制同步
+watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
+  if (isTeam && props.visible && spaceFilter.value === 'current') {
+    startTeamSync()
+  } else {
+    stopTeamSync()
+  }
+})
 
 // 加载模板（带缓存）
 async function loadTemplates(forceRefresh = false) {
@@ -514,11 +619,14 @@ watch(() => props.visible, async (visible) => {
     isContentReady.value = false
     
     // 并行加载数据
-    Promise.all([
+    await Promise.all([
       loadWorkflows(),
       loadQuotaInfo(),
       loadTemplates()
     ])
+    
+    // 启动团队空间实时同步
+    startTeamSync()
     
     // 加载历史工作流
     loadHistoryWorkflows()
@@ -530,6 +638,9 @@ watch(() => props.visible, async (visible) => {
     }, 280)
   } else {
     isContentReady.value = false
+    
+    // 停止团队空间实时同步
+    stopTeamSync()
   }
 })
 
@@ -547,6 +658,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
+  
+  // 停止团队空间实时同步
+  stopTeamSync()
 })
 
 // 🔧 新增：强制刷新工作流列表（供父组件调用）
@@ -588,6 +702,14 @@ defineExpose({
             </svg>
           </button>
         </div>
+        
+        <!-- 空间切换器（仅在我的工作流标签时显示） -->
+        <SpaceSwitcher 
+          v-if="activeTab === 'my'"
+          v-model="spaceFilter" 
+          @change="handleSpaceChange"
+          :compact="true"
+        />
         
         <!-- 标签页切换 -->
         <div class="panel-tabs">
@@ -715,6 +837,17 @@ defineExpose({
                         <span>{{ workflow.node_count }} {{ t('canvas.nodeLabel') }}</span>
                         <span>·</span>
                         <span>{{ formatDate(workflow.updated_at) }}</span>
+                        <!-- 团队空间用户署名 -->
+                        <template v-if="teamStore.isInTeamSpace.value && workflow.last_updated_by_username">
+                          <span>·</span>
+                          <span class="item-author">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                              <circle cx="12" cy="7" r="4"/>
+                            </svg>
+                            {{ workflow.last_updated_by_username }}
+                          </span>
+                        </template>
                       </div>
                     </div>
                     
@@ -1424,6 +1557,18 @@ defineExpose({
   gap: 4px;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.4);
+  flex-wrap: wrap;
+}
+
+.item-author {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.item-author svg {
+  opacity: 0.7;
 }
 
 .item-actions {
@@ -1905,6 +2050,10 @@ defineExpose({
 
 :root.canvas-theme-light .workflow-panel .item-meta {
   color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .item-author {
+  color: rgba(0, 0, 0, 0.5) !important;
 }
 
 :root.canvas-theme-light .workflow-panel .action-btn {

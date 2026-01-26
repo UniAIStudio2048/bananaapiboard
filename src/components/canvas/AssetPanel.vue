@@ -9,8 +9,11 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getAssets, deleteAsset, toggleFavorite, updateAssetTags, updateAsset, saveAsset } from '@/api/canvas/assets'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
+import { useTeamStore } from '@/stores/team'
+import SpaceSwitcher from './SpaceSwitcher.vue'
 
 const { t, currentLanguage } = useI18n()
+const teamStore = useTeamStore()
 
 const props = defineProps({
   visible: Boolean
@@ -24,6 +27,7 @@ const assets = ref([])
 const selectedType = ref('all') // all | text | image | video | audio
 const selectedTag = ref('all')  // all | favorite | 或自定义标签
 const searchQuery = ref('')
+const spaceFilter = ref('current') // 空间筛选: 'current' | 'personal' | 'team-xxx' | 'all'
 const showTagManager = ref(false)
 const editingAsset = ref(null)
 const newTagInput = ref('')
@@ -72,6 +76,11 @@ const dataCached = ref(false)
 const lastLoadTime = ref(0)
 const CACHE_DURATION = 60000 // 缓存有效期 60 秒
 const isContentReady = ref(false) // 延迟渲染标记
+
+// 团队空间实时同步
+const TEAM_SYNC_INTERVAL = 10000 // 团队空间同步间隔 10 秒
+let teamSyncTimer = null
+const lastSyncId = ref(null) // 记录最新一条记录的ID
 
 // 文件类型 - 存储翻译键，在模板中实时翻译
 const fileTypes = [
@@ -163,7 +172,7 @@ const assetStats = computed(() => {
 async function loadAssets(forceRefresh = false) {
   const now = Date.now()
   
-  // 如果有缓存且未过期，使用缓存
+  // 如果有缓存且未过期，使用缓存（但空间切换时需要强制刷新）
   if (!forceRefresh && dataCached.value && (now - lastLoadTime.value < CACHE_DURATION)) {
     console.log('[AssetPanel] 使用缓存数据')
     return
@@ -171,16 +180,109 @@ async function loadAssets(forceRefresh = false) {
   
   loading.value = true
   try {
-    const result = await getAssets()
+    // 获取空间筛选参数
+    const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
+    const result = await getAssets(spaceParams)
     assets.value = result.assets || []
     dataCached.value = true
     lastLoadTime.value = now
+    console.log('[AssetPanel] 加载资产:', assets.value.length, '个', spaceParams)
   } catch (error) {
     console.error('[AssetPanel] 加载资产失败:', error)
   } finally {
     loading.value = false
   }
 }
+
+/**
+ * 团队空间实时同步 - 检查是否有新数据
+ */
+async function checkTeamSync() {
+  // 仅在团队空间且面板可见时同步
+  if (!teamStore.isInTeamSpace.value || !props.visible) return
+  
+  // 仅在筛选当前空间时同步
+  if (spaceFilter.value !== 'current') return
+  
+  try {
+    const spaceParams = teamStore.getSpaceParams('current')
+    const result = await getAssets({ ...spaceParams, limit: 1 })
+    const latestAsset = result.assets?.[0]
+    
+    if (latestAsset) {
+      // 如果有新数据（ID不同或首次同步）
+      if (lastSyncId.value !== null && lastSyncId.value !== latestAsset.id) {
+        console.log('[AssetPanel] 检测到新数据，自动刷新')
+        dataCached.value = false
+        await loadAssets(true)
+      }
+      lastSyncId.value = latestAsset.id
+    }
+  } catch (error) {
+    console.error('[AssetPanel] 团队同步检查失败:', error)
+  }
+}
+
+/**
+ * 启动团队空间实时同步
+ */
+function startTeamSync() {
+  stopTeamSync()
+  if (teamStore.isInTeamSpace.value && props.visible) {
+    // 记录当前最新ID
+    if (assets.value.length > 0) {
+      lastSyncId.value = assets.value[0].id
+    }
+    teamSyncTimer = setInterval(checkTeamSync, TEAM_SYNC_INTERVAL)
+    console.log('[AssetPanel] 启动团队空间实时同步')
+  }
+}
+
+/**
+ * 停止团队空间实时同步
+ */
+function stopTeamSync() {
+  if (teamSyncTimer) {
+    clearInterval(teamSyncTimer)
+    teamSyncTimer = null
+    console.log('[AssetPanel] 停止团队空间实时同步')
+  }
+}
+
+// 空间筛选变化时重新加载
+function handleSpaceChange(newSpace) {
+  spaceFilter.value = newSpace
+  dataCached.value = false // 清除缓存
+  loadAssets(true)
+  
+  // 重新评估是否需要同步
+  if (newSpace === 'current') {
+    startTeamSync()
+  } else {
+    stopTeamSync()
+  }
+}
+
+// 监听全局空间切换事件
+watch(() => teamStore.globalTeamId.value, () => {
+  if (spaceFilter.value === 'current') {
+    dataCached.value = false
+    loadAssets(true)
+  }
+  // 空间切换后重新评估同步状态
+  if (props.visible) {
+    startTeamSync()
+  }
+})
+
+// 监听团队空间状态变化，控制同步
+watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
+  if (isTeam && props.visible && spaceFilter.value === 'current') {
+    startTeamSync()
+  } else {
+    stopTeamSync()
+  }
+})
 
 // 获取资产预览
 function getAssetPreview(asset) {
@@ -988,7 +1090,8 @@ async function submitAddCharacter() {
       throw new Error('文件上传失败：未返回URL')
     }
     
-    // 2. 保存为 sora-character 资产
+    // 2. 保存为 sora-character 资产（包含当前空间信息）
+    const spaceParams = teamStore.getSpaceParams('current')
     const assetData = {
       type: 'sora-character',
       name: name.trim(),
@@ -998,7 +1101,10 @@ async function submitAddCharacter() {
         username: username.trim(),
         source: 'manual',
         status: 'completed'
-      }
+      },
+      // 空间参数
+      spaceType: spaceParams.spaceType,
+      teamId: spaceParams.teamId
     }
     
     await saveAsset(assetData)
@@ -1133,7 +1239,10 @@ function closeTagManager() {
 watch(() => props.visible, async (visible) => {
   if (visible) {
     // 加载数据
-    loadAssets()
+    await loadAssets()
+    
+    // 启动团队空间实时同步
+    startTeamSync()
     
     // 延迟渲染内容，让面板动画先完成
     isContentReady.value = false
@@ -1145,6 +1254,9 @@ watch(() => props.visible, async (visible) => {
     }, 280)
   } else {
     isContentReady.value = false
+    
+    // 停止团队空间实时同步
+    stopTeamSync()
   }
 })
 
@@ -1188,6 +1300,10 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', handleGlobalClick)
   window.removeEventListener('assets-updated', handleAssetsUpdated)
+  
+  // 停止团队空间实时同步
+  stopTeamSync()
+  
   destroyAudioVisualizer()
 })
 </script>
@@ -1218,6 +1334,13 @@ onUnmounted(() => {
             </svg>
           </button>
         </div>
+        
+        <!-- 空间切换器 -->
+        <SpaceSwitcher 
+          v-model="spaceFilter" 
+          @change="handleSpaceChange"
+          :compact="true"
+        />
 
         <!-- 文件类型筛选 -->
         <div class="type-filter">
@@ -1463,6 +1586,14 @@ onUnmounted(() => {
                 <div class="asset-meta">
                   <span class="asset-size">{{ formatFileSize(asset.size) }}</span>
                   <span class="asset-time">{{ formatDate(asset.created_at) }}</span>
+                  <!-- 团队空间用户署名 -->
+                  <span v-if="teamStore.isInTeamSpace.value && asset.last_updated_by_username" class="asset-author">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                      <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                    {{ asset.last_updated_by_username }}
+                  </span>
                 </div>
                 
                 <!-- 标签 -->
@@ -2562,6 +2693,18 @@ onUnmounted(() => {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.4);
   margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.asset-author {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.asset-author svg {
+  opacity: 0.7;
 }
 
 .asset-tags {
@@ -3677,6 +3820,10 @@ onUnmounted(() => {
 
 :root.canvas-theme-light .asset-panel .asset-meta {
   color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .asset-panel .asset-author {
+  color: rgba(0, 0, 0, 0.5) !important;
 }
 
 :root.canvas-theme-light .asset-panel .asset-tag {

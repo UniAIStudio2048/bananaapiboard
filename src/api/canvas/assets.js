@@ -32,6 +32,8 @@ function getAuthHeaders() {
  * @param {boolean} params.favorite - 只显示收藏
  * @param {number} params.page - 页码
  * @param {number} params.pageSize - 每页数量
+ * @param {string} params.spaceType - 空间类型 (personal/team/all)
+ * @param {string} params.teamId - 团队ID (spaceType=team时需要)
  */
 export async function getAssets(params = {}) {
   const queryParams = new URLSearchParams({
@@ -39,7 +41,9 @@ export async function getAssets(params = {}) {
     pageSize: params.pageSize || 100,
     ...(params.type && { type: params.type }),
     ...(params.tag && { tag: params.tag }),
-    ...(params.favorite && { favorite: 'true' })
+    ...(params.favorite && { favorite: 'true' }),
+    ...(params.spaceType && { spaceType: params.spaceType }),
+    ...(params.teamId && { teamId: params.teamId })
   })
   
   const response = await fetch(`${getApiBase()}/api/canvas/assets?${queryParams}`, {
