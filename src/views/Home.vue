@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { generateImage, buildDownloadUrl, uploadImages, getMe, redeemVoucher, isQiniuCdnUrl } from '@/api/client'
+import { generateImage, buildDownloadUrl, uploadImages, getMe, redeemVoucher, isQiniuCdnUrl, getQiniuThumbnailUrl } from '@/api/client'
 import ImageAnnotator from '@/components/ImageAnnotator.vue'
 import MentionDropdown from '@/components/MentionDropdown.vue'
 import PromptInputWithTags from '@/components/PromptInputWithTags.vue'
@@ -2882,8 +2882,9 @@ onUnmounted(() => {
                   class="aspect-video relative cursor-pointer"
                   @click.stop="openHistoryImage(h, idx)"
                 >
+                  <!-- 🔧 历史列表使用缩略图(400px WebP)，节省 CDN 流量 -->
                   <img 
-                    :src="h.url || makePlaceholderImage(h)" 
+                    :src="getQiniuThumbnailUrl(h.url) || makePlaceholderImage(h)" 
                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     loading="lazy"
                     :alt="h.prompt || '历史图片'"

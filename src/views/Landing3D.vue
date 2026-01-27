@@ -93,6 +93,18 @@
           <span class="btn-arrow">→</span>
         </button>
       </div>
+      
+      <!-- 底部备案信息 -->
+      <footer v-if="icpConfig.enabled && icpConfig.icp_number" class="landing-icp-footer">
+        <a 
+          :href="icpConfig.icp_link || 'https://beian.miit.gov.cn/'" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          class="icp-link"
+        >
+          {{ icpConfig.icp_number }}
+        </a>
+      </footer>
     </div>
 
     <!-- Login Modal -->
@@ -372,6 +384,13 @@ const emailConfig = ref({
   has_whitelist: false,
   email_whitelist: []
 })
+
+// 备案号配置
+const icpConfig = ref({
+  enabled: false,
+  icp_number: '',
+  icp_link: 'https://beian.miit.gov.cn/'
+})
 const emailCode = ref('')
 const sendingCode = ref(false)
 const codeSent = ref(false)
@@ -423,6 +442,24 @@ async function loadEmailConfig() {
     }
   } catch (e) {
     console.warn('[Landing3D] 加载邮箱配置失败', e)
+  }
+}
+
+// 加载备案号配置
+async function loadIcpConfig() {
+  try {
+    const r = await fetch('/api/site-config', {
+      headers: getTenantHeaders()
+    })
+    if (r.ok) {
+      const data = await r.json()
+      if (data.icp_config) {
+        icpConfig.value = data.icp_config
+        console.log('[Landing3D] 备案配置已加载:', data.icp_config)
+      }
+    }
+  } catch (e) {
+    console.warn('[Landing3D] 加载备案配置失败', e)
   }
 }
 
@@ -1385,6 +1422,9 @@ onMounted(() => {
   animate()
   window.addEventListener('mousemove', onMouseMove)
   window.addEventListener('resize', onResize)
+  
+  // 加载备案配置
+  loadIcpConfig()
 })
 
 onUnmounted(() => {
@@ -1555,6 +1595,29 @@ onUnmounted(() => {
 /* CTA Section */
 .section-cta {
   background: #020208;
+  position: relative;
+}
+
+/* 落地页底部备案信息 */
+.landing-icp-footer {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  text-align: center;
+}
+
+.icp-link {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+  text-decoration: none;
+  letter-spacing: 0.5px;
+  transition: color 0.3s ease;
+}
+
+.icp-link:hover {
+  color: rgba(0, 255, 255, 0.7);
 }
 
 .cta-content {

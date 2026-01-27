@@ -15,7 +15,7 @@ const router = createRouter({
       path: '/', 
       name: 'landing',
       component: Landing3D,
-      meta: { title: 'AI Design Unleashed', requiresAuth: false }
+      meta: { title: '', requiresAuth: false }  // 落地页直接使用默认标题
     },
     { 
       path: '/generate', 
@@ -75,7 +75,7 @@ const router = createRouter({
 // 路由守卫 - 检查登录状态和更新页面标题
 router.beforeEach(async (to, from, next) => {
   // 更新页面标题
-  document.title = to.meta.title ? `${to.meta.title} - AI创作平台` : 'AI创作平台'
+  document.title = to.meta.title ? `${to.meta.title} - AI绘图创作` : 'AI绘图创作'
   
   // 检查是否需要登录
   if (to.meta.requiresAuth) {

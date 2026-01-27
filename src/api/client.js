@@ -99,6 +99,31 @@ export function isQiniuCdnUrl(url) {
 }
 
 /**
+ * 🔧 生成七牛云缩略图 URL（用于列表显示，节省 CDN 流量）
+ * 使用七牛云图片处理服务生成小尺寸 WebP 格式缩略图
+ * 
+ * @param {string} url - 原图 URL
+ * @param {number} width - 缩略图宽度（默认 400px）
+ * @param {string} format - 输出格式（默认 webp，体积最小）
+ * @returns {string} 缩略图 URL
+ */
+export function getQiniuThumbnailUrl(url, width = 400, format = 'webp') {
+  if (!url || typeof url !== 'string') return url
+  
+  // 只对七牛云 URL 进行处理
+  if (!isQiniuCdnUrl(url)) return url
+  
+  // 先获取原图 URL（去除可能已有的处理参数）
+  const originalUrl = getQiniuOriginalUrl(url)
+  
+  // 添加七牛云图片处理参数
+  // imageView2/2/w/400 - 等比缩放，宽度限制为 400px
+  // format/webp - 转 WebP 格式，体积更小（比 JPEG 小 25-35%）
+  const separator = originalUrl.includes('?') ? '|' : '?'
+  return `${originalUrl}${separator}imageView2/2/w/${width}/format/${format}`
+}
+
+/**
  * 获取七牛云原图 URL（去除所有图片处理参数）
  * 七牛云图片处理参数格式：
  * - ?imageView2/... - 图片基本处理
