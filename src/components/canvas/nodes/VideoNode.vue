@@ -585,8 +585,18 @@ const models = computed(() => {
     filteredModels = allModels.filter(m => isModelEnabled(m.value, 'video'))
   }
   
-  // 🔧 根据当前生成模式过滤：text=t2v, image=i2v
-  const currentMode = generationMode.value === 'text' ? 't2v' : 'i2v'
+  // 🔧 根据实际图片输入状态判断当前模式（而不是依赖可能过时的 generationMode）
+  // 当有图片连接时，显示图生视频模型；否则显示文生视频模型
+  // 注意：直接检查上游连接，避免依赖顺序问题
+  const allEdges = [...canvasStore.edges]
+  const allNodes = [...canvasStore.nodes]
+  const IMAGE_TYPES = ['image', 'image-input', 'image-gen', 'flux-image', 'image-expand']
+  const upstreamEdges = allEdges.filter(edge => edge.target === props.id)
+  const hasImageInput = upstreamEdges.some(edge => {
+    const sourceNode = allNodes.find(n => n.id === edge.source)
+    return sourceNode && IMAGE_TYPES.includes(sourceNode.type)
+  })
+  const currentMode = hasImageInput ? 'i2v' : 't2v'
   
   const result = filteredModels.filter(m => {
     const supportedModes = m.supportedModes
@@ -604,7 +614,7 @@ const models = computed(() => {
   // 调试日志（仅在开发环境或需要时输出）
   if (process.env.NODE_ENV === 'development') {
     console.log('[VideoNode] models 计算属性更新:', {
-      generationMode: generationMode.value,
+      hasImageInput,
       currentMode,
       allModelsCount: allModels.length,
       filteredCount: result.length,

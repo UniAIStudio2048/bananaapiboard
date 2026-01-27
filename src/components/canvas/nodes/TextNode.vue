@@ -4240,11 +4240,17 @@ onMounted(() => {
   box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15), 0 8px 40px rgba(0, 0, 0, 0.15);
 }
 
-/* 白昼模式 - 内容区域滚动条 */
+/* 白昼模式 - 内容区域文字颜色和滚动条 */
 :root.canvas-theme-light .text-node .editor-content,
 :root.canvas-theme-light .text-node .text-node-display,
 :root.canvas-theme-light .text-node .llm-response-content {
+  color: #1c1917;
   scrollbar-color: #c0c0c0 transparent;
+}
+
+/* 白昼模式 - 编辑器占位符颜色 */
+:root.canvas-theme-light .text-node .editor-content:empty:before {
+  color: #a8a29e;
 }
 
 :root.canvas-theme-light .text-node .editor-content::-webkit-scrollbar-thumb,

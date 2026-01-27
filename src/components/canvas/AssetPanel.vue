@@ -63,6 +63,10 @@ const addCharacterForm = ref({
 const addCharacterLoading = ref(false)
 const addCharacterError = ref('')
 
+// 添加角色下拉菜单状态（2秒延迟隐藏）
+const showAddCharacterDropdown = ref(false)
+let addCharacterDropdownTimer = null
+
 // 右键菜单状态
 const showContextMenu = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
@@ -388,9 +392,20 @@ function cancelEditName() {
 }
 
 // 点击资产 - Sora 角色单击复制 ID，其他资产打开预览
-function handleAssetClick(asset) {
-  // Sora 角色：单击复制角色 ID
+function handleAssetClick(e, asset) {
+  // 如果点击的是操作按钮区域，不处理（让按钮自己处理）
+  const target = e.target
+  if (target.closest('.asset-actions') || target.closest('.action-btn')) {
+    return
+  }
+  
+  // Sora 角色：单击复制角色 ID（仅当角色创建成功时）
   if (asset.type === 'sora-character') {
+    const status = getCharacterStatus(asset)
+    // 如果角色创建失败，点击不做任何操作（用户可以通过删除按钮删除）
+    if (status === 'failed') {
+      return
+    }
     const username = getCharacterUsername(asset)
     navigator.clipboard.writeText(`@${username}`).then(() => {
       copyToastMessage.value = `已复制: @${username}`
@@ -965,6 +980,38 @@ async function copyCharacterId(e, asset) {
 
 // ========== 添加角色功能 ==========
 
+// 显示添加角色下拉菜单（进入时清除隐藏计时器）
+function showCharacterDropdown() {
+  if (addCharacterDropdownTimer) {
+    clearTimeout(addCharacterDropdownTimer)
+    addCharacterDropdownTimer = null
+  }
+  showAddCharacterDropdown.value = true
+}
+
+// 开始隐藏计时（2秒后隐藏）
+function startHideCharacterDropdown() {
+  if (addCharacterDropdownTimer) {
+    clearTimeout(addCharacterDropdownTimer)
+  }
+  addCharacterDropdownTimer = setTimeout(() => {
+    showAddCharacterDropdown.value = false
+    addCharacterDropdownTimer = null
+  }, 2000)
+}
+
+// 点击添加角色按钮
+function handleAddCharacterClick() {
+  // 立即隐藏下拉菜单
+  showAddCharacterDropdown.value = false
+  if (addCharacterDropdownTimer) {
+    clearTimeout(addCharacterDropdownTimer)
+    addCharacterDropdownTimer = null
+  }
+  // 打开弹窗
+  openAddCharacterModal()
+}
+
 // 打开添加角色弹窗
 function openAddCharacterModal() {
   addCharacterForm.value = {
@@ -1349,6 +1396,8 @@ onUnmounted(() => {
             <div 
               v-if="ft.key === 'sora-character'" 
               class="sora-character-wrapper"
+              @mouseenter="showCharacterDropdown"
+              @mouseleave="startHideCharacterDropdown"
             >
               <button 
                 class="type-btn"
@@ -1359,11 +1408,16 @@ onUnmounted(() => {
                 <span class="type-label">{{ ft.label }}</span>
                 <span class="type-count">{{ assetStats[ft.key] || 0 }}</span>
               </button>
-              <!-- 悬停时弹出的添加角色按钮 -->
-              <div class="add-character-dropdown">
+              <!-- 悬停时弹出的添加角色按钮（2秒延迟隐藏） -->
+              <div 
+                class="add-character-dropdown"
+                :class="{ visible: showAddCharacterDropdown }"
+                @mouseenter="showCharacterDropdown"
+                @mouseleave="startHideCharacterDropdown"
+              >
                 <button 
                   class="add-character-btn"
-                  @click.stop="openAddCharacterModal"
+                  @click.stop="handleAddCharacterClick"
                   title="手动添加外部角色"
                 >
                   <span class="btn-icon">+</span>
@@ -1438,7 +1492,7 @@ onUnmounted(() => {
               class="asset-card"
               :class="[`type-${asset.type}`]"
               draggable="true"
-              @click="handleAssetClick(asset)"
+              @click="handleAssetClick($event, asset)"
               @dblclick="handleAssetDoubleClick(asset)"
               @contextmenu="handleContextMenu($event, asset)"
               @dragstart="handleDragStart($event, asset)"
@@ -2735,6 +2789,7 @@ onUnmounted(() => {
   gap: 4px;
   opacity: 0;
   transition: opacity 0.2s;
+  z-index: 20; /* 确保在失败覆盖层(z-index:10)之上 */
 }
 
 .action-btn {
@@ -3302,7 +3357,8 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-.sora-character-wrapper:hover .add-character-dropdown {
+/* 通过 JS 控制显示（2秒延迟隐藏） */
+.add-character-dropdown.visible {
   opacity: 1;
   visibility: visible;
   transform: translateX(-50%) translateY(8px);
