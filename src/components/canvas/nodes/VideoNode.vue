@@ -364,6 +364,20 @@ const klingMotionVideoError = ref('')  // 视频验证错误信息
 const klingMotionVideoDuration = ref(0)  // 参考视频时长（秒）
 const klingMotionVideoLoading = ref(false)  // 视频加载中
 
+// ==================== Seedance 模型相关 ====================
+// 检测是否是豆包 Seedance 模型
+const isSeedanceModel = computed(() => {
+  const modelName = selectedModel.value?.toLowerCase() || ''
+  const apiType = currentModelConfig.value?.apiType || ''
+  return modelName.includes('seedance') || apiType === 'seedance'
+})
+
+// Seedance 高级选项显示控制
+const showSeedanceAdvancedOptions = ref(false)
+
+// Seedance 音频相关选项
+const seedanceSoundEnabled = ref(props.data.seedanceSoundEnabled !== false)  // 是否生成声音，默认开启
+
 // 验证参考视频时长（最大30秒）
 const validateMotionVideoUrl = async (url) => {
   if (!url) {
@@ -1232,6 +1246,11 @@ const pointsCost = computed(() => {
     cost = cost * 2
   }
   
+  // Seedance 声音模式：积分翻倍
+  if (isSeedanceModel.value && seedanceSoundEnabled.value) {
+    cost = cost * 2
+  }
+  
   return cost
 })
 
@@ -1508,8 +1527,8 @@ function handleMotionImitation() {
 }
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingSoundEnabled, klingVoiceList, klingMotionVideoUrl, klingMotionMode], 
-  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingSndEnabled, klingVoices, motionVideoUrl, motionMode]) => {
+watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingSoundEnabled, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled], 
+  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingSndEnabled, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       aspectRatio,
@@ -1531,7 +1550,9 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
       klingVoiceList: klingVoices,
       // Kling 动作迁移参数
       klingMotionVideoUrl: motionVideoUrl,
-      klingMotionMode: motionMode
+      klingMotionMode: motionMode,
+      // Seedance 音频参数
+      seedanceSoundEnabled: seedanceSndEnabled
     })
   },
   { deep: true }  // 深度监听数组变化
@@ -1863,6 +1884,12 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
     // 模式参数
     formData.append('kling_motion_mode', klingMotionMode.value)
     console.log('[VideoNode] Kling 动作迁移模式:', klingMotionMode.value)
+  }
+  
+  // Seedance 模型特有参数：声音生成
+  if (isSeedanceModel.value) {
+    formData.append('seedance_generate_audio', seedanceSoundEnabled.value ? 'true' : 'false')
+    console.log('[VideoNode] Seedance 生成声音:', seedanceSoundEnabled.value)
   }
   
   // 如果有参考图片，添加图片 URL
@@ -4786,6 +4813,33 @@ function handleToolbarPreview() {
         </Transition>
       </template>
       
+      <!-- Seedance 高级选项 - 声音生成 -->
+      <template v-if="isSeedanceModel">
+        <!-- 展开/收起按钮 -->
+        <button class="sora2-collapse-trigger" @click="showSeedanceAdvancedOptions = !showSeedanceAdvancedOptions">
+          <span class="sora2-collapse-icon" :class="{ 'expanded': showSeedanceAdvancedOptions }">∧</span>
+          <span>{{ showSeedanceAdvancedOptions ? '收起' : '扩展' }}</span>
+        </button>
+        
+        <!-- 高级选项内容 -->
+        <Transition name="slide-down">
+          <div v-if="showSeedanceAdvancedOptions" class="sora2-advanced-options seedance-advanced">
+            <!-- 生成声音开关 -->
+            <div class="sora2-option-row">
+              <span class="sora2-option-label">🔊 生成声音 <span v-if="seedanceSoundEnabled" class="kling-sound-multiplier">(2x)</span></span>
+              <label class="sora2-toggle-switch">
+                <input type="checkbox" v-model="seedanceSoundEnabled" />
+                <span class="sora2-toggle-slider"></span>
+              </label>
+            </div>
+            
+            <div class="seedance-sound-hint">
+              💡 开启后将同时生成视频音频，积分消耗翻倍
+            </div>
+          </div>
+        </Transition>
+      </template>
+      
       <!-- Vidu 图生视频模式选择 -->
       <template v-if="isViduModel && referenceImages.length > 0">
         <div class="vidu-mode-section">
@@ -7302,6 +7356,21 @@ function handleToolbarPreview() {
   color: #fbbf24;
   font-weight: 600;
   font-size: 11px;
+}
+
+/* Seedance 高级选项样式 */
+.seedance-advanced {
+  border-color: #f97316;
+}
+
+.seedance-sound-hint {
+  font-size: 11px;
+  color: #f97316;
+  line-height: 1.4;
+  padding: 6px 8px;
+  background: rgba(249, 115, 22, 0.1);
+  border-radius: 4px;
+  margin-top: 8px;
 }
 
 /* Kling 白昼模式 */
