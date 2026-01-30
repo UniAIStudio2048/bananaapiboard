@@ -1996,16 +1996,10 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
         }
       })
       
-      // 后台轮询，不阻塞
-      // 🔥 错峰模式传入特殊轮询策略参数
-      const isOffPeakTask = isViduModel.value && viduOffPeak.value
-      pollVideoTaskForNode(taskId, nodeId, isOffPeakTask, Date.now()).catch(error => {
-        console.error(`[VideoNode] 任务 ${taskIndex + 1} 轮询失败:`, error)
-        canvasStore.updateNodeData(nodeId, {
-          status: 'error',
-          error: error.message
-        })
-      })
+      // ⚠️ 不再调用 pollVideoTaskForNode，使用 backgroundTaskManager 统一轮询
+      // 🔧 修复：避免双重轮询导致页面卡顿（Chrome弹出"重新加载此网站"）
+      // backgroundTaskManager 会通过事件通知任务状态变化
+      // 事件监听已在 onMounted 中设置：background-task-complete/failed/progress
       
       // 任务已提交，立即返回 taskId（不等待轮询结果）
       return taskId

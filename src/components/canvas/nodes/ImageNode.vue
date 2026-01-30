@@ -11,7 +11,7 @@ import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from '
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints } from '@/api/canvas/nodes'
-import { registerTask } from '@/stores/canvas/backgroundTaskManager'
+import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
@@ -459,6 +459,78 @@ function handleCanvasDragEnd() {
   isCanvasDragging.value = false
 }
 
+// 🔧 后台任务事件处理 - 统一使用 backgroundTaskManager 轮询，避免双重轮询导致页面卡顿
+function handleBackgroundTaskComplete(event) {
+  const { taskId, task } = event.detail
+  // 只处理属于当前节点的任务
+  if (task.nodeId !== props.id) return
+  
+  console.log(`[ImageNode] 后台任务完成: ${taskId}`, task)
+  
+  // 获取图片URL
+  const imageUrl = task.result?.url || task.result?.urls?.[0] || task.result?.images?.[0]
+  if (imageUrl) {
+    canvasStore.updateNodeData(props.id, {
+      status: 'success',
+      output: { type: 'image', urls: [imageUrl] }
+    })
+  }
+  
+  removeCompletedTask(taskId)
+}
+
+function handleBackgroundTaskFailed(event) {
+  const { taskId, task } = event.detail
+  if (task.nodeId !== props.id) return
+  
+  console.log(`[ImageNode] 后台任务失败: ${taskId}`, task)
+  
+  canvasStore.updateNodeData(props.id, {
+    status: 'error',
+    error: task.error || '图片生成失败'
+  })
+  
+  removeCompletedTask(taskId)
+}
+
+function handleBackgroundTaskProgress(event) {
+  const { taskId, task } = event.detail
+  if (task.nodeId !== props.id) return
+  
+  const progress = task.result?.progress || task.progress
+  if (progress) {
+    canvasStore.updateNodeData(props.id, {
+      progress: task.result?.status === 'processing' ? '生成中...' : progress
+    })
+  }
+}
+
+// 检查并恢复已完成的后台任务
+function checkAndRestoreBackgroundTasks() {
+  const nodeTasks = getTasksByNodeId(props.id)
+  
+  for (const task of nodeTasks) {
+    if (task.type !== 'image') continue
+    
+    if (task.status === 'completed') {
+      const imageUrl = task.result?.url || task.result?.urls?.[0] || task.result?.images?.[0]
+      if (imageUrl) {
+        canvasStore.updateNodeData(props.id, {
+          status: 'success',
+          output: { type: 'image', urls: [imageUrl] }
+        })
+      }
+      removeCompletedTask(task.taskId)
+    } else if (task.status === 'failed') {
+      canvasStore.updateNodeData(props.id, {
+        status: 'error',
+        error: task.error || '图片生成失败'
+      })
+      removeCompletedTask(task.taskId)
+    }
+  }
+}
+
 onMounted(() => {
   document.addEventListener('click', handleModelDropdownClickOutside)
   document.addEventListener('click', handleClickOutside)
@@ -471,6 +543,14 @@ onMounted(() => {
   // 🚀 性能优化：监听画布拖拽事件
   window.addEventListener('canvas-drag-start', handleCanvasDragStart)
   window.addEventListener('canvas-drag-end', handleCanvasDragEnd)
+  
+  // 🔧 监听后台任务事件 - 避免双重轮询
+  window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
+  window.addEventListener('background-task-failed', handleBackgroundTaskFailed)
+  window.addEventListener('background-task-progress', handleBackgroundTaskProgress)
+  
+  // 检查是否有已完成的后台任务需要恢复
+  checkAndRestoreBackgroundTasks()
 })
 
 // 组件卸载时移除监听
@@ -480,6 +560,11 @@ onUnmounted(() => {
   // 🚀 性能优化：移除画布拖拽事件监听
   window.removeEventListener('canvas-drag-start', handleCanvasDragStart)
   window.removeEventListener('canvas-drag-end', handleCanvasDragEnd)
+  
+  // 🔧 移除后台任务事件监听
+  window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
+  window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
+  window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
 })
 
 // 检查是否有图片输入（用于判断文生图/图生图模式）
@@ -1749,11 +1834,12 @@ async function handleOutpaint(data) {
     console.log('[ImageNode] 扩图任务已提交:', generateResult)
 
     // 5. 注册后台任务轮询
+    // 🔧 修复：统一使用 backgroundTaskManager 进行轮询，避免双重轮询导致页面卡顿
     if (generateResult.task_id) {
       const taskId = generateResult.task_id
       const currentTab = canvasStore.getCurrentTab()
       
-      // 注册到后台任务管理器
+      // 注册到后台任务管理器（backgroundTaskManager 会自动轮询并通过事件通知）
       registerTask({
         taskId,
         type: 'image',
@@ -1766,42 +1852,9 @@ async function handleOutpaint(data) {
         }
       })
       
-      // 后台轮询，不阻塞
-      // 🔧 修复：超时时间从 5 分钟改为 12 分钟
-      pollTaskStatus(taskId, 'image', {
-        interval: 2000,
-        timeout: 12 * 60 * 1000, // 12 分钟
-        onProgress: (progress) => {
-          canvasStore.updateNodeData(newNodeId, {
-            progress: progress.status === 'processing' ? '扩图生成中...' : progress.status
-          })
-        }
-      }).then(finalResult => {
-        const imageUrl = finalResult.url || finalResult.urls?.[0] || finalResult.images?.[0]
-        if (imageUrl) {
-          // 更新节点为完成状态
-          canvasStore.updateNodeData(newNodeId, {
-            status: 'success',
-            output: {
-              type: 'image',
-              url: imageUrl,
-              urls: [imageUrl]
-            }
-          })
-          console.log('[ImageNode] 扩图完成:', imageUrl)
-        } else {
-          canvasStore.updateNodeData(newNodeId, {
-            status: 'error',
-            error: '未获取到扩图结果'
-          })
-        }
-      }).catch(error => {
-        console.error('[ImageNode] 扩图轮询失败:', error)
-        canvasStore.updateNodeData(newNodeId, {
-          status: 'error',
-          error: error.message || '扩图生成失败'
-        })
-      })
+      // ⚠️ 不再调用 pollTaskStatus，使用 backgroundTaskManager 统一轮询
+      // 新创建的 newNodeId 节点会自动监听 background-task 事件
+      console.log('[ImageNode] 扩图任务已注册到后台任务管理器:', taskId)
     } else if (generateResult.url) {
       // 直接返回结果（同步模式）
       canvasStore.updateNodeData(newNodeId, {
@@ -2974,6 +3027,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
       console.log(`[ImageNode] 任务 ${taskIndex + 1} 已提交:`, taskId)
       
       // 注册到后台任务管理器（即使用户离开画布也继续执行）
+      // 🔧 修复：统一使用 backgroundTaskManager 进行轮询，避免双重轮询导致页面卡顿
       const currentTab = canvasStore.getCurrentTab()
       registerTask({
         taskId,
@@ -2987,36 +3041,9 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
         }
       })
       
-      // 后台轮询，不阻塞（使用独立的 Promise，不 await）
-      // 🔧 修复：超时时间从 5 分钟改为 12 分钟，与后端任务超时一致
-      pollTaskStatus(taskId, 'image', {
-        interval: 2000,
-        timeout: 12 * 60 * 1000, // 12 分钟
-        onProgress: (progress) => {
-          canvasStore.updateNodeData(nodeId, { 
-            progress: progress.status === 'processing' ? '生成中...' : progress.status
-          })
-        }
-      }).then(finalResult => {
-        const imageUrl = finalResult.url || finalResult.urls?.[0] || finalResult.images?.[0]
-        if (imageUrl) {
-          canvasStore.updateNodeData(nodeId, {
-            status: 'success',
-            output: { type: 'image', urls: [imageUrl] }
-          })
-        } else {
-          canvasStore.updateNodeData(nodeId, {
-            status: 'error',
-            error: '未获取到生成结果'
-          })
-        }
-      }).catch(error => {
-        console.error(`[ImageNode] 任务 ${taskIndex + 1} 轮询失败:`, error)
-        canvasStore.updateNodeData(nodeId, {
-          status: 'error',
-          error: error.message
-        })
-      })
+      // ⚠️ 不再调用 pollTaskStatus，使用 backgroundTaskManager 统一轮询
+      // backgroundTaskManager 会通过事件通知任务状态变化
+      // 事件监听已在 onMounted 中设置：background-task-complete/failed/progress
       
       // 任务已提交，立即返回 taskId（不等待轮询结果）
       return taskId
@@ -3248,7 +3275,9 @@ async function handleGenerate() {
   }
 }
 
-// 保留原来的单次生成逻辑作为备用
+// 🔧 已弃用：保留原来的单次生成逻辑作为备用
+// ⚠️ 此函数使用旧的 pollTaskStatus 轮询方式，可能导致双重轮询
+// 如需启用，请改用 backgroundTaskManager 事件机制
 async function handleGenerateSingle() {
   const upstreamPrompt = getUpstreamPrompt()
   const finalPrompt = promptText.value.trim() || upstreamPrompt
