@@ -200,22 +200,44 @@ async function cleanupIfNeeded(db) {
 }
 
 /**
+ * 获取预览 URL（添加 preview 和 width 参数）
+ * @param {string} url - 原始 URL
+ * @param {number} width - 预览宽度
+ * @returns {string} 带预览参数的 URL
+ */
+function getPreviewUrl(url, width = 800) {
+  // 只对本地图片/视频接口启用预览模式
+  if (url && (url.includes('/api/images/file/') || url.includes('/api/videos/file/'))) {
+    const separator = url.includes('?') ? '&' : '?'
+    return `${url}${separator}preview=true&w=${width}`
+  }
+  return url
+}
+
+/**
  * 从网络加载图片并缓存
  * @param {string} url - 图片 URL
  * @param {Object} options - 选项
+ * @param {boolean} options.usePreview - 是否使用预览模式（启用 Redis 缓存）
+ * @param {number} options.previewWidth - 预览图宽度（默认 800）
  * @returns {Promise<string>} Object URL（用于 img src）
  */
 export async function loadImageWithCache(url, options = {}) {
   if (!url) return null
   
-  // 1. 先尝试从缓存获取
-  const cachedBlob = await getCachedImage(url)
+  const { usePreview = true, previewWidth = 800 } = options
+  
+  // 生成用于缓存的 key（预览模式使用带参数的 URL）
+  const cacheUrl = usePreview ? getPreviewUrl(url, previewWidth) : url
+  
+  // 1. 先尝试从 IndexedDB 缓存获取
+  const cachedBlob = await getCachedImage(cacheUrl)
   if (cachedBlob) {
-    // console.log(`[ImageCache] 🎯 命中缓存: ${url.substring(0, 50)}...`)
+    // console.log(`[ImageCache] 🎯 IndexedDB 命中: ${url.substring(0, 50)}...`)
     return URL.createObjectURL(cachedBlob)
   }
   
-  // 2. 从网络加载
+  // 2. 从网络加载（预览模式会使用服务端 Redis 缓存）
   try {
     const headers = options.headers || {}
     
@@ -225,16 +247,24 @@ export async function loadImageWithCache(url, options = {}) {
     if (tenantId) headers['X-Tenant-ID'] = tenantId
     if (tenantKey) headers['X-Tenant-Key'] = tenantKey
     
-    const response = await fetch(url, { headers })
+    // 使用预览 URL（会触发服务端 Redis 缓存）
+    const fetchUrl = usePreview ? getPreviewUrl(url, previewWidth) : url
+    const response = await fetch(fetchUrl, { headers })
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)
     }
     
+    // 检查是否命中服务端缓存
+    const cacheHit = response.headers.get('X-Cache')
+    if (cacheHit === 'HIT') {
+      // console.log(`[ImageCache] 🚀 Redis 命中: ${url.substring(0, 50)}...`)
+    }
+    
     const blob = await response.blob()
     
-    // 3. 缓存图片（异步，不等待）
-    cacheImage(url, blob).catch(() => {})
+    // 3. 缓存图片到 IndexedDB（异步，不等待）
+    cacheImage(cacheUrl, blob).catch(() => {})
     
     // 4. 返回 Object URL
     return URL.createObjectURL(blob)
