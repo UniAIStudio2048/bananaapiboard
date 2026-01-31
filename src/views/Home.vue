@@ -5,6 +5,7 @@ import { generateImage, buildDownloadUrl, uploadImages, getMe, redeemVoucher, is
 import ImageAnnotator from '@/components/ImageAnnotator.vue'
 import MentionDropdown from '@/components/MentionDropdown.vue'
 import PromptInputWithTags from '@/components/PromptInputWithTags.vue'
+import CachedImage from '@/components/CachedImage.vue'
 import { labelToPromptText, indexToLabel } from '@/utils/imageAnnotation'
 import { getTenantHeaders, getModelDisplayName, getAvailableImageModels } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
@@ -2882,9 +2883,10 @@ onUnmounted(() => {
                   class="aspect-video relative cursor-pointer"
                   @click.stop="openHistoryImage(h, idx)"
                 >
-                  <!-- 🔧 历史列表使用缩略图(400px WebP)，节省 CDN 流量 -->
-                  <img 
-                    :src="getQiniuThumbnailUrl(h.url) || makePlaceholderImage(h)" 
+                  <!-- 🔧 历史列表使用 IndexedDB 缓存，加速二次加载 -->
+                  <CachedImage 
+                    :src="getQiniuThumbnailUrl(h.url) || h.url" 
+                    :placeholder="makePlaceholderImage(h)"
                     class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                     loading="lazy"
                     :alt="h.prompt || '历史图片'"

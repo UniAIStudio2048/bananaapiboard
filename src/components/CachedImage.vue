@@ -1,0 +1,177 @@
+<template>
+  <img 
+    ref="imgRef"
+    :src="displaySrc"
+    :alt="alt"
+    :class="imgClass"
+    :style="imgStyle"
+    :loading="loading"
+    @load="handleLoad"
+    @error="handleError"
+  />
+</template>
+
+<script setup>
+/**
+ * 🚀 带 IndexedDB 缓存的图片组件
+ * 
+ * 特性：
+ * - 自动缓存加载过的图片到 IndexedDB
+ * - 再次访问时从缓存读取，毫秒级加载
+ * - 支持懒加载、错误处理、占位图
+ * 
+ * 使用：
+ * <CachedImage 
+ *   :src="imageUrl" 
+ *   alt="图片描述"
+ *   :placeholder="placeholderUrl"
+ *   class="w-full h-full object-cover"
+ * />
+ */
+
+import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { loadImageWithCache, getCachedImage } from '@/utils/imageCache'
+
+const props = defineProps({
+  // 图片 URL
+  src: {
+    type: String,
+    default: ''
+  },
+  // 替代文本
+  alt: {
+    type: String,
+    default: ''
+  },
+  // 占位图（加载中/加载失败时显示）
+  placeholder: {
+    type: String,
+    default: ''
+  },
+  // 是否启用缓存
+  cache: {
+    type: Boolean,
+    default: true
+  },
+  // 懒加载
+  loading: {
+    type: String,
+    default: 'lazy'
+  },
+  // 自定义 class
+  imgClass: {
+    type: [String, Object, Array],
+    default: ''
+  },
+  // 自定义 style
+  imgStyle: {
+    type: [String, Object],
+    default: ''
+  }
+})
+
+const emit = defineEmits(['load', 'error', 'cached'])
+
+const imgRef = ref(null)
+const displaySrc = ref('')
+const isLoading = ref(true)
+const hasError = ref(false)
+let objectUrl = null // 用于释放内存
+
+// 判断是否是需要缓存的 URL（代理 URL 或相对路径）
+function shouldCache(url) {
+  if (!url || !props.cache) return false
+  
+  // COS 代理 URL 需要缓存
+  if (url.includes('/api/cos-proxy/')) return true
+  
+  // 本地存储 URL 需要缓存
+  if (url.includes('/api/images/file/')) return true
+  if (url.includes('/api/videos/file/')) return true
+  
+  // 相对路径需要缓存
+  if (url.startsWith('/')) return true
+  
+  // 七牛云等 CDN 不需要缓存（CDN 本身就有缓存）
+  if (url.includes('qiniucdn') || url.includes('clouddn') || url.includes('qnssl')) return false
+  
+  return false
+}
+
+// 加载图片
+async function loadImage(url) {
+  if (!url) {
+    displaySrc.value = props.placeholder
+    return
+  }
+  
+  isLoading.value = true
+  hasError.value = false
+  
+  // 先显示占位图
+  if (props.placeholder) {
+    displaySrc.value = props.placeholder
+  }
+  
+  // 释放之前的 Object URL
+  if (objectUrl) {
+    URL.revokeObjectURL(objectUrl)
+    objectUrl = null
+  }
+  
+  // 判断是否需要使用缓存
+  if (shouldCache(url)) {
+    try {
+      // 使用缓存加载
+      const cachedUrl = await loadImageWithCache(url)
+      if (cachedUrl) {
+        objectUrl = cachedUrl
+        displaySrc.value = cachedUrl
+        isLoading.value = false
+        emit('cached', true)
+        return
+      }
+    } catch (e) {
+      console.warn('[CachedImage] 缓存加载失败，使用原始 URL:', e)
+    }
+  }
+  
+  // 不使用缓存或缓存失败，直接使用原始 URL
+  displaySrc.value = url
+  isLoading.value = false
+}
+
+// 图片加载成功
+function handleLoad() {
+  isLoading.value = false
+  hasError.value = false
+  emit('load')
+}
+
+// 图片加载失败
+function handleError(e) {
+  isLoading.value = false
+  hasError.value = true
+  
+  // 显示占位图
+  if (props.placeholder && displaySrc.value !== props.placeholder) {
+    displaySrc.value = props.placeholder
+  }
+  
+  emit('error', e)
+}
+
+// 监听 src 变化
+watch(() => props.src, (newSrc) => {
+  loadImage(newSrc)
+}, { immediate: true })
+
+// 组件卸载时释放 Object URL
+onUnmounted(() => {
+  if (objectUrl) {
+    URL.revokeObjectURL(objectUrl)
+    objectUrl = null
+  }
+})
+</script>
+
