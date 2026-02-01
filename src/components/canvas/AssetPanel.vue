@@ -1566,7 +1566,6 @@ onUnmounted(() => {
                     x5-video-player-type="h5"
                     x5-playsinline
                     preload="metadata"
-                    crossorigin="anonymous"
                     @mouseenter="handleCharacterVideoPlay($event)"
                     @mouseleave="handleCharacterVideoPause($event)"
                     @error="handleCharacterVideoError($event, asset)"

@@ -7351,6 +7351,229 @@ function getLedgerTypeText(type) {
   color: rgba(0, 0, 0, 0.65) !important;
 }
 
+/* 自定义对话框 - 签到等弹窗白昼模式 */
+:root.canvas-theme-light .profile-panel .custom-dialog-overlay {
+  background: rgba(0, 0, 0, 0.35) !important;
+}
+
+:root.canvas-theme-light .profile-panel .custom-dialog {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .profile-panel .custom-dialog .dialog-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .custom-dialog .dialog-message {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .profile-panel .custom-dialog .dialog-footer {
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .custom-dialog .dialog-btn.cancel {
+  color: rgba(0, 0, 0, 0.55) !important;
+  border-right-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .profile-panel .custom-dialog .dialog-btn.cancel:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: rgba(0, 0, 0, 0.75) !important;
+}
+
+:root.canvas-theme-light .profile-panel .custom-dialog .dialog-btn.confirm {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .custom-dialog .dialog-btn.confirm:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* ========================================
+   充值面板 - 白昼模式
+   ======================================== */
+:root.canvas-theme-light .profile-panel .recharge-panel {
+  background: rgba(255, 255, 255, 0.98) !important;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent !important;
+}
+
+:root.canvas-theme-light .profile-panel .recharge-panel::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .profile-panel .recharge-panel::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25) !important;
+}
+
+:root.canvas-theme-light .profile-panel .recharge-header h4 {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .recharge-header .close-btn {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .profile-panel .recharge-header .close-btn:hover {
+  color: rgba(0, 0, 0, 0.8) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 充值卡片按钮 - 白昼模式 */
+:root.canvas-theme-light .profile-panel .card-btn-v2 {
+  background: linear-gradient(145deg, #ffffff, #f5f5f4) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .profile-panel .card-btn-v2:hover {
+  background: linear-gradient(145deg, #fafafa, #f0f0ef) !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .profile-panel .card-btn-v2.active {
+  background: linear-gradient(145deg, #f5f5f4, #e7e5e4) !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15) !important;
+}
+
+:root.canvas-theme-light .profile-panel .card-amount-v2 {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .card-bonus-hover {
+  background: rgba(245, 245, 244, 0.98) !important;
+  color: #57534e !important;
+}
+
+:root.canvas-theme-light .profile-panel .bonus-star {
+  color: #78716c !important;
+  text-shadow: none !important;
+}
+
+/* 金额按钮 - 白昼模式 */
+:root.canvas-theme-light .profile-panel .amount-btn {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .amount-btn:hover {
+  border-color: rgba(0, 0, 0, 0.2) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+:root.canvas-theme-light .profile-panel .amount-btn.active {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  color: #1c1917 !important;
+}
+
+/* 表单元素 - 白昼模式 */
+:root.canvas-theme-light .profile-panel .form-label {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .profile-panel .form-input,
+:root.canvas-theme-light .profile-panel .form-select {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .form-input:focus,
+:root.canvas-theme-light .profile-panel .form-select:focus {
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+:root.canvas-theme-light .profile-panel .form-input::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 价格信息 - 白昼模式 */
+:root.canvas-theme-light .profile-panel .price-info {
+  background: rgba(0, 0, 0, 0.03) !important;
+}
+
+:root.canvas-theme-light .profile-panel .price-row {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .profile-panel .price-row.discount {
+  color: #10b981 !important;
+}
+
+:root.canvas-theme-light .profile-panel .price-row.total {
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .total-price {
+  color: #6366f1 !important;
+}
+
+/* 支付方式选择 - 白昼模式 */
+:root.canvas-theme-light .profile-panel .payment-method-btn {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #57534e !important;
+}
+
+:root.canvas-theme-light .profile-panel .payment-method-btn:hover {
+  border-color: rgba(0, 0, 0, 0.2) !important;
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+:root.canvas-theme-light .profile-panel .payment-method-btn.active {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  color: #1c1917 !important;
+}
+
+/* 等待支付视图 - 白昼模式 */
+:root.canvas-theme-light .profile-panel .recharge-waiting-view {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .waiting-icon-bg {
+  background: rgba(0, 0, 0, 0.05) !important;
+}
+
+:root.canvas-theme-light .profile-panel .waiting-icon {
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .profile-panel .waiting-title {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .waiting-subtitle {
+  color: rgba(0, 0, 0, 0.55) !important;
+}
+
+:root.canvas-theme-light .profile-panel .waiting-amount {
+  color: #6366f1 !important;
+}
+
+:root.canvas-theme-light .profile-panel .waiting-tip {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .profile-panel .waiting-btn-secondary {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #57534e !important;
+}
+
+:root.canvas-theme-light .profile-panel .waiting-btn-secondary:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #1c1917 !important;
+}
+
 /* 充值卡片 */
 :root.canvas-theme-light .profile-panel .recharge-card {
   background: rgba(0, 0, 0, 0.02) !important;

@@ -370,7 +370,6 @@ onUnmounted(() => {
             @ended="isPlaying = false"
             @error="handleVideoError"
             preload="auto"
-            crossorigin="anonymous"
           ></video>
           
           <!-- 播放按钮覆盖层 -->

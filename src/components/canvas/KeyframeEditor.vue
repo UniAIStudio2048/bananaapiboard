@@ -198,29 +198,35 @@ async function markKeyframe() {
   videoRef.value.pause()
   isPlaying.value = false
   
-  // 截取当前帧
-  const canvas = document.createElement('canvas')
-  canvas.width = videoRef.value.videoWidth
-  canvas.height = videoRef.value.videoHeight
-  const ctx = canvas.getContext('2d')
-  ctx.drawImage(videoRef.value, 0, 0)
-  
-  const thumbnail = canvas.toDataURL('image/jpeg', 0.8)
-  
-  // 保存撤销状态
-  undoStack.value.push([...keyframes.value])
-  
-  // 添加关键帧
-  keyframes.value.push({
-    time: currentTime.value,
-    thumbnail,
-    cropArea: null // 使用原始比例
-  })
-  
-  // 选中新添加的关键帧
-  selectedKeyframeIndex.value = keyframes.value.length - 1
-  
-  console.log('[KeyframeEditor] 添加关键帧:', currentTime.value, '总数:', keyframes.value.length)
+  try {
+    // 截取当前帧
+    const canvas = document.createElement('canvas')
+    canvas.width = videoRef.value.videoWidth
+    canvas.height = videoRef.value.videoHeight
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(videoRef.value, 0, 0)
+    
+    const thumbnail = canvas.toDataURL('image/jpeg', 0.8)
+    
+    // 保存撤销状态
+    undoStack.value.push([...keyframes.value])
+    
+    // 添加关键帧
+    keyframes.value.push({
+      time: currentTime.value,
+      thumbnail,
+      cropArea: null // 使用原始比例
+    })
+    
+    // 选中新添加的关键帧
+    selectedKeyframeIndex.value = keyframes.value.length - 1
+    
+    console.log('[KeyframeEditor] 添加关键帧:', currentTime.value, '总数:', keyframes.value.length)
+  } catch (e) {
+    console.error('[KeyframeEditor] 截取关键帧失败:', e.message)
+    // 跨域视频无法截取帧时的提示
+    alert('无法截取关键帧：该视频来源不支持帧截取功能。请尝试使用本地上传的视频。')
+  }
 }
 
 // 撤销
@@ -496,7 +502,6 @@ onUnmounted(() => {
                 @ended="isPlaying = false"
                 @error="handleVideoError"
                 preload="auto"
-                crossorigin="anonymous"
               ></video>
               
               <!-- 裁剪遮罩 -->

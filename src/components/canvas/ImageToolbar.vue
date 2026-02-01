@@ -52,6 +52,13 @@ const canvasStore = useCanvasStore()
 const showPreviewModal = ref(false)
 const previewImageUrl = ref('')
 
+// 预览缩放和拖动状态
+const previewScale = ref(1)
+const previewPosition = ref({ x: 0, y: 0 })
+const isDragging = ref(false)
+const dragStart = ref({ x: 0, y: 0 })
+const lastPosition = ref({ x: 0, y: 0 })
+
 // 裁剪弹窗状态
 const showCropModal = ref(false)
 const cropImageUrl = ref('')
@@ -673,6 +680,138 @@ function handlePreview() {
 function closePreviewModal() {
   showPreviewModal.value = false
   previewImageUrl.value = ''
+  resetPreviewState()
+}
+
+// 重置预览状态
+function resetPreviewState() {
+  previewScale.value = 1
+  previewPosition.value = { x: 0, y: 0 }
+  isDragging.value = false
+}
+
+// 处理滚轮缩放
+function handlePreviewWheel(event) {
+  event.preventDefault()
+  const delta = event.deltaY > 0 ? -0.1 : 0.1
+  const newScale = Math.min(Math.max(previewScale.value + delta, 0.5), 5)
+  previewScale.value = newScale
+}
+
+// 处理鼠标按下（开始拖动）
+function handlePreviewMouseDown(event) {
+  if (event.button !== 0) return // 只响应左键
+  isDragging.value = true
+  dragStart.value = { x: event.clientX, y: event.clientY }
+  lastPosition.value = { ...previewPosition.value }
+  event.preventDefault()
+}
+
+// 处理鼠标移动（拖动中）
+function handlePreviewMouseMove(event) {
+  if (!isDragging.value) return
+  const dx = event.clientX - dragStart.value.x
+  const dy = event.clientY - dragStart.value.y
+  previewPosition.value = {
+    x: lastPosition.value.x + dx,
+    y: lastPosition.value.y + dy
+  }
+}
+
+// 处理鼠标释放（结束拖动）
+function handlePreviewMouseUp() {
+  isDragging.value = false
+}
+
+// 放大
+function handleZoomIn() {
+  previewScale.value = Math.min(previewScale.value + 0.25, 5)
+}
+
+// 缩小
+function handleZoomOut() {
+  previewScale.value = Math.max(previewScale.value - 0.25, 0.5)
+}
+
+// 重置缩放
+function handleZoomReset() {
+  previewScale.value = 1
+  previewPosition.value = { x: 0, y: 0 }
+}
+
+// 添加到我的资产
+async function handleAddToAssets() {
+  if (!imageUrl.value) return
+  
+  try {
+    // 导入资产API
+    const { saveAsset } = await import('@/api/canvas/assets')
+    
+    // 生成文件名
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const fileName = `画布图片_${timestamp}`
+    
+    await saveAsset({
+      type: 'image',
+      name: fileName,
+      url: imageUrl.value,
+      thumbnail_url: imageUrl.value,
+      source_node_id: props.imageNode?.id || null,
+      tags: ['画布', '预览保存']
+    })
+    
+    // 显示成功提示
+    console.log('[ImageToolbar] 已添加到资产库:', fileName)
+    
+    // 创建一个临时的成功提示
+    showSuccessToast('已成功添加到我的资产！')
+  } catch (error) {
+    console.error('[ImageToolbar] 添加到资产失败:', error)
+    showErrorToast('添加失败，请重试')
+  }
+}
+
+// 简单的提示函数
+function showSuccessToast(message) {
+  const toast = document.createElement('div')
+  toast.className = 'preview-toast success'
+  toast.textContent = message
+  toast.style.cssText = `
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    background: rgba(34, 197, 94, 0.9);
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 999999;
+    animation: fadeInOut 2s ease forwards;
+  `
+  document.body.appendChild(toast)
+  setTimeout(() => toast.remove(), 2000)
+}
+
+function showErrorToast(message) {
+  const toast = document.createElement('div')
+  toast.className = 'preview-toast error'
+  toast.textContent = message
+  toast.style.cssText = `
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 999999;
+    animation: fadeInOut 2s ease forwards;
+  `
+  document.body.appendChild(toast)
+  setTimeout(() => toast.remove(), 2000)
 }
 
 // 关闭裁剪弹窗
@@ -813,22 +952,83 @@ onUnmounted(() => {
   <!-- 放大预览弹窗 -->
   <Teleport to="body">
     <Transition name="modal-fade">
-      <div v-if="showPreviewModal" class="preview-modal-overlay" @click="closePreviewModal">
-        <div class="preview-modal-content" @click.stop>
-          <img :src="previewImageUrl" alt="预览图片" class="preview-image" />
-          <button class="preview-close-btn" @click="closePreviewModal">
+      <div 
+        v-if="showPreviewModal" 
+        class="preview-modal-overlay" 
+        @click="closePreviewModal"
+        @wheel.prevent="handlePreviewWheel"
+        @mousemove="handlePreviewMouseMove"
+        @mouseup="handlePreviewMouseUp"
+        @mouseleave="handlePreviewMouseUp"
+      >
+        <!-- 关闭按钮 -->
+        <button class="preview-close-btn" @click.stop="closePreviewModal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        
+        <!-- 缩放控制按钮 -->
+        <div class="preview-zoom-controls" @click.stop>
+          <button class="zoom-btn" @click="handleZoomOut" title="缩小">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="11" cy="11" r="8"/>
+              <path d="M21 21l-4.35-4.35M8 11h6"/>
             </svg>
           </button>
-          <div class="preview-actions">
-            <button class="preview-action-btn" @click="handleDownload">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              <span>下载</span>
-            </button>
-          </div>
+          <span class="zoom-level">{{ Math.round(previewScale * 100) }}%</span>
+          <button class="zoom-btn" @click="handleZoomIn" title="放大">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/>
+            </svg>
+          </button>
+          <button class="zoom-btn reset" @click="handleZoomReset" title="重置">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+          </button>
+        </div>
+        
+        <!-- 图片容器 -->
+        <div 
+          class="preview-image-container" 
+          @click.stop
+          @mousedown="handlePreviewMouseDown"
+          :class="{ dragging: isDragging }"
+        >
+          <img 
+            :src="previewImageUrl" 
+            alt="预览图片" 
+            class="preview-image" 
+            :style="{
+              transform: `translate(${previewPosition.x}px, ${previewPosition.y}px) scale(${previewScale})`,
+              cursor: isDragging ? 'grabbing' : (previewScale > 1 ? 'grab' : 'default')
+            }"
+            draggable="false"
+          />
+        </div>
+        
+        <!-- 底部操作按钮 -->
+        <div class="preview-actions" @click.stop>
+          <button class="preview-action-btn" @click="handleDownload">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>下载</span>
+          </button>
+          <button class="preview-action-btn add-asset-btn" @click="handleAddToAssets">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>加入资产</span>
+          </button>
+        </div>
+        
+        <!-- 操作提示 -->
+        <div class="preview-hint">
+          滚轮缩放 · 拖动查看细节
         </div>
       </div>
     </Transition>
@@ -915,20 +1115,29 @@ onUnmounted(() => {
 .preview-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 99999;
-  cursor: zoom-out;
+  cursor: default;
+  overflow: hidden;
 }
 
-.preview-modal-content {
+/* 图片容器 */
+.preview-image-container {
   position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
-  cursor: default;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.preview-image-container.dragging {
+  cursor: grabbing !important;
 }
 
 .preview-image {
@@ -937,14 +1146,18 @@ onUnmounted(() => {
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  transition: transform 0.1s ease-out;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
+/* 关闭按钮 */
 .preview-close-btn {
-  position: absolute;
-  top: -40px;
-  right: 0;
-  width: 32px;
-  height: 32px;
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  width: 44px;
+  height: 44px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
@@ -954,6 +1167,8 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  z-index: 10;
+  backdrop-filter: blur(8px);
 }
 
 .preview-close-btn:hover {
@@ -962,40 +1177,122 @@ onUnmounted(() => {
 }
 
 .preview-close-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
+/* 缩放控制 */
+.preview-zoom-controls {
+  position: fixed;
+  top: 24px;
+  left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+.zoom-btn {
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.zoom-btn.reset {
+  margin-left: 4px;
+}
+
+.zoom-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.zoom-level {
+  min-width: 50px;
+  text-align: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'SF Mono', 'Monaco', monospace;
+}
+
+/* 底部操作按钮 */
 .preview-actions {
-  position: absolute;
-  bottom: -50px;
+  position: fixed;
+  bottom: 32px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   gap: 12px;
+  z-index: 10;
 }
 
 .preview-action-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 20px;
+  padding: 12px 24px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  border-radius: 12px;
   color: #fff;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
 }
 
 .preview-action-btn:hover {
   background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
 }
 
 .preview-action-btn svg {
   width: 18px;
   height: 18px;
+}
+
+.preview-action-btn.add-asset-btn {
+  background: rgba(59, 130, 246, 0.3);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.preview-action-btn.add-asset-btn:hover {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+/* 操作提示 */
+.preview-hint {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 20px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 10;
 }
 
 /* 弹窗动画 */
@@ -1049,6 +1346,14 @@ onUnmounted(() => {
 
 :root.canvas-theme-light .image-toolbar .toolbar-btn:hover .btn-icon {
   color: #1c1917;
+}
+
+/* Toast动画 */
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
 }
 </style>
 

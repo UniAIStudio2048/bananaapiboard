@@ -21,7 +21,9 @@ import ImagePresetManager from '../dialogs/ImagePresetManager.vue'
 import ImageCropper from '../ImageCropper.vue'
 import Camera3DPanel from '../Camera3DPanel.vue'
 import Pose3DViewer from '../Pose3DViewer.vue'
+import CameraControlPanel from '../CameraControlPanel.vue'
 import { removeBackground } from '@imgly/background-removal'
+import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
 
 const { t } = useI18n()
 
@@ -82,6 +84,21 @@ const showImagePresetManager = ref(false)
 const editingImagePreset = ref(null)
 const imagePresetManagerRef = ref(null)
 const tempCustomPrompt = ref('') // 临时自定义提示词
+
+// 相机控制状态
+const showCameraControl = ref(false)
+const cameraControlEnabled = ref(false)
+const cameraSettings = ref({
+  camera: '',
+  cameraName: '',
+  cameraType: 'DIGITAL',
+  lens: '',
+  lensName: '',
+  focalLength: 35,
+  aperture: 2.0,
+  effects: [],
+  prompt: ''
+})
 
 // 图片列表拖拽排序状态
 const dragSortIndex = ref(-1)
@@ -448,6 +465,42 @@ function openImagePresetManager() {
 function handlePresetSelect(preset) {
   selectedPreset.value = `user-${preset.id}`
   showImagePresetManager.value = false
+}
+
+// ========== 相机控制功能 ==========
+
+// 打开相机控制面板
+function openCameraControl() {
+  showCameraControl.value = true
+}
+
+// 处理相机控制保存
+function handleCameraControlSave(settings) {
+  cameraSettings.value = { ...settings }
+  cameraControlEnabled.value = true
+  showCameraControl.value = false
+  console.log('[ImageNode] 相机控制已保存:', settings)
+}
+
+// 关闭相机控制面板
+function closeCameraControl() {
+  showCameraControl.value = false
+}
+
+// 禁用相机控制
+function disableCameraControl() {
+  cameraControlEnabled.value = false
+  cameraSettings.value = {
+    camera: '',
+    cameraName: '',
+    cameraType: 'DIGITAL',
+    lens: '',
+    lensName: '',
+    focalLength: 35,
+    aperture: 2.0,
+    effects: [],
+    prompt: ''
+  }
 }
 
 // 组件挂载时添加全局点击事件监听
@@ -833,6 +886,13 @@ const currentImageUrl = computed(() => {
 // 工具栏预览弹窗
 const showPreviewModal = ref(false)
 const previewImageUrl = ref('')
+
+// 预览缩放和拖动状态
+const previewScale = ref(1)
+const previewPosition = ref({ x: 0, y: 0 })
+const previewIsDragging = ref(false)
+const previewDragStart = ref({ x: 0, y: 0 })
+const previewLastPosition = ref({ x: 0, y: 0 })
 
 // 工具栏事件处理 - 进入编辑模式（使用新的 Fabric.js + vue-advanced-cropper 方案）
 function enterEditMode(tool) {
@@ -2056,6 +2116,131 @@ function handleToolbarPreview() {
 function closePreviewModal() {
   showPreviewModal.value = false
   previewImageUrl.value = ''
+  resetPreviewState()
+}
+
+// 重置预览状态
+function resetPreviewState() {
+  previewScale.value = 1
+  previewPosition.value = { x: 0, y: 0 }
+  previewIsDragging.value = false
+}
+
+// 处理滚轮缩放
+function handlePreviewWheel(event) {
+  event.preventDefault()
+  const delta = event.deltaY > 0 ? -0.1 : 0.1
+  const newScale = Math.min(Math.max(previewScale.value + delta, 0.5), 5)
+  previewScale.value = newScale
+}
+
+// 处理鼠标按下（开始拖动）
+function handlePreviewMouseDown(event) {
+  if (event.button !== 0) return // 只响应左键
+  previewIsDragging.value = true
+  previewDragStart.value = { x: event.clientX, y: event.clientY }
+  previewLastPosition.value = { ...previewPosition.value }
+  event.preventDefault()
+}
+
+// 处理鼠标移动（拖动中）
+function handlePreviewMouseMove(event) {
+  if (!previewIsDragging.value) return
+  const dx = event.clientX - previewDragStart.value.x
+  const dy = event.clientY - previewDragStart.value.y
+  previewPosition.value = {
+    x: previewLastPosition.value.x + dx,
+    y: previewLastPosition.value.y + dy
+  }
+}
+
+// 处理鼠标释放（结束拖动）
+function handlePreviewMouseUp() {
+  previewIsDragging.value = false
+}
+
+// 放大
+function handleZoomIn() {
+  previewScale.value = Math.min(previewScale.value + 0.25, 5)
+}
+
+// 缩小
+function handleZoomOut() {
+  previewScale.value = Math.max(previewScale.value - 0.25, 0.5)
+}
+
+// 重置缩放
+function handleZoomReset() {
+  previewScale.value = 1
+  previewPosition.value = { x: 0, y: 0 }
+}
+
+// 添加到我的资产
+async function handleAddToAssets() {
+  if (!currentImageUrl.value) return
+  
+  try {
+    const { saveAsset } = await import('@/api/canvas/assets')
+    
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const fileName = `画布图片_${timestamp}`
+    
+    await saveAsset({
+      type: 'image',
+      name: fileName,
+      url: currentImageUrl.value,
+      thumbnail_url: currentImageUrl.value,
+      source_node_id: props.id || null,
+      tags: ['画布', '预览保存']
+    })
+    
+    console.log('[ImageNode] 已添加到资产库:', fileName)
+    showSuccessToast('已成功添加到我的资产！')
+  } catch (error) {
+    console.error('[ImageNode] 添加到资产失败:', error)
+    showErrorToast('添加失败，请重试')
+  }
+}
+
+// 简单的提示函数
+function showSuccessToast(message) {
+  const toast = document.createElement('div')
+  toast.textContent = message
+  toast.style.cssText = `
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    background: rgba(34, 197, 94, 0.9);
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 999999;
+    animation: fadeInOut 2s ease forwards;
+  `
+  document.body.appendChild(toast)
+  setTimeout(() => toast.remove(), 2000)
+}
+
+function showErrorToast(message) {
+  const toast = document.createElement('div')
+  toast.textContent = message
+  toast.style.cssText = `
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    background: rgba(239, 68, 68, 0.9);
+    color: white;
+    border-radius: 8px;
+    font-size: 14px;
+    z-index: 999999;
+    animation: fadeInOut 2s ease forwards;
+  `
+  document.body.appendChild(toast)
+  setTimeout(() => toast.remove(), 2000)
 }
 
 // 节点拖动开始（记录起始位置）
@@ -3147,10 +3332,20 @@ async function handleGenerate() {
     }
   }
   
+  // 将相机控制提示词拼接到最后
+  if (cameraControlEnabled.value && cameraSettings.value.prompt) {
+    if (finalPrompt) {
+      finalPrompt = `${finalPrompt}, ${cameraSettings.value.prompt}`
+    } else {
+      finalPrompt = cameraSettings.value.prompt
+    }
+  }
+  
   console.log('[ImageNode] 生成参数:', {
     userPrompt,
     upstreamPrompt,
     presetPrompt,
+    cameraPrompt: cameraControlEnabled.value ? cameraSettings.value.prompt : null,
     finalPrompt,
     selectedPreset: selectedPreset.value,
     model: selectedModel.value,
@@ -4720,6 +4915,29 @@ async function handleDrop(event) {
             </Transition>
           </div>
           
+          <!-- 摄影机控制开关 -->
+          <div v-if="showPresetOption" class="camera-control-toggle">
+            <button 
+              class="camera-toggle-btn"
+              :class="{ active: cameraControlEnabled }"
+              @click="openCameraControl"
+              title="摄影机控制 - 选择电影机、镜头、焦段、光圈"
+            >
+              <span class="toggle-icon">🎬</span>
+              <span class="toggle-label">摄影机控制</span>
+              <span v-if="cameraControlEnabled" class="toggle-indicator"></span>
+            </button>
+            <!-- 快速关闭按钮 -->
+            <button 
+              v-if="cameraControlEnabled" 
+              class="camera-close-btn"
+              @click.stop="disableCameraControl"
+              title="关闭摄影机控制"
+            >
+              ✕
+            </button>
+          </div>
+          
           <!-- MJ 模型 botType 切换器（写实/动漫） -->
           <div v-if="isMJModel && referenceImages.length > 0" class="bot-type-selector">
             <div 
@@ -4782,22 +5000,83 @@ async function handleDrop(event) {
     <Teleport to="body">
       <!-- 放大预览弹窗 -->
       <Transition name="modal-fade">
-        <div v-if="showPreviewModal" class="preview-modal-overlay" @click="closePreviewModal">
-          <div class="preview-modal-content" @click.stop>
-            <img :src="previewImageUrl" alt="预览图片" class="preview-image" />
-            <button class="preview-close-btn" @click="closePreviewModal">
+        <div 
+          v-if="showPreviewModal" 
+          class="preview-modal-overlay" 
+          @click="closePreviewModal"
+          @wheel.prevent="handlePreviewWheel"
+          @mousemove="handlePreviewMouseMove"
+          @mouseup="handlePreviewMouseUp"
+          @mouseleave="handlePreviewMouseUp"
+        >
+          <!-- 关闭按钮 -->
+          <button class="preview-close-btn" @click.stop="closePreviewModal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          
+          <!-- 缩放控制按钮 -->
+          <div class="preview-zoom-controls" @click.stop>
+            <button class="zoom-btn" @click="handleZoomOut" title="缩小">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="11" cy="11" r="8"/>
+                <path d="M21 21l-4.35-4.35M8 11h6"/>
               </svg>
             </button>
-            <div class="preview-actions">
-              <button class="preview-action-btn" @click="handleToolbarDownload">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                <span>下载</span>
-              </button>
-            </div>
+            <span class="zoom-level">{{ Math.round(previewScale * 100) }}%</span>
+            <button class="zoom-btn" @click="handleZoomIn" title="放大">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/>
+                <path d="M21 21l-4.35-4.35M11 8v6M8 11h6"/>
+              </svg>
+            </button>
+            <button class="zoom-btn reset" @click="handleZoomReset" title="重置">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+              </svg>
+            </button>
+          </div>
+          
+          <!-- 图片容器 -->
+          <div 
+            class="preview-image-container" 
+            @click.stop
+            @mousedown="handlePreviewMouseDown"
+            :class="{ dragging: previewIsDragging }"
+          >
+            <img 
+              :src="previewImageUrl" 
+              alt="预览图片" 
+              class="preview-image" 
+              :style="{
+                transform: `translate(${previewPosition.x}px, ${previewPosition.y}px) scale(${previewScale})`,
+                cursor: previewIsDragging ? 'grabbing' : (previewScale > 1 ? 'grab' : 'default')
+              }"
+              draggable="false"
+            />
+          </div>
+          
+          <!-- 底部操作按钮 -->
+          <div class="preview-actions" @click.stop>
+            <button class="preview-action-btn" @click="handleToolbarDownload">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>下载</span>
+            </button>
+            <button class="preview-action-btn add-asset-btn" @click="handleAddToAssets">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <span>加入资产</span>
+            </button>
+          </div>
+          
+          <!-- 操作提示 -->
+          <div class="preview-hint">
+            滚轮缩放 · 拖动查看细节
           </div>
         </div>
       </Transition>
@@ -4822,6 +5101,14 @@ async function handleDrop(event) {
     @edit="editImagePreset"
     @refresh="loadImagePresets"
     @select="handlePresetSelect"
+  />
+  
+  <!-- 相机控制面板 -->
+  <CameraControlPanel
+    :visible="showCameraControl"
+    :initialSettings="cameraSettings"
+    @close="closeCameraControl"
+    @save="handleCameraControlSave"
   />
   
   <!-- 独立裁剪/扩图组件 -->
@@ -6178,6 +6465,105 @@ async function handleDrop(event) {
   color: var(--primary-color, #8b5cf6);
 }
 
+/* 摄影机控制开关样式 */
+.camera-control-toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.camera-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.camera-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.camera-toggle-btn.active {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+}
+
+.camera-toggle-btn .toggle-icon {
+  font-size: 14px;
+}
+
+.camera-toggle-btn .toggle-label {
+  font-weight: 500;
+}
+
+.camera-toggle-btn .toggle-indicator {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: #22c55e;
+  border-radius: 50%;
+  border: 2px solid var(--canvas-bg-primary, #0a0a0a);
+}
+
+.camera-close-btn {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 50%;
+  color: #ef4444;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  line-height: 1;
+}
+
+.camera-close-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+/* 亮色主题适配 */
+:root.canvas-theme-light .camera-toggle-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.6);
+}
+
+:root.canvas-theme-light .camera-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+:root.canvas-theme-light .camera-toggle-btn.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #2563eb;
+}
+
+:root.canvas-theme-light .camera-toggle-btn .toggle-indicator {
+  border-color: #ffffff;
+}
+
 .ratio-select-input option {
   background: #1a1a1a;
   color: #ffffff;
@@ -6495,36 +6881,49 @@ async function handleDrop(event) {
 .preview-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.95);
+  backdrop-filter: blur(12px);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 999999;
-  cursor: zoom-out;
-}
-
-.preview-modal-content {
-  position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
   cursor: default;
+  overflow: hidden;
 }
 
-.preview-modal-content .preview-image {
+/* 图片容器 */
+.preview-image-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.preview-image-container.dragging {
+  cursor: grabbing !important;
+}
+
+.preview-modal-overlay .preview-image {
   max-width: 90vw;
   max-height: 85vh;
   object-fit: contain;
   border-radius: 8px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  transition: transform 0.1s ease-out;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
-.preview-modal-content .preview-close-btn {
-  position: absolute;
-  top: -40px;
-  right: 0;
-  width: 32px;
-  height: 32px;
+/* 关闭按钮 */
+.preview-modal-overlay .preview-close-btn {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  width: 44px;
+  height: 44px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
@@ -6534,48 +6933,132 @@ async function handleDrop(event) {
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  z-index: 10;
+  backdrop-filter: blur(8px);
 }
 
-.preview-modal-content .preview-close-btn:hover {
+.preview-modal-overlay .preview-close-btn:hover {
   background: rgba(255, 255, 255, 0.2);
   transform: scale(1.1);
 }
 
-.preview-modal-content .preview-close-btn svg {
-  width: 16px;
-  height: 16px;
+.preview-modal-overlay .preview-close-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
-.preview-modal-content .preview-actions {
-  position: absolute;
-  bottom: -50px;
+/* 缩放控制 */
+.preview-zoom-controls {
+  position: fixed;
+  top: 24px;
+  left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  z-index: 10;
+}
+
+.zoom-btn {
+  width: 36px;
+  height: 36px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.zoom-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  transform: scale(1.05);
+}
+
+.zoom-btn.reset {
+  margin-left: 4px;
+}
+
+.zoom-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.zoom-level {
+  min-width: 50px;
+  text-align: center;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'SF Mono', 'Monaco', monospace;
+}
+
+/* 底部操作按钮 */
+.preview-modal-overlay .preview-actions {
+  position: fixed;
+  bottom: 32px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   gap: 12px;
+  z-index: 10;
 }
 
-.preview-modal-content .preview-action-btn {
+.preview-modal-overlay .preview-action-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 20px;
+  padding: 12px 24px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
+  border-radius: 12px;
   color: #fff;
   font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
+  backdrop-filter: blur(8px);
 }
 
-.preview-modal-content .preview-action-btn:hover {
+.preview-modal-overlay .preview-action-btn:hover {
   background: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
 }
 
-.preview-modal-content .preview-action-btn svg {
+.preview-modal-overlay .preview-action-btn svg {
   width: 18px;
   height: 18px;
+}
+
+.preview-modal-overlay .preview-action-btn.add-asset-btn {
+  background: rgba(59, 130, 246, 0.3);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.preview-modal-overlay .preview-action-btn.add-asset-btn:hover {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+/* 操作提示 */
+.preview-hint {
+  position: fixed;
+  bottom: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 20px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  pointer-events: none;
+  z-index: 10;
 }
 
 /* 弹窗动画 */
@@ -6592,6 +7075,14 @@ async function handleDrop(event) {
 .modal-fade-enter-from .preview-image,
 .modal-fade-leave-to .preview-image {
   transform: scale(0.9);
+}
+
+/* Toast动画 */
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+  15% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  85% { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
 }
 </style>
 

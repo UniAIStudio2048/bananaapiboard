@@ -4193,6 +4193,7 @@ function handleToolbarPreview() {
         >
           <video 
             ref="videoPlayerRef"
+            :src="normalizedVideoUrl"
             preload="auto"
             muted
             :loop="!data?.isCharacterNode"
@@ -4201,14 +4202,11 @@ function handleToolbarPreview() {
             webkit-playsinline
             x5-video-player-type="h5"
             x5-playsinline
-            crossorigin="anonymous"
-            @loadedmetadata="handleVideoLoaded"
+            @loadeddata="handleVideoLoaded"
             @canplay="handleVideoCanPlay"
             @timeupdate="handleVideoTimeUpdate"
             @error="handleVideoError"
-          >
-            <source :src="normalizedVideoUrl" type="video/mp4">
-          </video>
+          ></video>
           <!-- 播放指示器已移除：首帧不显示播放按钮 -->
           <div class="video-overlay-actions">
             <button class="overlay-action-btn" @click.stop="openFullscreenPreview" title="全屏预览">
@@ -4328,15 +4326,13 @@ function handleToolbarPreview() {
       <div v-if="isFullscreenPreview" class="fullscreen-preview-overlay" @click="closeFullscreenPreview">
         <div class="fullscreen-preview-container" @click.stop>
           <video 
+            :src="normalizedVideoUrl"
             controls 
             autoplay
             playsinline
             webkit-playsinline
-            crossorigin="anonymous"
             class="fullscreen-video"
-          >
-            <source :src="normalizedVideoUrl" type="video/mp4">
-          </video>
+          ></video>
           <button class="fullscreen-close-btn" @click="closeFullscreenPreview">
             ✕
           </button>

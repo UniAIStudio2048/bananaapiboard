@@ -2203,4 +2203,91 @@ onMounted(() => {
   background: rgba(0, 0, 0, 0.05);
   color: rgba(0, 0, 0, 0.7);
 }
+
+/* ========================================
+   模式/预设选择器下拉菜单 - 白昼模式
+   ======================================== */
+
+/* 模式按钮 */
+:root.canvas-theme-light .ai-assistant-panel .mode-btn {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .mode-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* 模式下拉菜单 */
+:root.canvas-theme-light .ai-assistant-panel .mode-dropdown {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .mode-option {
+  color: #57534e !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .mode-option:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .mode-option.active {
+  background: rgba(59, 130, 246, 0.1) !important;
+  color: #3b82f6 !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .mode-option .check-icon {
+  color: #3b82f6 !important;
+}
+
+/* 预设按钮 */
+:root.canvas-theme-light .ai-assistant-panel .preset-btn {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .preset-btn:hover {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+/* 预设下拉菜单 */
+:root.canvas-theme-light .ai-assistant-panel .preset-dropdown {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .preset-option {
+  color: #57534e !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .preset-option:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .preset-option.active {
+  background: rgba(59, 130, 246, 0.1) !important;
+  color: #3b82f6 !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .preset-option .check-icon {
+  color: #3b82f6 !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .preset-divider {
+  background: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .preset-manage {
+  color: #57534e !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .preset-manage:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #1c1917 !important;
+}
 </style>
