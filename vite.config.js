@@ -71,7 +71,7 @@ export default defineConfig(({ mode }) => {
     
     build: {
       // 生产构建配置
-      target: 'es2015',
+      target: 'es2020',
       outDir: 'dist',
       assetsDir: 'assets',
       sourcemap: false,
