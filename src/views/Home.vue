@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { generateImage, buildDownloadUrl, uploadImages, getMe, redeemVoucher, isQiniuCdnUrl, getQiniuThumbnailUrl } from '@/api/client'
+import { generateImage, buildDownloadUrl, uploadImages, getMe, redeemVoucher, isQiniuCdnUrl, getQiniuThumbnailUrl, downloadWithAuth } from '@/api/client'
 import ImageAnnotator from '@/components/ImageAnnotator.vue'
 import MentionDropdown from '@/components/MentionDropdown.vue'
 import PromptInputWithTags from '@/components/PromptInputWithTags.vue'
@@ -1114,18 +1114,21 @@ function resetImageTransform() {
 
 // 下载图片
 // - 七牛云 URL：直接使用 attname 参数下载（节省服务器流量）
-// - 本地文件/其他 URL：走后端代理下载
-function download(url, filename) {
+// - 本地文件/其他 URL：走后端代理下载（带认证头）
+async function download(url, filename) {
   const fname = filename || 'image.png'
   const downloadUrl = buildDownloadUrl(url, fname)
-  const link = document.createElement('a')
-  link.href = downloadUrl
-  link.download = fname
-  link.click()
+  
+  // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
+  try {
+    await downloadWithAuth(downloadUrl, fname)
+  } catch (e) {
+    console.error('[Home] 下载失败:', e)
+  }
 }
 
 // 下载历史记录图片
-function downloadHistoryImage(item) {
+async function downloadHistoryImage(item) {
   if (!item || !item.url) return
   const timestamp = item.created || Math.floor(Date.now() / 1000)
   const modelName = (item.model || 'image').replace(/[^a-zA-Z0-9-_]/g, '_')
@@ -1137,10 +1140,12 @@ function downloadHistoryImage(item) {
   // 使用统一的下载函数（会自动判断七牛云 URL 直接下载，其他走后端代理）
   const downloadUrl = buildDownloadUrl(item.url, filename)
   
-  const link = document.createElement('a')
-  link.href = downloadUrl
-  link.download = filename
-  link.click()
+  // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
+  try {
+    await downloadWithAuth(downloadUrl, filename)
+  } catch (e) {
+    console.error('[Home] 下载历史图片失败:', e)
+  }
 }
 
 // 更新图片备注

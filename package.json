@@ -1,6 +1,6 @@
 {
   "name": "ai-image-generator-frontend",
-  "version": "6.7.5",
+  "version": "6.7.6",
   "description": "AI图片/视频生成平台前端 - Vue 3 + Vite + TailwindCSS",
   "private": true,
   "type": "module",
@@ -21,6 +21,7 @@
     "@vueuse/core": "^14.1.0",
     "dompurify": "^3.3.1",
     "marked": "^17.0.1",
+    "onnxruntime-web": "^1.23.2",
     "pinia": "^3.0.4",
     "three": "^0.182.0",
     "vue": "^3.4.29",

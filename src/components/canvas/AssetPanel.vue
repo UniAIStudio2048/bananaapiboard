@@ -781,9 +781,15 @@ async function handleDownload() {
         URL.revokeObjectURL(blobUrl)
       }, 100)
     } catch (fetchError) {
-      console.warn('[AssetPanel] fetch 下载失败，使用新窗口下载:', fetchError)
-      // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
-      window.open(downloadUrl, '_blank')
+      console.warn('[AssetPanel] fetch 下载失败，使用带认证的下载方式:', fetchError)
+      // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
+      try {
+        const { downloadWithAuth } = await import('@/api/client')
+        await downloadWithAuth(downloadUrl, filename)
+      } catch (e) {
+        console.error('[AssetPanel] 所有下载方式都失败:', e)
+        alert(t('errors.downloadFailed') || '下载失败')
+      }
     }
   } catch (error) {
     console.error('[AssetPanel] 下载失败:', error)

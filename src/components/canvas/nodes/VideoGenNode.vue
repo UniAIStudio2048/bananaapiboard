@@ -470,10 +470,11 @@ async function downloadVideo() {
     }, 100)
   } catch (error) {
     console.error('[VideoGenNode] 下载失败:', error)
-    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
+    // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
     try {
-      const { buildVideoDownloadUrl } = await import('@/api/client')
-      window.open(buildVideoDownloadUrl(videoUrl, filename), '_blank')
+      const { buildVideoDownloadUrl, downloadWithAuth } = await import('@/api/client')
+      const downloadUrl = buildVideoDownloadUrl(videoUrl, filename)
+      await downloadWithAuth(downloadUrl, filename)
     } catch (e) {
       console.error('[VideoGenNode] 所有下载方式都失败:', e)
     }

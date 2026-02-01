@@ -391,6 +391,64 @@ export async function apiRequest(path, options = {}) {
   return r.text()
 }
 
+/**
+ * 带认证头的文件下载函数
+ * 解决前后端分离架构下，window.open 不带租户认证头导致的 401 错误
+ * 
+ * @param {string} downloadUrl - 下载 URL（完整 URL 或 API 路径）
+ * @param {string} filename - 保存的文件名
+ * @returns {Promise<void>}
+ */
+export async function downloadWithAuth(downloadUrl, filename) {
+  try {
+    // 如果是七牛云 URL，直接下载（不需要认证）
+    if (isQiniuCdnUrl(downloadUrl)) {
+      const a = document.createElement('a')
+      a.href = downloadUrl
+      a.download = filename || 'download'
+      a.target = '_blank'
+      a.rel = 'noopener noreferrer'
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      return
+    }
+    
+    // 确保 URL 是完整路径
+    const fullUrl = downloadUrl.startsWith('http') ? downloadUrl : getApiUrl(downloadUrl)
+    
+    // 使用 fetch 带认证头请求
+    const response = await fetch(fullUrl, {
+      method: 'GET',
+      headers: getHeaders()
+    })
+    
+    if (!response.ok) {
+      throw new Error(`下载失败: ${response.status} ${response.statusText}`)
+    }
+    
+    // 获取文件 blob
+    const blob = await response.blob()
+    
+    // 创建临时下载链接
+    const blobUrl = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = blobUrl
+    a.download = filename || 'download'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    
+    // 释放 blob URL
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 100)
+    
+    console.log('[downloadWithAuth] 下载成功:', filename)
+  } catch (e) {
+    console.error('[downloadWithAuth] 下载失败:', e)
+    throw e
+  }
+}
+
 // 导出便捷方法
 export const api = {
   get: (path) => apiRequest(path, { method: 'GET' }),

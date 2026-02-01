@@ -436,10 +436,11 @@ async function downloadImage() {
     window.URL.revokeObjectURL(url)
   } catch (error) {
     console.error('[ImageGenNode] 下载图片失败:', error)
-    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
+    // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
     try {
-      const { buildDownloadUrl } = await import('@/api/client')
-      window.open(buildDownloadUrl(imageUrl, filename), '_blank')
+      const { buildDownloadUrl, downloadWithAuth } = await import('@/api/client')
+      const downloadUrl = buildDownloadUrl(imageUrl, filename)
+      await downloadWithAuth(downloadUrl, filename)
     } catch (e) {
       console.error('[ImageGenNode] 所有下载方式都失败:', e)
     }

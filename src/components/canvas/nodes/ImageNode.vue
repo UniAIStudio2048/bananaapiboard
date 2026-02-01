@@ -2022,11 +2022,11 @@ async function handleToolbarDownload() {
     console.log('[ImageNode] 下载原图成功:', filename)
   } catch (error) {
     console.error('[ImageNode] 下载图片失败:', error)
-    // 🔧 修复：使用新窗口打开下载链接，避免触发当前页面的 beforeunload 事件
+    // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
     try {
-      const { buildDownloadUrl } = await import('@/api/client')
+      const { buildDownloadUrl, downloadWithAuth } = await import('@/api/client')
       const downloadUrl = buildDownloadUrl(currentImageUrl.value, filename)
-      window.open(downloadUrl, '_blank')
+      await downloadWithAuth(downloadUrl, filename)
     } catch (e) {
       console.error('[ImageNode] 所有下载方式都失败:', e)
     }
