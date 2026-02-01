@@ -88,6 +88,30 @@ const contentStyle = computed(() => ({
 // 是否有输出
 const hasOutput = computed(() => !!props.data.output?.url)
 
+// 处理视频 URL，确保使用相对路径（避免跨域问题）
+const normalizedVideoUrl = computed(() => {
+  const url = props.data.output?.url
+  if (!url) return ''
+  
+  // 如果已经是相对路径，直接返回
+  if (url.startsWith('/api/')) return url
+  
+  // 处理完整 URL，提取 /api/cos-proxy/... 部分
+  if (url.includes('/api/cos-proxy/')) {
+    const cosProxyIndex = url.indexOf('/api/cos-proxy/')
+    return url.substring(cosProxyIndex)
+  }
+  
+  // 处理完整 URL，提取 /api/images/file/... 部分
+  const match = url.match(/\/api\/images\/file\/[a-zA-Z0-9-]+/)
+  if (match) {
+    return match[0]
+  }
+  
+  // 其他情况保持原样（如七牛云 CDN URL）
+  return url
+})
+
 // 检查是否有上游连接
 const hasUpstreamEdge = computed(() => {
   return canvasStore.edges.some(edge => edge.target === props.id)
@@ -103,13 +127,25 @@ const inheritedImages = computed(() => {
   return props.data.inheritedData?.urls || []
 })
 
+// 标准化视频 URL（转换为相对路径避免跨域）
+function normalizeUrl(url) {
+  if (!url) return ''
+  if (url.startsWith('/api/')) return url
+  if (url.includes('/api/cos-proxy/')) {
+    return url.substring(url.indexOf('/api/cos-proxy/'))
+  }
+  const match = url.match(/\/api\/images\/file\/[a-zA-Z0-9-]+/)
+  if (match) return match[0]
+  return url
+}
+
 // 继承的视频（来自上游视频节点）
 const inheritedVideos = computed(() => {
   if (!hasUpstreamEdge.value) return []
   const inherited = props.data.inheritedData
-  // 如果继承数据类型是视频，返回视频URL
+  // 如果继承数据类型是视频，返回视频URL（标准化处理）
   if (inherited?.type === 'video' && inherited?.url) {
-    return [inherited.url]
+    return [normalizeUrl(inherited.url)]
   }
   return []
 })
@@ -537,7 +573,7 @@ function handleAddClick(event) {
         <!-- 生成结果 -->
         <video 
           v-else-if="hasOutput" 
-          :src="data.output.url" 
+          :src="normalizedVideoUrl" 
           controls
           class="video-player"
           @loadedmetadata="handleVideoLoad"

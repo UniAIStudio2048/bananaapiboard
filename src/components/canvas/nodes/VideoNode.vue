@@ -905,13 +905,19 @@ const normalizedVideoUrl = computed(() => {
   // 如果已经是相对路径，直接返回
   if (url.startsWith('/api/')) return url
   
-  // 如果是完整 URL，提取相对路径部分
+  // 处理完整 URL，提取 /api/cos-proxy/... 部分
+  if (url.includes('/api/cos-proxy/')) {
+    const cosProxyIndex = url.indexOf('/api/cos-proxy/')
+    return url.substring(cosProxyIndex)
+  }
+  
+  // 如果是完整 URL，提取 /api/images/file/... 部分
   const match = url.match(/\/api\/images\/file\/[a-zA-Z0-9-]+/)
   if (match) {
     return match[0]
   }
   
-  // 其他情况保持原样
+  // 其他情况保持原样（如七牛云 CDN URL）
   return url
 })
 
