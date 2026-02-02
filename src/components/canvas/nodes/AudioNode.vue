@@ -730,6 +730,7 @@ async function handleFileUpload(event) {
     console.log('[AudioNode] 秒加载 - 使用 blob URL 预览:', blobUrl)
     
     // 立即更新节点显示（使用 blob URL）
+    // 🔧 同时清除上传失败/数据丢失状态
     canvasStore.updateNodeData(props.id, {
       audioUrl: blobUrl,
       fileName: file.name,
@@ -739,7 +740,12 @@ async function handleFileUpload(event) {
         type: 'audio',
         url: blobUrl
       },
-      isUploading: true // 标记正在上传
+      isUploading: true, // 标记正在上传
+      // 清除错误状态
+      uploadFailed: false,
+      uploadError: null,
+      _dataLost: false,
+      _lostReason: null
     })
     
     // 🔄 后台异步上传到云存储

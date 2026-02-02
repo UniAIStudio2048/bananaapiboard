@@ -2528,6 +2528,9 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
       // 静默更新节点中的 URL（将 blob URL 替换为服务器 URL）
       const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
       if (currentNode) {
+        // 🔧 上传成功后清除上传状态
+        canvasStore.updateNodeData(nodeId, { isUploading: false })
+        
         // 检查并更新 sourceImages 中的 blob URL
         if (currentNode.data?.sourceImages?.includes(blobUrl)) {
           const updatedSourceImages = currentNode.data.sourceImages.map(
@@ -2557,7 +2560,15 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
     }
   } catch (error) {
     console.warn('[ImageNode] 后台上传失败，保持使用 blob URL:', error.message)
-    // 上传失败时不影响用户体验，保持 blob URL 可用
+    // 🔧 标记上传失败，让用户知道需要重新上传
+    const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
+    if (currentNode) {
+      canvasStore.updateNodeData(nodeId, {
+        isUploading: false,
+        uploadFailed: true,
+        uploadError: error.message
+      })
+    }
     // 注意：blob URL 仍在跟踪列表中，会在组件卸载时清理
   }
 }
@@ -2626,10 +2637,17 @@ async function handleImageToImageFlow(imageUrl) {
   if (!currentNode) return
   
   // 1. 当前节点变成源节点（显示上传的图片）
+  // 🔧 同时清除上传失败/数据丢失状态，避免重新上传后仍显示错误
   canvasStore.updateNodeData(props.id, {
     nodeRole: 'source',
     sourceImages: [imageUrl],
-    title: t('canvas.nodes.image')
+    title: t('canvas.nodes.image'),
+    // 清除错误状态
+    uploadFailed: false,
+    uploadError: null,
+    _dataLost: false,
+    _lostReason: null,
+    isUploading: true  // 标记正在后台上传
   })
   
   // 2. 创建右侧的输出节点
@@ -2812,8 +2830,14 @@ async function updateSourceImage(event) {
     const blobUrl = createTrackedBlobUrl(file)
     console.log('[ImageNode] 更新图片 - 秒加载 blob URL:', blobUrl)
     
+    // 🔧 同时清除上传失败状态
     canvasStore.updateNodeData(props.id, {
-      sourceImages: [blobUrl]
+      sourceImages: [blobUrl],
+      uploadFailed: false,
+      uploadError: null,
+      _dataLost: false,
+      _lostReason: null,
+      isUploading: true
     })
     
     // 同时更新下游节点的参考图
@@ -3041,6 +3065,31 @@ async function ensureAccessibleUrls(imageUrls) {
       // 已经是七牛云 URL，直接使用
       console.log('[ImageNode] 使用七牛云 URL:', url.substring(0, 60))
       accessibleUrls.push(url)
+    } else if (url.startsWith('blob:')) {
+      // 🔧 修复：blob URL 无法被外部 AI 服务访问，必须上传到云端
+      console.log('[ImageNode] blob URL 需要上传到云端:', url.substring(0, 60))
+      try {
+        // 从 blob URL 获取图片数据
+        const response = await fetch(url)
+        if (!response.ok) {
+          throw new Error(`获取 blob 图片失败: ${response.status}`)
+        }
+        const blob = await response.blob()
+        const file = new File([blob], `blob_${Date.now()}.png`, { type: blob.type || 'image/png' })
+        
+        // 上传到服务器（服务器会上传到云存储）
+        const urls = await uploadImages([file])
+        if (urls && urls.length > 0) {
+          console.log('[ImageNode] blob 上传成功，新 URL:', urls[0])
+          accessibleUrls.push(urls[0])
+        } else {
+          console.error('[ImageNode] blob 上传失败：返回空结果')
+          // blob URL 无法回退，跳过这张图片
+        }
+      } catch (error) {
+        console.error('[ImageNode] blob URL 处理失败:', error)
+        // blob URL 无法回退，跳过这张图片
+      }
     } else if (needsReupload(url)) {
       // 需要重新上传到云端
       console.log('[ImageNode] 需要重新上传:', url.substring(0, 60))
@@ -3059,8 +3108,44 @@ async function ensureAccessibleUrls(imageUrls) {
       } else {
         accessibleUrls.push(fullUrl)
       }
+    } else if (url.startsWith('data:image/')) {
+      // 🔧 修复：base64 图片也需要上传到云端（某些 AI 服务不支持 base64）
+      console.log('[ImageNode] base64 图片需要上传到云端')
+      try {
+        // 将 base64 转换为 Blob
+        const matches = url.match(/^data:image\/(\w+);base64,(.+)$/)
+        if (matches) {
+          const imageType = matches[1]
+          const base64Data = matches[2]
+          const byteCharacters = atob(base64Data)
+          const byteNumbers = new Array(byteCharacters.length)
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i)
+          }
+          const byteArray = new Uint8Array(byteNumbers)
+          const blob = new Blob([byteArray], { type: `image/${imageType}` })
+          const file = new File([blob], `base64_${Date.now()}.${imageType}`, { type: blob.type })
+          
+          const urls = await uploadImages([file])
+          if (urls && urls.length > 0) {
+            console.log('[ImageNode] base64 上传成功，新 URL:', urls[0])
+            accessibleUrls.push(urls[0])
+          } else {
+            // 上传失败，尝试直接使用 base64（部分 AI 服务支持）
+            accessibleUrls.push(url)
+          }
+        } else {
+          // 格式不正确，尝试直接使用
+          accessibleUrls.push(url)
+        }
+      } catch (error) {
+        console.error('[ImageNode] base64 处理失败:', error)
+        // 回退到直接使用 base64
+        accessibleUrls.push(url)
+      }
     } else {
       // 其他格式，尝试直接使用
+      console.warn('[ImageNode] 未知 URL 格式:', url.substring(0, 60))
       accessibleUrls.push(url)
     }
   }

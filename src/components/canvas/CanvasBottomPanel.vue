@@ -367,6 +367,22 @@ async function ensureAccessibleUrls(imageUrls) {
   for (const url of imageUrls) {
     if (isQiniuCdnUrl(url)) {
       accessibleUrls.push(url)
+    } else if (url.startsWith('blob:')) {
+      // 🔧 修复：blob URL 无法被外部 AI 服务访问，必须上传到云端
+      console.log('[BottomPanel] blob URL 需要上传到云端:', url.substring(0, 60))
+      try {
+        const response = await fetch(url)
+        if (!response.ok) throw new Error(`获取 blob 图片失败: ${response.status}`)
+        const blob = await response.blob()
+        const file = new File([blob], `blob_${Date.now()}.png`, { type: blob.type || 'image/png' })
+        const urls = await uploadImages([file])
+        if (urls && urls.length > 0) {
+          console.log('[BottomPanel] blob 上传成功:', urls[0])
+          accessibleUrls.push(urls[0])
+        }
+      } catch (error) {
+        console.error('[BottomPanel] blob URL 处理失败:', error)
+      }
     } else if (needsReupload(url)) {
       const newUrl = await reuploadToCloud(url)
       accessibleUrls.push(newUrl)
@@ -380,7 +396,37 @@ async function ensureAccessibleUrls(imageUrls) {
       } else {
         accessibleUrls.push(fullUrl)
       }
+    } else if (url.startsWith('data:image/')) {
+      // 🔧 修复：base64 图片上传到云端
+      console.log('[BottomPanel] base64 图片需要上传到云端')
+      try {
+        const matches = url.match(/^data:image\/(\w+);base64,(.+)$/)
+        if (matches) {
+          const imageType = matches[1]
+          const base64Data = matches[2]
+          const byteCharacters = atob(base64Data)
+          const byteNumbers = new Array(byteCharacters.length)
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i)
+          }
+          const byteArray = new Uint8Array(byteNumbers)
+          const blob = new Blob([byteArray], { type: `image/${imageType}` })
+          const file = new File([blob], `base64_${Date.now()}.${imageType}`, { type: blob.type })
+          const urls = await uploadImages([file])
+          if (urls && urls.length > 0) {
+            accessibleUrls.push(urls[0])
+          } else {
+            accessibleUrls.push(url)
+          }
+        } else {
+          accessibleUrls.push(url)
+        }
+      } catch (error) {
+        console.error('[BottomPanel] base64 处理失败:', error)
+        accessibleUrls.push(url)
+      }
     } else {
+      console.warn('[BottomPanel] 未知 URL 格式:', url.substring(0, 60))
       accessibleUrls.push(url)
     }
   }

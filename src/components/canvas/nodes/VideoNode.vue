@@ -1768,6 +1768,31 @@ async function ensureAccessibleUrls(imageUrls) {
       // 已经是七牛云 URL，直接使用
       console.log('[VideoNode] 使用七牛云 URL:', url.substring(0, 60))
       accessibleUrls.push(url)
+    } else if (url.startsWith('blob:')) {
+      // 🔧 修复：blob URL 无法被外部 AI 服务访问，必须上传到云端
+      console.log('[VideoNode] blob URL 需要上传到云端:', url.substring(0, 60))
+      try {
+        // 从 blob URL 获取图片数据
+        const response = await fetch(url)
+        if (!response.ok) {
+          throw new Error(`获取 blob 图片失败: ${response.status}`)
+        }
+        const blob = await response.blob()
+        const file = new File([blob], `blob_${Date.now()}.png`, { type: blob.type || 'image/png' })
+        
+        // 上传到服务器（服务器会上传到云存储）
+        const urls = await uploadImages([file])
+        if (urls && urls.length > 0) {
+          console.log('[VideoNode] blob 上传成功，新 URL:', urls[0])
+          accessibleUrls.push(urls[0])
+        } else {
+          console.error('[VideoNode] blob 上传失败：返回空结果')
+          // blob URL 无法回退，跳过这张图片
+        }
+      } catch (error) {
+        console.error('[VideoNode] blob URL 处理失败:', error)
+        // blob URL 无法回退，跳过这张图片
+      }
     } else if (needsReupload(url)) {
       // 需要重新上传到云端
       console.log('[VideoNode] 需要重新上传:', url.substring(0, 60))
@@ -1785,8 +1810,44 @@ async function ensureAccessibleUrls(imageUrls) {
         const fullUrl = getApiUrl(url)
         accessibleUrls.push(fullUrl)
       }
+    } else if (url.startsWith('data:image/')) {
+      // 🔧 修复：base64 图片也需要上传到云端（某些 AI 服务不支持 base64）
+      console.log('[VideoNode] base64 图片需要上传到云端')
+      try {
+        // 将 base64 转换为 Blob
+        const matches = url.match(/^data:image\/(\w+);base64,(.+)$/)
+        if (matches) {
+          const imageType = matches[1]
+          const base64Data = matches[2]
+          const byteCharacters = atob(base64Data)
+          const byteNumbers = new Array(byteCharacters.length)
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i)
+          }
+          const byteArray = new Uint8Array(byteNumbers)
+          const blob = new Blob([byteArray], { type: `image/${imageType}` })
+          const file = new File([blob], `base64_${Date.now()}.${imageType}`, { type: blob.type })
+          
+          const urls = await uploadImages([file])
+          if (urls && urls.length > 0) {
+            console.log('[VideoNode] base64 上传成功，新 URL:', urls[0])
+            accessibleUrls.push(urls[0])
+          } else {
+            // 上传失败，尝试直接使用 base64（部分 AI 服务支持）
+            accessibleUrls.push(url)
+          }
+        } else {
+          // 格式不正确，尝试直接使用
+          accessibleUrls.push(url)
+        }
+      } catch (error) {
+        console.error('[VideoNode] base64 处理失败:', error)
+        // 回退到直接使用 base64
+        accessibleUrls.push(url)
+      }
     } else {
-      // 其他格式（如 base64），尝试直接使用
+      // 其他格式，尝试直接使用
+      console.warn('[VideoNode] 未知 URL 格式:', url.substring(0, 60))
       accessibleUrls.push(url)
     }
   }
