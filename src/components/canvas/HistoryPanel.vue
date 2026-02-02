@@ -20,6 +20,7 @@ import { saveAsset } from '@/api/canvas/assets'
 import { getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
+import { getCachedHistory, cacheHistory, invalidateCache } from '@/utils/historyCache'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 
 const { t, currentLanguage } = useI18n()
@@ -243,25 +244,47 @@ function updateContainerHeight() {
   }
 }
 
-// 加载历史记录（带缓存）
+// 加载历史记录（带 IndexedDB 持久化缓存 + 内存缓存）
 async function loadHistory(forceRefresh = false) {
   const now = Date.now()
   
-  // 如果有缓存且未过期，使用缓存（但空间切换时需要强制刷新）
+  // 获取空间筛选参数
+  const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
+  const { spaceType, teamId } = spaceParams
+  
+  // 1. 内存缓存检查（最快）
   if (!forceRefresh && dataCached.value && (now - lastLoadTime.value < CACHE_DURATION)) {
-    console.log('[HistoryPanel] 使用缓存数据')
+    console.log('[HistoryPanel] 使用内存缓存')
     return
   }
   
+  // 2. IndexedDB 缓存检查（持久化，刷新页面后仍有效）
+  if (!forceRefresh) {
+    try {
+      const cachedData = await getCachedHistory('all', spaceType, teamId)
+      if (cachedData) {
+        historyList.value = cachedData
+        dataCached.value = true
+        lastLoadTime.value = now
+        console.log('[HistoryPanel] 🎯 使用 IndexedDB 缓存:', cachedData.length, '条')
+        return
+      }
+    } catch (e) {
+      console.warn('[HistoryPanel] IndexedDB 读取失败:', e)
+    }
+  }
+  
+  // 3. 从服务器加载（服务端有 Redis 缓存）
   loading.value = true
   try {
-    // 获取空间筛选参数
-    const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
     const result = await getHistory(spaceParams)
     historyList.value = result.history || []
     dataCached.value = true
     lastLoadTime.value = now
-    console.log('[HistoryPanel] 加载历史记录:', historyList.value.length, '条', spaceParams)
+    console.log('[HistoryPanel] 从服务器加载历史记录:', historyList.value.length, '条', spaceParams)
+    
+    // 异步写入 IndexedDB 缓存
+    cacheHistory('all', spaceType, teamId, historyList.value).catch(() => {})
   } catch (error) {
     console.error('[HistoryPanel] 加载历史记录失败:', error)
   } finally {
@@ -446,6 +469,9 @@ async function confirmDelete() {
   try {
     await deleteHistory(item.id, item.type)
     historyList.value = historyList.value.filter(h => h.id !== item.id)
+    
+    // 🔥 使 IndexedDB 缓存失效
+    invalidateCache(item.type).catch(() => {})
     
     // 如果在预览模式下删除了当前预览的项，关闭预览
     if (previewItem.value && previewItem.value.id === item.id) {
@@ -3692,3 +3718,4 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #ef4444, #dc2626) !important;
 }
 </style>
+
