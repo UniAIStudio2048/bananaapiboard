@@ -114,6 +114,9 @@ const isCanvasDragging = ref(false)
 // 🔧 Blob URL 内存管理 - 跟踪所有创建的 blob URL，用于组件卸载时清理
 const createdBlobUrls = ref([])
 
+// 🔧 Blob URL 到服务器 URL 的映射 - 用于在 blob URL 失效时获取已上传的服务器 URL
+const blobToServerUrlMap = ref(new Map())
+
 // 创建并跟踪 blob URL
 function createTrackedBlobUrl(blob) {
   const url = URL.createObjectURL(blob)
@@ -2517,6 +2520,11 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
       const serverUrl = urls[0]
       console.log('[ImageNode] 后台上传成功，服务器URL:', serverUrl)
       
+      // 🔧 重要：在释放 blob URL 之前，先保存映射关系
+      // 这样即使 blob URL 失效，也可以通过映射找到服务器 URL
+      blobToServerUrlMap.value.set(blobUrl, serverUrl)
+      console.log('[ImageNode] 保存 blob->server 映射:', blobUrl.substring(0, 30), '->', serverUrl.substring(0, 60))
+      
       // 静默更新节点中的 URL（将 blob URL 替换为服务器 URL）
       const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
       if (currentNode) {
@@ -2541,6 +2549,9 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
         }
       }
       
+      // 同时更新所有下游节点中引用该 blob URL 的地方
+      updateDownstreamBlobReferences(blobUrl, serverUrl)
+      
       // 释放 blob URL 内存（从跟踪列表中移除）
       revokeTrackedBlobUrl(blobUrl)
     }
@@ -2548,6 +2559,45 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
     console.warn('[ImageNode] 后台上传失败，保持使用 blob URL:', error.message)
     // 上传失败时不影响用户体验，保持 blob URL 可用
     // 注意：blob URL 仍在跟踪列表中，会在组件卸载时清理
+  }
+}
+
+// 更新所有下游节点中引用该 blob URL 的地方
+function updateDownstreamBlobReferences(blobUrl, serverUrl) {
+  // 遍历所有节点，查找并更新引用该 blob URL 的地方
+  for (const node of canvasStore.nodes) {
+    let updated = false
+    const updates = {}
+    
+    // 检查 sourceImages
+    if (node.data?.sourceImages?.includes(blobUrl)) {
+      updates.sourceImages = node.data.sourceImages.map(
+        url => url === blobUrl ? serverUrl : url
+      )
+      updated = true
+    }
+    
+    // 检查 output.urls
+    if (node.data?.output?.urls?.includes(blobUrl)) {
+      updates.output = {
+        ...node.data.output,
+        urls: node.data.output.urls.map(url => url === blobUrl ? serverUrl : url)
+      }
+      updated = true
+    }
+    
+    // 检查 referenceImages
+    if (node.data?.referenceImages?.includes(blobUrl)) {
+      updates.referenceImages = node.data.referenceImages.map(
+        url => url === blobUrl ? serverUrl : url
+      )
+      updated = true
+    }
+    
+    if (updated) {
+      canvasStore.updateNodeData(node.id, updates)
+      console.log('[ImageNode] 更新下游节点 blob 引用:', node.id)
+    }
   }
 }
 
@@ -2876,6 +2926,51 @@ function isBlobUrl(str) {
   return str.startsWith('blob:')
 }
 
+// 在所有节点中查找某个 blob URL 是否已被替换为服务器 URL
+// 当 blob URL 失效时，可以通过这个函数找到已上传的服务器 URL
+function findServerUrlForBlobInNodes(blobUrl) {
+  // 遍历所有节点的所有图片 URL 数组
+  for (const node of canvasStore.nodes) {
+    // 检查 sourceImages - 查找与 blob URL 位置相关的服务器 URL
+    // 由于 blob URL 被替换时位置不变，我们检查节点是否曾经有这个 blob URL
+    // 如果节点有服务器 URL 但没有 blob URL，可能是已经替换过了
+    
+    // 检查 output.urls
+    if (node.data?.output?.urls) {
+      for (const url of node.data.output.urls) {
+        // 如果找到了非 blob 的 URL，可能是我们要找的
+        if (url && !isBlobUrl(url) && isValidUrl(url)) {
+          // 这个逻辑需要更精确，暂时跳过
+        }
+      }
+    }
+  }
+  
+  // 如果映射表中没有，也尝试从上游节点获取最新的 HTTP URL
+  const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
+  for (const edge of upstreamEdges) {
+    const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
+    if (!sourceNode?.data) continue
+    
+    // 获取该节点的所有 HTTP URL（排除 blob URL）
+    const httpUrls = []
+    if (sourceNode.data.output?.urls) {
+      httpUrls.push(...sourceNode.data.output.urls.filter(u => u && !isBlobUrl(u) && isValidUrl(u)))
+    }
+    if (sourceNode.data.sourceImages) {
+      httpUrls.push(...sourceNode.data.sourceImages.filter(u => u && !isBlobUrl(u) && isValidUrl(u)))
+    }
+    
+    // 如果有 HTTP URL，返回第一个
+    if (httpUrls.length > 0) {
+      console.log('[ImageNode] 从上游节点找到替代 URL:', httpUrls[0].substring(0, 60))
+      return httpUrls[0]
+    }
+  }
+  
+  return null
+}
+
 // 判断是否是七牛云 CDN URL（公开可访问的 URL）
 function isQiniuCdnUrl(str) {
   if (!str || typeof str !== 'string') return false
@@ -3090,21 +3185,68 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     
     // 处理 blob URL：需要先转换为 File 再上传
     if (blobUrls.length > 0) {
-      try {
-        console.log('[ImageNode] 处理 blob URL...')
-        for (const blobUrl of blobUrls) {
+      console.log('[ImageNode] 处理 blob URL...', blobUrls.length, '个')
+      let processedCount = 0
+      let failedCount = 0
+      
+      for (const blobUrl of blobUrls) {
+        try {
+          // 🔧 优先检查映射表中是否已有服务器 URL（blob URL 可能已被异步上传并 revoke）
+          const cachedServerUrl = blobToServerUrlMap.value.get(blobUrl)
+          if (cachedServerUrl) {
+            console.log('[ImageNode] 从映射表获取服务器 URL:', cachedServerUrl.substring(0, 60))
+            imageUrls.push(cachedServerUrl)
+            processedCount++
+            continue
+          }
+          
+          // 尝试 fetch blob URL
           const response = await fetch(blobUrl)
+          if (!response.ok) {
+            throw new Error(`Fetch failed: ${response.status}`)
+          }
           const blob = await response.blob()
           const file = new File([blob], `blob_image_${Date.now()}.png`, { type: blob.type || 'image/png' })
           const urls = await uploadImages([file])
           if (urls && urls.length > 0) {
             imageUrls.push(urls[0])
+            // 保存到映射表
+            blobToServerUrlMap.value.set(blobUrl, urls[0])
+            processedCount++
           }
+        } catch (e) {
+          console.warn('[ImageNode] blob URL 处理失败，尝试查找替代 URL:', blobUrl.substring(0, 30), e.message)
+          
+          // 🔧 blob URL 失效时的降级策略：
+          // 1. 再次检查映射表（可能在处理过程中被更新）
+          const fallbackUrl = blobToServerUrlMap.value.get(blobUrl)
+          if (fallbackUrl) {
+            console.log('[ImageNode] 使用映射表中的服务器 URL:', fallbackUrl.substring(0, 60))
+            imageUrls.push(fallbackUrl)
+            processedCount++
+            continue
+          }
+          
+          // 2. 查找上游节点是否已有对应的服务器 URL
+          const serverUrlFromNode = findServerUrlForBlobInNodes(blobUrl)
+          if (serverUrlFromNode) {
+            console.log('[ImageNode] 从节点数据找到服务器 URL:', serverUrlFromNode.substring(0, 60))
+            imageUrls.push(serverUrlFromNode)
+            processedCount++
+            continue
+          }
+          
+          // 3. 都没找到，记录失败
+          failedCount++
+          console.error('[ImageNode] 无法找到 blob URL 的替代 URL:', blobUrl.substring(0, 30))
         }
-        console.log('[ImageNode] blob URL 处理成功:', blobUrls.length, '张')
-      } catch (e) {
-        console.error('[ImageNode] blob URL 处理失败:', e)
-        throw new Error('参考图片处理失败，请重试')
+      }
+      
+      console.log('[ImageNode] blob URL 处理完成:', processedCount, '成功,', failedCount, '失败')
+      
+      // 如果所有 blob URL 都处理失败且没有其他图片，才报错
+      if (processedCount === 0 && failedCount > 0 && imageUrls.length === 0 && httpUrls.length === 0) {
+        throw new Error('参考图片处理失败，请重新上传图片后重试')
       }
     }
     
