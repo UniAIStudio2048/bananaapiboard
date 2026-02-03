@@ -6,15 +6,47 @@
  * 特性：
  * - 持久化存储：关闭浏览器后缓存仍在
  * - LRU 淘汰策略：自动清理最久未访问的图片
- * - 容量限制：默认最多缓存 200MB
+ * - 动态容量：根据设备内存和存储空间自动调整
  * - 异步加载：不阻塞主线程
+ * - 🔧 支持大画布场景（100+节点）
  */
 
 const DB_NAME = 'BananaImageCache'
-const DB_VERSION = 1
+const DB_VERSION = 2  // 升级版本以支持更大缓存
 const STORE_NAME = 'images'
-const MAX_CACHE_SIZE = 200 * 1024 * 1024 // 200MB
-const MAX_ITEMS = 500 // 最多缓存 500 张图片
+
+// 🔧 动态计算缓存容量（根据设备能力）
+function getOptimalCacheSize() {
+  // 1. 检测设备内存（如果支持）
+  const deviceMemory = navigator.deviceMemory || 4 // 默认4GB
+  
+  // 2. 高内存设备（8GB+）使用更大缓存
+  if (deviceMemory >= 8) {
+    return {
+      maxSize: 500 * 1024 * 1024,  // 500MB
+      maxItems: 1000               // 1000张图片
+    }
+  }
+  
+  // 3. 中等内存设备（4-8GB）
+  if (deviceMemory >= 4) {
+    return {
+      maxSize: 300 * 1024 * 1024,  // 300MB
+      maxItems: 700                // 700张图片
+    }
+  }
+  
+  // 4. 低内存设备（<4GB）使用保守配置
+  return {
+    maxSize: 150 * 1024 * 1024,  // 150MB
+    maxItems: 400                // 400张图片
+  }
+}
+
+const { maxSize: MAX_CACHE_SIZE, maxItems: MAX_ITEMS } = getOptimalCacheSize()
+
+// 打印缓存配置（调试用）
+console.log(`[ImageCache] 🔧 设备内存: ${navigator.deviceMemory || '未知'}GB, 缓存配置: ${MAX_CACHE_SIZE / 1024 / 1024}MB / ${MAX_ITEMS}张`)
 
 let dbInstance = null
 let dbInitPromise = null
@@ -414,9 +446,61 @@ function formatSize(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
+// 🔧 缓存配置（可从后端动态获取）
+let cacheConfig = {
+  previewWidth: 800,
+  preloadCount: 20,
+  environment: 'development'
+}
+
+/**
+ * 🔧 从后端获取缓存配置（用于优化缓存策略）
+ */
+export async function fetchCacheConfig() {
+  try {
+    const response = await fetch('/api/cache-config')
+    if (response.ok) {
+      const config = await response.json()
+      cacheConfig = {
+        ...cacheConfig,
+        ...config.frontend,
+        environment: config.environment
+      }
+      console.log(`[ImageCache] 🔧 已加载后端配置: ${config.environment}环境, 预览宽度=${cacheConfig.previewWidth}px`)
+      return config
+    }
+  } catch (e) {
+    console.warn('[ImageCache] 获取后端配置失败，使用默认配置')
+  }
+  return null
+}
+
+/**
+ * 🔧 获取当前预览宽度配置
+ */
+export function getPreviewWidth() {
+  return cacheConfig.previewWidth
+}
+
+/**
+ * 🔧 获取当前预加载数量配置
+ */
+export function getPreloadCount() {
+  return cacheConfig.preloadCount
+}
+
+/**
+ * 🔧 判断是否为生产环境
+ */
+export function isProductionEnv() {
+  return cacheConfig.environment === 'production'
+}
+
 // 页面加载时初始化
 if (typeof window !== 'undefined') {
   initDB().catch(() => {})
+  // 异步获取后端配置（不阻塞）
+  fetchCacheConfig().catch(() => {})
 }
 
 export default {
@@ -426,6 +510,10 @@ export default {
   preloadImages,
   getCacheStats,
   clearCache,
-  removeCachedImage
+  removeCachedImage,
+  fetchCacheConfig,
+  getPreviewWidth,
+  getPreloadCount,
+  isProductionEnv
 }
 

@@ -45,6 +45,12 @@ const canvasStore = useCanvasStore()
 // 注入用户信息
 const userInfo = inject('userInfo', null)
 
+// 注入保存对话框函数
+const openSaveDialog = inject('openSaveDialog', null)
+
+// 注入快速保存函数（Ctrl+S 使用）
+const quickSaveWorkflow = inject('quickSaveWorkflow', null)
+
 // 连线样式设置 - 优先从用户偏好加载，其次从localStorage，最后使用默认值
 const edgeStyle = ref(
   userInfo?.value?.preferences?.canvas?.edgeStyle ||
@@ -944,6 +950,24 @@ function handleKeyDown(event) {
   if (isCtrlOrCmd && (event.key === 'y' || (event.key === 'z' && event.shiftKey))) {
     event.preventDefault()
     canvasStore.redo()
+    return
+  }
+  
+  // Ctrl+X 重做（恢复上一步）
+  if (isCtrlOrCmd && event.key === 'x') {
+    event.preventDefault()
+    canvasStore.redo()
+    return
+  }
+  
+  // Ctrl+S 保存工作流（已有则直接更新，新建则弹出对话框）
+  if (isCtrlOrCmd && event.key === 's') {
+    event.preventDefault()
+    if (quickSaveWorkflow) {
+      quickSaveWorkflow()
+    } else if (openSaveDialog) {
+      openSaveDialog()
+    }
     return
   }
   

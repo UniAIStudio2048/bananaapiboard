@@ -5865,6 +5865,7 @@ async function handleDrop(event) {
   padding: 16px;
   display: flex;
   flex-direction: column;
+  min-height: 240px; /* 确保节点内容区域有足够高度 */
 }
 
 /* 预览状态 - 简洁文字 */
@@ -5875,6 +5876,7 @@ async function handleDrop(event) {
   justify-content: center;
   background: var(--canvas-bg-tertiary, #1a1a1a);
   border-radius: 12px;
+  min-height: 200px; /* 确保生成中状态有足够高度 */
 }
 
 .processing-text {
@@ -5892,6 +5894,7 @@ async function handleDrop(event) {
   justify-content: center;
   gap: 8px;
   text-align: center;
+  min-height: 200px; /* 确保错误状态有足够高度 */
 }
 
 .error-icon {

@@ -707,6 +707,60 @@ function openSaveDialog() {
   showSaveDialog.value = true
 }
 
+// 快速保存工作流（Ctrl+S 调用）
+// 已有工作流直接更新，新工作流弹出对话框
+async function quickSaveWorkflow() {
+  const currentTab = canvasStore.getCurrentTab()
+  
+  // 检查是否有内容
+  const workflowData = canvasStore.exportWorkflow()
+  if (!workflowData.nodes || workflowData.nodes.length === 0) {
+    displayToast('画布为空，无需保存', 'warning', 2000)
+    return
+  }
+  
+  // 如果是已保存过的工作流，直接更新
+  if (currentTab?.workflowId) {
+    try {
+      displayToast('正在保存...', 'info', 10000)
+      
+      const { saveWorkflow } = await import('@/api/canvas/workflow')
+      const spaceParams = teamStore.getSpaceParams('current')
+      
+      await saveWorkflow({
+        id: currentTab.workflowId,
+        name: currentTab.name,
+        uploadToCloud: false,
+        spaceType: spaceParams.spaceType,
+        teamId: spaceParams.teamId,
+        ...workflowData
+      })
+      
+      canvasStore.markCurrentTabSaved()
+      lastAutoSave.value = new Date()
+      displayToast(`「${currentTab.name}」已保存`, 'success', 2000)
+      console.log('[Canvas] 快速保存成功:', currentTab.name)
+      
+      // 刷新工作流面板
+      if (workflowPanelRef.value && typeof workflowPanelRef.value.forceRefresh === 'function') {
+        workflowPanelRef.value.forceRefresh()
+      }
+    } catch (error) {
+      console.error('[Canvas] 快速保存失败:', error)
+      displayToast(`保存失败：${error.message || '未知错误'}`, 'error', 3000)
+    }
+  } else {
+    // 新建工作流，打开保存对话框
+    showSaveDialog.value = true
+  }
+}
+
+// 提供快速保存函数给子组件（Ctrl+S 使用）
+provide('quickSaveWorkflow', quickSaveWorkflow)
+
+// 提供打开保存对话框函数给子组件
+provide('openSaveDialog', openSaveDialog)
+
 // 关闭保存对话框
 function closeSaveDialog() {
   showSaveDialog.value = false
@@ -1510,6 +1564,268 @@ async function handleKeyDown(event) {
       }
     }
   }
+  
+  // ========== 快捷创建节点 (i/v/t/a) ==========
+  // 在选中节点的下游快速创建对应类型节点并连线
+  if (!isInInput && !event.ctrlKey && !event.metaKey && !event.altKey) {
+    const key = event.key.toLowerCase()
+    const nodeTypeMap = {
+      'i': { type: 'image-input', title: '图片' },
+      'v': { type: 'video', title: '视频' },
+      't': { type: 'text-input', title: '文本' },
+      'a': { type: 'audio-input', title: '音频' }
+    }
+    
+    if (nodeTypeMap[key]) {
+      event.preventDefault()
+      createDownstreamNode(nodeTypeMap[key].type, nodeTypeMap[key].title)
+      return
+    }
+    
+    // D 键下载选中节点的文件
+    if (key === 'd') {
+      event.preventDefault()
+      downloadSelectedNodeFile()
+      return
+    }
+  }
+}
+
+// 在选中节点下游创建新节点并连线
+// 多选时：创建一个下游节点，所有选中节点同时连接到该节点
+function createDownstreamNode(nodeType, nodeTitle) {
+  // 获取选中的节点（支持多选）
+  // 优先从 VueFlow 节点的 selected 属性获取（最准确）
+  const selectedFromNodes = canvasStore.nodes.filter(n => n.selected).map(n => n.id)
+  // 备选：从 store 的多选列表获取
+  const selectedFromStore = canvasStore.selectedNodeIds.length > 0 
+    ? [...canvasStore.selectedNodeIds] 
+    : (canvasStore.selectedNodeId ? [canvasStore.selectedNodeId] : [])
+  
+  // 使用节点 selected 属性为主，如果为空则使用 store 的选中状态
+  const selectedIds = selectedFromNodes.length > 0 ? selectedFromNodes : selectedFromStore
+  
+  console.log('[Canvas] 创建下游节点 - 选中状态:', {
+    fromNodes: selectedFromNodes,
+    fromStore: selectedFromStore,
+    final: selectedIds
+  })
+  
+  if (selectedIds.length === 0) {
+    console.log('[Canvas] 没有选中的节点，无法创建下游节点')
+    return
+  }
+  
+  const NODE_WIDTH = 280
+  const GAP_X = 80
+  
+  // 获取所有选中节点的位置信息
+  const selectedNodes = selectedIds
+    .map(id => canvasStore.nodes.find(n => n.id === id))
+    .filter(Boolean)
+  
+  if (selectedNodes.length === 0) return
+  
+  // 计算新节点位置：在所有选中节点的右侧，垂直居中
+  const maxX = Math.max(...selectedNodes.map(n => n.position.x))
+  const minY = Math.min(...selectedNodes.map(n => n.position.y))
+  const maxY = Math.max(...selectedNodes.map(n => n.position.y))
+  const centerY = (minY + maxY) / 2
+  
+  const newPosition = {
+    x: maxX + NODE_WIDTH + GAP_X,
+    y: centerY
+  }
+  
+  // 生成唯一 ID
+  const newNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  
+  // 根据节点类型准备正确的初始数据
+  let nodeData = { title: nodeTitle }
+  
+  switch (nodeType) {
+    case 'image-input':
+      nodeData = {
+        title: nodeTitle,
+        nodeRole: 'generator',  // 作为生成器，接收上游输入
+        sourceImages: [],
+        status: 'idle'
+      }
+      break
+    case 'video':
+      nodeData = {
+        title: nodeTitle,
+        label: nodeTitle,
+        status: 'idle',
+        generationMode: 'image'  // 默认图生视频模式（有上游输入）
+      }
+      break
+    case 'text-input':
+      nodeData = {
+        title: nodeTitle,
+        text: '',
+        placeholder: '输入提示词...'
+      }
+      break
+    case 'audio-input':
+      nodeData = {
+        title: nodeTitle,
+        audioUrl: null,
+        status: 'idle'
+      }
+      break
+  }
+  
+  // 创建新节点
+  const newNode = canvasStore.addNode({
+    id: newNodeId,
+    type: nodeType,
+    position: newPosition,
+    data: nodeData
+  }, true) // skipHistory = true，最后统一保存
+  
+  // 为所有选中节点创建到新节点的连线
+  if (newNode) {
+    selectedIds.forEach(sourceNodeId => {
+      canvasStore.addEdge({
+        id: `e-${sourceNodeId}-${newNodeId}`,
+        source: sourceNodeId,
+        target: newNodeId,
+        sourceHandle: 'output',
+        targetHandle: 'input'
+      })
+    })
+  }
+  
+  // 保存历史记录
+  canvasStore.saveHistory()
+  console.log(`[Canvas] 快捷键创建 ${nodeType} 节点，${selectedIds.length} 个源节点连接到该节点`)
+}
+
+// 下载选中节点的文件
+async function downloadSelectedNodeFile() {
+  const selectedId = canvasStore.selectedNodeId
+  if (!selectedId) {
+    console.log('[Canvas] 没有选中的节点')
+    return
+  }
+  
+  const node = canvasStore.nodes.find(n => n.id === selectedId)
+  if (!node) return
+  
+  const data = node.data || {}
+  let fileUrl = null
+  let fileName = ''
+  let isVideo = false
+  
+  // 根据节点类型获取文件 URL
+  // 图片节点
+  if (data.sourceImages?.length > 0) {
+    fileUrl = data.sourceImages[0]
+    fileName = `image_${selectedId}.png`
+  } else if (data.output?.urls?.length > 0) {
+    fileUrl = data.output.urls[0]
+    fileName = `image_${selectedId}.png`
+  } else if (data.images?.length > 0) {
+    fileUrl = data.images[0]
+    fileName = `image_${selectedId}.png`
+  }
+  // 视频节点
+  else if (data.output?.url && (data.output?.type === 'video' || node.type.includes('video'))) {
+    fileUrl = data.output.url
+    fileName = `video_${selectedId}.mp4`
+    isVideo = true
+  } else if (data.video) {
+    fileUrl = data.video
+    fileName = `video_${selectedId}.mp4`
+    isVideo = true
+  }
+  // 音频节点
+  else if (data.audioData || data.audioUrl) {
+    fileUrl = data.audioData || data.audioUrl
+    fileName = `audio_${selectedId}.mp3`
+  }
+  // 文本节点 - 导出为 txt
+  else if (data.text) {
+    const blob = new Blob([data.text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `text_${selectedId}.txt`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+    console.log('[Canvas] 下载文本文件:', link.download)
+    return
+  }
+  
+  if (!fileUrl) {
+    console.log('[Canvas] 选中的节点没有可下载的文件')
+    return
+  }
+  
+  try {
+    // dataUrl 或 blob URL 直接下载
+    if (fileUrl.startsWith('data:') || fileUrl.startsWith('blob:')) {
+      const response = fileUrl.startsWith('data:') ? null : await fetch(fileUrl)
+      let blob
+      if (fileUrl.startsWith('data:')) {
+        const parts = fileUrl.split(',')
+        const mime = parts[0].match(/:(.*?);/)?.[1] || 'application/octet-stream'
+        const base64 = parts[1]
+        const byteCharacters = atob(base64)
+        const byteNumbers = new Array(byteCharacters.length)
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i)
+        }
+        blob = new Blob([new Uint8Array(byteNumbers)], { type: mime })
+      } else {
+        blob = await response.blob()
+      }
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(blobUrl)
+      console.log('[Canvas] 下载文件:', fileName)
+      return
+    }
+    
+    // 远程 URL 使用下载函数
+    const { buildDownloadUrl, buildVideoDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
+    const downloadUrl = isVideo 
+      ? buildVideoDownloadUrl(fileUrl, fileName)
+      : buildDownloadUrl(fileUrl, fileName)
+    
+    if (isQiniuCdnUrl(fileUrl)) {
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } else {
+      const { getTenantHeaders } = await import('@/config/tenant')
+      const response = await fetch(downloadUrl, { headers: getTenantHeaders() })
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      const blob = await response.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = blobUrl
+      link.download = fileName
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(blobUrl)
+    }
+    console.log('[Canvas] 下载文件:', fileName)
+  } catch (error) {
+    console.error('[Canvas] 下载失败:', error)
+  }
 }
 
 // 处理解散编组
@@ -2014,8 +2330,9 @@ onUnmounted(() => {
             <div class="help-section">
               <h4>⌨️ {{ t('canvas.keyboardShortcuts') }}</h4>
               <ul>
+                <li><kbd>Ctrl+S</kbd> {{ t('canvas.saveWorkflow') }}</li>
                 <li><kbd>Ctrl+Z</kbd> {{ t('canvas.undoShortcut') }}</li>
-                <li><kbd>Ctrl+Y</kbd> {{ t('canvas.redoShortcut') }}</li>
+                <li><kbd>Ctrl+X</kbd> / <kbd>Ctrl+Y</kbd> {{ t('canvas.redoShortcut') }}</li>
                 <li><kbd>Ctrl+C</kbd> {{ t('canvas.copyNode') }}</li>
                 <li><kbd>Ctrl+V</kbd> {{ t('canvas.pasteNode') }}</li>
                 <li><kbd>Ctrl+A</kbd> {{ t('canvas.selectAllNodes') }}</li>
@@ -2024,6 +2341,11 @@ onUnmounted(() => {
                 <li><kbd>Escape</kbd> {{ t('canvas.closeDialog') }}</li>
                 <li><kbd>Ctrl+Enter</kbd> {{ t('canvas.startGenerate') }}</li>
                 <li><kbd>Tab</kbd> {{ t('canvas.toggleAIAssistant') || '展开/收起 AI 灵感助手' }}</li>
+                <li><kbd>I</kbd> {{ t('canvas.createImageNode') || '在下游创建图像节点' }}</li>
+                <li><kbd>V</kbd> {{ t('canvas.createVideoNode') || '在下游创建视频节点' }}</li>
+                <li><kbd>T</kbd> {{ t('canvas.createTextNode') || '在下游创建文本节点' }}</li>
+                <li><kbd>A</kbd> {{ t('canvas.createAudioNode') || '在下游创建音频节点' }}</li>
+                <li><kbd>D</kbd> {{ t('canvas.downloadNodeFile') || '下载选中节点的文件' }}</li>
               </ul>
             </div>
             <div class="help-section">
@@ -2468,7 +2790,7 @@ onUnmounted(() => {
   background: var(--canvas-bg-primary);
 }
 
-/* 帮助弹窗 */
+/* 帮助弹窗 - 支持日夜模式 */
 .canvas-help-modal {
   position: fixed;
   top: 0;
@@ -2484,14 +2806,14 @@ onUnmounted(() => {
 }
 
 .canvas-help-content {
-  background: #1e1e1e;
-  border: 1px solid #3a3a3a;
-  border-radius: 16px;
+  background: var(--canvas-bg-secondary);
+  border: 1px solid var(--canvas-border-default);
+  border-radius: var(--canvas-radius-lg);
   width: 90%;
   max-width: 480px;
   max-height: 80vh;
   overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--canvas-shadow-lg);
 }
 
 .canvas-help-header {
@@ -2499,14 +2821,14 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #3a3a3a;
+  border-bottom: 1px solid var(--canvas-border-default);
 }
 
 .canvas-help-header h3 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--canvas-text-primary);
 }
 
 .canvas-help-close {
@@ -2515,15 +2837,15 @@ onUnmounted(() => {
   border-radius: 8px;
   border: none;
   background: transparent;
-  color: #888888;
+  color: var(--canvas-text-tertiary);
   font-size: 20px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
 
 .canvas-help-close:hover {
-  background: #2a2a2a;
-  color: #ffffff;
+  background: var(--canvas-bg-elevated);
+  color: var(--canvas-text-primary);
 }
 
 .canvas-help-body {
@@ -2542,7 +2864,7 @@ onUnmounted(() => {
   margin: 0 0 12px;
   font-size: 14px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--canvas-text-primary);
 }
 
 .help-section ul {
@@ -2557,9 +2879,9 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 8px;
   padding: 10px 0;
-  color: #cccccc;
+  color: var(--canvas-text-secondary);
   font-size: 14px;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--canvas-border-subtle);
 }
 
 .help-section li:last-child {
@@ -2571,15 +2893,15 @@ onUnmounted(() => {
   padding: 4px 10px;
   font-size: 12px;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
-  color: #ffffff;
-  background: #333333;
-  border: 1px solid #444444;
+  color: var(--canvas-text-primary);
+  background: var(--canvas-bg-elevated);
+  border: 1px solid var(--canvas-border-active);
   border-radius: 6px;
-  box-shadow: 0 2px 0 #222222;
+  box-shadow: 0 2px 0 var(--canvas-border-subtle);
 }
 
 .help-section strong {
-  color: #ffffff;
+  color: var(--canvas-text-primary);
 }
 
 /* 右上角控制区域 */
