@@ -77,38 +77,53 @@ async function fetchModelSuccessRates() {
 }
 
 // 获取指定模型的成功率
+// 📊 逻辑说明：
+// 1. 默认精确匹配：每个模型（如 sora2、sora2-pro）独立统计
+// 2. VEO 整合入口：聚合其子模型（veo3.1-fast、veo3.1、veo3.1-pro 等）的统计
 function getModelSuccessRate(modelName) {
   if (!modelName || !modelSuccessRates.value) return null
   
-  // 先精确匹配
+  // 获取当前模型的配置信息
+  const modelConfig = models.value?.find(m => m.value === modelName)
+  
+  // 🔧 VEO 整合入口特殊处理：聚合其子模型的统计
+  if (modelConfig?.isVeoModel && modelConfig?.veoModes?.length > 0) {
+    // 收集所有 VEO 子模型的成功率数据
+    let totalSuccess = 0
+    let totalFailed = 0
+    
+    for (const mode of modelConfig.veoModes) {
+      const actualModel = mode.actualModel
+      if (actualModel && modelSuccessRates.value[actualModel]) {
+        totalSuccess += modelSuccessRates.value[actualModel].success || 0
+        totalFailed += modelSuccessRates.value[actualModel].failed || 0
+      }
+    }
+    
+    const total = totalSuccess + totalFailed
+    if (total > 0) {
+      return totalSuccess / total
+    }
+    // 如果没有子模型数据，尝试精确匹配入口模型名称
+  }
+  
+  // 📌 默认精确匹配：每个模型独立显示自己的成功率
   if (modelSuccessRates.value[modelName]?.rate !== undefined) {
     return modelSuccessRates.value[modelName].rate
   }
   
-  // 规范化模型名称（移除连字符、下划线，统一小写）
-  const normalize = (name) => name.toLowerCase().replace(/[-_\s.]/g, '')
+  // 尝试规范化匹配（处理 sora2 vs sora-2 等格式差异）
+  const normalize = (name) => name.toLowerCase().replace(/[-_\s]/g, '')
   const normalizedName = normalize(modelName)
   
-  // 模糊匹配：聚合同系列模型
-  let totalSuccess = 0
-  let totalFailed = 0
-  
   for (const [key, stat] of Object.entries(modelSuccessRates.value)) {
-    const normalizedKey = normalize(key)
-    // 检查是否属于同一系列
-    // 例如: sora2 匹配 sora-2, sora2-pro, sora-2-pro 等
-    if (normalizedKey.includes(normalizedName) || 
-        normalizedName.includes(normalizedKey) ||
-        normalizedName.startsWith(normalizedKey.substring(0, 4)) ||
-        normalizedKey.startsWith(normalizedName.substring(0, 4))) {
-      totalSuccess += stat.success || 0
-      totalFailed += stat.failed || 0
+    // 只匹配格式差异（如 sora2 = sora-2），不匹配不同模型（如 sora2 ≠ sora2-pro）
+    if (normalize(key) === normalizedName && stat.rate !== undefined) {
+      return stat.rate
     }
   }
   
-  const total = totalSuccess + totalFailed
-  if (total === 0) return null
-  return totalSuccess / total
+  return null
 }
 
 // 计算信号格数 (1-4格)
