@@ -47,6 +47,103 @@ const promptTextareaRef = ref(null)
 // 模型下拉框状态
 const isModelDropdownOpen = ref(false)
 
+// 📊 模型成功率统计
+const modelSuccessRates = ref({})
+const modelStatsLoading = ref(false)
+
+// 获取模型成功率统计
+async function fetchModelSuccessRates() {
+  if (modelStatsLoading.value) return
+  modelStatsLoading.value = true
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(`${getApiUrl('/api/model-stats/success-rate')}?type=video`, {
+      headers: {
+        ...getTenantHeaders(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    })
+    if (response.ok) {
+      const data = await response.json()
+      if (data.success && data.stats?.video) {
+        modelSuccessRates.value = data.stats.video
+      }
+    }
+  } catch (e) {
+    console.warn('[VideoNode] 获取模型成功率失败:', e)
+  } finally {
+    modelStatsLoading.value = false
+  }
+}
+
+// 获取指定模型的成功率
+function getModelSuccessRate(modelName) {
+  if (!modelName || !modelSuccessRates.value) return null
+  
+  // 先精确匹配
+  if (modelSuccessRates.value[modelName]?.rate !== undefined) {
+    return modelSuccessRates.value[modelName].rate
+  }
+  
+  // 规范化模型名称（移除连字符、下划线，统一小写）
+  const normalize = (name) => name.toLowerCase().replace(/[-_\s.]/g, '')
+  const normalizedName = normalize(modelName)
+  
+  // 模糊匹配：聚合同系列模型
+  let totalSuccess = 0
+  let totalFailed = 0
+  
+  for (const [key, stat] of Object.entries(modelSuccessRates.value)) {
+    const normalizedKey = normalize(key)
+    // 检查是否属于同一系列
+    // 例如: sora2 匹配 sora-2, sora2-pro, sora-2-pro 等
+    if (normalizedKey.includes(normalizedName) || 
+        normalizedName.includes(normalizedKey) ||
+        normalizedName.startsWith(normalizedKey.substring(0, 4)) ||
+        normalizedKey.startsWith(normalizedName.substring(0, 4))) {
+      totalSuccess += stat.success || 0
+      totalFailed += stat.failed || 0
+    }
+  }
+  
+  const total = totalSuccess + totalFailed
+  if (total === 0) return null
+  return totalSuccess / total
+}
+
+// 计算信号格数 (1-4格)
+function getSignalLevel(modelName) {
+  const rate = getModelSuccessRate(modelName)
+  if (rate === null) return 0      // 无数据
+  if (rate >= 0.95) return 4       // 95%+ → 满格
+  if (rate >= 0.80) return 3       // 80-95% → 3格
+  if (rate >= 0.60) return 2       // 60-80% → 2格
+  if (rate > 0) return 1           // 1-60% → 1格
+  return 0                          // 0% → 0格
+}
+
+// 获取颜色类名
+function getSignalClass(modelName) {
+  const rate = getModelSuccessRate(modelName)
+  if (rate === null) return 'none'
+  if (rate >= 0.95) return 'excellent'  // 绿色
+  if (rate >= 0.80) return 'good'       // 黄色
+  return 'poor'                          // 红色
+}
+
+// 格式化百分比
+function formatSuccessRate(modelName) {
+  const rate = getModelSuccessRate(modelName)
+  if (rate === null) return '--'
+  return `${Math.round(rate * 100)}%`
+}
+
+// 是否显示模型统计（总是显示，无数据时显示 --）
+function hasModelStats(modelName) {
+  // 总是显示信号格，无数据时显示灰色 "--"
+  return true
+}
+
 // 拖拽上传状态
 const isDragOver = ref(false)
 const dragCounter = ref(0)
@@ -824,6 +921,9 @@ onMounted(() => {
   if (availableDurations.value.length > 0 && !availableDurations.value.includes(selectedDuration.value)) {
     selectedDuration.value = availableDurations.value[0]
   }
+  
+  // 📊 获取模型成功率统计
+  fetchModelSuccessRates()
   
   // 🔧 初始化时检查当前模型是否支持当前的生成模式（使用 nextTick 确保计算属性已更新）
   nextTick(() => {
@@ -4542,6 +4642,20 @@ function handleToolbarPreview() {
                   <div class="model-item-main">
                     <span class="model-item-icon">{{ m.icon }}</span>
                     <span class="model-item-label">{{ m.label }}</span>
+                    <!-- 📊 成功率信号指示器 -->
+                    <div 
+                      v-if="hasModelStats(m.value)"
+                      class="model-signal-indicator"
+                      :class="getSignalClass(m.value)"
+                    >
+                      <div class="signal-bars">
+                        <span class="bar bar-1" :class="{ active: getSignalLevel(m.value) >= 1 }"></span>
+                        <span class="bar bar-2" :class="{ active: getSignalLevel(m.value) >= 2 }"></span>
+                        <span class="bar bar-3" :class="{ active: getSignalLevel(m.value) >= 3 }"></span>
+                        <span class="bar bar-4" :class="{ active: getSignalLevel(m.value) >= 4 }"></span>
+                      </div>
+                      <span class="signal-percent">{{ formatSuccessRate(m.value) }}</span>
+                    </div>
                     <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
                   </div>
                   <div v-if="m.description" class="model-item-desc">
@@ -6045,6 +6159,73 @@ function handleToolbarPreview() {
   line-height: 1.4;
 }
 
+/* 📊 模型成功率信号指示器 */
+.model-signal-indicator {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  margin-left: auto;
+  margin-right: 8px;
+}
+
+.signal-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+}
+
+.signal-bars .bar {
+  width: 3px;
+  border-radius: 1px;
+  background: rgba(107, 114, 128, 0.3);
+  transition: all 0.2s ease;
+}
+
+.signal-bars .bar-1 { height: 4px; }
+.signal-bars .bar-2 { height: 7px; }
+.signal-bars .bar-3 { height: 10px; }
+.signal-bars .bar-4 { height: 14px; }
+
+.signal-percent {
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 28px;
+  text-align: right;
+}
+
+/* 优秀 >= 95%：绿色 */
+.model-signal-indicator.excellent .bar.active {
+  background: #22c55e;
+  box-shadow: 0 0 4px rgba(34, 197, 94, 0.4);
+}
+.model-signal-indicator.excellent .signal-percent {
+  color: #22c55e;
+}
+
+/* 良好 80-95%：黄色 */
+.model-signal-indicator.good .bar.active {
+  background: #eab308;
+  box-shadow: 0 0 4px rgba(234, 179, 8, 0.4);
+}
+.model-signal-indicator.good .signal-percent {
+  color: #eab308;
+}
+
+/* 较差 < 80%：红色 */
+.model-signal-indicator.poor .bar.active {
+  background: #ef4444;
+  box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+}
+.model-signal-indicator.poor .signal-percent {
+  color: #ef4444;
+}
+
+/* 无数据：灰色 */
+.model-signal-indicator.none .signal-percent {
+  color: #6b7280;
+}
+
 /* 下拉动画 */
 .dropdown-fade-enter-active,
 .dropdown-fade-leave-active {
@@ -6736,6 +6917,39 @@ function handleToolbarPreview() {
 :root.canvas-theme-light .video-node .model-item-points {
   color: #f59e0b;
   background: rgba(245, 158, 11, 0.1);
+}
+
+/* 📊 模型成功率信号指示器 - 白昼模式 */
+:root.canvas-theme-light .video-node .signal-bars .bar {
+  background: rgba(107, 114, 128, 0.2);
+}
+
+:root.canvas-theme-light .video-node .model-signal-indicator.excellent .bar.active {
+  background: #16a34a;
+  box-shadow: 0 0 4px rgba(22, 163, 74, 0.3);
+}
+:root.canvas-theme-light .video-node .model-signal-indicator.excellent .signal-percent {
+  color: #16a34a;
+}
+
+:root.canvas-theme-light .video-node .model-signal-indicator.good .bar.active {
+  background: #ca8a04;
+  box-shadow: 0 0 4px rgba(202, 138, 4, 0.3);
+}
+:root.canvas-theme-light .video-node .model-signal-indicator.good .signal-percent {
+  color: #ca8a04;
+}
+
+:root.canvas-theme-light .video-node .model-signal-indicator.poor .bar.active {
+  background: #dc2626;
+  box-shadow: 0 0 4px rgba(220, 38, 38, 0.3);
+}
+:root.canvas-theme-light .video-node .model-signal-indicator.poor .signal-percent {
+  color: #dc2626;
+}
+
+:root.canvas-theme-light .video-node .model-signal-indicator.none .signal-percent {
+  color: #9ca3af;
 }
 
 /* 时长选择器 - 白昼模式 */
