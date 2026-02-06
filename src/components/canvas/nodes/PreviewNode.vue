@@ -57,14 +57,10 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([byteArray], { type: mime })
 }
 
-// 下载
-// - dataUrl/blob URL：直接在前端转换下载
-// - 七牛云 URL：直接使用 attname 参数下载（节省服务器流量）
-// - 其他 URL：走后端代理下载（解决跨域问题）
+// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
 async function download() {
   let mediaUrl = ''
   let fileName = ''
-  let isVideo = false
   
   if (contentType.value === 'image' && inheritedData.value?.urls?.length) {
     mediaUrl = inheritedData.value.urls[0]
@@ -72,13 +68,12 @@ async function download() {
   } else if (contentType.value === 'video' && inheritedData.value?.url) {
     mediaUrl = inheritedData.value.url
     fileName = `video_${props.id || Date.now()}.mp4`
-    isVideo = true
   }
   
   if (!mediaUrl) return
   
   try {
-    // 如果是 dataUrl（base64），直接在前端转换为 Blob 下载
+    // dataUrl 直接在前端转换下载
     if (mediaUrl.startsWith('data:')) {
       console.log('[PreviewNode] dataUrl 格式，使用前端直接下载')
       const blob = dataUrlToBlob(mediaUrl)
@@ -93,70 +88,12 @@ async function download() {
       return
     }
     
-    // 如果是 blob URL，直接使用
-    if (mediaUrl.startsWith('blob:')) {
-      console.log('[PreviewNode] blob URL 格式，使用前端直接下载')
-      const response = await fetch(mediaUrl)
-      const blob = await response.blob()
-      const blobUrl = window.URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = blobUrl
-      a.download = fileName
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      window.URL.revokeObjectURL(blobUrl)
-      return
-    }
-    
-    // 使用统一的下载函数
-    const { buildDownloadUrl, buildVideoDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
-    const downloadUrl = isVideo
-      ? buildVideoDownloadUrl(mediaUrl, fileName)
-      : buildDownloadUrl(mediaUrl, fileName)
-    
-    // 七牛云 URL 直接下载（节省服务器流量）
-    if (isQiniuCdnUrl(mediaUrl)) {
-      const a = document.createElement('a')
-      a.href = downloadUrl
-      a.download = fileName
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      console.log('[PreviewNode] 七牛云直接下载:', fileName)
-      return
-    }
-    
-    // 其他 URL 走后端代理下载
-    const response = await fetch(downloadUrl, {
-      headers: getTenantHeaders()
-    })
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    
-    const blob = await response.blob()
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
+    // 统一使用 smartDownload（fetch+blob，自动修正扩展名，解决跨域）
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(mediaUrl, fileName)
+    console.log('[PreviewNode] 下载成功:', fileName)
   } catch (error) {
     console.error('[PreviewNode] 下载失败:', error)
-    // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
-    try {
-      const { buildDownloadUrl, buildVideoDownloadUrl, downloadWithAuth } = await import('@/api/client')
-      const downloadUrl = isVideo
-        ? buildVideoDownloadUrl(mediaUrl, fileName)
-        : buildDownloadUrl(mediaUrl, fileName)
-      await downloadWithAuth(downloadUrl, fileName)
-    } catch (e) {
-      console.error('[PreviewNode] 所有下载方式都失败:', e)
-    }
   }
 }
 

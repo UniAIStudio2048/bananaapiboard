@@ -970,10 +970,126 @@ export const useCanvasStore = defineStore('canvas', () => {
   
   /**
    * 导出工作流数据
+   * 普通导出，不做清理（用于自动保存等场景）
    */
   function exportWorkflow() {
     return {
       nodes: nodes.value,
+      edges: edges.value,
+      viewport: viewport.value
+    }
+  }
+  
+  /**
+   * 🔧 导出工作流数据（保存前清理版）
+   * 清理所有 base64/blob 内联数据，只保留云端 URL
+   * 用于手动保存/自动保存到服务器前的数据清理
+   */
+  function exportWorkflowForSave() {
+    const cleanedNodes = nodes.value.map(node => {
+      if (!node.data) return { ...node }
+      const data = { ...node.data }
+      
+      // 清理 sourceImages 中的 base64/blob
+      if (Array.isArray(data.sourceImages)) {
+        data.sourceImages = data.sourceImages.filter(url => {
+          if (typeof url !== 'string') return false
+          return !url.startsWith('data:') && !url.startsWith('blob:')
+        })
+      }
+      
+      // 清理 referenceImages 中的 base64/blob
+      if (Array.isArray(data.referenceImages)) {
+        data.referenceImages = data.referenceImages.filter(url => {
+          if (typeof url === 'string') {
+            return !url.startsWith('data:') && !url.startsWith('blob:')
+          }
+          if (typeof url === 'object' && url?.url) {
+            return !url.url.startsWith('data:') && !url.url.startsWith('blob:')
+          }
+          return true
+        })
+      }
+      
+      // 清理 output 中的 base64/blob
+      if (data.output) {
+        data.output = { ...data.output }
+        if (data.output.url && typeof data.output.url === 'string') {
+          if (data.output.url.startsWith('data:') || data.output.url.startsWith('blob:')) {
+            data.output.url = null
+          }
+        }
+        if (Array.isArray(data.output.urls)) {
+          data.output.urls = data.output.urls.filter(url =>
+            typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')
+          )
+        }
+        if (Array.isArray(data.output.images)) {
+          data.output.images = data.output.images.map(img => {
+            if (img && typeof img === 'object') {
+              const cleaned = { ...img }
+              if (cleaned.url && (cleaned.url.startsWith('data:') || cleaned.url.startsWith('blob:'))) {
+                cleaned.url = null
+              }
+              delete cleaned.base64
+              delete cleaned.data
+              return cleaned
+            }
+            return img
+          })
+        }
+        if (Array.isArray(data.output.videos)) {
+          data.output.videos = data.output.videos.map(v => {
+            if (v && typeof v === 'object') {
+              const cleaned = { ...v }
+              if (cleaned.url && (cleaned.url.startsWith('data:') || cleaned.url.startsWith('blob:'))) {
+                cleaned.url = null
+              }
+              return cleaned
+            }
+            return v
+          })
+        }
+      }
+      
+      // 清理单独的 URL 字段
+      const urlFields = ['imageUrl', 'videoUrl', 'audioUrl', 'sourceVideo', 'sourceImage', 'image', 'video']
+      for (const field of urlFields) {
+        if (data[field] && typeof data[field] === 'string') {
+          if (data[field].startsWith('data:') || data[field].startsWith('blob:')) {
+            data[field] = null
+          }
+        }
+      }
+      
+      // 清理 urls 数组
+      if (Array.isArray(data.urls)) {
+        data.urls = data.urls.filter(url =>
+          typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')
+        )
+      }
+      
+      // 删除大型内联数据字段
+      const inlineDataFields = ['imageData', 'base64', 'previewData', 'originalData', 'audioData']
+      for (const field of inlineDataFields) {
+        if (data[field] && typeof data[field] === 'string' && data[field].length > 1000) {
+          delete data[field]
+        }
+      }
+      
+      // 清理 imageOrder
+      if (Array.isArray(data.imageOrder)) {
+        data.imageOrder = data.imageOrder.filter(url => {
+          if (typeof url !== 'string') return true
+          return !url.startsWith('data:') && !url.startsWith('blob:')
+        })
+      }
+      
+      return { ...node, data }
+    })
+    
+    return {
+      nodes: cleanedNodes,
       edges: edges.value,
       viewport: viewport.value
     }
@@ -1496,6 +1612,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     clearCanvas,
     loadWorkflow,
     exportWorkflow,
+    exportWorkflowForSave,
     
     // 多标签操作
     workflowTabs,

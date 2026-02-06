@@ -10,6 +10,7 @@
 import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
+import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints } from '@/api/canvas/nodes'
 import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
@@ -70,59 +71,13 @@ const refDragCounter = ref(0) // 参考图片拖拽计数器
 // 模型下拉框状态
 const isModelDropdownOpen = ref(false)
 
-// 📊 模型成功率统计
-const modelSuccessRates = ref({})
-const modelStatsLoading = ref(false)
+// 📊 模型成功率統計（使用集中式 Store，所有節點共享數據，10 分鐘輪詢）
+const modelStatsStore = useModelStatsStore()
+modelStatsStore.ensureStarted()
 
-// 获取模型成功率统计
-async function fetchModelSuccessRates() {
-  if (modelStatsLoading.value) return
-  modelStatsLoading.value = true
-  try {
-    const token = localStorage.getItem('token')
-    const response = await fetch(`${getApiUrl('/api/model-stats/success-rate')}?type=image`, {
-      headers: {
-        ...getTenantHeaders(),
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      }
-    })
-    if (response.ok) {
-      const data = await response.json()
-      if (data.success && data.stats?.image) {
-        modelSuccessRates.value = data.stats.image
-      }
-    }
-  } catch (e) {
-    console.warn('[ImageNode] 获取模型成功率失败:', e)
-  } finally {
-    modelStatsLoading.value = false
-  }
-}
-
-// 获取指定模型的成功率
-// 📊 逻辑说明：
-// 1. 默认精确匹配：每个模型独立统计，不同模型（如 model-pro vs model）分开显示
-// 2. 只处理格式差异（如 model-name = modelname），不合并不同模型
+// 获取指定模型的成功率（代理到 Store）
 function getModelSuccessRate(modelName) {
-  if (!modelName || !modelSuccessRates.value) return null
-  
-  // 📌 默认精确匹配：每个模型独立显示自己的成功率
-  if (modelSuccessRates.value[modelName]?.rate !== undefined) {
-    return modelSuccessRates.value[modelName].rate
-  }
-  
-  // 尝试规范化匹配（处理格式差异，如 model-name vs modelname）
-  const normalize = (name) => name.toLowerCase().replace(/[-_\s]/g, '')
-  const normalizedName = normalize(modelName)
-  
-  for (const [key, stat] of Object.entries(modelSuccessRates.value)) {
-    // 只匹配格式差异，不匹配不同模型
-    if (normalize(key) === normalizedName && stat.rate !== undefined) {
-      return stat.rate
-    }
-  }
-  
-  return null
+  return modelStatsStore.getImageModelRate(modelName)
 }
 
 // 计算信号格数 (1-4格)
@@ -679,8 +634,7 @@ onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   // 加载图像预设
   loadImagePresets()
-  // 📊 获取模型成功率统计
-  fetchModelSuccessRates()
+  // 📊 模型成功率統計已由 modelStatsStore 集中管理（10 分鐘輪詢）
   // 初始化时调整文本框高度（如果有预设文本）
   nextTick(() => {
     autoResizeTextarea()
@@ -1104,24 +1058,27 @@ async function startCutoutWithBg(bgType) {
     let finalDataUrl
     let isTransparent = false
     
+    // 🔧 改进：抠图结果转为 Blob → blob URL 显示 → 后台上传云端
+    let resultFinalBlob
     if (bgType === 'transparent') {
-      // 透明背景 - 直接使用结果
-      const reader = new FileReader()
-      finalDataUrl = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result)
-        reader.onerror = reject
-        reader.readAsDataURL(resultBlob)
-      })
+      // 透明背景 - 直接使用结果 Blob
+      resultFinalBlob = resultBlob
       isTransparent = true
     } else {
-      // 有颜色背景 - 合成背景色
+      // 有颜色背景 - 合成背景色，返回 Blob
       const bgColor = bgType === 'custom' ? cutoutCustomColor.value : 
                       bgType === 'white' ? '#ffffff' : 
                       bgType === 'green' ? '#00ff00' : '#ffffff'
       
-      finalDataUrl = await compositeWithBackground(resultBlob, bgColor)
+      const compositeDataUrl = await compositeWithBackground(resultBlob, bgColor)
+      // 将 data URL 转为 Blob
+      const resp = await fetch(compositeDataUrl)
+      resultFinalBlob = await resp.blob()
       isTransparent = false
     }
+    
+    // 使用 blob URL 立即显示
+    const blobUrl = URL.createObjectURL(resultFinalBlob)
     
     // 获取当前节点位置
     const currentNode = canvasStore.nodes.find(n => n.id === props.id)
@@ -1136,10 +1093,13 @@ async function startCutoutWithBg(bgType) {
       y: currentNode.position.y
     }
     
-    // 创建新的图像节点
+    // 创建新的图像节点（先用 blob URL 显示，后台上传云端）
     const bgLabel = bgType === 'transparent' ? '透明' : 
                     bgType === 'white' ? '白底' : 
                     bgType === 'green' ? '绿幕' : '自定义底'
+    
+    const fileExt = isTransparent ? 'png' : 'jpg'
+    const mimeType = isTransparent ? 'image/png' : 'image/jpeg'
     
     canvasStore.addNode({
       id: newNodeId,
@@ -1148,17 +1108,22 @@ async function startCutoutWithBg(bgType) {
       data: {
         label: `抠图-${bgLabel}`,
         output: {
-          url: finalDataUrl,
-          urls: [finalDataUrl]
+          url: blobUrl,
+          urls: [blobUrl]
         },
         sourceNodeId: props.id,
         isTransparent: isTransparent,
         cutoutResult: true,
-        cutoutBgType: bgType
+        cutoutBgType: bgType,
+        isUploading: true
       }
     })
     
-    console.log('[ImageNode] 抠图完成，已创建新节点:', newNodeId)
+    // 🔧 后台异步上传抠图结果到云端
+    const cutoutFile = new File([resultFinalBlob], `cutout_${Date.now()}.${fileExt}`, { type: mimeType })
+    uploadImageFileAsync(cutoutFile, blobUrl, newNodeId)
+    
+    console.log('[ImageNode] 抠图完成，已创建新节点:', newNodeId, '正在后台上传到云端')
     
   } catch (error) {
     console.error('[ImageNode] 抠图失败:', error)
@@ -1391,13 +1356,15 @@ async function handleToolbarGridCrop() {
         )
         
         // 🔧 优化：使用 JPEG 格式并压缩，比 PNG 小很多（约减少 70% 体积）
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        // 🔧 改进：转为 Blob 后上传云端，不再存储 base64 数据
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+        const blobUrl = URL.createObjectURL(blob)
         
         // 立即清理 canvas 引用，让 GC 可以回收
         canvas.width = 0
         canvas.height = 0
         
-        // 创建节点
+        // 创建节点（先使用 blob URL 显示，后台上传后替换）
         const nodeId = `grid-crop-${timestamp}-${index}`
         const nodeX = baseX + offsetX + col * (nodeWidth + gap)
         const nodeY = baseY + row * (nodeHeight + gap)
@@ -1409,13 +1376,18 @@ async function handleToolbarGridCrop() {
           data: {
             label: `裁剪 ${row + 1}-${col + 1}`,
             nodeRole: 'source',
-            sourceImages: [dataUrl],
+            sourceImages: [blobUrl],
             isGenerated: true,
-            fromGridCrop: true
+            fromGridCrop: true,
+            isUploading: true
           }
         })
         
         newNodeIds.push(nodeId)
+        
+        // 🔧 后台异步上传裁剪图到云端
+        const cropFile = new File([blob], `grid-crop-${index}.jpg`, { type: 'image/jpeg' })
+        uploadImageFileAsync(cropFile, blobUrl, nodeId)
         
         // 🔧 优化：每创建一个节点后，等待下一帧渲染，让浏览器有时间处理
         await nextFrame()
@@ -1433,7 +1405,7 @@ async function handleToolbarGridCrop() {
       canvasStore.createGroup(newNodeIds, '9宫格裁剪')
     }
     
-    console.log('[ImageNode] 9宫格裁剪完成，创建了', newNodeIds.length, '个节点')
+    console.log('[ImageNode] 9宫格裁剪完成，创建了', newNodeIds.length, '个节点，正在后台上传到云端')
     
   } catch (error) {
     console.error('[ImageNode] 9宫格裁剪失败:', error)
@@ -1533,13 +1505,15 @@ async function handleToolbarGrid4Crop() {
         )
         
         // 🔧 优化：使用 JPEG 格式并压缩，比 PNG 小很多（约减少 70% 体积）
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        // 🔧 改进：转为 Blob 后上传云端，不再存储 base64 数据
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+        const blobUrl = URL.createObjectURL(blob)
         
         // 立即清理 canvas 引用，让 GC 可以回收
         canvas.width = 0
         canvas.height = 0
         
-        // 创建节点
+        // 创建节点（先使用 blob URL 显示，后台上传后替换）
         const nodeId = `grid4-crop-${timestamp}-${index}`
         const nodeX = baseX + offsetX + col * (nodeWidth + gap)
         const nodeY = baseY + row * (nodeHeight + gap)
@@ -1551,11 +1525,16 @@ async function handleToolbarGrid4Crop() {
           data: {
             label: `裁剪 ${row + 1}-${col + 1}`,
             nodeRole: 'source',
-            sourceImages: [dataUrl],
+            sourceImages: [blobUrl],
             isGenerated: true,
-            fromGridCrop: true
+            fromGridCrop: true,
+            isUploading: true
           }
         })
+        
+        // 🔧 后台异步上传裁剪图到云端
+        const cropFile = new File([blob], `grid4-crop-${index}.jpg`, { type: 'image/jpeg' })
+        uploadImageFileAsync(cropFile, blobUrl, nodeId)
         
         newNodeIds.push(nodeId)
         
@@ -2093,9 +2072,8 @@ function handleEditorSaveMask(data) {
   closeImageEditor()
 }
 
-// 统一使用后端代理下载，解决跨域和第三方CDN预览问题
+// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
 // 对于 dataUrl 格式的图片（如裁剪后的图片），直接在前端下载
-// 🔧 修复：确保下载原图，去除七牛云压缩参数
 async function handleToolbarDownload() {
   if (!currentImageUrl.value) return
   
@@ -2105,7 +2083,6 @@ async function handleToolbarDownload() {
     const imageUrl = currentImageUrl.value
     
     // 如果是 dataUrl（base64），直接在前端转换为 Blob 下载
-    // 避免 URL 过长导致请求失败（dataUrl 通常几十KB到几MB）
     if (imageUrl.startsWith('data:')) {
       console.log('[ImageNode] dataUrl 格式图片，使用前端直接下载')
       const blob = await dataUrlToBlob(imageUrl)
@@ -2120,68 +2097,12 @@ async function handleToolbarDownload() {
       return
     }
     
-    // 如果是 blob URL，直接使用
-    if (imageUrl.startsWith('blob:')) {
-      console.log('[ImageNode] blob URL 格式图片，使用前端直接下载')
-      const response = await fetch(imageUrl)
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      return
-    }
-    
-    // 🔧 修复：使用 buildDownloadUrl 构建下载链接，会自动清理七牛云压缩参数，确保下载原图
-    const { buildDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
-    const downloadUrl = buildDownloadUrl(imageUrl, filename)
-    
-    // 七牛云 URL 直接下载（节省服务器流量）
-    if (isQiniuCdnUrl(imageUrl)) {
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      link.style.display = 'none'
-      document.body.appendChild(link)
-      link.click()
-      console.log('[ImageNode] 七牛云直接下载原图:', filename)
-      setTimeout(() => document.body.removeChild(link), 100)
-      return
-    }
-    
-    // 其他 URL 走后端代理下载
-    const response = await fetch(downloadUrl, {
-      headers: getTenantHeaders()
-    })
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    
-    const blob = await response.blob()
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    // 🔧 使用 smartDownload：fetch+blob 方式，自动修正扩展名，解决跨域下载问题
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(imageUrl, filename)
     console.log('[ImageNode] 下载原图成功:', filename)
   } catch (error) {
     console.error('[ImageNode] 下载图片失败:', error)
-    // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
-    try {
-      const { buildDownloadUrl, downloadWithAuth } = await import('@/api/client')
-      const downloadUrl = buildDownloadUrl(currentImageUrl.value, filename)
-      await downloadWithAuth(downloadUrl, filename)
-    } catch (e) {
-      console.error('[ImageNode] 所有下载方式都失败:', e)
-    }
   }
 }
 
@@ -2882,17 +2803,23 @@ async function extractLastFrameFromVideo() {
     const ctx = canvas.getContext('2d')
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
     
-    // 转换为 Base64
-    const frameDataUrl = canvas.toDataURL('image/jpeg', 0.9)
+    // 🔧 改进：转为 Blob → blob URL 显示 → 后台上传云端（不再存储 base64）
+    const frameBlob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+    const frameBlobUrl = URL.createObjectURL(frameBlob)
     
-    console.log('[ImageNode] 尾帧提取成功')
+    console.log('[ImageNode] 尾帧提取成功，正在上传到云端')
     
-    // 更新节点数据
+    // 更新节点数据（使用 blob URL 先显示）
     canvasStore.updateNodeData(props.id, {
-      sourceImages: [frameDataUrl],
+      sourceImages: [frameBlobUrl],
       nodeRole: 'source',
-      needsFrameExtraction: false // 标记已完成
+      needsFrameExtraction: false, // 标记已完成
+      isUploading: true
     })
+    
+    // 🔧 后台异步上传到云端
+    const frameFile = new File([frameBlob], `frame_${Date.now()}.jpg`, { type: 'image/jpeg' })
+    uploadImageFileAsync(frameFile, frameBlobUrl, props.id)
     
   } catch (error) {
     console.error('[ImageNode] 提取视频尾帧失败:', error)

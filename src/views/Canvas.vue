@@ -826,7 +826,8 @@ async function autoSaveWorkflow() {
     return
   }
   
-  const workflowData = canvasStore.exportWorkflow()
+  // 🔧 使用 exportWorkflowForSave 清理 base64/blob 数据，避免存储膨胀
+  const workflowData = canvasStore.exportWorkflowForSave()
   
   // 如果画布为空，不需要保存
   if (!workflowData.nodes || workflowData.nodes.length === 0) {
@@ -1124,29 +1125,15 @@ function handleBeforeUnload(event) {
   const currentTab = canvasStore.getCurrentTab()
   if (currentTab?.hasChanges) {
     try {
-      // 清理 blob URL 和 base64 数据，减小请求体积
-      const cleanedNodes = workflowData.nodes.map(node => {
-        const cleanedNode = { ...node, data: { ...node.data } }
-        // 移除 blob URL 和 base64 数据
-        if (cleanedNode.data.sourceImages) {
-          cleanedNode.data.sourceImages = cleanedNode.data.sourceImages.filter(
-            url => url && !url.startsWith('blob:') && !url.startsWith('data:')
-          )
-        }
-        if (cleanedNode.data.output?.urls) {
-          cleanedNode.data.output.urls = cleanedNode.data.output.urls.filter(
-            url => url && !url.startsWith('blob:') && !url.startsWith('data:')
-          )
-        }
-        return cleanedNode
-      })
+      // 🔧 使用 exportWorkflowForSave 统一清理 base64/blob 数据
+      const cleanedData = canvasStore.exportWorkflowForSave()
       
       const saveData = {
         id: currentTab.workflowId || null,
         name: currentTab.name || '未保存的工作流',
-        nodes: cleanedNodes,
-        edges: workflowData.edges,
-        viewport: workflowData.viewport,
+        nodes: cleanedData.nodes,
+        edges: cleanedData.edges,
+        viewport: cleanedData.viewport,
         uploadToCloud: false,
         isBeforeUnload: true // 标记为关闭前保存
       }

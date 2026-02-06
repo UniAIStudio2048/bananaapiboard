@@ -693,9 +693,7 @@ function handleAddToCanvas() {
   }
 }
 
-// 右键菜单 - 下载资产
-// - 七牛云 URL：直接使用 attname 参数下载（节省服务器流量）
-// - 其他 URL：走后端代理下载（解决跨域问题）
+// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
 async function handleDownload() {
   if (!contextMenuAsset.value) return
   
@@ -736,61 +734,10 @@ async function handleDownload() {
     
     console.log('[AssetPanel] 开始下载:', { url: assetUrl.substring(0, 60), filename })
     
-    const { buildDownloadUrl, buildVideoDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
-    const downloadUrl = asset.type === 'video'
-      ? buildVideoDownloadUrl(assetUrl, filename)
-      : buildDownloadUrl(assetUrl, filename)
-    
-    // 七牛云 URL 直接下载（节省服务器流量）
-    if (isQiniuCdnUrl(assetUrl)) {
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      link.style.display = 'none'
-      document.body.appendChild(link)
-      link.click()
-      console.log('[AssetPanel] 七牛云直接下载:', filename)
-      setTimeout(() => document.body.removeChild(link), 100)
-      return
-    }
-    
-    // 其他 URL 走后端代理下载
-    try {
-      const response = await fetch(downloadUrl, {
-        headers: getTenantHeaders()
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      
-      const blob = await response.blob()
-      const blobUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = blobUrl
-      link.download = filename
-      link.style.display = 'none'
-      document.body.appendChild(link)
-      link.click()
-      
-      console.log('[AssetPanel] 下载成功:', filename)
-      
-      // 清理
-      setTimeout(() => {
-        document.body.removeChild(link)
-        URL.revokeObjectURL(blobUrl)
-      }, 100)
-    } catch (fetchError) {
-      console.warn('[AssetPanel] fetch 下载失败，使用带认证的下载方式:', fetchError)
-      // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
-      try {
-        const { downloadWithAuth } = await import('@/api/client')
-        await downloadWithAuth(downloadUrl, filename)
-      } catch (e) {
-        console.error('[AssetPanel] 所有下载方式都失败:', e)
-        alert(t('errors.downloadFailed') || '下载失败')
-      }
-    }
+    // 使用 smartDownload 统一下载（fetch+blob，自动修正扩展名，解决跨域问题）
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(assetUrl, filename)
+    console.log('[AssetPanel] 下载成功:', filename)
   } catch (error) {
     console.error('[AssetPanel] 下载失败:', error)
     alert(t('errors.downloadFailed') || '下载失败')

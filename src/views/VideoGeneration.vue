@@ -813,9 +813,7 @@ async function deleteHistory(item) {
   }
 }
 
-// 下载视频
-// - 七牛云 URL：直接使用 attname 参数下载（节省服务器流量）
-// - 其他 URL：走后端代理下载（解决跨域问题）
+// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
 async function downloadVideo(item) {
   if (!item?.video_url) return
   try {
@@ -824,33 +822,8 @@ async function downloadVideo(item) {
     const promptPart = (item.prompt || 'video').slice(0, 20).replace(/[^a-zA-Z0-9\u4e00-\u9fa5-_]/g, '_')
     const filename = `${notePrefix}${promptPart}.mp4`
     
-    // 七牛云 URL 直接下载（节省服务器流量）
-    if (isQiniuCdnUrl(item.video_url)) {
-      const downloadUrl = buildVideoDownloadUrl(item.video_url, filename)
-      const a = document.createElement('a')
-      a.href = downloadUrl
-      a.download = filename
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      return
-    }
-    
-    // 其他 URL 走后端代理下载
-    const token = localStorage.getItem('token')
-    const response = await fetch(`/api/videos/download?url=${encodeURIComponent(item.video_url)}&name=${encodeURIComponent(filename)}`, {
-      headers: { ...getTenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-    })
-    if (!response.ok) throw new Error('下载失败')
-    const blob = await response.blob()
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(item.video_url, filename)
   } catch (e) {
     console.error('download video error', e)
   }

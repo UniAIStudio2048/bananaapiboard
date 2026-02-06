@@ -17,6 +17,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { deductCropPoints } from '@/api/canvas/nodes'
+import { uploadCanvasMedia } from '@/api/canvas/workflow'
 
 const props = defineProps({
   // 选中的图像节点
@@ -224,6 +225,32 @@ function handleExpand() {
 const isGridCropping = ref(false)
 
 /**
+ * 🔧 后台异步上传裁剪图到云端
+ */
+async function uploadCropToCloud(nodeId, file, blobUrl) {
+  try {
+    console.log(`[ImageToolbar] 后台上传裁剪图到云端:`, file.name)
+    const result = await uploadCanvasMedia(file, 'image')
+    const cloudUrl = result.url
+    console.log(`[ImageToolbar] 裁剪图上传成功:`, cloudUrl)
+    
+    const node = canvasStore.nodes.find(n => n.id === nodeId)
+    if (node) {
+      const newSourceImages = (node.data.sourceImages || []).map(url => url === blobUrl ? cloudUrl : url)
+      canvasStore.updateNodeData(nodeId, { sourceImages: newSourceImages, isUploading: false })
+    }
+    
+    try { URL.revokeObjectURL(blobUrl) } catch (e) { /* ignore */ }
+  } catch (error) {
+    console.error(`[ImageToolbar] 裁剪图上传失败:`, error.message)
+    const node = canvasStore.nodes.find(n => n.id === nodeId)
+    if (node) {
+      canvasStore.updateNodeData(nodeId, { isUploading: false, uploadFailed: true })
+    }
+  }
+}
+
+/**
  * 获取可用于 canvas 操作的图片 URL
  * 对于外部 URL（跨域），使用后端代理绕过 CORS 限制
  */
@@ -327,11 +354,12 @@ async function handleGridCrop() {
           cellHeight            // 目标高
         )
         
-        // 转换为blob URL
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+        // 🔧 改进：使用 JPEG 格式压缩，转为 blob URL + 后台上传云端
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
         const blobUrl = URL.createObjectURL(blob)
         croppedImages.push({
           url: blobUrl,
+          blob,
           row,
           col,
           index: row * 3 + col
@@ -362,15 +390,19 @@ async function handleGridCrop() {
         position: { x: nodeX, y: nodeY },
         data: {
           title: `裁剪 ${item.index + 1}`,
-          urls: [item.url],
-          output: {
-            type: 'image',
-            urls: [item.url]
-          }
+          nodeRole: 'source',
+          sourceImages: [item.url],
+          isGenerated: true,
+          fromGridCrop: true,
+          isUploading: true
         }
       }, true) // skipHistory = true，最后统一保存历史
       
       newNodeIds.push(nodeId)
+      
+      // 🔧 后台异步上传裁剪图到云端
+      const cropFile = new File([item.blob], `grid-crop-${item.index}.jpg`, { type: 'image/jpeg' })
+      uploadCropToCloud(nodeId, cropFile, item.url)
     }
     
     // 创建编组
@@ -378,7 +410,7 @@ async function handleGridCrop() {
       canvasStore.createGroup(newNodeIds, '9宫格裁剪')
     }
     
-    console.log('[ImageToolbar] 9宫格裁剪完成，创建了', newNodeIds.length, '个节点')
+    console.log('[ImageToolbar] 9宫格裁剪完成，创建了', newNodeIds.length, '个节点，正在后台上传到云端')
     
     emit('grid-crop', { 
       nodeId: props.imageNode?.id, 
@@ -562,9 +594,7 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([byteArray], { type: mime })
 }
 
-// 下载 - 统一使用后端代理下载，解决跨域和第三方CDN预览问题
-// 对于 dataUrl 格式的图片（如裁剪后的图片），直接在前端下载
-// 🔧 修复：确保下载原图，去除七牛云压缩参数
+// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
 async function handleDownload() {
   console.log('[ImageToolbar] 下载', props.imageNode?.id)
   if (!imageUrl.value) return
@@ -574,8 +604,7 @@ async function handleDownload() {
   try {
     const url = imageUrl.value
     
-    // 如果是 dataUrl（base64），直接在前端转换为 Blob 下载
-    // 避免 URL 过长导致请求失败（dataUrl 通常几十KB到几MB）
+    // dataUrl 直接在前端转换下载
     if (url.startsWith('data:')) {
       console.log('[ImageToolbar] dataUrl 格式图片，使用前端直接下载')
       const blob = dataUrlToBlob(url)
@@ -591,70 +620,12 @@ async function handleDownload() {
       return
     }
     
-    // 如果是 blob URL，直接使用
-    if (url.startsWith('blob:')) {
-      console.log('[ImageToolbar] blob URL 格式图片，使用前端直接下载')
-      const response = await fetch(url)
-      const blob = await response.blob()
-      const blobUrl = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = blobUrl
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(blobUrl)
-      emit('download', { nodeId: props.imageNode?.id, imageUrl: imageUrl.value })
-      return
-    }
-    
-    // 🔧 修复：使用 buildDownloadUrl 构建下载链接，会自动清理七牛云压缩参数，确保下载原图
-    const { buildDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
-    const downloadUrl = buildDownloadUrl(url, filename)
-    
-    // 七牛云 URL 直接下载（节省服务器流量）
-    if (isQiniuCdnUrl(url)) {
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      link.style.display = 'none'
-      document.body.appendChild(link)
-      link.click()
-      console.log('[ImageToolbar] 七牛云直接下载原图:', filename)
-      setTimeout(() => document.body.removeChild(link), 100)
-      emit('download', { nodeId: props.imageNode?.id, imageUrl: imageUrl.value })
-      return
-    }
-    
-    // 其他 URL 走后端代理下载
-    const response = await fetch(downloadUrl, {
-      headers: getTenantHeaders()
-    })
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    
-    const blob = await response.blob()
-    const blobUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(blobUrl)
+    // 统一使用 smartDownload（fetch+blob，自动修正扩展名，解决跨域）
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(url, filename)
     console.log('[ImageToolbar] 下载原图成功:', filename)
   } catch (error) {
     console.error('[ImageToolbar] 下载图片失败:', error)
-    // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
-    try {
-      const { buildDownloadUrl, downloadWithAuth } = await import('@/api/client')
-      const downloadUrl = buildDownloadUrl(imageUrl.value, filename)
-      await downloadWithAuth(downloadUrl, filename)
-    } catch (e) {
-      console.error('[ImageToolbar] 所有下载方式都失败:', e)
-    }
   }
   
   emit('download', { 

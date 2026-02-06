@@ -927,19 +927,23 @@ async function handleDrop(e) {
   if (!file.type.startsWith('audio/')) return
   
   try {
-    const dataUrl = await readFileAsBase64(file)
+    // 🔧 改进：使用 blob URL 立即显示 + 后台上传到云端（不再存储 base64）
+    const blobUrl = URL.createObjectURL(file)
     
     canvasStore.updateNodeData(props.id, {
-      audioUrl: dataUrl,
-      audioData: dataUrl,
+      audioUrl: blobUrl,
       fileName: file.name,
       title: file.name,
       status: 'success',
       output: {
         type: 'audio',
-        url: dataUrl
-      }
+        url: blobUrl
+      },
+      isUploading: true
     })
+    
+    // 🔧 后台异步上传到云端
+    uploadAudioFileAsync(file, blobUrl, props.id)
   } catch (error) {
     console.error('[AudioNode] 拖拽上传失败:', error)
   }

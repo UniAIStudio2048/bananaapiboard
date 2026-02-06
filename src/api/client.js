@@ -213,8 +213,45 @@ export function buildQiniuForceDownloadUrl(url, filename) {
   // 🔧 修复：先去除图片处理参数，确保下载原图
   const originalUrl = getQiniuOriginalUrl(url)
   
+  // 🔧 修复：确保 attname 的扩展名和原文件一致，避免 .jpg 文件用 .png 扩展名下载
+  const correctedFilename = correctFilenameExtension(filename, originalUrl)
+  
   const separator = originalUrl.includes('?') ? '&' : '?'
-  return `${originalUrl}${separator}attname=${encodeURIComponent(filename)}`
+  return `${originalUrl}${separator}attname=${encodeURIComponent(correctedFilename)}`
+}
+
+/**
+ * 修正下载文件名的扩展名，使其与原始 URL 的文件扩展名保持一致
+ * 例如：原始 URL 是 xxx.jpg，但传入 filename 是 image_xxx.png → 修正为 image_xxx.jpg
+ * @param {string} filename - 期望的文件名
+ * @param {string} url - 原始文件 URL
+ * @returns {string} 修正扩展名后的文件名
+ */
+function correctFilenameExtension(filename, url) {
+  if (!filename || !url) return filename
+  
+  // 从 URL 中提取原始扩展名（去掉查询参数后）
+  const urlPath = url.split('?')[0]
+  const urlExtMatch = urlPath.match(/\.(jpg|jpeg|png|gif|webp|mp4|webm|mov|mp3|wav|ogg|svg)$/i)
+  if (!urlExtMatch) return filename
+  
+  const urlExt = urlExtMatch[0].toLowerCase() // e.g., '.jpg'
+  
+  // 从 filename 中提取扩展名
+  const fnExtMatch = filename.match(/\.(jpg|jpeg|png|gif|webp|mp4|webm|mov|mp3|wav|ogg|svg)$/i)
+  if (!fnExtMatch) {
+    // filename 没有扩展名，直接追加 URL 的扩展名
+    return filename + urlExt
+  }
+  
+  const fnExt = fnExtMatch[0].toLowerCase()
+  
+  // 如果扩展名不一致，替换为 URL 的扩展名
+  if (fnExt !== urlExt) {
+    return filename.replace(/\.(jpg|jpeg|png|gif|webp|mp4|webm|mov|mp3|wav|ogg|svg)$/i, urlExt)
+  }
+  
+  return filename
 }
 
 /**
@@ -392,6 +429,100 @@ export async function apiRequest(path, options = {}) {
 }
 
 /**
+ * 🔧 通用可靠下载函数
+ * 用 fetch + blob 方式下载文件，彻底解决跨域 <a download> 被浏览器忽略的问题
+ * 
+ * 策略：
+ * - 七牛云 URL：先直接 fetch（利用 CORS），失败则回退到后端代理
+ * - 本地/API URL：带认证头 fetch
+ * - 其他外部 URL：走后端代理
+ * 
+ * @param {string} url - 原始资源 URL（不含 attname 等下载参数）
+ * @param {string} filename - 保存的文件名
+ * @returns {Promise<void>}
+ */
+export async function smartDownload(url, filename) {
+  if (!url) throw new Error('下载 URL 为空')
+  
+  // 修正文件名扩展名
+  const correctedFilename = correctFilenameExtension(filename || 'download', url)
+  
+  // 获取干净的原始 URL（去除图片处理参数）
+  const cleanUrl = getQiniuOriginalUrl(url)
+  
+  console.log('[smartDownload] 开始下载:', { url: cleanUrl.substring(0, 80), filename: correctedFilename })
+  
+  // dataUrl / blob 直接在前端下载
+  if (cleanUrl.startsWith('data:') || cleanUrl.startsWith('blob:')) {
+    const response = await fetch(cleanUrl)
+    const blob = await response.blob()
+    triggerBlobDownload(blob, correctedFilename)
+    return
+  }
+  
+  // 七牛云 URL：先尝试直接 fetch（利用 CDN CORS），失败回退到后端代理
+  if (isQiniuCdnUrl(cleanUrl)) {
+    try {
+      const response = await fetch(cleanUrl, { mode: 'cors' })
+      if (response.ok) {
+        const blob = await response.blob()
+        triggerBlobDownload(blob, correctedFilename)
+        console.log('[smartDownload] 七牛云直接下载成功:', correctedFilename)
+        return
+      }
+    } catch (corsErr) {
+      console.warn('[smartDownload] 七牛云直接下载失败(CORS)，回退到后端代理:', corsErr.message)
+    }
+    
+    // 回退：走后端代理下载
+    const proxyParams = new URLSearchParams({ url: cleanUrl, filename: correctedFilename })
+    const proxyUrl = getApiUrl(`/api/images/download?${proxyParams.toString()}`)
+    const proxyResp = await fetch(proxyUrl, { headers: getHeaders() })
+    if (!proxyResp.ok) throw new Error(`后端代理下载失败: ${proxyResp.status}`)
+    const blob = await proxyResp.blob()
+    triggerBlobDownload(blob, correctedFilename)
+    console.log('[smartDownload] 七牛云后端代理下载成功:', correctedFilename)
+    return
+  }
+  
+  // 本地 API 路径
+  if (cleanUrl.startsWith('/api/') || cleanUrl.startsWith(getApiUrl(''))) {
+    const fullUrl = cleanUrl.startsWith('http') ? cleanUrl : getApiUrl(cleanUrl)
+    const response = await fetch(fullUrl, { headers: getHeaders() })
+    if (!response.ok) throw new Error(`下载失败: ${response.status}`)
+    const blob = await response.blob()
+    triggerBlobDownload(blob, correctedFilename)
+    return
+  }
+  
+  // 其他外部 URL：走后端代理
+  const params = new URLSearchParams({ url: cleanUrl, filename: correctedFilename })
+  const proxyUrl = getApiUrl(`/api/images/download?${params.toString()}`)
+  const response = await fetch(proxyUrl, { headers: getHeaders() })
+  if (!response.ok) throw new Error(`下载失败: ${response.status}`)
+  const blob = await response.blob()
+  triggerBlobDownload(blob, correctedFilename)
+  console.log('[smartDownload] 后端代理下载成功:', correctedFilename)
+}
+
+/**
+ * 用 Blob URL 触发浏览器下载（同源，download 属性一定生效）
+ */
+function triggerBlobDownload(blob, filename) {
+  const blobUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename || 'download'
+  a.style.display = 'none'
+  document.body.appendChild(a)
+  a.click()
+  setTimeout(() => {
+    document.body.removeChild(a)
+    URL.revokeObjectURL(blobUrl)
+  }, 100)
+}
+
+/**
  * 带认证头的文件下载函数
  * 解决前后端分离架构下，window.open 不带租户认证头导致的 401 错误
  * 
@@ -401,16 +532,10 @@ export async function apiRequest(path, options = {}) {
  */
 export async function downloadWithAuth(downloadUrl, filename) {
   try {
-    // 如果是七牛云 URL，直接下载（不需要认证）
+    // 🔧 修复：七牛云 URL 也使用 fetch+blob 方式，避免跨域 <a download> 被浏览器忽略
     if (isQiniuCdnUrl(downloadUrl)) {
-      const a = document.createElement('a')
-      a.href = downloadUrl
-      a.download = filename || 'download'
-      a.target = '_blank'
-      a.rel = 'noopener noreferrer'
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
+      const cleanUrl = getQiniuOriginalUrl(downloadUrl)
+      await smartDownload(cleanUrl, filename)
       return
     }
     
@@ -429,18 +554,7 @@ export async function downloadWithAuth(downloadUrl, filename) {
     
     // 获取文件 blob
     const blob = await response.blob()
-    
-    // 创建临时下载链接
-    const blobUrl = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = blobUrl
-    a.download = filename || 'download'
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    
-    // 释放 blob URL
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 100)
+    triggerBlobDownload(blob, filename || 'download')
     
     console.log('[downloadWithAuth] 下载成功:', filename)
   } catch (e) {

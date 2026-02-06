@@ -6,8 +6,9 @@
 import { ref, computed, inject, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
+import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus } from '@/api/canvas/nodes'
-import { getAvailableImageModels, getTenantHeaders, getApiUrl } from '@/config/tenant'
+import { getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import { getImagePresets, createImagePreset, updateImagePreset, incrementPresetUseCount } from '@/api/canvas/image-presets'
@@ -31,59 +32,13 @@ const { updateNodeInternals } = useVueFlow()
 // 模型下拉框状态
 const isModelDropdownOpen = ref(false)
 
-// 📊 模型成功率统计
-const modelSuccessRates = ref({})
-const modelStatsLoading = ref(false)
+// 📊 模型成功率統計（使用集中式 Store，所有節點共享數據，10 分鐘輪詢）
+const modelStatsStore = useModelStatsStore()
+modelStatsStore.ensureStarted()
 
-// 获取模型成功率统计
-async function fetchModelSuccessRates() {
-  if (modelStatsLoading.value) return
-  modelStatsLoading.value = true
-  try {
-    const token = localStorage.getItem('token')
-    const response = await fetch(`${getApiUrl('/api/model-stats/success-rate')}?type=image`, {
-      headers: {
-        ...getTenantHeaders(),
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      }
-    })
-    if (response.ok) {
-      const data = await response.json()
-      if (data.success && data.stats?.image) {
-        modelSuccessRates.value = data.stats.image
-      }
-    }
-  } catch (e) {
-    console.warn('[ImageGenNode] 获取模型成功率失败:', e)
-  } finally {
-    modelStatsLoading.value = false
-  }
-}
-
-// 获取指定模型的成功率
-// 📊 逻辑说明：
-// 1. 默认精确匹配：每个模型独立统计，不同模型（如 model-pro vs model）分开显示
-// 2. 只处理格式差异（如 model-name = modelname），不合并不同模型
+// 获取指定模型的成功率（代理到 Store）
 function getModelSuccessRate(modelName) {
-  if (!modelName || !modelSuccessRates.value) return null
-  
-  // 📌 默认精确匹配：每个模型独立显示自己的成功率
-  if (modelSuccessRates.value[modelName]?.rate !== undefined) {
-    return modelSuccessRates.value[modelName].rate
-  }
-  
-  // 尝试规范化匹配（处理格式差异，如 model-name vs modelname）
-  const normalize = (name) => name.toLowerCase().replace(/[-_\s]/g, '')
-  const normalizedName = normalize(modelName)
-  
-  for (const [key, stat] of Object.entries(modelSuccessRates.value)) {
-    // 只匹配格式差异，不匹配不同模型
-    if (normalize(key) === normalizedName && stat.rate !== undefined) {
-      return stat.rate
-    }
-  }
-  
-  return null
+  return modelStatsStore.getImageModelRate(modelName)
 }
 
 // 计算信号格数 (1-4格)
@@ -480,9 +435,7 @@ async function useTool(action) {
   await showAlert(`${action} 功能开发中...`, '提示')
 }
 
-// 下载图片
-// - 七牛云 URL：直接使用 attname 参数下载（节省服务器流量）
-// - 其他 URL：走后端代理下载（解决跨域问题）
+// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
 async function downloadImage() {
   if (outputImages.value.length === 0) return
   
@@ -490,48 +443,10 @@ async function downloadImage() {
   const filename = `image_${props.id || Date.now()}.png`
   
   try {
-    const { buildDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
-    const downloadUrl = buildDownloadUrl(imageUrl, filename)
-    
-    // 七牛云 URL 直接下载
-    if (isQiniuCdnUrl(imageUrl)) {
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      return
-    }
-    
-    // 其他 URL 走后端代理下载
-    const response = await fetch(downloadUrl, {
-      headers: getTenantHeaders()
-    })
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    
-    const blob = await response.blob()
-    const url = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    window.URL.revokeObjectURL(url)
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(imageUrl, filename)
   } catch (error) {
     console.error('[ImageGenNode] 下载图片失败:', error)
-    // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
-    try {
-      const { buildDownloadUrl, downloadWithAuth } = await import('@/api/client')
-      const downloadUrl = buildDownloadUrl(imageUrl, filename)
-      await downloadWithAuth(downloadUrl, filename)
-    } catch (e) {
-      console.error('[ImageGenNode] 所有下载方式都失败:', e)
-    }
   }
 }
 
@@ -797,8 +712,7 @@ onMounted(() => {
   document.addEventListener('click', handleModelDropdownClickOutside)
   // 加载图像预设
   loadImagePresets()
-  // 📊 获取模型成功率统计
-  fetchModelSuccessRates()
+  // 📊 模型成功率統計已由 modelStatsStore 集中管理（10 分鐘輪詢）
 })
 
 // 组件卸载时移除监听

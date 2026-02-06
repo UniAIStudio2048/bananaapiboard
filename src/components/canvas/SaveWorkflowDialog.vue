@@ -279,7 +279,8 @@ async function handleSave() {
   saveError.value = ''
 
   // 导出工作流数据（在关闭对话框前导出，确保数据完整）
-  const workflowData = canvasStore.exportWorkflow()
+  // 🔧 使用 exportWorkflowForSave 清理 base64/blob 数据，只保留云端 URL
+  const workflowData = canvasStore.exportWorkflowForSave()
   const nameToSave = workflowName.value.trim()
   const descToSave = workflowDescription.value.trim()
   const idToSave = currentWorkflowId.value

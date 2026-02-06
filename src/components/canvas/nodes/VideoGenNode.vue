@@ -452,9 +452,7 @@ function handleRegenerate() {
   })
 }
 
-// 下载视频
-// - 七牛云 URL：直接使用 attname 参数下载（节省服务器流量）
-// - 其他 URL：走后端代理下载（解决跨域问题）
+// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
 async function downloadVideo() {
   if (!props.data.output?.url) return
   
@@ -464,56 +462,11 @@ async function downloadVideo() {
   console.log('[VideoGenNode] 开始下载:', { url: videoUrl.substring(0, 60), filename })
   
   try {
-    const { buildVideoDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
-    const downloadUrl = buildVideoDownloadUrl(videoUrl, filename)
-    
-    // 七牛云 URL 直接下载（节省服务器流量）
-    if (isQiniuCdnUrl(videoUrl)) {
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      link.style.display = 'none'
-      document.body.appendChild(link)
-      link.click()
-      console.log('[VideoGenNode] 七牛云直接下载:', filename)
-      setTimeout(() => document.body.removeChild(link), 100)
-      return
-    }
-    
-    // 其他 URL 走后端代理下载
-    const response = await fetch(downloadUrl, {
-      headers: getTenantHeaders()
-    })
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    
-    const blob = await response.blob()
-    const blobUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = filename
-    link.style.display = 'none'
-    document.body.appendChild(link)
-    link.click()
-    
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(videoUrl, filename)
     console.log('[VideoGenNode] 下载成功:', filename)
-    
-    setTimeout(() => {
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(blobUrl)
-    }, 100)
   } catch (error) {
     console.error('[VideoGenNode] 下载失败:', error)
-    // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
-    try {
-      const { buildVideoDownloadUrl, downloadWithAuth } = await import('@/api/client')
-      const downloadUrl = buildVideoDownloadUrl(videoUrl, filename)
-      await downloadWithAuth(downloadUrl, filename)
-    } catch (e) {
-      console.error('[VideoGenNode] 所有下载方式都失败:', e)
-    }
   }
 }
 

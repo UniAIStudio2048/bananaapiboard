@@ -6,6 +6,7 @@ import { ref, computed } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions } from '@/config/canvas/nodeTypes'
 import { useI18n } from '@/i18n'
+import { uploadCanvasMedia } from '@/api/canvas/workflow'
 
 const { t } = useI18n()
 
@@ -475,38 +476,50 @@ async function handleFileUpload(event) {
       let nodeType = null
       let nodeData = {}
       
-      // 图片文件 - 与拖拽上传保持一致
+      // 🔧 图片文件 - 使用 blob URL 立即显示 + 后台上传云端
       if (fileType.startsWith('image/')) {
-        const dataUrl = await readFileAsBase64(file)
+        const blobUrl = URL.createObjectURL(file)
         nodeType = 'image-input'
         nodeData = {
           title: file.name || '图片',
           nodeRole: 'source',
-          sourceImages: [dataUrl]
+          sourceImages: [blobUrl],
+          isUploading: true
         }
+        // 记录需要上传的文件信息
+        nodeData._uploadTask = { file, type: 'image', blobUrl, field: 'sourceImages' }
       }
-      // 视频文件 - 与拖拽上传保持一致
+      // 🔧 视频文件 - 使用 blob URL 立即显示 + 后台上传云端
       else if (fileType.startsWith('video/')) {
-        const dataUrl = await readFileAsBase64(file)
+        const blobUrl = URL.createObjectURL(file)
         nodeType = 'video'
         nodeData = {
           title: file.name || '视频',
           status: 'success',
           output: {
             type: 'video',
-            url: dataUrl
-          }
+            url: blobUrl
+          },
+          isUploading: true
         }
+        nodeData._uploadTask = { file, type: 'video', blobUrl, field: 'output.url' }
       }
-      // 音频文件 - 与拖拽上传保持一致
+      // 🔧 音频文件 - 使用 blob URL 立即显示 + 后台上传云端
       else if (fileType.startsWith('audio/')) {
-        const dataUrl = await readFileAsBase64(file)
-        nodeType = 'text-input'
+        const blobUrl = URL.createObjectURL(file)
+        nodeType = 'audio-input'
         nodeData = {
-          title: `🎵 ${file.name || '音频'}`,
-          text: `音频文件: ${file.name}`,
-          audioData: dataUrl
+          title: file.name || '音频',
+          audioUrl: blobUrl,
+          fileName: file.name,
+          status: 'success',
+          output: {
+            type: 'audio',
+            url: blobUrl
+          },
+          isUploading: true
         }
+        nodeData._uploadTask = { file, type: 'audio', blobUrl, field: 'audioUrl' }
       }
       // 文本文件
       else if (fileType.startsWith('text/') || 
@@ -537,11 +550,22 @@ async function handleFileUpload(event) {
           y: position.y + offsetY
         }
         
+        // 提取上传任务信息（不存入节点数据）
+        const uploadTask = nodeData._uploadTask
+        delete nodeData._uploadTask
+        
+        const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         canvasStore.addNode({
+          id: nodeId,
           type: nodeType,
           position: nodePosition,
           data: nodeData
         })
+        
+        // 🔧 后台异步上传到云端
+        if (uploadTask) {
+          uploadFileToCloud(nodeId, uploadTask)
+        }
         
         // 多文件时错开位置
         offsetX += 50
@@ -560,7 +584,48 @@ async function handleFileUpload(event) {
   emit('close')
 }
 
-// 读取文件为 Base64（与 CanvasBoard 中的实现保持一致）
+/**
+ * 🔧 后台异步上传文件到云端，上传成功后替换节点中的 blob URL
+ */
+async function uploadFileToCloud(nodeId, task) {
+  const { file, type, blobUrl } = task
+  try {
+    console.log(`[NodeSelector] 后台上传 ${type} 到云端:`, file.name, '大小:', Math.round(file.size / 1024), 'KB')
+    const result = await uploadCanvasMedia(file, type)
+    const cloudUrl = result.url
+    console.log(`[NodeSelector] ${type} 上传成功，云 URL:`, cloudUrl)
+    
+    const node = canvasStore.nodes.find(n => n.id === nodeId)
+    if (node) {
+      if (type === 'image') {
+        const newSourceImages = (node.data.sourceImages || []).map(url => url === blobUrl ? cloudUrl : url)
+        canvasStore.updateNodeData(nodeId, { sourceImages: newSourceImages, isUploading: false })
+      } else if (type === 'video') {
+        canvasStore.updateNodeData(nodeId, { 
+          output: { ...node.data.output, url: cloudUrl },
+          isUploading: false
+        })
+      } else if (type === 'audio') {
+        canvasStore.updateNodeData(nodeId, { 
+          audioUrl: cloudUrl,
+          output: { ...node.data.output, url: cloudUrl },
+          isUploading: false
+        })
+      }
+    }
+    
+    // 释放 blob URL
+    try { URL.revokeObjectURL(blobUrl) } catch (e) { /* ignore */ }
+  } catch (error) {
+    console.error(`[NodeSelector] ${type} 上传失败:`, error.message)
+    const node = canvasStore.nodes.find(n => n.id === nodeId)
+    if (node) {
+      canvasStore.updateNodeData(nodeId, { isUploading: false, uploadFailed: true, uploadError: error.message })
+    }
+  }
+}
+
+// 读取文件为 Base64（保留用于非媒体文件）
 function readFileAsBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader()

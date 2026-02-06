@@ -11,6 +11,7 @@
 import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
+import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels } from '@/config/tenant'
 import { uploadImages } from '@/api/canvas/nodes'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
@@ -47,80 +48,35 @@ const promptTextareaRef = ref(null)
 // 模型下拉框状态
 const isModelDropdownOpen = ref(false)
 
-// 📊 模型成功率统计
-const modelSuccessRates = ref({})
-const modelStatsLoading = ref(false)
+// 📊 模型成功率統計（使用集中式 Store，所有節點共享數據，10 分鐘輪詢）
+const modelStatsStore = useModelStatsStore()
+modelStatsStore.ensureStarted()
 
-// 获取模型成功率统计
-async function fetchModelSuccessRates() {
-  if (modelStatsLoading.value) return
-  modelStatsLoading.value = true
-  try {
-    const token = localStorage.getItem('token')
-    const response = await fetch(`${getApiUrl('/api/model-stats/success-rate')}?type=video`, {
-      headers: {
-        ...getTenantHeaders(),
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      }
-    })
-    if (response.ok) {
-      const data = await response.json()
-      if (data.success && data.stats?.video) {
-        modelSuccessRates.value = data.stats.video
-      }
-    }
-  } catch (e) {
-    console.warn('[VideoNode] 获取模型成功率失败:', e)
-  } finally {
-    modelStatsLoading.value = false
-  }
-}
-
-// 获取指定模型的成功率
-// 📊 逻辑说明：
-// 1. 默认精确匹配：每个模型（如 sora2、sora2-pro）独立统计
-// 2. VEO 整合入口：聚合其子模型（veo3.1-fast、veo3.1、veo3.1-pro 等）的统计
+// 获取指定模型的成功率（代理到 Store，含 VEO 前端聚合回退）
 function getModelSuccessRate(modelName) {
-  if (!modelName || !modelSuccessRates.value) return null
+  if (!modelName) return null
   
-  // 获取当前模型的配置信息
+  // 1. 先嘗試 Store 的標準匹配（精確 → 歸一化 → 包含）
+  const rate = modelStatsStore.getVideoModelRate(modelName)
+  if (rate !== null) return rate
+  
+  // 2. VEO 整合入口回退：如果後端未聚合，嘗試在前端聚合子模型
   const modelConfig = models.value?.find(m => m.value === modelName)
-  
-  // 🔧 VEO 整合入口特殊处理：聚合其子模型的统计
   if (modelConfig?.isVeoModel && modelConfig?.veoModes?.length > 0) {
-    // 收集所有 VEO 子模型的成功率数据
     let totalSuccess = 0
     let totalFailed = 0
-    
     for (const mode of modelConfig.veoModes) {
       const actualModel = mode.actualModel
-      if (actualModel && modelSuccessRates.value[actualModel]) {
-        totalSuccess += modelSuccessRates.value[actualModel].success || 0
-        totalFailed += modelSuccessRates.value[actualModel].failed || 0
+      if (actualModel) {
+        const stat = modelStatsStore.getVideoModelStat(actualModel)
+        if (stat) {
+          totalSuccess += stat.success || 0
+          totalFailed += stat.failed || 0
+        }
       }
     }
-    
     const total = totalSuccess + totalFailed
-    if (total > 0) {
-      return totalSuccess / total
-    }
-    // 如果没有子模型数据，尝试精确匹配入口模型名称
-  }
-  
-  // 📌 默认精确匹配：每个模型独立显示自己的成功率
-  if (modelSuccessRates.value[modelName]?.rate !== undefined) {
-    return modelSuccessRates.value[modelName].rate
-  }
-  
-  // 尝试规范化匹配（处理 sora2 vs sora-2 等格式差异）
-  const normalize = (name) => name.toLowerCase().replace(/[-_\s]/g, '')
-  const normalizedName = normalize(modelName)
-  
-  for (const [key, stat] of Object.entries(modelSuccessRates.value)) {
-    // 只匹配格式差异（如 sora2 = sora-2），不匹配不同模型（如 sora2 ≠ sora2-pro）
-    if (normalize(key) === normalizedName && stat.rate !== undefined) {
-      return stat.rate
-    }
+    if (total > 0) return totalSuccess / total
   }
   
   return null
@@ -937,8 +893,7 @@ onMounted(() => {
     selectedDuration.value = availableDurations.value[0]
   }
   
-  // 📊 获取模型成功率统计
-  fetchModelSuccessRates()
+  // 📊 模型成功率統計已由 modelStatsStore 集中管理（10 分鐘輪詢）
   
   // 🔧 初始化时检查当前模型是否支持当前的生成模式（使用 nextTick 确保计算属性已更新）
   nextTick(() => {

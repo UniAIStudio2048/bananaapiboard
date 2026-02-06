@@ -1112,16 +1112,12 @@ function resetImageTransform() {
   imageTranslate.value = { x: 0, y: 0 }
 }
 
-// 下载图片
-// - 七牛云 URL：直接使用 attname 参数下载（节省服务器流量）
-// - 本地文件/其他 URL：走后端代理下载（带认证头）
+// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
 async function download(url, filename) {
   const fname = filename || 'image.png'
-  const downloadUrl = buildDownloadUrl(url, fname)
-  
-  // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
   try {
-    await downloadWithAuth(downloadUrl, fname)
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(url, fname)
   } catch (e) {
     console.error('[Home] 下载失败:', e)
   }
@@ -1137,12 +1133,9 @@ async function downloadHistoryImage(item) {
   const notePrefix = item.note ? item.note.replace(/[^a-zA-Z0-9\u4e00-\u9fa5-_]/g, '_').slice(0, 50) + '_' : ''
   const filename = `${notePrefix}${modelName}_${timestamp}.png`
   
-  // 使用统一的下载函数（会自动判断七牛云 URL 直接下载，其他走后端代理）
-  const downloadUrl = buildDownloadUrl(item.url, filename)
-  
-  // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
   try {
-    await downloadWithAuth(downloadUrl, filename)
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(item.url, filename)
   } catch (e) {
     console.error('[Home] 下载历史图片失败:', e)
   }
