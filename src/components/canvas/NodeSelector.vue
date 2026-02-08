@@ -237,6 +237,38 @@ function handleAudioOperation(operationType) {
   }
 }
 
+// 创建分镜格子节点
+function createStoryboardGrid() {
+  // 计算新节点位置
+  let position = { x: 200, y: 200 }
+  
+  // 优先使用 store 中传入的 flowPosition
+  if (canvasStore.nodeSelectorFlowPosition) {
+    position = { ...canvasStore.nodeSelectorFlowPosition }
+    position.x -= 200 // 分镜格子节点较宽
+    position.y -= 100
+  }
+  
+  // 创建分镜格子节点
+  const node = canvasStore.addNode({
+    type: 'storyboard',
+    position,
+    data: {
+      title: '分镜格子',
+      gridSize: '3x3', // 默认 3x3
+      aspectRatio: '16:9', // 默认 16:9
+      images: [], // 存储图片 URL
+      status: 'idle'
+    }
+  })
+  
+  if (node?.id) {
+    canvasStore.selectNode(node.id)
+  }
+  
+  emit('close')
+}
+
 // 选择节点类型
 function selectNodeType(type) {
   selectedType.value = type
@@ -667,7 +699,7 @@ function formatFileSize(bytes) {
     </div>
     
     <!-- 节点列表 -->
-    <template v-if="availableNodes.length > 0">
+    <template v-if="(availableNodes || []).length > 0">
       <!-- 按分类显示（双击空白处或点击工具栏时） -->
       <template v-if="nodesByCategory">
         <!-- 输入节点分类 -->
@@ -681,8 +713,8 @@ function formatFileSize(bytes) {
           >
             <div class="node-selector-icon">{{ node.icon }}</div>
             <div class="node-selector-info">
-              <div class="node-selector-name">{{ t(node.label) }}</div>
-              <div class="node-selector-desc" v-if="node.description">{{ t(node.description) }}</div>
+              <div class="node-selector-name">{{ node.label ? t(node.label) : '' }}</div>
+              <div class="node-selector-desc" v-if="node.description">{{ node.description ? t(node.description) : '' }}</div>
             </div>
           </div>
         </template>
@@ -729,6 +761,19 @@ function formatFileSize(bytes) {
       <div class="empty-icon">○</div>
       <div class="empty-text">{{ t('canvas.noNodeTypes') }}</div>
     </div>
+    
+    <!-- 功能选项（仅非节点触发时显示） -->
+    <template v-if="!triggerNode">
+      <div class="node-selector-divider"></div>
+      <div class="node-selector-title">功能节点</div>
+      <div class="node-selector-item" @click="createStoryboardGrid">
+        <div class="node-selector-icon">⊞</div>
+        <div class="node-selector-info">
+          <div class="node-selector-name">分镜格子</div>
+          <div class="node-selector-desc">创建可拖拽排序的图片网格</div>
+        </div>
+      </div>
+    </template>
     
     <!-- 分隔线和上传选项（仅非节点触发时显示） -->
     <template v-if="!triggerNode">

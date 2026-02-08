@@ -538,6 +538,7 @@ export default {
       imageCutout: { label: 'Cutout', desc: 'Extract image subject' },
       imageExpand: { label: 'Outpaint', desc: 'Expand image borders' },
       gridPreview: { label: 'Grid Preview', desc: 'Display multiple images in grid' },
+      storyboardGrid: { label: 'Storyboard Grid', desc: 'Create draggable image grid' },
       videoLastFrame: { label: 'Extract Last Frame', desc: 'Extract last frame from video' },
       videoDescribe: { label: 'Video Describe', desc: 'Reverse prompt from video' }
     },

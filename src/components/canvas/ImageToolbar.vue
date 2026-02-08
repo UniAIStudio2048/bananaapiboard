@@ -64,6 +64,10 @@ const lastPosition = ref({ x: 0, y: 0 })
 const showCropModal = ref(false)
 const cropImageUrl = ref('')
 
+// 宫格裁剪选项菜单状态
+const gridCropMenuType = ref(null) // 'grid9' | 'grid4' | null
+const gridCropMenuJustOpened = ref(false) // 防止打开后立即关闭
+
 // 获取节点的图片URL
 const imageUrl = computed(() => {
   const node = props.imageNode
@@ -127,14 +131,14 @@ const toolbarItems = [
     id: 'grid-crop', 
     icon: 'grid-crop',
     label: '9宫格裁剪', 
-    handler: handleGridCrop,
+    handler: () => showGridCropMenu('grid9'),
     requiresImage: true
   },
   { 
     id: 'grid4-crop', 
     icon: 'grid4-crop',
     label: '4宫格裁剪', 
-    handler: handleGrid4Crop,
+    handler: () => showGridCropMenu('grid4'),
     requiresImage: true
   },
   // 分隔符
@@ -288,6 +292,161 @@ function getProxiedImageUrl(url) {
   
   // 其他情况直接返回
   return url
+}
+
+// ========== 宫格裁剪选项菜单 ==========
+
+// 显示宫格裁剪选项菜单
+function showGridCropMenu(type) {
+  gridCropMenuType.value = type
+  gridCropMenuJustOpened.value = true
+  // 短暂延迟后重置标志
+  setTimeout(() => {
+    gridCropMenuJustOpened.value = false
+  }, 100)
+}
+
+// 关闭宫格裁剪选项菜单
+function closeGridCropMenu() {
+  gridCropMenuType.value = null
+}
+
+// 执行仅裁剪
+function handleGridCropOnly() {
+  const type = gridCropMenuType.value
+  closeGridCropMenu()
+  if (type === 'grid9') {
+    handleGridCrop()
+  } else if (type === 'grid4') {
+    handleGrid4Crop()
+  }
+}
+
+// 执行裁剪并创建分镜格子
+async function handleGridCropToStoryboard() {
+  const type = gridCropMenuType.value
+  closeGridCropMenu()
+  
+  if (type === 'grid9') {
+    await createStoryboardFromCrop(3, 3)
+  } else if (type === 'grid4') {
+    await createStoryboardFromCrop(2, 2)
+  }
+}
+
+// 裁剪图片并创建分镜格子节点
+async function createStoryboardFromCrop(cols, rows) {
+  const gridType = cols === 3 ? 'grid9' : 'grid4'
+  const count = cols * rows
+  
+  console.log(`[ImageToolbar] 创建分镜格子 ${cols}x${rows}`, props.imageNode?.id)
+  if (!imageUrl.value) return
+  
+  try {
+    // 先扣除积分
+    try {
+      const deductResult = await deductCropPoints(gridType)
+      if (deductResult.pointsCost > 0) {
+        console.log(`[ImageToolbar] ${cols}x${rows}裁剪：已扣除 ${deductResult.pointsCost} 积分`)
+      }
+    } catch (deductError) {
+      console.error(`[ImageToolbar] ${cols}x${rows}裁剪：积分扣除失败`, deductError)
+      alert(deductError.message || '积分不足，无法执行裁剪操作')
+      return
+    }
+    
+    // 加载图片
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    const proxiedUrl = getProxiedImageUrl(imageUrl.value)
+    
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = proxiedUrl
+    })
+    
+    const imgWidth = img.naturalWidth
+    const imgHeight = img.naturalHeight
+    const cellWidth = Math.floor(imgWidth / cols)
+    const cellHeight = Math.floor(imgHeight / rows)
+    
+    // 计算比例
+    const cellRatio = cellWidth / cellHeight
+    let aspectRatio = '16:9'
+    if (Math.abs(cellRatio - 16/9) < 0.1) aspectRatio = '16:9'
+    else if (Math.abs(cellRatio - 9/16) < 0.1) aspectRatio = '9:16'
+    else if (Math.abs(cellRatio - 1) < 0.1) aspectRatio = '1:1'
+    else if (Math.abs(cellRatio - 4/3) < 0.1) aspectRatio = '4:3'
+    else if (Math.abs(cellRatio - 3/4) < 0.1) aspectRatio = '3:4'
+    
+    // 裁剪并上传所有图片
+    const croppedUrls = []
+    
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const canvas = document.createElement('canvas')
+        canvas.width = cellWidth
+        canvas.height = cellHeight
+        const ctx = canvas.getContext('2d')
+        
+        ctx.drawImage(
+          img,
+          col * cellWidth,
+          row * cellHeight,
+          cellWidth,
+          cellHeight,
+          0,
+          0,
+          cellWidth,
+          cellHeight
+        )
+        
+        // 转为 blob 并上传
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+        const file = new File([blob], `storyboard-${row * cols + col}.jpg`, { type: 'image/jpeg' })
+        
+        // 上传到云端
+        const uploadedUrl = await uploadCanvasMedia(file)
+        croppedUrls.push(uploadedUrl)
+      }
+    }
+    
+    // 计算分镜格子节点位置
+    const baseX = props.imageNode.position?.x || 0
+    const baseY = props.imageNode.position?.y || 0
+    const offsetX = (props.imageNode.style?.width || 400) + 100
+    
+    // 创建分镜格子节点
+    const nodeId = `storyboard-${Date.now()}`
+    const gridSize = `${cols}x${rows}`
+    
+    // 填充图片数组（9个位置，未使用的填 null）
+    const imagesArray = Array(9).fill(null)
+    croppedUrls.forEach((url, i) => {
+      imagesArray[i] = url
+    })
+    
+    canvasStore.addNode({
+      id: nodeId,
+      type: 'storyboard',
+      position: { x: baseX + offsetX, y: baseY },
+      data: {
+        title: `${cols}x${rows}分镜`,
+        gridSize: gridSize,
+        aspectRatio: aspectRatio,
+        gridScale: 1,
+        images: imagesArray,
+        output: null
+      }
+    })
+    
+    console.log(`[ImageToolbar] 创建分镜格子完成: ${nodeId}`)
+    
+  } catch (error) {
+    console.error('[ImageToolbar] 创建分镜格子失败:', error)
+    alert('创建分镜格子失败，请重试')
+  }
 }
 
 // 9宫格裁剪 - 将图片裁剪成9份并创建组
@@ -803,11 +962,29 @@ function handleToolClick(item) {
 // ESC 关闭预览
 function handleKeyDown(event) {
   if (event.key === 'Escape') {
+    if (gridCropMenuType.value) {
+      closeGridCropMenu()
+      return
+    }
     if (showPreviewModal.value) {
       closePreviewModal()
     }
     if (showCropModal.value) {
       closeCropModal()
+    }
+  }
+}
+
+// 点击工具栏外部关闭宫格菜单
+function handleToolbarClick(event) {
+  // 如果菜单刚打开，忽略这次点击
+  if (gridCropMenuJustOpened.value) return
+  
+  // 如果点击的不是菜单内部，关闭菜单
+  if (gridCropMenuType.value) {
+    const menu = event.target.closest('.grid-crop-menu')
+    if (!menu) {
+      closeGridCropMenu()
     }
   }
 }
@@ -822,7 +999,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="image-toolbar" @click.stop @mousedown.stop>
+  <div class="image-toolbar" @click.stop="handleToolbarClick" @mousedown.stop>
     <!-- 工具栏按钮 -->
     <template v-for="item in toolbarItems" :key="item.id">
       <!-- 分隔符 -->
@@ -918,6 +1095,38 @@ onUnmounted(() => {
         <span v-if="!item.iconOnly" class="btn-label">{{ item.label }}</span>
       </button>
     </template>
+    
+    <!-- 宫格裁剪选项菜单 -->
+    <div 
+      v-if="gridCropMenuType" 
+      class="grid-crop-menu"
+      @click.stop
+    >
+      <div class="grid-crop-menu-title">
+        {{ gridCropMenuType === 'grid9' ? '9宫格裁剪' : '4宫格裁剪' }}
+      </div>
+      <button class="grid-crop-menu-item" @click="handleGridCropOnly">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <line x1="12" y1="3" x2="12" y2="21"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+        </svg>
+        <span>仅裁剪</span>
+        <span class="menu-hint">创建独立图片节点</span>
+      </button>
+      <button class="grid-crop-menu-item" @click="handleGridCropToStoryboard">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="2" width="20" height="20" rx="2"/>
+          <rect x="5" y="5" width="5" height="5" rx="0.5"/>
+          <rect x="14" y="5" width="5" height="5" rx="0.5"/>
+          <rect x="5" y="14" width="5" height="5" rx="0.5"/>
+          <rect x="14" y="14" width="5" height="5" rx="0.5"/>
+        </svg>
+        <span>创建分镜格子</span>
+        <span class="menu-hint">自动填充到分镜节点</span>
+      </button>
+      <button class="grid-crop-menu-close" @click="closeGridCropMenu">取消</button>
+    </div>
   </div>
   
   <!-- 放大预览弹窗 -->
@@ -1026,6 +1235,84 @@ onUnmounted(() => {
   height: 20px;
   background: rgba(255, 255, 255, 0.15);
   margin: 0 6px;
+}
+
+/* ========== 宫格裁剪选项菜单 ========== */
+.grid-crop-menu {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 8px;
+  background: rgba(30, 30, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 8px;
+  min-width: 200px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  z-index: 100;
+}
+
+.grid-crop-menu-title {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 4px 12px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 4px;
+}
+
+.grid-crop-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+  position: relative;
+}
+
+.grid-crop-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.grid-crop-menu-item svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.grid-crop-menu-item .menu-hint {
+  position: absolute;
+  right: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.grid-crop-menu-close {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  margin-top: 4px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.grid-crop-menu-close:hover {
+  color: rgba(255, 255, 255, 0.8);
 }
 
 /* 工具按钮 */
