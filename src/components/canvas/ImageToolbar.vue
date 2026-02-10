@@ -437,7 +437,8 @@ async function createStoryboardFromCrop(cols, rows) {
         aspectRatio: aspectRatio,
         gridScale: 1,
         images: imagesArray,
-        output: null
+        output: null,
+        nodeWidth: 720
       }
     })
     

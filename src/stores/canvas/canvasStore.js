@@ -183,10 +183,12 @@ export const useCanvasStore = defineStore('canvas', () => {
     saveHistory() // 保存历史
     markCurrentTabChanged() // 标记变更
     
-    // 删除相关连线
-    edges.value = edges.value.filter(
-      e => e.source !== nodeId && e.target !== nodeId
+    // 删除相关连线（通过 removeEdge 逐条删除，确保 Storyboard 格子图片同步清理）
+    const edgesToRemove = edges.value.filter(
+      e => e.source === nodeId || e.target === nodeId
     )
+    edgesToRemove.forEach(e => removeEdge(e.id))
+    
     // 删除节点
     nodes.value = nodes.value.filter(n => n.id !== nodeId)
     
@@ -221,7 +223,11 @@ export const useCanvasStore = defineStore('canvas', () => {
    */
   function addEdge(edge) {
     const newEdge = {
-      id: edge.id || `e-${edge.source}-${edge.target}`,
+      id: edge.id || (
+        (edge.targetHandle && edge.targetHandle.startsWith('input-'))
+          ? `e-${edge.source}-${edge.target}-${edge.targetHandle}`
+          : `e-${edge.source}-${edge.target}`
+      ),
       source: edge.source,
       target: edge.target,
       sourceHandle: edge.sourceHandle || 'output',
@@ -235,11 +241,11 @@ export const useCanvasStore = defineStore('canvas', () => {
       typeof newEdge.targetHandle === 'string' &&
       newEdge.targetHandle.startsWith('input-')
     ) {
-      edges.value = edges.value.filter(e => {
-        if (e.target !== newEdge.target) return true
-        if (e.targetHandle !== newEdge.targetHandle) return true
-        return false
-      })
+      // 通过 removeEdge 逐条删除旧边，确保对应格子图片同步清理后再写入新图片
+      const oldCellEdges = edges.value.filter(e =>
+        e.target === newEdge.target && e.targetHandle === newEdge.targetHandle
+      )
+      oldCellEdges.forEach(e => removeEdge(e.id))
     }
     
     // 检查是否已存在（同 source/target/handle 的重复边）
@@ -264,7 +270,37 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 删除连线
    */
   function removeEdge(edgeId) {
+    // 在删除前查找边的信息，用于清理 Storyboard 格子图片
+    const edge = edges.value.find(e => e.id === edgeId)
+
+    // 先从数组中移除该边
     edges.value = edges.value.filter(e => e.id !== edgeId)
+
+    // Storyboard 连线删除后：清除所有"没有对应连线"的格子图片
+    // 解决批量写入场景（如"创建分镜格子"9张图只有1条连线）导致旧图片残留的问题
+    if (edge && edge.target) {
+      const targetNode = nodes.value.find(n => n.id === edge.target)
+      if (targetNode?.type === 'storyboard' && Array.isArray(targetNode.data.images)) {
+        // 收集该 storyboard 节点当前仍存活的所有入边的 targetHandle
+        const aliveHandles = new Set(
+          edges.value
+            .filter(e => e.target === edge.target && typeof e.targetHandle === 'string' && e.targetHandle.startsWith('input-'))
+            .map(e => e.targetHandle)
+        )
+        // 遍历所有格子，没有对应连线的格子清空图片
+        const nextImages = [...targetNode.data.images]
+        let changed = false
+        for (let i = 0; i < nextImages.length; i++) {
+          if (nextImages[i] && !aliveHandles.has(`input-${i}`)) {
+            nextImages[i] = null
+            changed = true
+          }
+        }
+        if (changed) {
+          updateNodeData(edge.target, { images: nextImages })
+        }
+      }
+    }
   }
 
   /**
@@ -272,14 +308,55 @@ export const useCanvasStore = defineStore('canvas', () => {
    * @param {string} nodeId 节点ID
    */
   function disconnectNodeInputs(nodeId) {
-    const originalCount = edges.value.length
-    edges.value = edges.value.filter(e => e.target !== nodeId)
-    if (edges.value.length !== originalCount) {
+    const edgesToRemove = edges.value.filter(e => e.target === nodeId)
+    if (edgesToRemove.length > 0) {
+      edgesToRemove.forEach(e => removeEdge(e.id))
       markCurrentTabChanged()
       saveHistory()
     }
   }
-  
+
+  /**
+   * 断开节点指定 targetHandle 的输入连线
+   * @param {string} nodeId 节点ID
+   * @param {string} targetHandle 目标端口ID，如 'input-4'
+   */
+  function disconnectNodeHandle(nodeId, targetHandle) {
+    const edgesToRemove = edges.value.filter(e => e.target === nodeId && e.targetHandle === targetHandle)
+    if (edgesToRemove.length > 0) {
+      edgesToRemove.forEach(e => removeEdge(e.id))
+      markCurrentTabChanged()
+      saveHistory()
+    }
+  }
+
+  /**
+   * 交换 Storyboard 两个格子对应的连线 targetHandle
+   * 当用户在编辑模式下拖拽交换格子图片时，连线也必须跟着交换，
+   * 否则 clearCell 按当前格子索引断线时会找不到对应连线。
+   * @param {string} nodeId  Storyboard 节点 ID
+   * @param {number} idxA    格子索引 A
+   * @param {number} idxB    格子索引 B
+   */
+  function swapCellEdges(nodeId, idxA, idxB) {
+    const handleA = `input-${idxA}`
+    const handleB = `input-${idxB}`
+
+    // 找到两个格子各自的入边
+    const edgeA = edges.value.find(e => e.target === nodeId && e.targetHandle === handleA)
+    const edgeB = edges.value.find(e => e.target === nodeId && e.targetHandle === handleB)
+
+    // 交换 targetHandle 和 id
+    if (edgeA) {
+      edgeA.targetHandle = handleB
+      edgeA.id = `e-${edgeA.source}-${nodeId}-${handleB}`
+    }
+    if (edgeB) {
+      edgeB.targetHandle = handleA
+      edgeB.id = `e-${edgeB.source}-${nodeId}-${handleA}`
+    }
+  }
+
   /**
    * 数据传递：从源节点传递输出到目标节点
    */
@@ -318,50 +395,70 @@ export const useCanvasStore = defineStore('canvas', () => {
       }
     }
     
-    // ========== Storyboard 格子级填充/替换 ==========
-    // 当连线目标是 storyboard 的某个格子输入端口（input-{index}）时，直接把上游图片落到对应格子
-    if (
-      targetNode.type === 'storyboard' &&
-      typeof targetHandle === 'string' &&
-      targetHandle.startsWith('input-')
-    ) {
-      const idx = Number(targetHandle.slice('input-'.length))
-      if (Number.isFinite(idx) && idx >= 0) {
-        // 尝试从 inheritedData 或源节点数据中拿到第一张图
-        let pickedUrl = null
+    // ========== Storyboard 图片填充 ==========
+    // 从源节点提取第一张图片 URL 的通用逻辑
+    if (targetNode.type === 'storyboard') {
+      let pickedUrl = null
 
-        if (inheritedData?.type === 'image') {
-          pickedUrl = inheritedData.urls?.[0] || inheritedData.url || null
-        } else if (typeof inheritedData?.url === 'string') {
-          pickedUrl = inheritedData.url
-        } else if (Array.isArray(inheritedData?.urls) && inheritedData.urls.length > 0) {
-          pickedUrl = inheritedData.urls[0]
+      if (inheritedData?.type === 'image') {
+        pickedUrl = inheritedData.urls?.[0] || inheritedData.url || null
+      } else if (typeof inheritedData?.url === 'string') {
+        pickedUrl = inheritedData.url
+      } else if (Array.isArray(inheritedData?.urls) && inheritedData.urls.length > 0) {
+        pickedUrl = inheritedData.urls[0]
+      }
+
+      if (!pickedUrl) {
+        if (sourceNode.data.output?.urls?.length > 0) pickedUrl = sourceNode.data.output.urls[0]
+        else if (sourceNode.data.output?.url) pickedUrl = sourceNode.data.output.url
+        else if (sourceNode.data.sourceImages?.length > 0) pickedUrl = sourceNode.data.sourceImages[0]
+        else if (sourceNode.data.images?.length > 0) pickedUrl = sourceNode.data.images[0]
+      }
+
+      if (pickedUrl) {
+        const nextImages = Array.isArray(targetNode.data.images)
+          ? [...targetNode.data.images]
+          : []
+
+        // 确定目标格子索引
+        let idx = -1
+        if (typeof targetHandle === 'string' && targetHandle.startsWith('input-')) {
+          // 格子级连线：填入指定格子
+          idx = Number(targetHandle.slice('input-'.length))
+        }
+        if (!Number.isFinite(idx) || idx < 0) {
+          // 节点级连线（input）或无效索引：填入第一个空格子
+          idx = nextImages.findIndex(cell => cell === null || cell === undefined)
+          if (idx === -1) {
+            // 所有格子都满了，追加到末尾
+            idx = nextImages.length
+          }
         }
 
-        if (!pickedUrl) {
-          if (sourceNode.data.output?.urls?.length > 0) pickedUrl = sourceNode.data.output.urls[0]
-          else if (sourceNode.data.output?.url) pickedUrl = sourceNode.data.output.url
-          else if (sourceNode.data.sourceImages?.length > 0) pickedUrl = sourceNode.data.sourceImages[0]
-          else if (sourceNode.data.images?.length > 0) pickedUrl = sourceNode.data.images[0]
+        while (nextImages.length <= idx) nextImages.push(null)
+        nextImages[idx] = pickedUrl
+
+        // 如果原始连线使用的是通用 'input' handle，将其升级为格子级 'input-{idx}'
+        // 这样 clearCell 删除图片时能正确找到并断开对应连线
+        const cellHandle = `input-${idx}`
+        if (targetHandle !== cellHandle) {
+          const edgeToUpdate = edges.value.find(
+            e => e.source === sourceId && e.target === targetId && e.targetHandle === (targetHandle || 'input')
+          )
+          if (edgeToUpdate) {
+            edgeToUpdate.targetHandle = cellHandle
+            // 同步更新 edge ID 以包含格子信息
+            edgeToUpdate.id = `e-${sourceId}-${targetId}-${cellHandle}`
+          }
         }
 
-        if (pickedUrl) {
-          const nextImages = Array.isArray(targetNode.data.images)
-            ? [...targetNode.data.images]
-            : []
-          while (nextImages.length <= idx) nextImages.push(null)
-
-          // 无论原来是否为空：直接替换/填充
-          nextImages[idx] = pickedUrl
-
-          updateNodeData(targetId, {
-            images: nextImages,
-            inheritedFrom: sourceId,
-            inheritedData,
-            hasUpstream: true
-          })
-          return
-        }
+        updateNodeData(targetId, {
+          images: nextImages,
+          inheritedFrom: sourceId,
+          inheritedData,
+          hasUpstream: true
+        })
+        return
       }
     }
 
@@ -764,9 +861,10 @@ export const useCanvasStore = defineStore('canvas', () => {
    * @param {Object|null} targetNode - 目标节点（如果连接到节点）
    * @param {Object} endPosition - 结束位置（画布坐标）
    * @param {Object} screenPosition - 屏幕坐标（用于显示选择器）
+   * @param {string|null} targetHandleId - 目标端口ID（如 'input-3'，用于 Storyboard 格子级连线）
    * @returns {Boolean} - 是否成功连接到节点
    */
-  function endDragConnection(targetNode, endPosition, screenPosition) {
+  function endDragConnection(targetNode, endPosition, screenPosition, targetHandleId = null) {
     if (!isDraggingConnection.value || !dragConnectionSource.value) {
       isDraggingConnection.value = false
       dragConnectionSource.value = null
@@ -778,13 +876,15 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     if (targetNode && targetNode.id !== sourceNodeId) {
       // 成功连接到另一个节点
+      // Storyboard 格子级连线：使用传入的 targetHandleId（如 'input-3'）
+      const finalTargetHandle = targetHandleId || 'input'
       addEdge({
         source: sourceNodeId,
         target: targetNode.id,
         sourceHandle: sourceHandleId,
-        targetHandle: 'input'
+        targetHandle: finalTargetHandle
       })
-      console.log('[Store] 拖拽连线成功', sourceNodeId, '->', targetNode.id)
+      console.log('[Store] 拖拽连线成功', sourceNodeId, '->', targetNode.id, 'handle:', finalTargetHandle)
       
       // 清理状态
       isDraggingConnection.value = false
@@ -1628,6 +1728,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     addEdge,
     removeEdge,
     disconnectNodeInputs,
+    disconnectNodeHandle,
+    swapCellEdges,
     propagateData,
     
     // 历史记录操作

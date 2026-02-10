@@ -1302,19 +1302,25 @@ watch(
 function handleEdgesChange(changes) {
   changes.forEach(change => {
     if (change.type === 'remove') {
-      // 边被删除时，重置目标节点的状态
-      const edge = canvasStore.edges.find(e => e.id === change.id)
-      if (edge) {
-        // 清除目标节点的继承数据
-        canvasStore.updateNodeData(edge.target, {
+      const { id, target, targetHandle } = change
+      const targetNode = canvasStore.nodes.find(n => n.id === target)
+
+      // 非 storyboard 格子级连线：清除目标节点的继承数据
+      // （Storyboard 格子级图片清理已统一在 canvasStore.removeEdge 中处理）
+      if (targetNode && !(
+        targetNode.type === 'storyboard' &&
+        typeof targetHandle === 'string' &&
+        targetHandle.startsWith('input-')
+      )) {
+        canvasStore.updateNodeData(target, {
           inheritedFrom: null,
           inheritedData: null,
           hasUpstream: false
         })
-        // 从 store 中移除边
-        canvasStore.removeEdge(change.id)
-        console.log(`[Canvas] 边 ${change.id} 已删除，目标节点 ${edge.target} 已重置`)
       }
+
+      // 从 store 中移除边（内部会处理 storyboard 格子图片清理）
+      canvasStore.removeEdge(id)
     }
   })
 }
@@ -1426,12 +1432,42 @@ function handleGlobalDragConnectionEnd(event) {
   const targetElement = document.elementFromPoint(event.clientX, event.clientY)
   const targetNode = findTargetNode(targetElement)
   
+  // 检测是否释放在 Storyboard 的某个格子级 cell-handle 上
+  // cell-handle 的 data-handleid 格式为 "input-{index}"
+  let targetHandleId = null
+  if (targetNode?.type === 'storyboard' && targetElement) {
+    const handleEl = targetElement.closest('.vue-flow__handle[data-handleid^="input-"]')
+      || targetElement.closest('.cell-handle')
+    if (handleEl) {
+      const hid = handleEl.getAttribute('data-handleid') || handleEl.id
+      if (typeof hid === 'string' && hid.startsWith('input-')) {
+        targetHandleId = hid
+      }
+    }
+    // 回退：通过鼠标位置检测悬停的格子索引
+    if (!targetHandleId) {
+      const nodeEl = targetElement.closest('.vue-flow__node')
+      if (nodeEl) {
+        const gridItems = nodeEl.querySelectorAll('.grid-item')
+        gridItems.forEach((el, idx) => {
+          const rect = el.getBoundingClientRect()
+          if (
+            event.clientX >= rect.left && event.clientX <= rect.right &&
+            event.clientY >= rect.top && event.clientY <= rect.bottom
+          ) {
+            targetHandleId = `input-${idx}`
+          }
+        })
+      }
+    }
+  }
+  
   // 计算结束位置
   const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
   const screenPos = { x: event.clientX, y: event.clientY }
   
-  // 调用 store 的 endDragConnection
-  const connected = canvasStore.endDragConnection(targetNode, flowPos, screenPos)
+  // 调用 store 的 endDragConnection（传入格子级 targetHandle）
+  const connected = canvasStore.endDragConnection(targetNode, flowPos, screenPos, targetHandleId)
   
   if (!connected) {
     // 如果没有连接到节点，标记刚刚打开了选择器
@@ -1570,7 +1606,8 @@ function findTargetNode(element) {
     if (current.classList?.contains('canvas-node') || 
         current.classList?.contains('text-node') ||
         current.classList?.contains('image-node') ||
-        current.classList?.contains('video-node')) {
+        current.classList?.contains('video-node') ||
+        current.classList?.contains('storyboard-node')) {
       // 从父元素找到 vue-flow__node
       const vueFlowNode = current.closest('.vue-flow__node')
       if (vueFlowNode) {
@@ -2297,7 +2334,7 @@ onUnmounted(() => {
 }
 
 /* 被选中节点的高亮效果（排除图片和视频节点，它们有自己的选中样式） */
-:deep(.vue-flow__node.selected:not([data-type="image-input"]):not([data-type="image"]):not([data-type="video"]):not([data-type="video-input"])) {
+:deep(.vue-flow__node.selected:not([data-type="image-input"]):not([data-type="image"]):not([data-type="video"]):not([data-type="video-input"]):not([data-type="storyboard"])) {
   box-shadow: 0 0 0 2px var(--canvas-accent-primary);
 }
 
@@ -2318,6 +2355,14 @@ onUnmounted(() => {
   border: 2px solid var(--canvas-border-default);
 }
 
+/* cell-handle 铺满格子，不受全局 12px 限制 */
+:deep(.vue-flow__handle.cell-handle) {
+  width: 100% !important;
+  height: 100% !important;
+  background: transparent !important;
+  border: none !important;
+}
+
 :deep(.vue-flow__handle:hover) {
   background: var(--canvas-accent-primary);
   border-color: var(--canvas-accent-primary);
@@ -2329,7 +2374,7 @@ onUnmounted(() => {
 }
 
 /* 多选时的节点样式（排除图片和视频节点，它们有自己的选中样式） */
-:deep(.vue-flow__node.selectable.selected:not([data-type="image-input"]):not([data-type="image"]):not([data-type="video"]):not([data-type="video-input"])) {
+:deep(.vue-flow__node.selectable.selected:not([data-type="image-input"]):not([data-type="image"]):not([data-type="video"]):not([data-type="video-input"]):not([data-type="storyboard"])) {
   outline: 2px solid var(--canvas-accent-primary);
   outline-offset: 2px;
 }

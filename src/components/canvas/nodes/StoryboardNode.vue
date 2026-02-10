@@ -40,7 +40,23 @@ const props = defineProps({
 
 const emit = defineEmits(['update:data', 'delete'])
 const canvasStore = useCanvasStore()
-const { updateNodeInternals } = useVueFlow()
+const { updateNodeInternals, onConnectStart: onVFConnectStart, onConnectEnd: onVFConnectEnd } = useVueFlow()
+
+// ========== 连线状态检测 ==========
+// 检测是否有连线正在进行（Vue Flow 原生连线 或 自定义拖拽连线）
+const isVFConnecting = ref(false)
+
+onVFConnectStart(() => {
+  isVFConnecting.value = true
+})
+onVFConnectEnd(() => {
+  isVFConnecting.value = false
+})
+
+// 综合判断：任一连线方式进行中即为 true
+const isAnyConnecting = computed(() => {
+  return isVFConnecting.value || canvasStore.isDraggingConnection
+})
 
 // ========== 节点标签 ==========
 const localLabel = ref(props.data.title || '分镜格子')
@@ -157,6 +173,86 @@ const layoutConfig = computed(() => {
 // ========== 图片数据 ==========
 const gridCount = computed(() => layoutConfig.value.count)
 const images = ref(Array(16).fill(null).map((_, i) => props.data.images?.[i] || null))
+
+// ========== 折叠模式 ==========
+const isCollapsed = ref(false)
+const collapseAnimating = ref(false)   // 收起/展开动画进行中
+const collapseDirection = ref('')      // 'collapsing' | 'expanding'
+
+function toggleCollapse() {
+  if (collapseAnimating.value) return
+  if (isCollapsed.value) {
+    expandFromCollapsed()
+  } else {
+    collapseWithAnimation()
+  }
+}
+
+// 收起动画：先播放动画，再切换到折叠视图
+function collapseWithAnimation() {
+  if (collapseAnimating.value) return
+  collapseDirection.value = 'collapsing'
+  collapseAnimating.value = true
+  // 动画结束后切换到折叠态
+  setTimeout(() => {
+    isCollapsed.value = true
+    collapseAnimating.value = false
+    collapseDirection.value = ''
+    // 折叠后刷新 handle 位置，让连线从统一左侧端口进入
+    nextTick(() => updateNodeInternals(props.id))
+  }, 400)
+}
+
+// 展开动画：先切换到展开视图，再播放动画
+function expandFromCollapsed() {
+  if (collapseAnimating.value) return
+  isCollapsed.value = false
+  collapseDirection.value = 'expanding'
+  collapseAnimating.value = true
+  // 展开后刷新 handle 位置，让连线回到各格子端口
+  nextTick(() => updateNodeInternals(props.id))
+  setTimeout(() => {
+    collapseAnimating.value = false
+    collapseDirection.value = ''
+  }, 400)
+}
+
+// 有效图片数量
+const validImageCount = computed(() => {
+  return images.value.slice(0, gridCount.value).filter(img => img !== null).length
+})
+
+// 折叠时第一张有效图片
+const firstImageUrl = computed(() => {
+  return images.value.find(img => img !== null) || null
+})
+
+// 折叠时其余有效图片（用于堆叠动效，最多取2张做视觉层叠）
+const stackImages = computed(() => {
+  const valid = images.value.filter(img => img !== null)
+  return valid.slice(1, 3) // 取第2、3张做堆叠背景
+})
+
+// 折叠时宽度：等于网格中单个格子的宽度
+const collapsedWidth = computed(() => {
+  const cols = layoutConfig.value.cols
+  // 单个格子宽度 = 节点宽度 / 列数（去掉 grid gap 的影响）
+  return Math.round(nodeWidth.value / cols)
+})
+
+// 折叠时高度：等于单个格子的高度（基于格子宽度和比例）
+const collapsedHeight = computed(() => {
+  const ratio = aspectRatioMap[aspectRatio.value] || 9/16
+  return Math.round(collapsedWidth.value * ratio)
+})
+
+// 当前实际显示宽度（折叠时用格子宽度，展开时用节点宽度）
+const displayWidth = computed(() => {
+  return isCollapsed.value ? collapsedWidth.value : nodeWidth.value
+})
+
+// CSS v-bind 用：将 "16:9" 转为 "16/9"
+const cssAspectRatio = computed(() => aspectRatio.value.replace(':', '/'))
 
 // ========== 编辑模式 ==========
 const isEditMode = ref(false)
@@ -284,6 +380,8 @@ function handleEditDragEnd(event) {
     const temp = images.value[fromIdx]
     images.value[fromIdx] = images.value[toIdx]
     images.value[toIdx] = temp
+    // 同步交换两个格子对应的连线 targetHandle，否则删除图片时找不到对应连线
+    canvasStore.swapCellEdges(props.id, fromIdx, toIdx)
     updateNodeData()
   }
 
@@ -326,10 +424,10 @@ const showToolbar = computed(() => {
 // ========== 节点尺寸 ==========
 const nodeWidth = ref(props.data.nodeWidth || 300)
 const nodeHeight = ref(props.data.nodeHeight || 400)
-const minWidth = 120
-const maxWidth = 600
-const minHeight = 150
-const maxHeight = 700
+const minWidth = 240
+const maxWidth = 1200
+const minHeight = 300
+const maxHeight = 1400
 
 // ========== 根据比例自动调整高度 ==========
 // 9:16 竖屏：高度是宽度的 16/9 倍
@@ -346,6 +444,13 @@ const aspectRatioMap = {
 const ratioHeight = computed(() => {
   const ratio = aspectRatioMap[aspectRatio.value] || 9/16
   return Math.round(nodeWidth.value * ratio)
+})
+
+// 节点取消选中时自动退出编辑模式
+watch(() => props.selected, (newVal) => {
+  if (!newVal && isEditMode.value) {
+    exitEditMode()
+  }
 })
 
 // 监听比例变化，自动调整高度
@@ -450,7 +555,7 @@ function handleCellPreview(index, event) {
 
   clickPreviewTimer = setTimeout(() => {
     const url = images.value[index]
-    if (url && !isEditMode.value) {
+    if (url) {
       previewImageUrl.value = url
       previewVisible.value = true
     }
@@ -554,6 +659,8 @@ async function handleDrop(event, targetIndex) {
     const temp = images.value[dragIndex.value]
     images.value[dragIndex.value] = images.value[targetIndex]
     images.value[targetIndex] = temp
+    // 同步交换两个格子对应的连线 targetHandle，否则删除图片时找不到对应连线
+    canvasStore.swapCellEdges(props.id, dragIndex.value, targetIndex)
     updateNodeData()
   }
 
@@ -569,7 +676,18 @@ function handleDragStart(event, index) {
 // ========== 清除功能 ==========
 function clearCell(index) {
   images.value[index] = null
-  updateNodeData()
+
+  // 直接同步写入 store，确保 node.data.images[index] 立即为 null
+  // 不能只依赖 emit('update:data') 的异步传播，否则重新连线时 propagateData 读到旧值
+  const node = canvasStore.nodes.find(n => n.id === props.id)
+  if (node?.data?.images) {
+    const storeImages = [...node.data.images]
+    storeImages[index] = null
+    canvasStore.updateNodeData(props.id, { images: storeImages })
+  }
+
+  // 断开该格子对应的输入连线（removeEdge 内部会进一步清理无连线的格子）
+  canvasStore.disconnectNodeHandle(props.id, `input-${index}`)
 }
 
 function clearAllCells() {
@@ -611,14 +729,14 @@ async function autoMergeAndOutput() {
       })
     )
 
-    // 计算每个格子的尺寸 (取第一张有效图片的尺寸作为基准，若无则默认为 1920x1080)
-    const firstValidImg = imgElements.find(img => img !== null)
-    const cellWidth = firstValidImg?.width || 1920
-    const cellHeight = firstValidImg?.height || 1080
+    // 所见即所得：按用户选择的比例计算每个格子的尺寸
+    const ratio = aspectRatioMap[aspectRatio.value] || 9/16  // 高度 = 宽度 × ratio
+    const baseCellWidth = 1080
+    const baseCellHeight = Math.round(baseCellWidth * ratio)
     
     // 计算拼接后的总尺寸
-    const totalWidth = cols * cellWidth
-    const totalHeight = rows * cellHeight
+    const totalWidth = cols * baseCellWidth
+    const totalHeight = rows * baseCellHeight
     
     // 压缩到最长边不超过 3840
     const maxDimension = 3840
@@ -635,8 +753,11 @@ async function autoMergeAndOutput() {
     canvas.height = finalHeight
     const ctx = canvas.getContext('2d')
 
-    // 绘制背景（二期要求：空格子纯白色填充）
-    ctx.fillStyle = '#ffffff'
+    // 所见即所得：空格子背景色跟随当前主题
+    const isLightTheme = document.documentElement.classList.contains('canvas-theme-light')
+    const emptyFill = isLightTheme ? '#ffffff' : '#1a1a1a'
+
+    ctx.fillStyle = emptyFill
     ctx.fillRect(0, 0, finalWidth, finalHeight)
 
     // 计算每个格子的缩放尺寸
@@ -674,8 +795,7 @@ async function autoMergeAndOutput() {
 
         ctx.drawImage(img, sx, sy, sWidth, sHeight, x, y, scaledCellWidth, scaledCellHeight)
       } else {
-        // 空格子已经在填充背景时处理为白色，这里可以不做处理或显式绘制白色
-        ctx.fillStyle = '#ffffff'
+        ctx.fillStyle = emptyFill
         ctx.fillRect(x, y, scaledCellWidth, scaledCellHeight)
       }
     })
@@ -901,34 +1021,7 @@ const upstreamImages = computed(() => {
   return [...new Set(allImages)]
 })
 
-// 监听上游图片变化，自动填充到空格子
-// immediate: true 确保组件挂载时若已有连接也能立即填充
-watch(upstreamImages, (newImages) => {
-  if (!newImages || newImages.length === 0) return
 
-  // A 模式：只有当存在“节点级 input”连线时，才自动把上游图片填充到空格
-  const edges = canvasStore.edges || []
-  const hasNodeLevelInput = edges.some(e => e.target === props.id && e.targetHandle === 'input')
-  if (!hasNodeLevelInput) return
-  
-  // 逐张检查：只填充尚未出现在格子中的图片，避免重复
-  let filled = false
-  for (const imgUrl of newImages) {
-    // 跳过已存在于格子中的图片
-    if (images.value.some(cell => cell === imgUrl)) continue
-    
-    // 查找第一个空格子
-    const emptyIndex = images.value.findIndex((cell, idx) => cell === null && idx < gridCount.value)
-    if (emptyIndex === -1) break // 没有空格子了
-    
-    images.value[emptyIndex] = imgUrl
-    filled = true
-  }
-  
-  if (filled) {
-    updateNodeData()
-  }
-}, { deep: true, immediate: true })
 
 // ========== 左侧快捷操作菜单 ==========
 const showLeftMenu = ref(false)
@@ -1006,66 +1099,50 @@ const hasAnyImage = computed(() => {
   <div
     ref="nodeRootRef"
     class="storyboard-node"
-    :class="{ selected: selected, resizing: isResizing, 'has-image': hasAnyImage, 'edit-mode': isEditMode }"
-    :style="{ width: nodeWidth + 'px' }"
+    :class="{ selected: selected, resizing: isResizing, 'has-image': hasAnyImage, 'edit-mode': isEditMode, 'connecting-active': isAnyConnecting }"
+    :style="{ width: displayWidth + 'px' }"
     @dblclick="handleNodeDblClick"
   >
 
     <!-- ========== 顶部工具栏（选中时显示） ========== -->
     <!-- nodrag nowheel 防止工具栏交互触发 Vue Flow 拖拽/缩放 -->
     <div v-show="showToolbar" class="storyboard-toolbar nodrag nowheel" @mousedown.stop @pointerdown.stop>
-      <!-- 比例选择（下拉） -->
-      <div class="toolbar-section toolbar-dropdown-wrap" ref="ratioDropdownRef">
-        <button class="toolbar-dropdown-trigger" @mousedown.stop.prevent="toggleRatioDropdown($event)" @click.stop.prevent>
-          <span class="dropdown-label">比例</span>
-          <span class="dropdown-value">{{ aspectRatio }}</span>
-          <svg class="dropdown-arrow" :class="{ open: showRatioDropdown }" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M3 5l3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+      <!-- 比例选择（点击展开竖排列表） -->
+      <div class="toolbar-section toolbar-popover-wrap" ref="ratioDropdownRef">
+        <button class="toolbar-popover-trigger" @mousedown.stop.prevent="toggleRatioDropdown($event)" @click.stop.prevent>
+          <span class="popover-label">比例</span>
+          <span class="popover-value">{{ aspectRatio }}</span>
         </button>
-        <Transition name="dropdown-fade">
-          <div v-if="showRatioDropdown" class="toolbar-dropdown-menu nodrag nowheel" @mousedown.stop.prevent @pointerdown.stop.prevent>
+        <Transition name="popover-fade">
+          <div v-if="showRatioDropdown" class="toolbar-popover-menu nodrag nowheel" @mousedown.stop.prevent @pointerdown.stop.prevent>
             <button
               v-for="opt in aspectRatioOptions"
               :key="opt.value"
-              class="toolbar-dropdown-item"
+              class="toolbar-popover-item"
               :class="{ active: aspectRatio === opt.value }"
               @click.stop.prevent="selectRatio(opt.value)"
               @mousedown.stop.prevent
-            >
-              <span>{{ opt.label }}</span>
-              <svg v-if="aspectRatio === opt.value" class="dropdown-check" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M2 6l3 3 5-5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
+            >{{ opt.label }}</button>
           </div>
         </Transition>
       </div>
 
-      <!-- 网格选择（下拉） -->
-      <div class="toolbar-section toolbar-dropdown-wrap" ref="gridDropdownRef">
-        <button class="toolbar-dropdown-trigger" @mousedown.stop.prevent="toggleGridDropdown($event)" @click.stop.prevent>
-          <span class="dropdown-label">网格</span>
-          <span class="dropdown-value">{{ gridSize.replace('x', '×') }}</span>
-          <svg class="dropdown-arrow" :class="{ open: showGridDropdown }" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M3 5l3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+      <!-- 网格选择（点击展开竖排列表） -->
+      <div class="toolbar-section toolbar-popover-wrap" ref="gridDropdownRef">
+        <button class="toolbar-popover-trigger" @mousedown.stop.prevent="toggleGridDropdown($event)" @click.stop.prevent>
+          <span class="popover-label">网格</span>
+          <span class="popover-value">{{ gridSize.replace('x', '×') }}</span>
         </button>
-        <Transition name="dropdown-fade">
-          <div v-if="showGridDropdown" class="toolbar-dropdown-menu nodrag nowheel" @mousedown.stop.prevent @pointerdown.stop.prevent>
+        <Transition name="popover-fade">
+          <div v-if="showGridDropdown" class="toolbar-popover-menu nodrag nowheel" @mousedown.stop.prevent @pointerdown.stop.prevent>
             <button
               v-for="opt in gridSizeOptions"
               :key="opt.value"
-              class="toolbar-dropdown-item"
+              class="toolbar-popover-item"
               :class="{ active: gridSize === opt.value }"
               @click.stop.prevent="selectGrid(opt.value)"
               @mousedown.stop.prevent
-            >
-              <span>{{ opt.label }}</span>
-              <svg v-if="gridSize === opt.value" class="dropdown-check" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M2 6l3 3 5-5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
+            >{{ opt.label }}</button>
           </div>
         </Transition>
       </div>
@@ -1099,7 +1176,7 @@ const hasAnyImage = computed(() => {
             <line x1="3" y1="9" x2="21" y2="9" stroke-linecap="round"/>
             <line x1="3" y1="15" x2="21" y2="15" stroke-linecap="round"/>
           </svg>
-          <span>{{ isMerging ? '拼接中...' : '输出' }}</span>
+          <span>{{ isMerging ? '合成中...' : '→合成' }}</span>
         </button>
         <button class="toolbar-btn action-btn" @mousedown.stop.prevent="clearAllCells" @click.stop.prevent title="清空所有格子">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1107,17 +1184,26 @@ const hasAnyImage = computed(() => {
           </svg>
           <span>清空</span>
         </button>
-        <button class="toolbar-btn action-btn delete-btn" @mousedown.stop.prevent="emit('delete')" @click.stop.prevent title="删除节点">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" stroke-linecap="round" stroke-linejoin="round"/>
+        <button class="toolbar-btn action-btn" @mousedown.stop.prevent="toggleCollapse" @click.stop.prevent :title="isCollapsed ? '展开分镜' : '折叠分镜'">
+          <svg v-if="!isCollapsed" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M4 12h16M12 4v16" stroke-linecap="round" stroke-linejoin="round" transform="rotate(45 12 12)"/>
+            <rect x="3" y="8" width="18" height="12" rx="2" stroke-linecap="round"/>
           </svg>
-          <span>删除</span>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <line x1="9" y1="3" x2="9" y2="21" stroke-linecap="round"/>
+            <line x1="15" y1="3" x2="15" y2="21" stroke-linecap="round"/>
+            <line x1="3" y1="9" x2="21" y2="9" stroke-linecap="round"/>
+            <line x1="3" y1="15" x2="21" y2="15" stroke-linecap="round"/>
+          </svg>
+          <span>{{ isCollapsed ? '展开' : '折叠' }}</span>
         </button>
+
       </div>
     </div>
 
     <!-- ========== 节点名称（双击编辑） ========== -->
-    <div class="node-label-area nodrag" @dblclick.stop="startEditLabel">
+    <div v-show="!isCollapsed" class="node-label-area nodrag" @dblclick.stop="startEditLabel">
       <input
         v-if="isEditingLabel"
         ref="labelInputRef"
@@ -1134,22 +1220,8 @@ const hasAnyImage = computed(() => {
 
     <!-- ========== 节点主体 ========== -->
     <div class="node-wrapper">
-    <!-- ========== 左侧输入端口 - 隐藏 Handle + 可见 + 按钮（同 ImageNode 模式） ========== -->
-    <Handle
-      type="target"
-      :position="Position.Left"
-      id="input"
-      class="node-handle node-handle-hidden"
-    />
 
-    <!-- 左侧添加按钮 -->
-    <button 
-      class="node-add-btn node-add-btn-left"
-      title="添加上游输入"
-      @click="handleInputClick"
-    >
-      +
-    </button>
+
     
     <!-- 左侧快捷操作菜单 -->
     <div v-if="showLeftMenu" class="left-quick-menu nodrag nowheel" @click.stop @mousedown.stop @pointerdown.stop>
@@ -1163,20 +1235,61 @@ const hasAnyImage = computed(() => {
       </div>
     </div>
 
-    <!-- ========== 中间格子区域（充满式布局） ========== -->
-    <div class="node-card" :class="[{ 'node-card-edit': isEditMode }, isEditMode ? 'nodrag nowheel' : '']" :style="{ height: nodeHeight + 'px' }">
-        <!-- 编辑模式提示条 -->
-        <div v-if="isEditMode" class="edit-mode-bar nodrag nowheel">
-          <span class="edit-mode-hint">拖拽图片调整顺序</span>
-          <button class="edit-mode-exit-btn" @click.stop="exitEditMode" @mousedown.stop>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            退出
-          </button>
+    <!-- ========== 中间格子区域 ========== -->
+    <div
+      class="node-card"
+      :class="[
+        { 'node-card-edit': isEditMode, 'node-card-collapsed': isCollapsed },
+        isEditMode ? 'nodrag nowheel' : ''
+      ]"
+      :style="{ height: isCollapsed ? collapsedHeight + 'px' : nodeHeight + 'px' }"
+    >
+
+        <!-- ===== 折叠视图：照片堆叠（第1张无边框，其他堆叠在后方） ===== -->
+        <div v-if="isCollapsed" class="collapsed-view">
+          <!-- 折叠时：所有格子级输入端口统一定位到左侧中间，保持连线不断 -->
+          <Handle
+            v-for="index in gridCount"
+            :key="'collapsed-handle-' + (index - 1)"
+            type="target"
+            :position="Position.Left"
+            :id="`input-${index - 1}`"
+            class="collapsed-cell-handle"
+          />
+          <!-- 堆叠背景照片（从后往前） -->
+          <div
+            v-for="(url, si) in stackImages.slice().reverse()"
+            :key="'stack-' + si"
+            class="stack-photo"
+            :class="'stack-layer-' + (stackImages.length - si)"
+          >
+            <img v-if="url" :src="url" class="stack-photo-img" />
+          </div>
+          <!-- 主图（第1张，最前面） -->
+          <div class="stack-photo stack-main">
+            <img v-if="firstImageUrl" :src="firstImageUrl" class="stack-photo-img" />
+            <div v-else class="stack-empty">
+              <svg class="cell-plus-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </div>
+            <!-- 展开按钮 -->
+            <button class="expand-btn nodrag nowheel" @click.stop="expandFromCollapsed" @mousedown.stop title="展开分镜">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <line x1="9" y1="3" x2="9" y2="21" stroke-linecap="round"/>
+                <line x1="15" y1="3" x2="15" y2="21" stroke-linecap="round"/>
+                <line x1="3" y1="9" x2="21" y2="9" stroke-linecap="round"/>
+                <line x1="3" y1="15" x2="21" y2="15" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <!-- 图片计数角标 -->
+            <div v-if="validImageCount > 1" class="stack-count">{{ validImageCount }}</div>
+          </div>
         </div>
 
-        <div class="grid-area">
+        <!-- ===== 展开视图：正常网格（含收起/展开动画） ===== -->
+        <div v-else class="grid-area" :class="{ 'anim-collapsing': collapseDirection === 'collapsing', 'anim-expanding': collapseDirection === 'expanding' }">
           <div
             class="grid-box"
             :class="[`grid-${gridSize}`, `ratio-${aspectRatio.replace(':', '-')}`, { 'grid-edit-mode': isEditMode }]"
@@ -1187,25 +1300,23 @@ const hasAnyImage = computed(() => {
               class="grid-item"
               :class="{
                 'has-img': url,
-                'drag-over': isEditMode ? editDropTargetIndex === index : dragOverIndex === index,
-                'drag-source': isEditMode ? editDragIndex === index : dragIndex === index,
+                'drag-over': isEditMode && editDropTargetIndex === index,
+                'drag-source': isEditMode && editDragIndex === index,
                 'edit-draggable': isEditMode && url
               }"
-              :draggable="!isEditMode && url !== null ? 'true' : 'false'"
-              @dragstart="!isEditMode && handleDragStart($event, index)"
-              @dragend="!isEditMode && handleDragEnd()"
-              @dragover.prevent="!isEditMode && handleDragEnter($event, index)"
-              @dragleave="!isEditMode && handleDragLeave($event)"
-              @drop="!isEditMode && handleDrop($event, index)"
-              @click="!isEditMode && triggerUpload(index)"
               @mousedown="isEditMode && handleEditDragStart($event, index)"
             >
 
-              <!-- 无图片时显示 + -->
-              <div v-if="!url" class="cell-plus">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="12" y1="5" x2="12" y2="19" stroke-linecap="round"/>
-                  <line x1="5" y1="12" x2="19" y2="12" stroke-linecap="round"/>
+              <!-- 无图片时显示 + 号，编辑模式下可点击上传 -->
+              <div
+                v-if="!url"
+                class="cell-empty"
+                :class="{ 'cell-empty-clickable': isEditMode }"
+                @click.stop="isEditMode && triggerUpload(index)"
+              >
+                <svg class="cell-plus-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
                 </svg>
               </div>
 
@@ -1215,8 +1326,6 @@ const hasAnyImage = computed(() => {
                 :src="url"
                 class="grid-img"
                 :class="{ 'grid-img-edit': isEditMode }"
-                @dblclick.stop.prevent="handleNodeDblClick"
-                @click.stop="!isEditMode && handleCellPreview(index, $event)"
                 @error="e => { e.target.style.display = 'none' }"
               />
 
@@ -1228,14 +1337,15 @@ const hasAnyImage = computed(() => {
                 class="cell-handle"
               />
 
-              <!-- 上传中 -->
-              <div v-if="uploadingIndex === index" class="upload-mask">
-                <div class="spinner"></div>
-              </div>
-
-              <!-- 图片操作按钮（非编辑模式才显示） -->
-              <div v-if="url && !isEditMode" class="img-actions">
-                <button class="img-btn" @click.stop="handleCellReplace(index, $event)" title="替换图片">
+              <!-- 编辑模式下的操作按钮：预览、替换、删除 -->
+              <div v-if="url && isEditMode" class="edit-cell-actions nodrag nowheel" @mousedown.stop @pointerdown.stop>
+                <button class="edit-cell-btn" @click.stop="handleCellPreview(index, $event)" title="预览">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+                <button class="edit-cell-btn" @click.stop="handleCellReplace(index, $event)" title="替换">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 12a9 9 0 0 0-15.5-6.3" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M3 4v6h6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1243,25 +1353,24 @@ const hasAnyImage = computed(() => {
                     <path d="M21 20v-6h-6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </button>
-                <button class="img-btn" @click.stop="clearCell(index)" title="删除">
+                <button class="edit-cell-btn edit-cell-btn-delete" @click.stop="clearCell(index)" title="删除">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 6L6 18M6 6l12 12"/>
+                    <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </button>
               </div>
+
+              <!-- 上传中 -->
+              <div v-if="uploadingIndex === index" class="upload-mask">
+                <div class="spinner"></div>
+              </div>
+
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ========== 右侧添加按钮 + 输出端口 ========== -->
-      <button 
-        class="node-add-btn node-add-btn-right"
-        title="点击输出拼接图片"
-        @click="handleOutputClick"
-      >
-        +
-      </button>
+
 
       <!-- 右侧输出端口 -->
       <Handle
@@ -1270,15 +1379,15 @@ const hasAnyImage = computed(() => {
         id="output"
         class="node-handle node-handle-hidden"
       />
+
+      <!-- ========== 右下角拖拽手柄（在 node-wrapper 内，跟随 node-card 底部） ========== -->
+      <div v-show="!isCollapsed" class="resize-handle resize-handle-corner nodrag nowheel" @mousedown.stop.prevent="startResize"></div>
     </div>
 
-    <!-- ========== 右下角拖拽手柄 ========== -->
-    <div class="resize-handle resize-handle-corner nodrag nowheel" @mousedown.stop.prevent="startResize"></div>
+    <!-- ========== 底部提示文字 ========== -->
+    <div v-if="!isEditMode && !isCollapsed" class="storyboard-hint">双击以进入分镜编辑排序</div>
 
-    <!-- 底部提示文字 -->
-    <div v-if="!isEditMode" class="node-bottom-hint">
-      双击以进入编辑调整分镜顺序
-    </div>
+
 
     <!-- ========== 全屏预览 ========== -->
     <Teleport to="body">
@@ -1315,13 +1424,25 @@ const hasAnyImage = computed(() => {
 </template>
 
 <style scoped>
-/* ========== 节点根元素 ========== */
+/* ========== 节点根元素（与 ImageNode 保持一致） ========== */
 .storyboard-node {
   position: relative;
-  background: transparent;
-  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   overflow: visible;
-  transition: all 0.2s;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 覆盖全局 .canvas-node.selected 样式，选中效果由内部 node-card 控制 */
+.storyboard-node.selected {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 /* ========== 编辑模式 ========== */
@@ -1504,82 +1625,59 @@ const hasAnyImage = computed(() => {
   padding: 6px 10px;
 }
 
-.delete-btn:hover {
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.1);
-}
-
-/* ========== 下拉选择器 ========== */
-.toolbar-dropdown-wrap {
+/* ========== 弹出选择器（比例 / 网格） ========== */
+.toolbar-popover-wrap {
   position: relative;
 }
 
-.toolbar-dropdown-trigger {
+.toolbar-popover-trigger {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   padding: 5px 10px;
   font-size: 11px;
   color: #ccc;
-  background: #333;
-  border: 1px solid #444;
-  border-radius: 8px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
 
-.toolbar-dropdown-trigger:hover {
+.toolbar-popover-trigger:hover {
   background: #3a3a3a;
-  border-color: #555;
   color: #fff;
 }
 
-.dropdown-label {
+.popover-label {
   color: #888;
-  margin-right: 2px;
 }
 
-.dropdown-value {
-  color: #60a5fa;
+.popover-value {
+  color: #e0e0e0;
   font-weight: 500;
 }
 
-.dropdown-arrow {
-  width: 10px;
-  height: 10px;
-  color: #666;
-  transition: transform 0.2s ease;
-  flex-shrink: 0;
-}
-
-.dropdown-arrow.open {
-  transform: rotate(180deg);
-}
-
-.toolbar-dropdown-menu {
+.toolbar-popover-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   background: #2a2a2a;
   border: 1px solid #3a3a3a;
   border-radius: 10px;
   padding: 4px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   z-index: 2000;
-  min-width: 90px;
-  max-height: 240px;
-  overflow-y: auto;
+  min-width: 64px;
 }
 
-.toolbar-dropdown-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 12px;
+.toolbar-popover-item {
+  padding: 6px 14px;
   font-size: 12px;
   color: #aaa;
   background: transparent;
@@ -1588,95 +1686,90 @@ const hasAnyImage = computed(() => {
   cursor: pointer;
   transition: all 0.12s ease;
   white-space: nowrap;
+  text-align: center;
 }
 
-.toolbar-dropdown-item:hover {
+.toolbar-popover-item:hover {
   background: #3a3a3a;
   color: #fff;
 }
 
-.toolbar-dropdown-item.active {
+.toolbar-popover-item.active {
   background: rgba(59, 130, 246, 0.15);
   color: #60a5fa;
 }
 
-.dropdown-check {
-  width: 12px;
-  height: 12px;
-  color: #60a5fa;
-  flex-shrink: 0;
-}
-
-/* 下拉菜单动画 */
-.dropdown-fade-enter-active,
-.dropdown-fade-leave-active {
+/* 弹出菜单动画 */
+.popover-fade-enter-active,
+.popover-fade-leave-active {
   transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
-.dropdown-fade-enter-from,
-.dropdown-fade-leave-to {
+.popover-fade-enter-from,
+.popover-fade-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(-4px);
+  transform: translateX(-50%) translateY(4px);
 }
 
-.dropdown-fade-enter-to,
-.dropdown-fade-leave-from {
+.popover-fade-enter-to,
+.popover-fade-leave-from {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
 
-/* ========== 节点名称标签 ========== */
+/* ========== 节点名称标签（与 ImageNode 保持一致） ========== */
 .node-label-area {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 6px 12px 2px;
   min-height: 28px;
   cursor: default;
 }
 
 .node-label-text {
-  font-size: 12px;
-  color: #aaa;
-  max-width: 100%;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  text-align: center;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  user-select: none;
+  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: default;
-  user-select: none;
-  transition: color 0.15s;
 }
 
 .node-label-area:hover .node-label-text {
-  color: #ccc;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--canvas-text-primary, #ffffff);
 }
 
 .node-label-input {
-  width: 100%;
-  max-width: 200px;
-  padding: 2px 8px;
-  font-size: 12px;
-  color: #fff;
-  background: #333;
-  border: 1px solid #555;
-  border-radius: 6px;
-  outline: none;
+  color: var(--canvas-text-primary, #ffffff);
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 8px;
   text-align: center;
-  transition: border-color 0.15s;
+  background: var(--canvas-bg-tertiary, #1a1a1a);
+  border: 1px solid var(--canvas-accent-primary, #3b82f6);
+  border-radius: 4px;
+  padding: 4px 8px;
+  outline: none;
+  min-width: 60px;
+  max-width: 200px;
 }
 
-.node-label-input:focus {
-  border-color: #60a5fa;
-}
-
-/* ========== 节点主体 ========== */
+/* ========== 节点主体（与 ImageNode 保持一致） ========== */
 .node-wrapper {
   position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
-  width: v-bind('nodeWidth + "px"');
-  height: v-bind('nodeHeight + "px"');
+  width: v-bind('displayWidth + "px"');
+  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ========== Handle（隐藏，仅作为连接点） ========== */
@@ -1686,13 +1779,35 @@ const hasAnyImage = computed(() => {
   pointer-events: none;
 }
 
-/* 调整 Handle 位置与 + 按钮中心对齐 */
-:deep(.vue-flow__handle.target) {
-  left: -52px !important;
+/* 折叠时统一左侧输入端口 */
+.collapsed-input-handle {
+  width: 8px !important;
+  height: 8px !important;
+  background: var(--canvas-accent-primary, #3b82f6) !important;
+  border: 2px solid var(--canvas-bg-tertiary, #1a1a1a) !important;
+  border-radius: 50% !important;
+  left: -4px !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
+  opacity: 1 !important;
+  z-index: 10;
 }
 
+/* 折叠时所有格子 handle 统一叠放到左侧中间（不可见，仅作连线锚点） */
+.collapsed-cell-handle {
+  position: absolute !important;
+  left: 0 !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 1px !important;
+  height: 1px !important;
+  background: transparent !important;
+  border: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* 输出端口位置 */
 :deep(.vue-flow__handle.source) {
   right: -52px !important;
   top: 50% !important;
@@ -1782,21 +1897,67 @@ const hasAnyImage = computed(() => {
   white-space: nowrap;
 }
 
-/* ========== 节点卡片 ========== */
+/* ========== 节点卡片（与 ImageNode 保持一致） ========== */
 .node-card {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--canvas-bg-quaternary, #252525);
+  flex: none;
+  background: var(--canvas-bg-tertiary, #1a1a1a);
+  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
   border-radius: 16px;
   overflow: hidden;
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  transition: border-color 0.2s, box-shadow 0.2s;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  transition: height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 0.2s ease,
+              box-shadow 0.2s ease,
+              background 0.2s ease;
+  width: 100%;
+}
+
+
+
+/* 选中状态 - 与 ImageNode 保持一致 */
+.storyboard-node.selected .node-card {
+  border-color: var(--canvas-accent-primary, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2), 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+/* 编辑模式时覆盖蓝色选中边框，只显示绿色发光 */
+.storyboard-node.selected .node-card.node-card-edit {
+  border-color: rgba(74, 222, 128, 0.6);
+  box-shadow: 
+    0 0 8px rgba(74, 222, 128, 0.35),
+    0 0 20px rgba(74, 222, 128, 0.2),
+    0 0 40px rgba(74, 222, 128, 0.1),
+    inset 0 0 0 1px rgba(74, 222, 128, 0.3);
 }
 
 .node-card-edit {
-  border-color: rgba(255, 255, 255, 0.35);
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18), 0 8px 32px rgba(0, 0, 0, 0.35);
+  border-color: rgba(74, 222, 128, 0.6);
+  overflow: visible;
+  box-shadow: 
+    0 0 8px rgba(74, 222, 128, 0.35),
+    0 0 20px rgba(74, 222, 128, 0.2),
+    0 0 40px rgba(74, 222, 128, 0.1),
+    inset 0 0 0 1px rgba(74, 222, 128, 0.3);
+  animation: edit-glow-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes edit-glow-pulse {
+  0%, 100% {
+    box-shadow: 
+      0 0 8px rgba(74, 222, 128, 0.35),
+      0 0 20px rgba(74, 222, 128, 0.2),
+      0 0 40px rgba(74, 222, 128, 0.1),
+      inset 0 0 0 1px rgba(74, 222, 128, 0.3);
+  }
+  50% {
+    box-shadow: 
+      0 0 12px rgba(74, 222, 128, 0.5),
+      0 0 28px rgba(74, 222, 128, 0.3),
+      0 0 50px rgba(74, 222, 128, 0.15),
+      inset 0 0 0 1px rgba(74, 222, 128, 0.45);
+  }
 }
 
 /* ========== 格子区域 ========== */
@@ -1812,9 +1973,9 @@ const hasAnyImage = computed(() => {
 
 .grid-box {
   display: grid;
-  gap: 2px;
-  background: transparent;
-  padding: 4px;
+  gap: 1px;
+  background: var(--canvas-border-subtle, rgba(255, 255, 255, 0.12));
+  padding: 0;
   width: 100%;
   height: 100%;
 }
@@ -1840,11 +2001,10 @@ const hasAnyImage = computed(() => {
 /* 单个格子 */
 .grid-item {
   position: relative;
-  background: var(--canvas-bg-tertiary, #2a2a2a);
-  border-radius: 6px;
+  background: var(--canvas-bg-tertiary, #1a1a1a);
+  border-radius: 0;
   overflow: hidden;
-  cursor: pointer;
-  transition: all 0.2s;
+  cursor: grab;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1852,81 +2012,319 @@ const hasAnyImage = computed(() => {
   min-height: 20px;
 }
 
-/* 格子级输入端口：动态调整感应区 */
+/* 格子级输入端口：默认隐藏，铺满整个格子作为连线落点 */
 .cell-handle {
   position: absolute !important;
-  left: 50% !important;
-  top: 50% !important;
-  transform: translate(-50%, -50%) !important;
-  width: 12px !important;
-  height: 12px !important;
-  border-radius: 50% !important;
-  background: var(--canvas-accent-primary, #3b82f6) !important;
-  border: 2px solid #fff !important;
+  left: 0 !important;
+  top: 0 !important;
+  transform: none !important;
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  border: none !important;
   opacity: 0;
   z-index: 5;
+  pointer-events: none !important;
+  transition: opacity 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* ===== 连线进行中：cell-handle 启用交互，接受连线落点 ===== */
+.storyboard-node.connecting-active :deep(.cell-handle) {
   pointer-events: auto !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 1;
+  background: rgba(59, 130, 246, 0.05) !important;
 }
 
-/* 拖拽连线时，扩大所有格子的命中面积，方便“投喂” */
-.storyboard-node.selected :deep(.cell-handle),
-.storyboard-node:hover :deep(.cell-handle) {
-  opacity: 0.3;
-}
-
-/* 连线悬停在特定格子上时：变成铺满状态，确保精准命中 */
-.grid-item:hover .cell-handle {
-  opacity: 0.8 !important;
-  width: 80% !important;
-  height: 80% !important;
-  border-radius: 8px !important;
+/* 连线进行中 + 鼠标悬停在格子上：高亮反馈，提示用户可以松手 */
+.storyboard-node.connecting-active .grid-item:hover :deep(.cell-handle) {
   background: rgba(59, 130, 246, 0.2) !important;
-  border: 2px solid var(--canvas-accent-primary, #3b82f6) !important;
-  transform: translate(-50%, -50%) scale(1.1) !important;
-}
-
-/* hover 时格子本身的边框提示 */
-.grid-item:hover {
-  box-shadow: inset 0 0 0 2px var(--canvas-accent-primary, #3b82f6);
-  z-index: 10;
+  box-shadow: inset 0 0 0 2px var(--canvas-accent-primary, #3b82f6) !important;
 }
 
 
-.grid-item.drag-over {
-  background: var(--canvas-border-active, #4a4a4a);
-  box-shadow: inset 0 0 0 2px var(--canvas-accent-primary, #3b82f6);
+
+/* 连线进行中，格子 hover 边框由 cell-handle 负责，取消格子自身的 */
+.storyboard-node.connecting-active .grid-item:hover {
+  box-shadow: none;
 }
 
-.grid-item.drag-source {
-  opacity: 0.4;
-}
 
-/* + 号 */
-.cell-plus {
+
+
+/* 空格子 */
+.cell-empty {
   width: 100%;
   height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--canvas-text-tertiary, #444);
-  transition: color 0.2s;
 }
 
-.cell-plus svg {
-  width: 16px;
-  height: 16px;
+.cell-plus-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  opacity: 0.35;
+  transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
-.grid-item:hover .cell-plus {
-  color: var(--canvas-text-secondary, #666);
+/* 编辑模式下空格子可点击 */
+.cell-empty-clickable {
+  cursor: pointer;
 }
+
+.cell-empty-clickable:hover .cell-plus-icon {
+  opacity: 0.8;
+  transform: scale(1.2);
+}
+
+/* ========== 折叠视图（照片堆叠效果） ========== */
+.collapsed-view {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 堆叠照片公共样式 */
+.stack-photo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(100% - 16px);
+  aspect-ratio: v-bind(cssAspectRatio);
+  overflow: hidden;
+  transform-origin: center center;
+}
+
+.stack-photo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* 主图（第1张）：无边框设计，直接铺满 */
+.stack-main {
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  border-radius: 0;
+  box-shadow: none;
+  border: none;
+}
+
+/* 堆叠背景层1（第2张图）：轻微旋转+偏移，像照片堆叠 */
+.stack-layer-1 {
+  z-index: 2;
+  transform: translate(-50%, -50%) rotate(3deg) scale(0.97);
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+  opacity: 0.7;
+}
+
+/* 堆叠背景层2（第3张图）：更大旋转+偏移 */
+.stack-layer-2 {
+  z-index: 1;
+  transform: translate(-50%, -50%) rotate(-4deg) scale(0.94);
+  border-radius: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+  opacity: 0.45;
+}
+
+/* 折叠时空状态 */
+.stack-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--canvas-bg-tertiary, #1a1a1a);
+  aspect-ratio: v-bind(cssAspectRatio);
+}
+
+/* 展开按钮（主图右上角） */
+.expand-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  border: none;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+
+.expand-btn:not(:hover) {
+  opacity: 0.7;
+}
+
+.expand-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.expand-btn:hover {
+  background: rgba(59, 130, 246, 0.8);
+  color: #fff;
+  transform: scale(1.1);
+}
+
+/* 图片计数角标 */
+.stack-count {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+/* ========== 收起/展开动画 ========== */
+/* 收起动画：非第一张格子缩小、淡出到第一张位置 */
+.anim-collapsing .grid-item:not(:first-child) {
+  animation: collapse-to-first 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* 展开动画：非第一张格子从第一张位置展开到自身位置 */
+.anim-expanding .grid-item:not(:first-child) {
+  animation: expand-from-first 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* 收起时第一张格子保持不动，其他格子淡出 */
+@keyframes collapse-to-first {
+  0% {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+/* 展开时其他格子从缩小状态展开 */
+@keyframes expand-from-first {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translate(0, 0);
+  }
+}
+
+/* 收起/展开时第一张格子始终可见 */
+.anim-collapsing .grid-item:first-child,
+.anim-expanding .grid-item:first-child {
+  z-index: 5;
+}
+
+/* 折叠态 node-card 无边框无背景 */
+.node-card-collapsed {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  overflow: visible;
+}
+
+.storyboard-node.selected .node-card-collapsed {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* 白昼模式适配 */
+:root.canvas-theme-light .expand-btn {
+  background: rgba(255, 255, 255, 0.8);
+  color: #333;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .expand-btn:hover {
+  background: rgba(59, 130, 246, 0.85);
+  color: #fff;
+}
+
+:root.canvas-theme-light .stack-count {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .node-card-collapsed {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+
 
 /* 图片 */
 .grid-img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* 上传遮罩 */
+/* ========== 编辑模式格子操作按钮 ========== */
+.edit-cell-actions {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  gap: 3px;
+  z-index: 10;
+}
+
+.edit-cell-btn {
+  width: 22px;
+  height: 22px;
+  background: rgba(0, 0, 0, 0.65);
+  border: none;
+  border-radius: 5px;
+  color: #ccc;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  backdrop-filter: blur(4px);
+}
+
+.edit-cell-btn:hover {
+  background: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  transform: scale(1.1);
+}
+
+.edit-cell-btn svg {
+  width: 12px;
+  height: 12px;
+}
+
+.edit-cell-btn-delete:hover {
+  background: rgba(239, 68, 68, 0.8);
+  color: #fff;
 }
 
 /* 上传遮罩 */
@@ -1952,43 +2350,20 @@ const hasAnyImage = computed(() => {
   to { transform: rotate(360deg); }
 }
 
-/* 图片操作按钮 */
-.img-actions {
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  display: flex;
-  gap: 2px;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
 
-.grid-item:hover .img-actions {
-  opacity: 1;
-}
 
-.img-btn {
-  width: 18px;
-  height: 18px;
-  background: rgba(0, 0, 0, 0.7);
-  border: none;
-  border-radius: 4px;
-  color: #bbb;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
 
-.img-btn:hover {
-  background: rgba(50, 50, 50, 0.9);
-  color: #fff;
-}
 
-.img-btn svg {
-  width: 10px;
-  height: 10px;
+
+
+/* ========== 底部提示文字 ========== */
+.storyboard-hint {
+  text-align: center;
+  font-size: 11px;
+  color: var(--canvas-text-tertiary, #666666);
+  margin-top: 6px;
+  user-select: none;
+  pointer-events: none;
 }
 
 /* ========== 右下角拖拽手柄 ========== */
@@ -2024,20 +2399,7 @@ const hasAnyImage = computed(() => {
   display: none;
 }
 
-/* 底部提示文字 */
-.node-bottom-hint {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: 12px;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.45);
-  white-space: nowrap;
-  pointer-events: none;
-  user-select: none;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-}
+
 
 /* ========== 全屏预览 ========== */
 .preview-overlay {
@@ -2083,5 +2445,129 @@ const hasAnyImage = computed(() => {
 .preview-close svg {
   width: 14px;
   height: 14px;
+}
+
+/* ========== 白昼模式适配 ========== */
+
+/* 工具栏 */
+:root.canvas-theme-light .storyboard-toolbar {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .toolbar-actions {
+  border-left-color: rgba(0, 0, 0, 0.1);
+}
+
+/* 工具栏按钮 */
+:root.canvas-theme-light .toolbar-btn {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .toolbar-btn.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+/* 弹出触发器 */
+:root.canvas-theme-light .toolbar-popover-trigger {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .toolbar-popover-trigger:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .popover-label {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .popover-value {
+  color: #1c1917;
+}
+
+/* 弹出菜单 */
+:root.canvas-theme-light .toolbar-popover-menu {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .toolbar-popover-item {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .toolbar-popover-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .toolbar-popover-item.active {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+/* 节点卡片 */
+:root.canvas-theme-light .node-card {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .storyboard-node.selected .node-card {
+  border-color: var(--canvas-accent-primary, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15), 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+/* 节点标签 */
+:root.canvas-theme-light .node-label-text {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .node-label-area:hover .node-label-text {
+  background: rgba(0, 0, 0, 0.04);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .node-label-input {
+  color: #1c1917;
+  background: #ffffff;
+  border-color: var(--canvas-accent-primary, #3b82f6);
+}
+
+/* 格子区域 */
+:root.canvas-theme-light .grid-box {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .grid-item {
+  background: #ffffff;
+}
+
+/* 左侧快捷菜单 */
+:root.canvas-theme-light .left-quick-menu {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .left-quick-menu-item {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .left-quick-menu-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1c1917;
+}
+
+/* 缩放手柄 */
+:root.canvas-theme-light .resize-handle-corner {
+  background: var(--canvas-accent-primary, #3b82f6);
 }
 </style>

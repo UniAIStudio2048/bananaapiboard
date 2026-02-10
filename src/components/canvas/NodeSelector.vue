@@ -258,7 +258,8 @@ function createStoryboardGrid() {
       gridSize: '3x3', // 默认 3x3
       aspectRatio: '16:9', // 默认 16:9
       images: [], // 存储图片 URL
-      status: 'idle'
+      status: 'idle',
+      nodeWidth: 720
     }
   })
   
