@@ -34,6 +34,9 @@ export const NODE_TYPES = {
   PREVIEW_OUTPUT: 'preview-output',
   GRID_PREVIEW: 'grid-preview',
   
+  // 分镜类
+  STORYBOARD_GRID: 'storyboard-grid',
+  
   // 视频处理类
   VIDEO_LAST_FRAME: 'video-last-frame',
   LLM_VIDEO_DESCRIBE: 'llm-video-describe',
@@ -209,6 +212,18 @@ export const NODE_TYPE_CONFIG = {
     hasInput: true,
     hasOutput: false,
     inputType: 'any'
+  },
+  
+  // 分镜格子节点配置
+  [NODE_TYPES.STORYBOARD_GRID]: {
+    label: 'canvas.nodeConfig.storyboardGrid.label',
+    description: 'canvas.nodeConfig.storyboardGrid.desc',
+    icon: '⊞',
+    category: 'input',
+    color: '#6366f1',
+    hasInput: true,
+    hasOutput: true,
+    outputType: 'image'
   },
   
   // 图片编辑类节点配置
@@ -390,21 +405,24 @@ export const CONNECTION_RULES = {
   [NODE_TYPES.IMAGE_INPUT]: [
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
-    NODE_TYPES.LLM_IMAGE_DESCRIBE   // 图片反推
+    NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推
+    NODE_TYPES.STORYBOARD_GRID      // 分镜格子
   ],
   
   // 统一图片节点别名
   'image': [
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
-    NODE_TYPES.LLM_IMAGE_DESCRIBE   // 图片反推
+    NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推
+    NODE_TYPES.STORYBOARD_GRID      // 分镜格子
   ],
   
   // 图生图节点别名
   'image-gen': [
     NODE_TYPES.IMAGE_TO_IMAGE,
     NODE_TYPES.IMAGE_TO_VIDEO,
-    NODE_TYPES.LLM_IMAGE_DESCRIBE   // 图片反推
+    NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推
+    NODE_TYPES.STORYBOARD_GRID      // 分镜格子
   ],
   
   [NODE_TYPES.VIDEO_INPUT]: [
@@ -456,14 +474,16 @@ export const CONNECTION_RULES = {
     NODE_TYPES.IMAGE_EXPAND,
     NODE_TYPES.LLM_IMAGE_DESCRIBE,
     NODE_TYPES.PREVIEW_OUTPUT,
-    NODE_TYPES.GRID_PREVIEW
+    NODE_TYPES.GRID_PREVIEW,
+    'storyboard'                    // 分镜格子
   ],
   
   [NODE_TYPES.IMAGE_TO_IMAGE]: [
     NODE_TYPES.IMAGE_TO_VIDEO,
     NODE_TYPES.IMAGE_REPAINT,
     NODE_TYPES.IMAGE_UPSCALE,
-    NODE_TYPES.PREVIEW_OUTPUT
+    NODE_TYPES.PREVIEW_OUTPUT,
+    'storyboard'                    // 分镜格子
   ],
   
   [NODE_TYPES.TEXT_TO_VIDEO]: [

@@ -41,7 +41,7 @@ const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals } = useVueFlow()
+const { updateNodeInternals, findNode } = useVueFlow()
 
 // 文件上传引用
 const fileInputRef = ref(null)
@@ -1181,6 +1181,14 @@ function handleClickOutside(event) {
       closeCutoutOptions()
     }
   }
+  // 关闭宫格裁剪菜单（忽略打开后200ms内的点击）
+  if (gridCropMenuType.value && Date.now() - gridCropMenuOpenTime > 200) {
+    const dropdown = event.target.closest('.grid-crop-dropdown')
+    const triggerBtn = event.target.closest('.toolbar-btn-wrapper')
+    if (!dropdown && !triggerBtn) {
+      closeGridCropMenu()
+    }
+  }
 }
 
 
@@ -1211,6 +1219,9 @@ const isGridCropping = ref(false)
 
 // 4宫格裁剪状态
 const isGrid4Cropping = ref(false)
+
+// 宫格裁剪选项菜单状态
+const gridCropMenuType = ref(null) // 'grid9' | 'grid4' | null
 
 // 扩图状态（复用裁剪组件）
 const isOutpainting = ref(false)
@@ -1265,6 +1276,236 @@ function nextFrame() {
   return new Promise(resolve => requestAnimationFrame(resolve))
 }
 
+// 辅助函数：加载图片用于 Canvas 操作（解决 CORS/代理加载失败问题）
+// 优先使用 fetch+Blob 方式，避免 img.crossOrigin='anonymous' 导致的加载失败
+async function loadImageForCanvas(imageUrl) {
+  // blob URL / data URL：直接加载，无 CORS 问题
+  if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
+    const img = new Image()
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = imageUrl
+    })
+    return img
+  }
+  
+  // 其他 URL：通过 fetch 获取二进制数据，转为 Blob URL 后加载（绕过 CORS）
+  const proxiedUrl = getProxiedImageUrl(imageUrl)
+  console.log('[ImageNode] loadImageForCanvas: fetch', proxiedUrl?.substring(0, 100))
+  
+  const response = await fetch(proxiedUrl)
+  if (!response.ok) {
+    throw new Error(`图片下载失败: ${response.status} ${response.statusText}`)
+  }
+  
+  const blob = await response.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  
+  const img = new Image()
+  try {
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = blobUrl
+    })
+  } catch (e) {
+    URL.revokeObjectURL(blobUrl)
+    throw e
+  }
+  
+  // 加载成功后释放 blob URL（图片数据已解码到内存中）
+  URL.revokeObjectURL(blobUrl)
+  return img
+}
+
+// ========== 宫格裁剪选项菜单 ==========
+
+// 显示宫格裁剪选项菜单
+let gridCropMenuOpenTime = 0
+function showGridCropMenu(type) {
+  gridCropMenuType.value = type
+  gridCropMenuOpenTime = Date.now()
+}
+
+// 关闭宫格裁剪选项菜单
+function closeGridCropMenu() {
+  gridCropMenuType.value = null
+}
+
+// 执行仅裁剪
+function handleGridCropOnly() {
+  const type = gridCropMenuType.value
+  closeGridCropMenu()
+  if (type === 'grid9') {
+    handleToolbarGridCrop()
+  } else if (type === 'grid4') {
+    handleToolbarGrid4Crop()
+  }
+}
+
+// 执行裁剪并创建分镜格子
+async function handleGridCropToStoryboard() {
+  console.log('[ImageNode] handleGridCropToStoryboard 被调用, type:', gridCropMenuType.value)
+  const type = gridCropMenuType.value
+  closeGridCropMenu()
+  
+  if (type === 'grid9') {
+    await createStoryboardFromCrop(3, 3)
+  } else if (type === 'grid4') {
+    await createStoryboardFromCrop(2, 2)
+  } else {
+    console.warn('[ImageNode] handleGridCropToStoryboard: type 无效', type)
+  }
+}
+
+// 裁剪图片并创建分镜格子节点
+async function createStoryboardFromCrop(cols, rows) {
+  const gridType = cols === 3 ? 'grid9' : 'grid4'
+  
+  console.log(`[ImageNode] createStoryboardFromCrop 开始: ${cols}x${rows}`)
+  
+  const imageUrl = sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
+  console.log('[ImageNode] 分镜裁剪图片URL:', imageUrl ? imageUrl.substring(0, 80) + '...' : '无')
+  if (!imageUrl) {
+    showAlert('提示', '请先上传或生成图片')
+    return
+  }
+  
+  try {
+    // 先扣除积分
+    try {
+      console.log(`[ImageNode] ${cols}x${rows}分镜：开始扣除积分...`)
+      const deductResult = await deductCropPoints(gridType)
+      console.log(`[ImageNode] ${cols}x${rows}分镜：积分扣除结果`, deductResult)
+      if (deductResult.pointsCost > 0) {
+        console.log(`[ImageNode] ${cols}x${rows}分镜：已扣除 ${deductResult.pointsCost} 积分`)
+      }
+    } catch (deductError) {
+      console.error(`[ImageNode] ${cols}x${rows}分镜：积分扣除失败`, deductError)
+      showAlert('提示', deductError.message || '积分不足，无法执行裁剪操作')
+      return
+    }
+    
+    // 加载图片（使用 fetch+Blob 方式，避免 crossOrigin 加载失败）
+    console.log(`[ImageNode] ${cols}x${rows}分镜：开始加载图片...`)
+    const img = await loadImageForCanvas(imageUrl)
+    console.log(`[ImageNode] ${cols}x${rows}分镜：图片加载成功 ${img.naturalWidth}x${img.naturalHeight}`)
+    
+    const imgWidth = img.naturalWidth
+    const imgHeight = img.naturalHeight
+    const cellWidth = Math.floor(imgWidth / cols)
+    const cellHeight = Math.floor(imgHeight / rows)
+    
+    // 自动匹配比例
+    const cellRatio = cellWidth / cellHeight
+    let aspectRatio = '16:9'
+    const ratioTests = [
+      { name: '16:9', val: 16/9 },
+      { name: '9:16', val: 9/16 },
+      { name: '1:1', val: 1 },
+      { name: '4:3', val: 4/3 },
+      { name: '3:4', val: 3/4 }
+    ]
+    let minDiff = Infinity
+    for (const r of ratioTests) {
+      const diff = Math.abs(cellRatio - r.val)
+      if (diff < minDiff) {
+        minDiff = diff
+        aspectRatio = r.name
+      }
+    }
+    
+    // 先声明分镜节点ID
+    const storyboardNodeId = `storyboard-${Date.now()}`
+    const gridSize = `${cols}x${rows}`
+    
+    // 裁剪所有图片
+    const croppedUrls = []
+    const uploadTasks = []
+    
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const index = row * cols + col
+        const canvas = document.createElement('canvas')
+        canvas.width = cellWidth
+        canvas.height = cellHeight
+        const ctx = canvas.getContext('2d')
+        
+        ctx.drawImage(img, col * cellWidth, row * cellHeight, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight)
+        
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+        const blobUrl = URL.createObjectURL(blob)
+        croppedUrls.push(blobUrl)
+        
+        // 收集上传任务，稍后执行
+        const file = new File([blob], `storyboard-${index}.jpg`, { type: 'image/jpeg' })
+        uploadTasks.push({ file, index, blobUrl })
+      }
+    }
+    
+    // 清理原图引用
+    img.src = ''
+    
+    // 填充图片数组
+    const imagesArray = Array(9).fill(null)
+    croppedUrls.forEach((url, i) => {
+      imagesArray[i] = url
+    })
+    
+    // 创建分镜格子节点（紧贴原节点右侧）
+    // 使用 store 中的节点位置（与其他节点创建逻辑保持一致）
+    const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+    const baseX = currentNode?.position?.x || 0
+    const baseY = currentNode?.position?.y || 0
+    const flowNode = findNode(props.id)
+    const actualWidth = flowNode?.dimensions?.width || (nodeWidth.value || 300)
+    const offsetX = actualWidth + 60
+    
+    canvasStore.addNode({
+      id: storyboardNodeId,
+      type: 'storyboard',
+      position: { x: baseX + offsetX, y: baseY },
+      data: {
+        title: `${cols}x${rows}分镜`,
+        gridSize: gridSize,
+        aspectRatio: aspectRatio,
+        gridScale: 1,
+        images: imagesArray,
+        output: null
+      }
+    })
+    
+    console.log(`[ImageNode] 创建分镜格子完成: ${storyboardNodeId}`)
+    
+    // 节点创建完成后，后台异步上传裁剪图到云端
+    for (const task of uploadTasks) {
+      ;(async (t) => {
+        try {
+          const urls = await uploadImages([t.file])
+          if (urls?.length > 0) {
+            const node = canvasStore.nodes.find(n => n.id === storyboardNodeId)
+            if (node && node.data?.images) {
+              const newImages = [...node.data.images]
+              newImages[t.index] = urls[0]
+              canvasStore.updateNodeData(storyboardNodeId, { images: newImages })
+            }
+            // 等待 Vue 响应式更新传播到 StoryboardNode 后再回收 blob URL
+            await nextTick()
+            try { URL.revokeObjectURL(t.blobUrl) } catch(e) {}
+          }
+        } catch(err) {
+          console.error('[ImageNode] 分镜图片上传失败:', err)
+        }
+      })(task)
+    }
+    
+  } catch (error) {
+    console.error('[ImageNode] 创建分镜格子失败:', error)
+    showAlert('错误', '创建分镜格子失败，请重试')
+  }
+}
+
 // 9宫格裁剪 - 将图片裁剪成9份并创建组（优化版：异步分批创建，防止浏览器崩溃）
 async function handleToolbarGridCrop() {
   console.log('[ImageNode] 工具栏：9宫格裁剪', props.id)
@@ -1298,20 +1539,10 @@ async function handleToolbarGridCrop() {
       return
     }
     
-    // 加载图片 - 使用代理URL绕过CORS限制
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    const proxiedUrl = getProxiedImageUrl(imageUrl)
-    console.log('[ImageNode] 9宫格裁剪：加载图片', proxiedUrl?.substring(0, 80))
-    
-    await new Promise((resolve, reject) => {
-      img.onload = resolve
-      img.onerror = (e) => {
-        console.error('[ImageNode] 9宫格裁剪：图片加载失败', e)
-        reject(e)
-      }
-      img.src = proxiedUrl
-    })
+    // 加载图片（使用 fetch+Blob 方式，避免 crossOrigin 加载失败）
+    console.log('[ImageNode] 9宫格裁剪：加载图片', imageUrl?.substring(0, 80))
+    const img = await loadImageForCanvas(imageUrl)
+    console.log(`[ImageNode] 9宫格裁剪：图片加载成功 ${img.naturalWidth}x${img.naturalHeight}`)
     
     const imgWidth = img.naturalWidth
     const imgHeight = img.naturalHeight
@@ -1447,20 +1678,10 @@ async function handleToolbarGrid4Crop() {
       return
     }
     
-    // 加载图片 - 使用代理URL绕过CORS限制
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    const proxiedUrl = getProxiedImageUrl(imageUrl)
-    console.log('[ImageNode] 4宫格裁剪：加载图片', proxiedUrl?.substring(0, 80))
-    
-    await new Promise((resolve, reject) => {
-      img.onload = resolve
-      img.onerror = (e) => {
-        console.error('[ImageNode] 4宫格裁剪：图片加载失败', e)
-        reject(e)
-      }
-      img.src = proxiedUrl
-    })
+    // 加载图片（使用 fetch+Blob 方式，避免 crossOrigin 加载失败）
+    console.log('[ImageNode] 4宫格裁剪：加载图片', imageUrl?.substring(0, 80))
+    const img = await loadImageForCanvas(imageUrl)
+    console.log(`[ImageNode] 4宫格裁剪：图片加载成功 ${img.naturalWidth}x${img.naturalHeight}`)
     
     const imgWidth = img.naturalWidth
     const imgHeight = img.naturalHeight
@@ -4548,12 +4769,12 @@ async function handleDrop(event) {
         </svg>
         <span>擦除</span>
       </button>
-      <button class="toolbar-btn" title="增强" @mousedown.stop.prevent="handleToolbarEnhance" @click.stop.prevent>
+      <button class="toolbar-btn" title="编辑" @mousedown.stop.prevent="handleToolbarEnhance" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <text x="12" y="15" text-anchor="middle" font-size="8" font-weight="bold" fill="currentColor" stroke="none">HD</text>
+          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>增强</span>
+        <span>编辑</span>
       </button>
       <div class="toolbar-btn-wrapper">
         <button 
@@ -4642,30 +4863,81 @@ async function handleDrop(event) {
         </svg>
         <span>扩图</span>
       </button>
-      <button class="toolbar-btn" title="9宫格裁剪" @mousedown.stop.prevent="handleToolbarGridCrop" @click.stop.prevent>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <!-- 外框 -->
-          <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <!-- 垂直分割线 -->
-          <line x1="9" y1="3" x2="9" y2="21" stroke-linecap="round"/>
-          <line x1="15" y1="3" x2="15" y2="21" stroke-linecap="round"/>
-          <!-- 水平分割线 -->
-          <line x1="3" y1="9" x2="21" y2="9" stroke-linecap="round"/>
-          <line x1="3" y1="15" x2="21" y2="15" stroke-linecap="round"/>
-        </svg>
-        <span>9宫格裁剪</span>
-      </button>
-      <button class="toolbar-btn" title="4宫格裁剪" @mousedown.stop.prevent="handleToolbarGrid4Crop" @click.stop.prevent>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <!-- 外框 -->
-          <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
-          <!-- 垂直分割线 (中间一条) -->
-          <line x1="12" y1="3" x2="12" y2="21" stroke-linecap="round"/>
-          <!-- 水平分割线 (中间一条) -->
-          <line x1="3" y1="12" x2="21" y2="12" stroke-linecap="round"/>
-        </svg>
-        <span>4宫格裁剪</span>
-      </button>
+      <div class="toolbar-btn-wrapper" style="position:relative">
+        <button class="toolbar-btn" title="9宫格裁剪" @mousedown.stop.prevent="showGridCropMenu('grid9')" @click.stop.prevent>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="9" y1="3" x2="9" y2="21" stroke-linecap="round"/>
+            <line x1="15" y1="3" x2="15" y2="21" stroke-linecap="round"/>
+            <line x1="3" y1="9" x2="21" y2="9" stroke-linecap="round"/>
+            <line x1="3" y1="15" x2="21" y2="15" stroke-linecap="round"/>
+          </svg>
+          <span>9宫格裁剪</span>
+        </button>
+        <!-- 9宫格裁剪选项菜单 -->
+        <div v-if="gridCropMenuType === 'grid9'" class="grid-crop-dropdown nodrag nowheel" @click.stop.prevent @mousedown.stop.prevent @pointerdown.stop.prevent>
+          <div class="grid-crop-dropdown-title">9宫格裁剪</div>
+          <button class="grid-crop-dropdown-item" @click.stop.prevent="handleGridCropOnly">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>
+              <line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/>
+            </svg>
+            <div class="dropdown-item-text">
+              <span>仅裁剪</span>
+              <span class="dropdown-hint">创建独立图片节点</span>
+            </div>
+          </button>
+          <button class="grid-crop-dropdown-item" @click.stop.prevent="handleGridCropToStoryboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="2" y="2" width="20" height="20" rx="2"/>
+              <rect x="5" y="5" width="5" height="5" rx="0.5"/><rect x="14" y="5" width="5" height="5" rx="0.5"/>
+              <rect x="5" y="14" width="5" height="5" rx="0.5"/><rect x="14" y="14" width="5" height="5" rx="0.5"/>
+            </svg>
+            <div class="dropdown-item-text">
+              <span>创建分镜格子</span>
+              <span class="dropdown-hint">自动填充到分镜节点</span>
+            </div>
+          </button>
+          <button class="grid-crop-dropdown-cancel" @click.stop.prevent="closeGridCropMenu">取消</button>
+        </div>
+      </div>
+      <div class="toolbar-btn-wrapper" style="position:relative">
+        <button class="toolbar-btn" title="4宫格裁剪" @mousedown.stop.prevent="showGridCropMenu('grid4')" @click.stop.prevent>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <line x1="12" y1="3" x2="12" y2="21" stroke-linecap="round"/>
+            <line x1="3" y1="12" x2="21" y2="12" stroke-linecap="round"/>
+          </svg>
+          <span>4宫格裁剪</span>
+        </button>
+        <!-- 4宫格裁剪选项菜单 -->
+        <div v-if="gridCropMenuType === 'grid4'" class="grid-crop-dropdown nodrag nowheel" @click.stop.prevent @mousedown.stop.prevent @pointerdown.stop.prevent>
+          <div class="grid-crop-dropdown-title">4宫格裁剪</div>
+          <button class="grid-crop-dropdown-item" @click.stop.prevent="handleGridCropOnly">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <line x1="12" y1="3" x2="12" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/>
+            </svg>
+            <div class="dropdown-item-text">
+              <span>仅裁剪</span>
+              <span class="dropdown-hint">创建独立图片节点</span>
+            </div>
+          </button>
+          <button class="grid-crop-dropdown-item" @click.stop.prevent="handleGridCropToStoryboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="2" y="2" width="20" height="20" rx="2"/>
+              <rect x="5" y="5" width="5" height="5" rx="0.5"/><rect x="14" y="5" width="5" height="5" rx="0.5"/>
+              <rect x="5" y="14" width="5" height="5" rx="0.5"/><rect x="14" y="14" width="5" height="5" rx="0.5"/>
+            </svg>
+            <div class="dropdown-item-text">
+              <span>创建分镜格子</span>
+              <span class="dropdown-hint">自动填充到分镜节点</span>
+            </div>
+          </button>
+          <button class="grid-crop-dropdown-cancel" @click.stop.prevent="closeGridCropMenu">取消</button>
+        </div>
+      </div>
       <button class="toolbar-btn" :class="{ active: show3DCamera }" title="3D相机角度" @mousedown.stop.prevent="handleToolbar3DCamera" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <!-- 相机机身 -->
@@ -5477,6 +5749,103 @@ async function handleDrop(event) {
   position: relative;
 }
 
+/* ========== 宫格裁剪下拉菜单 ========== */
+.grid-crop-dropdown {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(32, 32, 32, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 8px;
+  min-width: 210px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  z-index: 9999;
+  pointer-events: auto;
+}
+
+.grid-crop-dropdown::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 10px;
+  height: 10px;
+  background: rgba(32, 32, 32, 0.98);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.grid-crop-dropdown-title {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 4px 10px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 4px;
+}
+
+.grid-crop-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+  pointer-events: auto;
+  position: relative;
+  z-index: 1;
+}
+
+.grid-crop-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.grid-crop-dropdown-item svg {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.dropdown-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dropdown-hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.grid-crop-dropdown-cancel {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  margin-top: 4px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.grid-crop-dropdown-cancel:hover {
+  color: rgba(255, 255, 255, 0.8);
+}
+
 /* 抠图选项弹窗 */
 .cutout-options-popup {
   position: absolute;
@@ -5840,9 +6209,7 @@ async function handleDrop(event) {
 }
 
 .source-image-preview img {
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
+  width: 100%;
   height: auto;
   object-fit: contain;
   border-radius: 12px;
@@ -6006,11 +6373,9 @@ async function handleDrop(event) {
 }
 
 .preview-images.single-image .preview-image {
-  /* 让图片自适应，不强制填充容器 */
-  width: auto;
+  /* 图片始终填满容器宽度，高度按比例自适应 */
+  width: 100%;
   height: auto;
-  max-width: 100%;
-  max-height: 100%;
   aspect-ratio: auto;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);

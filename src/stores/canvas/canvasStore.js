@@ -228,17 +228,33 @@ export const useCanvasStore = defineStore('canvas', () => {
       targetHandle: edge.targetHandle || 'input',
       animated: false
     }
+
+    // 🔧 Storyboard 格子级输入：同一个 targetHandle 只允许一条入边（新的覆盖旧的）
+    // 这样从外部拖入新图片到某个格子时，会替换该格子的“上游来源”
+    if (
+      typeof newEdge.targetHandle === 'string' &&
+      newEdge.targetHandle.startsWith('input-')
+    ) {
+      edges.value = edges.value.filter(e => {
+        if (e.target !== newEdge.target) return true
+        if (e.targetHandle !== newEdge.targetHandle) return true
+        return false
+      })
+    }
     
-    // 检查是否已存在
+    // 检查是否已存在（同 source/target/handle 的重复边）
     const exists = edges.value.some(
-      e => e.source === newEdge.source && e.target === newEdge.target
+      e => e.source === newEdge.source &&
+           e.target === newEdge.target &&
+           e.sourceHandle === newEdge.sourceHandle &&
+           e.targetHandle === newEdge.targetHandle
     )
     
     if (!exists) {
       edges.value.push(newEdge)
       
-      // 自动传递数据
-      propagateData(edge.source, edge.target)
+      // 自动传递数据（包含 Storyboard 格子级替换）
+      propagateData(edge.source, edge.target, newEdge.targetHandle)
     }
     
     return newEdge
@@ -250,11 +266,24 @@ export const useCanvasStore = defineStore('canvas', () => {
   function removeEdge(edgeId) {
     edges.value = edges.value.filter(e => e.id !== edgeId)
   }
+
+  /**
+   * 断开节点的所有输入连线
+   * @param {string} nodeId 节点ID
+   */
+  function disconnectNodeInputs(nodeId) {
+    const originalCount = edges.value.length
+    edges.value = edges.value.filter(e => e.target !== nodeId)
+    if (edges.value.length !== originalCount) {
+      markCurrentTabChanged()
+      saveHistory()
+    }
+  }
   
   /**
    * 数据传递：从源节点传递输出到目标节点
    */
-  function propagateData(sourceId, targetId) {
+  function propagateData(sourceId, targetId, targetHandle = null) {
     const sourceNode = nodes.value.find(n => n.id === sourceId)
     const targetNode = nodes.value.find(n => n.id === targetId)
     
@@ -289,7 +318,54 @@ export const useCanvasStore = defineStore('canvas', () => {
       }
     }
     
-    // 更新目标节点
+    // ========== Storyboard 格子级填充/替换 ==========
+    // 当连线目标是 storyboard 的某个格子输入端口（input-{index}）时，直接把上游图片落到对应格子
+    if (
+      targetNode.type === 'storyboard' &&
+      typeof targetHandle === 'string' &&
+      targetHandle.startsWith('input-')
+    ) {
+      const idx = Number(targetHandle.slice('input-'.length))
+      if (Number.isFinite(idx) && idx >= 0) {
+        // 尝试从 inheritedData 或源节点数据中拿到第一张图
+        let pickedUrl = null
+
+        if (inheritedData?.type === 'image') {
+          pickedUrl = inheritedData.urls?.[0] || inheritedData.url || null
+        } else if (typeof inheritedData?.url === 'string') {
+          pickedUrl = inheritedData.url
+        } else if (Array.isArray(inheritedData?.urls) && inheritedData.urls.length > 0) {
+          pickedUrl = inheritedData.urls[0]
+        }
+
+        if (!pickedUrl) {
+          if (sourceNode.data.output?.urls?.length > 0) pickedUrl = sourceNode.data.output.urls[0]
+          else if (sourceNode.data.output?.url) pickedUrl = sourceNode.data.output.url
+          else if (sourceNode.data.sourceImages?.length > 0) pickedUrl = sourceNode.data.sourceImages[0]
+          else if (sourceNode.data.images?.length > 0) pickedUrl = sourceNode.data.images[0]
+        }
+
+        if (pickedUrl) {
+          const nextImages = Array.isArray(targetNode.data.images)
+            ? [...targetNode.data.images]
+            : []
+          while (nextImages.length <= idx) nextImages.push(null)
+
+          // 无论原来是否为空：直接替换/填充
+          nextImages[idx] = pickedUrl
+
+          updateNodeData(targetId, {
+            images: nextImages,
+            inheritedFrom: sourceId,
+            inheritedData,
+            hasUpstream: true
+          })
+          return
+        }
+      }
+    }
+
+    // ========== 默认连接数据传递 ==========
     if (inheritedData) {
       updateNodeData(targetId, {
         inheritedFrom: sourceId,
@@ -1551,6 +1627,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 连线操作
     addEdge,
     removeEdge,
+    disconnectNodeInputs,
     propagateData,
     
     // 历史记录操作

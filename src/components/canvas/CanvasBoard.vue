@@ -38,6 +38,7 @@ import LLMNode from './nodes/LLMNode.vue'
 import PreviewNode from './nodes/PreviewNode.vue'
 import GroupNode from './nodes/GroupNode.vue'
 import CharacterCardNode from './nodes/CharacterCardNode.vue'
+import StoryboardNode from './nodes/StoryboardNode.vue'
 
 const emit = defineEmits(['dblclick', 'canvas-contextmenu', 'pane-click'])
 const canvasStore = useCanvasStore()
@@ -231,7 +232,8 @@ const nodeTypes = {
   'preview-output': PreviewNode,
   'grid-preview': ImageNode,      // 9宫格分镜（使用 ImageNode，可以生成和输出图片）
   'group': GroupNode,             // 编组节点
-  'character-card': CharacterCardNode  // Sora角色卡节点
+  'character-card': CharacterCardNode,  // Sora角色卡节点
+  'storyboard': StoryboardNode    // 分镜格子节点
 }
 
 // 记录连线起始信息

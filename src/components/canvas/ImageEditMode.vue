@@ -5,8 +5,12 @@
  * 当用户点击图片工具栏进入编辑模式时显示
  * 功能：
  * - 全屏覆盖层，显示功能强大的图片编辑器
- * - 使用 Toast UI Image Editor 提供完整的编辑功能
+ * - 使用 NativeImageEditor 提供完整的编辑功能
  * - 处理保存和取消操作
+ * - 编辑历史缓存：退出后再次进入可恢复操作记录
+ * - 保存后覆盖原图
+ * 
+ * UI 风格：黑白灰，兼容画布深色/白昼模式
  */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
@@ -20,6 +24,41 @@ const editorRef = ref(null)
 // 编辑区域尺寸（动态计算）
 const editorWidth = ref(800)
 const editorHeight = ref(600)
+
+// ==================== 编辑历史缓存 ====================
+// 按节点ID缓存编辑状态，再次打开同一节点时恢复
+const nodeEditCache = new Map()
+
+// 获取当前节点的缓存状态
+const cachedState = computed(() => {
+  if (!canvasStore.editingNodeId) return null
+  return nodeEditCache.get(canvasStore.editingNodeId) || null
+})
+
+// 缓存当前编辑状态
+function cacheCurrentState() {
+  if (!editorRef.value || !canvasStore.editingNodeId) return
+  
+  try {
+    const state = editorRef.value.getEditState()
+    if (state && state.history && state.history.length > 0) {
+      nodeEditCache.set(canvasStore.editingNodeId, state)
+      console.log('[ImageEditMode] 已缓存编辑状态，节点:', canvasStore.editingNodeId, '历史:', state.history.length, '条')
+    }
+  } catch (error) {
+    console.warn('[ImageEditMode] 缓存编辑状态失败:', error)
+  }
+}
+
+// 清除指定节点的编辑缓存（保存后清除）
+function clearNodeCache(nodeId) {
+  if (nodeId && nodeEditCache.has(nodeId)) {
+    nodeEditCache.delete(nodeId)
+    console.log('[ImageEditMode] 已清除节点编辑缓存:', nodeId)
+  }
+}
+
+// ==================== 节点与图片 ====================
 
 // 当前编辑的节点
 const editingNode = computed(() => {
@@ -57,13 +96,13 @@ const isVisible = computed(() => {
   return true
 })
 
-// 映射工具到 TUI 编辑器的初始模式
+// 映射工具到编辑器的初始模式
 const initialTool = computed(() => {
   const toolMap = {
     'crop': 'crop',
     'repaint': 'mask',
     'erase': 'mask',
-    'annotate': 'draw',
+    'annotate': 'annotate', // 标注工具
     'enhance': 'filter',
     'cutout': '',
     'expand': ''
@@ -94,9 +133,13 @@ function calculateEditorSize() {
   editorHeight.value = Math.min(window.innerHeight - padding * 2 - toolbarHeight, 800)
 }
 
+// ==================== 保存与取消 ====================
+
 // 处理保存
 async function handleSave(data) {
   console.log('[ImageEditMode] 保存编辑结果', data)
+  
+  const nodeId = canvasStore.editingNodeId
   
   if (!editingNode.value || !data) {
     canvasStore.exitEditMode()
@@ -104,15 +147,18 @@ async function handleSave(data) {
   }
   
   try {
-    // 如果有图片数据，直接保存
+    // 如果有图片数据，直接保存（覆盖原图）
     if (data.image) {
       await updateNodeImage(data.image)
       
-      // 如果是蒙版模式，可能需要调用 AI API
-      if (data.hasMask && ['repaint', 'erase'].includes(currentTool.value)) {
-        console.log('[ImageEditMode] 蒙版已生成，准备调用 AI API')
-        // TODO: 调用后端 AI 接口进行重绘/擦除
-      }
+      // 保存成功后清除该节点的编辑缓存（因为原图已更新）
+      clearNodeCache(nodeId)
+    }
+    
+    // 如果有蒙版数据，上传蒙版并保存到节点
+    if (data.hasMask && data.mask) {
+      await uploadAndSaveMask(data.mask)
+      console.log('[ImageEditMode] 蒙版已生成并保存')
     }
   } catch (error) {
     console.error('[ImageEditMode] 保存失败:', error)
@@ -122,7 +168,57 @@ async function handleSave(data) {
   canvasStore.exitEditMode()
 }
 
-// 更新节点图片
+// 上传蒙版并创建新的蒙版图片节点
+async function uploadAndSaveMask(maskDataUrl) {
+  if (!editingNode.value || !maskDataUrl) return
+  
+  // 将 dataUrl 转换为 File 并上传
+  const response = await fetch(maskDataUrl)
+  const blob = await response.blob()
+  const file = new File([blob], `mask_${Date.now()}.png`, { type: 'image/png' })
+  
+  // 动态导入上传函数
+  const { uploadImages } = await import('@/api/canvas/nodes')
+  const uploadedUrls = await uploadImages([file])
+  
+  if (uploadedUrls?.length > 0) {
+    const maskUrl = uploadedUrls[0]
+    const sourceNode = editingNode.value
+    
+    // 保存蒙版 URL 到原节点数据（用于 AI 重绘时关联）
+    canvasStore.updateNodeData(sourceNode.id, {
+      maskUrl: maskUrl
+    })
+    
+    // 在原节点右侧创建一个新的图片节点显示蒙版
+    const nodeWidth = 280 // 节点默认宽度
+    const gap = 50 // 节点间距
+    const newNodePosition = {
+      x: sourceNode.position.x + nodeWidth + gap,
+      y: sourceNode.position.y
+    }
+    
+    // 创建蒙版图片节点
+    canvasStore.addNode({
+      type: 'image',
+      position: newNodePosition,
+      data: {
+        title: '蒙版',
+        sourceImages: [maskUrl],
+        nodeRole: 'source', // 设置为源节点以正确显示图片
+        isMask: true, // 标记为蒙版节点
+        sourceNodeId: sourceNode.id // 关联原节点
+      }
+    })
+    
+    console.log('[ImageEditMode] 蒙版节点已创建:', maskUrl)
+  } else {
+    console.error('[ImageEditMode] 上传蒙版失败')
+    throw new Error('上传蒙版失败')
+  }
+}
+
+// 更新节点图片（覆盖原图）
 async function updateNodeImage(dataUrl) {
   if (!editingNode.value) return
   
@@ -133,32 +229,58 @@ async function updateNodeImage(dataUrl) {
   
   // 动态导入上传函数
   const { uploadImages } = await import('@/api/canvas/nodes')
-  const uploadResult = await uploadImages([file])
+  // uploadImages 返回的是 URL 数组，不是对象
+  const uploadedUrls = await uploadImages([file])
   
-  if (uploadResult?.urls?.length > 0) {
-    const newUrl = uploadResult.urls[0]
+  if (uploadedUrls?.length > 0) {
+    const newUrl = uploadedUrls[0]
     const node = editingNode.value
     
-    // 更新节点数据
+    // 更新节点数据（覆盖原图）- 支持多种数据结构
     if (node.data?.output?.urls?.length > 0) {
+      // 有 output.urls 数组
       canvasStore.updateNodeData(node.id, {
         output: {
           ...node.data.output,
           urls: [newUrl, ...(node.data.output.urls.slice(1) || [])]
         }
       })
+    } else if (node.data?.output?.url) {
+      // 有 output.url 单个 URL
+      canvasStore.updateNodeData(node.id, {
+        output: {
+          ...node.data.output,
+          url: newUrl,
+          urls: [newUrl]
+        }
+      })
     } else if (node.data?.sourceImages?.length > 0) {
+      // 有 sourceImages 数组
       canvasStore.updateNodeData(node.id, {
         sourceImages: [newUrl, ...(node.data.sourceImages.slice(1) || [])]
       })
+    } else {
+      // 兜底：直接设置 output
+      canvasStore.updateNodeData(node.id, {
+        output: {
+          type: 'image',
+          url: newUrl,
+          urls: [newUrl]
+        }
+      })
     }
     
-    console.log('[ImageEditMode] 图片已更新:', newUrl)
+    console.log('[ImageEditMode] 图片已更新（覆盖原图）:', newUrl)
+  } else {
+    console.error('[ImageEditMode] 上传图片失败，没有返回 URL')
+    throw new Error('上传图片失败')
   }
 }
 
 // 处理取消
 function handleCancel() {
+  // 取消时也缓存编辑状态，以便下次恢复
+  cacheCurrentState()
   canvasStore.exitEditMode()
 }
 
@@ -199,7 +321,8 @@ onUnmounted(() => {
                   <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
               </button>
-              <span class="edit-title">图片编辑器</span>
+              <span class="edit-title">{{ toolTitle }}</span>
+              <span v-if="cachedState" class="restore-badge">已恢复编辑记录</span>
             </div>
             <div class="header-right">
               <span class="edit-hint">全功能图片编辑 · 按 ESC 退出</span>
@@ -215,6 +338,7 @@ onUnmounted(() => {
               :initial-tool="initialTool"
               :width="editorWidth"
               :height="editorHeight"
+              :cached-state="cachedState"
               @save="handleSave"
               @cancel="handleCancel"
             />
@@ -226,11 +350,13 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* ==================== 黑白灰主题 - 兼容画布深色/白昼模式 ==================== */
+
 .image-edit-mode-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(8px);
   z-index: 100000;
   display: flex;
   align-items: center;
@@ -244,7 +370,7 @@ onUnmounted(() => {
   flex-direction: column;
   max-width: 1400px;
   max-height: 100%;
-  padding: 20px;
+  padding: 16px 20px;
 }
 
 /* 头部 */
@@ -252,44 +378,55 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 0;
-  margin-bottom: 16px;
+  padding: 8px 0;
+  margin-bottom: 12px;
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
 }
 
 .close-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.8);
+  width: 36px;
+  height: 36px;
+  border-radius: var(--canvas-radius-sm, 8px);
+  background: var(--canvas-bg-elevated, rgba(255, 255, 255, 0.08));
+  border: 1px solid var(--canvas-border-subtle, rgba(255, 255, 255, 0.1));
+  color: var(--canvas-text-secondary, rgba(255, 255, 255, 0.6));
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  background: var(--canvas-bg-elevated, rgba(255, 255, 255, 0.12));
+  color: var(--canvas-text-primary, #ffffff);
 }
 
 .close-btn svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
 }
 
 .edit-title {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
-  color: #fff;
+  color: var(--canvas-text-primary, #ffffff);
+  letter-spacing: -0.01em;
+}
+
+.restore-badge {
+  font-size: 11px;
+  color: var(--canvas-accent-success, #22c55e);
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.2);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
 }
 
 .header-right {
@@ -298,8 +435,8 @@ onUnmounted(() => {
 }
 
 .edit-hint {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  color: var(--canvas-text-tertiary, rgba(255, 255, 255, 0.35));
 }
 
 /* 编辑器区域 */
@@ -311,82 +448,10 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* 占位编辑器 */
-.placeholder-editor {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 24px;
-}
-
-.placeholder-content {
-  position: relative;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-}
-
-.placeholder-image {
-  max-width: 800px;
-  max-height: 500px;
-  object-fit: contain;
-  display: block;
-}
-
-.placeholder-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-}
-
-.placeholder-icon {
-  font-size: 48px;
-}
-
-.placeholder-text {
-  font-size: 20px;
-  font-weight: 600;
-  color: #fff;
-}
-
-.placeholder-hint {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-.placeholder-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.action-btn {
-  padding: 10px 24px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-btn.cancel {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: #fff;
-}
-
-.action-btn.cancel:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
 /* 动画 */
 .edit-mode-fade-enter-active,
 .edit-mode-fade-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
 }
 
 .edit-mode-fade-enter-from,
@@ -396,7 +461,6 @@ onUnmounted(() => {
 
 .edit-mode-fade-enter-from .edit-mode-container,
 .edit-mode-fade-leave-to .edit-mode-container {
-  transform: scale(0.95);
+  transform: scale(0.96);
 }
 </style>
-
