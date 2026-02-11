@@ -3217,6 +3217,44 @@ onUnmounted(() => {
             </div>
           </template>
 
+          <!-- AlipayPage 支付宝电脑网站支付配置字段 -->
+          <template v-if="paymentForm.module === 'AlipayPage'">
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">支付宝APPID</label>
+              <input 
+                v-model="paymentForm.config.appId" 
+                class="input w-full" 
+                type="text" 
+                placeholder="支付宝应用ID"
+              />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">应用私钥</label>
+              <textarea 
+                v-model="paymentForm.config.privateKey" 
+                class="input w-full h-24" 
+                placeholder="RSA2私钥（不需要包含头尾）"
+              ></textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">支付宝公钥</label>
+              <textarea 
+                v-model="paymentForm.config.alipayPublicKey" 
+                class="input w-full h-24" 
+                placeholder="支付宝公钥（不需要包含头尾）"
+              ></textarea>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">自定义商品名称</label>
+              <input 
+                v-model="paymentForm.config.productName" 
+                class="input w-full" 
+                type="text" 
+                placeholder="将会体现在支付宝账单中"
+              />
+            </div>
+          </template>
+
           <!-- 通知地址显示 -->
           <div v-if="editingPaymentMethod" class="p-4 bg-slate-50 dark:bg-dark-600 rounded-lg">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">通知地址</label>

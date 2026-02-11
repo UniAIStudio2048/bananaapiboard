@@ -2509,11 +2509,13 @@ onUnmounted(() => {
             
             <!-- 完成状态 - 大图展示 -->
             <div v-else class="relative overflow-hidden rounded-2xl shadow-xl">
-              <!-- 高清图片 -->
-              <img 
+              <!-- 高清图片（渐进式加载） -->
+              <CachedImage 
                 :src="it.url" 
+                :thumbnail-src="it.thumbnail_url"
                 :alt="it.prompt || '生成的图像'" 
-                class="w-full h-auto object-contain transition-all duration-700 group-hover:scale-[1.02]"
+                progressive
+                img-class="w-full h-auto object-contain transition-all duration-700 group-hover:scale-[1.02]"
                 loading="eager"
               />
               
@@ -2625,10 +2627,12 @@ onUnmounted(() => {
             
             <!-- 完成状态 -->
             <div v-else class="relative overflow-hidden aspect-video">
-              <img 
+              <CachedImage 
                 :src="it.url" 
+                :thumbnail-src="it.thumbnail_url"
                 :alt="`生成图像 ${idx}`" 
-                class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                progressive
+                img-class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 loading="lazy"
               />
               <div class="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-3">

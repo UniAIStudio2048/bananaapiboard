@@ -10,6 +10,7 @@ import { getAssets, deleteAsset, toggleFavorite, updateAssetTags, updateAsset, s
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
+import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 
 const { t, currentLanguage } = useI18n()
@@ -1458,22 +1459,20 @@ onUnmounted(() => {
                 </div>
                 
                 <!-- 图片预览 -->
-                <img
+                <CachedImage
                   v-else-if="asset.type === 'image'"
                   :src="getAssetPreview(asset)"
                   :alt="asset.name"
-                  class="image-preview"
+                  img-class="image-preview"
                   loading="eager"
-                  decoding="async"
                 />
 
                 <!-- 视频预览 - 自动提取首帧 -->
                 <div v-else-if="asset.type === 'video'" class="video-preview">
-                  <img
+                  <CachedImage
                     :src="getVideoThumbnail(asset)"
                     :alt="asset.name"
                     loading="eager"
-                    decoding="async"
                   />
                   <div class="video-play-icon">▶</div>
                 </div>
@@ -1518,11 +1517,11 @@ onUnmounted(() => {
                     @error="handleCharacterVideoError($event, asset)"
                   />
                   <!-- 否则显示缩略图 -->
-                  <img 
+                  <CachedImage 
                     v-else-if="getVideoThumbnail(asset)" 
                     :src="getVideoThumbnail(asset)" 
                     :alt="asset.name"
-                    class="character-thumbnail"
+                    img-class="character-thumbnail"
                   />
                   <!-- 无视频无缩略图时显示渐变背景 -->
                   <div v-else class="character-placeholder"></div>
@@ -1862,11 +1861,11 @@ onUnmounted(() => {
             </div>
             
             <!-- 图片预览 -->
-            <img 
+            <CachedImage 
               v-else-if="previewAsset.type === 'image'" 
               :src="previewAsset.url" 
               :alt="previewAsset.name"
-              class="preview-image"
+              img-class="preview-image"
             />
             
             <!-- 视频预览 -->

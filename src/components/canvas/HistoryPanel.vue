@@ -1649,7 +1649,9 @@ onUnmounted(() => {
                       v-if="getPreviewContent(item) && !hasImageError(item)" 
                       :key="`img-${item.id}-${thumbnailFallback[item.id] ? 'fallback' : 'thumb'}`"
                       :src="getPreviewContent(item)" 
+                      :thumbnail-src="item.thumbnail_url"
                       :alt="item.name"
+                      progressive
                       img-class="card-image"
                       loading="lazy"
                       @error="handleImageError(item)"

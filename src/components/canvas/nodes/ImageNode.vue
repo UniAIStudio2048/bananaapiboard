@@ -5847,6 +5847,49 @@ async function handleDrop(event) {
   color: rgba(255, 255, 255, 0.8);
 }
 
+/* ========== 宫格裁剪下拉菜单 - 白昼模式 ========== */
+:root.canvas-theme-light .grid-crop-dropdown {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .grid-crop-dropdown::after {
+  background: rgba(255, 255, 255, 0.98);
+  border-right-color: rgba(0, 0, 0, 0.1);
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .grid-crop-dropdown-title {
+  color: rgba(0, 0, 0, 0.45);
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .grid-crop-dropdown-item {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.canvas-theme-light .grid-crop-dropdown-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .grid-crop-dropdown-item svg {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .dropdown-hint {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+:root.canvas-theme-light .grid-crop-dropdown-cancel {
+  border-top-color: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.4);
+}
+
+:root.canvas-theme-light .grid-crop-dropdown-cancel:hover {
+  color: rgba(0, 0, 0, 0.7);
+}
+
 /* 抠图选项弹窗 */
 .cutout-options-popup {
   position: absolute;

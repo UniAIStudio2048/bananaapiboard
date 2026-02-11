@@ -40,7 +40,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:data', 'delete'])
 const canvasStore = useCanvasStore()
-const { updateNodeInternals, onConnectStart: onVFConnectStart, onConnectEnd: onVFConnectEnd } = useVueFlow()
+const { updateNodeInternals, onConnectStart: onVFConnectStart, onConnectEnd: onVFConnectEnd, getViewport: getVFViewport } = useVueFlow()
 
 // ========== 连线状态检测 ==========
 // 检测是否有连线正在进行（Vue Flow 原生连线 或 自定义拖拽连线）
@@ -233,20 +233,27 @@ const stackImages = computed(() => {
   return valid.slice(1, 3) // 取第2、3张做堆叠背景
 })
 
-// 折叠时宽度：等于网格中单个格子的宽度
-const collapsedWidth = computed(() => {
+// 折叠时独立宽度（可缩放，持久化到 data）
+const collapsedNodeWidth = ref(props.data.collapsedNodeWidth || null)
+
+// 折叠时默认宽度：等于网格中单个格子的宽度（未手动缩放时使用）
+const defaultCollapsedWidth = computed(() => {
   const cols = layoutConfig.value.cols
-  // 单个格子宽度 = 节点宽度 / 列数（去掉 grid gap 的影响）
   return Math.round(nodeWidth.value / cols)
 })
 
-// 折叠时高度：等于单个格子的高度（基于格子宽度和比例）
+// 折叠时实际宽度：优先使用手动缩放值，否则用默认值
+const collapsedWidth = computed(() => {
+  return collapsedNodeWidth.value || defaultCollapsedWidth.value
+})
+
+// 折叠时高度：基于折叠宽度和比例
 const collapsedHeight = computed(() => {
   const ratio = aspectRatioMap[aspectRatio.value] || 9/16
   return Math.round(collapsedWidth.value * ratio)
 })
 
-// 当前实际显示宽度（折叠时用格子宽度，展开时用节点宽度）
+// 当前实际显示宽度（折叠时用折叠宽度，展开时用节点宽度）
 const displayWidth = computed(() => {
   return isCollapsed.value ? collapsedWidth.value : nodeWidth.value
 })
@@ -267,6 +274,7 @@ function exitEditMode() {
   editDragIndex.value = null
   editDropTargetIndex.value = null
   editDragGhostStyle.value = null
+  isDraggingOutside.value = false
 }
 
 function handleNodeDblClick(event) {
@@ -309,6 +317,7 @@ const editDragIndex = ref(null)
 const editDropTargetIndex = ref(null)
 const editDragGhostStyle = ref(null)
 const editDragImageSrc = ref(null)
+const isDraggingOutside = ref(false) // 是否拖拽到了节点外部（准备拖出到画布）
 
 function handleEditDragStart(event, index) {
   if (!isEditMode.value) return
@@ -351,6 +360,23 @@ function handleEditDragMove(event) {
     top: (event.clientY - offsetY) + 'px'
   }
 
+  // 检测鼠标是否在节点外部（用于拖出到画布）
+  const nodeRect = nodeRootRef.value?.getBoundingClientRect()
+  if (nodeRect) {
+    isDraggingOutside.value = (
+      event.clientX < nodeRect.left ||
+      event.clientX > nodeRect.right ||
+      event.clientY < nodeRect.top ||
+      event.clientY > nodeRect.bottom
+    )
+  }
+
+  // 如果在节点外部，不需要检测目标格子
+  if (isDraggingOutside.value) {
+    editDropTargetIndex.value = null
+    return
+  }
+
   // 检测鼠标悬停的目标格子
   const gridItems = nodeRootRef.value?.querySelectorAll('.grid-item')
   if (!gridItems) return
@@ -373,9 +399,38 @@ function handleEditDragEnd(event) {
   document.removeEventListener('mousemove', handleEditDragMove)
   document.removeEventListener('mouseup', handleEditDragEnd)
 
-  // 执行交换
-  if (editDragIndex.value !== null && editDropTargetIndex.value !== null && editDragIndex.value !== editDropTargetIndex.value) {
-    const fromIdx = editDragIndex.value
+  const fromIdx = editDragIndex.value
+  const imageUrl = fromIdx !== null ? images.value[fromIdx] : null
+
+  // 情况1：拖拽到节点外部 → 在画布上创建图片节点，清空原格子
+  if (isDraggingOutside.value && fromIdx !== null && imageUrl) {
+    // 屏幕坐标转画布坐标
+    const canvasContainer = document.querySelector('.vue-flow')
+    if (canvasContainer) {
+      const rect = canvasContainer.getBoundingClientRect()
+      const viewport = getVFViewport()
+      const canvasX = (event.clientX - rect.left - viewport.x) / viewport.zoom
+      const canvasY = (event.clientY - rect.top - viewport.y) / viewport.zoom
+
+      // 在画布上创建图片节点
+      const newNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+      canvasStore.addNode({
+        id: newNodeId,
+        type: 'image-input',
+        position: { x: canvasX - 100, y: canvasY - 80 },
+        data: {
+          title: '图片',
+          nodeRole: 'source',
+          sourceImages: [imageUrl]
+        }
+      })
+
+      // 清空原格子
+      clearCell(fromIdx)
+    }
+  }
+  // 情况2：拖拽到节点内部其他格子 → 交换位置
+  else if (fromIdx !== null && editDropTargetIndex.value !== null && fromIdx !== editDropTargetIndex.value) {
     const toIdx = editDropTargetIndex.value
     const temp = images.value[fromIdx]
     images.value[fromIdx] = images.value[toIdx]
@@ -389,6 +444,7 @@ function handleEditDragEnd(event) {
   editDropTargetIndex.value = null
   editDragGhostStyle.value = null
   editDragImageSrc.value = null
+  isDraggingOutside.value = false
 }
 
 // ========== 拖拽状态（普通模式） ==========
@@ -426,8 +482,8 @@ const nodeWidth = ref(props.data.nodeWidth || 300)
 const nodeHeight = ref(props.data.nodeHeight || 400)
 const minWidth = 240
 const maxWidth = 1200
-const minHeight = 300
-const maxHeight = 1400
+const minHeight = 100
+const maxHeight = 2400
 
 // ========== 根据比例自动调整高度 ==========
 // 9:16 竖屏：高度是宽度的 16/9 倍
@@ -440,10 +496,13 @@ const aspectRatioMap = {
   '1:1': 1        // 正方形
 }
 
-// 根据比例计算高度
+// 根据比例和网格行列数计算节点高度
+// 单个格子宽度 = nodeWidth / cols，格子高度 = 格子宽度 * cellRatio
+// 节点总高度 = rows * 格子高度 = nodeWidth * (rows / cols) * cellRatio
 const ratioHeight = computed(() => {
-  const ratio = aspectRatioMap[aspectRatio.value] || 9/16
-  return Math.round(nodeWidth.value * ratio)
+  const cellRatio = aspectRatioMap[aspectRatio.value] || 9/16
+  const { rows, cols } = layoutConfig.value
+  return Math.round(nodeWidth.value * (rows / cols) * cellRatio)
 })
 
 // 节点取消选中时自动退出编辑模式
@@ -481,8 +540,8 @@ function startResize(event) {
   isResizing.value = true
   resizeStartX.value = event.clientX
   resizeStartY.value = event.clientY
-  resizeStartWidth.value = nodeWidth.value
-  resizeStartHeight.value = nodeHeight.value
+  resizeStartWidth.value = isCollapsed.value ? collapsedWidth.value : nodeWidth.value
+  resizeStartHeight.value = isCollapsed.value ? collapsedHeight.value : nodeHeight.value
   document.addEventListener('mousemove', handleResize)
   document.addEventListener('mouseup', stopResize)
   // 安全兜底：如果鼠标离开窗口等异常情况，3秒后自动恢复
@@ -509,18 +568,23 @@ function handleResize(event) {
   }
   
   const deltaX = event.clientX - resizeStartX.value
-  const deltaY = event.clientY - resizeStartY.value
-  const newWidth = Math.min(Math.max(resizeStartWidth.value + deltaX, minWidth), maxWidth)
-  
-  // 根据比例计算高度
   const ratio = aspectRatioMap[aspectRatio.value] || 9/16
-  const newHeight = Math.round(newWidth * ratio)
-  
-  // 限制高度范围
-  const constrainedHeight = Math.min(Math.max(newHeight, minHeight), maxHeight)
-  
-  nodeWidth.value = newWidth
-  nodeHeight.value = constrainedHeight
+
+  if (isCollapsed.value) {
+    // 折叠模式：缩放折叠尺寸
+    const minCollapsed = 80
+    const maxCollapsed = 600
+    const newWidth = Math.min(Math.max(resizeStartWidth.value + deltaX, minCollapsed), maxCollapsed)
+    collapsedNodeWidth.value = newWidth
+  } else {
+    // 展开模式：缩放节点尺寸（高度需考虑行列比）
+    const { rows, cols } = layoutConfig.value
+    const newWidth = Math.min(Math.max(resizeStartWidth.value + deltaX, minWidth), maxWidth)
+    const newHeight = Math.round(newWidth * (rows / cols) * ratio)
+    const constrainedHeight = Math.min(Math.max(newHeight, minHeight), maxHeight)
+    nodeWidth.value = newWidth
+    nodeHeight.value = constrainedHeight
+  }
 }
 
 function stopResize() {
@@ -872,7 +936,8 @@ function updateNodeData() {
     images: images.value.slice(0, gridCount.value),
     output: outputImageUrl.value ? { url: outputImageUrl.value } : null,
     nodeWidth: nodeWidth.value,
-    nodeHeight: nodeHeight.value
+    nodeHeight: nodeHeight.value,
+    collapsedNodeWidth: collapsedNodeWidth.value
   }
   emit('update:data', data)
 }
@@ -895,6 +960,8 @@ watch(gridSize, () => {
   if (images.value.length !== gridCount.value) {
     images.value = Array(16).fill(null).map((_, i) => images.value[i] || null)
   }
+  // 网格行列变化后重新计算高度
+  nodeHeight.value = ratioHeight.value
   updateNodeData()
 })
 
@@ -1169,14 +1236,11 @@ const hasAnyImage = computed(() => {
           @click.stop.prevent
           title="拼接输出"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-            <line x1="9" y1="3" x2="9" y2="21" stroke-linecap="round"/>
-            <line x1="15" y1="3" x2="15" y2="21" stroke-linecap="round"/>
-            <line x1="3" y1="9" x2="21" y2="9" stroke-linecap="round"/>
-            <line x1="3" y1="15" x2="21" y2="15" stroke-linecap="round"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M5 12h14" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M13 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>{{ isMerging ? '合成中...' : '→合成' }}</span>
+          <span>{{ isMerging ? '合成中...' : '合成' }}</span>
         </button>
         <button class="toolbar-btn action-btn" @mousedown.stop.prevent="clearAllCells" @click.stop.prevent title="清空所有格子">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -1203,7 +1267,7 @@ const hasAnyImage = computed(() => {
     </div>
 
     <!-- ========== 节点名称（双击编辑） ========== -->
-    <div v-show="!isCollapsed" class="node-label-area nodrag" @dblclick.stop="startEditLabel">
+    <div class="node-label-area nodrag" @dblclick.stop="startEditLabel">
       <input
         v-if="isEditingLabel"
         ref="labelInputRef"
@@ -1380,8 +1444,8 @@ const hasAnyImage = computed(() => {
         class="node-handle node-handle-hidden"
       />
 
-      <!-- ========== 右下角拖拽手柄（在 node-wrapper 内，跟随 node-card 底部） ========== -->
-      <div v-show="!isCollapsed" class="resize-handle resize-handle-corner nodrag nowheel" @mousedown.stop.prevent="startResize"></div>
+      <!-- ========== 右下角拖拽手柄（在 node-wrapper 内，跟随 node-card 底部，仅选中时显示） ========== -->
+      <div v-show="selected" class="resize-handle resize-handle-corner nodrag nowheel" :class="{ 'resize-handle-collapsed': isCollapsed }" @mousedown.stop.prevent="startResize"></div>
     </div>
 
     <!-- ========== 底部提示文字 ========== -->
@@ -1406,6 +1470,7 @@ const hasAnyImage = computed(() => {
       <div
         v-if="editDragGhostStyle && editDragImageSrc"
         class="edit-drag-ghost"
+        :class="{ 'edit-drag-ghost-outside': isDraggingOutside }"
         :style="{
           left: editDragGhostStyle.left,
           top: editDragGhostStyle.top,
@@ -1414,6 +1479,7 @@ const hasAnyImage = computed(() => {
         }"
       >
         <img :src="editDragImageSrc" class="edit-drag-ghost-img" />
+        <div v-if="isDraggingOutside" class="edit-drag-ghost-hint">释放以创建图片节点</div>
       </div>
     </Teleport>
 
@@ -1528,7 +1594,30 @@ const hasAnyImage = computed(() => {
   opacity: 0.85;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), 0 0 0 2px #60a5fa;
   transform: scale(1.05);
-  transition: none;
+  transition: box-shadow 0.2s ease, border-radius 0.2s ease, opacity 0.2s ease;
+}
+
+/* 拖拽到节点外部时的幽灵样式 */
+.edit-drag-ghost-outside {
+  box-shadow: 0 12px 40px rgba(59, 130, 246, 0.5), 0 0 0 2px #3b82f6;
+  border-radius: 12px;
+  opacity: 0.92;
+  overflow: visible;
+}
+
+.edit-drag-ghost-hint {
+  position: absolute;
+  bottom: -28px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  font-size: 11px;
+  color: #fff;
+  background: rgba(59, 130, 246, 0.85);
+  padding: 3px 10px;
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  pointer-events: none;
 }
 
 .edit-drag-ghost-img {
@@ -1991,12 +2080,7 @@ const hasAnyImage = computed(() => {
 .grid-4x1 { grid-template-columns: 1fr; grid-template-rows: repeat(4, 1fr); }
 .grid-4x4 { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); }
 
-/* 比例 */
-.grid-box.ratio-16-9 .grid-item { aspect-ratio: 16/9; }
-.grid-box.ratio-9-16 .grid-item { aspect-ratio: 9/16; }
-.grid-box.ratio-3-4 .grid-item { aspect-ratio: 3/4; }
-.grid-box.ratio-4-3 .grid-item { aspect-ratio: 4/3; }
-.grid-box.ratio-1-1 .grid-item { aspect-ratio: 1/1; }
+/* 比例：由容器高度 + 1fr 行自动保证，不再给 grid-item 设 aspect-ratio */
 
 /* 单个格子 */
 .grid-item {
@@ -2382,6 +2466,19 @@ const hasAnyImage = computed(() => {
   cursor: nwse-resize;
   background: var(--canvas-accent-primary, #3b82f6);
   border-radius: 2px;
+}
+
+/* 折叠态缩放手柄：缩小一点，半透明，hover 时显现 */
+.resize-handle-collapsed {
+  width: 10px;
+  height: 10px;
+  opacity: 0.5;
+  border-radius: 2px;
+  transition: opacity 0.15s ease;
+}
+
+.resize-handle-collapsed:hover {
+  opacity: 1;
 }
 
 /* ========== Handle ========== */
