@@ -1156,10 +1156,26 @@ function handleBeforeUnload(event) {
 // 加载用户信息
 async function loadUserInfo() {
   try {
+    // 先检查是否有 token，没有 token 才跳转
+    const token = localStorage.getItem('token')
+    if (!token) {
+      console.log('[Canvas] 无 token，跳转到落地页')
+      router.push('/')
+      return
+    }
+    
     me.value = await getMe()
     if (!me.value) {
-      // 未登录，跳转到落地页
-      router.push('/')
+      // getMe 返回 null 可能是网络错误或 token 过期
+      // 仅在 token 被清除（401 时 getMe 内部不会清除 token）的情况下跳转
+      // 否则保留在当前页面，让用户手动刷新
+      const tokenAfter = localStorage.getItem('token')
+      if (!tokenAfter) {
+        console.log('[Canvas] Token 已被清除，跳转到落地页')
+        router.push('/')
+      } else {
+        console.warn('[Canvas] 获取用户信息失败，但 token 仍存在，保留在当前页面')
+      }
     } else {
       // 初始化团队空间
       teamStore.setCurrentUserId(me.value.id)

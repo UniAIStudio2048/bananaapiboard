@@ -1414,6 +1414,12 @@ function animateSecondaryScenes(time) {
 }
 
 onMounted(() => {
+  // 异步加载 Google Fonts，不阻塞页面渲染
+  const fontLink = document.createElement('link')
+  fontLink.rel = 'stylesheet'
+  fontLink.href = 'https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Orbitron:wght@400;700;900&display=swap'
+  document.head.appendChild(fontLink)
+
   initScene()
   // 延迟初始化次要场景，确保DOM已渲染
   setTimeout(() => {
@@ -1442,7 +1448,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Orbitron:wght@400;700;900&display=swap');
+/* Google Fonts 通过 JS 异步加载，避免阻塞渲染 */
 
 .landing-wrapper {
   min-height: 100vh;
