@@ -14,6 +14,16 @@ import { initLogger, logPageView } from './utils/logger'
 import { loadBrandConfig, getBrand } from './config/tenant'
 import { createI18n } from './i18n'
 
+// 🔧 防止 Vite HMR 失败时自动全页刷新（开发模式）
+// 当 HMR 无法热更新某个模块时，Vite 默认会 reload 整个页面
+// 这会导致创作过程中页面被意外重新加载
+if (import.meta.hot) {
+  import.meta.hot.on('vite:beforeFullReload', () => {
+    console.warn('[HMR] 阻止了 Vite 全页刷新，请手动刷新页面以应用更改')
+    throw new Error('[HMR] 全页刷新已被阻止')
+  })
+}
+
 // 在应用启动前初始化主题，确保默认是浅色模式
 initTheme()
 

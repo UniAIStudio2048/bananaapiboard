@@ -138,11 +138,10 @@ function monitorGlobalErrors() {
   })
 }
 
-// 监控页面卸载
+// 监控页面卸载（仅记录日志，不设置 returnValue）
 function monitorPageUnload() {
-  window.addEventListener('beforeunload', (event) => {
+  window.addEventListener('beforeunload', () => {
     logDiagnostic('BEFORE_UNLOAD', '页面即将卸载', {
-      hasReturnValue: !!event.returnValue,
       localStorageUsage: checkLocalStorageUsage(),
       memoryUsage: getMemoryUsage()
     })

@@ -87,7 +87,14 @@ router.beforeEach(async (to, from, next) => {
       return next({ path: '/', query: { redirect: to.fullPath } })
     }
     
-    // 验证 token 是否有效（可选：调用 API 验证）
+    // 🔧 修复：如果用户已经在需要认证的页面上（同页面内导航），跳过 API 验证
+    // 避免网络抖动或后端重启时把用户从画布等页面踢出去
+    if (from.meta.requiresAuth && from.name) {
+      // 已经在认证页面内，直接放行，不再重复验证 token
+      return next()
+    }
+    
+    // 仅在首次进入认证页面时验证 token
     try {
       const { getTenantHeaders } = await import('@/config/tenant')
       const response = await fetch('/api/user/me', {

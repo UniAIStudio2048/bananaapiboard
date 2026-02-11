@@ -1100,18 +1100,8 @@ function updateNodeFromTask(task) {
   }
 }
 
-// 页面关闭前保存当前工作流
+// 页面关闭前静默保存当前工作流（不弹出任何确认框）
 function handleBeforeUnload(event) {
-  // 🔧 修复：在开发环境下，如果是 Vite HMR 触发的刷新，不显示弹窗
-  // Vite HMR 会在修改代码时触发 page reload，这会导致烦人的弹窗
-  const isDevMode = import.meta.env.DEV
-  const isViteHMR = isDevMode && (
-    // 检测是否是 Vite 触发的刷新（通过检查 performance timing）
-    performance.getEntriesByType && performance.getEntriesByType('navigation').some(
-      nav => nav.type === 'reload' && (Date.now() - nav.startTime) < 500
-    )
-  )
-  
   const workflowData = getCurrentWorkflowData()
   if (!workflowData || !workflowData.nodes || workflowData.nodes.length === 0) {
     return
@@ -1121,11 +1111,10 @@ function handleBeforeUnload(event) {
   saveToHistory(workflowData)
   console.log('[Canvas] 页面关闭前保存工作流到历史')
   
-  // 2. 🔧 尝试使用 sendBeacon 保存到服务器（不阻塞页面关闭）
+  // 2. 尝试使用 sendBeacon 保存到服务器（不阻塞页面关闭）
   const currentTab = canvasStore.getCurrentTab()
   if (currentTab?.hasChanges) {
     try {
-      // 🔧 使用 exportWorkflowForSave 统一清理 base64/blob 数据
       const cleanedData = canvasStore.exportWorkflowForSave()
       
       const saveData = {
@@ -1135,10 +1124,9 @@ function handleBeforeUnload(event) {
         edges: cleanedData.edges,
         viewport: cleanedData.viewport,
         uploadToCloud: false,
-        isBeforeUnload: true // 标记为关闭前保存
+        isBeforeUnload: true
       }
       
-      // 使用 sendBeacon 异步发送（不阻塞页面关闭）
       const headers = getTenantHeaders()
       const token = localStorage.getItem('token')
       const blob = new Blob([JSON.stringify({
@@ -1149,7 +1137,6 @@ function handleBeforeUnload(event) {
         }
       })], { type: 'application/json' })
       
-      // sendBeacon 有大小限制（通常 64KB），如果数据太大就跳过
       if (blob.size < 64 * 1024) {
         const beaconUrl = '/api/canvas/workflows/beacon-save'
         navigator.sendBeacon(beaconUrl, blob)
@@ -1160,36 +1147,10 @@ function handleBeforeUnload(event) {
     } catch (e) {
       console.warn('[Canvas] sendBeacon 保存失败:', e)
     }
-    
-    // 3. 🔧 修复：只有当有实质性内容且未保存时才显示确认框
-    // 在开发模式下不显示弹窗，避免 Vite HMR 导致的烦人提示
-    if (isDevMode) {
-      console.log('[Canvas] 开发模式，跳过离开确认弹窗')
-      return
-    }
-    
-    // 检查是否有实质性内容（用户输入、生成结果等）
-    const hasSubstantialContent = workflowData.nodes.some(node => {
-      const data = node.data || {}
-      // 检查是否有用户输入的文本
-      if (data.prompt && data.prompt.trim()) return true
-      // 检查是否有生成的结果
-      if (data.output?.urls?.length > 0 || data.output?.url) return true
-      // 检查是否有上传的图片
-      if (data.sourceImages?.length > 0) return true
-      // 检查是否有视频结果
-      if (data.videoUrl) return true
-      return false
-    })
-    
-    // 只有当：1) 有实质性内容 2) 是新工作流（未保存过）才显示确认框
-    // 已保存过的工作流因为我们已经用 sendBeacon 保存了，所以不需要再提示
-    if (hasSubstantialContent && !currentTab.workflowId) {
-      event.preventDefault()
-      event.returnValue = '您有未保存的更改，确定要离开吗？'
-      return event.returnValue
-    }
   }
+  
+  // 🔧 不再设置 event.returnValue，不弹出任何"重新加载此网站？"确认框
+  // 数据已通过 localStorage + sendBeacon 静默保存
 }
 
 // 加载用户信息

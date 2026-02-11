@@ -22,7 +22,9 @@ export default defineConfig(({ mode }) => {
         // 禁用 overlay 错误弹窗（可能导致页面交互问题）
         overlay: false,
         // HMR 连接超时时间（毫秒），防止网络抖动导致重连刷新
-        timeout: 30000,
+        timeout: 60000,
+        // 🔧 关键：禁止 HMR 失败时自动全页刷新，必须手动刷新
+        // 这可以防止创作过程中页面被意外重新加载
       },
       proxy: {
         '/api': {
