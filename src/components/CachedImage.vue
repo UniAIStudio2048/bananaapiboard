@@ -77,6 +77,8 @@ const displaySrc = ref('')
 const isLoading = ref(true)
 const hasError = ref(false)
 let objectUrl = null // 用于释放内存
+let usedCache = false // 标记当前是否使用了缓存加载的 blob URL
+let originalUrl = '' // 保存原始 URL，用于 blob 失败时回退
 
 // 判断是否是需要缓存的 URL
 function shouldCache(url) {
@@ -85,8 +87,9 @@ function shouldCache(url) {
   // blob: / data: URL 不缓存
   if (url.startsWith('blob:') || url.startsWith('data:')) return false
   
-  // COS 代理 URL 需要缓存
-  if (url.includes('/api/cos-proxy/')) return true
+  // COS 代理 URL 不走 fetch 缓存（服务端已设置 Cache-Control: immutable，
+  // 浏览器原生 HTTP 缓存足够，且大图走 fetch→blob 容易导致并发加载失败）
+  if (url.includes('/api/cos-proxy/')) return false
   
   // 本地存储 URL 需要缓存
   if (url.includes('/api/images/file/')) return true
@@ -116,6 +119,8 @@ async function loadImage(url) {
   
   isLoading.value = true
   hasError.value = false
+  usedCache = false
+  originalUrl = url
   
   // 先显示占位图
   if (props.placeholder) {
@@ -136,6 +141,7 @@ async function loadImage(url) {
       if (cachedUrl) {
         objectUrl = cachedUrl
         displaySrc.value = cachedUrl
+        usedCache = true
         isLoading.value = false
         emit('cached', true)
         return
@@ -160,6 +166,20 @@ function handleLoad() {
 // 图片加载失败
 function handleError(e) {
   isLoading.value = false
+  
+  // 如果是缓存的 blob URL 加载失败，回退到原始 URL 直接显示（绕过缓存）
+  if (usedCache && originalUrl) {
+    console.warn('[CachedImage] blob URL 加载失败，回退到原始 URL:', originalUrl.substring(0, 60))
+    // 释放失败的 blob URL
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl)
+      objectUrl = null
+    }
+    usedCache = false
+    displaySrc.value = originalUrl
+    return // 不触发 error 事件，给原始 URL 一次机会
+  }
+  
   hasError.value = true
   
   // 显示占位图
