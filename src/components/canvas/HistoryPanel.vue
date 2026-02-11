@@ -21,6 +21,8 @@ import { getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { getCachedHistory, cacheHistory, invalidateCache } from '@/utils/historyCache'
+import { preloadImages } from '@/utils/imageCache'
+import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 
 const { t, currentLanguage } = useI18n()
@@ -285,6 +287,15 @@ async function loadHistory(forceRefresh = false) {
     
     // 异步写入 IndexedDB 缓存
     cacheHistory('all', spaceType, teamId, historyList.value).catch(() => {})
+    
+    // 预加载前 20 张图片到 IndexedDB（后台静默执行，不阻塞 UI）
+    const preloadUrls = historyList.value
+      .filter(item => item.type === 'image' && item.url)
+      .slice(0, 20)
+      .map(item => item.url)
+    if (preloadUrls.length > 0) {
+      preloadImages(preloadUrls, 3).catch(() => {})
+    }
   } catch (error) {
     console.error('[HistoryPanel] 加载历史记录失败:', error)
   } finally {
@@ -1634,14 +1645,13 @@ onUnmounted(() => {
                   </div>
                   <!-- 图片预览 -->
                   <template v-if="item.type === 'image'">
-                    <img 
+                    <CachedImage 
                       v-if="getPreviewContent(item) && !hasImageError(item)" 
                       :key="`img-${item.id}-${thumbnailFallback[item.id] ? 'fallback' : 'thumb'}`"
                       :src="getPreviewContent(item)" 
                       :alt="item.name"
-                      class="card-image"
+                      img-class="card-image"
                       loading="lazy"
-                      decoding="async"
                       @error="handleImageError(item)"
                     />
                     <div v-else class="card-placeholder image">
@@ -1653,13 +1663,12 @@ onUnmounted(() => {
                   <!-- 视频预览 -->
                   <template v-else-if="item.type === 'video'">
                     <!-- 优先使用缩略图 -->
-                    <img 
+                    <CachedImage 
                       v-if="getVideoThumbnail(item)" 
                       :src="getVideoThumbnail(item)" 
                       :alt="item.name"
-                      class="card-image"
+                      img-class="card-image"
                       loading="lazy"
-                      decoding="async"
                     />
                     <!-- 备用：直接使用 video 元素显示首帧 -->
                     <video 
@@ -1677,13 +1686,12 @@ onUnmounted(() => {
                   
                   <!-- 音频预览 -->
                   <template v-else-if="item.type === 'audio'">
-                    <img 
+                    <CachedImage 
                       v-if="getPreviewContent(item)" 
                       :src="getPreviewContent(item)" 
                       :alt="item.name || item.title"
-                      class="card-image"
+                      img-class="card-image"
                       loading="lazy"
-                      decoding="async"
                     />
                     <div v-else class="card-placeholder audio">
                       <span class="placeholder-icon">♪</span>

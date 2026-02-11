@@ -271,17 +271,22 @@ export async function loadImageWithCache(url, options = {}) {
   
   // 2. 从网络加载（预览模式会使用服务端 Redis 缓存）
   try {
-    const headers = options.headers || {}
-    
-    // 添加租户认证头
-    const tenantId = localStorage.getItem('tenantId')
-    const tenantKey = localStorage.getItem('tenantKey')
-    if (tenantId) headers['X-Tenant-ID'] = tenantId
-    if (tenantKey) headers['X-Tenant-Key'] = tenantKey
-    
-    // 使用预览 URL（会触发服务端 Redis 缓存）
     const fetchUrl = usePreview ? getPreviewUrl(url, previewWidth) : url
-    const response = await fetch(fetchUrl, { headers })
+    
+    // CDN URL 不需要认证头（跨域请求加自定义头会触发 preflight）
+    const isCDN = fetchUrl.startsWith('http://') || fetchUrl.startsWith('https://')
+    const fetchOptions = {}
+    
+    if (!isCDN) {
+      const headers = options.headers || {}
+      const tenantId = localStorage.getItem('tenantId')
+      const tenantKey = localStorage.getItem('tenantKey')
+      if (tenantId) headers['X-Tenant-ID'] = tenantId
+      if (tenantKey) headers['X-Tenant-Key'] = tenantKey
+      fetchOptions.headers = headers
+    }
+    
+    const response = await fetch(fetchUrl, fetchOptions)
     
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)

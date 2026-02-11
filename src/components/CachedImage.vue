@@ -78,9 +78,12 @@ const isLoading = ref(true)
 const hasError = ref(false)
 let objectUrl = null // 用于释放内存
 
-// 判断是否是需要缓存的 URL（代理 URL 或相对路径）
+// 判断是否是需要缓存的 URL
 function shouldCache(url) {
   if (!url || !props.cache) return false
+  
+  // blob: / data: URL 不缓存
+  if (url.startsWith('blob:') || url.startsWith('data:')) return false
   
   // COS 代理 URL 需要缓存
   if (url.includes('/api/cos-proxy/')) return true
@@ -90,10 +93,16 @@ function shouldCache(url) {
   if (url.includes('/api/videos/file/')) return true
   
   // 相对路径需要缓存
-  if (url.startsWith('/')) return true
+  if (url.startsWith('/api/') || url.startsWith('/storage/')) return true
   
-  // 七牛云等 CDN 不需要缓存（CDN 本身就有缓存）
-  if (url.includes('qiniucdn') || url.includes('clouddn') || url.includes('qnssl')) return false
+  // CDN 缩略图也缓存到 IndexedDB（带 imageView2 参数的是小图，适合缓存）
+  if (url.includes('imageView2') || url.includes('imageMogr2')) return true
+  
+  // 七牛云/腾讯云 CDN 原图不缓存（CDN 本身有缓存，原图太大）
+  if (url.includes('files.nananobanana.cn') || 
+      url.includes('qiniucdn') || url.includes('clouddn') || 
+      url.includes('qnssl') || url.includes('qbox.me') ||
+      url.includes('myqcloud.com')) return false
   
   return false
 }
