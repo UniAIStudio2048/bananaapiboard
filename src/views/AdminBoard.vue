@@ -2948,20 +2948,21 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- 支付方式列表 -->
+      <!-- 只读提示 -->
+      <div class="mb-6 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+        <div class="flex items-center">
+          <svg class="w-5 h-5 text-amber-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+          </svg>
+          <p class="text-sm text-amber-700 dark:text-amber-400">支付方式的添加、编辑、删除请前往 <span class="font-semibold">租户控制台（9000端口）→ 支付管理</span> 操作，此处仅供查看。</p>
+        </div>
+      </div>
+
+      <!-- 支付方式列表（只读） -->
       <div class="card">
-        <div class="p-6 border-b border-slate-200 dark:border-dark-600 flex items-center justify-between">
-          <div>
-            <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">支付配置</h3>
-            <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">配置系统支付方式，支持多种支付接口</p>
-          </div>
-          <button 
-            @click="openAddPaymentModal"
-            class="btn-primary flex items-center space-x-2"
-          >
-            <span>+</span>
-            <span>添加支付方式</span>
-          </button>
+        <div class="p-6 border-b border-slate-200 dark:border-dark-600">
+          <h3 class="text-lg font-bold text-slate-900 dark:text-slate-100">支付配置</h3>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">当前已配置的支付方式（只读）</p>
         </div>
 
         <div v-if="loadingPayment" class="p-12 text-center">
@@ -2970,8 +2971,7 @@ onUnmounted(() => {
         </div>
 
         <div v-else-if="paymentMethods.length === 0" class="p-12 text-center">
-          <p class="text-slate-500 dark:text-slate-400 mb-4">暂无支付方式</p>
-          <button @click="openAddPaymentModal" class="btn-primary">添加第一个支付方式</button>
+          <p class="text-slate-500 dark:text-slate-400">暂无支付方式，请前往租户控制台（9000端口）添加</p>
         </div>
 
         <div v-else class="overflow-x-auto">
@@ -2979,40 +2979,28 @@ onUnmounted(() => {
             <thead class="bg-slate-50 dark:bg-dark-700">
               <tr>
                 <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">ID</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">启用</th>
+                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">状态</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">显示名称</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">支付接口</th>
                 <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">通知地址</th>
-                <th class="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">操作</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-200 dark:divide-dark-600">
               <tr 
-                v-for="(method, index) in paymentMethods" 
+                v-for="method in paymentMethods" 
                 :key="method.id"
                 class="hover:bg-slate-50 dark:hover:bg-dark-700/50"
-                draggable="true"
-                @dragstart="handleDragStart($event, index)"
-                @dragover.prevent
-                @drop="handleDrop($event, index)"
               >
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <div class="flex items-center">
-                    <span class="text-slate-400 cursor-move mr-2">☰</span>
-                    <span class="text-sm text-slate-900 dark:text-slate-100">{{ method.id }}</span>
-                  </div>
+                  <span class="text-sm text-slate-900 dark:text-slate-100">{{ method.id }}</span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <button
-                    @click="togglePaymentEnabled(method)"
-                    class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors"
-                    :class="method.enabled ? 'bg-primary-600' : 'bg-slate-300 dark:bg-dark-500'"
+                  <span 
+                    class="px-2 py-1 text-xs rounded-full"
+                    :class="method.enabled ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' : 'bg-slate-100 dark:bg-dark-600 text-slate-500 dark:text-slate-400'"
                   >
-                    <span
-                      class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"
-                      :class="method.enabled ? 'translate-x-6' : 'translate-x-1'"
-                    ></span>
-                  </button>
+                    {{ method.enabled ? '已启用' : '已禁用' }}
+                  </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
                   <span class="text-sm font-medium text-slate-900 dark:text-slate-100">{{ method.name }}</span>
@@ -3027,262 +3015,12 @@ onUnmounted(() => {
                     {{ getPaymentNotifyUrl(method.id) }}
                   </span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap">
-                  <div class="flex items-center space-x-2">
-                    <button
-                      @click="openEditPaymentModal(method)"
-                      class="text-primary-600 hover:text-primary-800 dark:text-primary-400 dark:hover:text-primary-300"
-                      title="编辑"
-                    >
-                      ✏️
-                    </button>
-                    <button
-                      @click="deletePaymentMethod(method)"
-                      class="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                      title="删除"
-                    >
-                      🗑️
-                    </button>
-                  </div>
-                </td>
               </tr>
             </tbody>
           </table>
         </div>
       </div>
     </div><!-- 支付配置管理内容结束 -->
-
-    <!-- 支付方式编辑模态框 -->
-    <div v-if="showPaymentModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @click.self="closePaymentModal">
-      <div class="bg-white dark:bg-dark-700 rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-        <div class="p-6 border-b border-slate-200 dark:border-dark-600">
-          <div class="flex items-center justify-between">
-            <h3 class="text-xl font-bold text-slate-900 dark:text-slate-100">
-              {{ editingPaymentMethod ? '编辑支付方式' : '添加支付方式' }}
-            </h3>
-            <button @click="closePaymentModal" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-              </svg>
-            </button>
-          </div>
-        </div>
-
-        <div class="p-6 space-y-4">
-          <!-- 显示名称 -->
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">显示名称</label>
-            <input 
-              v-model="paymentForm.name" 
-              class="input w-full" 
-              type="text" 
-              placeholder="用于前端显示使用"
-            />
-          </div>
-
-          <!-- 图标URL -->
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">图标URL(选填)</label>
-            <input 
-              v-model="paymentForm.icon_url" 
-              class="input w-full" 
-              type="text" 
-              placeholder="用于前端显示使用(https://x.com/icon.svg)"
-            />
-          </div>
-
-          <!-- 自定义通知域名 -->
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">自定义通知域名(选填)</label>
-            <input 
-              v-model="paymentForm.notify_domain" 
-              class="input w-full" 
-              type="text" 
-              placeholder="网关的通知将会发送到该域名(https://x.com)"
-            />
-          </div>
-
-          <!-- 手续费配置 -->
-          <div class="grid grid-cols-2 gap-4">
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">百分比手续费(选填)</label>
-              <div class="flex items-center">
-                <input 
-                  v-model.number="paymentForm.fee_percent" 
-                  class="input w-full" 
-                  type="number" 
-                  step="0.01"
-                  min="0"
-                  placeholder="在订单金额基础上附加手..."
-                />
-                <span class="ml-2 text-slate-500">%</span>
-              </div>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">固定手续费(选填)</label>
-              <input 
-                v-model.number="paymentForm.fee_fixed" 
-                class="input w-full" 
-                type="number" 
-                min="0"
-                placeholder="在订单金额基础上附加手续费"
-              />
-            </div>
-          </div>
-
-          <!-- 接口文件选择 -->
-          <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">接口文件</label>
-            <select v-model="paymentForm.module" class="input w-full" @change="onModuleChange">
-              <option value="">请选择支付接口</option>
-              <option 
-                v-for="mod in paymentModules.filter(m => m.available !== false)" 
-                :key="mod.name" 
-                :value="mod.name"
-              >
-                {{ mod.name }} {{ mod.description ? `- ${mod.description}` : '' }}
-              </option>
-            </select>
-            <p v-if="paymentModules.filter(m => m.available !== false).length === 0" class="text-xs text-red-500 mt-1">
-              暂无可用的支付模块，请确保后端服务正常运行
-            </p>
-          </div>
-
-          <!-- EPay 配置字段 -->
-          <template v-if="paymentForm.module === 'EPay'">
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">URL</label>
-              <input 
-                v-model="paymentForm.config.url" 
-                class="input w-full" 
-                type="text" 
-                placeholder="易支付网关地址"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">PID</label>
-              <input 
-                v-model="paymentForm.config.pid" 
-                class="input w-full" 
-                type="text" 
-                placeholder="商户ID"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">KEY</label>
-              <input 
-                v-model="paymentForm.config.key" 
-                class="input w-full" 
-                type="password" 
-                placeholder="商户密钥"
-              />
-            </div>
-          </template>
-
-          <!-- AlipayF2F 配置字段 -->
-          <template v-if="paymentForm.module === 'AlipayF2F'">
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">支付宝APPID</label>
-              <input 
-                v-model="paymentForm.config.appId" 
-                class="input w-full" 
-                type="text" 
-                placeholder="支付宝应用ID"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">支付宝私钥</label>
-              <textarea 
-                v-model="paymentForm.config.privateKey" 
-                class="input w-full h-24" 
-                placeholder="RSA2私钥"
-              ></textarea>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">支付宝公钥</label>
-              <textarea 
-                v-model="paymentForm.config.alipayPublicKey" 
-                class="input w-full h-24" 
-                placeholder="支付宝公钥"
-              ></textarea>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">自定义商品名称</label>
-              <input 
-                v-model="paymentForm.config.productName" 
-                class="input w-full" 
-                type="text" 
-                placeholder="将会体现在支付宝账单中"
-              />
-            </div>
-          </template>
-
-          <!-- AlipayPage 支付宝电脑网站支付配置字段 -->
-          <template v-if="paymentForm.module === 'AlipayPage'">
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">支付宝APPID</label>
-              <input 
-                v-model="paymentForm.config.appId" 
-                class="input w-full" 
-                type="text" 
-                placeholder="支付宝应用ID"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">应用私钥</label>
-              <textarea 
-                v-model="paymentForm.config.privateKey" 
-                class="input w-full h-24" 
-                placeholder="RSA2私钥（不需要包含头尾）"
-              ></textarea>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">支付宝公钥</label>
-              <textarea 
-                v-model="paymentForm.config.alipayPublicKey" 
-                class="input w-full h-24" 
-                placeholder="支付宝公钥（不需要包含头尾）"
-              ></textarea>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">自定义商品名称</label>
-              <input 
-                v-model="paymentForm.config.productName" 
-                class="input w-full" 
-                type="text" 
-                placeholder="将会体现在支付宝账单中"
-              />
-            </div>
-          </template>
-
-          <!-- 通知地址显示 -->
-          <div v-if="editingPaymentMethod" class="p-4 bg-slate-50 dark:bg-dark-600 rounded-lg">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">通知地址</label>
-            <div class="flex items-center space-x-2">
-              <input 
-                :value="getPaymentNotifyUrl(editingPaymentMethod.id, paymentForm.notify_domain)" 
-                class="input w-full bg-white dark:bg-dark-700" 
-                type="text" 
-                readonly
-              />
-              <button 
-                @click="copyNotifyUrl(editingPaymentMethod.id, paymentForm.notify_domain)"
-                class="btn-secondary whitespace-nowrap"
-              >
-                复制
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div class="p-6 border-t border-slate-200 dark:border-dark-600 flex justify-end space-x-3">
-          <button @click="closePaymentModal" class="btn-secondary">取 消</button>
-          <button @click="savePaymentMethod" class="btn-primary" :disabled="loadingPayment">
-            {{ loadingPayment ? '保存中...' : (editingPaymentMethod ? '保 存' : '添 加') }}
-          </button>
-        </div>
-      </div>
-    </div>
 
     <!-- 套餐编辑模态框 -->
     <div v-if="showEditPackageModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" @click.self="closeEditPackage">
