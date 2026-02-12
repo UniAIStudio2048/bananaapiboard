@@ -59,6 +59,21 @@ const isTencentAigcModel = computed(() => {
   return currentModelConfig.value?.apiType === 'tencentaigc'
 })
 
+// 当前模型是否为 Kling Omni-Video O1（全能视频模型，包括文/图生视频和视频编辑）
+const isKlingOmniModel = computed(() => {
+  return currentModelConfig.value?.isKlingOmni || currentModelConfig.value?.apiType === 'kling-omni' || currentModelConfig.value?.apiType === 'kling-omni-edit'
+})
+
+// 当前模型是否为 Kling O1 视频编辑模型
+const isKlingOmniEditModel = computed(() => {
+  return currentModelConfig.value?.isKlingOmniEdit || currentModelConfig.value?.apiType === 'kling-omni-edit'
+})
+
+// O1 视频参考模式：feature=特征参考, base=视频编辑
+const omniVideoReferType = ref(props.data.omniVideoReferType || 'feature')
+// O1 是否保留视频原声
+const omniKeepSound = ref(props.data.omniKeepSound || 'yes')
+
 // 节点尺寸 - 视频生成节点使用16:9比例
 const nodeWidth = ref(props.data.width || 420)
 const nodeHeight = ref(props.data.height || 240)
@@ -326,6 +341,13 @@ function selectModel(modelValue) {
   if (aspectValues.length > 0 && !aspectValues.includes(selectedAspectRatio.value)) {
     selectedAspectRatio.value = aspectValues[0]
   }
+  
+  // Kling O1 视频编辑模型默认使用 base（视频编辑）模式
+  if (newModelConfig?.isKlingOmniEdit) {
+    omniVideoReferType.value = 'base'
+  } else if (newModelConfig?.isKlingOmni) {
+    omniVideoReferType.value = 'feature'
+  }
 }
 
 function handleModelDropdownClickOutside(event) {
@@ -358,7 +380,9 @@ async function handleGenerate() {
     model: selectedModel.value,
     duration: selectedDuration.value,
     aspectRatio: selectedAspectRatio.value,
-    offPeak: isViduModel.value ? offPeak.value : false
+    offPeak: isViduModel.value ? offPeak.value : false,
+    omniVideoReferType: isKlingOmniModel.value ? omniVideoReferType.value : undefined,
+    omniKeepSound: isKlingOmniModel.value ? omniKeepSound.value : undefined
   })
   
   try {
@@ -366,13 +390,31 @@ async function handleGenerate() {
     
     if (isImageToVideo.value) {
       // 图生视频
-      result = await generateVideoFromImage({
+      const genParams = {
         prompt: inheritedText.value || props.data.text || '',
         imageUrl: inheritedImages.value[0],
         model: selectedModel.value,
         duration: selectedDuration.value,
         aspectRatio: selectedAspectRatio.value,
         offPeak: isViduModel.value && offPeak.value
+      }
+      // O1 特有参数：视频参考
+      if (isKlingOmniModel.value && inheritedVideos.value.length > 0) {
+        genParams.klingOmniVideoUrl = inheritedVideos.value[0]
+        genParams.klingOmniVideoReferType = omniVideoReferType.value
+        genParams.klingOmniKeepSound = omniKeepSound.value
+      }
+      result = await generateVideoFromImage(genParams)
+    } else if (isKlingOmniModel.value && isVideoToVideo.value) {
+      // O1 视频参考/编辑模式（无参考图片，有参考视频）
+      result = await generateVideoFromText({
+        prompt: inheritedText.value || props.data.text || '',
+        model: selectedModel.value,
+        duration: selectedDuration.value,
+        aspectRatio: selectedAspectRatio.value,
+        klingOmniVideoUrl: inheritedVideos.value[0],
+        klingOmniVideoReferType: omniVideoReferType.value,
+        klingOmniKeepSound: omniKeepSound.value
       })
     } else {
       // 文生视频
@@ -536,7 +578,7 @@ function handleAddClick(event) {
         <div v-else class="canvas-node-preview-empty">
           <div v-if="inheritedText || hasReferenceMedia">
             <div class="inherited-label">
-              {{ isVideoToVideo ? '参考视频已就绪' : (isImageToVideo ? '参考图片已就绪' : '提示词已就绪') }}
+              {{ isVideoToVideo ? (isKlingOmniModel ? (omniVideoReferType === 'base' ? '视频编辑模式' : '视频参考已就绪') : '参考视频已就绪') : (isImageToVideo ? '参考图片已就绪' : '提示词已就绪') }}
             </div>
             <div v-if="inheritedText" class="inherited-text">
               {{ inheritedText.slice(0, 80) }}{{ inheritedText.length > 80 ? '...' : '' }}
@@ -601,8 +643,13 @@ function handleAddClick(event) {
             </Transition>
           </div>
           
-          <!-- 时长选择 -->
-          <select v-model="selectedDuration" class="param-select">
+          <!-- 时长选择（视频编辑 base 模式下禁用，时长跟随输入视频） -->
+          <select 
+            v-model="selectedDuration" 
+            class="param-select"
+            :disabled="isKlingOmniEditModel && omniVideoReferType === 'base' && inheritedVideos.length > 0"
+            :title="isKlingOmniEditModel && omniVideoReferType === 'base' && inheritedVideos.length > 0 ? '视频编辑模式下时长跟随输入视频' : ''"
+          >
             <option v-for="d in availableDurations" :key="d" :value="d">{{ d }}s</option>
           </select>
           
@@ -621,6 +668,22 @@ function handleAddClick(event) {
             <span class="toggle-icon">🌙</span>
             <span class="toggle-text">{{ offPeak ? '错峰' : '错峰' }}</span>
           </label>
+          
+          <!-- O1 视频参考控制（仅当有上游视频且为 O1 模型时显示） -->
+          <template v-if="isKlingOmniModel && inheritedVideos.length > 0">
+            <select v-model="omniVideoReferType" class="param-select">
+              <option value="feature">视频参考</option>
+              <option value="base">视频编辑</option>
+            </select>
+          </template>
+          <!-- O1 保留原声开关（视频编辑模型始终显示，文/图生视频模型仅有视频时显示） -->
+          <template v-if="(isKlingOmniEditModel && inheritedVideos.length > 0) || (isKlingOmniModel && inheritedVideos.length > 0)">
+            <label class="off-peak-toggle" :class="{ 'active': omniKeepSound === 'yes' }">
+              <input type="checkbox" :checked="omniKeepSound === 'yes'" @change="omniKeepSound = $event.target.checked ? 'yes' : 'no'" />
+              <span class="toggle-icon">🔊</span>
+              <span class="toggle-text">原声</span>
+            </label>
+          </template>
         </div>
         
         <div class="gen-actions">
@@ -633,7 +696,7 @@ function handleAddClick(event) {
           <button 
             v-if="!hasOutput"
             class="canvas-node-btn"
-            :disabled="data.status === 'processing' || (!inheritedText && !inheritedImages.length)"
+            :disabled="data.status === 'processing' || (!inheritedText && !inheritedImages.length && !inheritedVideos.length)"
             @click="handleGenerate"
           >
             {{ data.status === 'processing' ? '...' : '→ 生成' }}
@@ -847,6 +910,11 @@ function handleAddClick(event) {
   font-size: 11px;
   padding: 4px 6px;
   cursor: pointer;
+}
+
+.param-select:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .gen-actions {

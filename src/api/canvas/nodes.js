@@ -111,7 +111,7 @@ export async function generateImageFromImage(params) {
  * 视频生成 - 文生视频
  */
 export async function generateVideoFromText(params) {
-  const { prompt, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false } = params
+  const { prompt, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl } = params
   
   const body = {
     prompt,
@@ -123,6 +123,16 @@ export async function generateVideoFromText(params) {
   // Vidu 错峰模式
   if (offPeak) {
     body.off_peak = true
+  }
+  
+  // Kling Omni-Video O1 特有参数
+  if (klingOmniVideoUrl) {
+    body.kling_omni_video_url = klingOmniVideoUrl
+    body.kling_omni_video_refer_type = klingOmniVideoReferType || 'feature'
+    body.kling_omni_keep_sound = klingOmniKeepSound || 'yes'
+  }
+  if (klingOmniEndFrameUrl) {
+    body.kling_omni_end_frame_url = klingOmniEndFrameUrl
   }
   
   const response = await fetch(getApiUrl('/api/videos/generate'), {
@@ -147,7 +157,7 @@ export async function generateVideoFromText(params) {
  * 视频生成 - 图生视频
  */
 export async function generateVideoFromImage(params) {
-  const { prompt, imageUrl, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false } = params
+  const { prompt, imageUrl, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl } = params
   
   const body = {
     prompt,
@@ -160,6 +170,16 @@ export async function generateVideoFromImage(params) {
   // Vidu 错峰模式
   if (offPeak) {
     body.off_peak = true
+  }
+  
+  // Kling Omni-Video O1 特有参数
+  if (klingOmniVideoUrl) {
+    body.kling_omni_video_url = klingOmniVideoUrl
+    body.kling_omni_video_refer_type = klingOmniVideoReferType || 'base'
+    body.kling_omni_keep_sound = klingOmniKeepSound || 'yes'
+  }
+  if (klingOmniEndFrameUrl) {
+    body.kling_omni_end_frame_url = klingOmniEndFrameUrl
   }
   
   const response = await fetch(getApiUrl('/api/videos/generate'), {

@@ -760,6 +760,43 @@ export const getAvailableVideoModels = (options = {}) => {
       durations: ['5', '10'],
       isImageToVideo: true,
       supportedModes: { t2v: false, i2v: true, a2v: false }
+    },
+    // ==================== Kling O1 文/图生视频 ====================
+    'kling-video-o1-pro': { 
+      label: 'Kling O1 文/图生视频 (专家)', 
+      icon: 'K', 
+      description: '可灵 O1 文/图生视频，支持首尾帧、仅主体参考最多7张图', 
+      hasDurationPricing: true, 
+      pointsCost: { '5': 60, '10': 120 }, 
+      durations: ['5', '10'],
+      aspectRatios: [
+        { value: '16:9', label: '横屏 (16:9)' },
+        { value: '9:16', label: '竖屏 (9:16)' },
+        { value: '1:1', label: '方形 (1:1)' }
+      ],
+      isImageToVideo: false,
+      isKlingOmni: true,
+      maxRefImages: 7,
+      supportedModes: { t2v: true, i2v: true, a2v: false }
+    },
+    // ==================== Kling O1 视频编辑 ====================
+    'kling-video-o1-edit-pro': { 
+      label: 'Kling O1 视频编辑 (专家)', 
+      icon: 'K', 
+      description: '可灵 O1 视频编辑，输入3~10s视频，有视频时最多4张图', 
+      hasDurationPricing: true, 
+      pointsCost: { '5': 60, '10': 120, '15': 180 }, 
+      durations: ['5', '10'],
+      aspectRatios: [
+        { value: '16:9', label: '横屏 (16:9)' },
+        { value: '9:16', label: '竖屏 (9:16)' },
+        { value: '1:1', label: '方形 (1:1)' }
+      ],
+      isImageToVideo: false,
+      isKlingOmni: true,
+      isKlingOmniEdit: true,
+      maxRefImages: 4,
+      supportedModes: { t2v: true, i2v: true, a2v: false }
     }
   }
   
@@ -1145,7 +1182,11 @@ export const getAvailableVideoModels = (options = {}) => {
         veoModes: defaultConfig.veoModes,
         veoResolutions: defaultConfig.veoResolutions,
         defaultVeoMode: defaultConfig.defaultVeoMode,
-        defaultVeoResolution: defaultConfig.defaultVeoResolution
+        defaultVeoResolution: defaultConfig.defaultVeoResolution,
+        // Kling Omni-Video O1 特有属性
+        isKlingOmni: modelConfig.apiType === 'kling-omni' || modelConfig.apiType === 'kling-omni-edit' || defaultConfig.isKlingOmni || false,
+        isKlingOmniEdit: modelConfig.apiType === 'kling-omni-edit' || modelConfig.isKlingOmniEdit || defaultConfig.isKlingOmniEdit || false,
+        maxRefImages: modelConfig.maxRefImages || defaultConfig.maxRefImages || undefined
       })
     }
     

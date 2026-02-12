@@ -779,8 +779,10 @@ function startPolling() {
       if (taskData) {
         if (taskData.status === 'completed') {
           await updateTaskInLists(task.id, 'completed', taskData.url)
+          window.dispatchEvent(new CustomEvent('user-info-updated'))
         } else if (taskData.status === 'failed' || taskData.status === 'timeout') {
           await updateTaskInLists(task.id, 'failed', null, taskData.error || (taskData.status === 'timeout' ? '生成超时' : '生成失败'))
+          window.dispatchEvent(new CustomEvent('user-info-updated'))
         }
       }
     }
@@ -810,8 +812,10 @@ async function refreshGallery() {
     if (taskData) {
       if (taskData.status === 'completed') {
         await updateTaskInLists(task.id, 'completed', taskData.url)
+        window.dispatchEvent(new CustomEvent('user-info-updated'))
       } else if (taskData.status === 'failed' || taskData.status === 'timeout') {
         await updateTaskInLists(task.id, 'failed', null, taskData.error || (taskData.status === 'timeout' ? '生成超时' : '生成失败'))
+        window.dispatchEvent(new CustomEvent('user-info-updated'))
       }
     }
   }
@@ -904,6 +908,9 @@ async function generate() {
     // 调用生成API
     const j = await generateImage(payload)
     console.log('[generate] API响应:', j)
+    
+    // 积分可能已扣除，立即刷新导航栏积分
+    window.dispatchEvent(new CustomEvent('user-info-updated'))
     
     // 立即创建一个任务记录
     const newTask = { 

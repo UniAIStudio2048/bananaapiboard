@@ -391,25 +391,20 @@ const KLING_CAMERA_CONFIGS = [
 ]
 
 // Kling 2.6+ 音频相关选项
-const klingSoundEnabled = ref(props.data.klingSoundEnabled || false)  // 是否生成声音
 const klingVoiceList = ref(props.data.klingVoiceList || [])  // 音色列表（最多2个）
 const klingVoiceInput = ref('')  // 音色ID输入框
 
-// 检测是否是 Kling 2.6+ 版本（支持音频功能）
+// 检测是否是 Kling 2.6+ 版本（支持音频 sound 参数）
+// 仅按模型 name 匹配，2.5 及以下不支持 sound 参数
 const isKling26Plus = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
-  // 检测 v2.6 或更高版本
-  return modelName.includes('kling') && (
-    modelName.includes('2.6') || 
+  if (!modelName.includes('kling')) return false
+  // 匹配 2.6、2-6、3.0、3-0、v3 等版本号
+  return modelName.includes('2.6') || 
     modelName.includes('2-6') ||
-    modelName.includes('v2.6') ||
-    modelName.includes('v2-6') ||
-    // 未来版本
-    modelName.includes('2.7') ||
-    modelName.includes('2.8') ||
-    modelName.includes('2.9') ||
-    modelName.includes('3.0')
-  )
+    modelName.includes('3.0') ||
+    modelName.includes('3-0') ||
+    modelName.includes('v3')
 })
 
 // 检测是否是 Kling Pro 模式（只有 Pro 模式支持生成声音）
@@ -418,6 +413,9 @@ const isKlingProMode = computed(() => {
   // 检测模型名称中是否包含 pro
   return modelName.includes('kling') && modelName.includes('pro')
 })
+
+// Kling 2.6+ 声音开关（默认开启，仅 isKling26Plus 时生效）
+const klingSoundEnabled = ref(props.data.klingSoundEnabled ?? true)
 
 // 检测是否是 Kling 动作迁移模型（Motion Control）
 const isKlingMotionControl = computed(() => {
@@ -556,7 +554,7 @@ const buildKlingCameraControl = () => {
 
 // 构建 Kling voice_list 参数
 const buildKlingVoiceList = () => {
-  if (!klingSoundEnabled.value || klingVoiceList.value.length === 0) {
+  if (klingVoiceList.value.length === 0) {
     return null
   }
   return klingVoiceList.value.map(voiceId => ({ voice_id: voiceId }))
@@ -1317,8 +1315,8 @@ const pointsCost = computed(() => {
     cost = Math.ceil(cost * discount)
   }
   
-  // Kling 2.6+ Pro 声音模式：积分翻倍
-  if (isKlingProMode.value && klingSoundEnabled.value) {
+  // Kling 2.6+ 声音模式：开启时积分翻倍
+  if (isKling26Plus.value && klingSoundEnabled.value) {
     cost = cost * 2
   }
   
@@ -1603,8 +1601,8 @@ function handleMotionImitation() {
 }
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingSoundEnabled, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled], 
-  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingSndEnabled, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled]) => {
+watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled], 
+  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       aspectRatio,
@@ -1622,8 +1620,8 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
       klingCameraConfig: klingCamConfig,
       klingCameraValue: klingCamValue,
       // Kling 2.6+ 音频参数
-      klingSoundEnabled: klingSndEnabled,
       klingVoiceList: klingVoices,
+      klingSoundEnabled: klingSndEnabled,
       // Kling 动作迁移参数
       klingMotionVideoUrl: motionVideoUrl,
       klingMotionMode: motionMode,
@@ -1992,14 +1990,13 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
     }
   }
   
-  // Kling 2.6+ 模型特有参数：声音和音色
+  // Kling 2.6+ 模型特有参数：声音开关和音色
   if (isKling26Plus.value) {
-    // sound 参数
+    // 声音开关参数
     formData.append('kling_sound', klingSoundEnabled.value ? 'on' : 'off')
-    console.log('[VideoNode] Kling 生成声音:', klingSoundEnabled.value ? 'on' : 'off')
-    
+    console.log('[VideoNode] Kling 声音:', klingSoundEnabled.value ? 'on' : 'off')
     // voice_list 参数
-    if (klingSoundEnabled.value && klingVoiceList.value.length > 0) {
+    if (klingVoiceList.value.length > 0) {
       const voiceList = buildKlingVoiceList()
       if (voiceList) {
         formData.append('kling_voice_list', JSON.stringify(voiceList))
@@ -4796,6 +4793,20 @@ function handleToolbarPreview() {
         <!-- 高级选项内容 -->
         <Transition name="slide-down">
           <div v-if="showKlingAdvancedOptions" class="sora2-advanced-options kling-advanced">
+            <!-- Kling 2.6+ 声音开关 -->
+            <template v-if="isKling26Plus">
+              <div class="sora2-option-row">
+                <span class="sora2-option-label">🔊 生成声音 <span v-if="klingSoundEnabled" class="kling-sound-multiplier">(2x)</span></span>
+                <label class="sora2-toggle-switch">
+                  <input type="checkbox" v-model="klingSoundEnabled" />
+                  <span class="sora2-toggle-slider"></span>
+                </label>
+              </div>
+              <div class="seedance-sound-hint">
+                💡 开启后将同时生成视频音频，积分消耗翻倍
+              </div>
+            </template>
+            
             <!-- 摄像机控制开关 -->
             <div class="sora2-option-row">
               <span class="sora2-option-label">🎥 摄像机控制</span>
@@ -4869,61 +4880,6 @@ function handleToolbarPreview() {
               <div v-if="klingCameraType && klingCameraType !== 'simple'" class="kling-camera-tip">
                 💡 {{ KLING_CAMERA_TYPES.find(t => t.value === klingCameraType)?.description || '' }}
               </div>
-            </template>
-            
-            <!-- Kling 2.6+ Pro 音频选项（只有 Pro 模式支持声音生成）-->
-            <template v-if="isKling26Plus && isKlingProMode">
-              <div class="kling-section-divider"></div>
-              
-              <!-- 生成声音开关 -->
-              <div class="sora2-option-row">
-                <span class="sora2-option-label">🔊 生成声音 <span v-if="klingSoundEnabled" class="kling-sound-multiplier">(2x)</span></span>
-                <label class="sora2-toggle-switch">
-                  <input type="checkbox" v-model="klingSoundEnabled" />
-                  <span class="sora2-toggle-slider"></span>
-                </label>
-              </div>
-              
-              <!-- 启用声音后显示音色配置 -->
-              <template v-if="klingSoundEnabled">
-                <!-- 音色列表 - 独立容器确保样式隔离 -->
-                <div class="kling-voice-section">
-                  <div class="kling-voice-title">
-                    <span>音色列表</span>
-                    <span class="kling-voice-count">({{ klingVoiceList.length }}/2)</span>
-                  </div>
-                  
-                  <!-- 已添加的音色 -->
-                  <div v-if="klingVoiceList.length > 0" class="kling-voice-tags">
-                    <span 
-                      v-for="voiceId in klingVoiceList" 
-                      :key="voiceId" 
-                      class="kling-voice-tag"
-                    >
-                      {{ voiceId }}
-                      <button class="kling-voice-remove" @click="removeKlingVoice(voiceId)">×</button>
-                    </span>
-                  </div>
-                  
-                  <!-- 添加音色输入框 -->
-                  <div v-if="klingVoiceList.length < 2" class="kling-voice-input-row">
-                    <input 
-                      type="text" 
-                      v-model="klingVoiceInput"
-                      placeholder="输入音色ID"
-                      class="kling-voice-input"
-                      @keyup.enter="addKlingVoice"
-                    />
-                    <button class="kling-voice-add-btn" @click="addKlingVoice" :disabled="!klingVoiceInput.trim()">
-                      添加
-                    </button>
-                  </div>
-                  
-                  <div class="kling-voice-hint">
-                    💡 在 prompt 中使用 @音色ID 引用音色，最多添加2个
-                  </div>
-                </div>
-              </template>
             </template>
             
             <!-- Kling 动作迁移配置（Motion Control） -->
