@@ -50,6 +50,37 @@ const rechargeCouponCode = ref('')
 const rechargeLoading = ref(false)
 const rechargeError = ref('')
 
+// 余额划转永久积分状态
+const showConvertModal = ref(false)
+const convertAmount = ref('')
+const convertLoading = ref(false)
+const convertError = ref('')
+const convertSuccess = ref('')
+const convertExchangeRate = ref(10) // 1元 = 10积分
+
+// 永久积分转让状态
+const showTransferPointsModal = ref(false)
+const transferPointsForm = ref({
+  recipientQuery: '',
+  selectedRecipient: null,
+  amount: null,
+  memo: '',
+  recipientError: '',
+  amountError: ''
+})
+const recipientSuggestions = ref([])
+const transferringPoints = ref(false)
+const transferPointsError = ref('')
+const transferPointsSuccess = ref('')
+let recipientSearchTimeout = null
+
+// 转让确认弹窗
+const showTransferConfirm = ref(false)
+
+// Toast 通知
+const toastInfo = ref({ show: false, type: 'success', title: '', message: '' })
+let toastTimer = null
+
 // 快捷充值金额（单位：分）
 const quickAmounts = [
   { label: '¥3', value: 300 },
@@ -514,6 +545,227 @@ async function confirmPurchase() {
   }
 }
 
+// ========== 余额划转永久积分 ==========
+const convertCalculatedPoints = computed(() => {
+  const yuan = parseFloat(convertAmount.value) || 0
+  return Math.floor(yuan * convertExchangeRate.value)
+})
+
+function openConvertModal() {
+  convertAmount.value = ''
+  convertError.value = ''
+  convertSuccess.value = ''
+  showConvertModal.value = true
+}
+
+function closeConvertModal() {
+  showConvertModal.value = false
+  convertAmount.value = ''
+  convertError.value = ''
+  convertSuccess.value = ''
+}
+
+async function submitConvert() {
+  const yuan = parseFloat(convertAmount.value)
+  if (!yuan || yuan <= 0) {
+    convertError.value = '请输入有效的金额'
+    return
+  }
+  if (yuan < 1) {
+    convertError.value = '最低划转金额为1元'
+    return
+  }
+  const amountInCents = Math.floor(yuan * 100)
+  if ((user.value?.balance || 0) < amountInCents) {
+    convertError.value = `余额不足，当前余额 ${((user.value?.balance || 0) / 100).toFixed(2)} 元`
+    return
+  }
+
+  convertLoading.value = true
+  convertError.value = ''
+  convertSuccess.value = ''
+
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch('/api/user/balance-to-points', {
+      method: 'POST',
+      headers: {
+        ...getTenantHeaders(),
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ amount: amountInCents })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || '划转失败')
+
+    convertSuccess.value = data.message || `成功划转 ${yuan.toFixed(2)} 元为 ${data.points} 积分`
+
+    if (data.newBalance !== undefined && data.newPoints !== undefined) {
+      user.value = {
+        ...user.value,
+        balance: data.newBalance,
+        points: data.newPoints,
+        package_points: data.newPackagePoints !== undefined ? data.newPackagePoints : user.value.package_points
+      }
+    }
+
+    window.dispatchEvent(new CustomEvent('user-info-updated'))
+    emit('purchase-success')
+
+    setTimeout(() => closeConvertModal(), 2000)
+  } catch (e) {
+    convertError.value = e.message || '划转失败，请重试'
+  } finally {
+    convertLoading.value = false
+  }
+}
+
+// ========== 永久积分转让 ==========
+function openTransferPointsModal() {
+  transferPointsForm.value = {
+    recipientQuery: '',
+    selectedRecipient: null,
+    amount: null,
+    memo: '',
+    recipientError: '',
+    amountError: ''
+  }
+  recipientSuggestions.value = []
+  transferPointsError.value = ''
+  transferPointsSuccess.value = ''
+  showTransferPointsModal.value = true
+}
+
+function closeTransferPointsModal() {
+  showTransferPointsModal.value = false
+  transferPointsForm.value = {
+    recipientQuery: '',
+    selectedRecipient: null,
+    amount: null,
+    memo: '',
+    recipientError: '',
+    amountError: ''
+  }
+  recipientSuggestions.value = []
+}
+
+const canTransferPoints = computed(() => {
+  return transferPointsForm.value.selectedRecipient
+    && transferPointsForm.value.amount > 0
+    && transferPointsForm.value.amount <= (user.value?.points || 0)
+    && !transferPointsForm.value.recipientError
+    && !transferPointsForm.value.amountError
+})
+
+function handleRecipientSearch() {
+  const query = transferPointsForm.value.recipientQuery.trim()
+  if (transferPointsForm.value.selectedRecipient) {
+    transferPointsForm.value.selectedRecipient = null
+  }
+  transferPointsForm.value.recipientError = ''
+
+  if (query.length < 3) {
+    recipientSuggestions.value = []
+    if (query.length > 0 && query.length < 3) {
+      transferPointsForm.value.recipientError = '请至少输入3个字符'
+    }
+    return
+  }
+
+  clearTimeout(recipientSearchTimeout)
+  recipientSearchTimeout = setTimeout(async () => {
+    try {
+      const token = localStorage.getItem('token')
+      const res = await fetch(`/api/user/search-users?q=${encodeURIComponent(query)}`, {
+        headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
+      })
+      if (!res.ok) throw new Error('搜索失败')
+      const data = await res.json()
+      recipientSuggestions.value = data.users || []
+      if (data.users.length === 0) {
+        transferPointsForm.value.recipientError = '未找到匹配的用户'
+      }
+    } catch (e) {
+      transferPointsForm.value.recipientError = '搜索失败，请重试'
+      recipientSuggestions.value = []
+    }
+  }, 300)
+}
+
+function selectRecipient(u) {
+  transferPointsForm.value.selectedRecipient = u
+  transferPointsForm.value.recipientQuery = u.username || u.email
+  recipientSuggestions.value = []
+}
+
+function clearRecipient() {
+  transferPointsForm.value.selectedRecipient = null
+  transferPointsForm.value.recipientQuery = ''
+  recipientSuggestions.value = []
+}
+
+function confirmTransferPoints() {
+  if (!canTransferPoints.value) return
+  const amount = transferPointsForm.value.amount
+  if (!amount || amount <= 0) {
+    transferPointsForm.value.amountError = '转让金额必须大于0'
+    return
+  }
+  if (amount > (user.value?.points || 0)) {
+    transferPointsForm.value.amountError = '转让金额不能超过当前永久积分'
+    return
+  }
+  showTransferConfirm.value = true
+}
+
+async function executeTransferPoints() {
+  showTransferConfirm.value = false
+  transferringPoints.value = true
+  transferPointsError.value = ''
+
+  try {
+    const token = localStorage.getItem('token')
+    const res = await fetch('/api/user/transfer-points', {
+      method: 'POST',
+      headers: {
+        ...getTenantHeaders(),
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        to_user_id: transferPointsForm.value.selectedRecipient.id,
+        amount: transferPointsForm.value.amount,
+        memo: transferPointsForm.value.memo || ''
+      })
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || data.error || '转让失败')
+
+    showToastNotification('success', '转让成功',
+      data.message || `成功转让 ${transferPointsForm.value.amount} 积分给 ${transferPointsForm.value.selectedRecipient.username}`)
+
+    closeTransferPointsModal()
+    await loadPackages()
+    window.dispatchEvent(new CustomEvent('user-info-updated'))
+  } catch (e) {
+    showToastNotification('error', '转让失败', e.message)
+  } finally {
+    transferringPoints.value = false
+  }
+}
+
+function showToastNotification(type, title, message, duration = 4000) {
+  if (toastTimer) clearTimeout(toastTimer)
+  toastInfo.value = { show: true, type, title, message }
+  toastTimer = setTimeout(() => { toastInfo.value.show = false }, duration)
+}
+
+function closeToast() {
+  toastInfo.value.show = false
+  if (toastTimer) clearTimeout(toastTimer)
+}
+
 // 关闭弹窗
 function close() {
   emit('close')
@@ -672,19 +924,58 @@ watch(() => props.visible, (newVal) => {
             </div>
           </div>
 
-          <!-- 余额显示 -->
-          <div class="balance-banner">
-            <div class="balance-content">
-              <svg class="balance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-                <line x1="1" y1="10" x2="23" y2="10"/>
-              </svg>
-              <span class="balance-label">账户余额</span>
-              <span class="balance-value">¥{{ ((user?.balance || 0) / 100).toFixed(2) }}</span>
+          <!-- 积分与余额信息区 -->
+          <div class="assets-section">
+            <!-- 第一行：套餐积分 + 永久积分 -->
+            <div class="assets-row">
+              <div class="asset-card">
+                <div class="asset-icon package-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                  </svg>
+                </div>
+                <div class="asset-info">
+                  <span class="asset-label">套餐积分</span>
+                  <span class="asset-value">{{ formatPoints(user?.package_points || 0) }}</span>
+                  <span class="asset-hint">随套餐过期清零</span>
+                </div>
+              </div>
+              <div class="asset-card">
+                <div class="asset-icon permanent-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                  </svg>
+                </div>
+                <div class="asset-info">
+                  <span class="asset-label">永久积分</span>
+                  <span class="asset-value permanent">{{ formatPoints(user?.points || 0) }}</span>
+                  <span class="asset-hint">永不过期</span>
+                </div>
+                <button type="button" class="asset-action-btn transfer-btn" @click.stop="openTransferPointsModal">
+                  转让
+                </button>
+              </div>
             </div>
-            <button type="button" class="recharge-entry-btn" @click.stop.prevent="openRechargeModal">
-              充值
-            </button>
+
+            <!-- 第二行：余额 + 操作按钮 -->
+            <div class="balance-banner">
+              <div class="balance-content">
+                <svg class="balance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
+                  <line x1="1" y1="10" x2="23" y2="10"/>
+                </svg>
+                <span class="balance-label">账户余额</span>
+                <span class="balance-value">¥{{ ((user?.balance || 0) / 100).toFixed(2) }}</span>
+              </div>
+              <div class="balance-actions">
+                <button type="button" class="asset-action-btn convert-btn" @click.stop="openConvertModal">
+                  划转积分
+                </button>
+                <button type="button" class="recharge-entry-btn" @click.stop.prevent="openRechargeModal">
+                  充值
+                </button>
+              </div>
+            </div>
           </div>
 
           <!-- 错误提示 -->
@@ -1029,6 +1320,293 @@ watch(() => props.visible, (newVal) => {
         </div>
       </Transition>
 
+      <!-- 余额划转永久积分弹窗 -->
+      <Transition name="modal-scale">
+        <div v-if="showConvertModal" class="convert-modal-overlay" @click.self="closeConvertModal">
+          <div class="convert-modal">
+            <div class="modal-header">
+              <div class="modal-header-content">
+                <div class="modal-icon convert-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="17 1 21 5 17 9"/>
+                    <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+                    <polyline points="7 23 3 19 7 15"/>
+                    <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+                  </svg>
+                </div>
+                <div class="modal-title-group">
+                  <h3 class="modal-title">余额划转永久积分</h3>
+                  <p class="modal-subtitle">将账户余额转换为永不过期的积分</p>
+                </div>
+              </div>
+              <button class="modal-close" @click="closeConvertModal">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <!-- 当前资产信息 -->
+              <div class="convert-assets-info">
+                <div class="convert-asset-item">
+                  <span class="convert-asset-label">当前余额</span>
+                  <span class="convert-asset-value">¥{{ ((user?.balance || 0) / 100).toFixed(2) }}</span>
+                </div>
+                <div class="convert-asset-divider">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <polyline points="12 5 19 12 12 19"/>
+                  </svg>
+                </div>
+                <div class="convert-asset-item">
+                  <span class="convert-asset-label">永久积分</span>
+                  <span class="convert-asset-value permanent">{{ formatPoints(user?.points || 0) }}</span>
+                </div>
+              </div>
+
+              <!-- 汇率提示 -->
+              <div class="convert-rate-tip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+                <span>汇率：1元 = {{ convertExchangeRate }}积分</span>
+              </div>
+
+              <!-- 输入金额 -->
+              <div class="convert-input-section">
+                <label class="convert-input-label">划转金额（元）</label>
+                <div class="convert-input-wrapper">
+                  <span class="convert-currency">¥</span>
+                  <input
+                    v-model="convertAmount"
+                    type="number"
+                    placeholder="请输入划转金额，最低1元"
+                    min="1"
+                    step="1"
+                    class="convert-input"
+                  />
+                </div>
+              </div>
+
+              <!-- 预计获得积分 -->
+              <div v-if="convertCalculatedPoints > 0" class="convert-preview">
+                <span class="convert-preview-label">预计获得</span>
+                <span class="convert-preview-value">{{ convertCalculatedPoints }} 永久积分</span>
+              </div>
+
+              <!-- 成功提示 -->
+              <div v-if="convertSuccess" class="convert-success-tip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                  <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+                <span>{{ convertSuccess }}</span>
+              </div>
+
+              <!-- 错误提示 -->
+              <div v-if="convertError" class="convert-error-tip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span>{{ convertError }}</span>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-cancel" @click="closeConvertModal">取消</button>
+              <button
+                class="btn-confirm"
+                @click="submitConvert"
+                :disabled="convertLoading || !convertAmount || convertCalculatedPoints <= 0"
+              >
+                <span v-if="convertLoading" class="loading-dot"></span>
+                {{ convertLoading ? '处理中...' : '确认划转' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- 永久积分转让弹窗 -->
+      <Transition name="modal-scale">
+        <div v-if="showTransferPointsModal" class="transfer-modal-overlay" @click.self="closeTransferPointsModal">
+          <div class="transfer-modal">
+            <div class="modal-header">
+              <div class="modal-header-content">
+                <div class="modal-icon transfer-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="8.5" cy="7" r="4"/>
+                    <polyline points="17 11 19 13 23 9"/>
+                  </svg>
+                </div>
+                <div class="modal-title-group">
+                  <h3 class="modal-title">永久积分转让</h3>
+                  <p class="modal-subtitle">当前可转让：{{ formatPoints(user?.points || 0) }} 积分</p>
+                </div>
+              </div>
+              <button class="modal-close" @click="closeTransferPointsModal">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <!-- 搜索接收用户 -->
+              <div class="transfer-field">
+                <label class="transfer-field-label">接收用户</label>
+                <div class="transfer-search-wrapper">
+                  <input
+                    v-model="transferPointsForm.recipientQuery"
+                    type="text"
+                    placeholder="输入用户名或邮箱搜索（至少3个字符）"
+                    class="transfer-search-input"
+                    @input="handleRecipientSearch"
+                    :disabled="!!transferPointsForm.selectedRecipient"
+                  />
+                  <button
+                    v-if="transferPointsForm.selectedRecipient"
+                    class="transfer-clear-btn"
+                    @click="clearRecipient"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                      <line x1="18" y1="6" x2="6" y2="18"/>
+                      <line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+                <!-- 搜索结果下拉 -->
+                <div v-if="recipientSuggestions.length > 0 && !transferPointsForm.selectedRecipient" class="transfer-suggestions">
+                  <div
+                    v-for="u in recipientSuggestions"
+                    :key="u.id"
+                    class="transfer-suggestion-item"
+                    @click="selectRecipient(u)"
+                  >
+                    <div class="suggestion-avatar">{{ (u.username || u.email || '?')[0].toUpperCase() }}</div>
+                    <div class="suggestion-info">
+                      <span class="suggestion-name">{{ u.username || '未设置昵称' }}</span>
+                      <span class="suggestion-email">{{ u.email }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="transferPointsForm.recipientError" class="transfer-field-error">{{ transferPointsForm.recipientError }}</div>
+              </div>
+
+              <!-- 已选中用户 -->
+              <div v-if="transferPointsForm.selectedRecipient" class="transfer-selected-user">
+                <div class="selected-user-avatar">{{ (transferPointsForm.selectedRecipient.username || transferPointsForm.selectedRecipient.email || '?')[0].toUpperCase() }}</div>
+                <div class="selected-user-info">
+                  <span class="selected-user-name">{{ transferPointsForm.selectedRecipient.username || '未设置昵称' }}</span>
+                  <span class="selected-user-email">{{ transferPointsForm.selectedRecipient.email }}</span>
+                </div>
+                <svg class="selected-user-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                  <polyline points="22 4 12 14.01 9 11.01"/>
+                </svg>
+              </div>
+
+              <!-- 转让数量 -->
+              <div class="transfer-field">
+                <label class="transfer-field-label">转让积分数量</label>
+                <input
+                  v-model.number="transferPointsForm.amount"
+                  type="number"
+                  placeholder="请输入转让积分数量"
+                  min="1"
+                  :max="user?.points || 0"
+                  class="transfer-amount-input"
+                />
+                <div v-if="transferPointsForm.amountError" class="transfer-field-error">{{ transferPointsForm.amountError }}</div>
+              </div>
+
+              <!-- 备注 -->
+              <div class="transfer-field">
+                <label class="transfer-field-label">备注（可选）</label>
+                <input
+                  v-model="transferPointsForm.memo"
+                  type="text"
+                  placeholder="添加备注信息"
+                  class="transfer-memo-input"
+                />
+              </div>
+
+              <!-- 错误提示 -->
+              <div v-if="transferPointsError" class="convert-error-tip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="8" x2="12" y2="12"/>
+                  <line x1="12" y1="16" x2="12.01" y2="16"/>
+                </svg>
+                <span>{{ transferPointsError }}</span>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-cancel" @click="closeTransferPointsModal">取消</button>
+              <button
+                class="btn-confirm"
+                @click="confirmTransferPoints"
+                :disabled="!canTransferPoints || transferringPoints"
+              >
+                <span v-if="transferringPoints" class="loading-dot"></span>
+                {{ transferringPoints ? '处理中...' : '确认转让' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- 转让二次确认弹窗 -->
+      <Transition name="modal-scale">
+        <div v-if="showTransferConfirm" class="transfer-confirm-overlay" @click.self="showTransferConfirm = false">
+          <div class="transfer-confirm-modal">
+            <div class="confirm-icon-wrap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="32" height="32">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <h3 class="confirm-title">确认转让积分？</h3>
+            <p class="confirm-desc">
+              即将向 <span class="confirm-highlight">{{ transferPointsForm.selectedRecipient?.username || transferPointsForm.selectedRecipient?.email }}</span>
+              转让 <span class="confirm-highlight">{{ transferPointsForm.amount }}</span> 永久积分，此操作不可撤销。
+            </p>
+            <div class="confirm-btn-group">
+              <button class="btn-cancel" @click="showTransferConfirm = false">取消</button>
+              <button class="btn-confirm btn-danger" @click="executeTransferPoints" :disabled="transferringPoints">
+                <span v-if="transferringPoints" class="loading-dot"></span>
+                {{ transferringPoints ? '处理中...' : '确认转让' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- Toast 通知 -->
+      <Transition name="toast-slide">
+        <div v-if="toastInfo.show" class="toast-notification" :class="toastInfo.type" @click="closeToast">
+          <div class="toast-icon">
+            <svg v-if="toastInfo.type === 'success'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <div class="toast-content">
+            <div class="toast-title">{{ toastInfo.title }}</div>
+            <div class="toast-message">{{ toastInfo.message }}</div>
+          </div>
+        </div>
+      </Transition>
+
       <!-- 充值弹窗 -->
       <div v-if="showRechargeModal" class="recharge-modal-overlay" @click.self="closeRechargeModal">
         <div class="recharge-modal-container">
@@ -1324,10 +1902,10 @@ watch(() => props.visible, (newVal) => {
 
 .recharge-entry-btn {
   padding: 6px 14px;
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
   border: none;
   border-radius: 6px;
-  color: #ffffff;
+  color: #1a1a1a;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
@@ -1339,9 +1917,9 @@ watch(() => props.visible, (newVal) => {
 }
 
 .recharge-entry-btn:hover {
-  background: linear-gradient(135deg, #8b5cf6 0%, #818cf8 100%);
+  background: linear-gradient(135deg, #e0e0e0 0%, #c0c0c0 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.3);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
 }
 
 /* 错误横幅 */
@@ -1913,7 +2491,7 @@ watch(() => props.visible, (newVal) => {
 
 .coupon-success {
   font-size: 12px;
-  color: #10b981;
+  color: rgba(255, 255, 255, 0.7);
   padding-left: 2px;
 }
 
@@ -1935,7 +2513,7 @@ watch(() => props.visible, (newVal) => {
 }
 
 .price-row.discount {
-  color: #10b981;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .price-label {
@@ -2063,10 +2641,10 @@ watch(() => props.visible, (newVal) => {
   align-items: center;
   gap: 8px;
   padding: 12px 14px;
-  background: rgba(16, 185, 129, 0.1);
+  background: rgba(255, 255, 255, 0.04);
   border-radius: 10px;
   font-size: 13px;
-  color: #10b981;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .balance-tip svg {
@@ -2543,6 +3121,631 @@ watch(() => props.visible, (newVal) => {
   }
 }
 
+/* ========== 积分与余额信息区 ========== */
+.assets-section {
+  margin: 0 32px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.assets-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.asset-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
+  border: 1px solid #3a3a3a;
+  border-radius: 12px;
+  position: relative;
+}
+
+.asset-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.asset-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.asset-icon.package-icon {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.asset-icon.permanent-icon {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.asset-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.asset-label {
+  font-size: 11px;
+  color: #888888;
+}
+
+.asset-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+}
+
+.asset-value.permanent {
+  color: #ffffff;
+}
+
+.asset-hint {
+  font-size: 10px;
+  color: #666666;
+}
+
+.asset-action-btn {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border: none;
+}
+
+.asset-action-btn.transfer-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.asset-action-btn.transfer-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.asset-action-btn.convert-btn {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.asset-action-btn.convert-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.balance-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ========== 划转弹窗样式 ========== */
+.convert-modal-overlay,
+.transfer-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10002;
+  padding: 20px;
+}
+
+.convert-modal,
+.transfer-modal {
+  width: 100%;
+  max-width: 420px;
+  background: linear-gradient(180deg, #1c1c1e 0%, #141416 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.convert-icon {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.convert-icon svg {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+.transfer-icon {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.transfer-icon svg {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* 划转资产信息 */
+.convert-assets-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 14px;
+}
+
+.convert-asset-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+}
+
+.convert-asset-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.convert-asset-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.convert-asset-value.permanent {
+  color: #fff;
+}
+
+.convert-asset-divider {
+  color: rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* 汇率提示 */
+.convert-rate-tip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+/* 输入区 */
+.convert-input-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.convert-input-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+.convert-input-wrapper {
+  display: flex;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 0 16px;
+  transition: border-color 0.2s;
+}
+
+.convert-input-wrapper:focus-within {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.convert-currency {
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  margin-right: 8px;
+}
+
+.convert-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 14px 0;
+  color: #fff;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.convert-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.convert-input::-webkit-outer-spin-button,
+.convert-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* 预计获得 */
+.convert-preview {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+.convert-preview-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.convert-preview-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+/* 成功/错误提示 */
+.convert-success-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.convert-error-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 10px;
+  font-size: 13px;
+  color: #ef4444;
+}
+
+/* ========== 转让弹窗字段样式 ========== */
+.transfer-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: relative;
+}
+
+.transfer-field-label {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+.transfer-search-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.transfer-search-input,
+.transfer-amount-input,
+.transfer-memo-input {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.transfer-search-input:focus,
+.transfer-amount-input:focus,
+.transfer-memo-input:focus {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.transfer-search-input::placeholder,
+.transfer-amount-input::placeholder,
+.transfer-memo-input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.transfer-search-input:disabled {
+  opacity: 0.7;
+}
+
+.transfer-amount-input::-webkit-outer-spin-button,
+.transfer-amount-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.transfer-clear-btn {
+  position: absolute;
+  right: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.2s;
+}
+
+.transfer-clear-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* 搜索建议下拉 */
+.transfer-suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 4px;
+  background: #1c1c1e;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  overflow: hidden;
+  z-index: 10;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.transfer-suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.transfer-suggestion-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.suggestion-avatar,
+.selected-user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #3a3a3a 0%, #555555 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.suggestion-info,
+.selected-user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.suggestion-name,
+.selected-user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.suggestion-email,
+.selected-user-email {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transfer-field-error {
+  font-size: 12px;
+  color: #ef4444;
+  padding-left: 2px;
+}
+
+/* 已选中用户 */
+.transfer-selected-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+}
+
+.selected-user-check {
+  color: rgba(255, 255, 255, 0.7);
+  flex-shrink: 0;
+}
+
+/* ========== 转让确认弹窗 ========== */
+.transfer-confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10003;
+  padding: 20px;
+}
+
+.transfer-confirm-modal {
+  width: 100%;
+  max-width: 360px;
+  background: linear-gradient(180deg, #1c1c1e 0%, #141416 100%);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 32px 24px 24px;
+  text-align: center;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+}
+
+.confirm-icon-wrap {
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.confirm-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 8px;
+}
+
+.confirm-desc {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.5;
+  margin: 0 0 24px;
+}
+
+.confirm-highlight {
+  color: #ffffff;
+  font-weight: 600;
+}
+
+.confirm-btn-group {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #555555 0%, #3a3a3a 100%) !important;
+  color: #fff !important;
+}
+
+.btn-danger:hover:not(:disabled) {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* ========== Toast 通知 ========== */
+.toast-notification {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  z-index: 10100;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  min-width: 280px;
+  max-width: 400px;
+  cursor: pointer;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.toast-notification.success {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.toast-notification.error {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.toast-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.toast-notification.success .toast-icon {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.toast-notification.error .toast-icon {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.toast-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toast-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.toast-message {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.4;
+}
+
+/* Toast 动画 */
+.toast-slide-enter-active {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.toast-slide-leave-active {
+  transition: all 0.2s ease-in;
+}
+
+.toast-slide-enter-from {
+  opacity: 0;
+  transform: translateX(40px);
+}
+
+.toast-slide-leave-to {
+  opacity: 0;
+  transform: translateX(40px);
+}
+
 /* 等待支付视图响应式 */
 @media (max-height: 600px) {
   .waiting-view {
@@ -2703,8 +3906,9 @@ watch(() => props.visible, (newVal) => {
 }
 
 .amount-btn.active {
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
-  border-color: #7c3aed;
+  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
+  border-color: #ffffff;
+  color: #1a1a1a;
 }
 
 .custom-amount-wrapper {
@@ -2718,7 +3922,7 @@ watch(() => props.visible, (newVal) => {
 }
 
 .custom-amount-wrapper:focus-within {
-  border-color: #7c3aed;
+  border-color: #ffffff;
 }
 
 .currency-prefix {
@@ -2773,7 +3977,7 @@ watch(() => props.visible, (newVal) => {
 }
 
 .payment-method-item.active {
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .hidden-radio {
@@ -2821,7 +4025,7 @@ watch(() => props.visible, (newVal) => {
 }
 
 .coupon-input:focus {
-  border-color: #7c3aed;
+  border-color: #ffffff;
 }
 
 .coupon-input::placeholder {
@@ -2830,10 +4034,10 @@ watch(() => props.visible, (newVal) => {
 
 .apply-coupon-btn {
   padding: 12px 20px;
-  background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
   border: none;
   border-radius: 10px;
-  color: #ffffff;
+  color: #1a1a1a;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -2841,7 +4045,7 @@ watch(() => props.visible, (newVal) => {
 }
 
 .apply-coupon-btn:hover {
-  background: linear-gradient(135deg, #8b5cf6 0%, #818cf8 100%);
+  background: linear-gradient(135deg, #e0e0e0 0%, #c0c0c0 100%);
 }
 
 .recharge-error {
@@ -2862,10 +4066,10 @@ watch(() => props.visible, (newVal) => {
 .confirm-recharge-btn {
   width: 100%;
   padding: 14px 24px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
   border: none;
   border-radius: 10px;
-  color: #ffffff;
+  color: #1a1a1a;
   font-size: 16px;
   font-weight: 600;
   cursor: pointer;
@@ -2877,9 +4081,9 @@ watch(() => props.visible, (newVal) => {
 }
 
 .confirm-recharge-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%);
+  background: linear-gradient(135deg, #e0e0e0 0%, #c0c0c0 100%);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
 }
 
 .confirm-recharge-btn:disabled {
@@ -2892,666 +4096,908 @@ watch(() => props.visible, (newVal) => {
    ======================================== */
 
 /* 主遮罩层 */
-:root.canvas-theme-light .package-modal-overlay {
+html.canvas-theme-light.canvas-theme-light .package-modal-overlay.package-modal-overlay {
   background: rgba(0, 0, 0, 0.4) !important;
 }
 
 /* 主容器 */
-:root.canvas-theme-light .package-modal-container {
+html.canvas-theme-light.canvas-theme-light .package-modal-container {
   background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.15) !important;
 }
 
 /* 头部 */
-:root.canvas-theme-light .package-modal-header {
+html.canvas-theme-light.canvas-theme-light .package-modal-header {
   border-bottom-color: rgba(0, 0, 0, 0.08) !important;
 }
 
-:root.canvas-theme-light .header-icon {
+html.canvas-theme-light.canvas-theme-light .header-icon {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .header-title {
+html.canvas-theme-light.canvas-theme-light .header-title {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .close-btn {
+html.canvas-theme-light.canvas-theme-light .close-btn {
   border-color: rgba(0, 0, 0, 0.1) !important;
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
-:root.canvas-theme-light .close-btn:hover {
+html.canvas-theme-light.canvas-theme-light .close-btn:hover {
   background: rgba(0, 0, 0, 0.05) !important;
   border-color: rgba(0, 0, 0, 0.15) !important;
   color: #1c1917 !important;
 }
 
 /* 当前套餐横幅 */
-:root.canvas-theme-light .active-package-banner {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.05) 100%) !important;
-  border-color: rgba(99, 102, 241, 0.15) !important;
+html.canvas-theme-light.canvas-theme-light .active-package-banner {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
-:root.canvas-theme-light .banner-icon {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+html.canvas-theme-light.canvas-theme-light .banner-icon {
+  background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
 }
 
-:root.canvas-theme-light .banner-icon svg {
+html.canvas-theme-light.canvas-theme-light .banner-icon svg {
   color: #fff !important;
 }
 
-:root.canvas-theme-light .banner-label {
+html.canvas-theme-light.canvas-theme-light .banner-label {
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
-:root.canvas-theme-light .banner-name {
+html.canvas-theme-light.canvas-theme-light .banner-name {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .stat-label {
+html.canvas-theme-light.canvas-theme-light .stat-label {
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
-:root.canvas-theme-light .stat-value {
+html.canvas-theme-light.canvas-theme-light .stat-value {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .stat-divider {
+html.canvas-theme-light.canvas-theme-light .stat-divider {
   background: rgba(0, 0, 0, 0.1) !important;
 }
 
 /* 余额横幅 */
-:root.canvas-theme-light .balance-banner {
+html.canvas-theme-light.canvas-theme-light .balance-banner {
   background: rgba(0, 0, 0, 0.03) !important;
   border-color: rgba(0, 0, 0, 0.08) !important;
 }
 
-:root.canvas-theme-light .balance-icon {
+html.canvas-theme-light.canvas-theme-light .balance-icon {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .balance-label {
+html.canvas-theme-light.canvas-theme-light .balance-label {
   color: rgba(0, 0, 0, 0.55) !important;
 }
 
-:root.canvas-theme-light .balance-value {
+html.canvas-theme-light.canvas-theme-light .balance-value {
   color: #1c1917 !important;
 }
 
 /* 错误横幅 */
-:root.canvas-theme-light .error-banner {
+html.canvas-theme-light.canvas-theme-light .error-banner {
   background: rgba(239, 68, 68, 0.08) !important;
   border-color: rgba(239, 68, 68, 0.2) !important;
   color: #dc2626 !important;
 }
 
 /* 弹窗主体 */
-:root.canvas-theme-light .package-modal-body {
+html.canvas-theme-light.canvas-theme-light .package-modal-body {
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent !important;
 }
 
-:root.canvas-theme-light .package-modal-body::-webkit-scrollbar-track {
+html.canvas-theme-light.canvas-theme-light .package-modal-body::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.02) !important;
 }
 
-:root.canvas-theme-light .package-modal-body::-webkit-scrollbar-thumb {
+html.canvas-theme-light.canvas-theme-light .package-modal-body::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.12) !important;
 }
 
-:root.canvas-theme-light .package-modal-body::-webkit-scrollbar-thumb:hover {
+html.canvas-theme-light.canvas-theme-light .package-modal-body::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.2) !important;
 }
 
 /* 加载状态 */
-:root.canvas-theme-light .loading-spinner {
+html.canvas-theme-light.canvas-theme-light .loading-spinner {
   border-color: rgba(0, 0, 0, 0.1) !important;
-  border-top-color: #6366f1 !important;
+  border-top-color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .loading-state p {
+html.canvas-theme-light.canvas-theme-light .loading-state p {
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
 /* 空状态 */
-:root.canvas-theme-light .empty-icon {
+html.canvas-theme-light.canvas-theme-light .empty-icon {
   color: rgba(0, 0, 0, 0.2) !important;
 }
 
-:root.canvas-theme-light .empty-state p {
+html.canvas-theme-light.canvas-theme-light .empty-state p {
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
 /* 套餐卡片 */
-:root.canvas-theme-light .package-card {
+html.canvas-theme-light.canvas-theme-light .package-card {
   background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
-:root.canvas-theme-light .package-card:hover {
+html.canvas-theme-light.canvas-theme-light .package-card:hover {
   border-color: rgba(0, 0, 0, 0.15) !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1) !important;
 }
 
-:root.canvas-theme-light .package-card.is-active {
-  border-color: #6366f1 !important;
-  background: linear-gradient(180deg, rgba(99, 102, 241, 0.05) 0%, #ffffff 100%) !important;
+html.canvas-theme-light.canvas-theme-light .package-card.is-active {
+  border-color: #1c1917 !important;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02) 0%, #ffffff 100%) !important;
 }
 
 /* 推荐标签 */
-:root.canvas-theme-light .package-badge {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+html.canvas-theme-light.canvas-theme-light .package-badge {
+  background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
   color: #fff !important;
 }
 
 /* 套餐信息 */
-:root.canvas-theme-light .package-type {
+html.canvas-theme-light.canvas-theme-light .package-type {
   color: rgba(0, 0, 0, 0.45) !important;
 }
 
-:root.canvas-theme-light .package-name {
+html.canvas-theme-light.canvas-theme-light .package-name {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .package-description {
+html.canvas-theme-light.canvas-theme-light .package-description {
   color: rgba(0, 0, 0, 0.55) !important;
 }
 
-:root.canvas-theme-light .price-symbol,
-:root.canvas-theme-light .price-value {
+html.canvas-theme-light.canvas-theme-light .price-symbol,
+html.canvas-theme-light.canvas-theme-light .price-value {
   color: #1c1917 !important;
 }
 
 /* 特性列表 */
-:root.canvas-theme-light .feature-item {
+html.canvas-theme-light.canvas-theme-light .feature-item {
   color: rgba(0, 0, 0, 0.7) !important;
 }
 
-:root.canvas-theme-light .feature-icon {
-  color: #10b981 !important;
+html.canvas-theme-light.canvas-theme-light .feature-icon {
+  color: #57534e !important;
 }
 
 /* 购买按钮 */
-:root.canvas-theme-light .purchase-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+html.canvas-theme-light.canvas-theme-light .purchase-btn {
+  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%) !important;
   color: #fff !important;
 }
 
-:root.canvas-theme-light .purchase-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%) !important;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+html.canvas-theme-light.canvas-theme-light .purchase-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%) !important;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
 }
 
-:root.canvas-theme-light .purchase-btn.is-current {
+html.canvas-theme-light.canvas-theme-light .purchase-btn.is-current {
   background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+  color: #fff !important;
 }
 
-:root.canvas-theme-light .purchase-btn.is-current:hover {
+html.canvas-theme-light.canvas-theme-light .purchase-btn.is-current:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
   box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
 }
 
 /* ========== 购买确认弹窗 ========== */
-:root.canvas-theme-light .purchase-modal-overlay {
+html.canvas-theme-light.canvas-theme-light .purchase-modal-overlay {
   background: rgba(0, 0, 0, 0.5) !important;
 }
 
-:root.canvas-theme-light .purchase-modal {
+html.canvas-theme-light.canvas-theme-light .purchase-modal {
   background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.15) !important;
 }
 
 /* 弹窗头部 */
-:root.canvas-theme-light .modal-header {
+html.canvas-theme-light.canvas-theme-light .modal-header {
   border-bottom-color: rgba(0, 0, 0, 0.08) !important;
 }
 
-:root.canvas-theme-light .modal-icon {
-  background: rgba(99, 102, 241, 0.1) !important;
-  border-color: rgba(99, 102, 241, 0.15) !important;
+html.canvas-theme-light.canvas-theme-light .modal-icon {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
-:root.canvas-theme-light .modal-icon svg {
-  color: #6366f1 !important;
-}
-
-:root.canvas-theme-light .modal-title {
+html.canvas-theme-light.canvas-theme-light .modal-icon svg {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .modal-subtitle {
+html.canvas-theme-light.canvas-theme-light .modal-title {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .modal-subtitle {
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
-:root.canvas-theme-light .modal-close {
+html.canvas-theme-light.canvas-theme-light .modal-close {
   background: rgba(0, 0, 0, 0.05) !important;
   color: rgba(0, 0, 0, 0.45) !important;
 }
 
-:root.canvas-theme-light .modal-close:hover {
+html.canvas-theme-light.canvas-theme-light .modal-close:hover {
   background: rgba(0, 0, 0, 0.1) !important;
   color: #1c1917 !important;
 }
 
 /* 套餐权益 */
-:root.canvas-theme-light .benefits-section {
+html.canvas-theme-light.canvas-theme-light .benefits-section {
   background: rgba(0, 0, 0, 0.02) !important;
 }
 
-:root.canvas-theme-light .benefit-icon {
-  background: rgba(99, 102, 241, 0.08) !important;
-  border-color: rgba(99, 102, 241, 0.12) !important;
+html.canvas-theme-light.canvas-theme-light .benefit-icon {
+  background: rgba(0, 0, 0, 0.05) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
 }
 
-:root.canvas-theme-light .benefit-icon svg {
-  color: #6366f1 !important;
+html.canvas-theme-light.canvas-theme-light .benefit-icon svg {
+  color: #57534e !important;
 }
 
-:root.canvas-theme-light .benefit-value {
+html.canvas-theme-light.canvas-theme-light .benefit-value {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .benefit-label {
+html.canvas-theme-light.canvas-theme-light .benefit-label {
   color: rgba(0, 0, 0, 0.45) !important;
 }
 
 /* 价格计算区 */
-:root.canvas-theme-light .pricing-section {
+html.canvas-theme-light.canvas-theme-light .pricing-section {
   background: rgba(0, 0, 0, 0.02) !important;
 }
 
 /* 优惠券 */
-:root.canvas-theme-light .coupon-input {
+html.canvas-theme-light.canvas-theme-light .coupon-input {
   background: rgba(0, 0, 0, 0.03) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .coupon-input:focus {
-  border-color: rgba(99, 102, 241, 0.4) !important;
+html.canvas-theme-light.canvas-theme-light .coupon-input:focus {
+  border-color: rgba(0, 0, 0, 0.3) !important;
   background: #fff !important;
 }
 
-:root.canvas-theme-light .coupon-input::placeholder {
+html.canvas-theme-light.canvas-theme-light .coupon-input::placeholder {
   color: rgba(0, 0, 0, 0.35) !important;
 }
 
-:root.canvas-theme-light .coupon-btn {
-  background: rgba(99, 102, 241, 0.1) !important;
-  color: #6366f1 !important;
+html.canvas-theme-light.canvas-theme-light .coupon-btn {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .coupon-btn:hover:not(:disabled) {
-  background: rgba(99, 102, 241, 0.15) !important;
+html.canvas-theme-light.canvas-theme-light .coupon-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.1) !important;
 }
 
-:root.canvas-theme-light .coupon-btn.remove {
+html.canvas-theme-light.canvas-theme-light .coupon-btn.remove {
   color: #dc2626 !important;
   background: rgba(220, 38, 38, 0.08) !important;
 }
 
-:root.canvas-theme-light .coupon-error {
+html.canvas-theme-light.canvas-theme-light .coupon-error {
   color: #dc2626 !important;
 }
 
-:root.canvas-theme-light .coupon-success {
-  color: #059669 !important;
+html.canvas-theme-light.canvas-theme-light .coupon-success {
+  color: #57534e !important;
 }
 
 /* 价格明细 */
-:root.canvas-theme-light .price-breakdown {
+html.canvas-theme-light.canvas-theme-light .price-breakdown {
   border-bottom-color: rgba(0, 0, 0, 0.08) !important;
 }
 
-:root.canvas-theme-light .price-row {
+html.canvas-theme-light.canvas-theme-light .price-row {
   color: rgba(0, 0, 0, 0.65) !important;
 }
 
-:root.canvas-theme-light .price-row.discount {
-  color: #059669 !important;
+html.canvas-theme-light.canvas-theme-light .price-row.discount {
+  color: #57534e !important;
 }
 
-:root.canvas-theme-light .balance-hint {
+html.canvas-theme-light.canvas-theme-light .balance-hint {
   color: rgba(0, 0, 0, 0.4) !important;
 }
 
 /* 应付金额 */
-:root.canvas-theme-light .total-label {
+html.canvas-theme-light.canvas-theme-light .total-label {
   color: rgba(0, 0, 0, 0.7) !important;
 }
 
-:root.canvas-theme-light .total-value {
+html.canvas-theme-light.canvas-theme-light .total-value {
   color: #1c1917 !important;
 }
 
 /* 支付方式 */
-:root.canvas-theme-light .payment-label {
+html.canvas-theme-light.canvas-theme-light .payment-label {
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
-:root.canvas-theme-light .payment-item {
+html.canvas-theme-light.canvas-theme-light .payment-item {
   background: rgba(0, 0, 0, 0.02) !important;
 }
 
-:root.canvas-theme-light .payment-item:hover {
+html.canvas-theme-light.canvas-theme-light .payment-item:hover {
   background: rgba(0, 0, 0, 0.04) !important;
 }
 
-:root.canvas-theme-light .payment-item.active {
-  border-color: #6366f1 !important;
-  background: rgba(99, 102, 241, 0.05) !important;
+html.canvas-theme-light.canvas-theme-light .payment-item.active {
+  border-color: #1c1917 !important;
+  background: rgba(0, 0, 0, 0.04) !important;
 }
 
-:root.canvas-theme-light .payment-radio-dot {
+html.canvas-theme-light.canvas-theme-light .payment-radio-dot {
   border-color: rgba(0, 0, 0, 0.2) !important;
 }
 
-:root.canvas-theme-light .payment-item.active .payment-radio-dot {
-  border-color: #6366f1 !important;
+html.canvas-theme-light.canvas-theme-light .payment-item.active .payment-radio-dot {
+  border-color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .payment-item.active .payment-radio-dot::after {
-  background: #6366f1 !important;
+html.canvas-theme-light.canvas-theme-light .payment-item.active .payment-radio-dot::after {
+  background: #1c1917 !important;
 }
 
-:root.canvas-theme-light .payment-text {
+html.canvas-theme-light.canvas-theme-light .payment-text {
   color: rgba(0, 0, 0, 0.7) !important;
 }
 
-:root.canvas-theme-light .payment-item.active .payment-text {
-  color: #6366f1 !important;
+html.canvas-theme-light.canvas-theme-light .payment-item.active .payment-text {
+  color: #1c1917 !important;
 }
 
 /* 提示信息 */
-:root.canvas-theme-light .balance-tip {
-  background: rgba(16, 185, 129, 0.08) !important;
-  color: #059669 !important;
+html.canvas-theme-light.canvas-theme-light .balance-tip {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: #57534e !important;
 }
 
-:root.canvas-theme-light .error-tip {
+html.canvas-theme-light.canvas-theme-light .error-tip {
   background: rgba(220, 38, 38, 0.08) !important;
   color: #dc2626 !important;
 }
 
 /* 底部按钮 */
-:root.canvas-theme-light .modal-footer {
+html.canvas-theme-light.canvas-theme-light .modal-footer {
   border-top-color: rgba(0, 0, 0, 0.08) !important;
 }
 
-:root.canvas-theme-light .btn-cancel {
+html.canvas-theme-light.canvas-theme-light .btn-cancel {
   border-color: rgba(0, 0, 0, 0.1) !important;
   color: rgba(0, 0, 0, 0.65) !important;
 }
 
-:root.canvas-theme-light .btn-cancel:hover {
+html.canvas-theme-light.canvas-theme-light .btn-cancel:hover {
   background: rgba(0, 0, 0, 0.04) !important;
   border-color: rgba(0, 0, 0, 0.15) !important;
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .btn-confirm {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+html.canvas-theme-light.canvas-theme-light .btn-confirm {
+  background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
   color: #fff !important;
 }
 
-:root.canvas-theme-light .btn-confirm:hover:not(:disabled) {
-  box-shadow: 0 8px 20px rgba(99, 102, 241, 0.25) !important;
+html.canvas-theme-light.canvas-theme-light .btn-confirm:hover:not(:disabled) {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2) !important;
 }
 
-:root.canvas-theme-light .loading-dot {
+html.canvas-theme-light.canvas-theme-light .loading-dot {
   border-top-color: #fff !important;
 }
 
 /* ========== 等待支付状态 ========== */
-:root.canvas-theme-light .waiting-header {
-  background: rgba(99, 102, 241, 0.05) !important;
+html.canvas-theme-light.canvas-theme-light .waiting-header {
+  background: rgba(0, 0, 0, 0.02) !important;
 }
 
-:root.canvas-theme-light .waiting-icon-inner {
-  background: rgba(99, 102, 241, 0.1) !important;
+html.canvas-theme-light.canvas-theme-light .waiting-icon-inner {
+  background: rgba(0, 0, 0, 0.06) !important;
 }
 
-:root.canvas-theme-light .waiting-icon-inner svg {
-  color: #6366f1 !important;
-}
-
-:root.canvas-theme-light .waiting-spinner {
-  border-top-color: #6366f1 !important;
-}
-
-:root.canvas-theme-light .waiting-title {
+html.canvas-theme-light.canvas-theme-light .waiting-icon-inner svg {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .waiting-subtitle {
+html.canvas-theme-light.canvas-theme-light .waiting-spinner {
+  border-top-color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .waiting-title {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .waiting-subtitle {
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
 /* 订单信息卡片 */
-:root.canvas-theme-light .waiting-order-card {
+html.canvas-theme-light.canvas-theme-light .waiting-order-card {
   background: rgba(0, 0, 0, 0.02) !important;
 }
 
-:root.canvas-theme-light .order-info-label {
+html.canvas-theme-light.canvas-theme-light .order-info-label {
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
-:root.canvas-theme-light .order-info-value {
+html.canvas-theme-light.canvas-theme-light .order-info-value {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .order-info-divider {
+html.canvas-theme-light.canvas-theme-light .order-info-divider {
   background: rgba(0, 0, 0, 0.08) !important;
 }
 
-:root.canvas-theme-light .order-info-amount {
+html.canvas-theme-light.canvas-theme-light .order-info-amount {
   color: #1c1917 !important;
 }
 
 /* 步骤指示器 */
-:root.canvas-theme-light .step-dot {
+html.canvas-theme-light.canvas-theme-light .step-dot {
   background: rgba(0, 0, 0, 0.05) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
   color: rgba(0, 0, 0, 0.4) !important;
 }
 
-:root.canvas-theme-light .step-dot.active {
-  background: rgba(99, 102, 241, 0.1) !important;
-  border-color: rgba(99, 102, 241, 0.3) !important;
-  color: #6366f1 !important;
+html.canvas-theme-light.canvas-theme-light .step-dot.active {
+  background: rgba(0, 0, 0, 0.08) !important;
+  border-color: rgba(0, 0, 0, 0.2) !important;
+  color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .step-line {
+html.canvas-theme-light.canvas-theme-light .step-line {
   background: rgba(0, 0, 0, 0.1) !important;
 }
 
-:root.canvas-theme-light .waiting-steps-labels {
+html.canvas-theme-light.canvas-theme-light .waiting-steps-labels {
   color: rgba(0, 0, 0, 0.4) !important;
 }
 
 /* 等待支付错误 */
-:root.canvas-theme-light .waiting-error {
+html.canvas-theme-light.canvas-theme-light .waiting-error {
   background: rgba(220, 38, 38, 0.08) !important;
   color: #dc2626 !important;
 }
 
 /* 等待支付按钮 */
-:root.canvas-theme-light .waiting-btn-primary {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+html.canvas-theme-light.canvas-theme-light .waiting-btn-primary {
+  background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
   color: #fff !important;
 }
 
-:root.canvas-theme-light .waiting-btn-primary:hover:not(:disabled) {
-  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.25) !important;
+html.canvas-theme-light.canvas-theme-light .waiting-btn-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2) !important;
 }
 
-:root.canvas-theme-light .waiting-btn-secondary {
+html.canvas-theme-light.canvas-theme-light .waiting-btn-secondary {
   background: rgba(0, 0, 0, 0.04) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
   color: rgba(0, 0, 0, 0.7) !important;
 }
 
-:root.canvas-theme-light .waiting-btn-secondary:hover {
+html.canvas-theme-light.canvas-theme-light .waiting-btn-secondary:hover {
   background: rgba(0, 0, 0, 0.08) !important;
   border-color: rgba(0, 0, 0, 0.15) !important;
 }
 
-:root.canvas-theme-light .waiting-btn-ghost {
+html.canvas-theme-light.canvas-theme-light .waiting-btn-ghost {
   border-color: rgba(0, 0, 0, 0.08) !important;
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
-:root.canvas-theme-light .waiting-btn-ghost:hover {
+html.canvas-theme-light.canvas-theme-light .waiting-btn-ghost:hover {
   border-color: rgba(0, 0, 0, 0.12) !important;
   color: rgba(0, 0, 0, 0.7) !important;
 }
 
 /* ========== 充值按钮白昼模式 ========== */
-:root.canvas-theme-light .recharge-entry-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.2) !important;
+html.canvas-theme-light.canvas-theme-light .recharge-entry-btn {
+  background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
 }
 
-:root.canvas-theme-light .recharge-entry-btn:hover {
-  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%) !important;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
+html.canvas-theme-light.canvas-theme-light .recharge-entry-btn:hover {
+  background: linear-gradient(135deg, #292524 0%, #57534e 100%) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
 }
 
 /* ========== 充值弹窗白昼模式 ========== */
-:root.canvas-theme-light .recharge-modal-overlay {
+html.canvas-theme-light.canvas-theme-light .recharge-modal-overlay {
   background: rgba(0, 0, 0, 0.5) !important;
 }
 
-:root.canvas-theme-light .recharge-modal-container {
+html.canvas-theme-light.canvas-theme-light .recharge-modal-container {
   background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.15) !important;
 }
 
-:root.canvas-theme-light .recharge-modal-header {
+html.canvas-theme-light.canvas-theme-light .recharge-modal-header {
   border-bottom-color: rgba(0, 0, 0, 0.08) !important;
 }
 
-:root.canvas-theme-light .recharge-modal-header h3 {
+html.canvas-theme-light.canvas-theme-light .recharge-modal-header h3 {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .recharge-modal-header .close-btn {
+html.canvas-theme-light.canvas-theme-light .recharge-modal-header .close-btn {
   color: rgba(0, 0, 0, 0.45) !important;
 }
 
-:root.canvas-theme-light .recharge-modal-header .close-btn:hover {
+html.canvas-theme-light.canvas-theme-light .recharge-modal-header .close-btn:hover {
   color: #1c1917 !important;
   background: rgba(0, 0, 0, 0.05) !important;
 }
 
-:root.canvas-theme-light .section-label {
+html.canvas-theme-light.canvas-theme-light .section-label {
   color: rgba(0, 0, 0, 0.55) !important;
 }
 
-:root.canvas-theme-light .amount-btn {
+html.canvas-theme-light.canvas-theme-light .amount-btn {
   background: #f5f5f5 !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .amount-btn:hover {
+html.canvas-theme-light.canvas-theme-light .amount-btn:hover {
   background: #eeeeee !important;
   border-color: rgba(0, 0, 0, 0.15) !important;
 }
 
-:root.canvas-theme-light .amount-btn.active {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
-  border-color: #6366f1 !important;
+html.canvas-theme-light.canvas-theme-light .amount-btn.active {
+  background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
+  border-color: #1c1917 !important;
   color: #ffffff !important;
 }
 
-:root.canvas-theme-light .custom-amount-wrapper {
+html.canvas-theme-light.canvas-theme-light .custom-amount-wrapper {
   background: #f5f5f5 !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
-:root.canvas-theme-light .custom-amount-wrapper:focus-within {
-  border-color: #6366f1 !important;
+html.canvas-theme-light.canvas-theme-light .custom-amount-wrapper:focus-within {
+  border-color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .currency-prefix {
+html.canvas-theme-light.canvas-theme-light .currency-prefix {
   color: rgba(0, 0, 0, 0.45) !important;
 }
 
-:root.canvas-theme-light .custom-amount-input {
+html.canvas-theme-light.canvas-theme-light .custom-amount-input {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .custom-amount-input::placeholder {
+html.canvas-theme-light.canvas-theme-light .custom-amount-input::placeholder {
   color: rgba(0, 0, 0, 0.35) !important;
 }
 
-:root.canvas-theme-light .payment-methods {
+html.canvas-theme-light.canvas-theme-light .payment-methods {
   background: #f5f5f5 !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
 }
 
-:root.canvas-theme-light .payment-method-item {
+html.canvas-theme-light.canvas-theme-light .payment-method-item {
   border-bottom-color: rgba(0, 0, 0, 0.08) !important;
 }
 
-:root.canvas-theme-light .payment-method-item:hover {
+html.canvas-theme-light.canvas-theme-light .payment-method-item:hover {
   background: #eeeeee !important;
 }
 
-:root.canvas-theme-light .payment-method-item.active {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%) !important;
+html.canvas-theme-light.canvas-theme-light .payment-method-item.active {
+  background: rgba(0, 0, 0, 0.06) !important;
 }
 
-:root.canvas-theme-light .method-name {
+html.canvas-theme-light.canvas-theme-light .method-name {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .payment-methods-empty {
+html.canvas-theme-light.canvas-theme-light .payment-methods-empty {
   background: #f5f5f5 !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
   color: rgba(0, 0, 0, 0.45) !important;
 }
 
-:root.canvas-theme-light .coupon-input {
+html.canvas-theme-light.canvas-theme-light .coupon-input {
   background: #f5f5f5 !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .coupon-input:focus {
-  border-color: #6366f1 !important;
+html.canvas-theme-light.canvas-theme-light .coupon-input:focus {
+  border-color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .coupon-input::placeholder {
+html.canvas-theme-light.canvas-theme-light .coupon-input::placeholder {
   color: rgba(0, 0, 0, 0.35) !important;
 }
 
-:root.canvas-theme-light .apply-coupon-btn {
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%) !important;
+html.canvas-theme-light.canvas-theme-light .apply-coupon-btn {
+  background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
 }
 
-:root.canvas-theme-light .apply-coupon-btn:hover {
-  background: linear-gradient(135deg, #818cf8 0%, #a78bfa 100%) !important;
+html.canvas-theme-light.canvas-theme-light .apply-coupon-btn:hover {
+  background: linear-gradient(135deg, #292524 0%, #57534e 100%) !important;
 }
 
-:root.canvas-theme-light .recharge-error {
+html.canvas-theme-light.canvas-theme-light .recharge-error {
   background: rgba(220, 38, 38, 0.08) !important;
   border-color: rgba(220, 38, 38, 0.2) !important;
   color: #dc2626 !important;
 }
 
-:root.canvas-theme-light .recharge-modal-footer {
+html.canvas-theme-light.canvas-theme-light .recharge-modal-footer {
   border-top-color: rgba(0, 0, 0, 0.08) !important;
 }
 
-:root.canvas-theme-light .confirm-recharge-btn {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+html.canvas-theme-light.canvas-theme-light .confirm-recharge-btn {
+  background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
+  color: #ffffff !important;
 }
 
-:root.canvas-theme-light .confirm-recharge-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #60a5fa 0%, #3b82f6 100%) !important;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25) !important;
+html.canvas-theme-light.canvas-theme-light .confirm-recharge-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #292524 0%, #57534e 100%) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* ========== 积分资产区白昼模式 ========== */
+html.canvas-theme-light.canvas-theme-light .asset-card {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .asset-label {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .asset-value {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .asset-value.permanent {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .asset-hint {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .asset-action-btn.transfer-btn {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #57534e !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .asset-action-btn.transfer-btn:hover {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .asset-action-btn.convert-btn {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #57534e !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .asset-action-btn.convert-btn:hover {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* ========== 划转/转让弹窗白昼模式 ========== */
+html.canvas-theme-light.canvas-theme-light .convert-modal-overlay,
+html.canvas-theme-light.canvas-theme-light .transfer-modal-overlay,
+html.canvas-theme-light.canvas-theme-light .transfer-confirm-overlay {
+  background: rgba(0, 0, 0, 0.5) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-modal,
+html.canvas-theme-light.canvas-theme-light .transfer-modal,
+html.canvas-theme-light.canvas-theme-light .transfer-confirm-modal {
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.15) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-assets-info {
+  background: rgba(0, 0, 0, 0.02) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-asset-label {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-asset-value {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-asset-value.permanent {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-asset-divider {
+  color: rgba(0, 0, 0, 0.3) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-rate-tip {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: #57534e !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-input-label,
+html.canvas-theme-light.canvas-theme-light .transfer-field-label {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-input-wrapper {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-input-wrapper:focus-within {
+  border-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-currency {
+  color: rgba(0, 0, 0, 0.4) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-input {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-input::placeholder {
+  color: rgba(0, 0, 0, 0.3) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-preview {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-preview-label {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-preview-value {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-success-tip {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: #57534e !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-error-tip {
+  background: rgba(220, 38, 38, 0.08) !important;
+  color: #dc2626 !important;
+}
+
+/* 转让弹窗输入框白昼 */
+html.canvas-theme-light.canvas-theme-light .transfer-search-input,
+html.canvas-theme-light.canvas-theme-light .transfer-amount-input,
+html.canvas-theme-light.canvas-theme-light .transfer-memo-input {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .transfer-search-input:focus,
+html.canvas-theme-light.canvas-theme-light .transfer-amount-input:focus,
+html.canvas-theme-light.canvas-theme-light .transfer-memo-input:focus {
+  border-color: rgba(0, 0, 0, 0.3) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .transfer-search-input::placeholder,
+html.canvas-theme-light.canvas-theme-light .transfer-amount-input::placeholder,
+html.canvas-theme-light.canvas-theme-light .transfer-memo-input::placeholder {
+  color: rgba(0, 0, 0, 0.3) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .transfer-clear-btn {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .transfer-clear-btn:hover {
+  background: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .transfer-suggestions {
+  background: #fff !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .transfer-suggestion-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .suggestion-name,
+html.canvas-theme-light.canvas-theme-light .selected-user-name {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .suggestion-email,
+html.canvas-theme-light.canvas-theme-light .selected-user-email {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .transfer-field-error {
+  color: #dc2626 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .transfer-selected-user {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .selected-user-check {
+  color: #57534e !important;
+}
+
+/* 确认弹窗白昼 */
+html.canvas-theme-light.canvas-theme-light .confirm-icon-wrap {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #57534e !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .confirm-title {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .confirm-desc {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .confirm-highlight {
+  color: #1c1917 !important;
+}
+
+/* Toast 白昼模式 */
+html.canvas-theme-light.canvas-theme-light .toast-notification.success {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.05) 0%, rgba(0, 0, 0, 0.03) 100%) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .toast-notification.error {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.05) 0%, rgba(0, 0, 0, 0.03) 100%) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .toast-notification.success .toast-icon {
+  color: #57534e !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .toast-notification.error .toast-icon {
+  color: #57534e !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .toast-title {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .toast-message {
+  color: rgba(0, 0, 0, 0.6) !important;
 }
 </style>

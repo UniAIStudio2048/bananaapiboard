@@ -32,6 +32,11 @@ import CanvasNotification from '@/components/canvas/CanvasNotification.vue'
 import CanvasSupport from '@/components/canvas/CanvasSupport.vue'
 import CanvasToast from '@/components/canvas/CanvasToast.vue'
 import PackageModal from '@/components/canvas/PackageModal.vue'
+import TicketButton from '@/components/ticket/TicketButton.vue'
+import TicketDrawer from '@/components/ticket/TicketDrawer.vue'
+import TicketList from '@/components/ticket/TicketList.vue'
+import TicketDetail from '@/components/ticket/TicketDetail.vue'
+import CreateTicketForm from '@/components/ticket/CreateTicketForm.vue'
 import { useI18n } from '@/i18n'
 import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoSave, manualSave as saveToHistory, getWorkflowHistory } from '@/stores/canvas/workflowAutoSave'
 import { initBackgroundTaskManager, getPendingTasks, subscribeTask, removeCompletedTask, cleanup as cleanupBackgroundTasks } from '@/stores/canvas/backgroundTaskManager'
@@ -86,6 +91,13 @@ const aiPanelWidth = ref(0) // AI 面板宽度
 
 // 套餐购买弹窗
 const showPackageModal = ref(false)
+
+// 工单系统
+const showTicketDrawer = ref(false)
+const ticketView = ref('list') // list | detail | create
+const selectedTicketId = ref(null)
+const ticketButtonRef = ref(null)
+const ticketListRef = ref(null)
 
 // 画布主题切换 (dark / light)
 const canvasTheme = ref('dark')
@@ -1955,6 +1967,39 @@ function handlePurchaseSuccess(data) {
   handleUserInfoUpdated()
 }
 
+// 工单系统处理函数
+function handleSelectTicket(ticket) {
+  selectedTicketId.value = ticket.id
+  ticketView.value = 'detail'
+}
+
+function handleBackToList() {
+  ticketView.value = 'list'
+  selectedTicketId.value = null
+  // 刷新列表
+  nextTick(() => {
+    ticketListRef.value?.refresh()
+  })
+}
+
+function handleCreateSuccess() {
+  ticketView.value = 'list'
+  // 刷新列表和未读数
+  nextTick(() => {
+    ticketListRef.value?.refresh()
+    ticketButtonRef.value?.refresh()
+  })
+  displayToast('工单创建成功！', 'success', 3000)
+}
+
+function handleTicketUpdated() {
+  // 刷新列表和未读数
+  nextTick(() => {
+    ticketListRef.value?.refresh()
+    ticketButtonRef.value?.refresh()
+  })
+}
+
 // 加载主题偏好
 function loadCanvasThemePreference() {
   // 从用户偏好加载
@@ -2259,6 +2304,9 @@ onUnmounted(() => {
         <!-- 语言切换 -->
         <LanguageSwitcher :isDark="canvasTheme === 'dark'" direction="down" :compact="true" />
 
+        <!-- 工单按钮 -->
+        <TicketButton ref="ticketButtonRef" @open="showTicketDrawer = true" />
+
         <!-- 帮助/快捷键按钮（仅图标） -->
         <button class="canvas-icon-btn" :title="t('common.help')" @click="showHelp = true">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2486,6 +2534,36 @@ onUnmounted(() => {
       @close="closePackageModal"
       @purchase-success="handlePurchaseSuccess"
     />
+
+    <!-- 工单弹窗 -->
+    <TicketDrawer :visible="showTicketDrawer" @close="showTicketDrawer = false">
+      <!-- 工单列表 -->
+      <TicketList
+        v-show="ticketView === 'list'"
+        ref="ticketListRef"
+        @select="handleSelectTicket"
+        @create="ticketView = 'create'"
+        @close="showTicketDrawer = false"
+      />
+
+      <!-- 工单详情 -->
+      <TicketDetail
+        v-if="selectedTicketId"
+        v-show="ticketView === 'detail'"
+        :ticket-id="selectedTicketId"
+        @back="handleBackToList"
+        @updated="handleTicketUpdated"
+        @close="showTicketDrawer = false"
+      />
+
+      <!-- 创建工单 -->
+      <CreateTicketForm
+        v-show="ticketView === 'create'"
+        @back="ticketView = 'list'"
+        @success="handleCreateSuccess"
+        @close="showTicketDrawer = false"
+      />
+    </TicketDrawer>
   </div>
 </template>
 

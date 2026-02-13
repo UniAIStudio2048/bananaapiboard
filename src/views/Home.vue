@@ -3063,7 +3063,7 @@ onUnmounted(() => {
         <div class="p-3 border-t border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700/50">
           <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>共 {{ history.length }} 条</span>
-            <span>保留7天</span>
+            <span>保留15天</span>
           </div>
         </div>
       </div>

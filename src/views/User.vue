@@ -2441,7 +2441,7 @@ onUnmounted(() => {
               </div>
             </div>
             
-            <!-- 重要提示：数据保留7天 -->
+            <!-- 重要提示：数据保留15天 -->
             <div class="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-xl">
               <div class="flex items-start space-x-3">
                 <div class="flex-shrink-0 w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center">
@@ -2449,10 +2449,10 @@ onUnmounted(() => {
                 </div>
                 <div class="flex-1">
                   <h4 class="font-bold text-amber-900 dark:text-amber-300 mb-1">
-                    重要提醒：作品仅保留7天
+                    重要提醒：作品仅保留15天
                   </h4>
                   <p class="text-sm text-amber-800 dark:text-amber-400 leading-relaxed">
-                    为节省服务器存储空间，所有生成的作品将在创建后 <strong>7天自动删除</strong>。
+                    为节省服务器存储空间，所有生成的作品将在创建后 <strong>15天自动删除</strong>。
                     请及时下载并保存您喜欢的作品到本地设备，以免丢失！
                   </p>
                   <div class="mt-2 flex items-center space-x-2 text-xs text-amber-700 dark:text-amber-500">
@@ -2740,7 +2740,7 @@ onUnmounted(() => {
               </div>
             </div>
             
-            <!-- 重要提示：数据保留7天 -->
+            <!-- 重要提示：数据保留15天 -->
             <div class="mb-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-2 border-amber-200 dark:border-amber-800 rounded-xl">
               <div class="flex items-start space-x-3">
                 <div class="flex-shrink-0 w-10 h-10 bg-amber-500 rounded-full flex items-center justify-center">
@@ -2748,10 +2748,10 @@ onUnmounted(() => {
                 </div>
                 <div class="flex-1">
                   <h4 class="font-bold text-amber-900 dark:text-amber-300 mb-1">
-                    重要提醒：视频仅保留7天
+                    重要提醒：视频仅保留15天
                   </h4>
                   <p class="text-sm text-amber-800 dark:text-amber-400 leading-relaxed">
-                    为节省服务器存储空间，所有生成的视频将在创建后 <strong>7天自动删除</strong>。
+                    为节省服务器存储空间，所有生成的视频将在创建后 <strong>15天自动删除</strong>。
                     请及时下载并保存您喜欢的视频到本地设备，以免丢失！
                   </p>
                   <div class="mt-2 flex items-center space-x-2 text-xs text-amber-700 dark:text-amber-500">
@@ -4265,7 +4265,7 @@ onUnmounted(() => {
               <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
               </svg>
-              图片将在7天后自动删除，请尽快保存到本地
+              图片将在15天后自动删除，请尽快保存到本地
             </p>
           </div>
         </div>
@@ -4379,7 +4379,7 @@ onUnmounted(() => {
               <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
               </svg>
-              视频将在7天后自动删除，请尽快保存到本地
+              视频将在15天后自动删除，请尽快保存到本地
             </p>
           </div>
         </div>
