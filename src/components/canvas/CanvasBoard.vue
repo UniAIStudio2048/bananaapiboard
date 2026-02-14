@@ -40,7 +40,14 @@ import GroupNode from './nodes/GroupNode.vue'
 import CharacterCardNode from './nodes/CharacterCardNode.vue'
 import StoryboardNode from './nodes/StoryboardNode.vue'
 
-const emit = defineEmits(['dblclick', 'canvas-contextmenu', 'pane-click'])
+const props = defineProps({
+  pickMode: {
+    type: Boolean,
+    default: false
+  }
+})
+
+const emit = defineEmits(['dblclick', 'canvas-contextmenu', 'pane-click', 'pick-node'])
 const canvasStore = useCanvasStore()
 
 // 注入用户信息
@@ -766,6 +773,19 @@ function handleSelectionChange({ nodes }) {
 onNodeClick((event) => {
   const node = event.node
   console.log('[Canvas] 节点被点击:', node.id, node.type, 'data:', node.data)
+  
+  // 画布选择模式：拦截点击，发送给父组件
+  if (props.pickMode) {
+    const pickableTypes = [
+      'image', 'image-input', 'image-gen', 'imageGen', 'text-to-image', 'image-to-image', 'grid-preview',
+      'video', 'video-input', 'video-gen', 'videoGen', 'text-to-video', 'image-to-video',
+      'audio', 'audio-input'
+    ]
+    if (pickableTypes.includes(node.type)) {
+      emit('pick-node', node.id)
+    }
+    return // 不执行正常的选中逻辑
+  }
   
   // 立即更新选中状态（确保工具栏能正确显示）
   canvasStore.selectNode(node.id)
@@ -1784,6 +1804,57 @@ async function handleFileDrop(event) {
         return
       }
       
+      // 处理 AI 灵感助手对话附件拖拽
+      if (data.type === 'ai-chat-attachment' && data.attachment) {
+        console.log('[CanvasBoard] 接收到AI对话附件拖放:', data.attachment.name, data.attachment.type)
+        const att = data.attachment
+        const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        
+        if (att.type === 'image') {
+          canvasStore.addNode({
+            id: nodeId,
+            type: 'image-input',
+            position: { x: canvasX, y: canvasY },
+            data: {
+              title: att.name || '图片',
+              label: att.name || '图片',
+              sourceImages: [att.url],
+              nodeRole: 'source',
+              fromAIChat: true
+            }
+          })
+        }else if (att.type === 'video') {
+          canvasStore.addNode({
+            id: nodeId,
+            type: 'video',
+            position: { x: canvasX, y: canvasY },
+            data: {
+              title: att.name || '视频',
+              label: att.name || '视频',
+              status: 'success',
+              output: {
+                type: 'video',
+                url: att.url
+              },
+              fromAIChat: true
+            }
+          })
+        }else {
+          // 其他文件类型作为文本节点
+          canvasStore.addNode({
+            id: nodeId,
+            type: 'text-input',
+            position: { x: canvasX, y: canvasY },
+            data: {
+              title: att.name || '文件',
+              text: att.url,
+              fromAIChat: true
+            }
+          })
+        }
+        return
+      }
+
       // 处理资产拖拽（来自 AssetPanel）
       if (data.type === 'asset-insert' && data.asset) {
         console.log('[CanvasBoard] 接收到资产拖放:', data.asset.name, data.asset.type)
@@ -2154,7 +2225,7 @@ onUnmounted(() => {
   <div 
     ref="canvasBoardRef" 
     class="canvas-board" 
-    :class="{ 'file-drag-over': isFileDragOver }"
+    :class="{ 'file-drag-over': isFileDragOver, 'pick-mode': pickMode }"
     @dblclick="handleDoubleClick"
     @dragenter="handleFileDragEnter"
     @dragover="handleFileDragOver"

@@ -778,22 +778,35 @@ async function handleLLMGenerate() {
       content: llmInputText.value || (currentNodeText ? '请基于上方的内容继续' : '你好')
     }
     
-    // 如果有上游图片，需要先上传到七牛云获取 URL
+    // 如果有上游图片/视频，处理 URL
     let processedImages = []
     if (inheritedImages.value.length > 0) {
-      console.log('[TextNode] 检测到参考图片，开始上传到七牛云...', inheritedImages.value)
+      console.log('[TextNode] 检测到参考媒体，开始处理...', inheritedImages.value)
       
       try {
-        // 上传图片到七牛云
-        const uploadedUrls = await uploadImagesToQiniu(inheritedImages.value)
-        processedImages = uploadedUrls
-        console.log('[TextNode] 图片上传成功:', uploadedUrls)
+        // 分离视频 URL 和图片 URL
+        const videoUrls = upstreamVideoUrls.value
+        const imageOnlyUrls = inheritedImages.value.filter(url => !videoUrls.includes(url))
         
-        // 将图片 URL 添加到用户消息中
+        // 图片走七牛云上传流程
+        let uploadedImageUrls = []
+        if (imageOnlyUrls.length > 0) {
+          uploadedImageUrls = await uploadImagesToQiniu(imageOnlyUrls)
+          console.log('[TextNode] 图片上传成功:', uploadedImageUrls)
+        }
+        
+        // 视频 URL 直接传递（兼容 OpenAI vision 格式，无需上传转换）
+        if (videoUrls.length > 0) {
+          console.log('[TextNode] 视频URL直接传递:', videoUrls)
+        }
+        
+        processedImages = [...videoUrls, ...uploadedImageUrls]
+        
+        // 将媒体 URL 添加到用户消息中
         userMessage.images = processedImages
       } catch (uploadError) {
-        console.error('[TextNode] 图片上传失败:', uploadError)
-        throw new Error('图片上传失败，请重试')
+        console.error('[TextNode] 媒体处理失败:', uploadError)
+        throw new Error('媒体处理失败，请重试')
       }
     }
     

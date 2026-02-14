@@ -26,7 +26,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'send-to-assistant'])
 const canvasStore = useCanvasStore()
 
 // 加入资产的加载状态
@@ -603,6 +603,26 @@ async function performAsyncUploadAndSave(assetData, contentUrl, type) {
   }
 }
 
+// 发送到灵感助手
+function sendToAssistant() {
+  const type = assetType.value
+  if (!type || type === 'text') return // 仅支持图片/视频/音频
+
+  const url = type === 'image' ? imageUrl.value
+            : type === 'video' ? videoUrl.value
+            : audioUrl.value
+
+  if (!url) return
+
+  emit('send-to-assistant', { url, type })
+  emit('close')
+}
+
+// 是否可以发送到灵感助手（图片/视频/音频有内容时）
+const canSendToAssistant = computed(() => {
+  return isImageNodeWithOutput.value || isVideoNodeWithOutput.value || isAudioNodeWithOutput.value
+})
+
 // 简单的Toast提示
 function showToast(message, type = 'info') {
   const toast = document.createElement('div')
@@ -700,6 +720,16 @@ function handleMenuClick(event) {
         <span v-if="isAddingAsset">{{ $t('canvas.contextMenu.saving') }}</span>
         <span v-else>{{ $t('canvas.contextMenu.addToAssets') }}</span>
         <span class="permanent-badge">{{ $t('canvas.contextMenu.permanent') }}</span>
+      </div>
+      
+      <!-- 发送到灵感助手 -->
+      <div 
+        v-if="canSendToAssistant"
+        class="canvas-context-menu-item"
+        @click="sendToAssistant"
+      >
+        <span class="icon">✦</span>
+        {{ $t('canvas.contextMenu.sendToAssistant') }}
       </div>
       
       <div class="canvas-context-menu-divider"></div>

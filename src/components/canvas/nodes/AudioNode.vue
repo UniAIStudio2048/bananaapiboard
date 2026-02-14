@@ -2017,22 +2017,32 @@ function handleSpeedDropdownClickOutside(event) {
   border-radius: 8px;
 }
 
-/* ========== 音频输出预览 ========== */
+/* ========== 音频输出预览 - 毛玻璃现代设计 ========== */
 .audio-output-wrapper {
   position: relative;
   width: 100%;
   padding: 20px;
-  border-radius: 12px;
-  background: linear-gradient(180deg, rgba(28, 28, 32, 0.98) 0%, rgba(20, 20, 24, 0.98) 100%);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-  transition: box-shadow 0.2s ease;
+  border-radius: 16px;
+  background: linear-gradient(135deg, 
+    rgba(35, 38, 48, 0.85) 0%,
+    rgba(25, 28, 38, 0.9) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
 }
 
 .audio-node.selected .audio-output-wrapper {
+  border-color: rgba(168, 85, 247, 0.4);
   box-shadow: 
-    0 4px 20px rgba(0, 0, 0, 0.4),
-    0 0 0 2px var(--canvas-accent-audio, #a855f7),
-    0 0 20px rgba(168, 85, 247, 0.3);
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    0 0 0 1px rgba(168, 85, 247, 0.3),
+    0 0 30px rgba(168, 85, 247, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 /* 音量指示器 */
@@ -2070,14 +2080,20 @@ function handleSpeedDropdownClickOutside(event) {
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-/* 音频可视化 */
+/* 音频可视化 - 毛玻璃风格 */
 .audio-visual {
   display: flex;
   align-items: center;
   justify-content: center;
   height: 80px;
-  background: rgba(168, 85, 247, 0.1);
-  border-radius: 10px;
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.12) 0%,
+    rgba(139, 92, 246, 0.08) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  border-radius: 14px;
   margin-bottom: 16px;
 }
 
@@ -2120,48 +2136,78 @@ function handleSpeedDropdownClickOutside(event) {
   50% { transform: scaleY(1.4); }
 }
 
-/* 播放控制 */
+/* 播放控制 - 毛玻璃现代设计 */
 .audio-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   margin-bottom: 12px;
 }
 
 .play-btn {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
-  border: none;
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.9) 0%,
+    rgba(147, 51, 234, 0.95) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 50%;
   color: #fff;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
   flex-shrink: 0;
+  box-shadow: 
+    0 4px 16px rgba(168, 85, 247, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .play-btn:hover {
   transform: scale(1.08);
-  box-shadow: 0 0 16px rgba(168, 85, 247, 0.5);
+  box-shadow: 
+    0 6px 24px rgba(168, 85, 247, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .progress-bar {
   flex: 1;
-  height: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
+  height: 6px;
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.12) 100%
+  );
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: 3px;
   cursor: pointer;
   overflow: hidden;
+  position: relative;
+}
+
+.progress-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  pointer-events: none;
 }
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #a855f7, #d8b4fe);
-  border-radius: 4px;
+  background: linear-gradient(90deg, 
+    rgba(168, 85, 247, 0.9) 0%,
+    rgba(216, 180, 254, 0.95) 100%
+  );
+  border-radius: 3px;
   transition: width 0.1s;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
 }
 
 .time-display {
@@ -2170,6 +2216,7 @@ function handleSpeedDropdownClickOutside(event) {
   min-width: 80px;
   text-align: right;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 标题 */
@@ -3213,5 +3260,95 @@ function handleSpeedDropdownClickOutside(event) {
 
 :root.canvas-theme-light .audio-node .prompt-textarea::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.2);
+}
+
+/* ========== 音频播放器 - 白昼模式毛玻璃适配 ========== */
+:root.canvas-theme-light .audio-node .audio-output-wrapper {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(248, 250, 252, 0.85) 100%
+  ) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+:root.canvas-theme-light .audio-node.selected .audio-output-wrapper {
+  border-color: rgba(168, 85, 247, 0.3) !important;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.1),
+    0 0 0 1px rgba(168, 85, 247, 0.2),
+    0 0 30px rgba(168, 85, 247, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
+}
+
+/* 音频可视化 - 白昼模式 */
+:root.canvas-theme-light .audio-node .audio-visual {
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.08) 0%,
+    rgba(139, 92, 246, 0.05) 100%
+  ) !important;
+  border-color: rgba(168, 85, 247, 0.12) !important;
+}
+
+:root.canvas-theme-light .audio-node .audio-wave span {
+  background: linear-gradient(180deg, #a855f7 0%, #c084fc 100%) !important;
+}
+
+/* 播放按钮 - 白昼模式 */
+:root.canvas-theme-light .audio-node .play-btn {
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.95) 0%,
+    rgba(147, 51, 234, 1) 100%
+  ) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  box-shadow: 
+    0 4px 16px rgba(168, 85, 247, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2) !important;
+}
+
+:root.canvas-theme-light .audio-node .play-btn:hover {
+  box-shadow: 
+    0 6px 24px rgba(168, 85, 247, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+}
+
+/* 进度条 - 白昼模式 */
+:root.canvas-theme-light .audio-node .progress-bar {
+  background: linear-gradient(90deg, 
+    rgba(0, 0, 0, 0.06) 0%,
+    rgba(0, 0, 0, 0.08) 100%
+  ) !important;
+}
+
+:root.canvas-theme-light .audio-node .progress-bar::before {
+  border-color: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .audio-node .progress-fill {
+  background: linear-gradient(90deg, 
+    rgba(168, 85, 247, 0.95) 0%,
+    rgba(192, 132, 252, 1) 100%
+  ) !important;
+  box-shadow: 0 0 8px rgba(168, 85, 247, 0.3) !important;
+}
+
+/* 时间显示 - 白昼模式 */
+:root.canvas-theme-light .audio-node .time-display {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+/* 音频标题 - 白昼模式 */
+:root.canvas-theme-light .audio-node .audio-title {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+/* 音量指示器 - 白昼模式 */
+:root.canvas-theme-light .audio-node .volume-indicator {
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #1c1917 !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 </style>

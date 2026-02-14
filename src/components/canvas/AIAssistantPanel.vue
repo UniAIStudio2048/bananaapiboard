@@ -163,7 +163,7 @@
             :key="index"
             :message="msg"
             :user-name="userName"
-            @preview-image="previewImage"
+            @preview-media="previewMedia"
           />
         </div>
 
@@ -177,20 +177,52 @@
             <!-- 图片预览 -->
             <div v-if="att.type === 'image'" class="attachment-thumb-wrapper">
               <img :src="att.preview" class="attachment-thumb" />
+              <button class="attachment-remove" @click="removeAttachment(index)">
+                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
             </div>
 
-            <!-- 视频图标 -->
-            <div v-else-if="att.type === 'video'" class="attachment-file file-video">
+            <!-- 视频缩略图预览 -->
+            <div v-else-if="att.type === 'video'" class="attachment-thumb-wrapper attachment-video-wrapper">
+              <video
+                :src="att.preview"
+                class="attachment-thumb"
+                muted
+                preload="metadata"
+                @loadeddata="$event.target.currentTime = 0.5"
+              ></video>
+              <div class="video-play-badge">
+                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                </svg>
+              </div>
+              <button class="attachment-remove" @click="removeAttachment(index)">
+                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            <!-- 音频预览 -->
+            <div v-else-if="att.type === 'audio'" class="attachment-file file-audio">
               <div class="file-icon">
                 <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polygon points="23 7 16 12 23 17 23 7"/>
-                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                  <path d="M9 18V5l12-2v13"/>
+                  <circle cx="6" cy="18" r="3"/>
+                  <circle cx="18" cy="16" r="3"/>
                 </svg>
               </div>
               <div class="file-info">
                 <div class="file-name">{{ att.name }}</div>
                 <div v-if="att.size" class="file-size">{{ formatFileSize(att.size) }}</div>
               </div>
+              <button class="attachment-remove attachment-remove-file" @click.stop="removeAttachment(index)">
+                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
             </div>
 
             <!-- 文件图标 -->
@@ -230,13 +262,12 @@
                 <div class="file-name">{{ att.name }}</div>
                 <div v-if="att.size" class="file-size">{{ formatFileSize(att.size) }}</div>
               </div>
+              <button class="attachment-remove attachment-remove-file" @click="removeAttachment(index)">
+                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 6L6 18M6 6l12 12"/>
+                </svg>
+              </button>
             </div>
-
-            <button class="attachment-remove" @click="removeAttachment(index)">
-              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 6L6 18M6 6l12 12"/>
-              </svg>
-            </button>
           </div>
         </div>
 
@@ -379,16 +410,38 @@
                 </Transition>
               </div>
 
-              <!-- 附件按钮 -->
-              <button class="toolbar-btn" @click="triggerFileInput" title="添加附件">
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-                </svg>
-              </button>
+              <!-- 附件按钮（带下拉菜单） -->
+              <div class="attach-selector" ref="attachSelectorRef">
+                <button class="toolbar-btn" @click="showAttachDropdown = !showAttachDropdown" title="添加附件">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                  </svg>
+                </button>
+                <Transition name="dropdown">
+                  <div v-if="showAttachDropdown" class="attach-dropdown">
+                    <button class="attach-option" @click="handleLocalUpload">
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      <span>本地上传</span>
+                    </button>
+                    <button class="attach-option" @click="handleCanvasPick">
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="2" width="20" height="20" rx="2"/>
+                        <circle cx="8.5" cy="8.5" r="1.5"/>
+                        <polyline points="21 15 16 10 5 21"/>
+                      </svg>
+                      <span>从画布选择</span>
+                    </button>
+                  </div>
+                </Transition>
+              </div>
               <input
                 ref="fileInputRef"
                 type="file"
-                accept="image/*,video/*,.pdf,.txt,.md,.csv,.json,.xml,.doc,.docx,.xls,.xlsx,.py,.js,.ts,.java,.c,.cpp,.html,.css,.sh,.yaml,.yml,.mp4,.mov,.avi,.webm,.mkv"
+                accept="image/*,video/*,audio/*,.pdf,.txt,.md,.csv,.json,.xml,.doc,.docx,.xls,.xlsx,.py,.js,.ts,.java,.c,.cpp,.html,.css,.sh,.yaml,.yml,.mp4,.mov,.avi,.webm,.mkv,.mp3,.wav,.ogg,.flac,.aac"
                 multiple
                 class="hidden"
                 @change="handleFileSelect"
@@ -459,6 +512,52 @@
     @submit="handleSavePreset"
     @temp-use="handleTempUsePreset"
   />
+
+  <!-- 媒体预览 Lightbox -->
+  <Teleport to="body">
+    <Transition name="lightbox-fade">
+      <div v-if="lightboxVisible" class="media-lightbox" @click.self="closeLightbox">
+        <button class="lightbox-close" @click="closeLightbox">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"/>
+          </svg>
+        </button>
+        <!-- 图片预览 -->
+        <img
+          v-if="lightboxMedia.type === 'image'"
+          :src="lightboxMedia.url"
+          :alt="lightboxMedia.name"
+          class="lightbox-image"
+        />
+        <!-- 视频预览 -->
+        <video
+          v-else-if="lightboxMedia.type === 'video'"
+          :src="lightboxMedia.url"
+          class="lightbox-video"
+          controls
+          autoplay
+        ></video>
+        <!-- 音频预览 -->
+        <div v-else-if="lightboxMedia.type === 'audio'" class="lightbox-audio">
+          <div class="lightbox-audio-icon">
+            <svg class="w-16 h-16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M9 18V5l12-2v13"/>
+              <circle cx="6" cy="18" r="3"/>
+              <circle cx="18" cy="16" r="3"/>
+            </svg>
+          </div>
+          <div class="lightbox-audio-name">{{ lightboxMedia.name || '音频文件' }}</div>
+          <audio
+            :src="lightboxMedia.url"
+            class="lightbox-audio-player"
+            controls
+            autoplay
+          ></audio>
+        </div>
+        <div v-if="lightboxMedia.name" class="lightbox-caption">{{ lightboxMedia.name }}</div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup>
@@ -489,7 +588,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'width-change'])
+const emit = defineEmits(['close', 'width-change', 'start-canvas-pick'])
 
 // 注入用户信息
 const userInfo = inject('userInfo', { value: { username: 'User' } })
@@ -526,6 +625,7 @@ const showHistory = ref(false)
 const attachments = ref([])
 const isDragging = ref(false)
 const isUploading = ref(false) // 上传中状态
+const showAttachDropdown = ref(false) // 附件下拉菜单
 let dragCounter = 0 // 用于跟踪拖拽进入/离开次数
 
 // 预设管理相关
@@ -539,6 +639,7 @@ const editingPreset = ref(null)
 const messagesRef = ref(null)
 const inputRef = ref(null)
 const fileInputRef = ref(null)
+const attachSelectorRef = ref(null)
 
 // 面板宽度调整相关
 const DEFAULT_WIDTH = 480 // 增加默认宽度以确保工具栏一行显示
@@ -816,6 +917,18 @@ async function sendMessage() {
           }))
           console.log(`[AI-Assistant] 附件上传完成:`, uploadedAttachments)
           messages.value[assistantMessageIndex].content = ''
+
+          // 更新用户消息中的附件 URL 为云端 URL（避免 blob URL 失效）
+          const userMsg = messages.value[assistantMessageIndex - 1]
+          if (userMsg && userMsg.attachments) {
+            for (let i = 0; i < userMsg.attachments.length; i++) {
+              const uploaded = uploadedAttachments.find(u => u.name === userMsg.attachments[i].name)
+              if (uploaded) {
+                userMsg.attachments[i].url = uploaded.url
+                userMsg.attachments[i].type = uploaded.type
+              }
+            }
+          }
         } catch (uploadError) {
           console.error('[AI-Assistant] 附件上传失败:', uploadError)
           messages.value[assistantMessageIndex].content = `抱歉，附件上传失败: ${uploadError.message}`
@@ -882,6 +995,16 @@ function triggerFileInput() {
   fileInputRef.value?.click()
 }
 
+function handleLocalUpload() {
+  showAttachDropdown.value = false
+  triggerFileInput()
+}
+
+function handleCanvasPick() {
+  showAttachDropdown.value = false
+  emit('start-canvas-pick')
+}
+
 function handleFileSelect(event) {
   const files = event.target.files
   if (!files) return
@@ -893,6 +1016,10 @@ function handleFileSelect(event) {
 }
 
 function removeAttachment(index) {
+  const att = attachments.value[index]
+  if (att?.preview && att.preview.startsWith('blob:')) {
+    URL.revokeObjectURL(att.preview)
+  }
   attachments.value.splice(index, 1)
 }
 
@@ -933,6 +1060,7 @@ function processFiles(files) {
   const supportedTypes = {
     image: ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'],
     video: ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/x-matroska'],
+    audio: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/flac', 'audio/aac', 'audio/mp3', 'audio/x-wav'],
     document: ['application/pdf', 'text/plain', 'text/markdown', 'text/csv', 'application/json', 'application/xml', 'text/xml'],
     office: ['application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
              'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
@@ -946,6 +1074,8 @@ function processFiles(files) {
     'png': 'image', 'jpg': 'image', 'jpeg': 'image', 'gif': 'image', 'webp': 'image',
     // 视频
     'mp4': 'video', 'mov': 'video', 'avi': 'video', 'webm': 'video', 'mkv': 'video',
+    // 音频
+    'mp3': 'audio', 'wav': 'audio', 'ogg': 'audio', 'flac': 'audio', 'aac': 'audio',
     // 文档
     'pdf': 'document', 'txt': 'document', 'md': 'document', 'csv': 'document', 'json': 'document', 'xml': 'document',
     // Office
@@ -966,27 +1096,35 @@ function processFiles(files) {
 
     // 图片类型生成预览
     if (fileType === 'image') {
-      const reader = new FileReader()
-      reader.onload = (e) => {
-        attachments.value.push({
-          type: 'image',
-          name: file.name,
-          file: file,
-          fileType: fileType,
-          ext: ext,
-          preview: e.target.result
-        })
-      }
-      reader.readAsDataURL(file)
+      attachments.value.push({
+        type: 'image',
+        name: file.name,
+        file: file,
+        fileType: fileType,
+        ext: ext,
+        preview: URL.createObjectURL(file)
+      })
     } else if (fileType === 'video') {
-      // 视频类型
+      // 视频类型 - 生成 blob URL 用于缩略图预览
       attachments.value.push({
         type: 'video',
         name: file.name,
         file: file,
         fileType: fileType,
         ext: ext,
-        size: file.size
+        size: file.size,
+        preview: URL.createObjectURL(file)
+      })
+    } else if (fileType === 'audio') {
+      // 音频类型 - 生成 blob URL 用于播放预览
+      attachments.value.push({
+        type: 'audio',
+        name: file.name,
+        file: file,
+        fileType: fileType,
+        ext: ext,
+        size: file.size,
+        preview: URL.createObjectURL(file)
       })
     } else {
       // 其他文件类型
@@ -1017,9 +1155,34 @@ function scrollToBottom() {
   })
 }
 
-function previewImage(url) {
-  window.open(url, '_blank')
+// ========== 媒体预览 Lightbox ==========
+const lightboxVisible = ref(false)
+const lightboxMedia = ref({ type: '', url: '', name: '' })
+
+function previewMedia({ type, url, name }) {
+  lightboxMedia.value = { type, url, name }
+  lightboxVisible.value = true
 }
+
+function closeLightbox() {
+  lightboxVisible.value = false
+  lightboxMedia.value = { type: '', url: '', name: '' }
+}
+
+// ESC 关闭 Lightbox
+function handleLightboxKeydown(e) {
+  if (e.key === 'Escape' && lightboxVisible.value) {
+    closeLightbox()
+  }
+}
+
+watch(lightboxVisible, (val) => {
+  if (val) {
+    document.addEventListener('keydown', handleLightboxKeydown)
+  }else {
+    document.removeEventListener('keydown', handleLightboxKeydown)
+  }
+})
 
 // 格式化文件大小
 function formatFileSize(bytes) {
@@ -1094,6 +1257,9 @@ function handleClickOutside(event) {
   if (showPresetDropdown.value && !event.target.closest('.preset-selector')) {
     showPresetDropdown.value = false
   }
+  if (showAttachDropdown.value && !event.target.closest('.attach-selector')) {
+    showAttachDropdown.value = false
+  }
 }
 
 onMounted(() => {
@@ -1103,6 +1269,80 @@ onMounted(() => {
     loadSessions()
     loadUserPresets()
   }
+})
+
+/**
+ * 从 URL 添加附件到灵感助手（供外部调用）
+ * @param {string} url - 文件 URL
+ * @param {string} type - 文件类型: 'image' | 'video' | 'audio'
+ * @param {string} [name] - 文件名（可选）
+ */
+async function addAttachmentFromUrl(url, type, name) {
+  if (!url) return
+
+  const defaultNames = {
+    image: `image_${Date.now()}.png`,
+    video: `video_${Date.now()}.mp4`,
+    audio: `audio_${Date.now()}.mp3`
+  }
+  const fileName = name || defaultNames[type] || `file_${Date.now()}`
+
+  try {
+    // 获取文件 blob
+    let fetchUrl = url
+    if (url.startsWith('/api/') || url.startsWith('/storage/')) {
+      const { getApiUrl } = await import('@/config/tenant')
+      fetchUrl = getApiUrl(url)
+    }
+
+    const { getTenantHeaders } = await import('@/config/tenant')
+    const response = await fetch(fetchUrl, {
+      headers: url.startsWith('data:') || url.startsWith('blob:') ? {}: getTenantHeaders()
+    })
+    const blob = await response.blob()
+    const file = new File([blob], fileName, { type: blob.type })
+
+    if (type === 'image') {
+      attachments.value.push({
+        type: 'image',
+        name: fileName,
+        file,
+        fileType: 'image',
+        ext: fileName.split('.').pop(),
+        preview: URL.createObjectURL(file)
+      })
+    } else if (type === 'video') {
+      attachments.value.push({
+        type: 'video',
+        name: fileName,
+        file,
+        fileType: 'video',
+        ext: fileName.split('.').pop(),
+        size: file.size,
+        preview: URL.createObjectURL(file)
+      })
+    }else if (type === 'audio') {
+      attachments.value.push({
+        type: 'audio',
+        name: fileName,
+        file,
+        fileType: 'audio',
+        ext: fileName.split('.').pop(),
+        size: file.size,
+        preview: URL.createObjectURL(file)
+      })
+    }
+
+    // 聚焦输入框
+    await nextTick()
+    inputRef.value?.focus()
+  } catch (error) {
+    console.error('[AI-Assistant] 从 URL 添加附件失败:', error)
+  }
+}
+
+defineExpose({
+  addAttachmentFromUrl
 })
 </script>
 
@@ -1154,22 +1394,32 @@ onMounted(() => {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: rgba(18, 18, 18, 0.98);
+  background: linear-gradient(135deg, 
+    rgba(22, 24, 30, 0.92) 0%,
+    rgba(18, 20, 26, 0.95) 100%
+  );
   border-left: none;
   pointer-events: auto;
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border-radius: 16px 0 0 16px;
   overflow: visible; /* 允许下拉菜单溢出显示 */
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.2);
 }
 
-/* 头部 */
+/* 头部 - 毛玻璃设计 */
 .panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(24, 24, 24, 0.95);
+  background: linear-gradient(135deg, 
+    rgba(28, 30, 38, 0.85) 0%,
+    rgba(24, 26, 34, 0.9) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-radius: 16px 0 0 0; /* 保持左上角圆角 */
 }
 
@@ -1183,11 +1433,21 @@ onMounted(() => {
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.25) 0%,
+    rgba(99, 102, 241, 0.2) 50%,
+    rgba(59, 130, 246, 0.25) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   align-items: center;
   justify-content: center;
   color: rgba(255, 255, 255, 0.9);
+  box-shadow: 
+    0 4px 12px rgba(139, 92, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .header-title {
@@ -1223,14 +1483,19 @@ onMounted(() => {
   color: white;
 }
 
-/* 历史记录抽屉 */
+/* 历史记录抽屉 - 毛玻璃设计 */
 .history-drawer {
   position: absolute;
   top: 57px;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(24, 24, 24, 0.98);
+  background: linear-gradient(135deg, 
+    rgba(26, 28, 36, 0.95) 0%,
+    rgba(22, 24, 32, 0.98) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   z-index: 10;
   display: flex;
   flex-direction: column;
@@ -1566,6 +1831,10 @@ onMounted(() => {
   color: rgba(168, 85, 247, 0.9);
 }
 
+.file-audio .file-icon {
+  color: rgba(251, 191, 36, 0.9);
+}
+
 .file-info {
   flex: 1;
   min-width: 0;
@@ -1589,19 +1858,73 @@ onMounted(() => {
 
 .attachment-remove {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: 4px;
+  right: 4px;
   width: 18px;
   height: 18px;
-  border-radius: 50%;
-  background: #ef4444;
-  color: white;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  color: rgba(255, 255, 255, 0.8);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.attachment-thumb-wrapper:hover .attachment-remove,
+.attachment-file:hover .attachment-remove {
+  opacity: 1;
+}
+
+.attachment-remove:hover {
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+}
+
+/* 文件类型附件的删除按钮（始终可见） */
+.attachment-remove-file {
+  position: static;
+  opacity: 1;
+  flex-shrink: 0;
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.attachment-remove-file:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* 视频缩略图 */
+.attachment-video-wrapper {
+  position: relative;
+}
+
+.attachment-video-wrapper video {
+  pointer-events: none;
+}
+
+.video-play-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  color: rgba(255, 255, 255, 0.85);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* 输入区域 */
+/* 输入区域 - 毛玻璃设计 */
 .input-area {
   position: relative;
   display: flex;
@@ -1609,8 +1932,13 @@ onMounted(() => {
   gap: 12px;
   padding: 16px;
   padding-bottom: 20px; /* 增加底部内边距，确保发送按钮不被遮挡 */
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(18, 18, 18, 0.95);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(135deg, 
+    rgba(24, 26, 34, 0.9) 0%,
+    rgba(20, 22, 30, 0.95) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   transition: all 0.3s ease;
   flex-shrink: 0; /* 防止被压缩 */
 }
@@ -1676,15 +2004,21 @@ onMounted(() => {
   min-height: 44px;
   max-height: 120px;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.08) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
   color: rgba(255, 255, 255, 0.95);
   font-size: 14px;
   line-height: 1.5;
   resize: none;
   outline: none;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .input-textarea::placeholder {
@@ -1692,8 +2026,14 @@ onMounted(() => {
 }
 
 .input-textarea:focus {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: 
+    0 0 0 3px rgba(59, 130, 246, 0.1),
+    inset 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 /* 工具栏 */
@@ -1885,6 +2225,50 @@ onMounted(() => {
   color: rgba(167, 139, 250, 1);
 }
 
+/* 附件选择器 */
+.attach-selector {
+  position: relative;
+}
+
+.attach-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 160px;
+  background: rgba(30, 32, 40, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
+
+.attach-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: #d1d5db;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.attach-option:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: white;
+}
+
+.attach-option svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
 /* 下拉菜单动画 */
 .dropdown-enter-active,
 .dropdown-leave-active {
@@ -1957,26 +2341,44 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.9);
-  color: rgba(0, 0, 0, 0.85);
-  border: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, 
+    rgba(59, 130, 246, 0.9) 0%,
+    rgba(37, 99, 235, 0.95) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s ease;
   flex-shrink: 0;
+  box-shadow: 
+    0 4px 12px rgba(59, 130, 246, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .send-btn:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 1);
+  background: linear-gradient(135deg, 
+    rgba(37, 99, 235, 0.95) 0%,
+    rgba(29, 78, 216, 1) 100%
+  );
   transform: scale(1.05);
+  box-shadow: 
+    0 6px 16px rgba(59, 130, 246, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .send-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  background: rgba(100, 100, 100, 0.3);
+  background: linear-gradient(135deg, 
+    rgba(100, 100, 100, 0.3) 0%,
+    rgba(80, 80, 80, 0.35) 100%
+  );
+  box-shadow: none;
 }
 
 .hidden {
@@ -2029,6 +2431,115 @@ onMounted(() => {
   background: #4b5563;
 }
 
+/* ========== 媒体预览 Lightbox ========== */
+.media-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  cursor: zoom-out;
+}
+
+.lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s;
+  z-index: 1;
+}
+
+.lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.lightbox-image {
+  max-width: 90vw;
+  max-height: 85vh;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  cursor: default;
+}
+
+.lightbox-video {
+  max-width: 90vw;
+  max-height: 85vh;
+  border-radius: 8px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  outline: none;
+  cursor: default;
+}
+
+/* 音频 Lightbox */
+.lightbox-audio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 40px 48px;
+  background: rgba(30, 32, 40, 0.85);
+  border-radius: 16px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  min-width: 340px;
+}
+
+.lightbox-audio-icon {
+  color: #a78bfa;
+  opacity: 0.8;
+}
+
+.lightbox-audio-name {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  max-width: 300px;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lightbox-audio-player {
+  width: 300px;
+  outline: none;
+}
+
+.lightbox-caption {
+  margin-top: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  max-width: 80vw;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lightbox-fade-enter-active,
+.lightbox-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.lightbox-fade-enter-from,
+.lightbox-fade-leave-to {
+  opacity: 0;
+}
+
 </style>
 
 <!-- 白昼模式样式（非 scoped） -->
@@ -2037,17 +2548,32 @@ onMounted(() => {
    AIAssistantPanel 白昼模式样式适配
    ======================================== */
 :root.canvas-theme-light .ai-assistant-panel {
-  background: rgba(255, 255, 255, 0.98) !important;
-  backdrop-filter: blur(20px);
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(248, 250, 252, 0.9) 100%
+  ) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-left: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.06);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .panel-header {
-  background: rgba(250, 250, 250, 0.98);
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(250, 250, 252, 0.85) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-bottom-color: rgba(0, 0, 0, 0.06);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .header-icon {
-  background: rgba(59, 130, 246, 0.1);
+  background: linear-gradient(135deg, 
+    rgba(139, 92, 246, 0.15) 0%,
+    rgba(99, 102, 241, 0.1) 100%
+  );
+  border: 1px solid rgba(139, 92, 246, 0.15);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .header-title {
@@ -2090,13 +2616,24 @@ onMounted(() => {
 
 :root.canvas-theme-light .ai-assistant-panel .input-area {
   border-top-color: rgba(0, 0, 0, 0.06);
-  background: rgba(250, 250, 250, 0.8);
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.7) 0%,
+    rgba(250, 250, 252, 0.75) 100%
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .input-textarea {
-  background: rgba(0, 0, 0, 0.03);
-  border-color: rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.6) 0%,
+    rgba(248, 250, 252, 0.7) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-color: rgba(0, 0, 0, 0.08);
   color: #1c1917;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .input-textarea::placeholder {
@@ -2104,8 +2641,11 @@ onMounted(() => {
 }
 
 :root.canvas-theme-light .ai-assistant-panel .input-textarea:focus {
-  background: #ffffff;
-  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: 
+    0 0 0 3px rgba(59, 130, 246, 0.1),
+    inset 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .toolbar-btn {
@@ -2118,27 +2658,55 @@ onMounted(() => {
 }
 
 :root.canvas-theme-light .ai-assistant-panel .send-btn {
-  background: #3b82f6;
+  background: linear-gradient(135deg, 
+    rgba(59, 130, 246, 0.9) 0%,
+    rgba(37, 99, 235, 0.95) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   color: white;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 4px 12px rgba(59, 130, 246, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .send-btn:hover {
-  background: #2563eb;
+  background: linear-gradient(135deg, 
+    rgba(37, 99, 235, 0.95) 0%,
+    rgba(29, 78, 216, 1) 100%
+  );
+  box-shadow: 
+    0 6px 16px rgba(59, 130, 246, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .model-selector {
-  background: rgba(0, 0, 0, 0.03);
-  border-color: rgba(0, 0, 0, 0.1);
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.5) 0%,
+    rgba(248, 250, 252, 0.6) 100%
+  );
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-color: rgba(0, 0, 0, 0.08);
   color: #57534e;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .model-selector:hover {
-  background: rgba(0, 0, 0, 0.05);
-  border-color: rgba(0, 0, 0, 0.15);
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.65) 0%,
+    rgba(248, 250, 252, 0.75) 100%
+  );
+  border-color: rgba(0, 0, 0, 0.12);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .history-drawer {
-  background: rgba(250, 250, 250, 0.98);
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.9) 0%,
+    rgba(250, 250, 252, 0.95) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border-bottom-color: rgba(0, 0, 0, 0.06);
 }
 
@@ -2220,9 +2788,16 @@ onMounted(() => {
 
 /* 模式下拉菜单 */
 :root.canvas-theme-light .ai-assistant-panel .mode-dropdown {
-  background: rgba(255, 255, 255, 0.98) !important;
-  border-color: rgba(0, 0, 0, 0.1) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(250, 250, 252, 0.95) 100%
+  ) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .mode-option {
@@ -2255,9 +2830,16 @@ onMounted(() => {
 
 /* 预设下拉菜单 */
 :root.canvas-theme-light .ai-assistant-panel .preset-dropdown {
-  background: rgba(255, 255, 255, 0.98) !important;
-  border-color: rgba(0, 0, 0, 0.1) !important;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(250, 250, 252, 0.95) 100%
+  ) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .preset-option {
@@ -2289,5 +2871,66 @@ onMounted(() => {
 :root.canvas-theme-light .ai-assistant-panel .preset-manage:hover {
   background: rgba(0, 0, 0, 0.05) !important;
   color: #1c1917 !important;
+}
+
+/* 附件下拉菜单 - 白昼模式 */
+:root.canvas-theme-light .ai-assistant-panel .attach-dropdown {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(250, 250, 252, 0.95) 100%
+  ) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .attach-option {
+  color: #57534e !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .attach-option:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #1c1917 !important;
+}
+
+/* 附件预览区域 - 白昼模式 */
+:root.canvas-theme-light .ai-assistant-panel .attachments-preview {
+  border-top-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .attachment-file {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.6) 0%,
+    rgba(248, 250, 252, 0.7) 100%
+  ) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .file-name {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .file-size {
+  color: #78716c !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .file-icon {
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .attachment-remove-file {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .attachment-remove-file:hover {
+  background: rgba(0, 0, 0, 0.12) !important;
+  color: rgba(0, 0, 0, 0.75) !important;
 }
 </style>

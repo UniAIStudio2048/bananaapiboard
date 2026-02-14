@@ -88,6 +88,8 @@ const showOnboarding = ref(false)
 // AI 灵感助手
 const showAIAssistant = ref(false)
 const aiPanelWidth = ref(0) // AI 面板宽度
+const aiAssistantRef = ref(null) // AI 面板组件引用
+const canvasPickMode = ref(false) // 画布选择模式（从AI助手触发）
 
 // 套餐购买弹窗
 const showPackageModal = ref(false)
@@ -1313,6 +1315,74 @@ function handlePaneClick(event) {
   }
 }
 
+// 处理节点右键「发送到灵感助手」
+async function handleSendToAssistant({ url, type }) {
+  // 打开 AI 面板
+  showAIAssistant.value = true
+  // 等待面板渲染完成后添加附件
+  await nextTick()
+  // 再等一帧确保 AIAssistantPanel 已完全挂载
+  await nextTick()
+  aiAssistantRef.value?.addAttachmentFromUrl(url, type)
+}
+
+// 进入画布选择模式（从AI助手附件菜单触发）
+function startCanvasPick() {
+  canvasPickMode.value = true
+}
+
+// 退出画布选择模式
+function cancelCanvasPick() {
+  canvasPickMode.value = false
+}
+
+// 画布选择模式下点击节点
+function handlePickNode(nodeId) {
+  const node = canvasStore.nodes.find(n => n.id === nodeId)
+  if (!node) return
+
+  const nodeType = node.type
+
+  // 提取媒体 URL
+  let url = null
+  let type = null
+
+  // 图片类节点
+  const imageTypes = ['image', 'image-input', 'image-gen', 'imageGen', 'text-to-image', 'image-to-image', 'grid-preview']
+  // 视频类节点
+  const videoTypes = ['video', 'video-input', 'video-gen', 'videoGen', 'text-to-video', 'image-to-video']
+  // 音频类节点
+  const audioTypes = ['audio', 'audio-input']
+
+  if (imageTypes.includes(nodeType)) {
+    url = node.data.sourceImages?.[0] || node.data.output?.urls?.[0] || node.data.output?.url || node.data.images?.[0]
+    type = 'image'
+  } else if (videoTypes.includes(nodeType)) {
+    url = node.data.output?.url || node.data.sourceVideo
+    type = 'video'
+  }else if (audioTypes.includes(nodeType)) {
+    url = node.data.audioUrl || node.data.output?.url || node.data.audioData
+    type = 'audio'
+  }
+
+  if (!url) {
+    console.warn('[CanvasPick] 该节点没有可引用的媒体文件', nodeType, node.data)
+    return
+  }
+
+  // 退出选择模式
+  canvasPickMode.value = false
+
+  // 添加到 AI 助手附件
+  showAIAssistant.value = true
+  nextTick(() => {
+    nextTick(() => {
+      const name = node.data.title || `${type}_${Date.now()}`
+      aiAssistantRef.value?.addAttachmentFromUrl(url, type, name)
+    })
+  })
+}
+
 // 处理画布右键菜单的上传事件
 function handleCanvasUpload(type) {
   // 打开文件选择器上传
@@ -1506,6 +1576,11 @@ async function handleKeyDown(event) {
   
   // Escape 关闭弹窗
   if (event.key === 'Escape') {
+    // 如果在画布选择模式，先退出
+    if (canvasPickMode.value) {
+      canvasPickMode.value = false
+      return
+    }
     // 如果 AI 助手面板打开，先关闭它
     if (showAIAssistant.value) {
       showAIAssistant.value = false
@@ -2194,11 +2269,29 @@ onUnmounted(() => {
     <div 
       v-else 
       class="canvas-container" 
-      :class="{ 'ai-panel-open': showAIAssistant }"
+      :class="{ 'ai-panel-open': showAIAssistant, 'pick-mode': canvasPickMode }"
       :style="{ '--ai-panel-offset': (aiPanelWidth / 2) + 'px' }"
     >
+      <!-- 画布选择模式提示条 -->
+      <Transition name="pick-banner">
+        <div v-if="canvasPickMode" class="canvas-pick-banner">
+          <div class="pick-banner-content">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/>
+              <path d="M13 13l6 6"/>
+            </svg>
+            <span>点击画布中的图片、视频或音频节点进行引用</span>
+          </div>
+          <button class="pick-banner-cancel" @click="cancelCanvasPick">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+            <span>取消</span>
+          </button>
+        </div>
+      </Transition>
       <!-- 无限画布 - 使用 key 强制在就绪后重新挂载 -->
-      <CanvasBoard ref="canvasBoardRef" :key="'canvas-board-' + canvasReady" @dblclick="handleCanvasDoubleClick" @pane-click="handlePaneClick" />
+      <CanvasBoard ref="canvasBoardRef" :key="'canvas-board-' + canvasReady" :pick-mode="canvasPickMode" @dblclick="handleCanvasDoubleClick" @pane-click="handlePaneClick" @pick-node="handlePickNode" />
       
       <!-- 顶部标签栏 - 仅在有标签时显示 -->
       <div v-if="canvasStore.workflowTabs.length > 0" class="tabs-container">
@@ -2387,6 +2480,7 @@ onUnmounted(() => {
         :position="canvasStore.contextMenuPosition"
         :node="canvasStore.contextMenuTargetNode"
         @close="canvasStore.closeContextMenu()"
+        @send-to-assistant="handleSendToAssistant"
       />
       
       <!-- 画布右键菜单（空白区域） -->
@@ -2472,9 +2566,11 @@ onUnmounted(() => {
 
       <!-- AI 灵感助手面板 -->
       <AIAssistantPanel
+        ref="aiAssistantRef"
         :visible="showAIAssistant"
         @close="showAIAssistant = false"
         @width-change="aiPanelWidth = $event"
+        @start-canvas-pick="startCanvasPick"
       />
 
       <!-- AI 助手触发按钮 - 苹果风格3D图标 -->
@@ -3447,6 +3543,70 @@ onUnmounted(() => {
 :root.canvas-theme-light .mode-popup-btn.confirm:hover {
   background: #292524;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* 画布选择模式 */
+.canvas-container.pick-mode {
+  cursor: crosshair;
+}
+
+.canvas-pick-banner {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9500;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 20px;
+  background: rgba(59, 130, 246, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 4px 24px rgba(59, 130, 246, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+  backdrop-filter: blur(12px);
+  color: white;
+  font-size: 14px;
+  pointer-events: auto;
+}
+
+.pick-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pick-banner-content svg {
+  flex-shrink: 0;
+  opacity: 0.9;
+}
+
+.pick-banner-cancel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pick-banner-cancel:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.pick-banner-enter-active,
+.pick-banner-leave-active {
+  transition: all 0.25s ease;
+}
+
+.pick-banner-enter-from,
+.pick-banner-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-12px);
 }
 
 </style>

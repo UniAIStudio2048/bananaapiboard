@@ -277,6 +277,7 @@ export default {
       downloadVideo: '下载视频',
       downloadImage: '下载图片',
       addToAssets: '加入我的资产',
+      sendToAssistant: '发送到灵感助手',
       permanent: '永久',
       saving: '保存中...',
       editNode: '编辑节点',

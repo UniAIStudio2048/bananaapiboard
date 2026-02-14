@@ -277,6 +277,7 @@ export default {
       downloadVideo: 'Download Video',
       downloadImage: 'Download Image',
       addToAssets: 'Add to My Assets',
+      sendToAssistant: 'Send to AI Assistant',
       permanent: 'Permanent',
       saving: 'Saving...',
       editNode: 'Edit Node',

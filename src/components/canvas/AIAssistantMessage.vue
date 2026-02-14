@@ -4,37 +4,34 @@
     <div class="ai-message__avatar">
       <template v-if="message.role === 'assistant'">
         <div class="ai-avatar">
-          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none">
-            <defs>
-              <linearGradient id="sparkle-gradient-msg" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#e5e7eb"/>
-                <stop offset="50%" stop-color="#d1d5db"/>
-                <stop offset="100%" stop-color="#9ca3af"/>
-              </linearGradient>
-            </defs>
-            <!-- 主星 -->
-            <path
-              d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z"
-              fill="url(#sparkle-gradient-msg)"
-            />
-            <!-- 小星1 -->
-            <path
-              d="M19 15L19.75 17.25L22 18L19.75 18.75L19 21L18.25 18.75L16 18L18.25 17.25L19 15Z"
-              fill="url(#sparkle-gradient-msg)"
-              opacity="0.7"
-            />
-            <!-- 小星2 -->
-            <path
-              d="M5 15L5.5 16.5L7 17L5.5 17.5L5 19L4.5 17.5L3 17L4.5 16.5L5 15Z"
-              fill="url(#sparkle-gradient-msg)"
-              opacity="0.5"
-            />
-          </svg>
+          <div class="ai-avatar__ring"></div>
+          <div class="ai-avatar__inner">
+            <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none">
+              <defs>
+                <linearGradient id="sparkle-gradient-msg" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#c084fc"/>
+                  <stop offset="50%" stop-color="#818cf8"/>
+                  <stop offset="100%" stop-color="#60a5fa"/>
+                </linearGradient>
+              </defs>
+              <path
+                d="M12 2L13.5 8.5L20 10L13.5 11.5L12 18L10.5 11.5L4 10L10.5 8.5L12 2Z"
+                fill="url(#sparkle-gradient-msg)"
+              />
+              <path
+                d="M19 15L19.75 17.25L22 18L19.75 18.75L19 21L18.25 18.75L16 18L18.25 17.25L19 15Z"
+                fill="url(#sparkle-gradient-msg)"
+                opacity="0.7"
+              />
+            </svg>
+          </div>
         </div>
       </template>
       <template v-else>
         <div class="user-avatar">
-          {{ userInitial }}
+          <div class="user-avatar__inner">
+            <span class="user-avatar__letter">{{ userInitial }}</span>
+          </div>
         </div>
       </template>
     </div>
@@ -108,20 +105,86 @@
           v-for="(att, index) in message.attachments"
           :key="index"
           class="ai-attachment"
+          draggable="true"
+          @dragstart="handleAttachmentDragStart($event, att)"
         >
+          <!-- 图片预览 -->
           <img
             v-if="att.type === 'image'"
             :src="att.url"
             :alt="att.name"
             class="ai-attachment__image"
-            @click="$emit('preview-image', att.url)"
+            @click="$emit('preview-media', { type: 'image', url: att.url, name: att.name })"
           />
+          <!-- 视频内联预览 -->
+          <div v-else-if="att.type === 'video'" class="ai-attachment__video-wrapper" @click="$emit('preview-media', { type: 'video', url: att.url, name: att.name })">
+            <video
+              :src="att.url"
+              class="ai-attachment__video"
+              muted
+              preload="metadata"
+              @loadeddata="$event.target.currentTime = 0.5"
+            ></video>
+            <div class="ai-attachment__video-play">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+              </svg>
+            </div>
+            <div class="ai-attachment__video-label">{{ att.name || '视频' }}</div>
+          </div>
+          <!-- 音频内联播放器 - 现代毛玻璃风格 -->
+          <div v-else-if="att.type === 'audio'" class="ai-audio-player" @click.stop>
+            <div class="ai-audio-player__cover">
+              <div class="ai-audio-player__visualizer">
+                <span v-for="i in 5" :key="i" class="ai-audio-player__bar" :style="{ animationDelay: `${i * 0.12}s` }"></span>
+              </div>
+            </div>
+            <div class="ai-audio-player__info">
+              <div class="ai-audio-player__name">{{ att.name || '音频' }}</div>
+              <audio
+                :ref="el => { if (el) audioRefs[index] = el }"
+                :src="att.url"
+                preload="metadata"
+                @timeupdate="updateAudioProgress($event, index)"
+                @loadedmetadata="initAudioDuration($event, index)"
+                @ended="audioStates[index] = { ...audioStates[index], playing: false }"
+              ></audio>
+              <div class="ai-audio-player__progress">
+                <div class="ai-audio-player__progress-bar">
+                  <div class="ai-audio-player__progress-fill" :style="{ width: (audioStates[index]?.progress || 0) + '%' }"></div>
+                  <div class="ai-audio-player__progress-dot" :style="{ left: (audioStates[index]?.progress || 0) + '%' }"></div>
+                </div>
+                <div class="ai-audio-player__time">
+                  <span>{{ formatAudioTime(audioStates[index]?.currentTime || 0) }}</span>
+                  <span>{{ formatAudioTime(audioStates[index]?.duration || 0) }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="ai-audio-player__controls">
+              <button class="ai-audio-player__play-btn" @click="toggleAudioPlay(index)">
+                <svg v-if="audioStates[index]?.playing" class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <rect x="6" y="4" width="4" height="16" rx="1"/>
+                  <rect x="14" y="4" width="4" height="16" rx="1"/>
+                </svg>
+                <svg v-else class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <polygon points="6 3 20 12 6 21 6 3"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <!-- 其他文件 -->
           <div v-else class="ai-attachment__file">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
               <polyline points="14 2 14 8 20 8"/>
             </svg>
             <span>{{ att.name }}</span>
+          </div>
+          <!-- 拖拽提示角标 -->
+          <div class="ai-attachment__drag-hint" title="拖拽到画布">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+            </svg>
           </div>
         </div>
       </div>
@@ -154,7 +217,28 @@ const props = defineProps({
   }
 })
 
-defineEmits(['preview-image'])
+defineEmits(['preview-media'])
+
+// 拖拽附件到画布
+function handleAttachmentDragStart(e, att) {
+  const dragData = {
+    type: 'ai-chat-attachment',
+    attachment: {
+      type: att.type,
+      url: att.url,
+      name: att.name
+    }
+  }
+  e.dataTransfer.setData('application/json', JSON.stringify(dragData))
+  e.dataTransfer.effectAllowed = 'copy'
+  
+  // 图片拖拽预览
+  if (att.type === 'image' && att.url) {
+    const img = new Image()
+    img.src = att.url
+    e.dataTransfer.setDragImage(img, 50, 50)
+  }
+}
 
 const showThinking = ref(false)
 const showContextMenu = ref(false)
@@ -162,6 +246,56 @@ const contextMenuX = ref(0)
 const contextMenuY = ref(0)
 const contextMenuRef = ref(null)
 const selectedText = ref('')
+
+// 音频播放器状态
+const audioRefs = ref({})
+const audioStates = ref({})
+
+function toggleAudioPlay(index) {
+  const audio = audioRefs.value[index]
+  if (!audio) return
+  if (audio.paused) {
+    // 暂停其他正在播放的音频
+    Object.keys(audioRefs.value).forEach(k => {
+      if (k !== String(index) && audioRefs.value[k] && !audioRefs.value[k].paused) {
+        audioRefs.value[k].pause()
+        audioStates.value[k] = { ...audioStates.value[k], playing: false }
+      }
+    })
+    audio.play()
+    audioStates.value[index] = { ...audioStates.value[index], playing: true }
+  } else {
+    audio.pause()
+    audioStates.value[index] = { ...audioStates.value[index], playing: false }
+  }
+}
+
+function updateAudioProgress(event, index) {
+  const audio = event.target
+  const progress = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0
+  audioStates.value[index] = {
+    ...audioStates.value[index],
+    currentTime: audio.currentTime,
+    progress
+  }
+}
+
+function initAudioDuration(event, index) {
+  audioStates.value[index] = {
+    ...audioStates.value[index],
+    duration: event.target.duration,
+    currentTime: 0,
+    progress: 0,
+    playing: false
+  }
+}
+
+function formatAudioTime(seconds) {
+  if (!seconds || isNaN(seconds)) return '0:00'
+  const m = Math.floor(seconds / 60)
+  const s = Math.floor(seconds % 60)
+  return `${m}:${s.toString().padStart(2, '0')}`
+}
 
 const userInitial = computed(() => {
   return props.userName.charAt(0).toUpperCase()
@@ -294,28 +428,97 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+/* ========== AI 头像 - 毛玻璃灵动设计 ========== */
 .ai-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #374151, #1f2937);
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
 }
 
-.user-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: #374151;
+.ai-avatar__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.4) 0%,
+    rgba(99, 102, 241, 0.3) 50%,
+    rgba(59, 130, 246, 0.4) 100%
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 
+    0 4px 16px rgba(139, 92, 246, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  animation: avatarGlow 3s ease-in-out infinite;
+}
+
+@keyframes avatarGlow {
+  0%, 100% {
+    box-shadow: 
+      0 4px 16px rgba(139, 92, 246, 0.2),
+      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  50% {
+    box-shadow: 
+      0 4px 24px rgba(139, 92, 246, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  }
+}
+
+.ai-avatar__inner {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.ai-avatar__inner svg {
+  filter: drop-shadow(0 2px 4px rgba(139, 92, 246, 0.3));
+}
+
+/* ========== 用户头像 - 毛玻璃现代设计 ========== */
+.user-avatar {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-avatar__inner {
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, 
+    rgba(59, 130, 246, 0.5) 0%,
+    rgba(37, 99, 235, 0.4) 100%
+  );
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 
+    0 4px 16px rgba(59, 130, 246, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-avatar__letter {
+  position: relative;
+  z-index: 1;
   color: white;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .ai-message__content {
@@ -330,9 +533,10 @@ onUnmounted(() => {
   align-items: flex-end;
 }
 
+/* ========== 消息气泡 - 毛玻璃灵动设计 ========== */
 .ai-message__text {
-  padding: 10px 14px;
-  border-radius: 12px;
+  padding: 12px 16px;
+  border-radius: 16px;
   font-size: 14px;
   line-height: 1.6;
   word-break: break-word;
@@ -341,6 +545,8 @@ onUnmounted(() => {
   -moz-user-select: text;
   -ms-user-select: text;
   cursor: text;
+  position: relative;
+  transition: all 0.3s ease;
 }
 
 .ai-message__text.is-loading {
@@ -361,16 +567,36 @@ onUnmounted(() => {
   }
 }
 
+/* AI 消息气泡 - 深色毛玻璃 */
 .ai-message--assistant .ai-message__text {
-  background: #1f2937;
+  background: linear-gradient(135deg, 
+    rgba(45, 50, 65, 0.85) 0%,
+    rgba(35, 40, 55, 0.9) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   color: #e5e7eb;
-  border-bottom-left-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom-left-radius: 6px;
+  box-shadow: 
+    0 4px 24px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
+/* 用户消息气泡 - 蓝色毛玻璃 */
 .ai-message--user .ai-message__text {
-  background: #3b82f6;
+  background: linear-gradient(135deg, 
+    rgba(59, 130, 246, 0.85) 0%,
+    rgba(37, 99, 235, 0.9) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   color: white;
-  border-bottom-right-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-bottom-right-radius: 6px;
+  box-shadow: 
+    0 4px 24px rgba(59, 130, 246, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .ai-message__text :deep(p) {
@@ -488,6 +714,15 @@ onUnmounted(() => {
   margin-top: 8px;
 }
 
+.ai-attachment {
+  position: relative;
+  cursor: grab;
+}
+
+.ai-attachment:active {
+  cursor: grabbing;
+}
+
 .ai-attachment__image {
   max-width: 200px;
   max-height: 150px;
@@ -500,6 +735,87 @@ onUnmounted(() => {
   opacity: 0.8;
 }
 
+/* 视频内联预览 */
+.ai-attachment__video-wrapper {
+  position: relative;
+  max-width: 220px;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: #1a1a2e;
+}
+
+.ai-attachment__video-wrapper:hover .ai-attachment__video-play {
+  background: rgba(0, 0, 0, 0.5);
+  transform: translate(-50%, -50%) scale(1.1);
+}
+
+.ai-attachment__video {
+  width: 100%;
+  max-height: 150px;
+  object-fit: cover;
+  display: block;
+  border-radius: 8px;
+}
+
+.ai-attachment__video-play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 36px;
+  height: 36px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  transition: all 0.2s;
+  pointer-events: none;
+}
+
+.ai-attachment__video-play svg {
+  margin-left: 2px;
+}
+
+.ai-attachment__video-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 4px 8px;
+  background: linear-gradient(transparent, rgba(0,0,0,0.7));
+  color: #e5e7eb;
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 0 0 8px 8px;
+}
+
+/* 拖拽提示角标 */
+.ai-attachment__drag-hint {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.8);
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+
+.ai-attachment:hover .ai-attachment__drag-hint {
+  opacity: 1;
+}
+
 .ai-attachment__file {
   display: flex;
   align-items: center;
@@ -509,6 +825,73 @@ onUnmounted(() => {
   border-radius: 6px;
   color: #d1d5db;
   font-size: 12px;
+}
+
+/* 音频内联播放器 - 毛玻璃现代设计 */
+.ai-attachment__audio {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: linear-gradient(135deg, 
+    rgba(45, 50, 65, 0.8) 0%,
+    rgba(35, 40, 55, 0.85) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  min-width: 240px;
+  max-width: 320px;
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+.ai-attachment__audio:hover {
+  box-shadow: 
+    0 6px 28px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.ai-attachment__audio-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #e5e7eb;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ai-attachment__audio-header svg {
+  flex-shrink: 0;
+  color: #a78bfa;
+  filter: drop-shadow(0 2px 4px rgba(167, 139, 250, 0.3));
+}
+
+.ai-attachment__audio-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-attachment__audio-player {
+  width: 100%;
+  height: 36px;
+  border-radius: 8px;
+  outline: none;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+/* 让 audio 控件在暗色背景下更协调 */
+.ai-attachment__audio-player::-webkit-media-controls-panel {
+  background: linear-gradient(135deg, 
+    rgba(30, 35, 50, 0.9) 0%,
+    rgba(25, 30, 45, 0.95) 100%
+  );
+  border-radius: 8px;
 }
 
 .ai-message__time {
@@ -565,5 +948,190 @@ onUnmounted(() => {
 
 .ai-context-menu__item svg {
   flex-shrink: 0;
+}
+
+/* ========== 白昼模式适配 ========== */
+
+/* AI 头像 - 白昼模式 */
+:root.canvas-theme-light .ai-avatar__ring {
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.25) 0%,
+    rgba(99, 102, 241, 0.2) 50%,
+    rgba(59, 130, 246, 0.25) 100%
+  );
+  border-color: rgba(139, 92, 246, 0.2);
+  box-shadow: 
+    0 4px 16px rgba(139, 92, 246, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+:root.canvas-theme-light .ai-avatar__inner svg path {
+  stop-color: #8b5cf6;
+}
+
+/* 用户头像 - 白昼模式 */
+:root.canvas-theme-light .user-avatar__inner {
+  background: linear-gradient(135deg, 
+    rgba(59, 130, 246, 0.35) 0%,
+    rgba(37, 99, 235, 0.3) 100%
+  );
+  border-color: rgba(59, 130, 246, 0.25);
+  box-shadow: 
+    0 4px 16px rgba(59, 130, 246, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+:root.canvas-theme-light .user-avatar__letter {
+  color: #1e40af;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+/* AI 消息气泡 - 白昼模式 */
+:root.canvas-theme-light .ai-message--assistant .ai-message__text {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.75) 0%,
+    rgba(248, 250, 252, 0.85) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  color: #1c1917;
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 
+    0 4px 24px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* 用户消息气泡 - 白昼模式 */
+:root.canvas-theme-light .ai-message--user .ai-message__text {
+  background: linear-gradient(135deg, 
+    rgba(59, 130, 246, 0.9) 0%,
+    rgba(37, 99, 235, 0.95) 100%
+  );
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 4px 24px rgba(59, 130, 246, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+/* 代码块 - 白昼模式 */
+:root.canvas-theme-light .ai-message--assistant .ai-message__text :deep(code) {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-message--assistant .ai-message__text :deep(pre) {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .ai-message--assistant .ai-message__text :deep(a) {
+  color: #2563eb;
+}
+
+:root.canvas-theme-light .ai-message--assistant .ai-message__text :deep(blockquote) {
+  border-left-color: #d1d5db;
+  color: #57534e;
+}
+
+/* 思考过程 - 白昼模式 */
+:root.canvas-theme-light .ai-thinking__toggle {
+  background: rgba(139, 92, 246, 0.1);
+  border-color: rgba(139, 92, 246, 0.2);
+  color: #7c3aed;
+}
+
+:root.canvas-theme-light .ai-thinking__toggle:hover {
+  background: rgba(139, 92, 246, 0.15);
+}
+
+:root.canvas-theme-light .ai-thinking__content {
+  background: rgba(139, 92, 246, 0.08);
+  color: #6d28d9;
+}
+
+/* 工具调用 - 白昼模式 */
+:root.canvas-theme-light .ai-tool-call__header {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: #2563eb;
+}
+
+/* 附件文件 - 白昼模式 */
+:root.canvas-theme-light .ai-attachment__file {
+  background: rgba(0, 0, 0, 0.04);
+  color: #44403c;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* 音频播放器 - 白昼模式 */
+:root.canvas-theme-light .ai-attachment__audio {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.8) 0%,
+    rgba(248, 250, 252, 0.85) 100%
+  );
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+:root.canvas-theme-light .ai-attachment__audio:hover {
+  box-shadow: 
+    0 6px 28px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .ai-attachment__audio-header {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-attachment__audio-header svg {
+  color: #8b5cf6;
+}
+
+:root.canvas-theme-light .ai-attachment__audio-player {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .ai-attachment__audio-player::-webkit-media-controls-panel {
+  background: linear-gradient(135deg, 
+    rgba(248, 250, 252, 0.95) 0%,
+    rgba(241, 245, 249, 0.98) 100%
+  );
+}
+
+/* 视频预览 - 白昼模式 */
+:root.canvas-theme-light .ai-attachment__video-wrapper {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .ai-attachment__video-label {
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.5));
+}
+
+/* 图片附件 - 白昼模式 */
+:root.canvas-theme-light .ai-attachment__image {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* 右键菜单 - 白昼模式 */
+:root.canvas-theme-light .ai-context-menu {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .ai-context-menu__item {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-context-menu__item:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #0c0a09;
+}
+
+/* 时间戳 - 白昼模式 */
+:root.canvas-theme-light .ai-message__time {
+  color: #78716c;
 }
 </style>

@@ -61,7 +61,10 @@ export async function uploadAttachments(files) {
       results.push({
         url: result.url,
         name: file.name,
-        type: file.type.startsWith('image/') ? 'image' : 'file',
+        type: file.type.startsWith('image/') ? 'image'
+            : file.type.startsWith('video/') ? 'video'
+            : file.type.startsWith('audio/') ? 'audio'
+            : 'file',
         originalFile: file
       })
     } catch (error) {
