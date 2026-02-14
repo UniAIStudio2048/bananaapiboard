@@ -1134,4 +1134,277 @@ onUnmounted(() => {
 :root.canvas-theme-light .ai-message__time {
   color: #78716c;
 }
+
+/* ========== 音频播放器卡片样式（长方条） ========== */
+.ai-audio-player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, 
+    rgba(45, 50, 65, 0.85) 0%,
+    rgba(35, 40, 55, 0.9) 100%
+  );
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  min-width: 280px;
+  max-width: 100%;
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+  cursor: default;
+}
+
+.ai-audio-player:hover {
+  box-shadow: 
+    0 6px 28px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+/* 音频封面/图标区域 */
+.ai-audio-player__cover {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.3) 0%,
+    rgba(99, 102, 241, 0.25) 100%
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.ai-audio-player__visualizer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  width: 100%;
+  height: 100%;
+  padding: 8px;
+}
+
+.ai-audio-player__bar {
+  width: 3px;
+  background: linear-gradient(to top, 
+    rgba(168, 85, 247, 0.8) 0%,
+    rgba(99, 102, 241, 0.9) 50%,
+    rgba(59, 130, 246, 0.8) 100%
+  );
+  border-radius: 2px;
+  animation: audioWave 1.2s ease-in-out infinite;
+}
+
+@keyframes audioWave {
+  0%, 100% {
+    height: 20%;
+    opacity: 0.6;
+  }
+  50% {
+    height: 80%;
+    opacity: 1;
+  }
+}
+
+/* 音频信息区域 */
+.ai-audio-player__info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ai-audio-player__name {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 进度条 */
+.ai-audio-player__progress {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ai-audio-player__progress-bar {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.ai-audio-player__progress-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    rgba(168, 85, 247, 0.9) 0%,
+    rgba(99, 102, 241, 0.95) 50%,
+    rgba(59, 130, 246, 0.9) 100%
+  );
+  border-radius: 2px;
+  transition: width 0.1s linear;
+}
+
+.ai-audio-player__progress-dot {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 12px;
+  height: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  transition: left 0.1s linear;
+  opacity: 0;
+}
+
+.ai-audio-player__progress-bar:hover .ai-audio-player__progress-dot {
+  opacity: 1;
+}
+
+.ai-audio-player__time {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* 控制按钮 */
+.ai-audio-player__controls {
+  flex-shrink: 0;
+}
+
+.ai-audio-player__play-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.8) 0%,
+    rgba(99, 102, 241, 0.85) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 
+    0 2px 8px rgba(139, 92, 246, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.ai-audio-player__play-btn:hover {
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.95) 0%,
+    rgba(99, 102, 241, 1) 100%
+  );
+  transform: scale(1.05);
+  box-shadow: 
+    0 4px 12px rgba(139, 92, 246, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.ai-audio-player__play-btn:active {
+  transform: scale(0.95);
+}
+
+/* 白昼模式适配 */
+:root.canvas-theme-light .ai-audio-player {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(248, 250, 252, 0.9) 100%
+  );
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 
+    0 4px 20px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+:root.canvas-theme-light .ai-audio-player:hover {
+  box-shadow: 
+    0 6px 28px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .ai-audio-player__cover {
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.15) 0%,
+    rgba(99, 102, 241, 0.12) 100%
+  );
+}
+
+:root.canvas-theme-light .ai-audio-player__bar {
+  background: linear-gradient(to top, 
+    rgba(168, 85, 247, 0.6) 0%,
+    rgba(99, 102, 241, 0.7) 50%,
+    rgba(59, 130, 246, 0.6) 100%
+  );
+}
+
+:root.canvas-theme-light .ai-audio-player__name {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-audio-player__progress-bar {
+  background: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .ai-audio-player__progress-fill {
+  background: linear-gradient(90deg, 
+    rgba(168, 85, 247, 0.7) 0%,
+    rgba(99, 102, 241, 0.75) 50%,
+    rgba(59, 130, 246, 0.7) 100%
+  );
+}
+
+:root.canvas-theme-light .ai-audio-player__progress-dot {
+  background: rgba(0, 0, 0, 0.8);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .ai-audio-player__time {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .ai-audio-player__play-btn {
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 0.9) 0%,
+    rgba(99, 102, 241, 0.95) 100%
+  );
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 
+    0 2px 8px rgba(139, 92, 246, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+:root.canvas-theme-light .ai-audio-player__play-btn:hover {
+  background: linear-gradient(135deg, 
+    rgba(168, 85, 247, 1) 0%,
+    rgba(99, 102, 241, 1) 100%
+  );
+  box-shadow: 
+    0 4px 12px rgba(139, 92, 246, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
 </style>

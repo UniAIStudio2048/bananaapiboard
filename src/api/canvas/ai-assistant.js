@@ -52,21 +52,47 @@ export async function uploadAttachment(file) {
  * @param {File[]} files - 文件对象数组
  * @returns {Promise<Array<{url: string, name: string, type: string}>>} 上传结果数组
  */
+/**
+ * 根据文件对象判断文件类型
+ * @param {File} file - 文件对象
+ * @returns {string} 文件类型: 'image' | 'video' | 'audio' | 'file'
+ */
+function detectFileType(file) {
+  const mimeType = file.type || ''
+  const fileName = file.name || ''
+  const ext = fileName.split('.').pop()?.toLowerCase() || ''
+  
+  // 优先使用 MIME type
+  if (mimeType.startsWith('image/')) return 'image'
+  if (mimeType.startsWith('video/')) return 'video'
+  if (mimeType.startsWith('audio/')) return 'audio'
+  
+  // 如果 MIME type 不准确，根据扩展名判断
+  const imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg']
+  const videoExts = ['mp4', 'webm', 'mov', 'avi', 'mkv', 'flv', 'wmv']
+  const audioExts = ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma']
+  
+  if (imageExts.includes(ext)) return 'image'
+  if (videoExts.includes(ext)) return 'video'
+  if (audioExts.includes(ext)) return 'audio'
+  
+  return 'file'
+}
+
 export async function uploadAttachments(files) {
   const results = []
 
   for (const file of files) {
     try {
       const result = await uploadAttachment(file)
+      const fileType = detectFileType(file)
       results.push({
         url: result.url,
         name: file.name,
-        type: file.type.startsWith('image/') ? 'image'
-            : file.type.startsWith('video/') ? 'video'
-            : file.type.startsWith('audio/') ? 'audio'
-            : 'file',
+        type: fileType,
         originalFile: file
       })
+      console.log(`[AI-Assistant] 文件类型识别: ${file.name} -> ${fileType} (MIME: ${file.type || 'unknown'})`)
     } catch (error) {
       console.error(`[AI-Assistant] 上传文件 ${file.name} 失败:`, error)
       throw new Error(`上传文件 "${file.name}" 失败: ${error.message}`)

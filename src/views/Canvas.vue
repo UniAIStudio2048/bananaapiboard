@@ -1361,8 +1361,23 @@ function handlePickNode(nodeId) {
     url = node.data.output?.url || node.data.sourceVideo
     type = 'video'
   }else if (audioTypes.includes(nodeType)) {
-    url = node.data.audioUrl || node.data.output?.url || node.data.audioData
+    // 优先使用音频专用字段
+    url = node.data.audioUrl || node.data.audioData || node.data.output?.url
     type = 'audio'
+    
+    // 如果 URL 存在，确保文件名有正确的扩展名
+    if (url) {
+      const urlLower = url.toLowerCase()
+      // 检查 URL 是否看起来像音频文件
+      const isAudioUrl = urlLower.includes('/audio/') || 
+                        urlLower.includes('/canvas/audio/') ||
+                        /\.(mp3|wav|ogg|flac|aac|m4a)(\?|$)/i.test(url)
+      
+      // 如果 URL 看起来不像音频文件，但节点类型是音频，记录警告
+      if (!isAudioUrl && !urlLower.includes('/images/')) {
+        console.warn('[CanvasPick] 音频节点的 URL 可能不正确:', url, node.data)
+      }
+    }
   }
 
   if (!url) {
@@ -1377,7 +1392,31 @@ function handlePickNode(nodeId) {
   showAIAssistant.value = true
   nextTick(() => {
     nextTick(() => {
-      const name = node.data.title || `${type}_${Date.now()}`
+      // 从 URL 或节点数据中提取文件名
+      let name = node.data.title || node.data.fileName
+      if (!name) {
+        // 尝试从 URL 中提取文件名
+        const urlMatch = url.match(/([^/]+\.(mp3|wav|ogg|flac|aac|m4a|mp4|webm|mov|jpg|jpeg|png|gif|webp))(\?|$)/i)
+        if (urlMatch) {
+          name = urlMatch[1]
+        } else {
+          // 根据类型生成默认文件名
+          const ext = type === 'audio' ? '.mp3' : type === 'video' ? '.mp4' : '.png'
+          name = `${type}_${Date.now()}${ext}`
+        }
+      } else {
+        // 确保文件名有正确的扩展名
+        const ext = name.split('.').pop()?.toLowerCase()
+        if (type === 'audio' && !['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(ext)) {
+          name = name.replace(/\.[^.]+$/, '') + '.mp3'
+        } else if (type === 'video' && !['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext)) {
+          name = name.replace(/\.[^.]+$/, '') + '.mp4'
+        } else if (type === 'image' && !['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+          name = name.replace(/\.[^.]+$/, '') + '.png'
+        }
+      }
+      
+      console.log(`[CanvasPick] 添加附件到 AI 助手: type=${type}, url=${url}, name=${name}`)
       aiAssistantRef.value?.addAttachmentFromUrl(url, type, name)
     })
   })

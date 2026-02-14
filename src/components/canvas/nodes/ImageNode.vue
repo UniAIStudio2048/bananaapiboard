@@ -204,7 +204,7 @@ const selectedAspectRatio = ref(props.data.aspectRatio || 'auto')
 const selectedCount = ref(props.data.count || 1)
 const imageSize = ref(props.data.imageSize || '4K') // 尺寸选项（仅 nano-banana-2）
 
-// MJ botType 选择（图生图模式：写实/动漫）
+// MJ botType 选择（文生图和图生图模式：写实/动漫）
 const botType = ref(props.data.botType || 'MID_JOURNEY')
 const botTypeOptions = [
   { value: 'MID_JOURNEY', label: '写实' },
@@ -5468,8 +5468,8 @@ async function handleDrop(event) {
             </button>
           </div>
           
-          <!-- MJ 模型 botType 切换器（写实/动漫） -->
-          <div v-if="isMJModel && referenceImages.length > 0" class="bot-type-selector">
+          <!-- MJ 模型 botType 切换器（写实/动漫）- 文生图和图生图模式都支持 -->
+          <div v-if="isMJModel" class="bot-type-selector">
             <div 
               v-for="option in botTypeOptions" 
               :key="option.value"

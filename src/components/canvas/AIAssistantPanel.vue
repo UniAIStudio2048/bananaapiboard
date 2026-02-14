@@ -1280,12 +1280,36 @@ onMounted(() => {
 async function addAttachmentFromUrl(url, type, name) {
   if (!url) return
 
-  const defaultNames = {
-    image: `image_${Date.now()}.png`,
-    video: `video_${Date.now()}.mp4`,
-    audio: `audio_${Date.now()}.mp3`
+  // 根据类型确定默认文件名和 MIME type
+  const typeConfig = {
+    image: { ext: '.png', mime: 'image/png', defaultName: `image_${Date.now()}.png` },
+    video: { ext: '.mp4', mime: 'video/mp4', defaultName: `video_${Date.now()}.mp4` },
+    audio: { ext: '.mp3', mime: 'audio/mpeg', defaultName: `audio_${Date.now()}.mp3` }
   }
-  const fileName = name || defaultNames[type] || `file_${Date.now()}`
+  
+  const config = typeConfig[type] || { ext: '', mime: 'application/octet-stream', defaultName: `file_${Date.now()}` }
+  
+  // 如果提供了文件名，检查扩展名是否正确
+  let fileName = name || config.defaultName
+  if (name) {
+    const ext = name.split('.').pop()?.toLowerCase()
+    // 如果文件名没有扩展名，或者扩展名与类型不匹配，添加正确的扩展名
+    if (!ext || (type === 'audio' && !['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(ext)) ||
+        (type === 'video' && !['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext)) ||
+        (type === 'image' && !['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext))) {
+      // 如果扩展名不匹配，使用 URL 中的扩展名，或者使用默认扩展名
+      const urlExt = url.split('.').pop()?.split('?')[0]?.toLowerCase()
+      if (urlExt && (
+        (type === 'audio' && ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(urlExt)) ||
+        (type === 'video' && ['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(urlExt)) ||
+        (type === 'image' && ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(urlExt))
+      )) {
+        fileName = name.replace(/\.[^.]+$/, '') + '.' + urlExt
+      } else {
+        fileName = name.replace(/\.[^.]+$/, '') + config.ext
+      }
+    }
+  }
 
   try {
     // 获取文件 blob
@@ -1300,7 +1324,12 @@ async function addAttachmentFromUrl(url, type, name) {
       headers: url.startsWith('data:') || url.startsWith('blob:') ? {}: getTenantHeaders()
     })
     const blob = await response.blob()
-    const file = new File([blob], fileName, { type: blob.type })
+    
+    // 强制使用传入的 type 对应的 MIME type，而不是依赖服务器返回的 Content-Type
+    // 因为服务器可能返回错误的 Content-Type（比如音频文件返回 image/jpeg）
+    const file = new File([blob], fileName, { type: config.mime })
+    
+    console.log(`[AI-Assistant] 从 URL 添加附件: type=${type}, fileName=${fileName}, blob.type=${blob.type}, 使用 MIME=${config.mime}`)
 
     if (type === 'image') {
       attachments.value.push({
@@ -1321,7 +1350,7 @@ async function addAttachmentFromUrl(url, type, name) {
         size: file.size,
         preview: URL.createObjectURL(file)
       })
-    }else if (type === 'audio') {
+    } else if (type === 'audio') {
       attachments.value.push({
         type: 'audio',
         name: fileName,
