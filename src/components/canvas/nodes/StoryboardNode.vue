@@ -3,7 +3,7 @@
  * StoryboardNode.vue - 分镜格子节点
  *
  * 功能：
- * - 支持 2x2, 3x3, 4x4 格子布局（默认 3x3）
+ * - 支持 2x2, 3x3, 4x4, 5x5 格子布局（默认 3x3）
  * - 支持多种比例：16:9, 9:16, 3:4, 4:3, 1:1（默认 16:9）
  * - 每个格子可以拖放图片
  * - 格子之间可拖拽调整顺序
@@ -949,8 +949,13 @@ watch(() => props.data.images, (newImages) => {
   if (!newImages) return
   
   // 强制同步本地 images 数组，确保响应式
-  const gridLimit = 16 
-  for (let i = 0; i < gridLimit; i++) {
+  // 使用 gridCount 动态计算上限，支持 5x5（25格）等所有布局
+  const limit = gridCount.value
+  // 如果本地数组长度不够，先扩展
+  if (images.value.length < limit) {
+    images.value = Array(limit).fill(null).map((_, i) => images.value[i] || null)
+  }
+  for (let i = 0; i < limit; i++) {
     const val = newImages[i] !== undefined ? newImages[i] : null
     if (images.value[i] !== val) {
       images.value[i] = val
@@ -1404,14 +1409,15 @@ const hasAnyImage = computed(() => {
               />
 
               <!-- 编辑模式下的操作按钮：预览、替换、删除 -->
-              <div v-if="url && isEditMode" class="edit-cell-actions nodrag nowheel" @mousedown.stop @pointerdown.stop>
-                <button class="edit-cell-btn" @click.stop="handleCellPreview(index, $event)" title="预览">
+              <!-- 注意：不在容器上 @mousedown.stop，让 mousedown 能穿透到 grid-item 以支持拖拽排序 -->
+              <div v-if="url && isEditMode" class="edit-cell-actions nodrag nowheel" :class="{ 'edit-cell-actions-compact': gridSize === '5x5' }">
+                <button class="edit-cell-btn" @click.stop="handleCellPreview(index, $event)" @mousedown.stop @pointerdown.stop title="预览">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" stroke-linecap="round" stroke-linejoin="round"/>
                     <circle cx="12" cy="12" r="3"/>
                   </svg>
                 </button>
-                <button class="edit-cell-btn" @click.stop="handleCellReplace(index, $event)" title="替换">
+                <button class="edit-cell-btn" @click.stop="handleCellReplace(index, $event)" @mousedown.stop @pointerdown.stop title="替换">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M21 12a9 9 0 0 0-15.5-6.3" stroke-linecap="round" stroke-linejoin="round"/>
                     <path d="M3 4v6h6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1419,7 +1425,7 @@ const hasAnyImage = computed(() => {
                     <path d="M21 20v-6h-6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
                 </button>
-                <button class="edit-cell-btn edit-cell-btn-delete" @click.stop="clearCell(index)" title="删除">
+                <button class="edit-cell-btn edit-cell-btn-delete" @click.stop="clearCell(index)" @mousedown.stop @pointerdown.stop title="删除">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
@@ -2381,6 +2387,14 @@ const hasAnyImage = computed(() => {
   display: flex;
   gap: 3px;
   z-index: 10;
+  pointer-events: none; /* 容器不拦截鼠标事件，让 mousedown 穿透到 grid-item 以支持拖拽 */
+}
+
+/* 5x5 紧凑模式：按钮缩小以适应小格子 */
+.edit-cell-actions-compact {
+  top: 1px;
+  right: 1px;
+  gap: 1px;
 }
 
 .edit-cell-btn {
@@ -2396,6 +2410,19 @@ const hasAnyImage = computed(() => {
   justify-content: center;
   transition: all 0.15s ease;
   backdrop-filter: blur(4px);
+  pointer-events: auto; /* 按钮本身可点击 */
+}
+
+/* 5x5 紧凑模式按钮尺寸 */
+.edit-cell-actions-compact .edit-cell-btn {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+
+.edit-cell-actions-compact .edit-cell-btn svg {
+  width: 9px;
+  height: 9px;
 }
 
 .edit-cell-btn:hover {
