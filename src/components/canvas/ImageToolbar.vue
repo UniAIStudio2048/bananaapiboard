@@ -64,9 +64,18 @@ const lastPosition = ref({ x: 0, y: 0 })
 const showCropModal = ref(false)
 const cropImageUrl = ref('')
 
-// 宫格裁剪选项菜单状态
-const gridCropMenuType = ref(null) // 'grid9' | 'grid4' | null
+// 宫格裁剪选项菜单状态（统一入口）
+const gridCropMenuType = ref(null) // null | 'selecting' | 'grid4' | 'grid9' | 'grid16' | 'grid25'
 const gridCropMenuJustOpened = ref(false) // 防止打开后立即关闭
+const gridCropSelectedSize = ref(null) // { cols, rows, count, label, type }
+
+// 宫格尺寸选项
+const gridCropSizeOptions = [
+  { cols: 2, rows: 2, count: 4, label: '4宫格', type: 'grid4' },
+  { cols: 3, rows: 3, count: 9, label: '9宫格', type: 'grid9' },
+  { cols: 4, rows: 4, count: 16, label: '16宫格', type: 'grid16' },
+  { cols: 5, rows: 5, count: 25, label: '25宫格', type: 'grid25' }
+]
 
 // 获取节点的图片URL
 const imageUrl = computed(() => {
@@ -130,15 +139,8 @@ const toolbarItems = [
   { 
     id: 'grid-crop', 
     icon: 'grid-crop',
-    label: '9宫格裁剪', 
-    handler: () => showGridCropMenu('grid9'),
-    requiresImage: true
-  },
-  { 
-    id: 'grid4-crop', 
-    icon: 'grid4-crop',
-    label: '4宫格裁剪', 
-    handler: () => showGridCropMenu('grid4'),
+    label: '宫格裁剪', 
+    handler: () => showGridCropMenu('selecting'),
     requiresImage: true
   },
   // 分隔符
@@ -294,50 +296,60 @@ function getProxiedImageUrl(url) {
   return url
 }
 
-// ========== 宫格裁剪选项菜单 ==========
+// ========== 宫格裁剪选项菜单（统一入口） ==========
 
 // 显示宫格裁剪选项菜单
 function showGridCropMenu(type) {
-  gridCropMenuType.value = type
+  if (type === 'selecting') {
+    gridCropMenuType.value = 'selecting'
+    gridCropSelectedSize.value = null
+  }else {
+    gridCropMenuType.value = type
+  }
   gridCropMenuJustOpened.value = true
-  // 短暂延迟后重置标志
   setTimeout(() => {
     gridCropMenuJustOpened.value = false
   }, 100)
 }
 
+// 选择宫格大小后进入第二步
+function selectGridCropSize(sizeOption) {
+  gridCropSelectedSize.value = sizeOption
+  gridCropMenuType.value = sizeOption.type
+}
+
+// 返回宫格大小选择
+function backToGridSizeSelect() {
+  gridCropMenuType.value = 'selecting'
+  gridCropSelectedSize.value = null
+}
+
 // 关闭宫格裁剪选项菜单
 function closeGridCropMenu() {
   gridCropMenuType.value = null
+  gridCropSelectedSize.value = null
 }
 
-// 执行仅裁剪
+// 执行仅裁剪（通用）
 function handleGridCropOnly() {
-  const type = gridCropMenuType.value
+  const size = gridCropSelectedSize.value
+  if (!size) return
   closeGridCropMenu()
-  if (type === 'grid9') {
-    handleGridCrop()
-  } else if (type === 'grid4') {
-    handleGrid4Crop()
-  }
+  handleGenericGridCrop(size.cols, size.rows)
 }
 
-// 执行裁剪并创建分镜格子
+// 执行裁剪并创建分镜格子（通用）
 async function handleGridCropToStoryboard() {
-  const type = gridCropMenuType.value
+  const size = gridCropSelectedSize.value
+  if (!size) return
   closeGridCropMenu()
-  
-  if (type === 'grid9') {
-    await createStoryboardFromCrop(3, 3)
-  } else if (type === 'grid4') {
-    await createStoryboardFromCrop(2, 2)
-  }
+  await createStoryboardFromCrop(size.cols, size.rows)
 }
 
 // 裁剪图片并创建分镜格子节点
 async function createStoryboardFromCrop(cols, rows) {
-  const gridType = cols === 3 ? 'grid9' : 'grid4'
   const count = cols * rows
+  const gridType = count <= 4 ? 'grid4' : 'grid9'
   
   console.log(`[ImageToolbar] 创建分镜格子 ${cols}x${rows}`, props.imageNode?.id)
   if (!imageUrl.value) return
@@ -421,8 +433,8 @@ async function createStoryboardFromCrop(cols, rows) {
     const nodeId = `storyboard-${Date.now()}`
     const gridSize = `${cols}x${rows}`
     
-    // 填充图片数组（9个位置，未使用的填 null）
-    const imagesArray = Array(9).fill(null)
+    // 填充图片数组
+    const imagesArray = Array(count).fill(null)
     croppedUrls.forEach((url, i) => {
       imagesArray[i] = url
     })
@@ -451,36 +463,39 @@ async function createStoryboardFromCrop(cols, rows) {
 }
 
 // 9宫格裁剪 - 将图片裁剪成9份并创建组
-async function handleGridCrop() {
-  console.log('[ImageToolbar] 9宫格裁剪', props.imageNode?.id)
+// 通用宫格裁剪 - 将图片裁剪成 cols*rows 份并创建组
+async function handleGenericGridCrop(cols, rows) {
+  const count = cols * rows
+  console.log(`[ImageToolbar] ${count}宫格裁剪`, props.imageNode?.id)
   if (!imageUrl.value || isGridCropping.value) return
   
   isGridCropping.value = true
   
   try {
-    // 先扣除积分
+    // 先扣除积分（16/25宫格复用 grid9 积分）
     try {
-      const deductResult = await deductCropPoints('grid9')
+      const deductType = count <= 4 ? 'grid4' : 'grid9'
+      const deductResult = await deductCropPoints(deductType)
       if (deductResult.pointsCost > 0) {
-        console.log(`[ImageToolbar] 9宫格裁剪：已扣除 ${deductResult.pointsCost} 积分`)
+        console.log(`[ImageToolbar] ${count}宫格裁剪：已扣除 ${deductResult.pointsCost} 积分`)
       }
     } catch (deductError) {
-      console.error('[ImageToolbar] 9宫格裁剪：积分扣除失败', deductError)
+      console.error(`[ImageToolbar] ${count}宫格裁剪：积分扣除失败`, deductError)
       alert(deductError.message || '积分不足，无法执行裁剪操作')
       isGridCropping.value = false
       return
     }
     
-    // 加载图片 - 使用代理URL绕过CORS限制
+    // 加载图片
     const img = new Image()
     img.crossOrigin = 'anonymous'
     const proxiedUrl = getProxiedImageUrl(imageUrl.value)
-    console.log('[ImageToolbar] 9宫格裁剪：加载图片', proxiedUrl?.substring(0, 80))
+    console.log(`[ImageToolbar] ${count}宫格裁剪：加载图片`, proxiedUrl?.substring(0, 80))
     
     await new Promise((resolve, reject) => {
       img.onload = resolve
       img.onerror = (e) => {
-        console.error('[ImageToolbar] 9宫格裁剪：图片加载失败', e)
+        console.error(`[ImageToolbar] ${count}宫格裁剪：图片加载失败`, e)
         reject(e)
       }
       img.src = proxiedUrl
@@ -488,33 +503,20 @@ async function handleGridCrop() {
     
     const imgWidth = img.naturalWidth
     const imgHeight = img.naturalHeight
-    const cellWidth = Math.floor(imgWidth / 3)
-    const cellHeight = Math.floor(imgHeight / 3)
+    const cellWidth = Math.floor(imgWidth / cols)
+    const cellHeight = Math.floor(imgHeight / rows)
     
-    // 创建9个裁剪后的图片
     const croppedImages = []
     
-    for (let row = 0; row < 3; row++) {
-      for (let col = 0; col < 3; col++) {
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
         const canvas = document.createElement('canvas')
         canvas.width = cellWidth
         canvas.height = cellHeight
         const ctx = canvas.getContext('2d')
         
-        // 裁剪对应区域
-        ctx.drawImage(
-          img,
-          col * cellWidth,      // 源x
-          row * cellHeight,     // 源y
-          cellWidth,            // 源宽
-          cellHeight,           // 源高
-          0,                    // 目标x
-          0,                    // 目标y
-          cellWidth,            // 目标宽
-          cellHeight            // 目标高
-        )
+        ctx.drawImage(img, col * cellWidth, row * cellHeight, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight)
         
-        // 🔧 改进：使用 JPEG 格式压缩，转为 blob URL + 后台上传云端
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
         const blobUrl = URL.createObjectURL(blob)
         croppedImages.push({
@@ -522,22 +524,18 @@ async function handleGridCrop() {
           blob,
           row,
           col,
-          index: row * 3 + col
+          index: row * cols + col
         })
       }
     }
     
-    // 计算新节点的位置（基于原节点位置）
     const baseX = props.imageNode.position?.x || 0
     const baseY = props.imageNode.position?.y || 0
-    const nodeWidth = 200  // 每个小图节点的宽度
-    const nodeHeight = 200 // 每个小图节点的高度
-    const gap = 16         // 节点间距
-    
-    // 偏移到原节点右侧
+    const nodeWidth = 200
+    const nodeHeight = 200
+    const gap = 16
     const offsetX = (props.imageNode.style?.width || 400) + 50
     
-    // 创建9个图片节点
     const newNodeIds = []
     for (const item of croppedImages) {
       const nodeId = `grid-crop-${Date.now()}-${item.index}`
@@ -556,21 +554,19 @@ async function handleGridCrop() {
           fromGridCrop: true,
           isUploading: true
         }
-      }, true) // skipHistory = true，最后统一保存历史
+      }, true)
       
       newNodeIds.push(nodeId)
       
-      // 🔧 后台异步上传裁剪图到云端
       const cropFile = new File([item.blob], `grid-crop-${item.index}.jpg`, { type: 'image/jpeg' })
       uploadCropToCloud(nodeId, cropFile, item.url)
     }
     
-    // 创建编组
-    if (newNodeIds.length === 9) {
-      canvasStore.createGroup(newNodeIds, '9宫格裁剪')
+    if (newNodeIds.length === count) {
+      canvasStore.createGroup(newNodeIds, `${count}宫格裁剪`)
     }
     
-    console.log('[ImageToolbar] 9宫格裁剪完成，创建了', newNodeIds.length, '个节点，正在后台上传到云端')
+    console.log(`[ImageToolbar] ${count}宫格裁剪完成，创建了`, newNodeIds.length, '个节点，正在后台上传到云端')
     
     emit('grid-crop', { 
       nodeId: props.imageNode?.id, 
@@ -578,8 +574,8 @@ async function handleGridCrop() {
       newNodeIds
     })
     
-  } catch (error) {
-    console.error('[ImageToolbar] 9宫格裁剪失败:', error)
+  }catch (error) {
+    console.error(`[ImageToolbar] ${count}宫格裁剪失败:`, error)
   } finally {
     isGridCropping.value = false
   }
