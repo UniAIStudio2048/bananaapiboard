@@ -234,8 +234,8 @@ function fullscreen() {
 
 /* 调整 Handle 位置与 + 按钮中心对齐 */
 :deep(.vue-flow__handle.target) {
-  left: -39px !important;
-  top: calc(50% + 14px) !important;
+  left: -34px !important;
+  top: 50% !important;
   transform: translateY(-50%) !important;
 }
 </style>

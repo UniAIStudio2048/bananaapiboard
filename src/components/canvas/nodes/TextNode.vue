@@ -1837,17 +1837,25 @@ function startDragConnection(event) {
     return
   }
   
-  // 计算节点右侧输出端口的画布坐标（从节点位置计算）
-  // 节点位置 + 节点宽度 + 偏移量 = +号按钮中心位置，Y 轴在节点中间 + 标签高度偏移
-  const currentNodeWidth = props.data?.width || nodeWidth.value || 400
-  const currentNodeHeight = props.data?.height || nodeHeight.value || 280
-  const labelOffset = 28 // 标签高度偏移
+  // 计算节点右侧输出端口的画布坐标
+  // 使用响应式的节点尺寸（最准确）
+  const currentNodeWidth = nodeWidth.value || props.data?.width || 400
+  const currentNodeHeight = nodeHeight.value || props.data?.height || 280
+  const labelHeight = 28 // 节点标签高度
+  const labelMarginBottom = 8 // 标签与卡片之间的间距
+  const labelOffset = labelHeight + labelMarginBottom // 标签总偏移（高度 + 间距）
   const handleOffset = 34 // +号按钮中心相对于节点卡片边缘的偏移量
   
   const outputX = currentNode.position.x + currentNodeWidth + handleOffset
   const outputY = currentNode.position.y + labelOffset + currentNodeHeight / 2
   
-  console.log('[TextNode] 开始拖拽连线，起始位置:', { outputX, outputY, nodePosition: currentNode.position })
+  console.log('[TextNode] 开始拖拽连线，起始位置:', { 
+    outputX, 
+    outputY, 
+    nodePosition: currentNode.position,
+    nodeWidth: currentNodeWidth,
+    nodeHeight: currentNodeHeight
+  })
   
   // 调用 store 开始拖拽连线，使用节点输出端口位置作为起点
   canvasStore.startDragConnection(props.id, 'output', { x: outputX, y: outputY })
@@ -3147,14 +3155,14 @@ onMounted(() => {
 
 /* 调整 Handle 位置与 + 按钮中心对齐 */
 :deep(.vue-flow__handle.target) {
-  left: -39px !important;
-  top: calc(50% + 14px) !important;
+  left: -34px !important;
+  top: 50% !important;
   transform: translateY(-50%) !important;
 }
 
 :deep(.vue-flow__handle.source) {
-  right: -39px !important;
-  top: calc(50% + 14px) !important;
+  right: -34px !important;
+  top: 50% !important;
   transform: translateY(-50%) !important;
 }
 

@@ -832,6 +832,10 @@ onPaneClick((event) => {
     console.log('[Canvas] 用户点击空白画布，取消连线选择')
   }
   
+  // 取消所有节点的选中状态（Vue Flow 内部 + store）
+  removeSelectedNodes(getSelectedNodes.value)
+  selectedNodeIds.value = []
+  canvasStore.setSelectedNodeIds([])
   canvasStore.clearSelection()
   canvasStore.closeAllContextMenus()
   
@@ -1403,12 +1407,12 @@ watch(
     const listenerOptions = { capture: true }
     
     if (isDragging) {
-      // 优先使用节点组件传入的位置（更准确，因为节点知道自己的真实尺寸）
+      // 优先使用节点组件传入的起始位置（更准确，因为节点知道自己的真实尺寸）
       // 只有当位置无效时才使用 getHandlePosition 重新计算
-      const storePos = canvasStore.dragConnectionPosition
-      if (storePos && storePos.x !== 0 && storePos.y !== 0) {
-        dragLineStartPosition.value = { ...storePos }
-        console.log('[CanvasBoard] 使用节点传入的起始位置:', storePos)
+      const storeStartPos = canvasStore.dragConnectionStartPosition
+      if (storeStartPos && typeof storeStartPos.x === 'number' && typeof storeStartPos.y === 'number') {
+        dragLineStartPosition.value = { ...storeStartPos }
+        console.log('[CanvasBoard] 使用节点传入的起始位置:', storeStartPos)
       } else {
         // 回退：使用 getHandlePosition 计算
         const sourceInfo = canvasStore.dragConnectionSource
@@ -1521,7 +1525,9 @@ function getHandlePosition(nodeId, handleType) {
   const defaults = defaultSizes[node.type] || { width: 380, height: 280 }
   const nodeWidth = node.data?.width || defaults.width
   const nodeHeight = node.data?.height || defaults.height
-  const labelOffset = 28 // 节点标签高度
+  const labelHeight = 28 // 节点标签高度
+  const labelMarginBottom = 8 // 标签与卡片之间的间距
+  const labelOffset = labelHeight + labelMarginBottom // 标签总偏移（高度 + 间距）
   const handleOffset = 34 // +号按钮中心相对于节点卡片边缘的偏移量
   
   if (handleType === 'output') {

@@ -398,6 +398,11 @@ watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
 function getQiniuThumbnailUrl(url, width = 400) {
   if (!url || typeof url !== 'string') return url
   
+  // 如果URL已经包含图片处理参数，直接返回（避免重复添加）
+  if (url.includes('imageView2') || url.includes('imageMogr2')) {
+    return url
+  }
+  
   // 判断是否是七牛云URL
   if (url.includes('files.nananobanana.cn') ||  
       url.includes('qiniucdn.com') || 
@@ -411,6 +416,8 @@ function getQiniuThumbnailUrl(url, width = 400) {
     return `${url}${separator}imageView2/2/w/${width}/format/webp`
   }
   
+  // 对于其他URL（如腾讯COS、本地存储等），直接返回原URL
+  // 这些URL可能已经有自己的缩略图处理逻辑，或者需要原图显示
   return url
 }
 
@@ -418,12 +425,15 @@ function getQiniuThumbnailUrl(url, width = 400) {
 function getPreviewContent(item) {
   switch (item.type) {
     case 'image':
-      // 如果缩略图加载失败过，直接使用原图
+      // 如果缩略图加载失败过，直接使用原图（不使用thumbnail_url）
       if (thumbnailFallback.value[item.id]) {
-        return item.thumbnail_url || item.url
+        return item.url
       }
+      // 优先使用thumbnail_url，如果没有则使用url生成缩略图
+      const imageUrl = item.thumbnail_url || item.url
+      if (!imageUrl) return null
       // 列表使用小缩略图(400px宽)，加快加载速度
-      return getQiniuThumbnailUrl(item.thumbnail_url || item.url, 400)
+      return getQiniuThumbnailUrl(imageUrl, 400)
     case 'video':
       return item.thumbnail_url || item.url
     case 'audio':
@@ -1299,14 +1309,20 @@ function isPortraitVideo(item) {
 function handleImageError(item) {
   // 如果还没有尝试过回退到原图，先尝试回退
   if (!thumbnailFallback.value[item.id]) {
-    console.log('[HistoryPanel] 缩略图加载失败，回退到原图:', item.id)
-    thumbnailFallback.value[item.id] = true
-    // 不设置 imageLoadErrors，让它重新加载原图
+    console.log('[HistoryPanel] 缩略图加载失败，回退到原图:', item.id, item.url)
+    // 使用对象展开确保响应式更新
+    thumbnailFallback.value = {
+      ...thumbnailFallback.value,
+      [item.id]: true
+    }
     return
   }
   // 原图也加载失败了，显示占位符
-  console.log('[HistoryPanel] 原图也加载失败:', item.id)
-  imageLoadErrors.value[item.id] = true
+  console.log('[HistoryPanel] 原图也加载失败:', item.id, item.url)
+  imageLoadErrors.value = {
+    ...imageLoadErrors.value,
+    [item.id]: true
+  }
 }
 
 // 检查图片是否加载失败（原图也失败才显示占位符）

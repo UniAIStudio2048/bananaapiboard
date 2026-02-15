@@ -41,7 +41,7 @@ const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals, findNode } = useVueFlow()
+const { updateNodeInternals, findNode, getViewport } = useVueFlow()
 
 // 文件上传引用
 const fileInputRef = ref(null)
@@ -203,6 +203,21 @@ const selectedResolution = ref(props.data.resolution || '1024')
 const selectedAspectRatio = ref(props.data.aspectRatio || 'auto')
 const selectedCount = ref(props.data.count || 1)
 const imageSize = ref(props.data.imageSize || '4K') // 尺寸选项（仅 nano-banana-2）
+const enableGroupGeneration = ref(props.data.enableGroupGeneration || false) // 组图生成开关
+const maxGroupImages = ref(Math.max(2, Math.min(10, props.data.maxGroupImages || 3))) // 最大组图数量（限制在2-10之间，默认3）
+
+// 组图数量增减控制
+function incrementGroupImages() {
+  if (maxGroupImages.value < 10) {
+    maxGroupImages.value = Math.min(10, maxGroupImages.value + 1)
+  }
+}
+
+function decrementGroupImages() {
+  if (maxGroupImages.value > 2) {
+    maxGroupImages.value = Math.max(2, maxGroupImages.value - 1)
+  }
+}
 
 // MJ botType 选择（文生图和图生图模式：写实/动漫）
 const botType = ref(props.data.botType || 'MID_JOURNEY')
@@ -565,7 +580,7 @@ function handleBackgroundTaskComplete(event) {
   
   console.log(`[ImageNode] 后台任务完成: ${taskId}`, task)
   
-  // 获取图片URL
+  // 获取主图URL
   const imageUrl = task.result?.url || task.result?.urls?.[0] || task.result?.images?.[0]
   if (imageUrl) {
     canvasStore.updateNodeData(props.id, {
@@ -574,7 +589,64 @@ function handleBackgroundTaskComplete(event) {
     })
   }
   
+  // 🔥 组图处理：为每张额外的组图创建独立节点
+  const groupImageUrls = task.result?._groupImageUrls
+  if (groupImageUrls && Array.isArray(groupImageUrls) && groupImageUrls.length > 0) {
+    console.log(`[ImageNode] 组图生成完成，创建 ${groupImageUrls.length} 个额外节点`)
+    createGroupImageNodes(groupImageUrls, task)
+  }
+  
   removeCompletedTask(taskId)
+}
+
+/**
+ * 🔥 为组图的每张额外图片创建独立的画布节点
+ */
+function createGroupImageNodes(groupImageUrls, task) {
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return
+  
+  const nodeWidth = 320
+  const nodeGap = 40
+  const startX = currentNode.position.x + nodeWidth + nodeGap
+  const startY = currentNode.position.y
+  
+  const createdNodeIds = []
+  
+  for (let i = 0; i < groupImageUrls.length; i++) {
+    const { url } = groupImageUrls[i]
+    const newNodeId = `${props.id}_group_${i + 1}_${Date.now()}`
+    
+    const newNode = canvasStore.addNode({
+      id: newNodeId,
+      type: 'image',
+      position: {
+        x: startX + i * (nodeWidth + nodeGap),
+        y: startY
+      },
+      data: {
+        label: `组图 ${i + 2}`,
+        status: 'success',
+        model: selectedModel.value,
+        aspectRatio: selectedAspectRatio.value,
+        imageSize: imageSize.value,
+        prompt: promptText.value,
+        output: {
+          type: 'image',
+          urls: [url]
+        }
+      }
+    })
+    
+    createdNodeIds.push(newNodeId)
+    console.log(`[ImageNode] 组图节点 ${i + 2} 已创建 | ID: ${newNodeId} | URL: ${url?.substring(0, 60)}...`)
+  }
+  
+  // 更新主节点的组图关联信息
+  canvasStore.updateNodeData(props.id, {
+    groupNodeIds: createdNodeIds,
+    isGroupParent: true
+  })
 }
 
 function handleBackgroundTaskFailed(event) {
@@ -741,6 +813,81 @@ const isMJModel = computed(() => {
   return isMJ
 })
 
+// 辅助函数：检查是否是 Seedream 4.5 模型（包括即梦4.5/jimeng-4.5）
+function checkIsSeedream45(model) {
+  if (!model) return false
+  
+  const apiType = (model.apiType || '').toLowerCase()
+  const modelName = (model.name || model.label || model.value || '').toLowerCase()
+  const modelValue = (model.value || '').toLowerCase()
+  
+  // 合并所有可能的文本字段进行搜索
+  const searchText = `${apiType} ${modelName} ${modelValue}`.toLowerCase()
+  
+  // 检查是否是 seedream 类型（放宽条件：即使 apiType 不是 seedream，只要名称包含 seedream 也识别）
+  const isSeedream = apiType === 'seedream' || searchText.includes('seedream')
+  
+  // 如果明确包含"即梦"或"jimeng"，也认为是 seedream 类型
+  const hasJimengKeyword = searchText.includes('即梦') || searchText.includes('jimeng')
+  
+  if (!isSeedream && !hasJimengKeyword) {
+    return false
+  }
+  
+  // 检查是否是 4.5 版本
+  // 支持多种命名方式：seedream-4.5, seedream4.5, 即梦4.5, 即梦, jimeng-4.5, jimeng4.5 等
+  // 如果包含"即梦"或"jimeng"，默认认为是 4.5 版本
+  const isSeedream45 = (
+    searchText.includes('seedream-4.5') || 
+    searchText.includes('seedream4.5') ||
+    searchText.includes('4.5') ||
+    hasJimengKeyword  // 包含"即梦"或"jimeng"就认为是 4.5
+  )
+  
+  return isSeedream45
+}
+
+// 检测是否是 Seedream 4.5 模型（组图生成仅对 Seedream 4.5 有效）
+const isSeedream45Model = computed(() => {
+  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  const result = checkIsSeedream45(currentModel)
+  
+  // 详细调试信息
+  if (currentModel) {
+    const modelText = `${selectedModel.value} ${currentModel.label || ''} ${currentModel.name || ''}`.toLowerCase()
+    const shouldLog = result || modelText.includes('seedream') || modelText.includes('即梦') || modelText.includes('jimeng')
+    
+    if (shouldLog) {
+      console.log('[ImageNode] 🔍 模型识别调试:', {
+        selectedModel: selectedModel.value,
+        modelValue: currentModel.value,
+        modelName: currentModel.name,
+        modelLabel: currentModel.label,
+        apiType: currentModel.apiType,
+        isSeedream45: result,
+        checkResult: checkIsSeedream45(currentModel),
+        allModelData: currentModel
+      })
+    }
+  } else {
+    console.warn('[ImageNode] ⚠️ 未找到当前模型:', selectedModel.value, '可用模型:', models.value.map(m => m.value))
+  }
+  
+  return result
+})
+
+// Seedream 高级选项显示控制
+const showSeedreamAdvancedOptions = ref(false)
+
+// 限制 maxGroupImages 在 2-10 之间
+watch(maxGroupImages, (newVal) => {
+  if (newVal < 2) {
+    maxGroupImages.value = 2
+  } else if (newVal > 10) {
+    maxGroupImages.value = 10
+  }
+})
+
 // 默认尺寸选项配置（当模型配置中没有指定积分时使用）
 const defaultSizePricing = { '1K': 3, '2K': 4, '4K': 5 }
 
@@ -748,22 +895,29 @@ const defaultSizePricing = { '1K': 3, '2K': 4, '4K': 5 }
 const imageSizes = computed(() => {
   const currentModel = models.value.find(m => m.value === selectedModel.value)
   const pointsCost = currentModel?.pointsCost
+  const apiType = currentModel?.apiType
+  
+  // Seedream 4.5（包括即梦4.5/jimeng-4.5）不支持 1K，只支持 2K 和 4K
+  const isSeedream45 = checkIsSeedream45(currentModel)
+  const supportedSizes = isSeedream45
+    ? ['2K', '4K']
+    : ['1K', '2K', '4K']
   
   // 如果是按分辨率计费且 pointsCost 是对象
   if (currentModel?.hasResolutionPricing && typeof pointsCost === 'object') {
-    return [
-      { value: '1K', label: '1K', points: pointsCost['1k'] || pointsCost['1K'] || defaultSizePricing['1K'] },
-      { value: '2K', label: '2K', points: pointsCost['2k'] || pointsCost['2K'] || defaultSizePricing['2K'] },
-      { value: '4K', label: '4K', points: pointsCost['4k'] || pointsCost['4K'] || defaultSizePricing['4K'] }
-    ]
+    return supportedSizes.map(size => ({
+      value: size,
+      label: size,
+      points: pointsCost[size.toLowerCase()] || pointsCost[size] || defaultSizePricing[size]
+    }))
   }
   
   // 默认尺寸配置
-  return [
-    { value: '1K', label: '1K', points: defaultSizePricing['1K'] },
-    { value: '2K', label: '2K', points: defaultSizePricing['2K'] },
-    { value: '4K', label: '4K', points: defaultSizePricing['4K'] }
-  ]
+  return supportedSizes.map(size => ({
+    value: size,
+    label: size,
+    points: defaultSizePricing[size]
+  }))
 })
 
 // 是否显示尺寸选项（从模型配置中读取 hasResolutionPricing，MJ模型时隐藏）
@@ -779,8 +933,28 @@ const showPresetOption = computed(() => {
   return !isMJModel.value
 })
 
-// 计算当前积分消耗
-const currentPointsCost = computed(() => {
+// 监听模型变化，如果模型不支持1K且当前选择1K，自动切换到2K
+watch([selectedModel, imageSizes], () => {
+  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  const apiType = currentModel?.apiType
+  
+  // Seedream 4.5（包括即梦4.5/jimeng-4.5）不支持 1K，如果当前选择1K，自动切换到2K
+  const isSeedream45 = checkIsSeedream45(currentModel)
+  if (isSeedream45 && imageSize.value === '1K') {
+    imageSize.value = '2K'
+    console.log('[ImageNode] Seedream 4.5 不支持 1K，已自动切换到 2K')
+  }
+  
+  // 如果当前选择的尺寸不在可用尺寸列表中，切换到第一个可用尺寸
+  const availableSizes = imageSizes.value.map(s => s.value)
+  if (!availableSizes.includes(imageSize.value)) {
+    imageSize.value = availableSizes[0] || '2K'
+    console.log('[ImageNode] 当前尺寸不可用，已切换到:', imageSize.value)
+  }
+}, { immediate: true })
+
+// 计算单次积分消耗（不考虑组图和批次）
+const basePointsCost = computed(() => {
   const currentModel = models.value.find(m => m.value === selectedModel.value)
   
   // 按分辨率计费的模型
@@ -793,6 +967,22 @@ const currentPointsCost = computed(() => {
   const pointsCost = currentModel?.pointsCost
   // 如果 pointsCost 是数字则直接使用，否则默认为 1
   return typeof pointsCost === 'number' ? pointsCost : 1
+})
+
+// 计算当前积分消耗（考虑组图和批次）
+const currentPointsCost = computed(() => {
+  let cost = basePointsCost.value
+  
+  // 如果开启了组图生成，积分 = 组图数量 × 批次数 × 单次积分
+  if (enableGroupGeneration.value && isSeedream45Model.value) {
+    const groupCount = Math.max(2, Math.min(10, maxGroupImages.value || 3))
+    cost = basePointsCost.value * groupCount * selectedCount.value
+  } else {
+    // 普通模式：积分 = 批次数 × 单次积分
+    cost = basePointsCost.value * selectedCount.value
+  }
+  
+  return cost
 })
 
 const aspectRatios = [
@@ -3596,7 +3786,10 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     // 所有模型都传递 image_size 参数
     image_size: imageSize.value || '2K',
     // MJ 模型的 botType 参数（写实/动漫）
-    ...(isMJModel.value && { botType: botType.value })
+    ...(isMJModel.value && { botType: botType.value }),
+    // Seedream 组图生成参数
+    enableGroupGeneration: enableGroupGeneration.value,
+    maxGroupImages: maxGroupImages.value
   }
   
   if (finalReferenceImages.length > 0) {
@@ -3970,6 +4163,8 @@ async function handleGenerate() {
   // 检查并发限制
   if (selectedCount.value > userConcurrentLimit.value) {
     await showAlert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐`, '并发限制')
+    // 点击确认后，恢复为默认的 1x
+    selectedCount.value = 1
     return
   }
   
@@ -4510,17 +4705,25 @@ function startDragConnection(event) {
     return
   }
   
-  // 计算节点右侧输出端口的画布坐标（从节点位置计算）
-  // 节点位置 + 节点宽度 + 偏移量 = +号按钮中心位置，Y 轴在节点中间 + 标签高度偏移
-  const currentNodeWidth = props.data?.width || nodeWidth.value || 380
-  const currentNodeHeight = props.data?.height || nodeHeight.value || 320
-  const labelOffset = 28 // 标签高度偏移
+  // 计算节点右侧输出端口的画布坐标
+  // 使用响应式的节点尺寸（最准确）
+  const currentNodeWidth = nodeWidth.value || props.data?.width || 380
+  const currentNodeHeight = nodeHeight.value || props.data?.height || 320
+  const labelHeight = 28 // 节点标签高度
+  const labelMarginBottom = 8 // 标签与卡片之间的间距
+  const labelOffset = labelHeight + labelMarginBottom // 标签总偏移（高度 + 间距）
   const handleOffset = 34 // +号按钮中心相对于节点卡片边缘的偏移量
   
   const outputX = currentNode.position.x + currentNodeWidth + handleOffset
   const outputY = currentNode.position.y + labelOffset + currentNodeHeight / 2
   
-  console.log('[ImageNode] 开始拖拽连线，起始位置:', { outputX, outputY, nodePosition: currentNode.position })
+  console.log('[ImageNode] 开始拖拽连线，起始位置:', { 
+    outputX, 
+    outputY, 
+    nodePosition: currentNode.position,
+    nodeWidth: currentNodeWidth,
+    nodeHeight: currentNodeHeight
+  })
   
   // 调用 store 开始拖拽连线，使用节点输出端口位置作为起点
   canvasStore.startDragConnection(props.id, 'output', { x: outputX, y: outputY })
@@ -5646,7 +5849,7 @@ async function handleDrop(event) {
           
           <!-- 积分消耗显示 -->
           <span class="points-cost-display">
-            {{ currentPointsCost * selectedCount }} {{ t('imageGen.points') }}
+            {{ currentPointsCost }} {{ t('imageGen.points') }}
           </span>
           
           <!-- 生成按钮 - 只在任务提交中禁用，节点生成中仍可点击发起新任务 -->
@@ -5662,6 +5865,61 @@ async function handleDrop(event) {
           </button>
         </div>
       </div>
+      
+      <!-- Seedream 4.5 高级选项 - 组图生成 -->
+      <template v-if="isSeedream45Model">
+        <!-- 展开/收起按钮 -->
+        <button class="sora2-collapse-trigger" @click="showSeedreamAdvancedOptions = !showSeedreamAdvancedOptions">
+          <span class="sora2-collapse-icon" :class="{ 'expanded': showSeedreamAdvancedOptions }">∧</span>
+          <span>{{ showSeedreamAdvancedOptions ? '收起' : '扩展' }}</span>
+        </button>
+        
+        <!-- 高级选项内容 -->
+        <Transition name="slide-down">
+          <div v-if="showSeedreamAdvancedOptions" class="sora2-advanced-options seedream-advanced">
+            <!-- 组图生成开关 -->
+            <div class="sora2-option-row">
+              <span class="sora2-option-label">🖼️ 组图生成 
+                <span v-if="enableGroupGeneration" class="kling-sound-multiplier">
+                  ({{ maxGroupImages }}x)
+                </span>
+              </span>
+              <label class="sora2-toggle-switch">
+                <input type="checkbox" v-model="enableGroupGeneration" />
+                <span class="sora2-toggle-slider"></span>
+              </label>
+            </div>
+            
+            <!-- 组图数量控制（+-按钮） -->
+            <div v-if="enableGroupGeneration" class="seedream-group-input-row">
+              <span class="seedream-group-label">组图数量:</span>
+              <div class="number-control">
+                <button 
+                  class="number-btn minus-btn" 
+                  @click="decrementGroupImages"
+                  :disabled="maxGroupImages <= 2"
+                  title="减少"
+                >
+                  −
+                </button>
+                <span class="number-value">{{ maxGroupImages }}</span>
+                <button 
+                  class="number-btn plus-btn" 
+                  @click="incrementGroupImages"
+                  :disabled="maxGroupImages >= 10"
+                  title="增加"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            
+            <div class="seedream-group-hint">
+              💡 开启后一次生成多张图片，积分消耗 = 组图数量 × 批次数 × 单次积分
+            </div>
+          </div>
+        </Transition>
+      </template>
     </div>
     
     <!-- 放大预览弹窗（使用 Teleport 渲染到 body） -->
@@ -7761,6 +8019,235 @@ async function handleDrop(event) {
   cursor: nwse-resize;
   background: var(--canvas-accent-primary, #3b82f6);
   border-radius: 2px;
+}
+
+/* ========== Seedream 4.5 扩展选项样式 ========== */
+.sora2-collapse-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 0;
+  background: transparent;
+  border: none;
+  border-top: 1px solid #2a2a2a;
+  color: #666666;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sora2-collapse-trigger:hover {
+  color: #888888;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.sora2-collapse-icon {
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+.sora2-collapse-icon.expanded {
+  transform: rotate(180deg);
+}
+
+.sora2-advanced-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px;
+  border-top: 1px solid #2a2a2a;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.seedream-advanced {
+  border-color: #3b82f6;
+}
+
+.sora2-option-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sora2-option-label {
+  font-size: 13px;
+  color: #cccccc;
+  font-weight: 500;
+}
+
+.sora2-toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+}
+
+.sora2-toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.sora2-toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #333333;
+  border-radius: 22px;
+  transition: 0.3s;
+}
+
+.sora2-toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #666666;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.sora2-toggle-switch input:checked + .sora2-toggle-slider {
+  background-color: #ffffff;
+}
+
+.sora2-toggle-switch input:checked + .sora2-toggle-slider:before {
+  transform: translateX(18px);
+  background-color: #000000;
+}
+
+.kling-sound-multiplier {
+  color: #fbbf24;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.seedream-group-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.seedream-group-label {
+  font-size: 12px;
+  color: #aaaaaa;
+}
+
+/* 数字控制（+-按钮） */
+.number-control {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #3a3a3a;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.number-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: #cccccc;
+  font-size: 18px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+}
+
+.number-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.number-btn:active:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.number-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.number-value {
+  min-width: 40px;
+  padding: 0 12px;
+  text-align: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  border-left: 1px solid #3a3a3a;
+  border-right: 1px solid #3a3a3a;
+}
+
+/* 白昼模式样式 */
+:root.canvas-theme-light .number-control {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .number-btn {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+:root.canvas-theme-light .number-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .number-value {
+  color: #1c1917;
+  border-left-color: rgba(0, 0, 0, 0.1);
+  border-right-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .seedream-group-label {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+.seedream-group-hint {
+  font-size: 11px;
+  color: #3b82f6;
+  line-height: 1.4;
+  padding: 6px 8px;
+  background: rgba(59, 130, 246, 0.1);
+  border-radius: 4px;
+  margin-top: 8px;
+}
+
+/* 动画 */
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.slide-down-enter-from,
+.slide-down-leave-to {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.slide-down-enter-to,
+.slide-down-leave-from {
+  max-height: 500px;
+  opacity: 1;
 }
 </style>
 

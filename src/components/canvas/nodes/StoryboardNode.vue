@@ -1904,9 +1904,9 @@ const hasAnyImage = computed(() => {
   pointer-events: none !important;
 }
 
-/* 输出端口位置 */
+/* 输出端口位置 - 与+号按钮中心对齐 */
 :deep(.vue-flow__handle.source) {
-  right: -52px !important;
+  right: -34px !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
 }

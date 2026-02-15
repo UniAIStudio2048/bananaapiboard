@@ -19,7 +19,17 @@ function getHeaders(options = {}) {
  * 图片生成 - 文生图
  */
 export async function generateImageFromText(params) {
-  const { prompt, userPrompt, model = 'nano-banana-2', image_size, size, aspectRatio = 'auto', count = 1 } = params
+  const { 
+    prompt, 
+    userPrompt, 
+    model = 'nano-banana-2', 
+    image_size, 
+    size, 
+    aspectRatio = 'auto', 
+    count = 1,
+    enableGroupGeneration = false,
+    maxGroupImages = 3
+  } = params
   
   // 优先使用 image_size，否则使用 size（向后兼容）
   const finalImageSize = image_size || size || '1K'
@@ -31,7 +41,17 @@ export async function generateImageFromText(params) {
     image_size: finalImageSize,
     aspect_ratio: aspectRatio,
     n: count,
-    response_format: 'url'
+    response_format: 'url',
+    enableGroupGeneration,
+    maxGroupImages
+  }
+  
+  // Seedream 组图生成参数
+  if (enableGroupGeneration && maxGroupImages > 1) {
+    body.sequential_image_generation = 'auto'
+    body.sequential_image_generation_options = {
+      max_images: maxGroupImages
+    }
   }
   
   const response = await fetch(getApiUrl('/api/images/generate'), {
@@ -63,7 +83,9 @@ export async function generateImageFromImage(params) {
     model = 'nano-banana-2', 
     image_size,  // 支持 image_size 参数
     size,        // 也支持 size 参数（向后兼容）
-    aspectRatio = 'auto' 
+    aspectRatio = 'auto',
+    enableGroupGeneration = false,
+    maxGroupImages = 3
   } = params
   
   // 优先使用 image_size，否则使用 size
@@ -77,6 +99,21 @@ export async function generateImageFromImage(params) {
     image_size: finalImageSize,
     aspect_ratio: aspectRatio,
     response_format: 'url'
+  }
+  
+  // Seedream 组图生成参数
+  // 如果有多张参考图且启用组图生成，使用多图生组图模式
+  if (images && images.length > 1 && enableGroupGeneration && maxGroupImages > 1) {
+    body.sequential_image_generation = 'auto'
+    body.sequential_image_generation_options = {
+      max_images: maxGroupImages
+    }
+  } else if (enableGroupGeneration && maxGroupImages > 1) {
+    // 单图或多图融合时也支持组图生成
+    body.sequential_image_generation = 'auto'
+    body.sequential_image_generation_options = {
+      max_images: maxGroupImages
+    }
   }
   
   console.log('[API] 图生图请求参数:', { 

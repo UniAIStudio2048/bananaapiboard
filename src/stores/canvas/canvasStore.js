@@ -51,7 +51,8 @@ export const useCanvasStore = defineStore('canvas', () => {
   // ========== 拖拽连线状态 ==========
   const isDraggingConnection = ref(false)  // 是否正在拖拽连线
   const dragConnectionSource = ref(null)   // 拖拽连线的源节点 { nodeId, handleId }
-  const dragConnectionPosition = ref({ x: 0, y: 0 }) // 拖拽连线的当前位置（画布坐标）
+  const dragConnectionStartPosition = ref({ x: 0, y: 0 }) // 拖拽连线的起始位置（画布坐标，+号按钮位置）
+  const dragConnectionPosition = ref({ x: 0, y: 0 }) // 拖拽连线的当前位置（画布坐标，鼠标位置）
   const preventSelectorClose = ref(false)  // 防止选择器被立即关闭（用于连线拖拽后打开选择器的场景）
   
   const isContextMenuOpen = ref(false)
@@ -839,9 +840,10 @@ export const useCanvasStore = defineStore('canvas', () => {
    */
   function startDragConnection(nodeId, handleId = 'output', startPosition) {
     // 重要：先设置位置和源节点信息，再设置 isDraggingConnection
-    // 因为 CanvasBoard 的 watch 会在 isDraggingConnection 变化时读取 dragConnectionPosition
+    // 因为 CanvasBoard 的 watch 会在 isDraggingConnection 变化时读取 dragConnectionStartPosition
     dragConnectionSource.value = { nodeId, handleId }
-    dragConnectionPosition.value = startPosition
+    dragConnectionStartPosition.value = startPosition  // 保存起始位置（+号按钮位置）
+    dragConnectionPosition.value = startPosition  // 初始位置也设置为起始位置
     isDraggingConnection.value = true  // 最后设置，触发 watch
     console.log('[Store] 开始拖拽连线', { nodeId, handleId, startPosition })
   }
@@ -889,6 +891,8 @@ export const useCanvasStore = defineStore('canvas', () => {
       // 清理状态
       isDraggingConnection.value = false
       dragConnectionSource.value = null
+      dragConnectionStartPosition.value = { x: 0, y: 0 }
+      dragConnectionPosition.value = { x: 0, y: 0 }
       return true
     } else {
       // 没有连接到节点，打开节点选择器
@@ -921,6 +925,8 @@ export const useCanvasStore = defineStore('canvas', () => {
       // 清理拖拽状态（但保留 pendingConnection）
       isDraggingConnection.value = false
       dragConnectionSource.value = null
+      dragConnectionStartPosition.value = { x: 0, y: 0 }
+      dragConnectionPosition.value = { x: 0, y: 0 }
       return false
     }
   }
@@ -931,6 +937,8 @@ export const useCanvasStore = defineStore('canvas', () => {
   function cancelDragConnection() {
     isDraggingConnection.value = false
     dragConnectionSource.value = null
+    dragConnectionStartPosition.value = { x: 0, y: 0 }
+    dragConnectionPosition.value = { x: 0, y: 0 }
     console.log('[Store] 取消拖拽连线')
   }
   

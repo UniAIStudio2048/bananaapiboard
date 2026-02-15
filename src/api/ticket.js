@@ -223,19 +223,31 @@ export async function uploadAttachment(file) {
  * @returns {Promise<number>}
  */
 export async function getUnreadCount() {
-  const url = getApiUrl('/api/tickets/unread-count')
+  try {
+    // 检查是否有token，没有token时直接返回0，避免不必要的请求
+    const token = localStorage.getItem('token')
+    if (!token) {
+      return 0
+    }
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: getHeaders()
-  })
+    const url = getApiUrl('/api/tickets/unread-count')
 
-  if (!response.ok) {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: getHeaders()
+    })
+
+    if (!response.ok) {
+      // 静默处理错误，不打印到控制台
+      return 0
+    }
+
+    const data = await response.json()
+    return data.count || 0
+  } catch (e) {
+    // 静默处理所有错误，避免控制台大量报错
     return 0
   }
-
-  const data = await response.json()
-  return data.count || 0
 }
 
 /**

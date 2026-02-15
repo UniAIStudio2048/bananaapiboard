@@ -156,6 +156,33 @@ function startPolling(taskId) {
       if (statusLower === 'completed' || statusLower === 'success' || hasOutput) {
         task.status = 'completed'
         task.result = result
+        
+        // 🔥 组图处理：如果 usage 中包含 group_task_ids，获取所有组图的 URL
+        console.log(`[BackgroundTaskManager] 检查组图任务 | 任务ID: ${taskId} | usage存在: ${!!result.usage} | usage内容: ${JSON.stringify(result.usage)}`)
+        const groupTaskIds = result.usage?.group_task_ids
+        console.log(`[BackgroundTaskManager] 组图任务ID检查 | 任务ID: ${taskId} | groupTaskIds: ${groupTaskIds} | 是否为数组: ${Array.isArray(groupTaskIds)} | 长度: ${groupTaskIds?.length || 0} | 任务类型: ${task.type}`)
+        if (groupTaskIds && Array.isArray(groupTaskIds) && groupTaskIds.length > 0 && task.type === 'image') {
+          console.log(`[BackgroundTaskManager] 检测到组图任务 | 主任务: ${taskId} | 额外图片: ${groupTaskIds.length}张 | groupTaskIds: [${groupTaskIds.join(', ')}]`)
+          try {
+            const groupUrls = await fetchGroupTaskUrls(groupTaskIds)
+            // 将所有组图 URL 附加到 result 中
+            task.result._groupImageUrls = groupUrls
+            console.log(`[BackgroundTaskManager] 组图URL获取完成 | 主任务: ${taskId} | 成功: ${groupUrls.length}张 | URLs: ${groupUrls.map(g => g.url?.substring(0, 50)).join(', ')}`)
+          } catch (groupErr) {
+            console.error(`[BackgroundTaskManager] 获取组图URL失败:`, groupErr)
+          }
+        } else {
+          if (!groupTaskIds) {
+            console.log(`[BackgroundTaskManager] 组图处理跳过 | 任务ID: ${taskId} | 原因: groupTaskIds不存在`)
+          } else if (!Array.isArray(groupTaskIds)) {
+            console.warn(`[BackgroundTaskManager] 组图处理跳过 | 任务ID: ${taskId} | 原因: groupTaskIds不是数组 (类型: ${typeof groupTaskIds})`)
+          } else if (groupTaskIds.length === 0) {
+            console.log(`[BackgroundTaskManager] 组图处理跳过 | 任务ID: ${taskId} | 原因: groupTaskIds为空数组`)
+          } else if (task.type !== 'image') {
+            console.log(`[BackgroundTaskManager] 组图处理跳过 | 任务ID: ${taskId} | 原因: 任务类型不是image (${task.type})`)
+          }
+        }
+        
         stopPolling(taskId)
         notifyTaskComplete(taskId, task)
         console.log(`[BackgroundTaskManager] 任务完成: ${taskId}`, result)
@@ -387,6 +414,34 @@ export function getTaskStats() {
   }
   
   return { pending, processing, completed, failed, total: tasks.size }
+}
+
+/**
+ * 🔥 获取组图任务的所有图片URL
+ * @param {string[]}groupTaskIds - 组图子任务ID列表
+ * @returns {Promise<Array<{taskId: string, url: string}>>}
+ */
+async function fetchGroupTaskUrls(groupTaskIds) {
+  console.log(`[BackgroundTaskManager] 开始获取组图URL | groupTaskIds: [${groupTaskIds.join(', ')}] | 数量: ${groupTaskIds.length}`)
+  const results = []
+  for (let i = 0; i < groupTaskIds.length; i++) {
+    const gTaskId = groupTaskIds[i]
+    console.log(`[BackgroundTaskManager] 获取组图子任务 ${i + 1}/${groupTaskIds.length} | 任务ID: ${gTaskId}`)
+    try {
+      const result = await getImageTaskStatus(gTaskId)
+      console.log(`[BackgroundTaskManager] 组图子任务状态 | 任务ID: ${gTaskId} | 状态: ${result.status} | URL存在: ${!!result.url} | URL: ${result.url?.substring(0, 50)}...`)
+      if (result.url) {
+        results.push({ taskId: gTaskId, url: result.url })
+        console.log(`[BackgroundTaskManager] 组图子任务URL已添加 | 任务ID: ${gTaskId} | 当前结果数: ${results.length}`)
+      } else {
+        console.warn(`[BackgroundTaskManager] 组图子任务无URL | 任务ID: ${gTaskId} | 状态: ${result.status}`)
+      }
+    }catch (err) {
+      console.error(`[BackgroundTaskManager] 获取组图子任务 ${gTaskId} 失败:`, err.message, err.stack)
+    }
+  }
+  console.log(`[BackgroundTaskManager] 组图URL获取完成 | 总数: ${groupTaskIds.length} | 成功: ${results.length} | 结果: ${results.map(r => r.taskId).join(', ')}`)
+  return results
 }
 
 // 页面卸载前保存状态并停止轮询

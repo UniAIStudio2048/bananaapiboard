@@ -25,10 +25,18 @@ let pollTimer = null
 // 加载未读数量
 async function loadUnreadCount() {
   try {
+    // 检查是否有token，没有token时跳过请求
+    const token = localStorage.getItem('token')
+    if (!token) {
+      hasUnread.value = false
+      return
+    }
+
     const count = await getUnreadCount()
     hasUnread.value = count > 0
   } catch (e) {
-    console.error('获取未读数量失败:', e)
+    // 静默处理错误，避免控制台报错
+    hasUnread.value = false
   }
 }
 
