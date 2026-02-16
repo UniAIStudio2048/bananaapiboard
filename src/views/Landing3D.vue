@@ -651,6 +651,22 @@ const handleCTAClick = async () => {
   showLoginModal.value = true
 }
 
+// 页面加载时检查 URL 中是否携带邀请码参数，如果有则直接打开注册弹窗并预填邀请码
+onMounted(async () => {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const inviteFromUrl = params.get('invite') || params.get('code') || ''
+    if (inviteFromUrl) {
+      inviteCode.value = inviteFromUrl
+      authMode.value = 'register'
+      await loadEmailConfig()
+      showLoginModal.value = true
+    }
+  } catch (e) {
+    console.warn('[Landing3D] 解析邀请链接失败', e)
+  }
+})
+
 const closeModal = () => {
   showLoginModal.value = false
   showModeModal.value = false

@@ -269,9 +269,9 @@ async function submit() {
       error.value = '请输入邀请码，该租户已开启邀请码注册'
       return
     }
-    // 验证邀请码格式（12位十六进制）
-    if (!/^[a-f0-9]{12}$/.test(trimmedCode)) {
-      error.value = '邀请码格式无效，应为12位字符'
+    // 验证邀请码格式（6-12位字母或数字，大小写均可）
+    if (!/^[a-z0-9]{6,12}$/i.test(trimmedCode)) {
+      error.value = '邀请码格式无效，应为6-12位字母或数字'
       return
     }
   }
