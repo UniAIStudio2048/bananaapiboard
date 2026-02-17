@@ -761,11 +761,11 @@ export const getAvailableVideoModels = (options = {}) => {
       isImageToVideo: true,
       supportedModes: { t2v: false, i2v: true, a2v: false }
     },
-    // ==================== Kling O1 文/图生视频 ====================
+    // ==================== Kling O1 文/图生视频（画布支持首尾帧/多图参考/视频编辑三模式切换） ====================
     'kling-video-o1-pro': { 
       label: 'Kling O1 文/图生视频 (专家)', 
       icon: 'K', 
-      description: '可灵 O1 文/图生视频，支持首尾帧、仅主体参考最多7张图', 
+      description: '可灵 O1 全能视频，画布模式支持首尾帧、多图参考、视频编辑三种模式', 
       hasDurationPricing: true, 
       pointsCost: { '5': 60, '10': 120 }, 
       durations: ['5', '10'],
@@ -779,11 +779,11 @@ export const getAvailableVideoModels = (options = {}) => {
       maxRefImages: 7,
       supportedModes: { t2v: true, i2v: true, a2v: false }
     },
-    // ==================== Kling O1 视频编辑 ====================
+    // ==================== Kling O1 视频编辑（画布默认视频编辑子模式） ====================
     'kling-video-o1-edit-pro': { 
       label: 'Kling O1 视频编辑 (专家)', 
       icon: 'K', 
-      description: '可灵 O1 视频编辑，输入3~10s视频，有视频时最多4张图', 
+      description: '可灵 O1 视频编辑，支持单视频+可选图片输入，画布模式可切换首尾帧/多参考', 
       hasDurationPricing: true, 
       pointsCost: { '5': 60, '10': 120, '15': 180 }, 
       durations: ['5', '10'],
@@ -818,13 +818,15 @@ export const getAvailableVideoModels = (options = {}) => {
     const veoSubModels = []      // 普通 VEO 模型（不含 4k）
     const veo4kSubModels = []    // VEO 4K 组（名字包含 4k）
     
+    // 🆕 Kling O1 整合逻辑：收集所有 kling-omni / kling-omni-edit 子模型
+    const klingO1SubModels = []
+    
     for (const modelConfig of videoModelsConfig) {
       const key = modelConfig.name
       if (!key) continue
       if (modelConfig.enabled === false || enabledModels[key] === false) continue
       
       // 检测 VEO 模型（通过 apiType 或模型名称）
-      // 🔧 支持多种命名格式：veo3, veo_3, veo3.1, veo_3_1 等
       const keyLower = key.toLowerCase()
       const displayLower = (modelConfig.displayName || '').toLowerCase()
       const isVeoSubModel = modelConfig.apiType === 'vectorengine' || 
@@ -833,12 +835,16 @@ export const getAvailableVideoModels = (options = {}) => {
                            displayLower.includes('veo')
       
       if (isVeoSubModel) {
-        // 🆕 区分 4K 模型和普通模型
         if (key.toLowerCase().includes('4k') || (modelConfig.displayName || '').toLowerCase().includes('4k')) {
           veo4kSubModels.push(modelConfig)
         } else {
           veoSubModels.push(modelConfig)
         }
+      }
+      
+      // 检测 Kling O1 模型（通过 apiType）
+      if (modelConfig.apiType === 'kling-omni' || modelConfig.apiType === 'kling-omni-edit') {
+        klingO1SubModels.push(modelConfig)
       }
     }
     
@@ -1054,10 +1060,97 @@ export const getAvailableVideoModels = (options = {}) => {
       console.log('[tenant] VEO 4K 组已整合，子模型数量:', veo4kSubModels.length, '模式:', uniqueVeo4kModes.map(m => m.label))
     }
     
-    // 🔧 按原始配置顺序处理所有模型，在 VEO 位置插入整合入口
+    // 🆕 Kling O1 整合入口构建
+    let klingO1Entry = null
+    if (klingO1SubModels.length > 0) {
+      // 从子模型生成模式选项
+      const klingO1Modes = []
+      
+      // 取基础模型信息（用于所有模式的 actualModel 和 pointsCost 兜底）
+      // 优先用 kling-omni 类型，其次用任意 O1 子模型
+      const omniModel = klingO1SubModels.find(m => m.apiType === 'kling-omni') || klingO1SubModels[0]
+      const editModel = klingO1SubModels.find(m => m.apiType === 'kling-omni-edit') || omniModel
+      const baseActualModel = omniModel.name
+      const basePointsCost = omniModel.pointsCost || { '5': 60, '10': 120 }
+      
+      // 文生视频模式（不需要图片/视频输入）
+      klingO1Modes.push({
+        value: 'text2video',
+        label: '文生视频',
+        description: '纯文本描述生成视频',
+        subMode: null,
+        actualModel: baseActualModel,
+        maxImages: 0,
+        needsVideo: false,
+        pointsCost: basePointsCost
+      })
+      
+      // 首尾帧模式（所有 O1 子模型都支持，走同一个 omni-video 端点）
+      klingO1Modes.push({
+        value: 'first_last_frame',
+        label: '首尾帧',
+        description: '首帧/尾帧图片控制',
+        subMode: 'first_last_frame',
+        actualModel: baseActualModel,
+        maxImages: 2,
+        needsVideo: false,
+        pointsCost: basePointsCost
+      })
+      
+      // 多图参考模式
+      klingO1Modes.push({
+        value: 'multi_ref',
+        label: '多图参考',
+        description: '最多7张参考图',
+        subMode: 'multi_ref',
+        actualModel: baseActualModel,
+        maxImages: 7,
+        needsVideo: false,
+        pointsCost: basePointsCost
+      })
+      
+      // 视频编辑模式
+      klingO1Modes.push({
+        value: 'video_edit',
+        label: '视频编辑',
+        description: '编辑已有视频+可选图片',
+        subMode: 'video_edit',
+        actualModel: editModel.name,
+        maxImages: 4,
+        needsVideo: true,
+        pointsCost: editModel.pointsCost || basePointsCost
+      })
+      
+      klingO1Entry = {
+        value: 'klingO1',
+        label: 'Kling O1',
+        icon: 'K',
+        description: '可灵 O1 全能视频，支持文生视频、首尾帧、多图参考、视频编辑',
+        hasDurationPricing: true,
+        pointsCost: basePointsCost,
+        durations: ['5', '10'],
+        aspectRatios: omniModel.aspectRatios || [
+          { value: '16:9', label: '横屏 (16:9)' },
+          { value: '9:16', label: '竖屏 (9:16)' },
+          { value: '1:1', label: '方形 (1:1)' }
+        ],
+        supportedModes: { t2v: true, i2v: true, a2v: false },
+        apiType: omniModel.apiType,
+        isKlingO1Model: true,
+        isKlingOmni: true,
+        klingO1Modes,
+        defaultKlingO1Mode: 'text2video',
+        maxRefImages: 7
+      }
+      
+      console.log('[tenant] Kling O1 模型已整合，子模型数量:', klingO1SubModels.length, '模式:', klingO1Modes.map(m => m.label))
+    }
+    
+    // 🔧 按原始配置顺序处理所有模型，在 VEO/KlingO1 位置插入整合入口
     // 遍历原始配置，保持顺序
     let veoInserted = false
     let veo4kInserted = false
+    let klingO1Inserted = false
     
     for (let i = 0; i < videoModelsConfig.length; i++) {
       const modelConfig = videoModelsConfig[i]
@@ -1105,6 +1198,16 @@ export const getAvailableVideoModels = (options = {}) => {
         if (isVeoSubModel) continue
       }
       // 🆕 禁用整合时，VEO 子模型会在下面正常添加到列表
+      
+      // 🆕 Kling O1 整合逻辑：遇到第一个 kling-omni 子模型时插入整合入口，跳过所有子模型
+      const isKlingO1SubModel = modelConfig.apiType === 'kling-omni' || modelConfig.apiType === 'kling-omni-edit'
+      if (isKlingO1SubModel && klingO1Entry) {
+        if (!klingO1Inserted) {
+          models.push(klingO1Entry)
+          klingO1Inserted = true
+        }
+        continue  // 跳过 Kling O1 子模型，不单独显示
+      }
       
       const modelPricingConfig = pricing[key] || {}
       const defaultConfig = defaultModelConfig[key] || {}

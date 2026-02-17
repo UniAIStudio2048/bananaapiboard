@@ -148,7 +148,7 @@ export async function generateImageFromImage(params) {
  * 视频生成 - 文生视频
  */
 export async function generateVideoFromText(params) {
-  const { prompt, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl } = params
+  const { prompt, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl, klingOmniSubMode, klingOmniImageUrls } = params
   
   const body = {
     prompt,
@@ -163,6 +163,9 @@ export async function generateVideoFromText(params) {
   }
   
   // Kling Omni-Video O1 特有参数
+  if (klingOmniSubMode) {
+    body.kling_omni_sub_mode = klingOmniSubMode
+  }
   if (klingOmniVideoUrl) {
     body.kling_omni_video_url = klingOmniVideoUrl
     body.kling_omni_video_refer_type = klingOmniVideoReferType || 'feature'
@@ -170,6 +173,9 @@ export async function generateVideoFromText(params) {
   }
   if (klingOmniEndFrameUrl) {
     body.kling_omni_end_frame_url = klingOmniEndFrameUrl
+  }
+  if (klingOmniImageUrls && klingOmniImageUrls.length > 0) {
+    body.kling_omni_image_urls = klingOmniImageUrls
   }
   
   const response = await fetch(getApiUrl('/api/videos/generate'), {
@@ -194,7 +200,7 @@ export async function generateVideoFromText(params) {
  * 视频生成 - 图生视频
  */
 export async function generateVideoFromImage(params) {
-  const { prompt, imageUrl, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl } = params
+  const { prompt, imageUrl, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl, klingOmniSubMode, klingOmniImageUrls } = params
   
   const body = {
     prompt,
@@ -210,6 +216,9 @@ export async function generateVideoFromImage(params) {
   }
   
   // Kling Omni-Video O1 特有参数
+  if (klingOmniSubMode) {
+    body.kling_omni_sub_mode = klingOmniSubMode
+  }
   if (klingOmniVideoUrl) {
     body.kling_omni_video_url = klingOmniVideoUrl
     body.kling_omni_video_refer_type = klingOmniVideoReferType || 'base'
@@ -217,6 +226,9 @@ export async function generateVideoFromImage(params) {
   }
   if (klingOmniEndFrameUrl) {
     body.kling_omni_end_frame_url = klingOmniEndFrameUrl
+  }
+  if (klingOmniImageUrls && klingOmniImageUrls.length > 0) {
+    body.kling_omni_image_urls = klingOmniImageUrls
   }
   
   const response = await fetch(getApiUrl('/api/videos/generate'), {

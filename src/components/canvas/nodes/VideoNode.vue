@@ -258,6 +258,85 @@ function handlePromptWheel(event) {
   }
 }
 
+// ========== 提示词 @标记 引用功能（Kling O1 模型） ==========
+
+/**
+ * 收集所有参考素材（带编号），用于点击插入 @标记
+ */
+const referenceMediaList = computed(() => {
+  const list = []
+  referenceVideos.value.forEach((url, i) => {
+    list.push({ type: 'video', index: i + 1, url, label: `视频${i + 1}` })
+  })
+  referenceImages.value.forEach((url, i) => {
+    list.push({ type: 'image', index: i + 1, url, label: `图片${i + 1}` })
+  })
+  return list
+})
+
+/**
+ * 点击参考素材缩略图，在提示词光标处插入 @标记
+ */
+function insertMediaTag(media) {
+  const tag = `@${media.label}`
+  const textarea = promptTextareaRef.value
+  if (!textarea) {
+    promptText.value += tag
+    return
+  }
+  
+  const start = textarea.selectionStart ?? promptText.value.length
+  const end = textarea.selectionEnd ?? start
+  const before = promptText.value.slice(0, start)
+  const after = promptText.value.slice(end)
+  promptText.value = before + tag + after
+  
+  nextTick(() => {
+    textarea.focus()
+    const newPos = start + tag.length
+    textarea.setSelectionRange(newPos, newPos)
+  })
+}
+
+/**
+ * 提示词转义：将用户友好的 @标记 转换为后端 API 需要的 <<<>>> 格式
+ * 支持以下格式（有无【】括号均可）：
+ *   @视频 / 【@视频】 / @视频1 / 【@视频1】 → <<<video_1>>>
+ *   @图片 / 【@图片】 / @图片1 / 【@图片1】 → <<<image_1>>>
+ */
+function escapePromptTags(text) {
+  if (!text) return text
+  let result = text.replace(/【?@视频(\d*)】?/g, (_, num) => {
+    return `<<<video_${num ? parseInt(num) : 1}>>>`
+  })
+  result = result.replace(/【?@图片(\d*)】?/g, (_, num) => {
+    return `<<<image_${num ? parseInt(num) : 1}>>>`
+  })
+  return result
+}
+
+/**
+ * 提示词高亮分段：将提示词文本拆分为普通文本和 @标记 片段
+ */
+const highlightedPromptSegments = computed(() => {
+  if (!promptText.value) return []
+  const segments = []
+  const regex = /【?@(?:视频|图片)\d*】?/g
+  let lastIndex = 0
+  let match
+  while ((match = regex.exec(promptText.value)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ text: promptText.value.slice(lastIndex, match.index), isTag: false })
+    }
+    segments.push({ text: match[0], isTag: true })
+    lastIndex = regex.lastIndex
+  }
+  if (lastIndex < promptText.value.length) {
+    segments.push({ text: promptText.value.slice(lastIndex), isTag: false })
+  }
+  return segments
+})
+
 // 获取当前选中模型的显示名称
 const selectedModelLabel = computed(() => {
   const model = models.value.find(m => m.value === selectedModel.value)
@@ -630,6 +709,34 @@ const veoActualModel = computed(() => {
   if (!isVeoModel.value) return selectedModel.value
   return currentVeoModeConfig.value.actualModel || selectedModel.value
 })
+
+// ==================== Kling O1 整合模型相关 ====================
+// 当前模型是否为 Kling O1 整合模型
+const isKlingO1Model = computed(() => {
+  return !!currentModelConfig.value?.isKlingO1Model
+})
+
+// Kling O1 模式选择
+const selectedKlingO1Mode = ref(props.data.klingO1Mode || 'text2video')
+
+// Kling O1 可用模式列表
+const klingO1Modes = computed(() => {
+  return currentModelConfig.value?.klingO1Modes || []
+})
+
+// 当前选中的 Kling O1 模式配置对象
+const currentKlingO1ModeConfig = computed(() => {
+  return klingO1Modes.value.find(m => m.value === selectedKlingO1Mode.value) || klingO1Modes.value[0] || {}
+})
+
+// 获取 Kling O1 实际要使用的模型名称
+const klingO1ActualModel = computed(() => {
+  if (!isKlingO1Model.value) return selectedModel.value
+  return currentKlingO1ModeConfig.value?.actualModel || selectedModel.value
+})
+
+// O1 是否保留视频原声
+const omniKeepSound = ref(props.data.omniKeepSound || 'yes')
 
 // 获取当前选中的模型对象
 const currentModelConfig = computed(() => {
@@ -1164,6 +1271,24 @@ const referenceVideos = computed(() => {
     }
   }
 
+  // 如果有用户自定义的视频顺序，按顺序返回
+  const customOrder = props.data.videoOrder || []
+  if (customOrder.length > 0 && upstreamVideos.length > 0) {
+    const orderedVideos = []
+    const remainingVideos = [...upstreamVideos]
+
+    for (const url of customOrder) {
+      const index = remainingVideos.indexOf(url)
+      if (index !== -1) {
+        orderedVideos.push(url)
+        remainingVideos.splice(index, 1)
+      }
+    }
+
+    orderedVideos.push(...remainingVideos)
+    return orderedVideos
+  }
+
   return upstreamVideos
 })
 
@@ -1289,6 +1414,24 @@ const pointsCost = computed(() => {
     const currentRes = VEO_RESOLUTION_OPTIONS.value.find(r => r.value === veoResolution.value)
     if (currentRes && currentRes.extraCost > 0) {
       cost += currentRes.extraCost
+    }
+    return cost
+  }
+  
+  // Kling O1 整合模型：使用当前模式的积分配置（按时长）
+  if (isKlingO1Model.value) {
+    const modeConfig = currentKlingO1ModeConfig.value
+    const modeCost = modeConfig.pointsCost
+    if (modeCost && typeof modeCost === 'object') {
+      cost = modeCost[selectedDuration.value] || 60
+    } else if (typeof modeCost === 'number') {
+      cost = modeCost
+    } else {
+      // 降级到整合入口的 pointsCost
+      const baseCost = currentModelConfig.value.pointsCost
+      if (typeof baseCost === 'object') {
+        cost = baseCost[selectedDuration.value] || 60
+      }
     }
     return cost
   }
@@ -1666,6 +1809,12 @@ watch(selectedModel, () => {
       veoMode.value = modelConfig.defaultVeoMode
     }
   }
+  
+  // Kling O1 整合模型：切换时重置模式
+  if (modelConfig?.isKlingO1Model) {
+    selectedKlingO1Mode.value = modelConfig.defaultKlingO1Mode || 'text2video'
+    console.log('[VideoNode] 切换到 Kling O1 整合模型，模式重置为', selectedKlingO1Mode.value)
+  }
 })
 
 // 监听 promptText 变化，自动调整文本框高度
@@ -1936,6 +2085,29 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
     formData.append('model', veoActualModel.value)
     formData.append('veo_resolution', veoResolution.value)
     console.log('[VideoNode] VEO 实际模型:', veoActualModel.value, '清晰度:', veoResolution.value)
+  } else if (isKlingO1Model.value) {
+    // Kling O1 整合模型：使用当前模式对应的实际模型名称
+    formData.append('model', klingO1ActualModel.value)
+    const subMode = currentKlingO1ModeConfig.value.subMode
+    if (subMode) {
+      formData.append('kling_omni_sub_mode', subMode)
+    }
+    if (selectedKlingO1Mode.value === 'video_edit') {
+      formData.append('kling_omni_keep_sound', omniKeepSound.value)
+      // 视频编辑需要上游视频
+      const videoUrl = upstreamVideoUrl.value
+      if (videoUrl) {
+        formData.append('kling_omni_video_url', videoUrl)
+        // 官方 O1 视频编辑示例使用 refer_type = feature
+        formData.append('kling_omni_video_refer_type', 'feature')
+      }
+    }
+    // 多图参考模式：所有图片通过 image_urls 传递（已在下方处理）
+    // 首尾帧模式：第二张图作为尾帧
+    if (selectedKlingO1Mode.value === 'first_last_frame' && finalImages.length >= 2) {
+      formData.append('kling_omni_end_frame_url', finalImages[1])
+    }
+    console.log('[VideoNode] Kling O1 实际模型:', klingO1ActualModel.value, '子模式:', subMode || 'text2video')
   } else {
     formData.append('model', selectedModel.value)
   }
@@ -2298,6 +2470,18 @@ async function handleGenerate() {
   } else {
     // 只有一个，使用其中一个或继承数据
     finalPrompt = upstreamPromptText || userPrompt || inheritedPrompt.value
+  }
+  
+  // Kling O1 / Omni-Video 模型：对提示词中的 @视频/@图片 标记进行转义
+  // 兼容两种使用方式：
+  // 1）画布内的 Kling O1 整合模型（isKlingO1Model 为 true）
+  // 2）直接选择 apiType 为 kling-omni / kling-omni-edit 的模型（未启用整合入口）
+  if (
+    isKlingO1Model.value ||
+    currentModelConfig.value?.apiType === 'kling-omni' ||
+    currentModelConfig.value?.apiType === 'kling-omni-edit'
+  ) {
+    finalPrompt = escapePromptTags(finalPrompt)
   }
   
   // 合并参考图片：上游图片 > 继承图片 > 已设置的参考图
@@ -2995,7 +3179,51 @@ function removeReferenceImage(index) {
   nodesToRemove.forEach(nodeId => canvasStore.removeNode(nodeId))
 }
 
-// ========== 图片列表拖拽排序 ==========
+// 删除某个参考视频（仅删除由本节点创建的“source”视频节点）
+function removeReferenceVideo(index) {
+  const currentVideos = [...(referenceVideos.value || [])]
+  const removedVideo = currentVideos[index]
+  currentVideos.splice(index, 1)
+
+  // 更新视频顺序
+  canvasStore.updateNodeData(props.id, {
+    videoOrder: currentVideos,
+    // 只要还有图片或视频，就认为仍然有上游参考
+    hasUpstream: currentVideos.length > 0 || (referenceImages.value?.length || 0) > 0
+  })
+
+  // 查找并删除对应的上游视频连接：
+  // - 无论上游节点是否为本节点创建的 "source" 节点，都应移除连线
+  // - 仅当上游节点的 nodeRole === 'source' 时，才一并删除该临时节点
+  const edgesToRemove = []
+  const nodesToRemove = []
+
+  canvasStore.edges.forEach(edge => {
+    if (edge.target === props.id) {
+      const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
+      if (!sourceNode?.data) return
+
+      const isMatchedVideo =
+        sourceNode.data?.sourceVideo === removedVideo ||
+        sourceNode.data?.output?.url === removedVideo
+
+      if (!isMatchedVideo) return
+
+      // 始终移除与该参考视频对应的连线
+      edgesToRemove.push(edge.id)
+
+      // 仅删除由本节点创建的临时 "source" 节点，保留用户手动创建的上游节点
+      if (sourceNode.data?.nodeRole === 'source') {
+        nodesToRemove.push(sourceNode.id)
+      }
+    }
+  })
+
+  edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
+  nodesToRemove.forEach(nodeId => canvasStore.removeNode(nodeId))
+}
+
+// ========== 图片/视频列表拖拽排序 ==========
 // 阻止图片项的 mousedown 事件冒泡，防止触发节点拖拽
 function handleImageMouseDown(event) {
   event.stopPropagation()
@@ -3046,6 +3274,56 @@ function handleImageDrop(event, dropIndex) {
 }
 
 function handleImageDragEnd(event) {
+  event.target.classList.remove('dragging')
+  resetDragState()
+}
+
+// 阻止视频项的 mousedown 事件冒泡，防止触发节点拖拽
+function handleVideoMouseDown(event) {
+  event.stopPropagation()
+}
+
+function handleVideoDragStart(event, index) {
+  event.stopPropagation()
+  dragSortIndex.value = index
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', index.toString())
+  event.target.classList.add('dragging')
+}
+
+function handleVideoDragOver(event, index) {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+  dragOverIndex.value = index
+}
+
+function handleVideoDragLeave(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    dragOverIndex.value = -1
+  }
+}
+
+function handleVideoDrop(event, dropIndex) {
+  event.preventDefault()
+  const dragIndex = dragSortIndex.value
+
+  if (dragIndex === -1 || dragIndex === dropIndex) {
+    resetDragState()
+    return
+  }
+
+  const videos = [...(referenceVideos.value || [])]
+  const [draggedVideo] = videos.splice(dragIndex, 1)
+  videos.splice(dropIndex, 0, draggedVideo)
+
+  canvasStore.updateNodeData(props.id, {
+    videoOrder: videos
+  })
+
+  resetDragState()
+}
+
+function handleVideoDragEnd(event) {
   event.target.classList.remove('dragging')
   resetDragState()
 }
@@ -4512,26 +4790,49 @@ function handleToolbarPreview() {
           <span class="panel-frames-hint">拖拽图片/视频到此处 · 拖动调整顺序</span>
         </div>
         <div class="panel-frames-list">
-          <!-- 参考视频（来自上游视频节点） -->
+          <!-- 参考视频（来自上游视频节点）- 点击插入 @视频 标记 -->
           <div 
             v-for="(video, index) in referenceVideos"
             :key="'video-' + index"
             class="panel-frame-item panel-frame-video"
+            :class="{ 
+              'panel-frame-clickable': isKlingO1Model,
+              'drag-over': dragOverIndex === index,
+              'dragging': dragSortIndex === index
+            }"
+            draggable="true"
+            :title="isKlingO1Model ? `点击插入 @视频${index + 1}` : ''"
+            @mousedown="handleVideoMouseDown"
+            @click="isKlingO1Model && insertMediaTag({ type: 'video', index: index + 1, label: `视频${index + 1}` })"
+            @dragstart="handleVideoDragStart($event, index)"
+            @dragover="handleVideoDragOver($event, index)"
+            @dragleave="handleVideoDragLeave"
+            @drop="handleVideoDrop($event, index)"
+            @dragend="handleVideoDragEnd"
           >
             <video :src="video" muted preload="metadata" class="video-thumb"></video>
-            <span class="panel-frame-label">▶</span>
+            <!-- 左上角序号徽章（与图片节点保持一致） -->
+            <span class="panel-frame-label">{{ index + 1 }}</span>
+            <!-- 右下角播放图标徽章 -->
+            <span class="panel-frame-play-icon">▶</span>
+            <span v-if="isKlingO1Model" class="panel-frame-tag-badge">@视频{{ index + 1 }}</span>
+            <!-- 右上角移除按钮 -->
+            <button class="panel-frame-remove" @click.stop="removeReferenceVideo(index)">×</button>
           </div>
-          <!-- 现有图片（支持拖拽排序） -->
+          <!-- 现有图片（支持拖拽排序）- 点击插入 @图片N 标记 -->
           <div 
             v-for="(img, index) in referenceImages" 
             :key="img + index"
             class="panel-frame-item"
             :class="{ 
               'drag-over': dragOverIndex === index,
-              'dragging': dragSortIndex === index
+              'dragging': dragSortIndex === index,
+              'panel-frame-clickable': isKlingO1Model
             }"
             draggable="true"
+            :title="isKlingO1Model ? `点击插入 @图片${index + 1}` : ''"
             @mousedown="handleImageMouseDown"
+            @click="isKlingO1Model && insertMediaTag({ type: 'image', index: index + 1, label: `图片${index + 1}` })"
             @dragstart="handleImageDragStart($event, index)"
             @dragover="handleImageDragOver($event, index)"
             @dragleave="handleImageDragLeave"
@@ -4540,6 +4841,7 @@ function handleToolbarPreview() {
           >
             <img :src="img" :alt="`图片 ${index + 1}`" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
+            <span v-if="isKlingO1Model" class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>
           </div>
           <!-- 添加按钮 -->
@@ -4572,16 +4874,25 @@ function handleToolbarPreview() {
       
       <!-- 模式标签 + 提示词输入 -->
       <div class="prompt-section">
-        <textarea
-          ref="promptTextareaRef"
-          v-model="promptText"
-          class="prompt-input"
-          :placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
-          rows="3"
-          @keydown="handleKeyDown"
-          @input="autoResizeTextarea"
-          @wheel="handlePromptWheel"
-        ></textarea>
+        <div class="prompt-input-wrapper">
+          <textarea
+            ref="promptTextareaRef"
+            v-model="promptText"
+            class="prompt-input"
+            :placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : isKlingO1Model ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
+            rows="3"
+            @keydown="handleKeyDown"
+            @input="autoResizeTextarea"
+            @wheel="handlePromptWheel"
+          ></textarea>
+          <!-- @标记高亮叠加层（仅 Kling O1 模型且有标记时显示） -->
+          <div v-if="isKlingO1Model && highlightedPromptSegments.some(s => s.isTag)" class="prompt-highlight-overlay" aria-hidden="true">
+            <template v-for="(seg, i) in highlightedPromptSegments" :key="i"><span v-if="seg.isTag" class="prompt-media-tag">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template>
+          </div>
+        </div>
+        <div v-if="isKlingO1Model && (referenceVideos.length > 0 || referenceImages.length > 0)" class="prompt-tag-hint">
+          💡 点击上方参考素材可快速插入引用标记
+        </div>
       </div>
       
       <!-- 参数配置行 -->
@@ -5025,6 +5336,49 @@ function handleToolbarPreview() {
           <!-- 图片数量验证提示 -->
           <div v-if="referenceImages.length > 0 && referenceImages.length > currentVeoModeConfig.maxImages" class="veo-mode-tip warning">
             ⚠️ {{ currentVeoModeConfig.label }}最多支持{{ currentVeoModeConfig.maxImages }}张图
+          </div>
+        </div>
+      </template>
+      
+      <!-- Kling O1 模型模式选择 -->
+      <template v-if="isKlingO1Model">
+        <div class="veo-mode-section">
+          <div class="veo-mode-header">
+            <span class="veo-mode-label">🎬 O1 模式</span>
+            <span class="veo-mode-hint">当前: {{ currentKlingO1ModeConfig.label }}</span>
+          </div>
+          <div class="veo-mode-options">
+            <button
+              v-for="opt in klingO1Modes"
+              :key="opt.value"
+              @click="selectedKlingO1Mode = opt.value"
+              :class="['veo-mode-btn', { active: selectedKlingO1Mode === opt.value }]"
+            >
+              <span class="veo-mode-btn-label">{{ opt.label }}</span>
+              <span v-if="opt.maxImages > 0" class="veo-mode-btn-desc">{{ opt.maxImages }}张</span>
+            </button>
+          </div>
+          <!-- 视频编辑模式：保留原声开关 -->
+          <div v-if="selectedKlingO1Mode === 'video_edit'" class="veo-resolution-section">
+            <span class="veo-resolution-label">原声</span>
+            <div class="veo-resolution-options">
+              <button @click="omniKeepSound = 'yes'" :class="['veo-resolution-btn', { active: omniKeepSound === 'yes' }]">保留</button>
+              <button @click="omniKeepSound = 'no'" :class="['veo-resolution-btn', { active: omniKeepSound === 'no' }]">不保留</button>
+            </div>
+          </div>
+          <!-- 模式说明提示 -->
+          <div v-if="selectedKlingO1Mode === 'first_last_frame'" class="veo-mode-tip blue">
+            🖼️ 首尾帧：第1张图为首帧，第2张为尾帧
+          </div>
+          <div v-else-if="selectedKlingO1Mode === 'multi_ref'" class="veo-mode-tip purple">
+            💡 多图参考：最多7张图，prompt 用 &lt;&lt;&lt;image_N&gt;&gt;&gt; 引用
+          </div>
+          <div v-else-if="selectedKlingO1Mode === 'video_edit'" class="veo-mode-tip gold">
+            🎬 视频编辑：需要连接上游视频节点，可选附带参考图片
+          </div>
+          <!-- 图片数量验证提示 -->
+          <div v-if="referenceImages.length > 0 && referenceImages.length > currentKlingO1ModeConfig.maxImages && currentKlingO1ModeConfig.maxImages > 0" class="veo-mode-tip warning">
+            ⚠️ {{ currentKlingO1ModeConfig.label }}最多支持{{ currentKlingO1ModeConfig.maxImages }}张图
           </div>
         </div>
       </template>
@@ -5607,7 +5961,8 @@ function handleToolbarPreview() {
 
 /* 配置面板中的参考图片 */
 .panel-frames {
-  padding: 12px;
+  /* 底部增加一些空间，避免缩略图下方文字被截断 */
+  padding: 12px 12px 20px;
   border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
   position: relative;
   transition: all 0.2s ease;
@@ -5722,33 +6077,38 @@ function handleToolbarPreview() {
   pointer-events: none;
 }
 
-.panel-frame-video .panel-frame-label {
+/* 统一的左上角序号徽章样式（图片/视频共用） */
+.panel-frame-label {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
-  width: 20px;
-  height: 20px;
+  top: 4px;
+  left: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+  text-align: left;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* 视频缩略图右下角播放图标 */
+.panel-frame-play-icon {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.7);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 8px;
-  pointer-events: none;
-}
-
-.panel-frame-label {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
   font-size: 10px;
-  text-align: center;
-  padding: 2px 0;
+  color: #fff;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .panel-frame-remove {
@@ -5883,6 +6243,7 @@ function handleToolbarPreview() {
   width: 100%;
   min-height: 63px;
   max-height: 210px;
+  padding: 8px 10px;
   background: transparent;
   border: none;
   outline: none;
@@ -5891,6 +6252,8 @@ function handleToolbarPreview() {
   line-height: 1.5;
   resize: none;
   overflow-y: auto;
+  font-family: inherit;
+  caret-color: var(--canvas-text-primary, #fff);
   scrollbar-width: thin;
   scrollbar-color: rgba(150, 150, 150, 0.6) rgba(60, 60, 60, 0.3);
 }
@@ -8322,5 +8685,94 @@ function handleToolbarPreview() {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.1);
   color: #525252;
+}
+
+/* ========== @标记引用功能样式 ========== */
+
+/* 参考素材可点击状态（Kling O1 模型） */
+.panel-frame-clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  position: relative;
+  overflow: visible;
+}
+.panel-frame-clickable:hover {
+  transform: scale(1.08);
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+  z-index: 2;
+}
+
+/* 素材缩略图下方的 @标记 小徽章 */
+.panel-frame-tag-badge {
+  position: absolute;
+  /* 完全放在缩略图内部，避免在任何缩放下被裁剪 */
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  /* 统一为画布风格的半透明灰底 */
+  background: rgba(0, 0, 0, 0.65);
+  color: #f9fafb;
+  font-size: 9px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* 提示词输入区域包装器（用于叠加高亮层） */
+.prompt-input-wrapper {
+  position: relative;
+}
+
+/* 高亮叠加层 - 必须与 .prompt-input 的样式完全一致 */
+.prompt-highlight-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 8px 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  pointer-events: none;
+  color: transparent;
+  overflow: hidden;
+}
+
+/* @标记高亮样式 */
+.prompt-media-tag {
+  /* 深色主题下使用柔和的灰白高亮，而不是明显的紫色 */
+  background: rgba(255, 255, 255, 0.12);
+  color: transparent;
+  border-radius: 3px;
+  padding: 1px 2px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.45);
+}
+
+/* 提示词标记提示文字 */
+.prompt-tag-hint {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 4px 0 0;
+  line-height: 1.3;
+}
+
+/* 浅色主题 */
+.light-theme .prompt-tag-hint {
+  color: rgba(0, 0, 0, 0.4);
+}
+.light-theme .panel-frame-tag-badge {
+  /* 浅色主题下使用半透明深灰底 */
+  background: rgba(0, 0, 0, 0.6);
+}
+.light-theme .prompt-media-tag {
+  background: rgba(0, 0, 0, 0.06);
+  border-bottom-color: rgba(0, 0, 0, 0.3);
 }
 </style>

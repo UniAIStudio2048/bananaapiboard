@@ -325,6 +325,23 @@ function selectNodeType(type) {
     nodeData.title = NODE_TYPE_CONFIG[type]?.label || '文本'
   }
   
+  // 特殊处理：分镜格子节点（从图片节点右侧触发时，自动创建3x3分镜）
+  // 图片填充由 propagateData 通过连线自动完成，这里只设置节点结构
+  if (type === 'storyboard-grid' && triggerNode.value) {
+    actualNodeType = 'storyboard'
+    // 分镜格子节点较宽，调整位置偏移
+    if (!canvasStore.nodeSelectorFlowPosition) {
+      position.x = triggerNode.value.position.x + 500
+      position.y = triggerNode.value.position.y
+    }
+    nodeData.title = '分镜格子'
+    nodeData.gridSize = '3x3'
+    nodeData.aspectRatio = '16:9'
+    nodeData.images = Array(9).fill(null)
+    nodeData.status = 'idle'
+    nodeData.nodeWidth = 720
+  }
+
   // 特殊处理：9宫格分镜节点（从图片节点触发时）
   if (type === 'grid-preview' && triggerNode.value) {
     const sourceData = triggerNode.value.data
@@ -391,7 +408,8 @@ function selectNodeType(type) {
   }
   
   // 右侧添加：新节点接收来自触发节点的数据
-  if (triggerNode.value && !isLeftTrigger.value) {
+  // 分镜格子节点由 propagateData 通过连线自动填充图片，跳过 inheritedData 避免重复填充
+  if (triggerNode.value && !isLeftTrigger.value && actualNodeType !== 'storyboard') {
     nodeData.hasUpstream = true
     nodeData.inheritedFrom = props.triggerNodeId
     

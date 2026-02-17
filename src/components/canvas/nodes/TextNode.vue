@@ -2402,6 +2402,9 @@ onMounted(() => {
               class="reference-video-thumb"
               @loadeddata="$event.target.currentTime = 0.1"
             ></video>
+            <!-- 左上角序号徽章，保持与图片/视频节点缩略图一致 -->
+            <span class="reference-index-badge">{{ idx + 1 }}</span>
+            <!-- 右下角播放图标 -->
             <div class="video-badge">▶</div>
           </div>
           <!-- 图片缩略图 -->
@@ -2411,6 +2414,7 @@ onMounted(() => {
             class="reference-image-item"
           >
             <img :src="img" :alt="`参考图 ${idx + 1}`" />
+            <span class="reference-index-badge">{{ idx + 1 }}</span>
           </div>
           <div v-if="inheritedImages.length > 4" class="more-images-badge">
             +{{ inheritedImages.length - 4 }}
@@ -3332,6 +3336,22 @@ onMounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* 参考缩略图左上角序号徽章（文本节点） */
+.reference-index-badge {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 10px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+  text-align: left;
+  pointer-events: none;
+  z-index: 2;
 }
 
 /* 视频缩略图样式 */

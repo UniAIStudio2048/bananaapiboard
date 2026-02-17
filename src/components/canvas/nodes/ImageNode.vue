@@ -933,6 +933,11 @@ const showPresetOption = computed(() => {
   return !isMJModel.value
 })
 
+// 是否显示摄影机控制选项（所有模型都支持，包括 MJ 模型）
+const showCameraControlOption = computed(() => {
+  return true
+})
+
 // 监听模型变化，如果模型不支持1K且当前选择1K，自动切换到2K
 watch([selectedModel, imageSizes], () => {
   const currentModel = models.value.find(m => m.value === selectedModel.value)
@@ -4135,6 +4140,15 @@ async function handleGenerate() {
     }
   }
   
+  // MJ 模型选择动漫时，自动追加 --niji 7 参数
+  if (isMJModel.value && botType.value === 'NIJI_JOURNEY') {
+    if (finalPrompt && !finalPrompt.includes('--niji')) {
+      finalPrompt = `${finalPrompt} --niji 7`
+    } else if (!finalPrompt) {
+      finalPrompt = '--niji 7'
+    }
+  }
+  
   console.log('[ImageNode] 生成参数:', {
     userPrompt,
     upstreamPrompt,
@@ -5787,7 +5801,7 @@ async function handleDrop(event) {
           </div>
           
           <!-- 摄影机控制开关 -->
-          <div v-if="showPresetOption" class="camera-control-toggle">
+          <div v-if="showCameraControlOption" class="camera-control-toggle">
             <button 
               class="camera-toggle-btn"
               :class="{ active: cameraControlEnabled }"
@@ -7037,14 +7051,17 @@ async function handleDrop(event) {
 
 .panel-frame-label {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: rgba(0, 0, 0, 0.6);
-  color: white;
+  top: 4px;
+  left: 4px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
   font-size: 10px;
-  text-align: center;
-  padding: 2px 0;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: 999px;
+  text-align: left;
+  pointer-events: none;
+  z-index: 2;
 }
 
 .panel-frame-remove {
