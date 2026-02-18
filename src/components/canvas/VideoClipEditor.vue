@@ -9,7 +9,7 @@
  * - 确认创建角色
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { getSoraCharacterConfig } from '@/config/tenant.js'
+import { getSoraCharacterConfig, getTenantHeaders } from '@/config/tenant.js'
 
 // 获取角色创建积分消耗
 const characterPointsCost = computed(() => {
@@ -61,6 +61,12 @@ const createMode = ref(props.soraTaskId ? 'sora' : 'url')
 
 // 是否可以使用 Sora 模式（需要有任务ID）
 const canUseSoraMode = computed(() => !!props.soraTaskId)
+
+// 通道选择相关
+const availableChannels = ref([])
+const selectedChannel = ref(null)
+const loadingChannels = ref(false)
+const showChannelSelector = ref(false)
 
 // 拖拽状态
 const isDraggingStart = ref(false)
@@ -257,8 +263,58 @@ function handleDragEnd() {
   document.removeEventListener('mouseup', handleDragEnd)
 }
 
+// 加载可用通道列表
+async function loadAvailableChannels() {
+  loadingChannels.value = true
+  try {
+    const response = await fetch('/api/sora/characters/channels', {
+      headers: {
+        ...getTenantHeaders()
+      }
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      availableChannels.value = data.channels || []
+      
+      // 如果只有一个通道，自动选择
+      if (availableChannels.value.length === 1) {
+        selectedChannel.value = availableChannels.value[0].type
+        showChannelSelector.value = false
+      } else if (availableChannels.value.length > 1) {
+        // 多个通道，显示选择界面
+        showChannelSelector.value = true
+        // 默认选择第一个
+        if (!selectedChannel.value) {
+          selectedChannel.value = availableChannels.value[0].type
+        }
+      } else {
+        // 没有可用通道
+        showChannelSelector.value = false
+        selectedChannel.value = null
+      }
+    } else {
+      console.warn('[VideoClipEditor] 获取通道列表失败')
+      availableChannels.value = []
+      showChannelSelector.value = false
+    }
+  } catch (error) {
+    console.error('[VideoClipEditor] 加载通道列表出错:', error)
+    availableChannels.value = []
+    showChannelSelector.value = false
+  } finally {
+    loadingChannels.value = false
+  }
+}
+
 // 确认创建角色
 function handleConfirm() {
+  // 如果显示通道选择器但未选择通道，提示用户
+  if (showChannelSelector.value && !selectedChannel.value) {
+    alert('请选择要使用的角色创建通道')
+    return
+  }
+  
   // 取整数秒
   const startSec = Math.floor(clipStart.value)
   const endSec = Math.ceil(clipEnd.value)
@@ -283,7 +339,8 @@ function handleConfirm() {
     startTime: finalStart,
     endTime: finalEnd,
     characterName: name, // 传递角色名称
-    createMode: createMode.value // 传递创建模式：'sora' 或 'url'
+    createMode: createMode.value, // 传递创建模式：'sora' 或 'url'
+    channel_type: selectedChannel.value // 传递选择的通道类型
   })
 }
 
@@ -328,6 +385,8 @@ const playheadStyle = computed(() => {
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeyDown)
+  // 加载可用通道列表
+  loadAvailableChannels()
 })
 
 onUnmounted(() => {
@@ -357,7 +416,8 @@ onUnmounted(() => {
           </button>
         </div>
 
-        
+        <!-- 可滚动内容区域 -->
+        <div class="clip-content-wrapper">
         <!-- 视频预览区域 -->
         <div class="video-preview-area">
           <video
@@ -492,6 +552,35 @@ onUnmounted(() => {
           />
         </div>
         
+        <!-- 通道选择（仅在多个通道启用时显示） -->
+        <div v-if="showChannelSelector" class="channel-selector-section">
+          <label class="section-label">选择创建通道</label>
+          <div class="channel-options">
+            <label
+              v-for="channel in availableChannels"
+              :key="channel.type"
+              class="channel-option"
+              :class="{ active: selectedChannel === channel.type }"
+            >
+              <input
+                type="radio"
+                :value="channel.type"
+                v-model="selectedChannel"
+                class="channel-radio"
+              />
+              <div class="channel-info">
+                <span class="channel-name">{{ channel.name }}</span>
+                <span v-if="channel.points_cost > 0" class="channel-points">
+                  {{ channel.points_cost }} 积分/次
+                </span>
+                <span v-else class="channel-points free">免费</span>
+              </div>
+            </label>
+          </div>
+        </div>
+        </div>
+        <!-- 可滚动内容区域结束 -->
+        
         <!-- 操作按钮 -->
         <div class="clip-actions">
           <button class="action-btn secondary" @click="previewClip">
@@ -545,6 +634,16 @@ onUnmounted(() => {
   flex-direction: column;
   box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
   animation: scaleIn 0.3s ease;
+}
+
+/* 可滚动内容区域包装器 */
+.clip-content-wrapper {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 @keyframes scaleIn {
@@ -949,6 +1048,77 @@ onUnmounted(() => {
 
 .name-input::placeholder {
   color: #666;
+}
+
+/* 通道选择器 */
+.channel-selector-section {
+  padding: 16px 24px;
+  border-top: 1px solid #2a2a2a;
+  flex-shrink: 0;
+  min-height: fit-content;
+}
+
+.channel-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: fit-content;
+}
+
+.channel-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #2a2a2a;
+  border: 2px solid #3a3a3a;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+  min-height: 48px;
+}
+
+.channel-option:hover {
+  background: #333;
+  border-color: #4a4a4a;
+}
+
+.channel-option.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+}
+
+.channel-radio {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.channel-info {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+}
+
+.channel-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+}
+
+.channel-points {
+  font-size: 12px;
+  color: #888;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.channel-points.free {
+  color: #10b981;
 }
 
 /* 操作按钮 */

@@ -4141,6 +4141,12 @@ async function executeCharacterCreation(clipData) {
       prompt: characterName
     }
     
+    // 如果指定了通道类型，添加到请求体
+    if (clipData.channel_type) {
+      requestBody.channel_type = clipData.channel_type
+      console.log('[VideoNode] 使用指定通道创建角色:', clipData.channel_type)
+    }
+    
     // 优先使用任务 ID，否则使用视频 URL
     if (useTaskId && soraTaskId) {
       requestBody.character = soraTaskId // 使用任务 ID 作为 character 参数
