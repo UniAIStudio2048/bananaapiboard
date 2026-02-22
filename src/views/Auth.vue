@@ -305,6 +305,19 @@ async function submit() {
     }
     const j = await r.json()
     localStorage.setItem('token', j.token)
+    
+    // 🔧 修复：登录成功后清除上一个用户的工作流历史和后台任务
+    // 避免切换用户时看到上一个用户的数据，导致任务提交失败
+    try {
+      // 清除工作流历史
+      localStorage.removeItem('workflow_auto_saves')
+      // 清除后台任务
+      localStorage.removeItem('canvas_background_tasks')
+      console.log('[Auth] 已清除上一个用户的工作流历史和后台任务')
+    } catch (e) {
+      console.warn('[Auth] 清除用户数据失败:', e)
+    }
+    
     message.value = mode.value === 'register' ? '注册成功，已赠送积分' : '登录成功'
     const params = new URLSearchParams(location.search)
     const redirect = params.get('redirect') || ''

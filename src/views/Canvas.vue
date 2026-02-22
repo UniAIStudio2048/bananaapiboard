@@ -1191,6 +1191,22 @@ async function loadUserInfo() {
         console.warn('[Canvas] 获取用户信息失败，但 token 仍存在，保留在当前页面')
       }
     } else {
+      // 🔧 修复：检查是否切换了用户，如果是则清除上一个用户的工作流历史
+      // 通过检查 sessionStorage 中保存的用户ID来判断
+      const lastUserId = sessionStorage.getItem('canvas_last_user_id')
+      if (lastUserId && lastUserId !== me.value.id.toString()) {
+        console.log('[Canvas] 检测到用户切换，清除上一个用户的工作流历史')
+        try {
+          localStorage.removeItem('workflow_auto_saves')
+          localStorage.removeItem('canvas_background_tasks')
+          console.log('[Canvas] 已清除上一个用户的工作流历史和后台任务')
+        } catch (e) {
+          console.warn('[Canvas] 清除用户数据失败:', e)
+        }
+      }
+      // 保存当前用户ID到 sessionStorage
+      sessionStorage.setItem('canvas_last_user_id', me.value.id.toString())
+      
       // 初始化团队空间
       teamStore.setCurrentUserId(me.value.id)
       await teamStore.restoreSpaceState()
