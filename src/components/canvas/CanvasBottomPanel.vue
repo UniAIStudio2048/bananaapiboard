@@ -577,7 +577,7 @@ function handleKeyDown(event) {
 
 <template>
   <!-- 文本节点的配置面板已集成到 TextNode 内部，此处不再显示 -->
-  <div class="canvas-bottom-panel" :class="{ 'text-node-panel': isTextNode }" v-if="canvasStore.selectedNode && !isTextNode">
+  <div class="canvas-bottom-panel" :class="{ 'text-node-panel': isTextNode }" v-if="canvasStore.selectedNode && !isTextNode && canvasStore.selectedNodeIds.length <= 1">
     
     <!-- 文本节点：内容预览区域 -->
     <div v-if="isTextNode && hasTextContent" class="text-preview-section">

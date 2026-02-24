@@ -310,7 +310,11 @@ async function inviteMember(teamId, inviteeId, role = 'member', message = '', in
     
     const data = await api.post(`/api/teams/${teamId}/invite`, payload)
     if (data.success) {
-      return { success: true, invitation: data.invitation }
+      // 如果自动接受了，刷新团队成员列表
+      if (data.autoAccepted && globalTeamId.value === teamId) {
+        await loadTeamMembers(teamId)
+      }
+      return { success: true, invitation: data.invitation, autoAccepted: data.autoAccepted }
     }
     return { success: false, error: data.error, message: data.message }
   } catch (error) {

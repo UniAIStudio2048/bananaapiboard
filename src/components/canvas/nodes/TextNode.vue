@@ -26,7 +26,12 @@ const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals } = useVueFlow()
+const { updateNodeInternals, getSelectedNodes } = useVueFlow()
+
+// 是否单独选中（只选了这一个节点时才显示工具栏和底部面板）
+const isSoloSelected = computed(() => {
+  return props.selected && getSelectedNodes.value.length <= 1
+})
 
 // 本地文本状态
 const localText = ref(props.data.text || '')
@@ -229,6 +234,7 @@ const isGenerating = ref(false)
 const showModelDropdown = ref(false)
 const showPresetDropdown = ref(false) // 功能预设下拉菜单
 const showLanguageDropdown = ref(false) // 语言下拉菜单
+const showLeftMenu = ref(false) // 左侧快捷操作菜单显示状态
 const llmInputRef = ref(null)
 
 // 下拉菜单方向（true = 向上弹出，false = 向下弹出）
@@ -1019,14 +1025,21 @@ watch(() => [props.data.width, props.data.height], ([width, height]) => {
 
 // 监听节点选中状态变化，取消选中时关闭所有下拉菜单
 watch(() => props.selected, (newSelected) => {
-  if (!newSelected) {
+  if (newSelected) {
+    // 当节点被 VueFlow 选中时，同步到 canvasStore（与 ImageNode 保持一致）
+    if (canvasStore.selectedNodeId !== props.id) {
+      canvasStore.selectNode(props.id)
+    }
+    // 显示底部配置面板（用于 LLM 对话）
+    canvasStore.isBottomPanelVisible = true
+  } else {
     // 节点取消选中时，关闭所有下拉菜单
     showModelDropdown.value = false
     showPresetDropdown.value = false
     showLanguageDropdown.value = false
     showLeftMenu.value = false
   }
-})
+}, { immediate: true })
 
 // 同步 label 变化
 watch(() => props.data.label, (newLabel) => {
@@ -1691,8 +1704,8 @@ let pressTimer = null
 let isLongPress = false
 let pressStartPos = { x: 0, y: 0 }
 
-// 左侧快捷操作菜单显示状态
-const showLeftMenu = ref(false)
+// 左侧快捷操作菜单显示状态（已移至 watch 之前声明，避免 TDZ 错误）
+// const showLeftMenu = ref(false) -- 已移至上方
 
 // 左侧快捷操作列表（添加上游输入）- 使用翻译键
 const leftQuickActions = [
@@ -2047,16 +2060,15 @@ function splitSceneNodes() {
   console.log(`[TextNode] 所有分镜节点创建完成，共 ${scenes.length} 个`)
 }
 
-// 点击节点时选中，并显示底部 LLM 配置面板
+// 点击节点时的处理 - 主动同步选中状态到 canvasStore
+// 因为节点内部子元素可能通过 @click.stop 阻止冒泡，导致 VueFlow 的 onNodeClick 不触发
 function handleNodeClick(e) {
   // 如果点击的是编辑器区域，不阻止事件，让编辑器正常工作
   if (isEditing.value && textareaRef.value?.contains(e.target)) {
-    return // 让编辑器自己处理点击事件
+    return
   }
-  
-  e.stopPropagation()
+  // 主动同步选中状态（与 ImageNode 保持一致）
   canvasStore.selectNode(props.id)
-  // 显示底部配置面板（用于 LLM 对话）
   canvasStore.isBottomPanelVisible = true
 }
 
@@ -2147,8 +2159,8 @@ onMounted(() => {
       class="node-handle node-handle-hidden"
     />
     
-    <!-- 格式工具栏（选中节点时显示） -->
-    <div v-show="selected" class="format-toolbar">
+    <!-- 格式工具栏（单独选中节点时显示） -->
+    <div v-show="isSoloSelected" class="format-toolbar" @mousedown.stop @click.stop>
       <template v-for="(btn, index) in formatButtons" :key="index">
         <div v-if="btn.type === 'divider'" class="toolbar-divider"></div>
         <button 
@@ -2383,7 +2395,7 @@ onMounted(() => {
     </Teleport>
     
     <!-- 底部 LLM 配置面板 - 紧贴节点卡片 -->
-    <div v-show="selected" class="llm-config-panel" @click.stop>
+    <div v-show="isSoloSelected" class="llm-config-panel" @click.stop @mousedown.stop>
       <!-- 参考媒体区域（视频/图片/混合） -->
       <div v-if="inheritedImages.length > 0" class="reference-section">
         <span class="reference-label">{{ referenceLabel }}</span>

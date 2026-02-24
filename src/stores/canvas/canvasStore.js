@@ -142,6 +142,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     // 如果是从另一个节点创建的，自动添加连线
     if (triggerNodeId.value) {
+      console.warn('[Store] addNode 消费了 triggerNodeId:', triggerNodeId.value, '新节点:', newNode.id, '调用栈:', new Error().stack?.split('\n').slice(1, 4).join(' <- '))
       addEdge({
         source: triggerNodeId.value,
         target: newNode.id
@@ -794,12 +795,13 @@ export const useCanvasStore = defineStore('canvas', () => {
    * @param {Object} pendingConn - 待连接信息 (可选，用于显示虚拟连线)
    */
   function openNodeSelector(position, trigger = 'canvas', nodeId = null, flowPosition = null, pendingConn = null) {
+    console.log('[Store] openNodeSelector', { position, trigger, nodeId, flowPosition, hasPendingConn: !!pendingConn })
     nodeSelectorPosition.value = position
     nodeSelectorTrigger.value = trigger
     triggerNodeId.value = nodeId
     nodeSelectorFlowPosition.value = flowPosition
     isNodeSelectorOpen.value = true
-    
+
     // 设置待连接信息（用于渲染虚拟连线）
     if (pendingConn) {
       pendingConnection.value = pendingConn
@@ -810,6 +812,7 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 关闭节点选择器
    */
   function closeNodeSelector() {
+    console.log('[Store] closeNodeSelector', { wasOpen: isNodeSelectorOpen.value, triggerNodeId: triggerNodeId.value, stack: new Error().stack?.split('\n').slice(1, 4).join(' <- ') })
     isNodeSelectorOpen.value = false
     triggerNodeId.value = null
     nodeSelectorFlowPosition.value = null

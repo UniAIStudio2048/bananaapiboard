@@ -31,7 +31,7 @@ const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals } = useVueFlow()
+const { updateNodeInternals, getSelectedNodes } = useVueFlow()
 
 // 可用音乐模型列表 - 从租户配置动态获取
 const musicModels = computed(() => {
@@ -438,15 +438,15 @@ const nodeClass = computed(() => ({
   'resizing': isResizing.value
 }))
 
-// 是否显示底部配置面板 - 选中时显示
+// 是否显示底部配置面板 - 单独选中时显示
 const showConfigPanel = computed(() => {
-  return props.selected === true
+  return props.selected === true && getSelectedNodes.value.length <= 1
 })
 
 // ========== 音频工具栏相关 ==========
-// 是否显示工具栏（选中且有音频内容）- 与 ImageNode 保持一致
+// 是否显示工具栏（单独选中且有音频内容）- 与 ImageNode 保持一致
 const showToolbar = computed(() => {
-  return props.selected && hasAudio.value
+  return props.selected && getSelectedNodes.value.length <= 1 && hasAudio.value
 })
 
 // 是否有音频

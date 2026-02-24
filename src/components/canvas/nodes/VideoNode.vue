@@ -32,7 +32,12 @@ const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals } = useVueFlow()
+const { updateNodeInternals, getSelectedNodes } = useVueFlow()
+
+// 是否单独选中（多选时不显示底部配置面板）
+const isSoloSelected = computed(() => {
+  return props.selected && getSelectedNodes.value.length <= 1
+})
 
 // 标签编辑状态
 const isEditingLabel = ref(false)
@@ -82,10 +87,10 @@ function getModelSuccessRate(modelName) {
   return null
 }
 
-// 计算信号格数 (1-4格)
+// 计算信号格数 (1-4格)，无数据时默认满格
 function getSignalLevel(modelName) {
   const rate = getModelSuccessRate(modelName)
-  if (rate === null) return 0      // 无数据
+  if (rate === null) return 4      // 当天未使用，默认满格
   if (rate >= 0.95) return 4       // 95%+ → 满格
   if (rate >= 0.80) return 3       // 80-95% → 3格
   if (rate >= 0.60) return 2       // 60-80% → 2格
@@ -93,19 +98,19 @@ function getSignalLevel(modelName) {
   return 0                          // 0% → 0格
 }
 
-// 获取颜色类名
+// 获取颜色类名，无数据时默认绿色
 function getSignalClass(modelName) {
   const rate = getModelSuccessRate(modelName)
-  if (rate === null) return 'none'
+  if (rate === null) return 'excellent'  // 当天未使用，默认绿色
   if (rate >= 0.95) return 'excellent'  // 绿色
   if (rate >= 0.80) return 'good'       // 黄色
   return 'poor'                          // 红色
 }
 
-// 格式化百分比
+// 格式化百分比，无数据时显示 100%
 function formatSuccessRate(modelName) {
   const rate = getModelSuccessRate(modelName)
-  if (rate === null) return '--'
+  if (rate === null) return '100%'
   return `${Math.round(rate * 100)}%`
 }
 
@@ -1670,15 +1675,23 @@ function handleMotionImitation() {
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) return
   
-  // 自动选择动作迁移模型（查找包含 'kling' 和 'motion' 的模型）
-  const motionControlModel = models.value.find(m => {
-    const modelValue = m.value?.toLowerCase() || ''
-    return modelValue.includes('kling') && modelValue.includes('motion')
-  })
-  
+  // 自动选择动作迁移模型（从全量模型列表中查找，避免被 supportedModes 过滤掉）
+  // 优先 apiType 精确匹配，其次通过模型ID/名称模糊匹配
+  const allVideoModels = getAvailableVideoModels()
+  const motionControlModel = allVideoModels.find(m => m.apiType === 'kling-motion-control') ||
+    allVideoModels.find(m => {
+      const v = m.value?.toLowerCase() || ''
+      const l = m.label?.toLowerCase() || ''
+      const hasKling = v.includes('kling') || l.includes('可灵') || l.includes('kling')
+      const hasMotion = v.includes('motion') || l.includes('动作模仿') || l.includes('动作迁移')
+      return hasKling && hasMotion
+    })
+
   if (motionControlModel) {
-    selectedModel.value = motionControlModel.value
-    console.log('[VideoNode] 自动选择动作迁移模型:', motionControlModel.value)
+    nextTick(() => {
+      selectedModel.value = motionControlModel.value
+      console.log('[VideoNode] 自动选择动作迁移模型:', motionControlModel.value)
+    })
   } else {
     console.warn('[VideoNode] 未找到动作迁移模型，请检查租户配置')
   }
@@ -1888,6 +1901,9 @@ watch(() => props.data.generationMode, (newMode) => {
 
 // 🔧 监听生成模式变化，检查当前模型是否支持新模式（immediate: true 确保初始化时也执行）
 watch(generationMode, (newMode) => {
+  // motion 模式的模型选择由 handleMotionImitation 处理，跳过自动重置
+  if (newMode === 'motion') return
+
   console.log('[VideoNode] generationMode 变化:', newMode, '当前模型列表数量:', models.value.length)
   // 检查当前选中的模型是否在新模式的可用模型列表中
   const modelsForNewMode = models.value
@@ -3652,9 +3668,10 @@ function closeFullscreenPreview() {
 }
 
 // ========== 视频工具栏 ==========
-// 是否显示工具栏（选中且有视频内容）- 与 ImageNode 保持一致
+// 是否显示工具栏（单独选中且有视频内容）- 与 ImageNode 保持一致
 const showToolbar = computed(() => {
   if (!props.selected) return false
+  if (getSelectedNodes.value.length > 1) return false
   return hasOutput.value
 })
 
@@ -4780,7 +4797,7 @@ function handleToolbarPreview() {
     />
     
     <!-- 底部配置面板（选中时显示） -->
-    <div v-show="selected" class="config-panel" @mousedown.stop>
+    <div v-show="isSoloSelected" class="config-panel" @mousedown.stop>
       <!-- 参考图片预览（支持拖拽上传） -->
       <div 
         class="panel-frames"

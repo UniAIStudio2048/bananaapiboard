@@ -27,7 +27,12 @@ const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals } = useVueFlow()
+const { updateNodeInternals, getSelectedNodes } = useVueFlow()
+
+// 是否单独选中（多选时不显示底部配置面板）
+const isSoloSelected = computed(() => {
+  return props.selected && getSelectedNodes.value.length <= 1
+})
 
 // 模型下拉框状态
 const isModelDropdownOpen = ref(false)
@@ -41,10 +46,10 @@ function getModelSuccessRate(modelName) {
   return modelStatsStore.getImageModelRate(modelName)
 }
 
-// 计算信号格数 (1-4格)
+// 计算信号格数 (1-4格)，无数据时默认满格
 function getSignalLevel(modelName) {
   const rate = getModelSuccessRate(modelName)
-  if (rate === null) return 0
+  if (rate === null) return 4      // 当天未使用，默认满格
   if (rate >= 0.95) return 4
   if (rate >= 0.80) return 3
   if (rate >= 0.60) return 2
@@ -52,19 +57,19 @@ function getSignalLevel(modelName) {
   return 0
 }
 
-// 获取颜色类名
+// 获取颜色类名，无数据时默认绿色
 function getSignalClass(modelName) {
   const rate = getModelSuccessRate(modelName)
-  if (rate === null) return 'none'
+  if (rate === null) return 'excellent'  // 当天未使用，默认绿色
   if (rate >= 0.95) return 'excellent'
   if (rate >= 0.80) return 'good'
   return 'poor'
 }
 
-// 格式化百分比
+// 格式化百分比，无数据时显示 100%
 function formatSuccessRate(modelName) {
   const rate = getModelSuccessRate(modelName)
-  if (rate === null) return '--'
+  if (rate === null) return '100%'
   return `${Math.round(rate * 100)}%`
 }
 
@@ -874,7 +879,7 @@ onUnmounted(() => {
     </button>
     
     <!-- 底部配置面板 - 选中时显示 -->
-    <div v-show="selected" class="config-panel">
+    <div v-show="isSoloSelected" class="config-panel">
       <div class="settings-header">
         <span class="settings-title">生成设置</span>
       </div>

@@ -41,7 +41,7 @@ const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals, findNode, getViewport } = useVueFlow()
+const { updateNodeInternals, findNode, getViewport, getSelectedNodes } = useVueFlow()
 
 // 文件上传引用
 const fileInputRef = ref(null)
@@ -80,10 +80,10 @@ function getModelSuccessRate(modelName) {
   return modelStatsStore.getImageModelRate(modelName)
 }
 
-// 计算信号格数 (1-4格)
+// 计算信号格数 (1-4格)，无数据时默认满格
 function getSignalLevel(modelName) {
   const rate = getModelSuccessRate(modelName)
-  if (rate === null) return 0
+  if (rate === null) return 4      // 当天未使用，默认满格
   if (rate >= 0.95) return 4
   if (rate >= 0.80) return 3
   if (rate >= 0.60) return 2
@@ -91,19 +91,19 @@ function getSignalLevel(modelName) {
   return 0
 }
 
-// 获取颜色类名
+// 获取颜色类名，无数据时默认绿色
 function getSignalClass(modelName) {
   const rate = getModelSuccessRate(modelName)
-  if (rate === null) return 'none'
+  if (rate === null) return 'excellent'  // 当天未使用，默认绿色
   if (rate >= 0.95) return 'excellent'
   if (rate >= 0.80) return 'good'
   return 'poor'
 }
 
-// 格式化成功率显示
+// 格式化成功率显示，无数据时显示 100%
 function formatSuccessRate(modelName) {
   const rate = getModelSuccessRate(modelName)
-  if (rate === null) return '--'
+  if (rate === null) return '100%'
   return Math.round(rate * 100) + '%'
 }
 
@@ -1100,16 +1100,17 @@ const dragStartPos = ref({ x: 0, y: 0 })
 const hasMoved = ref(false)
 const DRAG_THRESHOLD = 5 // 移动超过5px才算拖动
 
-// 是否显示工具栏（选中且有图片内容）- 与 TextNode 保持一致
+// 是否显示工具栏（单独选中且有图片内容）- 与 TextNode 保持一致
 const showToolbar = computed(() => {
   if (!props.selected) return false
+  if (getSelectedNodes.value.length > 1) return false
   return hasOutput.value || hasSourceImage.value
 })
 
-// 是否显示底部配置面板 - 与 TextNode 保持一致，选中即显示
+// 是否显示底部配置面板 - 与 TextNode 保持一致，单独选中即显示
 // 修改：源节点也显示配置面板，以便添加参考图片
 const showConfigPanel = computed(() => {
-  return props.selected === true
+  return props.selected === true && getSelectedNodes.value.length <= 1
 })
 
 
@@ -4664,7 +4665,9 @@ let pressStartPos = { x: 0, y: 0 }
 function handleAddRightMouseDown(event) {
   event.stopPropagation()
   event.preventDefault()
-  
+
+  console.log('[ImageNode] +号按钮 mousedown', { nodeId: props.id, nodeType: canvasStore.nodes.find(n => n.id === props.id)?.type, status: props.data.status })
+
   isLongPress = false
   pressStartPos = { x: event.clientX, y: event.clientY }
   
@@ -4699,9 +4702,12 @@ function handleAddRightMouseUp(event) {
   clearTimeout(pressTimer)
   document.removeEventListener('mousemove', handleAddRightMouseMove)
   document.removeEventListener('mouseup', handleAddRightMouseUp)
-  
+
+  console.log('[ImageNode] +号按钮 mouseup', { isLongPress, nodeId: props.id, isDragging: canvasStore.isDraggingConnection })
+
   if (!isLongPress) {
     // 短按：打开节点选择器
+    console.log('[ImageNode] 短按打开 NodeSelector', { nodeId: props.id })
     canvasStore.openNodeSelector(
       { x: event.clientX, y: event.clientY },
       'node',

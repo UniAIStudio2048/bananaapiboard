@@ -976,6 +976,7 @@ watch(() => props.visible, (newVal) => {
                 </button>
               </div>
             </div>
+            <div class="convert-hint">余额划转后的积分为永久积分，也可转让他人使用</div>
           </div>
 
           <!-- 错误提示 -->
@@ -1867,7 +1868,7 @@ watch(() => props.visible, (newVal) => {
 
 /* 余额横幅 */
 .balance-banner {
-  margin: 0 32px 24px;
+  margin: 0 32px 0;
   padding: 16px 20px;
   background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
   border: 1px solid #3a3a3a;
@@ -1875,6 +1876,13 @@ watch(() => props.visible, (newVal) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.convert-hint {
+  margin: 4px 32px 24px;
+  font-size: 12px;
+  color: #888888;
+  text-align: right;
 }
 
 .balance-content {
@@ -2226,6 +2234,11 @@ watch(() => props.visible, (newVal) => {
   .active-package-banner,
   .balance-banner,
   .error-banner {
+    margin-left: 20px;
+    margin-right: 20px;
+  }
+
+  .convert-hint {
     margin-left: 20px;
     margin-right: 20px;
   }
@@ -4181,6 +4194,10 @@ html.canvas-theme-light.canvas-theme-light .balance-label {
 
 html.canvas-theme-light.canvas-theme-light .balance-value {
   color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .convert-hint {
+  color: rgba(0, 0, 0, 0.45) !important;
 }
 
 /* 错误横幅 */

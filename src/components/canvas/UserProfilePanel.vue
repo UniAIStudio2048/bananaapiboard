@@ -130,6 +130,13 @@ const showMemberManageModal = ref(false)
 const memberManageTeam = ref(null)
 const memberManageLoading = ref(false)
 
+// 重命名团队弹窗
+const showRenameTeamModal = ref(false)
+const renameTeamForm = ref({ name: '' })
+const renameTeamLoading = ref(false)
+const renameTeamError = ref('')
+const renamingTeam = ref(null)
+
 // 连线样式设置
 const edgeStyleOptions = [
   { value: 'smoothstep', labelKey: 'onboarding.settings.edgeStyleSmoothstep' },
@@ -142,7 +149,7 @@ const edgeStyleOptions = [
 const selectedEdgeStyle = ref(
   props.userInfo?.preferences?.canvas?.edgeStyle ||
   localStorage.getItem('canvasEdgeStyle') ||
-  'smoothstep'
+  'bezier'
 )
 
 // 监听用户信息变化，更新连线样式
@@ -439,6 +446,45 @@ async function handleCreateTeam() {
   }
 }
 
+// 打开重命名团队弹窗
+function openRenameTeamModal(team) {
+  renamingTeam.value = team
+  renameTeamForm.value.name = team.name
+  renameTeamError.value = ''
+  showRenameTeamModal.value = true
+}
+
+// 重命名团队
+async function handleRenameTeam() {
+  const newName = renameTeamForm.value.name.trim()
+  if (!newName) {
+    renameTeamError.value = '请输入团队名称'
+    return
+  }
+  if (newName === renamingTeam.value.name) {
+    showRenameTeamModal.value = false
+    return
+  }
+
+  renameTeamLoading.value = true
+  renameTeamError.value = ''
+
+  try {
+    const result = await teamStore.updateTeam(renamingTeam.value.id, { name: newName })
+    if (result.success) {
+      showRenameTeamModal.value = false
+      showAlert('团队已重命名', '成功')
+    } else {
+      renameTeamError.value = result.message || '重命名失败'
+    }
+  } catch (error) {
+    console.error('[Team] 重命名团队失败:', error)
+    renameTeamError.value = '重命名失败，请重试'
+  } finally {
+    renameTeamLoading.value = false
+  }
+}
+
 // 接受邀请
 async function handleAcceptInvitation(inviteId) {
   const result = await teamStore.acceptInvitation(inviteId)
@@ -527,7 +573,11 @@ async function handleInviteMember() {
     )
     
     if (result.success) {
-      showAlert('邀请已发送', '成功')
+      if (result.autoAccepted) {
+        showAlert('对方已自动加入团队（你们已有共创空间）', '成功')
+      } else {
+        showAlert('邀请已发送', '成功')
+      }
       showInviteMemberModal.value = false
     } else {
       showAlert(result.message || '邀请失败', '错误')
@@ -1860,7 +1910,19 @@ function getLedgerTypeText(type) {
                         </svg>
                         <span>邀请</span>
                       </button>
-                      <button 
+                      <button
+                        v-if="team.my_role === 'owner'"
+                        class="btn-team-action"
+                        @click="openRenameTeamModal(team)"
+                        title="重命名团队"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+                          <path d="m15 5 4 4"/>
+                        </svg>
+                        <span>重命名</span>
+                      </button>
+                      <button
                         v-if="team.my_role === 'owner'"
                         class="btn-team-action"
                         @click="openMemberManageModal(team)"
@@ -2712,7 +2774,40 @@ function getLedgerTypeText(type) {
       </div>
     </Transition>
   </Teleport>
-  
+
+  <!-- 重命名团队弹窗 -->
+  <Teleport to="body">
+    <Transition name="modal">
+      <div v-if="showRenameTeamModal" class="modal-overlay" @click.self="showRenameTeamModal = false">
+        <div class="modal-content team-modal">
+          <div class="modal-header">
+            <h3>重命名团队</h3>
+            <button class="modal-close" @click="showRenameTeamModal = false">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label>团队名称 <span class="required">*</span></label>
+              <input
+                v-model="renameTeamForm.name"
+                type="text"
+                placeholder="输入新的团队名称"
+                maxlength="50"
+                @keyup.enter="handleRenameTeam"
+              />
+            </div>
+            <div v-if="renameTeamError" class="error-message">{{ renameTeamError }}</div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-cancel" @click="showRenameTeamModal = false">取消</button>
+            <button class="btn-confirm" @click="handleRenameTeam" :disabled="renameTeamLoading">
+              {{ renameTeamLoading ? '保存中...' : '确认' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
   <!-- 邀请成员弹窗 -->
   <Teleport to="body">
     <Transition name="modal">

@@ -62,7 +62,7 @@ const quickSaveWorkflow = inject('quickSaveWorkflow', null)
 const edgeStyle = ref(
   userInfo?.value?.preferences?.canvas?.edgeStyle ||
   localStorage.getItem('canvasEdgeStyle') ||
-  'smoothstep'
+  'bezier'
 )
 const isEdgeHidden = computed(() => edgeStyle.value === 'hidden')
 
@@ -93,7 +93,7 @@ const defaultEdgeOptions = computed(() => ({
 
 // 监听连线样式变化事件
 function handleEdgeStyleChange(event) {
-  const newStyle = event.detail?.style || 'smoothstep'
+  const newStyle = event.detail?.style || 'bezier'
   edgeStyle.value = newStyle
   
   // 更新所有现有连线的样式
@@ -755,7 +755,7 @@ function handleSelectionChange({ nodes }) {
   const nodeIds = nodes.map(n => n.id)
   selectedNodeIds.value = nodeIds
   canvasStore.setSelectedNodeIds(nodeIds)
-  
+
   if (nodes.length === 1) {
     canvasStore.selectNode(nodes[0].id)
     console.log('[Canvas] 选中节点:', nodes[0].id, nodes[0].type)
@@ -1448,7 +1448,9 @@ function handleGlobalDragConnectionEnd(event) {
   const listenerOptions = { capture: true }
   window.removeEventListener('mousemove', handleGlobalDragConnectionMove, listenerOptions)
   window.removeEventListener('mouseup', handleGlobalDragConnectionEnd, listenerOptions)
-  
+
+  console.log('[CanvasBoard] handleGlobalDragConnectionEnd', { isDragging: canvasStore.isDraggingConnection, source: canvasStore.dragConnectionSource })
+
   if (!canvasStore.isDraggingConnection) return
   
   // 检测是否释放在某个节点上
