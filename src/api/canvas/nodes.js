@@ -19,16 +19,17 @@ function getHeaders(options = {}) {
  * 图片生成 - 文生图
  */
 export async function generateImageFromText(params) {
-  const { 
-    prompt, 
-    userPrompt, 
-    model = 'nano-banana-2', 
-    image_size, 
-    size, 
-    aspectRatio = 'auto', 
+  const {
+    prompt,
+    userPrompt,
+    model = 'nano-banana-2',
+    image_size,
+    size,
+    aspectRatio = 'auto',
     count = 1,
     enableGroupGeneration = false,
-    maxGroupImages = 3
+    maxGroupImages = 3,
+    webSearch
   } = params
   
   // 优先使用 image_size，否则使用 size（向后兼容）
@@ -44,6 +45,11 @@ export async function generateImageFromText(params) {
     response_format: 'url',
     enableGroupGeneration,
     maxGroupImages
+  }
+
+  // Seedream 5.0 Lite 联网搜索
+  if (webSearch !== undefined) {
+    body.webSearch = webSearch
   }
   
   // Seedream 组图生成参数

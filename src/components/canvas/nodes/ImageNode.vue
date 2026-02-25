@@ -205,6 +205,7 @@ const selectedCount = ref(props.data.count || 1)
 const imageSize = ref(props.data.imageSize || '4K') // 尺寸选项（仅 nano-banana-2）
 const enableGroupGeneration = ref(props.data.enableGroupGeneration || false) // 组图生成开关
 const maxGroupImages = ref(Math.max(2, Math.min(10, props.data.maxGroupImages || 3))) // 最大组图数量（限制在2-10之间，默认3）
+const enableWebSearch = ref(props.data.enableWebSearch !== undefined ? props.data.enableWebSearch : true) // 联网搜索开关（默认开启）
 
 // 组图数量增减控制
 function incrementGroupImages() {
@@ -813,6 +814,16 @@ const isMJModel = computed(() => {
   return isMJ
 })
 
+// 辅助函数：检查是否是 Seedream 5.0 Lite 模型
+function checkIsSeedream50Lite(model) {
+  if (!model) return false
+  const modelName = (model.name || model.label || model.value || '').toLowerCase()
+  const modelValue = (model.value || '').toLowerCase()
+  const actualModel = (model.actualModel || '').toLowerCase()
+  const searchText = `${modelName} ${modelValue} ${actualModel}`
+  return searchText.includes('seedream-5.0') || searchText.includes('seedream-5-0') || searchText.includes('5-0-260128')
+}
+
 // 辅助函数：检查是否是 Seedream 4.5 模型（包括即梦4.5/jimeng-4.5）
 function checkIsSeedream45(model) {
   if (!model) return false
@@ -879,6 +890,12 @@ const isSeedream45Model = computed(() => {
 // Seedream 高级选项显示控制
 const showSeedreamAdvancedOptions = ref(false)
 
+// 检测是否是 Seedream 5.0 Lite 模型
+const isSeedream50LiteModel = computed(() => {
+  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  return checkIsSeedream50Lite(currentModel)
+})
+
 // 限制 maxGroupImages 在 2-10 之间
 watch(maxGroupImages, (newVal) => {
   if (newVal < 2) {
@@ -897,11 +914,15 @@ const imageSizes = computed(() => {
   const pointsCost = currentModel?.pointsCost
   const apiType = currentModel?.apiType
   
+  // Seedream 5.0 只支持 2K 和 3K
+  const isSeedream50 = checkIsSeedream50Lite(currentModel)
   // Seedream 4.5（包括即梦4.5/jimeng-4.5）不支持 1K，只支持 2K 和 4K
   const isSeedream45 = checkIsSeedream45(currentModel)
-  const supportedSizes = isSeedream45
-    ? ['2K', '4K']
-    : ['1K', '2K', '4K']
+  const supportedSizes = isSeedream50
+    ? ['2K', '3K']
+    : isSeedream45
+      ? ['2K', '4K']
+      : ['1K', '2K', '4K']
   
   // 如果是按分辨率计费且 pointsCost 是对象
   if (currentModel?.hasResolutionPricing && typeof pointsCost === 'object') {
@@ -3795,7 +3816,9 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     ...(isMJModel.value && { botType: botType.value }),
     // Seedream 组图生成参数
     enableGroupGeneration: enableGroupGeneration.value,
-    maxGroupImages: maxGroupImages.value
+    maxGroupImages: maxGroupImages.value,
+    // Seedream 5.0 Lite 联网搜索参数
+    ...(isSeedream50LiteModel.value && { webSearch: enableWebSearch.value })
   }
   
   if (finalReferenceImages.length > 0) {
@@ -5887,16 +5910,25 @@ async function handleDrop(event) {
       </div>
       
       <!-- Seedream 4.5 高级选项 - 组图生成 -->
-      <template v-if="isSeedream45Model">
+      <template v-if="isSeedream45Model || isSeedream50LiteModel">
         <!-- 展开/收起按钮 -->
         <button class="sora2-collapse-trigger" @click="showSeedreamAdvancedOptions = !showSeedreamAdvancedOptions">
           <span class="sora2-collapse-icon" :class="{ 'expanded': showSeedreamAdvancedOptions }">∧</span>
           <span>{{ showSeedreamAdvancedOptions ? '收起' : '扩展' }}</span>
         </button>
-        
+
         <!-- 高级选项内容 -->
         <Transition name="slide-down">
           <div v-if="showSeedreamAdvancedOptions" class="sora2-advanced-options seedream-advanced">
+            <!-- 联网搜索开关（仅 Seedream 5.0 Lite） -->
+            <div v-if="isSeedream50LiteModel" class="sora2-option-row">
+              <span class="sora2-option-label">🔍 联网搜索</span>
+              <label class="sora2-toggle-switch">
+                <input type="checkbox" v-model="enableWebSearch" />
+                <span class="sora2-toggle-slider"></span>
+              </label>
+            </div>
+
             <!-- 组图生成开关 -->
             <div class="sora2-option-row">
               <span class="sora2-option-label">🖼️ 组图生成 

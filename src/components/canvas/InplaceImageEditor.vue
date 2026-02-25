@@ -124,7 +124,7 @@ const selectedSize = ref('1K') // 1K, 2K, 4K
 const selectedCount = ref(1) // 1, 2, 4
 
 // 尺寸选项（点击循环切换）
-const sizeOptions = ['1K', '2K', '4K']
+const sizeOptions = ['1K', '2K', '3K', '4K']
 
 // 张数选项（点击循环切换）
 const countOptions = [1, 2, 4]

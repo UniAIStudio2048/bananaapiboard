@@ -72,10 +72,10 @@ const router = createRouter({
   ]
 })
 
-// 路由守卫 - 检查登录状态和更新页面标题
+// 路由守卫 - 检查登录状态（标题始终固定为「ai绘图创作」）
 router.beforeEach(async (to, from, next) => {
-  // 更新页面标题
-  document.title = to.meta.title ? `${to.meta.title} - ai绘图创作` : 'ai绘图创作'
+  // 标题固定为「ai绘图创作」，不再根据路由动态变更
+  document.title = 'ai绘图创作'
   
   // 检查是否需要登录
   if (to.meta.requiresAuth) {
