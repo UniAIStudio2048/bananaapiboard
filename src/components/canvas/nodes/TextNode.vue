@@ -801,12 +801,14 @@ async function handleLLMGenerate() {
           console.log('[TextNode] 图片上传成功:', uploadedImageUrls)
         }
         
-        // 视频 URL 直接传递（兼容 OpenAI vision 格式，无需上传转换）
+        // 视频也需要上传到云端，确保公网可访问（blob:/内网 URL 会导致 LLM API 报 base64 解码错误）
+        let uploadedVideoUrls = []
         if (videoUrls.length > 0) {
-          console.log('[TextNode] 视频URL直接传递:', videoUrls)
+          uploadedVideoUrls = await uploadVideosToCloud(videoUrls)
+          console.log('[TextNode] 视频上传成功:', uploadedVideoUrls)
         }
-        
-        processedImages = [...videoUrls, ...uploadedImageUrls]
+
+        processedImages = [...uploadedVideoUrls, ...uploadedImageUrls]
         
         // 将媒体 URL 添加到用户消息中
         userMessage.images = processedImages
@@ -931,6 +933,68 @@ async function uploadImagesToQiniu(imageUrls) {
     }
   }
   
+  return uploadedUrls
+}
+
+// 上传视频到云端（确保 LLM API 可访问，避免 blob:/内网 URL 导致 base64 解码失败）
+async function uploadVideosToCloud(videoUrls) {
+  const uploadedUrls = []
+
+  for (const videoUrl of videoUrls) {
+    try {
+      // 已经是 CDN 公网 URL，直接使用
+      if (videoUrl.includes('qiniucdn.com') || videoUrl.includes('clouddn.com') || videoUrl.includes('myqcloud.com') || videoUrl.includes('qbox.me')) {
+        uploadedUrls.push(videoUrl)
+        continue
+      }
+
+      // 其他 https 公网 URL（非内网），直接使用
+      if (videoUrl.startsWith('https://') && !videoUrl.includes('localhost') && !videoUrl.includes('127.0.0.1') && !videoUrl.includes('192.168.') && !videoUrl.includes('10.')) {
+        uploadedUrls.push(videoUrl)
+        continue
+      }
+
+      console.log('[TextNode] 视频需要上传到云端:', videoUrl.substring(0, 60))
+
+      // 下载视频数据（支持 blob:、/api/、内网 URL 等）
+      const response = await fetch(videoUrl)
+      if (!response.ok) throw new Error(`获取视频失败: ${response.status}`)
+      const blob = await response.blob()
+
+      // 根据 MIME 类型确定扩展名
+      const mimeType = blob.type || 'video/mp4'
+      const extMap = { 'video/mp4': '.mp4', 'video/webm': '.webm', 'video/quicktime': '.mov', 'video/x-msvideo': '.avi' }
+      const ext = extMap[mimeType] || '.mp4'
+
+      // 通过后端上传接口转存到云端（/api/images/upload 已支持视频文件）
+      const formData = new FormData()
+      formData.append('images', new File([blob], `video_${Date.now()}${ext}`, { type: mimeType }))
+
+      const token = localStorage.getItem('token')
+      const uploadResponse = await fetch(getApiUrl('/api/images/upload'), {
+        method: 'POST',
+        headers: {
+          ...getTenantHeaders(),
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: formData
+      })
+
+      if (!uploadResponse.ok) throw new Error('视频上传失败')
+
+      const uploadResult = await uploadResponse.json()
+      if (uploadResult.urls && uploadResult.urls.length > 0) {
+        console.log('[TextNode] 视频上传成功:', uploadResult.urls[0].substring(0, 60))
+        uploadedUrls.push(uploadResult.urls[0])
+      } else {
+        throw new Error('上传返回数据异常')
+      }
+    } catch (error) {
+      console.error('[TextNode] 视频上传失败，尝试直接使用原URL:', error, videoUrl.substring(0, 60))
+      uploadedUrls.push(videoUrl)
+    }
+  }
+
   return uploadedUrls
 }
 
