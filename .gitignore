@@ -17,6 +17,9 @@ dist
 dist-ssr
 *.local
 
+# Local build artifacts
+dist-brainjuice/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
