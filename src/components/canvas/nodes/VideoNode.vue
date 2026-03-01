@@ -8786,15 +8786,14 @@ function handleToolbarPreview() {
   line-height: 1.3;
 }
 
-/* 浅色主题 */
-.light-theme .prompt-tag-hint {
-  color: rgba(0, 0, 0, 0.4);
+/* 浅色主题（白昼模式） */
+:root.canvas-theme-light .video-node .prompt-tag-hint {
+  color: rgba(0, 0, 0, 0.45);
 }
-.light-theme .panel-frame-tag-badge {
-  /* 浅色主题下使用半透明深灰底 */
+:root.canvas-theme-light .video-node .panel-frame-tag-badge {
   background: rgba(0, 0, 0, 0.6);
 }
-.light-theme .prompt-media-tag {
+:root.canvas-theme-light .video-node .prompt-media-tag {
   background: rgba(0, 0, 0, 0.06);
   border-bottom-color: rgba(0, 0, 0, 0.3);
 }

@@ -120,6 +120,12 @@ const isTransitioning = ref(false)
 const showModePopup = ref(false)
 let modeHoverTimer = null
 
+// 性能优化: 追踪画布拖拽状态，防止自动保存在拖拽中途触发导致卡顿
+// 监听 CanvasBoard 发出的 canvas-drag-start / canvas-drag-end 自定义事件
+let _isCanvasDragging = false
+function _onCanvasDragStart() { _isCanvasDragging = true }
+function _onCanvasDragEnd() { _isCanvasDragging = false }
+
 // 积分转让
 const showPointsTransferModal = ref(false)
 const showTransferConfirmModal = ref(false)
@@ -242,41 +248,34 @@ const selectedGroupNode = computed(() => {
   // 检查 selectedNodeId
   const selectedId = canvasStore.selectedNodeId
   if (!selectedId) return null
-  
+
   // 查找节点
   const node = canvasStore.nodes.find(n => n.id === selectedId)
   if (node && node.type === 'group') {
-    console.log('[Canvas] 检测到选中编组:', node.id)
     return node
   }
   return null
 })
 
 // 选中的图像节点（用于显示图像工具栏）
+// 性能优化: 移除高频 console.log，避免每次节点选择都产生大量日志输出导致卡顿
 const selectedImageNode = computed(() => {
   const selectedId = canvasStore.selectedNodeId
-  console.log('[Canvas] selectedImageNode 检查 - selectedId:', selectedId)
   if (!selectedId) return null
-  
+
   const node = canvasStore.nodes.find(n => n.id === selectedId)
-  console.log('[Canvas] selectedImageNode 检查 - node:', node?.id, node?.type, node?.data)
   if (!node) return null
-  
+
   // 检查是否是图像类型节点（包括所有可能的图像类型）
   const imageTypes = ['image', 'image-input', 'image-gen', 'text-to-image', 'image-to-image']
   if (imageTypes.includes(node.type)) {
     // 检查是否有图片内容（输出图片或源图片）
     const hasOutput = node.data?.output?.urls?.length > 0 || node.data?.output?.url
     const hasSource = node.data?.sourceImages?.length > 0
-    
-    console.log('[Canvas] 图像节点检查:', { hasOutput, hasSource, output: node.data?.output, sourceImages: node.data?.sourceImages })
-    
+
     if (hasOutput || hasSource) {
-      console.log('[Canvas] ✅ 检测到选中图像节点，应显示工具栏:', node.id, node.type)
       return node
     }
-  } else {
-    console.log('[Canvas] 节点类型不匹配:', node.type, '不在', imageTypes)
   }
   return null
 })
@@ -833,8 +832,14 @@ function handleWorkflowSaved(workflow) {
 
 // 自动保存函数
 async function autoSaveWorkflow() {
+  // 性能优化: 拖拽中途跳过自动保存，避免在高频事件期间触发昂贵的序列化和网络请求
+  if (_isCanvasDragging) {
+    console.log('[Canvas] 自动保存跳过：节点拖拽中')
+    return
+  }
+
   const currentTab = canvasStore.getCurrentTab()
-  
+
   // 检查是否有内容需要保存
   if (!currentTab) {
     return
@@ -2147,7 +2152,11 @@ onMounted(async () => {
   // 🔧 初始化画布诊断工具 - 用于调试画布强制重新加载问题
   // 在浏览器控制台运行 printCanvasDiagnosticReport() 查看诊断报告
   initCanvasDiagnostic(canvasStore)
-  
+
+  // 性能优化: 监听拖拽状态，防止自动保存在拖拽中途触发
+  window.addEventListener('canvas-drag-start', _onCanvasDragStart)
+  window.addEventListener('canvas-drag-end', _onCanvasDragEnd)
+
   await loadUserInfo()
 
   // 加载画布主题偏好
@@ -2244,6 +2253,9 @@ onUnmounted(() => {
   window.removeEventListener('user-info-updated', handleUserInfoUpdated)
   window.removeEventListener('popstate', handlePopState)
   window.removeEventListener('unload', handleUnload)
+  // 性能优化: 清理拖拽状态监听器
+  window.removeEventListener('canvas-drag-start', _onCanvasDragStart)
+  window.removeEventListener('canvas-drag-end', _onCanvasDragEnd)
   stopAutoSave()
   stopHistoryAutoSave()
 

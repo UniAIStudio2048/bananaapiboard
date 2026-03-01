@@ -6,7 +6,87 @@
           <!-- 标题栏 -->
           <div class="panel-header">
             <span class="panel-title">摄影机控制</span>
-            <button class="save-btn" @click="handleSave">保存</button>
+            <div class="header-actions">
+              <!-- 预设选择器 -->
+              <div class="preset-selector" ref="presetDropdownRef">
+                <button class="preset-trigger" @click="togglePresetDropdown">
+                  <span class="preset-current-name">{{ activePreset ? activePreset.name : '选择预设' }}</span>
+                  <svg class="preset-arrow" :class="{ open: showPresetDropdown }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                    <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <!-- 下拉菜单 -->
+                <Transition name="dropdown-fade">
+                  <div v-if="showPresetDropdown" class="preset-dropdown">
+                    <div class="preset-dropdown-header">
+                      <span>镜头预设 ({{ presets.length }}/10)</span>
+                    </div>
+                    <div class="preset-list" v-if="presets.length > 0">
+                      <div
+                        v-for="preset in presets"
+                        :key="preset.id"
+                        :class="['preset-item', { active: activePresetId === preset.id }]"
+                      >
+                        <!-- 重命名模式 -->
+                        <div v-if="renamingPresetId === preset.id" class="preset-rename-row">
+                          <input
+                            ref="renameInputRef"
+                            v-model="renameValue"
+                            class="preset-rename-input"
+                            maxlength="20"
+                            @keydown.enter="confirmRename(preset.id)"
+                            @keydown.escape="cancelRename"
+                            @click.stop
+                          />
+                          <button class="preset-action-btn confirm" @click.stop="confirmRename(preset.id)" title="确认">✓</button>
+                          <button class="preset-action-btn cancel" @click.stop="cancelRename" title="取消">✕</button>
+                        </div>
+                        <!-- 正常显示 -->
+                        <template v-else>
+                          <div class="preset-item-main" @click="loadPreset(preset.id)">
+                            <span class="preset-item-name">{{ preset.name }}</span>
+                            <span class="preset-item-desc">{{ preset.summary }}</span>
+                          </div>
+                          <div class="preset-item-actions">
+                            <button class="preset-action-btn" @click.stop="startRename(preset)" title="重命名">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                            <button class="preset-action-btn delete" @click.stop="deletePreset(preset.id)" title="删除">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            </button>
+                          </div>
+                        </template>
+                      </div>
+                    </div>
+                    <div v-else class="preset-empty">暂无预设，点击下方保存当前配置</div>
+                    <!-- 保存为新预设 -->
+                    <div class="preset-save-section">
+                      <div v-if="showSaveInput" class="preset-save-row">
+                        <input
+                          ref="saveInputRef"
+                          v-model="newPresetName"
+                          class="preset-save-input"
+                          placeholder="输入预设名称"
+                          maxlength="20"
+                          @keydown.enter="saveAsPreset"
+                          @keydown.escape="showSaveInput = false"
+                        />
+                        <button class="preset-save-confirm" @click="saveAsPreset">保存</button>
+                      </div>
+                      <button
+                        v-else
+                        class="preset-add-btn"
+                        :disabled="presets.length >= 10"
+                        @click="openSaveInput"
+                      >
+                        + 保存当前配置为预设
+                      </button>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
+              <button class="save-btn" @click="handleSave">应用</button>
+            </div>
           </div>
 
           <!-- 相机类型切换 -->
@@ -145,18 +225,22 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import WheelSelector from './WheelSelector.vue'
-import { 
-  cameraDatabase, 
-  getCompatibleLenses, 
-  getAvailableApertures, 
+import {
+  cameraDatabase,
+  getCompatibleLenses,
+  getAvailableApertures,
   getAvailableEffects,
   generateCameraPrompt,
   getCameraTypes,
   getCamerasByType,
   getCameraEffects
 } from '@/config/canvas/cameraDatabase'
+
+const PRESETS_STORAGE_KEY = 'camera-control-presets'
+const LAST_PRESET_KEY = 'camera-control-last-preset'
+const MAX_PRESETS = 10
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -181,22 +265,224 @@ const selectedFocalLength = ref(35)
 const selectedAperture = ref(2.0)
 const selectedEffects = ref([])
 
+// ========== 预设管理 ==========
+const presets = ref([])
+const activePresetId = ref(null)
+const showPresetDropdown = ref(false)
+const showSaveInput = ref(false)
+const newPresetName = ref('')
+const renamingPresetId = ref(null)
+const renameValue = ref('')
+const presetDropdownRef = ref(null)
+const saveInputRef = ref(null)
+const renameInputRef = ref(null)
+
+// 当前激活的预设
+const activePreset = computed(() => presets.value.find(p => p.id === activePresetId.value))
+
+// 加载预设列表
+function loadPresetsFromStorage() {
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY)
+    presets.value = raw ? JSON.parse(raw) : []
+  } catch { presets.value = [] }
+}
+
+// 保存预设列表到 localStorage
+function savePresetsToStorage() {
+  localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets.value))
+}
+
+// 记录上次使用的预设ID
+function saveLastPresetId(id) {
+  if (id) {
+    localStorage.setItem(LAST_PRESET_KEY, id)
+  } else {
+    localStorage.removeItem(LAST_PRESET_KEY)
+  }
+}
+
+// 获取当前配置快照
+function getCurrentSettings() {
+  return {
+    cameraType: cameraType.value,
+    camera: selectedCamera.value,
+    lens: selectedLens.value,
+    focalLength: selectedFocalLength.value,
+    aperture: selectedAperture.value,
+    effects: [...selectedEffects.value]
+  }
+}
+
+// 生成预设摘要
+function makePresetSummary(settings) {
+  const cam = cameraDatabase.cameras.find(c => c.id === settings.camera)
+  const parts = []
+  if (cam) parts.push(cam.name)
+  parts.push(`${settings.focalLength}mm`)
+  parts.push(`f/${settings.aperture}`)
+  return parts.join(' · ')
+}
+
+// 应用预设配置到当前面板（不触发 watch 的自动重置）
+let applyingPreset = false
+function applySettings(settings) {
+  applyingPreset = true
+  cameraType.value = settings.cameraType || 'DIGITAL'
+  // 延迟设置具体值，等 watch 处理完类型切换
+  nextTick(() => {
+    if (settings.camera) selectedCamera.value = settings.camera
+    nextTick(() => {
+      if (settings.lens) selectedLens.value = settings.lens
+      nextTick(() => {
+        if (settings.focalLength) selectedFocalLength.value = settings.focalLength
+        if (settings.aperture) selectedAperture.value = settings.aperture
+        if (settings.effects) selectedEffects.value = [...settings.effects]
+        applyingPreset = false
+      })
+    })
+  })
+}
+
+// 切换下拉菜单
+function togglePresetDropdown() {
+  showPresetDropdown.value = !showPresetDropdown.value
+  if (!showPresetDropdown.value) {
+    showSaveInput.value = false
+    renamingPresetId.value = null
+  }
+}
+
+// 点击外部关闭下拉
+function handleClickOutside(e) {
+  if (presetDropdownRef.value && !presetDropdownRef.value.contains(e.target)) {
+    showPresetDropdown.value = false
+    showSaveInput.value = false
+    renamingPresetId.value = null
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('mousedown', handleClickOutside)
+})
+onUnmounted(() => {
+  document.removeEventListener('mousedown', handleClickOutside)
+})
+
+// 加载预设
+function loadPreset(id) {
+  const preset = presets.value.find(p => p.id === id)
+  if (!preset) return
+  activePresetId.value = id
+  saveLastPresetId(id)
+  applySettings(preset.settings)
+  showPresetDropdown.value = false
+}
+
+// 打开保存输入框
+function openSaveInput() {
+  if (presets.value.length >= MAX_PRESETS) return
+  showSaveInput.value = true
+  newPresetName.value = ''
+  nextTick(() => saveInputRef.value?.focus())
+}
+
+// 保存为新预设
+function saveAsPreset() {
+  const name = newPresetName.value.trim()
+  if (!name || presets.value.length >= MAX_PRESETS) return
+  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+  const settings = getCurrentSettings()
+  const preset = { id, name, settings, summary: makePresetSummary(settings) }
+  presets.value.push(preset)
+  activePresetId.value = id
+  savePresetsToStorage()
+  saveLastPresetId(id)
+  showSaveInput.value = false
+  newPresetName.value = ''
+}
+
+// 删除预设
+function deletePreset(id) {
+  const idx = presets.value.findIndex(p => p.id === id)
+  if (idx === -1) return
+  presets.value.splice(idx, 1)
+  if (activePresetId.value === id) {
+    activePresetId.value = null
+    saveLastPresetId(null)
+  }
+  savePresetsToStorage()
+}
+
+// 开始重命名
+function startRename(preset) {
+  renamingPresetId.value = preset.id
+  renameValue.value = preset.name
+  nextTick(() => {
+    const inputs = renameInputRef.value
+    const el = Array.isArray(inputs) ? inputs[0] : inputs
+    el?.focus()
+    el?.select()
+  })
+}
+
+// 确认重命名
+function confirmRename(id) {
+  const name = renameValue.value.trim()
+  if (!name) { cancelRename(); return }
+  const preset = presets.value.find(p => p.id === id)
+  if (preset) {
+    preset.name = name
+    savePresetsToStorage()
+  }
+  renamingPresetId.value = null
+}
+
+// 取消重命名
+function cancelRename() {
+  renamingPresetId.value = null
+}
+
+// 当预设激活时，如果用户手动调整了参数，自动更新该预设的配置
+function updateActivePresetIfNeeded() {
+  if (applyingPreset || !activePresetId.value) return
+  const preset = presets.value.find(p => p.id === activePresetId.value)
+  if (!preset) return
+  preset.settings = getCurrentSettings()
+  preset.summary = makePresetSummary(preset.settings)
+  savePresetsToStorage()
+}
+
 // 初始化设置
 watch(() => props.visible, (newVal) => {
-  if (newVal && props.initialSettings) {
-    const settings = props.initialSettings
-    if (settings.camera) {
-      // 查找相机类型
+  if (newVal) {
+    loadPresetsFromStorage()
+    const hasInitial = props.initialSettings && props.initialSettings.camera
+    if (hasInitial) {
+      // 有外部传入的初始设置，优先使用
+      const settings = props.initialSettings
       const camera = cameraDatabase.cameras.find(c => c.id === settings.camera)
       if (camera) {
         cameraType.value = camera.type
         selectedCamera.value = settings.camera
       }
+      if (settings.lens) selectedLens.value = settings.lens
+      if (settings.focalLength) selectedFocalLength.value = settings.focalLength
+      if (settings.aperture) selectedAperture.value = settings.aperture
+      if (settings.effects) selectedEffects.value = [...settings.effects]
+    } else {
+      // 没有外部设置，尝试加载上次使用的预设
+      const lastId = localStorage.getItem(LAST_PRESET_KEY)
+      if (lastId && presets.value.find(p => p.id === lastId)) {
+        loadPreset(lastId)
+      }
     }
-    if (settings.lens) selectedLens.value = settings.lens
-    if (settings.focalLength) selectedFocalLength.value = settings.focalLength
-    if (settings.aperture) selectedAperture.value = settings.aperture
-    if (settings.effects) selectedEffects.value = [...settings.effects]
+  } else {
+    // 关闭面板时，保存当前激活预设的最新状态
+    if (activePresetId.value) {
+      updateActivePresetIfNeeded()
+    }
+    showPresetDropdown.value = false
   }
 }, { immediate: true })
 
@@ -391,8 +677,10 @@ function handleClose() {
   emit('close')
 }
 
-// 保存
+// 保存（应用到节点）
 function handleSave() {
+  // 同步更新激活预设的最新配置
+  updateActivePresetIfNeeded()
   emit('save', {
     camera: selectedCamera.value,
     cameraName: selectedCameraData.value?.name || '',
@@ -447,20 +735,304 @@ function handleSave() {
   color: white;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .save-btn {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(59, 130, 246, 0.25);
   border: none;
   border-radius: 8px;
   padding: 8px 16px;
-  color: rgba(255, 255, 255, 0.7);
+  color: #60a5fa;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .save-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(59, 130, 246, 0.35);
+  color: #93bbfd;
+}
+
+/* 预设选择器 */
+.preset-selector {
+  position: relative;
+}
+
+.preset-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  max-width: 180px;
+}
+
+.preset-trigger:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
   color: white;
+}
+
+.preset-current-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-arrow {
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+
+.preset-arrow.open {
+  transform: rotate(180deg);
+}
+
+/* 预设下拉菜单 */
+.preset-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 280px;
+  background: rgba(35, 35, 42, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.preset-dropdown-header {
+  padding: 10px 14px 8px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.preset-list {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.preset-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-radius: 8px;
+  transition: background 0.15s;
+}
+
+.preset-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.preset-item.active {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.preset-item-main {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.preset-item-name {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-item.active .preset-item-name {
+  color: #60a5fa;
+}
+
+.preset-item-desc {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preset-item-actions {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.preset-item:hover .preset-item-actions {
+  opacity: 1;
+}
+.preset-action-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.preset-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.preset-action-btn.delete:hover {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+}
+
+.preset-action-btn.confirm {
+  color: #4ade80;
+}
+
+.preset-action-btn.confirm:hover {
+  background: rgba(74, 222, 128, 0.15);
+}
+
+.preset-action-btn.cancel {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+/* 重命名行 */
+.preset-rename-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+}
+
+.preset-rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 6px;
+  color: white;
+  font-size: 12px;
+  outline: none;
+}
+
+.preset-rename-input:focus {
+  border-color: #60a5fa;
+}
+
+.preset-empty {
+  padding: 16px 14px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+/* 保存新预设区域 */
+.preset-save-section {
+  padding: 8px 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.preset-add-btn {
+  width: 100%;
+  padding: 8px;
+  background: transparent;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.preset-add-btn:hover:not(:disabled) {
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.preset-add-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.preset-save-row {
+  display: flex;
+  gap: 6px;
+}
+
+.preset-save-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  color: white;
+  font-size: 12px;
+  outline: none;
+}
+
+.preset-save-input:focus {
+  border-color: #60a5fa;
+}
+
+.preset-save-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.preset-save-confirm {
+  padding: 6px 14px;
+  background: rgba(59, 130, 246, 0.3);
+  border: none;
+  border-radius: 8px;
+  color: #60a5fa;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.preset-save-confirm:hover {
+  background: rgba(59, 130, 246, 0.45);
+}
+
+/* 下拉动画 */
+.dropdown-fade-enter-active,
+.dropdown-fade-leave-active {
+  transition: all 0.2s ease;
+}
+
+.dropdown-fade-enter-from,
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 /* 类型切换 */
@@ -776,13 +1348,109 @@ function handleSave() {
 }
 
 :root.canvas-theme-light .save-btn {
-  background: rgba(0, 0, 0, 0.05);
-  color: #666;
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
 }
 
 :root.canvas-theme-light .save-btn:hover {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgba(59, 130, 246, 0.2);
+  color: #1d4ed8;
+}
+
+:root.canvas-theme-light .preset-trigger {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.65);
+}
+
+:root.canvas-theme-light .preset-trigger:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.15);
   color: #333;
+}
+
+:root.canvas-theme-light .preset-dropdown {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .preset-dropdown-header {
+  color: rgba(0, 0, 0, 0.45);
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .preset-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .preset-item.active {
+  background: rgba(59, 130, 246, 0.08);
+}
+
+:root.canvas-theme-light .preset-item-name {
+  color: rgba(0, 0, 0, 0.85);
+}
+
+:root.canvas-theme-light .preset-item.active .preset-item-name {
+  color: #2563eb;
+}
+
+:root.canvas-theme-light .preset-item-desc {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+:root.canvas-theme-light .preset-action-btn {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+:root.canvas-theme-light .preset-action-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+:root.canvas-theme-light .preset-rename-input {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #333;
+}
+
+:root.canvas-theme-light .preset-empty {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+:root.canvas-theme-light .preset-save-section {
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .preset-add-btn {
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.45);
+}
+
+:root.canvas-theme-light .preset-add-btn:hover:not(:disabled) {
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #2563eb;
+  background: rgba(59, 130, 246, 0.04);
+}
+
+:root.canvas-theme-light .preset-save-input {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #333;
+}
+
+:root.canvas-theme-light .preset-save-input::placeholder {
+  color: rgba(0, 0, 0, 0.3);
+}
+
+:root.canvas-theme-light .preset-save-confirm {
+  background: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+}
+
+:root.canvas-theme-light .preset-save-confirm:hover {
+  background: rgba(59, 130, 246, 0.2);
 }
 
 :root.canvas-theme-light .type-tab {

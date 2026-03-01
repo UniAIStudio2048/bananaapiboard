@@ -142,6 +142,10 @@ const ALIGNMENT_THROTTLE_MS = 50  // 对齐计算最小间隔（毫秒）
 // 🔧 内存优化：追踪所有待执行的定时器，组件卸载时统一清理
 const pendingTimeouts = new Set()
 
+// 性能优化：组内节点位置同步的 rAF 节流句柄
+// 拖拽组节点时 onNodeDrag 每帧都触发，用 rAF 确保每帧最多同步一次位置
+let _syncGroupRafId = null
+
 // Vue Flow 实例
 const { 
   onConnect, 
@@ -420,29 +424,34 @@ onNodeDragStop((event) => {
 // 处理节点拖拽中（实时同步）
 onNodeDrag((event) => {
   const node = event.node
-  
+
   // 🚀 性能优化：标记拖拽开始，首次拖拽时触发
   if (!isDraggingNode.value) {
     isDraggingNode.value = true
     // 通知节点降低渲染质量
     window.dispatchEvent(new CustomEvent('canvas-drag-start'))
   }
-  
+
   // 如果拖拽的是编组节点，实时同步组内节点位置
+  // 性能优化: 用 rAF 节流，每帧最多同步一次，拖大组时不再每帧都做 O(n) 位置遍历
   if (node.type === 'group' && node.data?.nodeIds && node.data?.nodeOffsets) {
-    syncGroupChildrenPositions(node)
+    if (_syncGroupRafId) cancelAnimationFrame(_syncGroupRafId)
+    _syncGroupRafId = requestAnimationFrame(() => {
+      syncGroupChildrenPositions(node)
+      _syncGroupRafId = null
+    })
   }
-  
+
   // 如果拖拽的是组内节点，自动调整组的大小
   if (node.type !== 'group' && node.data?.groupId) {
     adjustGroupSizeForNode(node)
   }
-  
+
   // 🚀 性能优化：对齐辅助线计算节流
   // 当节点数量较多时（>10），使用 requestAnimationFrame 节流
   const nodeCount = canvasStore.nodes.length
   const now = performance.now()
-  
+
   if (nodeCount > 10) {
     // 节点多时，使用节流避免每帧都计算
     if (now - lastAlignmentCalcTime.value < ALIGNMENT_THROTTLE_MS) {
@@ -450,7 +459,7 @@ onNodeDrag((event) => {
     }
     lastAlignmentCalcTime.value = now
   }
-  
+
   // 使用 requestAnimationFrame 确保不阻塞渲染
   if (alignmentThrottleTimer.value) {
     cancelAnimationFrame(alignmentThrottleTimer.value)
@@ -1099,23 +1108,24 @@ function handleMouseDown(event) {
 }
 
 // 鼠标移动事件（用于空格+拖动平移）
+// 性能优化: 提前退出检查，只有实际在平移时才处理事件，减少无效计算
 function handleMouseMove(event) {
-  // 如果正在平移
-  if (isPanning.value && isSpacePressed.value) {
-    event.preventDefault()
-    
-    const deltaX = event.clientX - panStart.value.x
-    const deltaY = event.clientY - panStart.value.y
-    
-    const viewport = getViewport()
-    setViewport({
-      x: viewport.x + deltaX,
-      y: viewport.y + deltaY,
-      zoom: viewport.zoom
-    })
-    
-    panStart.value = { x: event.clientX, y: event.clientY }
-  }
+  // 提前退出：不在平移状态时直接返回，避免每次鼠标移动都执行代码
+  if (!isPanning.value || !isSpacePressed.value) return
+
+  event.preventDefault()
+
+  const deltaX = event.clientX - panStart.value.x
+  const deltaY = event.clientY - panStart.value.y
+
+  const viewport = getViewport()
+  setViewport({
+    x: viewport.x + deltaX,
+    y: viewport.y + deltaY,
+    zoom: viewport.zoom
+  })
+
+  panStart.value = { x: event.clientX, y: event.clientY }
 }
 
 // 鼠标释放事件（用于空格+拖动平移）
@@ -1288,28 +1298,25 @@ function handleViewportChange(viewport) {
 }
 
 // 监听 store 的 viewport 变化，同步到 VueFlow（支持滑块拖动等外部控制）
+// 性能优化: 改用浅监听 + 手动比对字段，避免 deep:true 对整个 viewport 对象做深度递归代理
 watch(
-  () => canvasStore.viewport,
-  (newViewport) => {
+  () => [canvasStore.viewport.x, canvasStore.viewport.y, canvasStore.viewport.zoom],
+  ([newX, newY, newZoom]) => {
     if (!setViewport || !getViewport) return
-    
+
     // 获取当前 VueFlow 的视口
     const currentViewport = getViewport()
-    
+
     // 检查是否需要更新（避免不必要的更新和循环）
-    const needsUpdate = 
-      Math.abs(currentViewport.x - newViewport.x) > 0.01 ||
-      Math.abs(currentViewport.y - newViewport.y) > 0.01 ||
-      Math.abs(currentViewport.zoom - newViewport.zoom) > 0.001
-    
+    const needsUpdate =
+      Math.abs(currentViewport.x - newX) > 0.01 ||
+      Math.abs(currentViewport.y - newY) > 0.01 ||
+      Math.abs(currentViewport.zoom - newZoom) > 0.001
+
     if (needsUpdate) {
       // 标记正在从外部更新，防止 handleViewportChange 触发循环
       isExternalViewportUpdate = true
-      setViewport({
-        x: newViewport.x,
-        y: newViewport.y,
-        zoom: newViewport.zoom
-      })
+      setViewport({ x: newX, y: newY, zoom: newZoom })
       // 延迟重置标志，确保 viewport-change 事件已被处理
       const viewportTimeoutId = setTimeout(() => {
         pendingTimeouts.delete(viewportTimeoutId)
@@ -1317,8 +1324,7 @@ watch(
       }, 50)
       pendingTimeouts.add(viewportTimeoutId)
     }
-  },
-  { deep: true }
+  }
 )
 
 // 处理边的变化（包括删除）
@@ -2220,6 +2226,12 @@ onUnmounted(() => {
   if (alignmentThrottleTimer.value) {
     cancelAnimationFrame(alignmentThrottleTimer.value)
     alignmentThrottleTimer.value = null
+  }
+
+  // 🔧 清理组内节点同步的 rAF 句柄
+  if (_syncGroupRafId) {
+    cancelAnimationFrame(_syncGroupRafId)
+    _syncGroupRafId = null
   }
   
   // 🔧 清理所有待执行的定时器

@@ -239,29 +239,36 @@ function handleResizeStart(handle, event) {
   document.addEventListener('mouseup', handleResizeEnd)
 }
 
+// 性能优化: resize 过程中使用 rAF 节流 updateNodeInternals，避免每帧都触发连线重计算
+let _resizeRafId = null
+
 // 调整尺寸中
 function handleResizeMove(event) {
   if (!isResizing.value) return
-  
+
   const deltaX = event.clientX - resizeStart.value.x
   const deltaY = event.clientY - resizeStart.value.y
-  
+
   const viewport = canvasStore.viewport
   const zoom = viewport.zoom || 1
-  
+
   const scaledDeltaX = deltaX / zoom
   const scaledDeltaY = deltaY / zoom
-  
+
   if (resizeHandle.value === 'right' || resizeHandle.value === 'corner') {
     nodeWidth.value = Math.max(200, resizeStart.value.width + scaledDeltaX)
   }
-  
+
   if (resizeHandle.value === 'bottom' || resizeHandle.value === 'corner') {
     nodeHeight.value = Math.max(200, resizeStart.value.height + scaledDeltaY)
   }
-  
-  // 实时更新连线位置
-  updateNodeInternals(props.id)
+
+  // 性能优化: 使用 rAF 节流连线位置更新，每帧最多更新一次
+  if (_resizeRafId) cancelAnimationFrame(_resizeRafId)
+  _resizeRafId = requestAnimationFrame(() => {
+    updateNodeInternals(props.id)
+    _resizeRafId = null
+  })
 }
 
 // 结束调整尺寸

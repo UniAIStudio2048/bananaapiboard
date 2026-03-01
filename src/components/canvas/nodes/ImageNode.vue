@@ -154,15 +154,17 @@ const editorInitialTool = ref('')
 const isCanvasDragging = ref(false)
 
 // 🔧 Blob URL 内存管理 - 跟踪所有创建的 blob URL，用于组件卸载时清理
-const createdBlobUrls = ref([])
+// 性能优化: 改用普通数组替代 ref([])，blob URL 跟踪不需要响应式，避免不必要的 Vue 追踪开销
+let createdBlobUrls = []
 
 // 🔧 Blob URL 到服务器 URL 的映射 - 用于在 blob URL 失效时获取已上传的服务器 URL
-const blobToServerUrlMap = ref(new Map())
+// 性能优化: 改用普通 Map 替代 ref(new Map())，映射关系不需要响应式
+let blobToServerUrlMap = new Map()
 
 // 创建并跟踪 blob URL
 function createTrackedBlobUrl(blob) {
   const url = URL.createObjectURL(blob)
-  createdBlobUrls.value.push(url)
+  createdBlobUrls.push(url)
   return url
 }
 
@@ -171,9 +173,9 @@ function revokeTrackedBlobUrl(url) {
   if (!url || !url.startsWith('blob:')) return
   try {
     URL.revokeObjectURL(url)
-    const index = createdBlobUrls.value.indexOf(url)
+    const index = createdBlobUrls.indexOf(url)
     if (index > -1) {
-      createdBlobUrls.value.splice(index, 1)
+      createdBlobUrls.splice(index, 1)
     }
   } catch (e) {
     console.warn('[ImageNode] 释放 blob URL 失败:', e)
@@ -182,15 +184,15 @@ function revokeTrackedBlobUrl(url) {
 
 // 清理所有跟踪的 blob URL
 function cleanupAllBlobUrls() {
-  console.log('[ImageNode] 清理所有 blob URL，数量:', createdBlobUrls.value.length)
-  createdBlobUrls.value.forEach(url => {
+  console.log('[ImageNode] 清理所有 blob URL，数量:', createdBlobUrls.length)
+  createdBlobUrls.forEach(url => {
     try {
       URL.revokeObjectURL(url)
     } catch (e) {
       // 忽略错误
     }
   })
-  createdBlobUrls.value = []
+  createdBlobUrls = []
 }
 
 // 生成参数 - 默认使用模型列表第一个
@@ -4932,6 +4934,31 @@ function removeReferenceImage(index) {
   nodesToRemove.forEach(nodeId => canvasStore.removeNode(nodeId))
 }
 
+// ========== 参考图片 @引用 ==========
+/**
+ * 点击参考图片缩略图，在提示词光标处插入 @图片N 标记
+ */
+function insertMediaTag(media) {
+  const tag = `@${media.label}`
+  const textarea = promptTextareaRef.value
+  if (!textarea) {
+    promptText.value += tag
+    return
+  }
+
+  const start = textarea.selectionStart ?? promptText.value.length
+  const end = textarea.selectionEnd ?? start
+  const before = promptText.value.slice(0, start)
+  const after = promptText.value.slice(end)
+  promptText.value = before + tag + after
+
+  nextTick(() => {
+    textarea.focus()
+    const newPos = start + tag.length
+    textarea.setSelectionRange(newPos, newPos)
+  })
+}
+
 // ========== 参考图片拖拽排序 ==========
 function handleImageMouseDown(event) {
   event.stopPropagation()
@@ -5672,17 +5699,20 @@ async function handleDrop(event) {
           <span class="panel-frames-hint">拖拽图片到此处 · 拖动调整顺序</span>
         </div>
         <div class="panel-frames-list">
-          <!-- 现有图片（支持拖拽排序） -->
-          <div 
-            v-for="(img, index) in referenceImages" 
+          <!-- 现有图片（支持拖拽排序）- 点击插入 @图片N 标记 -->
+          <div
+            v-for="(img, index) in referenceImages"
             :key="img + index"
             class="panel-frame-item"
-            :class="{ 
+            :class="{
               'drag-over': dragOverIndex === index,
-              'dragging': dragSortIndex === index
+              'dragging': dragSortIndex === index,
+              'panel-frame-clickable': true
             }"
             draggable="true"
+            :title="`点击插入 @图片${index + 1}`"
             @mousedown="handleImageMouseDown"
+            @click="insertMediaTag({ type: 'image', index: index + 1, label: `图片${index + 1}` })"
             @dragstart="handleImageDragStart($event, index)"
             @dragover="handleImageDragOver($event, index)"
             @dragleave="handleImageDragLeave"
@@ -5691,6 +5721,7 @@ async function handleDrop(event) {
           >
             <img :src="img" :alt="`图片 ${index + 1}`" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
+            <span class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>
           </div>
           <!-- 添加按钮（直接点击触发文件选择） -->
@@ -5715,7 +5746,7 @@ async function handleDrop(event) {
           ref="promptTextareaRef"
           v-model="promptText"
           class="prompt-input"
-          placeholder="描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)"
+          :placeholder="referenceImages.length > 0 ? '输入提示词，点击上方图片插入 @图片 引用\n例：让@图片1中的人物换上红色衣服（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
           rows="2"
           @keydown="handleKeyDown"
           @input="autoResizeTextarea"
@@ -7124,6 +7155,38 @@ async function handleDrop(event) {
 
 .panel-frame-remove:hover {
   background: #ef4444;
+}
+
+/* @图片N 标签徽章（与视频节点 Kling O1 风格一致） */
+.panel-frame-tag-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.65);
+  color: #f9fafb;
+  font-size: 9px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* 可点击的缩略图 */
+.panel-frame-clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  position: relative;
+  overflow: visible;
+}
+
+.panel-frame-clickable:hover {
+  transform: scale(1.08);
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+  z-index: 2;
 }
 
 .panel-frame-add {

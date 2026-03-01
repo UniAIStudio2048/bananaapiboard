@@ -632,12 +632,12 @@ const upstreamImageUrls = computed(() => {
   const images = []
   for (const node of upstreamNodes.value) {
     const nodeType = node.type || ''
-    
-    // 跳过视频节点
-    if (nodeType === 'video' || nodeType === 'video-input' || nodeType === 'video-gen') {
+
+    // 跳过视频节点和音频节点
+    if (nodeType === 'video' || nodeType === 'video-input' || nodeType === 'video-gen' || nodeType === 'audio' || nodeType === 'audio-input') {
       continue
     }
-    
+
     // 图片输入节点
     if (node.data?.sourceImages?.length) {
       images.push(...node.data.sourceImages)
@@ -652,14 +652,30 @@ const upstreamImageUrls = computed(() => {
   return images
 })
 
-// 上游媒体类型：'video' | 'image' | 'mixed' | null
+// 单独收集上游音频 URL
+const upstreamAudioUrls = computed(() => {
+  const audios = []
+  for (const node of upstreamNodes.value) {
+    const nodeType = node.type || ''
+    if (nodeType === 'audio' || nodeType === 'audio-input') {
+      const url = node.data?.audioUrl || node.data?.output?.url || node.data?.audioData
+      if (url) audios.push(url)
+    }
+  }
+  return audios
+})
+
+// 上游媒体类型：'video' | 'image' | 'audio' | 'mixed' | null
 const upstreamMediaType = computed(() => {
   const hasVideos = upstreamVideoUrls.value.length > 0
   const hasImages = upstreamImageUrls.value.length > 0
-  
-  if (hasVideos && hasImages) return 'mixed'
+  const hasAudios = upstreamAudioUrls.value.length > 0
+  const count = [hasVideos, hasImages, hasAudios].filter(Boolean).length
+
+  if (count > 1) return 'mixed'
   if (hasVideos) return 'video'
   if (hasImages) return 'image'
+  if (hasAudios) return 'audio'
   return null
 })
 
@@ -668,6 +684,7 @@ const referenceLabel = computed(() => {
   switch (upstreamMediaType.value) {
     case 'video': return '参考视频'
     case 'image': return '参考图片'
+    case 'audio': return '参考音频'
     case 'mixed': return '参考文件'
     default: return '参考图片'
   }
@@ -675,9 +692,36 @@ const referenceLabel = computed(() => {
 
 // 从上游节点收集所有图片和视频（视频也通过 image_url 传递给大模型）
 const upstreamImages = computed(() => {
-  // 合并视频和图片 URL
-  return [...upstreamVideoUrls.value, ...upstreamImageUrls.value]
+  // 合并视频、图片和音频 URL
+  return [...upstreamVideoUrls.value, ...upstreamImageUrls.value, ...upstreamAudioUrls.value]
 })
+
+// 所有媒体总数（用于显示计数和 +N 徽章）
+const totalMediaCount = computed(() => upstreamVideoUrls.value.length + upstreamImageUrls.value.length + upstreamAudioUrls.value.length)
+
+/**
+ * 点击参考素材缩略图，在提示词光标处插入 @标记
+ */
+function insertMediaTag(media) {
+  const tag = `@${media.label}`
+  const textarea = llmInputRef.value
+  if (!textarea) {
+    llmInputText.value += tag
+    return
+  }
+
+  const start = textarea.selectionStart ?? llmInputText.value.length
+  const end = textarea.selectionEnd ?? start
+  const before = llmInputText.value.slice(0, start)
+  const after = llmInputText.value.slice(end)
+  llmInputText.value = before + tag + after
+
+  nextTick(() => {
+    textarea.focus()
+    const newPos = start + tag.length
+    textarea.setSelectionRange(newPos, newPos)
+  })
+}
 
 // 提取纯文本，去除HTML标签和样式
 function extractPlainText(htmlContent) {
@@ -2460,40 +2504,56 @@ onMounted(() => {
     
     <!-- 底部 LLM 配置面板 - 紧贴节点卡片 -->
     <div v-show="isSoloSelected" class="llm-config-panel" @click.stop @mousedown.stop>
-      <!-- 参考媒体区域（视频/图片/混合） -->
+      <!-- 参考媒体区域（视频/图片/音频/混合） -->
       <div v-if="inheritedImages.length > 0" class="reference-section">
         <span class="reference-label">{{ referenceLabel }}</span>
-        <span class="reference-hint">来自上游节点 · 共{{ inheritedImages.length }}{{ upstreamMediaType === 'video' ? '个' : upstreamMediaType === 'mixed' ? '个' : '张' }}</span>
+        <span class="reference-hint">点击素材插入引用 · 共{{ totalMediaCount }}{{ upstreamMediaType === 'image' ? '张' : '个' }}</span>
         <div class="reference-images">
           <!-- 视频缩略图 -->
-          <div 
-            v-for="(videoUrl, idx) in upstreamVideoUrls.slice(0, 4)" 
-            :key="'video-' + idx" 
-            class="reference-image-item reference-video-item"
+          <div
+            v-for="(videoUrl, idx) in upstreamVideoUrls.slice(0, 4)"
+            :key="'video-' + idx"
+            class="reference-image-item reference-video-item reference-clickable"
+            :title="`点击插入 @视频${idx + 1}`"
+            @click="insertMediaTag({ type: 'video', index: idx + 1, label: `视频${idx + 1}` })"
           >
-            <video 
-              :src="videoUrl" 
+            <video
+              :src="videoUrl"
               preload="metadata"
               muted
               class="reference-video-thumb"
               @loadeddata="$event.target.currentTime = 0.1"
             ></video>
-            <!-- 左上角序号徽章，保持与图片/视频节点缩略图一致 -->
             <span class="reference-index-badge">{{ idx + 1 }}</span>
-            <!-- 右下角播放图标 -->
             <div class="video-badge">▶</div>
+            <span class="reference-tag-badge">@视频{{ idx + 1 }}</span>
           </div>
           <!-- 图片缩略图 -->
-          <div 
-            v-for="(img, idx) in upstreamImageUrls.slice(0, 4 - Math.min(upstreamVideoUrls.length, 4))" 
-            :key="'img-' + idx" 
-            class="reference-image-item"
+          <div
+            v-for="(img, idx) in upstreamImageUrls.slice(0, 4 - Math.min(upstreamVideoUrls.length, 4))"
+            :key="'img-' + idx"
+            class="reference-image-item reference-clickable"
+            :title="`点击插入 @图片${idx + 1}`"
+            @click="insertMediaTag({ type: 'image', index: idx + 1, label: `图片${idx + 1}` })"
           >
             <img :src="img" :alt="`参考图 ${idx + 1}`" />
             <span class="reference-index-badge">{{ idx + 1 }}</span>
+            <span class="reference-tag-badge">@图片{{ idx + 1 }}</span>
           </div>
-          <div v-if="inheritedImages.length > 4" class="more-images-badge">
-            +{{ inheritedImages.length - 4 }}
+          <!-- 音频缩略图 -->
+          <div
+            v-for="(audioUrl, idx) in upstreamAudioUrls.slice(0, Math.max(0, 4 - upstreamVideoUrls.length - upstreamImageUrls.length))"
+            :key="'audio-' + idx"
+            class="reference-image-item reference-audio-item reference-clickable"
+            :title="`点击插入 @音频${idx + 1}`"
+            @click="insertMediaTag({ type: 'audio', index: idx + 1, label: `音频${idx + 1}` })"
+          >
+            <span class="audio-icon-large">♪</span>
+            <span class="reference-index-badge">{{ idx + 1 }}</span>
+            <span class="reference-tag-badge">@音频{{ idx + 1 }}</span>
+          </div>
+          <div v-if="totalMediaCount > 4" class="more-images-badge">
+            +{{ totalMediaCount - 4 }}
           </div>
         </div>
       </div>
@@ -2513,7 +2573,7 @@ onMounted(() => {
           ref="llmInputRef"
           v-model="llmInputText"
           class="llm-input"
-          placeholder="描述你想要生成的内容，并在下方调整生成参数。（按下Enter 生成，Shift+Enter 换行）"
+          :placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（按下Enter 生成，Shift+Enter 换行）'"
           @keydown="handleLLMKeyDown"
         ></textarea>
       </div>
@@ -3404,14 +3464,60 @@ onMounted(() => {
   width: 64px;
   height: 64px;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  position: relative;
 }
 
 .reference-image-item img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 7px;
+}
+
+/* 可点击的缩略图（@引用） */
+.reference-clickable {
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.reference-clickable:hover {
+  transform: scale(1.08);
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+  z-index: 2;
+}
+
+/* @标记徽章（与视频节点可灵O1风格一致） */
+.reference-tag-badge {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.65);
+  color: #f9fafb;
+  font-size: 9px;
+  line-height: 1;
+  padding: 2px 5px;
+  border-radius: 3px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* 音频缩略图 */
+.reference-audio-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--canvas-bg-tertiary, #1a1a1a);
+}
+
+.audio-icon-large {
+  font-size: 22px;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  pointer-events: none;
 }
 
 /* 参考缩略图左上角序号徽章（文本节点） */
