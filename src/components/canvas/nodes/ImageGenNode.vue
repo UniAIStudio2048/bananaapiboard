@@ -389,7 +389,12 @@ async function handleGenerate() {
         }
       }).then(finalResult => {
         // 更新节点输出
-        const urls = finalResult.urls || finalResult.images || []
+        // 兼容后端任务状态返回结构：
+        // { url: '/api/xxx.jpg', urls: [...], images: [...] }
+        let urls = finalResult.urls || finalResult.images
+        if (!urls && finalResult.url) {
+          urls = [finalResult.url]
+        }
         canvasStore.updateNodeData(props.id, {
           status: 'success',
           output: {
@@ -404,9 +409,12 @@ async function handleGenerate() {
           error: error.message
         })
       })
-    } else if (result.urls || result.images) {
-      // 直接返回结果
-      const urls = result.urls || result.images || []
+    } else if (result.urls || result.images || result.url) {
+      // 直接返回结果（兼容 url / urls / images 三种字段）
+      let urls = result.urls || result.images
+      if (!urls && result.url) {
+        urls = [result.url]
+      }
       canvasStore.updateNodeData(props.id, {
         status: 'success',
         output: {
