@@ -7367,7 +7367,7 @@ async function handleDrop(event) {
   top: calc(100% + 4px);
   left: 0;
   min-width: 220px;
-  max-height: 240px;
+  max-height: 480px;
   overflow-y: auto;
   background: rgba(20, 20, 20, 0.98);
   border: 1px solid rgba(255, 255, 255, 0.1);

@@ -556,9 +556,13 @@ export const getAvailableImageModels = (mode = null) => {
   // 默认模型配置（当没有任何配置时使用）
   // 注意：description 应从租户管理后台(9000端口)配置，这里默认为空
   const defaultModels = [
-    { value: 'nano-banana', label: 'Nano Banana', icon: '🍌', points: 1, description: '', hasResolutionPricing: false, pointsCost: 1, supportedModes: 'both' },
-    { value: 'nano-banana-hd', label: 'Nano Banana HD', icon: '🍌', points: 3, description: '', hasResolutionPricing: false, pointsCost: 3, supportedModes: 'both' },
-    { value: 'nano-banana-2', label: 'Nano Banana 2', icon: '🍌', points: null, description: '', hasResolutionPricing: true, pointsCost: { '1k': 3, '2k': 4, '4k': 5 }, supportedModes: 'both' }
+    { value: 'nano-banana', label: 'Nano Banana', icon: '🍌', points: 1, description: '快速生成，适合日常使用', hasResolutionPricing: false, pointsCost: 1, supportedModes: 'both' },
+    { value: 'nano-banana-hd', label: 'Nano Banana HD', icon: '🍌', points: 3, description: '高清画质，细节更丰富', hasResolutionPricing: false, pointsCost: 3, supportedModes: 'both' },
+    { value: 'nano-banana-2', label: 'Nano Banana 2', icon: '🍌', points: null, description: '最新版本，支持多种分辨率', hasResolutionPricing: true, pointsCost: { '1k': 3, '2k': 4, '4k': 5 }, supportedModes: 'both' },
+    { value: 'flux-pro', label: 'Flux Pro', icon: 'F', points: 5, description: '专业级图像生成，极致画质', hasResolutionPricing: false, pointsCost: 5, supportedModes: 'both' },
+    { value: 'flux-dev', label: 'Flux Dev', icon: 'F', points: 3, description: '开发版本，平衡速度与质量', hasResolutionPricing: false, pointsCost: 3, supportedModes: 'both' },
+    { value: 'flux-schnell', label: 'Flux Schnell', icon: 'F', points: 2, description: '快速生成模式', hasResolutionPricing: false, pointsCost: 2, supportedModes: 'both' },
+    { value: 'stable-diffusion-xl', label: 'Stable Diffusion XL', icon: 'S', points: 2, description: '开源模型，稳定可靠', hasResolutionPricing: false, pointsCost: 2, supportedModes: 'both' }
   ]
   
   // 根据模式过滤默认模型

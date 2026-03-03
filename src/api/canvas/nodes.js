@@ -340,48 +340,96 @@ export async function uploadImages(files) {
  * @param {string} type - 任务类型 'image' | 'video'
  * @param {object} options - 选项
  * @param {number} options.interval - 轮询间隔，默认 2000ms
- * @param {number} options.timeout - 超时时间，图片默认 12 分钟，视频默认 45 分钟（与后端一致）
+ * @param {number} options.timeout - 超时时间，统一默认 12 分钟
  */
 export function pollTaskStatus(taskId, type = 'image', options = {}) {
-  // 视频生成需要更长时间，默认 45 分钟；图片默认 12 分钟
-  const defaultTimeout = type === 'video' ? 45 * 60 * 1000 : 12 * 60 * 1000
+  // 🔧 修复：统一超时时间为 12 分钟（720秒）
+  const defaultTimeout = 12 * 60 * 1000
   const { interval = 2000, timeout = defaultTimeout, onProgress } = options
   const getStatus = type === 'video' ? getVideoTaskStatus : getImageTaskStatus
   
   return new Promise((resolve, reject) => {
     const startTime = Date.now()
+    let pollCount = 0
     
     const poll = async () => {
       try {
+        pollCount++
         const result = await getStatus(taskId)
         
-        console.log('[pollTaskStatus] 任务状态:', taskId, result.status, result.url ? '有URL' : '无URL')
+        // 🔧 增强日志：显示更多调试信息
+        console.log('[pollTaskStatus] 轮询状态:', {
+          taskId,
+          pollCount,
+          status: result.status,
+          hasUrl: !!result.url,
+          hasUrls: !!result.urls,
+          hasImages: !!result.images,
+          elapsed: `${Math.round((Date.now() - startTime) / 1000)}s`
+        })
         
         // 回调进度
         if (onProgress) {
           onProgress(result)
         }
         
-        // 检查状态 - 有 url 也算完成
-        if (result.status === 'completed' || result.status === 'success' || result.url) {
+        // 🔧 修复：增强状态判断，兼容更多返回格式
+        // 成功状态：completed, success, succeeded, finished, done
+        const isCompleted = result.status === 'completed' || 
+                           result.status === 'success' || 
+                           result.status === 'succeeded' ||
+                           result.status === 'finished' ||
+                           result.status === 'done'
+        
+        // URL检查：url, urls数组, images数组
+        const hasValidUrl = result.url || 
+                           (result.urls && result.urls.length > 0) ||
+                           (result.images && result.images.length > 0)
+        
+        if (isCompleted || hasValidUrl) {
+          console.log('[pollTaskStatus] 任务完成:', {
+            taskId,
+            status: result.status,
+            url: result.url?.substring(0, 60),
+            urlsCount: result.urls?.length || 0,
+            imagesCount: result.images?.length || 0
+          })
           resolve(result)
           return
         }
         
+        // 失败状态：failed, error
         if (result.status === 'failed' || result.status === 'error') {
+          console.error('[pollTaskStatus] 任务失败:', {
+            taskId,
+            status: result.status,
+            error: result.error
+          })
           reject(new Error(result.error || '任务执行失败'))
           return
         }
         
         // 检查超时
-        if (Date.now() - startTime > timeout) {
-          reject(new Error('任务执行超时'))
+        const elapsed = Date.now() - startTime
+        if (elapsed > timeout) {
+          console.error('[pollTaskStatus] 任务超时:', {
+            taskId,
+            elapsed: `${Math.round(elapsed / 1000)}s`,
+            timeout: `${Math.round(timeout / 1000)}s`,
+            lastStatus: result.status
+          })
+          reject(new Error(`任务执行超时（超过${Math.round(timeout / 60000)}分钟）`))
           return
         }
         
         // 继续轮询
         setTimeout(poll, interval)
       } catch (e) {
+        console.error('[pollTaskStatus] 轮询异常:', {
+          taskId,
+          pollCount,
+          error: e.message
+        })
         reject(e)
       }
     }

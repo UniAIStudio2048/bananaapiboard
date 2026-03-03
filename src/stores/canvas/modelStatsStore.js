@@ -5,7 +5,7 @@
  * - 集中管理 image/video 模型的當日成功率數據
  * - 10 分鐘自動輪詢刷新
  * - 跨日（0 點）自動重置並重新拉取
- * - 所有 ImageNode/VideoNode/ImageGenNode 共享同一份數據，避免冗餘請求
+ * - 所有 ImageNode/VideoNode 共享同一份數據，避免冗餘請求
  * 
  * 使用方式：
  *   import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
@@ -33,7 +33,7 @@ export const useModelStatsStore = defineStore('modelStats', () => {
   
   // ========== Getters ==========
   
-  // 獲取圖像模型成功率（供 ImageNode / ImageGenNode 使用）
+  // 獲取圖像模型成功率（供 ImageNode 使用）
   function getImageModelRate(modelName) {
     return _resolveRate(modelName, imageStats.value)
   }

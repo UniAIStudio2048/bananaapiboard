@@ -1988,38 +1988,6 @@ function handleAddRightClick(event) {
   event.stopPropagation()
 }
 
-// 以下是旧代码保留的部分
-function createImageGenNode() {
-  // 获取当前节点位置
-  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
-  if (!currentNode) return
-  
-  // 在右侧创建图片生成节点
-  const newNodePosition = {
-    x: currentNode.position.x + 450, // 文本节点宽度 + 间距
-    y: currentNode.position.y
-  }
-  
-  // 创建图片生成节点
-  const newNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  canvasStore.addNode({
-    id: newNodeId,
-    type: 'image-gen',
-    position: newNodePosition,
-    data: {
-      title: '图片生成'
-    }
-  })
-  
-  // 自动连接
-  canvasStore.addEdge({
-    source: props.id,
-    target: newNodeId,
-    sourceHandle: 'output',
-    targetHandle: 'input'
-  })
-}
-
 // 拆分分镜节点
 function splitSceneNodes() {
   // 优先使用 LLM 响应内容，其次是 localText，最后是 props.data.text
