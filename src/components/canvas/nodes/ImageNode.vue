@@ -4130,7 +4130,8 @@ function createNewOutputNode() {
 }
 
 // 开始生成（输出节点用）
-async function handleGenerate() {
+async function handleGenerate(options = {}) {
+  const { fromGroup = false } = options
   // 动态获取上游节点的最新提示词（可能有多个文本节点连接）
   const upstreamPrompt = getUpstreamPrompt()
   const userPrompt = promptText.value.trim()
@@ -4189,19 +4190,44 @@ async function handleGenerate() {
   })
 
   if (referenceImages.value.length === 0 && !finalPrompt) {
+    if (fromGroup) {
+      // 编组执行模式：静默处理
+      // 如果节点自身有图片数据（输入节点），标记为 completed 让下游继续
+      const hasOwnData = props.data?.sourceImages?.length > 0 ||
+                         props.data?.output?.urls?.length > 0 ||
+                         props.data?.output?.url
+      if (hasOwnData) {
+        console.log(`[ImageNode] 编组执行：节点 ${props.id} 为输入节点，已有数据，标记完成`)
+        canvasStore.updateNodeData(props.id, { status: 'completed' })
+      } else {
+        console.log(`[ImageNode] 编组执行跳过节点 ${props.id}：无提示词且无参考图`)
+        canvasStore.updateNodeData(props.id, { status: 'skipped' })
+      }
+      return
+    }
     await showAlert('请输入提示词或连接参考图片', '提示')
     return
   }
-  
+
   // 检查总积分是否足够（单次消耗 * 次数）
   const totalCost = currentPointsCost.value * selectedCount.value
   if (userPoints.value < totalCost) {
+    if (fromGroup) {
+      console.log(`[ImageNode] 编组执行跳过节点 ${props.id}：积分不足`)
+      canvasStore.updateNodeData(props.id, { status: 'skipped' })
+      return
+    }
     await showInsufficientPointsDialog(totalCost, userPoints.value, selectedCount.value)
     return
   }
 
   // 检查并发限制
   if (selectedCount.value > userConcurrentLimit.value) {
+    if (fromGroup) {
+      console.log(`[ImageNode] 编组执行跳过节点 ${props.id}：超出并发限制`)
+      canvasStore.updateNodeData(props.id, { status: 'skipped' })
+      return
+    }
     await showAlert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐`, '并发限制')
     // 点击确认后，恢复为默认的 1x
     selectedCount.value = 1
@@ -4675,6 +4701,16 @@ watch(showLeftMenu, (newValue) => {
   }
 })
 
+// 监听编组整组执行触发
+watch(() => props.data.executeTriggered, (newVal, oldVal) => {
+  if (newVal && newVal !== oldVal && props.data.triggeredByGroup) {
+    // 由编组触发的执行
+    console.log(`[ImageNode] 编组触发执行: ${props.id}`)
+    // 调用已有的 handleGenerate 方法，传入编组模式标记
+    handleGenerate({ fromGroup: true })
+  }
+})
+
 // 关闭左侧菜单
 function closeLeftMenu() {
   showLeftMenu.value = false
@@ -4738,6 +4774,11 @@ function handleAddRightMouseUp(event) {
       'node',
       props.id
     )
+  }
+  // 确保拖拽状态被清理（防止卡死）
+  if (isLongPress && canvasStore.isDraggingConnection) {
+    // 长按拖拽场景：如果 handleGlobalDragConnectionEnd 没有处理，这里兜底
+    // 正常情况下 capture 阶段的 handler 会先处理，这里不会执行
   }
 }
 

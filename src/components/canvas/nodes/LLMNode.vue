@@ -3,7 +3,7 @@
  * LLMNode.vue - LLM 智能节点
  * 用于提示词优化、图片描述、内容扩写等
  */
-import { ref, computed, inject, nextTick } from 'vue'
+import { ref, computed, inject, nextTick, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { enhancePrompt, describeImage, expandContent, getLLMCost } from '@/api/canvas/llm'
@@ -271,6 +271,14 @@ function handleAddClick(event) {
     props.id
   )
 }
+
+// 监听编组整组执行触发
+watch(() => props.data.executeTriggered, (newVal, oldVal) => {
+  if (newVal && newVal !== oldVal && props.data.triggeredByGroup) {
+    console.log(`[LLMNode] 编组触发执行: ${props.id}`)
+    handleExecute()
+  }
+})
 </script>
 
 <template>

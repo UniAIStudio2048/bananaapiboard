@@ -1457,56 +1457,62 @@ function handleGlobalDragConnectionEnd(event) {
   console.log('[CanvasBoard] handleGlobalDragConnectionEnd', { isDragging: canvasStore.isDraggingConnection, source: canvasStore.dragConnectionSource })
 
   if (!canvasStore.isDraggingConnection) return
-  
-  // 检测是否释放在某个节点上
-  const targetElement = document.elementFromPoint(event.clientX, event.clientY)
-  const targetNode = findTargetNode(targetElement)
-  
-  // 检测是否释放在 Storyboard 的某个格子级 cell-handle 上
-  // cell-handle 的 data-handleid 格式为 "input-{index}"
-  let targetHandleId = null
-  if (targetNode?.type === 'storyboard' && targetElement) {
-    const handleEl = targetElement.closest('.vue-flow__handle[data-handleid^="input-"]')
-      || targetElement.closest('.cell-handle')
-    if (handleEl) {
-      const hid = handleEl.getAttribute('data-handleid') || handleEl.id
-      if (typeof hid === 'string' && hid.startsWith('input-')) {
-        targetHandleId = hid
+
+  try {
+    // 检测是否释放在某个节点上
+    const targetElement = document.elementFromPoint(event.clientX, event.clientY)
+    const targetNode = findTargetNode(targetElement)
+
+    // 检测是否释放在 Storyboard 的某个格子级 cell-handle 上
+    // cell-handle 的 data-handleid 格式为 "input-{index}"
+    let targetHandleId = null
+    if (targetNode?.type === 'storyboard' && targetElement) {
+      const handleEl = targetElement.closest('.vue-flow__handle[data-handleid^="input-"]')
+        || targetElement.closest('.cell-handle')
+      if (handleEl) {
+        const hid = handleEl.getAttribute('data-handleid') || handleEl.id
+        if (typeof hid === 'string' && hid.startsWith('input-')) {
+          targetHandleId = hid
+        }
+      }
+      // 回退：通过鼠标位置检测悬停的格子索引
+      if (!targetHandleId) {
+        const nodeEl = targetElement.closest('.vue-flow__node')
+        if (nodeEl) {
+          const gridItems = nodeEl.querySelectorAll('.grid-item')
+          gridItems.forEach((el, idx) => {
+            const rect = el.getBoundingClientRect()
+            if (
+              event.clientX >= rect.left && event.clientX <= rect.right &&
+              event.clientY >= rect.top && event.clientY <= rect.bottom
+            ) {
+              targetHandleId = `input-${idx}`
+            }
+          })
+        }
       }
     }
-    // 回退：通过鼠标位置检测悬停的格子索引
-    if (!targetHandleId) {
-      const nodeEl = targetElement.closest('.vue-flow__node')
-      if (nodeEl) {
-        const gridItems = nodeEl.querySelectorAll('.grid-item')
-        gridItems.forEach((el, idx) => {
-          const rect = el.getBoundingClientRect()
-          if (
-            event.clientX >= rect.left && event.clientX <= rect.right &&
-            event.clientY >= rect.top && event.clientY <= rect.bottom
-          ) {
-            targetHandleId = `input-${idx}`
-          }
-        })
-      }
+
+    // 计算结束位置
+    const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+    const screenPos = { x: event.clientX, y: event.clientY }
+
+    // 调用 store 的 endDragConnection（传入格子级 targetHandle）
+    const connected = canvasStore.endDragConnection(targetNode, flowPos, screenPos, targetHandleId)
+
+    if (!connected) {
+      // 如果没有连接到节点，标记刚刚打开了选择器
+      justOpenedSelectorFromConnection.value = true
+      const dragEndTimeoutId = setTimeout(() => {
+        pendingTimeouts.delete(dragEndTimeoutId)
+        justOpenedSelectorFromConnection.value = false
+      }, 200)
+      pendingTimeouts.add(dragEndTimeoutId)
     }
-  }
-  
-  // 计算结束位置
-  const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-  const screenPos = { x: event.clientX, y: event.clientY }
-  
-  // 调用 store 的 endDragConnection（传入格子级 targetHandle）
-  const connected = canvasStore.endDragConnection(targetNode, flowPos, screenPos, targetHandleId)
-  
-  if (!connected) {
-    // 如果没有连接到节点，标记刚刚打开了选择器
-    justOpenedSelectorFromConnection.value = true
-    const dragEndTimeoutId = setTimeout(() => {
-      pendingTimeouts.delete(dragEndTimeoutId)
-      justOpenedSelectorFromConnection.value = false
-    }, 200)
-    pendingTimeouts.add(dragEndTimeoutId)
+  } catch (err) {
+    console.error('[CanvasBoard] 拖拽连线结束异常:', err)
+    // 确保清理拖拽状态，防止画布冻结
+    canvasStore.cancelDragConnection()
   }
 }
 

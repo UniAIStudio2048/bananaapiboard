@@ -101,6 +101,13 @@ const transferAmount = ref('')
 const transferLoading = ref(false)
 const exchangeRate = ref(10) // 1元 = 10积分
 
+// 返利中心
+const referralStats = ref({ available: 0, total_earned: 0, pending: 0, withdrawn: 0, transferred: 0, invitee_count: 0 })
+const referralRecords = ref([])
+const referralWithdrawals = ref([])
+const referralActionAmount = ref('')
+const referralSubmitting = ref(false)
+
 // 新手引导设置
 const onboardingEnabled = ref(localStorage.getItem('canvasOnboardingEnabled') === 'true')
 
@@ -266,6 +273,7 @@ const menuItems = computed(() => [
   { id: 'packages', icon: 'package', label: t('user.packages') },
   { id: 'points', icon: 'diamond', label: t('user.pointsManage') },
   { id: 'voucher', icon: 'ticket', label: t('user.redeemCenter') },
+  ...(props.userInfo?.referral_enabled ? [{ id: 'referral', icon: 'dollar-sign', label: '返利中心' }] : []),
   { id: 'invite', icon: 'gift', label: t('user.invite') },
   { id: 'help', icon: 'help', label: t('user.tutorial') }
 ])
@@ -289,7 +297,8 @@ const icons = {
   brush: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9.06 11.9l8.07-8.06a2.85 2.85 0 114.03 4.03l-8.06 8.08"/><path d="M7.07 14.94c-1.66 0-3 1.35-3 3.02 0 1.33-2.5 1.52-2 2.02 1.08 1.1 2.49 2.02 4 2.02 2.2 0 4-1.8 4-4.04a3.01 3.01 0 00-3-3.02z"/></svg>`,
   message: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>`,
   star: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
-  coin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12"/><path d="M15 9.5a3 3 0 00-3-2.5c-1.7 0-3 1.1-3 2.5s1.3 2.5 3 2.5 3 1.1 3 2.5-1.3 2.5-3 2.5a3 3 0 01-3-2.5"/></svg>`
+  coin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12"/><path d="M15 9.5a3 3 0 00-3-2.5c-1.7 0-3 1.1-3 2.5s1.3 2.5 3 2.5 3 1.1 3 2.5-1.3 2.5-3 2.5a3 3 0 01-3-2.5"/></svg>`,
+  'dollar-sign': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>`
 }
 
 // 初始化数据
@@ -322,6 +331,11 @@ watch(() => showSpaceDropdown.value, (val) => {
     }
     setTimeout(() => document.addEventListener('click', closeDropdown), 0)
   }
+})
+
+// 切换到返利中心时加载数据
+watch(activeMenu, (val) => {
+  if (val === 'referral') loadReferralData()
 })
 
 // 加载数据
@@ -1553,6 +1567,77 @@ function copyInviteLink() {
   showAlert(t('user.inviteLinkCopied'), `✓ ${t('common.copySuccess')}`)
 }
 
+// ===== 返利中心 =====
+async function loadReferralData() {
+  const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
+  try {
+    const [statsRes, recordsRes, withdrawalsRes] = await Promise.all([
+      fetch('/api/user/referral/stats', { headers }),
+      fetch('/api/user/referral/records?page_size=50', { headers }),
+      fetch('/api/user/referral/withdrawals?page_size=50', { headers })
+    ])
+    if (statsRes.ok) referralStats.value = await statsRes.json()
+    if (recordsRes.ok) { const d = await recordsRes.json(); referralRecords.value = d.records || [] }
+    if (withdrawalsRes.ok) { const d = await withdrawalsRes.json(); referralWithdrawals.value = d.withdrawals || [] }
+  } catch (e) {
+    console.error('[referral] load error:', e)
+  }
+}
+
+async function doReferralWithdraw() {
+  const amt = Number(referralActionAmount.value)
+  if (!amt || amt <= 0) { showAlert('请输入有效金额', '提示'); return }
+  const amtFen = Math.round(amt * 100)
+  const confirmed = await showConfirm(`确定申请提现 ¥${amt.toFixed(2)} 吗？提现需要审核通过后才能到账。`, '确认提现')
+  if (!confirmed) return
+  referralSubmitting.value = true
+  try {
+    const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const res = await fetch('/api/user/referral/withdraw', { method: 'POST', headers, body: JSON.stringify({ amount: amtFen }) })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || '提现失败')
+    showAlert('提现申请已提交，等待审核', '成功')
+    referralActionAmount.value = ''
+    loadReferralData()
+  } catch (e) {
+    showAlert(e.message, '错误')
+  } finally {
+    referralSubmitting.value = false
+  }
+}
+
+async function doReferralTransfer() {
+  const amt = Number(referralActionAmount.value)
+  if (!amt || amt <= 0) { showAlert('请输入有效金额', '提示'); return }
+  const amtFen = Math.round(amt * 100)
+  const confirmed = await showConfirm(`确定将 ¥${amt.toFixed(2)} 划转到余额吗？划转后不可再提现。`, '确认划转')
+  if (!confirmed) return
+  referralSubmitting.value = true
+  try {
+    const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
+    const res = await fetch('/api/user/referral/transfer', { method: 'POST', headers, body: JSON.stringify({ amount: amtFen }) })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.message || '划转失败')
+    showAlert('划转成功，已到账余额', '成功')
+    referralActionAmount.value = ''
+    loadReferralData()
+    emit('update')
+  } catch (e) {
+    showAlert(e.message, '错误')
+  } finally {
+    referralSubmitting.value = false
+  }
+}
+
+function formatRebateAmount(fen) {
+  return ((fen || 0) / 100).toFixed(2)
+}
+
+function formatRebateTime(ts) {
+  if (!ts) return '-'
+  return new Date(ts).toLocaleString('zh-CN')
+}
+
 // 退出登录
 async function logout() {
   const confirmed = await showConfirm(t('user.logoutConfirmMsg'), t('user.logoutConfirm'))
@@ -2101,6 +2186,84 @@ function getLedgerTypeText(type) {
                   <li>{{ t('user.redeemTip2') }}</li>
                   <li>{{ t('user.redeemTip3') }}</li>
                 </ul>
+              </div>
+            </div>
+
+            <!-- 返利中心 -->
+            <div v-else-if="activeMenu === 'referral'" class="content-section">
+              <!-- 统计卡片 -->
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
+                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">可用返利</div>
+                  <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">¥{{ formatRebateAmount(referralStats.available) }}</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
+                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">累计返利</div>
+                  <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">¥{{ formatRebateAmount(referralStats.total_earned) }}</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
+                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">待审核提现</div>
+                  <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">¥{{ formatRebateAmount(referralStats.pending) }}</div>
+                </div>
+                <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
+                  <div style="font-size:11px;color:#aaa;margin-bottom:4px;">邀请人数</div>
+                  <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">{{ referralStats.invitee_count }}</div>
+                </div>
+              </div>
+              <!-- 操作区 -->
+              <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;margin-bottom:16px;">
+                <div style="font-size:12px;color:#aaa;margin-bottom:8px;">操作金额（元）</div>
+                <input
+                  v-model="referralActionAmount"
+                  type="number"
+                  placeholder="输入金额"
+                  style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:8px 10px;color:#fff;font-size:13px;margin-bottom:8px;box-sizing:border-box;"
+                />
+                <div style="display:flex;gap:8px;">
+                  <button
+                    @click="doReferralWithdraw"
+                    :disabled="referralSubmitting"
+                    style="flex:1;background:rgba(255,255,255,0.15);color:#e5e7eb;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:8px;font-size:12px;cursor:pointer;"
+                  >申请提现</button>
+                  <button
+                    @click="doReferralTransfer"
+                    :disabled="referralSubmitting"
+                    style="flex:1;background:rgba(255,255,255,0.25);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;padding:8px;font-size:12px;cursor:pointer;"
+                  >划转余额</button>
+                </div>
+                <div style="font-size:11px;color:#888;margin-top:6px;">提现需要审核，划转余额即时到账但不可再提现</div>
+              </div>
+              <!-- 返利记录 -->
+              <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;margin-bottom:12px;">
+                <div style="font-size:13px;font-weight:600;margin-bottom:10px;">返利记录</div>
+                <div v-if="referralRecords.length === 0" style="text-align:center;color:#888;font-size:12px;padding:16px 0;">暂无返利记录</div>
+                <div v-for="r in referralRecords" :key="r.id" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;">
+                  <div>
+                    <div style="color:#ddd;">{{ r.invitee_name || r.invitee_email || '用户' }}</div>
+                    <div style="color:#888;font-size:11px;">{{ formatRebateTime(r.created_at) }}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div style="color:#e5e7eb;">+¥{{ formatRebateAmount(r.rebate_amount) }}</div>
+                    <div style="color:#888;font-size:11px;">{{ ((r.rebate_rate || 0) * 100).toFixed(0) }}%</div>
+                  </div>
+                </div>
+              </div>
+              <!-- 提现记录 -->
+              <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;">
+                <div style="font-size:13px;font-weight:600;margin-bottom:10px;">提现记录</div>
+                <div v-if="referralWithdrawals.length === 0" style="text-align:center;color:#888;font-size:12px;padding:16px 0;">暂无提现记录</div>
+                <div v-for="w in referralWithdrawals" :key="w.id" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;">
+                  <div>
+                    <div style="color:#ddd;">{{ w.type === 'transfer' ? '划转余额' : '申请提现' }}</div>
+                    <div style="color:#888;font-size:11px;">{{ formatRebateTime(w.created_at) }}</div>
+                  </div>
+                  <div style="text-align:right;">
+                    <div :style="{ color: w.status === 'approved' ? '#9ca3af' : w.status === 'rejected' ? '#6b7280' : '#9ca3af' }">
+                      {{ w.status === 'approved' ? '已通过' : w.status === 'rejected' ? '已拒绝' : '待审核' }}
+                    </div>
+                    <div style="color:#ddd;">¥{{ formatRebateAmount(w.amount) }}</div>
+                  </div>
+                </div>
               </div>
             </div>
 

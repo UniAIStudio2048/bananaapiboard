@@ -1916,6 +1916,14 @@ watch(generationMode, (newMode) => {
   }
 }, { immediate: true })
 
+// 监听编组整组执行触发
+watch(() => props.data.executeTriggered, (newVal, oldVal) => {
+  if (newVal && newVal !== oldVal && props.data.triggeredByGroup) {
+    console.log(`[VideoNode] 编组触发执行: ${props.id}`)
+    handleGenerate()
+  }
+})
+
 // 并发间隔时间（毫秒）
 const CONCURRENT_INTERVAL = 5000
 

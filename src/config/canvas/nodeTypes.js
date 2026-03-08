@@ -465,25 +465,17 @@ export const CONNECTION_RULES = {
   ],
   
   [NODE_TYPES.TEXT_TO_IMAGE]: [
-    NODE_TYPES.IMAGE_TO_IMAGE,
-    NODE_TYPES.IMAGE_TO_VIDEO,
-    NODE_TYPES.IMAGE_REPAINT,
-    NODE_TYPES.IMAGE_ERASE,
-    NODE_TYPES.IMAGE_UPSCALE,
-    NODE_TYPES.IMAGE_CUTOUT,
-    NODE_TYPES.IMAGE_EXPAND,
-    NODE_TYPES.LLM_IMAGE_DESCRIBE,
-    NODE_TYPES.PREVIEW_OUTPUT,
-    NODE_TYPES.GRID_PREVIEW,
-    'storyboard'                    // 分镜格子
+    NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
+    NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
+    NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片描述
+    NODE_TYPES.STORYBOARD_GRID      // 分镜格子
   ],
-  
+
   [NODE_TYPES.IMAGE_TO_IMAGE]: [
-    NODE_TYPES.IMAGE_TO_VIDEO,
-    NODE_TYPES.IMAGE_REPAINT,
-    NODE_TYPES.IMAGE_UPSCALE,
-    NODE_TYPES.PREVIEW_OUTPUT,
-    'storyboard'                    // 分镜格子
+    NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
+    NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
+    NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片描述
+    NODE_TYPES.STORYBOARD_GRID      // 分镜格子
   ],
   
   [NODE_TYPES.TEXT_TO_VIDEO]: [
@@ -596,10 +588,12 @@ export function canConnect(sourceType, targetType) {
 // 根据上游节点类型获取可创建的下游节点
 export function getDownstreamOptions(sourceType) {
   const connectableTypes = getConnectableTypes(sourceType)
-  return connectableTypes.map(type => ({
-    type,
-    ...NODE_TYPE_CONFIG[type]
-  }))
+  return connectableTypes
+    .map(type => ({
+      type,
+      ...NODE_TYPE_CONFIG[type]
+    }))
+    .filter(node => node.label)
 }
 
 // 上游连接规则（某节点类型可以接收哪些类型作为输入）
@@ -721,9 +715,11 @@ export function getUpstreamTypes(targetType) {
 // 根据下游节点类型获取可创建的上游节点
 export function getUpstreamOptions(targetType) {
   const upstreamTypes = getUpstreamTypes(targetType)
-  return upstreamTypes.map(type => ({
-    type,
-    ...NODE_TYPE_CONFIG[type]
-  }))
+  return upstreamTypes
+    .map(type => ({
+      type,
+      ...NODE_TYPE_CONFIG[type]
+    }))
+    .filter(node => node.label)
 }
 

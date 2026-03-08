@@ -1229,6 +1229,14 @@ function selectPlaybackRate(rate) {
   canvasStore.updateNodeData(props.id, { playbackRate: rate })
 }
 
+// 监听编组整组执行触发
+watch(() => props.data.executeTriggered, (newVal, oldVal) => {
+  if (newVal && newVal !== oldVal && props.data.triggeredByGroup) {
+    console.log(`[AudioNode] 编组触发执行: ${props.id}`)
+    handleGenerateMusic()
+  }
+})
+
 // 点击外部关闭速度下拉
 function handleSpeedDropdownClickOutside(event) {
   const dropdown = event.target.closest('.speed-dropdown')

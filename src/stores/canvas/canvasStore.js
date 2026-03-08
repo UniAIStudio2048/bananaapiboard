@@ -3,7 +3,7 @@
  * 管理节点、连线、视口状态等
  */
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 export const useCanvasStore = defineStore('canvas', () => {
@@ -1114,6 +1114,21 @@ export const useCanvasStore = defineStore('canvas', () => {
     if (workflow.viewport) {
       viewport.value = workflow.viewport
     }
+
+    // 2.5 从 group 类型节点重建 nodeGroups（工作流加载时恢复编组状态）
+    const restoredGroups = skeletonNodes
+      .filter(n => n.type === 'group' && n.data?.nodeIds?.length)
+      .map(n => ({
+        id: n.id,
+        name: n.data.groupName || '新建组',
+        nodeIds: [...n.data.nodeIds],
+        color: n.data.groupColor || 'rgba(100, 116, 139, 0.08)',
+        borderColor: n.data.borderColor || 'rgba(100, 116, 139, 0.25)'
+      }))
+    if (restoredGroups.length) {
+      nodeGroups.value = restoredGroups
+      console.log(`[Canvas Store] 已从工作流恢复 ${restoredGroups.length} 个编组`)
+    }
     
     // 3. 异步填充媒体数据（分批处理，避免卡顿）
     const nodesWithMedia = skeletonNodes.filter(n => n.data?._mediaLoading)
@@ -1688,7 +1703,330 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     console.log(`[Canvas Store] 已解散编组 "${group.name}"`)
   }
-  
+
+  // ========== 编组执行 ==========
+
+  // 编组执行状态: { [groupId]: { status, progress, total, completed, failed, currentNodes } }
+  const groupExecutionState = ref({})
+  // 停止信号: { [groupId]: true } 用于中断执行
+  const groupExecutionAbort = ref({})
+
+  // 不可执行的节点类型（没有 executeTriggered watch，或纯输入节点无需执行）
+  const NON_EXECUTABLE_TYPES = new Set([
+    'text-input', 'text',
+    'image-input',
+    'video-input',
+    'audio-input',
+    'group',
+    'storyboard',
+    'character-card',
+    'preview-output'
+  ])
+
+  /**
+   * 获取编组内部的边（source 和 target 都在编组内）
+   */
+  function getGroupInternalEdges(groupId) {
+    // 优先从 nodeGroups 获取，fallback 到 group 节点的 data.nodeIds
+    const group = nodeGroups.value.find(g => g.id === groupId)
+    const groupNode = nodes.value.find(n => n.id === groupId && n.type === 'group')
+    const nodeIdList = group?.nodeIds || groupNode?.data?.nodeIds || []
+    if (!nodeIdList.length) return []
+    const idSet = new Set(nodeIdList)
+    return edges.value.filter(e => idSet.has(e.source) && idSet.has(e.target))
+  }
+
+  /**
+   * 拓扑排序（Kahn 算法）
+   * 返回分层结果，同层节点可并行执行
+   * 例如: [[n1, n2], [n3], [n4]]
+   */
+  function topologicalSort(nodeIds, internalEdges) {
+    const idSet = new Set(nodeIds)
+    // 构建入度表和邻接表
+    const inDegree = {}
+    const adjacency = {}
+    for (const id of nodeIds) {
+      inDegree[id] = 0
+      adjacency[id] = []
+    }
+    for (const edge of internalEdges) {
+      if (idSet.has(edge.source) && idSet.has(edge.target)) {
+        inDegree[edge.target]++
+        adjacency[edge.source].push(edge.target)
+      }
+    }
+    // Kahn 算法，按层收集
+    const layers = []
+    let queue = nodeIds.filter(id => inDegree[id] === 0)
+    const visited = new Set()
+
+    while (queue.length > 0) {
+      layers.push([...queue])
+      const nextQueue = []
+      for (const id of queue) {
+        visited.add(id)
+        for (const neighbor of adjacency[id]) {
+          inDegree[neighbor]--
+          if (inDegree[neighbor] === 0 && !visited.has(neighbor)) {
+            nextQueue.push(neighbor)
+          }
+        }
+      }
+      queue = nextQueue
+    }
+
+    // 检测环：如果有节点未被访问，说明存在环
+    const unvisited = nodeIds.filter(id => !visited.has(id))
+    if (unvisited.length > 0) {
+      console.warn('[Canvas Store] 编组内存在循环依赖，以下节点无法排序:', unvisited)
+      // 将环中的节点作为最后一层追加
+      layers.push(unvisited)
+    }
+
+    return layers
+  }
+
+  /**
+   * 触发单个节点执行
+   * 通过更新节点 data 中的 executeTriggered 标记通知节点组件
+   */
+  function triggerNodeExecution(nodeId) {
+    updateNodeData(nodeId, {
+      executeTriggered: Date.now(),
+      triggeredByGroup: true
+    })
+  }
+
+  /**
+   * 等待节点执行完成
+   * 通过 watch 节点 data.status 变化来判断
+   * 返回 Promise，resolve 时携带最终状态
+   */
+  function waitForNodeCompletion(nodeId, groupId, timeoutMs = 300000) {
+    return new Promise((resolve) => {
+      const node = nodes.value.find(n => n.id === nodeId)
+      if (!node) {
+        resolve('error')
+        return
+      }
+
+      // 如果节点已经处于终态，直接返回
+      const currentStatus = node.data?.status
+      if (currentStatus === 'completed' || currentStatus === 'success') {
+        resolve('completed')
+        return
+      }
+      if (currentStatus === 'error' || currentStatus === 'failed' || currentStatus === 'skipped') {
+        resolve('error')
+        return
+      }
+
+      let timer = null
+      let resolved = false
+      let stopWatcher = null
+      let stopAbortWatcher = null
+
+      const finish = (status) => {
+        if (resolved) return
+        resolved = true
+        if (timer) clearTimeout(timer)
+        if (stopWatcher) stopWatcher()
+        if (stopAbortWatcher) stopAbortWatcher()
+        resolve(status)
+      }
+
+      // 超时处理
+      timer = setTimeout(() => {
+        console.warn(`[Canvas Store] 节点 ${nodeId} 执行超时`)
+        finish('timeout')
+      }, timeoutMs)
+
+      // 监听停止信号
+      stopAbortWatcher = watch(
+        () => groupExecutionAbort.value[groupId],
+        (aborted) => {
+          if (aborted) {
+            finish('aborted')
+          }
+        }
+      )
+
+      // 监听节点状态变化
+      stopWatcher = watch(
+        () => {
+          const n = nodes.value.find(n => n.id === nodeId)
+          return n?.data?.status
+        },
+        (newStatus) => {
+          if (newStatus === 'completed' || newStatus === 'success') {
+            finish('completed')
+          } else if (newStatus === 'error' || newStatus === 'failed' || newStatus === 'skipped') {
+            finish('error')
+          }
+        },
+        { immediate: false }
+      )
+    })
+  }
+
+  /**
+   * 执行编组内所有节点（按拓扑顺序）
+   * 同层节点并行执行，层间串行等待
+   */
+  async function executeGroup(groupId) {
+    // 优先从 nodeGroups 获取，fallback 到 group 节点的 data.nodeIds
+    const group = nodeGroups.value.find(g => g.id === groupId)
+    const groupNode = nodes.value.find(n => n.id === groupId && n.type === 'group')
+    const nodeIdList = group?.nodeIds || groupNode?.data?.nodeIds || []
+    const groupName = group?.name || groupNode?.data?.groupName || groupId
+
+    if (!nodeIdList.length) {
+      console.warn('[Canvas Store] 编组内无节点:', groupId)
+      return
+    }
+
+    // 获取编组内部边并做拓扑排序
+    const internalEdges = getGroupInternalEdges(groupId)
+    const layers = topologicalSort([...nodeIdList], internalEdges)
+    const totalNodes = nodeIdList.length
+
+    // 初始化执行状态
+    groupExecutionState.value[groupId] = {
+      status: 'running',
+      progress: 0,
+      total: totalNodes,
+      completed: 0,
+      failed: 0,
+      currentNodes: []
+    }
+    // 清除停止信号
+    groupExecutionAbort.value[groupId] = false
+
+    console.log(`[Canvas Store] 开始执行编组 "${groupName}"，共 ${totalNodes} 个节点，${layers.length} 层`)
+
+    let completedCount = 0
+    let failedCount = 0
+
+    try {
+      for (let layerIdx = 0; layerIdx < layers.length; layerIdx++) {
+        // 检查是否已停止
+        if (groupExecutionAbort.value[groupId]) {
+          console.log(`[Canvas Store] 编组 "${groupName}" 执行已停止`)
+          break
+        }
+
+        const layer = layers[layerIdx]
+        // 检查本层节点是否有上游失败的，如果有则标记为 skipped
+        const executableNodes = []
+        for (const nodeId of layer) {
+          const upstreamInGroup = internalEdges
+            .filter(e => e.target === nodeId)
+            .map(e => e.source)
+          const node = nodes.value.find(n => n.id === nodeId)
+          const hasFailedUpstream = upstreamInGroup.some(upId => {
+            const upNode = nodes.value.find(n => n.id === upId)
+            return upNode?.data?.status === 'error' ||
+                   upNode?.data?.status === 'failed' ||
+                   upNode?.data?.status === 'skipped'
+          })
+
+          if (hasFailedUpstream) {
+            // 上游失败，跳过此节点
+            updateNodeData(nodeId, { status: 'skipped', triggeredByGroup: true })
+            failedCount++
+            completedCount++
+            console.log(`[Canvas Store] 节点 ${nodeId} 因上游失败被跳过`)
+          } else {
+            executableNodes.push(nodeId)
+          }
+        }
+
+        if (executableNodes.length === 0) continue
+
+        // 更新当前执行层
+        const state = groupExecutionState.value[groupId]
+        state.currentNodes = [...executableNodes]
+
+        // 并行触发本层所有可执行节点
+        const promises = executableNodes.map(nodeId => {
+          const node = nodes.value.find(n => n.id === nodeId)
+          const nodeType = node?.type
+
+          // 跳过不可执行的节点类型（如 text-input、text 等输入节点）
+          if (NON_EXECUTABLE_TYPES.has(nodeType)) {
+            console.log(`[Canvas Store] 节点 ${nodeId} (${nodeType}) 为输入节点，跳过执行`)
+            return Promise.resolve('completed')
+          }
+
+          triggerNodeExecution(nodeId)
+          return waitForNodeCompletion(nodeId, groupId)
+        })
+
+        // 等待本层所有节点完成
+        const results = await Promise.all(promises)
+
+        // 统计本层结果
+        for (let i = 0; i < results.length; i++) {
+          completedCount++
+          if (results[i] === 'error' || results[i] === 'timeout') {
+            failedCount++
+          } else if (results[i] === 'aborted') {
+            // 被中断，不再继续
+            break
+          }
+        }
+
+        // 更新进度
+        const stateAfter = groupExecutionState.value[groupId]
+        if (stateAfter) {
+          stateAfter.completed = completedCount
+          stateAfter.failed = failedCount
+          stateAfter.progress = Math.round((completedCount / totalNodes) * 100)
+        }
+      }
+    } catch (err) {
+      console.error('[Canvas Store] 编组执行异常:', err)
+    }
+
+    // 最终状态更新
+    const finalState = groupExecutionState.value[groupId]
+    if (finalState) {
+      finalState.currentNodes = []
+      if (groupExecutionAbort.value[groupId]) {
+        finalState.status = 'stopped'
+      } else if (failedCount > 0) {
+        finalState.status = 'partial'
+      } else {
+        finalState.status = 'completed'
+      }
+      finalState.completed = completedCount
+      finalState.failed = failedCount
+      finalState.progress = 100
+    }
+
+    console.log(`[Canvas Store] 编组 "${groupName}" 执行完毕，成功: ${completedCount - failedCount}，失败: ${failedCount}`)
+  }
+
+  /**
+   * 停止编组执行
+   */
+  function stopGroupExecution(groupId) {
+    groupExecutionAbort.value[groupId] = true
+    const state = groupExecutionState.value[groupId]
+    if (state) {
+      state.status = 'stopping'
+    }
+    console.log(`[Canvas Store] 正在停止编组 ${groupId} 的执行`)
+  }
+
+  /**
+   * 获取编组执行状态
+   */
+  function getGroupExecutionState(groupId) {
+    return groupExecutionState.value[groupId] || null
+  }
+
   return {
     // 状态
     nodes,
@@ -1762,7 +2100,15 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 编组操作
     createGroup,
     disbandGroup,
-    
+
+    // 编组执行
+    groupExecutionState,
+    executeGroup,
+    stopGroupExecution,
+    getGroupExecutionState,
+    getGroupInternalEdges,
+    topologicalSort,
+
     // UI 操作
     openNodeSelector,
     closeNodeSelector,

@@ -1961,10 +1961,14 @@ function handleDisbandGroup() {
 // 处理整组执行
 async function handleExecuteGroup() {
   if (selectedGroupNode.value) {
+    const groupId = selectedGroupNode.value.id
     const nodeIds = selectedGroupNode.value.data?.nodeIds || []
-    console.log('[Canvas] 整组执行', nodeIds)
-    // TODO: 实现批量执行逻辑
-    await showAlert(`将执行编组内 ${nodeIds.length} 个节点的生成任务`, '整组执行')
+    if (!nodeIds.length) {
+      await showAlert('编组内没有可执行的节点', '提示')
+      return
+    }
+    console.log('[Canvas] 整组执行', groupId, nodeIds)
+    canvasStore.executeGroup(groupId)
   }
 }
 
