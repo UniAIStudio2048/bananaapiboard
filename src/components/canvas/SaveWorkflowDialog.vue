@@ -28,6 +28,7 @@ const workflowDescription = ref('')
 const isSaving = ref(false)
 const saveError = ref('')
 const lastSaveError = ref('') // 用于实现"双击确认"逻辑
+const retryingUpload = ref(false) // 正在重试上传失败的图片
 
 // 用户配额信息
 const quota = ref(null)
@@ -179,6 +180,79 @@ function checkLocalFiles() {
   return issues
 }
 
+// 重试上传失败的节点图片
+async function retryFailedUploads(failedNodes) {
+  const { uploadImages } = await import('@/api/canvas/nodes.js')
+
+  for (const nodeInfo of failedNodes) {
+    const node = canvasStore.nodes.find(n => n.id === nodeInfo.id)
+    if (!node) continue
+
+    const data = node.data || {}
+
+    // 处理 sourceImages 中的 blob URL
+    const blobUrls = (data.sourceImages || []).filter(url => typeof url === 'string' && url.startsWith('blob:'))
+
+    for (const blobUrl of blobUrls) {
+      try {
+        const response = await fetch(blobUrl)
+        const blob = await response.blob()
+        const file = new File([blob], `retry-upload-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' })
+
+        const urls = await uploadImages([file])
+        if (urls && urls.length > 0) {
+          const serverUrl = urls[0]
+          const currentNode = canvasStore.nodes.find(n => n.id === nodeInfo.id)
+          if (currentNode?.data) {
+            const updatedSourceImages = (currentNode.data.sourceImages || []).map(
+              url => url === blobUrl ? serverUrl : url
+            )
+            canvasStore.updateNodeData(nodeInfo.id, {
+              sourceImages: updatedSourceImages,
+              uploadFailed: false,
+              uploadError: null
+            })
+          }
+        }
+      } catch (err) {
+        console.warn('[SaveDialog] 重试上传失败:', err.message)
+        throw new Error(`节点 "${nodeInfo.title}" 的图片重新上传失败，请删除该节点后重新上传图片`)
+      }
+    }
+
+    // 处理 output.url 和 output.urls 中的 blob URL
+    if (data.output) {
+      const outputBlobUrls = [
+        ...(data.output.url && typeof data.output.url === 'string' && data.output.url.startsWith('blob:') ? [data.output.url] : []),
+        ...(data.output.urls || []).filter(url => typeof url === 'string' && url.startsWith('blob:'))
+      ]
+
+      for (const blobUrl of outputBlobUrls) {
+        try {
+          const response = await fetch(blobUrl)
+          const blob = await response.blob()
+          const file = new File([blob], `retry-upload-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' })
+          const urls = await uploadImages([file])
+          if (urls && urls.length > 0) {
+            const serverUrl = urls[0]
+            const currentNode = canvasStore.nodes.find(n => n.id === nodeInfo.id)
+            if (currentNode?.data?.output) {
+              const updatedOutput = { ...currentNode.data.output }
+              if (updatedOutput.url === blobUrl) updatedOutput.url = serverUrl
+              if (Array.isArray(updatedOutput.urls)) {
+                updatedOutput.urls = updatedOutput.urls.map(u => u === blobUrl ? serverUrl : u)
+              }
+              canvasStore.updateNodeData(nodeInfo.id, { output: updatedOutput, uploadFailed: false, uploadError: null })
+            }
+          }
+        } catch (err) {
+          throw new Error(`节点 "${nodeInfo.title}" 的图片重新上传失败`)
+        }
+      }
+    }
+  }
+}
+
 // 保存到本地备份（用于恢复）
 function saveLocalBackup(workflowData, name) {
   try {
@@ -231,23 +305,30 @@ async function handleSave() {
     return
   }
   
-  // 如果有上传失败或未上传的 blob URL，给出警告
+  // 如果有上传失败或未上传的 blob URL，先重试上传
   const failedCount = fileIssues.uploadFailed.length + fileIssues.blobUrls.length
   if (failedCount > 0) {
-    const failedTitles = [
-      ...fileIssues.uploadFailed.map(n => n.title),
-      ...fileIssues.blobUrls.map(n => n.title)
-    ].slice(0, 3).join('、')
-    const moreText = failedCount > 3 ? `等 ${failedCount} 个` : ''
-    
-    // 显示警告但允许继续保存（用户可能想先保存，稍后修复）
-    saveError.value = `⚠️ "${failedTitles}"${moreText}节点包含本地文件未能上传到云端，保存后可能无法正常加载。建议删除这些节点后重新上传。`
-    // 不 return，继续保存（给用户选择的机会）
-    // 用户第二次点击保存时，如果错误信息相同，就允许保存
-    if (saveError.value === lastSaveError.value) {
-      saveError.value = '' // 清除错误，允许保存
-    } else {
-      lastSaveError.value = saveError.value
+    // 去重：同一个节点可能同时出现在 uploadFailed 和 blobUrls 中
+    const seenIds = new Set()
+    const nodesToRetry = []
+    for (const n of [...fileIssues.uploadFailed, ...fileIssues.blobUrls]) {
+      if (!seenIds.has(n.id)) {
+        seenIds.add(n.id)
+        nodesToRetry.push(n)
+      }
+    }
+
+    isSaving.value = true
+    saveError.value = ''
+    retryingUpload.value = true
+
+    try {
+      await retryFailedUploads(nodesToRetry)
+      retryingUpload.value = false
+    } catch (err) {
+      retryingUpload.value = false
+      isSaving.value = false
+      saveError.value = err.message || '部分图片重新上传失败，请删除相关节点后重新上传'
       return
     }
   }
@@ -439,6 +520,11 @@ function handleClose() {
             ></textarea>
           </div>
           
+          <!-- 重试上传提示 -->
+          <div v-if="retryingUpload" class="retry-upload-message">
+            正在重新上传图片，请稍候...
+          </div>
+
           <!-- 错误提示 -->
           <div v-if="saveError" class="error-message">
             {{ saveError }}
@@ -675,6 +761,35 @@ function handleClose() {
   min-height: 80px;
 }
 
+/* 重试上传提示 */
+.retry-upload-message {
+  padding: 12px 14px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: 8px;
+  color: #93c5fd;
+  font-size: 13px;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.retry-upload-message::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(59, 130, 246, 0.3);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* 错误信息 */
 .error-message {
   padding: 12px 14px;
@@ -881,6 +996,13 @@ function handleClose() {
 :root.canvas-theme-light .form-input::placeholder,
 :root.canvas-theme-light .form-textarea::placeholder {
   color: rgba(0, 0, 0, 0.35) !important;
+}
+
+/* 重试上传提示 - 白昼模式 */
+:root.canvas-theme-light .retry-upload-message {
+  background: rgba(59, 130, 246, 0.08) !important;
+  border-color: rgba(59, 130, 246, 0.25) !important;
+  color: #2563eb !important;
 }
 
 /* 错误信息 */

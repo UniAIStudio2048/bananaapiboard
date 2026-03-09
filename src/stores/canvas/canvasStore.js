@@ -1194,10 +1194,16 @@ export const useCanvasStore = defineStore('canvas', () => {
       
       // 清理 sourceImages 中的 base64/blob
       if (Array.isArray(data.sourceImages)) {
+        const originalCount = data.sourceImages.length
         data.sourceImages = data.sourceImages.filter(url => {
           if (typeof url !== 'string') return false
           return !url.startsWith('data:') && !url.startsWith('blob:')
         })
+        // 如果过滤后图片数量减少且节点上传失败，标记数据可能丢失
+        if (data.sourceImages.length < originalCount && data.uploadFailed) {
+          data._dataLost = true
+          data._lostReason = 'upload_failed'
+        }
       }
       
       // 清理 referenceImages 中的 base64/blob
