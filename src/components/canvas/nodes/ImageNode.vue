@@ -4323,12 +4323,16 @@ async function handleGenerate(options = {}) {
     
   } catch (error) {
     console.error('[ImageNode] 生成失败:', error)
+    isGenerating.value = false
+    if (error.code === 'concurrent_limit_exceeded') {
+      await showAlert(error.message, '并发限制')
+      return
+    }
     errorMessage.value = error.message || '生成失败'
     canvasStore.updateNodeData(targetNodeId, {
       status: 'error',
       error: error.message
     })
-    isGenerating.value = false
   }
 }
 

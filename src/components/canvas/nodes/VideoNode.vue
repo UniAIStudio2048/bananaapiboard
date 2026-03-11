@@ -2241,6 +2241,11 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
   const data = await response.json()
   
   if (!response.ok) {
+    if (response.status === 429 && data.error === 'user_concurrent_limit_exceeded') {
+      const err = new Error(data.message || '已达到并发限制，请升级套餐')
+      err.code = 'concurrent_limit_exceeded'
+      throw err
+    }
     throw new Error(data.message || data.error || '生成失败')
   }
   
@@ -2642,12 +2647,16 @@ async function handleGenerate() {
     
   } catch (error) {
     console.error('[VideoNode] 生成失败:', error)
+    isGenerating.value = false
+    if (error.code === 'concurrent_limit_exceeded') {
+      await showAlert(error.message, '并发限制')
+      return
+    }
     errorMessage.value = error.message || '生成失败'
     canvasStore.updateNodeData(targetNodeId, {
       status: 'error',
       error: error.message
     })
-    isGenerating.value = false
   }
 }
 
