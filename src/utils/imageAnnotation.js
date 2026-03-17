@@ -125,11 +125,12 @@ export function getGlobalLabel(globalIndex) {
  * @param {HTMLImageElement} image - 原始图片
  * @param {Array} markers - 标记点数组 [{x, y, label}]
  * @param {string} format - 输出格式 ('blob' | 'base64')
- * @param {number} quality - JPEG 质量 (0-1)，默认 0.85
+ * @param {number} quality - 图片质量 (0-1)，PNG 格式下忽略此参数
  * @param {Object} canvasSize - Canvas 显示尺寸 {width, height}，用于坐标转换
+ * @param {string} mimeType - 输出 MIME 类型，默认 'image/png' 保持无损质量
  * @returns {Promise<Blob|string>}
  */
-export async function generateAnnotatedImage(image, markers, format = 'blob', quality = 0.85, canvasSize = null) {
+export async function generateAnnotatedImage(image, markers, format = 'blob', quality = 0.95, canvasSize = null, mimeType = 'image/png') {
   return new Promise((resolve, reject) => {
     try {
       // 创建临时 Canvas，使用原始图片尺寸
@@ -185,18 +186,20 @@ export async function generateAnnotatedImage(image, markers, format = 'blob', qu
         drawPinMarker(ctx, scaledX, scaledY, marker.label, false, markerSizeScale)
       })
       
-      // 输出格式 - 使用 JPEG 格式压缩
+      // 输出格式 - 默认使用 PNG 无损格式，保持原图质量
+      const isPng = mimeType === 'image/png'
       if (format === 'blob') {
+        const blobArgs = isPng ? [mimeType] : [mimeType, quality]
         canvas.toBlob((blob) => {
           if (blob) {
-            console.log('[generateAnnotatedImage] 生成图片大小:', (blob.size / 1024 / 1024).toFixed(2), 'MB')
+            console.log('[generateAnnotatedImage] 生成图片大小:', (blob.size / 1024 / 1024).toFixed(2), 'MB', '格式:', mimeType)
             resolve(blob)
           } else {
             reject(new Error('Failed to generate blob'))
           }
-        }, 'image/jpeg', quality) // 使用 JPEG 格式和指定质量
+        }, ...blobArgs)
       } else if (format === 'base64') {
-        const base64 = canvas.toDataURL('image/jpeg', quality)
+        const base64 = isPng ? canvas.toDataURL(mimeType) : canvas.toDataURL(mimeType, quality)
         resolve(base64)
       } else {
         reject(new Error('Unsupported format'))

@@ -186,8 +186,9 @@ async function generateAndEmitAnnotatedImage() {
       imageElement.value, 
       markers.value, 
       'blob', 
-      0.85, 
-      canvasSize
+      0.95, 
+      canvasSize,
+      'image/png'
     )
     emit('annotated-image', blob)
   } catch (error) {

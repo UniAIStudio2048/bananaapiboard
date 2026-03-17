@@ -861,13 +861,14 @@ async function generate() {
         
         for (let i = 0; i < imageFiles.value.length; i++) {
           if (annotatedImageBlobs.value[i]) {
-            // 使用标注后的图片（JPEG 格式）
             const originalName = imageFiles.value[i].name
             const nameWithoutExt = originalName.replace(/\.[^/.]+$/, '')
+            const blob = annotatedImageBlobs.value[i]
+            const ext = blob.type === 'image/png' ? 'png' : 'jpg'
             const annotatedFile = new File(
-              [annotatedImageBlobs.value[i]], 
-              `annotated_${i}_${nameWithoutExt}.jpg`, 
-              { type: 'image/jpeg' }
+              [blob], 
+              `annotated_${i}_${nameWithoutExt}.${ext}`, 
+              { type: blob.type }
             )
             console.log('[generate] 标注图片', i, '大小:', (annotatedFile.size / 1024 / 1024).toFixed(2), 'MB')
             filesToUpload.push(annotatedFile)
