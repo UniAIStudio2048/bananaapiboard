@@ -2246,7 +2246,10 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
   if (isSeedance2Model.value) {
     const sd2Mode = selectedSeedance2Mode.value
     formData.append('seedance_mode', sd2Mode)
-    console.log('[VideoNode] Seedance 2.0 模式:', sd2Mode)
+    formData.append('seedance_resolution', '720p')
+    formData.append('seedance_ratio', selectedAspectRatio.value)
+    formData.append('seedance_watermark', 'false')
+    console.log('[VideoNode] Seedance 2.0 模式:', sd2Mode, '分辨率: 720p, 比例:', selectedAspectRatio.value)
 
     if (sd2Mode === 'image2video_first') {
       if (finalImages.length > 0) {

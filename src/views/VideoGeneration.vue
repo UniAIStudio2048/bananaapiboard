@@ -681,7 +681,7 @@ async function generateVideo() {
     formData.append('prompt', currentPrompt)
     formData.append('model', currentModel)
     formData.append('aspect_ratio', currentAspectRatio)
-    formData.append('duration', currentDuration)
+    formData.append('duration', isSeedanceModel.value ? String(seedanceDuration.value) : currentDuration)
     formData.append('hd', hd.value ? 'true' : 'false')
     formData.append('watermark', watermark.value ? 'true' : 'false')
     formData.append('private', isPrivate.value ? 'true' : 'false')
@@ -704,15 +704,14 @@ async function generateVideo() {
 
     // Seedance 2.0 参数
     if (isSeedanceModel.value) {
-      formData.append('seedanceMode', seedanceMode.value)
-      formData.append('seedanceResolution', seedanceResolution.value)
-      formData.append('seedanceRatio', seedanceRatio.value)
-      formData.append('seedanceDuration', String(seedanceDuration.value))
-      formData.append('generateAudio', seedanceGenerateAudio.value ? 'true' : 'false')
-      formData.append('webSearch', seedanceWebSearch.value ? 'true' : 'false')
-      formData.append('seedanceWatermark', seedanceWatermark.value ? 'true' : 'false')
+      formData.append('seedance_mode', seedanceMode.value)
+      formData.append('seedance_resolution', seedanceResolution.value)
+      formData.append('seedance_ratio', seedanceRatio.value)
+      formData.append('seedance_generate_audio', seedanceGenerateAudio.value ? 'true' : 'false')
+      formData.append('web_search', seedanceWebSearch.value ? 'true' : 'false')
+      formData.append('seedance_watermark', seedanceWatermark.value ? 'true' : 'false')
 
-      // 首帧图片
+      // 首帧图片（文件上传字段名需与 multer 配置一致，使用驼峰命名）
       if (seedanceFirstFrameFile.value) {
         formData.append('firstFrameImage', seedanceFirstFrameFile.value)
       }
