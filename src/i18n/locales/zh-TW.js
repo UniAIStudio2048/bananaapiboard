@@ -410,7 +410,11 @@ export default {
       imageUpscale: { label: '超解析度', desc: '提升圖片解析度' },
       imageCutout: { label: '智能摳圖', desc: '摳出圖片主體' },
       imageExpand: { label: '圖片擴展', desc: '擴展圖片邊緣' },
-      gridPreview: { label: '九宮格預覽', desc: '九宮格展示多張圖片' }
+      gridPreview: { label: '九宮格預覽', desc: '九宮格展示多張圖片' },
+      videoLastFrame: { label: '截取尾幀', desc: '提取影片最後一幀' },
+      videoDescribe: { label: '影片反推', desc: '影片反推提示詞' },
+      videoEdit: { label: '影片編輯', desc: '編輯和處理影片' },
+      videoExtend: { label: '影片延長', desc: '延長已有影片時長' }
     },
     // 圖片節點快捷操作
     imageNode: {

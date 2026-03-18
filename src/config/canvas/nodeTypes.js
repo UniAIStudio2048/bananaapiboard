@@ -41,6 +41,7 @@ export const NODE_TYPES = {
   VIDEO_LAST_FRAME: 'video-last-frame',
   LLM_VIDEO_DESCRIBE: 'llm-video-describe',
   VIDEO_EDIT: 'video-edit',  // 视频编辑（连接下游视频节点）
+  VIDEO_EXTEND: 'video-extend',  // 视频延长（延长已有视频）
 
   // 音频处理类
   AUDIO_TO_VIDEO: 'audio-to-video',
@@ -343,6 +344,19 @@ export const NODE_TYPE_CONFIG = {
     outputType: 'video'
   },
 
+  [NODE_TYPES.VIDEO_EXTEND]: {
+    label: 'canvas.nodeConfig.videoExtend.label',
+    description: 'canvas.nodeConfig.videoExtend.desc',
+    icon: '▶▶',
+    category: 'video',
+    color: '#f97316',
+    hasInput: true,
+    hasOutput: true,
+    inputType: 'video',
+    outputType: 'video',
+    consumesPoints: true
+  },
+
   // 音频处理节点
   [NODE_TYPES.AUDIO_TO_VIDEO]: {
     label: 'canvas.nodeConfig.audioToVideo.label',
@@ -428,40 +442,49 @@ export const CONNECTION_RULES = {
   [NODE_TYPES.VIDEO_INPUT]: [
     NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
     NODE_TYPES.LLM_VIDEO_DESCRIBE,  // 视频反推
-    NODE_TYPES.VIDEO_EDIT           // 视频编辑
+    NODE_TYPES.VIDEO_EDIT,          // 视频编辑
+    NODE_TYPES.VIDEO_EXTEND         // 视频延长
   ],
   
   [NODE_TYPES.AUDIO_INPUT]: [
     NODE_TYPES.AUDIO_TO_VIDEO,
     NODE_TYPES.AUDIO_TO_TEXT,
-    NODE_TYPES.AUDIO_LIP_SYNC
+    NODE_TYPES.AUDIO_LIP_SYNC,
+    NODE_TYPES.TEXT_TO_VIDEO,
+    NODE_TYPES.IMAGE_TO_VIDEO
   ],
 
   // 统一音频节点别名
   'audio': [
     NODE_TYPES.AUDIO_TO_VIDEO,
     NODE_TYPES.AUDIO_TO_TEXT,
-    NODE_TYPES.AUDIO_LIP_SYNC
+    NODE_TYPES.AUDIO_LIP_SYNC,
+    NODE_TYPES.TEXT_TO_VIDEO,
+    NODE_TYPES.IMAGE_TO_VIDEO
   ],
 
   'audio-input': [
     NODE_TYPES.AUDIO_TO_VIDEO,
     NODE_TYPES.AUDIO_TO_TEXT,
-    NODE_TYPES.AUDIO_LIP_SYNC
+    NODE_TYPES.AUDIO_LIP_SYNC,
+    NODE_TYPES.TEXT_TO_VIDEO,
+    NODE_TYPES.IMAGE_TO_VIDEO
   ],
   
   // 统一视频节点别名
   'video': [
     NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
     NODE_TYPES.LLM_VIDEO_DESCRIBE,  // 视频反推
-    NODE_TYPES.VIDEO_EDIT           // 视频编辑
+    NODE_TYPES.VIDEO_EDIT,          // 视频编辑
+    NODE_TYPES.VIDEO_EXTEND         // 视频延长
   ],
   
   // 视频生成节点别名
   'video-gen': [
     NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
     NODE_TYPES.LLM_VIDEO_DESCRIBE,  // 视频反推
-    NODE_TYPES.VIDEO_EDIT           // 视频编辑
+    NODE_TYPES.VIDEO_EDIT,          // 视频编辑
+    NODE_TYPES.VIDEO_EXTEND         // 视频延长
   ],
   
   [NODE_TYPES.TEXT_TO_IMAGE]: [
@@ -481,13 +504,15 @@ export const CONNECTION_RULES = {
   [NODE_TYPES.TEXT_TO_VIDEO]: [
     NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
     NODE_TYPES.LLM_VIDEO_DESCRIBE,  // 视频反推
-    NODE_TYPES.VIDEO_EDIT           // 视频编辑
+    NODE_TYPES.VIDEO_EDIT,          // 视频编辑
+    NODE_TYPES.VIDEO_EXTEND         // 视频延长
   ],
   
   [NODE_TYPES.IMAGE_TO_VIDEO]: [
     NODE_TYPES.VIDEO_LAST_FRAME,    // 截取尾帧
     NODE_TYPES.LLM_VIDEO_DESCRIBE,  // 视频反推
-    NODE_TYPES.VIDEO_EDIT           // 视频编辑
+    NODE_TYPES.VIDEO_EDIT,          // 视频编辑
+    NODE_TYPES.VIDEO_EXTEND         // 视频延长
   ],
   
   [NODE_TYPES.LLM_PROMPT_ENHANCE]: [
@@ -546,6 +571,13 @@ export const CONNECTION_RULES = {
   [NODE_TYPES.IMAGE_EXPAND]: [
     NODE_TYPES.IMAGE_TO_VIDEO,
     NODE_TYPES.PREVIEW_OUTPUT
+  ],
+
+  [NODE_TYPES.VIDEO_EXTEND]: [
+    NODE_TYPES.VIDEO_LAST_FRAME,
+    NODE_TYPES.LLM_VIDEO_DESCRIBE,
+    NODE_TYPES.VIDEO_EDIT,
+    NODE_TYPES.VIDEO_EXTEND
   ]
 }
 

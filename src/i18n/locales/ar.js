@@ -402,7 +402,11 @@ export default {
       imageUpscale: { label: 'تكبير', desc: 'تحسين دقة الصورة' },
       imageCutout: { label: 'قص', desc: 'استخراج موضوع الصورة' },
       imageExpand: { label: 'توسيع', desc: 'توسيع حدود الصورة' },
-      gridPreview: { label: 'معاينة الشبكة', desc: 'عرض صور متعددة في شبكة' }
+      gridPreview: { label: 'معاينة الشبكة', desc: 'عرض صور متعددة في شبكة' },
+      videoLastFrame: { label: 'استخراج آخر إطار', desc: 'استخراج آخر إطار من الفيديو' },
+      videoDescribe: { label: 'وصف الفيديو', desc: 'موجه عكسي من الفيديو' },
+      videoEdit: { label: 'تحرير الفيديو', desc: 'تحرير ومعالجة الفيديو' },
+      videoExtend: { label: 'تمديد الفيديو', desc: 'تمديد مدة الفيديو' }
     },
     imageNode: {
       imageToImage: 'صورة إلى صورة',

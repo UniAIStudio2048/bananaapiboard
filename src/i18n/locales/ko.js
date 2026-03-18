@@ -487,7 +487,11 @@ export default {
       imageUpscale: { label: '업스케일', desc: '이미지 해상도 향상' },
       imageCutout: { label: '컷아웃', desc: '이미지 주체 추출' },
       imageExpand: { label: '아웃페인트', desc: '이미지 경계 확장' },
-      gridPreview: { label: '그리드 미리보기', desc: '여러 이미지 그리드 표시' }
+      gridPreview: { label: '그리드 미리보기', desc: '여러 이미지 그리드 표시' },
+      videoLastFrame: { label: '마지막 프레임 추출', desc: '비디오에서 마지막 프레임 추출' },
+      videoDescribe: { label: '비디오 역추론', desc: '비디오에서 프롬프트 역추론' },
+      videoEdit: { label: '비디오 편집', desc: '비디오 편집 및 처리' },
+      videoExtend: { label: '비디오 연장', desc: '기존 비디오 길이 연장' }
     },
     // 이미지 노드 빠른 작업
     imageNode: {

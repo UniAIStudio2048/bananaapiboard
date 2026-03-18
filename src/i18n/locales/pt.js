@@ -402,7 +402,11 @@ export default {
       imageUpscale: { label: 'Upscale', desc: 'Melhorar resolução da imagem' },
       imageCutout: { label: 'Recorte', desc: 'Extrair sujeito da imagem' },
       imageExpand: { label: 'Outpaint', desc: 'Expandir bordas da imagem' },
-      gridPreview: { label: 'Prévia em Grade', desc: 'Exibir múltiplas imagens em grade' }
+      gridPreview: { label: 'Prévia em Grade', desc: 'Exibir múltiplas imagens em grade' },
+      videoLastFrame: { label: 'Extrair Último Quadro', desc: 'Extrair último quadro do vídeo' },
+      videoDescribe: { label: 'Descrever Vídeo', desc: 'Prompt reverso do vídeo' },
+      videoEdit: { label: 'Editar Vídeo', desc: 'Editar e processar vídeo' },
+      videoExtend: { label: 'Estender Vídeo', desc: 'Estender duração do vídeo' }
     },
     imageNode: {
       imageToImage: 'Imagem para Imagem',

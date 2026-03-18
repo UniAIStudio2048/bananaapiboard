@@ -479,7 +479,11 @@ export default {
       imageUpscale: { label: 'Upscale', desc: 'Améliorer résolution image' },
       imageCutout: { label: 'Détourage', desc: 'Extraire sujet de l\'image' },
       imageExpand: { label: 'Outpaint', desc: 'Étendre bordures de l\'image' },
-      gridPreview: { label: 'Aperçu Grille', desc: 'Afficher plusieurs images en grille' }
+      gridPreview: { label: 'Aperçu Grille', desc: 'Afficher plusieurs images en grille' },
+      videoLastFrame: { label: 'Extraire Dernière Image', desc: 'Extraire la dernière image de la vidéo' },
+      videoDescribe: { label: 'Décrire Vidéo', desc: 'Prompt inverse depuis la vidéo' },
+      videoEdit: { label: 'Éditer Vidéo', desc: 'Éditer et traiter la vidéo' },
+      videoExtend: { label: 'Étendre Vidéo', desc: 'Étendre la durée de la vidéo' }
     },
     imageNode: {
       imageToImage: 'Image vers Image',

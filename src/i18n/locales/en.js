@@ -545,7 +545,9 @@ export default {
       gridPreview: { label: 'Grid Preview', desc: 'Display multiple images in grid' },
       storyboardGrid: { label: 'Storyboard Grid', desc: 'Create draggable image grid' },
       videoLastFrame: { label: 'Extract Last Frame', desc: 'Extract last frame from video' },
-      videoDescribe: { label: 'Video Describe', desc: 'Reverse prompt from video' }
+      videoDescribe: { label: 'Video Describe', desc: 'Reverse prompt from video' },
+      videoEdit: { label: 'Video Edit', desc: 'Edit and process video' },
+      videoExtend: { label: 'Video Extend', desc: 'Extend video duration' }
     },
     // Image node quick actions
     imageNode: {

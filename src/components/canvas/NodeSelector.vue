@@ -7,6 +7,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions } from '@/config/canvas/nodeTypes'
 import { useI18n } from '@/i18n'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { getAvailableVideoModels } from '@/config/tenant'
 
 const { t } = useI18n()
 
@@ -387,6 +388,44 @@ function selectNodeType(type) {
     }
   }
   
+  // 特殊处理：视频延长节点（从视频节点触发时）
+  if (type === 'video-extend' && triggerNode.value) {
+    const sourceData = triggerNode.value.data
+    if (sourceData?.output?.url) {
+      actualNodeType = 'video'
+      nodeData.title = '视频延长'
+      nodeData.label = '视频延长'
+      nodeData.nodeRole = 'extend'
+      nodeData.extendMode = true
+      nodeData.sourceVideoUrl = sourceData.output.url
+      nodeData.output = {
+        type: 'video',
+        url: sourceData.output.url
+      }
+      nodeData.status = 'success'
+
+      // 自动选择最优模型：Seedance 2.0 > Kling O1 > 其他视频模型
+      const allVideoModels = getAvailableVideoModels()
+      const seedance2 = allVideoModels.find(m => {
+        const apiType = m.apiType || ''
+        const name = (m.value || '').toLowerCase()
+        return apiType === 'seedance-2.0' || (name.includes('seedance') && name.includes('2.0'))
+      })
+      const klingO1 = allVideoModels.find(m => m.isKlingO1Model)
+      const bestModel = seedance2 || klingO1 || allVideoModels[0]
+
+      if (bestModel) {
+        nodeData.model = bestModel.value
+        if (seedance2 && bestModel === seedance2) {
+          nodeData.seedance2Mode = 'video_extend'
+        } else if (klingO1 && bestModel === klingO1) {
+          const hasExtend = bestModel.klingO1Modes?.some(m => m.value === 'video_extend')
+          nodeData.klingO1Mode = hasExtend ? 'video_extend' : 'video_edit'
+        }
+      }
+    }
+  }
+
   // 特殊处理：截取尾帧节点（从视频节点触发时）
   if (type === 'video-last-frame' && triggerNode.value) {
     const sourceData = triggerNode.value.data

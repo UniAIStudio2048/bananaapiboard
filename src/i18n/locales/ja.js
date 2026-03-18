@@ -488,7 +488,11 @@ export default {
       imageUpscale: { label: 'アップスケール', desc: '画像解像度を向上' },
       imageCutout: { label: '切り抜き', desc: '画像の主体を抽出' },
       imageExpand: { label: 'アウトペイント', desc: '画像の境界を拡張' },
-      gridPreview: { label: 'グリッドプレビュー', desc: '複数画像をグリッド表示' }
+      gridPreview: { label: 'グリッドプレビュー', desc: '複数画像をグリッド表示' },
+      videoLastFrame: { label: '最終フレーム抽出', desc: '動画の最後のフレームを抽出' },
+      videoDescribe: { label: '動画逆推論', desc: '動画からプロンプトを逆推論' },
+      videoEdit: { label: '動画編集', desc: '動画を編集・処理' },
+      videoExtend: { label: '動画延長', desc: '既存の動画時間を延長' }
     },
     // 画像ノードのクイックアクション
     imageNode: {

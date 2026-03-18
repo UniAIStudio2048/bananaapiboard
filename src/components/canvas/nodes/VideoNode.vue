@@ -263,7 +263,10 @@ function handlePromptWheel(event) {
   }
 }
 
-// ========== 提示词 @标记 引用功能（Kling O1 模型） ==========
+// 支持 @标记 引用的模型（Kling O1 和 Seedance 2.0）
+const supportsMediaTags = computed(() => isKlingO1Model.value || isSeedance2Model.value)
+
+// ========== 提示词 @标记 引用功能（Kling O1 / Seedance 2.0 模型） ==========
 
 /**
  * 收集所有参考素材（带编号），用于点击插入 @标记
@@ -275,6 +278,9 @@ const referenceMediaList = computed(() => {
   })
   referenceImages.value.forEach((url, i) => {
     list.push({ type: 'image', index: i + 1, url, label: `图片${i + 1}` })
+  })
+  referenceAudios.value.forEach((url, i) => {
+    list.push({ type: 'audio', index: i + 1, url, label: `音频${i + 1}` })
   })
   return list
 })
@@ -317,6 +323,9 @@ function escapePromptTags(text) {
   result = result.replace(/【?@图片(\d*)】?/g, (_, num) => {
     return `<<<image_${num ? parseInt(num) : 1}>>>`
   })
+  result = result.replace(/【?@音频(\d*)】?/g, (_, num) => {
+    return `<<<audio_${num ? parseInt(num) : 1}>>>`
+  })
   return result
 }
 
@@ -326,7 +335,7 @@ function escapePromptTags(text) {
 const highlightedPromptSegments = computed(() => {
   if (!promptText.value) return []
   const segments = []
-  const regex = /【?@(?:视频|图片)\d*】?/g
+  const regex = /【?@(?:视频|图片|音频)\d*】?/g
   let lastIndex = 0
   let match
   while ((match = regex.exec(promptText.value)) !== null) {
@@ -1323,6 +1332,36 @@ const referenceVideos = computed(() => {
 // 是否有参考视频
 const hasReferenceVideos = computed(() => referenceVideos.value.length > 0)
 
+// 参考音频（来自上游音频节点）
+const AUDIO_NODE_TYPES = ['audio-input', 'audio']
+
+const referenceAudios = computed(() => {
+  const allEdges = [...canvasStore.edges]
+  const allNodes = [...canvasStore.nodes]
+  
+  const upstreamEdges = allEdges.filter(edge => edge.target === props.id)
+  if (upstreamEdges.length === 0) return []
+
+  const upstreamAudios = []
+  
+  for (const edge of upstreamEdges) {
+    const sourceNode = allNodes.find(n => n.id === edge.source)
+    if (!sourceNode?.data || !AUDIO_NODE_TYPES.includes(sourceNode.type)) continue
+    
+    if (sourceNode.data.output?.url) {
+      upstreamAudios.push(sourceNode.data.output.url)
+    } else if (sourceNode.data.audioUrl) {
+      upstreamAudios.push(sourceNode.data.audioUrl)
+    } else if (sourceNode.data.audioData) {
+      upstreamAudios.push(sourceNode.data.audioData)
+    }
+  }
+
+  return upstreamAudios
+})
+
+const hasReferenceAudios = computed(() => referenceAudios.value.length > 0)
+
 // 继承的文本提示词（来自上游文本节点）
 // 只有在有上游连接时才使用继承数据
 const inheritedPrompt = computed(() => {
@@ -1341,11 +1380,12 @@ const inheritedPrompt = computed(() => {
 function getUpstreamData() {
   // 查找所有连接到当前节点的上游边
   const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
-  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [] }
+  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [], audios: [] }
   
-  let prompts = []  // 改为数组，支持多个文本节点
+  let prompts = []
   let images = []
-  let videos = []   // 新增：收集上游视频
+  let videos = []
+  let audios = []
   
   // 遍历所有上游节点，收集数据
   for (const edge of upstreamEdges) {
@@ -1402,10 +1442,18 @@ function getUpstreamData() {
         videos.push(sourceNode.data.output.url)
       }
     }
+    
+    // 音频节点：获取音频URL（用于 Seedance 2.0 多模态参考）
+    if (AUDIO_NODE_TYPES.includes(sourceNode.type)) {
+      const audioUrl = sourceNode.data?.output?.url || sourceNode.data?.audioUrl || sourceNode.data?.audioData
+      if (audioUrl) {
+        audios.push(audioUrl)
+      }
+    }
   }
   
-  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos })
-  return { prompts, images, videos }
+  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos, audios })
+  return { prompts, images, videos, audios }
 }
 
 // 实时获取上游文本内容（用于显示在"上下文文字参考"区域）
@@ -2442,20 +2490,30 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
       for (const imgUrl of finalImages.slice(0, 9)) {
         formData.append('reference_images', imgUrl)
       }
-      const upVideos = getUpstreamData().videos || []
+      const upData = getUpstreamData()
+      const upVideos = upData.videos || []
       for (const vidUrl of upVideos.slice(0, 3)) {
         formData.append('reference_videos', vidUrl)
       }
-      console.log('[VideoNode] SD2 多模态参考 | 图片:', finalImages.length, '视频:', upVideos.length)
+      const upAudios = upData.audios || []
+      for (const audUrl of upAudios.slice(0, 3)) {
+        formData.append('reference_audios', audUrl)
+      }
+      console.log('[VideoNode] SD2 多模态参考 | 图片:', finalImages.length, '视频:', upVideos.length, '音频:', upAudios.length)
     } else if (sd2Mode === 'video_edit') {
       for (const imgUrl of finalImages) {
         formData.append('reference_images', imgUrl)
       }
-      const upVideos = getUpstreamData().videos || []
+      const upData = getUpstreamData()
+      const upVideos = upData.videos || []
       for (const vidUrl of upVideos) {
         formData.append('reference_videos', vidUrl)
       }
-      console.log('[VideoNode] SD2 视频编辑 | 参考图:', finalImages.length, '参考视频:', upVideos.length)
+      const upAudios = upData.audios || []
+      for (const audUrl of upAudios.slice(0, 3)) {
+        formData.append('reference_audios', audUrl)
+      }
+      console.log('[VideoNode] SD2 视频编辑 | 参考图:', finalImages.length, '参考视频:', upVideos.length, '音频:', upAudios.length)
     } else if (sd2Mode === 'video_extend') {
       const upVideos = getUpstreamData().videos || []
       for (const vidUrl of upVideos.slice(0, 3)) {
@@ -2751,12 +2809,9 @@ async function handleGenerate() {
     finalPrompt = upstreamPromptText || userPrompt || inheritedPrompt.value
   }
   
-  // Kling O1 / Omni-Video 模型：对提示词中的 @视频/@图片 标记进行转义
-  // 兼容两种使用方式：
-  // 1）画布内的 Kling O1 整合模型（isKlingO1Model 为 true）
-  // 2）直接选择 apiType 为 kling-omni / kling-omni-edit 的模型（未启用整合入口）
+  // 支持 @标记 的模型：对提示词中的 @视频/@图片/@音频 标记进行转义
   if (
-    isKlingO1Model.value ||
+    supportsMediaTags.value ||
     currentModelConfig.value?.apiType === 'kling-omni' ||
     currentModelConfig.value?.apiType === 'kling-omni-edit'
   ) {
@@ -3513,6 +3568,32 @@ function removeReferenceVideo(index) {
       edgesToRemove.push(edge.id)
 
       // 仅删除由本节点创建的临时 "source" 节点，保留用户手动创建的上游节点
+      if (sourceNode.data?.nodeRole === 'source') {
+        nodesToRemove.push(sourceNode.id)
+      }
+    }
+  })
+
+  edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
+  nodesToRemove.forEach(nodeId => canvasStore.removeNode(nodeId))
+}
+
+function removeReferenceAudio(index) {
+  const currentAudios = [...(referenceAudios.value || [])]
+  const removedAudio = currentAudios[index]
+
+  const edgesToRemove = []
+  const nodesToRemove = []
+
+  canvasStore.edges.forEach(edge => {
+    if (edge.target === props.id) {
+      const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
+      if (!sourceNode?.data || !AUDIO_NODE_TYPES.includes(sourceNode.type)) return
+
+      const audioUrl = sourceNode.data?.output?.url || sourceNode.data?.audioUrl || sourceNode.data?.audioData
+      if (audioUrl !== removedAudio) return
+
+      edgesToRemove.push(edge.id)
       if (sourceNode.data?.nodeRole === 'source') {
         nodesToRemove.push(sourceNode.id)
       }
@@ -5093,7 +5174,7 @@ function handleToolbarPreview() {
         @drop="handleFrameDrop"
       >
         <div class="panel-frames-header">
-          <span class="panel-frames-label">{{ hasReferenceVideos ? '参考视频/图片' : '参考图片' }}</span>
+          <span class="panel-frames-label">{{ hasReferenceAudios ? '参考视频/图片/音频' : hasReferenceVideos ? '参考视频/图片' : '参考图片' }}</span>
           <span class="panel-frames-hint">拖拽图片/视频到此处 · 拖动调整顺序</span>
         </div>
         <div class="panel-frames-list">
@@ -5103,14 +5184,14 @@ function handleToolbarPreview() {
             :key="'video-' + index"
             class="panel-frame-item panel-frame-video"
             :class="{ 
-              'panel-frame-clickable': isKlingO1Model,
+              'panel-frame-clickable': supportsMediaTags,
               'drag-over': dragOverIndex === index,
               'dragging': dragSortIndex === index
             }"
             draggable="true"
-            :title="isKlingO1Model ? `点击插入 @视频${index + 1}` : ''"
+            :title="supportsMediaTags ? `点击插入 @视频${index + 1}` : ''"
             @mousedown="handleVideoMouseDown"
-            @click="isKlingO1Model && insertMediaTag({ type: 'video', index: index + 1, label: `视频${index + 1}` })"
+            @click="supportsMediaTags && insertMediaTag({ type: 'video', index: index + 1, label: `视频${index + 1}` })"
             @dragstart="handleVideoDragStart($event, index)"
             @dragover="handleVideoDragOver($event, index)"
             @dragleave="handleVideoDragLeave"
@@ -5118,12 +5199,9 @@ function handleToolbarPreview() {
             @dragend="handleVideoDragEnd"
           >
             <video :src="video" muted preload="metadata" class="video-thumb"></video>
-            <!-- 左上角序号徽章（与图片节点保持一致） -->
             <span class="panel-frame-label">{{ index + 1 }}</span>
-            <!-- 右下角播放图标徽章 -->
             <span class="panel-frame-play-icon">▶</span>
-            <span v-if="isKlingO1Model" class="panel-frame-tag-badge">@视频{{ index + 1 }}</span>
-            <!-- 右上角移除按钮 -->
+            <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@视频{{ index + 1 }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceVideo(index)">×</button>
           </div>
           <!-- 现有图片（支持拖拽排序）- 点击插入 @图片N 标记 -->
@@ -5134,12 +5212,12 @@ function handleToolbarPreview() {
             :class="{ 
               'drag-over': dragOverIndex === index,
               'dragging': dragSortIndex === index,
-              'panel-frame-clickable': isKlingO1Model
+              'panel-frame-clickable': supportsMediaTags
             }"
             draggable="true"
-            :title="isKlingO1Model ? `点击插入 @图片${index + 1}` : ''"
+            :title="supportsMediaTags ? `点击插入 @图片${index + 1}` : ''"
             @mousedown="handleImageMouseDown"
-            @click="isKlingO1Model && insertMediaTag({ type: 'image', index: index + 1, label: `图片${index + 1}` })"
+            @click="supportsMediaTags && insertMediaTag({ type: 'image', index: index + 1, label: `图片${index + 1}` })"
             @dragstart="handleImageDragStart($event, index)"
             @dragover="handleImageDragOver($event, index)"
             @dragleave="handleImageDragLeave"
@@ -5148,8 +5226,24 @@ function handleToolbarPreview() {
           >
             <img :src="img" :alt="`图片 ${index + 1}`" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
-            <span v-if="isKlingO1Model" class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
+            <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>
+          </div>
+          <!-- 参考音频（来自上游音频节点）- 点击插入 @音频N 标记 -->
+          <div 
+            v-for="(audio, index) in referenceAudios"
+            :key="'audio-' + index"
+            class="panel-frame-item panel-frame-audio"
+            :class="{ 'panel-frame-clickable': supportsMediaTags }"
+            :title="supportsMediaTags ? `点击插入 @音频${index + 1}` : ''"
+            @click="supportsMediaTags && insertMediaTag({ type: 'audio', index: index + 1, label: `音频${index + 1}` })"
+          >
+            <div class="audio-thumb">
+              <span class="audio-thumb-icon">♪</span>
+            </div>
+            <span class="panel-frame-label">{{ index + 1 }}</span>
+            <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@音频{{ index + 1 }}</span>
+            <button class="panel-frame-remove" @click.stop="removeReferenceAudio(index)">×</button>
           </div>
           <!-- 添加按钮 -->
           <div 
@@ -5186,18 +5280,18 @@ function handleToolbarPreview() {
             ref="promptTextareaRef"
             v-model="promptText"
             class="prompt-input"
-            :placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : isKlingO1Model ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
+            :placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : supportsMediaTags ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
             rows="3"
             @keydown="handleKeyDown"
             @input="autoResizeTextarea"
             @wheel="handlePromptWheel"
           ></textarea>
-          <!-- @标记高亮叠加层（仅 Kling O1 模型且有标记时显示） -->
-          <div v-if="isKlingO1Model && highlightedPromptSegments.some(s => s.isTag)" class="prompt-highlight-overlay" aria-hidden="true">
+          <!-- @标记高亮叠加层 -->
+          <div v-if="supportsMediaTags && highlightedPromptSegments.some(s => s.isTag)" class="prompt-highlight-overlay" aria-hidden="true">
             <template v-for="(seg, i) in highlightedPromptSegments" :key="i"><span v-if="seg.isTag" class="prompt-media-tag">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template>
           </div>
         </div>
-        <div v-if="isKlingO1Model && (referenceVideos.length > 0 || referenceImages.length > 0)" class="prompt-tag-hint">
+        <div v-if="supportsMediaTags && (referenceVideos.length > 0 || referenceImages.length > 0 || referenceAudios.length > 0)" class="prompt-tag-hint">
           💡 点击上方参考素材可快速插入引用标记
         </div>
       </div>
@@ -5658,45 +5752,37 @@ function handleToolbarPreview() {
         </div>
       </template>
       
-      <!-- Kling O1 模型模式选择 -->
+      <!-- Kling O1 模型模式选择（使用 SD2 风格） -->
       <template v-if="isKlingO1Model">
-        <div class="veo-mode-section">
-          <div class="veo-mode-header">
-            <span class="veo-mode-label">🎬 O1 模式</span>
-            <span class="veo-mode-hint">当前: {{ currentKlingO1ModeConfig.label }}</span>
+        <div class="sd2-mode-section">
+          <div class="sd2-mode-header">
+            <span class="sd2-mode-title">O1 模式</span>
+            <span class="sd2-mode-current">{{ currentKlingO1ModeConfig.label }}</span>
           </div>
-          <div class="veo-mode-options">
+          <div class="sd2-mode-grid">
             <button
               v-for="opt in klingO1Modes"
               :key="opt.value"
               @click="selectedKlingO1Mode = opt.value"
-              :class="['veo-mode-btn', { active: selectedKlingO1Mode === opt.value }]"
+              :class="['sd2-mode-btn', { active: selectedKlingO1Mode === opt.value }]"
             >
-              <span class="veo-mode-btn-label">{{ opt.label }}</span>
-              <span v-if="opt.maxImages > 0" class="veo-mode-btn-desc">{{ opt.maxImages }}张</span>
+              <span class="sd2-mode-label">{{ opt.label }}</span>
             </button>
           </div>
           <!-- 视频编辑模式：保留原声开关 -->
-          <div v-if="selectedKlingO1Mode === 'video_edit'" class="veo-resolution-section">
-            <span class="veo-resolution-label">原声</span>
-            <div class="veo-resolution-options">
-              <button @click="omniKeepSound = 'yes'" :class="['veo-resolution-btn', { active: omniKeepSound === 'yes' }]">保留</button>
-              <button @click="omniKeepSound = 'no'" :class="['veo-resolution-btn', { active: omniKeepSound === 'no' }]">不保留</button>
+          <div v-if="selectedKlingO1Mode === 'video_edit'" class="sd2-o1-option-row">
+            <span class="sd2-o1-option-label">原声</span>
+            <div class="sd2-o1-option-btns">
+              <button @click="omniKeepSound = 'yes'" :class="['sd2-mode-btn sd2-mode-btn-sm', { active: omniKeepSound === 'yes' }]">保留</button>
+              <button @click="omniKeepSound = 'no'" :class="['sd2-mode-btn sd2-mode-btn-sm', { active: omniKeepSound === 'no' }]">不保留</button>
             </div>
           </div>
-          <!-- 模式说明提示 -->
-          <div v-if="selectedKlingO1Mode === 'first_last_frame'" class="veo-mode-tip blue">
-            🖼️ 首尾帧：第1张图为首帧，第2张为尾帧
+          <div class="sd2-mode-desc">{{ currentKlingO1ModeConfig.desc || '' }}</div>
+          <div v-if="selectedKlingO1Mode === 'video_edit' && !hasUpstreamVideo" class="sd2-mode-warn">
+            ⚠ 视频编辑需要连接上游视频节点
           </div>
-          <div v-else-if="selectedKlingO1Mode === 'multi_ref'" class="veo-mode-tip purple">
-            💡 多图参考：最多7张图，prompt 用 &lt;&lt;&lt;image_N&gt;&gt;&gt; 引用
-          </div>
-          <div v-else-if="selectedKlingO1Mode === 'video_edit'" class="veo-mode-tip gold">
-            🎬 视频编辑：需要连接上游视频节点，可选附带参考图片
-          </div>
-          <!-- 图片数量验证提示 -->
-          <div v-if="referenceImages.length > 0 && referenceImages.length > currentKlingO1ModeConfig.maxImages && currentKlingO1ModeConfig.maxImages > 0" class="veo-mode-tip warning">
-            ⚠️ {{ currentKlingO1ModeConfig.label }}最多支持{{ currentKlingO1ModeConfig.maxImages }}张图
+          <div v-if="referenceImages.length > 0 && referenceImages.length > currentKlingO1ModeConfig.maxImages && currentKlingO1ModeConfig.maxImages > 0" class="sd2-mode-warn">
+            ⚠ {{ currentKlingO1ModeConfig.label }}最多支持{{ currentKlingO1ModeConfig.maxImages }}张图
           </div>
         </div>
       </template>
@@ -6456,6 +6542,22 @@ function handleToolbarPreview() {
   z-index: 2;
 }
 
+/* 音频缩略图 */
+.panel-frame-audio .audio-thumb {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(168, 85, 247, 0.1));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.panel-frame-audio .audio-thumb-icon {
+  font-size: 22px;
+  color: rgba(168, 85, 247, 0.8);
+}
+
 .panel-frame-remove {
   position: absolute;
   top: 2px;
@@ -7116,6 +7218,30 @@ function handleToolbarPreview() {
   margin-top: 4px;
 }
 
+/* O1 选项行（保留原声等） */
+.sd2-o1-option-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.sd2-o1-option-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.sd2-o1-option-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.sd2-mode-btn-sm {
+  padding: 4px 8px !important;
+  font-size: 10px !important;
+}
+
 /* Seedance 2.0 模式 - 白昼模式 */
 :root.canvas-theme-light .sd2-mode-section {
   border-top-color: rgba(0, 0, 0, 0.08);
@@ -7154,6 +7280,18 @@ function handleToolbarPreview() {
 
 :root.canvas-theme-light .sd2-mode-desc {
   color: rgba(0, 0, 0, 0.3);
+}
+
+:root.canvas-theme-light .sd2-o1-option-label {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .panel-frame-audio .audio-thumb {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(168, 85, 247, 0.08));
+}
+
+:root.canvas-theme-light .panel-frame-audio .audio-thumb-icon {
+  color: rgba(168, 85, 247, 0.7);
 }
 
 /* Vidu 错峰模式开关 */

@@ -107,6 +107,14 @@ const seedanceRefVideoPreviews = ref([]) // { name, size, url }
 const seedanceRefAudios = ref([])
 const seedanceRefAudioPreviews = ref([]) // { name, size, duration }
 
+// Seedance 参考 URL 输入
+const seedanceRefImageUrl = ref('')
+const seedanceRefVideoUrl = ref('')
+const seedanceRefAudioUrl = ref('')
+const seedanceRefImageUrls = ref([])
+const seedanceRefVideoUrls = ref([])
+const seedanceRefAudioUrls = ref([])
+
 // Seedance 文件上传 refs
 const seedanceFirstFrameInputRef = ref(null)
 const seedanceLastFrameInputRef = ref(null)
@@ -479,7 +487,7 @@ function removeSeedanceLastFrame() {
 function handleSeedanceRefImages(e) {
   const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'))
   const MAX = 9
-  const remaining = MAX - seedanceRefImages.value.length
+  const remaining = MAX - seedanceRefImages.value.length - seedanceRefImageUrls.value.length
   const selected = files.filter(f => f.size <= 30 * 1024 * 1024).slice(0, remaining)
   seedanceRefImages.value.push(...selected)
   seedanceRefImagePreviews.value.push(...selected.map(f => URL.createObjectURL(f)))
@@ -495,7 +503,7 @@ function removeSeedanceRefImage(idx) {
 function handleSeedanceRefVideos(e) {
   const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('video/'))
   const MAX = 3
-  const remaining = MAX - seedanceRefVideos.value.length
+  const remaining = MAX - seedanceRefVideos.value.length - seedanceRefVideoUrls.value.length
   const selected = files.filter(f => f.size <= 50 * 1024 * 1024).slice(0, remaining)
   for (const file of selected) {
     seedanceRefVideos.value.push(file)
@@ -517,7 +525,7 @@ function removeSeedanceRefVideo(idx) {
 function handleSeedanceRefAudios(e) {
   const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('audio/'))
   const MAX = 3
-  const remaining = MAX - seedanceRefAudios.value.length
+  const remaining = MAX - seedanceRefAudios.value.length - seedanceRefAudioUrls.value.length
   const selected = files.filter(f => f.size <= 15 * 1024 * 1024).slice(0, remaining)
   for (const file of selected) {
     seedanceRefAudios.value.push(file)
@@ -534,6 +542,37 @@ function removeSeedanceRefAudio(idx) {
   seedanceRefAudioPreviews.value.splice(idx, 1)
 }
 
+function addSeedanceRefImageUrl() {
+  const url = seedanceRefImageUrl.value.trim()
+  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    seedanceRefImageUrls.value.push(url)
+    seedanceRefImageUrl.value = ''
+  }
+}
+function removeSeedanceRefImageUrl(idx) {
+  seedanceRefImageUrls.value.splice(idx, 1)
+}
+function addSeedanceRefVideoUrl() {
+  const url = seedanceRefVideoUrl.value.trim()
+  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    seedanceRefVideoUrls.value.push(url)
+    seedanceRefVideoUrl.value = ''
+  }
+}
+function removeSeedanceRefVideoUrl(idx) {
+  seedanceRefVideoUrls.value.splice(idx, 1)
+}
+function addSeedanceRefAudioUrl() {
+  const url = seedanceRefAudioUrl.value.trim()
+  if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+    seedanceRefAudioUrls.value.push(url)
+    seedanceRefAudioUrl.value = ''
+  }
+}
+function removeSeedanceRefAudioUrl(idx) {
+  seedanceRefAudioUrls.value.splice(idx, 1)
+}
+
 function clearSeedanceFiles() {
   removeSeedanceFirstFrame()
   removeSeedanceLastFrame()
@@ -545,6 +584,12 @@ function clearSeedanceFiles() {
   seedanceRefVideoPreviews.value = []
   seedanceRefAudios.value = []
   seedanceRefAudioPreviews.value = []
+  seedanceRefImageUrls.value = []
+  seedanceRefVideoUrls.value = []
+  seedanceRefAudioUrls.value = []
+  seedanceRefImageUrl.value = ''
+  seedanceRefVideoUrl.value = ''
+  seedanceRefAudioUrl.value = ''
 }
 
 function formatStatus(status) {
@@ -660,10 +705,18 @@ async function generateVideo() {
       if (!seedanceLastFrameFile.value) { error.value = '请上传尾帧图片'; return }
     }
     if (sm === 'video_edit') {
-      if (seedanceRefVideos.value.length === 0) { error.value = '请上传参考视频'; return }
+      if (seedanceRefVideos.value.length === 0 && seedanceRefVideoUrls.value.length === 0) { error.value = '请上传参考视频或输入视频 URL'; return }
     }
     if (sm === 'video_extend') {
-      if (seedanceRefVideos.value.length === 0) { error.value = '请上传要延长的视频'; return }
+      if (seedanceRefVideos.value.length === 0 && seedanceRefVideoUrls.value.length === 0) { error.value = '请上传要延长的视频或输入视频 URL'; return }
+    }
+    if (sm === 'multimodal_ref') {
+      const hasImages = seedanceRefImages.value.length > 0 || seedanceRefImageUrls.value.length > 0
+      const hasVideos = seedanceRefVideos.value.length > 0 || seedanceRefVideoUrls.value.length > 0
+      if (!hasImages && !hasVideos) {
+        error.value = '多模态模式至少需要一个参考图片或参考视频'
+        return
+      }
     }
   }
   
@@ -719,17 +772,26 @@ async function generateVideo() {
       if (seedanceLastFrameFile.value) {
         formData.append('lastFrameImage', seedanceLastFrameFile.value)
       }
-      // 多模态参考图片
+      // 多模态参考图片（文件上传）
       for (const file of seedanceRefImages.value) {
         formData.append('referenceImages', file)
       }
-      // 参考视频
+      if (seedanceRefImageUrls.value.length > 0) {
+        formData.append('reference_images', JSON.stringify(seedanceRefImageUrls.value))
+      }
+      // 参考视频（文件上传）
       for (const file of seedanceRefVideos.value) {
         formData.append('referenceVideos', file)
       }
-      // 参考音频
+      if (seedanceRefVideoUrls.value.length > 0) {
+        formData.append('reference_videos', JSON.stringify(seedanceRefVideoUrls.value))
+      }
+      // 参考音频（文件上传）
       for (const file of seedanceRefAudios.value) {
         formData.append('referenceAudios', file)
+      }
+      if (seedanceRefAudioUrls.value.length > 0) {
+        formData.append('reference_audios', JSON.stringify(seedanceRefAudioUrls.value))
       }
     }
     
@@ -1645,9 +1707,28 @@ onUnmounted(() => {
                   <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
                     <span>🖼️</span><span>参考图片</span>
                   </label>
-                  <span class="text-xs text-slate-500">{{ seedanceRefImages.length }} / {{ seedanceMode === 'multimodal_ref' ? 9 : 1 }}</span>
+                  <span class="text-xs text-slate-500">{{ seedanceRefImages.length + seedanceRefImageUrls.length }} / {{ seedanceMode === 'multimodal_ref' ? 9 : 1 }}</span>
                 </div>
-                <div v-if="seedanceRefImages.length < (seedanceMode === 'multimodal_ref' ? 9 : 1)" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefImageInputRef?.click()">
+                <!-- URL 输入 -->
+                <div v-if="(seedanceRefImages.length + seedanceRefImageUrls.length) < (seedanceMode === 'multimodal_ref' ? 9 : 1)" class="flex gap-1.5 mb-1.5">
+                  <input v-model="seedanceRefImageUrl" type="text" placeholder="粘贴图片 URL" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addSeedanceRefImageUrl" />
+                  <button @click="addSeedanceRefImageUrl" :disabled="!seedanceRefImageUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">添加</button>
+                </div>
+                <!-- 已添加的 URL 列表 -->
+                <div v-if="seedanceRefImageUrls.length > 0" class="space-y-1 mb-1.5">
+                  <div v-for="(url, idx) in seedanceRefImageUrls" :key="'img-url-'+idx" class="flex items-center gap-2 px-2 py-1 bg-slate-50 dark:bg-dark-700 rounded text-xs border border-slate-200 dark:border-dark-600">
+                    <span class="text-blue-500 flex-shrink-0">🔗</span>
+                    <span class="flex-1 truncate text-slate-600 dark:text-slate-400">{{ url }}</span>
+                    <button @click="removeSeedanceRefImageUrl(idx)" class="w-5 h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded flex items-center justify-center text-xs flex-shrink-0">✕</button>
+                  </div>
+                </div>
+                <!-- 文件上传分隔 -->
+                <div v-if="(seedanceRefImages.length + seedanceRefImageUrls.length) < (seedanceMode === 'multimodal_ref' ? 9 : 1)" class="flex items-center gap-2 mb-1.5">
+                  <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
+                  <span class="text-xs text-slate-400">或</span>
+                  <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
+                </div>
+                <div v-if="(seedanceRefImages.length + seedanceRefImageUrls.length) < (seedanceMode === 'multimodal_ref' ? 9 : 1)" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefImageInputRef?.click()">
                   <div class="text-2xl mb-1">📤</div>
                   <p class="text-xs text-slate-500 dark:text-slate-400">点击上传参考图片</p>
                   <input ref="seedanceRefImageInputRef" type="file" accept="image/*" multiple @change="handleSeedanceRefImages" class="hidden" />
@@ -1667,9 +1748,28 @@ onUnmounted(() => {
                   <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
                     <span>🎥</span><span>参考视频</span>
                   </label>
-                  <span class="text-xs text-slate-500">{{ seedanceRefVideos.length }} / 3</span>
+                  <span class="text-xs text-slate-500">{{ seedanceRefVideos.length + seedanceRefVideoUrls.length }} / 3</span>
                 </div>
-                <div v-if="seedanceRefVideos.length < 3" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefVideoInputRef?.click()">
+                <!-- URL 输入 -->
+                <div v-if="(seedanceRefVideos.length + seedanceRefVideoUrls.length) < 3" class="flex gap-1.5 mb-1.5">
+                  <input v-model="seedanceRefVideoUrl" type="text" placeholder="粘贴视频 URL" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addSeedanceRefVideoUrl" />
+                  <button @click="addSeedanceRefVideoUrl" :disabled="!seedanceRefVideoUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">添加</button>
+                </div>
+                <!-- 已添加的 URL 列表 -->
+                <div v-if="seedanceRefVideoUrls.length > 0" class="space-y-1 mb-1.5">
+                  <div v-for="(url, idx) in seedanceRefVideoUrls" :key="'vid-url-'+idx" class="flex items-center gap-2 px-2 py-1 bg-slate-50 dark:bg-dark-700 rounded text-xs border border-slate-200 dark:border-dark-600">
+                    <span class="text-blue-500 flex-shrink-0">🔗</span>
+                    <span class="flex-1 truncate text-slate-600 dark:text-slate-400">{{ url }}</span>
+                    <button @click="removeSeedanceRefVideoUrl(idx)" class="w-5 h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded flex items-center justify-center text-xs flex-shrink-0">✕</button>
+                  </div>
+                </div>
+                <!-- 文件上传分隔 -->
+                <div v-if="(seedanceRefVideos.length + seedanceRefVideoUrls.length) < 3" class="flex items-center gap-2 mb-1.5">
+                  <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
+                  <span class="text-xs text-slate-400">或</span>
+                  <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
+                </div>
+                <div v-if="(seedanceRefVideos.length + seedanceRefVideoUrls.length) < 3" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefVideoInputRef?.click()">
                   <div class="text-2xl mb-1">🎥</div>
                   <p class="text-xs text-slate-500 dark:text-slate-400">点击上传视频 (mp4/mov, 最大50MB)</p>
                   <input ref="seedanceRefVideoInputRef" type="file" accept="video/mp4,video/quicktime" multiple @change="handleSeedanceRefVideos" class="hidden" />
@@ -1694,9 +1794,28 @@ onUnmounted(() => {
                   <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
                     <span>🔊</span><span>参考音频</span>
                   </label>
-                  <span class="text-xs text-slate-500">{{ seedanceRefAudios.length }} / 3</span>
+                  <span class="text-xs text-slate-500">{{ seedanceRefAudios.length + seedanceRefAudioUrls.length }} / 3</span>
                 </div>
-                <div v-if="seedanceRefAudios.length < 3" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefAudioInputRef?.click()">
+                <!-- URL 输入 -->
+                <div v-if="(seedanceRefAudios.length + seedanceRefAudioUrls.length) < 3" class="flex gap-1.5 mb-1.5">
+                  <input v-model="seedanceRefAudioUrl" type="text" placeholder="粘贴音频 URL" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addSeedanceRefAudioUrl" />
+                  <button @click="addSeedanceRefAudioUrl" :disabled="!seedanceRefAudioUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">添加</button>
+                </div>
+                <!-- 已添加的 URL 列表 -->
+                <div v-if="seedanceRefAudioUrls.length > 0" class="space-y-1 mb-1.5">
+                  <div v-for="(url, idx) in seedanceRefAudioUrls" :key="'aud-url-'+idx" class="flex items-center gap-2 px-2 py-1 bg-slate-50 dark:bg-dark-700 rounded text-xs border border-slate-200 dark:border-dark-600">
+                    <span class="text-blue-500 flex-shrink-0">🔗</span>
+                    <span class="flex-1 truncate text-slate-600 dark:text-slate-400">{{ url }}</span>
+                    <button @click="removeSeedanceRefAudioUrl(idx)" class="w-5 h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded flex items-center justify-center text-xs flex-shrink-0">✕</button>
+                  </div>
+                </div>
+                <!-- 文件上传分隔 -->
+                <div v-if="(seedanceRefAudios.length + seedanceRefAudioUrls.length) < 3" class="flex items-center gap-2 mb-1.5">
+                  <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
+                  <span class="text-xs text-slate-400">或</span>
+                  <div class="flex-1 border-t border-slate-200 dark:border-dark-600"></div>
+                </div>
+                <div v-if="(seedanceRefAudios.length + seedanceRefAudioUrls.length) < 3" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefAudioInputRef?.click()">
                   <div class="text-2xl mb-1">🎵</div>
                   <p class="text-xs text-slate-500 dark:text-slate-400">点击上传音频 (wav/mp3, 最大15MB)</p>
                   <input ref="seedanceRefAudioInputRef" type="file" accept="audio/wav,audio/mpeg,audio/mp3" multiple @change="handleSeedanceRefAudios" class="hidden" />
