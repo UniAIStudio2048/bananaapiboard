@@ -1769,14 +1769,6 @@ onUnmounted(() => {
                   </div>
                   <!-- 开关选项 -->
                   <div class="space-y-2">
-                    <!-- 生成有声视频 -->
-                    <label class="flex items-center justify-between cursor-pointer">
-                      <span class="text-xs text-slate-600 dark:text-slate-400">🔊 生成有声视频</span>
-                      <div class="relative inline-flex items-center">
-                        <input type="checkbox" v-model="seedanceGenerateAudio" class="sr-only peer" />
-                        <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-gray-600"></div>
-                      </div>
-                    </label>
                     <!-- 联网搜索增强（仅文生视频） -->
                     <label v-if="seedanceMode === 'text2video'" class="flex items-center justify-between cursor-pointer">
                       <span class="text-xs text-slate-600 dark:text-slate-400">🌐 联网搜索增强</span>

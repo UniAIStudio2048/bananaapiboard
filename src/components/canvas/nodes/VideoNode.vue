@@ -536,9 +536,9 @@ const SEEDANCE2_MODES = [
   { value: 'text2video', label: '文生视频', desc: '纯文本提示词生成视频', needsImage: false, needsVideo: false },
   { value: 'image2video_first', label: '首帧', desc: '1张图作为首帧', needsImage: true, needsVideo: false, maxImages: 1 },
   { value: 'image2video_first_last', label: '首尾帧', desc: '2张图分别作为首帧和尾帧', needsImage: true, needsVideo: false, maxImages: 2 },
-  { value: 'multimodal_ref', label: '多模态', desc: '多图/视频/音频参考生成', needsImage: true, needsVideo: true, maxImages: 9 },
-  { value: 'video_edit', label: '编辑', desc: '基于参考视频+图片编辑', needsImage: true, needsVideo: true },
-  { value: 'video_extend', label: '延长', desc: '基于参考视频延长', needsImage: false, needsVideo: true }
+  { value: 'multimodal_ref', label: '多模态', desc: '可连接上游视频/图像/文本/音频节点', needsImage: false, needsVideo: false, maxImages: 9 },
+  { value: 'video_edit', label: '编辑', desc: '需连接上游视频节点，图片/文本/音频可选', needsImage: false, needsVideo: true },
+  { value: 'video_extend', label: '延长', desc: '需连接上游视频节点，最多支持3段视频参考', needsImage: false, needsVideo: true }
 ]
 
 const currentSeedance2ModeConfig = computed(() => {
@@ -1491,8 +1491,8 @@ const pointsCost = computed(() => {
     cost = cost * 2
   }
   
-  // Seedance 声音模式：积分翻倍
-  if (isSeedanceModel.value && seedanceSoundEnabled.value) {
+  // Seedance 1.5 声音模式：积分翻倍（2.0 默认含声音，不额外计费）
+  if (isSeedanceModel.value && !isSeedance2Model.value && seedanceSoundEnabled.value) {
     cost = cost * 2
   }
   
@@ -2238,8 +2238,10 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
   
   // Seedance 模型特有参数：声音生成
   if (isSeedanceModel.value) {
-    formData.append('seedance_generate_audio', seedanceSoundEnabled.value ? 'true' : 'false')
-    console.log('[VideoNode] Seedance 生成声音:', seedanceSoundEnabled.value)
+    // Seedance 2.0 默认开启声音，1.5 根据用户选择
+    const audioEnabled = isSeedance2Model.value ? true : seedanceSoundEnabled.value
+    formData.append('seedance_generate_audio', audioEnabled ? 'true' : 'false')
+    console.log('[VideoNode] Seedance 生成声音:', audioEnabled)
   }
 
   // Seedance 2.0 模式参数
@@ -5156,7 +5158,7 @@ function handleToolbarPreview() {
               {{ motionCostPerSecond }}积分/s
             </template>
             <template v-else>
-              {{ pointsCost }} {{ t('imageGen.points') }}
+              {{ pointsCost * selectedCount }} {{ t('imageGen.points') }}
             </template>
           </span>
           
@@ -5351,8 +5353,8 @@ function handleToolbarPreview() {
         </Transition>
       </template>
       
-      <!-- Seedance 高级选项 - 声音生成 -->
-      <template v-if="isSeedanceModel">
+      <!-- Seedance 1.5 高级选项 - 声音生成（2.0 默认含声音，无需开关） -->
+      <template v-if="isSeedanceModel && !isSeedance2Model">
         <!-- 展开/收起按钮 -->
         <button class="sora2-collapse-trigger" @click="showSeedanceAdvancedOptions = !showSeedanceAdvancedOptions">
           <span class="sora2-collapse-icon" :class="{ 'expanded': showSeedanceAdvancedOptions }">∧</span>
