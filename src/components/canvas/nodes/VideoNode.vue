@@ -519,14 +519,37 @@ const klingMotionVideoLoading = ref(false)  // 视频加载中
 const isSeedanceModel = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
   const apiType = currentModelConfig.value?.apiType || ''
-  return modelName.includes('seedance') || apiType === 'seedance'
+  return modelName.includes('seedance') || apiType === 'seedance' || apiType === 'seedance-2.0'
+})
+
+// 检测是否是 Seedance 2.0 模型（支持6种模式）
+const isSeedance2Model = computed(() => {
+  const apiType = currentModelConfig.value?.apiType || ''
+  const modelName = selectedModel.value?.toLowerCase() || ''
+  return apiType === 'seedance-2.0' || (modelName.includes('seedance') && modelName.includes('2.0'))
+})
+
+// Seedance 2.0 模式选择
+const selectedSeedance2Mode = ref(props.data.seedance2Mode || 'text2video')
+
+const SEEDANCE2_MODES = [
+  { value: 'text2video', label: '文生视频', desc: '纯文本提示词生成视频', needsImage: false, needsVideo: false },
+  { value: 'image2video_first', label: '首帧', desc: '1张图作为首帧', needsImage: true, needsVideo: false, maxImages: 1 },
+  { value: 'image2video_first_last', label: '首尾帧', desc: '2张图分别作为首帧和尾帧', needsImage: true, needsVideo: false, maxImages: 2 },
+  { value: 'multimodal_ref', label: '多模态', desc: '多图/视频/音频参考生成', needsImage: true, needsVideo: true, maxImages: 9 },
+  { value: 'video_edit', label: '编辑', desc: '基于参考视频+图片编辑', needsImage: true, needsVideo: true },
+  { value: 'video_extend', label: '延长', desc: '基于参考视频延长', needsImage: false, needsVideo: true }
+]
+
+const currentSeedance2ModeConfig = computed(() => {
+  return SEEDANCE2_MODES.find(m => m.value === selectedSeedance2Mode.value) || SEEDANCE2_MODES[0]
 })
 
 // Seedance 高级选项显示控制
 const showSeedanceAdvancedOptions = ref(false)
 
 // Seedance 音频相关选项
-const seedanceSoundEnabled = ref(props.data.seedanceSoundEnabled !== false)  // 是否生成声音，默认开启
+const seedanceSoundEnabled = ref(props.data.seedanceSoundEnabled !== false)
 
 // 验证参考视频时长（最大30秒）
 const validateMotionVideoUrl = async (url) => {
@@ -1757,8 +1780,8 @@ function handleMotionImitation() {
 }
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled], 
-  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled]) => {
+watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode], 
+  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       aspectRatio,
@@ -1770,22 +1793,19 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
       viduResolution: resolution,
       veoMode: veoMd,
       veoResolution: veoRes,
-      // Kling 摄像机控制参数
       klingCameraEnabled: klingCamEnabled,
       klingCameraType: klingCamType,
       klingCameraConfig: klingCamConfig,
       klingCameraValue: klingCamValue,
-      // Kling 2.6+ 音频参数
       klingVoiceList: klingVoices,
       klingSoundEnabled: klingSndEnabled,
-      // Kling 动作迁移参数
       klingMotionVideoUrl: motionVideoUrl,
       klingMotionMode: motionMode,
-      // Seedance 音频参数
-      seedanceSoundEnabled: seedanceSndEnabled
+      seedanceSoundEnabled: seedanceSndEnabled,
+      seedance2Mode: sd2Mode
     })
   },
-  { deep: true }  // 深度监听数组变化
+  { deep: true }
 )
 
 // 🔧 监听 VEO 模式切换，如果当前清晰度不被支持，自动切换到支持的第一个清晰度
@@ -2221,9 +2241,58 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
     formData.append('seedance_generate_audio', seedanceSoundEnabled.value ? 'true' : 'false')
     console.log('[VideoNode] Seedance 生成声音:', seedanceSoundEnabled.value)
   }
+
+  // Seedance 2.0 模式参数
+  if (isSeedance2Model.value) {
+    const sd2Mode = selectedSeedance2Mode.value
+    formData.append('seedance_mode', sd2Mode)
+    console.log('[VideoNode] Seedance 2.0 模式:', sd2Mode)
+
+    if (sd2Mode === 'image2video_first') {
+      if (finalImages.length > 0) {
+        formData.append('first_frame_image', finalImages[0])
+        console.log('[VideoNode] SD2 首帧图:', finalImages[0])
+      }
+    } else if (sd2Mode === 'image2video_first_last') {
+      if (finalImages.length > 0) formData.append('first_frame_image', finalImages[0])
+      if (finalImages.length > 1) formData.append('last_frame_image', finalImages[1])
+      console.log('[VideoNode] SD2 首尾帧:', finalImages.slice(0, 2))
+    } else if (sd2Mode === 'multimodal_ref') {
+      for (const imgUrl of finalImages.slice(0, 9)) {
+        formData.append('reference_images', imgUrl)
+      }
+      const upVideos = getUpstreamData().videos || []
+      for (const vidUrl of upVideos.slice(0, 3)) {
+        formData.append('reference_videos', vidUrl)
+      }
+      console.log('[VideoNode] SD2 多模态参考 | 图片:', finalImages.length, '视频:', upVideos.length)
+    } else if (sd2Mode === 'video_edit') {
+      for (const imgUrl of finalImages) {
+        formData.append('reference_images', imgUrl)
+      }
+      const upVideos = getUpstreamData().videos || []
+      for (const vidUrl of upVideos) {
+        formData.append('reference_videos', vidUrl)
+      }
+      console.log('[VideoNode] SD2 视频编辑 | 参考图:', finalImages.length, '参考视频:', upVideos.length)
+    } else if (sd2Mode === 'video_extend') {
+      const upVideos = getUpstreamData().videos || []
+      for (const vidUrl of upVideos.slice(0, 3)) {
+        formData.append('reference_videos', vidUrl)
+      }
+      console.log('[VideoNode] SD2 视频延长 | 参考视频:', upVideos.length)
+    }
+    // text2video 不需要额外参数，直接用 prompt
+  }
   
-  // 如果有参考图片，添加图片 URL
-  if (finalImages.length > 0) {
+  // 如果有参考图片，添加图片 URL（非 Seedance 2.0 模式或无特殊处理时）
+  if (finalImages.length > 0 && !isSeedance2Model.value) {
+    for (const imageUrl of finalImages) {
+      formData.append('image_urls', imageUrl)
+    }
+  }
+  // Seedance 2.0 text2video 和 image2video_first 模式也需要通过 image_urls 传图（后端兼容）
+  if (isSeedance2Model.value && selectedSeedance2Mode.value === 'text2video' && finalImages.length > 0) {
     for (const imageUrl of finalImages) {
       formData.append('image_urls', imageUrl)
     }
@@ -5021,7 +5090,7 @@ function handleToolbarPreview() {
           </div>
           
           <!-- 时长切换（VEO3模型和动作迁移模型不显示） -->
-          <div v-if="!isVeo3Model && !isKlingMotionControl && durations.length > 0" class="param-chip-group">
+          <div v-if="!isVeo3Model && !isKlingMotionControl && durations.length > 0 && durations.length <= 6" class="param-chip-group">
             <div 
               v-for="d in durations" 
               :key="d.value"
@@ -5031,6 +5100,17 @@ function handleToolbarPreview() {
             >
               {{ d.label }}
             </div>
+          </div>
+          <!-- 时长下拉选择（选项较多时使用） -->
+          <div v-if="!isVeo3Model && !isKlingMotionControl && durations.length > 6" class="duration-select-row">
+            <span class="duration-select-label">时长</span>
+            <select
+              :value="selectedDuration"
+              @change="selectedDuration = $event.target.value"
+              class="duration-select"
+            >
+              <option v-for="d in durations" :key="d.value" :value="d.value">{{ d.label }}</option>
+            </select>
           </div>
           
           <!-- Vidu 错峰模式开关 -->
@@ -5419,6 +5499,33 @@ function handleToolbarPreview() {
           <!-- 图片数量验证提示 -->
           <div v-if="referenceImages.length > 0 && referenceImages.length > currentKlingO1ModeConfig.maxImages && currentKlingO1ModeConfig.maxImages > 0" class="veo-mode-tip warning">
             ⚠️ {{ currentKlingO1ModeConfig.label }}最多支持{{ currentKlingO1ModeConfig.maxImages }}张图
+          </div>
+        </div>
+      </template>
+
+      <!-- Seedance 2.0 模式选择 -->
+      <template v-if="isSeedance2Model">
+        <div class="sd2-mode-section">
+          <div class="sd2-mode-header">
+            <span class="sd2-mode-title">SD2 模式</span>
+            <span class="sd2-mode-current">{{ currentSeedance2ModeConfig.label }}</span>
+          </div>
+          <div class="sd2-mode-grid">
+            <button
+              v-for="opt in SEEDANCE2_MODES"
+              :key="opt.value"
+              @click="selectedSeedance2Mode = opt.value"
+              :class="['sd2-mode-btn', { active: selectedSeedance2Mode === opt.value }]"
+            >
+              <span class="sd2-mode-label">{{ opt.label }}</span>
+            </button>
+          </div>
+          <div class="sd2-mode-desc">{{ currentSeedance2ModeConfig.desc }}</div>
+          <div v-if="currentSeedance2ModeConfig.needsVideo && !hasUpstreamVideo" class="sd2-mode-warn">
+            ⚠ {{ currentSeedance2ModeConfig.label }}需要连接上游视频节点
+          </div>
+          <div v-if="currentSeedance2ModeConfig.needsImage && referenceImages.length === 0 && selectedSeedance2Mode !== 'text2video'" class="sd2-mode-warn">
+            ⚠ {{ currentSeedance2ModeConfig.label }}需要连接上游图片节点
           </div>
         </div>
       </template>
@@ -6692,6 +6799,163 @@ function handleToolbarPreview() {
 .param-chip-group {
   display: flex;
   gap: 6px;
+}
+
+.duration-select-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.duration-select-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.duration-select {
+  flex: 1;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+  appearance: auto;
+}
+
+.duration-select:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.duration-select:focus {
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.duration-select option {
+  background: #1a1a2e;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ==================== Seedance 2.0 模式选择器 ==================== */
+.sd2-mode-section {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sd2-mode-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.sd2-mode-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.sd2-mode-current {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.sd2-mode-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.sd2-mode-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 6px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sd2-mode-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.sd2-mode-btn.active {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.sd2-mode-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+}
+
+.sd2-mode-btn.active .sd2-mode-label {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.sd2-mode-desc {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.35);
+  margin-bottom: 4px;
+}
+
+.sd2-mode-warn {
+  font-size: 10px;
+  color: #d97706;
+  margin-top: 4px;
+}
+
+/* Seedance 2.0 模式 - 白昼模式 */
+:root.canvas-theme-light .sd2-mode-section {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .sd2-mode-title {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+:root.canvas-theme-light .sd2-mode-current {
+  color: rgba(0, 0, 0, 0.35);
+}
+
+:root.canvas-theme-light .sd2-mode-btn {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: transparent;
+}
+
+:root.canvas-theme-light .sd2-mode-btn:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+:root.canvas-theme-light .sd2-mode-btn.active {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.3);
+}
+
+:root.canvas-theme-light .sd2-mode-label {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .sd2-mode-btn.active .sd2-mode-label {
+  color: rgba(0, 0, 0, 0.9);
+}
+
+:root.canvas-theme-light .sd2-mode-desc {
+  color: rgba(0, 0, 0, 0.3);
 }
 
 /* Vidu 错峰模式开关 */
@@ -8550,6 +8814,11 @@ function handleToolbarPreview() {
 .veo-mode-btn.active {
   border-color: #ffffff;
   background: rgba(255, 255, 255, 0.15);
+}
+
+.veo-mode-btn-icon {
+  font-size: 13px;
+  line-height: 1;
 }
 
 .veo-mode-btn-label {

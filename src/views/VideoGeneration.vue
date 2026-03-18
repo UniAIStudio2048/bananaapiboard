@@ -78,8 +78,85 @@ const maxImagesForModel = computed(() => {
 const watermark = ref(false) // 默认false，隐藏选项
 const isPrivate = ref(true) // 默认true，隐藏选项
 
+// ========== Seedance 2.0 相关状态 ==========
+const seedanceMode = ref('text2video') // 当前选择的 Seedance 模式
+const seedanceResolution = ref('720p') // 分辨率：480p / 720p
+const seedanceRatio = ref('adaptive') // 宽高比
+const seedanceDuration = ref(5) // 时长：4-15秒
+const seedanceGenerateAudio = ref(true) // 生成有声视频
+const seedanceWebSearch = ref(false) // 联网搜索增强
+const seedanceWatermark = ref(false) // 水印
+const seedanceAdvancedOpen = ref(false) // 高级设置展开状态
+const seedanceModeOpen = ref(true) // 模式选择展开状态
+
+// Seedance 首帧/尾帧图片
+const seedanceFirstFrameFile = ref(null)
+const seedanceFirstFramePreview = ref('')
+const seedanceLastFrameFile = ref(null)
+const seedanceLastFramePreview = ref('')
+
+// Seedance 多模态参考图片
+const seedanceRefImages = ref([])
+const seedanceRefImagePreviews = ref([])
+
+// Seedance 参考视频
+const seedanceRefVideos = ref([])
+const seedanceRefVideoPreviews = ref([]) // { name, size, url }
+
+// Seedance 参考音频
+const seedanceRefAudios = ref([])
+const seedanceRefAudioPreviews = ref([]) // { name, size, duration }
+
+// Seedance 文件上传 refs
+const seedanceFirstFrameInputRef = ref(null)
+const seedanceLastFrameInputRef = ref(null)
+const seedanceRefImageInputRef = ref(null)
+const seedanceRefVideoInputRef = ref(null)
+const seedanceRefAudioInputRef = ref(null)
+
+// Seedance 模式定义
+const SEEDANCE_MODES = [
+  { value: 'text2video', label: '文生视频', icon: '✍️' },
+  { value: 'image2video_first', label: '首帧', icon: '🖼️' },
+  { value: 'image2video_first_last', label: '首尾帧', icon: '🎞️' },
+  { value: 'multimodal_ref', label: '多模态', icon: '🎨' },
+  { value: 'video_edit', label: '编辑', icon: '✂️' },
+  { value: 'video_extend', label: '延长', icon: '⏩' }
+]
+
+const SEEDANCE_RATIOS = [
+  { value: 'adaptive', label: '自适应' },
+  { value: '16:9', label: '16:9' },
+  { value: '4:3', label: '4:3' },
+  { value: '1:1', label: '1:1' },
+  { value: '3:4', label: '3:4' },
+  { value: '9:16', label: '9:16' },
+  { value: '21:9', label: '21:9' }
+]
+
 // HD 选项已弃用（Sora 新版本不再支持 HD 选项）
 const isHdAvailable = computed(() => false)
+
+// 当前模型是否为 Seedance 2.0
+const isSeedanceModel = computed(() => {
+  const modelConfig = currentModelConfig.value
+  return modelConfig?.apiType === 'seedance-2.0'
+})
+
+// Seedance 可用的模式（从模型配置的 seedanceConfig.supportedModes 读取）
+const seedanceAvailableModes = computed(() => {
+  if (!isSeedanceModel.value) return []
+  const config = currentModelConfig.value?.seedanceConfig
+  const supported = config?.supportedModes
+  if (!supported) return SEEDANCE_MODES // 无配置则全部可用
+  // supported 可以是数组 ['text2video', 'image2video_first'] 或对象 { text2video: true }
+  if (Array.isArray(supported)) {
+    return SEEDANCE_MODES.filter(m => supported.includes(m.value))
+  } else if (typeof supported === 'object') {
+    return SEEDANCE_MODES.filter(m => supported[m.value] === true)
+  }
+  return SEEDANCE_MODES
+})
 const loading = ref(false)
 const error = ref('')
 const successMessage = ref('')
@@ -198,6 +275,9 @@ const availableModels = computed(() => {
   const currentMode = mode.value === 'text' ? 't2v' : 'i2v'
   
   return filteredByVersion.filter(m => {
+    // Seedance 2.0 模型始终显示（有自己的模式选择器）
+    if (m.apiType === 'seedance-2.0') return true
+
     const supportedModes = m.supportedModes
     if (!supportedModes) return true // 无配置默认支持所有模式
     
@@ -282,6 +362,15 @@ watch(mode, (newMode) => {
   }
 })
 
+// 监听 Seedance 模式变化，清空上一个模式的文件
+watch(seedanceMode, () => {
+  clearSeedanceFiles()
+  // 非文生视频模式时关闭联网搜索
+  if (seedanceMode.value !== 'text2video') {
+    seedanceWebSearch.value = false
+  }
+})
+
 async function refreshUser() {
   me.value = await getMe()
 }
@@ -351,6 +440,111 @@ function clearImages() {
   previewUrls.value.forEach(url => URL.revokeObjectURL(url))
   imageFiles.value = []
   previewUrls.value = []
+}
+
+// ========== Seedance 文件上传函数 ==========
+
+function handleSeedanceFirstFrame(e) {
+  const file = e.target.files?.[0]
+  if (!file || !file.type.startsWith('image/')) return
+  if (file.size > 30 * 1024 * 1024) { error.value = '图片不能超过30MB'; return }
+  if (seedanceFirstFramePreview.value) URL.revokeObjectURL(seedanceFirstFramePreview.value)
+  seedanceFirstFrameFile.value = file
+  seedanceFirstFramePreview.value = URL.createObjectURL(file)
+  e.target.value = ''
+}
+
+function removeSeedanceFirstFrame() {
+  if (seedanceFirstFramePreview.value) URL.revokeObjectURL(seedanceFirstFramePreview.value)
+  seedanceFirstFrameFile.value = null
+  seedanceFirstFramePreview.value = ''
+}
+
+function handleSeedanceLastFrame(e) {
+  const file = e.target.files?.[0]
+  if (!file || !file.type.startsWith('image/')) return
+  if (file.size > 30 * 1024 * 1024) { error.value = '图片不能超过30MB'; return }
+  if (seedanceLastFramePreview.value) URL.revokeObjectURL(seedanceLastFramePreview.value)
+  seedanceLastFrameFile.value = file
+  seedanceLastFramePreview.value = URL.createObjectURL(file)
+  e.target.value = ''
+}
+
+function removeSeedanceLastFrame() {
+  if (seedanceLastFramePreview.value) URL.revokeObjectURL(seedanceLastFramePreview.value)
+  seedanceLastFrameFile.value = null
+  seedanceLastFramePreview.value = ''
+}
+
+function handleSeedanceRefImages(e) {
+  const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'))
+  const MAX = 9
+  const remaining = MAX - seedanceRefImages.value.length
+  const selected = files.filter(f => f.size <= 30 * 1024 * 1024).slice(0, remaining)
+  seedanceRefImages.value.push(...selected)
+  seedanceRefImagePreviews.value.push(...selected.map(f => URL.createObjectURL(f)))
+  e.target.value = ''
+}
+
+function removeSeedanceRefImage(idx) {
+  URL.revokeObjectURL(seedanceRefImagePreviews.value[idx])
+  seedanceRefImages.value.splice(idx, 1)
+  seedanceRefImagePreviews.value.splice(idx, 1)
+}
+
+function handleSeedanceRefVideos(e) {
+  const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('video/'))
+  const MAX = 3
+  const remaining = MAX - seedanceRefVideos.value.length
+  const selected = files.filter(f => f.size <= 50 * 1024 * 1024).slice(0, remaining)
+  for (const file of selected) {
+    seedanceRefVideos.value.push(file)
+    seedanceRefVideoPreviews.value.push({
+      name: file.name,
+      size: (file.size / 1024 / 1024).toFixed(2),
+      url: URL.createObjectURL(file)
+    })
+  }
+  e.target.value = ''
+}
+
+function removeSeedanceRefVideo(idx) {
+  URL.revokeObjectURL(seedanceRefVideoPreviews.value[idx].url)
+  seedanceRefVideos.value.splice(idx, 1)
+  seedanceRefVideoPreviews.value.splice(idx, 1)
+}
+
+function handleSeedanceRefAudios(e) {
+  const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('audio/'))
+  const MAX = 3
+  const remaining = MAX - seedanceRefAudios.value.length
+  const selected = files.filter(f => f.size <= 15 * 1024 * 1024).slice(0, remaining)
+  for (const file of selected) {
+    seedanceRefAudios.value.push(file)
+    seedanceRefAudioPreviews.value.push({
+      name: file.name,
+      size: (file.size / 1024 / 1024).toFixed(2)
+    })
+  }
+  e.target.value = ''
+}
+
+function removeSeedanceRefAudio(idx) {
+  seedanceRefAudios.value.splice(idx, 1)
+  seedanceRefAudioPreviews.value.splice(idx, 1)
+}
+
+function clearSeedanceFiles() {
+  removeSeedanceFirstFrame()
+  removeSeedanceLastFrame()
+  seedanceRefImagePreviews.value.forEach(url => URL.revokeObjectURL(url))
+  seedanceRefImages.value = []
+  seedanceRefImagePreviews.value = []
+  seedanceRefVideoPreviews.value.forEach(p => URL.revokeObjectURL(p.url))
+  seedanceRefVideos.value = []
+  seedanceRefVideoPreviews.value = []
+  seedanceRefAudios.value = []
+  seedanceRefAudioPreviews.value = []
 }
 
 function formatStatus(status) {
@@ -443,12 +637,34 @@ async function generateVideo() {
     return
   }
   if (!prompt.value.trim()) {
-    error.value = '请输入提示词'
-    return
+    // Seedance 非文生视频模式允许空提示词
+    if (!isSeedanceModel.value || seedanceMode.value === 'text2video') {
+      error.value = '请输入提示词'
+      return
+    }
   }
-  if (mode.value === 'image' && imageFiles.value.length === 0) {
+  if (mode.value === 'image' && !isSeedanceModel.value && imageFiles.value.length === 0) {
     error.value = '请上传参考图片'
     return
+  }
+
+  // Seedance 模式特定验证
+  if (isSeedanceModel.value) {
+    const sm = seedanceMode.value
+    if (sm === 'image2video_first' && !seedanceFirstFrameFile.value) {
+      error.value = '请上传首帧图片'
+      return
+    }
+    if (sm === 'image2video_first_last') {
+      if (!seedanceFirstFrameFile.value) { error.value = '请上传首帧图片'; return }
+      if (!seedanceLastFrameFile.value) { error.value = '请上传尾帧图片'; return }
+    }
+    if (sm === 'video_edit') {
+      if (seedanceRefVideos.value.length === 0) { error.value = '请上传参考视频'; return }
+    }
+    if (sm === 'video_extend') {
+      if (seedanceRefVideos.value.length === 0) { error.value = '请上传要延长的视频'; return }
+    }
   }
   
   loading.value = true
@@ -485,6 +701,38 @@ async function generateVideo() {
         formData.append('images', file)
       }
     }
+
+    // Seedance 2.0 参数
+    if (isSeedanceModel.value) {
+      formData.append('seedanceMode', seedanceMode.value)
+      formData.append('seedanceResolution', seedanceResolution.value)
+      formData.append('seedanceRatio', seedanceRatio.value)
+      formData.append('seedanceDuration', String(seedanceDuration.value))
+      formData.append('generateAudio', seedanceGenerateAudio.value ? 'true' : 'false')
+      formData.append('webSearch', seedanceWebSearch.value ? 'true' : 'false')
+      formData.append('seedanceWatermark', seedanceWatermark.value ? 'true' : 'false')
+
+      // 首帧图片
+      if (seedanceFirstFrameFile.value) {
+        formData.append('firstFrameImage', seedanceFirstFrameFile.value)
+      }
+      // 尾帧图片
+      if (seedanceLastFrameFile.value) {
+        formData.append('lastFrameImage', seedanceLastFrameFile.value)
+      }
+      // 多模态参考图片
+      for (const file of seedanceRefImages.value) {
+        formData.append('referenceImages', file)
+      }
+      // 参考视频
+      for (const file of seedanceRefVideos.value) {
+        formData.append('referenceVideos', file)
+      }
+      // 参考音频
+      for (const file of seedanceRefAudios.value) {
+        formData.append('referenceAudios', file)
+      }
+    }
     
     console.log('[video] 请求参数:', {
       prompt: currentPrompt,
@@ -505,6 +753,7 @@ async function generateVideo() {
     
     // 立即清空输入框和图片，恢复UI状态
     clearImages()
+    if (isSeedanceModel.value) clearSeedanceFiles()
     prompt.value = ''
     loading.value = false
     successMessage.value = '任务已提交，正在处理...'
@@ -1019,6 +1268,20 @@ watch(model, (newModel) => {
   if (!isVidu && offPeak.value) {
     offPeak.value = false
   }
+
+  // 切换到 Seedance 模型时重置模式为文生视频，切换离开时清空 Seedance 文件
+  const isSeedance = modelCfg?.apiType === 'seedance-2.0'
+  if (isSeedance) {
+    seedanceMode.value = 'text2video'
+    seedanceResolution.value = '720p'
+    seedanceRatio.value = 'adaptive'
+    seedanceDuration.value = 5
+    seedanceGenerateAudio.value = true
+    seedanceWebSearch.value = false
+    seedanceWatermark.value = false
+  } else {
+    clearSeedanceFiles()
+  }
   
   // VEO3模型不需要时长选项（固定 8 秒）
   if (VEO3_MODELS.includes(newModel)) {
@@ -1114,6 +1377,7 @@ onUnmounted(() => {
   pollingTimers.forEach(timer => clearInterval(timer))
   pollingTimers.clear()
   clearImages()
+  clearSeedanceFiles()
 })
 </script>
 
@@ -1125,8 +1389,8 @@ onUnmounted(() => {
       <!-- 左侧控制面板 -->
       <div class="lg:col-span-3">
         <div class="card p-5 sticky top-24">
-          <!-- 模式切换标签 -->
-          <div class="flex bg-slate-100 dark:bg-dark-700 rounded-xl p-1 mb-5">
+          <!-- 模式切换标签（非 Seedance 模型时显示） -->
+          <div v-if="!isSeedanceModel" class="flex bg-slate-100 dark:bg-dark-700 rounded-xl p-1 mb-5">
             <button 
               @click="mode = 'image'" 
               :class="mode === 'image' 
@@ -1163,8 +1427,8 @@ onUnmounted(() => {
               </select>
             </div>
 
-            <!-- 画面比例/方向 - 从模型配置动态获取 -->
-            <div>
+            <!-- 画面比例/方向 - 从模型配置动态获取（非 Seedance 模型） -->
+            <div v-if="!isSeedanceModel">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>📐</span>
                 <span>画面方向</span>
@@ -1178,8 +1442,8 @@ onUnmounted(() => {
               </select>
             </div>
 
-            <!-- 视频长度（VEO3模型不显示） -->
-            <div v-if="!isVeo3Model">
+            <!-- 视频长度（VEO3模型和Seedance模型不显示） -->
+            <div v-if="!isVeo3Model && !isSeedanceModel">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>⏱️</span>
                 <span>视频长度</span>
@@ -1287,8 +1551,256 @@ onUnmounted(() => {
               ></textarea>
             </div>
 
-            <!-- 图生视频上传区域 -->
-            <div v-if="mode === 'image'" class="space-y-2.5">
+            <!-- ========== Seedance 2.0 模式选择 ========== -->
+            <div v-if="isSeedanceModel" class="space-y-3">
+              <!-- 模式选择区域（可展开/折叠） -->
+              <div class="border border-slate-200 dark:border-dark-600 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  @click="seedanceModeOpen = !seedanceModeOpen"
+                  class="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-dark-700 hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors"
+                >
+                  <span class="flex items-center space-x-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <span>🎬</span>
+                    <span>生成模式</span>
+                    <span class="ml-1 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs">
+                      {{ SEEDANCE_MODES.find(m => m.value === seedanceMode)?.label }}
+                    </span>
+                  </span>
+                  <svg
+                    class="w-4 h-4 text-slate-500 transition-transform duration-200"
+                    :class="{ 'rotate-180': seedanceModeOpen }"
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div
+                  v-show="seedanceModeOpen"
+                  class="px-3 py-2.5 border-t border-slate-200 dark:border-dark-600"
+                >
+                  <div class="flex flex-wrap gap-1.5">
+                    <button
+                      v-for="m in seedanceAvailableModes"
+                      :key="m.value"
+                      type="button"
+                      @click="seedanceMode = m.value"
+                      :class="[
+                        'px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-all duration-150',
+                        seedanceMode === m.value
+                          ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900 dark:border-gray-200 shadow-sm'
+                          : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500 hover:border-gray-400 dark:hover:border-gray-500'
+                      ]"
+                    >
+                      <span class="mr-1">{{ m.icon }}</span>{{ m.label }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Seedance 动态上传区域 -->
+
+              <!-- 首帧图片上传（image2video_first / image2video_first_last） -->
+              <div v-if="seedanceMode === 'image2video_first' || seedanceMode === 'image2video_first_last'">
+                <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                  <span>🖼️</span><span>首帧图片</span>
+                </label>
+                <div v-if="!seedanceFirstFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceFirstFrameInputRef?.click()">
+                  <div class="text-2xl mb-1">📤</div>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传首帧图片</p>
+                  <input ref="seedanceFirstFrameInputRef" type="file" accept="image/*" @change="handleSeedanceFirstFrame" class="hidden" />
+                </div>
+                <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
+                  <img :src="seedanceFirstFramePreview" class="w-12 h-12 object-cover rounded flex-shrink-0" />
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ seedanceFirstFrameFile.name }}</p>
+                    <p class="text-xs text-slate-500">{{ (seedanceFirstFrameFile.size / 1024 / 1024).toFixed(2) }} MB</p>
+                  </div>
+                  <button @click="removeSeedanceFirstFrame" class="w-6 h-6 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center text-xs">✕</button>
+                </div>
+              </div>
+
+              <!-- 尾帧图片上传（image2video_first_last） -->
+              <div v-if="seedanceMode === 'image2video_first_last'">
+                <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                  <span>🖼️</span><span>尾帧图片</span>
+                </label>
+                <div v-if="!seedanceLastFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceLastFrameInputRef?.click()">
+                  <div class="text-2xl mb-1">📤</div>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传尾帧图片</p>
+                  <input ref="seedanceLastFrameInputRef" type="file" accept="image/*" @change="handleSeedanceLastFrame" class="hidden" />
+                </div>
+                <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
+                  <img :src="seedanceLastFramePreview" class="w-12 h-12 object-cover rounded flex-shrink-0" />
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ seedanceLastFrameFile.name }}</p>
+                    <p class="text-xs text-slate-500">{{ (seedanceLastFrameFile.size / 1024 / 1024).toFixed(2) }} MB</p>
+                  </div>
+                  <button @click="removeSeedanceLastFrame" class="w-6 h-6 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center text-xs">✕</button>
+                </div>
+              </div>
+
+              <!-- 多模态参考图片（multimodal_ref / video_edit） -->
+              <div v-if="seedanceMode === 'multimodal_ref' || seedanceMode === 'video_edit'">
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <span>🖼️</span><span>参考图片</span>
+                  </label>
+                  <span class="text-xs text-slate-500">{{ seedanceRefImages.length }} / {{ seedanceMode === 'multimodal_ref' ? 9 : 1 }}</span>
+                </div>
+                <div v-if="seedanceRefImages.length < (seedanceMode === 'multimodal_ref' ? 9 : 1)" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefImageInputRef?.click()">
+                  <div class="text-2xl mb-1">📤</div>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传参考图片</p>
+                  <input ref="seedanceRefImageInputRef" type="file" accept="image/*" multiple @change="handleSeedanceRefImages" class="hidden" />
+                </div>
+                <div v-if="seedanceRefImagePreviews.length > 0" class="space-y-1.5 mt-1.5 max-h-36 overflow-y-auto">
+                  <div v-for="(url, idx) in seedanceRefImagePreviews" :key="idx" class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-1.5 border border-slate-200 dark:border-dark-600">
+                    <img :src="url" class="w-10 h-10 object-cover rounded flex-shrink-0" />
+                    <span class="flex-1 text-xs text-slate-600 dark:text-slate-300 truncate">{{ seedanceRefImages[idx]?.name }}</span>
+                    <button @click="removeSeedanceRefImage(idx)" class="w-5 h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded flex items-center justify-center text-xs">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 参考视频上传（multimodal_ref / video_edit / video_extend） -->
+              <div v-if="seedanceMode === 'multimodal_ref' || seedanceMode === 'video_edit' || seedanceMode === 'video_extend'">
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <span>🎥</span><span>参考视频</span>
+                  </label>
+                  <span class="text-xs text-slate-500">{{ seedanceRefVideos.length }} / 3</span>
+                </div>
+                <div v-if="seedanceRefVideos.length < 3" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefVideoInputRef?.click()">
+                  <div class="text-2xl mb-1">🎥</div>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传视频 (mp4/mov, 最大50MB)</p>
+                  <input ref="seedanceRefVideoInputRef" type="file" accept="video/mp4,video/quicktime" multiple @change="handleSeedanceRefVideos" class="hidden" />
+                </div>
+                <div v-if="seedanceRefVideoPreviews.length > 0" class="space-y-1.5 mt-1.5">
+                  <div v-for="(vp, idx) in seedanceRefVideoPreviews" :key="idx" class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
+                    <div class="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center flex-shrink-0">
+                      <span class="text-lg">🎬</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ vp.name }}</p>
+                      <p class="text-xs text-slate-500">{{ vp.size }} MB</p>
+                    </div>
+                    <button @click="removeSeedanceRefVideo(idx)" class="w-5 h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded flex items-center justify-center text-xs">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 参考音频上传（multimodal_ref） -->
+              <div v-if="seedanceMode === 'multimodal_ref'">
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <span>🔊</span><span>参考音频</span>
+                  </label>
+                  <span class="text-xs text-slate-500">{{ seedanceRefAudios.length }} / 3</span>
+                </div>
+                <div v-if="seedanceRefAudios.length < 3" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="seedanceRefAudioInputRef?.click()">
+                  <div class="text-2xl mb-1">🎵</div>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传音频 (wav/mp3, 最大15MB)</p>
+                  <input ref="seedanceRefAudioInputRef" type="file" accept="audio/wav,audio/mpeg,audio/mp3" multiple @change="handleSeedanceRefAudios" class="hidden" />
+                </div>
+                <div v-if="seedanceRefAudioPreviews.length > 0" class="space-y-1.5 mt-1.5">
+                  <div v-for="(ap, idx) in seedanceRefAudioPreviews" :key="idx" class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
+                    <div class="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center flex-shrink-0">
+                      <span class="text-sm">🎵</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ ap.name }}</p>
+                      <p class="text-xs text-slate-500">{{ ap.size }} MB</p>
+                    </div>
+                    <button @click="removeSeedanceRefAudio(idx)" class="w-5 h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded flex items-center justify-center text-xs">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Seedance 高级设置（可展开/折叠） -->
+              <div class="border border-slate-200 dark:border-dark-600 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  @click="seedanceAdvancedOpen = !seedanceAdvancedOpen"
+                  class="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-dark-700 hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors"
+                >
+                  <span class="flex items-center space-x-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <span>⚙️</span><span>高级设置</span>
+                  </span>
+                  <svg
+                    class="w-4 h-4 text-slate-500 transition-transform duration-200"
+                    :class="{ 'rotate-180': seedanceAdvancedOpen }"
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div v-show="seedanceAdvancedOpen" class="px-3 py-3 border-t border-slate-200 dark:border-dark-600 space-y-3">
+                  <!-- 分辨率 -->
+                  <div>
+                    <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">分辨率</label>
+                    <div class="flex space-x-2">
+                      <button type="button" @click="seedanceResolution = '480p'"
+                        :class="['flex-1 py-1.5 px-2 text-xs font-medium rounded-lg border transition-all', seedanceResolution === '480p' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900 dark:border-gray-200' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500 hover:border-gray-400']">
+                        480p
+                      </button>
+                      <button type="button" @click="seedanceResolution = '720p'"
+                        :class="['flex-1 py-1.5 px-2 text-xs font-medium rounded-lg border transition-all', seedanceResolution === '720p' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900 dark:border-gray-200' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500 hover:border-gray-400']">
+                        720p
+                      </button>
+                    </div>
+                  </div>
+                  <!-- 宽高比 -->
+                  <div>
+                    <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">宽高比</label>
+                    <select v-model="seedanceRatio" class="input text-xs">
+                      <option v-for="r in SEEDANCE_RATIOS" :key="r.value" :value="r.value">{{ r.label }}</option>
+                    </select>
+                  </div>
+                  <!-- 时长滑块 -->
+                  <div>
+                    <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
+                      <span>时长</span>
+                      <span class="text-gray-700 dark:text-gray-300 font-semibold">{{ seedanceDuration }} 秒</span>
+                    </label>
+                    <input type="range" v-model.number="seedanceDuration" min="4" max="15" step="1"
+                      class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-gray-600" />
+                    <div class="flex justify-between text-xs text-slate-400 mt-0.5">
+                      <span>4s</span><span>15s</span>
+                    </div>
+                  </div>
+                  <!-- 开关选项 -->
+                  <div class="space-y-2">
+                    <!-- 生成有声视频 -->
+                    <label class="flex items-center justify-between cursor-pointer">
+                      <span class="text-xs text-slate-600 dark:text-slate-400">🔊 生成有声视频</span>
+                      <div class="relative inline-flex items-center">
+                        <input type="checkbox" v-model="seedanceGenerateAudio" class="sr-only peer" />
+                        <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-gray-600"></div>
+                      </div>
+                    </label>
+                    <!-- 联网搜索增强（仅文生视频） -->
+                    <label v-if="seedanceMode === 'text2video'" class="flex items-center justify-between cursor-pointer">
+                      <span class="text-xs text-slate-600 dark:text-slate-400">🌐 联网搜索增强</span>
+                      <div class="relative inline-flex items-center">
+                        <input type="checkbox" v-model="seedanceWebSearch" class="sr-only peer" />
+                        <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-gray-600"></div>
+                      </div>
+                    </label>
+                    <!-- 水印 -->
+                    <label class="flex items-center justify-between cursor-pointer">
+                      <span class="text-xs text-slate-600 dark:text-slate-400">💧 水印</span>
+                      <div class="relative inline-flex items-center">
+                        <input type="checkbox" v-model="seedanceWatermark" class="sr-only peer" />
+                        <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-gray-600"></div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 图生视频上传区域（非 Seedance 模型时显示） -->
+            <div v-if="mode === 'image' && !isSeedanceModel" class="space-y-2.5">
               <div class="flex items-center justify-between">
                 <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
                   <span>🖼️</span>
