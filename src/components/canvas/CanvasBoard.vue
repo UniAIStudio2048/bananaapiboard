@@ -10,6 +10,8 @@
  * - Delete/Backspace：删除选中的节点
  * - 双击空白区域：打开节点选择器
  * - 鼠标滚轮：以鼠标位置为中心缩放
+ * - Shift + 滚轮：水平平移画布
+ * - Ctrl + 滚轮：垂直平移画布
  * - 空格 + 鼠标拖动：平移画布和视图跟随
  * - Ctrl+Z：撤销
  * - Ctrl+Y：重做
@@ -175,47 +177,48 @@ const MIN_ZOOM = 0.1
 const MAX_ZOOM = 5
 const ZOOM_SPEED = 0.1
 
+const PAN_SPEED = 50
+
 /**
- * 自定义滚轮缩放 - 以鼠标位置为中心进行缩放
+ * 自定义滚轮处理
+ * - 默认滚轮：以鼠标位置为中心缩放
+ * - Shift + 滚轮：水平平移画布
+ * - Ctrl + 滚轮：垂直平移画布
  */
 function handleWheel(event) {
-  // 阻止默认滚动行为
   event.preventDefault()
   
-  // 获取当前视口
   const viewport = getViewport()
-  
-  // 计算缩放因子
+
+  if (event.shiftKey) {
+    const dx = event.deltaY > 0 ? -PAN_SPEED : PAN_SPEED
+    setViewport({ x: viewport.x + dx, y: viewport.y, zoom: viewport.zoom })
+    return
+  }
+
+  if (event.ctrlKey || event.metaKey) {
+    const dy = event.deltaY > 0 ? -PAN_SPEED : PAN_SPEED
+    setViewport({ x: viewport.x, y: viewport.y + dy, zoom: viewport.zoom })
+    return
+  }
+
   const delta = event.deltaY > 0 ? -ZOOM_SPEED : ZOOM_SPEED
   const newZoom = Math.min(Math.max(viewport.zoom * (1 + delta), MIN_ZOOM), MAX_ZOOM)
   
-  // 如果缩放没有变化，直接返回
   if (newZoom === viewport.zoom) return
   
-  // 获取画布容器的边界
   const container = canvasBoardRef.value
   if (!container) return
   
   const rect = container.getBoundingClientRect()
-  
-  // 鼠标在画布容器中的位置
   const mouseX = event.clientX - rect.left
   const mouseY = event.clientY - rect.top
-  
-  // 计算鼠标在 flow 坐标系中的位置（缩放前）
   const flowX = (mouseX - viewport.x) / viewport.zoom
   const flowY = (mouseY - viewport.y) / viewport.zoom
-  
-  // 计算新的视口位置，使得鼠标指向的 flow 坐标点保持不变
   const newX = mouseX - flowX * newZoom
   const newY = mouseY - flowY * newZoom
   
-  // 设置新视口
-  setViewport({
-    x: newX,
-    y: newY,
-    zoom: newZoom
-  })
+  setViewport({ x: newX, y: newY, zoom: newZoom })
 }
 
 // 自定义节点类型映射
@@ -2282,7 +2285,7 @@ onUnmounted(() => {
       :select-nodes-on-drag="true"
       :pan-on-scroll="false"
       :zoom-on-scroll="false"
-      :zoom-on-pinch="true"
+      :zoom-on-pinch="false"
       :zoom-on-double-click="false"
       :delete-key-code="null"
       :prevent-scrolling="true"

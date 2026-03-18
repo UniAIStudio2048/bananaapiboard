@@ -2020,6 +2020,182 @@ async function reuploadToCloud(url) {
   }
 }
 
+// 判断是否是 base64 数据
+function isBase64Image(str) {
+  if (!str || typeof str !== 'string') return false
+  return str.startsWith('data:')
+}
+
+// 判断是否是 blob URL
+function isBlobUrl(str) {
+  if (!str || typeof str !== 'string') return false
+  return str.startsWith('blob:')
+}
+
+// 判断是否是有效的 URL
+function isValidUrl(str) {
+  if (!str || typeof str !== 'string') return false
+  if (str.startsWith('http://') || str.startsWith('https://')) return true
+  if (str.startsWith('/api/') || str.startsWith('/storage/')) return true
+  return false
+}
+
+// 获取图片源的字节大小
+async function getImageSourceSize(imageSource) {
+  if (isBase64Image(imageSource)) {
+    const base64Data = imageSource.split(',')[1]
+    if (!base64Data) return 0
+    return Math.ceil(base64Data.length * 3 / 4)
+  } else if (isBlobUrl(imageSource)) {
+    try {
+      const response = await fetch(imageSource)
+      const blob = await response.blob()
+      return blob.size
+    } catch {
+      return 0
+    }
+  } else if (isValidUrl(imageSource)) {
+    try {
+      try {
+        const headResponse = await fetch(imageSource, { method: 'HEAD' })
+        const contentLength = headResponse.headers.get('content-length')
+        if (contentLength) return parseInt(contentLength, 10)
+      } catch { /* HEAD 不可用，回退到全量获取 */ }
+      const response = await fetch(imageSource)
+      const blob = await response.blob()
+      return blob.size
+    } catch {
+      return 0
+    }
+  }
+  return 0
+}
+
+// 压缩单张图片到目标字节大小（优先保持像素尺寸不变，先降质量再缩尺寸）
+function compressImageToTargetSize(imageSource, targetSizeBytes) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+
+    img.onload = async () => {
+      const origWidth = img.width
+      const origHeight = img.height
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+
+      canvas.width = origWidth
+      canvas.height = origHeight
+      ctx.drawImage(img, 0, 0, origWidth, origHeight)
+
+      let quality = 0.92
+      let blob = null
+
+      while (quality >= 0.1) {
+        blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality))
+        if (blob && blob.size <= targetSizeBytes) {
+          console.log(`[VideoNode] 压缩成功 (质量=${quality.toFixed(2)}): ${origWidth}x${origHeight}, ${(blob.size / 1024 / 1024).toFixed(2)}MB`)
+          resolve(blob)
+          return
+        }
+        quality -= 0.05
+      }
+
+      if (blob && blob.size > targetSizeBytes) {
+        let scale = Math.sqrt(targetSizeBytes / blob.size) * 0.9
+        let attempts = 0
+
+        while (scale > 0.1 && attempts < 10) {
+          const newWidth = Math.round(origWidth * scale)
+          const newHeight = Math.round(origHeight * scale)
+          canvas.width = newWidth
+          canvas.height = newHeight
+          ctx.clearRect(0, 0, newWidth, newHeight)
+          ctx.drawImage(img, 0, 0, newWidth, newHeight)
+
+          blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.85))
+          if (blob && blob.size <= targetSizeBytes) {
+            console.log(`[VideoNode] 压缩成功 (缩放=${scale.toFixed(2)}): ${newWidth}x${newHeight}, ${(blob.size / 1024 / 1024).toFixed(2)}MB`)
+            resolve(blob)
+            return
+          }
+          scale *= 0.85
+          attempts++
+        }
+      }
+
+      console.warn(`[VideoNode] 压缩未完全达标，最终大小: ${blob ? (blob.size / 1024 / 1024).toFixed(2) : '?'}MB`)
+      resolve(blob)
+    }
+
+    img.onerror = () => {
+      console.warn('[VideoNode] 压缩失败：图片加载失败', imageSource?.substring?.(0, 60))
+      resolve(null)
+    }
+
+    img.src = imageSource
+  })
+}
+
+// 视频模型输入图片压缩：每张不超过10MB
+async function compressVideoInputImages(images) {
+  if (!images || images.length === 0) return images
+
+  const MAX_SIZE = 10 * 1024 * 1024
+
+  const sizes = await Promise.all(images.map(img => getImageSourceSize(img)))
+  console.log('[VideoNode] 输入图片大小检测:', sizes.map(s => (s / 1024 / 1024).toFixed(2) + 'MB'))
+
+  const result = []
+
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i]
+    const size = sizes[i]
+
+    if (size <= MAX_SIZE || size === 0) {
+      result.push(img)
+      continue
+    }
+
+    console.log(`[VideoNode] 图片 ${i + 1} 超过10MB (${(size / 1024 / 1024).toFixed(2)}MB)，开始压缩...`)
+
+    try {
+      const compressedBlob = await compressImageToTargetSize(img, MAX_SIZE)
+
+      if (compressedBlob) {
+        if (isBase64Image(img)) {
+          const base64 = await new Promise(r => {
+            const reader = new FileReader()
+            reader.onload = () => r(reader.result)
+            reader.readAsDataURL(compressedBlob)
+          })
+          result.push(base64)
+        } else if (isBlobUrl(img)) {
+          const newBlobUrl = URL.createObjectURL(compressedBlob)
+          result.push(newBlobUrl)
+        } else {
+          const file = new File([compressedBlob], `compressed_video_ref_${Date.now()}_${i}.jpg`, { type: 'image/jpeg' })
+          const urls = await uploadImages([file])
+          if (urls && urls.length > 0) {
+            result.push(urls[0])
+          } else {
+            result.push(img)
+            console.warn(`[VideoNode] 图片 ${i + 1} 压缩后上传失败，使用原图`)
+          }
+        }
+        console.log(`[VideoNode] 图片 ${i + 1} 压缩完成: ${(compressedBlob.size / 1024 / 1024).toFixed(2)}MB`)
+      } else {
+        result.push(img)
+        console.warn(`[VideoNode] 图片 ${i + 1} 压缩失败，使用原图`)
+      }
+    } catch (error) {
+      console.error(`[VideoNode] 图片 ${i + 1} 压缩异常:`, error)
+      result.push(img)
+    }
+  }
+
+  return result
+}
+
 // 确保所有图片 URL 都是 AI 模型可访问的公开 URL
 async function ensureAccessibleUrls(imageUrls) {
   const accessibleUrls = []
@@ -2608,6 +2784,11 @@ async function handleGenerate() {
     return
   }
   
+  // 视频模型输入图片限制：每张不超过10MB，超过自动压缩
+  if (finalImages.length > 0) {
+    finalImages = await compressVideoInputImages(finalImages)
+  }
+  
   // 🔥 关键：确保所有参考图片都是 AI 模型可访问的公开 URL
   if (finalImages.length > 0) {
     console.log('[VideoNode] 处理参考图片 URL，确保可访问性...')
@@ -2941,11 +3122,23 @@ function handleResizeEnd() {
 // 后台异步上传图片 - 上传完成后静默更新节点URL
 async function uploadImageFileAsync(file, blobUrl, nodeId) {
   try {
-    console.log('[VideoNode] 后台异步上传开始:', file.name)
+    console.log('[VideoNode] 后台异步上传开始:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
     
+    // 超过10MB的图片压缩后再上传
     if (file.size > 10 * 1024 * 1024) {
-      console.warn('[VideoNode] 文件过大，保持使用 blob URL')
-      return
+      console.log('[VideoNode] 文件超过10MB，压缩后上传...')
+      const tempBlobUrl = URL.createObjectURL(file)
+      try {
+        const compressedBlob = await compressImageToTargetSize(tempBlobUrl, 10 * 1024 * 1024)
+        URL.revokeObjectURL(tempBlobUrl)
+        if (compressedBlob) {
+          file = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() })
+          console.log('[VideoNode] 压缩后大小:', (file.size / 1024 / 1024).toFixed(2), 'MB')
+        }
+      } catch (e) {
+        URL.revokeObjectURL(tempBlobUrl)
+        console.warn('[VideoNode] 压缩失败，尝试上传原文件:', e.message)
+      }
     }
     
     const urls = await uploadImages([file])

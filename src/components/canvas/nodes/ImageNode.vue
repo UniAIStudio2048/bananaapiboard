@@ -3096,10 +3096,21 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
   try {
     console.log('[ImageNode] 后台异步上传开始:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
     
-    // 检查文件大小（限制 10MB）
-    if (file.size > 10 * 1024 * 1024) {
-      console.warn('[ImageNode] 文件过大，保持使用 blob URL')
-      return
+    // 单张超过20MB的图片压缩后再上传
+    if (file.size > 20 * 1024 * 1024) {
+      console.log('[ImageNode] 文件超过20MB，压缩后上传...')
+      const tempBlobUrl = URL.createObjectURL(file)
+      try {
+        const compressedBlob = await compressImageToTargetSize(tempBlobUrl, 15 * 1024 * 1024)
+        URL.revokeObjectURL(tempBlobUrl)
+        if (compressedBlob) {
+          file = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() })
+          console.log('[ImageNode] 压缩后大小:', (file.size / 1024 / 1024).toFixed(2), 'MB')
+        }
+      } catch (e) {
+        URL.revokeObjectURL(tempBlobUrl)
+        console.warn('[ImageNode] 压缩失败，尝试上传原文件:', e.message)
+      }
     }
     
     const urls = await uploadImages([file])
@@ -3205,9 +3216,21 @@ async function uploadImageFile(file) {
   // 立即上传到服务器获取真正的 URL
   console.log('[ImageNode] 上传图片文件到服务器:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
   
-  // 检查文件大小（限制 10MB）
-  if (file.size > 10 * 1024 * 1024) {
-    throw new Error('图片文件过大，请选择小于 10MB 的图片')
+  // 单张超过20MB的图片压缩后再上传
+  if (file.size > 20 * 1024 * 1024) {
+    console.log('[ImageNode] 文件超过20MB，压缩后上传...')
+    const tempBlobUrl = URL.createObjectURL(file)
+    try {
+      const compressedBlob = await compressImageToTargetSize(tempBlobUrl, 15 * 1024 * 1024)
+      URL.revokeObjectURL(tempBlobUrl)
+      if (compressedBlob) {
+        file = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() })
+        console.log('[ImageNode] 压缩后大小:', (file.size / 1024 / 1024).toFixed(2), 'MB')
+      }
+    } catch (e) {
+      URL.revokeObjectURL(tempBlobUrl)
+      console.warn('[ImageNode] 压缩失败，尝试上传原文件:', e.message)
+    }
   }
   
   const urls = await uploadImages([file])
@@ -3543,6 +3566,202 @@ function isBlobUrl(str) {
   return str.startsWith('blob:')
 }
 
+// 获取图片源的字节大小
+async function getImageSourceSize(imageSource) {
+  if (isBase64Image(imageSource)) {
+    const base64Data = imageSource.split(',')[1]
+    if (!base64Data) return 0
+    return Math.ceil(base64Data.length * 3 / 4)
+  } else if (isBlobUrl(imageSource)) {
+    try {
+      const response = await fetch(imageSource)
+      const blob = await response.blob()
+      return blob.size
+    } catch {
+      return 0
+    }
+  } else if (isValidUrl(imageSource)) {
+    try {
+      try {
+        const headResponse = await fetch(imageSource, { method: 'HEAD' })
+        const contentLength = headResponse.headers.get('content-length')
+        if (contentLength) return parseInt(contentLength, 10)
+      } catch { /* HEAD 不可用，回退到全量获取 */ }
+      const response = await fetch(imageSource)
+      const blob = await response.blob()
+      return blob.size
+    } catch {
+      return 0
+    }
+  }
+  return 0
+}
+
+// 压缩单张图片到目标字节大小（优先保持像素尺寸不变，先降质量再缩尺寸）
+function compressImageToTargetSize(imageSource, targetSizeBytes) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+
+    img.onload = async () => {
+      const origWidth = img.width
+      const origHeight = img.height
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+
+      // Phase 1: 保持原始尺寸，逐步降低 JPEG 质量
+      canvas.width = origWidth
+      canvas.height = origHeight
+      ctx.drawImage(img, 0, 0, origWidth, origHeight)
+
+      let quality = 0.92
+      let blob = null
+
+      while (quality >= 0.1) {
+        blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality))
+        if (blob && blob.size <= targetSizeBytes) {
+          console.log(`[ImageNode] 压缩成功 (质量=${quality.toFixed(2)}): ${origWidth}x${origHeight}, ${(blob.size / 1024 / 1024).toFixed(2)}MB`)
+          resolve(blob)
+          return
+        }
+        quality -= 0.05
+      }
+
+      // Phase 2: 质量已最低，需要按比例缩小尺寸
+      if (blob && blob.size > targetSizeBytes) {
+        let scale = Math.sqrt(targetSizeBytes / blob.size) * 0.9
+        let attempts = 0
+
+        while (scale > 0.1 && attempts < 10) {
+          const newWidth = Math.round(origWidth * scale)
+          const newHeight = Math.round(origHeight * scale)
+          canvas.width = newWidth
+          canvas.height = newHeight
+          ctx.clearRect(0, 0, newWidth, newHeight)
+          ctx.drawImage(img, 0, 0, newWidth, newHeight)
+
+          blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.85))
+          if (blob && blob.size <= targetSizeBytes) {
+            console.log(`[ImageNode] 压缩成功 (缩放=${scale.toFixed(2)}): ${newWidth}x${newHeight}, ${(blob.size / 1024 / 1024).toFixed(2)}MB`)
+            resolve(blob)
+            return
+          }
+          scale *= 0.85
+          attempts++
+        }
+      }
+
+      console.warn(`[ImageNode] 压缩未完全达标，最终大小: ${blob ? (blob.size / 1024 / 1024).toFixed(2) : '?'}MB`)
+      resolve(blob)
+    }
+
+    img.onerror = () => {
+      console.warn('[ImageNode] 压缩失败：图片加载失败', imageSource?.substring?.(0, 60))
+      resolve(null)
+    }
+
+    img.src = imageSource
+  })
+}
+
+// 批量检测和压缩图片（>3张检测总大小，单张>20MB也压缩）
+async function compressImagesIfNeeded(images) {
+  if (!images || images.length === 0) return images
+
+  const imageCount = images.length
+
+  const sizes = await Promise.all(images.map(img => getImageSourceSize(img)))
+  const totalSize = sizes.reduce((sum, s) => sum + s, 0)
+
+  console.log('[ImageNode] 图片压缩检测:', {
+    imageCount,
+    sizes: sizes.map(s => (s / 1024 / 1024).toFixed(2) + 'MB'),
+    totalSize: (totalSize / 1024 / 1024).toFixed(2) + 'MB'
+  })
+
+  // 确定批量压缩目标（仅超过3张时检测总大小）
+  let batchTargetSize = Infinity
+  if (imageCount > 3) {
+    if (totalSize > 40 * 1024 * 1024) {
+      batchTargetSize = 6 * 1024 * 1024
+      console.log('[ImageNode] 总大小超过40MB，每张压缩到6MB以内')
+    } else if (totalSize > 30 * 1024 * 1024) {
+      batchTargetSize = 8 * 1024 * 1024
+      console.log('[ImageNode] 总大小超过30MB，每张压缩到8MB以内')
+    }
+  }
+
+  const result = []
+  let anyCompressed = false
+
+  for (let i = 0; i < images.length; i++) {
+    const img = images[i]
+    const size = sizes[i]
+
+    let targetSize = batchTargetSize
+
+    // 单张超过20MB，无论图片数量都压缩到15MB以内
+    if (size > 20 * 1024 * 1024) {
+      targetSize = Math.min(targetSize, 15 * 1024 * 1024)
+      console.log(`[ImageNode] 图片 ${i + 1} 单张超过20MB (${(size / 1024 / 1024).toFixed(2)}MB)，需要压缩`)
+    }
+
+    if (size <= targetSize || size === 0) {
+      result.push(img)
+      continue
+    }
+
+    console.log(`[ImageNode] 开始压缩图片 ${i + 1}: ${(size / 1024 / 1024).toFixed(2)}MB -> 目标 ${(targetSize / 1024 / 1024).toFixed(2)}MB`)
+
+    try {
+      const compressedBlob = await compressImageToTargetSize(img, targetSize)
+
+      if (compressedBlob) {
+        anyCompressed = true
+
+        if (isBase64Image(img)) {
+          const base64 = await new Promise(r => {
+            const reader = new FileReader()
+            reader.onload = () => r(reader.result)
+            reader.readAsDataURL(compressedBlob)
+          })
+          result.push(base64)
+          console.log(`[ImageNode] 图片 ${i + 1} 压缩完成 (base64): ${(compressedBlob.size / 1024 / 1024).toFixed(2)}MB`)
+        } else if (isBlobUrl(img)) {
+          const newBlobUrl = URL.createObjectURL(compressedBlob)
+          result.push(newBlobUrl)
+          console.log(`[ImageNode] 图片 ${i + 1} 压缩完成 (blob): ${(compressedBlob.size / 1024 / 1024).toFixed(2)}MB`)
+        } else {
+          const file = new File([compressedBlob], `compressed_${Date.now()}_${i}.jpg`, { type: 'image/jpeg' })
+          const urls = await uploadImages([file])
+          if (urls && urls.length > 0) {
+            result.push(urls[0])
+            console.log(`[ImageNode] 图片 ${i + 1} 压缩+上传完成: ${(compressedBlob.size / 1024 / 1024).toFixed(2)}MB -> ${urls[0].substring(0, 60)}`)
+          } else {
+            result.push(img)
+            console.warn(`[ImageNode] 图片 ${i + 1} 压缩后上传失败，使用原图`)
+          }
+        }
+      } else {
+        result.push(img)
+        console.warn(`[ImageNode] 图片 ${i + 1} 压缩失败，使用原图`)
+      }
+    } catch (error) {
+      console.error(`[ImageNode] 图片 ${i + 1} 压缩异常:`, error)
+      result.push(img)
+    }
+  }
+
+  if (anyCompressed) {
+    const newSizes = await Promise.all(result.map(img => getImageSourceSize(img)))
+    const newTotalSize = newSizes.reduce((sum, s) => sum + s, 0)
+    console.log('[ImageNode] 压缩完成，总大小:', (newTotalSize / 1024 / 1024).toFixed(2) + 'MB',
+      '(压缩前:', (totalSize / 1024 / 1024).toFixed(2) + 'MB)')
+  }
+
+  return result
+}
+
 // 在所有节点中查找某个 blob URL 是否已被替换为服务器 URL
 // 当 blob URL 失效时，可以通过这个函数找到已上传的服务器 URL
 function findServerUrlForBlobInNodes(blobUrl) {
@@ -3805,6 +4024,9 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
   console.log('[ImageNode] computed 属性的参考图:', referenceImages.value.length, '张')
   console.log('[ImageNode] 最终使用的参考图:', finalReferenceImages)
   
+  // 压缩检测：超过3张检测总大小并压缩，单张超过20MB也压缩
+  const imagesToProcess = await compressImagesIfNeeded(finalReferenceImages)
+  
   // 构建基础参数
   const baseParams = {
     prompt: finalPrompt || '保持原图风格',
@@ -3823,7 +4045,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     ...(isSeedream50LiteModel.value && { webSearch: enableWebSearch.value })
   }
   
-  if (finalReferenceImages.length > 0) {
+  if (imagesToProcess.length > 0) {
     // 图生图模式：需要确保所有图片都是有效的 URL
     let imageUrls = []
     
@@ -3832,7 +4054,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     const blobUrls = []
     const httpUrls = []
     
-    for (const img of finalReferenceImages) {
+    for (const img of imagesToProcess) {
       if (isBase64Image(img)) {
         base64Images.push(img)
       } else if (isBlobUrl(img)) {

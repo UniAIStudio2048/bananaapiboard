@@ -2501,6 +2501,8 @@ onUnmounted(() => {
                 <li><kbd>{{ t('canvas.doubleClickBlank') }}</kbd> {{ t('canvas.doubleClickBlankDesc') }}</li>
                 <li><kbd>{{ t('canvas.scrollUp') }}</kbd> {{ t('canvas.scrollUpDesc') }}</li>
                 <li><kbd>{{ t('canvas.scrollDown') }}</kbd> {{ t('canvas.scrollDownDesc') }}</li>
+                <li><kbd>{{ t('canvas.shiftScroll') }}</kbd> {{ t('canvas.shiftScrollDesc') }}</li>
+                <li><kbd>{{ t('canvas.ctrlScroll') }}</kbd> {{ t('canvas.ctrlScrollDesc') }}</li>
               </ul>
             </div>
             <div class="help-section">

@@ -307,6 +307,14 @@ function handleMenuClick(event) {
           <span class="hint-key">滚轮</span>
           <span class="hint-desc">缩放画布</span>
         </div>
+        <div class="hint-item">
+          <span class="hint-key">Shift + 滚轮</span>
+          <span class="hint-desc">左右平移</span>
+        </div>
+        <div class="hint-item">
+          <span class="hint-key">Ctrl + 滚轮</span>
+          <span class="hint-desc">上下平移</span>
+        </div>
       </div>
     </template>
   </div>
