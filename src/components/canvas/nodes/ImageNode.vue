@@ -4160,9 +4160,8 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
       
       console.log('[ImageNode] blob URL 处理完成:', processedCount, '成功,', failedCount, '失败')
       
-      // 如果所有 blob URL 都处理失败且没有其他图片，才报错
       if (processedCount === 0 && failedCount > 0 && imageUrls.length === 0 && httpUrls.length === 0) {
-        throw new Error('参考图片处理失败，请重新上传图片后重试')
+        throw new Error('参考图片已失效（blob URL 过期），请重新上传图片或刷新页面后重试')
       }
     }
     
@@ -4300,17 +4299,21 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
     
     throw new Error('未获取到生成结果')
   } catch (error) {
-    console.error(`[ImageNode] 任务 ${taskIndex + 1} 失败:`, error)
-    console.error(`[ImageNode] 错误详情:`, {
+    const errorDetail = {
       name: error.name,
       message: error.message,
-      stack: error.stack
-    })
+      stack: error.stack,
+      model: selectedModel.value,
+      hasReferenceImages: referenceImages.value.length > 0,
+      referenceImageCount: referenceImages.value.length
+    }
+    console.error(`[ImageNode] 任务 ${taskIndex + 1} 失败:`, error)
+    console.error(`[ImageNode] 错误详情:`, errorDetail)
     canvasStore.updateNodeData(nodeId, {
       status: 'error',
       error: error.message
     })
-    return null
+    return { error: error.message, detail: errorDetail }
   }
 }
 
@@ -4543,12 +4546,19 @@ async function handleGenerate(options = {}) {
     
     // 等待所有任务提交完成（不是等待任务结果完成）
     const allResults = await Promise.all(submitPromises)
-    const successResults = allResults.filter(r => r !== null)
+    const successResults = allResults.filter(r => r !== null && !r?.error)
+    const failedResults = allResults.filter(r => r?.error)
     
-    console.log('[ImageNode] 全部任务已提交:', successResults.length, '/', generateCount)
+    console.log('[ImageNode] 全部任务已提交:', successResults.length, '/', generateCount, 
+      failedResults.length > 0 ? '失败详情:' : '', failedResults)
     
     if (successResults.length === 0) {
-      throw new Error('所有任务提交都失败了')
+      const firstError = failedResults[0]?.error || '未知错误'
+      const detail = failedResults[0]?.detail || {}
+      console.error('[ImageNode] 所有任务都失败，首个错误:', firstError, detail)
+      const err = new Error(`任务提交失败: ${firstError}`)
+      if (detail) err.detail = detail
+      throw err
     }
     
     // 任务提交成功后，立即恢复按钮状态，允许用户继续发起新任务

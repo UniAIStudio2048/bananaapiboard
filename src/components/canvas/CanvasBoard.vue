@@ -944,7 +944,7 @@ function handleKeyDown(event) {
     }
     
     // 优先级1：如果正在拖拽连线（从+按钮），取消连线拖拽
-    if (isDraggingConnection.value) {
+    if (canvasStore.isDraggingConnection) {
       cancelDragConnection()
       console.log('[Canvas] 用户按ESC取消连线拖拽（+按钮）')
       return
