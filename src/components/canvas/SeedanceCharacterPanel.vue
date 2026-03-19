@@ -171,6 +171,19 @@ async function syncFromCloud() {
     const cloudAssets = cloudResult.assets || []
     if (cloudAssets.length === 0) return
     
+    // 查询租户级所有 seedance-character 资产（不限用户），用于去重
+    // 避免将其他用户的云端资产同步到当前用户名下
+    const tenantResult = await getAssets({ type: 'seedance-character', scope: 'tenant', pageSize: 500 })
+    const tenantAssets = tenantResult.assets || []
+    
+    const tenantAssetIds = new Set()
+    for (const a of tenantAssets) {
+      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata || '{}') : (a.metadata || {})
+      if (meta.assetId) tenantAssetIds.add(meta.assetId)
+    }
+    
+    // 只同步租户内所有用户都不存在的资产（真正的孤儿资产不再自动同步）
+    // 以及当前用户自己空间内缺失的资产（通过个人空间检查）
     const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
     const localResult = await getAssets({ type: 'seedance-character', ...spaceParams, pageSize: 500 })
     const localAssets = localResult.assets || []
@@ -181,34 +194,58 @@ async function syncFromCloud() {
       if (meta.assetId) localAssetIds.add(meta.assetId)
     }
     
-    const missing = cloudAssets.filter(ca => !localAssetIds.has(ca.Id))
-    
-    for (const ca of missing) {
-      try {
-        await saveAsset({
-          type: 'seedance-character',
-          name: ca.Name || '角色素材',
-          url: `asset://${ca.Id}`,
-          thumbnail_url: ca.URL,
-          metadata: {
-            assetId: ca.Id,
-            groupId: ca.GroupId,
-            status: ca.Status || 'Active',
-            assetType: ca.AssetType || 'Image',
-            projectName: ca.ProjectName,
-            createTime: ca.CreateTime,
-            updateTime: ca.UpdateTime
-          },
-          spaceType: spaceParams.spaceType,
-          teamId: spaceParams.teamId
-        })
-      } catch (e) {
-        console.error('[SeedancePanel] 同步云端资产失败:', ca.Id, e)
-      }
-    }
+    // 云端资产如果在租户内任何用户名下已存在但不在当前用户空间内 → 跳过（属于其他用户）
+    // 云端资产如果在租户内完全不存在 → 跳过（孤儿资产，无法确定归属）
+    // 只有当前用户空间缺失但租户内已存在的情况：说明是当前用户的资产丢失，才需要恢复
+    // 实际上：只有 handleFileUpload 创建的资产才应该出现在用户空间内
+    const missing = cloudAssets.filter(ca => {
+      if (localAssetIds.has(ca.Id)) return false
+      if (tenantAssetIds.has(ca.Id)) return false
+      return false // 孤儿资产不自动同步，必须通过 UI 创建
+    })
     
     if (missing.length > 0) {
+      for (const ca of missing) {
+        try {
+          await saveAsset({
+            type: 'seedance-character',
+            name: ca.Name || '角色素材',
+            url: `asset://${ca.Id}`,
+            thumbnail_url: ca.URL,
+            metadata: {
+              assetId: ca.Id,
+              groupId: ca.GroupId,
+              status: ca.Status || 'Active',
+              assetType: ca.AssetType || 'Image',
+              projectName: ca.ProjectName,
+              createTime: ca.CreateTime,
+              updateTime: ca.UpdateTime
+            },
+            spaceType: spaceParams.spaceType,
+            teamId: spaceParams.teamId
+          })
+        } catch (e) {
+          console.error('[SeedancePanel] 同步云端资产失败:', ca.Id, e)
+        }
+      }
       console.log(`[SeedancePanel] 已从云端同步 ${missing.length} 个角色`)
+    }
+    
+    // 更新当前用户已有资产的状态（从云端同步最新状态）
+    for (const localAsset of localAssets) {
+      const meta = typeof localAsset.metadata === 'string' ? JSON.parse(localAsset.metadata || '{}') : (localAsset.metadata || {})
+      if (!meta.assetId) continue
+      const cloudAsset = cloudAssets.find(ca => ca.Id === meta.assetId)
+      if (cloudAsset && cloudAsset.Status !== meta.status) {
+        try {
+          await updateAsset(localAsset.id, {
+            metadata: { ...meta, status: cloudAsset.Status },
+            thumbnail_url: cloudAsset.URL || localAsset.thumbnail_url
+          })
+        } catch (e) {
+          console.error('[SeedancePanel] 更新资产状态失败:', meta.assetId, e)
+        }
+      }
     }
   } catch (err) {
     console.error('[SeedancePanel] 云端同步失败:', err)

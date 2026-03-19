@@ -43,7 +43,8 @@ export async function getAssets(params = {}) {
     ...(params.tag && { tag: params.tag }),
     ...(params.favorite && { favorite: 'true' }),
     ...(params.spaceType && { spaceType: params.spaceType }),
-    ...(params.teamId && { teamId: params.teamId })
+    ...(params.teamId && { teamId: params.teamId }),
+    ...(params.scope && { scope: params.scope })
   })
   
   const response = await fetch(`${getApiBase()}/api/canvas/assets?${queryParams}`, {

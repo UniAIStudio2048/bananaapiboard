@@ -2,9 +2,14 @@
 /**
  * SeedanceCharacterSelector.vue - 角色选择弹窗
  * 用于在 SeedanceCharacterNode 中选择/更换角色
+ * 从本地 canvas_assets 读取，实现用户级隔离
  */
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
-import { listAssetGroups, listAssets } from '@/api/canvas/volcengine-assets'
+import { listAssetGroups } from '@/api/canvas/volcengine-assets'
+import { getAssets } from '@/api/canvas/assets'
+import { useTeamStore } from '@/stores/team'
+
+const teamStore = useTeamStore()
 
 const props = defineProps({
   visible: Boolean,
@@ -19,6 +24,7 @@ const selectedGroupId = ref(null)
 const assets = ref([])
 const assetsLoading = ref(false)
 const selectedAsset = ref(null)
+const allLocalAssets = ref([])
 
 // 只显示 Active 资产
 const activeAssets = computed(() =>
@@ -33,7 +39,8 @@ async function loadGroups() {
     if (groups.value.length > 0 && !selectedGroupId.value) {
       selectedGroupId.value = groups.value[0].Id
     }
-    loadGroupCounts()
+    await loadAllLocalAssets()
+    updateGroupCounts()
   } catch (err) {
     console.error('[CharacterSelector] 加载角色组失败:', err)
   } finally {
@@ -41,24 +48,44 @@ async function loadGroups() {
   }
 }
 
-async function loadGroupCounts() {
-  const tasks = groups.value.map(async (group) => {
-    try {
-      const result = await listAssets({ groupIds: [group.Id], pageSize: 1 })
-      group._assetCount = result.total || 0
-    } catch {
-      group._assetCount = 0
-    }
-  })
-  await Promise.all(tasks)
+async function loadAllLocalAssets() {
+  try {
+    const spaceParams = teamStore.getSpaceParams('current')
+    const result = await getAssets({
+      type: 'seedance-character',
+      ...spaceParams,
+      pageSize: 500
+    })
+    allLocalAssets.value = (result.assets || []).map(a => {
+      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata || '{}') : (a.metadata || {})
+      return {
+        Id: meta.assetId || a.id,
+        Name: a.name,
+        URL: a.thumbnail_url || a.url,
+        Status: meta.status || 'Active',
+        GroupId: meta.groupId,
+        AssetType: meta.assetType || 'Image',
+        _canvasId: a.id,
+        _userId: a.user_id
+      }
+    })
+  } catch (err) {
+    console.error('[CharacterSelector] 加载本地资产失败:', err)
+    allLocalAssets.value = []
+  }
+}
+
+function updateGroupCounts() {
+  for (const group of groups.value) {
+    group._assetCount = allLocalAssets.value.filter(a => a.GroupId === group.Id).length
+  }
 }
 
 async function loadAssets(groupId) {
   if (!groupId) return
   assetsLoading.value = true
   try {
-    const result = await listAssets({ groupIds: [groupId], status: 'Active' })
-    assets.value = result.assets || []
+    assets.value = allLocalAssets.value.filter(a => a.GroupId === groupId)
   } catch (err) {
     console.error('[CharacterSelector] 加载资产失败:', err)
     assets.value = []
