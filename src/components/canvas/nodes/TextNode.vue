@@ -2483,6 +2483,7 @@ onMounted(() => {
             :key="'video-' + idx"
             class="reference-image-item reference-video-item reference-clickable"
             :title="`点击插入 @视频${idx + 1}`"
+            @mousedown.prevent.stop
             @click="insertMediaTag({ type: 'video', index: idx + 1, label: `视频${idx + 1}` })"
           >
             <video
@@ -2502,6 +2503,7 @@ onMounted(() => {
             :key="'img-' + idx"
             class="reference-image-item reference-clickable"
             :title="`点击插入 @图片${idx + 1}`"
+            @mousedown.prevent.stop
             @click="insertMediaTag({ type: 'image', index: idx + 1, label: `图片${idx + 1}` })"
           >
             <img :src="img" :alt="`参考图 ${idx + 1}`" />
@@ -2514,6 +2516,7 @@ onMounted(() => {
             :key="'audio-' + idx"
             class="reference-image-item reference-audio-item reference-clickable"
             :title="`点击插入 @音频${idx + 1}`"
+            @mousedown.prevent.stop
             @click="insertMediaTag({ type: 'audio', index: idx + 1, label: `音频${idx + 1}` })"
           >
             <span class="audio-icon-large">♪</span>

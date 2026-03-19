@@ -547,7 +547,8 @@ export default {
       videoLastFrame: { label: 'Extract Last Frame', desc: 'Extract last frame from video' },
       videoDescribe: { label: 'Video Describe', desc: 'Reverse prompt from video' },
       videoEdit: { label: 'Video Edit', desc: 'Edit and process video' },
-      videoExtend: { label: 'Video Extend', desc: 'Extend video duration' }
+      videoExtend: { label: 'Video Extend', desc: 'Extend video duration' },
+      seedanceCharacter: { label: 'Seedance Character', desc: 'Volcengine character asset' }
     },
     // Image node quick actions
     imageNode: {

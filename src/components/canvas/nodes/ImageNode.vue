@@ -5250,6 +5250,7 @@ function insertMediaTag(media) {
 // ========== 参考图片拖拽排序 ==========
 function handleImageMouseDown(event) {
   event.stopPropagation()
+  event.preventDefault()
 }
 
 function handleImageDragStart(event, index) {

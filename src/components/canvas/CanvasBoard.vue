@@ -39,6 +39,7 @@ import PreviewNode from './nodes/PreviewNode.vue'
 import GroupNode from './nodes/GroupNode.vue'
 import CharacterCardNode from './nodes/CharacterCardNode.vue'
 import StoryboardNode from './nodes/StoryboardNode.vue'
+import SeedanceCharacterNode from './nodes/SeedanceCharacterNode.vue'
 
 const props = defineProps({
   pickMode: {
@@ -245,6 +246,7 @@ const nodeTypes = {
   'grid-preview': ImageNode,      // 9宫格分镜（使用 ImageNode，可以生成和输出图片）
   'group': GroupNode,             // 编组节点
   'character-card': CharacterCardNode,  // Sora角色卡节点
+  'seedance-character': SeedanceCharacterNode,  // Seedance角色节点
   'storyboard': StoryboardNode    // 分镜格子节点
 }
 
@@ -1534,7 +1536,8 @@ function getHandlePosition(nodeId, handleType) {
     'image-gen': { width: 380, height: 320 },
     'video-input': { width: 420, height: 280 },
     'video': { width: 420, height: 280 },
-    'video-gen': { width: 420, height: 280 }
+    'video-gen': { width: 420, height: 280 },
+    'seedance-character': { width: 220, height: 220 }
   }
   
   const defaults = defaultSizes[node.type] || { width: 380, height: 280 }
@@ -1975,6 +1978,32 @@ async function handleFileDrop(event) {
             })
             break
         }
+        return
+      }
+
+      // 处理 Seedance 角色拖拽（来自 SeedanceCharacterPanel）
+      if (data.type === 'seedance-character' && data.assetId) {
+        const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        canvasStore.addNode({
+          id: nodeId,
+          type: 'seedance-character',
+          position: { x: canvasX, y: canvasY },
+          data: {
+            title: data.assetName || 'Seedance角色',
+            assetId: data.assetId,
+            assetUri: data.assetUri || `asset://${data.assetId}`,
+            assetUrl: data.assetUrl,
+            groupId: data.groupId,
+            assetName: data.assetName,
+            status: data.status || 'Active',
+            assetType: data.assetType,
+            width: 220,
+            output: {
+              type: 'image',
+              url: data.assetUrl
+            }
+          }
+        })
         return
       }
     } catch (e) {

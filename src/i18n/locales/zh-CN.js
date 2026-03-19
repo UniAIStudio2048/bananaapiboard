@@ -552,7 +552,8 @@ export default {
       audioToVideo: { label: '音频生视频', desc: '根据音频生成匹配的视频' },
       audioToText: { label: '音频提取文案', desc: '将音频转换为文字文案' },
       audioLipSync: { label: '图片对口型', desc: '根据音频为图片生成对口型视频' },
-      textToMusic: { label: '文字生成音乐', desc: '根据文字描述生成音乐' }
+      textToMusic: { label: '文字生成音乐', desc: '根据文字描述生成音乐' },
+      seedanceCharacter: { label: 'Seedance 角色', desc: '火山引擎角色资产' }
     },
     // 图片节点快捷操作
     imageNode: {

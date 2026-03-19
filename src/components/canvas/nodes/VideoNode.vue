@@ -1219,7 +1219,8 @@ const IMAGE_NODE_TYPES = [
   'image-erase',      // 智能擦除
   'image-upscale',    // 超分放大
   'image-cutout',     // 智能抠图
-  'image-expand'      // 图片扩展
+  'image-expand',     // 图片扩展
+  'seedance-character' // Seedance角色节点
 ]
 
 // 参考图片（来自左侧输入，支持多张图片，支持自定义顺序）
@@ -1380,12 +1381,13 @@ const inheritedPrompt = computed(() => {
 function getUpstreamData() {
   // 查找所有连接到当前节点的上游边
   const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
-  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [], audios: [] }
+  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [], audios: [], characterAssetUris: [] }
   
   let prompts = []
   let images = []
   let videos = []
   let audios = []
+  let characterAssetUris = []
   
   // 遍历所有上游节点，收集数据
   for (const edge of upstreamEdges) {
@@ -1416,6 +1418,11 @@ function getUpstreamData() {
         outputUrl: sourceNode.data?.output?.url,
         sourceImages: sourceNode.data?.sourceImages
       })
+      
+      // Seedance 角色节点：收集 Asset:// URI 用于 Seedance 2.0 API
+      if (sourceNode.type === 'seedance-character' && sourceNode.data?.assetUri) {
+        characterAssetUris.push(sourceNode.data.assetUri)
+      }
       
       // 优先使用输出结果
       if (sourceNode.data?.output?.urls?.length > 0) {
@@ -1452,8 +1459,8 @@ function getUpstreamData() {
     }
   }
   
-  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos, audios })
-  return { prompts, images, videos, audios }
+  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos, audios, characterAssetUris })
+  return { prompts, images, videos, audios, characterAssetUris }
 }
 
 // 实时获取上游文本内容（用于显示在"上下文文字参考"区域）
@@ -2199,6 +2206,11 @@ async function compressVideoInputImages(images) {
     const img = images[i]
     const size = sizes[i]
 
+    if (typeof img === 'string' && img.startsWith('Asset://')) {
+      result.push(img)
+      continue
+    }
+
     if (size <= MAX_SIZE || size === 0) {
       result.push(img)
       continue
@@ -2249,6 +2261,10 @@ async function ensureAccessibleUrls(imageUrls) {
   const accessibleUrls = []
   
   for (const url of imageUrls) {
+    if (url.startsWith('Asset://')) {
+      accessibleUrls.push(url)
+      continue
+    }
     if (isQiniuCdnUrl(url)) {
       // 已经是七牛云 URL，直接使用
       console.log('[VideoNode] 使用七牛云 URL:', url.substring(0, 60))
@@ -2842,6 +2858,24 @@ async function handleGenerate() {
   // 视频模型输入图片限制：每张不超过10MB，超过自动压缩
   if (finalImages.length > 0) {
     finalImages = await compressVideoInputImages(finalImages)
+  }
+  
+  // Seedance 2.0 + 角色素材：用 Asset:// URI 替换 seedance-character 节点的 HTTP URL
+  const characterAssetUris = upstreamData.characterAssetUris || []
+  if (isSeedance2Model.value && characterAssetUris.length > 0) {
+    // 收集所有 seedance-character 节点的 HTTP URL，用于从 finalImages 中去除
+    const charHttpUrls = new Set()
+    const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
+    for (const edge of upstreamEdges) {
+      const sn = canvasStore.nodes.find(n => n.id === edge.source)
+      if (sn?.type === 'seedance-character') {
+        if (sn.data?.output?.url) charHttpUrls.add(sn.data.output.url)
+        if (sn.data?.output?.urls) sn.data.output.urls.forEach(u => charHttpUrls.add(u))
+      }
+    }
+    const nonCharImages = finalImages.filter(u => !charHttpUrls.has(u))
+    finalImages = [...characterAssetUris, ...nonCharImages]
+    console.log('[VideoNode] Seedance 2.0 注入角色素材 Asset URI:', characterAssetUris, '最终图片列表:', finalImages)
   }
   
   // 🔥 关键：确保所有参考图片都是 AI 模型可访问的公开 URL
@@ -3608,6 +3642,7 @@ function removeReferenceAudio(index) {
 // 阻止图片项的 mousedown 事件冒泡，防止触发节点拖拽
 function handleImageMouseDown(event) {
   event.stopPropagation()
+  event.preventDefault()
 }
 
 function handleImageDragStart(event, index) {
@@ -3662,6 +3697,7 @@ function handleImageDragEnd(event) {
 // 阻止视频项的 mousedown 事件冒泡，防止触发节点拖拽
 function handleVideoMouseDown(event) {
   event.stopPropagation()
+  event.preventDefault()
 }
 
 function handleVideoDragStart(event, index) {
@@ -5236,6 +5272,7 @@ function handleToolbarPreview() {
             class="panel-frame-item panel-frame-audio"
             :class="{ 'panel-frame-clickable': supportsMediaTags }"
             :title="supportsMediaTags ? `点击插入 @音频${index + 1}` : ''"
+            @mousedown.prevent.stop
             @click="supportsMediaTags && insertMediaTag({ type: 'audio', index: index + 1, label: `音频${index + 1}` })"
           >
             <div class="audio-thumb">
@@ -7917,6 +7954,30 @@ function handleToolbarPreview() {
 
 :root.canvas-theme-light .video-node .duration-points {
   color: #f59e0b;
+}
+
+/* 时长下拉选择器 - 白昼模式 */
+:root.canvas-theme-light .video-node .duration-select-label {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .video-node .duration-select {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .video-node .duration-select:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .video-node .duration-select:focus {
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+:root.canvas-theme-light .video-node .duration-select option {
+  background: #ffffff;
+  color: #1c1917;
 }
 
 /* 尺寸选择器 - 白昼模式 */

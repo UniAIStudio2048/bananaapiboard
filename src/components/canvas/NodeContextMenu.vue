@@ -3,14 +3,15 @@
  * NodeContextMenu.vue - 节点右键菜单
  * 支持所有节点类型的"加入我的资产"功能
  */
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { getDownstreamOptions, NODE_TYPES } from '@/config/canvas/nodeTypes'
-import { getTenantHeaders, getApiUrl } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled } from '@/config/tenant'
 import { saveAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
+import { createAssetGroup, listAssetGroups, createAsset as createVolcAsset, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -623,6 +624,213 @@ const canSendToAssistant = computed(() => {
   return isImageNodeWithOutput.value || isVideoNodeWithOutput.value || isAudioNodeWithOutput.value
 })
 
+const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
+
+// ========== Seedance 2.0 角色创建 ==========
+
+const showSeedanceDialog = ref(false)
+const seedanceGroups = ref([])
+const seedanceGroupsLoading = ref(false)
+const showNewGroupInput = ref(false)
+const newGroupName = ref('')
+const newGroupInputRef = ref(null)
+const characterName = ref('')
+const characterNameRef = ref(null)
+
+async function openSeedanceDialog() {
+  if (!isImageNodeWithOutput.value) return
+  showSeedanceDialog.value = true
+  seedanceGroupsLoading.value = true
+  characterName.value = ''
+  
+  await nextTick()
+  characterNameRef.value?.focus()
+  
+  try {
+    const result = await listAssetGroups({ pageSize: 100 })
+    seedanceGroups.value = result.groups || []
+    if (seedanceGroups.value.length === 0) {
+      showNewGroupInput.value = true
+    }
+  } catch (error) {
+    console.error('[Seedance] 获取角色组失败:', error)
+    seedanceGroups.value = []
+    showNewGroupInput.value = true
+  } finally {
+    seedanceGroupsLoading.value = false
+  }
+}
+
+function closeSeedanceDialog() {
+  showSeedanceDialog.value = false
+  showNewGroupInput.value = false
+  newGroupName.value = ''
+  characterName.value = ''
+  seedanceGroups.value = []
+  emit('close')
+}
+
+function toggleNewGroupInput() {
+  showNewGroupInput.value = !showNewGroupInput.value
+  if (showNewGroupInput.value) {
+    nextTick(() => newGroupInputRef.value?.focus())
+  }
+}
+
+async function createNewGroupAndAsset() {
+  const groupNameVal = newGroupName.value.trim()
+  if (!groupNameVal) return
+  
+  const charName = characterName.value.trim()
+  if (!charName) {
+    showToast('请输入角色名称', 'error')
+    characterNameRef.value?.focus()
+    return
+  }
+  
+  const url = imageUrl.value
+  if (!url) {
+    showToast('未找到图片', 'error')
+    return
+  }
+
+  try {
+    const groupResult = await createAssetGroup({ Name: groupNameVal })
+    const groupId = groupResult.group?.Id || groupResult.Id
+    if (!groupId) throw new Error('创建分组返回数据异常')
+    
+    closeSeedanceDialog()
+    showToast('已提交 Seedance 角色创建，后台处理中...', 'info')
+    createSeedanceCharacterAsync(groupId, url, charName)
+  } catch (error) {
+    console.error('[Seedance] 创建分组失败:', error)
+    showToast('创建分组失败：' + (error.message || '未知错误'), 'error')
+  }
+}
+
+function selectGroupAndCreate(groupId) {
+  const charName = characterName.value.trim()
+  if (!charName) {
+    showToast('请输入角色名称', 'error')
+    characterNameRef.value?.focus()
+    return
+  }
+  
+  const url = imageUrl.value
+  if (!url) {
+    showToast('未找到图片', 'error')
+    return
+  }
+
+  closeSeedanceDialog()
+  showToast('已提交 Seedance 角色创建，后台处理中...', 'info')
+  createSeedanceCharacterAsync(groupId, url, charName)
+}
+
+async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
+  const sourceNode = props.node
+  const sourcePosition = sourceNode ? { ...sourceNode.position } : null
+
+  try {
+    let url = rawUrl
+    if (needsUploadToCloud(url)) {
+      url = await uploadToCloudForAsset(url, 'image')
+    }
+    
+    const assetResult = await createVolcAsset({
+      GroupId: groupId,
+      URL: url,
+      AssetType: 'Image',
+      Name: name
+    })
+    
+    const assetId = assetResult.asset?.Id || assetResult.Id
+    if (!assetId) throw new Error('创建角色资产返回数据异常')
+    
+    const spaceParams = teamStore.getSpaceParams('current')
+    let canvasAssetId = null
+    try {
+      const saved = await saveAsset({
+        type: 'seedance-character',
+        name: name,
+        url: `asset://${assetId}`,
+        thumbnail_url: url,
+        metadata: {
+          assetId,
+          groupId,
+          status: 'Processing',
+          assetType: 'Image'
+        },
+        spaceType: spaceParams.spaceType,
+        teamId: spaceParams.teamId
+      })
+      canvasAssetId = saved.asset?.id || saved.id
+    } catch (e) {
+      console.error('[Seedance] 保存到本地资产库失败:', e)
+    }
+    
+    const { promise } = pollAssetStatus(assetId, {
+      interval: 3000,
+      timeout: 120000
+    })
+    
+    const finalAsset = await promise
+    
+    if (canvasAssetId) {
+      try {
+        const { updateAsset: updateLocalAsset } = await import('@/api/canvas/assets')
+        await updateLocalAsset(canvasAssetId, {
+          metadata: {
+            assetId: finalAsset.Id || assetId,
+            groupId: finalAsset.GroupId || groupId,
+            status: finalAsset.Status || 'Active',
+            assetType: finalAsset.AssetType || 'Image',
+            projectName: finalAsset.ProjectName,
+            createTime: finalAsset.CreateTime,
+            updateTime: finalAsset.UpdateTime
+          }
+        })
+      } catch (e) {
+        console.error('[Seedance] 更新本地资产状态失败:', e)
+      }
+    }
+    
+    showToast('Seedance 角色创建成功！', 'success')
+
+    if (finalAsset.Status === 'Active') {
+      const newPosition = sourcePosition
+        ? { x: sourcePosition.x, y: sourcePosition.y + 350 }
+        : { x: 100, y: 100 }
+
+      canvasStore.addNode({
+        type: 'seedance-character',
+        position: newPosition,
+        data: {
+          title: finalAsset.Name || name || 'Seedance角色',
+          assetId: finalAsset.Id || assetId,
+          assetUri: `Asset://${finalAsset.Id || assetId}`,
+          assetUrl: finalAsset.URL || url,
+          groupId: finalAsset.GroupId || groupId,
+          assetName: finalAsset.Name || name,
+          status: 'Active',
+          assetType: finalAsset.AssetType || 'Image',
+          width: 220,
+          output: {
+            type: 'image',
+            url: finalAsset.URL || url
+          }
+        }
+      })
+    }
+  } catch (error) {
+    console.error('[Seedance] 后台创建角色失败:', error)
+    const msg = error.message?.includes('超时') 
+      ? '角色处理超时，请稍后在角色库查看' 
+      : '角色创建失败：' + (error.message || '未知错误')
+    showToast(msg, error.message?.includes('超时') ? 'info' : 'error')
+  }
+}
+
 // 简单的Toast提示
 function showToast(message, type = 'info') {
   const toast = document.createElement('div')
@@ -682,6 +890,7 @@ function handleMenuClick(event) {
 
 <template>
   <div 
+    v-show="!showSeedanceDialog"
     class="canvas-context-menu" 
     :style="menuStyle"
     @click="handleMenuClick"
@@ -730,6 +939,16 @@ function handleMenuClick(event) {
       >
         <span class="icon">✦</span>
         {{ $t('canvas.contextMenu.sendToAssistant') }}
+      </div>
+      
+      <!-- 创建 Seedance 2.0 角色 -->
+      <div 
+        v-if="isImageNodeWithOutput && seedanceFeaturesEnabled"
+        class="canvas-context-menu-item seedance-item"
+        @click="openSeedanceDialog"
+      >
+        <span class="icon">👥</span>
+        创建 Seedance 2.0 角色
       </div>
       
       <div class="canvas-context-menu-divider"></div>
@@ -782,6 +1001,95 @@ function handleMenuClick(event) {
         <button class="fullscreen-close-btn" @click="closeFullscreenPreview">
           ✕
         </button>
+      </div>
+    </div>
+  </Teleport>
+  
+  <!-- Seedance 角色创建弹窗 -->
+  <Teleport to="body">
+    <div v-if="showSeedanceDialog" class="seedance-dialog-overlay" @click="closeSeedanceDialog">
+      <div class="seedance-dialog" @click.stop>
+        <div class="seedance-dialog-header">
+          <span class="seedance-dialog-title">创建 Seedance 2.0 角色</span>
+          <button class="seedance-dialog-close" @click="closeSeedanceDialog">✕</button>
+        </div>
+        
+        <div class="seedance-dialog-body">
+          <!-- 角色名称输入 -->
+          <div class="seedance-name-section">
+            <div class="seedance-section-label">角色名称 <span class="seedance-required">*</span></div>
+            <input
+              ref="characterNameRef"
+              v-model="characterName"
+              type="text"
+              class="seedance-input seedance-name-input"
+              placeholder="输入角色名称"
+            />
+          </div>
+          
+          <div class="seedance-divider"></div>
+          
+          <!-- 加载中 -->
+          <div v-if="seedanceGroupsLoading" class="seedance-loading">
+            <span class="seedance-spinner"></span>
+            <span>加载角色分组...</span>
+          </div>
+          
+          <template v-else>
+            <!-- 有分组时显示列表 -->
+            <div v-if="seedanceGroups.length > 0" class="seedance-groups">
+              <div class="seedance-section-label">选择角色分组</div>
+              <div 
+                v-for="group in seedanceGroups" 
+                :key="group.Id"
+                class="seedance-group-item"
+                :class="{ 'seedance-group-disabled': !characterName.trim() }"
+                @click="selectGroupAndCreate(group.Id)"
+              >
+                <span class="seedance-group-icon">📁</span>
+                <span class="seedance-group-name">{{ group.Name }}</span>
+                <span class="seedance-group-arrow">→</span>
+              </div>
+              
+              <div class="seedance-divider"></div>
+            </div>
+            
+            <!-- 创建新分组 -->
+            <div class="seedance-new-group">
+              <div 
+                v-if="!showNewGroupInput && seedanceGroups.length > 0"
+                class="seedance-group-item seedance-create-btn"
+                @click="toggleNewGroupInput"
+              >
+                <span class="seedance-group-icon">＋</span>
+                <span class="seedance-group-name">创建新分组</span>
+              </div>
+              
+              <div v-if="showNewGroupInput" class="seedance-new-group-form">
+                <div class="seedance-section-label">
+                  {{ seedanceGroups.length === 0 ? '暂无分组，请先创建' : '新分组名称' }}
+                </div>
+                <div class="seedance-input-row">
+                  <input
+                    ref="newGroupInputRef"
+                    v-model="newGroupName"
+                    type="text"
+                    class="seedance-input"
+                    placeholder="输入分组名称"
+                    @keyup.enter="createNewGroupAndAsset"
+                  />
+                  <button 
+                    class="seedance-confirm-btn"
+                    :disabled="!newGroupName.trim() || !characterName.trim()"
+                    @click="createNewGroupAndAsset"
+                  >
+                    创建并添加
+                  </button>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
   </Teleport>
@@ -867,5 +1175,257 @@ function handleMenuClick(event) {
 .fullscreen-close-btn:hover {
   background: rgba(255, 255, 255, 0.2);
   transform: scale(1.1);
+}
+
+/* Seedance 菜单项样式 */
+.seedance-item {
+  color: #f59e0b !important;
+}
+.seedance-item:hover {
+  background: rgba(245, 158, 11, 0.15) !important;
+}
+
+/* Seedance 弹窗样式 */
+.seedance-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+  backdrop-filter: blur(4px);
+}
+
+.seedance-dialog {
+  width: 420px;
+  max-height: 520px;
+  background: var(--canvas-bg-elevated, #1e1e2e);
+  border: 1px solid var(--canvas-border-default, rgba(255, 255, 255, 0.1));
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  animation: seedanceDialogIn 0.25s ease;
+}
+
+@keyframes seedanceDialogIn {
+  from { opacity: 0; transform: scale(0.95) translateY(10px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.seedance-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--canvas-border-default, rgba(255, 255, 255, 0.08));
+}
+
+.seedance-dialog-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--canvas-text-primary, #f5f5f5);
+}
+
+.seedance-dialog-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--canvas-bg-tertiary, rgba(255, 255, 255, 0.06));
+  border: none;
+  border-radius: 6px;
+  color: var(--canvas-text-tertiary, #999);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.seedance-dialog-close:hover {
+  background: var(--canvas-bg-secondary, rgba(255, 255, 255, 0.12));
+  color: var(--canvas-text-primary, #fff);
+}
+
+.seedance-dialog-body {
+  padding: 16px 20px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.seedance-name-section {
+  margin-bottom: 4px;
+}
+
+.seedance-name-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.seedance-required {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.seedance-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 30px 0;
+  color: var(--canvas-text-tertiary, #aaa);
+  font-size: 14px;
+}
+
+.seedance-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(245, 158, 11, 0.3);
+  border-top-color: #f59e0b;
+  border-radius: 50%;
+  animation: seedanceSpin 0.8s linear infinite;
+}
+
+@keyframes seedanceSpin {
+  to { transform: rotate(360deg); }
+}
+
+.seedance-section-label {
+  font-size: 12px;
+  color: var(--canvas-text-tertiary, #888);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.seedance-groups {
+  margin-bottom: 4px;
+}
+
+.seedance-group-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--canvas-text-primary, #ddd);
+  font-size: 14px;
+}
+
+.seedance-group-item:hover {
+  background: var(--canvas-bg-tertiary, rgba(255, 255, 255, 0.08));
+}
+
+.seedance-group-item.seedance-group-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.seedance-group-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.seedance-group-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seedance-group-arrow {
+  color: var(--canvas-text-tertiary, #666);
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: transform 0.15s;
+}
+
+.seedance-group-item:not(.seedance-group-disabled):hover .seedance-group-arrow {
+  transform: translateX(3px);
+  color: #f59e0b;
+}
+
+.seedance-create-btn {
+  color: #f59e0b;
+}
+
+.seedance-create-btn:hover {
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.seedance-divider {
+  height: 1px;
+  background: var(--canvas-border-default, rgba(255, 255, 255, 0.06));
+  margin: 8px 0;
+}
+
+.seedance-new-group-form {
+  padding: 4px 0;
+}
+
+.seedance-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.seedance-input {
+  flex: 1;
+  padding: 8px 12px;
+  background: var(--canvas-bg-secondary, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--canvas-border-default, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  color: var(--canvas-text-primary, #eee);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.seedance-input:focus {
+  border-color: #f59e0b;
+}
+
+.seedance-input::placeholder {
+  color: var(--canvas-text-tertiary, #666);
+}
+
+.seedance-confirm-btn {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border: none;
+  border-radius: 8px;
+  color: #000;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.seedance-confirm-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  transform: translateY(-1px);
+}
+
+.seedance-confirm-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ========== Seedance 白昼模式适配 ========== */
+:root.canvas-theme-light .seedance-dialog-overlay {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+:root.canvas-theme-light .seedance-dialog {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .seedance-group-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .seedance-create-btn:hover {
+  background: rgba(245, 158, 11, 0.08);
 }
 </style>

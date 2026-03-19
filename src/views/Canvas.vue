@@ -576,6 +576,24 @@ function handleAssetInsert(asset) {
         assetId: asset.id
       }
       break
+    case 'seedance-character':
+      nodeType = 'seedance-character'
+      nodeData = {
+        title: asset.assetName || 'Seedance角色',
+        assetId: asset.assetId,
+        assetUri: asset.assetUri || `asset://${asset.assetId}`,
+        assetUrl: asset.assetUrl,
+        groupId: asset.groupId,
+        assetName: asset.assetName,
+        status: asset.status || 'Active',
+        assetType: asset.assetType,
+        width: 220,
+        output: {
+          type: 'image',
+          url: asset.assetUrl
+        }
+      }
+      break
   }
   
   canvasStore.addNode({

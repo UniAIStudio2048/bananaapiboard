@@ -7,11 +7,13 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getAssets, deleteAsset, toggleFavorite, updateAssetTags, updateAsset, saveAsset } from '@/api/canvas/assets'
-import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { listAssetGroups, listAssets as listSeedanceAssets } from '@/api/canvas/volcengine-assets'
+import { getApiUrl, getTenantHeaders, isSeedanceFeaturesEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
+import SeedanceCharacterPanel from './SeedanceCharacterPanel.vue'
 
 const { t, currentLanguage } = useI18n()
 const teamStore = useTeamStore()
@@ -68,6 +70,14 @@ const addCharacterError = ref('')
 const showAddCharacterDropdown = ref(false)
 let addCharacterDropdownTimer = null
 
+// Seedance 角色库下拉菜单状态
+const showSeedanceDropdownMenu = ref(false)
+let seedanceDropdownTimer = null
+const seedanceGroups = ref([])
+const seedanceAssetCount = ref(0)
+const selectedSeedanceGroupId = ref(null)
+const seedancePendingAction = ref(null)
+
 // 右键菜单状态
 const showContextMenu = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
@@ -87,15 +97,21 @@ const TEAM_SYNC_INTERVAL = 10000 // 团队空间同步间隔 10 秒
 let teamSyncTimer = null
 const lastSyncId = ref(null) // 记录最新一条记录的ID
 
+const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
+
 // 文件类型 - 存储翻译键，在模板中实时翻译
-const fileTypes = [
+const allFileTypes = [
   { key: 'all', labelKey: 'common.all', icon: '◈' },
   { key: 'text', labelKey: 'canvas.assetPanel.copywriting', icon: 'Aa' },
   { key: 'image', labelKey: 'canvas.nodes.image', icon: '◫' },
   { key: 'video', labelKey: 'canvas.nodes.video', icon: '▷' },
   { key: 'audio', labelKey: 'canvas.nodes.audio', icon: '♪' },
-  { key: 'sora-character', label: 'Sora角色库', icon: '👤' }
+  { key: 'sora-character', label: 'Sora角色库', icon: '👤' },
+  { key: 'seedance-character', label: 'Seedance角色库', icon: '👥' }
 ]
+const fileTypes = computed(() =>
+  allFileTypes.filter(ft => ft.key !== 'seedance-character' || seedanceFeaturesEnabled.value)
+)
 
 // 快捷标签 - 存储翻译键，在模板中实时翻译
 const quickTags = [
@@ -134,6 +150,11 @@ const allTags = computed(() => [...quickTags, ...userTags.value])
 const filteredAssets = computed(() => {
   let result = assets.value
 
+  // Seedance 功能关闭时过滤掉 seedance-character 类型资产
+  if (!seedanceFeaturesEnabled.value) {
+    result = result.filter(a => a.type !== 'seedance-character')
+  }
+
   // 按类型筛选
   if (selectedType.value !== 'all') {
     result = result.filter(a => a.type === selectedType.value)
@@ -161,8 +182,9 @@ const filteredAssets = computed(() => {
 
 // 按类型分组的资产统计
 const assetStats = computed(() => {
-  const stats = { all: 0, text: 0, image: 0, video: 0, audio: 0, 'sora-character': 0 }
+  const stats = { all: 0, text: 0, image: 0, video: 0, audio: 0, 'sora-character': 0, 'seedance-character': 0 }
   assets.value.forEach(a => {
+    if (!seedanceFeaturesEnabled.value && a.type === 'seedance-character') return
     stats.all++
     if (stats[a.type] !== undefined) {
       stats[a.type]++
@@ -966,6 +988,80 @@ function handleAddCharacterClick() {
   openAddCharacterModal()
 }
 
+// ========== Seedance 角色库下拉菜单 ==========
+
+async function loadSeedanceGroups() {
+  try {
+    const result = await listAssetGroups()
+    seedanceGroups.value = result.groups || []
+    // 火山引擎 ListAssetGroups 不返回 AssetCount，需要单独查询总数
+    if (seedanceGroups.value.length > 0) {
+      const groupIds = seedanceGroups.value.map(g => g.Id)
+      const assetsResult = await listSeedanceAssets({ groupIds, pageSize: 1 })
+      seedanceAssetCount.value = assetsResult.total || 0
+    } else {
+      seedanceAssetCount.value = 0
+    }
+  } catch (err) {
+    console.error('[AssetPanel] 加载 Seedance 角色组失败:', err)
+  }
+}
+
+function showSeedanceDropdown() {
+  if (seedanceDropdownTimer) {
+    clearTimeout(seedanceDropdownTimer)
+    seedanceDropdownTimer = null
+  }
+  showSeedanceDropdownMenu.value = true
+}
+
+function startHideSeedanceDropdown() {
+  if (seedanceDropdownTimer) {
+    clearTimeout(seedanceDropdownTimer)
+  }
+  seedanceDropdownTimer = setTimeout(() => {
+    showSeedanceDropdownMenu.value = false
+    seedanceDropdownTimer = null
+  }, 2000)
+}
+
+function selectSeedanceGroup(group) {
+  selectedSeedanceGroupId.value = group.Id
+  selectedType.value = 'seedance-character'
+  showSeedanceDropdownMenu.value = false
+  if (seedanceDropdownTimer) {
+    clearTimeout(seedanceDropdownTimer)
+    seedanceDropdownTimer = null
+  }
+}
+
+function handleCreateSeedanceGroup() {
+  showSeedanceDropdownMenu.value = false
+  if (seedanceDropdownTimer) {
+    clearTimeout(seedanceDropdownTimer)
+    seedanceDropdownTimer = null
+  }
+  selectedSeedanceGroupId.value = null
+  seedancePendingAction.value = 'create'
+  selectedType.value = 'seedance-character'
+}
+
+function handleSeedanceUpload() {
+  showSeedanceDropdownMenu.value = false
+  if (seedanceDropdownTimer) {
+    clearTimeout(seedanceDropdownTimer)
+    seedanceDropdownTimer = null
+  }
+  selectedSeedanceGroupId.value = null
+  seedancePendingAction.value = 'upload'
+  selectedType.value = 'seedance-character'
+}
+
+function handleSeedanceInsert(assetData) {
+  emit('insert-asset', assetData)
+  emit('close')
+}
+
 // 打开添加角色弹窗
 function openAddCharacterModal() {
   addCharacterForm.value = {
@@ -1295,6 +1391,7 @@ onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
   document.addEventListener('click', handleGlobalClick)
   window.addEventListener('assets-updated', handleAssetsUpdated)
+  loadSeedanceGroups()
 })
 
 onUnmounted(() => {
@@ -1379,6 +1476,47 @@ onUnmounted(() => {
                 </button>
               </div>
             </div>
+            <!-- Seedance角色库特殊处理：包含悬停弹出的角色组下拉菜单 -->
+            <div 
+              v-else-if="ft.key === 'seedance-character' && seedanceFeaturesEnabled" 
+              class="seedance-character-wrapper"
+              @mouseenter="showSeedanceDropdown"
+              @mouseleave="startHideSeedanceDropdown"
+            >
+              <button 
+                class="type-btn"
+                :class="{ active: selectedType === ft.key }"
+                @click="selectedType = ft.key"
+              >
+                <span class="type-icon">{{ ft.icon }}</span>
+                <span class="type-label">{{ ft.label }}</span>
+                <span class="type-count">{{ seedanceAssetCount }}</span>
+              </button>
+              <div 
+                class="seedance-dropdown"
+                :class="{ visible: showSeedanceDropdownMenu }"
+                @mouseenter="showSeedanceDropdown"
+                @mouseleave="startHideSeedanceDropdown"
+              >
+                <div class="seedance-dropdown-header">角色组</div>
+                <div v-if="seedanceGroups.length === 0" class="seedance-dropdown-empty">暂无角色组</div>
+                <div 
+                  v-for="group in seedanceGroups" 
+                  :key="group.Id" 
+                  class="seedance-dropdown-item"
+                  @click="selectSeedanceGroup(group)"
+                >
+                  <span class="group-name">{{ group.Name }}</span>
+                </div>
+                <div class="seedance-dropdown-divider"></div>
+                <button class="seedance-dropdown-action" @click.stop="handleCreateSeedanceGroup">
+                  <span>+</span> 新建角色组
+                </button>
+                <button class="seedance-dropdown-action" @click.stop="handleSeedanceUpload">
+                  <span>↑</span> 上传角色
+                </button>
+              </div>
+            </div>
             <!-- 其他类型按钮 -->
             <button 
               v-else
@@ -1426,6 +1564,19 @@ onUnmounted(() => {
 
         <!-- 资产列表 -->
         <div class="asset-list">
+          <!-- Seedance 角色库独立面板 -->
+          <SeedanceCharacterPanel 
+            v-if="selectedType === 'seedance-character' && seedanceFeaturesEnabled" 
+            :selectedGroupId="selectedSeedanceGroupId"
+            :pendingAction="seedancePendingAction"
+            :spaceFilter="spaceFilter"
+            @groups-updated="loadSeedanceGroups"
+            @clear-group="selectedSeedanceGroupId = null"
+            @action-consumed="seedancePendingAction = null"
+            @insert-to-canvas="handleSeedanceInsert"
+          />
+
+          <template v-else>
           <div v-if="loading" class="loading-state">
             <div class="spinner"></div>
             <span>{{ t('common.loading') }}</span>
@@ -1484,6 +1635,18 @@ onUnmounted(() => {
                   </div>
                 </div>
                 
+                <!-- Seedance 角色预览 -->
+                <div v-else-if="asset.type === 'seedance-character'" class="character-preview">
+                  <CachedImage
+                    v-if="asset.thumbnail_url || asset.url"
+                    :src="asset.thumbnail_url || asset.url"
+                    :alt="asset.name"
+                    img-class="image-preview"
+                    loading="lazy"
+                  />
+                  <div v-else class="character-placeholder"></div>
+                </div>
+
                 <!-- Sora 角色预览 - 显示裁剪后的视频 -->
                 <div v-else-if="asset.type === 'sora-character'" class="character-preview">
                   <!-- 失败状态覆盖层 -->
@@ -1647,6 +1810,7 @@ onUnmounted(() => {
                 {{ fileTypes.find(f => f.key === asset.type)?.icon || '◇' }}
               </div>
             </div>
+          </template>
           </template>
         </div>
 
@@ -2183,9 +2347,12 @@ onUnmounted(() => {
   grid-template-columns: repeat(3, 1fr);
   gap: 16px;
   align-content: start;
-  /* 确保可以滚动 */
   max-height: 100%;
   min-height: 0;
+}
+
+.asset-list > .seedance-panel {
+  grid-column: 1 / -1;
 }
 
 .asset-list::-webkit-scrollbar {
@@ -3366,6 +3533,132 @@ onUnmounted(() => {
   border-top: 1px solid rgba(139, 92, 246, 0.5);
 }
 
+/* ========== Seedance角色库悬停下拉菜单 ========== */
+.seedance-character-wrapper {
+  position: relative;
+  display: inline-flex;
+}
+
+.seedance-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  z-index: 100;
+  pointer-events: none;
+  min-width: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--canvas-bg-elevated);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  padding: 6px 0;
+}
+
+.seedance-dropdown.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(8px);
+  pointer-events: auto;
+}
+
+.seedance-dropdown::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%) rotate(45deg);
+  width: 8px;
+  height: 8px;
+  background: var(--canvas-bg-elevated);
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.seedance-dropdown-header {
+  padding: 4px 12px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--canvas-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.seedance-dropdown-empty {
+  padding: 12px;
+  font-size: 11px;
+  color: var(--canvas-text-tertiary);
+  text-align: center;
+}
+
+.seedance-dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.seedance-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.seedance-dropdown-item .group-name {
+  font-size: 12px;
+  color: var(--canvas-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.seedance-dropdown-item .group-count {
+  font-size: 10px;
+  color: var(--canvas-text-tertiary);
+  background: var(--canvas-bg-tertiary);
+  padding: 1px 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.seedance-dropdown-divider {
+  height: 1px;
+  background: var(--canvas-border-default);
+  margin: 4px 8px;
+}
+
+.seedance-dropdown-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 12px;
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+}
+
+.seedance-dropdown-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.seedance-dropdown-action span:first-child {
+  font-weight: bold;
+  font-size: 13px;
+}
+
 /* ========== 添加角色弹窗 ========== */
 .add-character-overlay {
   position: fixed;
@@ -3865,7 +4158,7 @@ onUnmounted(() => {
 }
 
 :root.canvas-theme-light .asset-panel .favorite-btn.active {
-  color: #f59e0b !important;
+  color: rgba(0, 0, 0, 0.6) !important;
 }
 
 :root.canvas-theme-light .asset-panel .delete-btn:hover {
@@ -4143,6 +4436,31 @@ onUnmounted(() => {
   background: rgba(124, 58, 237, 0.12) !important;
   border-left-color: rgba(124, 58, 237, 0.35) !important;
   border-top-color: rgba(124, 58, 237, 0.35) !important;
+}
+
+/* Seedance 下拉菜单亮色主题 */
+:root.canvas-theme-light .seedance-dropdown {
+  background: #fff !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .seedance-dropdown::before {
+  background: #fff !important;
+  border-left-color: rgba(0, 0, 0, 0.12) !important;
+  border-top-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .seedance-dropdown-item:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+:root.canvas-theme-light .seedance-dropdown-action {
+  color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .seedance-dropdown-action:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
 }
 
 /* 复制成功提示 */

@@ -46,7 +46,10 @@ export const NODE_TYPES = {
   // 音频处理类
   AUDIO_TO_VIDEO: 'audio-to-video',
   AUDIO_TO_TEXT: 'audio-to-text',
-  AUDIO_LIP_SYNC: 'audio-lip-sync'
+  AUDIO_LIP_SYNC: 'audio-lip-sync',
+
+  // 角色资产类
+  SEEDANCE_CHARACTER: 'seedance-character'
 }
 
 // 节点类型配置 - 黑白灰简洁风格图标
@@ -394,6 +397,19 @@ export const NODE_TYPE_CONFIG = {
     inputType: 'audio+image',
     outputType: 'video',
     consumesPoints: true
+  },
+
+  [NODE_TYPES.SEEDANCE_CHARACTER]: {
+    label: 'canvas.nodeConfig.seedanceCharacter.label',
+    description: 'canvas.nodeConfig.seedanceCharacter.desc',
+    icon: '👥',
+    category: 'input',
+    color: '#e11d48',
+    hasInput: false,
+    hasOutput: true,
+    inputType: null,
+    outputType: 'image',
+    consumesPoints: false
   }
 }
 
@@ -578,6 +594,10 @@ export const CONNECTION_RULES = {
     NODE_TYPES.LLM_VIDEO_DESCRIBE,
     NODE_TYPES.VIDEO_EDIT,
     NODE_TYPES.VIDEO_EXTEND
+  ],
+
+  [NODE_TYPES.SEEDANCE_CHARACTER]: [
+    NODE_TYPES.IMAGE_TO_VIDEO
   ]
 }
 
@@ -705,7 +725,8 @@ export const UPSTREAM_RULES = {
   [NODE_TYPES.TEXT_TO_VIDEO]: [
     NODE_TYPES.TEXT_INPUT,
     NODE_TYPES.LLM_PROMPT_ENHANCE,
-    NODE_TYPES.LLM_CONTENT_EXPAND
+    NODE_TYPES.LLM_CONTENT_EXPAND,
+    NODE_TYPES.SEEDANCE_CHARACTER
   ],
   
   // 图生视频节点：可以接收图片和文本
@@ -713,7 +734,8 @@ export const UPSTREAM_RULES = {
     NODE_TYPES.TEXT_INPUT,
     NODE_TYPES.IMAGE_INPUT,
     NODE_TYPES.TEXT_TO_IMAGE,
-    NODE_TYPES.IMAGE_TO_IMAGE
+    NODE_TYPES.IMAGE_TO_IMAGE,
+    NODE_TYPES.SEEDANCE_CHARACTER
   ],
   
   // 分镜脚本节点：可以接收文本和图片（图片会先转为描述再生成分镜）

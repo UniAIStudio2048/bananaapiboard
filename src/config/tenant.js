@@ -294,6 +294,14 @@ export async function loadBrandConfig(forceReload = false) {
         console.log('[tenant] 音乐模型配置已更新:', data.music_config)
       }
       
+      // 更新 Seedance 功能开关
+      if (data.enableSeedanceFeatures !== undefined) {
+        runtimeConfig.enableSeedanceFeatures = data.enableSeedanceFeatures
+      } else {
+        runtimeConfig.enableSeedanceFeatures = true
+      }
+      console.log('[tenant] Seedance 功能开关:', runtimeConfig.enableSeedanceFeatures)
+      
       // 保存到本地存储
       saveToStorage(runtimeConfig)
       
@@ -518,6 +526,9 @@ export const getModelPricing = () => config.modelPricing || defaultConfig.modelP
 
 // 获取 Sora 角色创建配置（积分消耗等）
 export const getSoraCharacterConfig = () => config.soraCharacterConfig || { points_cost: 0 }
+
+// 检查 Seedance 角色功能是否启用
+export const isSeedanceFeaturesEnabled = () => config.enableSeedanceFeatures !== false
 
 // 获取模型显示名称（如果自定义了则返回自定义名称，否则返回默认名称）
 export const getModelDisplayName = (modelKey, type = 'image') => {

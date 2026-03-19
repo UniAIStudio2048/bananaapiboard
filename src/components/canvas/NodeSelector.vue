@@ -7,7 +7,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions } from '@/config/canvas/nodeTypes'
 import { useI18n } from '@/i18n'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
-import { getAvailableVideoModels } from '@/config/tenant'
+import { getAvailableVideoModels, isSeedanceFeaturesEnabled } from '@/config/tenant'
 
 const { t } = useI18n()
 
@@ -824,6 +824,13 @@ function formatFileSize(bytes) {
     <template v-if="!triggerNode">
       <div class="node-selector-divider"></div>
       <div class="node-selector-title">功能节点</div>
+      <div v-if="isSeedanceFeaturesEnabled()" class="node-selector-item" @click="selectNodeType(NODE_TYPES.SEEDANCE_CHARACTER)">
+        <div class="node-selector-icon">{{ NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].icon }}</div>
+        <div class="node-selector-info">
+          <div class="node-selector-name">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].label) }}</div>
+          <div class="node-selector-desc">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].description) }}</div>
+        </div>
+      </div>
       <div class="node-selector-item" @click="createStoryboardGrid">
         <div class="node-selector-icon">⊞</div>
         <div class="node-selector-info">
