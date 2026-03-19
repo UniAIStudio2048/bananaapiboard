@@ -1809,7 +1809,7 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 通过 watch 节点 data.status 变化来判断
    * 返回 Promise，resolve 时携带最终状态
    */
-  function waitForNodeCompletion(nodeId, groupId, timeoutMs = 300000) {
+  function waitForNodeCompletion(nodeId, groupId, timeoutMs = 900000) {
     return new Promise((resolve) => {
       const node = nodes.value.find(n => n.id === nodeId)
       if (!node) {

@@ -584,11 +584,17 @@ function handleBackgroundTaskComplete(event) {
   console.log(`[ImageNode] 后台任务完成: ${taskId}`, task)
   
   // 获取主图URL
-  const imageUrl = task.result?.url || task.result?.urls?.[0] || task.result?.images?.[0]
+  const imageUrl = task.result?.url || task.result?.urls?.[0]
   if (imageUrl) {
     canvasStore.updateNodeData(props.id, {
       status: 'success',
       output: { type: 'image', urls: [imageUrl] }
+    })
+  } else {
+    console.warn(`[ImageNode] 任务完成但无图片URL: ${taskId}`, task.result)
+    canvasStore.updateNodeData(props.id, {
+      status: 'error',
+      error: '生成完成但未获取到图片'
     })
   }
   
@@ -686,11 +692,16 @@ function checkAndRestoreBackgroundTasks() {
     if (task.type !== 'image') continue
     
     if (task.status === 'completed') {
-      const imageUrl = task.result?.url || task.result?.urls?.[0] || task.result?.images?.[0]
+      const imageUrl = task.result?.url || task.result?.urls?.[0]
       if (imageUrl) {
         canvasStore.updateNodeData(props.id, {
           status: 'success',
           output: { type: 'image', urls: [imageUrl] }
+        })
+      } else {
+        canvasStore.updateNodeData(props.id, {
+          status: 'error',
+          error: '生成完成但未获取到图片'
         })
       }
       removeCompletedTask(task.taskId)
@@ -2249,7 +2260,7 @@ async function pollMultiangleTask(taskId, nodeId) {
   if (!token) return
   
   const pollInterval = 2000
-  const maxPolls = 150 // 最多轮询5分钟
+  const maxPolls = 450 // 最多轮询15分钟
   let pollCount = 0
   
   while (pollCount < maxPolls) {
@@ -4596,7 +4607,7 @@ async function handleGenerateSingle() {
           // 🔧 修复：超时时间从 5 分钟改为 12 分钟
           const finalResult = await pollTaskStatus(taskId, 'image', {
             interval: 2000,
-            timeout: 12 * 60 * 1000 // 12 分钟
+            timeout: 15 * 60 * 1000 // 15 分钟
           })
           
           const imageUrl = finalResult.url || finalResult.urls?.[0] || finalResult.images?.[0]

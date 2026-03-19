@@ -2671,13 +2671,13 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
 // 计算错峰模式的轮询间隔
 function getOffPeakPollInterval(taskCreatedAt) {
   const elapsed = Date.now() - taskCreatedAt
-  const ONE_HOUR = 60 * 60 * 1000
+  const EIGHTY_MINUTES = 80 * 60 * 1000
   
-  if (elapsed < ONE_HOUR) {
-    // 前1小时：正常轮询（5秒）
+  if (elapsed < EIGHTY_MINUTES) {
+    // 前80分钟：正常轮询（5秒）
     return 5000
   } else {
-    // 1小时后：每10分钟轮询一次
+    // 80分钟后：每10分钟轮询一次
     return 10 * 60 * 1000
   }
 }
@@ -2685,8 +2685,8 @@ function getOffPeakPollInterval(taskCreatedAt) {
 // 轮询视频任务状态（针对特定节点）
 async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreatedAt = null) {
   const token = localStorage.getItem('token')
-  // 错峰模式：最长48小时；普通模式：45分钟（与后端超时一致）
-  const MAX_POLL_TIME = isOffPeak ? 48 * 60 * 60 * 1000 : 45 * 60 * 1000
+  // 错峰模式：最长48小时；普通模式：80分钟
+  const MAX_POLL_TIME = isOffPeak ? 48 * 60 * 60 * 1000 : 80 * 60 * 1000
   const NORMAL_POLL_INTERVAL = 4000 // 普通模式4秒轮询一次
   const startTime = taskCreatedAt || Date.now()
   
@@ -2973,8 +2973,8 @@ async function handleGenerate() {
 // 轮询视频任务状态
 async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
   const token = localStorage.getItem('token')
-  // 错峰模式：最长48小时；普通模式：10分钟
-  const MAX_POLL_TIME = isOffPeak ? 48 * 60 * 60 * 1000 : 600000
+  // 错峰模式：最长48小时；普通模式：80分钟
+  const MAX_POLL_TIME = isOffPeak ? 48 * 60 * 60 * 1000 : 80 * 60 * 1000
   const NORMAL_POLL_INTERVAL = 4000 // 普通模式4秒轮询一次
   const startTime = taskCreatedAt || Date.now()
   
@@ -4637,8 +4637,8 @@ function createCharacterOutputNode(characterId, videoUrl, clipData, apiResult) {
 // 轮询查询角色状态
 async function pollCharacterStatus(characterId, displayVideoUrl, clipData) {
   const token = localStorage.getItem('token')
-  const maxAttempts = 36 // 最多轮询36次
-  const pollInterval = 10000 // 每10秒查询一次（总共约6分钟）
+  const maxAttempts = 90 // 最多轮询90次
+  const pollInterval = 10000 // 每10秒查询一次（总共约15分钟）
   let consecutiveErrors = 0
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {

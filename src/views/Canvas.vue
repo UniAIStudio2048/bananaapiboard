@@ -1058,15 +1058,13 @@ function updateNodeFromTask(task) {
     const result = task.result
     
     if (task.type === 'image') {
-      // 图片任务完成
-      const images = result.images || (result.url ? [{ url: result.url }] : [])
-      if (images.length > 0) {
+      const imageUrl = result.url || result.urls?.[0]
+      if (imageUrl) {
         canvasStore.updateNodeData(task.nodeId, {
-          status: 'completed',
+          status: 'success',
           output: {
-            ...node.data.output,
-            url: images[0].url,
-            images: images.map(img => img.url)
+            type: 'image',
+            urls: [imageUrl]
           }
         })
       }

@@ -938,13 +938,13 @@ function mergeTaskUpdate(taskId, update) {
 // 计算错峰模式的轮询间隔
 function getOffPeakPollInterval(taskCreatedAt) {
   const elapsed = Date.now() - taskCreatedAt
-  const ONE_HOUR = 60 * 60 * 1000
+  const EIGHTY_MINUTES = 80 * 60 * 1000
   
-  if (elapsed < ONE_HOUR) {
-    // 前1小时：正常轮询（5秒）
+  if (elapsed < EIGHTY_MINUTES) {
+    // 前80分钟：正常轮询（5秒）
     return 5000
   } else {
-    // 1小时后：每10分钟轮询一次
+    // 80分钟后：每10分钟轮询一次
     return 10 * 60 * 1000
   }
 }
@@ -953,7 +953,7 @@ function startPolling(taskId, isOffPeakTask = false, taskCreatedAt = null) {
   if (!taskId || pollingTimers.has(taskId)) return
   
   const startTime = taskCreatedAt || Date.now()
-  const ONE_HOUR = 60 * 60 * 1000
+  const EIGHTY_MINUTES = 80 * 60 * 1000
   const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000
   
   // 错峰模式使用动态轮询，普通模式使用固定间隔
@@ -976,7 +976,7 @@ function startPolling(taskId, isOffPeakTask = false, taskCreatedAt = null) {
     // 检查超时
     const createdAt = taskData.created_at || startTime
     const elapsed = Date.now() - createdAt
-    const maxTime = isOffPeakTask ? FORTY_EIGHT_HOURS : ONE_HOUR
+    const maxTime = isOffPeakTask ? FORTY_EIGHT_HOURS : EIGHTY_MINUTES
     
     // 如果超时且还在处理中，标记为失败
     if (elapsed > maxTime && isProcessingStatus(taskData.status)) {
@@ -984,7 +984,7 @@ function startPolling(taskId, isOffPeakTask = false, taskCreatedAt = null) {
       mergeTaskUpdate(taskId, {
         status: 'timeout',
         progress: '生成超时',
-        fail_reason: isOffPeakTask ? '错峰模式生成超时（48小时）' : '生成超时（超过1小时），未扣除积分'
+        fail_reason: isOffPeakTask ? '错峰模式生成超时（48小时）' : '生成超时（超过80分钟），未扣除积分'
       })
       pollingTimers.delete(taskId)
       return
@@ -1037,7 +1037,7 @@ async function loadHistory() {
     const data = await response.json()
     console.log('[VideoGeneration] 获取到原始数据:', data)
 
-    const ONE_HOUR = 60 * 60 * 1000
+    const EIGHTY_MINUTES = 80 * 60 * 1000
     const now = Date.now()
 
     // 限制历史记录数量,防止内存溢出(最多保留300条视频)
@@ -1057,17 +1057,17 @@ async function loadHistory() {
         created_at: item.created_at || item.created
       }
 
-      // 检查超时：错峰模式48小时，普通模式1小时
+      // 检查超时：错峰模式48小时，普通模式80分钟
       const createdAt = video.created_at || 0
       const elapsed = now - createdAt
       const isOffPeakTask = video.off_peak === 1 || video.off_peak === true
-      const maxTime = isOffPeakTask ? FORTY_EIGHT_HOURS : ONE_HOUR
+      const maxTime = isOffPeakTask ? FORTY_EIGHT_HOURS : EIGHTY_MINUTES
 
       if (elapsed > maxTime && isProcessingStatus(video.status)) {
         console.log(`[VideoGeneration] 发现超时任务: ${video.id}, 已运行 ${Math.floor(elapsed / 1000 / 60)} 分钟, 错峰模式: ${isOffPeakTask}`)
         video.status = 'timeout'
         video.progress = '生成超时'
-        video.fail_reason = isOffPeakTask ? '错峰模式生成超时（48小时）' : '生成超时（超过1小时），未扣除积分'
+        video.fail_reason = isOffPeakTask ? '错峰模式生成超时（48小时）' : '生成超时（超过80分钟），未扣除积分'
       }
 
       return video
@@ -1083,13 +1083,13 @@ async function loadHistory() {
     console.log('[VideoGeneration] 历史记录已加载，输出库保持空状态（显示"开始创作"）')
 
     // 对 history 中的未完成任务启动轮询（且未超时）- 限制数量
-    // 错峰模式任务允许48小时，普通任务1小时
+    // 错峰模式任务允许48小时，普通任务80分钟
     const MAX_POLLING_TASKS = 5
     const pendingTasks = videos.filter(item => {
       const createdAt = item.created_at || 0
       const elapsed = now - createdAt
       const isOffPeakTask = item.off_peak === 1 || item.off_peak === true
-      const maxTime = isOffPeakTask ? FORTY_EIGHT_HOURS : ONE_HOUR
+      const maxTime = isOffPeakTask ? FORTY_EIGHT_HOURS : EIGHTY_MINUTES
       return isProcessingStatus(item.status) && elapsed <= maxTime
     }).slice(0, MAX_POLLING_TASKS)
 

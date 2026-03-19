@@ -525,9 +525,9 @@ async function handleImageGenerate(nodeId, nodeType) {
       // 后台轮询，不阻塞
       pollTaskStatus(taskId, 'image', {
         interval: 2000,
-        timeout: 12 * 60 * 1000 // 12 分钟，与后端超时一致
+        timeout: 15 * 60 * 1000 // 15 分钟，与后端超时一致
       }).then(finalResult => {
-        const urls = finalResult.urls || finalResult.images || []
+        const urls = finalResult.urls || (finalResult.url ? [finalResult.url] : [])
         canvasStore.updateNodeData(nodeId, {
           status: 'success',
           output: {
