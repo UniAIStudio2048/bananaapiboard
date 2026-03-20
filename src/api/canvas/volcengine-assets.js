@@ -22,7 +22,7 @@ function getAuthHeaders() {
 
 /**
  * 创建角色组
- * @param {Object} data - { Name, Description }
+ * @param {Object} data - { Name, Description, spaceType, teamId }
  */
 export async function createAssetGroup(data) {
   const response = await fetch(`${getApiBase()}/api/volcengine-asset/groups`, {
@@ -184,6 +184,22 @@ export async function deleteAsset(id) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     throw new Error(error.error || '删除角色资产失败')
+  }
+  return response.json()
+}
+
+/**
+ * 删除角色组（含组内所有资产）
+ */
+export async function deleteAssetGroup(id) {
+  const response = await fetch(`${getApiBase()}/api/volcengine-asset/groups/${id}`, {
+    method: 'DELETE',
+    credentials: 'include',
+    headers: getAuthHeaders()
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || '删除角色组失败')
   }
   return response.json()
 }

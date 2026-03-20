@@ -7,6 +7,7 @@ import { ref, computed, inject, nextTick, watch } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { enhancePrompt, describeImage, expandContent, getLLMCost } from '@/api/canvas/llm'
+import { formatPoints } from '@/utils/format'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
@@ -91,15 +92,9 @@ const outputText = computed(() => props.data.output?.content || '')
 // 积分消耗
 const pointsCost = computed(() => getLLMCost(typeConfig.value.action))
 
-// 格式化积分显示（支持小数点后2位）
+// 格式化积分显示
 const formattedPointsCost = computed(() => {
-  const cost = pointsCost.value
-  // 如果是整数，直接显示整数
-  if (Number.isInteger(cost)) {
-    return cost.toString()
-  }
-  // 否则显示最多2位小数，去除末尾的0
-  return parseFloat(cost.toFixed(2)).toString()
+  return formatPoints(pointsCost.value)
 })
 
 // 用户积分

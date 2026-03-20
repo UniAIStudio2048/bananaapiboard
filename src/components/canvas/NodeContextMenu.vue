@@ -808,7 +808,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
         data: {
           title: finalAsset.Name || name || 'Seedance角色',
           assetId: finalAsset.Id || assetId,
-          assetUri: `Asset://${finalAsset.Id || assetId}`,
+          assetUri: `asset://${finalAsset.Id || assetId}`,
           assetUrl: finalAsset.URL || url,
           groupId: finalAsset.GroupId || groupId,
           assetName: finalAsset.Name || name,

@@ -12,6 +12,7 @@ import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from '
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
+import { formatPoints } from '@/utils/format'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels } from '@/config/tenant'
 import { uploadImages } from '@/api/canvas/nodes'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
@@ -884,7 +885,7 @@ function handleBackgroundTaskComplete(event) {
         },
         pointsCost: task.result?.pointsCost || 0
       })
-      showToast(`高清处理完成${task.result?.pointsCost > 0 ? `，消耗 ${task.result.pointsCost} 积分` : ''}`, 'success')
+      showToast(`高清处理完成${task.result?.pointsCost > 0 ? `，消耗 ${formatPoints(task.result.pointsCost)} 积分` : ''}`, 'success')
     }
     removeCompletedTask(taskId)
     return
@@ -1419,9 +1420,12 @@ function getUpstreamData() {
         sourceImages: sourceNode.data?.sourceImages
       })
       
-      // Seedance 角色节点：收集 Asset:// URI 用于 Seedance 2.0 API
-      if (sourceNode.type === 'seedance-character' && sourceNode.data?.assetUri) {
-        characterAssetUris.push(sourceNode.data.assetUri)
+      // Seedance 角色节点：收集 asset:// 素材 URI（持久化后可能仅有 assetId，需回推 URI）
+      if (sourceNode.type === 'seedance-character') {
+        const id = sourceNode.data?.assetId
+        const uri = (sourceNode.data?.assetUri && String(sourceNode.data.assetUri).trim()) ||
+          (id != null && String(id).trim() !== '' ? `asset://${id}` : '')
+        if (uri) characterAssetUris.push(uri)
       }
       
       // 优先使用输出结果
@@ -1436,17 +1440,18 @@ function getUpstreamData() {
       }
     }
     
-    // 视频节点：获取视频URL（用于动作迁移）
-    if (sourceNode.type === 'video') {
+    // 视频节点：获取视频URL（用于 Seedance 2.0 参考视频/视频编辑/视频延长）
+    if (VIDEO_NODE_TYPES.includes(sourceNode.type)) {
       console.log('[VideoNode] 检测到视频节点:', {
         type: sourceNode.type,
         id: sourceNode.id,
-        outputUrl: sourceNode.data?.output?.url
+        outputUrl: sourceNode.data?.output?.url,
+        sourceVideo: sourceNode.data?.sourceVideo
       })
       
-      // 获取视频输出URL
-      if (sourceNode.data?.output?.url) {
-        videos.push(sourceNode.data.output.url)
+      const videoUrl = sourceNode.data?.output?.url || sourceNode.data?.sourceVideo
+      if (videoUrl) {
+        videos.push(videoUrl)
       }
     }
     
@@ -2206,7 +2211,7 @@ async function compressVideoInputImages(images) {
     const img = images[i]
     const size = sizes[i]
 
-    if (typeof img === 'string' && img.startsWith('Asset://')) {
+    if (typeof img === 'string' && /^asset:\/\//i.test(img)) {
       result.push(img)
       continue
     }
@@ -2261,7 +2266,7 @@ async function ensureAccessibleUrls(imageUrls) {
   const accessibleUrls = []
   
   for (const url of imageUrls) {
-    if (url.startsWith('Asset://')) {
+    if (/^asset:\/\//i.test(url)) {
       accessibleUrls.push(url)
       continue
     }
@@ -2860,7 +2865,7 @@ async function handleGenerate() {
     finalImages = await compressVideoInputImages(finalImages)
   }
   
-  // Seedance 2.0 + 角色素材：用 Asset:// URI 替换 seedance-character 节点的 HTTP URL
+  // Seedance 2.0 + 角色素材：用 asset:// 素材 URI 替换角色节点预览 HTTP URL（避免重复且符合 Ark 素材格式）
   const characterAssetUris = upstreamData.characterAssetUris || []
   if (isSeedance2Model.value && characterAssetUris.length > 0) {
     // 收集所有 seedance-character 节点的 HTTP URL，用于从 finalImages 中去除
@@ -5479,10 +5484,10 @@ function handleToolbarPreview() {
           <!-- 积分消耗显示 -->
           <span class="points-cost-display">
             <template v-if="isKlingMotionControl">
-              {{ motionCostPerSecond }}积分/s
+              {{ formatPoints(motionCostPerSecond) }}积分/s
             </template>
             <template v-else>
-              {{ pointsCost * selectedCount }} {{ t('imageGen.points') }}
+              {{ formatPoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}
             </template>
           </span>
           

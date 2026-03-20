@@ -15,6 +15,7 @@ import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadIm
 import { getLLMConfig, chatWithLLM, describeImage } from '@/api/canvas/llm'
 import { getApiUrl, getAvailableImageModels } from '@/config/tenant'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
+import { formatPoints } from '@/utils/format'
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
@@ -636,7 +637,7 @@ function handleKeyDown(event) {
                     {{ model.icon }}
                   </span>
                   <span class="model-option-name">{{ model.label }}</span>
-                  <span v-if="model.pointsCost" class="model-option-cost">💎{{ model.pointsCost }}</span>
+                  <span v-if="model.pointsCost" class="model-option-cost">💎{{ formatPoints(model.pointsCost) }}</span>
                 </div>
                 <div v-if="model.description" class="model-option-desc">
                   {{ model.description }}

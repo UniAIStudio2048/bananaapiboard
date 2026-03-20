@@ -105,7 +105,7 @@ function openSelector() {
 function handleSelect(asset) {
   canvasStore.updateNodeData(props.id, {
     assetId: asset.Id,
-    assetUri: `Asset://${asset.Id}`,
+    assetUri: `asset://${asset.Id}`,
     assetUrl: asset.URL,
     groupId: asset.GroupId,
     assetName: asset.Name,

@@ -9,6 +9,7 @@ import CachedImage from '@/components/CachedImage.vue'
 import { labelToPromptText, indexToLabel } from '@/utils/imageAnnotation'
 import { getTenantHeaders, getModelDisplayName, getAvailableImageModels } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
+import { formatPoints } from '@/utils/format'
 import VirtualList from 'vue3-virtual-scroll-list'
 
 const prompt = ref('')
@@ -65,13 +66,12 @@ const pointsCostConfig = computed(() => {
 function getModelPointsCost(modelKey) {
   const config = pointsCostConfig.value[modelKey]
   if (typeof config === 'object') {
-    // 对于有多档积分的模型，显示范围
     const values = Object.values(config)
     const min = Math.min(...values)
     const max = Math.max(...values)
-    return min === max ? min : `${min}-${max}`
+    return min === max ? formatPoints(min) : `${formatPoints(min)}-${formatPoints(max)}`
   }
-  return config || 1
+  return formatPoints(config || 1)
 }
 
 // 图片缩放和拖动相关
@@ -1666,7 +1666,7 @@ const availableResolutions = computed(() => {
   if (pointsCost && typeof pointsCost === 'object') {
     return Object.entries(pointsCost).map(([size, points]) => ({
       value: size.toUpperCase(),
-      label: `${size.toUpperCase()} (${points}积分)`
+      label: `${size.toUpperCase()} (${formatPoints(points)}积分)`
     }))
   }
   return []
@@ -1756,12 +1756,12 @@ async function submitVoucher() {
         let detailText = ''
         if (autoPurchaseResult.isRenewal) {
           actionText = '已自动续费'
-          detailText = `\n• 有效期延长：${autoPurchaseResult.durationDays}天\n• 累加积分：+${autoPurchaseResult.points}\n• 并发限制：不变`
+          detailText = `\n• 有效期延长：${autoPurchaseResult.durationDays}天\n• 累加积分：+${formatPoints(autoPurchaseResult.points)}\n• 并发限制：不变`
         } else if (autoPurchaseResult.isUpgrade) {
           actionText = '已自动升级'
-          detailText = `\n• 赠送积分：${autoPurchaseResult.points}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天\n• 原套餐剩余价值已自动折抵`
+          detailText = `\n• 赠送积分：${formatPoints(autoPurchaseResult.points)}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天\n• 原套餐剩余价值已自动折抵`
         } else {
-          detailText = `\n• 赠送积分：${autoPurchaseResult.points}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
+          detailText = `\n• 赠送积分：${formatPoints(autoPurchaseResult.points)}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
         }
         voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额\n\n🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}\n\n💰 剩余余额：¥${(autoPurchaseResult.remainingBalance / 100).toFixed(2)}`
         // 刷新用户信息
@@ -1774,11 +1774,10 @@ async function submitVoucher() {
         voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额\n\n⚠️ 自动购买套餐失败：${autoPurchaseResult.message}\n请手动前往套餐页面购买`
       } else {
         // 其他情况（只兑换了积分没有余额等）
-        voucherSuccess.value = result.message || `成功兑换 ${result.points} 积分！`
+        voucherSuccess.value = result.message || `成功兑换 ${formatPoints(result.points)} 积分！`
       }
     } else if (result.points > 0) {
-      // 只兑换了积分
-      voucherSuccess.value = `✅ 成功兑换 ${result.points} 积分！`
+      voucherSuccess.value = `✅ 成功兑换 ${formatPoints(result.points)} 积分！`
     } else {
       voucherSuccess.value = result.message || '兑换成功！'
     }
@@ -2369,7 +2368,7 @@ onUnmounted(() => {
               <span class="mr-2">✨</span>
               <span :class="{'hidden xl:inline': layoutMode === 'widescreen'}">立即</span>
               <span>生成</span>
-              <span class="ml-2 text-sm opacity-90">(消耗{{ totalPointsCost }}积分)</span>
+              <span class="ml-2 text-sm opacity-90">(消耗{{ formatPoints(totalPointsCost) }}积分)</span>
             </span>
           </button>
 
@@ -2414,7 +2413,7 @@ onUnmounted(() => {
           <div v-if="me && !hasEnoughPoints" class="p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
             <p class="text-xs text-amber-700 dark:text-amber-400 flex items-center">
               <span class="mr-1.5">💰</span>
-              <span>积分不足！当前: {{ (me.package_points || 0) + (me.points || 0) }}，需要: {{ totalPointsCost }}</span>
+              <span>积分不足！当前: {{ formatPoints((me.package_points || 0) + (me.points || 0)) }}，需要: {{ formatPoints(totalPointsCost) }}</span>
             </p>
           </div>
 
@@ -3261,11 +3260,11 @@ onUnmounted(() => {
         <div class="space-y-2">
           <div class="flex items-center justify-between">
             <span class="text-sm text-slate-600 dark:text-slate-400">套餐积分</span>
-            <span class="font-semibold text-purple-600 dark:text-purple-400">{{ me.package_points || 0 }}</span>
+            <span class="font-semibold text-purple-600 dark:text-purple-400">{{ formatPoints(me.package_points || 0) }}</span>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-sm text-slate-600 dark:text-slate-400">永久积分</span>
-            <span class="font-semibold text-amber-600 dark:text-amber-400">{{ me.points || 0 }}</span>
+            <span class="font-semibold text-amber-600 dark:text-amber-400">{{ formatPoints(me.points || 0) }}</span>
           </div>
           <div class="flex items-center justify-between">
             <span class="text-sm text-slate-600 dark:text-slate-400">当前余额</span>
@@ -3273,7 +3272,7 @@ onUnmounted(() => {
           </div>
           <div class="pt-2 border-t border-slate-200 dark:border-dark-500 flex items-center justify-between">
             <span class="text-xs text-slate-500 dark:text-slate-500">积分总计</span>
-            <span class="text-lg font-bold gradient-text">{{ (me.package_points || 0) + (me.points || 0) }}</span>
+            <span class="text-lg font-bold gradient-text">{{ formatPoints((me.package_points || 0) + (me.points || 0)) }}</span>
           </div>
         </div>
       </div>

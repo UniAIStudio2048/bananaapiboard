@@ -599,7 +599,7 @@ async function submitConvert() {
     const data = await res.json()
     if (!res.ok) throw new Error(data.message || '划转失败')
 
-    convertSuccess.value = data.message || `成功划转 ${yuan.toFixed(2)} 元为 ${data.points} 积分`
+    convertSuccess.value = data.message || `成功划转 ${yuan.toFixed(2)} 元为 ${formatPoints(data.points)} 积分`
 
     if (data.newBalance !== undefined && data.newPoints !== undefined) {
       user.value = {
@@ -743,7 +743,7 @@ async function executeTransferPoints() {
     if (!res.ok) throw new Error(data.message || data.error || '转让失败')
 
     showToastNotification('success', '转让成功',
-      data.message || `成功转让 ${transferPointsForm.value.amount} 积分给 ${transferPointsForm.value.selectedRecipient.username}`)
+      data.message || `成功转让 ${formatPoints(transferPointsForm.value.amount)} 积分给 ${transferPointsForm.value.selectedRecipient.username}`)
 
     closeTransferPointsModal()
     await loadPackages()
@@ -1035,7 +1035,7 @@ watch(() => props.visible, (newVal) => {
                   <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="20 6 9 17 4 12"/>
                   </svg>
-                  <span>到账积分: {{ pkg.points }}积分（过期清零）</span>
+                  <span>到账积分: {{ formatPoints(pkg.points) }}积分（过期清零）</span>
                 </div>
                 <div class="feature-item">
                   <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1170,7 +1170,7 @@ watch(() => props.visible, (newVal) => {
                       </svg>
                     </div>
                     <div class="benefit-info">
-                      <div class="benefit-value">{{ selectedPackage.points }}积分</div>
+                      <div class="benefit-value">{{ formatPoints(selectedPackage.points) }}积分</div>
                       <div class="benefit-label">到账积分（过期清零）</div>
                     </div>
                   </div>
@@ -1394,7 +1394,7 @@ watch(() => props.visible, (newVal) => {
               <!-- 预计获得积分 -->
               <div v-if="convertCalculatedPoints > 0" class="convert-preview">
                 <span class="convert-preview-label">预计获得</span>
-                <span class="convert-preview-value">{{ convertCalculatedPoints }} 永久积分</span>
+                <span class="convert-preview-value">{{ formatPoints(convertCalculatedPoints) }} 永久积分</span>
               </div>
 
               <!-- 成功提示 -->
@@ -1574,7 +1574,7 @@ watch(() => props.visible, (newVal) => {
             <h3 class="confirm-title">确认转让积分？</h3>
             <p class="confirm-desc">
               即将向 <span class="confirm-highlight">{{ transferPointsForm.selectedRecipient?.username || transferPointsForm.selectedRecipient?.email }}</span>
-              转让 <span class="confirm-highlight">{{ transferPointsForm.amount }}</span> 永久积分，此操作不可撤销。
+              转让 <span class="confirm-highlight">{{ formatPoints(transferPointsForm.amount) }}</span> 永久积分，此操作不可撤销。
             </p>
             <div class="confirm-btn-group">
               <button class="btn-cancel" @click="showTransferConfirm = false">取消</button>

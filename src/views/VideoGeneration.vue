@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getMe, isQiniuCdnUrl, buildVideoDownloadUrl } from '@/api/client'
 import { getTenantHeaders, getModelDisplayName, isModelEnabled, getAvailableVideoModels } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
+import { formatPoints } from '@/utils/format'
 
 const fileInputRef = ref(null)
 const prompt = ref('')
@@ -331,7 +332,7 @@ const getModelName = (modelKey) => {
 
 function formatPointsTitle() {
   if (!me.value) return ''
-  return `套餐积分：${me.value.package_points || 0} | 永久积分：${me.value.points || 0}`
+  return `套餐积分：${formatPoints(me.value.package_points || 0)} | 永久积分：${formatPoints(me.value.points || 0)}`
 }
 
 // 监听模型变化，更新时长和方向选项
@@ -1593,7 +1594,7 @@ onUnmounted(() => {
               <div class="space-y-2">
                 <label class="flex items-center space-x-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
                   <input type="checkbox" v-model="hd" class="rounded accent-gray-600" />
-                  <span>HD 高清 (+{{ pointsCostConfig.hd_extra }}积分)</span>
+                  <span>HD 高清 (+{{ formatPoints(pointsCostConfig.hd_extra) }}积分)</span>
                 </label>
               </div>
             </div>
@@ -2036,7 +2037,7 @@ onUnmounted(() => {
               <span v-else class="inline-flex items-center justify-center w-full">
                 <span class="mr-2">✨</span>
                 <span>立即生成</span>
-                <span class="ml-2 text-sm opacity-90">(消耗{{ currentPointsCost }}积分)</span>
+                <span class="ml-2 text-sm opacity-90">(消耗{{ formatPoints(currentPointsCost) }}积分)</span>
               </span>
             </button>
 

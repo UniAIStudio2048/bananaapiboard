@@ -13,6 +13,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints } from '@/api/canvas/nodes'
 import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
+import { formatPoints } from '@/utils/format'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
@@ -6212,7 +6213,7 @@ async function handleDrop(event) {
           
           <!-- 积分消耗显示 -->
           <span class="points-cost-display">
-            {{ currentPointsCost }} {{ t('imageGen.points') }}
+            {{ formatPoints(currentPointsCost) }} {{ t('imageGen.points') }}
           </span>
           
           <!-- 生成按钮 - 只在任务提交中禁用，节点生成中仍可点击发起新任务 -->

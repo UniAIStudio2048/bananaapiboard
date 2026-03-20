@@ -8,6 +8,7 @@ import { ref, computed, watch, nextTick, inject, onMounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getLLMConfig, chatWithLLM, getUserLLMPresets, createUserLLMPreset, updateUserLLMPreset } from '@/api/canvas/llm'
+import { formatPoints } from '@/utils/format'
 import { getAssets } from '@/api/canvas/assets'
 import { getApiUrl, getTenantHeaders, getAvailableLLMModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
@@ -417,15 +418,9 @@ const currentModelCost = computed(() => {
   return model?.pointsCost || 1
 })
 
-// 格式化积分显示（支持小数点后2位）
+// 格式化积分显示
 const formattedModelCost = computed(() => {
-  const cost = currentModelCost.value
-  // 如果是整数，直接显示整数
-  if (Number.isInteger(cost)) {
-    return cost.toString()
-  }
-  // 否则显示最多2位小数，去除末尾的0
-  return parseFloat(cost.toFixed(2)).toString()
+  return formatPoints(currentModelCost.value)
 })
 
 // 用户积分
@@ -2569,7 +2564,7 @@ onMounted(() => {
               >
                 <span class="model-option-icon llm-icon">{{ model.icon }}</span>
                 <span class="model-option-name">{{ model.label }}</span>
-                <span v-if="model.pointsCost" class="model-option-cost">◆{{ model.pointsCost }}</span>
+                <span v-if="model.pointsCost" class="model-option-cost">◆{{ formatPoints(model.pointsCost) }}</span>
               </div>
             </div>
           </div>

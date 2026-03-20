@@ -7,7 +7,7 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getAssets, deleteAsset, toggleFavorite, updateAssetTags, updateAsset, saveAsset } from '@/api/canvas/assets'
-import { listAssetGroups, listAssets as listSeedanceAssets } from '@/api/canvas/volcengine-assets'
+import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } from '@/api/canvas/volcengine-assets'
 import { getApiUrl, getTenantHeaders, isSeedanceFeaturesEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
@@ -1062,6 +1062,42 @@ function handleSeedanceInsert(assetData) {
   emit('close')
 }
 
+// 删除 seedance 分组
+const showDeleteSeedanceGroupConfirm = ref(false)
+const deleteSeedanceGroupTarget = ref(null)
+const deleteSeedanceGroupLoading = ref(false)
+
+function requestDeleteSeedanceGroup(group, event) {
+  event.stopPropagation()
+  showSeedanceDropdownMenu.value = false
+  deleteSeedanceGroupTarget.value = group
+  showDeleteSeedanceGroupConfirm.value = true
+}
+
+function cancelDeleteSeedanceGroup() {
+  showDeleteSeedanceGroupConfirm.value = false
+  deleteSeedanceGroupTarget.value = null
+}
+
+async function confirmDeleteSeedanceGroup() {
+  if (!deleteSeedanceGroupTarget.value) return
+  const group = deleteSeedanceGroupTarget.value
+  deleteSeedanceGroupLoading.value = true
+  try {
+    await deleteAssetGroup(group.Id)
+    showDeleteSeedanceGroupConfirm.value = false
+    deleteSeedanceGroupTarget.value = null
+    if (selectedSeedanceGroupId.value === group.Id) {
+      selectedSeedanceGroupId.value = null
+    }
+    await loadSeedanceGroups()
+  } catch (err) {
+    console.error('[AssetPanel] 删除 Seedance 分组失败:', err)
+  } finally {
+    deleteSeedanceGroupLoading.value = false
+  }
+}
+
 // 打开添加角色弹窗
 function openAddCharacterModal() {
   addCharacterForm.value = {
@@ -1507,6 +1543,16 @@ onUnmounted(() => {
                   @click="selectSeedanceGroup(group)"
                 >
                   <span class="group-name">{{ group.Name }}</span>
+                  <button 
+                    v-if="group._isOwner" 
+                    class="seedance-group-delete-btn"
+                    @click="requestDeleteSeedanceGroup(group, $event)"
+                    title="删除此分组"
+                  >
+                    <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
+                      <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                    </svg>
+                  </button>
                 </div>
                 <div class="seedance-dropdown-divider"></div>
                 <button class="seedance-dropdown-action" @click.stop="handleCreateSeedanceGroup">
@@ -2100,6 +2146,40 @@ onUnmounted(() => {
     <Transition name="toast">
       <div v-if="copyToastVisible" class="copy-toast">
         {{ copyToastMessage }}
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 删除 Seedance 分组确认弹窗 -->
+  <Teleport to="body">
+    <Transition name="fade">
+      <div v-if="showDeleteSeedanceGroupConfirm" class="add-character-overlay" @click.self="cancelDeleteSeedanceGroup">
+        <div class="delete-seedance-group-modal">
+          <div class="add-character-header">
+            <h3>删除分组</h3>
+            <button class="add-character-close" @click="cancelDeleteSeedanceGroup" aria-label="关闭">
+              <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+          <div class="delete-seedance-group-body">
+            <p class="delete-seedance-group-text">
+              确定要删除分组 <strong>{{ deleteSeedanceGroupTarget?.Name || '未命名' }}</strong> 吗？
+            </p>
+            <p class="delete-seedance-group-hint">此操作将删除该分组及其中所有角色素材，不可恢复。</p>
+          </div>
+          <div class="delete-seedance-group-footer">
+            <button class="add-character-cancel" @click="cancelDeleteSeedanceGroup">取消</button>
+            <button 
+              class="add-character-submit delete-seedance-group-confirm"
+              @click="confirmDeleteSeedanceGroup"
+              :disabled="deleteSeedanceGroupLoading"
+            >
+              {{ deleteSeedanceGroupLoading ? '删除中...' : '确认删除' }}
+            </button>
+          </div>
+        </div>
       </div>
     </Transition>
   </Teleport>
@@ -3657,6 +3737,76 @@ onUnmounted(() => {
 .seedance-dropdown-action span:first-child {
   font-weight: bold;
   font-size: 13px;
+}
+
+.seedance-group-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background: none;
+  border: none;
+  color: var(--canvas-text-tertiary);
+  cursor: pointer;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: all 0.15s;
+}
+
+.seedance-dropdown-item:hover .seedance-group-delete-btn {
+  opacity: 1;
+}
+
+.seedance-group-delete-btn:hover {
+  color: var(--canvas-accent-error, #ef4444);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ========== 删除 Seedance 分组弹窗 ========== */
+.delete-seedance-group-modal {
+  background: var(--canvas-bg-elevated);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  width: 360px;
+  max-width: 90vw;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.delete-seedance-group-body {
+  padding: 16px 20px;
+}
+
+.delete-seedance-group-text {
+  font-size: 13px;
+  color: var(--canvas-text-primary);
+  margin: 0 0 8px;
+  line-height: 1.5;
+}
+
+.delete-seedance-group-hint {
+  font-size: 12px;
+  color: var(--canvas-accent-error, #ef4444);
+  margin: 0;
+  opacity: 0.85;
+}
+
+.delete-seedance-group-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.delete-seedance-group-confirm {
+  background: var(--canvas-accent-error, #ef4444) !important;
+  border-color: var(--canvas-accent-error, #ef4444) !important;
+}
+
+.delete-seedance-group-confirm:hover:not(:disabled) {
+  background: #dc2626 !important;
 }
 
 /* ========== 添加角色弹窗 ========== */

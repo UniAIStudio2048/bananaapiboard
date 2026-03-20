@@ -5,6 +5,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, provide, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getMe, updateUserPreferences } from '@/api/client'
+import { formatPoints } from '@/utils/format'
 import { getTenantHeaders } from '@/config/tenant'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
@@ -192,12 +193,10 @@ async function confirmSwitchToSimpleMode() {
 
 // 计算用户积分总和（套餐积分 + 永久积分）
 const totalPoints = computed(() => {
-  if (!me.value) return 0
+  if (!me.value) return '0'
   const packagePoints = parseFloat(me.value.package_points) || 0
   const permanentPoints = parseFloat(me.value.points) || 0
-  const total = packagePoints + permanentPoints
-  // 格式化显示，整数不显示小数点
-  return total % 1 === 0 ? total.toFixed(0) : total.toFixed(2)
+  return formatPoints(packagePoints + permanentPoints)
 })
 
 // 🔧 监控节点数量，防止内存溢出 + 大画布性能优化（静默处理，不打扰用户）
@@ -1568,6 +1567,17 @@ function handleCanvasGroup() {
   }
 }
 
+// 处理画布右键菜单的剪贴板粘贴事件
+function handlePasteClipboard(files) {
+  if (!canvasBoardRef.value?.handleClipboardFiles) return
+  const position = canvasStore.canvasContextMenuPosition
+  const flowPos = {
+    x: position.flowX || 100,
+    y: position.flowY || 100
+  }
+  canvasBoardRef.value.handleClipboardFiles(files, flowPos)
+}
+
 // ========== 缩放控制 ==========
 // 缩放步进值
 const ZOOM_STEP = 0.1
@@ -2580,6 +2590,7 @@ onUnmounted(() => {
         @upload="handleCanvasUpload"
         @add-node="handleCanvasAddNode"
         @group="handleCanvasGroup"
+        @paste-clipboard="handlePasteClipboard"
       />
 
       <!-- 工作流模板面板 -->

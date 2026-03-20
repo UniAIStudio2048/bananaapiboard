@@ -7,10 +7,6 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { listAssetGroups } from '@/api/canvas/volcengine-assets'
 import { getAssets } from '@/api/canvas/assets'
-import { useTeamStore } from '@/stores/team'
-
-const teamStore = useTeamStore()
-
 const props = defineProps({
   visible: Boolean,
   currentAssetId: String
@@ -36,11 +32,14 @@ async function loadGroups() {
   try {
     const result = await listAssetGroups()
     groups.value = (result.groups || []).map(g => ({ ...g, _assetCount: null }))
+    await loadAllLocalAssets()
+    updateGroupCounts()
     if (groups.value.length > 0 && !selectedGroupId.value) {
       selectedGroupId.value = groups.value[0].Id
     }
-    await loadAllLocalAssets()
-    updateGroupCounts()
+    if (selectedGroupId.value) {
+      loadAssets(selectedGroupId.value)
+    }
   } catch (err) {
     console.error('[CharacterSelector] 加载角色组失败:', err)
   } finally {
@@ -50,10 +49,9 @@ async function loadGroups() {
 
 async function loadAllLocalAssets() {
   try {
-    const spaceParams = teamStore.getSpaceParams('current')
     const result = await getAssets({
       type: 'seedance-character',
-      ...spaceParams,
+      spaceType: 'all',
       pageSize: 500
     })
     allLocalAssets.value = (result.assets || []).map(a => {
@@ -205,7 +203,10 @@ function positionPreview(event) {
               :class="{ active: selectedGroupId === group.Id }"
               @click="selectGroup(group.Id)"
             >
-              <span class="group-btn-name">{{ group.Name }}</span>
+              <span class="group-btn-name">
+                {{ group.Name }}
+                <span v-if="group._isOwner === false" class="team-badge" title="团队共享">👥</span>
+              </span>
               <span class="group-btn-count">{{ group._assetCount ?? '...' }}</span>
             </button>
           </div>
@@ -376,6 +377,11 @@ function positionPreview(event) {
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+}
+.team-badge {
+  font-size: 10px;
+  margin-left: 2px;
+  opacity: 0.7;
 }
 .group-btn-count {
   font-size: 10px;

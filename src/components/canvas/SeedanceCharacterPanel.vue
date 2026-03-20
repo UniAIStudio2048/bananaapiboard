@@ -5,7 +5,7 @@
  */
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import {
-  createAssetGroup, listAssetGroups, updateAssetGroup,
+  createAssetGroup, listAssetGroups, updateAssetGroup, deleteAssetGroup,
   createAsset, listAssets as listVolcAssets, pollAssetStatus,
   updateAsset as updateVolcAsset,
   deleteAsset as deleteVolcAsset
@@ -70,15 +70,23 @@ let copyTimer = null
 
 // 全屏放大模式
 const isFullscreen = ref(false)
+const fullscreenGroupId = ref(null)
 
 function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
+  if (isFullscreen.value) {
+    fullscreenGroupId.value = null
+  }
 }
 
 function handleFullscreenKeydown(e) {
   if (e.key === 'Escape' && isFullscreen.value) {
     isFullscreen.value = false
   }
+}
+
+function selectFullscreenGroup(groupId) {
+  fullscreenGroupId.value = groupId
 }
 
 // ========== 计算属性 ==========
@@ -95,6 +103,11 @@ const filteredAssets = computed(() => {
     )
   }
   return result
+})
+
+const fullscreenFilteredAssets = computed(() => {
+  if (!fullscreenGroupId.value) return filteredAssets.value
+  return filteredAssets.value.filter(a => a.GroupId === fullscreenGroupId.value)
 })
 
 // ========== 方法 ==========
@@ -256,7 +269,12 @@ async function handleCreateGroup() {
   if (!createGroupForm.value.Name.trim()) return
   createGroupLoading.value = true
   try {
-    await createAssetGroup(createGroupForm.value)
+    const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
+    await createAssetGroup({
+      ...createGroupForm.value,
+      spaceType: spaceParams.spaceType,
+      teamId: spaceParams.teamId
+    })
     showCreateGroupModal.value = false
     createGroupForm.value = { Name: '', Description: '' }
     await refreshAll()
@@ -266,6 +284,44 @@ async function handleCreateGroup() {
     createGroupLoading.value = false
   }
 }
+
+// 删除分组
+const showDeleteGroupConfirm = ref(false)
+const deleteGroupTarget = ref(null)
+const deleteGroupLoading = ref(false)
+
+function requestDeleteGroup(group) {
+  deleteGroupTarget.value = group
+  showDeleteGroupConfirm.value = true
+}
+
+function cancelDeleteGroup() {
+  showDeleteGroupConfirm.value = false
+  deleteGroupTarget.value = null
+}
+
+async function confirmDeleteGroup() {
+  if (!deleteGroupTarget.value) return
+  const group = deleteGroupTarget.value
+  deleteGroupLoading.value = true
+  
+  try {
+    await deleteAssetGroup(group.Id)
+    showDeleteGroupConfirm.value = false
+    deleteGroupTarget.value = null
+    await refreshAll()
+  } catch (err) {
+    errorMessage.value = '删除分组失败：' + (err.message || '未知错误')
+  } finally {
+    deleteGroupLoading.value = false
+  }
+}
+
+const currentGroupIsOwner = computed(() => {
+  if (!props.selectedGroupId) return false
+  const group = groups.value.find(g => g.Id === props.selectedGroupId)
+  return group?._isOwner === true
+})
 
 function triggerUpload() {
   fileInputRef.value?.click()
@@ -607,6 +663,16 @@ onUnmounted(() => {
       <!-- 角色组名称指示器 -->
       <div v-if="props.selectedGroupId && currentGroupName" class="group-indicator">
         <span class="group-indicator-label">{{ currentGroupName }}</span>
+        <button 
+          v-if="currentGroupIsOwner"
+          class="group-indicator-delete" 
+          @click="requestDeleteGroup(groups.find(g => g.Id === props.selectedGroupId))" 
+          title="删除此分组"
+        >
+          <svg viewBox="0 0 16 16" fill="none" width="10" height="10">
+            <path d="M3 4.5h10M6.5 4.5V3a1 1 0 0 1 1-1h1a1 1 0 0 1 1 1v1.5M5 4.5v8a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1v-8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
         <button class="group-indicator-clear" @click="clearGroupFilter" title="查看全部">
           <svg viewBox="0 0 16 16" fill="none" width="10" height="10">
             <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
@@ -914,6 +980,40 @@ onUnmounted(() => {
       </Transition>
     </Teleport>
 
+    <!-- 删除分组确认弹窗 -->
+    <Teleport to="body">
+      <Transition name="modal-fade">
+        <div v-if="showDeleteGroupConfirm" class="modal-overlay" @click.self="cancelDeleteGroup">
+          <div class="modal-content delete-confirm-modal" @click.stop>
+            <div class="modal-header">
+              <h3 class="modal-title delete-modal-title">删除分组</h3>
+              <button class="modal-close" @click="cancelDeleteGroup" aria-label="关闭">
+                <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
+                  <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+              </button>
+            </div>
+            <div class="modal-body">
+              <p class="delete-confirm-text">
+                确定要删除分组 <strong>{{ deleteGroupTarget?.Name || '未命名' }}</strong> 吗？
+              </p>
+              <p class="delete-confirm-hint">此操作将删除该分组及其中所有角色素材，不可恢复。</p>
+            </div>
+            <div class="modal-footer">
+              <button class="btn-modal-cancel" @click="cancelDeleteGroup">取消</button>
+              <button 
+                class="btn-modal-confirm btn-modal-delete"
+                @click="confirmDeleteGroup"
+                :disabled="deleteGroupLoading"
+              >
+                {{ deleteGroupLoading ? '删除中...' : '确认删除' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- 全屏放大浏览 -->
     <Teleport to="body">
       <Transition name="seedance-fullscreen">
@@ -929,7 +1029,7 @@ onUnmounted(() => {
                   <path d="M8 16c1-1.5 3-2.5 5-2.5s4 1 5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
                 Seedance 角色库
-                <span class="fullscreen-count">{{ filteredAssets.length }} 个角色</span>
+                <span class="fullscreen-count">{{ fullscreenFilteredAssets.length }} 个角色</span>
               </h3>
               <div class="fullscreen-toolbar">
                 <div class="fullscreen-search">
@@ -979,17 +1079,42 @@ onUnmounted(() => {
               </button>
             </div>
 
+            <!-- 分组筛选栏 -->
+            <div v-if="groups.length > 0" class="fullscreen-group-bar">
+              <button
+                class="fullscreen-group-pill"
+                :class="{ active: fullscreenGroupId === null }"
+                @click="selectFullscreenGroup(null)"
+              >
+                <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
+                  <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                </svg>
+                全部
+                <span class="group-pill-count">{{ filteredAssets.length }}</span>
+              </button>
+              <button
+                v-for="group in groups"
+                :key="group.Id"
+                class="fullscreen-group-pill"
+                :class="{ active: fullscreenGroupId === group.Id }"
+                @click="selectFullscreenGroup(group.Id)"
+              >
+                {{ group.Name }}
+                <span class="group-pill-count">{{ filteredAssets.filter(a => a.GroupId === group.Id).length }}</span>
+              </button>
+            </div>
+
             <!-- 全屏内容 -->
             <div v-if="loading" class="fullscreen-loading">
               <div class="spinner"></div>
               <span>加载角色...</span>
             </div>
-            <div v-else-if="filteredAssets.length === 0" class="fullscreen-empty">
+            <div v-else-if="fullscreenFilteredAssets.length === 0" class="fullscreen-empty">
               <p>暂无匹配的角色素材</p>
             </div>
             <div v-else class="fullscreen-grid">
               <div
-                v-for="asset in filteredAssets"
+                v-for="asset in fullscreenFilteredAssets"
                 :key="asset.Id"
                 class="fullscreen-card"
                 :class="{
@@ -1106,6 +1231,27 @@ onUnmounted(() => {
 .group-indicator-clear:hover {
   color: var(--canvas-text-primary);
   background: rgba(255, 255, 255, 0.1);
+}
+
+.group-indicator-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: none;
+  border: none;
+  color: var(--canvas-accent-error, #ef4444);
+  cursor: pointer;
+  border-radius: 4px;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  opacity: 0.7;
+}
+
+.group-indicator-delete:hover {
+  opacity: 1;
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .toolbar-search {
@@ -1770,6 +1916,72 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+/* 分组筛选栏 */
+.fullscreen-group-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.fullscreen-group-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.fullscreen-group-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--canvas-text-secondary, rgba(255, 255, 255, 0.55));
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.fullscreen-group-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--canvas-text-primary, #fff);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.fullscreen-group-pill.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--canvas-text-primary, #fff);
+  border-color: rgba(255, 255, 255, 0.2);
+  font-weight: 600;
+}
+
+.fullscreen-group-pill svg {
+  flex-shrink: 0;
+}
+
+.group-pill-count {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--canvas-text-tertiary, rgba(255, 255, 255, 0.35));
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 6px;
+  border-radius: 8px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.fullscreen-group-pill.active .group-pill-count {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--canvas-text-secondary, rgba(255, 255, 255, 0.6));
+}
+
 .fullscreen-close {
   width: 32px;
   height: 32px;
@@ -2114,6 +2326,38 @@ onUnmounted(() => {
 
 :root.canvas-theme-light .fullscreen-header {
   border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .fullscreen-group-bar {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .fullscreen-group-pill {
+  color: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .fullscreen-group-pill:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.8);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .fullscreen-group-pill.active {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+:root.canvas-theme-light .group-pill-count {
+  color: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .fullscreen-group-pill.active .group-pill-count {
+  color: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.07);
 }
 
 :root.canvas-theme-light .fullscreen-search .search-input {

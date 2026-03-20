@@ -638,6 +638,10 @@
   z-index: 1 !important;
 }
 
+.vue-flow__node.selected:not([data-type="group"]):not(.vue-flow__node-group) {
+  z-index: 10 !important;
+}
+
 .vue-flow__node.selected {
   outline: none !important;
   box-shadow: none !important;

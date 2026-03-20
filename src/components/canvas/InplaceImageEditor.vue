@@ -21,6 +21,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { generateImageFromImage, uploadImages, pollTaskStatus } from '@/api/canvas/nodes'
 import { useI18n } from '@/i18n'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { formatPoints } from '@/utils/format'
 
 const { t, currentLanguage } = useI18n()
 const canvasStore = useCanvasStore()
@@ -596,10 +597,10 @@ async function handleGenerate() {
   // 检查积分是否足够
   if (!hasEnoughPoints.value) {
     const insufficientMsg = {
-      'zh-CN': `积分不足，需要 ${requiredPoints.value} 积分，当前只有 ${userPoints.value} 积分`,
-      'zh-TW': `積分不足，需要 ${requiredPoints.value} 積分，當前只有 ${userPoints.value} 積分`,
-      'en': `Insufficient points. Need ${requiredPoints.value} pts, you have ${userPoints.value} pts`,
-      'ja': `ポイント不足。${requiredPoints.value}ポイント必要、現在${userPoints.value}ポイント`,
+      'zh-CN': `积分不足，需要 ${formatPoints(requiredPoints.value)} 积分，当前只有 ${formatPoints(userPoints.value)} 积分`,
+      'zh-TW': `積分不足，需要 ${formatPoints(requiredPoints.value)} 積分，當前只有 ${formatPoints(userPoints.value)} 積分`,
+      'en': `Insufficient points. Need ${formatPoints(requiredPoints.value)} pts, you have ${formatPoints(userPoints.value)} pts`,
+      'ja': `ポイント不足。${formatPoints(requiredPoints.value)}ポイント必要、現在${formatPoints(userPoints.value)}ポイント`,
       'ko': `포인트 부족. ${requiredPoints.value}포인트 필요, 현재 ${userPoints.value}포인트`
     }
     alert(insufficientMsg[currentLanguage.value] || insufficientMsg['en'])
@@ -993,7 +994,7 @@ onUnmounted(() => {
                 
                 <!-- 积分显示 -->
                 <div class="points-display" :class="{ insufficient: !hasEnoughPoints }">
-                  <span class="points-value">{{ requiredPoints }}</span>
+                  <span class="points-value">{{ formatPoints(requiredPoints) }}</span>
                   <span class="points-label">{{ pointsLabel }}</span>
                 </div>
                 

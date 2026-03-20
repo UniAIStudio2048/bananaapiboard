@@ -18,7 +18,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'upload', 'add-node', 'group'])
+const emit = defineEmits(['close', 'upload', 'add-node', 'group', 'paste-clipboard'])
 const canvasStore = useCanvasStore()
 
 // 菜单位置样式
@@ -117,6 +117,30 @@ function handlePaste() {
   }
   // 在鼠标位置粘贴
   canvasStore.pasteNodes(props.position)
+  emit('close')
+}
+
+// 从系统剪贴板粘贴图片/文件
+async function handlePasteFromClipboard() {
+  try {
+    const items = await navigator.clipboard.read()
+    const files = []
+    for (const item of items) {
+      for (const type of item.types) {
+        if (type.startsWith('image/') || type.startsWith('video/') || type.startsWith('audio/')) {
+          const blob = await item.getType(type)
+          const ext = type.split('/')[1] || 'png'
+          const file = new File([blob], `clipboard_${Date.now()}.${ext}`, { type })
+          files.push(file)
+        }
+      }
+    }
+    if (files.length > 0) {
+      emit('paste-clipboard', files)
+    }
+  } catch (err) {
+    console.warn('[CanvasContextMenu] 读取剪贴板失败:', err.message)
+  }
   emit('close')
 }
 
@@ -227,6 +251,11 @@ function handleMenuClick(event) {
         <span class="icon">🎬</span>
         上传视频
         <span class="shortcut"></span>
+      </div>
+      <div class="canvas-context-menu-item" @click="handlePasteFromClipboard">
+        <span class="icon">📋</span>
+        从剪贴板粘贴
+        <span class="shortcut">Ctrl+V</span>
       </div>
 
       <div class="canvas-context-menu-divider"></div>

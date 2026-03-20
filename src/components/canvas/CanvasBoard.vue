@@ -1047,12 +1047,8 @@ function handleKeyDown(event) {
     return
   }
   
-  // Ctrl+V 粘贴
+  // Ctrl+V 粘贴 — 不在此处处理，交由 paste 事件统一处理（支持系统剪贴板图片/文件）
   if (isCtrlOrCmd && event.key === 'v') {
-    event.preventDefault()
-    // 在画布中心或最后鼠标位置粘贴
-    const pastePosition = screenToFlowPosition(lastMousePosition.value)
-    canvasStore.pasteNodes(pastePosition)
     return
   }
   
@@ -1722,6 +1718,114 @@ function readFileAsBase64(file) {
 }
 
 /**
+ * 处理 paste 事件 —— 支持从系统剪贴板粘贴图片/文件，自动创建对应节点
+ * 若剪贴板无文件则回退到节点粘贴逻辑
+ */
+function handlePaste(event) {
+  const target = event.target
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+    return
+  }
+
+  const clipboardData = event.clipboardData
+  if (!clipboardData) return
+
+  const files = Array.from(clipboardData.files || [])
+
+  // 若剪贴板中没有 File 对象，尝试从 items 中提取（截图场景）
+  if (files.length === 0 && clipboardData.items) {
+    for (const item of clipboardData.items) {
+      if (item.kind === 'file') {
+        const file = item.getAsFile()
+        if (file) files.push(file)
+      }
+    }
+  }
+
+  if (files.length > 0) {
+    event.preventDefault()
+    handleClipboardFiles(files)
+    return
+  }
+
+  // 无文件 → 回退到已有的节点粘贴
+  event.preventDefault()
+  const pastePosition = screenToFlowPosition(lastMousePosition.value)
+  canvasStore.pasteNodes(pastePosition)
+}
+
+/**
+ * 从剪贴板文件列表创建画布节点（供 paste 事件 & 右键菜单共用）
+ */
+function handleClipboardFiles(files, positionOverride) {
+  const pos = positionOverride || screenToFlowPosition(lastMousePosition.value)
+  let offsetX = 0
+  let offsetY = 0
+  const uploadTasks = []
+
+  for (const file of files) {
+    const category = getFileCategory(file)
+    if (!category) continue
+
+    const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const blobUrl = URL.createObjectURL(file)
+    const fileName = file.name || `clipboard_${Date.now()}`
+
+    if (category === 'image') {
+      canvasStore.addNode({
+        id: nodeId,
+        type: 'image-input',
+        position: { x: pos.x + offsetX, y: pos.y + offsetY },
+        data: {
+          title: fileName,
+          nodeRole: 'source',
+          sourceImages: [blobUrl],
+          isUploading: true
+        }
+      })
+      uploadTasks.push({ file, type: 'image', nodeId, blobUrl, field: 'sourceImages' })
+    } else if (category === 'video') {
+      canvasStore.addNode({
+        id: nodeId,
+        type: 'video',
+        position: { x: pos.x + offsetX, y: pos.y + offsetY },
+        data: {
+          title: fileName,
+          status: 'success',
+          output: { type: 'video', url: blobUrl },
+          isUploading: true
+        }
+      })
+      uploadTasks.push({ file, type: 'video', nodeId, blobUrl, field: 'output.url' })
+    } else if (category === 'audio') {
+      const displayName = fileName.replace(/\.[^/.]+$/, '')
+      canvasStore.addNode({
+        id: nodeId,
+        type: 'audio-input',
+        position: { x: pos.x + offsetX, y: pos.y + offsetY },
+        data: {
+          title: displayName,
+          label: displayName,
+          audioUrl: blobUrl,
+          status: 'success',
+          output: { type: 'audio', url: blobUrl },
+          isUploading: true
+        }
+      })
+      uploadTasks.push({ file, type: 'audio', nodeId, blobUrl, field: 'audioUrl' })
+    }
+
+    offsetX += 50
+    offsetY += 50
+  }
+
+  if (uploadTasks.length > 0) {
+    console.log(`[CanvasBoard] 从剪贴板粘贴 ${uploadTasks.length} 个文件`)
+    uploadFilesToCloud(uploadTasks)
+  }
+}
+
+/**
  * 获取文件类型分类
  */
 function getFileCategory(file) {
@@ -2184,7 +2288,9 @@ defineExpose({
     return getViewport ? getViewport() : canvasStore.viewport
   },
   // 编组选中的节点
-  groupSelectedNodes
+  groupSelectedNodes,
+  // 从剪贴板文件创建节点（供右键菜单调用）
+  handleClipboardFiles
 })
 
 onMounted(() => {
@@ -2216,6 +2322,9 @@ onMounted(() => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('keyup', handleKeyUp)
   
+  // 添加粘贴事件监听（支持 Ctrl+V 粘贴系统剪贴板中的图片/文件）
+  document.addEventListener('paste', handlePaste)
+  
   // 添加连线样式变化事件监听
   window.addEventListener('canvas-edge-style-change', handleEdgeStyleChange)
   
@@ -2236,6 +2345,9 @@ onUnmounted(() => {
   // 移除键盘事件监听
   document.removeEventListener('keydown', handleKeyDown)
   document.removeEventListener('keyup', handleKeyUp)
+  
+  // 移除粘贴事件监听
+  document.removeEventListener('paste', handlePaste)
   
   // 移除连线样式变化事件监听
   window.removeEventListener('canvas-edge-style-change', handleEdgeStyleChange)

@@ -15,6 +15,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders, getAvailableMusicModels, refreshBrandConfig } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
+import { formatPoints } from '@/utils/format'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
 import apiClient from '@/api/client'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
@@ -1561,7 +1562,7 @@ function handleSpeedDropdownClickOutside(event) {
           <!-- 积分显示 -->
           <div class="points-badge">
             <span class="points-icon">◎</span>
-            <span class="points-value">{{ musicPointsCost }}积分</span>
+            <span class="points-value">{{ formatPoints(musicPointsCost) }}积分</span>
           </div>
           
           <!-- 生成按钮 -->

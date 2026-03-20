@@ -6,6 +6,7 @@
 import { ref, h, render } from 'vue'
 import CanvasDialog from '@/components/canvas/CanvasDialog.vue'
 import CanvasToast from '@/components/canvas/CanvasToast.vue'
+import { formatPoints } from '@/utils/format'
 
 // 存储当前弹窗的容器
 let dialogContainer = null
@@ -132,7 +133,7 @@ export function showInsufficientPointsDialog(required, current, count = 1) {
   return showDialog({
     type: 'alert',
     title: '积分不足',
-    message: `${count}次生成需要 ${required} 积分，您当前只有 ${current} 积分`,
+    message: `${count}次生成需要 ${formatPoints(required)} 积分，您当前只有 ${formatPoints(current)} 积分`,
     detail: '请前往购买套餐充值积分',
     confirmText: '确定'
   })

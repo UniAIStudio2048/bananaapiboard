@@ -1096,16 +1096,16 @@ async function submitVoucher() {
         let detailText = ''
         if (autoPurchaseResult.isRenewal) {
           actionText = '已自动续费'
-          detailText = `\n• 有效期延长：${autoPurchaseResult.durationDays}天\n• 累加积分：+${autoPurchaseResult.points}\n• 并发限制：不变`
+          detailText = `\n• 有效期延长：${autoPurchaseResult.durationDays}天\n• 累加积分：+${formatPoints(autoPurchaseResult.points)}\n• 并发限制：不变`
         } else if (autoPurchaseResult.isUpgrade) {
           actionText = '已自动升级'
           detailText = `
-• 赠送积分：${autoPurchaseResult.points}
+• 赠送积分：${formatPoints(autoPurchaseResult.points)}
 • 并发限制：${autoPurchaseResult.concurrentLimit}个
 • 有效期：${autoPurchaseResult.durationDays}天
 • 原套餐剩余价值已自动折抵`
         } else {
-          detailText = `\n• 赠送积分：${autoPurchaseResult.points}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
+          detailText = `\n• 赠送积分：${formatPoints(autoPurchaseResult.points)}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
         }
         voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额
 
@@ -1124,12 +1124,11 @@ async function submitVoucher() {
         await load() // 刷新用户信息
       } else {
         // 其他情况（只兑换了积分没有余额等）
-        voucherSuccess.value = result.message || `成功兑换 ${result.points} 积分！`
-        await load() // 刷新用户信息
+        voucherSuccess.value = result.message || `成功兑换 ${formatPoints(result.points)} 积分！`
+        await load()
       }
     } else if (result.points > 0) {
-      // 只兑换了积分
-      voucherSuccess.value = `✅ 成功兑换 ${result.points} 积分！`
+      voucherSuccess.value = `✅ 成功兑换 ${formatPoints(result.points)} 积分！`
       await load() // 刷新用户信息
     } else {
       voucherSuccess.value = result.message || '兑换成功！'
@@ -1327,7 +1326,7 @@ async function claimMilestoneReward(milestone) {
     }
     
     const data = await res.json()
-    showToast(`🎉 成功领取 ${data.points_awarded} 积分奖励！`, 'success')
+    showToast(`🎉 成功领取 ${formatPoints(data.points_awarded)} 积分奖励！`, 'success')
     
     // 刷新用户信息和邀请进度
     await load()
@@ -1417,7 +1416,7 @@ async function submitTransfer() {
       throw new Error(data.message || '划转失败')
     }
     
-    transferSuccess.value = data.message || `成功划转 ${yuan.toFixed(2)} 元 为 ${data.points} 积分`
+    transferSuccess.value = data.message || `成功划转 ${yuan.toFixed(2)} 元 为 ${formatPoints(data.points)} 积分`
     
     // 立即使用API返回的最新数据更新本地状态（无需再次请求）
     if (data.newBalance !== undefined && data.newPoints !== undefined) {
@@ -1602,7 +1601,7 @@ async function executeTransfer() {
     showTransferToast(
       'success',
       '转让成功',
-      data.message || `成功转让 ${amount} 积分给 ${pointsTransferForm.value.selectedRecipient.username}`,
+      data.message || `成功转让 ${formatPoints(amount)} 积分给 ${pointsTransferForm.value.selectedRecipient.username}`,
       4000
     )
 
@@ -2230,7 +2229,7 @@ onUnmounted(() => {
               <span class="text-2xl">✨</span>
             </div>
             <div class="text-right">
-              <p class="text-3xl font-bold text-white">{{ (me.package_points || 0) + (me.points || 0) }}</p>
+              <p class="text-3xl font-bold text-white">{{ formatPoints((me.package_points || 0) + (me.points || 0)) }}</p>
               <p class="text-xs text-white/80">套餐 + 永久</p>
             </div>
           </div>

@@ -722,12 +722,12 @@ async function redeemVoucher() {
         let detailText = ''
         if (autoPurchaseResult.isRenewal) {
           actionText = '已自动续费'
-          detailText = `\n• 有效期延长：${autoPurchaseResult.durationDays}天\n• 累加积分：+${autoPurchaseResult.points}`
+          detailText = `\n• 有效期延长：${autoPurchaseResult.durationDays}天\n• 累加积分：+${formatPoints(autoPurchaseResult.points)}`
         } else if (autoPurchaseResult.isUpgrade) {
           actionText = '已自动升级'
-          detailText = `\n• 赠送积分：${autoPurchaseResult.points}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
+          detailText = `\n• 赠送积分：${formatPoints(autoPurchaseResult.points)}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
         } else {
-          detailText = `\n• 赠送积分：${autoPurchaseResult.points}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
+          detailText = `\n• 赠送积分：${formatPoints(autoPurchaseResult.points)}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
         }
         voucherSuccess.value = `✅ 兑换成功！获得 ¥${(voucherBalance / 100).toFixed(2)} 余额\n\n🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}\n\n💰 剩余余额：¥${(autoPurchaseResult.remainingBalance / 100).toFixed(2)}`
       } else if (autoPurchaseResult.reason === 'no_package') {
@@ -738,7 +738,7 @@ async function redeemVoucher() {
         voucherSuccess.value = result.message || t('voucher.redeemSuccess')
       }
     } else if (result.points > 0) {
-      voucherSuccess.value = `✅ 成功兑换 ${result.points} 积分！`
+      voucherSuccess.value = `✅ 成功兑换 ${formatPoints(result.points)} 积分！`
     } else {
       voucherSuccess.value = result.message || t('voucher.redeemSuccess')
     }
@@ -1163,7 +1163,7 @@ async function confirmPurchase() {
         startPaymentCheck(data.order_id || data.order_no)
       } else {
         // 余额支付成功
-        showAlert(data.message || `🎉 套餐购买成功！获得 ${selectedPackage.value.points} 积分`, '购买成功')
+        showAlert(data.message || `🎉 套餐购买成功！获得 ${formatPoints(selectedPackage.value.points)} 积分`, '购买成功')
         closePurchasePanel()
         emit('update')
         await loadData() // 重新加载数据
@@ -1198,7 +1198,7 @@ function startPaymentCheck(orderId) {
           // 支付成功
           clearInterval(paymentCheckInterval.value)
           paymentCheckInterval.value = null
-          showAlert(`🎉 支付成功！套餐已激活，获得 ${selectedPackage.value.points} 积分`, '支付成功')
+          showAlert(`🎉 支付成功！套餐已激活，获得 ${formatPoints(selectedPackage.value.points)} 积分`, '支付成功')
           closePurchasePanel()
           emit('update')
           await loadData()
@@ -1227,7 +1227,7 @@ async function manualPaymentCheck() {
     
     // 检查套餐是否已激活
     if (activePackage.value && activePackage.value.package_type === selectedPackage.value?.type) {
-      showAlert(`🎉 支付成功！套餐已激活，获得 ${selectedPackage.value.points} 积分`, '支付成功')
+      showAlert(`🎉 支付成功！套餐已激活，获得 ${formatPoints(selectedPackage.value.points)} 积分`, '支付成功')
       closePurchasePanel()
     } else {
       purchaseError.value = '支付尚未完成，请在新窗口完成支付后再点击确认'
@@ -1520,7 +1520,7 @@ async function submitTransfer() {
   }
   
   const confirmed = await showConfirm(
-    t('user.transferConfirmMsg', { amount: yuan.toFixed(2), points: points }), 
+    t('user.transferConfirmMsg', { amount: yuan.toFixed(2), points: formatPoints(points) }), 
     t('user.transferConfirm')
   )
   if (!confirmed) return
@@ -1539,7 +1539,7 @@ async function submitTransfer() {
     })
     const data = await res.json()
     if (res.ok) {
-      showAlert(data.message || t('user.transferSuccessMsg', { points: data.points || points }), `🎉 ${t('user.transferSuccess')}`)
+      showAlert(data.message || t('user.transferSuccessMsg', { points: formatPoints(data.points || points) }), `🎉 ${t('user.transferSuccess')}`)
       transferAmount.value = ''
       emit('update')
     } else {
@@ -2072,7 +2072,7 @@ function getLedgerTypeText(type) {
                     <span class="price">¥{{ (pkg.price / 100).toFixed(0) }}</span>
                     <span class="unit">/{{ pkg.duration_days }}{{ t('time.days') }}</span>
                   </div>
-                  <div class="package-points">{{ pkg.points }} {{ t('user.points') }}</div>
+                  <div class="package-points">{{ formatPoints(pkg.points) }} {{ t('user.points') }}</div>
                   <button 
                     :class="['btn-purchase', { disabled: isDowngrade(pkg.type), current: isCurrentPackage(pkg.type) }]" 
                     :disabled="isDowngrade(pkg.type)"
@@ -2105,7 +2105,7 @@ function getLedgerTypeText(type) {
                       <div class="tooltip-details">
                         <div class="detail-item">
                           <span class="detail-icon">💎</span>
-                          <span class="detail-text">{{ t('packages.includePoints', { points: hoveredPackage.points }) }}</span>
+                          <span class="detail-text">{{ t('packages.includePoints', { points: formatPoints(hoveredPackage.points) }) }}</span>
                         </div>
                         <div class="detail-item">
                           <span class="detail-icon">⏱️</span>
@@ -2298,8 +2298,8 @@ function getLedgerTypeText(type) {
               <div class="invite-tips">
                 <h5>{{ t('user.inviteRules') }}</h5>
                 <ul>
-                  <li>每邀请一位好友注册，您获得 {{ appSettings.inviter_bonus || 10 }} 积分</li>
-                  <li>被邀请人也可获得 {{ appSettings.invitee_bonus || 5 }} 积分奖励</li>
+                  <li>每邀请一位好友注册，您获得 {{ formatPoints(appSettings.inviter_bonus || 10) }} 积分</li>
+                  <li>被邀请人也可获得 {{ formatPoints(appSettings.invitee_bonus || 5) }} 积分奖励</li>
                   <li>{{ t('user.inviteRule3') }}</li>
                 </ul>
               </div>
@@ -2478,8 +2478,8 @@ function getLedgerTypeText(type) {
                   <div class="card-amount-v2">¥{{ (card.amount / 100).toFixed(0) }}</div>
                   <!-- 奖励说明：悬停时显示 -->
                   <div v-if="card.bonus_enabled" class="card-bonus-hover">
-                    <span v-if="card.bonus_type === 'random'">+{{ card.bonus_min }}~{{ card.bonus_max }} 随机积分</span>
-                    <span v-else>+{{ card.bonus_fixed }} 积分奖励</span>
+                    <span v-if="card.bonus_type === 'random'">+{{ formatPoints(card.bonus_min) }}~{{ formatPoints(card.bonus_max) }} 随机积分</span>
+                    <span v-else>+{{ formatPoints(card.bonus_fixed) }} 积分奖励</span>
                   </div>
                 </button>
               </div>
