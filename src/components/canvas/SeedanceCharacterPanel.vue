@@ -122,21 +122,8 @@ function resolveAssetUrl(url) {
 
 async function loadGroups() {
   try {
-    const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
-    const localResult = await getAssets({ type: 'seedance-character', ...spaceParams, pageSize: 500 })
-    const localAssets = localResult.assets || []
-    const userGroupIdSet = new Set()
-    for (const a of localAssets) {
-      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata || '{}') : (a.metadata || {})
-      if (meta.groupId) userGroupIdSet.add(meta.groupId)
-    }
-
-    if (userGroupIdSet.size === 0) {
-      groups.value = []
-      return
-    }
-
-    const result = await listAssetGroups({ groupIds: Array.from(userGroupIdSet) })
+    // 直接从后端获取当前用户拥有的所有分组（后端已做租户+用户级隔离）
+    const result = await listAssetGroups({ pageSize: 100 })
     groups.value = result.groups || []
   } catch (err) {
     console.error('[SeedancePanel] 加载角色组失败:', err)

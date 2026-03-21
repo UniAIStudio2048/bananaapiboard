@@ -30,21 +30,10 @@ const activeAssets = computed(() =>
 async function loadGroups() {
   loading.value = true
   try {
-    await loadAllLocalAssets()
-
-    // 从本地资产提取用户拥有的 groupIds，确保用户级隔离
-    const userGroupIdSet = new Set()
-    for (const a of allLocalAssets.value) {
-      if (a.GroupId) userGroupIdSet.add(a.GroupId)
-    }
-
-    if (userGroupIdSet.size === 0) {
-      groups.value = []
-      return
-    }
-
-    const result = await listAssetGroups({ groupIds: Array.from(userGroupIdSet) })
+    // 直接从后端获取当前用户拥有的分组（后端已做租户+用户级隔离）
+    const result = await listAssetGroups({ pageSize: 100 })
     groups.value = (result.groups || []).map(g => ({ ...g, _assetCount: null }))
+    await loadAllLocalAssets()
     updateGroupCounts()
     if (groups.value.length > 0 && !selectedGroupId.value) {
       selectedGroupId.value = groups.value[0].Id

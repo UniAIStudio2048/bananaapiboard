@@ -992,25 +992,14 @@ function handleAddCharacterClick() {
 
 async function loadSeedanceGroups() {
   try {
+    // 直接从后端获取当前用户拥有的所有分组（后端已做租户+用户级隔离）
+    const result = await listAssetGroups({ pageSize: 100 })
+    seedanceGroups.value = result.groups || []
+
+    // 获取资产数量
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
     const localResult = await getAssets({ type: 'seedance-character', ...spaceParams, pageSize: 500 })
-    const localAssets = localResult.assets || []
-
-    const userGroupIdSet = new Set()
-    for (const a of localAssets) {
-      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata || '{}') : (a.metadata || {})
-      if (meta.groupId) userGroupIdSet.add(meta.groupId)
-    }
-
-    seedanceAssetCount.value = localAssets.length
-
-    if (userGroupIdSet.size === 0) {
-      seedanceGroups.value = []
-      return
-    }
-
-    const result = await listAssetGroups({ groupIds: Array.from(userGroupIdSet) })
-    seedanceGroups.value = result.groups || []
+    seedanceAssetCount.value = (localResult.assets || []).length
   } catch (err) {
     console.error('[AssetPanel] 加载 Seedance 角色组失败:', err)
   }
