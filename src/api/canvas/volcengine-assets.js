@@ -45,6 +45,10 @@ export async function createAssetGroup(data) {
 export async function listAssetGroups(params = {}) {
   const queryParams = new URLSearchParams()
   if (params.keyword) queryParams.set('keyword', params.keyword)
+  if (params.groupIds) {
+    const ids = Array.isArray(params.groupIds) ? params.groupIds.join(',') : params.groupIds
+    queryParams.set('groupIds', ids)
+  }
   if (params.page) queryParams.set('page', params.page)
   if (params.pageSize) queryParams.set('pageSize', params.pageSize)
   const qs = queryParams.toString()

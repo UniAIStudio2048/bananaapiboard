@@ -12,6 +12,7 @@ import {
 } from '@/api/canvas/volcengine-assets'
 import { saveAsset, getAssets, updateAsset, deleteAsset as deleteLocalAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
+import { getApiUrl } from '@/config/tenant'
 import { useTeamStore } from '@/stores/team'
 
 const teamStore = useTeamStore()
@@ -111,9 +112,31 @@ const fullscreenFilteredAssets = computed(() => {
 })
 
 // ========== 方法 ==========
+
+function resolveAssetUrl(url) {
+  if (!url) return ''
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) return url
+  if (url.startsWith('asset://')) return ''
+  return getApiUrl(url)
+}
+
 async function loadGroups() {
   try {
-    const result = await listAssetGroups()
+    const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
+    const localResult = await getAssets({ type: 'seedance-character', ...spaceParams, pageSize: 500 })
+    const localAssets = localResult.assets || []
+    const userGroupIdSet = new Set()
+    for (const a of localAssets) {
+      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata || '{}') : (a.metadata || {})
+      if (meta.groupId) userGroupIdSet.add(meta.groupId)
+    }
+
+    if (userGroupIdSet.size === 0) {
+      groups.value = []
+      return
+    }
+
+    const result = await listAssetGroups({ groupIds: Array.from(userGroupIdSet) })
     groups.value = result.groups || []
   } catch (err) {
     console.error('[SeedancePanel] 加载角色组失败:', err)
@@ -136,7 +159,7 @@ async function loadAssets() {
       return {
         Id: meta.assetId || a.id,
         Name: a.name,
-        URL: a.thumbnail_url || a.url,
+        URL: resolveAssetUrl(a.thumbnail_url) || resolveAssetUrl(a.url),
         Status: meta.status || 'Active',
         GroupId: meta.groupId,
         AssetType: meta.assetType || 'Image',
@@ -270,13 +293,16 @@ async function handleCreateGroup() {
   createGroupLoading.value = true
   try {
     const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
-    await createAssetGroup({
+    const result = await createAssetGroup({
       ...createGroupForm.value,
       spaceType: spaceParams.spaceType,
       teamId: spaceParams.teamId
     })
     showCreateGroupModal.value = false
     createGroupForm.value = { Name: '', Description: '' }
+    if (result && result.Id) {
+      groups.value.push(result)
+    }
     await refreshAll()
   } catch (err) {
     errorMessage.value = err.message
@@ -414,7 +440,9 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
     }
     try {
       if (canvasAssetId) {
-        await updateAsset(canvasAssetId, { metadata: finalMetadata })
+        const updates = { metadata: finalMetadata }
+        if (asset.URL) updates.thumbnail_url = asset.URL
+        await updateAsset(canvasAssetId, updates)
       } else {
         const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
         await saveAsset({

@@ -2508,51 +2508,45 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
       if (finalImages.length > 1) formData.append('last_frame_image', finalImages[1])
       console.log('[VideoNode] SD2 首尾帧:', finalImages.slice(0, 2))
     } else if (sd2Mode === 'multimodal_ref') {
-      for (const imgUrl of finalImages.slice(0, 9)) {
-        formData.append('reference_images', imgUrl)
+      if (finalImages.length > 0) {
+        formData.append('reference_images', JSON.stringify(finalImages.slice(0, 9)))
       }
       const upData = getUpstreamData()
       const upVideos = upData.videos || []
-      for (const vidUrl of upVideos.slice(0, 3)) {
-        formData.append('reference_videos', vidUrl)
+      if (upVideos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(upVideos.slice(0, 3)))
       }
       const upAudios = upData.audios || []
-      for (const audUrl of upAudios.slice(0, 3)) {
-        formData.append('reference_audios', audUrl)
+      if (upAudios.length > 0) {
+        formData.append('reference_audios', JSON.stringify(upAudios.slice(0, 3)))
       }
       console.log('[VideoNode] SD2 多模态参考 | 图片:', finalImages.length, '视频:', upVideos.length, '音频:', upAudios.length)
     } else if (sd2Mode === 'video_edit') {
-      for (const imgUrl of finalImages) {
-        formData.append('reference_images', imgUrl)
+      if (finalImages.length > 0) {
+        formData.append('reference_images', JSON.stringify(finalImages))
       }
       const upData = getUpstreamData()
       const upVideos = upData.videos || []
-      for (const vidUrl of upVideos) {
-        formData.append('reference_videos', vidUrl)
+      if (upVideos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(upVideos))
       }
       const upAudios = upData.audios || []
-      for (const audUrl of upAudios.slice(0, 3)) {
-        formData.append('reference_audios', audUrl)
+      if (upAudios.length > 0) {
+        formData.append('reference_audios', JSON.stringify(upAudios.slice(0, 3)))
       }
       console.log('[VideoNode] SD2 视频编辑 | 参考图:', finalImages.length, '参考视频:', upVideos.length, '音频:', upAudios.length)
     } else if (sd2Mode === 'video_extend') {
       const upVideos = getUpstreamData().videos || []
-      for (const vidUrl of upVideos.slice(0, 3)) {
-        formData.append('reference_videos', vidUrl)
+      if (upVideos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(upVideos.slice(0, 3)))
       }
       console.log('[VideoNode] SD2 视频延长 | 参考视频:', upVideos.length)
     }
     // text2video 不需要额外参数，直接用 prompt
   }
   
-  // 如果有参考图片，添加图片 URL（非 Seedance 2.0 模式或无特殊处理时）
-  if (finalImages.length > 0 && !isSeedance2Model.value) {
-    for (const imageUrl of finalImages) {
-      formData.append('image_urls', imageUrl)
-    }
-  }
-  // Seedance 2.0 text2video 和 image2video_first 模式也需要通过 image_urls 传图（后端兼容）
-  if (isSeedance2Model.value && selectedSeedance2Mode.value === 'text2video' && finalImages.length > 0) {
+  // 所有模型都通过 image_urls 传递参考图片（后端兼容 + 作为 Seedance 2.0 reference_images 的备用）
+  if (finalImages.length > 0) {
     for (const imageUrl of finalImages) {
       formData.append('image_urls', imageUrl)
     }

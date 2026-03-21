@@ -992,16 +992,25 @@ function handleAddCharacterClick() {
 
 async function loadSeedanceGroups() {
   try {
-    const result = await listAssetGroups()
-    seedanceGroups.value = result.groups || []
-    // 火山引擎 ListAssetGroups 不返回 AssetCount，需要单独查询总数
-    if (seedanceGroups.value.length > 0) {
-      const groupIds = seedanceGroups.value.map(g => g.Id)
-      const assetsResult = await listSeedanceAssets({ groupIds, pageSize: 1 })
-      seedanceAssetCount.value = assetsResult.total || 0
-    } else {
-      seedanceAssetCount.value = 0
+    const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
+    const localResult = await getAssets({ type: 'seedance-character', ...spaceParams, pageSize: 500 })
+    const localAssets = localResult.assets || []
+
+    const userGroupIdSet = new Set()
+    for (const a of localAssets) {
+      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata || '{}') : (a.metadata || {})
+      if (meta.groupId) userGroupIdSet.add(meta.groupId)
     }
+
+    seedanceAssetCount.value = localAssets.length
+
+    if (userGroupIdSet.size === 0) {
+      seedanceGroups.value = []
+      return
+    }
+
+    const result = await listAssetGroups({ groupIds: Array.from(userGroupIdSet) })
+    seedanceGroups.value = result.groups || []
   } catch (err) {
     console.error('[AssetPanel] 加载 Seedance 角色组失败:', err)
   }
