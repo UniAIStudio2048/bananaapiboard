@@ -12,6 +12,7 @@ import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled } from '@/config
 import { saveAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
 import { createAssetGroup, listAssetGroups, createAsset as createVolcAsset, pollAssetStatus } from '@/api/canvas/volcengine-assets'
+import { getAssets } from '@/api/canvas/assets'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -647,10 +648,25 @@ async function openSeedanceDialog() {
   characterNameRef.value?.focus()
   
   try {
-    const result = await listAssetGroups({ pageSize: 100 })
-    seedanceGroups.value = result.groups || []
-    if (seedanceGroups.value.length === 0) {
+    // 先从本地资产获取用户拥有的 groupIds，确保租户+用户级隔离
+    const spaceParams = teamStore.getSpaceParams('current')
+    const localResult = await getAssets({ type: 'seedance-character', ...spaceParams, pageSize: 500 })
+    const localAssets = localResult.assets || []
+    const userGroupIdSet = new Set()
+    for (const a of localAssets) {
+      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata || '{}') : (a.metadata || {})
+      if (meta.groupId) userGroupIdSet.add(meta.groupId)
+    }
+
+    if (userGroupIdSet.size === 0) {
+      seedanceGroups.value = []
       showNewGroupInput.value = true
+    } else {
+      const result = await listAssetGroups({ groupIds: Array.from(userGroupIdSet), pageSize: 100 })
+      seedanceGroups.value = result.groups || []
+      if (seedanceGroups.value.length === 0) {
+        showNewGroupInput.value = true
+      }
     }
   } catch (error) {
     console.error('[Seedance] 获取角色组失败:', error)
