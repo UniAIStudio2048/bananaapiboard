@@ -1300,7 +1300,10 @@ const firstFrame = computed(() => referenceImages.value[0] || null)
 const lastFrame = computed(() => referenceImages.value[1] || referenceImages.value[0] || null)
 
 // 参考视频（来自上游视频节点）
-const VIDEO_NODE_TYPES = ['video', 'video-input', 'video-gen']
+const VIDEO_NODE_TYPES = [
+  'video', 'video-input', 'video-gen',
+  'text-to-video', 'image-to-video', 'audio-to-video'
+]
 
 const referenceVideos = computed(() => {
   const allEdges = [...canvasStore.edges]
@@ -2506,6 +2509,34 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
     const audioEnabled = isSeedance2Model.value ? true : seedanceSoundEnabled.value
     formData.append('seedance_generate_audio', audioEnabled ? 'true' : 'false')
     console.log('[VideoNode] Seedance 生成声音:', audioEnabled)
+  }
+
+  // Seedance 2.0 音频时长验证（API 限制单个音频 ≤ 15 秒，总时长 ≤ 15 秒）
+  if (isSeedance2Model.value) {
+    const sd2Mode = selectedSeedance2Mode.value
+    if (['multimodal_ref', 'video_edit'].includes(sd2Mode)) {
+      const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
+      const allNodes = canvasStore.nodes
+      let totalAudioDuration = 0
+      for (const edge of upstreamEdges) {
+        const sourceNode = allNodes.find(n => n.id === edge.source)
+        if (!sourceNode?.data) continue
+        if (['audio-input', 'audio'].includes(sourceNode.type)) {
+          const dur = sourceNode.data.audioDuration
+          if (dur && dur > 15) {
+            await showAlert(`参考音频时长 ${Math.round(dur)} 秒，超过 Seedance 2.0 限制（单个音频不超过 15 秒）。请裁剪音频后重试。`, '音频时长超限')
+            isGenerating.value = false
+            return
+          }
+          if (dur) totalAudioDuration += dur
+        }
+      }
+      if (totalAudioDuration > 15) {
+        await showAlert(`参考音频总时长 ${Math.round(totalAudioDuration)} 秒，超过 Seedance 2.0 限制（总时长不超过 15 秒）。请减少音频或裁剪后重试。`, '音频时长超限')
+        isGenerating.value = false
+        return
+      }
+    }
   }
 
   // Seedance 2.0 模式参数
@@ -3714,10 +3745,8 @@ function handleImageDragEnd(event) {
   resetDragState()
 }
 
-// 阻止视频项的 mousedown 事件冒泡，防止触发节点拖拽
 function handleVideoMouseDown(event) {
   event.stopPropagation()
-  event.preventDefault()
 }
 
 function handleVideoDragStart(event, index) {
@@ -5101,7 +5130,6 @@ function handleToolbarPreview() {
           <!-- 有上游连接时 - 显示"已连接"等待状态 -->
           <div v-else-if="hasUpstream" class="ready-state">
             <div class="ready-icon">
-              <!-- SVG 黑白视频图标 -->
               <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <rect x="2" y="6" width="14" height="12" rx="2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M16 10.5L21 7.5V16.5L16 13.5V10.5Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -5111,6 +5139,12 @@ function handleToolbarPreview() {
             <div class="ready-text">
               <template v-if="inheritedPrompt">
                 <span class="prompt-preview">{{ inheritedPrompt.slice(0, 50) }}{{ inheritedPrompt.length > 50 ? '...' : '' }}</span>
+              </template>
+              <template v-else-if="hasReferenceVideos && referenceImages.length > 0">
+                已连接参考视频和图片
+              </template>
+              <template v-else-if="hasReferenceVideos">
+                已连接参考视频
               </template>
               <template v-else-if="referenceImages.length > 0">
                 已连接参考图片

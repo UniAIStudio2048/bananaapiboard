@@ -364,31 +364,21 @@ function selectNodeType(type) {
   }
   
   // 特殊处理：视频编辑节点（从视频节点触发时）
+  // 创建空白视频节点，源视频通过上游连线作为参考输入
   if (type === 'video-edit' && triggerNode.value) {
     const sourceData = triggerNode.value.data
-    // 检查是否从视频节点触发且有视频输出
     if (sourceData?.output?.url) {
-      // 将节点类型改为视频节点
       actualNodeType = 'video'
-      // 设置标题
       nodeData.title = '视频编辑'
       nodeData.label = '视频编辑'
-      // 设置节点角色为编辑
       nodeData.nodeRole = 'edit'
-      // 标记这是视频编辑模式
       nodeData.editMode = true
-      // 传递源视频URL
       nodeData.sourceVideoUrl = sourceData.output.url
-      // 设置输出为源视频（可以后续编辑）
-      nodeData.output = {
-        type: 'video',
-        url: sourceData.output.url
-      }
-      nodeData.status = 'success'
     }
   }
   
   // 特殊处理：视频延长节点（从视频节点触发时）
+  // 创建空白视频节点，源视频通过上游连线作为参考输入
   if (type === 'video-extend' && triggerNode.value) {
     const sourceData = triggerNode.value.data
     if (sourceData?.output?.url) {
@@ -398,11 +388,6 @@ function selectNodeType(type) {
       nodeData.nodeRole = 'extend'
       nodeData.extendMode = true
       nodeData.sourceVideoUrl = sourceData.output.url
-      nodeData.output = {
-        type: 'video',
-        url: sourceData.output.url
-      }
-      nodeData.status = 'success'
 
       // 自动选择最优模型：Seedance 2.0 > Kling O1 > 其他视频模型
       const allVideoModels = getAvailableVideoModels()

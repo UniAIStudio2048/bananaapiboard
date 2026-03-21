@@ -824,6 +824,7 @@ function handleTimeUpdate() {
 function handleLoadedMetadata() {
   if (audioRef.value) {
     duration.value = audioRef.value.duration
+    canvasStore.updateNodeData(props.id, { audioDuration: audioRef.value.duration })
     // 应用保存的播放速度
     audioRef.value.playbackRate = playbackRate.value
   }

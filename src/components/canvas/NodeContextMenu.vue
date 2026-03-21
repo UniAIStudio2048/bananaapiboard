@@ -284,10 +284,34 @@ function createDownstreamNode(type) {
     return
   }
   
+  let nodeType = type
+  let nodeData = {}
+
+  // 视频编辑：创建空白视频节点，源视频作为上游参考输入
+  if (type === NODE_TYPES.VIDEO_EDIT || type === 'video-edit') {
+    nodeType = 'video'
+    nodeData = {
+      title: '视频编辑',
+      nodeRole: 'edit',
+      editMode: true,
+      sourceVideoUrl: props.node.data?.output?.url || ''
+    }
+  }
+  // 视频延长：创建空白视频节点，源视频作为上游参考输入
+  else if (type === NODE_TYPES.VIDEO_EXTEND || type === 'video-extend') {
+    nodeType = 'video'
+    nodeData = {
+      title: '视频延长',
+      nodeRole: 'extend',
+      extendMode: true,
+      sourceVideoUrl: props.node.data?.output?.url || ''
+    }
+  }
+
   const newNode = canvasStore.addNode({
-    type,
+    type: nodeType,
     position,
-    data: {}
+    data: nodeData
   })
   
   canvasStore.addEdge({
