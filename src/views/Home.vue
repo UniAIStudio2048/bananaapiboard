@@ -717,6 +717,12 @@ async function checkTaskStatus(taskId) {
   return null
 }
 
+function isContentSafetyMsg(msg) {
+  if (!msg) return false
+  const keywords = ['敏感', '安全', '拦截', '违规', 'sensitive', 'moderation', 'content safety', 'illegal']
+  return keywords.some(k => msg.toLowerCase().includes(k.toLowerCase()))
+}
+
 // 更新任务状态
 async function updateTaskInLists(taskId, status, url = null, errorMsg = null) {
   // 更新输出图库中的任务（输出图库只显示最新的一张）
@@ -2505,11 +2511,13 @@ onUnmounted(() => {
             </div>
             
             <!-- 失败/超时状态 -->
-            <div v-else-if="it.status === 'failed' || it.status === 'timeout'" class="relative aspect-video bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 rounded-2xl overflow-hidden">
+            <div v-else-if="it.status === 'failed' || it.status === 'timeout'" class="relative aspect-video rounded-2xl overflow-hidden" :class="isContentSafetyMsg(it.error) ? 'bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20' : 'bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20'">
               <div class="absolute inset-0 flex flex-col items-center justify-center p-6">
-                <div class="text-5xl mb-4">{{ it.status === 'timeout' ? '⏰' : '❌' }}</div>
-                <p class="text-red-600 dark:text-red-400 text-lg font-semibold text-center">{{ it.status === 'timeout' ? '生成超时' : '生成失败' }}</p>
-                <p class="text-red-500 dark:text-red-500 text-sm mt-2 text-center opacity-75">{{ it.error || (it.status === 'timeout' ? '请重试' : '请稍后重试') }}</p>
+                <div class="text-5xl mb-4">{{ isContentSafetyMsg(it.error) ? '🛡️' : it.status === 'timeout' ? '⏰' : '❌' }}</div>
+                <p class="text-lg font-semibold text-center" :class="isContentSafetyMsg(it.error) ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'">{{ isContentSafetyMsg(it.error) ? '内容安全审核未通过' : it.status === 'timeout' ? '生成超时' : '生成失败' }}</p>
+                <p class="text-sm mt-2 text-center opacity-75" :class="isContentSafetyMsg(it.error) ? 'text-amber-500 dark:text-amber-400' : 'text-red-500 dark:text-red-500'">{{ it.error || (it.status === 'timeout' ? '请重试' : '请稍后重试') }}</p>
+                <p v-if="isContentSafetyMsg(it.error)" class="text-sm mt-1 text-center text-gray-500 dark:text-gray-400">请修改提示词或更换参考图片后重试</p>
+                <p v-else-if="it.status === 'timeout'" class="text-sm mt-1 text-center text-gray-500 dark:text-gray-400">生成时间过长，请稍后重试或简化提示词</p>
                 <p class="text-sm text-green-600 dark:text-green-400 mt-4 font-medium">✓ 未扣除积分</p>
               </div>
             </div>
@@ -2623,11 +2631,11 @@ onUnmounted(() => {
             </div>
             
             <!-- 失败/超时状态 -->
-            <div v-else-if="it.status === 'failed' || it.status === 'timeout'" class="relative aspect-video bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20">
+            <div v-else-if="it.status === 'failed' || it.status === 'timeout'" class="relative aspect-video" :class="isContentSafetyMsg(it.error) ? 'bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20' : 'bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20'">
               <div class="absolute inset-0 flex flex-col items-center justify-center p-3">
-                <div class="text-3xl mb-2">{{ it.status === 'timeout' ? '⏰' : '❌' }}</div>
-                <p class="text-red-600 dark:text-red-400 text-xs font-semibold text-center">{{ it.status === 'timeout' ? '生成超时' : '生成失败' }}</p>
-                <p class="text-red-500 dark:text-red-500 text-xs mt-1.5 text-center opacity-75">{{ it.error || (it.status === 'timeout' ? '请重试' : '请稍后重试') }}</p>
+                <div class="text-3xl mb-2">{{ isContentSafetyMsg(it.error) ? '🛡️' : it.status === 'timeout' ? '⏰' : '❌' }}</div>
+                <p class="text-xs font-semibold text-center" :class="isContentSafetyMsg(it.error) ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'">{{ isContentSafetyMsg(it.error) ? '内容审核未通过' : it.status === 'timeout' ? '生成超时' : '生成失败' }}</p>
+                <p class="text-xs mt-1.5 text-center opacity-75" :class="isContentSafetyMsg(it.error) ? 'text-amber-500 dark:text-amber-400' : 'text-red-500 dark:text-red-500'">{{ it.error || (it.status === 'timeout' ? '请重试' : '请稍后重试') }}</p>
                 <p class="text-xs text-green-600 dark:text-green-400 mt-2 font-medium">✓ 未扣除积分</p>
               </div>
             </div>
@@ -2789,11 +2797,11 @@ onUnmounted(() => {
               <!-- 失败/超时状态 -->
               <div v-else-if="h.status === 'failed' || h.status === 'timeout'" class="relative overflow-hidden">
                 <!-- 失败图标区域 -->
-                <div class="aspect-video bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 group relative">
+                <div class="aspect-video group relative" :class="isContentSafetyMsg(h.error) ? 'bg-gradient-to-br from-amber-50 to-amber-100 dark:from-amber-900/20 dark:to-amber-800/20' : 'bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20'">
                   <div class="absolute inset-0 flex flex-col items-center justify-center p-3">
-                    <div class="text-2xl mb-1">{{ h.status === 'timeout' ? '⏰' : '❌' }}</div>
-                    <p class="text-xs text-red-600 dark:text-red-400 font-semibold">{{ h.status === 'timeout' ? '生成超时' : '生成失败' }}</p>
-                    <p v-if="h.error" class="text-xs text-red-500 dark:text-red-400 mt-1 text-center line-clamp-2 px-2">{{ h.error }}</p>
+                    <div class="text-2xl mb-1">{{ isContentSafetyMsg(h.error) ? '🛡️' : h.status === 'timeout' ? '⏰' : '❌' }}</div>
+                    <p class="text-xs font-semibold" :class="isContentSafetyMsg(h.error) ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400'">{{ isContentSafetyMsg(h.error) ? '内容审核未通过' : h.status === 'timeout' ? '生成超时' : '生成失败' }}</p>
+                    <p v-if="h.error" class="text-xs mt-1 text-center line-clamp-2 px-2" :class="isContentSafetyMsg(h.error) ? 'text-amber-500 dark:text-amber-400' : 'text-red-500 dark:text-red-400'">{{ h.error }}</p>
                     <p class="text-xs text-green-600 dark:text-green-400 mt-1 font-medium">✓ 未扣除积分</p>
                   </div>
                   <!-- 失败状态的操作按钮 - 右下角小按钮 -->

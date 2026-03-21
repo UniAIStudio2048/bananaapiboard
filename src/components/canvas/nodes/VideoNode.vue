@@ -48,6 +48,23 @@ const localLabel = ref(props.data.label || 'Video')
 // 本地状态
 const isGenerating = ref(false)
 const errorMessage = ref('')
+
+function isContentSafetyError(msg) {
+  if (!msg) return false
+  const keywords = ['敏感', '安全', '拦截', '违规', 'sensitive', 'moderation', 'content safety', 'illegal']
+  return keywords.some(k => msg.toLowerCase().includes(k.toLowerCase()))
+}
+
+function isTimeoutError(msg) {
+  if (!msg) return false
+  return msg.includes('超时') || msg.includes('timeout')
+}
+
+function getErrorHint(msg) {
+  if (isContentSafetyError(msg)) return '请修改提示词或更换参考图片后重试'
+  if (isTimeoutError(msg)) return '生成时间过长，请稍后重试或简化提示词'
+  return ''
+}
 const promptText = ref(props.data.prompt || '')
 const promptTextareaRef = ref(null)
 
@@ -928,10 +945,12 @@ function handleBackgroundTaskFailed(event) {
     return
   }
   
+  const errorMsg = task.error || '视频生成失败'
   canvasStore.updateNodeData(props.id, {
     status: 'error',
-    error: task.error || '视频生成失败'
+    error: errorMsg
   })
+  errorMessage.value = errorMsg
   
   removeCompletedTask(taskId)
 }
@@ -2979,7 +2998,9 @@ async function handleGenerate() {
     console.log('[VideoNode] 全部任务已提交:', successResults.length, '/', generateCount)
     
     if (successResults.length === 0) {
-      throw new Error('所有任务提交都失败了')
+      const firstNodeData = canvasStore.nodes.find(n => n.id === allNodeIds[0])?.data
+      const specificError = firstNodeData?.error || '所有任务提交都失败了'
+      throw new Error(specificError)
     }
     
     // 任务提交成功后，立即恢复按钮状态，允许用户继续发起新任务
@@ -5070,9 +5091,10 @@ function handleToolbarPreview() {
           </div>
           
           <!-- 错误状态 -->
-          <div v-else-if="data.status === 'error'" class="preview-error">
-            <div class="error-icon">❌</div>
+          <div v-else-if="data.status === 'error'" class="preview-error" :class="{ 'content-safety': isContentSafetyError(data.error || errorMessage), 'timeout-error': isTimeoutError(data.error || errorMessage) }">
+            <div class="error-icon">{{ isContentSafetyError(data.error || errorMessage) ? '🛡️' : isTimeoutError(data.error || errorMessage) ? '⏱️' : '❌' }}</div>
             <div class="error-text">{{ data.error || errorMessage || '生成失败' }}</div>
+            <div v-if="getErrorHint(data.error || errorMessage)" class="error-hint">{{ getErrorHint(data.error || errorMessage) }}</div>
             <button class="retry-btn" @click="handleRegenerate">重试</button>
           </div>
           
@@ -6105,6 +6127,25 @@ function handleToolbarPreview() {
   font-size: 12px;
   color: var(--canvas-accent-error, #ef4444);
   max-width: 200px;
+}
+
+.error-hint {
+  font-size: 11px;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  max-width: 200px;
+  line-height: 1.4;
+}
+
+.preview-error.content-safety .error-text {
+  color: #f59e0b;
+}
+
+.preview-error.content-safety .error-icon {
+  color: #f59e0b;
+}
+
+.preview-error.timeout-error .error-text {
+  color: #f97316;
 }
 
 .retry-btn {

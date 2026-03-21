@@ -644,6 +644,12 @@ function isFailedStatus(status) {
   return ['failed', 'failure', 'error', 'timeout', 'file_expired', 'expired'].some(s => normalized.includes(s))
 }
 
+function isContentSafetyMsg(msg) {
+  if (!msg) return false
+  const keywords = ['敏感', '安全', '拦截', '违规', 'sensitive', 'moderation', 'content safety', 'illegal']
+  return keywords.some(k => msg.toLowerCase().includes(k.toLowerCase()))
+}
+
 // 辅助函数：判断是否为成功状态
 function isCompletedStatus(status) {
   if (!status) return false
@@ -2189,10 +2195,12 @@ onUnmounted(() => {
               <div v-else-if="isFailedStatus(item.status)" 
                 class="rounded-lg overflow-hidden bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800/40 dark:to-gray-700/40 aspect-video relative">
                 <div class="absolute inset-0 flex flex-col items-center justify-center p-4">
-                  <div class="text-4xl mb-3">❌</div>
-                  <p class="text-gray-700 dark:text-gray-300 text-base font-semibold text-center">{{ formatStatus(item.status) }}</p>
-                  <p v-if="item.fail_reason" class="text-gray-500 dark:text-gray-400 text-xs mt-2 text-center opacity-75">{{ item.fail_reason }}</p>
-                  <p v-else class="text-gray-500 dark:text-gray-400 text-xs mt-2 text-center opacity-75">请稍后重试</p>
+                  <div class="text-4xl mb-3">{{ isContentSafetyMsg(item.fail_reason) ? '🛡️' : item.status === 'timeout' ? '⏱️' : '❌' }}</div>
+                  <p class="text-base font-semibold text-center" :class="isContentSafetyMsg(item.fail_reason) ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300'">{{ formatStatus(item.status) }}</p>
+                  <p v-if="item.fail_reason" class="text-xs mt-2 text-center opacity-75" :class="isContentSafetyMsg(item.fail_reason) ? 'text-amber-500 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'">{{ item.fail_reason }}</p>
+                  <p v-if="isContentSafetyMsg(item.fail_reason)" class="text-xs mt-1 text-center text-gray-500 dark:text-gray-400">请修改提示词或更换参考图片后重试</p>
+                  <p v-else-if="item.status === 'timeout'" class="text-xs mt-1 text-center text-gray-500 dark:text-gray-400">生成时间过长，请稍后重试或简化提示词</p>
+                  <p v-else-if="!item.fail_reason" class="text-gray-500 dark:text-gray-400 text-xs mt-2 text-center opacity-75">请稍后重试</p>
                   <p class="text-sm text-gray-600 dark:text-gray-400 mt-3 font-medium">✓ 未扣除积分</p>
                 </div>
               </div>
@@ -2382,9 +2390,9 @@ onUnmounted(() => {
                 </div>
                 <!-- 失败状态 -->
                 <div v-else-if="isFailedStatus(item.status)" class="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800/40 dark:to-gray-700/40">
-                  <div class="text-3xl mb-2">❌</div>
-                  <p class="text-xs text-gray-700 dark:text-gray-300 font-semibold">{{ formatStatus(item.status) }}</p>
-                  <p v-if="item.fail_reason" class="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center px-4 line-clamp-2">{{ item.fail_reason }}</p>
+                  <div class="text-3xl mb-2">{{ isContentSafetyMsg(item.fail_reason) ? '🛡️' : item.status === 'timeout' ? '⏱️' : '❌' }}</div>
+                  <p class="text-xs font-semibold" :class="isContentSafetyMsg(item.fail_reason) ? 'text-amber-600 dark:text-amber-400' : 'text-gray-700 dark:text-gray-300'">{{ formatStatus(item.status) }}</p>
+                  <p v-if="item.fail_reason" class="text-xs mt-1 text-center px-4 line-clamp-2" :class="isContentSafetyMsg(item.fail_reason) ? 'text-amber-500 dark:text-amber-400' : 'text-gray-500 dark:text-gray-400'">{{ item.fail_reason }}</p>
                   <p class="text-xs text-gray-600 dark:text-gray-400 mt-1 font-medium">✓ 未扣除积分</p>
                 </div>
                 <!-- 其他未知状态 - 默认显示为等待中 -->
@@ -2457,8 +2465,10 @@ onUnmounted(() => {
                 </div>
 
                 <!-- 失败原因 -->
-                <div v-if="isFailedStatus(item.status)" class="text-xs bg-gray-100 dark:bg-gray-800/50 p-2 rounded space-y-1">
-                  <p v-if="item.fail_reason" class="text-gray-600 dark:text-gray-400">{{ item.fail_reason }}</p>
+                <div v-if="isFailedStatus(item.status)" class="text-xs p-2 rounded space-y-1" :class="isContentSafetyMsg(item.fail_reason) ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-gray-100 dark:bg-gray-800/50'">
+                  <p v-if="item.fail_reason" :class="isContentSafetyMsg(item.fail_reason) ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'">{{ item.fail_reason }}</p>
+                  <p v-if="isContentSafetyMsg(item.fail_reason)" class="text-gray-500 dark:text-gray-400">请修改提示词或更换参考图片后重试</p>
+                  <p v-else-if="item.status === 'timeout'" class="text-gray-500 dark:text-gray-400">生成时间过长，请稍后重试或简化提示词</p>
                   <p class="text-gray-600 dark:text-gray-400 font-medium">✓ 未扣除积分</p>
                 </div>
 

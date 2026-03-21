@@ -1024,6 +1024,12 @@ function onUserVideoLoaded() {
   }
 }
 
+function isContentSafetyMsg(msg) {
+  if (!msg) return false
+  const keywords = ['敏感', '安全', '拦截', '违规', 'sensitive', 'moderation', 'content safety', 'illegal']
+  return keywords.some(k => msg.toLowerCase().includes(k.toLowerCase()))
+}
+
 function formatVideoStatus(status) {
   const map = {
     pending: '排队中',
@@ -4532,8 +4538,9 @@ onUnmounted(() => {
               消耗 {{ selectedVideo.points_cost }} 积分
             </span>
           </div>
-          <div v-if="selectedVideo.fail_reason" class="mt-2 p-2 bg-red-500/20 rounded text-sm text-red-300">
+          <div v-if="selectedVideo.fail_reason" class="mt-2 p-2 rounded text-sm" :class="isContentSafetyMsg(selectedVideo.fail_reason) ? 'bg-amber-500/20 text-amber-300' : 'bg-red-500/20 text-red-300'">
             {{ selectedVideo.fail_reason }}
+            <p v-if="isContentSafetyMsg(selectedVideo.fail_reason)" class="text-xs mt-1 text-amber-200/70">请修改提示词或更换参考图片后重试</p>
           </div>
           <div class="mt-3 pt-3 border-t border-white/20">
             <p class="text-xs text-amber-300 flex items-center">
