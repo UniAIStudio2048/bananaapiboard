@@ -1084,6 +1084,22 @@ export const useCanvasStore = defineStore('canvas', () => {
       // 深拷贝节点，但标记媒体数据为"加载中"
       const skeletonNode = JSON.parse(JSON.stringify(node))
       
+      // 清理数据库中残留的瞬态上传状态（这些状态仅在上一次会话有效）
+      if (skeletonNode.data) {
+        if (skeletonNode.data.isUploading) {
+          delete skeletonNode.data.isUploading
+          const hasValidMedia = (skeletonNode.data.sourceImages?.length > 0) ||
+            (skeletonNode.data.output?.url) ||
+            (skeletonNode.data.output?.urls?.length > 0)
+          if (!hasValidMedia && !skeletonNode.data._dataLost) {
+            skeletonNode.data._dataLost = true
+            skeletonNode.data._lostReason = '图片上传未完成，数据未保存成功'
+          }
+        }
+        delete skeletonNode.data.uploadFailed
+        delete skeletonNode.data.uploadError
+      }
+      
       // 保存原始媒体数据的引用（用于异步加载）
       const hasMediaData = skeletonNode.data && (
         skeletonNode.data.sourceImages?.length > 0 ||
@@ -1292,6 +1308,21 @@ export const useCanvasStore = defineStore('canvas', () => {
           return !url.startsWith('data:') && !url.startsWith('blob:')
         })
       }
+      
+      // 清理瞬态上传状态标记 —— 这些仅用于当前会话的 UI 反馈，不应被持久化
+      // 如果仍在上传中（blob URL 已被过滤），标记为数据丢失而非永久"上传中"
+      if (data.isUploading) {
+        const hasValidMedia = (data.sourceImages?.length > 0) ||
+          (data.output?.url) ||
+          (data.output?.urls?.length > 0)
+        if (!hasValidMedia) {
+          data._dataLost = true
+          data._lostReason = '图片上传未完成，数据未保存成功'
+        }
+      }
+      delete data.isUploading
+      delete data.uploadFailed
+      delete data.uploadError
       
       return { ...node, data }
     })

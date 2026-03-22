@@ -862,6 +862,13 @@ async function autoSaveWorkflow() {
     return
   }
   
+  // 检查是否有节点正在上传文件，如果有则延迟保存，避免丢失数据
+  const uploadingNodes = canvasStore.nodes.filter(n => n.data?.isUploading)
+  if (uploadingNodes.length > 0) {
+    console.log(`[Canvas] 自动保存跳过：${uploadingNodes.length} 个节点正在上传文件，等待上传完成`)
+    return
+  }
+  
   // 🔧 使用 exportWorkflowForSave 清理 base64/blob 数据，避免存储膨胀
   const workflowData = canvasStore.exportWorkflowForSave()
   
@@ -1148,6 +1155,12 @@ function handleBeforeUnload(event) {
   // 2. 尝试使用 sendBeacon 保存到服务器（不阻塞页面关闭）
   const currentTab = canvasStore.getCurrentTab()
   if (currentTab?.hasChanges) {
+    // 有文件正在上传时跳过 beacon 保存，避免持久化不完整的数据
+    const hasUploading = canvasStore.nodes.some(n => n.data?.isUploading)
+    if (hasUploading) {
+      console.log('[Canvas] 跳过 beacon 保存：有文件正在上传')
+      return
+    }
     try {
       const cleanedData = canvasStore.exportWorkflowForSave()
       

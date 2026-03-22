@@ -828,6 +828,14 @@ export const getAvailableVideoModels = (options = {}) => {
   if (videoModelsConfig && Array.isArray(videoModelsConfig) && videoModelsConfig.length > 0) {
     const models = []
     
+    // 预检测：配置中是否存在 VEO 模型（不论启用状态），用于判断全部禁用时不显示默认 VEO 入口
+    const hasVeoInConfig = videoModelsConfig.some(m => {
+      const n = (m.name || '').toLowerCase()
+      const d = (m.displayName || '').toLowerCase()
+      const isVeo = m.apiType === 'vectorengine' || n.includes('veo3') || n.includes('veo_3') || d.includes('veo')
+      return isVeo && !n.includes('4k') && !d.includes('4k')
+    })
+    
     // 🔧 VEO 模型整合逻辑：收集所有 VEO 子模型，用于生成模式选项
     // 🆕 区分普通 VEO 和 VEO 4K 组
     const veoSubModels = []      // 普通 VEO 模型（不含 4k）
@@ -1309,8 +1317,8 @@ export const getAvailableVideoModels = (options = {}) => {
     }
     
     // 如果没有 VEO 子模型配置，但需要显示默认 VEO，添加到末尾
-    // 🔧 仅在未禁用整合时添加
-    if (!veoInserted && !disableVeoMerge) {
+    // 🔧 仅在未禁用整合时添加；如果配置中存在 VEO 模型但全部禁用，则不显示默认入口
+    if (!veoInserted && !disableVeoMerge && !hasVeoInConfig) {
       models.push(veoEntry)
     }
     
