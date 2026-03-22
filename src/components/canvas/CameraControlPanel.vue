@@ -10,7 +10,7 @@
               <!-- 预设选择器 -->
               <div class="preset-selector" ref="presetDropdownRef">
                 <button class="preset-trigger" @click="togglePresetDropdown">
-                  <span class="preset-current-name">{{ activePreset ? activePreset.name : '选择预设' }}</span>
+                  <span class="preset-current-name">{{ activePreset ? activePreset.name : '默认' }}</span>
                   <svg class="preset-arrow" :class="{ open: showPresetDropdown }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
                     <path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
                   </svg>
@@ -19,15 +19,24 @@
                 <Transition name="dropdown-fade">
                   <div v-if="showPresetDropdown" class="preset-dropdown">
                     <div class="preset-dropdown-header">
-                      <span>镜头预设 ({{ presets.length }}/10)</span>
+                      <span>镜头预设 ({{ presets.length }}/{{ MAX_PRESETS }})</span>
                     </div>
+                    <!-- 默认（重置）选项 -->
+                    <div class="preset-list">
+                      <div :class="['preset-item preset-item-default', { active: !activePresetId }]">
+                        <div class="preset-item-main" @click="resetToDefault">
+                          <span class="preset-item-name">默认</span>
+                          <span class="preset-item-desc">恢复初始设置</span>
+                        </div>
+                      </div>
+                    </div>
+                    <!-- 用户预设列表 -->
                     <div class="preset-list" v-if="presets.length > 0">
                       <div
                         v-for="preset in presets"
                         :key="preset.id"
                         :class="['preset-item', { active: activePresetId === preset.id }]"
                       >
-                        <!-- 重命名模式 -->
                         <div v-if="renamingPresetId === preset.id" class="preset-rename-row">
                           <input
                             ref="renameInputRef"
@@ -41,7 +50,6 @@
                           <button class="preset-action-btn confirm" @click.stop="confirmRename(preset.id)" title="确认">✓</button>
                           <button class="preset-action-btn cancel" @click.stop="cancelRename" title="取消">✕</button>
                         </div>
-                        <!-- 正常显示 -->
                         <template v-else>
                           <div class="preset-item-main" @click="loadPreset(preset.id)">
                             <span class="preset-item-name">{{ preset.name }}</span>
@@ -58,7 +66,8 @@
                         </template>
                       </div>
                     </div>
-                    <div v-else class="preset-empty">暂无预设，点击下方保存当前配置</div>
+                    <!-- 加载状态 -->
+                    <div v-if="presetsLoading" class="preset-empty">加载中...</div>
                     <!-- 保存为新预设 -->
                     <div class="preset-save-section">
                       <div v-if="showSaveInput" class="preset-save-row">
@@ -76,7 +85,7 @@
                       <button
                         v-else
                         class="preset-add-btn"
-                        :disabled="presets.length >= 10"
+                        :disabled="presets.length >= MAX_PRESETS"
                         @click="openSaveInput"
                       >
                         + 保存当前配置为预设
@@ -237,10 +246,17 @@ import {
   getCamerasByType,
   getCameraEffects
 } from '@/config/canvas/cameraDatabase'
+import {
+  getCameraPresets as fetchCameraPresets,
+  createCameraPreset,
+  updateCameraPreset as apiUpdatePreset,
+  deleteCameraPreset as apiDeletePreset,
+  setActiveCameraPreset
+} from '@/api/canvas/camera-presets'
+import { useTeamStore } from '@/stores/team'
 
-const PRESETS_STORAGE_KEY = 'camera-control-presets'
-const LAST_PRESET_KEY = 'camera-control-last-preset'
-const MAX_PRESETS = 10
+const MAX_PRESETS = 20
+const teamStore = useTeamStore()
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -276,29 +292,42 @@ const renameValue = ref('')
 const presetDropdownRef = ref(null)
 const saveInputRef = ref(null)
 const renameInputRef = ref(null)
+const presetsLoading = ref(false)
 
-// 当前激活的预设
 const activePreset = computed(() => presets.value.find(p => p.id === activePresetId.value))
 
-// 加载预设列表
-function loadPresetsFromStorage() {
+function getSpaceInfo() {
+  return {
+    spaceType: teamStore.globalSpaceType?.value || 'personal',
+    teamId: teamStore.globalTeamId?.value || null
+  }
+}
+
+async function loadPresetsFromDB() {
+  presetsLoading.value = true
   try {
-    const raw = localStorage.getItem(PRESETS_STORAGE_KEY)
-    presets.value = raw ? JSON.parse(raw) : []
-  } catch { presets.value = [] }
+    const { spaceType, teamId } = getSpaceInfo()
+    const data = await fetchCameraPresets(spaceType, teamId)
+    presets.value = (data.presets || []).map(p => ({
+      ...p,
+      settings: typeof p.settings === 'string' ? JSON.parse(p.settings) : p.settings
+    }))
+    activePresetId.value = data.activePresetId || null
+  } catch (e) {
+    console.warn('[CameraPresets] 加载预设失败:', e)
+    presets.value = []
+    activePresetId.value = null
+  } finally {
+    presetsLoading.value = false
+  }
 }
 
-// 保存预设列表到 localStorage
-function savePresetsToStorage() {
-  localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets.value))
-}
-
-// 记录上次使用的预设ID
-function saveLastPresetId(id) {
-  if (id) {
-    localStorage.setItem(LAST_PRESET_KEY, id)
-  } else {
-    localStorage.removeItem(LAST_PRESET_KEY)
+async function saveActivePresetToDB(presetId) {
+  try {
+    const { spaceType, teamId } = getSpaceInfo()
+    await setActiveCameraPreset(presetId, spaceType, teamId)
+  } catch (e) {
+    console.warn('[CameraPresets] 设置激活预设失败:', e)
   }
 }
 
@@ -374,12 +403,19 @@ function loadPreset(id) {
   const preset = presets.value.find(p => p.id === id)
   if (!preset) return
   activePresetId.value = id
-  saveLastPresetId(id)
+  saveActivePresetToDB(id)
   applySettings(preset.settings)
   showPresetDropdown.value = false
 }
 
-// 打开保存输入框
+// 重置为默认（取消激活预设，恢复初始状态）
+function resetToDefault() {
+  activePresetId.value = null
+  saveActivePresetToDB(null)
+  handleReset()
+  showPresetDropdown.value = false
+}
+
 function openSaveInput() {
   if (presets.value.length >= MAX_PRESETS) return
   showSaveInput.value = true
@@ -387,34 +423,40 @@ function openSaveInput() {
   nextTick(() => saveInputRef.value?.focus())
 }
 
-// 保存为新预设
-function saveAsPreset() {
+async function saveAsPreset() {
   const name = newPresetName.value.trim()
   if (!name || presets.value.length >= MAX_PRESETS) return
-  const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
   const settings = getCurrentSettings()
-  const preset = { id, name, settings, summary: makePresetSummary(settings) }
-  presets.value.push(preset)
-  activePresetId.value = id
-  savePresetsToStorage()
-  saveLastPresetId(id)
-  showSaveInput.value = false
-  newPresetName.value = ''
-}
+  const summary = makePresetSummary(settings)
+  const { spaceType, teamId } = getSpaceInfo()
 
-// 删除预设
-function deletePreset(id) {
-  const idx = presets.value.findIndex(p => p.id === id)
-  if (idx === -1) return
-  presets.value.splice(idx, 1)
-  if (activePresetId.value === id) {
-    activePresetId.value = null
-    saveLastPresetId(null)
+  try {
+    const data = await createCameraPreset({ name, settings, summary, spaceType, teamId })
+    const newPreset = { id: data.id, name, settings, summary }
+    presets.value.push(newPreset)
+    activePresetId.value = data.id
+    saveActivePresetToDB(data.id)
+    showSaveInput.value = false
+    newPresetName.value = ''
+  } catch (e) {
+    console.warn('[CameraPresets] 保存预设失败:', e)
   }
-  savePresetsToStorage()
 }
 
-// 开始重命名
+async function deletePreset(id) {
+  try {
+    await apiDeletePreset(id)
+    const idx = presets.value.findIndex(p => p.id === id)
+    if (idx !== -1) presets.value.splice(idx, 1)
+    if (activePresetId.value === id) {
+      activePresetId.value = null
+      saveActivePresetToDB(null)
+    }
+  } catch (e) {
+    console.warn('[CameraPresets] 删除预设失败:', e)
+  }
+}
+
 function startRename(preset) {
   renamingPresetId.value = preset.id
   renameValue.value = preset.name
@@ -426,40 +468,47 @@ function startRename(preset) {
   })
 }
 
-// 确认重命名
-function confirmRename(id) {
+async function confirmRename(id) {
   const name = renameValue.value.trim()
   if (!name) { cancelRename(); return }
   const preset = presets.value.find(p => p.id === id)
   if (preset) {
-    preset.name = name
-    savePresetsToStorage()
+    try {
+      await apiUpdatePreset(id, { name })
+      preset.name = name
+    } catch (e) {
+      console.warn('[CameraPresets] 重命名失败:', e)
+    }
   }
   renamingPresetId.value = null
 }
 
-// 取消重命名
 function cancelRename() {
   renamingPresetId.value = null
 }
 
-// 当预设激活时，如果用户手动调整了参数，自动更新该预设的配置
-function updateActivePresetIfNeeded() {
+async function updateActivePresetIfNeeded() {
   if (applyingPreset || !activePresetId.value) return
   const preset = presets.value.find(p => p.id === activePresetId.value)
   if (!preset) return
-  preset.settings = getCurrentSettings()
-  preset.summary = makePresetSummary(preset.settings)
-  savePresetsToStorage()
+  const newSettings = getCurrentSettings()
+  const newSummary = makePresetSummary(newSettings)
+  if (JSON.stringify(preset.settings) === JSON.stringify(newSettings)) return
+  preset.settings = newSettings
+  preset.summary = newSummary
+  try {
+    await apiUpdatePreset(preset.id, { settings: newSettings, summary: newSummary })
+  } catch (e) {
+    console.warn('[CameraPresets] 更新预设失败:', e)
+  }
 }
 
 // 初始化设置
-watch(() => props.visible, (newVal) => {
+watch(() => props.visible, async (newVal) => {
   if (newVal) {
-    loadPresetsFromStorage()
+    await loadPresetsFromDB()
     const hasInitial = props.initialSettings && props.initialSettings.camera
     if (hasInitial) {
-      // 有外部传入的初始设置，优先使用
       const settings = props.initialSettings
       const camera = cameraDatabase.cameras.find(c => c.id === settings.camera)
       if (camera) {
@@ -470,15 +519,13 @@ watch(() => props.visible, (newVal) => {
       if (settings.focalLength) selectedFocalLength.value = settings.focalLength
       if (settings.aperture) selectedAperture.value = settings.aperture
       if (settings.effects) selectedEffects.value = [...settings.effects]
-    } else {
-      // 没有外部设置，尝试加载上次使用的预设
-      const lastId = localStorage.getItem(LAST_PRESET_KEY)
-      if (lastId && presets.value.find(p => p.id === lastId)) {
-        loadPreset(lastId)
+    } else if (activePresetId.value) {
+      const preset = presets.value.find(p => p.id === activePresetId.value)
+      if (preset) {
+        applySettings(preset.settings)
       }
     }
   } else {
-    // 关闭面板时，保存当前激活预设的最新状态
     if (activePresetId.value) {
       updateActivePresetIfNeeded()
     }
@@ -865,6 +912,15 @@ function handleSave() {
   color: #60a5fa;
 }
 
+.preset-item-default {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  margin-bottom: 2px;
+}
+
+.preset-item-default .preset-item-name {
+  font-weight: 600;
+}
+
 .preset-item-desc {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.4);
@@ -885,7 +941,8 @@ function handleSave() {
 .preset-item:hover .preset-item-actions {
   opacity: 1;
 }
-.preset-action-btn {
+
+.preset-action-btn {
   width: 24px;
   height: 24px;
   display: flex;
@@ -1394,6 +1451,10 @@ function handleSave() {
 
 :root.canvas-theme-light .preset-item.active .preset-item-name {
   color: #2563eb;
+}
+
+:root.canvas-theme-light .preset-item-default {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
 }
 
 :root.canvas-theme-light .preset-item-desc {

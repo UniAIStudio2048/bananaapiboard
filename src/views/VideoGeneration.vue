@@ -877,7 +877,8 @@ async function generateVideo() {
     
     // 历史记录中添加（累积）
     history.value.unshift(task)
-    console.log('[video] 已添加到历史记录')
+    gallery.value = [task]
+    console.log('[video] 已添加到历史记录和输出视频库')
     
     // 🔥 错峰模式使用特殊轮询策略
     startPolling(taskId, isOffPeakTask, Date.now())
@@ -937,9 +938,8 @@ function mergeTaskUpdate(taskId, update) {
       list[index] = { ...list[index], ...update }
     }
   }
-  // 只更新 history 中已存在的任务
-  // gallery 不再使用，保持为空状态
   apply(history.value)
+  apply(gallery.value)
 }
 
 // 计算错峰模式的轮询间隔
@@ -1085,9 +1085,13 @@ async function loadHistory() {
     // 更新历史记录
     history.value = videos
 
-    // gallery 保持为空，始终显示"开始创作"空状态
-    // 所有视频任务都在历史记录抽屉中查看
-    console.log('[VideoGeneration] 历史记录已加载，输出库保持空状态（显示"开始创作"）')
+    if (gallery.value.length === 0 && videos.length > 0) {
+      const latestActive = videos.find(v => isProcessingStatus(v.status)) || videos.find(v => v.status === 'SUCCESS')
+      if (latestActive) {
+        gallery.value = [latestActive]
+      }
+    }
+    console.log('[VideoGeneration] 历史记录已加载，输出库显示:', gallery.value.length, '条')
 
     // 对 history 中的未完成任务启动轮询（且未超时）- 限制数量
     // 错峰模式任务允许48小时，普通任务80分钟
@@ -1373,9 +1377,7 @@ onMounted(async () => {
   // 加载视频配置（优先加载，以便后续计算积分）
   await loadVideoConfig()
   await refreshUser()
-  // 只加载历史记录到抽屉，不自动显示在输出视频库
   await loadHistory()
-  // gallery 保持为空，等待用户生成新视频
 
   // 选择一个启用的默认模型（从配置动态获取）
   const enabledModels = availableModels.value

@@ -7,10 +7,10 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useTeamStore } from '@/stores/team'
 
 const props = defineProps({
-  // 当前选中的空间: 'current' | 'personal' | 'team-xxx' | 'all'
+  // 当前选中的空间: 'personal' | 'team-xxx' | 'all'
   modelValue: {
     type: String,
-    default: 'current'
+    default: 'personal'
   },
   // 是否显示"全部"选项
   showAll: {
@@ -44,15 +44,6 @@ const selectedSpace = computed({
 // 构建可选的空间列表
 const spaces = computed(() => {
   const list = []
-  
-  // 当前空间（跟随全局）
-  list.push({
-    id: 'current',
-    name: teamStore.currentSpaceLabel.value,
-    icon: teamStore.currentSpaceIcon.value,
-    type: 'current',
-    label: '当前'
-  })
   
   // 个人空间
   list.push({

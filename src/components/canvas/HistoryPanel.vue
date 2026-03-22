@@ -39,7 +39,7 @@ const loading = ref(false)
 const historyList = shallowRef([]) // 使用 shallowRef 优化大数组
 const selectedType = ref('all') // all | image | video | audio
 const searchQuery = ref('')
-const spaceFilter = ref('current') // 空间筛选: 'current' | 'personal' | 'team-xxx' | 'all'
+const spaceFilter = ref('personal') // 空间筛选: 'personal' | 'team-xxx' | 'all'
 
 // 全屏模式
 const isFullscreen = ref(false)
@@ -311,11 +311,11 @@ async function checkTeamSync() {
   // 仅在团队空间且面板可见时同步
   if (!teamStore.isInTeamSpace.value || !props.visible) return
   
-  // 仅在筛选当前空间时同步
-  if (spaceFilter.value !== 'current') return
+  // 仅在筛选团队空间时同步
+  if (!spaceFilter.value.startsWith('team-')) return
   
   try {
-    const spaceParams = teamStore.getSpaceParams('current')
+    const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
     const result = await getHistory({ ...spaceParams, limit: 1 })
     const latestHistory = result.history?.[0]
     
@@ -366,28 +366,16 @@ function handleSpaceChange(newSpace) {
   loadHistory(true)
   
   // 重新评估是否需要同步
-  if (newSpace === 'current') {
+  if (newSpace.startsWith('team-')) {
     startTeamSync()
   } else {
     stopTeamSync()
   }
 }
 
-// 监听全局空间切换事件
-watch(() => teamStore.globalTeamId.value, () => {
-  if (spaceFilter.value === 'current') {
-    dataCached.value = false
-    loadHistory(true)
-  }
-  // 空间切换后重新评估同步状态
-  if (props.visible) {
-    startTeamSync()
-  }
-})
-
 // 监听团队空间状态变化，控制同步
 watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
-  if (isTeam && props.visible && spaceFilter.value === 'current') {
+  if (isTeam && props.visible && spaceFilter.value.startsWith('team-')) {
     startTeamSync()
   } else {
     stopTeamSync()
