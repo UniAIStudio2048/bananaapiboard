@@ -3152,7 +3152,7 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
       
       // 🔧 重要：在释放 blob URL 之前，先保存映射关系
       // 这样即使 blob URL 失效，也可以通过映射找到服务器 URL
-      blobToServerUrlMap.value.set(blobUrl, serverUrl)
+      blobToServerUrlMap.set(blobUrl, serverUrl)
       console.log('[ImageNode] 保存 blob->server 映射:', blobUrl.substring(0, 30), '->', serverUrl.substring(0, 60))
       
       // 静默更新节点中的 URL（将 blob URL 替换为服务器 URL）
@@ -4129,7 +4129,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
       for (const blobUrl of blobUrls) {
         try {
           // 🔧 优先检查映射表中是否已有服务器 URL（blob URL 可能已被异步上传并 revoke）
-          const cachedServerUrl = blobToServerUrlMap.value.get(blobUrl)
+          const cachedServerUrl = blobToServerUrlMap.get(blobUrl)
           if (cachedServerUrl) {
             console.log('[ImageNode] 从映射表获取服务器 URL:', cachedServerUrl.substring(0, 60))
             imageUrls.push(cachedServerUrl)
@@ -4148,7 +4148,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
           if (urls && urls.length > 0) {
             imageUrls.push(urls[0])
             // 保存到映射表
-            blobToServerUrlMap.value.set(blobUrl, urls[0])
+            blobToServerUrlMap.set(blobUrl, urls[0])
             processedCount++
           }
         } catch (e) {
@@ -4156,7 +4156,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
           
           // 🔧 blob URL 失效时的降级策略：
           // 1. 再次检查映射表（可能在处理过程中被更新）
-          const fallbackUrl = blobToServerUrlMap.value.get(blobUrl)
+          const fallbackUrl = blobToServerUrlMap.get(blobUrl)
           if (fallbackUrl) {
             console.log('[ImageNode] 使用映射表中的服务器 URL:', fallbackUrl.substring(0, 60))
             imageUrls.push(fallbackUrl)

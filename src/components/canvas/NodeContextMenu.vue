@@ -446,10 +446,12 @@ function needsUploadToCloud(url) {
   if (url.startsWith('blob:')) return true
   // base64 数据 URL 需要上传
   if (url.startsWith('data:')) return true
-  // 本地 API 路径需要上传
-  if (url.startsWith('/api/images/file/') || url.startsWith('/storage/')) return true
+  // 本地 API 路径需要上传（包括 cos-proxy、images/file 等所有后端代理路径）
+  if (url.startsWith('/api/') || url.startsWith('/storage/')) return true
   // localhost 路径需要上传
   if (url.includes('localhost') && url.includes('/api/')) return true
+  // 非 CDN 的内部服务器 URL 需要上传
+  if (url.includes('nananobanana.cn') && url.includes('/api/')) return true
   return false
 }
 
