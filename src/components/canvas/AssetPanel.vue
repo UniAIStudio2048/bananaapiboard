@@ -8,7 +8,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getAssets, deleteAsset, toggleFavorite, updateAssetTags, updateAsset, saveAsset } from '@/api/canvas/assets'
 import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } from '@/api/canvas/volcengine-assets'
-import { getApiUrl, getTenantHeaders, isSeedanceFeaturesEnabled } from '@/config/tenant'
+import { getApiUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import CachedImage from '@/components/CachedImage.vue'
@@ -98,6 +98,7 @@ let teamSyncTimer = null
 const lastSyncId = ref(null) // 记录最新一条记录的ID
 
 const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
+const soraCharacterLibraryEnabled = computed(() => isSoraCharacterLibraryEnabled())
 
 // 文件类型 - 存储翻译键，在模板中实时翻译
 const allFileTypes = [
@@ -110,7 +111,11 @@ const allFileTypes = [
   { key: 'seedance-character', label: 'Seedance角色库', icon: '👥' }
 ]
 const fileTypes = computed(() =>
-  allFileTypes.filter(ft => ft.key !== 'seedance-character' || seedanceFeaturesEnabled.value)
+  allFileTypes.filter(ft => {
+    if (ft.key === 'seedance-character') return seedanceFeaturesEnabled.value
+    if (ft.key === 'sora-character') return soraCharacterLibraryEnabled.value
+    return true
+  })
 )
 
 // 快捷标签 - 存储翻译键，在模板中实时翻译

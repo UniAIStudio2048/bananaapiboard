@@ -301,6 +301,14 @@ export async function loadBrandConfig(forceReload = false) {
         runtimeConfig.enableSeedanceFeatures = true
       }
       console.log('[tenant] Seedance 功能开关:', runtimeConfig.enableSeedanceFeatures)
+
+      // 更新 Sora 角色库开关
+      if (data.enableSoraCharacterLibrary !== undefined) {
+        runtimeConfig.enableSoraCharacterLibrary = data.enableSoraCharacterLibrary
+      } else {
+        runtimeConfig.enableSoraCharacterLibrary = true
+      }
+      console.log('[tenant] Sora 角色库开关:', runtimeConfig.enableSoraCharacterLibrary)
       
       // 保存到本地存储
       saveToStorage(runtimeConfig)
@@ -529,6 +537,9 @@ export const getSoraCharacterConfig = () => config.soraCharacterConfig || { poin
 
 // 检查 Seedance 角色功能是否启用
 export const isSeedanceFeaturesEnabled = () => config.enableSeedanceFeatures !== false
+
+// 检查 Sora 角色库是否启用
+export const isSoraCharacterLibraryEnabled = () => config.enableSoraCharacterLibrary !== false
 
 // 获取模型显示名称（如果自定义了则返回自定义名称，否则返回默认名称）
 export const getModelDisplayName = (modelKey, type = 'image') => {
