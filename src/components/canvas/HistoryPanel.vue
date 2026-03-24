@@ -107,7 +107,7 @@ const lastLoadTime = ref(0)
 const CACHE_DURATION = 60000 // 缓存有效期 60 秒
 
 // 团队空间实时同步
-const TEAM_SYNC_INTERVAL = 10000 // 团队空间同步间隔 10 秒
+const TEAM_SYNC_INTERVAL = 30000 // 团队空间同步间隔 30 秒
 let teamSyncTimer = null
 const lastSyncId = ref(null) // 记录最新一条记录的ID，用于检测新数据
 

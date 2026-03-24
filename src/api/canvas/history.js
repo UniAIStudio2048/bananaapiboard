@@ -35,10 +35,10 @@ function getAuthHeaders() {
  */
 export async function getHistory(params = {}) {
   const results = []
-  const timestamp = Date.now()
   const headers = getAuthHeaders()
   
-  // 构建空间筛选参数
+  const queryLimit = params.limit || 200
+  
   const spaceQuery = []
   if (params.spaceType) {
     spaceQuery.push(`spaceType=${params.spaceType}`)
@@ -46,6 +46,7 @@ export async function getHistory(params = {}) {
       spaceQuery.push(`teamId=${params.teamId}`)
     }
   }
+  spaceQuery.push(`limit=${queryLimit}`)
   const spaceQueryStr = spaceQuery.length > 0 ? `&${spaceQuery.join('&')}` : ''
   
   // 创建请求 Promise 数组
@@ -54,11 +55,10 @@ export async function getHistory(params = {}) {
   // 图片历史请求
   if (!params.type || params.type === 'all' || params.type === 'image') {
     requests.push(
-      fetch(`${getApiBase()}/api/images/history?_=${timestamp}${spaceQueryStr}`, {
+      fetch(`${getApiBase()}/api/images/history?${spaceQueryStr.replace(/^&/, '')}`, {
         method: 'GET',
         credentials: 'include',
-        headers,
-        cache: 'no-store'
+        headers
       })
       .then(async res => {
         if (!res.ok) return { type: 'image', data: [] }
@@ -97,11 +97,10 @@ export async function getHistory(params = {}) {
   // 视频历史请求
   if (!params.type || params.type === 'all' || params.type === 'video') {
     requests.push(
-      fetch(`${getApiBase()}/api/videos/history?_=${timestamp}${spaceQueryStr}`, {
+      fetch(`${getApiBase()}/api/videos/history?${spaceQueryStr.replace(/^&/, '')}`, {
         method: 'GET',
         credentials: 'include',
-        headers,
-        cache: 'no-store'
+        headers
       })
       .then(async res => {
         if (!res.ok) return { type: 'video', data: [] }
@@ -139,11 +138,10 @@ export async function getHistory(params = {}) {
   // 音频历史请求
   if (!params.type || params.type === 'all' || params.type === 'audio') {
     requests.push(
-      fetch(`${getApiBase()}/api/music/history?_=${timestamp}${spaceQueryStr}`, {
+      fetch(`${getApiBase()}/api/music/history?${spaceQueryStr.replace(/^&/, '')}`, {
         method: 'GET',
         credentials: 'include',
-        headers,
-        cache: 'no-store'
+        headers
       })
       .then(async res => {
         if (!res.ok) return { type: 'audio', data: [] }
