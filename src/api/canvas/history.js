@@ -13,6 +13,18 @@ function getApiBase() {
   return url || ''
 }
 
+function generateThumbnailUrl(url) {
+  if (!url) return url
+  if (url.includes('files.nananobanana.cn') || 
+      url.includes('qiniucdn.com') ||
+      url.includes('qncdn.net') ||
+      url.includes('clouddn.com')) {
+    const separator = url.includes('?') ? '|' : '?'
+    return `${url}${separator}imageView2/2/w/200/format/webp`
+  }
+  return url
+}
+
 /**
  * 获取带认证的请求头
  */
@@ -73,7 +85,7 @@ export async function getHistory(params = {}) {
               type: 'image',
               name: displayPrompt ? displayPrompt.substring(0, 30) + (displayPrompt.length > 30 ? '...' : '') : '图片',
               url: img.url,
-              thumbnail_url: img.url,
+              thumbnail_url: generateThumbnailUrl(img.url),
               prompt: displayPrompt, // 显示用户原始输入（不含预设）
               fullPrompt: img.prompt, // 保留完整提示词（含预设）供查看
               user_prompt: img.user_prompt, // 用户原始输入
@@ -81,8 +93,7 @@ export async function getHistory(params = {}) {
               status: img.status,
               created_at: img.created ? new Date(img.created * 1000).toISOString() : null,
               size: img.size,
-              aspect_ratio: img.aspect_ratio,
-              reference_images: img.reference_images
+              aspect_ratio: img.aspect_ratio
             }
           })
         }
