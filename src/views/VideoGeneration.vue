@@ -1018,60 +1018,57 @@ function startPolling(taskId, isOffPeakTask = false, taskCreatedAt = null) {
   pollTask()
 }
 
-async function loadHistory() {
+const VIDEO_PAGE_SIZE = 30
+const videoHistoryOffset = ref(0)
+const hasMoreVideoHistory = ref(true)
+const loadingMoreVideoHistory = ref(false)
+
+async function loadHistory(reset = true) {
+  if (!reset && (!hasMoreVideoHistory.value || loadingMoreVideoHistory.value)) return
+  
   try {
     const token = localStorage.getItem('token')
-    console.log('[VideoGeneration] 开始加载历史记录, token存在:', !!token)
 
     if (!token) {
-      console.log('[VideoGeneration] 未登录，跳过加载历史记录')
       history.value = []
-      // gallery 不清空，保留当前生成的视频
       return
     }
 
-    const response = await fetch('/api/videos/history', {
+    if (reset) {
+      videoHistoryOffset.value = 0
+      hasMoreVideoHistory.value = true
+    }
+    
+    loadingMoreVideoHistory.value = true
+
+    const response = await fetch(`/api/videos/history?limit=${VIDEO_PAGE_SIZE}&offset=${videoHistoryOffset.value}`, {
       headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
     })
 
-    console.log('[VideoGeneration] API响应状态:', response.status, response.ok)
-
-    if (!response.ok) {
-      console.error('[VideoGeneration] API返回错误状态:', response.status)
-      return
-    }
+    if (!response.ok) return
 
     const data = await response.json()
-    console.log('[VideoGeneration] 获取到原始数据:', data)
+    hasMoreVideoHistory.value = data.hasMore !== false && (data.videos || []).length === VIDEO_PAGE_SIZE
 
     const EIGHTY_MINUTES = 80 * 60 * 1000
     const now = Date.now()
 
-    // 限制历史记录数量,防止内存溢出(最多保留300条视频)
-    const MAX_HISTORY = 300
     const allVideos = data.videos || []
-    const limitedVideos = allVideos.slice(0, MAX_HISTORY)
-
-    if (allVideos.length > MAX_HISTORY) {
-      console.log(`[VideoGeneration] 历史记录过多(${allVideos.length}),已限制为${MAX_HISTORY}条`)
-    }
 
     const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000
-    const videos = limitedVideos.map(item => {
+    const videos = allVideos.map(item => {
       const video = {
         ...item,
         task_id: item.task_id || item.id,
         created_at: item.created_at || item.created
       }
 
-      // 检查超时：错峰模式48小时，普通模式80分钟
       const createdAt = video.created_at || 0
       const elapsed = now - createdAt
       const isOffPeakTask = video.off_peak === 1 || video.off_peak === true
       const maxTime = isOffPeakTask ? FORTY_EIGHT_HOURS : EIGHTY_MINUTES
 
       if (elapsed > maxTime && isProcessingStatus(video.status)) {
-        console.log(`[VideoGeneration] 发现超时任务: ${video.id}, 已运行 ${Math.floor(elapsed / 1000 / 60)} 分钟, 错峰模式: ${isOffPeakTask}`)
         video.status = 'timeout'
         video.progress = '生成超时'
         video.fail_reason = isOffPeakTask ? '错峰模式生成超时（48小时）' : '生成超时（超过80分钟），未扣除积分'
@@ -1080,10 +1077,15 @@ async function loadHistory() {
       return video
     })
 
-    console.log('[VideoGeneration] 处理后的视频列表:', videos.length, '条')
-
-    // 更新历史记录
-    history.value = videos
+    if (reset) {
+      history.value = videos
+    } else {
+      const existingIds = new Set(history.value.map(v => v.id))
+      const uniqueNew = videos.filter(v => !existingIds.has(v.id))
+      history.value = [...history.value, ...uniqueNew]
+    }
+    
+    videoHistoryOffset.value += videos.length
 
     if (gallery.value.length === 0 && videos.length > 0) {
       const latestActive = videos.find(v => isProcessingStatus(v.status)) || videos.find(v => v.status === 'SUCCESS')
@@ -1115,7 +1117,13 @@ async function loadHistory() {
     })
   } catch (e) {
     console.error('[VideoGeneration] 加载历史记录失败:', e)
+  } finally {
+    loadingMoreVideoHistory.value = false
   }
+}
+
+function loadMoreVideoHistory() {
+  loadHistory(false)
 }
 
 async function deleteHistory(item) {
@@ -2212,13 +2220,18 @@ onUnmounted(() => {
                 class="rounded-lg overflow-hidden bg-black aspect-video relative cursor-pointer group" 
                 @click="openVideoModal(item)"
               >
-                <video
-                  v-if="item.video_url"
-                  :src="item.video_url"
+                <img
+                  v-if="item.video_url && (item.cover_url || item.thumbnail_url)"
+                  :src="item.cover_url || item.thumbnail_url"
                   class="w-full h-full object-cover"
-                  muted
-                  playsinline
-                ></video>
+                  loading="lazy"
+                />
+                <div
+                  v-else-if="item.video_url"
+                  class="w-full h-full bg-gray-900 flex items-center justify-center"
+                >
+                  <svg class="w-12 h-12 text-gray-600" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </div>
                 <div v-else class="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
                   <div class="text-4xl mb-2">⏳</div>
                   <div class="text-sm">{{ formatStatus(item.status) }}</div>
@@ -2366,13 +2379,18 @@ onUnmounted(() => {
                 :class="item.video_url ? 'bg-black' : 'bg-gradient-to-br from-gray-100 via-gray-50 to-gray-100 dark:from-gray-800/40 dark:via-gray-900/40 dark:to-gray-800/40'"
                 @click="openVideoModal(item)"
               >
-                <video
-                  v-if="item.video_url"
-                  :src="item.video_url"
+                <img
+                  v-if="item.video_url && (item.cover_url || item.thumbnail_url)"
+                  :src="item.cover_url || item.thumbnail_url"
                   class="w-full h-full object-cover"
-                  muted
-                  playsinline
-                ></video>
+                  loading="lazy"
+                />
+                <div
+                  v-else-if="item.video_url"
+                  class="w-full h-full bg-gray-900 flex items-center justify-center"
+                >
+                  <svg class="w-12 h-12 text-gray-600" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                </div>
                 <!-- 生成中状态 -->
                 <div v-else-if="isProcessingStatus(item.status)" class="absolute inset-0 flex flex-col items-center justify-center">
                   <!-- 动态背景 -->
@@ -2508,6 +2526,24 @@ onUnmounted(() => {
                     🗑️
                   </button>
                 </div>
+              </div>
+            </div>
+            
+            <!-- 加载更多 -->
+            <div v-if="hasMoreVideoHistory" class="py-4 flex justify-center">
+              <button 
+                v-if="!loadingMoreVideoHistory"
+                @click="loadMoreVideoHistory"
+                class="px-4 py-2 text-xs text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
+              >
+                加载更多
+              </button>
+              <div v-else class="flex items-center gap-2 text-xs text-slate-500">
+                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                加载中...
               </div>
             </div>
           </div>

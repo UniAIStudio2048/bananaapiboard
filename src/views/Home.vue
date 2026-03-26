@@ -29,6 +29,8 @@ const currentImage = ref(null)
 const currentImageIndex = ref(0)
 const me = ref(null)
 const pollingInterval = ref(null)
+const loadMoreSentinel = ref(null)
+let historyObserver = null
 // 根据设备类型设置历史记录抽屉默认状态：手机默认收起，平板和电脑默认展开
 const isHistoryDrawerOpen = ref(shouldHistoryDrawerOpenByDefault())
 const isViewingHistory = ref(false) // 是否在查看历史记录
@@ -642,63 +644,75 @@ function playNotificationSound() {
   }
 }
 
-// 加载历史记录(虚拟滚动:一次性加载所有)
-async function loadHistory() {
+// 增量分页加载历史记录
+const HISTORY_PAGE_SIZE = 50
+const historyOffset = ref(0)
+const hasMoreHistory = ref(true)
+const loadingMoreHistory = ref(false)
+
+async function loadHistory(reset = true) {
+  if (!reset && (!hasMoreHistory.value || loadingMoreHistory.value)) return
+  
   try {
     const token = localStorage.getItem('token')
-    console.log('[loadHistory] 开始加载历史记录, token存在:', !!token)
     const headers = { ...getTenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-    const r = await fetch(`/api/images/history?_=${Date.now()}`, { headers, cache: 'no-store' })
-    console.log('[loadHistory] API响应状态:', r.status, r.ok)
-    if (r.status === 304) {
-      console.log('[loadHistory] 304 Not Modified，保持本地历史不变')
-      return
+    
+    if (reset) {
+      historyOffset.value = 0
+      hasMoreHistory.value = true
     }
+    
+    loadingMoreHistory.value = true
+    const r = await fetch(`/api/images/history?limit=${HISTORY_PAGE_SIZE}&offset=${historyOffset.value}&_=${Date.now()}`, { headers, cache: 'no-store' })
+    
+    if (r.status === 304) return
     if (r.ok) {
       const data = await r.json()
-      const newHistory = data.images || []
-      console.log('[loadHistory] 获取到历史记录数量:', newHistory.length)
-
-      // 限制历史记录数量,防止内存溢出(最多保留500条)
-      const MAX_HISTORY = 500
-      const limitedHistory = newHistory.slice(0, MAX_HISTORY)
-
-      if (newHistory.length > MAX_HISTORY) {
-        console.log(`[loadHistory] 历史记录过多(${newHistory.length}),已限制为${MAX_HISTORY}条`)
-      }
-
-      // 检测新增完成的任务
-      if (lastHistoryLength.value > 0 && limitedHistory.length > lastHistoryLength.value) {
-        const newCompletedCount = limitedHistory.slice(0, limitedHistory.length - lastHistoryLength.value)
-          .filter(img => img.status === 'completed').length
-
-        if (newCompletedCount > 0 && !isHistoryDrawerOpen.value) {
-          // 抽屉收起时有新任务完成
-          unreadCount.value += newCompletedCount
-          playNotificationSound()
+      const newImages = data.images || []
+      hasMoreHistory.value = data.hasMore !== false && newImages.length === HISTORY_PAGE_SIZE
+      
+      if (reset) {
+        // 首次加载或刷新：检测新任务通知
+        if (lastHistoryLength.value > 0 && newImages.length > 0) {
+          const newCompletedCount = newImages.filter(img => 
+            img.status === 'completed' && !history.value.find(h => h.id === img.id)
+          ).length
+          if (newCompletedCount > 0 && !isHistoryDrawerOpen.value) {
+            unreadCount.value += newCompletedCount
+            playNotificationSound()
+          }
         }
+        
+        // 合并服务器返回与本地 pending 任务
+        const serverIdSet = new Set(newImages.map(h => h.id))
+        const localPendingTasks = history.value.filter(h =>
+          !serverIdSet.has(h.id) && (h.status === 'pending' || h.status === 'processing')
+        )
+        const merged = [...newImages, ...localPendingTasks]
+        merged.sort((a, b) => (b.created || 0) - (a.created || 0))
+        history.value = merged
+        lastHistoryLength.value = newImages.length
+      } else {
+        // 加载更多：追加到现有列表
+        const existingIds = new Set(history.value.map(h => h.id))
+        const uniqueNew = newImages.filter(img => !existingIds.has(img.id))
+        history.value = [...history.value, ...uniqueNew]
       }
-      // 合并服务器返回与本地等待中的任务
-      // 服务器返回的数据为准，本地的 pending 任务如果服务器没有则保留
-      const serverIdSet = new Set(limitedHistory.map(h => h.id))
-      const localPendingTasks = history.value.filter(h =>
-        !serverIdSet.has(h.id) && (h.status === 'pending' || h.status === 'processing')
-      )
-
-      // 以服务器返回的为主，添加本地还在等待的任务
-      const merged = [...limitedHistory, ...localPendingTasks]
-
-      // 重新按时间倒序
-      merged.sort((a, b) => (b.created || 0) - (a.created || 0))
-      history.value = merged
-      lastHistoryLength.value = limitedHistory.length
+      
+      historyOffset.value += newImages.length
     } else {
       const errorText = await r.text()
       console.error('[loadHistory] API返回错误:', errorText)
     }
   } catch (e) {
     console.error('[loadHistory] 加载历史记录失败:', e)
+  } finally {
+    loadingMoreHistory.value = false
   }
+}
+
+function loadMoreHistory() {
+  loadHistory(false)
 }
 
 // 轮询检查任务状态
@@ -2025,10 +2039,23 @@ onMounted(async () => {
   
   // 监听兑换券入口点击事件
   window.addEventListener('open-voucher-modal', openVoucherModal)
+  
+  // 历史记录滚动加载更多（IntersectionObserver）
+  nextTick(() => {
+    if (loadMoreSentinel.value) {
+      historyObserver = new IntersectionObserver((entries) => {
+        if (entries[0]?.isIntersecting && hasMoreHistory.value && !loadingMoreHistory.value) {
+          loadMoreHistory()
+        }
+      }, { rootMargin: '200px' })
+      historyObserver.observe(loadMoreSentinel.value)
+    }
+  })
 })
 
 onUnmounted(() => {
   stopPolling()
+  if (historyObserver) { historyObserver.disconnect(); historyObserver = null }
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('open-voucher-modal', openVoucherModal)
 })
@@ -3064,13 +3091,31 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
+            
+            <!-- 加载更多哨兵 -->
+            <div v-if="hasMoreHistory" ref="loadMoreSentinel" class="py-4 flex justify-center">
+              <button 
+                v-if="!loadingMoreHistory"
+                @click="loadMoreHistory"
+                class="px-4 py-2 text-xs text-primary-600 dark:text-primary-400 bg-primary-50 dark:bg-primary-900/20 rounded-lg hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
+              >
+                加载更多
+              </button>
+              <div v-else class="flex items-center gap-2 text-xs text-slate-500">
+                <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                加载中...
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- 抽屉底部 -->
         <div class="p-3 border-t border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700/50">
           <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span>共 {{ history.length }} 条</span>
+            <span>共 {{ history.length }} 条{{ hasMoreHistory ? '+' : '' }}</span>
             <span>保留15天</span>
           </div>
         </div>

@@ -85,7 +85,7 @@ const videoThumbnails = ref({})
 const videoAspectRatios = ref({}) // 视频宽高比缓存
 const videoThumbnailQueue = ref([]) // 待处理队列
 const processingThumbnails = ref(0) // 正在处理的数量
-const MAX_CONCURRENT_THUMBNAILS = 2 // 最大同时处理数
+const MAX_CONCURRENT_THUMBNAILS = 4 // 最大同时处理数
 
 // 图片加载失败的记录
 const imageLoadErrors = ref({})
@@ -104,7 +104,7 @@ const contextMenuItem = ref(null)
 // 数据缓存标记
 const dataCached = ref(false)
 const lastLoadTime = ref(0)
-const CACHE_DURATION = 60000 // 缓存有效期 60 秒
+const CACHE_DURATION = 5 * 60 * 1000 // 缓存有效期 5 分钟
 
 // 团队空间实时同步
 const TEAM_SYNC_INTERVAL = 30000 // 团队空间同步间隔 30 秒
