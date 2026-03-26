@@ -27,6 +27,7 @@ import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { useCanvasStore } from '@/stores/canvas'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { compressImage } from '@/utils/imageCompress'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -186,9 +187,18 @@ const PAN_SPEED = 50
  * - Shift + 滚轮：水平平移画布
  * - Ctrl + 滚轮：垂直平移画布
  */
+let wheelRAF = null
 function handleWheel(event) {
   event.preventDefault()
-  
+
+  // 🚀 RAF 节流：避免高频滚轮事件导致卡顿
+  if (wheelRAF) return
+  wheelRAF = requestAnimationFrame(() => {
+    wheelRAF = null
+    handleWheelInner(event)
+  })
+}
+function handleWheelInner(event) {
   const viewport = getViewport()
 
   if (event.shiftKey) {
@@ -1291,10 +1301,16 @@ function groupSelectedNodes() {
 // 标记是否正在从外部更新视口（用于避免循环更新）
 let isExternalViewportUpdate = false
 
+// 🚀 视口变化节流：拖拽/缩放时高频触发，节流减少 store 更新
+let viewportRAF = null
 function handleViewportChange(viewport) {
   // 如果是外部更新触发的，跳过同步到 store（避免循环）
   if (isExternalViewportUpdate) return
-  canvasStore.updateViewport(viewport)
+  if (viewportRAF) return
+  viewportRAF = requestAnimationFrame(() => {
+    viewportRAF = null
+    canvasStore.updateViewport(viewport)
+  })
 }
 
 // 监听 store 的 viewport 变化，同步到 VueFlow（支持滑块拖动等外部控制）
@@ -2213,9 +2229,12 @@ async function uploadFilesToCloud(tasks) {
     const { file, type, nodeId, blobUrl, field } = task
     
     try {
-      console.log(`[CanvasBoard] 开始上传${type}到云存储:`, file.name, '大小:', Math.round(file.size / 1024), 'KB')
-      
-      const result = await uploadCanvasMedia(file, type)
+      // 上传前压缩图片
+      const fileToUpload = file.type.startsWith('image/') ? await compressImage(file) : file
+
+      console.log(`[CanvasBoard] 开始上传${type}到云存储:`, fileToUpload.name, '大小:', Math.round(fileToUpload.size / 1024), 'KB')
+
+      const result = await uploadCanvasMedia(fileToUpload, type)
       const cloudUrl = result.url
       
       console.log(`[CanvasBoard] ${type}上传成功，云URL:`, cloudUrl)
@@ -2691,8 +2710,7 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(59, 130, 246, 0.15);
-  backdrop-filter: blur(2px);
+  background: rgba(59, 130, 246, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;

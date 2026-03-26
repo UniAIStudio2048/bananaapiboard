@@ -4074,6 +4074,8 @@ async function handleVideoError(event) {
 
 // 鼠标进入视频区域 - 自动播放（带声音）
 function handleVideoMouseEnter() {
+  // 🚀 性能优化：大画布模式下禁用悬停播放
+  if (canvasStore.isLargeCanvas) return
   // 🚀 性能优化：拖拽时不自动播放视频
   if (isCanvasDragging.value) return
   
@@ -5034,7 +5036,7 @@ function handleToolbarPreview() {
         :style="contentStyle"
       >
         <!-- 彗星环绕发光特效（生成中显示） -->
-        <svg v-if="data.status === 'processing'" class="comet-border" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <svg v-if="data.status === 'processing' && canvasStore.performanceMode === 'full'" class="comet-border" viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <!-- 彗星渐变 -->
             <linearGradient id="comet-gradient-video" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -5081,7 +5083,7 @@ function handleToolbarPreview() {
           <video 
             ref="videoPlayerRef"
             :src="normalizedVideoUrl"
-            preload="auto"
+            preload="metadata"
             muted
             :loop="!data?.isCharacterNode"
             class="video-player-output"
@@ -5915,6 +5917,7 @@ function handleToolbarPreview() {
   display: flex;
   flex-direction: column;
   align-items: center;
+  contain: layout style;
   /* 确保配置面板不影响节点的选中框计算 */
   overflow: visible;
   /* 覆盖 canvas-node 的默认边框，只使用内部 node-card 的边框 */
@@ -5933,7 +5936,7 @@ function handleToolbarPreview() {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   user-select: none;
   white-space: pre-line; /* 支持多行标签 */
 }
@@ -5975,7 +5978,7 @@ function handleToolbarPreview() {
   position: relative;
   display: flex;
   flex-direction: column;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .video-node:hover .node-card {
@@ -6051,7 +6054,7 @@ function handleToolbarPreview() {
 .node-card.is-stacked {
   opacity: 0.85;
   transform: scale(0.98);
-  transition: all 0.3s ease;
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 .node-card.is-stacked:hover {
@@ -6067,6 +6070,8 @@ function handleToolbarPreview() {
   display: flex;
   flex-direction: column;
   min-height: 200px;
+  content-visibility: auto;
+  contain-intrinsic-size: 300px 300px;
 }
 
 /* 首尾帧预览 */
@@ -6227,7 +6232,7 @@ function handleToolbarPreview() {
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
 }
 
@@ -6336,8 +6341,7 @@ function handleToolbarPreview() {
 .overlay-action-btn {
   width: 36px;
   height: 36px;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 8px;
   color: white;
@@ -6346,7 +6350,7 @@ function handleToolbarPreview() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
 .overlay-action-btn:hover {
@@ -6388,7 +6392,7 @@ function handleToolbarPreview() {
   color: var(--canvas-text-secondary, #a0a0a0);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .action-btn:hover {
@@ -6453,7 +6457,7 @@ function handleToolbarPreview() {
   font-size: 14px;
   cursor: pointer;
   border-radius: 8px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .quick-action:hover {
@@ -6507,7 +6511,7 @@ function handleToolbarPreview() {
   padding: 12px 12px 20px;
   border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
   position: relative;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .panel-frames.drag-over {
@@ -6551,7 +6555,7 @@ function handleToolbarPreview() {
   overflow: hidden;
   border: 2px solid var(--canvas-border-default, #3a3a3a);
   cursor: grab;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease;
   user-select: none;
 }
 
@@ -6704,7 +6708,7 @@ function handleToolbarPreview() {
   justify-content: center;
   gap: 4px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
   background: transparent;
 }
 
@@ -6732,7 +6736,6 @@ function handleToolbarPreview() {
   position: absolute;
   inset: 0;
   background: rgba(34, 197, 94, 0.2);
-  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -6882,7 +6885,7 @@ function handleToolbarPreview() {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   min-height: 32px;
 }
 
@@ -6922,12 +6925,11 @@ function handleToolbarPreview() {
   min-width: 220px;
   max-height: 360px; /* 增加高度，一次显示 6 个模型 */
   overflow-y: auto;
-  background: rgba(20, 20, 20, 0.98);
+  background: rgb(20, 20, 20);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   z-index: 1000;
-  backdrop-filter: blur(8px);
 }
 
 /* 向上展开时的样式 */
@@ -7034,7 +7036,7 @@ function handleToolbarPreview() {
   width: 3px;
   border-radius: 1px;
   background: rgba(107, 114, 128, 0.3);
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease;
 }
 
 .signal-bars .bar-1 { height: 4px; }
@@ -7142,7 +7144,7 @@ function handleToolbarPreview() {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   min-height: 32px;
 }
 
@@ -7188,7 +7190,7 @@ function handleToolbarPreview() {
   color: rgba(255, 255, 255, 0.7);
   font-size: 11px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   user-select: none;
   min-height: 32px;
   display: flex;
@@ -7234,7 +7236,7 @@ function handleToolbarPreview() {
   font-size: 12px;
   cursor: pointer;
   outline: none;
-  transition: all 0.2s;
+  transition: border-color 0.2s ease;
   appearance: auto;
 }
 
@@ -7293,7 +7295,7 @@ function handleToolbarPreview() {
   border-radius: 6px;
   background: transparent;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .sd2-mode-btn:hover {
@@ -7415,7 +7417,7 @@ function handleToolbarPreview() {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   user-select: none;
   min-height: 32px;
   font-size: 11px;
@@ -7452,7 +7454,7 @@ function handleToolbarPreview() {
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   user-select: none;
   min-height: 32px;
   font-size: 11px;
@@ -7523,7 +7525,7 @@ function handleToolbarPreview() {
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   min-height: 32px;
   display: flex;
   align-items: center;
@@ -7558,7 +7560,7 @@ function handleToolbarPreview() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .generate-btn:hover:not(:disabled) {
@@ -7632,7 +7634,7 @@ function handleToolbarPreview() {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease;
   z-index: 10;
 }
 
@@ -7718,12 +7720,11 @@ function handleToolbarPreview() {
 .fullscreen-preview-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.92);
+  background: rgba(0, 0, 0, 0.95);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 10000;
-  backdrop-filter: blur(12px);
   animation: fadeIn 0.2s ease;
 }
 
@@ -7773,7 +7774,7 @@ function handleToolbarPreview() {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .fullscreen-close-btn:hover {
@@ -8254,7 +8255,7 @@ function handleToolbarPreview() {
   color: #666666;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .sora2-collapse-trigger:hover {
@@ -8377,7 +8378,7 @@ function handleToolbarPreview() {
   font-size: 12px;
   border-radius: 16px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
 }
 
@@ -8437,7 +8438,7 @@ function handleToolbarPreview() {
   color: #a0a0a0;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .kling-camera-type-btn:hover,
@@ -8673,7 +8674,7 @@ function handleToolbarPreview() {
   color: #a78bfa !important;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
   opacity: 1 !important;
 }
@@ -8831,7 +8832,7 @@ function handleToolbarPreview() {
   border-radius: 6px;
   color: #e0e0e0;
   font-size: 12px;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .kling-motion-input:focus {
@@ -8866,7 +8867,7 @@ function handleToolbarPreview() {
   color: #a0a0a0;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .kling-motion-mode-btn:hover {
@@ -9120,7 +9121,7 @@ function handleToolbarPreview() {
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .vidu-mode-btn:hover {
@@ -9274,7 +9275,7 @@ function handleToolbarPreview() {
   border: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .veo-mode-btn:hover {
@@ -9334,7 +9335,7 @@ function handleToolbarPreview() {
   font-size: 12px;
   color: var(--canvas-text-secondary, #a0a0a0);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
 .veo-resolution-btn:hover {

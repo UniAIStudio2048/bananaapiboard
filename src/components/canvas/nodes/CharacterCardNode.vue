@@ -201,9 +201,10 @@ function handleMouseLeave() {
   border-radius: 12px;
   overflow: hidden;
   cursor: grab;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  contain: layout style;
 }
 
 .character-card-node:hover {
@@ -224,7 +225,7 @@ function handleMouseLeave() {
   background: #6366f1;
   border: 2px solid #1a1a1c;
   right: -6px; /* 微调位置 */
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease, width 0.2s ease, height 0.2s ease;
 }
 
 .node-handle:hover {
@@ -291,7 +292,7 @@ function handleMouseLeave() {
   background: rgba(255, 255, 255, 0.03);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
   min-width: 0;
   border: 1px solid transparent;
 }
@@ -320,7 +321,7 @@ function handleMouseLeave() {
   background: rgba(255, 255, 255, 0.03);
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
   min-width: 0;
   flex-shrink: 0;
   border: 1px solid transparent;
@@ -346,7 +347,7 @@ function handleMouseLeave() {
   font-size: 12px;
   opacity: 0;
   transform: scale(0.8);
-  transition: all 0.15s;
+  transition: opacity 0.15s ease, transform 0.15s ease;
   color: rgba(255, 255, 255, 0.7);
 }
 
@@ -366,7 +367,7 @@ function handleMouseLeave() {
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: rgba(16, 185, 129, 0.95); /* 绿色半透明 */
+  background: rgb(16, 185, 129);
   color: white;
   font-size: 13px;
   font-weight: 500;
@@ -375,7 +376,6 @@ function handleMouseLeave() {
   z-index: 10;
   white-space: nowrap;
   pointer-events: none;
-  backdrop-filter: blur(4px);
 }
 
 .toast-icon {

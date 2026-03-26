@@ -5804,8 +5804,8 @@ async function handleDrop(event) {
         @dragleave="handleDragLeave"
         @drop="handleDrop"
       >
-        <!-- 彗星环绕发光特效（生成中显示） -->
-        <svg v-if="data.status === 'processing'" class="comet-border" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <!-- 彗星环绕发光特效（生成中显示，性能模式下禁用） -->
+        <svg v-if="data.status === 'processing' && canvasStore.performanceMode === 'full'" class="comet-border" viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <!-- 彗星渐变 -->
             <linearGradient id="comet-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -6454,6 +6454,7 @@ async function handleDrop(event) {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+  contain: layout style;
 }
 
 /* 覆盖全局 .canvas-node.selected 样式，选中效果由内部控制 */
@@ -6493,7 +6494,7 @@ async function handleDrop(event) {
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
 }
 
@@ -6546,13 +6547,12 @@ async function handleDrop(event) {
   bottom: calc(100% + 12px);
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(32, 32, 32, 0.98);
+  background: #202020;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   padding: 8px;
   min-width: 210px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(12px);
   z-index: 9999;
   pointer-events: auto;
 }
@@ -6601,7 +6601,7 @@ async function handleDrop(event) {
   color: rgba(255, 255, 255, 0.9);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   text-align: left;
   pointer-events: auto;
   position: relative;
@@ -6641,7 +6641,7 @@ async function handleDrop(event) {
   color: rgba(255, 255, 255, 0.45);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s;
 }
 
 .grid-crop-dropdown-cancel:hover {
@@ -6734,7 +6734,7 @@ async function handleDrop(event) {
   color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   border-radius: 4px;
-  transition: all 0.15s;
+  transition: background-color 0.15s, color 0.15s;
   z-index: 1;
 }
 
@@ -6764,7 +6764,7 @@ async function handleDrop(event) {
   border: 1px solid transparent;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s, border-color 0.15s;
   position: relative;
 }
 
@@ -6875,7 +6875,7 @@ async function handleDrop(event) {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease;
   user-select: none;
 }
 
@@ -6917,7 +6917,8 @@ async function handleDrop(event) {
   position: relative;
   display: flex;
   flex-direction: column;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  contain: content;
 }
 
 /* 源节点（有图片）- 无边框 */
@@ -6976,6 +6977,7 @@ async function handleDrop(event) {
   stroke-dasharray: 25 75;
   stroke-dashoffset: 0;
   animation: comet-rotate 2.5s linear infinite;
+  will-change: stroke-dashoffset;
 }
 
 @keyframes comet-rotate {
@@ -6999,7 +7001,7 @@ async function handleDrop(event) {
 .node-card.is-stacked {
   opacity: 0.85;
   transform: scale(0.98);
-  transition: all 0.3s ease;
+  transition: opacity 0.3s ease, transform 0.3s ease;
 }
 
 .node-card.is-stacked:hover {
@@ -7019,7 +7021,6 @@ async function handleDrop(event) {
   position: absolute;
   inset: 0;
   background: rgba(34, 197, 94, 0.15);
-  backdrop-filter: blur(2px);
   z-index: 20;
   display: flex;
   align-items: center;
@@ -7089,7 +7090,7 @@ async function handleDrop(event) {
   color: var(--canvas-text-primary, #fff);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .upload-overlay-btn:hover {
@@ -7108,6 +7109,8 @@ async function handleDrop(event) {
   display: flex;
   flex-direction: column;
   min-height: 240px; /* 确保节点内容区域有足够高度 */
+  content-visibility: auto;
+  contain-intrinsic-size: 300px 300px;
 }
 
 /* 预览状态 - 简洁文字 */
@@ -7314,7 +7317,7 @@ async function handleDrop(event) {
   font-size: 14px;
   cursor: pointer;
   border-radius: 8px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .quick-action:hover {
@@ -7350,7 +7353,7 @@ async function handleDrop(event) {
   padding: 12px;
   border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
   position: relative;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 
 .panel-frames.drag-over {
@@ -7394,7 +7397,7 @@ async function handleDrop(event) {
   overflow: hidden;
   border: 2px solid var(--canvas-border-default, #3a3a3a);
   cursor: grab;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease;
   user-select: none;
 }
 
@@ -7530,7 +7533,7 @@ async function handleDrop(event) {
   justify-content: center;
   gap: 4px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s, background-color 0.2s;
   background: transparent;
   box-sizing: border-box;
 }
@@ -7559,7 +7562,6 @@ async function handleDrop(event) {
   position: absolute;
   inset: 0;
   background: rgba(34, 197, 94, 0.2);
-  backdrop-filter: blur(2px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -7663,7 +7665,7 @@ async function handleDrop(event) {
   border: 1px solid var(--canvas-border-subtle, #2a2a2a);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s;
 }
 
 .model-selector-trigger:hover {
@@ -7699,12 +7701,11 @@ async function handleDrop(event) {
   min-width: 220px;
   max-height: 480px;
   overflow-y: auto;
-  background: rgba(20, 20, 20, 0.98);
+  background: #141414;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   z-index: 1000;
-  backdrop-filter: blur(8px);
 }
 
 /* 向上展开时的样式 */
@@ -7801,7 +7802,7 @@ async function handleDrop(event) {
   width: 4px;
   border-radius: 1px;
   background: rgba(156, 163, 175, 0.5);
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, height 0.2s ease;
 }
 
 .signal-bars .bar-1 { height: 5px; }
@@ -7888,7 +7889,7 @@ async function handleDrop(event) {
   border: 1px solid var(--canvas-border-subtle, #2a2a2a);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s;
 }
 
 .ratio-selector:hover {
@@ -7926,7 +7927,7 @@ async function handleDrop(event) {
   border: 1px solid var(--canvas-border-subtle, #2a2a2a);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s;
   user-select: none;
 }
 
@@ -7951,12 +7952,11 @@ async function handleDrop(event) {
   min-width: 220px;
   max-height: 350px;
   overflow-y: auto;
-  background: rgba(20, 20, 20, 0.98);
+  background: #141414;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   z-index: 1000;
-  backdrop-filter: blur(8px);
 }
 
 /* 向上展开（默认） */
@@ -8079,7 +8079,7 @@ async function handleDrop(event) {
   color: rgba(255, 255, 255, 0.6);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   position: relative;
 }
 
@@ -8126,7 +8126,7 @@ async function handleDrop(event) {
   color: #ef4444;
   font-size: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   padding: 0;
   line-height: 1;
 }
@@ -8178,7 +8178,7 @@ async function handleDrop(event) {
   color: var(--canvas-text-secondary, #888);
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
   user-select: none;
 }
 
@@ -8213,7 +8213,7 @@ async function handleDrop(event) {
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s, color 0.15s;
   color: var(--canvas-text-secondary, #666);
 }
 
@@ -8238,7 +8238,7 @@ async function handleDrop(event) {
   border-radius: 6px;
   background: var(--canvas-bg-tertiary, #1a1a1a);
   border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  transition: all 0.2s;
+  transition: border-color 0.2s, color 0.2s;
 }
 
 .count-display.clickable:hover {
@@ -8269,7 +8269,7 @@ async function handleDrop(event) {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
 }
 
 .generate-btn:hover:not(:disabled) {
@@ -8343,7 +8343,7 @@ async function handleDrop(event) {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease, transform 0.2s ease, background-color 0.2s ease;
   z-index: 10;
 }
 
@@ -8401,7 +8401,7 @@ async function handleDrop(event) {
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   color: var(--canvas-text-secondary, #ccc);
 }
 
@@ -8483,7 +8483,7 @@ async function handleDrop(event) {
   color: #666666;
   font-size: 12px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s, background-color 0.2s;
 }
 
 .sora2-collapse-trigger:hover {
@@ -8613,7 +8613,7 @@ async function handleDrop(event) {
   font-size: 18px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s;
   user-select: none;
 }
 
@@ -8705,8 +8705,7 @@ async function handleDrop(event) {
 .preview-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.95);
-  backdrop-filter: blur(12px);
+  background: #000000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8756,9 +8755,8 @@ async function handleDrop(event) {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
   z-index: 10;
-  backdrop-filter: blur(8px);
 }
 
 .preview-modal-overlay .preview-close-btn:hover {
@@ -8780,10 +8778,9 @@ async function handleDrop(event) {
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
-  backdrop-filter: blur(8px);
   z-index: 10;
 }
 
@@ -8798,7 +8795,7 @@ async function handleDrop(event) {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .zoom-btn:hover {
@@ -8847,8 +8844,7 @@ async function handleDrop(event) {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(8px);
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .preview-modal-overlay .preview-action-btn:hover {

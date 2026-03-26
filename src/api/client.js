@@ -66,21 +66,72 @@ export async function generateImage(payload) {
   }
 }
 
-export async function uploadImages(files) {
+export async function uploadImages(files, { onProgress, timeout = 120000 } = {}) {
   const form = new FormData()
   for (const f of files.slice(0, 9)) form.append('images', f)
   const token = localStorage.getItem('token')
-  const r = await fetch(getApiUrl('/api/images/upload'), { 
-    method: 'POST', 
-    headers: {
-      ...getTenantHeaders(),
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: form 
-  })
-  if (!r.ok) throw new Error('upload_failed')
-  const j = await r.json()
-  return j.urls || []
+
+  // 如果需要进度回调，使用 XMLHttpRequest
+  if (onProgress) {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', getApiUrl('/api/images/upload'))
+
+      // 设置请求头
+      const headers = getTenantHeaders()
+      Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v))
+      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+
+      // 超时
+      xhr.timeout = timeout
+      xhr.ontimeout = () => reject(new Error('upload_timeout'))
+
+      // 进度
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          onProgress({ loaded: e.loaded, total: e.total, percent: Math.round(e.loaded / e.total * 100) })
+        }
+      }
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const j = JSON.parse(xhr.responseText)
+            resolve(j.urls || [])
+          } catch { reject(new Error('parse_error')) }
+        } else {
+          reject(new Error('upload_failed'))
+        }
+      }
+
+      xhr.onerror = () => reject(new Error('upload_failed'))
+      xhr.send(form)
+    })
+  }
+
+  // 无进度回调时使用 fetch + AbortController
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+  try {
+    const r = await fetch(getApiUrl('/api/images/upload'), {
+      method: 'POST',
+      headers: {
+        ...getTenantHeaders(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: form,
+      signal: controller.signal
+    })
+    clearTimeout(timeoutId)
+    if (!r.ok) throw new Error('upload_failed')
+    const j = await r.json()
+    return j.urls || []
+  } catch (e) {
+    clearTimeout(timeoutId)
+    if (e.name === 'AbortError') throw new Error('upload_timeout')
+    throw e
+  }
 }
 
 /**
@@ -443,27 +494,34 @@ export async function apiRequest(path, options = {}) {
  */
 export async function smartDownload(url, filename) {
   if (!url) throw new Error('下载 URL 为空')
-  
+
+  const fetchWithTimeout = (fetchUrl, options = {}, timeout = 60000) => {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
+    return fetch(fetchUrl, { ...options, signal: controller.signal })
+      .finally(() => clearTimeout(timeoutId))
+  }
+
   // 修正文件名扩展名
   const correctedFilename = correctFilenameExtension(filename || 'download', url)
-  
+
   // 获取干净的原始 URL（去除图片处理参数）
   const cleanUrl = getQiniuOriginalUrl(url)
-  
+
   console.log('[smartDownload] 开始下载:', { url: cleanUrl.substring(0, 80), filename: correctedFilename })
-  
+
   // dataUrl / blob 直接在前端下载
   if (cleanUrl.startsWith('data:') || cleanUrl.startsWith('blob:')) {
-    const response = await fetch(cleanUrl)
+    const response = await fetchWithTimeout(cleanUrl)
     const blob = await response.blob()
     triggerBlobDownload(blob, correctedFilename)
     return
   }
-  
+
   // 七牛云 URL：先尝试直接 fetch（利用 CDN CORS），失败回退到后端代理
   if (isQiniuCdnUrl(cleanUrl)) {
     try {
-      const response = await fetch(cleanUrl, { mode: 'cors' })
+      const response = await fetchWithTimeout(cleanUrl, { mode: 'cors' })
       if (response.ok) {
         const blob = await response.blob()
         triggerBlobDownload(blob, correctedFilename)
@@ -473,32 +531,32 @@ export async function smartDownload(url, filename) {
     } catch (corsErr) {
       console.warn('[smartDownload] 七牛云直接下载失败(CORS)，回退到后端代理:', corsErr.message)
     }
-    
+
     // 回退：走后端代理下载
     const proxyParams = new URLSearchParams({ url: cleanUrl, filename: correctedFilename })
     const proxyUrl = getApiUrl(`/api/images/download?${proxyParams.toString()}`)
-    const proxyResp = await fetch(proxyUrl, { headers: getHeaders() })
+    const proxyResp = await fetchWithTimeout(proxyUrl, { headers: getHeaders() })
     if (!proxyResp.ok) throw new Error(`后端代理下载失败: ${proxyResp.status}`)
     const blob = await proxyResp.blob()
     triggerBlobDownload(blob, correctedFilename)
     console.log('[smartDownload] 七牛云后端代理下载成功:', correctedFilename)
     return
   }
-  
+
   // 本地 API 路径
   if (cleanUrl.startsWith('/api/') || cleanUrl.startsWith(getApiUrl(''))) {
     const fullUrl = cleanUrl.startsWith('http') ? cleanUrl : getApiUrl(cleanUrl)
-    const response = await fetch(fullUrl, { headers: getHeaders() })
+    const response = await fetchWithTimeout(fullUrl, { headers: getHeaders() })
     if (!response.ok) throw new Error(`下载失败: ${response.status}`)
     const blob = await response.blob()
     triggerBlobDownload(blob, correctedFilename)
     return
   }
-  
+
   // 其他外部 URL：走后端代理
   const params = new URLSearchParams({ url: cleanUrl, filename: correctedFilename })
   const proxyUrl = getApiUrl(`/api/images/download?${params.toString()}`)
-  const response = await fetch(proxyUrl, { headers: getHeaders() })
+  const response = await fetchWithTimeout(proxyUrl, { headers: getHeaders() })
   if (!response.ok) throw new Error(`下载失败: ${response.status}`)
   const blob = await response.blob()
   triggerBlobDownload(blob, correctedFilename)
@@ -574,3 +632,37 @@ export const api = {
 
 // 默认导出
 export default api
+
+/**
+ * 并发下载控制 - 限制同时下载数量，防止浏览器卡顿
+ */
+const downloadQueue = []
+let activeDownloads = 0
+const MAX_CONCURRENT_DOWNLOADS = 3
+
+export async function queuedDownload(url, filename) {
+  return new Promise((resolve, reject) => {
+    const task = async () => {
+      activeDownloads++
+      try {
+        await smartDownload(url, filename)
+        resolve()
+      } catch (e) {
+        reject(e)
+      } finally {
+        activeDownloads--
+        // 处理队列中的下一个
+        if (downloadQueue.length > 0) {
+          const next = downloadQueue.shift()
+          next()
+        }
+      }
+    }
+
+    if (activeDownloads < MAX_CONCURRENT_DOWNLOADS) {
+      task()
+    } else {
+      downloadQueue.push(task)
+    }
+  })
+}

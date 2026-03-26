@@ -1683,6 +1683,7 @@ function handleSpeedDropdownClickOutside(event) {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
+  contain: layout style;
 }
 
 /* ========== 音频工具栏（与 ImageNode 的 image-toolbar 保持一致） ========== */
@@ -1714,7 +1715,7 @@ function handleSpeedDropdownClickOutside(event) {
   border-radius: 6px;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
 }
 
@@ -1789,7 +1790,7 @@ function handleSpeedDropdownClickOutside(event) {
   cursor: pointer;
   font-size: 13px;
   color: #888;
-  transition: all 0.15s;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .speed-option:hover {
@@ -1813,7 +1814,7 @@ function handleSpeedDropdownClickOutside(event) {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease;
   user-select: none;
 }
 
@@ -1854,7 +1855,7 @@ function handleSpeedDropdownClickOutside(event) {
   position: relative;
   display: flex;
   flex-direction: column;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .audio-node:hover .node-card {
@@ -1933,7 +1934,7 @@ function handleSpeedDropdownClickOutside(event) {
   border-radius: 6px;
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .error-state .retry-btn:hover {
@@ -1968,7 +1969,7 @@ function handleSpeedDropdownClickOutside(event) {
   font-size: 14px;
   cursor: pointer;
   border-radius: 8px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .quick-action:hover {
@@ -2046,17 +2047,15 @@ function handleSpeedDropdownClickOutside(event) {
   width: 100%;
   padding: 20px;
   border-radius: 16px;
-  background: linear-gradient(135deg, 
-    rgba(35, 38, 48, 0.85) 0%,
-    rgba(25, 28, 38, 0.9) 100%
+  background: linear-gradient(135deg,
+    rgba(35, 38, 48, 0.95) 0%,
+    rgba(25, 28, 38, 0.95) 100%
   );
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 
+  box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.25),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  transition: all 0.3s ease;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .audio-node.selected .audio-output-wrapper {
@@ -2078,8 +2077,7 @@ function handleSpeedDropdownClickOutside(event) {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.95);
   border-radius: 8px;
   color: #fff;
   font-size: 14px;
@@ -2109,12 +2107,10 @@ function handleSpeedDropdownClickOutside(event) {
   align-items: center;
   justify-content: center;
   height: 80px;
-  background: linear-gradient(135deg, 
+  background: linear-gradient(135deg,
     rgba(168, 85, 247, 0.12) 0%,
     rgba(139, 92, 246, 0.08) 100%
   );
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(168, 85, 247, 0.15);
   border-radius: 14px;
   margin-bottom: 16px;
@@ -2173,17 +2169,15 @@ function handleSpeedDropdownClickOutside(event) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, 
-    rgba(168, 85, 247, 0.9) 0%,
-    rgba(147, 51, 234, 0.95) 100%
+  background: linear-gradient(135deg,
+    rgb(168, 85, 247) 0%,
+    rgb(147, 51, 234) 100%
   );
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 50%;
   color: #fff;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
   flex-shrink: 0;
   box-shadow: 
     0 4px 16px rgba(168, 85, 247, 0.35),
@@ -2201,12 +2195,10 @@ function handleSpeedDropdownClickOutside(event) {
 .progress-bar {
   flex: 1;
   height: 6px;
-  background: linear-gradient(90deg, 
+  background: linear-gradient(90deg,
     rgba(255, 255, 255, 0.08) 0%,
     rgba(255, 255, 255, 0.12) 100%
   );
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
   border-radius: 3px;
   cursor: pointer;
   overflow: hidden;
@@ -2257,7 +2249,6 @@ function handleSpeedDropdownClickOutside(event) {
   position: absolute;
   inset: 0;
   background: rgba(168, 85, 247, 0.2);
-  backdrop-filter: blur(2px);
   border-radius: 16px;
   display: flex;
   align-items: center;
@@ -2322,7 +2313,7 @@ function handleSpeedDropdownClickOutside(event) {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
   z-index: 10;
 }
 
@@ -2666,7 +2657,7 @@ function handleSpeedDropdownClickOutside(event) {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   flex-shrink: 0;
 }
 
@@ -2699,7 +2690,7 @@ function handleSpeedDropdownClickOutside(event) {
   color: #888888;
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .collapse-trigger:hover {
@@ -2796,7 +2787,7 @@ function handleSpeedDropdownClickOutside(event) {
   bottom: 3px;
   background: #888888;
   border-radius: 50%;
-  transition: all 0.2s;
+  transition: transform 0.2s ease, background-color 0.2s ease;
 }
 
 .toggle-switch input:checked + .toggle-slider {
@@ -2825,7 +2816,7 @@ function handleSpeedDropdownClickOutside(event) {
   color: #888888;
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .mode-tab:hover {
@@ -2891,7 +2882,7 @@ function handleSpeedDropdownClickOutside(event) {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s ease;
   white-space: nowrap;
 }
 
@@ -2919,7 +2910,7 @@ function handleSpeedDropdownClickOutside(event) {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   flex-shrink: 0;
 }
 

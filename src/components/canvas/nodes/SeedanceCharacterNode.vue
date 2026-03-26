@@ -362,6 +362,7 @@ onUnmounted(() => {
 <style scoped>
 .seedance-character-node {
   position: relative;
+  contain: layout style;
 }
 
 /* ========== 节点标签 ========== */
@@ -374,7 +375,7 @@ onUnmounted(() => {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease;
   user-select: none;
 }
 
@@ -412,7 +413,7 @@ onUnmounted(() => {
   position: relative;
   overflow: hidden;
   border-radius: 12px;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .seedance-character-node.resizing .node-card {
@@ -565,7 +566,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
   z-index: 10;
 }
 

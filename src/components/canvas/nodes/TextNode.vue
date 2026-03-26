@@ -2673,6 +2673,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  contain: layout style;
 }
 
 /* 格式工具栏 */
@@ -2705,7 +2706,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   font-size: 13px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .toolbar-btn:hover {
@@ -2735,7 +2736,7 @@ onMounted(() => {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease;
   user-select: none;
 }
 
@@ -3163,7 +3164,7 @@ onMounted(() => {
   color: white;
   font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .retry-btn:hover {
@@ -3224,7 +3225,7 @@ onMounted(() => {
   font-size: 14px;
   cursor: pointer;
   border-radius: 8px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .text-node-action:hover {
@@ -3290,7 +3291,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
   z-index: 10;
 }
 
@@ -3348,7 +3349,7 @@ onMounted(() => {
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   color: var(--canvas-text-secondary, #ccc);
 }
 
@@ -3597,7 +3598,7 @@ onMounted(() => {
   justify-content: center;
   gap: 4px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, color 0.2s ease;
   color: var(--canvas-text-tertiary, #666);
 }
 
@@ -3669,7 +3670,7 @@ onMounted(() => {
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease;
   min-width: auto;
 }
 
@@ -3737,7 +3738,7 @@ onMounted(() => {
   padding: 8px 12px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
 .preset-option:hover {
@@ -3785,7 +3786,7 @@ onMounted(() => {
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease;
   min-width: auto;
 }
 
@@ -3842,7 +3843,7 @@ onMounted(() => {
   padding: 8px 12px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
 .language-option:hover {
@@ -3869,7 +3870,7 @@ onMounted(() => {
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
 .model-selector:hover {
@@ -3949,7 +3950,7 @@ onMounted(() => {
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
 .model-option:hover {
@@ -3997,7 +3998,7 @@ onMounted(() => {
   background: var(--canvas-bg-tertiary, #1a1a1a);
   border: 1px solid var(--canvas-border-subtle, #2a2a2a);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: border-color 0.2s ease, color 0.2s ease;
 }
 
 .generate-count:hover {
@@ -4029,7 +4030,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   font-size: 18px;
 }
 
@@ -4272,14 +4273,13 @@ onMounted(() => {
 .selection-context-menu {
   position: fixed;
   z-index: 10000;
-  background: rgba(20, 20, 20, 0.98);
+  background: rgb(20, 20, 20);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 12px;
   padding: 8px;
   min-width: 240px;
   max-width: 320px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(20px);
 }
 
 .selection-menu-title {
@@ -4300,7 +4300,7 @@ onMounted(() => {
   padding: 10px 12px;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 
 .selection-menu-item:hover {

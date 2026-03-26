@@ -398,6 +398,7 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
 <style scoped>
 .llm-node {
   min-width: 260px;
+  contain: layout style;
 }
 
 .llm-input-section,
@@ -557,7 +558,7 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
   z-index: 10;
 }
 

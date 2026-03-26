@@ -1509,6 +1509,7 @@ const hasAnyImage = computed(() => {
   border: none !important;
   box-shadow: none !important;
   transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  contain: layout style;
 }
 
 /* 覆盖全局 .canvas-node.selected 样式，选中效果由内部 node-card 控制 */
@@ -1551,7 +1552,7 @@ const hasAnyImage = computed(() => {
   border: 1px solid #444;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .edit-mode-exit-btn:hover {
@@ -1621,10 +1622,9 @@ const hasAnyImage = computed(() => {
   white-space: nowrap;
   font-size: 11px;
   color: #fff;
-  background: rgba(59, 130, 246, 0.85);
+  background: rgba(59, 130, 246, 0.95);
   padding: 3px 10px;
   border-radius: 6px;
-  backdrop-filter: blur(4px);
   pointer-events: none;
 }
 
@@ -1693,7 +1693,7 @@ const hasAnyImage = computed(() => {
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
 }
 
@@ -1738,7 +1738,7 @@ const hasAnyImage = computed(() => {
   border: none;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   white-space: nowrap;
 }
 
@@ -1781,7 +1781,7 @@ const hasAnyImage = computed(() => {
   border: none;
   border-radius: 7px;
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: background-color 0.12s ease, color 0.12s ease;
   white-space: nowrap;
   text-align: center;
 }
@@ -1832,7 +1832,7 @@ const hasAnyImage = computed(() => {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease, background-color 0.2s ease;
   user-select: none;
   max-width: 200px;
   overflow: hidden;
@@ -1928,7 +1928,7 @@ const hasAnyImage = computed(() => {
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: all 0.2s ease;
+  transition: opacity 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
   z-index: 10;
 }
 
@@ -1974,7 +1974,7 @@ const hasAnyImage = computed(() => {
   padding: 8px 12px;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background-color 0.15s ease, color 0.15s ease;
   color: var(--canvas-text-secondary, #aaa);
   font-size: 13px;
 }
@@ -2246,8 +2246,7 @@ const hasAnyImage = computed(() => {
   width: 28px;
   height: 28px;
   border-radius: 7px;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.95);
   border: none;
   color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
@@ -2255,7 +2254,7 @@ const hasAnyImage = computed(() => {
   align-items: center;
   justify-content: center;
   z-index: 10;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
   padding: 0;
 }
 
@@ -2283,8 +2282,7 @@ const hasAnyImage = computed(() => {
   height: 22px;
   padding: 0 6px;
   border-radius: 11px;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(6px);
+  background: rgba(0, 0, 0, 0.95);
   color: rgba(255, 255, 255, 0.9);
   font-size: 11px;
   font-weight: 600;
@@ -2400,7 +2398,7 @@ const hasAnyImage = computed(() => {
 .edit-cell-btn {
   width: 22px;
   height: 22px;
-  background: rgba(0, 0, 0, 0.65);
+  background: rgba(0, 0, 0, 0.95);
   border: none;
   border-radius: 5px;
   color: #ccc;
@@ -2408,8 +2406,7 @@ const hasAnyImage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.15s ease;
-  backdrop-filter: blur(4px);
+  transition: background-color 0.15s ease, color 0.15s ease;
   pointer-events: auto; /* 按钮本身可点击 */
 }
 
@@ -2561,7 +2558,7 @@ const hasAnyImage = computed(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .preview-close:hover {

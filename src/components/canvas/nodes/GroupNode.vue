@@ -344,6 +344,7 @@ onUnmounted(() => {
   position: relative;
   z-index: -1000 !important;
   pointer-events: all;
+  contain: layout style;
 }
 
 .group-node.resizing {
@@ -375,7 +376,7 @@ onUnmounted(() => {
   cursor: text;
   padding: 2px 4px;
   border-radius: 4px;
-  transition: all 0.15s ease;
+  transition: color 0.15s ease, background-color 0.15s ease;
 }
 
 .group-name:hover {
@@ -505,10 +506,9 @@ onUnmounted(() => {
   gap: 4px;
   margin-left: 8px;
   padding: 2px 4px;
-  background: rgba(30, 30, 30, 0.9);
+  background: rgba(30, 30, 30, 0.95);
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(8px);
 }
 
 .toolbar-btn {
@@ -522,7 +522,7 @@ onUnmounted(() => {
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease;
   line-height: 1.4;
 }
 

@@ -3,7 +3,7 @@
  * 管理节点、连线、视口状态等
  */
 import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, toRaw } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 export const useCanvasStore = defineStore('canvas', () => {
@@ -551,11 +551,12 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
     
     // 🔧 清理节点数据，移除大型 base64 减少内存
-    const cleanedNodes = nodes.value.map(cleanNodeForHistory)
-    
+    const cleanedNodes = nodes.value.map(n => cleanNodeForHistory(toRaw(n)))
+
+    // 🚀 使用 JSON 深拷贝（Vue Proxy 对象与 structuredClone 不兼容）
     const state = {
       nodes: JSON.parse(JSON.stringify(cleanedNodes)),
-      edges: JSON.parse(JSON.stringify(edges.value))
+      edges: JSON.parse(JSON.stringify(toRaw(edges.value)))
     }
     
     // 如果当前不在历史末尾，删除后面的记录
@@ -590,19 +591,19 @@ export const useCanvasStore = defineStore('canvas', () => {
     const state = historyStack.value[historyIndex.value]
     nodes.value = JSON.parse(JSON.stringify(state.nodes))
     edges.value = JSON.parse(JSON.stringify(state.edges))
-    
+
     isHistoryAction.value = false
   }
-  
+
   /**
    * 重做
    */
   function redo() {
     if (!canRedo.value) return
-    
+
     isHistoryAction.value = true
     historyIndex.value++
-    
+
     const state = historyStack.value[historyIndex.value]
     nodes.value = JSON.parse(JSON.stringify(state.nodes))
     edges.value = JSON.parse(JSON.stringify(state.edges))
