@@ -275,6 +275,10 @@ export async function loadBrandConfig(forceReload = false) {
         runtimeConfig.video_models = data.video_models
         console.log('[tenant] 视频模型完整配置已更新:', data.video_models)
       }
+      if (data.video_model_groups) {
+        runtimeConfig.video_model_groups = data.video_model_groups
+        console.log('[tenant] 视频模型分组配置已更新:', data.video_model_groups)
+      }
       
       // 更新 Sora 角色创建配置
       if (data.soraCharacterConfig) {
@@ -752,9 +756,9 @@ export const getAvailableVideoModels = (options = {}) => {
       icon: 'V', 
       description: 'Google DeepMind 视频模型，支持多种生成模式和清晰度', 
       hasDurationPricing: false, 
-      pointsCost: 100,  // 基础价格，实际按模式计算
+      pointsCost: 100,
       supportedModes: { t2v: true, i2v: true, a2v: false },
-      // VEO 特有：支持模式选择
+      vendor: 'Google',
       isVeoModel: true,
       // VEO 模式选项
       veoModes: [
@@ -996,7 +1000,9 @@ export const getAvailableVideoModels = (options = {}) => {
         { value: '1080p', label: '1080P', extraCost: 0 }
       ],
       defaultVeoMode: finalVeoModes[0]?.value || 'standard',
-      defaultVeoResolution: '1080p'
+      defaultVeoResolution: '1080p',
+      vendor: veoSubModels[0]?.vendor || 'Google',
+      vendorLogo: veoSubModels[0]?.vendorLogo || ''
     }
     
     // 🆕 构建 VEO 4K 组整合入口
@@ -1082,13 +1088,15 @@ export const getAvailableVideoModels = (options = {}) => {
         supportedModes: { t2v: true, i2v: true, a2v: false },
         apiType: 'vectorengine',
         isVeoModel: true,
-        isVeo4k: true,  // 🆕 标记为 VEO 4K 组
+        isVeo4k: true,
         veoModes: uniqueVeo4kModes,
         veoResolutions: [
-          { value: '4k', label: '4K', extraCost: 0 }  // 4K 组只有 4K 清晰度，无额外费用
+          { value: '4k', label: '4K', extraCost: 0 }
         ],
         defaultVeoMode: uniqueVeo4kModes[0]?.value || 'standard',
-        defaultVeoResolution: '4k'
+        defaultVeoResolution: '4k',
+        vendor: veo4kSubModels[0]?.vendor || 'Google',
+        vendorLogo: veo4kSubModels[0]?.vendorLogo || ''
       }
       
       console.log('[tenant] VEO 4K 组已整合，子模型数量:', veo4kSubModels.length, '模式:', uniqueVeo4kModes.map(m => m.label))
@@ -1174,7 +1182,9 @@ export const getAvailableVideoModels = (options = {}) => {
         isKlingOmni: true,
         klingO1Modes,
         defaultKlingO1Mode: 'text2video',
-        maxRefImages: 7
+        maxRefImages: 7,
+        vendor: omniModel.vendor || 'Kling',
+        vendorLogo: omniModel.vendorLogo || ''
       }
       
       console.log('[tenant] Kling O1 模型已整合，子模型数量:', klingO1SubModels.length, '模式:', klingO1Modes.map(m => m.label))
@@ -1217,21 +1227,40 @@ export const getAvailableVideoModels = (options = {}) => {
           veo4kInserted = true
           continue  // 跳过 VEO 4K 子模型，不单独显示
         }
-        
+
         // 跳过其他 VEO 4K 子模型
         if (isVeo4kSubModel) continue
-        
+
         // 🔧 遇到第一个普通 VEO 子模型时，插入 VEO 整合入口
         if (isVeoSubModel && !veoInserted && veoSubModels.length > 0) {
           models.push(veoEntry)
           veoInserted = true
           continue  // 跳过 VEO 子模型，不单独显示
         }
-        
+
         // 跳过其他普通 VEO 子模型
         if (isVeoSubModel) continue
+      } else if (isVeoSubModel) {
+        // 🆕 禁用整合时，将每个 VEO 子模型作为独立条目添加
+        const subDisplayLabel = modelConfig.displayName || key
+        models.push({
+          value: key,
+          label: subDisplayLabel,
+          icon: modelConfig.icon || 'V',
+          description: modelConfig.description || '',
+          hasDurationPricing: false,
+          pointsCost: typeof modelConfig.pointsCost === 'number' ? modelConfig.pointsCost : 100,
+          durations: [],
+          aspectRatios: modelConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }],
+          supportedModes: { t2v: true, i2v: true, a2v: false },
+          apiType: 'vectorengine',
+          isVeoModel: false,
+          vendor: modelConfig.vendor || '',
+          vendorLogo: modelConfig.vendorLogo || ''
+        })
+        continue
       }
-      // 🆕 禁用整合时，VEO 子模型会在下面正常添加到列表
+      // 🆕 禁用整合时，VEO 子模型已在上面单独处理
       
       // 🆕 Kling O1 整合逻辑：遇到第一个 kling-omni 子模型时插入整合入口，跳过所有子模型
       const isKlingO1SubModel = modelConfig.apiType === 'kling-omni' || modelConfig.apiType === 'kling-omni-edit'
@@ -1323,7 +1352,10 @@ export const getAvailableVideoModels = (options = {}) => {
         // Kling Omni-Video O1 特有属性
         isKlingOmni: modelConfig.apiType === 'kling-omni' || modelConfig.apiType === 'kling-omni-edit' || defaultConfig.isKlingOmni || false,
         isKlingOmniEdit: modelConfig.apiType === 'kling-omni-edit' || modelConfig.isKlingOmniEdit || defaultConfig.isKlingOmniEdit || false,
-        maxRefImages: modelConfig.maxRefImages || defaultConfig.maxRefImages || undefined
+        maxRefImages: modelConfig.maxRefImages || defaultConfig.maxRefImages || undefined,
+        // 厂商信息
+        vendor: modelConfig.vendor || '',
+        vendorLogo: modelConfig.vendorLogo || ''
       })
     }
     
@@ -1334,7 +1366,73 @@ export const getAvailableVideoModels = (options = {}) => {
     }
     
     if (models.length > 0) {
-      console.log('[tenant] 视频模型列表已按后端配置排序:', models.map(m => m.value))
+      const customGroups = config.video_model_groups || []
+      if (customGroups.length > 0) {
+        const modelToGroup = {}
+        const modelToGroupOrder = {}
+        for (let gi = 0; gi < customGroups.length; gi++) {
+          const group = customGroups[gi]
+          for (let mi = 0; mi < (group.models || []).length; mi++) {
+            const modelName = group.models[mi]
+            modelToGroup[modelName] = { name: group.name, logo: group.logo || '' }
+            modelToGroupOrder[modelName] = { groupIdx: gi, modelIdx: mi }
+          }
+        }
+        for (const model of models) {
+          if (modelToGroup[model.value]) {
+            model.groupName = modelToGroup[model.value].name
+            model.groupLogo = modelToGroup[model.value].logo
+            continue
+          }
+          if (model.veoModes) {
+            for (const mode of model.veoModes) {
+              if (modelToGroup[mode.actualModel]) {
+                model.groupName = modelToGroup[mode.actualModel].name
+                model.groupLogo = modelToGroup[mode.actualModel].logo
+                break
+              }
+            }
+          }
+          if (model.klingO1Modes) {
+            for (const mode of model.klingO1Modes) {
+              if (modelToGroup[mode.actualModel]) {
+                model.groupName = modelToGroup[mode.actualModel].name
+                model.groupLogo = modelToGroup[mode.actualModel].logo
+                break
+              }
+            }
+          }
+        }
+
+        const getOrder = (model) => {
+          const direct = modelToGroupOrder[model.value]
+          if (direct) return direct
+          if (model.veoModes) {
+            for (const mode of model.veoModes) {
+              if (modelToGroupOrder[mode.actualModel]) return modelToGroupOrder[mode.actualModel]
+            }
+          }
+          if (model.klingO1Modes) {
+            for (const mode of model.klingO1Modes) {
+              if (modelToGroupOrder[mode.actualModel]) return modelToGroupOrder[mode.actualModel]
+            }
+          }
+          return null
+        }
+
+        models.sort((a, b) => {
+          const orderA = getOrder(a)
+          const orderB = getOrder(b)
+          if (orderA && orderB) {
+            if (orderA.groupIdx !== orderB.groupIdx) return orderA.groupIdx - orderB.groupIdx
+            return orderA.modelIdx - orderB.modelIdx
+          }
+          if (orderA) return -1
+          if (orderB) return 1
+          return 0
+        })
+      }
+      console.log('[tenant] 视频模型列表已按分组配置排序:', models.map(m => `${m.groupName || '未分组'}/${m.value}`))
       return models
     }
   }
@@ -1409,6 +1507,57 @@ export const getAvailableVideoModels = (options = {}) => {
     }
   }
   
+  const customGroups = config.video_model_groups || []
+  if (customGroups.length > 0 && models.length > 0) {
+    const modelToGroup = {}
+    const modelToGroupOrder = {}
+    for (let gi = 0; gi < customGroups.length; gi++) {
+      const group = customGroups[gi]
+      for (let mi = 0; mi < (group.models || []).length; mi++) {
+        const modelName = group.models[mi]
+        modelToGroup[modelName] = { name: group.name, logo: group.logo || '' }
+        modelToGroupOrder[modelName] = { groupIdx: gi, modelIdx: mi }
+      }
+    }
+    for (const model of models) {
+      if (modelToGroup[model.value]) {
+        model.groupName = modelToGroup[model.value].name
+        model.groupLogo = modelToGroup[model.value].logo
+        continue
+      }
+      if (model.veoModes) {
+        for (const mode of model.veoModes) {
+          if (modelToGroup[mode.actualModel]) {
+            model.groupName = modelToGroup[mode.actualModel].name
+            model.groupLogo = modelToGroup[mode.actualModel].logo
+            break
+          }
+        }
+      }
+      if (model.klingO1Modes) {
+        for (const mode of model.klingO1Modes) {
+          if (modelToGroup[mode.actualModel]) {
+            model.groupName = modelToGroup[mode.actualModel].name
+            model.groupLogo = modelToGroup[mode.actualModel].logo
+            break
+          }
+        }
+      }
+    }
+
+    models.sort((a, b) => {
+      const orderA = modelToGroupOrder[a.value]
+      const orderB = modelToGroupOrder[b.value]
+      if (orderA && orderB) {
+        if (orderA.groupIdx !== orderB.groupIdx) return orderA.groupIdx - orderB.groupIdx
+        return orderA.modelIdx - orderB.modelIdx
+      }
+      if (orderA) return -1
+      if (orderB) return 1
+      return 0
+    })
+  }
+
   return models.length > 0 ? models : defaultModels
 }
 

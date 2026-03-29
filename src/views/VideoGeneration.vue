@@ -197,14 +197,18 @@ const pointsCostConfig = computed(() => {
   return config
 })
 
-// 可用的时长选项（根据模型动态计算，VEO3模型不支持时长选择）
+// 可用的时长选项（根据模型动态计算，VEO3模型和otuapi模型不支持时长选择）
 const availableDurations = computed(() => {
   if (isVeo3Model.value) {
     return [] // VEO3模型不支持时长选择
   }
   // 优先使用模型配置中的 durations 数组
   const modelDurations = currentModelConfig.value?.durations
-  if (modelDurations && modelDurations.length > 0) {
+  if (modelDurations !== undefined && modelDurations !== null) {
+    // 🔧 如果 durations 为空数组，表示该模型不支持时长选择（如 otuapi 模型）
+    if (modelDurations.length === 0) {
+      return []
+    }
     // 🔧 确保时长为字符串格式（数据库配置可能返回数字）
     return modelDurations.map(d => String(d))
   }
@@ -1520,8 +1524,8 @@ onUnmounted(() => {
               </select>
             </div>
 
-            <!-- 视频长度（VEO3模型和Seedance模型不显示） -->
-            <div v-if="!isVeo3Model && !isSeedanceModel">
+            <!-- 视频长度（VEO3模型、Seedance模型和不支持时长选择的模型不显示） -->
+            <div v-if="!isVeo3Model && !isSeedanceModel && availableDurations.length > 0">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>⏱️</span>
                 <span>视频长度</span>

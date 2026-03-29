@@ -14,7 +14,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { formatPoints } from '@/utils/format'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels } from '@/config/tenant'
-import { uploadImages } from '@/api/canvas/nodes'
+import { uploadImages, getVideoTaskStatus } from '@/api/canvas/nodes'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
@@ -155,7 +155,7 @@ const generationMode = ref(props.data.generationMode || 'text')
 
 // 获取默认模型（根据当前生成模式过滤后的第一个模型）
 function getDefaultVideoModel(mode = 'text') {
-  const allModels = getAvailableVideoModels()
+  const allModels = getAvailableVideoModels({ disableVeoMerge: true })
   
   // 根据模式过滤模型
   const currentMode = mode === 'text' ? 't2v' : 'i2v'
@@ -227,6 +227,12 @@ function toggleModelDropdown(event) {
   }
 
   isModelDropdownOpen.value = !isModelDropdownOpen.value
+
+  // 打开下拉时，初始化选中厂商为当前模型所在厂商
+  if (isModelDropdownOpen.value && useVendorLayout.value) {
+    const currentModel = models.value.find(m => m.value === selectedModel.value)
+    selectedVendor.value = currentModel?.groupName || currentModel?.vendor || vendorGroups.value[0]?.name || ''
+  }
 }
 
 function selectModel(modelValue) {
@@ -376,10 +382,13 @@ const selectedModelLabel = computed(() => {
 })
 
 // VEO3模型列表（不支持时长参数）
-const VEO3_MODELS = ['veo3', 'veo3.1-fast', 'veo3.1-components', 'veo3.1', 'veo3.1-pro']
+const VEO3_MODELS = ['veo3', 'veo3.1-fast', 'veo3.1-components', 'veo3.1', 'veo3.1-pro', 'veo4k']
 
 // 当前模型是否为VEO3系列（包括整合入口和所有子模型）
-const isVeo3Model = computed(() => VEO3_MODELS.includes(selectedModel.value) || isVeoModel.value)
+const isVeo3Model = computed(() => {
+  const model = selectedModel.value?.toLowerCase() || ''
+  return VEO3_MODELS.includes(selectedModel.value) || isVeoModel.value || model.includes('veo3') || model.includes('veo_3') || model.includes('veo')
+})
 
 // Sora2模型列表（支持高级选项：trim、style、storyboard）
 const SORA2_MODELS = ['sora2', 'sora2-pro', 'sora-2', 'sora-2-pro']
@@ -801,10 +810,15 @@ const currentModelConfig = computed(() => {
 // 可用的时长选项（优先从模型配置的 durations 数组获取，兼容从 pointsCost 计算）
 const availableDurations = computed(() => {
   // 优先使用模型配置中的 durations 数组
-  if (currentModelConfig.value.durations && currentModelConfig.value.durations.length > 0) {
-    return currentModelConfig.value.durations
+  const modelDurations = currentModelConfig.value.durations
+  if (modelDurations !== undefined && modelDurations !== null) {
+    // 🔧 如果 durations 为空数组，表示该模型不支持时长选择（如 otuapi 模型）
+    if (modelDurations.length === 0) {
+      return []
+    }
+    return modelDurations
   }
-  
+
   // 兼容：如果模型支持时长计费，从 pointsCost 对象计算
   if (currentModelConfig.value.hasDurationPricing) {
     const pointsCostObj = currentModelConfig.value.pointsCost
@@ -812,14 +826,14 @@ const availableDurations = computed(() => {
       return Object.keys(pointsCostObj).filter(key => key !== 'hd_extra').sort((a, b) => Number(a) - Number(b))
     }
   }
-  
+
   // 默认返回常用时长选项
   return ['10', '15']
 })
 
 // 可用模型列表（从配置动态获取，支持新增模型自动同步）
 const models = computed(() => {
-  const allModels = getAvailableVideoModels()
+  const allModels = getAvailableVideoModels({ disableVeoMerge: true })
   
   // 如果有模型启用检查函数，则过滤
   let filteredModels = allModels
@@ -872,6 +886,47 @@ const aspectRatios = [
   { value: '9:16', label: '9:16 竖屏' }
 ]
 
+// ========== 厂商分组下拉布局 ==========
+
+// 按厂商分组的模型列表
+const vendorGroups = computed(() => {
+  const groups = []
+  const groupMap = {}
+  for (const m of models.value) {
+    const vendorName = m.groupName || m.vendor || ''
+    const logoValue = m.groupLogo || ''
+    const key = vendorName || '__ungrouped__'
+    if (!groupMap[key]) {
+      groupMap[key] = {
+        name: vendorName,
+        logo: logoValue,
+        models: []
+      }
+      groups.push(groupMap[key])
+    } else {
+      if (!groupMap[key].logo && logoValue) {
+        groupMap[key].logo = logoValue
+      }
+    }
+    groupMap[key].models.push(m)
+  }
+  return groups
+})
+
+// 当前选中的厂商（默认选第一个厂商）
+const selectedVendor = ref('')
+
+// 当前厂商下的模型列表
+const currentVendorModels = computed(() => {
+  if (vendorGroups.value.length <= 1) return models.value
+  const vendor = selectedVendor.value || vendorGroups.value[0]?.name || ''
+  const group = vendorGroups.value.find(g => g.name === vendor)
+  return group ? group.models : models.value
+})
+
+// 是否启用两栏布局（有多个厂商时才启用）
+const useVendorLayout = computed(() => vendorGroups.value.length > 1)
+
 // 时长选项（动态计算）
 const durations = computed(() => {
   return availableDurations.value.map(d => ({
@@ -879,6 +934,111 @@ const durations = computed(() => {
     label: `${d}s`
   }))
 })
+
+// 100% 卡住兜底：自动重试获取视频URL
+let stuckRetryTimer = null
+const STUCK_RETRY_DELAYS = [5000, 10000, 15000]
+const MAX_STUCK_RETRIES = 3
+
+function extractVideoUrl(result) {
+  return result?.video_url || result?.url || result?.outputUrl || result?.data?.output || null
+}
+
+async function retryFetchVideoUrl(taskId, retryCount = 0) {
+  if (retryCount >= MAX_STUCK_RETRIES) {
+    console.error(`[VideoNode] 重试获取视频URL达到上限(${MAX_STUCK_RETRIES}次)，标记为错误: ${taskId}`)
+    canvasStore.updateNodeData(props.id, {
+      status: 'error',
+      progress: null,
+      error: '视频处理完成但获取失败，请点击重试',
+      _failedTaskId: taskId
+    })
+    removeCompletedTask(taskId)
+    return
+  }
+
+  const delay = STUCK_RETRY_DELAYS[retryCount] || 15000
+  console.log(`[VideoNode] 等待 ${delay / 1000}s 后第${retryCount + 1}次重试获取视频URL: ${taskId}`)
+
+  stuckRetryTimer = setTimeout(async () => {
+    try {
+      const result = await getVideoTaskStatus(taskId)
+      const videoUrl = extractVideoUrl(result)
+
+      if (videoUrl) {
+        console.log(`[VideoNode] 重试成功，获取到视频URL: ${videoUrl.substring(0, 60)}`)
+        canvasStore.updateNodeData(props.id, {
+          status: 'success',
+          progress: null,
+          output: { type: 'video', url: videoUrl },
+          taskId: taskId,
+          soraTaskId: result?.task_id || taskId
+        })
+        removeCompletedTask(taskId)
+      } else {
+        retryFetchVideoUrl(taskId, retryCount + 1)
+      }
+    } catch (err) {
+      console.warn(`[VideoNode] 重试获取视频URL失败(${retryCount + 1}/${MAX_STUCK_RETRIES}):`, err.message)
+      retryFetchVideoUrl(taskId, retryCount + 1)
+    }
+  }, delay)
+}
+
+// 手动重新获取视频（用户点击按钮触发）
+async function handleManualRetryFetch() {
+  const taskId = props.data?.taskId || props.data?.soraTaskId || props.data?._failedTaskId
+  if (!taskId) {
+    showToast('无法获取任务ID，请重新生成', 'error')
+    return
+  }
+
+  canvasStore.updateNodeData(props.id, {
+    status: 'processing',
+    progress: '重新获取中...',
+    error: null
+  })
+
+  try {
+    const result = await getVideoTaskStatus(taskId)
+    const videoUrl = extractVideoUrl(result)
+
+    if (videoUrl) {
+      canvasStore.updateNodeData(props.id, {
+        status: 'success',
+        progress: null,
+        output: { type: 'video', url: videoUrl },
+        taskId: taskId,
+        soraTaskId: result?.task_id || taskId
+      })
+      removeCompletedTask(taskId)
+      showToast('视频获取成功', 'success')
+    } else {
+      const statusLower = (result?.status || '').toLowerCase()
+      if (statusLower === 'failure' || statusLower === 'failed') {
+        canvasStore.updateNodeData(props.id, {
+          status: 'error',
+          progress: null,
+          error: result?.fail_reason || '视频生成失败'
+        })
+      } else {
+        canvasStore.updateNodeData(props.id, {
+          status: 'error',
+          progress: null,
+          error: '视频仍在处理中或获取失败，请稍后重试',
+          _failedTaskId: taskId
+        })
+      }
+    }
+  } catch (err) {
+    canvasStore.updateNodeData(props.id, {
+      status: 'error',
+      progress: null,
+      error: `获取视频失败: ${err.message}`,
+      _failedTaskId: taskId
+    })
+  }
+}
 
 // 处理后台任务完成事件
 function handleBackgroundTaskComplete(event) {
@@ -909,10 +1069,11 @@ function handleBackgroundTaskComplete(event) {
   }
   
   // 获取视频URL（普通视频生成任务）
-  const videoUrl = task.result?.video_url || task.result?.url
+  const videoUrl = extractVideoUrl(task.result)
   if (videoUrl) {
     canvasStore.updateNodeData(props.id, {
       status: 'success',
+      progress: null,
       output: {
         type: 'video',
         url: videoUrl
@@ -920,10 +1081,15 @@ function handleBackgroundTaskComplete(event) {
       taskId: taskId,
       soraTaskId: task.result?.task_id || taskId
     })
+    removeCompletedTask(taskId)
+  } else {
+    console.warn(`[VideoNode] 任务已完成但视频URL为空，启动兜底重试: ${taskId}`)
+    canvasStore.updateNodeData(props.id, {
+      taskId: taskId,
+      soraTaskId: task.result?.task_id || taskId
+    })
+    retryFetchVideoUrl(taskId)
   }
-  
-  // 移除已完成的任务
-  removeCompletedTask(taskId)
 }
 
 // 处理后台任务失败事件
@@ -998,11 +1164,12 @@ function checkAndRestoreBackgroundTasks() {
       }
       
       // 普通视频任务
-      const videoUrl = task.result?.video_url || task.result?.url
+      const videoUrl = extractVideoUrl(task.result)
       if (videoUrl) {
         console.log(`[VideoNode] 恢复已完成的任务: ${task.taskId}`)
         canvasStore.updateNodeData(props.id, {
           status: 'success',
+          progress: null,
           output: {
             type: 'video',
             url: videoUrl
@@ -1011,6 +1178,13 @@ function checkAndRestoreBackgroundTasks() {
           soraTaskId: task.result?.task_id || task.taskId
         })
         removeCompletedTask(task.taskId)
+      } else {
+        console.warn(`[VideoNode] 任务已完成但视频URL为空，启动兜底重试: ${task.taskId}`)
+        canvasStore.updateNodeData(props.id, {
+          taskId: task.taskId,
+          soraTaskId: task.result?.task_id || task.taskId
+        })
+        retryFetchVideoUrl(task.taskId)
       }
     } else if (task.status === 'failed') {
       console.log(`[VideoNode] 恢复失败的任务: ${task.taskId}`)
@@ -1101,6 +1275,12 @@ onUnmounted(() => {
   // 🚀 性能优化：移除画布拖拽事件监听
   window.removeEventListener('canvas-drag-start', handleCanvasDragStart)
   window.removeEventListener('canvas-drag-end', handleCanvasDragEnd)
+  
+  // 清理兜底重试定时器
+  if (stuckRetryTimer) {
+    clearTimeout(stuckRetryTimer)
+    stuckRetryTimer = null
+  }
 })
 
 // 节点尺寸 - 视频节点使用16:9比例
@@ -1379,6 +1559,21 @@ const referenceAudios = computed(() => {
     } else if (sourceNode.data.audioData) {
       upstreamAudios.push(sourceNode.data.audioData)
     }
+  }
+
+  const customOrder = props.data.audioOrder || []
+  if (customOrder.length > 0 && upstreamAudios.length > 0) {
+    const orderedAudios = []
+    const remainingAudios = [...upstreamAudios]
+    for (const url of customOrder) {
+      const index = remainingAudios.indexOf(url)
+      if (index !== -1) {
+        orderedAudios.push(url)
+        remainingAudios.splice(index, 1)
+      }
+    }
+    orderedAudios.push(...remainingAudios)
+    return orderedAudios
   }
 
   return upstreamAudios
@@ -2561,36 +2756,34 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
       if (finalImages.length > 0) {
         formData.append('reference_images', JSON.stringify(finalImages.slice(0, 9)))
       }
-      const upData = getUpstreamData()
-      const upVideos = upData.videos || []
-      if (upVideos.length > 0) {
-        formData.append('reference_videos', JSON.stringify(upVideos.slice(0, 3)))
+      const orderedVideos = referenceVideos.value || []
+      if (orderedVideos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, 3)))
       }
-      const upAudios = upData.audios || []
-      if (upAudios.length > 0) {
-        formData.append('reference_audios', JSON.stringify(upAudios.slice(0, 3)))
+      const orderedAudios = referenceAudios.value || []
+      if (orderedAudios.length > 0) {
+        formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, 3)))
       }
-      console.log('[VideoNode] SD2 多模态参考 | 图片:', finalImages.length, '视频:', upVideos.length, '音频:', upAudios.length)
+      console.log('[VideoNode] SD2 多模态参考 | 图片:', finalImages.length, '视频:', orderedVideos.length, '音频:', orderedAudios.length)
     } else if (sd2Mode === 'video_edit') {
       if (finalImages.length > 0) {
         formData.append('reference_images', JSON.stringify(finalImages))
       }
-      const upData = getUpstreamData()
-      const upVideos = upData.videos || []
-      if (upVideos.length > 0) {
-        formData.append('reference_videos', JSON.stringify(upVideos))
+      const orderedVideos = referenceVideos.value || []
+      if (orderedVideos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(orderedVideos))
       }
-      const upAudios = upData.audios || []
-      if (upAudios.length > 0) {
-        formData.append('reference_audios', JSON.stringify(upAudios.slice(0, 3)))
+      const orderedAudios = referenceAudios.value || []
+      if (orderedAudios.length > 0) {
+        formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, 3)))
       }
-      console.log('[VideoNode] SD2 视频编辑 | 参考图:', finalImages.length, '参考视频:', upVideos.length, '音频:', upAudios.length)
+      console.log('[VideoNode] SD2 视频编辑 | 参考图:', finalImages.length, '参考视频:', orderedVideos.length, '音频:', orderedAudios.length)
     } else if (sd2Mode === 'video_extend') {
-      const upVideos = getUpstreamData().videos || []
-      if (upVideos.length > 0) {
-        formData.append('reference_videos', JSON.stringify(upVideos.slice(0, 3)))
+      const orderedVideos = referenceVideos.value || []
+      if (orderedVideos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, 3)))
       }
-      console.log('[VideoNode] SD2 视频延长 | 参考视频:', upVideos.length)
+      console.log('[VideoNode] SD2 视频延长 | 参考视频:', orderedVideos.length)
     }
     // text2video 不需要额外参数，直接用 prompt
   }
@@ -2883,8 +3076,8 @@ async function handleGenerate() {
     finalPrompt = escapePromptTags(finalPrompt)
   }
   
-  // 合并参考图片：上游图片 > 继承图片 > 已设置的参考图
-  let finalImages = upstreamData.images.length > 0 ? upstreamData.images : referenceImages.value
+  // 合并参考图片：使用 referenceImages（已按用户拖拽排序）
+  let finalImages = referenceImages.value.length > 0 ? [...referenceImages.value] : []
   
   console.log('[VideoNode] 生成参数（处理前）:', { 
     userPrompt,
@@ -3691,9 +3884,9 @@ function removeReferenceAudio(index) {
 
 // ========== 图片/视频列表拖拽排序 ==========
 // 阻止图片项的 mousedown 事件冒泡，防止触发节点拖拽
+// 注意：不能 preventDefault，否则会阻止浏览器的 draggable 拖拽启动
 function handleImageMouseDown(event) {
   event.stopPropagation()
-  event.preventDefault()
 }
 
 function handleImageDragStart(event, index) {
@@ -3790,6 +3983,45 @@ function handleVideoDrop(event, dropIndex) {
 }
 
 function handleVideoDragEnd(event) {
+  event.target.classList.remove('dragging')
+  resetDragState()
+}
+
+function handleAudioDragStart(event, index) {
+  event.stopPropagation()
+  dragSortIndex.value = index
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', index.toString())
+  event.target.classList.add('dragging')
+}
+
+function handleAudioDragOver(event, index) {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+  dragOverIndex.value = index
+}
+
+function handleAudioDragLeave(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    dragOverIndex.value = -1
+  }
+}
+
+function handleAudioDrop(event, dropIndex) {
+  event.preventDefault()
+  const dragIndex = dragSortIndex.value
+  if (dragIndex === -1 || dragIndex === dropIndex) {
+    resetDragState()
+    return
+  }
+  const audios = [...(referenceAudios.value || [])]
+  const [draggedAudio] = audios.splice(dragIndex, 1)
+  audios.splice(dropIndex, 0, draggedAudio)
+  canvasStore.updateNodeData(props.id, { audioOrder: audios })
+  resetDragState()
+}
+
+function handleAudioDragEnd(event) {
   event.target.classList.remove('dragging')
   resetDragState()
 }
@@ -5119,6 +5351,8 @@ function handleToolbarPreview() {
             <span v-if="progressPercent > 0" class="progress-percent">{{ progressPercent }}%</span>
             <span v-else-if="data.progress && !isDefaultProgress" class="progress-text">{{ data.progress }}</span>
             <span class="loading-hint">预计 1-3 分钟</span>
+            <!-- 100% 卡住时显示手动获取按钮 -->
+            <button v-if="progressPercent >= 100 && (data.taskId || data.soraTaskId)" class="retry-fetch-btn" @click.stop="handleManualRetryFetch">重新获取视频</button>
           </div>
           
           <!-- 错误状态 -->
@@ -5126,7 +5360,10 @@ function handleToolbarPreview() {
             <div class="error-icon">{{ isContentSafetyError(data.error || errorMessage) ? '🛡️' : isTimeoutError(data.error || errorMessage) ? '⏱️' : '❌' }}</div>
             <div class="error-text">{{ data.error || errorMessage || '生成失败' }}</div>
             <div v-if="getErrorHint(data.error || errorMessage)" class="error-hint">{{ getErrorHint(data.error || errorMessage) }}</div>
-            <button class="retry-btn" @click="handleRegenerate">重试</button>
+            <div class="error-actions">
+              <button v-if="data._failedTaskId || data.taskId || data.soraTaskId" class="retry-btn" @click.stop="handleManualRetryFetch">重新获取</button>
+              <button class="retry-btn" @click="handleRegenerate">重试</button>
+            </div>
           </div>
           
           <!-- 有上游连接时 - 显示"已连接"等待状态 -->
@@ -5322,15 +5559,25 @@ function handleToolbarPreview() {
             <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>
           </div>
-          <!-- 参考音频（来自上游音频节点）- 点击插入 @音频N 标记 -->
+          <!-- 参考音频（来自上游音频节点）- 支持拖拽排序，点击插入 @音频N 标记 -->
           <div 
             v-for="(audio, index) in referenceAudios"
             :key="'audio-' + index"
             class="panel-frame-item panel-frame-audio"
-            :class="{ 'panel-frame-clickable': supportsMediaTags }"
+            :class="{ 
+              'panel-frame-clickable': supportsMediaTags,
+              'drag-over': dragOverIndex === index,
+              'dragging': dragSortIndex === index
+            }"
+            draggable="true"
             :title="supportsMediaTags ? `点击插入 @音频${index + 1}` : ''"
             @mousedown.prevent.stop
             @click="supportsMediaTags && insertMediaTag({ type: 'audio', index: index + 1, label: `音频${index + 1}` })"
+            @dragstart="handleAudioDragStart($event, index)"
+            @dragover="handleAudioDragOver($event, index)"
+            @dragleave="handleAudioDragLeave"
+            @drop="handleAudioDrop($event, index)"
+            @dragend="handleAudioDragEnd"
           >
             <div class="audio-thumb">
               <span class="audio-thumb-icon">♪</span>
@@ -5410,39 +5657,91 @@ function handleToolbarPreview() {
                 v-if="isModelDropdownOpen"
                 ref="modelDropdownListRef"
                 class="model-dropdown-list"
-                :class="{ 'dropdown-up': dropdownDirection === 'up' }"
+                :class="[{ 'dropdown-up': dropdownDirection === 'up' }, { 'vendor-layout': useVendorLayout }]"
                 @wheel="handleDropdownWheel"
               >
-                <div
-                  v-for="m in models"
-                  :key="m.value"
-                  class="model-dropdown-item"
-                  :class="{ 'active': selectedModel === m.value }"
-                  @click="selectModel(m.value)"
-                >
-                  <div class="model-item-main">
-                    <span class="model-item-icon">{{ m.icon }}</span>
-                    <span class="model-item-label">{{ m.label }}</span>
-                    <!-- 📊 成功率信号指示器 -->
-                    <div 
-                      v-if="hasModelStats(m.value)"
-                      class="model-signal-indicator"
-                      :class="getSignalClass(m.value)"
+                <!-- 两栏布局：有多个厂商时 -->
+                <template v-if="useVendorLayout">
+                  <!-- 左栏：厂商列表 -->
+                  <div class="vendor-column">
+                    <div
+                      v-for="group in vendorGroups"
+                      :key="group.name || '__ungrouped__'"
+                      class="vendor-item"
+                      :class="{ active: selectedVendor === group.name }"
+                      @click.stop="selectedVendor = group.name"
                     >
-                      <div class="signal-bars">
-                        <span class="bar bar-1" :class="{ active: getSignalLevel(m.value) >= 1 }"></span>
-                        <span class="bar bar-2" :class="{ active: getSignalLevel(m.value) >= 2 }"></span>
-                        <span class="bar bar-3" :class="{ active: getSignalLevel(m.value) >= 3 }"></span>
-                        <span class="bar bar-4" :class="{ active: getSignalLevel(m.value) >= 4 }"></span>
+                      <!-- Logo：有图片则显示，否则显示首字/首字母 -->
+                      <div class="vendor-logo">
+                        <img v-if="group.logo" :src="group.logo" class="vendor-logo-img" />
+                        <span v-else class="vendor-logo-text">{{ group.name ? group.name.charAt(0) : '?' }}</span>
                       </div>
-                      <span class="signal-percent">{{ formatSuccessRate(m.value) }}</span>
+                      <span class="vendor-name">{{ group.name || '其他' }}</span>
                     </div>
-                    <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
                   </div>
-                  <div v-if="m.description" class="model-item-desc">
-                    {{ m.description }}
+                  <!-- 右栏：当前厂商的模型 -->
+                  <div class="model-column">
+                    <div
+                      v-for="m in currentVendorModels"
+                      :key="m.value"
+                      class="model-dropdown-item"
+                      :class="{ 'active': selectedModel === m.value }"
+                      @click="selectModel(m.value)"
+                    >
+                      <div class="model-item-main">
+                        <span class="model-item-label">{{ m.label }}</span>
+                        <div
+                          v-if="hasModelStats(m.value)"
+                          class="model-signal-indicator"
+                          :class="getSignalClass(m.value)"
+                        >
+                          <div class="signal-bars">
+                            <span class="bar bar-1" :class="{ active: getSignalLevel(m.value) >= 1 }"></span>
+                            <span class="bar bar-2" :class="{ active: getSignalLevel(m.value) >= 2 }"></span>
+                            <span class="bar bar-3" :class="{ active: getSignalLevel(m.value) >= 3 }"></span>
+                            <span class="bar bar-4" :class="{ active: getSignalLevel(m.value) >= 4 }"></span>
+                          </div>
+                          <span class="signal-percent">{{ formatSuccessRate(m.value) }}</span>
+                        </div>
+                        <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
+                      </div>
+                      <div v-if="m.description" class="model-item-desc">{{ m.description }}</div>
+                    </div>
                   </div>
-                </div>
+                </template>
+                <!-- 单栏布局：无分组或只有一个厂商时（保持原样） -->
+                <template v-else>
+                  <div
+                    v-for="m in models"
+                    :key="m.value"
+                    class="model-dropdown-item"
+                    :class="{ 'active': selectedModel === m.value }"
+                    @click="selectModel(m.value)"
+                  >
+                    <div class="model-item-main">
+                      <span class="model-item-icon">{{ m.icon }}</span>
+                      <span class="model-item-label">{{ m.label }}</span>
+                      <!-- 📊 成功率信号指示器 -->
+                      <div
+                        v-if="hasModelStats(m.value)"
+                        class="model-signal-indicator"
+                        :class="getSignalClass(m.value)"
+                      >
+                        <div class="signal-bars">
+                          <span class="bar bar-1" :class="{ active: getSignalLevel(m.value) >= 1 }"></span>
+                          <span class="bar bar-2" :class="{ active: getSignalLevel(m.value) >= 2 }"></span>
+                          <span class="bar bar-3" :class="{ active: getSignalLevel(m.value) >= 3 }"></span>
+                          <span class="bar bar-4" :class="{ active: getSignalLevel(m.value) >= 4 }"></span>
+                        </div>
+                        <span class="signal-percent">{{ formatSuccessRate(m.value) }}</span>
+                      </div>
+                      <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
+                    </div>
+                    <div v-if="m.description" class="model-item-desc">
+                      {{ m.description }}
+                    </div>
+                  </div>
+                </template>
               </div>
             </Transition>
           </div>
@@ -6203,6 +6502,29 @@ function handleToolbarPreview() {
   color: var(--canvas-accent-primary, #3b82f6);
 }
 
+.error-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.retry-fetch-btn {
+  margin-top: 10px;
+  padding: 6px 14px;
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #60a5fa;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.retry-fetch-btn:hover {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: #3b82f6;
+}
+
 /* ========== 视频工具栏（与 ImageNode 的 image-toolbar 保持一致） ========== */
 .video-toolbar {
   position: absolute;
@@ -6917,18 +7239,20 @@ function handleToolbarPreview() {
   transform: rotate(180deg);
 }
 
-/* 下拉列表 - 黑白灰滚动条 */
+/* 下拉列表 - 黑曜石质感（暗色模式） */
 .model-dropdown-list {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
   min-width: 220px;
-  max-height: 360px; /* 增加高度，一次显示 6 个模型 */
+  max-height: 360px;
   overflow-y: auto;
-  background: rgb(20, 20, 20);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  background: linear-gradient(135deg, rgba(18, 18, 22, 0.95), rgba(28, 28, 35, 0.92));
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   z-index: 1000;
 }
 
@@ -6965,7 +7289,7 @@ function handleToolbarPreview() {
 .model-dropdown-item {
   padding: 8px 10px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: all 0.15s ease;
   border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
@@ -6974,11 +7298,11 @@ function handleToolbarPreview() {
 }
 
 .model-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .model-dropdown-item.active {
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(139, 92, 246, 0.06));
 }
 
 .model-item-main {
@@ -7782,6 +8106,109 @@ function handleToolbarPreview() {
   transform: scale(1.1);
 }
 
+/* 两栏厂商+模型布局 */
+.model-dropdown-list.vendor-layout {
+  display: flex;
+  min-width: 340px;
+  max-height: 360px;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+/* 左栏：厂商列表 - 黑曜石质感 */
+.vendor-column {
+  width: 88px;
+  flex-shrink: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-y: auto;
+  background: linear-gradient(180deg, rgba(22, 22, 28, 0.6), rgba(15, 15, 20, 0.8));
+}
+
+.vendor-column::-webkit-scrollbar { width: 4px; }
+.vendor-column::-webkit-scrollbar-track { background: transparent; }
+.vendor-column::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
+.vendor-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.vendor-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.vendor-item.active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.08));
+  border-right: 2px solid rgba(139, 92, 246, 0.6);
+}
+
+.vendor-logo {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.vendor-item.active .vendor-logo {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(139, 92, 246, 0.08));
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.vendor-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 9px;
+}
+
+.vendor-logo-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1;
+}
+
+.vendor-item.active .vendor-logo-text {
+  color: rgba(200, 180, 255, 0.95);
+}
+
+.vendor-name {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  text-align: center;
+  word-break: break-all;
+  line-height: 1.2;
+  max-width: 72px;
+}
+
+.vendor-item.active .vendor-name {
+  color: rgba(200, 180, 255, 0.9);
+}
+
+/* 右栏：模型列表 */
+.model-column {
+  flex: 1;
+  overflow-y: auto;
+  min-width: 0;
+}
+
+.model-column::-webkit-scrollbar { width: 4px; }
+.model-column::-webkit-scrollbar-track { background: transparent; }
+.model-column::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+
 </style>
 
 <!-- 白昼模式样式（非 scoped） -->
@@ -7882,9 +8309,60 @@ function handleToolbarPreview() {
 }
 
 :root.canvas-theme-light .video-node .model-dropdown-list {
-  background: rgba(255, 255, 255, 0.98);
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(250, 248, 245, 0.78));
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+:root.canvas-theme-light .video-node .model-dropdown-list.vendor-layout {
+  border-radius: 12px;
+}
+
+:root.canvas-theme-light .video-node .vendor-column {
+  background: linear-gradient(180deg, rgba(245, 240, 235, 0.5), rgba(238, 232, 226, 0.4));
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .video-node .vendor-item {
+  border-bottom-color: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .video-node .vendor-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .video-node .vendor-item.active {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(139, 92, 246, 0.05));
+  border-right: 2px solid rgba(139, 92, 246, 0.5);
+}
+
+:root.canvas-theme-light .video-node .vendor-logo {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.4));
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .video-node .vendor-item.active .vendor-logo {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(139, 92, 246, 0.05));
+  border-color: rgba(139, 92, 246, 0.2);
+}
+
+:root.canvas-theme-light .video-node .vendor-logo-text {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+:root.canvas-theme-light .video-node .vendor-item.active .vendor-logo-text {
+  color: rgba(109, 62, 216, 0.9);
+}
+
+:root.canvas-theme-light .video-node .vendor-name {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+:root.canvas-theme-light .video-node .vendor-item.active .vendor-name {
+  color: rgba(109, 62, 216, 0.85);
 }
 
 :root.canvas-theme-light .video-node .model-dropdown-item {
@@ -7892,11 +8370,11 @@ function handleToolbarPreview() {
 }
 
 :root.canvas-theme-light .video-node .model-dropdown-item:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(0, 0, 0, 0.03);
 }
 
 :root.canvas-theme-light .video-node .model-dropdown-item.active {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(139, 92, 246, 0.08);
 }
 
 :root.canvas-theme-light .video-node .model-item-name {

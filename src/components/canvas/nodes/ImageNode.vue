@@ -7701,10 +7701,12 @@ async function handleDrop(event) {
   min-width: 220px;
   max-height: 480px;
   overflow-y: auto;
-  background: #141414;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  background: linear-gradient(135deg, rgba(18, 18, 22, 0.95), rgba(28, 28, 35, 0.92));
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   z-index: 1000;
 }
 
@@ -7754,7 +7756,7 @@ async function handleDrop(event) {
 }
 
 .model-dropdown-item.active {
-  background: rgba(255, 193, 7, 0.12);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(139, 92, 246, 0.06));
 }
 
 .model-item-main {
@@ -8985,9 +8987,12 @@ async function handleDrop(event) {
 }
 
 :root.canvas-theme-light .image-node .model-dropdown-list {
-  background: rgba(255, 255, 255, 0.98);
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(250, 248, 245, 0.78));
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 :root.canvas-theme-light .image-node .model-dropdown-item {
@@ -8999,7 +9004,7 @@ async function handleDrop(event) {
 }
 
 :root.canvas-theme-light .image-node .model-dropdown-item.active {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(139, 92, 246, 0.08);
 }
 
 :root.canvas-theme-light .image-node .model-item-name {

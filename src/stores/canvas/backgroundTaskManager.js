@@ -196,11 +196,19 @@ function startPolling(taskId) {
         task.status = 'processing'
       }
       
-      tasks.set(taskId, task)
-      saveTasksToStorage()
-      
-      // 通知进度更新
-      notifyTaskProgress(taskId, task)
+      // 只对进行中的任务更新状态和通知进度
+      // 已完成/失败的任务由事件处理器决定是否移除
+      if (task.status === 'processing' || task.status === 'pending') {
+        tasks.set(taskId, task)
+        saveTasksToStorage()
+        notifyTaskProgress(taskId, task)
+      } else {
+        // 完成/失败的任务也保存一次（供恢复使用），但不发送进度通知
+        if (tasks.has(taskId)) {
+          tasks.set(taskId, task)
+          saveTasksToStorage()
+        }
+      }
       
     } catch (error) {
       console.error(`[BackgroundTaskManager] 轮询任务 ${taskId} 出错:`, error)
