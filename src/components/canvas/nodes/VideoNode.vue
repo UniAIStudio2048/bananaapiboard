@@ -5775,9 +5775,9 @@ function handleToolbarPreview() {
           </div>
           
           <!-- 时长切换（VEO3模型和动作迁移模型不显示） -->
-          <div v-if="!isVeo3Model && !isKlingMotionControl && durations.length > 0 && durations.length <= 6" class="param-chip-group">
-            <div 
-              v-for="d in durations" 
+          <div v-if="!isVeo3Model && !isKlingMotionControl && durations.length > 0 && durations.length < 6" class="param-chip-group">
+            <div
+              v-for="d in durations"
               :key="d.value"
               class="param-chip"
               :class="{ active: selectedDuration === d.value }"
@@ -5787,7 +5787,7 @@ function handleToolbarPreview() {
             </div>
           </div>
           <!-- 时长下拉选择（选项较多时使用） -->
-          <div v-if="!isVeo3Model && !isKlingMotionControl && durations.length > 6" class="duration-select-row">
+          <div v-if="!isVeo3Model && !isKlingMotionControl && durations.length >= 6" class="duration-select-row">
             <span class="duration-select-label">时长</span>
             <select
               :value="selectedDuration"

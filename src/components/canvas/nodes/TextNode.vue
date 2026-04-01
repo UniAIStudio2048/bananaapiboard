@@ -603,6 +603,26 @@ function selectLanguage(languageCode) {
 // 动态获取上游节点的数据（支持实时更新）
 const upstreamNodes = computed(() => canvasStore.getUpstreamNodes(props.id))
 
+// 参考缩略图拖拽排序状态
+const dragSortIndex = ref(-1)
+const dragOverIndex = ref(-1)
+const dragSortType = ref('')
+
+function applyCustomOrder(items, customOrder) {
+  if (!customOrder?.length || !items.length) return items
+  const ordered = []
+  const remaining = [...items]
+  for (const url of customOrder) {
+    const idx = remaining.indexOf(url)
+    if (idx !== -1) {
+      ordered.push(url)
+      remaining.splice(idx, 1)
+    }
+  }
+  ordered.push(...remaining)
+  return ordered
+}
+
 // 单独收集上游视频 URL（用于显示视频缩略图）
 const upstreamVideoUrls = computed(() => {
   const videos = []
@@ -619,7 +639,7 @@ const upstreamVideoUrls = computed(() => {
       }
     }
   }
-  return videos
+  return applyCustomOrder(videos, props.data.videoOrder)
 })
 
 // 单独收集上游图片 URL
@@ -644,7 +664,7 @@ const upstreamImageUrls = computed(() => {
       images.push(...node.data.output.urls)
     }
   }
-  return images
+  return applyCustomOrder(images, props.data.imageOrder)
 })
 
 // 单独收集上游音频 URL
@@ -657,7 +677,7 @@ const upstreamAudioUrls = computed(() => {
       if (url) audios.push(url)
     }
   }
-  return audios
+  return applyCustomOrder(audios, props.data.audioOrder)
 })
 
 // 上游媒体类型：'video' | 'image' | 'audio' | 'mixed' | null
@@ -716,6 +736,69 @@ function insertMediaTag(media) {
     const newPos = start + tag.length
     textarea.setSelectionRange(newPos, newPos)
   })
+}
+
+function handleRefMediaDragStart(event, index, type) {
+  event.stopPropagation()
+  dragSortIndex.value = index
+  dragSortType.value = type
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', `${type}:${index}`)
+  event.target.classList.add('dragging')
+}
+
+function handleRefMediaDragOver(event, index, type) {
+  if (dragSortType.value !== type) return
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+  dragOverIndex.value = index
+}
+
+function handleRefMediaDragLeave(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    dragOverIndex.value = -1
+  }
+}
+
+function handleRefMediaDrop(event, dropIndex, type) {
+  event.preventDefault()
+  if (dragSortType.value !== type) {
+    resetRefDragState()
+    return
+  }
+  const dragIndex = dragSortIndex.value
+  if (dragIndex === -1 || dragIndex === dropIndex) {
+    resetRefDragState()
+    return
+  }
+
+  let list, orderKey
+  if (type === 'video') {
+    list = [...upstreamVideoUrls.value]
+    orderKey = 'videoOrder'
+  } else if (type === 'image') {
+    list = [...upstreamImageUrls.value]
+    orderKey = 'imageOrder'
+  } else {
+    list = [...upstreamAudioUrls.value]
+    orderKey = 'audioOrder'
+  }
+
+  const [dragged] = list.splice(dragIndex, 1)
+  list.splice(dropIndex, 0, dragged)
+  canvasStore.updateNodeData(props.id, { [orderKey]: list })
+  resetRefDragState()
+}
+
+function handleRefMediaDragEnd(event) {
+  event.target.classList.remove('dragging')
+  resetRefDragState()
+}
+
+function resetRefDragState() {
+  dragSortIndex.value = -1
+  dragOverIndex.value = -1
+  dragSortType.value = ''
 }
 
 // 提取纯文本，去除HTML标签和样式
@@ -2470,16 +2553,26 @@ onMounted(() => {
       <!-- 参考媒体区域（视频/图片/音频/混合） -->
       <div v-if="inheritedImages.length > 0" class="reference-section">
         <span class="reference-label">{{ referenceLabel }}</span>
-        <span class="reference-hint">点击素材插入引用 · 共{{ totalMediaCount }}{{ upstreamMediaType === 'image' ? '张' : '个' }}</span>
+        <span class="reference-hint">点击插入引用 · 拖动调整顺序 · 共{{ totalMediaCount }}{{ upstreamMediaType === 'image' ? '张' : '个' }}</span>
         <div class="reference-images">
           <!-- 视频缩略图 -->
           <div
-            v-for="(videoUrl, idx) in upstreamVideoUrls.slice(0, 4)"
+            v-for="(videoUrl, idx) in upstreamVideoUrls"
             :key="'video-' + idx"
             class="reference-image-item reference-video-item reference-clickable"
+            :class="{
+              'drag-over': dragSortType === 'video' && dragOverIndex === idx,
+              'dragging': dragSortType === 'video' && dragSortIndex === idx
+            }"
+            draggable="true"
             :title="`点击插入 @视频${idx + 1}`"
             @mousedown.prevent.stop
             @click="insertMediaTag({ type: 'video', index: idx + 1, label: `视频${idx + 1}` })"
+            @dragstart="handleRefMediaDragStart($event, idx, 'video')"
+            @dragover="handleRefMediaDragOver($event, idx, 'video')"
+            @dragleave="handleRefMediaDragLeave"
+            @drop="handleRefMediaDrop($event, idx, 'video')"
+            @dragend="handleRefMediaDragEnd"
           >
             <video
               :src="videoUrl"
@@ -2494,12 +2587,22 @@ onMounted(() => {
           </div>
           <!-- 图片缩略图 -->
           <div
-            v-for="(img, idx) in upstreamImageUrls.slice(0, 4 - Math.min(upstreamVideoUrls.length, 4))"
+            v-for="(img, idx) in upstreamImageUrls"
             :key="'img-' + idx"
             class="reference-image-item reference-clickable"
+            :class="{
+              'drag-over': dragSortType === 'image' && dragOverIndex === idx,
+              'dragging': dragSortType === 'image' && dragSortIndex === idx
+            }"
+            draggable="true"
             :title="`点击插入 @图片${idx + 1}`"
             @mousedown.prevent.stop
             @click="insertMediaTag({ type: 'image', index: idx + 1, label: `图片${idx + 1}` })"
+            @dragstart="handleRefMediaDragStart($event, idx, 'image')"
+            @dragover="handleRefMediaDragOver($event, idx, 'image')"
+            @dragleave="handleRefMediaDragLeave"
+            @drop="handleRefMediaDrop($event, idx, 'image')"
+            @dragend="handleRefMediaDragEnd"
           >
             <img :src="img" :alt="`参考图 ${idx + 1}`" />
             <span class="reference-index-badge">{{ idx + 1 }}</span>
@@ -2507,19 +2610,26 @@ onMounted(() => {
           </div>
           <!-- 音频缩略图 -->
           <div
-            v-for="(audioUrl, idx) in upstreamAudioUrls.slice(0, Math.max(0, 4 - upstreamVideoUrls.length - upstreamImageUrls.length))"
+            v-for="(audioUrl, idx) in upstreamAudioUrls"
             :key="'audio-' + idx"
             class="reference-image-item reference-audio-item reference-clickable"
+            :class="{
+              'drag-over': dragSortType === 'audio' && dragOverIndex === idx,
+              'dragging': dragSortType === 'audio' && dragSortIndex === idx
+            }"
+            draggable="true"
             :title="`点击插入 @音频${idx + 1}`"
             @mousedown.prevent.stop
             @click="insertMediaTag({ type: 'audio', index: idx + 1, label: `音频${idx + 1}` })"
+            @dragstart="handleRefMediaDragStart($event, idx, 'audio')"
+            @dragover="handleRefMediaDragOver($event, idx, 'audio')"
+            @dragleave="handleRefMediaDragLeave"
+            @drop="handleRefMediaDrop($event, idx, 'audio')"
+            @dragend="handleRefMediaDragEnd"
           >
             <span class="audio-icon-large">♪</span>
             <span class="reference-index-badge">{{ idx + 1 }}</span>
             <span class="reference-tag-badge">@音频{{ idx + 1 }}</span>
-          </div>
-          <div v-if="totalMediaCount > 4" class="more-images-badge">
-            +{{ totalMediaCount - 4 }}
           </div>
         </div>
       </div>
@@ -3585,6 +3695,18 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+
+.reference-image-item.dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+
+.reference-image-item.drag-over {
+  border-color: var(--canvas-accent-primary, #3b82f6);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4);
+  transform: scale(1.05);
 }
 
 .add-image-btn {
