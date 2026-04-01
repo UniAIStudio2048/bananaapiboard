@@ -5,16 +5,19 @@ import vue from '@vitejs/plugin-vue'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  
+
   // 获取 API 地址，优先使用环境变量
   const apiTarget = env.VITE_API_BASE || 'http://localhost:5000'
-  
+
+  // brainjuice 模式固定使用 3100 端口
+  const serverPort = mode === 'brainjuice' ? 3100 : 3000
+
   return {
     plugins: [vue()],
-    
+
     server: {
       host: '0.0.0.0',
-      port: 3000,
+      port: serverPort,
       allowedHosts: true,  // 允许所有域名（Vite 5.x 正确写法）
       
       // 🔧 HMR 配置：防止开发模式下意外刷新页面
@@ -50,7 +53,7 @@ export default defineConfig(({ mode }) => {
     
     preview: {
       host: '0.0.0.0',
-      port: 3000,
+      port: serverPort,
       proxy: {
         '/api': {
           target: apiTarget,
@@ -73,8 +76,9 @@ export default defineConfig(({ mode }) => {
     
     build: {
       // 生产构建配置
-      target: 'es2020',
-      outDir: 'dist',
+      target: 'esnext',
+      // brainjuice 生产构建输出到独立目录
+      outDir: mode === 'brainjuice' ? 'dist-brainjuice' : 'dist',
       assetsDir: 'assets',
       sourcemap: false,
       minify: 'terser',

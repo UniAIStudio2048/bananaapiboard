@@ -12,7 +12,7 @@ import router from './router'
 import { initTheme } from './utils/theme'
 import { initLogger, logPageView } from './utils/logger'
 import { loadBrandConfig, getBrand } from './config/tenant'
-import { createI18n } from './i18n'
+import { createI18n, initI18n } from './i18n'
 
 // 🔧 防止 Vite HMR 失败时自动全页刷新（开发模式）
 // 当 HMR 无法热更新某个模块时，Vite 默认会 reload 整个页面
@@ -110,7 +110,10 @@ app.use(pinia)
 app.use(router)
 app.use(createI18n())
 
-// 应用挂载后加载品牌配置
+// 确保 i18n 语言包加载完成后再挂载，避免首屏显示原始 key
+await initI18n()
+
+// 应用挂载
 app.mount('#app')
 
 // 异步加载品牌配置（不阻塞应用启动）

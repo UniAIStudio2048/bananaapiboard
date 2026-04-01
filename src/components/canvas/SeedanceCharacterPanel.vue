@@ -6,7 +6,7 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import {
   createAssetGroup, listAssetGroups, updateAssetGroup, deleteAssetGroup,
-  createAsset, listAssets as listVolcAssets, pollAssetStatus,
+  createAsset, listAssets as listVolcAssets, pollAssetStatus, getAsset,
   updateAsset as updateVolcAsset,
   deleteAsset as deleteVolcAsset
 } from '@/api/canvas/volcengine-assets'
@@ -165,10 +165,33 @@ async function loadAssets() {
 
     allAssets.value = mapped
 
-    const processingAssets = mapped.filter(a => a.Status === 'Processing')
-    for (const asset of processingAssets) {
-      if (!pollers.value[asset.Id]) {
-        startPolling(asset.Id, asset.GroupId, asset.URL, asset.Name, asset._canvasId)
+    // Refresh stale statuses from Volcengine for Processing/Failed assets
+    const staleAssets = mapped.filter(a => a.Status === 'Processing' || a.Status === 'Failed')
+    for (const asset of staleAssets) {
+      if (pollers.value[asset.Id]) continue
+      try {
+        const result = await getAsset(asset.Id)
+        const volcAsset = result.asset || result
+        const realStatus = volcAsset.Status || volcAsset.status
+        if (realStatus && realStatus !== asset.Status) {
+          const idx = allAssets.value.findIndex(a => a.Id === asset.Id)
+          if (idx >= 0) {
+            allAssets.value[idx].Status = realStatus
+            if (realStatus === 'Active' && volcAsset.URL) allAssets.value[idx].URL = volcAsset.URL
+          }
+          if (asset._canvasId) {
+            const updates = { metadata: { assetId: asset.Id, groupId: asset.GroupId, status: realStatus, assetType: asset.AssetType } }
+            if (realStatus === 'Active' && volcAsset.URL) updates.thumbnail_url = volcAsset.URL
+            updateAsset(asset._canvasId, updates).catch(() => {})
+          }
+        }
+        if (realStatus === 'Processing') {
+          startPolling(asset.Id, asset.GroupId, asset.URL, asset.Name, asset._canvasId)
+        }
+      } catch {
+        if (asset.Status === 'Processing') {
+          startPolling(asset.Id, asset.GroupId, asset.URL, asset.Name, asset._canvasId)
+        }
       }
     }
   } catch (err) {
@@ -404,8 +427,8 @@ async function handleFileUpload(event) {
 
 function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
   const { promise, cancel } = pollAssetStatus(assetId, {
-    interval: 3000,
-    timeout: 120000,
+    interval: 5000,
+    timeout: 2700000,
     onStatusChange(status) {
       const idx = allAssets.value.findIndex(a => (a.Id || a.id) === assetId)
       if (idx >= 0) allAssets.value[idx].Status = status
@@ -464,8 +487,9 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
     delete pollers.value[assetId]
     console.error('[SeedancePanel] 轮询失败:', err)
     if (canvasAssetId) {
+      const isTimeout = err.message === '轮询超时'
       updateAsset(canvasAssetId, {
-        metadata: { assetId, groupId, status: 'Failed', assetType: 'Image' }
+        metadata: { assetId, groupId, status: isTimeout ? 'Processing' : 'Failed', assetType: 'Image' }
       }).catch(() => {})
     }
     loadAssets()

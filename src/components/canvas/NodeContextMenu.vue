@@ -797,8 +797,8 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
     }
     
     const { promise } = pollAssetStatus(assetId, {
-      interval: 3000,
-      timeout: 120000
+      interval: 5000,
+      timeout: 2700000
     })
     
     const finalAsset = await promise

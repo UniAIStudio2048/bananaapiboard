@@ -32,6 +32,9 @@ const currentLanguage = ref(getInitialLanguage())
 // 翻译数据缓存
 const translations = reactive({})
 
+// 翻译版本号 - 每次加载新语言包时递增，确保使用 t() 的组件能响应式更新
+const translationVersion = ref(0)
+
 // 已加载的语言
 const loadedLanguages = new Set()
 
@@ -72,6 +75,7 @@ async function loadLanguageModule(lang) {
     const module = await import(`./locales/${lang}.js`)
     translations[lang] = module.default
     loadedLanguages.add(lang)
+    translationVersion.value++
     console.log(`[i18n] 语言包已加载: ${lang}`)
     return module.default
   } catch (error) {
@@ -119,6 +123,8 @@ async function setLanguage(lang) {
 
 // 获取翻译文本
 function t(key, params = {}) {
+  // 访问版本号以建立响应式依赖，确保语言包加载后触发重新渲染
+  const _v = translationVersion.value
   const lang = currentLanguage.value
   const fallbackLang = DEFAULT_LANGUAGE
   
@@ -202,9 +208,8 @@ export {
 export function createI18n() {
   return {
     install(app) {
-      // 初始化 i18n
-      initI18n()
-      
+      // 注意：initI18n() 由 main.js 在挂载前 await 调用，此处不再重复调用
+
       // 全局属性
       app.config.globalProperties.$t = t
       app.config.globalProperties.$language = currentLanguage

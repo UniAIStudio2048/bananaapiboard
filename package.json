@@ -1,13 +1,16 @@
 {
   "name": "ai-image-generator-frontend",
-  "version": "6.14.1",
+  "version": "6.14.2",
   "description": "AI图片/视频生成平台前端 - Vue 3 + Vite + TailwindCSS",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:brainjuice": "vite --mode brainjuice",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:brainjuice": "vite build --mode brainjuice",
+    "preview": "vite preview",
+    "preview:brainjuice": "vite preview --mode brainjuice"
   },
   "dependencies": {
     "@imgly/background-removal": "^1.7.0",

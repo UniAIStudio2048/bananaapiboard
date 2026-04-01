@@ -216,12 +216,13 @@ export async function deleteAssetGroup(id) {
  * @param {Object} options - { interval, timeout, onStatusChange }
  * @returns {{ promise: Promise, cancel: Function }}
  */
-export function pollAssetStatus(assetId, { interval = 3000, timeout = 120000, onStatusChange } = {}) {
+export function pollAssetStatus(assetId, { interval = 5000, timeout = 2700000, onStatusChange } = {}) {
   let cancelled = false
   let timer = null
 
   const promise = new Promise((resolve, reject) => {
     const startTime = Date.now()
+    let pollCount = 0
 
     async function check() {
       if (cancelled) return
@@ -229,6 +230,7 @@ export function pollAssetStatus(assetId, { interval = 3000, timeout = 120000, on
         const result = await getAsset(assetId)
         const asset = result.asset || result
         const status = asset.Status || asset.status
+        pollCount++
 
         if (onStatusChange) onStatusChange(status, asset)
 
@@ -244,7 +246,12 @@ export function pollAssetStatus(assetId, { interval = 3000, timeout = 120000, on
           reject(new Error('轮询超时'))
           return
         }
-        timer = setTimeout(check, interval)
+        // Progressive backoff: 5s for first 2min, then 15s until 10min, then 30s
+        const elapsed = Date.now() - startTime
+        let nextInterval = interval
+        if (elapsed > 600000) nextInterval = 30000
+        else if (elapsed > 120000) nextInterval = 15000
+        timer = setTimeout(check, nextInterval)
       } catch (err) {
         if (!cancelled) reject(err)
       }
