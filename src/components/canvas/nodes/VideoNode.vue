@@ -3083,6 +3083,55 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       console.log('[VideoNode] 处理后的可访问 URLs:', finalImages)
     }
     
+    // 确保参考视频可访问（blob URL 无法被外部 API 使用）
+    if (capturedState.isSeedance2) {
+      const currentRefVideos = referenceVideos.value || []
+      const hasBlobVideos = currentRefVideos.some(url => url.startsWith('blob:'))
+      if (hasBlobVideos) {
+        console.log('[VideoNode] 检测到参考视频含 blob URL，开始上传到云端...')
+        canvasStore.updateNodeData(targetNodeId, { progress: '正在处理参考视频...' })
+        for (const videoUrl of currentRefVideos) {
+          if (!videoUrl.startsWith('blob:')) continue
+          try {
+            const resp = await fetch(videoUrl)
+            if (!resp.ok) throw new Error(`获取 blob 视频失败: ${resp.status}`)
+            const blob = await resp.blob()
+            const file = new File([blob], `ref_video_${Date.now()}.mp4`, { type: blob.type || 'video/mp4' })
+            
+            const uploadFormData = new FormData()
+            uploadFormData.append('file', file)
+            const token = localStorage.getItem('token')
+            const uploadResp = await fetch('/api/videos/upload', {
+              method: 'POST',
+              headers: {
+                ...getTenantHeaders(),
+                ...(token ? { Authorization: `Bearer ${token}` } : {})
+              },
+              body: uploadFormData
+            })
+            
+            if (uploadResp.ok) {
+              const uploadResult = await uploadResp.json()
+              if (uploadResult.url) {
+                console.log('[VideoNode] 参考视频 blob 上传成功:', uploadResult.url)
+                const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
+                for (const edge of upstreamEdges) {
+                  const sn = canvasStore.nodes.find(n => n.id === edge.source)
+                  if (sn?.data?.sourceVideo === videoUrl) {
+                    canvasStore.updateNodeData(sn.id, { sourceVideo: uploadResult.url })
+                    break
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            console.error('[VideoNode] 参考视频 blob 上传失败:', err.message)
+          }
+        }
+        console.log('[VideoNode] 参考视频处理完成，当前列表:', referenceVideos.value)
+      }
+    }
+    
     canvasStore.updateNodeData(targetNodeId, { progress: '正在提交任务...' })
     
     // 提交所有任务
@@ -3510,40 +3559,43 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
 // 后台异步上传视频 - 上传完成后静默更新节点URL
 async function uploadVideoFileAsync(file, blobUrl, nodeId) {
   try {
-    console.log('[VideoNode] 后台异步上传视频开始:', file.name)
+    console.log('[VideoNode] 后台异步上传视频开始:', file.name, '大小:', (file.size / 1024 / 1024).toFixed(2), 'MB')
     
-    // 视频文件可能较大，放宽限制到 100MB
     if (file.size > 100 * 1024 * 1024) {
       console.warn('[VideoNode] 视频文件过大，保持使用 blob URL')
       return
     }
     
-    // 使用 FormData 上传视频
     const formData = new FormData()
-    formData.append('video', file)
+    formData.append('file', file)
     
-    const response = await fetch('/api/upload/video', {
+    const token = localStorage.getItem('token')
+    const response = await fetch('/api/videos/upload', {
       method: 'POST',
-      headers: getTenantHeaders(),
+      headers: {
+        ...getTenantHeaders(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
       body: formData
     })
     
     if (response.ok) {
       const result = await response.json()
-      const serverUrl = result.url || result.video_url
+      const serverUrl = result.url
       if (serverUrl) {
         console.log('[VideoNode] 视频后台上传成功，服务器URL:', serverUrl)
         
-        // 静默更新节点中的 URL
         const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
         if (currentNode?.data?.sourceVideo === blobUrl) {
           canvasStore.updateNodeData(nodeId, { sourceVideo: serverUrl })
           console.log('[VideoNode] 已静默更新 sourceVideo')
         }
         
-        // 释放 blob URL 内存
         URL.revokeObjectURL(blobUrl)
       }
+    } else {
+      const errData = await response.json().catch(() => ({}))
+      console.warn('[VideoNode] 视频上传返回错误:', response.status, errData.message || errData.error)
     }
   } catch (error) {
     console.warn('[VideoNode] 视频后台上传失败，保持使用 blob URL:', error.message)
