@@ -916,9 +916,9 @@ async function generate() {
       payload.aspect_ratio = aspectRatio.value
     }
     
-    // 根据模型名称设置分辨率
-    if (model.value === 'nano-banana-2') {
-      payload.image_size = imageSize.value // 根据选择的尺寸
+    // 有多档分辨率计价的模型，传递用户选择的尺寸
+    if (showResolutionOption.value) {
+      payload.image_size = imageSize.value
     }
     
     // 图生图模式：添加参考图片
