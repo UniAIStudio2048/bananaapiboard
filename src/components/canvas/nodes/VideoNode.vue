@@ -146,6 +146,7 @@ const frameInputRef = ref(null)
 // 图片列表拖拽排序状态
 const dragSortIndex = ref(-1)
 const dragOverIndex = ref(-1)
+const dragSortType = ref('')
 
 // 🚀 性能优化：画布拖拽状态（用于暂停视频播放）
 const isCanvasDragging = ref(false)
@@ -3050,20 +3051,92 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
   })
 }
 
-// 开始生成
+// 后台执行生成的重操作（图片压缩/上传/API提交），不阻塞UI
+async function processGenerationInBackground(targetNodeId, allNodeIds, finalPrompt, finalImages, generateCount, capturedState) {
+  try {
+    // 图片压缩（可能耗时）
+    if (finalImages.length > 0) {
+      finalImages = await compressVideoInputImages(finalImages)
+    }
+    
+    // Seedance 2.0 角色素材处理
+    if (capturedState.isSeedance2 && capturedState.characterAssetUris.length > 0) {
+      const charHttpUrls = new Set()
+      const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
+      for (const edge of upstreamEdges) {
+        const sn = canvasStore.nodes.find(n => n.id === edge.source)
+        if (sn?.type === 'seedance-character') {
+          if (sn.data?.output?.url) charHttpUrls.add(sn.data.output.url)
+          if (sn.data?.output?.urls) sn.data.output.urls.forEach(u => charHttpUrls.add(u))
+        }
+      }
+      const nonCharImages = finalImages.filter(u => !charHttpUrls.has(u))
+      finalImages = [...capturedState.characterAssetUris, ...nonCharImages]
+      console.log('[VideoNode] Seedance 2.0 注入角色素材 Asset URI:', capturedState.characterAssetUris, '最终图片列表:', finalImages)
+    }
+    
+    // 确保参考图片可访问（可能耗时：串行 fetch + upload）
+    if (finalImages.length > 0) {
+      console.log('[VideoNode] 后台处理参考图片 URL，确保可访问性...')
+      canvasStore.updateNodeData(targetNodeId, { progress: '正在处理参考图片...' })
+      finalImages = await ensureAccessibleUrls(finalImages)
+      console.log('[VideoNode] 处理后的可访问 URLs:', finalImages)
+    }
+    
+    canvasStore.updateNodeData(targetNodeId, { progress: '正在提交任务...' })
+    
+    // 提交所有任务
+    const submitPromises = allNodeIds.map((nodeId, index) => {
+      return new Promise(async (resolve) => {
+        if (index > 0) {
+          await delay(CONCURRENT_INTERVAL * index)
+        }
+        const result = await executeNodeGeneration(nodeId, finalPrompt, finalImages, index)
+        resolve(result)
+      })
+    })
+    
+    const allResults = await Promise.all(submitPromises)
+    const successResults = allResults.filter(r => r !== null)
+    
+    console.log('[VideoNode] 全部任务已提交:', successResults.length, '/', generateCount)
+    
+    if (successResults.length === 0) {
+      const firstNodeData = canvasStore.nodes.find(n => n.id === allNodeIds[0])?.data
+      const specificError = firstNodeData?.error || '所有任务提交都失败了'
+      throw new Error(specificError)
+    }
+    
+    window.dispatchEvent(new CustomEvent('user-info-updated'))
+    
+  } catch (error) {
+    console.error('[VideoNode] 后台生成失败:', error)
+    if (error.code === 'concurrent_limit_exceeded') {
+      showAlert(error.message, '并发限制')
+      return
+    }
+    errorMessage.value = error.message || '生成失败'
+    canvasStore.updateNodeData(targetNodeId, {
+      status: 'error',
+      error: error.message
+    })
+  }
+}
+
+// 开始生成（点击后立即响应，重操作全部后台执行）
 async function handleGenerate() {
+  if (isGenerating.value) return
+  
   // 动态获取上游节点的最新数据
   const upstreamData = getUpstreamData()
   const userPrompt = promptText.value.trim()
   
-  // 拼接提示词：上游提示词（可能有多个）+ 用户输入的提示词
+  // 拼接提示词
   const upstreamPromptText = upstreamData.prompts.join('\n')
   let finalPrompt = ''
   if (upstreamPromptText && userPrompt) {
-    // 两者都有，拼接在一起
     finalPrompt = `${upstreamPromptText}\n${userPrompt}`
   } else {
-    // 只有一个，使用其中一个或继承数据
     finalPrompt = upstreamPromptText || userPrompt || inheritedPrompt.value
   }
   
@@ -3076,7 +3149,7 @@ async function handleGenerate() {
     finalPrompt = escapePromptTags(finalPrompt)
   }
   
-  // 合并参考图片：使用 referenceImages（已按用户拖拽排序）
+  // 合并参考图片
   let finalImages = referenceImages.value.length > 0 ? [...referenceImages.value] : []
   
   console.log('[VideoNode] 生成参数（处理前）:', { 
@@ -3097,37 +3170,7 @@ async function handleGenerate() {
     return
   }
   
-  // 视频模型输入图片限制：每张不超过10MB，超过自动压缩
-  if (finalImages.length > 0) {
-    finalImages = await compressVideoInputImages(finalImages)
-  }
-  
-  // Seedance 2.0 + 角色素材：用 asset:// 素材 URI 替换角色节点预览 HTTP URL（避免重复且符合 Ark 素材格式）
-  const characterAssetUris = upstreamData.characterAssetUris || []
-  if (isSeedance2Model.value && characterAssetUris.length > 0) {
-    // 收集所有 seedance-character 节点的 HTTP URL，用于从 finalImages 中去除
-    const charHttpUrls = new Set()
-    const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
-    for (const edge of upstreamEdges) {
-      const sn = canvasStore.nodes.find(n => n.id === edge.source)
-      if (sn?.type === 'seedance-character') {
-        if (sn.data?.output?.url) charHttpUrls.add(sn.data.output.url)
-        if (sn.data?.output?.urls) sn.data.output.urls.forEach(u => charHttpUrls.add(u))
-      }
-    }
-    const nonCharImages = finalImages.filter(u => !charHttpUrls.has(u))
-    finalImages = [...characterAssetUris, ...nonCharImages]
-    console.log('[VideoNode] Seedance 2.0 注入角色素材 Asset URI:', characterAssetUris, '最终图片列表:', finalImages)
-  }
-  
-  // 🔥 关键：确保所有参考图片都是 AI 模型可访问的公开 URL
-  if (finalImages.length > 0) {
-    console.log('[VideoNode] 处理参考图片 URL，确保可访问性...')
-    finalImages = await ensureAccessibleUrls(finalImages)
-    console.log('[VideoNode] 处理后的可访问 URLs:', finalImages)
-  }
-  
-  // 检查总积分是否足够（单次消耗 * 次数）
+  // 检查积分（同步校验，不阻塞）
   const totalCost = pointsCost.value * selectedCount.value
   if (userPoints.value < totalCost) {
     await showInsufficientPointsDialog(totalCost, userPoints.value, selectedCount.value)
@@ -3140,18 +3183,25 @@ async function handleGenerate() {
     return
   }
   
+  // ✅ 验证通过，立即更新 UI 状态（不等待任何网络操作）
   isGenerating.value = true
   errorMessage.value = ''
   
   const generateCount = selectedCount.value
   
-  // 🔥 核心逻辑：如果当前节点正在处理中，创建新节点来接收新任务
+  // 快照当前状态，供后台任务使用
+  const capturedState = {
+    nodeId: props.id,
+    isSeedance2: isSeedance2Model.value,
+    characterAssetUris: upstreamData.characterAssetUris || []
+  }
+  
+  // 如果当前节点正在处理中，创建新节点来接收新任务
   let targetNodeId = props.id
   if (props.data.status === 'processing') {
     const newNodeId = createNewOutputNode()
     if (newNodeId) {
       targetNodeId = newNodeId
-      // 选中新创建的节点
       canvasStore.selectNode(newNodeId)
       console.log('[VideoNode] 当前节点正在生成，创建新节点接收任务:', newNodeId)
     }
@@ -3160,7 +3210,6 @@ async function handleGenerate() {
   // 多批次生成时，创建堆叠的输出节点
   let allNodeIds = [targetNodeId]
   if (generateCount > 1) {
-    // 对于目标节点创建额外的堆叠节点
     const currentNode = canvasStore.nodes.find(n => n.id === targetNodeId)
     if (currentNode) {
       for (let i = 1; i < generateCount; i++) {
@@ -3194,7 +3243,7 @@ async function handleGenerate() {
     }
   }
   
-  // 更新目标节点状态，清除旧的任务 ID
+  // 立即设置节点为 processing 状态
   canvasStore.updateNodeData(targetNodeId, { 
     status: 'processing',
     progress: generateCount > 1 ? `并行生成 ${generateCount} 个视频...` : '排队中...',
@@ -3202,50 +3251,11 @@ async function handleGenerate() {
     soraTaskId: null
   })
   
-  try {
-    // 提交所有任务（任务提交后立即返回，不等待完成）
-    const submitPromises = allNodeIds.map((nodeId, index) => {
-      return new Promise(async (resolve) => {
-        // 间隔发送请求
-        if (index > 0) {
-          await delay(CONCURRENT_INTERVAL * index)
-        }
-        const result = await executeNodeGeneration(nodeId, finalPrompt, finalImages, index)
-        resolve(result)
-      })
-    })
-    
-    // 等待所有任务提交完成（不是等待任务结果完成）
-    const allResults = await Promise.all(submitPromises)
-    const successResults = allResults.filter(r => r !== null)
-    
-    console.log('[VideoNode] 全部任务已提交:', successResults.length, '/', generateCount)
-    
-    if (successResults.length === 0) {
-      const firstNodeData = canvasStore.nodes.find(n => n.id === allNodeIds[0])?.data
-      const specificError = firstNodeData?.error || '所有任务提交都失败了'
-      throw new Error(specificError)
-    }
-    
-    // 任务提交成功后，立即恢复按钮状态，允许用户继续发起新任务
-    isGenerating.value = false
-    
-    // 刷新用户积分
-    window.dispatchEvent(new CustomEvent('user-info-updated'))
-    
-  } catch (error) {
-    console.error('[VideoNode] 生成失败:', error)
-    isGenerating.value = false
-    if (error.code === 'concurrent_limit_exceeded') {
-      await showAlert(error.message, '并发限制')
-      return
-    }
-    errorMessage.value = error.message || '生成失败'
-    canvasStore.updateNodeData(targetNodeId, {
-      status: 'error',
-      error: error.message
-    })
-  }
+  // ✅ 立即释放按钮，用户可以继续操作
+  isGenerating.value = false
+  
+  // 🔥 后台异步处理：图片压缩/上传/API提交，不阻塞UI
+  processGenerationInBackground(targetNodeId, allNodeIds, finalPrompt, finalImages, generateCount, capturedState)
 }
 
 // 轮询视频任务状态
@@ -3891,21 +3901,21 @@ function handleImageMouseDown(event) {
 
 function handleImageDragStart(event, index) {
   event.stopPropagation()
+  dragSortType.value = 'image'
   dragSortIndex.value = index
   event.dataTransfer.effectAllowed = 'move'
   event.dataTransfer.setData('text/plain', index.toString())
-  // 添加拖拽样式
   event.target.classList.add('dragging')
 }
 
 function handleImageDragOver(event, index) {
+  if (dragSortType.value !== 'image') return
   event.preventDefault()
   event.dataTransfer.dropEffect = 'move'
   dragOverIndex.value = index
 }
 
 function handleImageDragLeave(event) {
-  // 只在离开整个元素时才重置
   if (!event.currentTarget.contains(event.relatedTarget)) {
     dragOverIndex.value = -1
   }
@@ -3913,6 +3923,7 @@ function handleImageDragLeave(event) {
 
 function handleImageDrop(event, dropIndex) {
   event.preventDefault()
+  if (dragSortType.value !== 'image') { resetDragState(); return }
   const dragIndex = dragSortIndex.value
   
   if (dragIndex === -1 || dragIndex === dropIndex) {
@@ -3920,12 +3931,10 @@ function handleImageDrop(event, dropIndex) {
     return
   }
   
-  // 重新排序图片
   const images = [...(referenceImages.value || [])]
   const [draggedImage] = images.splice(dragIndex, 1)
   images.splice(dropIndex, 0, draggedImage)
   
-  // 保存新的图片顺序到节点数据
   canvasStore.updateNodeData(props.id, {
     imageOrder: images
   })
@@ -3944,6 +3953,7 @@ function handleVideoMouseDown(event) {
 
 function handleVideoDragStart(event, index) {
   event.stopPropagation()
+  dragSortType.value = 'video'
   dragSortIndex.value = index
   event.dataTransfer.effectAllowed = 'move'
   event.dataTransfer.setData('text/plain', index.toString())
@@ -3951,6 +3961,7 @@ function handleVideoDragStart(event, index) {
 }
 
 function handleVideoDragOver(event, index) {
+  if (dragSortType.value !== 'video') return
   event.preventDefault()
   event.dataTransfer.dropEffect = 'move'
   dragOverIndex.value = index
@@ -3964,6 +3975,7 @@ function handleVideoDragLeave(event) {
 
 function handleVideoDrop(event, dropIndex) {
   event.preventDefault()
+  if (dragSortType.value !== 'video') { resetDragState(); return }
   const dragIndex = dragSortIndex.value
 
   if (dragIndex === -1 || dragIndex === dropIndex) {
@@ -3987,8 +3999,13 @@ function handleVideoDragEnd(event) {
   resetDragState()
 }
 
+function handleAudioMouseDown(event) {
+  event.stopPropagation()
+}
+
 function handleAudioDragStart(event, index) {
   event.stopPropagation()
+  dragSortType.value = 'audio'
   dragSortIndex.value = index
   event.dataTransfer.effectAllowed = 'move'
   event.dataTransfer.setData('text/plain', index.toString())
@@ -3996,6 +4013,7 @@ function handleAudioDragStart(event, index) {
 }
 
 function handleAudioDragOver(event, index) {
+  if (dragSortType.value !== 'audio') return
   event.preventDefault()
   event.dataTransfer.dropEffect = 'move'
   dragOverIndex.value = index
@@ -4009,6 +4027,7 @@ function handleAudioDragLeave(event) {
 
 function handleAudioDrop(event, dropIndex) {
   event.preventDefault()
+  if (dragSortType.value !== 'audio') { resetDragState(); return }
   const dragIndex = dragSortIndex.value
   if (dragIndex === -1 || dragIndex === dropIndex) {
     resetDragState()
@@ -4029,6 +4048,7 @@ function handleAudioDragEnd(event) {
 function resetDragState() {
   dragSortIndex.value = -1
   dragOverIndex.value = -1
+  dragSortType.value = ''
 }
 
 // 右键菜单
@@ -5515,8 +5535,8 @@ function handleToolbarPreview() {
             class="panel-frame-item panel-frame-video"
             :class="{ 
               'panel-frame-clickable': supportsMediaTags,
-              'drag-over': dragOverIndex === index,
-              'dragging': dragSortIndex === index
+              'drag-over': dragSortType === 'video' && dragOverIndex === index,
+              'dragging': dragSortType === 'video' && dragSortIndex === index
             }"
             draggable="true"
             :title="supportsMediaTags ? `点击插入 @视频${index + 1}` : ''"
@@ -5540,8 +5560,8 @@ function handleToolbarPreview() {
             :key="img + index"
             class="panel-frame-item"
             :class="{ 
-              'drag-over': dragOverIndex === index,
-              'dragging': dragSortIndex === index,
+              'drag-over': dragSortType === 'image' && dragOverIndex === index,
+              'dragging': dragSortType === 'image' && dragSortIndex === index,
               'panel-frame-clickable': supportsMediaTags
             }"
             draggable="true"
@@ -5566,12 +5586,12 @@ function handleToolbarPreview() {
             class="panel-frame-item panel-frame-audio"
             :class="{ 
               'panel-frame-clickable': supportsMediaTags,
-              'drag-over': dragOverIndex === index,
-              'dragging': dragSortIndex === index
+              'drag-over': dragSortType === 'audio' && dragOverIndex === index,
+              'dragging': dragSortType === 'audio' && dragSortIndex === index
             }"
             draggable="true"
             :title="supportsMediaTags ? `点击插入 @音频${index + 1}` : ''"
-            @mousedown.prevent.stop
+            @mousedown="handleAudioMouseDown"
             @click="supportsMediaTags && insertMediaTag({ type: 'audio', index: index + 1, label: `音频${index + 1}` })"
             @dragstart="handleAudioDragStart($event, index)"
             @dragover="handleAudioDragOver($event, index)"

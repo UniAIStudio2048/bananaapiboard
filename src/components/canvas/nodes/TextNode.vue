@@ -2566,7 +2566,7 @@ onMounted(() => {
             }"
             draggable="true"
             :title="`点击插入 @视频${idx + 1}`"
-            @mousedown.prevent.stop
+            @mousedown.stop
             @click="insertMediaTag({ type: 'video', index: idx + 1, label: `视频${idx + 1}` })"
             @dragstart="handleRefMediaDragStart($event, idx, 'video')"
             @dragover="handleRefMediaDragOver($event, idx, 'video')"
@@ -2596,7 +2596,7 @@ onMounted(() => {
             }"
             draggable="true"
             :title="`点击插入 @图片${idx + 1}`"
-            @mousedown.prevent.stop
+            @mousedown.stop
             @click="insertMediaTag({ type: 'image', index: idx + 1, label: `图片${idx + 1}` })"
             @dragstart="handleRefMediaDragStart($event, idx, 'image')"
             @dragover="handleRefMediaDragOver($event, idx, 'image')"
@@ -2619,7 +2619,7 @@ onMounted(() => {
             }"
             draggable="true"
             :title="`点击插入 @音频${idx + 1}`"
-            @mousedown.prevent.stop
+            @mousedown.stop
             @click="insertMediaTag({ type: 'audio', index: idx + 1, label: `音频${idx + 1}` })"
             @dragstart="handleRefMediaDragStart($event, idx, 'audio')"
             @dragover="handleRefMediaDragOver($event, idx, 'audio')"
