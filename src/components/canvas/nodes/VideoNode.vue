@@ -3117,8 +3117,13 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
                 const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
                 for (const edge of upstreamEdges) {
                   const sn = canvasStore.nodes.find(n => n.id === edge.source)
-                  if (sn?.data?.sourceVideo === videoUrl) {
+                  if (!sn?.data) continue
+                  if (sn.data.sourceVideo === videoUrl) {
                     canvasStore.updateNodeData(sn.id, { sourceVideo: uploadResult.url })
+                    break
+                  }
+                  if (sn.data.output?.url === videoUrl) {
+                    canvasStore.updateNodeData(sn.id, { output: { ...sn.data.output, url: uploadResult.url } })
                     break
                   }
                 }
@@ -3129,6 +3134,63 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
           }
         }
         console.log('[VideoNode] 参考视频处理完成，当前列表:', referenceVideos.value)
+      }
+
+      // 确保参考音频可访问（blob URL 无法被外部 API 使用）
+      const currentRefAudios = referenceAudios.value || []
+      const hasBlobAudios = currentRefAudios.some(url => url.startsWith('blob:'))
+      if (hasBlobAudios) {
+        console.log('[VideoNode] 检测到参考音频含 blob URL，开始上传到云端...')
+        canvasStore.updateNodeData(targetNodeId, { progress: '正在处理参考音频...' })
+        for (const audioUrl of currentRefAudios) {
+          if (!audioUrl.startsWith('blob:')) continue
+          try {
+            const resp = await fetch(audioUrl)
+            if (!resp.ok) throw new Error(`获取 blob 音频失败: ${resp.status}`)
+            const blob = await resp.blob()
+            const ext = blob.type?.includes('wav') ? '.wav' : '.mp3'
+            const file = new File([blob], `ref_audio_${Date.now()}${ext}`, { type: blob.type || 'audio/mpeg' })
+            
+            const uploadFormData = new FormData()
+            uploadFormData.append('file', file)
+            const token = localStorage.getItem('token')
+            const uploadResp = await fetch('/api/videos/upload', {
+              method: 'POST',
+              headers: {
+                ...getTenantHeaders(),
+                ...(token ? { Authorization: `Bearer ${token}` } : {})
+              },
+              body: uploadFormData
+            })
+            
+            if (uploadResp.ok) {
+              const uploadResult = await uploadResp.json()
+              if (uploadResult.url) {
+                console.log('[VideoNode] 参考音频 blob 上传成功:', uploadResult.url)
+                const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
+                for (const edge of upstreamEdges) {
+                  const sn = canvasStore.nodes.find(n => n.id === edge.source)
+                  if (!sn?.data) continue
+                  if (sn.data.audioUrl === audioUrl) {
+                    canvasStore.updateNodeData(sn.id, { audioUrl: uploadResult.url })
+                    break
+                  }
+                  if (sn.data.audioData === audioUrl) {
+                    canvasStore.updateNodeData(sn.id, { audioData: uploadResult.url })
+                    break
+                  }
+                  if (sn.data.output?.url === audioUrl) {
+                    canvasStore.updateNodeData(sn.id, { output: { ...sn.data.output, url: uploadResult.url } })
+                    break
+                  }
+                }
+              }
+            }
+          } catch (err) {
+            console.error('[VideoNode] 参考音频 blob 上传失败:', err.message)
+          }
+        }
+        console.log('[VideoNode] 参考音频处理完成，当前列表:', referenceAudios.value)
       }
     }
     
