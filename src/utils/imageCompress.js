@@ -4,11 +4,10 @@
  */
 
 const DEFAULT_OPTIONS = {
-  maxWidth: 4096,        // 最大宽度
-  maxHeight: 4096,       // 最大高度
-  quality: 0.85,         // JPEG/WebP 压缩质量
-  maxSizeMB: 5,          // 超过此大小才压缩（MB）
-  mimeType: 'image/jpeg' // 输出格式
+  maxLongSide: 1280,
+  quality: 0.85,
+  maxSizeMB: 10,
+  mimeType: 'image/jpeg'
 }
 
 /**
@@ -18,17 +17,14 @@ const DEFAULT_OPTIONS = {
  * @returns {Promise<File>} 压缩后的文件
  */
 export async function compressImage(file, options = {}) {
-  // 非图片文件直接返回
   if (!file.type.startsWith('image/')) return file
-
-  // GIF 不压缩（会丢失动画）
   if (file.type === 'image/gif') return file
 
-  // 小于阈值不压缩
   const opts = { ...DEFAULT_OPTIONS, ...options }
-  if (file.size < opts.maxSizeMB * 1024 * 1024) return file
+  const maxBytes = opts.maxSizeMB * 1024 * 1024
+  if (file.size < maxBytes) return file
 
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     const img = new Image()
     const url = URL.createObjectURL(file)
 
@@ -36,39 +32,45 @@ export async function compressImage(file, options = {}) {
       URL.revokeObjectURL(url)
 
       let { width, height } = img
-
-      // 计算缩放比例
-      if (width > opts.maxWidth || height > opts.maxHeight) {
-        const ratio = Math.min(opts.maxWidth / width, opts.maxHeight / height)
+      const longSide = Math.max(width, height)
+      if (longSide > opts.maxLongSide) {
+        const ratio = opts.maxLongSide / longSide
         width = Math.round(width * ratio)
         height = Math.round(height * ratio)
-      }
-
-      // 如果尺寸没变且文件不大，直接返回
-      if (width === img.width && height === img.height && file.size < opts.maxSizeMB * 1024 * 1024 * 2) {
-        resolve(file)
-        return
       }
 
       const canvas = document.createElement('canvas')
       canvas.width = width
       canvas.height = height
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height)
 
-      const ctx = canvas.getContext('2d')
-      ctx.drawImage(img, 0, 0, width, height)
-
-      // 保持原格式或转为 JPEG
       const outputType = file.type === 'image/png' ? 'image/png' : opts.mimeType
-      const quality = outputType === 'image/png' ? undefined : opts.quality
 
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          resolve(file) // 压缩失败返回原文件
-          return
+      const tryCompress = (q) => new Promise((res) => {
+        canvas.toBlob((blob) => res(blob), outputType, outputType === 'image/png' ? undefined : q)
+      })
+
+      ;(async () => {
+        let quality = 0.92
+        let blob = await tryCompress(quality)
+
+        while (blob && blob.size > maxBytes && quality > 0.3) {
+          quality -= 0.08
+          blob = await tryCompress(quality)
         }
 
-        // 如果压缩后反而更大，返回原文件
-        if (blob.size >= file.size) {
+        if (blob && blob.size > maxBytes) {
+          let scale = 0.8
+          while (blob && blob.size > maxBytes && scale > 0.3) {
+            canvas.width = Math.round(width * scale)
+            canvas.height = Math.round(height * scale)
+            canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
+            blob = await tryCompress(0.8)
+            scale -= 0.1
+          }
+        }
+
+        if (!blob || blob.size >= file.size) {
           resolve(file)
           return
         }
@@ -80,12 +82,12 @@ export async function compressImage(file, options = {}) {
 
         console.log(`[compress] ${file.name}: ${(file.size/1024/1024).toFixed(1)}MB → ${(compressed.size/1024/1024).toFixed(1)}MB (${Math.round((1 - compressed.size/file.size) * 100)}% 减少)`)
         resolve(compressed)
-      }, outputType, quality)
+      })()
     }
 
     img.onerror = () => {
       URL.revokeObjectURL(url)
-      resolve(file) // 加载失败返回原文件
+      resolve(file)
     }
 
     img.src = url

@@ -8,6 +8,7 @@ import { publishWork, getPlatformFeeRate } from '@/api/community'
 import { getWorkflowList } from '@/api/canvas/workflow'
 import { getProjectList } from '@/api/canvas/project'
 import { uploadImages } from '@/api/client'
+import { compressImage } from '@/utils/imageCompress'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
 const props = defineProps({
@@ -157,7 +158,7 @@ const isDraggingWork = ref(false)
 const uploadProgress = ref(0)
 
 const MAX_VIDEO_SIZE = 500 * 1024 * 1024
-const MAX_IMAGE_SIZE = 50 * 1024 * 1024
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 
 // 工作流列表（支持个人空间 + 团队空间分组）
 const workflowGroups = ref([])
@@ -378,7 +379,7 @@ function validateWorkFile(file) {
 }
 
 // 封面上传
-function handleCoverChange(e) {
+async function handleCoverChange(e) {
   const file = e instanceof File ? e : e.target.files?.[0]
   if (!file) return
   if (!file.type.startsWith('image/')) {
@@ -386,8 +387,21 @@ function handleCoverChange(e) {
     return
   }
   error.value = ''
-  coverFile.value = file
-  coverPreview.value = URL.createObjectURL(file)
+  let finalFile = file
+  if (file.size > MAX_IMAGE_SIZE) {
+    if (file.type === 'image/gif') {
+      error.value = 'GIF 图片不能超过 10MB'
+      return
+    }
+    try {
+      finalFile = await compressImage(file, { maxSizeMB: 10 })
+    } catch {
+      error.value = '图片压缩失败，请换一张图片'
+      return
+    }
+  }
+  coverFile.value = finalFile
+  coverPreview.value = URL.createObjectURL(finalFile)
 }
 
 function clearCoverFile() {
@@ -641,7 +655,7 @@ async function handlePublish() {
                 </div>
                 <input ref="coverInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" class="hidden" @change="handleCoverChange" />
                 <div class="mt-1.5 space-y-0.5">
-                  <p class="text-[11px] text-white/20">建议比例 16:9，支持 PNG、JPG、GIF、WebP</p>
+                  <p class="text-[11px] text-white/20">建议比例 16:9，支持 PNG、JPG、GIF、WebP（超过10MB自动压缩）</p>
                 </div>
               </div>
             </div>
