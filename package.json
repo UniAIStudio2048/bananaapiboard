@@ -9,10 +9,20 @@
   "scripts": {
     "dev": "vite",
     "dev:brainjuice": "vite --mode brainjuice",
+    "dev:moyunzong": "vite --mode moyunzong",
+    "dev:sgbl": "vite --mode sgbl",
+    "dev:qingyuan": "vite --mode qingyuan",
     "build": "vite build",
     "build:brainjuice": "vite build --mode brainjuice",
+    "build:moyunzong": "vite build --mode moyunzong",
+    "build:sgbl": "vite build --mode sgbl",
+    "build:qingyuan": "vite build --mode qingyuan",
+    "build:tenants": "vite build --mode brainjuice && vite build --mode moyunzong && vite build --mode sgbl && vite build --mode qingyuan",
     "preview": "vite preview",
-    "preview:brainjuice": "vite preview --mode brainjuice"
+    "preview:brainjuice": "vite preview --mode brainjuice",
+    "preview:moyunzong": "vite preview --mode moyunzong",
+    "preview:sgbl": "vite preview --mode sgbl",
+    "preview:qingyuan": "vite preview --mode qingyuan"
   },
   "dependencies": {
     "@imgly/background-removal": "^1.7.0",

@@ -152,13 +152,15 @@ router.beforeEach(async (to, from, next) => {
         }
       })
       
-      if (!response.ok) {
-        // token 无效，清除并跳转到落地页
-        console.log('[Router] Token 无效，清除并跳转到落地页')
+      if (response.status === 401) {
+        console.log('[Router] Token 已失效(401)，清除登录状态')
         const { clearAuthSession } = await import('@/api/client')
         clearAuthSession()
         localStorage.removeItem('userMode')
         return next({ path: '/', query: { redirect: to.fullPath } })
+      }
+      if (!response.ok) {
+        console.warn('[Router] 验证请求返回', response.status, '，但非401，允许通过')
       }
     } catch (error) {
       console.error('[Router] 验证登录状态失败:', error)

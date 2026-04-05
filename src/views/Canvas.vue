@@ -1209,7 +1209,6 @@ function handleBeforeUnload(event) {
 // 加载用户信息
 async function loadUserInfo() {
   try {
-    // 先检查是否有 token，没有 token 才跳转
     const token = localStorage.getItem('token')
     if (!token) {
       console.log('[Canvas] 无 token，跳转到落地页')
@@ -1219,16 +1218,10 @@ async function loadUserInfo() {
     
     me.value = await getMe()
     if (!me.value) {
-      // getMe 返回 null 可能是网络错误或 token 过期
-      // 仅在 token 被清除（401 时 getMe 内部不会清除 token）的情况下跳转
-      // 否则保留在当前页面，让用户手动刷新
-      const tokenAfter = localStorage.getItem('token')
-      if (!tokenAfter) {
-        console.log('[Canvas] Token 已被清除，跳转到落地页')
-        router.push('/')
-      } else {
-        console.warn('[Canvas] 获取用户信息失败，但 token 仍存在，保留在当前页面')
-      }
+      // getMe 返回 null 可能是网络错误、超时或 token 过期
+      // 🔧 修复：不再跳转，保留在画布页面。用户已通过路由守卫认证，
+      // 临时的 API 失败（网络抖动、后端重启）不应将用户踢出画布
+      console.warn('[Canvas] 获取用户信息失败，保留在当前页面（不跳转）')
     } else {
       // 🔧 修复：检查是否切换了用户，如果是则清除上一个用户的工作流历史
       // 通过检查 sessionStorage 中保存的用户ID来判断

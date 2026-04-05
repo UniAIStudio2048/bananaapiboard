@@ -416,10 +416,8 @@ export async function getMe(forceRefresh = false) {
     clearTimeout(timeoutId)
 
     if (!r.ok) {
-      // 如果返回401，可能是token过期，清除token
       if (r.status === 401) {
-        console.warn('[getMe] 认证失败，token可能已过期')
-        clearAuthSession()
+        console.warn('[getMe] 认证失败(401)，token可能已过期，但不主动清除session（由路由守卫统一处理）')
       }
       return null
     }
