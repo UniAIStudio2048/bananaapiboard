@@ -400,6 +400,7 @@ export default {
     noTemplates: '暂无模板',
     open: '打开',
     nodeLabel: '节点',
+    copyWorkflowUid: '点击复制工作流ID',
     doubleClickOpen: '双击打开新标签',
     dragToMerge: '拖拽到画布合并',
     doubleClickOpenDragMerge: '双击打开新标签 · 拖拽到画布合并',

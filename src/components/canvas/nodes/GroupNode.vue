@@ -284,7 +284,7 @@ onUnmounted(() => {
       >{{ groupName }}</span>
 
       <!-- 编组工具栏（选中或悬停时显示） -->
-      <div v-if="(selected || isHovered) && !isEditing" class="group-toolbar">
+      <div v-if="(selected || isHovered) && !isEditing && !props.data?.readonly" class="group-toolbar">
         <button
           class="toolbar-btn execute-btn"
           :class="{ 'is-running': isExecuting }"

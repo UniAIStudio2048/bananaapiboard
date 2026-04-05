@@ -460,8 +460,14 @@ function handleTabSwitch(tab) {
 }
 
 // 标签关闭
-function handleTabClose(tabId) {
+async function handleTabClose(tabId) {
+  const isLastTab = canvasStore.workflowTabs.length === 1
+
   canvasStore.closeTab(tabId)
+
+  if (isLastTab) {
+    await router.push('/')
+  }
 }
 
 // 新建标签
@@ -830,7 +836,7 @@ function handleWorkflowSaved(workflow) {
 
   // 更新当前标签名称和工作流ID
   canvasStore.updateCurrentTabName(workflow.name)
-  canvasStore.markCurrentTabSaved(workflow.id)
+  canvasStore.markCurrentTabSaved(workflow.id, workflow.workflow_uid)
 
   // 启用自动保存
   if (!autoSaveEnabled.value) {
@@ -2214,12 +2220,15 @@ onMounted(async () => {
   }
   
   // 🔧 检测是否是异常刷新后的恢复（用于调试页面意外刷新问题）
+  // 仅在当前页面确实由浏览器刷新重新加载时才提示，避免将正常进入 /canvas 误判为异常刷新。
   const lastUnloadTimestamp = sessionStorage.getItem('canvas_unload_timestamp')
   const hadUnsavedWork = sessionStorage.getItem('canvas_had_unsaved_work')
+  const navigationEntry = performance.getEntriesByType('navigation')?.[0]
+  const isReloadNavigation = navigationEntry?.type === 'reload'
   if (lastUnloadTimestamp) {
     const elapsed = Date.now() - parseInt(lastUnloadTimestamp)
-    // 如果距离上次卸载不到 3 秒，可能是异常刷新
-    if (elapsed < 3000) {
+    // 只有真正的 reload 且距离上次卸载很近时，才认为可能是异常刷新
+    if (isReloadNavigation && elapsed < 3000) {
       console.warn('[Canvas] ⚠️ 检测到可能的异常刷新，距上次卸载:', elapsed, 'ms')
       if (hadUnsavedWork === 'true') {
         console.warn('[Canvas] ⚠️ 上次退出时有未保存的工作')

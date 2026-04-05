@@ -1,4 +1,7 @@
 <script setup>
+defineOptions({
+  inheritAttrs: false
+})
 /**
  * AudioNode.vue - 音频节点（统一设计）
  * 
@@ -27,6 +30,8 @@ const props = defineProps({
   data: Object,
   selected: Boolean
 })
+
+const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
@@ -1267,7 +1272,7 @@ function handleSpeedDropdownClickOutside(event) {
     />
     
     <!-- 音频工具栏（选中且有音频时显示）- 与 ImageNode 保持一致 -->
-    <div v-show="showToolbar" class="audio-toolbar">
+    <div v-show="showToolbar && !props.data?.readonly" class="audio-toolbar">
       <!-- 倍速选择器 -->
       <div class="speed-dropdown" @click.stop>
         <button class="toolbar-btn speed-btn" title="播放速度" @click="toggleSpeedDropdown">

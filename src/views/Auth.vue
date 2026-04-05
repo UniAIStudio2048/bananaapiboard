@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getTenantHeaders } from '@/config/tenant'
+import { persistAuthSession } from '@/api/client'
 
 const router = useRouter()
 const params = new URLSearchParams(location.search)
@@ -304,8 +305,8 @@ async function submit() {
       throw new Error(data.error || 'failed')
     }
     const j = await r.json()
-    localStorage.setItem('token', j.token)
-    
+    persistAuthSession(j.token, j.user || { username: account.value })
+
     // 🔧 修复：登录成功后清除上一个用户的工作流历史和后台任务
     // 避免切换用户时看到上一个用户的数据，导致任务提交失败
     try {

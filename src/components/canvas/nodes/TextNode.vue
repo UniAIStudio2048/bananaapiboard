@@ -1,4 +1,7 @@
 <script setup>
+defineOptions({
+  inheritAttrs: false
+})
 /**
  * TextNode.vue - 文本输入节点
  * 支持三种状态：空状态（快捷操作）、待编辑状态、编辑模式
@@ -22,6 +25,8 @@ const props = defineProps({
   data: Object,
   selected: Boolean
 })
+
+const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
@@ -2314,7 +2319,7 @@ onMounted(() => {
     />
     
     <!-- 格式工具栏（单独选中节点时显示） -->
-    <div v-show="isSoloSelected" class="format-toolbar" @mousedown.stop @click.stop>
+    <div v-show="isSoloSelected && !props.data?.readonly" class="format-toolbar" @mousedown.stop @click.stop>
       <template v-for="(btn, index) in formatButtons" :key="index">
         <div v-if="btn.type === 'divider'" class="toolbar-divider"></div>
         <button 

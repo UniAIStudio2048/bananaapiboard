@@ -2441,7 +2441,6 @@ onUnmounted(() => {
       :connection-mode="'loose'"
       :pan-on-drag="[0, 2]"
       :selection-on-drag="true"
-      :selection-key-code="'Control'"
       :select-nodes-on-drag="true"
       :pan-on-scroll="false"
       :zoom-on-scroll="false"

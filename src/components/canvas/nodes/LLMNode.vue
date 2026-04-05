@@ -1,4 +1,7 @@
 <script setup>
+defineOptions({
+  inheritAttrs: false
+})
 /**
  * LLMNode.vue - LLM 智能节点
  * 用于提示词优化、图片描述、内容扩写等
@@ -17,6 +20,8 @@ const props = defineProps({
   data: Object,
   selected: Boolean
 })
+
+const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')

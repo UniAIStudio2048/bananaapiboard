@@ -5,7 +5,6 @@
 import { ref, inject, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCanvasStore } from '@/stores/canvas'
-import { saveWorkflowLocal } from '@/api/canvas/workflow'
 import UserProfilePanel from './UserProfilePanel.vue'
 import { useI18n } from '@/i18n'
 
@@ -144,13 +143,7 @@ function openHistory() {
 const emit = defineEmits(['openSaveDialog'])
 
 function saveWorkflow() {
-  const data = canvasStore.exportWorkflow()
-  if (data.nodes.length === 0) {
-    // 画布为空时静默返回，不做任何提示
-    return
-  }
-  
-  // 触发打开保存对话框
+  // 统一交给父组件决定是否允许保存与如何提示，避免空画布时点击无响应
   emit('openSaveDialog')
 }
 

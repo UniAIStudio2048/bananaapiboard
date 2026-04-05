@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { getMe } from '@/api/client'
+import { clearAuthSession, getMe } from '@/api/client'
 import { getTheme, toggleTheme as toggleThemeUtil } from '@/utils/theme'
 import { getTenantHeaders, getBrand, loadBrandConfig } from '@/config/tenant'
 import NotificationBar from '@/components/NotificationBar.vue'
@@ -121,7 +121,7 @@ const navItems = [
 const isActive = (path) => route.path === path
 
 function logout() {
-  localStorage.removeItem('token')
+  clearAuthSession()
   localStorage.removeItem('userMode')
   me.value = null
   isUserMenuOpen.value = false
@@ -199,13 +199,14 @@ async function copyInviteLink() {
     console.error('复制失败', err)
   }
 }
+const isCommunityPage = computed(() => route.path.startsWith('/community'))
 
 </script>
 
 <template>
   <div class="min-h-screen flex flex-col">
-    <!-- 导航栏 - 落地页、画布页和工作流页不显示 -->
-    <nav v-if="route.path !== '/' && route.path !== '/canvas' && route.path !== '/workflows'" class="glass sticky top-0 z-50 border-b border-slate-200/50 dark:border-dark-600/50">
+    <!-- 导航栏 - 落地页、画布页、工作流页和社区页面不显示 -->
+    <nav v-if="route.path !== '/' && route.path !== '/canvas' && route.path !== '/workflows' && !route.path.startsWith('/community')" class="glass sticky top-0 z-50 border-b border-slate-200/50 dark:border-dark-600/50">
       <div class="mx-auto" 
         :class="isWidescreenMode && route.path === '/' ? 'px-0' : 'max-w-7xl px-4 sm:px-6 lg:px-8'">
         <div class="flex justify-between items-center h-16"
@@ -358,6 +359,16 @@ async function copyInviteLink() {
                   >
                     <span class="mr-3">👤</span>
                     {{ t('nav.user') }}
+                  </RouterLink>
+                  
+                  <RouterLink
+                    v-if="me?.id"
+                    :to="`/community/users/${me.id}`"
+                    class="flex items-center px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors"
+                    @click="isUserMenuOpen = false"
+                  >
+                    <span class="mr-3">🎨</span>
+                    我的主页
                   </RouterLink>
                   
                   <button
@@ -537,6 +548,16 @@ async function copyInviteLink() {
                 {{ t('nav.user') }}
               </RouterLink>
               
+              <RouterLink
+                v-if="me?.id"
+                :to="`/community/users/${me.id}`"
+                class="block nav-link"
+                @click="isMenuOpen = false"
+              >
+                <span class="mr-2">🎨</span>
+                我的主页
+              </RouterLink>
+              
               <button
                 @click="copyInviteLink"
                 class="w-full text-left nav-link transition-colors"
@@ -583,8 +604,8 @@ async function copyInviteLink() {
       </div>
     </nav>
 
-    <!-- 通知栏 - 落地页、画布页和工作流页不显示 -->
-    <NotificationBar v-if="route.path !== '/' && route.path !== '/canvas' && route.path !== '/workflows'" />
+    <!-- 通知栏 - 落地页、画布页、工作流页和社区详情页不显示 -->
+    <NotificationBar v-if="route.path !== '/' && route.path !== '/canvas' && route.path !== '/workflows' && !route.path.startsWith('/community')" />
 
     <!-- 主内容区 -->
     <main class="flex-1">
@@ -592,12 +613,16 @@ async function copyInviteLink() {
     </main>
     
     <!-- 底部备案号 - 固定在页面最底部，落地页、画布页和工作流页不显示 -->
-    <footer v-if="route.path !== '/' && route.path !== '/canvas' && route.path !== '/workflows' && icpConfig.enabled && icpConfig.icp_number" class="py-3 text-center border-t border-slate-200/50 dark:border-dark-600/50 bg-slate-50/80 dark:bg-dark-800/80 mt-auto">
+    <footer v-if="route.path !== '/' && route.path !== '/canvas' && route.path !== '/workflows' && route.name !== 'communityDetail' && route.name !== 'communityWorkflow' && icpConfig.enabled && icpConfig.icp_number" 
+      class="py-3 text-center mt-auto"
+      :class="isCommunityPage ? 'bg-black' : 'bg-slate-200 dark:bg-dark-800'"
+    >
       <a 
         :href="icpConfig.icp_link || 'https://beian.miit.gov.cn/'" 
         target="_blank" 
         rel="noopener noreferrer"
-        class="text-xs text-slate-400 dark:text-slate-500 hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
+        class="text-xs transition-colors"
+        :class="isCommunityPage ? 'text-white/70 hover:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
       >
         {{ icpConfig.icp_number }}
       </a>

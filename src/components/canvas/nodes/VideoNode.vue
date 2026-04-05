@@ -1,4 +1,7 @@
 <script setup>
+defineOptions({
+  inheritAttrs: false
+})
 /**
  * VideoNode.vue - 视频节点（统一设计）
  * 
@@ -28,6 +31,8 @@ const props = defineProps({
   data: Object,
   selected: Boolean
 })
+
+const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
@@ -1309,6 +1314,8 @@ const nodeClass = computed(() => ({
 
 // 是否有输出
 const hasOutput = computed(() => !!props.data.output?.url)
+const shouldRenderVideoOutput = computed(() => hasOutput.value && !readonlyPreviewVideoFailed.value)
+const readonlyPreviewVideoFailed = ref(false)
 
 // 处理视频 URL，确保使用相对路径（避免跨域问题）
 const normalizedVideoUrl = computed(() => {
@@ -2148,6 +2155,16 @@ watch(() => props.selected, (isSelected) => {
 watch(() => props.data.label, (newLabel) => {
   if (newLabel !== undefined && newLabel !== localLabel.value) {
     localLabel.value = newLabel
+  }
+})
+
+watch(() => props.data.output?.url, () => {
+  readonlyPreviewVideoFailed.value = false
+})
+
+watch(() => props.data.readonly, (isReadonly) => {
+  if (!isReadonly) {
+    readonlyPreviewVideoFailed.value = false
   }
 })
 
@@ -4381,7 +4398,13 @@ async function handleVideoError(event) {
   const video = event.target
   const error = video.error
   const taskId = props.data?.taskId || props.data?.soraTaskId
-  
+  const isReadonlyPreview = !!props.data?.readonly
+
+  if (isReadonlyPreview) {
+    readonlyPreviewVideoFailed.value = true
+    return
+  }
+
   console.error('[VideoNode] 视频加载失败:', {
     originalUrl: props.data.output?.url?.substring(0, 60),
     normalizedUrl: normalizedVideoUrl.value?.substring(0, 60),
@@ -4488,6 +4511,7 @@ function closeFullscreenPreview() {
 // ========== 视频工具栏 ==========
 // 是否显示工具栏（单独选中且有视频内容）- 与 ImageNode 保持一致
 const showToolbar = computed(() => {
+  if (props.data?.readonly) return false
   if (!props.selected) return false
   if (getSelectedNodes.value.length > 1) return false
   return hasOutput.value
@@ -5439,8 +5463,8 @@ function handleToolbarPreview() {
         </svg>
         
         <!-- 视频输出预览（无边框设计，悬停自动播放） -->
-        <div 
-          v-if="hasOutput" 
+        <div
+          v-if="shouldRenderVideoOutput"
           class="video-output-wrapper"
           :style="videoWrapperStyle"
           @mouseenter="handleVideoMouseEnter"
@@ -5474,7 +5498,13 @@ function handleToolbarPreview() {
             </button>
           </div>
         </div>
-        
+
+        <div v-else-if="hasOutput && props.data?.readonly" class="video-output-wrapper" :style="videoWrapperStyle">
+          <div class="flex h-full w-full items-center justify-center bg-black/40 text-xs text-white/60">
+            预览视频暂不可直接播放
+          </div>
+        </div>
+
         <!-- 主内容区域（非输出状态） -->
         <div v-else class="node-content">
           <!-- 加载中状态 -->
@@ -5626,7 +5656,7 @@ function handleToolbarPreview() {
     />
     
     <!-- 底部配置面板（选中时显示） -->
-    <div v-show="isSoloSelected" class="config-panel" @mousedown.stop>
+    <div v-show="isSoloSelected" class="config-panel" :class="{ 'config-panel-readonly': props.data?.readonly }" @mousedown.stop>
       <!-- 参考图片预览（支持拖拽上传） -->
       <div 
         class="panel-frames"
@@ -10166,5 +10196,23 @@ function handleToolbarPreview() {
 :root.canvas-theme-light .video-node .prompt-media-tag {
   background: rgba(0, 0, 0, 0.06);
   border-bottom-color: rgba(0, 0, 0, 0.3);
+}
+
+/* 只读预览模式 */
+.config-panel-readonly {
+  pointer-events: none;
+  opacity: 0.85;
+}
+.config-panel-readonly .generate-btn {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.config-panel-readonly .panel-frame-add,
+.config-panel-readonly .panel-frame-remove,
+.config-panel-readonly select,
+.config-panel-readonly input,
+.config-panel-readonly button {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 </style>

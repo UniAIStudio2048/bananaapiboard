@@ -8,13 +8,17 @@ import Canvas from '@/views/Canvas.vue'
 import WorkflowList from '@/views/WorkflowList.vue'
 import Landing3D from '@/views/Landing3D.vue'
 
+const landingMode = import.meta.env.VITE_LANDING_MODE
+
 const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { 
-      path: '/', 
+    {
+      path: '/',
       name: 'landing',
-      component: Landing3D,
+      component: landingMode === '1'
+        ? () => import('@/views/CommunityHome.vue')
+        : Landing3D,
       meta: { title: '', requiresAuth: false }  // 落地页直接使用默认标题
     },
     { 
@@ -58,11 +62,55 @@ const router = createRouter({
       component: Packages,
       meta: { title: '套餐购买', requiresAuth: true }
     },
-    { 
-      path: '/adminboard', 
+    {
+      path: '/adminboard',
       name: 'adminboard',
       component: AdminBoard,
       meta: { title: '管理后台', requiresAuth: true }
+    },
+    // 社区路由
+    {
+      path: '/community',
+      name: 'community',
+      component: () => import('@/views/CommunityHome.vue'),
+      meta: { title: '社区', requiresAuth: false }
+    },
+    {
+      path: '/community/tvshow',
+      name: 'communityTvShow',
+      component: () => import('@/views/TvShowPage.vue'),
+      meta: { title: 'TV Show', requiresAuth: false }
+    },
+    {
+      path: '/community/users/:userId',
+      name: 'communityUserProfile',
+      component: () => import('@/views/CommunityUserProfile.vue'),
+      meta: { title: '作者主页', requiresAuth: false }
+    },
+    {
+      path: '/community/messages',
+      name: 'communityMessages',
+      component: () => import('@/views/CommunityMessages.vue'),
+      meta: { title: '社区私信', requiresAuth: true }
+    },
+    {
+      path: '/community/templates',
+      name: 'communityTemplates',
+      component: () => import('@/views/TemplateListPage.vue'),
+      meta: { title: '模板库', requiresAuth: false }
+    },
+    {
+      path: '/community/:id/workflow',
+      alias: '/community/workflow/:id',
+      name: 'communityWorkflow',
+      component: () => import('@/views/CommunityWorkflow.vue'),
+      meta: { title: '工作流预览', requiresAuth: false }
+    },
+    {
+      path: '/community/:id',
+      name: 'communityDetail',
+      component: () => import('@/views/CommunityDetail.vue'),
+      meta: { title: '作品详情', requiresAuth: false }
     },
     // 404 重定向到首页
     {
@@ -107,7 +155,8 @@ router.beforeEach(async (to, from, next) => {
       if (!response.ok) {
         // token 无效，清除并跳转到落地页
         console.log('[Router] Token 无效，清除并跳转到落地页')
-        localStorage.removeItem('token')
+        const { clearAuthSession } = await import('@/api/client')
+        clearAuthSession()
         localStorage.removeItem('userMode')
         return next({ path: '/', query: { redirect: to.fullPath } })
       }

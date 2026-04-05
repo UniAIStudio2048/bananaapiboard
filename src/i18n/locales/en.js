@@ -400,6 +400,7 @@ export default {
     noTemplates: 'No templates available',
     open: 'Open',
     nodeLabel: 'nodes',
+    copyWorkflowUid: 'Click to copy workflow ID',
     doubleClickOpen: 'Double-click to open in new tab',
     dragToMerge: 'Drag to canvas to merge',
     doubleClickOpenDragMerge: 'Double-click to open · Drag to merge',
@@ -790,7 +791,20 @@ export default {
       deduct: 'Deduction',
       refund: 'Refund',
       voucher: 'Voucher',
-      transfer: 'Balance Transfer'
+      transfer: 'Balance Transfer',
+      points_transfer_out: 'Points Transfer Out',
+      points_transfer_in: 'Points Transfer In',
+      motion_control_refund: 'Motion Transfer Refund',
+      canvas_crop: 'Canvas Crop',
+      llm_chat: 'LLM Chat',
+      admin_adjust: 'Admin Points Adjustment',
+      admin_adjust_package: 'Admin Package Points Adjustment',
+      image_multiangle: 'Multi-angle Image Generation',
+      video_hd_upscale: 'HD Video Upscale',
+      package_purchase: 'Package Purchase',
+      package_upgrade: 'Package Upgrade',
+      sora_character_cost: 'Sora Character Creation',
+      sora_character_cost_package: 'Sora Character Creation'
     }
   },
 
@@ -965,7 +979,20 @@ export default {
     manual_adjust: 'Manual Adjustment',
     gift: 'Gift',
     deduct: 'Deduction',
-    milestone: 'Milestone Reward'
+    milestone: 'Milestone Reward',
+    points_transfer_out: 'Points Transfer Out',
+    points_transfer_in: 'Points Transfer In',
+    motion_control_refund: 'Motion Transfer Refund',
+    canvas_crop: 'Canvas Crop',
+    llm_chat: 'LLM Chat',
+    admin_adjust: 'Admin Points Adjustment',
+    admin_adjust_package: 'Admin Package Points Adjustment',
+    image_multiangle: 'Multi-angle Image Generation',
+    video_hd_upscale: 'HD Video Upscale',
+    package_purchase: 'Package Purchase',
+    package_upgrade: 'Package Upgrade',
+    sora_character_cost: 'Sora Character Creation',
+    sora_character_cost_package: 'Sora Character Creation'
   },
 
   // Onboarding Guide

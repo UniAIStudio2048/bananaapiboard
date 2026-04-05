@@ -111,7 +111,7 @@ function fullscreen() {
         <span class="icon">{{ isGridMode ? '⊞' : '◉' }}</span>
         {{ data.title || (isGridMode ? '9宫格分镜' : '预览输出') }}
       </div>
-      <div class="canvas-node-actions">
+      <div v-if="!props.data?.readonly" class="canvas-node-actions">
         <button class="canvas-node-action-btn" title="下载" @click="download">↓</button>
         <button class="canvas-node-action-btn" title="全屏" @click="fullscreen">⤢</button>
       </div>

@@ -9,10 +9,11 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
+import { createI18n, initI18n } from './i18n'
 import { initTheme } from './utils/theme'
 import { initLogger, logPageView } from './utils/logger'
 import { loadBrandConfig, getBrand } from './config/tenant'
-import { createI18n, initI18n } from './i18n'
+import { clearAuthSession } from './api/client'
 
 // 🔧 防止 Vite HMR 失败时自动全页刷新（开发模式）
 // 当 HMR 无法热更新某个模块时，Vite 默认会 reload 整个页面
@@ -73,7 +74,7 @@ function initSystemConfig() {
     if (needUpdate && oldTenantId && oldTenantId !== envConfig.tenantId) {
       console.log('[系统初始化] 清除旧配置和登录状态...')
       // 清除旧的登录token和用户数据
-      localStorage.removeItem('token')
+      clearAuthSession()
       localStorage.removeItem('tenant_config')
       localStorage.removeItem('brand_config_last_update')
     }

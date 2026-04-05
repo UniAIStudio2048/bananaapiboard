@@ -9,7 +9,9 @@ import { ref, computed, watch } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { saveWorkflow, getStorageQuota } from '@/api/canvas/workflow'
+import { getProjectList, createProject } from '@/api/canvas/project'
 import { useI18n } from '@/i18n'
+import PublishWorkDialog from '@/components/community/PublishWorkDialog.vue'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -33,6 +35,12 @@ const retryingUpload = ref(false) // 正在重试上传失败的图片
 // 用户配额信息
 const quota = ref(null)
 const loadingQuota = ref(false)
+
+// 项目选择
+const projects = ref([])
+const selectedProjectId = ref('')
+const showQuickCreate = ref(false)
+const quickProjectName = ref('')
 
 // 当前工作流ID（如果是更新）
 const currentWorkflowId = ref(null)
@@ -69,6 +77,7 @@ const dataSizeStatus = computed(() => {
 // 监听对话框打开
 watch(() => props.visible, async (visible) => {
   if (visible) {
+    showPublishDialog.value = false
     // 🔧 重置状态
     isSaving.value = false
     saveError.value = ''
@@ -76,6 +85,24 @@ watch(() => props.visible, async (visible) => {
 
     // 加载配额信息
     await loadQuota()
+
+    // 加载项目列表
+    try {
+      const result = await getProjectList({
+        spaceType: teamStore.globalSpaceType.value,
+        teamId: teamStore.globalTeamId.value
+      })
+      projects.value = result.data || []
+      // 如果有当前工作流的 project_id，选中它
+      if (canvasStore.workflowMeta?.project_id) {
+        selectedProjectId.value = canvasStore.workflowMeta.project_id
+      } else if (projects.value.length > 0) {
+        const defaultProj = projects.value.find(p => p.is_default)
+        if (defaultProj) selectedProjectId.value = defaultProj.id
+      }
+    } catch (e) {
+      console.error('[SaveWorkflow] 加载项目列表失败:', e)
+    }
 
     // 如果有当前工作流ID，加载名称和描述
     const workflowMeta = canvasStore.workflowMeta
@@ -88,6 +115,8 @@ watch(() => props.visible, async (visible) => {
       workflowName.value = ''
       workflowDescription.value = ''
     }
+  } else {
+    showPublishDialog.value = false
   }
 })
 
@@ -101,6 +130,28 @@ async function loadQuota() {
     console.error('[SaveDialog] 加载配额失败:', error)
   } finally {
     loadingQuota.value = false
+  }
+}
+
+// 快速创建项目
+async function handleQuickCreateProject() {
+  if (!quickProjectName.value.trim()) return
+  try {
+    const result = await createProject({
+      name: quickProjectName.value.trim(),
+      spaceType: teamStore.globalSpaceType.value,
+      teamId: teamStore.globalTeamId.value
+    })
+    const listResult = await getProjectList({
+      spaceType: teamStore.globalSpaceType.value,
+      teamId: teamStore.globalTeamId.value
+    })
+    projects.value = listResult.data || []
+    selectedProjectId.value = result.data.id
+    showQuickCreate.value = false
+    quickProjectName.value = ''
+  } catch (e) {
+    console.error('[SaveWorkflow] 创建项目失败:', e)
   }
 }
 
@@ -380,6 +431,7 @@ async function handleSave() {
     uploadToCloud: true, // 手动保存时上传到云存储
     spaceType: spaceParams.spaceType,
     teamId: spaceParams.teamId,
+    project_id: selectedProjectId.value || undefined,
     ...workflowData
   }
 
@@ -403,6 +455,7 @@ async function handleSave() {
     // 后端返回格式: { id, success } 或 { workflow: { id, name, ... } }
     const savedWorkflow = result.workflow || {
       id: result.id || dataToSave.id,
+      workflow_uid: result.workflow_uid,
       name: dataToSave.name,
       description: dataToSave.description
     }
@@ -410,6 +463,7 @@ async function handleSave() {
     // 更新store中的工作流元信息（使用真实 ID）
     canvasStore.workflowMeta = {
       id: savedWorkflow.id,
+      workflow_uid: savedWorkflow.workflow_uid,
       name: savedWorkflow.name,
       description: savedWorkflow.description
     }
@@ -454,143 +508,191 @@ function handleClose() {
     emit('close')
   }
 }
+
+// 发布到社区 — 不自动提取画布中的图片/视频，由用户手动上传封面和作品
+function extractPublishContext() {
+  return {
+    projectId: selectedProjectId.value || canvasStore.workflowMeta?.project_id || ''
+  }
+}
+
+const showPublishDialog = ref(false)
+const publishContext = computed(() => extractPublishContext())
+const selectedProjectName = computed(() => {
+  if (!selectedProjectId.value) return ''
+  return projects.value.find(p => String(p.id) === String(selectedProjectId.value))?.name || ''
+})
+function handlePublishToCommunity() {
+  showPublishDialog.value = true
+}
 </script>
 
 <template>
-  <div v-if="visible" class="dialog-overlay" @click.self="handleClose">
-    <div class="dialog-container">
-      <!-- 标题 -->
-      <div class="dialog-header">
-        <h2 class="dialog-title">
-          {{ isUpdate ? t('canvas.updateWorkflow') : t('canvas.saveWorkflow') }}
-        </h2>
-        <button class="dialog-close" @click="handleClose">✕</button>
-      </div>
-      
-      <!-- 内容 -->
-      <div class="dialog-content">
-        <!-- 配额信息 -->
-        <div v-if="quota" class="quota-info">
-          <div class="quota-stats">
-            <div class="quota-item">
-              <span class="quota-label">{{ t('canvas.storageSpace') }}</span>
-              <span class="quota-value">
-                {{ formatSize(quota.used_storage) }} / {{ formatSize(quota.total_quota) }}
-                <span class="quota-percentage">({{ quota.used_percentage }}%)</span>
-              </span>
-            </div>
-            <div class="quota-item">
-              <span class="quota-label">{{ t('canvas.workflowCount') }}</span>
-              <span class="quota-value">
-                {{ quota.current_workflows }} / {{ quota.max_workflows }}
-              </span>
-            </div>
-          </div>
-          
-          <!-- VIP提示 -->
-          <div v-if="!quota.is_vip" class="vip-tip">
-            <span class="vip-icon">💎</span>
-            {{ t('canvas.vipTip') }}
-          </div>
+  <Teleport to="body">
+    <div v-if="visible" v-show="!showPublishDialog" class="dialog-overlay" @click.self="handleClose">
+      <div class="dialog-container">
+        <!-- 标题 -->
+        <div class="dialog-header">
+          <h2 class="dialog-title">
+            {{ isUpdate ? t('canvas.updateWorkflow') : t('canvas.saveWorkflow') }}
+          </h2>
+          <button class="dialog-close" @click="handleClose">✕</button>
         </div>
-        
-        <!-- 表单 -->
-        <form @submit.prevent="handleSave">
-          <div class="form-group">
-            <label class="form-label">{{ t('canvas.workflowNameRequired') }}</label>
-            <input
-              v-model="workflowName"
-              type="text"
-              class="form-input"
-              :placeholder="t('canvas.workflowNamePlaceholder')"
-              maxlength="100"
-              :disabled="isSaving"
-            />
-          </div>
-          
-          <div class="form-group">
-            <label class="form-label">{{ t('canvas.workflowDescOptional') }}</label>
-            <textarea
-              v-model="workflowDescription"
-              class="form-textarea"
-              :placeholder="t('canvas.workflowDescPlaceholder')"
-              rows="3"
-              maxlength="500"
-              :disabled="isSaving"
-            ></textarea>
-          </div>
-          
-          <!-- 重试上传提示 -->
-          <div v-if="retryingUpload" class="retry-upload-message">
-            正在重新上传图片，请稍候...
+
+        <!-- 内容 -->
+        <div class="dialog-content">
+          <!-- 配额信息 -->
+          <div v-if="quota" class="quota-info">
+            <div class="quota-stats">
+              <div class="quota-item">
+                <span class="quota-label">{{ t('canvas.storageSpace') }}</span>
+                <span class="quota-value">
+                  {{ formatSize(quota.used_storage) }} / <span class="unlimited-badge">∞</span>
+                </span>
+              </div>
+              <div class="quota-item">
+                <span class="quota-label">{{ t('canvas.workflowCount') }}</span>
+                <span class="quota-value">
+                  {{ quota.current_workflows }} / <span class="unlimited-badge">∞</span>
+                </span>
+              </div>
+            </div>
           </div>
 
-          <!-- 错误提示 -->
-          <div v-if="saveError" class="error-message">
-            {{ saveError }}
-          </div>
-          
-          <!-- 工作流信息 -->
-          <div class="workflow-info">
-            <div class="info-item">
-              <span class="info-label">{{ t('canvas.nodeCount') }}</span>
-              <span class="info-value" :class="{ 'large-count': canvasStore.nodes.length > 50 }">
-                {{ canvasStore.nodes.length }}
-                <span v-if="canvasStore.nodes.length > 50" class="info-badge">大画布</span>
-              </span>
+          <!-- 表单 -->
+          <form @submit.prevent="handleSave">
+            <div class="form-group">
+              <label class="form-label">{{ t('canvas.workflowNameRequired') }}</label>
+              <input
+                v-model="workflowName"
+                type="text"
+                class="form-input"
+                :placeholder="t('canvas.workflowNamePlaceholder')"
+                maxlength="100"
+                :disabled="isSaving"
+              />
             </div>
-            <div class="info-item">
-              <span class="info-label">{{ t('canvas.edgeCount') }}</span>
-              <span class="info-value">{{ canvasStore.edges.length }}</span>
+
+            <div class="form-group">
+              <label class="form-label">所属项目</label>
+              <div class="project-select-row">
+                <select v-model="selectedProjectId" class="form-select">
+                  <option v-for="p in projects" :key="p.id" :value="p.id">
+                    {{ p.name }}{{ p.is_default ? ' (默认)' : '' }}
+                  </option>
+                </select>
+                <button type="button" class="quick-create-btn" @click="showQuickCreate = !showQuickCreate" title="新建项目">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                  </svg>
+                </button>
+              </div>
+              <div v-if="showQuickCreate" class="quick-create-form">
+                <input v-model="quickProjectName" placeholder="输入项目名称" class="form-input" @keyup.enter="handleQuickCreateProject" />
+                <button type="button" class="quick-create-confirm" @click="handleQuickCreateProject">创建</button>
+              </div>
             </div>
-            <div class="info-item">
-              <span class="info-label">数据大小</span>
-              <span class="info-value" :class="'size-' + dataSizeStatus">
-                {{ formatDataSize(currentDataSize) }}
-                <span v-if="dataSizeStatus === 'warning'" class="info-badge warning">较大</span>
-                <span v-if="dataSizeStatus === 'danger'" class="info-badge danger">过大</span>
-              </span>
+
+            <div class="form-group">
+              <label class="form-label">{{ t('canvas.workflowDescOptional') }}</label>
+              <textarea
+                v-model="workflowDescription"
+                class="form-textarea"
+                :placeholder="t('canvas.workflowDescPlaceholder')"
+                rows="3"
+                maxlength="500"
+                :disabled="isSaving"
+              ></textarea>
             </div>
-          </div>
-        </form>
-      </div>
-      
-      <!-- 底部按钮 -->
-      <div class="dialog-footer">
-        <button
-          type="button"
-          class="btn btn-secondary"
-          @click="handleClose"
-          :disabled="isSaving"
-        >
-          {{ t('common.cancel') }}
-        </button>
-        <button
-          type="button"
-          class="btn btn-primary"
-          @click="handleSave"
-          :disabled="isSaving || !workflowName.trim()"
-        >
-          {{ saveButtonText }}
-        </button>
+
+            <!-- 重试上传提示 -->
+            <div v-if="retryingUpload" class="retry-upload-message">
+              正在重新上传图片，请稍候...
+            </div>
+
+            <!-- 错误提示 -->
+            <div v-if="saveError" class="error-message">
+              {{ saveError }}
+            </div>
+
+            <!-- 工作流信息 -->
+            <div class="workflow-info">
+              <div class="info-item">
+                <span class="info-label">{{ t('canvas.nodeCount') }}</span>
+                <span class="info-value" :class="{ 'large-count': canvasStore.nodes.length > 50 }">
+                  {{ canvasStore.nodes.length }}
+                  <span v-if="canvasStore.nodes.length > 50" class="info-badge">大画布</span>
+                </span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">{{ t('canvas.edgeCount') }}</span>
+                <span class="info-value">{{ canvasStore.edges.length }}</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">数据大小</span>
+                <span class="info-value" :class="'size-' + dataSizeStatus">
+                  {{ formatDataSize(currentDataSize) }}
+                  <span v-if="dataSizeStatus === 'warning'" class="info-badge warning">较大</span>
+                  <span v-if="dataSizeStatus === 'danger'" class="info-badge danger">过大</span>
+                </span>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <!-- 底部按钮 -->
+        <div class="dialog-footer">
+          <button
+            type="button"
+            class="btn btn-secondary"
+            @click="handleClose"
+            :disabled="isSaving"
+          >
+            {{ t('common.cancel') }}
+          </button>
+          <button
+            type="button"
+            class="btn btn-primary"
+            @click="handleSave"
+            :disabled="isSaving || !workflowName.trim()"
+          >
+            {{ saveButtonText }}
+          </button>
+          <button
+            type="button"
+            class="btn btn-accent"
+            @click="handlePublishToCommunity"
+            :disabled="isSaving || !currentWorkflowId"
+            title="需要先保存工作流才能发布"
+          >
+            发布到社区
+          </button>
+        </div>
       </div>
     </div>
-  </div>
+  </Teleport>
+
+  <!-- 发布到社区弹窗 -->
+  <PublishWorkDialog
+    v-model="showPublishDialog"
+    :workflow-id="currentWorkflowId || ''"
+    :workflow-name="workflowName"
+    :workflow-uid="canvasStore.workflowMeta?.workflow_uid || ''"
+    :project-id="publishContext.projectId || ''"
+    :project-name="selectedProjectName"
+  />
 </template>
 
 <style scoped>
 .dialog-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 10000;
   animation: fadeIn 0.2s ease;
 }
 
@@ -697,25 +799,10 @@ function handleClose() {
   color: #fff;
 }
 
-.quota-percentage {
-  color: rgba(255, 255, 255, 0.6);
-  font-weight: normal;
-}
-
-.vip-tip {
-  padding: 10px 12px;
-  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(251, 146, 60, 0.1));
-  border-radius: 8px;
-  border: 1px solid rgba(251, 191, 36, 0.2);
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.8);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.vip-icon {
-  font-size: 16px;
+.unlimited-badge {
+  color: #a78bfa;
+  font-weight: 600;
+  font-size: 1.1em;
 }
 
 /* 表单 */
@@ -759,6 +846,82 @@ function handleClose() {
 .form-textarea {
   resize: vertical;
   min-height: 80px;
+}
+
+/* 项目选择 */
+.project-select-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.form-select {
+  flex: 1;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 14px;
+  transition: all 0.2s;
+  appearance: auto;
+}
+
+.form-select:focus {
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.form-select option {
+  background: #1a1a1a;
+  color: #fff;
+}
+
+.quick-create-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.quick-create-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.quick-create-form {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.quick-create-form .form-input {
+  flex: 1;
+}
+
+.quick-create-confirm {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.quick-create-confirm:hover {
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
 }
 
 /* 重试上传提示 */
@@ -911,6 +1074,16 @@ function handleClose() {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
 }
+
+.btn-accent {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: #fff;
+}
+
+.btn-accent:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+}
 </style>
 
 <!-- 白昼模式样式（非 scoped） -->
@@ -964,16 +1137,6 @@ function handleClose() {
   color: #1c1917 !important;
 }
 
-:root.canvas-theme-light .quota-percentage {
-  color: rgba(0, 0, 0, 0.5) !important;
-}
-
-:root.canvas-theme-light .vip-tip {
-  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.06)) !important;
-  border-color: rgba(99, 102, 241, 0.2) !important;
-  color: #6366f1 !important;
-}
-
 /* 表单 */
 :root.canvas-theme-light .form-label {
   color: rgba(0, 0, 0, 0.75) !important;
@@ -991,6 +1154,33 @@ function handleClose() {
   background: #fff !important;
   border-color: rgba(59, 130, 246, 0.5) !important;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+}
+
+:root.canvas-theme-light .form-select {
+  background: rgba(0, 0, 0, 0.02) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .form-select:focus {
+  background: #fff !important;
+  border-color: rgba(59, 130, 246, 0.5) !important;
+}
+
+:root.canvas-theme-light .form-select option {
+  background: #fff !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .quick-create-btn {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .quick-create-btn:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1c1917 !important;
 }
 
 :root.canvas-theme-light .form-input::placeholder,
@@ -1078,6 +1268,15 @@ function handleClose() {
 
 :root.canvas-theme-light .btn-primary:hover:not(:disabled) {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35) !important;
+}
+
+:root.canvas-theme-light .btn-accent {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed) !important;
+  color: #fff !important;
+}
+
+:root.canvas-theme-light .btn-accent:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35) !important;
 }
 </style>
 

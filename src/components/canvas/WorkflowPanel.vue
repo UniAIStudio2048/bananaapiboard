@@ -15,6 +15,7 @@ import {
   formatSaveTime 
 } from '@/stores/canvas/workflowAutoSave'
 import { useTeamStore } from '@/stores/team'
+import { getProjectList, updateProject, createProject, moveWorkflowToProject } from '@/api/canvas/project'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 
 const { t } = useI18n()
@@ -33,11 +34,14 @@ const activeTab = ref('my') // 'my' | 'templates'
 
 // ========== 我的工作流数据 ==========
 const workflows = ref([])
+const projects = ref([])
 const loading = ref(false)
 const quota = ref(null)
 const searchQuery = ref('')
 const selectedId = ref(null)
 const isDragging = ref(false)
+const draggingWorkflow = ref(null)
+const dragOverProjectId = ref(null)
 const spaceFilter = ref('personal') // 空间筛选: 'personal' | 'team-xxx' | 'all'
 
 // ========== 历史工作流数据 ==========
@@ -81,6 +85,112 @@ const deleteConfirm = ref({
 // 清空历史确认
 const clearHistoryConfirm = ref(false)
 
+// ========== 项目目录树 ==========
+const expandedProjects = ref(new Set())
+
+// 重命名状态
+const renamingProject = ref(null)
+const renameInput = ref('')
+
+// 删除确认状态
+const deleteProjectConfirm = ref({ visible: false, group: null, inputName: '' })
+
+function getProjectKey(group) {
+  return group.id || '__uncategorized__'
+}
+
+function toggleProject(projectId) {
+  if (renamingProject.value) return
+  const key = projectId || '__uncategorized__'
+  const newSet = new Set(expandedProjects.value)
+  if (newSet.has(key)) {
+    newSet.delete(key)
+  } else {
+    newSet.add(key)
+  }
+  expandedProjects.value = newSet
+}
+
+function isProjectExpanded(projectId) {
+  return expandedProjects.value.has(projectId || '__uncategorized__')
+}
+
+function startRenameProject(group) {
+  renamingProject.value = getProjectKey(group)
+  renameInput.value = group.id ? group.name : ''
+  nextTick(() => {
+    const input = document.querySelector('.folder-rename-input')
+    if (input) {
+      input.focus()
+      input.select()
+    }
+  })
+}
+
+async function confirmRenameProject(group) {
+  const newName = renameInput.value.trim()
+  if (!newName) {
+    cancelRenameProject()
+    return
+  }
+  
+  try {
+    if (group.id) {
+      await updateProject(group.id, { name: newName })
+    } else {
+      const teamStore2 = useTeamStore()
+      const result = await createProject({
+        name: newName,
+        spaceType: teamStore2.globalSpaceType.value,
+        teamId: teamStore2.globalTeamId.value
+      })
+      const newProjectId = result.data.id
+      for (const w of group.workflows) {
+        await moveWorkflowToProject(w.id, newProjectId)
+      }
+    }
+    renamingProject.value = null
+    renameInput.value = ''
+    workflowsCached.value = false
+    await loadWorkflows(true)
+  } catch (e) {
+    console.error('[WorkflowPanel] 重命名项目失败:', e)
+    alert('操作失败：' + e.message)
+  }
+}
+
+function cancelRenameProject() {
+  renamingProject.value = null
+  renameInput.value = ''
+}
+
+// 删除项目
+function showDeleteProject(e, group) {
+  e.stopPropagation()
+  deleteProjectConfirm.value = { visible: true, group, inputName: '' }
+}
+
+async function handleDeleteProject() {
+  const { group, inputName } = deleteProjectConfirm.value
+  if (!group || !group.id) return
+  if (inputName.trim() !== group.name.trim()) return
+  
+  try {
+    const { deleteProject } = await import('@/api/canvas/project')
+    await deleteProject(group.id)
+    deleteProjectConfirm.value = { visible: false, group: null, inputName: '' }
+    workflowsCached.value = false
+    await loadWorkflows(true)
+  } catch (e) {
+    console.error('[WorkflowPanel] 删除项目失败:', e)
+    alert('删除失败：' + e.message)
+  }
+}
+
+function cancelDeleteProject() {
+  deleteProjectConfirm.value = { visible: false, group: null, inputName: '' }
+}
+
 // ========== 计算属性 ==========
 
 // 筛选后的工作流
@@ -92,6 +202,81 @@ const filteredWorkflows = computed(() => {
     (w.description && w.description.toLowerCase().includes(query))
   )
 })
+
+// 找到默认项目
+const defaultProject = computed(() => {
+  return projects.value.find(p => p.is_default) || null
+})
+
+// 按项目分组的工作流目录树
+const projectTree = computed(() => {
+  const groups = new Map()
+  const defProj = defaultProject.value
+  
+  // 先基于项目列表创建所有项目组（即使暂时没有工作流）
+  for (const p of projects.value) {
+    groups.set(p.id, {
+      id: p.id,
+      name: p.name,
+      isDefault: !!p.is_default,
+      workflows: []
+    })
+  }
+  
+  // 将工作流分配到对应项目组
+  for (const w of filteredWorkflows.value) {
+    let key = w.project_id
+    // project_id 为 null 的归入默认项目
+    if (!key && defProj) {
+      key = defProj.id
+    }
+    
+    if (key && groups.has(key)) {
+      groups.get(key).workflows.push(w)
+    } else {
+      // 无项目且无默认项目，归入未分类
+      if (!groups.has('__uncategorized__')) {
+        groups.set('__uncategorized__', {
+          id: null,
+          name: '未分类',
+          isDefault: false,
+          workflows: []
+        })
+      }
+      groups.get('__uncategorized__').workflows.push(w)
+    }
+  }
+  
+  const result = []
+  const sorted = [...groups.entries()].sort((a, b) => {
+    // 默认项目排第一
+    if (a[1].isDefault) return -1
+    if (b[1].isDefault) return 1
+    // 未分类排最后
+    if (a[0] === '__uncategorized__') return 1
+    if (b[0] === '__uncategorized__') return -1
+    return a[1].name.localeCompare(b[1].name)
+  })
+  
+  for (const [, group] of sorted) {
+    result.push(group)
+  }
+  
+  return result
+})
+
+// 首次加载或项目变化时自动展开所有文件夹
+let hasInitialExpanded = false
+watch(projectTree, (newTree) => {
+  if (!hasInitialExpanded && newTree.length > 0) {
+    hasInitialExpanded = true
+    const newSet = new Set()
+    for (const g of newTree) {
+      newSet.add(g.id || '__uncategorized__')
+    }
+    expandedProjects.value = newSet
+  }
+}, { immediate: true })
 
 // 筛选后的历史工作流
 const filteredHistoryWorkflows = computed(() => {
@@ -128,15 +313,20 @@ async function loadWorkflows(forceRefresh = false) {
   
   loading.value = true
   try {
-    // 获取空间筛选参数
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
-    const result = await getWorkflowList({ page: 1, pageSize: 50, ...spaceParams })
-    workflows.value = result.list || []
+    const [wfResult, projResult] = await Promise.all([
+      getWorkflowList({ page: 1, pageSize: 50, ...spaceParams }),
+      getProjectList({
+        spaceType: spaceParams.spaceType,
+        teamId: spaceParams.teamId
+      }).catch(() => ({ data: [] }))
+    ])
+    workflows.value = wfResult.list || []
+    projects.value = projResult.data || []
     workflowsCached.value = true
     lastWorkflowsLoad.value = now
-    console.log('[WorkflowPanel] 加载工作流:', workflows.value.length, '个', spaceParams)
+    console.log('[WorkflowPanel] 加载工作流:', workflows.value.length, '个, 项目:', projects.value.length, '个')
     
-    // 如果我的工作流和历史记录都为空，自动切换到模板标签
     if (workflows.value.length === 0 && historyWorkflows.value.length === 0 && activeTab.value === 'my') {
       activeTab.value = 'templates'
     }
@@ -231,7 +421,8 @@ function stopTeamSync() {
 // 空间筛选变化时重新加载
 function handleSpaceChange(newSpace) {
   spaceFilter.value = newSpace
-  workflowsCached.value = false // 清除缓存
+  workflowsCached.value = false
+  hasInitialExpanded = false
   loadWorkflows(true)
   
   // 重新评估是否需要同步
@@ -461,17 +652,18 @@ function handleClearHistory() {
 function handleDragStart(e, workflow) {
   console.log('[WorkflowPanel] 开始拖拽工作流:', workflow.name, workflow.id)
   
+  draggingWorkflow.value = workflow
+  
   e.dataTransfer.setData('application/json', JSON.stringify({
     type: 'workflow-merge',
     workflowId: workflow.id,
     workflowName: workflow.name
   }))
-  e.dataTransfer.effectAllowed = 'copy'
+  e.dataTransfer.effectAllowed = 'copyMove'
   
   setTimeout(() => {
     isDragging.value = true
-    emit('close')
-  }, 100)
+  }, 50)
 }
 
 // 拖拽历史工作流
@@ -497,7 +689,91 @@ function handleHistoryDragStart(e, workflow) {
 // 结束拖拽
 function handleDragEnd() {
   console.log('[WorkflowPanel] 拖拽结束')
+  if (draggingWorkflow.value) {
+    emit('close')
+  }
   isDragging.value = false
+  draggingWorkflow.value = null
+  dragOverProjectId.value = null
+}
+
+// ========== 文件夹拖拽移动 ==========
+
+function getWorkflowSourceProjectId(workflow) {
+  if (workflow.project_id) return workflow.project_id
+  const defProj = defaultProject.value
+  return defProj ? defProj.id : null
+}
+
+function handleFolderDragOver(e, group) {
+  if (!draggingWorkflow.value) return
+  const targetId = group.id || null
+  const sourceId = getWorkflowSourceProjectId(draggingWorkflow.value)
+  if (targetId === sourceId) return
+  if (!group.id) return
+  
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+  dragOverProjectId.value = group.id || '__uncategorized__'
+}
+
+function handleFolderDragEnter(e, group) {
+  if (!draggingWorkflow.value) return
+  const targetId = group.id || null
+  const sourceId = getWorkflowSourceProjectId(draggingWorkflow.value)
+  if (targetId === sourceId) return
+  if (!group.id) return
+  
+  e.preventDefault()
+  dragOverProjectId.value = group.id || '__uncategorized__'
+}
+
+function handleFolderDragLeave(e, group) {
+  const related = e.relatedTarget
+  if (related && e.currentTarget.contains(related)) return
+  const key = group.id || '__uncategorized__'
+  if (dragOverProjectId.value === key) {
+    dragOverProjectId.value = null
+  }
+}
+
+async function handleFolderDrop(e, group) {
+  e.preventDefault()
+  e.stopPropagation()
+  dragOverProjectId.value = null
+  
+  if (!draggingWorkflow.value || !group.id) return
+  
+  const workflow = draggingWorkflow.value
+  const targetProjectId = group.id
+  const sourceProjectId = getWorkflowSourceProjectId(workflow)
+  
+  if (targetProjectId === sourceProjectId) {
+    draggingWorkflow.value = null
+    isDragging.value = false
+    return
+  }
+  
+  draggingWorkflow.value = null
+  isDragging.value = false
+  
+  try {
+    await moveWorkflowToProject(workflow.id, targetProjectId)
+    expandedProjects.value.add(targetProjectId)
+    await loadWorkflows(true)
+  } catch (err) {
+    console.error('[WorkflowPanel] 移动工作流失败:', err)
+  }
+}
+
+function handlePanelDragLeave(e) {
+  if (!draggingWorkflow.value) return
+  const related = e.relatedTarget
+  if (!related || !e.currentTarget.contains(related)) {
+    dragOverProjectId.value = null
+    emit('close')
+    draggingWorkflow.value = null
+  }
 }
 
 // ========== 模板操作 ==========
@@ -594,6 +870,20 @@ function formatDate(date) {
   return d.toLocaleDateString()
 }
 
+async function copyWorkflowUid(uid) {
+  try {
+    await navigator.clipboard.writeText(uid)
+    console.log('[WorkflowPanel] 已复制工作流ID:', uid)
+  } catch {
+    const input = document.createElement('input')
+    input.value = uid
+    document.body.appendChild(input)
+    input.select()
+    document.execCommand('copy')
+    document.body.removeChild(input)
+  }
+}
+
 // ========== 生命周期 ==========
 
 // 监听显示状态
@@ -669,6 +959,7 @@ defineExpose({
       v-if="visible"
       class="workflow-panel-container"
       :class="{ 'is-dragging': isDragging }"
+      @dragleave="handlePanelDragLeave"
     >
       <div class="workflow-panel">
         <!-- 头部 -->
@@ -759,19 +1050,13 @@ defineExpose({
           <div v-if="quota" class="quota-bar">
             <div class="quota-info">
               <span class="quota-used">{{ quota.current_workflows }}</span>
-              <span class="quota-total">/ {{ quota.max_workflows }} {{ t('canvas.workflow') }}</span>
-            </div>
-            <div class="quota-progress">
-              <div 
-                class="quota-fill"
-                :style="{ width: `${(quota.current_workflows / quota.max_workflows) * 100}%` }"
-              ></div>
+              <span class="quota-total">/ ∞ {{ t('canvas.workflow') }}</span>
             </div>
           </div>
           
           <!-- 双列工作流列表 -->
           <div class="panel-content two-columns">
-            <!-- 左侧：手动保存的工作流 -->
+            <!-- 左侧：手动保存的工作流（按项目分组目录树） -->
             <div class="column saved-column">
               <div class="column-header">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -784,11 +1069,11 @@ defineExpose({
               </div>
               
               <div class="column-content">
-                <div v-if="loading && workflows.length === 0" class="loading-state">
+                <div v-if="loading && workflows.length === 0 && projects.length === 0" class="loading-state">
                   <div class="spinner"></div>
                 </div>
                 
-                <div v-else-if="filteredWorkflows.length === 0" class="empty-state small">
+                <div v-else-if="projectTree.length === 0 && filteredWorkflows.length === 0" class="empty-state small">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <rect x="3" y="3" width="7" height="7" rx="1"/>
                     <rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -798,67 +1083,125 @@ defineExpose({
                   <p>{{ searchQuery ? t('canvas.noMatchingWorkflows') : t('canvas.noSavedWorkflows') }}</p>
                 </div>
                 
-                <div v-else class="workflow-list">
-                  <div
-                    v-for="workflow in filteredWorkflows"
-                    :key="workflow.id"
-                    class="workflow-item"
-                    :class="{ selected: selectedId === workflow.id }"
-                    draggable="true"
-                    @click="selectWorkflow(workflow)"
-                    @dblclick="handleLoadMyWorkflow(workflow)"
-                    @dragstart="handleDragStart($event, workflow)"
-                    @dragend="handleDragEnd"
-                  >
-                    <div class="item-icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <rect x="3" y="3" width="6" height="6" rx="1"/>
-                        <rect x="15" y="3" width="6" height="6" rx="1"/>
-                        <rect x="9" y="15" width="6" height="6" rx="1"/>
-                        <path d="M6 9v3h3M18 9v3h-3M12 15v-3"/>
+                <div v-else class="project-tree">
+                  <div v-for="group in projectTree" :key="group.id || '__uncategorized__'" class="project-group">
+                    <!-- 项目文件夹头 -->
+                    <div 
+                      class="project-folder" 
+                      :class="{ 
+                        expanded: isProjectExpanded(group.id),
+                        'drag-over': dragOverProjectId === (group.id || '__uncategorized__') && draggingWorkflow
+                      }"
+                      @click="toggleProject(group.id)"
+                      @dblclick.stop="startRenameProject(group)"
+                      @dragover="handleFolderDragOver($event, group)"
+                      @dragenter="handleFolderDragEnter($event, group)"
+                      @dragleave="handleFolderDragLeave($event, group)"
+                      @drop="handleFolderDrop($event, group)"
+                    >
+                      <svg class="folder-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"/>
                       </svg>
-                    </div>
-                    
-                    <div class="item-info">
-                      <div class="item-name">{{ workflow.name }}</div>
-                      <div class="item-meta">
-                        <span>{{ workflow.node_count }} {{ t('canvas.nodeLabel') }}</span>
-                        <span>·</span>
-                        <span>{{ formatDate(workflow.updated_at) }}</span>
-                        <!-- 团队空间用户署名 -->
-                        <template v-if="teamStore.isInTeamSpace.value && workflow.last_updated_by_username">
-                          <span>·</span>
-                          <span class="item-author">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                              <circle cx="12" cy="7" r="4"/>
-                            </svg>
-                            {{ workflow.last_updated_by_username }}
-                          </span>
-                        </template>
-                      </div>
-                    </div>
-                    
-                    <div class="item-actions">
+                      <svg v-if="group.id" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                      </svg>
+                      <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <rect x="2" y="4" width="20" height="16" rx="2"/>
+                        <line x1="2" y1="10" x2="22" y2="10"/>
+                      </svg>
+                      <template v-if="renamingProject === (group.id || '__uncategorized__')">
+                        <input
+                          class="folder-rename-input"
+                          v-model="renameInput"
+                          :placeholder="group.id ? '' : '输入项目名称'"
+                          @click.stop
+                          @keyup.enter="confirmRenameProject(group)"
+                          @keyup.escape="cancelRenameProject"
+                          @blur="confirmRenameProject(group)"
+                        />
+                      </template>
+                      <template v-else>
+                        <span class="folder-name">{{ group.name }}<span v-if="group.isDefault" class="folder-default-tag">默认</span></span>
+                      </template>
+                      <span class="folder-count">{{ group.workflows.length }}</span>
                       <button 
-                        class="action-btn load-btn" 
-                        @click.stop="handleLoadMyWorkflow(workflow)"
-                        :title="t('canvas.open')"
+                        v-if="group.id && !group.isDefault"
+                        class="folder-delete-btn"
+                        @click.stop="showDeleteProject($event, group)"
+                        title="删除项目"
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M5 12h14M12 5l7 7-7 7"/>
-                        </svg>
-                      </button>
-                      <button 
-                        class="action-btn delete-btn" 
-                        @click.stop="confirmDelete($event, workflow, false)"
-                        :title="t('common.delete')"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                           <polyline points="3 6 5 6 21 6"/>
                           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                         </svg>
                       </button>
+                    </div>
+                    
+                    <!-- 项目内工作流列表 -->
+                    <div v-if="isProjectExpanded(group.id)" class="project-workflows">
+                      <div
+                        v-for="workflow in group.workflows"
+                        :key="workflow.id"
+                        class="workflow-item tree-item"
+                        :class="{ selected: selectedId === workflow.id }"
+                        draggable="true"
+                        @click="selectWorkflow(workflow)"
+                        @dblclick="handleLoadMyWorkflow(workflow)"
+                        @dragstart="handleDragStart($event, workflow)"
+                        @dragend="handleDragEnd"
+                      >
+                        <div class="item-icon">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <rect x="3" y="3" width="6" height="6" rx="1"/>
+                            <rect x="15" y="3" width="6" height="6" rx="1"/>
+                            <rect x="9" y="15" width="6" height="6" rx="1"/>
+                            <path d="M6 9v3h3M18 9v3h-3M12 15v-3"/>
+                          </svg>
+                        </div>
+                        
+                        <div class="item-info">
+                          <div class="item-name">{{ workflow.name }}</div>
+                          <div class="item-meta">
+                            <span v-if="workflow.workflow_uid" class="workflow-uid" :title="t('canvas.copyWorkflowUid')" @click.stop="copyWorkflowUid(workflow.workflow_uid)">{{ workflow.workflow_uid }}</span>
+                            <span v-if="workflow.workflow_uid">·</span>
+                            <span>{{ workflow.node_count }} {{ t('canvas.nodeLabel') }}</span>
+                            <span>·</span>
+                            <span>{{ formatDate(workflow.updated_at) }}</span>
+                            <template v-if="teamStore.isInTeamSpace.value && workflow.last_updated_by_username">
+                              <span>·</span>
+                              <span class="item-author">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                  <circle cx="12" cy="7" r="4"/>
+                                </svg>
+                                {{ workflow.last_updated_by_username }}
+                              </span>
+                            </template>
+                          </div>
+                        </div>
+                        
+                        <div class="item-actions">
+                          <button 
+                            class="action-btn load-btn" 
+                            @click.stop="handleLoadMyWorkflow(workflow)"
+                            :title="t('canvas.open')"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <path d="M5 12h14M12 5l7 7-7 7"/>
+                            </svg>
+                          </button>
+                          <button 
+                            class="action-btn delete-btn" 
+                            @click.stop="confirmDelete($event, workflow, false)"
+                            :title="t('common.delete')"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                              <polyline points="3 6 5 6 21 6"/>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1031,6 +1374,31 @@ defineExpose({
               <div class="delete-actions">
                 <button class="btn-cancel" @click="clearHistoryConfirm = false">{{ t('common.cancel') }}</button>
                 <button class="btn-confirm" @click="handleClearHistory">{{ t('canvas.clearAll') }}</button>
+              </div>
+            </div>
+          </div>
+        </Transition>
+        
+        <!-- 删除项目确认（需输入项目名） -->
+        <Transition name="fade">
+          <div v-if="deleteProjectConfirm.visible" class="delete-modal" @click.self="cancelDeleteProject">
+            <div class="delete-dialog project-delete-dialog">
+              <p class="delete-title">删除项目「{{ deleteProjectConfirm.group?.name }}」</p>
+              <p class="delete-hint">项目下的工作流将移入默认项目，此操作不可撤销。</p>
+              <p class="delete-hint">请输入项目名称 <strong>{{ deleteProjectConfirm.group?.name }}</strong> 确认删除：</p>
+              <input 
+                v-model="deleteProjectConfirm.inputName"
+                class="delete-confirm-input"
+                :placeholder="deleteProjectConfirm.group?.name"
+                @keyup.enter="handleDeleteProject"
+              />
+              <div class="delete-actions">
+                <button class="btn-cancel" @click="cancelDeleteProject">取消</button>
+                <button 
+                  class="btn-confirm"
+                  :disabled="deleteProjectConfirm.inputName.trim() !== deleteProjectConfirm.group?.name?.trim()"
+                  @click="handleDeleteProject"
+                >确认删除</button>
               </div>
             </div>
           </div>
@@ -1364,6 +1732,7 @@ defineExpose({
   flex: 1;
   overflow-y: auto;
   padding: 6px;
+  padding-bottom: 16px;
 }
 
 .column-content::-webkit-scrollbar {
@@ -1471,6 +1840,185 @@ defineExpose({
   background: rgba(255, 255, 255, 0.15);
 }
 
+/* 项目目录树 */
+.project-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.project-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.project-folder {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: rgba(255, 255, 255, 0.7);
+  user-select: none;
+}
+
+.project-folder:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.project-folder.drag-over {
+  background: rgba(59, 130, 246, 0.15);
+  color: #fff;
+  outline: 1.5px dashed rgba(59, 130, 246, 0.6);
+  outline-offset: -1.5px;
+}
+
+.project-folder .folder-arrow {
+  transition: transform 0.2s;
+  flex-shrink: 0;
+  opacity: 0.5;
+}
+
+.project-folder.expanded .folder-arrow {
+  transform: rotate(90deg);
+}
+
+.folder-name {
+  font-size: 12px;
+  font-weight: 600;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-default-tag {
+  font-size: 9px;
+  font-weight: 500;
+  color: rgba(59, 130, 246, 0.8);
+  background: rgba(59, 130, 246, 0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.folder-delete-btn {
+  padding: 3px;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  transition: all 0.15s;
+  opacity: 0;
+  flex-shrink: 0;
+}
+
+.project-folder:hover .folder-delete-btn {
+  opacity: 1;
+}
+
+.folder-delete-btn:hover {
+  background: rgba(255, 100, 100, 0.15);
+  color: #ff6b6b;
+}
+
+.project-delete-dialog {
+  max-width: 340px;
+  user-select: text;
+}
+
+.delete-title {
+  font-size: 15px !important;
+  font-weight: 600;
+  margin-bottom: 8px !important;
+}
+
+.delete-hint {
+  font-size: 12px !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+  margin-bottom: 8px !important;
+  line-height: 1.5;
+}
+
+.delete-hint strong {
+  color: #ff6b6b;
+  user-select: text;
+  cursor: text;
+}
+
+.delete-confirm-input {
+  width: 100%;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+  margin-bottom: 16px;
+  box-sizing: border-box;
+}
+
+.delete-confirm-input:focus {
+  border-color: rgba(255, 100, 100, 0.5);
+}
+
+.btn-confirm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.folder-rename-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.5);
+  border-radius: 4px;
+  padding: 2px 6px;
+  outline: none;
+}
+
+.folder-rename-input:focus {
+  border-color: #3b82f6;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.folder-count {
+  font-size: 10px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 6px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.5);
+  flex-shrink: 0;
+}
+
+.project-workflows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 8px;
+  margin-left: 6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.workflow-item.tree-item {
+  padding: 8px;
+}
+
+.workflow-item.tree-item .item-icon {
+  width: 28px;
+  height: 28px;
+}
+
 /* 工作流列表 */
 .workflow-list {
   display: flex;
@@ -1546,6 +2094,24 @@ defineExpose({
   font-size: 11px;
   color: rgba(255, 255, 255, 0.4);
   flex-wrap: wrap;
+}
+
+.workflow-uid {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 1px 4px;
+  border-radius: 3px;
+  cursor: pointer;
+  user-select: all;
+  transition: all 0.15s;
+  letter-spacing: 0.3px;
+}
+
+.workflow-uid:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .item-author {
@@ -2000,6 +2566,71 @@ defineExpose({
   background: rgba(0, 0, 0, 0.1) !important;
 }
 
+/* 项目目录树 */
+:root.canvas-theme-light .workflow-panel .project-folder {
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .project-folder:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .project-folder.drag-over {
+  background: rgba(59, 130, 246, 0.1) !important;
+  color: #1c1917 !important;
+  outline: 1.5px dashed rgba(59, 130, 246, 0.5) !important;
+  outline-offset: -1.5px !important;
+}
+
+:root.canvas-theme-light .workflow-panel .folder-count {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .folder-default-tag {
+  color: rgba(59, 130, 246, 0.9) !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .folder-delete-btn {
+  color: rgba(0, 0, 0, 0.3) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .folder-delete-btn:hover {
+  background: rgba(255, 100, 100, 0.1) !important;
+  color: #ef4444 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .delete-hint {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .delete-confirm-input {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .delete-confirm-input:focus {
+  border-color: rgba(239, 68, 68, 0.5) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .project-workflows {
+  border-left-color: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .folder-rename-input {
+  color: #1c1917 !important;
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(59, 130, 246, 0.5) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .folder-rename-input:focus {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: #3b82f6 !important;
+}
+
 /* 工作流列表项 */
 :root.canvas-theme-light .workflow-panel .workflow-item {
   border-color: transparent !important;
@@ -2038,6 +2669,16 @@ defineExpose({
 
 :root.canvas-theme-light .workflow-panel .item-meta {
   color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .workflow-uid {
+  color: rgba(0, 0, 0, 0.5) !important;
+  background: rgba(0, 0, 0, 0.06) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .workflow-uid:hover {
+  background: rgba(0, 0, 0, 0.12) !important;
+  color: rgba(0, 0, 0, 0.7) !important;
 }
 
 :root.canvas-theme-light .workflow-panel .item-author {

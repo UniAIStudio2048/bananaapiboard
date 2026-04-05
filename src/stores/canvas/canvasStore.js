@@ -1359,6 +1359,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       id: tabId,
       name: workflow?.name || '新工作流',
       workflowId: workflow?.id || null,
+      workflowUid: workflow?.workflow_uid || null,
       nodes: workflow?.nodes || [],
       edges: workflow?.edges || [],
       viewport: workflow?.viewport || { x: 0, y: 0, zoom: 1 },
@@ -1398,6 +1399,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 更新工作流元信息
     workflowMeta.value = targetTab.workflowId ? {
       id: targetTab.workflowId,
+      workflow_uid: targetTab.workflowUid,
       name: targetTab.name,
       description: ''
     } : null
@@ -1495,12 +1497,15 @@ export const useCanvasStore = defineStore('canvas', () => {
   /**
    * 标记当前标签已保存
    */
-  function markCurrentTabSaved(workflowId = null) {
+  function markCurrentTabSaved(workflowId = null, workflowUid = null) {
     const currentTab = workflowTabs.value.find(t => t.id === activeTabId.value)
     if (currentTab) {
       currentTab.hasChanges = false
       if (workflowId) {
         currentTab.workflowId = workflowId
+      }
+      if (workflowUid) {
+        currentTab.workflowUid = workflowUid
       }
     }
   }

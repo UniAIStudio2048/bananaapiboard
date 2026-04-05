@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from '@/i18n'
 import { redeemVoucher } from '@/api/client'
+import { getMyWorks, getMyPurchases, getMyIncome, deleteWork, toggleWorkVisibility } from '@/api/community'
 import { getTheme, setTheme, toggleTheme as toggleThemeUtil, themes } from '@/utils/theme'
 import { getTenantHeaders, getModelDisplayName } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
@@ -47,6 +48,7 @@ const loading = ref(true)
 const pointsTrend = ref([])
 const pointsSources = ref([])
 const activeTab = ref('overview') // overview, images, videos, points, invite, settings
+const generationRecordTab = ref('images') // images, videos
 
 // 积分统计（分类）
 const pointsStats = ref({
@@ -158,6 +160,21 @@ const referralRecords = ref([])
 const referralWithdrawals = ref([])
 const referralActionAmount = ref('')
 const referralSubmitting = ref(false)
+
+// 我的社区相关
+const communitySubTab = ref('works') // works, purchases, income
+const communityWorksFilter = ref('') // '' = 全部, pending, approved, rejected
+const communityWorks = ref([])
+const communityWorksTotal = ref(0)
+const communityWorksPage = ref(1)
+const communityWorksLoading = ref(false)
+const communityPurchases = ref([])
+const communityPurchasesTotal = ref(0)
+const communityPurchasesPage = ref(1)
+const communityPurchasesLoading = ref(false)
+const communityIncome = ref({ total_income: 0, records: [], total: 0 })
+const communityIncomePage = ref(1)
+const communityIncomeLoading = ref(false)
 
 // 余额划转相关（原有）
 const transferForm = ref({ amount: '' })
@@ -755,6 +772,160 @@ function copyInvite() {
 }
 
 // ==================== 返利中心 ====================
+// 加载社区 - 我发布的作品
+async function loadCommunityWorks(reset = false) {
+  if (communityWorksLoading.value) return
+  communityWorksLoading.value = true
+  if (reset) communityWorksPage.value = 1
+  try {
+    const params = { page: communityWorksPage.value, pageSize: 12 }
+    if (communityWorksFilter.value) params.status = communityWorksFilter.value
+    const res = await getMyWorks(params)
+    if (res.success) {
+      communityWorks.value = res.data.works || []
+      communityWorksTotal.value = res.data.total || 0
+    }
+  } catch (e) {
+    console.error('加载我的作品失败:', e)
+  } finally {
+    communityWorksLoading.value = false
+  }
+}
+
+// 加载社区 - 我购买的工作流
+async function loadCommunityPurchases(reset = false) {
+  if (communityPurchasesLoading.value) return
+  communityPurchasesLoading.value = true
+  if (reset) communityPurchasesPage.value = 1
+  try {
+    const res = await getMyPurchases({ page: communityPurchasesPage.value, pageSize: 12 })
+    if (res.success) {
+      communityPurchases.value = res.data.records || []
+      communityPurchasesTotal.value = res.data.total || 0
+    }
+  } catch (e) {
+    console.error('加载购买记录失败:', e)
+  } finally {
+    communityPurchasesLoading.value = false
+  }
+}
+
+// 加载社区 - 我的收入
+async function loadCommunityIncome(reset = false) {
+  if (communityIncomeLoading.value) return
+  communityIncomeLoading.value = true
+  if (reset) communityIncomePage.value = 1
+  try {
+    const res = await getMyIncome({ page: communityIncomePage.value, pageSize: 12 })
+    if (res.success) {
+      communityIncome.value = res.data
+    }
+  } catch (e) {
+    console.error('加载收入记录失败:', e)
+  } finally {
+    communityIncomeLoading.value = false
+  }
+}
+
+// 切换社区子标签
+function switchCommunitySubTab(tab) {
+  communitySubTab.value = tab
+  if (tab === 'works') loadCommunityWorks(true)
+  else if (tab === 'purchases') loadCommunityPurchases(true)
+  else if (tab === 'income') loadCommunityIncome(true)
+}
+
+// 切换作品状态筛选
+function filterCommunityWorks(status) {
+  communityWorksFilter.value = status
+  loadCommunityWorks(true)
+}
+
+// 格式化日期
+function formatCommunityDate(ts) {
+  if (!ts) return ''
+  const d = new Date(typeof ts === 'number' ? ts : ts)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  const h = String(d.getHours()).padStart(2, '0')
+  const min = String(d.getMinutes()).padStart(2, '0')
+  return `${y}-${m}-${day} ${h}:${min}`
+}
+
+// 作品状态配置
+const workStatusConfig = {
+  pending: { label: '待审核', class: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+  approved: { label: '已通过', class: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+  rejected: { label: '已拒绝', class: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+  draft: { label: '草稿', class: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' },
+  offline: { label: '已下架', class: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300' }
+}
+
+function getWorkVisibilityState(work) {
+  if (!work || typeof work !== 'object') return false
+
+  if (typeof work.is_public === 'boolean') return work.is_public
+  if (typeof work.is_visible === 'boolean') return work.is_visible
+
+  if (typeof work.visibility === 'string') {
+    const visibility = work.visibility.toLowerCase()
+    if (['public', 'visible', 'published', 'online'].includes(visibility)) return true
+    if (['private', 'hidden', 'offline'].includes(visibility)) return false
+  }
+
+  if (typeof work.status === 'string') {
+    const status = work.status.toLowerCase()
+    if (['approved', 'public', 'visible', 'published', 'online'].includes(status)) return true
+    if (['offline', 'hidden', 'private'].includes(status)) return false
+  }
+
+  return false
+}
+
+function getVisibilityButtonLabel(work) {
+  return getWorkVisibilityState(work) ? '隐藏' : '公开'
+}
+
+function getVisibilityBadgeLabel(work) {
+  return getWorkVisibilityState(work) ? '公开' : '隐藏'
+}
+
+function getVisibilityBadgeClass(work) {
+  return getWorkVisibilityState(work)
+    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+    : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300'
+}
+
+async function handleDeleteCommunityWork(work) {
+  if (!work?.id) return
+  const title = work.title || '该作品'
+  if (!window.confirm(`确定删除“${title}”吗？删除后不可恢复。`)) return
+
+  try {
+    await deleteWork(work.id)
+    showToast('作品已删除', 'success')
+    await loadCommunityWorks(true)
+  } catch (e) {
+    console.error('删除社区作品失败:', e)
+    showToast(e?.message || '删除失败', 'error')
+  }
+}
+
+async function handleToggleCommunityWorkVisibility(work) {
+  if (!work?.id) return
+  const nextVisible = !getWorkVisibilityState(work)
+
+  try {
+    await toggleWorkVisibility(work.id, { is_public: nextVisible })
+    showToast(nextVisible ? '作品已设为公开' : '作品已设为隐藏', 'success')
+    await loadCommunityWorks(true)
+  } catch (e) {
+    console.error('切换作品可见性失败:', e)
+    showToast(e?.message || '切换可见性失败', 'error')
+  }
+}
+
 async function loadReferralData() {
   const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
   try {
@@ -2400,16 +2571,10 @@ onUnmounted(() => {
             📊 概览
           </button>
           <button
-            @click="activeTab = 'images'"
-            :class="['tab-button', { active: activeTab === 'images' }]"
+            @click="activeTab = 'generation-records'; generationRecordTab = 'images'"
+            :class="['tab-button', { active: activeTab === 'generation-records' }]"
           >
-            🖼️ 图片作品
-          </button>
-          <button
-            @click="activeTab = 'videos'"
-            :class="['tab-button', { active: activeTab === 'videos' }]"
-          >
-            🎬 视频作品
+            🗂️ 我的生成记录
           </button>
           <button
             @click="activeTab = 'points'"
@@ -2436,6 +2601,12 @@ onUnmounted(() => {
           >
             💰 返利中心
           </button>
+          <button
+            @click="activeTab = 'community'; switchCommunitySubTab(communitySubTab)"
+            :class="['tab-button', { active: activeTab === 'community' }]"
+          >
+            🌐 社区作品集
+          </button>
         </div>
       </div>
 
@@ -2450,7 +2621,7 @@ onUnmounted(() => {
                 <span class="mr-2">🖼️</span>
                 最近作品
               </h3>
-              <button @click="activeTab = 'images'" class="text-sm text-primary-600 hover:text-primary-700">
+              <button @click="activeTab = 'generation-records'; generationRecordTab = 'images'" class="text-sm text-primary-600 hover:text-primary-700">
                 查看全部 →
               </button>
             </div>
@@ -2520,13 +2691,31 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 我的作品 Tab -->
-        <div v-show="activeTab === 'images'">
+        <!-- 我的生成记录 Tab -->
+        <div v-show="activeTab === 'generation-records'" class="space-y-6">
+          <div class="card p-2">
+            <div class="flex flex-wrap gap-2">
+              <button
+                @click="generationRecordTab = 'images'"
+                :class="['px-4 py-2 rounded-lg text-sm font-medium transition-colors', generationRecordTab === 'images' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
+              >
+                图片生成记录
+              </button>
+              <button
+                @click="generationRecordTab = 'videos'"
+                :class="['px-4 py-2 rounded-lg text-sm font-medium transition-colors', generationRecordTab === 'videos' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
+              >
+                视频生成记录
+              </button>
+            </div>
+          </div>
+
+          <div v-show="generationRecordTab === 'images'">
           <div class="card p-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-xl font-bold gradient-text flex items-center">
                 <span class="mr-2">🖼️</span>
-                我的作品集
+                我的生成记录
               </h3>
               <div class="text-sm text-slate-600 dark:text-slate-400">
                 共 {{ imagesTotal }} 张作品
@@ -2819,8 +3008,7 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <!-- 视频作品 Tab -->
-        <div v-show="activeTab === 'videos'">
+          <div v-show="generationRecordTab === 'videos'">
           <div class="card p-6">
             <div class="flex items-center justify-between mb-4">
               <h3 class="text-xl font-bold gradient-text flex items-center">
@@ -3479,6 +3667,7 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+        </div>
 
         <!-- 账单中心 Tab -->
         <div v-show="activeTab === 'bills'">
@@ -3749,10 +3938,191 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+
+        <!-- 社区作品集 Tab -->
+        <div v-show="activeTab === 'community'">
+          <!-- 子标签导航 -->
+          <div class="flex space-x-2 mb-6">
+            <button
+              @click="switchCommunitySubTab('works')"
+              :class="['px-4 py-2 rounded-lg text-sm font-medium transition-colors', communitySubTab === 'works' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
+            >
+              社区作品集
+            </button>
+            <button
+              @click="switchCommunitySubTab('purchases')"
+              :class="['px-4 py-2 rounded-lg text-sm font-medium transition-colors', communitySubTab === 'purchases' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
+            >
+              我购买的工作流
+            </button>
+            <button
+              @click="switchCommunitySubTab('income')"
+              :class="['px-4 py-2 rounded-lg text-sm font-medium transition-colors', communitySubTab === 'income' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
+            >
+              我的社区收入
+            </button>
+          </div>
+
+          <!-- 子内容：社区作品集 -->
+          <div v-if="communitySubTab === 'works'">
+            <!-- 状态筛选 -->
+            <div class="flex flex-wrap gap-2 mb-4">
+              <button v-for="f in [{val:'',label:'全部'},{val:'pending',label:'待审核'},{val:'approved',label:'已通过'},{val:'rejected',label:'已拒绝'}]" :key="f.val"
+                @click="filterCommunityWorks(f.val)"
+                :class="['px-3 py-1.5 rounded-md text-xs font-medium transition-colors', communityWorksFilter === f.val ? 'bg-primary-500 text-white' : 'bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-dark-500']"
+              >{{ f.label }}</button>
+            </div>
+            <!-- 加载中 -->
+            <div v-if="communityWorksLoading" class="text-center py-12">
+              <div class="inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin"></div>
+              <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">加载中...</p>
+            </div>
+            <!-- 空状态 -->
+            <div v-else-if="communityWorks.length === 0" class="text-center py-12">
+              <div class="w-16 h-16 mx-auto mb-3 bg-slate-100 dark:bg-dark-600 rounded-full flex items-center justify-center">
+                <span class="text-2xl">📝</span>
+              </div>
+              <p class="text-slate-500 dark:text-slate-400">暂无发布的作品</p>
+            </div>
+            <!-- 作品列表 -->
+            <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div v-for="work in communityWorks" :key="work.id" class="card overflow-hidden group">
+                <div class="relative aspect-video bg-slate-100 dark:bg-dark-600">
+                  <img v-if="work.cover_url" :src="work.cover_url" :alt="work.title" class="w-full h-full object-cover" />
+                  <div v-else class="w-full h-full flex items-center justify-center text-slate-400">
+                    <span class="text-3xl">🖼️</span>
+                  </div>
+                  <span :class="['absolute top-2 right-2 px-2 py-0.5 rounded text-xs font-medium', workStatusConfig[work.status]?.class || 'bg-slate-100 text-slate-600']">
+                    {{ workStatusConfig[work.status]?.label || work.status }}
+                  </span>
+                </div>
+                <div class="p-3">
+                  <h4 class="font-medium text-slate-900 dark:text-slate-100 truncate text-sm">{{ work.title }}</h4>
+                  <div class="flex items-center gap-3 mt-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span>👁 {{ work.view_count || 0 }}</span>
+                    <span>❤ {{ work.like_count || 0 }}</span>
+                    <span>🔀 {{ work.fork_count || 0 }}</span>
+                  </div>
+                  <div v-if="work.status === 'rejected' && work.reject_reason" class="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs text-red-600 dark:text-red-400">
+                    拒绝原因：{{ work.reject_reason }}
+                  </div>
+                  <div class="mt-3 flex flex-wrap gap-2">
+                    <span :class="['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', getVisibilityBadgeClass(work)]">
+                      {{ getVisibilityBadgeLabel(work) }}
+                    </span>
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 rounded-md text-xs font-medium bg-slate-100 dark:bg-dark-600 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-dark-500 transition-colors"
+                      @click="handleToggleCommunityWorkVisibility(work)"
+                    >
+                      {{ getVisibilityButtonLabel(work) }}
+                    </button>
+                    <button
+                      v-if="work.status === 'rejected' && work.workflow_id"
+                      type="button"
+                      class="px-3 py-1.5 rounded-md text-xs font-medium bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400 hover:bg-primary-100 dark:hover:bg-primary-900/40 transition-colors"
+                      @click="$router.push({ name: 'canvas', query: { id: work.workflow_id } })"
+                    >
+                      重新编辑
+                    </button>
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 rounded-md text-xs font-medium bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                      @click="handleDeleteCommunityWork(work)"
+                    >
+                      删除作品
+                    </button>
+                  </div>
+                  <p class="mt-2 text-xs text-slate-400 dark:text-slate-500">{{ formatCommunityDate(work.created_at) }}</p>
+                </div>
+              </div>
+            </div>
+            <!-- 分页 -->
+            <div v-if="communityWorksTotal > 12" class="flex justify-center mt-6 gap-2">
+              <button @click="communityWorksPage > 1 && (communityWorksPage--, loadCommunityWorks())" :disabled="communityWorksPage <= 1" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">上一页</button>
+              <span class="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400">{{ communityWorksPage }} / {{ Math.ceil(communityWorksTotal / 12) }}</span>
+              <button @click="communityWorksPage < Math.ceil(communityWorksTotal / 12) && (communityWorksPage++, loadCommunityWorks())" :disabled="communityWorksPage >= Math.ceil(communityWorksTotal / 12)" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">下一页</button>
+            </div>
+          </div>
+
+          <!-- 子内容：我购买的工作流 -->
+          <div v-if="communitySubTab === 'purchases'">
+            <div v-if="communityPurchasesLoading" class="text-center py-12">
+              <div class="inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin"></div>
+              <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">加载中...</p>
+            </div>
+            <div v-else-if="communityPurchases.length === 0" class="text-center py-12">
+              <div class="w-16 h-16 mx-auto mb-3 bg-slate-100 dark:bg-dark-600 rounded-full flex items-center justify-center">
+                <span class="text-2xl">🛒</span>
+              </div>
+              <p class="text-slate-500 dark:text-slate-400">暂无购买记录</p>
+            </div>
+            <div v-else class="space-y-3">
+              <div v-for="p in communityPurchases" :key="p.id"
+                @click="$router.push({ name: 'communityDetail', params: { id: p.work_id } })"
+                class="card p-4 flex items-center gap-4 cursor-pointer hover:shadow-md transition-shadow"
+              >
+                <div class="w-16 h-16 rounded-lg overflow-hidden bg-slate-100 dark:bg-dark-600 flex-shrink-0">
+                  <img v-if="p.work_cover_url" :src="p.work_cover_url" class="w-full h-full object-cover" />
+                  <div v-else class="w-full h-full flex items-center justify-center text-slate-400"><span class="text-xl">🖼️</span></div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h4 class="font-medium text-slate-900 dark:text-slate-100 truncate text-sm">{{ p.work_title || '未知作品' }}</h4>
+                  <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">卖家：{{ p.seller_username || '未知' }}</p>
+                </div>
+                <div class="text-right flex-shrink-0">
+                  <p class="text-sm font-bold text-amber-500">{{ p.price || 0 }} 积分</p>
+                  <p class="text-xs text-slate-400 mt-1">{{ formatCommunityDate(p.created_at) }}</p>
+                </div>
+              </div>
+            </div>
+            <div v-if="communityPurchasesTotal > 12" class="flex justify-center mt-6 gap-2">
+              <button @click="communityPurchasesPage > 1 && (communityPurchasesPage--, loadCommunityPurchases())" :disabled="communityPurchasesPage <= 1" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">上一页</button>
+              <span class="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400">{{ communityPurchasesPage }} / {{ Math.ceil(communityPurchasesTotal / 12) }}</span>
+              <button @click="communityPurchasesPage < Math.ceil(communityPurchasesTotal / 12) && (communityPurchasesPage++, loadCommunityPurchases())" :disabled="communityPurchasesPage >= Math.ceil(communityPurchasesTotal / 12)" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">下一页</button>
+            </div>
+          </div>
+
+          <!-- 子内容：我的社区收入 -->
+          <div v-if="communitySubTab === 'income'">
+            <div v-if="communityIncomeLoading" class="text-center py-12">
+              <div class="inline-block w-8 h-8 border-4 border-primary-200 border-t-primary-500 rounded-full animate-spin"></div>
+              <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">加载中...</p>
+            </div>
+            <template v-else>
+              <!-- 总收入展示 -->
+              <div class="card p-6 mb-6 text-center">
+                <p class="text-sm text-slate-500 dark:text-slate-400 mb-1">累计社区收入</p>
+                <p class="text-4xl font-bold text-emerald-500">{{ communityIncome.total_income || 0 }}</p>
+                <p class="text-sm text-slate-400 dark:text-slate-500 mt-1">积分</p>
+              </div>
+              <!-- 收入明细 -->
+              <div v-if="!communityIncome.records || communityIncome.records.length === 0" class="text-center py-8">
+                <p class="text-slate-500 dark:text-slate-400">暂无收入记录</p>
+              </div>
+              <div v-else class="space-y-3">
+                <div v-for="r in communityIncome.records" :key="r.id" class="card p-4 flex items-center justify-between">
+                  <div class="min-w-0 flex-1">
+                    <h4 class="font-medium text-slate-900 dark:text-slate-100 truncate text-sm">{{ r.work_title || '未知作品' }}</h4>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">买家：{{ r.buyer_username || '未知' }}</p>
+                    <p class="text-xs text-slate-400 dark:text-slate-500 mt-0.5">{{ formatCommunityDate(r.created_at) }}</p>
+                  </div>
+                  <div class="text-right flex-shrink-0 ml-4">
+                    <p class="text-sm font-bold text-emerald-500">+{{ r.seller_income || 0 }}</p>
+                    <p class="text-xs text-slate-400">积分</p>
+                  </div>
+                </div>
+              </div>
+              <div v-if="(communityIncome.total || 0) > 12" class="flex justify-center mt-6 gap-2">
+                <button @click="communityIncomePage > 1 && (communityIncomePage--, loadCommunityIncome())" :disabled="communityIncomePage <= 1" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">上一页</button>
+                <span class="px-3 py-1.5 text-sm text-slate-500 dark:text-slate-400">{{ communityIncomePage }} / {{ Math.ceil((communityIncome.total || 0) / 12) }}</span>
+                <button @click="communityIncomePage < Math.ceil((communityIncome.total || 0) / 12) && (communityIncomePage++, loadCommunityIncome())" :disabled="communityIncomePage >= Math.ceil((communityIncome.total || 0) / 12)" class="px-3 py-1.5 rounded-md text-sm bg-slate-100 dark:bg-dark-600 text-slate-600 dark:text-slate-400 disabled:opacity-40">下一页</button>
+              </div>
+            </template>
+          </div>
+        </div>
       </div>
     </div>
-
-    <!-- 未登录状态 -->
     <div v-else class="text-center py-16">
       <div class="w-24 h-24 mx-auto mb-6 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-dark-600 dark:to-dark-700 rounded-full flex items-center justify-center">
         <span class="text-4xl">🔒</span>

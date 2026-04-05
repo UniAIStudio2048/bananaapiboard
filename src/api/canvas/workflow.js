@@ -114,7 +114,8 @@ export async function getWorkflowList(params = {}) {
     ...(params.orderBy && { orderBy: params.orderBy }),
     ...(params.orderDir && { orderDir: params.orderDir }),
     ...(params.spaceType && { spaceType: params.spaceType }),
-    ...(params.teamId && { teamId: params.teamId })
+    ...(params.teamId && { teamId: params.teamId }),
+    ...(params.projectId && { projectId: params.projectId })
   })
   
   const response = await fetch(`${getApiBase()}/api/canvas/workflows?${queryParams}`, {

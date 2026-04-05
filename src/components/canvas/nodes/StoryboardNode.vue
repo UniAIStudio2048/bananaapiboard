@@ -1180,7 +1180,7 @@ const hasAnyImage = computed(() => {
 
     <!-- ========== 顶部工具栏（选中时显示） ========== -->
     <!-- nodrag nowheel 防止工具栏交互触发 Vue Flow 拖拽/缩放 -->
-    <div v-show="showToolbar" class="storyboard-toolbar nodrag nowheel" @mousedown.stop @pointerdown.stop>
+    <div v-show="showToolbar && !props.data?.readonly" class="storyboard-toolbar nodrag nowheel" @mousedown.stop @pointerdown.stop>
       <!-- 比例选择（点击展开竖排列表） -->
       <div class="toolbar-section toolbar-popover-wrap" ref="ratioDropdownRef">
         <button class="toolbar-popover-trigger" @mousedown.stop.prevent="toggleRatioDropdown($event)" @click.stop.prevent>

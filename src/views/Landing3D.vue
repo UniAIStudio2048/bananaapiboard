@@ -191,11 +191,11 @@
           <!-- 登录/注册表单 -->
           <form v-if="!resetMode" @submit.prevent="submitAuth" class="auth-form">
             <!-- 注册模式且有白名单：显示用户名和邮箱分开的输入 -->
-            <div v-if="authMode === 'register' && emailConfig.has_whitelist && emailConfig.email_whitelist.length > 0" class="form-group">
+            <div v-if="authMode === 'register' && emailConfig.require_email_verification && emailConfig.email_whitelist.length > 0" class="form-group">
               <input v-model="account" type="text" class="form-input" :placeholder="t('auth.username')" required />
             </div>
 
-            <div v-if="authMode === 'register' && emailConfig.has_whitelist && emailConfig.email_whitelist.length > 0" class="form-group">
+            <div v-if="authMode === 'register' && emailConfig.require_email_verification && emailConfig.email_whitelist.length > 0" class="form-group">
               <div class="email-input-group">
                 <input v-model="emailPrefix" type="text" class="form-input email-prefix" :placeholder="t('auth.emailPrefix')" required />
                 <span class="email-at">@</span>
@@ -209,7 +209,7 @@
             </div>
 
             <!-- 其他模式：显示原来的邮箱/登录名输入框 -->
-            <div v-if="!(authMode === 'register' && emailConfig.has_whitelist && emailConfig.email_whitelist.length > 0)" class="form-group">
+            <div v-if="!(authMode === 'register' && emailConfig.require_email_verification && emailConfig.email_whitelist.length > 0)" class="form-group">
               <input v-model="account" type="text" class="form-input" :placeholder="t('auth.emailOrUsername')" required />
             </div>
 
@@ -237,9 +237,6 @@
                   {{ sendingCode ? t('auth.sending') : codeSent ? `${countdown}${t('auth.secondsLater')}` : t('auth.sendCode') }}
                 </button>
               </div>
-              <p v-if="emailConfig.has_whitelist" class="hint-text">
-                {{ t('auth.whitelistOnly') }}
-              </p>
             </div>
 
             <div v-if="authMode === 'register'" class="form-group">
@@ -337,6 +334,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
 import { getTenantHeaders } from '@/config/tenant'
+import { persistAuthSession } from '@/api/client'
 import { getMe } from '@/api/client'
 import { useI18n } from '@/i18n'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
@@ -400,7 +398,7 @@ const emailSuffix = ref('qq.com') // 邮箱后缀，默认为qq.com
 
 // 构建完整邮箱地址
 const fullEmail = computed(() => {
-  if (authMode.value === 'register' && emailConfig.value.has_whitelist && emailConfig.value.email_whitelist.length > 0) {
+  if (authMode.value === 'register' && emailConfig.value.require_email_verification && emailConfig.value.email_whitelist.length > 0) {
     // 注册模式且有白名单，使用前缀+后缀
     if (emailPrefix.value && emailSuffix.value) {
       return `${emailPrefix.value}@${emailSuffix.value}`
@@ -715,8 +713,8 @@ const submitAuth = async () => {
       return
     }
     const j = await r.json()
-    localStorage.setItem('token', j.token)
-    
+    persistAuthSession(j.token, j.user || { username: account.value })
+
     // 🔧 修复：登录成功后清除上一个用户的工作流历史和后台任务
     // 避免切换用户时看到上一个用户的数据，导致任务提交失败
     try {

@@ -5,6 +5,37 @@ let KEY = ''
 export function setApiKey(k) { KEY = k || '' }
 export function getApiKey() { return KEY }
 
+export function persistAuthSession(token, user = null) {
+  if (token) {
+    localStorage.setItem('token', token)
+  } else {
+    localStorage.removeItem('token')
+  }
+
+  if (user && typeof user === 'object') {
+    localStorage.setItem('user', JSON.stringify(user))
+    localStorage.setItem('username', user.username || '')
+    localStorage.setItem('avatar', user.avatar || '')
+    localStorage.setItem('user_id', user.id || '')
+    localStorage.setItem('userId', user.id || '')
+  } else {
+    localStorage.removeItem('user')
+    localStorage.removeItem('username')
+    localStorage.removeItem('avatar')
+    localStorage.removeItem('user_id')
+    localStorage.removeItem('userId')
+  }
+}
+
+export function clearAuthSession() {
+  localStorage.removeItem('token')
+  localStorage.removeItem('user')
+  localStorage.removeItem('username')
+  localStorage.removeItem('avatar')
+  localStorage.removeItem('user_id')
+  localStorage.removeItem('userId')
+}
+
 // 获取带租户标识的请求头
 function getHeaders(options = {}) {
   const token = localStorage.getItem('token')
@@ -388,10 +419,13 @@ export async function getMe(forceRefresh = false) {
       // 如果返回401，可能是token过期，清除token
       if (r.status === 401) {
         console.warn('[getMe] 认证失败，token可能已过期')
+        clearAuthSession()
       }
       return null
     }
-    return r.json()
+    const data = await r.json()
+    persistAuthSession(token, data)
+    return data
   } catch (e) {
     if (e.name === 'AbortError') {
       console.warn('[getMe] 请求超时')

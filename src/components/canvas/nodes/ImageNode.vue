@@ -1,4 +1,8 @@
 <script setup>
+defineOptions({
+  inheritAttrs: false
+})
+
 /**
  * ImageNode.vue - 图片节点（统一设计）
  * 
@@ -37,6 +41,8 @@ const props = defineProps({
   data: Object,
   selected: Boolean
 })
+
+const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
@@ -837,6 +843,28 @@ const models = computed(() => {
   return getAvailableImageModels(currentMode)
 })
 
+// 历史工作流只读预览可能引用当前租户未启用的旧模型，补一个兼容配置避免只读链路误报 warning
+const modelLookupList = computed(() => {
+  const currentModels = models.value || []
+  const currentSelection = selectedModel.value
+  if (!currentSelection || currentModels.some(m => m.value === currentSelection)) {
+    return currentModels
+  }
+
+  return [
+    {
+      value: currentSelection,
+      label: getModelDisplayName(currentSelection, 'image') || currentSelection,
+      description: '历史工作流模型（当前租户未启用）',
+      hasResolutionPricing: false,
+      pointsCost: 1,
+      supportedModes: 'both',
+      isLegacyPreviewModel: true
+    },
+    ...currentModels
+  ]
+})
+
 // 判断当前模型是否是 MJ 类型（通过模型名称判断，更可靠）
 const isMJModel = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
@@ -894,7 +922,7 @@ function checkIsSeedream45(model) {
 
 // 检测是否是 Seedream 4.5 模型（组图生成仅对 Seedream 4.5 有效）
 const isSeedream45Model = computed(() => {
-  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   const result = checkIsSeedream45(currentModel)
   
   // 详细调试信息
@@ -914,10 +942,8 @@ const isSeedream45Model = computed(() => {
         allModelData: currentModel
       })
     }
-  } else {
-    console.warn('[ImageNode] ⚠️ 未找到当前模型:', selectedModel.value, '可用模型:', models.value.map(m => m.value))
   }
-  
+
   return result
 })
 
@@ -926,7 +952,7 @@ const showSeedreamAdvancedOptions = ref(false)
 
 // 检测是否是 Seedream 5.0 Lite 模型
 const isSeedream50LiteModel = computed(() => {
-  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   return checkIsSeedream50Lite(currentModel)
 })
 
@@ -944,7 +970,7 @@ const defaultSizePricing = { '1K': 3, '2K': 4, '4K': 5 }
 
 // 获取当前模型的尺寸选项（从模型配置中读取积分）
 const imageSizes = computed(() => {
-  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   const pointsCost = currentModel?.pointsCost
   const apiType = currentModel?.apiType
   
@@ -979,7 +1005,7 @@ const imageSizes = computed(() => {
 const showResolutionOption = computed(() => {
   // MJ 模型不显示尺寸选项（不起作用）
   if (isMJModel.value) return false
-  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   return currentModel?.hasResolutionPricing || false
 })
 
@@ -995,7 +1021,7 @@ const showCameraControlOption = computed(() => {
 
 // 监听模型变化，如果模型不支持1K且当前选择1K，自动切换到2K
 watch([selectedModel, imageSizes], () => {
-  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   const apiType = currentModel?.apiType
   
   // Seedream 4.5（包括即梦4.5/jimeng-4.5）不支持 1K，如果当前选择1K，自动切换到2K
@@ -1015,7 +1041,7 @@ watch([selectedModel, imageSizes], () => {
 
 // 计算单次积分消耗（不考虑组图和批次）
 const basePointsCost = computed(() => {
-  const currentModel = models.value.find(m => m.value === selectedModel.value)
+  const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   
   // 按分辨率计费的模型
   if (currentModel?.hasResolutionPricing) {
@@ -1157,6 +1183,7 @@ const DRAG_THRESHOLD = 5 // 移动超过5px才算拖动
 
 // 是否显示工具栏（单独选中且有图片内容）- 与 TextNode 保持一致
 const showToolbar = computed(() => {
+  if (props.data?.readonly) return false
   if (!props.selected) return false
   if (getSelectedNodes.value.length > 1) return false
   return hasOutput.value || hasSourceImage.value
@@ -5993,7 +6020,7 @@ async function handleDrop(event) {
     </div>
     
     <!-- 底部配置面板（仅输出节点选中时显示，拖动和缩放时隐藏） -->
-    <div v-show="showConfigPanel" class="config-panel" @mousedown.stop>
+    <div v-show="showConfigPanel" class="config-panel" :class="{ 'config-panel-readonly': props.data?.readonly }" @mousedown.stop>
       <!-- 参考图片预览（支持拖拽上传和排序） -->
       <div 
         class="panel-frames"
@@ -9344,6 +9371,26 @@ async function handleDrop(event) {
   /* 使用更低的合成模式 */
   backface-visibility: hidden;
   transform: translateZ(0);
+}
+
+/* 只读预览模式 */
+.config-panel-readonly {
+  pointer-events: none;
+  opacity: 0.85;
+}
+.config-panel-readonly .generate-btn {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.config-panel-readonly .panel-frame-add,
+.config-panel-readonly .panel-frame-remove,
+.config-panel-readonly select,
+.config-panel-readonly input,
+.config-panel-readonly button,
+.config-panel-readonly .model-selector-custom,
+.config-panel-readonly .config-select {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 </style>

@@ -25,9 +25,10 @@ let pollTimer = null
 // 加载未读数量
 async function loadUnreadCount() {
   try {
-    // 检查是否有token，没有token时跳过请求
+    // 仅在存在已登录用户名时轮询，避免残留/无效 token 触发无意义请求
     const token = localStorage.getItem('token')
-    if (!token) {
+    const username = localStorage.getItem('username')
+    if (!token || !username) {
       hasUnread.value = false
       return
     }
