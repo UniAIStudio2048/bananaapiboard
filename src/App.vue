@@ -276,7 +276,7 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
             
             <!-- 购买套餐入口 -->
             <RouterLink
-              v-if="me"
+              v-show="me"
               to="/packages"
               class="nav-link flex items-center"
             >
@@ -286,7 +286,7 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
             
             <!-- 兑换券入口 -->
             <button
-              v-if="me"
+              v-show="me"
               @click="openVoucherModal"
               class="nav-link flex items-center"
             >
@@ -295,7 +295,7 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
             </button>
             
             <!-- 积分和余额显示 -->
-            <div v-if="me" class="ml-4 flex items-center space-x-2">
+            <div v-show="me" class="ml-4 flex items-center space-x-2">
               <!-- 套餐积分 -->
               <div class="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow" :title="t('user.packagePointsDesc')">
                 <span class="mr-1">💎</span>

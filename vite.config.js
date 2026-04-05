@@ -9,8 +9,8 @@ export default defineConfig(({ mode }) => {
   // 获取 API 地址，优先使用环境变量
   const apiTarget = env.VITE_API_BASE || 'http://localhost:5000'
 
-  // brainjuice 模式固定使用 3100 端口
-  const serverPort = mode === 'brainjuice' ? 3100 : 3000
+  const portMap = { brainjuice: 3100, moyunzong: 3200, sgbl: 3300, qingyuan: 3400 }
+  const serverPort = portMap[mode] || 3000
 
   return {
     plugins: [vue()],
@@ -77,8 +77,7 @@ export default defineConfig(({ mode }) => {
     build: {
       // 生产构建配置
       target: 'esnext',
-      // brainjuice 生产构建输出到独立目录
-      outDir: mode === 'brainjuice' ? 'dist-brainjuice' : 'dist',
+      outDir: portMap[mode] ? `dist-${mode}` : 'dist',
       assetsDir: 'assets',
       sourcemap: false,
       minify: 'terser',

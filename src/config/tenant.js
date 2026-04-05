@@ -199,6 +199,8 @@ export async function loadBrandConfig(forceReload = false) {
         // 如果距离上次更新不到1分钟，使用缓存（减少缓存时间以便更快同步配置变更）
         if (timeSinceUpdate < 1 * 60 * 1000) {
           console.log('[tenant] 使用缓存的品牌配置')
+          applyThemeColor(runtimeConfig.brand.primaryColor)
+          applyFavicon(runtimeConfig.brand.favicon)
           return runtimeConfig.brand
         }
       }

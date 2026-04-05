@@ -322,12 +322,10 @@ onUnmounted(() => {
 
 .notification-enter-from {
   opacity: 0;
-  transform: translateY(-100%);
 }
 
 .notification-leave-to {
   opacity: 0;
-  transform: translateY(-100%);
 }
 
 /* 响应式设计 */

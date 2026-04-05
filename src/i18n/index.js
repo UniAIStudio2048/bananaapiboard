@@ -5,6 +5,8 @@
 
 import { reactive, ref, computed, watch } from 'vue'
 
+import zhCN from './locales/zh-CN.js'
+
 // 语言代码到显示名称的映射
 export const LANGUAGES = {
   'zh-CN': { name: '中文', nativeName: '中文' },
@@ -37,6 +39,10 @@ const translationVersion = ref(0)
 
 // 已加载的语言
 const loadedLanguages = new Set()
+
+// 静态预注册中文简体语言包，确保首屏不需要等待网络
+translations['zh-CN'] = zhCN
+loadedLanguages.add('zh-CN')
 
 // 获取初始语言
 function getInitialLanguage() {

@@ -2,6 +2,16 @@
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8">
+    <script>
+      ;(function() {
+        var theme = 'light'
+        try { theme = localStorage.getItem('theme') || 'light' } catch(e) {}
+        var darkThemes = ['dark', 'oceanBlue']
+        var cl = document.documentElement.classList
+        cl.add('theme-' + theme)
+        if (darkThemes.indexOf(theme) !== -1) cl.add('dark')
+      })()
+    </script>
     <link rel="icon" href="/favicon.ico">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="AI 图片/视频生成平台">

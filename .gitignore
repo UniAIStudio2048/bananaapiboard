@@ -19,6 +19,9 @@ dist-ssr
 
 # Local build artifacts
 dist-brainjuice/
+dist-moyunzong/
+dist-sgbl/
+dist-qingyuan/
 
 # Editor directories and files
 .vscode/*
@@ -35,6 +38,10 @@ dist-brainjuice/
 .env
 .env.local
 .env.*.local
+.env.brainjuice
+.env.moyunzong
+.env.sgbl
+.env.qingyuan
 
 
 # Test

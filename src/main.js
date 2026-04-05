@@ -111,10 +111,10 @@ app.use(pinia)
 app.use(router)
 app.use(createI18n())
 
-// 确保 i18n 语言包加载完成后再挂载，避免首屏显示原始 key
-await initI18n()
+// 语言包初始化（中文已静态加载，不阻塞挂载）
+initI18n()
 
-// 应用挂载
+// 立即挂载应用
 app.mount('#app')
 
 // 异步加载品牌配置（不阻塞应用启动）
