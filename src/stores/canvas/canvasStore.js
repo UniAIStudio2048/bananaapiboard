@@ -94,7 +94,40 @@ export const useCanvasStore = defineStore('canvas', () => {
     if (count > 30) return 'optimized' // 优化渲染模式
     return 'full' // 完整渲染模式
   })
-  
+
+  // 边索引：按 target 节点 ID 分组的边映射，O(1) 查找上游连接
+  const edgesByTarget = computed(() => {
+    const map = new Map()
+    for (const edge of edges.value) {
+      if (!map.has(edge.target)) {
+        map.set(edge.target, [])
+      }
+      map.get(edge.target).push(edge)
+    }
+    return map
+  })
+
+  // 边索引：按 source 节点 ID 分组的边映射
+  const edgesBySource = computed(() => {
+    const map = new Map()
+    for (const edge of edges.value) {
+      if (!map.has(edge.source)) {
+        map.set(edge.source, [])
+      }
+      map.get(edge.source).push(edge)
+    }
+    return map
+  })
+
+  // 节点索引：按 ID 快速查找
+  const nodesById = computed(() => {
+    const map = new Map()
+    for (const node of nodes.value) {
+      map.set(node.id, node)
+    }
+    return map
+  })
+
   // 是否可以撤销
   const canUndo = computed(() => historyIndex.value > 0)
   
@@ -2083,6 +2116,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     isLargeCanvas,
     isVeryLargeCanvas,
     performanceMode,
+    edgesByTarget,
+    edgesBySource,
+    nodesById,
     
     // 历史记录状态
     canUndo,

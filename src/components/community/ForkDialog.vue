@@ -2,7 +2,7 @@
 /**
  * ForkDialog.vue - 复刻工作流到个人/团队空间
  */
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { forkWork } from '@/api/community'
 import { useTeamStore } from '@/stores/team'
@@ -29,6 +29,18 @@ const loading = ref(false)
 const error = ref('')
 const success = ref(false)
 const forkedWorkflowId = ref(null)
+const teamsLoading = ref(false)
+
+const myTeams = computed(() => teamStore.myTeams.value || [])
+
+async function loadTeams() {
+  teamsLoading.value = true
+  try {
+    await teamStore.loadMyTeams()
+  } finally {
+    teamsLoading.value = false
+  }
+}
 
 watch(() => props.modelValue, (v) => {
   if (v) {
@@ -38,10 +50,7 @@ watch(() => props.modelValue, (v) => {
     error.value = ''
     success.value = false
     forkedWorkflowId.value = null
-    // 加载团队列表
-    if (teamStore.myTeams.length === 0) {
-      teamStore.loadMyTeams?.()
-    }
+    loadTeams()
   }
 })
 
@@ -185,21 +194,25 @@ function goToWorkflow() {
             <!-- 团队选择 -->
             <div v-if="spaceType === 'team'" class="mb-5">
               <label class="block text-sm text-white/70 mb-1.5">选择团队</label>
-              <select
-                v-model="selectedTeamId"
-                class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50 transition"
-              >
-                <option value="" disabled selected class="bg-gray-900">请选择团队</option>
-                <option
-                  v-for="team in teamStore.myTeams"
-                  :key="team.id"
-                  :value="team.id"
-                  class="bg-gray-900"
-                >{{ team.name }}</option>
-              </select>
-              <p v-if="teamStore.myTeams.length === 0" class="text-xs text-white/40 mt-1">
-                暂无团队，请先创建或加入团队
-              </p>
+              <p v-if="teamsLoading" class="text-xs text-white/40 py-2">加载中...</p>
+              <template v-else>
+                <select
+                  v-if="myTeams.length > 0"
+                  v-model="selectedTeamId"
+                  class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500/50 transition"
+                >
+                  <option :value="null" disabled class="bg-gray-900">请选择团队</option>
+                  <option
+                    v-for="team in myTeams"
+                    :key="team.id"
+                    :value="team.id"
+                    class="bg-gray-900"
+                  >{{ team.name }}</option>
+                </select>
+                <p v-else class="text-xs text-white/40 mt-1">
+                  暂无团队，请先创建或加入团队
+                </p>
+              </template>
             </div>
 
             <!-- 错误 -->

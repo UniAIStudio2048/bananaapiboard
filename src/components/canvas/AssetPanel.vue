@@ -35,6 +35,14 @@ const showTagManager = ref(false)
 const editingAsset = ref(null)
 const newTagInput = ref('')
 
+// ========== 虚拟滚动 ==========
+const assetListRef = ref(null)
+const assetScrollTop = ref(0)
+const assetContainerHeight = ref(600)
+const ASSET_ROW_HEIGHT = 260
+const ASSET_COLS = 3
+const ASSET_BUFFER = 4
+
 // 全屏预览状态
 const showPreview = ref(false)
 const previewAsset = ref(null)
@@ -185,6 +193,38 @@ const filteredAssets = computed(() => {
   return result
 })
 
+const visibleAssets = computed(() => {
+  const items = filteredAssets.value
+  const total = items.length
+  if (total <= 30) {
+    return items.map((item, index) => ({ item, index }))
+  }
+
+  const startRow = Math.max(0, Math.floor(assetScrollTop.value / ASSET_ROW_HEIGHT) - ASSET_BUFFER)
+  const endRow = Math.ceil((assetScrollTop.value + assetContainerHeight.value) / ASSET_ROW_HEIGHT) + ASSET_BUFFER
+  const startIndex = startRow * ASSET_COLS
+  const endIndex = Math.min(total, (endRow + 1) * ASSET_COLS)
+
+  const visible = []
+  for (let i = startIndex; i < endIndex; i++) {
+    if (items[i]) visible.push({ item: items[i], index: i })
+  }
+  return visible
+})
+
+const assetTotalHeight = computed(() => {
+  const total = filteredAssets.value.length
+  if (total <= 30) return 'auto'
+  return Math.ceil(total / ASSET_COLS) * ASSET_ROW_HEIGHT + 'px'
+})
+
+const assetOffsetY = computed(() => {
+  const total = filteredAssets.value.length
+  if (total <= 30) return 0
+  const startRow = Math.max(0, Math.floor(assetScrollTop.value / ASSET_ROW_HEIGHT) - ASSET_BUFFER)
+  return startRow * ASSET_ROW_HEIGHT
+})
+
 // 按类型分组的资产统计
 const assetStats = computed(() => {
   const stats = { all: 0, text: 0, image: 0, video: 0, audio: 0, 'sora-character': 0, 'seedance-character': 0 }
@@ -199,6 +239,22 @@ const assetStats = computed(() => {
 })
 
 // ========== 方法 ==========
+
+let assetScrollRAF = null
+function handleAssetScroll(e) {
+  if (assetScrollRAF) return
+  assetScrollRAF = requestAnimationFrame(() => {
+    assetScrollTop.value = e.target.scrollTop
+    assetScrollRAF = null
+  })
+}
+
+watch([selectedType, selectedTag, searchQuery], () => {
+  assetScrollTop.value = 0
+  if (assetListRef.value) {
+    assetListRef.value.scrollTop = 0
+  }
+})
 
 // 加载资产列表（带缓存）
 async function loadAssets(forceRefresh = false) {
@@ -1414,6 +1470,24 @@ function handleAssetsUpdated() {
   loadAssets(true)
 }
 
+let assetResizeObserver = null
+
+watch(assetListRef, (el) => {
+  if (assetResizeObserver) {
+    assetResizeObserver.disconnect()
+    assetResizeObserver = null
+  }
+  if (el && 'ResizeObserver' in window) {
+    assetResizeObserver = new ResizeObserver(() => {
+      if (assetListRef.value) {
+        assetContainerHeight.value = assetListRef.value.clientHeight
+      }
+    })
+    assetResizeObserver.observe(el)
+    assetContainerHeight.value = el.clientHeight
+  }
+})
+
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
   document.addEventListener('click', handleGlobalClick)
@@ -1430,6 +1504,11 @@ onUnmounted(() => {
   stopTeamSync()
   
   destroyAudioVisualizer()
+
+  if (assetResizeObserver) {
+    assetResizeObserver.disconnect()
+    assetResizeObserver = null
+  }
 })
 </script>
 
@@ -1600,7 +1679,7 @@ onUnmounted(() => {
         </div>
 
         <!-- 资产列表 -->
-        <div class="asset-list">
+        <div class="asset-list" ref="assetListRef" @scroll="handleAssetScroll">
           <!-- Seedance 角色库独立面板 -->
           <SeedanceCharacterPanel 
             v-if="selectedType === 'seedance-character' && seedanceFeaturesEnabled" 
@@ -1627,9 +1706,11 @@ onUnmounted(() => {
           </div>
 
           <template v-else>
+            <div :style="filteredAssets.length > 30 ? { gridColumn: '1 / -1', minHeight: assetTotalHeight } : { display: 'contents' }">
+            <div :style="filteredAssets.length > 30 ? { transform: `translateY(${assetOffsetY}px)`, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' } : { display: 'contents' }">
             <!-- 资产卡片 -->
             <div 
-              v-for="asset in filteredAssets"
+              v-for="{ item: asset } in visibleAssets"
               :key="asset.id"
               class="asset-card"
               :class="[`type-${asset.type}`]"
@@ -1846,6 +1927,8 @@ onUnmounted(() => {
               <div class="asset-type-badge">
                 {{ fileTypes.find(f => f.key === asset.type)?.icon || '◇' }}
               </div>
+            </div>
+            </div>
             </div>
           </template>
           </template>

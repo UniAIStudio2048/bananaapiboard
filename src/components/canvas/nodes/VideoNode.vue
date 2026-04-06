@@ -21,6 +21,7 @@ import { uploadImages, getVideoTaskStatus } from '@/api/canvas/nodes'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
+import { getVideoPosterUrl } from '@/utils/canvasThumbnail'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 
@@ -1316,6 +1317,15 @@ const nodeClass = computed(() => ({
 const hasOutput = computed(() => !!props.data.output?.url)
 const shouldRenderVideoOutput = computed(() => hasOutput.value && !readonlyPreviewVideoFailed.value)
 const readonlyPreviewVideoFailed = ref(false)
+
+const videoPosterUrl = computed(() => {
+  const url = props.data.output?.url
+  if (!url) return ''
+  if (props.data.output?.cover_url || props.data.output?.thumbnail_url) {
+    return props.data.output.cover_url || props.data.output.thumbnail_url
+  }
+  return getVideoPosterUrl(url)
+})
 
 // 处理视频 URL，确保使用相对路径（避免跨域问题）
 const normalizedVideoUrl = computed(() => {
@@ -5473,7 +5483,8 @@ function handleToolbarPreview() {
           <video 
             ref="videoPlayerRef"
             :src="normalizedVideoUrl"
-            preload="metadata"
+            :preload="canvasStore.performanceMode === 'full' ? 'metadata' : 'none'"
+            :poster="videoPosterUrl"
             muted
             :loop="!data?.isCharacterNode"
             class="video-player-output"
@@ -5692,7 +5703,7 @@ function handleToolbarPreview() {
             @drop="handleVideoDrop($event, index)"
             @dragend="handleVideoDragEnd"
           >
-            <video :src="video" muted preload="metadata" class="video-thumb"></video>
+            <video :src="video" muted preload="none" :poster="getVideoPosterUrl(video)" class="video-thumb"></video>
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span class="panel-frame-play-icon">▶</span>
             <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@视频{{ index + 1 }}</span>

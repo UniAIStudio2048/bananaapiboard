@@ -30,6 +30,7 @@ import Pose3DViewer from '../Pose3DViewer.vue'
 import CameraControlPanel from '../CameraControlPanel.vue'
 import { removeBackground } from '@imgly/background-removal'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
+import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'
 
 const { t } = useI18n()
 
@@ -780,29 +781,21 @@ onUnmounted(() => {
 })
 
 // 检查是否有图片输入（用于判断文生图/图生图模式）
-// 🔧 修复：直接使用 referenceImages 的长度判断，避免判断逻辑不一致
 const hasImageInput = computed(() => {
-  // 1. 首先检查节点自身是否有参考图片（用户拖拽添加的）
-  if (props.data?.sourceImages?.length > 0) {
-    return true
-  }
-  
-  // 2. 然后检查上游连接的节点
-  const allEdges = [...canvasStore.edges]
-  const allNodes = [...canvasStore.nodes]
-  const upstreamEdges = allEdges.filter(e => e.target === props.id)
-  
+  if (props.data?.sourceImages?.length > 0) return true
+
+  const upstreamEdges = canvasStore.edgesByTarget.get(props.id) || []
+  const nodeIndex = canvasStore.nodesById
+
   for (const edge of upstreamEdges) {
-    const sourceNode = allNodes.find(n => n.id === edge.source)
+    const sourceNode = nodeIndex.get(edge.source)
     if (!sourceNode) continue
-    
-    // 检查上游节点是否有图片输出
-    const hasOutput = sourceNode.data?.output?.urls?.length > 0 || 
+
+    const hasOutput = sourceNode.data?.output?.urls?.length > 0 ||
                       sourceNode.data?.output?.url ||
                       sourceNode.data?.sourceImages?.length > 0
     if (hasOutput) return true
-    
-    // 检查是否是图片类型节点（非文本节点）
+
     if (sourceNode.type === 'image' || sourceNode.type === 'imageGeneration') {
       return true
     }
@@ -810,23 +803,17 @@ const hasImageInput = computed(() => {
   return false
 })
 
-// 🔧 新增：用于 botType 显示判断的计算属性，直接检查 referenceImages 是否有值
+// 用于 botType 显示判断：检查是否有实际的参考图片
 const hasReferenceImages = computed(() => {
-  // 检查 props.data 中的 sourceImages
-  if (props.data?.sourceImages?.length > 0) {
-    return true
-  }
-  
-  // 检查上游连接的节点的实际图片
-  const allEdges = [...canvasStore.edges]
-  const allNodes = [...canvasStore.nodes]
-  const upstreamEdges = allEdges.filter(e => e.target === props.id)
-  
+  if (props.data?.sourceImages?.length > 0) return true
+
+  const upstreamEdges = canvasStore.edgesByTarget.get(props.id) || []
+  const nodeIndex = canvasStore.nodesById
+
   for (const edge of upstreamEdges) {
-    const node = allNodes.find(n => n.id === edge.source)
+    const node = nodeIndex.get(edge.source)
     if (!node?.data) continue
-    
-    // 只检查有实际图片 URL 的情况
+
     if (node.data.output?.urls?.length > 0 ||
         node.data.output?.url ||
         node.data.sourceImages?.length > 0) {
@@ -2968,27 +2955,18 @@ const outputImages = computed(() => {
 const sourceImages = computed(() => props.data.sourceImages || [])
 
 // 继承的参考图片（来自左侧连接的节点，支持多图和自定义顺序）
-// 直接在 computed 中处理，确保响应式依赖被正确追踪
+// 使用 canvasStore 的边索引 O(1) 查找，避免全量遍历 O(N*E)
 const referenceImages = computed(() => {
-  // 强制访问响应式数据的长度，确保依赖追踪
-  const allEdges = [...canvasStore.edges]
-  const allNodes = [...canvasStore.nodes]
-  
-  // 优化：只处理与当前节点相关的边
-  const upstreamEdges = allEdges.filter(e => e.target === props.id)
-  if (upstreamEdges.length === 0) {
-    return []
-  }
-  
-  // 只收集上游节点的数据（而不是所有节点）
-  const upstreamNodeIds = new Set(upstreamEdges.map(e => e.source))
+  const upstreamEdges = canvasStore.edgesByTarget.get(props.id) || []
+  if (upstreamEdges.length === 0) return []
+
+  const nodeIndex = canvasStore.nodesById
   const upstreamImages = []
-  
+
   for (const edge of upstreamEdges) {
-    const node = allNodes.find(n => n.id === edge.source)
+    const node = nodeIndex.get(edge.source)
     if (!node?.data) continue
-    
-    // 优先级：output.urls > output.url > sourceImages
+
     if (node.data.output?.urls?.length > 0) {
       upstreamImages.push(...node.data.output.urls)
     } else if (node.data.output?.url) {
@@ -2997,8 +2975,7 @@ const referenceImages = computed(() => {
       upstreamImages.push(...node.data.sourceImages)
     }
   }
-  
-  // 如果有用户自定义的顺序，按顺序返回
+
   const customOrder = props.data.imageOrder || []
   if (customOrder.length > 0 && upstreamImages.length > 0) {
     const orderedImages = []
@@ -5896,7 +5873,7 @@ async function handleDrop(event) {
           
           <!-- 图片预览 -->
           <div class="source-image-preview" :class="{ 'low-quality': isCanvasDragging }">
-            <img :src="sourceImages[0]" alt="上传的图片" :loading="isCanvasDragging ? 'lazy' : 'eager'" />
+            <img :src="getCanvasThumbnailUrl(sourceImages[0])" alt="上传的图片" :loading="isCanvasDragging ? 'lazy' : 'eager'" />
           </div>
         </template>
         
@@ -5949,7 +5926,7 @@ async function handleDrop(event) {
               <img 
                 v-for="(img, index) in outputImages.slice(0, 4)" 
                 :key="img || index"
-                :src="img" 
+                :src="getCanvasThumbnailUrl(img)" 
                 :alt="`生成结果 ${index + 1}`"
                 class="preview-image"
                 :class="{ 'transparent-image': props.data?.isTransparent || props.data?.cutoutResult }"
@@ -6068,7 +6045,7 @@ async function handleDrop(event) {
             @drop="handleImageDrop($event, index)"
             @dragend="handleImageDragEnd"
           >
-            <img :src="img" :alt="`图片 ${index + 1}`" />
+            <img :src="getCanvasThumbnailUrl(img)" :alt="`图片 ${index + 1}`" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>
