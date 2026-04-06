@@ -1157,18 +1157,15 @@ export const useCanvasStore = defineStore('canvas', () => {
         
         for (let i = startIndex; i < endIndex; i++) {
           const node = nodesWithMedia[i]
-          const nodeIndex = nodes.value.findIndex(n => n.id === node.id)
-          if (nodeIndex !== -1 && node.data._originalMedia) {
-            // 恢复媒体数据
-            const updatedNode = { ...nodes.value[nodeIndex] }
-            updatedNode.data = {
-              ...updatedNode.data,
+          const targetNode = nodes.value.find(n => n.id === node.id)
+          if (targetNode && node.data._originalMedia) {
+            targetNode.data = {
+              ...targetNode.data,
               sourceImages: node.data._originalMedia.sourceImages || [],
-              output: node.data._originalMedia.output || updatedNode.data.output,
+              output: node.data._originalMedia.output || targetNode.data.output,
               _mediaLoading: false
             }
-            delete updatedNode.data._originalMedia
-            nodes.value[nodeIndex] = updatedNode
+            delete targetNode.data._originalMedia
           }
         }
         

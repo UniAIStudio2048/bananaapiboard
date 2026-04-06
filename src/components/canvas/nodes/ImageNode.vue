@@ -4706,6 +4706,17 @@ async function handleGenerateSingle() {
   }
 }
 
+function handleOutputImageError(event, imgUrl, index) {
+  console.warn(`[ImageNode] 输出图片加载失败: ${imgUrl?.substring(0, 80)}`, { nodeId: props.id, index })
+  const img = event.target
+  if (img && imgUrl && !img.dataset.retried) {
+    img.dataset.retried = 'true'
+    setTimeout(() => {
+      img.src = imgUrl + (imgUrl.includes('?') ? '&' : '?') + '_t=' + Date.now()
+    }, 1000)
+  }
+}
+
 // 重新生成
 function handleRegenerate() {
   canvasStore.updateNodeData(props.id, { 
@@ -5937,12 +5948,13 @@ async function handleDrop(event) {
             >
               <img 
                 v-for="(img, index) in outputImages.slice(0, 4)" 
-                :key="index"
+                :key="img || index"
                 :src="img" 
                 :alt="`生成结果 ${index + 1}`"
                 class="preview-image"
                 :class="{ 'transparent-image': props.data?.isTransparent || props.data?.cutoutResult }"
                 :loading="isCanvasDragging ? 'lazy' : 'eager'"
+                @error="handleOutputImageError($event, img, index)"
               />
             </div>
             
