@@ -85,7 +85,7 @@ const videoThumbnails = ref({})
 const videoAspectRatios = ref({}) // 视频宽高比缓存
 const videoThumbnailQueue = ref([]) // 待处理队列
 const processingThumbnails = ref(0) // 正在处理的数量
-const MAX_CONCURRENT_THUMBNAILS = 4 // 最大同时处理数
+const MAX_CONCURRENT_THUMBNAILS = 2 // 视频截帧很重，限制并发数
 
 // 图片加载失败的记录
 const imageLoadErrors = ref({})
@@ -260,7 +260,8 @@ async function loadHistory(forceRefresh = false) {
     return
   }
   
-  // 2. IndexedDB 缓存检查（持久化，刷新页面后仍有效）
+  // 2. IndexedDB 缓存检查 + stale-while-revalidate
+  // 先展示缓存数据（快速响应），然后后台刷新确保数据最新
   if (!forceRefresh) {
     try {
       const cachedData = await getCachedHistory('all', spaceType, teamId)
@@ -268,7 +269,9 @@ async function loadHistory(forceRefresh = false) {
         historyList.value = cachedData
         dataCached.value = true
         lastLoadTime.value = now
-        console.log('[HistoryPanel] 🎯 使用 IndexedDB 缓存:', cachedData.length, '条')
+        console.log('[HistoryPanel] 🎯 使用 IndexedDB 缓存:', cachedData.length, '条，后台刷新中...')
+        // 后台静默刷新，不显示 loading
+        _refreshHistoryInBackground(spaceParams, spaceType, teamId)
         return
       }
     } catch (e) {
@@ -276,30 +279,51 @@ async function loadHistory(forceRefresh = false) {
     }
   }
   
-  // 3. 从服务器加载（服务端有 Redis 缓存）
+  // 3. 从服务器加载（无缓存或强制刷新）
   loading.value = true
   try {
-    const result = await getHistory(spaceParams)
-    historyList.value = result.history || []
+    const freshData = await _fetchFromServer(spaceParams, spaceType, teamId)
+    historyList.value = freshData
     dataCached.value = true
-    lastLoadTime.value = now
-    console.log('[HistoryPanel] 从服务器加载历史记录:', historyList.value.length, '条', spaceParams)
-    
-    // 异步写入 IndexedDB 缓存
-    cacheHistory('all', spaceType, teamId, historyList.value).catch(() => {})
-    
-    // 预加载前 20 张图片到 IndexedDB（后台静默执行，不阻塞 UI）
-    const preloadUrls = historyList.value
-      .filter(item => item.type === 'image' && item.url)
-      .slice(0, 20)
-      .map(item => item.url)
-    if (preloadUrls.length > 0) {
-      preloadImages(preloadUrls, 3).catch(() => {})
-    }
+    lastLoadTime.value = Date.now()
   } catch (error) {
     console.error('[HistoryPanel] 加载历史记录失败:', error)
   } finally {
     loading.value = false
+  }
+}
+
+// 从服务器获取历史数据并缓存
+async function _fetchFromServer(spaceParams, spaceType, teamId) {
+  const result = await getHistory(spaceParams)
+  const freshData = result.history || []
+  console.log('[HistoryPanel] 从服务器加载:', freshData.length, '条')
+  
+  cacheHistory('all', spaceType, teamId, freshData).catch(() => {})
+  
+  const preloadUrls = freshData
+    .filter(item => item.type === 'image' && item.url)
+    .slice(0, 8)
+    .map(item => item.url)
+  if (preloadUrls.length > 0) {
+    preloadImages(preloadUrls, 3).catch(() => {})
+  }
+  return freshData
+}
+
+// 后台静默刷新：不阻塞 UI，刷新完毕后对比更新
+async function _refreshHistoryInBackground(spaceParams, spaceType, teamId) {
+  try {
+    const freshData = await _fetchFromServer(spaceParams, spaceType, teamId)
+    if (freshData.length !== historyList.value.length || 
+        JSON.stringify(freshData.map(d => d.id).slice(0, 5)) !== JSON.stringify(historyList.value.map(d => d.id).slice(0, 5))) {
+      historyList.value = freshData
+      dataCached.value = true
+      lastLoadTime.value = Date.now()
+      console.log('[HistoryPanel] 后台刷新完成，数据已更新:', freshData.length, '条')
+    }
+  } catch (e) {
+    // 后台刷新失败不影响已展示的缓存数据
   }
 }
 
@@ -632,6 +656,12 @@ function handleHistoryClick(item) {
 
 // 关闭全屏预览
 function closePreview() {
+  // 释放视频资源，避免后台继续缓冲
+  if (previewVideoRef.value) {
+    previewVideoRef.value.pause()
+    previewVideoRef.value.removeAttribute('src')
+    previewVideoRef.value.load()
+  }
   showPreview.value = false
   previewItem.value = null
   previewScale.value = 1
@@ -1859,6 +1889,7 @@ onUnmounted(() => {
               :src="previewItem.url"
               controls
               autoplay
+              preload="metadata"
               class="preview-video"
             ></video>
             

@@ -1,13 +1,14 @@
 <template>
-  <div class="cached-image-wrapper" :class="wrapperClass" :style="wrapperStyle">
+  <div ref="wrapperRef" class="cached-image-wrapper" :class="wrapperClass" :style="wrapperStyle">
     <!-- 模糊占位层（渐进式加载第一阶段） -->
     <div 
       v-if="progressive && isLoading && blurSrc"
       class="cached-image-blur"
       :style="{ backgroundImage: `url(${blurSrc})` }"
     />
-    <!-- 实际图片 -->
+    <!-- 实际图片：lazy 模式下，等有 displaySrc 后才渲染 img，避免 src="" 触发错误 -->
   <img 
+    v-if="displaySrc"
     ref="imgRef"
     :src="displaySrc"
     :alt="alt"
@@ -40,28 +41,26 @@
  * />
  */
 
-import { ref, watch, onUnmounted, computed } from 'vue'
+import { ref, watch, onMounted, onUnmounted, computed, nextTick } from 'vue'
 import { loadImageWithCache } from '@/utils/imageCache'
 
 const props = defineProps({
   src: { type: String, default: '' },
-  // 缩略图URL（渐进式加载用，优先加载此URL）
   thumbnailSrc: { type: String, default: '' },
   alt: { type: String, default: '' },
   placeholder: { type: String, default: '' },
   cache: { type: Boolean, default: true },
-  // 启用渐进式加载（模糊→清晰）
   progressive: { type: Boolean, default: false },
   loading: { type: String, default: 'lazy' },
   imgClass: { type: [String, Object, Array], default: '' },
   imgStyle: { type: [String, Object], default: '' },
-  // 外层wrapper的class和style
   wrapperClass: { type: [String, Object, Array], default: '' },
   wrapperStyle: { type: [String, Object], default: '' }
 })
 
 const emit = defineEmits(['load', 'error', 'cached'])
 
+const wrapperRef = ref(null)
 const imgRef = ref(null)
 const displaySrc = ref('')
 const isLoading = ref(true)
@@ -69,9 +68,42 @@ const hasError = ref(false)
 let objectUrl = null
 let usedCache = false
 let originalUrl = ''
-let isUpgrading = false // 标记是否正在从缩略图升级到原图
+let isUpgrading = false
 
-// 模糊占位图（用极小的缩略图做CSS blur）
+// IntersectionObserver 懒加载
+const isVisible = ref(false)
+const hasBeenVisible = ref(false)
+let observer = null
+
+onMounted(() => {
+  // eager 模式跳过 IntersectionObserver，直接标记可见
+  if (props.loading === 'eager') {
+    isVisible.value = true
+    hasBeenVisible.value = true
+    return
+  }
+  
+  nextTick(() => {
+    const target = wrapperRef.value || imgRef.value
+    if (target && 'IntersectionObserver' in window) {
+      observer = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting) {
+          isVisible.value = true
+          hasBeenVisible.value = true
+          observer?.disconnect()
+          observer = null
+        }
+      }, {
+        rootMargin: '200px'
+      })
+      observer.observe(target)
+    } else {
+      isVisible.value = true
+      hasBeenVisible.value = true
+    }
+  })
+})
+
 const blurSrc = computed(() => {
   if (props.thumbnailSrc) return props.thumbnailSrc
   if (props.placeholder) return props.placeholder
@@ -82,8 +114,6 @@ function shouldCache(url) {
   if (!url || !props.cache) return false
   if (url.startsWith('blob:') || url.startsWith('data:')) return false
   
-  // COS proxy: 服务端已有 Redis 缓存 + 浏览器 HTTP 缓存 (ETag + Cache-Control: immutable)
-  // 不走 IndexedDB，让 <img> 原生加载，避免 fetch 阻塞
   if (url.includes('/api/cos-proxy/')) return false
   
   if (url.includes('/api/images/file/')) return true
@@ -103,6 +133,11 @@ async function loadImage(url) {
     return
   }
   
+  // lazy 模式下等待元素进入视口再加载
+  if (props.loading === 'lazy' && !hasBeenVisible.value) {
+    return
+  }
+  
   isLoading.value = true
   hasError.value = false
   usedCache = false
@@ -114,10 +149,8 @@ async function loadImage(url) {
     objectUrl = null
   }
   
-  // 渐进式加载：先显示缩略图，再升级到原图
   const thumbUrl = props.thumbnailSrc
   if (props.progressive && thumbUrl && thumbUrl !== url) {
-    // 第一阶段：加载缩略图
     if (shouldCache(thumbUrl)) {
       try {
         const cachedThumb = await loadImageWithCache(thumbUrl)
@@ -126,21 +159,17 @@ async function loadImage(url) {
           displaySrc.value = cachedThumb
           usedCache = true
           isLoading.value = false
-          // 第二阶段：后台加载原图
           upgradeToFullImage(url)
           return
         }
       } catch (e) { /* fallthrough */ }
     }
-    // 缩略图未缓存，直接显示缩略图URL
     displaySrc.value = thumbUrl
     isLoading.value = false
-    // 后台加载原图
     upgradeToFullImage(url)
     return
   }
 
-  // 非渐进式：先显示占位图
   if (props.placeholder) {
     displaySrc.value = props.placeholder
   }
@@ -223,12 +252,23 @@ function handleError(e) {
   emit('error', e)
 }
 
+// 监听 src 变化和 IntersectionObserver 可见性
 watch(() => props.src, (newSrc) => {
   loadImage(newSrc)
 }, { immediate: true })
 
+watch(hasBeenVisible, (visible) => {
+  if (visible && props.src) {
+    loadImage(props.src)
+  }
+})
+
 onUnmounted(() => {
   isUpgrading = false
+  if (observer) {
+    observer.disconnect()
+    observer = null
+  }
   if (objectUrl) {
     URL.revokeObjectURL(objectUrl)
     objectUrl = null

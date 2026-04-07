@@ -1109,9 +1109,38 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 创建骨架节点（剥离媒体数据，加快首次渲染）
    * 复用于 loadWorkflow 和 createTab
    */
+  function safeDeepClone(obj) {
+    try {
+      return JSON.parse(JSON.stringify(obj))
+    } catch (e) {
+      console.error('[Canvas] 深拷贝失败:', e)
+      return {}
+    }
+  }
+
+  /**
+   * 清理节点中 Vue Flow 运行时注入的内部属性，避免加载时状态冲突
+   */
+  function cleanVueFlowNodeProps(node) {
+    const internalKeys = [
+      'dimensions', 'computedPosition', 'handleBounds', 'initialized',
+      'isParent', 'dragging', 'resizing', 'selected', 'events'
+    ]
+    for (const key of internalKeys) {
+      delete node[key]
+    }
+    if (node.style && typeof node.style === 'object' && Object.keys(node.style).length === 0) {
+      delete node.style
+    }
+    if (node.zIndex === undefined || node.zIndex === 0) {
+      delete node.zIndex
+    }
+    return node
+  }
+
   function createSkeletonNodes(rawNodes) {
     return rawNodes.map(node => {
-      const skeletonNode = structuredClone(toRaw(node))
+      const skeletonNode = cleanVueFlowNodeProps(safeDeepClone(node))
       
       if (skeletonNode.data) {
         if (skeletonNode.data.isUploading) {
@@ -1147,6 +1176,26 @@ export const useCanvasStore = defineStore('canvas', () => {
       }
       
       return skeletonNode
+    })
+  }
+
+  /**
+   * 清理 edges 中 Vue Flow 运行时注入的内部属性，避免加载时状态冲突
+   */
+  function cleanEdges(rawEdges) {
+    return rawEdges.map(edge => {
+      const cleaned = safeDeepClone(edge)
+      const internalKeys = [
+        'sourceNode', 'targetNode', 'sourceX', 'sourceY',
+        'targetX', 'targetY', 'events', 'selected'
+      ]
+      for (const key of internalKeys) {
+        delete cleaned[key]
+      }
+      if (cleaned.style && typeof cleaned.style === 'object' && Object.keys(cleaned.style).length === 0) {
+        delete cleaned.style
+      }
+      return cleaned
     })
   }
 
@@ -1198,7 +1247,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     const skeletonNodes = createSkeletonNodes(workflowNodes)
     
     nodes.value = skeletonNodes
-    edges.value = workflowEdges
+    edges.value = cleanEdges(workflowEdges)
     if (workflow.viewport) {
       viewport.value = workflow.viewport
     }
@@ -1403,7 +1452,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       workflowId: workflow?.id || null,
       workflowUid: workflow?.workflow_uid || null,
       nodes: tabNodes,
-      edges: workflow?.edges || [],
+      edges: workflow?.edges ? cleanEdges(workflow.edges) : [],
       viewport: workflow?.viewport || { x: 0, y: 0, zoom: 1 },
       hasChanges: false
     }
@@ -1411,9 +1460,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     workflowTabs.value.push(tab)
     switchToTab(tabId)
     
-    // 骨架渲染后异步恢复媒体数据（等 switchToTab 的 nextTick 完成后再执行）
+    // 骨架渲染后异步恢复媒体数据
     if (needsMediaRestore) {
-      nextTick(() => nextTick(() => asyncRestoreMedia()))
+      nextTick(() => asyncRestoreMedia())
     }
     
     return tab
@@ -1428,16 +1477,16 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     if (!targetTab) return
     
-    // 保存当前标签状态（structuredClone + toRaw 避免 JSON 序列化瓶颈）
+    // 保存当前标签状态
     if (currentTab) {
-      currentTab.nodes = structuredClone(toRaw(nodes.value))
-      currentTab.edges = structuredClone(toRaw(edges.value))
-      currentTab.viewport = { ...viewport.value }
+      try {
+        currentTab.nodes = JSON.parse(JSON.stringify(toRaw(nodes.value)))
+        currentTab.edges = JSON.parse(JSON.stringify(toRaw(edges.value)))
+        currentTab.viewport = { ...viewport.value }
+      } catch (e) {
+        console.error('[Canvas] 保存标签状态失败:', e)
+      }
     }
-    
-    // 先清空画布，避免旧数据和新数据同时渲染导致帧丢失
-    nodes.value = []
-    edges.value = []
     
     activeTabId.value = tabId
     
@@ -1453,13 +1502,16 @@ export const useCanvasStore = defineStore('canvas', () => {
     selectedEdgeId.value = null
     selectedNodeIds.value = []
     
-    // 延迟填充新数据 - 直接使用 tab 的引用，避免额外 clone
-    // 下次 switchToTab 保存当前 tab 时才会 clone，从 2 次减到 1 次
-    nextTick(() => {
-      nodes.value = targetTab.nodes
-      edges.value = targetTab.edges
-      viewport.value = { ...targetTab.viewport }
-    })
+    // 同步设置新数据 - 深拷贝避免共享引用
+    try {
+      nodes.value = JSON.parse(JSON.stringify(targetTab.nodes))
+      edges.value = JSON.parse(JSON.stringify(targetTab.edges))
+    } catch (e) {
+      console.error('[Canvas] 恢复标签数据失败:', e)
+      nodes.value = []
+      edges.value = []
+    }
+    viewport.value = { ...targetTab.viewport }
   }
   
   /**
@@ -1566,17 +1618,30 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 在新标签中打开工作流
    */
   function openWorkflowInNewTab(workflow) {
-    // 只有当 workflow.id 存在时才检查是否已经打开
-    // 历史工作流的 id 是 null，不应该匹配到其他 null id 的标签
     if (workflow.id) {
       const existingTab = workflowTabs.value.find(t => t.workflowId === workflow.id)
       if (existingTab) {
+        // 用服务器最新数据更新已有标签，避免加载旧/损坏的缓存数据
+        if (workflow.nodes && workflow.nodes.length > 0) {
+          const freshNodes = createSkeletonNodes(workflow.nodes)
+          const freshEdges = workflow.edges ? cleanEdges(workflow.edges) : []
+          existingTab.nodes = freshNodes
+          existingTab.edges = freshEdges
+          if (workflow.viewport) {
+            existingTab.viewport = workflow.viewport
+          }
+          existingTab.name = workflow.name || existingTab.name
+        }
         switchToTab(existingTab.id)
+        // 恢复媒体
+        const needsMedia = existingTab.nodes.some(n => n.data?._mediaLoading)
+        if (needsMedia) {
+          nextTick(() => asyncRestoreMedia())
+        }
         return existingTab
       }
     }
     
-    // 创建新标签
     return createTab(workflow)
   }
   

@@ -550,20 +550,29 @@ async function selectWorkflow(workflow) {
 }
 
 // 加载我的工作流到画布（在新标签中打开）
+let isLoadingWorkflow = false
 async function handleLoadMyWorkflow(workflow) {
+  if (isLoadingWorkflow) return
+  isLoadingWorkflow = true
   try {
     loading.value = true
+    console.log('[WorkflowPanel] 开始加载工作流:', workflow.id, workflow.name)
     const result = await loadWorkflow(workflow.id)
+    console.log('[WorkflowPanel] API 返回:', result ? Object.keys(result) : 'null')
     
-    if (result.workflow) {
+    if (result && result.workflow) {
       emit('load', result.workflow)
       emit('close')
+    } else {
+      console.error('[WorkflowPanel] API 返回格式异常:', JSON.stringify(result)?.substring(0, 200))
+      alert('加载失败：工作流数据为空，请刷新页面重试')
     }
   } catch (error) {
     console.error('[WorkflowPanel] 加载工作流失败:', error)
     alert('加载失败：' + error.message)
   } finally {
     loading.value = false
+    isLoadingWorkflow = false
   }
 }
 

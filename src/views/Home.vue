@@ -650,6 +650,11 @@ const historyOffset = ref(0)
 const hasMoreHistory = ref(true)
 const loadingMoreHistory = ref(false)
 
+// SWR 内存缓存：切换标签页回来时避免重复加载
+const historyMemoryCache = ref(null)
+const historyCacheTimestamp = ref(0)
+const HISTORY_SWR_TTL = 30 * 1000
+
 async function loadHistory(reset = true) {
   if (!reset && (!hasMoreHistory.value || loadingMoreHistory.value)) return
   
@@ -658,12 +663,19 @@ async function loadHistory(reset = true) {
     const headers = { ...getTenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
     
     if (reset) {
+      // SWR：首页请求且缓存有效时直接返回，后台静默刷新
+      if (historyMemoryCache.value && (Date.now() - historyCacheTimestamp.value < HISTORY_SWR_TTL)) {
+        history.value = historyMemoryCache.value
+        // 后台静默刷新
+        _refreshHistoryInBackground(headers)
+        return
+      }
       historyOffset.value = 0
       hasMoreHistory.value = true
     }
     
     loadingMoreHistory.value = true
-    const r = await fetch(`/api/images/history?limit=${HISTORY_PAGE_SIZE}&offset=${historyOffset.value}&_=${Date.now()}`, { headers, cache: 'no-store' })
+    const r = await fetch(`/api/images/history?limit=${HISTORY_PAGE_SIZE}&offset=${historyOffset.value}`, { headers })
     
     if (r.status === 304) return
     if (r.ok) {
@@ -692,6 +704,11 @@ async function loadHistory(reset = true) {
         merged.sort((a, b) => (b.created || 0) - (a.created || 0))
         history.value = merged
         lastHistoryLength.value = newImages.length
+        // 更新 SWR 内存缓存
+        if (reset) {
+          historyMemoryCache.value = merged
+          historyCacheTimestamp.value = Date.now()
+        }
       } else {
         // 加载更多：追加到现有列表
         const existingIds = new Set(history.value.map(h => h.id))
@@ -708,6 +725,30 @@ async function loadHistory(reset = true) {
     console.error('[loadHistory] 加载历史记录失败:', e)
   } finally {
     loadingMoreHistory.value = false
+  }
+}
+
+// SWR 后台静默刷新：不阻塞 UI，刷新完毕后更新数据
+async function _refreshHistoryInBackground(headers) {
+  try {
+    const r = await fetch(`/api/images/history?limit=${HISTORY_PAGE_SIZE}&offset=0`, { headers })
+    if (!r.ok || r.status === 304) return
+    const data = await r.json()
+    const newImages = data.images || []
+    const serverIdSet = new Set(newImages.map(h => h.id))
+    const localPendingTasks = history.value.filter(h =>
+      !serverIdSet.has(h.id) && (h.status === 'pending' || h.status === 'processing')
+    )
+    const merged = [...newImages, ...localPendingTasks]
+    merged.sort((a, b) => (b.created || 0) - (a.created || 0))
+    history.value = merged
+    historyMemoryCache.value = merged
+    historyCacheTimestamp.value = Date.now()
+    hasMoreHistory.value = data.hasMore !== false && newImages.length === HISTORY_PAGE_SIZE
+    historyOffset.value = newImages.length
+    lastHistoryLength.value = newImages.length
+  } catch (e) {
+    // 后台刷新失败不影响已展示的缓存数据
   }
 }
 

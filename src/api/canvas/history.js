@@ -63,7 +63,7 @@ export async function getHistory(params = {}) {
   const results = []
   const headers = getAuthHeaders()
   
-  const queryLimit = params.limit || 200
+  const queryLimit = params.limit || 50
   
   const spaceQuery = []
   if (params.spaceType) {

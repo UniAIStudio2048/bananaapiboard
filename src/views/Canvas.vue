@@ -379,72 +379,59 @@ function closeWorkflowPanel() {
 }
 
 // 工作流加载后的回调（在新标签中打开）
-// 包含旧数据格式的自动迁移功能
 async function handleWorkflowLoaded(workflow) {
-  console.log('[Canvas] 工作流已加载:', workflow.name)
-  
-  // 检测是否需要迁移（旧的 blob URL 或 base64 数据）
-  if (needsMigration(workflow)) {
-    console.log('[Canvas] 检测到需要迁移的旧数据格式')
-    const analysis = analyzeWorkflow(workflow)
+  try {
+    console.log('[Canvas] 工作流已加载:', workflow?.name, 'nodes:', workflow?.nodes?.length)
     
-    // 显示迁移提示
-    let migrationMessage = ''
-    if (analysis.blobUrls.length > 0) {
-      migrationMessage += `⚠️ ${analysis.blobUrls.length} 个本地临时文件已失效（无法恢复），将被清除\n`
-    }
-    if (analysis.base64Data.length > 0) {
-      migrationMessage += `📦 ${analysis.base64Data.length} 个文件使用旧格式存储，将自动迁移到云存储`
+    if (!workflow || !workflow.nodes) {
+      console.error('[Canvas] 工作流数据无效:', workflow)
+      displayToast('工作流数据无效', 'error')
+      return
     }
     
-    // 如果有 base64 数据，执行迁移
-    if (analysis.base64Data.length > 0) {
-      try {
-        // 显示迁移中提示
-        displayToast('正在迁移旧数据到云存储...', 'info', 30000) // 30秒超时
-        
-        const result = await migrateWorkflowData(workflow, (current, total, status) => {
-          console.log(`[Canvas] 迁移进度: ${current}/${total} - ${status}`)
-        })
-        
-        // 更新工作流数据
-        workflow.nodes = result.nodes
-        
-        // 关闭迁移中提示，显示结果
-        closeToast()
-        
-        if (result.migratedCount > 0) {
-          displayToast(`✅ 已将 ${result.migratedCount} 个文件迁移到云存储`, 'success')
+    // 检测是否需要迁移（旧的 blob URL 或 base64 数据）
+    if (needsMigration(workflow)) {
+      console.log('[Canvas] 检测到需要迁移的旧数据格式')
+      const analysis = analyzeWorkflow(workflow)
+      
+      if (analysis.base64Data.length > 0) {
+        try {
+          displayToast('正在迁移旧数据到云存储...', 'info', 30000)
+          const result = await migrateWorkflowData(workflow, (current, total, status) => {
+            console.log(`[Canvas] 迁移进度: ${current}/${total} - ${status}`)
+          })
+          workflow.nodes = result.nodes
+          closeToast()
+          if (result.migratedCount > 0) {
+            displayToast(`已将 ${result.migratedCount} 个文件迁移到云存储`, 'success')
+          }
+        } catch (error) {
+          console.error('[Canvas] 数据迁移失败:', error)
+          closeToast()
+          displayToast('数据迁移失败: ' + error.message, 'error')
         }
-        if (result.failedCount > 0) {
-          setTimeout(() => {
-            displayToast(`⚠️ ${result.failedCount} 个文件迁移失败`, 'warning')
-          }, 2000)
-        }
-        if (result.skippedBlobCount > 0) {
-          setTimeout(() => {
-            displayToast(`ℹ️ ${result.skippedBlobCount} 个临时文件已失效，需要重新上传`, 'info')
-          }, 4000)
-        }
-        
-      } catch (error) {
-        console.error('[Canvas] 数据迁移失败:', error)
-        closeToast()
-        displayToast('数据迁移失败: ' + error.message, 'error')
+      } else if (analysis.blobUrls.length > 0) {
+        displayToast(`${analysis.blobUrls.length} 个本地临时文件已失效，需要重新上传`, 'warning')
       }
-    } else if (analysis.blobUrls.length > 0) {
-      // 只有 blob URL（无法恢复），给出提示
-      displayToast(`⚠️ ${analysis.blobUrls.length} 个本地临时文件已失效，需要重新上传`, 'warning')
     }
-  }
-  
-  // 在新标签中打开
-  canvasStore.openWorkflowInNewTab(workflow)
-  
-  // 如果是已保存的工作流，启用自动保存
-  if (workflow.id && !autoSaveEnabled.value) {
-    autoSaveEnabled.value = true
-    startAutoSave()
+    
+    // 在新标签中打开
+    const tab = canvasStore.openWorkflowInNewTab(workflow)
+    if (!tab) {
+      displayToast('标签页已达上限，请关闭一些标签后重试', 'warning')
+      return
+    }
+    
+    // 如果是已保存的工作流，启用自动保存
+    if (workflow.id && !autoSaveEnabled.value) {
+      autoSaveEnabled.value = true
+      startAutoSave()
+    }
+    
+    console.log('[Canvas] 工作流加载完成, tab:', tab?.id)
+  } catch (error) {
+    console.error('[Canvas] 工作流加载异常:', error)
+    displayToast('工作流加载失败: ' + error.message, 'error')
   }
 }
 

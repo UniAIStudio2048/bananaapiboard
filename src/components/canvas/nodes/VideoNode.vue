@@ -5636,6 +5636,7 @@ function handleToolbarPreview() {
             :src="normalizedVideoUrl"
             controls 
             autoplay
+            preload="metadata"
             playsinline
             webkit-playsinline
             class="fullscreen-video"
