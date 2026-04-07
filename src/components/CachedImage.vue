@@ -82,11 +82,9 @@ function shouldCache(url) {
   if (!url || !props.cache) return false
   if (url.startsWith('blob:') || url.startsWith('data:')) return false
   
-  // 🚀 cos-proxy 缩略图（带 imageMogr2 参数，~30KB）需要缓存到 IndexedDB
-  // cos-proxy 原图（无参数，~4MB）不缓存（浏览器 HTTP 缓存 + ETag 已足够）
-  if (url.includes('/api/cos-proxy/')) {
-    return url.includes('imageMogr2') || url.includes('imageView2')
-  }
+  // COS proxy: 服务端已有 Redis 缓存 + 浏览器 HTTP 缓存 (ETag + Cache-Control: immutable)
+  // 不走 IndexedDB，让 <img> 原生加载，避免 fetch 阻塞
+  if (url.includes('/api/cos-proxy/')) return false
   
   if (url.includes('/api/images/file/')) return true
   if (url.includes('/api/videos/file/')) return true

@@ -3,7 +3,7 @@
  * 管理节点、连线、视口状态等
  */
 import { defineStore } from 'pinia'
-import { ref, computed, watch, toRaw } from 'vue'
+import { ref, computed, watch, toRaw, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 
 export const useCanvasStore = defineStore('canvas', () => {
@@ -1106,19 +1106,13 @@ export const useCanvasStore = defineStore('canvas', () => {
   }
   
   /**
-   * 加载工作流（优化版：骨架先行，媒体异步加载）
-   * 策略：先显示节点结构，然后异步加载图片/视频，提升流畅度
+   * 创建骨架节点（剥离媒体数据，加快首次渲染）
+   * 复用于 loadWorkflow 和 createTab
    */
-  function loadWorkflow(workflow) {
-    const workflowNodes = workflow.nodes || []
-    const workflowEdges = workflow.edges || []
-    
-    // 1. 先创建骨架节点（移除大型媒体数据，加快首次渲染）
-    const skeletonNodes = workflowNodes.map(node => {
-      // 深拷贝节点，但标记媒体数据为"加载中"
-      const skeletonNode = JSON.parse(JSON.stringify(node))
+  function createSkeletonNodes(rawNodes) {
+    return rawNodes.map(node => {
+      const skeletonNode = structuredClone(toRaw(node))
       
-      // 清理数据库中残留的瞬态上传状态（这些状态仅在上一次会话有效）
       if (skeletonNode.data) {
         if (skeletonNode.data.isUploading) {
           delete skeletonNode.data.isUploading
@@ -1134,7 +1128,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         delete skeletonNode.data.uploadError
       }
       
-      // 保存原始媒体数据的引用（用于异步加载）
       const hasMediaData = skeletonNode.data && (
         skeletonNode.data.sourceImages?.length > 0 ||
         skeletonNode.data.output?.url ||
@@ -1142,13 +1135,11 @@ export const useCanvasStore = defineStore('canvas', () => {
       )
       
       if (hasMediaData) {
-        // 标记为加载中状态
         skeletonNode.data._mediaLoading = true
         skeletonNode.data._originalMedia = {
           sourceImages: skeletonNode.data.sourceImages,
           output: skeletonNode.data.output
         }
-        // 临时清空媒体数据（骨架模式）
         skeletonNode.data.sourceImages = []
         if (skeletonNode.data.output) {
           skeletonNode.data.output = { ...skeletonNode.data.output, url: null, urls: [] }
@@ -1157,15 +1148,61 @@ export const useCanvasStore = defineStore('canvas', () => {
       
       return skeletonNode
     })
+  }
+
+  /**
+   * 异步分批恢复节点的媒体数据
+   * 在骨架渲染后调用，避免大量媒体数据一次性加载导致卡顿
+   */
+  function asyncRestoreMedia() {
+    const nodesWithMedia = nodes.value.filter(n => n.data?._mediaLoading)
+    if (nodesWithMedia.length === 0) return
     
-    // 2. 立即显示骨架结构
+    const loadMediaBatch = (startIndex) => {
+      const batchSize = 5
+      const endIndex = Math.min(startIndex + batchSize, nodesWithMedia.length)
+      
+      for (let i = startIndex; i < endIndex; i++) {
+        const node = nodesWithMedia[i]
+        const targetNode = nodes.value.find(n => n.id === node.id)
+        if (targetNode && node.data._originalMedia) {
+          Object.assign(targetNode.data, {
+            sourceImages: node.data._originalMedia.sourceImages || [],
+            output: node.data._originalMedia.output || targetNode.data.output,
+            _mediaLoading: false
+          })
+          delete targetNode.data._originalMedia
+        }
+      }
+      
+      if (endIndex < nodesWithMedia.length) {
+        requestAnimationFrame(() => {
+          setTimeout(() => loadMediaBatch(endIndex), 150)
+        })
+      }
+    }
+    
+    requestAnimationFrame(() => {
+      setTimeout(() => loadMediaBatch(0), 200)
+    })
+  }
+
+  /**
+   * 加载工作流（优化版：骨架先行，媒体异步加载）
+   * 策略：先显示节点结构，然后异步加载图片/视频，提升流畅度
+   */
+  function loadWorkflow(workflow) {
+    const workflowNodes = workflow.nodes || []
+    const workflowEdges = workflow.edges || []
+    
+    const skeletonNodes = createSkeletonNodes(workflowNodes)
+    
     nodes.value = skeletonNodes
     edges.value = workflowEdges
     if (workflow.viewport) {
       viewport.value = workflow.viewport
     }
 
-    // 2.5 从 group 类型节点重建 nodeGroups（工作流加载时恢复编组状态）
     const restoredGroups = skeletonNodes
       .filter(n => n.type === 'group' && n.data?.nodeIds?.length)
       .map(n => ({
@@ -1180,41 +1217,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       console.log(`[Canvas Store] 已从工作流恢复 ${restoredGroups.length} 个编组`)
     }
     
-    // 3. 异步填充媒体数据（分批处理，避免卡顿）
-    const nodesWithMedia = skeletonNodes.filter(n => n.data?._mediaLoading)
-    if (nodesWithMedia.length > 0) {
-      // 使用 requestIdleCallback 或 setTimeout 异步加载
-      const loadMediaBatch = (startIndex) => {
-        const batchSize = 3 // 每批加载3个节点
-        const endIndex = Math.min(startIndex + batchSize, nodesWithMedia.length)
-        
-        for (let i = startIndex; i < endIndex; i++) {
-          const node = nodesWithMedia[i]
-          const targetNode = nodes.value.find(n => n.id === node.id)
-          if (targetNode && node.data._originalMedia) {
-            targetNode.data = {
-              ...targetNode.data,
-              sourceImages: node.data._originalMedia.sourceImages || [],
-              output: node.data._originalMedia.output || targetNode.data.output,
-              _mediaLoading: false
-            }
-            delete targetNode.data._originalMedia
-          }
-        }
-        
-        // 继续加载下一批
-        if (endIndex < nodesWithMedia.length) {
-          requestAnimationFrame(() => {
-            setTimeout(() => loadMediaBatch(endIndex), 50)
-          })
-        }
-      }
-      
-      // 延迟启动媒体加载，让骨架先渲染
-      requestAnimationFrame(() => {
-        setTimeout(() => loadMediaBatch(0), 100)
-      })
-    }
+    asyncRestoreMedia()
   }
   
   /**
@@ -1378,28 +1381,40 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 创建新标签
    */
   function createTab(workflow = null) {
-    // 检查标签数量限制
     if (workflowTabs.value.length >= maxTabs) {
       console.warn(`[Canvas] 已达到最大标签数量 ${maxTabs}`)
       return null
     }
     
     const tabId = generateTabId()
+    
+    // 有工作流数据时使用骨架加载策略，剥离媒体数据加快首次渲染
+    const rawNodes = workflow?.nodes || []
+    let tabNodes = rawNodes
+    let needsMediaRestore = false
+    if (rawNodes.length > 0) {
+      tabNodes = createSkeletonNodes(rawNodes)
+      needsMediaRestore = tabNodes.some(n => n.data?._mediaLoading)
+    }
+    
     const tab = {
       id: tabId,
       name: workflow?.name || '新工作流',
       workflowId: workflow?.id || null,
       workflowUid: workflow?.workflow_uid || null,
-      nodes: workflow?.nodes || [],
+      nodes: tabNodes,
       edges: workflow?.edges || [],
       viewport: workflow?.viewport || { x: 0, y: 0, zoom: 1 },
       hasChanges: false
     }
     
     workflowTabs.value.push(tab)
-    
-    // 切换到新标签
     switchToTab(tabId)
+    
+    // 骨架渲染后异步恢复媒体数据（等 switchToTab 的 nextTick 完成后再执行）
+    if (needsMediaRestore) {
+      nextTick(() => nextTick(() => asyncRestoreMedia()))
+    }
     
     return tab
   }
@@ -1413,18 +1428,18 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     if (!targetTab) return
     
-    // 保存当前标签的状态
+    // 保存当前标签状态（structuredClone + toRaw 避免 JSON 序列化瓶颈）
     if (currentTab) {
-      currentTab.nodes = JSON.parse(JSON.stringify(nodes.value))
-      currentTab.edges = JSON.parse(JSON.stringify(edges.value))
+      currentTab.nodes = structuredClone(toRaw(nodes.value))
+      currentTab.edges = structuredClone(toRaw(edges.value))
       currentTab.viewport = { ...viewport.value }
     }
     
-    // 切换到目标标签
+    // 先清空画布，避免旧数据和新数据同时渲染导致帧丢失
+    nodes.value = []
+    edges.value = []
+    
     activeTabId.value = tabId
-    nodes.value = JSON.parse(JSON.stringify(targetTab.nodes))
-    edges.value = JSON.parse(JSON.stringify(targetTab.edges))
-    viewport.value = { ...targetTab.viewport }
     
     // 更新工作流元信息
     workflowMeta.value = targetTab.workflowId ? {
@@ -1434,10 +1449,17 @@ export const useCanvasStore = defineStore('canvas', () => {
       description: ''
     } : null
     
-    // 清空选择
     selectedNodeId.value = null
     selectedEdgeId.value = null
     selectedNodeIds.value = []
+    
+    // 延迟填充新数据 - 直接使用 tab 的引用，避免额外 clone
+    // 下次 switchToTab 保存当前 tab 时才会 clone，从 2 次减到 1 次
+    nextTick(() => {
+      nodes.value = targetTab.nodes
+      edges.value = targetTab.edges
+      viewport.value = { ...targetTab.viewport }
+    })
   }
   
   /**

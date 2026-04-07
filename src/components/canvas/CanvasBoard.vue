@@ -1303,9 +1303,21 @@ let isExternalViewportUpdate = false
 
 // 🚀 视口变化节流：拖拽/缩放时高频触发，节流减少 store 更新
 let viewportRAF = null
+let _isPanning = false
+let _panEndTimer = null
 function handleViewportChange(viewport) {
-  // 如果是外部更新触发的，跳过同步到 store（避免循环）
   if (isExternalViewportUpdate) return
+  
+  if (!_isPanning) {
+    _isPanning = true
+    window.dispatchEvent(new CustomEvent('canvas-drag-start'))
+  }
+  if (_panEndTimer) clearTimeout(_panEndTimer)
+  _panEndTimer = setTimeout(() => {
+    _isPanning = false
+    window.dispatchEvent(new CustomEvent('canvas-drag-end'))
+  }, 150)
+  
   if (viewportRAF) return
   viewportRAF = requestAnimationFrame(() => {
     viewportRAF = null

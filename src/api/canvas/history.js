@@ -13,8 +13,22 @@ function getApiBase() {
   return url || ''
 }
 
+function isVideoUrl(url) {
+  if (!url) return false
+  const lower = url.split('?')[0].toLowerCase()
+  return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') ||
+         lower.includes('/videos/') || lower.includes('/video-files/') ||
+         lower.includes('/character-videos/')
+}
+
 function generateThumbnailUrl(url) {
   if (!url) return url
+
+  if (url.includes('/api/cos-proxy/') && !isVideoUrl(url)) {
+    const separator = url.includes('?') ? '|' : '?'
+    return `${url}${separator}imageMogr2/thumbnail/200x/format/webp`
+  }
+
   if (url.includes('files.nananobanana.cn') || 
       url.includes('qiniucdn.com') ||
       url.includes('qncdn.net') ||

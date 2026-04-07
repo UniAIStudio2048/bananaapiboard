@@ -382,30 +382,33 @@ watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
   }
 })
 
-// 为七牛云URL添加缩略图处理参数（仅用于列表缩略图，加快加载速度）
 function getQiniuThumbnailUrl(url, width = 400) {
   if (!url || typeof url !== 'string') return url
   
-  // 如果URL已经包含图片处理参数，直接返回（避免重复添加）
   if (url.includes('imageView2') || url.includes('imageMogr2')) {
     return url
   }
   
-  // 判断是否是七牛云URL
+  // COS 代理 URL → imageMogr2 缩略图（跳过视频）
+  if (url.includes('/api/cos-proxy/')) {
+    const lower = url.split('?')[0].toLowerCase()
+    const isVideo = lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') ||
+                    lower.includes('/videos/') || lower.includes('/video-files/') || lower.includes('/character-videos/')
+    if (!isVideo) {
+      const separator = url.includes('?') ? '|' : '?'
+      return `${url}${separator}imageMogr2/thumbnail/${width}x/format/webp`
+    }
+  }
+  
   if (url.includes('files.nananobanana.cn') ||  
       url.includes('qiniucdn.com') || 
       url.includes('clouddn.com') || 
       url.includes('qnssl.com') ||
       url.includes('qbox.me')) {
-    // 添加七牛云图片处理参数
-    // imageView2/2/w/400 - 等比缩放，宽度限制为400px
-    // format/webp - 转WebP格式，体积更小
     const separator = url.includes('?') ? '|' : '?'
     return `${url}${separator}imageView2/2/w/${width}/format/webp`
   }
   
-  // 对于其他URL（如腾讯COS、本地存储等），直接返回原URL
-  // 这些URL可能已经有自己的缩略图处理逻辑，或者需要原图显示
   return url
 }
 
