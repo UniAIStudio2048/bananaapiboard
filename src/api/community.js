@@ -262,6 +262,11 @@ export function getPlatformFeeRate() {
   return request('/api/community/platform-fee-rate')
 }
 
+/** 获取社区上传类型配置 */
+export function getUploadConfig() {
+  return request('/api/community/upload-config')
+}
+
 // ==================== 用户资料编辑 ====================
 
 /** 更新用户资料（头像、简介） */

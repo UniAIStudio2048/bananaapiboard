@@ -7,6 +7,8 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getAssets, deleteAsset, toggleFavorite, updateAssetTags, updateAsset, saveAsset } from '@/api/canvas/assets'
+import { getCachedAssets, cacheAssets, invalidateAssetCache } from '@/utils/assetCache'
+import { preloadImages } from '@/utils/imageCache'
 import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } from '@/api/canvas/volcengine-assets'
 import { getApiUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
@@ -14,6 +16,7 @@ import { useTeamStore } from '@/stores/team'
 import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import SeedanceCharacterPanel from './SeedanceCharacterPanel.vue'
+import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
 
 const { t, currentLanguage } = useI18n()
 const teamStore = useTeamStore()
@@ -91,8 +94,19 @@ const showContextMenu = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
 const contextMenuAsset = ref(null)
 
+// 复制到空间状态
+const showCopyDialog = ref(false)
+const copyItems = ref([])
+
 // 视频缩略图缓存
 const videoThumbnails = ref({})
+const videoThumbnailQueue = ref([])
+const processingThumbnails = ref(0)
+const MAX_CONCURRENT_THUMBNAILS = 2
+
+// 音频不可用状态（源文件已删除等）
+const audioUnavailableSet = ref(new Set())
+const audioErrorPreview = ref(false)
 
 // 数据缓存和延迟渲染
 const dataCached = ref(false)
@@ -256,29 +270,96 @@ watch([selectedType, selectedTag, searchQuery], () => {
   }
 })
 
-// 加载资产列表（带缓存）
+// 加载资产列表（带 IndexedDB 缓存 + stale-while-revalidate）
 async function loadAssets(forceRefresh = false) {
   const now = Date.now()
   
-  // 如果有缓存且未过期，使用缓存（但空间切换时需要强制刷新）
+  // 1. 内存缓存检查
   if (!forceRefresh && dataCached.value && (now - lastLoadTime.value < CACHE_DURATION)) {
-    console.log('[AssetPanel] 使用缓存数据')
+    console.log('[AssetPanel] 使用内存缓存')
     return
   }
   
+  const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
+  const { spaceType, teamId } = spaceParams
+  
+  // 2. IndexedDB 缓存 + stale-while-revalidate
+  if (!forceRefresh) {
+    try {
+      const cachedData = await getCachedAssets('all', spaceType, teamId)
+      if (cachedData) {
+        assets.value = cachedData
+        dataCached.value = true
+        lastLoadTime.value = now
+        console.log('[AssetPanel] 使用 IndexedDB 缓存:', cachedData.length, '个，后台刷新中...')
+        _refreshAssetsInBackground(spaceParams, spaceType, teamId)
+        return
+      }
+    } catch (e) {
+      console.warn('[AssetPanel] IndexedDB 读取失败:', e)
+    }
+  }
+  
+  // 3. 无缓存，显示 loading 从服务器加载
   loading.value = true
   try {
-    // 获取空间筛选参数
-    const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
-    const result = await getAssets(spaceParams)
-    assets.value = result.assets || []
+    const freshData = await _fetchAssetsFromServer(spaceParams, spaceType, teamId)
+    assets.value = freshData
     dataCached.value = true
     lastLoadTime.value = now
-    console.log('[AssetPanel] 加载资产:', assets.value.length, '个', spaceParams)
+    checkAudioAvailability(freshData)
   } catch (error) {
     console.error('[AssetPanel] 加载资产失败:', error)
   } finally {
     loading.value = false
+  }
+}
+
+async function _fetchAssetsFromServer(spaceParams, spaceType, teamId) {
+  const result = await getAssets(spaceParams)
+  const freshData = result.assets || []
+  console.log('[AssetPanel] 从服务器加载:', freshData.length, '个')
+  
+  cacheAssets('all', spaceType, teamId, freshData).catch(() => {})
+  
+  const preloadUrls = freshData
+    .filter(item => item.type === 'image' && item.url)
+    .slice(0, 8)
+    .map(item => item.thumbnail_url || item.url)
+  if (preloadUrls.length > 0) {
+    preloadImages(preloadUrls)
+  }
+  
+  return freshData
+}
+
+async function _refreshAssetsInBackground(spaceParams, spaceType, teamId) {
+  try {
+    const freshData = await _fetchAssetsFromServer(spaceParams, spaceType, teamId)
+    if (freshData.length !== assets.value.length || 
+        JSON.stringify(freshData.map(d => d.id).slice(0, 5)) !== JSON.stringify(assets.value.map(d => d.id).slice(0, 5))) {
+      assets.value = freshData
+      console.log('[AssetPanel] 后台刷新完成，数据已更新')
+    }
+  } catch (e) {
+    console.warn('[AssetPanel] 后台刷新失败:', e)
+  }
+}
+
+// 检查音频资产可用性
+function checkAudioAvailability(assetList) {
+  const DEPRECATED_DOMAINS = ['oss.nananobanana.cn']
+  const audioAssets = assetList.filter(a => a.type === 'audio' && a.url)
+  if (audioAssets.length === 0) return
+
+  const newUnavailable = new Set(audioUnavailableSet.value)
+  for (const asset of audioAssets) {
+    if (DEPRECATED_DOMAINS.some(d => asset.url.includes(d))) {
+      newUnavailable.add(asset.id)
+    }
+  }
+  if (newUnavailable.size > audioUnavailableSet.value.size) {
+    audioUnavailableSet.value = newUnavailable
   }
 }
 
@@ -357,6 +438,22 @@ watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
     startTeamSync()
   } else {
     stopTeamSync()
+  }
+})
+
+watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], ([newType, newTeamId]) => {
+  const newFilter = newType === 'team' && newTeamId ? `team-${newTeamId}` : 'personal'
+  if (newFilter !== spaceFilter.value) {
+    spaceFilter.value = newFilter
+    dataCached.value = false
+    if (props.visible) {
+      loadAssets(true)
+    }
+    if (newFilter.startsWith('team-')) {
+      startTeamSync()
+    } else {
+      stopTeamSync()
+    }
   }
 })
 
@@ -492,18 +589,21 @@ function handleAssetClick(e, asset) {
   }
   // 其他资产：打开全屏预览
   previewAsset.value = asset
+  audioErrorPreview.value = false
   showPreview.value = true
 }
 
 // 双击资产 - 打开全屏预览（Sora 角色也支持）
 function handleAssetDoubleClick(asset) {
   previewAsset.value = asset
+  audioErrorPreview.value = false
   showPreview.value = true
 }
 
 // 关闭全屏预览
 function closePreview() {
   destroyAudioVisualizer()
+  audioErrorPreview.value = false
   showPreview.value = false
   previewAsset.value = null
 }
@@ -724,6 +824,17 @@ function handleAudioPause() {
   cleanupAudioVisualizer()
 }
 
+// 音频加载错误处理（源文件可能已删除）
+function handleAudioError() {
+  audioErrorPreview.value = true
+  if (previewAsset.value) {
+    const newSet = new Set(audioUnavailableSet.value)
+    newSet.add(previewAsset.value.id)
+    audioUnavailableSet.value = newSet
+  }
+  cleanupAudioVisualizer()
+}
+
 // 应用资产到画布
 function applyAssetToCanvas() {
   if (previewAsset.value) {
@@ -847,21 +958,68 @@ function handleContextTag() {
   closeContextMenu()
 }
 
-// 提取视频首帧作为缩略图
+function handleCopyToSpace(event, asset) {
+  event.stopPropagation()
+  copyItems.value = [{ type: 'canvas_asset', id: asset.id, name: asset.name || asset.type }]
+  showCopyDialog.value = true
+}
+
+function handleContextCopyToSpace() {
+  if (contextMenuAsset.value) {
+    copyItems.value = [{ type: 'canvas_asset', id: contextMenuAsset.value.id, name: contextMenuAsset.value.name || contextMenuAsset.value.type }]
+    showCopyDialog.value = true
+  }
+  showContextMenu.value = false
+}
+
+function handleCopySuccess() {
+  showCopyDialog.value = false
+}
+
+// 提取视频首帧作为缩略图（带并发控制）
 function extractVideoThumbnail(asset) {
   if (asset.type !== 'video' || !asset.url) return
-  if (videoThumbnails.value[asset.id]) return // 已有缓存
+  if (videoThumbnails.value[asset.id]) return
   
+  if (processingThumbnails.value >= MAX_CONCURRENT_THUMBNAILS) {
+    if (!videoThumbnailQueue.value.includes(asset.id)) {
+      videoThumbnailQueue.value.push(asset.id)
+    }
+    return
+  }
+  
+  processingThumbnails.value++
+
   const video = document.createElement('video')
   video.crossOrigin = 'anonymous'
   video.muted = true
   video.preload = 'metadata'
-  
+
+  const THUMBNAIL_TIMEOUT = 5000
+  let completed = false
+
+  function onComplete() {
+    if (completed) return
+    completed = true
+    clearTimeout(timeoutId)
+    processingThumbnails.value--
+    video.src = ''
+    video.load()
+    video.remove()
+    processNextThumbnail()
+  }
+
+  const timeoutId = setTimeout(() => {
+    if (!completed) {
+      console.warn('[AssetPanel] 视频缩略图提取超时:', asset.url)
+      onComplete()
+    }
+  }, THUMBNAIL_TIMEOUT)
+
   video.onloadeddata = () => {
-    // 跳到第一帧
     video.currentTime = 0.1
   }
-  
+
   video.onseeked = () => {
     try {
       const canvas = document.createElement('canvas')
@@ -873,15 +1031,26 @@ function extractVideoThumbnail(asset) {
     } catch (e) {
       console.warn('[AssetPanel] 无法提取视频缩略图:', e)
     }
-    video.remove()
+    onComplete()
   }
-  
+
   video.onerror = () => {
     console.warn('[AssetPanel] 视频加载失败:', asset.url)
-    video.remove()
+    onComplete()
   }
-  
+
   video.src = asset.url
+}
+
+function processNextThumbnail() {
+  if (videoThumbnailQueue.value.length === 0) return
+  if (processingThumbnails.value >= MAX_CONCURRENT_THUMBNAILS) return
+  
+  const nextId = videoThumbnailQueue.value.shift()
+  const item = assets.value.find(a => a.id === nextId)
+  if (item) {
+    extractVideoThumbnail(item)
+  }
 }
 
 // 获取视频缩略图
@@ -1467,6 +1636,7 @@ function handleGlobalClick(e) {
 // 资产更新事件处理
 function handleAssetsUpdated() {
   console.log('[AssetPanel] 收到资产更新事件，刷新数据')
+  invalidateAssetCache('all').catch(() => {})
   loadAssets(true)
 }
 
@@ -1736,19 +1906,33 @@ onUnmounted(() => {
                   loading="eager"
                 />
 
-                <!-- 视频预览 - 自动提取首帧 -->
+                <!-- 视频预览 - 使用原生 video 自动显示首帧 -->
                 <div v-else-if="asset.type === 'video'" class="video-preview">
                   <CachedImage
-                    :src="getVideoThumbnail(asset)"
+                    v-if="asset.thumbnail_url"
+                    :src="asset.thumbnail_url"
                     :alt="asset.name"
+                    img-class="image-preview"
                     loading="eager"
+                  />
+                  <video 
+                    v-else
+                    :src="asset.url"
+                    class="video-thumbnail"
+                    muted
+                    preload="metadata"
+                    @loadeddata="$event.target.currentTime = 0.1"
                   />
                   <div class="video-play-icon">▶</div>
                 </div>
                 
                 <!-- 音频预览 -->
-                <div v-else-if="asset.type === 'audio'" class="audio-preview">
-                  <div class="audio-wave">
+                <div v-else-if="asset.type === 'audio'" class="audio-preview" :class="{ 'audio-unavailable': audioUnavailableSet.has(asset.id) }">
+                  <div v-if="audioUnavailableSet.has(asset.id)" class="audio-unavailable-hint">
+                    <span class="unavailable-icon">⚠</span>
+                    <span class="unavailable-text">文件不可用</span>
+                  </div>
+                  <div v-else class="audio-wave">
                     <span></span><span></span><span></span><span></span><span></span>
                   </div>
                 </div>
@@ -1915,6 +2099,13 @@ onUnmounted(() => {
                   #
                 </button>
                 <button 
+                  class="action-btn copy-btn"
+                  @click="handleCopyToSpace($event, asset)"
+                  title="复制到空间"
+                >
+                  ⧉
+                </button>
+                <button 
                   class="action-btn delete-btn"
                   @click="handleDelete($event, asset)"
                   :title="t('common.delete')"
@@ -1968,6 +2159,13 @@ onUnmounted(() => {
                   <line x1="7" y1="7" x2="7.01" y2="7"/>
                 </svg>
                 <span>{{ t('canvas.assetPanel.manageTags') || '管理标签' }}</span>
+              </button>
+              <button class="context-menu-item" @click="handleContextCopyToSpace">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                <span>复制到空间</span>
               </button>
               <div class="context-menu-divider"></div>
               <button class="context-menu-item danger" @click="handleContextDelete">
@@ -2164,22 +2362,29 @@ onUnmounted(() => {
             
             <!-- 音频预览 -->
             <div v-else-if="previewAsset.type === 'audio'" class="preview-audio">
-              <div class="audio-visualizer-container">
-                <canvas ref="audioVisualizerRef" class="audio-visualizer-canvas" width="400" height="300"></canvas>
-                <div class="audio-icon">♪</div>
+              <div v-if="audioErrorPreview" class="audio-error-container">
+                <div class="audio-error-icon">⚠</div>
+                <div class="audio-error-text">音频文件不可用，源文件可能已被删除</div>
               </div>
-              <h3 class="audio-title">{{ previewAsset.name }}</h3>
-              <audio 
-                ref="audioRef"
-                :src="previewAsset.url"
-                controls
-                autoplay
-                crossorigin="anonymous"
-                class="audio-player"
-                @play="handleAudioPlay"
-                @pause="handleAudioPause"
-                @ended="handleAudioPause"
-              ></audio>
+              <template v-else>
+                <div class="audio-visualizer-container">
+                  <canvas ref="audioVisualizerRef" class="audio-visualizer-canvas" width="400" height="300"></canvas>
+                  <div class="audio-icon">♪</div>
+                </div>
+                <h3 class="audio-title">{{ previewAsset.name }}</h3>
+                <audio 
+                  ref="audioRef"
+                  :src="previewAsset.url"
+                  controls
+                  autoplay
+                  crossorigin="anonymous"
+                  class="audio-player"
+                  @play="handleAudioPlay"
+                  @pause="handleAudioPause"
+                  @ended="handleAudioPause"
+                  @error="handleAudioError"
+                ></audio>
+              </template>
             </div>
           </div>
           
@@ -2257,6 +2462,12 @@ onUnmounted(() => {
       </div>
     </Transition>
   </Teleport>
+
+  <CopyToSpaceDialog 
+    v-model:visible="showCopyDialog" 
+    :items="copyItems"
+    @success="handleCopySuccess"
+  />
 </template>
 
 <style scoped>
@@ -2665,12 +2876,18 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   position: relative;
+  background: #1a1a2e;
 }
 
-.video-preview img {
+.video-preview img,
+.video-preview video {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.video-preview .video-thumbnail {
+  pointer-events: none;
 }
 
 .video-play-icon {
@@ -2719,6 +2936,49 @@ onUnmounted(() => {
 @keyframes wave {
   0%, 100% { transform: scaleY(1); }
   50% { transform: scaleY(0.5); }
+}
+
+/* 音频不可用状态 */
+.audio-preview.audio-unavailable {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.15) 0%, rgba(220, 38, 38, 0.08) 100%);
+}
+
+.audio-unavailable-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  color: rgba(239, 68, 68, 0.8);
+}
+
+.unavailable-icon {
+  font-size: 20px;
+}
+
+.unavailable-text {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* 音频预览错误状态 */
+.audio-error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+}
+
+.audio-error-icon {
+  font-size: 48px;
+  color: rgba(239, 68, 68, 0.7);
+}
+
+.audio-error-text {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
 }
 
 /* Sora 角色预览 */
@@ -3086,6 +3346,10 @@ onUnmounted(() => {
 
 .favorite-btn.active {
   color: #fbbf24;
+}
+
+.copy-btn:hover {
+  background: rgba(99, 102, 241, 0.8);
 }
 
 .delete-btn:hover {

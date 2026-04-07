@@ -22,6 +22,7 @@ import { formatPoints } from '@/utils/format'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
 import apiClient from '@/api/client'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { useTeamStore } from '@/stores/team'
 
 const { t } = useI18n()
 
@@ -186,11 +187,16 @@ async function handleGenerateMusic() {
       makeInstrumental: makeInstrumental.value
     })
     
+    const teamStore = useTeamStore()
+    const spaceParams = teamStore.getSpaceParams('current')
+    
     const requestBody = {
       custom_mode: customMode.value ? '1' : '0',
       prompt: musicPrompt.value,
       model: selectedMusicModel.value,
-      make_instrumental: makeInstrumental.value ? '1' : '0'
+      make_instrumental: makeInstrumental.value ? '1' : '0',
+      spaceType: spaceParams.spaceType,
+      ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
     }
 
     // 自定义模式下才发送title（必填）
@@ -1520,6 +1526,7 @@ function handleSpeedDropdownClickOutside(event) {
             @keydown="handleMusicKeyDown"
             @wheel="handlePromptWheel"
             @input="autoResizeTextarea"
+            @dblclick.stop
           ></textarea>
         </div>
         

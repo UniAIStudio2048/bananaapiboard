@@ -14,6 +14,7 @@ import { saveAsset, getAssets, updateAsset, deleteAsset as deleteLocalAsset } fr
 import { uploadImages } from '@/api/canvas/nodes'
 import { getApiUrl } from '@/config/tenant'
 import { useTeamStore } from '@/stores/team'
+import { getCachedAssets, cacheAssets, invalidateAssetCache } from '@/utils/assetCache'
 
 const teamStore = useTeamStore()
 
@@ -130,48 +131,72 @@ async function loadGroups() {
   }
 }
 
+function processAssetData(canvasAssets) {
+  let mapped = canvasAssets.map(a => {
+    const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata) : (a.metadata || {})
+    return {
+      Id: meta.assetId || a.id,
+      Name: a.name,
+      URL: resolveAssetUrl(a.thumbnail_url) || resolveAssetUrl(a.url),
+      Status: meta.status || 'Active',
+      GroupId: meta.groupId,
+      AssetType: meta.assetType || 'Image',
+      _canvasId: a.id,
+      _userId: a.user_id
+    }
+  })
+
+  if (props.selectedGroupId) {
+    mapped = mapped.filter(a => a.GroupId === props.selectedGroupId)
+    const group = groups.value.find(g => g.Id === props.selectedGroupId)
+    currentGroupName.value = group?.Name || ''
+  } else {
+    currentGroupName.value = ''
+  }
+
+  allAssets.value = mapped
+  return mapped
+}
+
 async function loadAssets() {
-  loading.value = true
   errorMessage.value = ''
+  const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
+
+  // Stale-while-revalidate: 先检查 IndexedDB 缓存
+  let hasCachedData = false
   try {
-    const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
+    const cached = await getCachedAssets('seedance-character', spaceParams.spaceType, spaceParams.teamId)
+    if (cached) {
+      processAssetData(cached)
+      hasCachedData = true
+    }
+  } catch (e) {
+    // 缓存未命中，继续正常加载
+  }
+
+  if (!hasCachedData) {
+    loading.value = true
+  }
+
+  try {
     const result = await getAssets({
       type: 'seedance-character',
       ...spaceParams
     })
 
     const canvasAssets = result.assets || []
-    let mapped = canvasAssets.map(a => {
-      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata) : (a.metadata || {})
-      return {
-        Id: meta.assetId || a.id,
-        Name: a.name,
-        URL: resolveAssetUrl(a.thumbnail_url) || resolveAssetUrl(a.url),
-        Status: meta.status || 'Active',
-        GroupId: meta.groupId,
-        AssetType: meta.assetType || 'Image',
-        _canvasId: a.id,
-        _userId: a.user_id
-      }
-    })
 
-    if (props.selectedGroupId) {
-      mapped = mapped.filter(a => a.GroupId === props.selectedGroupId)
-      const group = groups.value.find(g => g.Id === props.selectedGroupId)
-      currentGroupName.value = group?.Name || ''
-    } else {
-      currentGroupName.value = ''
-    }
+    cacheAssets('seedance-character', spaceParams.spaceType, spaceParams.teamId, canvasAssets).catch(() => {})
 
-    allAssets.value = mapped
+    const mapped = processAssetData(canvasAssets)
 
     // Refresh stale statuses from Volcengine for Processing/Failed assets
     const staleAssets = mapped.filter(a => a.Status === 'Processing' || a.Status === 'Failed')
     for (const asset of staleAssets) {
       if (pollers.value[asset.Id]) continue
       try {
-        const result = await getAsset(asset.Id)
-        const volcAsset = result.asset || result
+        const statusResult = await getAsset(asset.Id)
+        const volcAsset = statusResult.asset || statusResult
         const realStatus = volcAsset.Status || volcAsset.status
         if (realStatus && realStatus !== asset.Status) {
           const idx = allAssets.value.findIndex(a => a.Id === asset.Id)
@@ -195,7 +220,9 @@ async function loadAssets() {
       }
     }
   } catch (err) {
-    errorMessage.value = err.message || '加载角色失败'
+    if (!hasCachedData) {
+      errorMessage.value = err.message || '加载角色失败'
+    }
   } finally {
     loading.value = false
   }

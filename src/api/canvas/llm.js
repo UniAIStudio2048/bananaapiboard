@@ -3,6 +3,7 @@
  * 大语言模型相关 API
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { useTeamStore } from '@/stores/team'
 
 // 获取通用请求头
 function getHeaders(options = {}) {
@@ -39,10 +40,17 @@ export async function getLLMConfig() {
  * @returns {Promise<{success: boolean, result: string, cost: number, balance: Object}>}
  */
 export async function chatWithLLM(params) {
+  const teamStore = useTeamStore()
+  const spaceParams = teamStore.getSpaceParams('current')
+  
   const response = await fetch(getApiUrl('/api/canvas/llm/chat'), {
     method: 'POST',
     headers: getHeaders({ json: true }),
-    body: JSON.stringify(params)
+    body: JSON.stringify({
+      ...params,
+      spaceType: spaceParams.spaceType,
+      ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
+    })
   })
   
   if (!response.ok) {
@@ -70,12 +78,17 @@ export async function chatWithLLMStream(params) {
   const { onChunk, onDone, onError, ...requestParams } = params
   
   try {
+    const teamStore = useTeamStore()
+    const spaceParams = teamStore.getSpaceParams('current')
+    
     const response = await fetch(getApiUrl('/api/canvas/llm/chat'), {
       method: 'POST',
       headers: getHeaders({ json: true }),
       body: JSON.stringify({
         ...requestParams,
-        stream: true // 启用流式输出
+        stream: true,
+        spaceType: spaceParams.spaceType,
+        ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
       })
     })
     
@@ -166,10 +179,17 @@ export async function chatWithLLMStream(params) {
  * 通用 LLM 调用（预设动作）
  */
 async function callLLM(action, params) {
+  const teamStore = useTeamStore()
+  const spaceParams = teamStore.getSpaceParams('current')
+  
   const response = await fetch(getApiUrl(`/api/canvas/llm/${action}`), {
     method: 'POST',
     headers: getHeaders({ json: true }),
-    body: JSON.stringify(params)
+    body: JSON.stringify({
+      ...params,
+      spaceType: spaceParams.spaceType,
+      ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
+    })
   })
   
   if (!response.ok) {

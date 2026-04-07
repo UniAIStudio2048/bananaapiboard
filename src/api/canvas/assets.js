@@ -44,7 +44,8 @@ export async function getAssets(params = {}) {
     ...(params.favorite && { favorite: 'true' }),
     ...(params.spaceType && { spaceType: params.spaceType }),
     ...(params.teamId && { teamId: params.teamId }),
-    ...(params.scope && { scope: params.scope })
+    ...(params.scope && { scope: params.scope }),
+    ...(params.limit && { limit: params.limit })
   })
   
   const response = await fetch(`${getApiBase()}/api/canvas/assets?${queryParams}`, {
@@ -209,5 +210,30 @@ export async function batchOperation(assetIds, action, params = {}) {
   }
   
   return response.json()
+}
+
+/**
+ * 复制资产到指定空间
+ * @param {Array} items - 要复制的项目列表 [{ type, id, name? }]
+ * @param {string} targetSpaceType - 目标空间类型 ('personal' | 'team')
+ * @param {string|null} targetTeamId - 目标团队ID
+ */
+export async function copyAssetsToSpace(items, targetSpaceType, targetTeamId) {
+  const response = await fetch(`${getApiBase()}/api/assets/copy-to-space`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    credentials: 'include',
+    body: JSON.stringify({
+      items,
+      targetSpaceType,
+      targetTeamId: targetTeamId || null
+    })
+  })
+  
+  const data = await response.json()
+  if (!response.ok) {
+    throw new Error(data.error || '复制失败')
+  }
+  return data
 }
 

@@ -114,7 +114,8 @@ function shouldCache(url) {
   if (!url || !props.cache) return false
   if (url.startsWith('blob:') || url.startsWith('data:')) return false
   
-  if (url.includes('/api/cos-proxy/')) return false
+  // COS 代理：默认缓存，但排除包含 ci-process= 的实时处理 URL（如视频截帧）
+  if (url.includes('/api/cos-proxy/') && url.includes('ci-process=')) return false
   
   if (url.includes('/api/images/file/')) return true
   if (url.includes('/api/videos/file/')) return true

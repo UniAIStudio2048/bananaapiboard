@@ -3,7 +3,7 @@
  * NodeContextMenu.vue - 节点右键菜单
  * 支持所有节点类型的"加入我的资产"功能
  */
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
@@ -216,26 +216,39 @@ const downstreamOptions = computed(() => {
   return getDownstreamOptions(props.node.type)
 })
 
-// 菜单位置样式
-const menuStyle = computed(() => {
+// 菜单 DOM 引用和自适应定位
+const menuRef = ref(null)
+const adjustedPos = ref({ x: 0, y: 0 })
+
+function adjustMenuPosition() {
   let x = props.position.x
   let y = props.position.y
-  
-  const menuWidth = 200
-  const menuHeight = 450
-  
-  if (x + menuWidth > window.innerWidth) {
-    x = window.innerWidth - menuWidth - 20
+  const padding = 10
+
+  if (menuRef.value) {
+    const rect = menuRef.value.getBoundingClientRect()
+    if (x + rect.width > window.innerWidth) {
+      x = window.innerWidth - rect.width - padding
+    }
+    if (y + rect.height > window.innerHeight) {
+      y = window.innerHeight - rect.height - padding
+    }
   }
-  if (y + menuHeight > window.innerHeight) {
-    y = window.innerHeight - menuHeight - 20
-  }
-  
-  return {
-    left: `${x}px`,
-    top: `${y}px`
-  }
+
+  if (x < padding) x = padding
+  if (y < padding) y = padding
+  adjustedPos.value = { x, y }
+}
+
+onMounted(() => {
+  adjustedPos.value = { x: props.position.x, y: props.position.y }
+  nextTick(adjustMenuPosition)
 })
+
+const menuStyle = computed(() => ({
+  left: `${adjustedPos.value.x}px`,
+  top: `${adjustedPos.value.y}px`
+}))
 
 // ========== 节点操作 ==========
 
@@ -917,6 +930,7 @@ function handleMenuClick(event) {
 
 <template>
   <div 
+    ref="menuRef"
     v-show="!showSeedanceDialog"
     class="canvas-context-menu" 
     :style="menuStyle"

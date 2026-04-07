@@ -112,7 +112,9 @@ watch(() => props.visible, async (visible) => {
       workflowDescription.value = workflowMeta.description || ''
     } else {
       currentWorkflowId.value = null
-      workflowName.value = ''
+      // 从当前标签获取已重命名的名称
+      const currentTab = canvasStore.workflowTabs.find(t => t.id === canvasStore.activeTabId)
+      workflowName.value = currentTab?.name || ''
       workflowDescription.value = ''
     }
   } else {
@@ -641,32 +643,37 @@ function handlePublishToCommunity() {
         </div>
 
         <!-- 底部按钮 -->
-        <div class="dialog-footer">
-          <button
-            type="button"
-            class="btn btn-secondary"
-            @click="handleClose"
-            :disabled="isSaving"
-          >
-            {{ t('common.cancel') }}
-          </button>
-          <button
-            type="button"
-            class="btn btn-primary"
-            @click="handleSave"
-            :disabled="isSaving || !workflowName.trim()"
-          >
-            {{ saveButtonText }}
-          </button>
-          <button
-            type="button"
-            class="btn btn-accent"
-            @click="handlePublishToCommunity"
-            :disabled="isSaving || !currentWorkflowId"
-            title="需要先保存工作流才能发布"
-          >
-            发布到社区
-          </button>
+        <div class="dialog-footer-wrap">
+          <div class="dialog-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              @click="handleClose"
+              :disabled="isSaving"
+            >
+              {{ t('common.cancel') }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              @click="handleSave"
+              :disabled="isSaving || !workflowName.trim()"
+            >
+              {{ saveButtonText }}
+            </button>
+            <button
+              type="button"
+              class="btn btn-accent"
+              @click="handlePublishToCommunity"
+              :disabled="isSaving || !currentWorkflowId"
+            >
+              发布到社区
+            </button>
+          </div>
+          <p v-if="!currentWorkflowId" class="publish-hint">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            需要先保存工作流才能发布到社区
+          </p>
         </div>
       </div>
     </div>
@@ -1033,12 +1040,27 @@ function handlePublishToCommunity() {
 }
 
 /* 底部 */
+.dialog-footer-wrap {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 16px 24px;
+}
+
 .dialog-footer {
   display: flex;
   gap: 12px;
   justify-content: flex-end;
-  padding: 16px 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.publish-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  font-size: 13px;
+  color: #f59e0b;
+  text-align: right;
+  justify-content: flex-end;
 }
 
 .btn {
@@ -1247,8 +1269,12 @@ function handlePublishToCommunity() {
 }
 
 /* 底部按钮 */
-:root.canvas-theme-light .dialog-footer {
+:root.canvas-theme-light .dialog-footer-wrap {
   border-top-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .publish-hint {
+  color: #d97706;
 }
 
 :root.canvas-theme-light .btn-secondary {

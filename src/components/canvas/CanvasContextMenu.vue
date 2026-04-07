@@ -8,7 +8,7 @@
  * - 撤销/重做
  * - 复制/粘贴节点
  */
-import { computed } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 
 const props = defineProps({
@@ -21,27 +21,38 @@ const props = defineProps({
 const emit = defineEmits(['close', 'upload', 'add-node', 'group', 'paste-clipboard'])
 const canvasStore = useCanvasStore()
 
-// 菜单位置样式
-const menuStyle = computed(() => {
+const menuRef = ref(null)
+const adjustedPos = ref({ x: 0, y: 0 })
+
+function adjustPosition() {
   let x = props.position.x
   let y = props.position.y
-  
-  // 确保不超出屏幕
-  const menuWidth = 200
-  const menuHeight = 350
-  
-  if (x + menuWidth > window.innerWidth) {
-    x = window.innerWidth - menuWidth - 20
+  const padding = 10
+
+  if (menuRef.value) {
+    const rect = menuRef.value.getBoundingClientRect()
+    if (x + rect.width > window.innerWidth) {
+      x = window.innerWidth - rect.width - padding
+    }
+    if (y + rect.height > window.innerHeight) {
+      y = window.innerHeight - rect.height - padding
+    }
   }
-  if (y + menuHeight > window.innerHeight) {
-    y = window.innerHeight - menuHeight - 20
-  }
-  
-  return {
-    left: `${x}px`,
-    top: `${y}px`
-  }
+
+  if (x < padding) x = padding
+  if (y < padding) y = padding
+  adjustedPos.value = { x, y }
+}
+
+onMounted(() => {
+  adjustedPos.value = { x: props.position.x, y: props.position.y }
+  nextTick(adjustPosition)
 })
+
+const menuStyle = computed(() => ({
+  left: `${adjustedPos.value.x}px`,
+  top: `${adjustedPos.value.y}px`
+}))
 
 // 是否可以撤销
 const canUndo = computed(() => canvasStore.canUndo)
@@ -192,6 +203,7 @@ function handleMenuClick(event) {
 
 <template>
   <div 
+    ref="menuRef"
     class="canvas-context-menu" 
     :style="menuStyle"
     @click="handleMenuClick"
@@ -325,7 +337,7 @@ function handleMenuClick(event) {
       <div class="canvas-context-menu-title">交互提示</div>
       <div class="canvas-context-menu-hint">
         <div class="hint-item">
-          <span class="hint-key">Ctrl + 拖动</span>
+          <span class="hint-key">Shift + 拖动</span>
           <span class="hint-desc">框选节点</span>
         </div>
         <div class="hint-item">

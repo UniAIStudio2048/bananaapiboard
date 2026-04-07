@@ -341,7 +341,7 @@ export default {
     leftDragDesc: 'Mover lienzo',
     rightClick: 'Clic derecho',
     rightClickDesc: 'Abrir menú contextual',
-    ctrlDrag: 'Ctrl+Arrastrar',
+    ctrlDrag: 'Shift+Clic izquierdo',
     ctrlDragDesc: 'Seleccionar múltiples nodos',
     spaceDrag: 'Espacio+Arrastrar',
     spaceDragDesc: 'Mover lienzo',

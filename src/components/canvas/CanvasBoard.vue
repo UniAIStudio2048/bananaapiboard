@@ -6,7 +6,7 @@
  * 交互说明：
  * - 左键拖拽空白区域：平移画布
  * - 右键点击空白区域：打开画布菜单
- * - Ctrl + 左键拖拽：框选节点（部分覆盖即选中）
+ * - Shift + 拖动：框选节点（部分覆盖即选中）
  * - Delete/Backspace：删除选中的节点
  * - 双击空白区域：打开节点选择器
  * - 鼠标滚轮：以鼠标位置为中心缩放
@@ -935,13 +935,30 @@ function screenToFlowPosition(screenPos) {
 
 // 键盘事件处理
 function handleKeyDown(event) {
-  // 确保不是在输入框中
   const target = event.target
-  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+  const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+  const isCtrlOrCmd = event.ctrlKey || event.metaKey
+
+  // 焦点在输入框内时，Ctrl+C 且无选中文本 → 复制选中节点
+  if (isInInput && isCtrlOrCmd && event.key === 'c') {
+    let hasSelectedText = false
+    if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      hasSelectedText = target.selectionStart !== target.selectionEnd
+    } else {
+      const selection = window.getSelection()
+      hasSelectedText = !!(selection?.toString())
+    }
+    if (!hasSelectedText) {
+      event.preventDefault()
+      canvasStore.copySelectedNodes()
+      return
+    }
     return
   }
-  
-  const isCtrlOrCmd = event.ctrlKey || event.metaKey
+
+  if (isInInput) {
+    return
+  }
   
   // Escape 键：取消连线拖拽或关闭弹窗
   if (event.key === 'Escape') {

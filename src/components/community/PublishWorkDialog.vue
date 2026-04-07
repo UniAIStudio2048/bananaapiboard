@@ -4,7 +4,7 @@
  */
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useCommunityStore } from '@/stores/community'
-import { publishWork, getPlatformFeeRate } from '@/api/community'
+import { publishWork, getPlatformFeeRate, getUploadConfig } from '@/api/community'
 import { getWorkflowList } from '@/api/canvas/workflow'
 import { getProjectList } from '@/api/canvas/project'
 import { uploadImages } from '@/api/client'
@@ -156,6 +156,10 @@ const workMediaType = ref('')
 const isDraggingCover = ref(false)
 const isDraggingWork = ref(false)
 const uploadProgress = ref(0)
+const uploadType = ref('video')
+const workFiles = ref([])
+const workPreviews = ref([])
+const MAX_IMAGE_COUNT = 9
 
 const MAX_VIDEO_SIZE = 500 * 1024 * 1024
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024
@@ -254,6 +258,8 @@ watch(() => props.modelValue, async (v) => {
     isDraggingCover.value = false
     isDraggingWork.value = false
     uploadProgress.value = 0
+    workFiles.value = []
+    workPreviews.value = []
     linkProject.value = false
     selectedProjectId.value = props.projectId || ''
     projects.value = []
@@ -267,6 +273,14 @@ watch(() => props.modelValue, async (v) => {
       feeRate.value = feeRes?.data?.fee_rate ?? 0.1
     } catch (e) {
       feeRate.value = 0.1
+    }
+
+    // 加载上传类型配置
+    try {
+      const configRes = await getUploadConfig()
+      uploadType.value = configRes?.data?.upload_type || 'video'
+    } catch (e) {
+      uploadType.value = 'video'
     }
 
     // 加载分类和标签
@@ -367,12 +381,42 @@ function formatFileSize(bytes) {
 
 function validateWorkFile(file) {
   const mediaType = inferMediaTypeFromFile(file)
-  if (mediaType !== 'video') {
-    error.value = '作品仅支持上传视频文件（MP4、MOV、WebM）'
+
+  if (uploadType.value === 'image') {
+    if (mediaType !== 'image') {
+      error.value = '当前仅支持上传图片文件'
+      return false
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      error.value = '图片文件不能超过 10MB'
+      return false
+    }
+    return true
+  }
+
+  if (uploadType.value === 'video') {
+    if (mediaType !== 'video') {
+      error.value = '作品仅支持上传视频文件（MP4、MOV、WebM）'
+      return false
+    }
+    if (file.size > MAX_VIDEO_SIZE) {
+      error.value = `视频文件不能超过 500MB，当前文件 ${(file.size / 1024 / 1024).toFixed(1)}MB`
+      return false
+    }
+    return true
+  }
+
+  // both
+  if (!mediaType) {
+    error.value = '请上传图片或视频文件'
     return false
   }
-  if (file.size > MAX_VIDEO_SIZE) {
-    error.value = `视频文件不能超过 500MB，当前文件 ${(file.size / 1024 / 1024).toFixed(1)}MB`
+  if (mediaType === 'video' && file.size > MAX_VIDEO_SIZE) {
+    error.value = '视频文件不能超过 500MB'
+    return false
+  }
+  if (mediaType === 'image' && file.size > MAX_IMAGE_SIZE) {
+    error.value = '图片文件不能超过 10MB'
     return false
   }
   return true
@@ -425,17 +469,72 @@ function updateWorkPreview(file) {
   error.value = ''
 }
 
+function handleMultiImageChange(e) {
+  const files = e.target?.files || e.dataTransfer?.files
+  if (!files || files.length === 0) return
+
+  const remaining = MAX_IMAGE_COUNT - workFiles.value.length
+  if (remaining <= 0) {
+    error.value = `最多上传 ${MAX_IMAGE_COUNT} 张图片`
+    return
+  }
+
+  const newFiles = Array.from(files).slice(0, remaining)
+  for (const file of newFiles) {
+    if (!file.type.startsWith('image/')) {
+      error.value = '请选择图片文件'
+      return
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      error.value = `图片 ${file.name} 超过 10MB 限制`
+      return
+    }
+  }
+
+  error.value = ''
+  for (const file of newFiles) {
+    workFiles.value.push(file)
+    workPreviews.value.push(URL.createObjectURL(file))
+  }
+}
+
+function removeImage(index) {
+  workFiles.value.splice(index, 1)
+  workPreviews.value.splice(index, 1)
+}
+
+function handleMultiImageDrop(e) {
+  isDraggingWork.value = false
+  handleMultiImageChange(e)
+}
+
 function handleWorkFileChange(e) {
+  if (uploadType.value === 'image') {
+    return handleMultiImageChange(e)
+  }
   const file = e instanceof File ? e : e.target.files?.[0]
   if (!file) return
+  if (uploadType.value === 'both' && inferMediaTypeFromFile(file) === 'image') {
+    return handleMultiImageChange(e)
+  }
   if (!validateWorkFile(file)) return
   updateWorkPreview(file)
 }
 
 function handleWorkDrop(e) {
   isDraggingWork.value = false
-  const file = e.dataTransfer?.files?.[0]
-  if (!file) return
+  const files = e.dataTransfer?.files
+  if (!files || files.length === 0) return
+
+  if (uploadType.value === 'image') {
+    return handleMultiImageChange(e)
+  }
+
+  const file = files[0]
+  if (uploadType.value === 'both' && inferMediaTypeFromFile(file) === 'image') {
+    return handleMultiImageChange(e)
+  }
+
   if (!validateWorkFile(file)) return
   updateWorkPreview(file)
 }
@@ -444,6 +543,8 @@ function clearWorkFile() {
   workFile.value = null
   workPreview.value = props.initialMediaUrl || ''
   workMediaType.value = normalizeMediaType(props.initialMediaType) || inferMediaTypeFromUrl(props.initialMediaUrl)
+  workFiles.value = []
+  workPreviews.value = []
   if (workInput.value) workInput.value.value = ''
 }
 
@@ -462,7 +563,8 @@ async function handlePublish() {
   // 验证
   if (!title.value.trim()) { error.value = '请输入作品名称'; return }
   if (!coverFile.value && !coverPreview.value) { error.value = '请上传封面图'; return }
-  if (!workFile.value && !workPreview.value) { error.value = '请上传作品媒体文件'; return }
+  const isMultiImage = workFiles.value.length > 0
+  if (!isMultiImage && !workFile.value && !workPreview.value) { error.value = '请上传作品媒体文件'; return }
   const hasWorkflow = !!selectedWorkflowId.value
   const hasProject = linkProject.value && !!selectedProjectId.value
   if (!hasWorkflow && !hasProject) { error.value = '请选择关联工作流或关联项目'; return }
@@ -477,17 +579,24 @@ async function handlePublish() {
 
   loading.value = true
   try {
-    let coverUrl = props.initialCoverUrl || ''
-    if (coverFile.value) {
-      const coverUrls = await uploadImages([coverFile.value])
-      if (!coverUrls || coverUrls.length === 0) throw new Error('封面上传失败')
-      coverUrl = coverUrls[0]
-    }
-
     let mediaUrl = props.initialMediaUrl || ''
     let mediaType = normalizeMediaType(props.initialMediaType) || inferMediaTypeFromUrl(mediaUrl)
 
-    if (workFile.value) {
+    if (workFiles.value.length > 0) {
+      uploadProgress.value = 0
+      const imageUrls = []
+      for (let i = 0; i < workFiles.value.length; i++) {
+        const urls = await uploadImages([workFiles.value[i]])
+        if (urls && urls.length > 0) {
+          imageUrls.push(urls[0])
+        }
+        uploadProgress.value = Math.round(((i + 1) / workFiles.value.length) * 100)
+      }
+      if (imageUrls.length === 0) throw new Error('图片上传失败')
+      mediaUrl = JSON.stringify(imageUrls)
+      mediaType = 'image'
+      uploadProgress.value = 0
+    } else if (workFile.value) {
       uploadProgress.value = 0
       const mediaUrls = await uploadWorkMedia(workFile.value, {
         onProgress: (p) => { uploadProgress.value = p.percent || Math.round((p.loaded / p.total) * 100) },
@@ -499,6 +608,18 @@ async function handlePublish() {
       mediaUrl = mediaUrls[0]
       mediaType = inferMediaTypeFromFile(workFile.value)
       uploadProgress.value = 0
+    }
+
+    let coverUrl = props.initialCoverUrl || ''
+    if (coverFile.value) {
+      const coverUrls = await uploadImages([coverFile.value])
+      if (!coverUrls || coverUrls.length === 0) throw new Error('封面上传失败')
+      coverUrl = coverUrls[0]
+    } else if (!coverUrl && workFiles.value.length > 0) {
+      try {
+        const parsed = JSON.parse(mediaUrl)
+        if (Array.isArray(parsed) && parsed.length > 0) coverUrl = parsed[0]
+      } catch {}
     }
 
     const payload = {
@@ -584,41 +705,160 @@ async function handlePublish() {
               <!-- 作品上传 -->
               <div>
                 <label class="publish-label">上传作品<span class="text-teal-400">*</span></label>
-                <div
-                  class="publish-upload-card h-[180px]"
-                  :class="isDraggingWork ? 'publish-upload-active' : workPreview ? 'publish-upload-has-file' : ''"
-                  @click="workInput?.click()"
-                  @dragover.prevent="isDraggingWork = true"
-                  @dragenter.prevent="isDraggingWork = true"
-                  @dragleave.prevent="isDraggingWork = false"
-                  @drop.prevent="handleWorkDrop"
-                >
-                  <button
-                    v-if="workFile || workPreview"
-                    type="button"
-                    class="absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full bg-black/60 text-white/60 hover:text-white hover:bg-black/80 transition"
-                    @click.stop="clearWorkFile"
-                  >
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                  </button>
-                  <div v-if="isDraggingWork" class="flex flex-col items-center justify-center h-full text-teal-400">
-                    <svg class="w-8 h-8 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
-                    <span class="text-xs">松开上传</span>
-                  </div>
-                  <img v-else-if="workPreview && workMediaType === 'image'" :src="workPreview" class="w-full h-full object-cover" alt="作品预览" />
-                  <video v-else-if="workPreview && workMediaType === 'video'" :src="workPreview" class="w-full h-full object-cover" muted playsinline />
-                  <div v-else class="flex flex-col items-center justify-center h-full text-white/25">
-                    <div class="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center mb-2.5">
-                      <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+
+                <!-- 多图片上传模式 -->
+                <template v-if="uploadType === 'image'">
+                  <div class="space-y-2">
+                    <div class="grid grid-cols-3 gap-2">
+                      <div
+                        v-for="(preview, idx) in workPreviews"
+                        :key="idx"
+                        class="relative aspect-square rounded-lg overflow-hidden border border-white/10"
+                      >
+                        <img :src="preview" class="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          class="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/60 text-white/60 hover:text-white hover:bg-black/80 transition"
+                          @click.stop="removeImage(idx)"
+                        >
+                          <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                      </div>
+                      <div
+                        v-if="workPreviews.length < MAX_IMAGE_COUNT"
+                        class="aspect-square rounded-lg border border-dashed border-white/10 hover:border-white/20 flex flex-col items-center justify-center cursor-pointer transition"
+                        @click="workInput?.click()"
+                        @dragover.prevent="isDraggingWork = true"
+                        @dragenter.prevent="isDraggingWork = true"
+                        @dragleave.prevent="isDraggingWork = false"
+                        @drop.prevent="handleMultiImageDrop"
+                        :class="isDraggingWork ? 'border-teal-500/40 bg-teal-500/5' : ''"
+                      >
+                        <svg class="w-5 h-5 text-white/20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                        <span class="text-[10px] text-white/20 mt-1">添加图片</span>
+                      </div>
                     </div>
-                    <span class="text-xs">点击上传</span>
+                    <p class="text-[11px] text-white/20">支持 PNG、JPG、WebP（每张≤10MB，最多{{ MAX_IMAGE_COUNT }}张，已选{{ workPreviews.length }}张）</p>
                   </div>
-                </div>
-                <input ref="workInput" type="file" accept="video/mp4,video/quicktime,video/webm" class="hidden" @change="handleWorkFileChange" />
-                <p v-if="workFile" class="text-xs text-white/30 mt-1.5 truncate">{{ workFile.name }} · {{ formatFileSize(workFile.size) }}</p>
-                <div v-else class="mt-1.5">
-                  <p class="text-[11px] text-white/20">支持 MP4、MOV、WebM 格式（≤500MB）</p>
-                </div>
+                  <input ref="workInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="handleWorkFileChange" />
+                </template>
+
+                <!-- 视频上传模式 -->
+                <template v-else-if="uploadType === 'video'">
+                  <div
+                    class="publish-upload-card h-[180px]"
+                    :class="isDraggingWork ? 'publish-upload-active' : workPreview ? 'publish-upload-has-file' : ''"
+                    @click="workInput?.click()"
+                    @dragover.prevent="isDraggingWork = true"
+                    @dragenter.prevent="isDraggingWork = true"
+                    @dragleave.prevent="isDraggingWork = false"
+                    @drop.prevent="handleWorkDrop"
+                  >
+                    <button
+                      v-if="workFile || workPreview"
+                      type="button"
+                      class="absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full bg-black/60 text-white/60 hover:text-white hover:bg-black/80 transition"
+                      @click.stop="clearWorkFile"
+                    >
+                      <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                    </button>
+                    <div v-if="isDraggingWork" class="flex flex-col items-center justify-center h-full text-teal-400">
+                      <svg class="w-8 h-8 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                      <span class="text-xs">松开上传</span>
+                    </div>
+                    <img v-else-if="workPreview && workMediaType === 'image'" :src="workPreview" class="w-full h-full object-cover" alt="作品预览" />
+                    <video v-else-if="workPreview && workMediaType === 'video'" :src="workPreview" class="w-full h-full object-cover" muted playsinline />
+                    <div v-else class="flex flex-col items-center justify-center h-full text-white/25">
+                      <div class="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center mb-2.5">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                      </div>
+                      <span class="text-xs">点击上传</span>
+                    </div>
+                  </div>
+                  <input ref="workInput" type="file" accept="video/mp4,video/quicktime,video/webm" class="hidden" @change="handleWorkFileChange" />
+                  <p v-if="workFile" class="text-xs text-white/30 mt-1.5 truncate">{{ workFile.name }} · {{ formatFileSize(workFile.size) }}</p>
+                  <div v-else class="mt-1.5">
+                    <p class="text-[11px] text-white/20">支持 MP4、MOV、WebM 格式（≤500MB）</p>
+                  </div>
+                </template>
+
+                <!-- both模式 -->
+                <template v-else>
+                  <!-- 如果已选了多图片则显示多图UI -->
+                  <template v-if="workFiles.length > 0">
+                    <div class="space-y-2">
+                      <div class="grid grid-cols-3 gap-2">
+                        <div
+                          v-for="(preview, idx) in workPreviews"
+                          :key="idx"
+                          class="relative aspect-square rounded-lg overflow-hidden border border-white/10"
+                        >
+                          <img :src="preview" class="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            class="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-black/60 text-white/60 hover:text-white hover:bg-black/80 transition"
+                            @click.stop="removeImage(idx)"
+                          >
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                          </button>
+                        </div>
+                        <div
+                          v-if="workPreviews.length < MAX_IMAGE_COUNT"
+                          class="aspect-square rounded-lg border border-dashed border-white/10 hover:border-white/20 flex flex-col items-center justify-center cursor-pointer transition"
+                          @click="workInput?.click()"
+                          @dragover.prevent="isDraggingWork = true"
+                          @dragenter.prevent="isDraggingWork = true"
+                          @dragleave.prevent="isDraggingWork = false"
+                          @drop.prevent="handleMultiImageDrop"
+                          :class="isDraggingWork ? 'border-teal-500/40 bg-teal-500/5' : ''"
+                        >
+                          <svg class="w-5 h-5 text-white/20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                          <span class="text-[10px] text-white/20 mt-1">添加图片</span>
+                        </div>
+                      </div>
+                      <p class="text-[11px] text-white/20">已选{{ workPreviews.length }}/{{ MAX_IMAGE_COUNT }}张图片</p>
+                    </div>
+                    <input ref="workInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="handleWorkFileChange" />
+                  </template>
+                  <!-- 否则显示通用上传 -->
+                  <template v-else>
+                    <div
+                      class="publish-upload-card h-[180px]"
+                      :class="isDraggingWork ? 'publish-upload-active' : workPreview ? 'publish-upload-has-file' : ''"
+                      @click="workInput?.click()"
+                      @dragover.prevent="isDraggingWork = true"
+                      @dragenter.prevent="isDraggingWork = true"
+                      @dragleave.prevent="isDraggingWork = false"
+                      @drop.prevent="handleWorkDrop"
+                    >
+                      <button
+                        v-if="workFile || workPreview"
+                        type="button"
+                        class="absolute top-2 right-2 z-10 w-6 h-6 flex items-center justify-center rounded-full bg-black/60 text-white/60 hover:text-white hover:bg-black/80 transition"
+                        @click.stop="clearWorkFile"
+                      >
+                        <svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                      </button>
+                      <div v-if="isDraggingWork" class="flex flex-col items-center justify-center h-full text-teal-400">
+                        <svg class="w-8 h-8 mb-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+                        <span class="text-xs">松开上传</span>
+                      </div>
+                      <img v-else-if="workPreview && workMediaType === 'image'" :src="workPreview" class="w-full h-full object-cover" alt="作品预览" />
+                      <video v-else-if="workPreview && workMediaType === 'video'" :src="workPreview" class="w-full h-full object-cover" muted playsinline />
+                      <div v-else class="flex flex-col items-center justify-center h-full text-white/25">
+                        <div class="w-10 h-10 rounded-full border border-white/10 flex items-center justify-center mb-2.5">
+                          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"/></svg>
+                        </div>
+                        <span class="text-xs">点击上传图片或视频</span>
+                      </div>
+                    </div>
+                    <input ref="workInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm" class="hidden" @change="handleWorkFileChange" />
+                    <p v-if="workFile" class="text-xs text-white/30 mt-1.5 truncate">{{ workFile.name }} · {{ formatFileSize(workFile.size) }}</p>
+                    <div v-else class="mt-1.5">
+                      <p class="text-[11px] text-white/20">支持图片（PNG、JPG，最多9张）或视频（MP4、MOV、WebM，≤500MB）</p>
+                    </div>
+                  </template>
+                </template>
               </div>
 
               <!-- 封面上传 -->

@@ -24,6 +24,7 @@ import { getCachedHistory, cacheHistory, invalidateCache } from '@/utils/history
 import { preloadImages } from '@/utils/imageCache'
 import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
+import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
 
 const { t, currentLanguage } = useI18n()
 const teamStore = useTeamStore()
@@ -113,6 +114,11 @@ const lastSyncId = ref(null) // 记录最新一条记录的ID，用于检测新�
 
 // 保存中状态
 const savingAsset = ref(false)
+
+// 复制到空间状态
+const showCopyDialog = ref(false)
+const copyItems = ref([])
+const batchCopying = ref(false)
 
 // 文件类型
 const fileTypes = [
@@ -403,6 +409,22 @@ watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
     startTeamSync()
   } else {
     stopTeamSync()
+  }
+})
+
+watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], ([newType, newTeamId]) => {
+  const newFilter = newType === 'team' && newTeamId ? `team-${newTeamId}` : 'personal'
+  if (newFilter !== spaceFilter.value) {
+    spaceFilter.value = newFilter
+    dataCached.value = false
+    if (props.visible) {
+      loadHistory(true)
+    }
+    if (newFilter.startsWith('team-')) {
+      startTeamSync()
+    } else {
+      stopTeamSync()
+    }
   }
 })
 
@@ -980,6 +1002,30 @@ function handleContextMenu(e, item) {
 function closeContextMenu() {
   showContextMenu.value = false
   contextMenuItem.value = null
+}
+
+function handleCopyToSpace(item) {
+  closeContextMenu()
+  const type = item.type === 'image' ? 'image' : item.type === 'video' ? 'video' : 'music'
+  copyItems.value = [{ type, id: item.id, name: item.prompt?.substring(0, 30) || item.id }]
+  showCopyDialog.value = true
+}
+
+function handleBatchCopyToSpace() {
+  const items = []
+  selectedItems.value.forEach(itemId => {
+    const item = filteredHistory.value.find(h => h.id === itemId)
+    if (item) {
+      const type = item.type === 'image' ? 'image' : item.type === 'video' ? 'video' : 'music'
+      items.push({ type, id: item.id, name: item.prompt?.substring(0, 30) || item.id })
+    }
+  })
+  copyItems.value = items
+  showCopyDialog.value = true
+}
+
+function handleCopySuccess() {
+  showCopyDialog.value = false
 }
 
 // Toast 通知
@@ -1575,6 +1621,13 @@ onUnmounted(() => {
             </span>
             <span v-else>批量下载</span>
           </button>
+          <button 
+            class="batch-copy-btn" 
+            :disabled="selectedItems.size === 0 || batchCopying"
+            @click="handleBatchCopyToSpace"
+          >
+            {{ batchCopying ? '复制中...' : '复制到空间' }}
+          </button>
         </div>
 
         <!-- 文件类型筛选 -->
@@ -1832,6 +1885,13 @@ onUnmounted(() => {
           </svg>
           <span>{{ contextMenuItem.type === 'video' ? t('canvas.contextMenu.downloadVideo') : t('canvas.contextMenu.downloadImage') }}</span>
         </div>
+        <div class="context-menu-item" @click="handleCopyToSpace(contextMenuItem)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+          </svg>
+          <span>复制到空间</span>
+        </div>
         <div class="context-menu-divider"></div>
         <div class="context-menu-item danger" @click="handleDelete(null, contextMenuItem)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2000,6 +2060,12 @@ onUnmounted(() => {
       </div>
     </Transition>
   </Teleport>
+
+  <CopyToSpaceDialog 
+    v-model:visible="showCopyDialog" 
+    :items="copyItems"
+    @success="handleCopySuccess"
+  />
 </template>
 
 <style scoped>
@@ -2164,6 +2230,28 @@ onUnmounted(() => {
 }
 
 .batch-download-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.batch-copy-btn {
+  padding: 6px 14px;
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.batch-copy-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.batch-copy-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

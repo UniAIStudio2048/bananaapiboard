@@ -355,7 +355,7 @@ export default {
     leftDragDesc: '平移画布',
     rightClick: '右键点击',
     rightClickDesc: '打开快捷菜单',
-    ctrlDrag: 'Ctrl+拖拽',
+    ctrlDrag: 'Shift+鼠标左键',
     ctrlDragDesc: '框选多个节点',
     spaceDrag: '空格+拖拽',
     spaceDragDesc: '平移画布',
@@ -1012,7 +1012,7 @@ export default {
     tips: {
       title: '快捷操作',
       subtitle: '提升效率',
-      description: '双击空白处快速添加节点；右键打开快捷菜单；Ctrl+拖拽框选多节点；滚轮缩放画布。更多快捷键请点击右上角帮助。'
+      description: '双击空白处快速添加节点；右键打开快捷菜单；Shift+鼠标左键框选多节点；滚轮缩放画布。更多快捷键请点击右上角帮助。'
     },
     // 用户设置
     settings: {

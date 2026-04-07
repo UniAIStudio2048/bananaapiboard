@@ -355,7 +355,7 @@ export default {
     leftDragDesc: 'Pan canvas',
     rightClick: 'Right Click',
     rightClickDesc: 'Open context menu',
-    ctrlDrag: 'Ctrl+Drag',
+    ctrlDrag: 'Shift+Left Click',
     ctrlDragDesc: 'Select multiple nodes',
     spaceDrag: 'Space+Drag',
     spaceDragDesc: 'Pan canvas',

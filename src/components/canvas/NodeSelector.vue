@@ -2,7 +2,7 @@
 /**
  * NodeSelector.vue - 节点选择器面板
  */
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions } from '@/config/canvas/nodeTypes'
 import { useI18n } from '@/i18n'
@@ -100,26 +100,47 @@ const nodesByCategory = computed(() => {
   return grouped
 })
 
-// 面板位置样式
+// 面板 DOM 引用和实际尺寸
+const panelRef = ref(null)
+const panelRect = ref({ width: 240, height: 400 })
+
+onMounted(() => {
+  nextTick(() => {
+    if (panelRef.value) {
+      const rect = panelRef.value.getBoundingClientRect()
+      panelRect.value = { width: rect.width, height: rect.height }
+    }
+  })
+})
+
+// 面板位置样式（基于实际尺寸做边界修正）
 const panelStyle = computed(() => {
   let x = props.position.x
   let y = props.position.y
   
-  // 确保不超出屏幕
-  const panelWidth = 240
-  const panelHeight = 300
+  const panelWidth = panelRect.value.width || 240
+  const panelHeight = panelRect.value.height || 400
+  const margin = 20
+  const maxAllowedHeight = window.innerHeight - margin * 2
   
   if (x + panelWidth > window.innerWidth) {
-    x = window.innerWidth - panelWidth - 20
+    x = window.innerWidth - panelWidth - margin
   }
-  if (y + panelHeight > window.innerHeight) {
-    y = window.innerHeight - panelHeight - 20
+  if (x < margin) x = margin
+  
+  if (y + panelHeight > window.innerHeight - margin) {
+    y = window.innerHeight - panelHeight - margin
+  }
+  if (y < margin) y = margin
+  
+  const style = {
+    left: `${x}px`,
+    top: `${y}px`,
+    maxHeight: `${maxAllowedHeight}px`,
+    overflowY: 'auto'
   }
   
-  return {
-    left: `${x}px`,
-    top: `${y}px`
-  }
+  return style
 })
 
 // LLM 预设映射表：将 LLM 节点类型映射到文本节点 + 预设
@@ -732,6 +753,7 @@ function formatFileSize(bytes) {
 
 <template>
   <div 
+    ref="panelRef"
     class="node-selector" 
     :style="panelStyle"
     @click="handlePanelClick"

@@ -442,6 +442,25 @@ watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
   }
 })
 
+// 全局空间切换时，自动同步面板的 spaceFilter 并刷新数据
+watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], ([newType, newTeamId]) => {
+  const newFilter = newType === 'team' && newTeamId ? `team-${newTeamId}` : 'personal'
+  if (newFilter !== spaceFilter.value) {
+    spaceFilter.value = newFilter
+    workflowsCached.value = false
+    hasInitialExpanded = false
+    if (props.visible) {
+      loadWorkflows(true)
+    }
+    // 重新评估团队同步
+    if (newFilter.startsWith('team-')) {
+      startTeamSync()
+    } else {
+      stopTeamSync()
+    }
+  }
+})
+
 // 加载模板（带缓存）
 async function loadTemplates(forceRefresh = false) {
   const now = Date.now()

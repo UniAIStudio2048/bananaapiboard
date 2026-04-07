@@ -34,6 +34,7 @@ import CanvasSupport from '@/components/canvas/CanvasSupport.vue'
 import CanvasToast from '@/components/canvas/CanvasToast.vue'
 import PackageModal from '@/components/canvas/PackageModal.vue'
 import TicketButton from '@/components/ticket/TicketButton.vue'
+import CanvasSpaceSwitcher from '@/components/canvas/CanvasSpaceSwitcher.vue'
 import TicketDrawer from '@/components/ticket/TicketDrawer.vue'
 import TicketList from '@/components/ticket/TicketList.vue'
 import TicketDetail from '@/components/ticket/TicketDetail.vue'
@@ -1312,6 +1313,13 @@ function handleOnboardingComplete({ skipped }) {
 
 // 处理画布双击 - 双击空白处弹出节点选择器
 function handleCanvasDoubleClick(event) {
+  const target = event.target
+  if (target.tagName === 'TEXTAREA' || target.tagName === 'INPUT' || 
+      target.isContentEditable || target.closest('[contenteditable="true"]') ||
+      target.closest('.vue-flow__node')) {
+    return
+  }
+
   // 获取画布容器来计算画布坐标
   const container = document.querySelector('.canvas-board')
   if (!container) return
@@ -1457,94 +1465,26 @@ function handlePickNode(nodeId) {
   })
 }
 
-// 处理画布右键菜单的上传事件
+// 处理画布右键菜单的上传事件（复用 handleClipboardFiles 确保数据结构一致 + 云上传）
 function handleCanvasUpload(type) {
-  // 打开文件选择器上传
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = type === 'image' ? 'image/*' : 'video/*'
-  input.multiple = type === 'image' // 图片支持多选
-  
-  input.onchange = async (e) => {
+  input.multiple = type === 'image'
+
+  input.onchange = (e) => {
     const files = Array.from(e.target.files || [])
     if (files.length === 0) return
-    
+    if (!canvasBoardRef.value?.handleClipboardFiles) return
+
     const position = canvasStore.canvasContextMenuPosition
-    const baseX = position.flowX || 100
-    const baseY = position.flowY || 100
-    
-    if (type === 'image') {
-      // 过滤出图片文件
-      const imageFiles = files.filter(f => f.type.startsWith('image/'))
-      
-      if (imageFiles.length === 0) {
-        console.warn('[Canvas] 没有选择有效的图片文件')
-        return
-      }
-      
-      // 每个图片创建一个节点，或者多张图片合并到一个节点
-      if (imageFiles.length === 1) {
-        // 单张图片：创建一个节点
-        const url = URL.createObjectURL(imageFiles[0])
-        canvasStore.addNode({
-          type: 'image-input',
-          position: { x: baseX, y: baseY },
-          data: { 
-            images: [url],
-            fileName: imageFiles[0].name 
-          }
-        })
-        console.log(`[Canvas] 上传图片: ${imageFiles[0].name}`)
-      } else {
-        // 多张图片：可以选择创建多个节点或一个节点
-        // 这里我们为每张图片创建一个独立节点，并排列布局
-        const nodeWidth = 250
-        const nodeHeight = 200
-        const gap = 30
-        const columns = Math.ceil(Math.sqrt(imageFiles.length))
-        
-        for (let i = 0; i < imageFiles.length; i++) {
-          const file = imageFiles[i]
-          const url = URL.createObjectURL(file)
-          
-          // 计算节点位置（网格布局）
-          const col = i % columns
-          const row = Math.floor(i / columns)
-          const nodeX = baseX + col * (nodeWidth + gap)
-          const nodeY = baseY + row * (nodeHeight + gap)
-          
-          canvasStore.addNode({
-            type: 'image-input',
-            position: { x: nodeX, y: nodeY },
-            data: { 
-              images: [url],
-              fileName: file.name 
-            }
-          })
-        }
-        console.log(`[Canvas] 上传 ${imageFiles.length} 张图片`)
-      }
-    } else if (type === 'video') {
-      // 视频只处理第一个文件
-      const videoFile = files.find(f => f.type.startsWith('video/'))
-      if (!videoFile) {
-        console.warn('[Canvas] 没有选择有效的视频文件')
-        return
-      }
-      
-      const url = URL.createObjectURL(videoFile)
-      canvasStore.addNode({
-        type: 'video-input',
-        position: { x: baseX, y: baseY },
-        data: { 
-          video: url,
-          fileName: videoFile.name 
-        }
-      })
-      console.log(`[Canvas] 上传视频: ${videoFile.name}`)
+    const flowPos = {
+      x: position.flowX || 100,
+      y: position.flowY || 100
     }
+    canvasBoardRef.value.handleClipboardFiles(files, flowPos)
   }
-  
+
   input.click()
 }
 
@@ -2439,6 +2379,9 @@ onUnmounted(() => {
         :class="{ 'panel-open': showAIAssistant }"
         :style="showAIAssistant ? { right: (aiPanelWidth + 24) + 'px' } : {}"
       >
+        <!-- 空间切换 -->
+        <CanvasSpaceSwitcher />
+
         <!-- 积分显示 -->
         <div v-if="me" class="canvas-points-display" :title="t('canvas.pointsDetail')">
           <svg class="points-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

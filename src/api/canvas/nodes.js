@@ -3,6 +3,7 @@
  * 节点执行相关 API，复用现有的图片/视频生成接口
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { useTeamStore } from '@/stores/team'
 
 // 获取通用请求头
 function getHeaders(options = {}) {
@@ -35,16 +36,21 @@ export async function generateImageFromText(params) {
   // 优先使用 image_size，否则使用 size（向后兼容）
   const finalImageSize = image_size || size || '1K'
   
+  const teamStore = useTeamStore()
+  const spaceParams = teamStore.getSpaceParams('current')
+  
   const body = {
     prompt,
-    user_prompt: userPrompt || prompt, // 用户原始输入（不含预设提示词）
+    user_prompt: userPrompt || prompt,
     model,
     image_size: finalImageSize,
     aspect_ratio: aspectRatio,
     n: count,
     response_format: 'url',
     enableGroupGeneration,
-    maxGroupImages
+    maxGroupImages,
+    spaceType: spaceParams.spaceType,
+    ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
   }
 
   // Seedream 5.0 Lite 联网搜索
@@ -102,14 +108,19 @@ export async function generateImageFromImage(params) {
   // 优先使用 image_size，否则使用 size
   const finalImageSize = image_size || size || '1K'
   
+  const teamStore = useTeamStore()
+  const spaceParams = teamStore.getSpaceParams('current')
+  
   const body = {
     prompt,
-    user_prompt: userPrompt || prompt, // 用户原始输入
-    image: images, // 参考图URL数组
+    user_prompt: userPrompt || prompt,
+    image: images,
     model,
     image_size: finalImageSize,
     aspect_ratio: aspectRatio,
-    response_format: 'url'
+    response_format: 'url',
+    spaceType: spaceParams.spaceType,
+    ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
   }
   
   // Seedream 组图生成参数
@@ -166,11 +177,16 @@ export async function generateImageFromImage(params) {
 export async function generateVideoFromText(params) {
   const { prompt, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl, klingOmniSubMode, klingOmniImageUrls } = params
   
+  const teamStore = useTeamStore()
+  const spaceParams = teamStore.getSpaceParams('current')
+  
   const body = {
     prompt,
     model,
     aspect_ratio: aspectRatio,
-    duration
+    duration,
+    spaceType: spaceParams.spaceType,
+    ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
   }
   
   // Vidu 错峰模式
@@ -218,12 +234,17 @@ export async function generateVideoFromText(params) {
 export async function generateVideoFromImage(params) {
   const { prompt, imageUrl, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl, klingOmniSubMode, klingOmniImageUrls } = params
   
+  const teamStore = useTeamStore()
+  const spaceParams = teamStore.getSpaceParams('current')
+  
   const body = {
     prompt,
     image_url: imageUrl,
     model,
     aspect_ratio: aspectRatio,
-    duration
+    duration,
+    spaceType: spaceParams.spaceType,
+    ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
   }
   
   // Vidu 错峰模式
@@ -471,5 +492,28 @@ export async function deductCropPoints(cropType) {
   }
   
   return data
+}
+
+/**
+ * 抠图 - 调用后端去除图片背景
+ */
+export async function removeImageBackground(imageUrl, bgType = 'transparent', bgColor = null) {
+  const token = localStorage.getItem('token')
+  const response = await fetch(getApiUrl('/api/images/remove-background'), {
+    method: 'POST',
+    headers: {
+      ...getTenantHeaders(),
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    },
+    body: JSON.stringify({ imageUrl, bgType, bgColor })
+  })
+  
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || '抠图失败')
+  }
+  
+  return response.json()
 }
 

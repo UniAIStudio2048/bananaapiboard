@@ -341,7 +341,7 @@ export default {
     leftDragDesc: 'Déplacer le canvas',
     rightClick: 'Clic droit',
     rightClickDesc: 'Ouvrir le menu contextuel',
-    ctrlDrag: 'Ctrl+Glisser',
+    ctrlDrag: 'Shift+Clic gauche',
     ctrlDragDesc: 'Sélectionner plusieurs nœuds',
     spaceDrag: 'Espace+Glisser',
     spaceDragDesc: 'Déplacer le canvas',

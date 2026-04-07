@@ -18,11 +18,19 @@
 
     <!-- 主内容 -->
     <template v-else-if="work">
-      <!-- 背景层：封面图 / 静音预览视频 -->
+      <!-- 背景层：封面图 / 静音预览视频 / 图片幻灯片 -->
       <div class="absolute inset-0 z-0">
         <transition name="fade">
+          <!-- 图片幻灯片模式 -->
           <img
-            v-if="viewPhase === 'cover'"
+            v-if="isImageSlideshow"
+            :key="'slide-' + currentImageIndex"
+            :src="detailMediaUrls[currentImageIndex]"
+            :alt="work.title"
+            class="w-full h-full object-cover"
+          />
+          <img
+            v-else-if="viewPhase === 'cover'"
             key="cover"
             :src="work.cover_url"
             :alt="work.title"
@@ -171,6 +179,54 @@
           </transition>
         </div>
       </transition>
+      <!-- 全屏图片幻灯片 -->
+      <transition name="fade">
+        <div
+          v-if="viewPhase === 'fullview' && isImageSlideshow"
+          class="absolute inset-0 z-30 bg-black flex items-center justify-center select-none"
+          @click="exitFullView"
+        >
+          <img
+            :src="detailMediaUrls[currentImageIndex]"
+            :alt="work.title"
+            class="max-w-full max-h-full object-contain"
+          />
+          <!-- 顶部栏 -->
+          <div class="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-4 py-3 bg-gradient-to-b from-black/70 to-transparent">
+            <button class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/80 hover:text-white transition" @click.stop="exitFullView">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+              返回
+            </button>
+            <span class="text-sm text-white/60">{{ currentImageIndex + 1 }} / {{ detailMediaUrls.length }}</span>
+          </div>
+          <!-- 左右箭头 -->
+          <button
+            v-if="detailMediaUrls.length > 1"
+            class="absolute left-4 top-1/2 -translate-y-1/2 z-40 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition"
+            @click.stop="prevImage"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+          </button>
+          <button
+            v-if="detailMediaUrls.length > 1"
+            class="absolute right-4 top-1/2 -translate-y-1/2 z-40 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center transition"
+            @click.stop="nextImage"
+          >
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </button>
+          <!-- 底部点指示器 -->
+          <div v-if="detailMediaUrls.length > 1" class="absolute bottom-6 left-0 right-0 flex justify-center gap-2 z-40" @click.stop>
+            <button
+              v-for="(_, idx) in detailMediaUrls"
+              :key="idx"
+              class="w-2 h-2 rounded-full transition-all"
+              :class="idx === currentImageIndex ? 'bg-white w-4' : 'bg-white/40 hover:bg-white/60'"
+              @click.stop="goToImage(idx)"
+            />
+          </div>
+        </div>
+      </transition>
+
       <!-- 前景内容层（正式观看时隐藏） -->
       <div v-show="viewPhase !== 'fullview'" class="relative z-20 h-screen flex flex-col overflow-hidden">
         <!-- 顶部栏：返回 + 作者信息 -->
@@ -240,7 +296,7 @@
               @click="handlePlay"
             >
               <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-              立即观看
+              {{ isImageSlideshow ? '查看图片' : '立即观看' }}
             </button>
             <!-- 查看制作过程 -->
             <button
@@ -407,6 +463,57 @@ let previewTimer = null
 const projectInfo = ref(null)
 const projectWorkflows = ref([])
 
+// 图片幻灯片
+const currentImageIndex = ref(0)
+let imageSlideTimer = null
+
+const detailMediaUrls = computed(() => {
+  if (!work.value || work.value.media_type !== 'image') return []
+  if (work.value.media_urls && Array.isArray(work.value.media_urls) && work.value.media_urls.length > 0) {
+    return work.value.media_urls
+  }
+  if (work.value.media_url) {
+    try {
+      const parsed = JSON.parse(work.value.media_url)
+      if (Array.isArray(parsed)) return parsed
+    } catch {}
+    return [work.value.media_url]
+  }
+  return []
+})
+
+const isImageSlideshow = computed(() => work.value?.media_type === 'image' && detailMediaUrls.value.length > 0)
+
+function startImageSlideshow() {
+  stopImageSlideshow()
+  if (detailMediaUrls.value.length <= 1) return
+  imageSlideTimer = setInterval(() => {
+    currentImageIndex.value = (currentImageIndex.value + 1) % detailMediaUrls.value.length
+  }, 3000)
+}
+
+function stopImageSlideshow() {
+  if (imageSlideTimer) {
+    clearInterval(imageSlideTimer)
+    imageSlideTimer = null
+  }
+}
+
+function goToImage(index) {
+  currentImageIndex.value = index
+  startImageSlideshow()
+}
+
+function prevImage() {
+  currentImageIndex.value = (currentImageIndex.value - 1 + detailMediaUrls.value.length) % detailMediaUrls.value.length
+  startImageSlideshow()
+}
+
+function nextImage() {
+  currentImageIndex.value = (currentImageIndex.value + 1) % detailMediaUrls.value.length
+  startImageSlideshow()
+}
+
 // 自定义播放器状态
 const videoPlaying = ref(false)
 const currentTime = ref(0)
@@ -532,6 +639,10 @@ async function loadWork(id) {
       }
     }
     nextTick(() => startPreviewTimer())
+    if (work.value.media_type === 'image') {
+      currentImageIndex.value = 0
+      nextTick(() => startImageSlideshow())
+    }
   } catch (e) {
     error.value = e.message || '加载作品失败'
     work.value = null
@@ -562,6 +673,10 @@ function startPreviewTimer() {
 }
 
 function handlePlay() {
+  if (isImageSlideshow.value) {
+    viewPhase.value = 'fullview'
+    return
+  }
   clearTimeout(previewTimer)
   viewPhase.value = 'fullview'
   controlsVisible.value = true
@@ -752,6 +867,7 @@ function openWorkflowFromFullView(workflowId) {
 onBeforeUnmount(() => {
   clearTimeout(previewTimer)
   clearTimeout(controlsTimer)
+  stopImageSlideshow()
 })
 
 // 点赞

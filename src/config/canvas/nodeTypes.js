@@ -436,7 +436,8 @@ export const CONNECTION_RULES = {
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推
-    NODE_TYPES.STORYBOARD_GRID      // 分镜格子
+    NODE_TYPES.STORYBOARD_GRID,     // 分镜格子
+    NODE_TYPES.TEXT_INPUT            // 文本节点（自动切换为图片反推预设）
   ],
   
   // 统一图片节点别名
@@ -444,7 +445,8 @@ export const CONNECTION_RULES = {
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推
-    NODE_TYPES.STORYBOARD_GRID      // 分镜格子
+    NODE_TYPES.STORYBOARD_GRID,     // 分镜格子
+    NODE_TYPES.TEXT_INPUT            // 文本节点（自动切换为图片反推预设）
   ],
   
   // 图生图节点别名
@@ -452,7 +454,8 @@ export const CONNECTION_RULES = {
     NODE_TYPES.IMAGE_TO_IMAGE,
     NODE_TYPES.IMAGE_TO_VIDEO,
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推
-    NODE_TYPES.STORYBOARD_GRID      // 分镜格子
+    NODE_TYPES.STORYBOARD_GRID,     // 分镜格子
+    NODE_TYPES.TEXT_INPUT            // 文本节点（自动切换为图片反推预设）
   ],
   
   [NODE_TYPES.VIDEO_INPUT]: [
@@ -507,14 +510,16 @@ export const CONNECTION_RULES = {
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片描述
-    NODE_TYPES.STORYBOARD_GRID      // 分镜格子
+    NODE_TYPES.STORYBOARD_GRID,     // 分镜格子
+    NODE_TYPES.TEXT_INPUT            // 文本节点（自动切换为图片反推预设）
   ],
 
   [NODE_TYPES.IMAGE_TO_IMAGE]: [
     NODE_TYPES.IMAGE_TO_IMAGE,      // 图生图
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片描述
-    NODE_TYPES.STORYBOARD_GRID      // 分镜格子
+    NODE_TYPES.STORYBOARD_GRID,     // 分镜格子
+    NODE_TYPES.TEXT_INPUT            // 文本节点（自动切换为图片反推预设）
   ],
   
   [NODE_TYPES.TEXT_TO_VIDEO]: [

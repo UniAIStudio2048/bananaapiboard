@@ -15,7 +15,7 @@ import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from '
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
-import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints } from '@/api/canvas/nodes'
+import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints, removeImageBackground } from '@/api/canvas/nodes'
 import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
 import { formatPoints } from '@/utils/format'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
@@ -28,7 +28,6 @@ import ImageCropper from '../ImageCropper.vue'
 import Camera3DPanel from '../Camera3DPanel.vue'
 import Pose3DViewer from '../Pose3DViewer.vue'
 import CameraControlPanel from '../CameraControlPanel.vue'
-import { removeBackground } from '@imgly/background-removal'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
 import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'
 
@@ -1284,7 +1283,6 @@ async function startCutoutWithBg(bgType) {
   cutoutBgColor.value = bgType
   showCutoutOptions.value = false
   
-  // 获取当前节点的图片URL
   const imageUrl = sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
   if (!imageUrl) return
   
@@ -1292,79 +1290,35 @@ async function startCutoutWithBg(bgType) {
   removeBgProgress.value = 0
   
   try {
-    console.log('[ImageNode] 开始抠图处理，背景:', bgType)
+    console.log('[ImageNode] 开始后端抠图处理，背景:', bgType)
     
-    // 首先将图片转换为 Blob（避免跨域问题）
-    let imageInput = imageUrl
+    removeBgProgress.value = 30
     
-    if (imageUrl.startsWith('http') || imageUrl.startsWith('/')) {
-      try {
-        const response = await fetch(imageUrl)
-        const blob = await response.blob()
-        imageInput = blob
-      } catch (fetchError) {
-        console.warn('[ImageNode] 无法获取远程图片，尝试直接使用 URL:', fetchError)
-      }
+    const bgColor = bgType === 'custom' ? cutoutCustomColor.value : null
+    const result = await removeImageBackground(imageUrl, bgType, bgColor)
+    
+    removeBgProgress.value = 90
+    
+    if (!result.success || !result.url) {
+      throw new Error('抠图返回结果异常')
     }
     
-    // 使用 @imgly/background-removal 进行抠图
-    const resultBlob = await removeBackground(imageInput, {
-      progress: (key, current, total) => {
-        if (total > 0) {
-          removeBgProgress.value = Math.round((current / total) * 100)
-        }
-        console.log('[ImageNode] 抠图进度:', key, `${current}/${total}`)
-      },
-      model: 'isnet_quint8',
-      debug: false
-    })
-    
-    // 根据选择的背景颜色处理结果
-    let finalDataUrl
-    let isTransparent = false
-    
-    // 🔧 改进：抠图结果转为 Blob → blob URL 显示 → 后台上传云端
-    let resultFinalBlob
-    if (bgType === 'transparent') {
-      // 透明背景 - 直接使用结果 Blob
-      resultFinalBlob = resultBlob
-      isTransparent = true
-    } else {
-      // 有颜色背景 - 合成背景色，返回 Blob
-      const bgColor = bgType === 'custom' ? cutoutCustomColor.value : 
-                      bgType === 'white' ? '#ffffff' : 
-                      bgType === 'green' ? '#00ff00' : '#ffffff'
-      
-      const compositeDataUrl = await compositeWithBackground(resultBlob, bgColor)
-      // 将 data URL 转为 Blob
-      const resp = await fetch(compositeDataUrl)
-      resultFinalBlob = await resp.blob()
-      isTransparent = false
-    }
-    
-    // 使用 blob URL 立即显示
-    const blobUrl = URL.createObjectURL(resultFinalBlob)
-    
-    // 获取当前节点位置
     const currentNode = canvasStore.nodes.find(n => n.id === props.id)
     if (!currentNode) {
       throw new Error('找不到当前节点')
     }
     
-    // 在当前节点右侧创建新节点
     const newNodeId = `cutout_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const newNodePosition = {
       x: currentNode.position.x + 380,
       y: currentNode.position.y
     }
     
-    // 创建新的图像节点（先用 blob URL 显示，后台上传云端）
     const bgLabel = bgType === 'transparent' ? '透明' : 
                     bgType === 'white' ? '白底' : 
                     bgType === 'green' ? '绿幕' : '自定义底'
     
-    const fileExt = isTransparent ? 'png' : 'jpg'
-    const mimeType = isTransparent ? 'image/png' : 'image/jpeg'
+    const isTransparent = result.isTransparent
     
     canvasStore.addNode({
       id: newNodeId,
@@ -1373,22 +1327,18 @@ async function startCutoutWithBg(bgType) {
       data: {
         label: `抠图-${bgLabel}`,
         output: {
-          url: blobUrl,
-          urls: [blobUrl]
+          url: result.url,
+          urls: [result.url]
         },
         sourceNodeId: props.id,
         isTransparent: isTransparent,
         cutoutResult: true,
-        cutoutBgType: bgType,
-        isUploading: true
+        cutoutBgType: bgType
       }
     })
     
-    // 🔧 后台异步上传抠图结果到云端
-    const cutoutFile = new File([resultFinalBlob], `cutout_${Date.now()}.${fileExt}`, { type: mimeType })
-    uploadImageFileAsync(cutoutFile, blobUrl, newNodeId)
-    
-    console.log('[ImageNode] 抠图完成，已创建新节点:', newNodeId, '正在后台上传到云端')
+    removeBgProgress.value = 100
+    console.log('[ImageNode] 后端抠图完成，已创建新节点:', newNodeId)
     
   } catch (error) {
     console.error('[ImageNode] 抠图失败:', error)
@@ -1397,39 +1347,6 @@ async function startCutoutWithBg(bgType) {
     isRemovingBackground.value = false
     removeBgProgress.value = 0
   }
-}
-
-// 将透明图片与背景色合成
-async function compositeWithBackground(blob, bgColor) {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    const blobUrl = URL.createObjectURL(blob)
-    
-    img.onload = () => {
-      const canvas = document.createElement('canvas')
-      canvas.width = img.width
-      canvas.height = img.height
-      const ctx = canvas.getContext('2d')
-      
-      // 填充背景色
-      ctx.fillStyle = bgColor
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      
-      // 绘制抠图结果
-      ctx.drawImage(img, 0, 0)
-      
-      // 🔧 释放临时 blob URL
-      URL.revokeObjectURL(blobUrl)
-      
-      resolve(canvas.toDataURL('image/png'))
-    }
-    img.onerror = (err) => {
-      // 🔧 出错时也要释放
-      URL.revokeObjectURL(blobUrl)
-      reject(err)
-    }
-    img.src = blobUrl
-  })
 }
 
 // 关闭抠图选项弹窗
@@ -5686,7 +5603,7 @@ async function handleDrop(event) {
         </svg>
         <span>角度</span>
       </button>
-      <button class="toolbar-btn" :class="{ active: showPose3DViewer }" title="3D姿态分析（正反打）" @mousedown.stop.prevent="handleToolbarPose3D" @click.stop.prevent>
+      <button class="toolbar-btn disabled" title="姿态检测（功能开发中）" disabled @mousedown.stop.prevent @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <!-- 人物骨架 -->
           <circle cx="12" cy="4" r="2"/>
@@ -6079,6 +5996,7 @@ async function handleDrop(event) {
           @focus="autoResizeTextarea"
           @wheel.stop
           @mousedown="startTextareaAutoScroll"
+          @dblclick.stop
         ></textarea>
       </div>
       
@@ -6547,8 +6465,13 @@ async function handleDrop(event) {
 }
 
 .image-toolbar .toolbar-btn:disabled {
-  opacity: 0.7;
+  opacity: 0.35;
   cursor: not-allowed;
+  pointer-events: none;
+  color: rgba(255, 255, 255, 0.3);
+}
+.image-toolbar .toolbar-btn:disabled:hover {
+  background: transparent;
 }
 
 /* 工具栏按钮包装器 - 用于弹窗定位 */

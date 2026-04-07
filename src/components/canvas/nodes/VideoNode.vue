@@ -5802,6 +5802,7 @@ function handleToolbarPreview() {
             @keydown="handleKeyDown"
             @input="autoResizeTextarea"
             @wheel="handlePromptWheel"
+            @dblclick.stop
           ></textarea>
           <!-- @标记高亮叠加层 -->
           <div v-if="supportsMediaTags && highlightedPromptSegments.some(s => s.isTag)" class="prompt-highlight-overlay" aria-hidden="true">

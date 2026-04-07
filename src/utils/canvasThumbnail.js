@@ -8,7 +8,7 @@
  * - GPU 解码耗时
  */
 
-const CANVAS_THUMB_WIDTH = 400
+const CANVAS_THUMB_WIDTH = 1024
 
 /**
  * 将图片 URL 转为画布适用的缩略图 URL

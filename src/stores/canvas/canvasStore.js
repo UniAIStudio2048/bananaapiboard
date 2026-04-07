@@ -497,18 +497,24 @@ export const useCanvasStore = defineStore('canvas', () => {
       }
     }
 
+    // ========== 图像→文本节点：自动切换为图片反推预设 ==========
+    const isImageSource = ['image-input', 'image', 'image-gen', 'text-to-image', 'image-to-image'].includes(sourceNode.type)
+    const isTextTarget = targetNode.type === 'text-input' || targetNode.type === 'text'
+    const autoPresetData = (isImageSource && isTextTarget) ? { autoPreset: 'image-describe' } : {}
+
     // ========== 默认连接数据传递 ==========
     if (inheritedData) {
       updateNodeData(targetId, {
         inheritedFrom: sourceId,
         inheritedData: inheritedData,
-        hasUpstream: true
+        hasUpstream: true,
+        ...autoPresetData
       })
     } else {
-      // 即使没有数据，也标记连接关系，让目标节点知道有上游
       updateNodeData(targetId, {
         inheritedFrom: sourceId,
-        hasUpstream: true
+        hasUpstream: true,
+        ...autoPresetData
       })
     }
   }
@@ -740,6 +746,81 @@ export const useCanvasStore = defineStore('canvas', () => {
   }
   
   /**
+   * 重置节点 data 中的生成状态，保留已完成的内容和参数配置
+   * - 有内容的节点（已生成/已上传）：保留内容，清除执行状态
+   * - 空节点或生成中的节点：清空内容，保留参数
+   */
+  function cleanNodeDataForPaste(data, nodeType) {
+    const isGenerating = ['processing', 'streaming', 'queued'].includes(data.status)
+
+    const commonResets = {
+      status: 'idle',
+      error: null,
+      progress: null,
+      executeTriggered: false,
+      triggeredByGroup: false,
+    }
+
+    if (isGenerating) {
+      commonResets.output = null
+    }
+
+    const imageTypes = ['image', 'image-input', 'text-to-image', 'image-to-image', 'image-batch']
+    const videoTypes = ['video', 'video-input', 'text-to-video', 'image-to-video', 'video-to-video']
+    const textTypes = ['text-input', 'text', 'text-generation']
+    const audioTypes = ['audio', 'audio-input']
+
+    let extraResets = {}
+
+    if (imageTypes.includes(nodeType)) {
+      extraResets = {
+        isUploading: false,
+        uploadFailed: false,
+        _dataLost: false,
+        _lostReason: null,
+        stackedNodeIds: null,
+        isStackParent: false,
+        isStackedNode: false,
+        stackIndex: null,
+        parentNodeId: null,
+        multiangleTaskId: null,
+        needsFrameExtraction: false,
+      }
+      if (isGenerating) {
+        extraResets.sourceImages = []
+      }
+    } else if (videoTypes.includes(nodeType)) {
+      extraResets = {
+        taskId: null,
+        soraTaskId: null,
+        _failedTaskId: null,
+        pointsCost: null,
+        localFile: null,
+      }
+    } else if (textTypes.includes(nodeType)) {
+      if (isGenerating) {
+        extraResets.llmResponse = ''
+      }
+    } else if (audioTypes.includes(nodeType)) {
+      extraResets = {
+        isUploading: false,
+        uploadFailed: false,
+        _dataLost: false,
+        _lostReason: null,
+        taskIds: null,
+      }
+      if (isGenerating) {
+        extraResets.audioUrl = null
+        extraResets.audioData = null
+        extraResets.musicHistory = null
+      }
+    }
+
+    Object.assign(data, commonResets, extraResets)
+    return data
+  }
+
+  /**
    * 粘贴节点
    * @param {Object} position - 粘贴位置（画布坐标）
    */
@@ -770,7 +851,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       const newId = generateId()
       idMap[node.id] = newId
       
-      return {
+      const newNode = {
         ...JSON.parse(JSON.stringify(node)),
         id: newId,
         position: {
@@ -778,6 +859,12 @@ export const useCanvasStore = defineStore('canvas', () => {
           y: node.position.y + offsetY
         }
       }
+
+      if (newNode.data) {
+        cleanNodeDataForPaste(newNode.data, node.type)
+      }
+
+      return newNode
     })
     
     // 创建新连线
@@ -805,6 +892,9 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 全选节点
    */
   function selectAllNodes() {
+    nodes.value.forEach(n => {
+      n.selected = true
+    })
     selectedNodeIds.value = nodes.value.map(n => n.id)
     if (nodes.value.length > 0) {
       selectedNodeId.value = nodes.value[0].id

@@ -350,7 +350,7 @@ export default {
     leftDragDesc: 'キャンバスをパン',
     rightClick: '右クリック',
     rightClickDesc: 'コンテキストメニューを開く',
-    ctrlDrag: 'Ctrl+ドラッグ',
+    ctrlDrag: 'Shift+左クリック',
     ctrlDragDesc: '複数ノードを選択',
     spaceDrag: 'スペース+ドラッグ',
     spaceDragDesc: 'キャンバスをパン',

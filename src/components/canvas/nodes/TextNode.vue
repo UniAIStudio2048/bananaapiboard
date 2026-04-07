@@ -1214,6 +1214,35 @@ watch(() => [props.data.width, props.data.height], ([width, height]) => {
   if (height && height !== nodeHeight.value) nodeHeight.value = height
 }, { immediate: true })
 
+// 上游图像节点连接时，自动切换预设为"图片反推"
+// autoPreset 标记仅在新建连接时由 propagateData 设置，加载已保存工作流时不会有
+function tryApplyAutoPreset() {
+  if (props.data.autoPreset !== 'image-describe') return false
+  const llmPresets = llmConfig.value.presets
+  if (!llmPresets || llmPresets.length === 0) return false
+
+  const imageDescribePreset = llmPresets.find(
+    p => p.id === 'image-describe' || p.name?.includes('图片反推') || p.name?.includes('反推')
+  )
+  if (imageDescribePreset) {
+    selectedPreset.value = imageDescribePreset.id
+    if (nodeState.value === 'empty') {
+      nodeState.value = 'ready'
+    }
+    canvasStore.updateNodeData(props.id, { autoPreset: null })
+    return true
+  }
+  return false
+}
+
+watch(() => props.data.autoPreset, (val) => {
+  if (val === 'image-describe') tryApplyAutoPreset()
+}, { immediate: true })
+
+watch(() => llmConfig.value.presets, () => {
+  if (props.data.autoPreset === 'image-describe') tryApplyAutoPreset()
+})
+
 // 监听节点选中状态变化，取消选中时关闭所有下拉菜单
 watch(() => props.selected, (newSelected) => {
   if (newSelected) {
@@ -2656,6 +2685,7 @@ onMounted(() => {
           class="llm-input"
           :placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（按下Enter 生成，Shift+Enter 换行）'"
           @keydown="handleLLMKeyDown"
+          @dblclick.stop
         ></textarea>
       </div>
       

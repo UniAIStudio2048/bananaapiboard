@@ -349,7 +349,7 @@ export default {
     leftDragDesc: '캔버스 이동',
     rightClick: '오른쪽 클릭',
     rightClickDesc: '컨텍스트 메뉴 열기',
-    ctrlDrag: 'Ctrl+드래그',
+    ctrlDrag: 'Shift+왼쪽 클릭',
     ctrlDragDesc: '여러 노드 선택',
     spaceDrag: '스페이스+드래그',
     spaceDragDesc: '캔버스 이동',
