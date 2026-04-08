@@ -553,6 +553,7 @@ export default {
     },
     // Image node quick actions
     imageNode: {
+      uploadImage: 'Upload Image',
       imageToImage: 'Image to Image',
       imageToVideo: 'Image to Video',
       changeBackground: 'Change Background',

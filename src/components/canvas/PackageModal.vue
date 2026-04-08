@@ -49,6 +49,8 @@ const rechargePaymentMethod = ref(null) // 在打开弹窗时设置默认值
 const rechargeCouponCode = ref('')
 const rechargeLoading = ref(false)
 const rechargeError = ref('')
+const rechargeCards = ref([])
+const selectedRechargeCard = ref(null)
 
 // 余额划转永久积分状态
 const showConvertModal = ref(false)
@@ -236,34 +238,40 @@ function closePurchaseModal() {
 
 // 打开充值弹窗
 async function openRechargeModal() {
-  // 先重置状态
   rechargeAmount.value = null
   customAmount.value = ''
   rechargeCouponCode.value = ''
   rechargeError.value = ''
   rechargePaymentMethod.value = null
+  selectedRechargeCard.value = null
   
-  // 加载支付方式
   try {
     const token = localStorage.getItem('token')
-    const res = await fetch('/api/user/payment-methods', {
-      headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
-      const data = await res.json()
+    const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
+    
+    const [paymentRes, cardsRes] = await Promise.all([
+      fetch('/api/user/payment-methods', { headers }),
+      fetch('/api/recharge-cards', { headers })
+    ])
+    
+    if (paymentRes.ok) {
+      const data = await paymentRes.json()
       paymentMethods.value = data.methods || []
     }
+    
+    if (cardsRes.ok) {
+      const data = await cardsRes.json()
+      rechargeCards.value = data.recharge_cards || []
+    }
   } catch (e) {
-    console.error('[openRechargeModal] 加载支付方式失败:', e)
+    console.error('[openRechargeModal] 加载数据失败:', e)
   }
   
-  // 默认选中第一个支付方式（无论是从后端加载的还是默认的）
   const options = rechargePaymentOptions.value
   if (options.length > 0) {
     rechargePaymentMethod.value = options[0].id
   }
   
-  // 加载完成后再显示弹窗
   showRechargeModal.value = true
 }
 
@@ -281,11 +289,19 @@ function closeRechargeModal() {
   rechargePaymentMethod.value = null
   rechargeCouponCode.value = ''
   rechargeError.value = ''
+  selectedRechargeCard.value = null
 }
 
 // 选择快捷金额
 function selectQuickAmount(amount) {
   rechargeAmount.value = amount
+  customAmount.value = ''
+  selectedRechargeCard.value = null
+}
+
+function selectRechargeCard(card) {
+  selectedRechargeCard.value = card
+  rechargeAmount.value = card.amount
   customAmount.value = ''
 }
 
@@ -334,7 +350,8 @@ async function confirmRecharge() {
       },
       body: JSON.stringify({
         amount: amountInCents,
-        payment_method_id: paymentMethod
+        payment_method_id: paymentMethod,
+        ...(selectedRechargeCard.value ? { recharge_card_id: selectedRechargeCard.value.id } : {})
       })
     })
     
@@ -1624,8 +1641,29 @@ watch(() => props.visible, (newVal) => {
 
           <!-- 内容 -->
           <div class="recharge-modal-body">
-            <!-- 快捷金额选择 -->
-            <div class="recharge-section">
+            <!-- 充值卡片选择（有配置时显示） -->
+            <div v-if="rechargeCards.length > 0" class="recharge-section">
+              <label class="section-label">选择充值金额</label>
+              <div class="quick-amounts">
+                <button
+                  v-for="card in rechargeCards"
+                  :key="card.id"
+                  class="amount-btn card-btn-v2"
+                  :class="{ active: selectedRechargeCard?.id === card.id }"
+                  @click="selectRechargeCard(card)"
+                >
+                  <span v-if="card.bonus_enabled" class="bonus-star">★</span>
+                  <div class="card-amount-v2">¥{{ (card.amount / 100).toFixed(0) }}</div>
+                  <div v-if="card.bonus_enabled" class="card-bonus-hover">
+                    <span v-if="card.bonus_type === 'random'">+{{ card.bonus_min }}~{{ card.bonus_max }} 随机积分</span>
+                    <span v-else>+{{ card.bonus_fixed }} 积分奖励</span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <!-- 快捷金额选择（无充值卡片配置时回退显示） -->
+            <div v-else class="recharge-section">
               <label class="section-label">选择充值金额</label>
               <div class="quick-amounts">
                 <button
@@ -1652,7 +1690,7 @@ watch(() => props.visible, (newVal) => {
                   min="1"
                   max="10000"
                   class="custom-amount-input"
-                  @input="rechargeAmount = null"
+                  @input="rechargeAmount = null; selectedRechargeCard = null"
                 />
               </div>
             </div>
@@ -4071,6 +4109,79 @@ watch(() => props.visible, (newVal) => {
   font-size: 13px;
 }
 
+/* 充值卡片样式 */
+.recharge-modal-container .card-btn-v2 {
+  position: relative;
+  padding: 12px 10px;
+  background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  min-height: 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.recharge-modal-container .card-btn-v2:hover {
+  background: linear-gradient(145deg, #3a3a3a, #2a2a2a);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.recharge-modal-container .card-btn-v2.active {
+  background: linear-gradient(145deg, #404040, #303030);
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.15);
+}
+
+.recharge-modal-container .bonus-star {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  font-size: 10px;
+  color: #ffffff;
+  opacity: 0.8;
+  z-index: 2;
+}
+
+.recharge-modal-container .card-btn-v2:hover .bonus-star {
+  opacity: 0;
+  transform: scale(0);
+}
+
+.recharge-modal-container .card-amount-v2 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  transition: all 0.25s ease;
+}
+
+.recharge-modal-container .card-bonus-hover {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 4px 6px;
+  background: rgba(26, 26, 26, 0.95);
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  opacity: 0;
+  transform: translateY(100%);
+  transition: all 0.25s ease;
+  white-space: nowrap;
+}
+
+.recharge-modal-container .card-btn-v2:hover .card-bonus-hover {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .recharge-modal-footer {
   padding: 20px 24px;
   border-top: 1px solid #2a2a2a;
@@ -4688,6 +4799,33 @@ html.canvas-theme-light.canvas-theme-light .amount-btn.active {
   background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
   border-color: #1c1917 !important;
   color: #ffffff !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .recharge-modal-container .card-btn-v2 {
+  background: linear-gradient(145deg, #ffffff, #f5f5f4) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .recharge-modal-container .card-btn-v2:hover {
+  background: linear-gradient(145deg, #fafafa, #f0f0ef) !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .recharge-modal-container .card-btn-v2.active {
+  background: linear-gradient(145deg, #f5f5f4, #e7e5e4) !important;
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15) !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .recharge-modal-container .card-amount-v2 {
+  color: #1c1917 !important;
+}
+
+html.canvas-theme-light.canvas-theme-light .recharge-modal-container .card-bonus-hover {
+  background: rgba(245, 245, 244, 0.98) !important;
+  color: #57534e !important;
 }
 
 html.canvas-theme-light.canvas-theme-light .custom-amount-wrapper {

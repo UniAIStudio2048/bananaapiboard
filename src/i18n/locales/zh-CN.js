@@ -558,6 +558,7 @@ export default {
     },
     // 图片节点快捷操作
     imageNode: {
+      uploadImage: '上传图片',
       imageToImage: '图生图',
       imageToVideo: '图生视频',
       changeBackground: '图片换背景',

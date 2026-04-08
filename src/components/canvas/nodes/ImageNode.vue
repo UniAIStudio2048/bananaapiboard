@@ -2921,6 +2921,7 @@ const userPoints = computed(() => {
 
 // 快捷操作 - 初始状态显示 - 使用翻译键
 const quickActions = [
+  { icon: '↑', labelKey: 'canvas.imageNode.uploadImage', action: () => triggerUpload('upload-image') },
   { icon: '↑', labelKey: 'canvas.imageNode.imageToImage', action: () => triggerUpload('image-to-image') },
   { icon: '↑', labelKey: 'canvas.imageNode.imageToVideo', action: () => triggerUpload('image-to-video') },
   { icon: '⊡', labelKey: 'canvas.imageNode.changeBackground', action: () => triggerUpload('change-background') },
@@ -3001,6 +3002,25 @@ function handleLabelKeyDown(event) {
   }
 }
 
+// 上传图片到当前节点（不创建新节点）
+function handleUploadImageFlow(blobUrl) {
+  canvasStore.updateNodeData(props.id, {
+    sourceImages: [blobUrl],
+    uploadFailed: false,
+    uploadError: null,
+    _dataLost: false,
+    _lostReason: null,
+    isUploading: true
+  })
+
+  const edges = canvasStore.edges.filter(e => e.source === props.id)
+  edges.forEach(edge => {
+    canvasStore.updateNodeData(edge.target, {
+      referenceImages: [blobUrl]
+    })
+  })
+}
+
 // 触发文件上传
 function triggerUpload(actionType) {
   pendingAction.value = actionType
@@ -3025,7 +3045,9 @@ async function handleFileUpload(event) {
     console.log('[ImageNode] 秒加载 - 使用 blob URL 预览:', blobUrl)
     
     // 立即执行流程，使用 blob URL 显示
-    if (actionType === 'image-to-image') {
+    if (actionType === 'upload-image') {
+      handleUploadImageFlow(blobUrl)
+    } else if (actionType === 'image-to-image') {
       await handleImageToImageFlow(blobUrl)
     } else if (actionType === 'image-to-video') {
       await handleImageToVideoFlow(blobUrl)

@@ -486,6 +486,7 @@ export default {
       videoExtend: { label: 'Étendre Vidéo', desc: 'Étendre la durée de la vidéo' }
     },
     imageNode: {
+      uploadImage: 'Télécharger une image',
       imageToImage: 'Image vers Image',
       imageToVideo: 'Image vers Vidéo',
       changeBackground: 'Changer le fond',

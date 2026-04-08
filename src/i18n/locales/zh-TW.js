@@ -418,6 +418,7 @@ export default {
     },
     // 圖片節點快捷操作
     imageNode: {
+      uploadImage: '上傳圖片',
       imageToImage: '圖生圖',
       imageToVideo: '圖生影片',
       changeBackground: '圖片換背景',

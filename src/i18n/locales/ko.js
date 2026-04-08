@@ -495,6 +495,7 @@ export default {
     },
     // 이미지 노드 빠른 작업
     imageNode: {
+      uploadImage: '이미지 업로드',
       imageToImage: '이미지에서 이미지',
       imageToVideo: '이미지에서 비디오',
       changeBackground: '배경 변경',

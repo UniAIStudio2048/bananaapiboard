@@ -496,6 +496,7 @@ export default {
     },
     // 画像ノードのクイックアクション
     imageNode: {
+      uploadImage: '画像をアップロード',
       imageToImage: '画像から画像',
       imageToVideo: '画像から動画',
       changeBackground: '背景変更',

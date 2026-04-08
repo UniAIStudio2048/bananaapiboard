@@ -1763,12 +1763,20 @@ function readFileAsBase64(file) {
 }
 
 /**
- * 处理 paste 事件 —— 支持从系统剪贴板粘贴图片/文件，自动创建对应节点
- * 若剪贴板无文件则回退到节点粘贴逻辑
+ * 处理 paste 事件 —— 优先粘贴已复制的画布节点，
+ * 仅在无内部节点剪贴板时才从系统剪贴板粘贴图片/文件创建新节点
  */
 function handlePaste(event) {
   const target = event.target
   if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+    return
+  }
+
+  // 内部剪贴板有已复制的节点时，优先粘贴节点（避免系统剪贴板图片覆盖）
+  if (canvasStore.hasClipboard) {
+    event.preventDefault()
+    const pastePosition = screenToFlowPosition(lastMousePosition.value)
+    canvasStore.pasteNodes(pastePosition)
     return
   }
 
@@ -1777,7 +1785,6 @@ function handlePaste(event) {
 
   const files = Array.from(clipboardData.files || [])
 
-  // 若剪贴板中没有 File 对象，尝试从 items 中提取（截图场景）
   if (files.length === 0 && clipboardData.items) {
     for (const item of clipboardData.items) {
       if (item.kind === 'file') {
@@ -1793,10 +1800,7 @@ function handlePaste(event) {
     return
   }
 
-  // 无文件 → 回退到已有的节点粘贴
   event.preventDefault()
-  const pastePosition = screenToFlowPosition(lastMousePosition.value)
-  canvasStore.pasteNodes(pastePosition)
 }
 
 /**

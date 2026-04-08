@@ -717,42 +717,41 @@ export const useCanvasStore = defineStore('canvas', () => {
   function copySelectedNodes() {
     const nodesToCopy = []
     const edgesToCopy = []
+    const upstreamEdges = []
     
-    // 获取要复制的节点
     if (selectedNodeIds.value.length > 0) {
-      // 多选情况
       nodesToCopy.push(...nodes.value.filter(n => selectedNodeIds.value.includes(n.id)))
     } else if (selectedNodeId.value) {
-      // 单选情况
       const node = nodes.value.find(n => n.id === selectedNodeId.value)
       if (node) nodesToCopy.push(node)
     }
     
     if (nodesToCopy.length === 0) return
     
-    // 获取这些节点之间的连线
     const nodeIds = nodesToCopy.map(n => n.id)
-    edgesToCopy.push(...edges.value.filter(
-      e => nodeIds.includes(e.source) && nodeIds.includes(e.target)
-    ))
-    
-    // 保存到剪贴板
-    clipboard.value = {
-      nodes: JSON.parse(JSON.stringify(nodesToCopy)),
-      edges: JSON.parse(JSON.stringify(edgesToCopy))
+
+    for (const e of edges.value) {
+      if (nodeIds.includes(e.source) && nodeIds.includes(e.target)) {
+        edgesToCopy.push(e)
+      } else if (nodeIds.includes(e.target) && !nodeIds.includes(e.source)) {
+        upstreamEdges.push(e)
+      }
     }
     
-    console.log(`[Canvas] 已复制 ${nodesToCopy.length} 个节点`)
+    clipboard.value = {
+      nodes: JSON.parse(JSON.stringify(nodesToCopy)),
+      edges: JSON.parse(JSON.stringify(edgesToCopy)),
+      upstreamEdges: JSON.parse(JSON.stringify(upstreamEdges))
+    }
+    
+    console.log(`[Canvas] 已复制 ${nodesToCopy.length} 个节点，${upstreamEdges.length} 条上游连线`)
   }
   
   /**
-   * 重置节点 data 中的生成状态，保留已完成的内容和参数配置
-   * - 有内容的节点（已生成/已上传）：保留内容，清除执行状态
-   * - 空节点或生成中的节点：清空内容，保留参数
+   * 重置节点 data 中的生成状态，保留所有内容、参数和已有图片
+   * 粘贴的节点始终为 idle 状态，但完整保留复制时刻的所有数据
    */
   function cleanNodeDataForPaste(data, nodeType) {
-    const isGenerating = ['processing', 'streaming', 'queued'].includes(data.status)
-
     const commonResets = {
       status: 'idle',
       error: null,
@@ -761,13 +760,8 @@ export const useCanvasStore = defineStore('canvas', () => {
       triggeredByGroup: false,
     }
 
-    if (isGenerating) {
-      commonResets.output = null
-    }
-
     const imageTypes = ['image', 'image-input', 'text-to-image', 'image-to-image', 'image-batch']
     const videoTypes = ['video', 'video-input', 'text-to-video', 'image-to-video', 'video-to-video']
-    const textTypes = ['text-input', 'text', 'text-generation']
     const audioTypes = ['audio', 'audio-input']
 
     let extraResets = {}
@@ -786,9 +780,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         multiangleTaskId: null,
         needsFrameExtraction: false,
       }
-      if (isGenerating) {
-        extraResets.sourceImages = []
-      }
     } else if (videoTypes.includes(nodeType)) {
       extraResets = {
         taskId: null,
@@ -797,10 +788,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         pointsCost: null,
         localFile: null,
       }
-    } else if (textTypes.includes(nodeType)) {
-      if (isGenerating) {
-        extraResets.llmResponse = ''
-      }
     } else if (audioTypes.includes(nodeType)) {
       extraResets = {
         isUploading: false,
@@ -808,11 +795,6 @@ export const useCanvasStore = defineStore('canvas', () => {
         _dataLost: false,
         _lostReason: null,
         taskIds: null,
-      }
-      if (isGenerating) {
-        extraResets.audioUrl = null
-        extraResets.audioData = null
-        extraResets.musicHistory = null
       }
     }
 
@@ -829,24 +811,19 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     saveHistory()
     
-    const { nodes: copiedNodes, edges: copiedEdges } = clipboard.value
-    const idMap = {} // 旧ID -> 新ID 映射
+    const { nodes: copiedNodes, edges: copiedEdges, upstreamEdges: copiedUpstream = [] } = clipboard.value
+    const idMap = {}
     
-    // 计算偏移量
     let offsetX = 50
     let offsetY = 50
     
     if (position && copiedNodes.length > 0) {
-      // 计算复制节点的中心点
       const centerX = copiedNodes.reduce((sum, n) => sum + n.position.x, 0) / copiedNodes.length
       const centerY = copiedNodes.reduce((sum, n) => sum + n.position.y, 0) / copiedNodes.length
-      
-      // 将节点中心移动到鼠标位置
       offsetX = position.x - centerX
       offsetY = position.y - centerY
     }
     
-    // 创建新节点
     const newNodes = copiedNodes.map(node => {
       const newId = generateId()
       idMap[node.id] = newId
@@ -867,19 +844,28 @@ export const useCanvasStore = defineStore('canvas', () => {
       return newNode
     })
     
-    // 创建新连线
     const newEdges = copiedEdges.map(edge => ({
       ...JSON.parse(JSON.stringify(edge)),
       id: `e-${idMap[edge.source]}-${idMap[edge.target]}`,
       source: idMap[edge.source],
       target: idMap[edge.target]
     }))
+
+    // 上游连线：源节点仍存在于画布上时，自动连接到新粘贴的节点
+    const existingNodeIds = new Set(nodes.value.map(n => n.id))
+    for (const edge of copiedUpstream) {
+      if (existingNodeIds.has(edge.source) && idMap[edge.target]) {
+        newEdges.push({
+          ...JSON.parse(JSON.stringify(edge)),
+          id: `e-${edge.source}-${idMap[edge.target]}`,
+          target: idMap[edge.target]
+        })
+      }
+    }
     
-    // 添加到画布
     nodes.value.push(...newNodes)
     edges.value.push(...newEdges)
     
-    // 选中新粘贴的节点
     selectedNodeIds.value = newNodes.map(n => n.id)
     if (newNodes.length === 1) {
       selectedNodeId.value = newNodes[0].id
