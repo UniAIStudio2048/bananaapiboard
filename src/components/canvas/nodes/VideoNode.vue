@@ -5483,7 +5483,7 @@ function handleToolbarPreview() {
           <video 
             ref="videoPlayerRef"
             :src="normalizedVideoUrl"
-            :preload="canvasStore.performanceMode === 'full' ? 'metadata' : 'none'"
+            preload="metadata"
             :poster="videoPosterUrl"
             muted
             :loop="!data?.isCharacterNode"
