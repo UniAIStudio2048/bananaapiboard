@@ -147,17 +147,17 @@ import { useRouter } from 'vue-router'
 import { clearAuthSession } from '@/api/client'
 import { useCommunityStore } from '@/stores/community'
 import { getTemplates } from '@/api/community'
-import { getBrand } from '@/config/tenant'
+import { getBrand, loadBrandConfig } from '@/config/tenant'
 import WorkflowPreviewModal from '@/components/community/WorkflowPreviewModal.vue'
 import LoginModal from '@/components/community/LoginModal.vue'
 
 const router = useRouter()
 const communityStore = useCommunityStore()
 
-// 品牌信息
-const brand = getBrand()
-const brandLogo = computed(() => brand?.logo || '/logo.png')
-const brandName = computed(() => brand?.name || 'Nano Banana AI')
+// 品牌信息（响应式，从租户端配置获取）
+const brand = ref(getBrand())
+const brandLogo = computed(() => brand.value?.logo || '/logo.png')
+const brandName = computed(() => brand.value?.name || 'Nano Banana AI')
 
 // 用户状态（全部响应式）
 const userToken = ref(localStorage.getItem('token') || '')
@@ -259,6 +259,13 @@ onMounted(async () => {
   await nextTick()
   setupObserver()
   document.addEventListener('click', onClickOutsideMenu)
+  
+  try {
+    const freshBrand = await loadBrandConfig(true)
+    brand.value = freshBrand
+  } catch (e) {
+    console.error('[TemplateListPage] 品牌配置加载失败:', e)
+  }
 })
 
 onUnmounted(() => {

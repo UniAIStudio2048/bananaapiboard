@@ -1,6 +1,6 @@
 /**
  * i18n 国际化配置
- * 支持语言：中文简体、中文繁体、English、日本語、한국어、Español、Français、Deutsch、Русский、العربية、Português
+ * 支持语言：中文简体、中文繁体、English、日本語、한국어、Español、Français、Deutsch、Русский、العربية、Português、ئۇيغۇرچە
  */
 
 import { reactive, ref, computed, watch } from 'vue'
@@ -19,7 +19,8 @@ export const LANGUAGES = {
   'de': { name: 'Deutsch', nativeName: 'Deutsch' },
   'ru': { name: 'Русский', nativeName: 'Русский' },
   'ar': { name: 'العربية', nativeName: 'العربية' },
-  'pt': { name: 'Português', nativeName: 'Português' }
+  'pt': { name: 'Português', nativeName: 'Português' },
+  'ug': { name: 'ئۇيغۇرچە', nativeName: 'ئۇيغۇرچە' }
 }
 
 // 语言代码列表
@@ -118,7 +119,7 @@ async function setLanguage(lang) {
   document.documentElement.lang = lang
   
   // 设置文本方向（阿拉伯语从右到左）
-  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr'
+  document.documentElement.dir = (lang === 'ar' || lang === 'ug') ? 'rtl' : 'ltr'
   
   // 触发全局事件，通知其他组件语言已更改
   window.dispatchEvent(new CustomEvent('language-changed', { detail: lang }))
@@ -197,7 +198,7 @@ function formatNumber(num, options = {}) {
 }
 
 // 判断是否是 RTL 语言
-const isRTL = computed(() => currentLanguage.value === 'ar')
+const isRTL = computed(() => currentLanguage.value === 'ar' || currentLanguage.value === 'ug')
 
 // 导出
 export {

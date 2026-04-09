@@ -6,7 +6,7 @@ import { ref, computed, watch, onMounted, onUnmounted, provide, nextTick } from 
 import { useRouter, useRoute } from 'vue-router'
 import { getMe, updateUserPreferences } from '@/api/client'
 import { formatPoints } from '@/utils/format'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getBrand, isCanvasLogoEnabled } from '@/config/tenant'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { loadWorkflow as loadWorkflowFromServer } from '@/api/canvas/workflow'
@@ -56,6 +56,16 @@ const router = useRouter()
 const route = useRoute()
 const canvasStore = useCanvasStore()
 const teamStore = useTeamStore()
+
+// 画布底部Logo状态
+const brandConfig = computed(() => getBrand())
+const showCanvasLogo = computed(() => {
+  if (!isCanvasLogoEnabled()) return false
+  if (canvasStore.selectedNodeId) return false
+  if (canvasStore.selectedNodeIds && canvasStore.selectedNodeIds.length > 0) return false
+  if (canvasStore.editingNodeId) return false
+  return true
+})
 
 // 用户信息
 const me = ref(null)
@@ -2350,6 +2360,19 @@ onUnmounted(() => {
       <!-- 空白状态引导 - 当画布为空或没有标签时显示 -->
       <CanvasEmptyState v-if="canvasStore.isEmpty || canvasStore.workflowTabs.length === 0" />
       
+      <!-- 底部品牌 Logo -->
+      <Transition name="canvas-logo-fade">
+        <div v-if="showCanvasLogo" class="canvas-bottom-logo">
+          <img 
+            v-if="brandConfig.logo && brandConfig.logo !== '/logo.png'" 
+            :src="brandConfig.logo" 
+            :alt="brandConfig.name"
+            class="canvas-bottom-logo-img"
+          />
+          <span v-else class="canvas-bottom-logo-text">{{ brandConfig.name }}</span>
+        </div>
+      </Transition>
+
       <!-- 缩放控制 - 滑块版本 -->
       <div class="canvas-zoom-controls" @mousedown.stop @touchstart.stop>
         <button class="canvas-zoom-btn" @click="handleZoomOut" :disabled="canvasStore.viewport.zoom <= MIN_ZOOM" title="缩小 (-)">−</button>

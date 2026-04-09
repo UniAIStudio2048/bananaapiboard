@@ -758,6 +758,70 @@
   }
 }
 
+/* 画布底部品牌 Logo */
+.canvas-bottom-logo {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  pointer-events: none;
+  opacity: 0.25;
+  transition: opacity 0.3s ease;
+}
+
+.canvas-bottom-logo:hover {
+  opacity: 0.4;
+}
+
+.canvas-bottom-logo-img {
+  height: 28px;
+  width: auto;
+  max-width: 120px;
+  object-fit: contain;
+  filter: grayscale(100%);
+  pointer-events: auto;
+}
+
+.canvas-bottom-logo-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--canvas-text-secondary, rgba(255, 255, 255, 0.5));
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  pointer-events: auto;
+}
+
+/* Logo 淡入淡出动画 */
+.canvas-logo-fade-enter-active,
+.canvas-logo-fade-leave-active {
+  transition: opacity 0.4s ease;
+}
+.canvas-logo-fade-enter-from,
+.canvas-logo-fade-leave-to {
+  opacity: 0;
+}
+
+/* 白天模式 Logo 样式 */
+:root.canvas-theme-light .canvas-bottom-logo {
+  opacity: 0.2;
+}
+
+:root.canvas-theme-light .canvas-bottom-logo:hover {
+  opacity: 0.35;
+}
+
+:root.canvas-theme-light .canvas-bottom-logo-text {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+:root.canvas-theme-light .canvas-bottom-logo-img {
+  filter: grayscale(100%) brightness(0.3);
+}
+
 /* ========================================
    缩放控制
    ======================================== */

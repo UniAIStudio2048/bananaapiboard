@@ -315,6 +315,14 @@ export async function loadBrandConfig(forceReload = false) {
         runtimeConfig.enableSoraCharacterLibrary = true
       }
       console.log('[tenant] Sora 角色库开关:', runtimeConfig.enableSoraCharacterLibrary)
+
+      // 更新画布底部 Logo 开关
+      if (data.enableCanvasLogo !== undefined) {
+        runtimeConfig.enableCanvasLogo = data.enableCanvasLogo
+      } else {
+        runtimeConfig.enableCanvasLogo = true
+      }
+      console.log('[tenant] 画布底部Logo开关:', runtimeConfig.enableCanvasLogo)
       
       // 保存到本地存储
       saveToStorage(runtimeConfig)
@@ -546,6 +554,9 @@ export const isSeedanceFeaturesEnabled = () => config.enableSeedanceFeatures !==
 
 // 检查 Sora 角色库是否启用
 export const isSoraCharacterLibraryEnabled = () => config.enableSoraCharacterLibrary !== false
+
+// 检查画布底部 Logo 是否启用
+export const isCanvasLogoEnabled = () => config.enableCanvasLogo !== false
 
 // 获取模型显示名称（如果自定义了则返回自定义名称，否则返回默认名称）
 export const getModelDisplayName = (modelKey, type = 'image') => {

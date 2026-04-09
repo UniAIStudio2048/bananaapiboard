@@ -161,7 +161,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useCommunityStore } from '@/stores/community'
 import { getWorks, toggleLike, toggleFavorite } from '@/api/community'
-import { getBrand } from '@/config/tenant'
+import { getBrand, loadBrandConfig } from '@/config/tenant'
 import WorkCard from '@/components/community/WorkCard.vue'
 import LoginModal from '@/components/community/LoginModal.vue'
 
@@ -202,10 +202,10 @@ function generateMockWorks(count, orientationFilter = null) {
   return works
 }
 
-// 品牌信息
-const brand = getBrand()
-const brandLogo = computed(() => brand?.logo || '/logo.png')
-const brandName = computed(() => brand?.name || 'Nano Banana AI')
+// 品牌信息（响应式，从租户端配置获取）
+const brand = ref(getBrand())
+const brandLogo = computed(() => brand.value?.logo || '/logo.png')
+const brandName = computed(() => brand.value?.name || 'Nano Banana AI')
 
 // 用户状态（全部响应式）
 const userToken = ref(localStorage.getItem('token') || '')
@@ -388,9 +388,16 @@ function setupObserver() {
   observer.observe(sentinelRef.value)
 }
 
-onMounted(() => {
+onMounted(async () => {
   initLoad()
   document.addEventListener('click', onClickOutsideMenu)
+  
+  try {
+    const freshBrand = await loadBrandConfig(true)
+    brand.value = freshBrand
+  } catch (e) {
+    console.error('[TvShowPage] 品牌配置加载失败:', e)
+  }
 })
 onUnmounted(() => {
   if (observer) observer.disconnect()
