@@ -376,6 +376,17 @@ export default {
         styleGenerate: 'إنشاء الأسلوب'
       }
     },
+    unnamed: 'بدون اسم',
+    doubleClickRename: 'انقر مرتين لإعادة التسمية - {name}',
+    newWorkflowBtn: 'سير عمل جديد',
+    soraCharacterLib: 'مكتبة شخصيات Sora',
+    seedanceCharacterLib: 'مكتبة شخصيات Seedance',
+    characterCount: '{count} شخصية',
+    characterTimeout: 'انتهت مهلة معالجة الشخصية، تحقق من المكتبة لاحقاً',
+    characterCreateFailed: 'فشل إنشاء الشخصية: {error}',
+    unknownError: 'خطأ غير معروف',
+    localCharacterLib: 'مكتبة الشخصيات المحلية',
+    addCharacterDesc: 'أضف الشخصيات المنشأة على المنصات الخارجية إلى المكتبة المحلية لاستخدام @اسم عند التوليد.',
     emptyState: {
       doubleClick: 'انقر نقرًا مزدوجًا',
       hint: 'للإنشاء بحرية، أو عرض قوالب سير العمل',
@@ -541,7 +552,23 @@ export default {
     validDays: 'صالح لمدة {0} يوم',
     buySuccess: 'تم الشراء بنجاح',
     paymentPending: 'في انتظار الدفع',
-    paymentFailed: 'فشل الدفع'
+    paymentFailed: 'فشل الدفع',
+    purchaseTitle: 'شراء الباقة',
+    neverExpires: 'لا تنتهي صلاحيتها',
+    expiresWithPackage: 'يتم إعادة تعيينها عند انتهاء الباقة',
+    accountBalance: 'رصيد الحساب',
+    buyNow: 'اشترِ الآن',
+    balanceToPointsHint: 'النقاط المشحونة/المشتراة هي نقاط دائمة',
+    pointsOverview: 'نظرة عامة على النقاط',
+    rechargeBtn: 'شحن',
+    detailRecord: 'التفاصيل',
+    renewNow: 'تجديد الآن',
+    cannotDowngrade: 'لا يمكن الرجوع',
+    upgradePackage: 'ترقية الباقة',
+    transfer: 'تحويل',
+    convertToPoints: 'تحويل إلى نقاط',
+    convertHint: 'النقاط المحولة دائمة ويمكن تحويلها للآخرين',
+    loadingPackages: 'جاري تحميل الباقات...'
   },
 
   voucher: {
@@ -558,6 +585,17 @@ export default {
     getVoucher: 'احصل على قسيمة',
     pointsReceived: 'حصلت على {0} نقطة',
     balanceReceived: 'حصلت على ¥{0}'
+  },
+
+  team: {
+    personalSpace: 'المساحة الشخصية',
+    teamSpace: 'مساحة الفريق',
+    createTeamSpace: 'إنشاء مساحة فريق',
+    saveToPersonal: 'حفظ في قائمة سير العمل الشخصية',
+    saveToTeam: 'حفظ في قائمة سير عمل الفريق',
+    forkedToSpace: 'تم نسخ {type} إلى {space}',
+    projectAndWorkflows: 'المشروع وسير العمل',
+    workflow: 'سير العمل'
   },
 
   admin: {

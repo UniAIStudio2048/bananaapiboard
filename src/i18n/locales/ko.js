@@ -285,6 +285,17 @@ export default {
       assetSaved: '{type}이(가) 내 자산에 추가되었습니다!',
       canvasGenerated: '캔버스 생성'
     },
+    unnamed: '제목 없음',
+    doubleClickRename: '더블 클릭하여 이름 변경 - {name}',
+    newWorkflowBtn: '새 워크플로',
+    soraCharacterLib: 'Sora 캐릭터 라이브러리',
+    seedanceCharacterLib: 'Seedance 캐릭터 라이브러리',
+    characterCount: '{count}개 캐릭터',
+    characterTimeout: '캐릭터 처리 시간 초과, 나중에 라이브러리에서 확인하세요',
+    characterCreateFailed: '캐릭터 생성 실패: {error}',
+    unknownError: '알 수 없는 오류',
+    localCharacterLib: '로컬 캐릭터 라이브러리',
+    addCharacterDesc: '외부 플랫폼에서 만든 캐릭터를 로컬 라이브러리에 추가하여 생성 시 @캐릭터명으로 참조할 수 있습니다.',
     emptyCanvas: '캔버스가 비어 있어 저장할 수 없습니다',
     noNodeTypes: '연결 가능한 노드 유형이 없습니다',
     nodeTypes: {
@@ -732,7 +743,23 @@ export default {
     buySuccess: '구매 성공',
     paymentPending: '결제 대기',
     paymentFailed: '결제 실패',
-    noAvailablePackages: '이용 가능한 패키지가 없습니다'
+    noAvailablePackages: '이용 가능한 패키지가 없습니다',
+    purchaseTitle: '패키지 구매',
+    neverExpires: '만료 없음',
+    expiresWithPackage: '패키지 만료 시 초기화',
+    accountBalance: '계정 잔액',
+    buyNow: '지금 구매',
+    balanceToPointsHint: '충전/구매 포인트는 영구 포인트입니다',
+    pointsOverview: '포인트 개요',
+    rechargeBtn: '충전',
+    detailRecord: '상세 내역',
+    renewNow: '지금 갱신',
+    cannotDowngrade: '다운그레이드 불가',
+    upgradePackage: '패키지 업그레이드',
+    transfer: '양도',
+    convertToPoints: '포인트로 전환',
+    convertHint: '전환된 포인트는 영구 포인트이며 타인에게 양도할 수 있습니다',
+    loadingPackages: '패키지 로딩 중...'
   },
 
   // 바우처
@@ -756,6 +783,18 @@ export default {
     redeemInstruction1: '바우처 코드는 대소문자를 구분합니다',
     redeemInstruction2: '각 바우처 코드는 1회만 사용 가능합니다',
     redeemInstruction3: '교환 성공 후 포인트가 즉시 지급됩니다'
+  },
+
+  // 팀 공간
+  team: {
+    personalSpace: '개인 공간',
+    teamSpace: '팀 공간',
+    createTeamSpace: '팀 공간 만들기',
+    saveToPersonal: '개인 워크플로 목록에 저장',
+    saveToTeam: '팀 워크플로 목록에 저장',
+    forkedToSpace: '{type}이(가) {space}에 포크되었습니다',
+    projectAndWorkflows: '프로젝트 및 워크플로',
+    workflow: '워크플로'
   },
 
   // 관리자

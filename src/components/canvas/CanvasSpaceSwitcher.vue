@@ -5,7 +5,9 @@
  */
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useTeamStore } from '@/stores/team'
+import { useI18n } from '@/i18n'
 
+const { t } = useI18n()
 const teamStore = useTeamStore()
 
 const isOpen = ref(false)
@@ -13,7 +15,7 @@ const dropdownRef = ref(null)
 
 const spaces = computed(() => {
   const list = [
-    { id: 'personal', name: '个人空间', icon: '👤', type: 'personal' }
+    { id: 'personal', name: t('team.personalSpace'), icon: '👤', type: 'personal' }
   ]
   teamStore.myTeams.value.forEach(team => {
     list.push({

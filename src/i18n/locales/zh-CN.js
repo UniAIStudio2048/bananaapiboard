@@ -287,6 +287,17 @@ export default {
       assetSaved: '{type}已加入我的资产！',
       canvasGenerated: '画布生成'
     },
+    unnamed: '未命名',
+    doubleClickRename: '双击重命名 - {name}',
+    newWorkflowBtn: '新建工作流',
+    soraCharacterLib: 'Sora角色库',
+    seedanceCharacterLib: 'Seedance角色库',
+    characterCount: '{count} 个角色',
+    characterTimeout: '角色处理超时，请稍后在角色库查看',
+    characterCreateFailed: '角色创建失败：{error}',
+    unknownError: '未知错误',
+    localCharacterLib: '本地角色库',
+    addCharacterDesc: '添加在外部平台创建的角色到本地角色库，方便在生成时使用 @角色名 引用。',
     emptyCanvas: '画布为空，无法保存',
     noNodeTypes: '暂无可连接的节点类型',
     nodeTypes: {
@@ -839,7 +850,23 @@ export default {
     purchaseFailed: '购买失败，请重试',
     purchaseConfirm: '确认购买',
     purchaseConfirmMsg: '确定购买 {name} 套餐吗？\n价格：¥{price}\n将获得：{points} 积分',
-    insufficientBalance: '余额不足，当前余额 ¥{current}，需要 ¥{required}'
+    insufficientBalance: '余额不足，当前余额 ¥{current}，需要 ¥{required}',
+    purchaseTitle: '套餐购买',
+    neverExpires: '永不过期',
+    expiresWithPackage: '随套餐过期清零',
+    accountBalance: '账户余额',
+    buyNow: '立即购买',
+    balanceToPointsHint: '申请充值/购买积分为永久积分，但开始会为永久积分',
+    pointsOverview: '积分总览',
+    rechargeBtn: '充值',
+    detailRecord: '明细记录',
+    renewNow: '立即续费',
+    cannotDowngrade: '不可降级',
+    upgradePackage: '升级套餐',
+    transfer: '转让',
+    convertToPoints: '划转积分',
+    convertHint: '余额划转后的积分为永久积分，也可转让他人使用',
+    loadingPackages: '加载套餐中...'
   },
 
   // 兑换券
@@ -858,6 +885,18 @@ export default {
     getVoucher: '获取兑换券',
     pointsReceived: '获得 {0} 积分',
     balanceReceived: '获得 ¥{0}'
+  },
+
+  // 团队空间
+  team: {
+    personalSpace: '个人空间',
+    teamSpace: '团队空间',
+    createTeamSpace: '创建团队空间',
+    saveToPersonal: '保存到你的个人工作流列表',
+    saveToTeam: '保存到团队工作流列表',
+    forkedToSpace: '{type}已复刻到{space}',
+    projectAndWorkflows: '项目及其工作流',
+    workflow: '工作流'
   },
 
   // 管理后台

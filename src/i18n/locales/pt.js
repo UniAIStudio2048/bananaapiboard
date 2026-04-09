@@ -264,6 +264,17 @@ export default {
       assetSaved: '{type} adicionado aos meus ativos!',
       canvasGenerated: 'Gerado no canvas'
     },
+    unnamed: 'Sem nome',
+    doubleClickRename: 'Duplo clique para renomear - {name}',
+    newWorkflowBtn: 'Novo Workflow',
+    soraCharacterLib: 'Biblioteca de Personagens Sora',
+    seedanceCharacterLib: 'Biblioteca de Personagens Seedance',
+    characterCount: '{count} personagens',
+    characterTimeout: 'Tempo esgotado do personagem, verifique a biblioteca mais tarde',
+    characterCreateFailed: 'Falha ao criar personagem: {error}',
+    unknownError: 'Erro desconhecido',
+    localCharacterLib: 'Biblioteca Local de Personagens',
+    addCharacterDesc: 'Adicione personagens criados em plataformas externas à biblioteca local para referenciá-los com @nome durante a geração.',
     nodeTypes: {
       textToImage: 'Texto para imagem',
       imageToImage: 'Imagem para imagem',
@@ -541,7 +552,23 @@ export default {
     validDays: 'Válido por {0} dias',
     buySuccess: 'Compra realizada',
     paymentPending: 'Pagamento pendente',
-    paymentFailed: 'Pagamento falhou'
+    paymentFailed: 'Pagamento falhou',
+    purchaseTitle: 'Comprar Pacote',
+    neverExpires: 'Nunca expira',
+    expiresWithPackage: 'Reiniciado ao expirar o pacote',
+    accountBalance: 'Saldo da Conta',
+    buyNow: 'Comprar Agora',
+    balanceToPointsHint: 'Pontos recarregados/comprados são pontos permanentes',
+    pointsOverview: 'Visão Geral dos Pontos',
+    rechargeBtn: 'Recarregar',
+    detailRecord: 'Detalhes',
+    renewNow: 'Renovar Agora',
+    cannotDowngrade: 'Não pode rebaixar',
+    upgradePackage: 'Atualizar Pacote',
+    transfer: 'Transferir',
+    convertToPoints: 'Converter em Pontos',
+    convertHint: 'Os pontos convertidos são permanentes e podem ser transferidos para outros',
+    loadingPackages: 'Carregando pacotes...'
   },
 
   voucher: {
@@ -558,6 +585,17 @@ export default {
     getVoucher: 'Obter cupom',
     pointsReceived: 'Recebeu {0} pontos',
     balanceReceived: 'Recebeu ¥{0}'
+  },
+
+  team: {
+    personalSpace: 'Espaço Pessoal',
+    teamSpace: 'Espaço da Equipe',
+    createTeamSpace: 'Criar Espaço da Equipe',
+    saveToPersonal: 'Salvar na sua lista de workflows pessoais',
+    saveToTeam: 'Salvar na lista de workflows da equipe',
+    forkedToSpace: '{type} bifurcado para {space}',
+    projectAndWorkflows: 'Projeto e workflows',
+    workflow: 'Workflow'
   },
 
   admin: {

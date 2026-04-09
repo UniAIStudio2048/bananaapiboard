@@ -277,6 +277,17 @@ export default {
       assetSaved: '{type} ajouté à mes ressources !',
       canvasGenerated: 'Généré depuis canvas'
     },
+    unnamed: 'Sans nom',
+    doubleClickRename: 'Double-cliquez pour renommer - {name}',
+    newWorkflowBtn: 'Nouveau Workflow',
+    soraCharacterLib: 'Bibliothèque de Personnages Sora',
+    seedanceCharacterLib: 'Bibliothèque de Personnages Seedance',
+    characterCount: '{count} personnages',
+    characterTimeout: 'Délai d\'attente du personnage dépassé, vérifiez la bibliothèque plus tard',
+    characterCreateFailed: 'Échec de création du personnage : {error}',
+    unknownError: 'Erreur inconnue',
+    localCharacterLib: 'Bibliothèque Locale de Personnages',
+    addCharacterDesc: 'Ajoutez des personnages créés sur des plateformes externes à la bibliothèque locale pour les référencer avec @nom lors de la génération.',
     emptyCanvas: 'Le canvas est vide, impossible d\'enregistrer',
     noNodeTypes: 'Aucun type de nœud connectable',
     nodeTypes: {
@@ -718,7 +729,23 @@ export default {
     buySuccess: 'Achat réussi',
     paymentPending: 'Paiement en attente',
     paymentFailed: 'Paiement échoué',
-    noAvailablePackages: 'Aucun forfait disponible'
+    noAvailablePackages: 'Aucun forfait disponible',
+    purchaseTitle: 'Acheter un Forfait',
+    neverExpires: 'N\'expire jamais',
+    expiresWithPackage: 'Réinitialisé à l\'expiration du forfait',
+    accountBalance: 'Solde du Compte',
+    buyNow: 'Acheter Maintenant',
+    balanceToPointsHint: 'Les points rechargés/achetés sont des points permanents',
+    pointsOverview: 'Aperçu des Points',
+    rechargeBtn: 'Recharger',
+    detailRecord: 'Détails',
+    renewNow: 'Renouveler Maintenant',
+    cannotDowngrade: 'Rétrogradation impossible',
+    upgradePackage: 'Mettre à niveau',
+    transfer: 'Transférer',
+    convertToPoints: 'Convertir en Points',
+    convertHint: 'Les points convertis sont permanents et transférables à d\'autres',
+    loadingPackages: 'Chargement des forfaits...'
   },
 
   voucher: {
@@ -741,6 +768,17 @@ export default {
     redeemInstruction1: 'Les codes sont sensibles à la casse',
     redeemInstruction2: 'Chaque code ne peut être utilisé qu\'une seule fois',
     redeemInstruction3: 'Les points sont crédités immédiatement après l\'échange'
+  },
+
+  team: {
+    personalSpace: 'Espace Personnel',
+    teamSpace: 'Espace Équipe',
+    createTeamSpace: 'Créer un Espace Équipe',
+    saveToPersonal: 'Enregistrer dans votre liste de workflows personnels',
+    saveToTeam: 'Enregistrer dans la liste de workflows de l\'équipe',
+    forkedToSpace: '{type} dupliqué dans {space}',
+    projectAndWorkflows: 'Projet et workflows',
+    workflow: 'Workflow'
   },
 
   admin: {

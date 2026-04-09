@@ -5,6 +5,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch, toRaw, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
+import { t } from '@/i18n'
 
 export const useCanvasStore = defineStore('canvas', () => {
   // ========== 节点和连线 ==========
@@ -1524,7 +1525,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     const tab = {
       id: tabId,
-      name: workflow?.name || '新工作流',
+      name: workflow?.name || t('canvas.newWorkflow'),
       workflowId: workflow?.id || null,
       workflowUid: workflow?.workflow_uid || null,
       nodes: tabNodes,

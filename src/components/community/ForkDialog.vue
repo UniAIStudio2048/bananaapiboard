@@ -6,6 +6,9 @@ import { ref, watch, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { forkWork } from '@/api/community'
 import { useTeamStore } from '@/stores/team'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -125,7 +128,7 @@ function goToWorkflow() {
               <svg class="w-7 h-7 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
             </div>
             <p class="text-white font-medium mb-1">{{ forkScope === 'project' ? '项目已复刻' : '复刻成功' }}</p>
-            <p class="text-sm text-white/50 mb-5">{{ forkScope === 'project' ? '项目及其工作流' : '工作流' }}已复刻到{{ spaceType === 'team' ? '团队空间' : '个人空间' }}</p>
+            <p class="text-sm text-white/50 mb-5">{{ t('team.forkedToSpace', { type: forkScope === 'project' ? t('team.projectAndWorkflows') : t('team.workflow'), space: spaceType === 'team' ? t('team.teamSpace') : t('team.personalSpace') }) }}</p>
             <div class="flex gap-3 justify-center">
               <button
                 class="px-4 py-2 bg-white/10 text-white/80 text-sm rounded-lg hover:bg-white/15 transition"
@@ -174,8 +177,8 @@ function goToWorkflow() {
               >
                 <input v-model="spaceType" type="radio" value="personal" class="accent-blue-500" />
                 <div>
-                  <p class="text-sm text-white font-medium">个人空间</p>
-                  <p class="text-xs text-white/40">保存到你的个人工作流列表</p>
+                  <p class="text-sm text-white font-medium">{{ t('team.personalSpace') }}</p>
+                  <p class="text-xs text-white/40">{{ t('team.saveToPersonal') }}</p>
                 </div>
               </label>
 
@@ -185,8 +188,8 @@ function goToWorkflow() {
               >
                 <input v-model="spaceType" type="radio" value="team" class="accent-blue-500" />
                 <div>
-                  <p class="text-sm text-white font-medium">团队空间</p>
-                  <p class="text-xs text-white/40">保存到团队共享工作流</p>
+                  <p class="text-sm text-white font-medium">{{ t('team.teamSpace') }}</p>
+                  <p class="text-xs text-white/40">{{ t('team.saveToTeam') }}</p>
                 </div>
               </label>
             </div>

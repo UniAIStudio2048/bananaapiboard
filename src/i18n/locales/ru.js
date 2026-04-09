@@ -376,6 +376,17 @@ export default {
         styleGenerate: 'Генерация Стиля'
       }
     },
+    unnamed: 'Без названия',
+    doubleClickRename: 'Двойной клик для переименования - {name}',
+    newWorkflowBtn: 'Новый процесс',
+    soraCharacterLib: 'Библиотека персонажей Sora',
+    seedanceCharacterLib: 'Библиотека персонажей Seedance',
+    characterCount: '{count} персонажей',
+    characterTimeout: 'Время обработки персонажа истекло, проверьте библиотеку позже',
+    characterCreateFailed: 'Ошибка создания персонажа: {error}',
+    unknownError: 'Неизвестная ошибка',
+    localCharacterLib: 'Локальная библиотека персонажей',
+    addCharacterDesc: 'Добавьте персонажей, созданных на внешних платформах, в локальную библиотеку для использования @имя при генерации.',
     emptyState: {
       doubleClick: 'Двойной клик',
       hint: 'для свободного создания, или просмотр шаблонов',
@@ -541,7 +552,23 @@ export default {
     validDays: 'Действует {0} дней',
     buySuccess: 'Покупка успешна',
     paymentPending: 'Ожидание оплаты',
-    paymentFailed: 'Ошибка оплаты'
+    paymentFailed: 'Ошибка оплаты',
+    purchaseTitle: 'Покупка пакета',
+    neverExpires: 'Бессрочно',
+    expiresWithPackage: 'Сбрасывается по истечении пакета',
+    accountBalance: 'Баланс аккаунта',
+    buyNow: 'Купить сейчас',
+    balanceToPointsHint: 'Пополненные/купленные баллы являются постоянными',
+    pointsOverview: 'Обзор баллов',
+    rechargeBtn: 'Пополнить',
+    detailRecord: 'Детали',
+    renewNow: 'Продлить сейчас',
+    cannotDowngrade: 'Понижение невозможно',
+    upgradePackage: 'Обновить пакет',
+    transfer: 'Передать',
+    convertToPoints: 'Конвертировать в баллы',
+    convertHint: 'Конвертированные баллы являются постоянными и могут быть переданы другим',
+    loadingPackages: 'Загрузка пакетов...'
   },
 
   voucher: {
@@ -558,6 +585,17 @@ export default {
     getVoucher: 'Получить купон',
     pointsReceived: 'Получено {0} баллов',
     balanceReceived: 'Получено ¥{0}'
+  },
+
+  team: {
+    personalSpace: 'Личное пространство',
+    teamSpace: 'Командное пространство',
+    createTeamSpace: 'Создать командное пространство',
+    saveToPersonal: 'Сохранить в список личных процессов',
+    saveToTeam: 'Сохранить в список процессов команды',
+    forkedToSpace: '{type} скопировано в {space}',
+    projectAndWorkflows: 'Проект и процессы',
+    workflow: 'Процесс'
   },
 
   admin: {

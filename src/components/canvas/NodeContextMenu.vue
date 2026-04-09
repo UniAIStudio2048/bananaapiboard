@@ -865,8 +865,8 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
   } catch (error) {
     console.error('[Seedance] 后台创建角色失败:', error)
     const msg = error.message?.includes('超时') 
-      ? '角色处理超时，请稍后在角色库查看' 
-      : '角色创建失败：' + (error.message || '未知错误')
+      ? t('canvas.characterTimeout') 
+      : t('canvas.characterCreateFailed', { error: error.message || t('canvas.unknownError') })
     showToast(msg, error.message?.includes('超时') ? 'info' : 'error')
   }
 }

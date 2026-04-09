@@ -129,8 +129,8 @@ const allFileTypes = [
   { key: 'image', labelKey: 'canvas.nodes.image', icon: '◫' },
   { key: 'video', labelKey: 'canvas.nodes.video', icon: '▷' },
   { key: 'audio', labelKey: 'canvas.nodes.audio', icon: '♪' },
-  { key: 'sora-character', label: 'Sora角色库', icon: '👤' },
-  { key: 'seedance-character', label: 'Seedance角色库', icon: '👥' }
+  { key: 'sora-character', labelKey: 'canvas.soraCharacterLib', icon: '👤' },
+  { key: 'seedance-character', labelKey: 'canvas.seedanceCharacterLib', icon: '👥' }
 ]
 const fileTypes = computed(() =>
   allFileTypes.filter(ft => {
@@ -1732,7 +1732,7 @@ onUnmounted(() => {
                 @click="selectedType = ft.key"
               >
                 <span class="type-icon">{{ ft.icon }}</span>
-                <span class="type-label">{{ ft.label }}</span>
+                <span class="type-label">{{ ft.labelKey ? t(ft.labelKey) : ft.label }}</span>
                 <span class="type-count">{{ assetStats[ft.key] || 0 }}</span>
               </button>
               <!-- 悬停时弹出的添加角色按钮（2秒延迟隐藏） -->
@@ -1765,7 +1765,7 @@ onUnmounted(() => {
                 @click="selectedType = ft.key"
               >
                 <span class="type-icon">{{ ft.icon }}</span>
-                <span class="type-label">{{ ft.label }}</span>
+                <span class="type-label">{{ ft.labelKey ? t(ft.labelKey) : ft.label }}</span>
                 <span class="type-count">{{ seedanceAssetCount }}</span>
               </button>
               <div 

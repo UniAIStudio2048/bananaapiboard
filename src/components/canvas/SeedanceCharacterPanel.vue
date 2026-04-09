@@ -13,6 +13,9 @@ import {
 import { saveAsset, getAssets, updateAsset, deleteAsset as deleteLocalAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
 import { getApiUrl } from '@/config/tenant'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 import { useTeamStore } from '@/stores/team'
 import { getCachedAssets, cacheAssets, invalidateAssetCache } from '@/utils/assetCache'
 
@@ -1094,8 +1097,8 @@ onUnmounted(() => {
                   <circle cx="16" cy="11" r="2.5" stroke="currentColor" stroke-width="1.5"/>
                   <path d="M8 16c1-1.5 3-2.5 5-2.5s4 1 5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
-                Seedance 角色库
-                <span class="fullscreen-count">{{ fullscreenFilteredAssets.length }} 个角色</span>
+                {{ t('canvas.seedanceCharacterLib') }}
+                <span class="fullscreen-count">{{ t('canvas.characterCount', { count: fullscreenFilteredAssets.length }) }}</span>
               </h3>
               <div class="fullscreen-toolbar">
                 <div class="fullscreen-search">

@@ -272,6 +272,17 @@ export default {
       assetSaved: '{type}已加入我的資產！',
       canvasGenerated: '畫布生成'
     },
+    unnamed: '未命名',
+    doubleClickRename: '雙擊重新命名 - {name}',
+    newWorkflowBtn: '新建工作流',
+    soraCharacterLib: 'Sora角色庫',
+    seedanceCharacterLib: 'Seedance角色庫',
+    characterCount: '{count} 個角色',
+    characterTimeout: '角色處理逾時，請稍後在角色庫查看',
+    characterCreateFailed: '角色建立失敗：{error}',
+    unknownError: '未知錯誤',
+    localCharacterLib: '本地角色庫',
+    addCharacterDesc: '添加在外部平台建立的角色到本地角色庫，方便在生成時使用 @角色名 引用。',
     nodeTypes: {
       textToImage: '文生圖',
       imageToImage: '圖生圖',
@@ -555,7 +566,23 @@ export default {
     validDays: '有效期 {0} 天',
     buySuccess: '購買成功',
     paymentPending: '等待付款',
-    paymentFailed: '付款失敗'
+    paymentFailed: '付款失敗',
+    purchaseTitle: '套餐購買',
+    neverExpires: '永不過期',
+    expiresWithPackage: '隨套餐到期自動清零',
+    accountBalance: '帳戶餘額',
+    buyNow: '立即購買',
+    balanceToPointsHint: '申請儲值/購買積分為永久積分',
+    pointsOverview: '積分總覽',
+    rechargeBtn: '儲值',
+    detailRecord: '明細記錄',
+    renewNow: '立即續費',
+    cannotDowngrade: '不可降級',
+    upgradePackage: '升級套餐',
+    transfer: '轉讓',
+    convertToPoints: '劃轉積分',
+    convertHint: '餘額劃轉後的積分為永久積分，也可轉讓他人使用',
+    loadingPackages: '載入套餐中...'
   },
 
   // 兌換券
@@ -573,6 +600,18 @@ export default {
     getVoucher: '獲取兌換券',
     pointsReceived: '獲得 {0} 積分',
     balanceReceived: '獲得 ¥{0}'
+  },
+
+  // 團隊空間
+  team: {
+    personalSpace: '個人空間',
+    teamSpace: '團隊空間',
+    createTeamSpace: '建立團隊空間',
+    saveToPersonal: '儲存到你的個人工作流清單',
+    saveToTeam: '儲存到團隊工作流清單',
+    forkedToSpace: '{type}已複製到{space}',
+    projectAndWorkflows: '專案及其工作流',
+    workflow: '工作流'
   },
 
   // 管理後台

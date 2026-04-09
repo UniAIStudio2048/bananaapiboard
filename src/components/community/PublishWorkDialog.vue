@@ -10,6 +10,9 @@ import { getProjectList } from '@/api/canvas/project'
 import { uploadImages } from '@/api/client'
 import { compressImage } from '@/utils/imageCompress'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -325,7 +328,7 @@ async function loadWorkflows() {
     }
 
     if (personalWfs.length) {
-      groups.push({ label: '个人空间', workflows: personalWfs })
+      groups.push({ label: t('team.personalSpace'), workflows: personalWfs })
     }
 
     try {

@@ -4,6 +4,7 @@
  */
 import { ref, computed, watch } from 'vue'
 import api from '@/api/client'
+import { t } from '@/i18n'
 
 // ==================== 状态 ====================
 
@@ -33,8 +34,8 @@ let currentUserId = null
 const isInTeamSpace = computed(() => globalSpaceType.value === 'team')
 
 const currentSpaceLabel = computed(() => {
-  if (globalSpaceType.value === 'personal') return '个人空间'
-  return globalTeam.value?.name || '团队空间'
+  if (globalSpaceType.value === 'personal') return t('team.personalSpace')
+  return globalTeam.value?.name || t('team.teamSpace')
 })
 
 const currentSpaceIcon = computed(() => {

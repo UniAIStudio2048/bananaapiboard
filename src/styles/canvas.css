@@ -761,7 +761,7 @@
 /* 画布底部品牌 Logo */
 .canvas-bottom-logo {
   position: absolute;
-  bottom: 24px;
+  bottom: 80px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -778,19 +778,19 @@
 }
 
 .canvas-bottom-logo-img {
-  height: 28px;
+  height: 48px;
   width: auto;
-  max-width: 120px;
+  max-width: 200px;
   object-fit: contain;
   filter: grayscale(100%);
   pointer-events: auto;
 }
 
 .canvas-bottom-logo-text {
-  font-size: 14px;
+  font-size: 24px;
   font-weight: 600;
   color: var(--canvas-text-secondary, rgba(255, 255, 255, 0.5));
-  letter-spacing: 2px;
+  letter-spacing: 3px;
   text-transform: uppercase;
   pointer-events: auto;
 }

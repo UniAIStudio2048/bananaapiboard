@@ -287,6 +287,17 @@ export default {
       assetSaved: '{type} مېنىڭ مۈلكۈمگە قوشۇلدى!',
       canvasGenerated: 'كارتىنا تاختىسى ھاسىللاندى'
     },
+    unnamed: 'نامسىز',
+    doubleClickRename: 'قوش چېكىش بىلەن نام ئۆزگەرتىش - {name}',
+    newWorkflowBtn: 'يېڭى خىزمەت ئېقىمى',
+    soraCharacterLib: 'Sora رول كۈتۈپخانىسى',
+    seedanceCharacterLib: 'Seedance رول كۈتۈپخانىسى',
+    characterCount: '{count} رول',
+    characterTimeout: 'رول بىر تەرەپ قىلىش ۋاقتى ئېشىپ كەتتى، كېيىن كۈتۈپخانىدا تەكشۈرۈڭ',
+    characterCreateFailed: 'رول قۇرۇش مەغلۇب بولدى: {error}',
+    unknownError: 'نامەلۇم خاتالىق',
+    localCharacterLib: 'يەرلىك رول كۈتۈپخانىسى',
+    addCharacterDesc: 'سىرتقى سۇپىدا قۇرۇلغان روللارنى يەرلىك كۈتۈپخانىغا قوشۇپ، ھاسىللاشتا @رول ئىسمى بىلەن پايدىلىنالايسىز.',
     emptyCanvas: 'كارتىنا تاختىسى قۇرۇق، ساقلاشقا بولمايدۇ',
     noNodeTypes: 'ھازىرچە ئۇلىنىدىغان تۈگۈن تىپى يوق',
     nodeTypes: {
@@ -838,7 +849,23 @@ export default {
     purchaseFailed: 'سېتىۋېلىش مەغلۇپ بولدى، قايتا سىناڭ',
     purchaseConfirm: 'سېتىۋېلىشنى جەزملەش',
     purchaseConfirmMsg: '{name} بولىقىنى سېتىۋېلىشنى جەزملەمسىز؟\nباھاسى: ¥{price}\nئالىدىغىنى: {points} نومۇر',
-    insufficientBalance: 'قالدۇق يېتىشمەيدۇ، نۆۋەتتىكى قالدۇق ¥{current}، كېرەكلىكى ¥{required}'
+    insufficientBalance: 'قالدۇق يېتىشمەيدۇ، نۆۋەتتىكى قالدۇق ¥{current}، كېرەكلىكى ¥{required}',
+    purchaseTitle: 'بولاق سېتىۋېلىش',
+    neverExpires: 'مەڭگۈلۈك',
+    expiresWithPackage: 'بولاق ۋاقتى توشقاندا ئاپتوماتىك تازىلىنىدۇ',
+    accountBalance: 'ھېسابات قالدۇقى',
+    buyNow: 'ھازىر سېتىۋېلىش',
+    balanceToPointsHint: 'تولدۇرۇش/سېتىۋېلىش نومۇرلىرى مەڭگۈلۈك نومۇر بولىدۇ',
+    pointsOverview: 'نومۇر ئومۇمىي ئەھۋالى',
+    rechargeBtn: 'تولدۇرۇش',
+    detailRecord: 'تەپسىلاتى',
+    renewNow: 'ھازىر يېڭىلاش',
+    cannotDowngrade: 'تۆۋەنلىتىشكە بولمايدۇ',
+    upgradePackage: 'بولاقنى يۈكسەلدۈرۈش',
+    transfer: 'يۆتكەش',
+    convertToPoints: 'نومۇرغا ئالماشتۇرۇش',
+    convertHint: 'ئالماشتۇرۇلغان نومۇرلار مەڭگۈلۈك بولۇپ، باشقىلارغا يۆتكىگىلى بولىدۇ',
+    loadingPackages: 'بولاقلارنى يۈكلەۋاتىدۇ...'
   },
 
   // ئالماشتۇرۇش كودى
@@ -857,6 +884,17 @@ export default {
     getVoucher: 'ئالماشتۇرۇش كودى ئېلىش',
     pointsReceived: '{0} نومۇر ئالدى',
     balanceReceived: '¥{0} ئالدى'
+  },
+
+  team: {
+    personalSpace: 'شەخسىي بوشلۇق',
+    teamSpace: 'گۇرۇپپا بوشلۇقى',
+    createTeamSpace: 'گۇرۇپپا بوشلۇقى قۇرۇش',
+    saveToPersonal: 'شەخسىي خىزمەت ئېقىمى تىزىملىكىگە ساقلاش',
+    saveToTeam: 'گۇرۇپپا خىزمەت ئېقىمى تىزىملىكىگە ساقلاش',
+    forkedToSpace: '{type} {space} غا كۆچۈرۈلدى',
+    projectAndWorkflows: 'تۈر ۋە خىزمەت ئېقىملىرى',
+    workflow: 'خىزمەت ئېقىمى'
   },
 
   // باشقۇرۇش تەگلىكى

@@ -287,6 +287,17 @@ export default {
       assetSaved: '{type} added to my assets!',
       canvasGenerated: 'Canvas Generated'
     },
+    unnamed: 'Untitled',
+    doubleClickRename: 'Double-click to rename - {name}',
+    newWorkflowBtn: 'New Workflow',
+    soraCharacterLib: 'Sora Character Library',
+    seedanceCharacterLib: 'Seedance Character Library',
+    characterCount: '{count} characters',
+    characterTimeout: 'Character processing timed out, check the library later',
+    characterCreateFailed: 'Character creation failed: {error}',
+    unknownError: 'Unknown error',
+    localCharacterLib: 'Local Character Library',
+    addCharacterDesc: 'Add characters created on external platforms to the local library for easy @reference during generation.',
     emptyCanvas: 'Canvas is empty, cannot save',
     noNodeTypes: 'No compatible node types available',
     nodeTypes: {
@@ -842,7 +853,23 @@ export default {
     purchaseFailed: 'Purchase failed, please try again',
     purchaseConfirm: 'Confirm Purchase',
     purchaseConfirmMsg: 'Purchase {name} package?\nPrice: ¥{price}\nYou will receive: {points} points',
-    insufficientBalance: 'Insufficient balance. Current: ¥{current}, Required: ¥{required}'
+    insufficientBalance: 'Insufficient balance. Current: ¥{current}, Required: ¥{required}',
+    purchaseTitle: 'Purchase Package',
+    neverExpires: 'Never expires',
+    expiresWithPackage: 'Expires with package',
+    accountBalance: 'Account Balance',
+    buyNow: 'Buy Now',
+    balanceToPointsHint: 'Recharged/purchased points are permanent points',
+    pointsOverview: 'Points Overview',
+    rechargeBtn: 'Recharge',
+    detailRecord: 'Details',
+    renewNow: 'Renew Now',
+    cannotDowngrade: 'Cannot Downgrade',
+    upgradePackage: 'Upgrade Package',
+    transfer: 'Transfer',
+    convertToPoints: 'Convert to Points',
+    convertHint: 'Converted points are permanent and can be transferred to others',
+    loadingPackages: 'Loading packages...'
   },
 
   // Voucher
@@ -861,6 +888,18 @@ export default {
     getVoucher: 'Get Voucher',
     pointsReceived: 'Received {0} points',
     balanceReceived: 'Received ¥{0}'
+  },
+
+  // Team Space
+  team: {
+    personalSpace: 'Personal Space',
+    teamSpace: 'Team Space',
+    createTeamSpace: 'Create Team Space',
+    saveToPersonal: 'Save to your personal workflow list',
+    saveToTeam: 'Save to team workflow list',
+    forkedToSpace: '{type} forked to {space}',
+    projectAndWorkflows: 'Project and workflows',
+    workflow: 'Workflow'
   },
 
   // Admin

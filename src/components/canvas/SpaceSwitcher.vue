@@ -5,6 +5,7 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useTeamStore } from '@/stores/team'
+import { useI18n } from '@/i18n'
 
 const props = defineProps({
   // 当前选中的空间: 'personal' | 'team-xxx' | 'all'
@@ -26,6 +27,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue', 'change'])
 
+const { t } = useI18n()
 const teamStore = useTeamStore()
 
 // 下拉菜单是否展开
@@ -48,7 +50,7 @@ const spaces = computed(() => {
   // 个人空间
   list.push({
     id: 'personal',
-    name: '个人空间',
+    name: t('team.personalSpace'),
     icon: '👤',
     type: 'personal'
   })

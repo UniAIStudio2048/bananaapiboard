@@ -264,6 +264,17 @@ export default {
       assetSaved: '{type} zu meinen Assets hinzugefügt!',
       canvasGenerated: 'Canvas generiert'
     },
+    unnamed: 'Unbenannt',
+    doubleClickRename: 'Doppelklick zum Umbenennen - {name}',
+    newWorkflowBtn: 'Neuer Workflow',
+    soraCharacterLib: 'Sora Charakterbibliothek',
+    seedanceCharacterLib: 'Seedance Charakterbibliothek',
+    characterCount: '{count} Charaktere',
+    characterTimeout: 'Zeitüberschreitung bei der Charakterverarbeitung, prüfen Sie die Bibliothek später',
+    characterCreateFailed: 'Charaktererstellung fehlgeschlagen: {error}',
+    unknownError: 'Unbekannter Fehler',
+    localCharacterLib: 'Lokale Charakterbibliothek',
+    addCharacterDesc: 'Fügen Sie auf externen Plattformen erstellte Charaktere zur lokalen Bibliothek hinzu, um sie bei der Generierung mit @Name zu referenzieren.',
     nodeTypes: {
       textToImage: 'Text zu Bild',
       imageToImage: 'Bild zu Bild',
@@ -541,7 +552,23 @@ export default {
     validDays: 'Gültig für {0} Tage',
     buySuccess: 'Kauf erfolgreich',
     paymentPending: 'Zahlung ausstehend',
-    paymentFailed: 'Zahlung fehlgeschlagen'
+    paymentFailed: 'Zahlung fehlgeschlagen',
+    purchaseTitle: 'Paket kaufen',
+    neverExpires: 'Läuft nie ab',
+    expiresWithPackage: 'Wird bei Paketablauf zurückgesetzt',
+    accountBalance: 'Kontostand',
+    buyNow: 'Jetzt kaufen',
+    balanceToPointsHint: 'Aufgeladene/gekaufte Punkte sind permanente Punkte',
+    pointsOverview: 'Punkteübersicht',
+    rechargeBtn: 'Aufladen',
+    detailRecord: 'Details',
+    renewNow: 'Jetzt verlängern',
+    cannotDowngrade: 'Downgrade nicht möglich',
+    upgradePackage: 'Paket upgraden',
+    transfer: 'Übertragen',
+    convertToPoints: 'In Punkte umwandeln',
+    convertHint: 'Umgewandelte Punkte sind permanent und können an andere übertragen werden',
+    loadingPackages: 'Pakete werden geladen...'
   },
 
   voucher: {
@@ -558,6 +585,17 @@ export default {
     getVoucher: 'Gutschein erhalten',
     pointsReceived: '{0} Punkte erhalten',
     balanceReceived: '¥{0} erhalten'
+  },
+
+  team: {
+    personalSpace: 'Persönlicher Bereich',
+    teamSpace: 'Teambereich',
+    createTeamSpace: 'Teambereich erstellen',
+    saveToPersonal: 'In Ihrer persönlichen Workflow-Liste speichern',
+    saveToTeam: 'In der Team-Workflow-Liste speichern',
+    forkedToSpace: '{type} nach {space} geforkt',
+    projectAndWorkflows: 'Projekt und Workflows',
+    workflow: 'Workflow'
   },
 
   admin: {

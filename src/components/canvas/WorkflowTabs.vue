@@ -6,6 +6,9 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { renameWorkflow } from '@/api/canvas/workflow'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   tabs: {
@@ -151,8 +154,8 @@ function handleDoubleClick(e, tab) {
   editState.value = {
     editing: true,
     tabId: tab.id,
-    originalName: tab.name || '未命名',
-    newName: tab.name || '未命名',
+    originalName: tab.name || t('canvas.unnamed'),
+    newName: tab.name || t('canvas.unnamed'),
     saving: false
   }
   
@@ -380,9 +383,9 @@ onUnmounted(() => {
           v-else 
           class="tab-name"
           @dblclick="handleDoubleClick($event, tab)"
-          :title="'双击重命名 - ' + (tab.name || '未命名')"
+          :title="t('canvas.doubleClickRename', { name: tab.name || t('canvas.unnamed') })"
         >
-          {{ tab.name || '未命名' }}
+          {{ tab.name || t('canvas.unnamed') }}
         </span>
         
         <!-- 未保存标记 -->
@@ -428,7 +431,7 @@ onUnmounted(() => {
               :class="{ active: tab.id === activeTabId }"
               @click="selectFromMore(tab)"
             >
-              <span class="menu-item-name">{{ tab.name || '未命名' }}</span>
+              <span class="menu-item-name">{{ tab.name || t('canvas.unnamed') }}</span>
               <span v-if="tab.hasChanges" class="unsaved-dot"></span>
             </div>
           </div>
@@ -437,7 +440,7 @@ onUnmounted(() => {
     </div>
     
     <!-- 新建按钮 -->
-    <button class="new-tab-btn" @click="createNew" title="新建工作流">
+    <button class="new-tab-btn" @click="createNew" :title="t('canvas.newWorkflowBtn')">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="12" y1="5" x2="12" y2="19"/>
         <line x1="5" y1="12" x2="19" y2="12"/>

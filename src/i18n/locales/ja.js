@@ -286,6 +286,17 @@ export default {
       assetSaved: '{type}がマイアセットに追加されました！',
       canvasGenerated: 'キャンバス生成'
     },
+    unnamed: '無題',
+    doubleClickRename: 'ダブルクリックでリネーム - {name}',
+    newWorkflowBtn: '新規ワークフロー',
+    soraCharacterLib: 'Soraキャラクターライブラリ',
+    seedanceCharacterLib: 'Seedanceキャラクターライブラリ',
+    characterCount: '{count} キャラクター',
+    characterTimeout: 'キャラクター処理がタイムアウトしました。後でライブラリを確認してください',
+    characterCreateFailed: 'キャラクター作成に失敗しました：{error}',
+    unknownError: '不明なエラー',
+    localCharacterLib: 'ローカルキャラクターライブラリ',
+    addCharacterDesc: '外部プラットフォームで作成したキャラクターをローカルライブラリに追加し、生成時に@キャラクター名で参照できます。',
     emptyCanvas: 'キャンバスが空です、保存できません',
     noNodeTypes: '接続可能なノードタイプがありません',
     nodeTypes: {
@@ -733,7 +744,23 @@ export default {
     buySuccess: '購入成功',
     paymentPending: '支払い待ち',
     paymentFailed: '支払い失敗',
-    noAvailablePackages: '利用可能なパッケージがありません'
+    noAvailablePackages: '利用可能なパッケージがありません',
+    purchaseTitle: 'パッケージ購入',
+    neverExpires: '無期限',
+    expiresWithPackage: 'パッケージ期限に合わせてリセット',
+    accountBalance: 'アカウント残高',
+    buyNow: '今すぐ購入',
+    balanceToPointsHint: 'チャージ/購入ポイントは永久ポイントになります',
+    pointsOverview: 'ポイント概要',
+    rechargeBtn: 'チャージ',
+    detailRecord: '明細記録',
+    renewNow: '今すぐ更新',
+    cannotDowngrade: 'ダウングレード不可',
+    upgradePackage: 'パッケージをアップグレード',
+    transfer: '譲渡',
+    convertToPoints: 'ポイントに変換',
+    convertHint: '変換されたポイントは永久ポイントとなり、他人に譲渡可能です',
+    loadingPackages: 'パッケージ読み込み中...'
   },
 
   // バウチャー
@@ -757,6 +784,18 @@ export default {
     redeemInstruction1: 'バウチャーコードは大文字小文字を区別します',
     redeemInstruction2: '各バウチャーコードは1回のみ使用可能',
     redeemInstruction3: '引き換え成功後、ポイントは即時付与'
+  },
+
+  // チームスペース
+  team: {
+    personalSpace: '個人スペース',
+    teamSpace: 'チームスペース',
+    createTeamSpace: 'チームスペースを作成',
+    saveToPersonal: '個人ワークフローリストに保存',
+    saveToTeam: 'チームワークフローリストに保存',
+    forkedToSpace: '{type}は{space}にフォークされました',
+    projectAndWorkflows: 'プロジェクトとワークフロー',
+    workflow: 'ワークフロー'
   },
 
   // 管理

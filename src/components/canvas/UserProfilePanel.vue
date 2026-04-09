@@ -1766,7 +1766,7 @@ function getLedgerTypeText(type) {
                 @click="selectSpace('personal')"
               >
                 <span class="space-icon">👤</span>
-                <span>个人空间</span>
+                <span>{{ t('team.personalSpace') }}</span>
                 <span v-if="teamStore.globalSpaceType.value === 'personal'" class="check-mark">✓</span>
               </div>
               <div class="space-divider" v-if="teamStore.myTeams.value.length > 0"></div>
@@ -1785,7 +1785,7 @@ function getLedgerTypeText(type) {
               <div class="space-divider"></div>
               <div class="space-option create-team" @click="openCreateTeamModal">
                 <span class="space-icon">➕</span>
-                <span>创建团队空间</span>
+                <span>{{ t('team.createTeamSpace') }}</span>
               </div>
               <div 
                 v-if="teamStore.pendingInvitationsCount.value > 0" 
@@ -2902,7 +2902,7 @@ function getLedgerTypeText(type) {
       <div v-if="showCreateTeamModal" class="modal-overlay" @click.self="showCreateTeamModal = false">
         <div class="modal-content team-modal">
           <div class="modal-header">
-            <h3>创建团队空间</h3>
+            <h3>{{ t('team.createTeamSpace') }}</h3>
             <button class="modal-close" @click="showCreateTeamModal = false">×</button>
           </div>
           <div class="modal-body">

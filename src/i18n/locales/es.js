@@ -277,6 +277,17 @@ export default {
       assetSaved: '¡{type} añadido a mis recursos!',
       canvasGenerated: 'Generado desde lienzo'
     },
+    unnamed: 'Sin nombre',
+    doubleClickRename: 'Doble clic para renombrar - {name}',
+    newWorkflowBtn: 'Nuevo Flujo',
+    soraCharacterLib: 'Biblioteca de Personajes Sora',
+    seedanceCharacterLib: 'Biblioteca de Personajes Seedance',
+    characterCount: '{count} personajes',
+    characterTimeout: 'Tiempo agotado del personaje, revise la biblioteca más tarde',
+    characterCreateFailed: 'Error al crear personaje: {error}',
+    unknownError: 'Error desconocido',
+    localCharacterLib: 'Biblioteca Local de Personajes',
+    addCharacterDesc: 'Agregue personajes creados en plataformas externas a la biblioteca local para referenciarlos con @nombre durante la generación.',
     emptyCanvas: 'El lienzo está vacío, no se puede guardar',
     noNodeTypes: 'No hay tipos de nodo conectables',
     nodeTypes: {
@@ -718,7 +729,23 @@ export default {
     buySuccess: 'Compra exitosa',
     paymentPending: 'Pago pendiente',
     paymentFailed: 'Pago fallido',
-    noAvailablePackages: 'No hay paquetes disponibles'
+    noAvailablePackages: 'No hay paquetes disponibles',
+    purchaseTitle: 'Comprar Paquete',
+    neverExpires: 'Sin caducidad',
+    expiresWithPackage: 'Se reinicia al vencer el paquete',
+    accountBalance: 'Saldo de la Cuenta',
+    buyNow: 'Comprar Ahora',
+    balanceToPointsHint: 'Los puntos recargados/comprados son puntos permanentes',
+    pointsOverview: 'Resumen de Puntos',
+    rechargeBtn: 'Recargar',
+    detailRecord: 'Detalles',
+    renewNow: 'Renovar Ahora',
+    cannotDowngrade: 'No se puede degradar',
+    upgradePackage: 'Mejorar Paquete',
+    transfer: 'Transferir',
+    convertToPoints: 'Convertir a Puntos',
+    convertHint: 'Los puntos convertidos son permanentes y se pueden transferir a otros',
+    loadingPackages: 'Cargando paquetes...'
   },
 
   voucher: {
@@ -741,6 +768,17 @@ export default {
     redeemInstruction1: 'Los códigos distinguen mayúsculas y minúsculas',
     redeemInstruction2: 'Cada código solo puede usarse una vez',
     redeemInstruction3: 'Los puntos se acreditan inmediatamente tras el canje'
+  },
+
+  team: {
+    personalSpace: 'Espacio Personal',
+    teamSpace: 'Espacio de Equipo',
+    createTeamSpace: 'Crear Espacio de Equipo',
+    saveToPersonal: 'Guardar en tu lista de flujos personales',
+    saveToTeam: 'Guardar en la lista de flujos del equipo',
+    forkedToSpace: '{type} bifurcado a {space}',
+    projectAndWorkflows: 'Proyecto y flujos de trabajo',
+    workflow: 'Flujo de trabajo'
   },
 
   admin: {

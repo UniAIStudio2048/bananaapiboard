@@ -2,6 +2,9 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { getTenantHeaders } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
+import { useI18n } from '@/i18n'
+
+const { t } = useI18n()
 
 const props = defineProps({
   visible: {
@@ -902,7 +905,7 @@ watch(() => props.visible, (newVal) => {
               <circle cx="20" cy="21" r="1"/>
               <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
             </svg>
-            <h2 class="header-title">套餐购买</h2>
+            <h2 class="header-title">{{ t('packages.purchaseTitle') }}</h2>
           </div>
           <button class="close-btn" @click="close">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -952,9 +955,9 @@ watch(() => props.visible, (newVal) => {
                   </svg>
                 </div>
                 <div class="asset-info">
-                  <span class="asset-label">套餐积分</span>
+                  <span class="asset-label">{{ t('user.packagePoints') }}</span>
                   <span class="asset-value">{{ formatPoints(user?.package_points || 0) }}</span>
-                  <span class="asset-hint">随套餐过期清零</span>
+                  <span class="asset-hint">{{ t('packages.expiresWithPackage') }}</span>
                 </div>
               </div>
               <div class="asset-card">
@@ -964,12 +967,12 @@ watch(() => props.visible, (newVal) => {
                   </svg>
                 </div>
                 <div class="asset-info">
-                  <span class="asset-label">永久积分</span>
+                  <span class="asset-label">{{ t('user.permanentPoints') }}</span>
                   <span class="asset-value permanent">{{ formatPoints(user?.points || 0) }}</span>
-                  <span class="asset-hint">永不过期</span>
+                  <span class="asset-hint">{{ t('packages.neverExpires') }}</span>
                 </div>
                 <button type="button" class="asset-action-btn transfer-btn" @click.stop="openTransferPointsModal">
-                  转让
+                  {{ t('packages.transfer') }}
                 </button>
               </div>
             </div>
@@ -981,19 +984,19 @@ watch(() => props.visible, (newVal) => {
                   <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
                   <line x1="1" y1="10" x2="23" y2="10"/>
                 </svg>
-                <span class="balance-label">账户余额</span>
+                <span class="balance-label">{{ t('packages.accountBalance') }}</span>
                 <span class="balance-value">¥{{ ((user?.balance || 0) / 100).toFixed(2) }}</span>
               </div>
               <div class="balance-actions">
                 <button type="button" class="asset-action-btn convert-btn" @click.stop="openConvertModal">
-                  划转积分
+                  {{ t('packages.convertToPoints') }}
                 </button>
                 <button type="button" class="recharge-entry-btn" @click.stop.prevent="openRechargeModal">
-                  充值
+                  {{ t('packages.rechargeBtn') }}
                 </button>
               </div>
             </div>
-            <div class="convert-hint">余额划转后的积分为永久积分，也可转让他人使用</div>
+            <div class="convert-hint">{{ t('packages.convertHint') }}</div>
           </div>
 
           <!-- 错误提示 -->
@@ -1009,7 +1012,7 @@ watch(() => props.visible, (newVal) => {
           <!-- 套餐列表 -->
           <div v-if="loading" class="loading-state">
             <div class="loading-spinner"></div>
-            <p>加载套餐中...</p>
+            <p>{{ t('packages.loadingPackages') }}</p>
           </div>
 
           <div v-else-if="packages.length === 0" class="empty-state">
@@ -1018,7 +1021,7 @@ watch(() => props.visible, (newVal) => {
               <line x1="12" y1="8" x2="12" y2="12"/>
               <line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
-            <p>暂无可用套餐</p>
+            <p>{{ t('packages.noPackages') }}</p>
           </div>
 
           <div v-else class="packages-grid">
@@ -1075,10 +1078,10 @@ watch(() => props.visible, (newVal) => {
                 :disabled="isDowngrade(pkg.type) && !isCurrentPackage(pkg.type)"
                 @click="purchasePackage(pkg)"
               >
-                <span v-if="isCurrentPackage(pkg.type)">立即续费</span>
-                <span v-else-if="isDowngrade(pkg.type)">不可降级</span>
-                <span v-else-if="canUpgrade(pkg.type)">升级套餐</span>
-                <span v-else>立即购买</span>
+                <span v-if="isCurrentPackage(pkg.type)">{{ t('packages.renewNow') }}</span>
+                <span v-else-if="isDowngrade(pkg.type)">{{ t('packages.cannotDowngrade') }}</span>
+                <span v-else-if="canUpgrade(pkg.type)">{{ t('packages.upgradePackage') }}</span>
+                <span v-else>{{ t('packages.buyNow') }}</span>
               </button>
             </div>
           </div>
