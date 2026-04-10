@@ -22,8 +22,10 @@ import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } fr
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getVideoPosterUrl } from '@/utils/canvasThumbnail'
+import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
+import PromptMentionPopup from '../PromptMentionPopup.vue'
 
 const { t, currentLanguage } = useI18n()
 
@@ -37,6 +39,7 @@ const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
+const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
 const { updateNodeInternals, getSelectedNodes } = useVueFlow()
@@ -44,6 +47,10 @@ const { updateNodeInternals, getSelectedNodes } = useVueFlow()
 // 是否单独选中（多选时不显示底部配置面板）
 const isSoloSelected = computed(() => {
   return props.selected && getSelectedNodes.value.length <= 1
+})
+
+watch(isSoloSelected, (val) => {
+  if (!val) showMentionPopup.value = false
 })
 
 // 标签编辑状态
@@ -73,6 +80,12 @@ function getErrorHint(msg) {
 }
 const promptText = ref(props.data.prompt || '')
 const promptTextareaRef = ref(null)
+
+// @ 提及弹出相关
+const showMentionPopup = ref(false)
+const mentionActiveIndex = ref(0)
+const mentionPosition = ref({ top: 0, left: 0 })
+let mentionStartPos = -1
 
 // 模型下拉框状态
 const isModelDropdownOpen = ref(false)
@@ -281,6 +294,42 @@ function autoResizeTextarea() {
   textarea.style.height = newHeight + 'px'
 }
 
+function handlePromptInput(event) {
+  autoResizeTextarea()
+  
+  const el = event.target
+  const cursorIndex = el.selectionStart
+  const text = el.value
+  const textBeforeCursor = text.slice(0, cursorIndex)
+  
+  const atIndex = textBeforeCursor.lastIndexOf('@')
+  
+  if (atIndex !== -1 && referenceMediaList.value.length > 0) {
+    const charBeforeAt = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' '
+    if (atIndex === 0 || /[\s\n]/.test(charBeforeAt)) {
+      const query = textBeforeCursor.slice(atIndex + 1)
+      if (/^(?:视频|图片|音频)\d/.test(query)) {
+        showMentionPopup.value = false
+        return
+      }
+      if (query.length < 4) {
+        showMentionPopup.value = true
+        mentionStartPos = atIndex
+        mentionActiveIndex.value = 0
+        
+        const rect = el.getBoundingClientRect()
+        mentionPosition.value = {
+          top: rect.top - 8,
+          left: rect.left + 12
+        }
+        return
+      }
+    }
+  }
+  
+  showMentionPopup.value = false
+}
+
 // 处理提示词框滚轮事件（阻止冒泡，让滚轮作用于文本框滚动条）
 function handlePromptWheel(event) {
   const textarea = promptTextareaRef.value
@@ -337,6 +386,26 @@ function insertMediaTag(media) {
     textarea.focus()
     const newPos = start + tag.length
     textarea.setSelectionRange(newPos, newPos)
+  })
+}
+
+function handleMentionSelect(media) {
+  const textarea = promptTextareaRef.value
+  if (!textarea) return
+  
+  const tag = `@${media.label}`
+  const cursorPos = textarea.selectionStart
+  const before = promptText.value.slice(0, mentionStartPos)
+  const after = promptText.value.slice(cursorPos)
+  promptText.value = before + tag + ' ' + after
+  
+  showMentionPopup.value = false
+  
+  nextTick(() => {
+    textarea.focus()
+    const newPos = mentionStartPos + tag.length + 1
+    textarea.setSelectionRange(newPos, newPos)
+    autoResizeTextarea()
   })
 }
 
@@ -2441,11 +2510,37 @@ function compressImageToTargetSize(imageSource, targetSizeBytes) {
   })
 }
 
-// 视频模型输入图片压缩：每张不超过10MB
-async function compressVideoInputImages(images) {
+// 需要前端预压缩的 API 类型及其对应的最大图片字节数
+// kling/tencentaigc 对图片大小敏感，前端预压缩可避免超时或拒绝
+// 其他类型（seedance、seedance-2.0、vidu、veo、runway 等）默认传原图，后端按需处理
+const API_TYPE_IMAGE_LIMITS = {
+  'kling': 10 * 1024 * 1024,
+  'kling-motion-control': 10 * 1024 * 1024,
+  'kling-omni': 10 * 1024 * 1024,
+  'kling-omni-edit': 10 * 1024 * 1024,
+  'tencentaigc': 5 * 1024 * 1024,
+}
+
+function shouldCompressForApiType(apiType) {
+  return apiType in API_TYPE_IMAGE_LIMITS
+}
+
+function getImageLimitForApiType(apiType) {
+  return API_TYPE_IMAGE_LIMITS[apiType] || 0
+}
+
+// 视频模型输入图片压缩：根据 API 类型判断是否需要压缩
+// 默认传原图，仅对有严格大小要求的 API 类型做前端预压缩
+async function compressVideoInputImages(images, apiType) {
   if (!images || images.length === 0) return images
 
-  const MAX_SIZE = 10 * 1024 * 1024
+  if (!shouldCompressForApiType(apiType)) {
+    console.log(`[VideoNode] API 类型 "${apiType}" 无需前端压缩，传递原图`)
+    return images
+  }
+
+  const MAX_SIZE = getImageLimitForApiType(apiType)
+  console.log(`[VideoNode] API 类型 "${apiType}" 需要压缩，限制 ${(MAX_SIZE / 1024 / 1024).toFixed(0)}MB/张`)
 
   const sizes = await Promise.all(images.map(img => getImageSourceSize(img)))
   console.log('[VideoNode] 输入图片大小检测:', sizes.map(s => (s / 1024 / 1024).toFixed(2) + 'MB'))
@@ -2466,7 +2561,7 @@ async function compressVideoInputImages(images) {
       continue
     }
 
-    console.log(`[VideoNode] 图片 ${i + 1} 超过10MB (${(size / 1024 / 1024).toFixed(2)}MB)，开始压缩...`)
+    console.log(`[VideoNode] 图片 ${i + 1} 超过 ${(MAX_SIZE / 1024 / 1024).toFixed(0)}MB (${(size / 1024 / 1024).toFixed(2)}MB)，开始压缩...`)
 
     try {
       const compressedBlob = await compressImageToTargetSize(img, MAX_SIZE)
@@ -3081,9 +3176,9 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
 // 后台执行生成的重操作（图片压缩/上传/API提交），不阻塞UI
 async function processGenerationInBackground(targetNodeId, allNodeIds, finalPrompt, finalImages, generateCount, capturedState) {
   try {
-    // 图片压缩（可能耗时）
+    // 图片压缩：仅对有严格大小要求的 API 类型（如 kling）做前端预压缩，其他类型传原图
     if (finalImages.length > 0) {
-      finalImages = await compressVideoInputImages(finalImages)
+      finalImages = await compressVideoInputImages(finalImages, capturedState.apiType)
     }
     
     // Seedance 2.0 角色素材处理
@@ -3331,7 +3426,8 @@ async function handleGenerate() {
   const capturedState = {
     nodeId: props.id,
     isSeedance2: isSeedance2Model.value,
-    characterAssetUris: upstreamData.characterAssetUris || []
+    characterAssetUris: upstreamData.characterAssetUris || [],
+    apiType: currentModelConfig.value?.apiType || ''
   }
   
   // 如果当前节点正在处理中，创建新节点来接收新任务
@@ -3516,6 +3612,61 @@ function handleRegenerate() {
 
 // 处理键盘事件
 function handleKeyDown(event) {
+  if (showMentionPopup.value) {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      mentionActiveIndex.value = Math.max(0, mentionActiveIndex.value - 1)
+      return
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      mentionActiveIndex.value = Math.min(referenceMediaList.value.length - 1, mentionActiveIndex.value + 1)
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.stopPropagation()
+      if (referenceMediaList.value[mentionActiveIndex.value]) {
+        handleMentionSelect(referenceMediaList.value[mentionActiveIndex.value])
+      }
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      showMentionPopup.value = false
+      return
+    }
+  }
+
+  if ((event.key === 'Backspace' || event.key === 'Delete') && supportsMediaTags.value) {
+    const textarea = promptTextareaRef.value
+    if (textarea && textarea.selectionStart === textarea.selectionEnd) {
+      const cursorPos = textarea.selectionStart
+      const text = promptText.value
+      const tagRegex = /【?@(?:视频|图片|音频)\d*】?/g
+      let match
+      while ((match = tagRegex.exec(text)) !== null) {
+        const tagStart = match.index
+        const tagEnd = tagStart + match[0].length
+        const shouldDelete = event.key === 'Backspace'
+          ? (cursorPos > tagStart && cursorPos <= tagEnd)
+          : (cursorPos >= tagStart && cursorPos < tagEnd)
+        if (shouldDelete) {
+          event.preventDefault()
+          showMentionPopup.value = false
+          const before = text.slice(0, tagStart)
+          const after = text.slice(tagEnd)
+          promptText.value = before + after
+          nextTick(() => {
+            textarea.setSelectionRange(tagStart, tagStart)
+            autoResizeTextarea()
+          })
+          return
+        }
+      }
+    }
+  }
+
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     handleGenerate()
@@ -3931,56 +4082,51 @@ async function handleFrameDrop(event) {
   }
 }
 
-// 更新参考图片（并在左侧创建对应的图片节点）
-// 删除某张参考图片
+// 删除某张参考图片（仅断开连线，不删除上游节点）
 function removeReferenceImage(index) {
   const currentImages = [...(referenceImages.value || [])]
   const removedImage = currentImages[index]
   currentImages.splice(index, 1)
   
-  // 更新图片顺序
   canvasStore.updateNodeData(props.id, {
     imageOrder: currentImages,
     hasUpstream: currentImages.length > 0
   })
   
-  // 查找并删除对应的上游节点和连接
   const edgesToRemove = []
-  const nodesToRemove = []
   
   canvasStore.edges.forEach(edge => {
     if (edge.target === props.id) {
       const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
-      if (sourceNode?.data?.sourceImages?.includes(removedImage)) {
+      if (!sourceNode?.data) return
+      
+      const isMatch =
+        sourceNode.data.sourceImages?.includes(removedImage) ||
+        sourceNode.data.output?.url === removedImage ||
+        sourceNode.data.output?.urls?.includes(removedImage)
+      
+      if (isMatch) {
         edgesToRemove.push(edge.id)
-        nodesToRemove.push(sourceNode.id)
       }
     }
   })
   
-  // 删除连接和节点
   edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
-  nodesToRemove.forEach(nodeId => canvasStore.removeNode(nodeId))
 }
 
-// 删除某个参考视频（仅删除由本节点创建的“source”视频节点）
+// 删除某个参考视频（仅断开连线，不删除上游节点）
 function removeReferenceVideo(index) {
   const currentVideos = [...(referenceVideos.value || [])]
   const removedVideo = currentVideos[index]
   currentVideos.splice(index, 1)
 
-  // 更新视频顺序
   canvasStore.updateNodeData(props.id, {
     videoOrder: currentVideos,
     // 只要还有图片或视频，就认为仍然有上游参考
     hasUpstream: currentVideos.length > 0 || (referenceImages.value?.length || 0) > 0
   })
 
-  // 查找并删除对应的上游视频连接：
-  // - 无论上游节点是否为本节点创建的 "source" 节点，都应移除连线
-  // - 仅当上游节点的 nodeRole === 'source' 时，才一并删除该临时节点
   const edgesToRemove = []
-  const nodesToRemove = []
 
   canvasStore.edges.forEach(edge => {
     if (edge.target === props.id) {
@@ -3991,28 +4137,21 @@ function removeReferenceVideo(index) {
         sourceNode.data?.sourceVideo === removedVideo ||
         sourceNode.data?.output?.url === removedVideo
 
-      if (!isMatchedVideo) return
-
-      // 始终移除与该参考视频对应的连线
-      edgesToRemove.push(edge.id)
-
-      // 仅删除由本节点创建的临时 "source" 节点，保留用户手动创建的上游节点
-      if (sourceNode.data?.nodeRole === 'source') {
-        nodesToRemove.push(sourceNode.id)
+      if (isMatchedVideo) {
+        edgesToRemove.push(edge.id)
       }
     }
   })
 
   edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
-  nodesToRemove.forEach(nodeId => canvasStore.removeNode(nodeId))
 }
 
+// 删除某个参考音频（仅断开连线，不删除上游节点）
 function removeReferenceAudio(index) {
   const currentAudios = [...(referenceAudios.value || [])]
   const removedAudio = currentAudios[index]
 
   const edgesToRemove = []
-  const nodesToRemove = []
 
   canvasStore.edges.forEach(edge => {
     if (edge.target === props.id) {
@@ -4023,14 +4162,10 @@ function removeReferenceAudio(index) {
       if (audioUrl !== removedAudio) return
 
       edgesToRemove.push(edge.id)
-      if (sourceNode.data?.nodeRole === 'source') {
-        nodesToRemove.push(sourceNode.id)
-      }
     }
   })
 
   edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
-  nodesToRemove.forEach(nodeId => canvasStore.removeNode(nodeId))
 }
 
 // ========== 图片/视频列表拖拽排序 ==========
@@ -5703,8 +5838,10 @@ function handleToolbarPreview() {
             @dragleave="handleVideoDragLeave"
             @drop="handleVideoDrop($event, index)"
             @dragend="handleVideoDragEnd"
+            @mouseenter="onVideoHoverStart(video, $event)"
+            @mouseleave="onHoverEnd"
           >
-            <video :src="video" muted preload="none" :poster="getVideoPosterUrl(video)" class="video-thumb"></video>
+            <video :src="video" muted preload="metadata" :poster="getVideoPosterUrl(video)" class="video-thumb" @loadeddata="$event.target.currentTime = 0.1"></video>
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span class="panel-frame-play-icon">▶</span>
             <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@视频{{ index + 1 }}</span>
@@ -5729,6 +5866,8 @@ function handleToolbarPreview() {
             @dragleave="handleImageDragLeave"
             @drop="handleImageDrop($event, index)"
             @dragend="handleImageDragEnd"
+            @mouseenter="onHoverStart(img, $event)"
+            @mouseleave="onHoverEnd"
           >
             <img :src="img" :alt="`图片 ${index + 1}`" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
@@ -5754,6 +5893,8 @@ function handleToolbarPreview() {
             @dragleave="handleAudioDragLeave"
             @drop="handleAudioDrop($event, index)"
             @dragend="handleAudioDragEnd"
+            @mouseenter="onAudioHoverStart(audio, $event)"
+            @mouseleave="onHoverEnd"
           >
             <div class="audio-thumb">
               <span class="audio-thumb-icon">♪</span>
@@ -5800,7 +5941,7 @@ function handleToolbarPreview() {
             :placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : supportsMediaTags ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
             rows="3"
             @keydown="handleKeyDown"
-            @input="autoResizeTextarea"
+            @input="handlePromptInput"
             @wheel="handlePromptWheel"
             @dblclick.stop
           ></textarea>
@@ -5812,6 +5953,14 @@ function handleToolbarPreview() {
         <div v-if="supportsMediaTags && (referenceVideos.length > 0 || referenceImages.length > 0 || referenceAudios.length > 0)" class="prompt-tag-hint">
           💡 点击上方参考素材可快速插入引用标记
         </div>
+        <PromptMentionPopup
+          :visible="showMentionPopup"
+          :items="referenceMediaList"
+          :active-index="mentionActiveIndex"
+          :position="mentionPosition"
+          @select="handleMentionSelect"
+          @update:active-index="mentionActiveIndex = $event"
+        />
       </div>
       
       <!-- 参数配置行 -->

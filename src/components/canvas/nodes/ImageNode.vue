@@ -29,7 +29,9 @@ import Camera3DPanel from '../Camera3DPanel.vue'
 import Pose3DViewer from '../Pose3DViewer.vue'
 import CameraControlPanel from '../CameraControlPanel.vue'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
-import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'
+import { getCanvasThumbnailUrl, getThumbWidthForZoom, getOriginalImageUrl } from '@/utils/canvasThumbnail'
+import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
+import PromptMentionPopup from '../PromptMentionPopup.vue'
 
 const { t } = useI18n()
 
@@ -46,6 +48,7 @@ const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
+const { onHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
 const { updateNodeInternals, findNode, getViewport, getSelectedNodes } = useVueFlow()
@@ -92,6 +95,12 @@ const autoScrollTimer = ref(null)
 const autoScrollSpeed = ref(0)
 const isRefDragOver = ref(false) // 参考图片区域拖拽状态
 const refDragCounter = ref(0) // 参考图片拖拽计数器
+
+// @ 提及弹出相关
+const showMentionPopup = ref(false)
+const mentionActiveIndex = ref(0)
+const mentionPosition = ref({ top: 0, left: 0 })
+let mentionStartPos = -1
 
 // 模型下拉框状态
 const isModelDropdownOpen = ref(false)
@@ -177,6 +186,25 @@ const editorInitialTool = ref('')
 
 // 🚀 性能优化：画布拖拽状态（用于降低渲染质量）
 const isCanvasDragging = ref(false)
+
+// 🚀 动态缩略图：根据画布 zoom 级别调整图片分辨率
+const currentThumbWidth = ref(getThumbWidthForZoom(canvasStore.viewport?.zoom || 1))
+let thumbUpdateTimer = null
+
+watch(() => canvasStore.viewport?.zoom, (newZoom) => {
+  if (thumbUpdateTimer) clearTimeout(thumbUpdateTimer)
+  thumbUpdateTimer = setTimeout(() => {
+    const newWidth = getThumbWidthForZoom(newZoom || 1)
+    if (newWidth !== currentThumbWidth.value) {
+      currentThumbWidth.value = newWidth
+    }
+  }, 300)
+})
+
+function getZoomAwareThumbnailUrl(url) {
+  if (currentThumbWidth.value <= 0) return getOriginalImageUrl(url)
+  return getCanvasThumbnailUrl(url, currentThumbWidth.value)
+}
 
 // 🔧 Blob URL 内存管理 - 跟踪所有创建的 blob URL，用于组件卸载时清理
 // 性能优化: 改用普通数组替代 ref([])，blob URL 跟踪不需要响应式，避免不必要的 Vue 追踪开销
@@ -777,6 +805,12 @@ onUnmounted(() => {
   window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
   window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
+  
+  // 清理缩略图更新定时器
+  if (thumbUpdateTimer) {
+    clearTimeout(thumbUpdateTimer)
+    thumbUpdateTimer = null
+  }
 })
 
 // 检查是否有图片输入（用于判断文生图/图生图模式）
@@ -1179,6 +1213,10 @@ const showToolbar = computed(() => {
 // 修改：源节点也显示配置面板，以便添加参考图片
 const showConfigPanel = computed(() => {
   return props.selected === true && getSelectedNodes.value.length <= 1
+})
+
+watch(showConfigPanel, (val) => {
+  if (!val) showMentionPopup.value = false
 })
 
 
@@ -2662,7 +2700,7 @@ function dataUrlToBlob(dataUrl) {
 
 function handleToolbarPreview() {
   if (!currentImageUrl.value) return
-  previewImageUrl.value = currentImageUrl.value
+  previewImageUrl.value = getOriginalImageUrl(currentImageUrl.value)
   showPreviewModal.value = true
 }
 
@@ -2913,6 +2951,15 @@ const referenceImages = computed(() => {
   return upstreamImages
 })
 
+const referenceMediaList = computed(() => {
+  return referenceImages.value.map((url, i) => ({
+    type: 'image',
+    index: i + 1,
+    url,
+    label: `图片${i + 1}`
+  }))
+})
+
 // 用户积分
 const userPoints = computed(() => {
   if (!userInfo?.value) return 0
@@ -3005,6 +3052,7 @@ function handleLabelKeyDown(event) {
 // 上传图片到当前节点（不创建新节点）
 function handleUploadImageFlow(blobUrl) {
   canvasStore.updateNodeData(props.id, {
+    nodeRole: 'source',
     sourceImages: [blobUrl],
     uploadFailed: false,
     uploadError: null,
@@ -4644,6 +4692,32 @@ function handleRegenerate() {
 
 // 处理键盘事件
 function handleKeyDown(event) {
+  if (showMentionPopup.value) {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      mentionActiveIndex.value = Math.max(0, mentionActiveIndex.value - 1)
+      return
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      mentionActiveIndex.value = Math.min(referenceMediaList.value.length - 1, mentionActiveIndex.value + 1)
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.stopPropagation()
+      if (referenceMediaList.value[mentionActiveIndex.value]) {
+        handleMentionSelect(referenceMediaList.value[mentionActiveIndex.value])
+      }
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      showMentionPopup.value = false
+      return
+    }
+  }
+
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     handleGenerate()
@@ -5168,7 +5242,7 @@ function createUpstreamImageNode(imageUrl) {
   console.log('[ImageNode] 上游节点创建完成，imageOrder 已更新')
 }
 
-// 删除参考图片
+// 删除参考图片（仅断开连线，不删除上游节点）
 function removeReferenceImage(index) {
   const currentImages = [...(referenceImages.value || [])]
   const removedImage = currentImages[index]
@@ -5179,22 +5253,25 @@ function removeReferenceImage(index) {
     hasUpstream: currentImages.length > 0
   })
   
-  // 查找并删除对应的上游节点和连接
   const edgesToRemove = []
-  const nodesToRemove = []
   
   canvasStore.edges.forEach(edge => {
     if (edge.target === props.id) {
       const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
-      if (sourceNode?.data?.sourceImages?.includes(removedImage)) {
+      if (!sourceNode?.data) return
+      
+      const isMatch =
+        sourceNode.data.sourceImages?.includes(removedImage) ||
+        sourceNode.data.output?.url === removedImage ||
+        sourceNode.data.output?.urls?.includes(removedImage)
+      
+      if (isMatch) {
         edgesToRemove.push(edge.id)
-        nodesToRemove.push(sourceNode.id)
       }
     }
   })
   
   edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
-  nodesToRemove.forEach(nodeId => canvasStore.removeNode(nodeId))
 }
 
 // ========== 参考图片 @引用 ==========
@@ -5219,6 +5296,58 @@ function insertMediaTag(media) {
     textarea.focus()
     const newPos = start + tag.length
     textarea.setSelectionRange(newPos, newPos)
+  })
+}
+
+function handlePromptInput(event) {
+  autoResizeTextarea(event)
+
+  const el = event.target
+  const cursorIndex = el.selectionStart
+  const text = el.value
+  const textBeforeCursor = text.slice(0, cursorIndex)
+
+  const atIndex = textBeforeCursor.lastIndexOf('@')
+
+  if (atIndex !== -1 && referenceMediaList.value.length > 0) {
+    const charBeforeAt = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' '
+    if (atIndex === 0 || /[\s\n]/.test(charBeforeAt)) {
+      const query = textBeforeCursor.slice(atIndex + 1)
+      if (query.length < 20) {
+        showMentionPopup.value = true
+        mentionStartPos = atIndex
+        mentionActiveIndex.value = 0
+
+        const rect = el.getBoundingClientRect()
+        mentionPosition.value = {
+          top: rect.top - 8,
+          left: rect.left + 12
+        }
+        return
+      }
+    }
+  }
+
+  showMentionPopup.value = false
+}
+
+function handleMentionSelect(media) {
+  const textarea = promptTextareaRef.value
+  if (!textarea) return
+
+  const tag = `@${media.label}`
+  const cursorPos = textarea.selectionStart
+  const before = promptText.value.slice(0, mentionStartPos)
+  const after = promptText.value.slice(cursorPos)
+  promptText.value = before + tag + ' ' + after
+
+  showMentionPopup.value = false
+
+  nextTick(() => {
+    textarea.focus()
+    const newPos = mentionStartPos + tag.length + 1
+    textarea.setSelectionRange(newPos, newPos)
+    autoResizeTextarea({ target: textarea })
   })
 }
 
@@ -5812,7 +5941,7 @@ async function handleDrop(event) {
           
           <!-- 图片预览 -->
           <div class="source-image-preview" :class="{ 'low-quality': isCanvasDragging }">
-            <img :src="getCanvasThumbnailUrl(sourceImages[0])" alt="上传的图片" :loading="isCanvasDragging ? 'lazy' : 'eager'" />
+            <img :src="getZoomAwareThumbnailUrl(sourceImages[0])" alt="上传的图片" :loading="isCanvasDragging ? 'lazy' : 'eager'" />
           </div>
         </template>
         
@@ -5865,7 +5994,7 @@ async function handleDrop(event) {
               <img 
                 v-for="(img, index) in outputImages.slice(0, 4)" 
                 :key="img || index"
-                :src="getCanvasThumbnailUrl(img)" 
+                :src="getZoomAwareThumbnailUrl(img)" 
                 :alt="`生成结果 ${index + 1}`"
                 class="preview-image"
                 :class="{ 'transparent-image': props.data?.isTransparent || props.data?.cutoutResult }"
@@ -5983,8 +6112,10 @@ async function handleDrop(event) {
             @dragleave="handleImageDragLeave"
             @drop="handleImageDrop($event, index)"
             @dragend="handleImageDragEnd"
+            @mouseenter="onHoverStart(img, $event)"
+            @mouseleave="onHoverEnd"
           >
-            <img :src="getCanvasThumbnailUrl(img)" :alt="`图片 ${index + 1}`" />
+            <img :src="getZoomAwareThumbnailUrl(img)" :alt="`图片 ${index + 1}`" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>
@@ -6014,12 +6145,20 @@ async function handleDrop(event) {
           :placeholder="referenceImages.length > 0 ? '输入提示词，点击上方图片插入 @图片 引用\n例：让@图片1中的人物换上红色衣服（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
           rows="2"
           @keydown="handleKeyDown"
-          @input="autoResizeTextarea"
+          @input="handlePromptInput"
           @focus="autoResizeTextarea"
           @wheel.stop
           @mousedown="startTextareaAutoScroll"
           @dblclick.stop
         ></textarea>
+        <PromptMentionPopup
+          :visible="showMentionPopup"
+          :items="referenceMediaList"
+          :active-index="mentionActiveIndex"
+          :position="mentionPosition"
+          @select="handleMentionSelect"
+          @update:active-index="mentionActiveIndex = $event"
+        />
       </div>
       
       <!-- 参数配置行 -->

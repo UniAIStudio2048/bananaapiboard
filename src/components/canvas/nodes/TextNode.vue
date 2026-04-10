@@ -17,6 +17,8 @@ import { getApiUrl, getTenantHeaders, getAvailableLLMModels } from '@/config/ten
 import { useI18n } from '@/i18n'
 import CustomPresetDialog from '../dialogs/CustomPresetDialog.vue'
 import PresetManager from '../dialogs/PresetManager.vue'
+import PromptMentionPopup from '../PromptMentionPopup.vue'
+import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 
 const { t } = useI18n()
 
@@ -30,6 +32,7 @@ const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
+const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
 const { updateNodeInternals, getSelectedNodes } = useVueFlow()
@@ -37,6 +40,10 @@ const { updateNodeInternals, getSelectedNodes } = useVueFlow()
 // 是否单独选中（只选了这一个节点时才显示工具栏和底部面板）
 const isSoloSelected = computed(() => {
   return props.selected && getSelectedNodes.value.length <= 1
+})
+
+watch(isSoloSelected, (val) => {
+  if (!val) showMediaMentionPopup.value = false
 })
 
 // 本地文本状态
@@ -54,6 +61,12 @@ const activeMentionIndex = ref(0)
 const mentionTarget = ref(null) // 'editor' | 'llm'
 let mentionRange = null // 用于 contenteditable
 let mentionStartPos = 0 // 用于 textarea
+
+// @ 媒体引用弹出相关
+const showMediaMentionPopup = ref(false)
+const mediaMentionActiveIndex = ref(0)
+const mediaMentionPosition = ref({ top: 0, left: 0 })
+let mediaMentionStartPos = -1
 
 // 过滤后的角色
 const filteredCharacters = computed(() => {
@@ -141,28 +154,50 @@ function handleLLMInput(event) {
   
   if (atIndex !== -1) {
     const charBeforeAt = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' '
-    if (/\s/.test(charBeforeAt)) {
+    if (atIndex === 0 || /[\s\n]/.test(charBeforeAt)) {
       const query = textBeforeCursor.slice(atIndex + 1)
-      if (!/\s/.test(query) && query.length < 20) {
-        showMentionList.value = true
-        mentionQuery.value = query
-        mentionTarget.value = 'llm'
-        mentionStartPos = atIndex
-        
-        // 计算 Textarea 光标位置（简化处理，可能不精确）
-        // 对于 textarea，精确获取光标像素位置比较复杂，这里简化为跟随 textarea 底部或固定位置
-        // 更好的方式是使用辅助 div 模拟
-        const rect = el.getBoundingClientRect()
-        mentionListPosition.value = {
-          top: rect.bottom + 5,
-          left: rect.left + 20 // 简化的左侧偏移
-        }
+      if (/^(?:视频|图片|音频)\d/.test(query)) {
+        showMediaMentionPopup.value = false
+        showMentionList.value = false
         return
+      }
+      if (query.length < 4) {
+        // 优先检查参考媒体
+        if (referenceMediaList.value.length > 0) {
+          showMediaMentionPopup.value = true
+          mediaMentionStartPos = atIndex
+          mediaMentionActiveIndex.value = 0
+          showMentionList.value = false
+          
+          const rect = el.getBoundingClientRect()
+          mediaMentionPosition.value = {
+            top: rect.top - 8,
+            left: rect.left + 12
+          }
+          return
+        }
+        
+        // 否则走角色提及
+        if (!/\s/.test(query)) {
+          showMentionList.value = true
+          mentionQuery.value = query
+          mentionTarget.value = 'llm'
+          mentionStartPos = atIndex
+          showMediaMentionPopup.value = false
+          
+          const rect = el.getBoundingClientRect()
+          mentionListPosition.value = {
+            top: rect.bottom + 5,
+            left: rect.left + 20
+          }
+          return
+        }
       }
     }
   }
   
   showMentionList.value = false
+  showMediaMentionPopup.value = false
 }
 
 // 选择角色
@@ -719,6 +754,24 @@ const upstreamImages = computed(() => {
 // 所有媒体总数（用于显示计数和 +N 徽章）
 const totalMediaCount = computed(() => upstreamVideoUrls.value.length + upstreamImageUrls.value.length + upstreamAudioUrls.value.length)
 
+const referenceMediaList = computed(() => {
+  const list = []
+  const videos = upstreamVideoUrls.value || []
+  const images = upstreamImageUrls.value || []
+  const audios = upstreamAudioUrls.value || []
+  
+  videos.forEach((url, i) => {
+    list.push({ type: 'video', index: i + 1, url, label: `视频${i + 1}` })
+  })
+  images.forEach((url, i) => {
+    list.push({ type: 'image', index: i + 1, url, label: `图片${i + 1}` })
+  })
+  audios.forEach((url, i) => {
+    list.push({ type: 'audio', index: i + 1, url, label: `音频${i + 1}` })
+  })
+  return list
+})
+
 /**
  * 点击参考素材缩略图，在提示词光标处插入 @标记
  */
@@ -739,6 +792,25 @@ function insertMediaTag(media) {
   nextTick(() => {
     textarea.focus()
     const newPos = start + tag.length
+    textarea.setSelectionRange(newPos, newPos)
+  })
+}
+
+function handleMediaMentionSelect(media) {
+  const textarea = llmInputRef.value
+  if (!textarea) return
+  
+  const tag = `@${media.label}`
+  const cursorPos = textarea.selectionStart
+  const before = llmInputText.value.slice(0, mediaMentionStartPos)
+  const after = llmInputText.value.slice(cursorPos)
+  llmInputText.value = before + tag + ' ' + after
+  
+  showMediaMentionPopup.value = false
+  
+  nextTick(() => {
+    textarea.focus()
+    const newPos = mediaMentionStartPos + tag.length + 1
     textarea.setSelectionRange(newPos, newPos)
   })
 }
@@ -1127,6 +1199,33 @@ async function uploadVideosToCloud(videoUrls) {
 
 // 键盘快捷键
 function handleLLMKeyDown(event) {
+  // @ 媒体引用弹出导航
+  if (showMediaMentionPopup.value) {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      mediaMentionActiveIndex.value = Math.max(0, mediaMentionActiveIndex.value - 1)
+      return
+    }
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      mediaMentionActiveIndex.value = Math.min(referenceMediaList.value.length - 1, mediaMentionActiveIndex.value + 1)
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.stopPropagation()
+      if (referenceMediaList.value[mediaMentionActiveIndex.value]) {
+        handleMediaMentionSelect(referenceMediaList.value[mediaMentionActiveIndex.value])
+      }
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      showMediaMentionPopup.value = false
+      return
+    }
+  }
+
   // 如果提及列表是打开的，处理导航
   if (showMentionList.value) {
     if (event.key === 'ArrowUp') {
@@ -1150,6 +1249,35 @@ function handleLLMKeyDown(event) {
       event.preventDefault()
       showMentionList.value = false
       return
+    }
+  }
+
+  if ((event.key === 'Backspace' || event.key === 'Delete') && inheritedImages.value.length > 0) {
+    const textarea = llmInputRef.value
+    if (textarea && textarea.selectionStart === textarea.selectionEnd) {
+      const cursorPos = textarea.selectionStart
+      const text = llmInputText.value
+      const tagRegex = /【?@(?:视频|图片|音频)\d*】?/g
+      let match
+      while ((match = tagRegex.exec(text)) !== null) {
+        const tagStart = match.index
+        const tagEnd = tagStart + match[0].length
+        const shouldDelete = event.key === 'Backspace'
+          ? (cursorPos > tagStart && cursorPos <= tagEnd)
+          : (cursorPos >= tagStart && cursorPos < tagEnd)
+        if (shouldDelete) {
+          event.preventDefault()
+          showMediaMentionPopup.value = false
+          showMentionList.value = false
+          const before = text.slice(0, tagStart)
+          const after = text.slice(tagEnd)
+          llmInputText.value = before + after
+          nextTick(() => {
+            textarea.setSelectionRange(tagStart, tagStart)
+          })
+          return
+        }
+      }
     }
   }
 
@@ -1341,15 +1469,13 @@ function handleEdit(callback) {
   nextTick(() => {
     if (textareaRef.value) {
       textareaRef.value.focus()
-      // 优先使用当前显示的内容（LLM 输出或用户输入的文本）
-      // 如果有 LLM 响应，编辑 LLM 响应的内容
-      // 否则编辑 localText 的内容
       const contentToEdit = props.data.llmResponse || localText.value
       if (contentToEdit) {
-        textareaRef.value.innerHTML = contentToEdit
-        // 如果编辑的是 LLM 响应，同时更新 localText，以便保存编辑结果
+        const hasHtmlTags = /<(?:br|p|div|h[1-6])[\s/>]/i.test(contentToEdit)
+        const htmlContent = hasHtmlTags ? contentToEdit : contentToEdit.replace(/\n/g, '<br>')
+        textareaRef.value.innerHTML = htmlContent
         if (props.data.llmResponse) {
-          localText.value = props.data.llmResponse
+          localText.value = htmlContent
         }
       }
       
@@ -2607,6 +2733,8 @@ onMounted(() => {
             @dragleave="handleRefMediaDragLeave"
             @drop="handleRefMediaDrop($event, idx, 'video')"
             @dragend="handleRefMediaDragEnd"
+            @mouseenter="onVideoHoverStart(videoUrl, $event)"
+            @mouseleave="onHoverEnd"
           >
             <video
               :src="videoUrl"
@@ -2637,6 +2765,8 @@ onMounted(() => {
             @dragleave="handleRefMediaDragLeave"
             @drop="handleRefMediaDrop($event, idx, 'image')"
             @dragend="handleRefMediaDragEnd"
+            @mouseenter="onHoverStart(img, $event)"
+            @mouseleave="onHoverEnd"
           >
             <img :src="img" :alt="`参考图 ${idx + 1}`" />
             <span class="reference-index-badge">{{ idx + 1 }}</span>
@@ -2660,6 +2790,8 @@ onMounted(() => {
             @dragleave="handleRefMediaDragLeave"
             @drop="handleRefMediaDrop($event, idx, 'audio')"
             @dragend="handleRefMediaDragEnd"
+            @mouseenter="onAudioHoverStart(audioUrl, $event)"
+            @mouseleave="onHoverEnd"
           >
             <span class="audio-icon-large">♪</span>
             <span class="reference-index-badge">{{ idx + 1 }}</span>
@@ -2685,8 +2817,17 @@ onMounted(() => {
           class="llm-input"
           :placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（按下Enter 生成，Shift+Enter 换行）'"
           @keydown="handleLLMKeyDown"
+          @input="handleLLMInput"
           @dblclick.stop
         ></textarea>
+        <PromptMentionPopup
+          :visible="showMediaMentionPopup"
+          :items="referenceMediaList"
+          :active-index="mediaMentionActiveIndex"
+          :position="mediaMentionPosition"
+          @select="handleMediaMentionSelect"
+          @update:active-index="mediaMentionActiveIndex = $event"
+        />
       </div>
       
       <!-- 控制栏 -->
