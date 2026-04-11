@@ -1143,13 +1143,13 @@ const nodeClass = computed(() => ({
   'error': props.data.status === 'error',
   'resizing': isResizing.value,
   'is-source-node': isSourceNode.value, // 是否为源节点（上传的图片）
-  'has-single-output': hasSingleOutput.value // 是否只有单张输出（无边框显示）
+  'has-single-output': hasSingleOutput.value && props.data.status !== 'processing' // 是否只有单张输出（无边框显示）
 }))
 
 // 节点内容样式
 // 注意：源节点和单图输出节点不使用 minHeight，让边框自适应图片尺寸
 const contentStyle = computed(() => {
-  const isSourceOrSingleOutput = isSourceNode.value || hasSingleOutput.value
+  const isSourceOrSingleOutput = (isSourceNode.value || hasSingleOutput.value) && props.data.status !== 'processing'
   return {
     width: `${nodeWidth.value}px`,
     // 源节点和单图输出节点不设置 minHeight，让高度自适应图片
@@ -5322,21 +5322,31 @@ function handlePromptInput(event) {
   const atIndex = textBeforeCursor.lastIndexOf('@')
 
   if (atIndex !== -1 && referenceMediaList.value.length > 0) {
-    const charBeforeAt = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' '
-    if (atIndex === 0 || /[\s\n]/.test(charBeforeAt)) {
-      const query = textBeforeCursor.slice(atIndex + 1)
-      if (query.length < 20) {
-        showMentionPopup.value = true
-        mentionStartPos = atIndex
-        mentionActiveIndex.value = 0
+    const query = textBeforeCursor.slice(atIndex + 1)
 
-        const rect = el.getBoundingClientRect()
-        mentionPosition.value = {
-          top: rect.top - 8,
-          left: rect.left + 12
-        }
-        return
+    // 已完成的引用（如 @图片1）不再弹窗
+    if (/^(?:视频|图片|音频)\d/.test(query)) {
+      showMentionPopup.value = false
+      return
+    }
+
+    // 只在用户刚输入 @ 或弹窗已为同一个 @ 打开时才显示
+    const justTypedAt = event.data === '@'
+    const popupStillActive = showMentionPopup.value && mentionStartPos === atIndex
+
+    if ((justTypedAt || popupStillActive) && query.length < 4 && !/\s/.test(query)) {
+      showMentionPopup.value = true
+      mentionStartPos = atIndex
+      mentionActiveIndex.value = 0
+
+      // 定位到 config-row（控制栏）下方，不遮挡输入区
+      const configRow = el.closest('.config-panel')?.querySelector('.config-row')
+      const posRect = configRow ? configRow.getBoundingClientRect() : el.getBoundingClientRect()
+      mentionPosition.value = {
+        top: posRect.bottom + 8,
+        left: el.getBoundingClientRect().left + 12
       }
+      return
     }
   }
 
@@ -5902,14 +5912,14 @@ async function handleDrop(event) {
         <svg v-if="data.status === 'processing' && canvasStore.performanceMode === 'full'" class="comet-border" viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <!-- 彗星渐变 -->
-            <linearGradient id="comet-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <linearGradient :id="'comet-gradient-' + id" x1="0%" y1="0%" x2="100%" y2="0%">
               <stop offset="0%" stop-color="transparent" />
               <stop offset="70%" stop-color="rgba(74, 222, 128, 0.3)" />
               <stop offset="90%" stop-color="rgba(74, 222, 128, 0.8)" />
               <stop offset="100%" stop-color="#4ade80" />
             </linearGradient>
             <!-- 发光滤镜 -->
-            <filter id="comet-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <filter :id="'comet-glow-' + id" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="2" result="blur" />
               <feMerge>
                 <feMergeNode in="blur" />
@@ -5929,10 +5939,10 @@ async function handleDrop(event) {
             class="comet-path"
             x="1" y="1" width="98" height="98" rx="8" ry="8"
             fill="none" 
-            stroke="url(#comet-gradient)" 
+            :stroke="'url(#comet-gradient-' + id + ')'" 
             stroke-width="2"
             stroke-linecap="round"
-            filter="url(#comet-glow)"
+            :filter="'url(#comet-glow-' + id + ')'"
           />
         </svg>
         <!-- ========== 源节点：显示上传的图片 ========== -->

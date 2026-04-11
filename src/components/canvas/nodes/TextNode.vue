@@ -144,8 +144,20 @@ function handleEditorInput(event) {
   showMentionList.value = false
 }
 
+// 自动调整 LLM 输入框高度（参考 ImageNode 的 autoResizeTextarea）
+function autoResizeLLMInput() {
+  const textarea = llmInputRef.value
+  if (!textarea) return
+  textarea.style.height = 'auto'
+  const minHeight = 60
+  const maxHeight = 200
+  const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
+  textarea.style.height = newHeight + 'px'
+}
+
 // 处理提及输入（Textarea）
 function handleLLMInput(event) {
+  autoResizeLLMInput()
   const el = event.target
   const cursorIndex = el.selectionStart
   const text = el.value
@@ -153,46 +165,45 @@ function handleLLMInput(event) {
   const atIndex = textBeforeCursor.lastIndexOf('@')
   
   if (atIndex !== -1) {
-    const charBeforeAt = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' '
-    if (atIndex === 0 || /[\s\n]/.test(charBeforeAt)) {
-      const query = textBeforeCursor.slice(atIndex + 1)
-      if (/^(?:视频|图片|音频)\d/.test(query)) {
-        showMediaMentionPopup.value = false
+    const query = textBeforeCursor.slice(atIndex + 1)
+
+    if (/^(?:视频|图片|音频)\d/.test(query)) {
+      showMediaMentionPopup.value = false
+      showMentionList.value = false
+      return
+    }
+
+    const justTypedAt = event.data === '@'
+    const popupOpenForThisAt = showMediaMentionPopup.value && mediaMentionStartPos === atIndex
+
+    if ((justTypedAt || popupOpenForThisAt) && query.length < 4 && !/\s/.test(query)) {
+      if (referenceMediaList.value.length > 0) {
+        showMediaMentionPopup.value = true
+        mediaMentionStartPos = atIndex
+        mediaMentionActiveIndex.value = 0
         showMentionList.value = false
+
+        const controlsEl = llmConfigPanelRef.value || llmControlsRef.value
+        const posRect = controlsEl ? controlsEl.getBoundingClientRect() : el.getBoundingClientRect()
+        mediaMentionPosition.value = {
+          top: posRect.bottom + 8,
+          left: el.getBoundingClientRect().left + 12
+        }
         return
       }
-      if (query.length < 4) {
-        // 优先检查参考媒体
-        if (referenceMediaList.value.length > 0) {
-          showMediaMentionPopup.value = true
-          mediaMentionStartPos = atIndex
-          mediaMentionActiveIndex.value = 0
-          showMentionList.value = false
-          
-          const rect = el.getBoundingClientRect()
-          mediaMentionPosition.value = {
-            top: rect.top - 8,
-            left: rect.left + 12
-          }
-          return
-        }
-        
-        // 否则走角色提及
-        if (!/\s/.test(query)) {
-          showMentionList.value = true
-          mentionQuery.value = query
-          mentionTarget.value = 'llm'
-          mentionStartPos = atIndex
-          showMediaMentionPopup.value = false
-          
-          const rect = el.getBoundingClientRect()
-          mentionListPosition.value = {
-            top: rect.bottom + 5,
-            left: rect.left + 20
-          }
-          return
-        }
+
+      showMentionList.value = true
+      mentionQuery.value = query
+      mentionTarget.value = 'llm'
+      mentionStartPos = atIndex
+      showMediaMentionPopup.value = false
+
+      const rect = el.getBoundingClientRect()
+      mentionListPosition.value = {
+        top: rect.bottom + 5,
+        left: rect.left + 20
       }
+      return
     }
   }
   
@@ -268,6 +279,14 @@ const formatState = ref({
 
 // ========== LLM 配置相关 ==========
 const llmInputText = ref('')
+
+// 监听 llmInputText 变化，自动调整输入框高度
+watch(llmInputText, () => {
+  nextTick(() => {
+    autoResizeLLMInput()
+  })
+})
+
 const selectedModel = ref('gemini-2.5-pro')
 const selectedPreset = ref('') // 选中的功能预设
 const selectedLanguage = ref('zh') // 选中的语言
@@ -277,6 +296,8 @@ const showPresetDropdown = ref(false) // 功能预设下拉菜单
 const showLanguageDropdown = ref(false) // 语言下拉菜单
 const showLeftMenu = ref(false) // 左侧快捷操作菜单显示状态
 const llmInputRef = ref(null)
+const llmConfigPanelRef = ref(null)
+const llmControlsRef = ref(null)
 
 // 下拉菜单方向（true = 向上弹出，false = 向下弹出）
 const modelDropdownUp = ref(true)
@@ -2709,7 +2730,7 @@ onMounted(() => {
     </Teleport>
     
     <!-- 底部 LLM 配置面板 - 紧贴节点卡片 -->
-    <div v-show="isSoloSelected" class="llm-config-panel" @click.stop @mousedown.stop>
+    <div v-show="isSoloSelected" ref="llmConfigPanelRef" class="llm-config-panel" @click.stop @mousedown.stop>
       <!-- 参考媒体区域（视频/图片/音频/混合） -->
       <div v-if="inheritedImages.length > 0" class="reference-section">
         <span class="reference-label">{{ referenceLabel }}</span>
@@ -2818,6 +2839,8 @@ onMounted(() => {
           :placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（按下Enter 生成，Shift+Enter 换行）'"
           @keydown="handleLLMKeyDown"
           @input="handleLLMInput"
+          @wheel.stop
+          @focus="autoResizeLLMInput"
           @dblclick.stop
         ></textarea>
         <PromptMentionPopup
@@ -2831,7 +2854,7 @@ onMounted(() => {
       </div>
       
       <!-- 控制栏 -->
-      <div class="llm-controls">
+      <div ref="llmControlsRef" class="llm-controls">
         <div class="controls-left">
           <!-- 模型选择器 -->
           <div ref="modelSelectorRef" class="model-selector" @click="toggleModelDropdown">
@@ -3663,21 +3686,20 @@ onMounted(() => {
   top: calc(100% + 12px);
   left: 50%;
   transform: translateX(-50%);
-  width: 100%;
-  min-width: 400px;
-  background: var(--canvas-bg-secondary, #141414);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  z-index: 100;
-  animation: slideDown 0.2s ease;
+  width: max-content;
+  min-width: max(100%, 520px);
+  max-width: 90vw;
+  background: var(--canvas-bg-elevated, #1e1e1e);
+  border: 1px solid var(--canvas-border-default, #3a3a3a);
+  border-radius: 12px;
+  overflow: visible;
+  z-index: 1000;
+  pointer-events: auto;
 }
 
 /* 上游文本展示区域 */
 .upstream-text-section {
-  margin-bottom: 12px;
-  padding-bottom: 12px;
+  padding: 12px;
   border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
 }
 
@@ -3846,8 +3868,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
+  padding: 12px;
   border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
 }
 
@@ -3915,7 +3936,8 @@ onMounted(() => {
 
 /* 输入区域 */
 .llm-input-area {
-  margin-bottom: 12px;
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
 }
 
 .llm-input {
@@ -3927,8 +3949,35 @@ onMounted(() => {
   font-size: 14px;
   resize: none;
   min-height: 60px;
-  max-height: 120px;
+  max-height: 200px;
   line-height: 1.6;
+  overflow-y: auto;
+  transition: height 0.15s ease;
+  padding: 4px 0;
+}
+
+/* 提示词框滚动条样式 */
+.llm-input::-webkit-scrollbar {
+  width: 6px;
+}
+
+.llm-input::-webkit-scrollbar-track {
+  background: rgba(60, 60, 60, 0.3);
+  border-radius: 3px;
+}
+
+.llm-input::-webkit-scrollbar-thumb {
+  background: rgba(150, 150, 150, 0.6);
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+
+.llm-input::-webkit-scrollbar-thumb:hover {
+  background: rgba(180, 180, 180, 0.8);
+}
+
+.llm-input::-webkit-scrollbar-thumb:active {
+  background: rgba(200, 200, 200, 0.9);
 }
 
 .llm-input::placeholder {
@@ -3940,15 +3989,16 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 12px;
-  border-top: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  padding: 12px 16px;
+  gap: 16px;
+  flex-wrap: nowrap;
 }
 
 .controls-left {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .controls-right {

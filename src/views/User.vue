@@ -5150,7 +5150,8 @@ const getTransactionIcon = (type) => {
     'system_grant': { icon: '⚙️', bg: 'bg-slate-100 dark:bg-slate-900/20' },
     'compensation': { icon: '🎁', bg: 'bg-green-100 dark:bg-green-900/20' },
     'manual_adjust': { icon: '✏️', bg: 'bg-slate-100 dark:bg-slate-900/20' },
-    'invitee_bonus': { icon: '⭐', bg: 'bg-purple-100 dark:bg-purple-900/20' }
+    'invitee_bonus': { icon: '⭐', bg: 'bg-purple-100 dark:bg-purple-900/20' },
+    'package_expired': { icon: '⏰', bg: 'bg-red-100 dark:bg-red-900/20' }
   }
   return icons[type] || { icon: '💎', bg: 'bg-slate-100 dark:bg-dark-600' }
 }

@@ -64,7 +64,7 @@ const listRef = ref(null)
 
 const popupStyle = computed(() => ({
   position: 'fixed',
-  bottom: `${window.innerHeight - props.position.top + 8}px`,
+  top: `${props.position.top}px`,
   left: `${props.position.left}px`,
   zIndex: 99999
 }))
@@ -214,7 +214,7 @@ watch(() => props.activeIndex, async () => {
 .mention-fade-enter-from,
 .mention-fade-leave-to {
   opacity: 0;
-  transform: translateY(4px);
+  transform: translateY(-4px);
 }
 </style>
 
