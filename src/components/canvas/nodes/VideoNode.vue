@@ -1591,9 +1591,11 @@ const referenceVideos = computed(() => {
       continue
     }
     
-    // 获取视频输出URL
+    // 获取视频输出 URL（与图片节点一致：优先单 url，否则使用 urls 数组）
     if (sourceNode.data.output?.url) {
       upstreamVideos.push(sourceNode.data.output.url)
+    } else if (sourceNode.data.output?.urls?.length > 0) {
+      upstreamVideos.push(...sourceNode.data.output.urls.filter(Boolean))
     } else if (sourceNode.data.sourceVideo) {
       upstreamVideos.push(sourceNode.data.sourceVideo)
     }
@@ -1753,7 +1755,8 @@ function getUpstreamData() {
         sourceVideo: sourceNode.data?.sourceVideo
       })
       
-      const videoUrl = sourceNode.data?.output?.url || sourceNode.data?.sourceVideo
+      const out = sourceNode.data?.output
+      const videoUrl = out?.url || (out?.urls?.length ? out.urls.filter(Boolean)[0] : null) || sourceNode.data?.sourceVideo
       if (videoUrl) {
         videos.push(videoUrl)
       }
