@@ -885,6 +885,14 @@ const modelLookupList = computed(() => {
   ]
 })
 
+// 判断当前模型是否是 wan2.7 系列（通义万相）
+const isWan27Model = computed(() => {
+  const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
+  const apiType = currentModel?.apiType || ''
+  const modelName = selectedModel.value?.toLowerCase() || ''
+  return apiType === 'dashscope' || apiType === 'wan2.7-image' || modelName.includes('wan2.7')
+})
+
 // 判断当前模型是否是 MJ 类型（通过模型名称判断，更可靠）
 const isMJModel = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
@@ -998,11 +1006,15 @@ const imageSizes = computed(() => {
   const isSeedream50 = checkIsSeedream50Lite(currentModel)
   // Seedream 4.5（包括即梦4.5/jimeng-4.5）不支持 1K，只支持 2K 和 4K
   const isSeedream45 = checkIsSeedream45(currentModel)
+  // wan2.7 图生图模式不支持 4K，只支持 1K 和 2K
+  const isWan27I2I = isWan27Model.value && hasImageInput.value
   const supportedSizes = isSeedream50
     ? ['2K', '3K']
     : isSeedream45
       ? ['2K', '4K']
-      : ['1K', '2K', '4K']
+      : isWan27I2I
+        ? ['1K', '2K']
+        : ['1K', '2K', '4K']
   
   // 如果是按分辨率计费且 pointsCost 是对象
   if (currentModel?.hasResolutionPricing && typeof pointsCost === 'object') {
