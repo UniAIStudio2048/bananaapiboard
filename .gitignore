@@ -22,6 +22,7 @@ dist-brainjuice/
 dist-moyunzong/
 dist-sgbl/
 dist-qingyuan/
+dist-vip/
 
 # Editor directories and files
 .vscode/*
@@ -42,6 +43,7 @@ dist-qingyuan/
 .env.moyunzong
 .env.sgbl
 .env.qingyuan
+.env.vip
 
 
 # Test

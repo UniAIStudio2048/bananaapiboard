@@ -9,7 +9,7 @@ export default defineConfig(({ mode }) => {
   // 获取 API 地址，优先使用环境变量
   const apiTarget = env.VITE_API_BASE || 'http://localhost:5000'
 
-  const portMap = { brainjuice: 3100, moyunzong: 3200, sgbl: 3300, qingyuan: 3400 }
+  const portMap = { vip: 3000, brainjuice: 3100, moyunzong: 3200, sgbl: 3300, qingyuan: 3400 }
   const serverPort = portMap[mode] || 3000
 
   return {
