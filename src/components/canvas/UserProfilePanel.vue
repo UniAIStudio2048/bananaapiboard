@@ -106,6 +106,8 @@ const referralStats = ref({ available: 0, total_earned: 0, pending: 0, withdrawn
 const referralRecords = ref([])
 const referralWithdrawals = ref([])
 const referralActionAmount = ref('')
+const referralAlipayName = ref('')
+const referralAlipayAccount = ref('')
 const referralSubmitting = ref(false)
 
 // 新手引导设置
@@ -1587,17 +1589,29 @@ async function loadReferralData() {
 async function doReferralWithdraw() {
   const amt = Number(referralActionAmount.value)
   if (!amt || amt <= 0) { showAlert('请输入有效金额', '提示'); return }
+  if (!referralAlipayName.value.trim()) { showAlert('请输入支付宝真实姓名', '提示'); return }
+  if (!referralAlipayAccount.value.trim()) { showAlert('请输入支付宝账号', '提示'); return }
   const amtFen = Math.round(amt * 100)
-  const confirmed = await showConfirm(`确定申请提现 ¥${amt.toFixed(2)} 吗？提现需要审核通过后才能到账。`, '确认提现')
+  const confirmed = await showConfirm(`确定申请提现 ¥${amt.toFixed(2)} 到支付宝账号 ${referralAlipayAccount.value} 吗？提现需要审核通过后才能到账。`, '确认提现')
   if (!confirmed) return
   referralSubmitting.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-    const res = await fetch('/api/user/referral/withdraw', { method: 'POST', headers, body: JSON.stringify({ amount: amtFen }) })
+    const res = await fetch('/api/user/referral/withdraw', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        amount: amtFen,
+        alipay_name: referralAlipayName.value.trim(),
+        alipay_account: referralAlipayAccount.value.trim()
+      })
+    })
     const data = await res.json()
     if (!res.ok) throw new Error(data.message || '提现失败')
     showAlert('提现申请已提交，等待审核', '成功')
     referralActionAmount.value = ''
+    referralAlipayName.value = ''
+    referralAlipayAccount.value = ''
     loadReferralData()
   } catch (e) {
     showAlert(e.message, '错误')
@@ -2211,27 +2225,45 @@ function getLedgerTypeText(type) {
                 </div>
               </div>
               <!-- 操作区 -->
-              <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;margin-bottom:16px;">
-                <div style="font-size:12px;color:#aaa;margin-bottom:8px;">操作金额（元）</div>
-                <input
-                  v-model="referralActionAmount"
-                  type="number"
-                  placeholder="输入金额"
-                  style="width:100%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:6px;padding:8px 10px;color:#fff;font-size:13px;margin-bottom:8px;box-sizing:border-box;"
-                />
-                <div style="display:flex;gap:8px;">
-                  <button
-                    @click="doReferralWithdraw"
-                    :disabled="referralSubmitting"
-                    style="flex:1;background:rgba(255,255,255,0.15);color:#e5e7eb;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:8px;font-size:12px;cursor:pointer;"
-                  >申请提现</button>
-                  <button
-                    @click="doReferralTransfer"
-                    :disabled="referralSubmitting"
-                    style="flex:1;background:rgba(255,255,255,0.25);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;padding:8px;font-size:12px;cursor:pointer;"
-                  >划转余额</button>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                <!-- 申请提现 -->
+                <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;">
+                  <div style="font-size:12px;font-weight:600;color:#f59e0b;margin-bottom:10px;">申请提现到支付宝</div>
+                  <div style="margin-bottom:8px;">
+                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">提现金额（元）</div>
+                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" placeholder="输入提现金额"
+                      style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:13px;outline:none;box-sizing:border-box;" />
+                  </div>
+                  <div style="margin-bottom:8px;">
+                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">支付宝真实姓名</div>
+                    <input v-model="referralAlipayName" type="text" placeholder="请输入收款人姓名" maxlength="50"
+                      style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:13px;outline:none;box-sizing:border-box;" />
+                  </div>
+                  <div style="margin-bottom:8px;">
+                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">支付宝账号</div>
+                    <input v-model="referralAlipayAccount" type="text" placeholder="手机号或邮箱" maxlength="200"
+                      style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:13px;outline:none;box-sizing:border-box;" />
+                  </div>
+                  <button @click="doReferralWithdraw" :disabled="referralSubmitting"
+                    style="width:100%;background:rgba(255,255,255,0.15);color:#e5e7eb;border:1px solid rgba(255,255,255,0.2);border-radius:6px;padding:8px;font-size:12px;cursor:pointer;">
+                    {{ referralSubmitting ? '处理中...' : '申请提现' }}
+                  </button>
+                  <div style="font-size:11px;color:#888;margin-top:6px;">提现需管理员审核通过后打款到您的支付宝</div>
                 </div>
-                <div style="font-size:11px;color:#888;margin-top:6px;">提现需要审核，划转余额即时到账但不可再提现</div>
+                <!-- 划转余额 -->
+                <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;">
+                  <div style="font-size:12px;font-weight:600;color:#10b981;margin-bottom:10px;">划转到账户余额</div>
+                  <div style="margin-bottom:8px;">
+                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">划转金额（元）</div>
+                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" placeholder="输入划转金额"
+                      style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:13px;outline:none;box-sizing:border-box;" />
+                  </div>
+                  <button @click="doReferralTransfer" :disabled="referralSubmitting"
+                    style="width:100%;background:rgba(255,255,255,0.25);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;padding:8px;font-size:12px;cursor:pointer;">
+                    {{ referralSubmitting ? '处理中...' : '划转余额' }}
+                  </button>
+                  <div style="font-size:11px;color:#888;margin-top:6px;">即时到账，划转后可用于消费但不可再提现</div>
+                </div>
               </div>
               <!-- 返利记录 -->
               <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;margin-bottom:12px;">
@@ -2252,17 +2284,19 @@ function getLedgerTypeText(type) {
               <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;">
                 <div style="font-size:13px;font-weight:600;margin-bottom:10px;">提现记录</div>
                 <div v-if="referralWithdrawals.length === 0" style="text-align:center;color:#888;font-size:12px;padding:16px 0;">暂无提现记录</div>
-                <div v-for="w in referralWithdrawals" :key="w.id" style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;">
-                  <div>
-                    <div style="color:#ddd;">{{ w.type === 'transfer' ? '划转余额' : '申请提现' }}</div>
-                    <div style="color:#888;font-size:11px;">{{ formatRebateTime(w.created_at) }}</div>
-                  </div>
-                  <div style="text-align:right;">
-                    <div :style="{ color: w.status === 'approved' ? '#9ca3af' : w.status === 'rejected' ? '#6b7280' : '#9ca3af' }">
-                      {{ w.status === 'approved' ? '已通过' : w.status === 'rejected' ? '已拒绝' : '待审核' }}
+                <div v-for="w in referralWithdrawals" :key="w.id" style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.06);font-size:12px;">
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                      <span :style="{ color: w.type === 'withdraw' ? '#f59e0b' : '#3b82f6', fontWeight: 500 }">{{ w.type === 'withdraw' ? '提现' : '划转余额' }}</span>
+                      <span :style="{ color: w.status === 'approved' ? '#10b981' : w.status === 'rejected' ? '#ef4444' : '#eab308', marginLeft: '6px' }">
+                        {{ w.status === 'approved' ? '已通过' : w.status === 'rejected' ? '已拒绝' : '待审核' }}
+                      </span>
                     </div>
-                    <div style="color:#ddd;">¥{{ formatRebateAmount(w.amount) }}</div>
+                    <div style="color:#ddd;font-weight:600;">¥{{ formatRebateAmount(w.amount) }}</div>
                   </div>
+                  <div v-if="w.alipay_name" style="color:#888;font-size:11px;margin-top:2px;">{{ w.alipay_name }} · {{ w.alipay_account }}</div>
+                  <div style="color:#888;font-size:11px;margin-top:2px;">{{ formatRebateTime(w.created_at) }}</div>
+                  <div v-if="w.admin_note" style="color:#888;font-size:11px;margin-top:2px;">备注：{{ w.admin_note }}</div>
                 </div>
               </div>
             </div>

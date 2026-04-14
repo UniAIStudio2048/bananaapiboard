@@ -159,6 +159,8 @@ const referralStats = ref({ available: 0, total_earned: 0, pending: 0, withdrawn
 const referralRecords = ref([])
 const referralWithdrawals = ref([])
 const referralActionAmount = ref('')
+const referralAlipayName = ref('')
+const referralAlipayAccount = ref('')
 const referralSubmitting = ref(false)
 
 // 我的社区相关
@@ -945,16 +947,28 @@ async function loadReferralData() {
 async function doReferralWithdraw() {
   const amt = Number(referralActionAmount.value)
   if (!amt || amt <= 0) { showToast('请输入有效金额', 'error'); return }
+  if (!referralAlipayName.value.trim()) { showToast('请输入支付宝真实姓名', 'error'); return }
+  if (!referralAlipayAccount.value.trim()) { showToast('请输入支付宝账号', 'error'); return }
   const amtFen = Math.round(amt * 100)
-  if (!confirm(`确定申请提现 ¥${amt.toFixed(2)} 吗？提现需要审核通过后才能到账。`)) return
+  if (!confirm(`确定申请提现 ¥${amt.toFixed(2)} 到支付宝账号 ${referralAlipayAccount.value} 吗？提现需要审核通过后才能到账。`)) return
   referralSubmitting.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-    const res = await fetch('/api/user/referral/withdraw', { method: 'POST', headers, body: JSON.stringify({ amount: amtFen }) })
+    const res = await fetch('/api/user/referral/withdraw', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        amount: amtFen,
+        alipay_name: referralAlipayName.value.trim(),
+        alipay_account: referralAlipayAccount.value.trim()
+      })
+    })
     const data = await res.json()
     if (!res.ok) throw new Error(data.message || '提现失败')
     showToast('提现申请已提交，等待审核', 'success')
     referralActionAmount.value = ''
+    referralAlipayName.value = ''
+    referralAlipayAccount.value = ''
     loadReferralData()
   } catch (e) {
     showToast(e.message, 'error')
@@ -3885,21 +3899,43 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="card p-6 mb-6">
-            <div class="flex flex-wrap gap-4">
-              <div class="flex-1 min-w-48">
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">操作金额（元）</label>
-                <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" class="input w-full" placeholder="输入金额" />
+            <h3 class="text-base font-bold text-slate-900 dark:text-slate-100 mb-4">返利操作</h3>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div class="p-4 border border-slate-200 dark:border-slate-700 rounded-lg">
+                <h4 class="text-sm font-semibold text-amber-500 mb-3">申请提现到支付宝</h4>
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">提现金额（元）</label>
+                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" class="input w-full" placeholder="输入提现金额" />
+                  </div>
+                  <div>
+                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">支付宝真实姓名</label>
+                    <input v-model="referralAlipayName" type="text" class="input w-full" placeholder="请输入收款人真实姓名" maxlength="50" />
+                  </div>
+                  <div>
+                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">支付宝账号</label>
+                    <input v-model="referralAlipayAccount" type="text" class="input w-full" placeholder="手机号或邮箱" maxlength="200" />
+                  </div>
+                  <button @click="doReferralWithdraw" class="btn-primary w-full py-2" :disabled="referralSubmitting">
+                    {{ referralSubmitting ? '处理中...' : '申请提现' }}
+                  </button>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">提现需管理员审核通过后打款到您的支付宝账户</p>
+                </div>
               </div>
-              <div class="flex items-end gap-2">
-                <button @click="doReferralWithdraw" class="btn-primary px-6 py-2" :disabled="referralSubmitting">
-                  {{ referralSubmitting ? '处理中...' : '申请提现' }}
-                </button>
-                <button @click="doReferralTransfer" class="px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors" :disabled="referralSubmitting">
-                  {{ referralSubmitting ? '处理中...' : '划转余额' }}
-                </button>
+              <div class="p-4 border border-slate-200 dark:border-slate-700 rounded-lg">
+                <h4 class="text-sm font-semibold text-emerald-500 mb-3">划转到账户余额</h4>
+                <div class="space-y-3">
+                  <div>
+                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">划转金额（元）</label>
+                    <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" class="input w-full" placeholder="输入划转金额" />
+                  </div>
+                  <button @click="doReferralTransfer" class="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors" :disabled="referralSubmitting">
+                    {{ referralSubmitting ? '处理中...' : '划转余额' }}
+                  </button>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">即时到账，划转后可用于平台消费但不可再提现</p>
+                </div>
               </div>
             </div>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-3">提现需要审核，划转余额即时到账但不可再提现</p>
           </div>
           <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div class="card p-6">
@@ -3929,7 +3965,9 @@ onUnmounted(() => {
                     <div>
                       <span :class="w.type === 'withdraw' ? 'text-amber-500' : 'text-blue-500'" class="text-xs font-medium">{{ w.type === 'withdraw' ? '提现' : '划转余额' }}</span>
                       <span :class="{ 'text-yellow-500': w.status === 'pending', 'text-emerald-500': w.status === 'approved', 'text-red-500': w.status === 'rejected' }" class="text-xs ml-2">{{ { pending: '待审核', approved: '已通过', rejected: '已拒绝' }[w.status] }}</span>
+                      <p v-if="w.alipay_name" class="text-xs text-slate-400 mt-0.5">{{ w.alipay_name }} · {{ w.alipay_account }}</p>
                       <p class="text-xs text-slate-500 mt-1">{{ formatRebateTime(w.created_at) }}</p>
+                      <p v-if="w.admin_note" class="text-xs text-slate-400 mt-0.5">备注：{{ w.admin_note }}</p>
                     </div>
                     <p class="font-bold text-slate-800 dark:text-slate-200">¥{{ formatRebateAmount(w.amount) }}</p>
                   </div>
