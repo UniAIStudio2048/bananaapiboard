@@ -39,8 +39,7 @@ function initSystemConfig() {
     // 只从环境变量读取租户ID和密钥，品牌配置从API获取
     const envConfig = {
       tenantId: import.meta.env.VITE_TENANT_ID || 'default-tenant-001',
-      tenantKey: import.meta.env.VITE_TENANT_KEY || 'DEFAULT-LICENSE-KEY-001',
-      apiBase: import.meta.env.VITE_API_BASE || ''
+      tenantKey: import.meta.env.VITE_TENANT_KEY || 'DEFAULT-LICENSE-KEY-001'
     }
     
     const existingConfig = localStorage.getItem('system_config')

@@ -8,9 +8,10 @@
  * 4. 默认配置
  * 
  * 环境变量：
- * - VITE_API_BASE: 后端 API 地址
  * - VITE_TENANT_ID: 租户 ID
  * - VITE_TENANT_KEY: 授权密钥
+ * 
+ * API 路径策略：统一使用相对路径（/api/*），由 Vite 代理（开发）或 Nginx 代理（生产）转发
  * 
  * 注意：品牌配置（名称、Logo、主题色）从9000端口租户控制台配置，
  * 不再使用 VITE_BRAND_* 环境变量
@@ -42,22 +43,8 @@ function getModelIconChar(label) {
   }
 }
 
-// 智能检测 API Base URL
-function getDefaultApiBase() {
-  // 确保在浏览器环境中运行
-  if (typeof window === 'undefined') {
-    return ''  // SSR 或初始化阶段，返回空字符串
-  }
-  
-  // 统一使用 Vite 代理，不直接访问后端
-  // 这样可以避免跨域问题和域名访问问题
-  return ''  // 空字符串表示使用 Vite 代理
-}
-
 // 默认配置
 const defaultConfig = {
-  // API 配置
-  apiBase: '',  // 初始为空，运行时动态检测
   
   // 租户标识
   tenantId: 'default-tenant-001',
@@ -131,8 +118,9 @@ const defaultConfig = {
 }
 
 // 从环境变量读取配置（品牌配置不再从环境变量读取）
+// apiBase 始终为空字符串，生产环境通过 Nginx 代理，开发环境通过 Vite 代理
 const envConfig = {
-  apiBase: import.meta.env.VITE_API_BASE || getDefaultApiBase(),
+  apiBase: '',
   tenantId: import.meta.env.VITE_TENANT_ID || defaultConfig.tenantId,
   tenantKey: import.meta.env.VITE_TENANT_KEY || defaultConfig.tenantKey,
   brand: {
@@ -460,9 +448,9 @@ export async function loadRemoteConfig() {
       const data = await response.json()
       console.log('[tenant] 远程配置加载成功')
       
-      // 更新运行时配置
+      // 更新运行时配置（apiBase 始终为空，不接受远程覆盖）
       runtimeConfig = {
-        apiBase: data.apiBase || runtimeConfig.apiBase,
+        apiBase: '',
         tenantId: data.tenantId || runtimeConfig.tenantId,
         tenantKey: data.tenantKey || runtimeConfig.tenantKey,
         brand: {
@@ -1640,16 +1628,9 @@ export const getTenantHeaders = () => {
   }
 }
 
-// 生成完整的 API URL
-export const getApiUrl = (path) => {
-  // 在开发环境中，始终使用相对路径（通过 Vite 代理）
-  // 这可以避免 CORS 问题
-  if (import.meta.env.DEV) {
-    return path
-  }
-  const base = config.apiBase || ''
-  return `${base}${path}`
-}
+// 生成完整的 API URL（统一使用相对路径，避免跨域问题）
+// 开发环境：Vite proxy 转发；生产环境：Nginx proxy 转发
+export const getApiUrl = (path) => path
 
 // 获取所有可用的音乐模型列表（从配置中动态获取）
 export const getAvailableMusicModels = () => {
