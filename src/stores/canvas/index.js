@@ -3,4 +3,5 @@
  */
 export { useCanvasStore } from './canvasStore'
 export { useModelStatsStore } from './modelStatsStore'
+export { useUploadManager } from './uploadManager'
 

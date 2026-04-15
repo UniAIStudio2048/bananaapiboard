@@ -14,7 +14,7 @@ defineOptions({
  */
 import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { useCanvasStore } from '@/stores/canvas'
+import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { getTenantHeaders, getAvailableMusicModels, refreshBrandConfig } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
@@ -35,6 +35,7 @@ const props = defineProps({
 const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
+const uploadManager = useUploadManager()
 const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
@@ -802,13 +803,17 @@ async function uploadAudioFileAsync(file, blobUrl, nodeId) {
     
   } catch (error) {
     console.error('[AudioNode] 音频上传失败:', error.message)
-    // 上传失败时保留 blob URL，标记上传失败
     const node = canvasStore.nodes.find(n => n.id === nodeId)
     if (node) {
       canvasStore.updateNodeData(nodeId, {
         isUploading: false,
         uploadFailed: true,
         uploadError: error.message
+      })
+      uploadManager.registerFailedUpload(`aud_${nodeId}_${Date.now()}`, {
+        nodeId, file, type: 'audio', blobUrl,
+        field: 'audioUrl',
+        error: error.message
       })
     }
   }

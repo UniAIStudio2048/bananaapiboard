@@ -3,7 +3,7 @@
  * NodeSelector.vue - 节点选择器面板
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { useCanvasStore } from '@/stores/canvas'
+import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions } from '@/config/canvas/nodeTypes'
 import { useI18n } from '@/i18n'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
@@ -28,6 +28,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close'])
 const canvasStore = useCanvasStore()
+const uploadManager = useUploadManager()
 
 // 文件上传输入框引用
 const fileInputRef = ref(null)
@@ -717,6 +718,11 @@ async function uploadFileToCloud(nodeId, task) {
     const node = canvasStore.nodes.find(n => n.id === nodeId)
     if (node) {
       canvasStore.updateNodeData(nodeId, { isUploading: false, uploadFailed: true, uploadError: error.message })
+      uploadManager.registerFailedUpload(`ns_${nodeId}_${Date.now()}`, {
+        nodeId, file, type, blobUrl,
+        field: task.field,
+        error: error.message
+      })
     }
   }
 }

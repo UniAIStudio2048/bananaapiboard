@@ -1216,44 +1216,58 @@ export const useCanvasStore = defineStore('canvas', () => {
   }
 
   function createSkeletonNodes(rawNodes) {
-    return rawNodes.map(node => {
-      const skeletonNode = cleanVueFlowNodeProps(safeDeepClone(node))
-      
-      if (skeletonNode.data) {
-        if (skeletonNode.data.isUploading) {
-          delete skeletonNode.data.isUploading
-          const hasValidMedia = (skeletonNode.data.sourceImages?.length > 0) ||
-            (skeletonNode.data.output?.url) ||
-            (skeletonNode.data.output?.urls?.length > 0)
-          if (!hasValidMedia && !skeletonNode.data._dataLost) {
-            skeletonNode.data._dataLost = true
-            skeletonNode.data._lostReason = '图片上传未完成，数据未保存成功'
+    return rawNodes
+      .filter(node => {
+        // 过滤掉已标记为数据丢失的节点
+        if (node.data?._dataLost) {
+          console.log(`[Canvas] 移除数据丢失节点: ${node.id} (${node.data._lostReason || '上传未完成'})`)
+          return false
+        }
+        // 过滤掉仍在上传中但没有有效媒体的节点
+        if (node.data?.isUploading) {
+          const hasValidMedia = (node.data.sourceImages?.some(u => u && !u.startsWith('blob:') && !u.startsWith('data:'))) ||
+            (node.data.output?.url && !node.data.output.url.startsWith('blob:')) ||
+            (node.data.output?.urls?.some(u => u && !u.startsWith('blob:'))) ||
+            (node.data.audioUrl && !node.data.audioUrl.startsWith('blob:')) ||
+            (node.data.sourceVideo && !node.data.sourceVideo.startsWith('blob:'))
+          if (!hasValidMedia) {
+            console.log(`[Canvas] 移除上传未完成节点: ${node.id}`)
+            return false
           }
         }
-        delete skeletonNode.data.uploadFailed
-        delete skeletonNode.data.uploadError
-      }
+        return true
+      })
+      .map(node => {
+        const skeletonNode = cleanVueFlowNodeProps(safeDeepClone(node))
       
-      const hasMediaData = skeletonNode.data && (
-        skeletonNode.data.sourceImages?.length > 0 ||
-        skeletonNode.data.output?.url ||
-        skeletonNode.data.output?.urls?.length > 0
-      )
-      
-      if (hasMediaData) {
-        skeletonNode.data._mediaLoading = true
-        skeletonNode.data._originalMedia = {
-          sourceImages: skeletonNode.data.sourceImages,
-          output: skeletonNode.data.output
+        if (skeletonNode.data) {
+          delete skeletonNode.data.isUploading
+          delete skeletonNode.data.uploadFailed
+          delete skeletonNode.data.uploadError
+          delete skeletonNode.data._dataLost
+          delete skeletonNode.data._lostReason
         }
-        skeletonNode.data.sourceImages = []
-        if (skeletonNode.data.output) {
-          skeletonNode.data.output = { ...skeletonNode.data.output, url: null, urls: [] }
-        }
-      }
       
-      return skeletonNode
-    })
+        const hasMediaData = skeletonNode.data && (
+          skeletonNode.data.sourceImages?.length > 0 ||
+          skeletonNode.data.output?.url ||
+          skeletonNode.data.output?.urls?.length > 0
+        )
+      
+        if (hasMediaData) {
+          skeletonNode.data._mediaLoading = true
+          skeletonNode.data._originalMedia = {
+            sourceImages: skeletonNode.data.sourceImages,
+            output: skeletonNode.data.output
+          }
+          skeletonNode.data.sourceImages = []
+          if (skeletonNode.data.output) {
+            skeletonNode.data.output = { ...skeletonNode.data.output, url: null, urls: [] }
+          }
+        }
+      
+        return skeletonNode
+      })
   }
 
   /**
@@ -1322,9 +1336,12 @@ export const useCanvasStore = defineStore('canvas', () => {
     const workflowEdges = workflow.edges || []
     
     const skeletonNodes = createSkeletonNodes(workflowNodes)
+    const skeletonNodeIds = new Set(skeletonNodes.map(n => n.id))
     
     nodes.value = skeletonNodes
-    edges.value = cleanEdges(workflowEdges)
+    edges.value = cleanEdges(workflowEdges).filter(e =>
+      skeletonNodeIds.has(e.source) && skeletonNodeIds.has(e.target)
+    )
     if (workflow.viewport) {
       viewport.value = workflow.viewport
     }
@@ -1375,10 +1392,9 @@ export const useCanvasStore = defineStore('canvas', () => {
           if (typeof url !== 'string') return false
           return !url.startsWith('data:') && !url.startsWith('blob:')
         })
-        // 如果过滤后图片数量减少且节点上传失败，标记数据可能丢失
-        if (data.sourceImages.length < originalCount && data.uploadFailed) {
-          data._dataLost = true
-          data._lostReason = 'upload_failed'
+        // 如果所有图片都是 blob（全部被清除），标记需要移除
+        if (data.sourceImages.length === 0 && originalCount > 0 && data.uploadFailed) {
+          data._partialLost = true
         }
       }
       
@@ -1469,27 +1485,56 @@ export const useCanvasStore = defineStore('canvas', () => {
         })
       }
       
-      // 清理瞬态上传状态标记 —— 这些仅用于当前会话的 UI 反馈，不应被持久化
-      // 如果仍在上传中（blob URL 已被过滤），标记为数据丢失而非永久"上传中"
+      // 清理瞬态上传状态标记
       if (data.isUploading) {
         const hasValidMedia = (data.sourceImages?.length > 0) ||
           (data.output?.url) ||
-          (data.output?.urls?.length > 0)
+          (data.output?.urls?.length > 0) ||
+          (data.audioUrl && !data.audioUrl.startsWith('blob:')) ||
+          (data.sourceVideo && !data.sourceVideo.startsWith('blob:'))
         if (!hasValidMedia) {
-          data._dataLost = true
-          data._lostReason = '图片上传未完成，数据未保存成功'
+          data._shouldRemove = true
         }
       }
       delete data.isUploading
       delete data.uploadFailed
       delete data.uploadError
       
+      // 已标记为数据丢失的节点也移除
+      if (data._dataLost || data._partialLost) {
+        const hasAnyMedia = (data.sourceImages?.length > 0) ||
+          (data.output?.url) ||
+          (data.output?.urls?.length > 0) ||
+          (data.audioUrl) ||
+          (data.sourceVideo)
+        if (!hasAnyMedia) {
+          data._shouldRemove = true
+        }
+      }
+      delete data._dataLost
+      delete data._lostReason
+      delete data._partialLost
+      
       return { ...node, data }
     })
     
+    // 过滤掉上传未完成且无有效数据的节点，避免残留
+    const validNodes = cleanedNodes.filter(n => !n.data?._shouldRemove)
+    const validNodeIds = new Set(validNodes.map(n => n.id))
+    
+    // 清理指向已移除节点的边
+    const validEdges = edges.value.filter(e =>
+      validNodeIds.has(e.source) && validNodeIds.has(e.target)
+    )
+    
+    // 清理临时标记
+    validNodes.forEach(n => {
+      if (n.data) delete n.data._shouldRemove
+    })
+    
     return {
-      nodes: cleanedNodes,
-      edges: edges.value,
+      nodes: validNodes,
+      edges: validEdges,
       viewport: viewport.value
     }
   }
@@ -1523,13 +1568,19 @@ export const useCanvasStore = defineStore('canvas', () => {
       needsMediaRestore = tabNodes.some(n => n.data?._mediaLoading)
     }
     
+    // 清理指向被移除节点的边
+    const tabNodeIds = new Set(tabNodes.map(n => n.id))
+    const tabEdges = workflow?.edges
+      ? cleanEdges(workflow.edges).filter(e => tabNodeIds.has(e.source) && tabNodeIds.has(e.target))
+      : []
+    
     const tab = {
       id: tabId,
       name: workflow?.name || t('canvas.newWorkflow'),
       workflowId: workflow?.id || null,
       workflowUid: workflow?.workflow_uid || null,
       nodes: tabNodes,
-      edges: workflow?.edges ? cleanEdges(workflow.edges) : [],
+      edges: tabEdges,
       viewport: workflow?.viewport || { x: 0, y: 0, zoom: 1 },
       hasChanges: false
     }
@@ -1701,7 +1752,10 @@ export const useCanvasStore = defineStore('canvas', () => {
         // 用服务器最新数据更新已有标签，避免加载旧/损坏的缓存数据
         if (workflow.nodes && workflow.nodes.length > 0) {
           const freshNodes = createSkeletonNodes(workflow.nodes)
-          const freshEdges = workflow.edges ? cleanEdges(workflow.edges) : []
+          const freshNodeIds = new Set(freshNodes.map(n => n.id))
+          const freshEdges = workflow.edges
+            ? cleanEdges(workflow.edges).filter(e => freshNodeIds.has(e.source) && freshNodeIds.has(e.target))
+            : []
           existingTab.nodes = freshNodes
           existingTab.edges = freshEdges
           if (workflow.viewport) {

@@ -25,7 +25,7 @@ import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
-import { useCanvasStore } from '@/stores/canvas'
+import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { compressImage } from '@/utils/imageCompress'
 
@@ -51,6 +51,7 @@ const props = defineProps({
 
 const emit = defineEmits(['dblclick', 'canvas-contextmenu', 'pane-click', 'pick-node'])
 const canvasStore = useCanvasStore()
+const uploadManager = useUploadManager()
 
 // 注入用户信息
 const userInfo = inject('userInfo', null)
@@ -2309,14 +2310,17 @@ async function uploadFilesToCloud(tasks) {
       
     } catch (error) {
       console.error(`[CanvasBoard] ${type}上传失败:`, error.message)
-      // 上传失败时保留 blob URL，让用户可以继续使用
-      // 但标记上传失败，保存工作流时会提示用户
       const node = canvasStore.nodes.find(n => n.id === nodeId)
       if (node) {
         canvasStore.updateNodeData(nodeId, { 
           isUploading: false,
           uploadFailed: true,
           uploadError: error.message
+        })
+        uploadManager.registerFailedUpload(`cb_${nodeId}_${Date.now()}`, {
+          nodeId, file, type, blobUrl,
+          field,
+          error: error.message
         })
       }
     }

@@ -7,7 +7,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { getMe, updateUserPreferences } from '@/api/client'
 import { formatPoints } from '@/utils/format'
 import { getTenantHeaders, getBrand, isCanvasLogoEnabled } from '@/config/tenant'
-import { useCanvasStore } from '@/stores/canvas'
+import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { loadWorkflow as loadWorkflowFromServer } from '@/api/canvas/workflow'
 import CanvasBoard from '@/components/canvas/CanvasBoard.vue'
@@ -56,6 +56,7 @@ const router = useRouter()
 const route = useRoute()
 const canvasStore = useCanvasStore()
 const teamStore = useTeamStore()
+const uploadManager = useUploadManager()
 
 // 画布底部Logo状态
 const brandConfig = computed(() => getBrand())
@@ -871,6 +872,13 @@ async function autoSaveWorkflow() {
   if (uploadingNodes.length > 0) {
     console.log(`[Canvas] 自动保存跳过：${uploadingNodes.length} 个节点正在上传文件，等待上传完成`)
     return
+  }
+  
+  // 检查是否有上传失败的节点，触发后台重试
+  const failedNodes = canvasStore.nodes.filter(n => n.data?.uploadFailed)
+  if (failedNodes.length > 0 && uploadManager.failedCount > 0) {
+    console.log(`[Canvas] 发现 ${failedNodes.length} 个上传失败的节点，触发后台重试`)
+    uploadManager.retryAllFailed()
   }
   
   // 🔧 使用 exportWorkflowForSave 清理 base64/blob 数据，避免存储膨胀
@@ -2253,6 +2261,9 @@ onUnmounted(() => {
 
   // 🔧 清理后台任务管理器
   cleanupBackgroundTasks()
+  
+  // 清理上传管理器定时器
+  uploadManager.destroy()
 })
 </script>
 

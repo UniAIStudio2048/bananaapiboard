@@ -236,6 +236,7 @@ function checkLocalFiles() {
 // 重试上传失败的节点图片
 async function retryFailedUploads(failedNodes) {
   const { uploadImages } = await import('@/api/canvas/nodes.js')
+  const { uploadCanvasMedia } = await import('@/api/canvas/workflow')
 
   for (const nodeInfo of failedNodes) {
     const node = canvasStore.nodes.find(n => n.id === nodeInfo.id)
@@ -243,7 +244,7 @@ async function retryFailedUploads(failedNodes) {
 
     const data = node.data || {}
 
-    // 处理 sourceImages 中的 blob URL
+    // 处理 sourceImages 中的 blob URL（图片）
     const blobUrls = (data.sourceImages || []).filter(url => typeof url === 'string' && url.startsWith('blob:'))
 
     for (const blobUrl of blobUrls) {
@@ -269,7 +270,42 @@ async function retryFailedUploads(failedNodes) {
         }
       } catch (err) {
         console.warn('[SaveDialog] 重试上传失败:', err.message)
-        throw new Error(`节点 "${nodeInfo.title}" 的图片重新上传失败，请删除该节点后重新上传图片`)
+        throw new Error(`节点 "${nodeInfo.title}" 的文件重新上传失败，请删除该节点后重新上传`)
+      }
+    }
+
+    // 处理 sourceVideo 中的 blob URL（视频）
+    if (data.sourceVideo && typeof data.sourceVideo === 'string' && data.sourceVideo.startsWith('blob:')) {
+      try {
+        const response = await fetch(data.sourceVideo)
+        const blob = await response.blob()
+        const file = new File([blob], `retry-video-${Date.now()}.mp4`, { type: blob.type || 'video/mp4' })
+        const result = await uploadCanvasMedia(file, 'video')
+        canvasStore.updateNodeData(nodeInfo.id, {
+          sourceVideo: result.url,
+          uploadFailed: false,
+          uploadError: null
+        })
+      } catch (err) {
+        throw new Error(`节点 "${nodeInfo.title}" 的视频重新上传失败`)
+      }
+    }
+
+    // 处理 audioUrl 中的 blob URL（音频）
+    if (data.audioUrl && typeof data.audioUrl === 'string' && data.audioUrl.startsWith('blob:')) {
+      try {
+        const response = await fetch(data.audioUrl)
+        const blob = await response.blob()
+        const file = new File([blob], `retry-audio-${Date.now()}.mp3`, { type: blob.type || 'audio/mpeg' })
+        const result = await uploadCanvasMedia(file, 'audio')
+        canvasStore.updateNodeData(nodeInfo.id, {
+          audioUrl: result.url,
+          output: { ...(data.output || {}), url: result.url },
+          uploadFailed: false,
+          uploadError: null
+        })
+      } catch (err) {
+        throw new Error(`节点 "${nodeInfo.title}" 的音频重新上传失败`)
       }
     }
 
@@ -284,10 +320,25 @@ async function retryFailedUploads(failedNodes) {
         try {
           const response = await fetch(blobUrl)
           const blob = await response.blob()
-          const file = new File([blob], `retry-upload-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' })
-          const urls = await uploadImages([file])
-          if (urls && urls.length > 0) {
-            const serverUrl = urls[0]
+          const isVideo = blob.type?.startsWith('video/')
+          const isAudio = blob.type?.startsWith('audio/')
+          
+          let serverUrl
+          if (isVideo) {
+            const file = new File([blob], `retry-video-${Date.now()}.mp4`, { type: blob.type })
+            const result = await uploadCanvasMedia(file, 'video')
+            serverUrl = result.url
+          } else if (isAudio) {
+            const file = new File([blob], `retry-audio-${Date.now()}.mp3`, { type: blob.type })
+            const result = await uploadCanvasMedia(file, 'audio')
+            serverUrl = result.url
+          } else {
+            const file = new File([blob], `retry-upload-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' })
+            const urls = await uploadImages([file])
+            serverUrl = urls?.[0]
+          }
+          
+          if (serverUrl) {
             const currentNode = canvasStore.nodes.find(n => n.id === nodeInfo.id)
             if (currentNode?.data?.output) {
               const updatedOutput = { ...currentNode.data.output }
@@ -299,7 +350,7 @@ async function retryFailedUploads(failedNodes) {
             }
           }
         } catch (err) {
-          throw new Error(`节点 "${nodeInfo.title}" 的图片重新上传失败`)
+          throw new Error(`节点 "${nodeInfo.title}" 的文件重新上传失败`)
         }
       }
     }

@@ -311,14 +311,73 @@ export function deleteWorkflowLocal(workflowId) {
 }
 
 /**
+ * 带重试和超时的 fetch 上传封装
+ * 针对带宽不稳定场景，自动重试网络错误和超时
+ */
+async function fetchWithRetry(url, options, { maxRetries = 3, baseDelay = 2000, timeoutMs = 120000, label = '' } = {}) {
+  let lastError
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+    
+    try {
+      if (attempt > 0) {
+        const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000
+        console.log(`[Upload] ${label} 第 ${attempt} 次重试，等待 ${Math.round(delay)}ms...`)
+        await new Promise(r => setTimeout(r, delay))
+      }
+      
+      const response = await fetch(url, { ...options, signal: controller.signal })
+      clearTimeout(timeoutId)
+      
+      if (response.status >= 500) {
+        const errBody = await response.json().catch(() => ({}))
+        lastError = new Error(errBody.message || errBody.error || `服务器错误 ${response.status}`)
+        lastError.retryable = true
+        if (attempt < maxRetries) continue
+        throw lastError
+      }
+      
+      if (!response.ok) {
+        clearTimeout(timeoutId)
+        const errBody = await response.json().catch(() => ({}))
+        throw new Error(errBody.message || errBody.error || `上传失败 (${response.status})`)
+      }
+      
+      return response
+    } catch (err) {
+      clearTimeout(timeoutId)
+      lastError = err
+      
+      const isRetryable = err.name === 'AbortError' ||
+        err.message?.includes('Failed to fetch') ||
+        err.message?.includes('NetworkError') ||
+        err.message?.includes('network') ||
+        err.message?.includes('timeout') ||
+        err.message?.includes('ERR_CONNECTION') ||
+        err.retryable
+      
+      if (!isRetryable || attempt >= maxRetries) {
+        if (err.name === 'AbortError') {
+          throw new Error(`上传超时（${Math.round(timeoutMs / 1000)}秒）`)
+        }
+        throw err
+      }
+    }
+  }
+  throw lastError
+}
+
+/**
  * 上传画布媒体文件到云存储（图片、视频、音频）
- * 这个函数用于将用户本地上传的文件异步上传到七牛云，避免工作流数据过大
+ * 内置自动重试（最多3次）和超时控制，适应带宽不稳定场景
  * 
  * @param {File} file - 要上传的文件
  * @param {string} type - 文件类型：'image' | 'video' | 'audio'
+ * @param {object} retryOptions - 重试选项 { maxRetries, baseDelay, timeoutMs }
  * @returns {Promise<{url: string, isCloud: boolean}>}
  */
-export async function uploadCanvasMedia(file, type = 'image') {
+export async function uploadCanvasMedia(file, type = 'image', retryOptions = {}) {
   const token = localStorage.getItem('token')
   const headers = {
     ...getTenantHeaders(),
@@ -327,7 +386,6 @@ export async function uploadCanvasMedia(file, type = 'image') {
   
   const formData = new FormData()
   
-  // 根据文件类型选择不同的上传端点
   let uploadUrl
   if (type === 'image') {
     formData.append('images', file)
@@ -342,19 +400,23 @@ export async function uploadCanvasMedia(file, type = 'image') {
     throw new Error(`不支持的文件类型: ${type}`)
   }
   
-  console.log(`[Canvas] 开始上传${type}文件到云存储:`, file.name, '大小:', Math.round(file.size / 1024), 'KB')
+  const sizeMB = (file.size / 1024 / 1024).toFixed(2)
+  console.log(`[Canvas] 开始上传${type}文件到云存储:`, file.name, `大小: ${sizeMB}MB`)
   
-  const response = await fetch(uploadUrl, {
+  const timeoutMs = file.size > 50 * 1024 * 1024 ? 300000 :
+                    file.size > 10 * 1024 * 1024 ? 180000 : 120000
+  
+  const response = await fetchWithRetry(uploadUrl, {
     method: 'POST',
     credentials: 'include',
     headers,
     body: formData
+  }, {
+    maxRetries: retryOptions.maxRetries ?? 3,
+    baseDelay: retryOptions.baseDelay ?? 2000,
+    timeoutMs: retryOptions.timeoutMs ?? timeoutMs,
+    label: `${type}(${file.name})`
   })
-  
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || error.error || `${type}上传失败`)
-  }
   
   const data = await response.json()
   const url = data.url || (data.urls && data.urls[0])

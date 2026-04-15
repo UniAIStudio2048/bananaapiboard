@@ -13,11 +13,12 @@ defineOptions({
  */
 import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { useCanvasStore } from '@/stores/canvas'
+import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { formatPoints } from '@/utils/format'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels } from '@/config/tenant'
 import { uploadImages, getVideoTaskStatus } from '@/api/canvas/nodes'
+import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
@@ -38,6 +39,7 @@ const props = defineProps({
 const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
+const uploadManager = useUploadManager()
 const userInfo = inject('userInfo')
 const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
@@ -3799,49 +3801,53 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
   }
 }
 
-// 后台异步上传视频 - 上传完成后静默更新节点URL
+// 后台异步上传视频 - 使用统一上传接口，内置重试机制
 async function uploadVideoFileAsync(file, blobUrl, nodeId) {
   try {
     console.log('[VideoNode] 后台异步上传视频开始:', file.name, '大小:', (file.size / 1024 / 1024).toFixed(2), 'MB')
     
-    if (file.size > 100 * 1024 * 1024) {
-      console.warn('[VideoNode] 视频文件过大，保持使用 blob URL')
+    if (file.size > 500 * 1024 * 1024) {
+      console.warn('[VideoNode] 视频文件超过500MB限制，保持使用 blob URL')
+      canvasStore.updateNodeData(nodeId, {
+        isUploading: false,
+        uploadFailed: true,
+        uploadError: '视频文件过大（>500MB）'
+      })
       return
     }
     
-    const formData = new FormData()
-    formData.append('file', file)
+    canvasStore.updateNodeData(nodeId, { isUploading: true })
     
-    const token = localStorage.getItem('token')
-    const response = await fetch('/api/videos/upload', {
-      method: 'POST',
-      headers: {
-        ...getTenantHeaders(),
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: formData
-    })
+    const result = await uploadCanvasMedia(file, 'video')
+    const serverUrl = result.url
     
-    if (response.ok) {
-      const result = await response.json()
-      const serverUrl = result.url
-      if (serverUrl) {
-        console.log('[VideoNode] 视频后台上传成功，服务器URL:', serverUrl)
-        
-        const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
-        if (currentNode?.data?.sourceVideo === blobUrl) {
-          canvasStore.updateNodeData(nodeId, { sourceVideo: serverUrl })
-          console.log('[VideoNode] 已静默更新 sourceVideo')
+    if (serverUrl) {
+      console.log('[VideoNode] 视频后台上传成功，服务器URL:', serverUrl)
+      const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
+      if (currentNode) {
+        const updates = { isUploading: false, uploadFailed: false, uploadError: null }
+        if (currentNode.data?.sourceVideo === blobUrl) {
+          updates.sourceVideo = serverUrl
         }
-        
-        URL.revokeObjectURL(blobUrl)
+        if (currentNode.data?.output?.url === blobUrl) {
+          updates.output = { ...currentNode.data.output, url: serverUrl }
+        }
+        canvasStore.updateNodeData(nodeId, updates)
       }
-    } else {
-      const errData = await response.json().catch(() => ({}))
-      console.warn('[VideoNode] 视频上传返回错误:', response.status, errData.message || errData.error)
+      try { URL.revokeObjectURL(blobUrl) } catch (e) { /* ignore */ }
     }
   } catch (error) {
-    console.warn('[VideoNode] 视频后台上传失败，保持使用 blob URL:', error.message)
+    console.warn('[VideoNode] 视频后台上传失败:', error.message)
+    canvasStore.updateNodeData(nodeId, {
+      isUploading: false,
+      uploadFailed: true,
+      uploadError: error.message
+    })
+    uploadManager.registerFailedUpload(`vid_${nodeId}_${Date.now()}`, {
+      nodeId, file, type: 'video', blobUrl,
+      field: 'sourceVideo',
+      error: error.message
+    })
   }
 }
 

@@ -13,7 +13,7 @@ defineOptions({
  */
 import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
-import { useCanvasStore } from '@/stores/canvas'
+import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints, removeImageBackground } from '@/api/canvas/nodes'
 import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
@@ -47,6 +47,7 @@ const props = defineProps({
 const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
+const uploadManager = useUploadManager()
 const userInfo = inject('userInfo')
 const { onHoverStart, onHoverEnd } = useImageHoverPreview()
 
@@ -3193,7 +3194,6 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
     }
   } catch (error) {
     console.warn('[ImageNode] 后台上传失败，保持使用 blob URL:', error.message)
-    // 🔧 标记上传失败，让用户知道需要重新上传
     const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
     if (currentNode) {
       canvasStore.updateNodeData(nodeId, {
@@ -3201,8 +3201,12 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
         uploadFailed: true,
         uploadError: error.message
       })
+      uploadManager.registerFailedUpload(`img_${nodeId}_${Date.now()}`, {
+        nodeId, file, type: 'image', blobUrl,
+        field: 'sourceImages',
+        error: error.message
+      })
     }
-    // 注意：blob URL 仍在跟踪列表中，会在组件卸载时清理
   }
 }
 
