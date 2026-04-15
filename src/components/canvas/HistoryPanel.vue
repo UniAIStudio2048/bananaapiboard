@@ -40,7 +40,8 @@ const loading = ref(false)
 const historyList = shallowRef([]) // 使用 shallowRef 优化大数组
 const selectedType = ref('all') // all | image | video | audio
 const searchQuery = ref('')
-const spaceFilter = ref('personal') // 空间筛选: 'personal' | 'team-xxx' | 'all'
+// 默认显示全部空间的历史记录，用户可手动切换筛选
+const spaceFilter = ref('all')
 
 // 全屏模式
 const isFullscreen = ref(false)
@@ -111,6 +112,10 @@ const CACHE_DURATION = 5 * 60 * 1000 // 缓存有效期 5 分钟
 const TEAM_SYNC_INTERVAL = 30000 // 团队空间同步间隔 30 秒
 let teamSyncTimer = null
 const lastSyncId = ref(null) // 记录最新一条记录的ID，用于检测新数据
+
+// 通用自动刷新（面板打开时，定期检测新数据）
+const AUTO_REFRESH_INTERVAL = 10000 // 10 秒检测一次
+let autoRefreshTimer = null
 
 // 保存中状态
 const savingAsset = ref(false)
@@ -386,6 +391,45 @@ function stopTeamSync() {
     clearInterval(teamSyncTimer)
     teamSyncTimer = null
     console.log('[HistoryPanel] 停止团队空间实时同步')
+  }
+}
+
+/**
+ * 通用自动刷新 - 面板打开时定期检测新数据
+ * 通过比较最新记录ID来判断是否需要全量刷新
+ */
+function startAutoRefresh() {
+  stopAutoRefresh()
+  if (!props.visible) return
+  
+  autoRefreshTimer = setInterval(async () => {
+    if (!props.visible) return
+    try {
+      const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
+      const result = await getHistory({ ...spaceParams, limit: 1 })
+      const latest = result.history?.[0]
+      
+      if (latest && historyList.value.length > 0) {
+        const currentLatestId = historyList.value[0]?.id
+        if (currentLatestId !== latest.id) {
+          console.log('[HistoryPanel] 检测到新数据，自动刷新')
+          dataCached.value = false
+          await loadHistory(true)
+        }
+      } else if (latest && historyList.value.length === 0) {
+        dataCached.value = false
+        await loadHistory(true)
+      }
+    } catch (e) {
+      // 静默失败
+    }
+  }, AUTO_REFRESH_INTERVAL)
+}
+
+function stopAutoRefresh() {
+  if (autoRefreshTimer) {
+    clearInterval(autoRefreshTimer)
+    autoRefreshTimer = null
   }
 }
 
@@ -1433,8 +1477,15 @@ watch(() => props.visible, async (visible) => {
     // 重置滚动位置
     scrollTop.value = 0
     
+    // 每次打开面板时重置内存缓存，确保走 IndexedDB + 后台刷新路径
+    // 这样新生成的图片会通过后台刷新被及时发现
+    dataCached.value = false
+    
     // 加载数据
     await loadHistory()
+    
+    // 启动自动刷新（检测新生成的内容）
+    startAutoRefresh()
     
     // 启动团队空间实时同步
     startTeamSync()
@@ -1452,6 +1503,9 @@ watch(() => props.visible, async (visible) => {
     // 面板关闭时重置状态
     isContentReady.value = false
     closeContextMenu()
+    
+    // 停止自动刷新
+    stopAutoRefresh()
     
     // 停止团队空间实时同步
     stopTeamSync()
@@ -1512,7 +1566,8 @@ onUnmounted(() => {
   document.removeEventListener('mouseup', handleGlobalMouseUp)
   document.removeEventListener('click', handleGlobalClick)
   
-  // 停止团队空间实时同步
+  // 停止自动刷新和团队空间实时同步
+  stopAutoRefresh()
   stopTeamSync()
   
   // 清理 ResizeObserver

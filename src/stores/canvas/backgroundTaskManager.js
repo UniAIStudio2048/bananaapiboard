@@ -13,6 +13,8 @@ import { getImageTaskStatus, getVideoTaskStatus, getVideoHdTaskStatus } from '@/
 const STORAGE_KEY = 'canvas_background_tasks'
 const POLL_INTERVAL = 3000  // 3秒轮询一次
 const MAX_TASK_AGE = 24 * 60 * 60 * 1000  // 任务最大存活时间：24小时
+const IMAGE_POLL_TIMEOUT = 10 * 60 * 1000  // 图片任务前端轮询超时：10分钟
+const VIDEO_POLL_TIMEOUT = 120 * 60 * 1000  // 视频任务前端轮询超时：120分钟
 
 // 内存中的任务状态
 let tasks = new Map()
@@ -69,12 +71,25 @@ function saveTasksToStorage() {
  * 恢复所有待处理的任务
  */
 function resumePendingTasks() {
+  const now = Date.now()
   for (const [taskId, task] of tasks) {
     if (task.status === 'pending' || task.status === 'processing') {
+      const pollTimeout = (task.type === 'video' || task.type === 'video-hd' || task.type === 'video-hd-upscale')
+        ? VIDEO_POLL_TIMEOUT : IMAGE_POLL_TIMEOUT
+      if (now - task.createdAt > pollTimeout) {
+        console.log(`[BackgroundTaskManager] 任务 ${taskId} 已超时 (${Math.round((now - task.createdAt) / 60000)}分钟), 标记为失败`)
+        task.status = 'failed'
+        task.error = '任务超时，请重试'
+        task.updatedAt = now
+        tasks.set(taskId, task)
+        notifyTaskFailed(taskId, task)
+        continue
+      }
       console.log(`[BackgroundTaskManager] 恢复任务轮询: ${taskId}`)
       startPolling(taskId)
     }
   }
+  saveTasksToStorage()
 }
 
 /**
@@ -125,6 +140,23 @@ function startPolling(taskId) {
     const task = tasks.get(taskId)
     if (!task) {
       stopPolling(taskId)
+      return
+    }
+    
+    // 前端超时检测：根据任务类型使用不同阈值
+    const pollTimeout = (task.type === 'video' || task.type === 'video-hd' || task.type === 'video-hd-upscale')
+      ? VIDEO_POLL_TIMEOUT : IMAGE_POLL_TIMEOUT
+    const taskAge = Date.now() - task.createdAt
+    if (taskAge > pollTimeout) {
+      const minutes = Math.round(taskAge / 60000)
+      console.log(`[BackgroundTaskManager] 任务 ${taskId} 前端超时 (${minutes}分钟), 标记为失败`)
+      task.status = 'failed'
+      task.error = `任务超时（${minutes}分钟），请重试`
+      task.updatedAt = Date.now()
+      tasks.set(taskId, task)
+      saveTasksToStorage()
+      stopPolling(taskId)
+      notifyTaskFailed(taskId, task)
       return
     }
     

@@ -743,6 +743,7 @@ function handleBackgroundTaskProgress(event) {
 // 检查并恢复已完成的后台任务
 function checkAndRestoreBackgroundTasks() {
   const nodeTasks = getTasksByNodeId(props.id)
+  const ZOMBIE_THRESHOLD = 10 * 60 * 1000 // 10 分钟
   
   for (const task of nodeTasks) {
     if (task.type !== 'image') continue
@@ -767,7 +768,28 @@ function checkAndRestoreBackgroundTasks() {
         error: task.error || '图片生成失败'
       })
       removeCompletedTask(task.taskId)
+    } else if ((task.status === 'processing' || task.status === 'pending') && task.createdAt) {
+      const taskAge = Date.now() - task.createdAt
+      if (taskAge > ZOMBIE_THRESHOLD) {
+        console.log(`[ImageNode] 检测到僵尸任务 ${task.taskId} (${Math.round(taskAge/60000)}分钟), 标记失败`)
+        task.status = 'failed'
+        task.error = '任务超时，请重试'
+        canvasStore.updateNodeData(props.id, {
+          status: 'error',
+          error: '任务超时，请重试'
+        })
+        removeCompletedTask(task.taskId)
+      }
     }
+  }
+  
+  // 如果节点状态是 processing 但没有任何关联的后台任务，说明轮询丢失了
+  if (props.data?.status === 'processing' && nodeTasks.filter(t => t.type === 'image' && (t.status === 'processing' || t.status === 'pending')).length === 0) {
+    console.log(`[ImageNode] 节点 ${props.id} 状态为 processing 但无关联任务, 重置为 error`)
+    canvasStore.updateNodeData(props.id, {
+      status: 'error',
+      error: '任务丢失，请重新生成'
+    })
   }
 }
 
