@@ -118,9 +118,9 @@ const defaultConfig = {
 }
 
 // 从环境变量读取配置（品牌配置不再从环境变量读取）
-// apiBase 始终为空字符串，生产环境通过 Nginx 代理，开发环境通过 Vite 代理
+// apiBase 为空时使用相对路径（本地 Nginx/Vite 代理），设置时使用绝对路径（远程 API）
 const envConfig = {
-  apiBase: '',
+  apiBase: (import.meta.env.VITE_API_BASE || '').replace(/\/+$/, ''),
   tenantId: import.meta.env.VITE_TENANT_ID || defaultConfig.tenantId,
   tenantKey: import.meta.env.VITE_TENANT_KEY || defaultConfig.tenantKey,
   brand: {
@@ -212,7 +212,7 @@ export async function loadBrandConfig(forceReload = false) {
     }
     
     // 调用公开的品牌配置API
-    const response = await fetch('/api/tenant-portal/brand-config', {
+    const response = await fetch(getApiUrl('/api/tenant-portal/brand-config'), {
       headers: {
         'X-Tenant-ID': tenantId,
         'X-Tenant-Key': tenantKey
@@ -437,7 +437,7 @@ export async function loadRemoteConfig() {
     }
     
     console.log('[tenant] 从后端加载租户配置...')
-    const response = await fetch(`/api/super-admin/tenants/${runtimeConfig.tenantId}/settings`, {
+    const response = await fetch(getApiUrl(`/api/super-admin/tenants/${runtimeConfig.tenantId}/settings`), {
       headers: {
         'X-Tenant-ID': runtimeConfig.tenantId,
         'X-Tenant-Key': runtimeConfig.tenantKey
@@ -1628,9 +1628,15 @@ export const getTenantHeaders = () => {
   }
 }
 
-// 生成完整的 API URL（统一使用相对路径，避免跨域问题）
-// 开发环境：Vite proxy 转发；生产环境：Nginx proxy 转发
-export const getApiUrl = (path) => path
+// 生成完整的 API URL
+// apiBase 为空：使用相对路径（本地 Nginx/Vite 代理，无跨域）
+// apiBase 非空：使用绝对路径（远程 API，需后端 CORS 支持）
+export const getApiUrl = (path) => {
+  if (config.apiBase) {
+    return `${config.apiBase}${path}`
+  }
+  return path
+}
 
 // 获取所有可用的音乐模型列表（从配置中动态获取）
 export const getAvailableMusicModels = () => {
