@@ -567,7 +567,6 @@ import PresetManager from './dialogs/PresetManager.vue'
 import CustomPresetDialog from './dialogs/CustomPresetDialog.vue'
 import {
   getAIAssistantConfig,
-  sendMessage as apiSendMessage,
   sendMessageStream,
   getSessions,
   deleteSession,
@@ -604,6 +603,7 @@ const config = ref({
   mcp_servers: [],
   deep_think: { enabled: false },
   web_search: { enabled: false },
+  stream: { normal: true, deep_think: true },
   models: [],
   points_cost: 1
 })
@@ -942,6 +942,10 @@ async function sendMessage() {
       }
     }
 
+    // 统一使用流式请求：对用户永远呈现打字机效果。
+    // 后端会根据租户配置决定对下游模型请求真流式还是非流式，
+    // 若下游模型不支持流式响应，后端会自动将完整内容切片模拟 SSE 流返回给前端，
+    // 保证前端体验始终一致。
     await sendMessageStream({
       session_id: currentSessionId.value,
       message: messageText,
@@ -951,28 +955,23 @@ async function sendMessage() {
         web_search: webSearchEnabled.value
       },
       attachments: uploadedAttachments,
-      system_prompt: selectedPreset.value?.systemPrompt, // 使用选中的预设系统提示词
+      system_prompt: selectedPreset.value?.systemPrompt,
       onSession: (sessionId) => {
         currentSessionId.value = sessionId
       },
       onContent: (chunk, fullContent) => {
-        // 实时更新消息内容
         messages.value[assistantMessageIndex].content = fullContent
-        // 使用节流滚动避免卡顿
         throttledScrollToBottom()
       },
       onThinking: (chunk, fullThinking) => {
-        // 更新思考过程
         messages.value[assistantMessageIndex].thinking = fullThinking
         throttledScrollToBottom()
       },
       onDone: (fullContent, result) => {
-        // 完成流式输出
         messages.value[assistantMessageIndex].isStreaming = false
         if (result?.session_id) {
           currentSessionId.value = result.session_id
         }
-        // 更新会话列表
         loadSessions()
       },
       onError: (error) => {
