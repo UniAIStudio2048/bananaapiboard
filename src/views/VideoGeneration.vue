@@ -843,11 +843,16 @@ async function generateVideo() {
     console.log('[video] 响应状态:', response.status, response.statusText)
     console.log('[video] 响应Headers:', Object.fromEntries(response.headers.entries()))
     
-    const data = await response.json()
+    let data
+    try {
+      data = await response.json()
+    } catch (parseErr) {
+      console.error('[video] 响应解析失败:', parseErr)
+      throw new Error('服务器返回了无效响应，请稍后重试')
+    }
     console.log('[video] 响应数据:', data)
     if (!response.ok) {
       console.error('[video] 请求失败:', response.status, data)
-      // 保存状态码和数据以便后续处理
       const err = new Error(data.message || data.error || '生成失败')
       err.status = response.status
       err.body = data
@@ -1128,6 +1133,82 @@ async function loadHistory(reset = true) {
 
 function loadMoreVideoHistory() {
   loadHistory(false)
+}
+
+// 视频首帧缩略图提取（当 cover_url 不存在时的后备方案）
+const videoThumbnails = ref({})
+const videoThumbnailFailed = ref({})
+const processingThumbnailCount = ref(0)
+const MAX_CONCURRENT_THUMBNAILS = 3
+const thumbnailQueue = ref([])
+
+function extractVideoThumbnail(item) {
+  if (!item.video_url || item.cover_url || item.thumbnail_url) return
+  if (videoThumbnails.value[item.id] || videoThumbnailFailed.value[item.id]) return
+
+  if (processingThumbnailCount.value >= MAX_CONCURRENT_THUMBNAILS) {
+    if (!thumbnailQueue.value.includes(item.id)) {
+      thumbnailQueue.value.push(item.id)
+    }
+    return
+  }
+
+  processingThumbnailCount.value++
+
+  const video = document.createElement('video')
+  video.crossOrigin = 'anonymous'
+  video.muted = true
+  video.preload = 'metadata'
+
+  const cleanup = () => {
+    video.remove()
+    processingThumbnailCount.value--
+    if (thumbnailQueue.value.length > 0) {
+      const nextId = thumbnailQueue.value.shift()
+      const nextItem = history.value.find(h => h.id === nextId) || gallery.value.find(g => g.id === nextId)
+      if (nextItem) extractVideoThumbnail(nextItem)
+    }
+  }
+
+  video.onloadeddata = () => { video.currentTime = 0.1 }
+  video.onseeked = () => {
+    try {
+      const canvas = document.createElement('canvas')
+      const w = video.videoWidth || 320
+      const h = video.videoHeight || 180
+      const maxDim = 480
+      const scale = Math.min(1, maxDim / Math.max(w, h))
+      canvas.width = w * scale
+      canvas.height = h * scale
+      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+      videoThumbnails.value[item.id] = canvas.toDataURL('image/jpeg', 0.7)
+    } catch (e) {
+      console.warn('[VideoGeneration] 缩略图提取失败:', e.message)
+      videoThumbnailFailed.value[item.id] = true
+    }
+    cleanup()
+  }
+  video.onerror = () => {
+    videoThumbnailFailed.value[item.id] = true
+    cleanup()
+  }
+  setTimeout(() => {
+    if (!videoThumbnails.value[item.id] && !videoThumbnailFailed.value[item.id]) {
+      videoThumbnailFailed.value[item.id] = true
+      cleanup()
+    }
+  }, 8000)
+  video.src = item.video_url
+}
+
+function getVideoThumbnail(item) {
+  if (item.cover_url) return item.cover_url
+  if (item.thumbnail_url) return item.thumbnail_url
+  if (videoThumbnails.value[item.id]) return videoThumbnails.value[item.id]
+  if (item.video_url && item.status === 'SUCCESS') {
+    extractVideoThumbnail(item)
+  }
+  return null
 }
 
 async function deleteHistory(item) {
@@ -2225,17 +2306,19 @@ onUnmounted(() => {
                 @click="openVideoModal(item)"
               >
                 <img
-                  v-if="item.video_url && (item.cover_url || item.thumbnail_url)"
-                  :src="item.cover_url || item.thumbnail_url"
+                  v-if="item.video_url && getVideoThumbnail(item)"
+                  :src="getVideoThumbnail(item)"
                   class="w-full h-full object-cover"
                   loading="lazy"
                 />
-                <div
+                <video
                   v-else-if="item.video_url"
-                  class="w-full h-full bg-gray-900 flex items-center justify-center"
-                >
-                  <svg class="w-12 h-12 text-gray-600" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                </div>
+                  :src="item.video_url"
+                  preload="metadata"
+                  muted
+                  class="w-full h-full object-cover pointer-events-none"
+                  @loadeddata="(e) => { e.target.currentTime = 0.1 }"
+                />
                 <div v-else class="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
                   <div class="text-4xl mb-2">⏳</div>
                   <div class="text-sm">{{ formatStatus(item.status) }}</div>
@@ -2384,17 +2467,19 @@ onUnmounted(() => {
                 @click="openVideoModal(item)"
               >
                 <img
-                  v-if="item.video_url && (item.cover_url || item.thumbnail_url)"
-                  :src="item.cover_url || item.thumbnail_url"
+                  v-if="item.video_url && getVideoThumbnail(item)"
+                  :src="getVideoThumbnail(item)"
                   class="w-full h-full object-cover"
                   loading="lazy"
                 />
-                <div
+                <video
                   v-else-if="item.video_url"
-                  class="w-full h-full bg-gray-900 flex items-center justify-center"
-                >
-                  <svg class="w-12 h-12 text-gray-600" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                </div>
+                  :src="item.video_url"
+                  preload="metadata"
+                  muted
+                  class="w-full h-full object-cover pointer-events-none"
+                  @loadeddata="(e) => { e.target.currentTime = 0.1 }"
+                />
                 <!-- 生成中状态 -->
                 <div v-else-if="isProcessingStatus(item.status)" class="absolute inset-0 flex flex-col items-center justify-center">
                   <!-- 动态背景 -->

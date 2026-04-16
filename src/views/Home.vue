@@ -810,7 +810,7 @@ function startPolling() {
 
   pollingInterval.value = setInterval(async () => {
     const now = Math.floor(Date.now() / 1000)
-    const TIMEOUT = 5 * 60 // 5分钟超时
+    const TIMEOUT = 15 * 60 // 15分钟超时
 
     const pendingTasks = history.value
       .filter(item => item.status === 'pending' || item.status === 'processing')

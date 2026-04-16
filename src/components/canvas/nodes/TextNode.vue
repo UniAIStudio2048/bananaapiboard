@@ -1105,20 +1105,26 @@ async function handleLLMGenerate() {
   }
 }
 
-// 上传图片到七牛云
+// 上传图片到云存储
 async function uploadImagesToQiniu(imageUrls) {
   const uploadedUrls = []
   
   for (const imageUrl of imageUrls) {
     try {
-      // 如果已经是七牛云 URL，直接使用
-      if (imageUrl.includes('qiniucdn.com') || imageUrl.includes('clouddn.com')) {
+      // 如果已经是 CDN URL，直接使用
+      if (imageUrl.includes('qiniucdn.com') || imageUrl.includes('clouddn.com') || imageUrl.includes('files.nananobanana.cn')) {
         uploadedUrls.push(imageUrl)
         continue
       }
       
-      // 下载图片数据
-      const response = await fetch(imageUrl)
+      // 相对路径需要通过 getApiUrl 转换后再 fetch（确保 /api/cos-proxy/ 等路径可正常访问）
+      const fetchUrl = (imageUrl.startsWith('/api/') || imageUrl.startsWith('/storage/')) ? getApiUrl(imageUrl) : imageUrl
+      const response = await fetch(fetchUrl, {
+        headers: {
+          ...getTenantHeaders(),
+          ...(localStorage.getItem('token') ? { Authorization: `Bearer ${localStorage.getItem('token')}` } : {})
+        }
+      })
       const blob = await response.blob()
       
       // 构造 FormData

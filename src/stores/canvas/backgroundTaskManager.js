@@ -13,7 +13,7 @@ import { getImageTaskStatus, getVideoTaskStatus, getVideoHdTaskStatus } from '@/
 const STORAGE_KEY = 'canvas_background_tasks'
 const POLL_INTERVAL = 3000  // 3秒轮询一次
 const MAX_TASK_AGE = 24 * 60 * 60 * 1000  // 任务最大存活时间：24小时
-const IMAGE_POLL_TIMEOUT = 10 * 60 * 1000  // 图片任务前端轮询超时：10分钟
+const IMAGE_POLL_TIMEOUT = 15 * 60 * 1000  // 图片任务前端轮询超时：15分钟
 const VIDEO_POLL_TIMEOUT = 120 * 60 * 1000  // 视频任务前端轮询超时：120分钟
 
 // 内存中的任务状态
