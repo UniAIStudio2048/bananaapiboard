@@ -6,7 +6,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { redeemVoucher as redeemVoucherApi, updateUserPreferences, clearAuthSession } from '@/api/client'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'

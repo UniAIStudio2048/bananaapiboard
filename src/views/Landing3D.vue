@@ -333,7 +333,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
 import { getMe } from '@/api/client'
 import { useI18n } from '@/i18n'

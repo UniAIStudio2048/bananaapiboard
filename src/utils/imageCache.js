@@ -11,6 +11,8 @@
  * - 🔧 支持大画布场景（100+节点）
  */
 
+import { getApiUrl } from '@/config/tenant'
+
 const DB_NAME = 'BananaImageCache'
 const DB_VERSION = 2  // 升级版本以支持更大缓存
 const STORE_NAME = 'images'

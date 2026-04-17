@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
 import { useI18n } from '@/i18n'
 

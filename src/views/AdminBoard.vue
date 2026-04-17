@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 
 const router = useRouter()

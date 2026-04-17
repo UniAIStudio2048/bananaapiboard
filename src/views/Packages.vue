@@ -780,7 +780,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { redeemVoucher, getMe } from '@/api/client'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
 
 const router = useRouter()
