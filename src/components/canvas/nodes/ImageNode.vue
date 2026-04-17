@@ -2182,7 +2182,7 @@ async function handleToolbarGrid4Crop() {
 async function fetchMultiangleConfig() {
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch('/api/settings/app', {
+    const response = await fetch(getApiUrl('/api/settings/app'), {
       headers: {
         'Authorization': `Bearer ${token}`,
         ...getTenantHeaders()

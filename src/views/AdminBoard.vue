@@ -208,7 +208,7 @@ async function ensureAdmin() {
     return
   }
   
-  const r = await fetch('/api/user/me', { headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` } })
+  const r = await fetch(getApiUrl('/api/user/me'), { headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` } })
   if (!r.ok) {
     router.push('/')
     return

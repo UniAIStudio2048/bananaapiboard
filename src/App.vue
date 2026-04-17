@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { clearAuthSession, getMe } from '@/api/client'
 import { getTheme, toggleTheme as toggleThemeUtil } from '@/utils/theme'
-import { getTenantHeaders, getBrand, loadBrandConfig } from '@/config/tenant'
+import { getTenantHeaders, getBrand, loadBrandConfig, getApiUrl } from '@/config/tenant'
 import NotificationBar from '@/components/NotificationBar.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { formatPoints } from '@/utils/format'
@@ -52,7 +52,7 @@ async function refreshUserInfo() {
 // 加载备案号配置
 async function loadSiteConfig() {
   try {
-    const r = await fetch('/api/site-config', {
+    const r = await fetch(getApiUrl('/api/site-config'), {
       headers: getTenantHeaders()
     })
     if (r.ok) {
@@ -164,7 +164,7 @@ async function loadInviteCode() {
       inviteCode.value = ''
       return
     }
-    const r = await fetch('/api/user/invite-code', {
+    const r = await fetch(getApiUrl('/api/user/invite-code'), {
       headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     })
     if (r.ok) {

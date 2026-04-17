@@ -463,7 +463,7 @@ let cacheConfig = {
  */
 export async function fetchCacheConfig() {
   try {
-    const response = await fetch('/api/cache-config')
+    const response = await fetch(getApiUrl('/api/cache-config'))
     if (response.ok) {
       const config = await response.json()
       cacheConfig = {

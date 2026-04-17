@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 
 const notification = ref(null)
 const isVisible = ref(false)
@@ -20,7 +20,7 @@ function checkMobile() {
 // 加载通知配置
 async function loadNotification() {
   try {
-    const r = await fetch('/api/tenant/notification', {
+    const r = await fetch(getApiUrl('/api/tenant/notification'), {
       headers: getTenantHeaders()
     })
     if (r.ok) {

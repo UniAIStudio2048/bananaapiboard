@@ -430,7 +430,7 @@ const getParticleStyle = (index) => {
 // 加载邮箱配置
 async function loadEmailConfig() {
   try {
-    const r = await fetch('/api/email/public-config', {
+    const r = await fetch(getApiUrl('/api/email/public-config'), {
       headers: getTenantHeaders()
     })
     if (r.ok) {
@@ -446,7 +446,7 @@ async function loadEmailConfig() {
 // 加载备案号配置
 async function loadIcpConfig() {
   try {
-    const r = await fetch('/api/site-config', {
+    const r = await fetch(getApiUrl('/api/site-config'), {
       headers: getTenantHeaders()
     })
     if (r.ok) {

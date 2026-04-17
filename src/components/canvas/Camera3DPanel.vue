@@ -7,7 +7,7 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as THREE from 'three'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 
 const props = defineProps({
   // 源图片URL
@@ -519,7 +519,7 @@ async function uploadImageToQiniu(imageUrl) {
   const formData = new FormData()
   formData.append('image', blob, 'camera3d-source.jpg')
 
-  const uploadResponse = await fetch('/api/canvas/upload-temp-image', {
+  const uploadResponse = await fetch(getApiUrl('/api/canvas/upload-temp-image'), {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -582,7 +582,7 @@ async function handleGenerate() {
     generateProgress.value = '提交任务中...'
 
     // 提交多角度生成任务
-    const response = await fetch('/api/images/multiangle', {
+    const response = await fetch(getApiUrl('/api/images/multiangle'), {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,

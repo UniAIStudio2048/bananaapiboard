@@ -4,7 +4,7 @@
  * 在画布右上角显示一个客服图标，点击可查看客服链接和二维码
  */
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 
 const props = defineProps({
   // 画布主题：dark / light
@@ -29,7 +29,7 @@ async function loadSupportConfig() {
       ...(token ? { 'Authorization': `Bearer ${token}` } : {})
     }
 
-    const r = await fetch('/api/settings/app', {
+    const r = await fetch(getApiUrl('/api/settings/app'), {
       headers
     })
     if (r.ok) {

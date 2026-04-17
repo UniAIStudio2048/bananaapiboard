@@ -4,7 +4,7 @@
  * 复用 Auth.vue 的登录注册逻辑，以弹窗形式展示
  */
 import { ref, watch, computed } from 'vue'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
 
 const props = defineProps({
@@ -111,7 +111,7 @@ watch(() => props.modelValue, (v) => {
 // 加载注册设置
 async function loadSettings() {
   try {
-    const r = await fetch('/api/settings/app', { headers: getTenantHeaders() })
+    const r = await fetch(getApiUrl('/api/settings/app'), { headers: getTenantHeaders() })
     if (r.ok) {
       const data = await r.json()
       if (data.settings?.require_invite_code !== undefined) {
@@ -125,7 +125,7 @@ async function loadSettings() {
 
 async function loadEmailConfig() {
   try {
-    const r = await fetch('/api/email/public-config', { headers: getTenantHeaders() })
+    const r = await fetch(getApiUrl('/api/email/public-config'), { headers: getTenantHeaders() })
     if (r.ok) {
       const data = await r.json()
       emailConfig.value = data
@@ -146,7 +146,7 @@ async function sendVerificationCode() {
   sendingCode.value = true
   error.value = ''
   try {
-    const r = await fetch('/api/email/send-verification-code', {
+    const r = await fetch(getApiUrl('/api/email/send-verification-code'), {
       method: 'POST',
       headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, type: 'register' })
@@ -268,7 +268,7 @@ async function sendResetCode() {
   sendingResetCode.value = true
   error.value = ''
   try {
-    const r = await fetch('/api/email/send-verification-code', {
+    const r = await fetch(getApiUrl('/api/email/send-verification-code'), {
       method: 'POST',
       headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: resetEmail.value, type: 'reset_password' })
@@ -319,7 +319,7 @@ async function resetPassword() {
   }
   loading.value = true
   try {
-    const r = await fetch('/api/auth/reset-password', {
+    const r = await fetch(getApiUrl('/api/auth/reset-password'), {
       method: 'POST',
       headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({

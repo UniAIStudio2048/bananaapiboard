@@ -349,13 +349,13 @@ async function loadData() {
     const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
 
     const [ledgerRes, packagesRes, inviteRes, checkinRes, activePackageRes, settingsRes, pointsConfigRes] = await Promise.all([
-      fetch('/api/user/points', { headers }),
-      fetch('/api/packages', { headers }),
-      fetch('/api/user/invite-code', { headers }),
-      fetch('/api/user/checkin-status', { headers }),
-      fetch('/api/user/package', { headers }),
-      fetch('/api/settings/app', { headers }), // 🔧 加载租户配置
-      fetch('/api/points-config', { headers: getTenantHeaders() }) // 🔧 加载积分配置（包含汇率）
+      fetch(getApiUrl('/api/user/points'), { headers }),
+      fetch(getApiUrl('/api/packages'), { headers }),
+      fetch(getApiUrl('/api/user/invite-code'), { headers }),
+      fetch(getApiUrl('/api/user/checkin-status'), { headers }),
+      fetch(getApiUrl('/api/user/package'), { headers }),
+      fetch(getApiUrl('/api/settings/app'), { headers }), // 🔧 加载租户配置
+      fetch(getApiUrl('/api/points-config'), { headers: getTenantHeaders() }) // 🔧 加载积分配置（包含汇率）
     ])
 
     if (ledgerRes.ok) {

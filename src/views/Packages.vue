@@ -959,7 +959,7 @@ async function loadPackages() {
     }
 
     // 获取用户信息
-    const userRes = await fetch('/api/user/me', {
+    const userRes = await fetch(getApiUrl('/api/user/me'), {
       headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     })
     if (userRes.ok) {
@@ -967,7 +967,7 @@ async function loadPackages() {
     }
 
     // 获取套餐列表
-    const pkgRes = await fetch('/api/packages', {
+    const pkgRes = await fetch(getApiUrl('/api/packages'), {
       headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     })
     if (pkgRes.ok) {
@@ -978,7 +978,7 @@ async function loadPackages() {
     }
 
     // 获取当前套餐
-    const activeRes = await fetch('/api/user/package', {
+    const activeRes = await fetch(getApiUrl('/api/user/package'), {
       headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     })
     if (activeRes.ok) {
@@ -988,7 +988,7 @@ async function loadPackages() {
 
     // 获取系统默认并发限制配置和外部链接配置
     try {
-      const configRes = await fetch('/api/points-config')
+      const configRes = await fetch(getApiUrl('/api/points-config'))
       if (configRes.ok) {
         const configData = await configRes.json()
         // 如果有 default_concurrent_limit 配置就使用，否则保持默认值 1
@@ -1048,7 +1048,7 @@ async function purchasePackage(pkg) {
   // 加载支付方式
   try {
     const token = localStorage.getItem('token')
-    const res = await fetch('/api/user/payment-methods', {
+    const res = await fetch(getApiUrl('/api/user/payment-methods'), {
       headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     })
     if (res.ok) {
@@ -1132,7 +1132,7 @@ async function applyCoupon() {
     const token = localStorage.getItem('token')
     const priceToValidate = selectedPackage.value.price // 使用原价验证
     
-    const res = await fetch('/api/user/coupons/validate', {
+    const res = await fetch(getApiUrl('/api/user/coupons/validate'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -1202,7 +1202,7 @@ async function confirmPurchase() {
       payload.payment_method_id = purchasePaymentMethod.value
     }
     
-    const res = await fetch('/api/packages/purchase', {
+    const res = await fetch(getApiUrl('/api/packages/purchase'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -1510,7 +1510,7 @@ async function submitVoucher() {
     
     // 刷新用户信息获取最新余额
     const token = localStorage.getItem('token')
-    const userRes = await fetch('/api/user/me', {
+    const userRes = await fetch(getApiUrl('/api/user/me'), {
       headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     })
     if (userRes.ok) {
@@ -1683,7 +1683,7 @@ async function autoPurchasePackage(pkg, token) {
     }
     
     console.log('[autoPurchasePackage] 发送请求到 /api/packages/purchase, payload:', payload)
-    const res = await fetch('/api/packages/purchase', {
+    const res = await fetch(getApiUrl('/api/packages/purchase'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),

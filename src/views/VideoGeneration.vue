@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getMe, isQiniuCdnUrl, buildVideoDownloadUrl } from '@/api/client'
-import { getTenantHeaders, getModelDisplayName, isModelEnabled, getAvailableVideoModels } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName, isModelEnabled, getAvailableVideoModels, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { formatPoints } from '@/utils/format'
 
@@ -831,7 +831,7 @@ async function generateVideo() {
     successMessage.value = '任务已提交，正在处理...'
     
     // 异步发送请求，不阻塞UI
-    const response = await fetch('/api/videos/generate', {
+    const response = await fetch(getApiUrl('/api/videos/generate'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -929,7 +929,7 @@ async function generateVideo() {
 async function fetchTask(taskId) {
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch(`/api/videos/task/${taskId}`, {
+    const response = await fetch(getApiUrl(`/api/videos/task/${taskId}`), {
       headers: { ...getTenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
     })
     if (!response.ok) return null
@@ -1050,7 +1050,7 @@ async function loadHistory(reset = true) {
     
     loadingMoreVideoHistory.value = true
 
-    const response = await fetch(`/api/videos/history?limit=${VIDEO_PAGE_SIZE}&offset=${videoHistoryOffset.value}`, {
+    const response = await fetch(getApiUrl(`/api/videos/history?limit=${VIDEO_PAGE_SIZE}&offset=${videoHistoryOffset.value}`), {
       headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
     })
 
@@ -1215,7 +1215,7 @@ async function deleteHistory(item) {
   if (!confirm('确定删除该记录吗？')) return
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch(`/api/videos/history/${item.id}`, {
+    const response = await fetch(getApiUrl(`/api/videos/history/${item.id}`), {
       method: 'DELETE',
       headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
     })
@@ -1248,7 +1248,7 @@ async function updateVideoNote(item, note) {
   if (!item || !item.id) return
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch(`/api/videos/history/${item.id}`, {
+    const response = await fetch(getApiUrl(`/api/videos/history/${item.id}`), {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1279,7 +1279,7 @@ async function updateVideoRating(item, rating) {
   if (!item || !item.id) return
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch(`/api/videos/history/${item.id}`, {
+    const response = await fetch(getApiUrl(`/api/videos/history/${item.id}`), {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',

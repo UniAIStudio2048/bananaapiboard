@@ -5,7 +5,7 @@ import { useI18n } from '@/i18n'
 import { redeemVoucher } from '@/api/client'
 import { getMyWorks, getMyPurchases, getMyIncome, deleteWork, toggleWorkVisibility } from '@/api/community'
 import { getTheme, setTheme, toggleTheme as toggleThemeUtil, themes } from '@/utils/theme'
-import { getTenantHeaders, getModelDisplayName } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 
 const { t } = useI18n()
@@ -290,17 +290,17 @@ async function load() {
     
     // 并行请求所有数据
     const [meRes, ledgerRes, inviteRes, statsRes, imagesRes, videosRes, trendRes, sourcesRes, checkinRes, pointsStatsRes, inviteProgressRes] = await Promise.all([
-      fetch('/api/user/me', { headers }),
-      fetch('/api/user/points', { headers }),
-      fetch('/api/user/invite-code', { headers }),
-      fetch('/api/user/stats', { headers }),
-      fetch('/api/user/recent-images?limit=12&offset=0', { headers }),
-      fetch('/api/user/recent-videos?limit=12&offset=0', { headers }),
-      fetch('/api/user/points-trend?days=7', { headers }),
-      fetch('/api/user/points-sources', { headers }),
-      fetch('/api/user/checkin-status', { headers }),
-      fetch('/api/user/points-stats', { headers }),
-      fetch('/api/invite/progress', { headers })
+      fetch(getApiUrl('/api/user/me'), { headers }),
+      fetch(getApiUrl('/api/user/points'), { headers }),
+      fetch(getApiUrl('/api/user/invite-code'), { headers }),
+      fetch(getApiUrl('/api/user/stats'), { headers }),
+      fetch(getApiUrl('/api/user/recent-images?limit=12&offset=0'), { headers }),
+      fetch(getApiUrl('/api/user/recent-videos?limit=12&offset=0'), { headers }),
+      fetch(getApiUrl('/api/user/points-trend?days=7'), { headers }),
+      fetch(getApiUrl('/api/user/points-sources'), { headers }),
+      fetch(getApiUrl('/api/user/checkin-status'), { headers }),
+      fetch(getApiUrl('/api/user/points-stats'), { headers }),
+      fetch(getApiUrl('/api/invite/progress'), { headers })
     ])
     
     if (!meRes.ok) throw new Error('unauth')
@@ -377,7 +377,7 @@ async function loadImages(reset = false) {
     const offset = reset ? 0 : recentImages.value.length
     params.set('offset', offset.toString())
     
-    const res = await fetch(`/api/user/recent-images?${params.toString()}`, { headers })
+    const res = await fetch(getApiUrl(`/api/user/recent-images?${params.toString()}`), { headers })
     
     if (res.ok) {
       const data = await res.json()
@@ -414,7 +414,7 @@ async function loadVideos(reset = false) {
     const offset = reset ? 0 : recentVideos.value.length
     params.set('offset', offset.toString())
     
-    const res = await fetch(`/api/user/recent-videos?${params.toString()}`, { headers })
+    const res = await fetch(getApiUrl(`/api/user/recent-videos?${params.toString()}`), { headers })
     
     if (res.ok) {
       const data = await res.json()
@@ -576,7 +576,7 @@ async function batchDownloadImages() {
         filename = `image-${img.id.substring(0, 8)}.png`
       }
       
-      await downloadFile(img.url, filename)
+      await downloadFile(getMediaUrl(img.url), filename)
       
       // 短暂延迟，避免同时下载太多文件
       if (i < selectedList.length - 1) {
@@ -615,7 +615,7 @@ async function batchDownloadVideos() {
         filename = `video-${video.id.substring(0, 8)}.mp4`
       }
       
-      await downloadFile(video.video_url, filename)
+      await downloadFile(getMediaUrl(video.video_url), filename)
       
       // 短暂延迟，避免同时下载太多文件
       if (i < selectedList.length - 1) {
@@ -641,7 +641,7 @@ async function updateImageRating(imageId, rating) {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
-    const res = await fetch(`/api/images/history/${imageId}`, {
+    const res = await fetch(getApiUrl(`/api/images/history/${imageId}`), {
       method: 'PUT',
       headers,
       body: JSON.stringify({ rating })
@@ -664,12 +664,12 @@ async function updateImageRating(imageId, rating) {
 // 更新视频星标
 async function updateVideoRating(videoId, rating) {
   try {
-    const headers = { 
-      ...getTenantHeaders(), 
+    const headers = {
+      ...getTenantHeaders(),
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
-    const res = await fetch(`/api/videos/history/${videoId}`, {
+    const res = await fetch(getApiUrl(`/api/videos/history/${videoId}`), {
       method: 'PUT',
       headers,
       body: JSON.stringify({ rating })
@@ -932,9 +932,9 @@ async function loadReferralData() {
   const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
   try {
     const [statsRes, recordsRes, withdrawalsRes] = await Promise.all([
-      fetch('/api/user/referral/stats', { headers }),
-      fetch('/api/user/referral/records?page_size=50', { headers }),
-      fetch('/api/user/referral/withdrawals?page_size=50', { headers })
+      fetch(getApiUrl('/api/user/referral/stats'), { headers }),
+      fetch(getApiUrl('/api/user/referral/records?page_size=50'), { headers }),
+      fetch(getApiUrl('/api/user/referral/withdrawals?page_size=50'), { headers })
     ])
     if (statsRes.ok) referralStats.value = await statsRes.json()
     if (recordsRes.ok) { const d = await recordsRes.json(); referralRecords.value = d.records || [] }
@@ -954,7 +954,7 @@ async function doReferralWithdraw() {
   referralSubmitting.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-    const res = await fetch('/api/user/referral/withdraw', {
+    const res = await fetch(getApiUrl('/api/user/referral/withdraw'), {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -985,14 +985,14 @@ async function doReferralTransfer() {
   referralSubmitting.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-    const res = await fetch('/api/user/referral/transfer', { method: 'POST', headers, body: JSON.stringify({ amount: amtFen }) })
+    const res = await fetch(getApiUrl('/api/user/referral/transfer'), { method: 'POST', headers, body: JSON.stringify({ amount: amtFen }) })
     const data = await res.json()
     if (!res.ok) throw new Error(data.message || '划转失败')
     showToast('划转成功，已到账余额', 'success')
     referralActionAmount.value = ''
     loadReferralData()
     // 刷新用户信息以更新余额
-    const meRes = await fetch('/api/user/me', { headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` } })
+    const meRes = await fetch(getApiUrl('/api/user/me'), { headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` } })
     if (meRes.ok) me.value = await meRes.json()
   } catch (e) {
     showToast(e.message, 'error')
@@ -1029,7 +1029,7 @@ async function saveProfile() {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
-    const res = await fetch('/api/user/profile', {
+    const res = await fetch(getApiUrl('/api/user/profile'), {
       method: 'PUT',
       headers,
       body: JSON.stringify(profileForm.value)
@@ -1075,7 +1075,7 @@ async function changePassword() {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
-    const res = await fetch('/api/user/password', {
+    const res = await fetch(getApiUrl('/api/user/password'), {
       method: 'PUT',
       headers,
       body: JSON.stringify({
@@ -1129,7 +1129,7 @@ async function doCheckin() {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
-    const res = await fetch('/api/user/checkin', {
+    const res = await fetch(getApiUrl('/api/user/checkin'), {
       method: 'POST',
       headers
     })
@@ -1156,7 +1156,7 @@ async function doCheckin() {
     }
     
     // 重新加载积分流水
-    const ledgerRes = await fetch('/api/user/points', { headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` } })
+    const ledgerRes = await fetch(getApiUrl('/api/user/points'), { headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` } })
     if (ledgerRes.ok) {
       ledger.value = (await ledgerRes.json()).ledger
     }
@@ -1351,7 +1351,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     
     // 获取套餐列表
     console.log('[User/tryAutoPurchasePackage] 获取套餐列表...')
-    const pkgRes = await fetch('/api/packages', {
+    const pkgRes = await fetch(getApiUrl('/api/packages'), {
       headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     })
     if (!pkgRes.ok) {
@@ -1368,7 +1368,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     }
     
     // 获取当前用户套餐
-    const activeRes = await fetch('/api/user/package', {
+    const activeRes = await fetch(getApiUrl('/api/user/package'), {
       headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     })
     let activePackage = null
@@ -1457,7 +1457,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     
     // 购买套餐（后端会自动处理续费延期、升级折抵等逻辑）
     console.log('[User/tryAutoPurchasePackage] 开始购买套餐...')
-    const purchaseRes = await fetch('/api/packages/purchase', {
+    const purchaseRes = await fetch(getApiUrl('/api/packages/purchase'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -1473,7 +1473,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     if (purchaseRes.ok && !purchaseData.pay_url) {
       // 购买成功
       // 刷新用户信息获取最新余额
-      const userRes = await fetch('/api/user/me', {
+      const userRes = await fetch(getApiUrl('/api/user/me'), {
         headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
       })
       let remainingBalance = 0
@@ -1505,7 +1505,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
 async function claimMilestoneReward(milestone) {
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-    const res = await fetch('/api/invite/claim-milestone', {
+    const res = await fetch(getApiUrl('/api/invite/claim-milestone'), {
       method: 'POST',
       headers,
       body: JSON.stringify({ milestone })
@@ -1593,7 +1593,7 @@ async function submitTransfer() {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 30000)
     
-    const res = await fetch('/api/user/balance-to-points', {
+    const res = await fetch(getApiUrl('/api/user/balance-to-points'), {
       method: 'POST',
       headers,
       body: JSON.stringify({ amount: amountInCents }),
@@ -1696,7 +1696,7 @@ function handleRecipientSearch() {
         ...getTenantHeaders(),
         Authorization: `Bearer ${token}`
       }
-      const res = await fetch(`/api/user/search-users?q=${encodeURIComponent(query)}`, { headers })
+      const res = await fetch(getApiUrl(`/api/user/search-users?q=${encodeURIComponent(query)}`), { headers })
 
       if (!res.ok) {
         throw new Error('搜索失败')
@@ -1772,7 +1772,7 @@ async function executeTransfer() {
       'Content-Type': 'application/json'
     }
 
-    const res = await fetch('/api/user/transfer-points', {
+    const res = await fetch(getApiUrl('/api/user/transfer-points'), {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -1831,8 +1831,8 @@ async function openRechargeModal() {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
 
     const [paymentRes, cardsRes] = await Promise.all([
-      fetch('/api/user/payment-methods', { headers }),
-      fetch('/api/recharge-cards', { headers: getTenantHeaders() })
+      fetch(getApiUrl('/api/user/payment-methods'), { headers }),
+      fetch(getApiUrl('/api/recharge-cards'), { headers: getTenantHeaders() })
     ])
 
     // 处理支付方式
@@ -1928,7 +1928,7 @@ async function submitRecharge() {
       requestBody.recharge_card_id = selectedRechargeCard.value.id
     }
 
-    const res = await fetch('/api/user/recharge', {
+    const res = await fetch(getApiUrl('/api/user/recharge'), {
       method: 'POST',
       headers,
       body: JSON.stringify(requestBody)
@@ -1958,7 +1958,7 @@ async function loadBillOrders() {
   billLoading.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
-    const res = await fetch(`/api/user/recharge/orders?page=${billPage.value}&page_size=20`, { headers })
+    const res = await fetch(getApiUrl(`/api/user/recharge/orders?page=${billPage.value}&page_size=20`), { headers })
     if (res.ok) {
       const data = await res.json()
       billOrders.value = data.orders || []
@@ -2031,7 +2031,7 @@ async function deleteImage(imageId) {
   
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
-    const res = await fetch(`/api/user/images/${imageId}`, {
+    const res = await fetch(getApiUrl(`/api/user/images/${imageId}`), {
       method: 'DELETE',
       headers
     })
@@ -2047,10 +2047,10 @@ async function deleteImage(imageId) {
 
 async function deleteVideo(videoId) {
   if (!confirm('确定要删除这个视频吗？')) return
-  
+
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
-    const res = await fetch(`/api/videos/history/${videoId}`, {
+    const res = await fetch(getApiUrl(`/api/videos/history/${videoId}`), {
       method: 'DELETE',
       headers
     })
@@ -2177,7 +2177,7 @@ onMounted(async () => {
   // 加载兑换券外部链接配置和余额兑换率
   try {
     // 🔧 添加租户头信息，确保读取租户特定配置
-    const configRes = await fetch('/api/points-config', { headers: getTenantHeaders() })
+    const configRes = await fetch(getApiUrl('/api/points-config'), { headers: getTenantHeaders() })
     if (configRes.ok) {
       const configData = await configRes.json()
       if (configData.voucher_external_link) {
@@ -2654,7 +2654,7 @@ onUnmounted(() => {
                 @click="viewImage(image)"
                 class="aspect-square rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform duration-200 shadow-md"
               >
-                <img :src="image.url" :alt="image.prompt" class="w-full h-full object-cover" />
+                <img :src="getMediaUrl(image.url)" :alt="image.prompt" class="w-full h-full object-cover" />
               </div>
             </div>
           </div>
@@ -2899,7 +2899,7 @@ onUnmounted(() => {
                   ]"
                   @click="imageSelectMode ? toggleImageSelection(image.id) : null"
                 >
-                  <img :src="image.url" :alt="image.prompt" class="w-full h-full object-cover" loading="lazy" />
+                  <img :src="getMediaUrl(image.url)" :alt="image.prompt" class="w-full h-full object-cover" loading="lazy" />
                   
                   <!-- 选择复选框 -->
                   <div v-if="imageSelectMode" class="absolute top-2 left-2 z-10">
@@ -2965,7 +2965,7 @@ onUnmounted(() => {
                       </svg>
                     </button>
                     <a
-                      :href="image.url"
+                      :href="getMediaUrl(image.url)"
                       :download="image.note ? `${sanitizeFilename(image.note)}.png` : `image-${image.id}.png`"
                       class="p-2 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors"
                       title="下载"
@@ -3200,7 +3200,7 @@ onUnmounted(() => {
                   <div class="aspect-video bg-black relative cursor-pointer" @click="videoSelectMode && video.video_url ? toggleVideoSelection(video.id) : viewVideo(video)">
                     <video
                       v-if="video.video_url"
-                      :src="video.video_url"
+                      :src="getMediaUrl(video.video_url)"
                       class="w-full h-full object-cover"
                       muted
                       playsinline
@@ -3306,7 +3306,7 @@ onUnmounted(() => {
                       </button>
                       <a
                         v-if="video.video_url"
-                        :href="video.video_url"
+                        :href="getMediaUrl(video.video_url)"
                         :download="video.note ? `${sanitizeFilename(video.note)}.mp4` : `video-${video.id}.mp4`"
                         class="flex-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white text-xs rounded-lg transition-colors text-center"
                         @click.stop
@@ -4762,7 +4762,7 @@ onUnmounted(() => {
     <div v-if="showImageModal && selectedImage" class="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4" @click.self="showImageModal = false">
       <div class="max-w-5xl w-full">
         <div class="relative">
-          <img :src="selectedImage.url" :alt="selectedImage.prompt" class="w-full h-auto rounded-xl shadow-2xl" />
+          <img :src="getMediaUrl(selectedImage.url)" :alt="selectedImage.prompt" class="w-full h-auto rounded-xl shadow-2xl" />
           <div class="absolute top-4 right-4 flex space-x-2">
             <!-- 星级选择器 -->
             <div class="relative group/modalrating">
@@ -4796,7 +4796,7 @@ onUnmounted(() => {
               <span class="text-xl">📝</span>
             </button>
             <a
-              :href="selectedImage.url"
+              :href="getMediaUrl(selectedImage.url)"
               :download="selectedImage.note ? `${sanitizeFilename(selectedImage.note)}.png` : `${selectedImage.model}-${selectedImage.id}.png`"
               class="p-3 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors"
               title="下载图片"
@@ -4855,7 +4855,7 @@ onUnmounted(() => {
             <video
               ref="videoPlayerRef"
               v-if="selectedVideo.video_url"
-              :src="selectedVideo.video_url"
+              :src="getMediaUrl(selectedVideo.video_url)"
               controls
               playsinline
               class="w-full h-full object-contain"
@@ -4901,7 +4901,7 @@ onUnmounted(() => {
             </button>
             <a
               v-if="selectedVideo.video_url"
-              :href="selectedVideo.video_url"
+              :href="getMediaUrl(selectedVideo.video_url)"
               :download="selectedVideo.note ? `${sanitizeFilename(selectedVideo.note)}.mp4` : `${selectedVideo.model}-${selectedVideo.id}.mp4`"
               class="p-3 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors"
               title="下载视频"

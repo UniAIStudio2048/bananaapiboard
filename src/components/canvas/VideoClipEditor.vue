@@ -9,7 +9,7 @@
  * - 确认创建角色
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { getSoraCharacterConfig, getTenantHeaders } from '@/config/tenant.js'
+import { getSoraCharacterConfig, getTenantHeaders, getApiUrl } from '@/config/tenant.js'
 
 // 获取角色创建积分消耗
 const characterPointsCost = computed(() => {
@@ -267,7 +267,7 @@ function handleDragEnd() {
 async function loadAvailableChannels() {
   loadingChannels.value = true
   try {
-    const response = await fetch('/api/sora/characters/channels', {
+    const response = await fetch(getApiUrl('/api/sora/characters/channels'), {
       headers: {
         ...getTenantHeaders()
       }

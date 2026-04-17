@@ -144,8 +144,8 @@ router.beforeEach(async (to, from, next) => {
     
     // 仅在首次进入认证页面时验证 token
     try {
-      const { getTenantHeaders } = await import('@/config/tenant')
-      const response = await fetch('/api/user/me', {
+      const { getTenantHeaders, getApiUrl } = await import('@/config/tenant')
+      const response = await fetch(getApiUrl('/api/user/me'), {
         headers: {
           ...getTenantHeaders(),
           'Authorization': `Bearer ${token}`

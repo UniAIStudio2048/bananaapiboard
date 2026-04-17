@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
 
 const router = useRouter()
@@ -57,7 +57,7 @@ const hasWhitelist = computed(() => {
 // 加载邀请奖励配置和注册设置
 async function loadInviteRewards() {
   try {
-    const r = await fetch('/api/points-config')
+    const r = await fetch(getApiUrl('/api/points-config'))
     if (r.ok) {
       const data = await r.json()
       if (data.inviter_bonus !== undefined) inviteRewards.value.inviter_bonus = data.inviter_bonus
@@ -65,7 +65,7 @@ async function loadInviteRewards() {
     }
 
     // 加载注册与邀请设置
-    const settingsRes = await fetch('/api/settings/app', {
+    const settingsRes = await fetch(getApiUrl('/api/settings/app'), {
       headers: getTenantHeaders()
     })
     if (settingsRes.ok) {
@@ -83,7 +83,7 @@ async function loadInviteRewards() {
 // 加载邮箱配置
 async function loadEmailConfig() {
   try {
-    const r = await fetch('/api/email/public-config', {
+    const r = await fetch(getApiUrl('/api/email/public-config'), {
       headers: getTenantHeaders()
     })
     if (r.ok) {
@@ -149,7 +149,7 @@ async function sendVerificationCode() {
   
   try {
     const type = resetMode.value ? 'reset_password' : 'register'
-    const r = await fetch('/api/email/send-verification-code', {
+    const r = await fetch(getApiUrl('/api/email/send-verification-code'), {
       method: 'POST',
       headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, type })
@@ -203,7 +203,7 @@ async function resetPassword() {
   loading.value = true
   
   try {
-    const r = await fetch('/api/auth/reset-password', {
+    const r = await fetch(getApiUrl('/api/auth/reset-password'), {
       method: 'POST',
       headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({

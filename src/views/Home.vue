@@ -7,7 +7,7 @@ import MentionDropdown from '@/components/MentionDropdown.vue'
 import PromptInputWithTags from '@/components/PromptInputWithTags.vue'
 import CachedImage from '@/components/CachedImage.vue'
 import { labelToPromptText, indexToLabel } from '@/utils/imageAnnotation'
-import { getTenantHeaders, getModelDisplayName, getAvailableImageModels } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName, getAvailableImageModels, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { formatPoints } from '@/utils/format'
 import VirtualList from 'vue3-virtual-scroll-list'
@@ -675,7 +675,7 @@ async function loadHistory(reset = true) {
     }
     
     loadingMoreHistory.value = true
-    const r = await fetch(`/api/images/history?limit=${HISTORY_PAGE_SIZE}&offset=${historyOffset.value}`, { headers })
+    const r = await fetch(getApiUrl(`/api/images/history?limit=${HISTORY_PAGE_SIZE}&offset=${historyOffset.value}`), { headers })
     
     if (r.status === 304) return
     if (r.ok) {
@@ -731,7 +731,7 @@ async function loadHistory(reset = true) {
 // SWR 后台静默刷新：不阻塞 UI，刷新完毕后更新数据
 async function _refreshHistoryInBackground(headers) {
   try {
-    const r = await fetch(`/api/images/history?limit=${HISTORY_PAGE_SIZE}&offset=0`, { headers })
+    const r = await fetch(getApiUrl(`/api/images/history?limit=${HISTORY_PAGE_SIZE}&offset=0`), { headers })
     if (!r.ok || r.status === 304) return
     const data = await r.json()
     const newImages = data.images || []
@@ -761,7 +761,7 @@ async function checkTaskStatus(taskId) {
   try {
     const token = localStorage.getItem('token')
     const headers = { ...getTenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
-    const r = await fetch(`/api/images/task/${taskId}`, { headers })
+    const r = await fetch(getApiUrl(`/api/images/task/${taskId}`), { headers })
     if (r.ok) {
       const data = await r.json()
       return data
@@ -1215,7 +1215,7 @@ async function updateImageNote(item, note) {
   if (!item || !item.id) return
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch(`/api/images/history/${item.id}`, {
+    const response = await fetch(getApiUrl(`/api/images/history/${item.id}`), {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1242,7 +1242,7 @@ async function updateImageRating(item, rating) {
   if (!item || !item.id) return
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch(`/api/images/history/${item.id}`, {
+    const response = await fetch(getApiUrl(`/api/images/history/${item.id}`), {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
@@ -1539,7 +1539,7 @@ async function deleteHistoryImage(item) {
     
     // 调用删除 API
     const token = localStorage.getItem('token')
-    const response = await fetch(`/api/user/images/${item.id}`, {
+    const response = await fetch(getApiUrl(`/api/user/images/${item.id}`), {
       method: 'DELETE',
       headers: {
         ...getTenantHeaders(),
@@ -1869,7 +1869,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     
     // 获取套餐列表
     console.log('[Home/tryAutoPurchasePackage] 获取套餐列表...')
-    const pkgRes = await fetch('/api/packages', {
+    const pkgRes = await fetch(getApiUrl('/api/packages'), {
       headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     })
     if (!pkgRes.ok) {
@@ -1886,7 +1886,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     }
     
     // 获取当前用户套餐
-    const activeRes = await fetch('/api/user/package', {
+    const activeRes = await fetch(getApiUrl('/api/user/package'), {
       headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     })
     let activePackage = null
@@ -1975,7 +1975,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     
     // 购买套餐（后端会自动处理续费延期、升级折抵等逻辑）
     console.log('[Home/tryAutoPurchasePackage] 开始购买套餐...')
-    const purchaseRes = await fetch('/api/packages/purchase', {
+    const purchaseRes = await fetch(getApiUrl('/api/packages/purchase'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -1991,7 +1991,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     if (purchaseRes.ok && !purchaseData.pay_url) {
       // 购买成功
       // 刷新用户信息获取最新余额
-      const userRes = await fetch('/api/user/me', {
+      const userRes = await fetch(getApiUrl('/api/user/me'), {
         headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
       })
       let remainingBalance = 0
@@ -2052,7 +2052,7 @@ onMounted(async () => {
   
   // 加载兑换券外部链接配置
   try {
-    const configRes = await fetch('/api/points-config')
+    const configRes = await fetch(getApiUrl('/api/points-config'))
     if (configRes.ok) {
       const configData = await configRes.json()
       if (configData.voucher_external_link) {

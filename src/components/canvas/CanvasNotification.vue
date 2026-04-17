@@ -4,7 +4,7 @@
  * 支持多条公告消息，按日期分组显示
  */
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 
 const props = defineProps({
   theme: {
@@ -67,7 +67,7 @@ function formatDate(timestamp) {
 // 加载通知配置（检查是否启用画布模式显示）
 async function loadNotificationConfig() {
   try {
-    const r = await fetch('/api/tenant/notification', {
+    const r = await fetch(getApiUrl('/api/tenant/notification'), {
       headers: getTenantHeaders()
     })
     if (r.ok) {
@@ -94,7 +94,7 @@ async function loadAnnouncements() {
   
   loading.value = true
   try {
-    const r = await fetch('/api/tenant/announcements', {
+    const r = await fetch(getApiUrl('/api/tenant/announcements'), {
       headers: getTenantHeaders()
     })
     if (r.ok) {

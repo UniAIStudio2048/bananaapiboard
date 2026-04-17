@@ -1638,6 +1638,29 @@ export const getApiUrl = (path) => {
   return path
 }
 
+/**
+ * 获取媒体资源 URL（图片、视频、音频）
+ * 处理相对路径转绝对路径，支持跨域访问
+ * @param {string} url - 原始 URL（可能是相对路径或完整 URL）
+ * @returns {string} 可访问的完整 URL
+ */
+export const getMediaUrl = (url) => {
+  if (!url) return url
+
+  // 已经是完整 URL，直接返回
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url
+  }
+
+  // 相对路径，需要拼接 apiBase
+  // /api/cos-proxy/... 或 /storage/... 等
+  if (url.startsWith('/')) {
+    return getApiUrl(url)
+  }
+
+  return url
+}
+
 // 获取所有可用的音乐模型列表（从配置中动态获取）
 export const getAvailableMusicModels = () => {
   // 获取音乐配置
