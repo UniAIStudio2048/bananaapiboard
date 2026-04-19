@@ -1967,6 +1967,10 @@ onUnmounted(() => {
                         :class="['flex-1 py-1.5 px-2 text-xs font-medium rounded-lg border transition-all', seedanceResolution === '720p' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900 dark:border-gray-200' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500 hover:border-gray-400']">
                         720p
                       </button>
+                      <button type="button" @click="seedanceResolution = '1080p'"
+                        :class="['flex-1 py-1.5 px-2 text-xs font-medium rounded-lg border transition-all', seedanceResolution === '1080p' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900 dark:border-gray-200' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500 hover:border-gray-400']">
+                        1080p
+                      </button>
                     </div>
                   </div>
                   <!-- 宽高比 -->
