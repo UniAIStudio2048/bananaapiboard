@@ -22,7 +22,7 @@ import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { getCachedHistory, cacheHistory, invalidateCache } from '@/utils/historyCache'
 import { preloadImages } from '@/utils/imageCache'
-import { toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { toSameOriginUrl, getOriginalImageUrl } from '@/utils/canvasThumbnail'
 import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
@@ -599,24 +599,25 @@ function getFileExtension(type, url) {
   }
 }
 
-// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
 async function handleDownload(item) {
   if (!item.url) return
   closeContextMenu()
   
+  // 获取原始图片 URL（去除缩略图参数），确保下载原图
+  const downloadUrl = getOriginalImageUrl(item.url)
+  
   // 确保文件名有正确的扩展名
-  const ext = getFileExtension(item.type, item.url)
+  const ext = getFileExtension(item.type, downloadUrl)
   let filename = item.name || `${item.type}_${item.id}`
-  // 如果文件名没有扩展名，添加扩展名
   if (!filename.match(/\.[a-zA-Z0-9]+$/)) {
     filename += ext
   }
   
-  console.log('[HistoryPanel] 开始下载:', { url: item.url.substring(0, 60), filename })
+  console.log('[HistoryPanel] 开始下载:', { url: downloadUrl.substring(0, 60), filename })
   
   try {
     const { smartDownload } = await import('@/api/client')
-    await smartDownload(item.url, filename)
+    await smartDownload(downloadUrl, filename)
     console.log('[HistoryPanel] 下载成功:', filename)
   } catch (error) {
     console.error('[HistoryPanel] 下载失败:', error)

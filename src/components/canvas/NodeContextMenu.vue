@@ -12,6 +12,7 @@ import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled } from '@/config
 import { saveAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
 import { createAssetGroup, listAssetGroups, createAsset as createVolcAsset, pollAssetStatus } from '@/api/canvas/volcengine-assets'
+import { getOriginalImageUrl } from '@/utils/canvasThumbnail'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -412,18 +413,16 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([byteArray], { type: mime })
 }
 
-// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
 async function downloadImage() {
   if (!imageUrl.value) return
   
   const filename = `image_${Date.now()}.png`
   
   try {
-    const url = imageUrl.value
+    // 获取原始图片 URL（去除缩略图参数），确保下载原图
+    const url = getOriginalImageUrl(imageUrl.value)
     
-    // dataUrl 直接在前端转换下载
     if (url.startsWith('data:')) {
-      console.log('[NodeContextMenu] dataUrl 格式图片，使用前端直接下载')
       const blob = dataUrlToBlob(url)
       const blobUrl = window.URL.createObjectURL(blob)
       const a = document.createElement('a')
@@ -437,7 +436,6 @@ async function downloadImage() {
       return
     }
     
-    // 统一使用 smartDownload（fetch+blob，自动修正扩展名，解决跨域）
     const { smartDownload } = await import('@/api/client')
     await smartDownload(url, filename)
   } catch (error) {

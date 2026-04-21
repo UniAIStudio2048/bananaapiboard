@@ -2852,9 +2852,8 @@ async function handleToolbarDownload() {
   const filename = `image_${props.id || Date.now()}.png`
   
   try {
-    const imageUrl = currentImageUrl.value
+    const imageUrl = getOriginalImageUrl(currentImageUrl.value)
     
-    // 如果是 dataUrl（base64），直接在前端转换为 Blob 下载
     if (imageUrl.startsWith('data:')) {
       console.log('[ImageNode] dataUrl 格式图片，使用前端直接下载')
       const blob = await dataUrlToBlob(imageUrl)
@@ -2869,7 +2868,6 @@ async function handleToolbarDownload() {
       return
     }
     
-    // 🔧 使用 smartDownload：fetch+blob 方式，自动修正扩展名，解决跨域下载问题
     const { smartDownload } = await import('@/api/client')
     await smartDownload(imageUrl, filename)
     console.log('[ImageNode] 下载原图成功:', filename)

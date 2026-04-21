@@ -538,7 +538,49 @@ export async function smartDownload(url, filename) {
   const correctedFilename = correctFilenameExtension(filename || 'download', url)
 
   // 获取干净的原始 URL（去除图片处理参数）
-  const cleanUrl = getQiniuOriginalUrl(url)
+  let cleanUrl = getQiniuOriginalUrl(url)
+
+  // COS 代理 URL：去除 imageMogr2 / imageView2 等缩略图处理参数，确保下载原图
+  if (cleanUrl.includes('/api/cos-proxy/') && !cleanUrl.match(/\.(mp4|webm|mov|avi)(\?|$)/i)) {
+    cleanUrl = cleanUrl.split('?')[0]
+  }
+
+  // 本地文件 URL：去除 preview / w 缩略图参数
+  if (cleanUrl.includes('/api/images/file/')) {
+    try {
+      const urlObj = new URL(cleanUrl, window.location.origin)
+      urlObj.searchParams.delete('preview')
+      urlObj.searchParams.delete('w')
+      cleanUrl = urlObj.pathname + (urlObj.search || '')
+    } catch {
+      cleanUrl = cleanUrl.replace(/[?&]preview=true/g, '').replace(/[?&]w=\d+/g, '')
+    }
+  }
+
+  // 完整 HTTP URL 包含我们自己的 API 路径时，走后端 /api/images/download 原生下载
+  // 不用 fetch（避免浏览器安全策略拦截），直接用 <a> 标签触发浏览器原生下载
+  if ((cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) &&
+      /\/api\/(cos-proxy|images\/file)\//.test(cleanUrl)) {
+    try {
+      const urlObj = new URL(cleanUrl)
+      const apiIdx = urlObj.pathname.indexOf('/api/')
+      if (apiIdx >= 0) {
+        const relativePath = urlObj.pathname.substring(apiIdx)
+        const downloadUrl = `/api/images/download?url=${encodeURIComponent(relativePath)}&filename=${encodeURIComponent(correctedFilename)}`
+        console.log('[smartDownload] 原生下载:', { url: relativePath.substring(0, 80), filename: correctedFilename })
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = correctedFilename
+        link.style.display = 'none'
+        document.body.appendChild(link)
+        link.click()
+        setTimeout(() => document.body.removeChild(link), 200)
+        return
+      }
+    } catch (e) {
+      console.warn('[smartDownload] 原生下载失败，回退默认逻辑:', e.message)
+    }
+  }
 
   console.log('[smartDownload] 开始下载:', { url: cleanUrl.substring(0, 80), filename: correctedFilename })
 
@@ -564,10 +606,10 @@ export async function smartDownload(url, filename) {
       console.warn('[smartDownload] 七牛云直接下载失败(CORS)，回退到后端代理:', corsErr.message)
     }
 
-    // 回退：走后端代理下载
+    // 回退：走后端代理下载（使用相对路径，走 nginx 同源代理）
     const proxyParams = new URLSearchParams({ url: cleanUrl, filename: correctedFilename })
-    const proxyUrl = getApiUrl(`/api/images/download?${proxyParams.toString()}`)
-    const proxyResp = await fetchWithTimeout(proxyUrl, { headers: getHeaders() })
+    const proxyPath = `/api/images/download?${proxyParams.toString()}`
+    const proxyResp = await fetchWithTimeout(proxyPath, { headers: getHeaders() })
     if (!proxyResp.ok) throw new Error(`后端代理下载失败: ${proxyResp.status}`)
     const blob = await proxyResp.blob()
     triggerBlobDownload(blob, correctedFilename)
@@ -575,9 +617,9 @@ export async function smartDownload(url, filename) {
     return
   }
 
-  // 本地 API 路径
-  if (cleanUrl.startsWith('/api/') || cleanUrl.startsWith(getApiUrl(''))) {
-    const fullUrl = cleanUrl.startsWith('http') ? cleanUrl : getApiUrl(cleanUrl)
+  // 本地 API 相对路径（如 /api/images/file/xxx、/api/cos-proxy/...）
+  if (cleanUrl.startsWith('/api/')) {
+    const fullUrl = getApiUrl(cleanUrl)
     const response = await fetchWithTimeout(fullUrl, { headers: getHeaders() })
     if (!response.ok) throw new Error(`下载失败: ${response.status}`)
     const blob = await response.blob()
@@ -585,14 +627,26 @@ export async function smartDownload(url, filename) {
     return
   }
 
-  // 其他外部 URL：走后端代理
-  const params = new URLSearchParams({ url: cleanUrl, filename: correctedFilename })
-  const proxyUrl = getApiUrl(`/api/images/download?${params.toString()}`)
-  const response = await fetchWithTimeout(proxyUrl, { headers: getHeaders() })
+  // 完整 HTTP(S) URL（含我们自己域名的 API URL 和其他外部 URL）
+  // 走后端 /api/images/download 代理：服务端 fetch 无 CORS 限制
+  // 使用相对路径而非 getApiUrl，确保请求走 nginx 同源代理，避免跨域问题
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+    const params = new URLSearchParams({ url: cleanUrl, filename: correctedFilename })
+    const proxyPath = `/api/images/download?${params.toString()}`
+    console.log('[smartDownload] 走后端代理下载:', cleanUrl.substring(0, 80))
+    const response = await fetchWithTimeout(proxyPath, { headers: getHeaders() })
+    if (!response.ok) throw new Error(`后端代理下载失败: ${response.status}`)
+    const blob = await response.blob()
+    triggerBlobDownload(blob, correctedFilename)
+    console.log('[smartDownload] 后端代理下载成功:', correctedFilename)
+    return
+  }
+
+  // 兜底：直接 fetch
+  const response = await fetchWithTimeout(cleanUrl)
   if (!response.ok) throw new Error(`下载失败: ${response.status}`)
   const blob = await response.blob()
   triggerBlobDownload(blob, correctedFilename)
-  console.log('[smartDownload] 后端代理下载成功:', correctedFilename)
 }
 
 /**
