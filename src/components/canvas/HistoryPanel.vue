@@ -22,6 +22,7 @@ import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { getCachedHistory, cacheHistory, invalidateCache } from '@/utils/historyCache'
 import { preloadImages } from '@/utils/imageCache'
+import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
@@ -456,19 +457,11 @@ watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
   }
 })
 
-watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], ([newType, newTeamId]) => {
-  const newFilter = newType === 'team' && newTeamId ? `team-${newTeamId}` : 'personal'
-  if (newFilter !== spaceFilter.value) {
-    spaceFilter.value = newFilter
+// 全局空间变化时仅刷新数据（不覆盖用户选择的空间筛选器）
+watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], () => {
+  if (props.visible) {
     dataCached.value = false
-    if (props.visible) {
-      loadHistory(true)
-    }
-    if (newFilter.startsWith('team-')) {
-      startTeamSync()
-    } else {
-      stopTeamSync()
-    }
+    loadHistory(true)
   }
 })
 
@@ -1306,14 +1299,16 @@ function extractVideoThumbnail(item, useProxy = false) {
   processingThumbnails.value++
   
   const video = document.createElement('video')
-  video.crossOrigin = 'anonymous'
   video.muted = true
   video.preload = 'metadata'
   
+  // 使用同源相对路径加载视频，避免跨域导致 canvas drawImage 被阻止
+  // 注意：不要设置 crossOrigin = 'anonymous'，会污染浏览器缓存导致同 URL 的其他 <video> 也加载失败
+  const safeUrl = toSameOriginUrl(item.url)
+
   const cleanup = () => {
     video.remove()
     processingThumbnails.value--
-    // 处理队列中的下一个
     processNextThumbnail()
   }
   
@@ -1327,10 +1322,8 @@ function extractVideoThumbnail(item, useProxy = false) {
       const videoWidth = video.videoWidth || 320
       const videoHeight = video.videoHeight || 180
 
-      // 保存视频的宽高比
       videoAspectRatios.value[item.id] = videoWidth / videoHeight
 
-      // 计算缩略图尺寸，保持比例，限制最大边长为 480px 以保证清晰度
       const maxDim = 480
       let scale = 1
       if (videoWidth > maxDim || videoHeight > maxDim) {
@@ -1350,12 +1343,11 @@ function extractVideoThumbnail(item, useProxy = false) {
   }
   
   video.onerror = () => {
-    console.warn('[HistoryPanel] 视频缩略图提取失败:', item.url?.substring(0, 50))
+    console.warn('[HistoryPanel] 视频缩略图提取失败:', safeUrl?.substring(0, 50))
     videoThumbnailFailed.value[item.id] = true
     cleanup()
   }
   
-  // 设置超时，防止卡住
   setTimeout(() => {
     if (processingThumbnails.value > 0 && !videoThumbnails.value[item.id]) {
       videoThumbnailFailed.value[item.id] = true
@@ -1363,7 +1355,7 @@ function extractVideoThumbnail(item, useProxy = false) {
     }
   }, 5000)
   
-  video.src = item.url
+  video.src = safeUrl
 }
 
 // 处理队列中的下一个缩略图
@@ -1477,8 +1469,8 @@ watch(() => props.visible, async (visible) => {
     // 重置滚动位置
     scrollTop.value = 0
     
-    // 每次打开面板时重置内存缓存，确保走 IndexedDB + 后台刷新路径
-    // 这样新生成的图片会通过后台刷新被及时发现
+    // 每次打开面板时重置为「全部」，确保能看到所有空间的记录
+    spaceFilter.value = 'all'
     dataCached.value = false
     
     // 加载数据
@@ -1545,7 +1537,14 @@ function handleGlobalClick(e) {
 // ResizeObserver 引用
 let resizeObserver = null
 
+function handleCanvasHistoryInvalidate() {
+  dataCached.value = false
+  invalidateCache('all').catch(() => {})
+  loadHistory(true)
+}
+
 onMounted(() => {
+  window.addEventListener('canvas-history-invalidate', handleCanvasHistoryInvalidate)
   document.addEventListener('keydown', handleKeydown)
   document.addEventListener('mousemove', handleGlobalMouseMove)
   document.addEventListener('mouseup', handleGlobalMouseUp)
@@ -1561,6 +1560,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('canvas-history-invalidate', handleCanvasHistoryInvalidate)
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('mousemove', handleGlobalMouseMove)
   document.removeEventListener('mouseup', handleGlobalMouseUp)
@@ -1820,7 +1820,7 @@ onUnmounted(() => {
                     <!-- 备用：直接使用 video 元素显示首帧 -->
                     <video 
                       v-else-if="item.url"
-                      :src="item.url"
+                      :src="toSameOriginUrl(item.url)"
                       class="card-image card-video-preview"
                       muted
                       preload="metadata"
@@ -2001,7 +2001,7 @@ onUnmounted(() => {
             <video 
               v-else-if="previewItem.type === 'video'"
               ref="previewVideoRef"
-              :src="previewItem.url"
+              :src="toSameOriginUrl(previewItem.url)"
               controls
               autoplay
               preload="metadata"

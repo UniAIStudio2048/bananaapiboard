@@ -117,6 +117,9 @@ const ticketListRef = ref(null)
 // 画布主题切换 (dark / light)
 const canvasTheme = ref('dark')
 
+// 交互模式 (comfyui / infinite-canvas)
+const interactionMode = ref('comfyui')
+
 // 自动保存定时器
 const autoSaveInterval = ref(null)
 const lastAutoSave = ref(null)
@@ -366,6 +369,9 @@ const imageToolbarPosition = computed(() => {
 
 // 提供用户信息给子组件
 provide('userInfo', me)
+
+// 提供交互模式给子组件
+provide('interactionMode', interactionMode)
 
 // 打开模板面板
 function openTemplates() {
@@ -835,7 +841,10 @@ function handleWorkflowSaved(workflow) {
 
   // 更新当前标签名称和工作流ID
   canvasStore.updateCurrentTabName(workflow.name)
-  canvasStore.markCurrentTabSaved(workflow.id, workflow.workflow_uid)
+  canvasStore.markCurrentTabSaved(workflow.id, workflow.workflow_uid, {
+    space_type: workflow.space_type,
+    team_id: workflow.team_id
+  })
 
   // 启用自动保存
   if (!autoSaveEnabled.value) {
@@ -942,7 +951,10 @@ async function autoSaveWorkflow() {
         
         // 更新标签信息
         if (result?.workflow?.id) {
-          canvasStore.markCurrentTabSaved(result.workflow.id)
+          canvasStore.markCurrentTabSaved(result.workflow.id, result.workflow.workflow_uid, {
+            space_type: result.workflow.space_type,
+            team_id: result.workflow.team_id
+          })
           canvasStore.updateCurrentTabName(result.workflow.name)
           lastAutoSave.value = new Date()
           console.log('[Canvas] 自动保存成功（新建草稿）:', result.workflow.name)
@@ -1120,6 +1132,21 @@ function updateNodeFromTask(task) {
         })
         console.log(`[Canvas] 高清任务完成，节点 ${task.nodeId} 已更新`)
       }
+    } else if (task.type === 'image-hd') {
+      const imageUrl = result.outputUrl || result.url
+      if (imageUrl) {
+        canvasStore.updateNodeData(task.nodeId, {
+          status: 'success',
+          progress: null,
+          output: {
+            type: 'image',
+            urls: [imageUrl]
+          },
+          pointsCost: result.pointsCost || 0,
+          hdUpscaled: true
+        })
+        console.log(`[Canvas] 图片高清任务完成，节点 ${task.nodeId} 已更新`)
+      }
     } else if (task.type === 'video') {
       // 视频任务完成
       if (result.url) {
@@ -1137,7 +1164,7 @@ function updateNodeFromTask(task) {
     console.log(`[Canvas] 节点 ${task.nodeId} 已更新为完成状态`)
   } else if (task.status === 'failed') {
     // 任务失败
-    const errorMsg = task.type === 'video-hd' ? '高清处理失败' : '任务执行失败'
+    const errorMsg = (task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理失败' : '任务执行失败'
     canvasStore.updateNodeData(task.nodeId, {
       status: 'error',
       progress: null,
@@ -1145,7 +1172,7 @@ function updateNodeFromTask(task) {
     })
   } else if (task.status === 'processing') {
     // 任务进行中
-    const progressText = task.type === 'video-hd' ? '高清处理中...' : task.progress
+    const progressText = (task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理中...' : task.progress
     canvasStore.updateNodeData(task.nodeId, {
       status: 'processing',
       progress: progressText || task.progress
@@ -2124,15 +2151,56 @@ function handleTicketUpdated() {
 
 // 加载主题偏好
 function loadCanvasThemePreference() {
-  // 从用户偏好加载
   const userTheme = me.value?.preferences?.canvas?.theme
   if (userTheme) {
     applyCanvasTheme(userTheme)
     console.log('[Canvas] 已加载用户主题偏好:', userTheme)
   } else {
-    // 默认使用深色主题
     applyCanvasTheme('dark')
   }
+}
+
+// 加载交互模式偏好
+function loadInteractionMode() {
+  const mode = me.value?.preferences?.canvas?.interactionMode
+  if (mode === 'infinite-canvas' || mode === 'comfyui') {
+    interactionMode.value = mode
+  } else {
+    interactionMode.value = 'comfyui'
+  }
+}
+
+// 保存交互模式到后端
+async function saveInteractionMode(mode) {
+  try {
+    const currentPreferences = me.value?.preferences || {}
+    const updatedPreferences = {
+      ...currentPreferences,
+      canvas: {
+        ...(currentPreferences.canvas || {}),
+        interactionMode: mode
+      }
+    }
+    const result = await updateUserPreferences(updatedPreferences)
+    if (result && me.value) {
+      me.value.preferences = updatedPreferences
+    }
+  } catch (error) {
+    console.error('[Canvas] 保存交互模式失败:', error)
+  }
+}
+
+// 切换交互模式
+function toggleInteractionMode() {
+  const newMode = interactionMode.value === 'comfyui' ? 'infinite-canvas' : 'comfyui'
+  interactionMode.value = newMode
+  saveInteractionMode(newMode)
+}
+
+// 新手引导中选择交互模式
+function handleOnboardingModeSelect(mode) {
+  interactionMode.value = mode
+  saveInteractionMode(mode)
 }
 
 onMounted(async () => {
@@ -2148,6 +2216,9 @@ onMounted(async () => {
 
   // 加载画布主题偏好
   loadCanvasThemePreference()
+  
+  // 加载交互模式偏好
+  loadInteractionMode()
   
   // 🆕 自动恢复：检查是否有最近的工作流历史（5分钟内），刷新后自动恢复
   const autoRestored = tryAutoRestoreRecentWorkflow()
@@ -2384,27 +2455,46 @@ onUnmounted(() => {
         </div>
       </Transition>
 
-      <!-- 缩放控制 - 滑块版本 -->
-      <div class="canvas-zoom-controls" @mousedown.stop @touchstart.stop>
-        <button class="canvas-zoom-btn" @click="handleZoomOut" :disabled="canvasStore.viewport.zoom <= MIN_ZOOM" title="缩小 (-)">−</button>
-        <input
-          type="range"
-          class="canvas-zoom-slider"
-          :min="MIN_ZOOM"
-          :max="MAX_ZOOM"
-          step="0.01"
-          :value="canvasStore.viewport.zoom"
-          @input="handleZoomSlider"
+      <!-- 底部左侧控制区域 -->
+      <div class="canvas-bottom-left-controls">
+        <!-- 交互模式切换 -->
+        <button 
+          class="canvas-mode-switch-btn"
+          @click="toggleInteractionMode"
           @mousedown.stop
-          @touchstart.stop
-          :title="`缩放: ${Math.round(canvasStore.viewport.zoom * 100)}%`"
-        />
-        <span
-          class="canvas-zoom-value"
-          @click="handleZoomReset"
-          :title="'点击重置为100%'"
-        >{{ Math.round(canvasStore.viewport.zoom * 100) }}%</span>
-        <button class="canvas-zoom-btn" @click="handleZoomIn" :disabled="canvasStore.viewport.zoom >= MAX_ZOOM" title="放大 (+)">+</button>
+          :title="interactionMode === 'comfyui' ? t('canvas.switchToInfiniteCanvas') : t('canvas.switchToComfyui')"
+        >
+          <svg v-if="interactionMode === 'comfyui'" class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M3 12h4l3-9 4 18 3-9h4"/>
+          </svg>
+          <svg v-else class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M3 9h18M3 15h18M9 3v18M15 3v18" opacity="0.3"/>
+          </svg>
+        </button>
+        
+        <!-- 缩放控制 -->
+        <div class="canvas-zoom-controls" @mousedown.stop @touchstart.stop>
+          <button class="canvas-zoom-btn" @click="handleZoomOut" :disabled="canvasStore.viewport.zoom <= MIN_ZOOM" title="缩小 (-)">−</button>
+          <input
+            type="range"
+            class="canvas-zoom-slider"
+            :min="MIN_ZOOM"
+            :max="MAX_ZOOM"
+            step="0.01"
+            :value="canvasStore.viewport.zoom"
+            @input="handleZoomSlider"
+            @mousedown.stop
+            @touchstart.stop
+            :title="`缩放: ${Math.round(canvasStore.viewport.zoom * 100)}%`"
+          />
+          <span
+            class="canvas-zoom-value"
+            @click="handleZoomReset"
+            :title="'点击重置为100%'"
+          >{{ Math.round(canvasStore.viewport.zoom * 100) }}%</span>
+          <button class="canvas-zoom-btn" @click="handleZoomIn" :disabled="canvasStore.viewport.zoom >= MAX_ZOOM" title="放大 (+)">+</button>
+        </div>
       </div>
       
       <!-- 右上角控制区域 -->
@@ -2496,8 +2586,11 @@ onUnmounted(() => {
           </div>
           <div class="canvas-help-body">
             <div class="help-section">
-              <h4>🖱️ {{ t('canvas.mouseOperations') }}</h4>
-              <ul>
+              <h4>🖱️ {{ t('canvas.mouseOperations') }}
+                <span class="help-mode-badge">{{ interactionMode === 'comfyui' ? t('canvas.comfyuiModeShort') : t('canvas.infiniteCanvasModeShort') }}</span>
+              </h4>
+              <!-- ComfyUI 模式 -->
+              <ul v-if="interactionMode === 'comfyui'">
                 <li><kbd>{{ t('canvas.leftDrag') }}</kbd> {{ t('canvas.leftDragDesc') }}</li>
                 <li><kbd>{{ t('canvas.rightClick') }}</kbd> {{ t('canvas.rightClickDesc') }}</li>
                 <li><kbd>{{ t('canvas.ctrlDrag') }}</kbd> {{ t('canvas.ctrlDragDesc') }}</li>
@@ -2508,6 +2601,20 @@ onUnmounted(() => {
                 <li><kbd>{{ t('canvas.scrollDown') }}</kbd> {{ t('canvas.scrollDownDesc') }}</li>
                 <li><kbd>{{ t('canvas.shiftScroll') }}</kbd> {{ t('canvas.shiftScrollDesc') }}</li>
                 <li><kbd>{{ t('canvas.ctrlScroll') }}</kbd> {{ t('canvas.ctrlScrollDesc') }}</li>
+                <li><kbd>{{ t('canvas.middleDrag') }}</kbd> {{ t('canvas.middleDragDesc') }}</li>
+              </ul>
+              <!-- 无限画布模式 -->
+              <ul v-else>
+                <li><kbd>{{ t('canvas.leftDrag') }}</kbd> {{ t('canvas.infiniteLeftDragDesc') }}</li>
+                <li><kbd>{{ t('canvas.rightClick') }}</kbd> {{ t('canvas.rightClickDesc') }}</li>
+                <li><kbd>{{ t('canvas.spaceDrag') }}</kbd> {{ t('canvas.spaceDragDesc') }}</li>
+                <li><kbd>{{ t('canvas.leftClick') }}</kbd> {{ t('canvas.leftClickDesc') }}</li>
+                <li><kbd>{{ t('canvas.doubleClickBlank') }}</kbd> {{ t('canvas.doubleClickBlankDesc') }}</li>
+                <li><kbd>{{ t('canvas.scrollUp') }}</kbd> {{ t('canvas.infiniteScrollDesc') }}</li>
+                <li><kbd>{{ t('canvas.scrollDown') }}</kbd> {{ t('canvas.infiniteScrollDesc') }}</li>
+                <li><kbd>{{ t('canvas.shiftScroll') }}</kbd> {{ t('canvas.shiftScrollDesc') }}</li>
+                <li><kbd>{{ t('canvas.ctrlScroll') }}</kbd> {{ t('canvas.infiniteCtrlScrollDesc') }}</li>
+                <li><kbd>{{ t('canvas.middleDrag') }}</kbd> {{ t('canvas.middleDragDesc') }}</li>
               </ul>
             </div>
             <div class="help-section">
@@ -2639,8 +2746,10 @@ onUnmounted(() => {
       <!-- 新手引导 -->
       <OnboardingGuide
         :visible="showOnboarding"
+        :interaction-mode="interactionMode"
         @close="closeOnboarding"
         @complete="handleOnboardingComplete"
+        @mode-select="handleOnboardingModeSelect"
       />
 
       <!-- AI 灵感助手面板 -->
@@ -3082,6 +3191,19 @@ onUnmounted(() => {
   font-size: 14px;
   font-weight: 600;
   color: var(--canvas-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-mode-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--canvas-text-secondary);
+  border: 1px solid var(--canvas-border-subtle);
 }
 
 .help-section ul {

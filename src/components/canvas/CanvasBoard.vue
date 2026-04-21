@@ -3,16 +3,26 @@
  * CanvasBoard.vue - 无限画布组件
  * 基于 Vue Flow 实现
  * 
- * 交互说明：
+ * 交互说明（支持两种模式，通过 interactionMode 切换）：
+ * 
+ * [ComfyUI 模式]
  * - 左键拖拽空白区域：平移画布
+ * - Shift / Ctrl + 拖动：框选节点
+ * - 滚轮：以鼠标位置为中心缩放
+ * - Ctrl + 滚轮：垂直平移画布
+ * 
+ * [无限画布模式]
+ * - 左键拖拽：框选节点
+ * - 滚轮：上下平移画布
+ * - Ctrl + 滚轮：以鼠标位置为中心缩放
+ * 
+ * [通用]
  * - 右键点击空白区域：打开画布菜单
- * - Shift + 拖动：框选节点（部分覆盖即选中）
+ * - 鼠标中键拖动：始终平移画布
+ * - Shift + 滚轮：水平平移画布
+ * - 空格 + 鼠标拖动：平移画布
  * - Delete/Backspace：删除选中的节点
  * - 双击空白区域：打开节点选择器
- * - 鼠标滚轮：以鼠标位置为中心缩放
- * - Shift + 滚轮：水平平移画布
- * - Ctrl + 滚轮：垂直平移画布
- * - 空格 + 鼠标拖动：平移画布和视图跟随
  * - Ctrl+Z：撤销
  * - Ctrl+Y：重做
  * - Ctrl+C：复制节点
@@ -61,6 +71,22 @@ const openSaveDialog = inject('openSaveDialog', null)
 
 // 注入快速保存函数（Ctrl+S 使用）
 const quickSaveWorkflow = inject('quickSaveWorkflow', null)
+
+// 注入交互模式
+const interactionMode = inject('interactionMode', ref('comfyui'))
+
+// VueFlow 交互配置（根据交互模式动态切换）
+const panOnDragConfig = computed(() => {
+  // 无限画布模式：禁用 Vue Flow 内置平移（全部由自定义代码处理），
+  // 让 selectionOnDrag 独占左键拖拽行为实现框选
+  // ComfyUI 模式：左键和右键可平移画布
+  return interactionMode.value === 'infinite-canvas' ? false : [0, 2]
+})
+const selectionKeyCodeConfig = computed(() => {
+  // 无限画布模式：不需要修饰键，左键拖拽直接框选
+  // ComfyUI 模式：需要 Shift/Ctrl 修饰键才框选
+  return interactionMode.value === 'infinite-canvas' ? true : ['Shift', 'Control']
+})
 
 // 连线样式设置 - 优先从用户偏好加载，其次从localStorage，最后使用默认值
 const edgeStyle = ref(
@@ -125,9 +151,10 @@ const canvasBoardRef = ref(null)
 const isFileDragOver = ref(false)
 const fileDragCounter = ref(0)
 
-// 空格键平移状态
+// 平移状态（空格+拖动 / 鼠标中键）
 const isSpacePressed = ref(false)
 const isPanning = ref(false)
+const isMiddleButtonPanning = ref(false)
 const panStart = ref({ x: 0, y: 0 })
 
 // 对齐辅助线状态
@@ -183,10 +210,9 @@ const ZOOM_SPEED = 0.1
 const PAN_SPEED = 50
 
 /**
- * 自定义滚轮处理
- * - 默认滚轮：以鼠标位置为中心缩放
- * - Shift + 滚轮：水平平移画布
- * - Ctrl + 滚轮：垂直平移画布
+ * 自定义滚轮处理（根据 interactionMode 切换行为）
+ * ComfyUI: 默认=缩放, Shift=水平平移, Ctrl=垂直平移
+ * 无限画布: 默认=垂直平移, Shift=水平平移, Ctrl=缩放
  */
 let wheelRAF = null
 function handleWheel(event) {
@@ -201,36 +227,38 @@ function handleWheel(event) {
 }
 function handleWheelInner(event) {
   const viewport = getViewport()
+  const isInfiniteCanvas = interactionMode.value === 'infinite-canvas'
+  const isCtrl = event.ctrlKey || event.metaKey
 
+  // Shift+滚轮：水平平移（两种模式相同）
   if (event.shiftKey) {
     const dx = event.deltaY > 0 ? -PAN_SPEED : PAN_SPEED
     setViewport({ x: viewport.x + dx, y: viewport.y, zoom: viewport.zoom })
     return
   }
 
-  if (event.ctrlKey || event.metaKey) {
+  // ComfyUI: 无修饰键=缩放, Ctrl=垂直平移
+  // 无限画布: 无修饰键=垂直平移, Ctrl=缩放
+  const shouldZoom = isInfiniteCanvas ? isCtrl : !isCtrl
+
+  if (shouldZoom) {
+    const delta = event.deltaY > 0 ? -ZOOM_SPEED : ZOOM_SPEED
+    const newZoom = Math.min(Math.max(viewport.zoom * (1 + delta), MIN_ZOOM), MAX_ZOOM)
+    if (newZoom === viewport.zoom) return
+    const container = canvasBoardRef.value
+    if (!container) return
+    const rect = container.getBoundingClientRect()
+    const mouseX = event.clientX - rect.left
+    const mouseY = event.clientY - rect.top
+    const flowX = (mouseX - viewport.x) / viewport.zoom
+    const flowY = (mouseY - viewport.y) / viewport.zoom
+    const newX = mouseX - flowX * newZoom
+    const newY = mouseY - flowY * newZoom
+    setViewport({ x: newX, y: newY, zoom: newZoom })
+  } else {
     const dy = event.deltaY > 0 ? -PAN_SPEED : PAN_SPEED
     setViewport({ x: viewport.x, y: viewport.y + dy, zoom: viewport.zoom })
-    return
   }
-
-  const delta = event.deltaY > 0 ? -ZOOM_SPEED : ZOOM_SPEED
-  const newZoom = Math.min(Math.max(viewport.zoom * (1 + delta), MIN_ZOOM), MAX_ZOOM)
-  
-  if (newZoom === viewport.zoom) return
-  
-  const container = canvasBoardRef.value
-  if (!container) return
-  
-  const rect = container.getBoundingClientRect()
-  const mouseX = event.clientX - rect.left
-  const mouseY = event.clientY - rect.top
-  const flowX = (mouseX - viewport.x) / viewport.zoom
-  const flowY = (mouseY - viewport.y) / viewport.zoom
-  const newX = mouseX - flowX * newZoom
-  const newY = mouseY - flowY * newZoom
-  
-  setViewport({ x: newX, y: newY, zoom: newZoom })
 }
 
 // 自定义节点类型映射
@@ -1123,23 +1151,31 @@ function handleKeyUp(event) {
   }
 }
 
-// 鼠标按下事件（用于空格+拖动平移）
+// 鼠标按下事件（用于空格+拖动平移 / 鼠标中键平移）
 function handleMouseDown(event) {
-  // 如果按住空格键，开始平移
+  // 空格键 + 左键：平移画布
   if (isSpacePressed.value && event.button === 0) {
     event.preventDefault()
     isPanning.value = true
     panStart.value = { x: event.clientX, y: event.clientY }
     document.body.style.cursor = 'grabbing'
     console.log('[Canvas] 开始空格键平移')
+    return
+  }
+  // 鼠标中键：始终平移画布（无论在空白处还是节点上）
+  if (event.button === 1) {
+    event.preventDefault()
+    isPanning.value = true
+    isMiddleButtonPanning.value = true
+    panStart.value = { x: event.clientX, y: event.clientY }
+    document.body.style.cursor = 'grabbing'
   }
 }
 
-// 鼠标移动事件（用于空格+拖动平移）
-// 性能优化: 提前退出检查，只有实际在平移时才处理事件，减少无效计算
+// 鼠标移动事件（用于空格+拖动平移 / 鼠标中键平移）
 function handleMouseMove(event) {
-  // 提前退出：不在平移状态时直接返回，避免每次鼠标移动都执行代码
-  if (!isPanning.value || !isSpacePressed.value) return
+  if (!isPanning.value) return
+  if (!isSpacePressed.value && !isMiddleButtonPanning.value) return
 
   event.preventDefault()
 
@@ -1156,13 +1192,13 @@ function handleMouseMove(event) {
   panStart.value = { x: event.clientX, y: event.clientY }
 }
 
-// 鼠标释放事件（用于空格+拖动平移）
+// 鼠标释放事件（用于空格+拖动平移 / 鼠标中键平移）
 function handleMouseUp(event) {
   if (isPanning.value) {
     event.preventDefault()
     isPanning.value = false
+    isMiddleButtonPanning.value = false
     document.body.style.cursor = isSpacePressed.value ? 'grab' : 'default'
-    console.log('[Canvas] 结束空格键平移')
   }
 }
 
@@ -2451,6 +2487,7 @@ onUnmounted(() => {
     class="canvas-board" 
     :class="{ 'file-drag-over': isFileDragOver, 'pick-mode': pickMode }"
     @dblclick="handleDoubleClick"
+    @mousedown.middle.prevent
     @dragenter="handleFileDragEnter"
     @dragover="handleFileDragOver"
     @dragleave="handleFileDragLeave"
@@ -2476,9 +2513,10 @@ onUnmounted(() => {
       :snap-to-grid="true"
       :snap-grid="[20, 20]"
       :connection-mode="'loose'"
-      :pan-on-drag="[0, 2]"
+      :pan-on-drag="panOnDragConfig"
       :selection-on-drag="true"
       :select-nodes-on-drag="true"
+      :selection-key-code="selectionKeyCodeConfig"
       :pan-on-scroll="false"
       :zoom-on-scroll="false"
       :zoom-on-pinch="false"

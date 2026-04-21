@@ -10,6 +10,23 @@
 const DEFAULT_THUMB_WIDTH = 1024
 
 /**
+ * 将完整媒体 URL 转为同源相对路径，避免跨域加载失败
+ * 完整 URL 经 Vite proxy（开发）或 nginx（生产）转发到后端
+ */
+export function toSameOriginUrl(url) {
+  if (!url) return ''
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url
+  if (url.startsWith('/api/')) return url
+
+  const proxyPaths = ['/api/cos-proxy/', '/api/videos/file/', '/api/images/file/', '/api/canvas/audio/']
+  for (const p of proxyPaths) {
+    const idx = url.indexOf(p)
+    if (idx !== -1) return url.substring(idx)
+  }
+  return url
+}
+
+/**
  * 根据画布 zoom 级别计算合适的缩略图宽度
  * zoom 0.1~0.3 → 256px (极度缩小，小缩略图即可)
  * zoom 0.3~0.6 → 512px

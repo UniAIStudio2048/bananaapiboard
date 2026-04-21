@@ -320,7 +320,7 @@ const formattedContent = computed(() => {
     })
   } catch (e) {
     // 如果解析失败，返回原始文本
-    return props.message.content.replace(/\n/g, '<br>')
+    return DOMPurify.sanitize(props.message.content.replace(/\n/g, '<br>'), { ALLOWED_TAGS: ['br'] })
   }
 })
 

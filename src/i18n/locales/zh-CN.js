@@ -382,6 +382,20 @@ export default {
     shiftScrollDesc: '左右平移画布',
     ctrlScroll: 'Ctrl+滚轮',
     ctrlScrollDesc: '上下平移画布',
+    middleDrag: '鼠标中键拖拽',
+    middleDragDesc: '平移画布',
+    interactionMode: '交互模式',
+    comfyuiMode: 'ComfyUI 模式',
+    infiniteCanvasMode: '无限画布模式',
+    comfyuiModeShort: 'ComfyUI',
+    infiniteCanvasModeShort: '无限画布',
+    switchToComfyui: '切换到 ComfyUI 模式',
+    switchToInfiniteCanvas: '切换到无限画布模式',
+    comfyuiModeDesc: '左键拖拽平移，Shift/Ctrl拖拽框选，滚轮缩放',
+    infiniteCanvasModeDesc: '左键拖拽框选，滚轮平移，Ctrl+滚轮缩放',
+    infiniteLeftDragDesc: '框选节点',
+    infiniteScrollDesc: '上下平移画布',
+    infiniteCtrlScrollDesc: '以光标为中心缩放',
     saveWorkflow: '保存工作流',
     undoShortcut: '撤销',
     redoShortcut: '重做（恢复上一步）',
@@ -813,7 +827,19 @@ export default {
       points_transfer_out: '积分转出',
       points_transfer_in: '积分转入',
       motion_control_refund: '动作迁移退款',
-      canvas_crop: '画布裁剪'
+      canvas_crop: '画布裁剪',
+      image_hd_upscale: '图片高清放大',
+      image_multiangle: '图片多视角',
+      video_hd_upscale: '视频高清放大',
+      llm_chat: 'LLM 对话',
+      llm_action: 'LLM 操作',
+      music_generation: '音乐生成',
+      admin_adjust: '管理员积分调整',
+      admin_adjust_package: '管理员套餐积分调整',
+      package_purchase: '套餐购买',
+      package_upgrade: '套餐升级',
+      sora_character_cost: 'Sora 角色创建',
+      sora_character_cost_package: 'Sora 角色创建'
     }
   },
 
@@ -1020,7 +1046,19 @@ export default {
     points_transfer_out: '积分转出',
     points_transfer_in: '积分转入',
     motion_control_refund: '动作迁移退款',
-    canvas_crop: '画布裁剪'
+    canvas_crop: '画布裁剪',
+    image_hd_upscale: '图片高清放大',
+    image_multiangle: '图片多视角',
+    video_hd_upscale: '视频高清放大',
+    llm_chat: 'LLM 对话',
+    llm_action: 'LLM 操作',
+    music_generation: '音乐生成',
+    admin_adjust: '管理员积分调整',
+    admin_adjust_package: '管理员套餐积分调整',
+    package_purchase: '套餐购买',
+    package_upgrade: '套餐升级',
+    sora_character_cost: 'Sora 角色创建',
+    sora_character_cost_package: 'Sora 角色创建'
   },
 
   // 新手引导
@@ -1048,6 +1086,15 @@ export default {
       title: '工作流',
       subtitle: '保存与复用',
       description: '将常用的创作流程保存为工作流，下次直接加载即可使用。还可以从模板库选择预设方案快速开始。'
+    },
+    interactionMode: {
+      title: '选择交互模式',
+      subtitle: '操作习惯',
+      description: '选择您习惯的画布交互方式，之后可随时在左下角切换。',
+      comfyuiTitle: 'ComfyUI 模式',
+      comfyuiDesc: '左键拖拽平移画布\nShift/Ctrl+拖拽框选\n滚轮缩放画布',
+      infiniteCanvasTitle: '无限画布模式',
+      infiniteCanvasDesc: '左键拖拽框选节点\n滚轮上下平移画布\nCtrl+滚轮缩放画布'
     },
     tips: {
       title: '快捷操作',

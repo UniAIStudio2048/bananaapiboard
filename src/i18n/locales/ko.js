@@ -892,6 +892,22 @@ export default {
     purchase: '구매',
     gift: '선물',
     deduct: '차감',
-    milestone: '마일스톤 보상'
+    milestone: '마일스톤 보상',
+    points_transfer_out: '포인트 이체 출금',
+    points_transfer_in: '포인트 이체 입금',
+    motion_control_refund: '모션 전송 환불',
+    canvas_crop: '캔버스 자르기',
+    image_hd_upscale: '이미지 HD 업스케일',
+    image_multiangle: '멀티 앵글 이미지',
+    video_hd_upscale: '비디오 HD 업스케일',
+    llm_chat: 'LLM 채팅',
+    llm_action: 'LLM 작업',
+    music_generation: '음악 생성',
+    admin_adjust: '관리자 포인트 조정',
+    admin_adjust_package: '관리자 패키지 포인트 조정',
+    package_purchase: '패키지 구매',
+    package_upgrade: '패키지 업그레이드',
+    sora_character_cost: 'Sora 캐릭터 생성',
+    sora_character_cost_package: 'Sora 캐릭터 생성'
   }
 }

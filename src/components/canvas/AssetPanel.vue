@@ -9,6 +9,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getAssets, deleteAsset, toggleFavorite, updateAssetTags, updateAsset, saveAsset } from '@/api/canvas/assets'
 import { getCachedAssets, cacheAssets, invalidateAssetCache } from '@/utils/assetCache'
 import { preloadImages } from '@/utils/imageCache'
+import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } from '@/api/canvas/volcengine-assets'
 import { getApiUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
@@ -991,10 +992,10 @@ function extractVideoThumbnail(asset) {
   processingThumbnails.value++
 
   const video = document.createElement('video')
-  video.crossOrigin = 'anonymous'
   video.muted = true
   video.preload = 'metadata'
 
+  const safeUrl = toSameOriginUrl(asset.url)
   const THUMBNAIL_TIMEOUT = 5000
   let completed = false
 
@@ -1011,7 +1012,7 @@ function extractVideoThumbnail(asset) {
 
   const timeoutId = setTimeout(() => {
     if (!completed) {
-      console.warn('[AssetPanel] 视频缩略图提取超时:', asset.url)
+      console.warn('[AssetPanel] 视频缩略图提取超时:', safeUrl)
       onComplete()
     }
   }, THUMBNAIL_TIMEOUT)
@@ -1035,11 +1036,11 @@ function extractVideoThumbnail(asset) {
   }
 
   video.onerror = () => {
-    console.warn('[AssetPanel] 视频加载失败:', asset.url)
+    console.warn('[AssetPanel] 视频加载失败:', safeUrl)
     onComplete()
   }
 
-  video.src = asset.url
+  video.src = safeUrl
 }
 
 function processNextThumbnail() {
@@ -1210,14 +1211,18 @@ function handleAddCharacterClick() {
 
 async function loadSeedanceGroups() {
   try {
-    // 直接从后端获取当前用户拥有的所有分组（后端已做租户+用户级隔离）
     const result = await listAssetGroups({ pageSize: 100 })
     seedanceGroups.value = result.groups || []
 
-    // 获取资产数量
+    // 按当前渠道分组过滤资产数量
+    const activeGroupIds = new Set(seedanceGroups.value.map(g => g.Id))
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
     const localResult = await getAssets({ type: 'seedance-character', ...spaceParams, pageSize: 500 })
-    seedanceAssetCount.value = (localResult.assets || []).length
+    const allAssets = localResult.assets || []
+    seedanceAssetCount.value = allAssets.filter(a => {
+      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata || '{}') : (a.metadata || {})
+      return meta.groupId && activeGroupIds.has(meta.groupId)
+    }).length
   } catch (err) {
     console.error('[AssetPanel] 加载 Seedance 角色组失败:', err)
   }
@@ -1917,7 +1922,7 @@ onUnmounted(() => {
                   />
                   <video 
                     v-else
-                    :src="asset.url"
+                    :src="toSameOriginUrl(asset.url)"
                     class="video-thumbnail"
                     muted
                     preload="metadata"
@@ -1967,7 +1972,7 @@ onUnmounted(() => {
                   <!-- 如果有视频 URL，显示视频（跨浏览器兼容） -->
                   <video 
                     v-if="asset.url && (asset.url.includes('/api/images/file/') || asset.url.includes('.mp4'))"
-                    :src="asset.url"
+                    :src="toSameOriginUrl(asset.url)"
                     :poster="getVideoThumbnail(asset)"
                     class="character-video"
                     muted
@@ -2354,7 +2359,7 @@ onUnmounted(() => {
             <video 
               v-else-if="previewAsset.type === 'video'"
               ref="previewVideoRef"
-              :src="previewAsset.url"
+              :src="toSameOriginUrl(previewAsset.url)"
               controls
               autoplay
               class="preview-video"

@@ -10,6 +10,7 @@ import { labelToPromptText, indexToLabel } from '@/utils/imageAnnotation'
 import { getTenantHeaders, getModelDisplayName, getAvailableImageModels, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { formatPoints } from '@/utils/format'
+import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
 import VirtualList from 'vue3-virtual-scroll-list'
 
 const prompt = ref('')
@@ -952,8 +953,13 @@ async function generate() {
       response_format: 'url'
     }
     
-    // 仅在非 auto 时传递 aspect_ratio 参数
-    if (aspectRatio.value !== 'auto') {
+    // 解析比例：auto 模式下根据文生图/图生图自动确定比例
+    if (aspectRatio.value === 'auto') {
+      const firstImageSrc = (mode.value === 'image' && imageFiles.value.length > 0)
+        ? imageFiles.value[0]
+        : null
+      payload.aspect_ratio = await resolveAutoAspectRatio(firstImageSrc)
+    } else {
       payload.aspect_ratio = aspectRatio.value
     }
     

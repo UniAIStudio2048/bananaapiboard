@@ -915,6 +915,22 @@ export default {
     manual_adjust: '手動調整',
     gift: 'ギフト',
     deduct: '控除',
-    milestone: 'マイルストーン報酬'
+    milestone: 'マイルストーン報酬',
+    points_transfer_out: 'ポイント振出',
+    points_transfer_in: 'ポイント振込',
+    motion_control_refund: 'モーション転送返金',
+    canvas_crop: 'キャンバス切り抜き',
+    image_hd_upscale: '画像高解像度アップスケール',
+    image_multiangle: 'マルチアングル画像',
+    video_hd_upscale: '動画高解像度アップスケール',
+    llm_chat: 'LLMチャット',
+    llm_action: 'LLMアクション',
+    music_generation: '音楽生成',
+    admin_adjust: '管理者ポイント調整',
+    admin_adjust_package: '管理者パッケージポイント調整',
+    package_purchase: 'パッケージ購入',
+    package_upgrade: 'パッケージアップグレード',
+    sora_character_cost: 'Soraキャラクター作成',
+    sora_character_cost_package: 'Soraキャラクター作成'
   }
 }

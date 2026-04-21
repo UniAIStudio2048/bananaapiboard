@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed } from 'vue'
+import DOMPurify from 'dompurify'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 
 const notification = ref(null)
@@ -46,10 +47,13 @@ const parsedContent = computed(() => {
   if (!notification.value?.content) return ''
   let content = notification.value.content
   content = content.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g, 
+    /\[([^\]]+)\]\(([^)]+)\)/g,
     '<a href="$2" target="_blank" rel="noopener noreferrer" class="notification-link">$1</a>'
   )
-  return content
+  return DOMPurify.sanitize(content, {
+    ALLOWED_TAGS: ['a', 'span', 'strong', 'em', 'br'],
+    ALLOWED_ATTR: ['href', 'target', 'rel', 'class']
+  })
 })
 
 // 计算滚动动画时长

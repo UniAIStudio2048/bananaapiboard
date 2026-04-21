@@ -825,10 +825,50 @@
 /* ========================================
    缩放控制
    ======================================== */
-.canvas-zoom-controls {
+/* 底部左侧控制区域（模式切换 + 缩放） */
+.canvas-bottom-left-controls {
   position: absolute;
   bottom: 24px;
   left: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 100;
+  pointer-events: none;
+}
+
+.canvas-bottom-left-controls > * {
+  pointer-events: auto;
+}
+
+/* 交互模式切换按钮 */
+.canvas-mode-switch-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--canvas-bg-secondary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: var(--canvas-radius-md);
+  color: var(--canvas-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.canvas-mode-switch-btn:hover {
+  background: var(--canvas-bg-hover);
+  border-color: var(--canvas-border-hover);
+  color: var(--canvas-text-primary);
+}
+
+.canvas-mode-switch-btn .mode-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.canvas-zoom-controls {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -836,8 +876,6 @@
   border: 1px solid var(--canvas-border-subtle);
   border-radius: var(--canvas-radius-md);
   padding: 6px 12px;
-  z-index: 100;
-  pointer-events: auto;
 }
 
 .canvas-zoom-btn {

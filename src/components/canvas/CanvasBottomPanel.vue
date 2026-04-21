@@ -9,6 +9,7 @@
  * - 下方显示 LLM 配置面板（输入框、模型选择、发送按钮）
  */
 import { ref, computed, watch, inject, onMounted, onUnmounted } from 'vue'
+import DOMPurify from 'dompurify'
 import { useCanvasStore } from '@/stores/canvas'
 import { getNodeConfig } from '@/config/canvas/nodeTypes'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages } from '@/api/canvas/nodes'
@@ -112,6 +113,8 @@ const textNodeContent = computed(() => {
   if (!isTextNode.value) return ''
   return canvasStore.selectedNode?.data?.text || ''
 })
+
+const sanitizedTextNodeContent = computed(() => DOMPurify.sanitize(textNodeContent.value || ''))
 
 // 文本节点是否有内容
 const hasTextContent = computed(() => {
@@ -589,7 +592,7 @@ function handleKeyDown(event) {
       
       <!-- 文本内容预览卡片 -->
       <div class="text-preview-card">
-        <div class="text-preview-content" v-html="textNodeContent"></div>
+        <div class="text-preview-content" v-html="sanitizedTextNodeContent"></div>
       </div>
       
       <!-- 右侧添加按钮 -->

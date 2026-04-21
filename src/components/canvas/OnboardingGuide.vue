@@ -12,16 +12,23 @@ const props = defineProps({
   visible: {
     type: Boolean,
     default: false
+  },
+  interactionMode: {
+    type: String,
+    default: 'comfyui'
   }
 })
 
-const emit = defineEmits(['close', 'complete'])
+const emit = defineEmits(['close', 'complete', 'modeSelect'])
 
 // 当前步骤索引
 const currentStep = ref(0)
 
 // 是否显示内容（用于入场动画）
 const showContent = ref(false)
+
+// 新手引导中选择的交互模式
+const selectedMode = ref(props.interactionMode || 'comfyui')
 
 // 引导步骤配置
 const steps = computed(() => [
@@ -37,6 +44,18 @@ const steps = computed(() => [
     </svg>`,
     highlight: null,
     animation: 'float'
+  },
+  {
+    id: 'interaction-mode',
+    title: t('onboarding.interactionMode.title'),
+    subtitle: t('onboarding.interactionMode.subtitle'),
+    description: t('onboarding.interactionMode.description'),
+    icon: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>
+    </svg>`,
+    highlight: null,
+    animation: 'pulse',
+    customContent: 'interaction-mode'
   },
   {
     id: 'toolbar',
@@ -100,16 +119,20 @@ const isLastStep = computed(() => currentStep.value === steps.value.length - 1)
 // 进度百分比
 const progress = computed(() => ((currentStep.value + 1) / steps.value.length) * 100)
 
+// 选择交互模式
+function selectMode(mode) {
+  selectedMode.value = mode
+  emit('modeSelect', mode)
+}
+
 // 下一步
 function nextStep() {
   if (isLastStep.value) {
     complete()
   } else {
-    // 淡出当前内容
     showContent.value = false
     setTimeout(() => {
       currentStep.value++
-      // 淡入新内容
       nextTick(() => {
         showContent.value = true
       })
@@ -225,6 +248,37 @@ watch(() => props.visible, (val) => {
               <div class="step-subtitle">{{ currentStepData.subtitle }}</div>
               <h2 class="step-title">{{ currentStepData.title }}</h2>
               <p class="step-description">{{ currentStepData.description }}</p>
+            </div>
+            
+            <!-- 交互模式选择卡片 -->
+            <div v-if="currentStepData.customContent === 'interaction-mode'" class="mode-selection">
+              <button 
+                class="mode-card" 
+                :class="{ active: selectedMode === 'comfyui' }"
+                @click="selectMode('comfyui')"
+              >
+                <div class="mode-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M3 12h4l3-9 4 18 3-9h4"/>
+                  </svg>
+                </div>
+                <div class="mode-card-title">{{ t('onboarding.interactionMode.comfyuiTitle') }}</div>
+                <div class="mode-card-desc">{{ t('onboarding.interactionMode.comfyuiDesc') }}</div>
+              </button>
+              <button 
+                class="mode-card" 
+                :class="{ active: selectedMode === 'infinite-canvas' }"
+                @click="selectMode('infinite-canvas')"
+              >
+                <div class="mode-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                    <path d="M3 9h18M3 15h18M9 3v18M15 3v18" opacity="0.4"/>
+                  </svg>
+                </div>
+                <div class="mode-card-title">{{ t('onboarding.interactionMode.infiniteCanvasTitle') }}</div>
+                <div class="mode-card-desc">{{ t('onboarding.interactionMode.infiniteCanvasDesc') }}</div>
+              </button>
             </div>
             
             <!-- 步骤指示点 -->
@@ -753,6 +807,65 @@ watch(() => props.visible, (val) => {
     opacity: 0;
     transform: translateY(-20px) scale(0.98);
   }
+}
+
+/* 交互模式选择卡片 */
+.mode-selection {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.mode-card {
+  flex: 1;
+  padding: 20px 16px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.mode-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.mode-card.active {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: #fff;
+  color: #fff;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+}
+
+.mode-card-icon {
+  width: 40px;
+  height: 40px;
+  margin: 0 auto 12px;
+}
+
+.mode-card-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.mode-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.mode-card-desc {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.45);
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.mode-card.active .mode-card-desc {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 /* 响应式 */

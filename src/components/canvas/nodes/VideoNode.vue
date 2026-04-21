@@ -22,7 +22,7 @@ import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
-import { getVideoPosterUrl } from '@/utils/canvasThumbnail'
+import { getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
@@ -1389,38 +1389,16 @@ const hasOutput = computed(() => !!props.data.output?.url)
 const shouldRenderVideoOutput = computed(() => hasOutput.value && !readonlyPreviewVideoFailed.value)
 const readonlyPreviewVideoFailed = ref(false)
 
+// poster 仅在有明确封面图时才设置；COS ci-process=snapshot 截帧服务不稳定（502），
+// 失败的 poster 会导致 <video> 显示黑屏而非首帧
 const videoPosterUrl = computed(() => {
-  const url = props.data.output?.url
-  if (!url) return ''
   if (props.data.output?.cover_url || props.data.output?.thumbnail_url) {
-    return props.data.output.cover_url || props.data.output.thumbnail_url
+    return toSameOriginUrl(props.data.output.cover_url || props.data.output.thumbnail_url)
   }
-  return getVideoPosterUrl(url)
+  return ''
 })
 
-// 处理视频 URL，确保使用相对路径（避免跨域问题）
-const normalizedVideoUrl = computed(() => {
-  const url = props.data.output?.url
-  if (!url) return ''
-  
-  // 如果已经是相对路径，直接返回
-  if (url.startsWith('/api/')) return url
-  
-  // 处理完整 URL，提取 /api/cos-proxy/... 部分
-  if (url.includes('/api/cos-proxy/')) {
-    const cosProxyIndex = url.indexOf('/api/cos-proxy/')
-    return url.substring(cosProxyIndex)
-  }
-  
-  // 如果是完整 URL，提取 /api/images/file/... 部分
-  const match = url.match(/\/api\/images\/file\/[a-zA-Z0-9-]+/)
-  if (match) {
-    return match[0]
-  }
-  
-  // 其他情况保持原样（如七牛云 CDN URL）
-  return url
-})
+const normalizedVideoUrl = computed(() => toSameOriginUrl(props.data.output?.url))
 
 // 节点内容样式（有输出时不设置 min-height，让视频自适应）
 const contentStyle = computed(() => {
@@ -5627,8 +5605,8 @@ function handleToolbarPreview() {
           <video 
             ref="videoPlayerRef"
             :src="normalizedVideoUrl"
-            preload="metadata"
-            :poster="videoPosterUrl"
+            preload="auto"
+            :poster="videoPosterUrl || undefined"
             muted
             :loop="!data?.isCharacterNode"
             class="video-player-output"
@@ -5850,7 +5828,7 @@ function handleToolbarPreview() {
             @mouseenter="onVideoHoverStart(video, $event)"
             @mouseleave="onHoverEnd"
           >
-            <video :src="video" muted preload="metadata" :poster="getVideoPosterUrl(video)" class="video-thumb" @loadeddata="$event.target.currentTime = 0.1"></video>
+            <video :src="toSameOriginUrl(video)" muted preload="metadata" :poster="getVideoPosterUrl(toSameOriginUrl(video))" class="video-thumb" @loadeddata="$event.target.currentTime = 0.1"></video>
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span class="panel-frame-play-icon">▶</span>
             <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@视频{{ index + 1 }}</span>

@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getMe, isQiniuCdnUrl, buildVideoDownloadUrl } from '@/api/client'
 import { getTenantHeaders, getModelDisplayName, isModelEnabled, getAvailableVideoModels, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
+import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { formatPoints } from '@/utils/format'
 
 const fileInputRef = ref(null)
@@ -1156,9 +1157,10 @@ function extractVideoThumbnail(item) {
   processingThumbnailCount.value++
 
   const video = document.createElement('video')
-  video.crossOrigin = 'anonymous'
   video.muted = true
   video.preload = 'metadata'
+
+  const safeUrl = toSameOriginUrl(item.video_url)
 
   const cleanup = () => {
     video.remove()
@@ -1198,7 +1200,7 @@ function extractVideoThumbnail(item) {
       cleanup()
     }
   }, 8000)
-  video.src = item.video_url
+  video.src = safeUrl
 }
 
 function getVideoThumbnail(item) {

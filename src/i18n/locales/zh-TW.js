@@ -731,6 +731,22 @@ export default {
     manual_adjust: '手動調整',
     gift: '贈送',
     deduct: '扣除',
-    milestone: '里程碑獎勵'
+    milestone: '里程碑獎勵',
+    points_transfer_out: '積分轉出',
+    points_transfer_in: '積分轉入',
+    motion_control_refund: '動作遷移退款',
+    canvas_crop: '畫布裁剪',
+    image_hd_upscale: '圖片高清放大',
+    image_multiangle: '圖片多視角',
+    video_hd_upscale: '影片高清放大',
+    llm_chat: 'LLM 對話',
+    llm_action: 'LLM 操作',
+    music_generation: '音樂生成',
+    admin_adjust: '管理員積分調整',
+    admin_adjust_package: '管理員套餐積分調整',
+    package_purchase: '套餐購買',
+    package_upgrade: '套餐升級',
+    sora_character_cost: 'Sora 角色建立',
+    sora_character_cost_package: 'Sora 角色建立'
   }
 }

@@ -56,6 +56,8 @@ const searchQuery = ref('')
 const statusFilter = ref('all')
 const errorMessage = ref('')
 const currentGroupName = ref('')
+const activeProvider = ref('')
+const activeProviderLabel = ref('')
 
 // 创建角色组弹窗
 const showCreateGroupModal = ref(false)
@@ -126,28 +128,36 @@ function resolveAssetUrl(url) {
 
 async function loadGroups() {
   try {
-    // 直接从后端获取当前用户拥有的所有分组（后端已做租户+用户级隔离）
     const result = await listAssetGroups({ pageSize: 100 })
     groups.value = result.groups || []
+    if (result.activeProvider) {
+      activeProvider.value = result.activeProvider
+      activeProviderLabel.value = result.activeProviderLabel || result.activeProvider
+    }
   } catch (err) {
     console.error('[SeedancePanel] 加载角色组失败:', err)
   }
 }
 
 function processAssetData(canvasAssets) {
-  let mapped = canvasAssets.map(a => {
-    const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata) : (a.metadata || {})
-    return {
-      Id: meta.assetId || a.id,
-      Name: a.name,
-      URL: resolveAssetUrl(a.thumbnail_url) || resolveAssetUrl(a.url),
-      Status: meta.status || 'Active',
-      GroupId: meta.groupId,
-      AssetType: meta.assetType || 'Image',
-      _canvasId: a.id,
-      _userId: a.user_id
-    }
-  })
+  // 只保留属于当前渠道分组的资产，不同渠道资产不通用
+  const activeGroupIds = new Set(groups.value.map(g => g.Id))
+
+  let mapped = canvasAssets
+    .map(a => {
+      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata) : (a.metadata || {})
+      return {
+        Id: meta.assetId || a.id,
+        Name: a.name,
+        URL: resolveAssetUrl(a.thumbnail_url) || resolveAssetUrl(a.url),
+        Status: meta.status || 'Active',
+        GroupId: meta.groupId,
+        AssetType: meta.assetType || 'Image',
+        _canvasId: a.id,
+        _userId: a.user_id
+      }
+    })
+    .filter(a => a.GroupId && activeGroupIds.has(a.GroupId))
 
   if (props.selectedGroupId) {
     mapped = mapped.filter(a => a.GroupId === props.selectedGroupId)
@@ -701,16 +711,33 @@ function onGlobalClick() {
   if (showContextMenu.value) closeContextMenu()
 }
 
+let channelCheckTimer = null
+
 onMounted(async () => {
   await loadGroups()
   await loadAssets()
   document.addEventListener('click', onGlobalClick)
   document.addEventListener('keydown', handleFullscreenKeydown)
+
+  // 每30秒检查一次渠道是否变化，如果变化则自动刷新
+  channelCheckTimer = setInterval(async () => {
+    try {
+      const result = await listAssetGroups({ pageSize: 1 })
+      if (result.activeProvider && result.activeProvider !== activeProvider.value) {
+        console.log('[SeedancePanel] 渠道已切换:', activeProvider.value, '->', result.activeProvider)
+        activeProvider.value = result.activeProvider
+        activeProviderLabel.value = result.activeProviderLabel || result.activeProvider
+        await loadGroups()
+        await loadAssets()
+      }
+    } catch (e) { /* ignore */ }
+  }, 30000)
 })
 
 onUnmounted(() => {
   Object.values(pollers.value).forEach(cancel => cancel())
   if (copyTimer) clearTimeout(copyTimer)
+  if (channelCheckTimer) clearInterval(channelCheckTimer)
   document.removeEventListener('click', onGlobalClick)
   document.removeEventListener('keydown', handleFullscreenKeydown)
 })
@@ -726,6 +753,14 @@ onUnmounted(() => {
       class="hidden"
       @change="handleFileUpload"
     />
+
+    <!-- 当前渠道指示器 -->
+    <div v-if="activeProviderLabel" class="channel-indicator">
+      <svg class="channel-icon" viewBox="0 0 16 16" fill="none" width="12" height="12">
+        <path d="M2 8h12M8 2v12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span class="channel-label">{{ activeProviderLabel }}</span>
+    </div>
 
     <!-- 顶部工具栏 -->
     <div class="panel-toolbar">
@@ -1253,6 +1288,22 @@ onUnmounted(() => {
 }
 
 .hidden { display: none; }
+
+/* ==================== 渠道指示器 ==================== */
+.channel-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  margin: 0 4px 4px;
+  background: rgba(59, 130, 246, 0.1);
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  border-radius: 6px;
+  font-size: 11px;
+  color: #60a5fa;
+}
+.channel-icon { flex-shrink: 0; }
+.channel-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ==================== 工具栏 ==================== */
 .panel-toolbar {

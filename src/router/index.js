@@ -1,12 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Home from '@/views/Home.vue'
-import User from '@/views/User.vue'
-import Packages from '@/views/Packages.vue'
-import VideoGeneration from '@/views/VideoGeneration.vue'
-import AdminBoard from '@/views/AdminBoard.vue'
-import Canvas from '@/views/Canvas.vue'
-import WorkflowList from '@/views/WorkflowList.vue'
-import Landing3D from '@/views/Landing3D.vue'
+const User = () => import('@/views/User.vue')
+const Packages = () => import('@/views/Packages.vue')
+const VideoGeneration = () => import('@/views/VideoGeneration.vue')
+const AdminBoard = () => import('@/views/AdminBoard.vue')
+const Canvas = () => import('@/views/Canvas.vue')
+const WorkflowList = () => import('@/views/WorkflowList.vue')
+const Landing3D = () => import('@/views/Landing3D.vue')
 
 const landingMode = import.meta.env.VITE_LANDING_MODE
 
@@ -66,7 +66,7 @@ const router = createRouter({
       path: '/adminboard',
       name: 'adminboard',
       component: AdminBoard,
-      meta: { title: '管理后台', requiresAuth: true }
+      meta: { title: '管理后台', requiresAuth: true, requiresAdmin: true }
     },
     // 社区路由
     {
@@ -137,7 +137,7 @@ router.beforeEach(async (to, from, next) => {
     
     // 🔧 修复：如果用户已经在需要认证的页面上（同页面内导航），跳过 API 验证
     // 避免网络抖动或后端重启时把用户从画布等页面踢出去
-    if (from.meta.requiresAuth && from.name) {
+    if (from.meta.requiresAuth && from.name && !to.meta.requiresAdmin) {
       // 已经在认证页面内，直接放行，不再重复验证 token
       return next()
     }
@@ -165,6 +165,19 @@ router.beforeEach(async (to, from, next) => {
     } catch (error) {
       console.error('[Router] 验证登录状态失败:', error)
       // 网络错误时允许通过，让页面自行处理
+    }
+
+    // 管理员权限检查
+    if (to.meta.requiresAdmin) {
+      try {
+        const userStr = localStorage.getItem('user')
+        const user = userStr ? JSON.parse(userStr) : null
+        if (!user || user.role !== 'admin') {
+          return next('/generate')
+        }
+      } catch {
+        return next('/generate')
+      }
     }
   }
   

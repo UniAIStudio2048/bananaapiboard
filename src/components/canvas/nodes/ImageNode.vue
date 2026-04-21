@@ -18,9 +18,10 @@ import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints, removeImageBackground } from '@/api/canvas/nodes'
 import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
 import { formatPoints } from '@/utils/format'
+import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
-import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
+import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getImagePresets, incrementPresetUseCount, createImagePreset, updateImagePreset } from '@/api/canvas/image-presets'
 import ImagePresetDialog from '../dialogs/ImagePresetDialog.vue'
 import ImagePresetManager from '../dialogs/ImagePresetManager.vue'
@@ -29,7 +30,7 @@ import Camera3DPanel from '../Camera3DPanel.vue'
 import Pose3DViewer from '../Pose3DViewer.vue'
 import CameraControlPanel from '../CameraControlPanel.vue'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
-import { getCanvasThumbnailUrl, getThumbWidthForZoom, getOriginalImageUrl } from '@/utils/canvasThumbnail'
+import { getCanvasThumbnailUrl, getThumbWidthForZoom, getOriginalImageUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 
@@ -634,10 +635,30 @@ function handleBackgroundTaskComplete(event) {
   const { taskId, task } = event.detail
   // 只处理属于当前节点的任务
   if (task.nodeId !== props.id) return
+
+  if (task.type !== 'image' && task.type !== 'image-hd') return
   
   console.log(`[ImageNode] 后台任务完成: ${taskId}`, task)
+
+  if (task.type === 'image-hd') {
+    const imageUrl = task.result?.outputUrl || task.result?.url
+    if (imageUrl) {
+      canvasStore.updateNodeData(props.id, {
+        status: 'success',
+        progress: null,
+        output: { type: 'image', urls: [imageUrl] },
+        pointsCost: task.result?.pointsCost || 0,
+        hdUpscaled: true
+      })
+      showToast(`图片高清完成${task.result?.pointsCost > 0 ? `，消耗 ${formatPoints(task.result.pointsCost)} 积分` : ''}`, 'success')
+    } else {
+      canvasStore.updateNodeData(props.id, { status: 'error', error: '高清完成但未获取到图片' })
+    }
+    removeCompletedTask(taskId)
+    return
+  }
   
-  // 获取主图URL
+  // 获取主图URL（文生图/图生图）
   const imageUrl = task.result?.url || task.result?.urls?.[0]
   if (imageUrl) {
     canvasStore.updateNodeData(props.id, {
@@ -715,8 +736,21 @@ function createGroupImageNodes(groupImageUrls, task) {
 function handleBackgroundTaskFailed(event) {
   const { taskId, task } = event.detail
   if (task.nodeId !== props.id) return
+
+  if (task.type !== 'image' && task.type !== 'image-hd') return
   
   console.log(`[ImageNode] 后台任务失败: ${taskId}`, task)
+
+  if (task.type === 'image-hd') {
+    canvasStore.updateNodeData(props.id, {
+      status: 'error',
+      progress: null,
+      error: task.error || '高清处理失败'
+    })
+    showToast(task.error || '图片高清失败，未扣除积分', 'error')
+    removeCompletedTask(taskId)
+    return
+  }
   
   const errorMsg = task.error || '图片生成失败'
   canvasStore.updateNodeData(props.id, {
@@ -731,11 +765,13 @@ function handleBackgroundTaskFailed(event) {
 function handleBackgroundTaskProgress(event) {
   const { taskId, task } = event.detail
   if (task.nodeId !== props.id) return
+
+  if (task.type !== 'image' && task.type !== 'image-hd') return
   
   const progress = task.result?.progress || task.progress
   if (progress) {
     canvasStore.updateNodeData(props.id, {
-      progress: task.result?.status === 'processing' ? '生成中...' : progress
+      progress: task.type === 'image-hd' ? '高清处理中...' : (task.result?.status === 'processing' ? '生成中...' : progress)
     })
   }
 }
@@ -746,29 +782,34 @@ function checkAndRestoreBackgroundTasks() {
   const ZOMBIE_THRESHOLD = 15 * 60 * 1000 // 15 分钟
   
   for (const task of nodeTasks) {
-    if (task.type !== 'image') continue
+    if (task.type !== 'image' && task.type !== 'image-hd') continue
     
     if (task.status === 'completed') {
-      const imageUrl = task.result?.url || task.result?.urls?.[0]
+      const imageUrl = task.type === 'image-hd'
+        ? (task.result?.outputUrl || task.result?.url)
+        : (task.result?.url || task.result?.urls?.[0])
       if (imageUrl) {
         canvasStore.updateNodeData(props.id, {
           status: 'success',
-          output: { type: 'image', urls: [imageUrl] }
+          progress: null,
+          output: { type: 'image', urls: [imageUrl] },
+          ...(task.type === 'image-hd' ? { hdUpscaled: true, pointsCost: task.result?.pointsCost || 0 } : {})
         })
       } else {
         canvasStore.updateNodeData(props.id, {
           status: 'error',
-          error: '生成完成但未获取到图片'
+          error: task.type === 'image-hd' ? '高清完成但未获取到图片' : '生成完成但未获取到图片'
         })
       }
       removeCompletedTask(task.taskId)
     } else if (task.status === 'failed') {
       canvasStore.updateNodeData(props.id, {
         status: 'error',
-        error: task.error || '图片生成失败'
+        error: task.error || (task.type === 'image-hd' ? '高清处理失败' : '图片生成失败')
       })
       removeCompletedTask(task.taskId)
     } else if ((task.status === 'processing' || task.status === 'pending') && task.createdAt) {
+      if (task.type === 'image-hd') continue
       const taskAge = Date.now() - task.createdAt
       if (taskAge > ZOMBIE_THRESHOLD) {
         console.log(`[ImageNode] 检测到僵尸任务 ${task.taskId} (${Math.round(taskAge/60000)}分钟), 标记失败`)
@@ -785,7 +826,7 @@ function checkAndRestoreBackgroundTasks() {
   
   // 如果节点状态是 processing 但没有任何关联的后台任务，说明轮询丢失了
   // 多角度生成节点有独立轮询机制（pollMultiangleTask），不走 backgroundTaskManager
-  if (props.data?.status === 'processing' && props.data?.sourceType !== 'multiangle' && nodeTasks.filter(t => t.type === 'image' && (t.status === 'processing' || t.status === 'pending')).length === 0) {
+  if (props.data?.status === 'processing' && props.data?.sourceType !== 'multiangle' && props.data?.taskType !== 'image-hd' && nodeTasks.filter(t => (t.type === 'image' || t.type === 'image-hd') && (t.status === 'processing' || t.status === 'pending')).length === 0) {
     console.log(`[ImageNode] 节点 ${props.id} 状态为 processing 但无关联任务, 重置为 error`)
     canvasStore.updateNodeData(props.id, {
       status: 'error',
@@ -1302,6 +1343,123 @@ function handleToolbarErase() {
 function handleToolbarEnhance() {
   console.log('[ImageNode] 工具栏：增强', props.id)
   enterEditMode('enhance') // 图像增强（待接入 AI API）
+}
+
+const isImageHDProcessing = ref(false)
+
+async function handleToolbarImageHD() {
+  if (!currentImageUrl.value) {
+    showToast('没有可处理的图片', 'error')
+    return
+  }
+  if (isImageHDProcessing.value) {
+    showToast('正在处理中，请稍候', 'warning')
+    return
+  }
+  const token = localStorage.getItem('token')
+  try {
+    isImageHDProcessing.value = true
+    let imageUrlForHD = currentImageUrl.value
+
+    if (imageUrlForHD.startsWith('blob:')) {
+      showToast('上传图片到云端...', 'info')
+      const response = await fetch(imageUrlForHD)
+      const blob = await response.blob()
+      const file = new File([blob], `hd_source_${Date.now()}.png`, { type: blob.type || 'image/png' })
+      const urls = await uploadImages([file])
+      if (!urls?.length) throw new Error('图片上传失败')
+      imageUrlForHD = urls[0]
+    } else if (needsReupload(imageUrlForHD)) {
+      showToast('上传图片到云端...', 'info')
+      imageUrlForHD = await reuploadToCloud(imageUrlForHD)
+    } else if (imageUrlForHD.startsWith('data:image/')) {
+      // 交给后端解析 base64
+    } else if (imageUrlForHD.startsWith('/api/')) {
+      imageUrlForHD = getApiUrl(imageUrlForHD)
+    }
+
+    showToast('提交高清任务...', 'info')
+    const res = await fetch('/api/images/hd-upscale', {
+      method: 'POST',
+      headers: {
+        ...getTenantHeaders(),
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        imageUrl: imageUrlForHD,
+        nodeId: props.id
+      })
+    })
+    const result = await res.json()
+    if (!res.ok) {
+      if (result.error === 'insufficient_points') {
+        showToast('当前积分余额不足', 'error')
+      } else if (result.error === 'hd_not_configured') {
+        await showAlert(result.message || '图片高清功能未配置，请联系管理员', '提示')
+      } else {
+        showToast(result.message || '提交失败', 'error')
+      }
+      isImageHDProcessing.value = false
+      return
+    }
+
+    showToast('高清任务已提交，后台处理中...', 'success')
+    isImageHDProcessing.value = false
+
+    const newNodeId = createImageHDProcessingNode(result.taskId)
+    if (!newNodeId) return
+    const currentTab = canvasStore.getCurrentTab()
+    registerTask({
+      taskId: result.taskId,
+      type: 'image-hd',
+      nodeId: newNodeId,
+      tabId: currentTab?.id,
+      metadata: {
+        sourceUrl: currentImageUrl.value,
+        sourceNodeId: props.id
+      }
+    })
+  } catch (e) {
+    console.error('[ImageNode] 图片高清失败:', e)
+    showToast(e.message || '图片高清失败', 'error')
+    isImageHDProcessing.value = false
+  }
+}
+
+function createImageHDProcessingNode(taskId) {
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return null
+  const newNodeId = `ihd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const newNodePosition = {
+    x: currentNode.position.x + (nodeWidth.value || 300) + 100,
+    y: currentNode.position.y
+  }
+  canvasStore.addNode({
+    id: newNodeId,
+    type: 'image',
+    position: newNodePosition,
+    data: {
+      label: '高清放大',
+      title: '高清放大',
+      status: 'processing',
+      progress: '高清处理中...',
+      taskId,
+      taskType: 'image-hd',
+      sourceType: 'image-hd',
+      hdUpscaled: true,
+      sourceNodeId: props.id
+    }
+  })
+  canvasStore.addEdge({
+    id: `edge-${props.id}-${newNodeId}-${Date.now()}`,
+    source: props.id,
+    target: newNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input',
+    type: 'smoothstep'
+  })
+  return newNodeId
 }
 
 // 抠图状态
@@ -3440,8 +3598,7 @@ async function extractLastFrameFromVideo() {
     
     // 使用 Canvas 提取最后一帧（前端处理）
     const video = document.createElement('video')
-    video.crossOrigin = 'anonymous'
-    video.src = props.data.videoUrl
+    video.src = toSameOriginUrl(props.data.videoUrl)
     
     // 等待视频元数据加载
     await new Promise((resolve, reject) => {
@@ -4089,12 +4246,19 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
   // 压缩检测：超过3张检测总大小并压缩，单张超过20MB也压缩
   const imagesToProcess = await compressImagesIfNeeded(finalReferenceImages)
   
+  // 解析比例：auto 模式下根据是否有参考图自动确定比例
+  let resolvedAspectRatio = selectedAspectRatio.value
+  if (resolvedAspectRatio === 'auto') {
+    const firstImageSrc = imagesToProcess.length > 0 ? imagesToProcess[0] : null
+    resolvedAspectRatio = await resolveAutoAspectRatio(firstImageSrc)
+  }
+
   // 构建基础参数
   const baseParams = {
     prompt: finalPrompt || '保持原图风格',
-    userPrompt: userPrompt || finalPrompt || '', // 用户原始输入（不含预设，用于历史显示）
+    userPrompt: userPrompt || finalPrompt || '',
     model: selectedModel.value,
-    aspectRatio: selectedAspectRatio.value,
+    aspectRatio: resolvedAspectRatio,
     count: 1, // 单次请求固定为1
     // 所有模型都传递 image_size 参数
     image_size: imageSize.value || '2K',
@@ -5605,8 +5769,26 @@ async function handleDrop(event) {
       @change="handleRefImageUpload"
     />
     
-    <!-- 图片工具栏（选中且有图片时显示）- 与 TextNode 保持一致 -->
+    <!-- 图片工具栏（高清为左侧第一项） -->
     <div v-show="showToolbar" class="image-toolbar">
+      <button
+        class="toolbar-btn toolbar-btn-hd"
+        :class="{ 'is-processing': isImageHDProcessing }"
+        title="高清放大"
+        :disabled="isImageHDProcessing"
+        @mousedown.stop.prevent="handleToolbarImageHD"
+        @click.stop.prevent
+      >
+        <svg v-if="!isImageHDProcessing" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <text x="12" y="15" text-anchor="middle" font-size="8" font-weight="bold" fill="currentColor" stroke="none">HD</text>
+        </svg>
+        <svg v-else class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+        </svg>
+        <span>{{ isImageHDProcessing ? '处理中...' : '高清' }}</span>
+      </button>
       <button class="toolbar-btn" title="重绘" @mousedown.stop.prevent="handleToolbarRepaint" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"/>
@@ -5935,8 +6117,8 @@ async function handleDrop(event) {
         @dragleave="handleDragLeave"
         @drop="handleDrop"
       >
-        <!-- 彗星环绕发光特效（生成中显示，性能模式下禁用） -->
-        <svg v-if="data.status === 'processing' && canvasStore.performanceMode === 'full'" class="comet-border" viewBox="0 0 100 100" preserveAspectRatio="none">
+        <!-- 彗星环绕发光特效（生成中显示） -->
+        <svg v-if="data.status === 'processing'" class="comet-border" viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
             <!-- 彗星渐变 -->
             <linearGradient :id="'comet-gradient-' + id" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -6626,6 +6808,17 @@ async function handleDrop(event) {
   pointer-events: auto;
 }
 
+.image-toolbar .toolbar-btn-hd {
+  color: #c4b5fd;
+}
+.image-toolbar .toolbar-btn-hd:hover:not(:disabled) {
+  color: #ddd6fe;
+}
+.image-toolbar .toolbar-btn-hd:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .image-toolbar .toolbar-btn {
   display: flex;
   align-items: center;
@@ -7109,6 +7302,7 @@ async function handleDrop(event) {
 .node-card.is-processing {
   position: relative;
   overflow: visible;
+  contain: none;
 }
 
 .comet-border {
@@ -9352,6 +9546,13 @@ async function handleDrop(event) {
 :root.canvas-theme-light .image-node .count-display.clickable:hover {
   border-color: rgba(59, 130, 246, 0.4);
   color: #3b82f6;
+}
+
+:root.canvas-theme-light .image-node .image-toolbar .toolbar-btn-hd {
+  color: #6d28d9;
+}
+:root.canvas-theme-light .image-node .image-toolbar .toolbar-btn-hd:hover:not(:disabled) {
+  color: #5b21b6;
 }
 
 /* 图片节点工具栏 - 白昼模式 */

@@ -6,6 +6,7 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch, toRaw, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import { t } from '@/i18n'
+import { useTeamStore } from '@/stores/team'
 
 export const useCanvasStore = defineStore('canvas', () => {
   // ========== 节点和连线 ==========
@@ -1547,6 +1548,27 @@ export const useCanvasStore = defineStore('canvas', () => {
   function generateTabId() {
     return `tab-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`
   }
+
+  /**
+   * 将全局个人/团队空间切换到当前已保存工作流所属空间，避免生成记录写入错误 space_type
+   * （例如：复刻到团队空间的工作流在全局仍为个人空间时，历史面板按团队筛选会看不到新图）
+   */
+  async function syncTeamSpaceFromWorkflowTab(tab) {
+    if (!tab) return
+    const st = tab.workflowSpaceType
+    if (st !== 'personal' && st !== 'team') return
+    const teamStore = useTeamStore()
+    try {
+      if (st === 'team' && tab.workflowTeamId) {
+        if (!teamStore.myTeams.length) await teamStore.loadMyTeams()
+        await teamStore.switchToTeam(tab.workflowTeamId)
+      } else {
+        teamStore.switchToPersonalSpace()
+      }
+    } catch (e) {
+      console.warn('[CanvasStore] 同步工作流所属空间失败:', e?.message)
+    }
+  }
   
   /**
    * 创建新标签
@@ -1579,6 +1601,9 @@ export const useCanvasStore = defineStore('canvas', () => {
       name: workflow?.name || t('canvas.newWorkflow'),
       workflowId: workflow?.id || null,
       workflowUid: workflow?.workflow_uid || null,
+      // 已保存工作流：记录其所属空间，切换标签时同步全局空间，保证生成任务写入对应 image/video 历史
+      workflowSpaceType: workflow?.id ? (workflow.space_type === 'team' ? 'team' : 'personal') : null,
+      workflowTeamId: workflow?.id && workflow.space_type === 'team' ? workflow.team_id : null,
       nodes: tabNodes,
       edges: tabEdges,
       viewport: workflow?.viewport || { x: 0, y: 0, zoom: 1 },
@@ -1640,6 +1665,8 @@ export const useCanvasStore = defineStore('canvas', () => {
       edges.value = []
     }
     viewport.value = { ...targetTab.viewport }
+
+    void syncTeamSpaceFromWorkflowTab(targetTab)
   }
   
   /**
@@ -1729,7 +1756,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   /**
    * 标记当前标签已保存
    */
-  function markCurrentTabSaved(workflowId = null, workflowUid = null) {
+  function markCurrentTabSaved(workflowId = null, workflowUid = null, spaceMeta = null) {
     const currentTab = workflowTabs.value.find(t => t.id === activeTabId.value)
     if (currentTab) {
       currentTab.hasChanges = false
@@ -1738,6 +1765,10 @@ export const useCanvasStore = defineStore('canvas', () => {
       }
       if (workflowUid) {
         currentTab.workflowUid = workflowUid
+      }
+      if (spaceMeta && typeof spaceMeta.space_type === 'string') {
+        currentTab.workflowSpaceType = spaceMeta.space_type === 'team' ? 'team' : 'personal'
+        currentTab.workflowTeamId = spaceMeta.space_type === 'team' ? spaceMeta.team_id : null
       }
     }
   }
@@ -1762,6 +1793,10 @@ export const useCanvasStore = defineStore('canvas', () => {
             existingTab.viewport = workflow.viewport
           }
           existingTab.name = workflow.name || existingTab.name
+        }
+        if (workflow.id) {
+          existingTab.workflowSpaceType = workflow.space_type === 'team' ? 'team' : 'personal'
+          existingTab.workflowTeamId = workflow.space_type === 'team' ? workflow.team_id : null
         }
         switchToTab(existingTab.id)
         // 恢复媒体

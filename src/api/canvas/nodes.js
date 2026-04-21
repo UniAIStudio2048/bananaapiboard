@@ -336,6 +336,22 @@ export async function getVideoHdTaskStatus(taskId) {
 }
 
 /**
+ * 查询图片高清放大任务状态
+ */
+export async function getImageHdTaskStatus(taskId) {
+  const response = await fetch(getApiUrl(`/api/images/hd-upscale/task/${taskId}`), {
+    headers: getHeaders()
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || '查询图片高清任务状态失败')
+  }
+
+  return response.json()
+}
+
+/**
  * 上传图片（内置重试机制）
  */
 export async function uploadImages(files, retryOptions = {}) {

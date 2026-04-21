@@ -8,6 +8,7 @@ defineOptions({
  * 底部配置面板集成在节点内，紧贴节点卡片
  */
 import { ref, computed, watch, nextTick, inject, onMounted } from 'vue'
+import DOMPurify from 'dompurify'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getLLMConfig, chatWithLLM, getUserLLMPresets, createUserLLMPreset, updateUserLLMPreset } from '@/api/canvas/llm'
@@ -48,6 +49,7 @@ watch(isSoloSelected, (val) => {
 
 // 本地文本状态
 const localText = ref(props.data.text || '')
+const sanitizedLocalText = computed(() => DOMPurify.sanitize(localText.value || ''))
 
 // 节点状态：'empty' | 'ready' | 'editing'
 const nodeState = ref(localText.value ? 'ready' : 'empty')
@@ -2648,7 +2650,7 @@ onMounted(() => {
           <div 
             v-else-if="localText" 
             class="text-node-display"
-            v-html="localText"
+            v-html="sanitizedLocalText"
             @wheel.stop
           ></div>
           
