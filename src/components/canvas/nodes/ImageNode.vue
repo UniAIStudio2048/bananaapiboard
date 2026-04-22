@@ -3311,23 +3311,6 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
   try {
     console.log('[ImageNode] 后台异步上传开始:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
     
-    // 单张超过20MB的图片压缩后再上传
-    if (file.size > 20 * 1024 * 1024) {
-      console.log('[ImageNode] 文件超过20MB，压缩后上传...')
-      const tempBlobUrl = URL.createObjectURL(file)
-      try {
-        const compressedBlob = await compressImageToTargetSize(tempBlobUrl, 15 * 1024 * 1024)
-        URL.revokeObjectURL(tempBlobUrl)
-        if (compressedBlob) {
-          file = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() })
-          console.log('[ImageNode] 压缩后大小:', (file.size / 1024 / 1024).toFixed(2), 'MB')
-        }
-      } catch (e) {
-        URL.revokeObjectURL(tempBlobUrl)
-        console.warn('[ImageNode] 压缩失败，尝试上传原文件:', e.message)
-      }
-    }
-    
     const urls = await uploadImages([file])
     if (urls && urls.length > 0) {
       const serverUrl = urls[0]
@@ -3433,23 +3416,6 @@ function updateDownstreamBlobReferences(blobUrl, serverUrl) {
 async function uploadImageFile(file) {
   // 立即上传到服务器获取真正的 URL
   console.log('[ImageNode] 上传图片文件到服务器:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
-  
-  // 单张超过20MB的图片压缩后再上传
-  if (file.size > 20 * 1024 * 1024) {
-    console.log('[ImageNode] 文件超过20MB，压缩后上传...')
-    const tempBlobUrl = URL.createObjectURL(file)
-    try {
-      const compressedBlob = await compressImageToTargetSize(tempBlobUrl, 15 * 1024 * 1024)
-      URL.revokeObjectURL(tempBlobUrl)
-      if (compressedBlob) {
-        file = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() })
-        console.log('[ImageNode] 压缩后大小:', (file.size / 1024 / 1024).toFixed(2), 'MB')
-      }
-    } catch (e) {
-      URL.revokeObjectURL(tempBlobUrl)
-      console.warn('[ImageNode] 压缩失败，尝试上传原文件:', e.message)
-    }
-  }
   
   const urls = await uploadImages([file])
   if (urls && urls.length > 0) {
@@ -3881,32 +3847,36 @@ function compressImageToTargetSize(imageSource, targetSizeBytes) {
   })
 }
 
-// 批量检测和压缩图片（>3张检测总大小，单张>20MB也压缩）
-async function compressImagesIfNeeded(images) {
+// 需要前端预压缩的图像模型 API 类型及其对应的单张最大字节数
+// 默认传原图，仅对有严格大小要求的 API 类型做前端预压缩
+const IMAGE_API_TYPE_LIMITS = {
+  'kling': 10 * 1024 * 1024,
+  'tencentaigc': 5 * 1024 * 1024,
+}
+
+function shouldCompressForImageApiType(apiType) {
+  return apiType in IMAGE_API_TYPE_LIMITS
+}
+
+function getImageLimitForApiType(apiType) {
+  return IMAGE_API_TYPE_LIMITS[apiType] || 0
+}
+
+// 根据模型 API 类型决定是否压缩图片
+// 默认传原图，仅对有严格大小要求的 API 类型做前端预压缩
+async function compressImagesIfNeeded(images, apiType) {
   if (!images || images.length === 0) return images
 
-  const imageCount = images.length
+  if (!shouldCompressForImageApiType(apiType)) {
+    console.log(`[ImageNode] API 类型 "${apiType}" 无需前端压缩，传递原图`)
+    return images
+  }
+
+  const MAX_SIZE = getImageLimitForApiType(apiType)
+  console.log(`[ImageNode] API 类型 "${apiType}" 需要压缩，限制 ${(MAX_SIZE / 1024 / 1024).toFixed(0)}MB/张`)
 
   const sizes = await Promise.all(images.map(img => getImageSourceSize(img)))
-  const totalSize = sizes.reduce((sum, s) => sum + s, 0)
-
-  console.log('[ImageNode] 图片压缩检测:', {
-    imageCount,
-    sizes: sizes.map(s => (s / 1024 / 1024).toFixed(2) + 'MB'),
-    totalSize: (totalSize / 1024 / 1024).toFixed(2) + 'MB'
-  })
-
-  // 确定批量压缩目标（仅超过3张时检测总大小）
-  let batchTargetSize = Infinity
-  if (imageCount > 3) {
-    if (totalSize > 40 * 1024 * 1024) {
-      batchTargetSize = 6 * 1024 * 1024
-      console.log('[ImageNode] 总大小超过40MB，每张压缩到6MB以内')
-    } else if (totalSize > 30 * 1024 * 1024) {
-      batchTargetSize = 8 * 1024 * 1024
-      console.log('[ImageNode] 总大小超过30MB，每张压缩到8MB以内')
-    }
-  }
+  console.log('[ImageNode] 输入图片大小检测:', sizes.map(s => (s / 1024 / 1024).toFixed(2) + 'MB'))
 
   const result = []
   let anyCompressed = false
@@ -3915,23 +3885,15 @@ async function compressImagesIfNeeded(images) {
     const img = images[i]
     const size = sizes[i]
 
-    let targetSize = batchTargetSize
-
-    // 单张超过20MB，无论图片数量都压缩到15MB以内
-    if (size > 20 * 1024 * 1024) {
-      targetSize = Math.min(targetSize, 15 * 1024 * 1024)
-      console.log(`[ImageNode] 图片 ${i + 1} 单张超过20MB (${(size / 1024 / 1024).toFixed(2)}MB)，需要压缩`)
-    }
-
-    if (size <= targetSize || size === 0) {
+    if (size <= MAX_SIZE || size === 0) {
       result.push(img)
       continue
     }
 
-    console.log(`[ImageNode] 开始压缩图片 ${i + 1}: ${(size / 1024 / 1024).toFixed(2)}MB -> 目标 ${(targetSize / 1024 / 1024).toFixed(2)}MB`)
+    console.log(`[ImageNode] 开始压缩图片 ${i + 1}: ${(size / 1024 / 1024).toFixed(2)}MB -> 目标 ${(MAX_SIZE / 1024 / 1024).toFixed(2)}MB`)
 
     try {
-      const compressedBlob = await compressImageToTargetSize(img, targetSize)
+      const compressedBlob = await compressImageToTargetSize(img, MAX_SIZE)
 
       if (compressedBlob) {
         anyCompressed = true
@@ -3972,6 +3934,7 @@ async function compressImagesIfNeeded(images) {
   if (anyCompressed) {
     const newSizes = await Promise.all(result.map(img => getImageSourceSize(img)))
     const newTotalSize = newSizes.reduce((sum, s) => sum + s, 0)
+    const totalSize = sizes.reduce((sum, s) => sum + s, 0)
     console.log('[ImageNode] 压缩完成，总大小:', (newTotalSize / 1024 / 1024).toFixed(2) + 'MB',
       '(压缩前:', (totalSize / 1024 / 1024).toFixed(2) + 'MB)')
   }
@@ -4241,8 +4204,10 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
   console.log('[ImageNode] computed 属性的参考图:', referenceImages.value.length, '张')
   console.log('[ImageNode] 最终使用的参考图:', finalReferenceImages)
   
-  // 压缩检测：超过3张检测总大小并压缩，单张超过20MB也压缩
-  const imagesToProcess = await compressImagesIfNeeded(finalReferenceImages)
+  // 仅对有严格大小要求的模型 API 类型做前端预压缩，其他类型传原图
+  const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
+  const currentApiType = currentModel?.apiType || ''
+  const imagesToProcess = await compressImagesIfNeeded(finalReferenceImages, currentApiType)
   
   // 解析比例：auto 模式下根据是否有参考图自动确定比例
   let resolvedAspectRatio = selectedAspectRatio.value

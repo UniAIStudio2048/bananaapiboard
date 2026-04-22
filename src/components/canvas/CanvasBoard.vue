@@ -37,7 +37,6 @@ import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
-import { compressImage } from '@/utils/imageCompress'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -2299,12 +2298,9 @@ async function uploadFilesToCloud(tasks) {
     const { file, type, nodeId, blobUrl, field } = task
     
     try {
-      // 上传前压缩图片
-      const fileToUpload = file.type.startsWith('image/') ? await compressImage(file) : file
+      console.log(`[CanvasBoard] 开始上传${type}到云存储:`, file.name, '大小:', Math.round(file.size / 1024), 'KB')
 
-      console.log(`[CanvasBoard] 开始上传${type}到云存储:`, fileToUpload.name, '大小:', Math.round(fileToUpload.size / 1024), 'KB')
-
-      const result = await uploadCanvasMedia(fileToUpload, type)
+      const result = await uploadCanvasMedia(file, type)
       const cloudUrl = result.url
       
       console.log(`[CanvasBoard] ${type}上传成功，云URL:`, cloudUrl)
