@@ -30,11 +30,12 @@ export async function generateImageFromText(params) {
     count = 1,
     enableGroupGeneration = false,
     maxGroupImages = 3,
-    webSearch
+    webSearch,
+    quality
   } = params
   
   // 优先使用 image_size，否则使用 size（向后兼容）
-  const finalImageSize = image_size || size || '1K'
+  const finalImageSize = image_size || size || '2K'
   
   const teamStore = useTeamStore()
   const spaceParams = teamStore.getSpaceParams('current')
@@ -51,6 +52,10 @@ export async function generateImageFromText(params) {
     maxGroupImages,
     spaceType: spaceParams.spaceType,
     ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
+  }
+
+  if (quality && quality !== 'auto') {
+    body.quality = quality
   }
 
   // Seedream 5.0 Lite 联网搜索
@@ -106,7 +111,7 @@ export async function generateImageFromImage(params) {
   } = params
   
   // 优先使用 image_size，否则使用 size
-  const finalImageSize = image_size || size || '1K'
+  const finalImageSize = image_size || size || '2K'
   
   const teamStore = useTeamStore()
   const spaceParams = teamStore.getSpaceParams('current')

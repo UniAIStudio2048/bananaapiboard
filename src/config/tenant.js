@@ -631,7 +631,8 @@ export const getAvailableImageModels = (mode = null) => {
         pointsCost: modelConfig.pointsCost || modelPricingConfig.pointsCost || 1,
         supportedModes,
         // API 类型（用于判断是否是 MJ 模型）
-        apiType: modelConfig.apiType || null
+        apiType: modelConfig.apiType || null,
+        defaultQuality: modelConfig.defaultQuality || undefined
       })
     }
     

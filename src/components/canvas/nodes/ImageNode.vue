@@ -265,6 +265,7 @@ const selectedResolution = ref(props.data.resolution || '1024')
 const selectedAspectRatio = ref(props.data.aspectRatio || 'auto')
 const selectedCount = ref(props.data.count || 1)
 const imageSize = ref(props.data.imageSize || '4K') // 尺寸选项（仅 nano-banana-2）
+const selectedQuality = ref('high')
 const enableGroupGeneration = ref(props.data.enableGroupGeneration || false) // 组图生成开关
 const maxGroupImages = ref(Math.max(2, Math.min(10, props.data.maxGroupImages || 3))) // 最大组图数量（限制在2-10之间，默认3）
 const enableWebSearch = ref(props.data.enableWebSearch !== undefined ? props.data.enableWebSearch : true) // 联网搜索开关（默认开启）
@@ -1103,12 +1104,17 @@ const imageSizes = computed(() => {
   }))
 })
 
-// 是否显示尺寸选项（从模型配置中读取 hasResolutionPricing，MJ模型时隐藏）
+// 是否显示尺寸选项（从模型配置中读取 hasResolutionPricing，MJ/gpt-image-2模型时隐藏）
 const showResolutionOption = computed(() => {
-  // MJ 模型不显示尺寸选项（不起作用）
   if (isMJModel.value) return false
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
+  const modelName = (selectedModel.value || '').toLowerCase()
+  if (modelName.includes('gpt-image')) return false
   return currentModel?.hasResolutionPricing || false
+})
+
+const showQualityOption = computed(() => {
+  return false
 })
 
 // 是否显示预设选项（MJ模型时隐藏，因为不起作用）
@@ -4230,6 +4236,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     count: 1, // 单次请求固定为1
     // 所有模型都传递 image_size 参数
     image_size: imageSize.value || '2K',
+    quality: 'high',
     // MJ 模型的 botType 参数（写实/动漫）
     ...(isMJModel.value && { botType: botType.value }),
     // Seedream 组图生成参数
@@ -6511,6 +6518,19 @@ async function handleDrop(event) {
               @click="imageSize = size.value"
             >
               {{ size.label }}
+            </div>
+          </div>
+
+          <!-- gpt-image-2 质量选项 -->
+          <div v-if="showQualityOption" class="param-chip-group">
+            <div 
+              v-for="q in [{ value: 'auto', label: 'Auto' }, { value: 'low', label: '快速' }, { value: 'medium', label: '标准' }, { value: 'high', label: '高质量' }]" 
+              :key="q.value"
+              class="param-chip"
+              :class="{ active: selectedQuality === q.value }"
+              @click="selectedQuality = q.value"
+            >
+              {{ q.label }}
             </div>
           </div>
         </div>

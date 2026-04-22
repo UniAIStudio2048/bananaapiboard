@@ -963,10 +963,14 @@ async function generate() {
       payload.aspect_ratio = aspectRatio.value
     }
     
-    // 有多档分辨率计价的模型，传递用户选择的尺寸
+    // 有多档分辨率计价的模型，传递用户选择的尺寸；否则默认 2K
     if (showResolutionOption.value) {
       payload.image_size = imageSize.value
+    } else {
+      payload.image_size = '2K'
     }
+
+    payload.quality = 'high'
     
     // 图生图模式：添加参考图片
     if (mode.value === 'image' && images.length > 0) {
@@ -1719,6 +1723,13 @@ const userPackageInfo = computed(() => {
   }
 })
 
+// gpt-image-2 质量选择
+const selectedQuality = ref('high')
+
+const showQualityOption = computed(() => {
+  return false
+})
+
 // 当模型有多档积分时显示尺寸选项
 const showResolutionOption = computed(() => {
   const modelInfo = availableModels.value.find(m => m.value === model.value)
@@ -2218,6 +2229,17 @@ onUnmounted(() => {
                 </option>
               </select>
             </div>
+          </div>
+
+          <!-- gpt-image-2 质量选项 -->
+          <div v-if="showQualityOption" class="mt-2">
+            <label class="block text-xs text-gray-400 mb-1">画质</label>
+            <select v-model="selectedQuality" class="input text-sm">
+              <option value="auto">Auto (自动)</option>
+              <option value="low">Low (快速草稿)</option>
+              <option value="medium">Medium (标准)</option>
+              <option value="high">High (高质量)</option>
+            </select>
           </div>
 
           <!-- 提示词 -->
