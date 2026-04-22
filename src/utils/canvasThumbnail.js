@@ -27,18 +27,24 @@ export function toSameOriginUrl(url) {
 }
 
 /**
- * 根据画布 zoom 级别计算合适的缩略图宽度
- * zoom 0.1~0.3 → 256px (极度缩小，小缩略图即可)
- * zoom 0.3~0.6 → 512px
- * zoom 0.6~1.0 → 1024px (默认)
- * zoom 1.0~2.0 → 2048px (放大，需要更多细节)
- * zoom >= 2.0  → 原图 (不加缩略图参数)
+ * 根据节点实际屏幕显示宽度计算合适的缩略图宽度
+ * @param {number} zoom 画布缩放级别
+ * @param {number} nodeWidth 节点宽度（画布坐标，默认 400）
+ *
+ * displayWidth = nodeWidth × zoom = 节点在屏幕上的像素宽度
+ * displayWidth >= 1200 → 原图（节点接近屏幕大小，几乎不压缩）
+ * displayWidth >= 800  → 2048px
+ * displayWidth >= 500  → 1024px
+ * displayWidth >= 250  → 512px
+ * displayWidth <  250  → 256px
  */
-export function getThumbWidthForZoom(zoom) {
-  if (!zoom || zoom >= 2.0) return 0
-  if (zoom >= 1.0) return 2048
-  if (zoom >= 0.6) return 1024
-  if (zoom >= 0.3) return 512
+export function getThumbWidthForZoom(zoom, nodeWidth = 400) {
+  if (!zoom) return 0
+  const displayWidth = nodeWidth * zoom
+  if (displayWidth >= 1200) return 0
+  if (displayWidth >= 800) return 2048
+  if (displayWidth >= 500) return 1024
+  if (displayWidth >= 250) return 512
   return 256
 }
 

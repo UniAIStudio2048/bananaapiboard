@@ -1916,32 +1916,22 @@ async function downloadSelectedNodeFile() {
       return
     }
     
-    // 远程 URL 使用下载函数
-    const { buildDownloadUrl, buildVideoDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
-    const downloadUrl = isVideo 
-      ? buildVideoDownloadUrl(fileUrl, fileName)
-      : buildDownloadUrl(fileUrl, fileName)
-    
-    if (isQiniuCdnUrl(fileUrl)) {
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
+    // 远程 URL 统一使用 smartDownload（fetch+blob，自动验证完整性）
+    const { smartDownload, buildVideoDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
+    if (isVideo) {
+      if (isQiniuCdnUrl(fileUrl)) {
+        const downloadUrl = buildVideoDownloadUrl(fileUrl, fileName)
+        const link = document.createElement('a')
+        link.href = downloadUrl
+        link.download = fileName
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } else {
+        await smartDownload(fileUrl, fileName)
+      }
     } else {
-      const { getTenantHeaders } = await import('@/config/tenant')
-      const response = await fetch(downloadUrl, { headers: getTenantHeaders() })
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
-      const blob = await response.blob()
-      const blobUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = blobUrl
-      link.download = fileName
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(blobUrl)
+      await smartDownload(fileUrl, fileName)
     }
     console.log('[Canvas] 下载文件:', fileName)
   } catch (error) {

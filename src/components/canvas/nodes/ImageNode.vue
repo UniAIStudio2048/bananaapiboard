@@ -189,19 +189,24 @@ const editorInitialTool = ref('')
 // 🚀 性能优化：画布拖拽状态（用于降低渲染质量）
 const isCanvasDragging = ref(false)
 
-// 🚀 动态缩略图：根据画布 zoom 级别调整图片分辨率
-const currentThumbWidth = ref(getThumbWidthForZoom(canvasStore.viewport?.zoom || 1))
+// 🚀 动态缩略图：根据节点实际屏幕显示宽度调整图片分辨率
+const currentThumbWidth = ref(getThumbWidthForZoom(canvasStore.viewport?.zoom || 1, props.data.width || 380))
 let thumbUpdateTimer = null
 
-watch(() => canvasStore.viewport?.zoom, (newZoom) => {
+function updateThumbWidth() {
   if (thumbUpdateTimer) clearTimeout(thumbUpdateTimer)
   thumbUpdateTimer = setTimeout(() => {
-    const newWidth = getThumbWidthForZoom(newZoom || 1)
+    const zoom = canvasStore.viewport?.zoom || 1
+    const nw = props.data.width || 380
+    const newWidth = getThumbWidthForZoom(zoom, nw)
     if (newWidth !== currentThumbWidth.value) {
       currentThumbWidth.value = newWidth
     }
   }, 300)
-})
+}
+
+watch(() => canvasStore.viewport?.zoom, updateThumbWidth)
+watch(() => props.data.width, updateThumbWidth)
 
 function getZoomAwareThumbnailUrl(url) {
   if (currentThumbWidth.value <= 0) return getOriginalImageUrl(url)
