@@ -115,7 +115,7 @@ let teamSyncTimer = null
 const lastSyncId = ref(null) // 记录最新一条记录的ID，用于检测新数据
 
 // 通用自动刷新（面板打开时，定期检测新数据）
-const AUTO_REFRESH_INTERVAL = 10000 // 10 秒检测一次
+const AUTO_REFRESH_INTERVAL = 30000 // 30 秒检测一次（避免频繁刷新导致图片跳闪）
 let autoRefreshTimer = null
 
 // 保存中状态
@@ -295,7 +295,10 @@ async function loadHistory(forceRefresh = false) {
   loading.value = true
   try {
     const freshData = await _fetchFromServer(spaceParams, spaceType, teamId)
-    historyList.value = freshData
+    // 精确比较，避免数据相同时替换数组引用导致图片跳闪
+    if (!_isHistoryEqual(freshData, historyList.value)) {
+      historyList.value = freshData
+    }
     dataCached.value = true
     lastLoadTime.value = Date.now()
   } catch (error) {
@@ -323,16 +326,27 @@ async function _fetchFromServer(spaceParams, spaceType, teamId) {
   return freshData
 }
 
+// 比较两个历史列表是否实质相同（避免不必要的数组替换导致图片跳闪）
+function _isHistoryEqual(a, b) {
+  if (a.length !== b.length) return false
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].id !== b[i].id) return false
+  }
+  return true
+}
+
 // 后台静默刷新：不阻塞 UI，刷新完毕后对比更新
 async function _refreshHistoryInBackground(spaceParams, spaceType, teamId) {
   try {
     const freshData = await _fetchFromServer(spaceParams, spaceType, teamId)
-    if (freshData.length !== historyList.value.length || 
-        JSON.stringify(freshData.map(d => d.id).slice(0, 5)) !== JSON.stringify(historyList.value.map(d => d.id).slice(0, 5))) {
+    if (!_isHistoryEqual(freshData, historyList.value)) {
       historyList.value = freshData
       dataCached.value = true
       lastLoadTime.value = Date.now()
       console.log('[HistoryPanel] 后台刷新完成，数据已更新:', freshData.length, '条')
+    } else {
+      // 数据相同，只更新时间戳，不替换数组引用
+      lastLoadTime.value = Date.now()
     }
   } catch (e) {
     // 后台刷新失败不影响已展示的缓存数据
@@ -341,28 +355,27 @@ async function _refreshHistoryInBackground(spaceParams, spaceType, teamId) {
 
 /**
  * 团队空间实时同步 - 检查是否有新数据
- * 通过比较最新记录ID来判断是否需要刷新
+ * 获取全量数据后精确比较，避免 limit:1 过滤不一致导致误判
  */
 async function checkTeamSync() {
   // 仅在团队空间且面板可见时同步
   if (!teamStore.isInTeamSpace.value || !props.visible) return
-  
+
   // 仅在筛选团队空间时同步
   if (!spaceFilter.value.startsWith('team-')) return
-  
+
   try {
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
-    const result = await getHistory({ ...spaceParams, limit: 1 })
-    const latestHistory = result.history?.[0]
-    
-    if (latestHistory) {
-      // 如果有新数据（ID不同或首次同步）
-      if (lastSyncId.value !== null && lastSyncId.value !== latestHistory.id) {
-        console.log('[HistoryPanel] 检测到新数据，自动刷新')
-        dataCached.value = false
-        await loadHistory(true)
-      }
-      lastSyncId.value = latestHistory.id
+    const { spaceType, teamId } = spaceParams
+    const result = await getHistory(spaceParams)
+    const freshData = result.history || []
+
+    if (!_isHistoryEqual(freshData, historyList.value)) {
+      console.log('[HistoryPanel] 团队空间检测到新数据，更新列表')
+      historyList.value = freshData
+      dataCached.value = true
+      lastLoadTime.value = Date.now()
+      cacheHistory('all', spaceType, teamId, freshData).catch(() => {})
     }
   } catch (error) {
     console.error('[HistoryPanel] 团队同步检查失败:', error)
@@ -397,29 +410,28 @@ function stopTeamSync() {
 
 /**
  * 通用自动刷新 - 面板打开时定期检测新数据
- * 通过比较最新记录ID来判断是否需要全量刷新
+ * 获取全量数据后与当前列表做 ID 级别精确比较，
+ * 只在真正有变化时才替换数组引用（避免图片跳闪）
  */
 function startAutoRefresh() {
   stopAutoRefresh()
   if (!props.visible) return
-  
+
   autoRefreshTimer = setInterval(async () => {
     if (!props.visible) return
     try {
       const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
-      const result = await getHistory({ ...spaceParams, limit: 1 })
-      const latest = result.history?.[0]
-      
-      if (latest && historyList.value.length > 0) {
-        const currentLatestId = historyList.value[0]?.id
-        if (currentLatestId !== latest.id) {
-          console.log('[HistoryPanel] 检测到新数据，自动刷新')
-          dataCached.value = false
-          await loadHistory(true)
-        }
-      } else if (latest && historyList.value.length === 0) {
-        dataCached.value = false
-        await loadHistory(true)
+      const { spaceType, teamId } = spaceParams
+      const result = await getHistory(spaceParams)
+      const freshData = result.history || []
+
+      if (!_isHistoryEqual(freshData, historyList.value)) {
+        console.log('[HistoryPanel] 检测到新数据，更新列表')
+        historyList.value = freshData
+        dataCached.value = true
+        lastLoadTime.value = Date.now()
+        // 更新缓存
+        cacheHistory('all', spaceType, teamId, freshData).catch(() => {})
       }
     } catch (e) {
       // 静默失败

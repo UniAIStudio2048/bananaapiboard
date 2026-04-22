@@ -254,7 +254,9 @@ function handleError(e) {
 }
 
 // 监听 src 变化和 IntersectionObserver 可见性
-watch(() => props.src, (newSrc) => {
+watch(() => props.src, (newSrc, oldSrc) => {
+  // 跳过相同 URL 的重复加载（避免父组件重渲染导致图片跳闪）
+  if (newSrc && newSrc === oldSrc) return
   loadImage(newSrc)
 }, { immediate: true })
 
