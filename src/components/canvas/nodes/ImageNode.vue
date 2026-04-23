@@ -30,14 +30,16 @@ import Camera3DPanel from '../Camera3DPanel.vue'
 import Pose3DViewer from '../Pose3DViewer.vue'
 import CameraControlPanel from '../CameraControlPanel.vue'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
-import { getCanvasThumbnailUrl, getThumbWidthForZoom, getOriginalImageUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { getOriginalImageUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
+import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 
 const { t } = useI18n()
 
-// 节点根元素引用（用于计算工具栏位置）
+// 节点根元素引用（用于计算工具栏位置 + 视口懒加载）
 const nodeRef = ref(null)
+const { isVisible: isNodeVisible } = useNodeVisibility(nodeRef)
 
 const props = defineProps({
   id: String,
@@ -189,29 +191,6 @@ const editorInitialTool = ref('')
 // 🚀 性能优化：画布拖拽状态（用于降低渲染质量）
 const isCanvasDragging = ref(false)
 
-// 🚀 动态缩略图：根据节点实际屏幕显示宽度调整图片分辨率
-const currentThumbWidth = ref(getThumbWidthForZoom(canvasStore.viewport?.zoom || 1, props.data.width || 380))
-let thumbUpdateTimer = null
-
-function updateThumbWidth() {
-  if (thumbUpdateTimer) clearTimeout(thumbUpdateTimer)
-  thumbUpdateTimer = setTimeout(() => {
-    const zoom = canvasStore.viewport?.zoom || 1
-    const nw = props.data.width || 380
-    const newWidth = getThumbWidthForZoom(zoom, nw)
-    if (newWidth !== currentThumbWidth.value) {
-      currentThumbWidth.value = newWidth
-    }
-  }, 300)
-}
-
-watch(() => canvasStore.viewport?.zoom, updateThumbWidth)
-watch(() => props.data.width, updateThumbWidth)
-
-function getZoomAwareThumbnailUrl(url) {
-  if (currentThumbWidth.value <= 0) return getOriginalImageUrl(url)
-  return getCanvasThumbnailUrl(url, currentThumbWidth.value)
-}
 
 // 🔧 Blob URL 内存管理 - 跟踪所有创建的 blob URL，用于组件卸载时清理
 // 性能优化: 改用普通数组替代 ref([])，blob URL 跟踪不需要响应式，避免不必要的 Vue 追踪开销
@@ -1676,13 +1655,28 @@ function getProxiedImageUrl(imageUrl) {
   
   // 检查是否是外部 URL（以 http:// 或 https:// 开头）
   if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-    // 检查是否是同源（当前后端的域名）
     const currentHost = window.location.host
     try {
       const urlObj = new URL(imageUrl)
-      // 如果是同一个域名，直接使用
+      // 同源直接使用
       if (urlObj.host === currentHost) {
         return imageUrl
+      }
+      // 同项目的其他子域名：提取 /api/ 路径通过当前后端地址访问
+      // 从 VITE_API_BASE 环境变量读取后端地址，动态判断基域名
+      if (urlObj.pathname.startsWith('/api/')) {
+        try {
+          const apiBase = import.meta.env.VITE_API_BASE
+          if (apiBase) {
+            const apiHost = new URL(apiBase).hostname
+            const getBaseDomain = (h) => { const p = h.split('.'); return p.length >= 2 ? p.slice(-2).join('.') : h }
+            if (getBaseDomain(urlObj.hostname) === getBaseDomain(apiHost)) {
+              const localUrl = `${apiBase}${urlObj.pathname}${urlObj.search}`
+              console.log('[ImageNode] 同项目域名，转为当前API地址:', localUrl.substring(0, 80))
+              return localUrl
+            }
+          }
+        } catch (_) {}
       }
     } catch (e) {
       // URL 解析失败，继续使用代理
@@ -1702,8 +1696,31 @@ function nextFrame() {
   return new Promise(resolve => requestAnimationFrame(resolve))
 }
 
+// 辅助函数：通过 fetch 下载图片并转为 Image 对象
+async function fetchImageAsBlob(url) {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`图片下载失败: ${response.status} ${response.statusText}`)
+  }
+  const blob = await response.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const img = new Image()
+  try {
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = blobUrl
+    })
+  } catch (e) {
+    URL.revokeObjectURL(blobUrl)
+    throw e
+  }
+  URL.revokeObjectURL(blobUrl)
+  return img
+}
+
 // 辅助函数：加载图片用于 Canvas 操作（解决 CORS/代理加载失败问题）
-// 优先使用 fetch+Blob 方式，避免 img.crossOrigin='anonymous' 导致的加载失败
+// 带重试机制和多种降级策略
 async function loadImageForCanvas(imageUrl) {
   // blob URL / data URL：直接加载，无 CORS 问题
   if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
@@ -1716,33 +1733,51 @@ async function loadImageForCanvas(imageUrl) {
     return img
   }
   
-  // 其他 URL：通过 fetch 获取二进制数据，转为 Blob URL 后加载（绕过 CORS）
   const proxiedUrl = getProxiedImageUrl(imageUrl)
-  console.log('[ImageNode] loadImageForCanvas: fetch', proxiedUrl?.substring(0, 100))
+  const isProxied = proxiedUrl !== imageUrl
   
-  const response = await fetch(proxiedUrl)
-  if (!response.ok) {
-    throw new Error(`图片下载失败: ${response.status} ${response.statusText}`)
+  // 策略1: 通过代理 fetch（带重试）
+  const MAX_RETRIES = 3
+  let lastError = null
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`[ImageNode] loadImageForCanvas: 尝试 ${attempt}/${MAX_RETRIES}`, proxiedUrl?.substring(0, 100))
+      return await fetchImageAsBlob(proxiedUrl)
+    } catch (e) {
+      lastError = e
+      console.warn(`[ImageNode] loadImageForCanvas: 尝试 ${attempt} 失败:`, e.message)
+      if (attempt < MAX_RETRIES) {
+        await new Promise(r => setTimeout(r, 500 * attempt))
+      }
+    }
   }
   
-  const blob = await response.blob()
-  const blobUrl = URL.createObjectURL(blob)
+  // 策略2: 若代理 URL 失败，尝试直接 fetch 原始 URL
+  if (isProxied) {
+    try {
+      console.log('[ImageNode] loadImageForCanvas: 代理失败，尝试直接 fetch 原始 URL')
+      return await fetchImageAsBlob(imageUrl)
+    } catch (e) {
+      console.warn('[ImageNode] loadImageForCanvas: 直接 fetch 也失败:', e.message)
+    }
+  }
   
-  const img = new Image()
+  // 策略3: 使用 Image crossOrigin 加载（某些 CDN 支持 CORS）
   try {
+    console.log('[ImageNode] loadImageForCanvas: 尝试 crossOrigin 加载')
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
     await new Promise((resolve, reject) => {
       img.onload = resolve
       img.onerror = reject
-      img.src = blobUrl
+      img.src = imageUrl
     })
+    return img
   } catch (e) {
-    URL.revokeObjectURL(blobUrl)
-    throw e
+    console.warn('[ImageNode] loadImageForCanvas: crossOrigin 加载也失败:', e.message)
   }
   
-  // 加载成功后释放 blob URL（图片数据已解码到内存中）
-  URL.revokeObjectURL(blobUrl)
-  return img
+  throw lastError || new Error('图片加载失败，请检查网络连接后重试')
 }
 
 // ========== 宫格裁剪选项菜单（统一入口） ==========
@@ -1847,13 +1882,13 @@ async function handleGenericGridCrop(cols, rows) {
     const cellHeight = Math.floor(imgHeight / rows)
     
     const nodeWidth = 300
-    const nodeHeight = 320
+    const nodeHeight = Math.ceil(nodeWidth * (cellHeight / cellWidth)) + 40
     const gap = 20
     
     const currentNode = canvasStore.nodes.find(n => n.id === props.id)
     const baseX = currentNode?.position?.x || 0
     const baseY = currentNode?.position?.y || 0
-    const offsetX = 400
+    const offsetX = (currentNode?.data?.width || 380) + 80
     
     const newNodeIds = []
     const timestamp = Date.now()
@@ -1869,7 +1904,7 @@ async function handleGenericGridCrop(cols, rows) {
         
         ctx.drawImage(img, col * cellWidth, row * cellHeight, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight)
         
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
         const blobUrl = URL.createObjectURL(blob)
         
         canvas.width = 0
@@ -1893,7 +1928,7 @@ async function handleGenericGridCrop(cols, rows) {
           }
         })
         
-        const cropFile = new File([blob], `grid-crop-${index}.jpg`, { type: 'image/jpeg' })
+        const cropFile = new File([blob], `grid-crop-${index}.png`, { type: 'image/png' })
         uploadImageFileAsync(cropFile, blobUrl, nodeId)
         
         newNodeIds.push(nodeId)
@@ -1914,6 +1949,7 @@ async function handleGenericGridCrop(cols, rows) {
     
   } catch (error) {
     console.error(`[ImageNode] ${count}宫格裁剪失败:`, error)
+    showAlert('裁剪失败', error.message || '宫格裁剪失败，请重试')
   }finally {
     isGridCropping.value = false
   }
@@ -1995,12 +2031,12 @@ async function createStoryboardFromCrop(cols, rows) {
         
         ctx.drawImage(img, col * cellWidth, row * cellHeight, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight)
         
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.9))
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
         const blobUrl = URL.createObjectURL(blob)
         croppedUrls.push(blobUrl)
         
         // 收集上传任务，稍后执行
-        const file = new File([blob], `storyboard-${index}.jpg`, { type: 'image/jpeg' })
+        const file = new File([blob], `storyboard-${index}.png`, { type: 'image/png' })
         uploadTasks.push({ file, index, blobUrl })
       }
     }
@@ -2111,16 +2147,14 @@ async function handleToolbarGridCrop() {
     const cellWidth = Math.floor(imgWidth / 3)
     const cellHeight = Math.floor(imgHeight / 3)
     
-    // 计算节点布局参数
     const nodeWidth = 300
-    const nodeHeight = 320
+    const nodeHeight = Math.ceil(nodeWidth * (cellHeight / cellWidth)) + 40
     const gap = 20
     
-    // 获取当前节点位置
     const currentNode = canvasStore.nodes.find(n => n.id === props.id)
     const baseX = currentNode?.position?.x || 0
     const baseY = currentNode?.position?.y || 0
-    const offsetX = 400 // 在原节点右侧
+    const offsetX = (currentNode?.data?.width || 380) + 80
     
     // 🔧 优化：异步分批裁剪和创建节点，防止浏览器崩溃
     const newNodeIds = []
@@ -2148,12 +2182,9 @@ async function handleToolbarGridCrop() {
           cellHeight
         )
         
-        // 🔧 优化：使用 JPEG 格式并压缩，比 PNG 小很多（约减少 70% 体积）
-        // 🔧 改进：转为 Blob 后上传云端，不再存储 base64 数据
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
         const blobUrl = URL.createObjectURL(blob)
         
-        // 立即清理 canvas 引用，让 GC 可以回收
         canvas.width = 0
         canvas.height = 0
         
@@ -2179,7 +2210,7 @@ async function handleToolbarGridCrop() {
         newNodeIds.push(nodeId)
         
         // 🔧 后台异步上传裁剪图到云端
-        const cropFile = new File([blob], `grid-crop-${index}.jpg`, { type: 'image/jpeg' })
+        const cropFile = new File([blob], `grid-crop-${index}.png`, { type: 'image/png' })
         uploadImageFileAsync(cropFile, blobUrl, nodeId)
         
         // 🔧 优化：每创建一个节点后，等待下一帧渲染，让浏览器有时间处理
@@ -2202,6 +2233,7 @@ async function handleToolbarGridCrop() {
     
   } catch (error) {
     console.error('[ImageNode] 9宫格裁剪失败:', error)
+    showAlert('裁剪失败', error.message || '9宫格裁剪失败，请重试')
   } finally {
     isGridCropping.value = false
   }
@@ -2250,16 +2282,14 @@ async function handleToolbarGrid4Crop() {
     const cellWidth = Math.floor(imgWidth / 2)
     const cellHeight = Math.floor(imgHeight / 2)
     
-    // 计算节点布局参数
     const nodeWidth = 300
-    const nodeHeight = 320
+    const nodeHeight = Math.ceil(nodeWidth * (cellHeight / cellWidth)) + 40
     const gap = 20
     
-    // 获取当前节点位置
     const currentNode = canvasStore.nodes.find(n => n.id === props.id)
     const baseX = currentNode?.position?.x || 0
     const baseY = currentNode?.position?.y || 0
-    const offsetX = 400 // 在原节点右侧
+    const offsetX = (currentNode?.data?.width || 380) + 80
     
     // 🔧 优化：异步分批裁剪和创建节点，防止浏览器崩溃
     const newNodeIds = []
@@ -2287,12 +2317,9 @@ async function handleToolbarGrid4Crop() {
           cellHeight
         )
         
-        // 🔧 优化：使用 JPEG 格式并压缩，比 PNG 小很多（约减少 70% 体积）
-        // 🔧 改进：转为 Blob 后上传云端，不再存储 base64 数据
-        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.85))
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
         const blobUrl = URL.createObjectURL(blob)
         
-        // 立即清理 canvas 引用，让 GC 可以回收
         canvas.width = 0
         canvas.height = 0
         
@@ -2316,7 +2343,7 @@ async function handleToolbarGrid4Crop() {
         })
         
         // 🔧 后台异步上传裁剪图到云端
-        const cropFile = new File([blob], `grid4-crop-${index}.jpg`, { type: 'image/jpeg' })
+        const cropFile = new File([blob], `grid4-crop-${index}.png`, { type: 'image/png' })
         uploadImageFileAsync(cropFile, blobUrl, nodeId)
         
         newNodeIds.push(nodeId)
@@ -2341,6 +2368,7 @@ async function handleToolbarGrid4Crop() {
     
   } catch (error) {
     console.error('[ImageNode] 4宫格裁剪失败:', error)
+    showAlert('裁剪失败', error.message || '4宫格裁剪失败，请重试')
   } finally {
     isGrid4Cropping.value = false
   }
@@ -6147,7 +6175,8 @@ async function handleDrop(event) {
           
           <!-- 图片预览 -->
           <div class="source-image-preview" :class="{ 'low-quality': isCanvasDragging }">
-            <img :src="getZoomAwareThumbnailUrl(sourceImages[0])" alt="上传的图片" :loading="isCanvasDragging ? 'lazy' : 'eager'" />
+            <img v-if="isNodeVisible" :src="sourceImages[0]" alt="上传的图片" :loading="isCanvasDragging ? 'lazy' : 'eager'" decoding="async" />
+            <div v-else class="image-placeholder" />
           </div>
         </template>
         
@@ -6197,16 +6226,19 @@ async function handleDrop(event) {
                 'low-quality': isCanvasDragging
               }"
             >
-              <img 
-                v-for="(img, index) in outputImages.slice(0, 4)" 
-                :key="img || index"
-                :src="getZoomAwareThumbnailUrl(img)" 
-                :alt="`生成结果 ${index + 1}`"
-                class="preview-image"
-                :class="{ 'transparent-image': props.data?.isTransparent || props.data?.cutoutResult }"
-                :loading="isCanvasDragging ? 'lazy' : 'eager'"
-                @error="handleOutputImageError($event, img, index)"
-              />
+              <template v-for="(img, index) in outputImages.slice(0, 4)" :key="img || index">
+                <img 
+                  v-if="isNodeVisible"
+                  :src="img" 
+                  :alt="`生成结果 ${index + 1}`"
+                  class="preview-image"
+                  :class="{ 'transparent-image': props.data?.isTransparent || props.data?.cutoutResult }"
+                  :loading="isCanvasDragging ? 'lazy' : 'eager'"
+                  decoding="async"
+                  @error="handleOutputImageError($event, img, index)"
+                />
+                <div v-else class="image-placeholder preview-image" />
+              </template>
             </div>
             
             <!-- 有上游连接时 - 显示等待状态 -->
@@ -6321,7 +6353,8 @@ async function handleDrop(event) {
             @mouseenter="onHoverStart(img, $event)"
             @mouseleave="onHoverEnd"
           >
-            <img :src="getZoomAwareThumbnailUrl(img)" :alt="`图片 ${index + 1}`" />
+            <img v-if="isNodeVisible" :src="img" :alt="`图片 ${index + 1}`" decoding="async" />
+            <div v-else class="image-placeholder" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>
@@ -6763,11 +6796,17 @@ async function handleDrop(event) {
   flex-direction: column;
   align-items: center;
   overflow: visible;
-  /* 覆盖 canvas-node 的默认边框，只使用内部 node-card 的边框 */
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   contain: layout style;
+}
+
+.image-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 80px;
+  background: rgba(128, 128, 128, 0.08);
 }
 
 /* 覆盖全局 .canvas-node.selected 样式，选中效果由内部控制 */

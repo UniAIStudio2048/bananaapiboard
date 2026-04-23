@@ -24,6 +24,7 @@ import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
+import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
@@ -37,6 +38,9 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['updateNodeInternals'])
+
+const videoNodeRootRef = ref(null)
+const { isVisible: isNodeVisible } = useNodeVisibility(videoNodeRootRef)
 
 const canvasStore = useCanvasStore()
 const uploadManager = useUploadManager()
@@ -5447,7 +5451,7 @@ function handleToolbarPreview() {
 </script>
 
 <template>
-  <div :class="nodeClass" @contextmenu="handleContextMenu">
+  <div ref="videoNodeRootRef" :class="nodeClass" @contextmenu="handleContextMenu">
     <!-- 视频工具栏（选中且有视频时显示）- 与 ImageNode 保持一致 -->
     <div v-show="showToolbar" class="video-toolbar">
       <button 
@@ -5596,7 +5600,7 @@ function handleToolbarPreview() {
         
         <!-- 视频输出预览（无边框设计，悬停自动播放） -->
         <div
-          v-if="shouldRenderVideoOutput"
+          v-if="shouldRenderVideoOutput && isNodeVisible"
           class="video-output-wrapper"
           :style="videoWrapperStyle"
           @mouseenter="handleVideoMouseEnter"
@@ -5856,7 +5860,7 @@ function handleToolbarPreview() {
             @mouseenter="onHoverStart(img, $event)"
             @mouseleave="onHoverEnd"
           >
-            <img :src="img" :alt="`图片 ${index + 1}`" />
+            <img v-if="isNodeVisible" :src="img" :alt="`图片 ${index + 1}`" decoding="async" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>

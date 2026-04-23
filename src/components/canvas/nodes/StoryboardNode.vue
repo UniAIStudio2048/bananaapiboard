@@ -14,6 +14,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { uploadImages } from '@/api/canvas/nodes'
+import { useNodeVisibility } from '@/composables/useNodeVisibility'
 
 const props = defineProps({
   id: {
@@ -306,8 +307,9 @@ function handleEditModeKeydown(event) {
   }
 }
 
-// 点击节点外部退出编辑模式
+// 点击节点外部退出编辑模式 + 视口懒加载
 const nodeRootRef = ref(null)
+const { isVisible: isNodeVisible } = useNodeVisibility(nodeRootRef)
 function handleClickOutsideNode(event) {
   if (isEditMode.value && nodeRootRef.value && !nodeRootRef.value.contains(event.target)) {
     exitEditMode()
@@ -1334,11 +1336,11 @@ const hasAnyImage = computed(() => {
             class="stack-photo"
             :class="'stack-layer-' + (stackImages.length - si)"
           >
-            <img v-if="url" :src="url" class="stack-photo-img" />
+            <img v-if="url && isNodeVisible" :src="url" class="stack-photo-img" decoding="async" />
           </div>
           <!-- 主图（第1张，最前面） -->
           <div class="stack-photo stack-main">
-            <img v-if="firstImageUrl" :src="firstImageUrl" class="stack-photo-img" />
+            <img v-if="firstImageUrl && isNodeVisible" :src="firstImageUrl" class="stack-photo-img" decoding="async" />
             <div v-else class="stack-empty">
               <svg class="cell-plus-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
                 <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -1393,12 +1395,14 @@ const hasAnyImage = computed(() => {
 
               <!-- 有图片时显示图片 -->
               <img
-                v-else
+                v-else-if="isNodeVisible"
                 :src="url"
                 class="grid-img"
                 :class="{ 'grid-img-edit': isEditMode }"
+                decoding="async"
                 @error="e => { e.target.style.display = 'none' }"
               />
+              <div v-else class="grid-img grid-img-placeholder" />
 
               <!-- 格子级输入端口 (用于连线特定位置) -->
               <Handle

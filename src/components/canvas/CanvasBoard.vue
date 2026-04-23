@@ -13,6 +13,7 @@
  * 
  * [无限画布模式]
  * - 左键拖拽：框选节点
+ * - 右键拖拽空白区域：平移画布
  * - 滚轮：上下平移画布
  * - Ctrl + 滚轮：以鼠标位置为中心缩放
  * 
@@ -150,10 +151,14 @@ const canvasBoardRef = ref(null)
 const isFileDragOver = ref(false)
 const fileDragCounter = ref(0)
 
-// 平移状态（空格+拖动 / 鼠标中键）
+// 平移状态（空格+拖动 / 鼠标中键 / 右键拖动）
 const isSpacePressed = ref(false)
 const isPanning = ref(false)
 const isMiddleButtonPanning = ref(false)
+const isRightButtonDown = ref(false)
+const isRightButtonPanning = ref(false)
+const rightDragSuppressContextMenu = ref(false)
+const RIGHT_DRAG_THRESHOLD = 4
 const panStart = ref({ x: 0, y: 0 })
 
 // 对齐辅助线状态
@@ -903,6 +908,12 @@ onPaneClick((event) => {
 onPaneContextMenu((event) => {
   event.preventDefault()
   
+  // 右键拖动平移后，抑制菜单弹出
+  if (rightDragSuppressContextMenu.value) {
+    rightDragSuppressContextMenu.value = false
+    return
+  }
+  
   // 关闭其他菜单
   canvasStore.closeNodeSelector()
   
@@ -1150,7 +1161,7 @@ function handleKeyUp(event) {
   }
 }
 
-// 鼠标按下事件（用于空格+拖动平移 / 鼠标中键平移）
+// 鼠标按下事件（用于空格+拖动平移 / 鼠标中键平移 / 右键拖动平移）
 function handleMouseDown(event) {
   // 空格键 + 左键：平移画布
   if (isSpacePressed.value && event.button === 0) {
@@ -1168,13 +1179,37 @@ function handleMouseDown(event) {
     isMiddleButtonPanning.value = true
     panStart.value = { x: event.clientX, y: event.clientY }
     document.body.style.cursor = 'grabbing'
+    return
+  }
+  // 无限画布模式：右键在空白处按下，准备拖动平移
+  if (event.button === 2 && interactionMode.value === 'infinite-canvas') {
+    const target = event.target
+    const isOnNode = target.closest('.vue-flow__node')
+    if (!isOnNode) {
+      isRightButtonDown.value = true
+      rightDragSuppressContextMenu.value = false
+      panStart.value = { x: event.clientX, y: event.clientY }
+    }
   }
 }
 
-// 鼠标移动事件（用于空格+拖动平移 / 鼠标中键平移）
+// 鼠标移动事件（用于空格+拖动平移 / 鼠标中键平移 / 右键拖动平移）
 function handleMouseMove(event) {
+  // 右键按下但还未开始平移：检测是否超过阈值
+  if (isRightButtonDown.value && !isRightButtonPanning.value) {
+    const dx = event.clientX - panStart.value.x
+    const dy = event.clientY - panStart.value.y
+    if (Math.abs(dx) > RIGHT_DRAG_THRESHOLD || Math.abs(dy) > RIGHT_DRAG_THRESHOLD) {
+      isRightButtonPanning.value = true
+      rightDragSuppressContextMenu.value = true
+      isPanning.value = true
+      document.body.style.cursor = 'grabbing'
+    }
+    return
+  }
+
   if (!isPanning.value) return
-  if (!isSpacePressed.value && !isMiddleButtonPanning.value) return
+  if (!isSpacePressed.value && !isMiddleButtonPanning.value && !isRightButtonPanning.value) return
 
   event.preventDefault()
 
@@ -1191,8 +1226,19 @@ function handleMouseMove(event) {
   panStart.value = { x: event.clientX, y: event.clientY }
 }
 
-// 鼠标释放事件（用于空格+拖动平移 / 鼠标中键平移）
+// 鼠标释放事件（用于空格+拖动平移 / 鼠标中键平移 / 右键拖动平移）
 function handleMouseUp(event) {
+  // 右键释放
+  if (event.button === 2) {
+    const wasPanning = isRightButtonPanning.value
+    isRightButtonDown.value = false
+    isRightButtonPanning.value = false
+    if (wasPanning) {
+      isPanning.value = false
+      document.body.style.cursor = isSpacePressed.value ? 'grab' : 'default'
+    }
+    return
+  }
   if (isPanning.value) {
     event.preventDefault()
     isPanning.value = false
@@ -1442,6 +1488,13 @@ function handleDoubleClick(event) {
 
 // 处理原生右键事件（作为备用）
 function handleNativeContextMenu(event) {
+  // 右键拖动平移后，抑制菜单弹出
+  if (rightDragSuppressContextMenu.value) {
+    event.preventDefault()
+    rightDragSuppressContextMenu.value = false
+    return
+  }
+  
   // 检查是否点击在节点上（节点有自己的右键菜单）
   const target = event.target
   const isOnNode = target.closest('.vue-flow__node')
