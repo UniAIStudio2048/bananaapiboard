@@ -124,6 +124,31 @@ const seedanceRefImageInputRef = ref(null)
 const seedanceRefVideoInputRef = ref(null)
 const seedanceRefAudioInputRef = ref(null)
 
+// ========== Kling v3 Omni 相关状态 ==========
+const klingV3OmniMode = ref('text2video')
+const klingV3OmniModeOpen = ref(true)
+
+// Kling v3 Omni 首帧/尾帧图片
+const klingV3OmniFirstFrameFile = ref(null)
+const klingV3OmniFirstFramePreview = ref('')
+const klingV3OmniLastFrameFile = ref(null)
+const klingV3OmniLastFramePreview = ref('')
+
+// Kling v3 Omni 参考图片（主体控制/多镜头）
+const klingV3OmniRefImages = ref([])
+const klingV3OmniRefImagePreviews = ref([])
+const klingV3OmniRefImageUrl = ref('')
+const klingV3OmniRefImageUrls = ref([])
+
+// Kling v3 Omni 参考视频
+const klingV3OmniRefVideoUrl = ref('')
+const klingV3OmniKeepSound = ref('yes')
+
+// Kling v3 Omni 文件上传 refs
+const klingV3OmniFirstFrameInputRef = ref(null)
+const klingV3OmniLastFrameInputRef = ref(null)
+const klingV3OmniRefImageInputRef = ref(null)
+
 // Seedance 模式定义
 const SEEDANCE_MODES = [
   { value: 'text2video', label: '文生视频', icon: '✍️' },
@@ -167,6 +192,33 @@ const seedanceAvailableModes = computed(() => {
   }
   return SEEDANCE_MODES
 })
+
+// Kling v3 Omni 模式定义
+const KLING_V3_OMNI_MODES = [
+  { value: 'text2video', label: '文生视频', icon: '✍' },
+  { value: 'image2video', label: '图生视频', icon: '🖼' },
+  { value: 'first_last_frame', label: '首尾帧', icon: '🎞' },
+  { value: 'subject_control', label: '主体控制', icon: '🎭' },
+  { value: 'video_reference', label: '视频参考', icon: '📹' },
+  { value: 'multi_shot', label: '多镜头', icon: '🎬' }
+]
+
+// 当前模型是否为 Kling v3 Omni
+const isKlingV3OmniModel = computed(() => {
+  const modelConfig = currentModelConfig.value
+  return modelConfig?.apiType === 'kling-v3-omni' || !!modelConfig?.isKlingV3OmniModel
+})
+
+// Kling v3 Omni 可用的模式
+const klingV3OmniAvailableModes = computed(() => {
+  if (!isKlingV3OmniModel.value) return []
+  const modes = currentModelConfig.value?.klingV3OmniModes
+  if (modes && Array.isArray(modes)) {
+    return KLING_V3_OMNI_MODES.filter(m => modes.some(em => em.value === m.value))
+  }
+  return KLING_V3_OMNI_MODES
+})
+
 const loading = ref(false)
 const error = ref('')
 const successMessage = ref('')
@@ -385,6 +437,11 @@ watch(seedanceMode, () => {
   }
 })
 
+// 监听 Kling v3 Omni 模式变化，清空上一个模式的文件
+watch(klingV3OmniMode, () => {
+  clearKlingV3OmniFiles()
+})
+
 async function refreshUser() {
   me.value = await getMe()
 }
@@ -598,6 +655,66 @@ function clearSeedanceFiles() {
   seedanceRefAudioUrl.value = ''
 }
 
+function clearKlingV3OmniFiles() {
+  klingV3OmniFirstFrameFile.value = null
+  klingV3OmniFirstFramePreview.value = ''
+  klingV3OmniLastFrameFile.value = null
+  klingV3OmniLastFramePreview.value = ''
+  klingV3OmniRefImages.value = []
+  klingV3OmniRefImagePreviews.value = []
+  klingV3OmniRefImageUrl.value = ''
+  klingV3OmniRefImageUrls.value = []
+  klingV3OmniRefVideoUrl.value = ''
+  klingV3OmniKeepSound.value = 'yes'
+}
+function handleKlingV3OmniFirstFrame(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  klingV3OmniFirstFrameFile.value = file
+  klingV3OmniFirstFramePreview.value = URL.createObjectURL(file)
+}
+function removeKlingV3OmniFirstFrame() {
+  if (klingV3OmniFirstFramePreview.value) URL.revokeObjectURL(klingV3OmniFirstFramePreview.value)
+  klingV3OmniFirstFrameFile.value = null
+  klingV3OmniFirstFramePreview.value = ''
+}
+function handleKlingV3OmniLastFrame(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  klingV3OmniLastFrameFile.value = file
+  klingV3OmniLastFramePreview.value = URL.createObjectURL(file)
+}
+function removeKlingV3OmniLastFrame() {
+  if (klingV3OmniLastFramePreview.value) URL.revokeObjectURL(klingV3OmniLastFramePreview.value)
+  klingV3OmniLastFrameFile.value = null
+  klingV3OmniLastFramePreview.value = ''
+}
+function handleKlingV3OmniRefImage(e) {
+  const files = Array.from(e.target.files || [])
+  const maxImages = 7
+  const remaining = maxImages - klingV3OmniRefImages.value.length - klingV3OmniRefImageUrls.value.length
+  const toAdd = files.slice(0, remaining)
+  for (const file of toAdd) {
+    klingV3OmniRefImages.value.push(file)
+    klingV3OmniRefImagePreviews.value.push(URL.createObjectURL(file))
+  }
+  if (e.target) e.target.value = ''
+}
+function removeKlingV3OmniRefImage(index) {
+  if (klingV3OmniRefImagePreviews.value[index]) URL.revokeObjectURL(klingV3OmniRefImagePreviews.value[index])
+  klingV3OmniRefImages.value.splice(index, 1)
+  klingV3OmniRefImagePreviews.value.splice(index, 1)
+}
+function addKlingV3OmniRefImageUrl() {
+  const url = klingV3OmniRefImageUrl.value.trim()
+  if (!url) return
+  klingV3OmniRefImageUrls.value.push(url)
+  klingV3OmniRefImageUrl.value = ''
+}
+function removeKlingV3OmniRefImageUrl(index) {
+  klingV3OmniRefImageUrls.value.splice(index, 1)
+}
+
 function formatStatus(status) {
   if (!status) return '未知状态'
   const normalized = status.toString().toLowerCase()
@@ -695,12 +812,15 @@ async function generateVideo() {
   }
   if (!prompt.value.trim()) {
     // Seedance 非文生视频模式允许空提示词
-    if (!isSeedanceModel.value || seedanceMode.value === 'text2video') {
+    // Kling v3 Omni 非文生视频模式也允许空提示词
+    const seedanceAllowEmpty = isSeedanceModel.value && seedanceMode.value !== 'text2video'
+    const klingOmniAllowEmpty = isKlingV3OmniModel.value && klingV3OmniMode.value !== 'text2video'
+    if (!seedanceAllowEmpty && !klingOmniAllowEmpty) {
       error.value = '请输入提示词'
       return
     }
   }
-  if (mode.value === 'image' && !isSeedanceModel.value && imageFiles.value.length === 0) {
+  if (mode.value === 'image' && !isSeedanceModel.value && !isKlingV3OmniModel.value && imageFiles.value.length === 0) {
     error.value = '请上传参考图片'
     return
   }
@@ -731,7 +851,20 @@ async function generateVideo() {
       }
     }
   }
-  
+
+  // Kling v3 Omni 验证
+  if (isKlingV3OmniModel.value) {
+    const km = klingV3OmniMode.value
+    if ((km === 'image2video' || km === 'first_last_frame') && !klingV3OmniFirstFrameFile.value && imageFiles.value.length === 0) {
+      error.value = '请上传首帧图片'
+      return
+    }
+    if (km === 'video_reference' && !klingV3OmniRefVideoUrl.value) {
+      error.value = '请输入参考视频 URL'
+      return
+    }
+  }
+
   loading.value = true
   
   // 保存当前输入，用于创建任务
@@ -806,7 +939,39 @@ async function generateVideo() {
         formData.append('reference_audios', JSON.stringify(seedanceRefAudioUrls.value))
       }
     }
-    
+
+    // Kling v3 Omni 参数
+    if (isKlingV3OmniModel.value) {
+      formData.append('kling_omni_sub_mode', klingV3OmniMode.value)
+
+      // 首帧图片
+      if (klingV3OmniFirstFrameFile.value) {
+        formData.append('image', klingV3OmniFirstFrameFile.value)
+      }
+
+      // 尾帧图片
+      if (klingV3OmniMode.value === 'first_last_frame' && klingV3OmniLastFrameFile.value) {
+        formData.append('last_frame_image', klingV3OmniLastFrameFile.value)
+      }
+
+      // 参考图片（主体控制/多镜头）
+      if (['subject_control', 'multi_shot'].includes(klingV3OmniMode.value)) {
+        for (const file of klingV3OmniRefImages.value) {
+          formData.append('reference_images', file)
+        }
+        if (klingV3OmniRefImageUrls.value.length > 0) {
+          formData.append('kling_omni_image_urls', JSON.stringify(klingV3OmniRefImageUrls.value))
+        }
+      }
+
+      // 视频参考
+      if (klingV3OmniMode.value === 'video_reference' && klingV3OmniRefVideoUrl.value) {
+        formData.append('kling_omni_video_url', klingV3OmniRefVideoUrl.value)
+        formData.append('kling_omni_video_refer_type', 'feature')
+        formData.append('kling_omni_keep_sound', klingV3OmniKeepSound.value)
+      }
+    }
+
     console.log('[video] 请求参数:', {
       prompt: currentPrompt,
       model: currentModel,
@@ -827,6 +992,7 @@ async function generateVideo() {
     // 立即清空输入框和图片，恢复UI状态
     clearImages()
     if (isSeedanceModel.value) clearSeedanceFiles()
+    if (isKlingV3OmniModel.value) clearKlingV3OmniFiles()
     prompt.value = ''
     loading.value = false
     successMessage.value = '任务已提交，正在处理...'
@@ -1449,7 +1615,16 @@ watch(model, (newModel) => {
   } else {
     clearSeedanceFiles()
   }
-  
+
+  // 切换到 Kling v3 Omni 模型时重置模式，切换离开时清空文件
+  const isKlingOmni = modelCfg?.apiType === 'kling-v3-omni' || !!modelCfg?.isKlingV3OmniModel
+  if (isKlingOmni) {
+    klingV3OmniMode.value = 'text2video'
+    clearKlingV3OmniFiles()
+  } else {
+    clearKlingV3OmniFiles()
+  }
+
   // VEO3模型不需要时长选项（固定 8 秒）
   if (VEO3_MODELS.includes(newModel)) {
     console.log('[VideoGeneration] VEO3模型不支持时长选择，固定8秒')
@@ -1555,7 +1730,7 @@ onUnmounted(() => {
       <div class="lg:col-span-3">
         <div class="card p-5 sticky top-24">
           <!-- 模式切换标签（非 Seedance 模型时显示） -->
-          <div v-if="!isSeedanceModel" class="flex bg-slate-100 dark:bg-dark-700 rounded-xl p-1 mb-5">
+          <div v-if="!isSeedanceModel && !isKlingV3OmniModel" class="flex bg-slate-100 dark:bg-dark-700 rounded-xl p-1 mb-5">
             <button 
               @click="mode = 'image'" 
               :class="mode === 'image' 
@@ -1592,8 +1767,8 @@ onUnmounted(() => {
               </select>
             </div>
 
-            <!-- 画面比例/方向 - 从模型配置动态获取（非 Seedance 模型） -->
-            <div v-if="!isSeedanceModel">
+            <!-- 画面比例/方向 - 从模型配置动态获取（非 Seedance/Kling Omni 模型） -->
+            <div v-if="!isSeedanceModel && !isKlingV3OmniModel">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>📐</span>
                 <span>画面方向</span>
@@ -1608,7 +1783,7 @@ onUnmounted(() => {
             </div>
 
             <!-- 视频长度（VEO3模型、Seedance模型和不支持时长选择的模型不显示） -->
-            <div v-if="!isVeo3Model && !isSeedanceModel && availableDurations.length > 0">
+            <div v-if="!isVeo3Model && !isSeedanceModel && !isKlingV3OmniModel && availableDurations.length > 0">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>⏱️</span>
                 <span>视频长度</span>
@@ -2017,8 +2192,143 @@ onUnmounted(() => {
               </div>
             </div>
 
+            <!-- ========== Kling v3 Omni 模式选择和参数 ========== -->
+            <div v-if="isKlingV3OmniModel" class="space-y-3">
+              <!-- 模式选择区域 -->
+              <div class="border border-slate-200 dark:border-dark-600 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  @click="klingV3OmniModeOpen = !klingV3OmniModeOpen"
+                  class="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-dark-700 hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors"
+                >
+                  <span class="flex items-center space-x-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <span>🎬</span>
+                    <span>生成模式</span>
+                    <span class="ml-1 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded text-xs">
+                      {{ KLING_V3_OMNI_MODES.find(m => m.value === klingV3OmniMode)?.label }}
+                    </span>
+                  </span>
+                  <svg
+                    class="w-4 h-4 text-slate-500 transition-transform duration-200"
+                    :class="{ 'rotate-180': klingV3OmniModeOpen }"
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div
+                  v-show="klingV3OmniModeOpen"
+                  class="px-3 py-2.5 border-t border-slate-200 dark:border-dark-600"
+                >
+                  <div class="flex flex-wrap gap-1.5">
+                    <button
+                      v-for="m in klingV3OmniAvailableModes"
+                      :key="m.value"
+                      type="button"
+                      @click="klingV3OmniMode = m.value"
+                      :class="[
+                        'px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-all duration-150',
+                        klingV3OmniMode === m.value
+                          ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900 dark:border-gray-200 shadow-sm'
+                          : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500 hover:border-gray-400 dark:hover:border-gray-500'
+                      ]"
+                    >
+                      <span class="mr-1">{{ m.icon }}</span>{{ m.label }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <!-- 首帧图片上传（图生视频/首尾帧） -->
+              <div v-if="['image2video', 'first_last_frame'].includes(klingV3OmniMode)">
+                <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                  <span>🖼</span><span>首帧图片</span>
+                </label>
+                <div v-if="!klingV3OmniFirstFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="klingV3OmniFirstFrameInputRef?.click()">
+                  <div class="text-2xl mb-1">📤</div>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传首帧图片</p>
+                  <input ref="klingV3OmniFirstFrameInputRef" type="file" accept="image/*" @change="handleKlingV3OmniFirstFrame" class="hidden" />
+                </div>
+                <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
+                  <img :src="klingV3OmniFirstFramePreview" class="w-12 h-12 object-cover rounded flex-shrink-0" />
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ klingV3OmniFirstFrameFile.name }}</p>
+                    <p class="text-xs text-slate-500">{{ (klingV3OmniFirstFrameFile.size / 1024 / 1024).toFixed(2) }} MB</p>
+                  </div>
+                  <button @click="removeKlingV3OmniFirstFrame" class="w-6 h-6 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center text-xs">✕</button>
+                </div>
+              </div>
+
+              <!-- 尾帧图片上传（首尾帧） -->
+              <div v-if="klingV3OmniMode === 'first_last_frame'">
+                <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                  <span>🖼</span><span>尾帧图片</span>
+                </label>
+                <div v-if="!klingV3OmniLastFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-gray-400 transition-colors" @click="klingV3OmniLastFrameInputRef?.click()">
+                  <div class="text-2xl mb-1">📤</div>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">点击上传尾帧图片</p>
+                  <input ref="klingV3OmniLastFrameInputRef" type="file" accept="image/*" @change="handleKlingV3OmniLastFrame" class="hidden" />
+                </div>
+                <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
+                  <img :src="klingV3OmniLastFramePreview" class="w-12 h-12 object-cover rounded flex-shrink-0" />
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ klingV3OmniLastFrameFile.name }}</p>
+                    <p class="text-xs text-slate-500">{{ (klingV3OmniLastFrameFile.size / 1024 / 1024).toFixed(2) }} MB</p>
+                  </div>
+                  <button @click="removeKlingV3OmniLastFrame" class="w-6 h-6 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center text-xs">✕</button>
+                </div>
+              </div>
+
+              <!-- 参考图片（主体控制/多镜头） -->
+              <div v-if="['subject_control', 'multi_shot'].includes(klingV3OmniMode)">
+                <div class="flex items-center justify-between mb-1.5">
+                  <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    <span>🖼</span><span>参考图片</span>
+                  </label>
+                  <span class="text-xs text-slate-500">{{ klingV3OmniRefImages.length + klingV3OmniRefImageUrls.length }} / 7</span>
+                </div>
+                <!-- URL 输入 -->
+                <div v-if="(klingV3OmniRefImages.length + klingV3OmniRefImageUrls.length) < 7" class="flex gap-1.5 mb-1.5">
+                  <input v-model="klingV3OmniRefImageUrl" type="text" placeholder="粘贴图片 URL" class="flex-1 px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" @keydown.enter.prevent="addKlingV3OmniRefImageUrl" />
+                  <button @click="addKlingV3OmniRefImageUrl" :disabled="!klingV3OmniRefImageUrl.trim()" class="px-2 py-1.5 text-xs font-medium bg-gray-700 text-white rounded-lg hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900">添加</button>
+                </div>
+                <!-- 已添加的图片列表 -->
+                <div class="space-y-1">
+                  <div v-for="(preview, i) in klingV3OmniRefImagePreviews" :key="'file-'+i" class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-1.5 border border-slate-200 dark:border-dark-600">
+                    <img :src="preview" class="w-8 h-8 object-cover rounded flex-shrink-0" />
+                    <span class="flex-1 text-xs text-slate-600 dark:text-slate-400 truncate">{{ klingV3OmniRefImages[i]?.name }}</span>
+                    <button @click="removeKlingV3OmniRefImage(i)" class="w-5 h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-xs flex items-center justify-center">✕</button>
+                  </div>
+                  <div v-for="(url, i) in klingV3OmniRefImageUrls" :key="'url-'+i" class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-1.5 border border-slate-200 dark:border-dark-600">
+                    <span class="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded flex items-center justify-center text-xs">🔗</span>
+                    <span class="flex-1 text-xs text-slate-600 dark:text-slate-400 truncate">{{ url }}</span>
+                    <button @click="removeKlingV3OmniRefImageUrl(i)" class="w-5 h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-xs flex items-center justify-center">✕</button>
+                  </div>
+                </div>
+                <!-- 文件上传按钮 -->
+                <button v-if="(klingV3OmniRefImages.length + klingV3OmniRefImageUrls.length) < 7" @click="klingV3OmniRefImageInputRef?.click()" class="mt-1.5 w-full py-2 border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg text-xs text-slate-500 hover:border-gray-400 transition-colors">
+                  + 上传图片
+                </button>
+                <input ref="klingV3OmniRefImageInputRef" type="file" accept="image/*" multiple @change="handleKlingV3OmniRefImage" class="hidden" />
+                <p v-if="klingV3OmniMode === 'subject_control'" class="text-xs text-slate-500 mt-1">提示词中用 &lt;&lt;&lt;image_1&gt;&gt;&gt; 引用对应图片</p>
+              </div>
+
+              <!-- 视频参考 -->
+              <div v-if="klingV3OmniMode === 'video_reference'">
+                <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                  <span>📹</span><span>参考视频 URL</span>
+                </label>
+                <input v-model="klingV3OmniRefVideoUrl" type="text" placeholder="粘贴视频 URL（MP4/MOV，3-10s）" class="w-full px-2 py-1.5 text-xs border border-slate-300 dark:border-dark-500 rounded-lg bg-white dark:bg-dark-700 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-gray-400" />
+                <div class="flex items-center gap-2 mt-1.5">
+                  <span class="text-xs text-slate-500">保留原声：</span>
+                  <button @click="klingV3OmniKeepSound = 'yes'" :class="['px-2 py-1 text-xs rounded border', klingV3OmniKeepSound === 'yes' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500']">是</button>
+                  <button @click="klingV3OmniKeepSound = 'no'" :class="['px-2 py-1 text-xs rounded border', klingV3OmniKeepSound === 'no' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500']">否</button>
+                </div>
+                <p class="text-xs text-slate-500 mt-1">仅 std/pro 模式支持，时长限制 3-10s</p>
+              </div>
+            </div>
+
             <!-- 图生视频上传区域（非 Seedance 模型时显示） -->
-            <div v-if="mode === 'image' && !isSeedanceModel" class="space-y-2.5">
+            <div v-if="mode === 'image' && !isSeedanceModel && !isKlingV3OmniModel" class="space-y-2.5">
               <div class="flex items-center justify-between">
                 <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
                   <span>🖼️</span>
