@@ -584,37 +584,61 @@ export async function smartDownload(url, filename) {
     return getApiUrl(`/api/images/download?${new URLSearchParams({ url: targetUrl, filename: correctedFilename }).toString()}`)
   }
 
-  // 完整 HTTP URL 包含我们自己的 API 路径时，提取相对路径走 fetch+blob 下载
+  // 自检：通过后端代理获取原图 Content-Length（只读响应头，立即中断 body 传输）
+  async function getOriginalSize(targetPath) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 10000)
+    try {
+      const res = await fetch(buildProxyUrl(targetPath), {
+        headers: getHeaders(),
+        signal: controller.signal
+      })
+      const size = parseInt(res.headers.get('content-length'), 10)
+      controller.abort()
+      return size || 0
+    } catch {
+      return 0
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  // 缓存优先下载 + 自检：先同源 Nginx 缓存取原文件，自检通过才用，否则回退后端代理
+  async function cacheFirstDownload(targetPath) {
+    // 优先通过同源 Nginx 缓存直接下载（无 CORS、速度快）
+    try {
+      const blob = await fetchAndValidate(targetPath, {}, 60000)
+
+      // 自检：对比后端代理报告的原图大小，确保缓存的不是缩略图
+      const originalSize = await getOriginalSize(targetPath)
+      if (originalSize > 0 && blob.size < originalSize * 0.9) {
+        console.warn(`[smartDownload] 自检不通过: 缓存 ${(blob.size/1024).toFixed(0)}KB < 原图 ${(originalSize/1024).toFixed(0)}KB → 丢弃缓存`)
+      } else {
+        console.log('[smartDownload] Nginx缓存下载成功(自检通过):', correctedFilename, `(${(blob.size / 1024).toFixed(0)}KB)`)
+        triggerBlobDownload(blob, correctedFilename)
+        return true
+      }
+    } catch (e) {
+      console.warn('[smartDownload] 缓存直取失败，回退后端代理:', e.message)
+    }
+
+    // 回退到后端代理下载（始终返回原图）
+    const proxyUrl = buildProxyUrl(targetPath)
+    const blob = await fetchAndValidate(proxyUrl, { headers: getHeaders() }, 180000)
+    console.log('[smartDownload] 后端代理下载成功:', correctedFilename, `(${(blob.size / 1024).toFixed(0)}KB)`)
+    triggerBlobDownload(blob, correctedFilename)
+    return true
+  }
+
+  // 完整 HTTP URL 包含我们自己的 API 路径时，提取相对路径
   if ((cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) &&
       /\/api\/(cos-proxy|images\/file)\//.test(cleanUrl)) {
     const urlObj = new URL(cleanUrl)
     const apiIdx = urlObj.pathname.indexOf('/api/')
     if (apiIdx >= 0) {
       const relativePath = urlObj.pathname.substring(apiIdx)
-      const downloadUrl = buildProxyUrl(relativePath)
-      console.log('[smartDownload] fetch+blob 下载:', { url: relativePath.substring(0, 80), filename: correctedFilename })
-
-      // 首次尝试
-      try {
-        const blob = await fetchAndValidate(downloadUrl, { headers: getHeaders() }, 180000)
-        console.log('[smartDownload] 下载完成, blob大小:', (blob.size / 1024).toFixed(0), 'KB')
-        triggerBlobDownload(blob, correctedFilename)
-        return
-      } catch (e) {
-        console.warn('[smartDownload] 首次下载失败，2s 后重试:', e.message)
-      }
-
-      // 重试一次
-      await new Promise(r => setTimeout(r, 2000))
-      try {
-        const blob = await fetchAndValidate(downloadUrl, { headers: getHeaders() }, 180000)
-        console.log('[smartDownload] 重试下载成功, blob大小:', (blob.size / 1024).toFixed(0), 'KB')
-        triggerBlobDownload(blob, correctedFilename)
-        return
-      } catch (retryErr) {
-        console.error('[smartDownload] 重试也失败:', retryErr.message)
-        throw retryErr
-      }
+      await cacheFirstDownload(relativePath)
+      return
     }
   }
 
@@ -647,8 +671,11 @@ export async function smartDownload(url, filename) {
   }
 
   // 本地 API 相对路径（如 /api/images/file/xxx、/api/cos-proxy/...）
-  // 统一走 /api/images/download 代理端点，确保返回 Content-Disposition attachment
   if (cleanUrl.startsWith('/api/')) {
+    if (/\/api\/(cos-proxy|images\/file)\//.test(cleanUrl)) {
+      await cacheFirstDownload(cleanUrl)
+      return
+    }
     const proxyPath = buildProxyUrl(cleanUrl)
     const blob = await fetchAndValidate(proxyPath, { headers: getHeaders() })
     triggerBlobDownload(blob, correctedFilename)
