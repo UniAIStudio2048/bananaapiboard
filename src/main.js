@@ -90,10 +90,9 @@ async function initBrandConfig() {
     console.log('[系统初始化] 开始加载品牌配置...')
     const brand = await loadBrandConfig()
 
-    // 页面标题固定为「ai绘图创作」，此处不再根据品牌名称覆盖
-    // 仅使用品牌配置应用 favicon、主题色等视觉元素
-    
-    // favicon 已在 loadBrandConfig 中通过 applyFavicon 自动应用
+    if (brand.siteTitle) {
+      document.title = brand.siteTitle
+    }
     
     console.log('[系统初始化] 品牌配置已应用:', brand.name, '主题色:', brand.primaryColor)
   } catch (e) {

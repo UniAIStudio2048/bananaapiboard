@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getBrand } from '@/config/tenant'
 import Home from '@/views/Home.vue'
 const User = () => import('@/views/User.vue')
 const Packages = () => import('@/views/Packages.vue')
@@ -122,8 +123,8 @@ const router = createRouter({
 
 // 路由守卫 - 检查登录状态（标题始终固定为「ai绘图创作」）
 router.beforeEach(async (to, from, next) => {
-  // 标题固定为「ai绘图创作」，不再根据路由动态变更
-  document.title = 'ai绘图创作'
+  const brand = getBrand()
+  document.title = brand?.siteTitle || 'ai绘图创作'
   
   // 检查是否需要登录
   if (to.meta.requiresAuth) {

@@ -4,14 +4,18 @@
  * 平铺角色卡片模式，参考 Sora 角色卡片设计
  */
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import QRCode from 'qrcode'
 import {
   createAssetGroup, listAssetGroups, updateAssetGroup, deleteAssetGroup,
   createAsset, listAssets as listVolcAssets, pollAssetStatus, getAsset,
   updateAsset as updateVolcAsset,
-  deleteAsset as deleteVolcAsset
+  deleteAsset as deleteVolcAsset,
+  createLivenessSession, getLivenessResult
 } from '@/api/canvas/volcengine-assets'
 import { saveAsset, getAssets, updateAsset, deleteAsset as deleteLocalAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
+import { checkFaceVerifyStatus } from '@/api/face-verify'
+import FaceVerifyDialog from './FaceVerifyDialog.vue'
 import { getApiUrl } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 
@@ -63,10 +67,22 @@ const activeProviderLabel = ref('')
 const showCreateGroupModal = ref(false)
 const createGroupForm = ref({ Name: '', Description: '' })
 const createGroupLoading = ref(false)
+const createGroupType = ref('AIGC') // 'AIGC' | 'LivenessFace'
+const supportsLiveness = computed(() => ['volcengine', 'volcengine_proxy', 'thirdparty'].includes(activeProvider.value))
+
+// 真人认证创建角色组（LivenessFace）
+const livenessVerifying = ref(false)
+const livenessPolling = ref(false)
+const livenessBytedToken = ref('')
+const livenessQrDataUrl = ref('')
 
 // 上传角色
 const uploadLoading = ref(false)
 const fileInputRef = ref(null)
+
+// 真人认证上传
+const showFaceVerifyDialog = ref(false)
+const pendingFaceVerifyFiles = ref(null)
 
 // 轮询取消器
 const pollers = ref({})
@@ -340,6 +356,12 @@ async function syncFromCloud() {
 
 async function handleCreateGroup() {
   if (!createGroupForm.value.Name.trim()) return
+
+  if (createGroupType.value === 'LivenessFace' && supportsLiveness.value) {
+    await handleCreateGroupLiveness()
+    return
+  }
+
   createGroupLoading.value = true
   try {
     const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
@@ -359,6 +381,72 @@ async function handleCreateGroup() {
   } finally {
     createGroupLoading.value = false
   }
+}
+
+async function handleCreateGroupLiveness() {
+  createGroupLoading.value = true
+  livenessVerifying.value = true
+  livenessQrDataUrl.value = ''
+  errorMessage.value = ''
+  try {
+    const session = await createLivenessSession({
+      CallbackURL: window.location.origin + '/face-verify-callback'
+    })
+    if (!session.H5Link || !session.BytedToken) {
+      throw new Error('获取认证链接失败')
+    }
+    livenessBytedToken.value = session.BytedToken
+    livenessQrDataUrl.value = await QRCode.toDataURL(session.H5Link, {
+      width: 240, margin: 2, color: { dark: '#000000', light: '#ffffff' }
+    })
+    livenessPolling.value = true
+    createGroupLoading.value = false
+
+    const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
+    const maxAttempts = 60
+    let attempts = 0
+    while (attempts < maxAttempts && livenessPolling.value) {
+      attempts++
+      await new Promise(r => setTimeout(r, 3000))
+      try {
+        const result = await getLivenessResult({
+          BytedToken: livenessBytedToken.value,
+          Name: createGroupForm.value.Name,
+          Description: createGroupForm.value.Description,
+          spaceType: spaceParams.spaceType,
+          teamId: spaceParams.teamId
+        })
+        if (result.GroupId) {
+          showCreateGroupModal.value = false
+          createGroupForm.value = { Name: '', Description: '' }
+          livenessQrDataUrl.value = ''
+          await refreshAll()
+          return
+        }
+      } catch (e) {
+        console.warn('[SeedancePanel] 轮询认证结果:', e.message)
+      }
+    }
+    if (attempts >= maxAttempts) {
+      errorMessage.value = '认证超时，请重试'
+    }
+  } catch (err) {
+    errorMessage.value = err.message
+  } finally {
+    livenessVerifying.value = false
+    livenessPolling.value = false
+    livenessBytedToken.value = ''
+    createGroupLoading.value = false
+  }
+}
+
+function cancelLivenessAndClose() {
+  livenessPolling.value = false
+  livenessVerifying.value = false
+  livenessBytedToken.value = ''
+  livenessQrDataUrl.value = ''
+  createGroupLoading.value = false
+  showCreateGroupModal.value = false
 }
 
 // 删除分组
@@ -401,6 +489,28 @@ const currentGroupIsOwner = computed(() => {
 
 function triggerUpload() {
   fileInputRef.value?.click()
+}
+
+async function triggerFaceVerifyUpload() {
+  try {
+    const status = await checkFaceVerifyStatus()
+    if (!status.enabled) {
+      triggerUpload()
+      return
+    }
+    if (status.verified) {
+      triggerUpload()
+      return
+    }
+    showFaceVerifyDialog.value = true
+  } catch (e) {
+    triggerUpload()
+  }
+}
+
+function onFaceVerified() {
+  showFaceVerifyDialog.value = false
+  triggerUpload()
 }
 
 async function handleFileUpload(event) {
@@ -827,6 +937,13 @@ onUnmounted(() => {
               <path d="M3.5 6A5.5 5.5 0 0 1 13 5.5M12.5 10a5.5 5.5 0 0 1-9.5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
+          <button class="btn-toolbar" @click="triggerFaceVerifyUpload" :disabled="uploadLoading" title="真人认证上传" aria-label="真人认证上传">
+            <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
+              <circle cx="8" cy="5.5" r="2.5" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M3 14c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+              <path d="M11.5 3.5l1 1 2-2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
           <button class="btn-toolbar" @click="triggerUpload" :disabled="uploadLoading" title="上传角色" aria-label="上传角色">
             <template v-if="uploadLoading">
               <div class="spinner-xs"></div>
@@ -838,7 +955,7 @@ onUnmounted(() => {
               </svg>
             </template>
           </button>
-          <button class="btn-toolbar btn-create" @click="showCreateGroupModal = true" aria-label="新建角色组">
+          <button class="btn-toolbar btn-create" @click="createGroupType = 'AIGC'; createGroupForm = { Name: '', Description: '' }; errorMessage = ''; showCreateGroupModal = true" aria-label="新建角色组">
             <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
               <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
             </svg>
@@ -984,29 +1101,91 @@ onUnmounted(() => {
               </button>
             </div>
             <div class="modal-body">
-              <label class="form-label">名称 <span class="required">*</span></label>
-              <input
-                v-model="createGroupForm.Name"
-                class="form-input"
-                placeholder="为角色组起个名字"
-                @keyup.enter="handleCreateGroup"
-              />
-              <label class="form-label form-label-gap">描述</label>
-              <textarea
-                v-model="createGroupForm.Description"
-                class="form-textarea"
-                placeholder="简要描述这个角色组的用途（可选）"
-                rows="3"
-              ></textarea>
+              <!-- 二维码扫码认证中 -->
+              <template v-if="livenessQrDataUrl">
+                <div class="qr-verify-container">
+                  <div class="qr-code-wrapper">
+                    <img :src="livenessQrDataUrl" alt="扫码认证" class="qr-code-img" />
+                    <div v-if="!livenessPolling" class="qr-expired-overlay">
+                      <span>已过期</span>
+                      <button class="qr-refresh-btn" @click="handleCreateGroup">刷新</button>
+                    </div>
+                  </div>
+                  <div class="qr-instructions">
+                    <div class="qr-step">
+                      <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><rect x="3" y="3" width="7" height="7" rx="1" stroke="#60a5fa" stroke-width="1.5"/><rect x="14" y="3" width="7" height="7" rx="1" stroke="#60a5fa" stroke-width="1.5"/><rect x="3" y="14" width="7" height="7" rx="1" stroke="#60a5fa" stroke-width="1.5"/><rect x="14" y="14" width="4" height="4" rx="0.5" stroke="#60a5fa" stroke-width="1.5"/><path d="M21 14v7h-3" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"/></svg>
+                      <span>打开微信，扫描左侧二维码</span>
+                    </div>
+                    <div class="qr-step">
+                      <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><circle cx="12" cy="9" r="4" stroke="#60a5fa" stroke-width="1.5"/><path d="M12 16c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" stroke="#60a5fa" stroke-width="1.5"/></svg>
+                      <span>在手机上完成人脸认证</span>
+                    </div>
+                    <div class="qr-step">
+                      <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M5 12l5 5L19 7" stroke="#60a5fa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      <span>认证通过后自动创建角色组</span>
+                    </div>
+                  </div>
+                  <div class="qr-polling-status">
+                    <div class="liveness-spinner"></div>
+                    <span>等待扫码认证...</span>
+                  </div>
+                </div>
+              </template>
+
+              <!-- 填写信息表单 -->
+              <template v-else>
+                <!-- 组类型选择（官方/官转渠道支持两种） -->
+                <div v-if="supportsLiveness" class="group-type-selector">
+                  <label class="form-label">角色组类型</label>
+                  <div class="type-toggle">
+                    <button
+                      class="type-toggle-btn"
+                      :class="{ active: createGroupType === 'AIGC' }"
+                      @click="createGroupType = 'AIGC'"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M12 2L2 7l10 5 10-5-10-5z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><path d="M2 17l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 12l10 5 10-5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                      AIGC 角色
+                    </button>
+                    <button
+                      class="type-toggle-btn"
+                      :class="{ active: createGroupType === 'LivenessFace' }"
+                      @click="createGroupType = 'LivenessFace'"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><circle cx="12" cy="9" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M12 16c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z" stroke="currentColor" stroke-width="1.5"/></svg>
+                      真人人像
+                    </button>
+                  </div>
+                  <p class="type-hint">{{ createGroupType === 'AIGC' ? 'AI生成角色，无需人脸认证' : '真人角色，需要扫码完成人脸认证' }}</p>
+                </div>
+                <label class="form-label" :class="{ 'form-label-gap': supportsLiveness }">名称 <span class="required">*</span></label>
+                <input
+                  v-model="createGroupForm.Name"
+                  class="form-input"
+                  placeholder="为角色组起个名字"
+                  @keyup.enter="handleCreateGroup"
+                />
+                <label class="form-label form-label-gap">描述</label>
+                <textarea
+                  v-model="createGroupForm.Description"
+                  class="form-textarea"
+                  placeholder="简要描述这个角色组的用途（可选）"
+                  rows="3"
+                ></textarea>
+                <div v-if="livenessVerifying && !livenessQrDataUrl" class="liveness-status">
+                  <div class="liveness-spinner"></div>
+                  <span>正在生成认证二维码...</span>
+                </div>
+              </template>
             </div>
             <div class="modal-footer">
-              <button class="btn-modal-cancel" @click="showCreateGroupModal = false">取消</button>
+              <button class="btn-modal-cancel" @click="livenessQrDataUrl ? cancelLivenessAndClose() : showCreateGroupModal = false">{{ livenessQrDataUrl ? '关闭' : '取消' }}</button>
               <button
+                v-if="!livenessQrDataUrl"
                 class="btn-modal-confirm"
                 @click="handleCreateGroup"
                 :disabled="createGroupLoading || !createGroupForm.Name.trim()"
               >
-                {{ createGroupLoading ? '创建中...' : '创建' }}
+                {{ createGroupLoading ? '生成中...' : (createGroupType === 'LivenessFace' && supportsLiveness ? '生成认证二维码' : '创建') }}
               </button>
             </div>
           </div>
@@ -1274,6 +1453,11 @@ onUnmounted(() => {
         </div>
       </Transition>
     </Teleport>
+
+    <FaceVerifyDialog
+      v-model:visible="showFaceVerifyDialog"
+      @verified="onFaceVerified"
+    />
   </div>
 </template>
 
@@ -1868,6 +2052,143 @@ onUnmounted(() => {
   resize: vertical;
   font-family: inherit;
   min-height: 60px;
+}
+
+.group-type-selector {
+  margin-bottom: 4px;
+}
+.type-toggle {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+.type-toggle-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.04);
+  color: var(--canvas-text-secondary, #94a3b8);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.type-toggle-btn:hover {
+  border-color: rgba(96, 165, 250, 0.3);
+  background: rgba(96, 165, 250, 0.06);
+}
+.type-toggle-btn.active {
+  border-color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
+  color: #93c5fd;
+}
+.type-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--canvas-text-tertiary, #64748b);
+}
+
+.liveness-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: rgba(96, 165, 250, 0.1);
+  border: 1px solid rgba(96, 165, 250, 0.25);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #93c5fd;
+}
+.liveness-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-top: 12px;
+  background: rgba(96, 165, 250, 0.08);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #93c5fd;
+}
+.liveness-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(96, 165, 250, 0.3);
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.qr-verify-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+}
+.qr-code-wrapper {
+  position: relative;
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+.qr-code-img {
+  display: block;
+  width: 200px;
+  height: 200px;
+}
+.qr-expired-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(0,0,0,0.7);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 14px;
+}
+.qr-refresh-btn {
+  padding: 4px 16px;
+  font-size: 12px;
+  background: #60a5fa;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.qr-instructions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 16px;
+}
+.qr-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--canvas-text-secondary, #94a3b8);
+}
+.qr-step svg { flex-shrink: 0; }
+.qr-polling-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(96, 165, 250, 0.08);
+  border-radius: 8px;
+  font-size: 12px;
+  color: #93c5fd;
 }
 
 .modal-footer {

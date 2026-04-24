@@ -36,6 +36,7 @@
     "marked": "^17.0.1",
     "onnxruntime-web": "^1.23.2",
     "pinia": "^3.0.4",
+    "qrcode": "^1.5.4",
     "three": "^0.182.0",
     "vue": "^3.4.29",
     "vue-router": "^4.2.5",

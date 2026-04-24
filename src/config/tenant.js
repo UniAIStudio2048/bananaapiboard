@@ -229,7 +229,8 @@ export async function loadBrandConfig(forceReload = false) {
         logo: data.brandLogo || runtimeConfig.brand.logo,
         favicon: data.favicon || data.brandLogo || runtimeConfig.brand.favicon,
         primaryColor: data.primaryColor || runtimeConfig.brand.primaryColor,
-        description: data.brandDescription || runtimeConfig.brand.description
+        description: data.brandDescription || runtimeConfig.brand.description,
+        siteTitle: data.siteTitle || ''
       }
       
       // 更新模型名称配置

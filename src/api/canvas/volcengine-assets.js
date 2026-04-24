@@ -98,6 +98,40 @@ export async function updateAssetGroup(id, data) {
   return response.json()
 }
 
+/**
+ * 创建真人人像角色组 - 获取 H5 认证链接
+ */
+export async function createLivenessSession(data = {}) {
+  const response = await fetch(`${getApiBase()}/api/volcengine-asset/groups/liveness/session`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || '创建认证会话失败')
+  }
+  return response.json()
+}
+
+/**
+ * 创建真人人像角色组 - 查询认证结果获取 GroupId
+ */
+export async function getLivenessResult(data) {
+  const response = await fetch(`${getApiBase()}/api/volcengine-asset/groups/liveness/result`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || '查询认证结果失败')
+  }
+  return response.json()
+}
+
 // ========== 角色资产 ==========
 
 /**
