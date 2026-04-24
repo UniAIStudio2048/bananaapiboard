@@ -239,6 +239,7 @@ async function submit() {
       if (data.error === 'disabled') error.value = '账号已被禁用'
       else if (data.error === 'invalid_credentials') error.value = '密码不正确'
       else if (data.error === 'not_found') error.value = '用户不存在'
+      else if (data.error === 'too_many_requests') error.value = data.message || '密码错误次数过多，请5分钟后重试'
       else error.value = data.message || '操作失败'
       return
     }

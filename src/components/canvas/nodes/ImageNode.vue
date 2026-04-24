@@ -2883,18 +2883,23 @@ function handleEditorSaveMask(data) {
   closeImageEditor()
 }
 
-// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
-// 对于 dataUrl 格式的图片（如裁剪后的图片），直接在前端下载
+let isDownloading = false
 async function handleToolbarDownload() {
-  if (!currentImageUrl.value) return
+  if (isDownloading) return
+  if (!currentImageUrl.value) {
+    showToast('没有可下载的图片', 'warning')
+    return
+  }
   
+  isDownloading = true
   const filename = `image_${props.id || Date.now()}.png`
+  showToast('正在下载图片...', 'info')
   
   try {
     const imageUrl = getOriginalImageUrl(currentImageUrl.value)
+    console.log('[ImageNode] 开始下载:', imageUrl?.substring(0, 100))
     
     if (imageUrl.startsWith('data:')) {
-      console.log('[ImageNode] dataUrl 格式图片，使用前端直接下载')
       const blob = await dataUrlToBlob(imageUrl)
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -2904,14 +2909,18 @@ async function handleToolbarDownload() {
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
+      showToast('下载完成', 'success')
       return
     }
     
     const { smartDownload } = await import('@/api/client')
     await smartDownload(imageUrl, filename)
-    console.log('[ImageNode] 下载原图成功:', filename)
+    showToast('下载完成', 'success')
   } catch (error) {
     console.error('[ImageNode] 下载图片失败:', error)
+    showToast('下载失败，请重试', 'error')
+  } finally {
+    isDownloading = false
   }
 }
 
@@ -6015,7 +6024,7 @@ async function handleDrop(event) {
           <path d="M6 6h10a2 2 0 012 2v10" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
+      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent="handleToolbarDownload">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>

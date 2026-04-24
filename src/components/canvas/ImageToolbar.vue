@@ -18,6 +18,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { deductCropPoints } from '@/api/canvas/nodes'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { showToast } from '@/composables/useCanvasDialog'
 
 const props = defineProps({
   // 选中的图像节点
@@ -750,19 +751,19 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([byteArray], { type: mime })
 }
 
-// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
 async function handleDownload() {
-  console.log('[ImageToolbar] 下载', props.imageNode?.id)
-  if (!imageUrl.value) return
+  if (!imageUrl.value) {
+    showToast('没有可下载的图片', 'warning')
+    return
+  }
   
   const filename = `image_${props.imageNode?.id || Date.now()}.png`
+  showToast('正在下载图片...', 'info')
   
   try {
     const url = imageUrl.value
     
-    // dataUrl 直接在前端转换下载
     if (url.startsWith('data:')) {
-      console.log('[ImageToolbar] dataUrl 格式图片，使用前端直接下载')
       const blob = dataUrlToBlob(url)
       const blobUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -772,16 +773,17 @@ async function handleDownload() {
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(blobUrl)
+      showToast('下载完成', 'success')
       emit('download', { nodeId: props.imageNode?.id, imageUrl: imageUrl.value })
       return
     }
     
-    // 统一使用 smartDownload（fetch+blob，自动修正扩展名，解决跨域）
     const { smartDownload } = await import('@/api/client')
     await smartDownload(url, filename)
-    console.log('[ImageToolbar] 下载原图成功:', filename)
+    showToast('下载完成', 'success')
   } catch (error) {
     console.error('[ImageToolbar] 下载图片失败:', error)
+    showToast('下载失败，请重试', 'error')
   }
   
   emit('download', { 

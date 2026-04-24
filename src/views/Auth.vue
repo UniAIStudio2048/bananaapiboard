@@ -299,6 +299,12 @@ async function submit() {
         error.value = '密码不正确，请重试'
       } else if (data.error === 'not_found') {
         error.value = '用户不存在'
+      } else if (data.error === 'too_many_requests') {
+        error.value = data.message || '密码错误次数过多，请5分钟后重试'
+      } else if (data.error === 'username_exists') {
+        error.value = '该用户名已被注册，请更换一个用户名'
+      } else if (data.error === 'email_exists') {
+        error.value = '该邮箱已被注册'
       } else {
         error.value = data.message || '提交失败'
       }

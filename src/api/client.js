@@ -580,9 +580,8 @@ export async function smartDownload(url, filename) {
     }
   }
 
-  // 统一构建下载代理 URL（后端 /api/images/download 代理，服务端 fetch 无 CORS 限制）
   function buildProxyUrl(targetUrl) {
-    return `/api/images/download?${new URLSearchParams({ url: targetUrl, filename: correctedFilename }).toString()}`
+    return getApiUrl(`/api/images/download?${new URLSearchParams({ url: targetUrl, filename: correctedFilename }).toString()}`)
   }
 
   // 完整 HTTP URL 包含我们自己的 API 路径时，提取相对路径走 fetch+blob 下载

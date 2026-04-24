@@ -709,6 +709,9 @@ const submitAuth = async () => {
         : data.error === 'invalid_email_code' ? t('auth.invalidEmailCode')
         : data.error === 'email_code_required' ? t('auth.emailCodeRequired')
         : data.error === 'email_not_whitelisted' ? t('auth.emailNotWhitelisted')
+        : data.error === 'too_many_requests' ? (data.message || '密码错误次数过多，请5分钟后重试')
+        : data.error === 'username_exists' ? '该用户名已被注册，请更换一个用户名'
+        : data.error === 'email_exists' ? '该邮箱已被注册'
         : data.message || t('auth.operationFailed')
       return
     }
