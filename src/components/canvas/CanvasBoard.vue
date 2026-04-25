@@ -38,6 +38,12 @@ import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import {
+  clampNodePositionToGroup,
+  flowPositionToScreenPosition,
+  resolveConnectionSourcePosition,
+  shouldTreatTargetAsGroupCanvas
+} from '@/utils/canvasConnectionPosition'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -200,6 +206,7 @@ const {
   fitView,
   setViewport,
   getViewport,
+  viewport: vfViewport,
   project,
   vueFlowRef,
   addSelectedEdges,
@@ -360,6 +367,7 @@ onConnectEnd((event) => {
       const pendingConn = {
         sourceNodeId: startInfo.nodeId,
         sourceHandleId: startInfo.handleId || 'output',
+        sourcePosition: canvasStore.dragConnectionStartPosition,
         targetPosition: flowPos
       }
       
@@ -445,9 +453,13 @@ onNodeDragStop((event) => {
   }
   
   // 计算最终位置
-  const finalPosition = {
+  let finalPosition = {
     x: snapX !== null ? snapX : currentX,
     y: snapY !== null ? snapY : currentY
+  }
+
+  if (node.type !== 'group' && node.data?.groupId) {
+    finalPosition = clampPositionInsideNodeGroup(node, finalPosition)
   }
   
   // 只使用 store 的更新方法，不直接修改 node.position
@@ -458,9 +470,9 @@ onNodeDragStop((event) => {
     syncGroupChildrenPositions(node)
   }
   
-  // 如果拖拽的是组内节点，最终调整组大小和偏移量
+  // 如果拖拽的是组内节点，更新相对组的偏移量
   if (node.type !== 'group' && node.data?.groupId) {
-    adjustGroupSizeForNode(node)
+    updateGroupOffsetForNode({ ...node, position: finalPosition })
   }
   
   // 🚀 性能优化：通知节点恢复正常渲染质量
@@ -489,9 +501,12 @@ onNodeDrag((event) => {
     })
   }
 
-  // 如果拖拽的是组内节点，自动调整组的大小
+  // 如果拖拽的是组内节点，限制在组内移动并同步偏移量
   if (node.type !== 'group' && node.data?.groupId) {
-    adjustGroupSizeForNode(node)
+    const clampedPosition = clampPositionInsideNodeGroup(node, node.position)
+    node.position = clampedPosition
+    canvasStore.updateNodePosition(node.id, clampedPosition)
+    updateGroupOffsetForNode({ ...node, position: clampedPosition })
   }
 
   // 🚀 性能优化：对齐辅助线计算节流
@@ -514,6 +529,8 @@ onNodeDrag((event) => {
   alignmentThrottleTimer.value = requestAnimationFrame(() => {
     calculateAlignmentGuides(node)
   })
+
+  if (selectedNodeIds.value.length > 0) readActiveEdgePaths()
 })
 
 // 计算对齐辅助线
@@ -671,6 +688,54 @@ function calculateAlignmentGuides(draggedNode) {
   
   // 注意：不在这里修改节点位置，只在 onNodeDragStop 中应用对齐位置
   // 这样可以避免干扰 Vue Flow 的拖拽机制
+}
+
+function getNodeSize(node) {
+  const defaultSizes = {
+    'text-input': { width: 400, height: 280 },
+    'text': { width: 400, height: 280 },
+    'image-input': { width: 380, height: 320 },
+    'image': { width: 380, height: 320 },
+    'image-gen': { width: 380, height: 320 },
+    'video-input': { width: 420, height: 280 },
+    'video': { width: 420, height: 280 },
+    'video-gen': { width: 420, height: 280 },
+    'seedance-character': { width: 220, height: 220 },
+    'storyboard': { width: 720, height: 360 }
+  }
+  const defaults = defaultSizes[node.type] || { width: 380, height: 280 }
+  return {
+    width: node.dimensions?.width || node.data?.width || node.data?.nodeWidth || defaults.width,
+    height: node.dimensions?.height || node.data?.height || defaults.height
+  }
+}
+
+function clampPositionInsideNodeGroup(node, position) {
+  const groupNode = canvasStore.nodes.find(n => n.id === node.data?.groupId && n.type === 'group')
+  if (!groupNode) return position
+
+  return clampNodePositionToGroup({
+    position,
+    nodeSize: getNodeSize(node),
+    groupNode,
+    padding: 20
+  })
+}
+
+function updateGroupOffsetForNode(node) {
+  const groupId = node.data?.groupId
+  const groupNode = canvasStore.nodes.find(n => n.id === groupId && n.type === 'group')
+  if (!groupNode) return
+
+  const nodeOffsets = {
+    ...(groupNode.data?.nodeOffsets || {}),
+    [node.id]: {
+      x: node.position.x - groupNode.position.x,
+      y: node.position.y - groupNode.position.y
+    }
+  }
+
+  canvasStore.updateNodeData(groupId, { nodeOffsets })
 }
 
 // 调整组大小以包含被拖拽的节点（只扩展不缩小）
@@ -1248,61 +1313,39 @@ function handleMouseUp(event) {
 }
 
 // 删除选中的元素（节点和连线）
-// 原则：选中什么删什么，不多删
+// 只通过 store 修改数据（v-model 会自动同步到 VueFlow），不再同时调用 VueFlow API，
+// 避免双写导致 VueFlow 内部状态损坏、画布冻结
 function deleteSelectedElements() {
   const selectedNodes = getSelectedNodes.value
   const selectedEdges = getSelectedEdges.value
   
-  console.log('[Canvas] 删除操作 - 当前选中状态:', {
-    selectedNodes: selectedNodes.map(n => n.id),
-    selectedEdges: selectedEdges.map(e => e.id)
-  })
+  if (selectedNodes.length === 0 && selectedEdges.length === 0) return
   
-  // 如果只选中了连线（没有选中节点），只删除连线
-  if (selectedEdges.length > 0 && selectedNodes.length === 0) {
-    const edgeIds = selectedEdges.map(e => e.id)
-    removeEdges(edgeIds)
-    
-    // 同步到 store
-    edgeIds.forEach(id => {
-      canvasStore.removeEdge(id)
+  // 编组节点：解散编组而不是删除内部节点
+  const groupNodes = selectedNodes.filter(n => n.type === 'group')
+  const normalNodes = selectedNodes.filter(n => n.type !== 'group')
+  
+  if (groupNodes.length > 0) {
+    groupNodes.forEach(groupNode => {
+      const nodeIds = groupNode.data?.nodeIds || []
+      nodeIds.forEach(nodeId => {
+        const node = canvasStore.nodes.find(n => n.id === nodeId)
+        if (node) node.draggable = true
+      })
+      canvasStore.disbandGroup(groupNode.id)
+      canvasStore.removeNode(groupNode.id)
     })
-    
-    console.log(`[Canvas] 只删除了 ${edgeIds.length} 条连线`)
-    return
   }
   
-  // 如果只选中了节点（没有选中连线），只删除节点
-  if (selectedNodes.length > 0 && selectedEdges.length === 0) {
-    const nodeIds = selectedNodes.map(n => n.id)
-    removeNodes(nodeIds)
-    
-    // 同步到 store
-    nodeIds.forEach(id => {
-      canvasStore.removeNode(id)
-    })
-    
-    console.log(`[Canvas] 只删除了 ${nodeIds.length} 个节点`)
-    return
+  // 批量删除普通节点（只保存一次历史）
+  if (normalNodes.length > 0) {
+    canvasStore.removeNodesBatch(normalNodes.map(n => n.id))
   }
   
-  // 如果同时选中了节点和连线，都删除
-  if (selectedNodes.length > 0 && selectedEdges.length > 0) {
-    // 先删除连线
-    const edgeIds = selectedEdges.map(e => e.id)
-    removeEdges(edgeIds)
-    edgeIds.forEach(id => {
-      canvasStore.removeEdge(id)
-    })
-    
-    // 再删除节点
-    const nodeIds = selectedNodes.map(n => n.id)
-    removeNodes(nodeIds)
-    nodeIds.forEach(id => {
-      canvasStore.removeNode(id)
-    })
-    
-    console.log(`[Canvas] 删除了 ${nodeIds.length} 个节点和 ${edgeIds.length} 条连线`)
+  // 删除额外选中的连线（不属于已删节点的独立连线）
+  if (selectedEdges.length > 0) {
+    canvasStore.saveHistory()
+    selectedEdges.forEach(e => canvasStore.removeEdge(e.id))
   }
 }
 
@@ -1459,10 +1502,12 @@ function handleEdgesChange(changes) {
   changes.forEach(change => {
     if (change.type === 'remove') {
       const { id, target, targetHandle } = change
+      
+      // 防御：边可能已被 store 的 removeNode/removeNodesBatch 删除
+      const edgeStillExists = canvasStore.edges.find(e => e.id === id)
+      
       const targetNode = canvasStore.nodes.find(n => n.id === target)
 
-      // 非 storyboard 格子级连线：清除目标节点的继承数据
-      // （Storyboard 格子级图片清理已统一在 canvasStore.removeEdge 中处理）
       if (targetNode && !(
         targetNode.type === 'storyboard' &&
         typeof targetHandle === 'string' &&
@@ -1475,8 +1520,9 @@ function handleEdgesChange(changes) {
         })
       }
 
-      // 从 store 中移除边（内部会处理 storyboard 格子图片清理）
-      canvasStore.removeEdge(id)
+      if (edgeStillExists) {
+        canvasStore.removeEdge(id)
+      }
     }
   })
 }
@@ -1596,7 +1642,12 @@ function handleGlobalDragConnectionEnd(event) {
   try {
     // 检测是否释放在某个节点上
     const targetElement = document.elementFromPoint(event.clientX, event.clientY)
-    const targetNode = findTargetNode(targetElement)
+    let targetNode = findTargetNode(targetElement)
+    const sourceNode = canvasStore.nodes.find(n => n.id === canvasStore.dragConnectionSource?.nodeId)
+
+    if (shouldTreatTargetAsGroupCanvas({ sourceNode, targetNode })) {
+      targetNode = null
+    }
 
     // 检测是否释放在 Storyboard 的某个格子级 cell-handle 上
     // cell-handle 的 data-handleid 格式为 "input-{index}"
@@ -1713,13 +1764,14 @@ const getDragLinePath = computed(() => {
   
   const startPos = dragLineStartPosition.value
   const endPos = canvasStore.dragConnectionPosition
-  const viewport = canvasStore.viewport
-  
-  // 将画布坐标转换为屏幕坐标用于显示
-  const screenX1 = startPos.x * viewport.zoom + viewport.x
-  const screenY1 = startPos.y * viewport.zoom + viewport.y
-  const screenX2 = endPos.x * viewport.zoom + viewport.x
-  const screenY2 = endPos.y * viewport.zoom + viewport.y
+  const viewport = getViewport()
+
+  const startScreen = flowPositionToScreenPosition(startPos, viewport)
+  const endScreen = flowPositionToScreenPosition(endPos, viewport)
+  const screenX1 = startScreen.x
+  const screenY1 = startScreen.y
+  const screenX2 = endScreen.x
+  const screenY2 = endScreen.y
   
   // 计算控制点（水平方向的贝塞尔曲线）
   const dx = Math.abs(screenX2 - screenX1)
@@ -1727,6 +1779,73 @@ const getDragLinePath = computed(() => {
   
   return `M ${screenX1} ${screenY1} C ${screenX1 + controlOffset} ${screenY1}, ${screenX2 - controlOffset} ${screenY2}, ${screenX2} ${screenY2}`
 })
+
+const connectionFlowLayers = computed(() => {
+  const N = 20
+  const period = 350
+  const maxDash = 150
+  const minDash = 8
+  const duration = 9
+  const opacityPerLayer = 0.045
+  return Array.from({ length: N }, (_, i) => {
+    const dash = maxDash - i * (maxDash - minDash) / (N - 1)
+    const gap = period - dash
+    const shift = maxDash - dash
+    const delay = -(shift / period) * duration
+    return {
+      dasharray: `${dash.toFixed(1)} ${gap.toFixed(1)}`,
+      opacity: opacityPerLayer,
+      delay: `${delay.toFixed(3)}s`
+    }
+  })
+})
+
+const activeFlowPaths = ref([])
+
+function transformSvgPath(d, vp) {
+  if (!d) return ''
+  const { x: px, y: py, zoom: z } = vp
+  return d.replace(/([MLCSQTA])\s*((?:-?[\d.]+[\s,]*)+)/gi, (_, cmd, args) => {
+    const upper = cmd.toUpperCase()
+    const nums = args.trim().split(/[\s,]+/).filter(Boolean).map(Number)
+    if (upper === 'H') return cmd + ' ' + nums.map(n => n * z + px).join(' ')
+    if (upper === 'V') return cmd + ' ' + nums.map(n => n * z + py).join(' ')
+    const out = []
+    for (let i = 0; i < nums.length; i += 2) {
+      out.push(nums[i] * z + px)
+      if (i + 1 < nums.length) out.push(nums[i + 1] * z + py)
+    }
+    return cmd + ' ' + out.join(' ')
+  })
+}
+
+function readActiveEdgePaths() {
+  const ids = selectedNodeIds.value
+  if (ids.length === 0 || isEdgeHidden.value) {
+    activeFlowPaths.value = []
+    return
+  }
+  const selectedSet = new Set(ids)
+  const vp = getViewport()
+  const el = vueFlowRef.value?.$el || vueFlowRef.value
+  if (!el) { activeFlowPaths.value = []; return }
+
+  const paths = []
+  for (const edge of canvasStore.edges) {
+    if (!selectedSet.has(edge.source) && !selectedSet.has(edge.target)) continue
+    const edgeEl = el.querySelector(`g[data-id="${edge.id}"] .vue-flow__edge-path`)
+    if (!edgeEl) continue
+    const d = edgeEl.getAttribute('d')
+    if (d) paths.push(transformSvgPath(d, vp))
+  }
+  activeFlowPaths.value = paths
+}
+
+watch(
+  [selectedNodeIds, vfViewport, () => canvasStore.edges.length],
+  () => { nextTick(readActiveEdgePaths) },
+  { immediate: true }
+)
 
 // 对齐辅助线的屏幕坐标（转换为屏幕坐标用于SVG渲染）
 const alignmentGuidesScreen = computed(() => {
@@ -1805,8 +1924,10 @@ function getPendingConnectionPath() {
   const pending = canvasStore.pendingConnection
   if (!pending) return ''
   
-  // 使用 getHandlePosition 获取源节点输出端口的精确位置
-  const sourcePos = getHandlePosition(pending.sourceNodeId, 'output')
+  const sourcePos = resolveConnectionSourcePosition(
+    pending,
+    () => getHandlePosition(pending.sourceNodeId, 'output')
+  )
   if (sourcePos.x === 0 && sourcePos.y === 0) return ''
   
   const sourceX = sourcePos.x
@@ -2152,6 +2273,8 @@ async function handleFileDrop(event) {
                 title: asset.name || '图片资产',
                 label: asset.name || '图片',
                 sourceImages: [asset.url],
+                thumbnailUrl: asset.thumbnail_url || asset.url,
+                thumbnail_url: asset.thumbnail_url || asset.url,
                 nodeRole: 'source',
                 fromAsset: true,
                 assetId: asset.id
@@ -2169,8 +2292,11 @@ async function handleFileDrop(event) {
                 status: 'success',
                 output: {
                   type: 'video',
-                  url: asset.url
+                  url: asset.url,
+                  thumbnailUrl: asset.thumbnail_url || ''
                 },
+                thumbnailUrl: asset.thumbnail_url || '',
+                thumbnail_url: asset.thumbnail_url || '',
                 fromAsset: true,
                 assetId: asset.id
               }
@@ -2194,6 +2320,39 @@ async function handleFileDrop(event) {
                 assetId: asset.id
               }
             })
+            break
+          case 'seedance-character':
+            {
+              const meta = asset.metadata || {}
+              const seedanceAssetId = meta.assetId || asset.id
+              const seedanceThumbUrl = asset.thumbnail_url || ''
+              canvasStore.addNode({
+                id: nodeId,
+                type: 'seedance-character',
+                position: { x: canvasX, y: canvasY },
+                data: {
+                  title: asset.name || 'Seedance角色',
+                  assetId: seedanceAssetId,
+                  assetUri: meta.assetUri || asset.url || `asset://${seedanceAssetId}`,
+                  assetUrl: seedanceThumbUrl,
+                  groupId: meta.groupId,
+                  assetName: asset.name,
+                  status: meta.status || 'Active',
+                  assetType: meta.assetType || 'Image',
+                  width: 220,
+                  thumbnailUrl: seedanceThumbUrl,
+                  thumbnail_url: seedanceThumbUrl,
+                  output: {
+                    type: 'image',
+                    url: meta.assetUri || asset.url || `asset://${seedanceAssetId}`,
+                    urls: [meta.assetUri || asset.url || `asset://${seedanceAssetId}`],
+                    thumbnailUrl: seedanceThumbUrl
+                  },
+                  fromAsset: true,
+                  canvasAssetId: asset.id
+                }
+              })
+            }
             break
           case 'sora-character':
             // Sora 角色卡节点 - 显示角色名称和 ID
@@ -2240,9 +2399,13 @@ async function handleFileDrop(event) {
             status: data.status || 'Active',
             assetType: data.assetType,
             width: 220,
+            thumbnailUrl: data.thumbnailUrl || data.assetUrl,
+            thumbnail_url: data.thumbnailUrl || data.assetUrl,
             output: {
               type: 'image',
-              url: data.assetUrl
+              url: data.assetUri || `asset://${data.assetId}`,
+              urls: [data.assetUri || `asset://${data.assetId}`],
+              thumbnailUrl: data.thumbnailUrl || data.assetUrl
             }
           }
         })
@@ -2587,58 +2750,47 @@ onUnmounted(() => {
         :size="1"
         pattern-color="#2a2a2a"
       />
-      
+
       <!-- 拖拽连线可视化 -->
       <template v-if="canvasStore.isDraggingConnection">
-        <svg class="drag-connection-line">
-          <defs>
-            <marker
-              id="drag-arrow"
-              viewBox="0 0 10 10"
-              refX="5"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#3b82f6" />
-            </marker>
-          </defs>
+        <svg class="drag-connection-line connection-guide-line">
+          <path :d="getDragLinePath" class="connection-flow-base" />
           <path
+            v-for="(layer, i) in connectionFlowLayers"
+            :key="i"
             :d="getDragLinePath"
-            stroke="#3b82f6"
-            stroke-width="2"
-            fill="none"
-            stroke-dasharray="5,5"
-            marker-end="url(#drag-arrow)"
+            class="connection-flow"
+            :style="{ strokeDasharray: layer.dasharray, opacity: layer.opacity, animationDelay: layer.delay }"
           />
         </svg>
       </template>
       
       <!-- 待连接虚拟连线（选择器打开时显示） -->
       <template v-if="showPendingConnection">
-        <svg class="pending-connection-line">
-          <defs>
-            <marker
-              id="pending-arrow"
-              viewBox="0 0 10 10"
-              refX="5"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#22c55e" />
-            </marker>
-          </defs>
+        <svg class="pending-connection-line connection-guide-line">
+          <path :d="getPendingConnectionPath()" class="connection-flow-base" />
           <path
+            v-for="(layer, i) in connectionFlowLayers"
+            :key="i"
             :d="getPendingConnectionPath()"
-            stroke="#22c55e"
-            stroke-width="2"
-            fill="none"
-            stroke-dasharray="8,4"
-            marker-end="url(#pending-arrow)"
+            class="connection-flow"
+            :style="{ strokeDasharray: layer.dasharray, opacity: layer.opacity, animationDelay: layer.delay }"
           />
+        </svg>
+      </template>
+
+      <!-- 选中节点关联连线的流动动画 -->
+      <template v-if="activeFlowPaths.length > 0">
+        <svg class="active-edge-flow connection-guide-line">
+          <template v-for="(edgePath, ei) in activeFlowPaths" :key="ei">
+            <path
+              v-for="(layer, li) in connectionFlowLayers"
+              :key="li"
+              :d="edgePath"
+              class="connection-flow"
+              :style="{ strokeDasharray: layer.dasharray, opacity: layer.opacity, animationDelay: layer.delay }"
+            />
+          </template>
         </svg>
       </template>
       
@@ -2750,8 +2902,13 @@ onUnmounted(() => {
 }
 
 :deep(.vue-flow__connection-line) {
-  stroke: var(--canvas-accent-primary);
+  stroke: #60a5fa;
   stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 84 266;
+  fill: none;
+  opacity: 0.3;
+  animation: connectionGlowFlow 9s linear infinite;
 }
 
 /* 多选时的节点样式（排除图片和视频节点，它们有自己的选中样式） */
@@ -2760,8 +2917,7 @@ onUnmounted(() => {
   outline-offset: 2px;
 }
 
-/* 拖拽连线可视化 */
-.drag-connection-line {
+.connection-guide-line {
   position: absolute;
   top: 0;
   left: 0;
@@ -2772,26 +2928,25 @@ onUnmounted(() => {
   overflow: visible;
 }
 
-.drag-connection-line path {
-  filter: drop-shadow(0 0 4px rgba(59, 130, 246, 0.5));
-  animation: dashAnimation 0.5s linear infinite;
+.connection-flow-base {
+  stroke: var(--canvas-edge-default);
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+  opacity: 0.86;
+}
+
+.connection-flow {
+  stroke: #60a5fa;
+  stroke-width: 2;
+  stroke-linecap: round;
+  fill: none;
+  animation: connectionGlowFlow 9s linear infinite;
 }
 
 /* 待连接虚拟连线（选择器打开时显示） */
 .pending-connection-line {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
   z-index: 999;
-  overflow: visible;
-}
-
-.pending-connection-line path {
-  filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.6));
-  animation: pendingDashAnimation 0.8s linear infinite;
 }
 
 /* 对齐辅助线 */
@@ -2810,16 +2965,9 @@ onUnmounted(() => {
   filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.6));
 }
 
-@keyframes pendingDashAnimation {
-  to {
-    stroke-dashoffset: -12;
-  }
-}
-
-@keyframes dashAnimation {
-  to {
-    stroke-dashoffset: -10;
-  }
+@keyframes connectionGlowFlow {
+  from { stroke-dashoffset: 0; }
+  to { stroke-dashoffset: -350; }
 }
 
 /* 文件拖拽到画布 */
@@ -2880,5 +3028,3 @@ onUnmounted(() => {
   color: var(--canvas-text-secondary, #a0a0a0);
 }
 </style>
-
-

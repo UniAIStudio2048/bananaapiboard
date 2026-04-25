@@ -6,7 +6,7 @@ defineOptions({
  * LLMNode.vue - LLM 智能节点
  * 用于提示词优化、图片描述、内容扩写等
  */
-import { ref, computed, inject, nextTick, watch } from 'vue'
+import { ref, computed, inject, nextTick, watch, onMounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { enhancePrompt, describeImage, expandContent, getLLMCost } from '@/api/canvas/llm'
@@ -28,6 +28,12 @@ const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
 const { updateNodeInternals } = useVueFlow()
+
+onMounted(() => {
+  nextTick(() => {
+    updateNodeInternals(props.id)
+  })
+})
 
 // LLM 类型配置 - 黑白灰简洁风格
 const LLM_TYPES = {
@@ -378,6 +384,7 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
       :position="Position.Left"
       id="input"
       class="node-handle node-handle-hidden"
+      :style="{ position: 'absolute', left: '-34px', top: '50%', transform: 'translateY(-50%)' }"
     />
     
     <!-- 输出端口（隐藏但保留给 Vue Flow 用于边渲染） -->
@@ -386,6 +393,7 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
       :position="Position.Right"
       id="output"
       class="node-handle node-handle-hidden"
+      :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
     />
     
     <!-- 右侧添加按钮 -->
@@ -528,7 +536,6 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
 
 .node-handle-hidden {
   opacity: 0 !important;
-  visibility: hidden;
   pointer-events: none;
 }
 

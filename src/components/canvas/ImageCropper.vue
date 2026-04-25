@@ -178,14 +178,17 @@ const outputSize = computed(() => {
 
 // 计算容器尺寸
 function calculateCanvasSize() {
-  if (!containerRef.value) return
-  
-  const padding = 60
-  const maxWidth = window.innerWidth - padding * 2
-  const maxHeight = window.innerHeight - 180
-  
-  canvasWidth.value = Math.min(maxWidth, 1400)
-  canvasHeight.value = Math.min(maxHeight, 900)
+  const compact = window.innerWidth < 900
+  const horizontalMargin = compact ? 32 : 220
+  const verticalChrome = props.mode === 'outpaint'
+    ? (compact ? 250 : 300)
+    : (compact ? 210 : 240)
+
+  const maxWidth = Math.max(320, window.innerWidth - horizontalMargin)
+  const maxHeight = Math.max(260, window.innerHeight - verticalChrome)
+
+  canvasWidth.value = Math.round(Math.min(maxWidth, compact ? 760 : 1080))
+  canvasHeight.value = Math.round(Math.min(maxHeight, compact ? 520 : 620))
 }
 
 // 加载图片
@@ -1001,6 +1004,12 @@ function handleCancel() {
   emit('cancel')
 }
 
+async function handleResize() {
+  if (props.visible) {
+    await init()
+  }
+}
+
 // 重置裁剪区域
 function resetCrop() {
   selectedRatio.value = 'free'
@@ -1043,11 +1052,11 @@ watch(() => props.visible, async (visible) => {
   if (visible) {
     await init()
     document.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('resize', calculateCanvasSize)
+    window.addEventListener('resize', handleResize)
     window.addEventListener('mouseup', handleMouseUp)
   } else {
     document.removeEventListener('keydown', handleKeyDown)
-    window.removeEventListener('resize', calculateCanvasSize)
+    window.removeEventListener('resize', handleResize)
     window.removeEventListener('mouseup', handleMouseUp)
   }
 }, { immediate: true })
@@ -1061,7 +1070,7 @@ watch(() => props.imageUrl, async (newUrl) => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown)
-  window.removeEventListener('resize', calculateCanvasSize)
+  window.removeEventListener('resize', handleResize)
   window.removeEventListener('mouseup', handleMouseUp)
 })
 </script>
@@ -1271,19 +1280,27 @@ onUnmounted(() => {
 .image-cropper-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(10, 10, 10, 0.98);
+  background: rgba(10, 10, 10, 0.56);
   z-index: 100001;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 32px;
+  backdrop-filter: none;
 }
 
 .cropper-container {
-  width: 100%;
-  height: 100%;
+  width: min(1180px, calc(100vw - 64px));
+  max-width: calc(100vw - 64px);
+  max-height: calc(100vh - 64px);
   display: flex;
   flex-direction: column;
   padding: 12px 16px;
+  background: rgba(16, 16, 16, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
 }
 
 .cropper-header {
@@ -1472,6 +1489,7 @@ onUnmounted(() => {
 
 .cropper-content {
   flex: 1;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1528,6 +1546,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 10px;
+  flex-shrink: 0;
 }
 
 .mode-indicator {

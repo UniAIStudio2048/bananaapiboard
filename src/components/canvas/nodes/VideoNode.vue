@@ -25,6 +25,9 @@ import { showAlert, showInsufficientPointsDialog, showToast } from '@/composable
 import { getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
+import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
+import { getMentionPopupPosition, getTextareaCaretViewportRect, isBrowserRenderableUrl } from '@/utils/promptMention'
+import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
@@ -48,7 +51,7 @@ const userInfo = inject('userInfo')
 const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals, getSelectedNodes } = useVueFlow()
+const { updateNodeInternals, getViewport, getSelectedNodes } = useVueFlow()
 
 // 是否单独选中（多选时不显示底部配置面板）
 const isSoloSelected = computed(() => {
@@ -86,6 +89,7 @@ function getErrorHint(msg) {
 }
 const promptText = ref(props.data.prompt || '')
 const promptTextareaRef = ref(null)
+const hasManualPromptTextareaSize = ref(false)
 
 // @ 提及弹出相关
 const showMentionPopup = ref(false)
@@ -286,6 +290,8 @@ function handleDropdownWheel(event) {
 
 // 自动调整提示词文本框高度
 function autoResizeTextarea() {
+  if (hasManualPromptTextareaSize.value) return
+
   const textarea = promptTextareaRef.value
   if (!textarea) return
   
@@ -298,6 +304,12 @@ function autoResizeTextarea() {
   const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
   
   textarea.style.height = newHeight + 'px'
+}
+
+function markPromptTextareaResizeIntent(event) {
+  if (isTextareaResizeHandlePointer(event, promptTextareaRef.value)) {
+    hasManualPromptTextareaSize.value = true
+  }
 }
 
 function handlePromptInput(event) {
@@ -323,11 +335,10 @@ function handlePromptInput(event) {
         mentionStartPos = atIndex
         mentionActiveIndex.value = 0
         
-        const rect = el.getBoundingClientRect()
-        mentionPosition.value = {
-          top: rect.top - 8,
-          left: rect.left + 12
-        }
+        mentionPosition.value = getMentionPopupPosition({
+          caretRect: getTextareaCaretViewportRect(el, cursorIndex),
+          fallbackRect: el.getBoundingClientRect()
+        })
         return
       }
     }
@@ -360,16 +371,82 @@ const supportsMediaTags = computed(() => isKlingO1Model.value || isKlingV3OmniMo
 const referenceMediaList = computed(() => {
   const list = []
   referenceVideos.value.forEach((url, i) => {
-    list.push({ type: 'video', index: i + 1, url, label: `视频${i + 1}` })
+    list.push({
+      type: 'video',
+      index: i + 1,
+      url,
+      label: `视频${i + 1}`,
+      thumbnailUrl: getReferenceVideoThumbnail(url)
+    })
   })
   referenceImages.value.forEach((url, i) => {
-    list.push({ type: 'image', index: i + 1, url, label: `图片${i + 1}` })
+    list.push({
+      type: 'image',
+      index: i + 1,
+      url,
+      label: `图片${i + 1}`,
+      thumbnailUrl: getReferenceImageThumbnail(url)
+    })
   })
   referenceAudios.value.forEach((url, i) => {
     list.push({ type: 'audio', index: i + 1, url, label: `音频${i + 1}` })
   })
   return list
 })
+
+function getReferenceImageThumbnail(url) {
+  const sourceNode = findUpstreamNodeByImageUrl(url)
+  if (!sourceNode?.data) return ''
+
+  return sourceNode.data.thumbnailUrl ||
+    sourceNode.data.thumbnail_url ||
+    sourceNode.data.assetUrl ||
+    sourceNode.data.output?.thumbnailUrl ||
+    sourceNode.data.output?.thumbnail_url ||
+    ''
+}
+
+function getReferenceVideoThumbnail(url) {
+  const sourceNode = findUpstreamNodeByVideoUrl(url)
+  if (!sourceNode?.data) return ''
+
+  return sourceNode.data.thumbnailUrl ||
+    sourceNode.data.thumbnail_url ||
+    sourceNode.data.output?.thumbnailUrl ||
+    sourceNode.data.output?.thumbnail_url ||
+    sourceNode.data.coverUrl ||
+    sourceNode.data.cover_url ||
+    ''
+}
+
+function findUpstreamNodeByImageUrl(url) {
+  const upstreamEdges = canvasStore.edges.filter(edge => edge.target === props.id)
+  for (const edge of upstreamEdges) {
+    const node = canvasStore.nodes.find(n => n.id === edge.source)
+    if (!node?.data || !IMAGE_NODE_TYPES.includes(node.type)) continue
+    if (node.data.sourceImages?.includes(url) ||
+        node.data.output?.url === url ||
+        node.data.output?.urls?.includes(url) ||
+        node.data.assetUrl === url) {
+      return node
+    }
+  }
+  return null
+}
+
+function findUpstreamNodeByVideoUrl(url) {
+  const upstreamEdges = canvasStore.edges.filter(edge => edge.target === props.id)
+  for (const edge of upstreamEdges) {
+    const node = canvasStore.nodes.find(n => n.id === edge.source)
+    if (!node?.data || !VIDEO_NODE_TYPES.includes(node.type)) continue
+    if (node.data.sourceVideo === url ||
+        node.data.output?.url === url ||
+        node.data.output?.urls?.includes(url)) {
+      return node
+    }
+  }
+  return null
+}
 
 /**
  * 点击参考素材缩略图，在提示词光标处插入 @标记
@@ -1343,6 +1420,7 @@ onMounted(() => {
   
   // 🔧 初始化时检查当前模型是否支持当前的生成模式（使用 nextTick 确保计算属性已更新）
   nextTick(() => {
+    updateNodeInternals(props.id)
     const modelsForCurrentMode = models.value
     const currentModelStillAvailable = modelsForCurrentMode.some(m => m.value === selectedModel.value)
     
@@ -1542,6 +1620,12 @@ const referenceImages = computed(() => {
     if (!sourceNode?.data || !IMAGE_NODE_TYPES.includes(sourceNode.type)) {
       continue
     }
+
+    if (sourceNode.type === 'seedance-character') {
+      const previewUrl = getSeedanceCharacterPreviewUrl(sourceNode.data)
+      if (previewUrl) upstreamImages.push(previewUrl)
+      continue
+    }
     
     // 优先使用输出结果
     if (sourceNode.data.output?.urls?.length > 0) {
@@ -1577,6 +1661,19 @@ const referenceImages = computed(() => {
 })
 const firstFrame = computed(() => referenceImages.value[0] || null)
 const lastFrame = computed(() => referenceImages.value[1] || referenceImages.value[0] || null)
+
+function getSeedanceCharacterPreviewUrl(data) {
+  const candidates = [
+    data?.thumbnailUrl,
+    data?.thumbnail_url,
+    data?.assetUrl,
+    data?.output?.thumbnailUrl,
+    data?.output?.thumbnail_url,
+    data?.output?.url,
+    ...(Array.isArray(data?.output?.urls) ? data.output.urls : [])
+  ]
+  return candidates.find(isBrowserRenderableUrl) || ''
+}
 
 // 参考视频（来自上游视频节点）
 const VIDEO_NODE_TYPES = [
@@ -3251,6 +3348,9 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       for (const edge of upstreamEdges) {
         const sn = canvasStore.nodes.find(n => n.id === edge.source)
         if (sn?.type === 'seedance-character') {
+          if (sn.data?.assetUrl) charHttpUrls.add(sn.data.assetUrl)
+          if (sn.data?.thumbnailUrl) charHttpUrls.add(sn.data.thumbnailUrl)
+          if (sn.data?.thumbnail_url) charHttpUrls.add(sn.data.thumbnail_url)
           if (sn.data?.output?.url) charHttpUrls.add(sn.data.output.url)
           if (sn.data?.output?.urls) sn.data.output.urls.forEach(u => charHttpUrls.add(u))
         }
@@ -4406,6 +4506,7 @@ function handleContextMenu(event) {
 
 // ========== 添加按钮交互（单击/长按） ==========
 const LONG_PRESS_DURATION = 300 // 长按阈值（毫秒）
+const addRightBtnRef = ref(null)
 let pressTimer = null
 let isLongPress = false
 let pressStartPos = { x: 0, y: 0 }
@@ -4472,6 +4573,12 @@ function handleAddRightMouseUp(event) {
 
 // 开始拖拽连线 - 直接调用 store 方法
 function startDragConnection(event) {
+  const buttonPosition = getElementCenterFlowPosition(addRightBtnRef.value, getViewport())
+  if (buttonPosition) {
+    canvasStore.startDragConnection(props.id, 'output', buttonPosition)
+    return
+  }
+
   // 获取当前节点在 store 中的数据
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) {
@@ -5618,6 +5725,7 @@ function handleToolbarPreview() {
         :position="Position.Left"
         id="input"
         class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', left: '-34px', top: '50%', transform: 'translateY(-50%)' }"
       />
 
       <!-- 左侧添加按钮 -->
@@ -5805,6 +5913,7 @@ function handleToolbarPreview() {
       
       <!-- 右侧添加按钮 - 单击打开选择器，长按/拖拽连线 -->
       <button 
+        ref="addRightBtnRef"
         class="node-add-btn node-add-btn-right"
         title="单击：添加节点 | 长按/拖拽：连接到其他节点"
         @mousedown="handleAddRightMouseDown"
@@ -5818,6 +5927,7 @@ function handleToolbarPreview() {
         :position="Position.Right"
         id="output"
         class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
       />
     </div>
     
@@ -6011,6 +6121,7 @@ function handleToolbarPreview() {
             @keydown="handleKeyDown"
             @input="handlePromptInput"
             @wheel="handlePromptWheel"
+            @mousedown="markPromptTextareaResizeIntent"
             @dblclick.stop
           ></textarea>
           <!-- @标记高亮叠加层 -->
@@ -7554,7 +7665,7 @@ function handleToolbarPreview() {
 .prompt-input {
   width: 100%;
   min-height: 63px;
-  max-height: 210px;
+  max-height: min(50vh, 420px);
   padding: 8px 10px;
   background: transparent;
   border: none;
@@ -7562,7 +7673,7 @@ function handleToolbarPreview() {
   color: var(--canvas-text-primary, #fff);
   font-size: 14px;
   line-height: 1.5;
-  resize: none;
+  resize: vertical;
   overflow-y: auto;
   font-family: inherit;
   caret-color: var(--canvas-text-primary, #fff);
@@ -8346,7 +8457,6 @@ function handleToolbarPreview() {
 
 .node-handle-hidden {
   opacity: 0 !important;
-  visibility: hidden;
   pointer-events: none;
 }
 

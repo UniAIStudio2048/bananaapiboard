@@ -2,8 +2,8 @@
 /**
  * PreviewNode.vue - 预览输出节点
  */
-import { computed } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
+import { computed, onMounted, nextTick } from 'vue'
+import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders } from '@/config/tenant'
 
@@ -14,6 +14,13 @@ const props = defineProps({
 })
 
 const canvasStore = useCanvasStore()
+const { updateNodeInternals } = useVueFlow()
+
+onMounted(() => {
+  nextTick(() => {
+    updateNodeInternals(props.id)
+  })
+})
 
 // 节点样式类
 const nodeClass = computed(() => ({
@@ -164,6 +171,7 @@ function fullscreen() {
       :position="Position.Left"
       id="input"
       class="node-handle node-handle-hidden"
+      :style="{ position: 'absolute', left: '-34px', top: '50%', transform: 'translateY(-50%)' }"
     />
   </div>
 </template>
@@ -228,7 +236,6 @@ function fullscreen() {
 
 .node-handle-hidden {
   opacity: 0 !important;
-  visibility: hidden;
   pointer-events: none;
 }
 

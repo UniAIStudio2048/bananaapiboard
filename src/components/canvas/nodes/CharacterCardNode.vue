@@ -8,11 +8,13 @@
  * - 左下角name，右下角username
  * - 点击name或username直接复制@name或@username到剪贴板
  */
-import { ref, computed, watch } from 'vue'
-import { Handle, Position } from '@vue-flow/core'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
+
+const { updateNodeInternals } = useVueFlow()
 
 const props = defineProps({
   id: String,
@@ -25,6 +27,12 @@ const copySuccess = ref(false)
 const copyType = ref('') // 'name' 或 'username'
 const videoRef = ref(null)
 const imageLoadError = ref(false)
+
+onMounted(() => {
+  nextTick(() => {
+    updateNodeInternals(props.id)
+  })
+})
 
 // 角色数据
 const characterName = computed(() => props.data.name || '未命名角色')
@@ -127,6 +135,7 @@ function handleMouseLeave() {
       :position="Position.Right"
       :id="`${id}-source`"
       class="node-handle"
+      :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
     />
 
     <!-- 角色媒体预览 -->

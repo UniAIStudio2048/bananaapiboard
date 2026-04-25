@@ -106,65 +106,226 @@ function getNodesInfo(nodeIds) {
   return { nodesInfo, maxWidth, maxHeight }
 }
 
-// 宫格布局
+// 宫格布局（图感知：连线相关节点排列在一起，最小化交叉）
 function applyGridLayout() {
   if (!props.groupNode?.data?.nodeIds) return
-  
+
   const nodeIds = props.groupNode.data.nodeIds
   const nodeOffsets = {}
-  
-  // 从 store 中重新获取编组节点以获取最新位置
+
   const groupNode = canvasStore.nodes.find(n => n.id === props.groupNode.id)
   if (!groupNode) return
-  
+
   const groupX = groupNode.position.x
   const groupY = groupNode.position.y
-  
   const { gap, paddingX, paddingTop, paddingBottom } = LAYOUT_CONFIG
-  
-  // 获取所有节点的尺寸信息
   const { nodesInfo, maxWidth, maxHeight } = getNodesInfo(nodeIds)
   if (nodesInfo.length === 0) return
-  
-  // 使用最大节点尺寸作为单元格尺寸
+
   const cellWidth = maxWidth
   const cellHeight = maxHeight
-  
-  // 计算宫格布局
-  const cols = Math.ceil(Math.sqrt(nodesInfo.length))
-  
-  console.log('[GroupToolbar] 应用宫格布局', { nodeIds, cols, cellWidth, cellHeight })
-  
-  nodesInfo.forEach((info, index) => {
-    const row = Math.floor(index / cols)
-    const col = index % cols
-    
-    const newX = groupX + paddingX + col * (cellWidth + gap)
-    const newY = groupY + paddingTop + row * (cellHeight + gap)
-    
-    // 使用 store 方法更新节点位置
-    canvasStore.updateNodePosition(info.id, { x: newX, y: newY })
-    
-    // 更新偏移量
-    nodeOffsets[info.id] = {
-      x: newX - groupX,
-      y: newY - groupY
+  const nodeIdSet = new Set(nodeIds)
+
+  const internalEdges = canvasStore.edges.filter(e =>
+    nodeIdSet.has(e.source) && nodeIdSet.has(e.target)
+  )
+
+  if (internalEdges.length === 0) {
+    _placeSimpleGrid(nodesInfo, groupX, groupY, cellWidth, cellHeight, nodeOffsets)
+    return
+  }
+
+  const adjOut = new Map()
+  const adjIn = new Map()
+  nodeIds.forEach(id => { adjOut.set(id, []); adjIn.set(id, []) })
+  internalEdges.forEach(e => {
+    adjOut.get(e.source).push(e.target)
+    adjIn.get(e.target).push(e.source)
+  })
+
+  // 找连通分量（无向）
+  const visited = new Set()
+  const components = []
+  function walkComponent(startId) {
+    const comp = []
+    const stack = [startId]
+    visited.add(startId)
+    while (stack.length > 0) {
+      const id = stack.pop()
+      comp.push(id)
+      for (const n of adjOut.get(id)) { if (!visited.has(n)) { visited.add(n); stack.push(n) } }
+      for (const n of adjIn.get(id)) { if (!visited.has(n)) { visited.add(n); stack.push(n) } }
+    }
+    return comp
+  }
+  nodeIds.forEach(id => {
+    if (!visited.has(id) && (adjOut.get(id).length > 0 || adjIn.get(id).length > 0)) {
+      components.push(walkComponent(id))
     }
   })
-  
-  // 调整组大小以包含所有节点
-  const rows = Math.ceil(nodesInfo.length / cols)
-  const newWidth = paddingX * 2 + cols * cellWidth + (cols - 1) * gap
-  const newHeight = paddingTop + paddingBottom + rows * cellHeight + (rows - 1) * gap
-  
+  const isolatedNodes = nodeIds.filter(id => !visited.has(id))
+
+  // 对每个连通分量做拓扑分层 + 重心排序
+  function layoutComponent(compIds) {
+    const compSet = new Set(compIds)
+    const localOut = new Map()
+    const localIn = new Map()
+    compIds.forEach(id => {
+      localOut.set(id, adjOut.get(id).filter(t => compSet.has(t)))
+      localIn.set(id, adjIn.get(id).filter(s => compSet.has(s)))
+    })
+
+    // Kahn 拓扑排序
+    const inDeg = new Map()
+    compIds.forEach(id => inDeg.set(id, localIn.get(id).length))
+    const queue = []
+    compIds.forEach(id => { if (inDeg.get(id) === 0) queue.push(id) })
+    if (queue.length === 0) {
+      const minNode = compIds.reduce((m, id) => inDeg.get(id) < inDeg.get(m) ? id : m)
+      inDeg.set(minNode, 0)
+      queue.push(minNode)
+    }
+    const topoOrder = []
+    const topoSet = new Set()
+    while (queue.length > 0) {
+      const node = queue.shift()
+      topoOrder.push(node)
+      topoSet.add(node)
+      for (const t of localOut.get(node)) {
+        inDeg.set(t, inDeg.get(t) - 1)
+        if (inDeg.get(t) === 0) queue.push(t)
+      }
+    }
+    compIds.forEach(id => { if (!topoSet.has(id)) topoOrder.push(id) })
+
+    // 最长路径分层
+    const layerOf = new Map()
+    topoOrder.forEach(id => {
+      const parents = localIn.get(id).filter(p => layerOf.has(p))
+      layerOf.set(id, parents.length === 0 ? 0 : Math.max(...parents.map(p => layerOf.get(p))) + 1)
+    })
+
+    const layerGroups = new Map()
+    compIds.forEach(id => {
+      const l = layerOf.get(id) ?? 0
+      if (!layerGroups.has(l)) layerGroups.set(l, [])
+      layerGroups.get(l).push(id)
+    })
+    const sortedLayers = [...layerGroups.entries()].sort((a, b) => a[0] - b[0])
+
+    // 重心法排序（前向+后向各2轮）减少连线交叉
+    for (let pass = 0; pass < 2; pass++) {
+      for (let i = 1; i < sortedLayers.length; i++) {
+        const prevPos = new Map()
+        sortedLayers[i - 1][1].forEach((id, pos) => prevPos.set(id, pos))
+        sortedLayers[i][1].sort((a, b) => {
+          const pA = localIn.get(a).filter(p => prevPos.has(p))
+          const pB = localIn.get(b).filter(p => prevPos.has(p))
+          const bA = pA.length > 0 ? pA.reduce((s, p) => s + prevPos.get(p), 0) / pA.length : 1e9
+          const bB = pB.length > 0 ? pB.reduce((s, p) => s + prevPos.get(p), 0) / pB.length : 1e9
+          return bA - bB
+        })
+      }
+      for (let i = sortedLayers.length - 2; i >= 0; i--) {
+        const nextPos = new Map()
+        sortedLayers[i + 1][1].forEach((id, pos) => nextPos.set(id, pos))
+        sortedLayers[i][1].sort((a, b) => {
+          const cA = localOut.get(a).filter(c => nextPos.has(c))
+          const cB = localOut.get(b).filter(c => nextPos.has(c))
+          const bA = cA.length > 0 ? cA.reduce((s, c) => s + nextPos.get(c), 0) / cA.length : 1e9
+          const bB = cB.length > 0 ? cB.reduce((s, c) => s + nextPos.get(c), 0) / cB.length : 1e9
+          return bA - bB
+        })
+      }
+    }
+
+    const numCols = sortedLayers.length
+    const numRows = Math.max(...sortedLayers.map(([, ns]) => ns.length))
+    const posMap = new Map()
+    sortedLayers.forEach(([, layerNodes], col) => {
+      layerNodes.forEach((id, row) => posMap.set(id, { col, row }))
+    })
+    return { cols: numCols, rows: numRows, positions: posMap }
+  }
+
+  const compLayouts = components.map(c => layoutComponent(c))
+
+  // 计算目标列数，用于装箱排布多个分量
+  const targetCols = Math.max(
+    Math.ceil(Math.sqrt(nodeIds.length)),
+    ...compLayouts.map(l => l.cols)
+  )
+
+  // 按宽度降序排列，优先放大分量
+  const compOrder = compLayouts.map((layout, i) => ({ layout, i }))
+    .sort((a, b) => b.layout.cols - a.layout.cols)
+
+  let curCol = 0, curRowBase = 0, curRowH = 0
+  const finalPos = new Map()
+
+  compOrder.forEach(({ layout }) => {
+    if (curCol > 0 && curCol + layout.cols > targetCols) {
+      curRowBase += curRowH + 1
+      curCol = 0
+      curRowH = 0
+    }
+    layout.positions.forEach(({ col, row }, id) => {
+      finalPos.set(id, { col: curCol + col, row: curRowBase + row })
+    })
+    curCol += layout.cols + 1
+    curRowH = Math.max(curRowH, layout.rows)
+  })
+
+  if (isolatedNodes.length > 0) {
+    if (curCol > 0) { curRowBase += curRowH + 1; curCol = 0 }
+    const isoCols = Math.min(targetCols, isolatedNodes.length)
+    isolatedNodes.forEach((id, idx) => {
+      finalPos.set(id, { col: idx % isoCols, row: curRowBase + Math.floor(idx / isoCols) })
+    })
+  }
+
+  let maxCol = 0, maxRow = 0
+  finalPos.forEach(({ col, row }, id) => {
+    const newX = groupX + paddingX + col * (cellWidth + gap)
+    const newY = groupY + paddingTop + row * (cellHeight + gap)
+    canvasStore.updateNodePosition(id, { x: newX, y: newY })
+    nodeOffsets[id] = { x: newX - groupX, y: newY - groupY }
+    maxCol = Math.max(maxCol, col)
+    maxRow = Math.max(maxRow, row)
+  })
+
+  const totalCols = maxCol + 1
+  const totalRows = maxRow + 1
+  const newWidth = paddingX * 2 + totalCols * cellWidth + Math.max(0, totalCols - 1) * gap
+  const newHeight = paddingTop + paddingBottom + totalRows * cellHeight + Math.max(0, totalRows - 1) * gap
+
   canvasStore.updateNodeData(props.groupNode.id, {
     width: newWidth,
     height: newHeight,
-    nodeOffsets: nodeOffsets,
+    nodeOffsets,
     layoutMode: 'grid'
   })
-  
-  console.log('[GroupToolbar] 宫格布局完成', { newWidth, newHeight })
+  emit('layout-change', 'grid')
+}
+
+// 无连线时的简单宫格排布
+function _placeSimpleGrid(nodesInfo, groupX, groupY, cellWidth, cellHeight, nodeOffsets) {
+  const { gap, paddingX, paddingTop, paddingBottom } = LAYOUT_CONFIG
+  const cols = Math.ceil(Math.sqrt(nodesInfo.length))
+  nodesInfo.forEach((info, index) => {
+    const row = Math.floor(index / cols)
+    const col = index % cols
+    const newX = groupX + paddingX + col * (cellWidth + gap)
+    const newY = groupY + paddingTop + row * (cellHeight + gap)
+    canvasStore.updateNodePosition(info.id, { x: newX, y: newY })
+    nodeOffsets[info.id] = { x: newX - groupX, y: newY - groupY }
+  })
+  const rows = Math.ceil(nodesInfo.length / cols)
+  const newWidth = paddingX * 2 + cols * cellWidth + (cols - 1) * gap
+  const newHeight = paddingTop + paddingBottom + rows * cellHeight + (rows - 1) * gap
+  canvasStore.updateNodeData(props.groupNode.id, {
+    width: newWidth, height: newHeight, nodeOffsets, layoutMode: 'grid'
+  })
   emit('layout-change', 'grid')
 }
 

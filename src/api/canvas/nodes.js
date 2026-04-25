@@ -357,6 +357,22 @@ export async function getImageHdTaskStatus(taskId) {
 }
 
 /**
+ * 查询图片抠图任务状态
+ */
+export async function getRemoveBackgroundTaskStatus(taskId) {
+  const response = await fetch(getApiUrl(`/api/images/remove-background/task/${taskId}`), {
+    headers: getHeaders()
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || '查询抠图任务状态失败')
+  }
+
+  return response.json()
+}
+
+/**
  * 上传图片（内置重试机制）
  */
 export async function uploadImages(files, retryOptions = {}) {
@@ -570,16 +586,11 @@ export async function deductCropPoints(cropType) {
 /**
  * 抠图 - 调用后端去除图片背景
  */
-export async function removeImageBackground(imageUrl, bgType = 'transparent', bgColor = null) {
-  const token = localStorage.getItem('token')
+export async function removeImageBackground(imageUrl, bgType = 'transparent', bgColor = null, nodeId = null) {
   const response = await fetch(getApiUrl('/api/images/remove-background'), {
     method: 'POST',
-    headers: {
-      ...getTenantHeaders(),
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: JSON.stringify({ imageUrl, bgType, bgColor })
+    headers: getHeaders({ json: true }),
+    body: JSON.stringify({ imageUrl, bgType, bgColor, nodeId })
   })
   
   if (!response.ok) {
@@ -589,4 +600,3 @@ export async function removeImageBackground(imageUrl, bgType = 'transparent', bg
   
   return response.json()
 }
-

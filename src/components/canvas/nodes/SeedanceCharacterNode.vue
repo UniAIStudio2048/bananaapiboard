@@ -3,7 +3,7 @@
  * SeedanceCharacterNode.vue - Seedance 角色节点
  * 无边框设计，匹配 ImageNode 风格
  */
-import { ref, computed, watch, nextTick, onUnmounted } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import SeedanceCharacterSelector from '../SeedanceCharacterSelector.vue'
@@ -18,6 +18,12 @@ const props = defineProps({
 
 const canvasStore = useCanvasStore()
 const { updateNodeInternals, getViewport } = useVueFlow()
+
+onMounted(() => {
+  nextTick(() => {
+    updateNodeInternals(props.id)
+  })
+})
 
 const showSelector = ref(false)
 
@@ -67,9 +73,10 @@ function handleLabelKeyDown(event) {
 
 // 节点尺寸
 const nodeWidth = ref(props.data?.width || 220)
+const nodeHeight = ref(props.data?.height || null)
 const isResizing = ref(false)
 const resizeHandle = ref(null)
-const resizeStart = ref({ x: 0, y: 0, width: 0 })
+const resizeStart = ref({ x: 0, y: 0, width: 0, height: 0 })
 let resizeRafId = null
 
 // 右侧 + 按钮交互
@@ -95,7 +102,12 @@ const statusLabel = computed(() => {
 })
 
 const contentStyle = computed(() => ({
-  width: `${nodeWidth.value}px`
+  width: `${nodeWidth.value}px`,
+  ...(nodeHeight.value ? { height: `${nodeHeight.value}px` } : {})
+}))
+
+const imageStyle = computed(() => ({
+  height: nodeHeight.value ? '100%' : 'auto'
 }))
 
 function openSelector() {
@@ -111,13 +123,16 @@ function handleSelect(asset) {
     assetName: asset.Name,
     status: asset.Status,
     assetType: asset.AssetType,
+    thumbnailUrl: asset.URL,
+    thumbnail_url: asset.URL,
     projectName: asset.ProjectName,
     createTime: asset.CreateTime,
     updateTime: asset.UpdateTime,
     output: {
       type: 'image',
-      url: asset.URL,
-      urls: [asset.URL]
+      url: `asset://${asset.Id}`,
+      urls: [`asset://${asset.Id}`],
+      thumbnailUrl: asset.URL
     }
   })
 }
@@ -131,7 +146,8 @@ function handleResizeStart(handle, event) {
   resizeStart.value = {
     x: event.clientX,
     y: event.clientY,
-    width: nodeWidth.value
+    width: nodeWidth.value,
+    height: nodeHeight.value
   }
   document.addEventListener('mousemove', handleResizeMove)
   document.addEventListener('mouseup', handleResizeEnd)
@@ -142,12 +158,22 @@ function handleResizeMove(event) {
   if (resizeRafId) cancelAnimationFrame(resizeRafId)
 
   const clientX = event.clientX
+  const clientY = event.clientY
   resizeRafId = requestAnimationFrame(() => {
     if (!isResizing.value) return
     const viewport = canvasStore.viewport
     const zoom = viewport.zoom || 1
     const deltaX = clientX - resizeStart.value.x
-    nodeWidth.value = Math.max(140, resizeStart.value.width + deltaX / zoom)
+    const deltaY = clientY - resizeStart.value.y
+
+    if (resizeHandle.value === 'right' || resizeHandle.value === 'corner') {
+      nodeWidth.value = Math.max(140, resizeStart.value.width + deltaX / zoom)
+    }
+
+    if (nodeHeight.value && resizeHandle.value === 'corner') {
+      nodeHeight.value = Math.max(140, resizeStart.value.height + deltaY / zoom)
+    }
+
     updateNodeInternals(props.id)
     resizeRafId = null
   })
@@ -160,7 +186,10 @@ function handleResizeEnd() {
   }
   isResizing.value = false
   resizeHandle.value = null
-  canvasStore.updateNodeData(props.id, { width: nodeWidth.value })
+  canvasStore.updateNodeData(props.id, {
+    width: nodeWidth.value,
+    ...(nodeHeight.value ? { height: nodeHeight.value } : {})
+  })
   nextTick(() => updateNodeInternals(props.id))
   document.removeEventListener('mousemove', handleResizeMove)
   document.removeEventListener('mouseup', handleResizeEnd)
@@ -283,6 +312,7 @@ onUnmounted(() => {
         :position="Position.Left"
         id="input"
         class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', left: '-34px', top: '50%', transform: 'translateY(-50%)' }"
       />
 
       <!-- 节点卡片 -->
@@ -295,6 +325,7 @@ onUnmounted(() => {
               :src="data.assetUrl"
               :alt="data.assetName"
               class="character-img"
+              :style="imageStyle"
             />
             <div v-else class="character-placeholder">
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
@@ -347,6 +378,7 @@ onUnmounted(() => {
         :position="Position.Right"
         id="output"
         class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
       />
     </div>
 
@@ -445,6 +477,7 @@ onUnmounted(() => {
 /* ========== 角色图片预览 ========== */
 .character-preview {
   width: 100%;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -474,6 +507,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   width: 100%;
+  height: 100%;
   aspect-ratio: 1;
   color: var(--canvas-text-tertiary);
   background: var(--canvas-bg-secondary);
@@ -506,6 +540,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   padding: 32px 16px;
+  min-height: 120px;
   gap: 10px;
   color: var(--canvas-text-tertiary);
   cursor: pointer;
@@ -532,7 +567,6 @@ onUnmounted(() => {
 
 .node-handle-hidden {
   opacity: 0 !important;
-  visibility: hidden;
   pointer-events: none;
 }
 

@@ -13,6 +13,7 @@ import { saveAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
 import { createAssetGroup, listAssetGroups, createAsset as createVolcAsset, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 import { getOriginalImageUrl } from '@/utils/canvasThumbnail'
+import { getSeedanceCharacterNodeLayout } from '@/utils/seedanceCharacterLayout'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -767,7 +768,6 @@ function selectGroupAndCreate(groupId) {
 
 async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
   const sourceNode = props.node
-  const sourcePosition = sourceNode ? { ...sourceNode.position } : null
 
   try {
     let url = rawUrl
@@ -836,13 +836,11 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
     showToast('Seedance 角色创建成功！', 'success')
 
     if (finalAsset.Status === 'Active') {
-      const newPosition = sourcePosition
-        ? { x: sourcePosition.x, y: sourcePosition.y + 350 }
-        : { x: 100, y: 100 }
+      const { position, size } = getSeedanceCharacterNodeLayout(sourceNode)
 
       canvasStore.addNode({
         type: 'seedance-character',
-        position: newPosition,
+        position,
         data: {
           title: finalAsset.Name || name || 'Seedance角色',
           assetId: finalAsset.Id || assetId,
@@ -852,7 +850,8 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
           assetName: finalAsset.Name || name,
           status: 'Active',
           assetType: finalAsset.AssetType || 'Image',
-          width: 220,
+          width: size.width,
+          height: size.height,
           output: {
             type: 'image',
             url: finalAsset.URL || url

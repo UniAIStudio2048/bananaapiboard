@@ -212,13 +212,43 @@ export const useCanvasStore = defineStore('canvas', () => {
       node.position = position
     }
   }
+
+  function addNodeToGroup(nodeId, groupId) {
+    const node = nodes.value.find(n => n.id === nodeId)
+    const groupNode = nodes.value.find(n => n.id === groupId && n.type === 'group')
+    if (!node || !groupNode) return
+
+    const group = nodeGroups.value.find(g => g.id === groupId)
+    const nodeIds = Array.from(new Set([...(groupNode.data?.nodeIds || group?.nodeIds || []), nodeId]))
+    const nodeOffsets = {
+      ...(groupNode.data?.nodeOffsets || {}),
+      [nodeId]: {
+        x: node.position.x - groupNode.position.x,
+        y: node.position.y - groupNode.position.y
+      }
+    }
+
+    if (group && !group.nodeIds.includes(nodeId)) {
+      group.nodeIds.push(nodeId)
+    }
+
+    updateNodeData(nodeId, {
+      groupId,
+      groupColor: groupNode.data?.groupColor || group?.color || null
+    })
+    updateNodeData(groupId, {
+      nodeIds,
+      nodeOffsets
+    })
+    markCurrentTabChanged()
+  }
   
   /**
    * 删除节点
    */
   function removeNode(nodeId) {
-    saveHistory() // 保存历史
-    markCurrentTabChanged() // 标记变更
+    saveHistory()
+    markCurrentTabChanged()
     
     // 删除相关连线（通过 removeEdge 逐条删除，确保 Storyboard 格子图片同步清理）
     const edgesToRemove = edges.value.filter(
@@ -226,15 +256,36 @@ export const useCanvasStore = defineStore('canvas', () => {
     )
     edgesToRemove.forEach(e => removeEdge(e.id))
     
-    // 删除节点
     nodes.value = nodes.value.filter(n => n.id !== nodeId)
     
-    // 清除选中状态
     if (selectedNodeId.value === nodeId) {
       selectedNodeId.value = null
     }
-    // 从多选列表中移除
     selectedNodeIds.value = selectedNodeIds.value.filter(id => id !== nodeId)
+  }
+
+  /**
+   * 批量删除节点（只保存一次历史，避免多次 JSON 深拷贝导致卡顿）
+   */
+  function removeNodesBatch(nodeIds) {
+    if (!nodeIds || !nodeIds.length) return
+    
+    saveHistory()
+    markCurrentTabChanged()
+    
+    const nodeIdSet = new Set(nodeIds)
+    
+    const edgesToRemove = edges.value.filter(
+      e => nodeIdSet.has(e.source) || nodeIdSet.has(e.target)
+    )
+    edgesToRemove.forEach(e => removeEdge(e.id))
+    
+    nodes.value = nodes.value.filter(n => !nodeIdSet.has(n.id))
+    
+    if (nodeIdSet.has(selectedNodeId.value)) {
+      selectedNodeId.value = null
+    }
+    selectedNodeIds.value = selectedNodeIds.value.filter(id => !nodeIdSet.has(id))
   }
   
   /**
@@ -1017,6 +1068,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       const pendingConn = {
         sourceNodeId,
         sourceHandleId,
+        sourcePosition: dragConnectionStartPosition.value,
         targetPosition: endPosition
       }
       
@@ -2398,7 +2450,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     addNode,
     updateNodeData,
     updateNodePosition,
+    addNodeToGroup,
     removeNode,
+    removeNodesBatch,
     selectNode,
     clearSelection,
     
@@ -2501,4 +2555,3 @@ export const useCanvasStore = defineStore('canvas', () => {
     getDownstreamNodes
   }
 })
-

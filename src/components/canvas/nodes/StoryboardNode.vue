@@ -989,6 +989,9 @@ onMounted(() => {
   if (props.data.nodeHeight) {
     nodeHeight.value = props.data.nodeHeight
   }
+  nextTick(() => {
+    updateNodeInternals(props.id)
+  })
   // 注册下拉菜单点击外部关闭
   document.addEventListener('click', handleClickOutsideDropdown)
   // 注册编辑模式事件
@@ -1454,6 +1457,7 @@ const hasAnyImage = computed(() => {
         :position="Position.Right"
         id="output"
         class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
       />
 
       <!-- ========== 右下角拖拽手柄（在 node-wrapper 内，跟随 node-card 底部，仅选中时显示） ========== -->
@@ -1876,7 +1880,6 @@ const hasAnyImage = computed(() => {
 /* ========== Handle（隐藏，仅作为连接点） ========== */
 .node-handle-hidden {
   opacity: 0 !important;
-  visibility: hidden;
   pointer-events: none;
 }
 

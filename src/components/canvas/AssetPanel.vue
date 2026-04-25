@@ -1502,6 +1502,10 @@ function handleDragStart(e, asset) {
     assetData.metadata.username = getCharacterUsername(asset)
     assetData.metadata.name = asset.name
   }
+
+  if (asset.type === 'seedance-character') {
+    assetData.metadata = asset.metadata || {}
+  }
   
   e.dataTransfer.setData('application/json', JSON.stringify({
     type: 'asset-insert',

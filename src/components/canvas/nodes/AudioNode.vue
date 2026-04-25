@@ -19,6 +19,8 @@ import { getTenantHeaders, getAvailableMusicModels, refreshBrandConfig } from '@
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import { formatPoints } from '@/utils/format'
+import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
+import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
 import apiClient from '@/api/client'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
@@ -39,7 +41,7 @@ const uploadManager = useUploadManager()
 const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals, getSelectedNodes } = useVueFlow()
+const { updateNodeInternals, getViewport, getSelectedNodes } = useVueFlow()
 
 // 可用音乐模型列表 - 从租户配置动态获取
 const musicModels = computed(() => {
@@ -50,6 +52,7 @@ const musicModels = computed(() => {
 const selectedMusicModel = ref(props.data.musicModel || musicModels.value[0]?.value || 'chirp-v4')
 const customMode = ref(props.data.customMode || false)
 const musicPrompt = ref(props.data.musicPrompt || '')
+const hasManualPromptTextareaSize = ref(false)
 const title = ref(props.data.title || '')
 const tags = ref(props.data.tags || '')
 const negativeTags = ref(props.data.negativeTags || '')
@@ -351,6 +354,8 @@ function handleMusicKeyDown(event) {
 
 // 自动调整文本框高度
 function autoResizeTextarea() {
+  if (hasManualPromptTextareaSize.value) return
+
   const textarea = promptTextareaRef.value
   if (!textarea) return
   
@@ -363,6 +368,12 @@ function autoResizeTextarea() {
   const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
   
   textarea.style.height = newHeight + 'px'
+}
+
+function markPromptTextareaResizeIntent(event) {
+  if (isTextareaResizeHandlePointer(event, promptTextareaRef.value)) {
+    hasManualPromptTextareaSize.value = true
+  }
 }
 
 // 监听 musicPrompt 变化，自动调整高度
@@ -389,6 +400,9 @@ function handlePromptWheel(event) {
 onMounted(async () => {
   document.addEventListener('click', handleMusicModelDropdownClickOutside)
   document.addEventListener('click', handleSpeedDropdownClickOutside)
+  nextTick(() => {
+    updateNodeInternals(props.id)
+  })
   
   // 刷新品牌配置以获取最新的音乐模型配置
   try {
@@ -435,6 +449,7 @@ const dragCounter = ref(0)
 // 节点尺寸 - 与 VideoNode 类似的比例
 const nodeWidth = ref(props.data.width || 420)
 const nodeHeight = ref(props.data.height || 280)
+const addRightBtnRef = ref(null)
 
 // 是否正在调整尺寸
 const isResizing = ref(false)
@@ -1035,6 +1050,12 @@ function handleAddRightMouseUp(event) {
 }
 
 function startDragConnection(event) {
+  const buttonPosition = getElementCenterFlowPosition(addRightBtnRef.value, getViewport())
+  if (buttonPosition) {
+    canvasStore.startDragConnection(props.id, 'output', buttonPosition)
+    return
+  }
+
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) return
   
@@ -1280,6 +1301,7 @@ function handleSpeedDropdownClickOutside(event) {
       :position="Position.Left"
       id="input"
       class="node-handle node-handle-hidden"
+      :style="{ position: 'absolute', left: '-34px', top: '50%', transform: 'translateY(-50%)' }"
     />
     
     <!-- 音频工具栏（选中且有音频时显示）- 与 ImageNode 保持一致 -->
@@ -1509,6 +1531,7 @@ function handleSpeedDropdownClickOutside(event) {
       
       <!-- 右侧添加按钮 -->
       <button 
+        ref="addRightBtnRef"
         class="node-add-btn node-add-btn-right"
         title="单击：添加节点 | 长按/拖拽：连接到其他节点"
         @mousedown="handleAddRightMouseDown"
@@ -1531,6 +1554,7 @@ function handleSpeedDropdownClickOutside(event) {
             @keydown="handleMusicKeyDown"
             @wheel="handlePromptWheel"
             @input="autoResizeTextarea"
+            @mousedown="markPromptTextareaResizeIntent"
             @dblclick.stop
           ></textarea>
         </div>
@@ -1686,6 +1710,7 @@ function handleSpeedDropdownClickOutside(event) {
       :position="Position.Right"
       id="output"
       class="node-handle node-handle-hidden"
+      :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
     />
   </div>
 </template>
@@ -2295,7 +2320,6 @@ function handleSpeedDropdownClickOutside(event) {
 
 .node-handle-hidden {
   opacity: 0 !important;
-  visibility: hidden;
   pointer-events: none;
 }
 
@@ -2443,7 +2467,7 @@ function handleSpeedDropdownClickOutside(event) {
 .prompt-textarea {
   width: 100%;
   min-height: 48px;
-  max-height: 200px;
+  max-height: min(50vh, 420px);
   padding: 4px 0;
   background: transparent;
   border: none;
@@ -2451,7 +2475,7 @@ function handleSpeedDropdownClickOutside(event) {
   font-size: 14px;
   font-family: inherit;
   line-height: 1.6;
-  resize: none;
+  resize: vertical;
   outline: none;
   overflow-y: auto;
   transition: height 0.15s ease;

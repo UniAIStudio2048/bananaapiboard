@@ -1093,6 +1093,28 @@ function restoreBackgroundTasks() {
   }
 }
 
+function handleBackgroundTaskProgress(event) {
+  const task = event.detail?.task
+  if (!task) return
+  updateNodeFromTask(task)
+}
+
+function handleBackgroundTaskComplete(event) {
+  const task = event.detail?.task
+  if (!task) return
+  console.log('[Canvas] 后台任务完成:', task.taskId)
+  updateNodeFromTask(task)
+  setTimeout(() => removeCompletedTask(task.taskId), 5000)
+}
+
+function handleBackgroundTaskFailed(event) {
+  const task = event.detail?.task
+  if (!task) return
+  console.log('[Canvas] 后台任务失败:', task.taskId)
+  updateNodeFromTask(task)
+  setTimeout(() => removeCompletedTask(task.taskId), 5000)
+}
+
 // 根据任务更新节点状态
 function updateNodeFromTask(task) {
   const node = canvasStore.nodes.find(n => n.id === task.nodeId)
@@ -1147,6 +1169,22 @@ function updateNodeFromTask(task) {
         })
         console.log(`[Canvas] 图片高清任务完成，节点 ${task.nodeId} 已更新`)
       }
+    } else if (task.type === 'image-cutout') {
+      const imageUrl = result.outputUrl || result.url
+      if (imageUrl) {
+        canvasStore.updateNodeData(task.nodeId, {
+          status: 'success',
+          progress: null,
+          output: {
+            type: 'image',
+            urls: [imageUrl]
+          },
+          cutoutResult: true,
+          isTransparent: result.isTransparent,
+          cutoutBgType: result.bgType
+        })
+        console.log(`[Canvas] 图片抠图任务完成，节点 ${task.nodeId} 已更新`)
+      }
     } else if (task.type === 'video') {
       // 视频任务完成
       if (result.url) {
@@ -1164,7 +1202,9 @@ function updateNodeFromTask(task) {
     console.log(`[Canvas] 节点 ${task.nodeId} 已更新为完成状态`)
   } else if (task.status === 'failed') {
     // 任务失败
-    const errorMsg = (task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理失败' : '任务执行失败'
+    const errorMsg = task.type === 'image-cutout'
+      ? '抠图处理失败'
+      : ((task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理失败' : '任务执行失败')
     canvasStore.updateNodeData(task.nodeId, {
       status: 'error',
       progress: null,
@@ -1172,7 +1212,9 @@ function updateNodeFromTask(task) {
     })
   } else if (task.status === 'processing') {
     // 任务进行中
-    const progressText = (task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理中...' : task.progress
+    const progressText = task.type === 'image-cutout'
+      ? '抠图处理中...'
+      : ((task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理中...' : task.progress)
     canvasStore.updateNodeData(task.nodeId, {
       status: 'processing',
       progress: progressText || task.progress
@@ -1661,30 +1703,7 @@ async function handleKeyDown(event) {
     // 不清除选择，让用户可以继续操作选中的节点
   }
   
-  // Delete 或 Backspace 删除选中的节点
-  if ((event.key === 'Delete' || event.key === 'Backspace') && !isInInput) {
-    event.preventDefault() // 阻止默认行为
-    
-    // 检查是否有选中的节点
-    if (canvasStore.selectedNodeId) {
-      const selectedNode = canvasStore.nodes.find(n => n.id === canvasStore.selectedNodeId)
-      
-      // 如果是编组节点，需要特殊处理
-      if (selectedNode?.type === 'group') {
-        const confirmed = await showConfirm(
-          '编组内的节点将被恢复为独立节点',
-          '确定要删除这个编组吗？'
-        )
-        if (confirmed) {
-          handleDisbandGroup()
-        }
-      } else {
-        // 普通节点直接删除
-        canvasStore.removeNode(canvasStore.selectedNodeId)
-        canvasStore.selectedNodeId = null
-      }
-    }
-  }
+  // Delete/Backspace 删除已移至 CanvasBoard.vue 统一处理，避免双重触发导致画布冻结
   
   // ========== 快捷创建节点 (i/v/t/a) ==========
   // 在选中节点的下游快速创建对应类型节点并连线
@@ -2245,6 +2264,10 @@ onMounted(async () => {
   // 初始化后台任务管理器，恢复未完成的任务
   initBackgroundTaskManager()
   restoreBackgroundTasks()
+
+  window.addEventListener('background-task-progress', handleBackgroundTaskProgress)
+  window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
+  window.addEventListener('background-task-failed', handleBackgroundTaskFailed)
   
   // 监听页面关闭事件，保存工作流到历史
   window.addEventListener('beforeunload', handleBeforeUnload)
@@ -2304,6 +2327,9 @@ onUnmounted(() => {
   window.removeEventListener('user-info-updated', handleUserInfoUpdated)
   window.removeEventListener('popstate', handlePopState)
   window.removeEventListener('unload', handleUnload)
+  window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
+  window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
+  window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
   // 性能优化: 清理拖拽状态监听器
   window.removeEventListener('canvas-drag-start', _onCanvasDragStart)
   window.removeEventListener('canvas-drag-end', _onCanvasDragEnd)
@@ -3801,4 +3827,3 @@ onUnmounted(() => {
 }
 
 </style>
-

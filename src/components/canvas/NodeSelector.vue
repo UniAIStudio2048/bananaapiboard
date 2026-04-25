@@ -8,6 +8,7 @@ import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, ge
 import { useI18n } from '@/i18n'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { getAvailableVideoModels, isSeedanceFeaturesEnabled } from '@/config/tenant'
+import { clampNodePositionToGroup } from '@/utils/canvasConnectionPosition'
 
 const { t } = useI18n()
 
@@ -153,6 +154,48 @@ const LLM_PRESET_MAP = {
   'llm-storyboard': 'storyboard'
 }
 
+function getDefaultNodeSize(type, data = {}) {
+  const sizes = {
+    'text-input': { width: 400, height: 280 },
+    'text': { width: 400, height: 280 },
+    'image-input': { width: 380, height: 320 },
+    'image': { width: 380, height: 320 },
+    'video-input': { width: 420, height: 280 },
+    'video': { width: 420, height: 280 },
+    'storyboard': { width: data.nodeWidth || 720, height: 360 },
+    'seedance-character': { width: 220, height: 220 }
+  }
+
+  return sizes[type] || { width: data.width || 380, height: data.height || 280 }
+}
+
+function getTriggerGroupNode() {
+  const groupId = triggerNode.value?.data?.groupId
+  if (!groupId) return null
+  return canvasStore.nodes.find(n => n.id === groupId && n.type === 'group') || null
+}
+
+function prepareGroupChildPosition(type, position, data = {}) {
+  const groupNode = getTriggerGroupNode()
+  if (!groupNode) return { position, groupId: null }
+
+  return {
+    position: clampNodePositionToGroup({
+      position,
+      nodeSize: getDefaultNodeSize(type, data),
+      groupNode,
+      padding: 20
+    }),
+    groupId: groupNode.id
+  }
+}
+
+function attachNodeToTriggerGroup(node, groupId) {
+  if (node?.id && groupId) {
+    canvasStore.addNodeToGroup(node.id, groupId)
+  }
+}
+
 // 处理音频节点的特殊操作
 function handleAudioOperation(operationType) {
   if (!triggerNode.value) return
@@ -271,6 +314,9 @@ function createStoryboardGrid() {
     position.x -= 200 // 分镜格子节点较宽
     position.y -= 100
   }
+
+  const groupPlacement = prepareGroupChildPosition('storyboard', position, { nodeWidth: 720 })
+  position = groupPlacement.position
   
   // 创建分镜格子节点
   const node = canvasStore.addNode({
@@ -287,6 +333,7 @@ function createStoryboardGrid() {
   })
   
   if (node?.id) {
+    attachNodeToTriggerGroup(node, groupPlacement.groupId)
     canvasStore.selectNode(node.id)
   }
   
@@ -486,13 +533,17 @@ function selectNodeType(type) {
     }
   }
   
+  const groupPlacement = prepareGroupChildPosition(actualNodeType, position, nodeData)
+  position = groupPlacement.position
+
   console.log('[NodeSelector] 创建节点:', { 
     type: actualNodeType,
     originalType: type,
     position, 
     nodeData, 
     triggerNodeId: props.triggerNodeId,
-    isLeftTrigger: isLeftTrigger.value
+    isLeftTrigger: isLeftTrigger.value,
+    groupId: groupPlacement.groupId
   })
   
   // 保存触发节点ID（因为 addNode 可能会清除它）
@@ -510,6 +561,7 @@ function selectNodeType(type) {
     position,
     data: nodeData
   })
+  attachNodeToTriggerGroup(newNode, groupPlacement.groupId)
   
   // 如果有触发节点，手动创建正确方向的连接
   if (savedTriggerNode && newNode?.id) {
@@ -912,4 +964,3 @@ function formatFileSize(bytes) {
   font-size: 13px;
 }
 </style>
-

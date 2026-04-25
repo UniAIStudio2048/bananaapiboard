@@ -16,6 +16,9 @@ import { formatPoints } from '@/utils/format'
 import { getAssets } from '@/api/canvas/assets'
 import { getApiUrl, getTenantHeaders, getAvailableLLMModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
+import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
+import { getMentionPopupPosition, getTextareaCaretViewportRect } from '@/utils/promptMention'
+import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import CustomPresetDialog from '../dialogs/CustomPresetDialog.vue'
 import PresetManager from '../dialogs/PresetManager.vue'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
@@ -36,7 +39,7 @@ const userInfo = inject('userInfo')
 const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals, getSelectedNodes } = useVueFlow()
+const { updateNodeInternals, getViewport, getSelectedNodes } = useVueFlow()
 
 // 是否单独选中（只选了这一个节点时才显示工具栏和底部面板）
 const isSoloSelected = computed(() => {
@@ -69,6 +72,7 @@ const showMediaMentionPopup = ref(false)
 const mediaMentionActiveIndex = ref(0)
 const mediaMentionPosition = ref({ top: 0, left: 0 })
 let mediaMentionStartPos = -1
+const hasManualLLMInputSize = ref(false)
 
 // 过滤后的角色
 const filteredCharacters = computed(() => {
@@ -148,6 +152,8 @@ function handleEditorInput(event) {
 
 // 自动调整 LLM 输入框高度（参考 ImageNode 的 autoResizeTextarea）
 function autoResizeLLMInput() {
+  if (hasManualLLMInputSize.value) return
+
   const textarea = llmInputRef.value
   if (!textarea) return
   textarea.style.height = 'auto'
@@ -155,6 +161,12 @@ function autoResizeLLMInput() {
   const maxHeight = 200
   const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
   textarea.style.height = newHeight + 'px'
+}
+
+function markLLMInputResizeIntent(event) {
+  if (isTextareaResizeHandlePointer(event, llmInputRef.value)) {
+    hasManualLLMInputSize.value = true
+  }
 }
 
 // 处理提及输入（Textarea）
@@ -185,12 +197,10 @@ function handleLLMInput(event) {
         mediaMentionActiveIndex.value = 0
         showMentionList.value = false
 
-        const controlsEl = llmConfigPanelRef.value || llmControlsRef.value
-        const posRect = controlsEl ? controlsEl.getBoundingClientRect() : el.getBoundingClientRect()
-        mediaMentionPosition.value = {
-          top: posRect.bottom + 8,
-          left: el.getBoundingClientRect().left + 12
-        }
+        mediaMentionPosition.value = getMentionPopupPosition({
+          caretRect: getTextareaCaretViewportRect(el, cursorIndex),
+          fallbackRect: el.getBoundingClientRect()
+        })
         return
       }
 
@@ -201,10 +211,11 @@ function handleLLMInput(event) {
       showMediaMentionPopup.value = false
 
       const rect = el.getBoundingClientRect()
-      mentionListPosition.value = {
-        top: rect.bottom + 5,
-        left: rect.left + 20
-      }
+      mentionListPosition.value = getMentionPopupPosition({
+        caretRect: getTextareaCaretViewportRect(el, cursorIndex),
+        fallbackRect: rect,
+        offset: 5
+      })
       return
     }
   }
@@ -261,6 +272,7 @@ const selectedText = ref('')
 // 节点尺寸 - 文本节点使用宽矩形，适合内容编辑
 const nodeWidth = ref(props.data.width || 400)
 const nodeHeight = ref(props.data.height || 280)
+const addRightBtnRef = ref(null)
 
 // 全屏预览模式
 const isFullscreen = ref(false)
@@ -2218,6 +2230,12 @@ function openNodeSelectorForRight(event) {
 
 // 开始拖拽连线 - 直接调用 store 方法
 function startDragConnection(event) {
+  const buttonPosition = getElementCenterFlowPosition(addRightBtnRef.value, getViewport())
+  if (buttonPosition) {
+    canvasStore.startDragConnection(props.id, 'output', buttonPosition)
+    return
+  }
+
   // 获取当前节点在 store 中的数据
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) {
@@ -2489,6 +2507,9 @@ function handleResizeEnd() {
 onMounted(() => {
   loadLLMConfig()
   loadUserPresets()
+  nextTick(() => {
+    updateNodeInternals(props.id)
+  })
 })
 </script>
 
@@ -2500,6 +2521,7 @@ onMounted(() => {
       :position="Position.Left"
       id="input"
       class="node-handle node-handle-hidden"
+      :style="{ position: 'absolute', left: '-34px', top: '50%', transform: 'translateY(-50%)' }"
     />
     
     <!-- 格式工具栏（单独选中节点时显示） -->
@@ -2691,6 +2713,7 @@ onMounted(() => {
       
       <!-- 右侧添加按钮 - 单击打开选择器，长按/拖拽连线 -->
       <button 
+        ref="addRightBtnRef"
         class="node-add-btn node-add-btn-right"
         title="单击：添加节点 | 长按/拖拽：连接到其他节点"
         @mousedown="handleAddRightMouseDown"
@@ -2705,6 +2728,7 @@ onMounted(() => {
       :position="Position.Right"
       id="output"
       class="node-handle node-handle-hidden"
+      :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
     />
     
     <!-- 选中文字右键菜单 -->
@@ -2849,6 +2873,7 @@ onMounted(() => {
           @input="handleLLMInput"
           @wheel.stop
           @focus="autoResizeLLMInput"
+          @mousedown="markLLMInputResizeIntent"
           @dblclick.stop
         ></textarea>
         <PromptMentionPopup
@@ -3573,7 +3598,6 @@ onMounted(() => {
 
 .node-handle-hidden {
   opacity: 0 !important;
-  visibility: hidden;
   pointer-events: none;
 }
 
@@ -3955,9 +3979,9 @@ onMounted(() => {
   outline: none;
   color: var(--canvas-text-primary, #ffffff);
   font-size: 14px;
-  resize: none;
+  resize: vertical;
   min-height: 60px;
-  max-height: 200px;
+  max-height: min(50vh, 420px);
   line-height: 1.6;
   overflow-y: auto;
   transition: height 0.15s ease;

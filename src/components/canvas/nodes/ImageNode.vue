@@ -33,6 +33,9 @@ import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
 import { getOriginalImageUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
+import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
+import { getMentionPopupPosition, getTextareaCaretViewportRect } from '@/utils/promptMention'
+import { getElementCenterFlowPosition, getElementSideCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 
 const { t } = useI18n()
@@ -90,6 +93,7 @@ function getErrorHint(msg) {
 
 const promptText = ref(props.data.prompt || '')
 const promptTextareaRef = ref(null) // 提示词输入框引用
+const hasManualPromptTextareaSize = ref(false)
 const isDragOver = ref(false) // 拖拽悬停状态
 
 // 文本框拖动自动滚动相关状态
@@ -722,17 +726,17 @@ function handleBackgroundTaskFailed(event) {
   const { taskId, task } = event.detail
   if (task.nodeId !== props.id) return
 
-  if (task.type !== 'image' && task.type !== 'image-hd') return
+  if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-cutout') return
   
   console.log(`[ImageNode] 后台任务失败: ${taskId}`, task)
 
-  if (task.type === 'image-hd') {
+  if (task.type === 'image-hd' || task.type === 'image-cutout') {
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       progress: null,
-      error: task.error || '高清处理失败'
+      error: task.error || (task.type === 'image-cutout' ? '抠图处理失败' : '高清处理失败')
     })
-    showToast(task.error || '图片高清失败，未扣除积分', 'error')
+    showToast(task.error || (task.type === 'image-cutout' ? '图片抠图失败' : '图片高清失败，未扣除积分'), 'error')
     removeCompletedTask(taskId)
     return
   }
@@ -751,12 +755,14 @@ function handleBackgroundTaskProgress(event) {
   const { taskId, task } = event.detail
   if (task.nodeId !== props.id) return
 
-  if (task.type !== 'image' && task.type !== 'image-hd') return
+  if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-cutout') return
   
   const progress = task.result?.progress || task.progress
   if (progress) {
     canvasStore.updateNodeData(props.id, {
-      progress: task.type === 'image-hd' ? '高清处理中...' : (task.result?.status === 'processing' ? '生成中...' : progress)
+      progress: task.type === 'image-hd'
+        ? '高清处理中...'
+        : (task.type === 'image-cutout' ? '抠图处理中...' : (task.result?.status === 'processing' ? '生成中...' : progress))
     })
   }
 }
@@ -767,10 +773,10 @@ function checkAndRestoreBackgroundTasks() {
   const ZOMBIE_THRESHOLD = 15 * 60 * 1000 // 15 分钟
   
   for (const task of nodeTasks) {
-    if (task.type !== 'image' && task.type !== 'image-hd') continue
+    if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-cutout') continue
     
     if (task.status === 'completed') {
-      const imageUrl = task.type === 'image-hd'
+      const imageUrl = (task.type === 'image-hd' || task.type === 'image-cutout')
         ? (task.result?.outputUrl || task.result?.url)
         : (task.result?.url || task.result?.urls?.[0])
       if (imageUrl) {
@@ -778,23 +784,24 @@ function checkAndRestoreBackgroundTasks() {
           status: 'success',
           progress: null,
           output: { type: 'image', urls: [imageUrl] },
-          ...(task.type === 'image-hd' ? { hdUpscaled: true, pointsCost: task.result?.pointsCost || 0 } : {})
+          ...(task.type === 'image-hd' ? { hdUpscaled: true, pointsCost: task.result?.pointsCost || 0 } : {}),
+          ...(task.type === 'image-cutout' ? { cutoutResult: true, isTransparent: task.result?.isTransparent, cutoutBgType: task.result?.bgType } : {})
         })
       } else {
         canvasStore.updateNodeData(props.id, {
           status: 'error',
-          error: task.type === 'image-hd' ? '高清完成但未获取到图片' : '生成完成但未获取到图片'
+          error: task.type === 'image-hd' ? '高清完成但未获取到图片' : (task.type === 'image-cutout' ? '抠图完成但未获取到图片' : '生成完成但未获取到图片')
         })
       }
       removeCompletedTask(task.taskId)
     } else if (task.status === 'failed') {
       canvasStore.updateNodeData(props.id, {
         status: 'error',
-        error: task.error || (task.type === 'image-hd' ? '高清处理失败' : '图片生成失败')
+        error: task.error || (task.type === 'image-hd' ? '高清处理失败' : (task.type === 'image-cutout' ? '抠图处理失败' : '图片生成失败'))
       })
       removeCompletedTask(task.taskId)
     } else if ((task.status === 'processing' || task.status === 'pending') && task.createdAt) {
-      if (task.type === 'image-hd') continue
+      if (task.type === 'image-hd' || task.type === 'image-cutout') continue
       const taskAge = Date.now() - task.createdAt
       if (taskAge > ZOMBIE_THRESHOLD) {
         console.log(`[ImageNode] 检测到僵尸任务 ${task.taskId} (${Math.round(taskAge/60000)}分钟), 标记失败`)
@@ -811,7 +818,7 @@ function checkAndRestoreBackgroundTasks() {
   
   // 如果节点状态是 processing 但没有任何关联的后台任务，说明轮询丢失了
   // 多角度生成节点有独立轮询机制（pollMultiangleTask），不走 backgroundTaskManager
-  if (props.data?.status === 'processing' && props.data?.sourceType !== 'multiangle' && props.data?.taskType !== 'image-hd' && nodeTasks.filter(t => (t.type === 'image' || t.type === 'image-hd') && (t.status === 'processing' || t.status === 'pending')).length === 0) {
+  if (props.data?.status === 'processing' && props.data?.sourceType !== 'multiangle' && props.data?.taskType !== 'image-hd' && props.data?.taskType !== 'image-cutout' && nodeTasks.filter(t => (t.type === 'image' || t.type === 'image-hd' || t.type === 'image-cutout') && (t.status === 'processing' || t.status === 'pending')).length === 0) {
     console.log(`[ImageNode] 节点 ${props.id} 状态为 processing 但无关联任务, 重置为 error`)
     canvasStore.updateNodeData(props.id, {
       status: 'error',
@@ -829,6 +836,7 @@ onMounted(() => {
   // 初始化时调整文本框高度（如果有预设文本）
   nextTick(() => {
     autoResizeTextarea()
+    updateNodeInternals(props.id)
   })
   // 🚀 性能优化：监听画布拖拽事件
   window.addEventListener('canvas-drag-start', handleCanvasDragStart)
@@ -856,11 +864,6 @@ onUnmounted(() => {
   window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
   window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
   
-  // 清理缩略图更新定时器
-  if (thumbUpdateTimer) {
-    clearTimeout(thumbUpdateTimer)
-    thumbUpdateTimer = null
-  }
 })
 
 // 检查是否有图片输入（用于判断文生图/图生图模式）
@@ -1505,63 +1508,58 @@ async function startCutoutWithBg(bgType) {
   cutoutBgColor.value = bgType
   showCutoutOptions.value = false
   
-  const imageUrl = sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
+  let imageUrl = currentImageUrl.value || sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
   if (!imageUrl) return
   
   isRemovingBackground.value = true
   removeBgProgress.value = 0
   
   try {
-    console.log('[ImageNode] 开始后端抠图处理，背景:', bgType)
-    
-    removeBgProgress.value = 30
-    
+    console.log('[ImageNode] 提交后端抠图任务，背景:', bgType)
+
+    if (imageUrl.startsWith('blob:')) {
+      showToast('上传图片到云端...', 'info')
+      const response = await fetch(imageUrl)
+      const blob = await response.blob()
+      const file = new File([blob], `cutout_source_${Date.now()}.png`, { type: blob.type || 'image/png' })
+      const urls = await uploadImages([file])
+      if (!urls?.length) throw new Error('图片上传失败')
+      imageUrl = urls[0]
+    } else if (needsReupload(imageUrl)) {
+      showToast('上传图片到云端...', 'info')
+      imageUrl = await reuploadToCloud(imageUrl)
+    } else if (imageUrl.startsWith('/api/')) {
+      imageUrl = getApiUrl(imageUrl)
+    }
+
+    removeBgProgress.value = 20
     const bgColor = bgType === 'custom' ? cutoutCustomColor.value : null
-    const result = await removeImageBackground(imageUrl, bgType, bgColor)
-    
-    removeBgProgress.value = 90
-    
-    if (!result.success || !result.url) {
-      throw new Error('抠图返回结果异常')
+    const result = await removeImageBackground(imageUrl, bgType, bgColor, props.id)
+
+    if (!result.success || !result.taskId) {
+      throw new Error('抠图任务提交失败')
     }
-    
-    const currentNode = canvasStore.nodes.find(n => n.id === props.id)
-    if (!currentNode) {
-      throw new Error('找不到当前节点')
+
+    const newNodeId = createCutoutProcessingNode(result.taskId, bgType)
+    if (!newNodeId) {
+      throw new Error('创建抠图结果节点失败')
     }
-    
-    const newNodeId = `cutout_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const newNodePosition = {
-      x: currentNode.position.x + 380,
-      y: currentNode.position.y
-    }
-    
-    const bgLabel = bgType === 'transparent' ? '透明' : 
-                    bgType === 'white' ? '白底' : 
-                    bgType === 'green' ? '绿幕' : '自定义底'
-    
-    const isTransparent = result.isTransparent
-    
-    canvasStore.addNode({
-      id: newNodeId,
-      type: 'image',
-      position: newNodePosition,
-      data: {
-        label: `抠图-${bgLabel}`,
-        output: {
-          url: result.url,
-          urls: [result.url]
-        },
+
+    const currentTab = canvasStore.getCurrentTab()
+    registerTask({
+      taskId: result.taskId,
+      type: 'image-cutout',
+      nodeId: newNodeId,
+      tabId: currentTab?.id,
+      metadata: {
+        sourceUrl: imageUrl,
         sourceNodeId: props.id,
-        isTransparent: isTransparent,
-        cutoutResult: true,
-        cutoutBgType: bgType
+        bgType
       }
     })
-    
+
+    showToast('抠图任务已提交，后台处理中...', 'success')
     removeBgProgress.value = 100
-    console.log('[ImageNode] 后端抠图完成，已创建新节点:', newNodeId)
-    
   } catch (error) {
     console.error('[ImageNode] 抠图失败:', error)
     showAlert('抠图失败', error.message || '处理过程中出现错误，请重试')
@@ -1569,6 +1567,50 @@ async function startCutoutWithBg(bgType) {
     isRemovingBackground.value = false
     removeBgProgress.value = 0
   }
+}
+
+function createCutoutProcessingNode(taskId, bgType) {
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return null
+
+  const bgLabel = bgType === 'transparent' ? '透明' : 
+                  bgType === 'white' ? '白底' : 
+                  bgType === 'green' ? '绿幕' : '自定义底'
+
+  const newNodeId = `cutout_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const newNodePosition = {
+    x: currentNode.position.x + (nodeWidth.value || 300) + 100,
+    y: currentNode.position.y
+  }
+
+  canvasStore.addNode({
+    id: newNodeId,
+    type: 'image',
+    position: newNodePosition,
+    data: {
+      label: `抠图-${bgLabel}`,
+      title: `抠图-${bgLabel}`,
+      status: 'processing',
+      progress: '抠图处理中...',
+      taskId,
+      taskType: 'image-cutout',
+      sourceType: 'image-cutout',
+      sourceNodeId: props.id,
+      cutoutResult: true,
+      cutoutBgType: bgType
+    }
+  })
+
+  canvasStore.addEdge({
+    id: `edge-${props.id}-${newNodeId}-${Date.now()}`,
+    source: props.id,
+    target: newNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input',
+    type: 'smoothstep'
+  })
+
+  return newNodeId
 }
 
 // 关闭抠图选项弹窗
@@ -4941,6 +4983,8 @@ function handleKeyDown(event) {
 
 // 自动调整文本框高度
 function autoResizeTextarea() {
+  if (hasManualPromptTextareaSize.value) return
+
   const textarea = promptTextareaRef.value
   if (!textarea) return
   
@@ -4971,6 +5015,11 @@ function startTextareaAutoScroll(event) {
   
   // 只响应左键
   if (event.button !== 0) return
+
+  if (isTextareaResizeHandlePointer(event, textarea)) {
+    hasManualPromptTextareaSize.value = true
+    return
+  }
   
   isTextareaDragging.value = true
   dragStartY.value = event.clientY
@@ -5229,6 +5278,8 @@ function closeLeftMenu() {
 
 // ========== 右侧添加按钮交互（单击/长按拖拽） ==========
 const LONG_PRESS_DURATION = 300 // 长按阈值（毫秒）
+const addRightBtnRef = ref(null)
+const nodeCardRef = ref(null)
 let pressTimer = null
 let isLongPress = false
 let pressStartPos = { x: 0, y: 0 }
@@ -5295,6 +5346,18 @@ function handleAddRightMouseUp(event) {
 
 // 开始拖拽连线 - 直接调用 store 方法
 function startDragConnection(event) {
+  const cardPosition = getElementSideCenterFlowPosition(nodeCardRef.value, getViewport(), 'right', 34)
+  if (cardPosition) {
+    canvasStore.startDragConnection(props.id, 'output', cardPosition)
+    return
+  }
+
+  const buttonPosition = getElementCenterFlowPosition(addRightBtnRef.value, getViewport())
+  if (buttonPosition) {
+    canvasStore.startDragConnection(props.id, 'output', buttonPosition)
+    return
+  }
+
   // 获取当前节点在 store 中的数据
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) {
@@ -5542,13 +5605,10 @@ function handlePromptInput(event) {
       mentionStartPos = atIndex
       mentionActiveIndex.value = 0
 
-      // 定位到 config-row（控制栏）下方，不遮挡输入区
-      const configRow = el.closest('.config-panel')?.querySelector('.config-row')
-      const posRect = configRow ? configRow.getBoundingClientRect() : el.getBoundingClientRect()
-      mentionPosition.value = {
-        top: posRect.bottom + 8,
-        left: el.getBoundingClientRect().left + 12
-      }
+      mentionPosition.value = getMentionPopupPosition({
+        caretRect: getTextareaCaretViewportRect(el, cursorIndex),
+        fallbackRect: el.getBoundingClientRect()
+      })
       return
     }
   }
@@ -6091,6 +6151,7 @@ async function handleDrop(event) {
         :position="Position.Left"
         id="input"
         class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', left: '-34px', top: '50%', transform: 'translateY(-50%)' }"
       />
 
       <!-- 左侧添加按钮 -->
@@ -6117,6 +6178,7 @@ async function handleDrop(event) {
       
       <!-- 节点卡片 -->
       <div 
+        ref="nodeCardRef"
         class="node-card" 
         :class="{ 
           'drag-over': isDragOver,
@@ -6307,6 +6369,7 @@ async function handleDrop(event) {
       
       <!-- 右侧添加按钮 - 单击打开选择器，长按/拖拽连线 -->
       <button 
+        ref="addRightBtnRef"
         class="node-add-btn node-add-btn-right"
         title="单击：添加节点 | 长按/拖拽：连接到其他节点"
         @mousedown="handleAddRightMouseDown"
@@ -6320,6 +6383,7 @@ async function handleDrop(event) {
         :position="Position.Right"
         id="output"
         class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
       />
     </div>
     
@@ -7958,14 +8022,14 @@ async function handleDrop(event) {
 .prompt-input {
   width: 100%;
   min-height: 48px;
-  max-height: 200px;
+  max-height: min(50vh, 420px);
   background: transparent;
   border: none;
   outline: none;
   color: var(--canvas-text-primary, #fff);
   font-size: 14px;
   line-height: 1.6;
-  resize: none;
+  resize: vertical;
   overflow-y: auto;
   transition: height 0.15s ease;
   padding: 4px 0;
@@ -8682,7 +8746,6 @@ async function handleDrop(event) {
 
 .node-handle-hidden {
   opacity: 0 !important;
-  visibility: hidden;
   pointer-events: none;
 }
 

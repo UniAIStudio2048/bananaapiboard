@@ -22,11 +22,13 @@
           >
             <div class="mention-item-preview">
               <template v-if="item.type === 'image'">
-                <img :src="getThumbnail(item.url)" class="mention-item-thumb" />
+                <img v-if="getMentionPreviewImageSrc(item)" :src="getMentionPreviewImageSrc(item)" class="mention-item-thumb" />
+                <div v-else class="mention-item-thumb mention-item-placeholder-thumb"></div>
               </template>
               <template v-else-if="item.type === 'video'">
                 <div class="mention-item-thumb mention-item-video-thumb">
-                  <video :src="item.url" muted preload="metadata" :poster="getVideoPosterUrl(item.url)" @loadeddata="$event.target.currentTime = 0.1" />
+                  <img v-if="hasExplicitThumbnail(item)" :src="getMentionPreviewImageSrc(item)" class="mention-item-thumb" />
+                  <video v-else :src="item.url" muted preload="metadata" :poster="getVideoPosterUrl(item.url)" @loadeddata="$event.target.currentTime = 0.1" />
                   <span class="mention-video-badge">▶</span>
                 </div>
               </template>
@@ -50,6 +52,7 @@
 <script setup>
 import { computed, watch, ref, nextTick } from 'vue'
 import { getVideoPosterUrl } from '@/utils/canvasThumbnail'
+import { getMentionPreviewImageSrc, getMentionPreviewUrl } from '@/utils/promptMention'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -74,11 +77,9 @@ function typeLabel(type) {
   return map[type] || type
 }
 
-function getThumbnail(url) {
-  if (!url) return ''
-  if (url.startsWith('blob:') || url.startsWith('data:')) return url
-  if (url.includes('?')) return url + '&imageView2/1/w/60/h/60'
-  return url + '?imageView2/1/w/60/h/60'
+function hasExplicitThumbnail(item) {
+  const previewUrl = getMentionPreviewUrl(item)
+  return !!previewUrl && previewUrl !== item.url
 }
 
 watch(() => props.activeIndex, async () => {
@@ -185,6 +186,10 @@ watch(() => props.activeIndex, async () => {
   align-items: center;
   justify-content: center;
   font-size: 16px;
+}
+
+.mention-item-placeholder-thumb {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .mention-item-info {

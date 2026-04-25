@@ -22,6 +22,7 @@ import { generateImageFromImage, uploadImages, pollTaskStatus } from '@/api/canv
 import { useI18n } from '@/i18n'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
+import { resolveNanoBananaAspectRatio } from '@/utils/nanoBananaImageParams'
 
 const { t, currentLanguage } = useI18n()
 const canvasStore = useCanvasStore()
@@ -639,7 +640,8 @@ async function handleGenerate() {
       tool: editTool.value,
       prompt: finalPrompt,
       size: selectedSize.value,
-      count: selectedCount.value
+      count: selectedCount.value,
+      sourceSize: `${originalImage.naturalWidth || originalImage.width}x${originalImage.naturalHeight || originalImage.height}`
     })
     
     // 4. 保存源节点ID（关闭编辑器前）
@@ -652,12 +654,17 @@ async function handleGenerate() {
     await handleCloseWithoutAnimation()
     
     // 7. 调用 nano-banana-2 API 生成图片
+    const sourceAspectRatio = resolveNanoBananaAspectRatio(
+      originalImage.naturalWidth || originalImage.width,
+      originalImage.naturalHeight || originalImage.height
+    )
+
     const generateResult = await generateImageFromImage({
       prompt: finalPrompt,
       images: [uploadedImageUrl],
       model: 'nano-banana-2',
       image_size: selectedSize.value,
-      aspectRatio: 'auto'
+      aspectRatio: sourceAspectRatio
     })
     
     console.log('[InplaceImageEditor] 生成任务已创建:', generateResult)
