@@ -3359,6 +3359,7 @@ onUnmounted(() => {
             </div>
           </div>
         </div>
+        </div>
 
         <!-- 积分详情 Tab -->
         <div v-show="activeTab === 'points'">
@@ -3680,7 +3681,6 @@ onUnmounted(() => {
               </div>
             </div>
           </div>
-        </div>
         </div>
 
         <!-- 账单中心 Tab -->
