@@ -69,4 +69,25 @@ assert.deepEqual(
   }
 )
 
+assert.deepEqual(
+  getOverlayExportRect({
+    overlay: {
+      x: 0.25,
+      y: 0.25,
+      scale: 2,
+      naturalWidth: 100,
+      naturalHeight: 100
+    },
+    outputWidth: 800,
+    outputHeight: 600,
+    baseHeightRatio: 0.25
+  }),
+  {
+    width: 300,
+    height: 300,
+    left: 50,
+    top: 0
+  }
+)
+
 console.log('canvasPanoramaOverlay tests passed')

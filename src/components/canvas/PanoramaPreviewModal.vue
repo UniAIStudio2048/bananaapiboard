@@ -478,6 +478,81 @@ function getOverlayFrameStyle(overlay) {
   }
 }
 
+async function loadOverlayImage(url) {
+  const shouldResolve = props.loadImageUrl && !String(url).startsWith('blob:') && !String(url).startsWith('data:')
+  const imageUrl = shouldResolve ? await props.loadImageUrl(url) : url
+  const image = new Image()
+  image.crossOrigin = 'anonymous'
+  await new Promise((resolve, reject) => {
+    image.onload = resolve
+    image.onerror = () => reject(new Error('贴片图片加载失败，请重试'))
+    image.src = imageUrl
+  })
+  return image
+}
+
+function drawOverlayLabel(ctx, label, centerX, top) {
+  if (!showOverlayLabels.value || !label) return
+  ctx.save()
+  ctx.font = '600 28px sans-serif'
+  const paddingX = 16
+  const metrics = ctx.measureText(label)
+  const width = Math.ceil(metrics.width + paddingX * 2)
+  const height = 44
+  const left = Math.round(centerX - width / 2)
+  const y = Math.max(8, Math.round(top - height - 12))
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.82)'
+  ctx.fillRect(left, y, width, height)
+  ctx.fillStyle = '#ffffff'
+  ctx.textAlign = 'center'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(label, centerX, y + height / 2)
+  ctx.restore()
+}
+
+async function compositeOverlays(baseBlob) {
+  const outputCanvas = document.createElement('canvas')
+  outputCanvas.width = ratioOption.value.width
+  outputCanvas.height = ratioOption.value.height
+  const ctx = outputCanvas.getContext('2d')
+  if (!ctx) throw new Error('当前画面合成失败，请重试')
+
+  const baseUrl = URL.createObjectURL(baseBlob)
+  try {
+    const baseImage = await loadOverlayImage(baseUrl)
+    ctx.drawImage(baseImage, 0, 0, outputCanvas.width, outputCanvas.height)
+  } finally {
+    URL.revokeObjectURL(baseUrl)
+  }
+
+  for (const overlay of sortVisibleOverlays(overlays.value)) {
+    const image = await loadOverlayImage(overlay.url)
+    const rect = getOverlayExportRect({
+      overlay,
+      outputWidth: outputCanvas.width,
+      outputHeight: outputCanvas.height,
+      baseHeightRatio: 0.42
+    })
+    ctx.save()
+    if (overlay.flipped) {
+      ctx.translate(rect.left + rect.width, rect.top)
+      ctx.scale(-1, 1)
+      ctx.drawImage(image, 0, 0, rect.width, rect.height)
+    } else {
+      ctx.drawImage(image, rect.left, rect.top, rect.width, rect.height)
+    }
+    ctx.restore()
+    drawOverlayLabel(ctx, overlay.label, rect.left + rect.width / 2, rect.top)
+  }
+
+  return await new Promise((resolve, reject) => {
+    outputCanvas.toBlob(blob => {
+      if (blob) resolve(blob)
+      else reject(new Error('当前画面合成失败，请重试'))
+    }, 'image/png')
+  })
+}
+
 function closeModal() {
   emit('close')
 }
@@ -501,7 +576,10 @@ async function exportViews(mode, views, storyboardGridSize) {
   try {
     const frames = []
     for (const view of views) {
-      const blob = await captureView(view)
+      let blob = await captureView(view)
+      if (mode === 'current-view' && overlays.value.some(item => item.visible !== false && item.url)) {
+        blob = await compositeOverlays(blob)
+      }
       frames.push({
         blob,
         yaw: view.yaw,
