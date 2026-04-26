@@ -110,6 +110,7 @@ onMounted(async () => {
   document.body.style.overflow = 'hidden'
   window.addEventListener('resize', resizeRenderer)
   window.addEventListener('keydown', handleKeydown)
+  document.addEventListener('pointerdown', handleDocumentPointerDown, true)
   await nextTick()
   await initScene()
 })
@@ -119,6 +120,7 @@ onBeforeUnmount(() => {
   document.body.style.overflow = ''
   window.removeEventListener('resize', resizeRenderer)
   window.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('pointerdown', handleDocumentPointerDown, true)
   localObjectUrls.forEach(url => URL.revokeObjectURL(url))
   localObjectUrls.clear()
   cleanupScene()
@@ -427,6 +429,13 @@ function commitInlineRename() {
 function cancelInlineRename() {
   editingOverlayId.value = null
   editingLabelDraft.value = ''
+}
+
+function handleDocumentPointerDown(event) {
+  if (!editingOverlayId.value) return
+  const input = document.querySelector(`[data-overlay-label-input="${editingOverlayId.value}"]`)
+  if (input && input.contains(event.target)) return
+  commitInlineRename()
 }
 
 function handleOverlayPointerDown(event, overlay) {
