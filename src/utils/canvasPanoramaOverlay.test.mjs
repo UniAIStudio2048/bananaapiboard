@@ -5,6 +5,7 @@ import {
   createDefaultOverlay,
   getNextOverlayLabel,
   getOverlayExportRect,
+  mapHistoryToOverlaySources,
   moveOverlayInStack,
   normalizeOverlayStack,
   sortVisibleOverlays
@@ -118,5 +119,33 @@ assert.equal(presets.people.length, 8)
 assert.equal(presets.objects.length, 10)
 assert.equal(presets.people.every(item => item.type === 'person' && item.source === 'preset' && item.url.startsWith('data:image/svg+xml')), true)
 assert.equal(presets.objects.every(item => item.type === 'object' && item.source === 'preset' && item.url.startsWith('data:image/svg+xml')), true)
+
+assert.deepEqual(
+  mapHistoryToOverlaySources({
+    history: [
+      { id: 'h1', name: '历史1', url: 'https://example.com/a.png', thumbnail_url: 'https://example.com/thumb-a.png' },
+      { id: 'h2', prompt: '历史提示词', url: 'https://example.com/b.png' },
+      { id: 'bad', name: '无图' }
+    ]
+  }),
+  [
+    {
+      id: 'h1',
+      name: '历史1',
+      url: 'https://example.com/a.png',
+      thumbnailUrl: 'https://example.com/thumb-a.png',
+      type: 'object',
+      source: 'history'
+    },
+    {
+      id: 'h2',
+      name: '历史提示词',
+      url: 'https://example.com/b.png',
+      thumbnailUrl: 'https://example.com/b.png',
+      type: 'object',
+      source: 'history'
+    }
+  ]
+)
 
 console.log('canvasPanoramaOverlay tests passed')

@@ -15,6 +15,7 @@ import {
   createPanoramaOverlayPresets,
   createDefaultOverlay,
   getOverlayExportRect,
+  mapHistoryToOverlaySources,
   moveOverlayInStack,
   normalizeOverlayStack,
   sortVisibleOverlays
@@ -333,15 +334,8 @@ async function loadOverlayPickerTab(tab) {
         source: 'asset'
       })).filter(item => item.url)
     } else if (tab === 'history') {
-      const items = await getHistory({ type: 'image', limit: 60 })
-      historyImages.value = items.map(item => ({
-        id: item.id,
-        name: item.name || item.prompt || '历史图片',
-        url: item.url,
-        thumbnailUrl: item.thumbnail_url || item.url,
-        type: 'object',
-        source: 'history'
-      })).filter(item => item.url)
+      const result = await getHistory({ type: 'image', limit: 60 })
+      historyImages.value = mapHistoryToOverlaySources(result)
     }
     loadedOverlayTabs.value = new Set([...loadedOverlayTabs.value, tab])
   } catch (error) {

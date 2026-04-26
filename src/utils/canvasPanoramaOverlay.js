@@ -100,6 +100,21 @@ export function getOverlayExportRect({
   return { width, height, left, top }
 }
 
+export function mapHistoryToOverlaySources(historyResult) {
+  const items = Array.isArray(historyResult)
+    ? historyResult
+    : (Array.isArray(historyResult?.history) ? historyResult.history : [])
+
+  return items.map(item => ({
+    id: item.id,
+    name: item.name || item.prompt || '历史图片',
+    url: item.url,
+    thumbnailUrl: item.thumbnail_url || item.url,
+    type: 'object',
+    source: 'history'
+  })).filter(item => item.url)
+}
+
 function createSvgDataUrl(svg) {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
 }
