@@ -3,6 +3,9 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as THREE from 'three'
 import { getAssets } from '@/api/canvas/assets'
 import { getHistory } from '@/api/canvas/history'
+import { getRemoveBackgroundTaskStatus, removeImageBackground, uploadImages } from '@/api/canvas/nodes'
+import { getApiUrl } from '@/config/tenant'
+import ImageCropper from './ImageCropper.vue'
 import {
   PANORAMA_RATIO_OPTIONS,
   PROJECTION_OPTIONS,
@@ -57,6 +60,11 @@ const overlayDrag = ref(null)
 const rowDragId = ref(null)
 const editingOverlayId = ref(null)
 const editingLabelDraft = ref('')
+const processingOverlayId = ref(null)
+const processingOverlayAction = ref('')
+const showOverlayCropper = ref(false)
+const cropperOverlayId = ref(null)
+const cropperImageUrl = ref('')
 
 const yaw = ref(0)
 const pitch = ref(0)
@@ -268,13 +276,20 @@ function handleWheel(event) {
 }
 
 function handleKeydown(event) {
+  const tagName = event.target?.tagName?.toLowerCase()
+  if (['input', 'textarea', 'select', 'button'].includes(tagName)) return
+
+  if ((event.code === 'Delete' || event.code === 'Backspace') && selectedOverlayId.value) {
+    event.preventDefault()
+    deleteOverlay(selectedOverlayId.value)
+    return
+  }
+
   if (event.code === 'Escape') {
     closeModal()
     return
   }
   if (event.code !== 'Space') return
-  const tagName = event.target?.tagName?.toLowerCase()
-  if (['input', 'textarea', 'select', 'button'].includes(tagName)) return
   event.preventDefault()
   isAutoRotating.value = !isAutoRotating.value
 }
@@ -514,6 +529,110 @@ function handleRowDrop(event, targetOverlay) {
   overlays.value = moveOverlayInStack(overlays.value, sourceId, targetIndex)
 }
 
+async function uploadOverlayImageIfNeeded(overlay) {
+  let imageUrl = overlay.url
+  if (!imageUrl) throw new Error('贴片图片不存在')
+
+  if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
+    const response = await fetch(imageUrl)
+    const blob = await response.blob()
+    const file = new File([blob], `overlay_${Date.now()}.png`, { type: blob.type || 'image/png' })
+    const urls = await uploadImages([file])
+    if (!urls?.length) throw new Error('贴片图片上传失败')
+    return urls[0]
+  }
+
+  if (imageUrl.startsWith('/api/')) {
+    return getApiUrl(imageUrl)
+  }
+
+  return imageUrl
+}
+
+function getTaskOutputUrl(result) {
+  return result?.url || result?.outputUrl || result?.imageUrl || result?.result?.url || result?.data?.url || ''
+}
+
+async function waitForRemoveBackground(taskId) {
+  const timeoutMs = 8 * 60 * 1000
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < timeoutMs) {
+    const result = await getRemoveBackgroundTaskStatus(taskId)
+    const outputUrl = getTaskOutputUrl(result)
+    const status = String(result.status || '').toLowerCase()
+    if (outputUrl || ['completed', 'success', 'succeeded', 'done'].includes(status)) {
+      if (!outputUrl) throw new Error('抠图完成但未返回图片')
+      return outputUrl
+    }
+    if (['failed', 'error', 'failure', 'timeout'].includes(status)) {
+      throw new Error(result.error || result.message || '抠图失败')
+    }
+    await new Promise(resolve => setTimeout(resolve, 2000))
+  }
+  throw new Error('抠图任务超时，请稍后重试')
+}
+
+async function replaceOverlayImage(id, nextUrl, metadata = {}) {
+  const current = overlays.value.find(item => item.id === id)
+  if (!current) return
+  const size = await getImageNaturalSize(nextUrl)
+  if (current.source === 'local' && current.url?.startsWith('blob:')) {
+    URL.revokeObjectURL(current.url)
+    localObjectUrls.delete(current.url)
+  }
+  updateOverlayById(id, {
+    ...metadata,
+    url: nextUrl,
+    naturalWidth: size.naturalWidth,
+    naturalHeight: size.naturalHeight
+  })
+}
+
+async function removeSelectedOverlayBackground(overlay) {
+  if (!overlay || processingOverlayId.value) return
+  processingOverlayId.value = overlay.id
+  processingOverlayAction.value = 'remove-bg'
+  errorMessage.value = ''
+  try {
+    const imageUrl = await uploadOverlayImageIfNeeded(overlay)
+    const result = await removeImageBackground(imageUrl, 'transparent', null, `panorama-overlay-${overlay.id}`)
+    if (!result.success || !result.taskId) throw new Error(result.message || '抠图任务提交失败')
+    const outputUrl = await waitForRemoveBackground(result.taskId)
+    await replaceOverlayImage(overlay.id, outputUrl, { source: 'cutout', originalName: `${overlay.originalName || overlay.label}-透明抠图` })
+  } catch (error) {
+    console.error('[PanoramaPreviewModal] 贴片抠图失败:', error)
+    errorMessage.value = error.message || '贴片抠图失败，请重试'
+  } finally {
+    processingOverlayId.value = null
+    processingOverlayAction.value = ''
+  }
+}
+
+function openOverlayCropper(overlay) {
+  if (!overlay || processingOverlayId.value) return
+  cropperOverlayId.value = overlay.id
+  cropperImageUrl.value = overlay.url
+  showOverlayCropper.value = true
+}
+
+async function handleOverlayCropSave(result) {
+  const overlayId = cropperOverlayId.value
+  showOverlayCropper.value = false
+  cropperOverlayId.value = null
+  cropperImageUrl.value = ''
+  if (!overlayId || !result?.dataUrl) return
+  await replaceOverlayImage(overlayId, result.dataUrl, {
+    source: 'crop',
+    originalName: `裁剪-${Date.now()}`
+  })
+}
+
+function handleOverlayCropCancel() {
+  showOverlayCropper.value = false
+  cropperOverlayId.value = null
+  cropperImageUrl.value = ''
+}
+
 function getOverlayFrameStyle(overlay) {
   const rect = getOverlayExportRect({
     overlay,
@@ -749,6 +868,27 @@ async function captureView(view) {
             @pointerup="handleOverlayPointerUp"
             @pointercancel="handleOverlayPointerUp"
           >
+            <div
+              v-if="overlay.id === selectedOverlayId"
+              class="overlay-action-bar"
+              :style="{ transform: overlay.flipped ? 'translateX(-50%) scaleX(-1)' : 'translateX(-50%)' }"
+              @pointerdown.stop
+            >
+              <button
+                type="button"
+                :disabled="processingOverlayId === overlay.id"
+                @click.stop="removeSelectedOverlayBackground(overlay)"
+              >
+                {{ processingOverlayId === overlay.id && processingOverlayAction === 'remove-bg' ? '抠图中...' : '移除背景' }}
+              </button>
+              <button
+                type="button"
+                :disabled="processingOverlayId === overlay.id"
+                @click.stop="openOverlayCropper(overlay)"
+              >
+                裁剪
+              </button>
+            </div>
             <input
               v-if="editingOverlayId === overlay.id"
               :data-overlay-label-input="overlay.id"
@@ -875,6 +1015,14 @@ async function captureView(view) {
         <span>{{ isAutoRotating ? '自动旋转中' : '已暂停旋转' }}</span>
         <span class="hint">鼠标拖拽旋转并停止自动旋转 · 空格暂停/恢复 · 滚轮缩放</span>
       </footer>
+
+      <ImageCropper
+        :visible="showOverlayCropper"
+        :imageUrl="cropperImageUrl"
+        mode="crop"
+        @save="handleOverlayCropSave"
+        @cancel="handleOverlayCropCancel"
+      />
     </div>
   </Teleport>
 </template>
@@ -1055,6 +1203,36 @@ async function captureView(view) {
   font-size: 12px;
   white-space: nowrap;
   pointer-events: auto;
+}
+
+.overlay-action-bar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 34px);
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(45, 212, 191, 0.55);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.92);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.overlay-action-bar button {
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  background: rgba(39, 39, 42, 0.96);
+  color: #f8fafc;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.overlay-action-bar button:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .overlay-label-input {
