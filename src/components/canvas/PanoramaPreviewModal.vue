@@ -420,6 +420,13 @@ function clearOverlays() {
   selectedOverlayId.value = null
 }
 
+function moveOverlay(id, direction) {
+  const current = overlays.value.find(item => item.id === id)
+  if (!current) return
+  const delta = direction === 'up' ? 1 : -1
+  updateOverlayById(id, { zIndex: Math.max(1, (Number(current.zIndex) || 1) + delta) })
+}
+
 function getFrameRect() {
   return frameRef.value?.getBoundingClientRect() || null
 }
@@ -746,6 +753,10 @@ async function captureView(view) {
             <input type="range" min="0.2" max="3" step="0.05" :value="selectedOverlay.scale" @input="updateSelectedOverlay({ scale: Number($event.target.value) })" />
           </label>
           <button type="button" @click="updateSelectedOverlay({ flipped: !selectedOverlay.flipped })">左右反转</button>
+          <div class="overlay-order-actions">
+            <button type="button" @click="moveOverlay(selectedOverlay.id, 'up')">上移</button>
+            <button type="button" @click="moveOverlay(selectedOverlay.id, 'down')">下移</button>
+          </div>
         </div>
       </aside>
 
@@ -1061,6 +1072,12 @@ async function captureView(view) {
   display: grid;
   gap: 8px;
   margin-top: 10px;
+}
+
+.overlay-order-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }
 
 .overlay-editor label {
