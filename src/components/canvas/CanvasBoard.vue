@@ -509,6 +509,8 @@ onNodeDrag((event) => {
     updateGroupOffsetForNode({ ...node, position: clampedPosition })
   }
 
+  scheduleActiveEdgePathsRead()
+
   // 🚀 性能优化：对齐辅助线计算节流
   // 当节点数量较多时（>10），使用 requestAnimationFrame 节流
   const nodeCount = canvasStore.nodes.length
@@ -529,8 +531,6 @@ onNodeDrag((event) => {
   alignmentThrottleTimer.value = requestAnimationFrame(() => {
     calculateAlignmentGuides(node)
   })
-
-  if (selectedNodeIds.value.length > 0) readActiveEdgePaths()
 })
 
 // 计算对齐辅助线
@@ -1801,6 +1801,7 @@ const connectionFlowLayers = computed(() => {
 })
 
 const activeFlowPaths = ref([])
+let activeFlowPathsRafId = null
 
 function transformSvgPath(d, vp) {
   if (!d) return ''
@@ -1841,9 +1842,18 @@ function readActiveEdgePaths() {
   activeFlowPaths.value = paths
 }
 
+function scheduleActiveEdgePathsRead() {
+  if (activeFlowPathsRafId) return
+
+  activeFlowPathsRafId = requestAnimationFrame(() => {
+    activeFlowPathsRafId = null
+    readActiveEdgePaths()
+  })
+}
+
 watch(
   [selectedNodeIds, vfViewport, () => canvasStore.edges.length],
-  () => { nextTick(readActiveEdgePaths) },
+  () => { nextTick(scheduleActiveEdgePathsRead) },
   { immediate: true }
 )
 
@@ -2685,6 +2695,11 @@ onUnmounted(() => {
   if (_syncGroupRafId) {
     cancelAnimationFrame(_syncGroupRafId)
     _syncGroupRafId = null
+  }
+
+  if (activeFlowPathsRafId) {
+    cancelAnimationFrame(activeFlowPathsRafId)
+    activeFlowPathsRafId = null
   }
   
   // 🔧 清理所有待执行的定时器

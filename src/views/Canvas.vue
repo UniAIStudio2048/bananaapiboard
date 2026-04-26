@@ -40,7 +40,15 @@ import TicketList from '@/components/ticket/TicketList.vue'
 import TicketDetail from '@/components/ticket/TicketDetail.vue'
 import CreateTicketForm from '@/components/ticket/CreateTicketForm.vue'
 import { useI18n } from '@/i18n'
-import { startAutoSave as startHistoryAutoSave, stopAutoSave as stopHistoryAutoSave, manualSave as saveToHistory, getWorkflowHistory } from '@/stores/canvas/workflowAutoSave'
+import {
+  startAutoSave as startHistoryAutoSave,
+  stopAutoSave as stopHistoryAutoSave,
+  manualSave as saveToHistory,
+  getWorkflowHistory,
+  getWorkflowSession,
+  saveWorkflowSession,
+  clearWorkflowSession
+} from '@/stores/canvas/workflowAutoSave'
 import { initBackgroundTaskManager, getPendingTasks, subscribeTask, removeCompletedTask, cleanup as cleanupBackgroundTasks } from '@/stores/canvas/backgroundTaskManager'
 import { showAlert, showConfirm } from '@/composables/useCanvasDialog'
 import { needsMigration, analyzeWorkflow, migrateWorkflowData } from '@/utils/workflowMigration'
@@ -1014,6 +1022,33 @@ function getCurrentWorkflowData() {
   }
 }
 
+function saveCurrentWorkflowSession() {
+  const session = canvasStore.exportWorkflowSession()
+  if (!session?.tabs?.length) {
+    clearWorkflowSession()
+    return false
+  }
+  return saveWorkflowSession(session)
+}
+
+function tryAutoRestoreWorkflowSession() {
+  try {
+    const session = getWorkflowSession()
+    if (!session?.tabs?.length) {
+      return false
+    }
+
+    const restored = canvasStore.restoreWorkflowSession(session)
+    if (restored) {
+      console.log(`[Canvas] 已恢复 ${session.tabs.length} 个工作流标签`)
+    }
+    return restored
+  } catch (error) {
+    console.error('[Canvas] 恢复工作流标签会话失败:', error)
+    return false
+  }
+}
+
 // 🆕 自动恢复最近的工作流（刷新页面时使用）
 // 如果有 5 分钟内保存的工作流历史，自动恢复到画布
 function tryAutoRestoreRecentWorkflow() {
@@ -1169,6 +1204,21 @@ function updateNodeFromTask(task) {
         })
         console.log(`[Canvas] 图片高清任务完成，节点 ${task.nodeId} 已更新`)
       }
+    } else if (task.type === 'image-panorama') {
+      const imageUrl = result.outputUrl || result.url
+      if (imageUrl) {
+        canvasStore.updateNodeData(task.nodeId, {
+          status: 'success',
+          progress: null,
+          output: {
+            type: 'image',
+            urls: [imageUrl]
+          },
+          pointsCost: result.pointsCost || 0,
+          panoramaGenerated: true
+        })
+        console.log(`[Canvas] 生成全景图任务完成，节点 ${task.nodeId} 已更新`)
+      }
     } else if (task.type === 'image-cutout') {
       const imageUrl = result.outputUrl || result.url
       if (imageUrl) {
@@ -1204,7 +1254,7 @@ function updateNodeFromTask(task) {
     // 任务失败
     const errorMsg = task.type === 'image-cutout'
       ? '抠图处理失败'
-      : ((task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理失败' : '任务执行失败')
+      : (task.type === 'image-panorama' ? '生成全景图失败' : ((task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理失败' : '任务执行失败'))
     canvasStore.updateNodeData(task.nodeId, {
       status: 'error',
       progress: null,
@@ -1214,7 +1264,7 @@ function updateNodeFromTask(task) {
     // 任务进行中
     const progressText = task.type === 'image-cutout'
       ? '抠图处理中...'
-      : ((task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理中...' : task.progress)
+      : (task.type === 'image-panorama' ? '全景图生成中...' : ((task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理中...' : task.progress))
     canvasStore.updateNodeData(task.nodeId, {
       status: 'processing',
       progress: progressText || task.progress
@@ -1224,16 +1274,19 @@ function updateNodeFromTask(task) {
 
 // 页面关闭前静默保存当前工作流（不弹出任何确认框）
 function handleBeforeUnload(event) {
+  saveCurrentWorkflowSession()
+  console.log('[Canvas] 页面关闭前保存工作流标签会话')
+
   const workflowData = getCurrentWorkflowData()
   if (!workflowData || !workflowData.nodes || workflowData.nodes.length === 0) {
     return
   }
   
-  // 1. 始终保存到 localStorage 历史（作为备份）
+  // 始终保存当前活动工作流到 localStorage 历史（作为兼容备份）
   saveToHistory(workflowData)
   console.log('[Canvas] 页面关闭前保存工作流到历史')
   
-  // 2. 尝试使用 sendBeacon 保存到服务器（不阻塞页面关闭）
+  // 尝试使用 sendBeacon 保存到服务器（不阻塞页面关闭）
   const currentTab = canvasStore.getCurrentTab()
   if (currentTab?.hasChanges) {
     // 有文件正在上传时跳过 beacon 保存，避免持久化不完整的数据
@@ -2229,8 +2282,8 @@ onMounted(async () => {
   // 加载交互模式偏好
   loadInteractionMode()
   
-  // 🆕 自动恢复：检查是否有最近的工作流历史（5分钟内），刷新后自动恢复
-  const autoRestored = tryAutoRestoreRecentWorkflow()
+  // 🆕 自动恢复：优先恢复刷新前的多标签会话；旧版本历史记录作为兼容兜底
+  const autoRestored = tryAutoRestoreWorkflowSession() || tryAutoRestoreRecentWorkflow()
   
   // 如果没有自动恢复，则初始化默认标签
   if (!autoRestored) {
@@ -2322,6 +2375,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  saveCurrentWorkflowSession()
+
   document.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('user-info-updated', handleUserInfoUpdated)

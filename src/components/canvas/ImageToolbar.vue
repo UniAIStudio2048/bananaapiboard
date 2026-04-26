@@ -70,6 +70,9 @@ const gridCropMenuType = ref(null) // null | 'selecting' | 'grid4' | 'grid9' | '
 const gridCropMenuJustOpened = ref(false) // 防止打开后立即关闭
 const gridCropSelectedSize = ref(null) // { cols, rows, count, label, type }
 
+// 编辑功能下拉菜单状态
+const showEditDropdown = ref(false)
+
 // 宫格尺寸选项
 const gridCropSizeOptions = [
   { cols: 2, rows: 2, count: 4, label: '4宫格', type: 'grid4' },
@@ -100,41 +103,59 @@ const imageUrl = computed(() => {
 // 是否有图片可操作
 const hasImage = computed(() => !!imageUrl.value)
 
-// 工具栏按钮配置 - 按截图顺序排列 (v2)
-const toolbarItems = [
-  { 
-    id: 'repaint', 
-    icon: 'repaint',
-    label: '重绘', 
+// 编辑下拉按钮配置
+const editDropdownItems = [
+  {
+    id: 'edit-primary',
+    icon: 'edit',
+    label: '编辑',
     handler: handleRepaint,
     requiresImage: true
   },
-  { 
-    id: 'erase', 
+  {
+    id: 'repaint',
+    icon: 'repaint',
+    label: '重绘',
+    handler: handleRepaint,
+    requiresImage: true
+  },
+  {
+    id: 'erase',
     icon: 'erase',
-    label: '擦除', 
+    label: '擦除',
     handler: handleErase,
     requiresImage: true
   },
+  {
+    id: 'cutout',
+    icon: 'cutout',
+    label: '抠图',
+    handler: handleCutout,
+    requiresImage: true
+  },
+  {
+    id: 'expand',
+    icon: 'expand',
+    label: '扩图',
+    handler: handleExpand,
+    requiresImage: true
+  }
+]
+
+// 工具栏按钮配置 - 按截图顺序排列 (v2)
+const toolbarItems = [
   { 
+    id: 'edit', 
+    icon: 'edit',
+    label: '编辑', 
+    handler: handleEditButtonClick,
+    requiresImage: true
+  },
+  {
     id: 'enhance', 
     icon: 'enhance',
     label: '增强', 
     handler: handleEnhance,
-    requiresImage: true
-  },
-  { 
-    id: 'cutout', 
-    icon: 'cutout',
-    label: '抠图', 
-    handler: handleCutout,
-    requiresImage: true
-  },
-  { 
-    id: 'expand', 
-    icon: 'expand',
-    label: '扩图', 
-    handler: handleExpand,
     requiresImage: true
   },
   { 
@@ -949,11 +970,33 @@ function closeCropModal() {
   cropImageUrl.value = ''
 }
 
+// 编辑入口：首次点击展开，再次点击执行默认编辑功能
+function handleEditButtonClick() {
+  if (!hasImage.value) return
+  if (!showEditDropdown.value) {
+    showEditDropdown.value = true
+    closeGridCropMenu()
+    return
+  }
+  showEditDropdown.value = false
+  handleRepaint()
+}
+
+// 点击编辑下拉项
+function handleEditDropdownItemClick(item) {
+  if (item.requiresImage && !hasImage.value) return
+  showEditDropdown.value = false
+  item.handler?.()
+}
+
 // 按钮点击处理
 function handleToolClick(item) {
   if (item.requiresImage && !hasImage.value) {
     console.log('[ImageToolbar] 没有可操作的图片')
     return
+  }
+  if (item.id !== 'edit') {
+    showEditDropdown.value = false
   }
   item.handler?.()
 }
@@ -961,6 +1004,10 @@ function handleToolClick(item) {
 // ESC 关闭预览
 function handleKeyDown(event) {
   if (event.key === 'Escape') {
+    if (showEditDropdown.value) {
+      showEditDropdown.value = false
+      return
+    }
     if (gridCropMenuType.value) {
       closeGridCropMenu()
       return
@@ -980,6 +1027,13 @@ function handleToolbarClick(event) {
   if (gridCropMenuJustOpened.value) return
   
   // 如果点击的不是菜单内部，关闭菜单
+  if (showEditDropdown.value) {
+    const menu = event.target.closest('.edit-dropdown-menu')
+    const button = event.target.closest('.edit-dropdown-trigger')
+    if (!menu && !button) {
+      showEditDropdown.value = false
+    }
+  }
   if (gridCropMenuType.value) {
     const menu = event.target.closest('.grid-crop-menu')
     if (!menu) {
@@ -988,12 +1042,21 @@ function handleToolbarClick(event) {
   }
 }
 
+function handleDocumentClick() {
+  showEditDropdown.value = false
+  if (gridCropMenuType.value) {
+    closeGridCropMenu()
+  }
+}
+
 onMounted(() => {
   document.addEventListener('keydown', handleKeyDown)
+  document.addEventListener('click', handleDocumentClick)
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown)
+  document.removeEventListener('click', handleDocumentClick)
 })
 </script>
 
@@ -1003,6 +1066,63 @@ onUnmounted(() => {
     <template v-for="item in toolbarItems" :key="item.id">
       <!-- 分隔符 -->
       <div v-if="item.type === 'divider'" class="toolbar-divider"></div>
+
+      <!-- 编辑下拉入口 -->
+      <div v-else-if="item.id === 'edit'" class="edit-dropdown-wrap">
+        <button
+          class="toolbar-btn edit-dropdown-trigger"
+          :class="{
+            'disabled': item.requiresImage && !hasImage,
+            'active': showEditDropdown
+          }"
+          :title="item.label"
+          @click="handleEditButtonClick"
+        >
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span class="btn-label">{{ item.label }}</span>
+          <span class="dropdown-arrow" :class="{ open: showEditDropdown }">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+              <path d="M4 6l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+        </button>
+
+        <div v-if="showEditDropdown" class="edit-dropdown-menu" @click.stop>
+          <button
+            v-for="dropdownItem in editDropdownItems"
+            :key="dropdownItem.id"
+            class="edit-dropdown-item"
+            :class="{ 'disabled': dropdownItem.requiresImage && !hasImage }"
+            @click="handleEditDropdownItemClick(dropdownItem)"
+          >
+            <span class="btn-icon">
+              <svg v-if="dropdownItem.icon === 'edit'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <svg v-else-if="dropdownItem.icon === 'repaint'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <svg v-else-if="dropdownItem.icon === 'erase'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M18.364 5.636a9 9 0 11-12.728 0M12 3v9" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M4.5 16.5l3-3 3 3-3 3-3-3z" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+              <svg v-else-if="dropdownItem.icon === 'cutout'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M4 4h4M4 4v4M20 4h-4M20 4v4M4 20h4M4 20v-4M20 20h-4M20 20v-4" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="12" cy="12" r="5" stroke-dasharray="3 2"/>
+              </svg>
+              <svg v-else-if="dropdownItem.icon === 'expand'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="6" y="6" width="12" height="12" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M3 9V5a2 2 0 012-2h4M15 3h4a2 2 0 012 2v4M21 15v4a2 2 0 01-2 2h-4M9 21H5a2 2 0 01-2-2v-4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </span>
+            <span>{{ dropdownItem.label }}</span>
+          </button>
+        </div>
+      </div>
       
       <!-- 工具按钮 -->
       <button
@@ -1234,6 +1354,82 @@ onUnmounted(() => {
   height: 20px;
   background: rgba(255, 255, 255, 0.15);
   margin: 0 6px;
+}
+
+/* ========== 编辑下拉菜单 ========== */
+.edit-dropdown-wrap {
+  position: relative;
+}
+
+.toolbar-btn.active:not(.disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+.dropdown-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 12px;
+  height: 12px;
+  opacity: 0.65;
+  transition: transform 0.2s ease;
+}
+
+.dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.dropdown-arrow svg {
+  width: 100%;
+  height: 100%;
+}
+
+.edit-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 128px;
+  padding: 6px;
+  background: rgba(30, 30, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  z-index: 110;
+}
+
+.edit-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.edit-dropdown-item:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.edit-dropdown-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.edit-dropdown-item .btn-icon {
+  width: 16px;
+  height: 16px;
+  color: rgba(255, 255, 255, 0.72);
 }
 
 /* ========== 宫格裁剪选项菜单 ========== */
@@ -1597,12 +1793,36 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.08);
 }
 
+:root.canvas-theme-light .image-toolbar .toolbar-btn.active:not(.disabled) {
+  background: rgba(0, 0, 0, 0.08);
+  color: #1c1917;
+}
+
 :root.canvas-theme-light .image-toolbar .btn-icon {
   color: #57534e;
 }
 
 :root.canvas-theme-light .image-toolbar .toolbar-btn:hover .btn-icon {
   color: #1c1917;
+}
+
+:root.canvas-theme-light .image-toolbar .edit-dropdown-menu {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14);
+}
+
+:root.canvas-theme-light .image-toolbar .edit-dropdown-item {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-toolbar .edit-dropdown-item:hover:not(.disabled) {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-toolbar .edit-dropdown-item .btn-icon {
+  color: #57534e;
 }
 
 /* Toast动画 */
@@ -1613,4 +1833,3 @@ onUnmounted(() => {
   100% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
 }
 </style>
-

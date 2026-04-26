@@ -812,7 +812,8 @@ export default {
       points_transfer_out: 'نومۇر چىقىرىش',
       points_transfer_in: 'نومۇر كىرگۈزۈش',
       motion_control_refund: 'ھەرىكەت يۆتكەش قايتۇرۇش',
-      canvas_crop: 'كارتىنا تاختىسى كېسىش'
+      canvas_crop: 'كارتىنا تاختىسى كېسىش',
+      image_panorama_generate: 'پۈتۈن كۆرۈنۈش سۈرەت ھاسىللاش'
     }
   },
 
@@ -1018,7 +1019,8 @@ export default {
     points_transfer_out: 'نومۇر چىقىرىش',
     points_transfer_in: 'نومۇر كىرگۈزۈش',
     motion_control_refund: 'ھەرىكەت يۆتكەش قايتۇرۇش',
-    canvas_crop: 'كارتىنا تاختىسى كېسىش'
+    canvas_crop: 'كارتىنا تاختىسى كېسىش',
+    image_panorama_generate: 'پۈتۈن كۆرۈنۈش سۈرەت ھاسىللاش'
   },
 
   // يېڭى ئىشلەتكۈچى يېتەكچىسى

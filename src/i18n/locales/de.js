@@ -688,7 +688,7 @@ export default {
     purchase: 'Kauf',
     gift: 'Geschenk',
     deduct: 'Abzug',
-    milestone: 'Meilenstein-Belohnung'
+    milestone: 'Meilenstein-Belohnung',
+    image_panorama_generate: 'Panorama-Bilderzeugung'
   }
 }
-

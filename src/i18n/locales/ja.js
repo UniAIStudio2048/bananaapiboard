@@ -922,6 +922,7 @@ export default {
     canvas_crop: 'キャンバス切り抜き',
     image_hd_upscale: '画像高解像度アップスケール',
     image_multiangle: 'マルチアングル画像',
+    image_panorama_generate: 'パノラマ画像生成',
     video_hd_upscale: '動画高解像度アップスケール',
     llm_chat: 'LLMチャット',
     llm_action: 'LLMアクション',

@@ -19,6 +19,7 @@ import { useI18n } from '@/i18n'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { getMentionPopupPosition, getTextareaCaretViewportRect } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
+import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import CustomPresetDialog from '../dialogs/CustomPresetDialog.vue'
 import PresetManager from '../dialogs/PresetManager.vue'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
@@ -292,10 +293,11 @@ const formatState = ref({
 })
 
 // ========== LLM 配置相关 ==========
-const llmInputText = ref('')
+const llmInputText = ref(props.data.llmInputText || props.data.prompt || '')
 
 // 监听 llmInputText 变化，自动调整输入框高度
 watch(llmInputText, () => {
+  persistNodePromptDraft(canvasStore, props.id, 'llmInputText', llmInputText.value)
   nextTick(() => {
     autoResizeLLMInput()
   })

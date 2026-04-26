@@ -871,7 +871,7 @@ export default {
     purchase: 'Achat',
     gift: 'Cadeau',
     deduct: 'Déduction',
-    milestone: 'Récompense d\'étape'
+    milestone: 'Récompense d\'étape',
+    image_panorama_generate: 'Génération d’image panoramique'
   }
 }
-

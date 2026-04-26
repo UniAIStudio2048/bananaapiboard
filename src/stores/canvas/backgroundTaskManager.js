@@ -8,7 +8,7 @@
  * - 用户返回画布时自动恢复任务状态
  */
 
-import { getImageTaskStatus, getVideoTaskStatus, getVideoHdTaskStatus, getImageHdTaskStatus, getRemoveBackgroundTaskStatus } from '@/api/canvas/nodes'
+import { getImageTaskStatus, getVideoTaskStatus, getVideoHdTaskStatus, getImageHdTaskStatus, getImagePanoramaTaskStatus, getRemoveBackgroundTaskStatus } from '@/api/canvas/nodes'
 
 const STORAGE_KEY = 'canvas_background_tasks'
 const POLL_INTERVAL = 3000  // 3秒轮询一次
@@ -74,7 +74,7 @@ function resumePendingTasks() {
   const now = Date.now()
   for (const [taskId, task] of tasks) {
     if (task.status === 'pending' || task.status === 'processing') {
-      const pollTimeout = (task.type === 'video' || task.type === 'video-hd' || task.type === 'video-hd-upscale' || task.type === 'image-hd' || task.type === 'image-cutout')
+      const pollTimeout = (task.type === 'video' || task.type === 'video-hd' || task.type === 'video-hd-upscale' || task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout')
         ? VIDEO_POLL_TIMEOUT : IMAGE_POLL_TIMEOUT
       if (now - task.createdAt > pollTimeout) {
         console.log(`[BackgroundTaskManager] 任务 ${taskId} 已超时 (${Math.round((now - task.createdAt) / 60000)}分钟), 标记为失败`)
@@ -144,7 +144,7 @@ function startPolling(taskId) {
     }
     
     // 前端超时检测：根据任务类型使用不同阈值
-    const pollTimeout = (task.type === 'video' || task.type === 'video-hd' || task.type === 'video-hd-upscale' || task.type === 'image-hd' || task.type === 'image-cutout')
+    const pollTimeout = (task.type === 'video' || task.type === 'video-hd' || task.type === 'video-hd-upscale' || task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout')
       ? VIDEO_POLL_TIMEOUT : IMAGE_POLL_TIMEOUT
     const taskAge = Date.now() - task.createdAt
     if (taskAge > pollTimeout) {
@@ -167,6 +167,8 @@ function startPolling(taskId) {
         getStatus = getVideoHdTaskStatus
       } else if (task.type === 'image-hd') {
         getStatus = getImageHdTaskStatus
+      } else if (task.type === 'image-panorama') {
+        getStatus = getImagePanoramaTaskStatus
       } else if (task.type === 'image-cutout') {
         getStatus = getRemoveBackgroundTaskStatus
       } else if (task.type === 'video') {
@@ -343,7 +345,7 @@ function notifyTaskComplete(taskId, task) {
   }))
 
   // 图片高清/抠图结果已写入服务端 image_history，通知历史面板拉取最新列表
-  if (task.type === 'image-hd' || task.type === 'image-cutout') {
+  if (task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout') {
     window.dispatchEvent(new CustomEvent('canvas-history-invalidate'))
   }
 }

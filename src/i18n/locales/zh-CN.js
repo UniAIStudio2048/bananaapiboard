@@ -830,6 +830,7 @@ export default {
       canvas_crop: '画布裁剪',
       image_hd_upscale: '图片高清放大',
       image_multiangle: '图片多视角',
+      image_panorama_generate: '生成全景图',
       video_hd_upscale: '视频高清放大',
       llm_chat: 'LLM 对话',
       llm_action: 'LLM 操作',
@@ -1049,6 +1050,7 @@ export default {
     canvas_crop: '画布裁剪',
     image_hd_upscale: '图片高清放大',
     image_multiangle: '图片多视角',
+    image_panorama_generate: '生成全景图',
     video_hd_upscale: '视频高清放大',
     llm_chat: 'LLM 对话',
     llm_action: 'LLM 操作',
@@ -1114,4 +1116,3 @@ export default {
     }
   }
 }
-

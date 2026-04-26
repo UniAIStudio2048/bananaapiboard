@@ -14,11 +14,14 @@
  */
 
 const STORAGE_KEY = 'workflow_auto_saves'
+const SESSION_STORAGE_KEY = 'workflow_tab_session'
 const MAX_HISTORY_COUNT = 20  // 最多保存20条历史记录
 const CACHE_DURATION = 24 * 60 * 60 * 1000  // 1天（毫秒）
+const SESSION_RESTORE_DURATION = 10 * 60 * 1000  // 10分钟内的标签会话用于刷新恢复
 const AUTO_SAVE_INTERVAL = 60 * 1000  // 1分钟（毫秒）
 const MAX_SINGLE_WORKFLOW_SIZE = 300 * 1024  // 单个工作流最大 300KB
 const MAX_TOTAL_STORAGE_SIZE = 3 * 1024 * 1024  // 总存储最大 3MB
+const MAX_SESSION_STORAGE_SIZE = 2 * 1024 * 1024  // 标签会话最大 2MB
 
 let autoSaveTimer = null
 
@@ -230,6 +233,98 @@ export function getWorkflowHistory() {
   } catch (error) {
     console.error('[WorkflowAutoSave] 读取历史失败:', error)
     return []
+  }
+}
+
+/**
+ * 保存当前多标签会话，用于页面刷新后恢复左上角打开的工作流标签
+ * @param {Object} session - { tabs, activeTabId }
+ */
+export function saveWorkflowSession(session) {
+  if (!session || !Array.isArray(session.tabs) || session.tabs.length === 0) {
+    return false
+  }
+
+  try {
+    const tabs = session.tabs.slice(0, 10).map(tab => {
+      const cleanedNodes = cleanNodeData(tab.nodes || [])
+      const cleanedEdges = JSON.parse(JSON.stringify(tab.edges || []))
+      return {
+        id: tab.id,
+        name: tab.name || '未命名工作流',
+        workflowId: tab.workflowId || null,
+        workflowUid: tab.workflowUid || null,
+        workflowSpaceType: tab.workflowSpaceType || null,
+        workflowTeamId: tab.workflowTeamId || null,
+        nodes: cleanedNodes,
+        edges: cleanedEdges,
+        viewport: tab.viewport ? { ...tab.viewport } : { x: 0, y: 0, zoom: 1 },
+        hasChanges: !!tab.hasChanges
+      }
+    })
+
+    const payload = {
+      tabs,
+      activeTabId: tabs.some(tab => tab.id === session.activeTabId) ? session.activeTabId : tabs[0]?.id,
+      savedAt: Date.now()
+    }
+
+    const jsonData = JSON.stringify(payload)
+    if (jsonData.length > MAX_SESSION_STORAGE_SIZE) {
+      console.warn(`[WorkflowAutoSave] 标签会话过大 (${(jsonData.length / 1024).toFixed(1)}KB)，跳过保存`)
+      return false
+    }
+
+    localStorage.setItem(SESSION_STORAGE_KEY, jsonData)
+    return true
+  } catch (error) {
+    console.error('[WorkflowAutoSave] 保存标签会话失败:', error)
+    return false
+  }
+}
+
+/**
+ * 读取最近的多标签会话。过期或无效会话会自动清理。
+ */
+export function getWorkflowSession() {
+  try {
+    const data = localStorage.getItem(SESSION_STORAGE_KEY)
+    if (!data) return null
+
+    const session = JSON.parse(data)
+    const savedAt = session?.savedAt || 0
+    if (!Array.isArray(session?.tabs) || session.tabs.length === 0) {
+      localStorage.removeItem(SESSION_STORAGE_KEY)
+      return null
+    }
+
+    if (Date.now() - savedAt > SESSION_RESTORE_DURATION) {
+      localStorage.removeItem(SESSION_STORAGE_KEY)
+      return null
+    }
+
+    return session
+  } catch (error) {
+    console.error('[WorkflowAutoSave] 读取标签会话失败:', error)
+    try {
+      localStorage.removeItem(SESSION_STORAGE_KEY)
+    } catch (e) {
+      // 忽略
+    }
+    return null
+  }
+}
+
+/**
+ * 清理已保存的多标签会话
+ */
+export function clearWorkflowSession() {
+  try {
+    localStorage.removeItem(SESSION_STORAGE_KEY)
+    return true
+  } catch (error) {
+    console.error('[WorkflowAutoSave] 清理标签会话失败:', error)
+    return false
   }
 }
 

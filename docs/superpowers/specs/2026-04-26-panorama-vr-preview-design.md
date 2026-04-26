@@ -2,7 +2,7 @@
 
 ## Goal
 
-Add a canvas image-node tool for 21:9 panorama images. The tool opens a full-screen VR-style preview, lets the user rotate the view, and exports the current or preset views back into the canvas as image nodes or storyboard grids.
+Add a canvas image-node tool for widescreen panorama-style images. The tool opens a full-screen VR-style preview, lets the user rotate the view, and exports the current or preset views back into the canvas as image nodes or storyboard grids.
 
 The GitHub project referenced by the user is an interaction reference only. The implementation target is the existing `bananaapiboard` canvas.
 
@@ -10,7 +10,7 @@ The GitHub project referenced by the user is an interaction reference only. The 
 
 First version:
 
-- Show a `全景VR` button only for image nodes whose loaded image ratio is close to `21:9`.
+- Show a `全景VR` button only for image nodes whose loaded image ratio is `16:9` or wider.
 - Open a full-screen panorama preview modal from the image node toolbar.
 - Map the source panorama onto the inside of a Three.js sphere.
 - Auto-rotate the view slowly after opening.
@@ -30,7 +30,7 @@ Out of first-version scope:
 
 1. User selects an image node.
 2. The node toolbar detects the image dimensions.
-3. If the image is approximately `21:9`, the toolbar shows `全景VR`.
+3. If the image is `16:9` or wider, the toolbar shows `全景VR`.
 4. User clicks `全景VR`.
 5. A full-screen preview opens with the panorama rendered as an immersive sphere.
 6. The view starts slow auto-rotation.
@@ -48,7 +48,7 @@ Out of first-version scope:
 The image-node toolbar gets one new button:
 
 - Label: `全景VR`
-- Visibility: only when a usable image exists and its natural ratio is within tolerance of `21:9`.
+- Visibility: only when a usable image exists and its natural ratio is `16:9` or wider.
 - Placement: near existing image tools such as `角度` and `宫格裁剪`.
 
 The preview modal uses a dark full-screen layout:
@@ -121,7 +121,7 @@ Responsibilities:
 If helper duplication becomes noticeable, create `src/utils/canvasPanoramaExport.js` or similar for:
 
 - Ratio definitions.
-- 21:9 detection.
+- Widescreen ratio detection.
 - Preset yaw/pitch generation.
 - Blob creation from rendered frames.
 - Common output metadata.
@@ -155,7 +155,7 @@ Export payload:
       label
     }
   ],
-  storyboardGridSize: '2x2' | '4x3'
+  storyboardGridSize: '2x2' | '3x4'
 }
 ```
 
@@ -163,7 +163,7 @@ Canvas mutation:
 
 - `current-view`: create one `image` node to the right of the source node.
 - `images`: create one `image` node per frame in a tidy grid to the right of the source node.
-- `storyboard`: create one `storyboard` node with `images` filled by blob URLs, then replace them as uploads finish.
+- `storyboard`: create one `storyboard` node with `images` filled by blob URLs, then replace them as uploads finish. `12宫格` uses `3x4`, which renders as 3 rows and 4 columns.
 
 Background upload:
 
@@ -172,16 +172,15 @@ Background upload:
 - When an upload resolves, the corresponding image node or storyboard cell is updated to the returned cloud URL.
 - Blob URLs are revoked after the reactive update is applied.
 
-## 21:9 Detection
+## Supported Ratio Detection
 
 Detection should use natural image dimensions, not node display dimensions.
 
 Suggested tolerance:
 
 ```js
-const target = 21 / 9
 const ratio = naturalWidth / naturalHeight
-const isPanorama = Math.abs(ratio - target) <= 0.08
+const isPanorama = ratio >= 16 / 9 - 0.08
 ```
 
 If dimensions are unavailable, the button remains hidden until the image loads.
@@ -224,8 +223,9 @@ Labels should be Chinese and clear, for example `全景-前`, `全景-右`, `全
 Manual verification:
 
 - Build succeeds with `npm run build`.
-- A normal 16:9 image node does not show `全景VR`.
-- A 21:9 image node shows `全景VR`.
+- A normal 4:3 or 1:1 image node does not show `全景VR`.
+- A 16:9 image node shows `全景VR`.
+- A 2:1, 21:9, or 32:9 image node shows `全景VR`.
 - The modal opens and auto-rotates.
 - Dragging changes yaw and pitch.
 - Wheel changes FOV within bounds.
@@ -240,7 +240,7 @@ Automated tests are optional for this first version because the repo has no unif
 
 ## Acceptance Criteria
 
-- The feature is available only on 21:9 image nodes.
+- The feature is available on image nodes whose natural ratio is `16:9` or wider.
 - The preview feels like a VR panorama rather than a flat crop view.
 - The first view auto-rotates slowly without user input.
 - Users can manually control camera direction with the mouse.

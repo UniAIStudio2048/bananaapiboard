@@ -31,8 +31,8 @@
       <!-- 普通封面 -->
       <template v-else>
         <img
-          v-if="work.cover_url"
-          :src="work.cover_url"
+          v-if="displayImageUrl"
+          :src="displayImageUrl"
           :alt="work.title || ''"
           class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           loading="lazy"
@@ -86,6 +86,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { getImageMediaUrls } from '@/utils/communityMedia'
 
 const props = defineProps({
   work: { type: Object, required: true },
@@ -98,23 +99,17 @@ const currentSlideIndex = ref(0)
 let slideTimer = null
 
 const mediaUrls = computed(() => {
-  if (props.work.media_type !== 'image') return []
-  if (props.work.media_urls && Array.isArray(props.work.media_urls) && props.work.media_urls.length > 1) {
-    return props.work.media_urls
-  }
-  if (props.work.media_url) {
-    try {
-      const parsed = JSON.parse(props.work.media_url)
-      if (Array.isArray(parsed) && parsed.length > 1) return parsed
-    } catch {}
-  }
-  return []
+  return getImageMediaUrls(props.work)
 })
 
 const isSlideshow = computed(() => mediaUrls.value.length > 1)
 
+const displayImageUrl = computed(() => {
+  return mediaUrls.value[0] || props.work.cover_url
+})
+
 const currentSlideUrl = computed(() => {
-  if (!isSlideshow.value) return props.work.cover_url
+  if (!isSlideshow.value) return displayImageUrl.value
   return mediaUrls.value[currentSlideIndex.value] || props.work.cover_url
 })
 

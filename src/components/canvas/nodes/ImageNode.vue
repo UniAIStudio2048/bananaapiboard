@@ -36,7 +36,10 @@ import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { getMentionPopupPosition, getTextareaCaretViewportRect } from '@/utils/promptMention'
 import { getElementCenterFlowPosition, getElementSideCenterFlowPosition } from '@/utils/canvasConnectionPosition'
+import { isPanoramaVrSupportedRatio } from '@/utils/canvasPanoramaExport'
+import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
+import PanoramaPreviewModal from '../PanoramaPreviewModal.vue'
 
 const { t } = useI18n()
 
@@ -625,11 +628,11 @@ function handleBackgroundTaskComplete(event) {
   // 只处理属于当前节点的任务
   if (task.nodeId !== props.id) return
 
-  if (task.type !== 'image' && task.type !== 'image-hd') return
+  if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-panorama') return
   
   console.log(`[ImageNode] 后台任务完成: ${taskId}`, task)
 
-  if (task.type === 'image-hd') {
+  if (task.type === 'image-hd' || task.type === 'image-panorama') {
     const imageUrl = task.result?.outputUrl || task.result?.url
     if (imageUrl) {
       canvasStore.updateNodeData(props.id, {
@@ -637,11 +640,11 @@ function handleBackgroundTaskComplete(event) {
         progress: null,
         output: { type: 'image', urls: [imageUrl] },
         pointsCost: task.result?.pointsCost || 0,
-        hdUpscaled: true
+        ...(task.type === 'image-hd' ? { hdUpscaled: true } : { panoramaGenerated: true })
       })
-      showToast(`图片高清完成${task.result?.pointsCost > 0 ? `，消耗 ${formatPoints(task.result.pointsCost)} 积分` : ''}`, 'success')
+      showToast(`${task.type === 'image-hd' ? '图片高清' : '全景图生成'}完成${task.result?.pointsCost > 0 ? `，消耗 ${formatPoints(task.result.pointsCost)} 积分` : ''}`, 'success')
     } else {
-      canvasStore.updateNodeData(props.id, { status: 'error', error: '高清完成但未获取到图片' })
+      canvasStore.updateNodeData(props.id, { status: 'error', error: task.type === 'image-hd' ? '高清完成但未获取到图片' : '全景图生成完成但未获取到图片' })
     }
     removeCompletedTask(taskId)
     return
@@ -726,17 +729,17 @@ function handleBackgroundTaskFailed(event) {
   const { taskId, task } = event.detail
   if (task.nodeId !== props.id) return
 
-  if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-cutout') return
+  if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-panorama' && task.type !== 'image-cutout') return
   
   console.log(`[ImageNode] 后台任务失败: ${taskId}`, task)
 
-  if (task.type === 'image-hd' || task.type === 'image-cutout') {
+  if (task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout') {
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       progress: null,
-      error: task.error || (task.type === 'image-cutout' ? '抠图处理失败' : '高清处理失败')
+      error: task.error || (task.type === 'image-cutout' ? '抠图处理失败' : (task.type === 'image-panorama' ? '生成全景图失败' : '高清处理失败'))
     })
-    showToast(task.error || (task.type === 'image-cutout' ? '图片抠图失败' : '图片高清失败，未扣除积分'), 'error')
+    showToast(task.error || (task.type === 'image-cutout' ? '图片抠图失败' : (task.type === 'image-panorama' ? '生成全景图失败，未扣除积分' : '图片高清失败，未扣除积分')), 'error')
     removeCompletedTask(taskId)
     return
   }
@@ -755,14 +758,17 @@ function handleBackgroundTaskProgress(event) {
   const { taskId, task } = event.detail
   if (task.nodeId !== props.id) return
 
-  if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-cutout') return
+  if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-panorama' && task.type !== 'image-cutout') return
   
   const progress = task.result?.progress || task.progress
   if (progress) {
     canvasStore.updateNodeData(props.id, {
       progress: task.type === 'image-hd'
         ? '高清处理中...'
+        : (task.type === 'image-panorama'
+          ? '全景图生成中...'
         : (task.type === 'image-cutout' ? '抠图处理中...' : (task.result?.status === 'processing' ? '生成中...' : progress))
+        )
     })
   }
 }
@@ -773,10 +779,10 @@ function checkAndRestoreBackgroundTasks() {
   const ZOMBIE_THRESHOLD = 15 * 60 * 1000 // 15 分钟
   
   for (const task of nodeTasks) {
-    if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-cutout') continue
+    if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-panorama' && task.type !== 'image-cutout') continue
     
     if (task.status === 'completed') {
-      const imageUrl = (task.type === 'image-hd' || task.type === 'image-cutout')
+      const imageUrl = (task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout')
         ? (task.result?.outputUrl || task.result?.url)
         : (task.result?.url || task.result?.urls?.[0])
       if (imageUrl) {
@@ -785,23 +791,24 @@ function checkAndRestoreBackgroundTasks() {
           progress: null,
           output: { type: 'image', urls: [imageUrl] },
           ...(task.type === 'image-hd' ? { hdUpscaled: true, pointsCost: task.result?.pointsCost || 0 } : {}),
+          ...(task.type === 'image-panorama' ? { panoramaGenerated: true, pointsCost: task.result?.pointsCost || 0 } : {}),
           ...(task.type === 'image-cutout' ? { cutoutResult: true, isTransparent: task.result?.isTransparent, cutoutBgType: task.result?.bgType } : {})
         })
       } else {
         canvasStore.updateNodeData(props.id, {
           status: 'error',
-          error: task.type === 'image-hd' ? '高清完成但未获取到图片' : (task.type === 'image-cutout' ? '抠图完成但未获取到图片' : '生成完成但未获取到图片')
+          error: task.type === 'image-hd' ? '高清完成但未获取到图片' : (task.type === 'image-panorama' ? '全景图生成完成但未获取到图片' : (task.type === 'image-cutout' ? '抠图完成但未获取到图片' : '生成完成但未获取到图片'))
         })
       }
       removeCompletedTask(task.taskId)
     } else if (task.status === 'failed') {
       canvasStore.updateNodeData(props.id, {
         status: 'error',
-        error: task.error || (task.type === 'image-hd' ? '高清处理失败' : (task.type === 'image-cutout' ? '抠图处理失败' : '图片生成失败'))
+        error: task.error || (task.type === 'image-hd' ? '高清处理失败' : (task.type === 'image-panorama' ? '生成全景图失败' : (task.type === 'image-cutout' ? '抠图处理失败' : '图片生成失败')))
       })
       removeCompletedTask(task.taskId)
     } else if ((task.status === 'processing' || task.status === 'pending') && task.createdAt) {
-      if (task.type === 'image-hd' || task.type === 'image-cutout') continue
+      if (task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout') continue
       const taskAge = Date.now() - task.createdAt
       if (taskAge > ZOMBIE_THRESHOLD) {
         console.log(`[ImageNode] 检测到僵尸任务 ${task.taskId} (${Math.round(taskAge/60000)}分钟), 标记失败`)
@@ -818,7 +825,7 @@ function checkAndRestoreBackgroundTasks() {
   
   // 如果节点状态是 processing 但没有任何关联的后台任务，说明轮询丢失了
   // 多角度生成节点有独立轮询机制（pollMultiangleTask），不走 backgroundTaskManager
-  if (props.data?.status === 'processing' && props.data?.sourceType !== 'multiangle' && props.data?.taskType !== 'image-hd' && props.data?.taskType !== 'image-cutout' && nodeTasks.filter(t => (t.type === 'image' || t.type === 'image-hd' || t.type === 'image-cutout') && (t.status === 'processing' || t.status === 'pending')).length === 0) {
+  if (props.data?.status === 'processing' && props.data?.sourceType !== 'multiangle' && props.data?.taskType !== 'image-hd' && props.data?.taskType !== 'image-panorama' && props.data?.taskType !== 'image-cutout' && nodeTasks.filter(t => (t.type === 'image' || t.type === 'image-hd' || t.type === 'image-panorama' || t.type === 'image-cutout') && (t.status === 'processing' || t.status === 'pending')).length === 0) {
     console.log(`[ImageNode] 节点 ${props.id} 状态为 processing 但无关联任务, 重置为 error`)
     canvasStore.updateNodeData(props.id, {
       status: 'error',
@@ -1301,9 +1308,53 @@ const currentImageUrl = computed(() => {
   return null
 })
 
+// 全景 VR 预览状态
+const showPanoramaPreview = ref(false)
+const isPanoramaCandidate = ref(false)
+let panoramaDimensionRequestId = 0
+
+async function detectPanoramaImage(url) {
+  const requestId = ++panoramaDimensionRequestId
+  isPanoramaCandidate.value = false
+  if (!url) return
+
+  try {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    const loadUrl = getProxiedImageUrl(url)
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = loadUrl
+    })
+    if (requestId !== panoramaDimensionRequestId) return
+    isPanoramaCandidate.value = isPanoramaVrSupportedRatio(img.naturalWidth, img.naturalHeight)
+    img.src = ''
+  } catch (error) {
+    if (requestId === panoramaDimensionRequestId) {
+      console.warn('[ImageNode] 全景图尺寸检测失败:', error)
+      isPanoramaCandidate.value = false
+    }
+  }
+}
+
+function openPanoramaPreview() {
+  if (!currentImageUrl.value || !isPanoramaCandidate.value) return
+  showPanoramaPreview.value = true
+}
+
+function closePanoramaPreview() {
+  showPanoramaPreview.value = false
+}
+
+function resolvePanoramaImageUrl(url) {
+  return getProxiedImageUrl(url)
+}
+
 // 工具栏预览弹窗
 const showPreviewModal = ref(false)
 const previewImageUrl = ref('')
+const showImageEditMenu = ref(false)
 
 // 预览缩放和拖动状态
 const previewScale = ref(1)
@@ -1338,7 +1389,27 @@ function handleToolbarEnhance() {
   enterEditMode('enhance') // 图像增强（待接入 AI API）
 }
 
+function handleToolbarEditMenuClick() {
+  if (!currentImageUrl.value) return
+  if (!showImageEditMenu.value) {
+    showImageEditMenu.value = true
+    return
+  }
+  showImageEditMenu.value = false
+  handleToolbarEnhance()
+}
+
+function closeImageEditMenu() {
+  showImageEditMenu.value = false
+}
+
+function runImageEditAction(handler) {
+  showImageEditMenu.value = false
+  handler()
+}
+
 const isImageHDProcessing = ref(false)
+const isPanoramaGenerating = ref(false)
 
 async function handleToolbarImageHD() {
   if (!currentImageUrl.value) {
@@ -1441,6 +1512,119 @@ function createImageHDProcessingNode(taskId) {
       taskType: 'image-hd',
       sourceType: 'image-hd',
       hdUpscaled: true,
+      sourceNodeId: props.id
+    }
+  })
+  canvasStore.addEdge({
+    id: `edge-${props.id}-${newNodeId}-${Date.now()}`,
+    source: props.id,
+    target: newNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input',
+    type: 'smoothstep'
+  })
+  return newNodeId
+}
+
+async function handleToolbarGeneratePanorama() {
+  if (!currentImageUrl.value) {
+    showToast('没有可处理的图片', 'error')
+    return
+  }
+  if (isPanoramaGenerating.value) {
+    showToast('正在处理中，请稍候', 'warning')
+    return
+  }
+  const token = localStorage.getItem('token')
+  try {
+    isPanoramaGenerating.value = true
+    let imageUrlForPanorama = currentImageUrl.value
+
+    if (imageUrlForPanorama.startsWith('blob:')) {
+      showToast('上传图片到云端...', 'info')
+      const response = await fetch(imageUrlForPanorama)
+      const blob = await response.blob()
+      const file = new File([blob], `panorama_source_${Date.now()}.png`, { type: blob.type || 'image/png' })
+      const urls = await uploadImages([file])
+      if (!urls?.length) throw new Error('图片上传失败')
+      imageUrlForPanorama = urls[0]
+    } else if (needsReupload(imageUrlForPanorama)) {
+      showToast('上传图片到云端...', 'info')
+      imageUrlForPanorama = await reuploadToCloud(imageUrlForPanorama)
+    } else if (imageUrlForPanorama.startsWith('/api/')) {
+      imageUrlForPanorama = getApiUrl(imageUrlForPanorama)
+    }
+
+    showToast('提交全景图任务...', 'info')
+    const res = await fetch('/api/images/panorama-generate', {
+      method: 'POST',
+      headers: {
+        ...getTenantHeaders(),
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({
+        imageUrl: imageUrlForPanorama,
+        nodeId: props.id
+      })
+    })
+    const result = await res.json()
+    if (!res.ok) {
+      if (result.error === 'insufficient_points') {
+        showToast('当前积分余额不足', 'error')
+      } else if (result.error === 'panorama_not_configured') {
+        await showAlert(result.message || '生成全景图功能未配置，请联系管理员', '提示')
+      } else {
+        showToast(result.message || '提交失败', 'error')
+      }
+      isPanoramaGenerating.value = false
+      return
+    }
+
+    showToast('全景图任务已提交，后台处理中...', 'success')
+    isPanoramaGenerating.value = false
+
+    const newNodeId = createPanoramaProcessingNode(result.taskId)
+    if (!newNodeId) return
+    const currentTab = canvasStore.getCurrentTab()
+    registerTask({
+      taskId: result.taskId,
+      type: 'image-panorama',
+      nodeId: newNodeId,
+      tabId: currentTab?.id,
+      metadata: {
+        sourceUrl: currentImageUrl.value,
+        sourceNodeId: props.id
+      }
+    })
+  } catch (e) {
+    console.error('[ImageNode] 生成全景图失败:', e)
+    showToast(e.message || '生成全景图失败', 'error')
+    isPanoramaGenerating.value = false
+  }
+}
+
+function createPanoramaProcessingNode(taskId) {
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return null
+  const newNodeId = `pano_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const newNodePosition = {
+    x: currentNode.position.x + (nodeWidth.value || 300) + 100,
+    y: currentNode.position.y + 80
+  }
+  canvasStore.addNode({
+    id: newNodeId,
+    type: 'image',
+    position: newNodePosition,
+    data: {
+      label: '生成全景图',
+      title: '生成全景图',
+      status: 'processing',
+      progress: '全景图生成中...',
+      taskId,
+      taskType: 'image-panorama',
+      sourceType: 'image-panorama',
+      panoramaGenerated: true,
       sourceNodeId: props.id
     }
   })
@@ -1620,6 +1804,13 @@ function closeCutoutOptions() {
 
 // 点击外部区域关闭抠图选项弹窗
 function handleClickOutside(event) {
+  if (showImageEditMenu.value) {
+    const menu = event.target.closest('.image-edit-dropdown')
+    const trigger = event.target.closest('.image-edit-menu-wrapper')
+    if (!menu && !trigger) {
+      closeImageEditMenu()
+    }
+  }
   if (showCutoutOptions.value) {
     const popup = document.querySelector('.cutout-options-popup')
     const trigger = document.querySelector('.toolbar-btn-wrapper .toolbar-btn')
@@ -2143,6 +2334,152 @@ async function createStoryboardFromCrop(cols, rows) {
   } catch (error) {
     console.error('[ImageNode] 创建分镜格子失败:', error)
     showAlert('错误', '创建分镜格子失败，请重试')
+  }
+}
+
+async function handlePanoramaExport(payload) {
+  if (!payload?.frames?.length) return
+
+  try {
+    if (payload.mode === 'storyboard') {
+      createPanoramaStoryboard(payload)
+    } else {
+      createPanoramaImageNodes(payload)
+    }
+    showToast('全景视角已输出到画布', 'success')
+  } catch (error) {
+    console.error('[ImageNode] 全景视角输出失败:', error)
+    showAlert('输出失败', error.message || '全景视角输出失败，请重试')
+  }
+}
+
+function getPanoramaBasePosition() {
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  const flowNode = findNode(props.id)
+  const baseX = currentNode?.position?.x || 0
+  const baseY = currentNode?.position?.y || 0
+  const actualWidth = flowNode?.dimensions?.width || (nodeWidth.value || 380)
+  return {
+    x: baseX + actualWidth + 80,
+    y: baseY
+  }
+}
+
+function createPanoramaImageNodes(payload) {
+  const base = getPanoramaBasePosition()
+  const timestamp = Date.now()
+  const ratio = payload.width / payload.height
+  const cardWidth = payload.mode === 'current-view' ? 360 : 300
+  const cardHeight = Math.round(cardWidth / ratio) + 44
+  const cols = payload.frames.length === 1 ? 1 : 2
+  const gap = 24
+  const nodeIds = []
+
+  payload.frames.forEach((frame, index) => {
+    const blobUrl = createTrackedBlobUrl(frame.blob)
+    const nodeId = `panorama-view-${timestamp}-${index}`
+    const col = index % cols
+    const row = Math.floor(index / cols)
+
+    canvasStore.addNode({
+      id: nodeId,
+      type: 'image',
+      position: {
+        x: base.x + col * (cardWidth + gap),
+        y: base.y + row * (cardHeight + gap)
+      },
+      data: {
+        label: frame.label || `全景视角 ${index + 1}`,
+        title: frame.label || `全景视角 ${index + 1}`,
+        nodeRole: 'source',
+        sourceImages: [blobUrl],
+        isGenerated: true,
+        fromPanorama: true,
+        panoramaProjection: payload.projection,
+        panoramaRatio: payload.ratio,
+        isUploading: true
+      }
+    })
+
+    nodeIds.push(nodeId)
+    const file = new File([frame.blob], `panorama-${timestamp}-${index}.png`, { type: 'image/png' })
+    uploadPanoramaFrameAsync({ file, blobUrl, nodeId, targetType: 'image' })
+  })
+
+  if (nodeIds.length > 1) {
+    nextTick(() => canvasStore.createGroup(nodeIds, '全景视角'))
+  }
+}
+
+function createPanoramaStoryboard(payload) {
+  const base = getPanoramaBasePosition()
+  const timestamp = Date.now()
+  const nodeId = `panorama-storyboard-${timestamp}`
+  const images = payload.frames.map(frame => createTrackedBlobUrl(frame.blob))
+
+  canvasStore.addNode({
+    id: nodeId,
+    type: 'storyboard',
+    position: base,
+    data: {
+      title: payload.storyboardGridSize === '2x2' ? '全景4宫格' : '全景12宫格',
+      gridSize: payload.storyboardGridSize || '2x2',
+      aspectRatio: payload.ratio,
+      gridScale: 1,
+      images,
+      output: null,
+      nodeWidth: 720,
+      fromPanorama: true,
+      panoramaProjection: payload.projection,
+      isUploading: true
+    }
+  })
+
+  payload.frames.forEach((frame, index) => {
+    const file = new File([frame.blob], `panorama-storyboard-${timestamp}-${index}.png`, { type: 'image/png' })
+    uploadPanoramaFrameAsync({
+      file,
+      blobUrl: images[index],
+      nodeId,
+      targetType: 'storyboard',
+      index
+    })
+  })
+}
+
+async function uploadPanoramaFrameAsync({ file, blobUrl, nodeId, targetType, index }) {
+  try {
+    const urls = await uploadImages([file])
+    if (!urls?.length) throw new Error('上传结果为空')
+
+    const serverUrl = urls[0]
+    const node = canvasStore.nodes.find(n => n.id === nodeId)
+    if (!node) return
+
+    if (targetType === 'storyboard') {
+      const nextImages = [...(node.data?.images || [])]
+      nextImages[index] = serverUrl
+      const allUploaded = nextImages.every(url => url && !url.startsWith('blob:'))
+      canvasStore.updateNodeData(nodeId, {
+        images: nextImages,
+        isUploading: !allUploaded
+      })
+    } else {
+      const nextSourceImages = (node.data?.sourceImages || []).map(url => url === blobUrl ? serverUrl : url)
+      canvasStore.updateNodeData(nodeId, {
+        sourceImages: nextSourceImages,
+        isUploading: false
+      })
+    }
+
+    await nextTick()
+    revokeTrackedBlobUrl(blobUrl)
+  } catch (error) {
+    console.error('[ImageNode] 全景视角上传失败:', error)
+    const node = canvasStore.nodes.find(n => n.id === nodeId)
+    if (node) {
+      canvasStore.updateNodeData(nodeId, { isUploading: false, uploadFailed: true })
+    }
   }
 }
 
@@ -3190,6 +3527,10 @@ const outputImages = computed(() => {
 
 // 源图片（上传的）
 const sourceImages = computed(() => props.data.sourceImages || [])
+
+watch(currentImageUrl, (url) => {
+  detectPanoramaImage(url)
+}, { immediate: true })
 
 // 继承的参考图片（来自左侧连接的节点，支持多图和自定义顺序）
 // 使用 canvasStore 的边索引 O(1) 查找，避免全量遍历 O(N*E)
@@ -5001,6 +5342,7 @@ function autoResizeTextarea() {
 
 // 监听 promptText 变化，自动调整高度
 watch(promptText, () => {
+  persistNodePromptDraft(canvasStore, props.id, 'prompt', promptText.value)
   nextTick(() => {
     autoResizeTextarea()
   })
@@ -5861,45 +6203,97 @@ async function handleDrop(event) {
         </svg>
         <span>{{ isImageHDProcessing ? '处理中...' : '高清' }}</span>
       </button>
-      <button class="toolbar-btn" title="重绘" @mousedown.stop.prevent="handleToolbarRepaint" @click.stop.prevent>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"/>
+      <button
+        class="toolbar-btn panorama-generate-btn"
+        :class="{ 'is-processing': isPanoramaGenerating }"
+        title="生成全景图"
+        :disabled="isPanoramaGenerating"
+        @mousedown.stop.prevent="handleToolbarGeneratePanorama"
+        @click.stop.prevent
+      >
+        <svg v-if="!isPanoramaGenerating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 12h16M12 4c2.2 2.3 3.3 5 3.3 8s-1.1 5.7-3.3 8M12 4c-2.2 2.3-3.3 5-3.3 8s1.1 5.7 3.3 8" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>重绘</span>
-      </button>
-      <button class="toolbar-btn" title="擦除" @mousedown.stop.prevent="handleToolbarErase" @click.stop.prevent>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M18.364 5.636a9 9 0 11-12.728 0M12 3v9" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M4.5 16.5l3-3 3 3-3 3-3-3z" stroke-linecap="round" stroke-linejoin="round"/>
+        <svg v-else class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
         </svg>
-        <span>擦除</span>
+        <span>{{ isPanoramaGenerating ? '生成中...' : '生成全景图' }}</span>
       </button>
-      <button class="toolbar-btn" title="编辑" @mousedown.stop.prevent="handleToolbarEnhance" @click.stop.prevent>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>编辑</span>
-      </button>
-      <div class="toolbar-btn-wrapper">
-        <button 
-          class="toolbar-btn" 
-          :class="{ 'is-processing': isRemovingBackground }"
-          title="抠图" 
-          @click.stop="handleToolbarCutout"
-          :disabled="isRemovingBackground"
+      <div class="toolbar-btn-wrapper image-edit-menu-wrapper">
+        <button
+          class="toolbar-btn"
+          :class="{ active: showImageEditMenu }"
+          title="编辑"
+          @mousedown.stop.prevent="handleToolbarEditMenuClick"
+          @click.stop.prevent
         >
-          <svg v-if="!isRemovingBackground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M4 4h4M4 4v4M20 4h-4M20 4v4M4 20h4M4 20v-4M20 20h-4M20 20v-4" stroke-linecap="round" stroke-linejoin="round"/>
-            <circle cx="12" cy="12" r="5" stroke-dasharray="3 2"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <svg v-else class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
-            <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+          <span>编辑</span>
+          <svg class="toolbar-dropdown-arrow" :class="{ open: showImageEditMenu }" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M4 6l4 4 4-4" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
-          <span>{{ isRemovingBackground ? `${removeBgProgress}%` : '抠图' }}</span>
         </button>
-        
+
+        <div v-if="showImageEditMenu" class="image-edit-dropdown" @click.stop.prevent @mousedown.stop.prevent>
+          <button class="image-edit-dropdown-item" @click="runImageEditAction(handleToolbarEnhance)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>编辑</span>
+          </button>
+          <button class="image-edit-dropdown-item" @click="runImageEditAction(handleToolbarRepaint)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>重绘</span>
+          </button>
+          <button class="image-edit-dropdown-item" @click="runImageEditAction(handleToolbarErase)">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M18.364 5.636a9 9 0 1 1-12.728 0M12 3v9" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M4.5 16.5l3-3 3 3-3 3-3-3z" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>擦除</span>
+          </button>
+          <button
+            class="image-edit-dropdown-item"
+            :class="{ 'is-processing': isRemovingBackground }"
+            :disabled="isRemovingBackground"
+            @click="runImageEditAction(handleToolbarCutout)"
+          >
+            <svg v-if="!isRemovingBackground" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M4 4h4M4 4v4M20 4h-4M20 4v4M4 20h4M4 20v-4M20 20h-4M20 20v-4" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="12" cy="12" r="5" stroke-dasharray="3 2"/>
+            </svg>
+            <svg v-else class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+              <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+            </svg>
+            <span>{{ isRemovingBackground ? `${removeBgProgress}%` : '抠图' }}</span>
+          </button>
+          <button
+            class="image-edit-dropdown-item"
+            :class="{ 'is-processing': isOutpainting }"
+            :disabled="isOutpainting"
+            @click="runImageEditAction(handleToolbarOutpaint)"
+          >
+            <svg v-if="!isOutpainting" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <rect x="6" y="6" width="12" height="12" rx="1" stroke-dasharray="3 2"/>
+              <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" stroke-linecap="round"/>
+            </svg>
+            <svg v-else class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+              <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+            </svg>
+            <span>扩图</span>
+          </button>
+        </div>
+
         <!-- 抠图选项弹窗 -->
         <Transition name="cutout-popup">
           <div v-if="showCutoutOptions" class="cutout-options-popup" @click.stop>
@@ -5951,23 +6345,6 @@ async function handleDrop(event) {
           </div>
         </Transition>
       </div>
-      <button 
-        class="toolbar-btn" 
-        :class="{ 'is-processing': isOutpainting }"
-        title="扩图" 
-        @click.stop="handleToolbarOutpaint"
-        :disabled="isOutpainting"
-      >
-        <svg v-if="!isOutpainting" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <rect x="6" y="6" width="12" height="12" rx="1" stroke-dasharray="3 2"/>
-          <path d="M3 8V5a2 2 0 0 1 2-2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M8 21H5a2 2 0 0 1-2-2v-3" stroke-linecap="round"/>
-        </svg>
-        <svg v-else class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
-          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
-        </svg>
-        <span>扩图</span>
-      </button>
       <div class="toolbar-btn-wrapper" style="position:relative">
         <button class="toolbar-btn" title="宫格裁剪" @mousedown.stop.prevent="showGridCropMenu('selecting')" @click.stop.prevent>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -6045,6 +6422,19 @@ async function handleDrop(event) {
           <button class="grid-crop-dropdown-cancel" @click.stop.prevent="closeGridCropMenu">取消</button>
         </div>
       </div>
+      <button
+        v-if="isPanoramaCandidate"
+        class="toolbar-btn panorama-vr-btn"
+        title="全景VR预览"
+        @mousedown.stop.prevent="openPanoramaPreview"
+        @click.stop.prevent
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 12h16M12 4c2.2 2.3 3.3 5 3.3 8s-1.1 5.7-3.3 8M12 4c-2.2 2.3-3.3 5-3.3 8s1.1 5.7 3.3 8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>全景VR</span>
+      </button>
       <button class="toolbar-btn" :class="{ active: show3DCamera }" title="3D相机角度" @mousedown.stop.prevent="handleToolbar3DCamera" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <!-- 相机机身 -->
@@ -6095,6 +6485,14 @@ async function handleDrop(event) {
         </svg>
       </button>
     </div>
+
+    <PanoramaPreviewModal
+      v-if="showPanoramaPreview && currentImageUrl"
+      :image-url="currentImageUrl"
+      :load-image-url="resolvePanoramaImageUrl"
+      @close="closePanoramaPreview"
+      @export="handlePanoramaExport"
+    />
     
     <!-- 3D 相机角度控制面板 -->
     <Teleport to="body">
@@ -6951,6 +7349,15 @@ async function handleDrop(event) {
   cursor: wait;
 }
 
+.image-toolbar .panorama-vr-btn {
+  color: #facc15;
+}
+
+.image-toolbar .panorama-vr-btn:hover {
+  color: #fde68a;
+  background: rgba(250, 204, 21, 0.12);
+}
+
 /* 3D相机面板动画 */
 .camera-panel-enter-active,
 .camera-panel-leave-active {
@@ -6980,6 +7387,86 @@ async function handleDrop(event) {
 /* 工具栏按钮包装器 - 用于弹窗定位 */
 .image-toolbar .toolbar-btn-wrapper {
   position: relative;
+}
+
+.image-toolbar .toolbar-dropdown-arrow {
+  width: 12px;
+  height: 12px;
+  opacity: 0.7;
+  transition: transform 0.15s ease;
+}
+
+.image-toolbar .toolbar-dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.image-edit-dropdown {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 126px;
+  padding: 6px;
+  background: #202020;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  pointer-events: auto;
+}
+
+.image-edit-dropdown::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  background: #202020;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.image-edit-dropdown-item {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #d1d5db;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.image-edit-dropdown-item:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.image-edit-dropdown-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.image-edit-dropdown-item.is-processing {
+  color: #60a5fa;
+}
+
+.image-edit-dropdown-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 /* ========== 宫格裁剪下拉菜单 ========== */
@@ -9672,6 +10159,27 @@ async function handleDrop(event) {
 
 :root.canvas-theme-light .image-node .image-toolbar .toolbar-divider {
   background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .image-node .image-toolbar .image-edit-dropdown {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.14);
+}
+
+:root.canvas-theme-light .image-node .image-toolbar .image-edit-dropdown::after {
+  background: rgba(255, 255, 255, 0.98);
+  border-right-color: rgba(0, 0, 0, 0.1);
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .image-node .image-toolbar .image-edit-dropdown-item {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .image-toolbar .image-edit-dropdown-item:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+  color: #1c1917;
 }
 
 /* 上传按钮 - 白昼模式 */

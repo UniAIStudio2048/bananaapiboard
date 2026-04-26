@@ -688,7 +688,7 @@ export default {
     purchase: 'Покупка',
     gift: 'Подарок',
     deduct: 'Списание',
-    milestone: 'Награда за достижение'
+    milestone: 'Награда за достижение',
+    image_panorama_generate: 'Создание панорамного изображения'
   }
 }
-

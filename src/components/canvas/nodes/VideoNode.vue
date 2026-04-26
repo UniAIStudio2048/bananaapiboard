@@ -28,6 +28,7 @@ import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { getMentionPopupPosition, getTextareaCaretViewportRect, isBrowserRenderableUrl } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
+import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
@@ -2351,6 +2352,7 @@ watch(selectedModel, () => {
 
 // 监听 promptText 变化，自动调整文本框高度
 watch(promptText, () => {
+  persistNodePromptDraft(canvasStore, props.id, 'prompt', promptText.value)
   nextTick(() => {
     autoResizeTextarea()
   })

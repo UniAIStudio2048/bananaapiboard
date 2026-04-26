@@ -104,6 +104,7 @@ const gridSizeOptions = [
   { value: '3x1', label: '3×1' },
   { value: '3x2', label: '3×2' },
   { value: '3x3', label: '3×3' },
+  { value: '3x4', label: '3×4' },
   { value: '4x1', label: '4×1' },
   { value: '4x4', label: '4×4' },
   { value: '5x5', label: '5×5' }
@@ -166,6 +167,7 @@ const layoutConfig = computed(() => {
     '3x1': { cols: 1, rows: 3, count: 3 },
     '3x2': { cols: 2, rows: 3, count: 6 },
     '3x3': { cols: 3, rows: 3, count: 9 },
+    '3x4': { cols: 4, rows: 3, count: 12 },
     '4x1': { cols: 1, rows: 4, count: 4 },
     '4x4': { cols: 4, rows: 4, count: 16 },
     '5x5': { cols: 5, rows: 5, count: 25 }
@@ -2092,6 +2094,7 @@ const hasAnyImage = computed(() => {
 .grid-3x1 { grid-template-columns: 1fr; grid-template-rows: repeat(3, 1fr); }
 .grid-3x2 { grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(3, 1fr); }
 .grid-3x3 { grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); }
+.grid-3x4 { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(3, 1fr); }
 .grid-4x1 { grid-template-columns: 1fr; grid-template-rows: repeat(4, 1fr); }
 .grid-4x4 { grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr); }
 .grid-5x5 { grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 1fr); }

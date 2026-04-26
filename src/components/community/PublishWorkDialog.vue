@@ -425,6 +425,12 @@ function validateWorkFile(file) {
   return true
 }
 
+function getMediaRequiredMessage() {
+  if (uploadType.value === 'image') return '请上传至少 1 张作品图片'
+  if (uploadType.value === 'video') return '请上传作品视频文件'
+  return '请上传作品图片或视频文件'
+}
+
 // 封面上传
 async function handleCoverChange(e) {
   const file = e instanceof File ? e : e.target.files?.[0]
@@ -567,7 +573,7 @@ async function handlePublish() {
   if (!title.value.trim()) { error.value = '请输入作品名称'; return }
   if (!coverFile.value && !coverPreview.value) { error.value = '请上传封面图'; return }
   const isMultiImage = workFiles.value.length > 0
-  if (!isMultiImage && !workFile.value && !workPreview.value) { error.value = '请上传作品媒体文件'; return }
+  if (!isMultiImage && !workFile.value && !workPreview.value) { error.value = getMediaRequiredMessage(); return }
   const hasWorkflow = !!selectedWorkflowId.value
   const hasProject = linkProject.value && !!selectedProjectId.value
   if (!hasWorkflow && !hasProject) { error.value = '请选择关联工作流或关联项目'; return }
@@ -855,7 +861,7 @@ async function handlePublish() {
                         <span class="text-xs">点击上传图片或视频</span>
                       </div>
                     </div>
-                    <input ref="workInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm" class="hidden" @change="handleWorkFileChange" />
+                    <input ref="workInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/quicktime,video/webm" multiple class="hidden" @change="handleWorkFileChange" />
                     <p v-if="workFile" class="text-xs text-white/30 mt-1.5 truncate">{{ workFile.name }} · {{ formatFileSize(workFile.size) }}</p>
                     <div v-else class="mt-1.5">
                       <p class="text-[11px] text-white/20">支持图片（PNG、JPG，最多9张）或视频（MP4、MOV、WebM，≤500MB）</p>

@@ -1878,6 +1878,77 @@ export const useCanvasStore = defineStore('canvas', () => {
   function getCurrentTab() {
     return workflowTabs.value.find(t => t.id === activeTabId.value)
   }
+
+  /**
+   * 导出完整多标签会话，包含当前活动标签的最新画布状态。
+   */
+  function exportWorkflowSession() {
+    const currentTabId = activeTabId.value
+    const tabs = workflowTabs.value.map(tab => {
+      const isActive = tab.id === currentTabId
+      const tabNodes = isActive ? nodes.value : tab.nodes
+      const tabEdges = isActive ? edges.value : tab.edges
+      const tabViewport = isActive ? viewport.value : tab.viewport
+
+      return {
+        id: tab.id,
+        name: tab.name,
+        workflowId: tab.workflowId,
+        workflowUid: tab.workflowUid,
+        workflowSpaceType: tab.workflowSpaceType,
+        workflowTeamId: tab.workflowTeamId,
+        nodes: JSON.parse(JSON.stringify(toRaw(tabNodes || []))),
+        edges: JSON.parse(JSON.stringify(toRaw(tabEdges || []))),
+        viewport: { ...(tabViewport || { x: 0, y: 0, zoom: 1 }) },
+        hasChanges: !!tab.hasChanges
+      }
+    })
+
+    return {
+      tabs,
+      activeTabId: currentTabId
+    }
+  }
+
+  /**
+   * 从刷新前保存的会话恢复所有打开的工作流标签。
+   */
+  function restoreWorkflowSession(session) {
+    if (!session || !Array.isArray(session.tabs) || session.tabs.length === 0) {
+      return false
+    }
+
+    const restoredTabs = session.tabs.slice(0, maxTabs).map(tab => {
+      const tabNodes = Array.isArray(tab.nodes) ? JSON.parse(JSON.stringify(tab.nodes)) : []
+      const tabNodeIds = new Set(tabNodes.map(n => n.id))
+      const tabEdges = Array.isArray(tab.edges)
+        ? cleanEdges(tab.edges).filter(e => tabNodeIds.has(e.source) && tabNodeIds.has(e.target))
+        : []
+
+      return {
+        id: tab.id || generateTabId(),
+        name: tab.name || t('canvas.newWorkflow'),
+        workflowId: tab.workflowId || null,
+        workflowUid: tab.workflowUid || null,
+        workflowSpaceType: tab.workflowSpaceType || null,
+        workflowTeamId: tab.workflowTeamId || null,
+        nodes: tabNodes,
+        edges: tabEdges,
+        viewport: tab.viewport || { x: 0, y: 0, zoom: 1 },
+        hasChanges: !!tab.hasChanges
+      }
+    })
+
+    workflowTabs.value = restoredTabs
+    activeTabId.value = null
+
+    const activeId = restoredTabs.some(tab => tab.id === session.activeTabId)
+      ? session.activeTabId
+      : restoredTabs[0].id
+    switchToTab(activeId)
+
+    return true
+  }
   
   /**
    * 合并工作流到当前画布（拖拽合并）
@@ -2548,6 +2619,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     openWorkflowInNewTab,
     initDefaultTab,
     getCurrentTab,
+    exportWorkflowSession,
+    restoreWorkflowSession,
     mergeWorkflowToCanvas,
     
     // 工具函数

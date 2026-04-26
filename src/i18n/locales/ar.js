@@ -688,7 +688,7 @@ export default {
     purchase: 'شراء',
     gift: 'هدية',
     deduct: 'خصم',
-    milestone: 'مكافأة الإنجاز'
+    milestone: 'مكافأة الإنجاز',
+    image_panorama_generate: 'إنشاء صورة بانورامية'
   }
 }
-

@@ -357,6 +357,22 @@ export async function getImageHdTaskStatus(taskId) {
 }
 
 /**
+ * 查询图片生成全景图任务状态
+ */
+export async function getImagePanoramaTaskStatus(taskId) {
+  const response = await fetch(getApiUrl(`/api/images/panorama-generate/task/${taskId}`), {
+    headers: getHeaders()
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || '查询生成全景图任务状态失败')
+  }
+
+  return response.json()
+}
+
+/**
  * 查询图片抠图任务状态
  */
 export async function getRemoveBackgroundTaskStatus(taskId) {

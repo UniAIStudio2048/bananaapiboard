@@ -1,0 +1,51 @@
+<h2>全景 VR 预览功能接入点</h2>
+<p class="subtitle">先确认目标范围，再定具体实现。当前本地画布里已有图片节点工具栏、宫格裁剪、分镜格子，可以在这些能力上扩展。</p>
+
+<div class="mockup">
+  <div class="mockup-header">Assumed Flow</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 80px 1fr 80px 1fr;gap:16px;align-items:center;">
+      <div style="border:1px solid #374151;border-radius:8px;padding:16px;background:#111827;">
+        <div style="height:72px;border-radius:6px;background:linear-gradient(90deg,#d7c4a4,#f3ead8,#b8d0c0);margin-bottom:12px;"></div>
+        <h3 style="margin:0 0 6px;">21:9 图片节点</h3>
+        <p style="margin:0;color:#9ca3af;">节点上方显示“全景 VR”按钮</p>
+      </div>
+      <div style="text-align:center;color:#9ca3af;font-size:28px;">→</div>
+      <div style="border:1px solid #374151;border-radius:8px;padding:16px;background:#111827;">
+        <div style="height:72px;border-radius:6px;background:#030712;position:relative;overflow:hidden;margin-bottom:12px;">
+          <div style="position:absolute;inset:18px 36px;border-radius:6px;background:linear-gradient(90deg,#efe4d1,#f8f3e9,#c5d9bd);"></div>
+        </div>
+        <h3 style="margin:0 0 6px;">VR 预览弹层</h3>
+        <p style="margin:0;color:#9ca3af;">自动慢速旋转，鼠标拖动镜头</p>
+      </div>
+      <div style="text-align:center;color:#9ca3af;font-size:28px;">→</div>
+      <div style="border:1px solid #374151;border-radius:8px;padding:16px;background:#111827;">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin-bottom:12px;">
+          <div style="height:32px;border-radius:4px;background:#f0e6d7;"></div>
+          <div style="height:32px;border-radius:4px;background:#dcc6ad;"></div>
+          <div style="height:32px;border-radius:4px;background:#cbd8c4;"></div>
+          <div style="height:32px;border-radius:4px;background:#efe9db;"></div>
+        </div>
+        <h3 style="margin:0 0 6px;">输出到画布</h3>
+        <p style="margin:0;color:#9ca3af;">当前视角、4/12 张场景图、4 宫格或 12 宫格</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="bananaapiboard" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>改本地 bananaapiboard 画布</h3>
+      <p>在当前 `/opt/banana/bananaapiboard` 的图片节点工具栏和分镜格子上扩展。</p>
+    </div>
+  </div>
+  <div class="option" data-choice="ai-canvaspro" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>改 GitHub AI-CanvasPro 项目</h3>
+      <p>先把 `ashuoAI/AI-CanvasPro` 作为目标项目完整拉取/定位，再按它的结构实现。</p>
+    </div>
+  </div>
+</div>

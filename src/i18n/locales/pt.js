@@ -688,7 +688,7 @@ export default {
     purchase: 'Compra',
     gift: 'Presente',
     deduct: 'Dedução',
-    milestone: 'Recompensa de marco'
+    milestone: 'Recompensa de marco',
+    image_panorama_generate: 'Geração de imagem panorâmica'
   }
 }
-

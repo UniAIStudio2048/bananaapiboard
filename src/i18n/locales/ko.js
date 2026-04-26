@@ -899,6 +899,7 @@ export default {
     canvas_crop: '캔버스 자르기',
     image_hd_upscale: '이미지 HD 업스케일',
     image_multiangle: '멀티 앵글 이미지',
+    image_panorama_generate: '파노라마 이미지 생성',
     video_hd_upscale: '비디오 HD 업스케일',
     llm_chat: 'LLM 채팅',
     llm_action: 'LLM 작업',

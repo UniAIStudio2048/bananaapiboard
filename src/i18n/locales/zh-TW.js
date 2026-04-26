@@ -738,6 +738,7 @@ export default {
     canvas_crop: '畫布裁剪',
     image_hd_upscale: '圖片高清放大',
     image_multiangle: '圖片多視角',
+    image_panorama_generate: '生成全景圖',
     video_hd_upscale: '影片高清放大',
     llm_chat: 'LLM 對話',
     llm_action: 'LLM 操作',
