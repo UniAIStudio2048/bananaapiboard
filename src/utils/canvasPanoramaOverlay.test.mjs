@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict'
 import {
   clampOverlayPosition,
+  createPanoramaOverlayPresets,
   createDefaultOverlay,
   getNextOverlayLabel,
   getOverlayExportRect,
+  moveOverlayInStack,
+  normalizeOverlayStack,
   sortVisibleOverlays
 } from './canvasPanoramaOverlay.js'
 
@@ -89,5 +92,31 @@ assert.deepEqual(
     top: 0
   }
 )
+
+const normalized = normalizeOverlayStack([
+  { id: 'a', zIndex: 30 },
+  { id: 'b', zIndex: 10 },
+  { id: 'c', zIndex: 10 }
+])
+assert.deepEqual(normalized.map(item => [item.id, item.zIndex]), [['a', 1], ['b', 2], ['c', 3]])
+
+assert.deepEqual(
+  moveOverlayInStack(normalized, 'a', 'up').map(item => [item.id, item.zIndex]),
+  [['b', 1], ['a', 2], ['c', 3]]
+)
+assert.deepEqual(
+  moveOverlayInStack(normalized, 'c', 'down').map(item => [item.id, item.zIndex]),
+  [['a', 1], ['c', 2], ['b', 3]]
+)
+assert.deepEqual(
+  moveOverlayInStack(normalized, 'a', 2).map(item => [item.id, item.zIndex]),
+  [['b', 1], ['c', 2], ['a', 3]]
+)
+
+const presets = createPanoramaOverlayPresets()
+assert.equal(presets.people.length, 8)
+assert.equal(presets.objects.length, 10)
+assert.equal(presets.people.every(item => item.type === 'person' && item.source === 'preset' && item.url.startsWith('data:image/svg+xml')), true)
+assert.equal(presets.objects.every(item => item.type === 'object' && item.source === 'preset' && item.url.startsWith('data:image/svg+xml')), true)
 
 console.log('canvasPanoramaOverlay tests passed')

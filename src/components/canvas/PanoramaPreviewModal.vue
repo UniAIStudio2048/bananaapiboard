@@ -12,8 +12,11 @@ import {
 } from '@/utils/canvasPanoramaExport'
 import {
   clampOverlayPosition,
+  createPanoramaOverlayPresets,
   createDefaultOverlay,
   getOverlayExportRect,
+  moveOverlayInStack,
+  normalizeOverlayStack,
   sortVisibleOverlays
 } from '@/utils/canvasPanoramaOverlay'
 
@@ -50,6 +53,9 @@ const assetImages = ref([])
 const historyImages = ref([])
 const loadedOverlayTabs = ref(new Set())
 const overlayDrag = ref(null)
+const rowDragId = ref(null)
+const editingOverlayId = ref(null)
+const editingLabelDraft = ref('')
 
 const yaw = ref(0)
 const pitch = ref(0)
@@ -72,6 +78,14 @@ const selectedProjectionLabel = computed(() => {
 })
 const selectedOverlay = computed(() => overlays.value.find(item => item.id === selectedOverlayId.value) || null)
 const visibleSortedOverlays = computed(() => sortVisibleOverlays(overlays.value))
+const overlayPresets = createPanoramaOverlayPresets()
+const currentPickerItems = computed(() => {
+  if (overlayPickerTab.value === 'asset') return assetImages.value
+  if (overlayPickerTab.value === 'history') return historyImages.value
+  if (overlayPickerTab.value === 'local') return []
+  if (overlayPickerTab.value === 'object') return overlayPresets.objects
+  return overlayPresets.people
+})
 const outputFrameStyle = computed(() => {
   const ratio = ratioOption.value.width / ratioOption.value.height
   const maxWidth = 'min(72vw, 1120px)'
@@ -266,34 +280,6 @@ function clampPitch(value) {
   return Math.max(-82, Math.min(82, value))
 }
 
-function createSvgDataUrl(svg) {
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
-}
-
-const presetMannequins = [
-  {
-    id: 'person-silhouette-1',
-    name: '人物假人1',
-    type: 'person',
-    source: 'preset',
-    url: createSvgDataUrl('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="720" viewBox="0 0 320 720"><g fill="#ffffff" stroke="#111827" stroke-width="10"><circle cx="160" cy="76" r="48"/><path d="M116 142h88l32 196h-58v320h-36V338H84z"/></g></svg>')
-  },
-  {
-    id: 'person-silhouette-2',
-    name: '人物假人2',
-    type: 'person',
-    source: 'preset',
-    url: createSvgDataUrl('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="720" viewBox="0 0 320 720"><g fill="#dbeafe" stroke="#1e3a8a" stroke-width="10"><circle cx="160" cy="72" r="44"/><path d="M130 132h60l70 200-46 16-28-76v386h-38V272l-28 76-46-16z"/></g></svg>')
-  },
-  {
-    id: 'object-block-1',
-    name: '物品占位',
-    type: 'object',
-    source: 'preset',
-    url: createSvgDataUrl('<svg xmlns="http://www.w3.org/2000/svg" width="520" height="420" viewBox="0 0 520 420"><rect x="48" y="72" width="424" height="276" rx="28" fill="#f8fafc" stroke="#0f172a" stroke-width="12"/><path d="M96 292l96-96 72 72 64-64 96 88" fill="none" stroke="#0f172a" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/></svg>')
-  }
-]
-
 async function getImageNaturalSize(url) {
   const image = await loadImageElement(url)
   return {
@@ -314,7 +300,7 @@ async function addOverlayFromSource(source) {
       naturalWidth: size.naturalWidth,
       naturalHeight: size.naturalHeight
     })
-    overlays.value.push(overlay)
+    overlays.value = normalizeOverlayStack([...overlays.value, overlay])
     selectedOverlayId.value = overlay.id
     overlayPickerOpen.value = false
     isAutoRotating.value = false
@@ -403,7 +389,7 @@ function deleteOverlay(id) {
     URL.revokeObjectURL(target.url)
     localObjectUrls.delete(target.url)
   }
-  overlays.value = overlays.value.filter(item => item.id !== id)
+  overlays.value = normalizeOverlayStack(overlays.value.filter(item => item.id !== id))
   if (selectedOverlayId.value === id) {
     selectedOverlayId.value = overlays.value.at(-1)?.id || null
   }
@@ -421,14 +407,32 @@ function clearOverlays() {
 }
 
 function moveOverlay(id, direction) {
-  const current = overlays.value.find(item => item.id === id)
-  if (!current) return
-  const delta = direction === 'up' ? 1 : -1
-  updateOverlayById(id, { zIndex: Math.max(1, (Number(current.zIndex) || 1) + delta) })
+  overlays.value = moveOverlayInStack(overlays.value, id, direction)
 }
 
 function getFrameRect() {
   return frameRef.value?.getBoundingClientRect() || null
+}
+
+function beginInlineRename(overlay) {
+  editingOverlayId.value = overlay.id
+  editingLabelDraft.value = overlay.label || ''
+  nextTick(() => {
+    document.querySelector(`[data-overlay-label-input="${overlay.id}"]`)?.focus()
+  })
+}
+
+function commitInlineRename() {
+  if (!editingOverlayId.value) return
+  const label = editingLabelDraft.value.trim()
+  if (label) updateOverlayById(editingOverlayId.value, { label })
+  editingOverlayId.value = null
+  editingLabelDraft.value = ''
+}
+
+function cancelInlineRename() {
+  editingOverlayId.value = null
+  editingLabelDraft.value = ''
 }
 
 function handleOverlayPointerDown(event, overlay) {
@@ -444,7 +448,23 @@ function handleOverlayPointerDown(event, overlay) {
     startY: event.clientY,
     originalX: overlay.x,
     originalY: overlay.y,
+    mode: 'move',
     rect
+  }
+  event.currentTarget.setPointerCapture?.(event.pointerId)
+}
+
+function handleOverlayResizePointerDown(event, overlay) {
+  event.preventDefault()
+  event.stopPropagation()
+  selectedOverlayId.value = overlay.id
+  isAutoRotating.value = false
+  overlayDrag.value = {
+    id: overlay.id,
+    startX: event.clientX,
+    startY: event.clientY,
+    originalScale: Number(overlay.scale) || 1,
+    mode: 'resize'
   }
   event.currentTarget.setPointerCapture?.(event.pointerId)
 }
@@ -454,6 +474,13 @@ function handleOverlayPointerMove(event) {
   event.preventDefault()
   event.stopPropagation()
   const drag = overlayDrag.value
+  if (drag.mode === 'resize') {
+    const distance = Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY)
+    const direction = (event.clientX - drag.startX) + (event.clientY - drag.startY) >= 0 ? 1 : -1
+    const nextScale = Math.max(0.2, Math.min(3, drag.originalScale + direction * distance / 220))
+    updateOverlayById(drag.id, { scale: Number(nextScale.toFixed(2)) })
+    return
+  }
   const next = clampOverlayPosition({
     x: drag.originalX + (event.clientX - drag.startX) / Math.max(1, drag.rect.width),
     y: drag.originalY + (event.clientY - drag.startY) / Math.max(1, drag.rect.height)
@@ -467,6 +494,21 @@ function handleOverlayPointerUp(event) {
   event.stopPropagation()
   overlayDrag.value = null
   event.currentTarget.releasePointerCapture?.(event.pointerId)
+}
+
+function handleRowDragStart(event, overlay) {
+  rowDragId.value = overlay.id
+  selectedOverlayId.value = overlay.id
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', overlay.id)
+}
+
+function handleRowDrop(event, targetOverlay) {
+  const sourceId = rowDragId.value || event.dataTransfer.getData('text/plain')
+  rowDragId.value = null
+  if (!sourceId || sourceId === targetOverlay.id) return
+  const targetIndex = overlays.value.findIndex(item => item.id === targetOverlay.id)
+  overlays.value = moveOverlayInStack(overlays.value, sourceId, targetIndex)
 }
 
 function getOverlayFrameStyle(overlay) {
@@ -669,11 +711,6 @@ async function captureView(view) {
           <button class="primary-action" :disabled="isLoading || isExporting || !!errorMessage" @click="exportCurrentView">
             {{ isExporting ? '提取中...' : '提取当前视角' }}
           </button>
-          <div class="overlay-menu">
-            <button type="button" :disabled="isLoading || isExporting || !!errorMessage" @click="openOverlayPicker('preset')">添加图片</button>
-            <button type="button" :class="{ active: showOverlayLabels }" @click="showOverlayLabels = !showOverlayLabels">标签</button>
-            <button type="button" :disabled="overlays.length === 0" @click="clearOverlays">清空贴片</button>
-          </div>
           <input
             ref="localFileInputRef"
             class="sr-only-file"
@@ -709,8 +746,36 @@ async function captureView(view) {
             @pointerup="handleOverlayPointerUp"
             @pointercancel="handleOverlayPointerUp"
           >
-            <div v-if="showOverlayLabels" class="overlay-label" :style="{ transform: overlay.flipped ? 'translateX(-50%) scaleX(-1)' : 'translateX(-50%)' }">{{ overlay.label }}</div>
+            <input
+              v-if="editingOverlayId === overlay.id"
+              :data-overlay-label-input="overlay.id"
+              class="overlay-label-input"
+              v-model="editingLabelDraft"
+              @pointerdown.stop
+              @keydown.enter.prevent="commitInlineRename"
+              @keydown.esc.prevent="cancelInlineRename"
+              @blur="commitInlineRename"
+            />
+            <div
+              v-else-if="showOverlayLabels"
+              class="overlay-label"
+              :style="{ transform: overlay.flipped ? 'translateX(-50%) scaleX(-1)' : 'translateX(-50%)' }"
+              @pointerdown.stop
+              @dblclick.stop="beginInlineRename(overlay)"
+            >
+              {{ overlay.label }}
+            </div>
             <img :src="overlay.url" draggable="false" />
+            <button
+              v-if="overlay.id === selectedOverlayId"
+              type="button"
+              class="overlay-resize-handle"
+              title="拖动缩放"
+              @pointerdown="handleOverlayResizePointerDown($event, overlay)"
+              @pointermove="handleOverlayPointerMove"
+              @pointerup="handleOverlayPointerUp"
+              @pointercancel="handleOverlayPointerUp"
+            ></button>
           </div>
         </div>
         <div v-if="isLoading" class="panorama-state">全景加载中...</div>
@@ -723,14 +788,25 @@ async function captureView(view) {
           <strong>贴片管理</strong>
           <span>{{ overlays.length }}</span>
         </div>
+        <div class="inspector-actions">
+          <button type="button" :disabled="isLoading || isExporting || !!errorMessage" @click="openOverlayPicker('preset')">添加图片</button>
+          <button type="button" :class="{ active: showOverlayLabels }" @click="showOverlayLabels = !showOverlayLabels">标签</button>
+          <button type="button" :disabled="overlays.length === 0" @click="clearOverlays">清空</button>
+        </div>
         <div v-if="overlays.length === 0" class="inspector-empty">暂无贴片</div>
         <div
           v-for="overlay in overlays"
           :key="overlay.id"
           class="overlay-row"
           :class="{ active: overlay.id === selectedOverlayId }"
+          draggable="true"
           @click="selectedOverlayId = overlay.id"
+          @dragstart="handleRowDragStart($event, overlay)"
+          @dragover.prevent
+          @drop.prevent="handleRowDrop($event, overlay)"
+          @dragend="rowDragId = null"
         >
+          <span class="drag-handle">⋮⋮</span>
           <img :src="overlay.url" alt="" />
           <span>{{ overlay.label }}</span>
           <button type="button" @click.stop="updateOverlayById(overlay.id, { visible: overlay.visible === false })">{{ overlay.visible === false ? '隐' : '显' }}</button>
@@ -768,6 +844,7 @@ async function captureView(view) {
           </header>
           <nav>
             <button type="button" :class="{ active: overlayPickerTab === 'preset' }" @click="overlayPickerTab = 'preset'">预设假人</button>
+            <button type="button" :class="{ active: overlayPickerTab === 'object' }" @click="overlayPickerTab = 'object'">物品</button>
             <button type="button" :class="{ active: overlayPickerTab === 'local' }" @click="overlayPickerTab = 'local'; triggerLocalOverlayUpload()">本地上传</button>
             <button type="button" :class="{ active: overlayPickerTab === 'asset' }" @click="overlayPickerTab = 'asset'; loadOverlayPickerTab('asset')">资产库</button>
             <button type="button" :class="{ active: overlayPickerTab === 'history' }" @click="overlayPickerTab = 'history'; loadOverlayPickerTab('history')">历史图片</button>
@@ -776,7 +853,7 @@ async function captureView(view) {
           <div v-else-if="overlayPickerError" class="picker-state is-error">{{ overlayPickerError }}</div>
           <div v-else class="picker-grid">
             <button
-              v-for="item in overlayPickerTab === 'asset' ? assetImages : overlayPickerTab === 'history' ? historyImages : presetMannequins"
+              v-for="item in currentPickerItems"
               :key="item.id"
               type="button"
               @click="addOverlayFromSource(item)"
@@ -877,12 +954,6 @@ async function captureView(view) {
   cursor: pointer;
 }
 
-.overlay-menu {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
 .panorama-controls button:hover:not(:disabled),
 .panorama-controls select:hover:not(:disabled) {
   border-color: rgba(167, 139, 250, 0.55);
@@ -899,11 +970,6 @@ async function captureView(view) {
   border-color: rgba(245, 158, 11, 0.45);
   background: rgba(245, 158, 11, 0.16);
   color: #fde68a;
-}
-
-.overlay-menu button.active {
-  border-color: rgba(45, 212, 191, 0.65);
-  color: #99f6e4;
 }
 
 .sr-only-file {
@@ -985,7 +1051,37 @@ async function captureView(view) {
   color: #fff;
   font-size: 12px;
   white-space: nowrap;
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.overlay-label-input {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  width: 96px;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border: 1px solid rgba(45, 212, 191, 0.8);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.9);
+  color: #fff;
+  font-size: 12px;
+  text-align: center;
+  pointer-events: auto;
+}
+
+.overlay-resize-handle {
+  position: absolute;
+  right: -7px;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  border: 2px solid #0f172a;
+  border-radius: 50%;
+  background: #2dd4bf;
+  cursor: nwse-resize;
+  pointer-events: auto;
 }
 
 .overlay-inspector {
@@ -1016,6 +1112,26 @@ async function captureView(view) {
   margin-bottom: 8px;
 }
 
+.inspector-actions {
+  display: grid;
+  grid-template-columns: 1fr 52px 52px;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.inspector-actions button {
+  height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: #27272a;
+  color: #f4f4f5;
+}
+
+.inspector-actions button.active {
+  border-color: rgba(45, 212, 191, 0.65);
+  color: #99f6e4;
+}
+
 .inspector-empty,
 .picker-state {
   color: #a1a1aa;
@@ -1039,6 +1155,10 @@ async function captureView(view) {
   cursor: pointer;
 }
 
+.overlay-row[draggable='true'] {
+  cursor: grab;
+}
+
 .overlay-row.active {
   border-color: rgba(45, 212, 191, 0.65);
 }
@@ -1047,6 +1167,14 @@ async function captureView(view) {
   width: 34px;
   height: 34px;
   object-fit: contain;
+}
+
+.drag-handle {
+  flex: 0 0 auto;
+  width: 14px;
+  color: #71717a;
+  font-size: 13px;
+  letter-spacing: 0;
 }
 
 .overlay-row span {
