@@ -7,7 +7,9 @@
  * - zoom >= 2 时直接加载原图
  */
 
-const DEFAULT_THUMB_WIDTH = 1024
+const DEFAULT_THUMB_WIDTH = 2048
+const MIN_CANVAS_PREVIEW_WIDTH = 1024
+const PREVIEW_WIDTHS = [1024, 2048, 3072]
 
 /**
  * 将完整媒体 URL 转为同源相对路径，避免跨域加载失败
@@ -32,20 +34,27 @@ export function toSameOriginUrl(url) {
  * @param {number} nodeWidth 节点宽度（画布坐标，默认 400）
  *
  * displayWidth = nodeWidth × zoom = 节点在屏幕上的像素宽度
- * displayWidth >= 1200 → 原图（节点接近屏幕大小，几乎不压缩）
- * displayWidth >= 800  → 2048px
- * displayWidth >= 500  → 1024px
- * displayWidth >= 250  → 512px
- * displayWidth <  250  → 256px
+ * 画布节点预览不再使用 256/512 低清图，也不强制转 WebP。
+ * 目标是接近原图观感，仅在远距离缩放时减少传输体积。
  */
 export function getThumbWidthForZoom(zoom, nodeWidth = 400) {
   if (!zoom) return 0
   const displayWidth = nodeWidth * zoom
   if (displayWidth >= 1200) return 0
-  if (displayWidth >= 800) return 2048
-  if (displayWidth >= 500) return 1024
-  if (displayWidth >= 250) return 512
-  return 256
+  if (displayWidth >= 700) return 3072
+  if (displayWidth >= 250) return 2048
+  return MIN_CANVAS_PREVIEW_WIDTH
+}
+
+export function getHighQualityCanvasPreviewUrl(url, { zoom = 1, nodeWidth = 400, devicePixelRatio = 1 } = {}) {
+  if (!url) return url
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url
+
+  const displayWidth = Math.max(1, (nodeWidth || 400) * (zoom || 1) * Math.max(1, devicePixelRatio || 1))
+  if (displayWidth >= 1200) return url
+
+  const targetWidth = PREVIEW_WIDTHS.find(width => width >= displayWidth) || 0
+  return getCanvasThumbnailUrl(url, targetWidth || 0)
 }
 
 /**
@@ -67,14 +76,14 @@ export function getCanvasThumbnailUrl(url, width = DEFAULT_THUMB_WIDTH) {
   // COS 代理 → 万象数据处理缩略图（仅图片，跳过视频）
   if (url.includes('/api/cos-proxy/') && !isVideoUrl(url)) {
     const sep = url.includes('?') ? '|' : '?'
-    return `${url}${sep}imageMogr2/thumbnail/${width}x/format/webp`
+    return `${url}${sep}imageMogr2/thumbnail/${width}x`
   }
 
   // 七牛 CDN → imageView2 缩略图
   if (isQiniuCdn(url) && !isVideoUrl(url)) {
     if (url.includes('imageView2') || url.includes('imageMogr2')) return url
     const sep = url.includes('?') ? '|' : '?'
-    return `${url}${sep}imageView2/2/w/${width}/format/webp`
+    return `${url}${sep}imageView2/2/w/${width}`
   }
 
   return url

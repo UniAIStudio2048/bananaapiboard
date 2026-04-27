@@ -175,7 +175,7 @@ const isHdAvailable = computed(() => false)
 // 当前模型是否为 Seedance 2.0
 const isSeedanceModel = computed(() => {
   const modelConfig = currentModelConfig.value
-  return modelConfig?.apiType === 'seedance-2.0'
+  return modelConfig?.apiType === 'seedance-2.0' || modelConfig?.apiType === 'happyhorse'
 })
 
 // Seedance 可用的模式（从模型配置的 seedanceConfig.supportedModes 读取）
@@ -290,7 +290,8 @@ const currentPointsCost = computed(() => {
   if (typeof modelConfig === 'number') {
     cost = modelConfig
   } else if (typeof modelConfig === 'object' && modelConfig !== null) {
-    cost = modelConfig[duration.value] || 40
+    const costDuration = isSeedanceModel.value ? String(seedanceDuration.value) : duration.value
+    cost = modelConfig[costDuration] || 40
   } else {
     cost = 40
   }
@@ -341,8 +342,8 @@ const availableModels = computed(() => {
   const currentMode = mode.value === 'text' ? 't2v' : 'i2v'
   
   return filteredByVersion.filter(m => {
-    // Seedance 2.0 模型始终显示（有自己的模式选择器）
-    if (m.apiType === 'seedance-2.0') return true
+    // Seedance 2.0 / Happy Horse 模型始终显示（有自己的模式选择器）
+    if (m.apiType === 'seedance-2.0' || m.apiType === 'happyhorse') return true
 
     const supportedModes = m.supportedModes
     if (!supportedModes) return true // 无配置默认支持所有模式
@@ -413,7 +414,20 @@ watch(model, (newModel) => {
     aspectRatio.value = aspectValues[0]
     console.log('[VideoGeneration] 方向已重置为:', aspectRatio.value)
   }
-})
+
+  if (modelConfig?.apiType === 'seedance-2.0' || modelConfig?.apiType === 'happyhorse') {
+    const seedanceConfig = modelConfig.seedanceConfig || {}
+    seedanceResolution.value = seedanceConfig.resolution || (modelConfig.apiType === 'happyhorse' ? '1080p' : '720p')
+    seedanceRatio.value = seedanceConfig.ratio || (modelConfig.apiType === 'happyhorse' ? '16:9' : 'adaptive')
+    seedanceDuration.value = Number(seedanceConfig.duration || durations[0] || 5)
+    seedanceGenerateAudio.value = seedanceConfig.generateAudio !== false
+    seedanceWatermark.value = seedanceConfig.watermark === true
+    seedanceWebSearch.value = modelConfig.apiType === 'happyhorse' ? false : seedanceConfig.webSearch === true
+    if (!seedanceAvailableModes.value.some(m => m.value === seedanceMode.value)) {
+      seedanceMode.value = seedanceAvailableModes.value[0]?.value || 'text2video'
+    }
+  }
+}, { immediate: true })
 
 // 🔧 监听模式变化，检查当前模型是否支持新模式
 watch(mode, (newMode) => {
@@ -3121,6 +3135,3 @@ onUnmounted(() => {
   animation: loading-bar 2s ease-in-out infinite;
 }
 </style>
-
-
-

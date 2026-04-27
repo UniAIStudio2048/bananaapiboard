@@ -30,7 +30,7 @@ import Camera3DPanel from '../Camera3DPanel.vue'
 import Pose3DViewer from '../Pose3DViewer.vue'
 import CameraControlPanel from '../CameraControlPanel.vue'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
-import { getOriginalImageUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
@@ -1093,13 +1093,11 @@ const imageSizes = computed(() => {
   }))
 })
 
-// 是否显示尺寸选项（从模型配置中读取 hasResolutionPricing，MJ/gpt-image-2模型时隐藏）
+// 是否显示尺寸选项（从模型配置中读取 hasResolutionPricing）
 const showResolutionOption = computed(() => {
   if (isMJModel.value) return false
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
-  const modelName = (selectedModel.value || '').toLowerCase()
-  if (modelName.includes('gpt-image')) return false
-  return currentModel?.hasResolutionPricing || false
+  return currentModel?.hasResolutionPricing || (currentModel?.pointsCost && typeof currentModel.pointsCost === 'object') || false
 })
 
 const showQualityOption = computed(() => {
@@ -3528,6 +3526,22 @@ const outputImages = computed(() => {
 // 源图片（上传的）
 const sourceImages = computed(() => props.data.sourceImages || [])
 
+const previewDevicePixelRatio = computed(() => {
+  if (typeof window === 'undefined') return 1
+  return window.devicePixelRatio || 1
+})
+
+function getNodePreviewImageUrl(url) {
+  return getHighQualityCanvasPreviewUrl(toSameOriginUrl(url), {
+    zoom: canvasStore.viewport?.zoom || 1,
+    nodeWidth: nodeWidth.value || 380,
+    devicePixelRatio: previewDevicePixelRatio.value
+  })
+}
+
+const outputPreviewImages = computed(() => outputImages.value.map(getNodePreviewImageUrl))
+const sourcePreviewImages = computed(() => sourceImages.value.map(getNodePreviewImageUrl))
+
 watch(currentImageUrl, (url) => {
   detectPanoramaImage(url)
 }, { immediate: true })
@@ -3545,11 +3559,18 @@ const referenceImages = computed(() => {
     const node = nodeIndex.get(edge.source)
     if (!node?.data) continue
 
-    if (node.data.output?.urls?.length > 0) {
+    // 源节点优先使用 sourceImages，与画布显示一致
+    if (node.data.nodeRole === 'source' && node.data.sourceImages?.length > 0) {
+      upstreamImages.push(...node.data.sourceImages)
+    }
+    // 非源节点优先使用输出结果
+    else if (node.data.output?.urls?.length > 0) {
       upstreamImages.push(...node.data.output.urls)
     } else if (node.data.output?.url) {
       upstreamImages.push(node.data.output.url)
-    } else if (node.data.sourceImages?.length > 0) {
+    }
+    // 兜底使用源图片
+    else if (node.data.sourceImages?.length > 0) {
       upstreamImages.push(...node.data.sourceImages)
     }
   }
@@ -4599,8 +4620,11 @@ function getUpstreamImagesRealtime() {
       sourceImages: sourceNode.data?.sourceImages
     })
     
-    // 优先级：output.urls > output.url > sourceImages
-    if (sourceNode.data?.output?.urls?.length > 0) {
+    // 源节点优先使用 sourceImages，与画布显示一致
+    if (sourceNode.data?.nodeRole === 'source' && sourceNode.data?.sourceImages?.length > 0) {
+      console.log('[ImageNode] 源节点从 sourceImages 获取图片:', sourceNode.data.sourceImages.length, '张')
+      upstreamImages.push(...sourceNode.data.sourceImages)
+    } else if (sourceNode.data?.output?.urls?.length > 0) {
       console.log('[ImageNode] 从 output.urls 获取图片:', sourceNode.data.output.urls.length, '张')
       upstreamImages.push(...sourceNode.data.output.urls)
     } else if (sourceNode.data?.output?.url) {
@@ -6644,7 +6668,7 @@ async function handleDrop(event) {
           
           <!-- 图片预览 -->
           <div class="source-image-preview" :class="{ 'low-quality': isCanvasDragging }">
-            <img v-if="isNodeVisible" :src="sourceImages[0]" alt="上传的图片" :loading="isCanvasDragging ? 'lazy' : 'eager'" decoding="async" />
+            <img v-if="isNodeVisible" :src="sourcePreviewImages[0]" alt="上传的图片" :loading="isCanvasDragging ? 'lazy' : 'eager'" decoding="async" />
             <div v-else class="image-placeholder" />
           </div>
         </template>
@@ -6698,7 +6722,7 @@ async function handleDrop(event) {
               <template v-for="(img, index) in outputImages.slice(0, 4)" :key="img || index">
                 <img 
                   v-if="isNodeVisible"
-                  :src="img" 
+                  :src="outputPreviewImages[index]"
                   :alt="`生成结果 ${index + 1}`"
                   class="preview-image"
                   :class="{ 'transparent-image': props.data?.isTransparent || props.data?.cutoutResult }"
@@ -6824,7 +6848,7 @@ async function handleDrop(event) {
             @mouseenter="onHoverStart(img, $event)"
             @mouseleave="onHoverEnd"
           >
-            <img v-if="isNodeVisible" :src="img" :alt="`图片 ${index + 1}`" decoding="async" />
+            <img v-if="isNodeVisible" :src="getNodePreviewImageUrl(img)" :alt="`图片 ${index + 1}`" decoding="async" />
             <div v-else class="image-placeholder" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>

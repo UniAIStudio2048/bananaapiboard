@@ -22,7 +22,7 @@ import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
-import { getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { getHighQualityCanvasPreviewUrl, getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
@@ -712,17 +712,23 @@ const klingMotionVideoLoading = ref(false)  // 视频加载中
 
 // ==================== Seedance 模型相关 ====================
 // 检测是否是豆包 Seedance 模型
+const isHappyHorseModel = computed(() => {
+  const modelName = selectedModel.value?.toLowerCase() || ''
+  const apiType = currentModelConfig.value?.apiType || ''
+  return apiType === 'happyhorse' || modelName.includes('happyhorse') || modelName.includes('happy-horse')
+})
+
 const isSeedanceModel = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
   const apiType = currentModelConfig.value?.apiType || ''
-  return modelName.includes('seedance') || apiType === 'seedance' || apiType === 'seedance-2.0'
+  return modelName.includes('seedance') || apiType === 'seedance' || apiType === 'seedance-2.0' || isHappyHorseModel.value
 })
 
 // 检测是否是 Seedance 2.0 模型（支持6种模式）
 const isSeedance2Model = computed(() => {
   const apiType = currentModelConfig.value?.apiType || ''
   const modelName = selectedModel.value?.toLowerCase() || ''
-  return apiType === 'seedance-2.0' || (modelName.includes('seedance') && modelName.includes('2.0'))
+  return apiType === 'seedance-2.0' || (modelName.includes('seedance') && modelName.includes('2.0')) || isHappyHorseModel.value
 })
 
 // Seedance 2.0 模式选择
@@ -737,8 +743,22 @@ const SEEDANCE2_MODES = [
   { value: 'video_extend', label: '延长', desc: '需连接上游视频节点，最多支持3段视频参考', needsImage: false, needsVideo: true }
 ]
 
+const supportedModesConfig = computed(() => {
+  return currentModelConfig.value?.seedanceConfig?.supportedModes ||
+    currentModelConfig.value?.happyHorseConfig?.supportedModes ||
+    null
+})
+
+const seedance2Modes = computed(() => {
+  const modes = SEEDANCE2_MODES.filter(mode => {
+    if (!supportedModesConfig.value) return true
+    return supportedModesConfig.value[mode.value] !== false
+  })
+  return modes.length > 0 ? modes : SEEDANCE2_MODES
+})
+
 const currentSeedance2ModeConfig = computed(() => {
-  return SEEDANCE2_MODES.find(m => m.value === selectedSeedance2Mode.value) || SEEDANCE2_MODES[0]
+  return seedance2Modes.value.find(m => m.value === selectedSeedance2Mode.value) || seedance2Modes.value[0] || SEEDANCE2_MODES[0]
 })
 
 // Seedance 高级选项显示控制
@@ -1067,6 +1087,12 @@ const models = computed(() => {
   }
   
   return result
+})
+
+watch(seedance2Modes, (modes) => {
+  if (!modes.some(mode => mode.value === selectedSeedance2Mode.value)) {
+    selectedSeedance2Mode.value = modes[0]?.value || 'text2video'
+  }
 })
 
 const aspectRatios = [
@@ -1511,6 +1537,19 @@ const videoPosterUrl = computed(() => {
 
 const normalizedVideoUrl = computed(() => toSameOriginUrl(props.data.output?.url))
 
+const previewDevicePixelRatio = computed(() => {
+  if (typeof window === 'undefined') return 1
+  return window.devicePixelRatio || 1
+})
+
+function getNodePreviewImageUrl(url) {
+  return getHighQualityCanvasPreviewUrl(toSameOriginUrl(url), {
+    zoom: canvasStore.viewport?.zoom || 1,
+    nodeWidth: nodeWidth.value || 420,
+    devicePixelRatio: previewDevicePixelRatio.value
+  })
+}
+
 // 节点内容样式（有输出时不设置 min-height，让视频自适应）
 const contentStyle = computed(() => {
   if (hasOutput.value) {
@@ -1628,13 +1667,17 @@ const referenceImages = computed(() => {
       continue
     }
     
-    // 优先使用输出结果
-    if (sourceNode.data.output?.urls?.length > 0) {
+    // 源节点优先使用 sourceImages，与画布显示一致
+    if (sourceNode.data.nodeRole === 'source' && sourceNode.data.sourceImages?.length > 0) {
+      upstreamImages.push(...sourceNode.data.sourceImages)
+    }
+    // 非源节点优先使用输出结果
+    else if (sourceNode.data.output?.urls?.length > 0) {
       upstreamImages.push(...sourceNode.data.output.urls)
     } else if (sourceNode.data.output?.url) {
       upstreamImages.push(sourceNode.data.output.url)
     }
-    // 其次使用源图片
+    // 兜底使用源图片
     else if (sourceNode.data.sourceImages?.length > 0) {
       upstreamImages.push(...sourceNode.data.sourceImages)
     }
@@ -1844,13 +1887,17 @@ function getUpstreamData() {
         if (uri) characterAssetUris.push(uri)
       }
       
-      // 优先使用输出结果
-      if (sourceNode.data?.output?.urls?.length > 0) {
+      // 源节点优先使用 sourceImages，与画布显示一致
+      if (sourceNode.data?.nodeRole === 'source' && sourceNode.data?.sourceImages?.length > 0) {
+        images = [...images, ...sourceNode.data.sourceImages]
+      }
+      // 非源节点优先使用输出结果
+      else if (sourceNode.data?.output?.urls?.length > 0) {
         images = [...images, ...sourceNode.data.output.urls]
       } else if (sourceNode.data?.output?.url) {
         images.push(sourceNode.data.output.url)
       }
-      // 其次使用源图片
+      // 兜底使用源图片
       else if (sourceNode.data?.sourceImages?.length > 0) {
         images = [...images, ...sourceNode.data.sourceImages]
       }
@@ -3023,10 +3070,13 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
   if (isSeedance2Model.value) {
     const sd2Mode = selectedSeedance2Mode.value
     formData.append('seedance_mode', sd2Mode)
-    formData.append('seedance_resolution', '720p')
+    const seedanceResolution = currentModelConfig.value?.seedanceConfig?.resolution ||
+      currentModelConfig.value?.happyHorseConfig?.resolution ||
+      (isHappyHorseModel.value ? '1080p' : '720p')
+    formData.append('seedance_resolution', seedanceResolution)
     formData.append('seedance_ratio', selectedAspectRatio.value)
     formData.append('seedance_watermark', 'false')
-    console.log('[VideoNode] Seedance 2.0 模式:', sd2Mode, '分辨率: 720p, 比例:', selectedAspectRatio.value)
+    console.log('[VideoNode] Seedance 2.0/Happy Horse 模式:', sd2Mode, '分辨率:', seedanceResolution, '比例:', selectedAspectRatio.value)
 
     if (sd2Mode === 'image2video_first') {
       if (finalImages.length > 0) {
@@ -5796,7 +5846,7 @@ function handleToolbarPreview() {
           <video 
             ref="videoPlayerRef"
             :src="normalizedVideoUrl"
-            preload="auto"
+            preload="metadata"
             :poster="videoPosterUrl || undefined"
             muted
             :loop="!data?.isCharacterNode"
@@ -6049,7 +6099,7 @@ function handleToolbarPreview() {
             @mouseenter="onHoverStart(img, $event)"
             @mouseleave="onHoverEnd"
           >
-            <img v-if="isNodeVisible" :src="img" :alt="`图片 ${index + 1}`" decoding="async" />
+            <img v-if="isNodeVisible" :src="getNodePreviewImageUrl(img)" :alt="`图片 ${index + 1}`" decoding="async" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>
@@ -6726,12 +6776,12 @@ function handleToolbarPreview() {
       <template v-if="isSeedance2Model">
         <div class="sd2-mode-section">
           <div class="sd2-mode-header">
-            <span class="sd2-mode-title">SD2 模式</span>
+            <span class="sd2-mode-title">{{ isHappyHorseModel ? 'Happy Horse 模式' : 'SD2 模式' }}</span>
             <span class="sd2-mode-current">{{ currentSeedance2ModeConfig.label }}</span>
           </div>
           <div class="sd2-mode-grid">
             <button
-              v-for="opt in SEEDANCE2_MODES"
+              v-for="opt in seedance2Modes"
               :key="opt.value"
               @click="selectedSeedance2Mode = opt.value"
               :class="['sd2-mode-btn', { active: selectedSeedance2Mode === opt.value }]"

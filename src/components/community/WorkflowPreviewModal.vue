@@ -206,7 +206,10 @@ function close() {
 function handleClone() {
   if (!communityStore.requireLogin()) return
   if (props.workId) {
-    cloneFn.value = (data) => forkWork(props.workId, data)
+    cloneFn.value = (data) => forkWork(props.workId, {
+      ...data,
+      workflow_id: activeTabId.value || props.workflowId || undefined
+    })
   } else if (props.templateId) {
     cloneFn.value = (data) => cloneTemplate(props.templateId, data)
   } else {

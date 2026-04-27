@@ -1,6 +1,6 @@
 import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'
 
-const PREVIEW_WIDTH = 512
+const PREVIEW_WIDTH = 1024
 const PREVIEW_MAX_SIZE = 280
 const SHOW_DELAY = 250
 const HIDE_DELAY = 60

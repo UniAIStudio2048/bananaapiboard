@@ -612,6 +612,8 @@ export const getAvailableImageModels = (mode = null) => {
       
       // 跳过禁用的模型
       if (modelConfig.enabled === false || enabledModels[key] === false) continue
+      if (modelConfig.apiType === 'gptimage2' && modelConfig.actualModel === 'gpt-image-2') continue
+      if ((modelConfig.apiType === 'openai' || !modelConfig.apiType) && modelConfig.actualModel === 'gpt-image-2' && key !== 'gpt-image-2') continue
       
       const modelPricingConfig = pricing[key] || {}
       const supportedModes = modelConfig.supportedModes || 'both'
@@ -1485,6 +1487,8 @@ export const getAvailableVideoModels = (options = {}) => {
         resolution720Discount: modelConfig.resolution720Discount,
         // API 类型（用于判断是否是 Vidu 模型）
         apiType: modelConfig.apiType,
+        seedanceConfig: modelConfig.seedanceConfig,
+        happyHorseConfig: modelConfig.happyHorseConfig,
         // 可灵动作迁移按秒计费配置（用于前端显示积分消耗）
         costPerSecond: modelConfig.costPerSecond,
         // VEO 模型特有属性
@@ -1852,5 +1856,3 @@ export const getAvailableMusicModels = () => {
 }
 
 export default config
-
-

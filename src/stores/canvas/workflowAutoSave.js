@@ -25,6 +25,30 @@ const MAX_SESSION_STORAGE_SIZE = 2 * 1024 * 1024  // 标签会话最大 2MB
 
 let autoSaveTimer = null
 
+function parseStoredJson(value, fallback) {
+  if (typeof value !== 'string') return value ?? fallback
+  try {
+    return JSON.parse(value)
+  } catch {
+    return fallback
+  }
+}
+
+function normalizeHistoryItem(item) {
+  const nodes = parseStoredJson(item.nodes, [])
+  const edges = parseStoredJson(item.edges, [])
+  const viewport = parseStoredJson(item.viewport, { x: 0, y: 0, zoom: 1 })
+
+  return {
+    ...item,
+    nodes: Array.isArray(nodes) ? nodes : [],
+    edges: Array.isArray(edges) ? edges : [],
+    viewport: viewport && typeof viewport === 'object' && !Array.isArray(viewport)
+      ? viewport
+      : { x: 0, y: 0, zoom: 1 }
+  }
+}
+
 /**
  * 🔧 清理节点中的大数据（base64图片、blob URL等），只保留结构和有效URL引用
  * 这样可以大幅减少存储空间，避免 localStorage 溢出
@@ -228,8 +252,10 @@ export function getWorkflowHistory() {
       saveToLocalStorage(validHistory)
     }
     
-    // 按时间倒序排列（最新的在前）
-    return validHistory.sort((a, b) => b.savedAt - a.savedAt)
+    // 按时间倒序排列（最新的在前），并兼容旧版本把 nodes/edges/viewport 存为字符串的记录
+    return validHistory
+      .map(normalizeHistoryItem)
+      .sort((a, b) => b.savedAt - a.savedAt)
   } catch (error) {
     console.error('[WorkflowAutoSave] 读取历史失败:', error)
     return []
