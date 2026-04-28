@@ -194,7 +194,7 @@
                     返回
                   </button>
                   <button
-                    v-if="activeBanner.workflow_id"
+                    v-if="activeBanner.workflow_id || activeBanner.work_id || parseWorkIdFromLink(activeBanner.external_link)"
                     class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/80 hover:text-white transition"
                     @click.stop="openWorkflowFromFullView"
                   >
@@ -279,7 +279,7 @@
                   立即观看
                 </button>
                 <button
-                  v-if="activeBanner.workflow_id"
+                  v-if="activeBanner.workflow_id || activeBanner.work_id || parseWorkIdFromLink(activeBanner.external_link)"
                   class="flex items-center gap-2 px-5 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white text-sm hover:bg-white/20 transition-colors"
                   @click="handleWorkflowPreview"
                 >
@@ -344,7 +344,15 @@
           <WorkflowPreviewModal
             v-model="showWorkflowPreview"
             :workflow-id="previewWorkflowId"
+            :work-id="bannerWorkId"
             :title="previewWorkflowTitle"
+            :is-paid="bannerWork?.share_mode === 'paid'"
+            :is-purchased="!!bannerWork?.is_purchased"
+            :is-own="false"
+            :price="bannerWork?.price || 0"
+            :work="bannerWork || {}"
+            :project-workflows="bannerProjectWorkflows"
+            :project-info="bannerProjectInfo"
           />
         </div>
       </transition>
@@ -355,6 +363,10 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import WorkflowPreviewModal from './WorkflowPreviewModal.vue'
+import { getWorkDetail, getProjectWorkflows } from '@/api/community'
+import { useCommunityStore } from '@/stores/community'
+
+const communityStore = useCommunityStore()
 
 const props = defineProps({
   banners: { type: Array, default: () => [] }
@@ -392,6 +404,12 @@ const rightCardHovered = ref(false)
 const showWorkflowPreview = ref(false)
 const previewWorkflowId = ref('')
 const previewWorkflowTitle = ref('')
+
+// Banner 关联作品信息（用于工作流预览 + 克隆）
+const bannerWork = ref(null)
+const bannerWorkId = ref(0)
+const bannerProjectInfo = ref(null)
+const bannerProjectWorkflows = ref([])
 
 const progressPercent = computed(() => duration.value ? (currentTime.value / duration.value) * 100 : 0)
 
@@ -596,11 +614,47 @@ function formatDuration(seconds) {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+function parseWorkIdFromLink(link) {
+  if (!link) return 0
+  const match = link.match(/\/community\/(?:work\/)?(\d+)/)
+  return match ? parseInt(match[1]) : 0
+}
+
 // --- 工作流预览 ---
-function handleWorkflowPreview() {
-  if (!activeBanner.value?.workflow_id) return
-  previewWorkflowId.value = activeBanner.value.workflow_id
-  previewWorkflowTitle.value = activeBanner.value.title || '工作流预览'
+async function handleWorkflowPreview() {
+  const banner = activeBanner.value
+  if (!banner?.workflow_id && !banner?.work_id && !parseWorkIdFromLink(banner?.external_link)) return
+
+  previewWorkflowId.value = banner.workflow_id || ''
+  previewWorkflowTitle.value = banner.title || '工作流预览'
+  bannerWork.value = null
+  bannerWorkId.value = 0
+  bannerProjectInfo.value = null
+  bannerProjectWorkflows.value = []
+
+  const workId = banner.work_id || parseWorkIdFromLink(banner.external_link)
+  if (workId) {
+    bannerWorkId.value = workId
+    try {
+      const res = await getWorkDetail(workId)
+      bannerWork.value = res.work || res.data || res
+      if (!previewWorkflowId.value && bannerWork.value.workflow_id) {
+        previewWorkflowId.value = bannerWork.value.workflow_id
+      }
+      if (bannerWork.value.project_id) {
+        try {
+          const projRes = await getProjectWorkflows(workId)
+          if (projRes.data?.project) {
+            bannerProjectInfo.value = projRes.data.project
+            bannerProjectWorkflows.value = projRes.data.workflows || []
+          }
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('[BannerCarousel] 加载作品信息失败:', e)
+    }
+  }
+
   showWorkflowPreview.value = true
 }
 

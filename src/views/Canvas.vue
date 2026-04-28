@@ -141,8 +141,8 @@ const toastDuration = ref(3000)
 
 // 模式切换
 const isTransitioning = ref(false)
-const showModePopup = ref(false)
-let modeHoverTimer = null
+const showModeDropdown = ref(false)
+const isCommunityEnabled = import.meta.env.VITE_LANDING_MODE === '1'
 
 // 性能优化: 追踪画布拖拽状态，防止自动保存在拖拽中途触发导致卡顿
 // 监听 CanvasBoard 发出的 canvas-drag-start / canvas-drag-end 自定义事件
@@ -165,49 +165,29 @@ const recipientSuggestions = ref([])
 const transferring = ref(false)
 let searchTimeout = null
 
-// 鼠标进入模式切换按钮
-function handleModeSwitchEnter() {
-  // 1.5秒后显示弹窗
-  modeHoverTimer = setTimeout(() => {
-    showModePopup.value = true
-  }, 1500)
-}
-
-// 鼠标离开模式切换按钮
-function handleModeSwitchLeave() {
-  if (modeHoverTimer) {
-    clearTimeout(modeHoverTimer)
-    modeHoverTimer = null
-  }
-}
-
-// 点击模式切换按钮 - 直接显示弹窗
+// 点击模式切换按钮 - 切换下拉菜单
 function handleModeSwitchClick() {
-  if (modeHoverTimer) {
-    clearTimeout(modeHoverTimer)
-    modeHoverTimer = null
-  }
-  showModePopup.value = true
+  showModeDropdown.value = !showModeDropdown.value
 }
 
-// 关闭模式弹窗
-function closeModePopup() {
-  showModePopup.value = false
+function closeModeDropdown() {
+  showModeDropdown.value = false
 }
 
-// 确认切换到新手模式
+function goBackHome() {
+  showModeDropdown.value = false
+  router.push(isCommunityEnabled ? '/community' : '/generate')
+}
+
+// 切换到新手模式
 async function confirmSwitchToSimpleMode() {
   if (isTransitioning.value) return
   isTransitioning.value = true
-  showModePopup.value = false
+  showModeDropdown.value = false
   
-  // 保存模式选择
   localStorage.setItem('userMode', 'simple')
-  
-  // 通知 App.vue 刷新用户信息，确保导航栏显示正确的登录状态
   window.dispatchEvent(new CustomEvent('user-info-updated'))
   
-  // 等待转场动画
   await nextTick()
   setTimeout(() => {
     router.push('/generate')
@@ -2391,11 +2371,6 @@ onUnmounted(() => {
   stopAutoSave()
   stopHistoryAutoSave()
 
-  // 🔧 清理定时器，防止内存泄漏
-  if (modeHoverTimer) {
-    clearTimeout(modeHoverTimer)
-    modeHoverTimer = null
-  }
   if (searchTimeout) {
     clearTimeout(searchTimeout)
     searchTimeout = null
@@ -2421,43 +2396,36 @@ onUnmounted(() => {
       </div>
     </Transition>
 
-    <!-- 模式切换按钮 -->
-    <!-- 模式切换按钮 -->
-    <div 
-      class="mode-switch-btn"
-      @mouseenter="handleModeSwitchEnter"
-      @mouseleave="handleModeSwitchLeave"
-      @click="handleModeSwitchClick"
-    >
-      <div class="mode-switch-icon">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="3" y="3" width="7" height="7" rx="1" />
-          <rect x="14" y="3" width="7" height="7" rx="1" />
-          <rect x="3" y="14" width="7" height="7" rx="1" />
-          <rect x="14" y="14" width="7" height="7" rx="1" />
-        </svg>
-      </div>
-    </div>
-
-    <!-- 模式切换弹窗 -->
-    <Transition name="popup-fade">
-      <div v-if="showModePopup" class="mode-popup-overlay" @click.self="closeModePopup">
-        <div class="mode-popup">
-          <div class="mode-popup-header">
-            <span class="mode-popup-title">{{ t('canvas.switchMode') }}</span>
-            <button class="mode-popup-close" @click="closeModePopup">×</button>
-          </div>
-          <div class="mode-popup-content">
-            <p>{{ t('canvas.switchModeQuestion') }}</p>
-            <p class="mode-popup-hint">{{ t('canvas.switchModeHint') }}</p>
-          </div>
-          <div class="mode-popup-actions">
-            <button class="mode-popup-btn cancel" @click="closeModePopup">{{ t('common.cancel') }}</button>
-            <button class="mode-popup-btn confirm" @click="confirmSwitchToSimpleMode">{{ t('canvas.switchToSimpleMode') }}</button>
-          </div>
+    <!-- 模式切换按钮 + 下拉菜单 -->
+    <div class="mode-switch-wrapper">
+      <div class="mode-switch-btn" @click="handleModeSwitchClick">
+        <div class="mode-switch-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="7" height="7" rx="1" />
+            <rect x="14" y="3" width="7" height="7" rx="1" />
+            <rect x="3" y="14" width="7" height="7" rx="1" />
+            <rect x="14" y="14" width="7" height="7" rx="1" />
+          </svg>
         </div>
       </div>
-    </Transition>
+      <Transition name="dropdown-fade">
+        <div v-if="showModeDropdown" class="mode-dropdown">
+          <div class="mode-dropdown-item" @click="goBackHome">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5" /><path d="M12 19l-7-7 7-7" />
+            </svg>
+            <span>{{ isCommunityEnabled ? '返回社区' : '返回首页' }}</span>
+          </div>
+          <div class="mode-dropdown-item" @click="confirmSwitchToSimpleMode">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M9 12h6" /><path d="M12 9v6" />
+            </svg>
+            <span>{{ t('canvas.switchToSimpleMode') }}</span>
+          </div>
+        </div>
+      </Transition>
+      <div v-if="showModeDropdown" class="mode-dropdown-backdrop" @click="closeModeDropdown"></div>
+    </div>
 
     <!-- 加载状态 -->
     <div v-if="loading || !canvasReady" class="canvas-loading-screen">
@@ -2942,16 +2910,21 @@ onUnmounted(() => {
   z-index: 100;
 }
 
-/* 模式切换按钮 */
-.mode-switch-btn {
+/* 模式切换按钮容器 */
+.mode-switch-wrapper {
   position: fixed;
   top: 16px;
   left: 16px;
   z-index: 1000;
+}
+
+.mode-switch-btn {
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
+  position: relative;
+  z-index: 2;
 }
 
 .mode-switch-icon {
@@ -2981,135 +2954,67 @@ onUnmounted(() => {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
 
-/* 模式切换弹窗 */
-.mode-popup-overlay {
+/* 模式切换下拉菜单 */
+.mode-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: 180px;
+  background: rgba(30, 30, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(20px);
+  z-index: 2;
+}
+
+.mode-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 14px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.mode-dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.mode-dropdown-item svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.mode-dropdown-backdrop {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
-  padding: 80px 0 0 80px;
-  z-index: 1000;
+  z-index: 1;
 }
 
-.mode-popup {
-  background: rgba(30, 30, 30, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  width: 320px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(20px);
+.dropdown-fade-enter-active {
+  transition: all 0.15s ease-out;
 }
-
-.mode-popup-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+.dropdown-fade-leave-active {
+  transition: all 0.1s ease-in;
 }
-
-.mode-popup-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #fff;
-}
-
-.mode-popup-close {
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 20px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s ease;
-}
-
-.mode-popup-close:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
-}
-
-.mode-popup-content {
-  padding: 20px;
-}
-
-.mode-popup-content p {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.mode-popup-hint {
-  margin-top: 8px !important;
-  color: rgba(255, 255, 255, 0.5) !important;
-  font-size: 13px !important;
-}
-
-.mode-popup-actions {
-  display: flex;
-  gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.mode-popup-btn {
-  flex: 1;
-  padding: 10px 16px;
-  border-radius: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.mode-popup-btn.cancel {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.mode-popup-btn.cancel:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-}
-
-.mode-popup-btn.confirm {
-  background: rgba(255, 255, 255, 0.9);
-  border: none;
-  color: #1a1a1a;
-}
-
-.mode-popup-btn.confirm:hover {
-  background: #fff;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
-}
-
-.popup-fade-enter-active,
-.popup-fade-leave-active {
-  transition: all 0.25s ease;
-}
-
-.popup-fade-enter-from,
-.popup-fade-leave-to {
+.dropdown-fade-enter-from {
   opacity: 0;
+  transform: translateY(-4px);
 }
-
-.popup-fade-enter-from .mode-popup,
-.popup-fade-leave-to .mode-popup {
-  transform: scale(0.95) translateY(-10px);
+.dropdown-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 /* 转场遮罩 */
@@ -3756,65 +3661,20 @@ onUnmounted(() => {
   color: #1c1917;
 }
 
-/* 模式切换弹窗 - 白昼模式 */
-:root.canvas-theme-light .mode-popup-overlay {
-  background: rgba(255, 255, 255, 0.6);
-}
-
-:root.canvas-theme-light .mode-popup {
+/* 模式切换下拉菜单 - 白昼模式 */
+:root.canvas-theme-light .mode-dropdown {
   background: rgba(255, 255, 255, 0.98);
   border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
 }
 
-:root.canvas-theme-light .mode-popup-header {
-  border-bottom-color: rgba(0, 0, 0, 0.06);
+:root.canvas-theme-light .mode-dropdown-item {
+  color: #44403c;
 }
 
-:root.canvas-theme-light .mode-popup-title {
-  color: #1c1917;
-}
-
-:root.canvas-theme-light .mode-popup-close {
-  color: rgba(0, 0, 0, 0.4);
-}
-
-:root.canvas-theme-light .mode-popup-close:hover {
+:root.canvas-theme-light .mode-dropdown-item:hover {
   background: rgba(0, 0, 0, 0.05);
-  color: rgba(0, 0, 0, 0.8);
-}
-
-:root.canvas-theme-light .mode-popup-content p {
   color: #1c1917;
-}
-
-:root.canvas-theme-light .mode-popup-hint {
-  color: #78716c !important;
-}
-
-:root.canvas-theme-light .mode-popup-actions {
-  border-top-color: rgba(0, 0, 0, 0.06);
-}
-
-:root.canvas-theme-light .mode-popup-btn.cancel {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.1);
-  color: #57534e;
-}
-
-:root.canvas-theme-light .mode-popup-btn.cancel:hover {
-  background: rgba(0, 0, 0, 0.08);
-  color: #1c1917;
-}
-
-:root.canvas-theme-light .mode-popup-btn.confirm {
-  background: #1c1917;
-  color: #ffffff;
-}
-
-:root.canvas-theme-light .mode-popup-btn.confirm:hover {
-  background: #292524;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 /* 画布选择模式 */
