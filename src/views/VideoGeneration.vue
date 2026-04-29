@@ -1384,8 +1384,8 @@ function extractVideoThumbnail(item) {
 }
 
 function getVideoThumbnail(item) {
-  if (item.cover_url) return item.cover_url
-  if (item.thumbnail_url) return item.thumbnail_url
+  if (item.cover_url) return getMediaUrl(item.cover_url)
+  if (item.thumbnail_url) return getMediaUrl(item.thumbnail_url)
   if (videoThumbnails.value[item.id]) return videoThumbnails.value[item.id]
   if (item.video_url && item.status === 'SUCCESS') {
     extractVideoThumbnail(item)
@@ -2643,7 +2643,7 @@ onUnmounted(() => {
                 />
                 <video
                   v-else-if="item.video_url"
-                  :src="item.video_url"
+                  :src="getMediaUrl(item.video_url)"
                   preload="metadata"
                   muted
                   class="w-full h-full object-cover pointer-events-none"
@@ -2804,7 +2804,7 @@ onUnmounted(() => {
                 />
                 <video
                   v-else-if="item.video_url"
-                  :src="item.video_url"
+                  :src="getMediaUrl(item.video_url)"
                   preload="metadata"
                   muted
                   class="w-full h-full object-cover pointer-events-none"
@@ -2986,7 +2986,7 @@ onUnmounted(() => {
           <video 
             ref="videoPlayerRef"
             v-if="currentVideo?.video_url" 
-            :src="currentVideo.video_url" 
+            :src="getMediaUrl(currentVideo.video_url)" 
             controls 
             class="w-full h-full object-contain"
             playsinline

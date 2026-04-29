@@ -11,7 +11,7 @@ import { getCachedAssets, cacheAssets, invalidateAssetCache } from '@/utils/asse
 import { preloadImages } from '@/utils/imageCache'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } from '@/api/canvas/volcengine-assets'
-import { getApiUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled } from '@/config/tenant'
+import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import CachedImage from '@/components/CachedImage.vue'
@@ -1950,7 +1950,7 @@ onUnmounted(() => {
                 <div v-else-if="asset.type === 'seedance-character'" class="character-preview">
                   <CachedImage
                     v-if="asset.thumbnail_url || asset.url"
-                    :src="asset.thumbnail_url || asset.url"
+                    :src="getMediaUrl(asset.thumbnail_url || asset.url)"
                     :alt="asset.name"
                     img-class="image-preview"
                     loading="lazy"
@@ -2354,7 +2354,7 @@ onUnmounted(() => {
             <!-- 图片预览 -->
             <CachedImage 
               v-else-if="previewAsset.type === 'image'" 
-              :src="previewAsset.url" 
+              :src="getMediaUrl(previewAsset.url)" 
               :alt="previewAsset.name"
               img-class="preview-image"
             />
@@ -2383,7 +2383,7 @@ onUnmounted(() => {
                 <h3 class="audio-title">{{ previewAsset.name }}</h3>
                 <audio 
                   ref="audioRef"
-                  :src="previewAsset.url"
+                  :src="getMediaUrl(previewAsset.url)"
                   controls
                   autoplay
                   crossorigin="anonymous"

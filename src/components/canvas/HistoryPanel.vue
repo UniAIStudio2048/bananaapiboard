@@ -17,7 +17,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
 import { getHistory, getHistoryDetail, deleteHistory } from '@/api/canvas/history'
 import { saveAsset } from '@/api/canvas/assets'
-import { getTenantHeaders } from '@/config/tenant'
+import { getTenantHeaders, getMediaUrl } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { getCachedHistory, cacheHistory, invalidateCache } from '@/utils/historyCache'
@@ -1385,7 +1385,7 @@ function processNextThumbnail() {
 
 // 获取视频缩略图（优化版：不会重复触发）
 function getVideoThumbnail(item) {
-  if (item.thumbnail_url) return item.thumbnail_url
+  if (item.thumbnail_url) return getMediaUrl(item.thumbnail_url)
   if (videoThumbnails.value[item.id]) return videoThumbnails.value[item.id]
 
   // 只有在可见区域内才触发提取
@@ -2000,7 +2000,7 @@ onUnmounted(() => {
             <!-- 图片预览 -->
             <img 
               v-if="previewItem.type === 'image'" 
-              :src="previewItem.url" 
+              :src="getMediaUrl(previewItem.url)" 
               :alt="previewItem.name"
               class="preview-image"
               :style="{
@@ -2032,7 +2032,7 @@ onUnmounted(() => {
               </div>
               <audio 
                 ref="audioRef"
-                :src="previewItem.url"
+                :src="getMediaUrl(previewItem.url)"
                 crossorigin="anonymous"
                 controls
                 autoplay

@@ -7,23 +7,26 @@
  * - zoom >= 2 时直接加载原图
  */
 
+import { getApiUrl } from '@/config/tenant'
+
 const DEFAULT_THUMB_WIDTH = 2048
 const MIN_CANVAS_PREVIEW_WIDTH = 1024
 const PREVIEW_WIDTHS = [1024, 2048, 3072]
 
 /**
- * 将完整媒体 URL 转为同源相对路径，避免跨域加载失败
- * 完整 URL 经 Vite proxy（开发）或 nginx（生产）转发到后端
+ * 将完整媒体 URL 转为可访问的 URL
+ * - 本地部署（apiBase 为空）：返回 /api/... 相对路径，由 Vite proxy / Nginx 转发
+ * - 远程租户（apiBase 非空）：返回 ${apiBase}/api/... 绝对路径，直连后端 API
  */
 export function toSameOriginUrl(url) {
   if (!url) return ''
   if (url.startsWith('blob:') || url.startsWith('data:')) return url
-  if (url.startsWith('/api/')) return url
+  if (url.startsWith('/api/')) return getApiUrl(url)
 
   const proxyPaths = ['/api/cos-proxy/', '/api/videos/file/', '/api/images/file/', '/api/canvas/audio/']
   for (const p of proxyPaths) {
     const idx = url.indexOf(p)
-    if (idx !== -1) return url.substring(idx)
+    if (idx !== -1) return getApiUrl(url.substring(idx))
   }
   return url
 }
