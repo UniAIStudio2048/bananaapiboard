@@ -563,8 +563,8 @@ export async function smartDownload(url, filename) {
   // 获取干净的原始 URL（去除图片处理参数）
   let cleanUrl = getQiniuOriginalUrl(url)
 
-  // COS 代理 URL：去除 imageMogr2 / imageView2 等缩略图处理参数，确保下载原图
-  if (cleanUrl.includes('/api/cos-proxy/') && !cleanUrl.match(/\.(mp4|webm|mov|avi)(\?|$)/i)) {
+  // COS 代理 URL 或 COS CDN URL：去除 imageMogr2 / imageView2 等缩略图处理参数，确保下载原图
+  if ((cleanUrl.includes('/api/cos-proxy/') || cleanUrl.includes('filescos.nananobanana.cn')) && !cleanUrl.match(/\.(mp4|webm|mov|avi)(\?|$)/i)) {
     cleanUrl = cleanUrl.split('?')[0]
   }
 

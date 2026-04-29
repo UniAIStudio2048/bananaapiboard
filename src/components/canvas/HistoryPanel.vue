@@ -331,6 +331,9 @@ function _isHistoryEqual(a, b) {
   if (a.length !== b.length) return false
   for (let i = 0; i < a.length; i++) {
     if (a[i].id !== b[i].id) return false
+    if (a[i].url !== b[i].url) return false
+    if (a[i].thumbnail_url !== b[i].thumbnail_url) return false
+    if (a[i].status !== b[i].status) return false
   }
   return true
 }
@@ -477,8 +480,16 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
   }
 })
 
+function isVideoMediaUrl(url) {
+  const lower = (url || '').split('?')[0].toLowerCase()
+  return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') ||
+         lower.includes('/videos/') || lower.includes('/video-files/') ||
+         lower.includes('/character-videos/')
+}
+
 function getQiniuThumbnailUrl(url, width = 400) {
   if (!url || typeof url !== 'string') return url
+  const lower = url.toLowerCase()
   
   if (url.includes('imageView2') || url.includes('imageMogr2')) {
     return url
@@ -493,6 +504,13 @@ function getQiniuThumbnailUrl(url, width = 400) {
       const separator = url.includes('?') ? '|' : '?'
       return `${url}${separator}imageMogr2/thumbnail/${width}x/format/webp`
     }
+  }
+
+  if ((lower.includes('filescos.nananobanana.cn') ||
+       (lower.includes('.cos.') && lower.includes('.myqcloud.com')) ||
+       lower.includes('.tencentcos.cn')) && !isVideoMediaUrl(url)) {
+    const separator = url.includes('?') ? '|' : '?'
+    return `${url}${separator}imageMogr2/thumbnail/${width}x/format/webp`
   }
   
   if (url.includes('files.nananobanana.cn') ||  
@@ -1314,10 +1332,11 @@ function extractVideoThumbnail(item, useProxy = false) {
   const video = document.createElement('video')
   video.muted = true
   video.preload = 'metadata'
+  video.crossOrigin = 'anonymous'
   
-  // 使用同源相对路径加载视频，避免跨域导致 canvas drawImage 被阻止
-  // 注意：不要设置 crossOrigin = 'anonymous'，会污染浏览器缓存导致同 URL 的其他 <video> 也加载失败
-  const safeUrl = toSameOriginUrl(item.url)
+  let safeUrl = toSameOriginUrl(item.url)
+  // 添加 _thumb 参数隔离缓存，避免 CORS 缓存与非 CORS 视频播放器冲突
+  safeUrl += (safeUrl.includes('?') ? '&' : '?') + '_thumb=1'
 
   const cleanup = () => {
     video.remove()
@@ -3867,4 +3886,3 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #ef4444, #dc2626) !important;
 }
 </style>
-

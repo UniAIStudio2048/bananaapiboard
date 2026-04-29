@@ -4,6 +4,7 @@
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useTeamStore } from '@/stores/team'
+import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
 
 // 获取通用请求头
 function getHeaders(options = {}) {
@@ -389,6 +390,40 @@ export async function getRemoveBackgroundTaskStatus(taskId) {
 }
 
 /**
+ * 提交音频裁剪/剪辑任务
+ */
+export async function submitAudioEdit(params) {
+  const response = await fetch(getApiUrl('/api/audio/edit'), {
+    method: 'POST',
+    headers: getHeaders({ json: true }),
+    body: JSON.stringify(params)
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.message || data.error || '音频处理任务提交失败')
+  }
+
+  return data
+}
+
+/**
+ * 查询音频裁剪/剪辑任务状态
+ */
+export async function getAudioEditTaskStatus(taskId) {
+  const response = await fetch(getApiUrl(`/api/audio/edit/task/${taskId}`), {
+    headers: getHeaders()
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || '查询音频处理任务状态失败')
+  }
+
+  return response.json()
+}
+
+/**
  * 上传图片（内置重试机制）
  */
 export async function uploadImages(files, retryOptions = {}) {
@@ -491,7 +526,8 @@ export function pollTaskStatus(taskId, type = 'image', options = {}) {
     const poll = async () => {
       try {
         pollCount++
-        const result = await getStatus(taskId)
+        const rawResult = await getStatus(taskId)
+        const result = normalizeTaskMediaResult(rawResult, type)
         
         // 🔧 增强日志：显示更多调试信息
         console.log('[pollTaskStatus] 轮询状态:', {
@@ -518,7 +554,8 @@ export function pollTaskStatus(taskId, type = 'image', options = {}) {
                            result.status === 'done'
         
         // URL检查：url, urls数组, images数组
-        const hasValidUrl = result.url || 
+        const hasValidUrl = result.hasOutput ||
+                           result.url ||
                            (result.urls && result.urls.length > 0) ||
                            (result.images && result.images.length > 0)
         

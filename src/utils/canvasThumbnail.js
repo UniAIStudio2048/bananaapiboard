@@ -8,6 +8,7 @@
  */
 
 import { getApiUrl } from '@/config/tenant'
+import { getCloudVideoPosterUrl, isCosCdn, isQiniuCdn, isVideoUrl } from './cloudMediaUrl.js'
 
 const DEFAULT_THUMB_WIDTH = 2048
 const MIN_CANVAS_PREVIEW_WIDTH = 1024
@@ -76,6 +77,13 @@ export function getCanvasThumbnailUrl(url, width = DEFAULT_THUMB_WIDTH) {
     return `${url}${sep}preview=true&w=${width}`
   }
 
+  // COS CDN → 数据万象缩略图（仅图片）
+  if (isCosCdn(url) && !isVideoUrl(url)) {
+    if (url.includes('imageMogr2') || url.includes('imageView2')) return url
+    const sep = url.includes('?') ? '|' : '?'
+    return `${url}${sep}imageMogr2/thumbnail/${width}x/format/webp`
+  }
+
   // COS 代理 → 万象数据处理缩略图（仅图片，跳过视频）
   if (url.includes('/api/cos-proxy/') && !isVideoUrl(url)) {
     const sep = url.includes('?') ? '|' : '?'
@@ -112,6 +120,11 @@ export function getOriginalImageUrl(url) {
     }
   }
 
+  // COS CDN：去掉 imageMogr2 参数
+  if (isCosCdn(url)) {
+    return url.split('?')[0]
+  }
+
   // COS 代理：去掉 imageMogr2 参数
   if (url.includes('/api/cos-proxy/')) {
     return url.split('?')[0]
@@ -130,35 +143,5 @@ export function getOriginalImageUrl(url) {
  * COS 视频支持 ?ci-process=snapshot 截取首帧
  */
 export function getVideoPosterUrl(url, width = DEFAULT_THUMB_WIDTH) {
-  if (!url) return ''
-  if (url.startsWith('blob:') || url.startsWith('data:')) return ''
-
-  // COS 代理视频 → 视频截帧
-  if (url.includes('/api/cos-proxy/') && isVideoUrl(url)) {
-    const sep = url.includes('?') ? '&' : '?'
-    return `${url}${sep}ci-process=snapshot&time=0&width=${width}&format=jpg`
-  }
-
-  // 七牛 CDN 视频 → vframe 截帧
-  if (isQiniuCdn(url) && isVideoUrl(url)) {
-    const sep = url.includes('?') ? '|' : '?'
-    return `${url}${sep}vframe/jpg/offset/0/w/${width}`
-  }
-
-  return ''
-}
-
-function isVideoUrl(url) {
-  if (!url) return false
-  const lower = url.split('?')[0].toLowerCase()
-  return lower.endsWith('.mp4') || lower.endsWith('.webm') || lower.endsWith('.mov') ||
-         lower.includes('/videos/') || lower.includes('/video-files/') ||
-         lower.includes('/character-videos/')
-}
-
-function isQiniuCdn(url) {
-  return url.includes('files.nananobanana.cn') ||
-         url.includes('qiniucdn.com') || url.includes('qncdn.net') ||
-         url.includes('clouddn.com') || url.includes('qnssl.com') ||
-         url.includes('qbox.me')
+  return getCloudVideoPosterUrl(url, width)
 }

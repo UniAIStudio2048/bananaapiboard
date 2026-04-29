@@ -22,9 +22,12 @@ import { formatPoints } from '@/utils/format'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
+import AudioEditorModal from '@/components/canvas/AudioEditorModal.vue'
 import apiClient from '@/api/client'
+import { submitAudioEdit } from '@/api/canvas/nodes'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { useTeamStore } from '@/stores/team'
+import { registerTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 
 const { t } = useI18n()
 
@@ -400,8 +403,12 @@ function handlePromptWheel(event) {
 onMounted(async () => {
   document.addEventListener('click', handleMusicModelDropdownClickOutside)
   document.addEventListener('click', handleSpeedDropdownClickOutside)
+  window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
+  window.addEventListener('background-task-failed', handleBackgroundTaskFailed)
+  window.addEventListener('background-task-progress', handleBackgroundTaskProgress)
   nextTick(() => {
     updateNodeInternals(props.id)
+    checkAndRestoreAudioEditTasks()
   })
   
   // 刷新品牌配置以获取最新的音乐模型配置
@@ -417,6 +424,9 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('click', handleMusicModelDropdownClickOutside)
   document.removeEventListener('click', handleSpeedDropdownClickOutside)
+  window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
+  window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
+  window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
 })
 
 // 标签编辑状态
@@ -477,6 +487,8 @@ const showToolbar = computed(() => {
   return props.selected && getSelectedNodes.value.length <= 1 && hasAudio.value
 })
 
+const showAudioEditor = ref(false)
+
 // 是否有音频
 const hasAudio = computed(() => {
   return props.data?.audioUrl || props.data?.output?.url || props.data?.audioData
@@ -524,6 +536,155 @@ const audioUrl = computed(() => {
 const audioTitle = computed(() => {
   return props.data?.title || props.data?.fileName || '音频'
 })
+
+function openAudioEditor(event) {
+  event?.stopPropagation()
+  if (isUploading.value) {
+    showAlert('音频仍在上传中，请稍后再编辑', '提示')
+    return
+  }
+  if (!audioUrl.value) {
+    showAlert('当前节点没有可编辑的音频', '提示')
+    return
+  }
+  showAudioEditor.value = true
+}
+
+function createAudioEditProcessingNode(taskId, editOptions) {
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return null
+
+  const newNodeId = `audio_edit_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+  const label = editOptions.mode === 'trim' ? '音频裁剪' : '音频编辑'
+
+  canvasStore.addNode({
+    id: newNodeId,
+    type: 'audio',
+    position: {
+      x: currentNode.position.x + 500,
+      y: currentNode.position.y
+    },
+    data: {
+      label,
+      title: label,
+      status: 'processing',
+      progress: editOptions.mode === 'trim' ? '裁剪中...' : '编辑中...',
+      taskId,
+      taskType: 'audio-edit',
+      sourceNodeId: props.id,
+      sourceAudioUrl: audioUrl.value,
+      editOptions
+    }
+  })
+
+  canvasStore.addEdge({
+    id: `edge-${props.id}-${newNodeId}-${Date.now()}`,
+    source: props.id,
+    target: newNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input',
+    type: 'default'
+  })
+
+  return newNodeId
+}
+
+async function handleAudioEditorSubmit(editOptions) {
+  showAudioEditor.value = false
+
+  try {
+    const result = await submitAudioEdit({
+      audioUrl: audioUrl.value,
+      sourceNodeId: props.id,
+      ...editOptions
+    })
+    const taskId = result.taskId || result.task_id
+    if (!taskId) throw new Error('未获取到音频处理任务ID')
+
+    const resultNodeId = createAudioEditProcessingNode(taskId, editOptions)
+    const currentTab = canvasStore.getCurrentTab()
+    registerTask({
+      taskId,
+      type: 'audio-edit',
+      nodeId: resultNodeId,
+      tabId: currentTab?.id,
+      metadata: {
+        sourceNodeId: props.id,
+        sourceUrl: audioUrl.value,
+        editOptions
+      }
+    })
+  } catch (error) {
+    console.error('[AudioNode] 音频编辑提交失败:', error)
+    await showAlert(error.message || '音频处理任务提交失败', '错误')
+  }
+}
+
+function handleBackgroundTaskComplete(event) {
+  const { taskId, task } = event.detail
+  if (task.nodeId !== props.id || task.type !== 'audio-edit') return
+
+  const outputUrl = task.result?.audio_url || task.result?.outputUrl || task.result?.url
+  if (outputUrl) {
+    canvasStore.updateNodeData(props.id, {
+      status: 'success',
+      progress: null,
+      audioUrl: outputUrl,
+      audioData: outputUrl,
+      output: {
+        type: 'audio',
+        url: outputUrl,
+        sourceUrl: task.metadata?.sourceUrl
+      }
+    })
+  } else {
+    canvasStore.updateNodeData(props.id, {
+      status: 'error',
+      progress: null,
+      error: '音频处理完成但未返回音频地址'
+    })
+  }
+  removeCompletedTask(taskId)
+}
+
+function handleBackgroundTaskFailed(event) {
+  const { taskId, task } = event.detail
+  if (task.nodeId !== props.id || task.type !== 'audio-edit') return
+
+  canvasStore.updateNodeData(props.id, {
+    status: 'error',
+    progress: null,
+    error: task.error || '音频处理失败'
+  })
+  removeCompletedTask(taskId)
+}
+
+function handleBackgroundTaskProgress(event) {
+  const { task } = event.detail
+  if (task.nodeId !== props.id || task.type !== 'audio-edit') return
+
+  canvasStore.updateNodeData(props.id, {
+    status: 'processing',
+    progress: task.result?.progress || task.progress || '编辑中...'
+  })
+}
+
+function checkAndRestoreAudioEditTasks() {
+  const nodeTasks = getTasksByNodeId(props.id)
+  for (const task of nodeTasks) {
+    if (task.type !== 'audio-edit') continue
+    if (task.status === 'completed') {
+      handleBackgroundTaskComplete({ detail: { taskId: task.taskId, task } })
+    } else if (task.status === 'failed') {
+      handleBackgroundTaskFailed({ detail: { taskId: task.taskId, task } })
+    } else if (task.status === 'processing' || task.status === 'pending') {
+      canvasStore.updateNodeData(props.id, {
+        status: 'processing',
+        progress: task.progress || '编辑中...'
+      })
+    }
+  }
+}
 
 // 节点内容样式
 const contentStyle = computed(() => {
@@ -1331,6 +1492,16 @@ function handleSpeedDropdownClickOutside(event) {
       </div>
       
       <div class="toolbar-divider"></div>
+
+      <!-- 音频编辑按钮 -->
+      <button class="toolbar-btn icon-only" title="音频编辑" @mousedown.stop.prevent="openAudioEditor" @click.stop.prevent>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 14l10-10 6 6-10 10H4v-6z" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M13 5l6 6" stroke-linecap="round"/>
+        </svg>
+      </button>
+
+      <div class="toolbar-divider"></div>
       
       <!-- 下载按钮 -->
       <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
@@ -1712,6 +1883,17 @@ function handleSpeedDropdownClickOutside(event) {
       class="node-handle node-handle-hidden"
       :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
     />
+
+    <Teleport to="body">
+      <AudioEditorModal
+        v-if="showAudioEditor"
+        :audio-url="audioUrl"
+        :title="audioTitle"
+        :duration="duration"
+        @close="showAudioEditor = false"
+        @submit="handleAudioEditorSubmit"
+      />
+    </Teleport>
   </div>
 </template>
 

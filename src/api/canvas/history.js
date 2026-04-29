@@ -23,6 +23,16 @@ function isVideoUrl(url) {
 
 function generateThumbnailUrl(url) {
   if (!url) return url
+  const lower = url.toLowerCase()
+
+  // COS CDN → 数据万象缩略图
+  if ((lower.includes('filescos.nananobanana.cn') ||
+       (lower.includes('.cos.') && lower.includes('.myqcloud.com')) ||
+       lower.includes('.tencentcos.cn')) && !isVideoUrl(url)) {
+    if (url.includes('imageMogr2') || url.includes('imageView2')) return url
+    const separator = url.includes('?') ? '|' : '?'
+    return `${url}${separator}imageMogr2/thumbnail/200x/format/webp`
+  }
 
   if (url.includes('/api/cos-proxy/') && !isVideoUrl(url)) {
     const separator = url.includes('?') ? '|' : '?'
@@ -268,4 +278,3 @@ export async function deleteHistory(historyId, type = 'image') {
   
   return response.json()
 }
-

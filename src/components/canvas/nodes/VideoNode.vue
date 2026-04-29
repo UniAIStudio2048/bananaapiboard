@@ -23,6 +23,7 @@ import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } fr
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getHighQualityCanvasPreviewUrl, getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
@@ -1155,7 +1156,7 @@ const STUCK_RETRY_DELAYS = [5000, 10000, 15000]
 const MAX_STUCK_RETRIES = 3
 
 function extractVideoUrl(result) {
-  return result?.video_url || result?.url || result?.outputUrl || result?.data?.output || null
+  return getTaskMediaUrl(result, 'video')
 }
 
 async function retryFetchVideoUrl(taskId, retryCount = 0) {
@@ -3239,15 +3240,16 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       
       // 任务已提交，立即返回 taskId（不等待轮询结果）
       return taskId
-    } else if (result.video_url || result.url) {
+    } else if (extractVideoUrl(result)) {
+      const videoUrl = extractVideoUrl(result)
       canvasStore.updateNodeData(nodeId, {
         status: 'success',
         output: {
           type: 'video',
-          url: result.video_url || result.url
+          url: videoUrl
         }
       })
-      return result.video_url || result.url
+      return videoUrl
     }
     
     throw new Error('未获取到生成结果')
@@ -3324,7 +3326,7 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
         // 检查完成状态
         const status = (data.status || '').toLowerCase()
         if (status === 'completed' || status === 'success') {
-          const videoUrl = data.video_url || data.url
+          const videoUrl = extractVideoUrl(data)
           if (videoUrl) {
             // 检查是否是临时外部URL（如即梦视频的capcut.com URL）
             // 这些临时URL可能有跨域问题或会过期，需要等待后端上传到云存储
@@ -3754,7 +3756,7 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
       // 检查完成状态
       const status = (data.status || '').toLowerCase()
       if (status === 'completed' || status === 'success') {
-        const videoUrl = data.video_url || data.url
+        const videoUrl = extractVideoUrl(data)
         if (videoUrl) {
           // 检查是否是临时外部URL（如即梦视频的capcut.com URL）
           const isTemporaryUrl = videoUrl.includes('capcut.com') || 
@@ -4805,7 +4807,7 @@ async function handleVideoError(event) {
       
       if (response.ok) {
         const data = await response.json()
-        const newVideoUrl = data.video_url || data.url
+        const newVideoUrl = extractVideoUrl(data)
         
         // 如果获取到新的视频URL且与当前不同，更新节点
         if (newVideoUrl && newVideoUrl !== props.data.output?.url) {

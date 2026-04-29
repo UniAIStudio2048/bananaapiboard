@@ -8,7 +8,9 @@
  * - 用户返回画布时自动恢复任务状态
  */
 
-import { getImageTaskStatus, getVideoTaskStatus, getVideoHdTaskStatus, getImageHdTaskStatus, getImagePanoramaTaskStatus, getRemoveBackgroundTaskStatus } from '@/api/canvas/nodes'
+import { getImageTaskStatus, getVideoTaskStatus, getVideoHdTaskStatus, getImageHdTaskStatus, getImagePanoramaTaskStatus, getRemoveBackgroundTaskStatus, getAudioEditTaskStatus } from '@/api/canvas/nodes'
+import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
+import { getTaskStatusConfig } from './backgroundTaskConfig'
 
 const STORAGE_KEY = 'canvas_background_tasks'
 const POLL_INTERVAL = 3000  // 3秒轮询一次
@@ -74,7 +76,7 @@ function resumePendingTasks() {
   const now = Date.now()
   for (const [taskId, task] of tasks) {
     if (task.status === 'pending' || task.status === 'processing') {
-      const pollTimeout = (task.type === 'video' || task.type === 'video-hd' || task.type === 'video-hd-upscale' || task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout')
+      const pollTimeout = getTaskStatusConfig(task.type).longRunning
         ? VIDEO_POLL_TIMEOUT : IMAGE_POLL_TIMEOUT
       if (now - task.createdAt > pollTimeout) {
         console.log(`[BackgroundTaskManager] 任务 ${taskId} 已超时 (${Math.round((now - task.createdAt) / 60000)}分钟), 标记为失败`)
@@ -144,7 +146,8 @@ function startPolling(taskId) {
     }
     
     // 前端超时检测：根据任务类型使用不同阈值
-    const pollTimeout = (task.type === 'video' || task.type === 'video-hd' || task.type === 'video-hd-upscale' || task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout')
+    const taskConfig = getTaskStatusConfig(task.type)
+    const pollTimeout = taskConfig.longRunning
       ? VIDEO_POLL_TIMEOUT : IMAGE_POLL_TIMEOUT
     const taskAge = Date.now() - task.createdAt
     if (taskAge > pollTimeout) {
@@ -163,20 +166,15 @@ function startPolling(taskId) {
     try {
       // 根据任务类型选择对应的状态查询函数
       let getStatus
-      if (task.type === 'video-hd-upscale' || task.type === 'video-hd') {
-        getStatus = getVideoHdTaskStatus
-      } else if (task.type === 'image-hd') {
-        getStatus = getImageHdTaskStatus
-      } else if (task.type === 'image-panorama') {
-        getStatus = getImagePanoramaTaskStatus
-      } else if (task.type === 'image-cutout') {
-        getStatus = getRemoveBackgroundTaskStatus
-      } else if (task.type === 'video') {
-        getStatus = getVideoTaskStatus
-      } else {
-        getStatus = getImageTaskStatus
-      }
-      const result = await getStatus(taskId)
+      if (taskConfig.statusApi === 'video-hd') getStatus = getVideoHdTaskStatus
+      else if (taskConfig.statusApi === 'image-hd') getStatus = getImageHdTaskStatus
+      else if (taskConfig.statusApi === 'image-panorama') getStatus = getImagePanoramaTaskStatus
+      else if (taskConfig.statusApi === 'image-cutout') getStatus = getRemoveBackgroundTaskStatus
+      else if (taskConfig.statusApi === 'audio-edit') getStatus = getAudioEditTaskStatus
+      else if (taskConfig.statusApi === 'video') getStatus = getVideoTaskStatus
+      else getStatus = getImageTaskStatus
+      const rawResult = await getStatus(taskId)
+      const result = normalizeTaskMediaResult(rawResult, taskConfig.resultType)
       
       console.log(`[BackgroundTaskManager] 任务 ${taskId} 状态:`, result.status)
       
@@ -190,7 +188,7 @@ function startPolling(taskId) {
       // 检查是否完成（支持大小写状态）
       const statusLower = (result.status || '').toLowerCase()
       // 高清任务返回 outputUrl，普通任务返回 url 或 video_url
-      const hasOutput = result.url || result.video_url || result.outputUrl
+      const hasOutput = result.hasOutput || result.url || result.video_url || result.outputUrl
       if (statusLower === 'completed' || statusLower === 'success' || hasOutput) {
         task.status = 'completed'
         task.result = result
