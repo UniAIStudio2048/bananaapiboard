@@ -175,7 +175,7 @@ const isHdAvailable = computed(() => false)
 // 当前模型是否为 Seedance 2.0
 const isSeedanceModel = computed(() => {
   const modelConfig = currentModelConfig.value
-  return modelConfig?.apiType === 'seedance-2.0' || modelConfig?.apiType === 'happyhorse'
+  return modelConfig?.apiType === 'seedance-2.0' || modelConfig?.apiType === 'ant' || modelConfig?.apiType === 'happyhorse'
 })
 
 // Seedance 可用的模式（从模型配置的 seedanceConfig.supportedModes 读取）
@@ -342,8 +342,8 @@ const availableModels = computed(() => {
   const currentMode = mode.value === 'text' ? 't2v' : 'i2v'
   
   return filteredByVersion.filter(m => {
-    // Seedance 2.0 / Happy Horse 模型始终显示（有自己的模式选择器）
-    if (m.apiType === 'seedance-2.0' || m.apiType === 'happyhorse') return true
+    // Seedance 2.0 / Ant / Happy Horse 模型始终显示（有自己的模式选择器）
+    if (m.apiType === 'seedance-2.0' || m.apiType === 'ant' || m.apiType === 'happyhorse') return true
 
     const supportedModes = m.supportedModes
     if (!supportedModes) return true // 无配置默认支持所有模式
@@ -415,7 +415,7 @@ watch(model, (newModel) => {
     console.log('[VideoGeneration] 方向已重置为:', aspectRatio.value)
   }
 
-  if (modelConfig?.apiType === 'seedance-2.0' || modelConfig?.apiType === 'happyhorse') {
+  if (modelConfig?.apiType === 'seedance-2.0' || modelConfig?.apiType === 'ant' || modelConfig?.apiType === 'happyhorse') {
     const seedanceConfig = modelConfig.seedanceConfig || {}
     seedanceResolution.value = seedanceConfig.resolution || (modelConfig.apiType === 'happyhorse' ? '1080p' : '720p')
     seedanceRatio.value = seedanceConfig.ratio || (modelConfig.apiType === 'happyhorse' ? '16:9' : 'adaptive')
@@ -1617,11 +1617,11 @@ watch(model, (newModel) => {
   }
 
   // 切换到 Seedance 模型时重置模式为文生视频，切换离开时清空 Seedance 文件
-  const isSeedance = modelCfg?.apiType === 'seedance-2.0'
+  const isSeedance = modelCfg?.apiType === 'seedance-2.0' || modelCfg?.apiType === 'ant' || modelCfg?.apiType === 'happyhorse'
   if (isSeedance) {
     seedanceMode.value = 'text2video'
-    seedanceResolution.value = '720p'
-    seedanceRatio.value = 'adaptive'
+    seedanceResolution.value = modelCfg?.apiType === 'happyhorse' ? '1080p' : '720p'
+    seedanceRatio.value = modelCfg?.apiType === 'happyhorse' ? '16:9' : 'adaptive'
     seedanceDuration.value = 5
     seedanceGenerateAudio.value = true
     seedanceWebSearch.value = false

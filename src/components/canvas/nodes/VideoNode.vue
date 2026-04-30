@@ -32,6 +32,7 @@ import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
+import { formatVideoNodeErrorMessage } from './video-error-message.js'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 
 const { t, currentLanguage } = useI18n()
@@ -73,20 +74,27 @@ const localLabel = ref(props.data.label || 'Video')
 const isGenerating = ref(false)
 const errorMessage = ref('')
 
+function getDisplayErrorMessage(msg) {
+  return formatVideoNodeErrorMessage(msg || errorMessage.value || '生成失败')
+}
+
 function isContentSafetyError(msg) {
-  if (!msg) return false
+  const normalized = getDisplayErrorMessage(msg)
+  if (!normalized) return false
   const keywords = ['敏感', '安全', '拦截', '违规', 'sensitive', 'moderation', 'content safety', 'illegal']
-  return keywords.some(k => msg.toLowerCase().includes(k.toLowerCase()))
+  return keywords.some(k => normalized.toLowerCase().includes(k.toLowerCase()))
 }
 
 function isTimeoutError(msg) {
-  if (!msg) return false
-  return msg.includes('超时') || msg.includes('timeout')
+  const normalized = getDisplayErrorMessage(msg)
+  return normalized.includes('超时') || normalized.includes('timeout')
 }
 
 function getErrorHint(msg) {
-  if (isContentSafetyError(msg)) return '请修改提示词或更换参考图片后重试'
-  if (isTimeoutError(msg)) return '生成时间过长，请稍后重试或简化提示词'
+  const normalized = getDisplayErrorMessage(msg)
+  if (normalized.includes('时长超限')) return '可先把参考视频裁到 15 秒以内，再重新生成'
+  if (isContentSafetyError(normalized)) return '请修改提示词或更换参考图片后重试'
+  if (isTimeoutError(normalized)) return '生成时间过长，请稍后重试或简化提示词'
   return ''
 }
 const promptText = ref(props.data.prompt || '')
@@ -722,14 +730,14 @@ const isHappyHorseModel = computed(() => {
 const isSeedanceModel = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
   const apiType = currentModelConfig.value?.apiType || ''
-  return modelName.includes('seedance') || apiType === 'seedance' || apiType === 'seedance-2.0' || isHappyHorseModel.value
+  return modelName.includes('seedance') || apiType === 'seedance' || apiType === 'seedance-2.0' || apiType === 'ant' || isHappyHorseModel.value
 })
 
 // 检测是否是 Seedance 2.0 模型（支持6种模式）
 const isSeedance2Model = computed(() => {
   const apiType = currentModelConfig.value?.apiType || ''
   const modelName = selectedModel.value?.toLowerCase() || ''
-  return apiType === 'seedance-2.0' || (modelName.includes('seedance') && modelName.includes('2.0')) || isHappyHorseModel.value
+  return apiType === 'seedance-2.0' || apiType === 'ant' || (modelName.includes('seedance') && modelName.includes('2.0')) || isHappyHorseModel.value
 })
 
 // Seedance 2.0 模式选择
@@ -3257,7 +3265,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
     console.error(`[VideoNode] 任务 ${taskIndex + 1} 失败:`, error)
     canvasStore.updateNodeData(nodeId, {
       status: 'error',
-      error: error.message
+      error: formatVideoNodeErrorMessage(error.message)
     })
     return null
   }
@@ -3565,10 +3573,10 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       showAlert(error.message, '并发限制')
       return
     }
-    errorMessage.value = error.message || '生成失败'
+    errorMessage.value = formatVideoNodeErrorMessage(error.message || '生成失败')
     canvasStore.updateNodeData(targetNodeId, {
       status: 'error',
-      error: error.message
+      error: formatVideoNodeErrorMessage(error.message)
     })
   }
 }
@@ -3806,10 +3814,10 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
       
     } catch (error) {
       console.error('[VideoNode] 轮询失败:', error)
-      errorMessage.value = error.message || '生成失败'
+      errorMessage.value = formatVideoNodeErrorMessage(error.message || '生成失败')
       canvasStore.updateNodeData(props.id, {
         status: 'error',
-        error: error.message
+        error: formatVideoNodeErrorMessage(error.message)
       })
       isGenerating.value = false
     }
@@ -5896,9 +5904,9 @@ function handleToolbarPreview() {
           </div>
           
           <!-- 错误状态 -->
-          <div v-else-if="data.status === 'error'" class="preview-error" :class="{ 'content-safety': isContentSafetyError(data.error || errorMessage), 'timeout-error': isTimeoutError(data.error || errorMessage) }">
-            <div class="error-icon">{{ isContentSafetyError(data.error || errorMessage) ? '🛡️' : isTimeoutError(data.error || errorMessage) ? '⏱️' : '❌' }}</div>
-            <div class="error-text">{{ data.error || errorMessage || '生成失败' }}</div>
+          <div v-else-if="data.status === 'error'" class="preview-error" :class="{ 'content-safety': isContentSafetyError(data.error || errorMessage), 'timeout-error': isTimeoutError(data.error || errorMessage), 'duration-error': getDisplayErrorMessage(data.error || errorMessage).includes('时长超限') }">
+            <div class="error-icon">{{ isContentSafetyError(data.error || errorMessage) ? '🛡️' : isTimeoutError(data.error || errorMessage) ? '⏱️' : getDisplayErrorMessage(data.error || errorMessage).includes('时长超限') ? '✂️' : '⚠️' }}</div>
+            <div class="error-text">{{ getDisplayErrorMessage(data.error || errorMessage) }}</div>
             <div v-if="getErrorHint(data.error || errorMessage)" class="error-hint">{{ getErrorHint(data.error || errorMessage) }}</div>
             <div class="error-actions">
               <button v-if="data._failedTaskId || data.taskId || data.soraTaskId" class="retry-btn" @click.stop="handleManualRetryFetch">重新获取</button>
@@ -7049,22 +7057,32 @@ function handleToolbarPreview() {
   justify-content: center;
   gap: 8px;
   text-align: center;
+  padding: 16px 14px;
+  margin: 12px;
+  border: 1px solid rgba(59, 130, 246, 0.22);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
 }
 
 .error-icon {
   font-size: 24px;
+  line-height: 1;
+  color: #475569;
 }
 
 .error-text {
   font-size: 12px;
-  color: var(--canvas-accent-error, #ef4444);
-  max-width: 200px;
+  color: var(--canvas-text-primary, #1f2937);
+  max-width: 220px;
+  line-height: 1.55;
+  font-weight: 500;
 }
 
 .error-hint {
   font-size: 11px;
-  color: var(--canvas-text-secondary, #a0a0a0);
-  max-width: 200px;
+  color: var(--canvas-text-secondary, #64748b);
+  max-width: 220px;
   line-height: 1.4;
 }
 
@@ -7078,6 +7096,11 @@ function handleToolbarPreview() {
 
 .preview-error.timeout-error .error-text {
   color: #f97316;
+}
+
+.preview-error.duration-error .error-text,
+.preview-error.duration-error .error-icon {
+  color: #2563eb;
 }
 
 .retry-btn {

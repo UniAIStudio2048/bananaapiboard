@@ -28,6 +28,7 @@ import { submitAudioEdit } from '@/api/canvas/nodes'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { useTeamStore } from '@/stores/team'
 import { registerTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
+import { formatVideoNodeErrorMessage } from './video-error-message.js'
 
 const { t } = useI18n()
 
@@ -77,6 +78,10 @@ const currentMusicModelConfig = computed(() => {
 
 // 音乐生成积分消耗（生成2首歌）
 const musicPointsCost = computed(() => (currentMusicModelConfig.value?.pointsCost || 20) * 2)
+
+function formatAudioErrorMessage(message) {
+  return formatVideoNodeErrorMessage(message || '生成失败')
+}
 
 // 用户积分
 const userPoints = computed(() => {
@@ -241,7 +246,7 @@ async function handleGenerateMusic() {
     console.error('[AudioNode] 音乐生成失败:', error)
     canvasStore.updateNodeData(props.id, {
       status: 'error',
-      error: error.response?.data?.error || error.message || '生成失败'
+      error: formatAudioErrorMessage(error.response?.data?.message || error.response?.data?.error || error.message || '生成失败')
     })
     isGeneratingMusic.value = false
   }
@@ -292,7 +297,7 @@ async function pollMusicStatus(taskIds) {
         const failedResult = results.find(r => r.status === 'failed')
         canvasStore.updateNodeData(props.id, {
           status: 'error',
-          error: failedResult.data?.error_message || '生成失败',
+          error: formatAudioErrorMessage(failedResult.data?.error_message || failedResult.data?.message || '生成失败'),
           progress: null
         })
         console.log('[AudioNode] 音乐生成失败')
@@ -616,7 +621,7 @@ async function handleAudioEditorSubmit(editOptions) {
     })
   } catch (error) {
     console.error('[AudioNode] 音频编辑提交失败:', error)
-    await showAlert(error.message || '音频处理任务提交失败', '错误')
+    await showAlert(formatAudioErrorMessage(error.message || '音频处理任务提交失败'), '错误')
   }
 }
 
@@ -654,7 +659,7 @@ function handleBackgroundTaskFailed(event) {
   canvasStore.updateNodeData(props.id, {
     status: 'error',
     progress: null,
-    error: task.error || '音频处理失败'
+    error: formatAudioErrorMessage(task.error || '音频处理失败')
   })
   removeCompletedTask(taskId)
 }
