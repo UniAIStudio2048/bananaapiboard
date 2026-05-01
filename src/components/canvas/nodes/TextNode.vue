@@ -20,6 +20,7 @@ import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { getMentionPopupPosition, getTextareaCaretViewportRect } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
+import { buildTextNodeLlmMessages } from '@/utils/textNodeLlmMessages'
 import CustomPresetDialog from '../dialogs/CustomPresetDialog.vue'
 import PresetManager from '../dialogs/PresetManager.vue'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
@@ -993,32 +994,15 @@ async function handleLLMGenerate() {
   isGenerating.value = true
   
   try {
-    // 构建消息列表，包含上游内容和当前节点内容作为上下文
-    const messages = []
-    
-    // 如果有上游文本内容，作为更早的上下文（已经是纯文本）
-    if (inheritedText.value) {
-      messages.push({
-        role: 'assistant',
-        content: inheritedText.value
-      })
-    }
-    
-    // 如果当前节点上方有文本内容（手写的或生成的），作为上一轮对话
-    if (currentNodeText) {
-      messages.push({
-        role: 'assistant',
-        content: currentNodeText
-      })
-    }
-    
-    // 当前用户输入
-    // 如果没有输入且有上方内容，默认提示词
-    // 如果完全没有内容，也允许发送（让 LLM 自由发挥）
-    const userMessage = {
-      role: 'user',
-      content: llmInputText.value || (currentNodeText ? '请基于上方的内容继续' : '你好')
-    }
+    // 构建消息列表，包含上游内容和当前节点内容作为上下文。
+    // 有参考媒体且底部输入为空时，节点正文就是本轮用户提示词。
+    const messages = buildTextNodeLlmMessages({
+      inheritedText: inheritedText.value,
+      currentNodeText,
+      llmInputText: llmInputText.value,
+      hasReferenceMedia: inheritedImages.value.length > 0
+    })
+    const userMessage = messages[messages.length - 1]
     
     // 如果有上游图片/视频，处理 URL
     let processedImages = []

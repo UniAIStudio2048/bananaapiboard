@@ -176,6 +176,30 @@ function cleanNodeData(nodes) {
           })
         }
       }
+
+      if (cleanedNode.data.editSession && typeof cleanedNode.data.editSession === 'object') {
+        cleanedNode.data.editSession = { ...cleanedNode.data.editSession }
+        if (Array.isArray(cleanedNode.data.editSession.history)) {
+          cleanedNode.data.editSession.history = cleanedNode.data.editSession.history
+            .map(entry => ({ ...entry }))
+            .filter(entry => {
+              const snapshotUrl = entry.snapshotUrl || entry.imageData
+              if (typeof snapshotUrl !== 'string') return false
+              return !snapshotUrl.startsWith('blob:') && !snapshotUrl.startsWith('data:')
+            })
+        }
+
+        if (
+          typeof cleanedNode.data.editSession.historyIndex === 'number' &&
+          Array.isArray(cleanedNode.data.editSession.history)
+        ) {
+          const maxIndex = Math.max(0, cleanedNode.data.editSession.history.length - 1)
+          cleanedNode.data.editSession.historyIndex = Math.min(
+            Math.max(0, cleanedNode.data.editSession.historyIndex),
+            maxIndex
+          )
+        }
+      }
     }
     
     return cleanedNode
@@ -278,6 +302,7 @@ export function saveWorkflowSession(session) {
       return {
         id: tab.id,
         name: tab.name || '未命名工作流',
+        description: tab.description || '',
         workflowId: tab.workflowId || null,
         workflowUid: tab.workflowUid || null,
         workflowSpaceType: tab.workflowSpaceType || null,
@@ -387,6 +412,7 @@ export function saveWorkflowToHistory(workflow) {
     const historyItem = {
       id: historyId,
       name: workflow.name || '未命名工作流',
+      description: workflow.description || '',
       tabId: workflow.tabId || null,
       workflowId: workflow.workflowId || null,  // 原始工作流ID（如果是已保存的工作流）
       nodeCount: workflow.nodes.length,
@@ -468,6 +494,25 @@ export function deleteWorkflowHistory(historyId) {
     return true
   } catch (error) {
     console.error('[WorkflowAutoSave] 删除失败:', error)
+    return false
+  }
+}
+
+/**
+ * 更新历史工作流描述
+ * @param {String} historyId - 历史记录ID
+ * @param {String} description - 描述内容
+ */
+export function updateWorkflowHistoryDescription(historyId, description) {
+  try {
+    const history = getWorkflowHistory()
+    const target = history.find(h => h.id === historyId)
+    if (!target) return false
+
+    target.description = String(description ?? '')
+    return saveToLocalStorage(history)
+  } catch (error) {
+    console.error('[WorkflowAutoSave] 更新历史描述失败:', error)
     return false
   }
 }
@@ -556,6 +601,27 @@ export function formatSaveTime(timestamp) {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+/**
+ * 格式化为北京时间，精确到分钟
+ * @param {Number} timestamp - 时间戳
+ */
+export function formatBeijingSaveTime(timestamp) {
+  if (!timestamp) return '-'
+
+  const parts = new Intl.DateTimeFormat('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).formatToParts(new Date(timestamp))
+
+  const value = type => parts.find(part => part.type === type)?.value || ''
+  return `${value('year')}/${value('month')}/${value('day')} ${value('hour')}:${value('minute')}`
 }
 
 /**

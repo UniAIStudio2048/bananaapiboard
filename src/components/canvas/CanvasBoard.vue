@@ -44,6 +44,7 @@ import {
   resolveConnectionSourcePosition,
   shouldTreatTargetAsGroupCanvas
 } from '@/utils/canvasConnectionPosition'
+import { getClipboardFiles, resolveCanvasPasteSource } from '@/utils/canvasClipboardPaste'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -1983,8 +1984,8 @@ function readFileAsBase64(file) {
 }
 
 /**
- * 处理 paste 事件 —— 优先粘贴已复制的画布节点，
- * 仅在无内部节点剪贴板时才从系统剪贴板粘贴图片/文件创建新节点
+ * 处理 paste 事件 —— 系统剪贴板含图片/文件时优先粘贴系统内容；
+ * 否则粘贴最后复制的画布节点。
  */
 function handlePaste(event) {
   const target = event.target
@@ -1992,31 +1993,22 @@ function handlePaste(event) {
     return
   }
 
-  // 内部剪贴板有已复制的节点时，优先粘贴节点（避免系统剪贴板图片覆盖）
-  if (canvasStore.hasClipboard) {
+  const clipboardData = event.clipboardData
+  const pasteSource = resolveCanvasPasteSource({
+    hasNodeClipboard: canvasStore.hasClipboard,
+    clipboardData
+  })
+
+  if (pasteSource === 'system-files') {
     event.preventDefault()
-    const pastePosition = screenToFlowPosition(lastMousePosition.value)
-    canvasStore.pasteNodes(pastePosition)
+    handleClipboardFiles(getClipboardFiles(clipboardData))
     return
   }
 
-  const clipboardData = event.clipboardData
-  if (!clipboardData) return
-
-  const files = Array.from(clipboardData.files || [])
-
-  if (files.length === 0 && clipboardData.items) {
-    for (const item of clipboardData.items) {
-      if (item.kind === 'file') {
-        const file = item.getAsFile()
-        if (file) files.push(file)
-      }
-    }
-  }
-
-  if (files.length > 0) {
+  if (pasteSource === 'nodes') {
     event.preventDefault()
-    handleClipboardFiles(files)
+    const pastePosition = screenToFlowPosition(lastMousePosition.value)
+    canvasStore.pasteNodes(pastePosition)
     return
   }
 
@@ -2941,6 +2933,10 @@ onUnmounted(() => {
   pointer-events: none;
   z-index: 1000;
   overflow: visible;
+}
+
+.active-edge-flow {
+  z-index: 0;
 }
 
 .connection-flow-base {

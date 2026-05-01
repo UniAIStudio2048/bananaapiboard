@@ -18,6 +18,11 @@
  * UI 风格：黑白灰，兼容画布深色/白昼模式
  */
 import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue'
+import {
+  buildSavedSessionPayload,
+  chooseEditorExportFormat
+} from './imageEditSession.js'
+import { getNativeImageEditorPointerCoords } from './nativeImageEditorCoords.js'
 
 const props = defineProps({
   imageUrl: {
@@ -43,7 +48,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['save', 'cancel'])
+const emit = defineEmits(['save', 'cancel', 'restore-failed'])
 
 // DOM 引用
 const containerRef = ref(null)
@@ -62,9 +67,13 @@ const maskCtx = ref(null) // 蒙版画布 context
 const originalImage = new Image()
 originalImage.crossOrigin = 'anonymous'
 
-// 画布尺寸
+// 画布尺寸（canvasWidth/Height 为真实像素尺寸，displayWidth/Height 为屏幕显示尺寸）
 const canvasWidth = ref(800)
 const canvasHeight = ref(600)
+const displayWidth = ref(800)
+const displayHeight = ref(600)
+const originalWidth = ref(0)
+const originalHeight = ref(0)
 
 // 历史记录
 const history = ref([])
@@ -112,6 +121,7 @@ const isDrawingShape = ref(false)
 
 // 文字输入状态
 const textPosition = ref({ x: 0, y: 0 })
+const textDisplayPosition = ref({ x: 0, y: 0 })
 const showTextInput = ref(false)
 
 // 缩放状态
@@ -165,6 +175,40 @@ const filterStyle = computed(() => {
   `
 })
 
+const exportInfo = computed(() => chooseEditorExportFormat(props.imageUrl))
+const canvasScaleFactor = computed(() => {
+  if (!displayWidth.value) return 1
+  return canvasWidth.value / displayWidth.value
+})
+
+function scaleUiSize(size) {
+  return Math.max(1, Number(size || 0) * canvasScaleFactor.value)
+}
+
+function getSnapshotSource(entry) {
+  return entry?.snapshotUrl || entry?.imageData || null
+}
+
+function fitDisplaySize(width, height) {
+  const maxWidth = props.width - 40
+  const maxHeight = props.height - 200
+
+  let nextWidth = width
+  let nextHeight = height
+
+  if (nextWidth > maxWidth) {
+    nextHeight = nextHeight * (maxWidth / nextWidth)
+    nextWidth = maxWidth
+  }
+  if (nextHeight > maxHeight) {
+    nextWidth = nextWidth * (maxHeight / nextHeight)
+    nextHeight = maxHeight
+  }
+
+  displayWidth.value = Math.max(1, Math.round(nextWidth))
+  displayHeight.value = Math.max(1, Math.round(nextHeight))
+}
+
 // ==================== 编辑状态导出/导入 ====================
 
 /**
@@ -172,14 +216,23 @@ const filterStyle = computed(() => {
  */
 function getEditState() {
   return {
+    baseImageUrl: props.cachedState?.baseImageUrl || props.imageUrl,
+    currentImageUrl: props.imageUrl,
+    exportFormat: exportInfo.value.format,
+    exportQuality: exportInfo.value.quality,
+    imageMimeType: exportInfo.value.mimeType,
     history: history.value.map(h => ({ ...h })),
     historyIndex: historyIndex.value,
     filters: { ...filters.value },
     rotation: rotation.value,
     flipX: flipX.value,
     flipY: flipY.value,
+    originalWidth: originalWidth.value,
+    originalHeight: originalHeight.value,
     canvasWidth: canvasWidth.value,
     canvasHeight: canvasHeight.value,
+    displayWidth: displayWidth.value,
+    displayHeight: displayHeight.value,
     brushSize: brushSize.value,
     brushColor: brushColor.value,
     currentMode: currentMode.value
@@ -197,8 +250,11 @@ async function restoreFromCachedState(state) {
     await loadImage(props.imageUrl)
     
     // 恢复画布尺寸
-    canvasWidth.value = state.canvasWidth
-    canvasHeight.value = state.canvasHeight
+    canvasWidth.value = state.canvasWidth || originalWidth.value
+    canvasHeight.value = state.canvasHeight || originalHeight.value
+    originalWidth.value = state.originalWidth || canvasWidth.value
+    originalHeight.value = state.originalHeight || canvasHeight.value
+    fitDisplaySize(canvasWidth.value, canvasHeight.value)
     
     // 恢复状态
     filters.value = { ...state.filters }
@@ -207,6 +263,7 @@ async function restoreFromCachedState(state) {
     flipY.value = state.flipY
     brushSize.value = state.brushSize || 10
     brushColor.value = state.brushColor || '#FF0000'
+    currentMode.value = state.currentMode || ''
     
     // 恢复历史记录
     history.value = state.history.map(h => ({ ...h }))
@@ -219,18 +276,22 @@ async function restoreFromCachedState(state) {
     // 从当前历史位置恢复画布
     const currentState = history.value[historyIndex.value]
     if (currentState) {
-      await new Promise((resolve) => {
+      const restoredSnapshot = await new Promise((resolve) => {
         const img = new Image()
         img.onload = () => {
           if (mainCtx.value) {
             mainCtx.value.clearRect(0, 0, canvasWidth.value, canvasHeight.value)
             mainCtx.value.drawImage(img, 0, 0)
           }
-          resolve()
+          resolve(true)
         }
-        img.onerror = resolve
-        img.src = currentState.imageData
+        img.onerror = () => resolve(false)
+        img.src = getSnapshotSource(currentState)
       })
+
+      if (!restoredSnapshot) {
+        return false
+      }
     }
     
     console.log('[NativeImageEditor] 从缓存恢复编辑状态，历史记录:', history.value.length, '条')
@@ -260,9 +321,12 @@ async function init() {
         isLoading.value = false
         if (props.initialTool) {
           activateMode(props.initialTool)
+        } else if (props.cachedState?.currentMode) {
+          activateMode(props.cachedState.currentMode)
         }
         return
       }
+      emit('restore-failed')
     }
     
     // 全新初始化
@@ -286,24 +350,11 @@ async function init() {
 function loadImage(url) {
   return new Promise((resolve, reject) => {
     originalImage.onload = () => {
-      // 计算适合的画布尺寸
-      const maxWidth = props.width - 40
-      const maxHeight = props.height - 200
-      
-      let w = originalImage.width
-      let h = originalImage.height
-      
-      if (w > maxWidth) {
-        h = h * (maxWidth / w)
-        w = maxWidth
-      }
-      if (h > maxHeight) {
-        w = w * (maxHeight / h)
-        h = maxHeight
-      }
-      
-      canvasWidth.value = Math.round(w)
-      canvasHeight.value = Math.round(h)
+      originalWidth.value = originalImage.width
+      originalHeight.value = originalImage.height
+      canvasWidth.value = originalImage.width
+      canvasHeight.value = originalImage.height
+      fitDisplaySize(originalImage.width, originalImage.height)
       
       resolve()
     }
@@ -412,7 +463,7 @@ function saveToHistory() {
   // 保存当前状态
   const imageData = mainCanvasRef.value.toDataURL('image/png')
   history.value.push({
-    imageData,
+    snapshotUrl: imageData,
     filters: { ...filters.value },
     rotation: rotation.value,
     flipX: flipX.value,
@@ -453,7 +504,7 @@ function restoreFromHistory() {
     mainCtx.value.clearRect(0, 0, canvasWidth.value, canvasHeight.value)
     mainCtx.value.drawImage(img, 0, 0)
   }
-  img.src = state.imageData
+  img.src = getSnapshotSource(state)
   
   filters.value = { ...state.filters }
   rotation.value = state.rotation
@@ -508,10 +559,12 @@ function clearOverlay() {
 // 获取画布坐标（考虑缩放）
 function getCanvasCoords(e) {
   const rect = mainCanvasRef.value.getBoundingClientRect()
-  // 缩放后的坐标需要除以缩放因子
-  const x = (e.clientX - rect.left) / zoomLevel.value
-  const y = (e.clientY - rect.top) / zoomLevel.value
-  return { x, y }
+  return getNativeImageEditorPointerCoords(e, rect, {
+    width: canvasWidth.value,
+    height: canvasHeight.value,
+    displayWidth: displayWidth.value,
+    displayHeight: displayHeight.value
+  })
 }
 
 // ==================== 绘图工具 ====================
@@ -540,7 +593,7 @@ function draw(e) {
     ctx.moveTo(lastX.value, lastY.value)
     ctx.lineTo(x, y)
     ctx.strokeStyle = '#FFFFFF' // 白色表示涂抹区域
-    ctx.lineWidth = brushSize.value
+    ctx.lineWidth = scaleUiSize(brushSize.value)
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.stroke()
@@ -554,7 +607,7 @@ function draw(e) {
     ctx.moveTo(lastX.value, lastY.value)
     ctx.lineTo(x, y)
     ctx.strokeStyle = brushColor.value
-    ctx.lineWidth = brushSize.value
+    ctx.lineWidth = scaleUiSize(brushSize.value)
     ctx.lineCap = 'round'
     ctx.lineJoin = 'round'
     ctx.stroke()
@@ -592,7 +645,7 @@ function drawShapePreview(e) {
   clearOverlay()
   const ctx = overlayCtx.value
   ctx.strokeStyle = brushColor.value
-  ctx.lineWidth = strokeWidth.value
+  ctx.lineWidth = scaleUiSize(strokeWidth.value)
   ctx.fillStyle = 'transparent'
   
   const startX = shapeStart.value.x
@@ -631,7 +684,7 @@ function endShape(e) {
   
   const ctx = mainCtx.value
   ctx.strokeStyle = brushColor.value
-  ctx.lineWidth = strokeWidth.value
+  ctx.lineWidth = scaleUiSize(strokeWidth.value)
   
   const startX = shapeStart.value.x
   const startY = shapeStart.value.y
@@ -667,7 +720,7 @@ function endShape(e) {
 }
 
 function drawArrow(ctx, fromX, fromY, toX, toY) {
-  const headLength = 15
+  const headLength = scaleUiSize(15)
   const angle = Math.atan2(toY - fromY, toX - fromX)
   
   ctx.beginPath()
@@ -688,8 +741,9 @@ function drawArrow(ctx, fromX, fromY, toX, toY) {
 function handleTextClick(e) {
   if (currentMode.value !== 'text') return
   
-  const { x, y } = getCanvasCoords(e)
+  const { x, y, displayX, displayY } = getCanvasCoords(e)
   textPosition.value = { x, y }
+  textDisplayPosition.value = { x: displayX, y: displayY }
   showTextInput.value = true
   textContent.value = ''
   
@@ -706,7 +760,7 @@ function addText() {
   }
   
   const ctx = mainCtx.value
-  ctx.font = `${fontSize.value}px ${fontFamily.value}`
+  ctx.font = `${scaleUiSize(fontSize.value)}px ${fontFamily.value}`
   ctx.fillStyle = brushColor.value
   ctx.fillText(textContent.value, textPosition.value.x, textPosition.value.y)
   
@@ -767,8 +821,8 @@ function drawAnnotationToCanvas(x, y, label) {
   const ctx = mainCtx.value
   if (!ctx) return
   
-  const pinSize = 24
-  const pinHeight = 32
+  const pinSize = scaleUiSize(24)
+  const pinHeight = scaleUiSize(32)
   
   // 绘制图钉主体（蓝色圆形）
   ctx.beginPath()
@@ -776,7 +830,7 @@ function drawAnnotationToCanvas(x, y, label) {
   ctx.fillStyle = '#2563EB' // 蓝色
   ctx.fill()
   ctx.strokeStyle = '#1D4ED8'
-  ctx.lineWidth = 2
+  ctx.lineWidth = scaleUiSize(2)
   ctx.stroke()
   
   // 绘制图钉尖端
@@ -788,7 +842,7 @@ function drawAnnotationToCanvas(x, y, label) {
   ctx.fill()
   
   // 绘制字母
-  ctx.font = 'bold 14px Arial'
+  ctx.font = `bold ${scaleUiSize(14)}px Arial`
   ctx.fillStyle = '#FFFFFF'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -807,7 +861,7 @@ function handleAnnotationRightClick(e) {
   const { x, y } = getCanvasCoords(e)
   
   // 查找点击位置附近的标注（扩大检测范围）
-  const clickRadius = 30
+  const clickRadius = scaleUiSize(30)
   const index = annotations.value.findIndex(ann => {
     const dx = ann.x - x
     const dy = (ann.y - 20) - y // 标注中心在标记点上方
@@ -889,12 +943,12 @@ function drawCropOverlay() {
   
   // 裁剪框边框
   ctx.strokeStyle = '#fff'
-  ctx.lineWidth = 2
+  ctx.lineWidth = scaleUiSize(2)
   ctx.strokeRect(x, y, width, height)
   
   // 网格线
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'
-  ctx.lineWidth = 1
+  ctx.lineWidth = scaleUiSize(1)
   
   // 垂直线
   ctx.beginPath()
@@ -910,7 +964,7 @@ function drawCropOverlay() {
   ctx.stroke()
   
   // 角落控制点
-  const cornerSize = 10
+  const cornerSize = scaleUiSize(10)
   ctx.fillStyle = '#fff'
   // 左上
   ctx.fillRect(x - cornerSize / 2, y - cornerSize / 2, cornerSize, cornerSize)
@@ -932,7 +986,7 @@ function startCropDrag(e) {
   const { x, y } = getCanvasCoords(e)
   
   const { x: cx, y: cy, width: cw, height: ch } = cropRect.value
-  const cornerSize = 15
+  const cornerSize = scaleUiSize(15)
   
   // 检测拖拽类型
   if (Math.abs(x - cx) < cornerSize && Math.abs(y - cy) < cornerSize) {
@@ -1035,6 +1089,9 @@ function applyCrop() {
   // 更新画布尺寸
   canvasWidth.value = width
   canvasHeight.value = height
+  originalWidth.value = width
+  originalHeight.value = height
+  fitDisplaySize(width, height)
   
   nextTick(() => {
     // 绘制裁剪后的图片
@@ -1131,7 +1188,10 @@ function resetAll() {
 // ==================== 保存/取消 ====================
 
 function save() {
-  const imageDataUrl = mainCanvasRef.value.toDataURL('image/png')
+  const imageDataUrl = mainCanvasRef.value.toDataURL(
+    exportInfo.value.mimeType,
+    exportInfo.value.quality
+  )
   
   // 检查是否有蒙版内容（蒙版画布不是全黑）
   let maskDataUrl = null
@@ -1156,7 +1216,9 @@ function save() {
   emit('save', {
     image: imageDataUrl,
     mask: maskDataUrl, // 黑白蒙版图片（涂抹区域白色，其他黑色）
-    hasMask: !!maskDataUrl
+    hasMask: !!maskDataUrl,
+    exportInfo: exportInfo.value,
+    editState: getEditState()
   })
 }
 
@@ -1194,8 +1256,8 @@ function handleMouseMove(e) {
 // 更新笔刷光标位置
 function updateBrushCursor(e) {
   if (!mainCanvasRef.value) return
-  const { x, y } = getCanvasCoords(e)
-  cursorPosition.value = { x, y }
+  const { displayX, displayY } = getCanvasCoords(e)
+  cursorPosition.value = { x: displayX, y: displayY }
 }
 
 // 鼠标进入画布
@@ -1649,8 +1711,8 @@ watch(() => props.imageUrl, (newUrl) => {
       <div 
         class="zoom-container"
         :style="{ 
-          width: canvasWidth * zoomLevel + 'px', 
-          height: canvasHeight * zoomLevel + 'px'
+          width: displayWidth * zoomLevel + 'px', 
+          height: displayHeight * zoomLevel + 'px'
         }"
       >
         <div 
@@ -1660,8 +1722,8 @@ watch(() => props.imageUrl, (newUrl) => {
             'annotate-mode': currentMode === 'annotate'
           }"
           :style="{ 
-            width: canvasWidth + 'px', 
-            height: canvasHeight + 'px',
+            width: displayWidth + 'px', 
+            height: displayHeight + 'px',
             transform: `scale(${zoomLevel})`,
             transformOrigin: 'top left'
           }"
@@ -1675,6 +1737,7 @@ watch(() => props.imageUrl, (newUrl) => {
           :width="canvasWidth"
           :height="canvasHeight"
           class="main-canvas"
+          :style="{ width: displayWidth + 'px', height: displayHeight + 'px' }"
           @mousedown="handleMouseDown"
           @mousemove="handleMouseMove"
           @click="handleClick"
@@ -1686,6 +1749,7 @@ watch(() => props.imageUrl, (newUrl) => {
           :width="canvasWidth"
           :height="canvasHeight"
           class="mask-canvas"
+          :style="{ width: displayWidth + 'px', height: displayHeight + 'px' }"
         ></canvas>
         
         <!-- 覆盖层画布（用于预览、裁剪框、蒙版显示等） -->
@@ -1694,6 +1758,7 @@ watch(() => props.imageUrl, (newUrl) => {
           :width="canvasWidth"
           :height="canvasHeight"
           class="overlay-canvas"
+          :style="{ width: displayWidth + 'px', height: displayHeight + 'px' }"
           @mousedown="handleMouseDown"
           @mousemove="handleMouseMove"
           @click="handleClick"
@@ -1725,7 +1790,7 @@ watch(() => props.imageUrl, (newUrl) => {
         <div 
           v-if="showTextInput" 
           class="text-input-overlay"
-          :style="{ left: textPosition.x + 'px', top: textPosition.y + 'px' }"
+          :style="{ left: textDisplayPosition.x + 'px', top: textDisplayPosition.y + 'px' }"
         >
           <input 
             v-model="textContent" 

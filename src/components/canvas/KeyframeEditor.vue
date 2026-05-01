@@ -11,6 +11,7 @@
  * - 最多支持8个关键帧
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { extractVideoFrame } from '@/api/canvas/workflow'
 
 const props = defineProps({
   videoUrl: {
@@ -74,6 +75,32 @@ const cropPreset = ref('original') // original, 1:1, 16:9, 9:16, 4:3, 3:4
 // 时间线拖拽状态
 const isDraggingTimeline = ref(false)
 const timelineRef = ref(null)
+
+function canCaptureFrameLocally(url) {
+  return !!url && (url.startsWith('blob:') || url.startsWith('data:'))
+}
+
+function captureCurrentFrameLocally() {
+  const canvas = document.createElement('canvas')
+  canvas.width = videoRef.value.videoWidth
+  canvas.height = videoRef.value.videoHeight
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(videoRef.value, 0, 0)
+  return canvas.toDataURL('image/jpeg', 0.8)
+}
+
+async function captureCurrentFrame() {
+  if (canCaptureFrameLocally(props.videoUrl)) {
+    return captureCurrentFrameLocally()
+  }
+
+  const result = await extractVideoFrame({
+    videoUrl: props.videoUrl,
+    time: currentTime.value,
+    nodeId: props.nodeId
+  })
+  return result.url
+}
 
 // 裁剪比例预设
 const cropPresets = [
@@ -199,14 +226,7 @@ async function markKeyframe() {
   isPlaying.value = false
   
   try {
-    // 截取当前帧
-    const canvas = document.createElement('canvas')
-    canvas.width = videoRef.value.videoWidth
-    canvas.height = videoRef.value.videoHeight
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(videoRef.value, 0, 0)
-    
-    const thumbnail = canvas.toDataURL('image/jpeg', 0.8)
+    const thumbnail = await captureCurrentFrame()
     
     // 保存撤销状态
     undoStack.value.push([...keyframes.value])
@@ -224,8 +244,7 @@ async function markKeyframe() {
     console.log('[KeyframeEditor] 添加关键帧:', currentTime.value, '总数:', keyframes.value.length)
   } catch (e) {
     console.error('[KeyframeEditor] 截取关键帧失败:', e.message)
-    // 跨域视频无法截取帧时的提示
-    alert('无法截取关键帧：该视频来源不支持帧截取功能。请尝试使用本地上传的视频。')
+    alert(`无法截取关键帧：${e.message || '该视频来源暂不支持帧截取功能'}`)
   }
 }
 
@@ -411,6 +430,7 @@ async function handleConfirm() {
 async function applyCropToImage(imageData, cropArea) {
   return new Promise((resolve) => {
     const img = new Image()
+    img.crossOrigin = 'anonymous'
     img.onload = () => {
       const canvas = document.createElement('canvas')
       const srcX = (cropArea.x / 100) * img.width
@@ -1450,4 +1470,3 @@ onUnmounted(() => {
   background: #444;
 }
 </style>
-

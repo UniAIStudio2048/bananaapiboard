@@ -26,6 +26,11 @@ import { toSameOriginUrl, getOriginalImageUrl } from '@/utils/canvasThumbnail'
 import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
+import {
+  setCanvasSpaceFilterFromGlobal,
+  syncGlobalSpaceFromFilter,
+  useCanvasSpaceFilter
+} from './spaceFilterState'
 
 const { t, currentLanguage } = useI18n()
 const teamStore = useTeamStore()
@@ -41,8 +46,7 @@ const loading = ref(false)
 const historyList = shallowRef([]) // 使用 shallowRef 优化大数组
 const selectedType = ref('all') // all | image | video | audio
 const searchQuery = ref('')
-// 默认显示全部空间的历史记录，用户可手动切换筛选
-const spaceFilter = ref('all')
+const spaceFilter = useCanvasSpaceFilter(teamStore)
 
 // 全屏模式
 const isFullscreen = ref(false)
@@ -449,13 +453,16 @@ function stopAutoRefresh() {
   }
 }
 
-// 空间筛选变化时重新加载
-function handleSpaceChange(newSpace) {
-  spaceFilter.value = newSpace
-  dataCached.value = false // 清除缓存
-  loadHistory(true)
-  
-  // 重新评估是否需要同步
+async function handleSpaceChange(newSpace) {
+  await syncGlobalSpaceFromFilter(teamStore, newSpace)
+}
+
+function refreshForSpaceChange(newSpace) {
+  dataCached.value = false
+  if (props.visible) {
+    loadHistory(true)
+  }
+
   if (newSpace.startsWith('team-')) {
     startTeamSync()
   } else {
@@ -472,12 +479,12 @@ watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
   }
 })
 
-// 全局空间变化时仅刷新数据（不覆盖用户选择的空间筛选器）
+watch(spaceFilter, (newSpace) => {
+  refreshForSpaceChange(newSpace)
+})
+
 watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], () => {
-  if (props.visible) {
-    dataCached.value = false
-    loadHistory(true)
-  }
+  setCanvasSpaceFilterFromGlobal(teamStore)
 })
 
 function isVideoMediaUrl(url) {
@@ -1500,10 +1507,6 @@ watch(() => props.visible, async (visible) => {
   if (visible) {
     // 重置滚动位置
     scrollTop.value = 0
-    
-    // 每次打开面板时重置为「全部」，确保能看到所有空间的记录
-    spaceFilter.value = 'all'
-    dataCached.value = false
     
     // 加载数据
     await loadHistory()
@@ -2625,7 +2628,6 @@ onUnmounted(() => {
 }
 
 .history-card:hover {
-  transform: scale(1.02);
   z-index: 10;
   box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
@@ -2637,7 +2639,6 @@ onUnmounted(() => {
 /* 选中状态 */
 .history-card.selected {
   box-shadow: 0 0 0 3px #3b82f6, 0 4px 12px rgba(59, 130, 246, 0.3);
-  transform: scale(1.02);
 }
 
 .history-card.selected::after {
@@ -2685,6 +2686,20 @@ onUnmounted(() => {
   width: 100%;
   /* 添加最大高度限制，防止超长图片影响体验 */
   max-height: 480px; 
+  height: auto;
+  display: block;
+  object-fit: cover;
+}
+
+.history-card :deep(.cached-image-wrapper) {
+  width: 100%;
+  display: block;
+}
+
+.history-card :deep(.card-image) {
+  width: 100%;
+  max-height: 480px;
+  height: auto;
   display: block;
   object-fit: cover;
 }
@@ -2706,6 +2721,12 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.history-card.portrait-video :deep(.cached-image-wrapper),
+.history-card.portrait-video :deep(.card-image) {
+  width: 100%;
+  height: 100%;
 }
 
 /* 占位符 */
@@ -2883,6 +2904,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
+  z-index: 2;
 }
 
 .overlay-delete:hover {

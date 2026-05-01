@@ -16,6 +16,7 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints, removeImageBackground } from '@/api/canvas/nodes'
+import { extractVideoFrame } from '@/api/canvas/workflow'
 import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
 import { formatPoints } from '@/utils/format'
 import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
@@ -31,6 +32,7 @@ import Pose3DViewer from '../Pose3DViewer.vue'
 import CameraControlPanel from '../CameraControlPanel.vue'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
 import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
@@ -825,7 +827,7 @@ function checkAndRestoreBackgroundTasks() {
   
   // 如果节点状态是 processing 但没有任何关联的后台任务，说明轮询丢失了
   // 多角度生成节点有独立轮询机制（pollMultiangleTask），不走 backgroundTaskManager
-  if (props.data?.status === 'processing' && props.data?.sourceType !== 'multiangle' && props.data?.taskType !== 'image-hd' && props.data?.taskType !== 'image-panorama' && props.data?.taskType !== 'image-cutout' && nodeTasks.filter(t => (t.type === 'image' || t.type === 'image-hd' || t.type === 'image-panorama' || t.type === 'image-cutout') && (t.status === 'processing' || t.status === 'pending')).length === 0) {
+  if (props.data?.status === 'processing' && props.data?.extractedFromVideo !== true && props.data?.sourceType !== 'multiangle' && props.data?.taskType !== 'image-hd' && props.data?.taskType !== 'image-panorama' && props.data?.taskType !== 'image-cutout' && nodeTasks.filter(t => (t.type === 'image' || t.type === 'image-hd' || t.type === 'image-panorama' || t.type === 'image-cutout') && (t.status === 'processing' || t.status === 'pending')).length === 0) {
     console.log(`[ImageNode] 节点 ${props.id} 状态为 processing 但无关联任务, 重置为 error`)
     canvasStore.updateNodeData(props.id, {
       status: 'error',
@@ -4011,10 +4013,35 @@ async function handleFirstFrameVideoFlow(imageUrl) {
 async function extractLastFrameFromVideo() {
   try {
     console.log('[ImageNode] 开始提取视频尾帧:', props.data.videoUrl)
-    
-    // 使用 Canvas 提取最后一帧（前端处理）
+
+    if (!canExtractVideoFrameLocally(props.data.videoUrl)) {
+      const duration = await loadVideoDuration(props.data.videoUrl)
+      const result = await extractVideoFrame({
+        videoUrl: props.data.videoUrl,
+        time: Math.max(0, duration - 0.12),
+        mode: 'last',
+        nodeId: props.id
+      })
+
+      canvasStore.updateNodeData(props.id, {
+        sourceImages: [result.url],
+        output: {
+          type: 'image',
+          url: result.url,
+          urls: [result.url]
+        },
+        nodeRole: 'source',
+        needsFrameExtraction: false,
+        isUploading: false,
+        extractedFrameTime: result.time
+      })
+      console.log('[ImageNode] 尾帧提取成功，已上传到云端:', result.url)
+      return
+    }
+
+    // blob/data 视频仍走本地秒显 + 后台上传，保持本地上传体验。
     const video = document.createElement('video')
-    video.src = toSameOriginUrl(props.data.videoUrl)
+    video.src = props.data.videoUrl
     
     // 等待视频元数据加载
     await new Promise((resolve, reject) => {
@@ -4060,6 +4087,45 @@ async function extractLastFrameFromVideo() {
     console.error('[ImageNode] 提取视频尾帧失败:', error)
     errorMessage.value = '提取视频尾帧失败: ' + error.message
   }
+}
+
+function loadVideoDuration(videoUrl) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video')
+    const timeout = setTimeout(() => {
+      cleanup()
+      reject(new Error('读取视频时长超时'))
+    }, 10000)
+
+    function cleanup() {
+      clearTimeout(timeout)
+      video.onloadedmetadata = null
+      video.onerror = null
+      video.removeAttribute('src')
+      video.load()
+    }
+
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      const duration = Number(video.duration) || 0
+      cleanup()
+      if (duration > 0) {
+        resolve(duration)
+      } else {
+        reject(new Error('无法读取视频时长'))
+      }
+    }
+    video.onerror = () => {
+      cleanup()
+      reject(new Error('读取视频时长失败'))
+    }
+    video.src = videoUrl
+    video.load()
+  })
+}
+
+function canExtractVideoFrameLocally(videoUrl) {
+  return !!videoUrl && (videoUrl.startsWith('blob:') || videoUrl.startsWith('data:'))
 }
 
 // 重新上传（源节点用）
@@ -4441,12 +4507,7 @@ function findServerUrlForBlobInNodes(blobUrl) {
 
 // 判断是否是七牛云 CDN URL（公开可访问的 URL）
 function isQiniuCdnUrl(str) {
-  if (!str || typeof str !== 'string') return false
-  // 检查是否是七牛云的 CDN 域名
-  return str.includes('files.nananobanana.cn') || 
-         str.includes('qncdn.') ||
-         str.includes('.qiniucdn.com') ||
-         str.includes('.qbox.me')
+  return isPreferredModelMediaUrl(str)
 }
 
 // 判断是否是需要重新上传的本地/相对路径 URL
@@ -4571,21 +4632,17 @@ async function ensureAccessibleUrls(imageUrls) {
           const file = new File([blob], `base64_${Date.now()}.${imageType}`, { type: blob.type })
           
           const urls = await uploadImages([file])
-          if (urls && urls.length > 0) {
-            console.log('[ImageNode] base64 上传成功，新 URL:', urls[0])
-            accessibleUrls.push(urls[0])
+        if (urls && urls.length > 0) {
+          console.log('[ImageNode] base64 上传成功，新 URL:', urls[0])
+          accessibleUrls.push(urls[0])
           } else {
-            // 上传失败，尝试直接使用 base64（部分 AI 服务支持）
-            accessibleUrls.push(url)
+            console.error('[ImageNode] base64 上传失败：返回空结果')
           }
         } else {
-          // 格式不正确，尝试直接使用
-          accessibleUrls.push(url)
+          console.error('[ImageNode] base64 格式不正确，跳过')
         }
       } catch (error) {
         console.error('[ImageNode] base64 处理失败:', error)
-        // 回退到直接使用 base64
-        accessibleUrls.push(url)
       }
     } else {
       // 其他格式，尝试直接使用
@@ -4594,7 +4651,7 @@ async function ensureAccessibleUrls(imageUrls) {
     }
   }
   
-  return accessibleUrls
+  return normalizeModelImageUrls(accessibleUrls).filter(isPreferredModelMediaUrl)
 }
 
 // 获取上游节点的实时图片数据（直接从 store 获取，确保数据最新）
@@ -4662,7 +4719,8 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
   // 仅对有严格大小要求的模型 API 类型做前端预压缩，其他类型传原图
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   const currentApiType = currentModel?.apiType || ''
-  const imagesToProcess = await compressImagesIfNeeded(finalReferenceImages, currentApiType)
+  const normalizedReferenceImages = normalizeModelImageUrls(finalReferenceImages)
+  const imagesToProcess = await compressImagesIfNeeded(normalizedReferenceImages, currentApiType)
   
   // 解析比例：auto 模式下根据是否有参考图自动确定比例
   let resolvedAspectRatio = selectedAspectRatio.value
@@ -4815,6 +4873,9 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     // 🔥 关键：确保所有 URL 都是 AI 模型可以访问的（七牛云 CDN URL）
     // 如果是本地服务器的相对路径，需要重新上传到七牛云
     const accessibleUrls = await ensureAccessibleUrls(imageUrls)
+    if (accessibleUrls.length === 0) {
+      throw new Error('参考图片未能转换为可访问 URL，请重新上传后重试')
+    }
     
     console.log('[ImageNode] 图生图请求 - 处理后的可访问 URLs:', {
       count: accessibleUrls.length,
@@ -6679,7 +6740,7 @@ async function handleDrop(event) {
           <div class="node-content">
             <!-- 加载中状态 - 简洁文字显示 -->
             <div v-if="data.status === 'processing'" class="preview-loading">
-              <span class="processing-text">生成中</span>
+              <span class="processing-text">{{ data.progress || '生成中' }}</span>
             </div>
             
             <!-- 错误状态 -->

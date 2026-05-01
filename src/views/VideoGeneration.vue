@@ -5,6 +5,7 @@ import { getTenantHeaders, getModelDisplayName, isModelEnabled, getAvailableVide
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { formatPoints } from '@/utils/format'
+import { pickConfiguredSubmode } from '@/utils/videoSubmodeDefaults'
 
 const fileInputRef = ref(null)
 const prompt = ref('')
@@ -330,6 +331,42 @@ const userPackageInfo = computed(() => {
   }
 })
 
+const MODE_TO_SD2_MODE = {
+  t2v: 'text2video',
+  i2v: 'image2video_first',
+  a2v: 'multimodal_ref'
+}
+
+const SD2_MODE_TO_GENERATION_MODE = {
+  text2video: 'text',
+  image2video_first: 'image',
+  image2video_first_last: 'image',
+  multimodal_ref: 'image',
+  video_edit: 'image',
+  video_extend: 'image'
+}
+
+function getDefaultSeedance2ModeForModel(modelConfig) {
+  const defaultMode = modelConfig?.defaultSeedance2Mode || modelConfig?.seedanceConfig?.defaultMode
+  if (defaultMode) return defaultMode
+  const defaultVideoMode = modelConfig?.defaultVideoMode || modelConfig?.happyHorseConfig?.defaultVideoMode
+  return MODE_TO_SD2_MODE[defaultVideoMode] || 'text2video'
+}
+
+function getDefaultGenerationModeForModel(modelConfig) {
+  if (!modelConfig) return 'text'
+  if (modelConfig.apiType === 'seedance-2.0' || modelConfig.apiType === 'ant' || modelConfig.apiType === 'happyhorse') {
+    const seedanceMode = getDefaultSeedance2ModeForModel(modelConfig)
+    return SD2_MODE_TO_GENERATION_MODE[seedanceMode] || 'text'
+  }
+  if (modelConfig.defaultVideoMode === 'i2v' || modelConfig.defaultVideoMode === 'a2v') return 'image'
+  return 'text'
+}
+
+function getFirstAvailableMode(preferredMode, availableModes, fallback = 'text2video') {
+  return pickConfiguredSubmode(preferredMode, availableModes, fallback)
+}
+
 // 获取可用的视频模型列表（从配置动态获取，根据当前模式过滤）
 // 🔧 新手模式禁用 VEO 整合，直接显示所有 VEO 子模型
 const availableModels = computed(() => {
@@ -424,7 +461,8 @@ watch(model, (newModel) => {
     seedanceWatermark.value = seedanceConfig.watermark === true
     seedanceWebSearch.value = modelConfig.apiType === 'happyhorse' ? false : seedanceConfig.webSearch === true
     if (!seedanceAvailableModes.value.some(m => m.value === seedanceMode.value)) {
-      seedanceMode.value = seedanceAvailableModes.value[0]?.value || 'text2video'
+      const defaultSeedanceMode = getDefaultSeedance2ModeForModel(modelConfig)
+      seedanceMode.value = getFirstAvailableMode(defaultSeedanceMode, seedanceAvailableModes.value)
     }
   }
 }, { immediate: true })
@@ -1616,10 +1654,12 @@ watch(model, (newModel) => {
     offPeak.value = false
   }
 
-  // 切换到 Seedance 模型时重置模式为文生视频，切换离开时清空 Seedance 文件
+  // 切换到 Seedance 模型时按配置的默认模式初始化，切换离开时清空 Seedance 文件
   const isSeedance = modelCfg?.apiType === 'seedance-2.0' || modelCfg?.apiType === 'ant' || modelCfg?.apiType === 'happyhorse'
   if (isSeedance) {
-    seedanceMode.value = 'text2video'
+    const defaultSeedanceMode = getDefaultSeedance2ModeForModel(modelCfg)
+    seedanceMode.value = getFirstAvailableMode(defaultSeedanceMode, seedanceAvailableModes.value)
+    mode.value = getDefaultGenerationModeForModel(modelCfg)
     seedanceResolution.value = modelCfg?.apiType === 'happyhorse' ? '1080p' : '720p'
     seedanceRatio.value = modelCfg?.apiType === 'happyhorse' ? '16:9' : 'adaptive'
     seedanceDuration.value = 5
@@ -1668,6 +1708,11 @@ onMounted(async () => {
   if (enabledModels.length > 0 && !enabledModels.find(m => m.value === model.value)) {
     model.value = enabledModels[0].value
     console.log('[VideoGeneration] 自动选择启用的模型:', model.value)
+  }
+
+  const initialModelConfig = availableModels.value.find(m => m.value === model.value)
+  if (initialModelConfig) {
+    mode.value = getDefaultGenerationModeForModel(initialModelConfig)
   }
 
   // 确保 aspectRatio 有效（在可用选项中）

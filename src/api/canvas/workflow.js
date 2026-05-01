@@ -433,6 +433,22 @@ export async function uploadCanvasMedia(file, type = 'image', retryOptions = {})
   }
 }
 
+export async function extractVideoFrame({ videoUrl, time = 0, mode = 'time', nodeId = '' }) {
+  const response = await fetch(`${getApiBase()}/api/videos/extract-frame`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ videoUrl, time, mode, nodeId })
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok || !data.url) {
+    throw new Error(data.message || data.error || '视频帧截取失败')
+  }
+
+  return data
+}
+
 /**
  * 批量上传画布媒体文件
  * 

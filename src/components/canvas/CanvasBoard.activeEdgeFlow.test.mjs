@@ -25,3 +25,14 @@ assert.ok(
   firstSchedule < throttledReturn,
   'active edge flow refresh must be scheduled before alignment throttling can return'
 )
+
+const activeFlowLayerRule = source.match(/\.active-edge-flow\s*\{[\s\S]*?\n\}/)
+assert.ok(
+  activeFlowLayerRule,
+  'active edge flow should define its own layer instead of inheriting the guide overlay z-index'
+)
+assert.match(
+  activeFlowLayerRule[0],
+  /z-index\s*:\s*0\s*;/,
+  'active edge flow should render on the edge layer, below normal nodes'
+)

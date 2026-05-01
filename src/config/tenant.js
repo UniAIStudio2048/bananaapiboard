@@ -1194,7 +1194,7 @@ export const getAvailableVideoModels = (options = {}) => {
         isKlingO1Model: true,
         isKlingOmni: true,
         klingO1Modes,
-        defaultKlingO1Mode: 'text2video',
+        defaultKlingO1Mode: omniModel.defaultKlingO1Mode || omniModel.defaultVideoSubMode || omniModel.seedanceConfig?.defaultMode || 'text2video',
         maxRefImages: 7,
         vendor: omniModel.vendor || 'Kling',
         vendorLogo: omniModel.vendorLogo || ''
@@ -1316,7 +1316,7 @@ export const getAvailableVideoModels = (options = {}) => {
         isKlingV3OmniModel: true,
         isKlingOmni: true,
         klingV3OmniModes,
-        defaultKlingV3OmniMode: 'text2video',
+        defaultKlingV3OmniMode: omniModel.defaultKlingV3OmniMode || omniModel.defaultVideoSubMode || omniModel.seedanceConfig?.defaultMode || 'text2video',
         maxRefImages: 7,
         vendor: omniModel.vendor || 'Kling',
         vendorLogo: omniModel.vendorLogo || ''
@@ -1489,6 +1489,10 @@ export const getAvailableVideoModels = (options = {}) => {
         apiType: modelConfig.apiType,
         seedanceConfig: modelConfig.seedanceConfig,
         happyHorseConfig: modelConfig.happyHorseConfig,
+        defaultVideoMode: modelConfig.defaultVideoMode || undefined,
+        defaultSeedance2Mode: modelConfig.defaultSeedance2Mode || modelConfig.seedanceConfig?.defaultMode || undefined,
+        defaultKlingO1Mode: modelConfig.defaultKlingO1Mode || undefined,
+        defaultKlingV3OmniMode: modelConfig.defaultKlingV3OmniMode || undefined,
         // 可灵动作迁移按秒计费配置（用于前端显示积分消耗）
         costPerSecond: modelConfig.costPerSecond,
         // VEO 模型特有属性
@@ -1651,6 +1655,12 @@ export const getAvailableVideoModels = (options = {}) => {
         resolution720Discount: modelFullConfig.resolution720Discount,
         // API 类型（用于判断是否是 Vidu 模型）
         apiType: modelFullConfig.apiType,
+        seedanceConfig: modelFullConfig.seedanceConfig,
+        happyHorseConfig: modelFullConfig.happyHorseConfig,
+        defaultVideoMode: modelFullConfig.defaultVideoMode || undefined,
+        defaultSeedance2Mode: modelFullConfig.defaultSeedance2Mode || modelFullConfig.seedanceConfig?.defaultMode || undefined,
+        defaultKlingO1Mode: modelFullConfig.defaultKlingO1Mode || undefined,
+        defaultKlingV3OmniMode: modelFullConfig.defaultKlingV3OmniMode || undefined,
         // 可灵动作迁移按秒计费配置（用于前端显示积分消耗）
         costPerSecond: modelFullConfig.costPerSecond
       })

@@ -18,6 +18,11 @@ import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import SeedanceCharacterPanel from './SeedanceCharacterPanel.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
+import {
+  setCanvasSpaceFilterFromGlobal,
+  syncGlobalSpaceFromFilter,
+  useCanvasSpaceFilter
+} from './spaceFilterState'
 
 const { t, currentLanguage } = useI18n()
 const teamStore = useTeamStore()
@@ -34,7 +39,7 @@ const assets = ref([])
 const selectedType = ref('all') // all | text | image | video | audio
 const selectedTag = ref('all')  // all | favorite | 或自定义标签
 const searchQuery = ref('')
-const spaceFilter = ref('personal') // 空间筛选: 'personal' | 'team-xxx' | 'all'
+const spaceFilter = useCanvasSpaceFilter(teamStore) // 空间筛选: 'personal' | 'team-xxx' | 'all'
 const showTagManager = ref(false)
 const editingAsset = ref(null)
 const newTagInput = ref('')
@@ -419,12 +424,16 @@ function stopTeamSync() {
   }
 }
 
-// 空间筛选变化时重新加载
-function handleSpaceChange(newSpace) {
-  spaceFilter.value = newSpace
+async function handleSpaceChange(newSpace) {
+  await syncGlobalSpaceFromFilter(teamStore, newSpace)
+}
+
+function refreshForSpaceChange(newSpace) {
   dataCached.value = false // 清除缓存
-  loadAssets(true)
-  
+  if (props.visible) {
+    loadAssets(true)
+  }
+
   // 重新评估是否需要同步
   if (newSpace.startsWith('team-')) {
     startTeamSync()
@@ -442,20 +451,12 @@ watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
   }
 })
 
-watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], ([newType, newTeamId]) => {
-  const newFilter = newType === 'team' && newTeamId ? `team-${newTeamId}` : 'personal'
-  if (newFilter !== spaceFilter.value) {
-    spaceFilter.value = newFilter
-    dataCached.value = false
-    if (props.visible) {
-      loadAssets(true)
-    }
-    if (newFilter.startsWith('team-')) {
-      startTeamSync()
-    } else {
-      stopTeamSync()
-    }
-  }
+watch(spaceFilter, (newFilter) => {
+  refreshForSpaceChange(newFilter)
+})
+
+watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], () => {
+  setCanvasSpaceFilterFromGlobal(teamStore)
 })
 
 // 获取资产预览
@@ -3593,23 +3594,26 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 40px;
+  padding: clamp(12px, 4vw, 40px);
+  overflow: hidden;
 }
 
 .asset-preview-modal {
   position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
+  width: min(96vw, 1400px);
+  max-width: 96vw;
+  max-height: calc(100vh - clamp(24px, 8vw, 80px));
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: clamp(12px, 2.4vh, 24px);
 }
 
 .preview-close-btn {
   position: absolute;
-  top: -50px;
+  top: 0;
   right: 0;
+  transform: translateY(calc(-100% - 12px));
   width: 44px;
   height: 44px;
   display: flex;
@@ -3626,15 +3630,19 @@ onUnmounted(() => {
 .preview-close-btn:hover {
   background: rgba(255, 255, 255, 0.2);
   color: #fff;
-  transform: scale(1.1);
+  transform: translateY(calc(-100% - 12px)) scale(1.1);
 }
 
 .preview-content {
   display: flex;
   align-items: center;
   justify-content: center;
-  max-width: 80vw;
-  max-height: 70vh;
+  width: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  max-width: 100%;
+  max-height: min(72vh, calc(100vh - 220px));
+  overflow: hidden;
 }
 
 /* 文本预览 */
@@ -3666,17 +3674,35 @@ onUnmounted(() => {
 
 /* 图片预览 */
 .preview-image {
-  max-width: 80vw;
-  max-height: 70vh;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(72vh, calc(100vh - 220px));
   object-fit: contain;
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
 }
 
+/* 确保 CachedImage 的外层容器也参与视口约束 */
+.preview-content :deep(.cached-image-wrapper) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 100%;
+  max-height: min(72vh, calc(100vh - 220px));
+  overflow: hidden;
+}
+
 /* 视频预览 */
 .preview-video {
-  max-width: 80vw;
-  max-height: 70vh;
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: min(72vh, calc(100vh - 220px));
+  object-fit: contain;
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   background: #000;
@@ -3744,7 +3770,10 @@ onUnmounted(() => {
 /* 资产信息 */
 .preview-info {
   display: flex;
-  gap: 32px;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px 32px;
+  max-width: 100%;
   padding: 16px 24px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
@@ -3793,6 +3822,70 @@ onUnmounted(() => {
 
 .apply-btn:active {
   transform: translateY(0);
+}
+
+@media (max-height: 720px), (max-width: 640px) {
+  .asset-preview-modal {
+    width: 98vw;
+    max-width: 98vw;
+    max-height: calc(100vh - 24px);
+    gap: 10px;
+  }
+
+  .preview-close-btn {
+    top: 8px;
+    right: 8px;
+    transform: none;
+    z-index: 2;
+    width: 40px;
+    height: 40px;
+  }
+
+  .preview-close-btn:hover {
+    transform: scale(1.06);
+  }
+
+  .preview-content,
+  .preview-image,
+  .preview-video,
+  .preview-content :deep(.cached-image-wrapper) {
+    max-height: min(76vh, calc(100vh - 170px));
+  }
+
+  .preview-info {
+    gap: 8px 16px;
+    padding: 10px 14px;
+  }
+
+  .info-row {
+    min-width: calc(50% - 8px);
+  }
+
+  .apply-btn {
+    padding: 12px 24px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 420px) {
+  .asset-preview-overlay {
+    padding: 8px;
+  }
+
+  .preview-content,
+  .preview-image,
+  .preview-video,
+  .preview-content :deep(.cached-image-wrapper) {
+    max-height: min(74vh, calc(100vh - 190px));
+  }
+
+  .preview-info {
+    width: 100%;
+  }
+
+  .info-row {
+    min-width: 100%;
+  }
 }
 
 /* 预览动画 */

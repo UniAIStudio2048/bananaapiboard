@@ -5,18 +5,24 @@
  * 我的工作流现在分为：左边手动保存的工作流 | 右边历史记录工作流
  */
 import { ref, watch, onMounted, computed, nextTick, onUnmounted } from 'vue'
-import { getWorkflowList, deleteWorkflow, loadWorkflow, getStorageQuota, getWorkflowTemplates } from '@/api/canvas/workflow'
+import { getWorkflowList, deleteWorkflow, loadWorkflow, saveWorkflow, getStorageQuota, getWorkflowTemplates } from '@/api/canvas/workflow'
 import { useCanvasStore } from '@/stores/canvas'
 import { useI18n } from '@/i18n'
-import { 
-  getWorkflowHistory, 
-  deleteWorkflowHistory, 
+import {
+  getWorkflowHistory,
+  deleteWorkflowHistory,
   clearWorkflowHistory,
-  formatSaveTime 
+  formatBeijingSaveTime,
+  updateWorkflowHistoryDescription
 } from '@/stores/canvas/workflowAutoSave'
 import { useTeamStore } from '@/stores/team'
 import { getProjectList, updateProject, createProject, moveWorkflowToProject } from '@/api/canvas/project'
 import SpaceSwitcher from './SpaceSwitcher.vue'
+import {
+  setCanvasSpaceFilterFromGlobal,
+  syncGlobalSpaceFromFilter,
+  useCanvasSpaceFilter
+} from './spaceFilterState'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -42,12 +48,14 @@ const selectedId = ref(null)
 const isDragging = ref(false)
 const draggingWorkflow = ref(null)
 const dragOverProjectId = ref(null)
-const spaceFilter = ref('personal') // 空间筛选: 'personal' | 'team-xxx' | 'all'
+const spaceFilter = useCanvasSpaceFilter(teamStore) // 空间筛选: 'personal' | 'team-xxx' | 'all'
 
 // ========== 历史工作流数据 ==========
 const historyWorkflows = ref([])
 const historyLoading = ref(false)
 const selectedHistoryId = ref(null)
+const savedDescriptionSaveTimers = new Map()
+const loadedWorkflowCache = new Map()
 
 // ========== 工作流模板数据 ==========
 const templates = ref([])
@@ -133,7 +141,7 @@ async function confirmRenameProject(group) {
     cancelRenameProject()
     return
   }
-  
+
   try {
     if (group.id) {
       await updateProject(group.id, { name: newName })
@@ -174,7 +182,7 @@ async function handleDeleteProject() {
   const { group, inputName } = deleteProjectConfirm.value
   if (!group || !group.id) return
   if (inputName.trim() !== group.name.trim()) return
-  
+
   try {
     const { deleteProject } = await import('@/api/canvas/project')
     await deleteProject(group.id)
@@ -197,8 +205,8 @@ function cancelDeleteProject() {
 const filteredWorkflows = computed(() => {
   if (!searchQuery.value.trim()) return workflows.value
   const query = searchQuery.value.toLowerCase()
-  return workflows.value.filter(w => 
-    w.name.toLowerCase().includes(query) || 
+  return workflows.value.filter(w =>
+    w.name.toLowerCase().includes(query) ||
     (w.description && w.description.toLowerCase().includes(query))
   )
 })
@@ -212,7 +220,7 @@ const defaultProject = computed(() => {
 const projectTree = computed(() => {
   const groups = new Map()
   const defProj = defaultProject.value
-  
+
   // 先基于项目列表创建所有项目组（即使暂时没有工作流）
   for (const p of projects.value) {
     groups.set(p.id, {
@@ -222,7 +230,7 @@ const projectTree = computed(() => {
       workflows: []
     })
   }
-  
+
   // 将工作流分配到对应项目组
   for (const w of filteredWorkflows.value) {
     let key = w.project_id
@@ -230,7 +238,7 @@ const projectTree = computed(() => {
     if (!key && defProj) {
       key = defProj.id
     }
-    
+
     if (key && groups.has(key)) {
       groups.get(key).workflows.push(w)
     } else {
@@ -246,7 +254,7 @@ const projectTree = computed(() => {
       groups.get('__uncategorized__').workflows.push(w)
     }
   }
-  
+
   const result = []
   const sorted = [...groups.entries()].sort((a, b) => {
     // 默认项目排第一
@@ -257,11 +265,11 @@ const projectTree = computed(() => {
     if (b[0] === '__uncategorized__') return -1
     return a[1].name.localeCompare(b[1].name)
   })
-  
+
   for (const [, group] of sorted) {
     result.push(group)
   }
-  
+
   return result
 })
 
@@ -282,8 +290,9 @@ watch(projectTree, (newTree) => {
 const filteredHistoryWorkflows = computed(() => {
   if (!searchQuery.value.trim()) return historyWorkflows.value
   const query = searchQuery.value.toLowerCase()
-  return historyWorkflows.value.filter(w => 
-    w.name.toLowerCase().includes(query)
+  return historyWorkflows.value.filter(w =>
+    w.name.toLowerCase().includes(query) ||
+    (w.description && w.description.toLowerCase().includes(query))
   )
 })
 
@@ -300,7 +309,7 @@ const filteredTemplates = computed(() => {
 // 加载我的工作流列表（带缓存）
 async function loadWorkflows(forceRefresh = false) {
   const now = Date.now()
-  
+
   // 如果有缓存且未过期，使用缓存（但空间切换时需要强制刷新）
   if (!forceRefresh && workflowsCached.value && (now - lastWorkflowsLoad.value < CACHE_DURATION)) {
     console.log('[WorkflowPanel] 使用工作流缓存数据')
@@ -310,7 +319,7 @@ async function loadWorkflows(forceRefresh = false) {
     }
     return
   }
-  
+
   loading.value = true
   try {
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
@@ -326,7 +335,7 @@ async function loadWorkflows(forceRefresh = false) {
     workflowsCached.value = true
     lastWorkflowsLoad.value = now
     console.log('[WorkflowPanel] 加载工作流:', workflows.value.length, '个, 项目:', projects.value.length, '个')
-    
+
     if (workflows.value.length === 0 && historyWorkflows.value.length === 0 && activeTab.value === 'my') {
       activeTab.value = 'templates'
     }
@@ -366,18 +375,18 @@ async function loadQuotaInfo() {
 async function checkTeamSync() {
   // 仅在团队空间且面板可见时同步
   if (!teamStore.isInTeamSpace.value || !props.visible) return
-  
+
   // 仅在筛选团队空间时同步
   if (!spaceFilter.value.startsWith('team-')) return
-  
+
   // 仅在"我的工作流"标签页时同步
   if (activeTab.value !== 'my') return
-  
+
   try {
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
     const result = await getWorkflowList({ page: 1, pageSize: 1, ...spaceParams })
     const latestWorkflow = result.list?.[0]
-    
+
     if (latestWorkflow) {
       // 如果有新数据（ID不同或首次同步）
       if (lastSyncId.value !== null && lastSyncId.value !== latestWorkflow.id) {
@@ -418,13 +427,24 @@ function stopTeamSync() {
   }
 }
 
-// 空间筛选变化时重新加载
-function handleSpaceChange(newSpace) {
-  spaceFilter.value = newSpace
+function clearSavedDescriptionTimers() {
+  for (const timer of savedDescriptionSaveTimers.values()) {
+    clearTimeout(timer)
+  }
+  savedDescriptionSaveTimers.clear()
+}
+
+async function handleSpaceChange(newSpace) {
+  await syncGlobalSpaceFromFilter(teamStore, newSpace)
+}
+
+function refreshForSpaceChange(newSpace) {
   workflowsCached.value = false
   hasInitialExpanded = false
-  loadWorkflows(true)
-  
+  if (props.visible) {
+    loadWorkflows(true)
+  }
+
   // 重新评估是否需要同步
   if (newSpace.startsWith('team-')) {
     startTeamSync()
@@ -442,35 +462,25 @@ watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
   }
 })
 
+watch(spaceFilter, (newFilter) => {
+  refreshForSpaceChange(newFilter)
+})
+
 // 全局空间切换时，自动同步面板的 spaceFilter 并刷新数据
-watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], ([newType, newTeamId]) => {
-  const newFilter = newType === 'team' && newTeamId ? `team-${newTeamId}` : 'personal'
-  if (newFilter !== spaceFilter.value) {
-    spaceFilter.value = newFilter
-    workflowsCached.value = false
-    hasInitialExpanded = false
-    if (props.visible) {
-      loadWorkflows(true)
-    }
-    // 重新评估团队同步
-    if (newFilter.startsWith('team-')) {
-      startTeamSync()
-    } else {
-      stopTeamSync()
-    }
-  }
+watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], () => {
+  setCanvasSpaceFilterFromGlobal(teamStore)
 })
 
 // 加载模板（带缓存）
 async function loadTemplates(forceRefresh = false) {
   const now = Date.now()
-  
+
   // 如果有缓存且未过期，使用缓存
   if (!forceRefresh && templatesCached.value && (now - lastTemplatesLoad.value < CACHE_DURATION)) {
     console.log('[WorkflowPanel] 使用模板缓存数据')
     return
   }
-  
+
   templatesLoading.value = true
   try {
     const data = await getWorkflowTemplates()
@@ -557,15 +567,14 @@ function getBuiltinTemplates() {
 
 // ========== 我的工作流操作 ==========
 
-// 选择工作流
-async function selectWorkflow(workflow) {
-  selectedHistoryId.value = null  // 清除历史选中
-  if (selectedId.value === workflow.id) {
-    // 双击加载
-    await handleLoadMyWorkflow(workflow)
-  } else {
-    selectedId.value = workflow.id
-  }
+function toggleWorkflow(workflow) {
+  selectedHistoryId.value = null
+  selectedId.value = selectedId.value === workflow.id ? null : workflow.id
+}
+
+function clearSelectedWorkflowDetails() {
+  selectedId.value = null
+  selectedHistoryId.value = null
 }
 
 // 加载我的工作流到画布（在新标签中打开）
@@ -578,8 +587,9 @@ async function handleLoadMyWorkflow(workflow) {
     console.log('[WorkflowPanel] 开始加载工作流:', workflow.id, workflow.name)
     const result = await loadWorkflow(workflow.id)
     console.log('[WorkflowPanel] API 返回:', result ? Object.keys(result) : 'null')
-    
+
     if (result && result.workflow) {
+      loadedWorkflowCache.set(workflow.id, result.workflow)
       emit('load', result.workflow)
       emit('close')
     } else {
@@ -593,6 +603,48 @@ async function handleLoadMyWorkflow(workflow) {
     loading.value = false
     isLoadingWorkflow = false
   }
+}
+
+async function persistSavedWorkflowDescription(workflow) {
+  try {
+    let fullWorkflow = loadedWorkflowCache.get(workflow.id)
+    if (!fullWorkflow) {
+      const result = await loadWorkflow(workflow.id)
+      fullWorkflow = result?.workflow
+      if (!fullWorkflow) throw new Error('工作流数据为空')
+      loadedWorkflowCache.set(workflow.id, fullWorkflow)
+    }
+
+    const description = workflow.description || ''
+    fullWorkflow.description = description
+    await saveWorkflow({
+      id: workflow.id,
+      name: fullWorkflow.name || workflow.name,
+      description,
+      uploadToCloud: false,
+      spaceType: workflow.space_type || fullWorkflow.space_type,
+      teamId: workflow.team_id || fullWorkflow.team_id,
+      project_id: workflow.project_id || fullWorkflow.project_id,
+      nodes: fullWorkflow.nodes || [],
+      edges: fullWorkflow.edges || [],
+      viewport: fullWorkflow.viewport || { x: 0, y: 0, zoom: 1 },
+      thumbnail: fullWorkflow.thumbnail || null
+    })
+    loadedWorkflowCache.set(workflow.id, { ...fullWorkflow, description })
+  } catch (error) {
+    console.error('[WorkflowPanel] 保存工作流描述失败:', error)
+  }
+}
+
+function handleSavedDescriptionInput(workflow, value) {
+  workflow.description = value
+  if (savedDescriptionSaveTimers.has(workflow.id)) {
+    clearTimeout(savedDescriptionSaveTimers.get(workflow.id))
+  }
+  savedDescriptionSaveTimers.set(workflow.id, setTimeout(() => {
+    savedDescriptionSaveTimers.delete(workflow.id)
+    persistSavedWorkflowDescription(workflow)
+  }, 500))
 }
 
 // 新建工作流
@@ -617,7 +669,7 @@ function cancelDelete() {
 // 执行删除
 async function handleDelete() {
   if (!deleteConfirm.value.workflow) return
-  
+
   try {
     if (deleteConfirm.value.isHistory) {
       // 删除历史记录
@@ -638,15 +690,9 @@ async function handleDelete() {
 
 // ========== 历史工作流操作 ==========
 
-// 选择历史工作流
-function selectHistoryWorkflow(workflow) {
-  selectedId.value = null  // 清除手动保存的选中
-  if (selectedHistoryId.value === workflow.id) {
-    // 双击加载
-    handleLoadHistoryWorkflow(workflow)
-  } else {
-    selectedHistoryId.value = workflow.id
-  }
+function toggleHistoryWorkflow(workflow) {
+  selectedId.value = null
+  selectedHistoryId.value = selectedHistoryId.value === workflow.id ? null : workflow.id
 }
 
 // 加载历史工作流到画布
@@ -656,11 +702,12 @@ function handleLoadHistoryWorkflow(historyWorkflow) {
     const workflow = {
       id: null, // 历史记录不是已保存的工作流
       name: historyWorkflow.name + ' (恢复)',
+      description: historyWorkflow.description || '',
       nodes: JSON.parse(JSON.stringify(historyWorkflow.nodes)),
       edges: JSON.parse(JSON.stringify(historyWorkflow.edges)),
       viewport: historyWorkflow.viewport || { x: 0, y: 0, zoom: 1 }
     }
-    
+
     emit('load', workflow)
     emit('close')
   } catch (error) {
@@ -676,19 +723,24 @@ function handleClearHistory() {
   clearHistoryConfirm.value = false
 }
 
+function handleHistoryDescriptionInput(workflow, value) {
+  workflow.description = value
+  updateWorkflowHistoryDescription(workflow.id, value)
+}
+
 // 开始拖拽工作流
 function handleDragStart(e, workflow) {
   console.log('[WorkflowPanel] 开始拖拽工作流:', workflow.name, workflow.id)
-  
+
   draggingWorkflow.value = workflow
-  
+
   e.dataTransfer.setData('application/json', JSON.stringify({
     type: 'workflow-merge',
     workflowId: workflow.id,
     workflowName: workflow.name
   }))
   e.dataTransfer.effectAllowed = 'copyMove'
-  
+
   setTimeout(() => {
     isDragging.value = true
   }, 50)
@@ -697,7 +749,7 @@ function handleDragStart(e, workflow) {
 // 拖拽历史工作流
 function handleHistoryDragStart(e, workflow) {
   console.log('[WorkflowPanel] 开始拖拽历史工作流:', workflow.name)
-  
+
   e.dataTransfer.setData('application/json', JSON.stringify({
     type: 'template-merge',
     template: {
@@ -707,7 +759,7 @@ function handleHistoryDragStart(e, workflow) {
     }
   }))
   e.dataTransfer.effectAllowed = 'copy'
-  
+
   setTimeout(() => {
     isDragging.value = true
     emit('close')
@@ -739,7 +791,7 @@ function handleFolderDragOver(e, group) {
   const sourceId = getWorkflowSourceProjectId(draggingWorkflow.value)
   if (targetId === sourceId) return
   if (!group.id) return
-  
+
   e.preventDefault()
   e.dataTransfer.dropEffect = 'move'
   dragOverProjectId.value = group.id || '__uncategorized__'
@@ -751,7 +803,7 @@ function handleFolderDragEnter(e, group) {
   const sourceId = getWorkflowSourceProjectId(draggingWorkflow.value)
   if (targetId === sourceId) return
   if (!group.id) return
-  
+
   e.preventDefault()
   dragOverProjectId.value = group.id || '__uncategorized__'
 }
@@ -769,22 +821,22 @@ async function handleFolderDrop(e, group) {
   e.preventDefault()
   e.stopPropagation()
   dragOverProjectId.value = null
-  
+
   if (!draggingWorkflow.value || !group.id) return
-  
+
   const workflow = draggingWorkflow.value
   const targetProjectId = group.id
   const sourceProjectId = getWorkflowSourceProjectId(workflow)
-  
+
   if (targetProjectId === sourceProjectId) {
     draggingWorkflow.value = null
     isDragging.value = false
     return
   }
-  
+
   draggingWorkflow.value = null
   isDragging.value = false
-  
+
   try {
     await moveWorkflowToProject(workflow.id, targetProjectId)
     expandedProjects.value.add(targetProjectId)
@@ -819,7 +871,7 @@ function applyTemplate(template) {
       data: { ...node.data, status: 'idle' }
     }
   })
-  
+
   // 更新连线的 source/target
   const newEdges = template.edges.map(edge => ({
     ...edge,
@@ -827,7 +879,7 @@ function applyTemplate(template) {
     source: idMap[edge.source],
     target: idMap[edge.target]
   }))
-  
+
   // 构造工作流对象
   const workflow = {
     id: null, // 模板不是已保存的工作流
@@ -836,7 +888,7 @@ function applyTemplate(template) {
     edges: newEdges,
     viewport: { x: 0, y: 0, zoom: 1 }
   }
-  
+
   // 触发加载事件
   emit('load', workflow)
   emit('close')
@@ -845,7 +897,7 @@ function applyTemplate(template) {
 // 拖拽模板
 function handleTemplateDragStart(e, template) {
   console.log('[WorkflowPanel] 开始拖拽模板:', template.name)
-  
+
   // 为节点生成新的唯一 ID
   const idMap = {}
   const newNodes = template.nodes.map(node => {
@@ -857,14 +909,14 @@ function handleTemplateDragStart(e, template) {
       data: { ...node.data, status: 'idle' }
     }
   })
-  
+
   const newEdges = template.edges.map(edge => ({
     ...edge,
     id: `edge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
     source: idMap[edge.source],
     target: idMap[edge.target]
   }))
-  
+
   e.dataTransfer.setData('application/json', JSON.stringify({
     type: 'template-merge',
     template: {
@@ -874,7 +926,7 @@ function handleTemplateDragStart(e, template) {
     }
   }))
   e.dataTransfer.effectAllowed = 'copy'
-  
+
   setTimeout(() => {
     isDragging.value = true
     emit('close')
@@ -882,21 +934,6 @@ function handleTemplateDragStart(e, template) {
 }
 
 // ========== 工具函数 ==========
-
-// 格式化时间
-function formatDate(date) {
-  if (!date) return '-'
-  const d = new Date(date)
-  const now = new Date()
-  const diff = now - d
-  
-  if (diff < 60000) return t('time.justNow')
-  if (diff < 3600000) return t('time.minutesAgo', { 0: Math.floor(diff / 60000) })
-  if (diff < 86400000) return t('time.hoursAgo', { 0: Math.floor(diff / 3600000) })
-  if (diff < 604800000) return t('time.daysAgo', { 0: Math.floor(diff / 86400000) })
-  
-  return d.toLocaleDateString()
-}
 
 async function copyWorkflowUid(uid) {
   try {
@@ -920,23 +957,23 @@ watch(() => props.visible, async (visible) => {
     // 重置选择状态（但保持 tab 和 filter 状态）
     selectedId.value = null
     selectedHistoryId.value = null
-    
+
     // 延迟渲染内容，让面板动画先完成
     isContentReady.value = false
-    
+
     // 并行加载数据
     await Promise.all([
       loadWorkflows(),
       loadQuotaInfo(),
       loadTemplates()
     ])
-    
+
     // 启动团队空间实时同步
     startTeamSync()
-    
+
     // 加载历史工作流
     loadHistoryWorkflows()
-    
+
     // 等待面板动画完成后再渲染内容
     await nextTick()
     setTimeout(() => {
@@ -944,7 +981,7 @@ watch(() => props.visible, async (visible) => {
     }, 280)
   } else {
     isContentReady.value = false
-    
+
     // 停止团队空间实时同步
     stopTeamSync()
   }
@@ -964,7 +1001,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
-  
+  clearSavedDescriptionTimers()
+
   // 停止团队空间实时同步
   stopTeamSync()
 })
@@ -1009,19 +1047,19 @@ defineExpose({
             </svg>
           </button>
         </div>
-        
+
         <!-- 空间切换器（仅在我的工作流标签时显示） -->
-        <SpaceSwitcher 
+        <SpaceSwitcher
           v-if="activeTab === 'my'"
-          v-model="spaceFilter" 
+          v-model="spaceFilter"
           @change="handleSpaceChange"
           :compact="true"
         />
-        
+
         <!-- 标签页切换 -->
         <div class="panel-tabs">
-          <button 
-            class="tab-btn" 
+          <button
+            class="tab-btn"
             :class="{ active: activeTab === 'my' }"
             @click="activeTab = 'my'"
           >
@@ -1034,8 +1072,8 @@ defineExpose({
               {{ workflows.length + historyWorkflows.length }}
             </span>
           </button>
-          <button 
-            class="tab-btn" 
+          <button
+            class="tab-btn"
             :class="{ active: activeTab === 'templates' }"
             @click="activeTab = 'templates'"
           >
@@ -1048,7 +1086,7 @@ defineExpose({
             {{ t('canvas.workflowTemplates') }}
           </button>
         </div>
-        
+
         <!-- 我的工作流内容 -->
         <template v-if="activeTab === 'my'">
           <!-- 工具栏 -->
@@ -1058,9 +1096,9 @@ defineExpose({
                 <circle cx="11" cy="11" r="8"/>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
-              <input 
+              <input
                 v-model="searchQuery"
-                type="text" 
+                type="text"
                 :placeholder="t('canvas.searchWorkflow')"
                 class="search-input"
               />
@@ -1073,7 +1111,7 @@ defineExpose({
               {{ t('canvas.new') }}
             </button>
           </div>
-          
+
           <!-- 配额信息 -->
           <div v-if="quota" class="quota-bar">
             <div class="quota-info">
@@ -1081,7 +1119,7 @@ defineExpose({
               <span class="quota-total">/ ∞ {{ t('canvas.workflow') }}</span>
             </div>
           </div>
-          
+
           <!-- 双列工作流列表 -->
           <div class="panel-content two-columns">
             <!-- 左侧：手动保存的工作流（按项目分组目录树） -->
@@ -1095,12 +1133,12 @@ defineExpose({
                 <span>{{ t('canvas.savedWorkflows') }}</span>
                 <span class="column-count">{{ workflows.length }}</span>
               </div>
-              
-              <div class="column-content">
+
+              <div class="column-content" @click="clearSelectedWorkflowDetails">
                 <div v-if="loading && workflows.length === 0 && projects.length === 0" class="loading-state">
                   <div class="spinner"></div>
                 </div>
-                
+
                 <div v-else-if="projectTree.length === 0 && filteredWorkflows.length === 0" class="empty-state small">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <rect x="3" y="3" width="7" height="7" rx="1"/>
@@ -1110,13 +1148,13 @@ defineExpose({
                   </svg>
                   <p>{{ searchQuery ? t('canvas.noMatchingWorkflows') : t('canvas.noSavedWorkflows') }}</p>
                 </div>
-                
+
                 <div v-else class="project-tree">
                   <div v-for="group in projectTree" :key="group.id || '__uncategorized__'" class="project-group">
                     <!-- 项目文件夹头 -->
-                    <div 
-                      class="project-folder" 
-                      :class="{ 
+                    <div
+                      class="project-folder"
+                      :class="{
                         expanded: isProjectExpanded(group.id),
                         'drag-over': dragOverProjectId === (group.id || '__uncategorized__') && draggingWorkflow
                       }"
@@ -1152,7 +1190,7 @@ defineExpose({
                         <span class="folder-name">{{ group.name }}<span v-if="group.isDefault" class="folder-default-tag">默认</span></span>
                       </template>
                       <span class="folder-count">{{ group.workflows.length }}</span>
-                      <button 
+                      <button
                         v-if="group.id && !group.isDefault"
                         class="folder-delete-btn"
                         @click.stop="showDeleteProject($event, group)"
@@ -1164,7 +1202,7 @@ defineExpose({
                         </svg>
                       </button>
                     </div>
-                    
+
                     <!-- 项目内工作流列表 -->
                     <div v-if="isProjectExpanded(group.id)" class="project-workflows">
                       <div
@@ -1173,61 +1211,81 @@ defineExpose({
                         class="workflow-item tree-item"
                         :class="{ selected: selectedId === workflow.id }"
                         draggable="true"
-                        @click="selectWorkflow(workflow)"
+                        @click.stop="toggleWorkflow(workflow)"
                         @dblclick="handleLoadMyWorkflow(workflow)"
                         @dragstart="handleDragStart($event, workflow)"
                         @dragend="handleDragEnd"
                       >
-                        <div class="item-icon">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <rect x="3" y="3" width="6" height="6" rx="1"/>
-                            <rect x="15" y="3" width="6" height="6" rx="1"/>
-                            <rect x="9" y="15" width="6" height="6" rx="1"/>
-                            <path d="M6 9v3h3M18 9v3h-3M12 15v-3"/>
-                          </svg>
-                        </div>
-                        
-                        <div class="item-info">
-                          <div class="item-name">{{ workflow.name }}</div>
-                          <div class="item-meta">
-                            <span v-if="workflow.workflow_uid" class="workflow-uid" :title="t('canvas.copyWorkflowUid')" @click.stop="copyWorkflowUid(workflow.workflow_uid)">{{ workflow.workflow_uid }}</span>
-                            <span v-if="workflow.workflow_uid">·</span>
-                            <span>{{ workflow.node_count }} {{ t('canvas.nodeLabel') }}</span>
-                            <span>·</span>
-                            <span>{{ formatDate(workflow.updated_at) }}</span>
-                            <template v-if="teamStore.isInTeamSpace.value && workflow.last_updated_by_username">
+                        <div class="workflow-item-content">
+                          <div class="item-icon">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                              <rect x="3" y="3" width="6" height="6" rx="1"/>
+                              <rect x="15" y="3" width="6" height="6" rx="1"/>
+                              <rect x="9" y="15" width="6" height="6" rx="1"/>
+                              <path d="M6 9v3h3M18 9v3h-3M12 15v-3"/>
+                            </svg>
+                          </div>
+
+                          <div class="item-info">
+                            <div class="item-name">{{ workflow.name }}</div>
+                            <div class="item-meta">
+                              <span v-if="workflow.workflow_uid" class="workflow-uid" :title="t('canvas.copyWorkflowUid')" @click.stop="copyWorkflowUid(workflow.workflow_uid)">{{ workflow.workflow_uid }}</span>
+                              <span v-if="workflow.workflow_uid">·</span>
+                              <span>{{ workflow.node_count }} {{ t('canvas.nodeLabel') }}</span>
                               <span>·</span>
-                              <span class="item-author">
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                                  <circle cx="12" cy="7" r="4"/>
-                                </svg>
-                                {{ workflow.last_updated_by_username }}
-                              </span>
-                            </template>
+                              <span>保存 {{ formatBeijingSaveTime(workflow.updated_at) }}</span>
+                              <template v-if="teamStore.isInTeamSpace.value && workflow.last_updated_by_username">
+                                <span>·</span>
+                                <span class="item-author">
+                                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                                    <circle cx="12" cy="7" r="4"/>
+                                  </svg>
+                                  {{ workflow.last_updated_by_username }}
+                                </span>
+                              </template>
+                            </div>
+                          </div>
+
+                          <div class="item-actions">
+                            <button
+                              class="action-btn load-btn"
+                              @click.stop="handleLoadMyWorkflow(workflow)"
+                              :title="t('canvas.open')"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M12 5l7 7-7 7"/>
+                              </svg>
+                            </button>
+                            <button
+                              class="action-btn delete-btn"
+                              @click.stop="confirmDelete($event, workflow, false)"
+                              :title="t('common.delete')"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                              </svg>
+                            </button>
                           </div>
                         </div>
-                        
-                        <div class="item-actions">
-                          <button 
-                            class="action-btn load-btn" 
-                            @click.stop="handleLoadMyWorkflow(workflow)"
-                            :title="t('canvas.open')"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <path d="M5 12h14M12 5l7 7-7 7"/>
-                            </svg>
-                          </button>
-                          <button 
-                            class="action-btn delete-btn" 
-                            @click.stop="confirmDelete($event, workflow, false)"
-                            :title="t('common.delete')"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                              <polyline points="3 6 5 6 21 6"/>
-                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            </svg>
-                          </button>
+
+                        <div
+                          v-if="selectedId === workflow.id"
+                          class="workflow-description-editor"
+                          @click.stop
+                          @dblclick.stop
+                        >
+                          <textarea
+                            :value="workflow.description || ''"
+                            class="workflow-description-input"
+                            rows="3"
+                            placeholder="描述内容"
+                            @input="handleSavedDescriptionInput(workflow, $event.target.value)"
+                            @keydown.stop
+                            @mousedown.stop
+                            @dragstart.stop
+                          ></textarea>
                         </div>
                       </div>
                     </div>
@@ -1235,7 +1293,7 @@ defineExpose({
                 </div>
               </div>
             </div>
-            
+
             <!-- 右侧：历史记录工作流 -->
             <div class="column history-column">
               <div class="column-header">
@@ -1245,7 +1303,7 @@ defineExpose({
                 </svg>
                 <span>{{ t('canvas.historyWorkflows') }}</span>
                 <span class="column-count">{{ historyWorkflows.length }}</span>
-                <button 
+                <button
                   v-if="historyWorkflows.length > 0"
                   class="clear-history-btn"
                   @click="clearHistoryConfirm = true"
@@ -1257,12 +1315,12 @@ defineExpose({
                   </svg>
                 </button>
               </div>
-              
-              <div class="column-content">
+
+              <div class="column-content" @click="clearSelectedWorkflowDetails">
                 <div v-if="historyLoading && historyWorkflows.length === 0" class="loading-state">
                   <div class="spinner"></div>
                 </div>
-                
+
                 <div v-else-if="filteredHistoryWorkflows.length === 0" class="empty-state small">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                     <circle cx="12" cy="12" r="10"/>
@@ -1271,7 +1329,7 @@ defineExpose({
                   <p>{{ t('canvas.noHistoryWorkflows') }}</p>
                   <p class="empty-hint">{{ t('canvas.historyAutoSaveHint') }}</p>
                 </div>
-                
+
                 <div v-else class="workflow-list">
                   <div
                     v-for="workflow in filteredHistoryWorkflows"
@@ -1279,48 +1337,68 @@ defineExpose({
                     class="workflow-item history-item"
                     :class="{ selected: selectedHistoryId === workflow.id }"
                     draggable="true"
-                    @click="selectHistoryWorkflow(workflow)"
+                    @click.stop="toggleHistoryWorkflow(workflow)"
                     @dblclick="handleLoadHistoryWorkflow(workflow)"
                     @dragstart="handleHistoryDragStart($event, workflow)"
                     @dragend="handleDragEnd"
                   >
-                    <div class="item-icon history-icon">
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <circle cx="12" cy="12" r="10"/>
-                        <polyline points="12 6 12 12 16 14"/>
-                      </svg>
-                    </div>
-                    
-                    <div class="item-info">
-                      <div class="item-name">{{ workflow.name }}</div>
-                      <div class="item-meta">
-                        <span>{{ workflow.nodeCount }} {{ t('canvas.nodeLabel') }}</span>
-                        <span>·</span>
-                        <span>{{ formatSaveTime(workflow.savedAt) }}</span>
+                    <div class="history-item-content">
+                      <div class="item-icon history-icon">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                          <circle cx="12" cy="12" r="10"/>
+                          <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                      </div>
+
+                      <div class="item-info">
+                        <div class="item-name">{{ workflow.name }}</div>
+                        <div class="item-meta">
+                          <span>{{ workflow.nodeCount }} {{ t('canvas.nodeLabel') }}</span>
+                          <span>·</span>
+                          <span>自动保存 {{ formatBeijingSaveTime(workflow.savedAt) }}</span>
+                        </div>
+                      </div>
+
+                      <div class="item-actions">
+                        <button
+                          class="action-btn load-btn"
+                          @click.stop="handleLoadHistoryWorkflow(workflow)"
+                          :title="t('canvas.restore')"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                            <path d="M3 3v5h5"/>
+                          </svg>
+                        </button>
+                        <button
+                          class="action-btn delete-btn"
+                          @click.stop="confirmDelete($event, workflow, true)"
+                          :title="t('common.delete')"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                          </svg>
+                        </button>
                       </div>
                     </div>
-                    
-                    <div class="item-actions">
-                      <button 
-                        class="action-btn load-btn" 
-                        @click.stop="handleLoadHistoryWorkflow(workflow)"
-                        :title="t('canvas.restore')"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                          <path d="M3 3v5h5"/>
-                        </svg>
-                      </button>
-                      <button 
-                        class="action-btn delete-btn" 
-                        @click.stop="confirmDelete($event, workflow, true)"
-                        :title="t('common.delete')"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                          <polyline points="3 6 5 6 21 6"/>
-                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                        </svg>
-                      </button>
+
+                    <div
+                      v-if="selectedHistoryId === workflow.id"
+                      class="history-description-editor"
+                      @click.stop
+                      @dblclick.stop
+                    >
+                      <textarea
+                        :value="workflow.description || ''"
+                        class="history-description-input"
+                        rows="3"
+                        placeholder="描述内容"
+                        @input="handleHistoryDescriptionInput(workflow, $event.target.value)"
+                        @keydown.stop
+                        @mousedown.stop
+                        @dragstart.stop
+                      ></textarea>
                     </div>
                   </div>
                 </div>
@@ -1328,13 +1406,13 @@ defineExpose({
             </div>
           </div>
         </template>
-        
+
         <!-- 工作流模板内容 -->
         <template v-else>
           <!-- 分类筛选 -->
           <div class="category-bar">
-            <button 
-              v-for="cat in categories" 
+            <button
+              v-for="cat in categories"
               :key="cat.key"
               class="category-btn"
               :class="{ active: selectedCategory === cat.key }"
@@ -1343,20 +1421,20 @@ defineExpose({
               {{ cat.label }}
             </button>
           </div>
-          
+
           <!-- 模板列表 -->
           <div class="panel-content templates-grid">
             <div v-if="templatesLoading" class="loading-state">
               <div class="spinner"></div>
             </div>
-            
+
             <div v-else-if="filteredTemplates.length === 0" class="empty-state">
               <p>{{ t('canvas.noTemplates') }}</p>
             </div>
-            
-            <div 
+
+            <div
               v-else
-              v-for="template in filteredTemplates" 
+              v-for="template in filteredTemplates"
               :key="template.id"
               class="template-card"
               draggable="true"
@@ -1375,12 +1453,12 @@ defineExpose({
             </div>
           </div>
         </template>
-        
+
         <!-- 底部提示 -->
         <div class="panel-footer">
           <span class="tip">{{ t('canvas.doubleClickOpenDragMerge') }}</span>
         </div>
-        
+
         <!-- 删除确认 -->
         <Transition name="fade">
           <div v-if="deleteConfirm.visible" class="delete-modal" @click.self="cancelDelete">
@@ -1393,7 +1471,7 @@ defineExpose({
             </div>
           </div>
         </Transition>
-        
+
         <!-- 清空历史确认 -->
         <Transition name="fade">
           <div v-if="clearHistoryConfirm" class="delete-modal" @click.self="clearHistoryConfirm = false">
@@ -1406,7 +1484,7 @@ defineExpose({
             </div>
           </div>
         </Transition>
-        
+
         <!-- 删除项目确认（需输入项目名） -->
         <Transition name="fade">
           <div v-if="deleteProjectConfirm.visible" class="delete-modal" @click.self="cancelDeleteProject">
@@ -1414,7 +1492,7 @@ defineExpose({
               <p class="delete-title">删除项目「{{ deleteProjectConfirm.group?.name }}」</p>
               <p class="delete-hint">项目下的工作流将移入默认项目，此操作不可撤销。</p>
               <p class="delete-hint">请输入项目名称 <strong>{{ deleteProjectConfirm.group?.name }}</strong> 确认删除：</p>
-              <input 
+              <input
                 v-model="deleteProjectConfirm.inputName"
                 class="delete-confirm-input"
                 :placeholder="deleteProjectConfirm.group?.name"
@@ -1422,7 +1500,7 @@ defineExpose({
               />
               <div class="delete-actions">
                 <button class="btn-cancel" @click="cancelDeleteProject">取消</button>
-                <button 
+                <button
                   class="btn-confirm"
                   :disabled="deleteProjectConfirm.inputName.trim() !== deleteProjectConfirm.group?.name?.trim()"
                   @click="handleDeleteProject"
@@ -2075,12 +2153,59 @@ defineExpose({
   border-color: rgba(255, 255, 255, 0.15);
 }
 
+.workflow-item.tree-item,
+.workflow-item.history-item {
+  align-items: stretch;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .workflow-item.history-item {
   border-left: 2px solid rgba(59, 130, 246, 0.3);
 }
 
 .workflow-item.history-item.selected {
   border-left-color: #3b82f6;
+}
+
+.workflow-item-content,
+.history-item-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.workflow-description-editor,
+.history-description-editor {
+  padding-left: 42px;
+}
+
+.workflow-description-input,
+.history-description-input {
+  width: 100%;
+  min-height: 68px;
+  resize: vertical;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.86);
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  outline: none;
+  cursor: text;
+}
+
+.workflow-description-input:focus,
+.history-description-input:focus {
+  border-color: rgba(59, 130, 246, 0.55);
+  background: rgba(0, 0, 0, 0.32);
+}
+
+.workflow-description-input::placeholder,
+.history-description-input::placeholder {
+  color: rgba(255, 255, 255, 0.32);
 }
 
 .item-icon {
@@ -2679,6 +2804,24 @@ defineExpose({
 
 :root.canvas-theme-light .workflow-panel .workflow-item.history-item.selected {
   border-left-color: #3b82f6 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .workflow-description-input,
+:root.canvas-theme-light .workflow-panel .history-description-input {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .workflow-description-input:focus,
+:root.canvas-theme-light .workflow-panel .history-description-input:focus {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(59, 130, 246, 0.55) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .workflow-description-input::placeholder,
+:root.canvas-theme-light .workflow-panel .history-description-input::placeholder {
+  color: rgba(0, 0, 0, 0.35) !important;
 }
 
 :root.canvas-theme-light .workflow-panel .item-icon {

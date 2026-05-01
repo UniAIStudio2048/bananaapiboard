@@ -7,6 +7,43 @@ import { ref, computed, watch, toRaw, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import { t } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
+import { sanitizeNodesForHistoryRestore } from './historyRestore'
+
+function cloneNodeDataValue(value) {
+  if (value === undefined) return undefined
+
+  const rawValue = toRaw(value)
+
+  if (typeof structuredClone === 'function') {
+    try {
+      return structuredClone(rawValue)
+    } catch (error) {
+      // Fall back to JSON cloning for Vue proxies or non-cloneable values.
+    }
+  }
+
+  return JSON.parse(JSON.stringify(rawValue))
+}
+
+export function mergeNodeData(currentData = {}, patchData = {}) {
+  const merged = {
+    ...cloneNodeDataValue(currentData)
+  }
+
+  for (const [key, value] of Object.entries(patchData || {})) {
+    merged[key] = cloneNodeDataValue(value)
+  }
+
+  return merged
+}
+
+export function cloneCanvasTabState({ nodes = [], edges = [], viewport = { x: 0, y: 0, zoom: 1 } } = {}) {
+  return {
+    nodes: cloneNodeDataValue(nodes) || [],
+    edges: cloneNodeDataValue(edges) || [],
+    viewport: { ...(viewport || { x: 0, y: 0, zoom: 1 }) }
+  }
+}
 
 export const useCanvasStore = defineStore('canvas', () => {
   // ========== 节点和连线 ==========
@@ -46,7 +83,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   const nodeSelectorFlowPosition = ref(null)       // 画布坐标（用于创建节点）
   const nodeSelectorTrigger = ref(null) // 'toolbar' | 'canvas' | 'node'
   const triggerNodeId = ref(null) // 触发节点ID（用于从节点创建下一个节点）
-  
+
   // 待连接的连线状态（用于拖拽连线后显示虚拟连线）
   const pendingConnection = ref(null) // { sourceNodeId, sourceHandleId, targetPosition: {x, y} }
   
@@ -199,7 +236,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   function updateNodeData(nodeId, data) {
     const node = nodes.value.find(n => n.id === nodeId)
     if (node) {
-      node.data = { ...node.data, ...data }
+      node.data = mergeNodeData(node.data, data)
     }
   }
   
@@ -681,7 +718,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     historyIndex.value--
     
     const state = historyStack.value[historyIndex.value]
-    nodes.value = JSON.parse(JSON.stringify(state.nodes))
+    nodes.value = sanitizeNodesForHistoryRestore(JSON.parse(JSON.stringify(state.nodes)))
     edges.value = JSON.parse(JSON.stringify(state.edges))
 
     isHistoryAction.value = false
@@ -697,7 +734,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     historyIndex.value++
 
     const state = historyStack.value[historyIndex.value]
-    nodes.value = JSON.parse(JSON.stringify(state.nodes))
+    nodes.value = sanitizeNodesForHistoryRestore(JSON.parse(JSON.stringify(state.nodes)))
     edges.value = JSON.parse(JSON.stringify(state.edges))
     
     isHistoryAction.value = false
@@ -1651,6 +1688,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     const tab = {
       id: tabId,
       name: workflow?.name || t('canvas.newWorkflow'),
+      description: workflow?.description || '',
       workflowId: workflow?.id || null,
       workflowUid: workflow?.workflow_uid || null,
       // 已保存工作流：记录其所属空间，切换标签时同步全局空间，保证生成任务写入对应 image/video 历史
@@ -1685,8 +1723,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 保存当前标签状态
     if (currentTab) {
       try {
-        currentTab.nodes = JSON.parse(JSON.stringify(toRaw(nodes.value)))
-        currentTab.edges = JSON.parse(JSON.stringify(toRaw(edges.value)))
+        currentTab.nodes = cloneNodeDataValue(nodes.value) || []
+        currentTab.edges = cloneNodeDataValue(edges.value) || []
         currentTab.viewport = { ...viewport.value }
       } catch (e) {
         console.error('[Canvas] 保存标签状态失败:', e)
@@ -1700,7 +1738,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       id: targetTab.workflowId,
       workflow_uid: targetTab.workflowUid,
       name: targetTab.name,
-      description: ''
+      description: targetTab.description || ''
     } : null
     
     selectedNodeId.value = null
@@ -1709,8 +1747,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     // 同步设置新数据 - 深拷贝避免共享引用
     try {
-      nodes.value = JSON.parse(JSON.stringify(targetTab.nodes))
-      edges.value = JSON.parse(JSON.stringify(targetTab.edges))
+      nodes.value = cloneNodeDataValue(targetTab.nodes) || []
+      edges.value = cloneNodeDataValue(targetTab.edges) || []
     } catch (e) {
       console.error('[Canvas] 恢复标签数据失败:', e)
       nodes.value = []
@@ -1764,6 +1802,20 @@ export const useCanvasStore = defineStore('canvas', () => {
     const currentTab = workflowTabs.value.find(t => t.id === activeTabId.value)
     if (currentTab) {
       currentTab.name = name
+    }
+  }
+
+  /**
+   * 更新当前标签描述
+   */
+  function updateCurrentTabDescription(description) {
+    const nextDescription = description || ''
+    const currentTab = workflowTabs.value.find(t => t.id === activeTabId.value)
+    if (currentTab) {
+      currentTab.description = nextDescription
+    }
+    if (workflowMeta.value) {
+      workflowMeta.value.description = nextDescription
     }
   }
   
@@ -1845,6 +1897,7 @@ export const useCanvasStore = defineStore('canvas', () => {
             existingTab.viewport = workflow.viewport
           }
           existingTab.name = workflow.name || existingTab.name
+          existingTab.description = workflow.description || existingTab.description || ''
         }
         if (workflow.id) {
           existingTab.workflowSpaceType = workflow.space_type === 'team' ? 'team' : 'personal'
@@ -1895,6 +1948,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         name: tab.name,
         workflowId: tab.workflowId,
         workflowUid: tab.workflowUid,
+        description: tab.description || '',
         workflowSpaceType: tab.workflowSpaceType,
         workflowTeamId: tab.workflowTeamId,
         nodes: JSON.parse(JSON.stringify(toRaw(tabNodes || []))),
@@ -1928,6 +1982,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       return {
         id: tab.id || generateTabId(),
         name: tab.name || t('canvas.newWorkflow'),
+        description: tab.description || '',
         workflowId: tab.workflowId || null,
         workflowUid: tab.workflowUid || null,
         workflowSpaceType: tab.workflowSpaceType || null,
@@ -2612,6 +2667,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     switchToTab,
     closeTab,
     updateCurrentTabName,
+    updateCurrentTabDescription,
     updateTabName,
     reorderTabs,
     markCurrentTabChanged,

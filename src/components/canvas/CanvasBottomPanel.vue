@@ -17,6 +17,7 @@ import { getLLMConfig, chatWithLLM, describeImage } from '@/api/canvas/llm'
 import { getApiUrl, getAvailableImageModels } from '@/config/tenant'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import { formatPoints } from '@/utils/format'
+import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
@@ -313,11 +314,7 @@ async function handleLLMChat(nodeId) {
 
 // 判断是否是七牛云 CDN URL（公开可访问的 URL）
 function isQiniuCdnUrl(str) {
-  if (!str || typeof str !== 'string') return false
-  return str.includes('files.nananobanana.cn') || 
-         str.includes('qncdn.') ||
-         str.includes('.qiniucdn.com') ||
-         str.includes('.qbox.me')
+  return isPreferredModelMediaUrl(str)
 }
 
 // 判断是否需要重新上传的本地/相对路径 URL
@@ -419,23 +416,18 @@ async function ensureAccessibleUrls(imageUrls) {
           const urls = await uploadImages([file])
           if (urls && urls.length > 0) {
             accessibleUrls.push(urls[0])
-          } else {
-            accessibleUrls.push(url)
           }
-        } else {
-          accessibleUrls.push(url)
         }
       } catch (error) {
         console.error('[BottomPanel] base64 处理失败:', error)
-        accessibleUrls.push(url)
       }
     } else {
       console.warn('[BottomPanel] 未知 URL 格式:', url.substring(0, 60))
-      accessibleUrls.push(url)
+      console.warn('[BottomPanel] 未知 URL 格式，跳过:', url.substring(0, 60))
     }
   }
   
-  return accessibleUrls
+  return normalizeModelImageUrls(accessibleUrls).filter(isPreferredModelMediaUrl)
 }
 
 // 获取上游节点的实时图片数据（直接从 store 获取，确保数据最新）
@@ -495,6 +487,9 @@ async function handleImageGenerate(nodeId, nodeType) {
     if (nodeType === 'image-to-image' || finalImages.length > 0) {
       // 🔥 关键：确保所有 URL 都是 AI 模型可以访问的（七牛云 CDN URL）
       const accessibleUrls = await ensureAccessibleUrls(finalImages)
+      if (accessibleUrls.length === 0) {
+        throw new Error('参考图片未能转换为可访问 URL，请重新上传后重试')
+      }
       console.log('[BottomPanel] 处理后的可访问 URLs:', accessibleUrls.length, '张')
       
       // 图生图

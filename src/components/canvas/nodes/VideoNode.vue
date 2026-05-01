@@ -23,6 +23,7 @@ import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } fr
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getHighQualityCanvasPreviewUrl, getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
@@ -30,6 +31,7 @@ import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { getMentionPopupPosition, getTextareaCaretViewportRect, isBrowserRenderableUrl } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
+import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import { formatVideoNodeErrorMessage } from './video-error-message.js'
@@ -742,6 +744,24 @@ const isSeedance2Model = computed(() => {
 
 // Seedance 2.0 模式选择
 const selectedSeedance2Mode = ref(props.data.seedance2Mode || 'text2video')
+let didInitializeSeedance2Mode = Boolean(props.data.seedance2Mode)
+
+const MODE_TO_SD2_MODE = {
+  t2v: 'text2video',
+  i2v: 'image2video_first',
+  a2v: 'multimodal_ref'
+}
+
+function getDefaultSeedance2ModeForModel(modelConfig) {
+  const defaultMode = modelConfig?.defaultSeedance2Mode || modelConfig?.seedanceConfig?.defaultMode
+  if (defaultMode) return defaultMode
+  const defaultVideoMode = modelConfig?.defaultVideoMode || modelConfig?.happyHorseConfig?.defaultVideoMode
+  return MODE_TO_SD2_MODE[defaultVideoMode] || 'text2video'
+}
+
+function getFirstAvailableMode(preferredMode, availableModes, fallback = 'text2video') {
+  return pickConfiguredSubmode(preferredMode, availableModes, fallback)
+}
 
 const SEEDANCE2_MODES = [
   { value: 'text2video', label: '文生视频', desc: '纯文本提示词生成视频', needsImage: false, needsVideo: false },
@@ -1099,10 +1119,16 @@ const models = computed(() => {
 })
 
 watch(seedance2Modes, (modes) => {
-  if (!modes.some(mode => mode.value === selectedSeedance2Mode.value)) {
-    selectedSeedance2Mode.value = modes[0]?.value || 'text2video'
+  const defaultMode = getDefaultSeedance2ModeForModel(currentModelConfig.value)
+  if (!didInitializeSeedance2Mode && isSeedance2Model.value) {
+    selectedSeedance2Mode.value = pickInitialSubmode(props.data.seedance2Mode, defaultMode, modes)
+    didInitializeSeedance2Mode = true
+    return
   }
-})
+  if (!modes.some(mode => mode.value === selectedSeedance2Mode.value)) {
+    selectedSeedance2Mode.value = getFirstAvailableMode(defaultMode, modes)
+  }
+}, { immediate: true })
 
 const aspectRatios = [
   { value: '16:9', label: '16:9 横屏' },
@@ -2395,14 +2421,20 @@ watch(selectedModel, () => {
   
   // Kling O1 整合模型：切换时重置模式
   if (modelConfig?.isKlingO1Model) {
-    selectedKlingO1Mode.value = modelConfig.defaultKlingO1Mode || 'text2video'
+    selectedKlingO1Mode.value = pickConfiguredSubmode(modelConfig.defaultKlingO1Mode, klingO1Modes.value)
     console.log('[VideoNode] 切换到 Kling O1 整合模型，模式重置为', selectedKlingO1Mode.value)
   }
 
   // Kling v3 Omni 整合模型：切换时重置模式
   if (modelConfig?.isKlingV3OmniModel) {
-    selectedKlingV3OmniMode.value = modelConfig.defaultKlingV3OmniMode || 'text2video'
+    selectedKlingV3OmniMode.value = pickConfiguredSubmode(modelConfig.defaultKlingV3OmniMode, klingV3OmniModes.value)
     console.log('[VideoNode] 切换到 Kling v3 Omni 整合模型，模式重置为', selectedKlingV3OmniMode.value)
+  }
+
+  if (modelConfig?.apiType === 'seedance-2.0' || modelConfig?.apiType === 'ant' || modelConfig?.apiType === 'happyhorse') {
+    const defaultMode = getDefaultSeedance2ModeForModel(modelConfig)
+    selectedSeedance2Mode.value = getFirstAvailableMode(defaultMode, seedance2Modes.value)
+    console.log('[VideoNode] 切换到 Seedance/Happy Horse 模型，模式重置为', selectedSeedance2Mode.value)
   }
 })
 
@@ -2523,13 +2555,7 @@ function delay(ms) {
 
 // 判断是否是七牛云 CDN URL（公开可访问的 URL）
 function isQiniuCdnUrl(str) {
-  if (!str || typeof str !== 'string') return false
-  return str.includes('files.nananobanana.cn') ||  // 项目的七牛云 CDN 域名
-         str.includes('oss.nananobanana.cn') ||    // 项目的七牛云源站域名
-         str.includes('qiniucdn.com') || 
-         str.includes('clouddn.com') || 
-         str.includes('qnssl.com') ||
-         str.includes('qbox.me')
+  return isPreferredModelMediaUrl(str)
 }
 
 // 判断是否是需要重新上传的本地/相对路径 URL
@@ -2869,21 +2895,17 @@ async function ensureAccessibleUrls(imageUrls) {
           const file = new File([blob], `base64_${Date.now()}.${imageType}`, { type: blob.type })
           
           const urls = await uploadImages([file])
-          if (urls && urls.length > 0) {
+        if (urls && urls.length > 0) {
             console.log('[VideoNode] base64 上传成功，新 URL:', urls[0])
             accessibleUrls.push(urls[0])
           } else {
-            // 上传失败，尝试直接使用 base64（部分 AI 服务支持）
-            accessibleUrls.push(url)
+            console.error('[VideoNode] base64 上传失败：返回空结果')
           }
         } else {
-          // 格式不正确，尝试直接使用
-          accessibleUrls.push(url)
+          console.error('[VideoNode] base64 格式不正确，跳过')
         }
       } catch (error) {
         console.error('[VideoNode] base64 处理失败:', error)
-        // 回退到直接使用 base64
-        accessibleUrls.push(url)
       }
     } else {
       // 其他格式，尝试直接使用
@@ -2892,7 +2914,7 @@ async function ensureAccessibleUrls(imageUrls) {
     }
   }
   
-  return accessibleUrls
+  return normalizeModelImageUrls(accessibleUrls).filter(isPreferredModelMediaUrl)
 }
 
 // 单次生成请求
@@ -3427,6 +3449,9 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       console.log('[VideoNode] 后台处理参考图片 URL，确保可访问性...')
       canvasStore.updateNodeData(targetNodeId, { progress: '正在处理参考图片...' })
       finalImages = await ensureAccessibleUrls(finalImages)
+      if (finalImages.length === 0) {
+        throw new Error('参考图片未能转换为可访问 URL，请重新上传后重试')
+      }
       console.log('[VideoNode] 处理后的可访问 URLs:', finalImages)
     }
     
@@ -3609,7 +3634,7 @@ async function handleGenerate() {
   }
   
   // 合并参考图片
-  let finalImages = referenceImages.value.length > 0 ? [...referenceImages.value] : []
+  let finalImages = referenceImages.value.length > 0 ? normalizeModelImageUrls(referenceImages.value) : []
   
   console.log('[VideoNode] 生成参数（处理前）:', { 
     userPrompt,
@@ -3981,23 +4006,6 @@ function handleResizeEnd() {
 async function uploadImageFileAsync(file, blobUrl, nodeId) {
   try {
     console.log('[VideoNode] 后台异步上传开始:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
-    
-    // 超过10MB的图片压缩后再上传
-    if (file.size > 10 * 1024 * 1024) {
-      console.log('[VideoNode] 文件超过10MB，压缩后上传...')
-      const tempBlobUrl = URL.createObjectURL(file)
-      try {
-        const compressedBlob = await compressImageToTargetSize(tempBlobUrl, 10 * 1024 * 1024)
-        URL.revokeObjectURL(tempBlobUrl)
-        if (compressedBlob) {
-          file = new File([compressedBlob], file.name, { type: 'image/jpeg', lastModified: Date.now() })
-          console.log('[VideoNode] 压缩后大小:', (file.size / 1024 / 1024).toFixed(2), 'MB')
-        }
-      } catch (e) {
-        URL.revokeObjectURL(tempBlobUrl)
-        console.warn('[VideoNode] 压缩失败，尝试上传原文件:', e.message)
-      }
-    }
     
     const urls = await uploadImages([file])
     if (urls && urls.length > 0) {

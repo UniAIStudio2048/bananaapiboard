@@ -6,7 +6,7 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions } from '@/config/canvas/nodeTypes'
 import { useI18n } from '@/i18n'
-import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { extractVideoFrame, uploadCanvasMedia } from '@/api/canvas/workflow'
 import { getAvailableVideoModels, isSeedanceFeaturesEnabled } from '@/config/tenant'
 import { clampNodePositionToGroup } from '@/utils/canvasConnectionPosition'
 
@@ -494,9 +494,9 @@ function selectNodeType(type) {
       // 标记这是从视频提取的
       nodeData.extractedFromVideo = true
       nodeData.videoUrl = sourceData.output.url
-      // 注意：实际的尾帧提取需要后端支持，这里先标记
-      // 前端会在节点挂载后调用后端API提取尾帧
-      nodeData.needsFrameExtraction = true
+      nodeData.needsFrameExtraction = false
+      nodeData.status = 'processing'
+      nodeData.progress = '截取中'
     }
   }
   
@@ -562,6 +562,10 @@ function selectNodeType(type) {
     data: nodeData
   })
   attachNodeToTriggerGroup(newNode, groupPlacement.groupId)
+
+  if (type === 'video-last-frame' && newNode?.id && nodeData.videoUrl) {
+    extractLastFrameToNode(newNode.id, nodeData.videoUrl)
+  }
   
   // 如果有触发节点，手动创建正确方向的连接
   if (savedTriggerNode && newNode?.id) {
@@ -584,6 +588,77 @@ function selectNodeType(type) {
   }
   
   emit('close')
+}
+
+async function extractLastFrameToNode(nodeId, videoUrl) {
+  try {
+    const duration = await loadVideoDuration(videoUrl)
+    const result = await extractVideoFrame({
+      videoUrl,
+      time: Math.max(0, duration - 0.12),
+      mode: 'last',
+      nodeId
+    })
+
+    applyExtractedFrameToNode(nodeId, result.url, result.time)
+  } catch (error) {
+    console.error('[NodeSelector] 截取视频尾帧失败:', error)
+    canvasStore.updateNodeData(nodeId, {
+      status: 'error',
+      progress: '',
+      error: error.message || '截取视频尾帧失败'
+    })
+  }
+}
+
+function loadVideoDuration(videoUrl) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video')
+    const timeout = setTimeout(() => {
+      cleanup()
+      reject(new Error('读取视频时长超时'))
+    }, 10000)
+
+    function cleanup() {
+      clearTimeout(timeout)
+      video.onloadedmetadata = null
+      video.onerror = null
+      video.removeAttribute('src')
+      video.load()
+    }
+
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      const duration = Number(video.duration) || 0
+      cleanup()
+      if (duration > 0) {
+        resolve(duration)
+      } else {
+        reject(new Error('无法读取视频时长'))
+      }
+    }
+    video.onerror = () => {
+      cleanup()
+      reject(new Error('读取视频时长失败'))
+    }
+    video.src = videoUrl
+    video.load()
+  })
+}
+
+function applyExtractedFrameToNode(nodeId, imageUrl, time) {
+  canvasStore.updateNodeData(nodeId, {
+    sourceImages: [imageUrl],
+    output: {
+      type: 'image',
+      url: imageUrl,
+      urls: [imageUrl]
+    },
+    status: 'success',
+    progress: '',
+    needsFrameExtraction: false,
+    extractedFrameTime: time
+  })
 }
 
 // 阻止点击冒泡

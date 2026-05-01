@@ -12,9 +12,15 @@
  * 
  * UI 风格：黑白灰，兼容画布深色/白昼模式
  */
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
+import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import NativeImageEditor from './NativeImageEditor.vue'
+import {
+  buildSavedSessionPayload,
+  clampSessionHistory,
+  isRestorableEditSession
+} from './imageEditSession.js'
 
 const canvasStore = useCanvasStore()
 
@@ -32,6 +38,10 @@ const nodeEditCache = new Map()
 // 获取当前节点的缓存状态
 const cachedState = computed(() => {
   if (!canvasStore.editingNodeId) return null
+  const node = editingNode.value
+  if (isRestorableEditSession(node?.data?.editSession)) {
+    return node.data.editSession
+  }
   return nodeEditCache.get(canvasStore.editingNodeId) || null
 })
 
@@ -50,11 +60,107 @@ function cacheCurrentState() {
   }
 }
 
-// 清除指定节点的编辑缓存（保存后清除）
-function clearNodeCache(nodeId) {
-  if (nodeId && nodeEditCache.has(nodeId)) {
-    nodeEditCache.delete(nodeId)
-    console.log('[ImageEditMode] 已清除节点编辑缓存:', nodeId)
+function buildImageFileName(extension = 'png') {
+  return `edited_${Date.now()}.${extension}`
+}
+
+async function dataUrlToFile(dataUrl, fileName, mimeType) {
+  const response = await fetch(dataUrl)
+  const blob = await response.blob()
+  const fileType = mimeType || blob.type || 'image/png'
+  return new File([blob], fileName, { type: fileType })
+}
+
+function buildNodeImagePatch(node, newUrl) {
+  if (node.data?.output?.urls?.length > 0) {
+    return {
+      output: {
+        ...node.data.output,
+        urls: [newUrl, ...(node.data.output.urls.slice(1) || [])]
+      }
+    }
+  }
+
+  if (node.data?.output?.url) {
+    return {
+      output: {
+        ...node.data.output,
+        url: newUrl,
+        urls: [newUrl]
+      }
+    }
+  }
+
+  if (node.data?.sourceImages?.length > 0) {
+    return {
+      sourceImages: [newUrl, ...(node.data.sourceImages.slice(1) || [])]
+    }
+  }
+
+  return {
+    output: {
+      type: 'image',
+      url: newUrl,
+      urls: [newUrl]
+    }
+  }
+}
+
+async function persistEditSession(rawState, currentImageUrl, exportInfo, node) {
+  if (!rawState?.history?.length) return null
+
+  const trimmedState = clampSessionHistory(rawState, 10)
+  const uploadedHistory = []
+
+  for (let index = 0; index < trimmedState.history.length; index++) {
+    const entry = trimmedState.history[index]
+    const snapshotUrl = entry?.snapshotUrl || entry?.imageData
+    if (!snapshotUrl) continue
+
+    if (/^(https?:)?\/\//.test(snapshotUrl) || snapshotUrl.startsWith('/')) {
+      uploadedHistory.push({
+        ...entry,
+        snapshotUrl
+      })
+      continue
+    }
+
+    const snapshotFile = await dataUrlToFile(
+      snapshotUrl,
+      `edit-session-${node?.id || 'node'}-${index}.png`,
+      'image/png'
+    )
+    const result = await uploadCanvasMedia(snapshotFile, 'image')
+    uploadedHistory.push({
+      ...entry,
+      snapshotUrl: result.url
+    })
+  }
+
+  return buildSavedSessionPayload({
+    ...trimmedState,
+    baseImageUrl: node?.data?.editSession?.baseImageUrl || rawState.baseImageUrl || currentImageUrl,
+    currentImageUrl,
+    exportFormat: exportInfo?.format,
+    exportQuality: exportInfo?.quality,
+    imageMimeType: exportInfo?.mimeType,
+    history: uploadedHistory
+  })
+}
+
+async function persistEditSessionInBackground(node, rawState, currentImageUrl, exportInfo) {
+  if (!node?.id || !rawState?.history?.length) return
+
+  try {
+    const persistedSession = await persistEditSession(rawState, currentImageUrl, exportInfo, node)
+    if (!persistedSession) return
+
+    canvasStore.updateNodeData(node.id, {
+      editSession: persistedSession
+    })
+    nodeEditCache.set(node.id, persistedSession)
+  } catch (sessionError) {
+    console.warn('[ImageEditMode] 编辑记录后台持久化失败，将从最终图重新编辑:', sessionError)
   }
 }
 
@@ -138,34 +244,53 @@ function calculateEditorSize() {
 // 处理保存
 async function handleSave(data) {
   console.log('[ImageEditMode] 保存编辑结果', data)
-  
-  const nodeId = canvasStore.editingNodeId
-  
+
   if (!editingNode.value || !data) {
     canvasStore.exitEditMode()
     return
   }
-  
+
   try {
-    // 如果有图片数据，直接保存（覆盖原图）
+    let newImageUrl = null
+    let savedNode = null
+
     if (data.image) {
-      await updateNodeImage(data.image)
-      
-      // 保存成功后清除该节点的编辑缓存（因为原图已更新）
-      clearNodeCache(nodeId)
+      newImageUrl = await updateNodeImage(data.image, data.exportInfo)
     }
-    
+
+    if (newImageUrl) {
+      const node = editingNode.value
+      const nodePatch = buildNodeImagePatch(node, newImageUrl)
+      canvasStore.updateNodeData(node.id, {
+        ...nodePatch,
+        editSession: null
+      })
+      nodeEditCache.delete(node.id)
+      savedNode = {
+        ...node,
+        data: {
+          ...node.data,
+          ...nodePatch
+        }
+      }
+    }
+
     // 如果有蒙版数据，上传蒙版并保存到节点
     if (data.hasMask && data.mask) {
       await uploadAndSaveMask(data.mask)
       console.log('[ImageEditMode] 蒙版已生成并保存')
     }
+
+    canvasStore.exitEditMode()
+
+    if (newImageUrl && data.editState && savedNode) {
+      persistEditSessionInBackground(savedNode, data.editState, newImageUrl, data.exportInfo)
+    }
   } catch (error) {
     console.error('[ImageEditMode] 保存失败:', error)
     alert('保存失败，请重试')
+    return
   }
-  
-  canvasStore.exitEditMode()
 }
 
 // 上传蒙版并创建新的蒙版图片节点
@@ -219,62 +344,28 @@ async function uploadAndSaveMask(maskDataUrl) {
 }
 
 // 更新节点图片（覆盖原图）
-async function updateNodeImage(dataUrl) {
-  if (!editingNode.value) return
-  
-  // 将 dataUrl 转换为 File 并上传
-  const response = await fetch(dataUrl)
-  const blob = await response.blob()
-  const file = new File([blob], `edited_${Date.now()}.png`, { type: 'image/png' })
-  
-  // 动态导入上传函数
-  const { uploadImages } = await import('@/api/canvas/nodes')
-  // uploadImages 返回的是 URL 数组，不是对象
-  const uploadedUrls = await uploadImages([file])
-  
-  if (uploadedUrls?.length > 0) {
-    const newUrl = uploadedUrls[0]
-    const node = editingNode.value
-    
-    // 更新节点数据（覆盖原图）- 支持多种数据结构
-    if (node.data?.output?.urls?.length > 0) {
-      // 有 output.urls 数组
-      canvasStore.updateNodeData(node.id, {
-        output: {
-          ...node.data.output,
-          urls: [newUrl, ...(node.data.output.urls.slice(1) || [])]
-        }
-      })
-    } else if (node.data?.output?.url) {
-      // 有 output.url 单个 URL
-      canvasStore.updateNodeData(node.id, {
-        output: {
-          ...node.data.output,
-          url: newUrl,
-          urls: [newUrl]
-        }
-      })
-    } else if (node.data?.sourceImages?.length > 0) {
-      // 有 sourceImages 数组
-      canvasStore.updateNodeData(node.id, {
-        sourceImages: [newUrl, ...(node.data.sourceImages.slice(1) || [])]
-      })
-    } else {
-      // 兜底：直接设置 output
-      canvasStore.updateNodeData(node.id, {
-        output: {
-          type: 'image',
-          url: newUrl,
-          urls: [newUrl]
-        }
-      })
-    }
-    
-    console.log('[ImageEditMode] 图片已更新（覆盖原图）:', newUrl)
-  } else {
+async function updateNodeImage(dataUrl, exportInfo = null) {
+  if (!editingNode.value) return null
+
+  const finalExportInfo = exportInfo || {
+    mimeType: 'image/png',
+    extension: 'png'
+  }
+
+  const file = await dataUrlToFile(
+    dataUrl,
+    buildImageFileName(finalExportInfo.extension || 'png'),
+    finalExportInfo.mimeType
+  )
+  const result = await uploadCanvasMedia(file, 'image')
+
+  if (!result?.url) {
     console.error('[ImageEditMode] 上传图片失败，没有返回 URL')
     throw new Error('上传图片失败')
   }
+
+  console.log('[ImageEditMode] 图片已上传（覆盖原图）:', result.url)
+  return result.url
 }
 
 // 处理取消
@@ -282,6 +373,18 @@ function handleCancel() {
   // 取消时也缓存编辑状态，以便下次恢复
   cacheCurrentState()
   canvasStore.exitEditMode()
+}
+
+function handleRestoreFailed() {
+  if (!editingNode.value) return
+
+  nodeEditCache.delete(editingNode.value.id)
+
+  if (editingNode.value.data?.editSession) {
+    canvasStore.updateNodeData(editingNode.value.id, {
+      editSession: null
+    })
+  }
 }
 
 // ESC 退出
@@ -341,6 +444,7 @@ onUnmounted(() => {
               :cached-state="cachedState"
               @save="handleSave"
               @cancel="handleCancel"
+              @restore-failed="handleRestoreFailed"
             />
           </div>
         </div>

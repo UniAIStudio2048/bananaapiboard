@@ -100,6 +100,28 @@ const showAssetPanel = ref(false)
 // 历史记录面板
 const showHistoryPanel = ref(false)
 
+function closeLeftPanels() {
+  showTemplates.value = false
+  showWorkflowPanel.value = false
+  showAssetPanel.value = false
+  showHistoryPanel.value = false
+}
+
+function toggleLeftPanel(panel) {
+  const wasOpen =
+    (panel === 'templates' && showTemplates.value) ||
+    (panel === 'workflow' && showWorkflowPanel.value) ||
+    (panel === 'asset' && showAssetPanel.value) ||
+    (panel === 'history' && showHistoryPanel.value)
+
+  closeLeftPanels()
+
+  showTemplates.value = panel === 'templates' && !wasOpen
+  showWorkflowPanel.value = panel === 'workflow' && !wasOpen
+  showAssetPanel.value = panel === 'asset' && !wasOpen
+  showHistoryPanel.value = panel === 'history' && !wasOpen
+}
+
 // CanvasBoard组件引用
 const canvasBoardRef = ref(null)
 
@@ -363,7 +385,7 @@ provide('interactionMode', interactionMode)
 
 // 打开模板面板
 function openTemplates() {
-  showTemplates.value = true
+  toggleLeftPanel('templates')
 }
 
 // 关闭模板面板
@@ -376,7 +398,7 @@ provide('openTemplates', openTemplates)
 
 // 切换工作流面板（打开/关闭）
 function openWorkflowPanel() {
-  showWorkflowPanel.value = !showWorkflowPanel.value
+  toggleLeftPanel('workflow')
 }
 
 // 关闭工作流面板
@@ -480,7 +502,7 @@ provide('openWorkflowPanel', openWorkflowPanel)
 
 // 切换资产面板（打开/关闭）
 function openAssetPanel() {
-  showAssetPanel.value = !showAssetPanel.value
+  toggleLeftPanel('asset')
 }
 
 // 关闭资产面板
@@ -606,7 +628,7 @@ provide('openAssetPanel', openAssetPanel)
 
 // 切换历史记录面板（打开/关闭）
 function openHistoryPanel() {
-  showHistoryPanel.value = !showHistoryPanel.value
+  toggleLeftPanel('history')
 }
 
 // 关闭历史记录面板
@@ -829,6 +851,7 @@ function handleWorkflowSaved(workflow) {
 
   // 更新当前标签名称和工作流ID
   canvasStore.updateCurrentTabName(workflow.name)
+  canvasStore.updateCurrentTabDescription(workflow.description || '')
   canvasStore.markCurrentTabSaved(workflow.id, workflow.workflow_uid, {
     space_type: workflow.space_type,
     team_id: workflow.team_id
@@ -994,6 +1017,7 @@ function getCurrentWorkflowData() {
   
   return {
     name: currentTab.name || '未命名工作流',
+    description: currentTab.description || canvasStore.workflowMeta?.description || '',
     tabId: currentTab.id,
     workflowId: currentTab.workflowId,
     nodes: workflowData.nodes,
@@ -1063,6 +1087,7 @@ function tryAutoRestoreRecentWorkflow() {
     canvasStore.openWorkflowInNewTab({
       id: recentWorkflow.workflowId || null,
       name: recentWorkflow.name || '恢复的工作流',
+      description: recentWorkflow.description || '',
       nodes: recentWorkflow.nodes,
       edges: recentWorkflow.edges || [],
       viewport: recentWorkflow.viewport || { x: 0, y: 0, zoom: 1 }
@@ -1462,20 +1487,7 @@ function handleCanvasDoubleClick(event) {
 
 // 处理画布空白区域点击（来自 CanvasBoard 的 pane-click 事件）
 function handlePaneClick(event) {
-  // 点击空白处时关闭资产面板
-  if (showAssetPanel.value) {
-    showAssetPanel.value = false
-  }
-  
-  // 点击空白处时关闭历史记录面板
-  if (showHistoryPanel.value) {
-    showHistoryPanel.value = false
-  }
-  
-  // 点击空白处时关闭工作流面板
-  if (showWorkflowPanel.value) {
-    showWorkflowPanel.value = false
-  }
+  closeLeftPanels()
 }
 
 // 处理节点右键「发送到灵感助手」

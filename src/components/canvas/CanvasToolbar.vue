@@ -25,6 +25,15 @@ const profilePanelPosition = ref({ x: 80, y: 100 })
 const showNodePanel = ref(false)
 const nodeMenuHoverTimer = ref(null)
 
+function closeToolbarPanels() {
+  if (nodeMenuHoverTimer.value) {
+    clearTimeout(nodeMenuHoverTimer.value)
+    nodeMenuHoverTimer.value = null
+  }
+  showNodePanel.value = false
+  showProfilePanel.value = false
+}
+
 // 节点类型列表 - 黑白灰简洁风格
 const nodeTypes = computed(() => [
   {
@@ -113,6 +122,7 @@ function goHome() {
 
 // 打开模板面板
 function handleOpenTemplates() {
+  closeToolbarPanels()
   if (openTemplates) {
     openTemplates()
   }
@@ -120,6 +130,7 @@ function handleOpenTemplates() {
 
 // 切换我的工作流面板（打开/关闭）
 function openWorkflows() {
+  closeToolbarPanels()
   if (openWorkflowPanel) {
     openWorkflowPanel()
   }
@@ -127,6 +138,7 @@ function openWorkflows() {
 
 // 切换我的资产面板（打开/关闭）
 function openAssets() {
+  closeToolbarPanels()
   if (openAssetPanel) {
     openAssetPanel()
   }
@@ -134,6 +146,7 @@ function openAssets() {
 
 // 切换历史记录面板（打开/关闭）
 function openHistory() {
+  closeToolbarPanels()
   if (openHistoryPanel) {
     openHistoryPanel()
   }
@@ -143,6 +156,7 @@ function openHistory() {
 const emit = defineEmits(['openSaveDialog'])
 
 function saveWorkflow() {
+  closeToolbarPanels()
   // 统一交给父组件决定是否允许保存与如何提示，避免空画布时点击无响应
   emit('openSaveDialog')
 }
@@ -155,6 +169,7 @@ function getTotalPoints() {
 
 // 打开个人中心面板
 function openProfilePanel(event) {
+  closeToolbarPanels()
   // 计算面板位置（在按钮右侧，靠近顶部）
   const btn = event.currentTarget
   const rect = btn.getBoundingClientRect()
@@ -633,4 +648,3 @@ async function handleUserUpdate() {
   stroke: rgba(0, 0, 0, 0.8);
 }
 </style>
-
