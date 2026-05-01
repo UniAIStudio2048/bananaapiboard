@@ -93,6 +93,7 @@ const videoAspectRatios = ref({}) // 视频宽高比缓存
 const videoThumbnailQueue = ref([]) // 待处理队列
 const processingThumbnails = ref(0) // 正在处理的数量
 const MAX_CONCURRENT_THUMBNAILS = 2 // 视频截帧很重，限制并发数
+const videoPosterLoadErrors = ref({})
 
 // 图片加载失败的记录
 const imageLoadErrors = ref({})
@@ -1411,7 +1412,7 @@ function processNextThumbnail() {
 
 // 获取视频缩略图（优化版：不会重复触发）
 function getVideoThumbnail(item) {
-  if (item.thumbnail_url) return getMediaUrl(item.thumbnail_url)
+  if (item.thumbnail_url && !videoPosterLoadErrors.value[item.id]) return getMediaUrl(item.thumbnail_url)
   if (videoThumbnails.value[item.id]) return videoThumbnails.value[item.id]
 
   // 只有在可见区域内才触发提取
@@ -1424,6 +1425,13 @@ function getVideoThumbnail(item) {
     }
   }
   return null
+}
+
+function handleVideoPosterError(item) {
+  videoPosterLoadErrors.value = {
+    ...videoPosterLoadErrors.value,
+    [item.id]: true
+  }
 }
 
 // 判断视频是否是竖屏（宽高比 < 1）
@@ -1851,6 +1859,7 @@ onUnmounted(() => {
                       :alt="item.name"
                       img-class="card-image"
                       loading="lazy"
+                      @error="handleVideoPosterError(item)"
                     />
                     <!-- 备用：直接使用 video 元素显示首帧 -->
                     <video 

@@ -31,7 +31,7 @@
  * - Ctrl+A：全选节点
  * - Ctrl+G：编组选中的节点
  */
-import { ref, computed, watch, onMounted, onUnmounted, inject, nextTick } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted, inject, nextTick, provide } from 'vue'
 import { VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
@@ -183,6 +183,24 @@ const ALIGNMENT_THROTTLE_MS = 50  // 对齐计算最小间隔（毫秒）
 
 // 🔧 内存优化：追踪所有待执行的定时器，组件卸载时统一清理
 const pendingTimeouts = new Set()
+const isViewportMoving = ref(false)
+let viewportMovingTimer = null
+
+provide('isCanvasViewportMoving', isViewportMoving)
+
+function markViewportMoving() {
+  isViewportMoving.value = true
+  if (viewportMovingTimer) {
+    clearTimeout(viewportMovingTimer)
+    pendingTimeouts.delete(viewportMovingTimer)
+  }
+  viewportMovingTimer = setTimeout(() => {
+    pendingTimeouts.delete(viewportMovingTimer)
+    viewportMovingTimer = null
+    isViewportMoving.value = false
+  }, 180)
+  pendingTimeouts.add(viewportMovingTimer)
+}
 
 // 性能优化：组内节点位置同步的 rAF 节流句柄
 // 拖拽组节点时 onNodeDrag 每帧都触发，用 rAF 确保每帧最多同步一次位置
@@ -1450,6 +1468,7 @@ let _isPanning = false
 let _panEndTimer = null
 function handleViewportChange(viewport) {
   if (isExternalViewportUpdate) return
+  markViewportMoving()
   
   if (!_isPanning) {
     _isPanning = true
@@ -2732,6 +2751,7 @@ onUnmounted(() => {
       :snap-to-grid="true"
       :snap-grid="[20, 20]"
       :connection-mode="'loose'"
+      :only-render-visible-elements="true"
       :pan-on-drag="panOnDragConfig"
       :selection-on-drag="true"
       :select-nodes-on-drag="true"

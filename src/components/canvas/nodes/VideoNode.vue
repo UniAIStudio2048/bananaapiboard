@@ -53,6 +53,7 @@ const { isVisible: isNodeVisible } = useNodeVisibility(videoNodeRootRef)
 const canvasStore = useCanvasStore()
 const uploadManager = useUploadManager()
 const userInfo = inject('userInfo')
+const isCanvasViewportMoving = inject('isCanvasViewportMoving', ref(false))
 const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
@@ -191,6 +192,7 @@ const dragSortType = ref('')
 
 // 🚀 性能优化：画布拖拽状态（用于暂停视频播放）
 const isCanvasDragging = ref(false)
+const isCanvasMediaMoving = computed(() => isCanvasDragging.value || isCanvasViewportMoving.value)
 
 // 生成模式：image（图生视频）, text（纯文本）
 const generationMode = ref(props.data.generationMode || 'text')
@@ -1462,6 +1464,7 @@ function checkAndRestoreBackgroundTasks() {
 // 🚀 性能优化：监听画布拖拽事件
 function handleCanvasDragStart() {
   isCanvasDragging.value = true
+  isVideoPreviewActive.value = false
   // 暂停视频播放以提升拖拽性能
   const video = videoPlayerRef.value
   if (video && !video.paused) {
@@ -1564,13 +1567,43 @@ const readonlyPreviewVideoFailed = ref(false)
 // poster 仅在有明确封面图时才设置；COS ci-process=snapshot 截帧服务不稳定（502），
 // 失败的 poster 会导致 <video> 显示黑屏而非首帧
 const videoPosterUrl = computed(() => {
-  if (props.data.output?.cover_url || props.data.output?.thumbnail_url) {
-    return toSameOriginUrl(props.data.output.cover_url || props.data.output.thumbnail_url)
+  const explicitPoster =
+    props.data.output?.cover_url ||
+    props.data.output?.coverUrl ||
+    props.data.output?.thumbnail_url ||
+    props.data.output?.thumbnailUrl ||
+    props.data.cover_url ||
+    props.data.coverUrl ||
+    props.data.thumbnail_url ||
+    props.data.thumbnailUrl
+
+  if (explicitPoster) {
+    return toSameOriginUrl(explicitPoster)
   }
-  return ''
+  return getVideoPosterUrl(toSameOriginUrl(props.data.output?.url), 768) || ''
 })
 
 const normalizedVideoUrl = computed(() => toSameOriginUrl(props.data.output?.url))
+const isVideoPreviewActive = ref(false)
+const videoPosterFailed = ref(false)
+const shouldFallbackToReadonlyVideoFrame = computed(() => {
+  return props.data?.readonly === true && shouldRenderVideoOutput.value && (!videoPosterUrl.value || videoPosterFailed.value)
+})
+const shouldMountVideoElement = computed(() => {
+  return shouldRenderVideoOutput.value &&
+    isNodeVisible.value &&
+    !isCanvasMediaMoving.value &&
+    (isVideoPreviewActive.value || shouldFallbackToReadonlyVideoFrame.value)
+})
+const videoPreloadMode = computed(() => shouldFallbackToReadonlyVideoFrame.value ? 'metadata' : 'none')
+
+watch(videoPosterUrl, () => {
+  videoPosterFailed.value = false
+})
+
+function handleVideoPosterError() {
+  videoPosterFailed.value = true
+}
 
 const previewDevicePixelRatio = computed(() => {
   if (typeof window === 'undefined') return 1
@@ -1581,7 +1614,8 @@ function getNodePreviewImageUrl(url) {
   return getHighQualityCanvasPreviewUrl(toSameOriginUrl(url), {
     zoom: canvasStore.viewport?.zoom || 1,
     nodeWidth: nodeWidth.value || 420,
-    devicePixelRatio: previewDevicePixelRatio.value
+    devicePixelRatio: previewDevicePixelRatio.value,
+    preferLowQuality: isCanvasMediaMoving.value
   })
 }
 
@@ -4852,12 +4886,17 @@ async function handleVideoError(event) {
 }
 
 // 鼠标进入视频区域 - 自动播放（带声音）
-function handleVideoMouseEnter() {
+function activateVideoPreview() {
   // 🚀 性能优化：大画布模式下禁用悬停播放
   if (canvasStore.isLargeCanvas) return
   // 🚀 性能优化：拖拽时不自动播放视频
-  if (isCanvasDragging.value) return
-  
+  if (isCanvasMediaMoving.value) return
+
+  isVideoPreviewActive.value = true
+  nextTick(() => handleVideoMouseEnter())
+}
+
+function handleVideoMouseEnter() {
   const video = videoPlayerRef.value
   if (video && video.paused) {
     video.muted = false // 悬停播放时取消静音，播放声音
@@ -4884,6 +4923,7 @@ function handleVideoMouseLeave() {
       video.currentTime = 0.1
     }
   }
+  isVideoPreviewActive.value = false
 }
 
 // 打开全屏预览
@@ -5858,14 +5898,16 @@ function handleToolbarPreview() {
           v-if="shouldRenderVideoOutput && isNodeVisible"
           class="video-output-wrapper"
           :style="videoWrapperStyle"
-          @mouseenter="handleVideoMouseEnter"
+          @mouseenter="activateVideoPreview"
           @mouseleave="handleVideoMouseLeave"
+          @click.stop="activateVideoPreview"
         >
           <video 
+            v-if="shouldMountVideoElement && isNodeVisible"
             ref="videoPlayerRef"
             :src="normalizedVideoUrl"
-            preload="metadata"
-            :poster="videoPosterUrl || undefined"
+            :preload="videoPreloadMode"
+            :poster="videoPosterFailed ? undefined : (videoPosterUrl || undefined)"
             muted
             :loop="!data?.isCharacterNode"
             class="video-player-output"
@@ -5878,6 +5920,15 @@ function handleToolbarPreview() {
             @timeupdate="handleVideoTimeUpdate"
             @error="handleVideoError"
           ></video>
+          <img
+            v-else-if="videoPosterUrl && !videoPosterFailed"
+            :src="videoPosterUrl"
+            class="video-poster-output"
+            alt="视频封面"
+            loading="lazy"
+            decoding="async"
+            @error="handleVideoPosterError"
+          />
           <!-- 播放指示器已移除：首帧不显示播放按钮 -->
           <div class="video-overlay-actions">
             <button class="overlay-action-btn" @click.stop="openFullscreenPreview" title="全屏预览">
@@ -6051,7 +6102,7 @@ function handleToolbarPreview() {
     />
     
     <!-- 底部配置面板（选中时显示） -->
-    <div v-show="isSoloSelected" class="config-panel" :class="{ 'config-panel-readonly': props.data?.readonly }" @mousedown.stop>
+    <div v-if="isSoloSelected" class="config-panel" :class="{ 'config-panel-readonly': props.data?.readonly }" @mousedown.stop>
       <!-- 参考图片预览（支持拖拽上传） -->
       <div 
         class="panel-frames"
@@ -6089,7 +6140,7 @@ function handleToolbarPreview() {
             @mouseenter="onVideoHoverStart(video, $event)"
             @mouseleave="onHoverEnd"
           >
-            <video :src="toSameOriginUrl(video)" muted preload="metadata" :poster="getVideoPosterUrl(toSameOriginUrl(video))" class="video-thumb" @loadeddata="$event.target.currentTime = 0.1"></video>
+            <img :src="getVideoPosterUrl(toSameOriginUrl(video), 384)" class="video-thumb" alt="参考视频封面" loading="lazy" decoding="async" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span class="panel-frame-play-icon">▶</span>
             <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@视频{{ index + 1 }}</span>
@@ -7253,7 +7304,8 @@ function handleToolbarPreview() {
     0 0 20px rgba(59, 130, 246, 0.3);
 }
 
-.video-player-output {
+.video-player-output,
+.video-poster-output {
   width: 100%;
   height: 100%;
   object-fit: contain;

@@ -60,6 +60,7 @@ const emit = defineEmits(['updateNodeInternals'])
 const canvasStore = useCanvasStore()
 const uploadManager = useUploadManager()
 const userInfo = inject('userInfo')
+const isCanvasViewportMoving = inject('isCanvasViewportMoving', ref(false))
 const { onHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
@@ -199,6 +200,7 @@ const editorInitialTool = ref('')
 
 // 🚀 性能优化：画布拖拽状态（用于降低渲染质量）
 const isCanvasDragging = ref(false)
+const isCanvasMediaMoving = computed(() => isCanvasDragging.value || isCanvasViewportMoving.value)
 
 
 // 🔧 Blob URL 内存管理 - 跟踪所有创建的 blob URL，用于组件卸载时清理
@@ -3537,7 +3539,8 @@ function getNodePreviewImageUrl(url) {
   return getHighQualityCanvasPreviewUrl(toSameOriginUrl(url), {
     zoom: canvasStore.viewport?.zoom || 1,
     nodeWidth: nodeWidth.value || 380,
-    devicePixelRatio: previewDevicePixelRatio.value
+    devicePixelRatio: previewDevicePixelRatio.value,
+    preferLowQuality: isCanvasMediaMoving.value
   })
 }
 
@@ -6871,7 +6874,7 @@ async function handleDrop(event) {
     </div>
     
     <!-- 底部配置面板（仅输出节点选中时显示，拖动和缩放时隐藏） -->
-    <div v-show="showConfigPanel" class="config-panel" :class="{ 'config-panel-readonly': props.data?.readonly }" @mousedown.stop>
+    <div v-if="showConfigPanel" class="config-panel" :class="{ 'config-panel-readonly': props.data?.readonly }" @mousedown.stop>
       <!-- 参考图片预览（支持拖拽上传和排序） -->
       <div 
         class="panel-frames"

@@ -4,15 +4,15 @@
  * 根据画布 zoom 级别动态调整图片质量：
  * - 缩小时加载小缩略图，节约内存和带宽
  * - 放大时逐步提高分辨率，接近原图
- * - zoom >= 2 时直接加载原图
+ * - 原图仅用于下载、全屏预览或生成输入，不直接用于画布节点
  */
 
 import { getApiUrl } from '@/config/tenant'
 import { getCloudVideoPosterUrl, isCosCdn, isQiniuCdn, isVideoUrl } from './cloudMediaUrl.js'
 
-const DEFAULT_THUMB_WIDTH = 2048
-const MIN_CANVAS_PREVIEW_WIDTH = 1024
-const PREVIEW_WIDTHS = [1024, 2048, 3072]
+const DEFAULT_THUMB_WIDTH = 1024
+const MIN_CANVAS_PREVIEW_WIDTH = 384
+const PREVIEW_WIDTHS = [384, 768, 1024]
 
 /**
  * 将完整媒体 URL 转为可访问的 URL
@@ -38,27 +38,24 @@ export function toSameOriginUrl(url) {
  * @param {number} nodeWidth 节点宽度（画布坐标，默认 400）
  *
  * displayWidth = nodeWidth × zoom = 节点在屏幕上的像素宽度
- * 画布节点预览不再使用 256/512 低清图，也不强制转 WebP。
- * 目标是接近原图观感，仅在远距离缩放时减少传输体积。
+ * 画布节点预览固定使用小档位，原图只在全屏预览、下载、生成输入中使用。
  */
 export function getThumbWidthForZoom(zoom, nodeWidth = 400) {
-  if (!zoom) return 0
+  if (!zoom) return MIN_CANVAS_PREVIEW_WIDTH
   const displayWidth = nodeWidth * zoom
-  if (displayWidth >= 1200) return 0
-  if (displayWidth >= 700) return 3072
-  if (displayWidth >= 250) return 2048
+  if (displayWidth >= 700) return 1024
+  if (displayWidth >= 250) return 768
   return MIN_CANVAS_PREVIEW_WIDTH
 }
 
-export function getHighQualityCanvasPreviewUrl(url, { zoom = 1, nodeWidth = 400, devicePixelRatio = 1 } = {}) {
+export function getHighQualityCanvasPreviewUrl(url, { zoom = 1, nodeWidth = 400, devicePixelRatio = 1, preferLowQuality = false } = {}) {
   if (!url) return url
   if (url.startsWith('blob:') || url.startsWith('data:')) return url
+  if (preferLowQuality) return getCanvasThumbnailUrl(url, MIN_CANVAS_PREVIEW_WIDTH)
 
   const displayWidth = Math.max(1, (nodeWidth || 400) * (zoom || 1) * Math.max(1, devicePixelRatio || 1))
-  if (displayWidth >= 1200) return url
-
-  const targetWidth = PREVIEW_WIDTHS.find(width => width >= displayWidth) || 0
-  return getCanvasThumbnailUrl(url, targetWidth || 0)
+  const targetWidth = PREVIEW_WIDTHS.find(width => width >= displayWidth) || PREVIEW_WIDTHS[PREVIEW_WIDTHS.length - 1]
+  return getCanvasThumbnailUrl(url, targetWidth)
 }
 
 /**
