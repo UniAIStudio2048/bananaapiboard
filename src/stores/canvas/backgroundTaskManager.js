@@ -188,7 +188,7 @@ function startPolling(taskId) {
       // 检查是否完成（支持大小写状态）
       const statusLower = (result.status || '').toLowerCase()
       // 高清任务返回 outputUrl，普通任务返回 url 或 video_url
-      const hasOutput = result.hasOutput || result.url || result.video_url || result.outputUrl
+      const hasOutput = result.hasOutput || result.url || result.video_url || result.outputUrl || result.output_url
       if (statusLower === 'completed' || statusLower === 'success' || hasOutput) {
         task.status = 'completed'
         task.result = result
@@ -342,8 +342,8 @@ function notifyTaskComplete(taskId, task) {
     detail: { taskId, task }
   }))
 
-  // 图片高清/抠图结果已写入服务端 image_history，通知历史面板拉取最新列表
-  if (task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout') {
+  // 高清/抠图结果已写入服务端历史记录，通知历史面板拉取最新列表
+  if (task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout' || task.type === 'video-hd') {
     window.dispatchEvent(new CustomEvent('canvas-history-invalidate'))
   }
 }

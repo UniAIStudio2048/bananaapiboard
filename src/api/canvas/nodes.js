@@ -6,6 +6,41 @@ import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useTeamStore } from '@/stores/team'
 import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
 
+async function parseApiResponse(response, fallbackMessage) {
+  const contentType = response.headers.get('content-type') || ''
+  const text = await response.text()
+
+  if (contentType.includes('application/json')) {
+    try {
+      return text ? JSON.parse(text) : {}
+    } catch (error) {
+      console.warn('[API] JSON 解析失败:', error)
+    }
+  }
+
+  const trimmed = text.trim()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      return JSON.parse(trimmed)
+    } catch (error) {
+      console.warn('[API] 响应看起来像 JSON 但解析失败:', error)
+    }
+  }
+
+  if (trimmed.startsWith('<')) {
+    return {
+      error: 'non_json_response',
+      message: fallbackMessage || `接口返回了 HTML 页面，请检查后端接口或代理配置（HTTP ${response.status}）`
+    }
+  }
+
+  return trimmed ? { message: trimmed } : {}
+}
+
+function getApiErrorMessage(error, fallbackMessage) {
+  return error?.message || error?.error || fallbackMessage
+}
+
 // 获取通用请求头
 function getHeaders(options = {}) {
   const token = localStorage.getItem('token')
@@ -316,13 +351,13 @@ export async function getVideoTaskStatus(taskId) {
   const response = await fetch(getApiUrl(`/api/videos/task/${taskId}`), {
     headers: getHeaders()
   })
+  const data = await parseApiResponse(response, '查询任务状态失败：后端没有返回 JSON')
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '查询任务状态失败')
+    throw new Error(getApiErrorMessage(data, '查询任务状态失败'))
   }
   
-  return response.json()
+  return data
 }
 
 /**
@@ -332,13 +367,13 @@ export async function getVideoHdTaskStatus(taskId) {
   const response = await fetch(getApiUrl(`/api/videos/hd-upscale/task/${taskId}`), {
     headers: getHeaders()
   })
+  const data = await parseApiResponse(response, '查询高清任务状态失败：后端没有返回 JSON')
   
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '查询高清任务状态失败')
+    throw new Error(getApiErrorMessage(data, '查询高清任务状态失败'))
   }
   
-  return response.json()
+  return data
 }
 
 /**

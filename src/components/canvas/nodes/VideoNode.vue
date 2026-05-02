@@ -16,8 +16,8 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { formatPoints } from '@/utils/format'
-import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels } from '@/config/tenant'
-import { uploadImages, getVideoTaskStatus } from '@/api/canvas/nodes'
+import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
+import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import { useI18n } from '@/i18n'
@@ -25,6 +25,7 @@ import { showAlert, showInsufficientPointsDialog, showToast } from '@/composable
 import { getHighQualityCanvasPreviewUrl, getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
+import { fetchVideoTaskStatus, isVideoHdTask } from '@/utils/videoTaskStatus'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
@@ -60,13 +61,31 @@ const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useIm
 const { updateNodeInternals, getViewport, getSelectedNodes } = useVueFlow()
 
 // 是否单独选中（多选时不显示底部配置面板）
+// 使用 nextTick 确保 Vue Flow 的选中状态已经更新
 const isSoloSelected = computed(() => {
-  return props.selected && getSelectedNodes.value.length <= 1
+  // 优先使用 props.selected，因为它是最先被设置的
+  // 同时检查 store 中的选中状态作为备选
+  const isSelected = props.selected || canvasStore.selectedNodeId === props.id
+  const isSingleSelection = getSelectedNodes.value.length <= 1 || canvasStore.selectedNodeIds.length <= 1
+  return isSelected && isSingleSelection
 })
 
 watch(isSoloSelected, (val) => {
   if (!val) showMentionPopup.value = false
 })
+
+// Force immediate UI update when selected prop changes
+watch(() => props.selected, (val) => {
+  if (val) {
+    // When node gets selected, ensure store is synced and force update
+    if (canvasStore.selectedNodeId !== props.id) {
+      canvasStore.selectNode(props.id)
+    }
+    nextTick(() => {
+      updateNodeInternals(props.id)
+    })
+  }
+}, { immediate: true })
 
 // 标签编辑状态
 const isEditingLabel = ref(false)
@@ -431,6 +450,22 @@ function getReferenceVideoThumbnail(url) {
     sourceNode.data.coverUrl ||
     sourceNode.data.cover_url ||
     ''
+}
+
+function getReferenceVideoPreviewSrc(url) {
+  const thumbnail = getReferenceVideoThumbnail(url)
+  if (thumbnail) return toSameOriginUrl(thumbnail)
+  return getVideoPosterUrl(toSameOriginUrl(url), 384)
+}
+
+const failedReferenceVideoPreviewUrls = ref(new Set())
+
+function shouldShowReferenceVideoImage(url) {
+  return !!getReferenceVideoPreviewSrc(url) && !failedReferenceVideoPreviewUrls.value.has(url)
+}
+
+function handleReferenceVideoPreviewError(url) {
+  failedReferenceVideoPreviewUrls.value = new Set([...failedReferenceVideoPreviewUrls.value, url])
 }
 
 function findUpstreamNodeByImageUrl(url) {
@@ -1195,6 +1230,13 @@ function extractVideoUrl(result) {
   return getTaskMediaUrl(result, 'video')
 }
 
+function fetchCurrentVideoTaskStatus(taskId) {
+  return fetchVideoTaskStatus(taskId, props.data, {
+    getVideoHdTaskStatus,
+    getVideoTaskStatus
+  })
+}
+
 async function retryFetchVideoUrl(taskId, retryCount = 0) {
   if (retryCount >= MAX_STUCK_RETRIES) {
     console.error(`[VideoNode] 重试获取视频URL达到上限(${MAX_STUCK_RETRIES}次)，标记为错误: ${taskId}`)
@@ -1213,7 +1255,7 @@ async function retryFetchVideoUrl(taskId, retryCount = 0) {
 
   stuckRetryTimer = setTimeout(async () => {
     try {
-      const result = await getVideoTaskStatus(taskId)
+      const result = await fetchCurrentVideoTaskStatus(taskId)
       const videoUrl = extractVideoUrl(result)
 
       if (videoUrl) {
@@ -1244,34 +1286,48 @@ async function handleManualRetryFetch() {
     return
   }
 
+  const isHD = isVideoHdTask(taskId, props.data)
+
   canvasStore.updateNodeData(props.id, {
     status: 'processing',
-    progress: '重新获取中...',
+    progress: isHD ? '重新获取高清视频...' : '重新获取中...',
     error: null
   })
 
   try {
-    const result = await getVideoTaskStatus(taskId)
+    const result = await fetchCurrentVideoTaskStatus(taskId)
     const videoUrl = extractVideoUrl(result)
 
     if (videoUrl) {
       canvasStore.updateNodeData(props.id, {
         status: 'success',
         progress: null,
-        output: { type: 'video', url: videoUrl },
+        output: {
+          type: 'video',
+          url: videoUrl,
+          ...(isHD ? { sourceUrl: props.data?.sourceUrl } : {})
+        },
         taskId: taskId,
-        soraTaskId: result?.task_id || taskId
+        soraTaskId: result?.task_id || taskId,
+        ...(isHD ? { pointsCost: result?.pointsCost || 0 } : {})
       })
       removeCompletedTask(taskId)
-      showToast('视频获取成功', 'success')
+      showToast(isHD ? '高清视频获取成功' : '视频获取成功', 'success')
     } else {
       const statusLower = (result?.status || '').toLowerCase()
-      if (statusLower === 'failure' || statusLower === 'failed') {
+      if (statusLower === 'failure' || statusLower === 'failed' || statusLower === 'timeout') {
         canvasStore.updateNodeData(props.id, {
           status: 'error',
           progress: null,
-          error: result?.fail_reason || '视频生成失败'
+          error: result?.error || result?.fail_reason || (isHD ? '高清处理失败' : '视频生成失败')
         })
+      } else if (statusLower === 'processing' || statusLower === 'pending') {
+        canvasStore.updateNodeData(props.id, {
+          status: 'processing',
+          progress: isHD ? '高清处理中，请稍后再试...' : '视频仍在处理中，请稍后重试',
+          _failedTaskId: taskId
+        })
+        showToast(isHD ? '高清任务仍在处理中，请耐心等待' : '视频仍在处理中，请稍后重试', 'info')
       } else {
         canvasStore.updateNodeData(props.id, {
           status: 'error',
@@ -1301,7 +1357,7 @@ function handleBackgroundTaskComplete(event) {
   
   // 处理高清任务完成
   if (task.type === 'video-hd') {
-    const videoUrl = task.result?.outputUrl || task.result?.url
+    const videoUrl = extractVideoUrl(task.result)
     if (videoUrl) {
       canvasStore.updateNodeData(props.id, {
         status: 'success',
@@ -1314,8 +1370,16 @@ function handleBackgroundTaskComplete(event) {
         pointsCost: task.result?.pointsCost || 0
       })
       showToast(`高清处理完成${task.result?.pointsCost > 0 ? `，消耗 ${formatPoints(task.result.pointsCost)} 积分` : ''}`, 'success')
+      removeCompletedTask(taskId)
+    } else {
+      console.warn(`[VideoNode] 高清任务已完成但视频URL为空，启动兜底重试: ${taskId}`)
+      canvasStore.updateNodeData(props.id, {
+        taskId,
+        taskType: 'video-hd',
+        hdUpscaled: true
+      })
+      retryFetchVideoUrl(taskId)
     }
-    removeCompletedTask(taskId)
     return
   }
   
@@ -1380,8 +1444,10 @@ function handleBackgroundTaskProgress(event) {
   // 更新进度（支持高清任务和普通视频任务）
   const progress = task.result?.progress || task.progress
   if (progress) {
+    // 高清任务的后端进度包含秒数（如 "高清处理中... (120秒)"），
+    // 会被 progressPercent 误解为百分比，使用固定文案避免误导
     canvasStore.updateNodeData(props.id, {
-      progress: progress
+      progress: task.type === 'video-hd' ? '高清处理中...' : progress
     })
   }
 }
@@ -1396,7 +1462,7 @@ function checkAndRestoreBackgroundTasks() {
     if (task.status === 'completed') {
       // 处理高清任务完成
       if (task.type === 'video-hd') {
-        const videoUrl = task.result?.outputUrl || task.result?.url
+        const videoUrl = extractVideoUrl(task.result)
         if (videoUrl) {
           console.log(`[VideoNode] 恢复已完成的高清任务: ${task.taskId}`)
           canvasStore.updateNodeData(props.id, {
@@ -1410,6 +1476,14 @@ function checkAndRestoreBackgroundTasks() {
             pointsCost: task.result?.pointsCost || 0
           })
           removeCompletedTask(task.taskId)
+        } else {
+          console.warn(`[VideoNode] 已完成高清任务视频URL为空，启动兜底重试: ${task.taskId}`)
+          canvasStore.updateNodeData(props.id, {
+            taskId: task.taskId,
+            taskType: 'video-hd',
+            hdUpscaled: true
+          })
+          retryFetchVideoUrl(task.taskId)
         }
         continue
       }
@@ -1586,16 +1660,15 @@ const videoPosterUrl = computed(() => {
 const normalizedVideoUrl = computed(() => toSameOriginUrl(props.data.output?.url))
 const isVideoPreviewActive = ref(false)
 const videoPosterFailed = ref(false)
-const shouldFallbackToReadonlyVideoFrame = computed(() => {
-  return props.data?.readonly === true && shouldRenderVideoOutput.value && (!videoPosterUrl.value || videoPosterFailed.value)
+const shouldFallbackToVideoFrame = computed(() => {
+  return shouldRenderVideoOutput.value && (!videoPosterUrl.value || videoPosterFailed.value)
 })
 const shouldMountVideoElement = computed(() => {
   return shouldRenderVideoOutput.value &&
     isNodeVisible.value &&
-    !isCanvasMediaMoving.value &&
-    (isVideoPreviewActive.value || shouldFallbackToReadonlyVideoFrame.value)
+    ((!isCanvasMediaMoving.value && isVideoPreviewActive.value) || shouldFallbackToVideoFrame.value)
 })
-const videoPreloadMode = computed(() => shouldFallbackToReadonlyVideoFrame.value ? 'metadata' : 'none')
+const videoPreloadMode = computed(() => shouldFallbackToVideoFrame.value ? 'auto' : 'metadata')
 
 watch(videoPosterUrl, () => {
   videoPosterFailed.value = false
@@ -4847,31 +4920,21 @@ async function handleVideoError(event) {
       // 等待2秒后重试（给后端时间完成异步上传）
       await new Promise(resolve => setTimeout(resolve, 2000))
       
-      const token = localStorage.getItem('token')
-      const response = await fetch(`/api/videos/task/${taskId}`, {
-        headers: { 
-          ...getTenantHeaders(), 
-          ...(token ? { Authorization: `Bearer ${token}` } : {}) 
-        }
-      })
+      const data = await fetchCurrentVideoTaskStatus(taskId)
+      const newVideoUrl = extractVideoUrl(data)
       
-      if (response.ok) {
-        const data = await response.json()
-        const newVideoUrl = extractVideoUrl(data)
-        
-        // 如果获取到新的视频URL且与当前不同，更新节点
-        if (newVideoUrl && newVideoUrl !== props.data.output?.url) {
-          console.log('[VideoNode] 获取到新的视频URL:', newVideoUrl.substring(0, 60))
-          canvasStore.updateNodeData(props.id, {
-            output: {
-              type: 'video',
-              url: newVideoUrl
-            }
-          })
-          // 重置重试计数（新URL可能也需要重试）
-          videoRetryCount = 0
-          return
-        }
+      // 如果获取到新的视频URL且与当前不同，更新节点
+      if (newVideoUrl && newVideoUrl !== props.data.output?.url) {
+        console.log('[VideoNode] 获取到新的视频URL:', newVideoUrl.substring(0, 60))
+        canvasStore.updateNodeData(props.id, {
+          output: {
+            type: 'video',
+            url: newVideoUrl
+          }
+        })
+        // 重置重试计数（新URL可能也需要重试）
+        videoRetryCount = 0
+        return
       }
     } catch (e) {
       console.error('[VideoNode] 重新获取视频URL失败:', e.message)
@@ -4894,6 +4957,17 @@ function activateVideoPreview() {
 
   isVideoPreviewActive.value = true
   nextTick(() => handleVideoMouseEnter())
+}
+
+// 处理视频包装器点击 - 确保节点被选中
+function handleVideoWrapperClick(event) {
+  // 如果点击的是视频播放器本身（而不是工具栏按钮），选中节点
+  if (event.target.tagName === 'VIDEO' || event.target.classList.contains('video-output-wrapper')) {
+    // 确保节点被选中
+    canvasStore.selectNode(props.id)
+    // 激活视频预览
+    activateVideoPreview()
+  }
 }
 
 function handleVideoMouseEnter() {
@@ -4936,16 +5010,31 @@ function openFullscreenPreview() {
 // 关闭全屏预览
 function closeFullscreenPreview() {
   isFullscreenPreview.value = false
+  // 参考 ImageNode closePreviewModal 逻辑：关闭预览后确保画布内容可见
+  // 全屏遮罩层会触发 video-output-wrapper 的 mouseleave，导致 isVideoPreviewActive=false
+  // 关闭后鼠标不在 wrapper 上，mouseenter 不会触发，视频/poster 无法渲染
+  nextTick(() => {
+    if (shouldRenderVideoOutput.value) {
+      isVideoPreviewActive.value = true
+    }
+  })
 }
 
 // ========== 视频工具栏 ==========
 // 是否显示工具栏（单独选中且有视频内容）- 与 ImageNode 保持一致
+// 使用 store 中的选中状态作为备选，确保响应及时
 const showToolbar = computed(() => {
   if (props.data?.readonly) return false
-  if (!props.selected) return false
-  if (getSelectedNodes.value.length > 1) return false
+  // 优先使用 props.selected，同时检查 store 中的选中状态
+  const isSelected = props.selected || canvasStore.selectedNodeId === props.id
+  if (!isSelected) return false
+  // 检查是否多选（使用 Vue Flow 或 store 的状态）
+  const isMultiSelect = getSelectedNodes.value.length > 1 || canvasStore.selectedNodeIds.length > 1
+  if (isMultiSelect) return false
   return hasOutput.value
 })
+
+const showCreateCharacterToolbarAction = computed(() => isSoraCharacterLibraryEnabled())
 
 // 视频裁剪编辑器状态
 const showClipEditor = ref(false)
@@ -4955,6 +5044,35 @@ const showKeyframeEditor = ref(false)
 
 // 高清处理状态（仅用于按钮禁用状态，任务由 backgroundTaskManager 管理）
 const isHDProcessing = ref(false)
+
+async function parseHDJsonResponse(response, fallbackMessage) {
+  const contentType = response.headers.get('content-type') || ''
+  const text = await response.text()
+
+  if (contentType.includes('application/json')) {
+    try {
+      return text ? JSON.parse(text) : {}
+    } catch (error) {
+      console.warn('[VideoNode] 高清接口 JSON 解析失败:', error)
+      throw new Error(fallbackMessage)
+    }
+  }
+
+  const trimmed = text.trim()
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      return JSON.parse(trimmed)
+    } catch (error) {
+      console.warn('[VideoNode] 高清接口响应解析失败:', error)
+    }
+  }
+
+  if (trimmed.startsWith('<')) {
+    throw new Error(`高清接口返回了页面内容，请检查后端接口或代理配置（HTTP ${response.status}）`)
+  }
+
+  throw new Error(trimmed || fallbackMessage)
+}
 
 // 工具栏处理函数 - 高清放大（异步任务模式）
 async function handleToolbarHD() {
@@ -5001,7 +5119,7 @@ async function handleToolbarHD() {
         const formData = new FormData()
         formData.append('file', fileToUpload)
         
-        const uploadResponse = await fetch('/api/videos/upload', {
+        const uploadResponse = await fetch(getApiUrl('/api/videos/upload'), {
           method: 'POST',
           headers: {
             ...getTenantHeaders(),
@@ -5009,13 +5127,12 @@ async function handleToolbarHD() {
           },
           body: formData
         })
+        const uploadResult = await parseHDJsonResponse(uploadResponse, '视频上传失败')
         
         if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json().catch(() => ({}))
-          throw new Error(errorData.message || '视频上传失败')
+          throw new Error(uploadResult.message || uploadResult.error || '视频上传失败')
         }
         
-        const uploadResult = await uploadResponse.json()
         videoUrlForHD = uploadResult.url
         console.log('[VideoNode] blob视频上传成功:', videoUrlForHD)
         
@@ -5026,7 +5143,7 @@ async function handleToolbarHD() {
           videoUrlForApi = getApiUrl(videoUrlForHD)
         }
         
-        const uploadResponse = await fetch('/api/videos/upload-to-qiniu', {
+        const uploadResponse = await fetch(getApiUrl('/api/videos/upload-to-qiniu'), {
           method: 'POST',
           headers: {
             ...getTenantHeaders(),
@@ -5035,13 +5152,12 @@ async function handleToolbarHD() {
           },
           body: JSON.stringify({ videoUrl: videoUrlForApi })
         })
+        const uploadResult = await parseHDJsonResponse(uploadResponse, '视频上传失败')
         
         if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json().catch(() => ({}))
-          throw new Error(errorData.message || '视频上传失败')
+          throw new Error(uploadResult.message || uploadResult.error || '视频上传失败')
         }
         
-        const uploadResult = await uploadResponse.json()
         videoUrlForHD = uploadResult.url
         console.log('[VideoNode] 本地视频上传成功:', videoUrlForHD)
       }
@@ -5050,7 +5166,7 @@ async function handleToolbarHD() {
     showToast('提交高清处理任务...', 'info')
     
     // 提交异步任务（使用七牛云 URL）
-    const response = await fetch('/api/videos/hd-upscale', {
+    const response = await fetch(getApiUrl('/api/videos/hd-upscale'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -5063,7 +5179,7 @@ async function handleToolbarHD() {
       })
     })
     
-    const result = await response.json()
+    const result = await parseHDJsonResponse(response, '高清处理失败')
     
     if (!response.ok) {
       if (result.error === 'insufficient_points') {
@@ -5077,25 +5193,34 @@ async function handleToolbarHD() {
       return
     }
     
+    const taskId = result.taskId || result.task_id || result.id
+    if (!taskId) {
+      throw new Error('高清任务提交成功但未返回任务ID')
+    }
+
     // 获取任务 ID
-    console.log('[VideoNode] 高清任务已提交:', result.taskId)
+    console.log('[VideoNode] 高清任务已提交:', taskId)
     showToast('高清任务已提交，后台处理中...', 'success')
     
     // 立即恢复按钮状态（任务在后台处理）
     isHDProcessing.value = false
     
     // 立即创建一个"生成中"状态的节点
-    const hdResultNodeId = createHDProcessingNode(result.taskId)
+    const hdResultNodeId = createHDProcessingNode(taskId, videoUrlForHD)
     
     // 注册到后台任务管理器
+    if (!hdResultNodeId) {
+      throw new Error('高清任务节点创建失败')
+    }
+
     const currentTab = canvasStore.getCurrentTab()
     registerTask({
-      taskId: result.taskId,
+      taskId,
       type: 'video-hd',
       nodeId: hdResultNodeId, // 使用新创建的节点ID
       tabId: currentTab?.id,
       metadata: {
-        sourceUrl: normalizedVideoUrl.value,
+        sourceUrl: videoUrlForHD,
         sourceNodeId: props.id // 记录源节点ID
       }
     })
@@ -5110,7 +5235,7 @@ async function handleToolbarHD() {
 // 注：高清任务轮询已由 backgroundTaskManager 统一处理，不再需要 VideoNode 内部轮询
 
 // 创建高清处理中节点（立即显示在画布上）
-function createHDProcessingNode(taskId) {
+function createHDProcessingNode(taskId, sourceUrl = normalizedVideoUrl.value) {
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) return null
   
@@ -5133,7 +5258,7 @@ function createHDProcessingNode(taskId) {
       taskType: 'video-hd',
       hdUpscaled: true,
       sourceNodeId: props.id,
-      sourceUrl: normalizedVideoUrl.value
+      sourceUrl
     }
   })
   
@@ -5189,6 +5314,7 @@ function handleToolbarAnalyze() {
 
 function handleToolbarCreateCharacter() {
   console.log('[VideoNode] 工具栏：角色创建', props.id)
+  if (!showCreateCharacterToolbarAction.value) return
   if (!normalizedVideoUrl.value) return
   showClipEditor.value = true
 }
@@ -5775,7 +5901,7 @@ function handleToolbarPreview() {
         </svg>
         <span>解析</span>
       </button>
-      <button class="toolbar-btn" title="角色创建" @mousedown.stop.prevent="handleToolbarCreateCharacter" @click.stop.prevent>
+      <button v-if="showCreateCharacterToolbarAction" class="toolbar-btn" title="角色创建" @mousedown.stop.prevent="handleToolbarCreateCharacter" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="8" r="4" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M6 21v-2a4 4 0 014-4h4a4 4 0 014 4v2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -5900,14 +6026,22 @@ function handleToolbarPreview() {
           :style="videoWrapperStyle"
           @mouseenter="activateVideoPreview"
           @mouseleave="handleVideoMouseLeave"
-          @click.stop="activateVideoPreview"
+          @click="handleVideoWrapperClick"
         >
+          <img
+            v-if="videoPosterUrl && !videoPosterFailed"
+            :src="videoPosterUrl"
+            class="video-poster-output"
+            alt="视频封面"
+            loading="lazy"
+            decoding="async"
+            @error="handleVideoPosterError"
+          />
           <video 
             v-if="shouldMountVideoElement && isNodeVisible"
             ref="videoPlayerRef"
             :src="normalizedVideoUrl"
             :preload="videoPreloadMode"
-            :poster="videoPosterFailed ? undefined : (videoPosterUrl || undefined)"
             muted
             :loop="!data?.isCharacterNode"
             class="video-player-output"
@@ -5920,15 +6054,6 @@ function handleToolbarPreview() {
             @timeupdate="handleVideoTimeUpdate"
             @error="handleVideoError"
           ></video>
-          <img
-            v-else-if="videoPosterUrl && !videoPosterFailed"
-            :src="videoPosterUrl"
-            class="video-poster-output"
-            alt="视频封面"
-            loading="lazy"
-            decoding="async"
-            @error="handleVideoPosterError"
-          />
           <!-- 播放指示器已移除：首帧不显示播放按钮 -->
           <div class="video-overlay-actions">
             <button class="overlay-action-btn" @click.stop="openFullscreenPreview" title="全屏预览">
@@ -5953,13 +6078,13 @@ function handleToolbarPreview() {
           <!-- 加载中状态 -->
           <div v-if="data.status === 'processing'" class="preview-loading">
             <div class="loading-spinner"></div>
-            <span class="loading-title">视频生成中...</span>
-            <!-- 进度显示：优先显示百分比，其次显示状态文本 -->
-            <span v-if="progressPercent > 0" class="progress-percent">{{ progressPercent }}%</span>
+            <span class="loading-title">{{ data.taskType === 'video-hd' ? '高清处理中...' : '视频生成中...' }}</span>
+            <!-- 进度显示：高清任务不显示百分比（后端进度含秒数会被误解），普通任务正常显示 -->
+            <span v-if="data.taskType !== 'video-hd' && progressPercent > 0" class="progress-percent">{{ progressPercent }}%</span>
             <span v-else-if="data.progress && !isDefaultProgress" class="progress-text">{{ data.progress }}</span>
-            <span class="loading-hint">预计 1-3 分钟</span>
-            <!-- 100% 卡住时显示手动获取按钮 -->
-            <button v-if="progressPercent >= 100 && (data.taskId || data.soraTaskId)" class="retry-fetch-btn" @click.stop="handleManualRetryFetch">重新获取视频</button>
+            <span class="loading-hint">{{ data.taskType === 'video-hd' ? '高清处理耗时较长，请耐心等待' : '预计 1-3 分钟' }}</span>
+            <!-- 卡住时显示手动获取按钮：普通任务进度100%卡住时显示，高清任务不显示（由后台任务管理器自动轮询） -->
+            <button v-if="data.taskType !== 'video-hd' && progressPercent >= 100 && (data.taskId || data.soraTaskId)" class="retry-fetch-btn" @click.stop="handleManualRetryFetch">重新获取视频</button>
           </div>
           
           <!-- 错误状态 -->
@@ -6140,7 +6265,23 @@ function handleToolbarPreview() {
             @mouseenter="onVideoHoverStart(video, $event)"
             @mouseleave="onHoverEnd"
           >
-            <img :src="getVideoPosterUrl(toSameOriginUrl(video), 384)" class="video-thumb" alt="参考视频封面" loading="lazy" decoding="async" />
+            <img
+              v-if="shouldShowReferenceVideoImage(video)"
+              :src="getReferenceVideoPreviewSrc(video)"
+              class="video-thumb"
+              alt="参考视频封面"
+              loading="lazy"
+              decoding="async"
+              @error="handleReferenceVideoPreviewError(video)"
+            />
+            <video
+              v-else
+              :src="toSameOriginUrl(video)"
+              class="video-thumb"
+              muted
+              preload="metadata"
+              @loadeddata="$event.target.currentTime = 0.1"
+            ></video>
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span class="panel-frame-play-icon">▶</span>
             <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@视频{{ index + 1 }}</span>
@@ -7304,7 +7445,6 @@ function handleToolbarPreview() {
     0 0 20px rgba(59, 130, 246, 0.3);
 }
 
-.video-player-output,
 .video-poster-output {
   width: 100%;
   height: 100%;
@@ -7312,7 +7452,22 @@ function handleToolbarPreview() {
   display: block;
   background: #000;
   border-radius: 12px;
-  /* 跨浏览器兼容 */
+  -webkit-transform: translateZ(0);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.video-player-output {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #000;
+  border-radius: 12px;
   -webkit-transform: translateZ(0);
   transform: translateZ(0);
   -webkit-backface-visibility: hidden;

@@ -26,8 +26,8 @@ assert.match(
 
 assert.match(
   source,
-  /const shouldFallbackToReadonlyVideoFrame = computed\(/,
-  'VideoNode should allow readonly community previews to fall back to the video first frame when no poster exists'
+  /const shouldFallbackToVideoFrame = computed\(/,
+  'VideoNode should allow video previews to fall back to the video first frame when no poster exists'
 )
 
 assert.match(

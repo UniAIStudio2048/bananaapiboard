@@ -8,7 +8,7 @@
  */
 
 import { getApiUrl } from '@/config/tenant'
-import { getCloudVideoPosterUrl, isCosCdn, isQiniuCdn, isVideoUrl } from './cloudMediaUrl.js'
+import { getCloudVideoPosterUrl, getCosProxyUrl, isCosCdn, isQiniuCdn, isVideoUrl } from './cloudMediaUrl.js'
 
 const DEFAULT_THUMB_WIDTH = 1024
 const MIN_CANVAS_PREVIEW_WIDTH = 384
@@ -29,6 +29,12 @@ export function toSameOriginUrl(url) {
     const idx = url.indexOf(p)
     if (idx !== -1) return getApiUrl(url.substring(idx))
   }
+
+  if (isCosCdn(url) && isVideoUrl(url)) {
+    const proxyUrl = getCosProxyUrl(url)
+    if (proxyUrl) return getApiUrl(proxyUrl)
+  }
+
   return url
 }
 

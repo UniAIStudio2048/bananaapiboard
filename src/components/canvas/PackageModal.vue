@@ -49,7 +49,6 @@ const rechargeAmount = ref(null)
 const lastRechargeAmount = ref(0) // 记录最后一次充值的金额，用于等待界面显示
 const customAmount = ref('')
 const rechargePaymentMethod = ref(null) // 在打开弹窗时设置默认值
-const rechargeCouponCode = ref('')
 const rechargeLoading = ref(false)
 const rechargeError = ref('')
 const rechargeCards = ref([])
@@ -243,7 +242,6 @@ function closePurchaseModal() {
 async function openRechargeModal() {
   rechargeAmount.value = null
   customAmount.value = ''
-  rechargeCouponCode.value = ''
   rechargeError.value = ''
   rechargePaymentMethod.value = null
   selectedRechargeCard.value = null
@@ -290,7 +288,6 @@ function closeRechargeModal() {
   rechargeAmount.value = null
   customAmount.value = ''
   rechargePaymentMethod.value = null
-  rechargeCouponCode.value = ''
   rechargeError.value = ''
   selectedRechargeCard.value = null
 }

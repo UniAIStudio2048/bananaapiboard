@@ -720,6 +720,34 @@ const upstreamVideoUrls = computed(() => {
   return applyCustomOrder(videos, props.data.videoOrder)
 })
 
+function getUpstreamVideoThumbnail(url) {
+  if (!url) return ''
+  for (const node of upstreamNodes.value) {
+    const nodeType = node.type || ''
+    if (nodeType !== 'video' && nodeType !== 'video-input' && nodeType !== 'video-gen') {
+      continue
+    }
+
+    const output = node.data?.output
+    const matchesVideo =
+      output?.url === url ||
+      output?.urls?.includes(url) ||
+      node.data?.sourceVideo === url ||
+      node.data?.videoUrl === url
+
+    if (!matchesVideo) continue
+
+    return node.data?.thumbnailUrl ||
+      node.data?.thumbnail_url ||
+      output?.thumbnailUrl ||
+      output?.thumbnail_url ||
+      node.data?.coverUrl ||
+      node.data?.cover_url ||
+      ''
+  }
+  return ''
+}
+
 // 单独收集上游图片 URL
 const upstreamImageUrls = computed(() => {
   const images = []
@@ -799,7 +827,7 @@ const referenceMediaList = computed(() => {
   const audios = upstreamAudioUrls.value || []
   
   videos.forEach((url, i) => {
-    list.push({ type: 'video', index: i + 1, url, label: `视频${i + 1}` })
+    list.push({ type: 'video', index: i + 1, url, label: `视频${i + 1}`, thumbnailUrl: getUpstreamVideoThumbnail(url) })
   })
   images.forEach((url, i) => {
     list.push({ type: 'image', index: i + 1, url, label: `图片${i + 1}` })
@@ -2775,7 +2803,16 @@ onMounted(() => {
             @mouseenter="onVideoHoverStart(videoUrl, $event)"
             @mouseleave="onHoverEnd"
           >
+            <img
+              v-if="getUpstreamVideoThumbnail(videoUrl)"
+              :src="getUpstreamVideoThumbnail(videoUrl)"
+              class="reference-video-thumb"
+              alt="参考视频封面"
+              loading="lazy"
+              decoding="async"
+            />
             <video
+              v-else
               :src="videoUrl"
               preload="metadata"
               muted

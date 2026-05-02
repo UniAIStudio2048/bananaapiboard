@@ -15,6 +15,38 @@ function firstArrayUrl(...values) {
   return null
 }
 
+function firstObjectUrl(...values) {
+  for (const value of values) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      const url = firstString(
+        value.url,
+        value.video_url,
+        value.audio_url,
+        value.image_url,
+        value.outputUrl,
+        value.output_url,
+        value.qiniu_url,
+        value.cdn_url,
+        value.cos_url
+      )
+      if (url) return url
+    }
+  }
+  return null
+}
+
+function firstArrayObjectUrl(...values) {
+  for (const value of values) {
+    if (Array.isArray(value)) {
+      const url = value
+        .map(item => typeof item === 'string' ? item : firstObjectUrl(item))
+        .find(item => typeof item === 'string' && item.trim())
+      if (url) return url
+    }
+  }
+  return null
+}
+
 export function getTaskMediaUrl(result, type = 'image') {
   if (!result) return null
 
@@ -23,14 +55,22 @@ export function getTaskMediaUrl(result, type = 'image') {
       result.audio_url,
       result.url,
       result.outputUrl,
+      result.output_url,
       result.qiniu_url,
       result.cdn_url,
       result.cos_url,
       result.data?.audio_url,
       result.data?.url,
       result.data?.output,
+      result.data?.output_url,
       result.data?.qiniu_url,
-      result.data?.cdn_url
+      result.data?.cdn_url,
+      result.result?.audio_url,
+      result.result?.url,
+      result.result?.output,
+      result.result?.output_url,
+      firstObjectUrl(result.output, result.data?.output, result.result?.output),
+      firstArrayObjectUrl(result.audios, result.data?.audios, result.result?.audios)
     )
   }
 
@@ -39,29 +79,50 @@ export function getTaskMediaUrl(result, type = 'image') {
       result.video_url,
       result.url,
       result.outputUrl,
+      result.output_url,
       result.qiniu_url,
       result.cdn_url,
       result.cos_url,
       result.data?.video_url,
       result.data?.url,
       result.data?.output,
+      result.data?.output_url,
       result.data?.qiniu_url,
-      result.data?.cdn_url
+      result.data?.cdn_url,
+      result.result?.video_url,
+      result.result?.url,
+      result.result?.output,
+      result.result?.output_url,
+      result.result?.qiniu_url,
+      result.result?.cdn_url,
+      firstObjectUrl(result.output, result.data?.output, result.result?.output),
+      firstArrayObjectUrl(result.videos, result.data?.videos, result.result?.videos, result.outputs, result.data?.outputs, result.result?.outputs)
     )
   }
 
   return firstString(
     result.url,
     firstArrayUrl(result.urls, result.images),
+    firstArrayObjectUrl(result.outputs, result.data?.outputs, result.result?.outputs),
     result.qiniu_url,
     result.cdn_url,
     result.cos_url,
     result.image_url,
+    result.outputUrl,
+    result.output_url,
     result.data?.url,
     firstArrayUrl(result.data?.urls, result.data?.images),
     result.data?.qiniu_url,
     result.data?.cdn_url,
-    result.data?.image_url
+    result.data?.image_url,
+    result.data?.output,
+    result.data?.output_url,
+    result.result?.url,
+    firstArrayUrl(result.result?.urls, result.result?.images),
+    result.result?.image_url,
+    result.result?.output,
+    result.result?.output_url,
+    firstObjectUrl(result.output, result.data?.output, result.result?.output)
   )
 }
 

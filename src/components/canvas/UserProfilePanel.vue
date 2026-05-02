@@ -70,10 +70,6 @@ const rechargeError = ref('')
 const quickAmounts = [300, 500, 1000, 5000, 10000]
 const paymentMethods = ref([])
 const rechargeSelectedMethod = ref(null)
-const rechargeCouponCode = ref('')
-const appliedRechargeCoupon = ref(null)
-const rechargeCouponDiscount = ref(0)
-const rechargeCouponError = ref('')
 const rechargeCards = ref([]) // 充值卡片列表
 const selectedRechargeCard = ref(null) // 选中的充值卡片
 // 充值支付等待状态
@@ -1269,10 +1265,6 @@ async function openRechargePanel() {
   rechargeSelectedMethod.value = null
   selectedRechargeCard.value = null
   rechargeError.value = ''
-  rechargeCouponCode.value = ''
-  appliedRechargeCoupon.value = null
-  rechargeCouponDiscount.value = 0
-  rechargeCouponError.value = ''
 
   // 并行加载支付方式和充值卡片
   try {
@@ -1323,62 +1315,6 @@ function getFinalRechargeAmount() {
   return 0
 }
 
-// 应用优惠券
-async function applyRechargeCoupon() {
-  if (!rechargeCouponCode.value || !rechargeCouponCode.value.trim()) {
-    rechargeCouponError.value = t('user.enterCouponCode')
-    return
-  }
-  
-  const amount = getFinalRechargeAmount()
-  if (amount < 100) {
-    rechargeCouponError.value = t('user.selectAmountFirst')
-    return
-  }
-  
-  try {
-    const headers = {
-      ...getTenantHeaders(),
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    }
-    
-    const res = await fetch('/api/coupons/validate', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        code: rechargeCouponCode.value.trim().toUpperCase(),
-        package_id: null,
-        amount: amount
-      })
-    })
-    
-    const data = await res.json()
-    
-    if (!res.ok) {
-      rechargeCouponError.value = data.message || t('user.couponValidateFailed')
-      return
-    }
-    
-    appliedRechargeCoupon.value = data.coupon
-    rechargeCouponDiscount.value = data.discount_amount
-    rechargeCouponError.value = ''
-    showAlert(t('user.couponApplied'), `✓ ${t('common.success')}`)
-    
-  } catch (e) {
-    console.error('[applyRechargeCoupon] error:', e)
-    rechargeCouponError.value = t('user.couponValidateFailed')
-  }
-}
-
-// 移除优惠券
-function removeRechargeCoupon() {
-  rechargeCouponCode.value = ''
-  appliedRechargeCoupon.value = null
-  rechargeCouponDiscount.value = 0
-  rechargeCouponError.value = ''
-}
-
 // 充值
 async function submitRecharge() {
   const amount = getFinalRechargeAmount()
@@ -1417,11 +1353,6 @@ async function submitRecharge() {
     // 如果选择了充值卡片，传递卡片ID
     if (selectedRechargeCard.value) {
       payload.recharge_card_id = selectedRechargeCard.value.id
-    }
-
-    // 如果使用了优惠券，添加优惠券码
-    if (appliedRechargeCoupon.value) {
-      payload.coupon_code = rechargeCouponCode.value.trim().toUpperCase()
     }
     
     const res = await fetch('/api/user/recharge', {
@@ -2559,54 +2490,16 @@ function getLedgerTypeText(type) {
               </select>
             </div>
             
-            <!-- 优惠券输入 -->
-            <div class="form-section">
-              <label class="form-label">{{ t('user.couponCode') }}</label>
-              <div class="coupon-input-group">
-                <input 
-                  v-model="rechargeCouponCode" 
-                  type="text" 
-                  class="form-input"
-                  :placeholder="t('user.enterCouponCode')"
-                  :disabled="!!appliedRechargeCoupon"
-                  @input="rechargeCouponCode = rechargeCouponCode.toUpperCase()"
-                />
-                <button 
-                  v-if="!appliedRechargeCoupon"
-                  class="btn-apply-coupon" 
-                  @click="applyRechargeCoupon"
-                  :disabled="!rechargeCouponCode.trim()"
-                >
-                  {{ t('user.applyCoupon') }}
-                </button>
-                <button 
-                  v-else
-                  class="btn-remove-coupon" 
-                  @click="removeRechargeCoupon"
-                >
-                  {{ t('user.removeCoupon') }}
-                </button>
-              </div>
-              <div v-if="rechargeCouponError" class="msg-error">{{ rechargeCouponError }}</div>
-              <div v-if="appliedRechargeCoupon" class="msg-success">
-                ✓ {{ t('user.couponApplied') }} -¥{{ (rechargeCouponDiscount / 100).toFixed(2) }}
-              </div>
-            </div>
-            
             <!-- 价格信息 -->
             <div v-if="getFinalRechargeAmount() > 0" class="price-info">
               <div class="price-row">
                 <span>{{ t('user.rechargeAmount') }}</span>
                 <span>¥{{ (getFinalRechargeAmount() / 100).toFixed(2) }}</span>
               </div>
-              <div v-if="appliedRechargeCoupon && rechargeCouponDiscount > 0" class="price-row discount">
-                <span>{{ t('user.couponDiscount') }}</span>
-                <span>-¥{{ (rechargeCouponDiscount / 100).toFixed(2) }}</span>
-              </div>
               <div class="price-row total">
                 <span>{{ t('user.actualPayment') }}</span>
                 <span class="total-price">
-                  ¥{{ ((getFinalRechargeAmount() - rechargeCouponDiscount) / 100).toFixed(2) }}
+                  ¥{{ (getFinalRechargeAmount() / 100).toFixed(2) }}
                 </span>
               </div>
             </div>
@@ -8347,4 +8240,3 @@ function getLedgerTypeText(type) {
   border-bottom-color: rgba(0, 0, 0, 0.12) !important;
 }
 </style>
-

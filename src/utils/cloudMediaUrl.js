@@ -23,6 +23,25 @@ export function isCosCdn(url) {
          lower.includes('.tencentcos.cn')
 }
 
+export function getCosProxyUrl(url) {
+  if (!url) return ''
+
+  const proxyMarker = '/api/cos-proxy/'
+  const proxyIndex = url.indexOf(proxyMarker)
+  if (proxyIndex !== -1) {
+    return url.slice(proxyIndex)
+  }
+
+  if (!isCosCdn(url)) return ''
+
+  try {
+    const parsed = new URL(url)
+    return `${proxyMarker}${parsed.pathname.replace(/^\/+/, '')}${parsed.search || ''}`
+  } catch {
+    return ''
+  }
+}
+
 export function getCloudVideoPosterUrl(url, width = 2048) {
   if (!url) return ''
   if (url.startsWith('blob:') || url.startsWith('data:')) return ''

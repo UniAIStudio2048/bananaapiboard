@@ -52,6 +52,7 @@ import {
 import { initBackgroundTaskManager, getPendingTasks, subscribeTask, removeCompletedTask, cleanup as cleanupBackgroundTasks } from '@/stores/canvas/backgroundTaskManager'
 import { showAlert, showConfirm } from '@/composables/useCanvasDialog'
 import { needsMigration, analyzeWorkflow, migrateWorkflowData } from '@/utils/workflowMigration'
+import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 // 🔧 画布诊断工具 - 用于调试画布强制重新加载问题
 import { initCanvasDiagnostic, printCanvasDiagnosticReport } from '@/utils/canvasDiagnostic'
 
@@ -672,6 +673,7 @@ function handleHistoryApply(historyItem) {
       }
       break
     case 'video':
+      const historyVideoPosterUrl = historyItem.cover_url || historyItem.coverUrl || historyItem.thumbnail_url || historyItem.thumbnailUrl
       nodeType = 'video-input'
       nodeData = {
         title: historyItem.name || t('canvas.historyPanel.videoResult'),
@@ -679,10 +681,14 @@ function handleHistoryApply(historyItem) {
         status: 'success',
         output: {
           type: 'video',
-          url: historyItem.url
+          url: historyItem.url,
+          thumbnail_url: historyVideoPosterUrl,
+          thumbnailUrl: historyVideoPosterUrl
         },
         fromHistory: true,
         historyId: historyItem.id,
+        thumbnail_url: historyVideoPosterUrl,
+        thumbnailUrl: historyVideoPosterUrl,
         prompt: historyItem.prompt,
         model: historyItem.model,
         // 传递 task_id 用于角色创建
@@ -1180,7 +1186,7 @@ function updateNodeFromTask(task) {
       }
     } else if (task.type === 'video-hd') {
       // 视频高清任务完成
-      const videoUrl = result.outputUrl || result.url
+      const videoUrl = getTaskMediaUrl(result, 'video')
       if (videoUrl) {
         canvasStore.updateNodeData(task.nodeId, {
           status: 'success',
