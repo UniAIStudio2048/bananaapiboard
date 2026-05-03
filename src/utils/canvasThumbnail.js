@@ -148,3 +148,41 @@ export function getOriginalImageUrl(url) {
 export function getVideoPosterUrl(url, width = DEFAULT_THUMB_WIDTH) {
   return getCloudVideoPosterUrl(url, width)
 }
+
+/**
+ * 将外部 CDN 图片 URL 转为可跨域访问的代理 URL
+ * 用于 Canvas 绘图操作（需要 crossOrigin 或 fetch）
+ * - blob:/data: 直接返回
+ * - /api/ 开头的相对路径直接返回
+ * - 同源 URL 直接返回
+ * - 外部 URL 通过 /api/images/proxy 代理
+ */
+export function getProxiedImageUrl(url) {
+  if (!url) return null
+  if (url.startsWith('data:') || url.startsWith('blob:')) return url
+  if (url.startsWith('/storage/') || url.startsWith('/api/')) return url
+
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      const urlObj = new URL(url)
+      if (urlObj.host === window.location.host) return url
+
+      if (urlObj.pathname.startsWith('/api/')) {
+        try {
+          const apiBase = import.meta.env.VITE_API_BASE
+          if (apiBase) {
+            const apiHost = new URL(apiBase).hostname
+            const baseDomain = (h) => { const p = h.split('.'); return p.length >= 2 ? p.slice(-2).join('.') : h }
+            if (baseDomain(urlObj.hostname) === baseDomain(apiHost)) {
+              return `${apiBase}${urlObj.pathname}${urlObj.search}`
+            }
+          }
+        } catch (_) {}
+      }
+    } catch (_) {}
+
+    return `${getApiUrl('/api/images/proxy')}?url=${encodeURIComponent(url)}`
+  }
+
+  return url
+}

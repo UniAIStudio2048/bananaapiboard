@@ -23,6 +23,7 @@ import { useI18n } from '@/i18n'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
 import { resolveNanoBananaAspectRatio } from '@/utils/nanoBananaImageParams'
+import { getProxiedImageUrl } from '@/utils/canvasThumbnail'
 
 const { t, currentLanguage } = useI18n()
 const canvasStore = useCanvasStore()
@@ -382,12 +383,12 @@ async function init() {
   }
 }
 
-// 加载图片
+// 加载图片（外部 CDN URL 通过代理加载以规避 CORS）
 function loadImage(url) {
   return new Promise((resolve, reject) => {
     originalImage.onload = () => resolve()
     originalImage.onerror = reject
-    originalImage.src = url
+    originalImage.src = getProxiedImageUrl(url) || url
   })
 }
 

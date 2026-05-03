@@ -23,6 +23,7 @@ import {
   chooseEditorExportFormat
 } from './imageEditSession.js'
 import { getNativeImageEditorPointerCoords } from './nativeImageEditorCoords.js'
+import { getProxiedImageUrl } from '@/utils/canvasThumbnail'
 
 const props = defineProps({
   imageUrl: {
@@ -346,7 +347,7 @@ async function init() {
   }
 }
 
-// 加载图片
+// 加载图片（外部 CDN URL 通过代理加载以规避 CORS）
 function loadImage(url) {
   return new Promise((resolve, reject) => {
     originalImage.onload = () => {
@@ -359,7 +360,7 @@ function loadImage(url) {
       resolve()
     }
     originalImage.onerror = reject
-    originalImage.src = url
+    originalImage.src = getProxiedImageUrl(url) || url
   })
 }
 
