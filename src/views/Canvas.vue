@@ -2642,66 +2642,70 @@ onUnmounted(() => {
             <button class="canvas-help-close" @click="showHelp = false">×</button>
           </div>
           <div class="canvas-help-body">
-            <div class="help-section">
-              <h4>🖱️ {{ t('canvas.mouseOperations') }}
-                <span class="help-mode-badge">{{ interactionMode === 'comfyui' ? t('canvas.comfyuiModeShort') : t('canvas.infiniteCanvasModeShort') }}</span>
-              </h4>
-              <!-- ComfyUI 模式 -->
-              <ul v-if="interactionMode === 'comfyui'">
-                <li><kbd>{{ t('canvas.leftDrag') }}</kbd> {{ t('canvas.leftDragDesc') }}</li>
-                <li><kbd>{{ t('canvas.rightClick') }}</kbd> {{ t('canvas.rightClickDesc') }}</li>
-                <li><kbd>{{ t('canvas.ctrlDrag') }}</kbd> {{ t('canvas.ctrlDragDesc') }}</li>
-                <li><kbd>{{ t('canvas.spaceDrag') }}</kbd> {{ t('canvas.spaceDragDesc') }}</li>
-                <li><kbd>{{ t('canvas.leftClick') }}</kbd> {{ t('canvas.leftClickDesc') }}</li>
-                <li><kbd>{{ t('canvas.doubleClickBlank') }}</kbd> {{ t('canvas.doubleClickBlankDesc') }}</li>
-                <li><kbd>{{ t('canvas.scrollUp') }}</kbd> {{ t('canvas.scrollUpDesc') }}</li>
-                <li><kbd>{{ t('canvas.scrollDown') }}</kbd> {{ t('canvas.scrollDownDesc') }}</li>
-                <li><kbd>{{ t('canvas.shiftScroll') }}</kbd> {{ t('canvas.shiftScrollDesc') }}</li>
-                <li><kbd>{{ t('canvas.ctrlScroll') }}</kbd> {{ t('canvas.ctrlScrollDesc') }}</li>
-                <li><kbd>{{ t('canvas.middleDrag') }}</kbd> {{ t('canvas.middleDragDesc') }}</li>
-              </ul>
-              <!-- 无限画布模式 -->
-              <ul v-else>
-                <li><kbd>{{ t('canvas.leftDrag') }}</kbd> {{ t('canvas.infiniteLeftDragDesc') }}</li>
-                <li><kbd>{{ t('canvas.rightClick') }}</kbd> {{ t('canvas.rightClickDesc') }}</li>
-                <li><kbd>{{ t('canvas.spaceDrag') }}</kbd> {{ t('canvas.spaceDragDesc') }}</li>
-                <li><kbd>{{ t('canvas.leftClick') }}</kbd> {{ t('canvas.leftClickDesc') }}</li>
-                <li><kbd>{{ t('canvas.doubleClickBlank') }}</kbd> {{ t('canvas.doubleClickBlankDesc') }}</li>
-                <li><kbd>{{ t('canvas.scrollUp') }}</kbd> {{ t('canvas.infiniteScrollDesc') }}</li>
-                <li><kbd>{{ t('canvas.scrollDown') }}</kbd> {{ t('canvas.infiniteScrollDesc') }}</li>
-                <li><kbd>{{ t('canvas.shiftScroll') }}</kbd> {{ t('canvas.shiftScrollDesc') }}</li>
-                <li><kbd>{{ t('canvas.ctrlScroll') }}</kbd> {{ t('canvas.infiniteCtrlScrollDesc') }}</li>
-                <li><kbd>{{ t('canvas.middleDrag') }}</kbd> {{ t('canvas.middleDragDesc') }}</li>
-              </ul>
-            </div>
-            <div class="help-section">
-              <h4>⌨️ {{ t('canvas.keyboardShortcuts') }}</h4>
-              <ul>
-                <li><kbd>Ctrl+S</kbd> {{ t('canvas.saveWorkflow') }}</li>
-                <li><kbd>Ctrl+Z</kbd> {{ t('canvas.undoShortcut') }}</li>
-                <li><kbd>Ctrl+X</kbd> / <kbd>Ctrl+Y</kbd> {{ t('canvas.redoShortcut') }}</li>
-                <li><kbd>Ctrl+C</kbd> {{ t('canvas.copyNode') }}</li>
-                <li><kbd>Ctrl+V</kbd> {{ t('canvas.pasteNode') }}</li>
-                <li><kbd>Ctrl+A</kbd> {{ t('canvas.selectAllNodes') }}</li>
-                <li><kbd>Ctrl+G</kbd> {{ t('canvas.groupNodes') }}</li>
-                <li><kbd>Delete</kbd> / <kbd>Backspace</kbd> {{ t('canvas.deleteSelected') }}</li>
-                <li><kbd>Escape</kbd> {{ t('canvas.closeDialog') }}</li>
-                <li><kbd>Ctrl+Enter</kbd> {{ t('canvas.startGenerate') }}</li>
-                <li><kbd>Tab</kbd> {{ t('canvas.toggleAIAssistant') || '展开/收起 AI 灵感助手' }}</li>
-                <li><kbd>I</kbd> {{ t('canvas.createImageNode') || '在下游创建图像节点' }}</li>
-                <li><kbd>V</kbd> {{ t('canvas.createVideoNode') || '在下游创建视频节点' }}</li>
-                <li><kbd>T</kbd> {{ t('canvas.createTextNode') || '在下游创建文本节点' }}</li>
-                <li><kbd>A</kbd> {{ t('canvas.createAudioNode') || '在下游创建音频节点' }}</li>
-                <li><kbd>D</kbd> {{ t('canvas.downloadNodeFile') || '下载选中节点的文件' }}</li>
-              </ul>
-            </div>
-            <div class="help-section">
-              <h4>📌 {{ t('canvas.nodeOperations') }}</h4>
-              <ul>
-                <li>{{ t('canvas.dragConnection') }}</li>
-                <li>{{ t('canvas.rightClickNode') }}</li>
-                <li>{{ t('canvas.clickPlus') }}</li>
-              </ul>
+            <div class="help-columns">
+              <div class="help-section">
+                <h4>🖱️ {{ t('canvas.mouseOperations') }}
+                  <span class="help-mode-badge">{{ interactionMode === 'comfyui' ? t('canvas.comfyuiModeShort') : t('canvas.infiniteCanvasModeShort') }}</span>
+                </h4>
+                <!-- ComfyUI 模式 -->
+                <ul v-if="interactionMode === 'comfyui'">
+                  <li><kbd>{{ t('canvas.leftDrag') }}</kbd> {{ t('canvas.leftDragDesc') }}</li>
+                  <li><kbd>{{ t('canvas.rightClick') }}</kbd> {{ t('canvas.rightClickDesc') }}</li>
+                  <li><kbd>{{ t('canvas.ctrlDrag') }}</kbd> {{ t('canvas.ctrlDragDesc') }}</li>
+                  <li><kbd>{{ t('canvas.spaceDrag') }}</kbd> {{ t('canvas.spaceDragDesc') }}</li>
+                  <li><kbd>{{ t('canvas.leftClick') }}</kbd> {{ t('canvas.leftClickDesc') }}</li>
+                  <li><kbd>{{ t('canvas.doubleClickBlank') }}</kbd> {{ t('canvas.doubleClickBlankDesc') }}</li>
+                  <li><kbd>{{ t('canvas.scrollUp') }}</kbd> {{ t('canvas.scrollUpDesc') }}</li>
+                  <li><kbd>{{ t('canvas.scrollDown') }}</kbd> {{ t('canvas.scrollDownDesc') }}</li>
+                  <li><kbd>{{ t('canvas.shiftScroll') }}</kbd> {{ t('canvas.shiftScrollDesc') }}</li>
+                  <li><kbd>{{ t('canvas.ctrlScroll') }}</kbd> {{ t('canvas.ctrlScrollDesc') }}</li>
+                  <li><kbd>{{ t('canvas.middleDrag') }}</kbd> {{ t('canvas.middleDragDesc') }}</li>
+                </ul>
+                <!-- 无限画布模式 -->
+                <ul v-else>
+                  <li><kbd>{{ t('canvas.leftDrag') }}</kbd> {{ t('canvas.infiniteLeftDragDesc') }}</li>
+                  <li><kbd>{{ t('canvas.rightClick') }}</kbd> {{ t('canvas.rightClickDesc') }}</li>
+                  <li><kbd>{{ t('canvas.spaceDrag') }}</kbd> {{ t('canvas.spaceDragDesc') }}</li>
+                  <li><kbd>{{ t('canvas.leftClick') }}</kbd> {{ t('canvas.leftClickDesc') }}</li>
+                  <li><kbd>{{ t('canvas.doubleClickBlank') }}</kbd> {{ t('canvas.doubleClickBlankDesc') }}</li>
+                  <li><kbd>{{ t('canvas.scrollUp') }}</kbd> {{ t('canvas.infiniteScrollDesc') }}</li>
+                  <li><kbd>{{ t('canvas.scrollDown') }}</kbd> {{ t('canvas.infiniteScrollDesc') }}</li>
+                  <li><kbd>{{ t('canvas.shiftScroll') }}</kbd> {{ t('canvas.shiftScrollDesc') }}</li>
+                  <li><kbd>{{ t('canvas.ctrlScroll') }}</kbd> {{ t('canvas.infiniteCtrlScrollDesc') }}</li>
+                  <li><kbd>{{ t('canvas.middleDrag') }}</kbd> {{ t('canvas.middleDragDesc') }}</li>
+                </ul>
+              </div>
+              <div class="help-column-right">
+                <div class="help-section">
+                  <h4>⌨️ {{ t('canvas.keyboardShortcuts') }}</h4>
+                  <ul>
+                    <li><kbd>Ctrl+S</kbd> {{ t('canvas.saveWorkflow') }}</li>
+                    <li><kbd>Ctrl+Z</kbd> {{ t('canvas.undoShortcut') }}</li>
+                    <li><kbd>Ctrl+X</kbd> / <kbd>Ctrl+Y</kbd> {{ t('canvas.redoShortcut') }}</li>
+                    <li><kbd>Ctrl+C</kbd> {{ t('canvas.copyNode') }}</li>
+                    <li><kbd>Ctrl+V</kbd> {{ t('canvas.pasteNode') }}</li>
+                    <li><kbd>Ctrl+A</kbd> {{ t('canvas.selectAllNodes') }}</li>
+                    <li><kbd>Ctrl+G</kbd> {{ t('canvas.groupNodes') }}</li>
+                    <li><kbd>Delete</kbd> / <kbd>Backspace</kbd> {{ t('canvas.deleteSelected') }}</li>
+                    <li><kbd>Escape</kbd> {{ t('canvas.closeDialog') }}</li>
+                    <li><kbd>Ctrl+Enter</kbd> {{ t('canvas.startGenerate') }}</li>
+                    <li><kbd>Tab</kbd> {{ t('canvas.toggleAIAssistant') || '展开/收起 AI 灵感助手' }}</li>
+                    <li><kbd>I</kbd> {{ t('canvas.createImageNode') || '在下游创建图像节点' }}</li>
+                    <li><kbd>V</kbd> {{ t('canvas.createVideoNode') || '在下游创建视频节点' }}</li>
+                    <li><kbd>T</kbd> {{ t('canvas.createTextNode') || '在下游创建文本节点' }}</li>
+                    <li><kbd>A</kbd> {{ t('canvas.createAudioNode') || '在下游创建音频节点' }}</li>
+                    <li><kbd>D</kbd> {{ t('canvas.downloadNodeFile') || '下载选中节点的文件' }}</li>
+                  </ul>
+                </div>
+                <div class="help-section">
+                  <h4>📌 {{ t('canvas.nodeOperations') }}</h4>
+                  <ul>
+                    <li>{{ t('canvas.dragConnection') }}</li>
+                    <li>{{ t('canvas.rightClickNode') }}</li>
+                    <li>{{ t('canvas.clickPlus') }}</li>
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -3130,8 +3134,8 @@ onUnmounted(() => {
   border: 1px solid var(--canvas-border-default);
   border-radius: var(--canvas-radius-lg);
   width: 90%;
-  max-width: 480px;
-  max-height: 80vh;
+  max-width: 860px;
+  max-height: 85vh;
   overflow-y: auto;
   box-shadow: var(--canvas-shadow-lg);
 }
@@ -3170,6 +3174,19 @@ onUnmounted(() => {
 
 .canvas-help-body {
   padding: 24px;
+}
+
+.help-columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 32px;
+}
+
+@media (max-width: 640px) {
+  .help-columns {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
 }
 
 .help-section {
@@ -3211,9 +3228,9 @@ onUnmounted(() => {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 10px 0;
+  padding: 7px 0;
   color: var(--canvas-text-secondary);
-  font-size: 14px;
+  font-size: 13px;
   border-bottom: 1px solid var(--canvas-border-subtle);
 }
 

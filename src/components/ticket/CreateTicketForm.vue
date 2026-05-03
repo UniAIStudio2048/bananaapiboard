@@ -18,16 +18,27 @@
     <!-- 表单内容 -->
     <div class="form-content">
       <form @submit.prevent="handleSubmit">
-        <!-- 工单类型 -->
-        <div class="form-group">
-          <label class="form-label">工单类型 <span class="required">*</span></label>
-          <select v-model="form.type" class="form-select" required>
-            <option value="">请选择</option>
-            <option value="bug">问题反馈</option>
-            <option value="feature">功能建议</option>
-            <option value="invoice">开票申请</option>
-            <option value="other">其他</option>
-          </select>
+        <!-- 类型和优先级并排 -->
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">工单类型 <span class="required">*</span></label>
+            <select v-model="form.type" class="form-select" required>
+              <option value="">请选择</option>
+              <option value="bug">问题反馈</option>
+              <option value="feature">功能建议</option>
+              <option value="invoice">开票申请</option>
+              <option value="other">其他</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">优先级</label>
+            <select v-model="form.priority" class="form-select">
+              <option value="low">低</option>
+              <option value="normal">中</option>
+              <option value="high">高</option>
+              <option value="urgent">紧急</option>
+            </select>
+          </div>
         </div>
 
         <!-- 标题 -->
@@ -41,17 +52,6 @@
             required
             maxlength="100"
           />
-        </div>
-
-        <!-- 优先级 -->
-        <div class="form-group">
-          <label class="form-label">优先级</label>
-          <select v-model="form.priority" class="form-select">
-            <option value="low">低</option>
-            <option value="normal">中</option>
-            <option value="high">高</option>
-            <option value="urgent">紧急</option>
-          </select>
         </div>
 
         <!-- 详细描述 -->
@@ -302,6 +302,12 @@ async function handleSubmit() {
 .form-content::-webkit-scrollbar-thumb {
   background: ra(255, 255, 255, 0.2);
   border-radius: 3px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
 }
 
 .form-group {

@@ -421,6 +421,9 @@ onMounted(() => {
   border: 1px solid #2a2a2a;
   border-radius: 12px;
   margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 24px;
 }
 
 .info-row {
@@ -428,10 +431,11 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.info-row:not(:last-child) {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+.info-row:nth-last-child(-n+2) {
+  border-bottom: none;
 }
 
 .info-label {
@@ -827,8 +831,11 @@ html.canvas-theme-light .ticket-detail.ticket-detail .ticket-info {
   background: rgba(0,0,0,0.02) !important;
   border-color: rgba(0,0,0,0.08) !important;
 }
-html.canvas-theme-light .ticket-detail.ticket-detail .info-row:not(:last-child) {
+html.canvas-theme-light .ticket-detail.ticket-detail .info-row {
   border-bottom-color: rgba(0,0,0,0.06) !important;
+}
+html.canvas-theme-light .ticket-detail.ticket-detail .info-row:nth-last-child(-n+2) {
+  border-bottom-color: transparent !important;
 }
 html.canvas-theme-light .ticket-detail.ticket-detail .info-label {
   color: rgba(0,0,0,0.5) !important;

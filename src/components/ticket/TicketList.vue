@@ -316,11 +316,19 @@ defineExpose({
 
 .ticket-items {
   padding: 12px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .ticket-items {
+    grid-template-columns: 1fr;
+  }
 }
 
 .ticket-item {
   padding: 16px;
-  margin-bottom: 8px;
   background: linear-gradient(180deg, #1f1f1f 0%, #1a1a1a 100%);
   border: 1px solid #2a2a2a;
   border-radius: 12px;

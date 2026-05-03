@@ -37,9 +37,9 @@ defineEmits(['close'])
 
 .modal-container {
   position: relative;
-  width: 520px;
+  width: 800px;
   max-width: 90vw;
-  height: 80vh;
+  height: 85vh;
   background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
   border: 1px solid #2a2a2a;
   border-radius: 16px;
