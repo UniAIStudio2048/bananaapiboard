@@ -17,12 +17,13 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
 import { getHistory, getHistoryDetail, deleteHistory } from '@/api/canvas/history'
 import { saveAsset } from '@/api/canvas/assets'
-import { getTenantHeaders, getMediaUrl } from '@/config/tenant'
+import { getTenantHeaders, getMediaUrl, getApiUrl } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { getCachedHistory, cacheHistory, invalidateCache } from '@/utils/historyCache'
 import { preloadImages } from '@/utils/imageCache'
 import { toSameOriginUrl, getOriginalImageUrl } from '@/utils/canvasThumbnail'
+import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
 import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
@@ -1343,6 +1344,11 @@ function extractVideoThumbnail(item, useProxy = false) {
   video.crossOrigin = 'anonymous'
   
   let safeUrl = toSameOriginUrl(item.url)
+  // COS CDN 视频需要通过 cos-proxy 才能跨域 canvas 绘制
+  if (isCosCdn(item.url) && isVideoMediaFile(item.url)) {
+    const proxyUrl = getCosProxyUrl(item.url)
+    if (proxyUrl) safeUrl = getApiUrl(proxyUrl)
+  }
   // 添加 _thumb 参数隔离缓存，避免 CORS 缓存与非 CORS 视频播放器冲突
   safeUrl += (safeUrl.includes('?') ? '&' : '?') + '_thumb=1'
 

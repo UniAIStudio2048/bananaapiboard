@@ -6807,6 +6807,10 @@ async function handleDrop(event) {
                 />
                 <div v-else class="image-placeholder preview-image" />
               </template>
+              <div v-if="data._editSaving" class="edit-saving-badge">
+                <svg class="edit-saving-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/></svg>
+                保存中
+              </div>
             </div>
             
             <!-- 有上游连接时 - 显示等待状态 -->
@@ -8225,6 +8229,33 @@ async function handleDrop(event) {
   background: var(--canvas-bg-tertiary, #1a1a1a);
   border-radius: 12px;
   overflow: hidden;
+  position: relative;
+}
+
+.edit-saving-badge {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: 12px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.edit-saving-spinner {
+  width: 14px;
+  height: 14px;
+  animation: edit-save-spin 0.8s linear infinite;
+}
+
+@keyframes edit-save-spin {
+  to { transform: rotate(360deg); }
 }
 
 .preview-image {

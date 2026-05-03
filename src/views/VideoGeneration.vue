@@ -4,6 +4,7 @@ import { getMe, isQiniuCdnUrl, buildVideoDownloadUrl } from '@/api/client'
 import { getTenantHeaders, getModelDisplayName, isModelEnabled, getAvailableVideoModels, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
 import { formatPoints } from '@/utils/format'
 import { pickConfiguredSubmode } from '@/utils/videoSubmodeDefaults'
 
@@ -1378,7 +1379,14 @@ function extractVideoThumbnail(item) {
   video.muted = true
   video.preload = 'metadata'
 
-  const safeUrl = toSameOriginUrl(item.video_url)
+  const safeUrl = (() => {
+    let url = toSameOriginUrl(item.video_url)
+    if (isCosCdn(item.video_url) && isVideoMediaFile(item.video_url)) {
+      const proxyUrl = getCosProxyUrl(item.video_url)
+      if (proxyUrl) url = getApiUrl(proxyUrl)
+    }
+    return url
+  })()
 
   const cleanup = () => {
     video.remove()

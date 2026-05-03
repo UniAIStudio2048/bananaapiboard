@@ -241,9 +241,9 @@ function calculateEditorSize() {
 
 // ==================== 保存与取消 ====================
 
-// 处理保存
+// 处理保存（立即关闭编辑器，后台上传）
 async function handleSave(data) {
-  console.log('[ImageEditMode] 保存编辑结果', data)
+  console.log('[ImageEditMode] handleSave 被调用', !!data?.image)
 
   if (!editingNode.value || !data) {
     canvasStore.exitEditMode()
@@ -251,45 +251,107 @@ async function handleSave(data) {
   }
 
   try {
+    const node = editingNode.value
+    const nodeId = node.id
+    const nodeSnapshot = { ...node, data: { ...node.data } }
+
+    if (data.image) {
+      const previewPatch = buildNodeImagePatch(node, data.image)
+      canvasStore.updateNodeData(nodeId, {
+        ...previewPatch,
+        editSession: null,
+        _editSaving: true
+      })
+      nodeEditCache.delete(nodeId)
+    }
+
+    canvasStore.exitEditMode()
+
+    if (data.image) {
+      uploadEditedImageInBackground(nodeId, nodeSnapshot, data)
+    }
+  } catch (error) {
+    console.error('[ImageEditMode] handleSave 异常:', error)
+    canvasStore.exitEditMode()
+  }
+}
+
+// 后台上传编辑后的图片和蒙版
+async function uploadEditedImageInBackground(nodeId, nodeSnapshot, data) {
+  try {
     let newImageUrl = null
-    let savedNode = null
 
     if (data.image) {
       newImageUrl = await updateNodeImage(data.image, data.exportInfo)
     }
 
     if (newImageUrl) {
-      const node = editingNode.value
-      const nodePatch = buildNodeImagePatch(node, newImageUrl)
-      canvasStore.updateNodeData(node.id, {
+      const nodePatch = buildNodeImagePatch(nodeSnapshot, newImageUrl)
+      canvasStore.updateNodeData(nodeId, {
         ...nodePatch,
-        editSession: null
+        _editSaving: false
       })
-      nodeEditCache.delete(node.id)
-      savedNode = {
-        ...node,
-        data: {
-          ...node.data,
-          ...nodePatch
-        }
+
+      const savedNode = {
+        ...nodeSnapshot,
+        data: { ...nodeSnapshot.data, ...nodePatch }
       }
+
+      if (data.editState) {
+        persistEditSessionInBackground(savedNode, data.editState, newImageUrl, data.exportInfo)
+      }
+    } else {
+      canvasStore.updateNodeData(nodeId, { _editSaving: false })
     }
 
-    // 如果有蒙版数据，上传蒙版并保存到节点
     if (data.hasMask && data.mask) {
-      await uploadAndSaveMask(data.mask)
+      await uploadAndSaveMaskForNode(nodeId, nodeSnapshot, data.mask)
       console.log('[ImageEditMode] 蒙版已生成并保存')
     }
 
-    canvasStore.exitEditMode()
-
-    if (newImageUrl && data.editState && savedNode) {
-      persistEditSessionInBackground(savedNode, data.editState, newImageUrl, data.exportInfo)
-    }
+    console.log('[ImageEditMode] 后台上传完成')
   } catch (error) {
-    console.error('[ImageEditMode] 保存失败:', error)
-    alert('保存失败，请重试')
-    return
+    console.error('[ImageEditMode] 后台上传失败:', error)
+    canvasStore.updateNodeData(nodeId, { _editSaving: false })
+  }
+}
+
+// 上传蒙版并创建新的蒙版图片节点（使用快照中的节点信息）
+async function uploadAndSaveMaskForNode(nodeId, nodeSnapshot, maskDataUrl) {
+  if (!maskDataUrl) return
+
+  const response = await fetch(maskDataUrl)
+  const blob = await response.blob()
+  const file = new File([blob], `mask_${Date.now()}.png`, { type: 'image/png' })
+
+  const { uploadImages } = await import('@/api/canvas/nodes')
+  const uploadedUrls = await uploadImages([file])
+
+  if (uploadedUrls?.length > 0) {
+    const maskUrl = uploadedUrls[0]
+
+    canvasStore.updateNodeData(nodeId, { maskUrl })
+
+    const nodeWidth = 280
+    const gap = 50
+    const newNodePosition = {
+      x: nodeSnapshot.position.x + nodeWidth + gap,
+      y: nodeSnapshot.position.y
+    }
+
+    canvasStore.addNode({
+      type: 'image',
+      position: newNodePosition,
+      data: {
+        title: '蒙版',
+        sourceImages: [maskUrl],
+        nodeRole: 'source',
+        isMask: true,
+        sourceNodeId: nodeId
+      }
+    })
+  } else {
+    throw new Error('上传蒙版失败')
   }
 }
 

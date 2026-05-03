@@ -2,15 +2,21 @@
 /**
  * CanvasSpaceSwitcher.vue - 画布右上角空间快速切换按钮
  * 显示当前空间名称，点击展开下拉菜单切换全局空间
+ *
+ * 切换空间时自动保存当前工作流，然后关闭所有标签回到画布初始页面，
+ * 保证不同空间的工作流数据完全隔离。
  */
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, toRaw, onMounted, onUnmounted } from 'vue'
 import { useTeamStore } from '@/stores/team'
+import { useCanvasStore } from '@/stores/canvas'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
+const canvasStore = useCanvasStore()
 
 const isOpen = ref(false)
+const isSwitching = ref(false)
 const dropdownRef = ref(null)
 
 const spaces = computed(() => {
@@ -35,17 +41,94 @@ const currentId = computed(() => {
   return `team-${teamStore.globalTeamId.value}`
 })
 
+/**
+ * 保存所有有变更的标签到各自所属空间，然后关闭所有标签。
+ * 已保存的工作流使用标签记录的空间信息；新工作流使用切换前的全局空间。
+ */
+async function saveAllTabsAndReset() {
+  const tabs = canvasStore.workflowTabs
+  if (!tabs.length) {
+    canvasStore.closeAllTabs()
+    return
+  }
+
+  const oldSpaceParams = teamStore.getSpaceParams('current')
+
+  for (const tab of tabs) {
+    if (!tab.hasChanges) continue
+
+    try {
+      const isActive = tab.id === canvasStore.activeTabId
+      const exported = isActive ? canvasStore.exportWorkflowForSave() : null
+      const tabNodes = isActive ? toRaw(exported.nodes) : toRaw(tab.nodes)
+      const tabEdges = isActive ? toRaw(exported.edges) : toRaw(tab.edges)
+      const tabViewport = isActive ? { ...canvasStore.viewport } : tab.viewport
+
+      if (!tabNodes || tabNodes.length === 0) continue
+
+      let spaceType, spaceTeamId
+      if (tab.workflowId && tab.workflowSpaceType) {
+        spaceType = tab.workflowSpaceType
+        spaceTeamId = tab.workflowTeamId
+      } else {
+        spaceType = oldSpaceParams.spaceType
+        spaceTeamId = oldSpaceParams.teamId
+      }
+
+      const { saveWorkflow } = await import('@/api/canvas/workflow')
+
+      if (tab.workflowId) {
+        await saveWorkflow({
+          id: tab.workflowId,
+          name: tab.name,
+          uploadToCloud: false,
+          spaceType,
+          teamId: spaceTeamId,
+          nodes: tabNodes,
+          edges: tabEdges,
+          viewport: tabViewport
+        })
+      } else if (tabNodes.length >= 2) {
+        await saveWorkflow({
+          name: tab.name || `草稿_${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
+          uploadToCloud: false,
+          isDraft: true,
+          spaceType,
+          teamId: spaceTeamId,
+          nodes: tabNodes,
+          edges: tabEdges,
+          viewport: tabViewport
+        })
+      }
+    } catch (e) {
+      console.warn('[SpaceSwitcher] 自动保存标签失败:', tab.name, e?.message)
+    }
+  }
+
+  canvasStore.closeAllTabs()
+}
+
 async function selectSpace(space) {
-  if (space.id === currentId.value) {
+  if (space.id === currentId.value || isSwitching.value) {
     isOpen.value = false
     return
   }
-  if (space.type === 'personal') {
-    teamStore.switchToPersonalSpace()
-  } else {
-    await teamStore.switchToTeam(space.teamId)
+
+  isSwitching.value = true
+  try {
+    await saveAllTabsAndReset()
+
+    if (space.type === 'personal') {
+      teamStore.switchToPersonalSpace()
+    } else {
+      await teamStore.switchToTeam(space.teamId)
+    }
+  } catch (e) {
+    console.error('[SpaceSwitcher] 切换空间失败:', e?.message)
+  } finally {
+    isSwitching.value = false
+    isOpen.value = false
   }
-  isOpen.value = false
 }
 
 function toggleDropdown() {
@@ -69,9 +152,10 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 
 <template>
   <div class="canvas-space-switcher" ref="dropdownRef">
-    <button class="space-trigger" @click="toggleDropdown" :title="'当前空间: ' + teamStore.currentSpaceLabel.value">
-      <span class="space-icon">{{ teamStore.currentSpaceIcon.value }}</span>
-      <span class="space-label">{{ teamStore.currentSpaceLabel.value }}</span>
+    <button class="space-trigger" @click="toggleDropdown" :disabled="isSwitching" :title="'当前空间: ' + teamStore.currentSpaceLabel.value">
+      <span v-if="isSwitching" class="space-icon switching-spinner"></span>
+      <span v-else class="space-icon">{{ teamStore.currentSpaceIcon.value }}</span>
+      <span class="space-label">{{ isSwitching ? '切换中...' : teamStore.currentSpaceLabel.value }}</span>
       <svg class="arrow-icon" :class="{ open: isOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12">
         <polyline points="6 9 12 15 18 9"/>
       </svg>
@@ -205,6 +289,25 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 .check-icon {
   flex-shrink: 0;
   color: var(--canvas-primary, #FBBF24);
+}
+
+.switching-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--canvas-primary, #FBBF24);
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.space-trigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* 动画 */

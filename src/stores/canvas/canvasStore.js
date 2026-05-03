@@ -1917,6 +1917,22 @@ export const useCanvasStore = defineStore('canvas', () => {
   }
   
   /**
+   * 关闭所有标签并重置画布到初始状态
+   */
+  function closeAllTabs() {
+    nodes.value = []
+    edges.value = []
+    viewport.value = { x: 0, y: 0, zoom: 1 }
+    selectedNodeId.value = null
+    selectedEdgeId.value = null
+    selectedNodeIds.value = []
+    workflowMeta.value = null
+    workflowTabs.value = []
+    activeTabId.value = null
+    clearHistory()
+  }
+
+  /**
    * 初始化默认标签（如果没有标签时调用）
    */
   function initDefaultTab() {
@@ -2674,6 +2690,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     markCurrentTabSaved,
     openWorkflowInNewTab,
     initDefaultTab,
+    closeAllTabs,
     getCurrentTab,
     exportWorkflowSession,
     restoreWorkflowSession,

@@ -31,8 +31,7 @@ export function toSameOriginUrl(url) {
   }
 
   if (isCosCdn(url) && isVideoUrl(url)) {
-    const proxyUrl = getCosProxyUrl(url)
-    if (proxyUrl) return getApiUrl(proxyUrl)
+    return url
   }
 
   return url

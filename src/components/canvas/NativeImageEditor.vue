@@ -1189,38 +1189,47 @@ function resetAll() {
 // ==================== 保存/取消 ====================
 
 function save() {
-  const imageDataUrl = mainCanvasRef.value.toDataURL(
-    exportInfo.value.mimeType,
-    exportInfo.value.quality
-  )
-  
-  // 检查是否有蒙版内容（蒙版画布不是全黑）
-  let maskDataUrl = null
-  if (maskCanvasRef.value && maskCtx.value) {
-    const maskData = maskCtx.value.getImageData(0, 0, maskCanvasRef.value.width, maskCanvasRef.value.height)
-    const data = maskData.data
-    let hasMaskContent = false
+  try {
+    const imageDataUrl = mainCanvasRef.value.toDataURL(
+      exportInfo.value.mimeType,
+      exportInfo.value.quality
+    )
     
-    // 检查是否有白色像素（涂抹区域）
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i] > 128) { // R 通道大于 128 说明有白色
-        hasMaskContent = true
-        break
+    let maskDataUrl = null
+    if (maskCanvasRef.value && maskCtx.value) {
+      const maskData = maskCtx.value.getImageData(0, 0, maskCanvasRef.value.width, maskCanvasRef.value.height)
+      const data = maskData.data
+      let hasMaskContent = false
+      
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i] > 128) {
+          hasMaskContent = true
+          break
+        }
+      }
+      
+      if (hasMaskContent) {
+        maskDataUrl = maskCanvasRef.value.toDataURL('image/png')
       }
     }
     
-    if (hasMaskContent) {
-      maskDataUrl = maskCanvasRef.value.toDataURL('image/png')
-    }
+    emit('save', {
+      image: imageDataUrl,
+      mask: maskDataUrl,
+      hasMask: !!maskDataUrl,
+      exportInfo: exportInfo.value,
+      editState: getEditState()
+    })
+  } catch (error) {
+    console.error('[NativeImageEditor] save() 失败:', error)
+    emit('save', {
+      image: null,
+      mask: null,
+      hasMask: false,
+      exportInfo: exportInfo.value,
+      editState: null
+    })
   }
-  
-  emit('save', {
-    image: imageDataUrl,
-    mask: maskDataUrl, // 黑白蒙版图片（涂抹区域白色，其他黑色）
-    hasMask: !!maskDataUrl,
-    exportInfo: exportInfo.value,
-    editState: getEditState()
-  })
 }
 
 function cancel() {
@@ -1335,7 +1344,7 @@ watch(() => props.imageUrl, (newUrl) => {
 </script>
 
 <template>
-  <div class="native-editor-wrapper" ref="containerRef">
+  <div class="native-editor-wrapper" ref="containerRef" :style="{ width: width + 'px' }">
     <!-- 工具栏 -->
     <div class="editor-toolbar">
       <!-- 主工具 -->
@@ -1847,6 +1856,7 @@ watch(() => props.imageUrl, (newUrl) => {
   height: 100%;
   max-height: 100%;
   box-sizing: border-box;
+  min-width: 0;
 }
 
 /* 工具栏 - 固定高度 */
@@ -1857,6 +1867,7 @@ watch(() => props.imageUrl, (newUrl) => {
   overflow-x: auto;
   flex-shrink: 0;
   box-sizing: border-box;
+  width: 100%;
 }
 
 .toolbar-section {
@@ -1951,6 +1962,7 @@ watch(() => props.imageUrl, (newUrl) => {
   overflow-y: hidden;
   flex-shrink: 0;
   box-sizing: border-box;
+  width: 100%;
   /* 隐藏滚动条但保持滚动功能 */
   scrollbar-width: none;
   -ms-overflow-style: none;

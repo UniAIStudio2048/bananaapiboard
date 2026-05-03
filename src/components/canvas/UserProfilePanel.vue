@@ -10,9 +10,11 @@ import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
+import { useCanvasStore } from '@/stores/canvas'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
+const canvasStore = useCanvasStore()
 
 const props = defineProps({
   visible: {
@@ -402,6 +404,15 @@ function closePanel() {
 // 选择空间
 async function selectSpace(type, teamId = null) {
   showSpaceDropdown.value = false
+  const currentSpaceType = teamStore.globalSpaceType.value
+  const currentTeamId = teamStore.globalTeamId.value
+  const isSameSpace = type === 'personal'
+    ? currentSpaceType === 'personal'
+    : currentSpaceType === 'team' && String(currentTeamId) === String(teamId)
+  if (isSameSpace) return
+
+  canvasStore.closeAllTabs()
+
   if (type === 'personal') {
     teamStore.switchToPersonalSpace()
   } else if (type === 'team' && teamId) {
@@ -6035,6 +6046,7 @@ function getLedgerTypeText(type) {
   gap: 10px;
   padding: 12px 16px;
   cursor: pointer;
+  color: rgba(255, 255, 255, 0.9);
   transition: background 0.15s ease;
 }
 
@@ -6863,6 +6875,10 @@ function getLedgerTypeText(type) {
 :root.canvas-theme-light .space-dropdown {
   background: rgba(255, 255, 255, 0.98);
   border-color: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .space-option {
+  color: rgba(0, 0, 0, 0.9);
 }
 
 :root.canvas-theme-light .space-option:hover {
