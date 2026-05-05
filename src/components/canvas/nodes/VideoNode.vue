@@ -23,7 +23,7 @@ import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } fr
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getHighQualityCanvasPreviewUrl, getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
-import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
+import { isModelReferenceMediaUrl, isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { fetchVideoTaskStatus, isVideoHdTask } from '@/utils/videoTaskStatus'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
@@ -3021,7 +3021,7 @@ async function ensureAccessibleUrls(imageUrls) {
     }
   }
   
-  return normalizeModelImageUrls(accessibleUrls).filter(isPreferredModelMediaUrl)
+  return normalizeModelImageUrls(accessibleUrls).filter(isModelReferenceMediaUrl)
 }
 
 // 单次生成请求

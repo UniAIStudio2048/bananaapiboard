@@ -10,6 +10,12 @@ export function isPreferredModelMediaUrl(url) {
   return /^https?:\/\//i.test(url)
 }
 
+export function isModelReferenceMediaUrl(url) {
+  if (!url || typeof url !== 'string') return false
+  if (/^asset:\/\/\S+/i.test(url.trim())) return true
+  return isPreferredModelMediaUrl(url)
+}
+
 function stripImageTransformParams(url) {
   if (url.includes('/api/images/file/')) {
     try {

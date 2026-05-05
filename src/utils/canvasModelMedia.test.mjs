@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  isModelReferenceMediaUrl,
   isPreferredModelMediaUrl,
   normalizeModelImageUrl,
   normalizeModelImageUrls
@@ -34,6 +35,13 @@ test('recognizes cloud CDN and backend proxy URLs but rejects transient inline U
   assert.equal(isPreferredModelMediaUrl('http://localhost:5000/api/images/file/a.jpg'), false)
   assert.equal(isPreferredModelMediaUrl('blob:https://app/123'), false)
   assert.equal(isPreferredModelMediaUrl('data:image/png;base64,abc'), false)
+})
+
+test('allows Seedance asset URIs as model reference media without treating them as public URLs', () => {
+  assert.equal(isPreferredModelMediaUrl('asset://asset-123'), false)
+  assert.equal(isModelReferenceMediaUrl('asset://asset-123'), true)
+  assert.equal(isModelReferenceMediaUrl('https://files.nananobanana.cn/a.jpg'), true)
+  assert.equal(isModelReferenceMediaUrl('blob:https://app/123'), false)
 })
 
 test('normalizes image URL arrays while preserving order', () => {
