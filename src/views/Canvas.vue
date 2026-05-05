@@ -1867,6 +1867,9 @@ function createDownstreamNode(nodeType, nodeTitle) {
       break
   }
   
+  // 保存历史记录
+  canvasStore.saveHistory({ force: true })
+
   // 创建新节点
   const newNode = canvasStore.addNode({
     id: newNodeId,
@@ -1888,8 +1891,6 @@ function createDownstreamNode(nodeType, nodeTitle) {
     })
   }
   
-  // 保存历史记录
-  canvasStore.saveHistory()
   console.log(`[Canvas] 快捷键创建 ${nodeType} 节点，${selectedIds.length} 个源节点连接到该节点`)
 }
 

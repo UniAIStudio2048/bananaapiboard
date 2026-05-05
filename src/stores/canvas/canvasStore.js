@@ -188,7 +188,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
     
     if (!skipHistory) {
-      saveHistory() // 保存历史
+      saveHistory({ force: true }) // 保存历史
     }
     
     // 标记当前标签有变更
@@ -284,7 +284,7 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 删除节点
    */
   function removeNode(nodeId) {
-    saveHistory()
+    saveHistory({ force: true })
     markCurrentTabChanged()
     
     // 删除相关连线（通过 removeEdge 逐条删除，确保 Storyboard 格子图片同步清理）
@@ -307,7 +307,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   function removeNodesBatch(nodeIds) {
     if (!nodeIds || !nodeIds.length) return
     
-    saveHistory()
+    saveHistory({ force: true })
     markCurrentTabChanged()
     
     const nodeIdSet = new Set(nodeIds)
@@ -435,9 +435,9 @@ export const useCanvasStore = defineStore('canvas', () => {
   function disconnectNodeInputs(nodeId) {
     const edgesToRemove = edges.value.filter(e => e.target === nodeId)
     if (edgesToRemove.length > 0) {
+      saveHistory({ force: true })
       edgesToRemove.forEach(e => removeEdge(e.id))
       markCurrentTabChanged()
-      saveHistory()
     }
   }
 
@@ -449,9 +449,9 @@ export const useCanvasStore = defineStore('canvas', () => {
   function disconnectNodeHandle(nodeId, targetHandle) {
     const edgesToRemove = edges.value.filter(e => e.target === nodeId && e.targetHandle === targetHandle)
     if (edgesToRemove.length > 0) {
+      saveHistory({ force: true })
       edgesToRemove.forEach(e => removeEdge(e.id))
       markCurrentTabChanged()
-      saveHistory()
     }
   }
 
@@ -646,7 +646,8 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 🔧 优化：添加节流和数据清理，减少内存占用
    * 🔧 大画布优化：节点越多，历史越少，节流越长
    */
-  function saveHistory() {
+  function saveHistory(options = {}) {
+    const { force = false } = options
     // 如果正在执行历史操作，不保存
     if (isHistoryAction.value) return
     
@@ -664,7 +665,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     // 🔧 节流：避免频繁保存历史
     const now = Date.now()
-    if (now - lastHistorySaveTime < dynamicThrottle) {
+    if (!force && now - lastHistorySaveTime < dynamicThrottle) {
       return
     }
     lastHistorySaveTime = now
@@ -899,7 +900,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   function pasteNodes(position = null) {
     if (!clipboard.value) return
     
-    saveHistory()
+    saveHistory({ force: true })
     
     const { nodes: copiedNodes, edges: copiedEdges, upstreamEdges: copiedUpstream = [] } = clipboard.value
     const idMap = {}
@@ -2036,7 +2037,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       createTab()
     }
     
-    saveHistory() // 保存历史用于撤销
+    saveHistory({ force: true }) // 保存历史用于撤销
     
     const workflowNodes = workflow.nodes || []
     const workflowEdges = workflow.edges || []
@@ -2156,7 +2157,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       return null
     }
     
-    saveHistory()
+    saveHistory({ force: true })
     
     const groupId = `group-${Date.now()}`
     const name = groupName || `新建组`
@@ -2202,7 +2203,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     const group = nodeGroups.value.find(g => g.id === groupId)
     if (!group) return
     
-    saveHistory()
+    saveHistory({ force: true })
     
     // 移除节点的编组标记，恢复可拖拽
     group.nodeIds.forEach(nodeId => {

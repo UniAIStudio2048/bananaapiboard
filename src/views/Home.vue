@@ -11,6 +11,7 @@ import { getTenantHeaders, getModelDisplayName, getAvailableImageModels, getApiU
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { formatPoints } from '@/utils/format'
 import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
+import { normalizeImageHistoryItems } from '@/utils/imageHistoryPrompt'
 import VirtualList from 'vue3-virtual-scroll-list'
 
 const prompt = ref('')
@@ -681,7 +682,7 @@ async function loadHistory(reset = true) {
     if (r.status === 304) return
     if (r.ok) {
       const data = await r.json()
-      const newImages = data.images || []
+      const newImages = normalizeImageHistoryItems(data.images || [])
       hasMoreHistory.value = data.hasMore !== false && newImages.length === HISTORY_PAGE_SIZE
       
       if (reset) {
@@ -735,7 +736,7 @@ async function _refreshHistoryInBackground(headers) {
     const r = await fetch(getApiUrl(`/api/images/history?limit=${HISTORY_PAGE_SIZE}&offset=0`), { headers })
     if (!r.ok || r.status === 304) return
     const data = await r.json()
-    const newImages = data.images || []
+    const newImages = normalizeImageHistoryItems(data.images || [])
     const serverIdSet = new Set(newImages.map(h => h.id))
     const localPendingTasks = history.value.filter(h =>
       !serverIdSet.has(h.id) && (h.status === 'pending' || h.status === 'processing')

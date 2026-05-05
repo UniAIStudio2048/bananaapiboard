@@ -1363,7 +1363,7 @@ function deleteSelectedElements() {
   
   // 删除额外选中的连线（不属于已删节点的独立连线）
   if (selectedEdges.length > 0) {
-    canvasStore.saveHistory()
+    canvasStore.saveHistory({ force: true })
     selectedEdges.forEach(e => canvasStore.removeEdge(e.id))
   }
 }

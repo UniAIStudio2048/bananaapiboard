@@ -4,6 +4,7 @@
  * 数据来自 /api/images/history 和 /api/video/tasks
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { normalizeImageHistoryItem } from '@/utils/imageHistoryPrompt'
 
 /**
  * 获取API基础URL
@@ -102,8 +103,8 @@ export async function getHistory(params = {}) {
         return { 
           type: 'image', 
           data: (data.images || []).map(img => {
-            // 优先使用 user_prompt（用户原始输入），如果没有则回退到 prompt
-            const displayPrompt = img.user_prompt || img.prompt
+            const normalized = normalizeImageHistoryItem(img)
+            const displayPrompt = normalized.prompt
             return {
               id: img.id,
               type: 'image',
@@ -111,8 +112,8 @@ export async function getHistory(params = {}) {
               url: img.url,
               thumbnail_url: generateThumbnailUrl(img.url),
               prompt: displayPrompt, // 显示用户原始输入（不含预设）
-              fullPrompt: img.prompt, // 保留完整提示词（含预设）供查看
-              user_prompt: img.user_prompt, // 用户原始输入
+              fullPrompt: normalized.fullPrompt,
+              user_prompt: normalized.user_prompt,
               model: img.model,
               status: img.status,
               created_at: img.created ? new Date(img.created * 1000).toISOString() : null,

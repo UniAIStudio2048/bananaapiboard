@@ -17,6 +17,15 @@ const POLL_INTERVAL = 3000  // 3秒轮询一次
 const MAX_TASK_AGE = 24 * 60 * 60 * 1000  // 任务最大存活时间：24小时
 const IMAGE_POLL_TIMEOUT = 15 * 60 * 1000  // 图片任务前端轮询超时：15分钟
 const VIDEO_POLL_TIMEOUT = 120 * 60 * 1000  // 视频任务前端轮询超时：120分钟
+const HISTORY_MEDIA_TASK_TYPES = new Set([
+  'image',
+  'video',
+  'audio-edit',
+  'image-hd',
+  'image-panorama',
+  'image-cutout',
+  'video-hd'
+])
 
 // 内存中的任务状态
 let tasks = new Map()
@@ -342,9 +351,12 @@ function notifyTaskComplete(taskId, task) {
     detail: { taskId, task }
   }))
 
-  // 高清/抠图结果已写入服务端历史记录，通知历史面板拉取最新列表
-  if (task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout' || task.type === 'video-hd') {
-    window.dispatchEvent(new CustomEvent('canvas-history-invalidate'))
+  // 生成任务一旦提交就不可撤销；即使关联画布节点后来被删除/撤销，
+  // 完成结果仍应进入服务端历史，通知历史面板重新拉取。
+  if (HISTORY_MEDIA_TASK_TYPES.has(task.type)) {
+    window.dispatchEvent(new CustomEvent('canvas-history-invalidate', {
+      detail: { taskId, task }
+    }))
   }
 }
 

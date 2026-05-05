@@ -4,9 +4,11 @@ import { useRoute } from 'vue-router'
 import { useI18n } from '@/i18n'
 import { redeemVoucher } from '@/api/client'
 import { getMyWorks, getMyPurchases, getMyIncome, deleteWork, toggleWorkVisibility } from '@/api/community'
+import CachedImage from '@/components/CachedImage.vue'
 import { getTheme, setTheme, toggleTheme as toggleThemeUtil, themes } from '@/utils/theme'
 import { getTenantHeaders, getModelDisplayName, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
+import { getHistoryImageDisplayUrl, makeHistoryImagePlaceholder } from '@/utils/historyImageDisplay'
 
 const { t } = useI18n()
 
@@ -1172,6 +1174,10 @@ async function doCheckin() {
 function viewImage(image) {
   selectedImage.value = image
   showImageModal.value = true
+}
+
+function getImageDisplayUrl(image) {
+  return getHistoryImageDisplayUrl(image, getMediaUrl)
 }
 
 function viewVideo(video) {
@@ -2652,9 +2658,16 @@ onUnmounted(() => {
                 v-for="image in recentImages.slice(0, 6)"
                 :key="image.id"
                 @click="viewImage(image)"
-                class="aspect-square rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform duration-200 shadow-md"
+                class="aspect-square rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform duration-200 shadow-md bg-slate-100 dark:bg-dark-700"
               >
-                <img :src="getMediaUrl(image.url)" :alt="image.prompt" class="w-full h-full object-cover" />
+                <CachedImage
+                  :src="getImageDisplayUrl(image)"
+                  :placeholder="makeHistoryImagePlaceholder(image)"
+                  :alt="image.prompt || '历史图片'"
+                  wrapper-class="w-full h-full"
+                  img-class="w-full h-full object-contain"
+                  loading="lazy"
+                />
               </div>
             </div>
           </div>
@@ -2708,16 +2721,16 @@ onUnmounted(() => {
         <!-- 我的生成记录 Tab -->
         <div v-show="activeTab === 'generation-records'" class="space-y-6">
           <div class="card p-2">
-            <div class="flex flex-wrap gap-2">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <button
                 @click="generationRecordTab = 'images'"
-                :class="['px-4 py-2 rounded-lg text-sm font-medium transition-colors', generationRecordTab === 'images' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
+                :class="['w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors text-center whitespace-nowrap', generationRecordTab === 'images' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
               >
                 图片生成记录
               </button>
               <button
                 @click="generationRecordTab = 'videos'"
-                :class="['px-4 py-2 rounded-lg text-sm font-medium transition-colors', generationRecordTab === 'videos' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
+                :class="['w-full px-4 py-2 rounded-lg text-sm font-medium transition-colors text-center whitespace-nowrap', generationRecordTab === 'videos' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-dark-600']"
               >
                 视频生成记录
               </button>
@@ -2760,12 +2773,12 @@ onUnmounted(() => {
             
             <!-- 筛选工具栏 -->
             <div class="mb-4 p-4 bg-slate-50 dark:bg-dark-700 rounded-xl space-y-3">
-              <div class="flex flex-wrap items-center gap-3">
+              <div class="image-history-filter-toolbar grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(150px,170px)_minmax(180px,1fr)_minmax(280px,300px)_auto_auto_auto_auto] items-center gap-3">
                 <!-- 星级筛选下拉 -->
                 <select
                   v-model="imageFilter.rating"
                   :class="[
-                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-all border',
+                    'w-full px-3 py-2 rounded-lg text-sm font-medium transition-all border',
                     imageFilter.rating > 0 
                       ? 'bg-amber-500 text-white border-amber-500' 
                       : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-dark-500'
@@ -2784,36 +2797,36 @@ onUnmounted(() => {
                   v-model="imageFilter.keyword"
                   type="text"
                   placeholder="🔍 搜索提示词/备注..."
-                  class="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 w-48"
+                  class="w-full px-3 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                   @keyup.enter="applyImageFilter"
                 />
                 
                 <!-- 日期筛选 -->
-                <div class="flex items-center gap-2">
+                <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                   <input
                     v-model="imageFilter.dateFrom"
                     type="date"
-                    class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                    class="w-full min-w-0 px-2 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                   />
                   <span class="text-slate-400">-</span>
                   <input
                     v-model="imageFilter.dateTo"
                     type="date"
-                    class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                    class="w-full min-w-0 px-2 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                   />
                 </div>
                 
                 <!-- 排序 -->
                 <select
                   v-model="imageFilter.sortBy"
-                  class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                  class="w-full px-2 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                 >
                   <option value="date">按日期</option>
                   <option value="rating">按星标</option>
                 </select>
                 <button
                   @click="imageFilter.sortOrder = imageFilter.sortOrder === 'desc' ? 'asc' : 'desc'"
-                  class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-500"
+                  class="w-full px-3 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-500 whitespace-nowrap"
                 >
                   {{ imageFilter.sortOrder === 'desc' ? '↓ 降序' : '↑ 升序' }}
                 </button>
@@ -2821,7 +2834,7 @@ onUnmounted(() => {
                 <!-- 查询按钮 -->
                 <button
                   @click="applyImageFilter"
-                  class="px-4 py-1.5 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-all flex items-center gap-1"
+                  class="w-full px-4 py-2 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-all flex items-center justify-center gap-1 whitespace-nowrap"
                 >
                   🔍 查询
                 </button>
@@ -2829,19 +2842,16 @@ onUnmounted(() => {
                 <!-- 重置按钮 -->
                 <button
                   @click="resetImageFilter"
-                  class="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-dark-400 transition-all"
+                  class="w-full px-3 py-2 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-dark-400 transition-all whitespace-nowrap"
                 >
                   重置
                 </button>
-                
-                <!-- 分隔线 -->
-                <div class="flex-1"></div>
                 
                 <!-- 批量操作 -->
                 <button
                   @click="toggleImageSelectMode"
                   :class="[
-                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1',
+                    'w-full px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1 whitespace-nowrap',
                     imageSelectMode 
                       ? 'bg-primary-500 text-white' 
                       : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-primary-900/20'
@@ -2889,107 +2899,116 @@ onUnmounted(() => {
               class="max-h-[800px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-dark-600 scrollbar-track-transparent"
               @scroll="handleScroll"
             >
-              <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
                 <div
                   v-for="image in recentImages"
                   :key="image.id"
                   :class="[
-                    'group relative aspect-square rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300',
+                    'group relative min-h-[260px] rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 bg-white dark:bg-dark-700 border border-slate-200/70 dark:border-dark-600',
                     imageSelectMode && selectedImages.has(image.id) ? 'ring-4 ring-primary-500' : ''
                   ]"
-                  @click="imageSelectMode ? toggleImageSelection(image.id) : null"
+                  @click="imageSelectMode ? toggleImageSelection(image.id) : viewImage(image)"
                 >
-                  <img :src="getMediaUrl(image.url)" :alt="image.prompt" class="w-full h-full object-cover" loading="lazy" />
+                  <div class="relative h-[220px] sm:h-[240px] bg-slate-100 dark:bg-dark-800 flex items-center justify-center history-image-stage">
+                    <CachedImage
+                      :src="getImageDisplayUrl(image)"
+                      :placeholder="makeHistoryImagePlaceholder(image)"
+                      :alt="image.prompt || '历史图片'"
+                      wrapper-class="w-full h-full"
+                      img-class="w-full h-full object-contain"
+                      loading="lazy"
+                    />
                   
-                  <!-- 选择复选框 -->
-                  <div v-if="imageSelectMode" class="absolute top-2 left-2 z-10">
-                    <div :class="[
-                      'w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all',
-                      selectedImages.has(image.id) 
-                        ? 'bg-primary-500 border-primary-500 text-white' 
-                        : 'bg-white/80 border-slate-300'
-                    ]">
-                      <span v-if="selectedImages.has(image.id)" class="text-xs">✓</span>
-                    </div>
-                  </div>
-                  
-                  <!-- 星标和备注标识 -->
-                  <div class="absolute top-2 right-2 flex items-center gap-1">
-                    <!-- 星级显示/编辑 -->
-                    <div v-if="!imageSelectMode" class="relative group/rating">
-                      <button
-                        :class="[
-                          'px-2 py-1 rounded-lg flex items-center gap-0.5 transition-all text-xs',
-                          image.rating > 0 
-                            ? 'bg-amber-500 text-white' 
-                            : 'bg-black/30 text-white/70 hover:bg-amber-500 hover:text-white'
-                        ]"
-                      >
-                        <span v-if="image.rating > 0">{{ '⭐'.repeat(image.rating) }}</span>
-                        <span v-else>☆</span>
-                      </button>
-                      <!-- 星级选择弹出 -->
-                      <div class="absolute right-0 top-full mt-1 hidden group-hover/rating:flex flex-col bg-white dark:bg-dark-700 rounded-lg shadow-xl border border-slate-200 dark:border-dark-600 overflow-hidden z-20">
-                        <button @click.stop="updateImageRating(image.id, 5)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐⭐ 5星</button>
-                        <button @click.stop="updateImageRating(image.id, 4)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐ 4星</button>
-                        <button @click.stop="updateImageRating(image.id, 3)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐ 3星</button>
-                        <button @click.stop="updateImageRating(image.id, 2)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐ 2星</button>
-                        <button @click.stop="updateImageRating(image.id, 1)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐ 1星</button>
-                        <button @click.stop="updateImageRating(image.id, 0)" class="px-3 py-1.5 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">✕ 清除</button>
+                    <!-- 选择复选框 -->
+                    <div v-if="imageSelectMode" class="absolute top-2 left-2 z-10">
+                      <div :class="[
+                        'w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all',
+                        selectedImages.has(image.id) 
+                          ? 'bg-primary-500 border-primary-500 text-white' 
+                          : 'bg-white/80 border-slate-300'
+                      ]">
+                        <span v-if="selectedImages.has(image.id)" class="text-xs">✓</span>
                       </div>
                     </div>
-                    <div v-if="image.note" class="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs">
-                      📝
+                    
+                    <!-- 星标和备注标识 -->
+                    <div class="absolute top-2 right-2 z-10 flex items-center gap-1 history-image-overlay-actions">
+                      <!-- 星级显示/编辑 -->
+                      <div v-if="!imageSelectMode" class="relative group/rating">
+                        <button
+                          :class="[
+                            'px-2 py-1 rounded-lg flex items-center gap-0.5 transition-all text-xs shadow-sm backdrop-blur',
+                            image.rating > 0 
+                              ? 'bg-amber-500 text-white' 
+                              : 'bg-black/35 text-white/80 hover:bg-amber-500 hover:text-white'
+                          ]"
+                        >
+                          <span v-if="image.rating > 0">{{ '⭐'.repeat(image.rating) }}</span>
+                          <span v-else>☆</span>
+                        </button>
+                        <!-- 星级选择弹出 -->
+                        <div class="absolute right-0 top-full mt-1 hidden group-hover/rating:flex flex-col bg-white dark:bg-dark-700 rounded-lg shadow-xl border border-slate-200 dark:border-dark-600 overflow-hidden z-20">
+                          <button @click.stop="updateImageRating(image.id, 5)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐⭐ 5星</button>
+                          <button @click.stop="updateImageRating(image.id, 4)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐⭐ 4星</button>
+                          <button @click.stop="updateImageRating(image.id, 3)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐⭐ 3星</button>
+                          <button @click.stop="updateImageRating(image.id, 2)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐⭐ 2星</button>
+                          <button @click.stop="updateImageRating(image.id, 1)" class="px-3 py-1.5 text-xs hover:bg-amber-50 dark:hover:bg-amber-900/20 whitespace-nowrap">⭐ 1星</button>
+                          <button @click.stop="updateImageRating(image.id, 0)" class="px-3 py-1.5 text-xs hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 whitespace-nowrap">✕ 清除</button>
+                        </div>
+                      </div>
+                      <div v-if="image.note" class="w-7 h-7 rounded-full bg-blue-500 text-white flex items-center justify-center text-xs shadow-sm">
+                        📝
+                      </div>
                     </div>
-                  </div>
-                  
-                  <!-- 悬停遮罩 -->
-                  <div v-if="!imageSelectMode" class="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-2">
-                    <button
-                      @click.stop="viewImage(image)"
-                      class="p-2 bg-white/20 backdrop-blur rounded-lg hover:bg-white/30 transition-colors"
-                      title="查看"
-                    >
-                      <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-                      </svg>
-                    </button>
-                    <button
-                      @click.stop="startEditNote('image', image.id, image.note)"
-                      class="p-2 bg-blue-500/80 backdrop-blur rounded-lg hover:bg-blue-600 transition-colors"
-                      title="编辑备注"
-                    >
-                      <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-                      </svg>
-                    </button>
-                    <a
-                      :href="getMediaUrl(image.url)"
-                      :download="image.note ? `${sanitizeFilename(image.note)}.png` : `image-${image.id}.png`"
-                      class="p-2 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors"
-                      title="下载"
-                      @click.stop
-                    >
-                      <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                      </svg>
-                    </a>
-                    <button
-                      @click.stop="deleteImage(image.id)"
-                      class="p-2 bg-red-500/80 backdrop-blur rounded-lg hover:bg-red-600 transition-colors"
-                      title="删除"
-                    >
-                      <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-                      </svg>
-                    </button>
+                    
+                    <!-- 悬停遮罩 -->
+                    <div v-if="!imageSelectMode" class="absolute inset-0 z-10 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-2">
+                      <button
+                        @click.stop="viewImage(image)"
+                        class="p-2 bg-white/20 backdrop-blur rounded-lg hover:bg-white/30 transition-colors"
+                        title="查看"
+                      >
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                        </svg>
+                      </button>
+                      <button
+                        @click.stop="startEditNote('image', image.id, image.note)"
+                        class="p-2 bg-blue-500/80 backdrop-blur rounded-lg hover:bg-blue-600 transition-colors"
+                        title="编辑备注"
+                      >
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                        </svg>
+                      </button>
+                      <a
+                        :href="getMediaUrl(image.url)"
+                        :download="image.note ? `${sanitizeFilename(image.note)}.png` : `image-${image.id}.png`"
+                        class="p-2 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors"
+                        title="下载"
+                        @click.stop
+                      >
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                      </a>
+                      <button
+                        @click.stop="deleteImage(image.id)"
+                        class="p-2 bg-red-500/80 backdrop-blur rounded-lg hover:bg-red-600 transition-colors"
+                        title="删除"
+                      >
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                   
                   <!-- 信息标签 -->
-                  <div class="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
-                    <p v-if="image.note" class="text-xs text-amber-300 font-medium truncate mb-0.5">📝 {{ image.note }}</p>
-                    <p class="text-xs text-white truncate">{{ image.prompt }}</p>
+                  <div class="p-3 bg-white dark:bg-dark-700">
+                    <p v-if="image.note" class="text-xs text-amber-600 dark:text-amber-300 font-medium line-clamp-2 mb-1">📝 {{ image.note }}</p>
+                    <p class="text-xs text-slate-700 dark:text-slate-200 line-clamp-3 break-words leading-relaxed">{{ image.prompt || '无提示词' }}</p>
                   </div>
                 </div>
               </div>
@@ -3058,12 +3077,12 @@ onUnmounted(() => {
             
             <!-- 筛选工具栏 -->
             <div class="mb-4 p-4 bg-slate-50 dark:bg-dark-700 rounded-xl space-y-3">
-              <div class="flex flex-wrap items-center gap-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-[minmax(150px,170px)_minmax(180px,1fr)_minmax(280px,300px)_auto_auto_auto_auto] items-center gap-3">
                 <!-- 星级筛选下拉 -->
                 <select
                   v-model="videoFilter.rating"
                   :class="[
-                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-all border',
+                    'w-full px-3 py-2 rounded-lg text-sm font-medium transition-all border',
                     videoFilter.rating > 0 
                       ? 'bg-amber-500 text-white border-amber-500' 
                       : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-dark-500'
@@ -3082,36 +3101,36 @@ onUnmounted(() => {
                   v-model="videoFilter.keyword"
                   type="text"
                   placeholder="🔍 搜索提示词/备注..."
-                  class="px-3 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 w-48"
+                  class="w-full px-3 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                   @keyup.enter="applyVideoFilter"
                 />
                 
                 <!-- 日期筛选 -->
-                <div class="flex items-center gap-2">
+                <div class="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
                   <input
                     v-model="videoFilter.dateFrom"
                     type="date"
-                    class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                    class="w-full min-w-0 px-2 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                   />
                   <span class="text-slate-400">-</span>
                   <input
                     v-model="videoFilter.dateTo"
                     type="date"
-                    class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                    class="w-full min-w-0 px-2 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                   />
                 </div>
                 
                 <!-- 排序 -->
                 <select
                   v-model="videoFilter.sortBy"
-                  class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
+                  class="w-full px-2 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300"
                 >
                   <option value="date">按日期</option>
                   <option value="rating">按星标</option>
                 </select>
                 <button
                   @click="videoFilter.sortOrder = videoFilter.sortOrder === 'desc' ? 'asc' : 'desc'"
-                  class="px-2 py-1.5 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-500"
+                  class="w-full px-3 py-2 rounded-lg text-sm bg-white dark:bg-dark-600 border border-slate-200 dark:border-dark-500 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-dark-500 whitespace-nowrap"
                 >
                   {{ videoFilter.sortOrder === 'desc' ? '↓ 降序' : '↑ 升序' }}
                 </button>
@@ -3119,7 +3138,7 @@ onUnmounted(() => {
                 <!-- 查询按钮 -->
                 <button
                   @click="applyVideoFilter"
-                  class="px-4 py-1.5 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-all flex items-center gap-1"
+                  class="w-full px-4 py-2 rounded-lg text-sm font-medium bg-primary-500 text-white hover:bg-primary-600 transition-all flex items-center justify-center gap-1 whitespace-nowrap"
                 >
                   🔍 查询
                 </button>
@@ -3127,19 +3146,16 @@ onUnmounted(() => {
                 <!-- 重置按钮 -->
                 <button
                   @click="resetVideoFilter"
-                  class="px-3 py-1.5 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-dark-400 transition-all"
+                  class="w-full px-3 py-2 rounded-lg text-sm font-medium bg-slate-200 dark:bg-dark-500 text-slate-600 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-dark-400 transition-all whitespace-nowrap"
                 >
                   重置
                 </button>
-                
-                <!-- 分隔线 -->
-                <div class="flex-1"></div>
                 
                 <!-- 批量操作 -->
                 <button
                   @click="toggleVideoSelectMode"
                   :class="[
-                    'px-3 py-1.5 rounded-lg text-sm font-medium transition-all flex items-center gap-1',
+                    'w-full px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-1 whitespace-nowrap',
                     videoSelectMode 
                       ? 'bg-primary-500 text-white' 
                       : 'bg-white dark:bg-dark-600 text-slate-600 dark:text-slate-300 hover:bg-primary-50 dark:hover:bg-primary-900/20'
@@ -4759,10 +4775,17 @@ onUnmounted(() => {
     </div>
 
     <!-- 图片查看模态框 -->
-    <div v-if="showImageModal && selectedImage" class="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-4" @click.self="showImageModal = false">
-      <div class="max-w-5xl w-full">
-        <div class="relative">
-          <img :src="getMediaUrl(selectedImage.url)" :alt="selectedImage.prompt" class="w-full h-auto rounded-xl shadow-2xl" />
+    <div v-if="showImageModal && selectedImage" class="fixed inset-0 bg-black/90 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4" @click.self="showImageModal = false">
+      <div class="w-full max-w-[96vw] max-h-[96vh] flex flex-col">
+        <div class="relative min-h-0 flex-1 flex items-center justify-center">
+          <CachedImage
+            :src="getImageDisplayUrl(selectedImage)"
+            :placeholder="makeHistoryImagePlaceholder(selectedImage)"
+            :alt="selectedImage.prompt || '预览图片'"
+            wrapper-class="max-w-full max-h-[calc(96vh-190px)] flex items-center justify-center"
+            img-class="max-w-full max-h-[calc(96vh-190px)] w-auto h-auto object-contain rounded-xl shadow-2xl"
+            loading="eager"
+          />
           <div class="absolute top-4 right-4 flex space-x-2">
             <!-- 星级选择器 -->
             <div class="relative group/modalrating">
@@ -4816,7 +4839,7 @@ onUnmounted(() => {
             </button>
           </div>
         </div>
-        <div class="mt-4 bg-white/10 backdrop-blur rounded-xl p-4">
+        <div class="mt-3 bg-white/10 backdrop-blur rounded-xl p-4 shrink-0 max-h-[180px] overflow-y-auto">
           <!-- 备注显示 -->
           <div v-if="selectedImage.note" class="mb-3 p-2 bg-amber-500/20 rounded-lg">
             <p class="text-amber-300 text-sm font-medium flex items-center">
@@ -4825,8 +4848,8 @@ onUnmounted(() => {
             </p>
           </div>
           
-          <p class="text-white font-medium mb-2">{{ selectedImage.prompt }}</p>
-          <div class="flex items-center justify-between text-sm text-white/70">
+          <p class="text-white font-medium mb-2 whitespace-pre-wrap break-words leading-relaxed">{{ selectedImage.prompt || '无提示词' }}</p>
+          <div class="flex flex-wrap items-center justify-between gap-2 text-sm text-white/70">
             <span>{{ getImageModelName(selectedImage.model) }} · {{ selectedImage.aspectRatio }} · {{ selectedImage.imageSize || 'N/A' }}</span>
             <span>{{ new Date(selectedImage.createdAt).toLocaleString() }}</span>
           </div>

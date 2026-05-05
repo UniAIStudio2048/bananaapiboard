@@ -579,6 +579,20 @@ function formatSize(item) {
   return ''
 }
 
+async function copyHistoryPrompt(e, item) {
+  if (e) e.stopPropagation()
+  const prompt = item?.prompt || ''
+  if (!prompt) return
+
+  try {
+    await navigator.clipboard.writeText(prompt)
+    showToast('提示词已复制', 'success')
+  } catch (error) {
+    console.error('[HistoryPanel] 复制提示词失败:', error)
+    showToast('复制失败，请手动复制', 'error')
+  }
+}
+
 // 删除历史记录 - 打开确认弹窗
 function handleDelete(e, item) {
   if (e) e.stopPropagation()
@@ -1912,7 +1926,7 @@ onUnmounted(() => {
                   <div class="hover-overlay">
                     <div class="overlay-content">
                       <div class="overlay-model" v-if="item.model">{{ item.model }}</div>
-                      <div class="overlay-prompt" v-if="item.prompt">{{ item.prompt.length > 60 ? item.prompt.slice(0, 60) + '...' : item.prompt }}</div>
+                      <div class="overlay-prompt-full" v-if="item.prompt">{{ item.prompt }}</div>
                       <div class="overlay-time">{{ formatDate(item.created_at) }}</div>
                       <!-- 团队空间用户署名 -->
                       <div v-if="teamStore.isInTeamSpace.value && item.last_updated_by_username" class="overlay-author">
@@ -1923,11 +1937,31 @@ onUnmounted(() => {
                         {{ item.last_updated_by_username }}
                       </div>
                     </div>
-                    <button 
+                  </div>
+                  <div class="history-card-actions">
+                    <button
+                      v-if="item.prompt"
+                      class="overlay-copy-prompt"
+                      @click.stop="copyHistoryPrompt($event, item)"
+                      title="复制提示词"
+                      aria-label="复制提示词"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
+                    </button>
+                    <button
                       class="overlay-delete"
                       @click.stop="handleDelete($event, item)"
                       :title="t('common.delete')"
-                    >×</button>
+                      :aria-label="t('common.delete')"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -2229,6 +2263,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   padding: 20px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -2237,9 +2272,15 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   font-size: 17px;
   font-weight: 600;
   color: #fff;
+}
+
+.header-title span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .header-title svg {
@@ -2252,6 +2293,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+  flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .header-btn {
@@ -2283,6 +2326,8 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
   padding: 8px 16px;
   background: rgba(59, 130, 246, 0.1);
   border-bottom: 1px solid rgba(59, 130, 246, 0.2);
@@ -2383,9 +2428,10 @@ onUnmounted(() => {
 /* 文件类型筛选 */
 .type-filter {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 12px 12px;
-  overflow-x: auto;
+  overflow-x: hidden;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   flex-shrink: 0;
 }
@@ -2398,6 +2444,7 @@ onUnmounted(() => {
 .type-btn {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 4px;
   padding: 6px 10px;
   background: rgba(255, 255, 255, 0.04);
@@ -2408,7 +2455,8 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
-  flex-shrink: 0;
+  flex: 1 1 96px;
+  min-width: 0;
 }
 
 .type-btn:hover {
@@ -2873,14 +2921,54 @@ onUnmounted(() => {
   width: fit-content;
 }
 
-.overlay-prompt {
+.overlay-prompt-full {
   font-size: 10px;
   color: rgba(255, 255, 255, 0.7);
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 112px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.overlay-prompt-full::-webkit-scrollbar {
+  width: 4px;
+}
+
+.overlay-prompt-full::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+}
+
+.history-card-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 30;
+}
+
+.overlay-copy-prompt {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.7);
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+
+.overlay-copy-prompt:hover {
+  background: #3b82f6;
+  color: #fff;
 }
 
 .overlay-time {
@@ -2904,22 +2992,17 @@ onUnmounted(() => {
 }
 
 .overlay-delete {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   background: rgba(0, 0, 0, 0.7);
   border: none;
-  border-radius: 50%;
+  border-radius: 8px;
   color: rgba(255, 255, 255, 0.7);
-  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.15s;
-  z-index: 2;
 }
 
 .overlay-delete:hover {
@@ -3218,12 +3301,23 @@ onUnmounted(() => {
 /* 提示词 */
 .preview-prompt {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.72);
   line-height: 1.5;
-  text-align: center;
-  max-height: 60px;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: min(28vh, 220px);
   overflow-y: auto;
-  padding: 0 20px;
+  padding: 0 8px 0 0;
+}
+
+.preview-prompt::-webkit-scrollbar {
+  width: 4px;
+}
+
+.preview-prompt::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
 }
 
 /* 操作按钮组 */
@@ -3732,8 +3826,12 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.08) !important;
 }
 
-:root.canvas-theme-light .history-panel .overlay-prompt {
+:root.canvas-theme-light .history-panel .overlay-prompt-full {
   color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .history-panel .overlay-prompt-full::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.22) !important;
 }
 
 :root.canvas-theme-light .history-panel .overlay-time {
@@ -3748,6 +3846,16 @@ onUnmounted(() => {
 :root.canvas-theme-light .history-panel .overlay-delete {
   background: rgba(255, 255, 255, 0.9) !important;
   color: rgba(0, 0, 0, 0.6) !important;
+}
+
+:root.canvas-theme-light .history-panel .overlay-copy-prompt {
+  background: rgba(255, 255, 255, 0.9) !important;
+  color: rgba(0, 0, 0, 0.65) !important;
+}
+
+:root.canvas-theme-light .history-panel .overlay-copy-prompt:hover {
+  background: #3b82f6 !important;
+  color: #fff !important;
 }
 
 :root.canvas-theme-light .history-panel .overlay-delete:hover {
