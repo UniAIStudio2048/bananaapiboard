@@ -175,11 +175,13 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
+  min-width: 74px;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 10px;
   color: rgba(255, 255, 255, 0.85);
   font-size: 14px;
+  white-space: nowrap;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -211,7 +213,11 @@ onUnmounted(() => {
 }
 
 .lang-name {
+  display: inline-block;
   font-weight: 500;
+  white-space: nowrap;
+  writing-mode: horizontal-tb;
+  line-height: 1;
 }
 
 .dropdown-arrow {

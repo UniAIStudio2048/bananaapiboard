@@ -209,10 +209,10 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
     <nav v-if="route.path !== '/' && route.path !== '/canvas' && route.path !== '/workflows' && !route.path.startsWith('/community')" class="glass sticky top-0 z-50 border-b border-slate-200/50 dark:border-dark-600/50">
       <div class="mx-auto" 
         :class="isWidescreenMode && route.path === '/' ? 'px-0' : 'max-w-7xl px-4 sm:px-6 lg:px-8'">
-        <div class="flex justify-between items-center h-16"
+        <div class="flex justify-between items-center h-16 gap-2 sm:gap-4"
           :class="isWidescreenMode && route.path === '/' ? 'px-4' : ''">
           <!-- Logo -->
-          <div class="flex items-center space-x-3">
+          <div class="flex items-center space-x-3 shrink-0 min-w-0">
             <!-- 品牌Logo图片（如果已配置） -->
             <img 
               v-if="brandConfig.logo && brandConfig.logo !== '/logo.png'" 
@@ -225,11 +225,11 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
               <span class="text-2xl">🍌</span>
             </div>
             <!-- 品牌名称 -->
-            <span class="text-xl font-bold gradient-text">{{ brandConfig.name || 'Nanobanana' }}</span>
+            <span class="text-base sm:text-xl font-bold gradient-text whitespace-nowrap">{{ brandConfig.name || 'Nanobanana' }}</span>
           </div>
 
           <!-- 桌面端导航 -->
-          <div class="hidden md:flex items-center space-x-2">
+          <div class="hidden md:flex items-center space-x-1 sm:space-x-2 min-w-0 flex-1 justify-end overflow-visible">
             <!-- 生成下拉菜单 -->
             <div class="relative generate-menu-container">
               <button
@@ -295,19 +295,19 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
             </button>
             
             <!-- 积分和余额显示 -->
-            <div v-if="me" class="ml-4 flex items-center space-x-2">
+            <div v-if="me" class="ml-2 sm:ml-4 flex items-center space-x-1 sm:space-x-2 shrink-0">
               <!-- 套餐积分 -->
-              <div class="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow" :title="t('user.packagePointsDesc')">
+              <div class="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="t('user.packagePointsDesc')">
                 <span class="mr-1">💎</span>
                 {{ formatPoints(me.package_points) }} {{ t('user.points') }}
               </div>
               <!-- 永久积分 -->
-              <div class="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow" :title="t('user.permanentPointsDesc')">
+              <div class="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="t('user.permanentPointsDesc')">
                 <span class="mr-1">⭐</span>
                 {{ formatPoints(me.points) }} {{ t('user.points') }}
               </div>
               <!-- 余额 -->
-              <div class="px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 rounded-full text-white text-sm font-medium shadow-lg">
+              <div class="px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 rounded-full text-white text-sm font-medium shadow-lg whitespace-nowrap shrink-0">
                 <span class="mr-1">💰</span>
                 ¥{{ ((me.balance || 0) / 100).toFixed(2) }}
               </div>
@@ -632,7 +632,7 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
 
 <style scoped>
 .nav-link {
-  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  @apply px-3 sm:px-4 py-2 rounded-lg font-medium transition-all duration-200 whitespace-nowrap shrink-0;
   @apply text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400;
   @apply hover:bg-primary-50 dark:hover:bg-primary-900/20;
 }

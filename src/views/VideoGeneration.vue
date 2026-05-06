@@ -1355,12 +1355,88 @@ function loadMoreVideoHistory() {
   loadHistory(false)
 }
 
+function buildSafeVideoUrl(videoUrl) {
+  if (!videoUrl) return ''
+  // 展示链路优先使用原始媒体地址，确保走 CDN 域名
+  return getMediaUrl(videoUrl)
+}
+
+function buildVideoProxyUrl(videoUrl) {
+  if (!videoUrl) return ''
+  if (isCosCdn(videoUrl) && isVideoMediaFile(videoUrl)) {
+    const proxyUrl = getCosProxyUrl(videoUrl)
+    if (proxyUrl) return getApiUrl(proxyUrl)
+  }
+  return toSameOriginUrl(videoUrl)
+}
+
 // 视频首帧缩略图提取（当 cover_url 不存在时的后备方案）
 const videoThumbnails = ref({})
 const videoThumbnailFailed = ref({})
+const remoteThumbnailFailed = ref({})
 const processingThumbnailCount = ref(0)
 const MAX_CONCURRENT_THUMBNAILS = 3
 const thumbnailQueue = ref([])
+const THUMBNAIL_SEEK_CANDIDATES = [1.2, 0.3, 2.0]
+const DEFAULT_VIDEO_POSTER = `data:image/svg+xml;utf8,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#0f172a"/>
+        <stop offset="100%" stop-color="#1e293b"/>
+      </linearGradient>
+    </defs>
+    <rect width="640" height="360" fill="url(#bg)"/>
+    <circle cx="320" cy="180" r="48" fill="rgba(59,130,246,0.25)" stroke="#60a5fa" stroke-width="2"/>
+    <polygon points="306,154 306,206 350,180" fill="#93c5fd"/>
+    <text x="320" y="252" fill="#cbd5e1" font-size="16" text-anchor="middle" font-family="Arial, sans-serif">视频封面加载中</text>
+  </svg>`
+)}` 
+
+function buildThumbnailSeekCandidates(durationSec) {
+  const duration = Number(durationSec)
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return [...THUMBNAIL_SEEK_CANDIDATES]
+  }
+  const maxSeek = Math.max(0.1, duration - 0.1)
+  const candidates = THUMBNAIL_SEEK_CANDIDATES
+    .map(t => Math.min(t, maxSeek))
+    .filter(t => t >= 0)
+  return [...new Set(candidates)]
+}
+
+function getVideoFallbackPoster() {
+  return DEFAULT_VIDEO_POSTER
+}
+
+function onVideoThumbnailError(item) {
+  if (!item?.id) return
+  remoteThumbnailFailed.value[item.id] = true
+}
+
+function isCanvasFrameTooDark(ctx, width, height) {
+  try {
+    const { data } = ctx.getImageData(0, 0, width, height)
+    if (!data || data.length === 0) return false
+    let samples = 0
+    let darkSamples = 0
+    const step = 40 // 每 10 像素采样一次（RGBA=4）
+    for (let i = 0; i < data.length; i += step) {
+      const r = data[i]
+      const g = data[i + 1]
+      const b = data[i + 2]
+      const alpha = data[i + 3]
+      if (alpha === 0) continue
+      const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+      if (luminance < 22) darkSamples++
+      samples++
+    }
+    if (samples === 0) return false
+    return darkSamples / samples > 0.92
+  } catch {
+    return false
+  }
+}
 
 function extractVideoThumbnail(item) {
   if (!item.video_url || item.cover_url || item.thumbnail_url) return
@@ -1378,17 +1454,69 @@ function extractVideoThumbnail(item) {
   const video = document.createElement('video')
   video.muted = true
   video.preload = 'metadata'
+  video.crossOrigin = 'anonymous'
 
-  const safeUrl = (() => {
-    let url = toSameOriginUrl(item.video_url)
-    if (isCosCdn(item.video_url) && isVideoMediaFile(item.video_url)) {
-      const proxyUrl = getCosProxyUrl(item.video_url)
-      if (proxyUrl) url = getApiUrl(proxyUrl)
+  const safeUrl = buildSafeVideoUrl(item.video_url)
+  const proxyUrl = buildVideoProxyUrl(item.video_url)
+  let retriedWithProxy = false
+  let proxyBlobObjectUrl = ''
+  let seekCandidates = [...THUMBNAIL_SEEK_CANDIDATES]
+  let seekIndex = 0
+  let seekStarted = false
+  let extractionTimeoutId = null
+
+  const scheduleExtractionTimeout = () => {
+    if (extractionTimeoutId) clearTimeout(extractionTimeoutId)
+    extractionTimeoutId = setTimeout(() => {
+      if (!videoThumbnails.value[item.id] && !videoThumbnailFailed.value[item.id]) {
+        videoThumbnailFailed.value[item.id] = true
+        cleanup()
+      }
+    }, 30000)
+  }
+
+  const resetSeekState = () => {
+    seekStarted = false
+    seekIndex = 0
+  }
+
+  const revokeProxyBlobUrl = () => {
+    if (!proxyBlobObjectUrl) return
+    URL.revokeObjectURL(proxyBlobObjectUrl)
+    proxyBlobObjectUrl = ''
+  }
+
+  const applyVideoSource = (src) => {
+    scheduleExtractionTimeout()
+    video.src = src
+    video.load()
+  }
+
+  const loadProxyBlobSource = async () => {
+    if (retriedWithProxy || !proxyUrl || proxyUrl === safeUrl) return false
+    retriedWithProxy = true
+    try {
+      // 代理域返回 ACAO:*，这里必须使用匿名 CORS，避免凭证模式导致读流失败
+      const response = await fetch(proxyUrl, { credentials: 'omit', mode: 'cors' })
+      if (!response.ok) return false
+      const blob = await response.blob()
+      revokeProxyBlobUrl()
+      proxyBlobObjectUrl = URL.createObjectURL(blob)
+      resetSeekState()
+      applyVideoSource(proxyBlobObjectUrl)
+      return true
+    } catch (error) {
+      console.warn('[VideoGeneration] 代理源拉取失败:', error?.message || error)
+      return false
     }
-    return url
-  })()
+  }
 
   const cleanup = () => {
+    if (extractionTimeoutId) {
+      clearTimeout(extractionTimeoutId)
+      extractionTimeoutId = null
+    }
+    revokeProxyBlobUrl()
     video.remove()
     processingThumbnailCount.value--
     if (thumbnailQueue.value.length > 0) {
@@ -1398,8 +1526,30 @@ function extractVideoThumbnail(item) {
     }
   }
 
-  video.onloadeddata = () => { video.currentTime = 0.1 }
-  video.onseeked = () => {
+  const seekNextCandidate = () => {
+    if (seekIndex >= seekCandidates.length) {
+      videoThumbnailFailed.value[item.id] = true
+      cleanup()
+      return
+    }
+    const targetTime = seekCandidates[seekIndex++]
+    try {
+      video.currentTime = targetTime
+    } catch {
+      seekNextCandidate()
+    }
+  }
+
+  const startSeeking = () => {
+    if (seekStarted) return
+    seekStarted = true
+    seekCandidates = buildThumbnailSeekCandidates(video.duration)
+    seekNextCandidate()
+  }
+
+  video.onloadedmetadata = startSeeking
+  video.onloadeddata = startSeeking
+  video.onseeked = async () => {
     try {
       const canvas = document.createElement('canvas')
       const w = video.videoWidth || 320
@@ -1408,32 +1558,46 @@ function extractVideoThumbnail(item) {
       const scale = Math.min(1, maxDim / Math.max(w, h))
       canvas.width = w * scale
       canvas.height = h * scale
-      canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height)
+      const ctx = canvas.getContext('2d')
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      if (isCanvasFrameTooDark(ctx, canvas.width, canvas.height) && seekIndex < seekCandidates.length) {
+        seekNextCandidate()
+        return
+      }
       videoThumbnails.value[item.id] = canvas.toDataURL('image/jpeg', 0.7)
     } catch (e) {
+      const message = e?.message || ''
+      const isTaintedCanvas = message.includes('Tainted canvases may not be exported')
+      if (isTaintedCanvas && await loadProxyBlobSource()) {
+        return
+      }
+      if (seekIndex < seekCandidates.length) {
+        seekNextCandidate()
+        return
+      }
       console.warn('[VideoGeneration] 缩略图提取失败:', e.message)
       videoThumbnailFailed.value[item.id] = true
     }
     cleanup()
   }
-  video.onerror = () => {
+  video.onerror = async () => {
+    if (await loadProxyBlobSource()) {
+      return
+    }
     videoThumbnailFailed.value[item.id] = true
     cleanup()
   }
-  setTimeout(() => {
-    if (!videoThumbnails.value[item.id] && !videoThumbnailFailed.value[item.id]) {
-      videoThumbnailFailed.value[item.id] = true
-      cleanup()
-    }
-  }, 8000)
-  video.src = safeUrl
+  applyVideoSource(safeUrl)
 }
 
 function getVideoThumbnail(item) {
-  if (item.cover_url) return getMediaUrl(item.cover_url)
-  if (item.thumbnail_url) return getMediaUrl(item.thumbnail_url)
+  if (!remoteThumbnailFailed.value[item.id]) {
+    if (item.cover_url) return getMediaUrl(item.cover_url)
+    if (item.thumbnail_url) return getMediaUrl(item.thumbnail_url)
+  }
   if (videoThumbnails.value[item.id]) return videoThumbnails.value[item.id]
-  if (item.video_url && item.status === 'SUCCESS') {
+  if (videoThumbnailFailed.value[item.id]) return getVideoFallbackPoster()
+  if (item.video_url && isCompletedStatus(item.status)) {
     extractVideoThumbnail(item)
   }
   return null
@@ -2693,10 +2857,11 @@ onUnmounted(() => {
                   :src="getVideoThumbnail(item)"
                   class="w-full h-full object-cover"
                   loading="lazy"
+                  @error="onVideoThumbnailError(item)"
                 />
                 <video
                   v-else-if="item.video_url"
-                  :src="getMediaUrl(item.video_url)"
+                  :src="buildSafeVideoUrl(item.video_url)"
                   preload="metadata"
                   muted
                   class="w-full h-full object-cover pointer-events-none"
@@ -2854,10 +3019,11 @@ onUnmounted(() => {
                   :src="getVideoThumbnail(item)"
                   class="w-full h-full object-cover"
                   loading="lazy"
+                  @error="onVideoThumbnailError(item)"
                 />
                 <video
                   v-else-if="item.video_url"
-                  :src="getMediaUrl(item.video_url)"
+                  :src="buildSafeVideoUrl(item.video_url)"
                   preload="metadata"
                   muted
                   class="w-full h-full object-cover pointer-events-none"
@@ -3039,7 +3205,7 @@ onUnmounted(() => {
           <video 
             ref="videoPlayerRef"
             v-if="currentVideo?.video_url" 
-            :src="getMediaUrl(currentVideo.video_url)" 
+            :src="buildSafeVideoUrl(currentVideo.video_url)" 
             controls 
             class="w-full h-full object-contain"
             playsinline

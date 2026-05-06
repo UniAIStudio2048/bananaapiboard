@@ -33,6 +33,7 @@ import CameraControlPanel from '../CameraControlPanel.vue'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
 import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
+import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
@@ -79,6 +80,7 @@ const localLabel = ref(props.data.label || 'Image')
 // 本地状态
 const isGenerating = ref(false)
 const errorMessage = ref('')
+const duplicateSubmitGuard = createCanvasDuplicateSubmitGuard()
 
 function isContentSafetyError(msg) {
   if (!msg) return false
@@ -5177,6 +5179,25 @@ async function handleGenerate(options = {}) {
     // 点击确认后，恢复为默认的 1x
     selectedCount.value = 1
     return
+  }
+
+  if (!fromGroup) {
+    const duplicateResult = duplicateSubmitGuard.check(buildCanvasSubmitFingerprint({
+      nodeId: props.id,
+      nodeType: 'image',
+      prompt: finalPrompt,
+      model: selectedModel.value,
+      aspectRatio: selectedAspectRatio.value,
+      imageSize: imageSize.value,
+      selectedCount: selectedCount.value,
+      referenceImages: referenceImages.value,
+      enableGroupGeneration: enableGroupGeneration.value,
+      maxGroupImages: maxGroupImages.value
+    }))
+    if (duplicateResult.blocked) {
+      await showAlert(duplicateResult.message, '重复提交')
+      return
+    }
   }
   
   isGenerating.value = true

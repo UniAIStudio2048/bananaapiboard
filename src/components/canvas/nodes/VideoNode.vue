@@ -24,6 +24,7 @@ import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getHighQualityCanvasPreviewUrl, getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { isModelReferenceMediaUrl, isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
+import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { fetchVideoTaskStatus, isVideoHdTask } from '@/utils/videoTaskStatus'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
@@ -95,6 +96,7 @@ const localLabel = ref(props.data.label || 'Video')
 // 本地状态
 const isGenerating = ref(false)
 const errorMessage = ref('')
+const duplicateSubmitGuard = createCanvasDuplicateSubmitGuard()
 
 function getDisplayErrorMessage(msg) {
   return formatVideoNodeErrorMessage(msg || errorMessage.value || '生成失败')
@@ -3771,6 +3773,27 @@ async function handleGenerate() {
   // 检查并发限制
   if (selectedCount.value > userConcurrentLimit.value) {
     await showAlert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐`, '并发限制')
+    return
+  }
+
+  const duplicateResult = duplicateSubmitGuard.check(buildCanvasSubmitFingerprint({
+    nodeId: props.id,
+    nodeType: 'video',
+    prompt: finalPrompt,
+    model: selectedModel.value,
+    aspectRatio: selectedAspectRatio.value,
+    duration: selectedDuration.value,
+    selectedCount: selectedCount.value,
+    generationMode: generationMode.value,
+    referenceImages: finalImages,
+    referenceVideos: referenceVideos.value,
+    referenceAudios: referenceAudios.value,
+    seedanceMode: isSeedance2Model.value ? selectedSeedance2Mode.value : '',
+    klingO1Mode: isKlingO1Model.value ? selectedKlingO1Mode.value : '',
+    klingV3OmniMode: isKlingV3OmniModel.value ? selectedKlingV3OmniMode.value : ''
+  }))
+  if (duplicateResult.blocked) {
+    await showAlert(duplicateResult.message, '重复提交')
     return
   }
   
