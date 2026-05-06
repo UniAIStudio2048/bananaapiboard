@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
+import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
 
 const router = useRouter()
 const params = new URLSearchParams(location.search)
@@ -318,6 +319,7 @@ async function submit() {
     try {
       // 清除工作流历史
       localStorage.removeItem('workflow_auto_saves')
+      clearWorkflowSession()
       // 清除后台任务
       localStorage.removeItem('canvas_background_tasks')
       console.log('[Auth] 已清除上一个用户的工作流历史和后台任务')

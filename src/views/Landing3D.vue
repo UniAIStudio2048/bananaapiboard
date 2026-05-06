@@ -337,6 +337,7 @@ import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
 import { getMe } from '@/api/client'
 import { useI18n } from '@/i18n'
+import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 
 const { t } = useI18n()
@@ -722,6 +723,7 @@ const submitAuth = async () => {
     // 避免切换用户时看到上一个用户的数据，导致任务提交失败
     try {
       localStorage.removeItem('workflow_auto_saves')
+      clearWorkflowSession()
       localStorage.removeItem('canvas_background_tasks')
       console.log('[Landing3D] 已清除上一个用户的工作流历史和后台任务')
     } catch (e) {

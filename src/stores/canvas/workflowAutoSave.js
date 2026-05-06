@@ -25,6 +25,21 @@ const MAX_SESSION_STORAGE_SIZE = 2 * 1024 * 1024  // 标签会话最大 2MB
 
 let autoSaveTimer = null
 
+function getCurrentUserId() {
+  try {
+    const directId = localStorage.getItem('user_id') || localStorage.getItem('userId')
+    if (directId) return String(directId)
+
+    const user = JSON.parse(localStorage.getItem('user') || 'null')
+    if (user?.id !== undefined && user?.id !== null) {
+      return String(user.id)
+    }
+  } catch (error) {
+    // 无法读取用户信息时按未登录处理，避免影响普通清理逻辑。
+  }
+  return null
+}
+
 function parseStoredJson(value, fallback) {
   if (typeof value !== 'string') return value ?? fallback
   try {
@@ -317,6 +332,7 @@ export function saveWorkflowSession(session) {
     const payload = {
       tabs,
       activeTabId: tabs.some(tab => tab.id === session.activeTabId) ? session.activeTabId : tabs[0]?.id,
+      userId: getCurrentUserId(),
       savedAt: Date.now()
     }
 
@@ -345,6 +361,12 @@ export function getWorkflowSession() {
     const session = JSON.parse(data)
     const savedAt = session?.savedAt || 0
     if (!Array.isArray(session?.tabs) || session.tabs.length === 0) {
+      localStorage.removeItem(SESSION_STORAGE_KEY)
+      return null
+    }
+
+    const currentUserId = getCurrentUserId()
+    if (currentUserId && session.userId !== currentUserId) {
       localStorage.removeItem(SESSION_STORAGE_KEY)
       return null
     }

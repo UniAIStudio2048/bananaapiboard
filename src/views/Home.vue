@@ -960,8 +960,10 @@ async function generate() {
         ? imageFiles.value[0]
         : null
       payload.aspect_ratio = await resolveAutoAspectRatio(firstImageSrc)
+      payload.aspect_ratio_mode = 'auto'
     } else {
       payload.aspect_ratio = aspectRatio.value
+      payload.aspect_ratio_mode = aspectRatio.value
     }
     
     // 有多档分辨率计价的模型，传递用户选择的尺寸；否则默认 2K

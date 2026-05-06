@@ -1369,7 +1369,9 @@ async function loadUserInfo() {
         console.log('[Canvas] 检测到用户切换，清除上一个用户的工作流历史')
         try {
           localStorage.removeItem('workflow_auto_saves')
+          clearWorkflowSession()
           localStorage.removeItem('canvas_background_tasks')
+          canvasStore.closeAllTabs()
           console.log('[Canvas] 已清除上一个用户的工作流历史和后台任务')
         } catch (e) {
           console.warn('[Canvas] 清除用户数据失败:', e)

@@ -1,0 +1,44 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs and caches
+.cache/
+dist/
+dist-*/
+build/
+coverage/
+
+# Runtime and debug artifacts
+logs/
+*.log
+*.pid
+
+# IDE and local tool state
+.vscode/
+.idea/
+.cursor/
+
+# Binary, model, media, and archive files
+*.mp4
+*.mov
+*.avi
+*.webm
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.tflite
+*.wasm
+*.so
+*.dylib
+*.dll
+*.pack
+*.zip
+*.tar.gz
+
+# Backups and temp files
+*~
+*.bak
+*.bak2

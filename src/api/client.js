@@ -1,5 +1,6 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { logApiRequest, logApiResponse, logApiError, logAuth, logUserAction } from '@/utils/logger'
+import { buildMediaProxyDownloadPath } from './downloadRouting.js'
 
 let KEY = ''
 export function setApiKey(k) { KEY = k || '' }
@@ -390,7 +391,7 @@ export function buildVideoDownloadUrl(url, filename) {
   // 后端会设置 Content-Disposition: attachment 头，解决跨域下载问题
   // 🔧 先清理可能的七牛云处理参数
   const cleanUrl = getQiniuOriginalUrl(url)
-  return getApiUrl(`/api/videos/download?url=${encodeURIComponent(cleanUrl)}&name=${encodeURIComponent(filename || 'video.mp4')}`)
+  return getApiUrl(buildMediaProxyDownloadPath(cleanUrl, filename || 'video.mp4'))
 }
 
 export async function getMe(forceRefresh = false) {
@@ -581,7 +582,7 @@ export async function smartDownload(url, filename) {
   }
 
   function buildProxyUrl(targetUrl) {
-    return getApiUrl(`/api/images/download?${new URLSearchParams({ url: targetUrl, filename: correctedFilename }).toString()}`)
+    return getApiUrl(buildMediaProxyDownloadPath(targetUrl, correctedFilename))
   }
 
   // 自检：通过后端代理获取原图 Content-Length（只读响应头，立即中断 body 传输）

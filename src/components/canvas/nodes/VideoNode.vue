@@ -15,6 +15,7 @@ import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from '
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
+import { useTeamStore } from '@/stores/team'
 import { formatPoints } from '@/utils/format'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
@@ -40,6 +41,7 @@ import { formatVideoNodeErrorMessage } from './video-error-message.js'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 
 const { t, currentLanguage } = useI18n()
+const teamStore = useTeamStore()
 
 const props = defineProps({
   id: String,
@@ -3091,6 +3093,11 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
   }
   
   formData.append('aspect_ratio', selectedAspectRatio.value)
+  const spaceParams = teamStore.getSpaceParams('current')
+  formData.append('spaceType', spaceParams.spaceType)
+  if (spaceParams.teamId) {
+    formData.append('teamId', spaceParams.teamId)
+  }
   
   // VEO3 模型不需要时长参数
   if (!isVeo3Model.value) {
@@ -3378,6 +3385,9 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       // 事件监听已在 onMounted 中设置：background-task-complete/failed/progress
       
       // 任务已提交，立即返回 taskId（不等待轮询结果）
+      window.dispatchEvent(new CustomEvent('canvas-history-invalidate', {
+        detail: { taskId, type: 'video', phase: 'submitted' }
+      }))
       return taskId
     } else if (extractVideoUrl(result)) {
       const videoUrl = extractVideoUrl(result)
@@ -3388,6 +3398,9 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
           url: videoUrl
         }
       })
+      window.dispatchEvent(new CustomEvent('canvas-history-invalidate', {
+        detail: { type: 'video', phase: 'completed' }
+      }))
       return videoUrl
     }
     

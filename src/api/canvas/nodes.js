@@ -63,6 +63,7 @@ export async function generateImageFromText(params) {
     image_size,
     size,
     aspectRatio = 'auto',
+    aspectRatioMode,
     count = 1,
     enableGroupGeneration = false,
     maxGroupImages = 3,
@@ -82,6 +83,7 @@ export async function generateImageFromText(params) {
     model,
     image_size: finalImageSize,
     aspect_ratio: aspectRatio,
+    aspect_ratio_mode: aspectRatioMode || aspectRatio,
     n: count,
     response_format: 'url',
     enableGroupGeneration,
@@ -142,6 +144,7 @@ export async function generateImageFromImage(params) {
     image_size,  // 支持 image_size 参数
     size,        // 也支持 size 参数（向后兼容）
     aspectRatio = 'auto',
+    aspectRatioMode,
     enableGroupGeneration = false,
     maxGroupImages = 3
   } = params
@@ -159,6 +162,7 @@ export async function generateImageFromImage(params) {
     model,
     image_size: finalImageSize,
     aspect_ratio: aspectRatio,
+    aspect_ratio_mode: aspectRatioMode || aspectRatio,
     response_format: 'url',
     spaceType: spaceParams.spaceType,
     ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
@@ -185,6 +189,7 @@ export async function generateImageFromImage(params) {
     model, 
     image_size: finalImageSize, 
     aspect_ratio: aspectRatio,
+    aspect_ratio_mode: aspectRatioMode || aspectRatio,
     imageCount: images?.length 
   })
   

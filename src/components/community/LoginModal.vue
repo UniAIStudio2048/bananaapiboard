@@ -6,6 +6,7 @@
 import { ref, watch, computed } from 'vue'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
+import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false }
@@ -247,6 +248,7 @@ async function submit() {
     const j = await r.json()
     persistAuthSession(j.token, j.user || (mode.value === 'register' ? { username: nickname.value.trim() } : null))
     localStorage.removeItem('workflow_auto_saves')
+    clearWorkflowSession()
     localStorage.removeItem('canvas_background_tasks')
 
     message.value = mode.value === 'register' ? '注册成功' : '登录成功'

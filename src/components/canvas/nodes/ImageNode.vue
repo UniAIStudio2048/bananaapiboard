@@ -4751,6 +4751,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     userPrompt: userPrompt || finalPrompt || '',
     model: selectedModel.value,
     aspectRatio: resolvedAspectRatio,
+    aspectRatioMode: selectedAspectRatio.value,
     count: 1, // 单次请求固定为1
     // 所有模型都传递 image_size 参数
     image_size: imageSize.value || '2K',

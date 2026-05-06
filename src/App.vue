@@ -8,12 +8,15 @@ import NotificationBar from '@/components/NotificationBar.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { formatPoints } from '@/utils/format'
 import { useI18n } from '@/i18n'
+import { useCanvasStore } from '@/stores/canvas'
+import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
 
 const { t, currentLanguage } = useI18n()
 
 const me = ref(null)
 const route = useRoute()
 const router = useRouter()
+const canvasStore = useCanvasStore()
 const isMenuOpen = ref(false)
 const isUserMenuOpen = ref(false)
 const isGenerateMenuOpen = ref(false) // 生成菜单下拉状态
@@ -122,7 +125,12 @@ const isActive = (path) => route.path === path
 
 function logout() {
   clearAuthSession()
+  clearWorkflowSession()
+  localStorage.removeItem('workflow_auto_saves')
+  localStorage.removeItem('canvas_background_tasks')
   localStorage.removeItem('userMode')
+  sessionStorage.removeItem('canvas_last_user_id')
+  canvasStore.closeAllTabs()
   me.value = null
   isUserMenuOpen.value = false
   router.push('/')

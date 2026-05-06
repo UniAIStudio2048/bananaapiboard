@@ -129,4 +129,23 @@ assert.equal(saveWorkflowToHistory({
 }), true)
 assert.equal(getWorkflowHistory()[0].description, '自动保存时保留的描述')
 
+storage.clear()
+storage.set('user_id', 'user-a')
+assert.equal(saveWorkflowSession({
+  tabs: [
+    {
+      id: 'tab-user-a',
+      name: '用户 A 的画布',
+      nodes: [{ id: 'node-user-a', type: 'text', position: { x: 0, y: 0 }, data: { title: 'A' } }],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 }
+    }
+  ],
+  activeTabId: 'tab-user-a'
+}), true)
+
+storage.set('user_id', 'user-b')
+assert.equal(getWorkflowSession(), null)
+assert.equal(storage.has('workflow_tab_session'), false)
+
 console.log('workflowAutoSave session tests passed')
