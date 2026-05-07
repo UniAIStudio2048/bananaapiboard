@@ -642,6 +642,20 @@
   z-index: 10 !important;
 }
 
+/* 社区只读预览专用：让编组节点回到可见层级（普通节点仍在编组之上） */
+.community-workflow-preview-flow .vue-flow__node[data-type="group"],
+.community-workflow-preview-flow .vue-flow__node.vue-flow__node-group {
+  z-index: 0 !important;
+}
+
+.community-workflow-preview-flow .vue-flow__node .group-node {
+  z-index: 0 !important;
+}
+
+.community-workflow-preview-flow .vue-flow__node:not([data-type="group"]):not(.vue-flow__node-group) {
+  z-index: 1 !important;
+}
+
 .vue-flow__node.selected {
   outline: none !important;
   box-shadow: none !important;

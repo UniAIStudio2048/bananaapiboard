@@ -1910,7 +1910,6 @@ async function downloadSelectedNodeFile() {
   const data = node.data || {}
   let fileUrl = null
   let fileName = ''
-  let isVideo = false
   
   // 根据节点类型获取文件 URL
   // 图片节点
@@ -1928,11 +1927,9 @@ async function downloadSelectedNodeFile() {
   else if (data.output?.url && (data.output?.type === 'video' || node.type.includes('video'))) {
     fileUrl = data.output.url
     fileName = `video_${selectedId}.mp4`
-    isVideo = true
   } else if (data.video) {
     fileUrl = data.video
     fileName = `video_${selectedId}.mp4`
-    isVideo = true
   }
   // 音频节点
   else if (data.audioData || data.audioUrl) {
@@ -1990,22 +1987,8 @@ async function downloadSelectedNodeFile() {
     }
     
     // 远程 URL 统一使用 smartDownload（fetch+blob，自动验证完整性）
-    const { smartDownload, buildVideoDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
-    if (isVideo) {
-      if (isQiniuCdnUrl(fileUrl)) {
-        const downloadUrl = buildVideoDownloadUrl(fileUrl, fileName)
-        const link = document.createElement('a')
-        link.href = downloadUrl
-        link.download = fileName
-        document.body.appendChild(link)
-        link.click()
-        document.body.removeChild(link)
-      } else {
-        await smartDownload(fileUrl, fileName)
-      }
-    } else {
-      await smartDownload(fileUrl, fileName)
-    }
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(fileUrl, fileName)
     console.log('[Canvas] 下载文件:', fileName)
   } catch (error) {
     console.error('[Canvas] 下载失败:', error)

@@ -12,6 +12,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { getWorkWorkflow, forkWork, forkProject, cloneTemplate, getTemplateWorkflow, getFeatureWorkflow } from '@/api/community'
 import { loadWorkflow } from '@/api/canvas/workflow'
 import { useCommunityStore } from '@/stores/community'
+import { normalizeCommunityWorkflowPreviewNodes } from '@/utils/communityWorkflowPreview'
 import ForkDialog from './ForkDialog.vue'
 import PurchaseDialog from './PurchaseDialog.vue'
 
@@ -260,7 +261,7 @@ async function loadWorkflowData(targetWorkflowId) {
     workflowName.value = wf.name || ''
     const rawNodes = typeof wf.nodes === 'string' ? JSON.parse(wf.nodes) : (wf.nodes || [])
     const rawEdges = typeof wf.edges === 'string' ? JSON.parse(wf.edges) : (wf.edges || [])
-    nodes.value = rawNodes.map(n => ({ ...n, draggable: false, selectable: true, connectable: false, data: { ...n.data, readonly: true } }))
+    nodes.value = normalizeCommunityWorkflowPreviewNodes(rawNodes)
     edges.value = rawEdges.map(e => ({ ...e, type: normalizeEdgeType(e.type), selectable: false, updatable: false }))
     if (wf.viewport) {
       viewport.value = typeof wf.viewport === 'string' ? JSON.parse(wf.viewport) : wf.viewport
@@ -398,7 +399,7 @@ function onKeydown(e) {
                 :min-zoom="0.1"
                 :max-zoom="5"
                 fit-view-on-init
-                class="w-full h-full"
+                class="w-full h-full community-workflow-preview-flow"
               >
                 <Background :gap="20" :size="1" pattern-color="rgba(255,255,255,0.03)" />
                 <Controls :show-interactive="false" position="bottom-right" />

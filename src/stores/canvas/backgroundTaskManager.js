@@ -198,6 +198,24 @@ function startPolling(taskId) {
       const statusLower = (result.status || '').toLowerCase()
       // 高清任务返回 outputUrl，普通任务返回 url 或 video_url
       const hasOutput = result.hasOutput || result.url || result.video_url || result.outputUrl || result.output_url
+      const isSuccessStatus = statusLower === 'completed' || statusLower === 'success' || statusLower === 'succeeded'
+      const isVideoTask = taskConfig.resultType === 'video'
+      const errorMessage = result.error || result.fail_reason || result.message
+
+      // 视频任务即使返回成功状态，但没有真实输出且携带错误信息时（例如 Seedance2 版权拦截把错误塞进 result_url），
+      // 应判定为失败，避免把错误文案当作视频结果落到画布节点上。
+      if (isVideoTask && isSuccessStatus && !hasOutput && errorMessage) {
+        task.status = 'failed'
+        task.error = errorMessage
+        task.result = result
+        tasks.set(taskId, task)
+        saveTasksToStorage()
+        stopPolling(taskId)
+        notifyTaskFailed(taskId, task)
+        console.log(`[BackgroundTaskManager] 视频任务返回成功但无输出，按失败处理: ${taskId} | 错误: ${errorMessage}`)
+        return
+      }
+
       if (statusLower === 'completed' || statusLower === 'success' || hasOutput) {
         task.status = 'completed'
         task.result = result

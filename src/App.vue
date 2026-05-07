@@ -217,27 +217,29 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
     <nav v-if="route.path !== '/' && route.path !== '/canvas' && route.path !== '/workflows' && !route.path.startsWith('/community')" class="glass sticky top-0 z-50 border-b border-slate-200/50 dark:border-dark-600/50">
       <div class="mx-auto" 
         :class="isWidescreenMode && route.path === '/' ? 'px-0' : 'max-w-7xl px-4 sm:px-6 lg:px-8'">
-        <div class="flex justify-between items-center h-16 gap-2 sm:gap-4"
+        <div class="flex justify-between items-center min-h-16 py-2 gap-2 sm:gap-4"
           :class="isWidescreenMode && route.path === '/' ? 'px-4' : ''">
           <!-- Logo -->
-          <div class="flex items-center space-x-3 shrink-0 min-w-0">
+          <div class="relative z-10 flex items-center gap-1.5 lg:gap-2 shrink-0 min-w-[150px] max-w-[170px] xl:max-w-[200px] pr-1">
             <!-- 品牌Logo图片（如果已配置） -->
             <img 
               v-if="brandConfig.logo && brandConfig.logo !== '/logo.png'" 
               :src="brandConfig.logo" 
               :alt="brandConfig.name"
-              class="w-10 h-10 object-contain rounded-lg"
+              class="w-8 h-8 lg:w-10 lg:h-10 object-contain rounded-lg shrink-0"
             />
             <!-- 默认Logo（如果没有配置自定义Logo） -->
-            <div v-else class="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-lg flex items-center justify-center">
+            <div v-else class="w-8 h-8 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-lg flex items-center justify-center shrink-0">
               <span class="text-2xl">🍌</span>
             </div>
             <!-- 品牌名称 -->
-            <span class="text-base sm:text-xl font-bold gradient-text whitespace-nowrap">{{ brandConfig.name || 'Nanobanana' }}</span>
+            <span class="brand-name text-sm lg:text-base xl:text-xl font-bold gradient-text truncate">{{ brandConfig.name || 'Nanobanana' }}</span>
           </div>
 
           <!-- 桌面端导航 -->
-          <div class="hidden md:flex items-center space-x-1 sm:space-x-2 min-w-0 flex-1 justify-end overflow-visible">
+          <div
+            class="desktop-nav items-center gap-0.5 xl:gap-1 min-w-0 flex-1 justify-end overflow-visible flex-nowrap"
+          >
             <!-- 生成下拉菜单 -->
             <div class="relative generate-menu-container">
               <button
@@ -245,8 +247,8 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
                 class="nav-link flex items-center"
                 :class="{ active: isActive('/') || isActive('/video') }"
               >
-                <span class="mr-2">{{ currentGenerateIcon }}</span>
-                {{ currentGenerateLabel }}
+                <span class="mr-0 xl:mr-1">{{ currentGenerateIcon }}</span>
+                <span class="hidden xl:inline">{{ currentGenerateLabel }}</span>
                 <svg class="w-4 h-4 ml-1 transition-transform" :class="{ 'rotate-180': isGenerateMenuOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
                 </svg>
@@ -288,8 +290,8 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
               to="/packages"
               class="nav-link flex items-center"
             >
-              <span class="mr-2">💎</span>
-              {{ t('nav.packages') }}
+              <span class="mr-0 xl:mr-1">💎</span>
+              <span class="hidden xl:inline">{{ t('nav.packages') }}</span>
             </RouterLink>
             
             <!-- 兑换券入口 -->
@@ -298,24 +300,24 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
               @click="openVoucherModal"
               class="nav-link flex items-center"
             >
-              <span class="mr-2">🎫</span>
-              {{ t('nav.voucher') }}
+              <span class="mr-0 xl:mr-1">🎫</span>
+              <span class="hidden xl:inline">{{ t('nav.voucher') }}</span>
             </button>
             
             <!-- 积分和余额显示 -->
-            <div v-if="me" class="ml-2 sm:ml-4 flex items-center space-x-1 sm:space-x-2 shrink-0">
+            <div v-if="me" class="ml-0.5 lg:ml-1 flex items-center gap-1 shrink-0 flex-nowrap">
               <!-- 套餐积分 -->
-              <div class="px-3 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="t('user.packagePointsDesc')">
+              <div class="px-2 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="t('user.packagePointsDesc')">
                 <span class="mr-1">💎</span>
-                {{ formatPoints(me.package_points) }} {{ t('user.points') }}
+                {{ formatPoints(me.package_points) }} <span class="hidden xl:inline">{{ t('user.points') }}</span>
               </div>
               <!-- 永久积分 -->
-              <div class="px-3 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="t('user.permanentPointsDesc')">
+              <div class="px-2 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="t('user.permanentPointsDesc')">
                 <span class="mr-1">⭐</span>
-                {{ formatPoints(me.points) }} {{ t('user.points') }}
+                {{ formatPoints(me.points) }} <span class="hidden xl:inline">{{ t('user.points') }}</span>
               </div>
               <!-- 余额 -->
-              <div class="px-3 py-1.5 bg-gradient-to-r from-green-500 to-green-600 rounded-full text-white text-sm font-medium shadow-lg whitespace-nowrap shrink-0">
+              <div class="px-2 py-1.5 bg-gradient-to-r from-green-500 to-green-600 rounded-full text-white text-sm font-medium shadow-lg whitespace-nowrap shrink-0">
                 <span class="mr-1">💰</span>
                 ¥{{ ((me.balance || 0) / 100).toFixed(2) }}
               </div>
@@ -327,7 +329,7 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
             <!-- 主题切换按钮 -->
             <button
               @click="toggleTheme"
-              class="ml-2 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors"
+              class="ml-1 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors"
               :title="currentTheme === 'dark' ? t('nav.switchToLightMode') : t('nav.switchToDarkMode')"
             >
               <span v-if="currentTheme === 'dark'" class="text-xl">🌙</span>
@@ -425,7 +427,7 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
           </div>
 
           <!-- 移动端菜单按钮 -->
-          <div class="md:hidden">
+          <div class="mobile-nav-toggle">
             <button
               @click="isMenuOpen = !isMenuOpen"
               class="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors"
@@ -439,7 +441,10 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
       </div>
 
       <!-- 移动端菜单 -->
-      <div v-if="isMenuOpen" class="md:hidden glass border-t border-slate-200/50 dark:border-dark-600/50">
+      <div
+        v-if="isMenuOpen"
+        class="mobile-nav-menu glass border-t border-slate-200/50 dark:border-dark-600/50"
+      >
         <div class="px-4 py-3 space-y-2">
           <!-- 生成菜单项 -->
           <div class="space-y-1">
@@ -640,13 +645,41 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
 
 <style scoped>
 .nav-link {
-  @apply px-3 sm:px-4 py-2 rounded-lg font-medium transition-all duration-200 whitespace-nowrap shrink-0;
+  @apply px-2 lg:px-3 xl:px-4 py-2 rounded-lg font-medium transition-all duration-200 whitespace-nowrap shrink-0;
   @apply text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400;
   @apply hover:bg-primary-50 dark:hover:bg-primary-900/20;
 }
 
 .nav-link.active {
   @apply bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400;
+}
+
+.brand-name {
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.desktop-nav {
+  display: none;
+}
+
+.mobile-nav-toggle {
+  display: block;
+}
+
+.mobile-nav-menu {
+  display: block;
+}
+
+@media (min-width: 1024px) {
+  .desktop-nav {
+    display: flex;
+  }
+
+  .mobile-nav-toggle,
+  .mobile-nav-menu {
+    display: none;
+  }
 }
 
 .animate-slide-up {

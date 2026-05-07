@@ -11,6 +11,7 @@
  * - 无缝全屏覆盖
  */
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
+import { getProxiedImageUrl } from '@/utils/canvasThumbnail'
 
 const props = defineProps({
   imageUrl: {
@@ -191,7 +192,7 @@ function calculateCanvasSize() {
   canvasHeight.value = Math.round(Math.min(maxHeight, compact ? 520 : 620))
 }
 
-// 加载图片
+// 加载图片（与图片编辑器一致，外部 URL 通过后端代理避免 canvas 跨域失败）
 async function loadImage(url) {
   isLoading.value = true
   
@@ -225,7 +226,7 @@ async function loadImage(url) {
       isLoading.value = false
       reject(err)
     }
-    originalImage.src = url
+    originalImage.src = getProxiedImageUrl(url) || url
   })
 }
 

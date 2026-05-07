@@ -12,6 +12,7 @@ import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import { getWorkDetail, getWorkWorkflow, getProjectWorkflows } from '@/api/community'
 import { useCommunityStore } from '@/stores/community'
+import { normalizeCommunityWorkflowPreviewNodes } from '@/utils/communityWorkflowPreview'
 import ForkDialog from '@/components/community/ForkDialog.vue'
 import PurchaseDialog from '@/components/community/PurchaseDialog.vue'
 
@@ -183,8 +184,8 @@ async function loadWorkflow() {
     // 解析 nodes/edges（可能是 JSON 字符串）
     const rawNodes = typeof wf.nodes === 'string' ? JSON.parse(wf.nodes) : (wf.nodes || [])
     const rawEdges = typeof wf.edges === 'string' ? JSON.parse(wf.edges) : (wf.edges || [])
-    // 标记所有节点为不可拖拽
-    nodes.value = rawNodes.map(n => ({ ...n, draggable: false, selectable: true, connectable: false, data: { ...n.data, readonly: true } }))
+    // 归一化（含历史 group 快照），仅用于只读预览，不影响正式画布
+    nodes.value = normalizeCommunityWorkflowPreviewNodes(rawNodes)
     edges.value = rawEdges.map(e => ({
       ...e,
       type: normalizeEdgeType(e.type),
@@ -316,7 +317,7 @@ onMounted(async () => {
             :min-zoom="0.1"
             :max-zoom="5"
             fit-view-on-init
-            class="w-full h-full"
+            class="w-full h-full community-workflow-preview-flow"
           >
             <Background :gap="20" :size="1" pattern-color="rgba(255,255,255,0.03)" />
             <Controls :show-interactive="false" position="bottom-right" />

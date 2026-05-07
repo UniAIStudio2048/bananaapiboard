@@ -745,13 +745,11 @@ function handleAnnotate() {
   })
 }
 
-// 裁剪 - 可实现功能
+// 裁剪 - 交给宿主组件打开对应裁剪工具
 function handleCrop() {
   console.log('[ImageToolbar] 裁剪', props.imageNode?.id)
   if (!imageUrl.value) return
-  
-  cropImageUrl.value = imageUrl.value
-  showCropModal.value = true
+
   emit('crop', { 
     nodeId: props.imageNode?.id, 
     imageUrl: imageUrl.value 
