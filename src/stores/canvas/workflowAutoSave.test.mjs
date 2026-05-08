@@ -92,6 +92,45 @@ assert.equal(
   'https://cdn.example.com/snapshot-1.png'
 )
 
+assert.equal(saveWorkflowSession({
+  tabs: [
+    {
+      id: 'tab-storyboard',
+      name: '分镜会话',
+      nodes: [{
+        id: 'storyboard-1',
+        type: 'storyboard',
+        position: { x: 0, y: 0 },
+        data: {
+          title: '分镜格子',
+          images: [
+            'https://cdn.example.com/frame-1.png',
+            null,
+            'blob:https://app.local/frame-2',
+            'data:image/png;base64,AAAA',
+            '/api/images/file/frame-5.png'
+          ]
+        }
+      }],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 }
+    }
+  ],
+  activeTabId: 'tab-storyboard'
+}), true)
+
+const restoredStoryboardSession = getWorkflowSession()
+assert.deepEqual(
+  restoredStoryboardSession.tabs[0].nodes[0].data.images,
+  [
+    'https://cdn.example.com/frame-1.png',
+    null,
+    null,
+    null,
+    '/api/images/file/frame-5.png'
+  ]
+)
+
 const now = Date.now()
 storage.set('workflow_auto_saves', JSON.stringify([
   {

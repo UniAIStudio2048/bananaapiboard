@@ -64,6 +64,12 @@ function normalizeHistoryItem(item) {
   }
 }
 
+function cleanPersistentImageUrl(url) {
+  if (typeof url !== 'string') return null
+  if (url.startsWith('blob:') || url.startsWith('data:')) return null
+  return url
+}
+
 /**
  * 🔧 清理节点中的大数据（base64图片、blob URL等），只保留结构和有效URL引用
  * 这样可以大幅减少存储空间，避免 localStorage 溢出
@@ -112,8 +118,16 @@ function cleanNodeData(nodes) {
       })
       
       // 清理 images 数组中的 base64 数据和 blob URL
+      // Storyboard 使用字符串 URL/null 数组，必须保留格子索引。
       if (Array.isArray(cleanedNode.data.images)) {
-        cleanedNode.data.images = cleanedNode.data.images.map(img => {
+        const containsStoryboardImageUrls = cleanedNode.data.images.some(
+          img => img === null || typeof img === 'string'
+        )
+
+        if (containsStoryboardImageUrls) {
+          cleanedNode.data.images = cleanedNode.data.images.map(img => cleanPersistentImageUrl(img))
+        } else {
+          cleanedNode.data.images = cleanedNode.data.images.map(img => {
           const cleanedImg = { ...img }
           // 保留有效 URL，移除 base64 和 blob
           if (cleanedImg.base64) delete cleanedImg.base64
@@ -132,7 +146,8 @@ function cleanNodeData(nodes) {
             delete cleanedImg.url
           }
           return cleanedImg
-        }).filter(img => img.url || img.src) // 移除没有有效 URL 的图片
+          }).filter(img => img.url || img.src) // 移除没有有效 URL 的图片
+        }
       }
       
       // 🔧 清理 sourceImages 数组中的 blob URL

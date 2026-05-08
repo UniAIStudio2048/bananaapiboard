@@ -8,8 +8,8 @@ const source = readFileSync(join(__dirname, 'CanvasBoard.vue'), 'utf8')
 
 assert.match(
   source,
-  /:only-render-visible-elements="true"/,
-  'CanvasBoard should let Vue Flow skip off-screen nodes and edges'
+  /:only-render-visible-elements="false"/,
+  'CanvasBoard should keep selected nodes mounted so zooming does not hide dynamic prompt panels'
 )
 
 assert.match(

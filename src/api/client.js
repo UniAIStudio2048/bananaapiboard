@@ -1,6 +1,6 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { logApiRequest, logApiResponse, logApiError, logAuth, logUserAction } from '@/utils/logger'
-import { buildMediaProxyDownloadPath } from './downloadRouting.js'
+import { buildMediaProxyDownloadPath, buildStreamDownloadPath, cleanStreamDownloadUrl } from './downloadRouting.js'
 
 let KEY = ''
 export function setApiKey(k) { KEY = k || '' }
@@ -394,6 +394,44 @@ export function buildVideoDownloadUrl(url, filename) {
   return getApiUrl(buildMediaProxyDownloadPath(cleanUrl, filename || 'video.mp4'))
 }
 
+/**
+ * 立即触发浏览器流式下载。
+ * 用于用户点击下载按钮的场景，避免前端先 fetch 完整文件导致大图长时间无响应。
+ */
+export function startStreamDownload(url, filename) {
+  if (!url) throw new Error('下载 URL 为空')
+
+  const correctedFilename = correctFilenameExtension(filename || 'download', url)
+  let cleanUrl = getQiniuOriginalUrl(url)
+
+  if ((cleanUrl.includes('/api/cos-proxy/') || cleanUrl.includes('filescos.nananobanana.cn')) && !cleanUrl.match(/\.(mp4|webm|mov|avi)(\?|$)/i)) {
+    cleanUrl = cleanUrl.split('?')[0]
+  }
+
+  cleanUrl = cleanStreamDownloadUrl(cleanUrl)
+
+  if (cleanUrl.startsWith('data:') || cleanUrl.startsWith('blob:')) {
+    triggerUrlDownload(cleanUrl, correctedFilename)
+    return
+  }
+
+  if (isQiniuCdnUrl(cleanUrl)) {
+    triggerUrlDownload(buildQiniuForceDownloadUrl(cleanUrl, correctedFilename), correctedFilename)
+    return
+  }
+
+  if ((cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) &&
+      /\/api\/(cos-proxy|images\/file)\//.test(cleanUrl)) {
+    const urlObj = new URL(cleanUrl)
+    const apiIdx = urlObj.pathname.indexOf('/api/')
+    if (apiIdx >= 0) {
+      cleanUrl = `${urlObj.pathname.substring(apiIdx)}${urlObj.search}`
+    }
+  }
+
+  triggerUrlDownload(getApiUrl(buildStreamDownloadPath(cleanUrl, correctedFilename)), correctedFilename)
+}
+
 export async function getMe(forceRefresh = false) {
   const token = localStorage.getItem('token')
   if (!token) return null
@@ -704,15 +742,21 @@ export async function smartDownload(url, filename) {
  */
 function triggerBlobDownload(blob, filename) {
   const blobUrl = URL.createObjectURL(blob)
+  triggerUrlDownload(blobUrl, filename)
+  setTimeout(() => {
+    URL.revokeObjectURL(blobUrl)
+  }, 100)
+}
+
+function triggerUrlDownload(url, filename) {
   const a = document.createElement('a')
-  a.href = blobUrl
+  a.href = url
   a.download = filename || 'download'
   a.style.display = 'none'
   document.body.appendChild(a)
   a.click()
   setTimeout(() => {
     document.body.removeChild(a)
-    URL.revokeObjectURL(blobUrl)
   }, 100)
 }
 

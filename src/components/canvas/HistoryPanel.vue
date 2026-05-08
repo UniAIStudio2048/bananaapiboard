@@ -2949,6 +2949,15 @@ onUnmounted(() => {
   align-items: center;
   gap: 4px;
   z-index: 30;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.history-card:hover .history-card-actions,
+.history-card:focus-within .history-card-actions {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .overlay-copy-prompt {

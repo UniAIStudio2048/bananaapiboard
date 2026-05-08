@@ -10,8 +10,13 @@ import { labelToPromptText, indexToLabel } from '@/utils/imageAnnotation'
 import { getTenantHeaders, getModelDisplayName, getAvailableImageModels, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { formatPoints } from '@/utils/format'
-import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
+import { resolveGenerationAspectRatio } from '@/utils/aspectRatio'
 import { normalizeImageHistoryItems } from '@/utils/imageHistoryPrompt'
+import {
+  getAvailableImageResolutionOptions,
+  getImageResolutionCost,
+  normalizeImageSelectedSize
+} from '@/utils/canvasImageResolutionOptions'
 import VirtualList from 'vue3-virtual-scroll-list'
 
 const prompt = ref('')
@@ -109,8 +114,7 @@ watch(mode, (newMode) => {
     // 如果是按分辨率计费的模型，设置默认尺寸
     const modelInfo = models[0]
     if (modelInfo.pointsCost && typeof modelInfo.pointsCost === 'object') {
-      const firstSize = Object.keys(modelInfo.pointsCost)[0]?.toUpperCase() || '1K'
-      imageSize.value = firstSize
+      imageSize.value = normalizeImageSelectedSize(modelInfo, imageSize.value)
     }
   }
 })
@@ -121,10 +125,8 @@ watch(model, (newModel) => {
   const pointsCost = modelInfo?.pointsCost
   
   if (pointsCost && typeof pointsCost === 'object') {
-    // 模型有多档积分，设置为第一个尺寸
-    const firstSize = Object.keys(pointsCost)[0]?.toUpperCase() || '1K'
-    imageSize.value = firstSize
-    console.log('[model-switch] 模型切换，已设置尺寸:', firstSize)
+    imageSize.value = normalizeImageSelectedSize(modelInfo, imageSize.value)
+    console.log('[model-switch] 模型切换，已设置尺寸:', imageSize.value)
   }
 })
 
@@ -955,20 +957,16 @@ async function generate() {
     }
     
     // 解析比例：auto 模式下根据文生图/图生图自动确定比例
-    if (aspectRatio.value === 'auto') {
-      const firstImageSrc = (mode.value === 'image' && imageFiles.value.length > 0)
-        ? imageFiles.value[0]
-        : null
-      payload.aspect_ratio = await resolveAutoAspectRatio(firstImageSrc)
-      payload.aspect_ratio_mode = 'auto'
-    } else {
-      payload.aspect_ratio = aspectRatio.value
-      payload.aspect_ratio_mode = aspectRatio.value
-    }
+    const firstImageSrc = (mode.value === 'image' && imageFiles.value.length > 0)
+      ? imageFiles.value[0]
+      : null
+    payload.aspect_ratio = await resolveGenerationAspectRatio(aspectRatio.value, firstImageSrc)
+    payload.aspect_ratio_mode = aspectRatio.value
     
     // 有多档分辨率计价的模型，传递用户选择的尺寸；否则默认 2K
     if (showResolutionOption.value) {
-      payload.image_size = imageSize.value
+      const modelInfo = availableModels.value.find(m => m.value === model.value)
+      payload.image_size = normalizeImageSelectedSize(modelInfo || {}, imageSize.value)
     } else {
       payload.image_size = '2K'
     }
@@ -1684,17 +1682,7 @@ const historyColsClass = computed(() => {
 // 计算当前选择需要的积分（不含高速通道附加）
 const currentPointsCost = computed(() => {
   const modelInfo = availableModels.value.find(m => m.value === model.value)
-  const pointsCost = modelInfo?.pointsCost
-  
-  // 如果模型有多档积分（如1K、2K、4K），根据选择的尺寸计算
-  if (pointsCost && typeof pointsCost === 'object') {
-    // 尝试匹配尺寸（忽略大小写）
-    const sizeKey = Object.keys(pointsCost).find(k => k.toLowerCase() === imageSize.value.toLowerCase())
-    return pointsCost[sizeKey] || Object.values(pointsCost)[0] || 1
-  }
-  
-  // 固定积分模型
-  return pointsCost || 1
+  return getImageResolutionCost(modelInfo || {}, imageSize.value)
 })
 
 // 计算总积分消耗（含高速通道附加）
@@ -1736,21 +1724,18 @@ const showQualityOption = computed(() => {
 // 当模型有多档积分时显示尺寸选项
 const showResolutionOption = computed(() => {
   const modelInfo = availableModels.value.find(m => m.value === model.value)
-  return modelInfo?.hasResolutionPricing || (modelInfo?.pointsCost && typeof modelInfo.pointsCost === 'object')
+  const hasResolutionPricing = modelInfo?.hasResolutionPricing ||
+    (modelInfo?.pointsCost && typeof modelInfo.pointsCost === 'object')
+  return Boolean(hasResolutionPricing && getAvailableImageResolutionOptions(modelInfo).length > 0)
 })
 
 // 获取当前模型的可用尺寸选项
 const availableResolutions = computed(() => {
   const modelInfo = availableModels.value.find(m => m.value === model.value)
-  const pointsCost = modelInfo?.pointsCost
-  
-  if (pointsCost && typeof pointsCost === 'object') {
-    return Object.entries(pointsCost).map(([size, points]) => ({
-      value: size.toUpperCase(),
-      label: `${size.toUpperCase()} (${formatPoints(points)}积分)`
-    }))
-  }
-  return []
+  return getAvailableImageResolutionOptions(modelInfo || {}).map(option => ({
+    value: option.value,
+    label: `${option.label} (${formatPoints(option.pointsCost)}积分)`
+  }))
 })
 
 // 获取可用的图片模型列表（从配置动态获取，根据当前模式过滤）
@@ -2053,8 +2038,7 @@ onMounted(async () => {
     // 如果是按分辨率计费的模型，设置默认尺寸
     const modelInfo = models[0]
     if (modelInfo.pointsCost && typeof modelInfo.pointsCost === 'object') {
-      const firstSize = Object.keys(modelInfo.pointsCost)[0]?.toUpperCase() || '1K'
-      imageSize.value = firstSize
+      imageSize.value = normalizeImageSelectedSize(modelInfo, imageSize.value)
     }
   }
   

@@ -36,3 +36,15 @@ assert.match(
   /z-index\s*:\s*0\s*;/,
   'active edge flow should render on the edge layer, below normal nodes'
 )
+
+assert.match(
+  source,
+  /const activeEdgeGeometrySignature = computed\(\(\) => \{/,
+  'active edge flow should track selected edge endpoint geometry changes'
+)
+
+const activeFlowWatcher = source.match(/watch\(\s*\[[\s\S]*?activeEdgeGeometrySignature[\s\S]*?\]\s*,\s*\(\) => \{ nextTick\(scheduleActiveEdgePathsRead\) \}/)
+assert.ok(
+  activeFlowWatcher,
+  'active edge flow should refresh when connected node geometry changes after media generation'
+)

@@ -69,3 +69,14 @@ export async function resolveAutoAspectRatio(firstImageSrc) {
     return '9:16'
   }
 }
+
+/**
+ * 解析生成接口可接受的比例：非 auto 保持用户选择，auto 则转换为标准比例
+ * @param {string} selectedAspectRatio - 用户选择的比例
+ * @param {File|Blob|string|null} firstImageSrc - 第一张参考图，null 表示文生图模式
+ * @returns {Promise<string>} 生成接口可接受的比例字符串
+ */
+export async function resolveGenerationAspectRatio(selectedAspectRatio, firstImageSrc) {
+  if (selectedAspectRatio !== 'auto') return selectedAspectRatio
+  return resolveAutoAspectRatio(firstImageSrc)
+}

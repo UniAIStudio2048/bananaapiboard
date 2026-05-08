@@ -15,3 +15,28 @@ export function buildMediaProxyDownloadPath(url, filename) {
 
   return `${endpoint}?${params.toString()}`
 }
+
+export function cleanStreamDownloadUrl(url) {
+  if (!url || typeof url !== 'string') return url
+
+  if (!url.includes('/api/images/file/')) return url
+
+  try {
+    const parsed = new URL(url, 'http://download.local')
+    parsed.searchParams.delete('preview')
+    parsed.searchParams.delete('w')
+    return url.startsWith('http://') || url.startsWith('https://')
+      ? parsed.toString()
+      : `${parsed.pathname}${parsed.search}`
+  } catch {
+    return url
+      .replace(/([?&])preview=true(&?)/g, (match, prefix, suffix) => suffix ? prefix : '')
+      .replace(/([?&])w=\d+(&?)/g, (match, prefix, suffix) => suffix ? prefix : '')
+      .replace(/[?&]$/, '')
+  }
+}
+
+export function buildStreamDownloadPath(url, filename) {
+  const cleanUrl = cleanStreamDownloadUrl(url)
+  return buildMediaProxyDownloadPath(cleanUrl, filename)
+}

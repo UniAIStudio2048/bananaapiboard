@@ -1822,6 +1822,7 @@ const connectionFlowLayers = computed(() => {
 
 const activeFlowPaths = ref([])
 let activeFlowPathsRafId = null
+let activeFlowPathsFollowupRafId = null
 
 function transformSvgPath(d, vp) {
   if (!d) return ''
@@ -1868,11 +1869,62 @@ function scheduleActiveEdgePathsRead() {
   activeFlowPathsRafId = requestAnimationFrame(() => {
     activeFlowPathsRafId = null
     readActiveEdgePaths()
+
+    if (!activeFlowPathsFollowupRafId) {
+      activeFlowPathsFollowupRafId = requestAnimationFrame(() => {
+        activeFlowPathsFollowupRafId = null
+        readActiveEdgePaths()
+      })
+    }
   })
 }
 
+const activeEdgeGeometrySignature = computed(() => {
+  const ids = selectedNodeIds.value
+  if (ids.length === 0 || isEdgeHidden.value) return ''
+
+  const selectedSet = new Set(ids)
+  const connectedNodeIds = new Set()
+  const connectedEdges = []
+
+  for (const edge of canvasStore.edges) {
+    if (!selectedSet.has(edge.source) && !selectedSet.has(edge.target)) continue
+    connectedEdges.push(`${edge.id}:${edge.source}:${edge.target}:${edge.sourceHandle || ''}:${edge.targetHandle || ''}`)
+    connectedNodeIds.add(edge.source)
+    connectedNodeIds.add(edge.target)
+  }
+
+  const nodeGeometry = Array.from(connectedNodeIds).sort().map((nodeId) => {
+    const node = canvasStore.nodes.find(n => n.id === nodeId)
+    if (!node) return `${nodeId}:missing`
+    const dimensions = node.dimensions || {}
+    const data = node.data || {}
+    const outputUrls = data.output?.urls || []
+    const sourceImages = data.sourceImages || []
+    return [
+      node.id,
+      node.position?.x,
+      node.position?.y,
+      dimensions.width,
+      dimensions.height,
+      data.width,
+      data.height,
+      data.nodeWidth,
+      data.nodeHeight,
+      data.status,
+      data.output?.url,
+      outputUrls.length,
+      outputUrls[0],
+      sourceImages.length,
+      sourceImages[0]
+    ].join(':')
+  })
+
+  return `${connectedEdges.sort().join('|')}#${nodeGeometry.join('|')}`
+})
+
 watch(
-  [selectedNodeIds, vfViewport, () => canvasStore.edges.length],
+  [selectedNodeIds, vfViewport, () => canvasStore.edges.length, activeEdgeGeometrySignature],
   () => { nextTick(scheduleActiveEdgePathsRead) },
   { immediate: true }
 )
@@ -2712,6 +2764,10 @@ onUnmounted(() => {
     cancelAnimationFrame(activeFlowPathsRafId)
     activeFlowPathsRafId = null
   }
+  if (activeFlowPathsFollowupRafId) {
+    cancelAnimationFrame(activeFlowPathsFollowupRafId)
+    activeFlowPathsFollowupRafId = null
+  }
   
   // 🔧 清理所有待执行的定时器
   pendingTimeouts.forEach(id => clearTimeout(id))
@@ -2751,7 +2807,7 @@ onUnmounted(() => {
       :snap-to-grid="true"
       :snap-grid="[20, 20]"
       :connection-mode="'loose'"
-      :only-render-visible-elements="true"
+      :only-render-visible-elements="false"
       :pan-on-drag="panOnDragConfig"
       :selection-on-drag="true"
       :select-nodes-on-drag="true"

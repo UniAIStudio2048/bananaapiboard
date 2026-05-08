@@ -15,6 +15,7 @@ defineOptions({
 import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
+import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { getTenantHeaders, getAvailableMusicModels, refreshBrandConfig } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
@@ -42,6 +43,8 @@ const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
 const uploadManager = useUploadManager()
+const modelStatsStore = useModelStatsStore()
+modelStatsStore.ensureStarted()
 const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
@@ -75,6 +78,16 @@ const showAdvancedOptions = ref(false)
 const currentMusicModelConfig = computed(() => {
   return musicModels.value.find(m => m.value === selectedMusicModel.value) || musicModels.value[0]
 })
+
+function formatModelAvgDuration(modelName) {
+  const seconds = modelStatsStore.getAudioModelAvgDurationSeconds(modelName)
+  return seconds === null ? '' : `${seconds}s`
+}
+
+function formatModelSuccessRate(modelName) {
+  const rate = modelStatsStore.getAudioModelRate(modelName)
+  return rate === null ? '100%' : `${Math.round(rate * 100)}%`
+}
 
 // 音乐生成积分消耗（生成2首歌）
 const musicPointsCost = computed(() => (currentMusicModelConfig.value?.pointsCost || 20) * 2)
@@ -1763,12 +1776,24 @@ function handleSpeedDropdownClickOutside(event) {
                 <div
                   v-for="m in musicModels"
                   :key="m.value"
-                  class="model-option"
+                  class="model-option model-dropdown-item"
                   :class="{ 'active': selectedMusicModel === m.value }"
                   @click="selectMusicModel(m.value)"
                 >
-                  <span class="option-name">{{ m.label }}</span>
-                  <span v-if="m.description" class="option-desc">{{ m.description }}</span>
+                  <div class="model-item-main">
+                    <span class="model-item-icon">{{ m.icon || '♫' }}</span>
+                    <div class="model-item-content">
+                      <span class="option-name model-item-label">{{ m.label }}</span>
+                      <span v-if="m.description" class="option-desc model-item-desc">{{ m.description }}</span>
+                    </div>
+                    <span class="model-audio-stats model-item-meta">
+                      <span class="signal-percent">{{ formatModelSuccessRate(m.value) }}</span>
+                      <span v-if="formatModelAvgDuration(m.value)" class="model-duration-text">
+                        {{ formatModelAvgDuration(m.value) }}
+                      </span>
+                      <span v-if="m.pointsCost" class="model-item-points">{{ m.pointsCost }}点</span>
+                    </span>
+                  </div>
                 </div>
               </div>
             </Transition>
@@ -2769,6 +2794,7 @@ function handleSpeedDropdownClickOutside(event) {
 .model-icon {
   font-size: 14px;
   color: #888888;
+  filter: grayscale(1);
 }
 
 .model-name {
@@ -2794,12 +2820,15 @@ function handleSpeedDropdownClickOutside(event) {
 .model-dropdown-list {
   position: absolute;
   left: 0;
-  right: 0;
-  background: #1e1e1e;
-  border: 1px solid #333333;
+  min-width: 260px;
+  max-width: min(420px, calc(100vw - 32px));
+  background: linear-gradient(135deg, rgba(18, 18, 22, 0.95), rgba(28, 28, 35, 0.92));
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   padding: 8px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   z-index: 9999;
   max-height: 300px;
   overflow-y: auto;
@@ -2819,30 +2848,118 @@ function handleSpeedDropdownClickOutside(event) {
 
 .model-option {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.model-option:last-child {
+  margin-bottom: 0;
+  border-bottom: 0;
 }
 
 .model-option:hover {
-  background: #2a2a2a;
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 .model-option.active {
-  background: #333333;
+  background: rgba(255, 255, 255, 0.07);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.model-item-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  width: 100%;
+}
+
+.model-item-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 18px;
+  font-weight: 700;
+  filter: grayscale(1);
+}
+
+.model-item-content {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.model-item-meta {
+  display: flex;
+  align-items: flex-end;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 
 .option-name {
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 700;
   color: #ffffff;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .option-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: #888888;
+  line-height: 1.4;
+}
+
+.model-item-points {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.07);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.model-audio-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  min-width: 36px;
+}
+
+.signal-percent {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: #22c55e;
+}
+
+.model-duration-text {
+  font-size: 10px;
+  line-height: 1.1;
+  color: #9ca3af;
+  text-align: right;
 }
 
 /* 字数统计 */
@@ -3308,7 +3425,18 @@ function handleSpeedDropdownClickOutside(event) {
 }
 
 :root.canvas-theme-light .audio-node .model-option.active {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .audio-node .model-item-icon {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .audio-node .model-item-points {
+  color: rgba(28, 25, 23, 0.62);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 :root.canvas-theme-light .audio-node .option-name {

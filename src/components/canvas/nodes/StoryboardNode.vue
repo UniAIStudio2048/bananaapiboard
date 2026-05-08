@@ -15,6 +15,7 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { uploadImages } from '@/api/canvas/nodes'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
+import { loadStoryboardImageForCanvas } from '@/utils/storyboardCanvasImage'
 
 const props = defineProps({
   id: {
@@ -789,13 +790,7 @@ async function autoMergeAndOutput() {
     const imgElements = await Promise.all(
       images.value.slice(0, gridCount.value).map(url => {
         if (!url) return Promise.resolve(null)
-        return new Promise((resolve, reject) => {
-          const img = new Image()
-          img.crossOrigin = 'anonymous'
-          img.onload = () => resolve(img)
-          img.onerror = reject
-          img.src = url
-        })
+        return loadStoryboardImageForCanvas(url)
       })
     )
 
@@ -873,8 +868,14 @@ async function autoMergeAndOutput() {
     // 转换为 Blob 并上传
     canvas.toBlob(async (blob) => {
       try {
+        if (!blob) {
+          throw new Error('拼接图片导出失败，请重试')
+        }
         const file = new File([blob], 'storyboard_output.png', { type: 'image/png' })
         const urls = await uploadImages([file])
+        if (!urls?.[0]) {
+          throw new Error('拼接图片上传失败，未返回图片地址')
+        }
 
         outputImageUrl.value = urls[0]
         updateNodeData()
@@ -916,7 +917,7 @@ function createOutputNode(url) {
     position: nodePosition,
     data: {
       title: '输出图像',
-      output: { url: url },
+      output: { type: 'image', url: url, urls: [url] },
       // 传递比例和尺寸信息，确保 ImageNode 初始显示正确
       aspectRatio: aspectRatio.value,
       width: targetWidth,
@@ -945,6 +946,7 @@ function updateNodeData() {
     nodeHeight: nodeHeight.value,
     collapsedNodeWidth: collapsedNodeWidth.value
   }
+  canvasStore.updateNodeData(props.id, data)
   emit('update:data', data)
 }
 

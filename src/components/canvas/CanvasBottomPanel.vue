@@ -14,13 +14,21 @@ import { useCanvasStore } from '@/stores/canvas'
 import { getNodeConfig } from '@/config/canvas/nodeTypes'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages } from '@/api/canvas/nodes'
 import { getLLMConfig, chatWithLLM, describeImage } from '@/api/canvas/llm'
-import { getApiUrl, getAvailableImageModels } from '@/config/tenant'
+import { getApiUrl, getAvailableImageModels, useTenantConfigVersion } from '@/config/tenant'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import { formatPoints } from '@/utils/format'
 import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
+import { resolveGenerationAspectRatio } from '@/utils/aspectRatio'
+import {
+  getAvailableImageResolutionOptions,
+  getImageResolutionCost,
+  normalizeImageSelectedSize
+} from '@/utils/canvasImageResolutionOptions'
+import ModelIcon from '@/components/common/ModelIcon.vue'
 
 const canvasStore = useCanvasStore()
 const userInfo = inject('userInfo')
+const tenantConfigVersion = useTenantConfigVersion()
 
 // 生成状态
 const isGenerating = ref(false)
@@ -60,6 +68,7 @@ async function loadLLMConfig() {
 
 // 可用模型列表（根据节点类型选择）
 const availableModels = computed(() => {
+  void tenantConfigVersion.value
   const nodeType = canvasStore.selectedNode?.type
   
   // 如果是文本节点，返回 LLM 模型
@@ -69,8 +78,9 @@ const availableModels = computed(() => {
       return llmConfig.value.models.map(m => ({
         value: m.id,
         label: m.name,
-        icon: m.icon || 'G',
-        pointsCost: m.pointsCost
+        icon: m.icon || m.name || m.id,
+        pointsCost: m.pointsCost,
+        description: m.description || ''
       }))
     }
     // 默认 LLM 模型列表
@@ -95,7 +105,25 @@ const selectedModelLabel = computed(() => {
 // 当前选中模型的图标
 const selectedModelIcon = computed(() => {
   const model = availableModels.value.find(m => m.value === selectedModel.value)
-  return model?.icon || 'G'
+  return model?.icon || selectedModelLabel.value || selectedModel.value
+})
+
+const selectedModelConfig = computed(() => {
+  return availableModels.value.find(m => m.value === selectedModel.value) || null
+})
+
+const isImageGenerateNode = computed(() => {
+  return canvasStore.selectedNode?.type?.includes('to-image') || false
+})
+
+const availableImageSizes = computed(() => {
+  if (!isImageGenerateNode.value) return []
+  const cfg = selectedModelConfig.value || {}
+  // [TEMP DEBUG] 排查 9000 端口开关在 3000 端口不生效问题，验证后删除
+  console.log('[DEBUG availableImageSizes] model:', cfg?.value, 'pointsCost:', JSON.stringify(cfg?.pointsCost), 'resolutionEnabled:', JSON.stringify(cfg?.resolutionEnabled))
+  const result = getAvailableImageResolutionOptions(cfg)
+  console.log('[DEBUG availableImageSizes] result:', JSON.stringify(result))
+  return result
 })
 
 // 当前模型积分消耗
@@ -130,7 +158,13 @@ function toggleModelDropdown() {
 // 选择模型
 function selectModel(modelValue) {
   selectedModel.value = modelValue
+  selectedSize.value = normalizeImageSelectedSize(selectedModelConfig.value || {}, selectedSize.value)
   showModelDropdown.value = false
+  updateNodeData()
+}
+
+function selectSize(size) {
+  selectedSize.value = size
   updateNodeData()
 }
 
@@ -180,6 +214,10 @@ const estimatedCost = computed(() => {
   if (type === 'text-input') {
     return currentModelCost.value
   }
+
+  if (type.includes('to-image')) {
+    return getImageResolutionCost(selectedModelConfig.value || {}, selectedSize.value)
+  }
   
   // 简化的积分计算
   const baseCosts = {
@@ -212,6 +250,15 @@ watch(() => canvasStore.selectedNode, (node) => {
     inputText.value = node.data.text || ''
     if (node.data.model) selectedModel.value = node.data.model
     if (node.data.size) selectedSize.value = node.data.size
+  }
+}, { immediate: true })
+
+watch([selectedModelConfig, availableImageSizes], () => {
+  if (!isImageGenerateNode.value) return
+  const nextSize = normalizeImageSelectedSize(selectedModelConfig.value || {}, selectedSize.value)
+  if (nextSize !== selectedSize.value) {
+    selectedSize.value = nextSize
+    updateNodeData()
   }
 }, { immediate: true })
 
@@ -482,7 +529,7 @@ async function handleImageGenerate(nodeId, nodeType) {
     console.log('[BottomPanel] 实时获取的参考图:', realtimeImages.length, '张')
     console.log('[BottomPanel] inheritedData 的参考图:', inheritedImages.length, '张')
     console.log('[BottomPanel] 最终使用的参考图:', finalImages.length, '张')
-    
+
     let result
     if (nodeType === 'image-to-image' || finalImages.length > 0) {
       // 🔥 关键：确保所有 URL 都是 AI 模型可以访问的（七牛云 CDN URL）
@@ -491,6 +538,7 @@ async function handleImageGenerate(nodeId, nodeType) {
         throw new Error('参考图片未能转换为可访问 URL，请重新上传后重试')
       }
       console.log('[BottomPanel] 处理后的可访问 URLs:', accessibleUrls.length, '张')
+      const effectiveAspectRatio = await resolveGenerationAspectRatio(selectedAspectRatio.value, accessibleUrls[0])
       
       // 图生图
       result = await generateImageFromImage({
@@ -498,7 +546,8 @@ async function handleImageGenerate(nodeId, nodeType) {
         images: accessibleUrls,
         model: selectedModel.value,
         size: selectedSize.value,
-        aspectRatio: selectedAspectRatio.value
+        aspectRatio: effectiveAspectRatio,
+        aspectRatioMode: selectedAspectRatio.value
       })
     } else {
       // 文生图
@@ -506,7 +555,8 @@ async function handleImageGenerate(nodeId, nodeType) {
         prompt: inputText.value,
         model: selectedModel.value,
         size: selectedSize.value,
-        aspectRatio: selectedAspectRatio.value,
+        aspectRatio: await resolveGenerationAspectRatio(selectedAspectRatio.value, null),
+        aspectRatioMode: selectedAspectRatio.value,
         count: generateCount.value
       })
     }
@@ -615,9 +665,12 @@ function handleKeyDown(event) {
         <div class="canvas-controls-left">
           <!-- 模型选择器 -->
           <div class="model-selector" @click="toggleModelDropdown">
-            <span class="model-icon" :class="{ 'llm-icon': isTextNode }">
-              {{ selectedModelIcon }}
-            </span>
+            <ModelIcon
+              :icon="selectedModelIcon"
+              :label="selectedModelLabel"
+              class="model-icon"
+              :class="{ 'llm-icon': isTextNode }"
+            />
             <span class="model-name">{{ selectedModelLabel }}</span>
             <span class="dropdown-arrow">▾</span>
             
@@ -631,11 +684,14 @@ function handleKeyDown(event) {
                 @click.stop="selectModel(model.value)"
               >
                 <div class="model-option-main">
-                  <span class="model-option-icon" :class="{ 'llm-icon': isTextNode }">
-                    {{ model.icon }}
-                  </span>
+                  <ModelIcon
+                    :icon="model.icon"
+                    :label="model.label"
+                    class="model-option-icon"
+                    :class="{ 'llm-icon': isTextNode }"
+                  />
                   <span class="model-option-name">{{ model.label }}</span>
-                  <span v-if="model.pointsCost" class="model-option-cost">💎{{ formatPoints(model.pointsCost) }}</span>
+                  <span v-if="typeof model.pointsCost === 'number'" class="model-option-cost">💎{{ formatPoints(model.pointsCost) }}</span>
                 </div>
                 <div v-if="model.description" class="model-option-desc">
                   {{ model.description }}
@@ -646,6 +702,20 @@ function handleKeyDown(event) {
         </div>
         
         <div class="canvas-controls-right">
+          <div v-if="isImageGenerateNode && availableImageSizes.length > 0" class="size-selector">
+            <button
+              v-for="option in availableImageSizes"
+              :key="option.value"
+              class="size-option"
+              :class="{ active: selectedSize === option.value }"
+              type="button"
+              @click="selectSize(option.value)"
+            >
+              <span>{{ option.label }}</span>
+              <span class="size-cost">💎{{ formatPoints(option.pointsCost) }}</span>
+            </button>
+          </div>
+
           <!-- 生成次数 -->
           <span class="generate-count">{{ generateCount }}x</span>
           
@@ -782,7 +852,7 @@ function handleKeyDown(event) {
 .canvas-controls-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 /* 模型选择器 */
@@ -794,7 +864,7 @@ function handleKeyDown(event) {
   padding: 8px 12px;
   background: var(--canvas-bg-tertiary, #1a1a1a);
   border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -805,40 +875,49 @@ function handleKeyDown(event) {
 
 /* 黑白灰风格图标 - 实色渐变 */
 .model-icon {
-  width: 24px;
-  height: 24px;
-  /* 黑白灰渐变背景 */
-  background: linear-gradient(145deg, #4a4a4a 0%, #2d2d2d 50%, #1a1a1a 100%);
-  border: 1px solid #5a5a5a;
-  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #ffffff;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  box-shadow: none;
+  text-shadow: none;
+  filter: grayscale(1);
 }
 
-/* LLM 模型使用紫色渐变区分 */
 .model-icon.llm-icon {
-  background: linear-gradient(145deg, #7c3aed 0%, #5b21b6 50%, #4c1d95 100%);
-  border-color: #8b5cf6;
-  color: #f3e8ff;
-  box-shadow: 
-    0 2px 4px rgba(91, 33, 182, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+}
+
+.model-icon-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+.model-icon-image-square {
+  border-radius: 9px;
+}
+
+.model-icon-text {
+  font-size: 14px;
+  line-height: 1;
 }
 
 .model-name {
   color: var(--canvas-text-primary, #ffffff);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
 }
 
@@ -867,7 +946,8 @@ function handleKeyDown(event) {
   flex-direction: column;
   gap: 4px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -877,7 +957,11 @@ function handleKeyDown(event) {
 }
 
 .model-option.active {
-  background: rgba(139, 92, 246, 0.15);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.model-option:last-child {
+  border-bottom: 0;
 }
 
 .model-option-main {
@@ -886,14 +970,12 @@ function handleKeyDown(event) {
   gap: 10px;
 }
 
-/* 下拉列表黑白灰风格图标 - 实色渐变 */
 .model-option-icon {
-  width: 26px;
-  height: 26px;
-  /* 黑白灰渐变背景 */
-  background: linear-gradient(145deg, #4a4a4a 0%, #2d2d2d 50%, #1a1a1a 100%);
-  border: 1px solid #5a5a5a;
-  border-radius: 6px;
+  width: 34px;
+  height: 34px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -902,22 +984,15 @@ function handleKeyDown(event) {
   font-weight: 700;
   flex-shrink: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  box-shadow: 
-    0 2px 4px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  box-shadow: none;
+  text-shadow: none;
+  filter: grayscale(1);
 }
 
-/* LLM 模型使用紫色渐变区分 */
 .model-option-icon.llm-icon {
-  background: linear-gradient(145deg, #7c3aed 0%, #5b21b6 50%, #4c1d95 100%);
-  border-color: #8b5cf6;
-  color: #f3e8ff;
-  box-shadow: 
-    0 2px 4px rgba(91, 33, 182, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }
 
 .model-option-name {
@@ -940,6 +1015,44 @@ function handleKeyDown(event) {
   background: rgba(255, 255, 255, 0.08);
   padding: 2px 6px;
   border-radius: 4px;
+}
+
+.size-selector {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px;
+  background: var(--canvas-bg-tertiary, #1a1a1a);
+  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  border-radius: 10px;
+}
+
+.size-option {
+  min-width: 54px;
+  height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+.size-option.active {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--canvas-text-primary, #ffffff);
+}
+
+.size-cost {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 /* 生成次数 */
@@ -971,7 +1084,8 @@ function handleKeyDown(event) {
 }
 
 .canvas-generate-btn:disabled {
-  background: var(--canvas-border-default, #3a3a3a);
+  background: var(--canvas-accent-primary, #3b82f6);
+  color: white;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -993,5 +1107,20 @@ function handleKeyDown(event) {
 
 .text-preview-card::-webkit-scrollbar-thumb:hover {
   background: var(--canvas-border-active, #4a4a4a);
+}
+</style>
+
+<style>
+:root.canvas-theme-light .canvas-bottom-panel .model-icon,
+:root.canvas-theme-light .canvas-bottom-panel .model-icon.llm-icon,
+:root.canvas-theme-light .canvas-bottom-panel .model-option-icon,
+:root.canvas-theme-light .canvas-bottom-panel .model-option-icon.llm-icon {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .canvas-bottom-panel .model-icon-text {
+  color: #1c1917;
 }
 </style>

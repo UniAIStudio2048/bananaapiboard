@@ -2,7 +2,7 @@
  * Model Stats Store - 模型成功率統計集中管理
  * 
  * 功能：
- * - 集中管理 image/video 模型的當日成功率數據
+ * - 集中管理 image/video/audio 模型的當日成功率和平均耗時數據
  * - 10 分鐘自動輪詢刷新
  * - 跨日（0 點）自動重置並重新拉取
  * - 所有 ImageNode/VideoNode 共享同一份數據，避免冗餘請求
@@ -21,8 +21,9 @@ const POLL_INTERVAL_MS = 10 * 60 * 1000 // 10 分鐘
 
 export const useModelStatsStore = defineStore('modelStats', () => {
   // ========== 狀態 ==========
-  const imageStats = ref({})   // { modelName: { total, success, failed, rate } }
-  const videoStats = ref({})   // { modelName: { total, success, failed, rate } }
+  const imageStats = ref({})   // { modelName: { total, success, failed, rate, avgDurationSeconds } }
+  const videoStats = ref({})   // { modelName: { total, success, failed, rate, avgDurationSeconds } }
+  const audioStats = ref({})   // { modelName: { total, success, failed, rate, avgDurationSeconds } }
   const loading = ref(false)
   const lastFetchTime = ref(0) // 上次拉取的時間戳
   const currentDate = ref('')  // 當前統計日期 'YYYY-MM-DD'
@@ -42,29 +43,63 @@ export const useModelStatsStore = defineStore('modelStats', () => {
   function getVideoModelRate(modelName) {
     return _resolveRate(modelName, videoStats.value)
   }
+
+  // 獲取音頻模型成功率（供 AudioNode 使用）
+  function getAudioModelRate(modelName) {
+    return _resolveRate(modelName, audioStats.value)
+  }
   
   // 獲取圖像模型統計對象（供 VEO 前端聚合回退使用）
   function getImageModelStat(modelName) {
-    return imageStats.value[modelName] || null
+    return _resolveStat(modelName, imageStats.value)
   }
   
   // 獲取視頻模型統計對象（供 VEO 前端聚合回退使用）
   function getVideoModelStat(modelName) {
-    return videoStats.value[modelName] || null
+    return _resolveStat(modelName, videoStats.value)
+  }
+
+  // 獲取音頻模型統計對象
+  function getAudioModelStat(modelName) {
+    return _resolveStat(modelName, audioStats.value)
+  }
+
+  function getImageModelAvgDurationSeconds(modelName) {
+    return _resolveAvgDurationSeconds(modelName, imageStats.value)
+  }
+
+  function getVideoModelAvgDurationSeconds(modelName) {
+    return _resolveAvgDurationSeconds(modelName, videoStats.value)
+  }
+
+  function getAudioModelAvgDurationSeconds(modelName) {
+    return _resolveAvgDurationSeconds(modelName, audioStats.value)
   }
   
   // 獲取原始 imageStats（供組件直接遍歷使用）
   const rawImageStats = computed(() => imageStats.value)
   const rawVideoStats = computed(() => videoStats.value)
+  const rawAudioStats = computed(() => audioStats.value)
   
   // ========== 內部匹配邏輯 ==========
   
   function _resolveRate(modelName, stats) {
+    const stat = _resolveStat(modelName, stats)
+    return stat?.rate !== undefined ? stat.rate : null
+  }
+
+  function _resolveAvgDurationSeconds(modelName, stats) {
+    const stat = _resolveStat(modelName, stats)
+    const value = stat?.avgDurationSeconds
+    return Number.isFinite(value) && value >= 0 ? value : null
+  }
+
+  function _resolveStat(modelName, stats) {
     if (!modelName || !stats) return null
     
     // 1. 精確匹配（後端已按配置模型名聚合，通常能直接匹配）
-    if (stats[modelName]?.rate !== undefined) {
-      return stats[modelName].rate
+    if (stats[modelName]) {
+      return stats[modelName]
     }
     
     // 2. 格式歸一化匹配（處理 model-name vs modelname、veo3.1 vs veo31 等差異）
@@ -72,8 +107,8 @@ export const useModelStatsStore = defineStore('modelStats', () => {
     const normalizedName = normalize(modelName)
     
     for (const [key, stat] of Object.entries(stats)) {
-      if (normalize(key) === normalizedName && stat.rate !== undefined) {
-        return stat.rate
+      if (normalize(key) === normalizedName) {
+        return stat
       }
     }
     
@@ -94,7 +129,7 @@ export const useModelStatsStore = defineStore('modelStats', () => {
         ...(token ? { Authorization: `Bearer ${token}` } : {})
       }
       
-      // 同時拉取 image 和 video 統計（一次請求返回兩種數據）
+      // 同時拉取 image、video、audio 統計（一次請求返回三種數據）
       const response = await fetch(`${getApiUrl('/api/model-stats/success-rate')}`, { headers })
       
       if (response.ok) {
@@ -106,12 +141,15 @@ export const useModelStatsStore = defineStore('modelStats', () => {
           if (data.stats?.video) {
             videoStats.value = data.stats.video
           }
+          if (data.stats?.audio) {
+            audioStats.value = data.stats.audio
+          }
           // 記錄統計日期（用於跨日檢測）
           if (data.date) {
             currentDate.value = data.date
           }
           lastFetchTime.value = Date.now()
-          console.log(`[modelStatsStore] ✅ 統計數據已更新 | 日期: ${data.date} | 圖像模型: ${Object.keys(imageStats.value).length} | 視頻模型: ${Object.keys(videoStats.value).length}`)
+          console.log(`[modelStatsStore] ✅ 統計數據已更新 | 日期: ${data.date} | 圖像模型: ${Object.keys(imageStats.value).length} | 視頻模型: ${Object.keys(videoStats.value).length} | 音頻模型: ${Object.keys(audioStats.value).length}`)
         }
       }
     } catch (e) {
@@ -129,6 +167,7 @@ export const useModelStatsStore = defineStore('modelStats', () => {
       console.log(`[modelStatsStore] 🔄 跨日檢測：${currentDate.value} → ${today}，重置統計數據`)
       imageStats.value = {}
       videoStats.value = {}
+      audioStats.value = {}
       currentDate.value = today
       // 立即重新拉取
       fetchStats()
@@ -180,17 +219,24 @@ export const useModelStatsStore = defineStore('modelStats', () => {
     // 狀態
     imageStats,
     videoStats,
+    audioStats,
     loading,
     lastFetchTime,
     currentDate,
     rawImageStats,
     rawVideoStats,
+    rawAudioStats,
     
     // 查詢方法
     getImageModelRate,
     getVideoModelRate,
+    getAudioModelRate,
     getImageModelStat,
     getVideoModelStat,
+    getAudioModelStat,
+    getImageModelAvgDurationSeconds,
+    getVideoModelAvgDurationSeconds,
+    getAudioModelAvgDurationSeconds,
     
     // 控制方法
     ensureStarted,

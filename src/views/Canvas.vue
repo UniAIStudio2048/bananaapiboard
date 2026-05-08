@@ -3258,53 +3258,58 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 8px 14px;
-  background: rgba(18, 18, 18, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 18, 18, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.82);
   font-size: 13px;
   font-weight: 500;
-  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
   cursor: default;
   transition: all 0.25s ease;
 }
 
 .canvas-points-display:hover {
-  background: rgba(30, 30, 30, 0.98);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(28, 28, 28, 0.76);
+  border-color: rgba(255, 255, 255, 0.22);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
 }
 
 .canvas-points-display .points-icon {
   width: 16px;
   height: 16px;
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.68);
   flex-shrink: 0;
 }
 
 .canvas-points-display .points-value {
-  color: rgba(255, 255, 255, 0.85);
+  color: rgba(255, 255, 255, 0.9);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 /* 积分显示 - 白昼模式 */
 :root.canvas-theme-light .canvas-points-display {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  color: rgba(28, 25, 23, 0.85);
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(24, 24, 27, 0.12);
+  color: rgba(24, 24, 27, 0.82);
+  box-shadow: 0 8px 24px rgba(24, 24, 27, 0.08);
 }
 
 :root.canvas-theme-light .canvas-points-display:hover {
-  background: rgba(255, 255, 255, 1);
-  border-color: rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(24, 24, 27, 0.18);
+  box-shadow: 0 10px 28px rgba(24, 24, 27, 0.12);
 }
 
 :root.canvas-theme-light .canvas-points-display .points-icon {
-  color: rgba(28, 25, 23, 0.85);
+  color: rgba(24, 24, 27, 0.62);
 }
 
 :root.canvas-theme-light .canvas-points-display .points-value {
-  color: rgba(28, 25, 23, 0.85);
+  color: rgba(24, 24, 27, 0.9);
 }
 
 /* 当 AI 面板打开时，右上角控制区域向左移动 - 通过内联样式动态控制 */
@@ -3343,43 +3348,53 @@ onUnmounted(() => {
   width: 36px;
   height: 36px;
   padding: 0;
-  background: rgba(18, 18, 18, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(18, 18, 18, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   transition: all 0.25s ease;
-  backdrop-filter: blur(20px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
 }
 
 .canvas-icon-btn:hover {
-  background: rgba(30, 30, 30, 0.98);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.95);
+  background: rgba(28, 28, 28, 0.76);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
   transform: translateY(-1px);
 }
 
 /* 亮色主题下的按钮样式 */
 :root.canvas-theme-light .canvas-icon-btn {
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(0, 0, 0, 0.1);
-  color: rgba(28, 25, 23, 0.8);
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(24, 24, 27, 0.12);
+  color: rgba(24, 24, 27, 0.72);
+  box-shadow: 0 8px 24px rgba(24, 24, 27, 0.08);
 }
 
 :root.canvas-theme-light .canvas-icon-btn:hover {
-  background: rgba(255, 255, 255, 1);
-  border-color: rgba(0, 0, 0, 0.15);
-  color: rgba(28, 25, 23, 1);
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(24, 24, 27, 0.18);
+  color: rgba(24, 24, 27, 0.92);
+  box-shadow: 0 10px 28px rgba(24, 24, 27, 0.12);
 }
 
 /* 主题切换按钮特殊效果 */
 .canvas-theme-toggle:hover {
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.2);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
 }
 
 /* 购物车按钮特殊效果 */
 .canvas-cart-btn:hover {
-  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
+}
+
+:root.canvas-theme-light .canvas-theme-toggle:hover,
+:root.canvas-theme-light .canvas-cart-btn:hover {
+  box-shadow: 0 10px 28px rgba(24, 24, 27, 0.12);
 }
 
 /* 确保语言切换器在画布模式下样式正确 */

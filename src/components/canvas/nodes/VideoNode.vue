@@ -37,7 +37,7 @@ import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
-import { formatVideoNodeErrorMessage } from './video-error-message.js'
+import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedanceVideoModel } from './video-error-message.js'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 
 const { t, currentLanguage } = useI18n()
@@ -101,7 +101,31 @@ const errorMessage = ref('')
 const duplicateSubmitGuard = createCanvasDuplicateSubmitGuard()
 
 function getDisplayErrorMessage(msg) {
-  return formatVideoNodeErrorMessage(msg || errorMessage.value || '生成失败')
+  const message = msg || errorMessage.value || '生成失败'
+  if (props.data?._preserveRawVideoError) {
+    return typeof message === 'string' && message.trim() ? message.trim() : '生成失败'
+  }
+  return formatVideoNodeErrorMessage(message)
+}
+
+function getTaskVideoModel(task = {}) {
+  return task?.metadata?.model ||
+    task?.model ||
+    task?.modelName ||
+    task?.model_name ||
+    task?.result?.model ||
+    task?.result?.modelName ||
+    task?.result?.model_name ||
+    props.data?.model ||
+    selectedModel.value
+}
+
+function buildAsyncVideoErrorData(message, model) {
+  const preserveRaw = isSeedanceVideoModel(model)
+  return {
+    error: formatVideoNodeAsyncErrorMessage(message, model),
+    _preserveRawVideoError: preserveRaw
+  }
 }
 
 function isContentSafetyError(msg) {
@@ -195,6 +219,29 @@ function formatSuccessRate(modelName) {
   const rate = getModelSuccessRate(modelName)
   if (rate === null) return '100%'
   return `${Math.round(rate * 100)}%`
+}
+
+function getModelAvgDurationSeconds(modelName) {
+  if (!modelName) return null
+  const seconds = modelStatsStore.getVideoModelAvgDurationSeconds(modelName)
+  if (seconds !== null) return seconds
+
+  const modelConfig = models.value?.find(m => m.value === modelName)
+  if (modelConfig?.isVeoModel && modelConfig?.veoModes?.length > 0) {
+    const values = modelConfig.veoModes
+      .map(mode => mode.actualModel ? modelStatsStore.getVideoModelAvgDurationSeconds(mode.actualModel) : null)
+      .filter(value => value !== null)
+    if (values.length > 0) {
+      return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+    }
+  }
+
+  return null
+}
+
+function formatModelAvgDuration(modelName) {
+  const seconds = getModelAvgDurationSeconds(modelName)
+  return seconds === null ? '' : `${seconds}s`
 }
 
 // 是否显示模型统计（总是显示，无数据时显示 --）
@@ -1295,7 +1342,8 @@ async function handleManualRetryFetch() {
   canvasStore.updateNodeData(props.id, {
     status: 'processing',
     progress: isHD ? '重新获取高清视频...' : '重新获取中...',
-    error: null
+    error: null,
+    _preserveRawVideoError: false
   })
 
   try {
@@ -1320,10 +1368,11 @@ async function handleManualRetryFetch() {
     } else {
       const statusLower = (result?.status || '').toLowerCase()
       if (statusLower === 'failure' || statusLower === 'failed' || statusLower === 'timeout') {
+        const model = props.data?.model || selectedModel.value
         canvasStore.updateNodeData(props.id, {
           status: 'error',
           progress: null,
-          error: result?.error || result?.fail_reason || (isHD ? '高清处理失败' : '视频生成失败')
+          ...buildAsyncVideoErrorData(result?.error || result?.fail_reason || (isHD ? '高清处理失败' : '视频生成失败'), model)
         })
       } else if (statusLower === 'processing' || statusLower === 'pending') {
         canvasStore.updateNodeData(props.id, {
@@ -1431,11 +1480,12 @@ function handleBackgroundTaskFailed(event) {
   }
   
   const errorMsg = task.error || '视频生成失败'
+  const model = getTaskVideoModel(task)
   canvasStore.updateNodeData(props.id, {
     status: 'error',
-    error: errorMsg
+    ...buildAsyncVideoErrorData(errorMsg, model)
   })
-  errorMessage.value = errorMsg
+  errorMessage.value = formatVideoNodeAsyncErrorMessage(errorMsg, model)
   
   removeCompletedTask(taskId)
 }
@@ -1518,10 +1568,11 @@ function checkAndRestoreBackgroundTasks() {
     } else if (task.status === 'failed') {
       console.log(`[VideoNode] 恢复失败的任务: ${task.taskId}`)
       const errorMsg = task.type === 'video-hd' ? '高清处理失败' : '视频生成失败'
+      const model = getTaskVideoModel(task)
       canvasStore.updateNodeData(props.id, {
         status: 'error',
         progress: null,
-        error: task.error || errorMsg
+        ...buildAsyncVideoErrorData(task.error || errorMsg, model)
       })
       removeCompletedTask(task.taskId)
     } else if (task.status === 'processing' || task.status === 'pending') {
@@ -3356,7 +3407,8 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       status: 'processing',
       progress: '排队中...',
       taskId: null,
-      soraTaskId: null
+      soraTaskId: null,
+      _preserveRawVideoError: false
     })
     
     const result = await sendGenerateRequest(finalPrompt, finalImages)
@@ -3516,7 +3568,7 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
         
         // 检查失败状态
         if (status === 'failed' || status === 'failure' || status === 'error') {
-          reject(new Error(data.fail_reason || '视频生成失败'))
+          reject(new Error(data.error || data.fail_reason || '视频生成失败'))
           return
         }
         
@@ -3876,7 +3928,8 @@ async function handleGenerate() {
     status: 'processing',
     progress: generateCount > 1 ? `并行生成 ${generateCount} 个视频...` : '排队中...',
     taskId: null,
-    soraTaskId: null
+    soraTaskId: null,
+    _preserveRawVideoError: false
   })
   
   // ✅ 立即释放按钮，用户可以继续操作
@@ -3968,7 +4021,7 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
       
       // 检查失败状态
       if (status === 'failed' || status === 'failure' || status === 'error') {
-        throw new Error(data.fail_reason || '视频生成失败')
+        throw new Error(data.error || data.fail_reason || '视频生成失败')
       }
       
       // 继续轮询（错峰模式会动态调整间隔）
@@ -3982,10 +4035,11 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
       
     } catch (error) {
       console.error('[VideoNode] 轮询失败:', error)
-      errorMessage.value = formatVideoNodeErrorMessage(error.message || '生成失败')
+      const model = props.data?.model || selectedModel.value
+      errorMessage.value = formatVideoNodeAsyncErrorMessage(error.message || '生成失败', model)
       canvasStore.updateNodeData(props.id, {
         status: 'error',
-        error: formatVideoNodeErrorMessage(error.message)
+        ...buildAsyncVideoErrorData(error.message, model)
       })
       isGenerating.value = false
     }
@@ -6492,23 +6546,31 @@ function handleToolbarPreview() {
                       @click="selectModel(m.value)"
                     >
                       <div class="model-item-main">
-                        <span class="model-item-label">{{ m.label }}</span>
-                        <div
-                          v-if="hasModelStats(m.value)"
-                          class="model-signal-indicator"
-                          :class="getSignalClass(m.value)"
-                        >
-                          <div class="signal-bars">
-                            <span class="bar bar-1" :class="{ active: getSignalLevel(m.value) >= 1 }"></span>
-                            <span class="bar bar-2" :class="{ active: getSignalLevel(m.value) >= 2 }"></span>
-                            <span class="bar bar-3" :class="{ active: getSignalLevel(m.value) >= 3 }"></span>
-                            <span class="bar bar-4" :class="{ active: getSignalLevel(m.value) >= 4 }"></span>
-                          </div>
-                          <span class="signal-percent">{{ formatSuccessRate(m.value) }}</span>
+                        <span class="model-item-icon">{{ m.icon || selectedVendor?.charAt(0) || 'V' }}</span>
+                        <div class="model-item-content">
+                          <span class="model-item-label">{{ m.label }}</span>
+                          <div v-if="m.description" class="model-item-desc">{{ m.description }}</div>
                         </div>
-                        <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
+                        <div class="model-item-meta">
+                          <div
+                            v-if="hasModelStats(m.value)"
+                            class="model-signal-indicator"
+                            :class="getSignalClass(m.value)"
+                          >
+                            <div class="signal-bars">
+                              <span class="bar bar-1" :class="{ active: getSignalLevel(m.value) >= 1 }"></span>
+                              <span class="bar bar-2" :class="{ active: getSignalLevel(m.value) >= 2 }"></span>
+                              <span class="bar bar-3" :class="{ active: getSignalLevel(m.value) >= 3 }"></span>
+                              <span class="bar bar-4" :class="{ active: getSignalLevel(m.value) >= 4 }"></span>
+                            </div>
+                            <span class="signal-percent">{{ formatSuccessRate(m.value) }}</span>
+                            <span v-if="formatModelAvgDuration(m.value)" class="model-duration-text">
+                              {{ formatModelAvgDuration(m.value) }}
+                            </span>
+                          </div>
+                          <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
+                        </div>
                       </div>
-                      <div v-if="m.description" class="model-item-desc">{{ m.description }}</div>
                     </div>
                   </div>
                 </template>
@@ -6523,25 +6585,32 @@ function handleToolbarPreview() {
                   >
                     <div class="model-item-main">
                       <span class="model-item-icon">{{ m.icon }}</span>
-                      <span class="model-item-label">{{ m.label }}</span>
-                      <!-- 📊 成功率信号指示器 -->
-                      <div
-                        v-if="hasModelStats(m.value)"
-                        class="model-signal-indicator"
-                        :class="getSignalClass(m.value)"
-                      >
-                        <div class="signal-bars">
-                          <span class="bar bar-1" :class="{ active: getSignalLevel(m.value) >= 1 }"></span>
-                          <span class="bar bar-2" :class="{ active: getSignalLevel(m.value) >= 2 }"></span>
-                          <span class="bar bar-3" :class="{ active: getSignalLevel(m.value) >= 3 }"></span>
-                          <span class="bar bar-4" :class="{ active: getSignalLevel(m.value) >= 4 }"></span>
+                      <div class="model-item-content">
+                        <span class="model-item-label">{{ m.label }}</span>
+                        <div v-if="m.description" class="model-item-desc">
+                          {{ m.description }}
                         </div>
-                        <span class="signal-percent">{{ formatSuccessRate(m.value) }}</span>
                       </div>
-                      <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
-                    </div>
-                    <div v-if="m.description" class="model-item-desc">
-                      {{ m.description }}
+                      <div class="model-item-meta">
+                        <!-- 📊 成功率信号指示器 -->
+                        <div
+                          v-if="hasModelStats(m.value)"
+                          class="model-signal-indicator"
+                          :class="getSignalClass(m.value)"
+                        >
+                          <div class="signal-bars">
+                            <span class="bar bar-1" :class="{ active: getSignalLevel(m.value) >= 1 }"></span>
+                            <span class="bar bar-2" :class="{ active: getSignalLevel(m.value) >= 2 }"></span>
+                            <span class="bar bar-3" :class="{ active: getSignalLevel(m.value) >= 3 }"></span>
+                            <span class="bar bar-4" :class="{ active: getSignalLevel(m.value) >= 4 }"></span>
+                          </div>
+                          <span class="signal-percent">{{ formatSuccessRate(m.value) }}</span>
+                          <span v-if="formatModelAvgDuration(m.value)" class="model-duration-text">
+                            {{ formatModelAvgDuration(m.value) }}
+                          </span>
+                        </div>
+                        <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
+                      </div>
                     </div>
                   </div>
                 </template>
@@ -7295,10 +7364,10 @@ function handleToolbarPreview() {
   text-align: center;
   padding: 16px 14px;
   margin: 12px;
-  border: 1px solid rgba(59, 130, 246, 0.22);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08);
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .error-icon {
@@ -7309,7 +7378,7 @@ function handleToolbarPreview() {
 
 .error-text {
   font-size: 12px;
-  color: var(--canvas-text-primary, #1f2937);
+  color: #ef4444;
   max-width: 220px;
   line-height: 1.55;
   font-weight: 500;
@@ -7323,7 +7392,7 @@ function handleToolbarPreview() {
 }
 
 .preview-error.content-safety .error-text {
-  color: #f59e0b;
+  color: #ef4444;
 }
 
 .preview-error.content-safety .error-icon {
@@ -7331,12 +7400,11 @@ function handleToolbarPreview() {
 }
 
 .preview-error.timeout-error .error-text {
-  color: #f97316;
+  color: #ef4444;
 }
 
-.preview-error.duration-error .error-text,
-.preview-error.duration-error .error-icon {
-  color: #2563eb;
+.preview-error.duration-error .error-text {
+  color: #ef4444;
 }
 
 .retry-btn {
@@ -8088,6 +8156,7 @@ function handleToolbarPreview() {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.7);
   line-height: 1;
+  filter: grayscale(1);
 }
 
 .model-name {
@@ -8120,6 +8189,7 @@ function handleToolbarPreview() {
   -webkit-backdrop-filter: blur(20px) saturate(1.2);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
+  padding: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   z-index: 1000;
 }
@@ -8155,41 +8225,83 @@ function handleToolbarPreview() {
 }
 
 .model-dropdown-item {
-  padding: 8px 10px;
+  padding: 12px 14px;
+  margin-bottom: 0;
   cursor: pointer;
-  transition: all 0.15s ease;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .model-dropdown-item:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
+  border-bottom: 0;
 }
 
 .model-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 .model-dropdown-item.active {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(139, 92, 246, 0.06));
+  background: rgba(255, 255, 255, 0.07);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
 }
 
 .model-item-main {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
+  min-width: 0;
 }
 
 .model-item-icon {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
+  width: 42px;
+  height: 42px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 18px;
+  font-weight: 700;
   line-height: 1;
+  filter: grayscale(1);
+}
+
+.model-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.model-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 
 .model-item-label {
   color: rgba(255, 255, 255, 0.9);
-  font-size: 12px;
-  font-weight: 500;
+  font-size: 16px;
+  font-weight: 700;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-item-points {
@@ -8201,11 +8313,10 @@ function handleToolbarPreview() {
 }
 
 .model-item-desc {
-  margin-top: 4px;
-  padding-left: 21px;
-  font-size: 10px;
+  font-size: 13px;
   color: rgba(255, 255, 255, 0.5);
   line-height: 1.4;
+  white-space: normal;
 }
 
 /* 📊 模型成功率信号指示器 */
@@ -8213,8 +8324,9 @@ function handleToolbarPreview() {
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  margin-left: auto;
-  margin-right: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  width: 54px;
 }
 
 .signal-bars {
@@ -8240,6 +8352,14 @@ function handleToolbarPreview() {
   font-size: 10px;
   font-weight: 600;
   min-width: 28px;
+  text-align: right;
+}
+
+.model-duration-text {
+  flex-basis: 100%;
+  font-size: 10px;
+  line-height: 1;
+  color: #9ca3af;
   text-align: right;
 }
 
@@ -9241,7 +9361,7 @@ function handleToolbarPreview() {
 }
 
 :root.canvas-theme-light .video-node .model-dropdown-item.active {
-  background: rgba(139, 92, 246, 0.08);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 :root.canvas-theme-light .video-node .model-item-name {
@@ -9306,11 +9426,13 @@ function handleToolbarPreview() {
 
 :root.canvas-theme-light .video-node .model-item-icon {
   color: #57534e;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
 :root.canvas-theme-light .video-node .model-item-points {
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.1);
+  color: rgba(28, 25, 23, 0.62);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 /* 📊 模型成功率信号指示器 - 白昼模式 */

@@ -24,6 +24,7 @@ import { buildTextNodeLlmMessages } from '@/utils/textNodeLlmMessages'
 import CustomPresetDialog from '../dialogs/CustomPresetDialog.vue'
 import PresetManager from '../dialogs/PresetManager.vue'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
+import ModelIcon from '@/components/common/ModelIcon.vue'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 
 const { t } = useI18n()
@@ -466,8 +467,9 @@ const availableModels = computed(() => {
     return llmConfig.value.models.map(m => ({
       value: m.id,
       label: m.name,
-      icon: m.icon || 'G',
-      pointsCost: m.pointsCost
+      icon: m.icon || m.name || m.id,
+      pointsCost: m.pointsCost,
+      description: m.description || ''
     }))
   }
   return [
@@ -487,7 +489,7 @@ const selectedModelLabel = computed(() => {
 // 当前选中模型的图标
 const selectedModelIcon = computed(() => {
   const model = availableModels.value.find(m => m.value === selectedModel.value)
-  return model?.icon || 'G'
+  return model?.icon || selectedModelLabel.value || selectedModel.value
 })
 
 // 当前模型积分消耗
@@ -2914,7 +2916,7 @@ onMounted(() => {
         <div class="controls-left">
           <!-- 模型选择器 -->
           <div ref="modelSelectorRef" class="model-selector" @click="toggleModelDropdown">
-            <span class="model-icon llm-icon">{{ selectedModelIcon }}</span>
+            <ModelIcon :icon="selectedModelIcon" :label="selectedModelLabel" class="model-icon llm-icon" />
             <span class="model-name">{{ selectedModelLabel }}</span>
             <span class="dropdown-arrow">▾</span>
             
@@ -2923,13 +2925,20 @@ onMounted(() => {
               <div 
                 v-for="model in availableModels" 
                 :key="model.value"
-                class="model-option"
+                class="model-option model-dropdown-item"
                 :class="{ active: selectedModel === model.value }"
                 @click.stop="selectModel(model.value)"
               >
-                <span class="model-option-icon llm-icon">{{ model.icon }}</span>
-                <span class="model-option-name">{{ model.label }}</span>
-                <span v-if="model.pointsCost" class="model-option-cost">◆{{ formatPoints(model.pointsCost) }}</span>
+                <div class="model-item-main">
+                  <ModelIcon :icon="model.icon" :label="model.label" class="model-option-icon model-item-icon llm-icon" />
+                  <div class="model-item-content">
+                    <span class="model-option-name model-item-label">{{ model.label }}</span>
+                    <span v-if="model.description" class="model-item-desc">{{ model.description }}</span>
+                  </div>
+                  <div class="model-item-meta">
+                    <span v-if="model.pointsCost" class="model-option-cost model-item-points">◆{{ formatPoints(model.pointsCost) }}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -4283,18 +4292,44 @@ onMounted(() => {
 .model-icon {
   width: 20px;
   height: 20px;
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
+  color: rgba(255, 255, 255, 0.78);
   font-size: 11px;
   font-weight: 600;
+  filter: grayscale(1);
 }
 
 .model-icon.llm-icon {
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.model-icon-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+
+.model-icon-image-square {
+  border-radius: 5px;
+}
+
+.model-icon-text {
+  line-height: 1;
+}
+
+.model-icon .model-icon-text {
+  font-size: 11px;
+}
+
+.model-option-icon .model-icon-text {
+  font-size: 18px;
 }
 
 .model-name {
@@ -4316,11 +4351,13 @@ onMounted(() => {
   min-width: 220px;
   max-height: 320px;
   overflow-y: auto;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  background: linear-gradient(135deg, rgba(18, 18, 22, 0.95), rgba(28, 28, 35, 0.92));
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   padding: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   z-index: 200;
   /* 自定义滚动条 - 黑夜模式 */
   scrollbar-width: thin;
@@ -4349,46 +4386,97 @@ onMounted(() => {
 .model-option {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 0;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.model-option:last-child {
+  margin-bottom: 0;
+  border-bottom: 0;
 }
 
 .model-option:hover {
-  background: var(--canvas-bg-elevated, #242424);
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 .model-option.active {
-  background: rgba(139, 92, 246, 0.15);
+  background: rgba(255, 255, 255, 0.07);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+
+.model-item-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  width: 100%;
+}
+
+.model-item-content {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.model-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 
 .model-option-icon {
-  width: 24px;
-  height: 24px;
-  background: linear-gradient(135deg, #4285f4, #34a853);
-  border-radius: 6px;
+  width: 42px;
+  height: 42px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 14px;
+  color: rgba(255, 255, 255, 0.78);
+  flex-shrink: 0;
+  font-size: 18px;
+  font-weight: 700;
+  filter: grayscale(1);
 }
 
 .model-option-icon.llm-icon {
-  background: linear-gradient(135deg, #8b5cf6, #ec4899);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .model-option-name {
   color: var(--canvas-text-primary, #ffffff);
-  font-size: 14px;
+  font-size: 16px;
+  font-weight: 700;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-option-cost {
-  color: var(--canvas-accent-banana, #fbbf24);
+  color: rgba(255, 255, 255, 0.62);
   font-size: 12px;
+}
+
+.model-item-desc {
+  color: var(--canvas-text-tertiary, #888);
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 /* 生成次数 */
@@ -4443,7 +4531,8 @@ onMounted(() => {
 }
 
 .generate-btn:disabled {
-  background: var(--canvas-border-default, #3a3a3a);
+  background: var(--canvas-accent-primary, #3b82f6);
+  color: white;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -4476,8 +4565,16 @@ onMounted(() => {
   background: rgba(0, 0, 0, 0.04);
 }
 
+:root.canvas-theme-light .text-node .model-icon,
+:root.canvas-theme-light .text-node .model-icon.llm-icon {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
+  filter: none;
+}
+
 :root.canvas-theme-light .text-node .model-name {
-  color: #1c1917;
+  color: #57534e;
 }
 
 :root.canvas-theme-light .text-node .model-desc {
@@ -4505,7 +4602,17 @@ onMounted(() => {
 }
 
 :root.canvas-theme-light .text-node .model-option.active {
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .text-node .model-option-icon {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .text-node .model-option-cost {
+  color: rgba(28, 25, 23, 0.62);
 }
 
 :root.canvas-theme-light .text-node .option-name {
@@ -4534,7 +4641,8 @@ onMounted(() => {
 }
 
 :root.canvas-theme-light .text-node .generate-btn:disabled {
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--canvas-accent-primary, #3b82f6);
+  color: white;
 }
 
 /* 积分显示 - 白昼模式 */

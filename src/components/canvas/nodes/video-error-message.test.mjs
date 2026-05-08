@@ -1,7 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { formatVideoNodeErrorMessage } from './video-error-message.js'
+import {
+  formatVideoNodeAsyncErrorMessage,
+  formatVideoNodeErrorMessage,
+  isSeedanceVideoModel
+} from './video-error-message.js'
 
 test('formats upstream ant duration errors as concise Chinese text', () => {
   const result = formatVideoNodeErrorMessage(
@@ -33,4 +37,22 @@ test('formats upstream audio format errors as concise Chinese text', () => {
   )
 
   assert.equal(result, '参考音频格式不受当前渠道支持，请改用常见的 MP3 或 WAV 后重试。')
+})
+
+test('detects seedance models case-insensitively', () => {
+  assert.equal(isSeedanceVideoModel('Doubao-Seedance-2-0'), true)
+  assert.equal(isSeedanceVideoModel('seedance2-pro'), true)
+  assert.equal(isSeedanceVideoModel('kling-v3'), false)
+})
+
+test('keeps raw async seedance errors including request id', () => {
+  const raw = 'Generation blocked by policy. Request id: 0217775348023375ab88183db28c1bc6b9ad1d3f70c5b50e3c749'
+
+  assert.equal(formatVideoNodeAsyncErrorMessage(raw, 'doubao-seedance-2-0'), raw)
+})
+
+test('formats async non-seedance errors with the default formatter', () => {
+  const raw = '视频生成失败。Request id: 0217775348023375ab88183db28c1bc6b9ad1d3f70c5b50e3c749'
+
+  assert.equal(formatVideoNodeAsyncErrorMessage(raw, 'kling-v3'), '视频生成失败。')
 })

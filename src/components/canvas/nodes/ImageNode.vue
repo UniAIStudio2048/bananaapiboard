@@ -43,6 +43,8 @@ import { isPanoramaVrSupportedRatio } from '@/utils/canvasPanoramaExport'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PanoramaPreviewModal from '../PanoramaPreviewModal.vue'
+import ModelIcon from '../../common/ModelIcon.vue'
+import { startStreamDownload } from '@/api/client'
 
 const { t } = useI18n()
 
@@ -155,6 +157,11 @@ function formatSuccessRate(modelName) {
   const rate = getModelSuccessRate(modelName)
   if (rate === null) return '100%'
   return Math.round(rate * 100) + '%'
+}
+
+function formatModelAvgDuration(modelName) {
+  const seconds = modelStatsStore.getImageModelAvgDurationSeconds(modelName)
+  return seconds === null ? '' : `${seconds}s`
 }
 
 // 是否显示模型统计（总是显示，无数据时显示 --）
@@ -929,6 +936,18 @@ const models = computed(() => {
   return getAvailableImageModels(currentMode)
 })
 
+const selectedModelConfig = computed(() => {
+  return models.value.find(m => m.value === selectedModel.value) || null
+})
+
+const selectedModelLabel = computed(() => {
+  return selectedModelConfig.value?.label || selectedModel.value
+})
+
+const selectedModelIcon = computed(() => {
+  return selectedModelConfig.value?.icon || '▶'
+})
+
 // 历史工作流只读预览可能引用当前租户未启用的旧模型，补一个兼容配置避免只读链路误报 warning
 const modelLookupList = computed(() => {
   const currentModels = models.value || []
@@ -1067,21 +1086,32 @@ const imageSizes = computed(() => {
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   const pointsCost = currentModel?.pointsCost
   const apiType = currentModel?.apiType
-  
+  const resolutionEnabled = currentModel?.resolutionEnabled || {}
+
   // Seedream 5.0 只支持 2K 和 3K
   const isSeedream50 = checkIsSeedream50Lite(currentModel)
   // Seedream 4.5（包括即梦4.5/jimeng-4.5）不支持 1K，只支持 2K 和 4K
   const isSeedream45 = checkIsSeedream45(currentModel)
   // wan2.7 图生图模式不支持 4K，只支持 1K 和 2K
   const isWan27I2I = isWan27Model.value && hasImageInput.value
-  const supportedSizes = isSeedream50
+  let supportedSizes = isSeedream50
     ? ['2K', '3K']
     : isSeedream45
       ? ['2K', '4K']
       : isWan27I2I
         ? ['1K', '2K']
         : ['1K', '2K', '4K']
-  
+
+  // 根据 9000 端口的 resolutionEnabled 配置过滤尺寸选项
+  if (Object.keys(resolutionEnabled).length > 0) {
+    supportedSizes = supportedSizes.filter(size => {
+      const key = size.toLowerCase()
+      const enabled = resolutionEnabled[key] ?? resolutionEnabled[size]
+      // 显式设为 false 时隐藏，未配置或为 true 时保留
+      return enabled !== false
+    })
+  }
+
   // 如果是按分辨率计费且 pointsCost 是对象
   if (currentModel?.hasResolutionPricing && typeof pointsCost === 'object') {
     return supportedSizes.map(size => ({
@@ -1090,7 +1120,7 @@ const imageSizes = computed(() => {
       points: pointsCost[size.toLowerCase()] || pointsCost[size] || defaultSizePricing[size]
     }))
   }
-  
+
   // 默认尺寸配置
   return supportedSizes.map(size => ({
     value: size,
@@ -1102,6 +1132,7 @@ const imageSizes = computed(() => {
 // 是否显示尺寸选项（从模型配置中读取 hasResolutionPricing）
 const showResolutionOption = computed(() => {
   if (isMJModel.value) return false
+  if (imageSizes.value.length === 0) return false
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   return currentModel?.hasResolutionPricing || (currentModel?.pointsCost && typeof currentModel.pointsCost === 'object') || false
 })
@@ -3307,9 +3338,8 @@ async function handleToolbarDownload() {
       return
     }
     
-    const { smartDownload } = await import('@/api/client')
-    await smartDownload(imageUrl, filename)
-    showToast('下载完成', 'success')
+    startStreamDownload(imageUrl, filename)
+    showToast('已开始下载', 'success')
   } catch (error) {
     console.error('[ImageNode] 下载图片失败:', error)
     showToast('下载失败，请重试', 'error')
@@ -6595,7 +6625,7 @@ async function handleDrop(event) {
           <path d="M6 6h10a2 2 0 012 2v10" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
-      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent="handleToolbarDownload">
+      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
@@ -7005,8 +7035,8 @@ async function handleDrop(event) {
               class="model-selector-trigger"
               @click="toggleModelDropdown"
             >
-              <span class="model-icon">🍌</span>
-              <span class="model-name">{{ models.find(m => m.value === selectedModel)?.label || selectedModel }}</span>
+              <ModelIcon :icon="selectedModelIcon" :label="selectedModelLabel" class="model-icon" />
+              <span class="model-name">{{ selectedModelLabel }}</span>
               <span class="select-arrow" :class="{ 'arrow-up': isModelDropdownOpen }">▾</span>
             </div>
             
@@ -7026,27 +7056,35 @@ async function handleDrop(event) {
                   @click="selectModel(m.value)"
                 >
                   <div class="model-item-main">
-                    <span class="model-item-icon">{{ m.icon }}</span>
-                    <span class="model-item-label">{{ m.label }}</span>
-                    <!-- 📊 成功率信号指示器 -->
-                    <div 
-                      v-if="hasModelStats(m.value)"
-                      class="model-signal-indicator"
-                      :class="getSignalClass(m.value)"
-                    >
-                      <div class="signal-bars">
-                        <span class="bar bar-1" :class="{ active: getSignalLevel(m.value) >= 1 }"></span>
-                        <span class="bar bar-2" :class="{ active: getSignalLevel(m.value) >= 2 }"></span>
-                        <span class="bar bar-3" :class="{ active: getSignalLevel(m.value) >= 3 }"></span>
-                        <span class="bar bar-4" :class="{ active: getSignalLevel(m.value) >= 4 }"></span>
+                    <ModelIcon :icon="m.icon" :label="m.label" class="model-item-icon" />
+                    <div class="model-item-content">
+                      <div class="model-item-header">
+                        <span class="model-item-label">{{ m.label }}</span>
                       </div>
-                      <span class="signal-percent">{{ formatSuccessRate(m.value) }}</span>
+                      <div v-if="m.description" class="model-item-desc">
+                        {{ m.description }}
+                      </div>
                     </div>
-                    <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
-                  </div>
-                  <div v-if="m.description" class="model-item-desc">
-                    {{ m.description }}
-                  </div>
+                    <div class="model-item-meta">
+                        <div 
+                          v-if="hasModelStats(m.value)"
+                          class="model-signal-indicator"
+                          :class="getSignalClass(m.value)"
+                        >
+                          <div class="signal-bars">
+                            <span class="bar bar-1" :class="{ active: getSignalLevel(m.value) >= 1 }"></span>
+                            <span class="bar bar-2" :class="{ active: getSignalLevel(m.value) >= 2 }"></span>
+                            <span class="bar bar-3" :class="{ active: getSignalLevel(m.value) >= 3 }"></span>
+                            <span class="bar bar-4" :class="{ active: getSignalLevel(m.value) >= 4 }"></span>
+                          </div>
+                          <span class="signal-percent">{{ formatSuccessRate(m.value) }}</span>
+                          <span v-if="formatModelAvgDuration(m.value)" class="model-duration-text">
+                            {{ formatModelAvgDuration(m.value) }}
+                          </span>
+                        </div>
+                        <span v-if="m.points" class="model-item-points">{{ m.points }}点</span>
+                      </div>
+                    </div>
                 </div>
               </div>
             </Transition>
@@ -8754,7 +8792,33 @@ async function handleDrop(event) {
 }
 
 .model-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
   font-size: 14px;
+  filter: grayscale(1);
+}
+
+.model-icon-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  display: block;
+}
+
+.model-icon-text {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1;
 }
 
 .model-name {
@@ -8779,14 +8843,18 @@ async function handleDrop(event) {
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
+  width: max-content;
   min-width: 220px;
+  max-width: min(420px, calc(100vw - 32px));
   max-height: 480px;
   overflow-y: auto;
+  overflow-x: hidden;
   background: linear-gradient(135deg, rgba(18, 18, 22, 0.95), rgba(28, 28, 35, 0.92));
   backdrop-filter: blur(20px) saturate(1.2);
   -webkit-backdrop-filter: blur(20px) saturate(1.2);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
+  padding: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   z-index: 1000;
 }
@@ -8822,45 +8890,87 @@ async function handleDrop(event) {
 }
 
 .model-dropdown-item {
-  padding: 10px 12px;
+  padding: 12px 14px;
+  margin-bottom: 0;
   cursor: pointer;
-  transition: background 0.15s;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .model-dropdown-item:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
+  border-bottom: 0;
 }
 
 .model-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 .model-dropdown-item.active {
-  background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(139, 92, 246, 0.06));
+  background: rgba(255, 255, 255, 0.07);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
 }
 
 .model-item-main {
   display: flex;
   align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.model-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.model-item-meta {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  flex-shrink: 0;
+  margin-left: 8px;
 }
 
 .model-item-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.78);
   font-size: 14px;
+  filter: grayscale(1);
 }
 
 .model-item-label {
   color: #ffffff;
-  font-size: 13px;
-  font-weight: 500;
-  flex: 1;
+  font-size: 16px;
+  font-weight: 700;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .model-item-points {
   font-size: 11px;
-  color: #ffc107;
-  background: rgba(255, 193, 7, 0.15);
+  color: rgba(255, 255, 255, 0.62);
+  background: rgba(255, 255, 255, 0.07);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -8870,8 +8980,9 @@ async function handleDrop(event) {
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  margin-left: auto;
-  margin-right: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  width: 54px;
 }
 
 .signal-bars {
@@ -8899,6 +9010,14 @@ async function handleDrop(event) {
   min-width: 28px;
   text-align: right;
   color: #9ca3af;
+}
+
+.model-duration-text {
+  flex-basis: 100%;
+  font-size: 10px;
+  line-height: 1;
+  color: #9ca3af;
+  text-align: right;
 }
 
 /* 优秀 >= 95%：绿色 */
@@ -8937,11 +9056,11 @@ async function handleDrop(event) {
 }
 
 .model-item-desc {
-  margin-top: 4px;
-  padding-left: 22px;
-  font-size: 11px;
+  display: block;
+  font-size: 13px;
   color: var(--canvas-text-tertiary, #888);
   line-height: 1.4;
+  white-space: normal;
 }
 
 /* 下拉动画 */
@@ -10058,6 +10177,16 @@ async function handleDrop(event) {
   border-color: rgba(0, 0, 0, 0.2);
 }
 
+:root.canvas-theme-light .image-node .model-icon {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .image-node .model-icon-text {
+  color: #1c1917;
+}
+
 :root.canvas-theme-light .image-node .model-name {
   color: #1c1917;
 }
@@ -10084,7 +10213,7 @@ async function handleDrop(event) {
 }
 
 :root.canvas-theme-light .image-node .model-dropdown-item.active {
-  background: rgba(139, 92, 246, 0.08);
+  background: rgba(0, 0, 0, 0.06);
 }
 
 :root.canvas-theme-light .image-node .model-item-name {
@@ -10157,11 +10286,13 @@ async function handleDrop(event) {
 
 :root.canvas-theme-light .image-node .model-item-icon {
   color: #57534e;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
 :root.canvas-theme-light .image-node .model-item-points {
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.1);
+  color: rgba(28, 25, 23, 0.62);
+  background: rgba(0, 0, 0, 0.05);
 }
 
 /* 尺寸选择器 - 白昼模式 */

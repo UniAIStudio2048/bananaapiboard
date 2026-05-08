@@ -1,3 +1,8 @@
+export function isSeedanceVideoModel(model) {
+  if (!model || typeof model !== 'string') return false
+  return model.toLowerCase().includes('seedance')
+}
+
 export function formatVideoNodeErrorMessage(message) {
   if (!message || typeof message !== 'string') return '生成失败'
 
@@ -24,4 +29,12 @@ export function formatVideoNodeErrorMessage(message) {
   }
 
   return trimmed.replace(/\s*request id:\s*[a-z0-9-]+\s*$/i, '').trim()
+}
+
+export function formatVideoNodeAsyncErrorMessage(message, model) {
+  if (isSeedanceVideoModel(model)) {
+    return typeof message === 'string' && message.trim() ? message.trim() : '生成失败'
+  }
+
+  return formatVideoNodeErrorMessage(message)
 }

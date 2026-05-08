@@ -1,3 +1,5 @@
+import { shallowRef } from 'vue'
+
 /**
  * 租户配置模块
  * 
@@ -24,7 +26,7 @@
  * @param {string} label - 模型显示名称
  * @returns {string} 单个字符用于图标显示
  */
-function getModelIconChar(label) {
+export function getModelIconChar(label) {
   if (!label) return '▶'
   
   // 去除空格后取第一个字符
@@ -41,6 +43,12 @@ function getModelIconChar(label) {
     // 英文返回大写首字母
     return firstChar.toUpperCase()
   }
+}
+
+export function resolveModelIcon(icon, label, key = '') {
+  const configuredIcon = String(icon || '').trim()
+  if (configuredIcon) return configuredIcon
+  return getModelIconChar(label || key)
 }
 
 // 默认配置
@@ -119,10 +127,11 @@ const defaultConfig = {
 
 // 从环境变量读取配置（品牌配置不再从环境变量读取）
 // apiBase 为空时使用相对路径（本地 Nginx/Vite 代理），设置时使用绝对路径（远程 API）
+const viteEnv = import.meta.env || {}
 const envConfig = {
-  apiBase: (import.meta.env.VITE_API_BASE || '').replace(/\/+$/, ''),
-  tenantId: import.meta.env.VITE_TENANT_ID || defaultConfig.tenantId,
-  tenantKey: import.meta.env.VITE_TENANT_KEY || defaultConfig.tenantKey,
+  apiBase: (viteEnv.VITE_API_BASE || '').replace(/\/+$/, ''),
+  tenantId: viteEnv.VITE_TENANT_ID || defaultConfig.tenantId,
+  tenantKey: viteEnv.VITE_TENANT_KEY || defaultConfig.tenantKey,
   brand: {
     // 品牌配置使用默认值，启动时会从API加载
     name: defaultConfig.brand.name,
@@ -132,15 +141,28 @@ const envConfig = {
     description: defaultConfig.brand.description
   },
   features: {
-    enableVideo: import.meta.env.VITE_ENABLE_VIDEO !== 'false',
-    enableVoucher: import.meta.env.VITE_ENABLE_VOUCHER !== 'false',
-    enableInvite: import.meta.env.VITE_ENABLE_INVITE !== 'false',
-    enablePackages: import.meta.env.VITE_ENABLE_PACKAGES !== 'false'
+    enableVideo: viteEnv.VITE_ENABLE_VIDEO !== 'false',
+    enableVoucher: viteEnv.VITE_ENABLE_VOUCHER !== 'false',
+    enableInvite: viteEnv.VITE_ENABLE_INVITE !== 'false',
+    enablePackages: viteEnv.VITE_ENABLE_PACKAGES !== 'false'
   }
 }
 
 // 当前运行时配置（可动态更新）
 let runtimeConfig = { ...envConfig }
+const tenantConfigVersion = shallowRef(0)
+
+function bumpTenantConfigVersion() {
+  tenantConfigVersion.value += 1
+}
+
+export function useTenantConfigVersion() {
+  return tenantConfigVersion
+}
+
+export function getTenantConfigVersion() {
+  return tenantConfigVersion.value
+}
 
 // 从 localStorage 加载配置
 function loadFromStorage() {
@@ -173,6 +195,7 @@ export function updateRuntimeConfig(newConfig) {
     ...runtimeConfig,
     ...newConfig
   }
+  bumpTenantConfigVersion()
   console.log('[tenant] 运行时配置已更新:', runtimeConfig)
 }
 
@@ -312,6 +335,7 @@ export async function loadBrandConfig(forceReload = false) {
         runtimeConfig.enableCanvasLogo = true
       }
       console.log('[tenant] 画布底部Logo开关:', runtimeConfig.enableCanvasLogo)
+      bumpTenantConfigVersion()
       
       // 保存到本地存储
       saveToStorage(runtimeConfig)
@@ -463,6 +487,7 @@ export async function loadRemoteConfig() {
         },
         features: runtimeConfig.features
       }
+      bumpTenantConfigVersion()
       
       // 保存到本地存储
       saveToStorage(runtimeConfig)
@@ -505,7 +530,10 @@ try {
     modelNames: savedTenantConfig?.modelNames || envConfig.modelNames,
     modelEnabled: savedTenantConfig?.modelEnabled || envConfig.modelEnabled,
     modelDescriptions: savedTenantConfig?.modelDescriptions || envConfig.modelDescriptions,
-    modelPricing: savedTenantConfig?.modelPricing || defaultConfig.modelPricing
+    modelPricing: savedTenantConfig?.modelPricing || defaultConfig.modelPricing,
+    image_models: savedTenantConfig?.image_models || [],
+    video_models: savedTenantConfig?.video_models || [],
+    video_model_groups: savedTenantConfig?.video_model_groups || []
   }
   
   console.log('[tenant] 初始化完成，租户ID:', envConfig.tenantId)
@@ -627,11 +655,12 @@ export const getAvailableImageModels = (mode = null) => {
       models.push({
         value: key,
         label: modelConfig.displayName || imageModels[key] || key,
-        icon: key.includes('gemini') ? 'G' : '🍌',
+        icon: resolveModelIcon(modelConfig.icon, modelConfig.displayName || imageModels[key] || key, key),
         description: modelConfig.description || descriptions[key] || '',
         // 积分配置
         hasResolutionPricing: modelConfig.hasResolutionPricing || modelPricingConfig.hasResolutionPricing || false,
         pointsCost: modelConfig.pointsCost || modelPricingConfig.pointsCost || 1,
+        resolutionEnabled: modelConfig.resolutionEnabled || modelPricingConfig.resolutionEnabled,
         supportedModes,
         // API 类型（用于判断是否是 MJ 模型）
         apiType: modelConfig.apiType || null,
@@ -669,11 +698,12 @@ export const getAvailableImageModels = (mode = null) => {
       models.push({
         value: key,
         label: name || key,
-        icon: key.includes('gemini') ? 'G' : '🍌',
+        icon: resolveModelIcon(modelFullConfig?.icon, name || key, key),
         description: descriptions[key] || '',
         // 积分配置
         hasResolutionPricing: modelPricingConfig.hasResolutionPricing || false,
         pointsCost: modelPricingConfig.pointsCost || 1,
+        resolutionEnabled: modelPricingConfig.resolutionEnabled,
         supportedModes
       })
     }
@@ -1747,9 +1777,10 @@ export const getAvailableLLMModels = () => {
         value: modelConfig.id, // 兼容前端选择器
         name: modelConfig.name,
         label: modelConfig.name, // 兼容前端选择器
-        icon: modelConfig.icon || 'G',
+        icon: resolveModelIcon(modelConfig.icon, modelConfig.name, modelConfig.id),
         provider: modelConfig.provider || 'google',
-        pointsCost: modelConfig.pointsCost || 1
+        pointsCost: modelConfig.pointsCost || 1,
+        description: modelConfig.description || ''
       })
     }
     
