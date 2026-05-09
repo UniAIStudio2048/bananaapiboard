@@ -153,6 +153,25 @@ export async function createAsset(data) {
 }
 
 /**
+ * 快捷创建 Seedance 角色资产。
+ * 后端会自动复用隐藏默认分组，并给资产写入 15 天有效期。
+ * @param {Object} data - { URL, Name, sourceNodeId }
+ */
+export async function createQuickSeedanceCharacterAsset(data) {
+  const response = await fetch(`${getApiBase()}/api/volcengine-asset/assets/quick-seedance-character`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.error || '快捷创建 Seedance 角色资产失败')
+  }
+  return response.json()
+}
+
+/**
  * 获取角色资产列表
  * @param {Object} params - { groupIds, status, keyword }
  */

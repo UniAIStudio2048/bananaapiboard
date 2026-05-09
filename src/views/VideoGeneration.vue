@@ -7,6 +7,11 @@ import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
 import { formatPoints } from '@/utils/format'
 import { pickConfiguredSubmode } from '@/utils/videoSubmodeDefaults'
+import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
+import {
+  getVideoGenerationProgressText,
+  shouldShowVideoGenerationTimeoutHint
+} from '@/utils/videoGenerationProgress'
 
 const fileInputRef = ref(null)
 const prompt = ref('')
@@ -235,6 +240,9 @@ const gallery = ref([])
 // 根据设备类型设置历史记录抽屉默认状态：手机默认收起，平板和电脑默认展开
 const isHistoryDrawerOpen = ref(shouldHistoryDrawerOpenByDefault())
 const pollingTimers = new Map()
+const elapsedTimeNow = ref(Date.now())
+let elapsedTimeTimer = null
+const modelStatsStore = useModelStatsStore()
 
 const showVideoModal = ref(false)
 const currentVideo = ref(null)
@@ -830,6 +838,38 @@ function isCompletedStatus(status) {
   if (!status) return false
   const normalized = status.toString().toLowerCase()
   return ['completed', 'success'].some(s => normalized.includes(s))
+}
+
+function processingProgressText(item) {
+  return getVideoGenerationProgressText(item, elapsedTimeNow.value)
+}
+
+function getAverageVideoGenerationSeconds(item) {
+  const modelName = item?.model || model.value
+  if (!modelName) return null
+
+  const seconds = modelStatsStore.getVideoModelAvgDurationSeconds(modelName)
+  if (seconds !== null) return seconds
+
+  const modelConfig = availableModels.value.find(m => m.value === modelName)
+  if (modelConfig?.isVeoModel && modelConfig?.veoModes?.length > 0) {
+    const values = modelConfig.veoModes
+      .map(mode => mode.actualModel ? modelStatsStore.getVideoModelAvgDurationSeconds(mode.actualModel) : null)
+      .filter(value => value !== null)
+    if (values.length > 0) {
+      return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)
+    }
+  }
+
+  return null
+}
+
+function showProcessingTimeoutHint(item) {
+  return shouldShowVideoGenerationTimeoutHint(
+    item,
+    elapsedTimeNow.value,
+    getAverageVideoGenerationSeconds(item)
+  )
 }
 
 function formatTime(ts) {
@@ -1870,6 +1910,12 @@ watch(model, (newModel) => {
 })
 
 onMounted(async () => {
+  modelStatsStore.ensureStarted()
+
+  elapsedTimeTimer = setInterval(() => {
+    elapsedTimeNow.value = Date.now()
+  }, 1000)
+
   // 加载视频配置（优先加载，以便后续计算积分）
   await loadVideoConfig()
   await refreshUser()
@@ -1947,6 +1993,10 @@ onMounted(async () => {
 onUnmounted(() => {
   pollingTimers.forEach(timer => clearInterval(timer))
   pollingTimers.clear()
+  if (elapsedTimeTimer) {
+    clearInterval(elapsedTimeTimer)
+    elapsedTimeTimer = null
+  }
   clearImages()
   clearSeedanceFiles()
 })
@@ -2819,8 +2869,13 @@ onUnmounted(() => {
                   </svg>
                   
                   <p class="text-slate-700 dark:text-slate-200 text-base font-bold mb-2">正在生成精彩视频...</p>
-                  <p v-if="item.progress" class="text-gray-600 dark:text-gray-400 text-sm font-semibold mb-3 animate-pulse">{{ item.progress }}</p>
-                  <p v-else class="text-slate-500 dark:text-slate-400 text-sm mb-3">AI正在为您创作中...</p>
+                  <p class="text-gray-600 dark:text-gray-400 text-sm font-semibold mb-3 animate-pulse">{{ processingProgressText(item) }}</p>
+                  <p
+                    v-if="showProcessingTimeoutHint(item)"
+                    class="text-amber-600 dark:text-amber-400 text-xs mb-3 font-medium px-6 text-center"
+                  >
+                    当前任务可能超时失败，可尝试重新提交任务
+                  </p>
                   
                   <!-- 进度条效果 -->
                   <div class="w-48 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -3041,9 +3096,13 @@ onUnmounted(() => {
                       <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                       <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    <p class="text-xs text-slate-700 dark:text-slate-300 font-semibold">正在生成中...</p>
-                    <p v-if="item.progress" class="text-xs text-gray-600 dark:text-gray-400 mt-1 animate-pulse">{{ item.progress }}</p>
-                    <p v-else class="text-xs text-slate-500 dark:text-slate-400 mt-1 opacity-75">AI正在创作中</p>
+                    <p class="text-xs text-slate-700 dark:text-slate-300 font-semibold">{{ processingProgressText(item) }}</p>
+                    <p
+                      v-if="showProcessingTimeoutHint(item)"
+                      class="text-xs text-amber-600 dark:text-amber-400 mt-1 px-3"
+                    >
+                      当前任务可能超时失败，可尝试重新提交任务
+                    </p>
                   </div>
                 </div>
                 <!-- 失败状态 -->

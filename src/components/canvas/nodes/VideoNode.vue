@@ -32,9 +32,20 @@ import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { getMentionPopupPosition, getTextareaCaretViewportRect, isBrowserRenderableUrl } from '@/utils/promptMention'
+import {
+  bindMediaMention,
+  escapePromptMediaMentions,
+  getMediaMentionKey,
+  syncPromptMediaMentions
+} from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
+import { getSeedanceQuickAsset } from '@/utils/seedanceQuickAsset'
+import {
+  getVideoGenerationProgressText,
+  shouldShowVideoGenerationTimeoutHint
+} from '@/utils/videoGenerationProgress'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedanceVideoModel } from './video-error-message.js'
@@ -150,6 +161,7 @@ function getErrorHint(msg) {
 const promptText = ref(props.data.prompt || '')
 const promptTextareaRef = ref(null)
 const hasManualPromptTextareaSize = ref(false)
+const promptMentionBindings = ref(props.data.promptMentionBindings || {})
 
 // @ 提及弹出相关
 const showMentionPopup = ref(false)
@@ -163,6 +175,8 @@ const isModelDropdownOpen = ref(false)
 // 📊 模型成功率統計（使用集中式 Store，所有節點共享數據，10 分鐘輪詢）
 const modelStatsStore = useModelStatsStore()
 modelStatsStore.ensureStarted()
+const elapsedTimeNow = ref(Date.now())
+let elapsedTimeTimer = null
 
 // 获取指定模型的成功率（代理到 Store，含 VEO 前端聚合回退）
 function getModelSuccessRate(modelName) {
@@ -242,6 +256,27 @@ function getModelAvgDurationSeconds(modelName) {
 function formatModelAvgDuration(modelName) {
   const seconds = getModelAvgDurationSeconds(modelName)
   return seconds === null ? '' : `${seconds}s`
+}
+
+function getProcessingTimingData(data = props.data) {
+  return {
+    processingStartedAt: data?.processingStartedAt,
+    created_at: data?.created_at,
+    createdAt: data?.createdAt
+  }
+}
+
+function processingProgressText(data = props.data) {
+  return getVideoGenerationProgressText(getProcessingTimingData(data), elapsedTimeNow.value)
+}
+
+function showProcessingTimeoutHint(data = props.data) {
+  if (data?.taskType === 'video-hd') return false
+  return shouldShowVideoGenerationTimeoutHint(
+    getProcessingTimingData(data),
+    elapsedTimeNow.value,
+    getModelAvgDurationSeconds(data?.model || selectedModel.value)
+  )
 }
 
 // 是否显示模型统计（总是显示，无数据时显示 --）
@@ -407,24 +442,21 @@ function handlePromptInput(event) {
   const atIndex = textBeforeCursor.lastIndexOf('@')
   
   if (atIndex !== -1 && referenceMediaList.value.length > 0) {
-    const charBeforeAt = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' '
-    if (atIndex === 0 || /[\s\n]/.test(charBeforeAt)) {
-      const query = textBeforeCursor.slice(atIndex + 1)
-      if (/^(?:视频|图片|音频)\d/.test(query)) {
-        showMentionPopup.value = false
-        return
-      }
-      if (query.length < 4) {
-        showMentionPopup.value = true
-        mentionStartPos = atIndex
-        mentionActiveIndex.value = 0
-        
-        mentionPosition.value = getMentionPopupPosition({
-          caretRect: getTextareaCaretViewportRect(el, cursorIndex),
-          fallbackRect: el.getBoundingClientRect()
-        })
-        return
-      }
+    const query = textBeforeCursor.slice(atIndex + 1)
+    if (/^(?:视频|图片|音频)\d/.test(query)) {
+      showMentionPopup.value = false
+      return
+    }
+    if (query.length < 4 && !/\s/.test(query)) {
+      showMentionPopup.value = true
+      mentionStartPos = atIndex
+      mentionActiveIndex.value = 0
+      
+      mentionPosition.value = getMentionPopupPosition({
+        caretRect: getTextareaCaretViewportRect(el, cursorIndex),
+        fallbackRect: el.getBoundingClientRect()
+      })
+      return
     }
   }
   
@@ -460,6 +492,7 @@ const referenceMediaList = computed(() => {
       index: i + 1,
       url,
       label: `视频${i + 1}`,
+      key: getMediaMentionKey({ type: 'video', url }),
       thumbnailUrl: getReferenceVideoThumbnail(url)
     })
   })
@@ -469,14 +502,36 @@ const referenceMediaList = computed(() => {
       index: i + 1,
       url,
       label: `图片${i + 1}`,
+      key: getMediaMentionKey({ type: 'image', url }),
       thumbnailUrl: getReferenceImageThumbnail(url)
     })
   })
   referenceAudios.value.forEach((url, i) => {
-    list.push({ type: 'audio', index: i + 1, url, label: `音频${i + 1}` })
+    list.push({
+      type: 'audio',
+      index: i + 1,
+      url,
+      label: `音频${i + 1}`,
+      key: getMediaMentionKey({ type: 'audio', url })
+    })
   })
   return list
 })
+
+function updatePromptMentionBindings(bindings) {
+  promptMentionBindings.value = bindings || {}
+  canvasStore.updateNodeData(props.id, {
+    promptMentionBindings: promptMentionBindings.value
+  })
+}
+
+function syncPromptMentionsWithMedia(mediaItems = referenceMediaList.value) {
+  const result = syncPromptMediaMentions(promptText.value, promptMentionBindings.value, mediaItems)
+  if (result.text !== promptText.value) {
+    promptText.value = result.text
+  }
+  updatePromptMentionBindings(result.bindings)
+}
 
 function getReferenceImageThumbnail(url) {
   const sourceNode = findUpstreamNodeByImageUrl(url)
@@ -556,6 +611,7 @@ function insertMediaTag(media) {
   const textarea = promptTextareaRef.value
   if (!textarea) {
     promptText.value += tag
+    updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
     return
   }
   
@@ -564,6 +620,7 @@ function insertMediaTag(media) {
   const before = promptText.value.slice(0, start)
   const after = promptText.value.slice(end)
   promptText.value = before + tag + after
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
   
   nextTick(() => {
     textarea.focus()
@@ -581,6 +638,7 @@ function handleMentionSelect(media) {
   const before = promptText.value.slice(0, mentionStartPos)
   const after = promptText.value.slice(cursorPos)
   promptText.value = before + tag + ' ' + after
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
   
   showMentionPopup.value = false
   
@@ -599,17 +657,7 @@ function handleMentionSelect(media) {
  *   @图片 / 【@图片】 / @图片1 / 【@图片1】 → <<<image_1>>>
  */
 function escapePromptTags(text) {
-  if (!text) return text
-  let result = text.replace(/【?@视频(\d*)】?/g, (_, num) => {
-    return `<<<video_${num ? parseInt(num) : 1}>>>`
-  })
-  result = result.replace(/【?@图片(\d*)】?/g, (_, num) => {
-    return `<<<image_${num ? parseInt(num) : 1}>>>`
-  })
-  result = result.replace(/【?@音频(\d*)】?/g, (_, num) => {
-    return `<<<audio_${num ? parseInt(num) : 1}>>>`
-  })
-  return result
+  return escapePromptMediaMentions(text)
 }
 
 /**
@@ -625,7 +673,7 @@ const highlightedPromptSegments = computed(() => {
     if (match.index > lastIndex) {
       segments.push({ text: promptText.value.slice(lastIndex, match.index), isTag: false })
     }
-    segments.push({ text: match[0], isTag: true })
+    segments.push({ text: match[0], isTag: true, media: getMediaForPromptTag(match[0]) })
     lastIndex = regex.lastIndex
   }
   if (lastIndex < promptText.value.length) {
@@ -633,6 +681,26 @@ const highlightedPromptSegments = computed(() => {
   }
   return segments
 })
+
+function getMediaForPromptTag(text) {
+  const match = String(text || '').match(/^【?@(视频|图片|音频)(\d*)】?$/)
+  if (!match) return null
+  const typeMap = { 视频: 'video', 图片: 'image', 音频: 'audio' }
+  const type = typeMap[match[1]]
+  const index = Number(match[2] || 1)
+  return referenceMediaList.value.find(item => item.type === type && item.index === index) || null
+}
+
+function handlePromptTagHover(media, event) {
+  if (!media) return
+  if (media.type === 'video') {
+    onVideoHoverStart(media.url, event)
+  } else if (media.type === 'audio') {
+    onAudioHoverStart(media.url, event)
+  } else {
+    onHoverStart(media.url, event)
+  }
+}
 
 // 获取当前选中模型的显示名称
 const selectedModelLabel = computed(() => {
@@ -1501,7 +1569,8 @@ function handleBackgroundTaskProgress(event) {
     // 高清任务的后端进度包含秒数（如 "高清处理中... (120秒)"），
     // 会被 progressPercent 误解为百分比，使用固定文案避免误导
     canvasStore.updateNodeData(props.id, {
-      progress: task.type === 'video-hd' ? '高清处理中...' : progress
+      progress: task.type === 'video-hd' ? '高清处理中...' : '生成中...',
+      processingStartedAt: props.data.processingStartedAt || task.createdAt || task.created_at || Date.now()
     })
   }
 }
@@ -1582,7 +1651,8 @@ function checkAndRestoreBackgroundTasks() {
       if (props.data.status !== 'processing') {
         canvasStore.updateNodeData(props.id, {
           status: 'processing',
-          progress: task.result?.progress || task.progress || progressText
+          progress: progressText,
+          processingStartedAt: props.data.processingStartedAt || task.createdAt || task.created_at || Date.now()
         })
       }
     }
@@ -1605,6 +1675,10 @@ function handleCanvasDragEnd() {
 }
 
 onMounted(() => {
+  elapsedTimeTimer = setInterval(() => {
+    elapsedTimeNow.value = Date.now()
+  }, 1000)
+
   // 如果当前模型支持时长选择，但当前选中的时长不在可用列表中，则重置为第一个可用时长
   if (availableDurations.value.length > 0 && !availableDurations.value.includes(selectedDuration.value)) {
     selectedDuration.value = availableDurations.value[0]
@@ -1662,6 +1736,10 @@ onUnmounted(() => {
   if (stuckRetryTimer) {
     clearTimeout(stuckRetryTimer)
     stuckRetryTimer = null
+  }
+  if (elapsedTimeTimer) {
+    clearInterval(elapsedTimeTimer)
+    elapsedTimeTimer = null
   }
 })
 
@@ -1767,7 +1845,7 @@ const videoWrapperStyle = computed(() => {
   return { aspectRatio: '16 / 9' }
 })
 
-// 进度百分比（从 progress 字符串中提取数字）
+// 进度百分比只用于卡住后的手动重试判断，不再作为生成中展示内容。
 const progressPercent = computed(() => {
   const progress = props.data.progress
   if (!progress) return 0
@@ -2038,13 +2116,15 @@ const inheritedPrompt = computed(() => {
 function getUpstreamData() {
   // 查找所有连接到当前节点的上游边
   const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
-  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [], audios: [], characterAssetUris: [] }
+  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [], audios: [], characterAssetUris: [], quickAssetUris: [], quickAssetSourceUrls: [] }
   
   let prompts = []
   let images = []
   let videos = []
   let audios = []
   let characterAssetUris = []
+  let quickAssetUris = []
+  let quickAssetSourceUrls = []
   
   // 遍历所有上游节点，收集数据
   for (const edge of upstreamEdges) {
@@ -2082,6 +2162,14 @@ function getUpstreamData() {
         const uri = (sourceNode.data?.assetUri && String(sourceNode.data.assetUri).trim()) ||
           (id != null && String(id).trim() !== '' ? `asset://${id}` : '')
         if (uri) characterAssetUris.push(uri)
+      }
+
+      const quickAsset = getSeedanceQuickAsset(sourceNode.data)
+      if (quickAsset.active) {
+        quickAssetUris.push(quickAsset.assetUri)
+        if (sourceNode.data?.sourceImages?.length > 0) quickAssetSourceUrls.push(...sourceNode.data.sourceImages)
+        if (sourceNode.data?.output?.url) quickAssetSourceUrls.push(sourceNode.data.output.url)
+        if (sourceNode.data?.output?.urls?.length > 0) quickAssetSourceUrls.push(...sourceNode.data.output.urls)
       }
       
       // 源节点优先使用 sourceImages，与画布显示一致
@@ -2125,8 +2213,8 @@ function getUpstreamData() {
     }
   }
   
-  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos, audios, characterAssetUris })
-  return { prompts, images, videos, audios, characterAssetUris }
+  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos, audios, characterAssetUris, quickAssetUris })
+  return { prompts, images, videos, audios, characterAssetUris, quickAssetUris, quickAssetSourceUrls }
 }
 
 // 实时获取上游文本内容（用于显示在"上下文文字参考"区域）
@@ -2607,6 +2695,13 @@ watch(promptText, () => {
     autoResizeTextarea()
   })
 })
+
+watch(
+  () => referenceMediaList.value.map(item => `${item.key}:${item.label}`).join('|'),
+  () => {
+    syncPromptMentionsWithMedia()
+  }
+)
 
 // 监听节点选中状态，选中时恢复正确的文本框高度
 watch(() => props.selected, (isSelected) => {
@@ -3351,22 +3446,53 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
   return data
 }
 
-// 创建新的视频节点用于接收新任务（当前节点正在生成中时使用）
+const NEW_OUTPUT_NODE_VERTICAL_GAP = 80
+
+function parseAspectRatioValue(value) {
+  const match = String(value || '').match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/)
+  if (!match) return null
+  const width = Number(match[1])
+  const height = Number(match[2])
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null
+  return { width, height }
+}
+
+function getCurrentNodeDisplayHeight(currentNode) {
+  const measuredHeight = Number(currentNode.dimensions?.height || 0)
+  const savedHeight = Number(currentNode.data?.nodeHeight || currentNode.data?.height || nodeHeight.value || 0)
+  const displayWidth = Number(currentNode.dimensions?.width || currentNode.data?.nodeWidth || currentNode.data?.width || nodeWidth.value || 420)
+  const ratio = parseAspectRatioValue(currentNode.data?.aspectRatio || selectedAspectRatio.value || '16:9')
+  const ratioMediaHeight = ratio
+    ? displayWidth * (ratio.height / ratio.width)
+    : 0
+
+  return Math.ceil(Math.max(measuredHeight, savedHeight, ratioMediaHeight, nodeHeight.value || 280))
+}
+
+function hasExistingMediaContent() {
+  return props.data?.sourceVideo ||
+    props.data?.output?.urls?.length > 0 ||
+    props.data?.output?.url ||
+    props.data?.videoUrl
+}
+
+// 创建新的视频节点用于接收新任务（当前节点已有内容或正在生成中时使用）
 function createNewOutputNode() {
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) return null
   
-  const stackOffset = 20 // 偏移量
+  const displayHeight = getCurrentNodeDisplayHeight(currentNode)
   const newNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   const newNodePosition = {
-    x: currentNode.position.x + stackOffset,
-    y: currentNode.position.y + stackOffset
+    x: currentNode.position.x,
+    y: currentNode.position.y + displayHeight + NEW_OUTPUT_NODE_VERTICAL_GAP
   }
   
   canvasStore.addNode({
     id: newNodeId,
     type: 'video',
     position: newNodePosition,
+    zIndex: (currentNode.zIndex || 0) + 1,
     data: {
       title: t('canvas.nodes.video'),
       status: 'idle',
@@ -3406,6 +3532,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
     canvasStore.updateNodeData(nodeId, { 
       status: 'processing',
       progress: '排队中...',
+      processingStartedAt: Date.now(),
       taskId: null,
       soraTaskId: null,
       _preserveRawVideoError: false
@@ -3524,7 +3651,8 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
         
         // 更新进度
         canvasStore.updateNodeData(nodeId, { 
-          progress: data.progress || '生成中...'
+          progress: '生成中...',
+          processingStartedAt: props.data.processingStartedAt || startTime
         })
         
         // 检查完成状态
@@ -3616,6 +3744,13 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       const nonCharImages = finalImages.filter(u => !charHttpUrls.has(u))
       finalImages = [...capturedState.characterAssetUris, ...nonCharImages]
       console.log('[VideoNode] Seedance 2.0 注入角色素材 Asset URI:', capturedState.characterAssetUris, '最终图片列表:', finalImages)
+    }
+
+    if (capturedState.isSeedance2 && capturedState.quickAssetUris.length > 0) {
+      const quickSourceUrls = new Set(capturedState.quickAssetSourceUrls || [])
+      const nonQuickImages = finalImages.filter(u => !quickSourceUrls.has(u))
+      finalImages = [...capturedState.quickAssetUris, ...nonQuickImages]
+      console.log('[VideoNode] Seedance 2.0 注入快捷过审 Asset URI:', capturedState.quickAssetUris, '最终图片列表:', finalImages)
     }
     
     // 确保参考图片可访问（可能耗时：串行 fetch + upload）
@@ -3781,7 +3916,8 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
 }
 
 // 开始生成（点击后立即响应，重操作全部后台执行）
-async function handleGenerate() {
+async function handleGenerate(options = {}) {
+  const { forceNewNode = false } = options
   if (isGenerating.value) return
   
   // 动态获取上游节点的最新数据
@@ -3841,25 +3977,27 @@ async function handleGenerate() {
     return
   }
 
-  const duplicateResult = duplicateSubmitGuard.check(buildCanvasSubmitFingerprint({
-    nodeId: props.id,
-    nodeType: 'video',
-    prompt: finalPrompt,
-    model: selectedModel.value,
-    aspectRatio: selectedAspectRatio.value,
-    duration: selectedDuration.value,
-    selectedCount: selectedCount.value,
-    generationMode: generationMode.value,
-    referenceImages: finalImages,
-    referenceVideos: referenceVideos.value,
-    referenceAudios: referenceAudios.value,
-    seedanceMode: isSeedance2Model.value ? selectedSeedance2Mode.value : '',
-    klingO1Mode: isKlingO1Model.value ? selectedKlingO1Mode.value : '',
-    klingV3OmniMode: isKlingV3OmniModel.value ? selectedKlingV3OmniMode.value : ''
-  }))
-  if (duplicateResult.blocked) {
-    await showAlert(duplicateResult.message, '重复提交')
-    return
+  if (!forceNewNode) {
+    const duplicateResult = duplicateSubmitGuard.check(buildCanvasSubmitFingerprint({
+      nodeId: props.id,
+      nodeType: 'video',
+      prompt: finalPrompt,
+      model: selectedModel.value,
+      aspectRatio: selectedAspectRatio.value,
+      duration: selectedDuration.value,
+      selectedCount: selectedCount.value,
+      generationMode: generationMode.value,
+      referenceImages: finalImages,
+      referenceVideos: referenceVideos.value,
+      referenceAudios: referenceAudios.value,
+      seedanceMode: isSeedance2Model.value ? selectedSeedance2Mode.value : '',
+      klingO1Mode: isKlingO1Model.value ? selectedKlingO1Mode.value : '',
+      klingV3OmniMode: isKlingV3OmniModel.value ? selectedKlingV3OmniMode.value : ''
+    }))
+    if (duplicateResult.blocked) {
+      await showAlert(duplicateResult.message, '重复提交')
+      return
+    }
   }
   
   // ✅ 验证通过，立即更新 UI 状态（不等待任何网络操作）
@@ -3873,17 +4011,19 @@ async function handleGenerate() {
     nodeId: props.id,
     isSeedance2: isSeedance2Model.value,
     characterAssetUris: upstreamData.characterAssetUris || [],
+    quickAssetUris: upstreamData.quickAssetUris || [],
+    quickAssetSourceUrls: upstreamData.quickAssetSourceUrls || [],
     apiType: currentModelConfig.value?.apiType || ''
   }
   
-  // 如果当前节点正在处理中，创建新节点来接收新任务
+  // 如果当前节点正在处理中或已有媒体内容，创建新节点来接收新任务
   let targetNodeId = props.id
-  if (props.data.status === 'processing') {
+  if (props.data.status === 'processing' || forceNewNode || hasExistingMediaContent()) {
     const newNodeId = createNewOutputNode()
     if (newNodeId) {
       targetNodeId = newNodeId
       canvasStore.selectNode(newNodeId)
-      console.log('[VideoNode] 当前节点正在生成，创建新节点接收任务:', newNodeId)
+      console.log('[VideoNode] 当前节点已有内容或正在生成，创建新节点接收任务:', newNodeId)
     }
   }
   
@@ -3927,6 +4067,7 @@ async function handleGenerate() {
   canvasStore.updateNodeData(targetNodeId, { 
     status: 'processing',
     progress: generateCount > 1 ? `并行生成 ${generateCount} 个视频...` : '排队中...',
+    processingStartedAt: Date.now(),
     taskId: null,
     soraTaskId: null,
     _preserveRawVideoError: false
@@ -3979,7 +4120,8 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
       
       // 更新进度
       canvasStore.updateNodeData(props.id, { 
-        progress: data.progress || '生成中...'
+        progress: '生成中...',
+        processingStartedAt: props.data.processingStartedAt || startTime
       })
       
       // 检查完成状态
@@ -4051,11 +4193,7 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
 
 // 重新生成
 function handleRegenerate() {
-  canvasStore.updateNodeData(props.id, { 
-    status: 'idle',
-    output: null,
-    error: null
-  })
+  handleGenerate({ forceNewNode: true })
 }
 
 // 处理键盘事件
@@ -6122,10 +6260,13 @@ function handleToolbarPreview() {
           <div v-if="data.status === 'processing'" class="preview-loading">
             <div class="loading-spinner"></div>
             <span class="loading-title">{{ data.taskType === 'video-hd' ? '高清处理中...' : '视频生成中...' }}</span>
-            <!-- 进度显示：高清任务不显示百分比（后端进度含秒数会被误解），普通任务正常显示 -->
-            <span v-if="data.taskType !== 'video-hd' && progressPercent > 0" class="progress-percent">{{ progressPercent }}%</span>
-            <span v-else-if="data.progress && !isDefaultProgress" class="progress-text">{{ data.progress }}</span>
-            <span class="loading-hint">{{ data.taskType === 'video-hd' ? '高清处理耗时较长，请耐心等待' : '预计 1-3 分钟' }}</span>
+            <span v-if="data.taskType !== 'video-hd'" class="progress-text">{{ processingProgressText(data) }}</span>
+            <span class="loading-hint">
+              {{ data.taskType === 'video-hd' ? '高清处理耗时较长，请耐心等待' : '视频生成需要一定时间，请耐心等待' }}
+            </span>
+            <span v-if="showProcessingTimeoutHint(data)" class="loading-timeout-hint">
+              当前任务可能超时失败，可尝试重新提交任务
+            </span>
             <!-- 卡住时显示手动获取按钮：普通任务进度100%卡住时显示，高清任务不显示（由后台任务管理器自动轮询） -->
             <button v-if="data.taskType !== 'video-hd' && progressPercent >= 100 && (data.taskId || data.soraTaskId)" class="retry-fetch-btn" @click.stop="handleManualRetryFetch">重新获取视频</button>
           </div>
@@ -6431,7 +6572,7 @@ function handleToolbarPreview() {
           ></textarea>
           <!-- @标记高亮叠加层 -->
           <div v-if="supportsMediaTags && highlightedPromptSegments.some(s => s.isTag)" class="prompt-highlight-overlay" aria-hidden="true">
-            <template v-for="(seg, i) in highlightedPromptSegments" :key="i"><span v-if="seg.isTag" class="prompt-media-tag">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template>
+            <template v-for="(seg, i) in highlightedPromptSegments" :key="i"><span v-if="seg.isTag" class="prompt-media-tag" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template>
           </div>
         </div>
         <div v-if="supportsMediaTags && (referenceVideos.length > 0 || referenceImages.length > 0 || referenceAudios.length > 0)" class="prompt-tag-hint">
@@ -7305,6 +7446,14 @@ function handleToolbarPreview() {
   color: var(--canvas-accent-primary, #4ade80);
   margin: 6px 0;
   opacity: 0.9;
+}
+
+.loading-timeout-hint {
+  max-width: 260px;
+  color: #f59e0b;
+  font-size: 11px;
+  line-height: 1.4;
+  text-align: center;
 }
 
 .preview-error {
@@ -10954,6 +11103,7 @@ function handleToolbarPreview() {
   border-radius: 3px;
   padding: 1px 2px;
   border-bottom: 2px solid rgba(255, 255, 255, 0.45);
+  pointer-events: auto;
 }
 
 /* 提示词标记提示文字 */

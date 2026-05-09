@@ -159,6 +159,29 @@ assert.equal(updatedHistory[0].description, '新的历史描述')
 
 assert.equal(updateWorkflowHistoryDescription('missing-history', '不会写入'), false)
 
+storage.set('workflow_auto_saves', JSON.stringify([
+  {
+    id: 'history-within-retention',
+    name: '14天内历史',
+    nodes: [{ id: 'recent-node', type: 'text', position: { x: 0, y: 0 }, data: { title: 'Recent' } }],
+    edges: [],
+    viewport: { x: 0, y: 0, zoom: 1 },
+    savedAt: now - 14 * 24 * 60 * 60 * 1000
+  },
+  {
+    id: 'history-expired',
+    name: '超过15天历史',
+    nodes: [{ id: 'expired-node', type: 'text', position: { x: 0, y: 0 }, data: { title: 'Expired' } }],
+    edges: [],
+    viewport: { x: 0, y: 0, zoom: 1 },
+    savedAt: now - 15 * 24 * 60 * 60 * 1000 - 1
+  }
+]))
+
+const retainedHistory = getWorkflowHistory()
+assert.equal(retainedHistory.length, 1)
+assert.equal(retainedHistory[0].id, 'history-within-retention')
+
 storage.delete('workflow_auto_saves')
 assert.equal(saveWorkflowToHistory({
   name: '带描述的自动保存',

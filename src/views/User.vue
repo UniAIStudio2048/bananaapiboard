@@ -1227,6 +1227,20 @@ function formatVideoStatus(status) {
   return map[status] || status || '未知状态'
 }
 
+function displayVideoProgress(video) {
+  const progress = String(video?.progress || '').trim()
+  if (!progress) return ''
+
+  const status = String(video?.status || '').toLowerCase()
+  if (['pending', 'processing', 'in_progress', 'queued', 'running'].some(s => status.includes(s))) {
+    if (/^\d+%$/.test(progress) || /预计.*分钟/.test(progress) || /1\s*[-~到]\s*3\s*分钟/.test(progress)) {
+      return ''
+    }
+  }
+
+  return progress
+}
+
 function videoStatusColor(status) {
   if (!status) return 'text-slate-500'
   const normalized = status.toString().toLowerCase()
@@ -3217,7 +3231,7 @@ onUnmounted(() => {
                     <div v-else class="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
                       <div class="text-4xl mb-2">⏳</div>
                       <div class="text-sm">{{ formatVideoStatus(video.status) }}</div>
-                      <div v-if="video.progress" class="text-xs mt-1 opacity-75">{{ video.progress }}</div>
+                      <div v-if="displayVideoProgress(video)" class="text-xs mt-1 opacity-75">{{ displayVideoProgress(video) }}</div>
                     </div>
                     
                     <!-- 选择复选框 -->
@@ -4880,7 +4894,7 @@ onUnmounted(() => {
             <div v-else class="w-full h-full flex flex-col items-center justify-center text-white">
               <div class="text-6xl mb-4">⏳</div>
               <div class="text-xl">{{ formatVideoStatus(selectedVideo.status) }}</div>
-              <div v-if="selectedVideo.progress" class="text-sm mt-2 opacity-75">{{ selectedVideo.progress }}</div>
+              <div v-if="displayVideoProgress(selectedVideo)" class="text-sm mt-2 opacity-75">{{ displayVideoProgress(selectedVideo) }}</div>
             </div>
           </div>
           <div class="absolute top-4 right-4 flex space-x-2">

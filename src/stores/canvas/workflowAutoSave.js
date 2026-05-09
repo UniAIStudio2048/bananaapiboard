@@ -3,7 +3,7 @@
  * 
  * 功能：
  * - 每1分钟自动保存当前工作流到 localStorage
- * - 缓存有效期为1天，自动清理过期记录
+ * - 缓存有效期为15天，自动清理过期记录
  * - 不存数据库，只做本地临时缓存
  * - 用于用户不小心关闭浏览器时恢复工作流
  * 
@@ -16,7 +16,7 @@
 const STORAGE_KEY = 'workflow_auto_saves'
 const SESSION_STORAGE_KEY = 'workflow_tab_session'
 const MAX_HISTORY_COUNT = 20  // 最多保存20条历史记录
-const CACHE_DURATION = 24 * 60 * 60 * 1000  // 1天（毫秒）
+const CACHE_DURATION = 15 * 24 * 60 * 60 * 1000  // 15天（毫秒）
 const SESSION_RESTORE_DURATION = 10 * 60 * 1000  // 10分钟内的标签会话用于刷新恢复
 const AUTO_SAVE_INTERVAL = 60 * 1000  // 1分钟（毫秒）
 const MAX_SINGLE_WORKFLOW_SIZE = 300 * 1024  // 单个工作流最大 300KB

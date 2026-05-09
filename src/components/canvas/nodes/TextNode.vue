@@ -21,6 +21,11 @@ import { getMentionPopupPosition, getTextareaCaretViewportRect } from '@/utils/p
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { buildTextNodeLlmMessages } from '@/utils/textNodeLlmMessages'
+import {
+  bindMediaMention,
+  getMediaMentionKey,
+  syncPromptMediaMentions
+} from '@/utils/promptMediaBindings'
 import CustomPresetDialog from '../dialogs/CustomPresetDialog.vue'
 import PresetManager from '../dialogs/PresetManager.vue'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
@@ -121,32 +126,28 @@ function handleEditorInput(event) {
   const atIndex = textBeforeCursor.lastIndexOf('@')
   
   if (atIndex !== -1) {
-    // 检查 @ 前面是否有空格或是否是行首
-    const charBeforeAt = atIndex > 0 ? textBeforeCursor[atIndex - 1] : ' '
-    if (/\s/.test(charBeforeAt)) {
-      const query = textBeforeCursor.slice(atIndex + 1)
-      // 如果包含空格，则不认为是提及（除非允许含空格的名字，这里假设名字不含空格或很短）
-      if (!/\s/.test(query) && query.length < 20) {
-        showMentionList.value = true
-        mentionQuery.value = query
-        mentionTarget.value = 'editor'
-        mentionRange = range.cloneRange()
-        mentionRange.setStart(range.startContainer, atIndex)
-        mentionRange.setEnd(range.startContainer, cursorIndex)
-        
-        // 计算位置
-        const rect = range.getBoundingClientRect()
-        // 获取编辑器容器的位置
-        const containerRect = textareaRef.value?.getBoundingClientRect() || { top: 0, left: 0 }
-        
-        // 相对位置，或者 fixed 位置
-        // 这里使用 fixed 定位提到 body
-        mentionListPosition.value = {
-          top: rect.bottom + 5,
-          left: rect.left
-        }
-        return
+    const query = textBeforeCursor.slice(atIndex + 1)
+    // 如果包含空格，则不认为是提及（除非允许含空格的名字，这里假设名字不含空格或很短）
+    if (!/\s/.test(query) && query.length < 20) {
+      showMentionList.value = true
+      mentionQuery.value = query
+      mentionTarget.value = 'editor'
+      mentionRange = range.cloneRange()
+      mentionRange.setStart(range.startContainer, atIndex)
+      mentionRange.setEnd(range.startContainer, cursorIndex)
+      
+      // 计算位置
+      const rect = range.getBoundingClientRect()
+      // 获取编辑器容器的位置
+      const containerRect = textareaRef.value?.getBoundingClientRect() || { top: 0, left: 0 }
+      
+      // 相对位置，或者 fixed 位置
+      // 这里使用 fixed 定位提到 body
+      mentionListPosition.value = {
+        top: rect.bottom + 5,
+        left: rect.left || containerRect.left + 20
       }
+      return
     }
   }
   
@@ -296,6 +297,7 @@ const formatState = ref({
 
 // ========== LLM 配置相关 ==========
 const llmInputText = ref(props.data.llmInputText || props.data.prompt || '')
+const promptMentionBindings = ref(props.data.promptMentionBindings || {})
 
 // 监听 llmInputText 变化，自动调整输入框高度
 watch(llmInputText, () => {
@@ -829,16 +831,96 @@ const referenceMediaList = computed(() => {
   const audios = upstreamAudioUrls.value || []
   
   videos.forEach((url, i) => {
-    list.push({ type: 'video', index: i + 1, url, label: `视频${i + 1}`, thumbnailUrl: getUpstreamVideoThumbnail(url) })
+    list.push({
+      type: 'video',
+      index: i + 1,
+      url,
+      label: `视频${i + 1}`,
+      key: getMediaMentionKey({ type: 'video', url }),
+      thumbnailUrl: getUpstreamVideoThumbnail(url)
+    })
   })
   images.forEach((url, i) => {
-    list.push({ type: 'image', index: i + 1, url, label: `图片${i + 1}` })
+    list.push({
+      type: 'image',
+      index: i + 1,
+      url,
+      label: `图片${i + 1}`,
+      key: getMediaMentionKey({ type: 'image', url })
+    })
   })
   audios.forEach((url, i) => {
-    list.push({ type: 'audio', index: i + 1, url, label: `音频${i + 1}` })
+    list.push({
+      type: 'audio',
+      index: i + 1,
+      url,
+      label: `音频${i + 1}`,
+      key: getMediaMentionKey({ type: 'audio', url })
+    })
   })
   return list
 })
+
+function updatePromptMentionBindings(bindings) {
+  promptMentionBindings.value = bindings || {}
+  canvasStore.updateNodeData(props.id, {
+    promptMentionBindings: promptMentionBindings.value
+  })
+}
+
+function syncPromptMentionsWithMedia() {
+  const result = syncPromptMediaMentions(llmInputText.value, promptMentionBindings.value, referenceMediaList.value)
+  if (result.text !== llmInputText.value) {
+    llmInputText.value = result.text
+  }
+  updatePromptMentionBindings(result.bindings)
+}
+
+const highlightedLlmInputSegments = computed(() => {
+  if (!llmInputText.value) return []
+  const segments = []
+  const regex = /【?@(?:视频|图片|音频)\d*】?/g
+  let lastIndex = 0
+  let match
+  while ((match = regex.exec(llmInputText.value)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ text: llmInputText.value.slice(lastIndex, match.index), isTag: false })
+    }
+    segments.push({ text: match[0], isTag: true, media: getMediaForPromptTag(match[0]) })
+    lastIndex = regex.lastIndex
+  }
+  if (lastIndex < llmInputText.value.length) {
+    segments.push({ text: llmInputText.value.slice(lastIndex), isTag: false })
+  }
+  return segments
+})
+
+function getMediaForPromptTag(text) {
+  const match = String(text || '').match(/^【?@(视频|图片|音频)(\d*)】?$/)
+  if (!match) return null
+  const typeMap = { 视频: 'video', 图片: 'image', 音频: 'audio' }
+  const type = typeMap[match[1]]
+  const index = Number(match[2] || 1)
+  return referenceMediaList.value.find(item => item.type === type && item.index === index) || null
+}
+
+function handlePromptTagHover(media, event) {
+  if (!media) return
+  if (media.type === 'video') {
+    onVideoHoverStart(media.url, event)
+  } else if (media.type === 'audio') {
+    onAudioHoverStart(media.url, event)
+  } else {
+    onHoverStart(media.url, event)
+  }
+}
+
+watch(
+  () => referenceMediaList.value.map(item => `${item.key}:${item.label}`).join('|'),
+  () => {
+    syncPromptMentionsWithMedia()
+  }
+)
 
 /**
  * 点击参考素材缩略图，在提示词光标处插入 @标记
@@ -848,6 +930,7 @@ function insertMediaTag(media) {
   const textarea = llmInputRef.value
   if (!textarea) {
     llmInputText.value += tag
+    updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
     return
   }
 
@@ -856,6 +939,7 @@ function insertMediaTag(media) {
   const before = llmInputText.value.slice(0, start)
   const after = llmInputText.value.slice(end)
   llmInputText.value = before + tag + after
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
 
   nextTick(() => {
     textarea.focus()
@@ -873,6 +957,7 @@ function handleMediaMentionSelect(media) {
   const before = llmInputText.value.slice(0, mediaMentionStartPos)
   const after = llmInputText.value.slice(cursorPos)
   llmInputText.value = before + tag + ' ' + after
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
   
   showMediaMentionPopup.value = false
   
@@ -2889,18 +2974,23 @@ onMounted(() => {
       
       <!-- 输入区域 -->
       <div class="llm-input-area">
-        <textarea
-          ref="llmInputRef"
-          v-model="llmInputText"
-          class="llm-input"
-          :placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（按下Enter 生成，Shift+Enter 换行）'"
-          @keydown="handleLLMKeyDown"
-          @input="handleLLMInput"
-          @wheel.stop
-          @focus="autoResizeLLMInput"
-          @mousedown="markLLMInputResizeIntent"
-          @dblclick.stop
-        ></textarea>
+        <div class="llm-input-wrapper">
+          <textarea
+            ref="llmInputRef"
+            v-model="llmInputText"
+            class="llm-input"
+            :placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（按下Enter 生成，Shift+Enter 换行）'"
+            @keydown="handleLLMKeyDown"
+            @input="handleLLMInput"
+            @wheel.stop
+            @focus="autoResizeLLMInput"
+            @mousedown="markLLMInputResizeIntent"
+            @dblclick.stop
+          ></textarea>
+          <div v-if="highlightedLlmInputSegments.some(s => s.isTag)" class="llm-highlight-overlay" aria-hidden="true">
+            <template v-for="(seg, i) in highlightedLlmInputSegments" :key="i"><span v-if="seg.isTag" class="prompt-media-tag" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template>
+          </div>
+        </div>
         <PromptMentionPopup
           :visible="showMediaMentionPopup"
           :items="referenceMediaList"
@@ -4004,6 +4094,10 @@ onMounted(() => {
   border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
 }
 
+.llm-input-wrapper {
+  position: relative;
+}
+
 .llm-input {
   width: 100%;
   background: transparent;
@@ -4018,6 +4112,29 @@ onMounted(() => {
   overflow-y: auto;
   transition: height 0.15s ease;
   padding: 4px 0;
+}
+
+.llm-highlight-overlay {
+  position: absolute;
+  inset: 0;
+  padding: 4px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  pointer-events: none;
+  color: transparent;
+  overflow: hidden;
+}
+
+.prompt-media-tag {
+  background: rgba(255, 255, 255, 0.12);
+  color: transparent;
+  border-radius: 3px;
+  padding: 1px 2px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.45);
+  pointer-events: auto;
 }
 
 /* 提示词框滚动条样式 */

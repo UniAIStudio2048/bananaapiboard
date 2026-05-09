@@ -189,7 +189,7 @@ function calculateCanvasSize() {
   const maxHeight = Math.max(260, window.innerHeight - verticalChrome)
 
   canvasWidth.value = Math.round(Math.min(maxWidth, compact ? 760 : 1080))
-  canvasHeight.value = Math.round(Math.min(maxHeight, compact ? 520 : 620))
+  canvasHeight.value = Math.round(Math.min(maxHeight, compact ? 520 : 690))
 }
 
 // 加载图片（与图片编辑器一致，外部 URL 通过后端代理避免 canvas 跨域失败）
@@ -201,8 +201,10 @@ async function loadImage(url) {
       imageNaturalWidth.value = originalImage.naturalWidth
       imageNaturalHeight.value = originalImage.naturalHeight
       
-      // 计算缩放比例，使图片适应画布（留出扩图空间）
-      const maxDisplayRatio = 0.6 // 图片最多占画布60%
+      // 计算缩放比例，使图片适应画布。扩图模式保留更多留白，裁剪模式优先放大预览便于操作。
+      const cropModeDisplayRatio = 0.82
+      const outpaintDisplayRatio = 0.6
+      const maxDisplayRatio = props.mode === 'outpaint' ? outpaintDisplayRatio : cropModeDisplayRatio
       const scaleX = (canvasWidth.value * maxDisplayRatio) / originalImage.naturalWidth
       const scaleY = (canvasHeight.value * maxDisplayRatio) / originalImage.naturalHeight
       imageScale.value = Math.min(scaleX, scaleY, 1)

@@ -15,12 +15,14 @@ import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from '
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
+import { useTeamStore } from '@/stores/team'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints, removeImageBackground } from '@/api/canvas/nodes'
 import { extractVideoFrame } from '@/api/canvas/workflow'
+import { createQuickSeedanceCharacterAsset, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
 import { formatPoints } from '@/utils/format'
 import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
-import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
+import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders, isSeedanceFeaturesEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getImagePresets, incrementPresetUseCount, createImagePreset, updateImagePreset } from '@/api/canvas/image-presets'
@@ -38,9 +40,15 @@ import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { getMentionPopupPosition, getTextareaCaretViewportRect } from '@/utils/promptMention'
+import {
+  bindMediaMention,
+  getMediaMentionKey,
+  syncPromptMediaMentions
+} from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition, getElementSideCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { isPanoramaVrSupportedRatio } from '@/utils/canvasPanoramaExport'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
+import { getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PanoramaPreviewModal from '../PanoramaPreviewModal.vue'
 import ModelIcon from '../../common/ModelIcon.vue'
@@ -62,6 +70,7 @@ const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
 const uploadManager = useUploadManager()
+const teamStore = useTeamStore()
 const userInfo = inject('userInfo')
 const isCanvasViewportMoving = inject('isCanvasViewportMoving', ref(false))
 const { onHoverStart, onHoverEnd } = useImageHoverPreview()
@@ -104,6 +113,7 @@ function getErrorHint(msg) {
 const promptText = ref(props.data.prompt || '')
 const promptTextareaRef = ref(null) // 提示词输入框引用
 const hasManualPromptTextareaSize = ref(false)
+const promptMentionBindings = ref(props.data.promptMentionBindings || {})
 const isDragOver = ref(false) // 拖拽悬停状态
 
 // 文本框拖动自动滚动相关状态
@@ -1353,6 +1363,101 @@ const currentImageUrl = computed(() => {
   }
   return null
 })
+
+const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
+const isQuickSeedanceSubmitting = ref(false)
+const seedanceQuickAssetStatus = computed(() => getSeedanceQuickAssetStatus(props.data))
+const showSeedanceQuickBadge = computed(() => seedanceQuickAssetStatus.value === 'approved' || seedanceQuickAssetStatus.value === 'expired')
+const seedanceQuickBadgeText = computed(() => seedanceQuickAssetStatus.value === 'expired' ? '已失效' : '已过审')
+
+async function resolveQuickSeedanceImageUrl(rawUrl) {
+  const url = getOriginalImageUrl(rawUrl)
+  if (!url) throw new Error('未找到图片')
+  if (url.startsWith('blob:') || url.startsWith('data:')) {
+    const response = await fetch(url)
+    if (!response.ok) throw new Error(`读取本地图片失败: ${response.status}`)
+    const blob = await response.blob()
+    const file = new File([blob], `seedance_quick_${Date.now()}.png`, { type: blob.type || 'image/png' })
+    const uploaded = await uploadImages([file])
+    if (!uploaded?.[0]) throw new Error('上传图片失败')
+    return uploaded[0]
+  }
+  return url
+}
+
+function updateSeedanceQuickAsset(partial) {
+  canvasStore.updateNodeData(props.id, {
+    seedanceQuickAsset: {
+      ...(props.data.seedanceQuickAsset || {}),
+      ...partial
+    }
+  })
+}
+
+async function handleQuickSeedanceReview() {
+  if (isQuickSeedanceSubmitting.value) return
+  if (!currentImageUrl.value) {
+    showToast('未找到图片', 'warning')
+    return
+  }
+  if (seedanceQuickAssetStatus.value === 'approved') {
+    showToast('该图片已过审，可直接连接 Seedance 2.0 视频节点使用', 'info')
+    return
+  }
+
+  isQuickSeedanceSubmitting.value = true
+  try {
+    const url = await resolveQuickSeedanceImageUrl(currentImageUrl.value)
+    const spaceParams = teamStore.getSpaceParams('current')
+    const result = await createQuickSeedanceCharacterAsset({
+      URL: url,
+      Name: `Seedance快捷角色_${props.id || Date.now()}`,
+      sourceNodeId: props.id || null,
+      spaceType: spaceParams.spaceType,
+      teamId: spaceParams.teamId
+    })
+
+    const assetId = result.quickAsset?.assetId || result.asset?.Id || result.Id
+    if (!assetId) throw new Error('快捷资产接口返回数据异常')
+
+    updateSeedanceQuickAsset({
+      assetId,
+      assetUri: result.quickAsset?.assetUri || `asset://${assetId}`,
+      groupId: result.quickAsset?.groupId || result.asset?.GroupId,
+      status: result.quickAsset?.status || 'Processing',
+      assetUrl: result.asset?.URL || url,
+      reviewedAt: null,
+      expiresAt: result.quickAsset?.expiresAt,
+      ttlDays: result.quickAsset?.ttlDays || 15
+    })
+    showToast('已提交 Seedance 角色过审，审核通过后会标记“已过审”', 'info')
+
+    const { promise } = pollAssetStatus(assetId, { interval: 5000, timeout: 2700000 })
+    promise.then((finalAsset) => {
+      updateSeedanceQuickAsset({
+        assetId: finalAsset.Id || assetId,
+        assetUri: `asset://${finalAsset.Id || assetId}`,
+        groupId: finalAsset.GroupId || result.quickAsset?.groupId || result.asset?.GroupId,
+        status: finalAsset.Status || 'Active',
+        assetUrl: finalAsset.URL || url,
+        reviewedAt: new Date().toISOString(),
+        expiresAt: result.quickAsset?.expiresAt
+      })
+      if ((finalAsset.Status || 'Active') === 'Active') {
+        showToast('Seedance 角色已过审', 'success')
+      }
+    }).catch((error) => {
+      console.error('[ImageNode] Seedance 快捷过审轮询失败:', error)
+      updateSeedanceQuickAsset({ status: 'Processing' })
+      showToast(error.message?.includes('超时') ? 'Seedance 角色仍在审核中' : `Seedance 角色过审失败：${error.message || '未知错误'}`, error.message?.includes('超时') ? 'info' : 'error')
+    })
+  } catch (error) {
+    console.error('[ImageNode] Seedance 快捷过审失败:', error)
+    showToast(`提交 Seedance 过审失败：${error.message || '未知错误'}`, 'error')
+  } finally {
+    isQuickSeedanceSubmitting.value = false
+  }
+}
 
 // 全景 VR 预览状态
 const showPanoramaPreview = ref(false)
@@ -3648,9 +3753,55 @@ const referenceMediaList = computed(() => {
     type: 'image',
     index: i + 1,
     url,
-    label: `图片${i + 1}`
+    label: `图片${i + 1}`,
+    key: getMediaMentionKey({ type: 'image', url })
   }))
 })
+
+function updatePromptMentionBindings(bindings) {
+  promptMentionBindings.value = bindings || {}
+  canvasStore.updateNodeData(props.id, {
+    promptMentionBindings: promptMentionBindings.value
+  })
+}
+
+function syncPromptMentionsWithMedia() {
+  const result = syncPromptMediaMentions(promptText.value, promptMentionBindings.value, referenceMediaList.value)
+  if (result.text !== promptText.value) {
+    promptText.value = result.text
+  }
+  updatePromptMentionBindings(result.bindings)
+}
+
+const highlightedPromptSegments = computed(() => {
+  if (!promptText.value) return []
+  const segments = []
+  const regex = /【?@图片\d*】?/g
+  let lastIndex = 0
+  let match
+  while ((match = regex.exec(promptText.value)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({ text: promptText.value.slice(lastIndex, match.index), isTag: false })
+    }
+    segments.push({ text: match[0], isTag: true, media: getMediaForPromptTag(match[0]) })
+    lastIndex = regex.lastIndex
+  }
+  if (lastIndex < promptText.value.length) {
+    segments.push({ text: promptText.value.slice(lastIndex), isTag: false })
+  }
+  return segments
+})
+
+function getMediaForPromptTag(text) {
+  const match = String(text || '').match(/^【?@图片(\d*)】?$/)
+  if (!match) return null
+  const index = Number(match[1] || 1)
+  return referenceMediaList.value.find(item => item.index === index) || null
+}
+
+function handlePromptTagHover(media, event) {
+  if (media?.url) onHoverStart(media.url, event)
+}
 
 // 用户积分
 const userPoints = computed(() => {
@@ -5059,22 +5210,59 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
   }
 }
 
-// 创建新的图像节点用于接收新任务（当前节点正在生成中时使用）
+const NEW_OUTPUT_NODE_VERTICAL_GAP = 80
+
+function parseAspectRatioValue(value) {
+  const match = String(value || '').match(/^(\d+(?:\.\d+)?):(\d+(?:\.\d+)?)$/)
+  if (!match) return null
+  const width = Number(match[1])
+  const height = Number(match[2])
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return null
+  return { width, height }
+}
+
+function getCurrentNodeDisplayHeight(currentNode) {
+  const measuredHeight = Number(currentNode.dimensions?.height || 0)
+  const savedHeight = Number(currentNode.data?.nodeHeight || currentNode.data?.height || nodeHeight.value || 0)
+  const displayWidth = Number(currentNode.dimensions?.width || currentNode.data?.nodeWidth || currentNode.data?.width || nodeWidth.value || 380)
+  const naturalWidth = Number(currentNode.data?.originalWidth || currentNode.data?.imageWidth || 0)
+  const naturalHeight = Number(currentNode.data?.originalHeight || currentNode.data?.imageHeight || 0)
+  const naturalMediaHeight = naturalWidth > 0 && naturalHeight > 0
+    ? displayWidth * (naturalHeight / naturalWidth)
+    : 0
+  const ratio = parseAspectRatioValue(currentNode.data?.aspectRatio || selectedAspectRatio.value)
+  const ratioMediaHeight = ratio
+    ? displayWidth * (ratio.height / ratio.width)
+    : 0
+
+  return Math.ceil(Math.max(measuredHeight, savedHeight, naturalMediaHeight, ratioMediaHeight, nodeHeight.value || 320))
+}
+
+function hasExistingMediaContent() {
+  return props.data?.sourceImages?.length > 0 ||
+    props.data?.output?.urls?.length > 0 ||
+    props.data?.output?.url ||
+    props.data?.generatedImage ||
+    props.data?.imageUrl
+}
+
+// 创建新的图像节点用于接收新任务（当前节点已有内容或正在生成中时使用）
 function createNewOutputNode() {
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) return null
   
-  const stackOffset = 20 // 偏移量
+  const displayHeight = getCurrentNodeDisplayHeight(currentNode)
   const newNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   const newNodePosition = {
-    x: currentNode.position.x + stackOffset,
-    y: currentNode.position.y + stackOffset
+    x: currentNode.position.x,
+    y: currentNode.position.y + displayHeight + NEW_OUTPUT_NODE_VERTICAL_GAP
   }
   
   canvasStore.addNode({
     id: newNodeId,
     type: 'image',
     position: newNodePosition,
+    zIndex: (currentNode.zIndex || 0) + 1,
     data: {
       title: t('canvas.nodes.image'),
       nodeRole: 'output',
@@ -5109,7 +5297,7 @@ function createNewOutputNode() {
 
 // 开始生成（输出节点用）
 async function handleGenerate(options = {}) {
-  const { fromGroup = false } = options
+  const { fromGroup = false, forceNewNode = false } = options
   // 动态获取上游节点的最新提示词（可能有多个文本节点连接）
   const upstreamPrompt = getUpstreamPrompt()
   const userPrompt = promptText.value.trim()
@@ -5212,7 +5400,7 @@ async function handleGenerate(options = {}) {
     return
   }
 
-  if (!fromGroup) {
+  if (!fromGroup && !forceNewNode) {
     const duplicateResult = duplicateSubmitGuard.check(buildCanvasSubmitFingerprint({
       nodeId: props.id,
       nodeType: 'image',
@@ -5236,15 +5424,15 @@ async function handleGenerate(options = {}) {
   
   const generateCount = selectedCount.value
   
-  // 🔥 核心逻辑：如果当前节点正在处理中，创建新节点来接收新任务
+  // 🔥 核心逻辑：如果当前节点正在处理中或已有媒体内容，创建新节点来接收新任务
   let targetNodeId = props.id
-  if (props.data.status === 'processing') {
+  if (props.data.status === 'processing' || forceNewNode || hasExistingMediaContent()) {
     const newNodeId = createNewOutputNode()
     if (newNodeId) {
       targetNodeId = newNodeId
       // 选中新创建的节点
       canvasStore.selectNode(newNodeId)
-      console.log('[ImageNode] 当前节点正在生成，创建新节点接收任务:', newNodeId)
+      console.log('[ImageNode] 当前节点已有内容或正在生成，创建新节点接收任务:', newNodeId)
     }
   }
   
@@ -5432,11 +5620,7 @@ function handleOutputImageError(event, imgUrl, index) {
 
 // 重新生成
 function handleRegenerate() {
-  canvasStore.updateNodeData(props.id, { 
-    status: 'idle',
-    output: null,
-    error: null
-  })
+  handleGenerate({ forceNewNode: true })
 }
 
 // 处理键盘事件
@@ -5498,6 +5682,13 @@ watch(promptText, () => {
     autoResizeTextarea()
   })
 })
+
+watch(
+  () => referenceMediaList.value.map(item => `${item.key}:${item.label}`).join('|'),
+  () => {
+    syncPromptMentionsWithMedia()
+  }
+)
 
 // 文本框拖动自动滚动功能
 const isAutoScrolling = ref(false) // 是否正在自动滚动（用于显示光标）
@@ -6054,6 +6245,7 @@ function insertMediaTag(media) {
   const textarea = promptTextareaRef.value
   if (!textarea) {
     promptText.value += tag
+    updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
     return
   }
 
@@ -6062,6 +6254,7 @@ function insertMediaTag(media) {
   const before = promptText.value.slice(0, start)
   const after = promptText.value.slice(end)
   promptText.value = before + tag + after
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
 
   nextTick(() => {
     textarea.focus()
@@ -6118,6 +6311,7 @@ function handleMentionSelect(media) {
   const before = promptText.value.slice(0, mentionStartPos)
   const after = promptText.value.slice(cursorPos)
   promptText.value = before + tag + ' ' + after
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
 
   showMentionPopup.value = false
 
@@ -6613,6 +6807,25 @@ async function handleDrop(event) {
         </svg>
         <span>姿态</span>
       </button>
+      <button
+        v-if="seedanceFeaturesEnabled"
+        class="toolbar-btn seedance-review-btn"
+        :class="{ 'is-processing': isQuickSeedanceSubmitting || seedanceQuickAssetStatus === 'processing', active: seedanceQuickAssetStatus === 'approved' }"
+        :disabled="isQuickSeedanceSubmitting || seedanceQuickAssetStatus === 'processing'"
+        title="提交 Seedance 角色过审"
+        @mousedown.stop.prevent="handleQuickSeedanceReview"
+        @click.stop.prevent
+      >
+        <svg v-if="isQuickSeedanceSubmitting || seedanceQuickAssetStatus === 'processing'" class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
+          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+        </svg>
+        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 3l7 4v5c0 4.2-2.8 7.5-7 9-4.2-1.5-7-4.8-7-9V7l7-4z" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M9 12l2 2 4-5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>{{ seedanceQuickAssetStatus === 'approved' ? '已过审' : seedanceQuickAssetStatus === 'processing' ? '审核中' : '过审' }}</span>
+      </button>
       <div class="toolbar-divider"></div>
       <button class="toolbar-btn icon-only" title="标注" @mousedown.stop.prevent="handleToolbarAnnotate" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -6635,6 +6848,10 @@ async function handleDrop(event) {
           <path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
+    </div>
+
+    <div v-if="showSeedanceQuickBadge" class="seedance-review-badge" :class="{ expired: seedanceQuickAssetStatus === 'expired' }">
+      {{ seedanceQuickBadgeText }}
     </div>
 
     <PanoramaPreviewModal
@@ -7003,19 +7220,24 @@ async function handleDrop(event) {
       
       <!-- 提示词输入 -->
       <div class="prompt-section">
-        <textarea
-          ref="promptTextareaRef"
-          v-model="promptText"
-          class="prompt-input"
-          :placeholder="referenceImages.length > 0 ? '输入提示词，点击上方图片插入 @图片 引用\n例：让@图片1中的人物换上红色衣服（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
-          rows="2"
-          @keydown="handleKeyDown"
-          @input="handlePromptInput"
-          @focus="autoResizeTextarea"
-          @wheel.stop
-          @mousedown="startTextareaAutoScroll"
-          @dblclick.stop
-        ></textarea>
+        <div class="prompt-input-wrapper">
+          <textarea
+            ref="promptTextareaRef"
+            v-model="promptText"
+            class="prompt-input"
+            :placeholder="referenceImages.length > 0 ? '输入提示词，点击上方图片插入 @图片 引用\n例：让@图片1中的人物换上红色衣服（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
+            rows="2"
+            @keydown="handleKeyDown"
+            @input="handlePromptInput"
+            @focus="autoResizeTextarea"
+            @wheel.stop
+            @mousedown="startTextareaAutoScroll"
+            @dblclick.stop
+          ></textarea>
+          <div v-if="highlightedPromptSegments.some(s => s.isTag)" class="prompt-highlight-overlay" aria-hidden="true">
+            <template v-for="(seg, i) in highlightedPromptSegments" :key="i"><span v-if="seg.isTag" class="prompt-media-tag" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template>
+          </div>
+        </div>
         <PromptMentionPopup
           :visible="showMentionPopup"
           :items="referenceMediaList"
@@ -7519,6 +7741,42 @@ async function handleDrop(event) {
 .image-toolbar .panorama-vr-btn:hover {
   color: #fde68a;
   background: rgba(250, 204, 21, 0.12);
+}
+
+.image-toolbar .seedance-review-btn {
+  color: #86efac;
+}
+
+.image-toolbar .seedance-review-btn:hover:not(:disabled) {
+  color: #bbf7d0;
+  background: rgba(34, 197, 94, 0.14);
+}
+
+.image-toolbar .seedance-review-btn.active {
+  background: rgba(34, 197, 94, 0.22);
+  border-color: rgba(34, 197, 94, 0.5);
+  color: #bbf7d0;
+}
+
+.seedance-review-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 12;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(5, 46, 22, 0.82);
+  color: #4ade80;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 18px;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+.seedance-review-badge.expired {
+  background: rgba(69, 26, 3, 0.86);
+  color: #fbbf24;
 }
 
 /* 3D相机面板动画 */
@@ -8696,6 +8954,10 @@ async function handleDrop(event) {
   border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
 }
 
+.prompt-input-wrapper {
+  position: relative;
+}
+
 .prompt-input {
   width: 100%;
   min-height: 48px;
@@ -8710,6 +8972,29 @@ async function handleDrop(event) {
   overflow-y: auto;
   transition: height 0.15s ease;
   padding: 4px 0;
+}
+
+.prompt-highlight-overlay {
+  position: absolute;
+  inset: 0;
+  padding: 4px 0;
+  font-size: 14px;
+  line-height: 1.6;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  pointer-events: none;
+  color: transparent;
+  overflow: hidden;
+}
+
+.prompt-media-tag {
+  background: rgba(255, 255, 255, 0.12);
+  color: transparent;
+  border-radius: 3px;
+  padding: 1px 2px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.45);
+  pointer-events: auto;
 }
 
 /* 提示词框滚动条样式 - 黑白灰风格 */
