@@ -46,6 +46,7 @@ import {
   getVideoGenerationProgressText,
   shouldShowVideoGenerationTimeoutHint
 } from '@/utils/videoGenerationProgress'
+import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedanceVideoModel } from './video-error-message.js'
@@ -1770,6 +1771,12 @@ const nodeClass = computed(() => ({
 const hasOutput = computed(() => !!props.data.output?.url)
 const shouldRenderVideoOutput = computed(() => hasOutput.value && !readonlyPreviewVideoFailed.value)
 const readonlyPreviewVideoFailed = ref(false)
+const VIDEO_TOOL_MODAL_MODES = {
+  edit: { initialMode: 'edit' },
+  subtitle: { initialMode: 'subtitle' }
+}
+const showVideoToolModal = ref(false)
+const videoToolInitialMode = ref('subtitle')
 
 // poster 仅在有明确封面图时才设置；COS ci-process=snapshot 截帧服务不稳定（502），
 // 失败的 poster 会导致 <video> 显示黑屏而非首帧
@@ -1791,6 +1798,29 @@ const videoPosterUrl = computed(() => {
 })
 
 const normalizedVideoUrl = computed(() => toSameOriginUrl(props.data.output?.url))
+const videoToolInitialSource = computed(() => {
+  const url = props.data.output?.url
+  if (!url) return null
+  return {
+    id: props.id,
+    name: props.data.title || props.data.label || '视频',
+    url,
+    duration: Number(props.data.duration) || Number(props.data.output?.duration) || 10
+  }
+})
+const canvasVideoToolSources = computed(() => {
+  const sources = canvasStore.nodes
+    .filter(node => node?.data?.output?.url)
+    .map(node => ({
+      id: node.id,
+      name: node.data.title || node.data.label || '视频',
+      url: node.data.output.url,
+      duration: Number(node.data.duration) || Number(node.data.output?.duration) || 10
+    }))
+  const current = videoToolInitialSource.value
+  if (current && !sources.some(source => source.id === current.id)) sources.unshift(current)
+  return sources
+})
 const isVideoPreviewActive = ref(false)
 const videoPosterFailed = ref(false)
 const shouldFallbackToVideoFrame = computed(() => {
@@ -5264,6 +5294,59 @@ const showToolbar = computed(() => {
 
 const showCreateCharacterToolbarAction = computed(() => isSoraCharacterLibraryEnabled())
 
+function openVideoToolModal(mode) {
+  if (!hasOutput.value) return
+  videoToolInitialMode.value = mode === VIDEO_TOOL_MODAL_MODES.edit.initialMode
+    ? VIDEO_TOOL_MODAL_MODES.edit.initialMode
+    : VIDEO_TOOL_MODAL_MODES.subtitle.initialMode
+  showVideoToolModal.value = true
+}
+
+function handleVideoToolCompleted(payload) {
+  const url = payload?.url || payload?.resultUrl || payload?.videoUrl || payload?.output?.url
+  if (!url) return
+
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return
+
+  const newNodeId = `video_tool_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+  const label = payload?.mode === 'edit' ? '视频剪辑' : '字幕擦除'
+  const width = Number(props.data.width) || Number(currentNode.data?.width) || 420
+
+  canvasStore.addNode({
+    id: newNodeId,
+    type: 'video',
+    position: {
+      x: currentNode.position.x + width + 120,
+      y: currentNode.position.y
+    },
+    data: {
+      label,
+      title: label,
+      status: 'success',
+      sourceNodeId: props.id,
+      videoToolMode: payload?.mode || videoToolInitialMode.value,
+      output: {
+        type: 'video',
+        url
+      }
+    }
+  })
+
+  canvasStore.addEdge({
+    id: `edge_${props.id}_${newNodeId}`,
+    source: props.id,
+    target: newNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input'
+  })
+
+  showVideoToolModal.value = false
+  window.dispatchEvent(new CustomEvent('canvas-history-invalidate', {
+    detail: { type: 'video', phase: 'tool-completed', sourceNodeId: props.id, nodeId: newNodeId }
+  }))
+}
+
 // 视频裁剪编辑器状态
 const showClipEditor = ref(false)
 
@@ -6209,6 +6292,16 @@ function handleToolbarPreview() {
           @mouseleave="handleVideoMouseLeave"
           @click="handleVideoWrapperClick"
         >
+          <div class="video-tool-actions" role="group" aria-label="视频工具">
+            <button class="video-tool-action-btn" type="button" title="剪辑" @click.stop="openVideoToolModal('edit')">
+              <span aria-hidden="true">✂</span>
+              <span>剪辑</span>
+            </button>
+            <button class="video-tool-action-btn" type="button" title="字幕擦除" @click.stop="openVideoToolModal('subtitle')">
+              <span aria-hidden="true">▭</span>
+              <span>字幕擦除</span>
+            </button>
+          </div>
           <img
             v-if="videoPosterUrl && !videoPosterFailed"
             :src="videoPosterUrl"
@@ -6408,6 +6501,16 @@ function handleToolbarPreview() {
       :node-id="id"
       @close="closeKeyframeEditor"
       @confirm="handleConfirmKeyframes"
+    />
+
+    <VideoToolModal
+      v-if="showVideoToolModal"
+      :initial-mode="videoToolInitialMode"
+      :initial-source="videoToolInitialSource"
+      :canvas-videos="canvasVideoToolSources"
+      @completed="handleVideoToolCompleted"
+      @close="showVideoToolModal = false"
+      @cancel="showVideoToolModal = false"
     />
     
     <!-- 底部配置面板（选中时显示） -->
@@ -7681,6 +7784,42 @@ function handleToolbarPreview() {
 }
 
 /* 播放指示器已移除 */
+
+.video-tool-actions {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  z-index: 22;
+  display: flex;
+  gap: 6px;
+  transform: translateX(-50%);
+}
+
+.video-tool-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 52px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.82);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.video-tool-action-btn:hover {
+  border-color: rgba(255, 255, 255, 0.38);
+  background: rgba(30, 30, 30, 0.94);
+  color: #fff;
+}
 
 /* 悬浮操作按钮 */
 .video-overlay-actions {
