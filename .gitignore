@@ -23,6 +23,7 @@ dist-moyunzong/
 dist-sgbl/
 dist-qingyuan/
 dist-vip/
+.worktrees/
 
 # Editor directories and files
 .vscode/*
@@ -54,7 +55,6 @@ CLAUDE.md
 
 # Misc
 *.pem
-
 
 
 
