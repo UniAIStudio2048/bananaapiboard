@@ -1,6 +1,13 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { logApiRequest, logApiResponse, logApiError, logAuth, logUserAction } from '@/utils/logger'
-import { buildMediaProxyDownloadPath, buildStreamDownloadPath, cleanStreamDownloadUrl } from './downloadRouting.js'
+import {
+  buildDirectCdnDownloadUrl,
+  buildMediaProxyDownloadPath,
+  buildStreamDownloadPath,
+  cleanCosCdnDownloadUrl,
+  cleanStreamDownloadUrl,
+  isDirectCdnDownloadUrl
+} from './downloadRouting.js'
 
 let KEY = ''
 export function setApiKey(k) { KEY = k || '' }
@@ -361,6 +368,10 @@ export function buildDownloadUrl(url, filename) {
   if (isQiniuCdnUrl(url)) {
     return buildQiniuForceDownloadUrl(url, filename || 'download')
   }
+
+  if (isDirectCdnDownloadUrl(url)) {
+    return buildDirectCdnDownloadUrl(url, filename || 'download')
+  }
   
   // 其他外部 URL：走后端代理下载
   // 后端会设置 Content-Disposition: attachment 头，解决跨域下载问题
@@ -385,6 +396,10 @@ export function buildVideoDownloadUrl(url, filename) {
   // buildQiniuForceDownloadUrl 内部会先去除处理参数
   if (isQiniuCdnUrl(url)) {
     return buildQiniuForceDownloadUrl(url, filename || 'video.mp4')
+  }
+
+  if (isDirectCdnDownloadUrl(url)) {
+    return buildDirectCdnDownloadUrl(url, filename || 'video.mp4')
   }
   
   // 其他外部 URL：走后端代理下载
@@ -417,6 +432,11 @@ export function startStreamDownload(url, filename) {
 
   if (isQiniuCdnUrl(cleanUrl)) {
     triggerUrlDownload(buildQiniuForceDownloadUrl(cleanUrl, correctedFilename), correctedFilename)
+    return
+  }
+
+  if (isDirectCdnDownloadUrl(cleanUrl)) {
+    triggerUrlDownload(buildDirectCdnDownloadUrl(cleanUrl, correctedFilename), correctedFilename)
     return
   }
 
@@ -600,7 +620,7 @@ export async function smartDownload(url, filename) {
   const correctedFilename = correctFilenameExtension(filename || 'download', url)
 
   // 获取干净的原始 URL（去除图片处理参数）
-  let cleanUrl = getQiniuOriginalUrl(url)
+  let cleanUrl = cleanCosCdnDownloadUrl(getQiniuOriginalUrl(url))
 
   // COS 代理 URL 或 COS CDN URL：去除 imageMogr2 / imageView2 等缩略图处理参数，确保下载原图
   if ((cleanUrl.includes('/api/cos-proxy/') || cleanUrl.includes('filescos.nananobanana.cn')) && !cleanUrl.match(/\.(mp4|webm|mov|avi)(\?|$)/i)) {
@@ -709,6 +729,24 @@ export async function smartDownload(url, filename) {
     return
   }
 
+  // COS CDN URL：优先直接从 CDN 拉取，失败时再回退后端代理
+  if (isDirectCdnDownloadUrl(cleanUrl)) {
+    try {
+      const blob = await fetchAndValidate(cleanUrl, { mode: 'cors' })
+      triggerBlobDownload(blob, correctedFilename)
+      console.log('[smartDownload] COS CDN直接下载成功:', correctedFilename, `(${(blob.size / 1024).toFixed(0)}KB)`)
+      return
+    } catch (corsErr) {
+      console.warn('[smartDownload] COS CDN直接下载失败，回退到后端代理:', corsErr.message)
+    }
+
+    const proxyPath = buildProxyUrl(cleanUrl)
+    const blob = await fetchAndValidate(proxyPath, { headers: getHeaders() })
+    triggerBlobDownload(blob, correctedFilename)
+    console.log('[smartDownload] COS CDN后端代理下载成功:', correctedFilename, `(${(blob.size / 1024).toFixed(0)}KB)`)
+    return
+  }
+
   // 本地 API 相对路径（如 /api/images/file/xxx、/api/cos-proxy/...）
   if (cleanUrl.startsWith('/api/')) {
     if (/\/api\/(cos-proxy|images\/file)\//.test(cleanUrl)) {
@@ -774,6 +812,11 @@ export async function downloadWithAuth(downloadUrl, filename) {
     if (isQiniuCdnUrl(downloadUrl)) {
       const cleanUrl = getQiniuOriginalUrl(downloadUrl)
       await smartDownload(cleanUrl, filename)
+      return
+    }
+
+    if (isDirectCdnDownloadUrl(downloadUrl)) {
+      await smartDownload(downloadUrl, filename)
       return
     }
     

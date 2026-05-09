@@ -18,7 +18,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { deductCropPoints } from '@/api/canvas/nodes'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
-import { startStreamDownload } from '@/api/client'
+import { smartDownload } from '@/api/client'
 import { showToast } from '@/composables/useCanvasDialog'
 
 const props = defineProps({
@@ -798,7 +798,7 @@ async function handleDownload() {
       return
     }
     
-    startStreamDownload(url, filename)
+    await smartDownload(url, filename)
     showToast('已开始下载', 'success')
   } catch (error) {
     console.error('[ImageToolbar] 下载图片失败:', error)

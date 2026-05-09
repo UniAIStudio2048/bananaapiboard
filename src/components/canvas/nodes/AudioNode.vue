@@ -1349,8 +1349,7 @@ function handleReupload() {
 
 // ========== 工具栏处理函数 ==========
 
-// 统一使用后端代理下载音频，解决跨域和第三方CDN预览问题
-// 🔧 修复：确保下载原音频，去除七牛云压缩参数
+// 统一使用 smartDownload，优先直连 CDN，失败时回退代理
 async function handleToolbarDownload() {
   const url = audioUrl.value
   if (!url) return
@@ -1360,8 +1359,6 @@ async function handleToolbarDownload() {
   const filename = fileName.endsWith('.mp3') || fileName.endsWith('.wav') ? fileName : `${fileName}.mp3`
   
   try {
-    let blob
-    
     if (url.startsWith('data:')) {
       // Base64 数据 - 直接在本地处理
       const parts = url.split(',')
@@ -1372,58 +1369,23 @@ async function handleToolbarDownload() {
       for (let i = 0; i < binary.length; i++) {
         array[i] = binary.charCodeAt(i)
       }
-      blob = new Blob([array], { type: mime })
-    } else {
-      // 🔧 修复：使用 buildDownloadUrl 构建下载链接，会自动清理七牛云压缩参数
-      const { buildDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
-      const downloadUrl = buildDownloadUrl(url, filename)
-      
-      // 七牛云 URL 直接下载（节省服务器流量）
-      if (isQiniuCdnUrl(url)) {
-        const link = document.createElement('a')
-        link.href = downloadUrl
-        link.download = filename
-        link.style.display = 'none'
-        document.body.appendChild(link)
-        link.click()
-        console.log('[AudioNode] 七牛云直接下载原音频:', filename)
-        setTimeout(() => document.body.removeChild(link), 100)
-        return
-      }
-      
-      // 其他 URL 走后端代理下载
-      const response = await fetch(downloadUrl, {
-        headers: getTenantHeaders()
-      })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-      
-      blob = await response.blob()
+      const blob = new Blob([array], { type: mime })
+      const downloadUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = downloadUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(downloadUrl)
+      return
     }
-    
-    // 创建下载链接
-    const downloadUrl = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = downloadUrl
-    link.download = filename
-    
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(downloadUrl)
+
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(url, filename)
     console.log('[AudioNode] 下载原音频成功:', filename)
   } catch (error) {
     console.error('[AudioNode] 下载失败:', error)
-    // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
-    try {
-      const { buildDownloadUrl, downloadWithAuth } = await import('@/api/client')
-      const downloadUrl = buildDownloadUrl(url, filename)
-      await downloadWithAuth(downloadUrl, filename)
-    } catch (e) {
-      console.error('[AudioNode] 所有下载方式都失败:', e)
-    }
   }
 }
 

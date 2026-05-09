@@ -5888,8 +5888,7 @@ async function addCharacterToAssets(characterId, videoUrl, apiResult, clipData) 
   }
 }
 
-// 统一使用后端代理下载，解决跨域和第三方CDN预览问题
-// 🔧 修复：确保下载原视频，去除七牛云压缩参数
+// 统一使用 smartDownload，优先直连 CDN，失败时回退代理
 async function handleToolbarDownload() {
   // 使用原始 URL（可能是七牛云地址），而不是 normalizedVideoUrl（可能被转换为相对路径）
   let videoUrl = props.data.output?.url
@@ -5900,57 +5899,11 @@ async function handleToolbarDownload() {
   console.log('[VideoNode] 开始下载:', { url: videoUrl.substring(0, 60), filename })
   
   try {
-    // 🔧 修复：使用 buildVideoDownloadUrl 构建下载链接，会自动清理七牛云压缩参数
-    const { buildVideoDownloadUrl, isQiniuCdnUrl } = await import('@/api/client')
-    const downloadUrl = buildVideoDownloadUrl(videoUrl, filename)
-    
-    // 七牛云 URL 直接下载（节省服务器流量）
-    if (isQiniuCdnUrl(videoUrl)) {
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      link.download = filename
-      link.style.display = 'none'
-      document.body.appendChild(link)
-      link.click()
-      console.log('[VideoNode] 七牛云直接下载原视频:', filename)
-      setTimeout(() => document.body.removeChild(link), 100)
-      return
-    }
-    
-    // 其他 URL 走后端代理下载
-    const response = await fetch(downloadUrl, {
-      headers: getTenantHeaders()
-    })
-    
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`)
-    }
-    
-    const blob = await response.blob()
-    const blobUrl = window.URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = blobUrl
-    link.download = filename
-    link.style.display = 'none'
-    document.body.appendChild(link)
-    link.click()
-    
+    const { smartDownload } = await import('@/api/client')
+    await smartDownload(videoUrl, filename)
     console.log('[VideoNode] 下载原视频成功:', filename)
-    
-    setTimeout(() => {
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(blobUrl)
-    }, 100)
   } catch (error) {
     console.error('[VideoNode] 下载失败:', error)
-    // 🔧 修复：使用带认证头的下载方式，解决前后端分离架构下的 401 错误
-    try {
-      const { buildVideoDownloadUrl, downloadWithAuth } = await import('@/api/client')
-      const downloadUrl = buildVideoDownloadUrl(videoUrl, filename)
-      await downloadWithAuth(downloadUrl, filename)
-    } catch (e) {
-      console.error('[VideoNode] 所有下载方式都失败:', e)
-    }
   }
 }
 

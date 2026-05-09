@@ -1,6 +1,6 @@
 /**
  * 格式化积分显示
- * 保留两位小数，去除尾部的0
+ * 最多保留一位小数，直接截断，不四舍五入
  * @param {number} points - 积分值
  * @returns {string} 格式化后的积分字符串
  */
@@ -13,12 +13,11 @@ export function formatPoints(points) {
   if (isNaN(num)) {
     return '0'
   }
-  
-  // 保留两位小数
-  const fixed = num.toFixed(2)
-  
-  // 去除尾部的0（保留至少一位小数）
-  return fixed.replace(/\.?0+$/, '')
+
+  const truncated = Math.trunc(num * 10) / 10
+  const normalized = Object.is(truncated, -0) ? 0 : truncated
+
+  return normalized.toFixed(1).replace(/\.0$/, '')
 }
 
 /**
@@ -57,4 +56,3 @@ export function formatNumber(num) {
   
   return n.toLocaleString('zh-CN')
 }
-

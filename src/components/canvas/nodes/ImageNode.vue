@@ -44,7 +44,7 @@ import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PanoramaPreviewModal from '../PanoramaPreviewModal.vue'
 import ModelIcon from '../../common/ModelIcon.vue'
-import { startStreamDownload } from '@/api/client'
+import { smartDownload } from '@/api/client'
 
 const { t } = useI18n()
 
@@ -3338,7 +3338,7 @@ async function handleToolbarDownload() {
       return
     }
     
-    startStreamDownload(imageUrl, filename)
+    await smartDownload(imageUrl, filename)
     showToast('已开始下载', 'success')
   } catch (error) {
     console.error('[ImageNode] 下载图片失败:', error)
