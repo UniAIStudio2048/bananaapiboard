@@ -6183,6 +6183,25 @@ function handleToolbarPreview() {
         </svg>
         <span>关键帧</span>
       </button>
+      <button class="toolbar-btn" title="剪辑" @mousedown.stop.prevent="openVideoToolModal('edit')" @click.stop.prevent>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="6" cy="6" r="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="6" cy="18" r="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M8 7.5l11 8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M8 16.5l11-8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>剪辑</span>
+      </button>
+      <button class="toolbar-btn" title="字幕擦除" @mousedown.stop.prevent="openVideoToolModal('subtitle')" @click.stop.prevent>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="3" y="5" width="18" height="14" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7 15h4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M13 15h4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M15 9l4 4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M19 9l-4 4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>字幕擦除</span>
+      </button>
       <div class="toolbar-divider"></div>
       <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -6292,16 +6311,6 @@ function handleToolbarPreview() {
           @mouseleave="handleVideoMouseLeave"
           @click="handleVideoWrapperClick"
         >
-          <div class="video-tool-actions" role="group" aria-label="视频工具">
-            <button class="video-tool-action-btn" type="button" title="剪辑" @click.stop="openVideoToolModal('edit')">
-              <span aria-hidden="true">✂</span>
-              <span>剪辑</span>
-            </button>
-            <button class="video-tool-action-btn" type="button" title="字幕擦除" @click.stop="openVideoToolModal('subtitle')">
-              <span aria-hidden="true">▭</span>
-              <span>字幕擦除</span>
-            </button>
-          </div>
           <img
             v-if="videoPosterUrl && !videoPosterFailed"
             :src="videoPosterUrl"
@@ -7784,42 +7793,6 @@ function handleToolbarPreview() {
 }
 
 /* 播放指示器已移除 */
-
-.video-tool-actions {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  z-index: 22;
-  display: flex;
-  gap: 6px;
-  transform: translateX(-50%);
-}
-
-.video-tool-action-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 52px;
-  height: 28px;
-  padding: 0 8px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 6px;
-  background: rgba(0, 0, 0, 0.82);
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 12px;
-  line-height: 1;
-  white-space: nowrap;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.24);
-  cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease;
-}
-
-.video-tool-action-btn:hover {
-  border-color: rgba(255, 255, 255, 0.38);
-  background: rgba(30, 30, 30, 0.94);
-  color: #fff;
-}
 
 /* 悬浮操作按钮 */
 .video-overlay-actions {

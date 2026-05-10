@@ -16,6 +16,13 @@ for (const label of ['剪辑', '字幕擦除']) {
   assert.match(source, new RegExp(label), `VideoNode should render ${label}`)
 }
 
+const toolbarBlock = source.match(/<div v-show="showToolbar" class="video-toolbar">[\s\S]*?<\/div>\s*\n\s*<!-- 节点标签 -->/)
+assert.ok(toolbarBlock, 'VideoNode should keep video actions inside the node toolbar block')
+assert.match(toolbarBlock[0], /title="剪辑"|title='剪辑'/, 'VideoNode should expose edit action in the node toolbar')
+assert.match(toolbarBlock[0], /title="字幕擦除"|title='字幕擦除'/, 'VideoNode should expose subtitle erase action in the node toolbar')
+assert.doesNotMatch(source, /class="video-tool-actions"/, 'VideoNode should not render video tool actions over the video preview')
+assert.doesNotMatch(source, /\.video-tool-actions\b/, 'VideoNode should not keep overlay styles for video tool actions')
+
 assert.match(source, /@completed="handleVideoToolCompleted"|@completed='handleVideoToolCompleted'/, 'VideoNode should handle video tool completion')
 assert.match(source, /function\s+handleVideoToolCompleted/, 'VideoNode should define completion handler')
 assert.match(source, /canvasStore\.addNode\(\{[\s\S]*type:\s*'video'[\s\S]*output:\s*\{[\s\S]*type:\s*'video'[\s\S]*url/s, 'VideoNode should add a video output node with output url')
