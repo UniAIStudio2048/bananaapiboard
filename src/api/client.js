@@ -435,11 +435,6 @@ export function startStreamDownload(url, filename) {
     return
   }
 
-  if (isDirectCdnDownloadUrl(cleanUrl)) {
-    triggerUrlDownload(buildDirectCdnDownloadUrl(cleanUrl, correctedFilename), correctedFilename)
-    return
-  }
-
   if ((cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) &&
       /\/api\/(cos-proxy|images\/file)\//.test(cleanUrl)) {
     const urlObj = new URL(cleanUrl)
@@ -585,6 +580,11 @@ export async function apiRequest(path, options = {}) {
  */
 export async function smartDownload(url, filename) {
   if (!url) throw new Error('下载 URL 为空')
+
+  if (typeof document !== 'undefined') {
+    startStreamDownload(url, filename)
+    return
+  }
 
   const fetchWithTimeout = (fetchUrl, options = {}, timeout = 60000) => {
     const controller = new AbortController()

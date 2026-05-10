@@ -473,9 +473,9 @@ export async function loadRemoteConfig() {
       const data = await response.json()
       console.log('[tenant] 远程配置加载成功')
       
-      // 更新运行时配置（apiBase 始终为空，不接受远程覆盖）
+      // 更新运行时配置，保留构建时配置的 API 域名，避免租户站回落到当前域名 /api。
       runtimeConfig = {
-        apiBase: '',
+        apiBase: envConfig.apiBase,
         tenantId: data.tenantId || runtimeConfig.tenantId,
         tenantKey: data.tenantKey || runtimeConfig.tenantKey,
         brand: {
