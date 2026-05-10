@@ -23,3 +23,9 @@ assert.match(
   /<CachedImage[\s\S]*v-if="getVideoThumbnail\(item\)"[\s\S]*@error="handleVideoPosterError\(item\)"/,
   'Video poster CachedImage should mark failed poster URLs so the video fallback can render'
 )
+
+assert.match(
+  source,
+  /if\s*\(\s*type\s*===\s*'video'\s*&&\s*match\[1\]\.toLowerCase\(\)\s*===\s*'bin'\s*\)\s*return\s+'\.mp4'/,
+  'HistoryPanel should download legacy subtitle erase .bin video records as .mp4'
+)

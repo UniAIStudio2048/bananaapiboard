@@ -1659,7 +1659,7 @@ async function deleteHistory(item) {
   }
 }
 
-// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
+// 走 startStreamDownload：浏览器原生下载栏（带进度），点击立即响应
 async function downloadVideo(item) {
   if (!item?.video_url) return
   try {
@@ -1668,8 +1668,8 @@ async function downloadVideo(item) {
     const promptPart = (item.prompt || 'video').slice(0, 20).replace(/[^a-zA-Z0-9\u4e00-\u9fa5-_]/g, '_')
     const filename = `${notePrefix}${promptPart}.mp4`
     
-    const { smartDownload } = await import('@/api/client')
-    await smartDownload(item.video_url, filename)
+    const { startStreamDownload } = await import('@/api/client')
+    startStreamDownload(item.video_url, filename)
   } catch (e) {
     console.error('download video error', e)
   }

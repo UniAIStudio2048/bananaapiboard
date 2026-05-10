@@ -2,8 +2,14 @@
   <label class="subtitle-erase-controls">
     <span>擦除模式</span>
     <select :value="mode" @change="$emit('update:mode', $event.target.value)">
-      <option value="standard">标准擦除</option>
-      <option value="fine">精细擦除</option>
+      <optgroup label="字幕擦除">
+        <option value="subtitle_all_area">全域智能擦除</option>
+        <option value="subtitle_sel_area">选区擦除</option>
+      </optgroup>
+      <optgroup label="高级水印/字幕擦除">
+        <option value="watermark_all_area">全域水印/字幕擦除</option>
+        <option value="watermark_sel_area">选区水印/字幕擦除</option>
+      </optgroup>
     </select>
   </label>
 </template>
@@ -12,7 +18,7 @@
 defineProps({
   mode: {
     type: String,
-    default: 'standard'
+    default: 'subtitle_all_area'
   }
 })
 

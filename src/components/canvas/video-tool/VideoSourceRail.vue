@@ -7,8 +7,12 @@
     </div>
 
     <div v-if="activeTab === 'canvas'" class="video-source-rail__list">
-      <button v-for="source in normalizedCanvasVideos" :key="source.id" type="button" class="video-source-rail__item" @click="$emit('add-source', source)">
-        <span>{{ source.name }}</span>
+      <button v-for="source in normalizedCanvasVideos" :key="source.id" type="button" class="video-source-rail__item" draggable="true" @dragstart="handleDragStart($event, source)" @click="$emit('add-source', source)">
+        <span class="video-source-rail__thumb">
+          <img v-if="source.thumbnailUrl" :src="displayMediaUrl(source.thumbnailUrl)" alt="" loading="lazy" />
+          <video v-else :src="displayMediaUrl(source.url) + '#t=0.1'" muted playsinline preload="metadata" />
+        </span>
+        <span class="video-source-rail__name">{{ source.name }}</span>
       </button>
       <p v-if="normalizedCanvasVideos.length === 0" class="video-source-rail__empty">暂无画布视频</p>
     </div>
@@ -22,8 +26,12 @@
       <button type="button" class="video-source-rail__refresh" :disabled="historyLoading" @click="loadHistoryVideos">
         {{ historyLoading ? '加载中' : '刷新历史' }}
       </button>
-      <button v-for="source in historyVideos" :key="source.id" type="button" class="video-source-rail__item" @click="$emit('add-source', source)">
-        <span>{{ source.name }}</span>
+      <button v-for="source in historyVideos" :key="source.id" type="button" class="video-source-rail__item" draggable="true" @dragstart="handleDragStart($event, source)" @click="$emit('add-source', source)">
+        <span class="video-source-rail__thumb">
+          <img v-if="source.thumbnailUrl" :src="displayMediaUrl(source.thumbnailUrl)" alt="" loading="lazy" />
+          <video v-else :src="displayMediaUrl(source.url) + '#t=0.1'" muted playsinline preload="metadata" />
+        </span>
+        <span class="video-source-rail__name">{{ source.name }}</span>
       </button>
       <p v-if="!historyLoading && historyVideos.length === 0" class="video-source-rail__empty">暂无历史视频</p>
     </div>
@@ -31,9 +39,10 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, reactive } from 'vue'
 import { getHistory } from '@/api/canvas/history'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { getMediaUrl } from '@/config/tenant'
 
 const props = defineProps({
   canvasVideos: {
@@ -55,17 +64,70 @@ const historyVideos = ref([])
 const historyLoading = ref(false)
 const uploadStatus = ref('选择本地视频上传')
 
-const normalizedCanvasVideos = computed(() => props.canvasVideos.map((item, index) => normalizeSource(item, `canvas-${index}`)).filter(Boolean))
+const canvasVideosList = ref([])
+
+watch(() => props.canvasVideos, async (videos) => {
+  const sources = videos.map((item, index) => normalizeSource(item, `canvas-${index}`)).filter(Boolean)
+  canvasVideosList.value = sources
+  for (const s of sources) {
+    if (s._needsProbe) {
+      await probeAndUpdateDuration(s)
+    }
+  }
+}, { immediate: true })
+
+const normalizedCanvasVideos = computed(() => canvasVideosList.value)
+
+function displayMediaUrl(url) {
+  return getMediaUrl(url)
+}
+
+function handleDragStart(event, source) {
+  event.dataTransfer.setData('application/video-source', JSON.stringify(source))
+  event.dataTransfer.effectAllowed = 'copy'
+}
+
+function probeVideoDuration(url) {
+  return new Promise((resolve) => {
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    video.muted = true
+    const cleanup = () => {
+      video.removeAttribute('src')
+      video.load()
+    }
+    video.onloadedmetadata = () => {
+      const dur = video.duration
+      cleanup()
+      resolve(Number.isFinite(dur) && dur > 0 ? dur : 0)
+    }
+    video.onerror = () => {
+      cleanup()
+      resolve(0)
+    }
+    video.src = getMediaUrl(url)
+    setTimeout(() => { cleanup(); resolve(0) }, 8000)
+  })
+}
 
 function normalizeSource(item, fallbackId) {
   const url = item?.url || item?.output?.url || item?.data?.output?.url || item?.video_url
   if (!url) return null
+  const metaDuration = Number(item.duration || item.output?.duration || item.data?.output?.duration) || 0
   return {
     id: item.id || fallbackId,
     name: item.name || item.title || item.prompt || `视频 ${fallbackId}`,
     url,
-    duration: Number(item.duration || item.output?.duration || item.data?.output?.duration) || 10
+    thumbnailUrl: item.thumbnailUrl || item.thumbnail_url || item.cover_url || item.output?.thumbnailUrl || item.output?.thumbnail_url || item.data?.output?.thumbnailUrl || item.data?.output?.thumbnail_url,
+    duration: metaDuration || 10,
+    _needsProbe: !metaDuration
   }
+}
+
+async function probeAndUpdateDuration(source) {
+  if (!source?._needsProbe && source?.duration > 0) return
+  const dur = await probeVideoDuration(source.url)
+  if (dur > 0) source.duration = dur
 }
 
 async function handleUpload(event) {
@@ -74,11 +136,14 @@ async function handleUpload(event) {
   uploadStatus.value = '上传中'
   try {
     const result = await uploadCanvasMedia(file, 'video')
+    const url = result.url
+    const dur = await probeVideoDuration(url)
     const source = {
       id: `upload-${Date.now()}`,
       name: file.name,
-      url: result.url,
-      duration: 10
+      url,
+      thumbnailUrl: result.thumbnailUrl || result.thumbnail_url || result.cover_url,
+      duration: dur || 10
     }
     uploadStatus.value = '上传完成'
     event.target.value = ''
@@ -92,7 +157,13 @@ async function loadHistoryVideos() {
   historyLoading.value = true
   try {
     const result = await getHistory({ type: 'video', limit: 50 })
-    historyVideos.value = (result.history || []).map((item, index) => normalizeSource(item, `history-${index}`)).filter(Boolean)
+    const sources = (result.history || []).map((item, index) => normalizeSource(item, `history-${index}`)).filter(Boolean)
+    historyVideos.value = sources
+    for (const s of sources) {
+      if (s._needsProbe) {
+        await probeAndUpdateDuration(s)
+      }
+    }
   } finally {
     historyLoading.value = false
   }
@@ -148,6 +219,12 @@ watch(activeTab, tab => {
   display: grid;
   gap: 8px;
   align-content: start;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.video-source-rail__list::-webkit-scrollbar {
+  display: none;
 }
 
 .video-source-rail__item,
@@ -161,7 +238,35 @@ watch(activeTab, tab => {
   font-size: 13px;
 }
 
-.video-source-rail__item span {
+.video-source-rail__item {
+  display: grid;
+  gap: 8px;
+  cursor: grab;
+}
+
+.video-source-rail__item:active {
+  cursor: grabbing;
+}
+
+.video-source-rail__thumb {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #050505;
+}
+
+.video-source-rail__thumb img,
+.video-source-rail__thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.video-source-rail__name {
   display: block;
   overflow: hidden;
   white-space: nowrap;

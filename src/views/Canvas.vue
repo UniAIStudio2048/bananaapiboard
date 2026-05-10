@@ -1986,10 +1986,10 @@ async function downloadSelectedNodeFile() {
       return
     }
     
-    // 远程 URL 统一使用 smartDownload（fetch+blob，自动验证完整性）
-    const { smartDownload } = await import('@/api/client')
-    await smartDownload(fileUrl, fileName)
-    console.log('[Canvas] 下载文件:', fileName)
+    // 远程 URL 走流式下载，触发浏览器原生下载栏（带进度），点击即响应
+    const { startStreamDownload } = await import('@/api/client')
+    startStreamDownload(fileUrl, fileName)
+    console.log('[Canvas] 已开始下载:', fileName)
   } catch (error) {
     console.error('[Canvas] 下载失败:', error)
   }

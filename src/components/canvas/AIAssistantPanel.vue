@@ -171,11 +171,21 @@
         <div v-if="attachments.length > 0" class="attachments-preview">
           <div
             v-for="(att, index) in attachments"
-            :key="index"
+            :key="att.key || index"
             class="attachment-item"
+            draggable="true"
+            @dragstart="attachmentDragIndex = index"
+            @dragend="attachmentDragIndex = -1"
+            @dragover.prevent
+            @drop.prevent="moveAttachment(attachmentDragIndex, index)"
           >
             <!-- 图片预览 -->
-            <div v-if="att.type === 'image'" class="attachment-thumb-wrapper">
+            <div
+              v-if="att.type === 'image'"
+              class="attachment-thumb-wrapper"
+              @mouseenter="onHoverStart(att.preview, $event)"
+              @mouseleave="onHoverEnd"
+            >
               <img :src="att.preview" class="attachment-thumb" />
               <button class="attachment-remove" @click="removeAttachment(index)">
                 <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -185,7 +195,12 @@
             </div>
 
             <!-- 视频缩略图预览 -->
-            <div v-else-if="att.type === 'video'" class="attachment-thumb-wrapper attachment-video-wrapper">
+            <div
+              v-else-if="att.type === 'video'"
+              class="attachment-thumb-wrapper attachment-video-wrapper"
+              @mouseenter="onVideoHoverStart(att.preview, $event)"
+              @mouseleave="onHoverEnd"
+            >
               <video
                 :src="att.preview"
                 class="attachment-thumb"
@@ -268,6 +283,9 @@
                 </svg>
               </button>
             </div>
+            <div v-if="attachmentMentionItems[index]" class="attachment-mention-label">
+              @{{ attachmentMentionItems[index].label }}
+            </div>
           </div>
         </div>
 
@@ -300,9 +318,18 @@
             class="input-textarea"
             placeholder="开启你的灵感之旅..."
             rows="1"
-            @keydown.enter.exact.prevent="sendMessage"
-            @input="autoResize"
+            @keydown="handleInputKeydown"
+            @input="handleInputEvent"
           ></textarea>
+
+          <PromptMentionPopup
+            :visible="showMentionPopup"
+            :items="filteredAttachmentMentionItems"
+            :active-index="mentionActiveIndex"
+            :position="mentionPosition"
+            @select="selectAttachmentMention"
+            @update:active-index="mentionActiveIndex = $event"
+          />
 
           <!-- 工具栏 -->
           <div class="input-toolbar">
@@ -563,6 +590,7 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, inject } from 'vue'
 import AIAssistantMessage from './AIAssistantMessage.vue'
+import PromptMentionPopup from './PromptMentionPopup.vue'
 import PresetManager from './dialogs/PresetManager.vue'
 import CustomPresetDialog from './dialogs/CustomPresetDialog.vue'
 import {
@@ -579,6 +607,21 @@ import {
   createUserLLMPreset,
   updateUserLLMPreset
 } from '@/api/canvas/llm'
+import {
+  buildDirectUrlAttachment,
+  getAssistantAttachmentTypeConfig,
+  normalizeAssistantAttachmentName,
+  shouldFetchAssistantAttachmentUrl
+} from '@/utils/aiAssistantAttachments'
+import { getMentionPopupPosition, getTextareaCaretViewportRect } from '@/utils/promptMention'
+import {
+  bindAssistantAttachmentMention,
+  buildAssistantMentionItems,
+  ensureAssistantAttachmentKey,
+  resolveAssistantAttachmentsForSend,
+  syncAssistantAttachmentMentions
+} from '@/utils/aiAssistantAttachmentMentions'
+import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 
 const props = defineProps({
   visible: {
@@ -626,7 +669,15 @@ const attachments = ref([])
 const isDragging = ref(false)
 const isUploading = ref(false) // 上传中状态
 const showAttachDropdown = ref(false) // 附件下拉菜单
+const attachmentDragIndex = ref(-1)
+const attachmentMentionBindings = ref({})
+const showMentionPopup = ref(false)
+const mentionActiveIndex = ref(0)
+const mentionPosition = ref({ top: 0, left: 0 })
+const mentionQuery = ref('')
 let dragCounter = 0 // 用于跟踪拖拽进入/离开次数
+let mentionStartPos = -1
+let nextAttachmentLocalId = 0
 
 // 预设管理相关
 const userPresets = ref([])
@@ -640,6 +691,7 @@ const messagesRef = ref(null)
 const inputRef = ref(null)
 const fileInputRef = ref(null)
 const attachSelectorRef = ref(null)
+const { onHoverStart, onVideoHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // 面板宽度调整相关
 const DEFAULT_WIDTH = 480 // 增加默认宽度以确保工具栏一行显示
@@ -668,6 +720,17 @@ const selectedMode = computed(() => {
 
 const canSend = computed(() => {
   return (inputText.value.trim() || attachments.value.length > 0) && !isLoading.value && !isUploading.value
+})
+
+const attachmentMentionItems = computed(() => buildAssistantMentionItems(attachments.value))
+
+const filteredAttachmentMentionItems = computed(() => {
+  const query = mentionQuery.value.trim().toLowerCase()
+  if (!query) return attachmentMentionItems.value
+  return attachmentMentionItems.value.filter(item => {
+    return item.label.toLowerCase().includes(query) ||
+      String(item.name || '').toLowerCase().includes(query)
+  })
 })
 
 // 检查是否有流式内容（用于隐藏加载指示器）
@@ -732,6 +795,8 @@ function startNewChat() {
   currentSessionId.value = null
   inputText.value = ''
   attachments.value = []
+  attachmentMentionBindings.value = {}
+  showMentionPopup.value = false
 }
 
 async function loadSession(session) {
@@ -859,15 +924,155 @@ function selectPreset(preset) {
   }
 }
 
+function normalizeAssistantAttachment(attachment) {
+  nextAttachmentLocalId += 1
+  return ensureAssistantAttachmentKey(attachment, `attachment-${nextAttachmentLocalId}`)
+}
+
+function pushAttachment(attachment) {
+  attachments.value.push(normalizeAssistantAttachment(attachment))
+  syncCurrentAttachmentMentions()
+}
+
+function syncCurrentAttachmentMentions() {
+  const result = syncAssistantAttachmentMentions(
+    inputText.value,
+    attachmentMentionBindings.value,
+    attachments.value
+  )
+  inputText.value = result.text
+  attachmentMentionBindings.value = result.bindings
+  if (attachments.value.length === 0) {
+    showMentionPopup.value = false
+  }
+}
+
+function showAttachmentMentionPopup() {
+  if (attachmentMentionItems.value.length === 0 || !inputRef.value) {
+    showMentionPopup.value = false
+    return
+  }
+
+  const caretRect = getTextareaCaretViewportRect(inputRef.value, inputRef.value.selectionStart)
+  mentionPosition.value = getMentionPopupPosition({
+    caretRect,
+    fallbackRect: inputRef.value.getBoundingClientRect(),
+    popupHeight: 260,
+    viewportHeight: window.innerHeight
+  })
+  mentionActiveIndex.value = Math.min(mentionActiveIndex.value, Math.max(filteredAttachmentMentionItems.value.length - 1, 0))
+  showMentionPopup.value = filteredAttachmentMentionItems.value.length > 0
+}
+
+function updateAttachmentMentionPopup() {
+  const textarea = inputRef.value
+  if (!textarea) return
+
+  const cursor = textarea.selectionStart
+  const before = inputText.value.slice(0, cursor)
+  const atIndex = before.lastIndexOf('@')
+  if (atIndex === -1) {
+    showMentionPopup.value = false
+    return
+  }
+
+  const query = before.slice(atIndex + 1)
+  if (/\s/.test(query)) {
+    showMentionPopup.value = false
+    return
+  }
+
+  mentionStartPos = atIndex
+  mentionQuery.value = query
+  mentionActiveIndex.value = 0
+  showAttachmentMentionPopup()
+}
+
+function handleInputEvent() {
+  autoResize()
+  updateAttachmentMentionPopup()
+}
+
+function handleInputKeydown(event) {
+  if (showMentionPopup.value && filteredAttachmentMentionItems.value.length > 0) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      mentionActiveIndex.value = Math.min(filteredAttachmentMentionItems.value.length - 1, mentionActiveIndex.value + 1)
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      mentionActiveIndex.value = Math.max(0, mentionActiveIndex.value - 1)
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      selectAttachmentMention(filteredAttachmentMentionItems.value[mentionActiveIndex.value])
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      showMentionPopup.value = false
+      return
+    }
+  }
+
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault()
+    sendMessage()
+  }
+}
+
+function selectAttachmentMention(item) {
+  if (!item || mentionStartPos < 0) return
+  const result = bindAssistantAttachmentMention({
+    text: inputText.value,
+    start: mentionStartPos,
+    queryLength: mentionQuery.value.length,
+    item,
+    bindings: attachmentMentionBindings.value
+  })
+
+  inputText.value = result.text
+  attachmentMentionBindings.value = result.bindings
+  showMentionPopup.value = false
+  mentionQuery.value = ''
+  mentionStartPos = -1
+
+  nextTick(() => {
+    inputRef.value?.focus()
+    inputRef.value?.setSelectionRange(result.cursor, result.cursor)
+    autoResize()
+  })
+}
+
+function moveAttachment(fromIndex, toIndex) {
+  if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return
+  const next = [...attachments.value]
+  const [item] = next.splice(fromIndex, 1)
+  if (!item) return
+  next.splice(toIndex, 0, item)
+  attachments.value = next
+  attachmentDragIndex.value = -1
+  syncCurrentAttachmentMentions()
+}
+
 async function sendMessage() {
   if (!canSend.value) return
 
+  syncCurrentAttachmentMentions()
   const messageText = inputText.value.trim()
-  const messageAttachments = [...attachments.value]
+  const messageAttachments = resolveAssistantAttachmentsForSend({
+    text: inputText.value,
+    bindings: attachmentMentionBindings.value,
+    attachments: attachments.value
+  })
 
   // 清空输入
   inputText.value = ''
   attachments.value = []
+  attachmentMentionBindings.value = {}
+  showMentionPopup.value = false
   autoResize()
 
   // 添加用户消息（先用本地预览显示）
@@ -896,8 +1101,16 @@ async function sendMessage() {
   })
 
   try {
-    // 如果有附件（图片或文件），先上传到七牛云获取URL
-    let uploadedAttachments = []
+    // 如果有附件（图片或文件），本地临时资源先上传，公网 URL 直接传给后端
+    let uploadedAttachments = messageAttachments
+      .filter(a => !a.file && a.url)
+      .map(a => ({
+        key: a.key,
+        type: a.type,
+        url: a.url,
+        name: a.name
+      }))
+
     if (messageAttachments.length > 0) {
       // 筛选出需要上传的文件（有file对象的）
       const filesToUpload = messageAttachments.filter(a => a.file)
@@ -908,13 +1121,18 @@ async function sendMessage() {
           messages.value[assistantMessageIndex].content = '正在上传附件...'
           console.log(`[AI-Assistant] 开始上传 ${filesToUpload.length} 个附件...`)
           const uploadResults = await uploadAttachments(filesToUpload.map(a => a.file))
-
-          // 构建上传后的附件列表
-          uploadedAttachments = uploadResults.map(result => ({
+          const uploadedByOriginal = uploadResults.map((result, index) => ({
+            key: filesToUpload[index].key,
             type: result.type,
             url: result.url,
             name: result.name
           }))
+
+          // 构建上传后的附件列表
+          uploadedAttachments = [
+            ...uploadedAttachments,
+            ...uploadedByOriginal
+          ]
           console.log(`[AI-Assistant] 附件上传完成:`, uploadedAttachments)
           messages.value[assistantMessageIndex].content = ''
 
@@ -922,7 +1140,7 @@ async function sendMessage() {
           const userMsg = messages.value[assistantMessageIndex - 1]
           if (userMsg && userMsg.attachments) {
             for (let i = 0; i < userMsg.attachments.length; i++) {
-              const uploaded = uploadedAttachments.find(u => u.name === userMsg.attachments[i].name)
+              const uploaded = uploadedAttachments.find(u => u.key === messageAttachments[i]?.key || u.name === userMsg.attachments[i].name)
               if (uploaded) {
                 userMsg.attachments[i].url = uploaded.url
                 userMsg.attachments[i].type = uploaded.type
@@ -1020,6 +1238,7 @@ function removeAttachment(index) {
     URL.revokeObjectURL(att.preview)
   }
   attachments.value.splice(index, 1)
+  syncCurrentAttachmentMentions()
 }
 
 // 拖拽上传处理
@@ -1095,7 +1314,7 @@ function processFiles(files) {
 
     // 图片类型生成预览
     if (fileType === 'image') {
-      attachments.value.push({
+      pushAttachment({
         type: 'image',
         name: file.name,
         file: file,
@@ -1105,7 +1324,7 @@ function processFiles(files) {
       })
     } else if (fileType === 'video') {
       // 视频类型 - 生成 blob URL 用于缩略图预览
-      attachments.value.push({
+      pushAttachment({
         type: 'video',
         name: file.name,
         file: file,
@@ -1116,7 +1335,7 @@ function processFiles(files) {
       })
     } else if (fileType === 'audio') {
       // 音频类型 - 生成 blob URL 用于播放预览
-      attachments.value.push({
+      pushAttachment({
         type: 'audio',
         name: file.name,
         file: file,
@@ -1127,7 +1346,7 @@ function processFiles(files) {
       })
     } else {
       // 其他文件类型
-      attachments.value.push({
+      pushAttachment({
         type: 'file',
         name: file.name,
         file: file,
@@ -1279,38 +1498,17 @@ onMounted(() => {
 async function addAttachmentFromUrl(url, type, name) {
   if (!url) return
 
-  // 根据类型确定默认文件名和 MIME type
-  const typeConfig = {
-    image: { ext: '.png', mime: 'image/png', defaultName: `image_${Date.now()}.png` },
-    video: { ext: '.mp4', mime: 'video/mp4', defaultName: `video_${Date.now()}.mp4` },
-    audio: { ext: '.mp3', mime: 'audio/mpeg', defaultName: `audio_${Date.now()}.mp3` }
-  }
-  
-  const config = typeConfig[type] || { ext: '', mime: 'application/octet-stream', defaultName: `file_${Date.now()}` }
-  
-  // 如果提供了文件名，检查扩展名是否正确
-  let fileName = name || config.defaultName
-  if (name) {
-    const ext = name.split('.').pop()?.toLowerCase()
-    // 如果文件名没有扩展名，或者扩展名与类型不匹配，添加正确的扩展名
-    if (!ext || (type === 'audio' && !['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(ext)) ||
-        (type === 'video' && !['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(ext)) ||
-        (type === 'image' && !['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext))) {
-      // 如果扩展名不匹配，使用 URL 中的扩展名，或者使用默认扩展名
-      const urlExt = url.split('.').pop()?.split('?')[0]?.toLowerCase()
-      if (urlExt && (
-        (type === 'audio' && ['mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a'].includes(urlExt)) ||
-        (type === 'video' && ['mp4', 'webm', 'mov', 'avi', 'mkv'].includes(urlExt)) ||
-        (type === 'image' && ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(urlExt))
-      )) {
-        fileName = name.replace(/\.[^.]+$/, '') + '.' + urlExt
-      } else {
-        fileName = name.replace(/\.[^.]+$/, '') + config.ext
-      }
-    }
-  }
+  const config = getAssistantAttachmentTypeConfig(type)
+  const fileName = normalizeAssistantAttachmentName({ url, type, name })
 
   try {
+    if (!shouldFetchAssistantAttachmentUrl(url)) {
+      pushAttachment(buildDirectUrlAttachment({ url, type, name: fileName }))
+      await nextTick()
+      inputRef.value?.focus()
+      return
+    }
+
     // 获取文件 blob
     let fetchUrl = url
     if (url.startsWith('/api/') || url.startsWith('/storage/')) {
@@ -1331,7 +1529,7 @@ async function addAttachmentFromUrl(url, type, name) {
     console.log(`[AI-Assistant] 从 URL 添加附件: type=${type}, fileName=${fileName}, blob.type=${blob.type}, 使用 MIME=${config.mime}`)
 
     if (type === 'image') {
-      attachments.value.push({
+      pushAttachment({
         type: 'image',
         name: fileName,
         file,
@@ -1340,7 +1538,7 @@ async function addAttachmentFromUrl(url, type, name) {
         preview: URL.createObjectURL(file)
       })
     } else if (type === 'video') {
-      attachments.value.push({
+      pushAttachment({
         type: 'video',
         name: fileName,
         file,
@@ -1350,7 +1548,7 @@ async function addAttachmentFromUrl(url, type, name) {
         preview: URL.createObjectURL(file)
       })
     } else if (type === 'audio') {
-      attachments.value.push({
+      pushAttachment({
         type: 'audio',
         name: fileName,
         file,
@@ -1806,9 +2004,34 @@ defineExpose({
   flex-shrink: 0;
 }
 
+.attachment-item[draggable="true"] {
+  cursor: grab;
+}
+
+.attachment-item[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.attachment-mention-label {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  max-width: calc(100% - 12px);
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #e5e7eb;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
 .attachment-thumb-wrapper {
-  width: 60px;
-  height: 60px;
+  width: 72px;
+  height: 72px;
   border-radius: 8px;
   overflow: hidden;
 }

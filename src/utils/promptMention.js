@@ -1,16 +1,49 @@
 const DEFAULT_OFFSET = 8
 const DEFAULT_FALLBACK_LEFT_OFFSET = 12
 
-export function getMentionPopupPosition({ caretRect, fallbackRect, offset = DEFAULT_OFFSET } = {}) {
+const DEFAULT_POPUP_HEIGHT = 260
+
+function getViewportHeight(explicitHeight) {
+  if (Number.isFinite(explicitHeight)) return explicitHeight
+  if (typeof window !== 'undefined' && Number.isFinite(window.innerHeight)) return window.innerHeight
+  return null
+}
+
+function getVerticalPosition({ top, bottom, offset, popupHeight = DEFAULT_POPUP_HEIGHT, viewportHeight }) {
+  const belowTop = Math.round(bottom + offset)
+  const actualViewportHeight = getViewportHeight(viewportHeight)
+
+  if (actualViewportHeight && belowTop + popupHeight > actualViewportHeight) {
+    return Math.max(offset, Math.round(top - popupHeight - offset))
+  }
+
+  return belowTop
+}
+
+export function getMentionPopupPosition({ caretRect, fallbackRect, offset = DEFAULT_OFFSET, popupHeight, viewportHeight } = {}) {
   if (caretRect && Number.isFinite(caretRect.left) && Number.isFinite(caretRect.bottom)) {
     return {
-      top: Math.round(caretRect.bottom + offset),
+      top: getVerticalPosition({
+        top: caretRect.top,
+        bottom: caretRect.bottom,
+        offset,
+        popupHeight,
+        viewportHeight
+      }),
       left: Math.round(caretRect.left)
     }
   }
 
+  const fallbackTop = fallbackRect?.top || 0
+  const fallbackBottom = fallbackRect?.bottom || 0
   return {
-    top: Math.round((fallbackRect?.bottom || 0) + offset),
+    top: getVerticalPosition({
+      top: fallbackTop,
+      bottom: fallbackBottom,
+      offset,
+      popupHeight,
+      viewportHeight
+    }),
     left: Math.round((fallbackRect?.left || 0) + DEFAULT_FALLBACK_LEFT_OFFSET)
   }
 }

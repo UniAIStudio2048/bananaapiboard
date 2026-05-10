@@ -840,7 +840,9 @@ export default {
       package_purchase: '套餐购买',
       package_upgrade: '套餐升级',
       sora_character_cost: 'Sora 角色创建',
-      sora_character_cost_package: 'Sora 角色创建'
+      sora_character_cost_package: 'Sora 角色创建',
+      subtitle_erase: '字幕擦除',
+      subtitle_erase_package: '字幕擦除'
     }
   },
 
@@ -1060,7 +1062,9 @@ export default {
     package_purchase: '套餐购买',
     package_upgrade: '套餐升级',
     sora_character_cost: 'Sora 角色创建',
-    sora_character_cost_package: 'Sora 角色创建'
+    sora_character_cost_package: 'Sora 角色创建',
+    subtitle_erase: '字幕擦除',
+    subtitle_erase_package: '字幕擦除'
   },
 
   // 新手引导

@@ -383,15 +383,15 @@ function closeFullscreenPreview() {
   emit('close')
 }
 
-// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
+// 走 startStreamDownload：浏览器原生下载栏（带进度），点击立即响应
 async function downloadVideo() {
   if (!videoUrl.value) return
   
   const filename = `video_${Date.now()}.mp4`
   
   try {
-    const { smartDownload } = await import('@/api/client')
-    await smartDownload(videoUrl.value, filename)
+    const { startStreamDownload } = await import('@/api/client')
+    startStreamDownload(videoUrl.value, filename)
   } catch (error) {
     console.error('下载视频失败:', error)
   }
@@ -437,8 +437,8 @@ async function downloadImage() {
       return
     }
     
-    const { smartDownload } = await import('@/api/client')
-    await smartDownload(url, filename)
+    const { startStreamDownload } = await import('@/api/client')
+    startStreamDownload(url, filename)
   } catch (error) {
     console.error('下载图片失败:', error)
   }

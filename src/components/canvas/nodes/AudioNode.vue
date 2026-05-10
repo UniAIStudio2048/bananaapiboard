@@ -1349,7 +1349,7 @@ function handleReupload() {
 
 // ========== 工具栏处理函数 ==========
 
-// 统一使用 smartDownload，优先直连 CDN，失败时回退代理
+// 走 startStreamDownload：浏览器原生下载栏（带进度），点击立即响应
 async function handleToolbarDownload() {
   const url = audioUrl.value
   if (!url) return
@@ -1381,9 +1381,9 @@ async function handleToolbarDownload() {
       return
     }
 
-    const { smartDownload } = await import('@/api/client')
-    await smartDownload(url, filename)
-    console.log('[AudioNode] 下载原音频成功:', filename)
+    const { startStreamDownload } = await import('@/api/client')
+    startStreamDownload(url, filename)
+    console.log('[AudioNode] 已开始下载原音频:', filename)
   } catch (error) {
     console.error('[AudioNode] 下载失败:', error)
   }

@@ -47,6 +47,7 @@ import {
   shouldShowVideoGenerationTimeoutHint
 } from '@/utils/videoGenerationProgress'
 import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
+import { exportVideoTimeline, getSubtitleEraseTask } from '@/api/canvas/video-tools'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedanceVideoModel } from './video-error-message.js'
@@ -1777,6 +1778,8 @@ const VIDEO_TOOL_MODAL_MODES = {
 }
 const showVideoToolModal = ref(false)
 const videoToolInitialMode = ref('subtitle')
+const SUBTITLE_ERASE_POLL_INTERVAL_MS = 2000
+const SUBTITLE_ERASE_POLL_ATTEMPTS = 1500
 
 // poster 仅在有明确封面图时才设置；COS ci-process=snapshot 截帧服务不稳定（502），
 // 失败的 poster 会导致 <video> 显示黑屏而非首帧
@@ -5347,6 +5350,80 @@ function handleVideoToolCompleted(payload) {
   }))
 }
 
+function handleVideoToolExportStarted(payload) {
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return
+
+  const isSubtitleErase = payload?.mode === 'subtitle'
+  const newNodeId = `video_tool_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+  const label = isSubtitleErase ? '字幕擦除' : '视频合成'
+  const width = Number(props.data.width) || Number(currentNode.data?.width) || 420
+
+  canvasStore.addNode({
+    id: newNodeId,
+    type: 'video',
+    position: {
+      x: currentNode.position.x + width + 120,
+      y: currentNode.position.y
+    },
+    data: {
+      label,
+      title: label,
+      status: 'processing',
+      progress: isSubtitleErase ? '字幕擦除中...' : '视频合成中...',
+      processingStartedAt: Date.now(),
+      sourceNodeId: props.id,
+      videoToolMode: isSubtitleErase ? 'subtitle' : 'edit',
+      output: { type: 'video', url: '' }
+    }
+  })
+
+  canvasStore.addEdge({
+    id: `edge_${props.id}_${newNodeId}`,
+    source: props.id,
+    target: newNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input'
+  })
+
+  showVideoToolModal.value = false
+
+  const asyncTask = isSubtitleErase
+    ? pollSubtitleEraseTask(payload.taskId)
+    : exportVideoTimeline({ clips: payload.clips }).then(result =>
+        result?.url || result?.video_url || result?.videoUrl || result?.resultUrl || result?.output?.url
+      )
+
+  asyncTask.then(url => {
+    if (!url) {
+      canvasStore.updateNodeData(newNodeId, { status: 'failed', error: isSubtitleErase ? '字幕擦除未返回视频地址' : '导出未返回视频地址' })
+      return
+    }
+    canvasStore.updateNodeData(newNodeId, {
+      status: 'success',
+      output: { type: 'video', url }
+    })
+    window.dispatchEvent(new CustomEvent('canvas-history-invalidate', {
+      detail: { type: 'video', phase: 'tool-completed', sourceNodeId: props.id, nodeId: newNodeId }
+    }))
+  }).catch(error => {
+    canvasStore.updateNodeData(newNodeId, { status: 'failed', error: error?.message || (isSubtitleErase ? '字幕擦除失败' : '视频合成失败') })
+  })
+}
+
+async function pollSubtitleEraseTask(taskId) {
+  for (let attempt = 0; attempt < SUBTITLE_ERASE_POLL_ATTEMPTS; attempt++) {
+    const task = await getSubtitleEraseTask(taskId)
+    const url = task?.resultUrl || task?.url || task?.videoUrl || task?.video_url || task?.outputUrl || task?.output?.url
+    const status = String(task?.status || '').toLowerCase()
+    if (url) return url
+    if (['completed', 'success', 'succeeded', 'done'].includes(status) && !url) return null
+    if (['failed', 'error', 'cancelled'].includes(status)) throw new Error(task?.message || '字幕擦除任务失败')
+    await new Promise(resolve => setTimeout(resolve, SUBTITLE_ERASE_POLL_INTERVAL_MS))
+  }
+  throw new Error('字幕擦除任务超时')
+}
+
 // 视频裁剪编辑器状态
 const showClipEditor = ref(false)
 
@@ -6518,6 +6595,7 @@ function handleToolbarPreview() {
       :initial-source="videoToolInitialSource"
       :canvas-videos="canvasVideoToolSources"
       @completed="handleVideoToolCompleted"
+      @export-started="handleVideoToolExportStarted"
       @close="showVideoToolModal = false"
       @cancel="showVideoToolModal = false"
     />

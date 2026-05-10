@@ -748,6 +748,8 @@ export default {
     package_purchase: '套餐購買',
     package_upgrade: '套餐升級',
     sora_character_cost: 'Sora 角色建立',
-    sora_character_cost_package: 'Sora 角色建立'
+    sora_character_cost_package: 'Sora 角色建立',
+    subtitle_erase: '字幕擦除',
+    subtitle_erase_package: '字幕擦除'
   }
 }

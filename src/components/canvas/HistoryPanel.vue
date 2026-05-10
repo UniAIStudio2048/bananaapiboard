@@ -640,6 +640,7 @@ function getFileExtension(type, url) {
     const urlPath = url.split('?')[0] // 去掉查询参数
     const match = urlPath.match(/\.([a-zA-Z0-9]+)$/)
     if (match) {
+      if (type === 'video' && match[1].toLowerCase() === 'bin') return '.mp4'
       return '.' + match[1].toLowerCase()
     }
   }
@@ -669,9 +670,9 @@ async function handleDownload(item) {
   console.log('[HistoryPanel] 开始下载:', { url: downloadUrl.substring(0, 60), filename })
   
   try {
-    const { smartDownload } = await import('@/api/client')
-    await smartDownload(downloadUrl, filename)
-    console.log('[HistoryPanel] 下载成功:', filename)
+    const { startStreamDownload } = await import('@/api/client')
+    startStreamDownload(downloadUrl, filename)
+    console.log('[HistoryPanel] 已开始下载:', filename)
   } catch (error) {
     console.error('[HistoryPanel] 下载失败:', error)
   }

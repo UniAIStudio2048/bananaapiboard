@@ -28,3 +28,13 @@ assert.match(source, /function\s+handleVideoToolCompleted/, 'VideoNode should de
 assert.match(source, /canvasStore\.addNode\(\{[\s\S]*type:\s*'video'[\s\S]*output:\s*\{[\s\S]*type:\s*'video'[\s\S]*url/s, 'VideoNode should add a video output node with output url')
 assert.match(source, /canvasStore\.addEdge\(\{[\s\S]*source:\s*props\.id[\s\S]*target:\s*newNodeId/s, 'VideoNode should connect the source video node to the result node')
 assert.match(source, /canvas-history-invalidate/, 'VideoNode should invalidate canvas history after creating a result node')
+
+const pollAttemptsMatch = source.match(/const\s+SUBTITLE_ERASE_POLL_ATTEMPTS\s*=\s*(\d+)/)
+const pollIntervalMatch = source.match(/const\s+SUBTITLE_ERASE_POLL_INTERVAL_MS\s*=\s*(\d+)/)
+assert.ok(pollAttemptsMatch, 'VideoNode should define subtitle erase poll attempts as a named constant')
+assert.ok(pollIntervalMatch, 'VideoNode should define subtitle erase poll interval as a named constant')
+const pollWindowMs = Number(pollAttemptsMatch[1]) * Number(pollIntervalMatch[1])
+assert.ok(
+  pollWindowMs >= 45 * 60 * 1000,
+  `VideoNode subtitle erase polling should cover the backend task window; got ${pollWindowMs}ms`
+)

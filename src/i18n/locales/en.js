@@ -834,7 +834,9 @@ export default {
       package_purchase: 'Package Purchase',
       package_upgrade: 'Package Upgrade',
       sora_character_cost: 'Sora Character Creation',
-      sora_character_cost_package: 'Sora Character Creation'
+      sora_character_cost_package: 'Sora Character Creation',
+      subtitle_erase: 'Subtitle Erase',
+      subtitle_erase_package: 'Subtitle Erase'
     }
   },
 
@@ -1054,7 +1056,9 @@ export default {
     package_purchase: 'Package Purchase',
     package_upgrade: 'Package Upgrade',
     sora_character_cost: 'Sora Character Creation',
-    sora_character_cost_package: 'Sora Character Creation'
+    sora_character_cost_package: 'Sora Character Creation',
+    subtitle_erase: 'Subtitle Erase',
+    subtitle_erase_package: 'Subtitle Erase'
   },
 
   // Onboarding Guide

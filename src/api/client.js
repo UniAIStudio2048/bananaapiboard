@@ -664,6 +664,31 @@ export async function smartDownload(url, filename) {
 
   // 缓存优先下载 + 自检：先同源 Nginx 缓存取原文件，自检通过才用，否则回退后端代理
   async function cacheFirstDownload(targetPath) {
+    // 对于 cos-proxy 路径，先尝试解析真实 CDN URL 并直接从 CDN 下载
+    if (targetPath.includes('/api/cos-proxy/')) {
+      try {
+        const resolveUrl = getApiUrl(`/api/resolve-cdn-url?url=${encodeURIComponent(targetPath)}`)
+        const resolveRes = await fetchWithTimeout(resolveUrl, { headers: getHeaders() }, 5000)
+        if (resolveRes.ok) {
+          const { cdnUrl } = await resolveRes.json()
+          if (cdnUrl) {
+            // 尝试 CORS fetch CDN URL
+            try {
+              const blob = await fetchAndValidate(cdnUrl, { mode: 'cors' }, 60000)
+              triggerBlobDownload(blob, correctedFilename)
+              console.log('[smartDownload] cos-proxy→CDN直接下载成功:', correctedFilename, `(${(blob.size / 1024).toFixed(0)}KB)`)
+              return true
+            } catch (cdnErr) {
+              // CORS 失败，跳过 response-content-disposition（COS 匿名 GET 不支持），走后续代理流程
+              console.warn('[smartDownload] cos-proxy→CDN CORS失败，走后端代理:', cdnErr.message)
+            }
+          }
+        }
+      } catch (resolveErr) {
+        console.warn('[smartDownload] CDN URL解析失败，走常规流程:', resolveErr.message)
+      }
+    }
+
     // 优先通过同源 Nginx 缓存直接下载（无 CORS、速度快）
     try {
       const blob = await fetchAndValidate(targetPath, {}, 60000)
@@ -711,7 +736,7 @@ export async function smartDownload(url, filename) {
     return
   }
 
-  // 七牛云 URL：先尝试直接 fetch（利用 CDN CORS），失败回退到后端代理
+  // 七牛云 URL：先尝试 CORS fetch，失败则直跳下载，最后后端代理兜底
   if (isQiniuCdnUrl(cleanUrl)) {
     try {
       const blob = await fetchAndValidate(cleanUrl, { mode: 'cors' })
@@ -719,7 +744,17 @@ export async function smartDownload(url, filename) {
       console.log('[smartDownload] 七牛云直接下载成功:', correctedFilename, `(${(blob.size / 1024).toFixed(0)}KB)`)
       return
     } catch (corsErr) {
-      console.warn('[smartDownload] 七牛云直接下载失败(CORS)，回退到后端代理:', corsErr.message)
+      console.warn('[smartDownload] 七牛云CORS下载失败，尝试直跳下载:', corsErr.message)
+    }
+
+    // CORS 失败：用 <a> 标签 + attname 参数直跳下载（不受 CORS 限制，速度快）
+    try {
+      const forceDownloadUrl = buildQiniuForceDownloadUrl(cleanUrl, correctedFilename)
+      triggerUrlDownload(forceDownloadUrl, correctedFilename)
+      console.log('[smartDownload] 七牛云直跳下载已触发:', correctedFilename)
+      return
+    } catch (jumpErr) {
+      console.warn('[smartDownload] 七牛云直跳下载失败，回退后端代理:', jumpErr.message)
     }
 
     const proxyPath = buildProxyUrl(cleanUrl)
@@ -729,7 +764,7 @@ export async function smartDownload(url, filename) {
     return
   }
 
-  // COS CDN URL：优先直接从 CDN 拉取，失败时再回退后端代理
+  // COS CDN URL：先尝试 CORS fetch，失败则直跳下载，最后后端代理兜底
   if (isDirectCdnDownloadUrl(cleanUrl)) {
     try {
       const blob = await fetchAndValidate(cleanUrl, { mode: 'cors' })
@@ -737,9 +772,10 @@ export async function smartDownload(url, filename) {
       console.log('[smartDownload] COS CDN直接下载成功:', correctedFilename, `(${(blob.size / 1024).toFixed(0)}KB)`)
       return
     } catch (corsErr) {
-      console.warn('[smartDownload] COS CDN直接下载失败，回退到后端代理:', corsErr.message)
+      console.warn('[smartDownload] COS CDN CORS下载失败，尝试直跳下载:', corsErr.message)
     }
 
+    // COS 匿名 GET 不支持 response-content-disposition，直接走后端代理下载
     const proxyPath = buildProxyUrl(cleanUrl)
     const blob = await fetchAndValidate(proxyPath, { headers: getHeaders() })
     triggerBlobDownload(blob, correctedFilename)

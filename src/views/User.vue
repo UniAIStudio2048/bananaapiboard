@@ -2718,7 +2718,7 @@ onUnmounted(() => {
                   class="font-bold"
                   :class="item.value > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
                 >
-                  {{ item.value > 0 ? '+' : '' }}{{ item.value }}
+                  {{ item.value > 0 ? '+' : '' }}{{ formatPoints(item.value) }}
                 </p>
               </div>
             </div>
@@ -3659,7 +3659,7 @@ onUnmounted(() => {
                       class="font-bold text-lg"
                       :class="item.value > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
                     >
-                      {{ item.value > 0 ? '+' : '' }}{{ item.value }}
+                      {{ item.value > 0 ? '+' : '' }}{{ formatPoints(item.value) }}
                     </p>
                   </div>
                 </div>

@@ -3,14 +3,19 @@ import assert from 'node:assert/strict'
 
 import { formatPoints } from './format.js'
 
-test('formatPoints truncates to one decimal place without rounding', () => {
-  assert.equal(formatPoints(1.29), '1.2')
-  assert.equal(formatPoints('12.99'), '12.9')
-  assert.equal(formatPoints(-3.19), '-3.1')
+test('formatPoints keeps up to two decimals and rounds the third decimal', () => {
+  assert.equal(formatPoints(1.5), '1.5')
+  assert.equal(formatPoints(-1.5), '-1.5')
+  assert.equal(formatPoints(1.555), '1.56')
+  assert.equal(formatPoints(1.554), '1.55')
+  assert.equal(formatPoints('12.999'), '13')
+  assert.equal(formatPoints(-3.195), '-3.2')
 })
 
-test('formatPoints omits trailing .0 for whole point values', () => {
+test('formatPoints omits trailing zeros', () => {
   assert.equal(formatPoints(10), '10')
-  assert.equal(formatPoints(10.04), '10')
+  assert.equal(formatPoints(10.00), '10')
+  assert.equal(formatPoints(10.5), '10.5')
+  assert.equal(formatPoints(10.50), '10.5')
   assert.equal(formatPoints(0), '0')
 })

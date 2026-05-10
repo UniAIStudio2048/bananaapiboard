@@ -932,6 +932,8 @@ export default {
     package_purchase: 'パッケージ購入',
     package_upgrade: 'パッケージアップグレード',
     sora_character_cost: 'Soraキャラクター作成',
-    sora_character_cost_package: 'Soraキャラクター作成'
+    sora_character_cost_package: 'Soraキャラクター作成',
+    subtitle_erase: '字幕消去',
+    subtitle_erase_package: '字幕消去'
   }
 }

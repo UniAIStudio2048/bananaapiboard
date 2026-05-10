@@ -878,7 +878,7 @@ function handleAddToCanvas() {
   }
 }
 
-// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
+// 走 startStreamDownload：浏览器原生下载栏（带进度），点击立即响应
 async function handleDownload() {
   if (!contextMenuAsset.value) return
   
@@ -919,10 +919,10 @@ async function handleDownload() {
     
     console.log('[AssetPanel] 开始下载:', { url: assetUrl.substring(0, 60), filename })
     
-    // 使用 smartDownload 统一下载（fetch+blob，自动修正扩展名，解决跨域问题）
-    const { smartDownload } = await import('@/api/client')
-    await smartDownload(assetUrl, filename)
-    console.log('[AssetPanel] 下载成功:', filename)
+    // 走流式下载，触发浏览器原生下载栏（带进度），点击即响应
+    const { startStreamDownload } = await import('@/api/client')
+    startStreamDownload(assetUrl, filename)
+    console.log('[AssetPanel] 已开始下载:', filename)
   } catch (error) {
     console.error('[AssetPanel] 下载失败:', error)
     alert(t('errors.downloadFailed') || '下载失败')

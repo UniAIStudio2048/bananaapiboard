@@ -1,6 +1,6 @@
 /**
  * 格式化积分显示
- * 最多保留一位小数，直接截断，不四舍五入
+ * 最多保留两位小数，第三位四舍五入，去掉尾随 0
  * @param {number} points - 积分值
  * @returns {string} 格式化后的积分字符串
  */
@@ -14,10 +14,10 @@ export function formatPoints(points) {
     return '0'
   }
 
-  const truncated = Math.trunc(num * 10) / 10
-  const normalized = Object.is(truncated, -0) ? 0 : truncated
+  const rounded = Math.sign(num) * Math.round((Math.abs(num) + Number.EPSILON) * 100) / 100
+  const normalized = Object.is(rounded, -0) ? 0 : rounded
 
-  return normalized.toFixed(1).replace(/\.0$/, '')
+  return normalized.toFixed(2).replace(/\.?0+$/, '')
 }
 
 /**

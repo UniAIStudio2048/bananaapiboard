@@ -37,6 +37,11 @@
                   <span class="mention-audio-icon">🎵</span>
                 </div>
               </template>
+              <template v-else>
+                <div class="mention-item-thumb mention-item-file-thumb">
+                  <span class="mention-file-icon">📄</span>
+                </div>
+              </template>
             </div>
             <div class="mention-item-info">
               <span class="mention-item-label">@{{ item.label }}</span>
@@ -73,7 +78,7 @@ const popupStyle = computed(() => ({
 }))
 
 function typeLabel(type) {
-  const map = { image: '参考图片', video: '参考视频', audio: '参考音频' }
+  const map = { image: '参考图片', video: '参考视频', audio: '参考音频', file: '参考文件' }
   return map[type] || type
 }
 
@@ -188,6 +193,13 @@ watch(() => props.activeIndex, async () => {
   font-size: 16px;
 }
 
+.mention-item-file-thumb {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+}
+
 .mention-item-placeholder-thumb {
   background: rgba(255, 255, 255, 0.08);
 }
@@ -240,6 +252,7 @@ watch(() => props.activeIndex, async () => {
 .prompt-mention-popup .mention-popup-item.active { background: rgba(255, 255, 255, 0.08); }
 .prompt-mention-popup .mention-item-video-thumb { background: #222; }
 .prompt-mention-popup .mention-item-audio-thumb { background: #333; }
+.prompt-mention-popup .mention-item-file-thumb { background: #333; }
 .prompt-mention-popup .mention-item-label { color: #e5e5e5; }
 .prompt-mention-popup .mention-item-type { color: rgba(255, 255, 255, 0.4); }
 </style>

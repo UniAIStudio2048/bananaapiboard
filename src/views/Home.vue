@@ -1192,12 +1192,12 @@ function resetImageTransform() {
   imageTranslate.value = { x: 0, y: 0 }
 }
 
-// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
+// 走 startStreamDownload：浏览器原生下载栏（带进度），点击立即响应
 async function download(url, filename) {
   const fname = filename || 'image.png'
   try {
-    const { smartDownload } = await import('@/api/client')
-    await smartDownload(url, fname)
+    const { startStreamDownload } = await import('@/api/client')
+    startStreamDownload(url, fname)
   } catch (e) {
     console.error('[Home] 下载失败:', e)
   }
@@ -1214,8 +1214,8 @@ async function downloadHistoryImage(item) {
   const filename = `${notePrefix}${modelName}_${timestamp}.png`
   
   try {
-    const { smartDownload } = await import('@/api/client')
-    await smartDownload(item.url, filename)
+    const { startStreamDownload } = await import('@/api/client')
+    startStreamDownload(item.url, filename)
   } catch (e) {
     console.error('[Home] 下载历史图片失败:', e)
   }

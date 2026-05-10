@@ -64,7 +64,7 @@ function dataUrlToBlob(dataUrl) {
   return new Blob([byteArray], { type: mime })
 }
 
-// 🔧 修复：使用 smartDownload 统一下载，解决跨域和扩展名不匹配问题
+// 走 startStreamDownload：浏览器原生下载栏（带进度），点击立即响应
 async function download() {
   let mediaUrl = ''
   let fileName = ''
@@ -95,10 +95,10 @@ async function download() {
       return
     }
     
-    // 统一使用 smartDownload（fetch+blob，自动修正扩展名，解决跨域）
-    const { smartDownload } = await import('@/api/client')
-    await smartDownload(mediaUrl, fileName)
-    console.log('[PreviewNode] 下载成功:', fileName)
+    // 走流式下载，触发浏览器原生下载栏（带进度），点击即响应
+    const { startStreamDownload } = await import('@/api/client')
+    startStreamDownload(mediaUrl, fileName)
+    console.log('[PreviewNode] 已开始下载:', fileName)
   } catch (error) {
     console.error('[PreviewNode] 下载失败:', error)
   }

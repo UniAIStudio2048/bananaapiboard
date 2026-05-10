@@ -14,3 +14,10 @@ test('user video history does not render raw provider progress directly', () => 
   assert.match(source, /displayVideoProgress\(selectedVideo\)/)
 })
 
+test('user ledger amounts use point formatting instead of raw values', () => {
+  assert.doesNotMatch(source, /\{\{\s*item\.value\s*\}\}/)
+  assert.equal(
+    (source.match(/\{\{\s*item\.value > 0 \? '\+' : ''\s*\}\}\{\{\s*formatPoints\(item\.value\)\s*\}\}/g) || []).length,
+    2
+  )
+})
