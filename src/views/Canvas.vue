@@ -155,6 +155,8 @@ const interactionMode = ref('comfyui')
 const autoSaveInterval = ref(null)
 const lastAutoSave = ref(null)
 const autoSaveEnabled = ref(false) // 只有保存过的工作流才启用自动保存
+let exitPersistInFlight = null
+let lastExitPersistKey = ''
 
 // 🔧 Toast 通知状态（用于显示保存状态等）
 const toastMessage = ref('')
@@ -200,6 +202,11 @@ function closeModeDropdown() {
 function goBackHome() {
   showModeDropdown.value = false
   router.push(isCommunityEnabled ? '/community' : '/generate')
+}
+
+function goToAllProjects() {
+  showModeDropdown.value = false
+  router.push('/workflows')
 }
 
 // 切换到新手模式
@@ -1059,8 +1066,8 @@ function tryAutoRestoreWorkflowSession() {
   }
 }
 
-// 🆕 自动恢复最近的工作流（刷新页面时使用）
-// 如果有 5 分钟内保存的工作流历史，自动恢复到画布
+// 🆕 自动恢复最近的工作流（进入画布时使用）
+// 历史记录已在 workflowAutoSave 中按保留期清理，这里直接恢复最新一条。
 function tryAutoRestoreRecentWorkflow() {
   try {
     const history = getWorkflowHistory()
@@ -1074,12 +1081,6 @@ function tryAutoRestoreRecentWorkflow() {
     const now = Date.now()
     const savedAt = recentWorkflow.savedAt || 0
     const ageMinutes = (now - savedAt) / (1000 * 60)
-    
-    // 只恢复 5 分钟内保存的工作流（避免恢复过旧的数据）
-    if (ageMinutes > 5) {
-      console.log(`[Canvas] 最近的工作流已过期 (${ageMinutes.toFixed(1)} 分钟前)，不自动恢复`)
-      return false
-    }
     
     // 检查是否有有效的节点数据
     if (!recentWorkflow.nodes || recentWorkflow.nodes.length === 0) {
@@ -1283,66 +1284,144 @@ function updateNodeFromTask(task) {
   }
 }
 
-// 页面关闭前静默保存当前工作流（不弹出任何确认框）
-function handleBeforeUnload(event) {
-  saveCurrentWorkflowSession()
-  console.log('[Canvas] 页面关闭前保存工作流标签会话')
-
+function saveCanvasExitState(reason = 'exit') {
+  const sessionSaved = saveCurrentWorkflowSession()
   const workflowData = getCurrentWorkflowData()
-  if (!workflowData || !workflowData.nodes || workflowData.nodes.length === 0) {
-    return
-  }
-  
-  // 始终保存当前活动工作流到 localStorage 历史（作为兼容备份）
-  saveToHistory(workflowData)
-  console.log('[Canvas] 页面关闭前保存工作流到历史')
-  
-  // 尝试使用 sendBeacon 保存到服务器（不阻塞页面关闭）
   const currentTab = canvasStore.getCurrentTab()
-  if (currentTab?.hasChanges) {
-    // 有文件正在上传时跳过 beacon 保存，避免持久化不完整的数据
+
+  try {
+    sessionStorage.setItem('canvas_unload_timestamp', Date.now().toString())
+    sessionStorage.setItem('canvas_unload_reason', reason)
+    sessionStorage.setItem(
+      'canvas_had_unsaved_work',
+      workflowData?.nodes?.length > 0 ? 'true' : 'false'
+    )
+  } catch (e) {
+    // 忽略卸载诊断写入失败
+  }
+
+  if (!workflowData || !workflowData.nodes || workflowData.nodes.length === 0) {
+    return { sessionSaved, currentTab, workflowData: null, cleanedData: null }
+  }
+
+  saveToHistory(workflowData)
+  console.log(`[Canvas] ${reason} 保存工作流标签会话和最近历史`)
+
+  let cleanedData = null
+  if (currentTab?.workflowId && currentTab?.hasChanges) {
     const hasUploading = canvasStore.nodes.some(n => n.data?.isUploading)
     if (hasUploading) {
-      console.log('[Canvas] 跳过 beacon 保存：有文件正在上传')
-      return
-    }
-    try {
-      const cleanedData = canvasStore.exportWorkflowForSave()
-      
-      const saveData = {
-        id: currentTab.workflowId || null,
-        name: currentTab.name || '未保存的工作流',
-        nodes: cleanedData.nodes,
-        edges: cleanedData.edges,
-        viewport: cleanedData.viewport,
-        uploadToCloud: false,
-        isBeforeUnload: true
-      }
-      
-      const headers = getTenantHeaders()
-      const token = localStorage.getItem('token')
-      const blob = new Blob([JSON.stringify({
-        ...saveData,
-        _headers: {
-          ...headers,
-          Authorization: token ? `Bearer ${token}` : undefined
-        }
-      })], { type: 'application/json' })
-      
-      if (blob.size < 64 * 1024) {
-        const beaconUrl = '/api/canvas/workflows/beacon-save'
-        navigator.sendBeacon(beaconUrl, blob)
-        console.log('[Canvas] 已发送 sendBeacon 保存请求')
-      } else {
-        console.log('[Canvas] 数据过大，跳过 sendBeacon 保存')
-      }
-    } catch (e) {
-      console.warn('[Canvas] sendBeacon 保存失败:', e)
+      console.log(`[Canvas] ${reason} 跳过服务器保存：有文件正在上传`)
+    } else {
+      cleanedData = canvasStore.exportWorkflowForSave()
     }
   }
-  
+
+  return { sessionSaved, currentTab, workflowData, cleanedData }
+}
+
+function buildExitSavePayload(state) {
+  if (!state?.currentTab?.workflowId || !state.cleanedData?.nodes?.length) return null
+
+  const currentTab = state.currentTab
+  const spaceParams = currentTab.workflowSpaceType
+    ? {
+        spaceType: currentTab.workflowSpaceType,
+        teamId: currentTab.workflowSpaceType === 'team' ? currentTab.workflowTeamId : null
+      }
+    : teamStore.getSpaceParams('current')
+
+  return {
+    id: currentTab.workflowId,
+    name: currentTab.name || '未命名工作流',
+    description: currentTab.description || '',
+    nodes: state.cleanedData.nodes,
+    edges: state.cleanedData.edges,
+    viewport: state.cleanedData.viewport,
+    uploadToCloud: false,
+    isBeforeUnload: true,
+    spaceType: spaceParams.spaceType,
+    teamId: spaceParams.teamId
+  }
+}
+
+function sendBeaconExitSave(payload) {
+  if (!payload || typeof navigator === 'undefined' || typeof navigator.sendBeacon !== 'function') return false
+
+  try {
+    const headers = getTenantHeaders()
+    const token = localStorage.getItem('token')
+    const blob = new Blob([JSON.stringify({
+      ...payload,
+      _headers: {
+        ...headers,
+        Authorization: token ? `Bearer ${token}` : undefined
+      }
+    })], { type: 'application/json' })
+
+    if (blob.size >= 64 * 1024) {
+      console.log('[Canvas] 关闭保存数据超过 sendBeacon 限制，仅保留本地恢复')
+      return false
+    }
+
+    const sent = navigator.sendBeacon('/api/canvas/workflows/beacon-save', blob)
+    console.log(`[Canvas] sendBeacon 关闭保存${sent ? '已发送' : '发送失败'}`)
+    return sent
+  } catch (e) {
+    console.warn('[Canvas] sendBeacon 保存失败:', e)
+    return false
+  }
+}
+
+async function persistCurrentWorkflowOnExit(reason = 'exit', options = {}) {
+  const state = saveCanvasExitState(reason)
+  const payload = buildExitSavePayload(state)
+  if (!payload) return false
+
+  const persistKey = `${payload.id}:${state.currentTab?.hasChanges}:${payload.nodes.length}:${payload.edges?.length || 0}`
+  if (exitPersistInFlight && lastExitPersistKey === persistKey) {
+    return exitPersistInFlight
+  }
+  lastExitPersistKey = persistKey
+
+  if (options.beaconOnly) {
+    return sendBeaconExitSave(payload)
+  }
+
+  exitPersistInFlight = (async () => {
+    try {
+      const { saveWorkflow } = await import('@/api/canvas/workflow')
+      await saveWorkflow(payload)
+      canvasStore.markCurrentTabSaved()
+      lastAutoSave.value = new Date()
+      console.log(`[Canvas] ${reason} 已更新已保存工作流: ${payload.name}`)
+      return true
+    } catch (error) {
+      console.warn(`[Canvas] ${reason} 更新工作流失败，已保留本地恢复:`, error.message || error)
+      return false
+    } finally {
+      exitPersistInFlight = null
+    }
+  })()
+
+  return exitPersistInFlight
+}
+
+// 页面关闭前静默保存当前工作流（不弹出任何确认框）
+function handleBeforeUnload(event) {
+  persistCurrentWorkflowOnExit('beforeunload', { beaconOnly: true })
   // 🔧 不再设置 event.returnValue，不弹出任何"重新加载此网站？"确认框
   // 数据已通过 localStorage + sendBeacon 静默保存
+}
+
+function handlePageHide() {
+  persistCurrentWorkflowOnExit('pagehide', { beaconOnly: true })
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    persistCurrentWorkflowOnExit('visibility_hidden')
+  }
 }
 
 // 加载用户信息
@@ -1425,19 +1504,7 @@ function handlePopState(event) {
 
 // 🔧 页面卸载时记录，用于调试意外刷新
 function handleUnload() {
-  // 记录卸载时间戳到 sessionStorage（localStorage 可能来不及写入）
-  try {
-    sessionStorage.setItem('canvas_unload_timestamp', Date.now().toString())
-    sessionStorage.setItem('canvas_unload_reason', 'unload_event')
-    
-    // 检查是否是正常退出（用户主动操作）还是异常退出
-    const workflowData = getCurrentWorkflowData()
-    if (workflowData?.nodes?.length > 0) {
-      sessionStorage.setItem('canvas_had_unsaved_work', 'true')
-    }
-  } catch (e) {
-    // 忽略
-  }
+  saveCanvasExitState('unload_event')
 }
 
 // 检查并显示新手引导
@@ -2266,14 +2333,6 @@ onMounted(async () => {
   // 加载交互模式偏好
   loadInteractionMode()
   
-  // 🆕 自动恢复：优先恢复刷新前的多标签会话；旧版本历史记录作为兼容兜底
-  const autoRestored = tryAutoRestoreWorkflowSession() || tryAutoRestoreRecentWorkflow()
-  
-  // 如果没有自动恢复，则初始化默认标签
-  if (!autoRestored) {
-    canvasStore.initDefaultTab()
-  }
-  
   // 🔧 检测是否是异常刷新后的恢复（用于调试页面意外刷新问题）
   // 仅在当前页面确实由浏览器刷新重新加载时才提示，避免将正常进入 /canvas 误判为异常刷新。
   const lastUnloadTimestamp = sessionStorage.getItem('canvas_unload_timestamp')
@@ -2308,6 +2367,8 @@ onMounted(async () => {
   
   // 监听页面关闭事件，保存工作流到历史
   window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener('pagehide', handlePageHide)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   
   // 监听用户信息更新事件，实时更新积分余额
   window.addEventListener('user-info-updated', handleUserInfoUpdated)
@@ -2318,8 +2379,10 @@ onMounted(async () => {
   // 🔧 防止页面意外刷新：监听 unload 事件，记录异常退出
   window.addEventListener('unload', handleUnload)
   
-  // 检查URL参数，如果有load参数则加载工作流
   const loadWorkflowId = route.query.load
+  let restoredOrLoaded = false
+
+  // 检查URL参数，如果有load参数则优先加载指定工作流，不自动恢复上次会话
   if (loadWorkflowId && me.value) {
     try {
       console.log('[Canvas] 从URL加载工作流:', loadWorkflowId)
@@ -2330,11 +2393,21 @@ onMounted(async () => {
         
         // 在新标签中打开工作流
         canvasStore.openWorkflowInNewTab(workflow)
+        restoredOrLoaded = true
       }
     } catch (error) {
       console.error('[Canvas] 加载工作流失败:', error)
       await showAlert('加载工作流失败：' + error.message, '错误')
     }
+  }
+
+  if (!restoredOrLoaded && !loadWorkflowId) {
+    restoredOrLoaded = tryAutoRestoreWorkflowSession() || tryAutoRestoreRecentWorkflow()
+  }
+
+  // 如果没有指定加载且没有自动恢复，则初始化默认标签
+  if (!restoredOrLoaded) {
+    canvasStore.initDefaultTab()
   }
   
   document.addEventListener('keydown', handleKeyDown)
@@ -2359,10 +2432,12 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  saveCurrentWorkflowSession()
+  persistCurrentWorkflowOnExit('unmount')
 
   document.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('pagehide', handlePageHide)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('user-info-updated', handleUserInfoUpdated)
   window.removeEventListener('popstate', handlePopState)
   window.removeEventListener('unload', handleUnload)
@@ -2419,6 +2494,12 @@ onUnmounted(() => {
               <path d="M19 12H5" /><path d="M12 19l-7-7 7-7" />
             </svg>
             <span>{{ isCommunityEnabled ? '返回社区' : '返回首页' }}</span>
+          </div>
+          <div class="mode-dropdown-item" @click="goToAllProjects">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18" /><path d="M3 6v12a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6" /><path d="M5 4h14l2 2H3l2-2z" />
+            </svg>
+            <span>全部项目</span>
           </div>
           <div class="mode-dropdown-item" @click="confirmSwitchToSimpleMode">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

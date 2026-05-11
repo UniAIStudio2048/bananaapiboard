@@ -182,6 +182,25 @@ const retainedHistory = getWorkflowHistory()
 assert.equal(retainedHistory.length, 1)
 assert.equal(retainedHistory[0].id, 'history-within-retention')
 
+storage.set('workflow_tab_session', JSON.stringify({
+  tabs: [
+    {
+      id: 'tab-within-retention',
+      name: '14天内会话',
+      nodes: [{ id: 'session-node', type: 'text', position: { x: 0, y: 0 }, data: { title: 'Session' } }],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 }
+    }
+  ],
+  activeTabId: 'tab-within-retention',
+  userId: null,
+  savedAt: now - 14 * 24 * 60 * 60 * 1000
+}))
+
+const retainedSession = getWorkflowSession()
+assert.equal(retainedSession.tabs.length, 1)
+assert.equal(retainedSession.activeTabId, 'tab-within-retention')
+
 storage.delete('workflow_auto_saves')
 assert.equal(saveWorkflowToHistory({
   name: '带描述的自动保存',

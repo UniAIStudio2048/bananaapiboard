@@ -4,12 +4,14 @@
  */
 import { ref, watch } from 'vue'
 import { getProjectList, moveWorkflowToProject } from '@/api/canvas/project'
+import { useTeamStore } from '@/stores/team'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
   workflowId: { type: String, default: '' },
   workflowName: { type: String, default: '' },
-  currentProjectId: { type: String, default: '' }
+  currentProjectId: { type: String, default: '' },
+  spaceFilter: { type: String, default: 'personal' }
 })
 
 const emit = defineEmits(['update:modelValue', 'moved'])
@@ -19,6 +21,7 @@ const selectedProjectId = ref('')
 const loading = ref(false)
 const loadingList = ref(false)
 const error = ref('')
+const teamStore = useTeamStore()
 
 watch(() => props.modelValue, async (v) => {
   if (v) {
@@ -26,7 +29,11 @@ watch(() => props.modelValue, async (v) => {
     selectedProjectId.value = ''
     loadingList.value = true
     try {
-      const result = await getProjectList()
+      const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
+      const result = await getProjectList({
+        spaceType: spaceParams.spaceType,
+        teamId: spaceParams.teamId
+      })
       projects.value = (result.data || []).filter(p => String(p.id) !== String(props.currentProjectId))
     } catch (e) {
       error.value = '加载项目列表失败'

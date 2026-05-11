@@ -4,15 +4,24 @@
  * 无导航栏的全屏页面，黑白灰色系风格
  * 两级结构：项目列表 → 项目内工作流列表
  */
-import { ref, onMounted, onActivated, nextTick } from 'vue'
+import { computed, ref, onMounted, onActivated, nextTick, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getWorkflowList, deleteWorkflow, getStorageQuota } from '@/api/canvas/workflow'
+import { getWorkflowList, deleteWorkflow, getStorageQuota, renameWorkflow } from '@/api/canvas/workflow'
 import { getProjectList, createProject, updateProject, deleteProject } from '@/api/canvas/project'
 import { useCanvasStore } from '@/stores/canvas'
+import { useTeamStore } from '@/stores/team'
+import SpaceSwitcher from '@/components/canvas/SpaceSwitcher.vue'
 import MoveToProjectDialog from '@/components/canvas/MoveToProjectDialog.vue'
+import {
+  setCanvasSpaceFilterFromGlobal,
+  syncGlobalSpaceFromFilter,
+  useCanvasSpaceFilter
+} from '@/components/canvas/spaceFilterState'
 
 const router = useRouter()
 const canvasStore = useCanvasStore()
+const teamStore = useTeamStore()
+const spaceFilter = useCanvasSpaceFilter(teamStore)
 
 // 数据状态
 const projects = ref([])
@@ -26,6 +35,32 @@ const pagination = ref({
   total: 0,
   totalPages: 0
 })
+
+const totalWorkflowPages = computed(() => {
+  const explicitTotalPages = Number(pagination.value.totalPages || 0)
+  if (explicitTotalPages > 0) return explicitTotalPages
+  return Math.ceil(pagination.value.total / pagination.value.pageSize) || 0
+})
+
+const currentProjectWorkflowTotal = computed(() => {
+  if (!currentProject.value) return 0
+  return Number(pagination.value.total || currentProject.value.workflow_count || 0)
+})
+
+const currentSpaceWorkflowTotal = computed(() => {
+  if (currentProject.value) return currentProjectWorkflowTotal.value
+  return projects.value.reduce((sum, project) => sum + Number(project.workflow_count || 0), 0)
+})
+
+function getSelectedSpaceParams() {
+  return teamStore.getSpaceParams(spaceFilter.value)
+}
+
+function getWritableSpaceParams() {
+  const spaceParams = getSelectedSpaceParams()
+  if (spaceParams.spaceType !== 'all') return spaceParams
+  return teamStore.getSpaceParams('current')
+}
 
 // 删除确认
 const deleteConfirm = ref({
@@ -65,6 +100,14 @@ const renameState = ref({
   type: '' // 'project'
 })
 
+const inlineRenameState = ref({
+  type: '',
+  id: null,
+  name: '',
+  saving: false
+})
+let titleClickTimer = null
+
 // 返回画布
 function goBack() {
   if (currentProject.value) {
@@ -86,7 +129,11 @@ function goBackToProjects() {
 async function loadProjects() {
   loading.value = true
   try {
-    const result = await getProjectList()
+    const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
+    const result = await getProjectList({
+      spaceType: spaceParams.spaceType,
+      teamId: spaceParams.teamId
+    })
     projects.value = result.data || []
   } catch (error) {
     console.error('[WorkflowList] 加载项目失败:', error)
@@ -107,16 +154,20 @@ function enterProject(project) {
 async function loadWorkflows() {
   loading.value = true
   try {
+    const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
     const params = {
       page: pagination.value.page,
-      pageSize: pagination.value.pageSize
+      pageSize: pagination.value.pageSize,
+      ...spaceParams
     }
     if (currentProject.value) {
       params.projectId = currentProject.value.id
     }
     const result = await getWorkflowList(params)
     workflows.value = result.list || []
-    pagination.value = { ...pagination.value, ...result.pagination }
+    const nextPagination = { ...pagination.value, ...(result.pagination || {}) }
+    nextPagination.totalPages = nextPagination.totalPages || Math.ceil(nextPagination.total / nextPagination.pageSize) || 0
+    pagination.value = nextPagination
   } catch (error) {
     console.error('[WorkflowList] 加载失败:', error)
     alert('加载工作流列表失败：' + error.message)
@@ -146,7 +197,14 @@ function openWorkflow(workflow) {
 }
 
 // 新建工作流
-function createNewWorkflow() {
+async function createNewWorkflow() {
+  if (currentProject.value?.space_type === 'team' && currentProject.value?.team_id) {
+    await teamStore.switchToTeam(currentProject.value.team_id)
+  } else if (currentProject.value?.space_type === 'personal') {
+    teamStore.switchToPersonalSpace()
+  } else {
+    await syncGlobalSpaceFromFilter(teamStore, spaceFilter.value)
+  }
   canvasStore.workflowMeta = null
   router.push('/canvas')
 }
@@ -166,7 +224,12 @@ async function handleCreateProject() {
   if (!name) return
   creatingProject.value = true
   try {
-    await createProject({ name })
+    const spaceParams = getWritableSpaceParams()
+    await createProject({
+      name,
+      spaceType: spaceParams.spaceType,
+      teamId: spaceParams.teamId
+    })
     showCreateProject.value = false
     newProjectName.value = ''
     await loadProjects()
@@ -230,6 +293,88 @@ async function handleRename() {
 
 function cancelRename() {
   renameState.value = { visible: false, id: null, name: '', type: '' }
+}
+
+function getProjectCoverUrl(project) {
+  return project?.cover_url || ''
+}
+
+function getWorkflowCoverUrl(workflow) {
+  return workflow?.thumbnail_url || workflow?.thumbnail || ''
+}
+
+function isVideoCover(url) {
+  return /\.(mp4|webm|mov)(\?|#|$)/i.test(String(url || ''))
+}
+
+function isInlineRenaming(type, item) {
+  return inlineRenameState.value.type === type && String(inlineRenameState.value.id) === String(item?.id)
+}
+
+function startInlineRename(type, item) {
+  if (!item?.id) return
+  if (titleClickTimer) {
+    clearTimeout(titleClickTimer)
+    titleClickTimer = null
+  }
+  inlineRenameState.value = {
+    type,
+    id: item.id,
+    name: item.name || '',
+    saving: false
+  }
+  nextTick(() => {
+    document.querySelector('.inline-rename-input')?.focus()
+    document.querySelector('.inline-rename-input')?.select()
+  })
+}
+
+function handleTitleClick(type, item) {
+  if (titleClickTimer) clearTimeout(titleClickTimer)
+  titleClickTimer = setTimeout(() => {
+    titleClickTimer = null
+    if (type === 'project') {
+      enterProject(item)
+    } else if (type === 'workflow') {
+      openWorkflow(item)
+    }
+  }, 220)
+}
+
+function cancelInlineRename() {
+  inlineRenameState.value = { type: '', id: null, name: '', saving: false }
+}
+
+async function confirmInlineRename() {
+  const { type, id, name, saving } = inlineRenameState.value
+  if (saving || !id) return
+  const trimmed = name.trim()
+  if (!trimmed) {
+    cancelInlineRename()
+    return
+  }
+
+  inlineRenameState.value.saving = true
+  try {
+    if (type === 'project') {
+      await updateProject(id, { name: trimmed })
+      if (currentProject.value && String(currentProject.value.id) === String(id)) {
+        currentProject.value = { ...currentProject.value, name: trimmed }
+      }
+      projects.value = projects.value.map(project => (
+        String(project.id) === String(id) ? { ...project, name: trimmed } : project
+      ))
+    } else if (type === 'workflow') {
+      await renameWorkflow(id, trimmed)
+      workflows.value = workflows.value.map(workflow => (
+        String(workflow.id) === String(id) ? { ...workflow, name: trimmed } : workflow
+      ))
+    }
+    cancelInlineRename()
+  } catch (error) {
+    alert('重命名失败：' + error.message)
+    inlineRenameState.value.saving = false
+  }
 }
 
 // === 右键菜单 ===
@@ -330,18 +475,35 @@ function onDocumentClick() {
 
 // 初始化
 onMounted(() => {
+  teamStore.loadMyTeams()
   loadProjects()
   loadQuota()
   document.addEventListener('click', onDocumentClick)
 })
 
 onActivated(() => {
+  teamStore.loadMyTeams()
   if (currentProject.value) {
     loadWorkflows()
   } else {
     loadProjects()
   }
   loadQuota()
+})
+
+async function handleSpaceChange(newSpace) {
+  await syncGlobalSpaceFromFilter(teamStore, newSpace)
+}
+
+watch(spaceFilter, () => {
+  currentProject.value = null
+  workflows.value = []
+  pagination.value.page = 1
+  loadProjects()
+})
+
+watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], () => {
+  setCanvasSpaceFilterFromGlobal(teamStore)
 })
 
 </script>
@@ -366,9 +528,37 @@ onActivated(() => {
           </svg>
           <span class="breadcrumb-current">{{ currentProject.name }}</span>
         </div>
+
+        <SpaceSwitcher
+          v-model="spaceFilter"
+          :compact="true"
+          @change="handleSpaceChange"
+        />
       </div>
 
-      <h1 class="page-title">{{ currentProject ? currentProject.name : '我的项目' }}</h1>
+      <div class="page-heading">
+        <h1
+          v-if="!currentProject || !isInlineRenaming('project', currentProject)"
+          class="page-title"
+          @dblclick="currentProject ? startInlineRename('project', currentProject) : null"
+        >
+          {{ currentProject ? currentProject.name : '我的项目' }}
+        </h1>
+        <input
+          v-else
+          v-model="inlineRenameState.name"
+          class="page-title page-title-input inline-rename-input"
+          maxlength="50"
+          @click.stop
+          @keyup.enter="confirmInlineRename"
+          @keyup.escape="cancelInlineRename"
+          @blur="confirmInlineRename"
+        />
+        <div v-if="!isInlineRenaming('project', currentProject)" class="page-count">
+          <span v-if="currentProject">共 {{ currentProjectWorkflowTotal }} 个工作流</span>
+          <span v-else>项目数量：{{ projects.length }} · 工作流：{{ currentSpaceWorkflowTotal }}</span>
+        </div>
+      </div>
 
       <button class="new-btn" @click="currentProject ? createNewWorkflow() : openCreateProject()">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -392,7 +582,7 @@ onActivated(() => {
       </div>
       <div class="quota-stats">
         <div class="stat-box">
-          <span class="stat-num">{{ quota.current_workflows }}</span>
+          <span class="stat-num">{{ currentSpaceWorkflowTotal }}</span>
           <span class="stat-max">/ {{ quota.max_workflows }}</span>
           <span class="stat-text">工作流</span>
         </div>
@@ -445,16 +635,46 @@ onActivated(() => {
             @click="enterProject(project)"
             @contextmenu="showContextMenuHandler($event, project, 'project')"
           >
-            <!-- 文件夹图标区 -->
+            <!-- 文件夹封面区 -->
             <div class="project-thumb">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <video
+                v-if="getProjectCoverUrl(project) && isVideoCover(getProjectCoverUrl(project))"
+                :src="getProjectCoverUrl(project)"
+                class="cover-media"
+                muted
+                playsinline
+                preload="metadata"
+              ></video>
+              <img
+                v-else-if="getProjectCoverUrl(project)"
+                :src="getProjectCoverUrl(project)"
+                :alt="project.name"
+                class="cover-media"
+                loading="lazy"
+              />
+              <svg v-else width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
               </svg>
               <span v-if="project.is_default" class="default-badge">默认</span>
             </div>
             <!-- 信息 -->
             <div class="project-body">
-              <h3 class="project-title">{{ project.name }}</h3>
+              <input
+                v-if="isInlineRenaming('project', project)"
+                v-model="inlineRenameState.name"
+                class="project-title inline-rename-input"
+                maxlength="50"
+                @click.stop
+                @keyup.enter="confirmInlineRename"
+                @keyup.escape="cancelInlineRename"
+                @blur="confirmInlineRename"
+              />
+              <h3
+                v-else
+                class="project-title"
+                @click.stop="handleTitleClick('project', project)"
+                @dblclick.stop="startInlineRename('project', project)"
+              >{{ project.name }}</h3>
               <div class="project-meta">
                 <span class="meta-item">{{ project.workflow_count || 0 }} 个工作流</span>
                 <span class="meta-item">{{ formatDate(project.updated_at) }}</span>
@@ -496,7 +716,22 @@ onActivated(() => {
             @contextmenu="showContextMenuHandler($event, workflow, 'workflow')"
           >
             <div class="card-thumb">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <video
+                v-if="getWorkflowCoverUrl(workflow) && isVideoCover(getWorkflowCoverUrl(workflow))"
+                :src="getWorkflowCoverUrl(workflow)"
+                class="cover-media"
+                muted
+                playsinline
+                preload="metadata"
+              ></video>
+              <img
+                v-else-if="getWorkflowCoverUrl(workflow)"
+                :src="getWorkflowCoverUrl(workflow)"
+                :alt="workflow.name"
+                class="cover-media"
+                loading="lazy"
+              />
+              <svg v-else width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                 <rect x="3" y="3" width="6" height="6" rx="1"/>
                 <rect x="15" y="3" width="6" height="6" rx="1"/>
                 <rect x="9" y="15" width="6" height="6" rx="1"/>
@@ -504,7 +739,22 @@ onActivated(() => {
               </svg>
             </div>
             <div class="card-body">
-              <h3 class="card-title">{{ workflow.name }}</h3>
+              <input
+                v-if="isInlineRenaming('workflow', workflow)"
+                v-model="inlineRenameState.name"
+                class="card-title inline-rename-input"
+                maxlength="50"
+                @click.stop
+                @keyup.enter="confirmInlineRename"
+                @keyup.escape="cancelInlineRename"
+                @blur="confirmInlineRename"
+              />
+              <h3
+                v-else
+                class="card-title"
+                @click.stop="handleTitleClick('workflow', workflow)"
+                @dblclick.stop="startInlineRename('workflow', workflow)"
+              >{{ workflow.name }}</h3>
               <p v-if="workflow.description" class="card-desc">{{ workflow.description }}</p>
               <div class="card-meta">
                 <span class="meta-item">
@@ -534,12 +784,12 @@ onActivated(() => {
       </template>
 
       <!-- 分页 -->
-      <div v-if="currentProject && pagination.totalPages > 1" class="pagination">
+      <div v-if="currentProject && totalWorkflowPages > 1" class="pagination">
         <button class="page-btn" :disabled="pagination.page === 1" @click="changePage(pagination.page - 1)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <span class="page-text">{{ pagination.page }} / {{ pagination.totalPages }}</span>
-        <button class="page-btn" :disabled="pagination.page === pagination.totalPages" @click="changePage(pagination.page + 1)">
+        <span class="page-text">{{ pagination.page }} / {{ totalWorkflowPages }}</span>
+        <button class="page-btn" :disabled="pagination.page === totalWorkflowPages" @click="changePage(pagination.page + 1)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
         </button>
       </div>
@@ -688,6 +938,7 @@ onActivated(() => {
       :workflow-id="String(moveTarget.id)"
       :workflow-name="moveTarget.name"
       :current-project-id="String(currentProject?.id || '')"
+      :space-filter="spaceFilter"
       @moved="onWorkflowMoved"
     />
   </div>
@@ -775,11 +1026,36 @@ onActivated(() => {
   color: rgba(255, 255, 255, 0.8);
 }
 
+.page-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+}
+
 .page-title {
   font-size: 18px;
   font-weight: 600;
   color: #fff;
   margin: 0;
+  max-width: min(420px, 42vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page-title-input {
+  width: min(420px, 42vw);
+  min-width: 180px;
+  text-align: center;
+}
+
+.page-count {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .new-btn {
@@ -953,6 +1229,14 @@ onActivated(() => {
   justify-content: center;
   color: rgba(255, 255, 255, 0.25);
   position: relative;
+  overflow: hidden;
+}
+
+.cover-media {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .default-badge {
@@ -977,6 +1261,34 @@ onActivated(() => {
   margin: 0 0 8px;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline-rename-input {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  color: #fff;
+  font: inherit;
+  line-height: 1.3;
+  letter-spacing: 0;
+  outline: none;
+}
+
+.inline-rename-input:focus {
+  border-color: rgba(255, 255, 255, 0.55);
+  background: rgba(255, 255, 255, 0.11);
+}
+
+.project-title.inline-rename-input,
+.card-title.inline-rename-input {
+  display: block;
+  width: 100%;
+  margin: -3px 0 5px;
   white-space: nowrap;
 }
 
@@ -1019,6 +1331,7 @@ onActivated(() => {
   align-items: center;
   justify-content: center;
   color: rgba(255, 255, 255, 0.2);
+  overflow: hidden;
 }
 
 .card-body { padding: 16px; }
@@ -1289,6 +1602,9 @@ onActivated(() => {
   .top-bar { padding: 12px 16px; }
   .back-btn span, .new-btn span { display: none; }
   .back-btn, .new-btn { padding: 10px; }
+  .page-title { font-size: 16px; }
+  .page-title-input { width: min(220px, 48vw); min-width: 120px; }
+  .page-count { font-size: 11px; }
   .breadcrumb { display: none; }
   .quota-section { padding: 16px; }
   .quota-row { flex-direction: column; align-items: stretch; }

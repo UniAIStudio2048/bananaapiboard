@@ -114,8 +114,8 @@ function handleOpenTemplates() {
   }
 }
 
-// 跳转到我的工作流页面
-function goToMyWorkflows() {
+// 跳转到我的项目页面
+function goToMyProjects() {
   router.push('/workflows')
 }
 
@@ -199,15 +199,15 @@ function handleDoubleClickHint() {
         {{ t('canvas.workflow') }}
       </button>
       
-      <!-- 我的工作流按钮 -->
-      <button class="canvas-quick-btn" @click="goToMyWorkflows">
+      <!-- 我的项目按钮 -->
+      <button class="canvas-quick-btn" @click="goToMyProjects">
         <span class="icon-svg">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M3 6H21M3 6V18C3 19.1046 3.89543 20 5 20H19C20.1046 20 21 19.1046 21 18V6M3 6L5 4H19L21 6" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
             <path d="M8 10H16M8 14H13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
           </svg>
         </span>
-        {{ t('canvas.myWorkflows') }}
+        我的项目
       </button>
     </div>
   </div>
@@ -341,4 +341,3 @@ function handleDoubleClickHint() {
   color: #3b82f6;
 }
 </style>
-

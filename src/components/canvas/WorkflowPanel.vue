@@ -40,6 +40,7 @@ const activeTab = ref('my') // 'my' | 'templates'
 
 // ========== 我的工作流数据 ==========
 const workflows = ref([])
+const workflowsTotal = ref(0)
 const projects = ref([])
 const loading = ref(false)
 const quota = ref(null)
@@ -323,14 +324,25 @@ async function loadWorkflows(forceRefresh = false) {
   loading.value = true
   try {
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
+    const pageSize = 50
     const [wfResult, projResult] = await Promise.all([
-      getWorkflowList({ page: 1, pageSize: 50, ...spaceParams }),
+      getWorkflowList({ page: 1, pageSize, ...spaceParams }),
       getProjectList({
         spaceType: spaceParams.spaceType,
         teamId: spaceParams.teamId
       }).catch(() => ({ data: [] }))
     ])
-    workflows.value = wfResult.list || []
+    const mergedWorkflows = wfResult.list || []
+    const total = Number(wfResult.pagination?.total ?? mergedWorkflows.length)
+    const totalPages = Math.ceil(total / pageSize)
+
+    for (let page = 2; page <= totalPages; page += 1) {
+      const pageResult = await getWorkflowList({ page: page, pageSize: pageSize, ...spaceParams })
+      mergedWorkflows.push(...(pageResult.list || []))
+    }
+
+    workflows.value = mergedWorkflows
+    workflowsTotal.value = Number(wfResult.pagination?.total ?? workflows.value.length)
     projects.value = projResult.data || []
     workflowsCached.value = true
     lastWorkflowsLoad.value = now
@@ -1069,7 +1081,7 @@ defineExpose({
             </svg>
             {{ t('canvas.myWorkflows') }}
             <span v-if="workflows.length > 0 || historyWorkflows.length > 0" class="tab-count">
-              {{ workflows.length + historyWorkflows.length }}
+              {{ workflowsTotal + historyWorkflows.length }}
             </span>
           </button>
           <button
@@ -1115,7 +1127,7 @@ defineExpose({
           <!-- 配额信息 -->
           <div v-if="quota" class="quota-bar">
             <div class="quota-info">
-              <span class="quota-used">{{ quota.current_workflows }}</span>
+              <span class="quota-used">{{ workflowsTotal }}</span>
               <span class="quota-total">/ ∞ {{ t('canvas.workflow') }}</span>
             </div>
           </div>
@@ -1131,7 +1143,7 @@ defineExpose({
                   <polyline points="7 3 7 8 15 8"/>
                 </svg>
                 <span>{{ t('canvas.savedWorkflows') }}</span>
-                <span class="column-count">{{ workflows.length }}</span>
+                <span class="column-count">{{ workflowsTotal }}</span>
               </div>
 
               <div class="column-content" @click="clearSelectedWorkflowDetails">
