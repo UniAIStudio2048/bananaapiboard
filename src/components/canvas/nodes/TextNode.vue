@@ -13,6 +13,7 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getLLMConfig, chatWithLLM, getUserLLMPresets, createUserLLMPreset, updateUserLLMPreset } from '@/api/canvas/llm'
 import { formatPoints } from '@/utils/format'
+import { getTotalUserPoints } from '@/utils/points'
 import { getAssets } from '@/api/canvas/assets'
 import { getApiUrl, getTenantHeaders, getAvailableLLMModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
@@ -508,7 +509,7 @@ const formattedModelCost = computed(() => {
 // 用户积分
 const userPoints = computed(() => {
   if (!userInfo?.value) return 0
-  return (userInfo.value.package_points || 0) + (userInfo.value.points || 0)
+  return getTotalUserPoints(userInfo.value)
 })
 
 // 检测下拉菜单方向（基于元素位置和屏幕空间）

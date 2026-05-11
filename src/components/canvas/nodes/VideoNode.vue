@@ -17,6 +17,7 @@ import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
 import { formatPoints } from '@/utils/format'
+import { getTotalUserPoints } from '@/utils/points'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
@@ -2370,7 +2371,7 @@ const motionCostPerSecond = computed(() => {
 // 用户积分
 const userPoints = computed(() => {
   if (!userInfo?.value) return 0
-  return (userInfo.value.package_points || 0) + (userInfo.value.points || 0)
+  return getTotalUserPoints(userInfo.value)
 })
 
 // 模式标签显示

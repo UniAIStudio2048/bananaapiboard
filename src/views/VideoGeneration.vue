@@ -6,6 +6,7 @@ import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
 import { formatPoints } from '@/utils/format'
+import { getTotalUserPoints } from '@/utils/points'
 import { pickConfiguredSubmode } from '@/utils/videoSubmodeDefaults'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import {
@@ -281,8 +282,7 @@ const availableDurations = computed(() => {
 })
 
 const totalPoints = computed(() => {
-  if (!me.value) return 0
-  return (me.value.package_points || 0) + (me.value.points || 0)
+  return getTotalUserPoints(me.value)
 })
 
 const currentPointsCost = computed(() => {

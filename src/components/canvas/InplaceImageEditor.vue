@@ -22,6 +22,7 @@ import { generateImageFromImage, uploadImages, pollTaskStatus } from '@/api/canv
 import { useI18n } from '@/i18n'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
+import { getTotalUserPoints } from '@/utils/points'
 import { resolveNanoBananaAspectRatio } from '@/utils/nanoBananaImageParams'
 import { getProxiedImageUrl } from '@/utils/canvasThumbnail'
 
@@ -160,7 +161,7 @@ const requiredPoints = computed(() => {
 // 用户当前积分
 const userPoints = computed(() => {
   if (!userInfo?.value) return 0
-  return (userInfo.value.package_points || 0) + (userInfo.value.points || 0)
+  return getTotalUserPoints(userInfo.value)
 })
 
 // 积分是否足够

@@ -7,6 +7,7 @@ import { useRouter } from 'vue-router'
 import { useCanvasStore } from '@/stores/canvas'
 import UserProfilePanel from './UserProfilePanel.vue'
 import { useI18n } from '@/i18n'
+import { getTotalUserPoints } from '@/utils/points'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -164,7 +165,7 @@ function saveWorkflow() {
 // 计算总积分
 function getTotalPoints() {
   if (!userInfo.value) return 0
-  return (userInfo.value.package_points || 0) + (userInfo.value.points || 0)
+  return getTotalUserPoints(userInfo.value)
 }
 
 // 打开个人中心面板

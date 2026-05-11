@@ -20,6 +20,7 @@ import { getTenantHeaders, getAvailableMusicModels, refreshBrandConfig } from '@
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import { formatPoints } from '@/utils/format'
+import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
@@ -99,7 +100,7 @@ function formatAudioErrorMessage(message) {
 // 用户积分
 const userPoints = computed(() => {
   if (!userInfo?.value) return 0
-  return (userInfo.value.package_points || 0) + (userInfo.value.points || 0)
+  return getTotalUserPoints(userInfo.value)
 })
 
 // 继承的数据（来自上游节点）

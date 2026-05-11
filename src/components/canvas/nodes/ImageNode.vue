@@ -21,6 +21,7 @@ import { extractVideoFrame } from '@/api/canvas/workflow'
 import { createQuickSeedanceCharacterAsset, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
 import { formatPoints } from '@/utils/format'
+import { getTotalUserPoints } from '@/utils/points'
 import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders, isSeedanceFeaturesEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
@@ -3806,7 +3807,7 @@ function handlePromptTagHover(media, event) {
 // 用户积分
 const userPoints = computed(() => {
   if (!userInfo?.value) return 0
-  return (userInfo.value.package_points || 0) + (userInfo.value.points || 0)
+  return getTotalUserPoints(userInfo.value)
 })
 
 // 快捷操作 - 初始状态显示 - 使用翻译键

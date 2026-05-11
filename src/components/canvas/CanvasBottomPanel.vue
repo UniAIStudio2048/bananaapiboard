@@ -17,6 +17,7 @@ import { getLLMConfig, chatWithLLM, describeImage } from '@/api/canvas/llm'
 import { getApiUrl, getAvailableImageModels, useTenantConfigVersion } from '@/config/tenant'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import { formatPoints } from '@/utils/format'
+import { getTotalUserPoints } from '@/utils/points'
 import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { resolveGenerationAspectRatio } from '@/utils/aspectRatio'
 import {
@@ -241,7 +242,7 @@ const estimatedCost = computed(() => {
 // 用户积分
 const userPoints = computed(() => {
   if (!userInfo.value) return 0
-  return (userInfo.value.package_points || 0) + (userInfo.value.points || 0)
+  return getTotalUserPoints(userInfo.value)
 })
 
 // 同步节点数据

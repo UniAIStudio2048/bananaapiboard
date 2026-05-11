@@ -11,6 +11,7 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { enhancePrompt, describeImage, expandContent, getLLMCost } from '@/api/canvas/llm'
 import { formatPoints } from '@/utils/format'
+import { getTotalUserPoints } from '@/utils/points'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
@@ -111,7 +112,7 @@ const formattedPointsCost = computed(() => {
 // 用户积分
 const userPoints = computed(() => {
   if (!userInfo?.value) return 0
-  return (userInfo.value.package_points || 0) + (userInfo.value.points || 0)
+  return getTotalUserPoints(userInfo.value)
 })
 
 // 是否可以执行
@@ -647,4 +648,3 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
   border-radius: 2px;
 }
 </style>
-

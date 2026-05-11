@@ -10,6 +10,7 @@ import { labelToPromptText, indexToLabel } from '@/utils/imageAnnotation'
 import { getTenantHeaders, getModelDisplayName, getAvailableImageModels, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { formatPoints } from '@/utils/format'
+import { getTotalUserPoints } from '@/utils/points'
 import { resolveGenerationAspectRatio } from '@/utils/aspectRatio'
 import { normalizeImageHistoryItems } from '@/utils/imageHistoryPrompt'
 import {
@@ -1693,8 +1694,7 @@ const totalPointsCost = computed(() => {
 // 检查积分是否足够
 const hasEnoughPoints = computed(() => {
   if (!me.value) return true // 未登录时不检查
-  const totalPoints = (me.value.package_points || 0) + (me.value.points || 0)
-  return totalPoints >= totalPointsCost.value
+  return getTotalUserPoints(me.value) >= totalPointsCost.value
 })
 
 // 用户套餐信息
@@ -2502,7 +2502,7 @@ onUnmounted(() => {
           <div v-if="me && !hasEnoughPoints" class="p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
             <p class="text-xs text-amber-700 dark:text-amber-400 flex items-center">
               <span class="mr-1.5">💰</span>
-              <span>积分不足！当前: {{ formatPoints((me.package_points || 0) + (me.points || 0)) }}，需要: {{ formatPoints(totalPointsCost) }}</span>
+              <span>积分不足！当前: {{ formatPoints(getTotalUserPoints(me)) }}，需要: {{ formatPoints(totalPointsCost) }}</span>
             </p>
           </div>
 
@@ -3381,7 +3381,7 @@ onUnmounted(() => {
           </div>
           <div class="pt-2 border-t border-slate-200 dark:border-dark-500 flex items-center justify-between">
             <span class="text-xs text-slate-500 dark:text-slate-500">积分总计</span>
-            <span class="text-lg font-bold gradient-text">{{ formatPoints((me.package_points || 0) + (me.points || 0)) }}</span>
+            <span class="text-lg font-bold gradient-text">{{ formatPoints(getTotalUserPoints(me)) }}</span>
           </div>
         </div>
       </div>
