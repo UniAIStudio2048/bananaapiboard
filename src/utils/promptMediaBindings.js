@@ -81,14 +81,8 @@ export function syncPromptMediaMentions(text, bindings = {}, mediaItems = []) {
 
 export function escapePromptMediaMentions(text) {
   if (!text) return text
-  let result = text.replace(/【?@视频(\d*)】?/g, (_, num) => {
-    return `<<<video_${num ? parseInt(num) : 1}>>>`
-  })
-  result = result.replace(/【?@图片(\d*)】?/g, (_, num) => {
-    return `<<<image_${num ? parseInt(num) : 1}>>>`
-  })
-  result = result.replace(/【?@音频(\d*)】?/g, (_, num) => {
-    return `<<<audio_${num ? parseInt(num) : 1}>>>`
-  })
-  return result
+  return text.replace(/【?@(视频|图片|音频)(\d*)】?/g, (match, type, num) => {
+    const label = `@${type}${num || '1'}`
+    return ` ${label} `
+  }).replace(/ {2,}/g, ' ').trim()
 }

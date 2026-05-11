@@ -9,6 +9,7 @@ import { getTheme, setTheme, toggleTheme as toggleThemeUtil, themes } from '@/ut
 import { getTenantHeaders, getModelDisplayName, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { getHistoryImageDisplayUrl, makeHistoryImagePlaceholder } from '@/utils/historyImageDisplay'
+import { toPointsNumber, getEffectivePackagePoints, getTotalUserPoints } from '@/utils/points'
 
 const { t } = useI18n()
 
@@ -2343,17 +2344,17 @@ onUnmounted(() => {
           
           <div class="bg-white dark:bg-dark-700 rounded-lg p-4 space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600 dark:text-slate-400">已获得</span>
-              <span class="text-lg font-bold text-green-600 dark:text-green-400">+{{ formatPoints(pointsStats.package.earned) }}</span>
+              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">已获得</span>
+              <span class="text-lg font-bold text-green-600 dark:text-green-400 truncate min-w-0 ml-2 text-right" :title="'+' + formatPoints(toPointsNumber(pointsStats.package.earned))">+{{ formatPoints(toPointsNumber(pointsStats.package.earned)) }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600 dark:text-slate-400">已使用</span>
-              <span class="text-lg font-bold text-red-600 dark:text-red-400">-{{ formatPoints(pointsStats.package.spent) }}</span>
+              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">已使用</span>
+              <span class="text-lg font-bold text-red-600 dark:text-red-400 truncate min-w-0 ml-2 text-right" :title="'-' + formatPoints(toPointsNumber(pointsStats.package.spent))">-{{ formatPoints(toPointsNumber(pointsStats.package.spent)) }}</span>
             </div>
             <div class="border-t-2 border-purple-200 dark:border-purple-700 pt-3">
               <div class="flex items-center justify-between">
-                <span class="text-base font-semibold text-purple-700 dark:text-purple-300">当前余额</span>
-                <span class="text-3xl font-bold text-purple-600 dark:text-purple-400">{{ formatPoints(me?.package_points) }}</span>
+                <span class="text-base font-semibold text-purple-700 dark:text-purple-300 flex-shrink-0">当前余额</span>
+                <span class="text-3xl font-bold text-purple-600 dark:text-purple-400 truncate min-w-0 ml-2 text-right" :title="formatPoints(toPointsNumber(me?.package_points))">{{ formatPoints(toPointsNumber(me?.package_points)) }}</span>
               </div>
             </div>
           </div>
@@ -2373,17 +2374,17 @@ onUnmounted(() => {
           
           <div class="bg-white dark:bg-dark-700 rounded-lg p-4 space-y-3">
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600 dark:text-slate-400">已获得</span>
-              <span class="text-lg font-bold text-green-600 dark:text-green-400">+{{ formatPoints(pointsStats.permanent.earned) }}</span>
+              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">已获得</span>
+              <span class="text-lg font-bold text-green-600 dark:text-green-400 truncate min-w-0 ml-2 text-right" :title="'+' + formatPoints(toPointsNumber(pointsStats.permanent.earned))">+{{ formatPoints(toPointsNumber(pointsStats.permanent.earned)) }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-sm text-slate-600 dark:text-slate-400">已使用</span>
-              <span class="text-lg font-bold text-red-600 dark:text-red-400">-{{ formatPoints(pointsStats.permanent.spent) }}</span>
+              <span class="text-sm text-slate-600 dark:text-slate-400 flex-shrink-0">已使用</span>
+              <span class="text-lg font-bold text-red-600 dark:text-red-400 truncate min-w-0 ml-2 text-right" :title="'-' + formatPoints(toPointsNumber(pointsStats.permanent.spent))">-{{ formatPoints(toPointsNumber(pointsStats.permanent.spent)) }}</span>
             </div>
             <div class="border-t-2 border-blue-200 dark:border-blue-700 pt-3">
               <div class="flex items-center justify-between">
-                <span class="text-base font-semibold text-blue-700 dark:text-blue-300">当前余额</span>
-                <span class="text-3xl font-bold text-blue-600 dark:text-blue-400">{{ formatPoints(me?.points) }}</span>
+                <span class="text-base font-semibold text-blue-700 dark:text-blue-300 flex-shrink-0">当前余额</span>
+                <span class="text-3xl font-bold text-blue-600 dark:text-blue-400 truncate min-w-0 ml-2 text-right" :title="formatPoints(toPointsNumber(me?.points))">{{ formatPoints(toPointsNumber(me?.points)) }}</span>
               </div>
             </div>
           </div>
@@ -2433,9 +2434,9 @@ onUnmounted(() => {
             <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur">
               <span class="text-2xl">✨</span>
             </div>
-            <div class="text-right">
-              <p class="text-3xl font-bold text-white">{{ formatPoints((me.package_points || 0) + (me.points || 0)) }}</p>
-              <p class="text-xs text-white/80">套餐 + 永久</p>
+            <div class="text-right min-w-0 flex-1 ml-3 overflow-hidden">
+              <p class="text-3xl font-bold text-white truncate" :title="formatPoints(getTotalUserPoints(me))">{{ formatPoints(getTotalUserPoints(me)) }}</p>
+              <p class="text-xs text-white/80">套餐 + 永久（有效）</p>
             </div>
           </div>
           <p class="text-sm font-medium text-white">总积分</p>
@@ -3394,18 +3395,18 @@ onUnmounted(() => {
               <div class="flex items-center justify-between mb-4">
                 <h4 class="text-lg font-bold text-blue-900 dark:text-blue-100">💎 永久积分</h4>
               </div>
-              <div class="space-y-3">
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-blue-700 dark:text-blue-300">当前余额</span>
-                  <span class="text-2xl font-bold text-blue-900 dark:text-blue-100">{{ me?.points || 0 }}</span>
+              <div class="space-y-3 min-w-0">
+                <div class="flex justify-between items-center gap-2 min-w-0">
+                  <span class="text-sm text-blue-700 dark:text-blue-300 flex-shrink-0">当前余额</span>
+                  <span class="text-2xl font-bold text-blue-900 dark:text-blue-100 truncate min-w-0 text-right" :title="formatPoints(toPointsNumber(me?.points))">{{ formatPoints(toPointsNumber(me?.points)) }}</span>
                 </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-blue-700 dark:text-blue-300">累计获得</span>
-                  <span class="text-lg font-semibold text-green-600 dark:text-green-400">+{{ pointsStats.permanent.earned }}</span>
+                <div class="flex justify-between items-center gap-2 min-w-0">
+                  <span class="text-sm text-blue-700 dark:text-blue-300 flex-shrink-0">累计获得</span>
+                  <span class="text-lg font-semibold text-green-600 dark:text-green-400 truncate min-w-0 text-right" :title="'+' + formatPoints(toPointsNumber(pointsStats.permanent.earned))">+{{ formatPoints(toPointsNumber(pointsStats.permanent.earned)) }}</span>
                 </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-blue-700 dark:text-blue-300">累计消耗</span>
-                  <span class="text-lg font-semibold text-red-600 dark:text-red-400">-{{ pointsStats.permanent.spent }}</span>
+                <div class="flex justify-between items-center gap-2 min-w-0">
+                  <span class="text-sm text-blue-700 dark:text-blue-300 flex-shrink-0">累计消耗</span>
+                  <span class="text-lg font-semibold text-red-600 dark:text-red-400 truncate min-w-0 text-right" :title="'-' + formatPoints(toPointsNumber(pointsStats.permanent.spent))">-{{ formatPoints(toPointsNumber(pointsStats.permanent.spent)) }}</span>
                 </div>
               </div>
             </div>
@@ -3415,18 +3416,18 @@ onUnmounted(() => {
               <div class="flex items-center justify-between mb-4">
                 <h4 class="text-lg font-bold text-purple-900 dark:text-purple-100">⚡ 套餐积分</h4>
               </div>
-              <div class="space-y-3">
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-purple-700 dark:text-purple-300">当前余额</span>
-                  <span class="text-2xl font-bold text-purple-900 dark:text-purple-100">{{ me?.package_points || 0 }}</span>
+              <div class="space-y-3 min-w-0">
+                <div class="flex justify-between items-center gap-2 min-w-0">
+                  <span class="text-sm text-purple-700 dark:text-purple-300 flex-shrink-0">当前余额（有效）</span>
+                  <span class="text-2xl font-bold text-purple-900 dark:text-purple-100 truncate min-w-0 text-right" :title="formatPoints(getEffectivePackagePoints(me))">{{ formatPoints(getEffectivePackagePoints(me)) }}</span>
                 </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-purple-700 dark:text-purple-300">累计获得</span>
-                  <span class="text-lg font-semibold text-green-600 dark:text-green-400">+{{ pointsStats.package.earned }}</span>
+                <div class="flex justify-between items-center gap-2 min-w-0">
+                  <span class="text-sm text-purple-700 dark:text-purple-300 flex-shrink-0">累计获得</span>
+                  <span class="text-lg font-semibold text-green-600 dark:text-green-400 truncate min-w-0 text-right" :title="'+' + formatPoints(toPointsNumber(pointsStats.package.earned))">+{{ formatPoints(toPointsNumber(pointsStats.package.earned)) }}</span>
                 </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-purple-700 dark:text-purple-300">累计消耗</span>
-                  <span class="text-lg font-semibold text-red-600 dark:text-red-400">-{{ pointsStats.package.spent }}</span>
+                <div class="flex justify-between items-center gap-2 min-w-0">
+                  <span class="text-sm text-purple-700 dark:text-purple-300 flex-shrink-0">累计消耗</span>
+                  <span class="text-lg font-semibold text-red-600 dark:text-red-400 truncate min-w-0 text-right" :title="'-' + formatPoints(toPointsNumber(pointsStats.package.spent))">-{{ formatPoints(toPointsNumber(pointsStats.package.spent)) }}</span>
                 </div>
                 <div v-if="me?.package_points_expires_at && me.package_points_expires_at > Date.now()" class="pt-2 border-t border-purple-200 dark:border-purple-700">
                   <span class="text-xs text-purple-600 dark:text-purple-400">
@@ -3441,18 +3442,18 @@ onUnmounted(() => {
               <div class="flex items-center justify-between mb-4">
                 <h4 class="text-lg font-bold text-amber-900 dark:text-amber-100">📊 总计</h4>
               </div>
-              <div class="space-y-3">
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-amber-700 dark:text-amber-300">可用总额</span>
-                  <span class="text-2xl font-bold text-amber-900 dark:text-amber-100">{{ (me?.points || 0) + (me?.package_points || 0) }}</span>
+              <div class="space-y-3 min-w-0">
+                <div class="flex justify-between items-center gap-2 min-w-0">
+                  <span class="text-sm text-amber-700 dark:text-amber-300 flex-shrink-0">可用总额</span>
+                  <span class="text-2xl font-bold text-amber-900 dark:text-amber-100 truncate min-w-0 text-right" :title="formatPoints(getTotalUserPoints(me))">{{ formatPoints(getTotalUserPoints(me)) }}</span>
                 </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-amber-700 dark:text-amber-300">累计获得</span>
-                  <span class="text-lg font-semibold text-green-600 dark:text-green-400">+{{ pointsStats.permanent.earned + pointsStats.package.earned }}</span>
+                <div class="flex justify-between items-center gap-2 min-w-0">
+                  <span class="text-sm text-amber-700 dark:text-amber-300 flex-shrink-0">累计获得</span>
+                  <span class="text-lg font-semibold text-green-600 dark:text-green-400 truncate min-w-0 text-right" :title="'+' + formatPoints(toPointsNumber(pointsStats.permanent.earned) + toPointsNumber(pointsStats.package.earned))">+{{ formatPoints(toPointsNumber(pointsStats.permanent.earned) + toPointsNumber(pointsStats.package.earned)) }}</span>
                 </div>
-                <div class="flex justify-between items-center">
-                  <span class="text-sm text-amber-700 dark:text-amber-300">累计消耗</span>
-                  <span class="text-lg font-semibold text-red-600 dark:text-red-400">-{{ pointsStats.permanent.spent + pointsStats.package.spent }}</span>
+                <div class="flex justify-between items-center gap-2 min-w-0">
+                  <span class="text-sm text-amber-700 dark:text-amber-300 flex-shrink-0">累计消耗</span>
+                  <span class="text-lg font-semibold text-red-600 dark:text-red-400 truncate min-w-0 text-right" :title="'-' + formatPoints(toPointsNumber(pointsStats.permanent.spent) + toPointsNumber(pointsStats.package.spent))">-{{ formatPoints(toPointsNumber(pointsStats.permanent.spent) + toPointsNumber(pointsStats.package.spent)) }}</span>
                 </div>
               </div>
             </div>

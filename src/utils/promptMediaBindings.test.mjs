@@ -4,7 +4,8 @@ import assert from 'node:assert/strict'
 import {
   bindMediaMention,
   buildMediaMentionItems,
-  syncPromptMediaMentions
+  syncPromptMediaMentions,
+  escapePromptMediaMentions
 } from './promptMediaBindings.js'
 
 test('removes prompt mentions when their bound media is removed', () => {
@@ -15,6 +16,27 @@ test('removes prompt mentions when their bound media is removed', () => {
 
   assert.equal(result.text, '让动起来')
   assert.deepEqual(result.bindings, {})
+})
+
+test('escapePromptMediaMentions adds spaces around mentions', () => {
+  assert.equal(
+    escapePromptMediaMentions('让@图片1的人物穿上@图片2的衣服'),
+    '让 @图片1 的人物穿上 @图片2 的衣服'
+  )
+})
+
+test('escapePromptMediaMentions handles bracket-wrapped mentions', () => {
+  assert.equal(
+    escapePromptMediaMentions('用【@视频1】做参考'),
+    '用 @视频1 做参考'
+  )
+})
+
+test('escapePromptMediaMentions does not double-space', () => {
+  assert.equal(
+    escapePromptMediaMentions('看 @图片1 然后@图片2'),
+    '看 @图片1 然后 @图片2'
+  )
 })
 
 test('renames bound prompt mentions after media reorder', () => {

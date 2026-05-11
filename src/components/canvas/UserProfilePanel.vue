@@ -41,6 +41,12 @@ const activeMenu = ref('home')
 
 // 数据
 const ledger = ref([])
+const ledgerPage = ref(1)
+const ledgerPageSize = ref(20)
+const ledgerTotal = ref(0)
+const ledgerTotalPages = ref(1)
+const ledgerLoading = ref(false)
+const ledgerPageSizeOptions = [10, 20, 50]
 const packages = ref([])
 const activePackage = ref(null) // 用户当前活跃套餐
 const invite = ref({ invite_code: '', uses: [] })
@@ -338,6 +344,38 @@ watch(activeMenu, (val) => {
   if (val === 'referral') loadReferralData()
 })
 
+async function loadLedger() {
+  if (!token) return
+  ledgerLoading.value = true
+  try {
+    const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
+    const ledgerRes = await fetch(getApiUrl(`/api/user/points?page=${ledgerPage.value}&pageSize=${ledgerPageSize.value}`), { headers })
+    if (ledgerRes.ok) {
+      const data = await ledgerRes.json()
+      ledger.value = Array.isArray(data) ? data : (data.records || data.ledger || [])
+      ledgerTotal.value = Number(data.total || ledger.value.length || 0)
+      ledgerPage.value = Number(data.page || ledgerPage.value || 1)
+      ledgerPageSize.value = Number(data.pageSize || ledgerPageSize.value || 20)
+      ledgerTotalPages.value = Math.max(1, Number(data.totalPages || Math.ceil(ledgerTotal.value / ledgerPageSize.value) || 1))
+    }
+  } finally {
+    ledgerLoading.value = false
+  }
+}
+
+function changeLedgerPageSize(event) {
+  ledgerPageSize.value = Number(event.target.value) || 20
+  ledgerPage.value = 1
+  loadLedger()
+}
+
+function goLedgerPage(page) {
+  const nextPage = Math.min(Math.max(1, page), ledgerTotalPages.value)
+  if (nextPage === ledgerPage.value) return
+  ledgerPage.value = nextPage
+  loadLedger()
+}
+
 // 加载数据
 async function loadData() {
   if (!token) return
@@ -346,8 +384,7 @@ async function loadData() {
   try {
     const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
 
-    const [ledgerRes, packagesRes, inviteRes, checkinRes, activePackageRes, settingsRes, pointsConfigRes] = await Promise.all([
-      fetch(getApiUrl('/api/user/points'), { headers }),
+    const [packagesRes, inviteRes, checkinRes, activePackageRes, settingsRes, pointsConfigRes] = await Promise.all([
       fetch(getApiUrl('/api/packages'), { headers }),
       fetch(getApiUrl('/api/user/invite-code'), { headers }),
       fetch(getApiUrl('/api/user/checkin-status'), { headers }),
@@ -356,10 +393,7 @@ async function loadData() {
       fetch(getApiUrl('/api/points-config'), { headers: getTenantHeaders() }) // 🔧 加载积分配置（包含汇率）
     ])
 
-    if (ledgerRes.ok) {
-      const data = await ledgerRes.json()
-      ledger.value = Array.isArray(data) ? data : (data.records || data.ledger || [])
-    }
+    await loadLedger()
     if (packagesRes.ok) {
       const data = await packagesRes.json()
       packages.value = data.packages || []
@@ -1485,6 +1519,8 @@ async function submitTransfer() {
     if (res.ok) {
       showAlert(data.message || t('user.transferSuccessMsg', { points: formatPoints(data.points || points) }), `🎉 ${t('user.transferSuccess')}`)
       transferAmount.value = ''
+      ledgerPage.value = 1
+      await loadLedger()
       emit('update')
     } else {
       showAlert(data.message || data.error || t('user.transferFailed'))
@@ -2102,10 +2138,19 @@ function getLedgerTypeText(type) {
                 </div>
               </div>
 
-              <h4 class="section-title">{{ t('user.pointsRecord') }}</h4>
-              <div v-if="!Array.isArray(ledger) || ledger.length === 0" class="empty-hint">{{ t('user.noRecord') }}</div>
+              <div class="ledger-header">
+                <h4 class="section-title">{{ t('user.pointsRecord') }}</h4>
+                <div class="ledger-controls">
+                  <span class="ledger-total">共 {{ ledgerTotal }} 条</span>
+                  <select class="ledger-page-size" :value="ledgerPageSize" @change="changeLedgerPageSize">
+                    <option v-for="size in ledgerPageSizeOptions" :key="size" :value="size">{{ size }} 条/页</option>
+                  </select>
+                </div>
+              </div>
+              <div v-if="ledgerLoading" class="empty-hint">加载中...</div>
+              <div v-else-if="!Array.isArray(ledger) || ledger.length === 0" class="empty-hint">{{ t('user.noRecord') }}</div>
               <div v-else class="ledger-list">
-                <div v-for="item in (Array.isArray(ledger) ? ledger : []).slice(0, 20)" :key="item.id" class="ledger-item">
+                <div v-for="item in (Array.isArray(ledger) ? ledger : [])" :key="item.id || `${item.ts}-${item.type}-${item.value}`" class="ledger-item">
                   <span class="ledger-icon" v-html="icons[getLedgerIconType(item.type)]"></span>
                   <div class="ledger-info">
                     <span class="ledger-type">{{ getLedgerTypeText(item.type) }}</span>
@@ -2115,6 +2160,11 @@ function getLedgerTypeText(type) {
                     {{ item.value > 0 ? '+' : '' }}{{ formatPoints(item.value) }}
                   </span>
                 </div>
+              </div>
+              <div v-if="ledgerTotalPages > 1" class="ledger-pagination">
+                <button class="ledger-page-btn" :disabled="ledgerPage <= 1 || ledgerLoading" @click="goLedgerPage(ledgerPage - 1)">上一页</button>
+                <span class="ledger-page-info">第 {{ ledgerPage }} / {{ ledgerTotalPages }} 页</span>
+                <button class="ledger-page-btn" :disabled="ledgerPage >= ledgerTotalPages || ledgerLoading" @click="goLedgerPage(ledgerPage + 1)">下一页</button>
               </div>
             </div>
 
@@ -3713,6 +3763,35 @@ function getLedgerTypeText(type) {
 }
 
 /* 积分记录 */
+.ledger-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.ledger-header .section-title {
+  margin-bottom: 0;
+}
+
+.ledger-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+}
+
+.ledger-page-size {
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.82);
+}
+
 .ledger-list {
   display: flex;
   flex-direction: column;
@@ -3770,6 +3849,34 @@ function getLedgerTypeText(type) {
 
 .ledger-amount.negative {
   color: #ef4444;
+}
+
+.ledger-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.ledger-page-btn {
+  min-width: 72px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.78);
+  cursor: pointer;
+}
+
+.ledger-page-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
+.ledger-page-info {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
 }
 
 /* 兑换表单 */
@@ -7404,6 +7511,24 @@ function getLedgerTypeText(type) {
 }
 
 /* 积分记录列表 - 浅色模式 */
+:root.canvas-theme-light .profile-panel .ledger-controls,
+:root.canvas-theme-light .profile-panel .ledger-total,
+:root.canvas-theme-light .profile-panel .ledger-page-info {
+  color: rgba(0, 0, 0, 0.5) !important;
+}
+
+:root.canvas-theme-light .profile-panel .ledger-page-size,
+:root.canvas-theme-light .profile-panel .ledger-page-btn {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: rgba(0, 0, 0, 0.72) !important;
+}
+
+:root.canvas-theme-light .profile-panel .ledger-page-btn:not(:disabled):hover {
+  background: rgba(99, 102, 241, 0.08) !important;
+  border-color: rgba(99, 102, 241, 0.22) !important;
+}
+
 :root.canvas-theme-light .profile-panel .ledger-list {
   gap: 6px !important;
 }

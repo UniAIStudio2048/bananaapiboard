@@ -132,8 +132,9 @@ async function loadPackages() {
     }
 
     // 获取用户信息
-    const userRes = await fetch(getApiUrl('/api/user/me'), {
-      headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
+    const userRes = await fetch(getApiUrl(`/api/user/me?_t=${Date.now()}`), {
+      headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` },
+      cache: 'no-store'
     })
     if (userRes.ok) {
       user.value = await userRes.json()
