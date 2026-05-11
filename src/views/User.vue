@@ -1756,8 +1756,9 @@ async function confirmTransfer() {
     return
   }
 
-  const amount = parseInt(pointsTransferForm.value.amount)
-  if (!amount || amount <= 0) {
+  const rawAmount = Number(pointsTransferForm.value.amount)
+  const amount = Number.isFinite(rawAmount) ? Math.round(rawAmount * 100) / 100 : 0
+  if (amount <= 0) {
     pointsTransferForm.value.amountError = '转让金额必须大于0'
     return
   }
