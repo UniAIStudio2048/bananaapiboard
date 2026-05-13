@@ -157,3 +157,59 @@ test('prompt mention selections use the shared replacement helper', () => {
 
   assert.match(aiAssistantMentionSource, /replacePromptEditorMentionText/)
 })
+
+test('node prompt media insertion uses current contenteditable text before replacing mentions', () => {
+  const cases = [
+    {
+      name: 'ImageNode',
+      source: imageNodeSource,
+      textRef: 'promptText'
+    },
+    {
+      name: 'VideoNode',
+      source: videoNodeSource,
+      textRef: 'promptText'
+    },
+    {
+      name: 'TextNode',
+      source: textNodeSource,
+      textRef: 'llmInputText'
+    }
+  ]
+
+  for (const { name, source, textRef } of cases) {
+    const insertHandler = source.match(/function insertMediaTag\(media\)[\s\S]*?\n}\n/)?.[0] || ''
+    assert.match(
+      insertHandler,
+      /const\s+currentText\s*=\s*serializePromptEditorContent\(editor\)/,
+      `${name} should read the live contenteditable text before thumbnail insertion`
+    )
+    assert.match(
+      insertHandler,
+      new RegExp(`if\\s*\\(currentText\\s*!==\\s*${textRef}\\.value\\)\\s*\\{\\s*${textRef}\\.value\\s*=\\s*currentText\\s*\\}`),
+      `${name} should sync reactive text from live editor text before replacing`
+    )
+    assert.match(
+      insertHandler,
+      /getActivePromptMentionRange\(currentText,\s*start\)/,
+      `${name} should detect active @ query against current editor text`
+    )
+    assert.match(
+      insertHandler,
+      /text:\s*currentText/,
+      `${name} should replace against current editor text, not stale reactive text`
+    )
+
+    const selectHandler = source.match(/function handle(?:Media)?MentionSelect\(media\)[\s\S]*?\n}\n/)?.[0] || ''
+    assert.match(
+      selectHandler,
+      /const\s+currentText\s*=\s*serializePromptEditorContent\(editor\)/,
+      `${name} should read the live contenteditable text before popup mention selection`
+    )
+    assert.match(
+      selectHandler,
+      /text:\s*currentText/,
+      `${name} popup mention selection should replace against current editor text`
+    )
+  }
+})

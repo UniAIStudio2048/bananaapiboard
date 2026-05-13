@@ -234,7 +234,7 @@ function getPromptMentionReplaceEnd(text, mentionStart, caret) {
   const safeStart = Math.max(0, Number.isFinite(mentionStart) ? mentionStart : 0)
   const minimumEnd = Math.min(String(text || '').length, safeStart + 1)
   const safeCaret = Number.isFinite(caret) ? Math.max(caret, minimumEnd) : minimumEnd
-  if (safeCaret > minimumEnd) return Math.min(String(text || '').length, safeCaret)
+  if (safeCaret >= minimumEnd) return Math.min(String(text || '').length, safeCaret)
 
   const rest = String(text || '').slice(minimumEnd)
   const match = rest.match(/^[^\s@]*/)

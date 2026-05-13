@@ -487,7 +487,8 @@ function handlePromptInput(event) {
   // "Cannot set properties of null (setting 'vnode')"，并打断 vue-flow 整棵渲染树，
   // 表现为节点无法拖动、连线错位。这里通过 bump renderKey 强制 Vue 重新挂载 prompt-input，
   // 让 vnode 树与真实 DOM 重新对齐。
-  if (wasNonEmpty && !text) {
+  if (wasNonEmpty && !text.trim()) {
+    promptText.value = ''
     promptEditorRenderKey.value += 1
     showMentionPopup.value = false
     nextTick(() => {
@@ -713,26 +714,39 @@ function insertMediaTag(media) {
   }
   
   const { start, end } = getPromptEditorSelectionRange(editor)
-  const activeMention = start === end ? getActivePromptMentionRange(promptText.value, start) : null
-  const replaceStart = activeMention?.start ?? start
-  const replaceEnd = activeMention?.end ?? end
+  const currentText = serializePromptEditorContent(editor)
+  if (currentText !== promptText.value) {
+    promptText.value = currentText
+  }
+  const activeMention = start === end ? getActivePromptMentionRange(currentText, start) : null
   const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
-  const result = replacePromptEditorMentionText({
-    text: promptText.value,
-    mentionStart: replaceStart,
-    caret: replaceEnd,
-    replacement: tag,
-    appendSpace: true
-  })
-  promptText.value = result.text
+  let resultText, resultCursor
+  if (activeMention) {
+    const result = replacePromptEditorMentionText({
+      text: currentText,
+      mentionStart: activeMention.start,
+      caret: activeMention.end,
+      replacement: tag,
+      appendSpace: true
+    })
+    resultText = result.text
+    resultCursor = result.cursor
+  } else {
+    const before = currentText.slice(0, start)
+    const after = currentText.slice(end)
+    const suffix = !after || after[0] !== ' ' ? ' ' : ''
+    resultText = before + tag + suffix + after
+    resultCursor = start + tag.length + suffix.length
+  }
+  promptText.value = resultText
   promptEditorRenderKey.value += 1
   updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
-  
+
   nextTick(() => {
     const nextEditor = promptTextareaRef.value || editor
     removePromptEditorOrphanTextNodes(nextEditor)
     autoResizeTextarea()
-    restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
+    restorePromptEditorSelection(nextEditor, resultCursor, resultCursor)
     nextEditor.scrollTop = scrollPosition.scrollTop
     nextEditor.scrollLeft = scrollPosition.scrollLeft
     updatePromptOverlayCaret()
@@ -746,8 +760,12 @@ function handleMentionSelect(media) {
     const mentionMedia = resolvedMedia || media
     const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
     const selection = getPromptEditorSelectionRange(editor)
+    const currentText = serializePromptEditorContent(editor)
+    if (currentText !== promptText.value) {
+      promptText.value = currentText
+    }
     const result = replacePromptEditorMentionText({
-      text: promptText.value,
+      text: currentText,
       mentionStart: mentionStartPos,
       caret: mentionEndPos >= 0 ? mentionEndPos : selection.start,
       replacement: tag,
@@ -777,19 +795,36 @@ function handleMentionSelect(media) {
   insertMediaTag(media)
 }
 
+function handlePromptPaste(event) {
+  event.preventDefault()
+  const text = (event.clipboardData || window.clipboardData)?.getData('text/plain') || ''
+  if (!text) return
+  insertPromptEditorPlainText(text)
+}
+
 function insertPromptEditorPlainText(text) {
   const editor = promptTextareaRef.value
   if (!editor) return
 
+  const currentText = serializePromptEditorContent(editor)
+  if (currentText !== promptText.value) {
+    promptText.value = currentText
+  }
   const { start, end } = getPromptEditorSelectionRange(editor)
   const before = promptText.value.slice(0, start)
   const after = promptText.value.slice(end)
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
   promptText.value = before + text + after
+  promptEditorRenderKey.value += 1
   nextTick(() => {
-    removePromptEditorOrphanTextNodes(editor)
+    const nextEditor = promptTextareaRef.value || editor
+    removePromptEditorOrphanTextNodes(nextEditor)
     const nextPos = start + text.length
-    restorePromptEditorSelection(editor, nextPos, nextPos)
+    restorePromptEditorSelection(nextEditor, nextPos, nextPos)
+    nextEditor.scrollTop = scrollPosition.scrollTop
+    nextEditor.scrollLeft = scrollPosition.scrollLeft
     autoResizeTextarea()
+    updatePromptOverlayCaret()
   })
 }
 
@@ -7186,6 +7221,7 @@ function handleToolbarPreview() {
             :data-placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : supportsMediaTags ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(Ctrl+Enter 生成，Enter 换行)'"
             @keydown="handleKeyDown"
             @input="handlePromptInput"
+            @paste="handlePromptPaste"
             @compositionstart="handlePromptCompositionStart"
             @compositionend="handlePromptCompositionEnd"
             @focus="handlePromptTextareaFocus"

@@ -34,7 +34,7 @@ import Camera3DPanel from '../Camera3DPanel.vue'
 import Pose3DViewer from '../Pose3DViewer.vue'
 import CameraControlPanel from '../CameraControlPanel.vue'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
-import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
@@ -77,7 +77,7 @@ const uploadManager = useUploadManager()
 const teamStore = useTeamStore()
 const userInfo = inject('userInfo')
 const isCanvasViewportMoving = inject('isCanvasViewportMoving', ref(false))
-const { onHoverStart, onHoverEnd } = useImageHoverPreview()
+const { onHoverStart, onVideoHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
 const { updateNodeInternals, findNode, setViewport, getViewport, getSelectedNodes } = useVueFlow()
@@ -3758,6 +3758,11 @@ watch(currentImageUrl, (url) => {
   detectPanoramaImage(url)
 }, { immediate: true })
 
+const VIDEO_NODE_TYPES = [
+  'video', 'video-input', 'video-gen',
+  'text-to-video', 'image-to-video', 'audio-to-video'
+]
+
 // 继承的参考图片（来自左侧连接的节点，支持多图和自定义顺序）
 // 使用 canvasStore 的边索引 O(1) 查找，避免全量遍历 O(N*E)
 const referenceImages = computed(() => {
@@ -3770,6 +3775,7 @@ const referenceImages = computed(() => {
   for (const edge of upstreamEdges) {
     const node = nodeIndex.get(edge.source)
     if (!node?.data) continue
+    if (VIDEO_NODE_TYPES.includes(node.type)) continue
 
     // 源节点优先使用 sourceImages，与画布显示一致
     if (node.data.nodeRole === 'source' && node.data.sourceImages?.length > 0) {
@@ -3807,14 +3813,118 @@ const referenceImages = computed(() => {
   return upstreamImages
 })
 
+const referenceVideos = computed(() => {
+  const upstreamEdges = canvasStore.edgesByTarget.get(props.id) || []
+  if (upstreamEdges.length === 0) return []
+
+  const nodeIndex = canvasStore.nodesById
+  const upstreamVideos = []
+
+  for (const edge of upstreamEdges) {
+    const node = nodeIndex.get(edge.source)
+    if (!node?.data || !VIDEO_NODE_TYPES.includes(node.type)) continue
+
+    if (node.data.output?.url) {
+      upstreamVideos.push(node.data.output.url)
+    } else if (node.data.output?.urls?.length > 0) {
+      upstreamVideos.push(...node.data.output.urls.filter(Boolean))
+    } else if (node.data.sourceVideo) {
+      upstreamVideos.push(node.data.sourceVideo)
+    } else if (node.data.videoUrl) {
+      upstreamVideos.push(node.data.videoUrl)
+    }
+  }
+
+  const customOrder = props.data.videoOrder || []
+  if (customOrder.length > 0 && upstreamVideos.length > 0) {
+    const orderedVideos = []
+    const remainingVideos = [...upstreamVideos]
+
+    for (const url of customOrder) {
+      const index = remainingVideos.indexOf(url)
+      if (index !== -1) {
+        orderedVideos.push(url)
+        remainingVideos.splice(index, 1)
+      }
+    }
+
+    orderedVideos.push(...remainingVideos)
+    return orderedVideos
+  }
+
+  return upstreamVideos
+})
+
+function findUpstreamNodeByVideoUrl(url) {
+  const upstreamEdges = canvasStore.edgesByTarget.get(props.id) || []
+  const nodeIndex = canvasStore.nodesById
+
+  for (const edge of upstreamEdges) {
+    const node = nodeIndex.get(edge.source)
+    if (!node?.data || !VIDEO_NODE_TYPES.includes(node.type)) continue
+
+    if (node.data.output?.url === url ||
+        node.data.output?.urls?.includes(url) ||
+        node.data.sourceVideo === url ||
+        node.data.videoUrl === url) {
+      return node
+    }
+  }
+
+  return null
+}
+
+function getReferenceVideoThumbnail(url) {
+  const sourceNode = findUpstreamNodeByVideoUrl(url)
+  if (!sourceNode?.data) return ''
+
+  return sourceNode.data.thumbnailUrl ||
+    sourceNode.data.thumbnail_url ||
+    sourceNode.data.output?.thumbnailUrl ||
+    sourceNode.data.output?.thumbnail_url ||
+    sourceNode.data.coverUrl ||
+    sourceNode.data.cover_url ||
+    ''
+}
+
+function getReferenceVideoPreviewSrc(url) {
+  const thumbnail = getReferenceVideoThumbnail(url)
+  if (thumbnail) return toSameOriginUrl(thumbnail)
+  return getVideoPosterUrl(toSameOriginUrl(url), 384)
+}
+
+const failedReferenceVideoPreviewUrls = ref(new Set())
+
+function shouldShowReferenceVideoImage(url) {
+  return !!getReferenceVideoPreviewSrc(url) && !failedReferenceVideoPreviewUrls.value.has(url)
+}
+
+function handleReferenceVideoPreviewError(url) {
+  failedReferenceVideoPreviewUrls.value = new Set([...failedReferenceVideoPreviewUrls.value, url])
+}
+
 const referenceMediaList = computed(() => {
-  return referenceImages.value.map((url, i) => ({
-    type: 'image',
-    index: i + 1,
-    url,
-    label: `图片${i + 1}`,
-    key: getMediaMentionKey({ type: 'image', url })
-  }))
+  const list = []
+  referenceVideos.value.forEach((url, i) => {
+    list.push({
+      type: 'video',
+      index: i + 1,
+      url,
+      label: `视频${i + 1}`,
+      key: getMediaMentionKey({ type: 'video', url }),
+      thumbnailUrl: getReferenceVideoThumbnail(url)
+    })
+  })
+  referenceImages.value.forEach((url, i) => {
+    list.push({
+      type: 'image',
+      index: i + 1,
+      url,
+      label: `图片${i + 1}`,
+      key: getMediaMentionKey({ type: 'image', url })
+    })
+  })
+  return list
 })
 
 function updatePromptMentionBindings(bindings) {
@@ -3835,7 +3945,7 @@ function syncPromptMentionsWithMedia() {
 const highlightedPromptSegments = computed(() => {
   if (!promptText.value) return []
   const segments = []
-  const regex = /【?@图片\d+】?/g
+  const regex = /【?@(视频|图片)\d+】?/g
   let lastIndex = 0
   let match
   while ((match = regex.exec(promptText.value)) !== null) {
@@ -3867,13 +3977,18 @@ const highlightedPromptSegments = computed(() => {
   return segments
 })
 function getMediaForPromptTag(text) {
-  const match = String(text || '').match(/^【?@图片(\d+)】?$/)
+  const match = String(text || '').match(/^【?@(视频|图片)(\d+)】?$/)
   if (!match) return null
-  const index = Number(match[1])
-  return referenceMediaList.value.find(item => item.index === index) || null
+  const typeMap = { 视频: 'video', 图片: 'image' }
+  const index = Number(match[2])
+  return referenceMediaList.value.find(item => item.type === typeMap[match[1]] && item.index === index) || null
 }
 
 function handlePromptTagHover(media, event) {
+  if (media?.type === 'video' && media.url) {
+    onVideoHoverStart(media.url, event)
+    return
+  }
   if (media?.url) onHoverStart(media.url, event)
 }
 
@@ -5774,15 +5889,34 @@ function handleKeyDown(event) {
   }
 }
 
+function handlePromptPaste(event) {
+  event.preventDefault()
+  const text = (event.clipboardData || window.clipboardData)?.getData('text/plain') || ''
+  if (!text) return
+  insertPromptEditorPlainText(text)
+}
+
 function insertPromptEditorPlainText(text) {
   const editor = promptTextareaRef.value
   if (!editor) return
 
+  const currentText = serializePromptEditorContent(editor)
+  if (currentText !== promptText.value) {
+    promptText.value = currentText
+  }
   const { start, end } = getPromptEditorSelectionRange(editor)
-  promptText.value = promptText.value.slice(0, start) + text + promptText.value.slice(end)
+  const before = promptText.value.slice(0, start)
+  const after = promptText.value.slice(end)
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+  promptText.value = before + text + after
+  promptEditorRenderKey.value += 1
   nextTick(() => {
+    const nextEditor = promptTextareaRef.value || editor
+    removePromptEditorOrphanTextNodes(nextEditor)
     const nextPos = start + text.length
-    restorePromptEditorSelection(editor, nextPos, nextPos)
+    restorePromptEditorSelection(nextEditor, nextPos, nextPos)
+    nextEditor.scrollTop = scrollPosition.scrollTop
+    nextEditor.scrollLeft = scrollPosition.scrollLeft
     autoResizeTextarea()
   })
 }
@@ -6342,7 +6476,7 @@ function removeReferenceImage(index) {
   
   canvasStore.updateNodeData(props.id, {
     imageOrder: currentImages,
-    hasUpstream: currentImages.length > 0
+    hasUpstream: currentImages.length > 0 || referenceVideos.value.length > 0
   })
   
   const edgesToRemove = []
@@ -6363,6 +6497,38 @@ function removeReferenceImage(index) {
     }
   })
   
+  edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
+}
+
+function removeReferenceVideo(index) {
+  const currentVideos = [...(referenceVideos.value || [])]
+  const removedVideo = currentVideos[index]
+  currentVideos.splice(index, 1)
+
+  canvasStore.updateNodeData(props.id, {
+    videoOrder: currentVideos,
+    hasUpstream: currentVideos.length > 0 || referenceImages.value.length > 0
+  })
+
+  const edgesToRemove = []
+
+  canvasStore.edges.forEach(edge => {
+    if (edge.target === props.id) {
+      const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
+      if (!sourceNode?.data || !VIDEO_NODE_TYPES.includes(sourceNode.type)) return
+
+      const isMatch =
+        sourceNode.data.sourceVideo === removedVideo ||
+        sourceNode.data.videoUrl === removedVideo ||
+        sourceNode.data.output?.url === removedVideo ||
+        sourceNode.data.output?.urls?.includes(removedVideo)
+
+      if (isMatch) {
+        edgesToRemove.push(edge.id)
+      }
+    }
+  })
+
   edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
 }
 
@@ -6389,25 +6555,38 @@ function insertMediaTag(media) {
   }
 
   const { start, end } = getPromptEditorSelectionRange(editor)
-  const activeMention = start === end ? getActivePromptMentionRange(promptText.value, start) : null
-  const replaceStart = activeMention?.start ?? start
-  const replaceEnd = activeMention?.end ?? end
+  const currentText = serializePromptEditorContent(editor)
+  if (currentText !== promptText.value) {
+    promptText.value = currentText
+  }
+  const activeMention = start === end ? getActivePromptMentionRange(currentText, start) : null
   const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
-  const result = replacePromptEditorMentionText({
-    text: promptText.value,
-    mentionStart: replaceStart,
-    caret: replaceEnd,
-    replacement: tag,
-    appendSpace: true
-  })
-  promptText.value = result.text
+  let resultText, resultCursor
+  if (activeMention) {
+    const result = replacePromptEditorMentionText({
+      text: currentText,
+      mentionStart: activeMention.start,
+      caret: activeMention.end,
+      replacement: tag,
+      appendSpace: true
+    })
+    resultText = result.text
+    resultCursor = result.cursor
+  } else {
+    const before = currentText.slice(0, start)
+    const after = currentText.slice(end)
+    const suffix = !after || after[0] !== ' ' ? ' ' : ''
+    resultText = before + tag + suffix + after
+    resultCursor = start + tag.length + suffix.length
+  }
+  promptText.value = resultText
   promptEditorRenderKey.value += 1
   updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
 
   nextTick(() => {
     const nextEditor = promptTextareaRef.value || editor
     removePromptEditorOrphanTextNodes(nextEditor)
-    restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
+    restorePromptEditorSelection(nextEditor, resultCursor, resultCursor)
     nextEditor.scrollTop = scrollPosition.scrollTop
     nextEditor.scrollLeft = scrollPosition.scrollLeft
   })
@@ -6443,7 +6622,8 @@ function handlePromptInput(event) {
   // "Cannot set properties of null (setting 'vnode')"，并打断 vue-flow 整棵渲染树，
   // 表现为节点无法拖动、连线错位。这里通过 bump renderKey 强制 Vue 重新挂载 prompt-input，
   // 让 vnode 树与真实 DOM 重新对齐。
-  if (wasNonEmpty && !text) {
+  if (wasNonEmpty && !text.trim()) {
+    promptText.value = ''
     promptEditorRenderKey.value += 1
     showMentionPopup.value = false
     nextTick(() => {
@@ -6498,8 +6678,12 @@ function handleMentionSelect(media) {
     const mentionMedia = resolvedMedia || media
     const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
     const selection = getPromptEditorSelectionRange(editor)
+    const currentText = serializePromptEditorContent(editor)
+    if (currentText !== promptText.value) {
+      promptText.value = currentText
+    }
     const result = replacePromptEditorMentionText({
-      text: promptText.value,
+      text: currentText,
       mentionStart: mentionStartPos,
       caret: selection.start,
       replacement: tag,
@@ -7406,6 +7590,36 @@ async function handleDrop(event) {
           <span class="panel-frames-hint">拖拽图片到此处 · 拖动调整顺序</span>
         </div>
         <div class="panel-frames-list">
+          <div
+            v-for="(video, index) in referenceVideos"
+            :key="'video-' + index"
+            class="panel-frame-item panel-frame-video panel-frame-clickable"
+            :title="`点击插入 @视频${index + 1}`"
+            @click="insertMediaTag({ type: 'video', index: index + 1, label: `视频${index + 1}` })"
+            @mouseenter="onVideoHoverStart(video, $event)"
+            @mouseleave="onHoverEnd"
+          >
+            <img
+              v-if="shouldShowReferenceVideoImage(video)"
+              :src="getReferenceVideoPreviewSrc(video)"
+              class="video-thumb"
+              alt="参考视频封面"
+              loading="lazy"
+              decoding="async"
+              @error="handleReferenceVideoPreviewError(video)"
+            />
+            <video
+              v-else
+              :src="toSameOriginUrl(video)"
+              class="video-thumb"
+              muted
+              preload="metadata"
+              @loadeddata="$event.target.currentTime = 0.1"
+            ></video>
+            <span class="panel-frame-label">{{ index + 1 }}</span>
+            <span class="panel-frame-tag-badge">@视频{{ index + 1 }}</span>
+            <button class="panel-frame-remove" @click.stop="removeReferenceVideo(index)">×</button>
+          </div>
           <!-- 现有图片（支持拖拽排序）- 点击插入 @图片N 标记 -->
           <div
             v-for="(img, index) in referenceImages"
@@ -7464,6 +7678,7 @@ async function handleDrop(event) {
             :data-placeholder="referenceImages.length > 0 ? '输入提示词，点击上方图片插入 @图片 引用\n例：让@图片1中的人物换上红色衣服（Ctrl+Enter 生成，Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。(Ctrl+Enter 生成，Enter 换行)'"
             @keydown="handleKeyDown"
             @input="handlePromptInput"
+            @paste="handlePromptPaste"
             @compositionstart="handlePromptCompositionStart"
             @compositionend="handlePromptCompositionEnd"
             @focus="autoResizeTextarea"
@@ -9129,6 +9344,18 @@ async function handleDrop(event) {
   height: 100%;
   object-fit: cover;
   pointer-events: none;
+}
+
+.panel-frame-video {
+  background: var(--canvas-bg-secondary, #1a1a1a);
+}
+
+.panel-frame-video .video-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
+  display: block;
 }
 
 .panel-frame-label {

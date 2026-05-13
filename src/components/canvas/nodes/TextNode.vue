@@ -240,6 +240,34 @@ function handleLLMCompositionEnd(event) {
   handleLLMInput(event)
 }
 
+function handleLLMPaste(event) {
+  event.preventDefault()
+  const text = (event.clipboardData || window.clipboardData)?.getData('text/plain') || ''
+  if (!text) return
+  const editor = llmInputRef.value
+  if (!editor) return
+
+  const currentText = serializePromptEditorContent(editor)
+  if (currentText !== llmInputText.value) {
+    llmInputText.value = currentText
+  }
+  const { start, end } = getPromptEditorSelectionRange(editor)
+  const before = llmInputText.value.slice(0, start)
+  const after = llmInputText.value.slice(end)
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+  llmInputText.value = before + text + after
+  llmInputRenderKey.value += 1
+  nextTick(() => {
+    const nextEditor = llmInputRef.value || editor
+    cleanOrphanedEditorTextNodes(nextEditor)
+    const nextPos = start + text.length
+    restorePromptEditorSelection(nextEditor, nextPos, nextPos)
+    nextEditor.scrollTop = scrollPosition.scrollTop
+    nextEditor.scrollLeft = scrollPosition.scrollLeft
+    autoResizeLLMInput()
+  })
+}
+
 // 处理提及输入（Textarea）
 function handleLLMInput(event) {
   if (isLLMInputComposing || event?.isComposing) return
@@ -257,7 +285,8 @@ function handleLLMInput(event) {
   // "Cannot set properties of null (setting 'vnode')"，并打断 vue-flow 整棵渲染树，
   // 表现为节点无法拖动、连线错位。这里通过 bump renderKey 强制 Vue 重新挂载 llm-input，
   // 让 vnode 树与真实 DOM 重新对齐。
-  if (wasNonEmpty && !text) {
+  if (wasNonEmpty && !text.trim()) {
+    llmInputText.value = ''
     llmInputRenderKey.value += 1
     showMediaMentionPopup.value = false
     showMentionList.value = false
@@ -1094,25 +1123,38 @@ function insertMediaTag(media) {
   }
 
   const { start, end } = getPromptEditorSelectionRange(editor)
-  const activeMention = start === end ? getActivePromptMentionRange(llmInputText.value, start) : null
-  const replaceStart = activeMention?.start ?? start
-  const replaceEnd = activeMention?.end ?? end
+  const currentText = serializePromptEditorContent(editor)
+  if (currentText !== llmInputText.value) {
+    llmInputText.value = currentText
+  }
+  const activeMention = start === end ? getActivePromptMentionRange(currentText, start) : null
   const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
-  const result = replacePromptEditorMentionText({
-    text: llmInputText.value,
-    mentionStart: replaceStart,
-    caret: replaceEnd,
-    replacement: tag,
-    appendSpace: true
-  })
-  llmInputText.value = result.text
+  let resultText, resultCursor
+  if (activeMention) {
+    const result = replacePromptEditorMentionText({
+      text: currentText,
+      mentionStart: activeMention.start,
+      caret: activeMention.end,
+      replacement: tag,
+      appendSpace: true
+    })
+    resultText = result.text
+    resultCursor = result.cursor
+  } else {
+    const before = currentText.slice(0, start)
+    const after = currentText.slice(end)
+    const suffix = !after || after[0] !== ' ' ? ' ' : ''
+    resultText = before + tag + suffix + after
+    resultCursor = start + tag.length + suffix.length
+  }
+  llmInputText.value = resultText
   llmInputRenderKey.value += 1
   updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
 
   nextTick(() => {
     const nextEditor = llmInputRef.value || editor
     cleanOrphanedEditorTextNodes(nextEditor)
-    restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
+    restorePromptEditorSelection(nextEditor, resultCursor, resultCursor)
     nextEditor.scrollTop = scrollPosition.scrollTop
     nextEditor.scrollLeft = scrollPosition.scrollLeft
   })
@@ -1129,8 +1171,12 @@ function handleMediaMentionSelect(media) {
     const mentionMedia = resolvedMedia || media
     const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
     const selection = getPromptEditorSelectionRange(editor)
+    const currentText = serializePromptEditorContent(editor)
+    if (currentText !== llmInputText.value) {
+      llmInputText.value = currentText
+    }
     const result = replacePromptEditorMentionText({
-      text: llmInputText.value,
+      text: currentText,
       mentionStart: mediaMentionStartPos,
       caret: mediaMentionEndPos >= 0 ? mediaMentionEndPos : selection.start,
       replacement: tag,
@@ -3262,6 +3308,7 @@ onUnmounted(() => {
             :data-placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Ctrl+Enter 生成，Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（Ctrl+Enter 生成，Enter 换行）'"
             @keydown="handleLLMKeyDown"
             @input="handleLLMInput"
+            @paste="handleLLMPaste"
             @compositionstart="handleLLMCompositionStart"
             @compositionend="handleLLMCompositionEnd"
             @wheel.stop

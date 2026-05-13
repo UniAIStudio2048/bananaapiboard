@@ -58,13 +58,13 @@ test('image node re-renders the contenteditable prompt after inserting media men
 test('image node thumbnail clicks replace the active @ query instead of appending a second at sign', () => {
   assert.match(
     source,
-    /getActivePromptMentionRange\(promptText\.value,\s*start\)/,
+    /getActivePromptMentionRange\(currentText,\s*start\)/,
     'thumbnail insertion should detect the active @ query at the caret'
   )
 
   assert.match(
     source,
-    /const\s+replaceStart\s*=\s*activeMention\?\.start\s*\?\?\s*start[\s\S]*const\s+replaceEnd\s*=\s*activeMention\?\.end\s*\?\?\s*end/,
-    'thumbnail insertion should replace the active @ query range'
+    /if\s*\(activeMention\)\s*\{[\s\S]*?mentionStart:\s*activeMention\.start[\s\S]*?caret:\s*activeMention\.end/,
+    'thumbnail insertion should replace the active @ query range when mention is active'
   )
 })

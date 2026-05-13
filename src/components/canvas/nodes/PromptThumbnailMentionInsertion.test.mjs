@@ -10,7 +10,7 @@ function readNode(name) {
   return readFileSync(join(__dirname, name), 'utf8')
 }
 
-test('text and video thumbnail insertion replace an active @ query instead of appending @@', () => {
+test('text and video thumbnail insertion detect active @ query and use it for replacement', () => {
   for (const [file, stateName] of [
     ['TextNode.vue', 'llmInputText'],
     ['VideoNode.vue', 'promptText']
@@ -18,13 +18,18 @@ test('text and video thumbnail insertion replace an active @ query instead of ap
     const source = readNode(file)
     assert.match(
       source,
-      new RegExp(`getActivePromptMentionRange\\(${stateName}\\.value,\\s*start\\)`),
+      /getActivePromptMentionRange\(currentText,\s*start\)/,
       `${file} should detect the active @ query before thumbnail insertion`
     )
     assert.match(
       source,
-      /const\s+replaceStart\s*=\s*activeMention\?\.start\s*\?\?\s*start[\s\S]*const\s+replaceEnd\s*=\s*activeMention\?\.end\s*\?\?\s*end/,
-      `${file} should replace the active @ query range`
+      /if\s*\(activeMention\)\s*\{[\s\S]*?mentionStart:\s*activeMention\.start[\s\S]*?caret:\s*activeMention\.end/,
+      `${file} should replace the active @ query range when mention is active`
+    )
+    assert.match(
+      source,
+      /}\s*else\s*\{[\s\S]*?currentText\.slice\(0,\s*start\)/,
+      `${file} should do plain insertion when no active mention`
     )
   }
 })

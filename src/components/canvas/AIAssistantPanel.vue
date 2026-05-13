@@ -315,6 +315,7 @@
           
           <!-- 输入框 -->
           <div
+            :key="inputEditorRenderKey"
             ref="inputRef"
             class="input-textarea"
             :class="{ 'is-empty': !inputText }"
@@ -324,6 +325,8 @@
             data-placeholder="开启你的灵感之旅..."
             @keydown="handleInputKeydown"
             @input="handleInputEvent"
+            @compositionstart="handleInputCompositionStart"
+            @compositionend="handleInputCompositionEnd"
           >
             <span
               v-for="(seg, i) in highlightedInputSegments"
@@ -671,6 +674,7 @@ const config = ref({
 
 const messages = ref([])
 const inputText = ref('')
+const inputEditorRenderKey = ref(0)
 const isLoading = ref(false)
 const currentSessionId = ref(null)
 const sessions = ref([])
@@ -696,6 +700,7 @@ const mentionQuery = ref('')
 let dragCounter = 0 // 用于跟踪拖拽进入/离开次数
 let mentionStartPos = -1
 let nextAttachmentLocalId = 0
+let isInputComposing = false
 
 // 预设管理相关
 const userPresets = ref([])
@@ -1091,7 +1096,17 @@ function updateAttachmentMentionPopup() {
   showAttachmentMentionPopup()
 }
 
-function handleInputEvent() {
+function handleInputCompositionStart() {
+  isInputComposing = true
+}
+
+function handleInputCompositionEnd(event) {
+  isInputComposing = false
+  handleInputEvent(event)
+}
+
+function handleInputEvent(event) {
+  if (isInputComposing || event?.isComposing) return
   const editor = inputRef.value
   if (editor) {
     const selectionRange = getPromptEditorSelectionRange(editor)
@@ -1202,6 +1217,7 @@ function insertAttachmentMention(index) {
 
   const suffix = inputText.value[replaceEnd] === ' ' ? '' : ' '
   inputText.value = inputText.value.slice(0, replaceStart) + mention + suffix + inputText.value.slice(replaceEnd)
+  inputEditorRenderKey.value += 1
   attachmentMentionBindings.value = {
     ...(attachmentMentionBindings.value || {}),
     [item.key]: {
@@ -1240,6 +1256,7 @@ function selectAttachmentMention(item) {
   })
 
   inputText.value = result.text
+  inputEditorRenderKey.value += 1
   attachmentMentionBindings.value = result.bindings
   showMentionPopup.value = false
   mentionQuery.value = ''
