@@ -55,7 +55,20 @@ export function validatePreparedSeedanceImage(meta = {}) {
   return ''
 }
 
-export function validateSeedanceModeInputs({ mode, imageCount = 0, videoCount = 0 } = {}) {
+export const SEEDANCE_MAX_IMAGES = 9
+export const SEEDANCE_MAX_VIDEOS = 3
+export const SEEDANCE_MAX_AUDIOS = 3
+
+export function validateSeedanceModeInputs({ mode, imageCount = 0, videoCount = 0, audioCount = 0 } = {}) {
+  if (imageCount > SEEDANCE_MAX_IMAGES) {
+    return `参考图片数量不能超过${SEEDANCE_MAX_IMAGES}张，当前${imageCount}张`
+  }
+  if (videoCount > SEEDANCE_MAX_VIDEOS) {
+    return `参考视频数量不能超过${SEEDANCE_MAX_VIDEOS}个，当前${videoCount}个`
+  }
+  if (audioCount > SEEDANCE_MAX_AUDIOS) {
+    return `参考音频数量不能超过${SEEDANCE_MAX_AUDIOS}个，当前${audioCount}个`
+  }
   if (mode === 'image2video_first' && imageCount < 1) {
     return '请上传或连接首帧图片'
   }

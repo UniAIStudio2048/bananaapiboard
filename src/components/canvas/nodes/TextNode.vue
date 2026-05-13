@@ -287,6 +287,7 @@ function handleLLMInput(event) {
   showMentionList.value = false
   showMediaMentionPopup.value = false
   mediaMentionEndPos = -1
+  mediaMentionStartPos = -1
 }
 
 // 选择角色
@@ -366,8 +367,11 @@ const llmInputRenderKey = ref(0)
 const promptMentionBindings = ref(props.data.promptMentionBindings || {})
 
 // 监听 llmInputText 变化，自动调整输入框高度
-watch(llmInputText, () => {
-  persistNodePromptDraft(canvasStore, props.id, 'llmInputText', llmInputText.value)
+watch(llmInputText, (newVal) => {
+  persistNodePromptDraft(canvasStore, props.id, 'llmInputText', newVal)
+  if (!newVal || !newVal.trim()) {
+    updatePromptMentionBindings({})
+  }
   nextTick(() => {
     autoResizeLLMInput()
     syncLLMHighlightOverlayScroll()
@@ -1563,6 +1567,7 @@ function handleLLMKeyDown(event) {
           const before = text.slice(0, tagStart)
           const after = text.slice(tagEnd)
           llmInputText.value = before + after
+          syncPromptMentionsWithMedia()
           nextTick(() => {
             restorePromptEditorSelection(editor, tagStart, tagStart)
           })
@@ -3205,13 +3210,13 @@ onUnmounted(() => {
       </div>
       
       <!-- 输入区域 -->
-      <div class="llm-input-area">
+      <div class="llm-input-area nodrag">
         <div class="llm-input-wrapper">
           <div
             :key="llmInputRenderKey"
             ref="llmInputRef"
             class="llm-input"
-            :class="{ 'is-empty': !llmInputText }"
+            :class="{ 'is-empty': !llmInputText || !llmInputText.trim() }"
             contenteditable="true"
             role="textbox"
             aria-multiline="true"

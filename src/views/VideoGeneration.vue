@@ -1065,7 +1065,8 @@ async function generateVideo() {
         ? (seedanceFirstFrameFile.value ? 1 : 0) + (seedanceLastFrameFile.value ? 1 : 0)
         : seedanceRefImages.value.length + seedanceRefImageUrls.value.length
     const videoCount = seedanceRefVideos.value.length + seedanceRefVideoUrls.value.length
-    const seedanceValidationMessage = validateSeedanceModeInputs({ mode: sm, imageCount, videoCount })
+    const audioCount = seedanceRefAudios.value.length + seedanceRefAudioUrls.value.length
+    const seedanceValidationMessage = validateSeedanceModeInputs({ mode: sm, imageCount, videoCount, audioCount })
     if (seedanceValidationMessage) {
       error.value = seedanceValidationMessage
       return
