@@ -44,7 +44,7 @@
               </template>
             </div>
             <div class="mention-item-info">
-              <span class="mention-item-label">@{{ displayLabel(item) }}</span>
+              <span class="mention-item-label">{{ displayLabel(item) }}</span>
               <span class="mention-item-type">{{ typeLabel(item.type) }}</span>
             </div>
           </div>

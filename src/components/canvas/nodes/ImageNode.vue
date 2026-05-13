@@ -40,7 +40,7 @@ import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
-import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
+import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import {
   bindMediaMention,
   getMediaMentionKey,
@@ -6445,35 +6445,9 @@ function handlePromptInput(event) {
 }
 
 function handleMentionSelect(media) {
-  const editor = promptTextareaRef.value
-  if (!editor) return
-
-  const resolvedMedia = resolveMediaMentionItem(media, referenceMediaList.value)
-  const mentionMedia = resolvedMedia || media
-  const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
-  const { start: cursorPos } = getPromptEditorSelectionRange(editor)
-  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
-  const result = replacePromptEditorMentionText({
-    text: promptText.value,
-    mentionStart: mentionStartPos,
-    caret: cursorPos,
-    replacement: tag,
-    appendSpace: true
-  })
-  promptText.value = result.text
-  promptEditorRenderKey.value += 1
-  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
-
   showMentionPopup.value = false
-
-  nextTick(() => {
-    const nextEditor = promptTextareaRef.value || editor
-    removePromptEditorOrphanTextNodes(nextEditor)
-    autoResizeTextarea()
-    restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
-    nextEditor.scrollTop = scrollPosition.scrollTop
-    nextEditor.scrollLeft = scrollPosition.scrollLeft
-  })
+  mentionStartPos = -1
+  insertMediaTag(media)
 }
 
 // ========== 参考图片拖拽排序 ==========

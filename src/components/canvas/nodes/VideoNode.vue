@@ -32,7 +32,7 @@ import { fetchVideoTaskStatus, isVideoHdTask } from '@/utils/videoTaskStatus'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
-import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, isBrowserRenderableUrl, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
+import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, isBrowserRenderableUrl, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import {
   bindMediaMention,
   escapePromptMediaMentions,
@@ -693,38 +693,10 @@ function insertMediaTag(media) {
 }
 
 function handleMentionSelect(media) {
-  const editor = promptTextareaRef.value
-  if (!editor) return
-  
-  const resolvedMedia = resolveMediaMentionItem(media, referenceMediaList.value)
-  const mentionMedia = resolvedMedia || media
-  const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
-  const { start: cursorPos } = getPromptEditorSelectionRange(editor)
-  const replaceEnd = mentionEndPos > mentionStartPos ? mentionEndPos : cursorPos
-  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
-  const result = replacePromptEditorMentionText({
-    text: promptText.value,
-    mentionStart: mentionStartPos,
-    caret: replaceEnd,
-    replacement: tag,
-    appendSpace: true
-  })
-  promptText.value = result.text
-  promptEditorRenderKey.value += 1
-  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
-  
   showMentionPopup.value = false
   mentionEndPos = -1
-  
-  nextTick(() => {
-    const nextEditor = promptTextareaRef.value || editor
-    removePromptEditorOrphanTextNodes(nextEditor)
-    autoResizeTextarea()
-    restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
-    nextEditor.scrollTop = scrollPosition.scrollTop
-    nextEditor.scrollLeft = scrollPosition.scrollLeft
-    updatePromptOverlayCaret()
-  })
+  mentionStartPos = -1
+  insertMediaTag(media)
 }
 
 function insertPromptEditorPlainText(text) {

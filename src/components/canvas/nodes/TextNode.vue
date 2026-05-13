@@ -18,7 +18,7 @@ import { getAssets } from '@/api/canvas/assets'
 import { getApiUrl, getTenantHeaders, getAvailableLLMModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
-import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
+import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { buildTextNodeLlmMessages } from '@/utils/textNodeLlmMessages'
@@ -1070,36 +1070,10 @@ function cleanOrphanedEditorTextNodes(editor) {
 }
 
 function handleMediaMentionSelect(media) {
-  const editor = llmInputRef.value
-  if (!editor) return
-  
-  const resolvedMedia = resolveMediaMentionItem(media, referenceMediaList.value)
-  const mentionMedia = resolvedMedia || media
-  const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
-  const { start: cursorPos } = getPromptEditorSelectionRange(editor)
-  const replaceEnd = mediaMentionEndPos > mediaMentionStartPos ? mediaMentionEndPos : cursorPos
-  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
-  const result = replacePromptEditorMentionText({
-    text: llmInputText.value,
-    mentionStart: mediaMentionStartPos,
-    caret: replaceEnd,
-    replacement: tag,
-    appendSpace: true
-  })
-  llmInputText.value = result.text
-  llmInputRenderKey.value += 1
-  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
-  
   showMediaMentionPopup.value = false
   mediaMentionEndPos = -1
-  
-  nextTick(() => {
-    const nextEditor = llmInputRef.value || editor
-    cleanOrphanedEditorTextNodes(nextEditor)
-    restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
-    nextEditor.scrollTop = scrollPosition.scrollTop
-    nextEditor.scrollLeft = scrollPosition.scrollLeft
-  })
+  mediaMentionStartPos = -1
+  insertMediaTag(media)
 }
 
 function handleRefMediaDragStart(event, index, type) {
