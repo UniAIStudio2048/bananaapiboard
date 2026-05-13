@@ -175,7 +175,7 @@
             class="attachment-item"
             draggable="true"
             @dragstart="attachmentDragIndex = index"
-            @dragend="attachmentDragIndex = -1"
+            @dragend="resetAttachmentDragState"
             @dragover.prevent
             @drop.prevent="moveAttachment(attachmentDragIndex, index)"
           >
@@ -1200,7 +1200,8 @@ function insertAttachmentMention(index) {
   const replaceStart = activeMention?.start ?? start
   const replaceEnd = activeMention?.end ?? end
 
-  inputText.value = inputText.value.slice(0, replaceStart) + mention + inputText.value.slice(replaceEnd)
+  const suffix = inputText.value[replaceEnd] === ' ' ? '' : ' '
+  inputText.value = inputText.value.slice(0, replaceStart) + mention + suffix + inputText.value.slice(replaceEnd)
   attachmentMentionBindings.value = {
     ...(attachmentMentionBindings.value || {}),
     [item.key]: {
@@ -1216,7 +1217,7 @@ function insertAttachmentMention(index) {
     autoResize()
     if (inputRef.value) {
       removePromptEditorOrphanTextNodes(inputRef.value)
-      const nextCursor = replaceStart + mention.length
+      const nextCursor = replaceStart + mention.length + suffix.length
       restorePromptEditorSelection(inputRef.value, nextCursor, nextCursor)
       inputRef.value.scrollTop = scrollPosition?.scrollTop || 0
       inputRef.value.scrollLeft = scrollPosition?.scrollLeft || 0
@@ -1264,6 +1265,13 @@ function moveAttachment(fromIndex, toIndex) {
   attachments.value = next
   attachmentDragIndex.value = -1
   syncCurrentAttachmentMentions()
+}
+
+function resetAttachmentDragState() {
+  attachmentDragIndex.value = -1
+  dragCounter = 0
+  isDragging.value = false
+  window.dispatchEvent(new CustomEvent('canvas-drag-end'))
 }
 
 async function sendMessage() {
@@ -2461,6 +2469,7 @@ defineExpose({
 }
 
 .input-textarea {
+  position: relative;
   box-sizing: border-box;
   width: 100%;
   min-height: 44px;
@@ -2492,6 +2501,10 @@ defineExpose({
 
 .input-textarea.is-empty::before {
   content: attr(data-placeholder);
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  right: 16px;
   color: rgba(255, 255, 255, 0.3);
   pointer-events: none;
   white-space: pre-wrap;

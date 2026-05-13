@@ -20,6 +20,33 @@ export function parseTaskCreatedAt(createdAt) {
   return null
 }
 
+export function parseTaskCreatedAtForTimeout(createdAt) {
+  const timestamp = parseTaskCreatedAt(createdAt)
+  if (timestamp === null) return null
+  return Math.abs(timestamp) < 10_000_000_000 ? timestamp * 1000 : timestamp
+}
+
+export function isVideoGenerationProcessingStatus(status) {
+  const normalized = String(status || '').toLowerCase()
+  return ['pending', 'processing', 'in_progress', 'not_start', 'queued', 'running'].some(s => normalized.includes(s))
+}
+
+export function hasVideoGenerationTimedOut(task, now = Date.now(), timeoutMs) {
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return false
+  if (!isVideoGenerationProcessingStatus(task?.status)) return false
+
+  const createdAt = parseTaskCreatedAtForTimeout(
+    task?.processingStartedAt ??
+    task?.started_at ??
+    task?.created_at ??
+    task?.createdAt ??
+    task?.created
+  )
+  if (createdAt === null) return false
+
+  return now - createdAt > timeoutMs
+}
+
 export function getVideoGenerationElapsedSeconds(task, now = Date.now()) {
   const createdAt = parseTaskCreatedAt(
     task?.processingStartedAt ??

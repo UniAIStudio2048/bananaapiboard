@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   getVideoGenerationElapsedSeconds,
   getVideoGenerationProgressText,
+  hasVideoGenerationTimedOut,
   shouldShowVideoGenerationTimeoutHint
 } from './videoGenerationProgress.js'
 
@@ -44,4 +45,24 @@ test('elapsed seconds is clamped for missing or future timestamps', () => {
 
 test('elapsed seconds supports video node processing start timestamps', () => {
   assert.equal(getVideoGenerationElapsedSeconds({ processingStartedAt: 2_000 }, 108_000), 106)
+})
+
+test('video timeout check handles ISO, seconds, and millisecond created_at values', () => {
+  const now = Date.parse('2026-05-13T12:00:00.000Z')
+  const timeoutMs = 80 * 60 * 1000
+
+  assert.equal(hasVideoGenerationTimedOut({
+    status: 'PROCESSING',
+    created_at: '2026-05-13T10:39:00.000Z'
+  }, now, timeoutMs), true)
+
+  assert.equal(hasVideoGenerationTimedOut({
+    status: 'queued',
+    created_at: Math.floor((now - timeoutMs - 1000) / 1000)
+  }, now, timeoutMs), true)
+
+  assert.equal(hasVideoGenerationTimedOut({
+    status: 'processing',
+    created_at: now - timeoutMs + 1000
+  }, now, timeoutMs), false)
 })

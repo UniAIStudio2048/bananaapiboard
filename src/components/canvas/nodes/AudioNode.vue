@@ -2819,6 +2819,7 @@ function handleSpeedDropdownClickOutside(event) {
 }
 
 .prompt-textarea {
+  position: relative;
   width: 100%;
   min-height: 48px;
   max-height: min(50vh, 420px);
@@ -2843,6 +2844,10 @@ function handleSpeedDropdownClickOutside(event) {
 
 .prompt-textarea.is-empty::before {
   content: attr(data-placeholder);
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
   color: #666666;
   pointer-events: none;
   white-space: pre-wrap;

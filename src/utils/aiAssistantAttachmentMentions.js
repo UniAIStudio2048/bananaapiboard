@@ -63,7 +63,8 @@ export function bindAssistantAttachmentMention({ text = '', start = 0, queryLeng
     text,
     mentionStart: start,
     caret: start + queryLength + 1,
-    replacement: mention
+    replacement: mention,
+    appendSpace: true
   })
 
   return {

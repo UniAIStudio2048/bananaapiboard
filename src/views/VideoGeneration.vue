@@ -17,6 +17,8 @@ import {
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import {
   getVideoGenerationProgressText,
+  hasVideoGenerationTimedOut,
+  parseTaskCreatedAtForTimeout,
   shouldShowVideoGenerationTimeoutHint
 } from '@/utils/videoGenerationProgress'
 
@@ -1338,7 +1340,8 @@ function mergeTaskUpdate(taskId, update) {
 
 // 计算错峰模式的轮询间隔
 function getOffPeakPollInterval(taskCreatedAt) {
-  const elapsed = Date.now() - taskCreatedAt
+  const normalizedCreatedAt = parseTaskCreatedAtForTimeout(taskCreatedAt) || Date.now()
+  const elapsed = Date.now() - normalizedCreatedAt
   const EIGHTY_MINUTES = 80 * 60 * 1000
   
   if (elapsed < EIGHTY_MINUTES) {
@@ -1353,7 +1356,7 @@ function getOffPeakPollInterval(taskCreatedAt) {
 function startPolling(taskId, isOffPeakTask = false, taskCreatedAt = null) {
   if (!taskId || pollingTimers.has(taskId)) return
   
-  const startTime = taskCreatedAt || Date.now()
+  const startTime = parseTaskCreatedAtForTimeout(taskCreatedAt) || Date.now()
   const EIGHTY_MINUTES = 80 * 60 * 1000
   const FORTY_EIGHT_HOURS = 48 * 60 * 60 * 1000
   
@@ -1375,12 +1378,12 @@ function startPolling(taskId, isOffPeakTask = false, taskCreatedAt = null) {
     }
     
     // 检查超时
-    const createdAt = taskData.created_at || startTime
-    const elapsed = Date.now() - createdAt
     const maxTime = isOffPeakTask ? FORTY_EIGHT_HOURS : EIGHTY_MINUTES
     
     // 如果超时且还在处理中，标记为失败
-    if (elapsed > maxTime && isProcessingStatus(taskData.status)) {
+    if (hasVideoGenerationTimedOut({ ...taskData, created_at: taskData.created_at || startTime }, Date.now(), maxTime)) {
+      const createdAt = parseTaskCreatedAtForTimeout(taskData.created_at) || startTime
+      const elapsed = Date.now() - createdAt
       console.log(`[VideoGeneration] 任务超时: ${taskId}, 已运行 ${Math.floor(elapsed / 1000 / 60)} 分钟, 错峰模式: ${isOffPeakTask}`)
       mergeTaskUpdate(taskId, {
         status: 'timeout',
@@ -1457,12 +1460,10 @@ async function loadHistory(reset = true) {
         created_at: item.created_at || item.created
       }
 
-      const createdAt = video.created_at || 0
-      const elapsed = now - createdAt
       const isOffPeakTask = video.off_peak === 1 || video.off_peak === true
       const maxTime = isOffPeakTask ? FORTY_EIGHT_HOURS : EIGHTY_MINUTES
 
-      if (elapsed > maxTime && isProcessingStatus(video.status)) {
+      if (hasVideoGenerationTimedOut(video, now, maxTime)) {
         video.status = 'timeout'
         video.progress = '生成超时'
         video.fail_reason = isOffPeakTask ? '错峰模式生成超时（48小时）' : '生成超时（超过80分钟），未扣除积分'
@@ -1493,11 +1494,9 @@ async function loadHistory(reset = true) {
     // 错峰模式任务允许48小时，普通任务80分钟
     const MAX_POLLING_TASKS = 5
     const pendingTasks = videos.filter(item => {
-      const createdAt = item.created_at || 0
-      const elapsed = now - createdAt
       const isOffPeakTask = item.off_peak === 1 || item.off_peak === true
       const maxTime = isOffPeakTask ? FORTY_EIGHT_HOURS : EIGHTY_MINUTES
-      return isProcessingStatus(item.status) && elapsed <= maxTime
+      return isProcessingStatus(item.status) && !hasVideoGenerationTimedOut(item, now, maxTime)
     }).slice(0, MAX_POLLING_TASKS)
 
     console.log('[VideoGeneration] 未完成任务数:', pendingTasks.length, '个(已限制最多', MAX_POLLING_TASKS, '个)')

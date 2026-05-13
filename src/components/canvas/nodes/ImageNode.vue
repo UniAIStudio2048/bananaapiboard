@@ -40,7 +40,7 @@ import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
-import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
+import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import {
   bindMediaMention,
   getMediaMentionKey,
@@ -6375,7 +6375,14 @@ function insertMediaTag(media) {
   const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
   const editor = promptTextareaRef.value
   if (!editor) {
-    promptText.value += tag
+    const result = replacePromptEditorMentionText({
+      text: promptText.value,
+      mentionStart: promptText.value.length,
+      caret: promptText.value.length,
+      replacement: tag,
+      appendSpace: true
+    })
+    promptText.value = result.text
     updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
     return
   }
@@ -6385,17 +6392,21 @@ function insertMediaTag(media) {
   const replaceStart = activeMention?.start ?? start
   const replaceEnd = activeMention?.end ?? end
   const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
-  const before = promptText.value.slice(0, replaceStart)
-  const after = promptText.value.slice(replaceEnd)
-  promptText.value = before + tag + after
+  const result = replacePromptEditorMentionText({
+    text: promptText.value,
+    mentionStart: replaceStart,
+    caret: replaceEnd,
+    replacement: tag,
+    appendSpace: true
+  })
+  promptText.value = result.text
   promptEditorRenderKey.value += 1
   updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
 
   nextTick(() => {
     const nextEditor = promptTextareaRef.value || editor
     removePromptEditorOrphanTextNodes(nextEditor)
-    const newPos = replaceStart + tag.length
-    restorePromptEditorSelection(nextEditor, newPos, newPos)
+    restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
     nextEditor.scrollTop = scrollPosition.scrollTop
     nextEditor.scrollLeft = scrollPosition.scrollLeft
   })
@@ -6445,6 +6456,34 @@ function handlePromptInput(event) {
 }
 
 function handleMentionSelect(media) {
+  const editor = promptTextareaRef.value
+  if (editor && mentionStartPos >= 0) {
+    const resolvedMedia = resolveMediaMentionItem(media, referenceMediaList.value)
+    const mentionMedia = resolvedMedia || media
+    const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
+    const selection = getPromptEditorSelectionRange(editor)
+    const result = replacePromptEditorMentionText({
+      text: promptText.value,
+      mentionStart: mentionStartPos,
+      caret: selection.start,
+      replacement: tag,
+      appendSpace: true
+    })
+    const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+    promptText.value = result.text
+    promptEditorRenderKey.value += 1
+    updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
+    showMentionPopup.value = false
+    mentionStartPos = -1
+    nextTick(() => {
+      const nextEditor = promptTextareaRef.value || editor
+      removePromptEditorOrphanTextNodes(nextEditor)
+      restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
+      nextEditor.scrollTop = scrollPosition.scrollTop
+      nextEditor.scrollLeft = scrollPosition.scrollLeft
+    })
+    return
+  }
   showMentionPopup.value = false
   mentionStartPos = -1
   insertMediaTag(media)
@@ -9186,6 +9225,7 @@ async function handleDrop(event) {
 }
 
 .prompt-input {
+  position: relative;
   display: block;
   box-sizing: border-box;
   width: 100%;
@@ -9211,6 +9251,10 @@ async function handleDrop(event) {
 
 .prompt-input.is-empty::before {
   content: attr(data-placeholder);
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
   color: var(--canvas-text-placeholder, #4a4a4a);
   pointer-events: none;
   white-space: pre-wrap;

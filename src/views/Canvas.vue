@@ -49,7 +49,8 @@ import {
   saveWorkflowSession,
   clearWorkflowSession
 } from '@/stores/canvas/workflowAutoSave'
-import { initBackgroundTaskManager, getPendingTasks, subscribeTask, removeCompletedTask, cleanup as cleanupBackgroundTasks } from '@/stores/canvas/backgroundTaskManager'
+import { initBackgroundTaskManager, getPendingTasks, registerTask, subscribeTask, removeCompletedTask, cleanup as cleanupBackgroundTasks } from '@/stores/canvas/backgroundTaskManager'
+import { getCanvasVideoNodeTaskId, shouldFailCanvasVideoNodeWithoutTask, shouldResumeCanvasVideoNodeWithoutTask } from '@/stores/canvas/videoZombieTask'
 import { showAlert, showConfirm } from '@/composables/useCanvasDialog'
 import { needsMigration, analyzeWorkflow, migrateWorkflowData } from '@/utils/workflowMigration'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
@@ -1137,6 +1138,37 @@ function restoreBackgroundTasks() {
         setTimeout(() => removeCompletedTask(failedTask.taskId), 5000)
       }
     })
+  }
+}
+
+function failZombieCanvasVideoNodes() {
+  const pendingTaskIds = new Set(getPendingTasks().map(task => task.taskId))
+
+  for (const node of canvasStore.nodes) {
+    const taskId = getCanvasVideoNodeTaskId(node)
+    const hasBackgroundTask = taskId ? pendingTaskIds.has(taskId) : false
+
+    if (shouldResumeCanvasVideoNodeWithoutTask(node, hasBackgroundTask)) {
+      registerTask({
+        taskId,
+        type: node.data?.taskType || 'video',
+        nodeId: node.id,
+        tabId: canvasStore.activeTabId,
+        metadata: {
+          restoredFromCanvasNode: true
+        }
+      })
+      pendingTaskIds.add(taskId)
+      continue
+    }
+
+    if (shouldFailCanvasVideoNodeWithoutTask(node, hasBackgroundTask)) {
+      canvasStore.updateNodeData(node.id, {
+        status: 'error',
+        progress: null,
+        error: '视频生成超时，请重新生成'
+      })
+    }
   }
 }
 
@@ -2409,6 +2441,8 @@ onMounted(async () => {
   if (!restoredOrLoaded) {
     canvasStore.initDefaultTab()
   }
+
+  failZombieCanvasVideoNodes()
   
   document.addEventListener('keydown', handleKeyDown)
   

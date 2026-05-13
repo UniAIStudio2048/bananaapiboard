@@ -52,6 +52,20 @@ test('binds selected mention item to the current text', () => {
   assert.equal(result.cursor, 7)
 })
 
+test('binding a selected mention at the end leaves editable space after the media tag', () => {
+  const item = { key: 'k-img-a', type: 'image', label: '图片1' }
+  const result = bindAssistantAttachmentMention({
+    text: '@图',
+    start: 0,
+    queryLength: 1,
+    item,
+    bindings: {}
+  })
+
+  assert.equal(result.text, '@图片1 ')
+  assert.equal(result.cursor, 5)
+})
+
 test('renames bound mentions after reorder while preserving keys', () => {
   const attachments = [
     { key: 'k-img-b', type: 'image', url: 'b.png' },

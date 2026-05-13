@@ -34,3 +34,23 @@ test('assistant attachment thumbnail clicks replace an active @ query instead of
     'assistant attachment insertion should replace the active @ query range'
   )
 })
+
+test('assistant attachment drags reset local and canvas drag state on every drag end path', () => {
+  assert.match(
+    source,
+    /function\s+resetAttachmentDragState\(/,
+    'AIAssistantPanel should centralize attachment drag cleanup'
+  )
+
+  assert.match(
+    source,
+    /@dragend="resetAttachmentDragState"/,
+    'attachment dragend should use the shared cleanup handler'
+  )
+
+  assert.match(
+    source,
+    /window\.dispatchEvent\(new CustomEvent\('canvas-drag-end'\)\)/,
+    'attachment drag cleanup should release global canvas drag listeners'
+  )
+})

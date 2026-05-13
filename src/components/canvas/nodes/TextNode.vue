@@ -18,7 +18,7 @@ import { getAssets } from '@/api/canvas/assets'
 import { getApiUrl, getTenantHeaders, getAvailableLLMModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
-import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
+import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { buildTextNodeLlmMessages } from '@/utils/textNodeLlmMessages'
@@ -1039,7 +1039,14 @@ function insertMediaTag(media) {
   const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
   const editor = llmInputRef.value
   if (!editor) {
-    llmInputText.value += tag
+    const result = replacePromptEditorMentionText({
+      text: llmInputText.value,
+      mentionStart: llmInputText.value.length,
+      caret: llmInputText.value.length,
+      replacement: tag,
+      appendSpace: true
+    })
+    llmInputText.value = result.text
     updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
     return
   }
@@ -1049,17 +1056,21 @@ function insertMediaTag(media) {
   const replaceStart = activeMention?.start ?? start
   const replaceEnd = activeMention?.end ?? end
   const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
-  const before = llmInputText.value.slice(0, replaceStart)
-  const after = llmInputText.value.slice(replaceEnd)
-  llmInputText.value = before + tag + after
+  const result = replacePromptEditorMentionText({
+    text: llmInputText.value,
+    mentionStart: replaceStart,
+    caret: replaceEnd,
+    replacement: tag,
+    appendSpace: true
+  })
+  llmInputText.value = result.text
   llmInputRenderKey.value += 1
   updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
 
   nextTick(() => {
     const nextEditor = llmInputRef.value || editor
     cleanOrphanedEditorTextNodes(nextEditor)
-    const newPos = replaceStart + tag.length
-    restorePromptEditorSelection(nextEditor, newPos, newPos)
+    restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
     nextEditor.scrollTop = scrollPosition.scrollTop
     nextEditor.scrollLeft = scrollPosition.scrollLeft
   })
@@ -1070,6 +1081,35 @@ function cleanOrphanedEditorTextNodes(editor) {
 }
 
 function handleMediaMentionSelect(media) {
+  const editor = llmInputRef.value
+  if (editor && mediaMentionStartPos >= 0) {
+    const resolvedMedia = resolveMediaMentionItem(media, referenceMediaList.value)
+    const mentionMedia = resolvedMedia || media
+    const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
+    const selection = getPromptEditorSelectionRange(editor)
+    const result = replacePromptEditorMentionText({
+      text: llmInputText.value,
+      mentionStart: mediaMentionStartPos,
+      caret: mediaMentionEndPos >= 0 ? mediaMentionEndPos : selection.start,
+      replacement: tag,
+      appendSpace: true
+    })
+    const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+    llmInputText.value = result.text
+    llmInputRenderKey.value += 1
+    updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
+    showMediaMentionPopup.value = false
+    mediaMentionEndPos = -1
+    mediaMentionStartPos = -1
+    nextTick(() => {
+      const nextEditor = llmInputRef.value || editor
+      cleanOrphanedEditorTextNodes(nextEditor)
+      restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
+      nextEditor.scrollTop = scrollPosition.scrollTop
+      nextEditor.scrollLeft = scrollPosition.scrollLeft
+    })
+    return
+  }
   showMediaMentionPopup.value = false
   mediaMentionEndPos = -1
   mediaMentionStartPos = -1
@@ -3561,6 +3601,7 @@ onUnmounted(() => {
 
 /* 编辑器 - 使用 contenteditable */
 .editor-content {
+  position: relative;
   width: 100%;
   height: 100%;
   flex: 1;
@@ -3582,6 +3623,10 @@ onUnmounted(() => {
 
 .editor-content:empty:before {
   content: attr(placeholder);
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  right: 20px;
   color: #666;
   pointer-events: none;
 }
@@ -4365,6 +4410,7 @@ onUnmounted(() => {
 }
 
 .llm-input {
+  position: relative;
   width: 100%;
   background: transparent;
   border: none;
@@ -4389,6 +4435,10 @@ onUnmounted(() => {
 
 .llm-input.is-empty::before {
   content: attr(data-placeholder);
+  position: absolute;
+  top: 4px;
+  left: 0;
+  right: 0;
   color: var(--canvas-text-placeholder, #4a4a4a);
   pointer-events: none;
   white-space: pre-wrap;
