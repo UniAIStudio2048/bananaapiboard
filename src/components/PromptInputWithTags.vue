@@ -71,6 +71,7 @@ const parsedContent = computed(() => {
 function handleInput(e) {
   // 提取纯文本，排除删除按钮的 ×
   const contentDiv = e.target
+  
   let text = ''
   
   // 遍历所有子节点
@@ -91,6 +92,9 @@ function handleInput(e) {
       }
     }
   })
+  
+  // 过滤掉零宽字符，避免占位符字符被保存为实际内容
+  text = text.replace(/\u200B/g, '')
   
   emit('update:modelValue', text)
   emit('input', e)
@@ -174,6 +178,17 @@ watch(() => props.modelValue, (newValue) => {
   }
 })
 
+// 确保 contentEditable 元素中始终有一个可编辑的文本节点，防止输入法无法输入
+function ensureEditableNode() {
+  if (!contentEditableRef.value) return
+  
+  const el = contentEditableRef.value
+  // 如果元素完全为空，插入一个不可见的文本节点来保持可编辑性
+  if (el.innerHTML === '' || el.innerHTML === '<br>') {
+    el.innerHTML = '\u200B'
+  }
+}
+
 function getContentEditableText() {
   if (!contentEditableRef.value) return ''
   let text = ''
@@ -189,7 +204,8 @@ function getContentEditableText() {
       }
     }
   })
-  return text
+  // 过滤掉零宽字符
+  return text.replace(/\u200B/g, '')
 }
 
 function updateContentEditable() {
@@ -201,6 +217,7 @@ function updateContentEditable() {
   const cursorOffset = range ? range.startOffset : 0
   
   // 清空并重新构建内容
+  // 注意：不要完全清空，保留一个 <br> 以保持 contenteditable 的可编辑性
   contentEditableRef.value.innerHTML = ''
   
   parsedContent.value.forEach(part => {
@@ -248,6 +265,11 @@ function updateContentEditable() {
       contentEditableRef.value.appendChild(tagSpan)
     }
   })
+  
+  // 如果内容为空，保留一个零宽字符以保持 contenteditable 的可编辑性，确保输入法能正常输入
+  if (contentEditableRef.value.innerHTML === '') {
+    contentEditableRef.value.innerHTML = '\u200B'
+  }
 }
 
 // 获取纯文本内容
@@ -368,12 +390,14 @@ defineExpose({
       contenteditable="true"
       class="prompt-input"
       :class="{ 'is-focused': isFocused }"
-      :data-placeholder="placeholder"
       @input="handleInput"
       @keydown="handleKeyDown"
       @focus="isFocused = true"
       @blur="isFocused = false"
     ></div>
+    <div class="prompt-placeholder" v-if="!props.modelValue && !isFocused">
+      {{ placeholder }}
+    </div>
   </div>
 </template>
 
@@ -417,13 +441,19 @@ defineExpose({
   box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
 }
 
-.prompt-input:empty:before {
-  content: attr(data-placeholder);
+.prompt-placeholder {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
   color: #94a3b8;
+  font-size: 14px;
+  line-height: 1.6;
   pointer-events: none;
+  user-select: none;
 }
 
-.dark .prompt-input:empty:before {
+.dark .prompt-placeholder {
   color: #64748b;
 }
 

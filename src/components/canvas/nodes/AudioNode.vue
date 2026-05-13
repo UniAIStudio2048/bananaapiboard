@@ -2842,7 +2842,7 @@ function handleSpeedDropdownClickOutside(event) {
   transition: height 0.15s ease;
 }
 
-.prompt-textarea.is-empty::before {
+.prompt-textarea.is-empty:empty::before {
   content: attr(data-placeholder);
   position: absolute;
   top: 4px;
@@ -3525,7 +3525,7 @@ function handleSpeedDropdownClickOutside(event) {
   color: #1c1917;
 }
 
-:root.canvas-theme-light .audio-node .prompt-textarea.is-empty::before {
+:root.canvas-theme-light .audio-node .prompt-textarea.is-empty:empty::before {
   color: #a8a29e;
 }
 

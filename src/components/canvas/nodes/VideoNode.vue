@@ -461,10 +461,31 @@ function handlePromptInput(event) {
   const editor = event.target
   const selectionRange = getPromptEditorSelectionRange(editor)
   const text = serializePromptEditorContent(editor)
+  const wasNonEmpty = !!promptText.value
   if (text !== promptText.value) {
     promptText.value = text
   }
   autoResizeTextarea()
+
+  // 当 contenteditable 内容从非空被清空时，浏览器可能已经移除了 Vue 管理的 <span>
+  // 子节点（或留下 <br>），导致 Vue 的 vnode 引用失效，下一次 patch 时会抛出
+  // "Cannot set properties of null (setting 'vnode')"，并打断 vue-flow 整棵渲染树，
+  // 表现为节点无法拖动、连线错位。这里通过 bump renderKey 强制 Vue 重新挂载 prompt-input，
+  // 让 vnode 树与真实 DOM 重新对齐。
+  if (wasNonEmpty && !text) {
+    promptEditorRenderKey.value += 1
+    showMentionPopup.value = false
+    nextTick(() => {
+      const nextEditor = promptTextareaRef.value
+      if (nextEditor) {
+        nextEditor.focus()
+        restorePromptEditorSelection(nextEditor, 0, 0)
+        updatePromptOverlayCaret()
+      }
+    })
+    return
+  }
+
   nextTick(() => {
     removePromptEditorOrphanTextNodes(editor)
     restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
@@ -8843,7 +8864,7 @@ function handleToolbarPreview() {
   scrollbar-color: rgba(150, 150, 150, 0.6) rgba(60, 60, 60, 0.3);
 }
 
-.prompt-input.is-empty::before {
+.prompt-input.is-empty:empty::before {
   content: attr(data-placeholder);
   position: absolute;
   top: 8px;
@@ -10050,7 +10071,7 @@ function handleToolbarPreview() {
   color: #1c1917;
 }
 
-:root.canvas-theme-light .video-node .prompt-input.is-empty::before {
+:root.canvas-theme-light .video-node .prompt-input.is-empty:empty::before {
   color: #a8a29e;
 }
 

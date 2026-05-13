@@ -229,10 +229,31 @@ function handleLLMInput(event) {
   const editor = event.target
   const selectionRange = getPromptEditorSelectionRange(editor)
   const text = serializePromptEditorContent(editor)
+  const wasNonEmpty = !!llmInputText.value
   if (text !== llmInputText.value) {
     llmInputText.value = text
   }
   autoResizeLLMInput()
+
+  // 当 contenteditable 内容从非空被清空时，浏览器可能已经移除了 Vue 管理的 <span>
+  // 子节点（或留下 <br>），导致 Vue 的 vnode 引用失效，下一次 patch 时会抛出
+  // "Cannot set properties of null (setting 'vnode')"，并打断 vue-flow 整棵渲染树，
+  // 表现为节点无法拖动、连线错位。这里通过 bump renderKey 强制 Vue 重新挂载 llm-input，
+  // 让 vnode 树与真实 DOM 重新对齐。
+  if (wasNonEmpty && !text) {
+    llmInputRenderKey.value += 1
+    showMediaMentionPopup.value = false
+    showMentionList.value = false
+    nextTick(() => {
+      const nextEditor = llmInputRef.value
+      if (nextEditor) {
+        nextEditor.focus()
+        restorePromptEditorSelection(nextEditor, 0, 0)
+      }
+    })
+    return
+  }
+
   nextTick(() => {
     cleanOrphanedEditorTextNodes(editor)
     restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
@@ -4438,7 +4459,7 @@ onUnmounted(() => {
   -webkit-user-select: text;
 }
 
-.llm-input.is-empty::before {
+.llm-input.is-empty:empty::before {
   content: attr(data-placeholder);
   position: absolute;
   top: 4px;
@@ -4495,7 +4516,7 @@ onUnmounted(() => {
   background: rgba(200, 200, 200, 0.9);
 }
 
-.llm-input.is-empty::before {
+.llm-input.is-empty:empty::before {
   color: var(--canvas-text-placeholder, #4a4a4a);
 }
 
@@ -5137,7 +5158,7 @@ onUnmounted(() => {
   color: #1c1917;
 }
 
-:root.canvas-theme-light .text-node .llm-input.is-empty::before {
+:root.canvas-theme-light .text-node .llm-input.is-empty:empty::before {
   color: #a8a29e;
 }
 
