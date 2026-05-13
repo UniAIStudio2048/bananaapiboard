@@ -861,11 +861,29 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
     }
   } catch (error) {
     console.error('[Seedance] 后台创建角色失败:', error)
-    const msg = error.message?.includes('超时') 
-      ? t('canvas.characterTimeout') 
-      : t('canvas.characterCreateFailed', { error: error.message || t('canvas.unknownError') })
-    showToast(msg, error.message?.includes('超时') ? 'info' : 'error')
+    const msg = getSeedanceCreateErrorMessage(error)
+    showToast(msg, error.category === 'timeout' ? 'info' : 'error')
   }
+}
+
+function getSeedanceCreateErrorMessage(error) {
+  if (error?.category === 'timeout') {
+    return '角色创建请求超时：图片上传已完成，但渠道处理超时，请稍后重试或切换渠道。'
+  }
+  if (error?.category === 'network') {
+    return '角色创建网络连接失败：后端无法连接当前渠道，请检查渠道网络或切换渠道。'
+  }
+  if (error?.category === 'non_json_response') {
+    return '角色创建返回了非 JSON 响应：可能是网关 502/504、代理异常或渠道页面错误。'
+  }
+  if (error?.category === 'business_error') {
+    return `角色创建被渠道拒绝：${error.message || '上游返回业务错误'}`
+  }
+  if (error?.category === 'auth_error') {
+    return '角色创建认证失败：请检查当前渠道 API Key 或密钥配置。'
+  }
+  if (error?.message?.includes('超时')) return t('canvas.characterTimeout')
+  return t('canvas.characterCreateFailed', { error: error?.message || t('canvas.unknownError') })
 }
 
 // 简单的Toast提示

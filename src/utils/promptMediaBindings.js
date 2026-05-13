@@ -10,7 +10,13 @@ const LABEL_TYPE_MAP = {
   音频: 'audio'
 }
 
-const MENTION_RE = /【?@(视频|图片|音频)(\d*)】?/g
+const MENTION_RE = /【?@(视频|图片|音频)(\d+)】?/g
+
+export function normalizeMediaMentionLabel(label) {
+  return String(label || '')
+    .replace(/^[【\u3010]?@/, '')
+    .replace(/[】\u3011]$/, '')
+}
 
 export function getMediaMentionKey(item = {}) {
   const url = String(item.url || '')
@@ -42,9 +48,33 @@ export function bindMediaMention(bindings = {}, media) {
     ...(bindings || {}),
     [key]: {
       type: media.type,
-      label: media.label
+      label: normalizeMediaMentionLabel(media.label)
     }
   }
+}
+
+export function resolveMediaMentionItem(media, mediaItems = []) {
+  if (!media) return null
+  if (media.url && media.key) return media
+
+  const items = Array.isArray(mediaItems) ? mediaItems : []
+  const byKey = media.key ? items.find(item => item.key === media.key) : null
+  if (byKey) return byKey
+
+  const type = media.type
+  const index = Number(media.index)
+  if (type && Number.isFinite(index)) {
+    const byTypeIndex = items.find(item => item.type === type && item.index === index)
+    if (byTypeIndex) return byTypeIndex
+  }
+
+  const label = normalizeMediaMentionLabel(media.label)
+  if (type && label) {
+    const byLabel = items.find(item => item.type === type && normalizeMediaMentionLabel(item.label) === label)
+    if (byLabel) return byLabel
+  }
+
+  return media.url ? media : null
 }
 
 export function syncPromptMediaMentions(text, bindings = {}, mediaItems = []) {
@@ -58,9 +88,9 @@ export function syncPromptMediaMentions(text, bindings = {}, mediaItems = []) {
 
   const nextText = text.replace(MENTION_RE, (raw, zhType, rawIndex) => {
     const type = LABEL_TYPE_MAP[zhType]
-    const oldLabel = `${zhType}${rawIndex || '1'}`
+    const oldLabel = `${zhType}${rawIndex}`
     const boundEntry = Object.entries(bindings || {}).find(([, value]) => {
-      return value?.type === type && value?.label === oldLabel
+      return value?.type === type && normalizeMediaMentionLabel(value?.label) === oldLabel
     })
     const media = boundEntry
       ? mediaByKey.get(boundEntry[0])
@@ -71,9 +101,9 @@ export function syncPromptMediaMentions(text, bindings = {}, mediaItems = []) {
     const key = media.key || getMediaMentionKey(media)
     nextBindings[key] = {
       type: media.type,
-      label: media.label
+      label: normalizeMediaMentionLabel(media.label)
     }
-    return `@${media.label}`
+    return `@${normalizeMediaMentionLabel(media.label)}`
   })
 
   return { text: nextText, bindings: nextBindings }
@@ -81,8 +111,8 @@ export function syncPromptMediaMentions(text, bindings = {}, mediaItems = []) {
 
 export function escapePromptMediaMentions(text) {
   if (!text) return text
-  return text.replace(/【?@(视频|图片|音频)(\d*)】?/g, (match, type, num) => {
-    const label = `@${type}${num || '1'}`
+  return text.replace(MENTION_RE, (match, type, num) => {
+    const label = `@${type}${num}`
     return ` ${label} `
   }).replace(/ {2,}/g, ' ').trim()
 }

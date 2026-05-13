@@ -313,6 +313,21 @@ export async function loadImageWithCache(url, options = {}) {
   }
 }
 
+function shouldPreloadImageUrl(url) {
+  if (!url) return false
+  if (url.startsWith('blob:') || url.startsWith('data:')) return false
+
+  // Browser <img> can render these CDNs directly, but fetch() may be blocked by CORS.
+  // Preloading them through ImageCache creates noisy console warnings and no useful cache.
+  if (url.includes('filescos.nananobanana.cn')) return false
+  if (url.includes('files.nananobanana.cn') ||
+      url.includes('qiniucdn') || url.includes('clouddn') ||
+      url.includes('qnssl') || url.includes('qbox.me') ||
+      url.includes('myqcloud.com')) return false
+
+  return true
+}
+
 /**
  * 预加载图片列表
  * @param {Array<string>} urls - 图片 URL 列表
@@ -329,6 +344,7 @@ export async function preloadImages(urls, concurrency = 3) {
     
     const url = queue.shift()
     if (!url || loading.has(url)) return
+    if (!shouldPreloadImageUrl(url)) return await loadNext()
     
     loading.add(url)
     
@@ -523,4 +539,3 @@ export default {
   getPreloadCount,
   isProductionEnv
 }
-

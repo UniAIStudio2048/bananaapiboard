@@ -6,8 +6,28 @@
 const DEFAULT_OPTIONS = {
   maxLongSide: 1280,
   quality: 0.85,
+  minQuality: 0.3,
   maxSizeMB: 10,
-  mimeType: 'image/jpeg'
+  mimeType: 'image/jpeg',
+  preservePng: true,
+  maxPixels: 0
+}
+
+export function getImageFileDimensions(file) {
+  if (!file?.type?.startsWith('image/')) return Promise.resolve(null)
+  return new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height })
+    }
+    img.onerror = () => {
+      URL.revokeObjectURL(url)
+      resolve(null)
+    }
+    img.src = url
+  })
 }
 
 /**
@@ -22,7 +42,6 @@ export async function compressImage(file, options = {}) {
 
   const opts = { ...DEFAULT_OPTIONS, ...options }
   const maxBytes = opts.maxSizeMB * 1024 * 1024
-  if (file.size < maxBytes) return file
 
   return new Promise((resolve) => {
     const img = new Image()
@@ -32,6 +51,14 @@ export async function compressImage(file, options = {}) {
       URL.revokeObjectURL(url)
 
       let { width, height } = img
+      const pixelCount = width * height
+      if (opts.maxPixels && pixelCount > opts.maxPixels) {
+        const ratio = Math.sqrt(opts.maxPixels / pixelCount)
+        width = Math.max(1, Math.floor(width * ratio))
+        height = Math.max(1, Math.floor(height * ratio))
+        while (width * height > opts.maxPixels) width -= 1
+      }
+
       const longSide = Math.max(width, height)
       if (longSide > opts.maxLongSide) {
         const ratio = opts.maxLongSide / longSide
@@ -39,22 +66,27 @@ export async function compressImage(file, options = {}) {
         height = Math.round(height * ratio)
       }
 
+      if (file.size < maxBytes && (!opts.maxPixels || pixelCount <= opts.maxPixels)) {
+        resolve(file)
+        return
+      }
+
       const canvas = document.createElement('canvas')
       canvas.width = width
       canvas.height = height
       canvas.getContext('2d').drawImage(img, 0, 0, width, height)
 
-      const outputType = file.type === 'image/png' ? 'image/png' : opts.mimeType
+      const outputType = opts.preservePng && file.type === 'image/png' ? 'image/png' : opts.mimeType
 
       const tryCompress = (q) => new Promise((res) => {
         canvas.toBlob((blob) => res(blob), outputType, outputType === 'image/png' ? undefined : q)
       })
 
       ;(async () => {
-        let quality = 0.92
+        let quality = opts.quality
         let blob = await tryCompress(quality)
 
-        while (blob && blob.size > maxBytes && quality > 0.3) {
+        while (blob && blob.size > maxBytes && quality > opts.minQuality) {
           quality -= 0.08
           blob = await tryCompress(quality)
         }

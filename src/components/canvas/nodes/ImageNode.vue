@@ -40,10 +40,12 @@ import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
-import { getMentionPopupPosition, getTextareaCaretViewportRect } from '@/utils/promptMention'
+import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import {
   bindMediaMention,
   getMediaMentionKey,
+  normalizeMediaMentionLabel,
+  resolveMediaMentionItem,
   syncPromptMediaMentions
 } from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition, getElementSideCenterFlowPosition } from '@/utils/canvasConnectionPosition'
@@ -51,6 +53,7 @@ import { isPanoramaVrSupportedRatio } from '@/utils/canvasPanoramaExport'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
+import PromptMediaTag from '../PromptMediaTag.vue'
 import PanoramaPreviewModal from '../PanoramaPreviewModal.vue'
 import ModelIcon from '../../common/ModelIcon.vue'
 import { smartDownload } from '@/api/client'
@@ -77,7 +80,12 @@ const isCanvasViewportMoving = inject('isCanvasViewportMoving', ref(false))
 const { onHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals, findNode, getViewport, getSelectedNodes } = useVueFlow()
+const { updateNodeInternals, findNode, setViewport, getViewport, getSelectedNodes } = useVueFlow()
+
+// 配置面板放大相关（与 VideoNode 保持一致的交互逻辑）
+const configPanelRef = ref(null)
+const isConfigPanelExpanded = ref(false)
+const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
 
 // 文件上传引用
 const fileInputRef = ref(null)
@@ -112,6 +120,7 @@ function getErrorHint(msg) {
 }
 
 const promptText = ref(props.data.prompt || '')
+const promptEditorRenderKey = ref(0)
 const promptTextareaRef = ref(null) // 提示词输入框引用
 const hasManualPromptTextareaSize = ref(false)
 const promptMentionBindings = ref(props.data.promptMentionBindings || {})
@@ -646,6 +655,50 @@ function handleCanvasDragEnd() {
   isCanvasDragging.value = false
 }
 
+// 配置面板放大：把节点居中到视口中心，方便放大后查看
+function centerNodeInViewport() {
+  const nodeEl = nodeRef.value
+  const paneEl = nodeEl?.closest?.('.vue-flow')
+  if (!nodeEl || !paneEl || !getViewport || !setViewport) return
+
+  const nodeRect = nodeEl.getBoundingClientRect()
+  const paneRect = paneEl.getBoundingClientRect()
+  const viewport = getViewport()
+  const targetZoom = EXPANDED_CONFIG_PANEL_NODE_ZOOM
+  const nodeCenterFlowX = (nodeRect.left - paneRect.left + nodeRect.width / 2 - viewport.x) / viewport.zoom
+  const nodeCenterFlowY = (nodeRect.top - paneRect.top + nodeRect.height / 2 - viewport.y) / viewport.zoom
+
+  setViewport({
+    x: paneRect.width / 2 - nodeCenterFlowX * targetZoom,
+    y: paneRect.height / 2 - nodeCenterFlowY * targetZoom,
+    zoom: targetZoom
+  }, { duration: 420 })
+}
+
+function toggleConfigPanelExpanded() {
+  const nextExpanded = !isConfigPanelExpanded.value
+  if (nextExpanded) {
+    centerNodeInViewport()
+  }
+  isConfigPanelExpanded.value = nextExpanded
+  if (nextExpanded) {
+    nextTick(() => {
+      promptTextareaRef.value?.focus()
+    })
+  }
+}
+
+function collapseConfigPanel() {
+  isConfigPanelExpanded.value = false
+}
+
+function handleConfigPanelOutsideMouseDown(event) {
+  if (!isConfigPanelExpanded.value) return
+  if (configPanelRef.value?.contains(event.target)) return
+  if (event.target.closest('.prompt-mention-popup')) return
+  collapseConfigPanel()
+}
+
 // 🔧 后台任务事件处理 - 统一使用 backgroundTaskManager 轮询，避免双重轮询导致页面卡顿
 function handleBackgroundTaskComplete(event) {
   const { taskId, task } = event.detail
@@ -861,6 +914,7 @@ function checkAndRestoreBackgroundTasks() {
 onMounted(() => {
   document.addEventListener('click', handleModelDropdownClickOutside)
   document.addEventListener('click', handleClickOutside)
+  document.addEventListener('mousedown', handleConfigPanelOutsideMouseDown)
   // 加载图像预设
   loadImagePresets()
   // 📊 模型成功率統計已由 modelStatsStore 集中管理（10 分鐘輪詢）
@@ -886,6 +940,7 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', handleModelDropdownClickOutside)
   document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('mousedown', handleConfigPanelOutsideMouseDown)
   // 🚀 性能优化：移除画布拖拽事件监听
   window.removeEventListener('canvas-drag-start', handleCanvasDragStart)
   window.removeEventListener('canvas-drag-end', handleCanvasDragEnd)
@@ -1350,7 +1405,10 @@ const showConfigPanel = computed(() => {
 })
 
 watch(showConfigPanel, (val) => {
-  if (!val) showMentionPopup.value = false
+  if (!val) {
+    showMentionPopup.value = false
+    isConfigPanelExpanded.value = false
+  }
 })
 
 
@@ -3777,31 +3835,83 @@ function syncPromptMentionsWithMedia() {
 const highlightedPromptSegments = computed(() => {
   if (!promptText.value) return []
   const segments = []
-  const regex = /【?@图片\d*】?/g
+  const regex = /【?@图片\d+】?/g
   let lastIndex = 0
   let match
   while ((match = regex.exec(promptText.value)) !== null) {
     if (match.index > lastIndex) {
-      segments.push({ text: promptText.value.slice(lastIndex, match.index), isTag: false })
+      segments.push({
+        text: promptText.value.slice(lastIndex, match.index),
+        isTag: false,
+        start: lastIndex,
+        end: match.index
+      })
     }
-    segments.push({ text: match[0], isTag: true, media: getMediaForPromptTag(match[0]) })
+    segments.push({
+      text: match[0],
+      isTag: true,
+      media: getMediaForPromptTag(match[0]),
+      start: match.index,
+      end: regex.lastIndex
+    })
     lastIndex = regex.lastIndex
   }
   if (lastIndex < promptText.value.length) {
-    segments.push({ text: promptText.value.slice(lastIndex), isTag: false })
+    segments.push({
+      text: promptText.value.slice(lastIndex),
+      isTag: false,
+      start: lastIndex,
+      end: promptText.value.length
+    })
   }
   return segments
 })
-
 function getMediaForPromptTag(text) {
-  const match = String(text || '').match(/^【?@图片(\d*)】?$/)
+  const match = String(text || '').match(/^【?@图片(\d+)】?$/)
   if (!match) return null
-  const index = Number(match[1] || 1)
+  const index = Number(match[1])
   return referenceMediaList.value.find(item => item.index === index) || null
 }
 
 function handlePromptTagHover(media, event) {
   if (media?.url) onHoverStart(media.url, event)
+}
+
+// 点击 chip 时，把 textarea 的光标精准定位到该 chip 字符串的开始或结束位置
+// 修复 chip 视觉宽度与 textarea 字符宽度不一致导致光标无法定位的问题
+function handlePromptTagMousedown(seg, event) {
+  event.preventDefault()
+  event.stopPropagation()
+  const editor = promptTextareaRef.value
+  if (!editor) return
+  const tagSegments = highlightedPromptSegments.value.filter(item => item.isTag)
+  const segmentIndex = tagSegments.findIndex(item =>
+    item === seg ||
+    (item.start === seg.start && item.end === seg.end && item.text === seg.text)
+  )
+  const targetIndex = getPromptMediaTagCaretIndex({
+    segments: tagSegments,
+    segmentIndex,
+    clickX: event.clientX,
+    tagRects: Array.from(editor.querySelectorAll('[data-prompt-mention]')).map(el => el.getBoundingClientRect())
+  })
+  editor.focus()
+  nextTick(() => {
+    if (editor && Number.isFinite(targetIndex)) {
+      restorePromptEditorSelection(editor, targetIndex, targetIndex)
+    }
+  })
+}
+
+function getPromptEditorCaretViewportRect(editor = promptTextareaRef.value) {
+  if (!editor || typeof window === 'undefined') return null
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  if (!editor.contains(range.startContainer)) return null
+  const rect = range.getBoundingClientRect()
+  if (rect && Number.isFinite(rect.left) && (rect.width || rect.height)) return rect
+  return editor.getBoundingClientRect()
 }
 
 // 用户积分
@@ -5656,6 +5766,24 @@ function handleKeyDown(event) {
     event.preventDefault()
     handleGenerate()
   }
+
+  if (event.key === 'Enter' && event.shiftKey) {
+    event.preventDefault()
+    insertPromptEditorPlainText('\n')
+  }
+}
+
+function insertPromptEditorPlainText(text) {
+  const editor = promptTextareaRef.value
+  if (!editor) return
+
+  const { start, end } = getPromptEditorSelectionRange(editor)
+  promptText.value = promptText.value.slice(0, start) + text + promptText.value.slice(end)
+  nextTick(() => {
+    const nextPos = start + text.length
+    restorePromptEditorSelection(editor, nextPos, nextPos)
+    autoResizeTextarea()
+  })
 }
 
 // 自动调整文本框高度
@@ -5668,8 +5796,8 @@ function autoResizeTextarea() {
   // 重置高度以获取正确的 scrollHeight
   textarea.style.height = 'auto'
   
-  // 计算最小高度 (2行约48px) 和最大高度 (8行约200px)
-  const minHeight = 48
+  // 计算最小高度 (4行约96px) 和最大高度 (8行约200px)
+  const minHeight = 96
   const maxHeight = 200
   const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
   
@@ -5705,7 +5833,7 @@ function startTextareaAutoScroll(event) {
     hasManualPromptTextareaSize.value = true
     return
   }
-  
+
   isTextareaDragging.value = true
   dragStartY.value = event.clientY
   
@@ -5771,7 +5899,7 @@ function stopTextareaAutoScroll() {
     clearInterval(autoScrollTimer.value)
     autoScrollTimer.value = null
   }
-  
+
   document.removeEventListener('mousemove', handleTextareaDragMove)
   document.removeEventListener('mouseup', stopTextareaAutoScroll)
 }
@@ -6242,34 +6370,51 @@ function removeReferenceImage(index) {
  * 点击参考图片缩略图，在提示词光标处插入 @图片N 标记
  */
 function insertMediaTag(media) {
-  const tag = `@${media.label}`
-  const textarea = promptTextareaRef.value
-  if (!textarea) {
+  const resolvedMedia = resolveMediaMentionItem(media, referenceMediaList.value)
+  const mentionMedia = resolvedMedia || media
+  const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
+  const editor = promptTextareaRef.value
+  if (!editor) {
     promptText.value += tag
-    updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
+    updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
     return
   }
 
-  const start = textarea.selectionStart ?? promptText.value.length
-  const end = textarea.selectionEnd ?? start
-  const before = promptText.value.slice(0, start)
-  const after = promptText.value.slice(end)
+  const { start, end } = getPromptEditorSelectionRange(editor)
+  const activeMention = start === end ? getActivePromptMentionRange(promptText.value, start) : null
+  const replaceStart = activeMention?.start ?? start
+  const replaceEnd = activeMention?.end ?? end
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+  const before = promptText.value.slice(0, replaceStart)
+  const after = promptText.value.slice(replaceEnd)
   promptText.value = before + tag + after
-  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
+  promptEditorRenderKey.value += 1
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
 
   nextTick(() => {
-    textarea.focus()
-    const newPos = start + tag.length
-    textarea.setSelectionRange(newPos, newPos)
+    const nextEditor = promptTextareaRef.value || editor
+    removePromptEditorOrphanTextNodes(nextEditor)
+    const newPos = replaceStart + tag.length
+    restorePromptEditorSelection(nextEditor, newPos, newPos)
+    nextEditor.scrollTop = scrollPosition.scrollTop
+    nextEditor.scrollLeft = scrollPosition.scrollLeft
   })
 }
 
 function handlePromptInput(event) {
-  autoResizeTextarea(event)
+  const editor = event.target
+  const selectionRange = getPromptEditorSelectionRange(editor)
+  const text = serializePromptEditorContent(editor)
+  if (text !== promptText.value) {
+    promptText.value = text
+  }
+  autoResizeTextarea()
+  nextTick(() => {
+    removePromptEditorOrphanTextNodes(editor)
+    restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+  })
 
-  const el = event.target
-  const cursorIndex = el.selectionStart
-  const text = el.value
+  const cursorIndex = selectionRange.start
   const textBeforeCursor = text.slice(0, cursorIndex)
 
   const atIndex = textBeforeCursor.lastIndexOf('@')
@@ -6283,18 +6428,14 @@ function handlePromptInput(event) {
       return
     }
 
-    // 只在用户刚输入 @ 或弹窗已为同一个 @ 打开时才显示
-    const justTypedAt = event.data === '@'
-    const popupStillActive = showMentionPopup.value && mentionStartPos === atIndex
-
-    if ((justTypedAt || popupStillActive) && query.length < 4 && !/\s/.test(query)) {
+    if (query.length < 4 && !/\s/.test(query)) {
       showMentionPopup.value = true
       mentionStartPos = atIndex
       mentionActiveIndex.value = 0
 
       mentionPosition.value = getMentionPopupPosition({
-        caretRect: getTextareaCaretViewportRect(el, cursorIndex),
-        fallbackRect: el.getBoundingClientRect()
+        caretRect: getPromptEditorCaretViewportRect(editor),
+        fallbackRect: editor.getBoundingClientRect()
       })
       return
     }
@@ -6304,23 +6445,34 @@ function handlePromptInput(event) {
 }
 
 function handleMentionSelect(media) {
-  const textarea = promptTextareaRef.value
-  if (!textarea) return
+  const editor = promptTextareaRef.value
+  if (!editor) return
 
-  const tag = `@${media.label}`
-  const cursorPos = textarea.selectionStart
-  const before = promptText.value.slice(0, mentionStartPos)
-  const after = promptText.value.slice(cursorPos)
-  promptText.value = before + tag + ' ' + after
-  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
+  const resolvedMedia = resolveMediaMentionItem(media, referenceMediaList.value)
+  const mentionMedia = resolvedMedia || media
+  const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
+  const { start: cursorPos } = getPromptEditorSelectionRange(editor)
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+  const result = replacePromptEditorMentionText({
+    text: promptText.value,
+    mentionStart: mentionStartPos,
+    caret: cursorPos,
+    replacement: tag,
+    appendSpace: true
+  })
+  promptText.value = result.text
+  promptEditorRenderKey.value += 1
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
 
   showMentionPopup.value = false
 
   nextTick(() => {
-    textarea.focus()
-    const newPos = mentionStartPos + tag.length + 1
-    textarea.setSelectionRange(newPos, newPos)
-    autoResizeTextarea({ target: textarea })
+    const nextEditor = promptTextareaRef.value || editor
+    removePromptEditorOrphanTextNodes(nextEditor)
+    autoResizeTextarea()
+    restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
+    nextEditor.scrollTop = scrollPosition.scrollTop
+    nextEditor.scrollLeft = scrollPosition.scrollLeft
   })
 }
 
@@ -7159,7 +7311,37 @@ async function handleDrop(event) {
     </div>
     
     <!-- 底部配置面板（仅输出节点选中时显示，拖动和缩放时隐藏） -->
-    <div v-if="showConfigPanel" class="config-panel" :class="{ 'config-panel-readonly': props.data?.readonly }" @mousedown.stop>
+    <Teleport to="body" :disabled="!isConfigPanelExpanded">
+    <div
+      v-if="showConfigPanel"
+      ref="configPanelRef"
+      class="config-panel"
+      :class="{
+        'config-panel-readonly': props.data?.readonly,
+        'config-panel-expanded': isConfigPanelExpanded
+      }"
+      @mousedown.stop
+    >
+      <button
+        class="config-expand-btn"
+        type="button"
+        :title="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        :aria-label="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        @click.stop="toggleConfigPanelExpanded"
+      >
+        <svg v-if="!isConfigPanelExpanded" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 3h6v6" />
+          <path d="M21 3l-7 7" />
+          <path d="M9 21H3v-6" />
+          <path d="M3 21l7-7" />
+        </svg>
+        <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 14h6v6" />
+          <path d="M10 14l-7 7" />
+          <path d="M20 10h-6V4" />
+          <path d="M14 10l7-7" />
+        </svg>
+      </button>
       <!-- 参考图片预览（支持拖拽上传和排序） -->
       <div 
         class="panel-frames"
@@ -7222,21 +7404,34 @@ async function handleDrop(event) {
       <!-- 提示词输入 -->
       <div class="prompt-section">
         <div class="prompt-input-wrapper">
-          <textarea
+          <div
+            :key="promptEditorRenderKey"
             ref="promptTextareaRef"
-            v-model="promptText"
             class="prompt-input"
-            :placeholder="referenceImages.length > 0 ? '输入提示词，点击上方图片插入 @图片 引用\n例：让@图片1中的人物换上红色衣服（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
-            rows="2"
+            :class="{ 'is-empty': !promptText }"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+            :data-placeholder="referenceImages.length > 0 ? '输入提示词，点击上方图片插入 @图片 引用\n例：让@图片1中的人物换上红色衣服（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
             @keydown="handleKeyDown"
             @input="handlePromptInput"
             @focus="autoResizeTextarea"
             @wheel.stop
             @mousedown="startTextareaAutoScroll"
             @dblclick.stop
-          ></textarea>
-          <div v-if="highlightedPromptSegments.some(s => s.isTag)" class="prompt-highlight-overlay" aria-hidden="true">
-            <template v-for="(seg, i) in highlightedPromptSegments" :key="i"><span v-if="seg.isTag" class="prompt-media-tag" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template>
+          >
+            <span
+              v-for="(seg, i) in highlightedPromptSegments"
+              :key="i"
+              class="prompt-highlight-segment"
+              :class="{ 'is-prompt-tag-slot': seg.isTag }"
+              :data-prompt-segment-index="i"
+              :data-prompt-segment-start="seg.start"
+              :data-prompt-segment-end="seg.end"
+              :data-prompt-mention="seg.isTag ? seg.text : undefined"
+              :contenteditable="seg.isTag ? 'false' : undefined"
+              @mousedown="seg.isTag && handlePromptTagMousedown(seg, $event)"
+            ><PromptMediaTag v-if="seg.isTag" :text="seg.text" :media="seg.media" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd" /><template v-else>{{ seg.text }}</template></span>
           </div>
         </div>
         <PromptMentionPopup
@@ -7518,6 +7713,7 @@ async function handleDrop(event) {
         </Transition>
       </template>
     </div>
+    </Teleport>
     
     <!-- 放大预览弹窗（使用 Teleport 渲染到 body） -->
     <Teleport to="body">
@@ -8726,6 +8922,61 @@ async function handleDrop(event) {
   pointer-events: auto;
 }
 
+.config-panel-expanded {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 70vw;
+  min-width: 70vw;
+  max-width: calc(100vw - 32px);
+  height: 70vh;
+  max-height: calc(100vh - 32px);
+  transform: translate(-50%, -50%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+  z-index: 5000;
+}
+
+.config-expand-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--canvas-text-secondary, #a0a0a0);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  z-index: 5;
+}
+
+.config-expand-btn:hover {
+  background: rgba(59, 130, 246, 0.16);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: var(--canvas-text-primary, #ffffff);
+}
+
+.config-panel-expanded .config-expand-btn {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: var(--canvas-text-primary, #ffffff);
+}
+
+.config-panel-expanded .panel-frames {
+  padding-right: 48px;
+}
+
+.config-panel-expanded .prompt-input {
+  min-height: 320px;
+  max-height: calc(70vh - 220px);
+}
+
 /* 参考图片面板 */
 .panel-frames {
   padding: 12px;
@@ -8957,11 +9208,14 @@ async function handleDrop(event) {
 
 .prompt-input-wrapper {
   position: relative;
+  overflow: hidden;
 }
 
 .prompt-input {
+  display: block;
+  box-sizing: border-box;
   width: 100%;
-  min-height: 48px;
+  min-height: 96px;
   max-height: min(50vh, 420px);
   background: transparent;
   border: none;
@@ -8973,25 +9227,37 @@ async function handleDrop(event) {
   overflow-y: auto;
   transition: height 0.15s ease;
   padding: 4px 0;
+  cursor: text;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
-.prompt-highlight-overlay {
-  position: absolute;
-  inset: 0;
-  padding: 4px 0;
-  font-size: 14px;
-  line-height: 1.6;
-  font-family: inherit;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+.prompt-input.is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--canvas-text-placeholder, #4a4a4a);
   pointer-events: none;
-  color: transparent;
-  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.prompt-highlight-segment.is-prompt-tag-slot {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: baseline;
+  box-sizing: border-box;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.prompt-highlight-segment.is-prompt-tag-slot :deep(.prompt-media-tag-chip) {
+  flex-shrink: 0;
 }
 
 .prompt-media-tag {
   background: rgba(255, 255, 255, 0.12);
-  color: transparent;
+  color: var(--canvas-text-primary, #fff);
   border-radius: 3px;
   padding: 1px 2px;
   border-bottom: 2px solid rgba(255, 255, 255, 0.45);
@@ -9036,26 +9302,28 @@ async function handleDrop(event) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  gap: 16px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  gap: 12px;
   flex-wrap: nowrap;
+  min-height: 48px;
 }
 
 .config-left {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .config-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   flex-shrink: 0;
 }
 
-/* 模型选择器（自定义下拉框） */
+/* 模型选择器（自定义下拉框）- 扁平化设计，与 VideoNode 统一 */
 .model-selector-custom {
   position: relative;
   z-index: 100;
@@ -9064,31 +9332,33 @@ async function handleDrop(event) {
 .model-selector-trigger {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  border-radius: 8px;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  min-height: 32px;
 }
 
 .model-selector-trigger:hover {
-  border-color: var(--canvas-border-active, #4a4a4a);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .model-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   flex-shrink: 0;
-  font-size: 14px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1;
   filter: grayscale(1);
 }
 
@@ -9101,22 +9371,22 @@ async function handleDrop(event) {
 }
 
 .model-icon-text {
-  font-size: 14px;
+  font-size: 11px;
   font-weight: 700;
   color: rgba(255, 255, 255, 0.75);
   line-height: 1;
 }
 
 .model-name {
-  color: #ffffff;
-  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
   font-weight: 500;
 }
 
 .select-arrow {
-  color: var(--canvas-text-tertiary, #999);
-  font-size: 10px;
-  margin-left: -4px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 9px;
+  margin-left: auto;
   transition: transform 0.2s;
 }
 
@@ -9367,41 +9637,44 @@ async function handleDrop(event) {
   transform: translateY(8px);
 }
 
-/* 比例选择器 */
+/* 比例选择器 - 与 VideoNode 统一的扁平化设计 */
 .ratio-selector {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 10px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  border-radius: 8px;
+  gap: 4px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  min-height: 32px;
 }
 
 .ratio-selector:hover {
-  border-color: var(--canvas-border-active, #4a4a4a);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .ratio-icon {
-  font-size: 12px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .ratio-select-input {
-  background: rgba(0, 0, 0, 0.4);
+  background: transparent;
   border: none;
-  color: #ffffff;
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 11px;
   cursor: pointer;
   outline: none;
-  padding: 2px 4px;
-  border-radius: 4px;
+  padding: 0;
   -webkit-appearance: none;
   -moz-appearance: none;
+  appearance: none;
 }
 
-/* 预设选择器样式 */
+/* 预设选择器样式 - 与 VideoNode 统一的扁平化设计 */
 .preset-selector-custom {
   position: relative;
 }
@@ -9409,28 +9682,30 @@ async function handleDrop(event) {
 .preset-selector-trigger {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  border-radius: 8px;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
   user-select: none;
+  min-height: 32px;
 }
 
 .preset-selector-trigger:hover {
-  border-color: var(--canvas-border-active, #4a4a4a);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .preset-icon {
-  font-size: 14px;
-  color: #888;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .preset-name {
-  color: #ffffff;
-  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
   font-weight: 500;
 }
 
@@ -9548,7 +9823,7 @@ async function handleDrop(event) {
   color: var(--primary-color, #8b5cf6);
 }
 
-/* 摄影机控制开关样式 */
+/* 摄影机控制开关样式 - 与 VideoNode 扁平化设计统一 */
 .camera-control-toggle {
   position: relative;
   display: flex;
@@ -9560,31 +9835,32 @@ async function handleDrop(event) {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 12px;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
   cursor: pointer;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   position: relative;
+  min-height: 32px;
 }
 
 .camera-toggle-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
   color: rgba(255, 255, 255, 0.9);
 }
 
 .camera-toggle-btn.active {
   background: rgba(59, 130, 246, 0.15);
   border-color: rgba(59, 130, 246, 0.4);
-  color: #60a5fa;
+  color: rgba(59, 130, 246, 0.9);
 }
 
 .camera-toggle-btn .toggle-icon {
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .camera-toggle-btn .toggle-label {
@@ -9654,31 +9930,35 @@ async function handleDrop(event) {
 }
 
 .ratio-select-input:hover {
-  background: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 1);
 }
 
-/* 参数选择芯片 */
+/* 参数选择芯片 - 与 VideoNode 扁平化设计统一 */
 .param-chip {
-  padding: 6px 12px;
-  background: transparent;
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
-  color: var(--canvas-text-secondary, #888);
-  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 11px;
   cursor: pointer;
-  transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   user-select: none;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
 }
 
 .param-chip:hover {
-  border-color: var(--canvas-border-active, #4a4a4a);
-  color: var(--canvas-text-primary, #fff);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .param-chip.active {
   background: rgba(59, 130, 246, 0.15);
-  border-color: var(--canvas-accent-primary, #3b82f6);
-  color: var(--canvas-accent-primary, #3b82f6);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: rgba(59, 130, 246, 0.9);
 }
 
 .param-chip-group {
@@ -9715,8 +9995,8 @@ async function handleDrop(event) {
 }
 
 .count-display {
-  font-size: 14px;
-  color: var(--canvas-text-secondary, #888);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
   font-weight: 500;
 }
 
@@ -9724,14 +10004,18 @@ async function handleDrop(event) {
   cursor: pointer;
   padding: 4px 10px;
   border-radius: 6px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  transition: border-color 0.2s, color 0.2s;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
 }
 
 .count-display.clickable:hover {
-  border-color: var(--canvas-accent-primary, #3b82f6);
-  color: var(--canvas-accent-primary, #3b82f6);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: rgba(59, 130, 246, 0.9);
 }
 
 /* 积分消耗显示 - 黑白灰风格 */
@@ -9757,7 +10041,7 @@ async function handleDrop(event) {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s, transform 0.2s, box-shadow 0.2s;
+  transition: background-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .generate-btn:hover:not(:disabled) {
@@ -10417,6 +10701,18 @@ async function handleDrop(event) {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
 }
 
+:root.canvas-theme-light .config-panel-expanded {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.18) !important;
+}
+
+:root.canvas-theme-light .config-panel-expanded .config-expand-btn {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.25);
+  color: #2563eb;
+}
+
 :root.canvas-theme-light .image-node .panel-frames {
   border-bottom-color: rgba(0, 0, 0, 0.06);
 }
@@ -10450,7 +10746,11 @@ async function handleDrop(event) {
   color: #1c1917;
 }
 
-:root.canvas-theme-light .image-node .prompt-input::placeholder {
+:root.canvas-theme-light .image-node .prompt-media-tag {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .image-node .prompt-input.is-empty::before {
   color: #a8a29e;
 }
 
@@ -10460,13 +10760,14 @@ async function handleDrop(event) {
 }
 
 :root.canvas-theme-light .image-node .model-selector-trigger:hover {
-  border-color: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
 }
 
 :root.canvas-theme-light .image-node .model-icon {
   color: #57534e;
-  background: rgba(0, 0, 0, 0.05);
-  border-color: rgba(0, 0, 0, 0.08);
+  background: transparent;
+  border-color: transparent;
 }
 
 :root.canvas-theme-light .image-node .model-icon-text {
@@ -10626,18 +10927,23 @@ async function handleDrop(event) {
   color: #f59e0b;
 }
 
-/* 比例选择器 - 白昼模式 */
+/* 比例选择器 - 白昼模式（与 VideoNode 统一） */
 :root.canvas-theme-light .image-node .ratio-selector {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.1);
 }
 
 :root.canvas-theme-light .image-node .ratio-selector:hover {
-  border-color: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .image-node .ratio-icon {
+  color: #78716c;
 }
 
 :root.canvas-theme-light .image-node .ratio-select-input {
-  background: rgba(0, 0, 0, 0.06);
+  background: transparent;
   color: #1c1917;
 }
 
@@ -10647,18 +10953,20 @@ async function handleDrop(event) {
 }
 
 :root.canvas-theme-light .image-node .ratio-select-input:hover {
-  background: rgba(0, 0, 0, 0.1);
+  color: #1c1917;
 }
 
-/* 参数选择芯片 - 白昼模式 */
+/* 参数选择芯片 - 白昼模式（与 VideoNode 统一） */
 :root.canvas-theme-light .image-node .param-chip {
+  background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.1);
   color: #57534e;
 }
 
 :root.canvas-theme-light .image-node .param-chip:hover {
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(0, 0, 0, 0.06);
   border-color: rgba(0, 0, 0, 0.15);
+  color: #1c1917;
 }
 
 :root.canvas-theme-light .image-node .param-chip.active {

@@ -32,17 +32,25 @@ import { fetchVideoTaskStatus, isVideoHdTask } from '@/utils/videoTaskStatus'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
-import { getMentionPopupPosition, getTextareaCaretViewportRect, isBrowserRenderableUrl } from '@/utils/promptMention'
+import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, isBrowserRenderableUrl, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import {
   bindMediaMention,
   escapePromptMediaMentions,
   getMediaMentionKey,
+  normalizeMediaMentionLabel,
+  resolveMediaMentionItem,
   syncPromptMediaMentions
 } from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
 import { getSeedanceQuickAsset } from '@/utils/seedanceQuickAsset'
+import { compressImage, getImageFileDimensions } from '@/utils/imageCompress'
+import {
+  SEEDANCE_MAX_IMAGE_PIXELS,
+  validatePreparedSeedanceImage,
+  validateSeedanceModeInputs
+} from '@/utils/seedanceMediaValidation'
 import {
   getVideoGenerationProgressText,
   shouldShowVideoGenerationTimeoutHint
@@ -53,6 +61,7 @@ import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedanceVideoModel } from './video-error-message.js'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
+import PromptMediaTag from '../PromptMediaTag.vue'
 
 const { t, currentLanguage } = useI18n()
 const teamStore = useTeamStore()
@@ -75,7 +84,7 @@ const isCanvasViewportMoving = inject('isCanvasViewportMoving', ref(false))
 const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals, getViewport, getSelectedNodes } = useVueFlow()
+const { updateNodeInternals, setViewport, getViewport, getSelectedNodes } = useVueFlow()
 
 // 是否单独选中（多选时不显示底部配置面板）
 // 使用 nextTick 确保 Vue Flow 的选中状态已经更新
@@ -88,7 +97,10 @@ const isSoloSelected = computed(() => {
 })
 
 watch(isSoloSelected, (val) => {
-  if (!val) showMentionPopup.value = false
+  if (!val) {
+    showMentionPopup.value = false
+    isConfigPanelExpanded.value = false
+  }
 })
 
 // Force immediate UI update when selected prop changes
@@ -163,6 +175,10 @@ function getErrorHint(msg) {
 }
 const promptText = ref(props.data.prompt || '')
 const promptTextareaRef = ref(null)
+const promptEditorRenderKey = ref(0)
+const configPanelRef = ref(null)
+const isConfigPanelExpanded = ref(false)
+const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
 const hasManualPromptTextareaSize = ref(false)
 const promptMentionBindings = ref(props.data.promptMentionBindings || {})
 
@@ -171,6 +187,7 @@ const showMentionPopup = ref(false)
 const mentionActiveIndex = ref(0)
 const mentionPosition = ref({ top: 0, left: 0 })
 let mentionStartPos = -1
+let mentionEndPos = -1
 
 // 模型下拉框状态
 const isModelDropdownOpen = ref(false)
@@ -412,20 +429,26 @@ function handleDropdownWheel(event) {
 
 // 自动调整提示词文本框高度
 function autoResizeTextarea() {
-  if (hasManualPromptTextareaSize.value) return
-
   const textarea = promptTextareaRef.value
   if (!textarea) return
-  
-  // 重置高度以获取正确的 scrollHeight
-  textarea.style.height = 'auto'
-  
-  // 计算最小高度 (3行约63px) 和最大高度 (10行约210px)
-  const minHeight = 63
-  const maxHeight = 210
-  const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
-  
-  textarea.style.height = newHeight + 'px'
+
+  if (!hasManualPromptTextareaSize.value) {
+    // 重置高度以获取正确的 scrollHeight
+    textarea.style.height = 'auto'
+
+    // 计算最小高度 (3行约63px) 和最大高度 (10行约210px)
+    const minHeight = 63
+    const maxHeight = 210
+    const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
+
+    textarea.style.height = newHeight + 'px'
+  }
+
+  syncPromptHighlightOverlayScroll()
+}
+
+function syncPromptHighlightOverlayScroll() {
+  updatePromptOverlayCaret()
 }
 
 function markPromptTextareaResizeIntent(event) {
@@ -435,11 +458,20 @@ function markPromptTextareaResizeIntent(event) {
 }
 
 function handlePromptInput(event) {
+  const editor = event.target
+  const selectionRange = getPromptEditorSelectionRange(editor)
+  const text = serializePromptEditorContent(editor)
+  if (text !== promptText.value) {
+    promptText.value = text
+  }
   autoResizeTextarea()
-  
-  const el = event.target
-  const cursorIndex = el.selectionStart
-  const text = el.value
+  nextTick(() => {
+    removePromptEditorOrphanTextNodes(editor)
+    restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+    updatePromptOverlayCaret()
+  })
+
+  const cursorIndex = selectionRange.start
   const textBeforeCursor = text.slice(0, cursorIndex)
   
   const atIndex = textBeforeCursor.lastIndexOf('@')
@@ -453,17 +485,34 @@ function handlePromptInput(event) {
     if (query.length < 4 && !/\s/.test(query)) {
       showMentionPopup.value = true
       mentionStartPos = atIndex
+      mentionEndPos = cursorIndex
       mentionActiveIndex.value = 0
       
       mentionPosition.value = getMentionPopupPosition({
-        caretRect: getTextareaCaretViewportRect(el, cursorIndex),
-        fallbackRect: el.getBoundingClientRect()
+        caretRect: getPromptEditorCaretViewportRect(editor),
+        fallbackRect: editor.getBoundingClientRect()
       })
       return
     }
   }
   
   showMentionPopup.value = false
+  mentionEndPos = -1
+}
+
+function handlePromptTextareaFocus() {
+  updatePromptOverlayCaret()
+}
+
+function getPromptEditorCaretViewportRect(editor = promptTextareaRef.value) {
+  if (!editor || typeof window === 'undefined') return null
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  if (!editor.contains(range.startContainer)) return null
+  const rect = range.getBoundingClientRect()
+  if (rect && Number.isFinite(rect.left) && (rect.width || rect.height)) return rect
+  return editor.getBoundingClientRect()
 }
 
 // 处理提示词框滚轮事件（阻止冒泡，让滚轮作用于文本框滚动条）
@@ -610,45 +659,86 @@ function findUpstreamNodeByVideoUrl(url) {
  * 点击参考素材缩略图，在提示词光标处插入 @标记
  */
 function insertMediaTag(media) {
-  const tag = `@${media.label}`
-  const textarea = promptTextareaRef.value
-  if (!textarea) {
+  const resolvedMedia = resolveMediaMentionItem(media, referenceMediaList.value)
+  const mentionMedia = resolvedMedia || media
+  const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
+  const editor = promptTextareaRef.value
+  if (!editor) {
     promptText.value += tag
-    updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
+    updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
     return
   }
   
-  const start = textarea.selectionStart ?? promptText.value.length
-  const end = textarea.selectionEnd ?? start
-  const before = promptText.value.slice(0, start)
-  const after = promptText.value.slice(end)
+  const { start, end } = getPromptEditorSelectionRange(editor)
+  const activeMention = start === end ? getActivePromptMentionRange(promptText.value, start) : null
+  const replaceStart = activeMention?.start ?? start
+  const replaceEnd = activeMention?.end ?? end
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+  const before = promptText.value.slice(0, replaceStart)
+  const after = promptText.value.slice(replaceEnd)
   promptText.value = before + tag + after
-  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
+  promptEditorRenderKey.value += 1
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
   
   nextTick(() => {
-    textarea.focus()
-    const newPos = start + tag.length
-    textarea.setSelectionRange(newPos, newPos)
+    const nextEditor = promptTextareaRef.value || editor
+    removePromptEditorOrphanTextNodes(nextEditor)
+    const newPos = replaceStart + tag.length
+    autoResizeTextarea()
+    restorePromptEditorSelection(nextEditor, newPos, newPos)
+    nextEditor.scrollTop = scrollPosition.scrollTop
+    nextEditor.scrollLeft = scrollPosition.scrollLeft
+    updatePromptOverlayCaret()
   })
 }
 
 function handleMentionSelect(media) {
-  const textarea = promptTextareaRef.value
-  if (!textarea) return
+  const editor = promptTextareaRef.value
+  if (!editor) return
   
-  const tag = `@${media.label}`
-  const cursorPos = textarea.selectionStart
-  const before = promptText.value.slice(0, mentionStartPos)
-  const after = promptText.value.slice(cursorPos)
-  promptText.value = before + tag + ' ' + after
-  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
+  const resolvedMedia = resolveMediaMentionItem(media, referenceMediaList.value)
+  const mentionMedia = resolvedMedia || media
+  const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
+  const { start: cursorPos } = getPromptEditorSelectionRange(editor)
+  const replaceEnd = mentionEndPos > mentionStartPos ? mentionEndPos : cursorPos
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+  const result = replacePromptEditorMentionText({
+    text: promptText.value,
+    mentionStart: mentionStartPos,
+    caret: replaceEnd,
+    replacement: tag,
+    appendSpace: true
+  })
+  promptText.value = result.text
+  promptEditorRenderKey.value += 1
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
   
   showMentionPopup.value = false
+  mentionEndPos = -1
   
   nextTick(() => {
-    textarea.focus()
-    const newPos = mentionStartPos + tag.length + 1
-    textarea.setSelectionRange(newPos, newPos)
+    const nextEditor = promptTextareaRef.value || editor
+    removePromptEditorOrphanTextNodes(nextEditor)
+    autoResizeTextarea()
+    restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
+    nextEditor.scrollTop = scrollPosition.scrollTop
+    nextEditor.scrollLeft = scrollPosition.scrollLeft
+    updatePromptOverlayCaret()
+  })
+}
+
+function insertPromptEditorPlainText(text) {
+  const editor = promptTextareaRef.value
+  if (!editor) return
+
+  const { start, end } = getPromptEditorSelectionRange(editor)
+  const before = promptText.value.slice(0, start)
+  const after = promptText.value.slice(end)
+  promptText.value = before + text + after
+  nextTick(() => {
+    removePromptEditorOrphanTextNodes(editor)
+    const nextPos = start + text.length
+    restorePromptEditorSelection(editor, nextPos, nextPos)
     autoResizeTextarea()
   })
 }
@@ -669,28 +759,43 @@ function escapePromptTags(text) {
 const highlightedPromptSegments = computed(() => {
   if (!promptText.value) return []
   const segments = []
-  const regex = /【?@(?:视频|图片|音频)\d*】?/g
+  const regex = /【?@(?:视频|图片|音频)\d+】?/g
   let lastIndex = 0
   let match
   while ((match = regex.exec(promptText.value)) !== null) {
     if (match.index > lastIndex) {
-      segments.push({ text: promptText.value.slice(lastIndex, match.index), isTag: false })
+      segments.push({
+        text: promptText.value.slice(lastIndex, match.index),
+        isTag: false,
+        start: lastIndex,
+        end: match.index
+      })
     }
-    segments.push({ text: match[0], isTag: true, media: getMediaForPromptTag(match[0]) })
+    segments.push({
+      text: match[0],
+      isTag: true,
+      media: getMediaForPromptTag(match[0]),
+      start: match.index,
+      end: regex.lastIndex
+    })
     lastIndex = regex.lastIndex
   }
   if (lastIndex < promptText.value.length) {
-    segments.push({ text: promptText.value.slice(lastIndex), isTag: false })
+    segments.push({
+      text: promptText.value.slice(lastIndex),
+      isTag: false,
+      start: lastIndex,
+      end: promptText.value.length
+    })
   }
   return segments
 })
-
 function getMediaForPromptTag(text) {
-  const match = String(text || '').match(/^【?@(视频|图片|音频)(\d*)】?$/)
+  const match = String(text || '').match(/^【?@(视频|图片|音频)(\d+)】?$/)
   if (!match) return null
   const typeMap = { 视频: 'video', 图片: 'image', 音频: 'audio' }
   const type = typeMap[match[1]]
-  const index = Number(match[2] || 1)
+  const index = Number(match[2])
   return referenceMediaList.value.find(item => item.type === type && item.index === index) || null
 }
 
@@ -703,6 +808,63 @@ function handlePromptTagHover(media, event) {
   } else {
     onHoverStart(media.url, event)
   }
+}
+
+// 点击 chip 时，把 textarea 的光标精准定位到该 chip 字符串的开始或结束位置
+// 修复 chip 视觉宽度与 textarea 字符宽度不一致导致光标无法定位的问题
+function handlePromptTagMousedown(seg, event) {
+  event.preventDefault()
+  event.stopPropagation()
+  const editor = promptTextareaRef.value
+  if (!editor) return
+  const tagSegments = highlightedPromptSegments.value.filter(item => item.isTag)
+  const segmentIndex = tagSegments.findIndex(item =>
+    item === seg ||
+    (item.start === seg.start && item.end === seg.end && item.text === seg.text)
+  )
+  const tagRects = editor
+    ? Array.from(editor.querySelectorAll('[data-prompt-mention]')).map(el => el.getBoundingClientRect())
+    : [event.currentTarget.getBoundingClientRect()]
+  const targetIndex = getPromptMediaTagCaretIndex({
+    segments: tagSegments,
+    segmentIndex,
+    clickX: event.clientX,
+    tagRects
+  })
+  editor.focus()
+  nextTick(() => {
+    if (editor && Number.isFinite(targetIndex)) {
+      restorePromptEditorSelection(editor, targetIndex, targetIndex)
+      updatePromptOverlayCaret()
+    }
+  })
+}
+
+function clampPromptCaretOutsideTags() {
+  const editor = promptTextareaRef.value
+  if (!editor) return false
+  const { start, end } = getPromptEditorSelectionRange(editor)
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return false
+  if (start !== end) return false
+
+  const tagSegments = highlightedPromptSegments.value.filter(s => s.isTag)
+  if (tagSegments.length === 0) return false
+
+  for (const seg of tagSegments) {
+    if (start > seg.start && start < seg.end) {
+      const target = (start - seg.start) <= (seg.end - start) ? seg.start : seg.end
+      const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+      restorePromptEditorSelection(editor, target, target)
+      editor.scrollTop = scrollPosition.scrollTop
+      editor.scrollLeft = scrollPosition.scrollLeft
+      return true
+    }
+  }
+  return false
+}
+
+function updatePromptOverlayCaret() {
+  clampPromptCaretOutsideTags()
 }
 
 // 获取当前选中模型的显示名称
@@ -1677,6 +1839,49 @@ function handleCanvasDragEnd() {
   isCanvasDragging.value = false
 }
 
+function centerNodeInViewport() {
+  const nodeEl = videoNodeRootRef.value
+  const paneEl = nodeEl?.closest?.('.vue-flow')
+  if (!nodeEl || !paneEl || !getViewport || !setViewport) return
+
+  const nodeRect = nodeEl.getBoundingClientRect()
+  const paneRect = paneEl.getBoundingClientRect()
+  const viewport = getViewport()
+  const targetZoom = EXPANDED_CONFIG_PANEL_NODE_ZOOM
+  const nodeCenterFlowX = (nodeRect.left - paneRect.left + nodeRect.width / 2 - viewport.x) / viewport.zoom
+  const nodeCenterFlowY = (nodeRect.top - paneRect.top + nodeRect.height / 2 - viewport.y) / viewport.zoom
+
+  setViewport({
+    x: paneRect.width / 2 - nodeCenterFlowX * targetZoom,
+    y: paneRect.height / 2 - nodeCenterFlowY * targetZoom,
+    zoom: targetZoom
+  }, { duration: 420 })
+}
+
+function toggleConfigPanelExpanded() {
+  const nextExpanded = !isConfigPanelExpanded.value
+  if (nextExpanded) {
+    centerNodeInViewport()
+  }
+  isConfigPanelExpanded.value = nextExpanded
+  if (nextExpanded) {
+    nextTick(() => {
+      promptTextareaRef.value?.focus()
+    })
+  }
+}
+
+function collapseConfigPanel() {
+  isConfigPanelExpanded.value = false
+}
+
+function handleConfigPanelOutsideMouseDown(event) {
+  if (!isConfigPanelExpanded.value) return
+  if (configPanelRef.value?.contains(event.target)) return
+  if (event.target.closest('.prompt-mention-popup')) return
+  collapseConfigPanel()
+}
+
 onMounted(() => {
   elapsedTimeTimer = setInterval(() => {
     elapsedTimeNow.value = Date.now()
@@ -1704,6 +1909,7 @@ onMounted(() => {
   
   // 添加点击外部关闭下拉框的事件监听
   document.addEventListener('click', handleModelDropdownClickOutside)
+  document.addEventListener('mousedown', handleConfigPanelOutsideMouseDown)
   
   // 监听后台任务事件
   window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
@@ -1721,10 +1927,12 @@ onMounted(() => {
   nextTick(() => {
     autoResizeTextarea()
   })
+
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleModelDropdownClickOutside)
+  document.removeEventListener('mousedown', handleConfigPanelOutsideMouseDown)
   
   // 移除后台任务事件监听
   window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
@@ -2131,6 +2339,59 @@ const referenceAudios = computed(() => {
 })
 
 const hasReferenceAudios = computed(() => referenceAudios.value.length > 0)
+
+async function prepareSeedanceImageFile(file) {
+  if (!file || !file.type?.startsWith('image/')) return null
+  const compressed = await compressImage(file, {
+    maxSizeMB: 30,
+    maxLongSide: 6000,
+    maxPixels: SEEDANCE_MAX_IMAGE_PIXELS,
+    quality: 0.88,
+    minQuality: 0.45,
+    preservePng: false,
+    mimeType: 'image/jpeg'
+  })
+  const dimensions = await getImageFileDimensions(compressed)
+  const message = validatePreparedSeedanceImage({
+    width: dimensions?.width,
+    height: dimensions?.height,
+    size: compressed.size
+  })
+  if (message) throw new Error(message)
+  return compressed
+}
+
+function getLocalMediaDuration(file, mediaType) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement(mediaType)
+    const url = URL.createObjectURL(file)
+    const cleanup = () => URL.revokeObjectURL(url)
+    el.preload = 'metadata'
+    el.onloadedmetadata = () => {
+      cleanup()
+      resolve(Number.isFinite(el.duration) ? el.duration : 0)
+    }
+    el.onerror = () => {
+      cleanup()
+      reject(new Error(mediaType === 'video' ? '无法读取视频时长，请更换视频文件' : '无法读取音频时长，请更换音频文件'))
+    }
+    el.src = url
+  })
+}
+
+async function validateSeedanceVideoFile(file) {
+  if (!['video/mp4', 'video/quicktime'].includes(file.type)) {
+    throw new Error('参考视频格式不受支持，请使用 MP4 或 MOV')
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    throw new Error('参考视频不能超过50MB')
+  }
+  const duration = await getLocalMediaDuration(file, 'video')
+  if (duration < 2 || duration > 15) {
+    throw new Error('参考视频时长需在2到15秒之间')
+  }
+  return duration
+}
 
 // 继承的文本提示词（来自上游文本节点）
 // 只有在有上游连接时才使用继承数据
@@ -3953,6 +4214,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
 async function handleGenerate(options = {}) {
   const { forceNewNode = false } = options
   if (isGenerating.value) return
+  collapseConfigPanel()
   
   // 动态获取上游节点的最新数据
   const upstreamData = getUpstreamData()
@@ -3993,7 +4255,38 @@ async function handleGenerate(options = {}) {
     currentStatus: props.data.status
   })
   
-  if (!finalPrompt && finalImages.length === 0) {
+  if (isSeedance2Model.value) {
+    const seedanceValidationMessage = validateSeedanceModeInputs({
+      mode: selectedSeedance2Mode.value,
+      imageCount: finalImages.length,
+      videoCount: referenceVideos.value.length
+    })
+    if (seedanceValidationMessage) {
+      await showAlert(seedanceValidationMessage, '提示')
+      return
+    }
+    if (['multimodal_ref', 'video_edit', 'video_extend'].includes(selectedSeedance2Mode.value)) {
+      const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
+      let totalVideoDuration = 0
+      for (const edge of upstreamEdges) {
+        const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
+        const dur = Number(sourceNode?.data?.videoDuration)
+        if (!Number.isFinite(dur) || dur <= 0) continue
+        if (dur < 2 || dur > 15) {
+          await showAlert('参考视频时长需在2到15秒之间', '提示')
+          return
+        }
+        totalVideoDuration += dur
+      }
+      if (totalVideoDuration > 15) {
+        await showAlert('参考视频总时长不能超过15秒', '提示')
+        return
+      }
+    }
+  }
+
+  const hasSeedanceVideoInput = isSeedance2Model.value && referenceVideos.value.length > 0
+  if (!finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput) {
     await showAlert('请输入提示词或连接参考图片', '提示')
     return
   }
@@ -4258,10 +4551,42 @@ function handleKeyDown(event) {
     }
   }
 
-  if ((event.key === 'Backspace' || event.key === 'Delete') && supportsMediaTags.value) {
-    const textarea = promptTextareaRef.value
-    if (textarea && textarea.selectionStart === textarea.selectionEnd) {
-      const cursorPos = textarea.selectionStart
+  // 左右方向键穿越 @引用 标签：禁止光标停在标签内部
+  if (
+    (event.key === 'ArrowLeft' || event.key === 'ArrowRight') &&
+    !event.shiftKey &&
+    supportsMediaTags.value
+  ) {
+    const editor = promptTextareaRef.value
+    const selection = editor ? getPromptEditorSelectionRange(editor) : null
+    if (editor && selection && selection.start === selection.end) {
+      const cursor = selection.start
+      const tagRegex = /【?@(?:视频|图片|音频)\d*】?/g
+      let match
+      while ((match = tagRegex.exec(promptText.value)) !== null) {
+        const tagStart = match.index
+        const tagEnd = tagStart + match[0].length
+        if (event.key === 'ArrowLeft' && cursor === tagEnd) {
+          event.preventDefault()
+          restorePromptEditorSelection(editor, tagStart, tagStart)
+          nextTick(() => updatePromptOverlayCaret())
+          return
+        }
+        if (event.key === 'ArrowRight' && cursor === tagStart) {
+          event.preventDefault()
+          restorePromptEditorSelection(editor, tagEnd, tagEnd)
+          nextTick(() => updatePromptOverlayCaret())
+          return
+        }
+      }
+    }
+  }
+
+    if ((event.key === 'Backspace' || event.key === 'Delete') && supportsMediaTags.value) {
+    const editor = promptTextareaRef.value
+    const selection = editor ? getPromptEditorSelectionRange(editor) : null
+    if (editor && selection && selection.start === selection.end) {
+      const cursorPos = selection.start
       const text = promptText.value
       const tagRegex = /【?@(?:视频|图片|音频)\d*】?/g
       let match
@@ -4278,13 +4603,19 @@ function handleKeyDown(event) {
           const after = text.slice(tagEnd)
           promptText.value = before + after
           nextTick(() => {
-            textarea.setSelectionRange(tagStart, tagStart)
+            restorePromptEditorSelection(editor, tagStart, tagStart)
             autoResizeTextarea()
           })
           return
         }
       }
     }
+  }
+
+  if (event.key === 'Enter' && event.shiftKey) {
+    event.preventDefault()
+    insertPromptEditorPlainText('\n')
+    return
   }
 
   if (event.key === 'Enter' && !event.shiftKey) {
@@ -4470,8 +4801,13 @@ async function handleFrameFileChange(event) {
   try {
     for (const file of fileArray) {
       if (file.type.startsWith('image/')) {
+        let imageFile = file
+        if (isSeedance2Model.value) {
+          imageFile = await prepareSeedanceImageFile(file)
+          if (!imageFile) continue
+        }
         // 🚀 图片秒加载：立即使用 blob URL
-        const blobUrl = URL.createObjectURL(file)
+        const blobUrl = URL.createObjectURL(imageFile)
         console.log('[VideoNode] 图片秒加载 - blob URL:', blobUrl)
         
         // 立即创建上游节点（使用 blob URL）
@@ -4479,15 +4815,16 @@ async function handleFrameFileChange(event) {
         
         // 🔄 后台异步上传
         if (nodeId) {
-          uploadImageFileAsync(file, blobUrl, nodeId)
+          uploadImageFileAsync(imageFile, blobUrl, nodeId)
         }
       } else if (file.type.startsWith('video/')) {
+        const videoDuration = isSeedance2Model.value ? await validateSeedanceVideoFile(file) : null
         // 🎬 视频秒加载：立即使用 blob URL
         const blobUrl = URL.createObjectURL(file)
         console.log('[VideoNode] 视频秒加载 - blob URL:', blobUrl)
         
         // 立即创建上游视频节点（使用 blob URL）
-        const nodeId = createUpstreamVideoNode(blobUrl)
+        const nodeId = createUpstreamVideoNode(blobUrl, { videoDuration })
         
         // 🔄 后台异步上传
         if (nodeId) {
@@ -4497,6 +4834,7 @@ async function handleFrameFileChange(event) {
     }
   } catch (error) {
     console.error('[VideoNode] 上传失败:', error)
+    await showAlert(error.message || '图片处理失败，请更换图片', '提示')
   }
 }
 
@@ -4547,7 +4885,7 @@ function createUpstreamImageNode(imageUrl) {
 }
 
 // 创建上游视频节点 - 返回创建的节点ID（用于视频参考/视频转视频）
-function createUpstreamVideoNode(videoUrl) {
+function createUpstreamVideoNode(videoUrl, metadata = {}) {
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) return null
   
@@ -4570,6 +4908,7 @@ function createUpstreamVideoNode(videoUrl) {
       title: `参考视频 ${existingUpstreamCount + 1}`,
       nodeRole: 'source',
       sourceVideo: videoUrl,
+      videoDuration: metadata.videoDuration || null,
       output: {
         type: 'video',
         url: videoUrl
@@ -4659,8 +4998,13 @@ async function handleFrameDrop(event) {
   try {
     for (const file of files) {
       if (file.type.startsWith('image/')) {
+        let imageFile = file
+        if (isSeedance2Model.value) {
+          imageFile = await prepareSeedanceImageFile(file)
+          if (!imageFile) continue
+        }
         // 🚀 图片秒加载：立即使用 blob URL
-        const blobUrl = URL.createObjectURL(file)
+        const blobUrl = URL.createObjectURL(imageFile)
         console.log('[VideoNode] 拖拽上传图片 - 秒加载 blob URL:', blobUrl)
         
         // 立即创建上游节点
@@ -4668,15 +5012,16 @@ async function handleFrameDrop(event) {
         
         // 🔄 后台异步上传
         if (nodeId) {
-          uploadImageFileAsync(file, blobUrl, nodeId)
+          uploadImageFileAsync(imageFile, blobUrl, nodeId)
         }
       } else if (file.type.startsWith('video/')) {
+        const videoDuration = isSeedance2Model.value ? await validateSeedanceVideoFile(file) : null
         // 🎬 视频秒加载：立即使用 blob URL
         const blobUrl = URL.createObjectURL(file)
         console.log('[VideoNode] 拖拽上传视频 - 秒加载 blob URL:', blobUrl)
         
         // 立即创建上游视频节点
-        const nodeId = createUpstreamVideoNode(blobUrl)
+        const nodeId = createUpstreamVideoNode(blobUrl, { videoDuration })
         
         // 🔄 后台异步上传
         if (nodeId) {
@@ -4686,6 +5031,7 @@ async function handleFrameDrop(event) {
     }
   } catch (error) {
     console.error('[VideoNode] 拖拽上传失败:', error)
+    await showAlert(error.message || '图片处理失败，请更换图片', '提示')
   }
 }
 
@@ -6602,7 +6948,37 @@ function handleToolbarPreview() {
     />
     
     <!-- 底部配置面板（选中时显示） -->
-    <div v-if="isSoloSelected" class="config-panel" :class="{ 'config-panel-readonly': props.data?.readonly }" @mousedown.stop>
+    <Teleport to="body" :disabled="!isConfigPanelExpanded">
+    <div
+      v-if="isSoloSelected"
+      ref="configPanelRef"
+      class="config-panel"
+      :class="{
+        'config-panel-readonly': props.data?.readonly,
+        'config-panel-expanded': isConfigPanelExpanded
+      }"
+      @mousedown.stop
+    >
+      <button
+        class="config-expand-btn"
+        type="button"
+        :title="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        :aria-label="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        @click.stop="toggleConfigPanelExpanded"
+      >
+        <svg v-if="!isConfigPanelExpanded" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 3h6v6" />
+          <path d="M21 3l-7 7" />
+          <path d="M9 21H3v-6" />
+          <path d="M3 21l7-7" />
+        </svg>
+        <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 14h6v6" />
+          <path d="M10 14l-7 7" />
+          <path d="M20 10h-6V4" />
+          <path d="M14 10l7-7" />
+        </svg>
+      </button>
       <!-- 参考图片预览（支持拖拽上传） -->
       <div 
         class="panel-frames"
@@ -6749,21 +7125,38 @@ function handleToolbarPreview() {
       <!-- 模式标签 + 提示词输入 -->
       <div class="prompt-section">
         <div class="prompt-input-wrapper">
-          <textarea
+          <div
+            :key="promptEditorRenderKey"
             ref="promptTextareaRef"
-            v-model="promptText"
             class="prompt-input"
-            :placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : supportsMediaTags ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
-            rows="3"
+            :class="{ 'is-empty': !promptText }"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+            :data-placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : supportsMediaTags ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
             @keydown="handleKeyDown"
             @input="handlePromptInput"
+            @focus="handlePromptTextareaFocus"
+            @keyup="updatePromptOverlayCaret"
+            @click="updatePromptOverlayCaret"
+            @mouseup="updatePromptOverlayCaret"
+            @scroll="syncPromptHighlightOverlayScroll"
             @wheel="handlePromptWheel"
             @mousedown="markPromptTextareaResizeIntent"
             @dblclick.stop
-          ></textarea>
-          <!-- @标记高亮叠加层 -->
-          <div v-if="supportsMediaTags && highlightedPromptSegments.some(s => s.isTag)" class="prompt-highlight-overlay" aria-hidden="true">
-            <template v-for="(seg, i) in highlightedPromptSegments" :key="i"><span v-if="seg.isTag" class="prompt-media-tag" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template>
+          >
+            <span
+              v-for="(seg, i) in highlightedPromptSegments"
+              :key="i"
+              class="prompt-highlight-segment"
+              :class="{ 'is-prompt-tag-slot': seg.isTag }"
+              :data-prompt-segment-index="i"
+              :data-prompt-segment-start="seg.start"
+              :data-prompt-segment-end="seg.end"
+              :data-prompt-mention="seg.isTag ? seg.text : undefined"
+              :contenteditable="seg.isTag ? 'false' : undefined"
+              @mousedown="seg.isTag && handlePromptTagMousedown(seg, $event)"
+            ><PromptMediaTag v-if="seg.isTag" :text="seg.text" :media="seg.media" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd" /><template v-else>{{ seg.text }}</template></span>
           </div>
         </div>
         <div v-if="supportsMediaTags && (referenceVideos.length > 0 || referenceImages.length > 0 || referenceAudios.length > 0)" class="prompt-tag-hint">
@@ -7399,6 +7792,7 @@ function handleToolbarPreview() {
         </div>
       </template>
     </div>
+    </Teleport>
   </div>
 </template>
 
@@ -8045,6 +8439,62 @@ function handleToolbarPreview() {
   pointer-events: auto;
 }
 
+.config-panel-expanded {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 70vw;
+  min-width: 70vw;
+  max-width: calc(100vw - 32px);
+  height: 70vh;
+  max-height: calc(100vh - 32px);
+  transform: translate(-50%, -50%);
+  animation: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+  z-index: 5000;
+}
+
+.config-expand-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--canvas-text-secondary, #a0a0a0);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  z-index: 5;
+}
+
+.config-expand-btn:hover {
+  background: rgba(59, 130, 246, 0.16);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: var(--canvas-text-primary, #ffffff);
+}
+
+.config-panel-expanded .config-expand-btn {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: var(--canvas-text-primary, #ffffff);
+}
+
+.config-panel-expanded .panel-frames {
+  padding-right: 48px;
+}
+
+.config-panel-expanded .prompt-input {
+  min-height: 320px;
+  max-height: calc(70vh - 220px);
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;
@@ -8059,7 +8509,7 @@ function handleToolbarPreview() {
 /* 配置面板中的参考图片 */
 .panel-frames {
   /* 底部增加一些空间，避免缩略图下方文字被截断 */
-  padding: 12px 12px 20px;
+  padding: 12px 48px 20px 12px;
   border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
   position: relative;
   transition: background-color 0.2s ease, border-color 0.2s ease;
@@ -8352,6 +8802,8 @@ function handleToolbarPreview() {
 }
 
 .prompt-input {
+  display: block;
+  box-sizing: border-box;
   width: 100%;
   min-height: 63px;
   max-height: min(50vh, 420px);
@@ -8366,8 +8818,21 @@ function handleToolbarPreview() {
   overflow-y: auto;
   font-family: inherit;
   caret-color: var(--canvas-text-primary, #fff);
+  cursor: text;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  user-select: text;
+  -webkit-user-select: text;
   scrollbar-width: thin;
   scrollbar-color: rgba(150, 150, 150, 0.6) rgba(60, 60, 60, 0.3);
+}
+
+.prompt-input.is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--canvas-text-placeholder, #4a4a4a);
+  pointer-events: none;
+  white-space: pre-wrap;
 }
 
 .prompt-input::-webkit-scrollbar {
@@ -8390,10 +8855,6 @@ function handleToolbarPreview() {
 
 .prompt-input::-webkit-scrollbar-thumb:active {
   background: rgba(200, 200, 200, 0.9);
-}
-
-.prompt-input::placeholder {
-  color: var(--canvas-text-placeholder, #4a4a4a);
 }
 
 .config-row {
@@ -9518,6 +9979,18 @@ function handleToolbarPreview() {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12) !important;
 }
 
+:root.canvas-theme-light .config-panel-expanded {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.18) !important;
+}
+
+:root.canvas-theme-light .config-panel-expanded .config-expand-btn {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.25);
+  color: #2563eb;
+}
+
 :root.canvas-theme-light .video-node .panel-frames {
   border-bottom-color: rgba(0, 0, 0, 0.06);
 }
@@ -9554,7 +10027,11 @@ function handleToolbarPreview() {
   scrollbar-color: rgba(120, 120, 120, 0.5) rgba(200, 200, 200, 0.3);
 }
 
-:root.canvas-theme-light .video-node .prompt-input::placeholder {
+:root.canvas-theme-light .video-node .prompt-media-tag {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .video-node .prompt-input.is-empty::before {
   color: #a8a29e;
 }
 
@@ -11263,34 +11740,29 @@ function handleToolbarPreview() {
   z-index: 3;
 }
 
-/* 提示词输入区域包装器（用于叠加高亮层） */
 .prompt-input-wrapper {
   position: relative;
+  overflow: hidden;
 }
 
-/* 高亮叠加层 - 必须与 .prompt-input 的样式完全一致 */
-.prompt-highlight-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 8px 10px;
-  font-size: 14px;
-  line-height: 1.5;
-  font-family: inherit;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  pointer-events: none;
-  color: transparent;
-  overflow: hidden;
+.prompt-highlight-segment.is-prompt-tag-slot {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: baseline;
+  box-sizing: border-box;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.prompt-highlight-segment.is-prompt-tag-slot :deep(.prompt-media-tag-chip) {
+  flex-shrink: 0;
 }
 
 /* @标记高亮样式 */
 .prompt-media-tag {
   /* 深色主题下使用柔和的灰白高亮，而不是明显的紫色 */
   background: rgba(255, 255, 255, 0.12);
-  color: transparent;
+  color: var(--canvas-text-primary, #fff);
   border-radius: 3px;
   padding: 1px 2px;
   border-bottom: 2px solid rgba(255, 255, 255, 0.45);

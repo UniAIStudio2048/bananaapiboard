@@ -44,7 +44,7 @@
               </template>
             </div>
             <div class="mention-item-info">
-              <span class="mention-item-label">@{{ item.label }}</span>
+              <span class="mention-item-label">@{{ displayLabel(item) }}</span>
               <span class="mention-item-type">{{ typeLabel(item.type) }}</span>
             </div>
           </div>
@@ -87,6 +87,10 @@ function hasExplicitThumbnail(item) {
   return !!previewUrl && previewUrl !== item.url
 }
 
+function displayLabel(item) {
+  return String(item?.label || '').replace(/^[【\u3010]?@/, '').replace(/[】\u3011]$/, '')
+}
+
 watch(() => props.activeIndex, async () => {
   await nextTick()
   if (!listRef.value) return
@@ -113,11 +117,6 @@ watch(() => props.activeIndex, async () => {
   align-items: center;
   gap: 6px;
   padding: 8px 12px 6px;
-}
-
-.mention-popup-icon {
-  font-weight: 700;
-  font-size: 14px;
 }
 
 .mention-popup-title {

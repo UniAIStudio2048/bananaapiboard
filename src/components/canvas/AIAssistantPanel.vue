@@ -183,6 +183,7 @@
             <div
               v-if="att.type === 'image'"
               class="attachment-thumb-wrapper"
+              @click.stop="insertAttachmentMention(index)"
               @mouseenter="onHoverStart(att.preview, $event)"
               @mouseleave="onHoverEnd"
             >
@@ -198,6 +199,7 @@
             <div
               v-else-if="att.type === 'video'"
               class="attachment-thumb-wrapper attachment-video-wrapper"
+              @click.stop="insertAttachmentMention(index)"
               @mouseenter="onVideoHoverStart(att.preview, $event)"
               @mouseleave="onHoverEnd"
             >
@@ -291,7 +293,7 @@
 
         <!-- 输入区域 -->
         <div 
-          class="input-area" 
+          class="input-area prompt-input-wrapper" 
           :class="{ 'is-dragging': isDragging }"
           @dragenter.prevent="handleDragEnter"
           @dragover.prevent="handleDragOver"
@@ -312,15 +314,30 @@
           </div>
           
           <!-- 输入框 -->
-          <textarea
+          <div
             ref="inputRef"
-            v-model="inputText"
             class="input-textarea"
-            placeholder="开启你的灵感之旅..."
-            rows="1"
+            :class="{ 'is-empty': !inputText }"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+            data-placeholder="开启你的灵感之旅..."
             @keydown="handleInputKeydown"
             @input="handleInputEvent"
-          ></textarea>
+          >
+            <span
+              v-for="(seg, i) in highlightedInputSegments"
+              :key="i"
+              class="prompt-highlight-segment"
+              :class="{ 'is-prompt-tag-slot': seg.isTag }"
+              :data-prompt-segment-index="i"
+              :data-prompt-segment-start="seg.start"
+              :data-prompt-segment-end="seg.end"
+              :data-prompt-mention="seg.isTag ? seg.text : undefined"
+              :contenteditable="seg.isTag ? 'false' : undefined"
+              @mousedown="seg.isTag && handlePromptTagMousedown(seg, $event)"
+            ><PromptMediaTag v-if="seg.isTag" :text="seg.text" :media="seg.media" /><template v-else>{{ seg.text }}</template></span>
+          </div>
 
           <PromptMentionPopup
             :visible="showMentionPopup"
@@ -591,6 +608,7 @@
 import { ref, computed, watch, nextTick, onMounted, inject } from 'vue'
 import AIAssistantMessage from './AIAssistantMessage.vue'
 import PromptMentionPopup from './PromptMentionPopup.vue'
+import PromptMediaTag from './PromptMediaTag.vue'
 import PresetManager from './dialogs/PresetManager.vue'
 import CustomPresetDialog from './dialogs/CustomPresetDialog.vue'
 import {
@@ -613,7 +631,7 @@ import {
   normalizeAssistantAttachmentName,
   shouldFetchAssistantAttachmentUrl
 } from '@/utils/aiAssistantAttachments'
-import { getMentionPopupPosition, getTextareaCaretViewportRect } from '@/utils/promptMention'
+import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import {
   bindAssistantAttachmentMention,
   buildAssistantMentionItems,
@@ -723,6 +741,91 @@ const canSend = computed(() => {
 })
 
 const attachmentMentionItems = computed(() => buildAssistantMentionItems(attachments.value))
+
+const highlightedInputSegments = computed(() => {
+  if (!inputText.value) return []
+  const segments = []
+  const regex = /【?@(图片|视频|音频|文件)\d+】?/g
+  let lastIndex = 0
+  let match
+  while ((match = regex.exec(inputText.value)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({
+        text: inputText.value.slice(lastIndex, match.index),
+        isTag: false,
+        start: lastIndex,
+        end: match.index
+      })
+    }
+    segments.push({
+      text: match[0],
+      isTag: true,
+      media: getAttachmentForPromptTag(match[0]),
+      start: match.index,
+      end: regex.lastIndex
+    })
+    lastIndex = regex.lastIndex
+  }
+  if (lastIndex < inputText.value.length) {
+    segments.push({
+      text: inputText.value.slice(lastIndex),
+      isTag: false,
+      start: lastIndex,
+      end: inputText.value.length
+    })
+  }
+  return segments
+})
+
+function getAttachmentForPromptTag(text) {
+  const match = String(text || '').match(/^【?@(图片|视频|音频|文件)(\d+)】?$/)
+  if (!match) return null
+  const typeMap = { 图片: 'image', 视频: 'video', 音频: 'audio', 文件: 'file' }
+  const type = typeMap[match[1]]
+  const index = Number(match[2])
+  const item = attachmentMentionItems.value.find(entry => entry.type === type && entry.index === index)
+  if (!item) return null
+  return {
+    ...item,
+    thumbnailUrl: item.preview || item.thumbnailUrl || item.thumbnail_url || '',
+    url: item.url || item.preview || ''
+  }
+}
+
+function getInputEditorCaretViewportRect(editor = inputRef.value) {
+  if (!editor || typeof window === 'undefined') return null
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  if (!editor.contains(range.startContainer)) return null
+  const rect = range.getBoundingClientRect()
+  if (rect && Number.isFinite(rect.left) && (rect.width || rect.height)) return rect
+  return editor.getBoundingClientRect()
+}
+
+function handlePromptTagMousedown(seg, event) {
+  event.preventDefault()
+  event.stopPropagation()
+  const editor = inputRef.value
+  if (!editor) return
+  const tagSegments = highlightedInputSegments.value.filter(item => item.isTag)
+  const segmentIndex = tagSegments.findIndex(item =>
+    item === seg ||
+    (item.start === seg.start && item.end === seg.end && item.text === seg.text)
+  )
+  const targetIndex = getPromptMediaTagCaretIndex({
+    segments: tagSegments,
+    segmentIndex,
+    clickX: event.clientX,
+    tagRects: Array.from(editor.querySelectorAll('[data-prompt-mention]')).map(el => el.getBoundingClientRect())
+  })
+  editor.focus()
+  nextTick(() => {
+    if (editor && Number.isFinite(targetIndex)) {
+      restorePromptEditorSelection(editor, targetIndex, targetIndex)
+    }
+  })
+}
 
 const filteredAttachmentMentionItems = computed(() => {
   const query = mentionQuery.value.trim().toLowerCase()
@@ -953,7 +1056,7 @@ function showAttachmentMentionPopup() {
     return
   }
 
-  const caretRect = getTextareaCaretViewportRect(inputRef.value, inputRef.value.selectionStart)
+  const caretRect = getInputEditorCaretViewportRect(inputRef.value)
   mentionPosition.value = getMentionPopupPosition({
     caretRect,
     fallbackRect: inputRef.value.getBoundingClientRect(),
@@ -965,10 +1068,10 @@ function showAttachmentMentionPopup() {
 }
 
 function updateAttachmentMentionPopup() {
-  const textarea = inputRef.value
-  if (!textarea) return
+  const editor = inputRef.value
+  if (!editor) return
 
-  const cursor = textarea.selectionStart
+  const { start: cursor } = getPromptEditorSelectionRange(editor)
   const before = inputText.value.slice(0, cursor)
   const atIndex = before.lastIndexOf('@')
   if (atIndex === -1) {
@@ -989,6 +1092,18 @@ function updateAttachmentMentionPopup() {
 }
 
 function handleInputEvent() {
+  const editor = inputRef.value
+  if (editor) {
+    const selectionRange = getPromptEditorSelectionRange(editor)
+    const text = serializePromptEditorContent(editor)
+    if (text !== inputText.value) {
+      inputText.value = text
+    }
+    nextTick(() => {
+      removePromptEditorOrphanTextNodes(editor)
+      restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+    })
+  }
   autoResize()
   updateAttachmentMentionPopup()
 }
@@ -1017,14 +1132,104 @@ function handleInputKeydown(event) {
     }
   }
 
+  if ((event.key === 'Backspace' || event.key === 'Delete') && attachmentMentionItems.value.length > 0) {
+    const editor = inputRef.value
+    const selection = editor ? getPromptEditorSelectionRange(editor) : null
+    if (editor && selection && selection.start === selection.end) {
+      const cursorPos = selection.start
+      const text = inputText.value
+      const tagRegex = /【?@(图片|视频|音频|文件)\d+】?/g
+      let match
+      while ((match = tagRegex.exec(text)) !== null) {
+        const tagStart = match.index
+        const tagEnd = tagStart + match[0].length
+        const shouldDelete = event.key === 'Backspace'
+          ? (cursorPos > tagStart && cursorPos <= tagEnd)
+          : (cursorPos >= tagStart && cursorPos < tagEnd)
+        if (shouldDelete) {
+          event.preventDefault()
+          showMentionPopup.value = false
+          inputText.value = text.slice(0, tagStart) + text.slice(tagEnd)
+          nextTick(() => {
+            restorePromptEditorSelection(editor, tagStart, tagStart)
+            autoResize()
+          })
+          return
+        }
+      }
+    }
+  }
+
+  if (event.key === 'Enter' && event.shiftKey) {
+    event.preventDefault()
+    insertInputEditorPlainText('\n')
+    return
+  }
+
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     sendMessage()
   }
 }
 
+function insertInputEditorPlainText(text) {
+  const editor = inputRef.value
+  if (!editor) return
+  const { start, end } = getPromptEditorSelectionRange(editor)
+  inputText.value = inputText.value.slice(0, start) + text + inputText.value.slice(end)
+  nextTick(() => {
+    const nextPos = start + text.length
+    restorePromptEditorSelection(editor, nextPos, nextPos)
+    autoResize()
+  })
+}
+
+function insertAttachmentMention(index) {
+  const item = attachmentMentionItems.value[index]
+  if (!item) return
+
+  const mention = `@${item.label}`
+  const editor = inputRef.value
+  const scrollPosition = editor
+    ? { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+    : null
+  const selection = editor ? getPromptEditorSelectionRange(editor) : null
+  const start = selection?.start ?? inputText.value.length
+  const end = selection?.end ?? start
+  const activeMention = start === end ? getActivePromptMentionRange(inputText.value, start) : null
+  const replaceStart = activeMention?.start ?? start
+  const replaceEnd = activeMention?.end ?? end
+
+  inputText.value = inputText.value.slice(0, replaceStart) + mention + inputText.value.slice(replaceEnd)
+  attachmentMentionBindings.value = {
+    ...(attachmentMentionBindings.value || {}),
+    [item.key]: {
+      type: item.type,
+      label: item.label
+    }
+  }
+  showMentionPopup.value = false
+  mentionQuery.value = ''
+  mentionStartPos = -1
+
+  nextTick(() => {
+    autoResize()
+    if (inputRef.value) {
+      removePromptEditorOrphanTextNodes(inputRef.value)
+      const nextCursor = replaceStart + mention.length
+      restorePromptEditorSelection(inputRef.value, nextCursor, nextCursor)
+      inputRef.value.scrollTop = scrollPosition?.scrollTop || 0
+      inputRef.value.scrollLeft = scrollPosition?.scrollLeft || 0
+    }
+  })
+}
+
 function selectAttachmentMention(item) {
   if (!item || mentionStartPos < 0) return
+  const editor = inputRef.value
+  const scrollPosition = editor
+    ? { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+    : null
   const result = bindAssistantAttachmentMention({
     text: inputText.value,
     start: mentionStartPos,
@@ -1040,9 +1245,13 @@ function selectAttachmentMention(item) {
   mentionStartPos = -1
 
   nextTick(() => {
-    inputRef.value?.focus()
-    inputRef.value?.setSelectionRange(result.cursor, result.cursor)
     autoResize()
+    if (inputRef.value) {
+      removePromptEditorOrphanTextNodes(inputRef.value)
+      restorePromptEditorSelection(inputRef.value, result.cursor, result.cursor)
+      inputRef.value.scrollTop = scrollPosition?.scrollTop || 0
+      inputRef.value.scrollLeft = scrollPosition?.scrollLeft || 0
+    }
   })
 }
 
@@ -2192,6 +2401,7 @@ defineExpose({
   -webkit-backdrop-filter: blur(16px);
   transition: all 0.3s ease;
   flex-shrink: 0; /* 防止被压缩 */
+  overflow: hidden;
 }
 
 .input-area.is-dragging {
@@ -2251,6 +2461,7 @@ defineExpose({
 }
 
 .input-textarea {
+  box-sizing: border-box;
   width: 100%;
   min-height: 44px;
   max-height: 120px;
@@ -2267,13 +2478,36 @@ defineExpose({
   font-size: 14px;
   line-height: 1.5;
   resize: none;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
   outline: none;
   transition: all 0.3s ease;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
-.input-textarea::placeholder {
+.input-textarea.is-empty::before {
+  content: attr(data-placeholder);
   color: rgba(255, 255, 255, 0.3);
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+
+.prompt-highlight-segment.is-prompt-tag-slot {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: baseline;
+  box-sizing: border-box;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.prompt-highlight-segment.is-prompt-tag-slot :deep(.prompt-media-tag-chip) {
+  flex-shrink: 0;
 }
 
 .input-textarea:focus {
@@ -2887,7 +3121,7 @@ defineExpose({
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
-:root.canvas-theme-light .ai-assistant-panel .input-textarea::placeholder {
+:root.canvas-theme-light .ai-assistant-panel .input-textarea.is-empty::before {
   color: rgba(0, 0, 0, 0.35);
 }
 

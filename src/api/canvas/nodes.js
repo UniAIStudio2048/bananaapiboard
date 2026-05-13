@@ -5,6 +5,7 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useTeamStore } from '@/stores/team'
 import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
+import { classifyBackgroundTaskStatus } from '@/stores/canvas/backgroundTaskStatus'
 
 async function parseApiResponse(response, fallbackMessage) {
   const contentType = response.headers.get('content-type') || ''
@@ -585,21 +586,9 @@ export function pollTaskStatus(taskId, type = 'image', options = {}) {
           onProgress(result)
         }
         
-        // 🔧 修复：增强状态判断，兼容更多返回格式
-        // 成功状态：completed, success, succeeded, finished, done
-        const isCompleted = result.status === 'completed' || 
-                           result.status === 'success' || 
-                           result.status === 'succeeded' ||
-                           result.status === 'finished' ||
-                           result.status === 'done'
-        
-        // URL检查：url, urls数组, images数组
-        const hasValidUrl = result.hasOutput ||
-                           result.url ||
-                           (result.urls && result.urls.length > 0) ||
-                           (result.images && result.images.length > 0)
-        
-        if (isCompleted || hasValidUrl) {
+        const classifiedStatus = classifyBackgroundTaskStatus(result, type)
+
+        if (classifiedStatus.state === 'completed') {
           console.log('[pollTaskStatus] 任务完成:', {
             taskId,
             status: result.status,
@@ -611,14 +600,13 @@ export function pollTaskStatus(taskId, type = 'image', options = {}) {
           return
         }
         
-        // 失败状态：failed, error
-        if (result.status === 'failed' || result.status === 'error') {
+        if (classifiedStatus.state === 'failed') {
           console.error('[pollTaskStatus] 任务失败:', {
             taskId,
             status: result.status,
-            error: result.error
+            error: classifiedStatus.error
           })
-          reject(new Error(result.error || '任务执行失败'))
+          reject(new Error(classifiedStatus.error || '任务执行失败'))
           return
         }
         

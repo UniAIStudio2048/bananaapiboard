@@ -18,6 +18,36 @@ function getAuthHeaders() {
   }
 }
 
+async function parseAssetResponse(response, fallbackMessage) {
+  const text = await response.text()
+  let data = {}
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch (error) {
+      const err = new Error(`后端返回了非 JSON 响应（HTTP ${response.status}），可能是网关超时或服务异常`)
+      err.category = 'non_json_response'
+      err.statusCode = response.status
+      err.upstreamBodySnippet = text.replace(/\s+/g, ' ').trim().slice(0, 300)
+      throw err
+    }
+  }
+
+  if (!response.ok) {
+    const err = new Error(data.message || data.error || fallbackMessage)
+    err.category = data.category || data.error || 'request_failed'
+    err.provider = data.provider
+    err.action = data.action
+    err.statusCode = data.statusCode || response.status
+    err.upstreamCode = data.upstreamCode
+    err.upstreamBodySnippet = data.upstreamBodySnippet
+    err.timeoutMs = data.timeoutMs
+    throw err
+  }
+
+  return data
+}
+
 // ========== 角色组 ==========
 
 /**
@@ -31,11 +61,7 @@ export async function createAssetGroup(data) {
     headers: getAuthHeaders(),
     body: JSON.stringify(data)
   })
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '创建角色组失败')
-  }
-  return response.json()
+  return parseAssetResponse(response, '创建角色组失败')
 }
 
 /**
@@ -145,11 +171,7 @@ export async function createAsset(data) {
     headers: getAuthHeaders(),
     body: JSON.stringify(data)
   })
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '创建角色资产失败')
-  }
-  return response.json()
+  return parseAssetResponse(response, '创建角色资产失败')
 }
 
 /**
@@ -164,11 +186,7 @@ export async function createQuickSeedanceCharacterAsset(data) {
     headers: getAuthHeaders(),
     body: JSON.stringify(data)
   })
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.error || '快捷创建 Seedance 角色资产失败')
-  }
-  return response.json()
+  return parseAssetResponse(response, '快捷创建 Seedance 角色资产失败')
 }
 
 /**

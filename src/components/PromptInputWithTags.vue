@@ -161,11 +161,36 @@ function removeTag(tagContent) {
 
 // 同步内容到 contentEditable
 watch(() => props.modelValue, (newValue) => {
-  if (contentEditableRef.value && document.activeElement !== contentEditableRef.value) {
-    // 只在非聚焦状态下更新，避免打断用户输入
+  if (!contentEditableRef.value) return
+  
+  if (document.activeElement !== contentEditableRef.value) {
     updateContentEditable()
+  } else {
+    // 聚焦状态下，检查 DOM 内容是否与新值一致；不一致说明是外部程序化修改，需要强制同步
+    const currentText = getContentEditableText()
+    if (currentText !== newValue) {
+      updateContentEditable()
+    }
   }
 })
+
+function getContentEditableText() {
+  if (!contentEditableRef.value) return ''
+  let text = ''
+  contentEditableRef.value.childNodes.forEach(node => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      text += node.textContent
+    } else if (node.nodeType === Node.ELEMENT_NODE) {
+      if (node.classList.contains('prompt-tag')) {
+        const textSpan = node.querySelector('.prompt-tag-text')
+        if (textSpan) text += textSpan.textContent
+      } else {
+        text += node.textContent
+      }
+    }
+  })
+  return text
+}
 
 function updateContentEditable() {
   if (!contentEditableRef.value) return

@@ -22,6 +22,7 @@ import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvas
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
+import { getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
 import AudioEditorModal from '@/components/canvas/AudioEditorModal.vue'
@@ -49,7 +50,15 @@ modelStatsStore.ensureStarted()
 const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals, getViewport, getSelectedNodes } = useVueFlow()
+const { updateNodeInternals, setViewport, getViewport, getSelectedNodes } = useVueFlow()
+
+// 节点根元素引用（用于配置面板放大居中）
+const nodeRef = ref(null)
+
+// 配置面板放大相关（与 VideoNode 保持一致的交互逻辑）
+const configPanelRef = ref(null)
+const isConfigPanelExpanded = ref(false)
+const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
 
 // 可用音乐模型列表 - 从租户配置动态获取
 const musicModels = computed(() => {
@@ -368,10 +377,42 @@ async function pollMusicStatus(taskIds) {
 
 // 键盘快捷键
 function handleMusicKeyDown(event) {
+  if (event.key === 'Enter' && event.shiftKey) {
+    event.preventDefault()
+    insertMusicEditorPlainText('\n')
+    return
+  }
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     handleGenerateMusic()
   }
+}
+
+function handleMusicInput(event) {
+  const editor = event.target
+  const selectionRange = getPromptEditorSelectionRange(editor)
+  const text = serializePromptEditorContent(editor)
+  if (text !== musicPrompt.value) {
+    musicPrompt.value = text
+  }
+  autoResizeTextarea()
+  nextTick(() => {
+    removePromptEditorOrphanTextNodes(editor)
+    restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+  })
+}
+
+function insertMusicEditorPlainText(text) {
+  const editor = promptTextareaRef.value
+  if (!editor) return
+  const { start, end } = getPromptEditorSelectionRange(editor)
+  musicPrompt.value = musicPrompt.value.slice(0, start) + text + musicPrompt.value.slice(end)
+  nextTick(() => {
+    removePromptEditorOrphanTextNodes(editor)
+    const nextPos = start + text.length
+    restorePromptEditorSelection(editor, nextPos, nextPos)
+    autoResizeTextarea()
+  })
 }
 
 // 自动调整文本框高度
@@ -418,10 +459,54 @@ function handlePromptWheel(event) {
   }
 }
 
+// 配置面板放大：把节点居中到视口中心，方便放大后查看
+function centerNodeInViewport() {
+  const nodeEl = nodeRef.value
+  const paneEl = nodeEl?.closest?.('.vue-flow')
+  if (!nodeEl || !paneEl || !getViewport || !setViewport) return
+
+  const nodeRect = nodeEl.getBoundingClientRect()
+  const paneRect = paneEl.getBoundingClientRect()
+  const viewport = getViewport()
+  const targetZoom = EXPANDED_CONFIG_PANEL_NODE_ZOOM
+  const nodeCenterFlowX = (nodeRect.left - paneRect.left + nodeRect.width / 2 - viewport.x) / viewport.zoom
+  const nodeCenterFlowY = (nodeRect.top - paneRect.top + nodeRect.height / 2 - viewport.y) / viewport.zoom
+
+  setViewport({
+    x: paneRect.width / 2 - nodeCenterFlowX * targetZoom,
+    y: paneRect.height / 2 - nodeCenterFlowY * targetZoom,
+    zoom: targetZoom
+  }, { duration: 420 })
+}
+
+function toggleConfigPanelExpanded() {
+  const nextExpanded = !isConfigPanelExpanded.value
+  if (nextExpanded) {
+    centerNodeInViewport()
+  }
+  isConfigPanelExpanded.value = nextExpanded
+  if (nextExpanded) {
+    nextTick(() => {
+      promptTextareaRef.value?.focus()
+    })
+  }
+}
+
+function collapseConfigPanel() {
+  isConfigPanelExpanded.value = false
+}
+
+function handleConfigPanelOutsideMouseDown(event) {
+  if (!isConfigPanelExpanded.value) return
+  if (configPanelRef.value?.contains(event.target)) return
+  collapseConfigPanel()
+}
+
 // 组件挂载时添加全局点击事件监听并刷新配置
 onMounted(async () => {
   document.addEventListener('click', handleMusicModelDropdownClickOutside)
   document.addEventListener('click', handleSpeedDropdownClickOutside)
+  document.addEventListener('mousedown', handleConfigPanelOutsideMouseDown)
   window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.addEventListener('background-task-failed', handleBackgroundTaskFailed)
   window.addEventListener('background-task-progress', handleBackgroundTaskProgress)
@@ -443,6 +528,7 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('click', handleMusicModelDropdownClickOutside)
   document.removeEventListener('click', handleSpeedDropdownClickOutside)
+  document.removeEventListener('mousedown', handleConfigPanelOutsideMouseDown)
   window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
   window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
@@ -498,6 +584,12 @@ const nodeClass = computed(() => ({
 // 是否显示底部配置面板 - 单独选中时显示
 const showConfigPanel = computed(() => {
   return props.selected === true && getSelectedNodes.value.length <= 1
+})
+
+watch(showConfigPanel, (val) => {
+  if (!val) {
+    isConfigPanelExpanded.value = false
+  }
 })
 
 // ========== 音频工具栏相关 ==========
@@ -1430,6 +1522,7 @@ function handleSpeedDropdownClickOutside(event) {
 
 <template>
   <div 
+    ref="nodeRef"
     :class="nodeClass" 
     @contextmenu="handleContextMenu"
     @dragenter="handleDragEnter"
@@ -1693,22 +1786,52 @@ function handleSpeedDropdownClickOutside(event) {
     </div>
     
     <!-- 底部配置面板（选中时显示） - 黑白现代风格 -->
-    <div v-show="showConfigPanel" class="config-panel" @mousedown.stop>
+    <Teleport to="body" :disabled="!isConfigPanelExpanded">
+    <div
+      v-show="showConfigPanel"
+      ref="configPanelRef"
+      class="config-panel"
+      :class="{ 'config-panel-expanded': isConfigPanelExpanded }"
+      @mousedown.stop
+    >
+      <button
+        class="config-expand-btn"
+        type="button"
+        :title="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        :aria-label="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        @click.stop="toggleConfigPanelExpanded"
+      >
+        <svg v-if="!isConfigPanelExpanded" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 3h6v6" />
+          <path d="M21 3l-7 7" />
+          <path d="M9 21H3v-6" />
+          <path d="M3 21l7-7" />
+        </svg>
+        <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 14h6v6" />
+          <path d="M10 14l-7 7" />
+          <path d="M20 10h-6V4" />
+          <path d="M14 10l7-7" />
+        </svg>
+      </button>
       <!-- 音乐生成配置（无音频时显示） -->
       <div v-if="!hasAudio" class="music-gen-panel">
         <!-- 大文本输入区 -->
         <div class="prompt-area">
-          <textarea
+          <div
             ref="promptTextareaRef"
-            v-model="musicPrompt"
             class="prompt-textarea"
-            placeholder="描述您想要的音乐。"
+            :class="{ 'is-empty': !musicPrompt }"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+            data-placeholder="描述您想要的音乐。"
             @keydown="handleMusicKeyDown"
             @wheel="handlePromptWheel"
-            @input="autoResizeTextarea"
+            @input="handleMusicInput"
             @mousedown="markPromptTextareaResizeIntent"
             @dblclick.stop
-          ></textarea>
+          >{{ musicPrompt }}</div>
         </div>
         
         <!-- 控制栏 -->
@@ -1867,6 +1990,7 @@ function handleSpeedDropdownClickOutside(event) {
         </div>
       </div>
     </div>
+    </Teleport>
     
     <!-- 右侧输出端口（隐藏但保留给 Vue Flow 用于边渲染） -->
     <Handle
@@ -2627,6 +2751,61 @@ function handleSpeedDropdownClickOutside(event) {
   pointer-events: auto;
 }
 
+.config-panel-expanded {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 70vw;
+  min-width: 70vw;
+  max-width: calc(100vw - 32px);
+  height: 70vh;
+  max-height: calc(100vh - 32px);
+  transform: translate(-50%, -50%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+  z-index: 5000;
+}
+
+.config-expand-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--canvas-text-secondary, #a0a0a0);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  z-index: 5;
+}
+
+.config-expand-btn:hover {
+  background: rgba(59, 130, 246, 0.16);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: var(--canvas-text-primary, #ffffff);
+}
+
+.config-panel-expanded .config-expand-btn {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: var(--canvas-text-primary, #ffffff);
+}
+
+.config-panel-expanded .prompt-area {
+  padding-right: 56px;
+}
+
+.config-panel-expanded .prompt-textarea {
+  min-height: 320px;
+  max-height: calc(70vh - 220px);
+}
+
 /* ===== 音乐生成面板 ===== */
 .music-gen-panel {
   display: flex;
@@ -2653,7 +2832,20 @@ function handleSpeedDropdownClickOutside(event) {
   resize: vertical;
   outline: none;
   overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
   transition: height 0.15s ease;
+}
+
+.prompt-textarea.is-empty::before {
+  content: attr(data-placeholder);
+  color: #666666;
+  pointer-events: none;
+  white-space: pre-wrap;
 }
 
 /* 提示词框滚动条样式 - 黑白灰风格 */
@@ -2684,10 +2876,6 @@ function handleSpeedDropdownClickOutside(event) {
 .prompt-textarea {
   scrollbar-width: thin;
   scrollbar-color: rgba(150, 150, 150, 0.6) rgba(60, 60, 60, 0.3);
-}
-
-.prompt-textarea::placeholder {
-  color: #666666;
 }
 
 /* 控制栏 */
@@ -3305,6 +3493,18 @@ function handleSpeedDropdownClickOutside(event) {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
 }
 
+:root.canvas-theme-light .config-panel-expanded {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.18) !important;
+}
+
+:root.canvas-theme-light .config-panel-expanded .config-expand-btn {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.25);
+  color: #2563eb;
+}
+
 /* 音乐生成面板 */
 :root.canvas-theme-light .audio-node .music-gen-panel {
   background: rgba(255, 255, 255, 0.98);
@@ -3320,7 +3520,7 @@ function handleSpeedDropdownClickOutside(event) {
   color: #1c1917;
 }
 
-:root.canvas-theme-light .audio-node .prompt-textarea::placeholder {
+:root.canvas-theme-light .audio-node .prompt-textarea.is-empty::before {
   color: #a8a29e;
 }
 

@@ -1,3 +1,5 @@
+import { replacePromptEditorMentionText } from './promptMention.js'
+
 const TYPE_LABELS = {
   image: '图片',
   video: '视频',
@@ -57,13 +59,16 @@ export function bindAssistantAttachmentMention({ text = '', start = 0, queryLeng
   }
 
   const mention = `@${item.label}`
-  const before = text.slice(0, start)
-  const after = text.slice(start + queryLength + 1)
-  const nextText = `${before}${mention}${after}`
+  const result = replacePromptEditorMentionText({
+    text,
+    mentionStart: start,
+    caret: start + queryLength + 1,
+    replacement: mention
+  })
 
   return {
-    text: nextText,
-    cursor: before.length + mention.length,
+    text: result.text,
+    cursor: result.cursor,
     bindings: {
       ...(bindings || {}),
       [item.key]: {

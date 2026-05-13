@@ -8,6 +8,12 @@ import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/util
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { pickConfiguredSubmode } from '@/utils/videoSubmodeDefaults'
+import { compressImage, getImageFileDimensions } from '@/utils/imageCompress'
+import {
+  SEEDANCE_MAX_IMAGE_PIXELS,
+  validatePreparedSeedanceImage,
+  validateSeedanceModeInputs
+} from '@/utils/seedanceMediaValidation'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import {
   getVideoGenerationProgressText,
@@ -576,14 +582,59 @@ function clearImages() {
 
 // ========== Seedance 文件上传函数 ==========
 
-function handleSeedanceFirstFrame(e) {
+async function prepareSeedanceImageFile(file) {
+  if (!file || !file.type.startsWith('image/')) return null
+  const compressed = await compressImage(file, {
+    maxSizeMB: 30,
+    maxLongSide: 6000,
+    maxPixels: SEEDANCE_MAX_IMAGE_PIXELS,
+    quality: 0.88,
+    minQuality: 0.45,
+    preservePng: false,
+    mimeType: 'image/jpeg'
+  })
+  const dimensions = await getImageFileDimensions(compressed)
+  const message = validatePreparedSeedanceImage({
+    width: dimensions?.width,
+    height: dimensions?.height,
+    size: compressed.size
+  })
+  if (message) throw new Error(message)
+  return compressed
+}
+
+function getLocalMediaDuration(file, mediaType) {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement(mediaType)
+    const url = URL.createObjectURL(file)
+    const cleanup = () => URL.revokeObjectURL(url)
+    el.preload = 'metadata'
+    el.onloadedmetadata = () => {
+      cleanup()
+      resolve(Number.isFinite(el.duration) ? el.duration : 0)
+    }
+    el.onerror = () => {
+      cleanup()
+      reject(new Error(mediaType === 'audio' ? '无法读取音频时长，请更换音频文件' : '无法读取视频时长，请更换视频文件'))
+    }
+    el.src = url
+  })
+}
+
+async function handleSeedanceFirstFrame(e) {
   const file = e.target.files?.[0]
   if (!file || !file.type.startsWith('image/')) return
-  if (file.size > 30 * 1024 * 1024) { error.value = '图片不能超过30MB'; return }
-  if (seedanceFirstFramePreview.value) URL.revokeObjectURL(seedanceFirstFramePreview.value)
-  seedanceFirstFrameFile.value = file
-  seedanceFirstFramePreview.value = URL.createObjectURL(file)
-  e.target.value = ''
+  try {
+    const prepared = await prepareSeedanceImageFile(file)
+    if (!prepared) return
+    if (seedanceFirstFramePreview.value) URL.revokeObjectURL(seedanceFirstFramePreview.value)
+    seedanceFirstFrameFile.value = prepared
+    seedanceFirstFramePreview.value = URL.createObjectURL(prepared)
+  } catch (err) {
+    error.value = err.message || '图片处理失败，请更换图片'
+  } finally {
+    e.target.value = ''
+  }
 }
 
 function removeSeedanceFirstFrame() {
@@ -592,14 +643,20 @@ function removeSeedanceFirstFrame() {
   seedanceFirstFramePreview.value = ''
 }
 
-function handleSeedanceLastFrame(e) {
+async function handleSeedanceLastFrame(e) {
   const file = e.target.files?.[0]
   if (!file || !file.type.startsWith('image/')) return
-  if (file.size > 30 * 1024 * 1024) { error.value = '图片不能超过30MB'; return }
-  if (seedanceLastFramePreview.value) URL.revokeObjectURL(seedanceLastFramePreview.value)
-  seedanceLastFrameFile.value = file
-  seedanceLastFramePreview.value = URL.createObjectURL(file)
-  e.target.value = ''
+  try {
+    const prepared = await prepareSeedanceImageFile(file)
+    if (!prepared) return
+    if (seedanceLastFramePreview.value) URL.revokeObjectURL(seedanceLastFramePreview.value)
+    seedanceLastFrameFile.value = prepared
+    seedanceLastFramePreview.value = URL.createObjectURL(prepared)
+  } catch (err) {
+    error.value = err.message || '图片处理失败，请更换图片'
+  } finally {
+    e.target.value = ''
+  }
 }
 
 function removeSeedanceLastFrame() {
@@ -608,14 +665,23 @@ function removeSeedanceLastFrame() {
   seedanceLastFramePreview.value = ''
 }
 
-function handleSeedanceRefImages(e) {
+async function handleSeedanceRefImages(e) {
   const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'))
   const MAX = 9
   const remaining = MAX - seedanceRefImages.value.length - seedanceRefImageUrls.value.length
-  const selected = files.filter(f => f.size <= 30 * 1024 * 1024).slice(0, remaining)
-  seedanceRefImages.value.push(...selected)
-  seedanceRefImagePreviews.value.push(...selected.map(f => URL.createObjectURL(f)))
-  e.target.value = ''
+  const selected = []
+  try {
+    for (const file of files.slice(0, remaining)) {
+      const prepared = await prepareSeedanceImageFile(file)
+      if (prepared) selected.push(prepared)
+    }
+    seedanceRefImages.value.push(...selected)
+    seedanceRefImagePreviews.value.push(...selected.map(f => URL.createObjectURL(f)))
+  } catch (err) {
+    error.value = err.message || '图片处理失败，请更换图片'
+  } finally {
+    e.target.value = ''
+  }
 }
 
 function removeSeedanceRefImage(idx) {
@@ -624,17 +690,52 @@ function removeSeedanceRefImage(idx) {
   seedanceRefImagePreviews.value.splice(idx, 1)
 }
 
-function handleSeedanceRefVideos(e) {
+async function handleSeedanceRefVideos(e) {
   const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('video/'))
   const MAX = 3
   const remaining = MAX - seedanceRefVideos.value.length - seedanceRefVideoUrls.value.length
-  const selected = files.filter(f => f.size <= 50 * 1024 * 1024).slice(0, remaining)
-  for (const file of selected) {
-    seedanceRefVideos.value.push(file)
+  const invalidFormat = files.find(f => !['video/mp4', 'video/quicktime'].includes(f.type))
+  if (invalidFormat) {
+    error.value = '参考视频格式不受支持，请使用 MP4 或 MOV'
+    e.target.value = ''
+    return
+  }
+  const tooLarge = files.find(f => f.size > 50 * 1024 * 1024)
+  if (tooLarge) {
+    error.value = '参考视频不能超过50MB'
+    e.target.value = ''
+    return
+  }
+  const selected = []
+  let totalDuration = seedanceRefVideoPreviews.value.reduce((sum, item) => sum + (Number(item.duration) || 0), 0)
+  try {
+    for (const file of files.slice(0, remaining)) {
+      const dur = await getLocalMediaDuration(file, 'video')
+      if (dur < 2 || dur > 15) {
+        error.value = '参考视频时长需在2到15秒之间'
+        e.target.value = ''
+        return
+      }
+      if (totalDuration + dur > 15) {
+        error.value = '参考视频总时长不能超过15秒'
+        e.target.value = ''
+        return
+      }
+      totalDuration += dur
+      selected.push({ file, duration: dur })
+    }
+  } catch (err) {
+    error.value = err.message || '无法读取视频时长，请更换视频文件'
+    e.target.value = ''
+    return
+  }
+  for (const item of selected) {
+    seedanceRefVideos.value.push(item.file)
     seedanceRefVideoPreviews.value.push({
-      name: file.name,
-      size: (file.size / 1024 / 1024).toFixed(2),
-      url: URL.createObjectURL(file)
+      name: item.file.name,
+      size: (item.file.size / 1024 / 1024).toFixed(2),
+      duration: item.duration,
+      url: URL.createObjectURL(item.file)
     })
   }
   e.target.value = ''
@@ -646,16 +747,51 @@ function removeSeedanceRefVideo(idx) {
   seedanceRefVideoPreviews.value.splice(idx, 1)
 }
 
-function handleSeedanceRefAudios(e) {
+async function handleSeedanceRefAudios(e) {
   const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('audio/'))
   const MAX = 3
   const remaining = MAX - seedanceRefAudios.value.length - seedanceRefAudioUrls.value.length
-  const selected = files.filter(f => f.size <= 15 * 1024 * 1024).slice(0, remaining)
-  for (const file of selected) {
-    seedanceRefAudios.value.push(file)
+  const invalidFormat = files.find(f => !['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav'].includes(f.type))
+  if (invalidFormat) {
+    error.value = '参考音频格式不受支持，请使用 MP3 或 WAV'
+    e.target.value = ''
+    return
+  }
+  const tooLarge = files.find(f => f.size > 15 * 1024 * 1024)
+  if (tooLarge) {
+    error.value = '参考音频不能超过15MB'
+    e.target.value = ''
+    return
+  }
+  const selected = []
+  let totalDuration = seedanceRefAudioPreviews.value.reduce((sum, item) => sum + (Number(item.duration) || 0), 0)
+  try {
+    for (const file of files.slice(0, remaining)) {
+      const dur = await getLocalMediaDuration(file, 'audio')
+      if (dur < 2 || dur > 15) {
+        error.value = '参考音频时长需在2到15秒之间'
+        e.target.value = ''
+        return
+      }
+      if (totalDuration + dur > 15) {
+        error.value = '参考音频总时长不能超过15秒'
+        e.target.value = ''
+        return
+      }
+      totalDuration += dur
+      selected.push({ file, duration: dur })
+    }
+  } catch (err) {
+    error.value = err.message || '无法读取音频时长，请更换音频文件'
+    e.target.value = ''
+    return
+  }
+  for (const item of selected) {
+    seedanceRefAudios.value.push(item.file)
     seedanceRefAudioPreviews.value.push({
-      name: file.name,
-      size: (file.size / 1024 / 1024).toFixed(2)
+      name: item.file.name,
+      size: (item.file.size / 1024 / 1024).toFixed(2),
+      duration: item.duration
     })
   }
   e.target.value = ''
@@ -921,27 +1057,16 @@ async function generateVideo() {
   // Seedance 模式特定验证
   if (isSeedanceModel.value) {
     const sm = seedanceMode.value
-    if (sm === 'image2video_first' && !seedanceFirstFrameFile.value) {
-      error.value = '请上传首帧图片'
+    const imageCount = sm === 'image2video_first'
+      ? (seedanceFirstFrameFile.value ? 1 : 0)
+      : sm === 'image2video_first_last'
+        ? (seedanceFirstFrameFile.value ? 1 : 0) + (seedanceLastFrameFile.value ? 1 : 0)
+        : seedanceRefImages.value.length + seedanceRefImageUrls.value.length
+    const videoCount = seedanceRefVideos.value.length + seedanceRefVideoUrls.value.length
+    const seedanceValidationMessage = validateSeedanceModeInputs({ mode: sm, imageCount, videoCount })
+    if (seedanceValidationMessage) {
+      error.value = seedanceValidationMessage
       return
-    }
-    if (sm === 'image2video_first_last') {
-      if (!seedanceFirstFrameFile.value) { error.value = '请上传首帧图片'; return }
-      if (!seedanceLastFrameFile.value) { error.value = '请上传尾帧图片'; return }
-    }
-    if (sm === 'video_edit') {
-      if (seedanceRefVideos.value.length === 0 && seedanceRefVideoUrls.value.length === 0) { error.value = '请上传参考视频或输入视频 URL'; return }
-    }
-    if (sm === 'video_extend') {
-      if (seedanceRefVideos.value.length === 0 && seedanceRefVideoUrls.value.length === 0) { error.value = '请上传要延长的视频或输入视频 URL'; return }
-    }
-    if (sm === 'multimodal_ref') {
-      const hasImages = seedanceRefImages.value.length > 0 || seedanceRefImageUrls.value.length > 0
-      const hasVideos = seedanceRefVideos.value.length > 0 || seedanceRefVideoUrls.value.length > 0
-      if (!hasImages && !hasVideos) {
-        error.value = '多模态模式至少需要一个参考图片或参考视频'
-        return
-      }
     }
   }
 

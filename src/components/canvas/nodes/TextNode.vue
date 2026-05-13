@@ -7,7 +7,7 @@ defineOptions({
  * 支持三种状态：空状态（快捷操作）、待编辑状态、编辑模式
  * 底部配置面板集成在节点内，紧贴节点卡片
  */
-import { ref, computed, watch, nextTick, inject, onMounted } from 'vue'
+import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from 'vue'
 import DOMPurify from 'dompurify'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
@@ -18,18 +18,21 @@ import { getAssets } from '@/api/canvas/assets'
 import { getApiUrl, getTenantHeaders, getAvailableLLMModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
-import { getMentionPopupPosition, getTextareaCaretViewportRect } from '@/utils/promptMention'
+import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { buildTextNodeLlmMessages } from '@/utils/textNodeLlmMessages'
 import {
   bindMediaMention,
   getMediaMentionKey,
+  normalizeMediaMentionLabel,
+  resolveMediaMentionItem,
   syncPromptMediaMentions
 } from '@/utils/promptMediaBindings'
 import CustomPresetDialog from '../dialogs/CustomPresetDialog.vue'
 import PresetManager from '../dialogs/PresetManager.vue'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
+import PromptMediaTag from '../PromptMediaTag.vue'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 
@@ -48,7 +51,14 @@ const userInfo = inject('userInfo')
 const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
-const { updateNodeInternals, getViewport, getSelectedNodes } = useVueFlow()
+const { updateNodeInternals, setViewport, getViewport, getSelectedNodes } = useVueFlow()
+
+// 节点根元素引用（用于配置面板放大居中）
+const textNodeRootRef = ref(null)
+
+// 配置面板放大相关（与 VideoNode 保持一致的交互逻辑）
+const isConfigPanelExpanded = ref(false)
+const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
 
 // 是否单独选中（只选了这一个节点时才显示工具栏和底部面板）
 const isSoloSelected = computed(() => {
@@ -56,7 +66,10 @@ const isSoloSelected = computed(() => {
 })
 
 watch(isSoloSelected, (val) => {
-  if (!val) showMediaMentionPopup.value = false
+  if (!val) {
+    showMediaMentionPopup.value = false
+    isConfigPanelExpanded.value = false
+  }
 })
 
 // 本地文本状态
@@ -81,6 +94,7 @@ const showMediaMentionPopup = ref(false)
 const mediaMentionActiveIndex = ref(0)
 const mediaMentionPosition = ref({ top: 0, left: 0 })
 let mediaMentionStartPos = -1
+let mediaMentionEndPos = -1
 const hasManualLLMInputSize = ref(false)
 
 // 过滤后的角色
@@ -157,15 +171,28 @@ function handleEditorInput(event) {
 
 // 自动调整 LLM 输入框高度（参考 ImageNode 的 autoResizeTextarea）
 function autoResizeLLMInput() {
-  if (hasManualLLMInputSize.value) return
-
   const textarea = llmInputRef.value
   if (!textarea) return
-  textarea.style.height = 'auto'
-  const minHeight = 60
-  const maxHeight = 200
-  const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
-  textarea.style.height = newHeight + 'px'
+
+  if (!hasManualLLMInputSize.value) {
+    textarea.style.height = 'auto'
+    const minHeight = 60
+    const maxHeight = 200
+    const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
+    textarea.style.height = newHeight + 'px'
+  }
+
+  syncLLMHighlightOverlayScroll()
+}
+
+function syncLLMHighlightOverlayScroll() {
+}
+
+function handleLLMInputFocus() {
+  autoResizeLLMInput()
+  nextTick(() => {
+    syncLLMHighlightOverlayScroll()
+  })
 }
 
 function markLLMInputResizeIntent(event) {
@@ -174,12 +201,43 @@ function markLLMInputResizeIntent(event) {
   }
 }
 
+function getPromptEditorCaretViewportRect(editor = llmInputRef.value) {
+  if (!editor || typeof window === 'undefined') return null
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return null
+  const range = selection.getRangeAt(0)
+  if (!editor.contains(range.startContainer)) return null
+  const rect = range.getBoundingClientRect()
+  if (rect && Number.isFinite(rect.left) && (rect.width || rect.height)) return rect
+  return editor.getBoundingClientRect()
+}
+
+function insertLLMEditorPlainText(text) {
+  const editor = llmInputRef.value
+  if (!editor) return
+  const { start, end } = getPromptEditorSelectionRange(editor)
+  llmInputText.value = llmInputText.value.slice(0, start) + text + llmInputText.value.slice(end)
+  nextTick(() => {
+    const nextPos = start + text.length
+    restorePromptEditorSelection(editor, nextPos, nextPos)
+    autoResizeLLMInput()
+  })
+}
+
 // 处理提及输入（Textarea）
 function handleLLMInput(event) {
+  const editor = event.target
+  const selectionRange = getPromptEditorSelectionRange(editor)
+  const text = serializePromptEditorContent(editor)
+  if (text !== llmInputText.value) {
+    llmInputText.value = text
+  }
   autoResizeLLMInput()
-  const el = event.target
-  const cursorIndex = el.selectionStart
-  const text = el.value
+  nextTick(() => {
+    cleanOrphanedEditorTextNodes(editor)
+    restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+  })
+  const cursorIndex = selectionRange.start
   const textBeforeCursor = text.slice(0, cursorIndex)
   const atIndex = textBeforeCursor.lastIndexOf('@')
   
@@ -199,12 +257,13 @@ function handleLLMInput(event) {
       if (referenceMediaList.value.length > 0) {
         showMediaMentionPopup.value = true
         mediaMentionStartPos = atIndex
+        mediaMentionEndPos = cursorIndex
         mediaMentionActiveIndex.value = 0
         showMentionList.value = false
 
         mediaMentionPosition.value = getMentionPopupPosition({
-          caretRect: getTextareaCaretViewportRect(el, cursorIndex),
-          fallbackRect: el.getBoundingClientRect()
+          caretRect: getPromptEditorCaretViewportRect(editor),
+          fallbackRect: editor.getBoundingClientRect()
         })
         return
       }
@@ -215,9 +274,9 @@ function handleLLMInput(event) {
       mentionStartPos = atIndex
       showMediaMentionPopup.value = false
 
-      const rect = el.getBoundingClientRect()
+      const rect = editor.getBoundingClientRect()
       mentionListPosition.value = getMentionPopupPosition({
-        caretRect: getTextareaCaretViewportRect(el, cursorIndex),
+        caretRect: getPromptEditorCaretViewportRect(editor),
         fallbackRect: rect,
         offset: 5
       })
@@ -227,6 +286,7 @@ function handleLLMInput(event) {
   
   showMentionList.value = false
   showMediaMentionPopup.value = false
+  mediaMentionEndPos = -1
 }
 
 // 选择角色
@@ -245,18 +305,22 @@ function selectCharacter(character) {
       localText.value = textareaRef.value.innerHTML
     }
   } else if (mentionTarget.value === 'llm') {
-    // Textarea 插入
+    // LLM contenteditable 插入
     const originalText = llmInputText.value
     const before = originalText.slice(0, mentionStartPos)
     const after = originalText.slice(mentionStartPos + mentionQuery.value.length + 1)
+    const scrollPosition = llmInputRef.value
+      ? { scrollTop: llmInputRef.value.scrollTop, scrollLeft: llmInputRef.value.scrollLeft }
+      : null
     llmInputText.value = before + textToInsert + after
     
     // 恢复光标位置
     nextTick(() => {
       if (llmInputRef.value) {
-        llmInputRef.value.focus()
         const newCursorPos = mentionStartPos + textToInsert.length
-        llmInputRef.value.setSelectionRange(newCursorPos, newCursorPos)
+        restorePromptEditorSelection(llmInputRef.value, newCursorPos, newCursorPos)
+        llmInputRef.value.scrollTop = scrollPosition?.scrollTop || 0
+        llmInputRef.value.scrollLeft = scrollPosition?.scrollLeft || 0
       }
     })
   }
@@ -298,6 +362,7 @@ const formatState = ref({
 
 // ========== LLM 配置相关 ==========
 const llmInputText = ref(props.data.llmInputText || props.data.prompt || '')
+const llmInputRenderKey = ref(0)
 const promptMentionBindings = ref(props.data.promptMentionBindings || {})
 
 // 监听 llmInputText 变化，自动调整输入框高度
@@ -305,6 +370,7 @@ watch(llmInputText, () => {
   persistNodePromptDraft(canvasStore, props.id, 'llmInputText', llmInputText.value)
   nextTick(() => {
     autoResizeLLMInput()
+    syncLLMHighlightOverlayScroll()
   })
 })
 
@@ -880,28 +946,43 @@ function syncPromptMentionsWithMedia() {
 const highlightedLlmInputSegments = computed(() => {
   if (!llmInputText.value) return []
   const segments = []
-  const regex = /【?@(?:视频|图片|音频)\d*】?/g
+  const regex = /【?@(?:视频|图片|音频)\d+】?/g
   let lastIndex = 0
   let match
   while ((match = regex.exec(llmInputText.value)) !== null) {
     if (match.index > lastIndex) {
-      segments.push({ text: llmInputText.value.slice(lastIndex, match.index), isTag: false })
+      segments.push({
+        text: llmInputText.value.slice(lastIndex, match.index),
+        isTag: false,
+        start: lastIndex,
+        end: match.index
+      })
     }
-    segments.push({ text: match[0], isTag: true, media: getMediaForPromptTag(match[0]) })
+    segments.push({
+      text: match[0],
+      isTag: true,
+      media: getMediaForPromptTag(match[0]),
+      start: match.index,
+      end: regex.lastIndex
+    })
     lastIndex = regex.lastIndex
   }
   if (lastIndex < llmInputText.value.length) {
-    segments.push({ text: llmInputText.value.slice(lastIndex), isTag: false })
+    segments.push({
+      text: llmInputText.value.slice(lastIndex),
+      isTag: false,
+      start: lastIndex,
+      end: llmInputText.value.length
+    })
   }
   return segments
 })
-
 function getMediaForPromptTag(text) {
-  const match = String(text || '').match(/^【?@(视频|图片|音频)(\d*)】?$/)
+  const match = String(text || '').match(/^【?@(视频|图片|音频)(\d+)】?$/)
   if (!match) return null
   const typeMap = { 视频: 'video', 图片: 'image', 音频: 'audio' }
   const type = typeMap[match[1]]
-  const index = Number(match[2] || 1)
+  const index = Number(match[2])
   return referenceMediaList.value.find(item => item.type === type && item.index === index) || null
 }
 
@@ -916,6 +997,32 @@ function handlePromptTagHover(media, event) {
   }
 }
 
+// 点击 chip 时，把 textarea 的光标精准定位到该 chip 字符串的开始或结束位置
+// 修复 chip 视觉宽度与 textarea 字符宽度不一致导致光标无法定位的问题
+function handlePromptTagMousedown(seg, event) {
+  event.preventDefault()
+  event.stopPropagation()
+  const editor = llmInputRef.value
+  if (!editor) return
+  const tagSegments = highlightedLlmInputSegments.value.filter(item => item.isTag)
+  const segmentIndex = tagSegments.findIndex(item =>
+    item === seg ||
+    (item.start === seg.start && item.end === seg.end && item.text === seg.text)
+  )
+  const targetIndex = getPromptMediaTagCaretIndex({
+    segments: tagSegments,
+    segmentIndex,
+    clickX: event.clientX,
+    tagRects: Array.from(editor.querySelectorAll('[data-prompt-mention]')).map(el => el.getBoundingClientRect())
+  })
+  editor.focus()
+  nextTick(() => {
+    if (editor && Number.isFinite(targetIndex)) {
+      restorePromptEditorSelection(editor, targetIndex, targetIndex)
+    }
+  })
+}
+
 watch(
   () => referenceMediaList.value.map(item => `${item.key}:${item.label}`).join('|'),
   () => {
@@ -927,45 +1034,71 @@ watch(
  * 点击参考素材缩略图，在提示词光标处插入 @标记
  */
 function insertMediaTag(media) {
-  const tag = `@${media.label}`
-  const textarea = llmInputRef.value
-  if (!textarea) {
+  const resolvedMedia = resolveMediaMentionItem(media, referenceMediaList.value)
+  const mentionMedia = resolvedMedia || media
+  const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
+  const editor = llmInputRef.value
+  if (!editor) {
     llmInputText.value += tag
-    updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
+    updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
     return
   }
 
-  const start = textarea.selectionStart ?? llmInputText.value.length
-  const end = textarea.selectionEnd ?? start
-  const before = llmInputText.value.slice(0, start)
-  const after = llmInputText.value.slice(end)
+  const { start, end } = getPromptEditorSelectionRange(editor)
+  const activeMention = start === end ? getActivePromptMentionRange(llmInputText.value, start) : null
+  const replaceStart = activeMention?.start ?? start
+  const replaceEnd = activeMention?.end ?? end
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+  const before = llmInputText.value.slice(0, replaceStart)
+  const after = llmInputText.value.slice(replaceEnd)
   llmInputText.value = before + tag + after
-  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
+  llmInputRenderKey.value += 1
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
 
   nextTick(() => {
-    textarea.focus()
-    const newPos = start + tag.length
-    textarea.setSelectionRange(newPos, newPos)
+    const nextEditor = llmInputRef.value || editor
+    cleanOrphanedEditorTextNodes(nextEditor)
+    const newPos = replaceStart + tag.length
+    restorePromptEditorSelection(nextEditor, newPos, newPos)
+    nextEditor.scrollTop = scrollPosition.scrollTop
+    nextEditor.scrollLeft = scrollPosition.scrollLeft
   })
 }
 
+function cleanOrphanedEditorTextNodes(editor) {
+  removePromptEditorOrphanTextNodes(editor)
+}
+
 function handleMediaMentionSelect(media) {
-  const textarea = llmInputRef.value
-  if (!textarea) return
+  const editor = llmInputRef.value
+  if (!editor) return
   
-  const tag = `@${media.label}`
-  const cursorPos = textarea.selectionStart
-  const before = llmInputText.value.slice(0, mediaMentionStartPos)
-  const after = llmInputText.value.slice(cursorPos)
-  llmInputText.value = before + tag + ' ' + after
-  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, media))
+  const resolvedMedia = resolveMediaMentionItem(media, referenceMediaList.value)
+  const mentionMedia = resolvedMedia || media
+  const tag = `@${normalizeMediaMentionLabel(mentionMedia.label)}`
+  const { start: cursorPos } = getPromptEditorSelectionRange(editor)
+  const replaceEnd = mediaMentionEndPos > mediaMentionStartPos ? mediaMentionEndPos : cursorPos
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+  const result = replacePromptEditorMentionText({
+    text: llmInputText.value,
+    mentionStart: mediaMentionStartPos,
+    caret: replaceEnd,
+    replacement: tag,
+    appendSpace: true
+  })
+  llmInputText.value = result.text
+  llmInputRenderKey.value += 1
+  updatePromptMentionBindings(bindMediaMention(promptMentionBindings.value, mentionMedia))
   
   showMediaMentionPopup.value = false
+  mediaMentionEndPos = -1
   
   nextTick(() => {
-    textarea.focus()
-    const newPos = mediaMentionStartPos + tag.length + 1
-    textarea.setSelectionRange(newPos, newPos)
+    const nextEditor = llmInputRef.value || editor
+    cleanOrphanedEditorTextNodes(nextEditor)
+    restorePromptEditorSelection(nextEditor, result.cursor, result.cursor)
+    nextEditor.scrollTop = scrollPosition.scrollTop
+    nextEditor.scrollLeft = scrollPosition.scrollLeft
   })
 }
 
@@ -1396,11 +1529,12 @@ function handleLLMKeyDown(event) {
   }
 
   if ((event.key === 'Backspace' || event.key === 'Delete') && inheritedImages.value.length > 0) {
-    const textarea = llmInputRef.value
-    if (textarea && textarea.selectionStart === textarea.selectionEnd) {
-      const cursorPos = textarea.selectionStart
+    const editor = llmInputRef.value
+    const selection = editor ? getPromptEditorSelectionRange(editor) : null
+    if (editor && selection && selection.start === selection.end) {
+      const cursorPos = selection.start
       const text = llmInputText.value
-      const tagRegex = /【?@(?:视频|图片|音频)\d*】?/g
+      const tagRegex = /【?@(?:视频|图片|音频)\d+】?/g
       let match
       while ((match = tagRegex.exec(text)) !== null) {
         const tagStart = match.index
@@ -1416,7 +1550,7 @@ function handleLLMKeyDown(event) {
           const after = text.slice(tagEnd)
           llmInputText.value = before + after
           nextTick(() => {
-            textarea.setSelectionRange(tagStart, tagStart)
+            restorePromptEditorSelection(editor, tagStart, tagStart)
           })
           return
         }
@@ -1427,6 +1561,11 @@ function handleLLMKeyDown(event) {
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
     handleLLMGenerate()
+  }
+
+  if (event.key === 'Enter' && event.shiftKey) {
+    event.preventDefault()
+    insertLLMEditorPlainText('\n')
   }
 }
 
@@ -2605,18 +2744,67 @@ function handleResizeEnd() {
   document.removeEventListener('mouseup', handleResizeEnd)
 }
 
+// 配置面板放大：把节点居中到视口中心，方便放大后查看
+function centerNodeInViewport() {
+  const nodeEl = textNodeRootRef.value
+  const paneEl = nodeEl?.closest?.('.vue-flow')
+  if (!nodeEl || !paneEl || !getViewport || !setViewport) return
+
+  const nodeRect = nodeEl.getBoundingClientRect()
+  const paneRect = paneEl.getBoundingClientRect()
+  const viewport = getViewport()
+  const targetZoom = EXPANDED_CONFIG_PANEL_NODE_ZOOM
+  const nodeCenterFlowX = (nodeRect.left - paneRect.left + nodeRect.width / 2 - viewport.x) / viewport.zoom
+  const nodeCenterFlowY = (nodeRect.top - paneRect.top + nodeRect.height / 2 - viewport.y) / viewport.zoom
+
+  setViewport({
+    x: paneRect.width / 2 - nodeCenterFlowX * targetZoom,
+    y: paneRect.height / 2 - nodeCenterFlowY * targetZoom,
+    zoom: targetZoom
+  }, { duration: 420 })
+}
+
+function toggleConfigPanelExpanded() {
+  const nextExpanded = !isConfigPanelExpanded.value
+  if (nextExpanded) {
+    centerNodeInViewport()
+  }
+  isConfigPanelExpanded.value = nextExpanded
+  if (nextExpanded) {
+    nextTick(() => {
+      llmInputRef.value?.focus()
+    })
+  }
+}
+
+function collapseConfigPanel() {
+  isConfigPanelExpanded.value = false
+}
+
+function handleConfigPanelOutsideMouseDown(event) {
+  if (!isConfigPanelExpanded.value) return
+  if (llmConfigPanelRef.value?.contains(event.target)) return
+  if (event.target.closest('.prompt-mention-popup')) return
+  collapseConfigPanel()
+}
+
 // 组件挂载时加载 LLM 配置和用户预设
 onMounted(() => {
   loadLLMConfig()
   loadUserPresets()
+  document.addEventListener('mousedown', handleConfigPanelOutsideMouseDown)
   nextTick(() => {
     updateNodeInternals(props.id)
   })
 })
+
+onUnmounted(() => {
+  document.removeEventListener('mousedown', handleConfigPanelOutsideMouseDown)
+})
 </script>
 
 <template>
-  <div :class="nodeClass" @contextmenu="handleContextMenu" @click="handleNodeClick">
+  <div ref="textNodeRootRef" :class="nodeClass" @contextmenu="handleContextMenu" @click="handleNodeClick">
     <!-- 输入端口 (隐藏但保留给 Vue Flow 用于边渲染) -->
     <Handle
       type="target"
@@ -2864,7 +3052,36 @@ onMounted(() => {
     </Teleport>
     
     <!-- 底部 LLM 配置面板 - 紧贴节点卡片 -->
-    <div v-show="isSoloSelected" ref="llmConfigPanelRef" class="llm-config-panel" @click.stop @mousedown.stop>
+    <Teleport to="body" :disabled="!isConfigPanelExpanded">
+    <div
+      v-show="isSoloSelected"
+      ref="llmConfigPanelRef"
+      class="llm-config-panel"
+      :class="{ 'llm-config-panel-expanded': isConfigPanelExpanded }"
+      @click.stop
+      @mousedown.stop
+    >
+      <button
+        class="llm-config-expand-btn"
+        type="button"
+        :title="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        :aria-label="isConfigPanelExpanded ? '缩小输入面板' : '放大输入面板'"
+        @click.stop="toggleConfigPanelExpanded"
+        @mousedown.stop
+      >
+        <svg v-if="!isConfigPanelExpanded" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M15 3h6v6" />
+          <path d="M21 3l-7 7" />
+          <path d="M9 21H3v-6" />
+          <path d="M3 21l7-7" />
+        </svg>
+        <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 14h6v6" />
+          <path d="M10 14l-7 7" />
+          <path d="M20 10h-6V4" />
+          <path d="M14 10l7-7" />
+        </svg>
+      </button>
       <!-- 参考媒体区域（视频/图片/音频/混合） -->
       <div v-if="inheritedImages.length > 0" class="reference-section">
         <span class="reference-label">{{ referenceLabel }}</span>
@@ -2976,20 +3193,34 @@ onMounted(() => {
       <!-- 输入区域 -->
       <div class="llm-input-area">
         <div class="llm-input-wrapper">
-          <textarea
+          <div
+            :key="llmInputRenderKey"
             ref="llmInputRef"
-            v-model="llmInputText"
             class="llm-input"
-            :placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（按下Enter 生成，Shift+Enter 换行）'"
+            :class="{ 'is-empty': !llmInputText }"
+            contenteditable="true"
+            role="textbox"
+            aria-multiline="true"
+            :data-placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（按下Enter 生成，Shift+Enter 换行）'"
             @keydown="handleLLMKeyDown"
             @input="handleLLMInput"
             @wheel.stop
-            @focus="autoResizeLLMInput"
+            @focus="handleLLMInputFocus"
             @mousedown="markLLMInputResizeIntent"
             @dblclick.stop
-          ></textarea>
-          <div v-if="highlightedLlmInputSegments.some(s => s.isTag)" class="llm-highlight-overlay" aria-hidden="true">
-            <template v-for="(seg, i) in highlightedLlmInputSegments" :key="i"><span v-if="seg.isTag" class="prompt-media-tag" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd">{{ seg.text }}</span><span v-else>{{ seg.text }}</span></template>
+          >
+            <span
+              v-for="(seg, i) in highlightedLlmInputSegments"
+              :key="i"
+              class="prompt-highlight-segment"
+              :class="{ 'is-prompt-tag-slot': seg.isTag }"
+              :data-prompt-segment-index="i"
+              :data-prompt-segment-start="seg.start"
+              :data-prompt-segment-end="seg.end"
+              :data-prompt-mention="seg.isTag ? seg.text : undefined"
+              :contenteditable="seg.isTag ? 'false' : undefined"
+              @mousedown="seg.isTag && handlePromptTagMousedown(seg, $event)"
+            ><PromptMediaTag v-if="seg.isTag" :text="seg.text" :media="seg.media" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd" /><template v-else>{{ seg.text }}</template></span>
           </div>
         </div>
         <PromptMentionPopup
@@ -3110,6 +3341,7 @@ onMounted(() => {
         </div>
       </div>
     </div>
+    </Teleport>
   </div>
 
   <!-- 自定义预设对话框 -->
@@ -3852,6 +4084,64 @@ onMounted(() => {
   pointer-events: auto;
 }
 
+/* 放大态：脱离节点布局，固定居中浮动在视口中央 */
+.llm-config-panel-expanded {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 70vw;
+  min-width: 70vw;
+  max-width: calc(100vw - 32px);
+  height: 70vh;
+  max-height: calc(100vh - 32px);
+  transform: translate(-50%, -50%);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
+  z-index: 5000;
+}
+
+/* 放大按钮（右上角） */
+.llm-config-expand-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--canvas-text-secondary, #a0a0a0);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  z-index: 5;
+}
+
+.llm-config-expand-btn:hover {
+  background: rgba(59, 130, 246, 0.16);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: var(--canvas-text-primary, #ffffff);
+}
+
+.llm-config-panel-expanded .llm-config-expand-btn {
+  background: rgba(59, 130, 246, 0.18);
+  border-color: rgba(59, 130, 246, 0.5);
+  color: var(--canvas-text-primary, #ffffff);
+}
+
+/* 放大态下让输入框获得更大的可用高度 */
+.llm-config-panel-expanded .llm-input-area {
+  padding-right: 48px;
+}
+
+.llm-config-panel-expanded .llm-input {
+  min-height: 320px;
+  max-height: calc(70vh - 220px);
+}
+
 /* 上游文本展示区域 */
 .upstream-text-section {
   padding: 12px;
@@ -4097,6 +4387,7 @@ onMounted(() => {
 
 .llm-input-wrapper {
   position: relative;
+  overflow: hidden;
 }
 
 .llm-input {
@@ -4106,32 +4397,45 @@ onMounted(() => {
   outline: none;
   color: var(--canvas-text-primary, #ffffff);
   font-size: 14px;
+  font-family: inherit;
   resize: vertical;
   min-height: 60px;
   max-height: min(50vh, 420px);
   line-height: 1.6;
   overflow-y: auto;
+  overflow-wrap: break-word;
+  word-break: break-word;
   transition: height 0.15s ease;
   padding: 4px 0;
+  cursor: text;
+  white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
-.llm-highlight-overlay {
-  position: absolute;
-  inset: 0;
-  padding: 4px 0;
-  font-size: 14px;
-  line-height: 1.6;
-  font-family: inherit;
-  white-space: pre-wrap;
-  word-wrap: break-word;
+.llm-input.is-empty::before {
+  content: attr(data-placeholder);
+  color: var(--canvas-text-placeholder, #4a4a4a);
   pointer-events: none;
-  color: transparent;
-  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.prompt-highlight-segment.is-prompt-tag-slot {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: baseline;
+  box-sizing: border-box;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.prompt-highlight-segment.is-prompt-tag-slot :deep(.prompt-media-tag-chip) {
+  flex-shrink: 0;
 }
 
 .prompt-media-tag {
   background: rgba(255, 255, 255, 0.12);
-  color: transparent;
+  color: var(--canvas-text-primary, #ffffff);
   border-radius: 3px;
   padding: 1px 2px;
   border-bottom: 2px solid rgba(255, 255, 255, 0.45);
@@ -4162,7 +4466,7 @@ onMounted(() => {
   background: rgba(200, 200, 200, 0.9);
 }
 
-.llm-input::placeholder {
+.llm-input.is-empty::before {
   color: var(--canvas-text-placeholder, #4a4a4a);
 }
 
@@ -4800,7 +5104,11 @@ onMounted(() => {
   color: #1c1917;
 }
 
-:root.canvas-theme-light .text-node .prompt-input::placeholder {
+:root.canvas-theme-light .text-node .prompt-media-tag {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .text-node .llm-input.is-empty::before {
   color: #a8a29e;
 }
 
@@ -5081,5 +5389,18 @@ onMounted(() => {
 :root.canvas-theme-light .text-node .text-node-display::-webkit-scrollbar-thumb:hover,
 :root.canvas-theme-light .text-node .llm-response-content::-webkit-scrollbar-thumb:hover {
   background: #a0a0a0;
+}
+
+/* 放大态 LLM 配置面板（白昼模式） */
+:root.canvas-theme-light .llm-config-panel-expanded {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.18) !important;
+}
+
+:root.canvas-theme-light .llm-config-panel-expanded .llm-config-expand-btn {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.25);
+  color: #2563eb;
 }
 </style>

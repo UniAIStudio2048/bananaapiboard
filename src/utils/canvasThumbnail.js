@@ -4,7 +4,8 @@
  * 根据画布 zoom 级别动态调整图片质量：
  * - 缩小时加载小缩略图，节约内存和带宽
  * - 放大时逐步提高分辨率，接近原图
- * - 原图仅用于下载、全屏预览或生成输入，不直接用于画布节点
+ * - COS CDN 图片保持原图直连，避免远程图片处理失败导致画布节点空白
+ * - 原图仅用于下载、全屏预览或生成输入；COS CDN 是例外
  */
 
 import { getApiUrl } from '@/config/tenant'
@@ -79,11 +80,10 @@ export function getCanvasThumbnailUrl(url, width = DEFAULT_THUMB_WIDTH) {
     return `${url}${sep}preview=true&w=${width}`
   }
 
-  // COS CDN → 数据万象缩略图（仅图片）
+  // COS CDN 图片直接用于画布节点。部分 COS 对象没有文件扩展名或未启用数据万象，
+  // 强制拼接 imageMogr2 会导致节点图片加载失败，画布只剩连线。
   if (isCosCdn(url) && !isVideoUrl(url)) {
-    if (url.includes('imageMogr2') || url.includes('imageView2')) return url
-    const sep = url.includes('?') ? '|' : '?'
-    return `${url}${sep}imageMogr2/thumbnail/${width}x/format/webp`
+    return url
   }
 
   // COS 代理 → 万象数据处理缩略图（仅图片，跳过视频）

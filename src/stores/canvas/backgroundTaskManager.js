@@ -11,6 +11,7 @@
 import { getImageTaskStatus, getVideoTaskStatus, getVideoHdTaskStatus, getImageHdTaskStatus, getImagePanoramaTaskStatus, getRemoveBackgroundTaskStatus, getAudioEditTaskStatus } from '@/api/canvas/nodes'
 import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
 import { getTaskStatusConfig } from './backgroundTaskConfig'
+import { classifyBackgroundTaskStatus } from './backgroundTaskStatus'
 
 const STORAGE_KEY = 'canvas_background_tasks'
 const POLL_INTERVAL = 3000  // 3秒轮询一次
@@ -194,29 +195,9 @@ function startPolling(taskId) {
         task.progress = result.progress
       }
       
-      // 检查是否完成（支持大小写状态）
-      const statusLower = (result.status || '').toLowerCase()
-      // 高清任务返回 outputUrl，普通任务返回 url 或 video_url
-      const hasOutput = result.hasOutput || result.url || result.video_url || result.outputUrl || result.output_url
-      const isSuccessStatus = statusLower === 'completed' || statusLower === 'success' || statusLower === 'succeeded'
-      const isVideoTask = taskConfig.resultType === 'video'
-      const errorMessage = result.error || result.fail_reason || result.message
+      const classifiedStatus = classifyBackgroundTaskStatus(result, taskConfig.resultType)
 
-      // 视频任务即使返回成功状态，但没有真实输出且携带错误信息时（例如 Seedance2 版权拦截把错误塞进 result_url），
-      // 应判定为失败，避免把错误文案当作视频结果落到画布节点上。
-      if (isVideoTask && isSuccessStatus && !hasOutput && errorMessage) {
-        task.status = 'failed'
-        task.error = errorMessage
-        task.result = result
-        tasks.set(taskId, task)
-        saveTasksToStorage()
-        stopPolling(taskId)
-        notifyTaskFailed(taskId, task)
-        console.log(`[BackgroundTaskManager] 视频任务返回成功但无输出，按失败处理: ${taskId} | 错误: ${errorMessage}`)
-        return
-      }
-
-      if (statusLower === 'completed' || statusLower === 'success' || hasOutput) {
+      if (classifiedStatus.state === 'completed') {
         task.status = 'completed'
         task.result = result
         
@@ -249,12 +230,13 @@ function startPolling(taskId) {
         stopPolling(taskId)
         notifyTaskComplete(taskId, task)
         console.log(`[BackgroundTaskManager] 任务完成: ${taskId}`, result)
-      } else if (statusLower === 'failed' || statusLower === 'error' || statusLower === 'failure' || statusLower === 'timeout') {
+      } else if (classifiedStatus.state === 'failed') {
         task.status = 'failed'
-        task.error = result.error || result.fail_reason || '任务执行失败'
+        task.error = classifiedStatus.error || '任务执行失败'
+        task.result = result
         stopPolling(taskId)
         notifyTaskFailed(taskId, task)
-        console.log(`[BackgroundTaskManager] 任务失败: ${taskId}`)
+        console.log(`[BackgroundTaskManager] 任务失败: ${taskId} | 状态: ${result.status || 'unknown'} | 错误: ${task.error}`)
       } else {
         task.status = 'processing'
       }

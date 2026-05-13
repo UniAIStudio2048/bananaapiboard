@@ -32,20 +32,25 @@ test('image node model dropdown icons match video vendor group icon size', () =>
 
   assert.doesNotMatch(imageNode, /<span class="model-icon">🍌<\/span>/)
 
-  const selectedIcon = cssBlock(imageNode, '.model-icon')
   const itemIcon = cssBlock(imageNode, '.model-item-icon')
   const imageIcon = cssBlock(imageNode, '.model-icon-image')
-  const textIcon = cssBlock(imageNode, '.model-icon-text')
 
-  assert.match(selectedIcon, /width:\s*34px;/)
-  assert.match(selectedIcon, /height:\s*34px;/)
-  assert.match(selectedIcon, /border-radius:\s*10px;/)
   assert.match(itemIcon, /width:\s*34px;/)
   assert.match(itemIcon, /height:\s*34px;/)
   assert.match(itemIcon, /border-radius:\s*10px;/)
   assert.match(imageIcon, /width:\s*100%;/)
   assert.match(imageIcon, /height:\s*100%;/)
-  assert.match(textIcon, /font-size:\s*14px;/)
+})
+
+test('image node trigger icon matches video node compact trigger style', () => {
+  // 触发按钮内的模型图标应与 VideoNode 底部参数行的紧凑风格保持一致
+  // 不再使用 34px 大方块（与下拉项尺寸混淆），改为紧凑的 18px 内联图标
+  const imageNode = readComponent('ImageNode.vue')
+  const selectedIcon = cssBlock(imageNode, '.model-icon')
+
+  assert.match(selectedIcon, /width:\s*18px;/)
+  assert.match(selectedIcon, /height:\s*18px;/)
+  assert.doesNotMatch(selectedIcon, /background:\s*rgba\(255,\s*255,\s*255,\s*0\.08\)/)
 })
 
 test('image node model selector delegates configured icon expressions to ModelIcon', () => {

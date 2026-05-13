@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   bindMediaMention,
   buildMediaMentionItems,
+  resolveMediaMentionItem,
   syncPromptMediaMentions,
   escapePromptMediaMentions
 } from './promptMediaBindings.js'
@@ -16,6 +17,41 @@ test('removes prompt mentions when their bound media is removed', () => {
 
   assert.equal(result.text, '让动起来')
   assert.deepEqual(result.bindings, {})
+})
+
+test('does not treat incomplete media mention input as a removable mention', () => {
+  const items = buildMediaMentionItems({ images: ['a.png'] })
+  const bindings = bindMediaMention({}, items[0])
+
+  const result = syncPromptMediaMentions('正在输入@图片', bindings, items)
+
+  assert.equal(result.text, '正在输入@图片')
+  assert.deepEqual(result.bindings, {})
+})
+
+test('normalizes media labels that already include an at sign', () => {
+  const bindings = bindMediaMention({}, {
+    type: 'image',
+    label: '@图片1',
+    url: 'a.png'
+  })
+
+  assert.deepEqual(bindings, {
+    'image:a.png': { type: 'image', label: '图片1' }
+  })
+})
+
+test('resolves thumbnail click payloads to full media mention items', () => {
+  const items = buildMediaMentionItems({
+    videos: ['v.mp4'],
+    images: ['a.png'],
+    audios: ['sound.mp3']
+  })
+
+  assert.deepEqual(
+    resolveMediaMentionItem({ type: 'image', index: 1, label: '图片1' }, items),
+    items[1]
+  )
 })
 
 test('escapePromptMediaMentions adds spaces around mentions', () => {
