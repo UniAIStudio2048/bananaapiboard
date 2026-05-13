@@ -5762,12 +5762,13 @@ function handleKeyDown(event) {
     }
   }
 
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault()
     handleGenerate()
+    return
   }
 
-  if (event.key === 'Enter' && event.shiftKey) {
+  if (event.key === 'Enter') {
     event.preventDefault()
     insertPromptEditorPlainText('\n')
   }
@@ -6412,7 +6413,22 @@ function insertMediaTag(media) {
   })
 }
 
+// IME 中文输入法 composition 状态：composition 期间浏览器会持续触发 input，
+// 此时序列化得到的是临时拼音串、再调用 restorePromptEditorSelection 会破坏 IME 选区，
+// 因此必须在 composition 期间直接 return，等 compositionend 后再统一处理一次
+let isPromptInputComposing = false
+
+function handlePromptCompositionStart() {
+  isPromptInputComposing = true
+}
+
+function handlePromptCompositionEnd(event) {
+  isPromptInputComposing = false
+  handlePromptInput(event)
+}
+
 function handlePromptInput(event) {
+  if (isPromptInputComposing || event?.isComposing) return
   const editor = event.target
   const selectionRange = getPromptEditorSelectionRange(editor)
   const text = serializePromptEditorContent(editor)
@@ -7445,9 +7461,11 @@ async function handleDrop(event) {
             contenteditable="true"
             role="textbox"
             aria-multiline="true"
-            :data-placeholder="referenceImages.length > 0 ? '输入提示词，点击上方图片插入 @图片 引用\n例：让@图片1中的人物换上红色衣服（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
+            :data-placeholder="referenceImages.length > 0 ? '输入提示词，点击上方图片插入 @图片 引用\n例：让@图片1中的人物换上红色衣服（Ctrl+Enter 生成，Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。(Ctrl+Enter 生成，Enter 换行)'"
             @keydown="handleKeyDown"
             @input="handlePromptInput"
+            @compositionstart="handlePromptCompositionStart"
+            @compositionend="handlePromptCompositionEnd"
             @focus="autoResizeTextarea"
             @wheel.stop
             @mousedown="startTextareaAutoScroll"

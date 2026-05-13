@@ -1057,9 +1057,18 @@ function screenToFlowPosition(screenPos) {
 }
 
 // 键盘事件处理
+function isTextInputEventTarget(target) {
+  return !!(
+    target?.tagName === 'INPUT' ||
+    target?.tagName === 'TEXTAREA' ||
+    target?.isContentEditable ||
+    target?.closest?.('input, textarea, select, [contenteditable="true"]')
+  )
+}
+
 function handleKeyDown(event) {
   const target = event.target
-  const isInInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+  const isInInput = isTextInputEventTarget(target)
   const isCtrlOrCmd = event.ctrlKey || event.metaKey
 
   // 焦点在输入框内时，Ctrl+C 且无选中文本 → 复制选中节点
@@ -2060,7 +2069,7 @@ function readFileAsBase64(file) {
  */
 function handlePaste(event) {
   const target = event.target
-  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+  if (isTextInputEventTarget(target)) {
     return
   }
 

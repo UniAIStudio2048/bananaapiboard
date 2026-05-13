@@ -617,8 +617,8 @@ async function handleImageGenerate(nodeId, nodeType) {
 
 // 键盘快捷键
 function handleKeyDown(event) {
-  // Enter 生成（非Shift）
-  if (event.key === 'Enter' && !event.shiftKey) {
+  // Ctrl/Cmd + Enter 生成，普通 Enter 默认换行（textarea 浏览器原生行为）
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault()
     handleGenerate()
   }

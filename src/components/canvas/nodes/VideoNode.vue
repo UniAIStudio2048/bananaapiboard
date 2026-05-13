@@ -457,7 +457,22 @@ function markPromptTextareaResizeIntent(event) {
   }
 }
 
+// IME 中文输入法 composition 状态：composition 期间浏览器会持续触发 input，
+// 此时序列化得到的是临时拼音串、再调用 restorePromptEditorSelection 会破坏 IME 选区，
+// 因此必须在 composition 期间直接 return，等 compositionend 后再统一处理一次
+let isPromptInputComposing = false
+
+function handlePromptCompositionStart() {
+  isPromptInputComposing = true
+}
+
+function handlePromptCompositionEnd(event) {
+  isPromptInputComposing = false
+  handlePromptInput(event)
+}
+
 function handlePromptInput(event) {
+  if (isPromptInputComposing || event?.isComposing) return
   const editor = event.target
   const selectionRange = getPromptEditorSelectionRange(editor)
   const text = serializePromptEditorContent(editor)
@@ -4647,15 +4662,15 @@ function handleKeyDown(event) {
     }
   }
 
-  if (event.key === 'Enter' && event.shiftKey) {
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault()
-    insertPromptEditorPlainText('\n')
+    handleGenerate()
     return
   }
 
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter') {
     event.preventDefault()
-    handleGenerate()
+    insertPromptEditorPlainText('\n')
   }
 }
 
@@ -7168,9 +7183,11 @@ function handleToolbarPreview() {
             contenteditable="true"
             role="textbox"
             aria-multiline="true"
-            :data-placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : supportsMediaTags ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(按下Enter 生成，Shift+Enter 换行)'"
+            :data-placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : supportsMediaTags ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(Ctrl+Enter 生成，Enter 换行)'"
             @keydown="handleKeyDown"
             @input="handlePromptInput"
+            @compositionstart="handlePromptCompositionStart"
+            @compositionend="handlePromptCompositionEnd"
             @focus="handlePromptTextareaFocus"
             @keyup="updatePromptOverlayCaret"
             @click="updatePromptOverlayCaret"

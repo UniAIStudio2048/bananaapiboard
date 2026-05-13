@@ -97,6 +97,10 @@ let mediaMentionStartPos = -1
 let mediaMentionEndPos = -1
 const hasManualLLMInputSize = ref(false)
 
+// IME 中文输入法 composition 状态：composition 期间必须跳过 serialize / restore，
+// 否则会强行打断输入法的临时拼音串与候选选区，导致逗号重复、自动空格换行等异常
+let isLLMInputComposing = false
+
 // 过滤后的角色
 const filteredCharacters = computed(() => {
   const query = mentionQuery.value.toLowerCase()
@@ -224,8 +228,21 @@ function insertLLMEditorPlainText(text) {
   })
 }
 
+// IME 中文输入法 composition 处理：composition 期间浏览器会持续触发 input，
+// 但此时序列化得到的是临时拼音串、再调用 restorePromptEditorSelection 会破坏 IME 选区，
+// 因此 composition 期间必须直接 return，等 compositionend 后再统一处理一次
+function handleLLMCompositionStart() {
+  isLLMInputComposing = true
+}
+
+function handleLLMCompositionEnd(event) {
+  isLLMInputComposing = false
+  handleLLMInput(event)
+}
+
 // 处理提及输入（Textarea）
 function handleLLMInput(event) {
+  if (isLLMInputComposing || event?.isComposing) return
   const editor = event.target
   const selectionRange = getPromptEditorSelectionRange(editor)
   const text = serializePromptEditorContent(editor)
@@ -1598,12 +1615,13 @@ function handleLLMKeyDown(event) {
     }
   }
 
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault()
     handleLLMGenerate()
+    return
   }
 
-  if (event.key === 'Enter' && event.shiftKey) {
+  if (event.key === 'Enter') {
     event.preventDefault()
     insertLLMEditorPlainText('\n')
   }
@@ -3241,9 +3259,11 @@ onUnmounted(() => {
             contenteditable="true"
             role="textbox"
             aria-multiline="true"
-            :data-placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Enter 生成，Shift+Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（按下Enter 生成，Shift+Enter 换行）'"
+            :data-placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Ctrl+Enter 生成，Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（Ctrl+Enter 生成，Enter 换行）'"
             @keydown="handleLLMKeyDown"
             @input="handleLLMInput"
+            @compositionstart="handleLLMCompositionStart"
+            @compositionend="handleLLMCompositionEnd"
             @wheel.stop
             @focus="handleLLMInputFocus"
             @mousedown="markLLMInputResizeIntent"

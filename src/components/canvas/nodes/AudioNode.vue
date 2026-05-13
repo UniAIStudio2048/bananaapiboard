@@ -377,18 +377,33 @@ async function pollMusicStatus(taskIds) {
 
 // 键盘快捷键
 function handleMusicKeyDown(event) {
-  if (event.key === 'Enter' && event.shiftKey) {
-    event.preventDefault()
-    insertMusicEditorPlainText('\n')
-    return
-  }
-  if (event.key === 'Enter' && !event.shiftKey) {
+  if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault()
     handleGenerateMusic()
+    return
+  }
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    insertMusicEditorPlainText('\n')
   }
 }
 
+// IME 中文输入法 composition 状态：composition 期间浏览器会持续触发 input，
+// 此时序列化得到的是临时拼音串、再调用 restorePromptEditorSelection 会破坏 IME 选区，
+// 因此必须在 composition 期间直接 return，等 compositionend 后再统一处理一次
+let isMusicInputComposing = false
+
+function handleMusicCompositionStart() {
+  isMusicInputComposing = true
+}
+
+function handleMusicCompositionEnd(event) {
+  isMusicInputComposing = false
+  handleMusicInput(event)
+}
+
 function handleMusicInput(event) {
+  if (isMusicInputComposing || event?.isComposing) return
   const editor = event.target
   const selectionRange = getPromptEditorSelectionRange(editor)
   const text = serializePromptEditorContent(editor)
@@ -1829,6 +1844,8 @@ function handleSpeedDropdownClickOutside(event) {
             @keydown="handleMusicKeyDown"
             @wheel="handlePromptWheel"
             @input="handleMusicInput"
+            @compositionstart="handleMusicCompositionStart"
+            @compositionend="handleMusicCompositionEnd"
             @mousedown="markPromptTextareaResizeIntent"
             @dblclick.stop
           >{{ musicPrompt }}</div>
