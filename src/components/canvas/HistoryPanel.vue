@@ -24,6 +24,7 @@ import { getCachedHistory, cacheHistory, invalidateCache } from '@/utils/history
 import { preloadImages } from '@/utils/imageCache'
 import { toSameOriginUrl, getOriginalImageUrl } from '@/utils/canvasThumbnail'
 import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
+import { getHistoryAspectRatioStyle, normalizeHistoryAspectRatio } from '@/utils/historyAspectRatio'
 import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
@@ -58,12 +59,11 @@ const selectedItems = ref(new Set())
 
 // 滚动容器引用
 const scrollContainerRef = ref(null)
+let scrollRAF = null
+let pendingScrollTop = 0
 
-// ========== 虚拟滚动状态 ==========
-const ITEM_HEIGHT = 180 // 每个卡片的估计高度（包含间距）
-const BUFFER_COUNT = 6 // 上下缓冲区域的项目数
+// ========== 瀑布流状态 ==========
 const scrollTop = ref(0)
-const containerHeight = ref(600) // 容器高度
 const isContentReady = ref(false) // 内容是否准备好渲染（延迟渲染用）
 
 // 全屏预览状态
@@ -120,6 +120,10 @@ const TEAM_SYNC_INTERVAL = 30000 // 团队空间同步间隔 30 秒
 let teamSyncTimer = null
 const lastSyncId = ref(null) // 记录最新一条记录的ID，用于检测新数据
 
+function updateContainerHeight() {
+  // 旧虚拟滚动实现遗留的尺寸同步入口，当前瀑布流布局不需要额外计算
+}
+
 // 通用自动刷新（面板打开时，定期检测新数据）
 const AUTO_REFRESH_INTERVAL = 30000 // 30 秒检测一次（避免频繁刷新导致图片跳闪）
 let autoRefreshTimer = null
@@ -162,74 +166,25 @@ const filteredHistory = computed(() => {
   return result
 })
 
-// ========== 虚拟滚动计算 ==========
+// ========== 瀑布流计算 ==========
 // 全屏模式下的列数
 const columnCount = computed(() => isFullscreen.value ? 6 : 2)
 
-// 计算可见项目
-const visibleItems = computed(() => {
-  if (!isContentReady.value) return []
-  
-  const items = filteredHistory.value
-  const total = items.length
-  const cols = columnCount.value
-  
-  // 如果数据量小于 50，直接渲染全部（不需要虚拟滚动）
-  if (total <= 50) {
-    return items.map((item, index) => ({ item, index }))
-  }
-  
-  // 计算每行高度
-  const rowHeight = ITEM_HEIGHT
-  
-  // 计算可见的行范围
-  const startRow = Math.max(0, Math.floor(scrollTop.value / rowHeight) - BUFFER_COUNT)
-  const endRow = Math.ceil((scrollTop.value + containerHeight.value) / rowHeight) + BUFFER_COUNT
-  
-  // 转换为项目索引范围
-  const startIndex = startRow * cols
-  const endIndex = Math.min(total, (endRow + 1) * cols)
-  
-  // 返回可见项目及其索引
-  const visible = []
-  for (let i = startIndex; i < endIndex; i++) {
-    if (items[i]) {
-      visible.push({ item: items[i], index: i })
-    }
-  }
-  
-  return visible
-})
-
-// 动态生成列数据
+// 动态生成列数据（按估算高度自动分配到最短列）
 const columnItems = computed(() => {
   const cols = columnCount.value
-  const columns = Array.from({ length: cols }, () => [])
-  
-  visibleItems.value.forEach(item => {
-    const colIndex = item.index % cols
-    columns[colIndex].push(item)
+  const columns = Array.from({ length: cols }, () => ({ items: [], weight: 0 }))
+
+  filteredHistory.value.forEach(item => {
+    let targetColumn = columns[0]
+    for (const column of columns) {
+      if (column.weight < targetColumn.weight) targetColumn = column
+    }
+    targetColumn.items.push(item)
+    targetColumn.weight += estimateItemWeight(item)
   })
-  
-  return columns
-})
 
-// 虚拟滚动的总高度（用于滚动条）
-const totalHeight = computed(() => {
-  const total = filteredHistory.value.length
-  const cols = columnCount.value
-  const rows = Math.ceil(total / cols)
-  return rows * ITEM_HEIGHT
-})
-
-// 虚拟滚动的偏移量
-const offsetY = computed(() => {
-  const items = filteredHistory.value
-  if (items.length <= 50) return 0
-  
-  const cols = columnCount.value
-  const startRow = Math.max(0, Math.floor(scrollTop.value / ITEM_HEIGHT) - BUFFER_COUNT)
-  return startRow * ITEM_HEIGHT
+  return columns.map(column => column.items)
 })
 
 // 按类型分组的统计
@@ -247,21 +202,15 @@ const historyStats = computed(() => {
 // ========== 方法 ==========
 
 // 处理滚动事件（节流）
-let scrollRAF = null
 function handleScroll(e) {
-  if (scrollRAF) return
-  
-  scrollRAF = requestAnimationFrame(() => {
-    scrollTop.value = e.target.scrollTop
-    scrollRAF = null
-  })
+  scrollTop.value = e.target.scrollTop
 }
 
-// 更新容器高度
-function updateContainerHeight() {
-  if (scrollContainerRef.value) {
-    containerHeight.value = scrollContainerRef.value.clientHeight
-  }
+function syncScrollPosition(nextTop = scrollTop.value) {
+  if (!scrollContainerRef.value) return
+  const normalizedTop = Math.max(0, nextTop)
+  scrollTop.value = normalizedTop
+  scrollContainerRef.value.scrollTop = normalizedTop
 }
 
 // 加载历史记录（带 IndexedDB 持久化缓存 + 内存缓存）
@@ -283,7 +232,7 @@ async function loadHistory(forceRefresh = false) {
   if (!forceRefresh) {
     try {
       const cachedData = await getCachedHistory('all', spaceType, teamId)
-      if (cachedData) {
+      if (Array.isArray(cachedData) && cachedData.length > 0) {
         historyList.value = cachedData
         dataCached.value = true
         lastLoadTime.value = now
@@ -291,6 +240,8 @@ async function loadHistory(forceRefresh = false) {
         // 后台静默刷新，不显示 loading
         _refreshHistoryInBackground(spaceParams, spaceType, teamId)
         return
+      } else if (Array.isArray(cachedData) && cachedData.length === 0) {
+        console.log('[HistoryPanel] IndexedDB 缓存为空，回源刷新')
       }
     } catch (e) {
       console.warn('[HistoryPanel] IndexedDB 读取失败:', e)
@@ -342,6 +293,21 @@ function _isHistoryEqual(a, b) {
     if (a[i].status !== b[i].status) return false
   }
   return true
+}
+
+function getHistoryCardAspectStyle(item) {
+  const fallback = item.type === 'video' ? '16 / 9' : item.type === 'audio' ? '1 / 1' : '1 / 1'
+  const raw = item.aspect_ratio || item.aspectRatio || (item.type === 'video' ? videoAspectRatios.value[item.id] : null)
+  return { aspectRatio: normalizeHistoryAspectRatio(raw, fallback) }
+}
+
+function estimateItemWeight(item) {
+  const raw = item.aspect_ratio || item.aspectRatio || (item.type === 'video' ? videoAspectRatios.value[item.id] : null)
+  const ratioText = normalizeHistoryAspectRatio(raw, item.type === 'video' ? '16 / 9' : '1 / 1')
+  const parsed = ratioText.includes('/') ? ratioText.split('/').map(part => Number.parseFloat(part.trim())) : [Number.parseFloat(ratioText), 1]
+  const width = Number.isFinite(parsed[0]) && parsed[0] > 0 ? parsed[0] : 1
+  const height = Number.isFinite(parsed[1]) && parsed[1] > 0 ? parsed[1] : 1
+  return height / width
 }
 
 // 后台静默刷新：不阻塞 UI，刷新完毕后对比更新
@@ -681,6 +647,9 @@ async function handleDownload(item) {
 // ========== 全屏模式 ==========
 function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
+  nextTick(() => {
+    syncScrollPosition(scrollTop.value)
+  })
 }
 
 // ========== 批量选择模式 ==========
@@ -1536,6 +1505,7 @@ watch(() => props.visible, async (visible) => {
   if (visible) {
     // 重置滚动位置
     scrollTop.value = 0
+    pendingScrollTop = 0
     
     // 加载数据
     await loadHistory()
@@ -1553,7 +1523,7 @@ watch(() => props.visible, async (visible) => {
     // 等待面板动画完成后再渲染内容（250ms 是动画时长）
     setTimeout(() => {
       isContentReady.value = true
-      updateContainerHeight()
+      syncScrollPosition(0)
     }, 280)
   } else {
     // 面板关闭时重置状态
@@ -1814,12 +1784,10 @@ onUnmounted(() => {
           <div 
             v-else 
             class="virtual-scroll-container"
-            :style="{ height: totalHeight + 'px' }"
           >
             <div 
               class="waterfall-grid"
               :class="{ 'fullscreen-grid': isFullscreen }"
-              :style="{ transform: `translateY(${offsetY}px)` }"
             >
               <div 
                 v-for="(colItems, colIndex) in columnItems"
@@ -1827,7 +1795,7 @@ onUnmounted(() => {
                 class="waterfall-column"
               >
                 <div
-                  v-for="{ item, index } in colItems"
+                  v-for="item in colItems"
                   :key="item.id"
                   class="history-card"
                   :class="[
@@ -1835,6 +1803,7 @@ onUnmounted(() => {
                     { 'portrait-video': item.type === 'video' && isPortraitVideo(item) },
                     { 'selected': isSelectMode && isItemSelected(item) }
                   ]"
+                  :style="getHistoryCardAspectStyle(item)"
                   draggable="true"
                   @click="isSelectMode ? toggleSelectItem(item, $event) : handleHistoryClick(item)"
                   @contextmenu="handleContextMenu($event, item)"
@@ -1862,6 +1831,7 @@ onUnmounted(() => {
                       :alt="item.name"
                       progressive
                       img-class="card-image"
+                      wrapper-class="card-media"
                       loading="lazy"
                       @error="handleImageError(item)"
                     />
@@ -1879,6 +1849,7 @@ onUnmounted(() => {
                       :src="getVideoThumbnail(item)" 
                       :alt="item.name"
                       img-class="card-image"
+                      wrapper-class="card-media"
                       loading="lazy"
                       @error="handleVideoPosterError(item)"
                     />
@@ -1903,6 +1874,7 @@ onUnmounted(() => {
                       :src="getPreviewContent(item)" 
                       :alt="item.name || item.title"
                       img-class="card-image"
+                      wrapper-class="card-media"
                       loading="lazy"
                     />
                     <div v-else class="card-placeholder audio">
@@ -2683,8 +2655,10 @@ onUnmounted(() => {
   border-radius: 8px; /* 圆角 */
   overflow: hidden;
   cursor: grab;
+  box-sizing: border-box;
+  display: block;
   transition: all 0.15s;
-  /* margin-bottom由父容器gap控制 */
+  min-height: 96px;
 }
 
 .history-card:active {
@@ -2748,43 +2722,45 @@ onUnmounted(() => {
 /* 卡片图片 */
 .card-image {
   width: 100%;
-  /* 添加最大高度限制，防止超长图片影响体验 */
-  max-height: 480px; 
-  height: auto;
+  height: 100%;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
+  background: #111113;
 }
 
 .history-card :deep(.cached-image-wrapper) {
   width: 100%;
+  height: 100%;
   display: block;
+  overflow: hidden;
 }
 
 .history-card :deep(.card-image) {
   width: 100%;
-  max-height: 480px;
-  height: auto;
+  height: 100%;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
+  background: #111113;
 }
 
 /* 视频预览元素样式 */
 .card-video-preview {
   pointer-events: none; /* 禁止视频交互 */
   background: #1a1a1c;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 /* 竖屏视频特殊样式 */
 .history-card.portrait-video {
-  /* 竖屏视频占满宽度，保持比例 */
-  aspect-ratio: 9 / 16 !important;
   display: block;
 }
 
 .history-card.portrait-video .card-image {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .history-card.portrait-video :deep(.cached-image-wrapper),
@@ -2795,7 +2771,8 @@ onUnmounted(() => {
 
 /* 占位符 */
 .card-placeholder {
-  aspect-ratio: 1;
+  width: 100%;
+  height: 100%;
   background: linear-gradient(135deg, #2a2a2e 0%, #1a1a1c 100%);
   display: flex;
   flex-direction: column;
@@ -2803,7 +2780,8 @@ onUnmounted(() => {
   justify-content: center;
   gap: 8px;
   padding: 12px;
-  min-height: 120px;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .card-placeholder.image {
@@ -2856,8 +2834,8 @@ onUnmounted(() => {
 
 /* 竖屏视频的占位符 */
 .history-card.portrait-video .card-placeholder {
-  aspect-ratio: 9 / 16;
-  min-height: 240px;
+  aspect-ratio: auto;
+  min-height: 0;
 }
 
 .placeholder-icon {

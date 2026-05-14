@@ -9,7 +9,9 @@ import { getTheme, setTheme, toggleTheme as toggleThemeUtil, themes } from '@/ut
 import { getTenantHeaders, getModelDisplayName, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { getHistoryImageDisplayUrl, makeHistoryImagePlaceholder } from '@/utils/historyImageDisplay'
+import { getHistoryAspectRatioStyle } from '@/utils/historyAspectRatio'
 import { toPointsNumber, getEffectivePackagePoints, getTotalUserPoints } from '@/utils/points'
+import { normalizePointsSources, getPointsSourcesMaxTotal } from '@/utils/pointsSources'
 
 const { t } = useI18n()
 
@@ -59,6 +61,8 @@ const pointsStats = ref({
   package: { earned: 0, spent: 0, balance: 0, transactions: [] }
 })
 const pointsStatsTab = ref('all') // all, permanent, package
+const normalizedPointsSources = computed(() => normalizePointsSources(pointsSources.value))
+const pointsSourcesMaxTotal = computed(() => getPointsSourcesMaxTotal(normalizedPointsSources.value))
 
 // 无限滚动相关（图片）
 const imagesPage = ref(0)
@@ -297,8 +301,8 @@ async function load() {
       fetch(getApiUrl('/api/user/points'), { headers }),
       fetch(getApiUrl('/api/user/invite-code'), { headers }),
       fetch(getApiUrl('/api/user/stats'), { headers }),
-      fetch(getApiUrl('/api/user/recent-images?limit=12&offset=0'), { headers }),
-      fetch(getApiUrl('/api/user/recent-videos?limit=12&offset=0'), { headers }),
+      fetch(getApiUrl(`/api/user/recent-images?limit=${imagesLimit.value}&offset=0`), { headers }),
+      fetch(getApiUrl(`/api/user/recent-videos?limit=${videosLimit.value}&offset=0`), { headers }),
       fetch(getApiUrl('/api/user/points-trend?days=7'), { headers }),
       fetch(getApiUrl('/api/user/points-sources'), { headers }),
       fetch(getApiUrl('/api/user/checkin-status'), { headers }),
@@ -328,7 +332,10 @@ async function load() {
       videosHasMore.value = data.hasMore || false
     }
     if (trendRes.ok) pointsTrend.value = (await trendRes.json()).trend
-    if (sourcesRes.ok) pointsSources.value = (await sourcesRes.json()).sources
+    if (sourcesRes.ok) {
+      const data = await sourcesRes.json()
+      pointsSources.value = Array.isArray(data.sources) ? data.sources : []
+    }
     if (checkinRes.ok) checkinStatus.value = await checkinRes.json()
     if (pointsStatsRes.ok) pointsStats.value = (await pointsStatsRes.json()).stats
     
@@ -1172,6 +1179,14 @@ function viewImage(image) {
 
 function getImageDisplayUrl(image) {
   return getHistoryImageDisplayUrl(image, getMediaUrl)
+}
+
+function getImagePreviewAspectStyle(image) {
+  return getHistoryAspectRatioStyle(image, '1 / 1')
+}
+
+function getVideoPreviewAspectStyle(video) {
+  return getHistoryAspectRatioStyle(video, '16 / 9')
 }
 
 function viewVideo(video) {
@@ -2908,17 +2923,17 @@ onUnmounted(() => {
               class="max-h-[800px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-dark-600 scrollbar-track-transparent"
               @scroll="handleScroll"
             >
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-4">
+              <div class="history-masonry history-masonry-images">
                 <div
                   v-for="image in recentImages"
                   :key="image.id"
                   :class="[
-                    'group relative min-h-[260px] rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 bg-white dark:bg-dark-700 border border-slate-200/70 dark:border-dark-600',
+                    'history-masonry-item group relative rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 bg-white dark:bg-dark-700 border border-slate-200/70 dark:border-dark-600',
                     imageSelectMode && selectedImages.has(image.id) ? 'ring-4 ring-primary-500' : ''
                   ]"
                   @click="imageSelectMode ? toggleImageSelection(image.id) : viewImage(image)"
                 >
-                  <div class="relative h-[220px] sm:h-[240px] bg-slate-100 dark:bg-dark-800 flex items-center justify-center history-image-stage">
+                  <div class="relative bg-slate-100 dark:bg-dark-800 flex items-center justify-center history-image-stage" :style="getImagePreviewAspectStyle(image)">
                     <CachedImage
                       :src="getImageDisplayUrl(image)"
                       :placeholder="makeHistoryImagePlaceholder(image)"
@@ -3212,21 +3227,21 @@ onUnmounted(() => {
               class="max-h-[800px] overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-dark-600 scrollbar-track-transparent"
               @scroll="handleVideoScroll"
             >
-              <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div class="history-masonry history-masonry-videos">
                 <div
                   v-for="video in recentVideos"
                   :key="video.id"
                   :class="[
-                    'group relative rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 bg-slate-50 dark:bg-dark-700',
+                    'history-masonry-item group relative rounded-xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 bg-slate-50 dark:bg-dark-700',
                     videoSelectMode && selectedVideos.has(video.id) ? 'ring-4 ring-primary-500' : ''
                   ]"
                 >
                   <!-- 视频预览 -->
-                  <div class="aspect-video bg-black relative cursor-pointer" @click="videoSelectMode && video.video_url ? toggleVideoSelection(video.id) : viewVideo(video)">
+                  <div class="bg-black relative cursor-pointer history-video-stage" :style="getVideoPreviewAspectStyle(video)" @click="videoSelectMode && video.video_url ? toggleVideoSelection(video.id) : viewVideo(video)">
                     <video
                       v-if="video.video_url"
                       :src="getMediaUrl(video.video_url)"
-                      class="w-full h-full object-cover"
+                      class="w-full h-full object-contain"
                       muted
                       playsinline
                     ></video>
@@ -3630,13 +3645,13 @@ onUnmounted(() => {
                 <div
                   v-for="(item, index) in filteredLedger"
                   :key="index"
-                  class="flex items-center justify-between p-4 bg-slate-50 dark:bg-dark-600/30 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-600/50 transition-colors"
+                  class="flex items-start justify-between p-4 bg-slate-50 dark:bg-dark-600/30 rounded-lg hover:bg-slate-100 dark:hover:bg-dark-600/50 transition-colors"
                 >
-                  <div class="flex items-center space-x-4">
-                    <div class="w-10 h-10 rounded-full flex items-center justify-center" :class="getTransactionIcon(item.type).bg">
+                  <div class="flex items-center space-x-4 min-w-0 flex-1">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center mt-0.5" :class="getTransactionIcon(item.type).bg">
                       <span class="text-lg">{{ getTransactionIcon(item.type).icon }}</span>
                     </div>
-                    <div>
+                    <div class="min-w-0">
                       <div class="flex items-center space-x-2">
                         <p class="font-medium text-slate-900 dark:text-slate-100">
                           {{ getTransactionTypeText(item.type) }}
@@ -3651,12 +3666,15 @@ onUnmounted(() => {
                       <p class="text-sm text-slate-500 dark:text-slate-400">
                         {{ new Date(item.ts).toLocaleString() }}
                       </p>
+                      <p v-if="item.task_id" class="text-xs text-slate-400 dark:text-slate-500 mt-1 font-mono break-all">
+                        任务ID：{{ item.task_id }}
+                      </p>
                       <p v-if="item.memo" class="text-xs text-slate-400 dark:text-slate-500 mt-1">
                         {{ item.memo }}
                       </p>
                     </div>
                   </div>
-                  <div class="text-right">
+                  <div class="text-right flex-shrink-0 pt-0.5">
                     <p
                       class="font-bold text-lg"
                       :class="item.value > 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'"
@@ -3675,13 +3693,13 @@ onUnmounted(() => {
                 积分来源分析
               </h3>
               
-              <div v-if="pointsSources.length === 0" class="text-center py-12">
+              <div v-if="normalizedPointsSources.length === 0" class="text-center py-12">
                 <p class="text-slate-500 dark:text-slate-400">暂无数据</p>
               </div>
               
               <div v-else class="space-y-4">
                 <div
-                  v-for="source in pointsSources"
+                  v-for="source in normalizedPointsSources"
                   :key="source.type"
                   class="space-y-2"
                 >
@@ -3696,7 +3714,7 @@ onUnmounted(() => {
                   <div class="w-full bg-slate-200 dark:bg-dark-600 rounded-full h-2 overflow-hidden">
                     <div
                       class="h-full bg-gradient-to-r from-primary-500 to-primary-600 rounded-full transition-all duration-500"
-                      :style="{ width: `${(source.total / pointsSources[0].total) * 100}%` }"
+                      :style="{ width: `${pointsSourcesMaxTotal > 0 ? (source.total / pointsSourcesMaxTotal) * 100 : 0}%` }"
                     ></div>
                   </div>
                   <p class="text-xs text-slate-500 dark:text-slate-400">
@@ -5297,6 +5315,38 @@ export default {
 
 .dark .scrollbar-thin::-webkit-scrollbar-thumb:hover {
   background: rgb(71 85 105);
+}
+
+.history-masonry {
+  column-gap: 1rem;
+}
+
+.history-masonry-images {
+  column-width: 260px;
+}
+
+.history-masonry-videos {
+  column-width: 300px;
+}
+
+.history-masonry-item {
+  display: inline-block;
+  width: 100%;
+  margin: 0 0 1rem;
+  break-inside: avoid;
+}
+
+.history-image-stage,
+.history-video-stage {
+  width: 100%;
+  overflow: hidden;
+}
+
+.history-image-stage :deep(.cached-image-wrapper),
+.history-video-stage :deep(video),
+.history-image-stage :deep(img) {
+  width: 100%;
+  height: 100%;
 }
 
 /* Toast 通知动画 */

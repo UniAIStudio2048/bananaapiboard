@@ -274,11 +274,12 @@ export function replacePromptEditorMentionText({
   const rawStart = Math.max(0, Math.min(value.length, Number.isFinite(mentionStart) ? mentionStart : 0))
   const start = value[rawStart] !== '@' && value[rawStart - 1] === '@' ? rawStart - 1 : rawStart
   const end = getPromptMentionReplaceEnd(value, start, caret)
-  const suffix = appendSpace && value[end] !== ' ' ? ' ' : ''
-  const nextText = value.slice(0, start) + replacement + suffix + value.slice(end)
+  const prefix = appendSpace && start > 0 && value[start - 1] !== ' ' && value[start - 1] !== '\n' ? ' ' : ''
+  const suffix = appendSpace && value[end] !== ' ' && value[end] !== '\n' ? ' ' : ''
+  const nextText = value.slice(0, start) + prefix + replacement + suffix + value.slice(end)
   return {
     text: nextText,
-    cursor: start + replacement.length + suffix.length
+    cursor: start + prefix.length + replacement.length + suffix.length
   }
 }
 

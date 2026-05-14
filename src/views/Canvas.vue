@@ -54,6 +54,7 @@ import { getCanvasVideoNodeTaskId, shouldFailCanvasVideoNodeWithoutTask, shouldR
 import { showAlert, showConfirm } from '@/composables/useCanvasDialog'
 import { needsMigration, analyzeWorkflow, migrateWorkflowData } from '@/utils/workflowMigration'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
+import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
 // 🔧 画布诊断工具 - 用于调试画布强制重新加载问题
 import { initCanvasDiagnostic, printCanvasDiagnosticReport } from '@/utils/canvasDiagnostic'
 
@@ -1166,7 +1167,7 @@ function failZombieCanvasVideoNodes() {
       canvasStore.updateNodeData(node.id, {
         status: 'error',
         progress: null,
-        error: '视频生成超时，请重新生成'
+        error: withNoChargeNotice('视频生成超时，请重新生成')
       })
     }
   }
@@ -1302,7 +1303,7 @@ function updateNodeFromTask(task) {
     canvasStore.updateNodeData(task.nodeId, {
       status: 'error',
       progress: null,
-      error: task.error || errorMsg
+      error: withNoChargeNotice(task.error || errorMsg, errorMsg)
     })
   } else if (task.status === 'processing') {
     // 任务进行中

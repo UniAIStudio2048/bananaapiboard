@@ -5,6 +5,7 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useTeamStore } from '@/stores/team'
 import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
+import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
 import { classifyBackgroundTaskStatus } from '@/stores/canvas/backgroundTaskStatus'
 
 async function parseApiResponse(response, fallbackMessage) {
@@ -40,6 +41,13 @@ async function parseApiResponse(response, fallbackMessage) {
 
 function getApiErrorMessage(error, fallbackMessage) {
   return error?.message || error?.error || fallbackMessage
+}
+
+function getTaskQueryErrorMessage(response, error, fallbackMessage) {
+  const fallback = response.status === 404
+    ? '任务不存在或已过期，请重新生成'
+    : fallbackMessage
+  return getApiErrorMessage(error, fallback)
 }
 
 // 获取通用请求头
@@ -344,7 +352,8 @@ export async function getImageTaskStatus(taskId) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '查询任务状态失败')
+    const fallback = response.status === 404 ? '任务不存在或已过期，请重新生成' : '查询任务状态失败'
+    throw new Error(getApiErrorMessage(error, fallback))
   }
   
   return response.json()
@@ -360,7 +369,7 @@ export async function getVideoTaskStatus(taskId) {
   const data = await parseApiResponse(response, '查询任务状态失败：后端没有返回 JSON')
   
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(data, '查询任务状态失败'))
+    throw new Error(getTaskQueryErrorMessage(response, data, '查询任务状态失败'))
   }
   
   return data
@@ -376,7 +385,7 @@ export async function getVideoHdTaskStatus(taskId) {
   const data = await parseApiResponse(response, '查询高清任务状态失败：后端没有返回 JSON')
   
   if (!response.ok) {
-    throw new Error(getApiErrorMessage(data, '查询高清任务状态失败'))
+    throw new Error(getTaskQueryErrorMessage(response, data, '查询高清任务状态失败'))
   }
   
   return data
@@ -392,7 +401,7 @@ export async function getImageHdTaskStatus(taskId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '查询图片高清任务状态失败')
+    throw new Error(getTaskQueryErrorMessage(response, error, '查询图片高清任务状态失败'))
   }
 
   return response.json()
@@ -408,7 +417,7 @@ export async function getImagePanoramaTaskStatus(taskId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '查询生成全景图任务状态失败')
+    throw new Error(getTaskQueryErrorMessage(response, error, '查询生成全景图任务状态失败'))
   }
 
   return response.json()
@@ -424,7 +433,7 @@ export async function getRemoveBackgroundTaskStatus(taskId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '查询抠图任务状态失败')
+    throw new Error(getTaskQueryErrorMessage(response, error, '查询抠图任务状态失败'))
   }
 
   return response.json()
@@ -606,7 +615,7 @@ export function pollTaskStatus(taskId, type = 'image', options = {}) {
             status: result.status,
             error: classifiedStatus.error
           })
-          reject(new Error(classifiedStatus.error || '任务执行失败'))
+          reject(new Error(withNoChargeNotice(classifiedStatus.error, '任务执行失败')))
           return
         }
         
@@ -619,7 +628,7 @@ export function pollTaskStatus(taskId, type = 'image', options = {}) {
             timeout: `${Math.round(timeout / 1000)}s`,
             lastStatus: result.status
           })
-          reject(new Error(`任务执行超时（超过${Math.round(timeout / 60000)}分钟）`))
+          reject(new Error(withNoChargeNotice(`任务执行超时（超过${Math.round(timeout / 60000)}分钟）`)))
           return
         }
         

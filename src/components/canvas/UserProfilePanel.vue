@@ -1722,6 +1722,8 @@ function getLedgerTypeText(type) {
   // 都没找到，返回原始type
   return type
 }
+
+const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.value : []))
 </script>
 
 <template>
@@ -2150,11 +2152,16 @@ function getLedgerTypeText(type) {
               <div v-if="ledgerLoading" class="empty-hint">加载中...</div>
               <div v-else-if="!Array.isArray(ledger) || ledger.length === 0" class="empty-hint">{{ t('user.noRecord') }}</div>
               <div v-else class="ledger-list">
-                <div v-for="item in (Array.isArray(ledger) ? ledger : [])" :key="item.id || `${item.ts}-${item.type}-${item.value}`" class="ledger-item">
+                <div v-for="item in ledgerDisplayItems" :key="item.id || `${item.ts}-${item.type}-${item.value}`" class="ledger-item">
                   <span class="ledger-icon" v-html="icons[getLedgerIconType(item.type)]"></span>
                   <div class="ledger-info">
-                    <span class="ledger-type">{{ getLedgerTypeText(item.type) }}</span>
+                    <div class="ledger-header-row">
+                      <span class="ledger-type">{{ getLedgerTypeText(item.type) }}</span>
+                      <span class="ledger-points-type">{{ (item.points_type === 'package') ? '套餐' : '永久' }}</span>
+                    </div>
                     <span class="ledger-time">{{ formatTime(item.ts) }}</span>
+                    <span v-if="item.task_id" class="ledger-desc">任务ID：{{ item.task_id }}</span>
+                    <span v-if="item.memo" class="ledger-desc">{{ item.memo }}</span>
                   </div>
                   <span :class="['ledger-amount', item.value > 0 ? 'positive' : 'negative']">
                     {{ item.value > 0 ? '+' : '' }}{{ formatPoints(item.value) }}
@@ -3800,7 +3807,7 @@ function getLedgerTypeText(type) {
 
 .ledger-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.03);
@@ -3814,6 +3821,7 @@ function getLedgerTypeText(type) {
   display: flex;
   align-items: center;
   justify-content: center;
+  margin-top: 2px;
 }
 
 .ledger-icon :deep(svg) {
@@ -3825,12 +3833,34 @@ function getLedgerTypeText(type) {
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ledger-header-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
 }
 
 .ledger-type {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.8);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ledger-points-type {
+  flex: 0 0 auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .ledger-time {
@@ -3838,9 +3868,18 @@ function getLedgerTypeText(type) {
   color: rgba(255, 255, 255, 0.4);
 }
 
+.ledger-desc {
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.58);
+  word-break: break-all;
+}
+
 .ledger-amount {
   font-size: 15px;
   font-weight: 600;
+  flex: 0 0 auto;
+  padding-top: 2px;
 }
 
 .ledger-amount.positive {
@@ -7554,6 +7593,11 @@ function getLedgerTypeText(type) {
 
 :root.canvas-theme-light .profile-panel .ledger-desc {
   color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .profile-panel .ledger-points-type {
+  color: rgba(0, 0, 0, 0.7) !important;
+  background: rgba(0, 0, 0, 0.04) !important;
 }
 
 :root.canvas-theme-light .profile-panel .ledger-time {

@@ -20,6 +20,7 @@ import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { resolveGenerationAspectRatio } from '@/utils/aspectRatio'
+import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
 import {
   getAvailableImageResolutionOptions,
   getImageResolutionCost,
@@ -589,7 +590,7 @@ async function handleImageGenerate(nodeId, nodeType) {
         console.error('[BottomPanel] 轮询失败:', error)
         canvasStore.updateNodeData(nodeId, {
           status: 'error',
-          error: error.message || '生成失败'
+          error: withNoChargeNotice(error.message, '生成失败')
         })
       })
     } else if (result.urls || result.images) {
@@ -608,9 +609,9 @@ async function handleImageGenerate(nodeId, nodeType) {
     console.error('[BottomPanel] 生成失败:', error)
     canvasStore.updateNodeData(nodeId, {
       status: 'error',
-      error: error.message || '生成失败'
+      error: withNoChargeNotice(error.message, '生成失败')
     })
-    alert(error.message || '生成失败，请重试')
+    alert(withNoChargeNotice(error.message, '生成失败，请重试'))
     isGenerating.value = false
   }
 }

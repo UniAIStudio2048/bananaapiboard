@@ -10,6 +10,7 @@
 
 import { getImageTaskStatus, getVideoTaskStatus, getVideoHdTaskStatus, getImageHdTaskStatus, getImagePanoramaTaskStatus, getRemoveBackgroundTaskStatus, getAudioEditTaskStatus } from '@/api/canvas/nodes'
 import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
+import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
 import { getTaskStatusConfig } from './backgroundTaskConfig'
 import { classifyBackgroundTaskStatus } from './backgroundTaskStatus'
 
@@ -27,11 +28,27 @@ const HISTORY_MEDIA_TASK_TYPES = new Set([
   'image-cutout',
   'video-hd'
 ])
+const NO_CHARGE_TASK_TYPES = new Set([
+  'image',
+  'video',
+  'image-hd',
+  'image-panorama',
+  'image-cutout',
+  'video-hd',
+  'video-hd-upscale'
+])
 
 // 内存中的任务状态
 let tasks = new Map()
 let pollingTimers = new Map()
 let taskCallbacks = new Map()
+
+function formatTaskError(task, message, fallback) {
+  if (NO_CHARGE_TASK_TYPES.has(task?.type)) {
+    return withNoChargeNotice(message, fallback)
+  }
+  return message || fallback
+}
 
 /**
  * 初始化后台任务管理器
@@ -91,7 +108,7 @@ function resumePendingTasks() {
       if (now - task.createdAt > pollTimeout) {
         console.log(`[BackgroundTaskManager] 任务 ${taskId} 已超时 (${Math.round((now - task.createdAt) / 60000)}分钟), 标记为失败`)
         task.status = 'failed'
-        task.error = '任务超时，请重试'
+        task.error = formatTaskError(task, '任务超时，请重试', '任务超时，请重试')
         task.updatedAt = now
         tasks.set(taskId, task)
         notifyTaskFailed(taskId, task)
@@ -164,7 +181,7 @@ function startPolling(taskId) {
       const minutes = Math.round(taskAge / 60000)
       console.log(`[BackgroundTaskManager] 任务 ${taskId} 前端超时 (${minutes}分钟), 标记为失败`)
       task.status = 'failed'
-      task.error = `任务超时（${minutes}分钟），请重试`
+      task.error = formatTaskError(task, `任务超时（${minutes}分钟），请重试`, '任务超时，请重试')
       task.updatedAt = Date.now()
       tasks.set(taskId, task)
       saveTasksToStorage()
@@ -232,7 +249,7 @@ function startPolling(taskId) {
         console.log(`[BackgroundTaskManager] 任务完成: ${taskId}`, result)
       } else if (classifiedStatus.state === 'failed') {
         task.status = 'failed'
-        task.error = classifiedStatus.error || '任务执行失败'
+        task.error = formatTaskError(task, classifiedStatus.error, '任务执行失败')
         task.result = result
         stopPolling(taskId)
         notifyTaskFailed(taskId, task)
@@ -261,7 +278,7 @@ function startPolling(taskId) {
       // 如果任务不存在（404错误），标记为失败并停止轮询
       if (error.message?.includes('任务不存在') || error.message?.includes('not found')) {
         task.status = 'failed'
-        task.error = '任务不存在或已过期，请重新生成'
+        task.error = formatTaskError(task, '任务不存在或已过期，请重新生成', '任务不存在或已过期，请重新生成')
         task.updatedAt = Date.now()
         tasks.set(taskId, task)
         saveTasksToStorage()

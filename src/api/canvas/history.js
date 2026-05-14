@@ -62,9 +62,61 @@ function getAuthHeaders() {
   }
 }
 
+const MAX_HISTORY_PAGES = 20
+
+function getHistoryPageLimit(limit) {
+  const parsed = Number.parseInt(limit, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 50
+  return Math.min(parsed, 500)
+}
+
+function buildHistoryQuery(params, pageLimit, offset) {
+  const parts = []
+  if (params.spaceType) {
+    parts.push(`spaceType=${encodeURIComponent(params.spaceType)}`)
+    if (params.spaceType === 'team' && params.teamId) {
+      parts.push(`teamId=${encodeURIComponent(params.teamId)}`)
+    }
+  }
+  parts.push(`limit=${pageLimit}`)
+  parts.push(`offset=${offset}`)
+  return parts.join('&')
+}
+
+async function fetchHistoryPages(endpoint, responseKey, params, headers, mapRows, errorLabel) {
+  const allItems = []
+  const pageLimit = getHistoryPageLimit(params.limit)
+  let offset = Math.max(Number.parseInt(params.offset, 10) || 0, 0)
+
+  for (let page = 0; page < MAX_HISTORY_PAGES; page++) {
+    try {
+      const query = buildHistoryQuery(params, pageLimit, offset)
+      const res = await fetch(`${getApiBase()}${endpoint}?${query}`, {
+        method: 'GET',
+        credentials: 'include',
+        headers
+      })
+
+      if (!res.ok) break
+
+      const data = await res.json()
+      const rows = data[responseKey] || []
+      allItems.push(...mapRows(rows))
+
+      if (!data.hasMore || rows.length < pageLimit) break
+      offset += pageLimit
+    } catch (e) {
+      console.error(`[History API] ${errorLabel}失败:`, e)
+      break
+    }
+  }
+
+  return allItems
+}
+
 /**
  * 获取历史记录列表（合并图片和视频历史）
- * 优化：使用 Promise.allSettled 并行请求，提升加载速度
+ * 每类媒体按页拉取，与普通模式保持同一个 15 天历史范围
  * @param {Object} params - 查询参数
  * @param {string} params.type - 类型筛选 (image/video/audio)
  * @param {string} params.spaceType - 空间类型 (personal/team/all)
@@ -73,36 +125,19 @@ function getAuthHeaders() {
 export async function getHistory(params = {}) {
   const results = []
   const headers = getAuthHeaders()
-  
-  const queryLimit = params.limit || 50
-  
-  const spaceQuery = []
-  if (params.spaceType) {
-    spaceQuery.push(`spaceType=${params.spaceType}`)
-    if (params.spaceType === 'team' && params.teamId) {
-      spaceQuery.push(`teamId=${params.teamId}`)
-    }
-  }
-  spaceQuery.push(`limit=${queryLimit}`)
-  const spaceQueryStr = spaceQuery.length > 0 ? `&${spaceQuery.join('&')}` : ''
-  
+
   // 创建请求 Promise 数组
   const requests = []
   
   // 图片历史请求
   if (!params.type || params.type === 'all' || params.type === 'image') {
     requests.push(
-      fetch(`${getApiBase()}/api/images/history?${spaceQueryStr.replace(/^&/, '')}`, {
-        method: 'GET',
-        credentials: 'include',
-        headers
-      })
-      .then(async res => {
-        if (!res.ok) return { type: 'image', data: [] }
-        const data = await res.json()
-        return { 
-          type: 'image', 
-          data: (data.images || []).map(img => {
+      fetchHistoryPages(
+        '/api/images/history',
+        'images',
+        params,
+        headers,
+        rows => rows.map(img => {
             const normalized = normalizeImageHistoryItem(img)
             const displayPrompt = normalized.prompt
             return {
@@ -120,30 +155,21 @@ export async function getHistory(params = {}) {
               size: img.size,
               aspect_ratio: img.aspect_ratio
             }
-          })
-        }
-      })
-      .catch(e => {
-        console.error('[History API] 获取图片历史失败:', e)
-        return { type: 'image', data: [] }
-      })
+          }),
+        '获取图片历史'
+      ).then(data => ({ type: 'image', data }))
     )
   }
   
   // 视频历史请求
   if (!params.type || params.type === 'all' || params.type === 'video') {
     requests.push(
-      fetch(`${getApiBase()}/api/videos/history?${spaceQueryStr.replace(/^&/, '')}`, {
-        method: 'GET',
-        credentials: 'include',
-        headers
-      })
-      .then(async res => {
-        if (!res.ok) return { type: 'video', data: [] }
-        const data = await res.json()
-        return {
-          type: 'video',
-          data: (data.videos || []).map(vid => {
+      fetchHistoryPages(
+        '/api/videos/history',
+        'videos',
+        params,
+        headers,
+        rows => rows.map(vid => {
             // 优先使用 user_prompt（用户原始输入），如果没有则回退到 prompt
             const displayPrompt = vid.user_prompt || vid.prompt
             return {
@@ -161,30 +187,21 @@ export async function getHistory(params = {}) {
               aspect_ratio: vid.aspect_ratio,
               created_at: vid.created_at
             }
-          })
-        }
-      })
-      .catch(e => {
-        console.error('[History API] 获取视频历史失败:', e)
-        return { type: 'video', data: [] }
-      })
+          }),
+        '获取视频历史'
+      ).then(data => ({ type: 'video', data }))
     )
   }
   
   // 音频历史请求
   if (!params.type || params.type === 'all' || params.type === 'audio') {
     requests.push(
-      fetch(`${getApiBase()}/api/music/history?${spaceQueryStr.replace(/^&/, '')}`, {
-        method: 'GET',
-        credentials: 'include',
-        headers
-      })
-      .then(async res => {
-        if (!res.ok) return { type: 'audio', data: [] }
-        const data = await res.json()
-        return {
-          type: 'audio',
-          data: (data.data || []).filter(aud => aud.status === 'completed').map(aud => {
+      fetchHistoryPages(
+        '/api/music/history',
+        'data',
+        params,
+        headers,
+        rows => rows.filter(aud => aud.status === 'completed').map(aud => {
             const displayTitle = aud.title || aud.prompt?.substring(0, 30) || '音乐'
             return {
               id: aud.id || aud.task_id,
@@ -201,13 +218,9 @@ export async function getHistory(params = {}) {
               created_at: aud.created_at,
               video_url: aud.video_url // 音乐MV
             }
-          })
-        }
-      })
-      .catch(e => {
-        console.error('[History API] 获取音频历史失败:', e)
-        return { type: 'audio', data: [] }
-      })
+          }),
+        '获取音频历史'
+      ).then(data => ({ type: 'audio', data }))
     )
   }
   

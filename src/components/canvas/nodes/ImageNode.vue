@@ -6575,9 +6575,10 @@ function insertMediaTag(media) {
   } else {
     const before = currentText.slice(0, start)
     const after = currentText.slice(end)
-    const suffix = !after || after[0] !== ' ' ? ' ' : ''
-    resultText = before + tag + suffix + after
-    resultCursor = start + tag.length + suffix.length
+    const prefix = before.length > 0 && before[before.length - 1] !== ' ' && before[before.length - 1] !== '\n' ? ' ' : ''
+    const suffix = !after || (after[0] !== ' ' && after[0] !== '\n') ? ' ' : ''
+    resultText = before + prefix + tag + suffix + after
+    resultCursor = start + prefix.length + tag.length + suffix.length
   }
   promptText.value = resultText
   promptEditorRenderKey.value += 1
