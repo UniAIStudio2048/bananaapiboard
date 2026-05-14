@@ -18,6 +18,7 @@ import { checkFaceVerifyStatus } from '@/api/face-verify'
 import FaceVerifyDialog from './FaceVerifyDialog.vue'
 import { getApiUrl } from '@/config/tenant'
 import { useI18n } from '@/i18n'
+import { smartDownload } from '@/api/client'
 
 const { t } = useI18n()
 import { useTeamStore } from '@/stores/team'
@@ -707,6 +708,27 @@ function copyAssetUri(asset) {
   }).catch(() => {})
 }
 
+function getAssetDownloadFilename(asset) {
+  const rawName = asset?.Name || asset?.Id || 'seedance-character'
+  const safeName = String(rawName).trim().replace(/[\\/:*?"<>|]+/g, '_') || 'seedance-character'
+  return `${safeName}.png`
+}
+
+async function handleDownloadAsset(asset) {
+  closeContextMenu()
+  if (!asset?.URL) {
+    errorMessage.value = '没有可下载的图片'
+    return
+  }
+
+  try {
+    await smartDownload(asset.URL, getAssetDownloadFilename(asset))
+  } catch (err) {
+    console.error('[SeedancePanel] 下载角色图片失败:', err)
+    errorMessage.value = '下载失败：' + (err.message || '未知错误')
+  }
+}
+
 // 重命名
 const editingAssetId = ref(null)
 const editingName = ref('')
@@ -1216,6 +1238,12 @@ onUnmounted(() => {
               <path d="M11 3H4.5A1.5 1.5 0 0 0 3 4.5V11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
             </svg>
             复制 URI
+          </button>
+          <button v-if="contextMenuAsset?.Status === 'Active' && contextMenuAsset?.URL" class="context-menu-item" @click="handleDownloadAsset(contextMenuAsset)">
+            <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
+              <path d="M3 11.5v1A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-1M8 2.5v7M5.5 7.5 8 10l2.5-2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            下载图片
           </button>
           <button 
             v-if="contextMenuAsset && isAssetCreator(contextMenuAsset)"

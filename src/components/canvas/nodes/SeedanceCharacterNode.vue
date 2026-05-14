@@ -7,6 +7,7 @@ import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import SeedanceCharacterSelector from '../SeedanceCharacterSelector.vue'
+import { smartDownload } from '@/api/client'
 
 const LONG_PRESS_DURATION = 300
 
@@ -26,6 +27,7 @@ onMounted(() => {
 })
 
 const showSelector = ref(false)
+const showPreviewModal = ref(false)
 
 // 标签编辑
 const isEditingLabel = ref(false)
@@ -110,6 +112,12 @@ const imageStyle = computed(() => ({
   height: nodeHeight.value ? '100%' : 'auto'
 }))
 
+function getCharacterDownloadFilename() {
+  const rawName = props.data?.assetName || props.id || 'seedance-character'
+  const safeName = String(rawName).trim().replace(/[\\/:*?"<>|]+/g, '_') || 'seedance-character'
+  return `${safeName}.png`
+}
+
 function openSelector() {
   showSelector.value = true
 }
@@ -135,6 +143,20 @@ function handleSelect(asset) {
       thumbnailUrl: asset.URL
     }
   })
+}
+
+async function handleDownloadCharacter() {
+  if (!props.data?.assetUrl) return
+  try {
+    await smartDownload(props.data.assetUrl, getCharacterDownloadFilename())
+  } catch (error) {
+    console.error('[SeedanceCharacterNode] 下载角色图片失败:', error)
+  }
+}
+
+function handlePreviewCharacter() {
+  if (!props.data?.assetUrl) return
+  showPreviewModal.value = true
 }
 
 // Resize
@@ -234,7 +256,7 @@ function handleAddRightMouseUp(event) {
   }
 }
 
-function startDragConnection(event) {
+function startDragConnection() {
   if (addBtnRef.value) {
     const rect = addBtnRef.value.getBoundingClientRect()
     const centerX = rect.left + rect.width / 2
@@ -269,6 +291,9 @@ function startDragConnection(event) {
 
 onUnmounted(() => {
   if (resizeRafId) cancelAnimationFrame(resizeRafId)
+  clearTimeout(pressTimer)
+  document.removeEventListener('mousemove', handleAddRightMouseMove)
+  document.removeEventListener('mouseup', handleAddRightMouseUp)
 })
 </script>
 
@@ -319,6 +344,28 @@ onUnmounted(() => {
       <div class="node-card" :style="contentStyle">
         <!-- 有角色时 -->
         <template v-if="hasCharacter">
+          <div v-if="data.assetUrl" class="character-toolbar">
+            <button
+              class="character-toolbar-btn"
+              title="下载"
+              @mousedown.stop.prevent="handleDownloadCharacter"
+              @click.stop.prevent
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M4 16v1a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-1m-4-4-4 4m0 0-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <button
+              class="character-toolbar-btn"
+              title="放大预览"
+              @mousedown.stop.prevent="handlePreviewCharacter"
+              @click.stop.prevent
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0-5 5M4 16v4m0 0h4m-4 0 5-5m11 5v-4m0 4h-4m4 0-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
           <div class="character-preview">
             <img
               v-if="data.assetUrl"
@@ -388,6 +435,19 @@ onUnmounted(() => {
       :current-asset-id="data?.assetId"
       @select="handleSelect"
     />
+
+    <Teleport to="body">
+      <Transition name="character-preview-fade">
+        <div v-if="showPreviewModal" class="character-preview-modal" @click.self="showPreviewModal = false">
+          <button class="character-preview-close" title="关闭" @click.stop="showPreviewModal = false">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6 6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <img :src="data.assetUrl" :alt="data.assetName || '角色预览'" class="character-preview-large" />
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -512,6 +572,58 @@ onUnmounted(() => {
   color: var(--canvas-text-tertiary);
   background: var(--canvas-bg-secondary);
   border-radius: 12px;
+}
+
+/* ========== 角色图片工具栏 ========== */
+.character-toolbar {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #2a2a2a;
+  border: 1px solid #3a3a3a;
+  border-radius: 20px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.node-wrapper:hover .character-toolbar,
+.seedance-character-node.selected .character-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.character-toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 6px;
+  border: none;
+  background: transparent;
+  color: #888;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.character-toolbar-btn:hover {
+  background: #3a3a3a;
+  color: #fff;
+}
+
+.character-toolbar-btn svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
 }
 
 /* 状态标签 */
@@ -677,6 +789,21 @@ onUnmounted(() => {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
 }
 
+:root.canvas-theme-light .character-toolbar {
+  background: #fff;
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .character-toolbar-btn {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+:root.canvas-theme-light .character-toolbar-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.85);
+}
+
 :root.canvas-theme-light .seedance-character-node.selected .character-img {
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3), 0 8px 30px rgba(0, 0, 0, 0.15);
 }
@@ -698,5 +825,63 @@ onUnmounted(() => {
 
 :root.canvas-theme-light .resize-handle-corner:hover {
   background: rgba(59, 130, 246, 0.4);
+}
+</style>
+
+<style>
+.character-preview-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(10px);
+}
+
+.character-preview-large {
+  max-width: min(90vw, 1100px);
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: 12px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.character-preview-close {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+}
+
+.character-preview-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.character-preview-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.character-preview-fade-enter-active,
+.character-preview-fade-leave-active {
+  transition: opacity 0.18s ease;
+}
+
+.character-preview-fade-enter-from,
+.character-preview-fade-leave-to {
+  opacity: 0;
 }
 </style>
