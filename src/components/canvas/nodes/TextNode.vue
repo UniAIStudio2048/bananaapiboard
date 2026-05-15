@@ -1395,6 +1395,8 @@ async function handleLLMGenerate() {
     canvasStore.updateNodeData(props.id, {
       text: llmInputText.value,
       status: 'processing',
+      output: null,
+      error: null,
       llmResponse: '' // 清空之前的响应
     })
     

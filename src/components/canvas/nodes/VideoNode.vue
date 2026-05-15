@@ -4298,7 +4298,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
 
 // 开始生成（点击后立即响应，重操作全部后台执行）
 async function handleGenerate(options = {}) {
-  const { forceNewNode = false } = options
+  const { retry = false } = options
   if (isGenerating.value) return
   collapseConfigPanel()
   
@@ -4390,7 +4390,7 @@ async function handleGenerate(options = {}) {
     return
   }
 
-  if (!forceNewNode) {
+  if (!retry) {
     const duplicateResult = duplicateSubmitGuard.check(buildCanvasSubmitFingerprint({
       nodeId: props.id,
       nodeType: 'video',
@@ -4429,16 +4429,7 @@ async function handleGenerate(options = {}) {
     apiType: currentModelConfig.value?.apiType || ''
   }
   
-  // 如果当前节点正在处理中或已有媒体内容，创建新节点来接收新任务
-  let targetNodeId = props.id
-  if (props.data.status === 'processing' || forceNewNode || hasExistingMediaContent()) {
-    const newNodeId = createNewOutputNode()
-    if (newNodeId) {
-      targetNodeId = newNodeId
-      canvasStore.selectNode(newNodeId)
-      console.log('[VideoNode] 当前节点已有内容或正在生成，创建新节点接收任务:', newNodeId)
-    }
-  }
+  const targetNodeId = props.id
   
   // 多批次生成时，创建堆叠的输出节点
   let allNodeIds = [targetNodeId]
@@ -4479,6 +4470,9 @@ async function handleGenerate(options = {}) {
   // 立即设置节点为 processing 状态
   canvasStore.updateNodeData(targetNodeId, { 
     status: 'processing',
+    output: null,
+    videoUrl: null,
+    error: null,
     progress: generateCount > 1 ? `并行生成 ${generateCount} 个视频...` : '排队中...',
     processingStartedAt: Date.now(),
     taskId: null,
@@ -4606,7 +4600,7 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
 
 // 重新生成
 function handleRegenerate() {
-  handleGenerate({ forceNewNode: true })
+  handleGenerate({ retry: true })
 }
 
 // 处理键盘事件

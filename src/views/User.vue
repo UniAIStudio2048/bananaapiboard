@@ -289,6 +289,8 @@ const getVideoModelName = (modelKey) => {
   return defaultNames[modelKey] || modelKey
 }
 
+const generationHistorySpaceQuery = 'spaceType=all'
+
 async function load() {
   error.value = ''
   loading.value = true
@@ -301,8 +303,8 @@ async function load() {
       fetch(getApiUrl('/api/user/points'), { headers }),
       fetch(getApiUrl('/api/user/invite-code'), { headers }),
       fetch(getApiUrl('/api/user/stats'), { headers }),
-      fetch(getApiUrl(`/api/user/recent-images?limit=${imagesLimit.value}&offset=0`), { headers }),
-      fetch(getApiUrl(`/api/user/recent-videos?limit=${videosLimit.value}&offset=0`), { headers }),
+      fetch(getApiUrl(`/api/user/recent-images?limit=${imagesLimit.value}&offset=0&${generationHistorySpaceQuery}`), { headers }),
+      fetch(getApiUrl(`/api/user/recent-videos?limit=${videosLimit.value}&offset=0&${generationHistorySpaceQuery}`), { headers }),
       fetch(getApiUrl('/api/user/points-trend?days=7'), { headers }),
       fetch(getApiUrl('/api/user/points-sources'), { headers }),
       fetch(getApiUrl('/api/user/checkin-status'), { headers }),
@@ -350,6 +352,7 @@ async function load() {
 function buildImageFilterParams() {
   const params = new URLSearchParams()
   params.set('limit', imagesLimit.value.toString())
+  params.set('spaceType', 'all')
   
   if (imageFilter.value.rating > 0) params.set('rating', imageFilter.value.rating.toString())
   if (imageFilter.value.keyword && imageFilter.value.keyword.trim()) params.set('keyword', imageFilter.value.keyword.trim())
@@ -365,6 +368,7 @@ function buildImageFilterParams() {
 function buildVideoFilterParams() {
   const params = new URLSearchParams()
   params.set('limit', videosLimit.value.toString())
+  params.set('spaceType', 'all')
   
   if (videoFilter.value.rating > 0) params.set('rating', videoFilter.value.rating.toString())
   if (videoFilter.value.keyword && videoFilter.value.keyword.trim()) params.set('keyword', videoFilter.value.keyword.trim())

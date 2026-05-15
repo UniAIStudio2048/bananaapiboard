@@ -203,6 +203,12 @@ async function handleGenerateMusic() {
   // 更新节点状态，保存所有参数
   canvasStore.updateNodeData(props.id, {
     status: 'processing',
+    audioUrl: null,
+    audioData: null,
+    output: null,
+    imageUrl: null,
+    videoUrl: null,
+    error: null,
     musicPrompt: musicPrompt.value,
     musicModel: selectedMusicModel.value,
     customMode: customMode.value,

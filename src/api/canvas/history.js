@@ -80,6 +80,9 @@ function buildHistoryQuery(params, pageLimit, offset) {
   }
   parts.push(`limit=${pageLimit}`)
   parts.push(`offset=${offset}`)
+  if (params.noCache) {
+    parts.push(`noCache=${Date.now()}`)
+  }
   return parts.join('&')
 }
 

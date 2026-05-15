@@ -13,3 +13,10 @@ test('user page initial history request uses pagination page sizes instead of fi
   assert.doesNotMatch(source, /\/api\/user\/recent-images\?limit=12&offset=0/)
   assert.doesNotMatch(source, /\/api\/user\/recent-videos\?limit=12&offset=0/)
 })
+
+test('user page generation records request all accessible spaces', () => {
+  assert.match(source, /generationHistorySpaceQuery = 'spaceType=all'/)
+  assert.match(source, /\/api\/user\/recent-images\?limit=\$\{imagesLimit\.value\}&offset=0&\$\{generationHistorySpaceQuery\}/)
+  assert.match(source, /\/api\/user\/recent-videos\?limit=\$\{videosLimit\.value\}&offset=0&\$\{generationHistorySpaceQuery\}/)
+  assert.match(source, /params\.set\('spaceType', 'all'\)/)
+})

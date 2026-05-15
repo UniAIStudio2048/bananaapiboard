@@ -692,6 +692,12 @@ function collapseConfigPanel() {
   isConfigPanelExpanded.value = false
 }
 
+function invalidateCanvasHistory() {
+  window.dispatchEvent(new CustomEvent('canvas-history-invalidate', {
+    detail: { source: 'image-node', nodeId: props.id }
+  }))
+}
+
 function handleConfigPanelOutsideMouseDown(event) {
   if (!isConfigPanelExpanded.value) return
   if (configPanelRef.value?.contains(event.target)) return
@@ -734,6 +740,7 @@ function handleBackgroundTaskComplete(event) {
       status: 'success',
       output: { type: 'image', urls: [imageUrl] }
     })
+    invalidateCanvasHistory()
   } else {
     console.warn(`[ImageNode] 任务完成但无图片URL: ${taskId}`, task.result)
     canvasStore.updateNodeData(props.id, {
@@ -5523,7 +5530,7 @@ function createNewOutputNode() {
 
 // 开始生成（输出节点用）
 async function handleGenerate(options = {}) {
-  const { fromGroup = false, forceNewNode = false } = options
+  const { fromGroup = false, retry = false } = options
   // 动态获取上游节点的最新提示词（可能有多个文本节点连接）
   const upstreamPrompt = getUpstreamPrompt()
   const userPrompt = promptText.value.trim()
@@ -5626,7 +5633,7 @@ async function handleGenerate(options = {}) {
     return
   }
 
-  if (!fromGroup && !forceNewNode) {
+  if (!fromGroup && !retry) {
     const duplicateResult = duplicateSubmitGuard.check(buildCanvasSubmitFingerprint({
       nodeId: props.id,
       nodeType: 'image',
@@ -5650,17 +5657,7 @@ async function handleGenerate(options = {}) {
   
   const generateCount = selectedCount.value
   
-  // 🔥 核心逻辑：如果当前节点正在处理中或已有媒体内容，创建新节点来接收新任务
-  let targetNodeId = props.id
-  if (props.data.status === 'processing' || forceNewNode || hasExistingMediaContent()) {
-    const newNodeId = createNewOutputNode()
-    if (newNodeId) {
-      targetNodeId = newNodeId
-      // 选中新创建的节点
-      canvasStore.selectNode(newNodeId)
-      console.log('[ImageNode] 当前节点已有内容或正在生成，创建新节点接收任务:', newNodeId)
-    }
-  }
+  const targetNodeId = props.id
   
   // 多批次生成时，创建堆叠的输出节点
   let allNodeIds = [targetNodeId]
@@ -5702,6 +5699,11 @@ async function handleGenerate(options = {}) {
   // 更新目标节点状态
   canvasStore.updateNodeData(targetNodeId, { 
     status: 'processing',
+    nodeRole: 'output',
+    output: null,
+    generatedImage: null,
+    imageUrl: null,
+    error: null,
     progress: generateCount > 1 ? `并行生成 ${generateCount} 张...` : '生成中...'
   })
   
@@ -5817,6 +5819,7 @@ async function handleGenerateSingle() {
           urls: allResults
         }
       })
+      invalidateCanvasHistory()
     } else {
       throw new Error('生成完成但未返回图片URL')
     }
@@ -5846,7 +5849,7 @@ function handleOutputImageError(event, imgUrl, index) {
 
 // 重新生成
 function handleRegenerate() {
-  handleGenerate({ forceNewNode: true })
+  handleGenerate({ retry: true })
 }
 
 // 处理键盘事件

@@ -251,7 +251,7 @@ async function loadHistory(forceRefresh = false) {
   // 3. 从服务器加载（无缓存或强制刷新）
   loading.value = true
   try {
-    const freshData = await _fetchFromServer(spaceParams, spaceType, teamId)
+    const freshData = await _fetchFromServer(spaceParams, spaceType, teamId, forceRefresh)
     // 精确比较，避免数据相同时替换数组引用导致图片跳闪
     if (!_isHistoryEqual(freshData, historyList.value)) {
       historyList.value = freshData
@@ -266,8 +266,8 @@ async function loadHistory(forceRefresh = false) {
 }
 
 // 从服务器获取历史数据并缓存
-async function _fetchFromServer(spaceParams, spaceType, teamId) {
-  const result = await getHistory(spaceParams)
+async function _fetchFromServer(spaceParams, spaceType, teamId, noCache = false) {
+  const result = await getHistory(noCache ? { ...spaceParams, noCache: true } : spaceParams)
   const freshData = result.history || []
   console.log('[HistoryPanel] 从服务器加载:', freshData.length, '条')
   
@@ -342,7 +342,7 @@ async function checkTeamSync() {
   try {
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
     const { spaceType, teamId } = spaceParams
-    const result = await getHistory(spaceParams)
+    const result = await getHistory({ ...spaceParams, noCache: true })
     const freshData = result.history || []
 
     if (!_isHistoryEqual(freshData, historyList.value)) {
@@ -397,7 +397,7 @@ function startAutoRefresh() {
     try {
       const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
       const { spaceType, teamId } = spaceParams
-      const result = await getHistory(spaceParams)
+      const result = await getHistory({ ...spaceParams, noCache: true })
       const freshData = result.history || []
 
       if (!_isHistoryEqual(freshData, historyList.value)) {

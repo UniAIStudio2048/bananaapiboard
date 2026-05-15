@@ -47,6 +47,7 @@ const batchVoucherForm = ref({
   balance: 0,
   max_uses: 1,
   days: 30,
+  point_valid_days: 365,
   note: ''
 })
 const showVoucherRedemptionsModal = ref(false)
@@ -624,8 +625,10 @@ function openBatchVoucherModal() {
   batchVoucherForm.value = {
     count: 10,
     points: 100,
+    balance: 0,
     max_uses: 1,
     days: 30,
+    point_valid_days: 365,
     note: ''
   }
   error.value = ''
@@ -650,15 +653,18 @@ async function createBatchVouchers() {
     return
   }
   
-  if (batchVoucherForm.value.days < 1) {
-    error.value = '有效天数必须大于0'
+  if (batchVoucherForm.value.days < 0) {
+    error.value = '兑换券有效天数不能小于0'
+    return
+  }
+
+  if (batchVoucherForm.value.point_valid_days < 0) {
+    error.value = '积分到账有效天数不能小于0'
     return
   }
   
   loadingCreate.value = true
   try {
-    const expires_at = Date.now() + (batchVoucherForm.value.days * 24 * 60 * 60 * 1000)
-    
     // 余额转换为分（后端存储单位）
     const balanceInCents = Math.round(balance * 100)
     
@@ -670,7 +676,8 @@ async function createBatchVouchers() {
         points: points,
         balance: balanceInCents,
         max_uses: batchVoucherForm.value.max_uses,
-        expires_at,
+        expires_days: batchVoucherForm.value.days,
+        point_valid_days: batchVoucherForm.value.point_valid_days,
         note: batchVoucherForm.value.note
       })
     })
@@ -794,6 +801,10 @@ function prevVouchersPage() {
 
 function formatDate(timestamp) {
   return new Date(timestamp).toLocaleString('zh-CN')
+}
+
+function formatExpiryDate(timestamp) {
+  return Number(timestamp) === 0 ? '永久有效' : formatDate(timestamp)
 }
 
 const vouchersRangeStart = computed(() => vouchersTotal.value === 0 ? 0 : (vouchersPage.value - 1) * vouchersPageSize.value + 1)
@@ -2204,9 +2215,14 @@ onUnmounted(() => {
                   </code>
                 </td>
                 <td class="px-4 py-3">
-                  <span class="font-semibold text-amber-600 dark:text-amber-400">
-                    {{ voucher.points || 0 }}
-                  </span>
+                  <div>
+                    <span class="font-semibold text-amber-600 dark:text-amber-400">
+                      {{ voucher.points || 0 }}
+                    </span>
+                    <div v-if="Number(voucher.points || 0) > 0" class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      {{ Number(voucher.point_valid_days) === 0 ? '永久积分' : `到账后${voucher.point_valid_days || 365}天有效` }}
+                    </div>
+                  </div>
                 </td>
                 <td class="px-4 py-3">
                   <span class="font-semibold text-green-600 dark:text-green-400">
@@ -2227,9 +2243,9 @@ onUnmounted(() => {
                 </td>
                 <td class="px-4 py-3">
                   <span 
-                    :class="voucher.expires_at <= Date.now() ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'"
+                    :class="Number(voucher.expires_at) !== 0 && voucher.expires_at <= Date.now() ? 'text-red-600 dark:text-red-400' : 'text-slate-600 dark:text-slate-400'"
                   >
-                    {{ formatDate(voucher.expires_at) }}
+                    {{ formatExpiryDate(voucher.expires_at) }}
                   </span>
                 </td>
                 <td class="px-4 py-3">
@@ -3715,14 +3731,28 @@ onUnmounted(() => {
         
         <div>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            有效天数 <span class="text-red-500">*</span>
+            兑换券有效天数 <span class="text-red-500">*</span>
           </label>
           <input 
             v-model.number="batchVoucherForm.days" 
             type="number"
-            min="1"
+            min="0"
             class="input"
-            placeholder="从现在起多少天后过期"
+            placeholder="从现在起多少天后过期（0表示永久有效）"
+          />
+        </div>
+
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            积分到账有效天数
+            <span class="text-xs text-slate-500 ml-1">(仅影响兑换积分，0表示永久积分)</span>
+          </label>
+          <input
+            v-model.number="batchVoucherForm.point_valid_days"
+            type="number"
+            min="0"
+            class="input"
+            placeholder="兑换后积分多少天内有效，默认365天"
           />
         </div>
         
