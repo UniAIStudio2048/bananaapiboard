@@ -159,7 +159,8 @@ const filteredHistory = computed(() => {
     result = result.filter(h => 
       h.name?.toLowerCase().includes(query) ||
       h.prompt?.toLowerCase().includes(query) ||
-      h.model?.toLowerCase().includes(query)
+      h.model?.toLowerCase().includes(query) ||
+      getHistoryModelDisplayName(h).toLowerCase().includes(query)
     )
   }
 
@@ -543,6 +544,10 @@ function formatSize(item) {
   if (item.size) return item.size
   if (item.aspect_ratio) return item.aspect_ratio
   return ''
+}
+
+function getHistoryModelDisplayName(item) {
+  return item?.model_display_name || item?.modelDisplayName || ''
 }
 
 async function copyHistoryPrompt(e, item) {
@@ -1898,7 +1903,7 @@ onUnmounted(() => {
                   <!-- 悬停信息遮罩 -->
                   <div class="hover-overlay">
                     <div class="overlay-content">
-                      <div class="overlay-model" v-if="item.model">{{ item.model }}</div>
+                      <div class="overlay-model" v-if="getHistoryModelDisplayName(item)">{{ getHistoryModelDisplayName(item) }}</div>
                       <div class="overlay-prompt-full" v-if="item.prompt">{{ item.prompt }}</div>
                       <div class="overlay-time">{{ formatDate(item.created_at) }}</div>
                       <!-- 团队空间用户署名 -->
@@ -2091,7 +2096,7 @@ onUnmounted(() => {
           <div class="preview-footer">
             <!-- 信息区 -->
             <div class="preview-info-row">
-              <span v-if="previewItem.model" class="info-tag">{{ previewItem.model }}</span>
+              <span v-if="getHistoryModelDisplayName(previewItem)" class="info-tag">{{ getHistoryModelDisplayName(previewItem) }}</span>
               <span v-if="formatSize(previewItem)" class="info-tag">{{ formatSize(previewItem) }}</span>
               <span class="info-tag">{{ formatDate(previewItem.created_at) }}</span>
             </div>

@@ -261,6 +261,9 @@ function closeTransferToast() {
 
 // 获取模型显示名称（图片）
 const getImageModelName = (modelKey) => {
+  if (modelKey && typeof modelKey === 'object') {
+    return modelKey.model_display_name || modelKey.modelDisplayName || getImageModelName(modelKey.model)
+  }
   const customName = getModelDisplayName(modelKey, 'image')
   if (customName) return customName
   
@@ -270,11 +273,14 @@ const getImageModelName = (modelKey) => {
     'nano-banana-hd': 'Nano Banana HD',
     'nano-banana-2': 'Nano Banana 2'
   }
-  return defaultNames[modelKey] || modelKey
+  return defaultNames[modelKey] || '未知模型'
 }
 
 // 获取模型显示名称（视频）
 const getVideoModelName = (modelKey) => {
+  if (modelKey && typeof modelKey === 'object') {
+    return modelKey.model_display_name || modelKey.modelDisplayName || getVideoModelName(modelKey.model)
+  }
   const customName = getModelDisplayName(modelKey, 'video')
   if (customName) return customName
   
@@ -286,7 +292,7 @@ const getVideoModelName = (modelKey) => {
     'veo3.1': 'VEO 3.1 标准',
     'veo3.1-pro': 'VEO 3.1 Pro'
   }
-  return defaultNames[modelKey] || modelKey
+  return defaultNames[modelKey] || '未知模型'
 }
 
 const generationHistorySpaceQuery = 'spaceType=all'
@@ -3329,7 +3335,7 @@ onUnmounted(() => {
                     </div>
                     
                     <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                      <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-600 rounded">{{ getVideoModelName(video.model) }}</span>
+                      <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-600 rounded">{{ getVideoModelName(video) }}</span>
                       <span class="px-2 py-0.5 bg-slate-200 dark:bg-slate-600 rounded">{{ video.aspect_ratio }}</span>
                     </div>
                     
@@ -4881,7 +4887,7 @@ onUnmounted(() => {
           
           <p class="text-white font-medium mb-2 whitespace-pre-wrap break-words leading-relaxed">{{ selectedImage.prompt || '无提示词' }}</p>
           <div class="flex flex-wrap items-center justify-between gap-2 text-sm text-white/70">
-            <span>{{ getImageModelName(selectedImage.model) }} · {{ selectedImage.aspectRatio }} · {{ selectedImage.imageSize || 'N/A' }}</span>
+            <span>{{ getImageModelName(selectedImage) }} · {{ selectedImage.aspectRatio }} · {{ selectedImage.imageSize || 'N/A' }}</span>
             <span>{{ new Date(selectedImage.createdAt).toLocaleString() }}</span>
           </div>
           <div class="flex items-center space-x-2 mt-2">
@@ -4986,7 +4992,7 @@ onUnmounted(() => {
           
           <p class="text-white font-medium mb-2">{{ selectedVideo.prompt }}</p>
           <div class="flex items-center justify-between text-sm text-white/70">
-            <span>{{ getVideoModelName(selectedVideo.model) }} · {{ selectedVideo.aspect_ratio }} · {{ selectedVideo.duration }}s</span>
+            <span>{{ getVideoModelName(selectedVideo) }} · {{ selectedVideo.aspect_ratio }} · {{ selectedVideo.duration }}s</span>
             <span>{{ new Date(selectedVideo.created_at).toLocaleString() }}</span>
           </div>
           <div class="flex items-center space-x-2 mt-2">

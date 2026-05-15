@@ -153,6 +153,7 @@ export async function getHistory(params = {}) {
               fullPrompt: normalized.fullPrompt,
               user_prompt: normalized.user_prompt,
               model: img.model,
+              model_display_name: img.model_display_name || img.modelDisplayName || '',
               status: img.status,
               created_at: img.created ? new Date(img.created * 1000).toISOString() : null,
               size: img.size,
@@ -186,6 +187,7 @@ export async function getHistory(params = {}) {
               fullPrompt: vid.prompt, // 保留完整提示词
               user_prompt: vid.user_prompt,
               model: vid.model,
+              model_display_name: vid.model_display_name || vid.modelDisplayName || '',
               status: vid.status === 'SUCCESS' ? 'completed' : vid.status,
               aspect_ratio: vid.aspect_ratio,
               created_at: vid.created_at
@@ -217,6 +219,7 @@ export async function getHistory(params = {}) {
               title: aud.title,
               tags: aud.tags,
               model: aud.model,
+              model_display_name: aud.model_display_name || aud.modelDisplayName || '',
               status: 'completed',
               created_at: aud.created_at,
               video_url: aud.video_url // 音乐MV
