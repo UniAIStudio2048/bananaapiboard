@@ -2724,7 +2724,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: contain;
+  object-fit: cover;
   background: #111113;
 }
 
@@ -2739,7 +2739,7 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: contain;
+  object-fit: cover;
   background: #111113;
 }
 
@@ -2749,7 +2749,7 @@ onUnmounted(() => {
   background: #1a1a1c;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 /* 竖屏视频特殊样式 */
@@ -2760,7 +2760,7 @@ onUnmounted(() => {
 .history-card.portrait-video .card-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .history-card.portrait-video :deep(.cached-image-wrapper),

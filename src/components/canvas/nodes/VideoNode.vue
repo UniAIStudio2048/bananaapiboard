@@ -45,6 +45,11 @@ import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
 import { getSeedanceQuickAsset } from '@/utils/seedanceQuickAsset'
+import {
+  applySeedanceVideoInputMultiplier,
+  formatSeedanceVideoInputMultiplier,
+  normalizeSeedanceVideoInputMultiplier
+} from '@/utils/seedanceVideoInputMultiplier'
 import { compressImage, getImageFileDimensions } from '@/utils/imageCompress'
 import {
   SEEDANCE_MAX_IMAGE_PIXELS,
@@ -2381,6 +2386,19 @@ const referenceVideos = computed(() => {
 // 是否有参考视频
 const hasReferenceVideos = computed(() => referenceVideos.value.length > 0)
 
+const isSeedanceVideoInputMultiplierModel = computed(() => {
+  const apiType = currentModelConfig.value?.apiType
+  return apiType === 'seedance-2.0' || apiType === 'ant'
+})
+
+const seedanceVideoInputMultiplier = computed(() => {
+  return normalizeSeedanceVideoInputMultiplier(currentModelConfig.value?.seedanceConfig?.videoInputMultiplier)
+})
+
+const shouldApplySeedanceVideoInputMultiplier = computed(() => {
+  return isSeedanceVideoInputMultiplierModel.value && hasReferenceVideos.value
+})
+
 // 参考音频（来自上游音频节点）
 const AUDIO_NODE_TYPES = ['audio-input', 'audio']
 
@@ -2701,6 +2719,10 @@ const pointsCost = computed(() => {
   // Seedance 1.5 声音模式：积分翻倍（2.0 默认含声音，不额外计费）
   if (isSeedanceModel.value && !isSeedance2Model.value && seedanceSoundEnabled.value) {
     cost = cost * 2
+  }
+
+  if (shouldApplySeedanceVideoInputMultiplier.value) {
+    cost = applySeedanceVideoInputMultiplier(cost, seedanceVideoInputMultiplier.value, true)
   }
   
   return cost
@@ -7472,6 +7494,9 @@ function handleToolbarPreview() {
             </template>
             <template v-else>
               {{ formatPoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}
+              <span v-if="shouldApplySeedanceVideoInputMultiplier" class="points-multiplier-chip">
+                {{ formatSeedanceVideoInputMultiplier(seedanceVideoInputMultiplier) }}
+              </span>
             </template>
           </span>
           
@@ -9701,6 +9726,11 @@ function handleToolbarPreview() {
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   white-space: nowrap;
+}
+
+.points-multiplier-chip {
+  margin-left: 6px;
+  color: rgba(251, 191, 36, 0.95);
 }
 
 .generate-btn {
