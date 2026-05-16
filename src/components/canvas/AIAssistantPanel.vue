@@ -324,9 +324,13 @@
             aria-multiline="true"
             data-placeholder="开启你的灵感之旅..."
             @keydown="handleInputKeydown"
+            @beforeinput="handleInputBeforeInput"
             @input="handleInputEvent"
             @compositionstart="handleInputCompositionStart"
             @compositionend="handleInputCompositionEnd"
+            @keyup="handleInputSelectionSettle"
+            @click="handleInputSelectionSettle"
+            @mouseup="handleInputSelectionSettle"
           >
             <span
               v-for="(seg, i) in highlightedInputSegments"
@@ -338,7 +342,6 @@
               :data-prompt-segment-end="seg.end"
               :data-prompt-mention="seg.isTag ? seg.text : undefined"
               :contenteditable="seg.isTag ? 'false' : undefined"
-              @mousedown="seg.isTag && handlePromptTagMousedown(seg, $event)"
             ><PromptMediaTag v-if="seg.isTag" :text="seg.text" :media="seg.media" /><template v-else>{{ seg.text }}</template></span>
           </div>
 
@@ -634,7 +637,7 @@ import {
   normalizeAssistantAttachmentName,
   shouldFetchAssistantAttachmentUrl
 } from '@/utils/aiAssistantAttachments'
-import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
+import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import {
   bindAssistantAttachmentMention,
   buildAssistantMentionItems,
@@ -1097,12 +1100,52 @@ function updateAttachmentMentionPopup() {
 }
 
 function handleInputCompositionStart() {
+  const editor = inputRef.value
+  if (editor) snapPromptEditorCaretOutOfMention(editor)
   isInputComposing = true
 }
 
 function handleInputCompositionEnd(event) {
   isInputComposing = false
   handleInputEvent(event)
+}
+
+function handleInputSelectionSettle() {
+  // 在键盘/鼠标交互改变 caret 后调用，确保 caret 不会停留在 mention chip 内部
+  const editor = inputRef.value
+  if (editor) snapPromptEditorCaretOutOfMention(editor)
+}
+
+function handleInputBeforeInput(event) {
+  if (isInputComposing || event?.isComposing) return
+  if (event.inputType !== 'insertText' || typeof event.data !== 'string' || !event.data) return
+  if (shouldDeferPromptEditorBoundaryBeforeInputForIme(event)) return
+  const editor = event.currentTarget || event.target
+  // caret 可能被浏览器收进 mention chip 内部，先 snap 出来再走 mention 边界处理
+  snapPromptEditorCaretOutOfMention(editor)
+  if (!isPromptEditorSelectionAtMentionBoundary(editor)) return
+
+  const selectionRange = getPromptEditorSelectionRange(editor)
+  const currentText = serializePromptEditorContent(editor)
+  const next = applyPromptEditorTextInput({
+    text: currentText,
+    selection: selectionRange,
+    data: event.data
+  })
+
+  event.preventDefault()
+  inputText.value = next.text
+  inputEditorRenderKey.value += 1
+  showMentionPopup.value = false
+  autoResize()
+  nextTick(() => {
+    const nextEditor = inputRef.value
+    if (nextEditor) {
+      nextEditor.focus()
+      restorePromptEditorSelection(nextEditor, next.cursor, next.cursor)
+      autoResize()
+    }
+  })
 }
 
 function handleInputEvent(event) {
@@ -1114,10 +1157,22 @@ function handleInputEvent(event) {
     if (text !== inputText.value) {
       inputText.value = text
     }
-    nextTick(() => {
-      removePromptEditorOrphanTextNodes(editor)
-      restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
-    })
+    if (hasPromptEditorOrphanTextNodes(editor) ||
+      Array.from(editor.childNodes).some(node => node.nodeType === 1 && node.tagName !== 'SPAN')) {
+      inputEditorRenderKey.value += 1
+      nextTick(() => {
+        const nextEditor = inputRef.value
+        if (nextEditor) {
+          nextEditor.focus()
+          restorePromptEditorSelection(nextEditor, selectionRange.start, selectionRange.end)
+        }
+      })
+    } else {
+      nextTick(() => {
+        removePromptEditorOrphanTextNodes(editor)
+        restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+      })
+    }
   }
   autoResize()
   updateAttachmentMentionPopup()

@@ -4,6 +4,11 @@ const DEFAULT_OFFSET = 8
 const DEFAULT_FALLBACK_LEFT_OFFSET = 12
 
 const DEFAULT_POPUP_HEIGHT = 260
+const OBJECT_REPLACEMENT_CHAR_PATTERN = /\uFFFC/g
+
+export function sanitizePromptEditorText(text = '') {
+  return String(text || '').replace(OBJECT_REPLACEMENT_CHAR_PATTERN, '')
+}
 
 function getViewportHeight(explicitHeight) {
   if (Number.isFinite(explicitHeight)) return explicitHeight
@@ -105,6 +110,176 @@ export function removePromptEditorOrphanTextNodes(root) {
     .forEach(node => node.remove())
 }
 
+export function hasPromptEditorOrphanTextNodes(root) {
+  if (!root?.childNodes) return false
+  return Array.from(root.childNodes).some(node => node.nodeType === 3 && (node.nodeValue || '') !== '')
+}
+
+export function applyPromptEditorTextInput({ text = '', selection, data = '' } = {}) {
+  const value = sanitizePromptEditorText(text)
+  const start = Math.max(0, Math.min(value.length, Number.isFinite(selection?.start) ? selection.start : value.length))
+  const end = Math.max(start, Math.min(value.length, Number.isFinite(selection?.end) ? selection.end : start))
+  const insertion = String(data || '')
+  const nextText = value.slice(0, start) + insertion + value.slice(end)
+  return {
+    text: nextText,
+    cursor: start + insertion.length
+  }
+}
+
+export function shouldDeferPromptEditorBoundaryBeforeInputForIme(event) {
+  if (!event || event.inputType !== 'insertText') return false
+  if (event.isComposing) return true
+  if (typeof event.data !== 'string') return false
+  return /^[A-Za-z]$/.test(event.data) &&
+    !event.ctrlKey &&
+    !event.metaKey &&
+    !event.altKey
+}
+
+export function applyPromptEditorQueuedTextInput({ text = '', selection, data = '', pending = null } = {}) {
+  const hasPending = typeof pending?.text === 'string' && Number.isFinite(pending?.cursor)
+  const baseText = hasPending ? pending.text : String(text || '')
+  const baseSelection = hasPending
+    ? { start: pending.cursor, end: pending.cursor }
+    : selection
+  const next = applyPromptEditorTextInput({
+    text: baseText,
+    selection: baseSelection,
+    data
+  })
+  return {
+    ...next,
+    pending: {
+      text: next.text,
+      cursor: next.cursor
+    }
+  }
+}
+
+function isPromptMentionElement(node) {
+  return isElementNode(node) && !!getPromptMentionText(node)
+}
+
+/**
+ * 返回 node（含其本身）向上查找时遇到的第一个属于 root 的 mention chip 元素，
+ * 若不存在则返回 null。用于判断 caret/range 端点是否落在 chip 内部。
+ */
+export function getEnclosingPromptMention(root, node) {
+  if (!root || !node) return null
+  let current = node
+  while (current && current !== root) {
+    if (isPromptMentionElement(current)) return current
+    current = current.parentNode
+  }
+  return null
+}
+
+export function isPromptEditorSelectionAtMentionBoundary(root) {
+  if (!root || typeof window === 'undefined') return false
+
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0 || !selection.isCollapsed) return false
+
+  const range = selection.getRangeAt(0)
+  if (!root.contains(range.startContainer)) return false
+
+  // caret 已经/被浏览器收进 mention chip 内部，同样视为处于 mention 边界，
+  // 由调用方接管插入流程并把 caret 重新移出 chip，避免破坏 chip DOM。
+  if (getEnclosingPromptMention(root, range.startContainer)) return true
+
+  const container = range.startContainer
+  const offset = range.startOffset
+  if (container === root) {
+    const before = root.childNodes?.[offset - 1]
+    const after = root.childNodes?.[offset]
+    return isPromptMentionElement(before) || isPromptMentionElement(after)
+  }
+
+  const parent = container.parentNode
+  if (!parent || parent.parentNode !== root) return false
+  const childIndex = Array.prototype.indexOf.call(root.childNodes || [], parent)
+  if (childIndex < 0) return false
+
+  if (container.nodeType === 3) {
+    const length = (container.nodeValue || '').length
+    if (offset === 0 && isPromptMentionElement(root.childNodes?.[childIndex - 1])) return true
+    if (offset === length && isPromptMentionElement(root.childNodes?.[childIndex + 1])) return true
+  }
+
+  return false
+}
+
+function getRectCenterX(rect) {
+  if (!rect) return null
+  const left = Number.isFinite(rect.left) ? rect.left : null
+  const right = Number.isFinite(rect.right) ? rect.right
+    : (Number.isFinite(rect.width) && left != null ? left + rect.width : null)
+  if (left == null || right == null) return null
+  return left + (right - left) / 2
+}
+
+function shouldPlaceCaretAfterMention(range, mention) {
+  if (!range || !mention) return false
+  try {
+    const mentionRect = mention.getBoundingClientRect?.()
+    const caretRect = range.getBoundingClientRect?.()
+    const center = getRectCenterX(mentionRect)
+    if (center != null && caretRect && Number.isFinite(caretRect.left) && caretRect.left > 0) {
+      return caretRect.left > center
+    }
+  } catch (_) {
+    // ignore, fall through to DOM heuristic
+  }
+  // DOM 启发式：若 caret 落在 chip 内的最后一个 text node 末尾，倾向于放到 chip 之后；
+  // 其他情况一律落到 chip 之前。
+  const container = range.startContainer
+  if (container && container.nodeType === 3) {
+    const length = (container.nodeValue || '').length
+    if (range.startOffset >= length) {
+      let walker = container
+      while (walker && walker !== mention) {
+        if (walker.nextSibling) return false
+        walker = walker.parentNode
+      }
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * 若当前选区落在 root 内某个 mention chip 内部，则把 caret 强制移到该 chip
+ * 之前或之后（基于光标横向位置）。返回是否做了调整。
+ */
+export function snapPromptEditorCaretOutOfMention(root) {
+  if (!root || typeof window === 'undefined' || typeof document === 'undefined') return false
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return false
+
+  const range = selection.getRangeAt(0)
+  if (!root.contains(range.startContainer)) return false
+
+  const startMention = getEnclosingPromptMention(root, range.startContainer)
+  const endMention = getEnclosingPromptMention(root, range.endContainer)
+  const mention = startMention || endMention
+  if (!mention) return false
+
+  const parent = mention.parentNode
+  if (!parent) return false
+  const childIndex = Array.prototype.indexOf.call(parent.childNodes || [], mention)
+  if (childIndex < 0) return false
+
+  const placeAfter = shouldPlaceCaretAfterMention(range, mention)
+  const newRange = document.createRange()
+  const targetOffset = placeAfter ? childIndex + 1 : childIndex
+  newRange.setStart(parent, targetOffset)
+  newRange.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(newRange)
+  return true
+}
+
 export function serializePromptEditorContent(root) {
   if (!root) return ''
 
@@ -113,7 +288,7 @@ export function serializePromptEditorContent(root) {
     if (!node) return
 
     if (node.nodeType === 3) {
-      text += node.nodeValue || ''
+      text += sanitizePromptEditorText(node.nodeValue || '')
       return
     }
 
@@ -150,10 +325,26 @@ export function getPromptEditorSelectionRange(root) {
     return { start: end, end }
   }
 
+  // 若端点落入某个 mention chip 内部，使用 chip 自身相对 root 的边界来计算，
+  // 避免 cloneContents 把整段 mention 文本错误地计入而产生越界 caret index。
+  const resolveEndpoint = (container, offset) => {
+    const mention = getEnclosingPromptMention(root, container)
+    if (mention) {
+      const parent = mention.parentNode || root
+      const childIndex = Array.prototype.indexOf.call(parent.childNodes || [], mention)
+      if (childIndex >= 0) {
+        const placeAfter = shouldPlaceCaretAfterMention(range, mention)
+        return { container: parent, offset: placeAfter ? childIndex + 1 : childIndex }
+      }
+    }
+    return { container, offset }
+  }
+
   const measure = (container, offset) => {
+    const resolved = resolveEndpoint(container, offset)
     const preRange = document.createRange()
     preRange.selectNodeContents(root)
-    preRange.setEnd(container, offset)
+    preRange.setEnd(resolved.container, resolved.offset)
     return serializePromptEditorContent(preRange.cloneContents()).length
   }
 

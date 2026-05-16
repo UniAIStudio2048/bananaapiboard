@@ -76,7 +76,7 @@ test('clearing prompt via backspace bumps renderKey to force Vue to remount the 
     )
     assert.match(
       body,
-      /if\s*\(\s*wasNonEmpty\s*&&\s*!text\s*\)/,
+      /if\s*\(\s*wasNonEmpty\s*&&\s*!(?:text|text\.trim\(\))\s*\)/,
       `${file} ${inputHandler} should guard the renderKey bump with the becoming-empty transition`
     )
   }

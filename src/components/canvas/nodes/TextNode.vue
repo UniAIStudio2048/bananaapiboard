@@ -18,7 +18,7 @@ import { getAssets } from '@/api/canvas/assets'
 import { getApiUrl, getTenantHeaders, getAvailableLLMModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
-import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
+import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { buildTextNodeLlmMessages } from '@/utils/textNodeLlmMessages'
@@ -232,12 +232,53 @@ function insertLLMEditorPlainText(text) {
 // 但此时序列化得到的是临时拼音串、再调用 restorePromptEditorSelection 会破坏 IME 选区，
 // 因此 composition 期间必须直接 return，等 compositionend 后再统一处理一次
 function handleLLMCompositionStart() {
+  const editor = llmInputRef.value
+  if (editor) snapPromptEditorCaretOutOfMention(editor)
   isLLMInputComposing = true
 }
 
 function handleLLMCompositionEnd(event) {
   isLLMInputComposing = false
   handleLLMInput(event)
+}
+
+function handleLLMSelectionSettle() {
+  // 在键盘/鼠标交互改变 caret 后调用，确保 caret 不会停留在 mention chip 内部
+  const editor = llmInputRef.value
+  if (editor) snapPromptEditorCaretOutOfMention(editor)
+}
+
+function handleLLMBeforeInput(event) {
+  if (isLLMInputComposing || event?.isComposing) return
+  if (event.inputType !== 'insertText' || typeof event.data !== 'string' || !event.data) return
+  if (shouldDeferPromptEditorBoundaryBeforeInputForIme(event)) return
+  const editor = event.currentTarget || event.target
+  // caret 可能被浏览器收进 mention chip 内部，先 snap 出来再走 mention 边界处理
+  snapPromptEditorCaretOutOfMention(editor)
+  if (!isPromptEditorSelectionAtMentionBoundary(editor)) return
+
+  const selectionRange = getPromptEditorSelectionRange(editor)
+  const currentText = serializePromptEditorContent(editor)
+  const next = applyPromptEditorTextInput({
+    text: currentText,
+    selection: selectionRange,
+    data: event.data
+  })
+
+  event.preventDefault()
+  llmInputText.value = next.text
+  llmInputRenderKey.value += 1
+  showMediaMentionPopup.value = false
+  showMentionList.value = false
+  autoResizeLLMInput()
+  nextTick(() => {
+    const nextEditor = llmInputRef.value
+    if (nextEditor) {
+      nextEditor.focus()
+      restorePromptEditorSelection(nextEditor, next.cursor, next.cursor)
+      autoResizeLLMInput()
+    }
+  })
 }
 
 function handleLLMPaste(event) {
@@ -279,6 +320,8 @@ function handleLLMInput(event) {
     llmInputText.value = text
   }
   autoResizeLLMInput()
+  const shouldRemountEditor = hasPromptEditorOrphanTextNodes(editor) ||
+    Array.from(editor.childNodes).some(node => node.nodeType === 1 && node.tagName !== 'SPAN')
 
   // 当 contenteditable 内容从非空被清空时，浏览器可能已经移除了 Vue 管理的 <span>
   // 子节点（或留下 <br>），导致 Vue 的 vnode 引用失效，下一次 patch 时会抛出
@@ -300,10 +343,21 @@ function handleLLMInput(event) {
     return
   }
 
-  nextTick(() => {
-    cleanOrphanedEditorTextNodes(editor)
-    restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
-  })
+  if (shouldRemountEditor) {
+    llmInputRenderKey.value += 1
+    nextTick(() => {
+      const nextEditor = llmInputRef.value
+      if (nextEditor) {
+        nextEditor.focus()
+        restorePromptEditorSelection(nextEditor, selectionRange.start, selectionRange.end)
+      }
+    })
+  } else {
+    nextTick(() => {
+      cleanOrphanedEditorTextNodes(editor)
+      restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+    })
+  }
   const cursorIndex = selectionRange.start
   const textBeforeCursor = text.slice(0, cursorIndex)
   const atIndex = textBeforeCursor.lastIndexOf('@')
@@ -3310,10 +3364,14 @@ onUnmounted(() => {
             aria-multiline="true"
             :data-placeholder="inheritedImages.length > 0 ? '输入提示词，点击上方素材插入 @引用\n例：描述@图片1中的内容（Ctrl+Enter 生成，Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。（Ctrl+Enter 生成，Enter 换行）'"
             @keydown="handleLLMKeyDown"
+            @beforeinput="handleLLMBeforeInput"
             @input="handleLLMInput"
             @paste="handleLLMPaste"
             @compositionstart="handleLLMCompositionStart"
             @compositionend="handleLLMCompositionEnd"
+            @keyup="handleLLMSelectionSettle"
+            @click="handleLLMSelectionSettle"
+            @mouseup="handleLLMSelectionSettle"
             @wheel.stop
             @focus="handleLLMInputFocus"
             @mousedown="markLLMInputResizeIntent"
@@ -3329,7 +3387,6 @@ onUnmounted(() => {
               :data-prompt-segment-end="seg.end"
               :data-prompt-mention="seg.isTag ? seg.text : undefined"
               :contenteditable="seg.isTag ? 'false' : undefined"
-              @mousedown="seg.isTag && handlePromptTagMousedown(seg, $event)"
             ><PromptMediaTag v-if="seg.isTag" :text="seg.text" :media="seg.media" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd" /><template v-else>{{ seg.text }}</template></span>
           </div>
         </div>

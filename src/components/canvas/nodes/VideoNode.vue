@@ -32,7 +32,7 @@ import { fetchVideoTaskStatus, isVideoHdTask } from '@/utils/videoTaskStatus'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
-import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, isBrowserRenderableUrl, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
+import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isBrowserRenderableUrl, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, sanitizePromptEditorText, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import {
   bindMediaMention,
   escapePromptMediaMentions,
@@ -178,7 +178,7 @@ function getErrorHint(msg) {
   if (isTimeoutError(normalized)) return '生成时间过长，请稍后重试或简化提示词'
   return ''
 }
-const promptText = ref(props.data.prompt || '')
+const promptText = ref(sanitizePromptEditorText(props.data.prompt || ''))
 const promptTextareaRef = ref(null)
 const promptEditorRenderKey = ref(0)
 const configPanelRef = ref(null)
@@ -468,12 +468,84 @@ function markPromptTextareaResizeIntent(event) {
 let isPromptInputComposing = false
 
 function handlePromptCompositionStart() {
+  // 进入 IME 输入前若 caret 落入 mention chip 内部，先 snap 出来，
+  // 避免整段输入被浏览器写入 chip 子节点而破坏 chip DOM 结构。
+  const editor = promptTextareaRef.value
+  if (editor) snapPromptEditorCaretOutOfMention(editor)
   isPromptInputComposing = true
 }
 
 function handlePromptCompositionEnd(event) {
   isPromptInputComposing = false
   handlePromptInput(event)
+}
+
+function handlePromptSelectionSettle() {
+  const editor = promptTextareaRef.value
+  if (editor) snapPromptEditorCaretOutOfMention(editor)
+  updatePromptOverlayCaret()
+}
+
+function handlePromptBeforeInput(event) {
+  if (isPromptInputComposing || event?.isComposing) return
+  if (event.inputType !== 'insertText' || typeof event.data !== 'string' || !event.data) return
+  if (shouldDeferPromptEditorBoundaryBeforeInputForIme(event)) return
+  const editor = event.currentTarget || event.target
+  // caret 可能被浏览器收进 mention chip 内部，先 snap 出来再走 mention 边界处理
+  snapPromptEditorCaretOutOfMention(editor)
+  if (!isPromptEditorSelectionAtMentionBoundary(editor)) return
+
+  const selectionRange = getPromptEditorSelectionRange(editor)
+  const currentText = serializePromptEditorContent(editor)
+  const next = applyPromptEditorTextInput({
+    text: currentText,
+    selection: selectionRange,
+    data: event.data
+  })
+
+  event.preventDefault()
+  promptText.value = next.text
+  promptEditorRenderKey.value += 1
+  showMentionPopup.value = false
+  updatePromptMentionPopup(next.text, next.cursor, editor)
+  autoResizeTextarea()
+  nextTick(() => {
+    const nextEditor = promptTextareaRef.value
+    if (nextEditor) {
+      nextEditor.focus()
+      restorePromptEditorSelection(nextEditor, next.cursor, next.cursor)
+      updatePromptOverlayCaret()
+      autoResizeTextarea()
+    }
+  })
+}
+
+function updatePromptMentionPopup(text, cursorIndex, editor) {
+  const textBeforeCursor = text.slice(0, cursorIndex)
+  const atIndex = textBeforeCursor.lastIndexOf('@')
+
+  if (atIndex !== -1 && referenceMediaList.value.length > 0) {
+    const query = textBeforeCursor.slice(atIndex + 1)
+    if (/^(?:视频|图片|音频)\d/.test(query)) {
+      showMentionPopup.value = false
+      return
+    }
+    if (query.length < 4 && !/\s/.test(query)) {
+      showMentionPopup.value = true
+      mentionStartPos = atIndex
+      mentionEndPos = cursorIndex
+      mentionActiveIndex.value = 0
+
+      mentionPosition.value = getMentionPopupPosition({
+        caretRect: getPromptEditorCaretViewportRect(editor),
+        fallbackRect: editor.getBoundingClientRect()
+      })
+      return
+    }
+  }
+
+  showMentionPopup.value = false
+  mentionEndPos = -1
 }
 
 function handlePromptInput(event) {
@@ -486,6 +558,9 @@ function handlePromptInput(event) {
     promptText.value = text
   }
   autoResizeTextarea()
+  // 检测 DOM 损坏：孤立文本节点或浏览器插入的非 span 包装元素（如 <div>）
+  const shouldRemountEditor = hasPromptEditorOrphanTextNodes(editor) ||
+    Array.from(editor.childNodes).some(node => node.nodeType === 1 && node.tagName !== 'SPAN')
 
   // 当 contenteditable 内容从非空被清空时，浏览器可能已经移除了 Vue 管理的 <span>
   // 子节点（或留下 <br>），导致 Vue 的 vnode 引用失效，下一次 patch 时会抛出
@@ -507,39 +582,25 @@ function handlePromptInput(event) {
     return
   }
 
-  nextTick(() => {
-    removePromptEditorOrphanTextNodes(editor)
-    restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
-    updatePromptOverlayCaret()
-  })
-
-  const cursorIndex = selectionRange.start
-  const textBeforeCursor = text.slice(0, cursorIndex)
-  
-  const atIndex = textBeforeCursor.lastIndexOf('@')
-  
-  if (atIndex !== -1 && referenceMediaList.value.length > 0) {
-    const query = textBeforeCursor.slice(atIndex + 1)
-    if (/^(?:视频|图片|音频)\d/.test(query)) {
-      showMentionPopup.value = false
-      return
-    }
-    if (query.length < 4 && !/\s/.test(query)) {
-      showMentionPopup.value = true
-      mentionStartPos = atIndex
-      mentionEndPos = cursorIndex
-      mentionActiveIndex.value = 0
-      
-      mentionPosition.value = getMentionPopupPosition({
-        caretRect: getPromptEditorCaretViewportRect(editor),
-        fallbackRect: editor.getBoundingClientRect()
-      })
-      return
-    }
+  if (shouldRemountEditor) {
+    promptEditorRenderKey.value += 1
+    nextTick(() => {
+      const nextEditor = promptTextareaRef.value
+      if (nextEditor) {
+        nextEditor.focus()
+        restorePromptEditorSelection(nextEditor, selectionRange.start, selectionRange.end)
+        updatePromptOverlayCaret()
+      }
+    })
+  } else {
+    nextTick(() => {
+      removePromptEditorOrphanTextNodes(editor)
+      restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+      updatePromptOverlayCaret()
+    })
   }
-  
-  showMentionPopup.value = false
-  mentionEndPos = -1
+
+  updatePromptMentionPopup(text, selectionRange.start, editor)
 }
 
 function handlePromptTextareaFocus() {
@@ -934,6 +995,9 @@ function handlePromptTagMousedown(seg, event) {
 function clampPromptCaretOutsideTags() {
   const editor = promptTextareaRef.value
   if (!editor) return false
+  // 先做 DOM 级别的 snap：若 caret 落在 mention chip 内部（无法用字符
+  // 索引检测出来），强制移到 chip 之前或之后，再做字符级别的修正。
+  if (snapPromptEditorCaretOutOfMention(editor)) return true
   const { start, end } = getPromptEditorSelectionRange(editor)
   if (!Number.isFinite(start) || !Number.isFinite(end)) return false
   if (start !== end) return false
@@ -7237,14 +7301,15 @@ function handleToolbarPreview() {
             aria-multiline="true"
             :data-placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : supportsMediaTags ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(Ctrl+Enter 生成，Enter 换行)'"
             @keydown="handleKeyDown"
+            @beforeinput="handlePromptBeforeInput"
             @input="handlePromptInput"
             @paste="handlePromptPaste"
             @compositionstart="handlePromptCompositionStart"
             @compositionend="handlePromptCompositionEnd"
             @focus="handlePromptTextareaFocus"
-            @keyup="updatePromptOverlayCaret"
-            @click="updatePromptOverlayCaret"
-            @mouseup="updatePromptOverlayCaret"
+            @keyup="handlePromptSelectionSettle"
+            @click="handlePromptSelectionSettle"
+            @mouseup="handlePromptSelectionSettle"
             @scroll="syncPromptHighlightOverlayScroll"
             @wheel="handlePromptWheel"
             @mousedown="markPromptTextareaResizeIntent"
@@ -7260,7 +7325,6 @@ function handleToolbarPreview() {
               :data-prompt-segment-end="seg.end"
               :data-prompt-mention="seg.isTag ? seg.text : undefined"
               :contenteditable="seg.isTag ? 'false' : undefined"
-              @mousedown="seg.isTag && handlePromptTagMousedown(seg, $event)"
             ><PromptMediaTag v-if="seg.isTag" :text="seg.text" :media="seg.media" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd" /><template v-else>{{ seg.text }}</template></span>
           </div>
         </div>

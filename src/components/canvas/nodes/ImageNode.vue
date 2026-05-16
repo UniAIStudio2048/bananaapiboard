@@ -40,7 +40,7 @@ import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
-import { getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
+import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import {
   bindMediaMention,
   getMediaMentionKey,
@@ -6602,12 +6602,45 @@ function insertMediaTag(media) {
 let isPromptInputComposing = false
 
 function handlePromptCompositionStart() {
+  const editor = promptTextareaRef.value
+  if (editor) snapPromptEditorCaretOutOfMention(editor)
   isPromptInputComposing = true
 }
 
 function handlePromptCompositionEnd(event) {
   isPromptInputComposing = false
   handlePromptInput(event)
+}
+
+function handlePromptBeforeInput(event) {
+  if (isPromptInputComposing || event?.isComposing) return
+  if (event.inputType !== 'insertText' || typeof event.data !== 'string' || !event.data) return
+  if (shouldDeferPromptEditorBoundaryBeforeInputForIme(event)) return
+  const editor = event.currentTarget || event.target
+  snapPromptEditorCaretOutOfMention(editor)
+  if (!isPromptEditorSelectionAtMentionBoundary(editor)) return
+
+  const selectionRange = getPromptEditorSelectionRange(editor)
+  const currentText = serializePromptEditorContent(editor)
+  const next = applyPromptEditorTextInput({
+    text: currentText,
+    selection: selectionRange,
+    data: event.data
+  })
+
+  event.preventDefault()
+  promptText.value = next.text
+  promptEditorRenderKey.value += 1
+  showMentionPopup.value = false
+  autoResizeTextarea()
+  nextTick(() => {
+    const nextEditor = promptTextareaRef.value
+    if (nextEditor) {
+      nextEditor.focus()
+      restorePromptEditorSelection(nextEditor, next.cursor, next.cursor)
+      autoResizeTextarea()
+    }
+  })
 }
 
 function handlePromptInput(event) {
@@ -6620,6 +6653,8 @@ function handlePromptInput(event) {
     promptText.value = text
   }
   autoResizeTextarea()
+  const shouldRemountEditor = hasPromptEditorOrphanTextNodes(editor) ||
+    Array.from(editor.childNodes).some(node => node.nodeType === 1 && node.tagName !== 'SPAN')
 
   // 当 contenteditable 内容从非空被清空时，浏览器可能已经移除了 Vue 管理的 <span>
   // 子节点（或留下 <br>），导致 Vue 的 vnode 引用失效，下一次 patch 时会抛出
@@ -6640,10 +6675,21 @@ function handlePromptInput(event) {
     return
   }
 
-  nextTick(() => {
-    removePromptEditorOrphanTextNodes(editor)
-    restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
-  })
+  if (shouldRemountEditor) {
+    promptEditorRenderKey.value += 1
+    nextTick(() => {
+      const nextEditor = promptTextareaRef.value
+      if (nextEditor) {
+        nextEditor.focus()
+        restorePromptEditorSelection(nextEditor, selectionRange.start, selectionRange.end)
+      }
+    })
+  } else {
+    nextTick(() => {
+      removePromptEditorOrphanTextNodes(editor)
+      restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+    })
+  }
 
   const cursorIndex = selectionRange.start
   const textBeforeCursor = text.slice(0, cursorIndex)
@@ -7681,6 +7727,7 @@ async function handleDrop(event) {
             aria-multiline="true"
             :data-placeholder="referenceImages.length > 0 ? '输入提示词，点击上方图片插入 @图片 引用\n例：让@图片1中的人物换上红色衣服（Ctrl+Enter 生成，Enter 换行）' : '描述你想要生成的内容，并在下方调整生成参数。(Ctrl+Enter 生成，Enter 换行)'"
             @keydown="handleKeyDown"
+            @beforeinput="handlePromptBeforeInput"
             @input="handlePromptInput"
             @paste="handlePromptPaste"
             @compositionstart="handlePromptCompositionStart"
@@ -7700,7 +7747,6 @@ async function handleDrop(event) {
               :data-prompt-segment-end="seg.end"
               :data-prompt-mention="seg.isTag ? seg.text : undefined"
               :contenteditable="seg.isTag ? 'false' : undefined"
-              @mousedown="seg.isTag && handlePromptTagMousedown(seg, $event)"
             ><PromptMediaTag v-if="seg.isTag" :text="seg.text" :media="seg.media" @mouseenter="handlePromptTagHover(seg.media, $event)" @mouseleave="onHoverEnd" /><template v-else>{{ seg.text }}</template></span>
           </div>
         </div>

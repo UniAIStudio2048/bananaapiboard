@@ -58,11 +58,9 @@ test('media prompt editors render mentions as atomic contenteditable chips', () 
     assert.match(source, /data-prompt-mention/)
     assert.match(source, /data-prompt-segment-start/)
     assert.match(source, /data-prompt-segment-end/)
-    assert.match(source, /@mousedown="seg\.isTag && handlePromptTagMousedown/)
-    assert.match(source, /function\s+handlePromptTagMousedown\(seg,\s*event\)[\s\S]*event\.preventDefault\(\)/)
     assert.match(source, /getPromptEditorSelectionRange\(editor\)/)
     assert.match(source, /serializePromptEditorContent\(editor\)/)
-    assert.match(source, /restorePromptEditorSelection\(editor,\s*targetIndex,\s*targetIndex\)/)
+    assert.doesNotMatch(source, /@mousedown="seg\.isTag && handlePromptTagMousedown/)
     assert.doesNotMatch(source, /prompt-highlight-overlay|llm-highlight-overlay|assistant-highlight-overlay/)
   }
 })
@@ -81,10 +79,9 @@ test('media prompt overlays remain visible while selecting textarea text', () =>
   assert.doesNotMatch(textNodeSource, /\.llm-input\.has-prompt-media-tags::selection\s*\{/)
 })
 
-test('video prompt media chips map visual clicks back to serialized caret positions', () => {
-  assert.match(videoNodeSource, /@mousedown="seg\.isTag && handlePromptTagMousedown/)
+test('video prompt media chips do not bind click selection handlers on tag elements', () => {
+  assert.doesNotMatch(videoNodeSource, /@mousedown="seg\.isTag && handlePromptTagMousedown/)
   assert.match(videoNodeSource, /data-prompt-segment-index/)
-  assert.match(videoNodeSource, /restorePromptEditorSelection\(editor,\s*targetIndex,\s*targetIndex\)/)
   assert.match(videoNodeSource, /getPromptMediaTagCaretIndex/)
   assert.doesNotMatch(videoNodeSource, /class="prompt-overlay-caret"/)
   assert.doesNotMatch(videoNodeSource, /\.prompt-input\.has-overlay-caret/)
@@ -211,5 +208,72 @@ test('node prompt media insertion uses current contenteditable text before repla
       /text:\s*currentText/,
       `${name} popup mention selection should replace against current editor text`
     )
+  }
+})
+
+test('prompt editors remount when browser inserts direct text nodes around media chips', () => {
+  const cases = [
+    {
+      name: 'ImageNode',
+      source: imageNodeSource,
+      renderKey: 'promptEditorRenderKey'
+    },
+    {
+      name: 'VideoNode',
+      source: videoNodeSource,
+      renderKey: 'promptEditorRenderKey'
+    },
+    {
+      name: 'TextNode',
+      source: textNodeSource,
+      renderKey: 'llmInputRenderKey'
+    },
+    {
+      name: 'AIAssistantPanel',
+      source: aiAssistantSource,
+      renderKey: 'inputEditorRenderKey'
+    }
+  ]
+
+  for (const { name, source, renderKey } of cases) {
+    assert.match(source, /hasPromptEditorOrphanTextNodes/)
+    assert.match(
+      source,
+      new RegExp(`hasPromptEditorOrphanTextNodes\\(editor\\)[\\s\\S]*?${renderKey}\\.value\\s*\\+=\\s*1`),
+      `${name} should remount the contenteditable editor after direct text-node input near a chip`
+    )
+  }
+})
+
+test('prompt editors intercept text input at media chip boundaries before the browser mutates contenteditable DOM', () => {
+  const cases = [
+    {
+      name: 'ImageNode',
+      source: imageNodeSource,
+      handler: 'handlePromptBeforeInput'
+    },
+    {
+      name: 'VideoNode',
+      source: videoNodeSource,
+      handler: 'handlePromptBeforeInput'
+    },
+    {
+      name: 'TextNode',
+      source: textNodeSource,
+      handler: 'handleLLMBeforeInput'
+    },
+    {
+      name: 'AIAssistantPanel',
+      source: aiAssistantSource,
+      handler: 'handleInputBeforeInput'
+    }
+  ]
+
+  for (const { name, source, handler } of cases) {
+    assert.match(source, new RegExp(`@beforeinput="${handler}"`), `${name} should handle beforeinput`)
+    assert.match(source, /isPromptEditorSelectionAtMentionBoundary/)
+    assert.match(source, /applyPromptEditorTextInput/)
+    assert.match(source, /shouldDeferPromptEditorBoundaryBeforeInputForIme/)
+    assert.match(source, /event\.preventDefault\(\)/)
   }
 })
