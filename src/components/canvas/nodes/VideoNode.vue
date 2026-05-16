@@ -1208,14 +1208,16 @@ const isHappyHorseModel = computed(() => {
 const isSeedanceModel = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
   const apiType = currentModelConfig.value?.apiType || ''
-  return modelName.includes('seedance') || apiType === 'seedance' || apiType === 'seedance-2.0' || apiType === 'ant' || isHappyHorseModel.value
+  return modelName.includes('seedance') || apiType === 'seedance' || apiType === 'seedance-2.0' || apiType === 'seedance-openapi-pro' || apiType === 'ant' || isHappyHorseModel.value
 })
+
+const isSeedanceOpenApiProModel = computed(() => currentModelConfig.value?.apiType === 'seedance-openapi-pro')
 
 // 检测是否是 Seedance 2.0 模型（支持6种模式）
 const isSeedance2Model = computed(() => {
   const apiType = currentModelConfig.value?.apiType || ''
   const modelName = selectedModel.value?.toLowerCase() || ''
-  return apiType === 'seedance-2.0' || apiType === 'ant' || (modelName.includes('seedance') && modelName.includes('2.0')) || isHappyHorseModel.value
+  return apiType === 'seedance-2.0' || apiType === 'seedance-openapi-pro' || apiType === 'ant' || (modelName.includes('seedance') && modelName.includes('2.0')) || isHappyHorseModel.value
 })
 
 // Seedance 2.0 模式选择
@@ -2579,13 +2581,14 @@ const inheritedPrompt = computed(() => {
 function getUpstreamData() {
   // 查找所有连接到当前节点的上游边
   const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
-  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [], audios: [], characterAssetUris: [], quickAssetUris: [], quickAssetSourceUrls: [] }
+  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [], audios: [], characterAssetUris: [], faceCodes: [], quickAssetUris: [], quickAssetSourceUrls: [] }
   
   let prompts = []
   let images = []
   let videos = []
   let audios = []
   let characterAssetUris = []
+  let faceCodes = []
   let quickAssetUris = []
   let quickAssetSourceUrls = []
   
@@ -2625,6 +2628,8 @@ function getUpstreamData() {
         const uri = (sourceNode.data?.assetUri && String(sourceNode.data.assetUri).trim()) ||
           (id != null && String(id).trim() !== '' ? `asset://${id}` : '')
         if (uri) characterAssetUris.push(uri)
+        const faceCode = sourceNode.data?.faceCode || sourceNode.data?.metadata?.faceCode || sourceNode.data?.metadata?.face_code || id
+        if (faceCode) faceCodes.push(String(faceCode).replace(/^face:/, ''))
       }
 
       const quickAsset = getSeedanceQuickAsset(sourceNode.data)
@@ -2676,8 +2681,8 @@ function getUpstreamData() {
     }
   }
   
-  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos, audios, characterAssetUris, quickAssetUris })
-  return { prompts, images, videos, audios, characterAssetUris, quickAssetUris, quickAssetSourceUrls }
+  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos, audios, characterAssetUris, faceCodes, quickAssetUris })
+  return { prompts, images, videos, audios, characterAssetUris, faceCodes, quickAssetUris, quickAssetSourceUrls }
 }
 
 // 实时获取上游文本内容（用于显示在"上下文文字参考"区域）
@@ -3642,7 +3647,7 @@ async function ensureAccessibleUrls(imageUrls) {
 }
 
 // 单次生成请求
-async function sendGenerateRequest(finalPrompt, finalImages) {
+async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {}) {
   const token = localStorage.getItem('token')
   
   // 构建请求数据
@@ -3831,11 +3836,16 @@ async function sendGenerateRequest(finalPrompt, finalImages) {
     const sd2Mode = selectedSeedance2Mode.value
     formData.append('seedance_mode', sd2Mode)
     const seedanceResolution = currentModelConfig.value?.seedanceConfig?.resolution ||
+      currentModelConfig.value?.seedanceOpenConfig?.defaultResolution ||
       currentModelConfig.value?.happyHorseConfig?.resolution ||
       (isHappyHorseModel.value ? '1080p' : '720p')
     formData.append('seedance_resolution', seedanceResolution)
     formData.append('seedance_ratio', selectedAspectRatio.value)
     formData.append('seedance_watermark', 'false')
+    if (isSeedanceOpenApiProModel.value && capturedState.faceCodes?.length > 0) {
+      formData.append('seedance_face_codes', JSON.stringify(capturedState.faceCodes))
+      console.log('[VideoNode] Seedance OpenAPI Pro 人物 face codes:', capturedState.faceCodes)
+    }
     console.log('[VideoNode] Seedance 2.0/Happy Horse 模式:', sd2Mode, '分辨率:', seedanceResolution, '比例:', selectedAspectRatio.value)
 
     if (sd2Mode === 'image2video_first') {
@@ -3993,7 +4003,7 @@ function createNewOutputNode() {
 }
 
 // 单个节点执行生成任务（后台轮询，不阻塞UI）
-async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex) {
+async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex, capturedState = {}) {
   try {
     // 清除旧的任务 ID，避免角色创建时使用过期的 ID
     canvasStore.updateNodeData(nodeId, { 
@@ -4005,7 +4015,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       _preserveRawVideoError: false
     })
     
-    const result = await sendGenerateRequest(finalPrompt, finalImages)
+    const result = await sendGenerateRequest(finalPrompt, finalImages, capturedState)
     const taskId = result.task_id || result.id
     
     if (taskId) {
@@ -4195,7 +4205,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     }
     
     // Seedance 2.0 角色素材处理
-    if (capturedState.isSeedance2 && capturedState.characterAssetUris.length > 0) {
+    if (capturedState.isSeedance2 && !capturedState.isSeedanceOpenApiPro && capturedState.characterAssetUris.length > 0) {
       const charHttpUrls = new Set()
       const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
       for (const edge of upstreamEdges) {
@@ -4350,7 +4360,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
         if (index > 0) {
           await delay(CONCURRENT_INTERVAL * index)
         }
-        const result = await executeNodeGeneration(nodeId, finalPrompt, finalImages, index)
+        const result = await executeNodeGeneration(nodeId, finalPrompt, finalImages, index, capturedState)
         resolve(result)
       })
     })
@@ -4509,7 +4519,9 @@ async function handleGenerate(options = {}) {
   const capturedState = {
     nodeId: props.id,
     isSeedance2: isSeedance2Model.value,
+    isSeedanceOpenApiPro: isSeedanceOpenApiProModel.value,
     characterAssetUris: upstreamData.characterAssetUris || [],
+    faceCodes: upstreamData.faceCodes || [],
     quickAssetUris: upstreamData.quickAssetUris || [],
     quickAssetSourceUrls: upstreamData.quickAssetSourceUrls || [],
     apiType: currentModelConfig.value?.apiType || ''

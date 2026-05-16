@@ -70,6 +70,9 @@ const createGroupForm = ref({ Name: '', Description: '' })
 const createGroupLoading = ref(false)
 const createGroupType = ref('AIGC') // 'AIGC' | 'LivenessFace'
 const supportsLiveness = computed(() => ['volcengine', 'volcengine_proxy', 'thirdparty'].includes(activeProvider.value))
+const isSeedanceOpenApiProProvider = computed(() => activeProvider.value === 'seedance_openapi_pro')
+const seedanceAssetType = computed(() => isSeedanceOpenApiProProvider.value ? 'seedance-openapi-pro-character' : 'seedance-character')
+const supportsCustomGroups = computed(() => !isSeedanceOpenApiProProvider.value)
 
 // 真人认证创建角色组（LivenessFace）
 const livenessVerifying = ref(false)
@@ -143,6 +146,11 @@ function resolveAssetUrl(url) {
   return getApiUrl(url)
 }
 
+function getSeedanceAssetUri(asset) {
+  if (isSeedanceOpenApiProProvider.value) return `face:${asset.FaceCode || asset.faceCode || asset.Id}`
+  return `asset://${asset.Id}`
+}
+
 async function loadGroups() {
   try {
     const result = await listAssetGroups({ pageSize: 100 })
@@ -169,6 +177,7 @@ function processAssetData(canvasAssets) {
         URL: resolveAssetUrl(a.thumbnail_url) || resolveAssetUrl(a.url),
         Status: meta.status || 'Active',
         GroupId: meta.groupId,
+        FaceCode: meta.faceCode || a.faceCode,
         AssetType: meta.assetType || 'Image',
         _canvasId: a.id,
         _userId: a.user_id
@@ -195,7 +204,7 @@ async function loadAssets() {
   // Stale-while-revalidate: 先检查 IndexedDB 缓存
   let hasCachedData = false
   try {
-    const cached = await getCachedAssets('seedance-character', spaceParams.spaceType, spaceParams.teamId)
+    const cached = await getCachedAssets(seedanceAssetType.value, spaceParams.spaceType, spaceParams.teamId)
     if (cached) {
       processAssetData(cached)
       hasCachedData = true
@@ -210,18 +219,18 @@ async function loadAssets() {
 
   try {
     const result = await getAssets({
-      type: 'seedance-character',
+      type: seedanceAssetType.value,
       ...spaceParams
     })
 
     const canvasAssets = result.assets || []
 
-    cacheAssets('seedance-character', spaceParams.spaceType, spaceParams.teamId, canvasAssets).catch(() => {})
+    cacheAssets(seedanceAssetType.value, spaceParams.spaceType, spaceParams.teamId, canvasAssets).catch(() => {})
 
     const mapped = processAssetData(canvasAssets)
 
     // Refresh stale statuses from Volcengine for Processing/Failed assets
-    const staleAssets = mapped.filter(a => a.Status === 'Processing' || a.Status === 'Failed')
+    const staleAssets = isSeedanceOpenApiProProvider.value ? [] : mapped.filter(a => a.Status === 'Processing' || a.Status === 'Failed')
     for (const asset of staleAssets) {
       if (pollers.value[asset.Id]) continue
       try {
@@ -267,6 +276,7 @@ async function refreshAll() {
 
 async function syncFromCloud() {
   if (groups.value.length === 0) return
+  if (isSeedanceOpenApiProProvider.value) return
   
   try {
     const groupIds = groups.value.map(g => g.Id)
@@ -276,7 +286,7 @@ async function syncFromCloud() {
     
     // 查询租户级所有 seedance-character 资产（不限用户），用于去重
     // 避免将其他用户的云端资产同步到当前用户名下
-    const tenantResult = await getAssets({ type: 'seedance-character', scope: 'tenant', pageSize: 500 })
+    const tenantResult = await getAssets({ type: seedanceAssetType.value, scope: 'tenant', pageSize: 500 })
     const tenantAssets = tenantResult.assets || []
     
     const tenantAssetIds = new Set()
@@ -288,7 +298,7 @@ async function syncFromCloud() {
     // 只同步租户内所有用户都不存在的资产（真正的孤儿资产不再自动同步）
     // 以及当前用户自己空间内缺失的资产（通过个人空间检查）
     const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
-    const localResult = await getAssets({ type: 'seedance-character', ...spaceParams, pageSize: 500 })
+    const localResult = await getAssets({ type: seedanceAssetType.value, ...spaceParams, pageSize: 500 })
     const localAssets = localResult.assets || []
     
     const localAssetIds = new Set()
@@ -311,7 +321,7 @@ async function syncFromCloud() {
       for (const ca of missing) {
         try {
           await saveAsset({
-            type: 'seedance-character',
+            type: seedanceAssetType.value,
             name: ca.Name || '角色素材',
             url: `asset://${ca.Id}`,
             thumbnail_url: ca.URL,
@@ -356,6 +366,10 @@ async function syncFromCloud() {
 }
 
 async function handleCreateGroup() {
+  if (isSeedanceOpenApiProProvider.value) {
+    errorMessage.value = 'Seedance OpenAPI Pro 使用专用人物库，无需创建分组'
+    return
+  }
   if (!createGroupForm.value.Name.trim()) return
 
   if (createGroupType.value === 'LivenessFace' && supportsLiveness.value) {
@@ -493,6 +507,10 @@ function triggerUpload() {
 }
 
 async function triggerFaceVerifyUpload() {
+  if (isSeedanceOpenApiProProvider.value) {
+    triggerUpload()
+    return
+  }
   try {
     const status = await checkFaceVerifyStatus()
     if (!status.enabled) {
@@ -545,16 +563,19 @@ async function handleFileUpload(event) {
       const assetId = asset.Id || asset.id
       if (assetId) {
         let canvasAssetId = null
+        const faceCode = asset.FaceCode || asset.faceCode || assetId
+        const status = isSeedanceOpenApiProProvider.value ? (asset.Status || 'pending') : 'Processing'
         try {
           const saved = await saveAsset({
-            type: 'seedance-character',
+            type: seedanceAssetType.value,
             name: fileName,
-            url: `asset://${assetId}`,
+            url: isSeedanceOpenApiProProvider.value ? `face:${faceCode}` : `asset://${assetId}`,
             thumbnail_url: url,
             metadata: {
               assetId,
+              faceCode: isSeedanceOpenApiProProvider.value ? faceCode : undefined,
               groupId: targetGroupId,
-              status: 'Processing',
+              status,
               assetType: 'Image'
             },
             spaceType: spaceParams.spaceType,
@@ -564,7 +585,11 @@ async function handleFileUpload(event) {
         } catch (e) {
           console.error('[SeedancePanel] 保存到本地资产库失败:', e)
         }
-        startPolling(assetId, targetGroupId, url, fileName, canvasAssetId)
+        if (isSeedanceOpenApiProProvider.value) {
+          emit('groups-updated')
+        } else {
+          startPolling(assetId, targetGroupId, url, fileName, canvasAssetId)
+        }
       }
     }
     await loadAssets()
@@ -607,7 +632,7 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
       } else {
         const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
         await saveAsset({
-          type: 'seedance-character',
+          type: seedanceAssetType.value,
           name: asset.Name || name || '角色素材',
           url: `asset://${asset.Id}`,
           thumbnail_url: asset.URL || imageUrl,
@@ -651,13 +676,14 @@ function handleAssetDragStart(e, asset) {
   const data = {
     type: 'seedance-character',
     assetId: asset.Id,
-    assetUri: `asset://${asset.Id}`,
+    assetUri: getSeedanceAssetUri(asset),
     assetUrl: asset.URL,
     thumbnailUrl: asset.URL,
     groupId: asset.GroupId,
     assetName: asset.Name,
     status: asset.Status,
-    assetType: asset.AssetType
+    assetType: asset.AssetType,
+    faceCode: asset.FaceCode || asset.faceCode
   }
   e.dataTransfer.setData('application/json', JSON.stringify(data))
   e.dataTransfer.effectAllowed = 'copy'
@@ -687,20 +713,21 @@ function handleAddToCanvas() {
   emit('insert-to-canvas', {
     type: 'seedance-character',
     assetId: asset.Id,
-    assetUri: `asset://${asset.Id}`,
+    assetUri: getSeedanceAssetUri(asset),
     assetUrl: asset.URL,
     thumbnailUrl: asset.URL,
     groupId: asset.GroupId,
     assetName: asset.Name,
     status: asset.Status,
-    assetType: asset.AssetType
+    assetType: asset.AssetType,
+    faceCode: asset.FaceCode || asset.faceCode
   })
   closeContextMenu()
 }
 
 function copyAssetUri(asset) {
   if (editingAssetId.value) return
-  const uri = `asset://${asset.Id}`
+  const uri = getSeedanceAssetUri(asset)
   navigator.clipboard.writeText(uri).then(() => {
     copiedAssetId.value = asset.Id
     if (copyTimer) clearTimeout(copyTimer)
@@ -979,7 +1006,7 @@ onUnmounted(() => {
               </svg>
             </template>
           </button>
-          <button class="btn-toolbar btn-create" @click="createGroupType = 'AIGC'; createGroupForm = { Name: '', Description: '' }; errorMessage = ''; showCreateGroupModal = true" aria-label="新建角色组">
+          <button v-if="supportsCustomGroups" class="btn-toolbar btn-create" @click="createGroupType = 'AIGC'; createGroupForm = { Name: '', Description: '' }; errorMessage = ''; showCreateGroupModal = true" aria-label="新建角色组">
             <svg viewBox="0 0 16 16" fill="none" width="12" height="12">
               <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
             </svg>

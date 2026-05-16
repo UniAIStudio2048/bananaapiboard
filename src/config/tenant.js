@@ -1518,6 +1518,7 @@ export const getAvailableVideoModels = (options = {}) => {
         // API 类型（用于判断是否是 Vidu 模型）
         apiType: modelConfig.apiType,
         seedanceConfig: modelConfig.seedanceConfig,
+        seedanceOpenConfig: modelConfig.seedanceOpenConfig,
         happyHorseConfig: modelConfig.happyHorseConfig,
         defaultVideoMode: modelConfig.defaultVideoMode || undefined,
         defaultSeedance2Mode: modelConfig.defaultSeedance2Mode || modelConfig.seedanceConfig?.defaultMode || undefined,
@@ -1686,6 +1687,7 @@ export const getAvailableVideoModels = (options = {}) => {
         // API 类型（用于判断是否是 Vidu 模型）
         apiType: modelFullConfig.apiType,
         seedanceConfig: modelFullConfig.seedanceConfig,
+        seedanceOpenConfig: modelFullConfig.seedanceOpenConfig,
         happyHorseConfig: modelFullConfig.happyHorseConfig,
         defaultVideoMode: modelFullConfig.defaultVideoMode || undefined,
         defaultSeedance2Mode: modelFullConfig.defaultSeedance2Mode || modelFullConfig.seedanceConfig?.defaultMode || undefined,
