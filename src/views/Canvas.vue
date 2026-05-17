@@ -2389,15 +2389,11 @@ onMounted(async () => {
   
   // 启动历史工作流自动保存服务（localStorage 缓存）
   initHistoryAutoSave()
-  
-  // 初始化后台任务管理器，恢复未完成的任务
-  initBackgroundTaskManager()
-  restoreBackgroundTasks()
 
   window.addEventListener('background-task-progress', handleBackgroundTaskProgress)
   window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.addEventListener('background-task-failed', handleBackgroundTaskFailed)
-  
+
   // 监听页面关闭事件，保存工作流到历史
   window.addEventListener('beforeunload', handleBeforeUnload)
   window.addEventListener('pagehide', handlePageHide)
@@ -2442,6 +2438,11 @@ onMounted(async () => {
   if (!restoredOrLoaded) {
     canvasStore.initDefaultTab()
   }
+
+  // 初始化后台任务管理器，恢复未完成的任务。必须在节点恢复/创建后启动，
+  // 否则初始化轮询可能先发出完成事件，导致节点尚不存在时丢失回写。
+  initBackgroundTaskManager()
+  restoreBackgroundTasks()
 
   failZombieCanvasVideoNodes()
   
