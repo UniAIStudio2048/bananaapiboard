@@ -481,7 +481,7 @@ async function sendVerificationCode() {
   authError.value = ''
   
   try {
-    const r = await fetch('/api/email/send-verification-code', {
+    const r = await fetch(getApiUrl('/api/email/send-verification-code'), {
       method: 'POST',
       headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, type: 'register' })
@@ -530,7 +530,7 @@ async function sendResetVerificationCode() {
   authError.value = ''
   
   try {
-    const r = await fetch('/api/email/send-verification-code', {
+    const r = await fetch(getApiUrl('/api/email/send-verification-code'), {
       method: 'POST',
       headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: email, type: 'reset_password' })
@@ -582,7 +582,7 @@ async function resetPassword() {
   authLoading.value = true
   
   try {
-    const r = await fetch('/api/auth/reset-password', {
+    const r = await fetch(getApiUrl('/api/auth/reset-password'), {
       method: 'POST',
       headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -691,7 +691,7 @@ const submitAuth = async () => {
   
   authLoading.value = true
   try {
-    const url = authMode.value === 'register' ? '/api/auth/register' : '/api/auth/login'
+    const url = getApiUrl(authMode.value === 'register' ? '/api/auth/register' : '/api/auth/login')
     const payload = authMode.value === 'register'
       ? { 
           username: account.value, 

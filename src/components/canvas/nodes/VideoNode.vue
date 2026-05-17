@@ -3900,7 +3900,7 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
     }
   }
   
-  const response = await fetch('/api/videos/generate', {
+  const response = await fetch(getApiUrl('/api/videos/generate'), {
     method: 'POST',
     headers: {
       ...getTenantHeaders(),
@@ -4111,7 +4111,7 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
         // 计算本次轮询间隔
         const pollInterval = isOffPeak ? getOffPeakPollInterval(startTime) : NORMAL_POLL_INTERVAL
         
-        const response = await fetch(`/api/videos/task/${taskId}`, {
+        const response = await fetch(getApiUrl(`/api/videos/task/${taskId}`), {
           headers: { 
             ...getTenantHeaders(), 
             ...(token ? { Authorization: `Bearer ${token}` } : {}) 
@@ -4259,7 +4259,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
             const uploadFormData = new FormData()
             uploadFormData.append('file', file)
             const token = localStorage.getItem('token')
-            const uploadResp = await fetch('/api/videos/upload', {
+            const uploadResp = await fetch(getApiUrl('/api/videos/upload'), {
               method: 'POST',
               headers: {
                 ...getTenantHeaders(),
@@ -4312,7 +4312,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
             const uploadFormData = new FormData()
             uploadFormData.append('file', file)
             const token = localStorage.getItem('token')
-            const uploadResp = await fetch('/api/videos/upload', {
+            const uploadResp = await fetch(getApiUrl('/api/videos/upload'), {
               method: 'POST',
               headers: {
                 ...getTenantHeaders(),
@@ -4609,7 +4609,7 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
         throw new Error(isOffPeak ? '错峰模式生成超时（48小时），请联系客服' : '生成超时，请稍后在历史记录中查看')
       }
       
-      const response = await fetch(`/api/videos/task/${taskId}`, {
+      const response = await fetch(getApiUrl(`/api/videos/task/${taskId}`), {
         headers: { 
           ...getTenantHeaders(), 
           ...(token ? { Authorization: `Bearer ${token}` } : {}) 
@@ -6331,7 +6331,7 @@ async function executeCharacterCreation(clipData) {
     let clippedVideoUrl = null
     
     try {
-      const clipResponse = await fetch('/api/videos/clip', {
+      const clipResponse = await fetch(getApiUrl('/api/videos/clip'), {
         method: 'POST',
         headers: {
           ...getTenantHeaders(),
@@ -6408,7 +6408,7 @@ async function executeCharacterCreation(clipData) {
         const formData = new FormData()
         formData.append('file', fileToUpload)
         
-        const uploadResponse = await fetch('/api/videos/upload', {
+        const uploadResponse = await fetch(getApiUrl('/api/videos/upload'), {
           method: 'POST',
           headers: {
             ...getTenantHeaders(),
@@ -6434,7 +6434,7 @@ async function executeCharacterCreation(clipData) {
         }
         
         // 上传视频到七牛云获取公开 URL
-        const uploadResponse = await fetch('/api/videos/upload-to-qiniu', {
+        const uploadResponse = await fetch(getApiUrl('/api/videos/upload-to-qiniu'), {
           method: 'POST',
           headers: {
             ...getTenantHeaders(),
@@ -6484,7 +6484,7 @@ async function executeCharacterCreation(clipData) {
       console.log('[VideoNode] 使用上传的视频 URL 创建角色:', qiniuVideoUrl, '名称:', characterName)
     }
     
-    const createResponse = await fetch('/api/sora/characters/create', {
+    const createResponse = await fetch(getApiUrl('/api/sora/characters/create'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -6589,7 +6589,7 @@ async function pollCharacterStatus(characterId, displayVideoUrl, clipData) {
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const response = await fetch(`/api/sora/characters/${characterId}`, {
+      const response = await fetch(getApiUrl(`/api/sora/characters/${characterId}`), {
         method: 'GET',
         headers: {
           ...getTenantHeaders(),
@@ -6659,7 +6659,7 @@ async function addCharacterToAssets(characterId, videoUrl, apiResult, clipData) 
     // 使用已经裁剪好的视频 URL（如果存在）
     const clippedVideoUrl = clipData?.clippedVideoUrl || `${videoUrl}#t=${clipStartTime},${clipEndTime}`
     
-    const response = await fetch('/api/canvas/assets', {
+    const response = await fetch(getApiUrl('/api/canvas/assets'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),

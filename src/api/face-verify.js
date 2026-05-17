@@ -4,11 +4,6 @@
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
-function getApiBase() {
-  const url = getApiUrl('')
-  return url || ''
-}
-
 function getAuthHeaders() {
   const token = localStorage.getItem('token')
   return {
@@ -23,7 +18,7 @@ function getAuthHeaders() {
  * @returns {Promise<{required: boolean, enabled: boolean, verified: boolean, expires_at?: string}>}
  */
 export async function checkFaceVerifyStatus() {
-  const response = await fetch(`${getApiBase()}/api/face-verify/status`, {
+  const response = await fetch(getApiUrl(`/api/face-verify/status`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -40,7 +35,7 @@ export async function checkFaceVerifyStatus() {
  * @returns {Promise<{byted_token: string, h5_url: string, h5_config_id: string}>}
  */
 export async function requestFaceVerifyToken(params = {}) {
-  const response = await fetch(`${getApiBase()}/api/face-verify/token`, {
+  const response = await fetch(getApiUrl(`/api/face-verify/token`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -59,7 +54,7 @@ export async function requestFaceVerifyToken(params = {}) {
  * @returns {Promise<{result: boolean, alive: boolean, score?: number}>}
  */
 export async function queryFaceVerifyResult(bytedToken) {
-  const response = await fetch(`${getApiBase()}/api/face-verify/query`, {
+  const response = await fetch(getApiUrl(`/api/face-verify/query`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),

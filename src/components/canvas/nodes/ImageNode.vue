@@ -1660,7 +1660,7 @@ async function handleToolbarImageHD() {
     }
 
     showToast('提交高清任务...', 'info')
-    const res = await fetch('/api/images/hd-upscale', {
+    const res = await fetch(getApiUrl('/api/images/hd-upscale'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -1773,7 +1773,7 @@ async function handleToolbarGeneratePanorama() {
     }
 
     showToast('提交全景图任务...', 'info')
-    const res = await fetch('/api/images/panorama-generate', {
+    const res = await fetch(getApiUrl('/api/images/panorama-generate'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -3087,7 +3087,7 @@ async function pollMultiangleTask(taskId, nodeId) {
     pollCount++
     
     try {
-      const response = await fetch(`/api/images/multiangle/task/${taskId}`, {
+      const response = await fetch(getApiUrl(`/api/images/multiangle/task/${taskId}`), {
         headers: {
           'Authorization': `Bearer ${token}`,
           ...getTenantHeaders()

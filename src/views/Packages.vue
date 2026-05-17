@@ -1282,8 +1282,8 @@ async function openRechargeModal() {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     
     const [paymentRes, cardsRes] = await Promise.all([
-      fetch('/api/user/payment-methods', { headers }),
-      fetch('/api/recharge-cards', { headers: getTenantHeaders() })
+      fetch(getApiUrl('/api/user/payment-methods'), { headers }),
+      fetch(getApiUrl('/api/recharge-cards'), { headers: getTenantHeaders() })
     ])
     
     // 处理支付方式
@@ -1371,7 +1371,7 @@ async function submitRecharge() {
       payload.recharge_card_id = selectedRechargeCard.value.id
     }
     
-    const res = await fetch('/api/user/recharge', {
+    const res = await fetch(getApiUrl('/api/user/recharge'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -1445,7 +1445,7 @@ async function checkPaymentStatus() {
 
   try {
     const token = localStorage.getItem('token')
-    const res = await fetch(`/api/user-portal/pay/check/${paymentOrderNo.value}`, {
+    const res = await fetch(getApiUrl(`/api/user-portal/pay/check/${paymentOrderNo.value}`), {
       headers: {
         ...getTenantHeaders(),
         'Authorization': `Bearer ${token}`
@@ -1543,7 +1543,7 @@ async function submitVoucher() {
         
         if (purchaseResult.success) {
           // 再次刷新用户信息获取最新数据
-          const userRes2 = await fetch('/api/user/me', {
+          const userRes2 = await fetch(getApiUrl('/api/user/me'), {
             headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
           })
           if (userRes2.ok) {
@@ -1774,7 +1774,7 @@ watch([showPaymentModal, paymentQrCode], async ([isShown, qrCode]) => {
         qrContainer.innerHTML = ''
         if (paymentOrderNo.value) {
           const link = document.createElement('a')
-          link.href = `/api/user-portal/pay/${paymentOrderNo.value}`
+          link.href = getApiUrl(`/api/user-portal/pay/${paymentOrderNo.value}`)
           link.target = '_blank'
           link.rel = 'noopener'
           link.textContent = '二维码加载失败，点击打开支付页面'
@@ -1835,7 +1835,6 @@ onUnmounted(() => {
   animation: scale-in 0.2s ease-out;
 }
 </style>
-
 
 
 

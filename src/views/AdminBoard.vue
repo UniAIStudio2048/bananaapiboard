@@ -190,7 +190,7 @@ const listRangeEnd = computed(() => Math.min(page.value * pageSize.value, total.
 async function fetchWithAdminAuth(url, opts = {}) {
   const t = localStorage.getItem('token') || ''
   const h = { ...getTenantHeaders(), ...(opts.headers || {}), Authorization: `Bearer ${t}` }
-  const r = await fetch(url, { ...opts, headers: h })
+  const r = await fetch(getApiUrl(url), { ...opts, headers: h })
   if (r.status === 401) {
     router.push('/')
     return null
@@ -597,7 +597,7 @@ async function exportFilteredVouchers() {
     if (voucherFilters.value.note) params.append('note', voucherFilters.value.note)
     
     const token = localStorage.getItem('token')
-    const url = `/api/admin/vouchers/export?${params.toString()}`
+    const url = getApiUrl(`/api/admin/vouchers/export?${params.toString()}`)
     const a = document.createElement('a')
     a.href = url
     a.download = `vouchers_${Date.now()}.csv`
@@ -704,7 +704,7 @@ async function exportVouchers() {
   try {
     const token = localStorage.getItem('token') || ''
     const params = new URLSearchParams(voucherStatus.value ? { status: voucherStatus.value } : {})
-    const url = `/api/admin/vouchers/export?${params.toString()}`
+    const url = getApiUrl(`/api/admin/vouchers/export?${params.toString()}`)
     
     // 创建一个隐藏的a标签来触发下载
     const a = document.createElement('a')

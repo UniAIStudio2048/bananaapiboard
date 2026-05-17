@@ -722,7 +722,7 @@ async function performCheckin() {
   
   try {
     const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
-    const res = await fetch('/api/user/checkin', { method: 'POST', headers })
+    const res = await fetch(getApiUrl('/api/user/checkin'), { method: 'POST', headers })
     if (res.ok) {
       const data = await res.json()
       checkinStatus.value.hasCheckedInToday = true
@@ -808,7 +808,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     
     // 获取套餐列表
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
-    const pkgRes = await fetch('/api/packages', { headers })
+    const pkgRes = await fetch(getApiUrl('/api/packages'), { headers })
     if (!pkgRes.ok) {
       return { success: false, reason: 'fetch_failed', message: '获取套餐列表失败' }
     }
@@ -820,7 +820,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     }
     
     // 获取当前用户套餐
-    const activeRes = await fetch('/api/user/package', { headers })
+    const activeRes = await fetch(getApiUrl('/api/user/package'), { headers })
     let currentPackage = null
     if (activeRes.ok) {
       const activeData = await activeRes.json()
@@ -859,7 +859,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     console.log(`[Canvas/tryAutoPurchasePackage] 选择套餐: "${selectedPackage.name}" (${isRenewal ? '续费' : isUpgrade ? '升级' : '新购'})`)
     
     // 购买套餐
-    const purchaseRes = await fetch('/api/packages/purchase', {
+    const purchaseRes = await fetch(getApiUrl('/api/packages/purchase'), {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: JSON.stringify({ package_id: selectedPackage.id })
@@ -869,7 +869,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
     
     if (purchaseRes.ok && !purchaseData.pay_url) {
       // 购买成功，获取最新余额
-      const userRes = await fetch('/api/user/me', { headers })
+      const userRes = await fetch(getApiUrl('/api/user/me'), { headers })
       let remainingBalance = 0
       if (userRes.ok) {
         const userData = await userRes.json()
@@ -904,7 +904,7 @@ async function saveProfile() {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
-    const res = await fetch('/api/user/profile', {
+    const res = await fetch(getApiUrl('/api/user/profile'), {
       method: 'PUT',
       headers,
       body: JSON.stringify(profileForm.value)
@@ -940,7 +940,7 @@ async function changePassword() {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
-    const res = await fetch('/api/user/change-password', {
+    const res = await fetch(getApiUrl('/api/user/change-password'), {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -1074,7 +1074,7 @@ async function purchasePackage(pkg) {
   // 加载支付方式
   try {
     const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
-    const res = await fetch('/api/user/payment-methods', { headers })
+    const res = await fetch(getApiUrl('/api/user/payment-methods'), { headers })
     if (res.ok) {
       const data = await res.json()
       paymentMethods.value = data.methods || []
@@ -1114,7 +1114,7 @@ async function applyPurchaseCoupon() {
       'Content-Type': 'application/json'
     }
     
-    const res = await fetch('/api/user/coupons/validate', {
+    const res = await fetch(getApiUrl('/api/user/coupons/validate'), {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -1185,7 +1185,7 @@ async function confirmPurchase() {
       payload.payment_method_id = purchasePaymentMethod.value
     }
     
-    const res = await fetch('/api/packages/purchase', {
+    const res = await fetch(getApiUrl('/api/packages/purchase'), {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
@@ -1234,7 +1234,7 @@ function startPaymentCheck(orderId) {
         Authorization: `Bearer ${token}`
       }
       
-      const res = await fetch(`/api/orders/${orderId}/status`, { headers })
+      const res = await fetch(getApiUrl(`/api/orders/${orderId}/status`), { headers })
       if (res.ok) {
         const data = await res.json()
         if (data.status === 'paid' || data.status === 'completed') {
@@ -1316,8 +1316,8 @@ async function openRechargePanel() {
     const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
 
     const [paymentRes, cardsRes] = await Promise.all([
-      fetch('/api/user/payment-methods', { headers }),
-      fetch('/api/recharge-cards', { headers: getTenantHeaders() })
+      fetch(getApiUrl('/api/user/payment-methods'), { headers }),
+      fetch(getApiUrl('/api/recharge-cards'), { headers: getTenantHeaders() })
     ])
 
     // 处理支付方式
@@ -1400,7 +1400,7 @@ async function submitRecharge() {
       payload.recharge_card_id = selectedRechargeCard.value.id
     }
     
-    const res = await fetch('/api/user/recharge', {
+    const res = await fetch(getApiUrl('/api/user/recharge'), {
       method: 'POST',
       headers,
       body: JSON.stringify(payload)
@@ -1510,7 +1510,7 @@ async function submitTransfer() {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
-    const res = await fetch('/api/user/balance-to-points', {
+    const res = await fetch(getApiUrl('/api/user/balance-to-points'), {
       method: 'POST',
       headers,
       body: JSON.stringify({ amount: amountInCents })
@@ -1552,9 +1552,9 @@ async function loadReferralData() {
   const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
   try {
     const [statsRes, recordsRes, withdrawalsRes] = await Promise.all([
-      fetch('/api/user/referral/stats', { headers }),
-      fetch('/api/user/referral/records?page_size=50', { headers }),
-      fetch('/api/user/referral/withdrawals?page_size=50', { headers })
+      fetch(getApiUrl('/api/user/referral/stats'), { headers }),
+      fetch(getApiUrl('/api/user/referral/records?page_size=50'), { headers }),
+      fetch(getApiUrl('/api/user/referral/withdrawals?page_size=50'), { headers })
     ])
     if (statsRes.ok) referralStats.value = await statsRes.json()
     if (recordsRes.ok) { const d = await recordsRes.json(); referralRecords.value = d.records || [] }
@@ -1575,7 +1575,7 @@ async function doReferralWithdraw() {
   referralSubmitting.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-    const res = await fetch('/api/user/referral/withdraw', {
+    const res = await fetch(getApiUrl('/api/user/referral/withdraw'), {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -1607,7 +1607,7 @@ async function doReferralTransfer() {
   referralSubmitting.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-    const res = await fetch('/api/user/referral/transfer', { method: 'POST', headers, body: JSON.stringify({ amount: amtFen }) })
+    const res = await fetch(getApiUrl('/api/user/referral/transfer'), { method: 'POST', headers, body: JSON.stringify({ amount: amtFen }) })
     const data = await res.json()
     if (!res.ok) throw new Error(data.message || '划转失败')
     showAlert('划转成功，已到账余额', '成功')

@@ -3,11 +3,6 @@
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
-function getApiBase() {
-  const url = getApiUrl('')
-  return url || ''
-}
-
 function getAuthHeaders() {
   const token = localStorage.getItem('token')
   return {
@@ -24,7 +19,7 @@ export async function getProjectList(params = {}) {
   if (params.teamId) queryParams.set('teamId', params.teamId)
 
   const qs = queryParams.toString()
-  const response = await fetch(`${getApiBase()}/api/canvas/projects${qs ? '?' + qs : ''}`, {
+  const response = await fetch(getApiUrl(`/api/canvas/projects${qs ? '?' + qs : ''}`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -38,7 +33,7 @@ export async function getProjectList(params = {}) {
 
 /** 创建项目 */
 export async function createProject(data) {
-  const response = await fetch(`${getApiBase()}/api/canvas/projects`, {
+  const response = await fetch(getApiUrl(`/api/canvas/projects`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -53,7 +48,7 @@ export async function createProject(data) {
 
 /** 获取项目详情 */
 export async function getProject(id) {
-  const response = await fetch(`${getApiBase()}/api/canvas/projects/${id}`, {
+  const response = await fetch(getApiUrl(`/api/canvas/projects/${id}`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -67,7 +62,7 @@ export async function getProject(id) {
 
 /** 更新项目 */
 export async function updateProject(id, data) {
-  const response = await fetch(`${getApiBase()}/api/canvas/projects/${id}`, {
+  const response = await fetch(getApiUrl(`/api/canvas/projects/${id}`), {
     method: 'PUT',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -82,7 +77,7 @@ export async function updateProject(id, data) {
 
 /** 删除项目 */
 export async function deleteProject(id) {
-  const response = await fetch(`${getApiBase()}/api/canvas/projects/${id}`, {
+  const response = await fetch(getApiUrl(`/api/canvas/projects/${id}`), {
     method: 'DELETE',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -96,7 +91,7 @@ export async function deleteProject(id) {
 
 /** 移动工作流到项目 */
 export async function moveWorkflowToProject(workflowId, projectId) {
-  const response = await fetch(`${getApiBase()}/api/canvas/workflows/${workflowId}/move`, {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/move`), {
     method: 'PUT',
     credentials: 'include',
     headers: getAuthHeaders(),

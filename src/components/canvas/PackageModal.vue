@@ -252,8 +252,8 @@ async function openRechargeModal() {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     
     const [paymentRes, cardsRes] = await Promise.all([
-      fetch('/api/user/payment-methods', { headers }),
-      fetch('/api/recharge-cards', { headers })
+      fetch(getApiUrl('/api/user/payment-methods'), { headers }),
+      fetch(getApiUrl('/api/recharge-cards'), { headers })
     ])
     
     if (paymentRes.ok) {
@@ -342,7 +342,7 @@ async function confirmRecharge() {
   
   try {
     const token = localStorage.getItem('token')
-    const response = await fetch('/api/user/recharge', {
+    const response = await fetch(getApiUrl('/api/user/recharge'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -450,7 +450,7 @@ async function applyCoupon() {
     const token = localStorage.getItem('token')
     const priceToValidate = selectedPackage.value.price
 
-    const res = await fetch('/api/user/coupons/validate', {
+    const res = await fetch(getApiUrl('/api/user/coupons/validate'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -514,7 +514,7 @@ async function confirmPurchase() {
       payload.payment_method_id = purchasePaymentMethod.value
     }
 
-    const res = await fetch('/api/packages/purchase', {
+    const res = await fetch(getApiUrl('/api/packages/purchase'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -605,7 +605,7 @@ async function submitConvert() {
 
   try {
     const token = localStorage.getItem('token')
-    const res = await fetch('/api/user/balance-to-points', {
+    const res = await fetch(getApiUrl('/api/user/balance-to-points'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -695,7 +695,7 @@ function handleRecipientSearch() {
   recipientSearchTimeout = setTimeout(async () => {
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch(`/api/user/search-users?q=${encodeURIComponent(query)}`, {
+      const res = await fetch(getApiUrl(`/api/user/search-users?q=${encodeURIComponent(query)}`), {
         headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
       })
       if (!res.ok) throw new Error('搜索失败')
@@ -744,7 +744,7 @@ async function executeTransferPoints() {
 
   try {
     const token = localStorage.getItem('token')
-    const res = await fetch('/api/user/transfer-points', {
+    const res = await fetch(getApiUrl('/api/user/transfer-points'), {
       method: 'POST',
       headers: {
         ...getTenantHeaders(),
@@ -806,7 +806,7 @@ async function confirmPaymentDone() {
   try {
     const token = localStorage.getItem('token')
     // 检查订单支付状态
-    const res = await fetch(`/api/payment/check-status?order_no=${pendingOrderNo.value}`, {
+    const res = await fetch(getApiUrl(`/api/payment/check-status?order_no=${pendingOrderNo.value}`), {
       headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
     })
     

@@ -6,7 +6,7 @@ import { ref, computed, watch, onMounted, onUnmounted, provide, nextTick } from 
 import { useRouter, useRoute } from 'vue-router'
 import { getMe, updateUserPreferences } from '@/api/client'
 import { formatPoints } from '@/utils/format'
-import { getTenantHeaders, getBrand, isCanvasLogoEnabled } from '@/config/tenant'
+import { getTenantHeaders, getBrand, isCanvasLogoEnabled, getApiUrl } from '@/config/tenant'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { loadWorkflow as loadWorkflowFromServer } from '@/api/canvas/workflow'
@@ -1397,7 +1397,7 @@ function sendBeaconExitSave(payload) {
       return false
     }
 
-    const sent = navigator.sendBeacon('/api/canvas/workflows/beacon-save', blob)
+    const sent = navigator.sendBeacon(getApiUrl('/api/canvas/workflows/beacon-save'), blob)
     console.log(`[Canvas] sendBeacon 关闭保存${sent ? '已发送' : '发送失败'}`)
     return sent
   } catch (e) {

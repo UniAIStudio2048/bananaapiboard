@@ -4,11 +4,6 @@
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
-function getApiBase() {
-  const url = getApiUrl('')
-  return url || ''
-}
-
 function getAuthHeaders() {
   const token = localStorage.getItem('token')
   return {
@@ -55,7 +50,7 @@ async function parseAssetResponse(response, fallbackMessage) {
  * @param {Object} data - { Name, Description, spaceType, teamId }
  */
 export async function createAssetGroup(data) {
-  const response = await fetch(`${getApiBase()}/api/volcengine-asset/groups`, {
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/groups`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -78,7 +73,7 @@ export async function listAssetGroups(params = {}) {
   if (params.page) queryParams.set('page', params.page)
   if (params.pageSize) queryParams.set('pageSize', params.pageSize)
   const qs = queryParams.toString()
-  const url = `${getApiBase()}/api/volcengine-asset/groups${qs ? '?' + qs : ''}`
+  const url = getApiUrl(`/api/volcengine-asset/groups${qs ? '?' + qs : ''}`)
   const response = await fetch(url, {
     method: 'GET',
     credentials: 'include',
@@ -95,7 +90,7 @@ export async function listAssetGroups(params = {}) {
  * 获取单个角色组详情
  */
 export async function getAssetGroup(id) {
-  const response = await fetch(`${getApiBase()}/api/volcengine-asset/groups/${id}`, {
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/groups/${id}`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -111,7 +106,7 @@ export async function getAssetGroup(id) {
  * 更新角色组
  */
 export async function updateAssetGroup(id, data) {
-  const response = await fetch(`${getApiBase()}/api/volcengine-asset/groups/${id}`, {
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/groups/${id}`), {
     method: 'PUT',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -128,7 +123,7 @@ export async function updateAssetGroup(id, data) {
  * 创建真人人像角色组 - 获取 H5 认证链接
  */
 export async function createLivenessSession(data = {}) {
-  const response = await fetch(`${getApiBase()}/api/volcengine-asset/groups/liveness/session`, {
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/groups/liveness/session`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -145,7 +140,7 @@ export async function createLivenessSession(data = {}) {
  * 创建真人人像角色组 - 查询认证结果获取 GroupId
  */
 export async function getLivenessResult(data) {
-  const response = await fetch(`${getApiBase()}/api/volcengine-asset/groups/liveness/result`, {
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/groups/liveness/result`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -165,7 +160,7 @@ export async function getLivenessResult(data) {
  * @param {Object} data - { GroupId, URL, AssetType, Name }
  */
 export async function createAsset(data) {
-  const response = await fetch(`${getApiBase()}/api/volcengine-asset/assets`, {
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -180,7 +175,7 @@ export async function createAsset(data) {
  * @param {Object} data - { URL, Name, sourceNodeId }
  */
 export async function createQuickSeedanceCharacterAsset(data) {
-  const response = await fetch(`${getApiBase()}/api/volcengine-asset/assets/quick-seedance-character`, {
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/quick-seedance-character`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -201,7 +196,7 @@ export async function listAssets(params = {}) {
   if (params.page) queryParams.set('page', params.page)
   if (params.pageSize) queryParams.set('pageSize', params.pageSize)
   const qs = queryParams.toString()
-  const url = `${getApiBase()}/api/volcengine-asset/assets${qs ? '?' + qs : ''}`
+  const url = getApiUrl(`/api/volcengine-asset/assets${qs ? '?' + qs : ''}`)
   const response = await fetch(url, {
     method: 'GET',
     credentials: 'include',
@@ -218,7 +213,7 @@ export async function listAssets(params = {}) {
  * 获取单个角色资产详情
  */
 export async function getAsset(id) {
-  const response = await fetch(`${getApiBase()}/api/volcengine-asset/assets/${id}`, {
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/${id}`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -234,7 +229,7 @@ export async function getAsset(id) {
  * 更新角色资产
  */
 export async function updateAsset(id, data) {
-  const response = await fetch(`${getApiBase()}/api/volcengine-asset/assets/${id}`, {
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/${id}`), {
     method: 'PUT',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -251,7 +246,7 @@ export async function updateAsset(id, data) {
  * 删除角色资产
  */
 export async function deleteAsset(id) {
-  const response = await fetch(`${getApiBase()}/api/volcengine-asset/assets/${id}`, {
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/${id}`), {
     method: 'DELETE',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -267,7 +262,7 @@ export async function deleteAsset(id) {
  * 删除角色组（含组内所有资产）
  */
 export async function deleteAssetGroup(id) {
-  const response = await fetch(`${getApiBase()}/api/volcengine-asset/groups/${id}`, {
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/groups/${id}`), {
     method: 'DELETE',
     credentials: 'include',
     headers: getAuthHeaders()

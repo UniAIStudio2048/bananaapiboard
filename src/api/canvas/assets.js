@@ -5,14 +5,6 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
 /**
- * 获取API基础URL
- */
-function getApiBase() {
-  const url = getApiUrl('')
-  return url || ''
-}
-
-/**
  * 获取带认证的请求头
  */
 function getAuthHeaders() {
@@ -48,7 +40,7 @@ export async function getAssets(params = {}) {
     ...(params.limit && { limit: params.limit })
   })
   
-  const response = await fetch(`${getApiBase()}/api/canvas/assets?${queryParams}`, {
+  const response = await fetch(getApiUrl(`/api/canvas/assets?${queryParams}`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -67,7 +59,7 @@ export async function getAssets(params = {}) {
  * @param {string} assetId - 资产ID
  */
 export async function getAsset(assetId) {
-  const response = await fetch(`${getApiBase()}/api/canvas/assets/${assetId}`, {
+  const response = await fetch(getApiUrl(`/api/canvas/assets/${assetId}`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -95,7 +87,7 @@ export async function getAsset(assetId) {
  * @param {string[]} assetData.tags - 标签数组
  */
 export async function saveAsset(assetData) {
-  const response = await fetch(`${getApiBase()}/api/canvas/assets`, {
+  const response = await fetch(getApiUrl(`/api/canvas/assets`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -116,7 +108,7 @@ export async function saveAsset(assetData) {
  * @param {Object} updates - 更新数据
  */
 export async function updateAsset(assetId, updates) {
-  const response = await fetch(`${getApiBase()}/api/canvas/assets/${assetId}`, {
+  const response = await fetch(getApiUrl(`/api/canvas/assets/${assetId}`), {
     method: 'PUT',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -136,7 +128,7 @@ export async function updateAsset(assetId, updates) {
  * @param {string} assetId - 资产ID
  */
 export async function deleteAsset(assetId) {
-  const response = await fetch(`${getApiBase()}/api/canvas/assets/${assetId}`, {
+  const response = await fetch(getApiUrl(`/api/canvas/assets/${assetId}`), {
     method: 'DELETE',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -155,7 +147,7 @@ export async function deleteAsset(assetId) {
  * @param {string} assetId - 资产ID
  */
 export async function toggleFavorite(assetId) {
-  const response = await fetch(`${getApiBase()}/api/canvas/assets/${assetId}/favorite`, {
+  const response = await fetch(getApiUrl(`/api/canvas/assets/${assetId}/favorite`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -175,7 +167,7 @@ export async function toggleFavorite(assetId) {
  * @param {string[]} tags - 新的标签数组
  */
 export async function updateAssetTags(assetId, tags) {
-  const response = await fetch(`${getApiBase()}/api/canvas/assets/${assetId}/tags`, {
+  const response = await fetch(getApiUrl(`/api/canvas/assets/${assetId}/tags`), {
     method: 'PUT',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -197,7 +189,7 @@ export async function updateAssetTags(assetId, tags) {
  * @param {Object} params - 额外参数
  */
 export async function batchOperation(assetIds, action, params = {}) {
-  const response = await fetch(`${getApiBase()}/api/canvas/assets/batch`, {
+  const response = await fetch(getApiUrl(`/api/canvas/assets/batch`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -219,7 +211,7 @@ export async function batchOperation(assetIds, action, params = {}) {
  * @param {string|null} targetTeamId - 目标团队ID
  */
 export async function copyAssetsToSpace(items, targetSpaceType, targetTeamId) {
-  const response = await fetch(`${getApiBase()}/api/assets/copy-to-space`, {
+  const response = await fetch(getApiUrl(`/api/assets/copy-to-space`), {
     method: 'POST',
     headers: getAuthHeaders(),
     credentials: 'include',
@@ -236,4 +228,3 @@ export async function copyAssetsToSpace(items, targetSpaceType, targetTeamId) {
   }
   return data
 }
-

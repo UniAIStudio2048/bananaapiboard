@@ -4,16 +4,6 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
 /**
- * 获取API基础URL（动态获取，确保每次请求时都是最新的）
- */
-function getApiBase() {
-  // getApiUrl 期望传入路径参数，传入空字符串获取基础URL
-  const url = getApiUrl('')
-  // 如果返回空或undefined，使用空字符串（相对路径）
-  return url || ''
-}
-
-/**
  * 获取带认证的请求头（包含用户token和租户信息）
  */
 function getAuthHeaders() {
@@ -29,7 +19,7 @@ function getAuthHeaders() {
  * 获取用户存储配额
  */
 export async function getStorageQuota() {
-  const response = await fetch(`${getApiBase()}/api/canvas/storage/quota`, {
+  const response = await fetch(getApiUrl(`/api/canvas/storage/quota`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -47,7 +37,7 @@ export async function getStorageQuota() {
  * 保存工作流
  */
 export async function saveWorkflow(workflowData) {
-  const response = await fetch(`${getApiBase()}/api/canvas/workflows`, {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -84,7 +74,7 @@ export async function saveWorkflow(workflowData) {
  * 加载工作流
  */
 export async function loadWorkflow(workflowId) {
-  const response = await fetch(`${getApiBase()}/api/canvas/workflows/${workflowId}`, {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -118,7 +108,7 @@ export async function getWorkflowList(params = {}) {
     ...(params.projectId && { projectId: params.projectId })
   })
   
-  const response = await fetch(`${getApiBase()}/api/canvas/workflows?${queryParams}`, {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows?${queryParams}`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -136,7 +126,7 @@ export async function getWorkflowList(params = {}) {
  * 删除工作流
  */
 export async function deleteWorkflow(workflowId) {
-  const response = await fetch(`${getApiBase()}/api/canvas/workflows/${workflowId}`, {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}`), {
     method: 'DELETE',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -154,7 +144,7 @@ export async function deleteWorkflow(workflowId) {
  * 重命名工作流
  */
 export async function renameWorkflow(workflowId, newName) {
-  const response = await fetch(`${getApiBase()}/api/canvas/workflows/${workflowId}/rename`, {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/rename`), {
     method: 'PUT',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -173,7 +163,7 @@ export async function renameWorkflow(workflowId, newName) {
  * 获取工作流版本历史
  */
 export async function getWorkflowVersions(workflowId) {
-  const response = await fetch(`${getApiBase()}/api/canvas/workflows/${workflowId}/versions`, {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/versions`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -191,7 +181,7 @@ export async function getWorkflowVersions(workflowId) {
  * 获取工作流模板
  */
 export async function getWorkflowTemplates() {
-  const response = await fetch(`${getApiBase()}/api/canvas/workflows/templates`, {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/templates`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -209,7 +199,7 @@ export async function getWorkflowTemplates() {
  * 恢复到指定版本
  */
 export async function restoreWorkflowVersion(workflowId, versionNumber) {
-  const response = await fetch(`${getApiBase()}/api/canvas/workflows/${workflowId}/restore`, {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/restore`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -389,13 +379,13 @@ export async function uploadCanvasMedia(file, type = 'image', retryOptions = {})
   let uploadUrl
   if (type === 'image') {
     formData.append('images', file)
-    uploadUrl = `${getApiBase()}/api/images/upload`
+    uploadUrl = getApiUrl(`/api/images/upload`)
   } else if (type === 'video') {
     formData.append('file', file)
-    uploadUrl = `${getApiBase()}/api/videos/upload`
+    uploadUrl = getApiUrl(`/api/videos/upload`)
   } else if (type === 'audio') {
     formData.append('file', file)
-    uploadUrl = `${getApiBase()}/api/canvas/upload-audio`
+    uploadUrl = getApiUrl(`/api/canvas/upload-audio`)
   } else {
     throw new Error(`不支持的文件类型: ${type}`)
   }
@@ -434,7 +424,7 @@ export async function uploadCanvasMedia(file, type = 'image', retryOptions = {})
 }
 
 export async function extractVideoFrame({ videoUrl, time = 0, mode = 'time', nodeId = '' }) {
-  const response = await fetch(`${getApiBase()}/api/videos/extract-frame`, {
+  const response = await fetch(getApiUrl(`/api/videos/extract-frame`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),

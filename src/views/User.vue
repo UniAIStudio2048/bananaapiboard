@@ -721,7 +721,7 @@ async function saveNote() {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json'
     }
-    const url = type === 'image' ? `/api/images/history/${id}` : `/api/videos/history/${id}`
+    const url = getApiUrl(type === 'image' ? `/api/images/history/${id}` : `/api/videos/history/${id}`)
     
     const res = await fetch(url, {
       method: 'PUT',

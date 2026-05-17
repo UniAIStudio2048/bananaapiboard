@@ -6,14 +6,6 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { normalizeImageHistoryItem } from '@/utils/imageHistoryPrompt'
 
-/**
- * 获取API基础URL
- */
-function getApiBase() {
-  const url = getApiUrl('')
-  return url || ''
-}
-
 function isVideoUrl(url) {
   if (!url) return false
   const lower = url.split('?')[0].toLowerCase()
@@ -94,7 +86,7 @@ async function fetchHistoryPages(endpoint, responseKey, params, headers, mapRows
   for (let page = 0; page < MAX_HISTORY_PAGES; page++) {
     try {
       const query = buildHistoryQuery(params, pageLimit, offset)
-      const res = await fetch(`${getApiBase()}${endpoint}?${query}`, {
+      const res = await fetch(getApiUrl(`${endpoint}?${query}`), {
         method: 'GET',
         credentials: 'include',
         headers
@@ -278,14 +270,14 @@ export async function getHistoryDetail(historyId) {
 export async function deleteHistory(historyId, type = 'image') {
   let endpoint
   if (type === 'video') {
-    endpoint = `${getApiBase()}/api/videos/history/${historyId}`
+    endpoint = `/api/videos/history/${historyId}`
   } else if (type === 'audio') {
-    endpoint = `${getApiBase()}/api/music/history/${historyId}`
+    endpoint = `/api/music/history/${historyId}`
   } else {
-    endpoint = `${getApiBase()}/api/images/history/${historyId}`
+    endpoint = `/api/images/history/${historyId}`
   }
     
-  const response = await fetch(endpoint, {
+  const response = await fetch(getApiUrl(endpoint), {
     method: 'DELETE',
     credentials: 'include',
     headers: getAuthHeaders()

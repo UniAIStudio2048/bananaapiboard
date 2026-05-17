@@ -280,7 +280,7 @@ async function submit() {
 
   loading.value = true
   try {
-    const url = mode.value === 'register' ? '/api/auth/register' : '/api/auth/login'
+    const url = getApiUrl(mode.value === 'register' ? '/api/auth/register' : '/api/auth/login')
     const payload = mode.value === 'register'
       ? { 
           username: account.value, 
