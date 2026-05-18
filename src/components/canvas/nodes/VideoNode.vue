@@ -4197,7 +4197,7 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
 }
 
 // 后台执行生成的重操作（图片压缩/上传/API提交），不阻塞UI
-async function processGenerationInBackground(targetNodeId, allNodeIds, finalPrompt, finalImages, generateCount, capturedState) {
+async function processGenerationInBackground(targetNodeId, allNodeIds, finalPrompt, finalImages, generateCount, capturedState, submitFingerprint = '') {
   try {
     // 图片压缩：仅对有严格大小要求的 API 类型（如 kling）做前端预压缩，其他类型传原图
     if (finalImages.length > 0) {
@@ -4389,6 +4389,10 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       status: 'error',
       error: formatVideoNodeErrorMessage(error.message)
     })
+  } finally {
+    if (submitFingerprint) {
+      duplicateSubmitGuard.release(submitFingerprint)
+    }
   }
 }
 
@@ -4486,8 +4490,9 @@ async function handleGenerate(options = {}) {
     return
   }
 
+  let submitFingerprint = ''
   if (!retry) {
-    const duplicateResult = duplicateSubmitGuard.check(buildCanvasSubmitFingerprint({
+    submitFingerprint = buildCanvasSubmitFingerprint({
       nodeId: props.id,
       nodeType: 'video',
       prompt: finalPrompt,
@@ -4502,11 +4507,13 @@ async function handleGenerate(options = {}) {
       seedanceMode: isSeedance2Model.value ? selectedSeedance2Mode.value : '',
       klingO1Mode: isKlingO1Model.value ? selectedKlingO1Mode.value : '',
       klingV3OmniMode: isKlingV3OmniModel.value ? selectedKlingV3OmniMode.value : ''
-    }))
+    })
+    const duplicateResult = duplicateSubmitGuard.check(submitFingerprint)
     if (duplicateResult.blocked) {
       await showAlert(duplicateResult.message, '重复提交')
       return
     }
+    duplicateSubmitGuard.hold(submitFingerprint)
   }
   
   // ✅ 验证通过，立即更新 UI 状态（不等待任何网络操作）
@@ -4582,7 +4589,7 @@ async function handleGenerate(options = {}) {
   isGenerating.value = false
   
   // 🔥 后台异步处理：图片压缩/上传/API提交，不阻塞UI
-  processGenerationInBackground(targetNodeId, allNodeIds, finalPrompt, finalImages, generateCount, capturedState)
+  processGenerationInBackground(targetNodeId, allNodeIds, finalPrompt, finalImages, generateCount, capturedState, submitFingerprint)
 }
 
 // 轮询视频任务状态

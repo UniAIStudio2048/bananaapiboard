@@ -25,6 +25,7 @@ export function createCanvasDuplicateSubmitGuard(options = {}) {
   const windowMs = options.windowMs ?? DEFAULT_WINDOW_MS
   const now = options.now || (() => Date.now())
   const lastSubmitByFingerprint = new Map()
+  const inFlightFingerprints = new Set()
 
   return {
     check(fingerprint) {
@@ -37,7 +38,7 @@ export function createCanvasDuplicateSubmitGuard(options = {}) {
 
       const lastSubmitAt = lastSubmitByFingerprint.get(fingerprint)
 
-      if (lastSubmitAt !== undefined && currentTime - lastSubmitAt < windowMs) {
+      if (inFlightFingerprints.has(fingerprint) || (lastSubmitAt !== undefined && currentTime - lastSubmitAt < windowMs)) {
         return {
           blocked: true,
           message: DUPLICATE_MESSAGE
@@ -48,8 +49,17 @@ export function createCanvasDuplicateSubmitGuard(options = {}) {
       return { blocked: false }
     },
 
+    hold(fingerprint) {
+      inFlightFingerprints.add(fingerprint)
+    },
+
+    release(fingerprint) {
+      inFlightFingerprints.delete(fingerprint)
+    },
+
     clear() {
       lastSubmitByFingerprint.clear()
+      inFlightFingerprints.clear()
     }
   }
 }
