@@ -22,6 +22,7 @@ import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopu
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { buildTextNodeLlmMessages } from '@/utils/textNodeLlmMessages'
+import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import {
   bindMediaMention,
   getMediaMentionKey,
@@ -47,6 +48,7 @@ const props = defineProps({
 const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
+const duplicateSubmitGuard = createCanvasDuplicateSubmitGuard()
 const userInfo = inject('userInfo')
 const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
@@ -1409,6 +1411,27 @@ async function handleLLMGenerate() {
       hasReferenceMedia: inheritedImages.value.length > 0
     })
     const userMessage = messages[messages.length - 1]
+
+    const submitFingerprint = buildCanvasSubmitFingerprint({
+      nodeId: props.id,
+      nodeType: 'text',
+      messages,
+      model: selectedModel.value,
+      language: selectedLanguage.value || 'zh',
+      preset: selectedPreset.value,
+      customSystemPrompt: selectedPreset.value === 'temp-custom' ? tempCustomPrompt.value : ''
+    })
+    const duplicateResult = duplicateSubmitGuard.check(submitFingerprint)
+    if (duplicateResult.blocked) {
+      alert(duplicateResult.message)
+      isGenerating.value = false
+      return
+    }
+
+    const targetNode = props.data.status === 'processing'
+      ? canvasStore.duplicateNodeWithIncomingEdges(props.id, { offset: { x: 40, y: 40 } })
+      : null
+    const targetNodeId = targetNode?.id || props.id
     
     // 如果有上游图片/视频，处理 URL
     let processedImages = []
@@ -1446,7 +1469,7 @@ async function handleLLMGenerate() {
     
     messages.push(userMessage)
     
-    canvasStore.updateNodeData(props.id, {
+    canvasStore.updateNodeData(targetNodeId, {
       text: llmInputText.value,
       status: 'processing',
       output: null,
@@ -1480,7 +1503,7 @@ async function handleLLMGenerate() {
 
       const result = await chatWithLLM(apiParams)
       
-      canvasStore.updateNodeData(props.id, {
+      canvasStore.updateNodeData(targetNodeId, {
         status: 'success',
         output: {
           type: 'text',
@@ -1493,7 +1516,7 @@ async function handleLLMGenerate() {
       window.dispatchEvent(new CustomEvent('user-info-updated'))
     } catch (llmError) {
       console.error('[TextNode] LLM 对话失败:', llmError)
-      canvasStore.updateNodeData(props.id, {
+      canvasStore.updateNodeData(targetNodeId, {
         status: 'error',
         error: llmError.message || 'LLM 对话失败'
       })

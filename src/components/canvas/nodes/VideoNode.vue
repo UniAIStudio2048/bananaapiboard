@@ -4513,7 +4513,6 @@ async function handleGenerate(options = {}) {
       await showAlert(duplicateResult.message, '重复提交')
       return
     }
-    duplicateSubmitGuard.hold(submitFingerprint)
   }
   
   // ✅ 验证通过，立即更新 UI 状态（不等待任何网络操作）
@@ -4534,7 +4533,10 @@ async function handleGenerate(options = {}) {
     apiType: currentModelConfig.value?.apiType || ''
   }
   
-  const targetNodeId = props.id
+  const targetNode = (!retry && props.data.status === 'processing')
+    ? canvasStore.duplicateNodeWithIncomingEdges(props.id, { offset: { x: 40, y: 40 } })
+    : null
+  const targetNodeId = targetNode?.id || props.id
   
   // 多批次生成时，创建堆叠的输出节点
   let allNodeIds = [targetNodeId]

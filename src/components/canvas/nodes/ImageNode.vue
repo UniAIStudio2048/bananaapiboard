@@ -5657,7 +5657,10 @@ async function handleGenerate(options = {}) {
   
   const generateCount = selectedCount.value
   
-  const targetNodeId = props.id
+  const targetNode = (!fromGroup && !retry && props.data.status === 'processing')
+    ? canvasStore.duplicateNodeWithIncomingEdges(props.id, { offset: { x: 40, y: 40 } })
+    : null
+  const targetNodeId = targetNode?.id || props.id
   
   // 多批次生成时，创建堆叠的输出节点
   let allNodeIds = [targetNodeId]

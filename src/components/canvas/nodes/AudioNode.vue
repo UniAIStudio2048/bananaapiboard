@@ -22,6 +22,7 @@ import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvas
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
+import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
@@ -44,6 +45,7 @@ const props = defineProps({
 const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
+const duplicateSubmitGuard = createCanvasDuplicateSubmitGuard()
 const uploadManager = useUploadManager()
 const modelStatsStore = useModelStatsStore()
 modelStatsStore.ensureStarted()
@@ -198,10 +200,32 @@ async function handleGenerateMusic() {
     return
   }
 
+  const submitFingerprint = buildCanvasSubmitFingerprint({
+    nodeId: props.id,
+    nodeType: 'audio',
+    prompt: musicPrompt.value,
+    model: selectedMusicModel.value,
+    customMode: customMode.value,
+    title: title.value,
+    tags: tags.value,
+    negativeTags: negativeTags.value,
+    makeInstrumental: makeInstrumental.value
+  })
+  const duplicateResult = duplicateSubmitGuard.check(submitFingerprint)
+  if (duplicateResult.blocked) {
+    await showAlert(duplicateResult.message, '重复提交')
+    return
+  }
+
   isGeneratingMusic.value = true
 
+  const targetNode = props.data.status === 'processing'
+    ? canvasStore.duplicateNodeWithIncomingEdges(props.id, { offset: { x: 40, y: 40 } })
+    : null
+  const targetNodeId = targetNode?.id || props.id
+
   // 更新节点状态，保存所有参数
-  canvasStore.updateNodeData(props.id, {
+  canvasStore.updateNodeData(targetNodeId, {
     status: 'processing',
     audioUrl: null,
     audioData: null,
@@ -260,7 +284,7 @@ async function handleGenerateMusic() {
     const taskIds = response.task_ids || []
     
     // 保存任务ID到节点数据
-    canvasStore.updateNodeData(props.id, {
+    canvasStore.updateNodeData(targetNodeId, {
       taskIds,
       status: 'processing'
     })
@@ -269,11 +293,11 @@ async function handleGenerateMusic() {
     isGeneratingMusic.value = false
     
     // 开始轮询任务状态
-    pollMusicStatus(taskIds)
+    pollMusicStatus(targetNodeId, taskIds)
     
   } catch (error) {
     console.error('[AudioNode] 音乐生成失败:', error)
-    canvasStore.updateNodeData(props.id, {
+    canvasStore.updateNodeData(targetNodeId, {
       status: 'error',
       error: formatAudioErrorMessage(error.response?.data?.message || error.response?.data?.error || error.message || '生成失败')
     })
@@ -282,7 +306,7 @@ async function handleGenerateMusic() {
 }
 
 // 轮询音乐生成状态
-async function pollMusicStatus(taskIds) {
+async function pollMusicStatus(nodeId, taskIds) {
   const startTime = Date.now()
   const maxDuration = 15 * 60 * 1000 // 15分钟超时
   const pollInterval = 3000 // 3秒轮询一次
@@ -294,7 +318,7 @@ async function pollMusicStatus(taskIds) {
     
     // 15分钟超时
     if (elapsed >= maxDuration) {
-      canvasStore.updateNodeData(props.id, {
+      canvasStore.updateNodeData(nodeId, {
         status: 'timeout',
         error: '生成超时（超过15分钟），请稍后查看历史记录'
       })
@@ -303,7 +327,7 @@ async function pollMusicStatus(taskIds) {
     }
     
     // 更新进度显示
-    canvasStore.updateNodeData(props.id, {
+    canvasStore.updateNodeData(nodeId, {
       progress: `已等待 ${elapsedMinutes}:${elapsedSeconds.toString().padStart(2, '0')}`
     })
     
@@ -324,7 +348,7 @@ async function pollMusicStatus(taskIds) {
       
       if (anyFailed) {
         const failedResult = results.find(r => r.status === 'failed')
-        canvasStore.updateNodeData(props.id, {
+        canvasStore.updateNodeData(nodeId, {
           status: 'error',
           error: formatAudioErrorMessage(failedResult.data?.error_message || failedResult.data?.message || '生成失败'),
           progress: null
@@ -335,7 +359,7 @@ async function pollMusicStatus(taskIds) {
         const firstResult = results[0]
         const songData = firstResult.data
         const songTitle = songData.title || '生成的音乐'
-        canvasStore.updateNodeData(props.id, {
+        canvasStore.updateNodeData(nodeId, {
           status: 'success',
           musicHistory: results.map(r => r.data),
           audioUrl: songData.audio_url || songData.audio_stream_url,
@@ -358,7 +382,7 @@ async function pollMusicStatus(taskIds) {
       } else if (anyStreaming) {
         // 流式状态：音频预览就绪
         const streamingResult = results.find(r => r.status === 'streaming')
-        canvasStore.updateNodeData(props.id, {
+        canvasStore.updateNodeData(nodeId, {
           status: 'streaming',
           audioUrl: streamingResult.data?.audio_url,
           title: streamingResult.data?.title,

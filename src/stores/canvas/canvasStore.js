@@ -894,6 +894,96 @@ export const useCanvasStore = defineStore('canvas', () => {
   }
 
   /**
+   * 清理“生成中再次提交”复制节点的结果态。
+   * 保留提示词、模型、尺寸、参考媒体等参数，只移除旧输出和任务状态。
+   */
+  function cleanNodeDataForProcessingDuplicate(data, nodeType) {
+    cleanNodeDataForPaste(data, nodeType)
+
+    const outputResets = {
+      status: 'idle',
+      output: null,
+      error: null,
+      progress: null,
+      taskId: null,
+      taskIds: null,
+      soraTaskId: null,
+      processingStartedAt: null
+    }
+
+    const imageTypes = ['image', 'image-input', 'text-to-image', 'image-to-image', 'image-batch']
+    const videoTypes = ['video', 'video-input', 'text-to-video', 'image-to-video', 'video-to-video']
+    const audioTypes = ['audio', 'audio-input']
+    const textTypes = ['text', 'text-input', 'llm', 'llm-prompt-enhance', 'llm-image-describe', 'llm-content-expand']
+
+    if (imageTypes.includes(nodeType)) {
+      Object.assign(outputResets, {
+        generatedImage: null,
+        imageUrl: null
+      })
+    } else if (videoTypes.includes(nodeType)) {
+      Object.assign(outputResets, {
+        videoUrl: null
+      })
+    } else if (audioTypes.includes(nodeType)) {
+      Object.assign(outputResets, {
+        audioUrl: null,
+        audioData: null
+      })
+    } else if (textTypes.includes(nodeType)) {
+      Object.assign(outputResets, {
+        llmResponse: ''
+      })
+    }
+
+    Object.assign(data, outputResets)
+    return data
+  }
+
+  /**
+   * 生成中再次提交时复制当前节点，并且只复制入边。
+   * 出边不复制，避免新任务完成后意外推动原有下游流程。
+   */
+  function duplicateNodeWithIncomingEdges(nodeId, options = {}) {
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (!node) return null
+
+    saveHistory({ force: true })
+    markCurrentTabChanged()
+
+    const offset = options.offset || { x: 40, y: 40 }
+    const newNode = {
+      ...cloneNodeDataValue(node),
+      id: options.id || generateId(),
+      position: {
+        x: node.position.x + offset.x,
+        y: node.position.y + offset.y
+      },
+      selected: false
+    }
+
+    if (newNode.data) {
+      cleanNodeDataForProcessingDuplicate(newNode.data, node.type)
+    }
+
+    nodes.value.push(newNode)
+
+    const incomingEdges = edges.value.filter(e => e.target === nodeId)
+    for (const edge of incomingEdges) {
+      addEdge({
+        ...cloneNodeDataValue(edge),
+        id: `${edge.id || `e-${edge.source}-${edge.target}`}-${newNode.id}`,
+        target: newNode.id
+      })
+    }
+
+    selectedNodeId.value = newNode.id
+    selectedNodeIds.value = [newNode.id]
+
+    return newNode
+  }
+
+  /**
    * 粘贴节点
    * @param {Object} position - 粘贴位置（画布坐标）
    */
@@ -2620,6 +2710,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 剪贴板操作
     copySelectedNodes,
     pasteNodes,
+    duplicateNodeWithIncomingEdges,
     selectAllNodes,
     setSelectedNodeIds,
     
