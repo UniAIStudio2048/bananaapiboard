@@ -32,7 +32,9 @@ const brandConfig = ref(getBrand())
 const icpConfig = ref({
   enabled: false,
   icp_number: '',
-  icp_link: 'https://beian.miit.gov.cn/'
+  icp_link: 'https://beian.miit.gov.cn/',
+  icp_license_number: '',
+  icp_license_link: 'https://dxzhgl.miit.gov.cn/'
 })
 
 // 切换主题
@@ -61,7 +63,10 @@ async function loadSiteConfig() {
     if (r.ok) {
       const data = await r.json()
       if (data.icp_config) {
-        icpConfig.value = data.icp_config
+        icpConfig.value = {
+          ...icpConfig.value,
+          ...data.icp_config
+        }
       }
     }
   } catch (e) {
@@ -207,7 +212,15 @@ async function copyInviteLink() {
     console.error('复制失败', err)
   }
 }
-const isCommunityPage = computed(() => route.path.startsWith('/community'))
+const isCommunityLandingPage = computed(() => route.path === '/' && import.meta.env.VITE_LANDING_MODE === '1')
+const isCommunityPage = computed(() => route.path.startsWith('/community') || isCommunityLandingPage.value)
+const hasIcpFooterLinks = computed(() => Boolean(icpConfig.value.icp_number || icpConfig.value.icp_license_number))
+const isIcpFooterVisible = computed(() => {
+  const isStandaloneSurface = route.path === '/canvas' || route.path === '/workflows' || route.name === 'communityWorkflow'
+  const isThreeDLandingPage = route.path === '/' && !isCommunityLandingPage.value
+
+  return !isStandaloneSurface && !isThreeDLandingPage && icpConfig.value.enabled && hasIcpFooterLinks.value
+})
 
 </script>
 
@@ -625,12 +638,13 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
       <RouterView />
     </main>
     
-    <!-- 底部备案号 - 固定在页面最底部，落地页、画布页和工作流页不显示 -->
-    <footer v-if="route.path !== '/' && route.path !== '/canvas' && route.path !== '/workflows' && route.name !== 'communityDetail' && route.name !== 'communityWorkflow' && icpConfig.enabled && icpConfig.icp_number" 
+    <!-- 底部备案号 - 固定在页面最底部，3D落地页、画布页、工作流页和社区工作流预览不显示 -->
+    <footer v-if="isIcpFooterVisible" 
       class="py-3 text-center mt-auto"
       :class="isCommunityPage ? 'bg-black' : 'bg-slate-200 dark:bg-dark-800'"
     >
-      <a 
+      <a
+        v-if="icpConfig.icp_number"
         :href="icpConfig.icp_link || 'https://beian.miit.gov.cn/'" 
         target="_blank" 
         rel="noopener noreferrer"
@@ -638,6 +652,21 @@ const isCommunityPage = computed(() => route.path.startsWith('/community'))
         :class="isCommunityPage ? 'text-white/70 hover:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
       >
         {{ icpConfig.icp_number }}
+      </a>
+      <span
+        v-if="icpConfig.icp_number && icpConfig.icp_license_number"
+        class="mx-2 text-xs"
+        :class="isCommunityPage ? 'text-white/30' : 'text-slate-400 dark:text-slate-600'"
+      >/</span>
+      <a
+        v-if="icpConfig.icp_license_number"
+        :href="icpConfig.icp_license_link || 'https://dxzhgl.miit.gov.cn/'"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="text-xs transition-colors"
+        :class="isCommunityPage ? 'text-white/70 hover:text-white' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'"
+      >
+        {{ icpConfig.icp_license_number }}
       </a>
     </footer>
   </div>

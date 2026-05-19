@@ -480,12 +480,6 @@ function handlePromptCompositionEnd(event) {
   handlePromptInput(event)
 }
 
-function handlePromptSelectionSettle() {
-  const editor = promptTextareaRef.value
-  if (editor) snapPromptEditorCaretOutOfMention(editor)
-  updatePromptOverlayCaret()
-}
-
 function handlePromptBeforeInput(event) {
   if (isPromptInputComposing || event?.isComposing) return
   if (event.inputType !== 'insertText' || typeof event.data !== 'string' || !event.data) return
@@ -7328,9 +7322,6 @@ function handleToolbarPreview() {
             @compositionstart="handlePromptCompositionStart"
             @compositionend="handlePromptCompositionEnd"
             @focus="handlePromptTextareaFocus"
-            @keyup="handlePromptSelectionSettle"
-            @click="handlePromptSelectionSettle"
-            @mouseup="handlePromptSelectionSettle"
             @scroll="syncPromptHighlightOverlayScroll"
             @wheel="handlePromptWheel"
             @mousedown="markPromptTextareaResizeIntent"

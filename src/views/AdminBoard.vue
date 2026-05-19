@@ -176,11 +176,6 @@ const settings = ref({
     button_text: '获取兑换券',
     url: '',
     open_in_new_tab: true
-  },
-  icp_config: {
-    enabled: false,
-    icp_number: '',
-    icp_link: 'https://beian.miit.gov.cn/'
   }
 })
 
@@ -265,10 +260,6 @@ async function loadSettings() {
       voucher_external_link: {
         ...defaultSettings.voucher_external_link,
         ...(data.voucher_external_link || {})
-      },
-      icp_config: {
-        ...defaultSettings.icp_config,
-        ...(data.icp_config || {})
       }
     }
   }
@@ -481,14 +472,13 @@ async function saveSettings() {
   success.value = ''
   
   try {
-    // 保存兑换券配置、备案号配置等
+    // 保存兑换券配置
     // 注意：积分奖励、并发限制等配置已迁移到租户管理平台(9000端口)管理
     const r1 = await fetchWithAdminAuth('/api/admin/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        voucher_external_link: settings.value.voucher_external_link,
-        icp_config: settings.value.icp_config
+        voucher_external_link: settings.value.voucher_external_link
       })
     })
     if (!r1 || !r1.ok) throw new Error('保存设置失败')
@@ -3551,58 +3541,6 @@ onUnmounted(() => {
                     在新标签页打开
                   </span>
                 </label>
-              </div>
-            </div>
-          </div>
-          
-          <!-- 备案号设置 -->
-          <div class="pt-6 border-t border-slate-200 dark:border-dark-600">
-            <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-4 flex items-center">
-              <span class="mr-2">📋</span>
-              网站备案设置
-            </h4>
-            <div class="space-y-4">
-              <div class="flex items-center">
-                <input 
-                  type="checkbox" 
-                  id="icp_enabled" 
-                  v-model="settings.icp_config.enabled"
-                  class="w-4 h-4 text-primary-600 bg-white dark:bg-dark-600 border-slate-300 dark:border-dark-500 rounded focus:ring-primary-500"
-                />
-                <label for="icp_enabled" class="ml-2 text-sm font-medium text-slate-700 dark:text-slate-300">
-                  在页面底部显示备案号
-                </label>
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  ICP备案号
-                </label>
-                <input 
-                  v-model="settings.icp_config.icp_number" 
-                  class="input" 
-                  type="text" 
-                  placeholder="例如：京ICP备12345678号-1"
-                />
-              </div>
-              
-              <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  备案查询链接
-                  <span class="text-xs text-slate-500 ml-1">(点击备案号跳转的地址)</span>
-                </label>
-                <input 
-                  v-model="settings.icp_config.icp_link" 
-                  class="input" 
-                  type="text" 
-                  placeholder="https://beian.miit.gov.cn/"
-                />
-              </div>
-              
-              <div class="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                <p class="text-xs text-blue-700 dark:text-blue-300">
-                  💡 提示：启用后，备案号将显示在网站底部，点击可跳转到工信部备案查询网站
-                </p>
               </div>
             </div>
           </div>

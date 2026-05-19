@@ -8,12 +8,14 @@ import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { getDownstreamOptions, NODE_TYPES } from '@/config/canvas/nodeTypes'
-import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled, getAvailableVideoModels } from '@/config/tenant'
 import { saveAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
+import { extractVideoFrame } from '@/api/canvas/workflow'
 import { createAssetGroup, listAssetGroups, createAsset as createVolcAsset, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 import { getOriginalImageUrl } from '@/utils/canvasThumbnail'
 import { getSeedanceCharacterNodeLayout } from '@/utils/seedanceCharacterLayout'
+import { buildVideoQuickActionNode, VIDEO_QUICK_ACTION_TYPES } from '@/utils/canvasVideoQuickActions'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -259,14 +261,40 @@ function createDownstreamNode(type) {
   if (!props.node) return
   
   const position = {
-    x: props.node.position.x + 300,
+    x: props.node.position.x + 400,
     y: props.node.position.y
   }
+
+  const isVideoQuickAction = Object.values(VIDEO_QUICK_ACTION_TYPES).includes(type)
+  if (isVideoQuickAction) {
+    const models = getAvailableVideoModels({ disableVeoMerge: true })
+    const actionNode = buildVideoQuickActionNode(type, props.node, { models })
+    const newNode = canvasStore.addNode({
+      type: actionNode.nodeType,
+      position,
+      data: actionNode.nodeData
+    })
+
+    if (newNode?.id) {
+      canvasStore.addEdge({
+        source: props.node.id,
+        sourceHandle: 'output',
+        target: newNode.id,
+        targetHandle: 'input'
+      })
+      canvasStore.selectNode(newNode.id)
+      if (actionNode.shouldExtractLastFrame && actionNode.nodeData.videoUrl) {
+        extractLastFrameToNode(newNode.id, actionNode.nodeData.videoUrl)
+      }
+    }
+
+    emit('close')
+    return
+  }
   
-  // 如果是图片描述或视频描述，创建反推节点，再连接到文本节点
-  if (type === NODE_TYPES.LLM_IMAGE_DESCRIBE || type === NODE_TYPES.LLM_VIDEO_DESCRIBE || 
-      type === 'llm-image-describe' || type === 'llm-video-describe') {
-    // 1. 创建反推节点（图片反推或视频反推）
+  // 图片描述保留原来的反推节点链路；视频反推走上面的共享视频快捷动作。
+  if (type === NODE_TYPES.LLM_IMAGE_DESCRIBE || type === 'llm-image-describe') {
+    // 1. 创建图片反推节点
     const describeNode = canvasStore.addNode({
       type,
       position,
@@ -299,34 +327,10 @@ function createDownstreamNode(type) {
     return
   }
   
-  let nodeType = type
-  let nodeData = {}
-
-  // 视频编辑：创建空白视频节点，源视频作为上游参考输入
-  if (type === NODE_TYPES.VIDEO_EDIT || type === 'video-edit') {
-    nodeType = 'video'
-    nodeData = {
-      title: '视频编辑',
-      nodeRole: 'edit',
-      editMode: true,
-      sourceVideoUrl: props.node.data?.output?.url || ''
-    }
-  }
-  // 视频延长：创建空白视频节点，源视频作为上游参考输入
-  else if (type === NODE_TYPES.VIDEO_EXTEND || type === 'video-extend') {
-    nodeType = 'video'
-    nodeData = {
-      title: '视频延长',
-      nodeRole: 'extend',
-      extendMode: true,
-      sourceVideoUrl: props.node.data?.output?.url || ''
-    }
-  }
-
   const newNode = canvasStore.addNode({
-    type: nodeType,
+    type,
     position,
-    data: nodeData
+    data: {}
   })
   
   canvasStore.addEdge({
@@ -335,6 +339,72 @@ function createDownstreamNode(type) {
   })
   
   emit('close')
+}
+
+async function extractLastFrameToNode(nodeId, sourceVideoUrl) {
+  try {
+    const duration = await loadVideoDuration(sourceVideoUrl)
+    const result = await extractVideoFrame({
+      videoUrl: sourceVideoUrl,
+      time: Math.max(0, duration - 0.12),
+      mode: 'last',
+      nodeId
+    })
+    canvasStore.updateNodeData(nodeId, {
+      sourceImages: [result.url],
+      output: {
+        type: 'image',
+        url: result.url,
+        urls: [result.url]
+      },
+      status: 'success',
+      progress: '',
+      needsFrameExtraction: false,
+      extractedFrameTime: result.time
+    })
+  } catch (error) {
+    console.error('[NodeContextMenu] 截取视频尾帧失败:', error)
+    canvasStore.updateNodeData(nodeId, {
+      status: 'error',
+      progress: '',
+      error: error.message || '截取视频尾帧失败'
+    })
+  }
+}
+
+function loadVideoDuration(sourceVideoUrl) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video')
+    const timeout = setTimeout(() => {
+      cleanup()
+      reject(new Error('读取视频时长超时'))
+    }, 10000)
+
+    function cleanup() {
+      clearTimeout(timeout)
+      video.onloadedmetadata = null
+      video.onerror = null
+      video.removeAttribute('src')
+      video.load()
+    }
+
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => {
+      const duration = Number(video.duration) || 0
+      cleanup()
+      if (duration > 0) {
+        resolve(duration)
+      } else {
+        reject(new Error('无法读取视频时长'))
+      }
+    }
+    video.onerror = () => {
+      cleanup()
+      reject(new Error('读取视频时长失败'))
+    }
+    video.src = sourceVideoUrl
+    video.load()
+  })
 }
 
 // 复制节点

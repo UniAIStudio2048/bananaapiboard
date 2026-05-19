@@ -244,12 +244,6 @@ function handleLLMCompositionEnd(event) {
   handleLLMInput(event)
 }
 
-function handleLLMSelectionSettle() {
-  // 在键盘/鼠标交互改变 caret 后调用，确保 caret 不会停留在 mention chip 内部
-  const editor = llmInputRef.value
-  if (editor) snapPromptEditorCaretOutOfMention(editor)
-}
-
 function handleLLMBeforeInput(event) {
   if (isLLMInputComposing || event?.isComposing) return
   if (event.inputType !== 'insertText' || typeof event.data !== 'string' || !event.data) return
@@ -3392,9 +3386,6 @@ onUnmounted(() => {
             @paste="handleLLMPaste"
             @compositionstart="handleLLMCompositionStart"
             @compositionend="handleLLMCompositionEnd"
-            @keyup="handleLLMSelectionSettle"
-            @click="handleLLMSelectionSettle"
-            @mouseup="handleLLMSelectionSettle"
             @wheel.stop
             @focus="handleLLMInputFocus"
             @mousedown="markLLMInputResizeIntent"

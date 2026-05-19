@@ -9,6 +9,7 @@ import { useI18n } from '@/i18n'
 import { extractVideoFrame, uploadCanvasMedia } from '@/api/canvas/workflow'
 import { getAvailableVideoModels, isSeedanceFeaturesEnabled } from '@/config/tenant'
 import { clampNodePositionToGroup } from '@/utils/canvasConnectionPosition'
+import { buildVideoQuickActionNode, VIDEO_QUICK_ACTION_TYPES } from '@/utils/canvasVideoQuickActions'
 
 const { t } = useI18n()
 
@@ -389,7 +390,15 @@ function selectNodeType(type) {
   
   // 检查是否是 LLM 预设类型，如果是，转换为文本节点 + 预设
   let actualNodeType = type
-  if (LLM_PRESET_MAP[type]) {
+  let videoQuickAction = null
+  const isVideoQuickAction = Object.values(VIDEO_QUICK_ACTION_TYPES).includes(type)
+  if (isVideoQuickAction && triggerNode.value && !isLeftTrigger.value) {
+    videoQuickAction = buildVideoQuickActionNode(type, triggerNode.value, {
+      models: getAvailableVideoModels({ disableVeoMerge: true })
+    })
+    actualNodeType = videoQuickAction.nodeType
+    Object.assign(nodeData, videoQuickAction.nodeData)
+  } else if (LLM_PRESET_MAP[type]) {
     actualNodeType = 'text-input'
     nodeData.selectedPreset = LLM_PRESET_MAP[type]
     nodeData.title = NODE_TYPE_CONFIG[type]?.label || '文本'
@@ -434,7 +443,7 @@ function selectNodeType(type) {
   
   // 特殊处理：视频编辑节点（从视频节点触发时）
   // 创建空白视频节点，源视频通过上游连线作为参考输入
-  if (type === 'video-edit' && triggerNode.value) {
+  if (!videoQuickAction && type === 'video-edit' && triggerNode.value) {
     const sourceData = triggerNode.value.data
     if (sourceData?.output?.url) {
       actualNodeType = 'video'
@@ -448,7 +457,7 @@ function selectNodeType(type) {
   
   // 特殊处理：视频延长节点（从视频节点触发时）
   // 创建空白视频节点，源视频通过上游连线作为参考输入
-  if (type === 'video-extend' && triggerNode.value) {
+  if (!videoQuickAction && type === 'video-extend' && triggerNode.value) {
     const sourceData = triggerNode.value.data
     if (sourceData?.output?.url) {
       actualNodeType = 'video'
@@ -481,7 +490,7 @@ function selectNodeType(type) {
   }
 
   // 特殊处理：截取尾帧节点（从视频节点触发时）
-  if (type === 'video-last-frame' && triggerNode.value) {
+  if (!videoQuickAction && type === 'video-last-frame' && triggerNode.value) {
     const sourceData = triggerNode.value.data
     // 检查是否从视频节点触发且有视频输出
     if (sourceData?.output?.url) {
@@ -563,7 +572,7 @@ function selectNodeType(type) {
   })
   attachNodeToTriggerGroup(newNode, groupPlacement.groupId)
 
-  if (type === 'video-last-frame' && newNode?.id && nodeData.videoUrl) {
+  if ((videoQuickAction?.shouldExtractLastFrame || type === 'video-last-frame') && newNode?.id && nodeData.videoUrl) {
     extractLastFrameToNode(newNode.id, nodeData.videoUrl)
   }
   

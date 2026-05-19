@@ -346,6 +346,10 @@ function sourceToClip(source, probedDuration) {
 
 async function addSourceToTimeline(source) {
   if (!source?.url) return
+  const clip = sourceToClip(source)
+  clips.value = [...clips.value, clip]
+  selectedIndex.value = clips.value.length - 1
+
   let probedDuration = 0
   try {
     const video = document.createElement('video')
@@ -363,8 +367,21 @@ async function addSourceToTimeline(source) {
       setTimeout(() => { cleanup(); resolve(0) }, 8000)
     })
   } catch { /* use fallback */ }
-  clips.value = [...clips.value, sourceToClip(source, probedDuration)]
-  selectedIndex.value = clips.value.length - 1
+
+  if (probedDuration > 0) {
+    clips.value = clips.value.map(existing => {
+      if (existing.id !== clip.id) return existing
+      const nextDuration = Math.max(0.1, probedDuration)
+      const startTime = Math.min(existing.startTime || 0, nextDuration)
+      const defaultRangeUnchanged = (existing.startTime || 0) === 0 && (existing.endTime || 0) === clip.endTime
+      return {
+        ...existing,
+        startTime,
+        endTime: defaultRangeUnchanged ? nextDuration : Math.min(existing.endTime || nextDuration, nextDuration),
+        duration: nextDuration
+      }
+    })
+  }
 }
 
 function getResultUrl(payload) {

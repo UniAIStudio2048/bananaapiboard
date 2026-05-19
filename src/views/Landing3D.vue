@@ -95,14 +95,25 @@
       </div>
       
       <!-- 底部备案信息 -->
-      <footer v-if="icpConfig.enabled && icpConfig.icp_number" class="landing-icp-footer">
-        <a 
+      <footer v-if="icpConfig.enabled && hasIcpFooterLinks" class="landing-icp-footer">
+        <a
+          v-if="icpConfig.icp_number"
           :href="icpConfig.icp_link || 'https://beian.miit.gov.cn/'" 
           target="_blank" 
           rel="noopener noreferrer"
           class="icp-link"
         >
           {{ icpConfig.icp_number }}
+        </a>
+        <span v-if="icpConfig.icp_number && icpConfig.icp_license_number" class="icp-separator">/</span>
+        <a
+          v-if="icpConfig.icp_license_number"
+          :href="icpConfig.icp_license_link || 'https://dxzhgl.miit.gov.cn/'"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="icp-link"
+        >
+          {{ icpConfig.icp_license_number }}
         </a>
       </footer>
     </div>
@@ -388,8 +399,11 @@ const emailConfig = ref({
 const icpConfig = ref({
   enabled: false,
   icp_number: '',
-  icp_link: 'https://beian.miit.gov.cn/'
+  icp_link: 'https://beian.miit.gov.cn/',
+  icp_license_number: '',
+  icp_license_link: 'https://dxzhgl.miit.gov.cn/'
 })
+const hasIcpFooterLinks = computed(() => Boolean(icpConfig.value.icp_number || icpConfig.value.icp_license_number))
 const emailCode = ref('')
 const sendingCode = ref(false)
 const codeSent = ref(false)
@@ -453,7 +467,10 @@ async function loadIcpConfig() {
     if (r.ok) {
       const data = await r.json()
       if (data.icp_config) {
-        icpConfig.value = data.icp_config
+        icpConfig.value = {
+          ...icpConfig.value,
+          ...data.icp_config
+        }
         console.log('[Landing3D] 备案配置已加载:', data.icp_config)
       }
     }
@@ -1641,6 +1658,11 @@ onUnmounted(() => {
   transform: translateX(-50%);
   z-index: 20;
   text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .icp-link {
@@ -1653,6 +1675,11 @@ onUnmounted(() => {
 
 .icp-link:hover {
   color: rgba(0, 255, 255, 0.7);
+}
+
+.icp-separator {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.2);
 }
 
 .cta-content {

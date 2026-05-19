@@ -328,9 +328,6 @@
             @input="handleInputEvent"
             @compositionstart="handleInputCompositionStart"
             @compositionend="handleInputCompositionEnd"
-            @keyup="handleInputSelectionSettle"
-            @click="handleInputSelectionSettle"
-            @mouseup="handleInputSelectionSettle"
           >
             <span
               v-for="(seg, i) in highlightedInputSegments"
@@ -1108,12 +1105,6 @@ function handleInputCompositionStart() {
 function handleInputCompositionEnd(event) {
   isInputComposing = false
   handleInputEvent(event)
-}
-
-function handleInputSelectionSettle() {
-  // 在键盘/鼠标交互改变 caret 后调用，确保 caret 不会停留在 mention chip 内部
-  const editor = inputRef.value
-  if (editor) snapPromptEditorCaretOutOfMention(editor)
 }
 
 function handleInputBeforeInput(event) {
@@ -2481,7 +2472,7 @@ defineExpose({
   -webkit-backdrop-filter: blur(16px);
   transition: all 0.3s ease;
   flex-shrink: 0; /* 防止被压缩 */
-  overflow: hidden;
+  overflow: visible;
 }
 
 .input-area.is-dragging {

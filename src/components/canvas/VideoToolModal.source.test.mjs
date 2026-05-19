@@ -35,6 +35,15 @@ for (const className of ['video-tool-modal', 'video-tool-modal__mode-tabs', 'vid
   assert.match(modal, new RegExp(className), `VideoToolModal should include ${className}`)
 }
 
+const addSourceIndex = modal.indexOf('async function addSourceToTimeline(source)')
+const immediateInsertIndex = modal.indexOf('clips.value = [...clips.value, clip]', addSourceIndex)
+const metadataProbeIndex = modal.indexOf("document.createElement('video')", addSourceIndex)
+assert.ok(addSourceIndex >= 0, 'VideoToolModal should define addSourceToTimeline')
+assert.ok(
+  immediateInsertIndex > addSourceIndex && immediateInsertIndex < metadataProbeIndex,
+  'VideoToolModal should add the initial source before async metadata probing so subtitle erase is immediately clickable'
+)
+
 assert.match(sourceRail, /getHistory\(\{\s*type:\s*'video'/, 'VideoSourceRail should load video history with getHistory')
 assert.match(sourceRail, /thumbnailUrl:\s*item\.thumbnailUrl\s*\|\|\s*item\.thumbnail_url\s*\|\|\s*item\.cover_url/, 'VideoSourceRail should preserve history and canvas thumbnail URLs')
 assert.match(sourceRail, /class="video-source-rail__thumb"/, 'VideoSourceRail should render a thumbnail well for each video source')

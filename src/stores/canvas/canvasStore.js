@@ -1806,24 +1806,27 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 切换标签
    */
   function switchToTab(tabId) {
-    const currentTab = workflowTabs.value.find(t => t.id === activeTabId.value)
     const targetTab = workflowTabs.value.find(t => t.id === tabId)
-    
+
     if (!targetTab) return
-    
-    // 保存当前标签状态
-    if (currentTab) {
-      try {
-        currentTab.nodes = cloneNodeDataValue(nodes.value) || []
-        currentTab.edges = cloneNodeDataValue(edges.value) || []
-        currentTab.viewport = { ...viewport.value }
-      } catch (e) {
-        console.error('[Canvas] 保存标签状态失败:', e)
+
+    // 仅在切换到不同 tab 时，才把当前画布数据回写到原 tab。
+    // 如果调用方先更新了 targetTab.nodes/edges 再 switchToTab(同一个 tab)（例如重新加载已绑定的工作流），
+    // 跳过此步可避免画布旧数据覆盖刚写入 targetTab 的最新数据。
+    if (activeTabId.value !== tabId) {
+      const currentTab = workflowTabs.value.find(t => t.id === activeTabId.value)
+      if (currentTab) {
+        try {
+          currentTab.nodes = cloneNodeDataValue(nodes.value) || []
+          currentTab.edges = cloneNodeDataValue(edges.value) || []
+          currentTab.viewport = { ...viewport.value }
+        } catch (e) {
+          console.error('[Canvas] 保存标签状态失败:', e)
+        }
       }
+      activeTabId.value = tabId
     }
-    
-    activeTabId.value = tabId
-    
+
     // 更新工作流元信息
     workflowMeta.value = targetTab.workflowId ? {
       id: targetTab.workflowId,
@@ -1831,11 +1834,11 @@ export const useCanvasStore = defineStore('canvas', () => {
       name: targetTab.name,
       description: targetTab.description || ''
     } : null
-    
+
     selectedNodeId.value = null
     selectedEdgeId.value = null
     selectedNodeIds.value = []
-    
+
     // 同步设置新数据 - 深拷贝避免共享引用
     try {
       nodes.value = cloneNodeDataValue(targetTab.nodes) || []
