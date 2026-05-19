@@ -57,6 +57,7 @@ const historyLoading = ref(false)
 const selectedHistoryId = ref(null)
 const savedDescriptionSaveTimers = new Map()
 const loadedWorkflowCache = new Map()
+let workflowSelectionClickTimer = null
 
 // ========== 工作流模板数据 ==========
 const templates = ref([])
@@ -584,7 +585,23 @@ function toggleWorkflow(workflow) {
   selectedId.value = selectedId.value === workflow.id ? null : workflow.id
 }
 
+function clearWorkflowSelectionClickTimer() {
+  if (workflowSelectionClickTimer) {
+    clearTimeout(workflowSelectionClickTimer)
+    workflowSelectionClickTimer = null
+  }
+}
+
+function handleWorkflowClick(workflow) {
+  clearWorkflowSelectionClickTimer()
+  workflowSelectionClickTimer = setTimeout(() => {
+    workflowSelectionClickTimer = null
+    toggleWorkflow(workflow)
+  }, 200)
+}
+
 function clearSelectedWorkflowDetails() {
+  clearWorkflowSelectionClickTimer()
   selectedId.value = null
   selectedHistoryId.value = null
 }
@@ -615,6 +632,11 @@ async function handleLoadMyWorkflow(workflow) {
     loading.value = false
     isLoadingWorkflow = false
   }
+}
+
+function handleLoadMyWorkflowFromDoubleClick(workflow) {
+  clearWorkflowSelectionClickTimer()
+  handleLoadMyWorkflow(workflow)
 }
 
 async function persistSavedWorkflowDescription(workflow) {
@@ -707,6 +729,14 @@ function toggleHistoryWorkflow(workflow) {
   selectedHistoryId.value = selectedHistoryId.value === workflow.id ? null : workflow.id
 }
 
+function handleHistoryWorkflowClick(workflow) {
+  clearWorkflowSelectionClickTimer()
+  workflowSelectionClickTimer = setTimeout(() => {
+    workflowSelectionClickTimer = null
+    toggleHistoryWorkflow(workflow)
+  }, 200)
+}
+
 // 加载历史工作流到画布
 function handleLoadHistoryWorkflow(historyWorkflow) {
   try {
@@ -726,6 +756,11 @@ function handleLoadHistoryWorkflow(historyWorkflow) {
     console.error('[WorkflowPanel] 恢复历史工作流失败:', error)
     alert('恢复失败：' + error.message)
   }
+}
+
+function handleLoadHistoryWorkflowFromDoubleClick(workflow) {
+  clearWorkflowSelectionClickTimer()
+  handleLoadHistoryWorkflow(workflow)
 }
 
 // 清空所有历史
@@ -993,6 +1028,7 @@ watch(() => props.visible, async (visible) => {
     }, 280)
   } else {
     isContentReady.value = false
+    clearWorkflowSelectionClickTimer()
 
     // 停止团队空间实时同步
     stopTeamSync()
@@ -1013,6 +1049,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
+  clearWorkflowSelectionClickTimer()
   clearSavedDescriptionTimers()
 
   // 停止团队空间实时同步
@@ -1223,8 +1260,8 @@ defineExpose({
                         class="workflow-item tree-item"
                         :class="{ selected: selectedId === workflow.id }"
                         draggable="true"
-                        @click.stop="toggleWorkflow(workflow)"
-                        @dblclick="handleLoadMyWorkflow(workflow)"
+                        @click.stop="handleWorkflowClick(workflow)"
+                        @dblclick.stop.prevent="handleLoadMyWorkflowFromDoubleClick(workflow)"
                         @dragstart="handleDragStart($event, workflow)"
                         @dragend="handleDragEnd"
                       >
@@ -1349,8 +1386,8 @@ defineExpose({
                     class="workflow-item history-item"
                     :class="{ selected: selectedHistoryId === workflow.id }"
                     draggable="true"
-                    @click.stop="toggleHistoryWorkflow(workflow)"
-                    @dblclick="handleLoadHistoryWorkflow(workflow)"
+                    @click.stop="handleHistoryWorkflowClick(workflow)"
+                    @dblclick.stop.prevent="handleLoadHistoryWorkflowFromDoubleClick(workflow)"
                     @dragstart="handleHistoryDragStart($event, workflow)"
                     @dragend="handleDragEnd"
                   >

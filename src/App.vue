@@ -34,7 +34,9 @@ const icpConfig = ref({
   icp_number: '',
   icp_link: 'https://beian.miit.gov.cn/',
   icp_license_number: '',
-  icp_license_link: 'https://dxzhgl.miit.gov.cn/'
+  icp_license_link: 'https://dxzhgl.miit.gov.cn/',
+  network_culture_license: '',
+  broadcast_license: ''
 })
 
 // 切换主题
@@ -214,7 +216,7 @@ async function copyInviteLink() {
 }
 const isCommunityLandingPage = computed(() => route.path === '/' && import.meta.env.VITE_LANDING_MODE === '1')
 const isCommunityPage = computed(() => route.path.startsWith('/community') || isCommunityLandingPage.value)
-const hasIcpFooterLinks = computed(() => Boolean(icpConfig.value.icp_number || icpConfig.value.icp_license_number))
+const hasIcpFooterLinks = computed(() => Boolean(icpConfig.value.icp_number || icpConfig.value.icp_license_number || icpConfig.value.network_culture_license || icpConfig.value.broadcast_license))
 const isIcpFooterVisible = computed(() => {
   const isStandaloneSurface = route.path === '/canvas' || route.path === '/workflows' || route.name === 'communityWorkflow'
   const isThreeDLandingPage = route.path === '/' && !isCommunityLandingPage.value
@@ -668,6 +670,30 @@ const isIcpFooterVisible = computed(() => {
       >
         {{ icpConfig.icp_license_number }}
       </a>
+      <span
+        v-if="(icpConfig.icp_number || icpConfig.icp_license_number) && icpConfig.network_culture_license"
+        class="mx-2 text-xs"
+        :class="isCommunityPage ? 'text-white/30' : 'text-slate-400 dark:text-slate-600'"
+      >/</span>
+      <span
+        v-if="icpConfig.network_culture_license"
+        class="text-xs"
+        :class="isCommunityPage ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'"
+      >
+        {{ icpConfig.network_culture_license }}
+      </span>
+      <span
+        v-if="(icpConfig.icp_number || icpConfig.icp_license_number || icpConfig.network_culture_license) && icpConfig.broadcast_license"
+        class="mx-2 text-xs"
+        :class="isCommunityPage ? 'text-white/30' : 'text-slate-400 dark:text-slate-600'"
+      >/</span>
+      <span
+        v-if="icpConfig.broadcast_license"
+        class="text-xs"
+        :class="isCommunityPage ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'"
+      >
+        {{ icpConfig.broadcast_license }}
+      </span>
     </footer>
   </div>
 </template>

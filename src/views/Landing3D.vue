@@ -115,6 +115,14 @@
         >
           {{ icpConfig.icp_license_number }}
         </a>
+        <span v-if="(icpConfig.icp_number || icpConfig.icp_license_number) && icpConfig.network_culture_license" class="icp-separator">/</span>
+        <span v-if="icpConfig.network_culture_license" class="icp-link">
+          {{ icpConfig.network_culture_license }}
+        </span>
+        <span v-if="(icpConfig.icp_number || icpConfig.icp_license_number || icpConfig.network_culture_license) && icpConfig.broadcast_license" class="icp-separator">/</span>
+        <span v-if="icpConfig.broadcast_license" class="icp-link">
+          {{ icpConfig.broadcast_license }}
+        </span>
       </footer>
     </div>
 
@@ -401,9 +409,11 @@ const icpConfig = ref({
   icp_number: '',
   icp_link: 'https://beian.miit.gov.cn/',
   icp_license_number: '',
-  icp_license_link: 'https://dxzhgl.miit.gov.cn/'
+  icp_license_link: 'https://dxzhgl.miit.gov.cn/',
+  network_culture_license: '',
+  broadcast_license: ''
 })
-const hasIcpFooterLinks = computed(() => Boolean(icpConfig.value.icp_number || icpConfig.value.icp_license_number))
+const hasIcpFooterLinks = computed(() => Boolean(icpConfig.value.icp_number || icpConfig.value.icp_license_number || icpConfig.value.network_culture_license || icpConfig.value.broadcast_license))
 const emailCode = ref('')
 const sendingCode = ref(false)
 const codeSent = ref(false)

@@ -20,8 +20,38 @@ assert.match(
 
 assert.match(
   source,
-  /class="column-content"[\s\S]*?@click="clearSelectedWorkflowDetails"[\s\S]*?class="workflow-item history-item"[\s\S]*?@click\.stop="toggleHistoryWorkflow\(workflow\)"[\s\S]*?@dblclick="handleLoadHistoryWorkflow\(workflow\)"/,
-  'History list should clear on column background clicks, stop item clicks, and keep double-click loading'
+  /function clearWorkflowSelectionClickTimer\(\) \{[\s\S]*?clearTimeout\(workflowSelectionClickTimer\)[\s\S]*?workflowSelectionClickTimer = null[\s\S]*?\n\}/,
+  'Workflow panel should be able to cancel delayed single-click selection before double-click loading'
+)
+
+assert.match(
+  source,
+  /function handleWorkflowClick\(workflow\) \{[\s\S]*?clearWorkflowSelectionClickTimer\(\)[\s\S]*?workflowSelectionClickTimer = setTimeout\(\(\) => \{[\s\S]*?toggleWorkflow\(workflow\)[\s\S]*?\}, 200\)[\s\S]*?\n\}/,
+  'Saved workflow single-click selection should be delayed so double-click can load before DOM changes'
+)
+
+assert.match(
+  source,
+  /function handleHistoryWorkflowClick\(workflow\) \{[\s\S]*?clearWorkflowSelectionClickTimer\(\)[\s\S]*?workflowSelectionClickTimer = setTimeout\(\(\) => \{[\s\S]*?toggleHistoryWorkflow\(workflow\)[\s\S]*?\}, 200\)[\s\S]*?\n\}/,
+  'History workflow single-click selection should be delayed so double-click can load before DOM changes'
+)
+
+assert.match(
+  source,
+  /function handleLoadMyWorkflowFromDoubleClick\(workflow\) \{[\s\S]*?clearWorkflowSelectionClickTimer\(\)[\s\S]*?handleLoadMyWorkflow\(workflow\)[\s\S]*?\n\}/,
+  'Saved workflow double-click loading should cancel pending single-click selection'
+)
+
+assert.match(
+  source,
+  /function handleLoadHistoryWorkflowFromDoubleClick\(workflow\) \{[\s\S]*?clearWorkflowSelectionClickTimer\(\)[\s\S]*?handleLoadHistoryWorkflow\(workflow\)[\s\S]*?\n\}/,
+  'History workflow double-click loading should cancel pending single-click selection'
+)
+
+assert.match(
+  source,
+  /class="column-content"[\s\S]*?@click="clearSelectedWorkflowDetails"[\s\S]*?class="workflow-item history-item"[\s\S]*?@click\.stop="handleHistoryWorkflowClick\(workflow\)"[\s\S]*?@dblclick\.stop\.prevent="handleLoadHistoryWorkflowFromDoubleClick\(workflow\)"/,
+  'History list should clear on column background clicks, stop item clicks, delay selection, and prevent double-click default while loading'
 )
 
 assert.match(

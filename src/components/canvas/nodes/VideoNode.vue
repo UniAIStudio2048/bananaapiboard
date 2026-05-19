@@ -136,7 +136,7 @@ function getDisplayErrorMessage(msg) {
   if (props.data?._preserveRawVideoError) {
     return typeof message === 'string' && message.trim() ? message.trim() : '生成失败'
   }
-  return formatVideoNodeErrorMessage(message)
+  return formatVideoNodeErrorMessage(message, { model: props.data?.model || selectedModel.value })
 }
 
 function getTaskVideoModel(task = {}) {
@@ -4057,9 +4057,10 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
     throw new Error('未获取到生成结果')
   } catch (error) {
     console.error(`[VideoNode] 任务 ${taskIndex + 1} 失败:`, error)
+    const model = capturedState.model || selectedModel.value
     canvasStore.updateNodeData(nodeId, {
       status: 'error',
-      error: formatVideoNodeErrorMessage(error.message)
+      error: formatVideoNodeErrorMessage(error.message, { model })
     })
     return null
   }
@@ -4378,10 +4379,11 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       showAlert(error.message, '并发限制')
       return
     }
-    errorMessage.value = formatVideoNodeErrorMessage(error.message || '生成失败')
+    const model = capturedState.model || selectedModel.value
+    errorMessage.value = formatVideoNodeErrorMessage(error.message || '生成失败', { model })
     canvasStore.updateNodeData(targetNodeId, {
       status: 'error',
-      error: formatVideoNodeErrorMessage(error.message)
+      error: formatVideoNodeErrorMessage(error.message, { model })
     })
   } finally {
     if (submitFingerprint) {
@@ -4518,6 +4520,7 @@ async function handleGenerate(options = {}) {
   // 快照当前状态，供后台任务使用
   const capturedState = {
     nodeId: props.id,
+    model: selectedModel.value,
     isSeedance2: isSeedance2Model.value,
     isSeedanceOpenApiPro: isSeedanceOpenApiProModel.value,
     characterAssetUris: upstreamData.characterAssetUris || [],

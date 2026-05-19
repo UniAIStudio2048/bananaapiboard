@@ -55,6 +55,16 @@ test('keeps raw async seedance errors including request id', () => {
   assert.equal(formatVideoNodeAsyncErrorMessage(raw, 'doubao-seedance-2-0', { includeNoChargeNotice: true }), `${raw}，未扣除积分`)
 })
 
+test('keeps seedance content safety request id in canvas submit errors', () => {
+  const requestId = '02177915339841700000000000000000000ffffac1566a5e16bd6'
+  const raw = `The request failed because the output video may contain sensitive information. Request id: ${requestId}`
+
+  assert.equal(
+    formatVideoNodeErrorMessage(raw, { includeNoChargeNotice: true, model: 'doubao-seedance-2-0-260128' }),
+    `生成的视频可能包含敏感内容，已被内容安全系统拦截，请修改提示词后重试。Request id: ${requestId}，未扣除积分`
+  )
+})
+
 test('formats async non-seedance errors with the default formatter', () => {
   const raw = '视频生成失败。Request id: 0217775348023375ab88183db28c1bc6b9ad1d3f70c5b50e3c749'
 

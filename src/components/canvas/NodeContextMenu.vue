@@ -744,6 +744,8 @@ const newGroupName = ref('')
 const newGroupInputRef = ref(null)
 const characterName = ref('')
 const characterNameRef = ref(null)
+const activeProvider = ref('')
+const isSeedanceOpenApiProProvider = computed(() => activeProvider.value === 'seedance_openapi_pro')
 
 async function openSeedanceDialog() {
   if (!isImageNodeWithOutput.value) return
@@ -757,8 +759,9 @@ async function openSeedanceDialog() {
   try {
     // 直接从后端获取当前用户拥有的分组（后端已做租户+用户级隔离）
     const result = await listAssetGroups({ pageSize: 100 })
+    activeProvider.value = result.activeProvider || ''
     seedanceGroups.value = result.groups || []
-    if (seedanceGroups.value.length === 0) {
+    if (!isSeedanceOpenApiProProvider.value && seedanceGroups.value.length === 0) {
       showNewGroupInput.value = true
     }
   } catch (error) {
@@ -776,6 +779,7 @@ function closeSeedanceDialog() {
   newGroupName.value = ''
   characterName.value = ''
   seedanceGroups.value = []
+  activeProvider.value = ''
   emit('close')
 }
 
@@ -787,6 +791,11 @@ function toggleNewGroupInput() {
 }
 
 async function createNewGroupAndAsset() {
+  if (isSeedanceOpenApiProProvider.value) {
+    selectGroupAndCreate('seedance-openapi-pro-default')
+    return
+  }
+
   const groupNameVal = newGroupName.value.trim()
   if (!groupNameVal) return
   
@@ -808,9 +817,10 @@ async function createNewGroupAndAsset() {
     const groupId = groupResult.group?.Id || groupResult.Id
     if (!groupId) throw new Error('创建分组返回数据异常')
     
+    const providerType = activeProvider.value
     closeSeedanceDialog()
     showToast('已提交 Seedance 角色创建，后台处理中...', 'info')
-    createSeedanceCharacterAsync(groupId, url, charName)
+    createSeedanceCharacterAsync(groupId, url, charName, providerType)
   } catch (error) {
     console.error('[Seedance] 创建分组失败:', error)
     showToast('创建分组失败：' + (error.message || '未知错误'), 'error')
@@ -831,12 +841,13 @@ function selectGroupAndCreate(groupId) {
     return
   }
 
+  const providerType = activeProvider.value
   closeSeedanceDialog()
   showToast('已提交 Seedance 角色创建，后台处理中...', 'info')
-  createSeedanceCharacterAsync(groupId, url, charName)
+  createSeedanceCharacterAsync(groupId, url, charName, providerType)
 }
 
-async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
+async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType = activeProvider.value) {
   const sourceNode = props.node
 
   try {
@@ -854,20 +865,26 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
     
     const assetId = assetResult.asset?.Id || assetResult.Id
     if (!assetId) throw new Error('创建角色资产返回数据异常')
+    const isOpenApiPro = providerType === 'seedance_openapi_pro'
+    const faceCode = assetResult.asset?.FaceCode || assetResult.asset?.faceCode || assetResult.FaceCode || assetResult.faceCode || assetId
+    const savedAssetUrl = isOpenApiPro ? `face:${faceCode}` : `asset://${assetId}`
+    const initialStatus = isOpenApiPro ? (assetResult.asset?.Status || assetResult.Status || 'pending') : 'Processing'
     
     const spaceParams = teamStore.getSpaceParams('current')
     let canvasAssetId = null
     try {
       const saved = await saveAsset({
-        type: 'seedance-character',
+        type: isOpenApiPro ? 'seedance-openapi-pro-character' : 'seedance-character',
         name: name,
-        url: `asset://${assetId}`,
+        url: savedAssetUrl,
         thumbnail_url: url,
         metadata: {
           assetId,
+          faceCode: isOpenApiPro ? faceCode : undefined,
           groupId,
-          status: 'Processing',
-          assetType: 'Image'
+          status: initialStatus,
+          assetType: 'Image',
+          providerType: isOpenApiPro ? 'seedance_openapi_pro' : undefined
         },
         spaceType: spaceParams.spaceType,
         teamId: spaceParams.teamId
@@ -875,6 +892,34 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
       canvasAssetId = saved.asset?.id || saved.id
     } catch (e) {
       console.error('[Seedance] 保存到本地资产库失败:', e)
+    }
+
+    if (isOpenApiPro) {
+      showToast('Seedance 角色已提交审核', 'success')
+
+      const { position, size } = getSeedanceCharacterNodeLayout(sourceNode)
+      canvasStore.addNode({
+        type: 'seedance-character',
+        position,
+        data: {
+          title: name || 'Seedance角色',
+          assetId,
+          assetUri: savedAssetUrl,
+          assetUrl: url,
+          faceCode,
+          groupId,
+          assetName: name,
+          status: initialStatus,
+          assetType: 'Image',
+          width: size.width,
+          height: size.height,
+          output: {
+            type: 'image',
+            url: savedAssetUrl
+          }
+        }
+      })
+      return
     }
     
     const { promise } = pollAssetStatus(assetId, {
@@ -890,9 +935,11 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
         await updateLocalAsset(canvasAssetId, {
           metadata: {
             assetId: finalAsset.Id || assetId,
+            faceCode: isOpenApiPro ? (finalAsset.FaceCode || finalAsset.faceCode || faceCode) : undefined,
             groupId: finalAsset.GroupId || groupId,
             status: finalAsset.Status || 'Active',
             assetType: finalAsset.AssetType || 'Image',
+            providerType: isOpenApiPro ? 'seedance_openapi_pro' : undefined,
             projectName: finalAsset.ProjectName,
             createTime: finalAsset.CreateTime,
             updateTime: finalAsset.UpdateTime
@@ -907,6 +954,8 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
 
     if (finalAsset.Status === 'Active') {
       const { position, size } = getSeedanceCharacterNodeLayout(sourceNode)
+      const finalFaceCode = finalAsset.FaceCode || finalAsset.faceCode || faceCode
+      const finalAssetUri = isOpenApiPro ? `face:${finalFaceCode}` : `asset://${finalAsset.Id || assetId}`
 
       canvasStore.addNode({
         type: 'seedance-character',
@@ -914,8 +963,9 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
         data: {
           title: finalAsset.Name || name || 'Seedance角色',
           assetId: finalAsset.Id || assetId,
-          assetUri: `asset://${finalAsset.Id || assetId}`,
+          assetUri: finalAssetUri,
           assetUrl: finalAsset.URL || url,
+          faceCode: isOpenApiPro ? finalFaceCode : undefined,
           groupId: finalAsset.GroupId || groupId,
           assetName: finalAsset.Name || name,
           status: 'Active',
@@ -924,7 +974,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name) {
           height: size.height,
           output: {
             type: 'image',
-            url: finalAsset.URL || url
+            url: isOpenApiPro ? `face:${finalFaceCode}` : (finalAsset.URL || url)
           }
         }
       })
@@ -1181,7 +1231,7 @@ function handleMenuClick(event) {
             </div>
             
             <!-- 创建新分组 -->
-            <div class="seedance-new-group">
+            <div v-if="!isSeedanceOpenApiProProvider" class="seedance-new-group">
               <div 
                 v-if="!showNewGroupInput && seedanceGroups.length > 0"
                 class="seedance-group-item seedance-create-btn"
