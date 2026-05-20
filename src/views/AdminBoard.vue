@@ -53,6 +53,8 @@ const batchVoucherForm = ref({
 const showVoucherRedemptionsModal = ref(false)
 const currentVoucherRedemptions = ref([])
 const currentVoucher = ref(null)
+const selectedVoucherIds = ref([])
+const deletingVouchers = ref(false)
 
 // 优惠券管理
 const coupons = ref([])
@@ -531,6 +533,7 @@ async function loadVouchers() {
     const j = await r.json()
     vouchers.value = j.vouchers || []
     vouchersTotal.value = j.total || 0
+    selectedVoucherIds.value = []
   } catch (e) {
     error.value = '加载兑换券列表失败'
   } finally {
@@ -736,6 +739,65 @@ async function deleteVoucher(voucherId) {
     setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
     error.value = '删除兑换券失败'
+  }
+}
+
+function isVoucherSelected(voucherId) {
+  return selectedVoucherIds.value.some((id) => String(id) === String(voucherId))
+}
+
+const allVouchersOnPageSelected = computed(() => {
+  if (vouchers.value.length === 0) return false
+  return vouchers.value.every((v) => isVoucherSelected(v.id))
+})
+
+function toggleSelectAllVouchersOnPage() {
+  if (allVouchersOnPageSelected.value) {
+    const pageIds = new Set(vouchers.value.map((v) => String(v.id)))
+    selectedVoucherIds.value = selectedVoucherIds.value.filter((id) => !pageIds.has(String(id)))
+    return
+  }
+  const merged = new Map(selectedVoucherIds.value.map((id) => [String(id), id]))
+  for (const v of vouchers.value) {
+    merged.set(String(v.id), v.id)
+  }
+  selectedVoucherIds.value = [...merged.values()]
+}
+
+function toggleVoucherSelection(voucherId) {
+  if (isVoucherSelected(voucherId)) {
+    selectedVoucherIds.value = selectedVoucherIds.value.filter((id) => String(id) !== String(voucherId))
+  } else {
+    selectedVoucherIds.value = [...selectedVoucherIds.value, voucherId]
+  }
+}
+
+async function deleteSelectedVouchers() {
+  if (selectedVoucherIds.value.length === 0) return
+  if (!confirm(`确定要删除选中的 ${selectedVoucherIds.value.length} 张兑换券吗？`)) return
+
+  deletingVouchers.value = true
+  error.value = ''
+  try {
+    const r = await fetchWithAdminAuth('/api/admin/vouchers/batch-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: selectedVoucherIds.value })
+    })
+    if (!r) return
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}))
+      throw new Error(err.error || err.message || '批量删除失败')
+    }
+    const j = await r.json()
+    success.value = `已删除 ${j.deleted ?? selectedVoucherIds.value.length} 张兑换券`
+    selectedVoucherIds.value = []
+    await loadVouchers()
+    setTimeout(() => { success.value = '' }, 3000)
+  } catch (e) {
+    error.value = e.message || '批量删除兑换券失败'
+  } finally {
+    deletingVouchers.value = false
   }
 }
 
@@ -2017,6 +2079,15 @@ onUnmounted(() => {
           </div>
           
           <div class="flex space-x-3">
+            <button
+              @click="deleteSelectedVouchers"
+              :disabled="deletingVouchers || selectedVoucherIds.length === 0"
+              class="flex items-center space-x-2 px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :title="selectedVoucherIds.length === 0 ? '请先在列表中勾选要删除的兑换券' : ''"
+            >
+              <span>🗑️</span>
+              <span>{{ deletingVouchers ? '删除中...' : selectedVoucherIds.length > 0 ? `批量删除 (${selectedVoucherIds.length})` : '批量删除' }}</span>
+            </button>
             <button 
               @click="exportFilteredVouchers"
               class="btn-secondary flex items-center space-x-2"
@@ -2168,6 +2239,9 @@ onUnmounted(() => {
           </div>
           <div v-else class="text-sm text-slate-500 dark:text-slate-400">
             共 {{ vouchersTotal }} 张兑换券
+            <span v-if="selectedVoucherIds.length > 0" class="ml-2 text-red-600 dark:text-red-400">
+              已选 {{ selectedVoucherIds.length }} 张
+            </span>
           </div>
         </div>
 
@@ -2183,6 +2257,14 @@ onUnmounted(() => {
           <table class="w-full text-sm">
             <thead class="bg-slate-50 dark:bg-dark-600">
               <tr>
+                <th class="px-4 py-3 text-left w-10">
+                  <input
+                    type="checkbox"
+                    :checked="allVouchersOnPageSelected"
+                    @change="toggleSelectAllVouchersOnPage"
+                    class="rounded border-slate-300 dark:border-dark-500"
+                  />
+                </th>
                 <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">兑换码</th>
                 <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">积分</th>
                 <th class="px-4 py-3 text-left text-slate-700 dark:text-slate-300 font-semibold">余额</th>
@@ -2199,6 +2281,14 @@ onUnmounted(() => {
                 :key="voucher.id"
                 class="border-t border-slate-200 dark:border-dark-600 hover:bg-slate-50 dark:hover:bg-dark-600 transition-colors"
               >
+                <td class="px-4 py-3">
+                  <input
+                    type="checkbox"
+                    :checked="isVoucherSelected(voucher.id)"
+                    @change="toggleVoucherSelection(voucher.id)"
+                    class="rounded border-slate-300 dark:border-dark-500"
+                  />
+                </td>
                 <td class="px-4 py-3">
                   <code class="px-2 py-1 bg-slate-100 dark:bg-dark-700 rounded text-primary-600 dark:text-primary-400 font-mono">
                     {{ voucher.code }}

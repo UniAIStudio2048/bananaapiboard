@@ -207,14 +207,14 @@
             <input
               v-model="voucherCode"
               type="text"
-              placeholder="请输入13位兑换码"
+              placeholder="请输入12位兑换码"
               maxlength="13"
               class="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-dark-500 bg-white dark:bg-dark-600 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
               @keyup.enter="submitVoucher"
             />
             <div class="mt-2 space-y-2">
               <p class="text-xs text-slate-500 dark:text-slate-400">
-                兑换券为13位大写字母和数字组合
+                兑换券为12位大写字母
               </p>
               <div class="p-2.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                 <p class="text-xs text-blue-700 dark:text-blue-300 flex items-start gap-1.5">

@@ -4458,12 +4458,12 @@ onUnmounted(() => {
               v-model="voucherCode"
               type="text"
               class="input w-full uppercase"
-              placeholder="请输入13位兑换码"
+              placeholder="请输入12位兑换码"
               maxlength="13"
               :disabled="voucherLoading"
             />
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              兑换码为13位大写字母和数字组合
+              兑换码为12位大写字母
             </p>
           </div>
           
