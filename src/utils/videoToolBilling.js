@@ -54,10 +54,9 @@ export function normalizeSubtitleEraseMode(mode = 'subtitle_all_area') {
 
 /** 与后端一致：按 masks 里的 configured 判断（不向浏览器下发明文密钥） */
 export function pickSubtitleEraseChannelFromMasked(config) {
-  if (!config?.enabled) return null
-  const order = config.priorityFirst === 'volcengine' ? ['volcengine', 'wuhenai'] : ['wuhenai', 'volcengine']
+  const order = config?.priorityFirst === 'volcengine' ? ['volcengine', 'wuhenai'] : ['wuhenai', 'volcengine']
   for (const id of order) {
-    const ch = config[id]
+    const ch = config?.[id]
     if (ch?.enabled && ch?.configured) return { id, channel: ch }
   }
   return null

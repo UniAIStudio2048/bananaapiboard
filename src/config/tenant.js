@@ -1807,13 +1807,22 @@ export const refreshBrandConfig = async () => {
 }
 
 // 生成带租户标识的请求头
-// 重要：始终优先使用环境变量的租户配置，确保多租户隔离
 export const getTenantHeaders = () => {
-  // 优先使用环境变量的配置（通过 envConfig）
-  // 这是在模块加载时从 import.meta.env 读取的
-  const tenantId = envConfig.tenantId
-  const tenantKey = envConfig.tenantKey
-  
+  // 构建时 .env 中的租户凭证优先，避免 localStorage 残留导致远程租户请求错租户配置
+  let tenantId = envConfig.tenantId || config.tenantId
+  let tenantKey = envConfig.tenantKey || config.tenantKey
+
+  try {
+    const systemConfig = localStorage.getItem('system_config')
+    if (systemConfig) {
+      const parsed = JSON.parse(systemConfig)
+      if (!envConfig.tenantId && parsed.tenantId) tenantId = parsed.tenantId
+      if (!envConfig.tenantKey && parsed.tenantKey) tenantKey = parsed.tenantKey
+    }
+  } catch {
+    // ignore parse errors
+  }
+
   return {
     'X-Tenant-ID': tenantId,
     'X-Tenant-Key': tenantKey

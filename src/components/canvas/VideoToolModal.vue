@@ -392,12 +392,36 @@ function getTaskId(payload) {
   return payload?.taskId || payload?.task_id || payload?.id
 }
 
+function computeLocalEstimate() {
+  if (activeMode.value !== 'subtitle' || normalizedClips.value.length === 0 || !subtitleConfig.value) {
+    return null
+  }
+  return estimateSubtitleEraseBilling({
+    totalSeconds: totalSeconds.value,
+    config: subtitleConfig.value,
+    mode: eraseMode.value
+  })
+}
+
+async function ensureSubtitleConfigLoaded() {
+  if (subtitleConfig.value) return subtitleConfig.value
+  try {
+    subtitleConfig.value = await getSubtitleEraseConfig()
+  } catch {
+    subtitleConfig.value = null
+  }
+  return subtitleConfig.value
+}
+
 async function refreshEstimate() {
   if (activeMode.value !== 'subtitle' || normalizedClips.value.length === 0) {
     estimate.value = null
     statusText.value = normalizedClips.value.length === 0 ? '添加视频后开始处理' : '剪辑导出'
     return
   }
+
+  await ensureSubtitleConfigLoaded()
+  const localEstimate = computeLocalEstimate()
 
   try {
     estimate.value = await estimateSubtitleErase({
@@ -406,13 +430,21 @@ async function refreshEstimate() {
       detectRect: isSelectionEraseMode.value ? detectRect.value : undefined
     })
     statusText.value = activeEraseOption.value.label
-  } catch {
-    estimate.value = estimateSubtitleEraseBilling({
+    return
+  } catch (error) {
+    if (localEstimate?.pointsCost > 0) {
+      estimate.value = localEstimate
+      statusText.value = '本地预估'
+      return
+    }
+    estimate.value = localEstimate || {
       totalSeconds: totalSeconds.value,
-      config: subtitleConfig.value,
-      mode: eraseMode.value
-    })
-    statusText.value = '本地预估'
+      billedMinutes: Math.max(1, Math.ceil(totalSeconds.value / 60)),
+      billingUnit: 'minute',
+      pointsPerSecond: 0,
+      pointsCost: 0
+    }
+    statusText.value = error?.message || '无法预估积分，请检查字幕擦除配置'
   }
 }
 
@@ -483,12 +515,8 @@ function handleGlobalClick(e) {
 onMounted(async () => {
   window.addEventListener('keydown', handleKeydown, true)
   window.addEventListener('click', handleGlobalClick, true)
+  await ensureSubtitleConfigLoaded()
   if (props.initialSource) addSourceToTimeline(props.initialSource)
-  try {
-    subtitleConfig.value = await getSubtitleEraseConfig()
-  } catch {
-    subtitleConfig.value = null
-  }
   refreshEstimate()
 })
 

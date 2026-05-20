@@ -71,6 +71,25 @@ test('pickSubtitleEraseChannel falls back when priority channel not configured',
   assert.equal(pickSubtitleEraseChannelFromMasked(cfg).id, 'wuhenai')
 })
 
+test('estimateSubtitleEraseBilling works when master switch off but channel configured', () => {
+  const cfg = {
+    enabled: false,
+    priorityFirst: 'wuhenai',
+    wuhenai: {
+      enabled: true,
+      configured: true,
+      subtitleAllAreaPointsPerSecond: 2,
+      subtitleSelAreaPointsPerSecond: 0,
+      watermarkAllAreaPointsPerSecond: 0,
+      watermarkSelAreaPointsPerSecond: 0
+    },
+    volcengine: { enabled: false, configured: false }
+  }
+  const est = estimateSubtitleEraseBilling({ totalSeconds: 10, config: cfg, mode: 'subtitle_all_area' })
+  assert.equal(est.pointsCost, 20)
+  assert.equal(est.channel, 'wuhenai')
+})
+
 test('estimateSubtitleEraseBilling uses picked channel rates', () => {
   const cfg = {
     enabled: true,
