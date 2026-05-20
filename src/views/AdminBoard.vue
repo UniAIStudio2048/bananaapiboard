@@ -40,6 +40,7 @@ const vouchersPage = ref(1)
 const vouchersPageSize = ref(20)
 const voucherStatus = ref('')
 const loadingVouchers = ref(false)
+let vouchersLoadSeq = 0
 const showBatchVoucherModal = ref(false)
 const batchVoucherForm = ref({
   count: 10,
@@ -187,7 +188,7 @@ const listRangeEnd = computed(() => Math.min(page.value * pageSize.value, total.
 async function fetchWithAdminAuth(url, opts = {}) {
   const t = localStorage.getItem('token') || ''
   const h = { ...getTenantHeaders(), ...(opts.headers || {}), Authorization: `Bearer ${t}` }
-  const r = await fetch(getApiUrl(url), { ...opts, headers: h })
+  const r = await fetch(getApiUrl(url), { cache: 'no-store', ...opts, headers: h })
   if (r.status === 401) {
     router.push('/')
     return null
@@ -501,11 +502,13 @@ async function saveSettings() {
 
 // 兑换券相关方法
 async function loadVouchers() {
+  const seq = ++vouchersLoadSeq
   loadingVouchers.value = true
   try {
     const params = new URLSearchParams({
       page: String(vouchersPage.value),
       pageSize: String(vouchersPageSize.value),
+      _t: String(Date.now()),
       ...(voucherStatus.value ? { status: voucherStatus.value } : {})
     })
     
@@ -529,15 +532,21 @@ async function loadVouchers() {
     
     const r = await fetchWithAdminAuth(`/api/admin/vouchers?${params.toString()}`)
     if (!r) return
+    if (seq !== vouchersLoadSeq) return
     if (!r.ok) throw new Error('failed')
     const j = await r.json()
+    if (seq !== vouchersLoadSeq) return
     vouchers.value = j.vouchers || []
     vouchersTotal.value = j.total || 0
     selectedVoucherIds.value = []
   } catch (e) {
-    error.value = '加载兑换券列表失败'
+    if (seq === vouchersLoadSeq) {
+      error.value = '加载兑换券列表失败'
+    }
   } finally {
-    loadingVouchers.value = false
+    if (seq === vouchersLoadSeq) {
+      loadingVouchers.value = false
+    }
   }
 }
 
@@ -734,6 +743,9 @@ async function deleteVoucher(voucherId) {
     if (!r) return
     if (!r.ok) throw new Error('删除失败')
     
+    vouchers.value = vouchers.value.filter((v) => String(v.id) !== String(voucherId))
+    vouchersTotal.value = Math.max(0, vouchersTotal.value - 1)
+    selectedVoucherIds.value = selectedVoucherIds.value.filter((id) => String(id) !== String(voucherId))
     success.value = '兑换券已删除'
     await loadVouchers()
     setTimeout(() => { success.value = '' }, 3000)
@@ -776,22 +788,38 @@ async function deleteSelectedVouchers() {
   if (selectedVoucherIds.value.length === 0) return
   if (!confirm(`确定要删除选中的 ${selectedVoucherIds.value.length} 张兑换券吗？`)) return
 
+  const idsToDelete = [...selectedVoucherIds.value]
+  const deleteIdSet = new Set(idsToDelete.map((id) => String(id)))
+
   deletingVouchers.value = true
   error.value = ''
   try {
     const r = await fetchWithAdminAuth('/api/admin/vouchers/batch-delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: selectedVoucherIds.value })
+      body: JSON.stringify({ ids: idsToDelete })
     })
     if (!r) return
+    const j = await r.json().catch(() => ({}))
     if (!r.ok) {
-      const err = await r.json().catch(() => ({}))
-      throw new Error(err.error || err.message || '批量删除失败')
+      throw new Error(j.error || j.message || '批量删除失败')
     }
-    const j = await r.json()
-    success.value = `已删除 ${j.deleted ?? selectedVoucherIds.value.length} 张兑换券`
+
+    const deletedCount = Number(j.deleted)
+    if (!Number.isFinite(deletedCount) || deletedCount <= 0) {
+      throw new Error('未能删除任何兑换券，请刷新页面后重试')
+    }
+
+    vouchers.value = vouchers.value.filter((v) => !deleteIdSet.has(String(v.id)))
+    vouchersTotal.value = Math.max(0, vouchersTotal.value - deletedCount)
     selectedVoucherIds.value = []
+
+    if (deletedCount < idsToDelete.length) {
+      success.value = `已删除 ${deletedCount} 张兑换券，${idsToDelete.length - deletedCount} 张未找到`
+    } else {
+      success.value = `已删除 ${deletedCount} 张兑换券`
+    }
+
     await loadVouchers()
     setTimeout(() => { success.value = '' }, 3000)
   } catch (e) {
