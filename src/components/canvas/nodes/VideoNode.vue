@@ -24,7 +24,7 @@ import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
-import { getHighQualityCanvasPreviewUrl, getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl, onCanvasImageError, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { isModelReferenceMediaUrl, isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
@@ -63,6 +63,7 @@ import {
 import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
 import { exportVideoTimeline, getSubtitleEraseTask } from '@/api/canvas/video-tools'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
+import CanvasNodeImage from '@/components/canvas/CanvasNodeImage.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedanceVideoModel } from './video-error-message.js'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
@@ -86,6 +87,7 @@ const canvasStore = useCanvasStore()
 const uploadManager = useUploadManager()
 const userInfo = inject('userInfo')
 const isCanvasViewportMoving = inject('isCanvasViewportMoving', ref(false))
+const canvasStableZoom = inject('canvasStableZoom', null)
 const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
@@ -2200,7 +2202,18 @@ watch(videoPosterUrl, () => {
   videoPosterFailed.value = false
 })
 
-function handleVideoPosterError() {
+function handleVideoPosterError(event) {
+  // 先尝试用原图重试（视频封面常因 ci-process 缩略参数失败）
+  const img = event?.target
+  if (img && !img.dataset.fallbackTried) {
+    const currentSrc = img.getAttribute('src')
+    const originalSrc = getOriginalImageUrl(currentSrc)
+    if (originalSrc && originalSrc !== currentSrc) {
+      img.dataset.fallbackTried = '1'
+      img.src = originalSrc
+      return
+    }
+  }
   videoPosterFailed.value = true
 }
 
@@ -2210,8 +2223,10 @@ const previewDevicePixelRatio = computed(() => {
 })
 
 function getNodePreviewImageUrl(url) {
+  // 用稳定 zoom（去抖 220ms）计算 LOD，避免连续缩放时 src 频繁切换
+  const z = canvasStableZoom?.value ?? canvasStore.viewport?.zoom ?? 1
   return getHighQualityCanvasPreviewUrl(toSameOriginUrl(url), {
-    zoom: canvasStore.viewport?.zoom || 1,
+    zoom: z,
     nodeWidth: nodeWidth.value || 420,
     devicePixelRatio: previewDevicePixelRatio.value,
     preferLowQuality: isCanvasMediaMoving.value
@@ -3797,7 +3812,7 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
     console.log('[VideoNode] Seedance 生成声音:', audioEnabled)
   }
 
-  // Seedance 2.0 音频时长验证（API 限制单个音频 ≤ 15 秒，总时长 ≤ 15 秒）
+  // Seedance 2.0 音频时长验证（API 限制单个音频 2~15 秒，总时长 ≤ 15 秒）
   if (isSeedance2Model.value) {
     const sd2Mode = selectedSeedance2Mode.value
     if (['multimodal_ref', 'video_edit'].includes(sd2Mode)) {
@@ -3809,6 +3824,11 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
         if (!sourceNode?.data) continue
         if (['audio-input', 'audio'].includes(sourceNode.type)) {
           const dur = sourceNode.data.audioDuration
+          if (dur && dur < 2) {
+            await showAlert(`参考音频时长 ${dur.toFixed(1)} 秒，不满足 Seedance 2.0 限制（单个音频不短于 2 秒）。请更换音频后重试。`, '音频时长不足')
+            isGenerating.value = false
+            return
+          }
           if (dur && dur > 15) {
             await showAlert(`参考音频时长 ${Math.round(dur)} 秒，超过 Seedance 2.0 限制（单个音频不超过 15 秒）。请裁剪音频后重试。`, '音频时长超限')
             isGenerating.value = false
@@ -7244,7 +7264,7 @@ function handleToolbarPreview() {
             @mouseenter="onHoverStart(img, $event)"
             @mouseleave="onHoverEnd"
           >
-            <img v-if="isNodeVisible" :src="getNodePreviewImageUrl(img)" :alt="`图片 ${index + 1}`" decoding="async" />
+            <CanvasNodeImage v-if="isNodeVisible" :src="getNodePreviewImageUrl(img)" :alt="`图片 ${index + 1}`" loading="lazy" decoding="async" fetchpriority="low" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span v-if="supportsMediaTags" class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
             <button class="panel-frame-remove" @click.stop="removeReferenceImage(index)">×</button>

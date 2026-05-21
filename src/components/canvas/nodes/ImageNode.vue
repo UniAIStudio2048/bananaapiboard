@@ -34,7 +34,7 @@ import Camera3DPanel from '../Camera3DPanel.vue'
 import Pose3DViewer from '../Pose3DViewer.vue'
 import CameraControlPanel from '../CameraControlPanel.vue'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
-import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl, onCanvasImageError, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
@@ -54,6 +54,7 @@ import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PromptMediaTag from '../PromptMediaTag.vue'
+import CanvasNodeImage from '../CanvasNodeImage.vue'
 import PanoramaPreviewModal from '../PanoramaPreviewModal.vue'
 import ModelIcon from '../../common/ModelIcon.vue'
 import { smartDownload } from '@/api/client'
@@ -77,6 +78,7 @@ const uploadManager = useUploadManager()
 const teamStore = useTeamStore()
 const userInfo = inject('userInfo')
 const isCanvasViewportMoving = inject('isCanvasViewportMoving', ref(false))
+const canvasStableZoom = inject('canvasStableZoom', null)
 const { onHoverStart, onVideoHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
@@ -3750,8 +3752,10 @@ const previewDevicePixelRatio = computed(() => {
 })
 
 function getNodePreviewImageUrl(url) {
+  // 用稳定 zoom（去抖 220ms）计算 LOD，避免连续缩放时 src 频繁切换
+  const z = canvasStableZoom?.value ?? canvasStore.viewport?.zoom ?? 1
   return getHighQualityCanvasPreviewUrl(toSameOriginUrl(url), {
-    zoom: canvasStore.viewport?.zoom || 1,
+    zoom: z,
     nodeWidth: nodeWidth.value || 380,
     devicePixelRatio: previewDevicePixelRatio.value,
     preferLowQuality: isCanvasMediaMoving.value
@@ -3760,6 +3764,25 @@ function getNodePreviewImageUrl(url) {
 
 const outputPreviewImages = computed(() => outputImages.value.map(getNodePreviewImageUrl))
 const sourcePreviewImages = computed(() => sourceImages.value.map(getNodePreviewImageUrl))
+
+// 源图加载失败兜底：URL 失效（CDN/签名过期、cos-proxy bid 丢失等）时
+// 也要保证用户能重新上传，避免节点陷入"图片裂了又删不掉只能整个删除"的死锁
+const sourceImageLoadFailed = ref(false)
+let sourceImageErrorCount = 0
+
+function handleSourceImageError() {
+  // CanvasNodeImage 内部 autoFallback 会先尝试一次 onCanvasImageError 回退到原图，
+  // 这里只在第二次错误（回退也失败）时才视为彻底失败，避免误判网络抖动
+  sourceImageErrorCount += 1
+  if (sourceImageErrorCount >= 2) {
+    sourceImageLoadFailed.value = true
+  }
+}
+
+watch(() => sourceImages.value[0], () => {
+  sourceImageErrorCount = 0
+  sourceImageLoadFailed.value = false
+})
 
 watch(currentImageUrl, (url) => {
   detectPanoramaImage(url)
@@ -5840,9 +5863,21 @@ async function handleGenerateSingle() {
 }
 
 function handleOutputImageError(event, imgUrl, index) {
-  console.warn(`[ImageNode] 输出图片加载失败: ${imgUrl?.substring(0, 80)}`, { nodeId: props.id, index })
   const img = event.target
-  if (img && imgUrl && !img.dataset.retried) {
+  if (!img) return
+  // 第一次失败：先尝试回退到原图（缩略图参数失败时最常见原因）
+  if (!img.dataset.fallbackTried) {
+    const currentSrc = img.getAttribute('src')
+    const originalSrc = getOriginalImageUrl(currentSrc)
+    if (originalSrc && originalSrc !== currentSrc) {
+      img.dataset.fallbackTried = '1'
+      img.src = originalSrc
+      return
+    }
+  }
+  // 第二次失败：原图也加载不出来（极少见），走老的时间戳防缓存重试
+  console.warn(`[ImageNode] 输出图片加载失败: ${imgUrl?.substring(0, 80)}`, { nodeId: props.id, index })
+  if (imgUrl && !img.dataset.retried) {
     img.dataset.retried = 'true'
     setTimeout(() => {
       img.src = imgUrl + (imgUrl.includes('?') ? '&' : '?') + '_t=' + Date.now()
@@ -7435,10 +7470,10 @@ async function handleDrop(event) {
         </svg>
         <!-- ========== 源节点：显示上传的图片 ========== -->
         <template v-if="isSourceNode && hasSourceImage">
-          <!-- 上传按钮（右上角）- 只有本地上传的图片才显示，历史记录/资产中的不显示 -->
-          <button v-if="!isFromHistoryOrAsset" class="upload-overlay-btn" @click="handleReupload">
+          <!-- 上传按钮（右上角）- 本地上传或图片加载失败时显示，确保失效图也能重新上传 -->
+          <button v-if="!isFromHistoryOrAsset || sourceImageLoadFailed" class="upload-overlay-btn" @click="handleReupload">
             <span class="upload-icon">↑</span>
-            <span>上传</span>
+            <span>{{ sourceImageLoadFailed ? '重新上传' : '上传' }}</span>
           </button>
           
           <!-- 拖拽覆盖层 -->
@@ -7451,7 +7486,24 @@ async function handleDrop(event) {
           
           <!-- 图片预览 -->
           <div class="source-image-preview" :class="{ 'low-quality': isCanvasDragging }">
-            <img v-if="isNodeVisible" :src="sourcePreviewImages[0]" alt="上传的图片" :loading="isCanvasDragging ? 'lazy' : 'eager'" decoding="async" />
+            <div
+              v-if="sourceImageLoadFailed"
+              class="source-image-failed"
+              @click="handleReupload"
+            >
+              <div class="failed-icon">⚠️</div>
+              <div class="failed-text">图片加载失败</div>
+              <div class="failed-hint">点击此处重新上传</div>
+            </div>
+            <CanvasNodeImage
+              v-else-if="isNodeVisible"
+              :src="sourcePreviewImages[0]"
+              alt="上传的图片"
+              loading="lazy"
+              decoding="async"
+              fetchpriority="low"
+              @error="handleSourceImageError"
+            />
             <div v-else class="image-placeholder" />
           </div>
         </template>
@@ -7503,7 +7555,7 @@ async function handleDrop(event) {
               }"
             >
               <template v-for="(img, index) in outputImages.slice(0, 4)" :key="img || index">
-                <img 
+                <CanvasNodeImage
                   v-if="isNodeVisible"
                   :src="outputPreviewImages[index]"
                   :alt="`生成结果 ${index + 1}`"
@@ -7511,6 +7563,8 @@ async function handleDrop(event) {
                   :class="{ 'transparent-image': props.data?.isTransparent || props.data?.cutoutResult }"
                   :loading="isCanvasDragging ? 'lazy' : 'eager'"
                   decoding="async"
+                  fetchpriority="low"
+                  :auto-fallback="false"
                   @error="handleOutputImageError($event, img, index)"
                 />
                 <div v-else class="image-placeholder preview-image" />
@@ -7695,7 +7749,7 @@ async function handleDrop(event) {
             @mouseenter="onHoverStart(img, $event)"
             @mouseleave="onHoverEnd"
           >
-            <img v-if="isNodeVisible" :src="getNodePreviewImageUrl(img)" :alt="`图片 ${index + 1}`" decoding="async" />
+            <CanvasNodeImage v-if="isNodeVisible" :src="getNodePreviewImageUrl(img)" :alt="`图片 ${index + 1}`" loading="lazy" decoding="async" fetchpriority="low" />
             <div v-else class="image-placeholder" />
             <span class="panel-frame-label">{{ index + 1 }}</span>
             <span class="panel-frame-tag-badge">@图片{{ index + 1 }}</span>
@@ -8966,6 +9020,42 @@ async function handleDrop(event) {
 
 .upload-icon {
   font-size: 14px;
+}
+
+/* 源图加载失败覆盖层 */
+.source-image-failed {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  background: rgba(20, 20, 20, 0.85);
+  color: var(--canvas-text-primary, #fff);
+  cursor: pointer;
+  border-radius: 12px;
+  text-align: center;
+  padding: 16px;
+  transition: background-color 0.2s ease;
+}
+
+.source-image-failed:hover {
+  background: rgba(40, 40, 40, 0.92);
+}
+
+.source-image-failed .failed-icon {
+  font-size: 32px;
+}
+
+.source-image-failed .failed-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.source-image-failed .failed-hint {
+  font-size: 12px;
+  opacity: 0.75;
 }
 
 /* ========== 输出节点样式 ========== */

@@ -5,9 +5,12 @@ const DEFAULT_FALLBACK_LEFT_OFFSET = 12
 
 const DEFAULT_POPUP_HEIGHT = 260
 const OBJECT_REPLACEMENT_CHAR_PATTERN = /\uFFFC/g
+const CARRIAGE_RETURN_NEWLINE_PATTERN = /\r\n?/g
 
 export function sanitizePromptEditorText(text = '') {
-  return String(text || '').replace(OBJECT_REPLACEMENT_CHAR_PATTERN, '')
+  return String(text || '')
+    .replace(OBJECT_REPLACEMENT_CHAR_PATTERN, '')
+    .replace(CARRIAGE_RETURN_NEWLINE_PATTERN, '\n')
 }
 
 function getViewportHeight(explicitHeight) {

@@ -8,6 +8,7 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import SeedanceCharacterSelector from '../SeedanceCharacterSelector.vue'
 import { smartDownload } from '@/api/client'
+import { getAsset as getVolcengineAsset } from '@/api/canvas/volcengine-assets'
 
 const LONG_PRESS_DURATION = 300
 
@@ -20,10 +21,78 @@ const props = defineProps({
 const canvasStore = useCanvasStore()
 const { updateNodeInternals, getViewport } = useVueFlow()
 
+// 火山 seedance 资产的 URL 是带签名的临时链接，可能过期；同时从资产库拖入时
+// 也可能存在 thumbnail_url 为空导致 assetUrl 为空。任意一种情况下，节点都需要
+// 根据 assetId 重新向后端拉取最新的 URL，保证刷新后图片不会"丢失"。
+const isResolvingAsset = ref(false)
+let assetUrlRetryCount = 0
+const MAX_ASSET_URL_RETRY = 1
+// 资产图片彻底加载失败时显示"重新选择"入口，避免节点只能删除
+const assetLoadFailed = ref(false)
+
+async function resolveAssetUrl({ force = false } = {}) {
+  const assetId = props.data?.assetId
+  if (!assetId) return
+  if (isResolvingAsset.value) return
+  if (!force && props.data?.assetUrl) return
+
+  isResolvingAsset.value = true
+  try {
+    const result = await getVolcengineAsset(assetId)
+    const asset = result?.asset || result
+    const freshUrl = asset?.URL || asset?.url
+    if (!freshUrl) return
+
+    const existingOutput = props.data?.output || {}
+    canvasStore.updateNodeData(props.id, {
+      assetUrl: freshUrl,
+      thumbnailUrl: freshUrl,
+      thumbnail_url: freshUrl,
+      assetName: asset?.Name || props.data?.assetName,
+      status: asset?.Status || props.data?.status,
+      assetType: asset?.AssetType || props.data?.assetType,
+      output: {
+        ...existingOutput,
+        thumbnailUrl: freshUrl
+      }
+    })
+  } catch (err) {
+    console.warn('[SeedanceCharacterNode] 重新解析角色 URL 失败:', err?.message || err)
+  } finally {
+    isResolvingAsset.value = false
+  }
+}
+
+function handleImageError() {
+  if (!props.data?.assetId) return
+  if (assetUrlRetryCount >= MAX_ASSET_URL_RETRY) {
+    // 重试次数耗尽，标记为彻底失败，让用户看到"重新选择角色"入口
+    assetLoadFailed.value = true
+    return
+  }
+  assetUrlRetryCount += 1
+  resolveAssetUrl({ force: true })
+}
+
 onMounted(() => {
   nextTick(() => {
     updateNodeInternals(props.id)
+    // 节点挂载时只要有 assetId 但 assetUrl 缺失就立即补齐
+    if (props.data?.assetId && !props.data?.assetUrl) {
+      resolveAssetUrl()
+    }
   })
+})
+
+// 资产 ID 变更（如重新选择角色）时，重置重试计数
+watch(() => props.data?.assetId, () => {
+  assetUrlRetryCount = 0
+  assetLoadFailed.value = false
+})
+
+// assetUrl 变更时也重置失败标志，给新 URL 一次机会
+watch(() => props.data?.assetUrl, () => {
+  assetLoadFailed.value = false
 })
 
 const showSelector = ref(false)
@@ -367,12 +436,22 @@ onUnmounted(() => {
             </button>
           </div>
           <div class="character-preview">
+            <div
+              v-if="assetLoadFailed"
+              class="character-failed"
+              @click.stop="openSelector"
+            >
+              <div class="failed-icon">⚠️</div>
+              <div class="failed-text">角色图片加载失败</div>
+              <div class="failed-hint">点击重新选择角色</div>
+            </div>
             <img
-              v-if="data.assetUrl"
+              v-else-if="data.assetUrl"
               :src="data.assetUrl"
               :alt="data.assetName"
               class="character-img"
               :style="imageStyle"
+              @error="handleImageError"
             />
             <div v-else class="character-placeholder">
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none">
@@ -444,7 +523,12 @@ onUnmounted(() => {
               <path d="M18 6 6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-          <img :src="data.assetUrl" :alt="data.assetName || '角色预览'" class="character-preview-large" />
+          <img
+            :src="data.assetUrl"
+            :alt="data.assetName || '角色预览'"
+            class="character-preview-large"
+            @error="handleImageError"
+          />
         </div>
       </Transition>
     </Teleport>
@@ -572,6 +656,43 @@ onUnmounted(() => {
   color: var(--canvas-text-tertiary);
   background: var(--canvas-bg-secondary);
   border-radius: 12px;
+}
+
+/* 角色图片加载失败覆盖层 */
+.character-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  padding: 12px;
+  text-align: center;
+  color: var(--canvas-text-primary, #fff);
+  background: rgba(20, 20, 20, 0.85);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.character-failed:hover {
+  background: rgba(40, 40, 40, 0.92);
+}
+
+.character-failed .failed-icon {
+  font-size: 28px;
+}
+
+.character-failed .failed-text {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.character-failed .failed-hint {
+  font-size: 11px;
+  opacity: 0.75;
 }
 
 /* ========== 角色图片工具栏 ========== */

@@ -1,19 +1,33 @@
 /**
  * 画布节点缩略图 URL 工具
  *
- * 根据画布 zoom 级别动态调整图片质量：
- * - 缩小时加载小缩略图，节约内存和带宽
- * - 放大时逐步提高分辨率，接近原图
- * - COS CDN 图片保持原图直连，避免远程图片处理失败导致画布节点空白
- * - 原图仅用于下载、全屏预览或生成输入；COS CDN 是例外
+ * LOD（Level of Detail）策略：
+ * - 画布缩小、节点很小 → 小档位缩略图，节约内存和带宽
+ * - 节点逐渐放大 → 逐步提高分辨率
+ * - 节点接近屏幕大小（>= 1920px 显示宽度）→ 直接用原图，保证清晰度
+ * - pan/zoom 移动期间 → 强制最小档位低质量占位（preferLowQuality）
+ *
+ * 严格原则：
+ * - 下载、节点间连线传输、全屏预览 → 始终使用原图（通过 getOriginalImageUrl）
+ * - 画布节点显示 → 走缩略图档位
+ * - COS CDN 缩略图加载失败 → 通过 onImageError 回退到原图，避免节点空白
  */
 
 import { getApiUrl } from '@/config/tenant'
 import { getCloudVideoPosterUrl, getCosProxyUrl, isCosCdn, isQiniuCdn, isVideoUrl } from './cloudMediaUrl.js'
+import { selectLodWidth, MIN_CANVAS_PREVIEW_WIDTH, PREVIEW_WIDTHS, ORIGINAL_THRESHOLD } from './lodSelector.js'
 
 const DEFAULT_THUMB_WIDTH = 1024
-const MIN_CANVAS_PREVIEW_WIDTH = 384
-const PREVIEW_WIDTHS = [384, 768, 1024]
+
+// COS 数据万象开关：默认启用（后端 cos-storage.js 已在用），生产环境若未开通可设 false
+const COS_THUMBNAIL_ENABLED = (() => {
+  try {
+    const v = import.meta?.env?.VITE_COS_THUMBNAIL_ENABLED
+    return v === undefined || v === '' ? true : v !== 'false' && v !== false
+  } catch {
+    return true
+  }
+})()
 
 /**
  * 将完整媒体 URL 转为可访问的 URL
@@ -39,28 +53,39 @@ export function toSameOriginUrl(url) {
 }
 
 /**
- * 根据节点实际屏幕显示宽度计算合适的缩略图宽度
+ * 根据节点实际屏幕显示宽度计算合适的缩略图宽度（不含 DPR 校正）
  * @param {number} zoom 画布缩放级别
  * @param {number} nodeWidth 节点宽度（画布坐标，默认 400）
- *
- * displayWidth = nodeWidth × zoom = 节点在屏幕上的像素宽度
- * 画布节点预览固定使用小档位，原图只在全屏预览、下载、生成输入中使用。
  */
 export function getThumbWidthForZoom(zoom, nodeWidth = 400) {
   if (!zoom) return MIN_CANVAS_PREVIEW_WIDTH
   const displayWidth = nodeWidth * zoom
-  if (displayWidth >= 700) return 1024
-  if (displayWidth >= 250) return 768
-  return MIN_CANVAS_PREVIEW_WIDTH
+  if (displayWidth >= ORIGINAL_THRESHOLD) return 0 // 0 表示用原图
+  return PREVIEW_WIDTHS.find(width => width >= displayWidth) || PREVIEW_WIDTHS[PREVIEW_WIDTHS.length - 1]
 }
 
-export function getHighQualityCanvasPreviewUrl(url, { zoom = 1, nodeWidth = 400, devicePixelRatio = 1, preferLowQuality = false } = {}) {
+/**
+ * 根据视口状态返回画布节点应该使用的图片 URL
+ *
+ * 选择规则：
+ *   - blob/data URI 直接返回（本地未上传）
+ *   - preferLowQuality（pan/zoom 移动中）→ 最小档位
+ *   - displayWidth >= 1920 → 原图（接近屏幕大小，避免模糊）
+ *   - 其余按 PREVIEW_WIDTHS 选最小覆盖档位
+ *
+ * @param {string} url 原图 URL
+ * @param {object} opts
+ * @param {number} opts.zoom 画布 zoom
+ * @param {number} opts.nodeWidth 节点画布坐标宽度
+ * @param {number} opts.devicePixelRatio 设备像素比（高分屏）
+ * @param {boolean} opts.preferLowQuality 是否优先低质量（移动期间）
+ */
+export function getHighQualityCanvasPreviewUrl(url, opts = {}) {
   if (!url) return url
   if (url.startsWith('blob:') || url.startsWith('data:')) return url
-  if (preferLowQuality) return getCanvasThumbnailUrl(url, MIN_CANVAS_PREVIEW_WIDTH)
-
-  const displayWidth = Math.max(1, (nodeWidth || 400) * (zoom || 1) * Math.max(1, devicePixelRatio || 1))
-  const targetWidth = PREVIEW_WIDTHS.find(width => width >= displayWidth) || PREVIEW_WIDTHS[PREVIEW_WIDTHS.length - 1]
+  const targetWidth = selectLodWidth(opts)
+  // selectLodWidth 返回 0 表示节点接近屏幕大小，直接用原图避免模糊
+  if (targetWidth === 0) return url
   return getCanvasThumbnailUrl(url, targetWidth)
 }
 
@@ -80,15 +105,20 @@ export function getCanvasThumbnailUrl(url, width = DEFAULT_THUMB_WIDTH) {
     return `${url}${sep}preview=true&w=${width}`
   }
 
-  // COS CDN 图片直接用于画布节点。部分 COS 对象没有文件扩展名或未启用数据万象，
-  // 强制拼接 imageMogr2 会导致节点图片加载失败，画布只剩连线。
+  // COS CDN 图片走数据万象缩略图（后端 cos-storage.js 已在用相同协议）。
+  // 若 bucket 未启用万象或对象无扩展名，<img @error> 会自动回退到原图（见 makeCanvasImageErrorHandler）。
+  // 紧急回滚：设环境变量 VITE_COS_THUMBNAIL_ENABLED=false 即可全局关闭。
   if (isCosCdn(url) && !isVideoUrl(url)) {
-    return url
+    if (!COS_THUMBNAIL_ENABLED) return url
+    if (url.includes('imageMogr2') || url.includes('imageView2')) return url
+    const sep = url.includes('?') ? '&' : '?'
+    return `${url}${sep}imageMogr2/thumbnail/${width}x`
   }
 
   // COS 代理 → 万象数据处理缩略图（仅图片，跳过视频）
   if (url.includes('/api/cos-proxy/') && !isVideoUrl(url)) {
-    const sep = url.includes('?') ? '|' : '?'
+    if (url.includes('imageMogr2') || url.includes('imageView2')) return url
+    const sep = url.includes('?') ? '&' : '?'
     return `${url}${sep}imageMogr2/thumbnail/${width}x`
   }
 
@@ -100,6 +130,26 @@ export function getCanvasThumbnailUrl(url, width = DEFAULT_THUMB_WIDTH) {
   }
 
   return url
+}
+
+/**
+ * 创建画布 <img> 的 onerror 回退处理器
+ *
+ * 缩略图加载失败时（COS 未开通万象 / 对象无扩展名等）自动回退到原图 URL，
+ * 杜绝「画布只剩连线」的灾难场景。每张图最多回退一次，避免死循环。
+ *
+ * 用法：<img :src="thumbUrl" @error="onCanvasImageError" />
+ */
+export function onCanvasImageError(event) {
+  const img = event?.target
+  if (!img || !(img instanceof HTMLImageElement)) return
+  if (img.dataset.fallbackTried === '1') return
+  const current = img.getAttribute('src')
+  if (!current) return
+  const original = getOriginalImageUrl(current)
+  if (!original || original === current) return
+  img.dataset.fallbackTried = '1'
+  img.src = original
 }
 
 /**

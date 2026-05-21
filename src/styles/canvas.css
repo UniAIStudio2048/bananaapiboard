@@ -620,11 +620,71 @@
   border: none !important;
   background: transparent !important;
   overflow: visible !important;
+
+  /* 🚀 浏览器原生性能隔离：
+     - layout 隔离：节点内部布局变化不触发画布其他节点重排
+     - style 隔离：节点内部样式查询限制在自身范围
+     - 不加 paint：避免裁剪节点内部的 absolute 浮窗（如 canvas-tooltip）
+     100+ 节点时可大幅降低 Layout/Style 重算开销 */
+  contain: layout style;
 }
 
 /* 确保节点内部包装器也允许溢出显示（用于配置面板） */
 .vue-flow__node > div {
   overflow: visible !important;
+}
+
+/* 节点 image-placeholder（v-else 占位符）固定尺寸，避免 isNodeVisible 切换时布局抖动 */
+.vue-flow__node .image-placeholder {
+  min-height: 120px;
+  background: var(--canvas-bg-tertiary);
+  border-radius: var(--canvas-radius-md);
+  /* 视觉占位，提示用户图片正在视口外 */
+  opacity: 0.4;
+}
+
+/* ========================================
+   🚀 P1-3：低 zoom 极简显示模式
+   当 zoom < 0.4（节点显示宽度 < 160px），用户看的是全局，
+   节点内细节本来就看不清，直接屏蔽次要 UI 以节省 paint/style。
+   选中节点豁免：用户在操作它，必须保持完整 UI。
+   ======================================== */
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .toolbar-btn span,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .toolbar-btn-wrapper,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .vendor-logo-img,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .model-item-desc,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .preset-item-desc,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .seedance-review-badge,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .panel-frame-label,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .panel-frame-tag-badge,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .panel-frame-remove,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .edit-saving-badge,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .image-edit-dropdown,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .cutout-options-popup,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .grid-crop-dropdown,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .error-hint,
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .canvas-tooltip {
+  display: none !important;
+}
+
+/* tiny zoom 下，节点 handle（连线点）也简化为小圆点 */
+.canvas-board[data-zoom-level="tiny"] .vue-flow__node:not(.selected) .vue-flow__handle {
+  width: 6px !important;
+  height: 6px !important;
+}
+
+/* ========================================
+   🚀 P1-4：视口外节点 content-visibility 虚拟化
+   不动 Vue Flow 的 only-render-visible-elements（保护用户输入），
+   改用浏览器原生 content-visibility 让视口外节点跳过 paint/layout。
+   - data-node-visible="false" 由 useNodeVisibility 通过 IntersectionObserver 设置
+   - selected 节点豁免（即使被 observer 判定不可见也保持完整渲染）
+   - contain-intrinsic-size 给浏览器尺寸暗示，避免滚动条抖动
+   ======================================== */
+.vue-flow__node[data-node-visible="false"]:not(.selected) {
+  content-visibility: auto;
+  /* 用节点 BBox 大致尺寸做占位，避免裁掉时滚动条跳动 */
+  contain-intrinsic-size: 380px 280px;
 }
 
 /* 编组节点放在最底层 */

@@ -138,6 +138,33 @@ test('sanitizes browser object replacement placeholders from prompt text values'
   assert.equal(sanitizePromptEditorText('放大\uFFFC@图片1\uFFFC继续'), '放大@图片1继续')
 })
 
+test('normalizes CRLF and lone CR newlines pasted from windows clipboards to LF', () => {
+  assert.equal(sanitizePromptEditorText('第一行\r\n第二行\r第三行\n第四行'), '第一行\n第二行\n第三行\n第四行')
+})
+
+test('serializes pasted multiline text node with CRLF as LF only', () => {
+  const text = (value) => ({ nodeType: 3, nodeValue: value })
+  const element = (tagName, childNodes = [], attrs = {}) => ({
+    nodeType: 1,
+    tagName,
+    childNodes,
+    getAttribute(name) {
+      return attrs[name] || null
+    }
+  })
+
+  const root = element('DIV', [
+    text('【第 30 集 片段三】\r\n0:00-0:15\r\n画面：'),
+    element('SPAN', [text('图片1')], { 'data-prompt-mention': '@图片1' }),
+    text('\r\n台词')
+  ])
+
+  assert.equal(
+    serializePromptEditorContent(root),
+    '【第 30 集 片段三】\n0:00-0:15\n画面：@图片1\n台词'
+  )
+})
+
 test('detects browser-inserted direct text nodes around prompt chips', () => {
   const text = (value) => ({ nodeType: 3, nodeValue: value })
   const element = (tagName, childNodes = [], attrs = {}) => ({

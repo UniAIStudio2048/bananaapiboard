@@ -38,8 +38,14 @@ assert.match(
 
 assert.match(
   source,
-  /function handleVideoPosterError\(\)/,
-  'VideoNode should switch away from broken poster images'
+  /function handleVideoPosterError\(event\)/,
+  'VideoNode should switch away from broken poster images and accept event for original-URL fallback'
+)
+
+assert.match(
+  source,
+  /img\.dataset\.fallbackTried/,
+  'VideoNode poster error handler should attempt original-URL fallback before declaring failure'
 )
 
 assert.match(

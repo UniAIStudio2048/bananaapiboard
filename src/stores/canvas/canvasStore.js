@@ -232,11 +232,19 @@ export const useCanvasStore = defineStore('canvas', () => {
   
   /**
    * 更新节点数据
+   * 任何节点 data 字段的变更都立即标记当前标签为"待保存"，
+   * 确保自动保存 / beforeunload beacon 能把内容真正写回数据库，
+   * 杜绝刷新后内容丢失。
+   *
+   * options.silent = true 仅用于内部恢复/骨架填充等不需要持久化的场景。
    */
-  function updateNodeData(nodeId, data) {
+  function updateNodeData(nodeId, data, options = {}) {
     const node = nodes.value.find(n => n.id === nodeId)
     if (node) {
       node.data = mergeNodeData(node.data, data)
+      if (!options.silent) {
+        markCurrentTabChanged()
+      }
     }
   }
   
@@ -2111,6 +2119,12 @@ export const useCanvasStore = defineStore('canvas', () => {
       ? session.activeTabId
       : restoredTabs[0].id
     switchToTab(activeId)
+
+    // 会话恢复后，如有节点处于骨架(_mediaLoading)态，异步把原始媒体补回，
+    // 避免恢复后图片/视频 url 仍是空导致用户感知为"内容丢失"。
+    if (nodes.value.some(n => n.data?._mediaLoading)) {
+      nextTick(() => asyncRestoreMedia())
+    }
 
     return true
   }

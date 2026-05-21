@@ -188,6 +188,49 @@ let viewportMovingTimer = null
 
 provide('isCanvasViewportMoving', isViewportMoving)
 
+/**
+ * 当前 zoom 档位（用于 CSS 极简模式切换，不参与响应式追踪每个节点）
+ * - tiny: zoom < 0.4 → 节点显示宽度 < 160px，应屏蔽冗余 UI（图标文本/状态徽章等）
+ * - small: 0.4 <= zoom < 0.75 → 中等密度
+ * - normal: zoom >= 0.75 → 完整 UI
+ * 通过画布根 data-zoom-level 属性下发，配合 canvas.css 规则生效。
+ * 不需要每个节点单独 inject，避免 100 节点级联触发响应。
+ */
+const canvasZoomLevel = computed(() => {
+  const z = canvasStore.viewport?.zoom || 1
+  if (z < 0.4) return 'tiny'
+  if (z < 0.75) return 'small'
+  return 'normal'
+})
+
+/**
+ * 稳定 zoom：viewport.zoom 停止变化 220ms 后才更新。
+ *
+ * 作用：节点的 LOD URL 计算用 stableZoom 而非实时 zoom，避免用户连续滚轮
+ *      缩放时 src 在多个档位之间反复切换，触发不必要的 decode/paint。
+ *
+ * 与 isViewportMoving (180ms) 错时：移动期间 preferLowQuality=true 用 384 占位，
+ *      移动停止后再等 ~40ms stableZoom 更新到最终值，才加载真正档位的高清图。
+ *      用户感受：拖动时图变模糊（占位），停下后清晰版"渐入"，不闪烁。
+ */
+const stableZoom = ref(canvasStore.viewport?.zoom || 1)
+let stableZoomTimer = null
+provide('canvasStableZoom', stableZoom)
+
+watch(() => canvasStore.viewport?.zoom, (z) => {
+  if (typeof z !== 'number') return
+  if (stableZoomTimer) {
+    clearTimeout(stableZoomTimer)
+    pendingTimeouts.delete(stableZoomTimer)
+  }
+  stableZoomTimer = setTimeout(() => {
+    pendingTimeouts.delete(stableZoomTimer)
+    stableZoomTimer = null
+    stableZoom.value = z
+  }, 220)
+  pendingTimeouts.add(stableZoomTimer)
+})
+
 function markViewportMoving() {
   isViewportMoving.value = true
   if (viewportMovingTimer) {
@@ -2407,7 +2450,14 @@ async function handleFileDrop(event) {
             {
               const meta = asset.metadata || {}
               const seedanceAssetId = meta.assetId || asset.id
-              const seedanceThumbUrl = asset.thumbnail_url || ''
+              // assetUrl 用于 <img> 直接展示，按优先级回退到任意可用 URL；
+              // 若全部缺失，SeedanceCharacterNode 挂载时会按 assetId 自动解析。
+              const seedanceDisplayUrl =
+                asset.thumbnail_url ||
+                meta.assetUrl ||
+                meta.thumbnailUrl ||
+                (asset.url && !asset.url.startsWith('asset://') ? asset.url : '') ||
+                ''
               canvasStore.addNode({
                 id: nodeId,
                 type: 'seedance-character',
@@ -2416,19 +2466,19 @@ async function handleFileDrop(event) {
                   title: asset.name || 'Seedance角色',
                   assetId: seedanceAssetId,
                   assetUri: meta.assetUri || asset.url || `asset://${seedanceAssetId}`,
-                  assetUrl: seedanceThumbUrl,
+                  assetUrl: seedanceDisplayUrl,
                   groupId: meta.groupId,
                   assetName: asset.name,
                   status: meta.status || 'Active',
                   assetType: meta.assetType || 'Image',
                   width: 220,
-                  thumbnailUrl: seedanceThumbUrl,
-                  thumbnail_url: seedanceThumbUrl,
+                  thumbnailUrl: seedanceDisplayUrl,
+                  thumbnail_url: seedanceDisplayUrl,
                   output: {
                     type: 'image',
                     url: meta.assetUri || asset.url || `asset://${seedanceAssetId}`,
                     urls: [meta.assetUri || asset.url || `asset://${seedanceAssetId}`],
-                    thumbnailUrl: seedanceThumbUrl
+                    thumbnailUrl: seedanceDisplayUrl
                   },
                   fromAsset: true,
                   canvasAssetId: asset.id
@@ -2789,6 +2839,7 @@ onUnmounted(() => {
     ref="canvasBoardRef" 
     class="canvas-board" 
     :class="{ 'file-drag-over': isFileDragOver, 'pick-mode': pickMode }"
+    :data-zoom-level="canvasZoomLevel"
     @dblclick="handleDoubleClick"
     @mousedown.middle.prevent
     @dragenter="handleFileDragEnter"
