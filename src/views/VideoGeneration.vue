@@ -9,6 +9,12 @@ import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { normalizePromptLineEndings } from '@/utils/promptText'
 import { pickConfiguredSubmode } from '@/utils/videoSubmodeDefaults'
+import {
+  getDefaultGenerationModeForVideoModel,
+  getDefaultSeedance2ModeForVideoModel,
+  isSeedanceSd2VideoModel,
+  resolveVideoRequestModel
+} from '@/utils/videoGenerationMode'
 import { compressImage, getImageFileDimensions } from '@/utils/imageCompress'
 import {
   SEEDANCE_MAX_IMAGE_PIXELS,
@@ -192,7 +198,7 @@ const isHdAvailable = computed(() => false)
 // 当前模型是否为 Seedance 2.0
 const isSeedanceModel = computed(() => {
   const modelConfig = currentModelConfig.value
-  return modelConfig?.apiType === 'seedance-2.0' || modelConfig?.apiType === 'ant' || modelConfig?.apiType === 'happyhorse'
+  return isSeedanceSd2VideoModel(modelConfig)
 })
 
 // Seedance 可用的模式（从模型配置的 seedanceConfig.supportedModes 读取）
@@ -349,36 +355,12 @@ const userPackageInfo = computed(() => {
   }
 })
 
-const MODE_TO_SD2_MODE = {
-  t2v: 'text2video',
-  i2v: 'image2video_first',
-  a2v: 'multimodal_ref'
-}
-
-const SD2_MODE_TO_GENERATION_MODE = {
-  text2video: 'text',
-  image2video_first: 'image',
-  image2video_first_last: 'image',
-  multimodal_ref: 'image',
-  video_edit: 'image',
-  video_extend: 'image'
-}
-
 function getDefaultSeedance2ModeForModel(modelConfig) {
-  const defaultMode = modelConfig?.defaultSeedance2Mode || modelConfig?.seedanceConfig?.defaultMode
-  if (defaultMode) return defaultMode
-  const defaultVideoMode = modelConfig?.defaultVideoMode || modelConfig?.happyHorseConfig?.defaultVideoMode
-  return MODE_TO_SD2_MODE[defaultVideoMode] || 'text2video'
+  return getDefaultSeedance2ModeForVideoModel(modelConfig)
 }
 
 function getDefaultGenerationModeForModel(modelConfig) {
-  if (!modelConfig) return 'text'
-  if (modelConfig.apiType === 'seedance-2.0' || modelConfig.apiType === 'ant' || modelConfig.apiType === 'happyhorse') {
-    const seedanceMode = getDefaultSeedance2ModeForModel(modelConfig)
-    return SD2_MODE_TO_GENERATION_MODE[seedanceMode] || 'text'
-  }
-  if (modelConfig.defaultVideoMode === 'i2v' || modelConfig.defaultVideoMode === 'a2v') return 'image'
-  return 'text'
+  return getDefaultGenerationModeForVideoModel(modelConfig)
 }
 
 function getFirstAvailableMode(preferredMode, availableModes, fallback = 'text2video') {
@@ -397,8 +379,8 @@ const availableModels = computed(() => {
   const currentMode = mode.value === 'text' ? 't2v' : 'i2v'
   
   return filteredByVersion.filter(m => {
-    // Seedance 2.0 / Ant / Happy Horse 模型始终显示（有自己的模式选择器）
-    if (m.apiType === 'seedance-2.0' || m.apiType === 'ant' || m.apiType === 'happyhorse') return true
+    // Seedance 2.0 / Ant / HappyHorse 模型始终显示（有自己的模式选择器）
+    if (isSeedanceSd2VideoModel(m)) return true
 
     const supportedModes = m.supportedModes
     if (!supportedModes) return true // 无配置默认支持所有模式
@@ -470,14 +452,15 @@ watch(model, (newModel) => {
     console.log('[VideoGeneration] 方向已重置为:', aspectRatio.value)
   }
 
-  if (modelConfig?.apiType === 'seedance-2.0' || modelConfig?.apiType === 'ant' || modelConfig?.apiType === 'happyhorse') {
+  if (isSeedanceSd2VideoModel(modelConfig)) {
     const seedanceConfig = modelConfig.seedanceConfig || {}
-    seedanceResolution.value = seedanceConfig.resolution || (modelConfig.apiType === 'happyhorse' ? '1080p' : '720p')
-    seedanceRatio.value = seedanceConfig.ratio || (modelConfig.apiType === 'happyhorse' ? '16:9' : 'adaptive')
+    const isHappyHorse = modelConfig.apiType === 'happyhorse'
+    seedanceResolution.value = seedanceConfig.resolution || (isHappyHorse ? '1080p' : '720p')
+    seedanceRatio.value = seedanceConfig.ratio || (isHappyHorse ? '16:9' : 'adaptive')
     seedanceDuration.value = Number(seedanceConfig.duration || durations[0] || 5)
     seedanceGenerateAudio.value = seedanceConfig.generateAudio !== false
     seedanceWatermark.value = seedanceConfig.watermark === true
-    seedanceWebSearch.value = modelConfig.apiType === 'happyhorse' ? false : seedanceConfig.webSearch === true
+    seedanceWebSearch.value = isHappyHorse ? false : seedanceConfig.webSearch === true
     if (!seedanceAvailableModes.value.some(m => m.value === seedanceMode.value)) {
       const defaultSeedanceMode = getDefaultSeedance2ModeForModel(modelConfig)
       seedanceMode.value = getFirstAvailableMode(defaultSeedanceMode, seedanceAvailableModes.value)
@@ -1092,6 +1075,7 @@ async function generateVideo() {
   // 保存当前输入，用于创建任务
   const currentPrompt = normalizePromptLineEndings(prompt.value).trim()
   const currentModel = model.value
+  const requestModel = resolveVideoRequestModel(currentModelConfig.value, currentModel)
   const currentDuration = duration.value
   const currentAspectRatio = aspectRatio.value
   const pointsCost = currentPointsCost.value
@@ -1099,7 +1083,7 @@ async function generateVideo() {
   try {
     const formData = new FormData()
     formData.append('prompt', currentPrompt)
-    formData.append('model', currentModel)
+    formData.append('model', requestModel)
     formData.append('aspect_ratio', currentAspectRatio)
     formData.append('duration', isSeedanceModel.value ? String(seedanceDuration.value) : currentDuration)
     formData.append('hd', hd.value ? 'true' : 'false')
@@ -1995,7 +1979,7 @@ watch(model, (newModel) => {
   }
 
   // 切换到 Seedance 模型时按配置的默认模式初始化，切换离开时清空 Seedance 文件
-  const isSeedance = modelCfg?.apiType === 'seedance-2.0' || modelCfg?.apiType === 'ant' || modelCfg?.apiType === 'happyhorse'
+  const isSeedance = isSeedanceSd2VideoModel(modelCfg)
   if (isSeedance) {
     const defaultSeedanceMode = getDefaultSeedance2ModeForModel(modelCfg)
     seedanceMode.value = getFirstAvailableMode(defaultSeedanceMode, seedanceAvailableModes.value)

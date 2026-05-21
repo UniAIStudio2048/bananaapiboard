@@ -164,6 +164,26 @@ export function getTenantConfigVersion() {
   return tenantConfigVersion.value
 }
 
+function isByteforVideoConfig(modelConfig = {}) {
+  return modelConfig.apiType === 'bytefor' ||
+    String(modelConfig.provider || '').toLowerCase().includes('bytefor') ||
+    String(modelConfig.apiBase || '').toLowerCase().includes('bytefor')
+}
+
+function filterByteforDurations(modelConfig, durations) {
+  if (!isByteforVideoConfig(modelConfig)) return durations
+  return durations.filter(duration => Number.parseInt(duration, 10) >= 4)
+}
+
+function filterByteforPointsCost(modelConfig, pointsCost) {
+  if (!isByteforVideoConfig(modelConfig) || !pointsCost || typeof pointsCost !== 'object' || Array.isArray(pointsCost)) {
+    return pointsCost
+  }
+  return Object.fromEntries(
+    Object.entries(pointsCost).filter(([duration]) => Number.parseInt(duration, 10) >= 4)
+  )
+}
+
 // 从 localStorage 加载配置
 function loadFromStorage() {
   try {
@@ -1420,6 +1440,7 @@ export const getAvailableVideoModels = (options = {}) => {
           aspectRatios: modelConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }],
           supportedModes: { t2v: true, i2v: true, a2v: false },
           apiType: 'vectorengine',
+          actualModel: modelConfig.actualModel || modelConfig.seedanceOpenConfig?.model || modelConfig.seedanceConfig?.model || key,
           isVeoModel: false,
           vendor: modelConfig.vendor || '',
           vendorLogo: modelConfig.vendorLogo || ''
@@ -1454,7 +1475,7 @@ export const getAvailableVideoModels = (options = {}) => {
       // 计算时长选项（优先级：新格式配置 durations > 默认配置）
       // 🔧 修复：不再从 pointsCost 提取时长，始终以 durations 配置为准
       const hasDurPricing = modelConfig.hasDurationPricing ?? modelPricingConfig.hasDurationPricing ?? defaultConfig.hasDurationPricing ?? false
-      const pCost = modelConfig.pointsCost || modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1
+      const pCost = filterByteforPointsCost(modelConfig, modelConfig.pointsCost || modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1)
       
       // 优先使用后端配置的 durations，然后是默认配置
       let modelDurations = ['10', '15'] // 最终兜底
@@ -1465,6 +1486,7 @@ export const getAvailableVideoModels = (options = {}) => {
         // 使用默认配置的 durations
         modelDurations = defaultConfig.durations.map(d => String(d))
       }
+      modelDurations = filterByteforDurations(modelConfig, modelDurations)
       // 注意：不再从 pointsCost 提取时长，因为 pointsCost 可能包含历史遗留的计费键
       
       // 获取新格式配置中的 aspectRatios 和 supportedModes
@@ -1517,6 +1539,7 @@ export const getAvailableVideoModels = (options = {}) => {
         resolution720Discount: modelConfig.resolution720Discount,
         // API 类型（用于判断是否是 Vidu 模型）
         apiType: modelConfig.apiType,
+        actualModel: modelConfig.actualModel || modelConfig.seedanceOpenConfig?.model || modelConfig.seedanceConfig?.model || key,
         seedanceConfig: modelConfig.seedanceConfig,
         seedanceOpenConfig: modelConfig.seedanceOpenConfig,
         happyHorseConfig: modelConfig.happyHorseConfig,
@@ -1641,7 +1664,7 @@ export const getAvailableVideoModels = (options = {}) => {
       // 计算时长选项（优先级：后端配置 > 默认配置）
       // 🔧 修复：不再从 pointsCost 提取时长
       const hasDurPricing = modelPricingConfig.hasDurationPricing ?? defaultConfig.hasDurationPricing ?? false
-      const pCost = modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1
+      const pCost = filterByteforPointsCost(modelFullConfig, modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1)
       
       let modelDurations = ['10', '15'] // 最终兜底
       if (modelFullConfig.durations && Array.isArray(modelFullConfig.durations) && modelFullConfig.durations.length > 0) {
@@ -1649,6 +1672,7 @@ export const getAvailableVideoModels = (options = {}) => {
       } else if (defaultConfig.durations && defaultConfig.durations.length > 0) {
         modelDurations = defaultConfig.durations.map(d => String(d))
       }
+      modelDurations = filterByteforDurations(modelFullConfig, modelDurations)
       
       // 兼容两种格式：字符串数组或对象数组
       let aspectRatios = modelFullConfig.aspectRatios || defaultConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }]
@@ -1686,6 +1710,7 @@ export const getAvailableVideoModels = (options = {}) => {
         resolution720Discount: modelFullConfig.resolution720Discount,
         // API 类型（用于判断是否是 Vidu 模型）
         apiType: modelFullConfig.apiType,
+        actualModel: modelFullConfig.actualModel || modelFullConfig.seedanceOpenConfig?.model || modelFullConfig.seedanceConfig?.model || key,
         seedanceConfig: modelFullConfig.seedanceConfig,
         seedanceOpenConfig: modelFullConfig.seedanceOpenConfig,
         happyHorseConfig: modelFullConfig.happyHorseConfig,

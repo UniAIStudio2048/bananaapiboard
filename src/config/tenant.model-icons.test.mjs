@@ -157,3 +157,26 @@ test('tenant config version lets Vue computed values recompute after runtime con
 
   assert.deepEqual(modelResolutionEnabled.value, { '2k': false, '3k': false, '4k': false })
 })
+
+test('getAvailableVideoModels filters unsupported 3 second Bytefor duration pricing', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    video_models: [
+      {
+        name: 'bytefor-seedance-2.0',
+        displayName: 'Bytefor Seedance 2.0',
+        enabled: true,
+        apiType: 'bytefor',
+        pointsCost: { '3': 30, '4': 40, '5': 50 },
+        durations: ['3', '4', '5']
+      }
+    ]
+  })
+
+  const model = tenant.getAvailableVideoModels().find(m => m.value === 'bytefor-seedance-2.0')
+  assert.deepEqual(model.durations, ['4', '5'])
+  assert.deepEqual(model.pointsCost, { '4': 40, '5': 50 })
+})

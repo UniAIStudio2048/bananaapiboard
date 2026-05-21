@@ -367,7 +367,7 @@ async function syncFromCloud() {
 
 async function handleCreateGroup() {
   if (isSeedanceOpenApiProProvider.value) {
-    errorMessage.value = 'Seedance OpenAPI Pro 使用专用人物库，无需创建分组'
+    errorMessage.value = 'Bytefor API 使用专用人物库，无需创建分组'
     return
   }
   if (!createGroupForm.value.Name.trim()) return

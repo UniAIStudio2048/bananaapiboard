@@ -60,6 +60,7 @@ import {
   getVideoGenerationProgressText,
   shouldShowVideoGenerationTimeoutHint
 } from '@/utils/videoGenerationProgress'
+import { isSeedanceSd2VideoModel, resolveVideoRequestModel } from '@/utils/videoGenerationMode'
 import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
 import { exportVideoTimeline, getSubtitleEraseTask } from '@/api/canvas/video-tools'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
@@ -1204,16 +1205,16 @@ const isHappyHorseModel = computed(() => {
 const isSeedanceModel = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
   const apiType = currentModelConfig.value?.apiType || ''
-  return modelName.includes('seedance') || apiType === 'seedance' || apiType === 'seedance-2.0' || apiType === 'seedance-openapi-pro' || apiType === 'ant' || isHappyHorseModel.value
+  if (isSeedanceSd2VideoModel(currentModelConfig.value) || apiType === 'seedance-openapi-pro') return true
+  if (['seedance-2.0', 'ant', 'happyhorse'].includes(apiType)) return false
+  return modelName.includes('seedance') || apiType === 'seedance' || isHappyHorseModel.value
 })
 
 const isSeedanceOpenApiProModel = computed(() => currentModelConfig.value?.apiType === 'seedance-openapi-pro')
 
 // 检测是否是 Seedance 2.0 模型（支持6种模式）
 const isSeedance2Model = computed(() => {
-  const apiType = currentModelConfig.value?.apiType || ''
-  const modelName = selectedModel.value?.toLowerCase() || ''
-  return apiType === 'seedance-2.0' || apiType === 'seedance-openapi-pro' || apiType === 'ant' || (modelName.includes('seedance') && modelName.includes('2.0')) || isHappyHorseModel.value
+  return isSeedanceSd2VideoModel(currentModelConfig.value) || isSeedanceOpenApiProModel.value
 })
 
 // Seedance 2.0 模式选择
@@ -2463,7 +2464,7 @@ const hasReferenceVideos = computed(() => referenceVideos.value.length > 0)
 
 const isSeedanceVideoInputMultiplierModel = computed(() => {
   const apiType = currentModelConfig.value?.apiType
-  return apiType === 'seedance-2.0' || apiType === 'ant'
+  return isSeedanceSd2VideoModel(currentModelConfig.value) && apiType !== 'happyhorse'
 })
 
 const seedanceVideoInputMultiplier = computed(() => {
@@ -3162,7 +3163,7 @@ watch(selectedModel, () => {
     console.log('[VideoNode] 切换到 Kling v3 Omni 整合模型，模式重置为', selectedKlingV3OmniMode.value)
   }
 
-  if (modelConfig?.apiType === 'seedance-2.0' || modelConfig?.apiType === 'ant' || modelConfig?.apiType === 'happyhorse') {
+  if (isSeedanceSd2VideoModel(modelConfig)) {
     const defaultMode = getDefaultSeedance2ModeForModel(modelConfig)
     selectedSeedance2Mode.value = getFirstAvailableMode(defaultMode, seedance2Modes.value)
     console.log('[VideoNode] 切换到 Seedance/Happy Horse 模型，模式重置为', selectedSeedance2Mode.value)
@@ -3716,7 +3717,7 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
 
     console.log('[VideoNode] Kling v3 Omni 实际模型:', klingV3OmniActualModel.value, '子模式:', subMode || 'text2video')
   } else {
-    formData.append('model', selectedModel.value)
+    formData.append('model', resolveVideoRequestModel(currentModelConfig.value, selectedModel.value))
   }
   
   formData.append('aspect_ratio', selectedAspectRatio.value)
@@ -4229,7 +4230,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     }
     
     // Seedance 2.0 角色素材处理
-    if (capturedState.isSeedance2 && !capturedState.isSeedanceOpenApiPro && capturedState.characterAssetUris.length > 0) {
+    if (capturedState.isSeedance2 && (capturedState.characterAssetUris.length > 0 || (capturedState.isSeedanceOpenApiPro && capturedState.faceCodes?.length > 0))) {
       const charHttpUrls = new Set()
       const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
       for (const edge of upstreamEdges) {
@@ -4242,9 +4243,15 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
           if (sn.data?.output?.urls) sn.data.output.urls.forEach(u => charHttpUrls.add(u))
         }
       }
-      const nonCharImages = finalImages.filter(u => !charHttpUrls.has(u))
-      finalImages = [...capturedState.characterAssetUris, ...nonCharImages]
-      console.log('[VideoNode] Seedance 2.0 注入角色素材 Asset URI:', capturedState.characterAssetUris, '最终图片列表:', finalImages)
+      if (capturedState.isSeedanceOpenApiPro && capturedState.faceCodes?.length > 0) {
+        finalImages = finalImages.filter(u => !charHttpUrls.has(u))
+        console.log('[VideoNode] Seedance OpenAPI Pro 仅保留普通参考图，角色素材通过 face codes 传递:', capturedState.faceCodes, '最终图片列表:', finalImages)
+      }
+      if (!capturedState.isSeedanceOpenApiPro && capturedState.characterAssetUris.length > 0) {
+        const nonCharImages = finalImages.filter(u => !charHttpUrls.has(u))
+        finalImages = [...capturedState.characterAssetUris, ...nonCharImages]
+        console.log('[VideoNode] Seedance 2.0 注入角色素材 Asset URI:', capturedState.characterAssetUris, '最终图片列表:', finalImages)
+      }
     }
 
     if (capturedState.isSeedance2 && capturedState.quickAssetUris.length > 0) {

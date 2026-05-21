@@ -895,7 +895,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
     }
 
     if (isOpenApiPro) {
-      showToast('Seedance 角色已提交审核', 'success')
+      showToast('角色已提交 Bytefor 审核', 'success')
 
       const { position, size } = getSeedanceCharacterNodeLayout(sourceNode)
       canvasStore.addNode({

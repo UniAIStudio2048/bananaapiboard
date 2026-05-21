@@ -1,3 +1,5 @@
+import { isSeedanceSd2VideoModel } from './videoGenerationMode.js'
+
 export const VIDEO_QUICK_ACTION_TYPES = {
   LAST_FRAME: 'video-last-frame',
   DESCRIBE: 'llm-video-describe',
@@ -21,13 +23,7 @@ function modelSupportsSeedanceMode(model, mode) {
 }
 
 function isSeedance2CapableModel(model) {
-  const apiType = model?.apiType || ''
-  const name = `${model?.value || ''} ${model?.label || ''}`.toLowerCase()
-  return apiType === 'seedance-2.0' ||
-    apiType === 'seedance-openapi-pro' ||
-    apiType === 'ant' ||
-    apiType === 'happyhorse' ||
-    (name.includes('seedance') && name.includes('2.0'))
+  return isSeedanceSd2VideoModel(model)
 }
 
 export function selectVideoQuickActionModel(models = [], actionType) {
@@ -55,12 +51,15 @@ function buildVideoEditNode(sourceVideoUrl, model) {
     label: '视频编辑',
     nodeRole: 'edit',
     editMode: true,
-    sourceVideoUrl,
-    seedance2Mode: 'video_edit'
+    sourceVideoUrl
   }
 
   if (model?.value) {
     nodeData.model = model.value
+  }
+
+  if (isSeedance2CapableModel(model)) {
+    nodeData.seedance2Mode = 'video_edit'
   }
 
   if (model?.isKlingO1Model) {
@@ -76,12 +75,15 @@ function buildVideoExtendNode(sourceVideoUrl, model) {
     label: '视频延长',
     nodeRole: 'extend',
     extendMode: true,
-    sourceVideoUrl,
-    seedance2Mode: 'video_extend'
+    sourceVideoUrl
   }
 
   if (model?.value) {
     nodeData.model = model.value
+  }
+
+  if (isSeedance2CapableModel(model)) {
+    nodeData.seedance2Mode = 'video_extend'
   }
 
   if (model?.isKlingO1Model) {

@@ -10,6 +10,7 @@ import { extractVideoFrame, uploadCanvasMedia } from '@/api/canvas/workflow'
 import { getAvailableVideoModels, isSeedanceFeaturesEnabled } from '@/config/tenant'
 import { clampNodePositionToGroup } from '@/utils/canvasConnectionPosition'
 import { buildVideoQuickActionNode, VIDEO_QUICK_ACTION_TYPES } from '@/utils/canvasVideoQuickActions'
+import { isSeedanceSd2VideoModel } from '@/utils/videoGenerationMode'
 
 const { t } = useI18n()
 
@@ -469,11 +470,7 @@ function selectNodeType(type) {
 
       // 自动选择最优模型：Seedance 2.0 > Kling O1 > 其他视频模型
       const allVideoModels = getAvailableVideoModels()
-      const seedance2 = allVideoModels.find(m => {
-        const apiType = m.apiType || ''
-        const name = (m.value || '').toLowerCase()
-        return apiType === 'seedance-2.0' || (name.includes('seedance') && name.includes('2.0'))
-      })
+      const seedance2 = allVideoModels.find(m => isSeedanceSd2VideoModel(m))
       const klingO1 = allVideoModels.find(m => m.isKlingO1Model)
       const bestModel = seedance2 || klingO1 || allVideoModels[0]
 
