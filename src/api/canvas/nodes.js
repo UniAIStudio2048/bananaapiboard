@@ -7,6 +7,7 @@ import { useTeamStore } from '@/stores/team'
 import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
 import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
 import { classifyBackgroundTaskStatus } from '@/stores/canvas/backgroundTaskStatus'
+import { normalizePromptLineEndings } from '@/utils/promptText'
 
 async function parseApiResponse(response, fallbackMessage) {
   const contentType = response.headers.get('content-type') || ''
@@ -66,8 +67,8 @@ function getHeaders(options = {}) {
  */
 export async function generateImageFromText(params) {
   const {
-    prompt,
-    userPrompt,
+    prompt: rawPrompt,
+    userPrompt: rawUserPrompt,
     model = 'nano-banana-2',
     image_size,
     size,
@@ -83,6 +84,8 @@ export async function generateImageFromText(params) {
   // 优先使用 image_size，否则使用 size（向后兼容）
   const finalImageSize = image_size || size || '2K'
   
+  const prompt = normalizePromptLineEndings(rawPrompt)
+  const userPrompt = normalizePromptLineEndings(rawUserPrompt)
   const teamStore = useTeamStore()
   const spaceParams = teamStore.getSpaceParams('current')
   
@@ -146,8 +149,8 @@ export async function generateImageFromText(params) {
  */
 export async function generateImageFromImage(params) {
   const { 
-    prompt,
-    userPrompt, // 用户原始输入（不含预设提示词）
+    prompt: rawPrompt,
+    userPrompt: rawUserPrompt, // 用户原始输入（不含预设提示词）
     images, 
     model = 'nano-banana-2', 
     image_size,  // 支持 image_size 参数
@@ -158,6 +161,8 @@ export async function generateImageFromImage(params) {
     maxGroupImages = 3
   } = params
   
+  const prompt = normalizePromptLineEndings(rawPrompt)
+  const userPrompt = normalizePromptLineEndings(rawUserPrompt)
   // 优先使用 image_size，否则使用 size
   const finalImageSize = image_size || size || '2K'
   
@@ -230,8 +235,9 @@ export async function generateImageFromImage(params) {
  * 视频生成 - 文生视频
  */
 export async function generateVideoFromText(params) {
-  const { prompt, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl, klingOmniSubMode, klingOmniImageUrls } = params
+  const { prompt: rawPrompt, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl, klingOmniSubMode, klingOmniImageUrls } = params
   
+  const prompt = normalizePromptLineEndings(rawPrompt)
   const teamStore = useTeamStore()
   const spaceParams = teamStore.getSpaceParams('current')
   
@@ -287,8 +293,9 @@ export async function generateVideoFromText(params) {
  * 视频生成 - 图生视频
  */
 export async function generateVideoFromImage(params) {
-  const { prompt, imageUrl, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl, klingOmniSubMode, klingOmniImageUrls } = params
+  const { prompt: rawPrompt, imageUrl, model = 'sora-2', aspectRatio = '16:9', duration = '10', offPeak = false, klingOmniVideoUrl, klingOmniVideoReferType, klingOmniKeepSound, klingOmniEndFrameUrl, klingOmniSubMode, klingOmniImageUrls } = params
   
+  const prompt = normalizePromptLineEndings(rawPrompt)
   const teamStore = useTeamStore()
   const spaceParams = teamStore.getSpaceParams('current')
   

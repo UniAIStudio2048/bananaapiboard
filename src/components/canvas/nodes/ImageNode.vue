@@ -5406,11 +5406,13 @@ function createStackedOutputNodes(count, basePosition) {
 // @param {string} userPrompt - 用户原始输入（不含预设，用于历史记录显示）
 async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt = null) {
   try {
-    canvasStore.updateNodeData(nodeId, { 
+    canvasStore.updateNodeData(nodeId, {
       status: 'processing',
-      progress: '生成中...'
+      progress: '生成中...',
+      processingStartedAt: Date.now(),
+      taskType: 'image'
     })
-    
+
     const result = await sendImageGenerateRequest(finalPrompt, userPrompt)
     
     if (result.task_id || result.id) {
@@ -5431,7 +5433,14 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
           imageSize: imageSize.value
         }
       })
-      
+
+      // 立即把 taskId 写回节点 data，确保刷新/离开画布后仍能由 zombie 恢复机制
+      // 续上轮询，否则节点会永久停在"生成中"。
+      canvasStore.updateNodeData(nodeId, {
+        taskId,
+        taskType: 'image'
+      })
+
       // ⚠️ 不再调用 pollTaskStatus，使用 backgroundTaskManager 统一轮询
       // backgroundTaskManager 会通过事件通知任务状态变化
       // 事件监听已在 onMounted 中设置：background-task-complete/failed/progress

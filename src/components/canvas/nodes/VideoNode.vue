@@ -4048,7 +4048,16 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
           aspectRatio: selectedAspectRatio.value
         }
       })
-      
+
+      // 立即把 taskId 写回节点 data，确保工作流落盘后仍能恢复轮询。
+      // 不写入会导致：刷新/离开画布、且 backgroundTaskManager 的 localStorage
+      // 任务被清理（完成 5s 后自动清理）之后，shouldResumeCanvasVideoNodeWithoutTask
+      // 找不到 taskId，节点永远停在"生成中"，直到 120 分钟超时才标失败。
+      canvasStore.updateNodeData(nodeId, {
+        taskId,
+        soraTaskId: taskId
+      })
+
       // ⚠️ 不再调用 pollVideoTaskForNode，使用 backgroundTaskManager 统一轮询
       // 🔧 修复：避免双重轮询导致页面卡顿（Chrome弹出"重新加载此网站"）
       // backgroundTaskManager 会通过事件通知任务状态变化

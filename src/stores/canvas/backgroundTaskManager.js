@@ -18,7 +18,7 @@ const STORAGE_KEY = 'canvas_background_tasks'
 const POLL_INTERVAL = 3000  // 3秒轮询一次
 const MAX_TASK_AGE = 24 * 60 * 60 * 1000  // 任务最大存活时间：24小时
 const IMAGE_POLL_TIMEOUT = 15 * 60 * 1000  // 图片任务前端轮询超时：15分钟
-const VIDEO_POLL_TIMEOUT = 120 * 60 * 1000  // 视频任务前端轮询超时：120分钟
+const VIDEO_POLL_TIMEOUT = 40 * 60 * 1000  // 视频任务前端轮询超时：40分钟（与后端 VIDEO_TASK_TIMEOUT_MS 对齐）
 const HISTORY_MEDIA_TASK_TYPES = new Set([
   'image',
   'video',
