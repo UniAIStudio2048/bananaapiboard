@@ -612,9 +612,10 @@ function handleAssetInsert(asset) {
       }
       break
     case 'seedance-character':
-      nodeType = 'seedance-character'
+    case 'bytefor-character':
+      nodeType = asset.type === 'bytefor-character' || asset.libraryType === 'bytefor' ? 'bytefor-character' : 'seedance-character'
       nodeData = {
-        title: asset.assetName || 'Seedance角色',
+        title: asset.assetName || (nodeType === 'bytefor-character' ? 'Bytefor角色' : 'Seedance角色'),
         assetId: asset.assetId,
         assetUri: asset.assetUri || `asset://${asset.assetId}`,
         assetUrl: asset.assetUrl,

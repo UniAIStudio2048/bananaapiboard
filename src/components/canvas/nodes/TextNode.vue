@@ -18,6 +18,7 @@ import { getAssets } from '@/api/canvas/assets'
 import { getApiUrl, getTenantHeaders, getAvailableLLMModels } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
+import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
 import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
@@ -61,6 +62,7 @@ const textNodeRootRef = ref(null)
 // 配置面板放大相关（与 VideoNode 保持一致的交互逻辑）
 const isConfigPanelExpanded = ref(false)
 const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
+const { configPanelScale, handleConfigPanelWheel, resetConfigPanelScale } = createConfigPanelWheelZoom()
 
 // 是否单独选中（只选了这一个节点时才显示工具栏和底部面板）
 const isSoloSelected = computed(() => {
@@ -2945,6 +2947,7 @@ function centerNodeInViewport() {
 function toggleConfigPanelExpanded() {
   const nextExpanded = !isConfigPanelExpanded.value
   if (nextExpanded) {
+    resetConfigPanelScale()
     centerNodeInViewport()
   }
   isConfigPanelExpanded.value = nextExpanded
@@ -2957,6 +2960,7 @@ function toggleConfigPanelExpanded() {
 
 function collapseConfigPanel() {
   isConfigPanelExpanded.value = false
+  resetConfigPanelScale()
 }
 
 function handleConfigPanelOutsideMouseDown(event) {
@@ -3236,8 +3240,10 @@ onUnmounted(() => {
       ref="llmConfigPanelRef"
       class="llm-config-panel"
       :class="{ 'llm-config-panel-expanded': isConfigPanelExpanded }"
+      :style="{ '--config-panel-scale': configPanelScale }"
       @click.stop
       @mousedown.stop
+      @wheel="handleConfigPanelWheel($event, isConfigPanelExpanded)"
     >
       <button
         class="llm-config-expand-btn"
@@ -4280,7 +4286,8 @@ onUnmounted(() => {
   max-width: calc(100vw - 32px);
   height: 70vh;
   max-height: calc(100vh - 32px);
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--config-panel-scale, 1));
+  transform-origin: center center;
   overflow-y: auto;
   overscroll-behavior: contain;
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);

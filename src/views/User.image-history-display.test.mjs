@@ -13,7 +13,8 @@ test('user image history uses cached image fallback instead of raw image tags', 
 })
 
 test('user image history grid adapts and avoids cropping generated images', () => {
-  assert.match(source, /grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4/)
+  assert.match(source, /history-masonry history-masonry-images/)
+  assert.match(source, /\.history-masonry-images\s*\{[\s\S]*column-width:\s*260px;/)
   assert.match(source, /img-class="w-full h-full object-contain"/)
 })
 
@@ -52,4 +53,17 @@ test('image preview can show the full image and full prompt text', () => {
   assert.match(source, /img-class="max-w-full max-h-\[calc\(96vh-190px\)\] w-auto h-auto object-contain/)
   assert.match(source, /whitespace-pre-wrap break-words leading-relaxed/)
   assert.doesNotMatch(source, /<p class="text-white font-medium mb-2 truncate"/)
+})
+
+test('image and video preview details use shared history media metadata formatter', () => {
+  assert.match(source, /import \{ buildHistoryMediaDetails, enrichHistoryMediaDetails \} from '@\/utils\/historyMediaDetails'/)
+  assert.match(source, /function getImagePreviewDetails\(image\)[\s\S]*buildHistoryMediaDetails\(image/)
+  assert.match(source, /function getVideoPreviewDetails\(video\)[\s\S]*buildHistoryMediaDetails\(\{ \.\.\.video, type: 'video' \}/)
+  assert.match(source, /enrichHistoryMediaDetails\(selectedImage\.value, \{ resolveUrl: getMediaUrl \}\)/)
+  assert.match(source, /enrichHistoryMediaDetails\(selectedVideo\.value, \{ resolveUrl: getMediaUrl \}\)/)
+  assert.match(source, /v-for="detail in getImagePreviewDetails\(selectedImage\)"/)
+  assert.match(source, /v-for="detail in getVideoPreviewDetails\(selectedVideo\)"/)
+  assert.match(source, /flex flex-wrap items-start gap-x-4 gap-y-1\.5 text-sm text-white\/75 select-text/)
+  assert.match(source, /min-w-0 break-all font-medium text-white/)
+  assert.doesNotMatch(source, /rounded-lg bg-white\/10 px-3 py-2/)
 })

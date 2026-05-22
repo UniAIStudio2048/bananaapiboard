@@ -359,6 +359,7 @@ const nodeTypes = {
   'group': GroupNode,             // 编组节点
   'character-card': CharacterCardNode,  // Sora角色卡节点
   'seedance-character': SeedanceCharacterNode,  // Seedance角色节点
+  'bytefor-character': SeedanceCharacterNode,  // Bytefor角色节点
   'storyboard': StoryboardNode    // 分镜格子节点
 }
 
@@ -763,6 +764,7 @@ function getNodeSize(node) {
     'video': { width: 420, height: 280 },
     'video-gen': { width: 420, height: 280 },
     'seedance-character': { width: 220, height: 220 },
+    'bytefor-character': { width: 220, height: 220 },
     'storyboard': { width: 720, height: 360 }
   }
   const defaults = defaultSizes[node.type] || { width: 380, height: 280 }
@@ -1790,7 +1792,8 @@ function getHandlePosition(nodeId, handleType) {
     'video-input': { width: 420, height: 280 },
     'video': { width: 420, height: 280 },
     'video-gen': { width: 420, height: 280 },
-    'seedance-character': { width: 220, height: 220 }
+    'seedance-character': { width: 220, height: 220 },
+    'bytefor-character': { width: 220, height: 220 }
   }
   
   const defaults = defaultSizes[node.type] || { width: 380, height: 280 }
@@ -2447,6 +2450,7 @@ async function handleFileDrop(event) {
             })
             break
           case 'seedance-character':
+          case 'bytefor-character':
             {
               const meta = asset.metadata || {}
               const seedanceAssetId = meta.assetId || asset.id
@@ -2460,10 +2464,10 @@ async function handleFileDrop(event) {
                 ''
               canvasStore.addNode({
                 id: nodeId,
-                type: 'seedance-character',
+                type: asset.type === 'bytefor-character' ? 'bytefor-character' : 'seedance-character',
                 position: { x: canvasX, y: canvasY },
                 data: {
-                  title: asset.name || 'Seedance角色',
+                  title: asset.name || (asset.type === 'bytefor-character' ? 'Bytefor角色' : 'Seedance角色'),
                   assetId: seedanceAssetId,
                   assetUri: meta.assetUri || asset.url || `asset://${seedanceAssetId}`,
                   assetUrl: seedanceDisplayUrl,
@@ -2515,14 +2519,14 @@ async function handleFileDrop(event) {
       }
 
       // 处理 Seedance 角色拖拽（来自 SeedanceCharacterPanel）
-      if (data.type === 'seedance-character' && data.assetId) {
+      if ((data.type === 'seedance-character' || data.type === 'bytefor-character') && data.assetId) {
         const nodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         canvasStore.addNode({
           id: nodeId,
-          type: 'seedance-character',
+          type: data.type === 'bytefor-character' || data.libraryType === 'bytefor' ? 'bytefor-character' : 'seedance-character',
           position: { x: canvasX, y: canvasY },
           data: {
-            title: data.assetName || 'Seedance角色',
+            title: data.assetName || (data.libraryType === 'bytefor' ? 'Bytefor角色' : 'Seedance角色'),
             assetId: data.assetId,
             assetUri: data.assetUri || `asset://${data.assetId}`,
             assetUrl: data.assetUrl,

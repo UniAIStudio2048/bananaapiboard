@@ -147,8 +147,13 @@ export async function getHistory(params = {}) {
               model: img.model,
               model_display_name: img.model_display_name || img.modelDisplayName || '',
               status: img.status,
-              created_at: img.created ? new Date(img.created * 1000).toISOString() : null,
+              created_at: img.created_at || (img.created ? new Date(img.created * 1000).toISOString() : null),
+              finished_at: img.finished_at || img.finishedAt || null,
               size: img.size,
+              image_size: img.image_size || img.imageSize || img.size,
+              file_size: img.file_size || img.fileSize || img.size_bytes || null,
+              width: img.width || img.image_width || null,
+              height: img.height || img.image_height || null,
               aspect_ratio: img.aspect_ratio
             }
           }),
@@ -182,7 +187,13 @@ export async function getHistory(params = {}) {
               model_display_name: vid.model_display_name || vid.modelDisplayName || '',
               status: vid.status === 'SUCCESS' ? 'completed' : vid.status,
               aspect_ratio: vid.aspect_ratio,
-              created_at: vid.created_at
+              duration: vid.duration,
+              fps: vid.fps || vid.frame_rate || vid.frameRate || null,
+              file_size: vid.file_size || vid.fileSize || vid.size_bytes || null,
+              width: vid.width || vid.video_width || null,
+              height: vid.height || vid.video_height || null,
+              created_at: vid.created_at,
+              finished_at: vid.finished_at || vid.finishedAt || null
             }
           }),
         '获取视频历史'
@@ -214,6 +225,9 @@ export async function getHistory(params = {}) {
               model_display_name: aud.model_display_name || aud.modelDisplayName || '',
               status: 'completed',
               created_at: aud.created_at,
+              finished_at: aud.completed_at || aud.finished_at || aud.finishedAt || null,
+              duration: aud.duration || aud.audio_duration || null,
+              file_size: aud.file_size || aud.fileSize || aud.size_bytes || null,
               video_url: aud.video_url // 音乐MV
             }
           }),

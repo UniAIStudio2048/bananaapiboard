@@ -290,6 +290,7 @@ export default {
     newWorkflowBtn: '새 워크플로',
     soraCharacterLib: 'Sora 캐릭터 라이브러리',
     seedanceCharacterLib: 'Seedance 캐릭터 라이브러리',
+    byteforCharacterLib: 'Bytefor 캐릭터 라이브러리',
     characterCount: '{count}개 캐릭터',
     characterTimeout: '캐릭터 처리 시간 초과, 나중에 라이브러리에서 확인하세요',
     characterCreateFailed: '캐릭터 생성 실패: {error}',

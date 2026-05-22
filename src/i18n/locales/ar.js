@@ -381,6 +381,7 @@ export default {
     newWorkflowBtn: 'سير عمل جديد',
     soraCharacterLib: 'مكتبة شخصيات Sora',
     seedanceCharacterLib: 'مكتبة شخصيات Seedance',
+    byteforCharacterLib: 'مكتبة شخصيات Bytefor',
     characterCount: '{count} شخصية',
     characterTimeout: 'انتهت مهلة معالجة الشخصية، تحقق من المكتبة لاحقاً',
     characterCreateFailed: 'فشل إنشاء الشخصية: {error}',

@@ -282,6 +282,7 @@ export default {
     newWorkflowBtn: 'Nouveau Workflow',
     soraCharacterLib: 'Bibliothèque de Personnages Sora',
     seedanceCharacterLib: 'Bibliothèque de Personnages Seedance',
+    byteforCharacterLib: 'Bibliothèque de Personnages Bytefor',
     characterCount: '{count} personnages',
     characterTimeout: 'Délai d\'attente du personnage dépassé, vérifiez la bibliothèque plus tard',
     characterCreateFailed: 'Échec de création du personnage : {error}',

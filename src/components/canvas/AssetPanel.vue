@@ -11,7 +11,7 @@ import { getCachedAssets, cacheAssets, invalidateAssetCache } from '@/utils/asse
 import { preloadImages } from '@/utils/imageCache'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } from '@/api/canvas/volcengine-assets'
-import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled } from '@/config/tenant'
+import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled, isByteforCharacterLibraryEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import CachedImage from '@/components/CachedImage.vue'
@@ -127,6 +127,7 @@ const lastSyncId = ref(null) // 记录最新一条记录的ID
 
 const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
 const soraCharacterLibraryEnabled = computed(() => isSoraCharacterLibraryEnabled())
+const byteforCharacterLibraryEnabled = computed(() => isByteforCharacterLibraryEnabled())
 
 // 文件类型 - 存储翻译键，在模板中实时翻译
 const allFileTypes = [
@@ -136,12 +137,14 @@ const allFileTypes = [
   { key: 'video', labelKey: 'canvas.nodes.video', icon: '▷' },
   { key: 'audio', labelKey: 'canvas.nodes.audio', icon: '♪' },
   { key: 'sora-character', labelKey: 'canvas.soraCharacterLib', icon: '👤' },
-  { key: 'seedance-character', labelKey: 'canvas.seedanceCharacterLib', icon: '👥' }
+  { key: 'seedance-character', labelKey: 'canvas.seedanceCharacterLib', icon: '👥' },
+  { key: 'bytefor-character', labelKey: 'canvas.byteforCharacterLib', icon: '人' }
 ]
 const fileTypes = computed(() =>
   allFileTypes.filter(ft => {
     if (ft.key === 'seedance-character') return seedanceFeaturesEnabled.value
     if (ft.key === 'sora-character') return soraCharacterLibraryEnabled.value
+    if (ft.key === 'bytefor-character') return byteforCharacterLibraryEnabled.value
     return true
   })
 )
@@ -186,6 +189,9 @@ const filteredAssets = computed(() => {
   // Seedance 功能关闭时过滤掉 seedance-character 类型资产
   if (!seedanceFeaturesEnabled.value) {
     result = result.filter(a => a.type !== 'seedance-character')
+  }
+  if (!byteforCharacterLibraryEnabled.value) {
+    result = result.filter(a => a.type !== 'bytefor-character')
   }
 
   // 按类型筛选
@@ -247,9 +253,10 @@ const assetOffsetY = computed(() => {
 
 // 按类型分组的资产统计
 const assetStats = computed(() => {
-  const stats = { all: 0, text: 0, image: 0, video: 0, audio: 0, 'sora-character': 0, 'seedance-character': 0 }
+  const stats = { all: 0, text: 0, image: 0, video: 0, audio: 0, 'sora-character': 0, 'seedance-character': 0, 'bytefor-character': 0 }
   assets.value.forEach(a => {
     if (!seedanceFeaturesEnabled.value && a.type === 'seedance-character') return
+    if (!byteforCharacterLibraryEnabled.value && a.type === 'bytefor-character') return
     stats.all++
     if (stats[a.type] !== undefined) {
       stats[a.type]++
@@ -1869,6 +1876,16 @@ onUnmounted(() => {
             @groups-updated="loadSeedanceGroups"
             @clear-group="selectedSeedanceGroupId = null"
             @action-consumed="seedancePendingAction = null"
+            @insert-to-canvas="handleSeedanceInsert"
+          />
+
+          <SeedanceCharacterPanel
+            v-else-if="selectedType === 'bytefor-character' && byteforCharacterLibraryEnabled"
+            libraryType="bytefor"
+            :selectedGroupId="null"
+            :pendingAction="null"
+            :spaceFilter="spaceFilter"
+            @groups-updated="loadAssets(true)"
             @insert-to-canvas="handleSeedanceInsert"
           />
 

@@ -22,6 +22,7 @@ import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvas
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
+import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
@@ -61,6 +62,7 @@ const nodeRef = ref(null)
 const configPanelRef = ref(null)
 const isConfigPanelExpanded = ref(false)
 const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
+const { configPanelScale, handleConfigPanelWheel, resetConfigPanelScale } = createConfigPanelWheelZoom()
 
 // 可用音乐模型列表 - 从租户配置动态获取
 const musicModels = computed(() => {
@@ -527,6 +529,7 @@ function centerNodeInViewport() {
 function toggleConfigPanelExpanded() {
   const nextExpanded = !isConfigPanelExpanded.value
   if (nextExpanded) {
+    resetConfigPanelScale()
     centerNodeInViewport()
   }
   isConfigPanelExpanded.value = nextExpanded
@@ -539,6 +542,7 @@ function toggleConfigPanelExpanded() {
 
 function collapseConfigPanel() {
   isConfigPanelExpanded.value = false
+  resetConfigPanelScale()
 }
 
 function handleConfigPanelOutsideMouseDown(event) {
@@ -1835,9 +1839,11 @@ function handleSpeedDropdownClickOutside(event) {
     <div
       v-show="showConfigPanel"
       ref="configPanelRef"
-      class="config-panel"
+      class="config-panel audio-config-panel"
       :class="{ 'config-panel-expanded': isConfigPanelExpanded }"
+      :style="{ '--config-panel-scale': configPanelScale }"
       @mousedown.stop
+      @wheel="handleConfigPanelWheel($event, isConfigPanelExpanded)"
     >
       <button
         class="config-expand-btn"
@@ -2807,7 +2813,8 @@ function handleSpeedDropdownClickOutside(event) {
   max-width: calc(100vw - 32px);
   height: 70vh;
   max-height: calc(100vh - 32px);
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--config-panel-scale, 1));
+  transform-origin: center center;
   overflow-y: auto;
   overscroll-behavior: contain;
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
@@ -3551,6 +3558,28 @@ function handleSpeedDropdownClickOutside(event) {
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.18) !important;
 }
 
+:root.canvas-theme-light .audio-config-panel {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12) !important;
+}
+
+:root.canvas-theme-light .audio-config-panel.config-panel-expanded {
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.18) !important;
+}
+
+:root.canvas-theme-light .audio-config-panel .config-expand-btn {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .audio-config-panel .config-expand-btn:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.25);
+  color: #2563eb;
+}
+
 :root.canvas-theme-light .config-panel-expanded .config-expand-btn {
   background: rgba(59, 130, 246, 0.1);
   border-color: rgba(59, 130, 246, 0.25);
@@ -3562,8 +3591,16 @@ function handleSpeedDropdownClickOutside(event) {
   background: rgba(255, 255, 255, 0.98);
 }
 
+:root.canvas-theme-light .audio-config-panel .music-gen-panel {
+  background: rgba(255, 255, 255, 0.98);
+}
+
 /* 提示词输入区域 */
 :root.canvas-theme-light .audio-node .prompt-area {
+  background: transparent;
+}
+
+:root.canvas-theme-light .audio-config-panel .prompt-area {
   background: transparent;
 }
 
@@ -3572,7 +3609,17 @@ function handleSpeedDropdownClickOutside(event) {
   color: #1c1917;
 }
 
+:root.canvas-theme-light .audio-config-panel .prompt-textarea {
+  background: transparent;
+  color: #1c1917;
+  scrollbar-color: rgba(0, 0, 0, 0.16) rgba(0, 0, 0, 0.03);
+}
+
 :root.canvas-theme-light .audio-node .prompt-textarea.is-empty:empty::before {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .audio-config-panel .prompt-textarea.is-empty:empty::before {
   color: #a8a29e;
 }
 
@@ -3582,8 +3629,17 @@ function handleSpeedDropdownClickOutside(event) {
   border-top-color: rgba(0, 0, 0, 0.06);
 }
 
+:root.canvas-theme-light .audio-config-panel .control-bar {
+  background: rgba(0, 0, 0, 0.02);
+  border-top-color: rgba(0, 0, 0, 0.06);
+}
+
 /* 类型选择器 */
 :root.canvas-theme-light .audio-node .type-selector {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .audio-config-panel .type-selector {
   background: rgba(0, 0, 0, 0.04);
 }
 
@@ -3591,7 +3647,15 @@ function handleSpeedDropdownClickOutside(event) {
   background: rgba(0, 0, 0, 0.06);
 }
 
+:root.canvas-theme-light .audio-config-panel .type-selector:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
 :root.canvas-theme-light .audio-node .type-icon {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .audio-config-panel .type-icon {
   color: #57534e;
 }
 
@@ -3599,7 +3663,15 @@ function handleSpeedDropdownClickOutside(event) {
   color: #1c1917;
 }
 
+:root.canvas-theme-light .audio-config-panel .type-label {
+  color: #1c1917;
+}
+
 :root.canvas-theme-light .audio-node .type-arrow {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .audio-config-panel .type-arrow {
   color: #78716c;
 }
 
@@ -3608,7 +3680,15 @@ function handleSpeedDropdownClickOutside(event) {
   background: rgba(0, 0, 0, 0.04);
 }
 
+:root.canvas-theme-light .audio-config-panel .model-trigger {
+  background: rgba(0, 0, 0, 0.04);
+}
+
 :root.canvas-theme-light .audio-node .model-trigger:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .audio-config-panel .model-trigger:hover {
   background: rgba(0, 0, 0, 0.06);
 }
 
@@ -3616,11 +3696,23 @@ function handleSpeedDropdownClickOutside(event) {
   color: #57534e;
 }
 
+:root.canvas-theme-light .audio-config-panel .model-icon {
+  color: #57534e;
+}
+
 :root.canvas-theme-light .audio-node .model-name {
   color: #1c1917;
 }
 
+:root.canvas-theme-light .audio-config-panel .model-name {
+  color: #1c1917;
+}
+
 :root.canvas-theme-light .audio-node .model-arrow {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .audio-config-panel .model-arrow {
   color: #78716c;
 }
 
@@ -3631,7 +3723,17 @@ function handleSpeedDropdownClickOutside(event) {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
 }
 
+:root.canvas-theme-light .audio-config-panel .model-dropdown-list {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
 :root.canvas-theme-light .audio-node .model-option {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-config-panel .model-option {
   color: #1c1917;
 }
 
@@ -3639,11 +3741,25 @@ function handleSpeedDropdownClickOutside(event) {
   background: rgba(0, 0, 0, 0.04);
 }
 
+:root.canvas-theme-light .audio-config-panel .model-option:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
 :root.canvas-theme-light .audio-node .model-option.active {
   background: rgba(0, 0, 0, 0.06);
 }
 
+:root.canvas-theme-light .audio-config-panel .model-option.active {
+  background: rgba(0, 0, 0, 0.06);
+}
+
 :root.canvas-theme-light .audio-node .model-item-icon {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .audio-config-panel .model-item-icon {
   color: #57534e;
   background: rgba(0, 0, 0, 0.05);
   border-color: rgba(0, 0, 0, 0.08);
@@ -3654,11 +3770,24 @@ function handleSpeedDropdownClickOutside(event) {
   background: rgba(0, 0, 0, 0.05);
 }
 
+:root.canvas-theme-light .audio-config-panel .model-item-points {
+  color: rgba(28, 25, 23, 0.62);
+  background: rgba(0, 0, 0, 0.05);
+}
+
 :root.canvas-theme-light .audio-node .option-name {
   color: #1c1917;
 }
 
+:root.canvas-theme-light .audio-config-panel .option-name {
+  color: #1c1917;
+}
+
 :root.canvas-theme-light .audio-node .option-desc {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .audio-config-panel .option-desc {
   color: #78716c;
 }
 
@@ -3839,11 +3968,23 @@ function handleSpeedDropdownClickOutside(event) {
   background: rgba(0, 0, 0, 0.02);
 }
 
+:root.canvas-theme-light .audio-config-panel .prompt-textarea::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+}
+
 :root.canvas-theme-light .audio-node .prompt-textarea::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.1);
 }
 
+:root.canvas-theme-light .audio-config-panel .prompt-textarea::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+
 :root.canvas-theme-light .audio-node .prompt-textarea::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .audio-config-panel .prompt-textarea::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.2);
 }
 

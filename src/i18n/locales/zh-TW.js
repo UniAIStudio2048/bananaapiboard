@@ -277,6 +277,7 @@ export default {
     newWorkflowBtn: '新建工作流',
     soraCharacterLib: 'Sora角色庫',
     seedanceCharacterLib: 'Seedance角色庫',
+    byteforCharacterLib: 'Bytefor角色庫',
     characterCount: '{count} 個角色',
     characterTimeout: '角色處理逾時，請稍後在角色庫查看',
     characterCreateFailed: '角色建立失敗：{error}',

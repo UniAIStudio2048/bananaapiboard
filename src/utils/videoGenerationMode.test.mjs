@@ -82,9 +82,10 @@ test('Bytefor submit payload keeps normal video fields and skips SD2 fields', ()
   assert.equal(entries.has('seedance_generate_audio'), false)
 })
 
-test('video generation payload uses actual model when configured', () => {
+test('video generation payload keeps configured model id for backend routing', () => {
+  const configuredProviderModel = 'Custom Bytefor Model From Settings'
   const entries = buildVideoGenerationFormEntries({
-    modelConfig: { apiType: 'bytefor', actualModel: 'Seedance 2.0' },
+    modelConfig: { apiType: 'bytefor', actualModel: configuredProviderModel },
     prompt: 'make a product shot move',
     model: 'bytefor-seedance-2.0',
     aspectRatio: '16:9',
@@ -92,16 +93,17 @@ test('video generation payload uses actual model when configured', () => {
     mode: 'text'
   })
 
-  assert.equal(entries.get('model'), 'Seedance 2.0')
+  assert.equal(entries.get('model'), 'bytefor-seedance-2.0')
 })
 
-test('Bytefor request model uses configured Seedance model from legacy config', () => {
+test('Bytefor request model keeps model id instead of provider model', () => {
+  const configuredProviderModel = 'Custom Bytefor Model From Settings'
   assert.equal(
     resolveVideoRequestModel({
       apiType: 'bytefor',
       name: 'bytefor-seedance-2.0',
-      seedanceConfig: { model: 'Seedance 2.0' }
+      seedanceConfig: { model: configuredProviderModel }
     }, 'bytefor-seedance-2.0'),
-    'Seedance 2.0'
+    'bytefor-seedance-2.0'
   )
 })

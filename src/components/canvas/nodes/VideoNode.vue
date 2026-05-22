@@ -29,9 +29,11 @@ import { isModelReferenceMediaUrl, isPreferredModelMediaUrl, normalizeModelImage
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { fetchVideoTaskStatus, isVideoHdTask } from '@/utils/videoTaskStatus'
+import { applyOrderedMediaReplacements } from '@/utils/videoReferenceOrdering'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
+import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
 import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isBrowserRenderableUrl, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, sanitizePromptEditorText, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import {
   bindMediaMention,
@@ -187,6 +189,7 @@ const promptEditorRenderKey = ref(0)
 const configPanelRef = ref(null)
 const isConfigPanelExpanded = ref(false)
 const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
+const { configPanelScale, handleConfigPanelWheel, resetConfigPanelScale } = createConfigPanelWheelZoom()
 const hasManualPromptTextareaSize = ref(false)
 const promptMentionBindings = ref(props.data.promptMentionBindings || {})
 
@@ -628,10 +631,10 @@ function handlePromptWheel(event) {
   }
 }
 
-// 支持 @标记 引用的模型（Kling O1、Kling v3 Omni 和 Seedance 2.0）
-const supportsMediaTags = computed(() => isKlingO1Model.value || isKlingV3OmniModel.value || isSeedance2Model.value)
+// 所有视频节点都支持 @标记引用上游媒体素材
+const supportsMediaTags = computed(() => true)
 
-// ========== 提示词 @标记 引用功能（Kling O1 / Seedance 2.0 模型） ==========
+// ========== 提示词 @标记 引用功能 ==========
 
 /**
  * 收集所有参考素材（带编号），用于点击插入 @标记
@@ -1202,9 +1205,28 @@ const isHappyHorseModel = computed(() => {
   return apiType === 'happyhorse' || modelName.includes('happyhorse') || modelName.includes('happy-horse')
 })
 
+const isByteforVideoModel = computed(() => {
+  const fields = [
+    currentModelConfig.value?.apiType,
+    currentModelConfig.value?.apiBase,
+    currentModelConfig.value?.provider,
+    currentModelConfig.value?.name,
+    currentModelConfig.value?.displayName,
+    currentModelConfig.value?.actualModel,
+    selectedModel.value
+  ]
+
+  return fields.some(value => {
+    if (value === undefined || value === null) return false
+    const normalized = String(value).toLowerCase()
+    return normalized.includes('bytefor') || normalized.includes('byteforapi')
+  })
+})
+
 const isSeedanceModel = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
   const apiType = currentModelConfig.value?.apiType || ''
+  if (isByteforVideoModel.value) return false
   if (isSeedanceSd2VideoModel(currentModelConfig.value) || apiType === 'seedance-openapi-pro') return true
   if (['seedance-2.0', 'ant', 'happyhorse'].includes(apiType)) return false
   return modelName.includes('seedance') || apiType === 'seedance' || isHappyHorseModel.value
@@ -2015,6 +2037,7 @@ function centerNodeInViewport() {
 function toggleConfigPanelExpanded() {
   const nextExpanded = !isConfigPanelExpanded.value
   if (nextExpanded) {
+    resetConfigPanelScale()
     centerNodeInViewport()
   }
   isConfigPanelExpanded.value = nextExpanded
@@ -2027,6 +2050,7 @@ function toggleConfigPanelExpanded() {
 
 function collapseConfigPanel() {
   isConfigPanelExpanded.value = false
+  resetConfigPanelScale()
 }
 
 function handleConfigPanelOutsideMouseDown(event) {
@@ -2321,7 +2345,8 @@ const IMAGE_NODE_TYPES = [
   'image-upscale',    // 超分放大
   'image-cutout',     // 智能抠图
   'image-expand',     // 图片扩展
-  'seedance-character' // Seedance角色节点
+  'seedance-character', // Seedance角色节点
+  'bytefor-character' // Bytefor角色节点
 ]
 
 // 参考图片（来自左侧输入，支持多张图片，支持自定义顺序）
@@ -2345,7 +2370,7 @@ const referenceImages = computed(() => {
       continue
     }
 
-    if (sourceNode.type === 'seedance-character') {
+    if (sourceNode.type === 'seedance-character' || sourceNode.type === 'bytefor-character') {
       const previewUrl = getSeedanceCharacterPreviewUrl(sourceNode.data)
       if (previewUrl) upstreamImages.push(previewUrl)
       continue
@@ -2401,6 +2426,58 @@ function getSeedanceCharacterPreviewUrl(data) {
     ...(Array.isArray(data?.output?.urls) ? data.output.urls : [])
   ]
   return candidates.find(isBrowserRenderableUrl) || ''
+}
+
+function collectNodeMediaUrls(data) {
+  const urls = []
+  const add = value => {
+    if (typeof value === 'string' && value.trim()) urls.push(value.trim())
+  }
+
+  add(data?.assetUrl)
+  add(data?.thumbnailUrl)
+  add(data?.thumbnail_url)
+  add(data?.output?.thumbnailUrl)
+  add(data?.output?.thumbnail_url)
+  add(data?.output?.url)
+  if (Array.isArray(data?.output?.urls)) data.output.urls.forEach(add)
+  if (Array.isArray(data?.sourceImages)) data.sourceImages.forEach(add)
+
+  return [...new Set(urls)]
+}
+
+function collectSeedanceMediaReplacements(nodeId, { includeCharacters = true, includeQuickAssets = true } = {}) {
+  const replacements = []
+  const upstreamEdges = canvasStore.edges.filter(e => e.target === nodeId)
+
+  for (const edge of upstreamEdges) {
+    const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
+    if (!sourceNode?.data) continue
+
+    if (includeCharacters && sourceNode.type === 'seedance-character') {
+      const id = sourceNode.data?.assetId
+      const replacementUrl = (sourceNode.data?.assetUri && String(sourceNode.data.assetUri).trim()) ||
+        (id != null && String(id).trim() !== '' ? `asset://${id}` : '')
+      if (!replacementUrl) continue
+
+      const previewUrl = getSeedanceCharacterPreviewUrl(sourceNode.data)
+      replacements.push({
+        replacementUrl,
+        sourceUrls: [...new Set([...collectNodeMediaUrls(sourceNode.data), previewUrl].filter(Boolean))]
+      })
+    }
+
+    if (includeQuickAssets && IMAGE_NODE_TYPES.includes(sourceNode.type)) {
+      const quickAsset = getSeedanceQuickAsset(sourceNode.data)
+      if (!quickAsset.active || !quickAsset.assetUri) continue
+      replacements.push({
+        replacementUrl: quickAsset.assetUri,
+        sourceUrls: collectNodeMediaUrls(sourceNode.data)
+      })
+    }
+  }
+
+  return replacements
 }
 
 // 参考视频（来自上游视频节点）
@@ -2591,7 +2668,7 @@ const inheritedPrompt = computed(() => {
 function getUpstreamData() {
   // 查找所有连接到当前节点的上游边
   const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
-  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [], audios: [], characterAssetUris: [], faceCodes: [], quickAssetUris: [], quickAssetSourceUrls: [] }
+  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [], audios: [], characterAssetUris: [], faceCodes: [], byteforFaceCodes: [], quickAssetUris: [], quickAssetSourceUrls: [] }
   
   let prompts = []
   let images = []
@@ -2599,6 +2676,7 @@ function getUpstreamData() {
   let audios = []
   let characterAssetUris = []
   let faceCodes = []
+  let byteforFaceCodes = []
   let quickAssetUris = []
   let quickAssetSourceUrls = []
   
@@ -2633,13 +2711,20 @@ function getUpstreamData() {
       })
       
       // Seedance 角色节点：收集 asset:// 素材 URI（持久化后可能仅有 assetId，需回推 URI）
-      if (sourceNode.type === 'seedance-character') {
+      if (sourceNode.type === 'seedance-character' || sourceNode.type === 'bytefor-character') {
         const id = sourceNode.data?.assetId
         const uri = (sourceNode.data?.assetUri && String(sourceNode.data.assetUri).trim()) ||
           (id != null && String(id).trim() !== '' ? `asset://${id}` : '')
-        if (uri) characterAssetUris.push(uri)
         const faceCode = sourceNode.data?.faceCode || sourceNode.data?.metadata?.faceCode || sourceNode.data?.metadata?.face_code || id
-        if (faceCode) faceCodes.push(String(faceCode).replace(/^face:/, ''))
+        if (sourceNode.type === 'bytefor-character') {
+          if (faceCode) byteforFaceCodes.push(String(faceCode).replace(/^face:/, ''))
+          const previewUrl = getSeedanceCharacterPreviewUrl(sourceNode.data)
+          if (previewUrl) images.push(previewUrl)
+          continue
+        } else {
+          if (uri) characterAssetUris.push(uri)
+          if (faceCode) faceCodes.push(String(faceCode).replace(/^face:/, ''))
+        }
       }
 
       const quickAsset = getSeedanceQuickAsset(sourceNode.data)
@@ -2691,8 +2776,8 @@ function getUpstreamData() {
     }
   }
   
-  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos, audios, characterAssetUris, faceCodes, quickAssetUris })
-  return { prompts, images, videos, audios, characterAssetUris, faceCodes, quickAssetUris, quickAssetSourceUrls }
+  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos, audios, characterAssetUris, faceCodes, byteforFaceCodes, quickAssetUris })
+  return { prompts, images, videos, audios, characterAssetUris, faceCodes, byteforFaceCodes, quickAssetUris, quickAssetSourceUrls }
 }
 
 // 实时获取上游文本内容（用于显示在"上下文文字参考"区域）
@@ -3914,6 +3999,12 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
       formData.append('image_urls', imageUrl)
     }
   }
+
+  if (capturedState.apiType === 'bytefor' && capturedState.byteforFaceCodes?.length > 0) {
+    formData.append('bytefor_face_codes', JSON.stringify(capturedState.byteforFaceCodes))
+    formData.append('seedance_face_codes', JSON.stringify(capturedState.byteforFaceCodes))
+    console.log('[VideoNode] Bytefor 人物 face codes:', capturedState.byteforFaceCodes)
+  }
   
   const response = await fetch(getApiUrl('/api/videos/generate'), {
     method: 'POST',
@@ -4231,33 +4322,44 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     
     // Seedance 2.0 角色素材处理
     if (capturedState.isSeedance2 && (capturedState.characterAssetUris.length > 0 || (capturedState.isSeedanceOpenApiPro && capturedState.faceCodes?.length > 0))) {
-      const charHttpUrls = new Set()
-      const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
-      for (const edge of upstreamEdges) {
-        const sn = canvasStore.nodes.find(n => n.id === edge.source)
-        if (sn?.type === 'seedance-character') {
-          if (sn.data?.assetUrl) charHttpUrls.add(sn.data.assetUrl)
-          if (sn.data?.thumbnailUrl) charHttpUrls.add(sn.data.thumbnailUrl)
-          if (sn.data?.thumbnail_url) charHttpUrls.add(sn.data.thumbnail_url)
-          if (sn.data?.output?.url) charHttpUrls.add(sn.data.output.url)
-          if (sn.data?.output?.urls) sn.data.output.urls.forEach(u => charHttpUrls.add(u))
-        }
-      }
+      const characterReplacements = collectSeedanceMediaReplacements(capturedState.nodeId, {
+        includeCharacters: true,
+        includeQuickAssets: false
+      })
+      const charHttpUrls = new Set(characterReplacements.flatMap(item => item.sourceUrls || []))
       if (capturedState.isSeedanceOpenApiPro && capturedState.faceCodes?.length > 0) {
         finalImages = finalImages.filter(u => !charHttpUrls.has(u))
         console.log('[VideoNode] Seedance OpenAPI Pro 仅保留普通参考图，角色素材通过 face codes 传递:', capturedState.faceCodes, '最终图片列表:', finalImages)
       }
       if (!capturedState.isSeedanceOpenApiPro && capturedState.characterAssetUris.length > 0) {
-        const nonCharImages = finalImages.filter(u => !charHttpUrls.has(u))
-        finalImages = [...capturedState.characterAssetUris, ...nonCharImages]
+        finalImages = applyOrderedMediaReplacements(finalImages, characterReplacements)
         console.log('[VideoNode] Seedance 2.0 注入角色素材 Asset URI:', capturedState.characterAssetUris, '最终图片列表:', finalImages)
       }
     }
 
+    if (capturedState.apiType === 'bytefor' && capturedState.byteforFaceCodes?.length > 0) {
+      const byteforCharHttpUrls = new Set()
+      const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
+      for (const edge of upstreamEdges) {
+        const sn = canvasStore.nodes.find(n => n.id === edge.source)
+        if (sn?.type === 'bytefor-character') {
+          if (sn.data?.assetUrl) byteforCharHttpUrls.add(sn.data.assetUrl)
+          if (sn.data?.thumbnailUrl) byteforCharHttpUrls.add(sn.data.thumbnailUrl)
+          if (sn.data?.thumbnail_url) byteforCharHttpUrls.add(sn.data.thumbnail_url)
+          if (sn.data?.output?.url) byteforCharHttpUrls.add(sn.data.output.url)
+          if (sn.data?.output?.urls) sn.data.output.urls.forEach(u => byteforCharHttpUrls.add(u))
+        }
+      }
+      finalImages = finalImages.filter(u => !byteforCharHttpUrls.has(u))
+      console.log('[VideoNode] Bytefor 角色素材通过 face codes 传递:', capturedState.byteforFaceCodes, '最终图片列表:', finalImages)
+    }
+
     if (capturedState.isSeedance2 && capturedState.quickAssetUris.length > 0) {
-      const quickSourceUrls = new Set(capturedState.quickAssetSourceUrls || [])
-      const nonQuickImages = finalImages.filter(u => !quickSourceUrls.has(u))
-      finalImages = [...capturedState.quickAssetUris, ...nonQuickImages]
+      const quickReplacements = collectSeedanceMediaReplacements(capturedState.nodeId, {
+        includeCharacters: false,
+        includeQuickAssets: true
+      })
+      finalImages = applyOrderedMediaReplacements(finalImages, quickReplacements)
       console.log('[VideoNode] Seedance 2.0 注入快捷过审 Asset URI:', capturedState.quickAssetUris, '最终图片列表:', finalImages)
     }
     
@@ -4447,13 +4549,8 @@ async function handleGenerate(options = {}) {
     finalPrompt = upstreamPromptText || userPrompt || inheritedPrompt.value
   }
   
-  // 支持 @标记 的模型：对提示词中的 @视频/@图片/@音频 标记进行转义
-  if (
-    supportsMediaTags.value ||
-    currentModelConfig.value?.apiType === 'kling-omni' ||
-    currentModelConfig.value?.apiType === 'kling-omni-edit' ||
-    currentModelConfig.value?.apiType === 'kling-v3-omni'
-  ) {
+  // 对提示词中的 @视频/@图片/@音频 标记进行转义
+  if (supportsMediaTags.value) {
     finalPrompt = escapePromptTags(finalPrompt)
   }
   
@@ -4561,6 +4658,7 @@ async function handleGenerate(options = {}) {
     isSeedanceOpenApiPro: isSeedanceOpenApiProModel.value,
     characterAssetUris: upstreamData.characterAssetUris || [],
     faceCodes: upstreamData.faceCodes || [],
+    byteforFaceCodes: upstreamData.byteforFaceCodes || [],
     quickAssetUris: upstreamData.quickAssetUris || [],
     quickAssetSourceUrls: upstreamData.quickAssetSourceUrls || [],
     apiType: currentModelConfig.value?.apiType || ''
@@ -7177,7 +7275,9 @@ function handleToolbarPreview() {
         'config-panel-readonly': props.data?.readonly,
         'config-panel-expanded': isConfigPanelExpanded
       }"
+      :style="{ '--config-panel-scale': configPanelScale }"
       @mousedown.stop
+      @wheel="handleConfigPanelWheel($event, isConfigPanelExpanded)"
     >
       <button
         class="config-expand-btn"
@@ -8671,7 +8771,8 @@ function handleToolbarPreview() {
   max-width: calc(100vw - 32px);
   height: 70vh;
   max-height: calc(100vh - 32px);
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--config-panel-scale, 1));
+  transform-origin: center center;
   animation: none;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -10222,6 +10323,180 @@ function handleToolbarPreview() {
   background: rgba(59, 130, 246, 0.1);
   border-color: rgba(59, 130, 246, 0.25);
   color: #2563eb;
+}
+
+:root.canvas-theme-light .config-panel-expanded .panel-frames,
+:root.canvas-theme-light .config-panel-expanded .config-row,
+:root.canvas-theme-light .config-panel-expanded .sora2-collapse-trigger,
+:root.canvas-theme-light .config-panel-expanded .sora2-advanced-options {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .config-panel-expanded .panel-frames-label {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .config-panel-expanded .panel-frames-hint,
+:root.canvas-theme-light .config-panel-expanded .sora2-collapse-trigger,
+:root.canvas-theme-light .config-panel-expanded .prompt-tag-hint {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .panel-frame-add {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .panel-frame-add:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .config-panel-expanded .context-reference-section {
+  background: rgba(59, 130, 246, 0.06);
+}
+
+:root.canvas-theme-light .config-panel-expanded .context-reference-label {
+  color: #2563eb;
+}
+
+:root.canvas-theme-light .config-panel-expanded .context-reference-hint {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .context-reference-content {
+  background: rgba(0, 0, 0, 0.03);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .config-panel-expanded .prompt-input,
+:root.canvas-theme-light .config-panel-expanded .prompt-media-tag,
+:root.canvas-theme-light .config-panel-expanded .model-name,
+:root.canvas-theme-light .config-panel-expanded .model-item-label {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .config-panel-expanded .prompt-input {
+  scrollbar-color: rgba(120, 120, 120, 0.5) rgba(200, 200, 200, 0.3);
+}
+
+:root.canvas-theme-light .config-panel-expanded .prompt-input.is-empty:empty::before,
+:root.canvas-theme-light .config-panel-expanded .model-item-desc,
+:root.canvas-theme-light .config-panel-expanded .sora2-tag-count {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .prompt-input::-webkit-scrollbar-track {
+  background: rgba(200, 200, 200, 0.3);
+}
+
+:root.canvas-theme-light .config-panel-expanded .prompt-input::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.5);
+}
+
+:root.canvas-theme-light .config-panel-expanded .prompt-input::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 100, 100, 0.7);
+}
+
+:root.canvas-theme-light .config-panel-expanded .model-selector-trigger,
+:root.canvas-theme-light .config-panel-expanded .ratio-selector,
+:root.canvas-theme-light .config-panel-expanded .duration-select,
+:root.canvas-theme-light .config-panel-expanded .count-display.clickable,
+:root.canvas-theme-light .config-panel-expanded .param-chip,
+:root.canvas-theme-light .config-panel-expanded .sora2-style-tag,
+:root.canvas-theme-light .config-panel-expanded .kling-camera-type-btn,
+:root.canvas-theme-light .config-panel-expanded .kling-camera-config-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .config-panel-expanded .model-selector-trigger:hover,
+:root.canvas-theme-light .config-panel-expanded .ratio-selector:hover,
+:root.canvas-theme-light .config-panel-expanded .duration-select:hover,
+:root.canvas-theme-light .config-panel-expanded .count-display.clickable:hover,
+:root.canvas-theme-light .config-panel-expanded .param-chip:hover,
+:root.canvas-theme-light .config-panel-expanded .sora2-style-tag:hover,
+:root.canvas-theme-light .config-panel-expanded .kling-camera-type-btn:hover,
+:root.canvas-theme-light .config-panel-expanded .kling-camera-config-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .config-panel-expanded .select-arrow,
+:root.canvas-theme-light .config-panel-expanded .ratio-icon,
+:root.canvas-theme-light .config-panel-expanded .points-cost-display,
+:root.canvas-theme-light .config-panel-expanded .duration-select-label,
+:root.canvas-theme-light .config-panel-expanded .count-display,
+:root.canvas-theme-light .config-panel-expanded .kling-slider-label,
+:root.canvas-theme-light .config-panel-expanded .kling-slider-hint,
+:root.canvas-theme-light .config-panel-expanded .seedance-sound-hint {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .ratio-select-input,
+:root.canvas-theme-light .config-panel-expanded .duration-select {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .config-panel-expanded .ratio-select-input option,
+:root.canvas-theme-light .config-panel-expanded .duration-select option {
+  background: #ffffff;
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .config-panel-expanded .duration-select:focus {
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+:root.canvas-theme-light .config-panel-expanded .count-display.clickable:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #2563eb;
+}
+
+:root.canvas-theme-light .config-panel-expanded .points-cost-display {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+:root.canvas-theme-light .config-panel-expanded .param-chip.active,
+:root.canvas-theme-light .config-panel-expanded .sora2-style-tag.selected,
+:root.canvas-theme-light .config-panel-expanded .kling-camera-type-btn.active,
+:root.canvas-theme-light .config-panel-expanded .kling-camera-config-btn.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #2563eb;
+}
+
+:root.canvas-theme-light .config-panel-expanded .sora2-collapse-trigger:hover {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+:root.canvas-theme-light .config-panel-expanded .sora2-advanced-options {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+:root.canvas-theme-light .config-panel-expanded .sora2-option-label {
+  color: #44403c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .sora2-toggle-slider {
+  background-color: #d6d3d1;
+}
+
+:root.canvas-theme-light .config-panel-expanded .sora2-toggle-slider:before {
+  background-color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .kling-camera-tip {
+  background: rgba(59, 130, 246, 0.06);
+  border-color: rgba(59, 130, 246, 0.18);
+  color: #57534e;
 }
 
 :root.canvas-theme-light .video-node .panel-frames {

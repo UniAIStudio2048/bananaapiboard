@@ -381,6 +381,7 @@ export default {
     newWorkflowBtn: 'Новый процесс',
     soraCharacterLib: 'Библиотека персонажей Sora',
     seedanceCharacterLib: 'Библиотека персонажей Seedance',
+    byteforCharacterLib: 'Библиотека персонажей Bytefor',
     characterCount: '{count} персонажей',
     characterTimeout: 'Время обработки персонажа истекло, проверьте библиотеку позже',
     characterCreateFailed: 'Ошибка создания персонажа: {error}',

@@ -81,7 +81,8 @@ export function getDefaultGenerationModeForVideoModel(modelConfig) {
 
 export function resolveVideoRequestModel(modelConfig, modelValue) {
   const apiType = modelConfig?.apiType || ''
-  if (apiType === 'bytefor' || apiType === 'seedance-openapi-pro' || apiType === 'seedance-openai') {
+  if (apiType === 'bytefor') return modelValue
+  if (apiType === 'seedance-openapi-pro' || apiType === 'seedance-openai') {
     return modelConfig?.seedanceOpenConfig?.model || modelConfig?.seedanceConfig?.model || modelConfig?.actualModel || modelValue
   }
   return modelConfig?.actualModel || modelConfig?.seedanceOpenConfig?.model || modelValue

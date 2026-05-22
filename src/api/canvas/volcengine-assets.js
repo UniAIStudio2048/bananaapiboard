@@ -72,6 +72,9 @@ export async function listAssetGroups(params = {}) {
   }
   if (params.page) queryParams.set('page', params.page)
   if (params.pageSize) queryParams.set('pageSize', params.pageSize)
+  if (params.providerType) queryParams.set('providerType', params.providerType)
+  if (params.spaceType) queryParams.set('spaceType', params.spaceType)
+  if (params.teamId) queryParams.set('teamId', params.teamId)
   const qs = queryParams.toString()
   const url = getApiUrl(`/api/volcengine-asset/groups${qs ? '?' + qs : ''}`)
   const response = await fetch(url, {
@@ -195,6 +198,7 @@ export async function listAssets(params = {}) {
   if (params.keyword) queryParams.set('keyword', params.keyword)
   if (params.page) queryParams.set('page', params.page)
   if (params.pageSize) queryParams.set('pageSize', params.pageSize)
+  if (params.providerType) queryParams.set('providerType', params.providerType)
   const qs = queryParams.toString()
   const url = getApiUrl(`/api/volcengine-asset/assets${qs ? '?' + qs : ''}`)
   const response = await fetch(url, {

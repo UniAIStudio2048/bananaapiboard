@@ -165,7 +165,8 @@ function getDefaultNodeSize(type, data = {}) {
     'video-input': { width: 420, height: 280 },
     'video': { width: 420, height: 280 },
     'storyboard': { width: data.nodeWidth || 720, height: 360 },
-    'seedance-character': { width: 220, height: 220 }
+    'seedance-character': { width: 220, height: 220 },
+    'bytefor-character': { width: 220, height: 220 }
   }
 
   return sizes[type] || { width: data.width || 380, height: data.height || 280 }

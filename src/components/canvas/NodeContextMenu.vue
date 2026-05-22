@@ -8,7 +8,7 @@ import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { getDownstreamOptions, NODE_TYPES } from '@/config/canvas/nodeTypes'
-import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled, getAvailableVideoModels } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled, isByteforCharacterLibraryEnabled, getAvailableVideoModels } from '@/config/tenant'
 import { saveAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
 import { extractVideoFrame } from '@/api/canvas/workflow'
@@ -733,6 +733,7 @@ const canSendToAssistant = computed(() => {
 })
 
 const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
+const byteforCharacterLibraryEnabled = computed(() => isByteforCharacterLibraryEnabled())
 
 // ========== Seedance 2.0 角色创建 ==========
 
@@ -746,6 +747,7 @@ const characterName = ref('')
 const characterNameRef = ref(null)
 const activeProvider = ref('')
 const isSeedanceOpenApiProProvider = computed(() => activeProvider.value === 'seedance_openapi_pro')
+const isByteforProvider = computed(() => activeProvider.value === 'bytefor')
 
 async function openSeedanceDialog() {
   if (!isImageNodeWithOutput.value) return
@@ -773,6 +775,22 @@ async function openSeedanceDialog() {
   }
 }
 
+async function openByteforDialog() {
+  if (!isImageNodeWithOutput.value) return
+  showSeedanceDialog.value = true
+  seedanceGroupsLoading.value = false
+  characterName.value = ''
+  activeProvider.value = 'bytefor'
+  seedanceGroups.value = [{
+    Id: 'seedance-openapi-pro-default',
+    Name: 'Bytefor 角色库'
+  }]
+  showNewGroupInput.value = false
+
+  await nextTick()
+  characterNameRef.value?.focus()
+}
+
 function closeSeedanceDialog() {
   showSeedanceDialog.value = false
   showNewGroupInput.value = false
@@ -791,7 +809,7 @@ function toggleNewGroupInput() {
 }
 
 async function createNewGroupAndAsset() {
-  if (isSeedanceOpenApiProProvider.value) {
+  if (isSeedanceOpenApiProProvider.value || isByteforProvider.value) {
     selectGroupAndCreate('seedance-openapi-pro-default')
     return
   }
@@ -847,6 +865,16 @@ function selectGroupAndCreate(groupId) {
   createSeedanceCharacterAsync(groupId, url, charName, providerType)
 }
 
+function buildByteforFaceCode(name) {
+  const normalized = String(name || '')
+    .trim()
+    .replace(/[^A-Za-z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 32)
+  if (normalized) return normalized
+  return `face_${Date.now().toString(36).slice(-8)}`
+}
+
 async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType = activeProvider.value) {
   const sourceNode = props.node
 
@@ -855,17 +883,20 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
     if (needsUploadToCloud(url)) {
       url = await uploadToCloudForAsset(url, 'image')
     }
+    const isBytefor = providerType === 'bytefor'
     
     const assetResult = await createVolcAsset({
       GroupId: groupId,
       URL: url,
       AssetType: 'Image',
-      Name: name
+      Name: name,
+      FaceCode: isBytefor ? buildByteforFaceCode(name) : undefined,
+      ProviderType: providerType === 'bytefor' ? 'bytefor' : undefined
     })
     
     const assetId = assetResult.asset?.Id || assetResult.Id
     if (!assetId) throw new Error('创建角色资产返回数据异常')
-    const isOpenApiPro = providerType === 'seedance_openapi_pro'
+    const isOpenApiPro = providerType === 'seedance_openapi_pro' || providerType === 'bytefor'
     const faceCode = assetResult.asset?.FaceCode || assetResult.asset?.faceCode || assetResult.FaceCode || assetResult.faceCode || assetId
     const savedAssetUrl = isOpenApiPro ? `face:${faceCode}` : `asset://${assetId}`
     const initialStatus = isOpenApiPro ? (assetResult.asset?.Status || assetResult.Status || 'pending') : 'Processing'
@@ -874,7 +905,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
     let canvasAssetId = null
     try {
       const saved = await saveAsset({
-        type: isOpenApiPro ? 'seedance-openapi-pro-character' : 'seedance-character',
+        type: isBytefor ? 'bytefor-character' : (isOpenApiPro ? 'seedance-openapi-pro-character' : 'seedance-character'),
         name: name,
         url: savedAssetUrl,
         thumbnail_url: url,
@@ -884,7 +915,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
           groupId,
           status: initialStatus,
           assetType: 'Image',
-          providerType: isOpenApiPro ? 'seedance_openapi_pro' : undefined
+          providerType: isBytefor ? 'bytefor' : (isOpenApiPro ? 'seedance_openapi_pro' : undefined)
         },
         spaceType: spaceParams.spaceType,
         teamId: spaceParams.teamId
@@ -895,11 +926,11 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
     }
 
     if (isOpenApiPro) {
-      showToast('角色已提交 Bytefor 审核', 'success')
+      showToast(isBytefor ? 'Bytefor 角色已提交审核' : 'Seedance 角色已提交审核', 'success')
 
       const { position, size } = getSeedanceCharacterNodeLayout(sourceNode)
       canvasStore.addNode({
-        type: 'seedance-character',
+        type: isBytefor ? 'bytefor-character' : 'seedance-character',
         position,
         data: {
           title: name || 'Seedance角色',
@@ -907,6 +938,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
           assetUri: savedAssetUrl,
           assetUrl: url,
           faceCode,
+          libraryType: isBytefor ? 'bytefor' : 'seedance',
           groupId,
           assetName: name,
           status: initialStatus,
@@ -939,7 +971,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
             groupId: finalAsset.GroupId || groupId,
             status: finalAsset.Status || 'Active',
             assetType: finalAsset.AssetType || 'Image',
-            providerType: isOpenApiPro ? 'seedance_openapi_pro' : undefined,
+            providerType: isBytefor ? 'bytefor' : (isOpenApiPro ? 'seedance_openapi_pro' : undefined),
             projectName: finalAsset.ProjectName,
             createTime: finalAsset.CreateTime,
             updateTime: finalAsset.UpdateTime
@@ -984,6 +1016,10 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
     const msg = getSeedanceCreateErrorMessage(error)
     showToast(msg, error.category === 'timeout' ? 'info' : 'error')
   }
+}
+
+async function createByteforCharacterAsync(groupId, rawUrl, name) {
+  return createSeedanceCharacterAsync(groupId, rawUrl, name, 'bytefor')
 }
 
 function getSeedanceCreateErrorMessage(error) {
@@ -1126,6 +1162,16 @@ function handleMenuClick(event) {
         <span class="icon">👥</span>
         创建 Seedance 2.0 角色
       </div>
+
+      <!-- 创建 Bytefor 角色 -->
+      <div
+        v-if="isImageNodeWithOutput && byteforCharacterLibraryEnabled"
+        class="canvas-context-menu-item seedance-item"
+        @click="openByteforDialog"
+      >
+        <span class="icon">人</span>
+        创建 Bytefor 角色
+      </div>
       
       <div class="canvas-context-menu-divider"></div>
     </template>
@@ -1186,7 +1232,7 @@ function handleMenuClick(event) {
     <div v-if="showSeedanceDialog" class="seedance-dialog-overlay" @click="closeSeedanceDialog">
       <div class="seedance-dialog" @click.stop>
         <div class="seedance-dialog-header">
-          <span class="seedance-dialog-title">创建 Seedance 2.0 角色</span>
+          <span class="seedance-dialog-title">{{ isByteforProvider ? '创建 Bytefor 角色' : '创建 Seedance 2.0 角色' }}</span>
           <button class="seedance-dialog-close" @click="closeSeedanceDialog">✕</button>
         </div>
         
@@ -1231,7 +1277,7 @@ function handleMenuClick(event) {
             </div>
             
             <!-- 创建新分组 -->
-            <div v-if="!isSeedanceOpenApiProProvider" class="seedance-new-group">
+            <div v-if="!isSeedanceOpenApiProProvider && !isByteforProvider" class="seedance-new-group">
               <div 
                 v-if="!showNewGroupInput && seedanceGroups.length > 0"
                 class="seedance-group-item seedance-create-btn"

@@ -292,6 +292,7 @@ export default {
     newWorkflowBtn: 'يېڭى خىزمەت ئېقىمى',
     soraCharacterLib: 'Sora رول كۈتۈپخانىسى',
     seedanceCharacterLib: 'Seedance رول كۈتۈپخانىسى',
+    byteforCharacterLib: 'Bytefor رول كۈتۈپخانىسى',
     characterCount: '{count} رول',
     characterTimeout: 'رول بىر تەرەپ قىلىش ۋاقتى ئېشىپ كەتتى، كېيىن كۈتۈپخانىدا تەكشۈرۈڭ',
     characterCreateFailed: 'رول قۇرۇش مەغلۇب بولدى: {error}',

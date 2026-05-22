@@ -86,6 +86,7 @@ const nodeTypes = {
   'group': markRaw(GroupNode),
   'character-card': markRaw(CharacterCardNode),
   'seedance-character': markRaw(SeedanceCharacterNode),
+  'bytefor-character': markRaw(SeedanceCharacterNode),
   'storyboard': markRaw(StoryboardNode)
 }
 

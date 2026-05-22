@@ -19,6 +19,7 @@ import FaceVerifyDialog from './FaceVerifyDialog.vue'
 import { getApiUrl } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { smartDownload } from '@/api/client'
+import { matchesSeedanceCharacterAssetSearch } from '@/utils/seedanceCharacterAssetSearch'
 
 const { t } = useI18n()
 import { useTeamStore } from '@/stores/team'
@@ -38,6 +39,10 @@ const props = defineProps({
   spaceFilter: {
     type: String,
     default: 'current'
+  },
+  libraryType: {
+    type: String,
+    default: 'seedance'
   }
 })
 
@@ -70,8 +75,13 @@ const createGroupForm = ref({ Name: '', Description: '' })
 const createGroupLoading = ref(false)
 const createGroupType = ref('AIGC') // 'AIGC' | 'LivenessFace'
 const supportsLiveness = computed(() => ['volcengine', 'volcengine_proxy', 'thirdparty'].includes(activeProvider.value))
-const isSeedanceOpenApiProProvider = computed(() => activeProvider.value === 'seedance_openapi_pro')
-const seedanceAssetType = computed(() => isSeedanceOpenApiProProvider.value ? 'seedance-openapi-pro-character' : 'seedance-character')
+const isByteforLibrary = computed(() => props.libraryType === 'bytefor')
+const requestedProviderType = computed(() => isByteforLibrary.value ? 'bytefor' : undefined)
+const isSeedanceOpenApiProProvider = computed(() => activeProvider.value === 'seedance_openapi_pro' || isByteforLibrary.value)
+const seedanceAssetType = computed(() => {
+  if (isByteforLibrary.value) return 'bytefor-character'
+  return isSeedanceOpenApiProProvider.value ? 'seedance-openapi-pro-character' : 'seedance-character'
+})
 const supportsCustomGroups = computed(() => !isSeedanceOpenApiProProvider.value)
 
 // 真人认证创建角色组（LivenessFace）
@@ -123,11 +133,7 @@ const filteredAssets = computed(() => {
     result = result.filter(a => a.Status === statusFilter.value)
   }
   if (searchQuery.value.trim()) {
-    const q = searchQuery.value.toLowerCase()
-    result = result.filter(a =>
-      a.Name?.toLowerCase().includes(q) ||
-      a.Id?.toLowerCase().includes(q)
-    )
+    result = result.filter(a => matchesSeedanceCharacterAssetSearch(a, searchQuery.value))
   }
   return result
 })
@@ -153,7 +159,7 @@ function getSeedanceAssetUri(asset) {
 
 async function loadGroups() {
   try {
-    const result = await listAssetGroups({ pageSize: 100 })
+    const result = await listAssetGroups({ pageSize: 100, providerType: requestedProviderType.value })
     groups.value = result.groups || []
     if (result.activeProvider) {
       activeProvider.value = result.activeProvider
@@ -171,16 +177,21 @@ function processAssetData(canvasAssets) {
   let mapped = canvasAssets
     .map(a => {
       const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata) : (a.metadata || {})
+      const faceCode = a.FaceCode || meta.faceCode || a.faceCode
+      const assetId = meta.assetId || a.Id || a.id || faceCode
       return {
-        Id: meta.assetId || a.id,
-        Name: a.name,
-        URL: resolveAssetUrl(a.thumbnail_url) || resolveAssetUrl(a.url),
-        Status: meta.status || 'Active',
-        GroupId: meta.groupId,
-        FaceCode: meta.faceCode || a.faceCode,
-        AssetType: meta.assetType || 'Image',
-        _canvasId: a.id,
-        _userId: a.user_id
+        Id: assetId,
+        Name: a.Name || a.name,
+        URL: resolveAssetUrl(a.URL) || resolveAssetUrl(a.thumbnail_url) || resolveAssetUrl(a.url),
+        Status: a.Status || meta.status || 'Active',
+        GroupId: a.GroupId || meta.groupId,
+        FaceCode: faceCode,
+        assetId,
+        assetUri: meta.assetUri || a.url || (faceCode ? `face:${faceCode}` : ''),
+        metadata: meta,
+        AssetType: a.AssetType || meta.assetType || 'Image',
+        _canvasId: a._canvasId || a.id,
+        _userId: a._userId || a.user_id
       }
     })
     .filter(a => a.GroupId && activeGroupIds.has(a.GroupId))
@@ -197,20 +208,36 @@ function processAssetData(canvasAssets) {
   return mapped
 }
 
+async function loadSeedanceCharacterAssets(spaceParams) {
+  if (isSeedanceOpenApiProProvider.value) {
+    return listVolcAssets({
+      providerType: requestedProviderType.value,
+      pageSize: 500,
+      ...spaceParams
+    })
+  }
+  return getAssets({
+    type: seedanceAssetType.value,
+    ...spaceParams
+  })
+}
+
 async function loadAssets() {
   errorMessage.value = ''
   const spaceParams = teamStore.getSpaceParams(props.spaceFilter)
 
   // Stale-while-revalidate: 先检查 IndexedDB 缓存
   let hasCachedData = false
-  try {
-    const cached = await getCachedAssets(seedanceAssetType.value, spaceParams.spaceType, spaceParams.teamId)
-    if (cached) {
-      processAssetData(cached)
-      hasCachedData = true
+  if (!isSeedanceOpenApiProProvider.value) {
+    try {
+      const cached = await getCachedAssets(seedanceAssetType.value, spaceParams.spaceType, spaceParams.teamId)
+      if (cached) {
+        processAssetData(cached)
+        hasCachedData = true
+      }
+    } catch (e) {
+      // 缓存未命中，继续正常加载
     }
-  } catch (e) {
-    // 缓存未命中，继续正常加载
   }
 
   if (!hasCachedData) {
@@ -218,14 +245,13 @@ async function loadAssets() {
   }
 
   try {
-    const result = await getAssets({
-      type: seedanceAssetType.value,
-      ...spaceParams
-    })
+    const result = await loadSeedanceCharacterAssets(spaceParams)
 
     const canvasAssets = result.assets || []
 
-    cacheAssets(seedanceAssetType.value, spaceParams.spaceType, spaceParams.teamId, canvasAssets).catch(() => {})
+    if (!isSeedanceOpenApiProProvider.value) {
+      cacheAssets(seedanceAssetType.value, spaceParams.spaceType, spaceParams.teamId, canvasAssets).catch(() => {})
+    }
 
     const mapped = processAssetData(canvasAssets)
 
@@ -557,7 +583,8 @@ async function handleFileUpload(event) {
         GroupId: targetGroupId,
         URL: url,
         AssetType: 'Image',
-        Name: fileName
+        Name: fileName,
+        ProviderType: requestedProviderType.value
       })
       const asset = result.asset || result
       const assetId = asset.Id || asset.id
@@ -649,7 +676,8 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
 
     if (asset.Status === 'Active') {
       emit('insert-to-canvas', {
-        type: 'seedance-character',
+        type: isByteforLibrary.value ? 'bytefor-character' : 'seedance-character',
+        libraryType: props.libraryType,
         assetId: asset.Id,
         assetUri: `asset://${asset.Id}`,
         assetUrl: asset.URL || imageUrl,
@@ -674,7 +702,8 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
 
 function handleAssetDragStart(e, asset) {
   const data = {
-    type: 'seedance-character',
+    type: isByteforLibrary.value ? 'bytefor-character' : 'seedance-character',
+    libraryType: props.libraryType,
     assetId: asset.Id,
     assetUri: getSeedanceAssetUri(asset),
     assetUrl: asset.URL,
@@ -711,7 +740,8 @@ function handleAddToCanvas() {
   if (!contextMenuAsset.value) return
   const asset = contextMenuAsset.value
   emit('insert-to-canvas', {
-    type: 'seedance-character',
+    type: isByteforLibrary.value ? 'bytefor-character' : 'seedance-character',
+    libraryType: props.libraryType,
     assetId: asset.Id,
     assetUri: getSeedanceAssetUri(asset),
     assetUrl: asset.URL,
@@ -883,7 +913,7 @@ onMounted(async () => {
   // 每30秒检查一次渠道是否变化，如果变化则自动刷新
   channelCheckTimer = setInterval(async () => {
     try {
-      const result = await listAssetGroups({ pageSize: 1 })
+      const result = await listAssetGroups({ pageSize: 1, providerType: requestedProviderType.value })
       if (result.activeProvider && result.activeProvider !== activeProvider.value) {
         console.log('[SeedancePanel] 渠道已切换:', activeProvider.value, '->', result.activeProvider)
         activeProvider.value = result.activeProvider
@@ -953,7 +983,7 @@ onUnmounted(() => {
         <input
           v-model="searchQuery"
           class="search-input"
-          placeholder="搜索角色..."
+          placeholder="搜索角色或资产 ID..."
         />
       </div>
 
@@ -1379,7 +1409,7 @@ onUnmounted(() => {
                   <input
                     v-model="searchQuery"
                     class="search-input"
-                    placeholder="搜索角色..."
+                    placeholder="搜索角色或资产 ID..."
                   />
                 </div>
                 <div class="fullscreen-filters">

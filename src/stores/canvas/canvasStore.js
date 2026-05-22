@@ -2348,6 +2348,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     'group',
     'storyboard',
     'character-card',
+    'seedance-character',
+    'bytefor-character',
     'preview-output'
   ])
 

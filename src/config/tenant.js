@@ -348,6 +348,14 @@ export async function loadBrandConfig(forceReload = false) {
       }
       console.log('[tenant] Sora 角色库开关:', runtimeConfig.enableSoraCharacterLibrary)
 
+      // 更新 Bytefor 角色库开关
+      if (data.enableByteforCharacterLibrary !== undefined) {
+        runtimeConfig.enableByteforCharacterLibrary = data.enableByteforCharacterLibrary
+      } else {
+        runtimeConfig.enableByteforCharacterLibrary = false
+      }
+      console.log('[tenant] Bytefor 角色库开关:', runtimeConfig.enableByteforCharacterLibrary)
+
       // 更新画布底部 Logo 开关
       if (data.enableCanvasLogo !== undefined) {
         runtimeConfig.enableCanvasLogo = data.enableCanvasLogo
@@ -591,6 +599,9 @@ export const isSeedanceFeaturesEnabled = () => config.enableSeedanceFeatures !==
 
 // 检查 Sora 角色库是否启用
 export const isSoraCharacterLibraryEnabled = () => config.enableSoraCharacterLibrary !== false
+
+// 检查 Bytefor 角色库是否启用
+export const isByteforCharacterLibraryEnabled = () => config.enableByteforCharacterLibrary === true
 
 // 检查画布底部 Logo 是否启用
 export const isCanvasLogoEnabled = () => config.enableCanvasLogo !== false

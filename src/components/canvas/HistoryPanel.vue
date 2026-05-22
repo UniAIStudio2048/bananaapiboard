@@ -25,6 +25,7 @@ import { preloadImages } from '@/utils/imageCache'
 import { toSameOriginUrl, getOriginalImageUrl } from '@/utils/canvasThumbnail'
 import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
 import { getHistoryAspectRatioStyle, normalizeHistoryAspectRatio } from '@/utils/historyAspectRatio'
+import { buildHistoryMediaDetails, enrichHistoryMediaDetails } from '@/utils/historyMediaDetails'
 import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
@@ -550,6 +551,12 @@ function getHistoryModelDisplayName(item) {
   return item?.model_display_name || item?.modelDisplayName || ''
 }
 
+function getHistoryPreviewDetails(item) {
+  return buildHistoryMediaDetails(item, {
+    modelName: getHistoryModelDisplayName(item) || item?.model
+  })
+}
+
 async function copyHistoryPrompt(e, item) {
   if (e) e.stopPropagation()
   const prompt = item?.prompt || ''
@@ -737,6 +744,11 @@ async function handleBatchDownload() {
 function handleHistoryClick(item) {
   previewItem.value = item
   showPreview.value = true
+  enrichHistoryMediaDetails(item, { resolveUrl: getMediaUrl }).then(details => {
+    if (previewItem.value?.id === details.id) {
+      previewItem.value = details
+    }
+  })
   // 重置缩放和平移状态
   previewScale.value = 1
   previewTranslate.value = { x: 0, y: 0 }
@@ -2095,10 +2107,15 @@ onUnmounted(() => {
           <!-- 底部信息和操作栏 -->
           <div class="preview-footer">
             <!-- 信息区 -->
-            <div class="preview-info-row">
-              <span v-if="getHistoryModelDisplayName(previewItem)" class="info-tag">{{ getHistoryModelDisplayName(previewItem) }}</span>
-              <span v-if="formatSize(previewItem)" class="info-tag">{{ formatSize(previewItem) }}</span>
-              <span class="info-tag">{{ formatDate(previewItem.created_at) }}</span>
+            <div class="preview-detail-grid">
+              <div
+                v-for="detail in getHistoryPreviewDetails(previewItem)"
+                :key="detail.label"
+                class="preview-detail-item"
+              >
+                <span class="preview-detail-label">{{ detail.label }}</span>
+                <span class="preview-detail-value" :title="detail.value">{{ detail.value }}</span>
+              </div>
             </div>
             
             <!-- 提示词 -->
@@ -3291,6 +3308,44 @@ onUnmounted(() => {
   border-radius: 4px;
 }
 
+.preview-detail-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  align-items: flex-start;
+  user-select: text;
+}
+
+.preview-detail-item {
+  min-width: 0;
+  max-width: 320px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  background: transparent;
+}
+
+.preview-detail-label {
+  flex: 0 0 auto;
+  display: inline;
+  margin: 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.preview-detail-value {
+  display: inline;
+  min-width: 0;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  word-break: break-all;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.86);
+}
+
 /* 提示词 */
 .preview-prompt {
   font-size: 12px;
@@ -3935,6 +3990,14 @@ onUnmounted(() => {
 :root.canvas-theme-light .history-preview-modal .info-tag {
   color: rgba(0, 0, 0, 0.6) !important;
   background: rgba(0, 0, 0, 0.05) !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .preview-detail-label {
+  color: rgba(0, 0, 0, 0.45) !important;
+}
+
+:root.canvas-theme-light .history-preview-modal .preview-detail-value {
+  color: rgba(0, 0, 0, 0.75) !important;
 }
 
 :root.canvas-theme-light .history-preview-modal .preview-prompt {

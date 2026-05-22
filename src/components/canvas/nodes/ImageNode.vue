@@ -40,6 +40,7 @@ import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
+import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
 import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import {
   bindMediaMention,
@@ -88,6 +89,7 @@ const { updateNodeInternals, findNode, setViewport, getViewport, getSelectedNode
 const configPanelRef = ref(null)
 const isConfigPanelExpanded = ref(false)
 const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
+const { configPanelScale, handleConfigPanelWheel, resetConfigPanelScale } = createConfigPanelWheelZoom()
 
 // 文件上传引用
 const fileInputRef = ref(null)
@@ -680,6 +682,7 @@ function centerNodeInViewport() {
 function toggleConfigPanelExpanded() {
   const nextExpanded = !isConfigPanelExpanded.value
   if (nextExpanded) {
+    resetConfigPanelScale()
     centerNodeInViewport()
   }
   isConfigPanelExpanded.value = nextExpanded
@@ -692,6 +695,7 @@ function toggleConfigPanelExpanded() {
 
 function collapseConfigPanel() {
   isConfigPanelExpanded.value = false
+  resetConfigPanelScale()
 }
 
 function invalidateCanvasHistory() {
@@ -7669,7 +7673,9 @@ async function handleDrop(event) {
         'config-panel-readonly': props.data?.readonly,
         'config-panel-expanded': isConfigPanelExpanded
       }"
+      :style="{ '--config-panel-scale': configPanelScale }"
       @mousedown.stop
+      @wheel="handleConfigPanelWheel($event, isConfigPanelExpanded)"
     >
       <button
         class="config-expand-btn"
@@ -9349,7 +9355,8 @@ async function handleDrop(event) {
   max-width: calc(100vw - 32px);
   height: 70vh;
   max-height: calc(100vh - 32px);
-  transform: translate(-50%, -50%);
+  transform: translate(-50%, -50%) scale(var(--config-panel-scale, 1));
+  transform-origin: center center;
   overflow-y: auto;
   overscroll-behavior: contain;
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.42);
@@ -11146,6 +11153,177 @@ async function handleDrop(event) {
   background: rgba(59, 130, 246, 0.1);
   border-color: rgba(59, 130, 246, 0.25);
   color: #2563eb;
+}
+
+:root.canvas-theme-light .config-panel-expanded .panel-frames,
+:root.canvas-theme-light .config-panel-expanded .config-row,
+:root.canvas-theme-light .config-panel-expanded .sora2-collapse-trigger,
+:root.canvas-theme-light .config-panel-expanded .sora2-advanced-options {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .config-panel-expanded .panel-frames-label {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .config-panel-expanded .panel-frames-hint,
+:root.canvas-theme-light .config-panel-expanded .sora2-collapse-trigger {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .panel-frame-add {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .panel-frame-add:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .config-panel-expanded .prompt-input,
+:root.canvas-theme-light .config-panel-expanded .prompt-media-tag,
+:root.canvas-theme-light .config-panel-expanded .model-name,
+:root.canvas-theme-light .config-panel-expanded .model-icon-text {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .config-panel-expanded .prompt-input.is-empty:empty::before,
+:root.canvas-theme-light .config-panel-expanded .model-item-desc {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .model-selector-trigger,
+:root.canvas-theme-light .config-panel-expanded .preset-selector-trigger,
+:root.canvas-theme-light .config-panel-expanded .ratio-selector,
+:root.canvas-theme-light .config-panel-expanded .param-chip {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .config-panel-expanded .model-selector-trigger:hover,
+:root.canvas-theme-light .config-panel-expanded .preset-selector-trigger:hover,
+:root.canvas-theme-light .config-panel-expanded .ratio-selector:hover,
+:root.canvas-theme-light .config-panel-expanded .param-chip:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+:root.canvas-theme-light .config-panel-expanded .select-arrow,
+:root.canvas-theme-light .config-panel-expanded .preset-icon,
+:root.canvas-theme-light .config-panel-expanded .ratio-icon,
+:root.canvas-theme-light .config-panel-expanded .points-cost-display {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-name,
+:root.canvas-theme-light .config-panel-expanded .ratio-select-input {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .config-panel-expanded .count-display {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .config-panel-expanded .count-display.clickable {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .config-panel-expanded .count-display.clickable:hover {
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #2563eb;
+}
+
+:root.canvas-theme-light .config-panel-expanded .points-cost-display {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.2);
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-list {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-list::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-list::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.2);
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-item {
+  border-bottom-color: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-item.active {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-divider {
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .config-panel-expanded .divider-label,
+:root.canvas-theme-light .config-panel-expanded .preset-item-desc {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-item-label {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-item.preset-action,
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-item.preset-action .preset-item-label {
+  color: #8b5cf6;
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-item.preset-action:hover {
+  background: rgba(139, 92, 246, 0.08);
+}
+
+:root.canvas-theme-light .config-panel-expanded .param-chip.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #2563eb;
+}
+
+:root.canvas-theme-light .config-panel-expanded .sora2-collapse-trigger:hover {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.03);
+}
+
+:root.canvas-theme-light .config-panel-expanded .sora2-advanced-options {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+:root.canvas-theme-light .config-panel-expanded .sora2-option-label {
+  color: #44403c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .sora2-toggle-slider {
+  background-color: #d6d3d1;
+}
+
+:root.canvas-theme-light .config-panel-expanded .sora2-toggle-slider:before {
+  background-color: #78716c;
 }
 
 :root.canvas-theme-light .image-node .panel-frames {

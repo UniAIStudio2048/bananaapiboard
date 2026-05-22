@@ -10,6 +10,7 @@ import { getTenantHeaders, getModelDisplayName, getApiUrl, getMediaUrl } from '@
 import { formatPoints, formatBalance } from '@/utils/format'
 import { getHistoryImageDisplayUrl, makeHistoryImagePlaceholder } from '@/utils/historyImageDisplay'
 import { getHistoryAspectRatioStyle } from '@/utils/historyAspectRatio'
+import { buildHistoryMediaDetails, enrichHistoryMediaDetails } from '@/utils/historyMediaDetails'
 import { toPointsNumber, getEffectivePackagePoints, getTotalUserPoints } from '@/utils/points'
 import { normalizePointsSources, getPointsSourcesMaxTotal } from '@/utils/pointsSources'
 
@@ -1183,8 +1184,13 @@ async function doCheckin() {
 }
 
 function viewImage(image) {
-  selectedImage.value = image
+  selectedImage.value = { ...image, type: 'image' }
   showImageModal.value = true
+  enrichHistoryMediaDetails(selectedImage.value, { resolveUrl: getMediaUrl }).then(details => {
+    if (selectedImage.value?.id === details.id) {
+      selectedImage.value = details
+    }
+  })
 }
 
 function getImageDisplayUrl(image) {
@@ -1199,9 +1205,22 @@ function getVideoPreviewAspectStyle(video) {
   return getHistoryAspectRatioStyle(video, '16 / 9')
 }
 
+function getImagePreviewDetails(image) {
+  return buildHistoryMediaDetails(image, { modelName: getImageModelName(image) })
+}
+
+function getVideoPreviewDetails(video) {
+  return buildHistoryMediaDetails({ ...video, type: 'video' }, { modelName: getVideoModelName(video) })
+}
+
 function viewVideo(video) {
-  selectedVideo.value = video
+  selectedVideo.value = { ...video, type: 'video' }
   showVideoModal.value = true
+  enrichHistoryMediaDetails(selectedVideo.value, { resolveUrl: getMediaUrl }).then(details => {
+    if (selectedVideo.value?.id === details.id) {
+      selectedVideo.value = details
+    }
+  })
   // 使用 setTimeout 确保 DOM 更新后再尝试播放
   setTimeout(() => {
     if (videoPlayerRef.value) {
@@ -4886,9 +4905,15 @@ onUnmounted(() => {
           </div>
           
           <p class="text-white font-medium mb-2 whitespace-pre-wrap break-words leading-relaxed">{{ selectedImage.prompt || '无提示词' }}</p>
-          <div class="flex flex-wrap items-center justify-between gap-2 text-sm text-white/70">
-            <span>{{ getImageModelName(selectedImage) }} · {{ selectedImage.aspectRatio }} · {{ selectedImage.imageSize || 'N/A' }}</span>
-            <span>{{ new Date(selectedImage.createdAt).toLocaleString() }}</span>
+          <div class="flex flex-wrap items-start gap-x-4 gap-y-1.5 text-sm text-white/75 select-text">
+            <div
+              v-for="detail in getImagePreviewDetails(selectedImage)"
+              :key="detail.label"
+              class="min-w-0 max-w-full sm:max-w-xs flex items-baseline gap-1.5"
+            >
+              <span class="shrink-0 text-xs text-white/45">{{ detail.label }}</span>
+              <span class="min-w-0 break-all font-medium text-white" :title="detail.value">{{ detail.value }}</span>
+            </div>
           </div>
           <div class="flex items-center space-x-2 mt-2">
             <span v-if="selectedImage.rating > 0" class="text-sm font-medium px-2 py-1 bg-amber-500/20 text-amber-300 rounded">
@@ -4991,9 +5016,15 @@ onUnmounted(() => {
           </div>
           
           <p class="text-white font-medium mb-2">{{ selectedVideo.prompt }}</p>
-          <div class="flex items-center justify-between text-sm text-white/70">
-            <span>{{ getVideoModelName(selectedVideo) }} · {{ selectedVideo.aspect_ratio }} · {{ selectedVideo.duration }}s</span>
-            <span>{{ new Date(selectedVideo.created_at).toLocaleString() }}</span>
+          <div class="flex flex-wrap items-start gap-x-4 gap-y-1.5 text-sm text-white/75 select-text">
+            <div
+              v-for="detail in getVideoPreviewDetails(selectedVideo)"
+              :key="detail.label"
+              class="min-w-0 max-w-full sm:max-w-xs flex items-baseline gap-1.5"
+            >
+              <span class="shrink-0 text-xs text-white/45">{{ detail.label }}</span>
+              <span class="min-w-0 break-all font-medium text-white" :title="detail.value">{{ detail.value }}</span>
+            </div>
           </div>
           <div class="flex items-center space-x-2 mt-2">
             <span :class="videoStatusColor(selectedVideo.status)" class="text-sm font-medium px-2 py-1 bg-white/10 rounded">
