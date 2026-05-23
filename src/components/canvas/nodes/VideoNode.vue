@@ -65,6 +65,7 @@ import {
 import { isSeedanceSd2VideoModel, resolveVideoRequestModel } from '@/utils/videoGenerationMode'
 import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
 import { exportVideoTimeline, getSubtitleEraseTask } from '@/api/canvas/video-tools'
+import { smartDownload } from '@/api/client'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import CanvasNodeImage from '@/components/canvas/CanvasNodeImage.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
@@ -6862,7 +6863,6 @@ async function handleToolbarDownload() {
   console.log('[VideoNode] 开始下载:', { url: videoUrl.substring(0, 60), filename })
   
   try {
-    const { smartDownload } = await import('@/api/client')
     await smartDownload(videoUrl, filename)
     console.log('[VideoNode] 下载原视频成功:', filename)
   } catch (error) {
@@ -6945,7 +6945,7 @@ function handleToolbarPreview() {
         <span>字幕擦除</span>
       </button>
       <div class="toolbar-divider"></div>
-      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
+      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent @click.stop.prevent="handleToolbarDownload">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
