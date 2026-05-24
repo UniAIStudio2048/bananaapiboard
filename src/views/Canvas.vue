@@ -165,6 +165,14 @@ const autoSaveEnabled = ref(false) // 只有保存过的工作流才启用自动
 let exitPersistInFlight = null
 let lastExitPersistKey = ''
 
+// 后台任务完成后的"立即持久化"防抖控制
+// 原因：updateNodeFromTask 只改前端内存节点，不写库；如果用户不主动保存且未达 5 分钟
+// 自动保存周期就刷新页面，会导致 canvas_workflows.workflow_data 里没有最新 output.urls，
+// 表现为"刷新后才能看到图片"。这里在每次任务完成后短延迟（去抖）触发一次 autoSaveWorkflow，
+// 把含有 output.urls 的节点数据立即落库。
+let _persistAfterTaskTimer = null
+const PERSIST_AFTER_TASK_DEBOUNCE_MS = 800
+
 // 🔧 Toast 通知状态（用于显示保存状态等）
 const toastMessage = ref('')
 const toastType = ref('info') // success | error | info | warning
@@ -1136,12 +1144,15 @@ function restoreBackgroundTasks() {
       onComplete: (completedTask) => {
         console.log('[Canvas] 后台任务完成:', completedTask.taskId)
         updateNodeFromTask(completedTask)
+        // 与全局事件路径保持一致：完成后立即去抖落库
+        schedulePersistAfterTask(`restore-complete:${completedTask.taskId}`)
         // 延迟清理完成的任务
         setTimeout(() => removeCompletedTask(completedTask.taskId), 5000)
       },
       onError: (failedTask) => {
         console.log('[Canvas] 后台任务失败:', failedTask.taskId)
         updateNodeFromTask(failedTask)
+        schedulePersistAfterTask(`restore-failed:${failedTask.taskId}`)
         setTimeout(() => removeCompletedTask(failedTask.taskId), 5000)
       }
     })
@@ -1205,6 +1216,9 @@ function handleBackgroundTaskComplete(event) {
   if (!task) return
   console.log('[Canvas] 后台任务完成:', task.taskId)
   updateNodeFromTask(task)
+  // 任务完成结果（图片/视频/音频 URL）只在前端内存里更新，必须立即写库，
+  // 避免刷新页面后 canvas_workflows.workflow_data 仍是旧值导致画布看不到结果。
+  schedulePersistAfterTask(`complete:${task.taskId}`)
   setTimeout(() => removeCompletedTask(task.taskId), 5000)
 }
 
@@ -1213,14 +1227,46 @@ function handleBackgroundTaskFailed(event) {
   if (!task) return
   console.log('[Canvas] 后台任务失败:', task.taskId)
   updateNodeFromTask(task)
+  // 失败状态也需要落库，否则刷新后节点会回到 processing 重新轮询拿到失败再次扣分前端体验差
+  schedulePersistAfterTask(`failed:${task.taskId}`)
   setTimeout(() => removeCompletedTask(task.taskId), 5000)
+}
+
+// 任务完成后，去抖触发一次"立即持久化"
+// 仅在工作流已经存在 workflowId 时直接调用 autoSaveWorkflow（已支持 hasChanges 检查）
+// 新建工作流场景由 autoSaveWorkflow 内部"节点 >= 2 时自动建草稿"逻辑兜底
+function schedulePersistAfterTask(reason = 'background-task') {
+  if (_persistAfterTaskTimer) {
+    clearTimeout(_persistAfterTaskTimer)
+  }
+  _persistAfterTaskTimer = setTimeout(() => {
+    _persistAfterTaskTimer = null
+    const currentTab = canvasStore.getCurrentTab?.()
+    if (!currentTab) return
+    if (!currentTab.hasChanges) return
+    if (_isCanvasDragging) return
+    console.log(`[Canvas] 任务完成后触发立即持久化 (reason=${reason}, workflowId=${currentTab.workflowId || 'draft'})`)
+    autoSaveWorkflow().catch(err => {
+      console.warn('[Canvas] 任务完成后立即持久化失败:', err?.message || err)
+    })
+  }, PERSIST_AFTER_TASK_DEBOUNCE_MS)
 }
 
 // 根据任务更新节点状态
 function updateNodeFromTask(task) {
   const node = canvasStore.nodes.find(n => n.id === task.nodeId)
   if (!node) {
-    console.log(`[Canvas] 找不到任务关联的节点: ${task.nodeId}`)
+    console.log(`[Canvas] 找不到任务关联的节点 (可能已被删除): ${task.nodeId}, 触发历史面板刷新作为兜底`)
+    // 关键兜底：节点已删除时，生成结果仍然写入了后端历史表（image_history / video_history / music_history），
+    // 显式派发一次历史失效事件，保证历史面板立刻拉到这条记录。
+    // backgroundTaskManager.notifyTaskComplete 也会派发，这里是 progress/失败/恢复路径的额外加固。
+    try {
+      window.dispatchEvent(new CustomEvent('canvas-history-invalidate', {
+        detail: { taskId: task.taskId, task, source: 'orphan-task' }
+      }))
+    } catch (e) {
+      // ignore
+    }
     return
   }
   
@@ -2561,6 +2607,11 @@ onUnmounted(() => {
   // 性能优化: 清理拖拽状态监听器
   window.removeEventListener('canvas-drag-start', _onCanvasDragStart)
   window.removeEventListener('canvas-drag-end', _onCanvasDragEnd)
+  // 清理"任务完成后立即持久化"的去抖定时器
+  if (_persistAfterTaskTimer) {
+    clearTimeout(_persistAfterTaskTimer)
+    _persistAfterTaskTimer = null
+  }
   stopAutoSave()
   stopHistoryAutoSave()
 
