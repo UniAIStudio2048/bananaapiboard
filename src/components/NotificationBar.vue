@@ -1,381 +1,342 @@
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue'
-import DOMPurify from 'dompurify'
-import { getTenantHeaders, getApiUrl } from '@/config/tenant'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { getHomeNotices } from '@/api/community'
 
-const notification = ref(null)
+const ROTATION_INTERVAL_MS = 8000
+const CLOSE_SUPPRESSION_MS = 24 * 60 * 60 * 1000
+
+const router = useRouter()
+const notices = ref([])
+const activeIndex = ref(0)
 const isVisible = ref(false)
-const isCollapsed = ref(false)
-const isMobile = ref(false)
-const scrollSpeed = ref(50)
+let rotationTimer = null
 
-// 移动端双击检测
-let lastTapTime = 0
-let touchStartY = 0
+const activeNotice = computed(() => notices.value[activeIndex.value] || null)
 
-// 检测是否为移动端
-function checkMobile() {
-  isMobile.value = window.innerWidth <= 768
+const barStyle = computed(() => ({
+  backgroundColor: activeNotice.value?.bar_background_color || '#D8F4FF'
+}))
+
+const cardStyle = computed(() => ({
+  backgroundColor: activeNotice.value?.card_background_color || '#FFFFFF',
+  color: activeNotice.value?.text_color || '#0F172A'
+}))
+
+const badgeText = computed(() => activeNotice.value?.badge_text || '📣 通知')
+
+function getTenantIdentity() {
+  return localStorage.getItem('tenant_id') ||
+    localStorage.getItem('current_tenant_id') ||
+    window.location.host ||
+    'default'
 }
 
-// 加载通知配置
-async function loadNotification() {
-  try {
-    const r = await fetch(getApiUrl('/api/tenant/notification'), {
-      headers: getTenantHeaders()
-    })
-    if (r.ok) {
-      const data = await r.json()
-      if (data.enabled && data.content) {
-        notification.value = data
-        scrollSpeed.value = data.scroll_speed || 50
-        isVisible.value = true
-        // 检查本地存储的收起状态
-        const collapsed = localStorage.getItem('notification_collapsed')
-        if (collapsed === 'true') {
-          isCollapsed.value = true
-        }
-      }
-    }
-  } catch (e) {
-    console.error('加载通知栏失败', e)
+function getUserIdentity() {
+  return localStorage.getItem('user_id') ||
+    localStorage.getItem('userId') ||
+    localStorage.getItem('username') ||
+    'anonymous'
+}
+
+function getDismissStorageKey() {
+  return `home_notice_dismissed:${getTenantIdentity()}:${getUserIdentity()}`
+}
+
+function getAnonymousDismissKey() {
+  return `home_notice_anonymous_dismissed:${getTenantIdentity()}`
+}
+
+function isSuppressed() {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    return sessionStorage.getItem(getAnonymousDismissKey()) === '1'
+  }
+
+  const dismissedAt = Number(localStorage.getItem(getDismissStorageKey()) || 0)
+  return dismissedAt > 0 && Date.now() - dismissedAt < CLOSE_SUPPRESSION_MS
+}
+
+function closeNotice() {
+  const token = localStorage.getItem('token')
+  if (token) {
+    localStorage.setItem(getDismissStorageKey(), String(Date.now()))
+  } else {
+    sessionStorage.setItem(getAnonymousDismissKey(), '1')
+  }
+  isVisible.value = false
+  stopRotation()
+}
+
+function showNextNotice() {
+  if (notices.value.length <= 1) return
+  activeIndex.value = (activeIndex.value + 1) % notices.value.length
+}
+
+function startRotation() {
+  stopRotation()
+  if (notices.value.length > 1) {
+    rotationTimer = setInterval(showNextNotice, ROTATION_INTERVAL_MS)
   }
 }
 
-// 解析内容中的链接
-const parsedContent = computed(() => {
-  if (!notification.value?.content) return ''
-  let content = notification.value.content
-  content = content.replace(
-    /\[([^\]]+)\]\(([^)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener noreferrer" class="notification-link">$1</a>'
-  )
-  return DOMPurify.sanitize(content, {
-    ALLOWED_TAGS: ['a', 'span', 'strong', 'em', 'br'],
-    ALLOWED_ATTR: ['href', 'target', 'rel', 'class']
-  })
-})
-
-// 计算滚动动画时长
-const animationDuration = computed(() => {
-  if (!notification.value?.content) return 15
-  // 根据内容长度和速度计算动画时长
-  const contentLength = notification.value.content.length
-  const baseWidth = contentLength * 14 + 200 // 估算内容宽度
-  return Math.max(8, baseWidth / scrollSpeed.value)
-})
-
-// 计算样式
-const barStyle = computed(() => {
-  if (!notification.value) return {}
-  return {
-    '--bg-color': notification.value.background_color || '#FEF3C7',
-    '--text-color': notification.value.text_color || '#92400E',
-    '--scroll-duration': `${animationDuration.value}s`
+function stopRotation() {
+  if (rotationTimer) {
+    clearInterval(rotationTimer)
+    rotationTimer = null
   }
-})
-
-// 点击收起
-function handleBarClick(e) {
-  // 如果点击的是链接，不收起
-  if (e.target.tagName === 'A') return
-  toggleCollapse()
 }
 
-// 切换收起/展开状态
-function toggleCollapse() {
-  isCollapsed.value = !isCollapsed.value
-  localStorage.setItem('notification_collapsed', isCollapsed.value.toString())
-}
+function openNotice() {
+  const link = activeNotice.value?.link_url?.trim()
+  if (!link) return
 
-// 移动端触摸事件处理
-function handleTouchStart(e) {
-  touchStartY = e.touches[0].clientY
-}
-
-function handleTouchEnd(e) {
-  const touchEndY = e.changedTouches[0].clientY
-  const deltaY = touchEndY - touchStartY
-  
-  // 下拉手势展开（收起状态下）
-  if (isCollapsed.value && deltaY > 30) {
-    isCollapsed.value = false
-    localStorage.setItem('notification_collapsed', 'false')
+  if (/^https?:\/\//i.test(link)) {
+    window.open(link, '_blank', 'noopener,noreferrer')
     return
   }
-  
-  // 双击收起（展开状态下）
-  if (!isCollapsed.value) {
-    const currentTime = new Date().getTime()
-    const tapLength = currentTime - lastTapTime
-    if (tapLength < 300 && tapLength > 0) {
-      isCollapsed.value = true
-      localStorage.setItem('notification_collapsed', 'true')
-    }
-    lastTapTime = currentTime
+
+  router.push(link.startsWith('/') ? link : `/${link}`)
+}
+
+async function loadHomeNotices() {
+  if (isSuppressed()) return
+  try {
+    const response = await getHomeNotices()
+    const items = response?.data || []
+    notices.value = Array.isArray(items) ? items.slice(0, 3) : []
+    activeIndex.value = 0
+    isVisible.value = notices.value.length > 0
+    startRotation()
+  } catch (error) {
+    console.error('[NotificationBar] 加载首页通知失败:', error)
   }
 }
 
-onMounted(() => {
-  checkMobile()
-  window.addEventListener('resize', checkMobile)
-  loadNotification()
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', checkMobile)
-})
+onMounted(loadHomeNotices)
+onUnmounted(stopRotation)
 </script>
 
 <template>
-  <Transition name="notification">
-    <div 
-      v-if="isVisible && notification" 
-      class="notification-wrapper"
+  <Transition name="home-notice">
+    <div
+      v-if="isVisible && activeNotice"
+      class="home-notice-bar"
       :style="barStyle"
-      :class="{ 'is-collapsed': isCollapsed }"
     >
-      <!-- 展开状态 -->
-      <div 
-        v-show="!isCollapsed"
-        class="notification-bar"
-        @click="handleBarClick"
-        @touchstart="handleTouchStart"
-        @touchend="handleTouchEnd"
-        :title="isMobile ? '双击收起' : '点击收起'"
-      >
-        <div class="notification-track">
-          <div class="notification-scroll">
-            <span v-html="parsedContent" class="notification-text"></span>
-            <span class="spacer">•</span>
-            <span v-html="parsedContent" class="notification-text"></span>
-            <span class="spacer">•</span>
-          </div>
-        </div>
+      <div class="home-notice-viewport">
+        <Transition name="home-notice-page" mode="out-in">
+          <button
+            :key="activeNotice.id || activeIndex"
+            class="home-notice-card"
+            :class="`preset-${activeNotice.preset || 'blue'}`"
+            :style="cardStyle"
+            type="button"
+            @click="openNotice"
+          >
+            <span class="home-notice-badge">{{ badgeText }}</span>
+            <span class="home-notice-copy">
+              <span class="home-notice-title">{{ activeNotice.title }}</span>
+              <span v-if="activeNotice.content" class="home-notice-content">{{ activeNotice.content }}</span>
+            </span>
+          </button>
+        </Transition>
       </div>
-      
-      <!-- 收起状态的把手 -->
-      <div 
-        v-show="isCollapsed"
-        class="notification-handle"
-        @click="toggleCollapse"
-        @touchstart="handleTouchStart"
-        @touchend="handleTouchEnd"
-        :title="isMobile ? '下拉展开' : '点击展开'"
-      >
-        <div class="handle-pill">
-          <svg class="handle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
-          </svg>
-          <span class="handle-dot"></span>
-        </div>
-      </div>
+
+      <button class="home-notice-close" type="button" aria-label="关闭通知" @click="closeNotice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6L6 18" />
+        </svg>
+      </button>
     </div>
   </Transition>
 </template>
 
 <style scoped>
-.notification-wrapper {
+.home-notice-bar {
   position: relative;
-  z-index: 30;
-  --bg-color: #FEF3C7;
-  --text-color: #92400E;
-  --scroll-duration: 15s;
+  z-index: 60;
+  min-height: 48px;
+  padding: 8px 56px;
   display: flex;
+  align-items: center;
   justify-content: center;
-  padding: 6px 0;
-  pointer-events: none;
+  gap: 12px;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
 }
 
-/* 展开状态的通知栏 */
-.notification-bar {
-  display: inline-flex;
+.home-notice-viewport {
+  max-width: min(1680px, calc(100vw - 80px));
+  display: flex;
   align-items: center;
-  background: var(--bg-color);
-  color: var(--text-color);
-  padding: 0.5rem 1.5rem;
-  min-height: 36px;
-  width: 520px;
-  max-width: calc(100vw - 40px);
+  justify-content: center;
   overflow: hidden;
-  position: relative;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+}
+
+.home-notice-card {
+  width: max-content;
+  max-width: 100%;
+  min-height: 32px;
+  box-sizing: border-box;
+  border: 0;
   border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  pointer-events: auto;
-}
-
-.notification-bar:hover {
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
-  transform: translateY(-0.5px);
-}
-
-.notification-bar:active {
-  transform: translateY(0);
-}
-
-/* 滚动轨道 */
-.notification-track {
-  overflow: hidden;
-  flex: 1;
-  mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 20px, black calc(100% - 20px), transparent);
-}
-
-/* 滚动容器 */
-.notification-scroll {
-  display: inline-flex;
+  padding: 7px 14px;
+  display: flex;
   align-items: center;
-  animation: scroll-marquee var(--scroll-duration) linear infinite;
+  justify-content: center;
+  gap: 10px;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+  text-align: center;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.home-notice-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
+}
+
+.home-notice-badge {
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 700;
+  background: rgba(14, 165, 233, 0.16);
+  color: #0369a1;
+}
+
+.home-notice-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  overflow: hidden;
+  line-height: 20px;
+}
+
+.home-notice-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.notification-bar:hover .notification-scroll {
-  animation-play-state: paused;
+.home-notice-content {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 20px;
+  opacity: 0.78;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.spacer {
-  padding: 0 2em;
-  opacity: 0.5;
-  flex-shrink: 0;
-}
-
-@keyframes scroll-marquee {
-  0% {
-    transform: translateX(0);
-  }
-  100% {
-    transform: translateX(-50%);
-  }
-}
-
-.notification-text {
-  font-size: 0.875rem;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  line-height: 1.5;
-  flex-shrink: 0;
-}
-
-/* 链接样式 */
-.notification-bar :deep(.notification-link) {
-  color: inherit;
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  font-weight: 600;
-  transition: opacity 0.2s;
-}
-
-.notification-bar :deep(.notification-link:hover) {
-  opacity: 0.75;
-}
-
-/* 收起状态的把手 */
-.notification-handle {
-  display: flex;
-  justify-content: center;
-  padding: 2px 0;
+.home-notice-close {
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.55);
+  color: #0f172a;
+  display: grid;
+  place-items: center;
   cursor: pointer;
-  pointer-events: auto;
 }
 
-.handle-pill {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--bg-color);
-  color: var(--text-color);
-  padding: 6px 16px;
-  border-radius: 0 0 8px 8px;
-  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
-  transition: all 0.2s ease;
-  position: relative;
+.home-notice-close:hover {
+  background: rgba(255, 255, 255, 0.82);
 }
 
-.handle-pill:hover {
-  padding: 7px 18px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+.home-notice-close svg {
+  width: 16px;
+  height: 16px;
 }
 
-.handle-icon {
-  width: 14px;
-  height: 14px;
-  opacity: 0.8;
+.preset-amber .home-notice-badge {
+  background: rgba(245, 158, 11, 0.16);
+  color: #92400e;
 }
 
-.handle-dot {
-  width: 6px;
-  height: 6px;
-  background: currentColor;
-  border-radius: 50%;
-  opacity: 0.8;
-  animation: pulse 2s ease-in-out infinite;
+.preset-green .home-notice-badge {
+  background: rgba(16, 185, 129, 0.16);
+  color: #047857;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 0.8; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.8); }
+.preset-dark .home-notice-badge {
+  background: rgba(255, 255, 255, 0.16);
+  color: inherit;
 }
 
-/* 过渡动画 */
-.notification-enter-active,
-.notification-leave-active {
-  transition: all 0.3s ease;
+.home-notice-enter-active,
+.home-notice-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-.notification-enter-from {
+.home-notice-enter-from,
+.home-notice-leave-to {
   opacity: 0;
+  transform: translateY(-8px);
 }
 
-.notification-leave-to {
+.home-notice-page-enter-active,
+.home-notice-page-leave-active {
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+
+.home-notice-page-enter-from {
   opacity: 0;
+  transform: translateY(-110%);
 }
 
-/* 响应式设计 */
+.home-notice-page-leave-to {
+  opacity: 0;
+  transform: translateY(110%);
+}
+
 @media (max-width: 768px) {
-  .notification-wrapper {
-    padding: 4px 8px;
+  .home-notice-bar {
+    padding: 8px 44px 8px 10px;
+    gap: 8px;
+    align-items: center;
   }
-  
-  .notification-bar {
-    padding: 0.4rem 1rem;
-    min-height: 32px;
-    max-width: calc(100% - 16px);
-    border-radius: 6px;
-  }
-  
-  .notification-text {
-    font-size: 0.8125rem;
-  }
-  
-  .spacer {
-    padding: 0 1.5em;
-  }
-  
-  .handle-pill {
-    padding: 3px 10px;
-  }
-  
-  .handle-icon {
-    width: 12px;
-    height: 12px;
-  }
-  
-  .handle-dot {
-    width: 5px;
-    height: 5px;
-  }
-}
 
-/* 深色模式适配 */
-@media (prefers-color-scheme: dark) {
-  .notification-bar {
-    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.25);
+  .home-notice-viewport {
+    max-width: calc(100vw - 54px);
   }
-  
-  .handle-pill {
-    box-shadow: 0 1px 8px rgba(0, 0, 0, 0.3);
+
+  .home-notice-card {
+    width: max-content;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
   }
+
+  .home-notice-copy {
+    max-width: calc(100% - 50px);
+    align-items: center;
+    flex-direction: row;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .home-notice-content {
+    width: auto;
+  }
+
 }
 </style>

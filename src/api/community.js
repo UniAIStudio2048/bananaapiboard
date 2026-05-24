@@ -70,6 +70,11 @@ export function getBanners() {
   return request('/api/community/banners')
 }
 
+/** 获取社区首页顶部通知 */
+export function getHomeNotices() {
+  return request('/api/community/home-notices')
+}
+
 /** 获取分类列表 */
 export function getCategories() {
   return request('/api/community/categories')

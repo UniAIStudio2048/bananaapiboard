@@ -216,6 +216,7 @@ async function copyInviteLink() {
 }
 const isCommunityLandingPage = computed(() => route.path === '/' && import.meta.env.VITE_LANDING_MODE === '1')
 const isCommunityPage = computed(() => route.path.startsWith('/community') || isCommunityLandingPage.value)
+const isHomeNoticeVisible = computed(() => route.path === '/' || route.path === '/community')
 const hasIcpFooterLinks = computed(() => Boolean(icpConfig.value.icp_number || icpConfig.value.icp_license_number || icpConfig.value.network_culture_license || icpConfig.value.broadcast_license))
 const isIcpFooterVisible = computed(() => {
   const isStandaloneSurface = route.path === '/canvas' || route.path === '/workflows' || route.name === 'communityWorkflow'
@@ -632,8 +633,8 @@ const isIcpFooterVisible = computed(() => {
       </div>
     </nav>
 
-    <!-- 通知栏 - 落地页、画布页、工作流页和社区详情页不显示 -->
-    <NotificationBar v-if="route.path !== '/' && route.path !== '/canvas' && route.path !== '/workflows' && !route.path.startsWith('/community')" />
+    <!-- 首页顶部通知栏 -->
+    <NotificationBar v-if="isHomeNoticeVisible" />
 
     <!-- 主内容区 -->
     <main class="flex-1">
