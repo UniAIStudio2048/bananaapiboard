@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<meta name="theme-color" content="#FFD60A" />
+<title>原型市场 · 需求调研问卷</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+    background: #FFF8E1;
+    color: #1a1a1a;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 16px 120px; }
+
+  header.hero {
+    padding: 24px 16px 20px;
+    background: linear-gradient(135deg, #FFD60A 0%, #FFB800 100%);
+    border-radius: 0 0 24px 24px;
+    margin: 0 -16px 20px;
+    color: #1a1a1a;
+  }
+  header.hero h1 { margin: 0 0 6px; font-size: 22px; font-weight: 800; letter-spacing: 0.5px; }
+  header.hero p.sub { margin: 0; font-size: 13px; opacity: 0.75; }
+
+  .progress-bar { position: sticky; top: 0; background: #FFF8E1; padding: 12px 0 8px; margin: 0 -16px; z-index: 10; border-bottom: 1px solid rgba(0,0,0,0.06); }
+  .progress-bar .inner { padding: 0 16px; }
+  .progress-bar .track { height: 6px; border-radius: 3px; background: rgba(0,0,0,0.08); overflow: hidden; }
+  .progress-bar .fill { height: 100%; background: #FFB800; width: 0%; transition: width 0.3s ease; }
+  .progress-bar .label { display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-top: 6px; }
+
+  .intro {
+    background: #fff;
+    border-radius: 16px;
+    padding: 16px;
+    margin: 16px 0 24px;
+    font-size: 14px;
+    color: #444;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+  .intro strong { color: #1a1a1a; }
+
+  .question {
+    background: #fff;
+    border-radius: 16px;
+    padding: 18px 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    scroll-margin-top: 80px;
+  }
+  .question.required-missing { box-shadow: 0 0 0 2px #ff4d4f; }
+  .question .qhead { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 14px; }
+  .question .qno { flex-shrink: 0; background: #FFD60A; color: #1a1a1a; font-weight: 700; font-size: 13px; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+  .question .qtitle { font-size: 16px; font-weight: 600; line-height: 1.4; }
+  .question .qhint { font-size: 12px; color: #999; margin: 6px 0 12px 34px; }
+
+  .options { display: flex; flex-direction: column; gap: 8px; }
+  .opt { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border: 1.5px solid #e8e8e8; border-radius: 12px; cursor: pointer; transition: all 0.15s; background: #fafafa; }
+  .opt:active { transform: scale(0.99); }
+  .opt.checked { border-color: #FFB800; background: #FFF8E1; }
+  .opt input { margin-top: 3px; flex-shrink: 0; accent-color: #FFB800; }
+  .opt .opt-label { font-size: 14px; line-height: 1.4; color: #333; flex: 1; }
+
+  textarea {
+    width: 100%;
+    min-height: 80px;
+    padding: 12px;
+    border: 1.5px solid #e8e8e8;
+    border-radius: 12px;
+    background: #fafafa;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    color: #333;
+  }
+  textarea:focus { outline: none; border-color: #FFB800; background: #fff; }
+
+  input[type=text] {
+    width: 100%;
+    padding: 12px;
+    border: 1.5px solid #e8e8e8;
+    border-radius: 12px;
+    background: #fafafa;
+    font-size: 14px;
+    font-family: inherit;
+    color: #333;
+  }
+  input[type=text]:focus { outline: none; border-color: #FFB800; background: #fff; }
+
+  .submit-bar {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    background: rgba(255,248,225,0.95);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(0,0,0,0.06);
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    z-index: 20;
+  }
+  .submit-bar .inner { max-width: 640px; margin: 0 auto; }
+  button.submit {
+    width: 100%;
+    padding: 14px;
+    font-size: 16px;
+    font-weight: 700;
+    border: none;
+    border-radius: 12px;
+    background: #FFB800;
+    color: #1a1a1a;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  button.submit:active { transform: scale(0.98); }
+  button.submit:disabled { background: #e8e8e8; color: #999; cursor: not-allowed; }
+
+  .thanks { text-align: center; padding: 40px 20px; }
+  .thanks .icon { font-size: 64px; margin-bottom: 16px; }
+  .thanks h2 { font-size: 22px; margin: 0 0 12px; }
+  .thanks p { color: #666; margin: 6px 0; }
+  .thanks .serial { display: inline-block; margin-top: 16px; padding: 8px 16px; background: #FFD60A; border-radius: 20px; font-weight: 600; }
+
+  .error-toast {
+    position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+    background: #ff4d4f; color: #fff; padding: 10px 16px; border-radius: 8px;
+    font-size: 14px; z-index: 30; box-shadow: 0 4px 12px rgba(255,77,79,0.3);
+    opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  }
+  .error-toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="hero">
+    <h1>原型市场 · 需求调研</h1>
+    <p class="sub">5 分钟，15 道选择题，帮我们决定下一步要不要做</p>
+  </header>
+
+  <div class="progress-bar">
+    <div class="inner">
+      <div class="track"><div class="fill" id="progressFill"></div></div>
+      <div class="label"><span id="progressText">0 / 15 已完成</span><span>必填 *</span></div>
+    </div>
+  </div>
+
+  <div id="formArea">
+
+    <div class="intro">
+      我们正在评估一个新方向：<strong>在 Banana AI 画布平台上叠加一个「猪八戒式」接单平台</strong>——发需求方挂单出佣金，创作团队入驻接单、用画布交付，组长可分配子任务、给成员算积分。<br><br>
+      在动手开发之前，想先听听你的真实想法。问卷匿名，答案直接进我们的需求评估文档。
+    </div>
+
+    <div id="questions"></div>
+
+    <div class="question">
+      <div class="qhead">
+        <div class="qno">+</div>
+        <div class="qtitle">补充想说的话（可选）</div>
+      </div>
+      <textarea id="freeText" placeholder="平台还应该做什么 / 你曾经被坑的故事 / 任何想吐槽的……"></textarea>
+    </div>
+
+    <div class="question">
+      <div class="qhead">
+        <div class="qno">@</div>
+        <div class="qtitle">联系方式（可选，仅用于深度访谈）</div>
+      </div>
+      <input type="text" id="contact" placeholder="微信号 / 手机号 / 邮箱（不留也可以提交）" />
+    </div>
+
+  </div>
+
+  <div id="thanksArea" class="thanks" style="display:none;">
+    <div class="icon">🎉</div>
+    <h2>收到啦，谢谢！</h2>
+    <p>你的答案已经进入评估文档。</p>
+    <p>如果想随时改主意，可以再提交一次。</p>
+    <div class="serial" id="serialBadge"></div>
+  </div>
+
+</div>
+
+<div class="submit-bar" id="submitBar">
+  <div class="inner">
+    <button class="submit" id="submitBtn">提交问卷</button>
+  </div>
+</div>
+
+<div class="error-toast" id="toast"></div>
+
+<script>
+const SURVEY = {
+  id: 'prototype-market-v1',
+  title: '原型市场（猛八戒式接单平台）需求调研',
+  questions: [
+    { id: 'role', required: true, type: 'single', title: '你最有可能是哪种角色？',
+      options: [
+        '我是「有需求方」：自己/公司经常要 AI 图像/视频创作，但缺人缺工具',
+        '我是「接单方/创作团队」：有 AI 创作能力，想接活赚钱',
+        '我是「自由创作者」：偶尔接活，偶尔发活',
+        '我只是路过看看，对接单平台没具体需求'
+      ]
+    },
+    { id: 'channel', required: true, type: 'single', title: '你目前怎么找活 / 找团队？',
+      options: [
+        '没渠道，靠关系/朋友介绍',
+        '在闲鱼、小红书、微信群发布或寻找',
+        '用过猛八戒、Fiverr、特赞等专业接单平台',
+        '在公司内部接单，不对外'
+      ]
+    },
+    { id: 'pain', required: true, type: 'multi', title: '当前模式下，最让你头疼的是？（可多选）',
+      hint: '至少选 1 项',
+      options: [
+        '找人 / 找活效率太低',
+        '沟通不清楚，反复改稿',
+        '付钱 / 收钱有纠纷',
+        '没法验证对方能力、真实性',
+        '版权 / 商用授权说不清'
+      ]
+    },
+    { id: 'delivery_time', required: true, type: 'single', title: '现在完成一单（从约定到交付）平均多久？',
+      options: [ '当天就能搞定', '1-3 天', '一周以内', '一周以上', '我没接过 / 没发过' ]
+    },
+    { id: 'demand_type', required: true, type: 'multi', title: '你期望发 / 接的需求主要是哪类？（可多选）',
+      hint: '至少选 1 项',
+      options: [
+        '商品图 / 产品图生成',
+        '头像 / 插画 / 海报设计',
+        '短视频 / 动图制作',
+        '三维 / 场景渲染',
+        '综合性多类型'
+      ]
+    },
+    { id: 'frequency', required: true, type: 'single', title: '你期望使用这种平台的频率？',
+      options: [ '每天会用', '每周 1-3 次', '每月几次', '偶尔有需求才用' ]
+    },
+    { id: 'value', required: true, type: 'single', title: '如果平台主打「画布即工作流」（接单方在画布上做、需求方实时看进度），你最看重哪点？',
+      options: [
+        '进度透明、过程可见',
+        '画布资产可被复用 / 二次创作',
+        '平台担保资金，不被骗',
+        '团队能协作分工，不是单人接活'
+      ]
+    },
+    { id: 'price_range', required: true, type: 'single', title: '你估计的单笔订单金额范围？',
+      options: [ '< 100 元', '100-500 元', '500-2000 元', '> 2000 元', '我没接过 / 没发过' ]
+    },
+    { id: 'fee_model', required: true, type: 'single', title: '你愿意接受的平台费用模式？',
+      hint: '回答从「接单方/团队」视角考虑',
+      options: [
+        '平台抽佣 5-10%',
+        '平台抽佣 10-20%',
+        '月费 / 年费包月，0 抽佣',
+        '0 抽佣，由需求方付服务费',
+        '不愿意付任何费用'
+      ]
+    },
+    { id: 'team_mgmt', required: true, type: 'single', title: '如果你是团队组长，最希望平台提供的管理功能？',
+      options: [
+        '子任务派单 + 积分计算',
+        '团队成员能力画像 + 自动分配建议',
+        '营收分账（平台自动算抽成）',
+        '我不组团，单干就行'
+      ]
+    },
+    { id: 'qc', required: true, type: 'single', title: '如果你是发需求方，验收前最希望平台帮你做什么？',
+      options: [
+        '自动质检（分辨率 / 水印 / 清晰度）',
+        '多版本对比 + 评分',
+        '强制版权确认 + 商用授权书',
+        '我自己看就行，不需要平台介入'
+      ]
+    },
+    { id: 'trust', required: true, type: 'single', title: '你倾向哪种「接单方信任评级」机制？',
+      options: [
+        '历史交易评分（用户互评）',
+        '实名 + 公司资质认证',
+        '平台官方认证（金牌 / 银牌团队）',
+        '不需要评级，看作品说话'
+      ]
+    },
+    { id: 'concern', required: true, type: 'multi', title: '你最担心平台出什么问题？（可多选）',
+      hint: '至少选 1 项',
+      options: [
+        '平台跑路，押金 / 佣金拿不回',
+        '抄袭 / 版权纠纷处理不力',
+        '平台抽成过高',
+        '没有买家 / 卖家活跃度，冷启动失败',
+        '维权响应太慢'
+      ]
+    },
+    { id: 'launch_action', required: true, type: 'single', title: '如果这个平台明天上线测试版，你会怎么做？',
+      options: [
+        '立刻注册试用，发 / 接第一单',
+        '注册占个位，观望几周',
+        '看看再说，不会立刻动',
+        '不会用'
+      ]
+    },
+    { id: 'early_invest', required: true, type: 'single', title: '你愿意为早期试用投入多少？',
+      options: [
+        '每月投 ≥ 5 小时 + ≥ 500 元尝试',
+        '每月投 1-5 小时，先不花钱',
+        '偶尔看看，不主动投入',
+        '完全没兴趣'
+      ]
+    }
+  ]
+}
+
+const state = { answers: {} }
+
+function renderQuestions() {
+  const wrap = document.getElementById('questions')
+  wrap.innerHTML = SURVEY.questions.map((q, idx) => {
+    const no = idx + 1
+    const star = q.required ? ' *' : ''
+    const hint = q.hint ? `<div class="qhint">${q.hint}</div>` : ''
+    const inputType = q.type === 'multi' ? 'checkbox' : 'radio'
+    const opts = q.options.map((opt, i) => `
+      <label class="opt" data-q="${q.id}" data-i="${i}">
+        <input type="${inputType}" name="${q.id}" value="${opt.replace(/"/g, '&quot;')}" />
+        <span class="opt-label">${opt}</span>
+      </label>
+    `).join('')
+    return `
+      <div class="question" id="q-${q.id}">
+        <div class="qhead">
+          <div class="qno">${no}</div>
+          <div class="qtitle">${q.title}${star}</div>
+        </div>
+        ${hint}
+        <div class="options">${opts}</div>
+      </div>
+    `
+  }).join('')
+
+  wrap.addEventListener('change', e => {
+    if (!e.target.matches('input[type=radio], input[type=checkbox]')) return
+    const qId = e.target.name
+    const q = SURVEY.questions.find(x => x.id === qId)
+    if (!q) return
+    if (q.type === 'single') {
+      state.answers[qId] = e.target.value
+    } else {
+      const all = Array.from(document.querySelectorAll(`input[name="${qId}"]:checked`)).map(x => x.value)
+      state.answers[qId] = all
+    }
+    document.querySelectorAll(`label.opt[data-q="${qId}"]`).forEach(lab => {
+      const input = lab.querySelector('input')
+      lab.classList.toggle('checked', input.checked)
+    })
+    document.getElementById(`q-${qId}`).classList.remove('required-missing')
+    updateProgress()
+  })
+}
+
+function isAnswered(q) {
+  const a = state.answers[q.id]
+  if (q.type === 'single') return typeof a === 'string' && a.length > 0
+  return Array.isArray(a) && a.length > 0
+}
+
+function updateProgress() {
+  const total = SURVEY.questions.length
+  const done = SURVEY.questions.filter(isAnswered).length
+  document.getElementById('progressFill').style.width = `${(done / total) * 100}%`
+  document.getElementById('progressText').textContent = `${done} / ${total} 已完成`
+  document.getElementById('submitBtn').disabled = done < total
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast')
+  t.textContent = msg
+  t.classList.add('show')
+  setTimeout(() => t.classList.remove('show'), 2400)
+}
+
+async function submit() {
+  const missing = SURVEY.questions.filter(q => q.required && !isAnswered(q))
+  if (missing.length > 0) {
+    missing.forEach(q => document.getElementById(`q-${q.id}`).classList.add('required-missing'))
+    const first = document.getElementById(`q-${missing[0].id}`)
+    first.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    toast(`还有 ${missing.length} 题没答`)
+    return
+  }
+
+  const btn = document.getElementById('submitBtn')
+  btn.disabled = true
+  btn.textContent = '提交中…'
+
+  const payload = {
+    surveyId: SURVEY.id,
+    surveyTitle: SURVEY.title,
+    questions: SURVEY.questions.map(q => ({ id: q.id, title: q.title, type: q.type })),
+    answers: SURVEY.questions.map(q => state.answers[q.id] ?? null),
+    freeText: document.getElementById('freeText').value.trim(),
+    contact: document.getElementById('contact').value.trim()
+  }
+
+  try {
+    const r = await fetch('/api/survey/submit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+    const data = await r.json()
+    if (!r.ok || !data.ok) {
+      throw new Error(data.message || `提交失败 (${r.status})`)
+    }
+    document.getElementById('formArea').style.display = 'none'
+    document.getElementById('submitBar').style.display = 'none'
+    document.querySelector('.progress-bar').style.display = 'none'
+    document.getElementById('thanksArea').style.display = 'block'
+    document.getElementById('serialBadge').textContent = `第 ${data.serial} 份提交`
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  } catch (err) {
+    btn.disabled = false
+    btn.textContent = '提交问卷'
+    toast(err.message || '网络错误，请重试')
+  }
+}
+
+renderQuestions()
+updateProgress()
+document.getElementById('submitBtn').addEventListener('click', submit)
+</script>
+</body>
+</html>

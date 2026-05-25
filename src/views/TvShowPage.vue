@@ -121,7 +121,7 @@
         <h2 class="text-lg font-semibold mb-4 text-neutral-200">更多作品</h2>
         <div class="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-3 [column-fill:_balance-all]">
           <div v-for="item in portraitWorks" :key="'pt-' + item.id" class="break-inside-avoid mb-3">
-            <WorkCard :work="item" :landscape="false" @click="goToWork" @like="handleLike" />
+            <WorkCard :work="item" :landscape="item.orientation === 'landscape'" @click="goToWork" @like="handleLike" />
           </div>
         </div>
       </section>
@@ -286,6 +286,10 @@ function buildParams(extra = {}) {
   return params
 }
 
+function hasScopedTvShowFilter() {
+  return activeCategory.value !== null || !!searchKeyword.value.trim()
+}
+
 async function loadTopWorks() {
   try {
     const landscapeParams = buildParams({ orientation: 'landscape', pageSize: MAX_TOP_SLOTS, page: 1 })
@@ -303,10 +307,10 @@ async function loadTopWorks() {
       top = [...top, ...portraitItems.slice(0, fillCount)]
     }
 
-    topWorks.value = top.length > 0 ? top : generateMockWorks(12, 'landscape')
+    topWorks.value = top.length > 0 ? top : (hasScopedTvShowFilter() ? [] : generateMockWorks(12, 'landscape'))
   } catch (e) {
     console.error('[TvShowPage] 加载顶部作品失败:', e)
-    topWorks.value = generateMockWorks(12, 'landscape')
+    topWorks.value = hasScopedTvShowFilter() ? [] : generateMockWorks(12, 'landscape')
   }
 }
 
@@ -316,7 +320,9 @@ async function loadPortraitWorks(reset = false) {
   if (reset) { portraitPage.value = 1; portraitWorks.value = []; noMore.value = false }
   loadingMore.value = true
   try {
-    const params = buildParams({ orientation: 'portrait', page: portraitPage.value, pageSize: 20 })
+    const params = buildParams(hasScopedTvShowFilter()
+      ? { page: portraitPage.value, pageSize: 20 }
+      : { orientation: 'portrait', page: portraitPage.value, pageSize: 20 })
     const res = await getWorks(params)
     const works = res.data?.works || res.works || []
 
@@ -324,7 +330,7 @@ async function loadPortraitWorks(reset = false) {
     const filtered = works.filter(w => !topIds.has(w.id))
 
     if (reset && filtered.length === 0 && works.length === 0) {
-      portraitWorks.value = generateMockWorks(20, 'portrait')
+      portraitWorks.value = hasScopedTvShowFilter() ? [] : generateMockWorks(20, 'portrait')
       noMore.value = true
       return
     }
@@ -339,7 +345,7 @@ async function loadPortraitWorks(reset = false) {
   } catch (e) {
     console.error('[TvShowPage] 加载竖屏作品失败:', e)
     if (reset && portraitWorks.value.length === 0) {
-      portraitWorks.value = generateMockWorks(20, 'portrait')
+      portraitWorks.value = hasScopedTvShowFilter() ? [] : generateMockWorks(20, 'portrait')
       noMore.value = true
     }
   } finally { loadingMore.value = false }
