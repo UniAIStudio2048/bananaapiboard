@@ -108,6 +108,7 @@ const edges = ref([])
 const viewport = ref({ x: 0, y: 0, zoom: 1 })
 const showForkDialog = ref(false)
 const cloneFn = ref(null)
+const forkDialogDefaultScope = ref('workflow')
 const canvasContainerRef = ref(null)
 
 // 自定义滚轮缩放（与正式画布 CanvasBoard 一致）
@@ -207,11 +208,15 @@ function close() {
 
 function handleClone() {
   if (!communityStore.requireLogin()) return
+  forkDialogDefaultScope.value = 'workflow'
   if (props.workId) {
-    cloneFn.value = (data) => forkWork(props.workId, {
-      ...data,
-      workflow_id: activeTabId.value || props.workflowId || undefined
-    })
+    cloneFn.value = (data) => {
+      if (data?.scope === 'project') return forkProject(props.workId, data)
+      return forkWork(props.workId, {
+        ...data,
+        workflow_id: activeTabId.value || props.workflowId || undefined
+      })
+    }
   } else if (props.templateId) {
     cloneFn.value = (data) => cloneTemplate(props.templateId, data)
   } else {
@@ -278,18 +283,9 @@ async function loadWorkflowData(targetWorkflowId) {
 async function handleCloneProject() {
   if (!communityStore.requireLogin()) return
   if (cloningProject.value) return
-  cloningProject.value = true
-  try {
-    const res = await forkProject(props.workId)
-    if (res.data?.project_id) {
-      close()
-      router.push('/canvas')
-    }
-  } catch (e) {
-    alert(e.message || '克隆项目失败')
-  } finally {
-    cloningProject.value = false
-  }
+  forkDialogDefaultScope.value = 'project'
+  cloneFn.value = (data) => forkProject(props.workId, data)
+  showForkDialog.value = true
 }
 
 // ESC 关闭
@@ -460,6 +456,10 @@ function onKeydown(e) {
           :work-id="workId || 0"
           :work-title="title"
           :clone-fn="cloneFn"
+          :has-project="isProject"
+          :project-name="projectInfo?.name || title"
+          :project-workflow-count="projectWorkflows.length"
+          :default-scope="forkDialogDefaultScope"
           @forked="onCloned"
         />
 

@@ -230,7 +230,7 @@ export function getProxiedImageUrl(url) {
       }
     } catch (_) {}
 
-    return `${getApiUrl('/api/images/proxy')}?url=${encodeURIComponent(url)}`
+    return `${getApiUrl('/api/images/proxy')}?force=1&url=${encodeURIComponent(url)}`
   }
 
   return url

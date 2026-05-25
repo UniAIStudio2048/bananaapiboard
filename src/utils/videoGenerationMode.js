@@ -59,7 +59,7 @@ function hasByteforMarker(modelConfig) {
 export function isSeedanceSd2VideoModel(modelConfig) {
   const apiType = modelConfig?.apiType || ''
   if (hasByteforMarker(modelConfig)) return false
-  return apiType === 'seedance-2.0' || apiType === 'ant' || apiType === 'happyhorse'
+  return apiType === 'seedance-2.0' || apiType === 'ant' || apiType === 'happyhorse' || apiType === 'ctyun-seedance'
 }
 
 export function getDefaultSeedance2ModeForVideoModel(modelConfig) {

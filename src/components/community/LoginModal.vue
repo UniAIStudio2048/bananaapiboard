@@ -85,6 +85,19 @@ function resetForm() {
   resetCountdown.value = 0
 }
 
+function applyInviteCodeFromUrl() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const inviteFromUrl = params.get('invite') || params.get('code') || ''
+    if (inviteFromUrl) {
+      inviteCode.value = inviteFromUrl
+      mode.value = 'register'
+    }
+  } catch (e) {
+    console.warn('[LoginModal] 解析邀请链接失败', e)
+  }
+}
+
 function enterResetMode() {
   resetMode.value = true
   error.value = ''
@@ -104,6 +117,7 @@ function exitResetMode() {
 watch(() => props.modelValue, (v) => {
   if (v) {
     resetForm()
+    applyInviteCodeFromUrl()
     loadSettings()
     loadEmailConfig()
   }

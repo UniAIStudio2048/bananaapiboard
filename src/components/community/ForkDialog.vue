@@ -17,7 +17,8 @@ const props = defineProps({
   cloneFn: { type: Function, default: null },
   hasProject: { type: Boolean, default: false },
   projectName: { type: String, default: '' },
-  projectWorkflowCount: { type: Number, default: 0 }
+  projectWorkflowCount: { type: Number, default: 0 },
+  defaultScope: { type: String, default: 'workflow' }
 })
 
 const emit = defineEmits(['update:modelValue', 'forked'])
@@ -49,7 +50,7 @@ watch(() => props.modelValue, (v) => {
   if (v) {
     spaceType.value = 'personal'
     selectedTeamId.value = null
-    forkScope.value = 'workflow'
+    forkScope.value = props.defaultScope === 'project' ? 'project' : 'workflow'
     error.value = ''
     success.value = false
     forkedWorkflowId.value = null
@@ -77,10 +78,14 @@ async function handleFork() {
     }
     // If custom clone function provided, use it; otherwise use default forkWork
     const result = props.cloneFn
-      ? await props.cloneFn({ space_type: spaceType.value, team_id: selectedTeamId.value || undefined })
+      ? await props.cloneFn({
+        space_type: spaceType.value,
+        ...(spaceType.value === 'team' ? { team_id: selectedTeamId.value } : {}),
+        ...(forkScope.value === 'project' ? { scope: 'project' } : {})
+      })
       : await forkWork(props.workId, data)
     success.value = true
-    forkedWorkflowId.value = result.workflow_id || result.workflowId || null
+    forkedWorkflowId.value = result.data?.workflow_id || result.workflow_id || result.workflowId || null
     emit('forked', result)
   } catch (e) {
     error.value = e.message || '复刻失败，请重试'

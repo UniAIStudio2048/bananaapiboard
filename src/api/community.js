@@ -253,8 +253,8 @@ export function getProjectWorkflows(workId) {
 }
 
 /** 克隆整个项目（含所有工作流） */
-export function forkProject(workId) {
-  return request(`/api/community/works/${workId}/fork-project`, { method: 'POST' })
+export function forkProject(workId, data = {}) {
+  return request(`/api/community/works/${workId}/fork-project`, { method: 'POST', body: data })
 }
 
 /** 获取社区区块自定义名称 */

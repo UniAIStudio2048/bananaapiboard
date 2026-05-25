@@ -312,11 +312,92 @@ function getProxiedImageUrl(url) {
     
     // 外部 URL，使用代理接口绕过 CORS
     console.log('[ImageToolbar] 使用代理加载外部图片:', url.substring(0, 60) + '...')
-    return `${getApiUrl('/api/images/proxy')}?url=${encodeURIComponent(url)}`
+    return `${getApiUrl('/api/images/proxy')}?force=1&url=${encodeURIComponent(url)}`
   }
   
   // 其他情况直接返回
   return url
+}
+
+async function fetchImageAsBlob(url) {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`图片下载失败: ${response.status} ${response.statusText}`)
+  }
+  const blob = await response.blob()
+  const blobUrl = URL.createObjectURL(blob)
+  const img = new Image()
+  try {
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = blobUrl
+    })
+  } catch (error) {
+    URL.revokeObjectURL(blobUrl)
+    throw error
+  }
+  URL.revokeObjectURL(blobUrl)
+  return img
+}
+
+async function loadImageForCanvas(imageUrl) {
+  if (!imageUrl) {
+    throw new Error('图片地址为空')
+  }
+
+  if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
+    const img = new Image()
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = imageUrl
+    })
+    return img
+  }
+
+  const proxiedUrl = getProxiedImageUrl(imageUrl)
+  const isProxied = proxiedUrl !== imageUrl
+  const MAX_RETRIES = 3
+  let lastError = null
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      console.log(`[ImageToolbar] loadImageForCanvas: 尝试 ${attempt}/${MAX_RETRIES}`, proxiedUrl?.substring(0, 100))
+      return await fetchImageAsBlob(proxiedUrl)
+    } catch (error) {
+      lastError = error
+      console.warn(`[ImageToolbar] loadImageForCanvas: 尝试 ${attempt} 失败:`, error.message)
+      if (attempt < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, 500 * attempt))
+      }
+    }
+  }
+
+  if (isProxied) {
+    try {
+      console.log('[ImageToolbar] loadImageForCanvas: 代理失败，尝试直接 fetch 原始 URL')
+      return await fetchImageAsBlob(imageUrl)
+    } catch (error) {
+      console.warn('[ImageToolbar] loadImageForCanvas: 直接 fetch 也失败:', error.message)
+    }
+  }
+
+  try {
+    console.log('[ImageToolbar] loadImageForCanvas: 尝试 crossOrigin 加载')
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    await new Promise((resolve, reject) => {
+      img.onload = resolve
+      img.onerror = reject
+      img.src = imageUrl
+    })
+    return img
+  } catch (error) {
+    console.warn('[ImageToolbar] loadImageForCanvas: crossOrigin 加载也失败:', error.message)
+  }
+
+  throw lastError || new Error('图片加载失败，请检查网络连接后重试')
 }
 
 // ========== 宫格裁剪选项菜单（统一入口） ==========
@@ -391,15 +472,7 @@ async function createStoryboardFromCrop(cols, rows) {
     }
     
     // 加载图片
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    const proxiedUrl = getProxiedImageUrl(imageUrl.value)
-    
-    await new Promise((resolve, reject) => {
-      img.onload = resolve
-      img.onerror = reject
-      img.src = proxiedUrl
-    })
+    const img = await loadImageForCanvas(imageUrl.value)
     
     const imgWidth = img.naturalWidth
     const imgHeight = img.naturalHeight
@@ -481,7 +554,7 @@ async function createStoryboardFromCrop(cols, rows) {
     
   } catch (error) {
     console.error('[ImageToolbar] 创建分镜格子失败:', error)
-    alert('创建分镜格子失败，请重试')
+    alert(error.message || '创建分镜格子失败，请重试')
   }
 }
 
@@ -510,19 +583,8 @@ async function handleGenericGridCrop(cols, rows) {
     }
     
     // 加载图片
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    const proxiedUrl = getProxiedImageUrl(imageUrl.value)
-    console.log(`[ImageToolbar] ${count}宫格裁剪：加载图片`, proxiedUrl?.substring(0, 80))
-    
-    await new Promise((resolve, reject) => {
-      img.onload = resolve
-      img.onerror = (e) => {
-        console.error(`[ImageToolbar] ${count}宫格裁剪：图片加载失败`, e)
-        reject(e)
-      }
-      img.src = proxiedUrl
-    })
+    console.log(`[ImageToolbar] ${count}宫格裁剪：加载图片`, imageUrl.value?.substring(0, 80))
+    const img = await loadImageForCanvas(imageUrl.value)
     
     const imgWidth = img.naturalWidth
     const imgHeight = img.naturalHeight
@@ -599,6 +661,7 @@ async function handleGenericGridCrop(cols, rows) {
     
   }catch (error) {
     console.error(`[ImageToolbar] ${count}宫格裁剪失败:`, error)
+    alert(error.message || `${count}宫格裁剪失败，请重试`)
   } finally {
     isGridCropping.value = false
   }

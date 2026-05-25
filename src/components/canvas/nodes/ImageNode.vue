@@ -2140,7 +2140,7 @@ function getProxiedImageUrl(imageUrl) {
     
     // 外部 URL，使用代理接口绕过 CORS
     console.log('[ImageNode] 使用代理加载外部图片:', imageUrl.substring(0, 60) + '...')
-    return `${getApiUrl('/api/images/proxy')}?url=${encodeURIComponent(imageUrl)}`
+    return `${getApiUrl('/api/images/proxy')}?force=1&url=${encodeURIComponent(imageUrl)}`
   }
   
   // 其他情况直接返回

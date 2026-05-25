@@ -14,6 +14,47 @@ test('Bytefor video models are not treated as Seedance SD2 models', () => {
   assert.equal(isSeedanceSd2VideoModel({ apiType: 'happyhorse' }), true)
   assert.equal(isSeedanceSd2VideoModel({ apiType: 'seedance-2.0' }), true)
   assert.equal(isSeedanceSd2VideoModel({ apiType: 'ant' }), true)
+  assert.equal(isSeedanceSd2VideoModel({ apiType: 'ctyun-seedance' }), true)
+})
+
+test('Ctyun Seedance default generation mode follows SD2 detector', () => {
+  assert.equal(
+    getDefaultGenerationModeForVideoModel({
+      apiType: 'ctyun-seedance',
+      defaultSeedance2Mode: 'image2video_first'
+    }),
+    'image'
+  )
+  assert.equal(
+    getDefaultGenerationModeForVideoModel({ apiType: 'ctyun-seedance' }),
+    'text'
+  )
+})
+
+test('Ctyun Seedance submit payload appends SD2 fields', () => {
+  const entries = buildVideoGenerationFormEntries({
+    modelConfig: { apiType: 'ctyun-seedance' },
+    prompt: '小女孩唱歌',
+    model: 'ctyun-seedance-2.0',
+    aspectRatio: '16:9',
+    duration: '4',
+    mode: 'text',
+    seedance: {
+      mode: 'text2video',
+      resolution: '720p',
+      ratio: '16:9',
+      generateAudio: true,
+      webSearch: false,
+      watermark: false,
+      duration: '4'
+    }
+  })
+
+  assert.equal(entries.get('seedance_mode'), 'text2video')
+  assert.equal(entries.get('seedance_resolution'), '720p')
+  assert.equal(entries.get('seedance_ratio'), '16:9')
+  assert.equal(entries.get('seedance_generate_audio'), 'true')
+  assert.equal(entries.get('duration'), '4')
 })
 
 test('Bytefor-backed Seedance and HappyHorse configs are not treated as Seedance SD2 models', () => {
