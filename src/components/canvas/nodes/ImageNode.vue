@@ -2061,7 +2061,7 @@ function handleToolbarExpand() {
 function handleToolbarOutpaint() {
   console.log('[ImageNode] 工具栏：扩图', props.id)
   
-  const imageUrl = sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
+  const imageUrl = currentImageUrl.value
   if (!imageUrl) {
     console.warn('[ImageNode] 扩图：没有图片')
     showAlert('提示', '请先上传或生成图片')
@@ -3234,7 +3234,7 @@ function handleToolbarCrop() {
   console.log('[ImageNode] 工具栏：裁剪', props.id)
   
   // 获取当前图片URL
-  const imageUrl = sourceImages.value?.[0] || props.data?.output?.url || props.data?.output?.urls?.[0]
+  const imageUrl = currentImageUrl.value
   if (!imageUrl) {
     showAlert('提示', '请先上传或生成图片')
     return
