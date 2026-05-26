@@ -211,13 +211,14 @@ const elapsedTimeNow = ref(Date.now())
 let elapsedTimeTimer = null
 
 // 获取指定模型的成功率（代理到 Store，含 VEO 前端聚合回退）
+// 小样本保护与 store 内部一致：(success+failed) < 5 时返回 null，让 UI 显示满格 100%
 function getModelSuccessRate(modelName) {
   if (!modelName) return null
-  
-  // 1. 先嘗試 Store 的標準匹配（精確 → 歸一化 → 包含）
+
+  // 1. 先嘗試 Store 的標準匹配（精確 → 歸一化 → 包含；含小樣本保護）
   const rate = modelStatsStore.getVideoModelRate(modelName)
   if (rate !== null) return rate
-  
+
   // 2. VEO 整合入口回退：如果後端未聚合，嘗試在前端聚合子模型
   const modelConfig = models.value?.find(m => m.value === modelName)
   if (modelConfig?.isVeoModel && modelConfig?.veoModes?.length > 0) {
@@ -234,9 +235,10 @@ function getModelSuccessRate(modelName) {
       }
     }
     const total = totalSuccess + totalFailed
-    if (total > 0) return totalSuccess / total
+    // 与 store 一致的小样本阈值（5 次），样本不足时不显示具体百分比
+    if (total >= 5) return totalSuccess / total
   }
-  
+
   return null
 }
 

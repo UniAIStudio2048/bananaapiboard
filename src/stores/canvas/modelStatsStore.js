@@ -19,6 +19,13 @@ import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
 const POLL_INTERVAL_MS = 10 * 60 * 1000 // 10 分鐘
 
+/**
+ * 最小可信样本数：只有当前模型当日 (success+failed) 任务数 >= 该值时，
+ * 才用真实成功率显示。否则视作"样本不足"，UI 回退到默认满格 + 100%，
+ * 避免出现"4 次任务 3 次因平台 bug 误杀 → 显示 25%"这类误导。
+ */
+const MIN_RELIABLE_SAMPLES = 5
+
 export const useModelStatsStore = defineStore('modelStats', () => {
   // ========== 狀態 ==========
   const imageStats = ref({})   // { modelName: { total, success, failed, rate, avgDurationSeconds } }
@@ -85,7 +92,11 @@ export const useModelStatsStore = defineStore('modelStats', () => {
   
   function _resolveRate(modelName, stats) {
     const stat = _resolveStat(modelName, stats)
-    return stat?.rate !== undefined ? stat.rate : null
+    if (!stat || stat.rate === undefined || stat.rate === null) return null
+    // 小样本保护：样本量不足时不显示具体百分比（UI 回退到满格 100%）
+    const reliableCount = (stat.success || 0) + (stat.failed || 0)
+    if (reliableCount < MIN_RELIABLE_SAMPLES) return null
+    return stat.rate
   }
 
   function _resolveAvgDurationSeconds(modelName, stats) {

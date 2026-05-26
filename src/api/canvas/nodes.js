@@ -568,11 +568,11 @@ export async function uploadImages(files, retryOptions = {}) {
  * @param {string} type - 任务类型 'image' | 'video'
  * @param {object} options - 选项
  * @param {number} options.interval - 轮询间隔，默认 2000ms
- * @param {number} options.timeout - 超时时间，统一默认 15 分钟
+ * @param {number} options.timeout - 超时时间，统一默认 8 分钟
  */
 export function pollTaskStatus(taskId, type = 'image', options = {}) {
-  // 🔧 修复：统一超时时间为 15 分钟（900秒）
-  const defaultTimeout = 15 * 60 * 1000
+  // 🔧 修复：统一超时时间为 8 分钟（480秒），与后端 imageTaskTimeout 保持一致
+  const defaultTimeout = 8 * 60 * 1000
   const { interval = 2000, timeout = defaultTimeout, onProgress } = options
   const getStatus = type === 'video' ? getVideoTaskStatus : getImageTaskStatus
   

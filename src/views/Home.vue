@@ -815,7 +815,7 @@ function startPolling() {
 
   pollingInterval.value = setInterval(async () => {
     const now = Math.floor(Date.now() / 1000)
-    const TIMEOUT = 15 * 60 // 15分钟超时
+    const TIMEOUT = 8 * 60 // 8分钟超时，与后端 imageTaskTimeout 保持一致
 
     const pendingTasks = history.value
       .filter(item => item.status === 'pending' || item.status === 'processing')
