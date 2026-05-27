@@ -59,6 +59,11 @@ import CharacterCardNode from './nodes/CharacterCardNode.vue'
 import StoryboardNode from './nodes/StoryboardNode.vue'
 import SeedanceCharacterNode from './nodes/SeedanceCharacterNode.vue'
 
+// 🚀 节点虚拟化：HOC + 控制器
+// 当节点总数超过阈值时，视口外的节点由 NodeShell 替换，避免挂载重量级组件
+import { createVirtualizedNodeType } from './VirtualizedNode.js'
+import { createCanvasVirtualization } from '@/composables/useCanvasVirtualization.js'
+
 const props = defineProps({
   pickMode: {
     type: Boolean,
@@ -334,34 +339,83 @@ function handleWheelInner(event) {
   }
 }
 
-// 自定义节点类型映射
+// 🚀 自定义节点类型映射（已经过虚拟化 HOC 包装）
 // 统一设计：Image 和 Video 节点同时支持上传和生成
+//
+// 虚拟化策略：
+//   - 普通节点用 createVirtualizedNodeType 包装：节点总数超过 200 时，
+//     视口外的节点自动替换为 NodeShell（保留位置和大小，避免挂载重组件）
+//   - group / preview-output 永远走真组件（alwaysReal:true）：
+//     group 是其他节点的视觉容器，preview-output 通常很小且数量少
+//   - 选中、拖拽中的节点永远走真组件（在 HOC 内部判定）
+const V = (RealComp, opts) => createVirtualizedNodeType(RealComp, opts)
 const nodeTypes = {
-  'text-input': TextNode,
-  'image-input': ImageNode,       // 图片节点（上传+生成一体化）
-  'video-input': VideoNode,       // 视频节点（上传+生成一体化）
-  'audio-input': AudioNode,       // 音频节点（上传音频）
-  'audio': AudioNode,             // 统一音频节点
-  'image': ImageNode,             // 统一图片节点
-  'video': VideoNode,             // 统一视频节点
-  'image-gen': ImageNode,         // 兼容：图片生成映射到 ImageNode
-  'video-gen': VideoNode,         // 兼容：视频生成映射到 VideoNode
-  'text-to-image': ImageNode,     // 文生图 → 统一的 ImageNode
-  'image-to-image': ImageNode,    // 图生图 → 统一的 ImageNode
-  'text-to-video': VideoNode,     // 文生视频 → 统一的 VideoNode
-  'image-to-video': VideoNode,    // 图生视频 → 统一的 VideoNode
-  'llm': LLMNode,                 // 统一 LLM 节点
-  'llm-prompt-enhance': LLMNode,
-  'llm-image-describe': LLMNode,
-  'llm-content-expand': LLMNode,
-  'preview-output': PreviewNode,
-  'grid-preview': ImageNode,      // 9宫格分镜（使用 ImageNode，可以生成和输出图片）
-  'group': GroupNode,             // 编组节点
-  'character-card': CharacterCardNode,  // Sora角色卡节点
-  'seedance-character': SeedanceCharacterNode,  // Seedance角色节点
-  'bytefor-character': SeedanceCharacterNode,  // Bytefor角色节点
-  'storyboard': StoryboardNode    // 分镜格子节点
+  'text-input': V(TextNode),
+  'image-input': V(ImageNode),       // 图片节点（上传+生成一体化）
+  'video-input': V(VideoNode),       // 视频节点（上传+生成一体化）
+  'audio-input': V(AudioNode),       // 音频节点（上传音频）
+  'audio': V(AudioNode),             // 统一音频节点
+  'image': V(ImageNode),             // 统一图片节点
+  'video': V(VideoNode),             // 统一视频节点
+  'image-gen': V(ImageNode),         // 兼容：图片生成映射到 ImageNode
+  'video-gen': V(VideoNode),         // 兼容：视频生成映射到 VideoNode
+  'text-to-image': V(ImageNode),     // 文生图 → 统一的 ImageNode
+  'image-to-image': V(ImageNode),    // 图生图 → 统一的 ImageNode
+  'text-to-video': V(VideoNode),     // 文生视频 → 统一的 VideoNode
+  'image-to-video': V(VideoNode),    // 图生视频 → 统一的 VideoNode
+  'llm': V(LLMNode),                 // 统一 LLM 节点
+  'llm-prompt-enhance': V(LLMNode),
+  'llm-image-describe': V(LLMNode),
+  'llm-content-expand': V(LLMNode),
+  'preview-output': V(PreviewNode, { alwaysReal: true }),
+  'grid-preview': V(ImageNode),      // 9宫格分镜（使用 ImageNode，可以生成和输出图片）
+  'group': V(GroupNode, { alwaysReal: true }),  // 编组节点（视觉容器，永远渲染真组件）
+  'character-card': V(CharacterCardNode),  // Sora角色卡节点
+  'seedance-character': V(SeedanceCharacterNode),  // Seedance角色节点
+  'bytefor-character': V(SeedanceCharacterNode),  // Bytefor角色节点
+  'storyboard': V(StoryboardNode)    // 分镜格子节点
 }
+
+// 🚀 当前选中节点 ID 集合（响应式），传给虚拟化控制器确保选中节点不被卸载
+const virtualizationSelectedIds = computed(() => {
+  const set = new Set()
+  const single = canvasStore.selectedNodeId
+  if (single) set.add(single)
+  const multi = canvasStore.selectedNodeIds
+  if (Array.isArray(multi)) {
+    for (const id of multi) if (id) set.add(id)
+  }
+  return set
+})
+
+// 🚀 创建虚拟化控制器并通过 provide 注入给每个 VirtualizedNode HOC
+// 阈值 200：低于此数节点全量渲染，避免开销；超过则启用真虚拟化
+const canvasVirtualization = createCanvasVirtualization({
+  nodes: computed(() => canvasStore.nodes),
+  viewport: computed(() => canvasStore.viewport),
+  containerRef: canvasBoardRef,
+  selectedIds: virtualizationSelectedIds,
+  threshold: 200,
+  bufferRatio: 1.5
+})
+provide('canvasVirtualization', canvasVirtualization)
+
+// 🚀 性能模式注入：让节点组件按性能档位自适应渲染
+//   - full     (<50):    所有特效开启
+//   - optimized (50-200): 关闭非必要动画
+//   - reduced  (200-500): 强制 LOD、禁用对齐辅助线、禁用边动画
+//   - minimal  (>500):    全量降级 + HOC 真虚拟化 + history=3
+const canvasPerformanceMode = computed(() => canvasStore.performanceMode)
+provide('canvasPerformanceMode', canvasPerformanceMode)
+
+// 是否禁用对齐辅助线（reduced 以上档位）
+const shouldDisableAlignmentGuides = computed(() => {
+  const mode = canvasPerformanceMode.value
+  return mode === 'reduced' || mode === 'minimal'
+})
+
+// 是否禁用边动画（minimal 档位）
+const shouldDisableEdgeAnimation = computed(() => canvasPerformanceMode.value === 'minimal')
 
 // 记录连线起始信息
 const connectStartInfo = ref(null)
@@ -600,11 +654,10 @@ onNodeDrag((event) => {
 function calculateAlignmentGuides(draggedNode) {
   const SNAP_THRESHOLD = 10 // 对齐阈值（像素）
   
-  // 🚀 性能优化：节点数量过多时禁用对齐辅助线（大画布优化）
-  const totalNodes = canvasStore.nodes.length
-  if (totalNodes > 30) {
-    // 超过30个节点时，完全禁用对齐辅助线以提升性能
-    // 这对于70-100+节点的大画布至关重要
+  // 🚀 性能优化：按性能档位禁用对齐辅助线
+  //   reduced / minimal：完全禁用（>200 节点）
+  //   30+ 节点：兜底禁用，对齐计算 O(n) 太贵
+  if (shouldDisableAlignmentGuides.value || canvasStore.nodes.length > 30) {
     alignmentGuides.value = { vertical: null, horizontal: null }
     snapPosition.value = { x: null, y: null }
     return
@@ -1898,7 +1951,8 @@ function transformSvgPath(d, vp) {
 
 function readActiveEdgePaths() {
   const ids = selectedNodeIds.value
-  if (ids.length === 0 || isEdgeHidden.value) {
+  // 🚀 minimal 模式（>500 节点）禁用选中节点的流动边动画
+  if (ids.length === 0 || isEdgeHidden.value || shouldDisableEdgeAnimation.value) {
     activeFlowPaths.value = []
     return
   }

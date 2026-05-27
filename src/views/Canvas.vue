@@ -10,6 +10,7 @@ import { getTenantHeaders, getBrand, isCanvasLogoEnabled, getApiUrl } from '@/co
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { loadWorkflow as loadWorkflowFromServer } from '@/api/canvas/workflow'
+import { useCanvasRealtimeSync } from '@/composables/useCanvasRealtimeSync'
 import CanvasBoard from '@/components/canvas/CanvasBoard.vue'
 import CanvasToolbar from '@/components/canvas/CanvasToolbar.vue'
 import CanvasEmptyState from '@/components/canvas/CanvasEmptyState.vue'
@@ -62,6 +63,7 @@ import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
 // 🔧 画布诊断工具 - 用于调试画布强制重新加载问题
 import { initCanvasDiagnostic, printCanvasDiagnosticReport } from '@/utils/canvasDiagnostic'
+import { createCanvasFpsMonitor } from '@/utils/canvasFpsMonitor'
 
 // 导入画布样式
 import '@/styles/canvas.css'
@@ -73,6 +75,21 @@ const route = useRoute()
 const canvasStore = useCanvasStore()
 const teamStore = useTeamStore()
 const uploadManager = useUploadManager()
+
+// Phase 3.2：WebSocket 实时同步（opt-in，跟随 workflowMeta.id 自动连接/断开）
+// 失败时只在 console 提示，不影响主流程。
+try {
+  useCanvasRealtimeSync({
+    store: canvasStore,
+    getWorkflowId: () => (canvasStore.workflowMeta && canvasStore.workflowMeta.id) || null,
+    onStateChange: (st) => {
+      if (st === 'reconnecting') console.warn('[CanvasWS] 正在重连…')
+    },
+    onError: (err) => console.warn('[CanvasWS] error:', err && err.message)
+  })
+} catch (wsErr) {
+  console.warn('[Canvas] WebSocket 同步未启用:', wsErr.message)
+}
 
 // 画布底部Logo状态
 const brandConfig = computed(() => getBrand())
@@ -944,50 +961,57 @@ async function autoSaveWorkflow() {
   }
   
   try {
-    const { saveWorkflow } = await import('@/api/canvas/workflow')
-    
-    // 🔧 预检：计算数据大小，如果过大则跳过自动保存（提升限制支持大画布）
-    const nodesJson = JSON.stringify(workflowData.nodes || [])
-    const edgesJson = JSON.stringify(workflowData.edges || [])
-    const dataSize = new Blob([nodesJson, edgesJson]).size
-    const MAX_AUTO_SAVE_SIZE = 100 * 1024 * 1024 // 100MB（支持大画布自动保存）
-    
-    if (dataSize > MAX_AUTO_SAVE_SIZE) {
-      console.warn(`[Canvas] 自动保存跳过：数据过大 (${(dataSize / 1024 / 1024).toFixed(1)}MB)，请手动保存`)
-      // 大数据时给用户一个提示
-      displayToast(`工作流较大(${(dataSize / 1024 / 1024).toFixed(0)}MB)，请手动保存`, 'warning', 3000)
-      return
-    }
-    
+    const [{ saveWorkflowRaw }, { serializeWorkflow }] = await Promise.all([
+      import('@/api/canvas/workflow'),
+      import('@/utils/workflowSerializer')
+    ])
+
     // 获取当前空间参数
     const spaceParams = teamStore.getSpaceParams('current')
-    
+
+    // 🚀 序列化全部丢给 Worker，主线程不再被 JSON.stringify 卡 200-500ms
+    const MAX_AUTO_SAVE_SIZE = 100 * 1024 * 1024 // 100MB
+
     // 🔧 新建工作流也支持自动保存（作为草稿）
     if (currentTab.workflowId) {
-      // 已保存的工作流：更新保存
-      await saveWorkflow({
+      const payload = {
         id: currentTab.workflowId,
         name: currentTab.name,
         uploadToCloud: false,
         spaceType: spaceParams.spaceType,
         teamId: spaceParams.teamId,
         ...workflowData
-      })
+      }
+      const { json, size, viaWorker, elapsed } = await serializeWorkflow(payload)
+      if (size > MAX_AUTO_SAVE_SIZE) {
+        console.warn(`[Canvas] 自动保存跳过：数据过大 (${(size / 1024 / 1024).toFixed(1)}MB)，请手动保存`)
+        displayToast(`工作流较大(${(size / 1024 / 1024).toFixed(0)}MB)，请手动保存`, 'warning', 3000)
+        return
+      }
+      console.log(`[Canvas] autosave 序列化 ${(size / 1024).toFixed(1)}KB ${viaWorker ? '(worker)' : '(main)'} ${elapsed?.toFixed?.(1) || '?'}ms`)
+      await saveWorkflowRaw(json)
       canvasStore.markCurrentTabSaved()
       lastAutoSave.value = new Date()
       console.log('[Canvas] 自动保存成功（更新）:', currentTab.name)
     } else {
       // 🔧 新建工作流：创建草稿保存
-      // 只有节点数量 >= 2 时才自动创建草稿（避免误触发）
       if (workflowData.nodes.length >= 2) {
-        const result = await saveWorkflow({
+        const payload = {
           name: currentTab.name || `草稿_${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
           uploadToCloud: false,
-          isDraft: true, // 标记为草稿
+          isDraft: true,
           spaceType: spaceParams.spaceType,
           teamId: spaceParams.teamId,
           ...workflowData
-        })
+        }
+        const { json, size, viaWorker, elapsed } = await serializeWorkflow(payload)
+        if (size > MAX_AUTO_SAVE_SIZE) {
+          console.warn(`[Canvas] 自动保存跳过：数据过大 (${(size / 1024 / 1024).toFixed(1)}MB)，请手动保存`)
+          displayToast(`工作流较大(${(size / 1024 / 1024).toFixed(0)}MB)，请手动保存`, 'warning', 3000)
+          return
+        }
+        console.log(`[Canvas] autosave 序列化 ${(size / 1024).toFixed(1)}KB ${viaWorker ? '(worker)' : '(main)'} ${elapsed?.toFixed?.(1) || '?'}ms`)
+        const result = await saveWorkflowRaw(json)
         
         // 更新标签信息
         if (result?.workflow?.id) {
@@ -1011,6 +1035,47 @@ async function autoSaveWorkflow() {
     } else {
       console.error('[Canvas] 自动保存失败:', error.message || error)
     }
+  }
+}
+
+// ========== 🚀 FPS 自适应降级监控 ==========
+let canvasFpsMonitor = null
+let fpsLargeCanvasNotified = false
+
+function startCanvasFpsMonitor() {
+  if (canvasFpsMonitor) return
+  if (typeof window === 'undefined' || typeof requestAnimationFrame === 'undefined') return
+  canvasFpsMonitor = createCanvasFpsMonitor({
+    windowMs: 1000,
+    degradeThreshold: 30,
+    recoverThreshold: 55,
+    degradeWindows: 3,
+    recoverWindows: 5,
+    getBaselineTier: () => canvasStore.baselinePerformanceMode,
+    getCurrentTier: () => canvasStore.performanceMode,
+    applyTier: (tier, info) => {
+      console.log(`[CanvasFPS] ${info.reason} fps=${info.fps?.toFixed(1)} ${info.from} → ${tier}`)
+      if (tier === canvasStore.baselinePerformanceMode) {
+        canvasStore.setPerformanceMode(null)
+      } else {
+        canvasStore.setPerformanceMode(tier)
+      }
+      // 节点数 >1500 时一次性提示用户已进入高性能模式
+      if (!fpsLargeCanvasNotified && canvasStore.nodes.length > 1500 && tier !== 'full') {
+        fpsLargeCanvasNotified = true
+        try {
+          displayToast('画布节点较多，已开启高性能渲染模式', 'info', 4000)
+        } catch (_) { /* noop */ }
+      }
+    }
+  })
+  canvasFpsMonitor.start()
+}
+
+function stopCanvasFpsMonitor() {
+  if (canvasFpsMonitor) {
+    canvasFpsMonitor.stop()
+    canvasFpsMonitor = null
   }
 }
 
@@ -2478,6 +2543,9 @@ onMounted(async () => {
   // 在浏览器控制台运行 printCanvasDiagnosticReport() 查看诊断报告
   initCanvasDiagnostic(canvasStore)
 
+  // 🚀 启动画布 FPS 自适应监控（连续低帧自动降一档，恢复后自动升回 baseline）
+  startCanvasFpsMonitor()
+
   // 性能优化: 监听拖拽状态，防止自动保存在拖拽中途触发
   window.addEventListener('canvas-drag-start', _onCanvasDragStart)
   window.addEventListener('canvas-drag-end', _onCanvasDragEnd)
@@ -2614,6 +2682,7 @@ onUnmounted(() => {
   }
   stopAutoSave()
   stopHistoryAutoSave()
+  stopCanvasFpsMonitor()
 
   if (searchTimeout) {
     clearTimeout(searchTimeout)

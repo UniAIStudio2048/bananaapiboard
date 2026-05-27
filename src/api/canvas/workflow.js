@@ -34,6 +34,39 @@ export async function getStorageQuota() {
 }
 
 /**
+ * 保存工作流（接受已序列化的 JSON 字符串，避免主线程重复 stringify）
+ *
+ * 主要给 Web Worker 化的 autosave 路径使用：autoSave 在 worker 内做完
+ * JSON.stringify 后直接传字符串过来，省一次同步序列化。
+ */
+export async function saveWorkflowRaw(jsonBody) {
+  if (typeof jsonBody !== 'string') {
+    throw new TypeError('saveWorkflowRaw 要求 jsonBody 为字符串')
+  }
+  const response = await fetch(getApiUrl(`/api/canvas/workflows`), {
+    method: 'POST',
+    credentials: 'include',
+    headers: getAuthHeaders(),
+    body: jsonBody
+  })
+
+  const text = await response.text()
+  if (!text) {
+    if (!response.ok) throw new Error(`保存失败 (HTTP ${response.status})`)
+    return { success: true }
+  }
+
+  let data
+  try {
+    data = JSON.parse(text)
+  } catch (e) {
+    throw new Error(`服务器响应格式错误: ${text.substring(0, 100)}`)
+  }
+  if (!response.ok) throw new Error(data.error || '保存失败')
+  return data
+}
+
+/**
  * 保存工作流
  */
 export async function saveWorkflow(workflowData) {
@@ -85,6 +118,99 @@ export async function loadWorkflow(workflowId) {
     throw new Error(error.error || '加载失败')
   }
   
+  return response.json()
+}
+
+/**
+ * Phase 2.4 — 获取工作流轻量 manifest（位置/类型/尺寸/version）
+ * 用于首屏快速渲染 Shell 节点，避免一次性下载所有节点的 data
+ */
+export async function getWorkflowManifest(workflowId) {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/manifest`), {
+    method: 'GET',
+    credentials: 'include',
+    headers: getAuthHeaders()
+  })
+  if (!response.ok) {
+    let err = {}
+    try { err = await response.json() } catch {}
+    throw new Error(err.error || `获取 manifest 失败 (HTTP ${response.status})`)
+  }
+  return response.json()
+}
+
+/**
+ * Phase 2.4 — 按节点 id 批量获取节点 data
+ * 一次最多 50 个；超过会被服务端截断。
+ *
+ * @returns {{ workflowId, nodes: Array<NodeFull>, missing: string[] }}
+ */
+export async function getWorkflowNodesBatch(workflowId, nodeIds) {
+  if (!Array.isArray(nodeIds) || nodeIds.length === 0) {
+    return { workflowId, nodes: [], missing: [] }
+  }
+  const ids = nodeIds.slice(0, 50).join(',')
+  const url = getApiUrl(`/api/canvas/workflows/${workflowId}/nodes?ids=${encodeURIComponent(ids)}`)
+  const response = await fetch(url, {
+    method: 'GET',
+    credentials: 'include',
+    headers: getAuthHeaders()
+  })
+  if (!response.ok) {
+    let err = {}
+    try { err = await response.json() } catch {}
+    throw new Error(err.error || `批量加载节点失败 (HTTP ${response.status})`)
+  }
+  return response.json()
+}
+
+/**
+ * Phase 2.4 — 增量更新单节点（带乐观锁）
+ */
+export async function patchWorkflowNode(workflowId, nodeId, patch, baseVersion) {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/nodes/${encodeURIComponent(nodeId)}`), {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ patch, baseVersion })
+  })
+  if (response.status === 409) {
+    let body = {}
+    try { body = await response.json() } catch {}
+    const err = new Error(body.error || '节点版本冲突')
+    err.code = 'VERSION_CONFLICT'
+    err.currentVersion = body.currentVersion
+    throw err
+  }
+  if (!response.ok) {
+    let body = {}
+    try { body = await response.json() } catch {}
+    throw new Error(body.error || `更新节点失败 (HTTP ${response.status})`)
+  }
+  return response.json()
+}
+
+/**
+ * Phase 2.5 — 批量提交 ops（事务执行 + 返回新 version）
+ */
+export async function postWorkflowOps(workflowId, ops) {
+  if (!Array.isArray(ops) || ops.length === 0) {
+    return { workflowId, applied: [], results: [] }
+  }
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/ops`), {
+    method: 'POST',
+    credentials: 'include',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ ops })
+  })
+  if (!response.ok) {
+    let body = {}
+    try { body = await response.json() } catch {}
+    const err = new Error(body.error || `批量 ops 失败 (HTTP ${response.status})`)
+    err.status = response.status
+    err.body = body
+    throw err
+  }
   return response.json()
 }
 

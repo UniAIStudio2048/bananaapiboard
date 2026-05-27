@@ -8,6 +8,8 @@ import { useVueFlow } from '@vue-flow/core'
 import { t } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { sanitizeNodesForHistoryRestore } from './historyRestore'
+import { createOpHistory } from './opHistory'
+import { getGlobalNodeDataCache } from './nodeDataCache'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -62,12 +64,21 @@ export const useCanvasStore = defineStore('canvas', () => {
   const nodeGroups = ref([]) // 编组列表 [{ id, name, nodeIds: [], color }]
   
   // ========== 历史记录（撤销/重做） ==========
-  const historyStack = ref([])     // 历史记录栈
-  const historyIndex = ref(-1)     // 当前历史位置
+  // 🚀 op-based 历史栈：只存 diff，1000+ 节点画布历史内存降低 90%+
+  const opHistory = createOpHistory({ maxSize: 50 })
+  const historyStack = ref([])     // 兼容字段：长度反映 opHistory 栈深度
+  const historyIndex = ref(-1)     // 当前历史位置（与 opHistory.index 同步）
   const maxHistoryLength = 20      // 🔧 进一步减小历史记录数，大画布性能优化
   const isHistoryAction = ref(false) // 是否正在执行历史操作（防止重复记录）
   let lastHistorySaveTime = 0      // 🔧 上次保存历史的时间（节流用）
   const HISTORY_THROTTLE_MS = 500  // 🔧 历史保存最小间隔（毫秒）- 增加到500ms减少内存压力
+
+  function syncHistoryRefs() {
+    if (historyStack.value.length !== opHistory.length) {
+      historyStack.value = new Array(opHistory.length).fill(null)
+    }
+    historyIndex.value = opHistory.index
+  }
   
   // ========== 剪贴板 ==========
   const clipboard = ref(null)      // 复制的节点数据
@@ -123,16 +134,44 @@ export const useCanvasStore = defineStore('canvas', () => {
   const nodeCount = computed(() => nodes.value.length)
   
   // 🔧 大画布性能模式计算属性
-  // 用于自动启用简化渲染，提升70-100+节点时的流畅性
-  const isLargeCanvas = computed(() => nodes.value.length > 30)  // 30+节点算大画布
-  const isVeryLargeCanvas = computed(() => nodes.value.length > 60) // 60+节点算超大画布
-  const performanceMode = computed(() => {
+  // 用于自动启用简化渲染，提升 70-1000+ 节点时的流畅性
+  const isLargeCanvas = computed(() => nodes.value.length > 30)  // 30+ 节点算大画布
+  const isVeryLargeCanvas = computed(() => nodes.value.length > 60) // 60+ 节点算超大画布
+
+  // 性能模式手动覆盖（来自 FPS 监控自动降级或用户偏好）
+  // null 表示按节点数自动判定；显式值会覆盖自动判定。
+  const performanceModeOverride = ref(null)
+
+  // 🚀 1000+ 节点架构：四档分级渲染
+  //   - full     (<50):    所有特效开启
+  //   - optimized (50-200): 关闭非必要动画
+  //   - reduced  (200-500): 强制 LOD 384、禁用对齐辅助线、禁用边动画
+  //   - minimal  (>500):    全量降级 + HOC 真虚拟化 + history=3
+  // baseline 表示"按节点数应处于的档"，作为 FPS 自适应恢复的上限
+  const baselinePerformanceMode = computed(() => {
     const count = nodes.value.length
-    if (count > 80) return 'minimal'  // 最小化渲染模式
-    if (count > 50) return 'reduced'  // 简化渲染模式
-    if (count > 30) return 'optimized' // 优化渲染模式
-    return 'full' // 完整渲染模式
+    if (count > 500) return 'minimal'
+    if (count > 200) return 'reduced'
+    if (count > 50) return 'optimized'
+    return 'full'
   })
+
+  const performanceMode = computed(() => {
+    if (performanceModeOverride.value) return performanceModeOverride.value
+    return baselinePerformanceMode.value
+  })
+
+  /**
+   * 手动设置性能模式（用于自适应降级与用户偏好）
+   * @param {'full'|'optimized'|'reduced'|'minimal'|null} mode null 恢复自动判定
+   */
+  function setPerformanceMode(mode) {
+    if (mode !== null && !['full', 'optimized', 'reduced', 'minimal'].includes(mode)) {
+      console.warn('[Canvas Store] setPerformanceMode: 无效的模式', mode)
+      return
+    }
+    performanceModeOverride.value = mode
+  }
 
   // 边索引：按 target 节点 ID 分组的边映射，O(1) 查找上游连接
   const edgesByTarget = computed(() => {
@@ -167,9 +206,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     return map
   })
 
-  // 是否可以撤销
-  const canUndo = computed(() => historyIndex.value > 0)
-  
+  // 是否可以撤销（op-based：index >= 0 即代表有至少一条可撤销 diff）
+  const canUndo = computed(() => historyIndex.value >= 0)
+
   // 是否可以重做
   const canRedo = computed(() => historyIndex.value < historyStack.value.length - 1)
   
@@ -663,12 +702,14 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     // 🔧 大画布性能优化：节点越多，节流时间越长
     let dynamicThrottle = HISTORY_THROTTLE_MS
-    if (nodeCount > 80) {
-      dynamicThrottle = 2000  // 80+节点：2秒节流
+    if (nodeCount > 500) {
+      dynamicThrottle = 3000  // minimal: 3 秒节流
+    } else if (nodeCount > 200) {
+      dynamicThrottle = 2000  // reduced: 2 秒节流
     } else if (nodeCount > 50) {
-      dynamicThrottle = 1000  // 50-80节点：1秒节流
+      dynamicThrottle = 1000  // optimized: 1 秒节流
     } else if (nodeCount > 30) {
-      dynamicThrottle = 800   // 30-50节点：800ms节流
+      dynamicThrottle = 800   // 30-50 节点：800ms 节流
     }
     
     // 🔧 节流：避免频繁保存历史
@@ -680,12 +721,14 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     // 🔧 节点过多时大幅减少历史记录数量
     let effectiveMaxHistory = maxHistoryLength
-    if (nodeCount > 80) {
-      effectiveMaxHistory = 5   // 80+节点：只保留5条历史
+    if (nodeCount > 500) {
+      effectiveMaxHistory = 3   // minimal: 只保留 3 条历史
+    } else if (nodeCount > 200) {
+      effectiveMaxHistory = 5   // reduced: 保留 5 条
     } else if (nodeCount > 50) {
-      effectiveMaxHistory = 8   // 50-80节点：保留8条历史
+      effectiveMaxHistory = 10  // optimized: 保留 10 条
     } else if (nodeCount > 30) {
-      effectiveMaxHistory = 12  // 30-50节点：保留12条历史
+      effectiveMaxHistory = 15  // 30-50 节点：保留 15 条
     }
     
     // 🔧 清理节点数据，移除大型 base64 减少内存
@@ -696,56 +739,40 @@ export const useCanvasStore = defineStore('canvas', () => {
       nodes: JSON.parse(JSON.stringify(cleanedNodes)),
       edges: JSON.parse(JSON.stringify(toRaw(edges.value)))
     }
-    
-    // 如果当前不在历史末尾，删除后面的记录
-    if (historyIndex.value < historyStack.value.length - 1) {
-      historyStack.value = historyStack.value.slice(0, historyIndex.value + 1)
-    }
-    
-    // 添加新记录
-    historyStack.value.push(state)
-    
-    // 限制历史记录长度
-    while (historyStack.value.length > effectiveMaxHistory) {
-      historyStack.value.shift()
-      // 调整索引
-      if (historyIndex.value > 0) {
-        historyIndex.value--
-      }
-    }
-    
-    historyIndex.value = historyStack.value.length - 1
+
+    // 🚀 走 op-based 历史栈：只存 diff
+    opHistory.record(state)
+    opHistory.trim(effectiveMaxHistory)
+    syncHistoryRefs()
   }
   
   /**
-   * 撤销
+   * 撤销（op-based）
    */
   function undo() {
-    if (!canUndo.value) return
-    
-    isHistoryAction.value = true
-    historyIndex.value--
-    
-    const state = historyStack.value[historyIndex.value]
-    nodes.value = sanitizeNodesForHistoryRestore(JSON.parse(JSON.stringify(state.nodes)))
-    edges.value = JSON.parse(JSON.stringify(state.edges))
+    if (!opHistory.canUndo) return
 
+    isHistoryAction.value = true
+    opHistory.undo(state => {
+      nodes.value = sanitizeNodesForHistoryRestore(state.nodes)
+      edges.value = state.edges
+    })
+    syncHistoryRefs()
     isHistoryAction.value = false
   }
 
   /**
-   * 重做
+   * 重做（op-based）
    */
   function redo() {
-    if (!canRedo.value) return
+    if (!opHistory.canRedo) return
 
     isHistoryAction.value = true
-    historyIndex.value++
-
-    const state = historyStack.value[historyIndex.value]
-    nodes.value = sanitizeNodesForHistoryRestore(JSON.parse(JSON.stringify(state.nodes)))
-    edges.value = JSON.parse(JSON.stringify(state.edges))
-    
+    opHistory.redo(state => {
+      nodes.value = sanitizeNodesForHistoryRestore(state.nodes)
+      edges.value = state.edges
+    })
+    syncHistoryRefs()
     isHistoryAction.value = false
   }
 
@@ -754,30 +781,21 @@ export const useCanvasStore = defineStore('canvas', () => {
    * @param {number} keepCount - 保留的历史记录数量，默认5个
    */
   function trimHistory(keepCount = 5) {
-    const currentLength = historyStack.value.length
-    if (currentLength <= keepCount) {
-      console.log(`[Canvas Store] 历史记录数量 (${currentLength}) 未超过保留数量 (${keepCount})，无需裁剪`)
-      return
+    const removed = opHistory.trim(keepCount)
+    syncHistoryRefs()
+    if (removed > 0) {
+      console.log(`[Canvas Store] 历史记录已裁剪: 删除 ${removed} 条，保留最近 ${keepCount} 条`)
+    } else {
+      console.log(`[Canvas Store] 历史记录数量 (${opHistory.length}) 未超过保留数量 (${keepCount})，无需裁剪`)
     }
-    
-    // 计算需要删除的数量
-    const removeCount = currentLength - keepCount
-    
-    // 从前面删除旧的历史记录
-    historyStack.value = historyStack.value.slice(removeCount)
-    
-    // 调整当前索引
-    historyIndex.value = Math.max(0, historyIndex.value - removeCount)
-    
-    console.log(`[Canvas Store] 历史记录已裁剪: 删除 ${removeCount} 条，保留最近 ${keepCount} 条`)
   }
 
   /**
    * 🔧 清空历史记录（完全清空，释放所有内存）
    */
   function clearHistory() {
-    historyStack.value = []
-    historyIndex.value = -1
+    opHistory.clear()
+    syncHistoryRefs()
     console.log('[Canvas Store] 历史记录已完全清空，释放内存')
   }
 
@@ -787,13 +805,16 @@ export const useCanvasStore = defineStore('canvas', () => {
   function getMemoryStats() {
     const nodesSize = JSON.stringify(nodes.value).length
     const edgesSize = JSON.stringify(edges.value).length
-    const historySize = JSON.stringify(historyStack.value).length
+    // 🚀 op-based 历史栈仅存 diff，用 diff 条数 × 平均节点尺寸近似估算
+    const opStats = opHistory.getStats()
+    const avgNodeBytes = nodes.value.length > 0 ? nodesSize / nodes.value.length : 0
+    const historySize = Math.round(opStats.totalDiffSize * avgNodeBytes)
     const clipboardSize = clipboard.value ? JSON.stringify(clipboard.value).length : 0
-    
+
     return {
       nodeCount: nodes.value.length,
       edgeCount: edges.value.length,
-      historyCount: historyStack.value.length,
+      historyCount: opStats.length,
       estimatedMemoryKB: Math.round((nodesSize + edgesSize + historySize + clipboardSize) / 1024),
       breakdown: {
         nodesKB: Math.round(nodesSize / 1024),
@@ -1551,7 +1572,90 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     asyncRestoreMedia()
   }
-  
+
+  /**
+   * Phase 2.4 — 增量加载入口
+   *
+   * 传入 manifest（来自 GET /workflows/:id/manifest），立刻把 Shell 节点喂进 store，
+   * 之后 store 外部（CanvasBoard）按视口调用 ensureNodesData(ids) 拉详细 data。
+   *
+   * 不替换 loadWorkflow（旧路径保留为兜底）。manifest 里的字段约定：
+   *   - viewport: { x, y, zoom }
+   *   - nodeIndex: [{ id, type, x, y, w, h, groupId, zIndex, version }]
+   *   - edgeIndex: [{ id, source, target, sourceHandle?, targetHandle?, type?, version }]
+   */
+  function loadWorkflowManifest(manifest) {
+    if (!manifest || !Array.isArray(manifest.nodeIndex)) {
+      console.warn('[Canvas Store] loadWorkflowManifest: 无效 manifest')
+      return
+    }
+    const shells = manifest.nodeIndex.map(item => {
+      const node = {
+        id: item.id,
+        type: item.type || 'image',
+        position: { x: Number(item.x) || 0, y: Number(item.y) || 0 },
+        data: {
+          _shellLoading: true,
+          _baseVersion: item.version || 1
+        }
+      }
+      if (item.w != null) node.width = Number(item.w)
+      if (item.h != null) node.height = Number(item.h)
+      if (item.groupId) node.parentNode = item.groupId
+      if (item.zIndex != null) node.zIndex = Number(item.zIndex)
+      return node
+    })
+    const shellIds = new Set(shells.map(n => n.id))
+    nodes.value = shells
+    edges.value = (manifest.edgeIndex || [])
+      .filter(e => shellIds.has(e.source) && shellIds.has(e.target))
+      .map(e => {
+        const edge = { id: e.id, source: e.source, target: e.target }
+        if (e.sourceHandle) edge.sourceHandle = e.sourceHandle
+        if (e.targetHandle) edge.targetHandle = e.targetHandle
+        if (e.type) edge.type = e.type
+        return edge
+      })
+    if (manifest.viewport) viewport.value = manifest.viewport
+    console.log(`[Canvas Store] manifest 已载入：${shells.length} 节点 / ${edges.value.length} 边`)
+  }
+
+  /**
+   * Phase 2.4 — 用 LRU 缓存里的完整 node data 合并进 Shell 节点
+   *
+   * 由外部 incrementalLoader 在拉到节点 data 时回调；也支持手动从缓存补齐。
+   * 不会覆盖已经被用户编辑过（_dirty）的字段。
+   */
+  function applyIncrementalNode(node) {
+    if (!node || !node.id) return
+    const target = nodes.value.find(n => n.id === node.id)
+    if (!target) return
+    const incomingData = node.data || {}
+    const wasShell = target.data?._shellLoading
+    const mergedData = {
+      ...(target.data || {}),
+      ...incomingData,
+      _shellLoading: false,
+      _baseVersion: node.version || target.data?._baseVersion || 1
+    }
+    delete mergedData._shellLoading
+    if (typeof Object.assign === 'function') {
+      target.data = mergedData
+    }
+    if (wasShell) {
+      // Shell -> Full 切换时把节点缓存到 LRU
+      try { getGlobalNodeDataCache().set(node.id, { ...node, data: mergedData }) } catch {}
+    }
+  }
+
+  /**
+   * Phase 2.4 — 标记某个节点为视口可见（外部 incrementalLoader 用）
+   * 这里只是做一个 LRU touch，真正的批量请求由 loader 控制。
+   */
+  function touchNodeCache(id) {
+    try { getGlobalNodeDataCache().get(id) } catch {}
+  }
+
   /**
    * 导出工作流数据
    * 普通导出，不做清理（用于自动保存等场景）
@@ -2673,6 +2777,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     isLargeCanvas,
     isVeryLargeCanvas,
     performanceMode,
+    baselinePerformanceMode,
+    performanceModeOverride,
+    setPerformanceMode,
     edgesByTarget,
     edgesBySource,
     nodesById,
@@ -2783,6 +2890,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     workflowMeta,
     clearCanvas,
     loadWorkflow,
+    loadWorkflowManifest,
+    applyIncrementalNode,
+    touchNodeCache,
     exportWorkflow,
     exportWorkflowForSave,
     

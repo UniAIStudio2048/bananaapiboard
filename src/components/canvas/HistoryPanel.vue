@@ -67,6 +67,14 @@ let pendingScrollTop = 0
 const scrollTop = ref(0)
 const isContentReady = ref(false) // 内容是否准备好渲染（延迟渲染用）
 
+// ========== 渐进式渲染（滚动加载更多）==========
+// 一次性渲染所有卡片会触发大量 CDN 缩略图和视频元数据请求，
+// 这里改为先渲染一个窗口，滚动接近底部时再追加，避免带宽小的客户长时间等待
+const INITIAL_DISPLAY_COUNT = 30
+const LOAD_MORE_STEP = 30
+const LOAD_MORE_THRESHOLD_PX = 600 // 距底部多少像素触发追加
+const displayCount = ref(INITIAL_DISPLAY_COUNT)
+
 // 全屏预览状态
 const showPreview = ref(false)
 const previewItem = ref(null)
@@ -168,6 +176,16 @@ const filteredHistory = computed(() => {
   return result
 })
 
+// 当前实际渲染的历史记录（受 displayCount 限制，滚动到底部时追加）
+const displayedHistory = computed(() => {
+  return filteredHistory.value.slice(0, displayCount.value)
+})
+
+// 是否还有未渲染的历史项目
+const hasMoreToRender = computed(() => {
+  return displayCount.value < filteredHistory.value.length
+})
+
 // ========== 瀑布流计算 ==========
 // 全屏模式下的列数
 const columnCount = computed(() => isFullscreen.value ? 6 : 2)
@@ -177,7 +195,7 @@ const columnItems = computed(() => {
   const cols = columnCount.value
   const columns = Array.from({ length: cols }, () => ({ items: [], weight: 0 }))
 
-  filteredHistory.value.forEach(item => {
+  displayedHistory.value.forEach(item => {
     let targetColumn = columns[0]
     for (const column of columns) {
       if (column.weight < targetColumn.weight) targetColumn = column
@@ -205,7 +223,37 @@ const historyStats = computed(() => {
 
 // 处理滚动事件（节流）
 function handleScroll(e) {
-  scrollTop.value = e.target.scrollTop
+  const target = e.target
+  scrollTop.value = target.scrollTop
+  maybeLoadMore(target)
+}
+
+// 接近底部时追加渲染下一批卡片
+function maybeLoadMore(target) {
+  if (!target) return
+  if (!hasMoreToRender.value) return
+  const distanceToBottom = target.scrollHeight - target.scrollTop - target.clientHeight
+  if (distanceToBottom < LOAD_MORE_THRESHOLD_PX) {
+    displayCount.value = Math.min(
+      displayCount.value + LOAD_MORE_STEP,
+      filteredHistory.value.length
+    )
+  }
+}
+
+// 数据变化后，如果列表不够撑满容器，自动追加直到出现滚动条
+// （否则用户没机会触发滚动事件）
+function ensureScrollableOrLoadAll() {
+  const target = scrollContainerRef.value
+  if (!target) return
+  if (!hasMoreToRender.value) return
+  // 内容高度 <= 容器高度 + 阈值，说明还没有可滚动空间，直接追加一批
+  if (target.scrollHeight <= target.clientHeight + LOAD_MORE_THRESHOLD_PX) {
+    displayCount.value = Math.min(
+      displayCount.value + LOAD_MORE_STEP,
+      filteredHistory.value.length
+    )
+  }
 }
 
 function syncScrollPosition(nextTop = scrollTop.value) {
@@ -452,6 +500,20 @@ watch(() => teamStore.isInTeamSpace.value, (isTeam) => {
 watch(spaceFilter, (newSpace) => {
   refreshForSpaceChange(newSpace)
 })
+
+// 任何会改变 filteredHistory 内容范围的因素变化时，重置渲染窗口到初始大小
+watch([selectedType, searchQuery, spaceFilter], () => {
+  displayCount.value = INITIAL_DISPLAY_COUNT
+  syncScrollPosition(0)
+})
+
+// 数据/筛选变化后，如果当前内容撑不满容器，自动补足一批，保证用户能继续滚动
+watch(
+  [() => filteredHistory.value.length, displayCount, isContentReady],
+  () => {
+    nextTick(() => ensureScrollableOrLoadAll())
+  }
+)
 
 watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value], () => {
   setCanvasSpaceFilterFromGlobal(teamStore)
@@ -1520,9 +1582,10 @@ function handleDragEnd(e) {
 
 watch(() => props.visible, async (visible) => {
   if (visible) {
-    // 重置滚动位置
+    // 重置滚动位置和渲染窗口（避免上次留下的大量卡片继续占用 DOM/CDN）
     scrollTop.value = 0
     pendingScrollTop = 0
+    displayCount.value = INITIAL_DISPLAY_COUNT
     
     // 加载数据
     await loadHistory()
@@ -1956,6 +2019,12 @@ onUnmounted(() => {
                 </div>
               </div>
             </div>
+          </div>
+
+          <!-- 滚动加载更多提示 -->
+          <div v-if="hasMoreToRender" class="load-more-hint">
+            <div class="spinner"></div>
+            <span>{{ t('common.loading') }}</span>
           </div>
         </div>
 
@@ -2627,6 +2696,23 @@ onUnmounted(() => {
   border-top-color: rgba(255, 255, 255, 0.7);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
+}
+
+/* 滚动加载更多提示 */
+.load-more-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 0 12px;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+}
+
+.load-more-hint .spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
 }
 
 @keyframes spin {

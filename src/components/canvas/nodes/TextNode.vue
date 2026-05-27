@@ -37,6 +37,7 @@ import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PromptMediaTag from '../PromptMediaTag.vue'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
+import { useNodeVisibility } from '@/composables/useNodeVisibility'
 
 const { t } = useI18n()
 
@@ -58,6 +59,11 @@ const { updateNodeInternals, setViewport, getViewport, getSelectedNodes } = useV
 
 // 节点根元素引用（用于配置面板放大居中）
 const textNodeRootRef = ref(null)
+
+// 🚀 节点可见性追踪：让 useNodeVisibility 把 data-node-visible 属性写到
+// 最近的 .vue-flow__node 祖先元素上，触发 canvas.css 的 content-visibility 虚拟化。
+// 选中节点由 CSS 的 :not(.selected) 选择器豁免。
+const { isVisible: isNodeVisible } = useNodeVisibility(textNodeRootRef)
 
 // 配置面板放大相关（与 VideoNode 保持一致的交互逻辑）
 const isConfigPanelExpanded = ref(false)

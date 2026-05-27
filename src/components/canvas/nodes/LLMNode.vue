@@ -13,6 +13,7 @@ import { enhancePrompt, describeImage, expandContent, getLLMCost } from '@/api/c
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { useI18n } from '@/i18n'
+import { useNodeVisibility } from '@/composables/useNodeVisibility'
 
 const { t } = useI18n()
 
@@ -29,6 +30,10 @@ const userInfo = inject('userInfo')
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
 const { updateNodeInternals } = useVueFlow()
+
+// 🚀 节点可见性追踪（用于 content-visibility 浏览器原生虚拟化）
+const llmNodeRootRef = ref(null)
+const { isVisible: isNodeVisible } = useNodeVisibility(llmNodeRootRef)
 
 onMounted(() => {
   nextTick(() => {
@@ -289,7 +294,7 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
 </script>
 
 <template>
-  <div :class="nodeClass" @contextmenu="handleContextMenu">
+  <div ref="llmNodeRootRef" :class="nodeClass" @contextmenu="handleContextMenu">
     <!-- 节点头部 -->
     <div class="canvas-node-header">
       <div class="canvas-node-title">
