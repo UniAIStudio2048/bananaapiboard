@@ -20,6 +20,7 @@ import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadIm
 import { extractVideoFrame } from '@/api/canvas/workflow'
 import { createQuickSeedanceCharacterAsset, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
+import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
@@ -722,7 +723,9 @@ function handleBackgroundTaskComplete(event) {
   console.log(`[ImageNode] 后台任务完成: ${taskId}`, task)
 
   if (task.type === 'image-hd' || task.type === 'image-panorama') {
-    const imageUrl = task.result?.outputUrl || task.result?.url
+    // 用 getTaskMediaUrl 全字段兜底（覆盖 data.url / data.output_url / images[]/outputs[] 等嵌套字段），
+    // 避免后端实际生成完成、但因字段命名差异导致前端拿不到 URL 而误判失败。
+    const imageUrl = getTaskMediaUrl(task.result, 'image') || task.result?.outputUrl || task.result?.url
     if (imageUrl) {
       canvasStore.updateNodeData(props.id, {
         status: 'success',
@@ -740,7 +743,9 @@ function handleBackgroundTaskComplete(event) {
   }
   
   // 获取主图URL（文生图/图生图）
-  const imageUrl = task.result?.url || task.result?.urls?.[0]
+  // 用 getTaskMediaUrl 兜底，确保能从嵌套字段（data.url / images[].url 等）抽到 URL，
+  // 与 Canvas.vue / VideoNode 的提取逻辑保持一致。
+  const imageUrl = getTaskMediaUrl(task.result, 'image') || task.result?.url || task.result?.urls?.[0]
   if (imageUrl) {
     canvasStore.updateNodeData(props.id, {
       status: 'success',
@@ -863,6 +868,35 @@ function handleBackgroundTaskProgress(event) {
   }
 }
 
+// 网络错误事件：BTM 连续多次轮询失败时触发，给节点显示"网络异常，重试中..."
+// 而不是用户长时间看不到任何反馈。
+function handleBackgroundTaskNetworkError(event) {
+  const { task, message } = event.detail || {}
+  if (!task || task.nodeId !== props.id) return
+  if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-panorama' && task.type !== 'image-cutout') return
+  // 仅在节点仍处于生成中时覆盖 progress 文案；终态不打扰
+  const currentStatus = props.data?.status
+  if (currentStatus !== 'processing' && currentStatus !== 'pending') return
+  canvasStore.updateNodeData(props.id, {
+    progress: '网络异常，重试中...',
+    _networkRetrying: true,
+    _networkRetryMessage: message || '网络连接异常'
+  })
+}
+
+// 网络恢复事件：BTM 再次轮询成功时触发，清掉重试中提示，恢复原 progress。
+function handleBackgroundTaskNetworkRecovered(event) {
+  const { task } = event.detail || {}
+  if (!task || task.nodeId !== props.id) return
+  if (task.type !== 'image' && task.type !== 'image-hd' && task.type !== 'image-panorama' && task.type !== 'image-cutout') return
+  if (!props.data?._networkRetrying) return
+  canvasStore.updateNodeData(props.id, {
+    progress: task.type === 'image-hd' ? '高清处理中...' : (task.type === 'image-panorama' ? '全景图生成中...' : (task.type === 'image-cutout' ? '抠图处理中...' : '生成中...')),
+    _networkRetrying: false,
+    _networkRetryMessage: null
+  })
+}
+
 // 检查并恢复已完成的后台任务
 function checkAndRestoreBackgroundTasks() {
   const nodeTasks = getTasksByNodeId(props.id)
@@ -873,8 +907,8 @@ function checkAndRestoreBackgroundTasks() {
     
     if (task.status === 'completed') {
       const imageUrl = (task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout')
-        ? (task.result?.outputUrl || task.result?.url)
-        : (task.result?.url || task.result?.urls?.[0])
+        ? (getTaskMediaUrl(task.result, 'image') || task.result?.outputUrl || task.result?.url)
+        : (getTaskMediaUrl(task.result, 'image') || task.result?.url || task.result?.urls?.[0])
       if (imageUrl) {
         canvasStore.updateNodeData(props.id, {
           status: 'success',
@@ -944,6 +978,8 @@ onMounted(() => {
   window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.addEventListener('background-task-failed', handleBackgroundTaskFailed)
   window.addEventListener('background-task-progress', handleBackgroundTaskProgress)
+  window.addEventListener('background-task-network-error', handleBackgroundTaskNetworkError)
+  window.addEventListener('background-task-network-recovered', handleBackgroundTaskNetworkRecovered)
   
   // 检查是否有已完成的后台任务需要恢复
   checkAndRestoreBackgroundTasks()
@@ -962,6 +998,8 @@ onUnmounted(() => {
   window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
   window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
+  window.removeEventListener('background-task-network-error', handleBackgroundTaskNetworkError)
+  window.removeEventListener('background-task-network-recovered', handleBackgroundTaskNetworkRecovered)
   
 })
 

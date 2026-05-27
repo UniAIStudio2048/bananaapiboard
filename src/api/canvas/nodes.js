@@ -47,8 +47,22 @@ function getApiErrorMessage(error, fallbackMessage) {
 function getTaskQueryErrorMessage(response, error, fallbackMessage) {
   const fallback = response.status === 404
     ? '任务不存在或已过期，请重新生成'
-    : fallbackMessage
+    : response.status === 401
+      ? '登录已过期，请刷新页面重新登录'
+      : fallbackMessage
   return getApiErrorMessage(error, fallback)
+}
+
+/**
+ * 构造任务状态查询错误，并把 HTTP status 挂到 error.status，
+ * 让上层（BackgroundTaskManager）能精确识别 401/404 等情况，
+ * 而不是只能从字符串里 includes('401')。
+ */
+function buildTaskQueryError(response, body, fallbackMessage) {
+  const message = getTaskQueryErrorMessage(response, body, fallbackMessage)
+  const err = new Error(message)
+  err.status = response.status
+  return err
 }
 
 // 获取通用请求头
@@ -356,13 +370,12 @@ export async function getImageTaskStatus(taskId) {
   const response = await fetch(getApiUrl(`/api/images/task/${taskId}`), {
     headers: getHeaders()
   })
-  
+
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    const fallback = response.status === 404 ? '任务不存在或已过期，请重新生成' : '查询任务状态失败'
-    throw new Error(getApiErrorMessage(error, fallback))
+    throw buildTaskQueryError(response, error, '查询任务状态失败')
   }
-  
+
   return response.json()
 }
 
@@ -374,11 +387,11 @@ export async function getVideoTaskStatus(taskId) {
     headers: getHeaders()
   })
   const data = await parseApiResponse(response, '查询任务状态失败：后端没有返回 JSON')
-  
+
   if (!response.ok) {
-    throw new Error(getTaskQueryErrorMessage(response, data, '查询任务状态失败'))
+    throw buildTaskQueryError(response, data, '查询任务状态失败')
   }
-  
+
   return data
 }
 
@@ -390,11 +403,11 @@ export async function getVideoHdTaskStatus(taskId) {
     headers: getHeaders()
   })
   const data = await parseApiResponse(response, '查询高清任务状态失败：后端没有返回 JSON')
-  
+
   if (!response.ok) {
-    throw new Error(getTaskQueryErrorMessage(response, data, '查询高清任务状态失败'))
+    throw buildTaskQueryError(response, data, '查询高清任务状态失败')
   }
-  
+
   return data
 }
 
@@ -408,7 +421,7 @@ export async function getImageHdTaskStatus(taskId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(getTaskQueryErrorMessage(response, error, '查询图片高清任务状态失败'))
+    throw buildTaskQueryError(response, error, '查询图片高清任务状态失败')
   }
 
   return response.json()
@@ -424,7 +437,7 @@ export async function getImagePanoramaTaskStatus(taskId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(getTaskQueryErrorMessage(response, error, '查询生成全景图任务状态失败'))
+    throw buildTaskQueryError(response, error, '查询生成全景图任务状态失败')
   }
 
   return response.json()
@@ -440,7 +453,7 @@ export async function getRemoveBackgroundTaskStatus(taskId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(getTaskQueryErrorMessage(response, error, '查询抠图任务状态失败'))
+    throw buildTaskQueryError(response, error, '查询抠图任务状态失败')
   }
 
   return response.json()
@@ -474,7 +487,7 @@ export async function getAudioEditTaskStatus(taskId) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || '查询音频处理任务状态失败')
+    throw buildTaskQueryError(response, error, '查询音频处理任务状态失败')
   }
 
   return response.json()

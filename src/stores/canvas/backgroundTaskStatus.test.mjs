@@ -3,7 +3,11 @@ import assert from 'node:assert/strict'
 
 import { classifyBackgroundTaskStatus } from './backgroundTaskStatus.js'
 
-test('treats successful terminal status without media output as failed instead of still processing', () => {
+test('keeps successful terminal status without media output in processing with waitingForUrl flag (grace period)', () => {
+  // 语义变更说明：
+  // 第三方异步渠道（视频/HD/部分图片）经常在"状态先 success，URL 几秒后才落库"。
+  // 旧行为立即 failed → 用户看到"已生成但节点空白"。
+  // 新行为：标记 waitingForUrl，由 BackgroundTaskManager 给出有限宽限期再决定 failed。
   const result = {
     status: 'succeeded',
     progress: '100%',
@@ -12,8 +16,9 @@ test('treats successful terminal status without media output as failed instead o
 
   const status = classifyBackgroundTaskStatus(result, 'video')
 
-  assert.equal(status.state, 'failed')
-  assert.equal(status.isTerminal, true)
+  assert.equal(status.state, 'processing')
+  assert.equal(status.isTerminal, false)
+  assert.equal(status.waitingForUrl, true)
   assert.match(status.error, /未返回/)
 })
 

@@ -2063,6 +2063,31 @@ function handleConfigPanelOutsideMouseDown(event) {
   collapseConfigPanel()
 }
 
+// 网络错误事件：BTM 连续多次轮询失败时触发，给节点显示"网络异常，重试中..."。
+function handleBackgroundTaskNetworkError(event) {
+  const { task, message } = event.detail || {}
+  if (!task || task.nodeId !== props.id) return
+  const currentStatus = props.data?.status
+  if (currentStatus !== 'processing' && currentStatus !== 'pending') return
+  canvasStore.updateNodeData(props.id, {
+    progress: '网络异常，重试中...',
+    _networkRetrying: true,
+    _networkRetryMessage: message || '网络连接异常'
+  })
+}
+
+// 网络恢复事件：BTM 再次轮询成功时触发，清掉重试中提示。
+function handleBackgroundTaskNetworkRecovered(event) {
+  const { task } = event.detail || {}
+  if (!task || task.nodeId !== props.id) return
+  if (!props.data?._networkRetrying) return
+  canvasStore.updateNodeData(props.id, {
+    progress: '生成中...',
+    _networkRetrying: false,
+    _networkRetryMessage: null
+  })
+}
+
 onMounted(() => {
   elapsedTimeTimer = setInterval(() => {
     elapsedTimeNow.value = Date.now()
@@ -2096,6 +2121,8 @@ onMounted(() => {
   window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.addEventListener('background-task-failed', handleBackgroundTaskFailed)
   window.addEventListener('background-task-progress', handleBackgroundTaskProgress)
+  window.addEventListener('background-task-network-error', handleBackgroundTaskNetworkError)
+  window.addEventListener('background-task-network-recovered', handleBackgroundTaskNetworkRecovered)
   
   // 🚀 性能优化：监听画布拖拽事件
   window.addEventListener('canvas-drag-start', handleCanvasDragStart)
@@ -2119,6 +2146,8 @@ onUnmounted(() => {
   window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
   window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
+  window.removeEventListener('background-task-network-error', handleBackgroundTaskNetworkError)
+  window.removeEventListener('background-task-network-recovered', handleBackgroundTaskNetworkRecovered)
   
   // 🚀 性能优化：移除画布拖拽事件监听
   window.removeEventListener('canvas-drag-start', handleCanvasDragStart)

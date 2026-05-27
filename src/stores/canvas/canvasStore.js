@@ -1632,12 +1632,56 @@ export const useCanvasStore = defineStore('canvas', () => {
     if (!target) return
     const incomingData = node.data || {}
     const wasShell = target.data?._shellLoading
+    const localData = target.data || {}
+
+    // 关键保护：远端 stale 数据不应覆盖本地刚完成的生成结果。
+    // 场景：
+    //   1) 用户在 A 标签触发生成 → 任务回调把 output.urls 写到本地节点；
+    //   2) 此时 WS resync / 远端 patch 因服务端写库延迟仍是旧版本（无 output 或空 output）；
+    //   3) 默认 spread 合并会用空 output 覆盖刚完成的 output，节点变空白。
+    // 处理：本地已有非空 output（图片/视频/音频 URL）且远端 incomingData
+    //   没有更"丰富"的 output 时，保留本地 output。
+    function hasNonEmptyOutput(out) {
+      if (!out || typeof out !== 'object') return false
+      if (typeof out.url === 'string' && out.url) return true
+      if (Array.isArray(out.urls) && out.urls.some(u => typeof u === 'string' && u)) return true
+      return false
+    }
+
+    const localHasOutput = hasNonEmptyOutput(localData.output)
+    const incomingHasOutput = Object.prototype.hasOwnProperty.call(incomingData, 'output')
+      ? hasNonEmptyOutput(incomingData.output)
+      : false
+    const incomingExplicitlyClearsOutput = Object.prototype.hasOwnProperty.call(incomingData, 'output')
+      && !hasNonEmptyOutput(incomingData.output)
+
+    // 同样保护 status: 远端旧版本仍为 processing 而本地已经 success / error，不应回退。
+    const TERMINAL_STATUSES = new Set(['success', 'error'])
+    const localTerminal = TERMINAL_STATUSES.has(localData.status)
+    const incomingHasStatus = Object.prototype.hasOwnProperty.call(incomingData, 'status')
+    const incomingNonTerminal = incomingHasStatus && !TERMINAL_STATUSES.has(incomingData.status)
+
     const mergedData = {
-      ...(target.data || {}),
+      ...localData,
       ...incomingData,
       _shellLoading: false,
-      _baseVersion: node.version || target.data?._baseVersion || 1
+      _baseVersion: node.version || localData._baseVersion || 1
     }
+
+    // 当远端要把 output 抹掉但本地已有完成结果时，恢复本地 output（含 progress/error 重置避免视觉抖动）
+    if (localHasOutput && incomingExplicitlyClearsOutput && !incomingHasOutput) {
+      mergedData.output = localData.output
+      console.warn(`[Canvas Store] applyIncrementalNode: 拒绝用空 output 覆盖本地已完成结果 (nodeId=${node.id})`)
+    }
+
+    // 当本地已是终态而远端把 status 拉回 processing/pending 时，保留本地终态
+    if (localTerminal && incomingNonTerminal) {
+      mergedData.status = localData.status
+      mergedData.progress = localData.progress
+      if (typeof localData.error !== 'undefined') mergedData.error = localData.error
+      console.warn(`[Canvas Store] applyIncrementalNode: 拒绝用 ${incomingData.status} 覆盖本地终态 ${localData.status} (nodeId=${node.id})`)
+    }
+
     delete mergedData._shellLoading
     if (typeof Object.assign === 'function') {
       target.data = mergedData

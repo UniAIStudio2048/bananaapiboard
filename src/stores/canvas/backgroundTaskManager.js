@@ -19,6 +19,11 @@ const POLL_INTERVAL = 3000  // 3秒轮询一次
 const MAX_TASK_AGE = 24 * 60 * 60 * 1000  // 任务最大存活时间：24小时
 const IMAGE_POLL_TIMEOUT = 8 * 60 * 1000  // 图片任务前端轮询超时：8分钟
 const VIDEO_POLL_TIMEOUT = 40 * 60 * 1000  // 视频任务前端轮询超时：40分钟（与后端 VIDEO_TASK_TIMEOUT_MS 对齐）
+
+// 连续网络错误超过该次数（≈5*3s=15s）后，向节点广播 network-error 事件，给用户可见反馈
+const NETWORK_ERROR_NOTIFY_AFTER = 5
+// 后端返回 success/completed 但仍未拿到 URL 的最大宽限轮询次数（≈8*3s=24s）；超过则视为"已完成但URL丢失"判定 failed
+const SUCCESS_NO_URL_GRACE = 8
 const HISTORY_MEDIA_TASK_TYPES = new Set([
   'image',
   'video',
@@ -202,7 +207,13 @@ function startPolling(taskId) {
       else getStatus = getImageTaskStatus
       const rawResult = await getStatus(taskId)
       const result = normalizeTaskMediaResult(rawResult, taskConfig.resultType)
-      
+
+      // 网络成功 → 重置连续错误计数，并清除"重试中"提示
+      if (task._networkErrorCount) {
+        task._networkErrorCount = 0
+        notifyTaskNetworkRecovered(taskId, task)
+      }
+
       console.log(`[BackgroundTaskManager] 任务 ${taskId} 状态:`, result.status)
       
       // 更新任务状态
@@ -254,7 +265,24 @@ function startPolling(taskId) {
         stopPolling(taskId)
         notifyTaskFailed(taskId, task)
         console.log(`[BackgroundTaskManager] 任务失败: ${taskId} | 状态: ${result.status || 'unknown'} | 错误: ${task.error}`)
+      } else if (classifiedStatus.waitingForUrl) {
+        // 后端返回 success/completed 但 URL 尚未落库：累计宽限次数，超阈值才 failed。
+        // 这避免了"实际已生成、URL 几秒后才到"被错判失败导致节点空白。
+        task._successNoUrlCount = (task._successNoUrlCount || 0) + 1
+        task.status = 'processing'
+        if (task._successNoUrlCount >= SUCCESS_NO_URL_GRACE) {
+          task.status = 'failed'
+          task.error = formatTaskError(task, classifiedStatus.error, '任务执行失败')
+          task.result = result
+          stopPolling(taskId)
+          notifyTaskFailed(taskId, task)
+          console.warn(`[BackgroundTaskManager] 任务 ${taskId} 后端 success 但 URL 始终为空，宽限耗尽判失败`)
+        } else {
+          console.log(`[BackgroundTaskManager] 任务 ${taskId} success 但缺 URL，等待中 (${task._successNoUrlCount}/${SUCCESS_NO_URL_GRACE})`)
+        }
       } else {
+        // 正常 processing，重置宽限计数（避免 success → processing → success 序列错误累计）
+        task._successNoUrlCount = 0
         task.status = 'processing'
       }
       
@@ -274,9 +302,11 @@ function startPolling(taskId) {
       
     } catch (error) {
       console.error(`[BackgroundTaskManager] 轮询任务 ${taskId} 出错:`, error)
-      
+
+      const message = String(error?.message || '')
+
       // 如果任务不存在（404错误），标记为失败并停止轮询
-      if (error.message?.includes('任务不存在') || error.message?.includes('not found')) {
+      if (message.includes('任务不存在') || message.includes('not found')) {
         task.status = 'failed'
         task.error = formatTaskError(task, '任务不存在或已过期，请重新生成', '任务不存在或已过期，请重新生成')
         task.updatedAt = Date.now()
@@ -287,7 +317,44 @@ function startPolling(taskId) {
         console.log(`[BackgroundTaskManager] 任务 ${taskId} 不存在，已停止轮询`)
         return
       }
-      // 其他错误继续尝试轮询
+
+      // 401 / 会话过期：继续静默重试只会让节点一直转，停止轮询并给出明确提示，
+      // 让用户去登录而不是干等到 8/40 分钟超时。
+      const isAuthError = error?.status === 401 ||
+        message.includes('401') ||
+        message.includes('Unauthorized') ||
+        message.includes('未登录') ||
+        message.includes('登录已过期') ||
+        message.includes('会话已过期')
+      if (isAuthError) {
+        task.status = 'failed'
+        task.error = formatTaskError(task, '登录已过期，请刷新页面重新登录后再生成', '登录已过期，请刷新页面')
+        task.updatedAt = Date.now()
+        tasks.set(taskId, task)
+        saveTasksToStorage()
+        stopPolling(taskId)
+        notifyTaskFailed(taskId, task)
+        console.warn(`[BackgroundTaskManager] 任务 ${taskId} 401，已停止轮询`)
+        return
+      }
+
+      // 网络错误（Failed to fetch / NetworkError / 5xx 等）：累计连续失败次数；
+      // 累计达到阈值后向节点广播 network-error 事件，让节点显示"网络异常，重试中..."而不是一直 loading。
+      // 注意：不直接把任务置为 failed，后台任务可能仍在跑；恢复后由 reset 流程清掉提示。
+      const isNetworkError = message.includes('Failed to fetch') ||
+        message.includes('NetworkError') ||
+        message.includes('network') ||
+        /^\d{3}$/.test(message) ||
+        message.includes('查询任务状态失败')
+
+      task._networkErrorCount = (task._networkErrorCount || 0) + 1
+      task.updatedAt = Date.now()
+
+      if (isNetworkError && task._networkErrorCount >= NETWORK_ERROR_NOTIFY_AFTER) {
+        notifyTaskNetworkError(taskId, task, message || '网络连接异常')
+      }
+
+      // 不停止轮询，下次 setInterval 继续重试
     }
   }
   
@@ -375,6 +442,30 @@ function notifyTaskComplete(taskId, task) {
       detail: { taskId, task }
     }))
   }
+}
+
+/**
+ * 通知任务网络错误（轮询失败累计达到阈值时）
+ * 节点应显示"网络异常，重试中..."等可见反馈，而不是一直转 loading
+ */
+function notifyTaskNetworkError(taskId, task, message) {
+  window.dispatchEvent(new CustomEvent('background-task-network-error', {
+    detail: {
+      taskId,
+      task,
+      message: message || '网络连接异常',
+      consecutiveErrors: task._networkErrorCount || 0
+    }
+  }))
+}
+
+/**
+ * 通知任务网络已恢复（轮询再次成功，清除"重试中"提示）
+ */
+function notifyTaskNetworkRecovered(taskId, task) {
+  window.dispatchEvent(new CustomEvent('background-task-network-recovered', {
+    detail: { taskId, task }
+  }))
 }
 
 /**

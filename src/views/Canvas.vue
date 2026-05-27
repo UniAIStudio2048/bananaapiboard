@@ -188,7 +188,9 @@ let lastExitPersistKey = ''
 // 表现为"刷新后才能看到图片"。这里在每次任务完成后短延迟（去抖）触发一次 autoSaveWorkflow，
 // 把含有 output.urls 的节点数据立即落库。
 let _persistAfterTaskTimer = null
-const PERSIST_AFTER_TASK_DEBOUNCE_MS = 800
+// 任务完成后到落库的延迟：以前是 800ms 去抖，会与 BTM 5s 后清理任务、拖拽中跳过保存等
+// 共同造成"已生成但刷新后丢失"的竞态。任务结果（图片/视频 URL）必须立即写库，因此降到 200ms。
+const PERSIST_AFTER_TASK_DEBOUNCE_MS = 200
 
 // 🔧 Toast 通知状态（用于显示保存状态等）
 const toastMessage = ref('')
@@ -1309,7 +1311,13 @@ function schedulePersistAfterTask(reason = 'background-task') {
     const currentTab = canvasStore.getCurrentTab?.()
     if (!currentTab) return
     if (!currentTab.hasChanges) return
-    if (_isCanvasDragging) return
+    // 注意：拖拽中不再跳过保存。
+    // 原本跳过是为了减少拖拽期间的脏写，但任务完成结果（图片/视频 URL）是关键持久化点，
+    // 一旦此时被拖拽 + 5s removeCompletedTask 清理叠加，就会出现"刷新后画布丢图"的事故。
+    // 拖拽中触发的普通自动保存已被 autoSaveWorkflow 内部去抖控制，这里强制落库不会引入新风险。
+    if (_isCanvasDragging) {
+      console.log(`[Canvas] 任务完成期间正在拖拽，仍强制落库 (reason=${reason})`)
+    }
     console.log(`[Canvas] 任务完成后触发立即持久化 (reason=${reason}, workflowId=${currentTab.workflowId || 'draft'})`)
     autoSaveWorkflow().catch(err => {
       console.warn('[Canvas] 任务完成后立即持久化失败:', err?.message || err)
