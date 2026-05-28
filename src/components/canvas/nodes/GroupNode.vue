@@ -10,6 +10,8 @@
  */
 import { ref, computed, onUnmounted, nextTick, watch } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
+import { createGroupSchedule } from '@/api/canvas/groupSchedule'
+import GroupScheduleDialog from '@/components/canvas/GroupScheduleDialog.vue'
 
 const props = defineProps({
   id: String,
@@ -54,6 +56,8 @@ const isHovered = ref(false)
 const isEditing = ref(false)
 const editingName = ref('')
 const nameInputRef = ref(null)
+const showScheduleDialog = ref(false)
+const scheduleSubmitting = ref(false)
 
 // ========== 编组执行状态 ==========
 // 注意：canvasStore 中的 executeGroup、groupExecutionState、stopGroupExecution
@@ -83,6 +87,41 @@ function handleExecuteGroup() {
     return
   }
   canvasStore.executeGroup?.(props.id)
+}
+
+function getScheduleSnapshot() {
+  const exported = canvasStore.exportWorkflowForSave?.() || canvasStore.exportWorkflow?.() || {}
+  return {
+    nodes: exported.nodes || [],
+    edges: exported.edges || [],
+    viewport: exported.viewport || canvasStore.viewport || { x: 0, y: 0, zoom: 1 }
+  }
+}
+
+async function handleScheduleSubmit(payload) {
+  const currentTab = canvasStore.getCurrentTab?.()
+  const workflowId = currentTab?.workflowId || canvasStore.workflowMeta?.id
+  if (!workflowId) {
+    window.alert?.('请先保存工作流后再设置定时执行')
+    return
+  }
+
+  scheduleSubmitting.value = true
+  try {
+    await createGroupSchedule({
+      workflowId,
+      groupId: props.id,
+      scheduledAt: payload.scheduledAt,
+      batchCount: payload.batchCount,
+      snapshot: getScheduleSnapshot()
+    })
+    showScheduleDialog.value = false
+    window.alert?.('定时执行已创建')
+  } catch (err) {
+    window.alert?.(err?.message || '创建定时执行失败')
+  } finally {
+    scheduleSubmitting.value = false
+  }
 }
 
 // 节点样式类
@@ -296,6 +335,15 @@ onUnmounted(() => {
           <span class="toolbar-btn-text">{{ isExecuting ? executionProgress : '整组执行' }}</span>
         </button>
         <button
+          class="toolbar-btn schedule-btn"
+          title="定时执行"
+          aria-label="定时执行"
+          @click.stop="showScheduleDialog = true"
+        >
+          <span class="toolbar-btn-icon">⏱</span>
+          <span class="toolbar-btn-text">定时执行</span>
+        </button>
+        <button
           class="toolbar-btn ungroup-btn"
           title="解散编组"
           aria-label="解散编组"
@@ -306,6 +354,14 @@ onUnmounted(() => {
         </button>
       </div>
     </div>
+
+    <GroupScheduleDialog
+      v-if="showScheduleDialog"
+      :group-name="groupName"
+      :submitting="scheduleSubmitting"
+      @close="showScheduleDialog = false"
+      @submit="handleScheduleSubmit"
+    />
 
     <!-- 执行进度条（执行中时显示） -->
     <div v-if="isExecuting" class="group-progress-bar">
@@ -552,6 +608,17 @@ onUnmounted(() => {
 
 .execute-btn.is-running:hover {
   background: rgba(239, 68, 68, 0.35);
+  color: #fff;
+}
+
+/* 定时执行按钮 - 绿色主题 */
+.schedule-btn {
+  background: rgba(16, 185, 129, 0.18);
+  color: rgba(52, 211, 153, 0.95);
+}
+
+.schedule-btn:hover {
+  background: rgba(16, 185, 129, 0.32);
   color: #fff;
 }
 
