@@ -103,6 +103,10 @@ function handleError(event) {
   if (props.autoFallback) onCanvasImageError(event)
   emit('error', event)
 }
+
+function handleLoad(event) {
+  emit('load', event)
+}
 </script>
 
 <template>
@@ -110,6 +114,7 @@ function handleError(event) {
     v-if="displaySrc"
     v-bind="$attrs"
     :src="displaySrc"
+    @load="handleLoad"
     @error="handleError"
   />
 </template>

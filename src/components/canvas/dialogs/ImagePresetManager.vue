@@ -71,7 +71,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                   </svg>
                 </button>
-                <button class="action-btn action-delete" @click="handleDelete(preset)" title="删除">
+                <button class="action-btn action-delete" @click="requestDelete(preset)" title="删除">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                   </svg>
@@ -94,6 +94,19 @@
           <p class="empty-hint">点击上方"新建预设"按钮创建您的第一个图像提示词预设</p>
         </div>
       </div>
+      <div v-if="deleteConfirm.visible" class="preset-delete-backdrop" @click.stop.self="cancelDelete">
+        <div class="preset-delete-modal" role="dialog" aria-modal="true">
+          <h3>确认删除预设</h3>
+          <p>确定要删除预设 <strong>{{ deleteConfirm.preset?.name }}</strong> 吗？此操作不可恢复。</p>
+          <p v-if="deleteError" class="delete-error">{{ deleteError }}</p>
+          <div class="preset-delete-actions">
+            <button class="btn-cancel-delete" @click="cancelDelete" :disabled="deleteLoading">取消</button>
+            <button class="btn-confirm-delete" @click="confirmDelete" :disabled="deleteLoading">
+              {{ deleteLoading ? '删除中...' : '确认删除' }}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </Teleport>
 </template>
@@ -113,6 +126,12 @@ const emit = defineEmits(['close', 'create', 'edit', 'refresh', 'select'])
 
 const presets = ref([])
 const isLoading = ref(false)
+const deleteConfirm = ref({
+  visible: false,
+  preset: null
+})
+const deleteLoading = ref(false)
+const deleteError = ref('')
 
 // 分类标签映射
 const categoryLabels = {
@@ -196,19 +215,43 @@ function handleEdit(preset) {
 }
 
 // 删除预设
-async function handleDelete(preset) {
-  if (!confirm(`确定要删除预设"${preset.name}"吗？`)) {
-    return
+function requestDelete(preset) {
+  deleteError.value = ''
+  deleteConfirm.value = {
+    visible: true,
+    preset
   }
+}
 
+function cancelDelete() {
+  if (deleteLoading.value) return
+  deleteConfirm.value = {
+    visible: false,
+    preset: null
+  }
+  deleteError.value = ''
+}
+
+async function confirmDelete() {
+  const preset = deleteConfirm.value.preset
+  if (!preset || deleteLoading.value) return
+
+  deleteLoading.value = true
+  deleteError.value = ''
   try {
     await deleteImagePreset(preset.id)
     console.log('[ImagePresetManager] 预设已删除:', preset.name)
     await loadPresets()
     emit('refresh')
+    deleteConfirm.value = {
+      visible: false,
+      preset: null
+    }
   } catch (error) {
     console.error('[ImagePresetManager] 删除预设失败:', error)
-    alert(error.message || '删除失败，请重试')
+    deleteError.value = error.message || '删除失败，请重试'
+  } finally {
+    deleteLoading.value = false
   }
 }
 
@@ -242,6 +285,98 @@ defineExpose({
   background: rgba(0, 0, 0, 0.6);
   z-index: 9999;
   animation: fadeIn 0.15s ease;
+}
+
+.preset-delete-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.42);
+  backdrop-filter: blur(4px);
+}
+
+.preset-delete-modal {
+  width: 360px;
+  max-width: 100%;
+  padding: 22px;
+  background: var(--canvas-bg-primary, #1e1e1e);
+  border: 1px solid var(--canvas-border, rgba(255, 255, 255, 0.12));
+  border-radius: 14px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.5);
+}
+
+.preset-delete-modal h3 {
+  margin: 0 0 10px;
+  color: var(--canvas-text-primary, #fff);
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.preset-delete-modal p {
+  margin: 0;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.preset-delete-modal strong {
+  color: var(--canvas-text-primary, #fff);
+  word-break: break-word;
+}
+
+.delete-error {
+  margin-top: 12px !important;
+  padding: 10px 12px;
+  color: #fca5a5 !important;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.24);
+  border-radius: 8px;
+}
+
+.preset-delete-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.btn-cancel-delete,
+.btn-confirm-delete {
+  min-width: 84px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-cancel-delete {
+  background: var(--canvas-bg-tertiary, rgba(255, 255, 255, 0.06));
+  border: 1px solid var(--canvas-border, rgba(255, 255, 255, 0.1));
+  color: var(--canvas-text-primary, #fff);
+}
+
+.btn-confirm-delete {
+  background: #ef4444;
+  border: 1px solid #ef4444;
+  color: #fff;
+}
+
+.btn-confirm-delete:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.btn-cancel-delete:disabled,
+.btn-confirm-delete:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .preset-manager-drawer {

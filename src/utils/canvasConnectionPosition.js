@@ -11,14 +11,26 @@ export function elementCenterToFlowPosition({ elementRect, containerRect, viewpo
   }
 }
 
-export function getElementCenterFlowPosition(element, viewport) {
+export function getElementCenterFlowPosition(element, viewportOrOptions) {
   if (!element) return null
+
+  const elementRect = element.getBoundingClientRect()
+  const center = {
+    x: elementRect.left + elementRect.width / 2,
+    y: elementRect.top + elementRect.height / 2
+  }
+
+  if (typeof viewportOrOptions?.screenToFlowPosition === 'function') {
+    return viewportOrOptions.screenToFlowPosition(center)
+  }
 
   const vueFlowEl = element.closest('.vue-flow')
   if (!vueFlowEl) return null
 
+  const viewport = viewportOrOptions?.viewport || viewportOrOptions
+
   return elementCenterToFlowPosition({
-    elementRect: element.getBoundingClientRect(),
+    elementRect,
     containerRect: vueFlowEl.getBoundingClientRect(),
     viewport
   })

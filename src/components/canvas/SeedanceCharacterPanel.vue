@@ -1873,11 +1873,14 @@ onUnmounted(() => {
 
 .asset-card {
   position: relative;
-  border: 1px solid var(--canvas-border-default);
-  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
   overflow: hidden;
-  background: var(--canvas-bg-elevated);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  background: rgba(255, 255, 255, 0.035);
+  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
 .asset-card.is-active {
@@ -1886,8 +1889,9 @@ onUnmounted(() => {
 
 .asset-card.is-active:hover {
   transform: translateY(-2px);
-  border-color: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.1);
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.065);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
 }
 
 .asset-card.is-processing {
@@ -1901,8 +1905,9 @@ onUnmounted(() => {
 /* 图片预览区 */
 .card-thumb {
   position: relative;
-  aspect-ratio: 1;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.03) 100%);
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: rgba(0, 0, 0, 0.26);
   overflow: hidden;
 }
 
@@ -1989,7 +1994,8 @@ onUnmounted(() => {
 
 /* 信息区 */
 .card-info {
-  padding: 6px 8px;
+  padding: 10px 11px 11px;
+  min-width: 0;
 }
 
 .card-name-row {
@@ -2000,9 +2006,9 @@ onUnmounted(() => {
 }
 
 .card-name {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--canvas-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

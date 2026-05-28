@@ -7,9 +7,11 @@ import { ref, computed, watch, toRaw, nextTick } from 'vue'
 import { useVueFlow } from '@vue-flow/core'
 import { t } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
+import { sanitizeWorkflowForSave } from '@/utils/workflowSaveSanitizer'
 import { sanitizeNodesForHistoryRestore } from './historyRestore'
 import { createOpHistory } from './opHistory'
 import { getGlobalNodeDataCache } from './nodeDataCache'
+import { buildNodeDataWithRememberedParameters } from './nodeParameterMemory'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -233,6 +235,13 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 标记当前标签有变更
     markCurrentTabChanged()
     
+    const baseNodeData = {
+      title: node.title || getDefaultTitle(node.type),
+      ...node.data,
+      status: node.data?.status || 'idle',
+      estimatedCost: node.data?.estimatedCost || 0
+    }
+
     const newNode = {
       id: node.id || generateId(),
       type: node.type,
@@ -241,12 +250,11 @@ export const useCanvasStore = defineStore('canvas', () => {
       style: node.style || {},
       draggable: node.draggable !== undefined ? node.draggable : true,
       selectable: node.selectable !== undefined ? node.selectable : true,
-      data: {
-        title: node.title || getDefaultTitle(node.type),
-        ...node.data,
-        status: node.data?.status || 'idle',
-        estimatedCost: node.data?.estimatedCost || 0
-      }
+      data: buildNodeDataWithRememberedParameters({
+        type: node.type,
+        baseData: baseNodeData,
+        nodes: nodes.value
+      })
     }
     
     nodes.value.push(newNode)
@@ -1718,162 +1726,11 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 用于手动保存/自动保存到服务器前的数据清理
    */
   function exportWorkflowForSave() {
-    const cleanedNodes = nodes.value.map(node => {
-      if (!node.data) return { ...node }
-      const data = { ...node.data }
-      
-      // 清理 sourceImages 中的 base64/blob
-      if (Array.isArray(data.sourceImages)) {
-        const originalCount = data.sourceImages.length
-        data.sourceImages = data.sourceImages.filter(url => {
-          if (typeof url !== 'string') return false
-          return !url.startsWith('data:') && !url.startsWith('blob:')
-        })
-        // 如果所有图片都是 blob（全部被清除），标记需要移除
-        if (data.sourceImages.length === 0 && originalCount > 0 && data.uploadFailed) {
-          data._partialLost = true
-        }
-      }
-      
-      // 清理 referenceImages 中的 base64/blob
-      if (Array.isArray(data.referenceImages)) {
-        data.referenceImages = data.referenceImages.filter(url => {
-          if (typeof url === 'string') {
-            return !url.startsWith('data:') && !url.startsWith('blob:')
-          }
-          if (typeof url === 'object' && url?.url) {
-            return !url.url.startsWith('data:') && !url.url.startsWith('blob:')
-          }
-          return true
-        })
-      }
-      
-      // 清理 output 中的 base64/blob
-      if (data.output) {
-        data.output = { ...data.output }
-        if (data.output.url && typeof data.output.url === 'string') {
-          if (data.output.url.startsWith('data:') || data.output.url.startsWith('blob:')) {
-            data.output.url = null
-          }
-        }
-        if (Array.isArray(data.output.urls)) {
-          data.output.urls = data.output.urls.filter(url =>
-            typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')
-          )
-        }
-        if (Array.isArray(data.output.images)) {
-          data.output.images = data.output.images.map(img => {
-            if (img && typeof img === 'object') {
-              const cleaned = { ...img }
-              if (cleaned.url && (cleaned.url.startsWith('data:') || cleaned.url.startsWith('blob:'))) {
-                cleaned.url = null
-              }
-              delete cleaned.base64
-              delete cleaned.data
-              return cleaned
-            }
-            return img
-          })
-        }
-        if (Array.isArray(data.output.videos)) {
-          data.output.videos = data.output.videos.map(v => {
-            if (v && typeof v === 'object') {
-              const cleaned = { ...v }
-              if (cleaned.url && (cleaned.url.startsWith('data:') || cleaned.url.startsWith('blob:'))) {
-                cleaned.url = null
-              }
-              return cleaned
-            }
-            return v
-          })
-        }
-      }
-      
-      // 清理单独的 URL 字段
-      const urlFields = ['imageUrl', 'videoUrl', 'audioUrl', 'sourceVideo', 'sourceImage', 'image', 'video']
-      for (const field of urlFields) {
-        if (data[field] && typeof data[field] === 'string') {
-          if (data[field].startsWith('data:') || data[field].startsWith('blob:')) {
-            data[field] = null
-          }
-        }
-      }
-      
-      // 清理 urls 数组
-      if (Array.isArray(data.urls)) {
-        data.urls = data.urls.filter(url =>
-          typeof url === 'string' && !url.startsWith('data:') && !url.startsWith('blob:')
-        )
-      }
-      
-      // 删除大型内联数据字段
-      const inlineDataFields = ['imageData', 'base64', 'previewData', 'originalData', 'audioData']
-      for (const field of inlineDataFields) {
-        if (data[field] && typeof data[field] === 'string' && data[field].length > 1000) {
-          delete data[field]
-        }
-      }
-      
-      // 清理 imageOrder
-      if (Array.isArray(data.imageOrder)) {
-        data.imageOrder = data.imageOrder.filter(url => {
-          if (typeof url !== 'string') return true
-          return !url.startsWith('data:') && !url.startsWith('blob:')
-        })
-      }
-      
-      // 清理瞬态上传状态标记
-      if (data.isUploading) {
-        const hasValidMedia = (data.sourceImages?.length > 0) ||
-          (data.output?.url) ||
-          (data.output?.urls?.length > 0) ||
-          (data.audioUrl && !data.audioUrl.startsWith('blob:')) ||
-          (data.sourceVideo && !data.sourceVideo.startsWith('blob:'))
-        if (!hasValidMedia) {
-          data._shouldRemove = true
-        }
-      }
-      delete data.isUploading
-      delete data.uploadFailed
-      delete data.uploadError
-      
-      // 已标记为数据丢失的节点也移除
-      if (data._dataLost || data._partialLost) {
-        const hasAnyMedia = (data.sourceImages?.length > 0) ||
-          (data.output?.url) ||
-          (data.output?.urls?.length > 0) ||
-          (data.audioUrl) ||
-          (data.sourceVideo)
-        if (!hasAnyMedia) {
-          data._shouldRemove = true
-        }
-      }
-      delete data._dataLost
-      delete data._lostReason
-      delete data._partialLost
-      
-      return { ...node, data }
-    })
-    
-    // 过滤掉上传未完成且无有效数据的节点，避免残留
-    const validNodes = cleanedNodes.filter(n => !n.data?._shouldRemove)
-    const validNodeIds = new Set(validNodes.map(n => n.id))
-    
-    // 清理指向已移除节点的边
-    const validEdges = edges.value.filter(e =>
-      validNodeIds.has(e.source) && validNodeIds.has(e.target)
-    )
-    
-    // 清理临时标记
-    validNodes.forEach(n => {
-      if (n.data) delete n.data._shouldRemove
-    })
-    
-    return {
-      nodes: validNodes,
-      edges: validEdges,
+    return sanitizeWorkflowForSave({
+      nodes: nodes.value,
+      edges: edges.value,
       viewport: viewport.value
-    }
+    })
   }
   
   // ========== 多标签操作 ==========

@@ -3189,6 +3189,15 @@ onUnmounted(() => {
         ></div>
       </div>
       
+      <!-- 输出端口 (隐藏但保留给 Vue Flow 用于边渲染) -->
+      <Handle
+        type="source"
+        :position="Position.Right"
+        id="output"
+        class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
+      />
+
       <!-- 右侧添加按钮 - 单击打开选择器，长按/拖拽连线 -->
       <button 
         ref="addRightBtnRef"
@@ -3199,16 +3208,7 @@ onUnmounted(() => {
         +
       </button>
     </div>
-    
-    <!-- 输出端口 (隐藏但保留给 Vue Flow 用于边渲染) -->
-    <Handle
-      type="source"
-      :position="Position.Right"
-      id="output"
-      class="node-handle node-handle-hidden"
-      :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
-    />
-    
+
     <!-- 选中文字右键菜单 -->
     <Teleport to="body">
       <div 

@@ -14,10 +14,12 @@ import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } f
 import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled, isByteforCharacterLibraryEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
-import CachedImage from '@/components/CachedImage.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import SeedanceCharacterPanel from './SeedanceCharacterPanel.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
+import AssetCard from './AssetCard.vue'
+import AssetHoverPreview from './AssetHoverPreview.vue'
+import AssetPreviewModal from './AssetPreviewModal.vue'
 import {
   setCanvasSpaceFilterFromGlobal,
   syncGlobalSpaceFromFilter,
@@ -48,24 +50,20 @@ const newTagInput = ref('')
 const assetListRef = ref(null)
 const assetScrollTop = ref(0)
 const assetContainerHeight = ref(600)
-const ASSET_ROW_HEIGHT = 260
+const ASSET_ROW_HEIGHT = 560
 const ASSET_COLS = 3
 const ASSET_BUFFER = 4
 
 // 全屏预览状态
 const showPreview = ref(false)
 const previewAsset = ref(null)
-const previewVideoRef = ref(null)
 
-// 音频可视化状态
-const audioRef = ref(null)
-const audioVisualizerRef = ref(null)
-let audioContext = null
-let analyser = null
-let audioSource = null
-let animationId = null
-let particles = []
-let audioSourceConnected = false
+// 悬停预览状态
+const hoverAsset = ref(null)
+const hoverAnchorRect = ref(null)
+const showHoverPreview = ref(false)
+let showHoverTimer = null
+let hideHoverTimer = null
 
 // 编辑名称状态
 const editingNameAssetId = ref(null)
@@ -100,6 +98,14 @@ const showContextMenu = ref(false)
 const contextMenuPosition = ref({ x: 0, y: 0 })
 const contextMenuAsset = ref(null)
 
+// 本地资产删除确认弹窗状态
+const deleteAssetConfirm = ref({
+  visible: false,
+  asset: null
+})
+const deleteAssetLoading = ref(false)
+const deleteAssetError = ref('')
+
 // 复制到空间状态
 const showCopyDialog = ref(false)
 const copyItems = ref([])
@@ -112,7 +118,6 @@ const MAX_CONCURRENT_THUMBNAILS = 2
 
 // 音频不可用状态（源文件已删除等）
 const audioUnavailableSet = ref(new Set())
-const audioErrorPreview = ref(false)
 
 // 数据缓存和延迟渲染
 const dataCached = ref(false)
@@ -149,6 +154,13 @@ const fileTypes = computed(() =>
   })
 )
 
+const fileTypeLabels = computed(() =>
+  fileTypes.value.map(ft => ({
+    ...ft,
+    label: ft.labelKey ? t(ft.labelKey) : ft.label
+  }))
+)
+
 // 快捷标签 - 存储翻译键，在模板中实时翻译
 const quickTags = [
   { key: 'all', labelKey: 'common.all', icon: '○' },
@@ -181,6 +193,31 @@ const userTags = computed(() => {
 
 // 所有标签选项（quickTags 是静态数组，userTags 是 computed）
 const allTags = computed(() => [...quickTags, ...userTags.value])
+
+const tagCounts = computed(() => {
+  const counts = { all: 0, favorite: 0 }
+  assets.value.forEach(asset => {
+    if (!seedanceFeaturesEnabled.value && asset.type === 'seedance-character') return
+    if (!byteforCharacterLibraryEnabled.value && asset.type === 'bytefor-character') return
+    if (selectedType.value !== 'all' && asset.type !== selectedType.value) return
+    if (searchQuery.value.trim()) {
+      const query = searchQuery.value.toLowerCase()
+      const matchesSearch =
+        asset.name?.toLowerCase().includes(query) ||
+        asset.content?.toLowerCase().includes(query) ||
+        asset.tags?.some(t => t.toLowerCase().includes(query))
+      if (!matchesSearch) return
+    }
+    counts.all++
+    if (asset.is_favorite) counts.favorite++
+    if (asset.tags) {
+      asset.tags.forEach(tag => {
+        counts[tag] = (counts[tag] || 0) + 1
+      })
+    }
+  })
+  return counts
+})
 
 // 筛选后的资产
 const filteredAssets = computed(() => {
@@ -269,6 +306,7 @@ const assetStats = computed(() => {
 
 let assetScrollRAF = null
 function handleAssetScroll(e) {
+  closeHoverPreview()
   if (assetScrollRAF) return
   assetScrollRAF = requestAnimationFrame(() => {
     assetScrollTop.value = e.target.scrollTop
@@ -276,7 +314,59 @@ function handleAssetScroll(e) {
   })
 }
 
+function closeHoverPreview() {
+  if (showHoverTimer) {
+    clearTimeout(showHoverTimer)
+    showHoverTimer = null
+  }
+  if (hideHoverTimer) {
+    clearTimeout(hideHoverTimer)
+    hideHoverTimer = null
+  }
+  showHoverPreview.value = false
+  hoverAsset.value = null
+  hoverAnchorRect.value = null
+}
+
+function handleCardMouseEnter(e, asset) {
+  if (hideHoverTimer) {
+    clearTimeout(hideHoverTimer)
+    hideHoverTimer = null
+  }
+  if (showHoverTimer) clearTimeout(showHoverTimer)
+  showHoverTimer = setTimeout(() => {
+    hoverAsset.value = asset
+    hoverAnchorRect.value = e.currentTarget.getBoundingClientRect()
+    showHoverPreview.value = true
+    showHoverTimer = null
+  }, 250)
+}
+
+function handleCardMouseLeave() {
+  if (showHoverTimer) {
+    clearTimeout(showHoverTimer)
+    showHoverTimer = null
+  }
+  hideHoverTimer = setTimeout(() => {
+    closeHoverPreview()
+  }, 150)
+}
+
+function handleHoverPreviewEnter() {
+  if (hideHoverTimer) {
+    clearTimeout(hideHoverTimer)
+    hideHoverTimer = null
+  }
+}
+
+function handleHoverPreviewLeave() {
+  hideHoverTimer = setTimeout(() => {
+    closeHoverPreview()
+  }, 150)
+}
+
 watch([selectedType, selectedTag, searchQuery], () => {
+  closeHoverPreview()
   assetScrollTop.value = 0
   if (assetListRef.value) {
     assetListRef.value.scrollTop = 0
@@ -357,6 +447,21 @@ async function _refreshAssetsInBackground(spaceParams, spaceType, teamId) {
   } catch (e) {
     console.warn('[AssetPanel] 后台刷新失败:', e)
   }
+}
+
+function upsertAssetInList(asset) {
+  if (!asset?.id) return
+  const existingIndex = assets.value.findIndex(item => item.id === asset.id)
+  if (existingIndex === 0) {
+    assets.value[0] = { ...assets.value[0], ...asset }
+    return
+  }
+  if (existingIndex > 0) {
+    assets.value.splice(existingIndex, 1)
+  }
+  assets.value = [asset, ...assets.value]
+  dataCached.value = true
+  lastLoadTime.value = Date.now()
 }
 
 // 检查音频资产可用性
@@ -473,10 +578,13 @@ function getAssetPreview(asset) {
       return asset.content?.substring(0, 100) + (asset.content?.length > 100 ? '...' : '')
     case 'image':
     case 'video':
-      return asset.thumbnail_url || asset.url
+      return getMediaUrl(asset.thumbnail_url || asset.url)
     case 'audio':
       return null
     default:
+      if (asset.thumbnail_url || asset.url) {
+        return getMediaUrl(asset.thumbnail_url || asset.url)
+      }
       return null
   }
 }
@@ -515,18 +623,64 @@ async function handleToggleFavorite(e, asset) {
   }
 }
 
-// 删除资产
-async function handleDelete(e, asset) {
-  e.stopPropagation()
-  if (!confirm(t('canvas.assetPanel.deleteConfirm', { name: asset.name }))) return
-  
+async function performDeleteAsset(asset) {
+  if (!asset?.id) return
   try {
     await deleteAsset(asset.id)
     assets.value = assets.value.filter(a => a.id !== asset.id)
+    if (previewAsset.value?.id === asset.id) {
+      closePreview()
+    }
   } catch (error) {
     console.error('[AssetPanel] 删除资产失败:', error)
-    alert(t('errors.deleteFailed') + ': ' + error.message)
+    throw error
   }
+}
+
+function requestDeleteAsset(asset) {
+  if (!asset) return
+  closeHoverPreview()
+  deleteAssetError.value = ''
+  deleteAssetConfirm.value = {
+    visible: true,
+    asset
+  }
+}
+
+function cancelDeleteAsset() {
+  if (deleteAssetLoading.value) return
+  deleteAssetConfirm.value = {
+    visible: false,
+    asset: null
+  }
+  deleteAssetError.value = ''
+}
+
+async function confirmDeleteAsset() {
+  const asset = deleteAssetConfirm.value.asset
+  if (!asset || deleteAssetLoading.value) return
+
+  deleteAssetLoading.value = true
+  deleteAssetError.value = ''
+  try {
+    await performDeleteAsset(asset)
+    deleteAssetConfirm.value = {
+      visible: false,
+      asset: null
+    }
+  } catch (error) {
+    deleteAssetError.value = error?.message
+      ? `${t('errors.deleteFailed')}: ${error.message}`
+      : t('errors.deleteFailed')
+  } finally {
+    deleteAssetLoading.value = false
+  }
+}
+
+// 删除资产
+function handleDelete(e, asset) {
+  e.stopPropagation()
+  requestDeleteAsset(asset)
 }
 
 // 开始编辑名称
@@ -571,12 +725,6 @@ function cancelEditName() {
 
 // 点击资产 - Sora 角色单击复制 ID，其他资产打开预览
 function handleAssetClick(e, asset) {
-  // 如果点击的是操作按钮区域，不处理（让按钮自己处理）
-  const target = e.target
-  if (target.closest('.asset-actions') || target.closest('.action-btn')) {
-    return
-  }
-  
   // Sora 角色：单击复制角色 ID（仅当角色创建成功时）
   if (asset.type === 'sora-character') {
     const status = getCharacterStatus(asset)
@@ -598,250 +746,36 @@ function handleAssetClick(e, asset) {
   }
   // 其他资产：打开全屏预览
   previewAsset.value = asset
-  audioErrorPreview.value = false
   showPreview.value = true
 }
 
 // 双击资产 - 打开全屏预览（Sora 角色也支持）
 function handleAssetDoubleClick(asset) {
   previewAsset.value = asset
-  audioErrorPreview.value = false
   showPreview.value = true
 }
 
 // 关闭全屏预览
 function closePreview() {
-  destroyAudioVisualizer()
-  audioErrorPreview.value = false
   showPreview.value = false
   previewAsset.value = null
 }
 
-// ========== 音频可视化 ==========
-
-// 粒子类
-class Particle {
-  constructor(canvas) {
-    this.canvas = canvas
-    this.reset()
-  }
-  
-  reset() {
-    const centerX = this.canvas.width / 2
-    const centerY = this.canvas.height / 2
-    const angle = Math.random() * Math.PI * 2
-    const distance = Math.random() * 80 + 60
-    
-    this.x = centerX + Math.cos(angle) * distance
-    this.y = centerY + Math.sin(angle) * distance
-    this.size = Math.random() * 4 + 2
-    this.speedX = (Math.random() - 0.5) * 2
-    this.speedY = (Math.random() - 0.5) * 2
-    this.life = 1
-    this.decay = Math.random() * 0.02 + 0.01
-    this.hue = Math.random() * 40 + 200 // 蓝色色调 200-240
-    this.brightness = Math.random() * 30 + 70
-  }
-  
-  update(intensity) {
-    this.x += this.speedX * (1 + intensity * 2)
-    this.y += this.speedY * (1 + intensity * 2)
-    this.life -= this.decay
-    
-    if (this.life <= 0) {
-      this.reset()
-    }
-  }
-  
-  draw(ctx) {
-    ctx.save()
-    ctx.globalAlpha = this.life * 0.8
-    ctx.fillStyle = `hsl(${this.hue}, 80%, ${this.brightness}%)`
-    ctx.shadowColor = `hsl(${this.hue}, 100%, 60%)`
-    ctx.shadowBlur = 15
-    ctx.beginPath()
-    ctx.arc(this.x, this.y, this.size * this.life, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.restore()
-  }
+function handlePreviewManageTags(asset = previewAsset.value) {
+  if (!asset) return
+  editingAsset.value = asset
+  showTagManager.value = true
+  newTagInput.value = ''
 }
 
-// 初始化音频可视化
-function initAudioVisualizer() {
-  if (!audioRef.value || !audioVisualizerRef.value) return
-  
-  try {
-    // 创建新的 AudioContext
-    audioContext = new (window.AudioContext || window.webkitAudioContext)()
-    analyser = audioContext.createAnalyser()
-    analyser.fftSize = 256
-    analyser.smoothingTimeConstant = 0.8
-    
-    // 连接音频源（只能连接一次）
-    if (!audioSourceConnected) {
-      audioSource = audioContext.createMediaElementSource(audioRef.value)
-      audioSource.connect(analyser)
-      analyser.connect(audioContext.destination)
-      audioSourceConnected = true
-    }
-    
-    // 初始化粒子
-    const canvas = audioVisualizerRef.value
-    particles = []
-    for (let i = 0; i < 50; i++) {
-      particles.push(new Particle(canvas))
-    }
-    
-    // 开始动画
-    animateVisualizer()
-  } catch (e) {
-    console.error('[AssetPanel] 音频可视化初始化失败:', e)
-  }
+async function handlePreviewDownload(asset = previewAsset.value) {
+  await handleDownload(asset)
 }
 
-// 动画循环
-function animateVisualizer() {
-  if (!audioVisualizerRef.value || !analyser) return
-  
-  const canvas = audioVisualizerRef.value
-  const ctx = canvas.getContext('2d')
-  const width = canvas.width
-  const height = canvas.height
-  
-  // 获取频率数据
-  const bufferLength = analyser.frequencyBinCount
-  const dataArray = new Uint8Array(bufferLength)
-  analyser.getByteFrequencyData(dataArray)
-  
-  // 计算平均强度
-  let sum = 0
-  for (let i = 0; i < bufferLength; i++) {
-    sum += dataArray[i]
-  }
-  const avgIntensity = sum / bufferLength / 255
-  
-  // 清除画布
-  ctx.fillStyle = 'rgba(15, 15, 25, 0.2)'
-  ctx.fillRect(0, 0, width, height)
-  
-  // 绘制中心波形
-  drawWaveform(ctx, dataArray, width, height, avgIntensity)
-  
-  // 更新和绘制粒子
-  particles.forEach(particle => {
-    particle.update(avgIntensity)
-    particle.draw(ctx)
-  })
-  
-  // 绘制底部频谱
-  drawSpectrumBars(ctx, dataArray, width, height)
-  
-  animationId = requestAnimationFrame(animateVisualizer)
-}
-
-// 绘制波形
-function drawWaveform(ctx, dataArray, width, height, intensity) {
-  const centerX = width / 2
-  const centerY = height / 2
-  const radius = 50 + intensity * 30
-  const points = 32
-  
-  ctx.save()
-  ctx.strokeStyle = `hsla(210, 100%, 60%, ${0.6 + intensity * 0.4})`
-  ctx.lineWidth = 2
-  ctx.shadowColor = 'hsl(210, 100%, 60%)'
-  ctx.shadowBlur = 20
-  
-  ctx.beginPath()
-  for (let i = 0; i <= points; i++) {
-    const angle = (i / points) * Math.PI * 2
-    const dataIndex = Math.floor((i / points) * dataArray.length)
-    const amplitude = dataArray[dataIndex] / 255
-    const r = radius + amplitude * 40
-    
-    const x = centerX + Math.cos(angle) * r
-    const y = centerY + Math.sin(angle) * r
-    
-    if (i === 0) {
-      ctx.moveTo(x, y)
-    } else {
-      ctx.lineTo(x, y)
-    }
-  }
-  ctx.closePath()
-  ctx.stroke()
-  ctx.restore()
-}
-
-// 绘制频谱柱状图
-function drawSpectrumBars(ctx, dataArray, width, height) {
-  const barCount = 64
-  const barWidth = width / barCount - 2
-  const barSpacing = 2
-  
-  for (let i = 0; i < barCount; i++) {
-    const dataIndex = Math.floor((i / barCount) * dataArray.length)
-    const amplitude = dataArray[dataIndex] / 255
-    const barHeight = amplitude * 60
-    
-    const x = i * (barWidth + barSpacing)
-    const y = height - barHeight
-    
-    const hue = 210 + (i / barCount) * 40 // 蓝色到紫色渐变
-    ctx.fillStyle = `hsla(${hue}, 80%, 60%, ${0.3 + amplitude * 0.5})`
-    ctx.shadowColor = `hsl(${hue}, 100%, 60%)`
-    ctx.shadowBlur = 5
-    
-    ctx.fillRect(x, y, barWidth, barHeight)
-  }
-}
-
-// 清理音频可视化
-function cleanupAudioVisualizer() {
-  if (animationId) {
-    cancelAnimationFrame(animationId)
-    animationId = null
-  }
-  particles = []
-}
-
-// 完全销毁音频可视化（关闭预览时调用）
-function destroyAudioVisualizer() {
-  cleanupAudioVisualizer()
-  
-  if (audioContext) {
-    audioContext.close().catch(() => {})
-    audioContext = null
-  }
-  analyser = null
-  audioSource = null
-  audioSourceConnected = false
-}
-
-// 音频播放事件处理
-function handleAudioPlay() {
-  if (audioContext && audioContext.state === 'suspended') {
-    audioContext.resume()
-  }
-  if (!animationId && audioRef.value) {
-    initAudioVisualizer()
-  }
-}
-
-// 音频暂停事件处理
-function handleAudioPause() {
-  cleanupAudioVisualizer()
-}
-
-// 音频加载错误处理（源文件可能已删除）
-function handleAudioError() {
-  audioErrorPreview.value = true
-  if (previewAsset.value) {
-    const newSet = new Set(audioUnavailableSet.value)
-    newSet.add(previewAsset.value.id)
-    audioUnavailableSet.value = newSet
-  }
-  cleanupAudioVisualizer()
+async function handlePreviewDelete(asset = previewAsset.value) {
+  if (!asset) return
+  closePreview()
+  requestDeleteAsset(asset)
 }
 
 // 应用资产到画布
@@ -886,11 +820,13 @@ function handleAddToCanvas() {
 }
 
 // 走 startStreamDownload：浏览器原生下载栏（带进度），点击立即响应
-async function handleDownload() {
-  if (!contextMenuAsset.value) return
-  
-  const asset = contextMenuAsset.value
-  closeContextMenu()
+async function handleDownload(assetArg = contextMenuAsset.value) {
+  if (!assetArg) return
+
+  const asset = assetArg
+  if (contextMenuAsset.value === asset) {
+    closeContextMenu()
+  }
   
   try {
     let assetUrl = asset.url
@@ -937,24 +873,12 @@ async function handleDownload() {
 }
 
 // 右键菜单 - 删除
-async function handleContextDelete() {
+function handleContextDelete() {
   if (!contextMenuAsset.value) return
   
   const asset = contextMenuAsset.value
-  if (!confirm(t('canvas.assetPanel.deleteConfirm', { name: asset.name }))) {
-    closeContextMenu()
-    return
-  }
-  
-  try {
-    await deleteAsset(asset.id)
-    assets.value = assets.value.filter(a => a.id !== asset.id)
-  } catch (error) {
-    console.error('[AssetPanel] 删除资产失败:', error)
-    alert(t('errors.deleteFailed') + ': ' + error.message)
-  }
-  
   closeContextMenu()
+  requestDeleteAsset(asset)
 }
 
 // 右键菜单 - 管理标签
@@ -1073,8 +997,8 @@ function getVideoThumbnail(asset) {
     extractVideoThumbnail(asset)
   }
 
-  // 返回视频URL作为后备（某些浏览器可以直接显示视频首帧）
-  return asset.url
+  // 缩略图生成中，不使用视频 URL 冒充图片
+  return ''
 }
 
 // 获取角色 username（用于显示）
@@ -1119,52 +1043,6 @@ function getCharacterFailReason(asset) {
 // 复制角色 ID 到剪贴板
 const copyToastVisible = ref(false)
 const copyToastMessage = ref('')
-
-// 角色视频播放（跨浏览器兼容）
-function handleCharacterVideoPlay(e) {
-  const video = e.target
-  if (video && video.paused) {
-    // 确保静音状态，避免自动播放策略限制
-    video.muted = true
-    const playPromise = video.play()
-    if (playPromise !== undefined) {
-      playPromise.catch(err => {
-        console.log('[AssetPanel] 视频播放失败:', err.message)
-      })
-    }
-  }
-}
-
-// 角色视频暂停
-function handleCharacterVideoPause(e) {
-  const video = e.target
-  if (video) {
-    video.pause()
-    video.currentTime = 0
-  }
-}
-
-// 角色视频加载错误处理
-function handleCharacterVideoError(e, asset) {
-  console.warn('[AssetPanel] 角色视频加载失败:', asset.url)
-  // 视频加载失败时隐藏视频元素，显示缩略图或占位符
-  const video = e.target
-  if (video) {
-    video.style.display = 'none'
-    // 尝试显示后备缩略图
-    const parent = video.parentElement
-    if (parent && !parent.querySelector('.character-thumbnail-fallback')) {
-      const thumbnail = getVideoThumbnail(asset)
-      if (thumbnail) {
-        const img = document.createElement('img')
-        img.src = thumbnail
-        img.alt = asset.name
-        img.className = 'character-thumbnail-fallback'
-        parent.appendChild(img)
-      }
-    }
-  }
-}
 
 async function copyCharacterId(e, asset) {
   e.stopPropagation() // 阻止冒泡，避免触发预览
@@ -1541,6 +1419,13 @@ function openTagManager(e, asset) {
   newTagInput.value = ''
 }
 
+function openBottomTagManager(e) {
+  e.stopPropagation()
+  const target = hoverAsset.value || filteredAssets.value[0]
+  if (!target) return
+  openTagManager(e, target)
+}
+
 // 添加标签
 async function addTag() {
   if (!newTagInput.value.trim() || !editingAsset.value) return
@@ -1604,24 +1489,15 @@ function closeTagManager() {
 
 watch(() => props.visible, async (visible) => {
   if (visible) {
-    // 加载数据
     await loadAssets()
-    
-    // 启动团队空间实时同步
     startTeamSync()
-    
-    // 延迟渲染内容，让面板动画先完成
     isContentReady.value = false
-    await nextTick()
-    
-    // 等待面板动画完成后再渲染内容
-    setTimeout(() => {
+    requestAnimationFrame(() => {
       isContentReady.value = true
-    }, 280)
+    })
   } else {
-    isContentReady.value = false
-    
-    // 停止团队空间实时同步
+    closeHoverPreview()
+    closePreview()
     stopTeamSync()
   }
 })
@@ -1630,7 +1506,11 @@ watch(() => props.visible, async (visible) => {
 function handleKeydown(e) {
   if (!props.visible) return
   if (e.key === 'Escape') {
-    if (showContextMenu.value) {
+    if (deleteAssetConfirm.value.visible) {
+      cancelDeleteAsset()
+    } else if (showPreview.value) {
+      closePreview()
+    } else if (showContextMenu.value) {
       closeContextMenu()
     } else if (showTagManager.value) {
       closeTagManager()
@@ -1651,8 +1531,11 @@ function handleGlobalClick(e) {
 }
 
 // 资产更新事件处理
-function handleAssetsUpdated() {
+function handleAssetsUpdated(event) {
   console.log('[AssetPanel] 收到资产更新事件，刷新数据')
+  if (event?.detail?.asset) {
+    upsertAssetInList(event.detail.asset)
+  }
   invalidateAssetCache('all').catch(() => {})
   loadAssets(true)
 }
@@ -1689,8 +1572,7 @@ onUnmounted(() => {
   
   // 停止团队空间实时同步
   stopTeamSync()
-  
-  destroyAudioVisualizer()
+  closeHoverPreview()
 
   if (assetResizeObserver) {
     assetResizeObserver.disconnect()
@@ -1834,22 +1716,6 @@ onUnmounted(() => {
           </template>
         </div>
 
-        <!-- 标签筛选 -->
-        <div class="tag-filter">
-          <div class="tag-scroll">
-            <button 
-              v-for="tag in allTags" 
-              :key="tag.key"
-              class="tag-btn"
-              :class="{ active: selectedTag === tag.key }"
-              @click="selectedTag = tag.key"
-            >
-              <span class="tag-icon">{{ tag.icon }}</span>
-              <span>{{ tag.labelKey ? t(tag.labelKey) : tag.label }}</span>
-            </button>
-          </div>
-        </div>
-
         <!-- 搜索栏 -->
         <div class="search-bar">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1903,253 +1769,56 @@ onUnmounted(() => {
           </div>
 
           <template v-else>
-            <div :style="filteredAssets.length > 30 ? { gridColumn: '1 / -1', minHeight: assetTotalHeight } : { display: 'contents' }">
-            <div :style="filteredAssets.length > 30 ? { transform: `translateY(${assetOffsetY}px)`, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' } : { display: 'contents' }">
-            <!-- 资产卡片 -->
-            <div 
+            <div
+              class="asset-grid-window"
+              :style="filteredAssets.length > 30 ? { minHeight: assetTotalHeight } : null"
+            >
+            <div
+              class="asset-grid-track"
+              :style="filteredAssets.length > 30 ? { transform: `translateY(${assetOffsetY}px)` } : null"
+            >
+            <AssetCard
               v-for="{ item: asset } in visibleAssets"
               :key="asset.id"
-              class="asset-card"
-              :class="[`type-${asset.type}`]"
-              draggable="true"
-              @click="handleAssetClick($event, asset)"
-              @dblclick="handleAssetDoubleClick(asset)"
-              @contextmenu="handleContextMenu($event, asset)"
-              @dragstart="handleDragStart($event, asset)"
+              :asset="asset"
+              :file-types="fileTypes"
+              :audio-unavailable="audioUnavailableSet.has(asset.id)"
+              :video-thumbnail="getVideoThumbnail(asset)"
+              :formatted-size="formatFileSize(asset.size)"
+              :formatted-date="formatDate(asset.created_at)"
+              :character-status="getCharacterStatus(asset)"
+              :character-fail-reason="getCharacterFailReason(asset) || ''"
+              @click="handleAssetClick"
+              @dblclick="handleAssetDoubleClick"
+              @contextmenu="handleContextMenu"
+              @dragstart="handleDragStart"
+              @mouseenter="handleCardMouseEnter"
+              @mouseleave="handleCardMouseLeave"
+              @favorite="handleToggleFavorite"
+            />
+            </div>
+            </div>
+          </template>
+          </template>
+        </div>
+
+        <div class="asset-tag-bar-bottom">
+          <div class="tag-scroll">
+            <button
+              v-for="tag in allTags"
+              :key="tag.key"
+              class="tag-chip"
+              :class="{ active: selectedTag === tag.key }"
+              @click="selectedTag = tag.key"
             >
-              <!-- 预览区 -->
-              <div class="asset-preview">
-                <!-- 文本预览 -->
-                <div v-if="asset.type === 'text'" class="text-preview">
-                  <p>{{ getAssetPreview(asset) }}</p>
-                </div>
-                
-                <!-- 图片预览 -->
-                <CachedImage
-                  v-else-if="asset.type === 'image'"
-                  :src="getAssetPreview(asset)"
-                  :alt="asset.name"
-                  img-class="image-preview"
-                  loading="eager"
-                />
-
-                <!-- 视频预览 - 使用原生 video 自动显示首帧 -->
-                <div v-else-if="asset.type === 'video'" class="video-preview">
-                  <CachedImage
-                    v-if="asset.thumbnail_url"
-                    :src="asset.thumbnail_url"
-                    :alt="asset.name"
-                    img-class="image-preview"
-                    loading="eager"
-                  />
-                  <video 
-                    v-else
-                    :src="toSameOriginUrl(asset.url)"
-                    class="video-thumbnail"
-                    muted
-                    preload="metadata"
-                    @loadeddata="$event.target.currentTime = 0.1"
-                  />
-                  <div class="video-play-icon">▶</div>
-                </div>
-                
-                <!-- 音频预览 -->
-                <div v-else-if="asset.type === 'audio'" class="audio-preview" :class="{ 'audio-unavailable': audioUnavailableSet.has(asset.id) }">
-                  <div v-if="audioUnavailableSet.has(asset.id)" class="audio-unavailable-hint">
-                    <span class="unavailable-icon">⚠</span>
-                    <span class="unavailable-text">文件不可用</span>
-                  </div>
-                  <div v-else class="audio-wave">
-                    <span></span><span></span><span></span><span></span><span></span>
-                  </div>
-                </div>
-                
-                <!-- Seedance 角色预览 -->
-                <div v-else-if="asset.type === 'seedance-character'" class="character-preview">
-                  <CachedImage
-                    v-if="asset.thumbnail_url || asset.url"
-                    :src="getMediaUrl(asset.thumbnail_url || asset.url)"
-                    :alt="asset.name"
-                    img-class="image-preview"
-                    loading="lazy"
-                  />
-                  <div v-else class="character-placeholder"></div>
-                </div>
-
-                <!-- Sora 角色预览 - 显示裁剪后的视频 -->
-                <div v-else-if="asset.type === 'sora-character'" class="character-preview">
-                  <!-- 失败状态覆盖层 -->
-                  <div v-if="getCharacterStatus(asset) === 'failed'" class="character-failed-overlay">
-                    <div class="failed-icon">✕</div>
-                    <div class="failed-text">创建失败</div>
-                    <div v-if="getCharacterFailReason(asset)" class="failed-reason">{{ getCharacterFailReason(asset) }}</div>
-                  </div>
-                  
-                  <!-- 处理中状态覆盖层 -->
-                  <div v-else-if="getCharacterStatus(asset) === 'pending' || getCharacterStatus(asset) === 'processing'" class="character-pending-overlay">
-                    <div class="pending-spinner"></div>
-                    <div class="pending-text">创建中...</div>
-                  </div>
-                  
-                  <!-- 如果有视频 URL，显示视频（跨浏览器兼容） -->
-                  <video 
-                    v-if="asset.url && (asset.url.includes('/api/images/file/') || asset.url.includes('.mp4'))"
-                    :src="toSameOriginUrl(asset.url)"
-                    :poster="getVideoThumbnail(asset)"
-                    class="character-video"
-                    muted
-                    loop
-                    playsinline
-                    webkit-playsinline
-                    x5-video-player-type="h5"
-                    x5-playsinline
-                    preload="metadata"
-                    @mouseenter="handleCharacterVideoPlay($event)"
-                    @mouseleave="handleCharacterVideoPause($event)"
-                    @error="handleCharacterVideoError($event, asset)"
-                  />
-                  <!-- 否则显示缩略图 -->
-                  <CachedImage 
-                    v-else-if="getVideoThumbnail(asset)" 
-                    :src="getVideoThumbnail(asset)" 
-                    :alt="asset.name"
-                    img-class="character-thumbnail"
-                  />
-                  <!-- 无视频无缩略图时显示渐变背景 -->
-                  <div v-else class="character-placeholder"></div>
-                </div>
-              </div>
-
-              <!-- 信息区 -->
-              <div class="asset-info">
-                <!-- Sora 角色：名称和角色ID并排显示 -->
-                <div v-if="asset.type === 'sora-character'" class="character-name-row">
-                  <!-- 左侧：角色名称 -->
-                  <div class="character-name-left">
-                    <template v-if="editingNameAssetId === asset.id">
-                      <input
-                        v-model="editingNameValue"
-                        class="name-edit-input"
-                        @blur="saveEditedName(asset)"
-                        @keyup.enter="saveEditedName(asset)"
-                        @keyup.escape="cancelEditName"
-                        @click.stop
-                        autofocus
-                      />
-                    </template>
-                    <template v-else>
-                      <span class="asset-name character-display-name" @dblclick="startEditName($event, asset)">
-                        {{ asset.name }}
-                      </span>
-                    </template>
-                  </div>
-                  <!-- 右侧：角色ID（点击复制） -->
-                  <span 
-                    class="character-username-tag clickable" 
-                    @click="copyCharacterId($event, asset)"
-                    title="点击复制角色ID"
-                  >
-                    @{{ getCharacterUsername(asset) }}
-                  </span>
-                </div>
-                
-                <!-- 非角色资产：正常显示可编辑名称 -->
-                <div v-else class="asset-name-container">
-                  <template v-if="editingNameAssetId === asset.id">
-                    <input
-                      v-model="editingNameValue"
-                      class="name-edit-input"
-                      @blur="saveEditedName(asset)"
-                      @keyup.enter="saveEditedName(asset)"
-                      @keyup.escape="cancelEditName"
-                      @click.stop
-                      autofocus
-                    />
-                  </template>
-                  <template v-else>
-                    <div class="asset-name" @dblclick="startEditName($event, asset)">
-                      {{ asset.name }}
-                    </div>
-                    <button 
-                      class="edit-name-btn" 
-                      @click="startEditName($event, asset)"
-                      title="编辑名称"
-                    >
-                      ✎
-                    </button>
-                  </template>
-                </div>
-                
-                <div class="asset-meta">
-                  <span class="asset-size">{{ formatFileSize(asset.size) }}</span>
-                  <span class="asset-time">{{ formatDate(asset.created_at) }}</span>
-                  <!-- 团队空间用户署名 -->
-                  <span v-if="teamStore.isInTeamSpace.value && asset.last_updated_by_username" class="asset-author">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                      <circle cx="12" cy="7" r="4"/>
-                    </svg>
-                    {{ asset.last_updated_by_username }}
-                  </span>
-                </div>
-                
-                <!-- 标签 -->
-                <div v-if="asset.tags && asset.tags.length > 0" class="asset-tags">
-                  <span 
-                    v-for="tag in asset.tags.slice(0, 3)" 
-                    :key="tag" 
-                    class="asset-tag"
-                  >
-                    {{ tag }}
-                  </span>
-                  <span v-if="asset.tags.length > 3" class="asset-tag more">
-                    +{{ asset.tags.length - 3 }}
-                  </span>
-                </div>
-              </div>
-
-              <!-- 操作按钮 -->
-              <div class="asset-actions">
-                <button 
-                  class="action-btn favorite-btn"
-                  :class="{ active: asset.is_favorite }"
-                  @click="handleToggleFavorite($event, asset)"
-                  :title="t('canvas.assetPanel.favorite')"
-                >
-                  {{ asset.is_favorite ? '★' : '☆' }}
-                </button>
-                <button 
-                  class="action-btn tag-btn"
-                  @click="openTagManager($event, asset)"
-                  :title="t('canvas.assetPanel.manageTags')"
-                >
-                  #
-                </button>
-                <button 
-                  class="action-btn copy-btn"
-                  @click="handleCopyToSpace($event, asset)"
-                  title="复制到空间"
-                >
-                  ⧉
-                </button>
-                <button 
-                  class="action-btn delete-btn"
-                  @click="handleDelete($event, asset)"
-                  :title="t('common.delete')"
-                >
-                  ×
-                </button>
-              </div>
-
-              <!-- 类型标识 -->
-              <div class="asset-type-badge">
-                {{ fileTypes.find(f => f.key === asset.type)?.icon || '◇' }}
-              </div>
-            </div>
-            </div>
-            </div>
-          </template>
-          </template>
+              <span class="tag-icon">{{ tag.icon }}</span>
+              <span>{{ tag.labelKey ? t(tag.labelKey) : tag.label }}</span>
+              <span v-if="tagCounts[tag.key]" class="tag-count">{{ tagCounts[tag.key] }}</span>
+            </button>
+          </div>
+          <button class="tag-manage-btn" @click="openBottomTagManager" title="管理标签">
+            + {{ t('canvas.assetPanel.manageTags') }}
+          </button>
         </div>
 
         <!-- 底部提示 -->
@@ -2348,100 +2017,69 @@ onUnmounted(() => {
     </div>
   </Transition>
 
-  <!-- 全屏预览模态框 -->
+  <AssetHoverPreview
+    :visible="showHoverPreview"
+    :asset="hoverAsset"
+    :anchor-rect="hoverAnchorRect"
+    @mouseenter="handleHoverPreviewEnter"
+    @mouseleave="handleHoverPreviewLeave"
+  />
+
+  <AssetPreviewModal
+    :visible="showPreview"
+    :asset="previewAsset"
+    :file-types="fileTypeLabels"
+    @close="closePreview"
+    @apply="applyAssetToCanvas"
+    @manage-tags="handlePreviewManageTags"
+    @download="handlePreviewDownload"
+    @delete="handlePreviewDelete"
+  />
+
+  <!-- 本地资产删除确认弹窗 -->
   <Teleport to="body">
-    <Transition name="preview">
-      <div v-if="showPreview && previewAsset" class="asset-preview-overlay" @click.self="closePreview">
-        <div class="asset-preview-modal">
-          <!-- 关闭按钮 -->
-          <button class="preview-close-btn" @click="closePreview">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
-          
-          <!-- 预览内容 -->
-          <div class="preview-content">
-            <!-- 文本预览 -->
-            <div v-if="previewAsset.type === 'text'" class="preview-text">
-              <h3>{{ previewAsset.name }}</h3>
-              <div class="text-content">{{ previewAsset.content }}</div>
+    <Transition name="fade">
+      <div v-if="deleteAssetConfirm.visible" class="add-character-overlay" @click.self="cancelDeleteAsset">
+        <div class="delete-asset-modal" role="dialog" aria-modal="true" aria-labelledby="delete-asset-title">
+          <div class="delete-asset-header">
+            <div class="delete-asset-icon">
+              <svg viewBox="0 0 24 24" fill="none" width="18" height="18">
+                <path d="M12 9v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M12 17h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+              </svg>
             </div>
-            
-            <!-- 图片预览 -->
-            <CachedImage 
-              v-else-if="previewAsset.type === 'image'" 
-              :src="getMediaUrl(previewAsset.url)" 
-              :alt="previewAsset.name"
-              img-class="preview-image"
-            />
-            
-            <!-- 视频预览 -->
-            <video 
-              v-else-if="previewAsset.type === 'video'"
-              ref="previewVideoRef"
-              :src="toSameOriginUrl(previewAsset.url)"
-              controls
-              autoplay
-              class="preview-video"
-            ></video>
-            
-            <!-- 音频预览 -->
-            <div v-else-if="previewAsset.type === 'audio'" class="preview-audio">
-              <div v-if="audioErrorPreview" class="audio-error-container">
-                <div class="audio-error-icon">⚠</div>
-                <div class="audio-error-text">音频文件不可用，源文件可能已被删除</div>
-              </div>
-              <template v-else>
-                <div class="audio-visualizer-container">
-                  <canvas ref="audioVisualizerRef" class="audio-visualizer-canvas" width="400" height="300"></canvas>
-                  <div class="audio-icon">♪</div>
-                </div>
-                <h3 class="audio-title">{{ previewAsset.name }}</h3>
-                <audio 
-                  ref="audioRef"
-                  :src="getMediaUrl(previewAsset.url)"
-                  controls
-                  autoplay
-                  crossorigin="anonymous"
-                  class="audio-player"
-                  @play="handleAudioPlay"
-                  @pause="handleAudioPause"
-                  @ended="handleAudioPause"
-                  @error="handleAudioError"
-                ></audio>
-              </template>
+            <div>
+              <h3 id="delete-asset-title">确认删除资产</h3>
+              <p>删除后无法恢复，请确认是否继续。</p>
             </div>
+            <button class="delete-asset-close" @click="cancelDeleteAsset" :disabled="deleteAssetLoading" aria-label="关闭">
+              <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
+                <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              </svg>
+            </button>
           </div>
-          
-          <!-- 资产信息 -->
-          <div class="preview-info">
-            <div class="info-row">
-              <span class="info-label">{{ t('canvas.assetPanel.name') }}</span>
-              <span class="info-value">{{ previewAsset.name }}</span>
+
+          <div class="delete-asset-body">
+            <div class="delete-asset-name">
+              {{ deleteAssetConfirm.asset?.name || '未命名资产' }}
             </div>
-            <div class="info-row">
-              <span class="info-label">{{ t('canvas.assetPanel.type') }}</span>
-              <span class="info-value">{{ t(fileTypes.find(f => f.key === previewAsset.type)?.labelKey) || previewAsset.type }}</span>
+            <div class="delete-asset-meta">
+              {{ fileTypeLabels.find(ft => ft.key === deleteAssetConfirm.asset?.type)?.label || deleteAssetConfirm.asset?.type || '资产' }}
+              <span v-if="deleteAssetConfirm.asset?.size"> · {{ formatFileSize(deleteAssetConfirm.asset.size) }}</span>
             </div>
-            <div class="info-row">
-              <span class="info-label">{{ t('canvas.assetPanel.size') }}</span>
-              <span class="info-value">{{ formatFileSize(previewAsset.size) }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">{{ t('canvas.assetPanel.createdAt') }}</span>
-              <span class="info-value">{{ formatDate(previewAsset.created_at) }}</span>
-            </div>
+            <p v-if="deleteAssetError" class="delete-asset-error">{{ deleteAssetError }}</p>
           </div>
-          
-          <!-- 应用按钮 -->
-          <button class="apply-btn" @click="applyAssetToCanvas">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
-            {{ t('canvas.assetPanel.applyToCanvas') }}
-          </button>
+
+          <div class="delete-asset-footer">
+            <button class="delete-asset-cancel" @click="cancelDeleteAsset" :disabled="deleteAssetLoading">
+              取消
+            </button>
+            <button class="delete-asset-confirm" @click="confirmDeleteAsset" :disabled="deleteAssetLoading">
+              <span v-if="deleteAssetLoading" class="btn-spinner"></span>
+              {{ deleteAssetLoading ? '删除中...' : '确认删除' }}
+            </button>
+          </div>
         </div>
       </div>
     </Transition>
@@ -2626,10 +2264,78 @@ onUnmounted(() => {
   color: #c4b5fd;
 }
 
-/* 标签筛选 */
-.tag-filter {
-  padding: 12px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+/* 底部标签栏 */
+.asset-tag-bar-bottom {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(20, 20, 24, 0.95);
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+
+.asset-tag-bar-bottom .tag-scroll {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+}
+
+.tag-chip:hover {
+  border-color: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.tag-chip.active {
+  background: linear-gradient(135deg, rgba(167, 139, 250, 0.22) 0%, rgba(139, 92, 246, 0.16) 100%);
+  border-color: rgba(167, 139, 250, 0.45);
+  color: #c4b5fd;
+}
+
+.tag-chip .tag-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  font-size: 10px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.tag-manage-btn {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px dashed rgba(167, 139, 250, 0.45);
+  background: transparent;
+  color: #a78bfa;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tag-manage-btn:hover {
+  background: rgba(167, 139, 250, 0.12);
 }
 
 .tag-scroll {
@@ -2650,32 +2356,6 @@ onUnmounted(() => {
 .tag-scroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
-}
-
-.tag-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.tag-btn:hover {
-  border-color: rgba(255, 255, 255, 0.15);
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.tag-btn.active {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #fff;
 }
 
 .tag-icon {
@@ -2745,6 +2425,18 @@ onUnmounted(() => {
 
 .asset-list > .seedance-panel {
   grid-column: 1 / -1;
+}
+
+.asset-grid-window {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+
+.asset-grid-track {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
 }
 
 .asset-list::-webkit-scrollbar {
@@ -2819,35 +2511,50 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.3) !important;
 }
 
-/* 资产卡片 */
-.asset-card {
+/* 资产卡片（旧版内联卡片，v2 组件已接管） */
+.asset-card:not(.asset-card-v2) {
   position: relative;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: transparent;
+  border: none;
   border-radius: 14px;
-  overflow: hidden;
+  overflow: visible;
   cursor: pointer;
   transition: all 0.2s;
   display: flex;
   flex-direction: column;
+  isolation: isolate;
   /* 设置最小高度确保卡片不会太扁 */
   min-height: 240px;
 }
 
-.asset-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(255, 255, 255, 0.12);
+.asset-card:not(.asset-card-v2)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.asset-card:not(.asset-card-v2):hover {
   transform: translateY(-2px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
-.asset-card:hover .asset-actions {
+.asset-card:not(.asset-card-v2):hover::before {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.asset-card:not(.asset-card-v2):hover .asset-actions {
   opacity: 1;
 }
 
 /* 资产预览 - 更大尺寸 */
 .asset-preview {
-  height: 160px;
+  height: clamp(160px, 22vw, 220px);
   min-height: 160px;
   background: rgba(0, 0, 0, 0.2);
   display: flex;
@@ -2856,6 +2563,7 @@ onUnmounted(() => {
   overflow: hidden;
   position: relative;
   flex-shrink: 0;
+  border-radius: 14px 14px 0 0;
 }
 
 /* 视频加载中 */
@@ -2896,7 +2604,8 @@ onUnmounted(() => {
 .image-preview {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .video-preview {
@@ -2910,7 +2619,8 @@ onUnmounted(() => {
 .video-preview video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .video-preview .video-thumbnail {
@@ -3022,13 +2732,14 @@ onUnmounted(() => {
 .character-preview img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .character-preview .character-video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   background: #1a1a2e;
   /* 跨浏览器兼容 */
   -webkit-transform: translateZ(0);
@@ -3039,7 +2750,7 @@ onUnmounted(() => {
 .character-preview .character-thumbnail-fallback {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   background: #1a1a2e;
 }
 
@@ -3169,7 +2880,7 @@ onUnmounted(() => {
   transition: all 0.15s ease;
 }
 
-.asset-item:hover .edit-name-btn {
+.asset-card:not(.asset-card-v2):hover .edit-name-btn {
   opacity: 1;
 }
 
@@ -3247,11 +2958,11 @@ onUnmounted(() => {
 }
 
 /* Sora 角色卡片 - 单击复制提示 */
-.asset-card.type-sora-character {
+.asset-card.type-sora-character:not(.asset-card-v2) {
   cursor: copy;
 }
 
-.asset-card.type-sora-character::after {
+.asset-card.type-sora-character:not(.asset-card-v2)::after {
   content: '📋 点击复制@ID';
   position: absolute;
   top: 8px;
@@ -3269,7 +2980,7 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.asset-card.type-sora-character:hover::after {
+.asset-card.type-sora-character:not(.asset-card-v2):hover::after {
   opacity: 1;
 }
 
@@ -3324,6 +3035,7 @@ onUnmounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  padding-right: 116px;
 }
 
 .asset-tag {
@@ -3994,6 +3706,160 @@ onUnmounted(() => {
   transform: scale(0.95);
 }
 
+/* ========== 本地资产删除确认弹窗 ========== */
+.delete-asset-modal {
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  background: rgba(28, 28, 32, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.62);
+  overflow: hidden;
+}
+
+.delete-asset-header {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 20px 22px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.delete-asset-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  color: #f87171;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+}
+
+.delete-asset-header h3 {
+  margin: 0;
+  color: #fff;
+  font-size: 17px;
+  font-weight: 650;
+}
+
+.delete-asset-header p {
+  margin: 5px 0 0;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.delete-asset-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-asset-close:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.delete-asset-close:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.delete-asset-body {
+  padding: 18px 22px 6px;
+}
+
+.delete-asset-name {
+  padding: 12px 14px;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+  word-break: break-word;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.delete-asset-meta {
+  margin-top: 8px;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 12px;
+}
+
+.delete-asset-error {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  color: #fca5a5;
+  font-size: 12px;
+  line-height: 1.45;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.26);
+  border-radius: 8px;
+}
+
+.delete-asset-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 18px 22px 20px;
+}
+
+.delete-asset-cancel,
+.delete-asset-confirm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 96px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.delete-asset-cancel {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.74);
+}
+
+.delete-asset-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.11);
+  color: #fff;
+}
+
+.delete-asset-confirm {
+  gap: 8px;
+  background: #ef4444;
+  border: 1px solid #ef4444;
+  color: #fff;
+}
+
+.delete-asset-confirm:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.delete-asset-cancel:disabled,
+.delete-asset-confirm:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
 /* ========== Sora角色库悬停添加按钮 ========== */
 .sora-character-wrapper {
   position: relative;
@@ -4598,22 +4464,17 @@ onUnmounted(() => {
   color: #6d28d9 !important;
 }
 
-/* 标签筛选 */
-:root.canvas-theme-light .asset-panel .tag-filter {
-  border-bottom-color: rgba(0, 0, 0, 0.04) !important;
-}
-
-:root.canvas-theme-light .asset-panel .tag-btn {
+:root.canvas-theme-light .asset-panel .tag-chip {
   border-color: rgba(0, 0, 0, 0.08) !important;
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
-:root.canvas-theme-light .asset-panel .tag-btn:hover {
+:root.canvas-theme-light .asset-panel .tag-chip:hover {
   border-color: rgba(0, 0, 0, 0.15) !important;
   color: rgba(0, 0, 0, 0.8) !important;
 }
 
-:root.canvas-theme-light .asset-panel .tag-btn.active {
+:root.canvas-theme-light .asset-panel .tag-chip.active {
   background: rgba(0, 0, 0, 0.08) !important;
   border-color: rgba(0, 0, 0, 0.15) !important;
   color: #1c1917 !important;
@@ -4683,15 +4544,23 @@ onUnmounted(() => {
 }
 
 /* 资产卡片 */
-:root.canvas-theme-light .asset-panel .asset-card {
+:root.canvas-theme-light .asset-panel .asset-card:not(.asset-card-v2) {
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+:root.canvas-theme-light .asset-panel .asset-card:not(.asset-card-v2):hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .asset-panel .asset-card:not(.asset-card-v2)::before {
   background: rgba(0, 0, 0, 0.02) !important;
   border-color: rgba(0, 0, 0, 0.06) !important;
 }
 
-:root.canvas-theme-light .asset-panel .asset-card:hover {
+:root.canvas-theme-light .asset-panel .asset-card:not(.asset-card-v2):hover::before {
   background: rgba(0, 0, 0, 0.04) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08) !important;
 }
 
 /* 资产预览 */
@@ -4881,6 +4750,48 @@ onUnmounted(() => {
 
 :root.canvas-theme-light .asset-context-menu .context-menu-divider {
   background: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 本地资产删除确认弹窗 */
+:root.canvas-theme-light .delete-asset-modal {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.2) !important;
+}
+
+:root.canvas-theme-light .delete-asset-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .delete-asset-header h3 {
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .delete-asset-header p {
+  color: rgba(0, 0, 0, 0.58) !important;
+}
+
+:root.canvas-theme-light .delete-asset-close,
+:root.canvas-theme-light .delete-asset-cancel {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  color: rgba(0, 0, 0, 0.62) !important;
+}
+
+:root.canvas-theme-light .delete-asset-close:hover:not(:disabled),
+:root.canvas-theme-light .delete-asset-cancel:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.08) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .delete-asset-name {
+  background: rgba(0, 0, 0, 0.035) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  color: rgba(0, 0, 0, 0.86) !important;
+}
+
+:root.canvas-theme-light .delete-asset-meta {
+  color: rgba(0, 0, 0, 0.48) !important;
 }
 
 /* 全屏预览 */

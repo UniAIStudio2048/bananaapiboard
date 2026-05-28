@@ -10,7 +10,7 @@
  */
 import { ref, computed, onUnmounted, nextTick, watch } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
-import { createGroupSchedule } from '@/api/canvas/groupSchedule'
+import { cancelGroupSchedule, createGroupSchedule, listGroupSchedules } from '@/api/canvas/groupSchedule'
 import GroupScheduleDialog from '@/components/canvas/GroupScheduleDialog.vue'
 
 const props = defineProps({
@@ -57,7 +57,11 @@ const isEditing = ref(false)
 const editingName = ref('')
 const nameInputRef = ref(null)
 const showScheduleDialog = ref(false)
+const showScheduleRecords = ref(false)
 const scheduleSubmitting = ref(false)
+const scheduleRecordsLoading = ref(false)
+const scheduleCancellingId = ref('')
+const groupSchedules = ref([])
 
 // ========== 编组执行状态 ==========
 // 注意：canvasStore 中的 executeGroup、groupExecutionState、stopGroupExecution
@@ -98,9 +102,54 @@ function getScheduleSnapshot() {
   }
 }
 
-async function handleScheduleSubmit(payload) {
+function getCurrentWorkflowId() {
   const currentTab = canvasStore.getCurrentTab?.()
-  const workflowId = currentTab?.workflowId || canvasStore.workflowMeta?.id
+  return currentTab?.workflowId || canvasStore.workflowMeta?.id
+}
+
+async function loadGroupSchedules({ silent = false } = {}) {
+  const workflowId = getCurrentWorkflowId()
+  if (!workflowId) {
+    if (!silent) window.alert?.('请先保存工作流后再查看定时记录')
+    groupSchedules.value = []
+    return
+  }
+
+  scheduleRecordsLoading.value = true
+  try {
+    const data = await listGroupSchedules({ workflowId })
+    groupSchedules.value = (data.schedules || []).filter(schedule => (
+      schedule.group_id === props.id || schedule.groupId === props.id
+    ))
+  } catch (err) {
+    if (!silent) window.alert?.(err?.message || '获取定时任务失败')
+  } finally {
+    scheduleRecordsLoading.value = false
+  }
+}
+
+async function openScheduleRecords() {
+  showScheduleRecords.value = true
+  await loadGroupSchedules()
+}
+
+async function handleCancelSchedule(schedule) {
+  if (!schedule?.id) return
+
+  scheduleCancellingId.value = schedule.id
+  try {
+    await cancelGroupSchedule(schedule.id)
+    await loadGroupSchedules({ silent: true })
+  } catch (err) {
+    window.alert?.(err?.message || '任务已开始或无法取消')
+    await loadGroupSchedules({ silent: true })
+  } finally {
+    scheduleCancellingId.value = ''
+  }
+}
+
+async function handleScheduleSubmit(payload) {
+  const workflowId = getCurrentWorkflowId()
   if (!workflowId) {
     window.alert?.('请先保存工作流后再设置定时执行')
     return
@@ -116,6 +165,8 @@ async function handleScheduleSubmit(payload) {
       snapshot: getScheduleSnapshot()
     })
     showScheduleDialog.value = false
+    showScheduleRecords.value = true
+    await loadGroupSchedules({ silent: true })
     window.alert?.('定时执行已创建')
   } catch (err) {
     window.alert?.(err?.message || '创建定时执行失败')
@@ -344,6 +395,15 @@ onUnmounted(() => {
           <span class="toolbar-btn-text">定时执行</span>
         </button>
         <button
+          class="toolbar-btn schedule-records-btn"
+          title="定时记录"
+          aria-label="定时记录"
+          @click.stop="openScheduleRecords"
+        >
+          <span class="toolbar-btn-icon">≡</span>
+          <span class="toolbar-btn-text">定时记录</span>
+        </button>
+        <button
           class="toolbar-btn ungroup-btn"
           title="解散编组"
           aria-label="解散编组"
@@ -357,10 +417,23 @@ onUnmounted(() => {
 
     <GroupScheduleDialog
       v-if="showScheduleDialog"
+      mode="create"
       :group-name="groupName"
       :submitting="scheduleSubmitting"
       @close="showScheduleDialog = false"
       @submit="handleScheduleSubmit"
+    />
+
+    <GroupScheduleDialog
+      v-if="showScheduleRecords"
+      mode="records"
+      :group-name="groupName"
+      :schedules="groupSchedules"
+      :loading="scheduleRecordsLoading"
+      :cancelling-id="scheduleCancellingId"
+      @close="showScheduleRecords = false"
+      @refresh="loadGroupSchedules"
+      @cancel-schedule="handleCancelSchedule"
     />
 
     <!-- 执行进度条（执行中时显示） -->
@@ -619,6 +692,16 @@ onUnmounted(() => {
 
 .schedule-btn:hover {
   background: rgba(16, 185, 129, 0.32);
+  color: #fff;
+}
+
+.schedule-records-btn {
+  background: rgba(14, 165, 233, 0.16);
+  color: rgba(125, 211, 252, 0.95);
+}
+
+.schedule-records-btn:hover {
+  background: rgba(14, 165, 233, 0.3);
   color: #fff;
 }
 

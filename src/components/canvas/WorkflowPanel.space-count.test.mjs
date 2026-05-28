@@ -14,7 +14,7 @@ assert.match(
 
 assert.match(
   source,
-  /workflowsTotal\.value = Number\(wfResult\.pagination\?\.total \?\? workflows\.value\.length\)/,
+  /const total = Number\(wfResult\.pagination\?\.total \?\? firstPageList\.length\)[\s\S]*?workflowsTotal\.value = total/,
   'Workflow panel should derive saved workflow counts from the selected-space workflow API result'
 )
 

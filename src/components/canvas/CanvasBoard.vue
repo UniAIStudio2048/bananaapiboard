@@ -2128,14 +2128,13 @@ function getPendingConnectionPath() {
   const targetX = pending.targetPosition.x
   const targetY = pending.targetPosition.y
   
-  // 获取视口信息
-  const viewport = canvasStore.viewport
-  
-  // 将画布坐标转换为屏幕坐标
-  const screenX1 = sourceX * viewport.zoom + viewport.x
-  const screenY1 = sourceY * viewport.zoom + viewport.y
-  const screenX2 = targetX * viewport.zoom + viewport.x
-  const screenY2 = targetY * viewport.zoom + viewport.y
+  const viewport = getViewport()
+  const startScreen = flowPositionToScreenPosition({ x: sourceX, y: sourceY }, viewport)
+  const endScreen = flowPositionToScreenPosition({ x: targetX, y: targetY }, viewport)
+  const screenX1 = startScreen.x
+  const screenY1 = startScreen.y
+  const screenX2 = endScreen.x
+  const screenY2 = endScreen.y
   
   // 计算控制点（水平方向的贝塞尔曲线）
   const dx = Math.abs(screenX2 - screenX1)

@@ -50,6 +50,20 @@ test('contenteditable prompt placeholders use :empty so they hide as soon as DOM
   }
 })
 
+test('audio prompt editor renders text through Vue-managed segments instead of direct text nodes', () => {
+  // AudioNode uses the same contenteditable prompt utilities as ImageNode/VideoNode.
+  // Those utilities remove direct text nodes after input, so the rendered prompt
+  // content must live inside Vue-managed span segments.
+  const source = readNode('AudioNode.vue')
+  const editorMatch = source.match(/<div\s+[\s\S]*?ref="promptTextareaRef"[\s\S]*?<\/div>/)
+  assert.ok(editorMatch, 'AudioNode should render a prompt editor')
+  const editor = editorMatch[0]
+
+  assert.match(editor, /:key="promptEditorRenderKey"/, 'AudioNode editor should remount when browser mutates contenteditable DOM')
+  assert.match(editor, /v-for="\([\s\S]*?\)\s+in\s+highlightedMusicPromptSegments"/, 'AudioNode should render prompt text through managed segments')
+  assert.doesNotMatch(editor, /\{\{\s*musicPrompt\s*\}\}/, 'AudioNode should not render musicPrompt as a direct text node')
+})
+
 test('clearing prompt via backspace bumps renderKey to force Vue to remount the editor', () => {
   // 防御性测试：当 contenteditable 内容从非空被 backspace 清空时，
   // 浏览器可能已经移除/修改 Vue 管理的 <span>，留下 <br> 等元素，使得
@@ -62,7 +76,8 @@ test('clearing prompt via backspace bumps renderKey to force Vue to remount the 
   for (const [file, inputHandler, renderKeyName] of [
     ['ImageNode.vue', 'handlePromptInput', 'promptEditorRenderKey'],
     ['VideoNode.vue', 'handlePromptInput', 'promptEditorRenderKey'],
-    ['TextNode.vue', 'handleLLMInput', 'llmInputRenderKey']
+    ['TextNode.vue', 'handleLLMInput', 'llmInputRenderKey'],
+    ['AudioNode.vue', 'handleMusicInput', 'promptEditorRenderKey']
   ]) {
     const source = readNode(file)
     const fnMatch = source.match(new RegExp(`function\\s+${inputHandler}\\s*\\([\\s\\S]*?\\n\\}`))

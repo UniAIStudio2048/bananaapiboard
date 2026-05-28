@@ -109,6 +109,18 @@ assert.match(
   'Template must spread attrs so loading/decoding/class/alt pass through'
 )
 
+// 8b) 必须转发真实 <img> load 事件，父组件依赖它在图片高度稳定后刷新画布端口位置
+assert.match(
+  source,
+  /function handleLoad\(event\) \{[\s\S]*?emit\('load', event\)/,
+  'Must forward rendered img load events so parents can respond to media-driven layout changes'
+)
+assert.match(
+  source,
+  /@load="handleLoad"/,
+  'Rendered img must bind the load handler'
+)
+
 // 9) 初始 displaySrc 应等于 props.src（首次渲染不等待）
 assert.match(
   source,

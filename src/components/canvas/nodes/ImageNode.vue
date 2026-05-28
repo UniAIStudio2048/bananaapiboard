@@ -50,7 +50,7 @@ import {
   resolveMediaMentionItem,
   syncPromptMediaMentions
 } from '@/utils/promptMediaBindings'
-import { getElementCenterFlowPosition, getElementSideCenterFlowPosition } from '@/utils/canvasConnectionPosition'
+import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { isPanoramaVrSupportedRatio } from '@/utils/canvasPanoramaExport'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
@@ -65,6 +65,7 @@ const { t } = useI18n()
 
 // 节点根元素引用（用于计算工具栏位置 + 视口懒加载）
 const nodeRef = ref(null)
+const nodeWrapperRef = ref(null)
 const { isVisible: isNodeVisible } = useNodeVisibility(nodeRef)
 
 const props = defineProps({
@@ -85,6 +86,29 @@ const { onHoverStart, onVideoHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
 const { updateNodeInternals, findNode, setViewport, getViewport, getSelectedNodes } = useVueFlow()
+let nodeGeometryObserver = null
+let nodeInternalsUpdateRaf = null
+let nodeInternalsUpdateQueued = false
+let nodeGeometryDisposed = false
+
+function scheduleNodeInternalsUpdate() {
+  if (nodeGeometryDisposed || nodeInternalsUpdateQueued) return
+  nodeInternalsUpdateQueued = true
+
+  nextTick(() => {
+    if (nodeGeometryDisposed) {
+      nodeInternalsUpdateQueued = false
+      return
+    }
+    nodeInternalsUpdateRaf = requestAnimationFrame(() => {
+      if (!nodeGeometryDisposed) {
+        updateNodeInternals(props.id)
+      }
+      nodeInternalsUpdateRaf = null
+      nodeInternalsUpdateQueued = false
+    })
+  })
+}
 
 // 配置面板放大相关（与 VideoNode 保持一致的交互逻辑）
 const configPanelRef = ref(null)
@@ -949,7 +973,7 @@ function checkAndRestoreBackgroundTasks() {
   
   // 如果节点状态是 processing 但没有任何关联的后台任务，说明轮询丢失了
   // 多角度生成节点有独立轮询机制（pollMultiangleTask），不走 backgroundTaskManager
-  if (props.data?.status === 'processing' && props.data?.extractedFromVideo !== true && props.data?.sourceType !== 'multiangle' && props.data?.taskType !== 'image-hd' && props.data?.taskType !== 'image-panorama' && props.data?.taskType !== 'image-cutout' && nodeTasks.filter(t => (t.type === 'image' || t.type === 'image-hd' || t.type === 'image-panorama' || t.type === 'image-cutout') && (t.status === 'processing' || t.status === 'pending')).length === 0) {
+  if (props.data?.status === 'processing' && props.data?.extractedFromVideo !== true && props.data?.sourceType !== 'multiangle' && props.data?.localProcessing !== 'spot-heal' && props.data?.taskType !== 'image-hd' && props.data?.taskType !== 'image-panorama' && props.data?.taskType !== 'image-cutout' && nodeTasks.filter(t => (t.type === 'image' || t.type === 'image-hd' || t.type === 'image-panorama' || t.type === 'image-cutout') && (t.status === 'processing' || t.status === 'pending')).length === 0) {
     console.log(`[ImageNode] 节点 ${props.id} 状态为 processing 但无关联任务, 重置为 error`)
     canvasStore.updateNodeData(props.id, {
       status: 'error',
@@ -959,6 +983,7 @@ function checkAndRestoreBackgroundTasks() {
 }
 
 onMounted(() => {
+  nodeGeometryDisposed = false
   document.addEventListener('click', handleModelDropdownClickOutside)
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('mousedown', handleConfigPanelOutsideMouseDown)
@@ -968,8 +993,16 @@ onMounted(() => {
   // 初始化时调整文本框高度（如果有预设文本）
   nextTick(() => {
     autoResizeTextarea()
-    updateNodeInternals(props.id)
+    scheduleNodeInternalsUpdate()
   })
+  if (typeof ResizeObserver !== 'undefined') {
+    nodeGeometryObserver = new ResizeObserver(() => {
+      scheduleNodeInternalsUpdate()
+    })
+    if (nodeWrapperRef.value) {
+      nodeGeometryObserver.observe(nodeWrapperRef.value)
+    }
+  }
   // 🚀 性能优化：监听画布拖拽事件
   window.addEventListener('canvas-drag-start', handleCanvasDragStart)
   window.addEventListener('canvas-drag-end', handleCanvasDragEnd)
@@ -987,9 +1020,19 @@ onMounted(() => {
 
 // 组件卸载时移除监听
 onUnmounted(() => {
+  nodeGeometryDisposed = true
+  nodeInternalsUpdateQueued = false
   document.removeEventListener('click', handleModelDropdownClickOutside)
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('mousedown', handleConfigPanelOutsideMouseDown)
+  if (nodeGeometryObserver) {
+    nodeGeometryObserver.disconnect()
+    nodeGeometryObserver = null
+  }
+  if (nodeInternalsUpdateRaf) {
+    cancelAnimationFrame(nodeInternalsUpdateRaf)
+    nodeInternalsUpdateRaf = null
+  }
   // 🚀 性能优化：移除画布拖拽事件监听
   window.removeEventListener('canvas-drag-start', handleCanvasDragStart)
   window.removeEventListener('canvas-drag-end', handleCanvasDragEnd)
@@ -1645,9 +1688,14 @@ function handleToolbarErase() {
   enterEditMode('erase') // 使用蒙版绘制进行擦除
 }
 
+function handleToolbarSpotHeal() {
+  console.log('[ImageNode] 工具栏：污点修复', props.id)
+  enterEditMode('spot-heal')
+}
+
 function handleToolbarEnhance() {
-  console.log('[ImageNode] 工具栏：增强', props.id)
-  enterEditMode('enhance') // 图像增强（待接入 AI API）
+  console.log('[ImageNode] 工具栏：调色', props.id)
+  enterEditMode('enhance') // 调色混色器
 }
 
 function handleToolbarEditMenuClick() {
@@ -6319,7 +6367,6 @@ function closeLeftMenu() {
 // ========== 右侧添加按钮交互（单击/长按拖拽） ==========
 const LONG_PRESS_DURATION = 300 // 长按阈值（毫秒）
 const addRightBtnRef = ref(null)
-const nodeCardRef = ref(null)
 let pressTimer = null
 let isLongPress = false
 let pressStartPos = { x: 0, y: 0 }
@@ -6386,47 +6433,13 @@ function handleAddRightMouseUp(event) {
 
 // 开始拖拽连线 - 直接调用 store 方法
 function startDragConnection(event) {
-  const cardPosition = getElementSideCenterFlowPosition(nodeCardRef.value, getViewport(), 'right', 34)
-  if (cardPosition) {
-    canvasStore.startDragConnection(props.id, 'output', cardPosition)
-    return
-  }
-
   const buttonPosition = getElementCenterFlowPosition(addRightBtnRef.value, getViewport())
   if (buttonPosition) {
     canvasStore.startDragConnection(props.id, 'output', buttonPosition)
     return
   }
 
-  // 获取当前节点在 store 中的数据
-  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
-  if (!currentNode) {
-    console.warn('[ImageNode] 未找到当前节点')
-    return
-  }
-  
-  // 计算节点右侧输出端口的画布坐标
-  // 使用响应式的节点尺寸（最准确）
-  const currentNodeWidth = nodeWidth.value || props.data?.width || 380
-  const currentNodeHeight = nodeHeight.value || props.data?.height || 320
-  const labelHeight = 28 // 节点标签高度
-  const labelMarginBottom = 8 // 标签与卡片之间的间距
-  const labelOffset = labelHeight + labelMarginBottom // 标签总偏移（高度 + 间距）
-  const handleOffset = 34 // +号按钮中心相对于节点卡片边缘的偏移量
-  
-  const outputX = currentNode.position.x + currentNodeWidth + handleOffset
-  const outputY = currentNode.position.y + labelOffset + currentNodeHeight / 2
-  
-  console.log('[ImageNode] 开始拖拽连线，起始位置:', { 
-    outputX, 
-    outputY, 
-    nodePosition: currentNode.position,
-    nodeWidth: currentNodeWidth,
-    nodeHeight: currentNodeHeight
-  })
-  
-  // 调用 store 开始拖拽连线，使用节点输出端口位置作为起点
-  canvasStore.startDragConnection(props.id, 'output', { x: outputX, y: outputY })
+  console.warn('[ImageNode] 无法获取右侧 + 按钮中心，取消拖拽连线', { nodeId: props.id })
 }
 
 // 下载图片
@@ -7130,6 +7143,13 @@ async function handleDrop(event) {
             </svg>
             <span>擦除</span>
           </button>
+          <button class="image-edit-dropdown-item" @click="runImageEditAction(handleToolbarSpotHeal)">
+            <svg data-icon="spot-heal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M14.7 6.3a4 4 0 0 1 0 5.7l-6.4 6.4a4 4 0 0 1-5.7-5.7L9 6.3a4 4 0 0 1 5.7 0z" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M6.5 14.5l3 3M16 4l1-2M19 7l2-1M18 11l2 1" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span>污点修复</span>
+          </button>
           <button
             class="image-edit-dropdown-item"
             :class="{ 'is-processing': isRemovingBackground }"
@@ -7435,7 +7455,7 @@ async function handleDrop(event) {
     />
     
     <!-- 节点主体 -->
-    <div class="node-wrapper">
+    <div class="node-wrapper" ref="nodeWrapperRef">
       <!-- 左侧输入端口 -->
       <Handle
         type="target"
@@ -7469,7 +7489,6 @@ async function handleDrop(event) {
       
       <!-- 节点卡片 -->
       <div 
-        ref="nodeCardRef"
         class="node-card" 
         :class="{ 
           'drag-over': isDragOver,
@@ -7554,6 +7573,7 @@ async function handleDrop(event) {
               decoding="async"
               fetchpriority="low"
               @error="handleSourceImageError"
+              @load="scheduleNodeInternalsUpdate"
             />
             <div v-else class="image-placeholder" />
           </div>
@@ -7617,6 +7637,7 @@ async function handleDrop(event) {
                   fetchpriority="low"
                   :auto-fallback="false"
                   @error="handleOutputImageError($event, img, index)"
+                  @load="scheduleNodeInternalsUpdate"
                 />
                 <div v-else class="image-placeholder preview-image" />
               </template>
@@ -7681,6 +7702,15 @@ async function handleDrop(event) {
         ></div>
       </div>
       
+      <!-- 右侧输出端口 -->
+      <Handle
+        type="source"
+        :position="Position.Right"
+        id="output"
+        class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
+      />
+
       <!-- 右侧添加按钮 - 单击打开选择器，长按/拖拽连线 -->
       <button 
         ref="addRightBtnRef"
@@ -7690,15 +7720,6 @@ async function handleDrop(event) {
       >
         +
       </button>
-
-      <!-- 右侧输出端口 -->
-      <Handle
-        type="source"
-        :position="Position.Right"
-        id="output"
-        class="node-handle node-handle-hidden"
-        :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
-      />
     </div>
     
     <!-- 底部配置面板（仅输出节点选中时显示，拖动和缩放时隐藏） -->

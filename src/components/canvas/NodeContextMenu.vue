@@ -674,6 +674,7 @@ async function addToMyAssets() {
       const result = await saveAsset(assetData)
 
       if (result && result.id) {
+        notifyAssetsUpdated(result, assetData)
         showToast(`${assetTypeName.value}已加入我的资产`, 'success')
       } else {
         throw new Error(result?.error || '保存失败')
@@ -705,11 +706,29 @@ async function performAsyncUploadAndSave(assetData, contentUrl, type) {
       throw new Error(result?.error || '保存失败')
     }
 
+    notifyAssetsUpdated(result, assetData)
     console.log(`[NodeContextMenu] ${type}资产保存成功:`, result.id)
   } catch (error) {
     console.error(`[NodeContextMenu] 异步上传${type}失败:`, error)
     throw error
   }
+}
+
+function notifyAssetsUpdated(result, assetData = {}) {
+  if (typeof window === 'undefined') return
+
+  const savedAsset = result?.asset || result
+  window.dispatchEvent(new CustomEvent('assets-updated', {
+    detail: {
+      asset: {
+        ...assetData,
+        ...savedAsset,
+        id: savedAsset?.id || result?.id,
+        tags: savedAsset?.tags || assetData.tags || [],
+        created_at: savedAsset?.created_at || new Date().toISOString()
+      }
+    }
+  }))
 }
 
 // 发送到灵感助手

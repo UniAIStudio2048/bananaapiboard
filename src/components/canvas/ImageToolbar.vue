@@ -5,7 +5,7 @@
  * 功能：
  * - 重绘：AI重绘图像（预留事件）
  * - 擦除：擦除图像部分内容（预留事件）
- * - 增强：图像增强/超分辨率（预留事件）
+ * - 调色：打开图像调色混色器
  * - 抠图：去除背景/抠图（预留事件）
  * - 扩图：扩展图像边界（预留事件）
  * - 标注：图像标注功能（预留事件）
@@ -38,7 +38,7 @@ const emit = defineEmits([
   'close',
   'repaint',      // 重绘
   'erase',        // 擦除
-  'enhance',      // 增强
+  'enhance',      // 调色（沿用事件名，减少调用面变化）
   'cutout',       // 抠图
   'expand',       // 扩图
   'annotate',     // 标注
@@ -155,7 +155,7 @@ const toolbarItems = [
   {
     id: 'enhance', 
     icon: 'enhance',
-    label: '增强', 
+    label: '调色', 
     handler: handleEnhance,
     requiresImage: true
   },
@@ -223,9 +223,9 @@ function handleErase() {
   })
 }
 
-// 增强（预留事件）
+// 调色混色器
 function handleEnhance() {
-  console.log('[ImageToolbar] 增强', props.imageNode?.id)
+  console.log('[ImageToolbar] 调色', props.imageNode?.id)
   emit('enhance', { 
     nodeId: props.imageNode?.id, 
     imageUrl: imageUrl.value 
@@ -1209,7 +1209,7 @@ onUnmounted(() => {
             <path d="M4.5 16.5l3-3 3 3-3 3-3-3z" stroke-linecap="round" stroke-linejoin="round"/>
           </svg>
           
-          <!-- 增强图标 -->
+          <!-- 调色图标 -->
           <svg v-else-if="item.icon === 'enhance'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
             <text x="12" y="15" text-anchor="middle" font-size="8" font-weight="bold" fill="currentColor" stroke="none">HD</text>

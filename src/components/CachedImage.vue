@@ -230,10 +230,15 @@ async function upgradeToFullImage(url) {
   }
 }
 
-function handleLoad() {
+function handleLoad(e) {
   isLoading.value = false
   hasError.value = false
-  emit('load')
+  const img = imgRef.value
+  emit('load', {
+    event: e,
+    naturalWidth: img?.naturalWidth || 0,
+    naturalHeight: img?.naturalHeight || 0
+  })
 }
 
 function handleError(e) {

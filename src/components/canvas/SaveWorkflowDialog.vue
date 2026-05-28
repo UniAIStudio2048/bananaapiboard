@@ -54,10 +54,10 @@ const saveButtonText = computed(() => {
   return isUpdate.value ? t('canvas.updateWorkflow') : t('canvas.saveWorkflow')
 })
 
-// 🔧 计算当前工作流数据大小（用于实时显示）
+// 🔧 计算当前工作流保存数据大小（用于实时显示）
 const currentDataSize = computed(() => {
   try {
-    const workflowData = canvasStore.exportWorkflow()
+    const workflowData = canvasStore.exportWorkflowForSave()
     const nodesJson = JSON.stringify(workflowData.nodes || [])
     const edgesJson = JSON.stringify(workflowData.edges || [])
     return new Blob([nodesJson, edgesJson]).size
@@ -167,7 +167,7 @@ function formatSize(bytes) {
 
 // 计算工作流数据大小（用于预检）
 function calculateDataSize() {
-  const workflowData = canvasStore.exportWorkflow()
+  const workflowData = canvasStore.exportWorkflowForSave()
   const nodesJson = JSON.stringify(workflowData.nodes || [])
   const edgesJson = JSON.stringify(workflowData.edges || [])
   // 🔧 使用 Blob 计算字节大小（浏览器兼容）
@@ -1356,4 +1356,3 @@ function handlePublishToCommunity() {
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.35) !important;
 }
 </style>
-

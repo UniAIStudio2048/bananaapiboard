@@ -710,3 +710,21 @@ export async function removeImageBackground(imageUrl, bgType = 'transparent', bg
   
   return response.json()
 }
+
+/**
+ * 本地污点修复 - OpenCV inpaint，不调用外部模型 API
+ */
+export async function inpaintImageLocal({ imageUrl, image = null, mask, method = 'telea', radius = 3, nodeId = null }) {
+  const response = await fetch(getApiUrl('/api/images/inpaint-local'), {
+    method: 'POST',
+    headers: getHeaders({ json: true }),
+    body: JSON.stringify({ imageUrl, image, mask, method, radius, nodeId })
+  })
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.message || data.error || '污点修复失败')
+  }
+
+  return data
+}

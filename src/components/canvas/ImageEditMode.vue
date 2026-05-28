@@ -15,6 +15,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { inpaintImageLocal } from '@/api/canvas/nodes'
+import { showToast } from '@/composables/useCanvasDialog'
 import NativeImageEditor from './NativeImageEditor.vue'
 import {
   buildSavedSessionPayload,
@@ -208,6 +210,7 @@ const initialTool = computed(() => {
     'crop': 'crop',
     'repaint': 'mask',
     'erase': 'mask',
+    'spot-heal': 'spot-heal',
     'annotate': 'annotate', // 标注工具
     'enhance': 'filter',
     'cutout': '',
@@ -221,9 +224,10 @@ const toolTitle = computed(() => {
   const titles = {
     repaint: '重绘蒙版',
     erase: '擦除区域',
+    'spot-heal': '污点修复',
     annotate: '涂鸦标注',
     crop: '裁剪图片',
-    enhance: '图像增强',
+    enhance: '调色混色器',
     cutout: '智能抠图',
     expand: '智能扩图'
   }
@@ -255,6 +259,13 @@ async function handleSave(data) {
     const nodeId = node.id
     const nodeSnapshot = { ...node, data: { ...node.data } }
 
+    if (currentTool.value === 'spot-heal') {
+      const sourceImageUrl = currentImageUrl.value
+      canvasStore.exitEditMode()
+      processSpotHealInBackground(nodeId, nodeSnapshot, data, sourceImageUrl)
+      return
+    }
+
     if (data.image) {
       const previewPatch = buildNodeImagePatch(node, data.image)
       canvasStore.updateNodeData(nodeId, {
@@ -273,6 +284,93 @@ async function handleSave(data) {
   } catch (error) {
     console.error('[ImageEditMode] handleSave 异常:', error)
     canvasStore.exitEditMode()
+  }
+}
+
+function createSpotHealResultNode(sourceNode, data) {
+  const nodeWidth = 280
+  const gap = 50
+  const newNodeId = `spot_heal_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  const newNodePosition = {
+    x: (sourceNode.position?.x || 0) + nodeWidth + gap,
+    y: sourceNode.position?.y || 0
+  }
+
+  canvasStore.addNode({
+    id: newNodeId,
+    type: 'image',
+    position: newNodePosition,
+    data: {
+      title: '污点修复',
+      label: '污点修复',
+      status: 'processing',
+      progress: '污点修复中...',
+      taskType: 'spot-heal',
+      sourceType: 'spot-heal',
+      localProcessing: 'spot-heal',
+      sourceNodeId: sourceNode.id,
+      maskPreview: data.mask || null
+    }
+  })
+
+  canvasStore.addEdge({
+    id: `edge-${sourceNode.id}-${newNodeId}-${Date.now()}`,
+    source: sourceNode.id,
+    target: newNodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input',
+    type: 'smoothstep'
+  })
+
+  return newNodeId
+}
+
+async function processSpotHealInBackground(nodeId, nodeSnapshot, data, sourceImageUrl) {
+  const resultNodeId = createSpotHealResultNode(nodeSnapshot, data)
+
+  try {
+    if (!data?.hasMask || !data.mask) {
+      throw new Error('请先涂抹要修复的污点区域')
+    }
+
+    const result = await inpaintImageLocal({
+      imageUrl: sourceImageUrl,
+      image: data.image,
+      mask: data.mask,
+      method: 'telea',
+      radius: Math.max(1, Math.min(80, Math.round((data.editState?.brushSize || 10) / 4))),
+      nodeId
+    })
+
+    if (!result?.url) {
+      throw new Error('污点修复完成但未返回图片')
+    }
+
+    canvasStore.updateNodeData(resultNodeId, {
+      status: 'success',
+      progress: null,
+      localProcessing: null,
+      output: {
+        type: 'image',
+        url: result.url,
+        urls: [result.url]
+      },
+      localInpaint: {
+        method: result.method || 'telea',
+        radius: result.radius || null
+      }
+    })
+
+    showToast('污点修复完成', 'success')
+  } catch (error) {
+    console.error('[ImageEditMode] 污点修复失败:', error)
+    canvasStore.updateNodeData(resultNodeId, {
+      status: 'error',
+      progress: null,
+      localProcessing: null,
+      error: error.message || '污点修复失败'
+    })
+    showToast(error.message || '污点修复失败', 'error', 3000)
   }
 }
 

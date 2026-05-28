@@ -7216,6 +7216,15 @@ function handleToolbarPreview() {
         ></div>
       </div>
       
+      <!-- 右侧输出端口 -->
+      <Handle
+        type="source"
+        :position="Position.Right"
+        id="output"
+        class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
+      />
+
       <!-- 右侧添加按钮 - 单击打开选择器，长按/拖拽连线 -->
       <button 
         ref="addRightBtnRef"
@@ -7225,15 +7234,6 @@ function handleToolbarPreview() {
       >
         +
       </button>
-
-      <!-- 右侧输出端口 -->
-      <Handle
-        type="source"
-        :position="Position.Right"
-        id="output"
-        class="node-handle node-handle-hidden"
-        :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
-      />
     </div>
     
     <!-- 隐藏的文件上传 input（支持多选，支持图片和视频） -->

@@ -24,7 +24,7 @@ import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
-import { getPromptEditorSelectionRange, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
+import { getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
 import AudioEditorModal from '@/components/canvas/AudioEditorModal.vue'
@@ -78,6 +78,7 @@ const musicModels = computed(() => {
 const selectedMusicModel = ref(props.data.musicModel || musicModels.value[0]?.value || 'chirp-v4')
 const customMode = ref(props.data.customMode || false)
 const musicPrompt = ref(props.data.musicPrompt || '')
+const promptEditorRenderKey = ref(0)
 const hasManualPromptTextareaSize = ref(false)
 const title = ref(props.data.title || '')
 const tags = ref(props.data.tags || '')
@@ -123,6 +124,15 @@ const userPoints = computed(() => {
 
 // 继承的数据（来自上游节点）
 const inheritedText = computed(() => props.data.inheritedData?.content || '')
+
+const highlightedMusicPromptSegments = computed(() => {
+  if (!musicPrompt.value) return []
+  return [{
+    text: musicPrompt.value,
+    start: 0,
+    end: musicPrompt.value.length
+  }]
+})
 
 // 监听继承数据，自动填充到提示词
 watch(inheritedText, (newText) => {
@@ -444,14 +454,42 @@ function handleMusicInput(event) {
   const editor = event.target
   const selectionRange = getPromptEditorSelectionRange(editor)
   const text = serializePromptEditorContent(editor)
+  const wasNonEmpty = !!musicPrompt.value
   if (text !== musicPrompt.value) {
     musicPrompt.value = text
   }
   autoResizeTextarea()
-  nextTick(() => {
-    removePromptEditorOrphanTextNodes(editor)
-    restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
-  })
+  const shouldRemountEditor = hasPromptEditorOrphanTextNodes(editor) ||
+    Array.from(editor.childNodes).some(node => node.nodeType === 1 && node.tagName !== 'SPAN')
+
+  if (wasNonEmpty && !text.trim()) {
+    musicPrompt.value = ''
+    promptEditorRenderKey.value += 1
+    nextTick(() => {
+      const nextEditor = promptTextareaRef.value
+      if (nextEditor) {
+        nextEditor.focus()
+        restorePromptEditorSelection(nextEditor, 0, 0)
+      }
+    })
+    return
+  }
+
+  if (shouldRemountEditor) {
+    promptEditorRenderKey.value += 1
+    nextTick(() => {
+      const nextEditor = promptTextareaRef.value
+      if (nextEditor) {
+        nextEditor.focus()
+        restorePromptEditorSelection(nextEditor, selectionRange.start, selectionRange.end)
+      }
+    })
+  } else {
+    nextTick(() => {
+      removePromptEditorOrphanTextNodes(editor)
+      restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+    })
+  }
 }
 
 function insertMusicEditorPlainText(text) {
@@ -1382,31 +1420,7 @@ function startDragConnection(event) {
     return
   }
 
-  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
-  if (!currentNode) return
-  
-  // 计算节点右侧输出端口的画布坐标
-  // 使用响应式的节点尺寸（最准确）
-  const currentNodeWidth = nodeWidth.value || props.data?.width || 420
-  const currentNodeHeight = nodeHeight.value || props.data?.height || 280
-  const labelHeight = 28 // 节点标签高度
-  const labelMarginBottom = 8 // 标签与卡片之间的间距
-  const labelOffset = labelHeight + labelMarginBottom // 标签总偏移（高度 + 间距）
-  const handleOffset = 34 // +号按钮中心相对于节点卡片边缘的偏移量
-  
-  const outputX = currentNode.position.x + currentNodeWidth + handleOffset
-  const outputY = currentNode.position.y + labelOffset + currentNodeHeight / 2
-  
-  console.log('[AudioNode] 开始拖拽连线，起始位置:', { 
-    outputX, 
-    outputY, 
-    nodePosition: currentNode.position,
-    nodeWidth: currentNodeWidth,
-    nodeHeight: currentNodeHeight
-  })
-  
-  // 调用 store 开始拖拽连线，使用节点输出端口位置作为起点
-  canvasStore.startDragConnection(props.id, 'output', { x: outputX, y: outputY })
+  console.warn('[AudioNode] 无法获取右侧 + 按钮中心，取消拖拽连线', { nodeId: props.id })
 }
 
 // 开始调整尺寸
@@ -1828,6 +1842,15 @@ function handleSpeedDropdownClickOutside(event) {
         ></div>
       </div>
       
+      <!-- 输出端口 (隐藏但保留给 Vue Flow 用于边渲染) -->
+      <Handle
+        type="source"
+        :position="Position.Right"
+        id="output"
+        class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
+      />
+
       <!-- 右侧添加按钮 -->
       <button 
         ref="addRightBtnRef"
@@ -1875,6 +1898,7 @@ function handleSpeedDropdownClickOutside(event) {
         <!-- 大文本输入区 -->
         <div class="prompt-area">
           <div
+            :key="promptEditorRenderKey"
             ref="promptTextareaRef"
             class="prompt-textarea"
             :class="{ 'is-empty': !musicPrompt }"
@@ -1889,7 +1913,16 @@ function handleSpeedDropdownClickOutside(event) {
             @compositionend="handleMusicCompositionEnd"
             @mousedown="markPromptTextareaResizeIntent"
             @dblclick.stop
-          >{{ musicPrompt }}</div>
+          >
+            <span
+              v-for="(seg, i) in highlightedMusicPromptSegments"
+              :key="i"
+              class="prompt-highlight-segment"
+              :data-prompt-segment-index="i"
+              :data-prompt-segment-start="seg.start"
+              :data-prompt-segment-end="seg.end"
+            >{{ seg.text }}</span>
+          </div>
         </div>
         
         <!-- 控制栏 -->
@@ -2049,16 +2082,6 @@ function handleSpeedDropdownClickOutside(event) {
       </div>
     </div>
     </Teleport>
-    
-    <!-- 右侧输出端口（隐藏但保留给 Vue Flow 用于边渲染） -->
-    <Handle
-      type="source"
-      :position="Position.Right"
-      id="output"
-      class="node-handle node-handle-hidden"
-      :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
-    />
-
     <Teleport to="body">
       <AudioEditorModal
         v-if="showAudioEditor"

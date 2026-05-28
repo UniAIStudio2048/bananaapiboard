@@ -181,6 +181,7 @@ const lastAutoSave = ref(null)
 const autoSaveEnabled = ref(false) // 只有保存过的工作流才启用自动保存
 let exitPersistInFlight = null
 let lastExitPersistKey = ''
+const AUTO_SAVE_INTERVAL_MS = 60 * 1000
 
 // 后台任务完成后的"立即持久化"防抖控制
 // 原因：updateNodeFromTask 只改前端内存节点，不写库；如果用户不主动保存且未达 5 分钟
@@ -921,9 +922,10 @@ function handleWorkflowSaved(workflow) {
 }
 
 // 自动保存函数
-async function autoSaveWorkflow() {
+async function autoSaveWorkflow(options = {}) {
+  const { force = false, reason = 'autosave' } = options
   // 性能优化: 拖拽中途跳过自动保存，避免在高频事件期间触发昂贵的序列化和网络请求
-  if (_isCanvasDragging) {
+  if (_isCanvasDragging && !force) {
     console.log('[Canvas] 自动保存跳过：节点拖拽中')
     return
   }
@@ -958,7 +960,7 @@ async function autoSaveWorkflow() {
   }
   
   // 如果是已保存的工作流且没有变更，跳过
-  if (currentTab.workflowId && !currentTab.hasChanges) {
+  if (currentTab.workflowId && !currentTab.hasChanges && !force) {
     return
   }
   
@@ -994,7 +996,7 @@ async function autoSaveWorkflow() {
       await saveWorkflowRaw(json)
       canvasStore.markCurrentTabSaved()
       lastAutoSave.value = new Date()
-      console.log('[Canvas] 自动保存成功（更新）:', currentTab.name)
+      console.log(`[Canvas] 自动保存成功（更新, reason=${reason}）:`, currentTab.name)
     } else {
       // 🔧 新建工作流：创建草稿保存
       if (workflowData.nodes.length >= 2) {
@@ -1023,7 +1025,7 @@ async function autoSaveWorkflow() {
           })
           canvasStore.updateCurrentTabName(result.workflow.name)
           lastAutoSave.value = new Date()
-          console.log('[Canvas] 自动保存成功（新建草稿）:', result.workflow.name)
+          console.log(`[Canvas] 自动保存成功（新建草稿, reason=${reason}）:`, result.workflow.name)
           
           // 显示保存成功提示
           displayToast('工作流已自动保存', 'success', 2000)
@@ -1081,18 +1083,17 @@ function stopCanvasFpsMonitor() {
   }
 }
 
-// 启动自动保存定时器（每5分钟）
+// 启动自动保存定时器（后台静默保存已保存工作流进度）
 function startAutoSave() {
   if (autoSaveInterval.value) {
     clearInterval(autoSaveInterval.value)
   }
   
-  // 每5分钟自动保存
   autoSaveInterval.value = setInterval(() => {
-    autoSaveWorkflow()
-  }, 5 * 60 * 1000)
+    autoSaveWorkflow({ reason: 'interval' })
+  }, AUTO_SAVE_INTERVAL_MS)
   
-  console.log('[Canvas] 自动保存已启用，间隔: 5分钟')
+  console.log(`[Canvas] 自动保存已启用，间隔: ${AUTO_SAVE_INTERVAL_MS / 1000}秒`)
 }
 
 // 停止自动保存
@@ -1310,7 +1311,6 @@ function schedulePersistAfterTask(reason = 'background-task') {
     _persistAfterTaskTimer = null
     const currentTab = canvasStore.getCurrentTab?.()
     if (!currentTab) return
-    if (!currentTab.hasChanges) return
     // 注意：拖拽中不再跳过保存。
     // 原本跳过是为了减少拖拽期间的脏写，但任务完成结果（图片/视频 URL）是关键持久化点，
     // 一旦此时被拖拽 + 5s removeCompletedTask 清理叠加，就会出现"刷新后画布丢图"的事故。
@@ -1319,7 +1319,7 @@ function schedulePersistAfterTask(reason = 'background-task') {
       console.log(`[Canvas] 任务完成期间正在拖拽，仍强制落库 (reason=${reason})`)
     }
     console.log(`[Canvas] 任务完成后触发立即持久化 (reason=${reason}, workflowId=${currentTab.workflowId || 'draft'})`)
-    autoSaveWorkflow().catch(err => {
+    autoSaveWorkflow({ force: true, reason }).catch(err => {
       console.warn('[Canvas] 任务完成后立即持久化失败:', err?.message || err)
     })
   }, PERSIST_AFTER_TASK_DEBOUNCE_MS)
@@ -1538,7 +1538,7 @@ function saveCanvasExitState(reason = 'exit') {
   console.log(`[Canvas] ${reason} 保存工作流标签会话和最近历史`)
 
   let cleanedData = null
-  if (currentTab?.workflowId && currentTab?.hasChanges) {
+  if (currentTab?.workflowId) {
     const hasUploading = canvasStore.nodes.some(n => n.data?.isUploading)
     if (hasUploading) {
       console.log(`[Canvas] ${reason} 跳过服务器保存：有文件正在上传`)
@@ -2668,7 +2668,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  persistCurrentWorkflowOnExit('unmount')
+  persistCurrentWorkflowOnExit('unmounted')
 
   document.removeEventListener('keydown', handleKeyDown)
   window.removeEventListener('beforeunload', handleBeforeUnload)

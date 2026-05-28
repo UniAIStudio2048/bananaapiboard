@@ -58,6 +58,7 @@ const selectedHistoryId = ref(null)
 const savedDescriptionSaveTimers = new Map()
 const loadedWorkflowCache = new Map()
 let workflowSelectionClickTimer = null
+let workflowListLoadToken = 0
 
 // ========== 工作流模板数据 ==========
 const templates = ref([])
@@ -70,6 +71,7 @@ const templatesCached = ref(false)
 const lastWorkflowsLoad = ref(0)
 const lastTemplatesLoad = ref(0)
 const CACHE_DURATION = 60000 // 缓存有效期 60 秒
+const WORKFLOW_LIST_PAGE_SIZE = 500 // 元数据列表不包含节点详情，可用大页减少面板打开时的请求数
 const isContentReady = ref(false) // 延迟渲染标记
 
 // 团队空间实时同步
@@ -308,9 +310,43 @@ const filteredTemplates = computed(() => {
 
 // ========== 加载函数 ==========
 
+async function loadRemainingWorkflowPages({ token, firstPageList, totalPages, pageSize, spaceParams }) {
+  if (totalPages <= 1) return
+  try {
+    const pageNumbers = Array.from({ length: totalPages - 1 }, (_, index) => index + 2)
+    const pageResults = await Promise.all(
+      pageNumbers.map(page => getWorkflowList({ page, pageSize, ...spaceParams }))
+    )
+    if (token !== workflowListLoadToken) return
+    workflows.value = [
+      ...firstPageList,
+      ...pageResults.flatMap(result => result.list || [])
+    ]
+    workflowsCached.value = true
+    console.log('[WorkflowPanel] 后台补齐工作流:', workflows.value.length, '个')
+  } catch (error) {
+    console.error('[WorkflowPanel] 后台补齐工作流失败:', error)
+  }
+}
+
+async function loadWorkflowProjects({ token, spaceParams }) {
+  try {
+    const projResult = await getProjectList({
+      spaceType: spaceParams.spaceType,
+      teamId: spaceParams.teamId
+    }).catch(() => ({ data: [] }))
+    if (token !== workflowListLoadToken) return
+    projects.value = projResult.data || []
+    console.log('[WorkflowPanel] 加载项目:', projects.value.length, '个')
+  } catch (error) {
+    console.error('[WorkflowPanel] 加载项目失败:', error)
+  }
+}
+
 // 加载我的工作流列表（带缓存）
 async function loadWorkflows(forceRefresh = false) {
   const now = Date.now()
+  const loadToken = ++workflowListLoadToken
 
   // 如果有缓存且未过期，使用缓存（但空间切换时需要强制刷新）
   if (!forceRefresh && workflowsCached.value && (now - lastWorkflowsLoad.value < CACHE_DURATION)) {
@@ -325,29 +361,29 @@ async function loadWorkflows(forceRefresh = false) {
   loading.value = true
   try {
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
-    const pageSize = 50
-    const [wfResult, projResult] = await Promise.all([
-      getWorkflowList({ page: 1, pageSize, ...spaceParams }),
-      getProjectList({
-        spaceType: spaceParams.spaceType,
-        teamId: spaceParams.teamId
-      }).catch(() => ({ data: [] }))
-    ])
-    const mergedWorkflows = wfResult.list || []
-    const total = Number(wfResult.pagination?.total ?? mergedWorkflows.length)
+    const pageSize = WORKFLOW_LIST_PAGE_SIZE
+    const wfResult = await getWorkflowList({ page: 1, pageSize, ...spaceParams })
+    if (loadToken !== workflowListLoadToken) return
+    const firstPageList = wfResult.list || []
+    const total = Number(wfResult.pagination?.total ?? firstPageList.length)
     const totalPages = Math.ceil(total / pageSize)
-
-    for (let page = 2; page <= totalPages; page += 1) {
-      const pageResult = await getWorkflowList({ page: page, pageSize: pageSize, ...spaceParams })
-      mergedWorkflows.push(...(pageResult.list || []))
-    }
-
-    workflows.value = mergedWorkflows
-    workflowsTotal.value = Number(wfResult.pagination?.total ?? workflows.value.length)
-    projects.value = projResult.data || []
+    workflows.value = firstPageList
+    workflowsTotal.value = total
     workflowsCached.value = true
     lastWorkflowsLoad.value = now
-    console.log('[WorkflowPanel] 加载工作流:', workflows.value.length, '个, 项目:', projects.value.length, '个')
+    console.log('[WorkflowPanel] 加载工作流:', workflows.value.length, '个')
+
+    loadWorkflowProjects({
+      token: loadToken,
+      spaceParams
+    })
+    loadRemainingWorkflowPages({
+      token: loadToken,
+      firstPageList,
+      totalPages,
+      pageSize,
+      spaceParams
+    })
 
     if (workflows.value.length === 0 && historyWorkflows.value.length === 0 && activeTab.value === 'my') {
       activeTab.value = 'templates'
