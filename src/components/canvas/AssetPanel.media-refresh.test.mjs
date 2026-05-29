@@ -45,6 +45,12 @@ test('AssetPanel media cards preserve original media ratio and bottom tag filter
   assert.doesNotMatch(assetPanel, /class="tag-filter"/)
 })
 
+test('AssetPanel bottom tag bar has explicit light theme colors', () => {
+  assert.match(assetPanel, /:root\.canvas-theme-light \.asset-panel \.asset-tag-bar-bottom\s*\{[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.92\)/)
+  assert.match(assetPanel, /:root\.canvas-theme-light \.asset-panel \.tag-chip\s*\{[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.72\)/)
+  assert.match(assetPanel, /:root\.canvas-theme-light \.asset-panel \.tag-manage-btn\s*\{[\s\S]*?background:\s*rgba\(255,\s*255,\s*255,\s*0\.78\)/)
+})
+
 test('AssetPreviewModal constrains cached preview images without cropping', () => {
   const previewModal = readFileSync(new URL('./AssetPreviewModal.vue', import.meta.url), 'utf8')
   assert.match(previewModal, /class="preview-back-btn"[\s\S]*?>[\s\S]*返回/)

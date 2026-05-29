@@ -1572,12 +1572,17 @@ async function handleQuickSeedanceReview() {
 
     const assetId = result.quickAsset?.assetId || result.asset?.Id || result.Id
     if (!assetId) throw new Error('快捷资产接口返回数据异常')
+    const quickProviderType = result.quickAsset?.providerType
+    const isQuickOpenApiPro = quickProviderType === 'seedance_openapi_pro' || quickProviderType === 'bytefor'
+    const initialFaceCode = result.quickAsset?.faceCode || result.asset?.FaceCode || result.asset?.faceCode || assetId
 
     updateSeedanceQuickAsset({
       assetId,
-      assetUri: result.quickAsset?.assetUri || `asset://${assetId}`,
+      assetUri: result.quickAsset?.assetUri || (isQuickOpenApiPro ? `face:${initialFaceCode}` : `asset://${assetId}`),
       groupId: result.quickAsset?.groupId || result.asset?.GroupId,
       status: result.quickAsset?.status || 'Processing',
+      providerType: quickProviderType,
+      faceCode: isQuickOpenApiPro ? initialFaceCode : undefined,
       assetUrl: result.asset?.URL || url,
       reviewedAt: null,
       expiresAt: result.quickAsset?.expiresAt,
@@ -1587,11 +1592,14 @@ async function handleQuickSeedanceReview() {
 
     const { promise } = pollAssetStatus(assetId, { interval: 5000, timeout: 2700000 })
     promise.then((finalAsset) => {
+      const finalFaceCode = finalAsset.FaceCode || finalAsset.faceCode || initialFaceCode
       updateSeedanceQuickAsset({
         assetId: finalAsset.Id || assetId,
-        assetUri: `asset://${finalAsset.Id || assetId}`,
+        assetUri: isQuickOpenApiPro ? `face:${finalFaceCode}` : `asset://${finalAsset.Id || assetId}`,
         groupId: finalAsset.GroupId || result.quickAsset?.groupId || result.asset?.GroupId,
         status: finalAsset.Status || 'Active',
+        providerType: quickProviderType,
+        faceCode: isQuickOpenApiPro ? finalFaceCode : undefined,
         assetUrl: finalAsset.URL || url,
         reviewedAt: new Date().toISOString(),
         expiresAt: result.quickAsset?.expiresAt

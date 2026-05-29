@@ -13,3 +13,9 @@ test('ImageNode exposes quick Seedance review button and approved/expired badge'
   assert.match(source, /已过审/)
   assert.match(source, /已失效/)
 })
+
+test('ImageNode preserves face URI for quick review assets from OpenAPI Pro channels', () => {
+  assert.match(source, /const quickProviderType = result\.quickAsset\?\.providerType/)
+  assert.match(source, /const isQuickOpenApiPro = quickProviderType === 'seedance_openapi_pro' \|\| quickProviderType === 'bytefor'/)
+  assert.match(source, /assetUri: isQuickOpenApiPro \? `face:\$\{finalFaceCode\}` : `asset:\/\/\$\{finalAsset\.Id \|\| assetId\}`/)
+})

@@ -4464,20 +4464,49 @@ onUnmounted(() => {
   color: #6d28d9 !important;
 }
 
+:root.canvas-theme-light .asset-panel .asset-tag-bar-bottom {
+  background: rgba(255, 255, 255, 0.92) !important;
+  border-top-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow: 0 -10px 24px rgba(255, 255, 255, 0.78) !important;
+}
+
 :root.canvas-theme-light .asset-panel .tag-chip {
+  background: rgba(255, 255, 255, 0.72) !important;
   border-color: rgba(0, 0, 0, 0.08) !important;
   color: rgba(0, 0, 0, 0.5) !important;
 }
 
 :root.canvas-theme-light .asset-panel .tag-chip:hover {
+  background: rgba(255, 255, 255, 0.92) !important;
   border-color: rgba(0, 0, 0, 0.15) !important;
   color: rgba(0, 0, 0, 0.8) !important;
 }
 
 :root.canvas-theme-light .asset-panel .tag-chip.active {
-  background: rgba(0, 0, 0, 0.08) !important;
-  border-color: rgba(0, 0, 0, 0.15) !important;
-  color: #1c1917 !important;
+  background: rgba(124, 58, 237, 0.12) !important;
+  border-color: rgba(124, 58, 237, 0.32) !important;
+  color: #7c3aed !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-chip .tag-count {
+  background: rgba(0, 0, 0, 0.07) !important;
+  color: rgba(0, 0, 0, 0.56) !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-chip.active .tag-count {
+  background: rgba(124, 58, 237, 0.18) !important;
+  color: #6d28d9 !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-manage-btn {
+  background: rgba(255, 255, 255, 0.78) !important;
+  border-color: rgba(124, 58, 237, 0.42) !important;
+  color: #7c3aed !important;
+}
+
+:root.canvas-theme-light .asset-panel .tag-manage-btn:hover {
+  background: rgba(124, 58, 237, 0.1) !important;
+  border-color: rgba(124, 58, 237, 0.5) !important;
 }
 
 /* 搜索栏 */
