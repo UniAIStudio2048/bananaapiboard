@@ -1327,7 +1327,17 @@ function schedulePersistAfterTask(reason = 'background-task') {
 
 // 根据任务更新节点状态
 function updateNodeFromTask(task) {
-  const node = canvasStore.nodes.find(n => n.id === task.nodeId)
+  const activeNode = canvasStore.nodes.find(n => n.id === task.nodeId)
+  const inactiveTarget = activeNode ? null : canvasStore.findInactiveWorkflowTabNode(task.nodeId)
+  const node = activeNode || inactiveTarget?.node || null
+  const applyNodePatch = (patch) => {
+    if (activeNode) {
+      canvasStore.updateNodeData(task.nodeId, patch)
+      return { active: true }
+    }
+    return canvasStore.updateInactiveWorkflowTabNodeData(task.nodeId, patch)
+  }
+
   if (!node) {
     console.log(`[Canvas] 找不到任务关联的节点 (可能已被删除): ${task.nodeId}, 触发历史面板刷新作为兜底`)
     // 关键兜底：节点已删除时，生成结果仍然写入了后端历史表（image_history / video_history / music_history），
@@ -1357,7 +1367,7 @@ function updateNodeFromTask(task) {
       const singleUrl = getTaskMediaUrl(result, 'image') || result.url || (Array.isArray(result.urls) ? result.urls[0] : null)
       const urls = groupUrls.length > 0 ? groupUrls : (singleUrl ? [singleUrl] : [])
       if (urls.length > 0) {
-        canvasStore.updateNodeData(task.nodeId, {
+        applyNodePatch({
           status: 'success',
           progress: null,
           taskId: task.taskId,
@@ -1369,13 +1379,13 @@ function updateNodeFromTask(task) {
         console.log(`[Canvas] 图像任务完成，节点 ${task.nodeId} 已更新（${urls.length} 张）`)
       } else {
         console.warn(`[Canvas] 图像任务完成但未提取到 URL，保留 taskId: ${task.taskId}`)
-        canvasStore.updateNodeData(task.nodeId, { taskId: task.taskId })
+        applyNodePatch({ taskId: task.taskId })
       }
     } else if (task.type === 'video-hd') {
       // 视频高清任务完成
       const videoUrl = getTaskMediaUrl(result, 'video')
       if (videoUrl) {
-        canvasStore.updateNodeData(task.nodeId, {
+        applyNodePatch({
           status: 'success',
           progress: null,
           taskId: task.taskId,
@@ -1388,12 +1398,12 @@ function updateNodeFromTask(task) {
         })
         console.log(`[Canvas] 高清任务完成，节点 ${task.nodeId} 已更新`)
       } else {
-        canvasStore.updateNodeData(task.nodeId, { taskId: task.taskId })
+        applyNodePatch({ taskId: task.taskId })
       }
     } else if (task.type === 'image-hd') {
       const imageUrl = getTaskMediaUrl(result, 'image') || result.outputUrl || result.url
       if (imageUrl) {
-        canvasStore.updateNodeData(task.nodeId, {
+        applyNodePatch({
           status: 'success',
           progress: null,
           taskId: task.taskId,
@@ -1406,12 +1416,12 @@ function updateNodeFromTask(task) {
         })
         console.log(`[Canvas] 图片高清任务完成，节点 ${task.nodeId} 已更新`)
       } else {
-        canvasStore.updateNodeData(task.nodeId, { taskId: task.taskId })
+        applyNodePatch({ taskId: task.taskId })
       }
     } else if (task.type === 'image-panorama') {
       const imageUrl = getTaskMediaUrl(result, 'image') || result.outputUrl || result.url
       if (imageUrl) {
-        canvasStore.updateNodeData(task.nodeId, {
+        applyNodePatch({
           status: 'success',
           progress: null,
           taskId: task.taskId,
@@ -1424,12 +1434,12 @@ function updateNodeFromTask(task) {
         })
         console.log(`[Canvas] 生成全景图任务完成，节点 ${task.nodeId} 已更新`)
       } else {
-        canvasStore.updateNodeData(task.nodeId, { taskId: task.taskId })
+        applyNodePatch({ taskId: task.taskId })
       }
     } else if (task.type === 'image-cutout') {
       const imageUrl = getTaskMediaUrl(result, 'image') || result.outputUrl || result.url
       if (imageUrl) {
-        canvasStore.updateNodeData(task.nodeId, {
+        applyNodePatch({
           status: 'success',
           progress: null,
           taskId: task.taskId,
@@ -1443,13 +1453,13 @@ function updateNodeFromTask(task) {
         })
         console.log(`[Canvas] 图片抠图任务完成，节点 ${task.nodeId} 已更新`)
       } else {
-        canvasStore.updateNodeData(task.nodeId, { taskId: task.taskId })
+        applyNodePatch({ taskId: task.taskId })
       }
     } else if (task.type === 'audio-edit') {
       // 音频编辑任务完成
       const audioUrl = getTaskMediaUrl(result, 'audio') || result.audio_url || result.outputUrl || result.url
       if (audioUrl) {
-        canvasStore.updateNodeData(task.nodeId, {
+        applyNodePatch({
           status: 'success',
           progress: null,
           taskId: task.taskId,
@@ -1460,7 +1470,7 @@ function updateNodeFromTask(task) {
         })
         console.log(`[Canvas] 音频编辑任务完成，节点 ${task.nodeId} 已更新`)
       } else {
-        canvasStore.updateNodeData(task.nodeId, { taskId: task.taskId })
+        applyNodePatch({ taskId: task.taskId })
       }
     } else if (task.type === 'video') {
       // 视频任务完成。
@@ -1469,7 +1479,7 @@ function updateNodeFromTask(task) {
       // 状态写 'success'（与 VideoNode 节点级处理对齐，否则 success 样式不生效）。
       const videoUrl = getTaskMediaUrl(result, 'video')
       if (videoUrl) {
-        canvasStore.updateNodeData(task.nodeId, {
+        applyNodePatch({
           status: 'success',
           progress: null,
           taskId: task.taskId,
@@ -1484,7 +1494,7 @@ function updateNodeFromTask(task) {
         console.log(`[Canvas] 视频任务完成，节点 ${task.nodeId} 已更新`)
       } else {
         console.warn(`[Canvas] 视频任务完成但未提取到 URL，保留 taskId 等待节点级兜底重试: ${task.taskId}`)
-        canvasStore.updateNodeData(task.nodeId, {
+        applyNodePatch({
           taskId: task.taskId,
           soraTaskId: result?.task_id || task.taskId
         })
@@ -1497,7 +1507,7 @@ function updateNodeFromTask(task) {
     const errorMsg = task.type === 'image-cutout'
       ? '抠图处理失败'
       : (task.type === 'image-panorama' ? '生成全景图失败' : ((task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理失败' : '任务执行失败'))
-    canvasStore.updateNodeData(task.nodeId, {
+    applyNodePatch({
       status: 'error',
       progress: null,
       error: withNoChargeNotice(task.error || errorMsg, errorMsg)
@@ -1507,7 +1517,7 @@ function updateNodeFromTask(task) {
     const progressText = task.type === 'image-cutout'
       ? '抠图处理中...'
       : (task.type === 'image-panorama' ? '全景图生成中...' : ((task.type === 'video-hd' || task.type === 'image-hd') ? '高清处理中...' : task.progress))
-    canvasStore.updateNodeData(task.nodeId, {
+    applyNodePatch({
       status: 'processing',
       progress: progressText || task.progress
     })

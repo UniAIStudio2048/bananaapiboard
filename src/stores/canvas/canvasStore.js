@@ -12,6 +12,7 @@ import { sanitizeNodesForHistoryRestore } from './historyRestore'
 import { createOpHistory } from './opHistory'
 import { getGlobalNodeDataCache } from './nodeDataCache'
 import { buildNodeDataWithRememberedParameters } from './nodeParameterMemory'
+import { applyNodeDataPatchToTabs } from './tabNodePatch'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -293,6 +294,22 @@ export const useCanvasStore = defineStore('canvas', () => {
         markCurrentTabChanged()
       }
     }
+  }
+
+  function findInactiveWorkflowTabNode(nodeId) {
+    if (!nodeId) return null
+    for (const tab of workflowTabs.value) {
+      if (!tab || tab.id === activeTabId.value) continue
+      const node = Array.isArray(tab.nodes)
+        ? tab.nodes.find(item => item?.id === nodeId)
+        : null
+      if (node) return { tab, node }
+    }
+    return null
+  }
+
+  function updateInactiveWorkflowTabNodeData(nodeId, data) {
+    return applyNodeDataPatchToTabs(workflowTabs.value, activeTabId.value, nodeId, data)
   }
   
   /**
@@ -2709,6 +2726,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 节点操作
     addNode,
     updateNodeData,
+    findInactiveWorkflowTabNode,
+    updateInactiveWorkflowTabNodeData,
     updateNodePosition,
     addNodeToGroup,
     removeNode,
