@@ -10,6 +10,7 @@ assert.match(source, /from '\.\/imageEditSession\.js'/, 'ImageEditMode should us
 assert.match(source, /node\??\.data\?\.editSession/, 'ImageEditMode should read persisted edit sessions from node data')
 assert.match(source, /async function persistEditSession\(/, 'ImageEditMode should persist edit sessions after save')
 assert.match(source, /editSession: persistedSession/, 'ImageEditMode should write persisted sessions back to node data')
+assert.match(source, /currentTool\.value === 'enhance'[\s\S]*canvasStore\.exitEditMode\(\)/, 'ImageEditMode should skip cancel-time session capture for color mixer exits')
 assert.doesNotMatch(source, /clearNodeCache\(nodeId\)/, 'ImageEditMode should not clear the saved session after save')
 
 console.log('ImageEditMode session tests passed')

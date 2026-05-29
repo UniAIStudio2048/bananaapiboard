@@ -27,7 +27,7 @@ import {
   getMaskBrushFeatherRadius,
   normalizeMaskBrushSettings
 } from './nativeMaskBrushSettings.js'
-import { applyLiquifyPush } from './nativeImageLiquify.js'
+import { applyLiquifyPush, getLiquifyDirtyRect } from './nativeImageLiquify.js'
 import { getProxiedImageUrl } from '@/utils/canvasThumbnail'
 
 const props = defineProps({
@@ -59,11 +59,13 @@ const emit = defineEmits(['save', 'cancel', 'restore-failed'])
 // DOM 引用
 const containerRef = ref(null)
 const mainCanvasRef = ref(null)
+const filterPreviewCanvasRef = ref(null)
 const overlayCanvasRef = ref(null)
 const maskCanvasRef = ref(null) // 蒙版画布（独立图层）
 
 // 状态
 const isLoading = ref(true)
+const isShowingFilterPreview = ref(false)
 const currentMode = ref('')
 const mainCtx = ref(null)
 const overlayCtx = ref(null)
@@ -96,6 +98,8 @@ const isLiquifying = ref(false)
 const liquifyLastPoint = ref(null)
 const liquifyChanged = ref(false)
 const liquifyResetSnapshot = ref(null)
+let scheduledLiquifyFrame = null
+let pendingLiquifyPoint = null
 
 // 工具设置
 const brushSize = ref(10)
@@ -131,6 +135,11 @@ function normalizeFilters(value = {}) {
 const filters = ref(normalizeFilters())
 const activeMixerTab = ref('hue')
 const mixerAdjustmentKeys = ['hue', 'saturation', 'lightness']
+const hasPendingFilterCommit = ref(false)
+let scheduledFilterPreviewFrame = null
+let scheduledFilterPreviewTimeout = null
+let lastFilterPreviewAt = 0
+const filterPreviewMinIntervalMs = 33
 
 const mixerColorChannels = [
   {
@@ -411,11 +420,113 @@ function hasHslMixerAdjustments() {
   })
 }
 
-function applyColorMixerToCanvas() {
-  if (!mainCtx.value || !mainCanvasRef.value || !hasHslMixerAdjustments()) return
+function getActiveMixerChannels() {
+  return mixerColorChannels
+    .map(channel => {
+      const values = hslMixer.value[channel.id] || {}
+      return {
+        ...channel,
+        values: {
+          hue: Number(values.hue || 0),
+          saturation: Number(values.saturation || 0),
+          lightness: Number(values.lightness || 0)
+        }
+      }
+    })
+    .filter(channel => mixerAdjustmentKeys.some(key => channel.values[key] !== 0))
+}
 
-  const ctx = mainCtx.value
-  const canvas = mainCanvasRef.value
+function hideFilterPreview() {
+  isShowingFilterPreview.value = false
+}
+
+function cancelScheduledFilterPreview() {
+  if (scheduledFilterPreviewFrame !== null) {
+    cancelAnimationFrame(scheduledFilterPreviewFrame)
+    scheduledFilterPreviewFrame = null
+  }
+  if (scheduledFilterPreviewTimeout !== null) {
+    clearTimeout(scheduledFilterPreviewTimeout)
+    scheduledFilterPreviewTimeout = null
+  }
+}
+
+function runScheduledFilterPreview() {
+  scheduledFilterPreviewFrame = null
+  lastFilterPreviewAt = performance.now()
+  drawFastFilterPreview()
+}
+
+function scheduleFilterPreview() {
+  if (scheduledFilterPreviewFrame !== null || scheduledFilterPreviewTimeout !== null) return
+
+  const elapsed = performance.now() - lastFilterPreviewAt
+  const delay = Math.max(0, filterPreviewMinIntervalMs - elapsed)
+
+  if (delay > 0) {
+    scheduledFilterPreviewTimeout = setTimeout(() => {
+      scheduledFilterPreviewTimeout = null
+      scheduledFilterPreviewFrame = requestAnimationFrame(runScheduledFilterPreview)
+    }, delay)
+    return
+  }
+
+  scheduledFilterPreviewFrame = requestAnimationFrame(runScheduledFilterPreview)
+}
+
+function getFilterPreviewSize() {
+  const maxPreviewPixels = 420 * 420
+  let width = Math.max(1, Math.round(displayWidth.value || canvasWidth.value))
+  let height = Math.max(1, Math.round(displayHeight.value || canvasHeight.value))
+  const pixels = width * height
+
+  if (pixels > maxPreviewPixels) {
+    const scale = Math.sqrt(maxPreviewPixels / pixels)
+    width = Math.max(1, Math.round(width * scale))
+    height = Math.max(1, Math.round(height * scale))
+  }
+
+  return { width, height }
+}
+
+function drawBaseImageToContext(ctx, width, height) {
+  ctx.clearRect(0, 0, width, height)
+  ctx.save()
+  ctx.translate(width / 2, height / 2)
+  ctx.rotate((rotation.value * Math.PI) / 180)
+  ctx.scale(flipX.value ? -1 : 1, flipY.value ? -1 : 1)
+  ctx.translate(-width / 2, -height / 2)
+  ctx.filter = 'none'
+  ctx.drawImage(originalImage, 0, 0, width, height)
+  ctx.restore()
+}
+
+function drawFastFilterPreview() {
+  if (!filterPreviewCanvasRef.value) return
+
+  if (!hasHslMixerAdjustments()) {
+    hideFilterPreview()
+    return
+  }
+
+  const { width, height } = getFilterPreviewSize()
+  const previewCanvas = filterPreviewCanvasRef.value
+  previewCanvas.width = width
+  previewCanvas.height = height
+  const previewCtx = previewCanvas.getContext('2d', { willReadFrequently: true })
+  if (!previewCtx) return
+
+  drawBaseImageToContext(previewCtx, width, height)
+  applyColorMixerToCanvas(previewCtx, previewCanvas)
+  isShowingFilterPreview.value = true
+}
+
+function applyColorMixerToCanvas(ctx = mainCtx.value, canvas = mainCanvasRef.value) {
+  if (!ctx || !canvas || !hasHslMixerAdjustments()) return
+
+  const activeChannels = getActiveMixerChannels()
+  if (activeChannels.length === 0) return
+
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height)
   const data = imageData.data
 
@@ -430,15 +541,14 @@ function applyColorMixerToCanvas() {
     let lightnessOffset = 0
     let totalWeight = 0
 
-    mixerColorChannels.forEach(channel => {
+    for (const channel of activeChannels) {
       const weight = getChannelWeight(hsl.h, channel)
-      if (weight <= 0) return
-      const values = hslMixer.value[channel.id]
-      hueOffset += Number(values?.hue || 0) * weight
-      saturationOffset += Number(values?.saturation || 0) * weight
-      lightnessOffset += Number(values?.lightness || 0) * weight
+      if (weight <= 0) continue
+      hueOffset += channel.values.hue * weight
+      saturationOffset += channel.values.saturation * weight
+      lightnessOffset += channel.values.lightness * weight
       totalWeight += weight
-    })
+    }
 
     if (totalWeight <= 0) continue
 
@@ -635,6 +745,7 @@ defineExpose({
 // ==================== 初始化 ====================
 
 async function init() {
+  cancelScheduledFilterPreview()
   isLoading.value = true
 
   try {
@@ -756,25 +867,11 @@ function renderMaskPreview() {
 function drawImage() {
   if (!mainCtx.value) return
 
+  hideFilterPreview()
   const ctx = mainCtx.value
   const canvas = mainCanvasRef.value
 
-  ctx.clearRect(0, 0, canvas.width, canvas.height)
-  ctx.save()
-
-  // 应用变换
-  ctx.translate(canvas.width / 2, canvas.height / 2)
-  ctx.rotate((rotation.value * Math.PI) / 180)
-  ctx.scale(flipX.value ? -1 : 1, flipY.value ? -1 : 1)
-  ctx.translate(-canvas.width / 2, -canvas.height / 2)
-
-  // 应用调色混色器
-  ctx.filter = 'none'
-
-  // 绘制图片
-  ctx.drawImage(originalImage, 0, 0, canvas.width, canvas.height)
-
-  ctx.restore()
+  drawBaseImageToContext(ctx, canvas.width, canvas.height)
   applyColorMixerToCanvas()
 }
 
@@ -840,6 +937,7 @@ function activateMode(mode) {
 
   currentMode.value = mode
   if (mode !== 'filter') {
+    commitPendingFilters()
     activeMixerTab.value = 'hue'
   }
   fitDisplaySize(canvasWidth.value, canvasHeight.value)
@@ -1578,12 +1676,29 @@ function rotateRight() {
 // ==================== 调色混色器 ====================
 
 function previewFilters() {
+  hasPendingFilterCommit.value = true
+  scheduleFilterPreview()
+}
+
+function settleFilterPreview() {
+  cancelScheduledFilterPreview()
+  hasPendingFilterCommit.value = true
+  drawFastFilterPreview()
+}
+
+function commitPendingFilters({ saveHistory = true } = {}) {
+  if (!hasPendingFilterCommit.value) return
+  cancelScheduledFilterPreview()
   drawImage()
+  if (saveHistory) {
+    saveToHistory()
+  }
+  hasPendingFilterCommit.value = false
 }
 
 function commitFilters() {
-  drawImage()
-  saveToHistory()
+  hasPendingFilterCommit.value = true
+  commitPendingFilters()
 }
 
 function resetFilters() {
@@ -1596,6 +1711,28 @@ function resetMixerControl(channelId, key = activeMixerTab.value) {
   if (!hslMixer.value[channelId]) return
   hslMixer.value[channelId][key] = 0
   commitFilters()
+}
+
+function updateMixerControlValue(channelId, key, value, shouldCommit = false) {
+  if (!hslMixer.value[channelId]) return
+
+  const numericValue = Number(value)
+  const nextValue = Number.isFinite(numericValue)
+    ? clamp(numericValue, activeMixerRange.value.min, activeMixerRange.value.max)
+    : 0
+
+  hslMixer.value[channelId][key] = nextValue
+
+  if (shouldCommit) {
+    settleFilterPreview()
+  } else {
+    previewFilters()
+  }
+}
+
+function nudgeMixerControl(channelId, key = activeMixerTab.value, amount = activeMixerRange.value.step) {
+  const currentValue = Number(hslMixer.value[channelId]?.[key] || 0)
+  updateMixerControlValue(channelId, key, currentValue + amount, true)
 }
 
 function getLiquifyPressureValue() {
@@ -1617,6 +1754,7 @@ function setMixerTab(tabId) {
   clearOverlay()
 
   if (tabId === 'liquify' && !wasLiquifyActive) {
+    commitPendingFilters()
     liquifyResetSnapshot.value = mainCanvasRef.value?.toDataURL('image/png') || null
   }
 }
@@ -1631,11 +1769,9 @@ function startLiquify(e) {
   liquifyLastPoint.value = { x, y }
 }
 
-function liquifyMove(e) {
-  if (!isLiquifying.value || !isLiquifyActive.value) return
+function processLiquifyMove(currentPoint) {
   if (!mainCtx.value || !liquifyLastPoint.value) return
 
-  const currentPoint = getCanvasCoords(e)
   const movement = Math.hypot(
     currentPoint.x - liquifyLastPoint.value.x,
     currentPoint.y - liquifyLastPoint.value.y
@@ -1643,22 +1779,66 @@ function liquifyMove(e) {
 
   if (!movement) return
 
-  const sourceData = mainCtx.value.getImageData(0, 0, canvasWidth.value, canvasHeight.value)
+  const radius = scaleUiSize(liquifyBrushSize.value)
+  const dirtyRect = getLiquifyDirtyRect({
+    previous: liquifyLastPoint.value,
+    current: currentPoint,
+    radius
+  }, canvasWidth.value, canvasHeight.value)
+
+  if (dirtyRect.width <= 0 || dirtyRect.height <= 0) return
+
+  const sourceData = mainCtx.value.getImageData(dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height)
   const liquified = applyLiquifyPush(sourceData, {
     previous: liquifyLastPoint.value,
     current: currentPoint,
-    radius: scaleUiSize(liquifyBrushSize.value),
-    pressure: getLiquifyPressureValue()
+    radius,
+    pressure: getLiquifyPressureValue(),
+    offsetX: dirtyRect.x,
+    offsetY: dirtyRect.y
   })
 
-  mainCtx.value.putImageData(new ImageData(liquified.data, liquified.width, liquified.height), 0, 0)
+  mainCtx.value.putImageData(new ImageData(liquified.data, liquified.width, liquified.height), dirtyRect.x, dirtyRect.y)
   liquifyLastPoint.value = { x: currentPoint.x, y: currentPoint.y }
   liquifyChanged.value = true
+}
+
+function runScheduledLiquifyMove() {
+  scheduledLiquifyFrame = null
+  const currentPoint = pendingLiquifyPoint
+  pendingLiquifyPoint = null
+  if (!currentPoint || !isLiquifying.value || !isLiquifyActive.value) return
+  processLiquifyMove(currentPoint)
+}
+
+function flushPendingLiquifyMove() {
+  if (scheduledLiquifyFrame !== null) {
+    cancelAnimationFrame(scheduledLiquifyFrame)
+    scheduledLiquifyFrame = null
+  }
+
+  if (!pendingLiquifyPoint) return
+
+  const currentPoint = pendingLiquifyPoint
+  pendingLiquifyPoint = null
+  if (isLiquifying.value && isLiquifyActive.value) {
+    processLiquifyMove(currentPoint)
+  }
+}
+
+function liquifyMove(e) {
+  if (!isLiquifying.value || !isLiquifyActive.value) return
+  if (!mainCtx.value || !liquifyLastPoint.value) return
+
+  pendingLiquifyPoint = getCanvasCoords(e)
+  if (scheduledLiquifyFrame !== null) return
+  scheduledLiquifyFrame = requestAnimationFrame(runScheduledLiquifyMove)
 }
 
 function endLiquify() {
   if (!isLiquifying.value) return
 
+  flushPendingLiquifyMove()
   isLiquifying.value = false
   liquifyLastPoint.value = null
 
@@ -1702,6 +1882,7 @@ function resetAll() {
 
 function save() {
   try {
+    commitPendingFilters({ saveHistory: false })
     const imageDataUrl = mainCanvasRef.value.toDataURL(
       exportInfo.value.mimeType,
       exportInfo.value.quality
@@ -1745,6 +1926,9 @@ function save() {
 }
 
 function cancel() {
+  cancelScheduledFilterPreview()
+  hideFilterPreview()
+  hasPendingFilterCommit.value = false
   emit('cancel')
 }
 
@@ -1787,8 +1971,9 @@ function updateBrushCursor(e) {
 }
 
 // 鼠标进入画布
-function handleMouseEnter() {
+function handleMouseEnter(e) {
   if (currentMode.value === 'draw' || currentMode.value === 'mask' || currentMode.value === 'spot-heal' || currentMode.value === 'annotate' || isLiquifyActive.value) {
+    updateBrushCursor(e)
     showBrushCursor.value = true
   }
 }
@@ -1853,6 +2038,8 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  cancelScheduledFilterPreview()
+  flushPendingLiquifyMove()
   window.removeEventListener('mouseup', handleMouseUp)
 })
 
@@ -2352,6 +2539,14 @@ watch(() => props.imageUrl, (newUrl) => {
               @click="handleClick"
             ></canvas>
 
+            <!-- 调色拖动预览画布（低分辨率，仅用于交互预览） -->
+            <canvas
+              v-show="isShowingFilterPreview"
+              ref="filterPreviewCanvasRef"
+              class="filter-preview-canvas"
+              :style="{ width: displayWidth + 'px', height: displayHeight + 'px' }"
+            ></canvas>
+
             <!-- 蒙版画布（隐藏，仅用于存储蒙版数据） -->
             <canvas
               ref="maskCanvasRef"
@@ -2373,27 +2568,29 @@ watch(() => props.imageUrl, (newUrl) => {
               @click="handleClick"
             ></canvas>
 
-            <!-- 笔刷光标 -->
-            <div
-              v-if="showBrushCursor && (currentMode === 'draw' || currentMode === 'mask' || currentMode === 'spot-heal' || isLiquifyActive)"
-              class="brush-cursor"
-              :style="{
-                left: cursorPosition.x + 'px',
-                top: cursorPosition.y + 'px',
-                width: (isLiquifyActive ? liquifyBrushSize : brushSize) + 'px',
-                height: (isLiquifyActive ? liquifyBrushSize : brushSize) + 'px'
-              }"
-            ></div>
+            <div class="cursor-layer">
+              <!-- 笔刷光标 -->
+              <div
+                v-if="showBrushCursor && (currentMode === 'draw' || currentMode === 'mask' || currentMode === 'spot-heal' || isLiquifyActive)"
+                class="brush-cursor"
+                :style="{
+                  left: cursorPosition.x + 'px',
+                  top: cursorPosition.y + 'px',
+                  width: (isLiquifyActive ? liquifyBrushSize : brushSize) + 'px',
+                  height: (isLiquifyActive ? liquifyBrushSize : brushSize) + 'px'
+                }"
+              ></div>
 
-            <!-- 标注光标（蓝色发光小点） -->
-            <div
-              v-if="showBrushCursor && currentMode === 'annotate'"
-              class="annotate-cursor"
-              :style="{
-                left: cursorPosition.x + 'px',
-                top: cursorPosition.y + 'px'
-              }"
-            ></div>
+              <!-- 标注光标（蓝色发光小点） -->
+              <div
+                v-if="showBrushCursor && currentMode === 'annotate'"
+                class="annotate-cursor"
+                :style="{
+                  left: cursorPosition.x + 'px',
+                  top: cursorPosition.y + 'px'
+                }"
+              ></div>
+            </div>
 
             <!-- 文字输入框 -->
             <div
@@ -2444,9 +2641,40 @@ watch(() => props.imageUrl, (newUrl) => {
           >
             <div class="mixer-control-header">
               <label :for="`mixer-${channel.id}-${activeMixerTab}`">{{ channel.label }}</label>
-              <button class="mixer-value" @click="resetMixerControl(channel.id)">
-                {{ hslMixer[channel.id][activeMixerTab] }}{{ activeMixerRange.unit }}
-              </button>
+              <div class="mixer-value-controls">
+                <button
+                  class="mixer-step-btn"
+                  type="button"
+                  @click="nudgeMixerControl(channel.id, activeMixerTab, -activeMixerRange.step)"
+                >
+                  -
+                </button>
+                <input
+                  class="mixer-value-input"
+                  type="number"
+                  :min="activeMixerRange.min"
+                  :max="activeMixerRange.max"
+                  :step="activeMixerRange.step"
+                  :value="hslMixer[channel.id][activeMixerTab]"
+                  @input="updateMixerControlValue(channel.id, activeMixerTab, $event.target.value)"
+                  @change="updateMixerControlValue(channel.id, activeMixerTab, $event.target.value, true)"
+                />
+                <button
+                  class="mixer-step-btn"
+                  type="button"
+                  @click="nudgeMixerControl(channel.id, activeMixerTab, activeMixerRange.step)"
+                >
+                  +
+                </button>
+                <button
+                  class="mixer-reset-value-btn"
+                  type="button"
+                  title="重置"
+                  @click="resetMixerControl(channel.id)"
+                >
+                  0
+                </button>
+              </div>
             </div>
             <input
               :id="`mixer-${channel.id}-${activeMixerTab}`"
@@ -2458,7 +2686,7 @@ watch(() => props.imageUrl, (newUrl) => {
               :step="activeMixerRange.step"
               :style="{ '--mixer-track': channel.track[activeMixerTab] }"
               @input="previewFilters"
-              @change="commitFilters"
+              @change="settleFilterPreview"
             />
           </div>
         </div>
@@ -2873,7 +3101,8 @@ watch(() => props.imageUrl, (newUrl) => {
 }
 
 .mixer-reset-btn,
-.mixer-value {
+.mixer-step-btn,
+.mixer-reset-value-btn {
   border: 1px solid var(--canvas-border-subtle, #2a2a2a);
   border-radius: var(--canvas-radius-sm, 6px);
   background: var(--canvas-bg-elevated, #242424);
@@ -2887,18 +3116,42 @@ watch(() => props.imageUrl, (newUrl) => {
   font-size: 12px;
 }
 
-.mixer-value {
-  min-width: 64px;
-  padding: 5px 8px;
+.mixer-value-controls {
+  display: grid;
+  grid-template-columns: 24px 54px 24px 28px;
+  align-items: center;
+  gap: 4px;
+}
+
+.mixer-step-btn,
+.mixer-reset-value-btn {
+  height: 26px;
+  padding: 0;
   font-size: 11px;
-  text-align: right;
+  line-height: 1;
+  text-align: center;
+}
+
+.mixer-value-input {
+  width: 54px;
+  height: 26px;
+  box-sizing: border-box;
+  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  border-radius: var(--canvas-radius-sm, 6px);
+  background: var(--canvas-bg-elevated, #242424);
+  color: var(--canvas-text-primary, #ffffff);
+  font-size: 11px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
 .mixer-reset-btn:hover,
-.mixer-value:hover {
+.mixer-step-btn:hover,
+.mixer-reset-value-btn:hover,
+.mixer-value-input:focus {
   color: var(--canvas-text-primary, #ffffff);
   border-color: var(--canvas-border-default, #3a3a3a);
+  outline: none;
 }
 
 .mixer-tabs {
@@ -3030,6 +3283,14 @@ watch(() => props.imageUrl, (newUrl) => {
   cursor: none;
 }
 
+.cursor-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 100;
+}
+
 /* 笔刷光标 */
 .brush-cursor {
   position: absolute;
@@ -3040,7 +3301,6 @@ watch(() => props.imageUrl, (newUrl) => {
   box-shadow:
     0 0 0 1px rgba(0, 0, 0, 0.5),
     inset 0 0 0 1px rgba(0, 0, 0, 0.3);
-  z-index: 100;
   transition: width 0.1s ease, height 0.1s ease;
 }
 
@@ -3057,7 +3317,6 @@ watch(() => props.imageUrl, (newUrl) => {
     0 0 8px 4px rgba(59, 130, 246, 0.6),
     0 0 16px 8px rgba(59, 130, 246, 0.3),
     0 0 24px 12px rgba(59, 130, 246, 0.1);
-  z-index: 100;
   animation: annotate-pulse 1.5s ease-in-out infinite;
 }
 
@@ -3077,6 +3336,7 @@ watch(() => props.imageUrl, (newUrl) => {
 }
 
 .main-canvas,
+.filter-preview-canvas,
 .overlay-canvas,
 .mask-canvas {
   position: absolute;
@@ -3086,6 +3346,16 @@ watch(() => props.imageUrl, (newUrl) => {
 
 .main-canvas {
   background: var(--canvas-bg-tertiary, #1a1a1a);
+}
+
+.filter-preview-canvas {
+  z-index: 2;
+  pointer-events: none;
+  background: var(--canvas-bg-tertiary, #1a1a1a);
+}
+
+.overlay-canvas {
+  z-index: 3;
 }
 
 .mask-canvas {

@@ -530,6 +530,11 @@ async function updateNodeImage(dataUrl, exportInfo = null) {
 
 // 处理取消
 function handleCancel() {
+  if (currentTool.value === 'enhance') {
+    canvasStore.exitEditMode()
+    return
+  }
+
   // 取消时也缓存编辑状态，以便下次恢复
   cacheCurrentState()
   canvasStore.exitEditMode()

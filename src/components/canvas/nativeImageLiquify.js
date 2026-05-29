@@ -32,9 +32,39 @@ export function clampLiquifySettings(settings = {}) {
   }
 }
 
+export function getLiquifyDirtyRect(options = {}, width = 0, height = 0) {
+  const imageWidth = Math.max(0, Math.floor(Number(width) || 0))
+  const imageHeight = Math.max(0, Math.floor(Number(height) || 0))
+
+  if (imageWidth <= 0 || imageHeight <= 0) {
+    return { x: 0, y: 0, width: 0, height: 0 }
+  }
+
+  const previous = options.previous || {}
+  const current = options.current || {}
+  const { radius } = clampLiquifySettings({
+    radius: options.radius,
+    pressure: 1
+  })
+
+  const minX = Math.max(0, Math.floor(Math.min(Number(previous.x), Number(current.x)) - radius))
+  const maxX = Math.min(imageWidth - 1, Math.ceil(Math.max(Number(previous.x), Number(current.x)) + radius))
+  const minY = Math.max(0, Math.floor(Math.min(Number(previous.y), Number(current.y)) - radius))
+  const maxY = Math.min(imageHeight - 1, Math.ceil(Math.max(Number(previous.y), Number(current.y)) + radius))
+
+  return {
+    x: minX,
+    y: minY,
+    width: Math.max(0, maxX - minX + 1),
+    height: Math.max(0, maxY - minY + 1)
+  }
+}
+
 export function applyLiquifyPush(imageData, options = {}) {
   const width = Number(imageData?.width) || 0
   const height = Number(imageData?.height) || 0
+  const offsetX = Number(options.offsetX) || 0
+  const offsetY = Number(options.offsetY) || 0
 
   if (!imageData?.data || width <= 0 || height <= 0) {
     return cloneImageDataLike({ data: new Uint8ClampedArray(), width: 0, height: 0 })
@@ -63,23 +93,27 @@ export function applyLiquifyPush(imageData, options = {}) {
   const target = new Uint8ClampedArray(source)
   const centerX = Number(current.x)
   const centerY = Number(current.y)
-  const minX = Math.max(0, Math.floor(centerX - radius))
-  const maxX = Math.min(width - 1, Math.ceil(centerX + radius))
-  const minY = Math.max(0, Math.floor(centerY - radius))
-  const maxY = Math.min(height - 1, Math.ceil(centerY + radius))
+  const minX = Math.max(0, Math.floor(centerX - radius - offsetX))
+  const maxX = Math.min(width - 1, Math.ceil(centerX + radius - offsetX))
+  const minY = Math.max(0, Math.floor(centerY - radius - offsetY))
+  const maxY = Math.min(height - 1, Math.ceil(centerY + radius - offsetY))
 
   for (let y = minY; y <= maxY; y++) {
     for (let x = minX; x <= maxX; x++) {
-      const offsetX = x - centerX
-      const offsetY = y - centerY
-      const localDistance = Math.hypot(offsetX, offsetY)
+      const globalX = x + offsetX
+      const globalY = y + offsetY
+      const pointOffsetX = globalX - centerX
+      const pointOffsetY = globalY - centerY
+      const localDistance = Math.hypot(pointOffsetX, pointOffsetY)
 
       if (localDistance > radius) continue
 
       const falloff = 1 - (localDistance / radius)
       const strength = falloff * falloff * pressure
-      const sampleX = Math.round(clamp(x - dx * strength, 0, width - 1))
-      const sampleY = Math.round(clamp(y - dy * strength, 0, height - 1))
+      const sampleGlobalX = clamp(globalX - dx * strength, offsetX, offsetX + width - 1)
+      const sampleGlobalY = clamp(globalY - dy * strength, offsetY, offsetY + height - 1)
+      const sampleX = Math.round(sampleGlobalX - offsetX)
+      const sampleY = Math.round(sampleGlobalY - offsetY)
 
       copyPixel(source, target, sampleX, sampleY, x, y, width)
     }
