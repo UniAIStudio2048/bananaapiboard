@@ -25,6 +25,10 @@ import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders, isSeedanceFeaturesEnabled } from '@/config/tenant'
+import {
+  formatVideoGenerationElapsed,
+  getVideoGenerationElapsedSeconds
+} from '@/utils/videoGenerationProgress'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getImagePresets, incrementPresetUseCount, createImagePreset, updateImagePreset } from '@/api/canvas/image-presets'
@@ -176,6 +180,8 @@ const isModelDropdownOpen = ref(false)
 // 📊 模型成功率統計（使用集中式 Store，所有節點共享數據，10 分鐘輪詢）
 const modelStatsStore = useModelStatsStore()
 modelStatsStore.ensureStarted()
+const elapsedTimeNow = ref(Date.now())
+let elapsedTimeTimer = null
 
 // 获取指定模型的成功率（代理到 Store）
 function getModelSuccessRate(modelName) {
@@ -212,6 +218,18 @@ function formatSuccessRate(modelName) {
 function formatModelAvgDuration(modelName) {
   const seconds = modelStatsStore.getImageModelAvgDurationSeconds(modelName)
   return seconds === null ? '' : `${seconds}s`
+}
+
+function getImageProcessingTimingData(data = props.data) {
+  return {
+    processingStartedAt: data?.processingStartedAt,
+    created_at: data?.created_at,
+    createdAt: data?.createdAt
+  }
+}
+
+function imageProcessingElapsedText(data = props.data) {
+  return formatVideoGenerationElapsed(getVideoGenerationElapsedSeconds(getImageProcessingTimingData(data), elapsedTimeNow.value))
 }
 
 // 是否显示模型统计（总是显示，无数据时显示 --）
@@ -985,6 +1003,9 @@ function checkAndRestoreBackgroundTasks() {
 
 onMounted(() => {
   nodeGeometryDisposed = false
+  elapsedTimeTimer = setInterval(() => {
+    elapsedTimeNow.value = Date.now()
+  }, 1000)
   document.addEventListener('click', handleModelDropdownClickOutside)
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('mousedown', handleConfigPanelOutsideMouseDown)
@@ -1023,6 +1044,10 @@ onMounted(() => {
 onUnmounted(() => {
   nodeGeometryDisposed = true
   nodeInternalsUpdateQueued = false
+  if (elapsedTimeTimer) {
+    clearInterval(elapsedTimeTimer)
+    elapsedTimeTimer = null
+  }
   document.removeEventListener('click', handleModelDropdownClickOutside)
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('mousedown', handleConfigPanelOutsideMouseDown)
@@ -1825,6 +1850,7 @@ function createImageHDProcessingNode(taskId) {
       label: '高清放大',
       title: '高清放大',
       status: 'processing',
+      processingStartedAt: Date.now(),
       progress: '高清处理中...',
       taskId,
       taskType: 'image-hd',
@@ -1938,6 +1964,7 @@ function createPanoramaProcessingNode(taskId) {
       label: '生成全景图',
       title: '生成全景图',
       status: 'processing',
+      processingStartedAt: Date.now(),
       progress: '全景图生成中...',
       taskId,
       taskType: 'image-panorama',
@@ -2093,6 +2120,7 @@ function createCutoutProcessingNode(taskId, bgType) {
       label: `抠图-${bgLabel}`,
       title: `抠图-${bgLabel}`,
       status: 'processing',
+      processingStartedAt: Date.now(),
       progress: '抠图处理中...',
       taskId,
       taskType: 'image-cutout',
@@ -3151,6 +3179,7 @@ async function handleMultiangleGenerateStart(data) {
       label: '多角度生成中...',
       title: '多角度生成',
       status: 'processing',
+      processingStartedAt: Date.now(),
       cameraAngle: data.angles,
       cameraPrompt: data.prompt,
       sourceType: 'multiangle',
@@ -3438,6 +3467,7 @@ async function handleOutpaint(data) {
         label: '扩图',
         sourceNodeId: props.id,
         status: 'processing', // 使用 processing 状态显示"生成中"
+        processingStartedAt: Date.now(),
         progress: '生成中...',
         model: 'gemini-3-pro-image-preview',
         resolution: data.size || '2K',
@@ -5872,6 +5902,7 @@ async function handleGenerate(options = {}) {
     generatedImage: null,
     imageUrl: null,
     error: null,
+    processingStartedAt: Date.now(),
     progress: generateCount > 1 ? `并行生成 ${generateCount} 张...` : '生成中...'
   })
   
@@ -5941,6 +5972,7 @@ async function handleGenerateSingle() {
   
   canvasStore.updateNodeData(props.id, { 
     status: 'processing',
+    processingStartedAt: Date.now(),
     progress: '生成中...'
   })
   
@@ -7629,6 +7661,7 @@ async function handleDrop(event) {
             <!-- 加载中状态 - 简洁文字显示 -->
             <div v-if="data.status === 'processing'" class="preview-loading">
               <span class="processing-text">{{ data.progress || '生成中' }}</span>
+              <span class="processing-duration-text">{{ imageProcessingElapsedText(data) }}</span>
             </div>
             
             <!-- 错误状态 -->
@@ -9221,8 +9254,10 @@ async function handleDrop(event) {
 .preview-loading {
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   background: var(--canvas-bg-tertiary, #1a1a1a);
   border-radius: 12px;
   min-height: 200px; /* 确保生成中状态有足够高度 */
@@ -9233,6 +9268,14 @@ async function handleDrop(event) {
   font-weight: 500;
   color: var(--canvas-text-secondary, #888);
   letter-spacing: 2px;
+}
+
+.processing-duration-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--canvas-accent-primary, #4ade80);
+  letter-spacing: 0;
+  opacity: 0.9;
 }
 
 .preview-error {
