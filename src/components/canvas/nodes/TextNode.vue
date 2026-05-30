@@ -459,6 +459,50 @@ function selectCharacter(character) {
 const isEditing = ref(false)
 const textareaRef = ref(null)
 
+function getTextEditorSelectionElement(node) {
+  if (!node) return null
+  if (typeof Node !== 'undefined' && node.nodeType === Node.TEXT_NODE) {
+    return node.parentElement
+  }
+  return node.nodeType === 1 ? node : node.parentElement || null
+}
+
+function isTextEditorSelectionInsideEditor(selection) {
+  const editor = textareaRef.value
+  if (!editor || !selection || selection.rangeCount === 0) return false
+
+  const anchorElement = getTextEditorSelectionElement(selection?.anchorNode)
+  const focusElement = getTextEditorSelectionElement(selection?.focusNode)
+  return !!(
+    (anchorElement && editor.contains(anchorElement)) ||
+    (focusElement && editor.contains(focusElement))
+  )
+}
+
+function handleTextEditorDeleteKeyDown(event) {
+  if (event.key !== 'Backspace' && event.key !== 'Delete') return
+  const editor = textareaRef.value
+  if (!editor || editor.contains(event.target)) return
+
+  const selection = typeof window !== 'undefined' ? window.getSelection?.() : null
+  if (isTextEditorSelectionInsideEditor(selection)) {
+    event.stopPropagation()
+  }
+}
+
+function setTextEditorDeleteKeyGuard(enabled) {
+  if (typeof document === 'undefined') return
+  if (enabled) {
+    document.addEventListener('keydown', handleTextEditorDeleteKeyDown, true)
+  } else {
+    document.removeEventListener('keydown', handleTextEditorDeleteKeyDown, true)
+  }
+}
+
+watch(isEditing, (editing) => {
+  setTextEditorDeleteKeyGuard(editing)
+})
+
 // 选中文字右键菜单
 const showSelectionMenu = ref(false)
 const selectionMenuPosition = ref({ x: 0, y: 0 })
@@ -2988,6 +3032,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('mousedown', handleConfigPanelOutsideMouseDown)
+  setTextEditorDeleteKeyGuard(false)
 })
 </script>
 

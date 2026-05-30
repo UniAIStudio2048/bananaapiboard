@@ -10,6 +10,7 @@
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
+import { resolveCanvasMenuPastePosition } from '@/utils/canvasClipboardPaste'
 
 const props = defineProps({
   position: {
@@ -127,7 +128,7 @@ function handlePaste() {
     return
   }
   // 在鼠标位置粘贴
-  canvasStore.pasteNodes(props.position)
+  canvasStore.pasteNodes(resolveCanvasMenuPastePosition(props.position))
   emit('close')
 }
 
@@ -512,4 +513,3 @@ function handleMenuClick(event) {
   color: #b91c1c;
 }
 </style>
-

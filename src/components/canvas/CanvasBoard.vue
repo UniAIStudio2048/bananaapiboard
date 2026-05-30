@@ -44,7 +44,19 @@ import {
   resolveConnectionSourcePosition,
   shouldTreatTargetAsGroupCanvas
 } from '@/utils/canvasConnectionPosition'
-import { getClipboardFiles, resolveCanvasPasteSource } from '@/utils/canvasClipboardPaste'
+import {
+  getClipboardFiles,
+  isScreenPointInsideRect,
+  resolveCanvasPasteScreenPosition,
+  resolveCanvasPasteSource
+} from '@/utils/canvasClipboardPaste'
+import {
+  applyPanToViewport,
+  applyZoomAtScreenPoint,
+  getTouchDistance,
+  getTouchMidpoint,
+  getTouchPoint
+} from '@/utils/canvasTouchInteractions'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -151,7 +163,7 @@ function handleEdgeStyleChange(event) {
 }
 
 // 记录最后的鼠标位置（用于粘贴）
-const lastMousePosition = ref({ x: 0, y: 0 })
+const lastMousePosition = ref(null)
 
 // 选中的节点ID列表（用于批量删除）
 const selectedNodeIds = ref([])
@@ -173,6 +185,11 @@ const rightDragSuppressContextMenu = ref(false)
 const RIGHT_DRAG_THRESHOLD = 4
 const panStart = ref({ x: 0, y: 0 })
 
+// 触屏手势只服务 iPad/平板等 touch 输入，不改变鼠标/键盘路径
+const TOUCH_PAN_THRESHOLD = 4
+const TOUCH_CONNECTION_DRAG_THRESHOLD = 5
+const TOUCH_CONNECTION_LONG_PRESS_DURATION = 300
+
 // 对齐辅助线状态
 const alignmentGuides = ref({
   vertical: null,   // { x: number, startY: number, endY: number } | null
@@ -190,6 +207,9 @@ const ALIGNMENT_THROTTLE_MS = 50  // 对齐计算最小间隔（毫秒）
 const pendingTimeouts = new Set()
 const isViewportMoving = ref(false)
 let viewportMovingTimer = null
+let touchState = null
+let touchConnectionLongPressTimer = null
+let globalTouchListenersAttached = false
 
 provide('isCanvasViewportMoving', isViewportMoving)
 
@@ -1080,7 +1100,7 @@ onPaneClick((event) => {
   canvasStore.isBottomPanelVisible = false
   
   // 更新鼠标位置
-  lastMousePosition.value = { x: event.clientX, y: event.clientY }
+  rememberCanvasMousePosition(event)
   
   // 通知父组件画布空白区域被点击（用于关闭侧边面板）
   emit('pane-click', event)
@@ -1109,7 +1129,7 @@ onPaneContextMenu((event) => {
   }
   
   // 记录鼠标位置
-  lastMousePosition.value = { x: event.clientX, y: event.clientY }
+  rememberCanvasMousePosition(event)
   
   // 计算画布坐标（用于粘贴时定位）
   const flowPosition = screenToFlowPosition({ x: event.clientX, y: event.clientY })
@@ -1152,6 +1172,24 @@ function screenToFlowPosition(screenPos) {
     x: (screenPos.x - rect.left - viewport.x) / viewport.zoom,
     y: (screenPos.y - rect.top - viewport.y) / viewport.zoom
   }
+}
+
+function getCanvasBoardRect() {
+  return canvasBoardRef.value?.getBoundingClientRect?.() || null
+}
+
+function rememberCanvasMousePosition(event) {
+  const screenPosition = { x: event.clientX, y: event.clientY }
+  if (isScreenPointInsideRect(screenPosition, getCanvasBoardRect())) {
+    lastMousePosition.value = screenPosition
+  }
+}
+
+function getCanvasPasteScreenPosition() {
+  return resolveCanvasPasteScreenPosition({
+    lastMousePosition: lastMousePosition.value,
+    canvasRect: getCanvasBoardRect()
+  })
 }
 
 // 键盘事件处理
@@ -1386,6 +1424,8 @@ function handleMouseDown(event) {
 
 // 鼠标移动事件（用于空格+拖动平移 / 鼠标中键平移 / 右键拖动平移）
 function handleMouseMove(event) {
+  rememberCanvasMousePosition(event)
+
   // 右键按下但还未开始平移：检测是否超过阈值
   if (isRightButtonDown.value && !isRightButtonPanning.value) {
     const dx = event.clientX - panStart.value.x
@@ -1436,6 +1476,314 @@ function handleMouseUp(event) {
     isMiddleButtonPanning.value = false
     document.body.style.cursor = isSpacePressed.value ? 'grab' : 'default'
   }
+}
+
+function getTouchByIdentifier(touches, identifier) {
+  for (const touch of touches || []) {
+    if (touch.identifier === identifier) return touch
+  }
+  return null
+}
+
+function getElementCenterScreenPosition(element) {
+  const rect = element?.getBoundingClientRect?.()
+  if (!rect) return null
+  return {
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2
+  }
+}
+
+function isEditableTouchTarget(target) {
+  return !!target?.closest?.('input, textarea, select, [contenteditable="true"]')
+}
+
+function getTouchConnectionButton(target) {
+  const rightButton = target?.closest?.('.node-add-btn-right')
+  if (rightButton) return rightButton
+
+  const genericButton = target?.closest?.('.node-add-btn')
+  if (genericButton && !genericButton.classList.contains('node-add-btn-left')) {
+    return genericButton
+  }
+
+  return null
+}
+
+function getTouchTargetNodeId(target) {
+  const nodeEl = target?.closest?.('.vue-flow__node')
+  return nodeEl?.getAttribute?.('data-id') || null
+}
+
+function shouldStartTouchPan(target) {
+  if (!target?.closest) return false
+  if (isEditableTouchTarget(target)) return false
+  if (target.closest('.vue-flow__node')) return false
+  if (target.closest('.vue-flow__controls, .vue-flow__minimap')) return false
+  if (target.closest('button, a, input, textarea, select, [role="button"]')) return false
+  return !!target.closest('.canvas-board')
+}
+
+function ensureGlobalTouchListeners() {
+  if (globalTouchListenersAttached) return
+  window.addEventListener('touchmove', handleTouchMove, { passive: false, capture: true })
+  window.addEventListener('touchend', handleTouchEnd, { capture: true })
+  window.addEventListener('touchcancel', handleTouchCancel, { capture: true })
+  globalTouchListenersAttached = true
+}
+
+function removeGlobalTouchListeners() {
+  if (!globalTouchListenersAttached) return
+  window.removeEventListener('touchmove', handleTouchMove, { capture: true })
+  window.removeEventListener('touchend', handleTouchEnd, { capture: true })
+  window.removeEventListener('touchcancel', handleTouchCancel, { capture: true })
+  globalTouchListenersAttached = false
+}
+
+function clearTouchConnectionTimer() {
+  if (!touchConnectionLongPressTimer) return
+  clearTimeout(touchConnectionLongPressTimer)
+  pendingTimeouts.delete(touchConnectionLongPressTimer)
+  touchConnectionLongPressTimer = null
+}
+
+function handleTouchStart(event) {
+  if (!event.touches?.length || !canvasBoardRef.value?.contains(event.target)) return
+  if (touchState?.mode === 'connection-pending' || touchState?.mode === 'connection-drag') {
+    event.preventDefault()
+    return
+  }
+
+  if (event.touches.length === 1) {
+    const connectionButton = getTouchConnectionButton(event.target)
+    if (connectionButton) {
+      handleTouchConnectionStart(event, connectionButton)
+      return
+    }
+
+    if (!shouldStartTouchPan(event.target)) return
+
+    const point = getTouchPoint(event.touches[0])
+    if (!point) return
+
+    event.preventDefault()
+    touchState = {
+      mode: 'pan',
+      identifier: event.touches[0].identifier,
+      startPoint: point,
+      lastPoint: point,
+      hasMoved: false
+    }
+    ensureGlobalTouchListeners()
+    return
+  }
+
+  if (event.touches.length === 2 && !isEditableTouchTarget(event.target)) {
+    const midpoint = getTouchMidpoint(event.touches[0], event.touches[1])
+    const rect = getCanvasBoardRect()
+    if (!midpoint || !rect) return
+
+    event.preventDefault()
+    touchState = {
+      mode: 'pinch',
+      lastDistance: getTouchDistance(event.touches[0], event.touches[1]),
+      lastCenter: { x: midpoint.x - rect.left, y: midpoint.y - rect.top }
+    }
+    ensureGlobalTouchListeners()
+  }
+}
+
+function handleTouchConnectionStart(event, button) {
+  const touch = event.touches?.[0]
+  const point = getTouchPoint(touch)
+  const nodeId = getTouchTargetNodeId(button)
+  if (!touch || !point || !nodeId) return
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  touchState = {
+    mode: 'connection-pending',
+    identifier: touch.identifier,
+    nodeId,
+    button,
+    startPoint: point,
+    lastPoint: point
+  }
+
+  clearTouchConnectionTimer()
+  touchConnectionLongPressTimer = setTimeout(() => {
+    pendingTimeouts.delete(touchConnectionLongPressTimer)
+    touchConnectionLongPressTimer = null
+    startTouchConnectionDrag()
+  }, TOUCH_CONNECTION_LONG_PRESS_DURATION)
+  pendingTimeouts.add(touchConnectionLongPressTimer)
+  ensureGlobalTouchListeners()
+}
+
+function startTouchConnectionDrag() {
+  if (!touchState || touchState.mode !== 'connection-pending') return
+
+  const buttonCenter = getElementCenterScreenPosition(touchState.button)
+  if (!buttonCenter) return
+
+  const startPosition = screenToFlowPosition(buttonCenter)
+  canvasStore.startDragConnection(touchState.nodeId, 'output', startPosition)
+  touchState = {
+    ...touchState,
+    mode: 'connection-drag'
+  }
+
+  const flowPos = screenToFlowPosition(touchState.lastPoint)
+  canvasStore.updateDragConnectionPosition(flowPos)
+}
+
+function handleTouchMove(event) {
+  if (!touchState) return
+
+  if (touchState.mode === 'connection-pending' || touchState.mode === 'connection-drag') {
+    handleTouchConnectionMove(event)
+    return
+  }
+
+  if (touchState.mode === 'pan') {
+    handleTouchPanMove(event)
+    return
+  }
+
+  if (touchState.mode === 'pinch') {
+    handleTouchPinchMove(event)
+  }
+}
+
+function handleTouchConnectionMove(event) {
+  const touch = getTouchByIdentifier(event.touches, touchState.identifier)
+  const point = getTouchPoint(touch)
+  if (!point) return
+
+  event.preventDefault()
+  event.stopPropagation()
+  touchState.lastPoint = point
+
+  if (touchState.mode === 'connection-pending') {
+    const dx = point.x - touchState.startPoint.x
+    const dy = point.y - touchState.startPoint.y
+    if (Math.sqrt(dx * dx + dy * dy) > TOUCH_CONNECTION_DRAG_THRESHOLD) {
+      clearTouchConnectionTimer()
+      startTouchConnectionDrag()
+    }
+  }
+
+  if (touchState.mode === 'connection-drag') {
+    const flowPos = screenToFlowPosition(point)
+    canvasStore.updateDragConnectionPosition(flowPos)
+  }
+}
+
+function handleTouchPanMove(event) {
+  const touch = getTouchByIdentifier(event.touches, touchState.identifier)
+  const point = getTouchPoint(touch)
+  if (!point) return
+
+  const totalDx = point.x - touchState.startPoint.x
+  const totalDy = point.y - touchState.startPoint.y
+  const movedEnough = Math.sqrt(totalDx * totalDx + totalDy * totalDy) > TOUCH_PAN_THRESHOLD
+  if (!touchState.hasMoved && !movedEnough) return
+
+  event.preventDefault()
+  touchState.hasMoved = true
+
+  const delta = {
+    dx: point.x - touchState.lastPoint.x,
+    dy: point.y - touchState.lastPoint.y
+  }
+  const viewport = getViewport()
+  setViewport(applyPanToViewport(viewport, delta))
+  markViewportMoving()
+  touchState.lastPoint = point
+}
+
+function handleTouchPinchMove(event) {
+  if (event.touches.length < 2) return
+
+  const midpoint = getTouchMidpoint(event.touches[0], event.touches[1])
+  const rect = getCanvasBoardRect()
+  if (!midpoint || !rect) return
+
+  const distance = getTouchDistance(event.touches[0], event.touches[1])
+  if (!distance || !touchState.lastDistance) return
+
+  event.preventDefault()
+
+  const center = { x: midpoint.x - rect.left, y: midpoint.y - rect.top }
+  const centerDelta = {
+    dx: center.x - touchState.lastCenter.x,
+    dy: center.y - touchState.lastCenter.y
+  }
+  const viewport = applyPanToViewport(getViewport(), centerDelta)
+  const nextZoom = viewport.zoom * (distance / touchState.lastDistance)
+  setViewport(applyZoomAtScreenPoint(viewport, nextZoom, center, { minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM }))
+  markViewportMoving()
+
+  touchState.lastDistance = distance
+  touchState.lastCenter = center
+}
+
+function handleTouchEnd(event) {
+  if (!touchState) return
+
+  if (touchState.mode === 'connection-pending') {
+    event.preventDefault()
+    event.stopPropagation()
+    clearTouchConnectionTimer()
+    canvasStore.openNodeSelector(touchState.lastPoint, 'node', touchState.nodeId)
+    resetTouchState()
+    return
+  }
+
+  if (touchState.mode === 'connection-drag') {
+    event.preventDefault()
+    event.stopPropagation()
+    clearTouchConnectionTimer()
+    finishDragConnectionAtScreenPosition(touchState.lastPoint)
+    resetTouchState()
+    return
+  }
+
+  if (touchState.mode === 'pinch' && event.touches.length === 1) {
+    const touch = event.touches[0]
+    const point = getTouchPoint(touch)
+    if (!point) {
+      resetTouchState()
+      return
+    }
+    touchState = {
+      mode: 'pan',
+      identifier: touch.identifier,
+      startPoint: point,
+      lastPoint: point,
+      hasMoved: true
+    }
+    return
+  }
+
+  if (event.touches.length === 0) {
+    resetTouchState()
+  }
+}
+
+function handleTouchCancel() {
+  if (touchState?.mode === 'connection-drag') {
+    canvasStore.cancelDragConnection()
+  }
+  clearTouchConnectionTimer()
+  resetTouchState()
+}
+
+function resetTouchState() {
+  touchState = null
+  clearTouchConnectionTimer()
+  removeGlobalTouchListeners()
 }
 
 // 删除选中的元素（节点和连线）
@@ -1692,7 +2040,7 @@ function handleNativeContextMenu(event) {
   }
   
   // 记录鼠标位置
-  lastMousePosition.value = { x: event.clientX, y: event.clientY }
+  rememberCanvasMousePosition(event)
   
   // 计算画布坐标
   const flowPosition = screenToFlowPosition({ x: event.clientX, y: event.clientY })
@@ -1766,9 +2114,15 @@ function handleGlobalDragConnectionEnd(event) {
 
   if (!canvasStore.isDraggingConnection) return
 
+  finishDragConnectionAtScreenPosition({ x: event.clientX, y: event.clientY })
+}
+
+function finishDragConnectionAtScreenPosition(screenPos) {
+  if (!canvasStore.isDraggingConnection) return
+
   try {
     // 检测是否释放在某个节点上
-    const targetElement = document.elementFromPoint(event.clientX, event.clientY)
+    const targetElement = document.elementFromPoint(screenPos.x, screenPos.y)
     let targetNode = findTargetNode(targetElement)
     const sourceNode = canvasStore.nodes.find(n => n.id === canvasStore.dragConnectionSource?.nodeId)
 
@@ -1796,8 +2150,8 @@ function handleGlobalDragConnectionEnd(event) {
           gridItems.forEach((el, idx) => {
             const rect = el.getBoundingClientRect()
             if (
-              event.clientX >= rect.left && event.clientX <= rect.right &&
-              event.clientY >= rect.top && event.clientY <= rect.bottom
+              screenPos.x >= rect.left && screenPos.x <= rect.right &&
+              screenPos.y >= rect.top && screenPos.y <= rect.bottom
             ) {
               targetHandleId = `input-${idx}`
             }
@@ -1807,8 +2161,7 @@ function handleGlobalDragConnectionEnd(event) {
     }
 
     // 计算结束位置
-    const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-    const screenPos = { x: event.clientX, y: event.clientY }
+    const flowPos = screenToFlowPosition(screenPos)
 
     // 调用 store 的 endDragConnection（传入格子级 targetHandle）
     const connected = canvasStore.endDragConnection(targetNode, flowPos, screenPos, targetHandleId)
@@ -2186,7 +2539,7 @@ function handlePaste(event) {
 
   if (pasteSource === 'nodes') {
     event.preventDefault()
-    const pastePosition = screenToFlowPosition(lastMousePosition.value)
+    const pastePosition = screenToFlowPosition(getCanvasPasteScreenPosition())
     canvasStore.pasteNodes(pastePosition)
     return
   }
@@ -2198,7 +2551,7 @@ function handlePaste(event) {
  * 从剪贴板文件列表创建画布节点（供 paste 事件 & 右键菜单共用）
  */
 function handleClipboardFiles(files, positionOverride) {
-  const pos = positionOverride || screenToFlowPosition(lastMousePosition.value)
+  const pos = positionOverride || screenToFlowPosition(getCanvasPasteScreenPosition())
   let offsetX = 0
   let offsetY = 0
   const uploadTasks = []
@@ -2829,6 +3182,7 @@ onMounted(() => {
   // 添加滚轮事件监听（以鼠标位置为中心缩放）
   if (canvasBoardRef.value) {
     canvasBoardRef.value.addEventListener('wheel', handleWheel, { passive: false })
+    canvasBoardRef.value.addEventListener('touchstart', handleTouchStart, { passive: false })
     // 添加原生右键菜单事件监听
     canvasBoardRef.value.addEventListener('contextmenu', handleNativeContextMenu)
   }
@@ -2856,8 +3210,10 @@ onUnmounted(() => {
   // 移除滚轮和右键事件监听
   if (canvasBoardRef.value) {
     canvasBoardRef.value.removeEventListener('wheel', handleWheel)
+    canvasBoardRef.value.removeEventListener('touchstart', handleTouchStart)
     canvasBoardRef.value.removeEventListener('contextmenu', handleNativeContextMenu)
   }
+  resetTouchState()
   
   // 移除全局拖拽事件监听
   const listenerOptions = { capture: true }
@@ -3034,6 +3390,13 @@ onUnmounted(() => {
 .canvas-board {
   width: 100%;
   height: 100%;
+  overscroll-behavior: contain;
+}
+
+.canvas-board :deep(.vue-flow__pane),
+.canvas-board :deep(.vue-flow__background),
+.canvas-board :deep(.node-add-btn) {
+  touch-action: none;
 }
 
 /* Vue Flow 样式覆盖 */
