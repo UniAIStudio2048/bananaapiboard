@@ -8,6 +8,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getAssets, deleteAsset, toggleFavorite, updateAssetTags, updateAsset, saveAsset } from '@/api/canvas/assets'
 import { getCachedAssets, cacheAssets, invalidateAssetCache } from '@/utils/assetCache'
+import { getAssetPanelStats, getAssetPanelTagCounts, getAssetPanelUserTags, getVisibleAssetPanelAssets } from '@/utils/assetPanelVisibility'
 import { preloadImages } from '@/utils/imageCache'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } from '@/api/canvas/volcengine-assets'
@@ -92,6 +93,7 @@ const seedanceGroups = ref([])
 const seedanceAssetCount = ref(0)
 const selectedSeedanceGroupId = ref(null)
 const seedancePendingAction = ref(null)
+const seedanceActiveProvider = ref('')
 
 // 右键菜单状态
 const showContextMenu = ref(false)
@@ -133,6 +135,14 @@ const lastSyncId = ref(null) // 记录最新一条记录的ID
 const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
 const soraCharacterLibraryEnabled = computed(() => isSoraCharacterLibraryEnabled())
 const byteforCharacterLibraryEnabled = computed(() => isByteforCharacterLibraryEnabled())
+const seedanceActiveGroupIds = computed(() => seedanceGroups.value.map(g => g.Id).filter(Boolean))
+const assetVisibilityContext = computed(() => ({
+  seedanceFeaturesEnabled: seedanceFeaturesEnabled.value,
+  soraCharacterLibraryEnabled: soraCharacterLibraryEnabled.value,
+  byteforCharacterLibraryEnabled: byteforCharacterLibraryEnabled.value,
+  seedanceActiveProvider: seedanceActiveProvider.value,
+  seedanceActiveGroupIds: seedanceActiveGroupIds.value
+}))
 
 // 文件类型 - 存储翻译键，在模板中实时翻译
 const allFileTypes = [
@@ -178,13 +188,7 @@ const quickTagOptionKeys = [
 
 // 用户自定义标签（从资产中提取）
 const userTags = computed(() => {
-  const tagSet = new Set()
-  assets.value.forEach(asset => {
-    if (asset.tags) {
-      asset.tags.forEach(tag => tagSet.add(tag))
-    }
-  })
-  return Array.from(tagSet).map(tag => ({
+  return getAssetPanelUserTags(assets.value, assetVisibilityContext.value).map(tag => ({
     key: tag,
     label: tag,
     icon: '#'
@@ -195,65 +199,21 @@ const userTags = computed(() => {
 const allTags = computed(() => [...quickTags, ...userTags.value])
 
 const tagCounts = computed(() => {
-  const counts = { all: 0, favorite: 0 }
-  assets.value.forEach(asset => {
-    if (!seedanceFeaturesEnabled.value && asset.type === 'seedance-character') return
-    if (!byteforCharacterLibraryEnabled.value && asset.type === 'bytefor-character') return
-    if (selectedType.value !== 'all' && asset.type !== selectedType.value) return
-    if (searchQuery.value.trim()) {
-      const query = searchQuery.value.toLowerCase()
-      const matchesSearch =
-        asset.name?.toLowerCase().includes(query) ||
-        asset.content?.toLowerCase().includes(query) ||
-        asset.tags?.some(t => t.toLowerCase().includes(query))
-      if (!matchesSearch) return
-    }
-    counts.all++
-    if (asset.is_favorite) counts.favorite++
-    if (asset.tags) {
-      asset.tags.forEach(tag => {
-        counts[tag] = (counts[tag] || 0) + 1
-      })
-    }
+  return getAssetPanelTagCounts(assets.value, {
+    ...assetVisibilityContext.value,
+    selectedType: selectedType.value,
+    searchQuery: searchQuery.value
   })
-  return counts
 })
 
 // 筛选后的资产
 const filteredAssets = computed(() => {
-  let result = assets.value
-
-  // Seedance 功能关闭时过滤掉 seedance-character 类型资产
-  if (!seedanceFeaturesEnabled.value) {
-    result = result.filter(a => a.type !== 'seedance-character')
-  }
-  if (!byteforCharacterLibraryEnabled.value) {
-    result = result.filter(a => a.type !== 'bytefor-character')
-  }
-
-  // 按类型筛选
-  if (selectedType.value !== 'all') {
-    result = result.filter(a => a.type === selectedType.value)
-  }
-
-  // 按标签筛选
-  if (selectedTag.value === 'favorite') {
-    result = result.filter(a => a.is_favorite)
-  } else if (selectedTag.value !== 'all') {
-    result = result.filter(a => a.tags && a.tags.includes(selectedTag.value))
-  }
-
-  // 搜索
-  if (searchQuery.value.trim()) {
-    const query = searchQuery.value.toLowerCase()
-    result = result.filter(a => 
-      a.name?.toLowerCase().includes(query) ||
-      a.content?.toLowerCase().includes(query) ||
-      a.tags?.some(t => t.toLowerCase().includes(query))
-    )
-  }
-
-  return result
+  return getVisibleAssetPanelAssets(assets.value, {
+    ...assetVisibilityContext.value,
+    selectedType: selectedType.value,
+    selectedTag: selectedTag.value,
+    searchQuery: searchQuery.value
+  })
 })
 
 const visibleAssets = computed(() => {
@@ -290,16 +250,7 @@ const assetOffsetY = computed(() => {
 
 // 按类型分组的资产统计
 const assetStats = computed(() => {
-  const stats = { all: 0, text: 0, image: 0, video: 0, audio: 0, 'sora-character': 0, 'seedance-character': 0, 'bytefor-character': 0 }
-  assets.value.forEach(a => {
-    if (!seedanceFeaturesEnabled.value && a.type === 'seedance-character') return
-    if (!byteforCharacterLibraryEnabled.value && a.type === 'bytefor-character') return
-    stats.all++
-    if (stats[a.type] !== undefined) {
-      stats[a.type]++
-    }
-  })
-  return stats
+  return getAssetPanelStats(assets.value, assetVisibilityContext.value)
 })
 
 // ========== 方法 ==========
@@ -543,6 +494,7 @@ async function handleSpaceChange(newSpace) {
 function refreshForSpaceChange(newSpace) {
   dataCached.value = false // 清除缓存
   if (props.visible) {
+    loadSeedanceGroups()
     loadAssets(true)
   }
 
@@ -1099,18 +1051,21 @@ async function loadSeedanceGroups() {
   try {
     const result = await listAssetGroups({ pageSize: 100 })
     seedanceGroups.value = result.groups || []
+    seedanceActiveProvider.value = result.activeProvider || ''
 
     // 按当前渠道分组过滤资产数量
-    const activeGroupIds = new Set(seedanceGroups.value.map(g => g.Id))
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
-    const localResult = await getAssets({ type: 'seedance-character', ...spaceParams, pageSize: 500 })
+    const seedanceAssetType = seedanceActiveProvider.value === 'seedance_openapi_pro'
+      ? 'seedance-openapi-pro-character'
+      : 'seedance-character'
+    const localResult = await getAssets({ type: seedanceAssetType, ...spaceParams, pageSize: 500 })
     const allAssets = localResult.assets || []
-    seedanceAssetCount.value = allAssets.filter(a => {
-      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata || '{}') : (a.metadata || {})
-      return meta.groupId && activeGroupIds.has(meta.groupId)
-    }).length
+    seedanceAssetCount.value = getAssetPanelStats(allAssets, assetVisibilityContext.value)['seedance-character']
   } catch (err) {
     console.error('[AssetPanel] 加载 Seedance 角色组失败:', err)
+    seedanceGroups.value = []
+    seedanceActiveProvider.value = ''
+    seedanceAssetCount.value = 0
   }
 }
 
@@ -1489,6 +1444,7 @@ function closeTagManager() {
 
 watch(() => props.visible, async (visible) => {
   if (visible) {
+    await loadSeedanceGroups()
     await loadAssets()
     startTeamSync()
     isContentReady.value = false

@@ -13,6 +13,13 @@ assert.notEqual(loadWorkflowsEnd, -1, 'WorkflowPanel should keep loadWorkflows b
 
 const loadWorkflowsSource = source.slice(loadWorkflowsStart, loadWorkflowsEnd)
 
+const loadRemainingStart = source.indexOf('async function loadRemainingWorkflowPages')
+const loadRemainingEnd = source.indexOf('async function loadWorkflowProjects', loadRemainingStart)
+assert.notEqual(loadRemainingStart, -1, 'WorkflowPanel should define loadRemainingWorkflowPages')
+assert.notEqual(loadRemainingEnd, -1, 'WorkflowPanel should keep loadRemainingWorkflowPages before project loading')
+
+const loadRemainingSource = source.slice(loadRemainingStart, loadRemainingEnd)
+
 assert.match(
   loadWorkflowsSource,
   /pagination\?\.total/,
@@ -35,6 +42,24 @@ assert.match(
   source,
   /const WORKFLOW_LIST_PAGE_SIZE = 500/,
   'WorkflowPanel should request a large metadata-only page to avoid slow all-workflow pagination'
+)
+
+assert.match(
+  source,
+  /const WORKFLOW_BACKGROUND_PAGE_CONCURRENCY = 2/,
+  'WorkflowPanel should cap background saved workflow pagination concurrency'
+)
+
+assert.doesNotMatch(
+  loadRemainingSource,
+  /Promise\.all\(\s*pageNumbers\.map/,
+  'WorkflowPanel should not request every remaining saved workflow page concurrently'
+)
+
+assert.match(
+  loadRemainingSource,
+  /pageNumbers\.slice\(index, index \+ WORKFLOW_BACKGROUND_PAGE_CONCURRENCY\)/,
+  'WorkflowPanel should fetch remaining saved workflow pages in bounded batches'
 )
 
 assert.match(

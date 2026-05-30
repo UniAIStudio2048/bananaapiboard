@@ -72,6 +72,7 @@ const lastWorkflowsLoad = ref(0)
 const lastTemplatesLoad = ref(0)
 const CACHE_DURATION = 60000 // 缓存有效期 60 秒
 const WORKFLOW_LIST_PAGE_SIZE = 500 // 元数据列表不包含节点详情，可用大页减少面板打开时的请求数
+const WORKFLOW_BACKGROUND_PAGE_CONCURRENCY = 2 // 后台补齐分页限流，避免打开面板时打爆接口
 const isContentReady = ref(false) // 延迟渲染标记
 
 // 团队空间实时同步
@@ -314,14 +315,16 @@ async function loadRemainingWorkflowPages({ token, firstPageList, totalPages, pa
   if (totalPages <= 1) return
   try {
     const pageNumbers = Array.from({ length: totalPages - 1 }, (_, index) => index + 2)
-    const pageResults = await Promise.all(
-      pageNumbers.map(page => getWorkflowList({ page, pageSize, ...spaceParams }))
-    )
-    if (token !== workflowListLoadToken) return
-    workflows.value = [
-      ...firstPageList,
-      ...pageResults.flatMap(result => result.list || [])
-    ]
+    const mergedWorkflows = [...firstPageList]
+    for (let index = 0; index < pageNumbers.length; index += WORKFLOW_BACKGROUND_PAGE_CONCURRENCY) {
+      const pageBatch = pageNumbers.slice(index, index + WORKFLOW_BACKGROUND_PAGE_CONCURRENCY)
+      const pageResults = await Promise.all(
+        pageBatch.map(page => getWorkflowList({ page, pageSize, ...spaceParams }))
+      )
+      if (token !== workflowListLoadToken) return
+      mergedWorkflows.push(...pageResults.flatMap(result => result.list || []))
+      workflows.value = mergedWorkflows
+    }
     workflowsCached.value = true
     console.log('[WorkflowPanel] 后台补齐工作流:', workflows.value.length, '个')
   } catch (error) {

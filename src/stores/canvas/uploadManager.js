@@ -165,6 +165,12 @@ export const useUploadManager = defineStore('uploadManager', () => {
             )
           }
         }
+        if (node.data?.output?.url === task.blobUrl || node.data?.output?.url?.startsWith('blob:')) {
+          updates.output = {
+            ...(updates.output || node.data.output),
+            url: task.cloudUrl
+          }
+        }
       } else if (task.type === 'video') {
         updates.output = { ...node.data.output, url: task.cloudUrl }
         if (node.data?.sourceVideo === task.blobUrl) {

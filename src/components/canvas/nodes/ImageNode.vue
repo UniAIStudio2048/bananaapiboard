@@ -120,6 +120,7 @@ const { configPanelScale, handleConfigPanelWheel, resetConfigPanelScale } = crea
 const fileInputRef = ref(null)
 const refImageInputRef = ref(null) // 参考图片上传引用
 const pendingAction = ref(null) // 记录待执行的操作类型
+const REPLACE_OUTPUT_IMAGE_ACTION = 'replace-output-image'
 
 // 标签编辑状态
 const isEditingLabel = ref(false)
@@ -4266,9 +4267,32 @@ function handleUploadImageFlow(blobUrl) {
   })
 }
 
+function handleReplaceOutputImageFlow(blobUrl) {
+  canvasStore.updateNodeData(props.id, {
+    nodeRole: props.data.nodeRole || 'output',
+    status: 'success',
+    output: {
+      ...(props.data.output || {}),
+      type: 'image',
+      url: blobUrl,
+      urls: [blobUrl]
+    },
+    uploadFailed: false,
+    uploadError: null,
+    _dataLost: false,
+    _lostReason: null,
+    isUploading: false
+  })
+}
+
 // 触发文件上传
 function triggerUpload(actionType) {
   pendingAction.value = actionType
+  fileInputRef.value?.click()
+}
+
+function triggerReplaceOutputUpload() {
+  pendingAction.value = REPLACE_OUTPUT_IMAGE_ACTION
   fileInputRef.value?.click()
 }
 
@@ -4292,6 +4316,8 @@ async function handleFileUpload(event) {
     // 立即执行流程，使用 blob URL 显示
     if (actionType === 'upload-image') {
       handleUploadImageFlow(blobUrl)
+    } else if (actionType === REPLACE_OUTPUT_IMAGE_ACTION) {
+      handleReplaceOutputImageFlow(blobUrl)
     } else if (actionType === 'image-to-image') {
       await handleImageToImageFlow(blobUrl)
     } else if (actionType === 'image-to-video') {
@@ -4341,15 +4367,21 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
           console.log('[ImageNode] 已静默更新 sourceImages:', blobUrl.substring(0, 30), '->', serverUrl.substring(0, 60))
         }
         
-        // 也检查 output.urls（如果图片被移到了输出中）
-        if (currentNode.data?.output?.urls?.includes(blobUrl)) {
-          const updatedOutputUrls = currentNode.data.output.urls.map(
-            url => url === blobUrl ? serverUrl : url
-          )
+        // 也检查 output.url / output.urls（如果图片被移到了输出中）
+        if (currentNode.data?.output?.url === blobUrl || currentNode.data?.output?.urls?.includes(blobUrl)) {
+          const updatedOutput = {
+            ...currentNode.data.output,
+            ...(currentNode.data.output.url === blobUrl ? { url: serverUrl } : {})
+          }
+          if (Array.isArray(updatedOutput.urls)) {
+            updatedOutput.urls = updatedOutput.urls.map(
+              url => url === blobUrl ? serverUrl : url
+            )
+          }
           canvasStore.updateNodeData(nodeId, { 
-            output: { ...currentNode.data.output, urls: updatedOutputUrls }
+            output: updatedOutput
           })
-          console.log('[ImageNode] 已静默更新 output.urls')
+          console.log('[ImageNode] 已静默更新 output.url/output.urls')
         }
       }
       
@@ -4392,11 +4424,14 @@ function updateDownstreamBlobReferences(blobUrl, serverUrl) {
       updated = true
     }
     
-    // 检查 output.urls
-    if (node.data?.output?.urls?.includes(blobUrl)) {
+    // 检查 output.url / output.urls
+    if (node.data?.output?.url === blobUrl || node.data?.output?.urls?.includes(blobUrl)) {
       updates.output = {
         ...node.data.output,
-        urls: node.data.output.urls.map(url => url === blobUrl ? serverUrl : url)
+        ...(node.data.output.url === blobUrl ? { url: serverUrl } : {})
+      }
+      if (Array.isArray(updates.output.urls)) {
+        updates.output.urls = updates.output.urls.map(url => url === blobUrl ? serverUrl : url)
       }
       updated = true
     }
@@ -7633,6 +7668,37 @@ async function handleDrop(event) {
                 'low-quality': isCanvasDragging
               }"
             >
+              <button
+                type="button"
+                class="preview-output-image-btn output-image-action-btn"
+                title="全图预览"
+                aria-label="全图预览"
+                @mousedown.stop.prevent
+                @click.stop="handleToolbarPreview"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M4 8V4m0 0h4M4 4l5 5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M20 8V4m0 0h-4m4 0l-5 5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M4 16v4m0 0h4m-4 0l5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M20 16v4m0 0h-4m4 0l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <button
+                v-if="!props.data?.readonly"
+                type="button"
+                class="replace-output-image-btn output-image-action-btn"
+                title="替换图片"
+                aria-label="替换图片"
+                @mousedown.stop.prevent
+                @click.stop="triggerReplaceOutputUpload"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M21 12a9 9 0 0 1-15 6.7L3 16" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M3 21v-5h5" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M3 12a9 9 0 0 1 15-6.7L21 8" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M21 3v5h-5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
               <template v-for="(img, index) in outputImages.slice(0, 4)" :key="img || index">
                 <CanvasNodeImage
                   v-if="isNodeVisible"
@@ -9236,6 +9302,55 @@ async function handleDrop(event) {
   border-radius: 12px;
   overflow: hidden;
   position: relative;
+}
+
+.output-image-action-btn {
+  position: absolute;
+  top: 10px;
+  z-index: 8;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(20, 20, 20, 0.78);
+  color: #fff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.24);
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-2px);
+  transition: opacity 0.16s ease, transform 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.replace-output-image-btn {
+  right: 10px;
+}
+
+.preview-output-image-btn {
+  right: 52px;
+}
+
+.output-image-action-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.preview-images:hover .output-image-action-btn,
+.output-image-action-btn:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.output-image-action-btn:hover,
+.output-image-action-btn:focus-visible {
+  background: rgba(40, 40, 40, 0.92);
+  border-color: var(--canvas-accent-primary, #3b82f6);
+  outline: none;
 }
 
 .edit-saving-badge {
@@ -11748,6 +11863,20 @@ async function handleDrop(event) {
 
 :root.canvas-theme-light .image-node .upload-overlay-btn:hover {
   background: rgba(255, 255, 255, 1);
+  border-color: rgba(59, 130, 246, 0.4);
+  color: #3b82f6;
+}
+
+:root.canvas-theme-light .image-node .output-image-action-btn {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: #57534e;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14);
+}
+
+:root.canvas-theme-light .image-node .output-image-action-btn:hover,
+:root.canvas-theme-light .image-node .output-image-action-btn:focus-visible {
+  background: #fff;
   border-color: rgba(59, 130, 246, 0.4);
   color: #3b82f6;
 }
