@@ -7,8 +7,11 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(join(__dirname, 'history.js'), 'utf8')
 
-test('canvas history fetches all paginated history pages instead of only the first page', () => {
+test('canvas history supports bounded paginated fetching', () => {
   assert.match(source, /async function fetchHistoryPages/)
+  assert.match(source, /function getHistoryMaxPages/)
+  assert.match(source, /const maxPages = getHistoryMaxPages\(params\.maxPages\)/)
+  assert.match(source, /page < maxPages/)
   assert.match(source, /offset \+= pageLimit/)
   assert.match(source, /hasMore/)
   assert.match(source, /offset=\$\{offset\}/)
