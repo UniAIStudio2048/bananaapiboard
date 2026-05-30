@@ -5,28 +5,85 @@
 
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 
+const IMAGE_PRESETS_CACHE_TTL = 30 * 1000
+let imagePresetsCache = {
+  key: '',
+  expiresAt: 0,
+  data: null
+}
+let imagePresetsRequest = null
+
+function getLocalStorageValue(key) {
+  if (typeof localStorage === 'undefined') return ''
+  return localStorage.getItem(key) || ''
+}
+
+function getImagePresetsCacheKey() {
+  return [
+    getLocalStorageValue('token'),
+    getLocalStorageValue('tenantId'),
+    getLocalStorageValue('tenantKey')
+  ].join(':')
+}
+
+export function invalidateImagePresetsCache() {
+  imagePresetsCache = {
+    key: '',
+    expiresAt: 0,
+    data: null
+  }
+  imagePresetsRequest = null
+}
+
 /**
  * 获取图像预设列表（租户全局预设 + 用户自定义预设）
+ * @param {Object} options
+ * @param {Boolean} options.forceRefresh - 是否绕过本地短缓存
  * @returns {Promise<{tenant: Array, user: Array}>}
  */
-export async function getImagePresets() {
-  const token = localStorage.getItem('token')
+export async function getImagePresets(options = {}) {
+  const { forceRefresh = false } = options
+  const token = getLocalStorageValue('token')
+  const cacheKey = getImagePresetsCacheKey()
+  const now = Date.now()
 
-  const response = await fetch(getApiUrl('/api/canvas/image-presets'), {
-    method: 'GET',
-    headers: {
-      ...getTenantHeaders(),
-      'Authorization': `Bearer ${token}`
-    }
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || '获取预设失败')
+  if (!forceRefresh && imagePresetsCache.key === cacheKey && imagePresetsCache.data && imagePresetsCache.expiresAt > now) {
+    return imagePresetsCache.data
   }
 
-  const data = await response.json()
-  return data.presets // { tenant: [], user: [] }
+  if (!forceRefresh && imagePresetsRequest) {
+    return imagePresetsRequest
+  }
+
+  imagePresetsRequest = (async () => {
+    const response = await fetch(getApiUrl('/api/canvas/image-presets'), {
+      method: 'GET',
+      headers: {
+        ...getTenantHeaders(),
+        'Authorization': `Bearer ${token}`
+      }
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || '获取预设失败')
+    }
+
+    const data = await response.json()
+    const presets = data.presets || { tenant: [], user: [] }
+    imagePresetsCache = {
+      key: cacheKey,
+      expiresAt: Date.now() + IMAGE_PRESETS_CACHE_TTL,
+      data: presets
+    }
+    return presets // { tenant: [], user: [] }
+  })()
+
+  try {
+    return await imagePresetsRequest
+  } finally {
+    imagePresetsRequest = null
+  }
 }
 
 /**
@@ -85,6 +142,7 @@ export async function createImagePreset(presetData) {
   }
 
   const data = await response.json()
+  invalidateImagePresetsCache()
   return data.preset
 }
 
@@ -113,6 +171,7 @@ export async function updateImagePreset(presetId, presetData) {
   }
 
   const data = await response.json()
+  invalidateImagePresetsCache()
   return data.preset
 }
 
@@ -136,6 +195,8 @@ export async function deleteImagePreset(presetId) {
     const error = await response.json()
     throw new Error(error.error || '删除预设失败')
   }
+
+  invalidateImagePresetsCache()
 }
 
 /**

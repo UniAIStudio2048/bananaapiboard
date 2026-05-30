@@ -62,6 +62,12 @@ function getHistoryPageLimit(limit) {
   return Math.min(parsed, 500)
 }
 
+function getHistoryMaxPages(maxPages) {
+  const parsed = Number.parseInt(maxPages, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return MAX_HISTORY_PAGES
+  return Math.min(parsed, MAX_HISTORY_PAGES)
+}
+
 function buildHistoryQuery(params, pageLimit, offset) {
   const parts = []
   if (params.spaceType) {
@@ -81,9 +87,10 @@ function buildHistoryQuery(params, pageLimit, offset) {
 async function fetchHistoryPages(endpoint, responseKey, params, headers, mapRows, errorLabel) {
   const allItems = []
   const pageLimit = getHistoryPageLimit(params.limit)
+  const maxPages = getHistoryMaxPages(params.maxPages)
   let offset = Math.max(Number.parseInt(params.offset, 10) || 0, 0)
 
-  for (let page = 0; page < MAX_HISTORY_PAGES; page++) {
+  for (let page = 0; page < maxPages; page++) {
     try {
       const query = buildHistoryQuery(params, pageLimit, offset)
       const res = await fetch(getApiUrl(`${endpoint}?${query}`), {

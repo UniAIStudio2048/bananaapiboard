@@ -301,13 +301,18 @@ async function loadHistory(forceRefresh = false) {
   // 3. 从服务器加载（无缓存或强制刷新）
   loading.value = true
   try {
-    const freshData = await _fetchFromServer(spaceParams, spaceType, teamId, forceRefresh)
+    const freshData = await _fetchFromServer(spaceParams, spaceType, teamId, {
+      noCache: forceRefresh,
+      maxPages: 1,
+      cacheResult: false
+    })
     // 精确比较，避免数据相同时替换数组引用导致图片跳闪
     if (!_isHistoryEqual(freshData, historyList.value)) {
       historyList.value = freshData
     }
     dataCached.value = true
     lastLoadTime.value = Date.now()
+    _refreshHistoryInBackground(spaceParams, spaceType, teamId, { noCache: forceRefresh })
   } catch (error) {
     console.error('[HistoryPanel] 加载历史记录失败:', error)
   } finally {
@@ -316,12 +321,25 @@ async function loadHistory(forceRefresh = false) {
 }
 
 // 从服务器获取历史数据并缓存
-async function _fetchFromServer(spaceParams, spaceType, teamId, noCache = false) {
-  const result = await getHistory(noCache ? { ...spaceParams, noCache: true } : spaceParams)
+async function _fetchFromServer(spaceParams, spaceType, teamId, options = {}) {
+  const normalizedOptions = typeof options === 'boolean' ? { noCache: options } : (options || {})
+  const {
+    noCache = false,
+    maxPages,
+    cacheResult = true
+  } = normalizedOptions
+  const query = {
+    ...spaceParams,
+    ...(noCache ? { noCache: true } : {}),
+    ...(maxPages ? { maxPages } : {})
+  }
+  const result = await getHistory(query)
   const freshData = result.history || []
   console.log('[HistoryPanel] 从服务器加载:', freshData.length, '条')
   
-  cacheHistory('all', spaceType, teamId, freshData).catch(() => {})
+  if (cacheResult) {
+    cacheHistory('all', spaceType, teamId, freshData).catch(() => {})
+  }
   
   const preloadUrls = freshData
     .filter(item => item.type === 'image' && item.url)
@@ -345,6 +363,12 @@ function _isHistoryEqual(a, b) {
   return true
 }
 
+function _isHistoryPrefixEqual(freshPrefix, currentList) {
+  if (freshPrefix.length === 0 && currentList.length === 0) return true
+  if (freshPrefix.length === 0 || currentList.length === 0) return false
+  return _isHistoryEqual(freshPrefix, currentList.slice(0, freshPrefix.length))
+}
+
 function getHistoryCardAspectStyle(item) {
   const fallback = item.type === 'video' ? '16 / 9' : item.type === 'audio' ? '1 / 1' : '1 / 1'
   const raw = item.aspect_ratio || item.aspectRatio || (item.type === 'video' ? videoAspectRatios.value[item.id] : null)
@@ -361,9 +385,9 @@ function estimateItemWeight(item) {
 }
 
 // 后台静默刷新：不阻塞 UI，刷新完毕后对比更新
-async function _refreshHistoryInBackground(spaceParams, spaceType, teamId) {
+async function _refreshHistoryInBackground(spaceParams, spaceType, teamId, options = {}) {
   try {
-    const freshData = await _fetchFromServer(spaceParams, spaceType, teamId)
+    const freshData = await _fetchFromServer(spaceParams, spaceType, teamId, options)
     if (!_isHistoryEqual(freshData, historyList.value)) {
       historyList.value = freshData
       dataCached.value = true
@@ -392,15 +416,13 @@ async function checkTeamSync() {
   try {
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
     const { spaceType, teamId } = spaceParams
-    const result = await getHistory({ ...spaceParams, noCache: true })
+    const result = await getHistory({ ...spaceParams, noCache: true, maxPages: 1 })
     const freshData = result.history || []
 
-    if (!_isHistoryEqual(freshData, historyList.value)) {
+    if (!_isHistoryPrefixEqual(freshData, historyList.value)) {
       console.log('[HistoryPanel] 团队空间检测到新数据，更新列表')
-      historyList.value = freshData
-      dataCached.value = true
-      lastLoadTime.value = Date.now()
-      cacheHistory('all', spaceType, teamId, freshData).catch(() => {})
+      dataCached.value = false
+      await loadHistory(true)
     }
   } catch (error) {
     console.error('[HistoryPanel] 团队同步检查失败:', error)
@@ -447,16 +469,13 @@ function startAutoRefresh() {
     try {
       const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
       const { spaceType, teamId } = spaceParams
-      const result = await getHistory({ ...spaceParams, noCache: true })
+      const result = await getHistory({ ...spaceParams, noCache: true, maxPages: 1 })
       const freshData = result.history || []
 
-      if (!_isHistoryEqual(freshData, historyList.value)) {
+      if (!_isHistoryPrefixEqual(freshData, historyList.value)) {
         console.log('[HistoryPanel] 检测到新数据，更新列表')
-        historyList.value = freshData
-        dataCached.value = true
-        lastLoadTime.value = Date.now()
-        // 更新缓存
-        cacheHistory('all', spaceType, teamId, freshData).catch(() => {})
+        dataCached.value = false
+        await loadHistory(true)
       }
     } catch (e) {
       // 静默失败
