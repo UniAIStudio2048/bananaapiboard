@@ -164,6 +164,36 @@ export function registerTask(taskInfo) {
 }
 
 /**
+ * 确保画布节点关联的后台任务已登记且正在轮询。
+ */
+export function ensureTaskPolling({ taskId, type, nodeId, tabId }) {
+  if (!taskId) return null
+
+  const existingTask = tasks.get(taskId)
+  if (existingTask) {
+    if (existingTask.status === 'completed' || existingTask.status === 'failed') {
+      return existingTask
+    }
+    if ((existingTask.status === 'pending' || existingTask.status === 'processing') && !pollingTimers.has(taskId)) {
+      startPolling(taskId)
+    }
+    return tasks.get(taskId)
+  }
+
+  registerTask({
+    taskId,
+    type,
+    nodeId,
+    tabId,
+    metadata: {
+      restoredFromCanvasNode: true
+    }
+  })
+
+  return tasks.get(taskId)
+}
+
+/**
  * 开始轮询任务状态
  */
 function startPolling(taskId) {

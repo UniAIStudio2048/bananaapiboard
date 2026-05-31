@@ -50,7 +50,7 @@ import {
   saveWorkflowSession,
   clearWorkflowSession
 } from '@/stores/canvas/workflowAutoSave'
-import { initBackgroundTaskManager, getPendingTasks, registerTask, subscribeTask, removeCompletedTask, cleanup as cleanupBackgroundTasks } from '@/stores/canvas/backgroundTaskManager'
+import { initBackgroundTaskManager, getPendingTasks, registerTask, ensureTaskPolling, subscribeTask, removeCompletedTask, cleanup as cleanupBackgroundTasks } from '@/stores/canvas/backgroundTaskManager'
 import {
   getCanvasNodeTaskId,
   getCanvasNodeBackgroundTaskType,
@@ -1227,6 +1227,25 @@ function restoreBackgroundTasks() {
   }
 }
 
+function reconcileTasksForActiveTab() {
+  for (const node of canvasStore.nodes) {
+    if (node.data?.status !== 'processing' || !node.data?.taskId) continue
+
+    const task = ensureTaskPolling({
+      taskId: node.data.taskId,
+      type: node.data.taskType || 'image',
+      nodeId: node.id,
+      tabId: canvasStore.activeTabId
+    })
+
+    if (task && (task.status === 'completed' || task.status === 'failed')) {
+      updateNodeFromTask(task)
+    }
+  }
+
+  restoreBackgroundTasks()
+}
+
 function failZombieCanvasVideoNodes() {
   const pendingTaskIds = new Set(getPendingTasks().map(task => task.taskId))
 
@@ -1523,6 +1542,12 @@ function updateNodeFromTask(task) {
     })
   }
 }
+
+watch(() => canvasStore.activeTabId, (id, old) => {
+  if (id && id !== old) {
+    nextTick(() => reconcileTasksForActiveTab())
+  }
+})
 
 function saveCanvasExitState(reason = 'exit') {
   const sessionSaved = saveCurrentWorkflowSession()
