@@ -62,7 +62,13 @@ import {
   getVideoGenerationProgressText,
   shouldShowVideoGenerationTimeoutHint
 } from '@/utils/videoGenerationProgress'
-import { isSeedanceSd2VideoModel, resolveVideoRequestModel } from '@/utils/videoGenerationMode'
+import {
+  getWanDurationOptions,
+  isSeedanceSd2VideoModel,
+  isWanVideoModel,
+  resolveVideoRequestModel,
+  WAN_MODES
+} from '@/utils/videoGenerationMode'
 import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
 import { exportVideoTimeline, getSubtitleEraseTask } from '@/api/canvas/video-tools'
 import { smartDownload } from '@/api/client'
@@ -1290,6 +1296,26 @@ const currentSeedance2ModeConfig = computed(() => {
   return seedance2Modes.value.find(m => m.value === selectedSeedance2Mode.value) || seedance2Modes.value[0] || SEEDANCE2_MODES[0]
 })
 
+// Wan 2.7 模式选择（对齐 Seedance 2.0）
+const isWanModel = computed(() => isWanVideoModel(currentModelConfig.value))
+const selectedWanMode = ref(props.data.wanMode || 't2v')
+
+const wanSupportedModesConfig = computed(() => {
+  return currentModelConfig.value?.wanConfig?.supportedModes || null
+})
+
+const wanModes = computed(() => {
+  const modes = WAN_MODES.filter(mode => {
+    if (!wanSupportedModesConfig.value) return true
+    return wanSupportedModesConfig.value[mode.value] !== false
+  })
+  return modes.length > 0 ? modes : WAN_MODES
+})
+
+const currentWanModeConfig = computed(() => {
+  return wanModes.value.find(m => m.value === selectedWanMode.value) || wanModes.value[0] || WAN_MODES[0]
+})
+
 // Seedance 高级选项显示控制
 const showSeedanceAdvancedOptions = ref(false)
 
@@ -1678,7 +1704,15 @@ const useVendorLayout = computed(() => vendorGroups.value.length > 1)
 
 // 时长选项（动态计算）
 const durations = computed(() => {
-  return availableDurations.value.map(d => ({
+  const sourceDurations = isWanModel.value
+    ? getWanDurationOptions({
+        modelDurations: availableDurations.value,
+        mode: selectedWanMode.value,
+        hasVideoReference: referenceVideos.value.length > 0
+      })
+    : availableDurations.value
+
+  return sourceDurations.map(d => ({
     value: d,
     label: `${d}s`
   }))
@@ -2629,6 +2663,22 @@ const referenceAudios = computed(() => {
 
 const hasReferenceAudios = computed(() => referenceAudios.value.length > 0)
 
+watch(wanModes, (modes) => {
+  if (!isWanModel.value) return
+  if (!modes.some(mode => mode.value === selectedWanMode.value)) {
+    selectedWanMode.value = getFirstAvailableMode(currentModelConfig.value?.wanConfig?.defaultMode || 't2v', modes, 't2v')
+  }
+}, { immediate: true })
+
+watch([selectedWanMode, referenceVideos, isWanModel], () => {
+  if (!isWanModel.value || selectedWanMode.value !== 'r2v' || referenceVideos.value.length === 0) return
+  const currentDuration = Number(selectedDuration.value)
+  if (currentDuration > 10) {
+    selectedDuration.value = '10'
+    showToast('Wan 多参考包含视频时，时长已自动调整为10秒', 'warning')
+  }
+})
+
 async function prepareSeedanceImageFile(file) {
   if (!file || !file.type?.startsWith('image/')) return null
   const compressed = await compressImage(file, {
@@ -2835,6 +2885,28 @@ const hasUpstreamVideo = computed(() => {
   return upstreamVideoUrl.value.length > 0
 })
 
+const upstreamVideoDuration = computed(() => {
+  const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
+  for (const edge of upstreamEdges) {
+    const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
+    if (!sourceNode?.data || !VIDEO_NODE_TYPES.includes(sourceNode.type)) continue
+    const duration = Number(
+      sourceNode.data.videoDuration ||
+      sourceNode.data.duration ||
+      sourceNode.data.output?.duration
+    )
+    if (Number.isFinite(duration) && duration > 0) {
+      return duration
+    }
+  }
+  return 0
+})
+
+const wanBillingDuration = computed(() => {
+  if (selectedWanMode.value !== 'videoedit') return Number(selectedDuration.value) || 5
+  return Math.ceil(upstreamVideoDuration.value || currentModelConfig.value?.wanConfig?.defaultDuration || 5)
+})
+
 // 积分消耗计算（从模型配置中读取）
 const pointsCost = computed(() => {
   let cost = 1
@@ -2887,6 +2959,11 @@ const pointsCost = computed(() => {
 
   const modelPointsCost = currentModelConfig.value.pointsCost
   
+  if (isWanModel.value && currentModelConfig.value.hasDurationPricing && typeof modelPointsCost === 'object') {
+    cost = modelPointsCost[String(wanBillingDuration.value)] || modelPointsCost[wanBillingDuration.value] || modelPointsCost['5'] || 20
+    return cost
+  }
+
   // 如果是按时长计费的模型
   if (currentModelConfig.value.hasDurationPricing && typeof modelPointsCost === 'object') {
     cost = modelPointsCost[selectedDuration.value] || 20
@@ -3205,8 +3282,8 @@ function handleMotionImitation() {
 }
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode], 
-  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode]) => {
+watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode, selectedWanMode], 
+  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode, wanMode]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       aspectRatio,
@@ -3227,7 +3304,8 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
       klingMotionVideoUrl: motionVideoUrl,
       klingMotionMode: motionMode,
       seedanceSoundEnabled: seedanceSndEnabled,
-      seedance2Mode: sd2Mode
+      seedance2Mode: sd2Mode,
+      wanMode
     })
   },
   { deep: true }
@@ -3284,6 +3362,11 @@ watch(selectedModel, () => {
     const defaultMode = getDefaultSeedance2ModeForModel(modelConfig)
     selectedSeedance2Mode.value = getFirstAvailableMode(defaultMode, seedance2Modes.value)
     console.log('[VideoNode] 切换到 Seedance/Happy Horse 模型，模式重置为', selectedSeedance2Mode.value)
+  }
+
+  if (isWanVideoModel(modelConfig)) {
+    selectedWanMode.value = getFirstAvailableMode(modelConfig?.wanConfig?.defaultMode || 't2v', wanModes.value, 't2v')
+    console.log('[VideoNode] 切换到 Wan 模型，模式重置为', selectedWanMode.value)
   }
 })
 
@@ -3844,9 +3927,13 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
     formData.append('teamId', spaceParams.teamId)
   }
   
-  // VEO3 模型不需要时长参数
-  if (!isVeo3Model.value) {
+  // VEO3 / Wan 视频编辑不需要时长参数
+  if (!isVeo3Model.value && !(isWanModel.value && selectedWanMode.value === 'videoedit')) {
     formData.append('duration', selectedDuration.value)
+  }
+  const negativePrompt = props.data?.negativePrompt || props.data?.negative_prompt || ''
+  if (negativePrompt) {
+    formData.append('negative_prompt', negativePrompt)
   }
   
   // Sora2 模型特有参数
@@ -4023,6 +4110,51 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
       console.log('[VideoNode] SD2 视频延长 | 参考视频:', orderedVideos.length)
     }
     // text2video 不需要额外参数，直接用 prompt
+  }
+
+  if (isWanModel.value) {
+    const wanMode = selectedWanMode.value
+    const wanResolution = currentModelConfig.value?.wanConfig?.resolution ||
+      currentModelConfig.value?.resolution ||
+      '720P'
+    formData.append('seedance_mode', wanMode)
+    formData.append('seedance_resolution', wanResolution)
+    formData.append('resolution', wanResolution)
+    formData.append('seedance_ratio', selectedAspectRatio.value)
+    formData.append('seedance_watermark', currentModelConfig.value?.wanConfig?.watermark === false ? 'false' : 'true')
+    console.log('[VideoNode] Wan 模式:', wanMode, '分辨率:', wanResolution, '比例:', selectedAspectRatio.value)
+
+    if (wanMode === 'i2v') {
+      if (finalImages.length > 0) {
+        formData.append('first_frame_image', finalImages[0])
+      }
+      const orderedAudios = referenceAudios.value || []
+      if (orderedAudios.length > 0) {
+        formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, 1)))
+      }
+      console.log('[VideoNode] Wan 图生视频 | 首帧图:', finalImages.length > 0, '驱动音频:', orderedAudios.length)
+    } else if (wanMode === 'r2v') {
+      const orderedVideos = referenceVideos.value || []
+      const imageLimit = Math.max(0, 5 - orderedVideos.length)
+      const totalReferenceCount = Math.min(5, finalImages.length + orderedVideos.length)
+      if (finalImages.length > 0) {
+        formData.append('reference_images', JSON.stringify(finalImages.slice(0, imageLimit)))
+      }
+      if (orderedVideos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, 5)))
+      }
+      const orderedAudios = referenceAudios.value || []
+      if (orderedAudios.length > 0) {
+        formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, totalReferenceCount)))
+      }
+      console.log('[VideoNode] Wan 多参考 | 图片:', finalImages.length, '视频:', orderedVideos.length, '音频:', orderedAudios.length)
+    } else if (wanMode === 'videoedit') {
+      const orderedVideos = referenceVideos.value || []
+      if (orderedVideos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, 1)))
+      }
+      console.log('[VideoNode] Wan 视频编辑 | 上游视频:', orderedVideos.length)
+    }
   }
   
   // 所有模型都通过 image_urls 传递参考图片（后端兼容 + 作为 Seedance 2.0 reference_images 的备用）
@@ -4632,8 +4764,38 @@ async function handleGenerate(options = {}) {
     }
   }
 
+  if (isWanModel.value) {
+    const wanMode = selectedWanMode.value
+    const wanReferenceCount = finalImages.length + referenceVideos.value.length
+    if (!finalPrompt) {
+      await showAlert('请输入 Wan 视频提示词', '提示')
+      return
+    }
+    if (wanMode === 'i2v' && finalImages.length === 0) {
+      await showAlert('Wan 图生视频需要连接或上传1张首帧图', '提示')
+      return
+    }
+    if (wanMode === 'i2v' && finalImages.length > 1) {
+      await showAlert('Wan 图生视频最多支持1张首帧图', '提示')
+      return
+    }
+    if (wanMode === 'r2v' && wanReferenceCount === 0) {
+      await showAlert('Wan 多参考需要连接或上传图片/视频参考素材', '提示')
+      return
+    }
+    if (wanMode === 'r2v' && wanReferenceCount > 5) {
+      await showAlert('Wan 多参考的图片/视频参考素材合计最多5个', '提示')
+      return
+    }
+    if (wanMode === 'videoedit' && referenceVideos.value.length === 0) {
+      await showAlert('Wan 视频编辑需要连接上游视频节点', '提示')
+      return
+    }
+  }
+
   const hasSeedanceVideoInput = isSeedance2Model.value && referenceVideos.value.length > 0
-  if (!finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput) {
+  const hasWanVideoInput = isWanModel.value && ['r2v', 'videoedit'].includes(selectedWanMode.value) && referenceVideos.value.length > 0
+  if (!finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput && !hasWanVideoInput) {
     await showAlert('请输入提示词或连接参考图片', '提示')
     return
   }
@@ -4666,6 +4828,7 @@ async function handleGenerate(options = {}) {
       referenceVideos: referenceVideos.value,
       referenceAudios: referenceAudios.value,
       seedanceMode: isSeedance2Model.value ? selectedSeedance2Mode.value : '',
+      wanMode: isWanModel.value ? selectedWanMode.value : '',
       klingO1Mode: isKlingO1Model.value ? selectedKlingO1Mode.value : '',
       klingV3OmniMode: isKlingV3OmniModel.value ? selectedKlingV3OmniMode.value : ''
     })
@@ -8115,6 +8278,42 @@ function handleToolbarPreview() {
           </div>
           <div v-if="referenceImages.length > 0 && referenceImages.length > currentKlingV3OmniModeConfig.maxImages && currentKlingV3OmniModeConfig.maxImages > 0" class="sd2-mode-warn">
             ⚠ {{ currentKlingV3OmniModeConfig.label }}最多支持{{ currentKlingV3OmniModeConfig.maxImages }}张图
+          </div>
+        </div>
+      </template>
+
+      <!-- Wan 2.7 模式选择（使用 SD2 风格） -->
+      <template v-if="isWanModel">
+        <div class="sd2-mode-section">
+          <div class="sd2-mode-header">
+            <span class="sd2-mode-title">Wan 模式</span>
+            <span class="sd2-mode-current">{{ currentWanModeConfig.label }}</span>
+          </div>
+          <div class="sd2-mode-grid">
+            <button
+              v-for="opt in wanModes"
+              :key="opt.value"
+              @click="selectedWanMode = opt.value"
+              :class="['sd2-mode-btn', { active: selectedWanMode === opt.value }]"
+            >
+              <span class="sd2-mode-label">{{ opt.label }}</span>
+            </button>
+          </div>
+          <div class="sd2-mode-desc">{{ currentWanModeConfig.desc }}</div>
+          <div v-if="selectedWanMode === 'i2v' && referenceImages.length === 0" class="sd2-mode-warn">
+            ⚠ 图生视频需要连接或上传1张首帧图
+          </div>
+          <div v-if="selectedWanMode === 'i2v' && referenceImages.length > 1" class="sd2-mode-warn">
+            ⚠ 图生视频最多支持1张首帧图
+          </div>
+          <div v-if="selectedWanMode === 'r2v' && referenceImages.length + referenceVideos.length === 0" class="sd2-mode-warn">
+            ⚠ 多参考需要连接或上传图片/视频参考素材
+          </div>
+          <div v-if="selectedWanMode === 'r2v' && referenceImages.length + referenceVideos.length > 5" class="sd2-mode-warn">
+            ⚠ 多参考的图片/视频参考素材合计最多5个
+          </div>
+          <div v-if="selectedWanMode === 'videoedit' && !hasUpstreamVideo" class="sd2-mode-warn">
+            ⚠ 视频编辑需要连接上游视频节点
           </div>
         </div>
       </template>

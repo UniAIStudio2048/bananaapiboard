@@ -13,6 +13,13 @@ const SD2_MODE_TO_GENERATION_MODE = {
   video_extend: 'image'
 }
 
+export const WAN_MODES = [
+  { value: 't2v', label: '文生视频', desc: '纯文本生成视频', needsImage: false, needsVideo: false },
+  { value: 'i2v', label: '图生视频', desc: '首帧图(+可选驱动音频)', needsImage: true, needsVideo: false, needsAudio: true, maxImages: 1 },
+  { value: 'r2v', label: '多参考', desc: '图片/视频参考(≤5)，可带音色', needsImage: true, needsVideo: true, needsAudio: true, maxImages: 5 },
+  { value: 'videoedit', label: '视频编辑', desc: '需连接上游视频节点', needsImage: false, needsVideo: true }
+]
+
 class FormEntryList {
   constructor() {
     this.entries = []
@@ -60,6 +67,21 @@ export function isSeedanceSd2VideoModel(modelConfig) {
   const apiType = modelConfig?.apiType || ''
   if (hasByteforMarker(modelConfig)) return false
   return apiType === 'seedance-2.0' || apiType === 'ant' || apiType === 'happyhorse' || apiType === 'ctyun-seedance'
+}
+
+export function isWanVideoModel(modelConfig) {
+  return modelConfig?.apiType === 'wan'
+}
+
+export function getWanDurationOptions({ modelDurations = [], mode = 't2v', hasVideoReference = false } = {}) {
+  if (mode === 'videoedit') return []
+  const maxDuration = mode === 'r2v' && hasVideoReference ? 10 : 15
+  const sourceDurations = Array.isArray(modelDurations) && modelDurations.length > 0
+    ? modelDurations
+    : Array.from({ length: 14 }, (_, index) => index + 2)
+  return sourceDurations
+    .map(duration => Number(duration))
+    .filter(duration => Number.isFinite(duration) && duration >= 2 && duration <= maxDuration)
 }
 
 export function getDefaultSeedance2ModeForVideoModel(modelConfig) {

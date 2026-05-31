@@ -4,7 +4,9 @@ import assert from 'node:assert/strict'
 import {
   buildVideoGenerationFormEntries,
   getDefaultGenerationModeForVideoModel,
+  getWanDurationOptions,
   isSeedanceSd2VideoModel,
+  isWanVideoModel,
   resolveVideoRequestModel
 } from './videoGenerationMode.js'
 
@@ -146,5 +148,38 @@ test('Bytefor request model keeps model id instead of provider model', () => {
       seedanceConfig: { model: configuredProviderModel }
     }, 'bytefor-seedance-2.0'),
     'bytefor-seedance-2.0'
+  )
+})
+
+test('Wan video models use text defaults and clamp r2v durations with video references', () => {
+  assert.equal(isWanVideoModel({ apiType: 'wan' }), true)
+  assert.equal(isWanVideoModel({ apiType: 'seedance-2.0' }), false)
+  assert.equal(getDefaultGenerationModeForVideoModel({ apiType: 'wan' }), 'text')
+
+  assert.deepEqual(
+    getWanDurationOptions({
+      modelDurations: [2, 5, 10, 11, 15, 20],
+      mode: 't2v',
+      hasVideoReference: false
+    }),
+    [2, 5, 10, 11, 15]
+  )
+
+  assert.deepEqual(
+    getWanDurationOptions({
+      modelDurations: [2, 5, 10, 11, 15, 20],
+      mode: 'r2v',
+      hasVideoReference: true
+    }),
+    [2, 5, 10]
+  )
+
+  assert.deepEqual(
+    getWanDurationOptions({
+      modelDurations: [2, 5, 10, 11, 15],
+      mode: 'videoedit',
+      hasVideoReference: true
+    }),
+    []
   )
 })
