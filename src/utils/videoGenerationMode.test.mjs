@@ -7,7 +7,8 @@ import {
   getWanDurationOptions,
   isSeedanceSd2VideoModel,
   isWanVideoModel,
-  resolveVideoRequestModel
+  resolveVideoRequestModel,
+  WAN_MODES
 } from './videoGenerationMode.js'
 
 test('Bytefor video models are not treated as Seedance SD2 models', () => {
@@ -155,6 +156,7 @@ test('Wan video models use text defaults and clamp r2v durations with video refe
   assert.equal(isWanVideoModel({ apiType: 'wan' }), true)
   assert.equal(isWanVideoModel({ apiType: 'seedance-2.0' }), false)
   assert.equal(getDefaultGenerationModeForVideoModel({ apiType: 'wan' }), 'text')
+  assert.ok(WAN_MODES.some(mode => mode.value === 'animate_mix' && mode.needsImage && mode.needsVideo))
 
   assert.deepEqual(
     getWanDurationOptions({
@@ -178,6 +180,15 @@ test('Wan video models use text defaults and clamp r2v durations with video refe
     getWanDurationOptions({
       modelDurations: [2, 5, 10, 11, 15],
       mode: 'videoedit',
+      hasVideoReference: true
+    }),
+    []
+  )
+
+  assert.deepEqual(
+    getWanDurationOptions({
+      modelDurations: [2, 5, 10, 15, 30],
+      mode: 'animate_mix',
       hasVideoReference: true
     }),
     []

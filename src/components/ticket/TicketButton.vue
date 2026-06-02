@@ -20,6 +20,7 @@ import { ref, onMounted, onUnmounted } from 'vue'
 import { getUnreadCount } from '@/api/ticket'
 
 const hasUnread = ref(false)
+const UNREAD_POLL_INTERVAL_MS = 120000
 let pollTimer = null
 
 // 加载未读数量
@@ -44,7 +45,7 @@ async function loadUnreadCount() {
 // 开始轮询
 function startPolling() {
   loadUnreadCount()
-  pollTimer = setInterval(loadUnreadCount, 30000)
+  pollTimer = setInterval(loadUnreadCount, UNREAD_POLL_INTERVAL_MS)
 }
 
 // 停止轮询

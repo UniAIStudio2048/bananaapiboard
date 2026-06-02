@@ -835,6 +835,27 @@ function handleHistoryClick(item) {
   previewTranslate.value = { x: 0, y: 0 }
 }
 
+const previewableHistoryItems = computed(() => {
+  return filteredHistory.value.filter(item => item?.url && ['image', 'video', 'audio'].includes(item.type))
+})
+
+const currentPreviewIndex = computed(() => {
+  if (!previewItem.value) return -1
+  return previewableHistoryItems.value.findIndex(item => item.id === previewItem.value.id)
+})
+
+const canPreviewPrevious = computed(() => currentPreviewIndex.value > 0)
+const canPreviewNext = computed(() => {
+  return currentPreviewIndex.value >= 0 && currentPreviewIndex.value < previewableHistoryItems.value.length - 1
+})
+
+function switchHistoryPreview(offset) {
+  const nextIndex = currentPreviewIndex.value + offset
+  const nextItem = previewableHistoryItems.value[nextIndex]
+  if (!nextItem) return
+  handleHistoryClick(nextItem)
+}
+
 // 关闭全屏预览
 function closePreview() {
   // 释放视频资源，避免后台继续缓冲
@@ -1640,7 +1661,14 @@ watch(() => props.visible, async (visible) => {
 // 键盘事件
 function handleKeydown(e) {
   if (!props.visible) return
-  if (e.key === 'Escape') {
+  if (showPreview.value && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+    e.preventDefault()
+    e.stopPropagation()
+    e.stopImmediatePropagation?.()
+    if (previewItem.value) {
+      handleDownload(previewItem.value)
+    }
+  } else if (e.key === 'Escape') {
     if (showContextMenu.value) {
       closeContextMenu()
     } else if (showPreview.value) {
@@ -1648,6 +1676,12 @@ function handleKeydown(e) {
     } else {
       emit('close')
     }
+  } else if (showPreview.value && e.key === 'ArrowLeft') {
+    e.preventDefault()
+    switchHistoryPreview(-1)
+  } else if (showPreview.value && e.key === 'ArrowRight') {
+    e.preventDefault()
+    switchHistoryPreview(1)
   }
 }
 
@@ -1678,7 +1712,7 @@ function handleCanvasHistoryInvalidate() {
 
 onMounted(() => {
   window.addEventListener('canvas-history-invalidate', handleCanvasHistoryInvalidate)
-  document.addEventListener('keydown', handleKeydown)
+  document.addEventListener('keydown', handleKeydown, true)
   document.addEventListener('mousemove', handleGlobalMouseMove)
   document.addEventListener('mouseup', handleGlobalMouseUp)
   document.addEventListener('click', handleGlobalClick)
@@ -1694,7 +1728,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('canvas-history-invalidate', handleCanvasHistoryInvalidate)
-  document.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('keydown', handleKeydown, true)
   document.removeEventListener('mousemove', handleGlobalMouseMove)
   document.removeEventListener('mouseup', handleGlobalMouseUp)
   document.removeEventListener('click', handleGlobalClick)
@@ -2135,6 +2169,32 @@ onUnmounted(() => {
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <line x1="18" y1="6" x2="6" y2="18"/>
               <line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+
+          <button
+            class="preview-nav-btn preview-nav-prev"
+            type="button"
+            :disabled="!canPreviewPrevious"
+            @click.stop="switchHistoryPreview(-1)"
+            title="上一张"
+            aria-label="上一张"
+          >
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+
+          <button
+            class="preview-nav-btn preview-nav-next"
+            type="button"
+            :disabled="!canPreviewNext"
+            @click.stop="switchHistoryPreview(1)"
+            title="下一张"
+            aria-label="下一张"
+          >
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
           
@@ -3254,6 +3314,41 @@ onUnmounted(() => {
   max-height: 90vh;
   margin: auto;
   position: relative;
+}
+
+.history-preview-modal .preview-nav-btn {
+  position: absolute;
+  top: 50%;
+  z-index: 20;
+  width: 56px;
+  height: 80px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+
+.history-preview-modal .preview-nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.history-preview-modal .preview-nav-btn:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.history-preview-modal .preview-nav-prev {
+  left: 24px;
+}
+
+.history-preview-modal .preview-nav-next {
+  right: 24px;
 }
 
 /* 关闭按钮 */

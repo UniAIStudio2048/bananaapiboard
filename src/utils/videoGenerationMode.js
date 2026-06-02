@@ -17,7 +17,8 @@ export const WAN_MODES = [
   { value: 't2v', label: '文生视频', desc: '纯文本生成视频', needsImage: false, needsVideo: false },
   { value: 'i2v', label: '图生视频', desc: '首帧图(+可选驱动音频)', needsImage: true, needsVideo: false, needsAudio: true, maxImages: 1 },
   { value: 'r2v', label: '多参考', desc: '图片/视频参考(≤5)，可带音色', needsImage: true, needsVideo: true, needsAudio: true, maxImages: 5 },
-  { value: 'videoedit', label: '视频编辑', desc: '需连接上游视频节点', needsImage: false, needsVideo: true }
+  { value: 'videoedit', label: '视频编辑', desc: '需连接上游视频节点', needsImage: false, needsVideo: true },
+  { value: 'animate_mix', label: '换人混合', desc: '1张人物图 + 1段参考视频', needsImage: true, needsVideo: true, maxImages: 1, maxVideos: 1 }
 ]
 
 class FormEntryList {
@@ -74,7 +75,7 @@ export function isWanVideoModel(modelConfig) {
 }
 
 export function getWanDurationOptions({ modelDurations = [], mode = 't2v', hasVideoReference = false } = {}) {
-  if (mode === 'videoedit') return []
+  if (mode === 'videoedit' || mode === 'animate_mix') return []
   const maxDuration = mode === 'r2v' && hasVideoReference ? 10 : 15
   const sourceDurations = Array.isArray(modelDurations) && modelDurations.length > 0
     ? modelDurations

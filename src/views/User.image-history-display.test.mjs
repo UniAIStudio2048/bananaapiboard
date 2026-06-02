@@ -67,3 +67,18 @@ test('image and video preview details use shared history media metadata formatte
   assert.match(source, /min-w-0 break-all font-medium text-white/)
   assert.doesNotMatch(source, /rounded-lg bg-white\/10 px-3 py-2/)
 })
+
+test('image preview supports keyboard save shortcuts with remembered directory', () => {
+  assert.match(source, /import \{ buildStreamDownloadPath \} from '@\/api\/downloadRouting'/)
+  assert.match(source, /import \{ getHistoryImageDownloadFilename, getHistoryImageShortcutAction \} from '@\/utils\/historyImageDownload'/)
+  assert.match(source, /const historyImageDownloadDirectoryHandle = ref\(null\)/)
+  assert.match(source, /async function saveSelectedImageToDirectory\(/)
+  assert.match(source, /async function saveHistoryImageDownloadDirectoryHandle\(/)
+  assert.match(source, /async function loadHistoryImageDownloadDirectoryHandle\(/)
+  assert.match(source, /async function downloadSelectedImageFromPreview\(/)
+  assert.match(source, /function handleImagePreviewShortcut\(event\)/)
+  assert.match(source, /loadHistoryImageDownloadDirectoryHandle\(\)/)
+  assert.match(source, /window\.addEventListener\('keydown', handleImagePreviewShortcut\)/)
+  assert.match(source, /window\.removeEventListener\('keydown', handleImagePreviewShortcut\)/)
+  assert.match(source, /getHistoryImageShortcutAction\(event\)/)
+})

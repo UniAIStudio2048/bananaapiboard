@@ -2903,7 +2903,7 @@ const upstreamVideoDuration = computed(() => {
 })
 
 const wanBillingDuration = computed(() => {
-  if (selectedWanMode.value !== 'videoedit') return Number(selectedDuration.value) || 5
+  if (selectedWanMode.value !== 'videoedit' && selectedWanMode.value !== 'animate_mix') return Number(selectedDuration.value) || 5
   return Math.ceil(upstreamVideoDuration.value || currentModelConfig.value?.wanConfig?.defaultDuration || 5)
 })
 
@@ -2959,6 +2959,15 @@ const pointsCost = computed(() => {
 
   const modelPointsCost = currentModelConfig.value.pointsCost
   
+  if (isWanModel.value && selectedWanMode.value === 'animate_mix') {
+    const rateConfig = currentModelConfig.value.costPerSecond || currentModelConfig.value.wanConfig?.costPerSecond
+    const animateMode = currentModelConfig.value.wanConfig?.animateMode || 'wan-std'
+    const perSecondCost = typeof rateConfig === 'object'
+      ? (Number(rateConfig[animateMode] || rateConfig.std || rateConfig['wan-std']) || 10)
+      : (Number(rateConfig) || 10)
+    return Math.ceil(wanBillingDuration.value || 30) * perSecondCost
+  }
+
   if (isWanModel.value && currentModelConfig.value.hasDurationPricing && typeof modelPointsCost === 'object') {
     cost = modelPointsCost[String(wanBillingDuration.value)] || modelPointsCost[wanBillingDuration.value] || modelPointsCost['5'] || 20
     return cost
@@ -4154,6 +4163,16 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
         formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, 1)))
       }
       console.log('[VideoNode] Wan 视频编辑 | 上游视频:', orderedVideos.length)
+    } else if (wanMode === 'animate_mix') {
+      if (finalImages.length > 0) {
+        formData.append('first_frame_image', finalImages[0])
+      }
+      const orderedVideos = referenceVideos.value || []
+      if (orderedVideos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, 1)))
+      }
+      formData.append('source_video_duration', String(Math.ceil(upstreamVideoDuration.value || currentModelConfig.value?.wanConfig?.defaultDuration || 30)))
+      console.log('[VideoNode] Wan 换人混合 | 人物图:', finalImages.length > 0, '参考视频:', orderedVideos.length)
     }
   }
   
@@ -4791,10 +4810,22 @@ async function handleGenerate(options = {}) {
       await showAlert('Wan 视频编辑需要连接上游视频节点', '提示')
       return
     }
+    if (wanMode === 'animate_mix' && finalImages.length === 0) {
+      await showAlert('Wan 换人混合需要连接或上传1张人物图片', '提示')
+      return
+    }
+    if (wanMode === 'animate_mix' && finalImages.length > 1) {
+      await showAlert('Wan 换人混合最多支持1张人物图片', '提示')
+      return
+    }
+    if (wanMode === 'animate_mix' && referenceVideos.value.length === 0) {
+      await showAlert('Wan 换人混合需要连接上游视频节点', '提示')
+      return
+    }
   }
 
   const hasSeedanceVideoInput = isSeedance2Model.value && referenceVideos.value.length > 0
-  const hasWanVideoInput = isWanModel.value && ['r2v', 'videoedit'].includes(selectedWanMode.value) && referenceVideos.value.length > 0
+  const hasWanVideoInput = isWanModel.value && ['r2v', 'videoedit', 'animate_mix'].includes(selectedWanMode.value) && referenceVideos.value.length > 0
   if (!finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput && !hasWanVideoInput) {
     await showAlert('请输入提示词或连接参考图片', '提示')
     return
@@ -8314,6 +8345,15 @@ function handleToolbarPreview() {
           </div>
           <div v-if="selectedWanMode === 'videoedit' && !hasUpstreamVideo" class="sd2-mode-warn">
             ⚠ 视频编辑需要连接上游视频节点
+          </div>
+          <div v-if="selectedWanMode === 'animate_mix' && referenceImages.length === 0" class="sd2-mode-warn">
+            ⚠ 换人混合需要连接或上传1张人物图片
+          </div>
+          <div v-if="selectedWanMode === 'animate_mix' && referenceImages.length > 1" class="sd2-mode-warn">
+            ⚠ 换人混合最多支持1张人物图片
+          </div>
+          <div v-if="selectedWanMode === 'animate_mix' && !hasUpstreamVideo" class="sd2-mode-warn">
+            ⚠ 换人混合需要连接上游视频节点
           </div>
         </div>
       </template>

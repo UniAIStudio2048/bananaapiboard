@@ -1009,6 +1009,7 @@ onMounted(() => {
   document.addEventListener('click', handleModelDropdownClickOutside)
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('mousedown', handleConfigPanelOutsideMouseDown)
+  document.addEventListener('keydown', handlePreviewKeydown, true)
   // 加载图像预设
   loadImagePresets()
   // 📊 模型成功率統計已由 modelStatsStore 集中管理（10 分鐘輪詢）
@@ -1051,6 +1052,7 @@ onUnmounted(() => {
   document.removeEventListener('click', handleModelDropdownClickOutside)
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('mousedown', handleConfigPanelOutsideMouseDown)
+  document.removeEventListener('keydown', handlePreviewKeydown, true)
   if (nodeGeometryObserver) {
     nodeGeometryObserver.disconnect()
     nodeGeometryObserver = null
@@ -1543,6 +1545,27 @@ const currentImageUrl = computed(() => {
   return null
 })
 
+function getCanvasNodeSwitchImageUrl(node) {
+  const data = node?.data || {}
+  if (Array.isArray(data.output?.urls) && data.output.urls[0]) return data.output.urls[0]
+  if (data.output?.url) return data.output.url
+  if (Array.isArray(data.sourceImages) && data.sourceImages[0]) return data.sourceImages[0]
+  if (data.imageUrl) return data.imageUrl
+  if (data.url) return data.url
+  return null
+}
+
+const canvasPreviewImages = computed(() => {
+  const imageNodeTypes = new Set(['image', 'image-input', 'image-gen', 'text-to-image', 'image-to-image', 'grid-preview'])
+  return canvasStore.nodes
+    .filter(node => imageNodeTypes.has(node?.type) || node?.data?.type === 'image')
+    .map(node => ({
+      id: node.id,
+      url: getCanvasNodeSwitchImageUrl(node)
+    }))
+    .filter(item => Boolean(item.url))
+})
+
 const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
 const isQuickSeedanceSubmitting = ref(false)
 const seedanceQuickAssetStatus = computed(() => getSeedanceQuickAssetStatus(props.data))
@@ -1692,6 +1715,7 @@ function resolvePanoramaImageUrl(url) {
 // 工具栏预览弹窗
 const showPreviewModal = ref(false)
 const previewImageUrl = ref('')
+const previewNodeId = ref('')
 const showImageEditMenu = ref(false)
 
 // 预览缩放和拖动状态
@@ -1700,6 +1724,16 @@ const previewPosition = ref({ x: 0, y: 0 })
 const previewIsDragging = ref(false)
 const previewDragStart = ref({ x: 0, y: 0 })
 const previewLastPosition = ref({ x: 0, y: 0 })
+
+const currentCanvasPreviewIndex = computed(() => {
+  if (!previewNodeId.value) return -1
+  return canvasPreviewImages.value.findIndex(item => item.id === previewNodeId.value)
+})
+
+const canPreviewPreviousCanvasImage = computed(() => currentCanvasPreviewIndex.value > 0)
+const canPreviewNextCanvasImage = computed(() => {
+  return currentCanvasPreviewIndex.value >= 0 && currentCanvasPreviewIndex.value < canvasPreviewImages.value.length - 1
+})
 
 // 工具栏事件处理 - 进入编辑模式（使用新的 Fabric.js + vue-advanced-cropper 方案）
 function enterEditMode(tool) {
@@ -3613,7 +3647,8 @@ function handleEditorSaveMask(data) {
 let isDownloading = false
 async function handleToolbarDownload() {
   if (isDownloading) return
-  if (!currentImageUrl.value) {
+  const activeImageUrl = showPreviewModal.value && previewImageUrl.value ? previewImageUrl.value : currentImageUrl.value
+  if (!activeImageUrl) {
     showToast('没有可下载的图片', 'warning')
     return
   }
@@ -3623,7 +3658,7 @@ async function handleToolbarDownload() {
   showToast('正在下载图片...', 'info')
   
   try {
-    const imageUrl = getOriginalImageUrl(currentImageUrl.value)
+    const imageUrl = getOriginalImageUrl(activeImageUrl)
     console.log('[ImageNode] 开始下载:', imageUrl?.substring(0, 100))
     
     if (imageUrl.startsWith('data:')) {
@@ -3667,13 +3702,43 @@ function dataUrlToBlob(dataUrl) {
 function handleToolbarPreview() {
   if (!currentImageUrl.value) return
   previewImageUrl.value = getOriginalImageUrl(currentImageUrl.value)
+  previewNodeId.value = props.id
   showPreviewModal.value = true
 }
 
 function closePreviewModal() {
   showPreviewModal.value = false
   previewImageUrl.value = ''
+  previewNodeId.value = ''
   resetPreviewState()
+}
+
+function switchCanvasPreviewImage(offset) {
+  const nextIndex = currentCanvasPreviewIndex.value + offset
+  const nextItem = canvasPreviewImages.value[nextIndex]
+  if (!nextItem) return
+  previewNodeId.value = nextItem.id
+  previewImageUrl.value = getOriginalImageUrl(nextItem.url)
+  resetPreviewState()
+}
+
+function handlePreviewKeydown(event) {
+  if (!showPreviewModal.value) return
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+    event.preventDefault()
+    event.stopPropagation()
+    event.stopImmediatePropagation?.()
+    void handleToolbarDownload()
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    closePreviewModal()
+  } else if (event.key === 'ArrowLeft') {
+    event.preventDefault()
+    switchCanvasPreviewImage(-1)
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault()
+    switchCanvasPreviewImage(1)
+  }
 }
 
 // 重置预览状态
@@ -3734,7 +3799,8 @@ function handleZoomReset() {
 
 // 添加到我的资产
 async function handleAddToAssets() {
-  if (!currentImageUrl.value) return
+  const activeImageUrl = showPreviewModal.value && previewImageUrl.value ? previewImageUrl.value : currentImageUrl.value
+  if (!activeImageUrl) return
   
   try {
     const { saveAsset } = await import('@/api/canvas/assets')
@@ -3745,9 +3811,9 @@ async function handleAddToAssets() {
     await saveAsset({
       type: 'image',
       name: fileName,
-      url: currentImageUrl.value,
-      thumbnail_url: currentImageUrl.value,
-      source_node_id: props.id || null,
+      url: activeImageUrl,
+      thumbnail_url: activeImageUrl,
+      source_node_id: previewNodeId.value || props.id || null,
       tags: ['画布', '预览保存']
     })
     
@@ -8288,6 +8354,32 @@ async function handleDrop(event) {
               <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
+
+          <button
+            class="preview-nav-btn preview-nav-prev"
+            type="button"
+            :disabled="!canPreviewPreviousCanvasImage"
+            @click.stop="switchCanvasPreviewImage(-1)"
+            title="上一张"
+            aria-label="上一张"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
+
+          <button
+            class="preview-nav-btn preview-nav-next"
+            type="button"
+            :disabled="!canPreviewNextCanvasImage"
+            @click.stop="switchCanvasPreviewImage(1)"
+            title="下一张"
+            aria-label="下一张"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+              <path d="M9 6l6 6-6 6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </button>
           
           <!-- 缩放控制按钮 -->
           <div class="preview-zoom-controls" @click.stop>
@@ -11205,6 +11297,47 @@ async function handleDrop(event) {
 .preview-modal-overlay .preview-close-btn svg {
   width: 20px;
   height: 20px;
+}
+
+.preview-modal-overlay .preview-nav-btn {
+  position: fixed;
+  top: 50%;
+  z-index: 10;
+  width: 60px;
+  height: 92px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.44);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transform: translateY(-50%);
+  transition: background-color 0.2s ease, opacity 0.2s ease, transform 0.2s ease;
+}
+
+.preview-modal-overlay .preview-nav-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  transform: translateY(-50%) scale(1.04);
+}
+
+.preview-modal-overlay .preview-nav-btn:disabled {
+  opacity: 0.28;
+  cursor: default;
+}
+
+.preview-modal-overlay .preview-nav-btn svg {
+  width: 32px;
+  height: 32px;
+}
+
+.preview-modal-overlay .preview-nav-prev {
+  left: 7vw;
+}
+
+.preview-modal-overlay .preview-nav-next {
+  right: 7vw;
 }
 
 /* 缩放控制 */

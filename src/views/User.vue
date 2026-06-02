@@ -4,12 +4,14 @@ import { useRoute } from 'vue-router'
 import { useI18n } from '@/i18n'
 import { redeemVoucher } from '@/api/client'
 import { getMyWorks, getMyPurchases, getMyIncome, deleteWork, toggleWorkVisibility } from '@/api/community'
+import { buildStreamDownloadPath } from '@/api/downloadRouting'
 import CachedImage from '@/components/CachedImage.vue'
 import { getTheme, setTheme, toggleTheme as toggleThemeUtil, themes } from '@/utils/theme'
 import { getTenantHeaders, getModelDisplayName, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { getHistoryImageDisplayUrl, makeHistoryImagePlaceholder } from '@/utils/historyImageDisplay'
 import { getHistoryAspectRatioStyle } from '@/utils/historyAspectRatio'
+import { getHistoryImageDownloadFilename, getHistoryImageShortcutAction } from '@/utils/historyImageDownload'
 import { buildHistoryMediaDetails, enrichHistoryMediaDetails } from '@/utils/historyMediaDetails'
 import { toPointsNumber, getEffectivePackagePoints, getTotalUserPoints } from '@/utils/points'
 import { normalizePointsSources, getPointsSourcesMaxTotal } from '@/utils/pointsSources'
@@ -130,6 +132,11 @@ const errorMessage = ref('')
 // 图片查看
 const showImageModal = ref(false)
 const selectedImage = ref(null)
+const historyImageDownloadDirectoryHandle = ref(null)
+const historyImageSaving = ref(false)
+const HISTORY_IMAGE_DOWNLOAD_DB = 'banana-history-image-download'
+const HISTORY_IMAGE_DOWNLOAD_STORE = 'handles'
+const HISTORY_IMAGE_DOWNLOAD_DIRECTORY_KEY = 'image-preview-directory'
 
 // 视频查看
 const showVideoModal = ref(false)
@@ -1193,6 +1200,163 @@ function viewImage(image) {
   })
 }
 
+function getSelectedImageDownloadFilename() {
+  return getHistoryImageDownloadFilename(selectedImage.value)
+}
+
+function getSelectedImageDownloadUrl() {
+  return selectedImage.value?.url ? getMediaUrl(selectedImage.value.url) : ''
+}
+
+function supportsDirectoryImageSave() {
+  return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function'
+}
+
+function openHistoryImageDownloadDb() {
+  if (typeof indexedDB === 'undefined') return Promise.resolve(null)
+
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(HISTORY_IMAGE_DOWNLOAD_DB, 1)
+    request.onupgradeneeded = () => {
+      const db = request.result
+      if (!db.objectStoreNames.contains(HISTORY_IMAGE_DOWNLOAD_STORE)) {
+        db.createObjectStore(HISTORY_IMAGE_DOWNLOAD_STORE)
+      }
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+}
+
+async function saveHistoryImageDownloadDirectoryHandle(directoryHandle) {
+  try {
+    const db = await openHistoryImageDownloadDb()
+    if (!db) return
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction(HISTORY_IMAGE_DOWNLOAD_STORE, 'readwrite')
+      tx.objectStore(HISTORY_IMAGE_DOWNLOAD_STORE).put(directoryHandle, HISTORY_IMAGE_DOWNLOAD_DIRECTORY_KEY)
+      tx.oncomplete = resolve
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  } catch (e) {
+    console.warn('保存图片下载路径失败:', e)
+  }
+}
+
+async function loadHistoryImageDownloadDirectoryHandle() {
+  try {
+    const db = await openHistoryImageDownloadDb()
+    if (!db) return
+    const directoryHandle = await new Promise((resolve, reject) => {
+      const tx = db.transaction(HISTORY_IMAGE_DOWNLOAD_STORE, 'readonly')
+      const request = tx.objectStore(HISTORY_IMAGE_DOWNLOAD_STORE).get(HISTORY_IMAGE_DOWNLOAD_DIRECTORY_KEY)
+      request.onsuccess = () => resolve(request.result || null)
+      request.onerror = () => reject(request.error)
+    })
+    db.close()
+    if (directoryHandle) {
+      historyImageDownloadDirectoryHandle.value = directoryHandle
+    }
+  } catch (e) {
+    console.warn('读取图片下载路径失败:', e)
+  }
+}
+
+async function ensureDirectoryWritePermission(directoryHandle) {
+  if (!directoryHandle) return false
+  const options = { mode: 'readwrite' }
+  if (typeof directoryHandle.queryPermission === 'function') {
+    const currentPermission = await directoryHandle.queryPermission(options)
+    if (currentPermission === 'granted') return true
+  }
+  if (typeof directoryHandle.requestPermission === 'function') {
+    return await directoryHandle.requestPermission(options) === 'granted'
+  }
+  return true
+}
+
+async function fetchSelectedImageDownloadBlob(url, filename) {
+  const headers = {
+    ...getTenantHeaders(),
+    ...(token ? { Authorization: `Bearer ${token}` } : {})
+  }
+  const res = await fetch(getApiUrl(buildStreamDownloadPath(url, filename)), { headers })
+  if (!res.ok) throw new Error(`download_failed_${res.status}`)
+  return await res.blob()
+}
+
+async function saveSelectedImageToDirectory(directoryHandle) {
+  const url = getSelectedImageDownloadUrl()
+  if (!url || !directoryHandle) return
+
+  const filename = getSelectedImageDownloadFilename()
+  const canWrite = await ensureDirectoryWritePermission(directoryHandle)
+  if (!canWrite) throw new Error('directory_permission_denied')
+
+  const blob = await fetchSelectedImageDownloadBlob(url, filename)
+  const fileHandle = await directoryHandle.getFileHandle(filename, { create: true })
+  const writable = await fileHandle.createWritable()
+  try {
+    await writable.write(blob)
+  } finally {
+    await writable.close()
+  }
+}
+
+async function downloadSelectedImageFromPreview(requireDirectory = false) {
+  if (!selectedImage.value || historyImageSaving.value) return
+
+  const url = getSelectedImageDownloadUrl()
+  const filename = getSelectedImageDownloadFilename()
+  if (!url) {
+    showToast('图片地址为空，无法下载', 'error')
+    return
+  }
+
+  historyImageSaving.value = true
+  try {
+    if (requireDirectory) {
+      if (!supportsDirectoryImageSave()) {
+        showToast('当前浏览器不支持选择保存路径，已使用默认下载', 'info')
+        await downloadFile(url, filename)
+        return
+      }
+      historyImageDownloadDirectoryHandle.value = await window.showDirectoryPicker({ mode: 'readwrite' })
+      await saveHistoryImageDownloadDirectoryHandle(historyImageDownloadDirectoryHandle.value)
+      await saveSelectedImageToDirectory(historyImageDownloadDirectoryHandle.value)
+      showToast('图片已保存到所选路径', 'success')
+      return
+    }
+
+    if (historyImageDownloadDirectoryHandle.value) {
+      await saveSelectedImageToDirectory(historyImageDownloadDirectoryHandle.value)
+      showToast('图片已保存到上次选择的路径', 'success')
+      return
+    }
+
+    await downloadFile(url, filename)
+  } catch (e) {
+    if (e?.name === 'AbortError') {
+      return
+    }
+    console.error('预览图片保存失败:', e)
+    showToast('图片保存失败，请重试', 'error')
+  } finally {
+    historyImageSaving.value = false
+  }
+}
+
+function handleImagePreviewShortcut(event) {
+  if (!showImageModal.value || !selectedImage.value || editingNote.value) return
+  const action = getHistoryImageShortcutAction(event)
+  if (!action) return
+
+  event.preventDefault()
+  event.stopPropagation()
+  downloadSelectedImageFromPreview(action === 'saveAs')
+}
+
 function getImageDisplayUrl(image) {
   return getHistoryImageDisplayUrl(image, getMediaUrl)
 }
@@ -2218,6 +2382,7 @@ function handleVisibilityChange() {
 
 onMounted(async () => {
   load()
+  loadHistoryImageDownloadDirectoryHandle()
   // 确保主题已应用
   currentTheme.value = getTheme()
   
@@ -2269,6 +2434,7 @@ onMounted(async () => {
   
   // 监听用户信息更新事件（支付成功后刷新）
   window.addEventListener('user-info-updated', handleUserInfoUpdated)
+  window.addEventListener('keydown', handleImagePreviewShortcut)
 })
 
 // 处理用户信息更新
@@ -2282,6 +2448,7 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('open-voucher-modal', openVoucherModal)
   window.removeEventListener('user-info-updated', handleUserInfoUpdated)
+  window.removeEventListener('keydown', handleImagePreviewShortcut)
 })
 </script>
 
@@ -4874,17 +5041,16 @@ onUnmounted(() => {
             >
               <span class="text-xl">📝</span>
             </button>
-            <a
-              :href="getMediaUrl(selectedImage.url)"
-              :download="selectedImage.note ? `${sanitizeFilename(selectedImage.note)}.png` : `${selectedImage.model}-${selectedImage.id}.png`"
-              class="p-3 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors"
+            <button
+              @click.stop="downloadSelectedImageFromPreview(false)"
+              :disabled="historyImageSaving"
+              class="p-3 bg-green-500/80 backdrop-blur rounded-lg hover:bg-green-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
               title="下载图片"
-              @click.stop
             >
               <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
               </svg>
-            </a>
+            </button>
             <button
               @click="showImageModal = false"
               class="p-3 bg-white/10 backdrop-blur rounded-lg hover:bg-white/20 transition-colors"
