@@ -9,7 +9,8 @@ test('VideoNode injects quick reviewed asset URI only for Seedance 2 generation 
   assert.match(source, /getSeedanceQuickAsset/)
   assert.match(source, /quickAssetUris/)
   assert.match(source, /capturedState\.isSeedance2 && capturedState\.quickAssetUris\.length > 0/)
-  assert.match(source, /\.\.\.capturedState\.quickAssetUris,\s*\.\.\.nonQuickImages/)
+  assert.match(source, /includeQuickAssets:\s*true/)
+  assert.match(source, /finalImages = applyOrderedMediaReplacements\(finalImages,\s*quickReplacements\)/)
 })
 
 test('VideoNode sends Seedance OpenAPI Pro character assets as face codes', () => {

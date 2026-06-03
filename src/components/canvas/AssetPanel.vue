@@ -4411,6 +4411,10 @@ onUnmounted(() => {
   color: #7c3aed !important;
 }
 
+:root.canvas-theme-light .asset-panel .type-btn .type-label {
+  color: #111827 !important;
+}
+
 :root.canvas-theme-light .asset-panel .type-count {
   background: rgba(0, 0, 0, 0.08) !important;
 }
@@ -4546,6 +4550,18 @@ onUnmounted(() => {
 :root.canvas-theme-light .asset-panel .asset-card:not(.asset-card-v2):hover::before {
   background: rgba(0, 0, 0, 0.04) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+:root.canvas-theme-light .asset-panel :deep(.asset-card-v2 .asset-card-title) {
+  color: #111827 !important;
+}
+
+:root.canvas-theme-light .asset-panel :deep(.asset-card-v2 .asset-card-meta) {
+  color: rgba(17, 24, 39, 0.56) !important;
+}
+
+:root.canvas-theme-light .asset-panel :deep(.asset-card-v2 .text-preview) {
+  color: #111827 !important;
 }
 
 /* 资产预览 */

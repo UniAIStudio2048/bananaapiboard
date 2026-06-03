@@ -555,22 +555,41 @@ function handleFavorite(event) {
   white-space: nowrap;
 }
 
-:global(:root.canvas-theme-light) .asset-card {
+:global(:root.canvas-theme-light) .asset-card,
+:global(html.canvas-theme-light) .asset-card,
+:global(body.canvas-theme-light) .asset-card,
+:global(.canvas-theme-light) .asset-card {
   border-color: rgba(0, 0, 0, 0.08);
   background: rgba(0, 0, 0, 0.025);
 }
 
-:global(:root.canvas-theme-light) .asset-card:hover {
+:global(:root.canvas-theme-light) .asset-card:hover,
+:global(html.canvas-theme-light) .asset-card:hover,
+:global(body.canvas-theme-light) .asset-card:hover,
+:global(.canvas-theme-light) .asset-card:hover {
   border-color: rgba(0, 0, 0, 0.14);
   background: rgba(0, 0, 0, 0.045);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.1);
 }
 
-:global(:root.canvas-theme-light) .asset-card-title {
-  color: #1c1917;
+:global(:root.canvas-theme-light) .asset-card-title,
+:global(html.canvas-theme-light) .asset-card-title,
+:global(body.canvas-theme-light) .asset-card-title,
+:global(.canvas-theme-light) .asset-card-title {
+  color: #111827 !important;
 }
 
-:global(:root.canvas-theme-light) .asset-card-meta {
-  color: rgba(0, 0, 0, 0.48);
+:global(:root.canvas-theme-light) .asset-card-meta,
+:global(html.canvas-theme-light) .asset-card-meta,
+:global(body.canvas-theme-light) .asset-card-meta,
+:global(.canvas-theme-light) .asset-card-meta {
+  color: rgba(17, 24, 39, 0.56) !important;
+}
+
+:global(:root.canvas-theme-light) .text-preview,
+:global(html.canvas-theme-light) .text-preview,
+:global(body.canvas-theme-light) .text-preview,
+:global(.canvas-theme-light) .text-preview {
+  color: #111827 !important;
 }
 </style>

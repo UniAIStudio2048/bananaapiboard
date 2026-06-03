@@ -189,6 +189,8 @@ const panStart = ref({ x: 0, y: 0 })
 const TOUCH_PAN_THRESHOLD = 4
 const TOUCH_CONNECTION_DRAG_THRESHOLD = 5
 const TOUCH_CONNECTION_LONG_PRESS_DURATION = 300
+const TOUCH_LONG_PRESS_DURATION = 600
+const TOUCH_LONG_PRESS_MOVE_THRESHOLD = 8
 
 // 对齐辅助线状态
 const alignmentGuides = ref({
@@ -209,6 +211,7 @@ const isViewportMoving = ref(false)
 let viewportMovingTimer = null
 let touchState = null
 let touchConnectionLongPressTimer = null
+let touchLongPressTimer = null
 let globalTouchListenersAttached = false
 
 provide('isCanvasViewportMoving', isViewportMoving)
@@ -1498,6 +1501,10 @@ function isEditableTouchTarget(target) {
   return !!target?.closest?.('input, textarea, select, [contenteditable="true"]')
 }
 
+function isInteractiveTouchTarget(target) {
+  return !!target?.closest?.('button, a, input, textarea, select, [role="button"], [contenteditable="true"]')
+}
+
 function getTouchConnectionButton(target) {
   const rightButton = target?.closest?.('.node-add-btn-right')
   if (rightButton) return rightButton
@@ -1515,12 +1522,21 @@ function getTouchTargetNodeId(target) {
   return nodeEl?.getAttribute?.('data-id') || null
 }
 
+function isNodeSelectedForTouchDelete(nodeId) {
+  if (!nodeId) return false
+  if (canvasStore.selectedNodeId === nodeId) return true
+  if (Array.isArray(canvasStore.selectedNodeIds) && canvasStore.selectedNodeIds.includes(nodeId)) return true
+
+  const selectedNodes = getSelectedNodes.value || []
+  return selectedNodes.some(node => node.id === nodeId)
+}
+
 function shouldStartTouchPan(target) {
   if (!target?.closest) return false
   if (isEditableTouchTarget(target)) return false
   if (target.closest('.vue-flow__node')) return false
   if (target.closest('.vue-flow__controls, .vue-flow__minimap')) return false
-  if (target.closest('button, a, input, textarea, select, [role="button"]')) return false
+  if (isInteractiveTouchTarget(target)) return false
   return !!target.closest('.canvas-board')
 }
 
@@ -1547,6 +1563,13 @@ function clearTouchConnectionTimer() {
   touchConnectionLongPressTimer = null
 }
 
+function clearTouchLongPressTimer() {
+  if (!touchLongPressTimer) return
+  clearTimeout(touchLongPressTimer)
+  pendingTimeouts.delete(touchLongPressTimer)
+  touchLongPressTimer = null
+}
+
 function handleTouchStart(event) {
   if (!event.touches?.length || !canvasBoardRef.value?.contains(event.target)) return
   if (touchState?.mode === 'connection-pending' || touchState?.mode === 'connection-drag') {
@@ -1561,20 +1584,15 @@ function handleTouchStart(event) {
       return
     }
 
+    const nodeId = getTouchTargetNodeId(event.target)
+    if (nodeId && isNodeSelectedForTouchDelete(nodeId) && !isInteractiveTouchTarget(event.target)) {
+      startSelectedNodeTouchDelete(event, nodeId)
+      return
+    }
+
     if (!shouldStartTouchPan(event.target)) return
 
-    const point = getTouchPoint(event.touches[0])
-    if (!point) return
-
-    event.preventDefault()
-    touchState = {
-      mode: 'pan',
-      identifier: event.touches[0].identifier,
-      startPoint: point,
-      lastPoint: point,
-      hasMoved: false
-    }
-    ensureGlobalTouchListeners()
+    startBlankTouchLongPress(event)
     return
   }
 
@@ -1591,6 +1609,70 @@ function handleTouchStart(event) {
     }
     ensureGlobalTouchListeners()
   }
+}
+
+function startBlankTouchLongPress(event) {
+  const touch = event.touches?.[0]
+  const point = getTouchPoint(touch)
+  if (!touch || !point) return
+
+  event.preventDefault()
+  touchState = {
+    mode: 'blank-long-press',
+    identifier: touch.identifier,
+    startPoint: point,
+    lastPoint: point,
+    hasMoved: false
+  }
+
+  clearTouchLongPressTimer()
+  touchLongPressTimer = setTimeout(() => {
+    pendingTimeouts.delete(touchLongPressTimer)
+    touchLongPressTimer = null
+    if (!touchState || touchState.mode !== 'blank-long-press' || touchState.hasMoved) return
+
+    const flowPosition = screenToFlowPosition(touchState.lastPoint)
+    canvasStore.openNodeSelector(
+      touchState.lastPoint,
+      'canvas',
+      null,
+      flowPosition
+    )
+    resetTouchState()
+  }, TOUCH_LONG_PRESS_DURATION)
+  pendingTimeouts.add(touchLongPressTimer)
+  ensureGlobalTouchListeners()
+}
+
+function startSelectedNodeTouchDelete(event, nodeId) {
+  const touch = event.touches?.[0]
+  const point = getTouchPoint(touch)
+  if (!touch || !point) return
+
+  touchState = {
+    mode: 'node-delete-pending',
+    identifier: touch.identifier,
+    nodeId,
+    startPoint: point,
+    lastPoint: point,
+    hasMoved: false
+  }
+
+  clearTouchLongPressTimer()
+  touchLongPressTimer = setTimeout(() => {
+    pendingTimeouts.delete(touchLongPressTimer)
+    touchLongPressTimer = null
+    if (!touchState || touchState.mode !== 'node-delete-pending' || touchState.hasMoved) return
+    if (!isNodeSelectedForTouchDelete(touchState.nodeId)) {
+      resetTouchState()
+      return
+    }
+
+    canvasStore.removeNode(touchState.nodeId)
+    resetTouchState()
+  }, TOUCH_LONG_PRESS_DURATION)
+  pendingTimeouts.add(touchLongPressTimer)
+  ensureGlobalTouchListeners()
 }
 
 function handleTouchConnectionStart(event, button) {
@@ -1651,6 +1733,16 @@ function handleTouchMove(event) {
     return
   }
 
+  if (touchState.mode === 'blank-long-press') {
+    handleBlankTouchLongPressMove(event)
+    return
+  }
+
+  if (touchState.mode === 'node-delete-pending') {
+    handleSelectedNodeTouchDeleteMove(event)
+    return
+  }
+
   if (touchState.mode === 'pinch') {
     handleTouchPinchMove(event)
   }
@@ -1703,6 +1795,54 @@ function handleTouchPanMove(event) {
   touchState.lastPoint = point
 }
 
+function didTouchMovePastLongPressThreshold(point) {
+  const dx = point.x - touchState.startPoint.x
+  const dy = point.y - touchState.startPoint.y
+  return Math.sqrt(dx * dx + dy * dy) > TOUCH_LONG_PRESS_MOVE_THRESHOLD
+}
+
+function handleBlankTouchLongPressMove(event) {
+  const touch = getTouchByIdentifier(event.touches, touchState.identifier)
+  const point = getTouchPoint(touch)
+  if (!point) return
+
+  if (!didTouchMovePastLongPressThreshold(point)) {
+    touchState.lastPoint = point
+    return
+  }
+
+  event.preventDefault()
+  clearTouchLongPressTimer()
+  touchState.hasMoved = true
+
+  const delta = {
+    dx: point.x - touchState.lastPoint.x,
+    dy: point.y - touchState.lastPoint.y
+  }
+  const viewport = getViewport()
+  setViewport(applyPanToViewport(viewport, delta))
+  markViewportMoving()
+
+  touchState = {
+    ...touchState,
+    mode: 'pan',
+    lastPoint: point,
+    hasMoved: true
+  }
+}
+
+function handleSelectedNodeTouchDeleteMove(event) {
+  const touch = getTouchByIdentifier(event.touches, touchState.identifier)
+  const point = getTouchPoint(touch)
+  if (!point) return
+
+  touchState.lastPoint = point
+  if (!didTouchMovePastLongPressThreshold(point)) return
+
+  clearTouchLongPressTimer()
+  resetTouchState()
+}
+
 function handleTouchPinchMove(event) {
   if (event.touches.length < 2) return
 
@@ -1731,6 +1871,12 @@ function handleTouchPinchMove(event) {
 
 function handleTouchEnd(event) {
   if (!touchState) return
+
+  if (touchState.mode === 'blank-long-press' || touchState.mode === 'node-delete-pending') {
+    clearTouchLongPressTimer()
+    resetTouchState()
+    return
+  }
 
   if (touchState.mode === 'connection-pending') {
     event.preventDefault()
@@ -1777,12 +1923,14 @@ function handleTouchCancel() {
     canvasStore.cancelDragConnection()
   }
   clearTouchConnectionTimer()
+  clearTouchLongPressTimer()
   resetTouchState()
 }
 
 function resetTouchState() {
   touchState = null
   clearTouchConnectionTimer()
+  clearTouchLongPressTimer()
   removeGlobalTouchListeners()
 }
 
@@ -3395,6 +3543,7 @@ onUnmounted(() => {
 
 .canvas-board :deep(.vue-flow__pane),
 .canvas-board :deep(.vue-flow__background),
+.canvas-board :deep(.vue-flow__node),
 .canvas-board :deep(.node-add-btn) {
   touch-action: none;
 }

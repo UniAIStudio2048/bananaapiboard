@@ -644,7 +644,7 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
     delete pollers.value[assetId]
     const finalMetadata = {
       assetId: asset.Id,
-      groupId: asset.GroupId,
+      groupId: asset.GroupId || groupId,
       status: asset.Status,
       assetType: asset.AssetType,
       projectName: asset.ProjectName,

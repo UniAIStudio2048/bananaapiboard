@@ -14,3 +14,7 @@ test('SeedanceCharacterPanel isolates OpenAPI Pro role assets into a dedicated l
   assert.match(source, /assetUri:\s*getSeedanceAssetUri\(asset\)/)
   assert.match(source, /activeProvider\.value === 'seedance_openapi_pro'/)
 })
+
+test('SeedanceCharacterPanel keeps the selected group when polling response omits GroupId', () => {
+  assert.match(source, /const finalMetadata = \{\s*assetId:\s*asset\.Id,\s*groupId:\s*asset\.GroupId\s*\|\|\s*groupId,/)
+})

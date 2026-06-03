@@ -17,3 +17,7 @@ test('NodeContextMenu preserves Seedance OpenAPI Pro face URI semantics', () => 
 test('NodeContextMenu does not wait for asset polling after OpenAPI Pro face submit', () => {
   assert.match(source, /if \(isOpenApiPro\) \{[\s\S]*showToast\(isBytefor \? 'Bytefor 角色已提交审核' : 'Seedance 角色已提交审核', 'success'\)[\s\S]*canvasStore\.addNode\({[\s\S]*assetUri:\s*savedAssetUrl[\s\S]*status:\s*initialStatus[\s\S]*url:\s*savedAssetUrl[\s\S]*return[\s\S]*\}[\s\S]*const \{ promise \} = pollAssetStatus/)
 })
+
+test('NodeContextMenu keeps the selected Seedance group when polling response omits GroupId', () => {
+  assert.match(source, /groupId:\s*finalAsset\.GroupId\s*\|\|\s*groupId/)
+})

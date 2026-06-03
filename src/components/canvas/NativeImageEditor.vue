@@ -1597,49 +1597,52 @@ function endCropDrag() {
   cropDragType = null
 }
 
-function applyCrop() {
-  if (!isCropping.value) return
+async function applyCrop() {
+  if (!isCropping.value) return false
 
   const { x, y, width, height } = cropRect.value
+  const sourceWidth = Math.max(1, Math.round(canvasWidth.value))
+  const sourceHeight = Math.max(1, Math.round(canvasHeight.value))
+  const cropX = Math.max(0, Math.round(Math.min(sourceWidth - 1, x)))
+  const cropY = Math.max(0, Math.round(Math.min(sourceHeight - 1, y)))
+  const cropWidth = Math.max(1, Math.min(Math.round(width), sourceWidth - cropX))
+  const cropHeight = Math.max(1, Math.min(Math.round(height), sourceHeight - cropY))
 
   // 创建临时画布
   const tempCanvas = document.createElement('canvas')
-  tempCanvas.width = width
-  tempCanvas.height = height
+  tempCanvas.width = cropWidth
+  tempCanvas.height = cropHeight
   const tempCtx = tempCanvas.getContext('2d')
 
   // 裁剪图片
-  tempCtx.drawImage(mainCanvasRef.value, x, y, width, height, 0, 0, width, height)
+  tempCtx.drawImage(mainCanvasRef.value, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight)
 
   // 更新画布尺寸
-  canvasWidth.value = width
-  canvasHeight.value = height
-  originalWidth.value = width
-  originalHeight.value = height
-  fitDisplaySize(width, height)
+  canvasWidth.value = cropWidth
+  canvasHeight.value = cropHeight
+  originalWidth.value = cropWidth
+  originalHeight.value = cropHeight
+  fitDisplaySize(cropWidth, cropHeight)
 
-  nextTick(() => {
-    // 绘制裁剪后的图片
-    mainCtx.value.clearRect(0, 0, width, height)
-    mainCtx.value.drawImage(tempCanvas, 0, 0)
+  await nextTick()
+  setupCanvas()
 
-    // 更新原始图片
-    const img = new Image()
-    img.onload = () => {
-      originalImage.src = tempCanvas.toDataURL('image/png')
-    }
-    img.src = tempCanvas.toDataURL('image/png')
+  // 绘制裁剪后的图片
+  mainCtx.value.clearRect(0, 0, cropWidth, cropHeight)
+  mainCtx.value.drawImage(tempCanvas, 0, 0)
 
-    // 裁剪后重新初始化蒙版画布（清除之前的蒙版）
-    nextTick(() => {
-      clearMaskCanvas()
-    })
+  // 更新原始图片
+  originalImage.src = tempCanvas.toDataURL('image/png')
 
-    isCropping.value = false
-    currentMode.value = ''
-    clearOverlay()
-    saveToHistory()
-  })
+  // 裁剪后重新初始化蒙版画布（清除之前的蒙版）
+  await nextTick()
+  clearMaskCanvas()
+
+  isCropping.value = false
+  currentMode.value = ''
+  clearOverlay()
+  saveToHistory()
+  return true
 }
 
 function cancelCrop() {
@@ -1880,8 +1883,12 @@ function resetAll() {
 
 // ==================== 保存/取消 ====================
 
-function save() {
+async function save() {
   try {
+    if (currentMode.value === 'crop' && isCropping.value) {
+      await applyCrop()
+    }
+
     commitPendingFilters({ saveHistory: false })
     const imageDataUrl = mainCanvasRef.value.toDataURL(
       exportInfo.value.mimeType,
