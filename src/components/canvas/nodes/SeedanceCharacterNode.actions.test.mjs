@@ -11,7 +11,7 @@ test('Seedance character canvas node shows download and preview top actions and 
   assert.match(source, /class="character-toolbar"/)
   assert.match(source, /title="下载"/)
   assert.match(source, /title="放大预览"/)
-  assert.match(source, /class="node-add-btn node-add-btn-right"/)
+  assert.match(source, /class="node-add-btn node-add-btn-right nodrag"/)
 
   const toolbarMatch = source.match(/<div v-if="data\.assetUrl" class="character-toolbar">([\s\S]*?)<\/div>\n\s*<div class="character-preview">/)
   assert.ok(toolbarMatch, 'character toolbar template should be present')

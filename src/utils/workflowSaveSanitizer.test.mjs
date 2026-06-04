@@ -106,8 +106,8 @@ assert.equal(serialized.includes(cdnUrl), true, '云端 URL 必须保留')
 
 assert.deepEqual(
   sanitized.nodes.map(node => node.id),
-  ['source', 'target'],
-  '上传未完成且没有有效媒体的节点应在保存前移除'
+  ['source', 'target', 'lost-upload'],
+  '保存清理不能静默删除节点，否则大工作流保存成功后会丢节点'
 )
 
 const source = sanitized.nodes.find(node => node.id === 'source')
@@ -127,7 +127,12 @@ assert.equal(target.data.promptMentionBindings.image1.previewData, undefined)
 assert.equal(target.data.promptMentionBindings.image1.savedUrl, cdnUrl)
 assert.deepEqual(target.data.referenceImages, [{ url: cdnUrl, label: 'cdn' }])
 
-assert.equal(sanitized.edges.length, 1)
+const lostUpload = sanitized.nodes.find(node => node.id === 'lost-upload')
+assert.deepEqual(lostUpload.data.sourceImages, [])
+assert.equal(lostUpload.data.isUploading, undefined)
+assert.equal(lostUpload.data.uploadFailed, undefined)
+
+assert.equal(sanitized.edges.length, 2)
 assert.equal(sanitized.edges[0].sourceNode, undefined)
 assert.equal(sanitized.edges[0].targetNode, undefined)
 assert.equal(sanitized.edges[0].sourceX, undefined)

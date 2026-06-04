@@ -45,6 +45,14 @@ function assertDragConnectionStartsFromRightAddButton(source, nodeName) {
   )
 }
 
+function assertRightAddButtonIsNoDrag(source, nodeName) {
+  assert.match(
+    source,
+    /class="[^"]*\bnode-add-btn\b[^"]*\bnodrag\b[^"]*"/,
+    `${nodeName} right add button should opt out of Vue Flow node dragging for touch connection gestures`
+  )
+}
+
 test('text node output handle is positioned in the same wrapper as the right add button', () => {
   const source = readNode('TextNode.vue')
   assertOutputHandleBeforeRightAddButton(source, 'text-node-card-wrapper')
@@ -118,4 +126,17 @@ test('image node media load events refresh handle bounds', () => {
 test('audio node drag connection starts from the right add button center', () => {
   const source = readNode('AudioNode.vue')
   assertDragConnectionStartsFromRightAddButton(source, 'audio node')
+})
+
+test('node right add buttons do not start Vue Flow node dragging on touch', () => {
+  for (const [fileName, nodeName] of [
+    ['TextNode.vue', 'text node'],
+    ['ImageNode.vue', 'image node'],
+    ['VideoNode.vue', 'video node'],
+    ['AudioNode.vue', 'audio node'],
+    ['SeedanceCharacterNode.vue', 'character node'],
+    ['LLMNode.vue', 'llm node']
+  ]) {
+    assertRightAddButtonIsNoDrag(readNode(fileName), nodeName)
+  }
 })

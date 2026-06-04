@@ -405,7 +405,7 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
     <!-- 右侧添加按钮 -->
     <button 
       v-if="outputText"
-      class="node-add-btn"
+      class="node-add-btn nodrag"
       title="创建下一个节点"
       @click="handleAddClick"
     >

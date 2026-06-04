@@ -188,7 +188,6 @@ const panStart = ref({ x: 0, y: 0 })
 // 触屏手势只服务 iPad/平板等 touch 输入，不改变鼠标/键盘路径
 const TOUCH_PAN_THRESHOLD = 4
 const TOUCH_CONNECTION_DRAG_THRESHOLD = 5
-const TOUCH_CONNECTION_LONG_PRESS_DURATION = 300
 const TOUCH_LONG_PRESS_DURATION = 600
 const TOUCH_LONG_PRESS_MOVE_THRESHOLD = 8
 
@@ -1585,7 +1584,7 @@ function handleTouchStart(event) {
     }
 
     const nodeId = getTouchTargetNodeId(event.target)
-    if (nodeId && isNodeSelectedForTouchDelete(nodeId) && !isInteractiveTouchTarget(event.target)) {
+    if (nodeId && !isInteractiveTouchTarget(event.target)) {
       startSelectedNodeTouchDelete(event, nodeId)
       return
     }
@@ -1649,6 +1648,9 @@ function startSelectedNodeTouchDelete(event, nodeId) {
   const point = getTouchPoint(touch)
   if (!touch || !point) return
 
+  event.preventDefault()
+  event.stopPropagation()
+
   touchState = {
     mode: 'node-delete-pending',
     identifier: touch.identifier,
@@ -1663,12 +1665,15 @@ function startSelectedNodeTouchDelete(event, nodeId) {
     pendingTimeouts.delete(touchLongPressTimer)
     touchLongPressTimer = null
     if (!touchState || touchState.mode !== 'node-delete-pending' || touchState.hasMoved) return
-    if (!isNodeSelectedForTouchDelete(touchState.nodeId)) {
-      resetTouchState()
-      return
-    }
 
-    canvasStore.removeNode(touchState.nodeId)
+    const node = canvasStore.nodes.find(n => n.id === touchState.nodeId)
+    if (node) {
+      canvasStore.closeCanvasContextMenu()
+      canvasStore.openContextMenu(
+        touchState.lastPoint,
+        node
+      )
+    }
     resetTouchState()
   }, TOUCH_LONG_PRESS_DURATION)
   pendingTimeouts.add(touchLongPressTimer)
@@ -1693,13 +1698,7 @@ function handleTouchConnectionStart(event, button) {
     lastPoint: point
   }
 
-  clearTouchConnectionTimer()
-  touchConnectionLongPressTimer = setTimeout(() => {
-    pendingTimeouts.delete(touchConnectionLongPressTimer)
-    touchConnectionLongPressTimer = null
-    startTouchConnectionDrag()
-  }, TOUCH_CONNECTION_LONG_PRESS_DURATION)
-  pendingTimeouts.add(touchConnectionLongPressTimer)
+  startTouchConnectionDrag()
   ensureGlobalTouchListeners()
 }
 
@@ -1872,7 +1871,17 @@ function handleTouchPinchMove(event) {
 function handleTouchEnd(event) {
   if (!touchState) return
 
-  if (touchState.mode === 'blank-long-press' || touchState.mode === 'node-delete-pending') {
+  if (touchState.mode === 'blank-long-press') {
+    if (canvasStore.isNodeSelectorOpen) {
+      canvasStore.closeNodeSelector()
+    }
+    canvasStore.closeAllContextMenus()
+    clearTouchLongPressTimer()
+    resetTouchState()
+    return
+  }
+
+  if (touchState.mode === 'node-delete-pending') {
     clearTouchLongPressTimer()
     resetTouchState()
     return
@@ -3330,7 +3339,7 @@ onMounted(() => {
   // 添加滚轮事件监听（以鼠标位置为中心缩放）
   if (canvasBoardRef.value) {
     canvasBoardRef.value.addEventListener('wheel', handleWheel, { passive: false })
-    canvasBoardRef.value.addEventListener('touchstart', handleTouchStart, { passive: false })
+    canvasBoardRef.value.addEventListener('touchstart', handleTouchStart, { passive: false, capture: true })
     // 添加原生右键菜单事件监听
     canvasBoardRef.value.addEventListener('contextmenu', handleNativeContextMenu)
   }
@@ -3358,7 +3367,7 @@ onUnmounted(() => {
   // 移除滚轮和右键事件监听
   if (canvasBoardRef.value) {
     canvasBoardRef.value.removeEventListener('wheel', handleWheel)
-    canvasBoardRef.value.removeEventListener('touchstart', handleTouchStart)
+    canvasBoardRef.value.removeEventListener('touchstart', handleTouchStart, { capture: true })
     canvasBoardRef.value.removeEventListener('contextmenu', handleNativeContextMenu)
   }
   resetTouchState()

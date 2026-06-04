@@ -130,16 +130,6 @@ function sanitizeReferenceImages(values) {
   })
 }
 
-function hasSavedMedia(data) {
-  return Boolean(
-    data.sourceImages?.length > 0 ||
-    data.output?.url ||
-    data.output?.urls?.length > 0 ||
-    (data.audioUrl && !isTransientWorkflowUrl(data.audioUrl)) ||
-    (data.sourceVideo && !isTransientWorkflowUrl(data.sourceVideo))
-  )
-}
-
 export function sanitizeWorkflowNodeForSave(node) {
   const cleanedNode = removeEmptyRuntimeStyle(copyWithoutKeys(node, NODE_RUNTIME_KEYS))
   if (!cleanedNode.data) {
@@ -149,11 +139,7 @@ export function sanitizeWorkflowNodeForSave(node) {
   const data = sanitizeInlineValue(cleanedNode.data) || {}
 
   if (Array.isArray(data.sourceImages)) {
-    const originalCount = data.sourceImages.length
     data.sourceImages = persistentUrlList(data.sourceImages)
-    if (data.sourceImages.length === 0 && originalCount > 0 && data.uploadFailed) {
-      data._partialLost = true
-    }
   }
 
   if (Array.isArray(data.referenceImages)) {
@@ -184,16 +170,6 @@ export function sanitizeWorkflowNodeForSave(node) {
     })
   }
 
-  if (data.isUploading && !hasSavedMedia(data)) {
-    data._shouldRemove = true
-  }
-
-  if (data._dataLost || data._partialLost) {
-    if (!hasSavedMedia(data)) {
-      data._shouldRemove = true
-    }
-  }
-
   delete data.isUploading
   delete data.uploadFailed
   delete data.uploadError
@@ -212,19 +188,14 @@ export function sanitizeWorkflowEdgeForSave(edge) {
 
 export function sanitizeWorkflowForSave(workflow = {}) {
   const cleanedNodes = (workflow.nodes || []).map(sanitizeWorkflowNodeForSave)
-  const validNodes = cleanedNodes.filter(node => !node.data?._shouldRemove)
-  const validNodeIds = new Set(validNodes.map(node => node.id))
-
-  validNodes.forEach(node => {
-    if (node.data) delete node.data._shouldRemove
-  })
+  const validNodeIds = new Set(cleanedNodes.map(node => node.id))
 
   const validEdges = (workflow.edges || [])
     .filter(edge => validNodeIds.has(edge.source) && validNodeIds.has(edge.target))
     .map(sanitizeWorkflowEdgeForSave)
 
   return {
-    nodes: validNodes,
+    nodes: cleanedNodes,
     edges: validEdges,
     viewport: sanitizeInlineValue(workflow.viewport || { x: 0, y: 0, zoom: 1 })
   }

@@ -14,8 +14,8 @@ assert.match(
 
 assert.match(
   source,
-  /addEventListener\('touchstart',\s*handleTouchStart,\s*\{\s*passive:\s*false\s*\}\)/,
-  'CanvasBoard should attach a non-passive touchstart listener so iPad canvas gestures can prevent page scrolling'
+  /addEventListener\('touchstart',\s*handleTouchStart,\s*\{\s*passive:\s*false,\s*capture:\s*true\s*\}\)/,
+  'CanvasBoard should capture a non-passive touchstart listener before Vue Flow can consume selected-node long presses'
 )
 
 assert.match(
@@ -36,6 +36,38 @@ assert.match(
   'CanvasBoard should start custom drag connections from touch on the node add button'
 )
 
+const touchEndHandler = source.match(
+  /function handleTouchEnd\([\s\S]*?\n}\n\nfunction handleTouchCancel/
+)?.[0] || ''
+
+assert.match(
+  touchEndHandler,
+  /touchState\.mode === 'blank-long-press'[\s\S]*?canvasStore\.isNodeSelectorOpen[\s\S]*?canvasStore\.closeNodeSelector\(\)/,
+  'Blank canvas taps on touch devices should close an already-open node selector'
+)
+
+assert.match(
+  touchEndHandler,
+  /touchState\.mode === 'blank-long-press'[\s\S]*?canvasStore\.closeAllContextMenus\(\)/,
+  'Blank canvas taps on touch devices should close an open node long-press context menu'
+)
+
+const touchConnectionStart = source.match(
+  /function handleTouchConnectionStart\([\s\S]*?\n}\n\nfunction startTouchConnectionDrag/
+)?.[0] || ''
+
+assert.match(
+  touchConnectionStart,
+  /startTouchConnectionDrag\(\)/,
+  'Touching the right node add button should immediately enter drag-connection mode on iPad'
+)
+
+assert.doesNotMatch(
+  touchConnectionStart,
+  /touchConnectionLongPressTimer\s*=\s*setTimeout/,
+  'Touch connection start should not wait for a long-press timer before drawing the connection'
+)
+
 assert.match(
   source,
   /applyZoomAtScreenPoint\(/,
@@ -44,8 +76,8 @@ assert.match(
 
 assert.match(
   source,
-  /removeEventListener\('touchstart',\s*handleTouchStart\)/,
-  'CanvasBoard should remove touch listeners on unmount'
+  /removeEventListener\('touchstart',\s*handleTouchStart,\s*\{\s*capture:\s*true\s*\}\)/,
+  'CanvasBoard should remove the captured touchstart listener on unmount'
 )
 
 console.log('CanvasBoard touch interaction tests passed')

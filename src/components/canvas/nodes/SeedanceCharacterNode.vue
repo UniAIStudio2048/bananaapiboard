@@ -491,7 +491,7 @@ onUnmounted(() => {
       <!-- 右侧 + 按钮 -->
       <button
         ref="addBtnRef"
-        class="node-add-btn node-add-btn-right"
+        class="node-add-btn node-add-btn-right nodrag"
         title="单击：添加节点 | 长按/拖拽：连线"
         @mousedown="handleAddRightMouseDown"
       >

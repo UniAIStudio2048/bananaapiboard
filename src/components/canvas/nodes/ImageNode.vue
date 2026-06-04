@@ -7887,7 +7887,7 @@ async function handleDrop(event) {
       <!-- 右侧添加按钮 - 单击打开选择器，长按/拖拽连线 -->
       <button 
         ref="addRightBtnRef"
-        class="node-add-btn node-add-btn-right"
+        class="node-add-btn node-add-btn-right nodrag"
         title="单击：添加节点 | 长按/拖拽：连接到其他节点"
         @mousedown="handleAddRightMouseDown"
       >
