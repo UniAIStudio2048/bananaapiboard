@@ -140,4 +140,34 @@ assert.match(
   'Image node batch count control should be treated as an interactive touch target on Android tablets'
 )
 
+assert.match(
+  interactiveTouchTarget,
+  /config-panel/,
+  'Inline node config panels should keep touch taps for their own controls instead of starting canvas node gestures'
+)
+
+assert.match(
+  interactiveTouchTarget,
+  /quick-action/,
+  'Div-based quick actions inside nodes should be interactive touch targets on tablets'
+)
+
+assert.match(
+  interactiveTouchTarget,
+  /panel-frame-add/,
+  'Reference media add tiles should receive touch clicks inside node config panels'
+)
+
+assert.match(
+  interactiveTouchTarget,
+  /panel-frame-item/,
+  'Reference media thumbnails should receive touch clicks inside node config panels'
+)
+
+assert.match(
+  interactiveTouchTarget,
+  /model-selector-trigger/,
+  'Div-based model selectors should receive touch clicks inside node config panels'
+)
+
 console.log('CanvasBoard touch interaction tests passed')

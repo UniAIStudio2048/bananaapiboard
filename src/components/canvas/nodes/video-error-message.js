@@ -27,6 +27,9 @@ function formatKnownSeedanceError(message) {
   if (lower.includes('the request failed because the input may contain sensitive information')) {
     return withRequestId('输入内容可能包含敏感信息，已被内容安全系统拦截，请修改提示词后重试')
   }
+  if (lower.includes('the request failed because the input text may contain sensitive information')) {
+    return withRequestId('提示词可能包含敏感内容，已被内容安全系统拦截，请修改提示词后重试')
+  }
   if (lower.includes('the request failed because the input image may contain sensitive information')) {
     return withRequestId('输入图片可能包含敏感内容，请更换图片后重试')
   }
@@ -46,9 +49,9 @@ export function formatVideoNodeErrorMessage(message, options = {}) {
 
   const trimmed = message.trim()
   const lower = trimmed.toLowerCase()
-  const seedanceMessage = isSeedanceVideoModel(model) ? formatKnownSeedanceError(trimmed) : ''
-  if (seedanceMessage) {
-    return maybeWithNoChargeNotice(seedanceMessage, includeNoChargeNotice)
+  const knownContentSafetyMessage = formatKnownSeedanceError(trimmed)
+  if (knownContentSafetyMessage) {
+    return maybeWithNoChargeNotice(knownContentSafetyMessage, includeNoChargeNotice)
   }
 
   const videoDurationMatch = trimmed.match(/video duration \(seconds\).*?less than or equal to\s+(\d+(?:\.\d+)?)/i)

@@ -5331,7 +5331,7 @@ function triggerFrameUpload() {
   }
 }
 
-// 处理文件选择 - 直接创建上游图片/视频节点（秒加载优化）
+// 处理文件选择 - 直接创建上游图片/视频/音频节点（秒加载优化）
 async function handleFrameFileChange(event) {
   const files = event.target.files
   if (!files || files.length === 0) return
@@ -5374,11 +5374,20 @@ async function handleFrameFileChange(event) {
         if (nodeId) {
           uploadVideoFileAsync(file, blobUrl, nodeId)
         }
+      } else if (file.type.startsWith('audio/')) {
+        const blobUrl = URL.createObjectURL(file)
+        console.log('[VideoNode] 音频秒加载 - blob URL:', blobUrl)
+
+        const nodeId = createUpstreamAudioNode(blobUrl, { fileName: file.name })
+
+        if (nodeId) {
+          uploadAudioFileAsync(file, blobUrl, nodeId)
+        }
       }
     }
   } catch (error) {
     console.error('[VideoNode] 上传失败:', error)
-    await showAlert(error.message || '图片处理失败，请更换图片', '提示')
+    await showAlert(error.message || '素材处理失败，请更换文件', '提示')
   }
 }
 
@@ -5472,6 +5481,87 @@ function createUpstreamVideoNode(videoUrl, metadata = {}) {
   return newNodeId
 }
 
+// 创建上游音频节点 - 返回创建的节点ID（用于视频参考音频）
+function createUpstreamAudioNode(audioUrl, metadata = {}) {
+  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
+  if (!currentNode) return null
+
+  const existingUpstreamCount = canvasStore.edges.filter(e => e.target === props.id).length
+  const offsetY = existingUpstreamCount * 200
+
+  const newNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const newNodePosition = {
+    x: currentNode.position.x - 500,
+    y: currentNode.position.y + offsetY - 100
+  }
+
+  canvasStore.addNode({
+    id: newNodeId,
+    type: 'audio-input',
+    position: newNodePosition,
+    data: {
+      title: metadata.fileName || `参考音频 ${existingUpstreamCount + 1}`,
+      fileName: metadata.fileName || '',
+      nodeRole: 'source',
+      status: 'success',
+      audioUrl,
+      output: {
+        type: 'audio',
+        url: audioUrl
+      },
+      isUploading: true,
+      uploadFailed: false,
+      uploadError: null
+    }
+  })
+
+  canvasStore.addEdge({
+    id: `edge_${newNodeId}_${props.id}`,
+    source: newNodeId,
+    target: props.id,
+    sourceHandle: 'output',
+    targetHandle: 'input'
+  })
+
+  return newNodeId
+}
+
+async function uploadAudioFileAsync(file, blobUrl, nodeId) {
+  try {
+    console.log('[VideoNode] 后台异步上传音频开始:', file.name, '大小:', Math.round(file.size / 1024), 'KB')
+
+    const result = await uploadCanvasMedia(file, 'audio')
+    const serverUrl = result.url
+
+    if (serverUrl) {
+      const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
+      if (currentNode) {
+        const updates = {
+          audioUrl: serverUrl,
+          output: { ...currentNode.data.output, url: serverUrl },
+          isUploading: false,
+          uploadFailed: false,
+          uploadError: null
+        }
+        canvasStore.updateNodeData(nodeId, updates)
+      }
+      try { URL.revokeObjectURL(blobUrl) } catch (e) { /* ignore */ }
+    }
+  } catch (error) {
+    console.warn('[VideoNode] 音频后台上传失败:', error.message)
+    canvasStore.updateNodeData(nodeId, {
+      isUploading: false,
+      uploadFailed: true,
+      uploadError: error.message
+    })
+    uploadManager.registerFailedUpload(`aud_${nodeId}_${Date.now()}`, {
+      nodeId, file, type: 'audio', blobUrl,
+      field: 'audioUrl',
+      error: error.message
+    })
+  }
+}
+
 // 判断是否为外部文件拖拽（非内部排序）
 function isExternalFileDrag(event) {
   const types = event.dataTransfer?.types || []
@@ -5524,7 +5614,7 @@ function handleFrameDragLeave(event) {
   }
 }
 
-// 拖拽放置 - 仅处理外部文件上传（支持图片和视频）
+// 拖拽放置 - 仅处理外部文件上传（支持图片、视频和音频）
 async function handleFrameDrop(event) {
   // 如果是内部排序拖拽，不在这里处理（由 handleImageDrop 处理）
   if (dragSortIndex.value !== -1) {
@@ -5571,11 +5661,20 @@ async function handleFrameDrop(event) {
         if (nodeId) {
           uploadVideoFileAsync(file, blobUrl, nodeId)
         }
+      } else if (file.type.startsWith('audio/')) {
+        const blobUrl = URL.createObjectURL(file)
+        console.log('[VideoNode] 拖拽上传音频 - 秒加载 blob URL:', blobUrl)
+
+        const nodeId = createUpstreamAudioNode(blobUrl, { fileName: file.name })
+
+        if (nodeId) {
+          uploadAudioFileAsync(file, blobUrl, nodeId)
+        }
       }
     }
   } catch (error) {
     console.error('[VideoNode] 拖拽上传失败:', error)
-    await showAlert(error.message || '图片处理失败，请更换图片', '提示')
+    await showAlert(error.message || '素材处理失败，请更换文件', '提示')
   }
 }
 
@@ -5619,8 +5718,8 @@ function removeReferenceVideo(index) {
 
   canvasStore.updateNodeData(props.id, {
     videoOrder: currentVideos,
-    // 只要还有图片或视频，就认为仍然有上游参考
-    hasUpstream: currentVideos.length > 0 || (referenceImages.value?.length || 0) > 0
+    // 只要还有图片、视频或音频，就认为仍然有上游参考
+    hasUpstream: currentVideos.length > 0 || (referenceImages.value?.length || 0) > 0 || (referenceAudios.value?.length || 0) > 0
   })
 
   const edgesToRemove = []
@@ -7430,11 +7529,11 @@ function handleToolbarPreview() {
       </button>
     </div>
     
-    <!-- 隐藏的文件上传 input（支持多选，支持图片和视频） -->
+    <!-- 隐藏的文件上传 input（支持多选，支持图片、视频和音频） -->
     <input 
       ref="frameInputRef"
       type="file" 
-      accept="image/*,video/*"
+      accept="image/*,video/*,audio/*"
       multiple
       class="hidden-file-input"
       @change="handleFrameFileChange"
@@ -7536,7 +7635,7 @@ function handleToolbarPreview() {
       >
         <div class="panel-frames-header">
           <span class="panel-frames-label">{{ hasReferenceAudios ? '参考视频/图片/音频' : hasReferenceVideos ? '参考视频/图片' : '参考图片' }}</span>
-          <span class="panel-frames-hint">拖拽图片/视频到此处 · 拖动调整顺序</span>
+          <span class="panel-frames-hint">拖拽图片/视频/音频到此处 · 拖动调整顺序</span>
         </div>
         <div class="panel-frames-list">
           <!-- 参考视频（来自上游视频节点）- 点击插入 @视频 标记 -->
@@ -7651,7 +7750,7 @@ function handleToolbarPreview() {
         </div>
         <!-- 拖拽覆盖层 -->
         <div v-if="isDragOver" class="panel-drag-overlay">
-          <span>释放以添加图片/视频</span>
+          <span>释放以添加图片/视频/音频</span>
         </div>
       </div>
       

@@ -19,3 +19,11 @@ test('ImageNode preserves face URI for quick review assets from OpenAPI Pro chan
   assert.match(source, /const isQuickOpenApiPro = quickProviderType === 'seedance_openapi_pro' \|\| quickProviderType === 'bytefor'/)
   assert.match(source, /assetUri: isQuickOpenApiPro \? `face:\$\{finalFaceCode\}` : `asset:\/\/\$\{finalAsset\.Id \|\| assetId\}`/)
 })
+
+test('ImageNode quick review synchronizes the active asset provider before creating and polling', () => {
+  assert.match(source, /import \{ createQuickSeedanceCharacterAsset, listAssetGroups, pollAssetStatus \} from '@\/api\/canvas\/volcengine-assets'/)
+  assert.match(source, /async function getQuickSeedanceProviderType\(/)
+  assert.match(source, /const providerType = await getQuickSeedanceProviderType\(\)/)
+  assert.match(source, /providerType/)
+  assert.match(source, /pollAssetStatus\(assetId,\s*\{[^}]*providerType/)
+})

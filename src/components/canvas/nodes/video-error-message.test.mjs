@@ -65,6 +65,16 @@ test('keeps seedance content safety request id in canvas submit errors', () => {
   )
 })
 
+test('formats ant input text sensitive content errors in canvas submit errors', () => {
+  const requestId = '0217806776858121904dd2b7b68a82df8a4ecc3a706eba2f494a3'
+  const raw = `The request failed because the input text may contain sensitive information. Request id: ${requestId}`
+
+  assert.equal(
+    formatVideoNodeErrorMessage(raw, { includeNoChargeNotice: true, model: 'ant-2-text-2-video' }),
+    `提示词可能包含敏感内容，已被内容安全系统拦截，请修改提示词后重试。Request id: ${requestId}，未扣除积分`
+  )
+})
+
 test('formats async non-seedance errors with the default formatter', () => {
   const raw = '视频生成失败。Request id: 0217775348023375ab88183db28c1bc6b9ad1d3f70c5b50e3c749'
 

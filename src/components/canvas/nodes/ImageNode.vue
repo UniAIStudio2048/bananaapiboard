@@ -18,7 +18,7 @@ import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints, removeImageBackground } from '@/api/canvas/nodes'
 import { extractVideoFrame } from '@/api/canvas/workflow'
-import { createQuickSeedanceCharacterAsset, pollAssetStatus } from '@/api/canvas/volcengine-assets'
+import { createQuickSeedanceCharacterAsset, listAssetGroups, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { formatPoints } from '@/utils/format'
@@ -1596,6 +1596,11 @@ function updateSeedanceQuickAsset(partial) {
   })
 }
 
+async function getQuickSeedanceProviderType() {
+  const result = await listAssetGroups({ pageSize: 1 })
+  return result.activeProvider || ''
+}
+
 async function handleQuickSeedanceReview() {
   if (isQuickSeedanceSubmitting.value) return
   if (!currentImageUrl.value) {
@@ -1611,10 +1616,12 @@ async function handleQuickSeedanceReview() {
   try {
     const url = await resolveQuickSeedanceImageUrl(currentImageUrl.value)
     const spaceParams = teamStore.getSpaceParams('current')
+    const providerType = await getQuickSeedanceProviderType()
     const result = await createQuickSeedanceCharacterAsset({
       URL: url,
       Name: `Seedance快捷角色_${props.id || Date.now()}`,
       sourceNodeId: props.id || null,
+      providerType,
       spaceType: spaceParams.spaceType,
       teamId: spaceParams.teamId
     })
@@ -1639,7 +1646,7 @@ async function handleQuickSeedanceReview() {
     })
     showToast('已提交 Seedance 角色过审，审核通过后会标记“已过审”', 'info')
 
-    const { promise } = pollAssetStatus(assetId, { interval: 5000, timeout: 2700000 })
+    const { promise } = pollAssetStatus(assetId, { interval: 5000, timeout: 2700000, providerType })
     promise.then((finalAsset) => {
       const finalFaceCode = finalAsset.FaceCode || finalAsset.faceCode || initialFaceCode
       updateSeedanceQuickAsset({

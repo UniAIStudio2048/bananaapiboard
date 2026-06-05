@@ -216,8 +216,11 @@ export async function listAssets(params = {}) {
 /**
  * 获取单个角色资产详情
  */
-export async function getAsset(id) {
-  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/${id}`), {
+export async function getAsset(id, params = {}) {
+  const queryParams = new URLSearchParams()
+  if (params.providerType) queryParams.set('providerType', params.providerType)
+  const qs = queryParams.toString()
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/${id}${qs ? '?' + qs : ''}`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -286,7 +289,7 @@ export async function deleteAssetGroup(id) {
  * @param {Object} options - { interval, timeout, onStatusChange }
  * @returns {{ promise: Promise, cancel: Function }}
  */
-export function pollAssetStatus(assetId, { interval = 5000, timeout = 2700000, onStatusChange } = {}) {
+export function pollAssetStatus(assetId, { interval = 5000, timeout = 2700000, onStatusChange, providerType } = {}) {
   let cancelled = false
   let timer = null
 
@@ -297,7 +300,7 @@ export function pollAssetStatus(assetId, { interval = 5000, timeout = 2700000, o
     async function check() {
       if (cancelled) return
       try {
-        const result = await getAsset(assetId)
+        const result = await getAsset(assetId, { providerType })
         const asset = result.asset || result
         const status = asset.Status || asset.status
         pollCount++
