@@ -1501,7 +1501,19 @@ function isEditableTouchTarget(target) {
 }
 
 function isInteractiveTouchTarget(target) {
-  return !!target?.closest?.('button, a, input, textarea, select, [role="button"], [contenteditable="true"]')
+  return !!target?.closest?.([
+    'button',
+    'a',
+    'input',
+    'textarea',
+    'select',
+    '[role="button"]',
+    '[contenteditable="true"]',
+    '.model-selector-custom',
+    '.preset-selector-custom',
+    '.param-chip',
+    '.count-display.clickable'
+  ].join(', '))
 }
 
 function getTouchConnectionButton(target) {
@@ -1528,6 +1540,20 @@ function isNodeSelectedForTouchDelete(nodeId) {
 
   const selectedNodes = getSelectedNodes.value || []
   return selectedNodes.some(node => node.id === nodeId)
+}
+
+function selectSingleNodeFromTouch(nodeId) {
+  if (!nodeId) return
+  const nodeExists = canvasStore.nodes.some(node => node.id === nodeId)
+  if (!nodeExists) return
+
+  canvasStore.nodes.forEach(node => {
+    node.selected = node.id === nodeId
+  })
+  selectedNodeIds.value = [nodeId]
+  canvasStore.setSelectedNodeIds([nodeId])
+  canvasStore.selectNode(nodeId)
+  canvasStore.closeAllContextMenus()
 }
 
 function shouldStartTouchPan(target) {
@@ -1742,6 +1768,11 @@ function handleTouchMove(event) {
     return
   }
 
+  if (touchState.mode === 'node-drag') {
+    handleTouchNodeDragMove(event)
+    return
+  }
+
   if (touchState.mode === 'pinch') {
     handleTouchPinchMove(event)
   }
@@ -1835,11 +1866,84 @@ function handleSelectedNodeTouchDeleteMove(event) {
   const point = getTouchPoint(touch)
   if (!point) return
 
-  touchState.lastPoint = point
   if (!didTouchMovePastLongPressThreshold(point)) return
 
+  event.preventDefault()
+  event.stopPropagation()
   clearTouchLongPressTimer()
-  resetTouchState()
+  startTouchNodeDrag(point)
+}
+
+function handleTouchNodeDragMove(event) {
+  const touch = getTouchByIdentifier(event.touches, touchState.identifier)
+  const point = getTouchPoint(touch)
+  if (!point) return
+
+  event.preventDefault()
+  event.stopPropagation()
+  moveTouchDraggedNode(point)
+}
+
+function moveTouchDraggedNode(point) {
+  if (!touchState?.nodeId || !touchState.lastPoint) return
+  const node = canvasStore.nodes.find(n => n.id === touchState.nodeId)
+  if (!node) return
+
+  const viewport = getViewport()
+  const zoom = viewport?.zoom || 1
+  const delta = {
+    x: (point.x - touchState.lastPoint.x) / zoom,
+    y: (point.y - touchState.lastPoint.y) / zoom
+  }
+  let nextPosition = {
+    x: node.position.x + delta.x,
+    y: node.position.y + delta.y
+  }
+
+  if (node.type !== 'group' && node.data?.groupId) {
+    nextPosition = clampPositionInsideNodeGroup(node, nextPosition)
+  }
+
+  canvasStore.updateNodePosition(node.id, nextPosition)
+
+  if (node.type === 'group' && node.data?.nodeIds) {
+    syncGroupChildrenPositions({ ...node, position: nextPosition })
+  }
+
+  if (node.type !== 'group' && node.data?.groupId) {
+    updateGroupOffsetForNode({ ...node, position: nextPosition })
+  }
+
+  scheduleActiveEdgePathsRead()
+  touchState.lastPoint = point
+}
+
+function startTouchNodeDrag(point) {
+  selectSingleNodeFromTouch(touchState.nodeId)
+  touchState = {
+    ...touchState,
+    mode: 'node-drag',
+    hasMoved: true
+  }
+
+  if (!isDraggingNode.value) {
+    isDraggingNode.value = true
+    window.dispatchEvent(new CustomEvent('canvas-drag-start'))
+  }
+
+  moveTouchDraggedNode(point)
+}
+
+function finishTouchNodeDrag() {
+  alignmentGuides.value = { vertical: null, horizontal: null }
+  snapPosition.value = { x: null, y: null }
+  if (alignmentThrottleTimer.value) {
+    cancelAnimationFrame(alignmentThrottleTimer.value)
+    alignmentThrottleTimer.value = null
+  }
+
+  isDraggingNode.value = false
+  window.dispatchEvent(new CustomEvent('canvas-drag-end'))
 }
 
 function handleTouchPinchMove(event) {
@@ -1882,7 +1986,18 @@ function handleTouchEnd(event) {
   }
 
   if (touchState.mode === 'node-delete-pending') {
+    if (!touchState.hasMoved) {
+      selectSingleNodeFromTouch(touchState.nodeId)
+    }
     clearTouchLongPressTimer()
+    resetTouchState()
+    return
+  }
+
+  if (touchState.mode === 'node-drag') {
+    event.preventDefault()
+    event.stopPropagation()
+    finishTouchNodeDrag()
     resetTouchState()
     return
   }
