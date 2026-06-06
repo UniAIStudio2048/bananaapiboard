@@ -13,6 +13,7 @@ import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
 import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
 import { getTaskStatusConfig } from './backgroundTaskConfig'
 import { classifyBackgroundTaskStatus } from './backgroundTaskStatus'
+import { classifyPollingError } from './backgroundTaskErrorPolicy.js'
 
 const STORAGE_KEY = 'canvas_background_tasks'
 const POLL_INTERVAL = 3000  // 3秒轮询一次
@@ -335,10 +336,26 @@ function startPolling(taskId) {
 
       const message = String(error?.message || '')
 
+      const pollingErrorAction = classifyPollingError(task, error)
+
+      if (pollingErrorAction.kind === 'pause') {
+        task.status = pollingErrorAction.status
+        task.error = null
+        task._networkErrorCount = NETWORK_ERROR_NOTIFY_AFTER
+        task._pausedByIdentityMismatch = true
+        task.updatedAt = Date.now()
+        tasks.set(taskId, task)
+        saveTasksToStorage()
+        stopPolling(taskId)
+        notifyTaskNetworkError(taskId, task, pollingErrorAction.message)
+        console.warn(`[BackgroundTaskManager] 任务 ${taskId} 查询身份不匹配，已暂停轮询并保留重新获取入口`)
+        return
+      }
+
       // 如果任务不存在（404错误），标记为失败并停止轮询
-      if (message.includes('任务不存在') || message.includes('not found')) {
+      if (pollingErrorAction.kind === 'failed') {
         task.status = 'failed'
-        task.error = formatTaskError(task, '任务不存在或已过期，请重新生成', '任务不存在或已过期，请重新生成')
+        task.error = formatTaskError(task, pollingErrorAction.message, '任务不存在或已过期，请重新生成')
         task.updatedAt = Date.now()
         tasks.set(taskId, task)
         saveTasksToStorage()

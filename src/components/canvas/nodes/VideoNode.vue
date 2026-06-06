@@ -2101,6 +2101,19 @@ function handleConfigPanelOutsideMouseDown(event) {
 function handleBackgroundTaskNetworkError(event) {
   const { task, message } = event.detail || {}
   if (!task || task.nodeId !== props.id) return
+  if (task._pausedByIdentityMismatch) {
+    canvasStore.updateNodeData(props.id, {
+      status: 'error',
+      progress: null,
+      error: message || '任务属于其他登录态或租户，请切回提交任务时的账号/租户后重新获取',
+      taskId: task.taskId,
+      soraTaskId: task.taskId,
+      _failedTaskId: task.taskId,
+      _networkRetrying: false,
+      _networkRetryMessage: null
+    })
+    return
+  }
   const currentStatus = props.data?.status
   if (currentStatus !== 'processing' && currentStatus !== 'pending') return
   canvasStore.updateNodeData(props.id, {

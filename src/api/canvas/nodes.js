@@ -8,6 +8,7 @@ import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
 import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
 import { classifyBackgroundTaskStatus } from '@/stores/canvas/backgroundTaskStatus'
 import { normalizePromptLineEndings } from '@/utils/promptText'
+import { buildTaskQueryError } from './taskQueryError.js'
 
 async function parseApiResponse(response, fallbackMessage) {
   const contentType = response.headers.get('content-type') || ''
@@ -38,31 +39,6 @@ async function parseApiResponse(response, fallbackMessage) {
   }
 
   return trimmed ? { message: trimmed } : {}
-}
-
-function getApiErrorMessage(error, fallbackMessage) {
-  return error?.message || error?.error || fallbackMessage
-}
-
-function getTaskQueryErrorMessage(response, error, fallbackMessage) {
-  const fallback = response.status === 404
-    ? '任务不存在或已过期，请重新生成'
-    : response.status === 401
-      ? '登录已过期，请刷新页面重新登录'
-      : fallbackMessage
-  return getApiErrorMessage(error, fallback)
-}
-
-/**
- * 构造任务状态查询错误，并把 HTTP status 挂到 error.status，
- * 让上层（BackgroundTaskManager）能精确识别 401/404 等情况，
- * 而不是只能从字符串里 includes('401')。
- */
-function buildTaskQueryError(response, body, fallbackMessage) {
-  const message = getTaskQueryErrorMessage(response, body, fallbackMessage)
-  const err = new Error(message)
-  err.status = response.status
-  return err
 }
 
 // 获取通用请求头
