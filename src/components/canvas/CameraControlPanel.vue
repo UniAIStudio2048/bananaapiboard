@@ -113,7 +113,7 @@
             </div>
             
             <!-- 重置按钮 -->
-            <button class="reset-btn" @click="handleReset" title="重置">
+            <button class="reset-btn" @click="resetToDefault" title="重置">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" stroke-linecap="round" stroke-linejoin="round"/>
                 <path d="M3 3v5h5" stroke-linecap="round" stroke-linejoin="round"/>
@@ -244,7 +244,8 @@ import {
   generateCameraPrompt,
   getCameraTypes,
   getCamerasByType,
-  getCameraEffects
+  getCameraEffects,
+  getDefaultCameraSettingsForType
 } from '@/config/canvas/cameraDatabase'
 import {
   getCameraPresets as fetchCameraPresets,
@@ -712,11 +713,13 @@ function getEffectIcon(category) {
 
 // 重置
 function handleReset() {
-  const cameras = filteredCameras.value
-  if (cameras.length > 0) {
-    selectedCamera.value = cameras[0].id
-  }
-  selectedEffects.value = []
+  const defaults = getDefaultCameraSettingsForType(cameraType.value)
+  cameraType.value = defaults.cameraType
+  selectedCamera.value = defaults.camera
+  selectedLens.value = defaults.lens
+  selectedFocalLength.value = defaults.focalLength
+  selectedAperture.value = defaults.aperture
+  selectedEffects.value = [...defaults.effects]
 }
 
 // 关闭

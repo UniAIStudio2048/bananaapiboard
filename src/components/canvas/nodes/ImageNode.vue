@@ -1536,6 +1536,9 @@ watch(showConfigPanel, (val) => {
 
 // 获取当前图片URL（用于工具栏操作）
 const currentImageUrl = computed(() => {
+  if (props.data?.nodeRole === 'source' && hasSourceImage.value) {
+    return sourceImages.value[0]
+  }
   if (hasOutput.value) {
     return outputImages.value[0]
   }
@@ -1547,6 +1550,7 @@ const currentImageUrl = computed(() => {
 
 function getCanvasNodeSwitchImageUrl(node) {
   const data = node?.data || {}
+  if (data.nodeRole === 'source' && Array.isArray(data.sourceImages) && data.sourceImages[0]) return data.sourceImages[0]
   if (Array.isArray(data.output?.urls) && data.output.urls[0]) return data.output.urls[0]
   if (data.output?.url) return data.output.url
   if (Array.isArray(data.sourceImages) && data.sourceImages[0]) return data.sourceImages[0]

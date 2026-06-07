@@ -152,6 +152,51 @@ test('Bytefor request model keeps model id instead of provider model', () => {
   )
 })
 
+test('Seedance SD2 request model keeps selected config id for resolution-specific routing', () => {
+  assert.equal(
+    resolveVideoRequestModel({
+      apiType: 'seedance-2.0',
+      actualModel: 'doubao-seedance-2-0-260128',
+      seedanceConfig: {
+        model: 'ep-20260530163210-glf9n',
+        resolution: '480p'
+      }
+    }, 'seedance-2.0-copy'),
+    'seedance-2.0-copy'
+  )
+})
+
+test('Seedance SD2 submit payload keeps selected config id for backend billing', () => {
+  const entries = buildVideoGenerationFormEntries({
+    modelConfig: {
+      apiType: 'seedance-2.0',
+      actualModel: 'doubao-seedance-2-0-260128',
+      seedanceConfig: {
+        model: 'ep-20260530163210-glf9n',
+        resolution: '480p'
+      }
+    },
+    prompt: '根据图片生成视频',
+    model: 'seedance-2.0-copy',
+    aspectRatio: '9:16',
+    duration: '9',
+    mode: 'image',
+    seedance: {
+      mode: 'multimodal_ref',
+      resolution: '480p',
+      ratio: '9:16',
+      generateAudio: true,
+      webSearch: false,
+      watermark: false,
+      duration: '9'
+    }
+  })
+
+  assert.equal(entries.get('model'), 'seedance-2.0-copy')
+  assert.equal(entries.get('seedance_resolution'), '480p')
+  assert.equal(entries.get('duration'), '9')
+})
+
 test('Wan video models use text defaults and clamp r2v durations with video references', () => {
   assert.equal(isWanVideoModel({ apiType: 'wan' }), true)
   assert.equal(isWanVideoModel({ apiType: 'seedance-2.0' }), false)

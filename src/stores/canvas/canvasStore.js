@@ -290,6 +290,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     const node = nodes.value.find(n => n.id === nodeId)
     if (node) {
       node.data = mergeNodeData(node.data, data)
+      if (!options.skipStoryboardBindingSync) {
+        syncOutgoingStoryboardBindings(nodeId)
+      }
       if (!options.silent) {
         markCurrentTabChanged()
       }
@@ -473,31 +476,42 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 先从数组中移除该边
     edges.value = edges.value.filter(e => e.id !== edgeId)
 
-    // Storyboard 连线删除后：清除所有"没有对应连线"的格子图片
-    // 解决批量写入场景（如"创建分镜格子"9张图只有1条连线）导致旧图片残留的问题
+    // Storyboard 格子级连线删除后，只清除该连线实际占用的格子。
+    // 其它无独立入边的格子可能来自批量生成或手动上传，不能一起清空。
     if (edge && edge.target) {
       const targetNode = nodes.value.find(n => n.id === edge.target)
       if (targetNode?.type === 'storyboard' && Array.isArray(targetNode.data.images)) {
-        // 收集该 storyboard 节点当前仍存活的所有入边的 targetHandle
-        const aliveHandles = new Set(
-          edges.value
-            .filter(e => e.target === edge.target && typeof e.targetHandle === 'string' && e.targetHandle.startsWith('input-'))
-            .map(e => e.targetHandle)
+        const removedCellIndex = getStoryboardCellIndexFromHandle(edge.targetHandle)
+        const hasReplacementEdge = edges.value.some(e =>
+          e.target === edge.target && e.targetHandle === edge.targetHandle
         )
-        // 遍历所有格子，没有对应连线的格子清空图片
-        const nextImages = [...targetNode.data.images]
-        let changed = false
-        for (let i = 0; i < nextImages.length; i++) {
-          if (nextImages[i] && !aliveHandles.has(`input-${i}`)) {
-            nextImages[i] = null
-            changed = true
-          }
-        }
-        if (changed) {
+        if (removedCellIndex !== null && !hasReplacementEdge && targetNode.data.images[removedCellIndex]) {
+          const nextImages = [...targetNode.data.images]
+          nextImages[removedCellIndex] = null
           updateNodeData(edge.target, { images: nextImages })
         }
       }
     }
+  }
+
+  function getStoryboardCellIndexFromHandle(handle) {
+    if (typeof handle !== 'string' || !handle.startsWith('input-')) return null
+    const index = Number(handle.slice('input-'.length))
+    return Number.isInteger(index) && index >= 0 ? index : null
+  }
+
+  function getNodeImageUrlForPropagation(sourceNode) {
+    if (!sourceNode?.data) return null
+
+    if (sourceNode.data?.nodeRole === 'source' && sourceNode.data.sourceImages?.[0]) {
+      return sourceNode.data.sourceImages[0]
+    }
+
+    if (sourceNode.data.output?.urls?.[0]) return sourceNode.data.output.urls[0]
+    if (sourceNode.data.output?.url) return sourceNode.data.output.url
+    if (sourceNode.data.sourceImages?.[0]) return sourceNode.data.sourceImages[0]
+    if (sourceNode.data.images?.[0]) return sourceNode.data.images[0]
+    return null
   }
 
   /**
@@ -565,18 +579,29 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     let inheritedData = null
     
-    // 1. 如果源节点有输出结果，直接传递
-    if (sourceNode.data.output) {
+    // 1. 源图节点优先传递用户当前上传/替换的 sourceImages
+    if (
+      sourceNode.data.nodeRole === 'source' &&
+      (sourceNode.type === 'image-input' || sourceNode.type === 'image') &&
+      sourceNode.data.sourceImages?.length
+    ) {
+      inheritedData = {
+        type: 'image',
+        urls: sourceNode.data.sourceImages
+      }
+    }
+    // 2. 如果源节点有输出结果，直接传递
+    else if (sourceNode.data.output) {
       inheritedData = sourceNode.data.output
     }
-    // 2. 文本节点传递文本内容
+    // 3. 文本节点传递文本内容
     else if ((sourceNode.type === 'text-input' || sourceNode.type === 'text') && sourceNode.data.text) {
       inheritedData = {
         type: 'text',
         content: sourceNode.data.text
       }
     }
-    // 3. 图片节点（源节点角色）传递上传的图片
+    // 4. 图片节点传递上传的图片
     else if ((sourceNode.type === 'image-input' || sourceNode.type === 'image') && 
              (sourceNode.data.sourceImages?.length || sourceNode.data.images?.length)) {
       inheritedData = {
@@ -584,7 +609,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         urls: sourceNode.data.sourceImages || sourceNode.data.images
       }
     }
-    // 4. 视频节点传递视频
+    // 5. 视频节点传递视频
     else if ((sourceNode.type === 'video-input' || sourceNode.type === 'video') && sourceNode.data.sourceVideo) {
       inheritedData = {
         type: 'video',
@@ -595,21 +620,14 @@ export const useCanvasStore = defineStore('canvas', () => {
     // ========== Storyboard 图片填充 ==========
     // 从源节点提取第一张图片 URL 的通用逻辑
     if (targetNode.type === 'storyboard') {
-      let pickedUrl = null
+      let pickedUrl = getNodeImageUrlForPropagation(sourceNode)
 
-      if (inheritedData?.type === 'image') {
+      if (!pickedUrl && inheritedData?.type === 'image') {
         pickedUrl = inheritedData.urls?.[0] || inheritedData.url || null
       } else if (typeof inheritedData?.url === 'string') {
         pickedUrl = inheritedData.url
       } else if (Array.isArray(inheritedData?.urls) && inheritedData.urls.length > 0) {
         pickedUrl = inheritedData.urls[0]
-      }
-
-      if (!pickedUrl) {
-        if (sourceNode.data.output?.urls?.length > 0) pickedUrl = sourceNode.data.output.urls[0]
-        else if (sourceNode.data.output?.url) pickedUrl = sourceNode.data.output.url
-        else if (sourceNode.data.sourceImages?.length > 0) pickedUrl = sourceNode.data.sourceImages[0]
-        else if (sourceNode.data.images?.length > 0) pickedUrl = sourceNode.data.images[0]
       }
 
       if (pickedUrl) {
@@ -654,7 +672,7 @@ export const useCanvasStore = defineStore('canvas', () => {
           inheritedFrom: sourceId,
           inheritedData,
           hasUpstream: true
-        })
+        }, { skipStoryboardBindingSync: true })
         return
       }
     }
@@ -679,6 +697,22 @@ export const useCanvasStore = defineStore('canvas', () => {
         ...autoPresetData
       })
     }
+  }
+
+  function syncOutgoingStoryboardBindings(sourceId) {
+    const sourceNode = nodes.value.find(n => n.id === sourceId)
+    if (!sourceNode) return
+
+    const outgoingStoryboardEdges = edges.value.filter(edge => {
+      const targetNode = nodes.value.find(n => n.id === edge.target)
+      return targetNode?.type === 'storyboard'
+    })
+
+    outgoingStoryboardEdges
+      .filter(edge => edge.source === sourceId)
+      .forEach(edge => {
+        propagateData(edge.source, edge.target, edge.targetHandle)
+      })
   }
   
   // ========== 历史记录操作（撤销/重做） ==========

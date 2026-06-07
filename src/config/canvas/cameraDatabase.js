@@ -3171,6 +3171,50 @@ export function getCamerasByType(type) {
   return cameraDatabase.cameras.filter(c => c.type === type)
 }
 
+function pickDefaultFocalLength(values = []) {
+  if (!values.length) return 35
+  if (values.includes(35)) return 35
+  return values.reduce((prev, curr) =>
+    Math.abs(curr - 35) < Math.abs(prev - 35) ? curr : prev
+  )
+}
+
+/**
+ * 获取指定相机类型的默认设置
+ */
+export function getDefaultCameraSettingsForType(type = 'CAMERA') {
+  const cameraType = getCameraTypes().some(item => item.id === type) ? type : 'CAMERA'
+  const camera = getCamerasByType(cameraType)[0] || cameraDatabase.cameras[0]
+
+  if (!camera) {
+    return {
+      cameraType,
+      camera: '',
+      lens: '',
+      focalLength: 35,
+      aperture: 2.0,
+      effects: []
+    }
+  }
+
+  const cinemaMode = cameraType === 'FILM' || cameraType === 'DIGITAL'
+  const lens = cinemaMode ? getCompatibleLenses(camera.id)[0] : null
+  const focalLengths = lens?.focalLengths || camera.focalLengths || [35]
+  const focalLength = pickDefaultFocalLength(focalLengths)
+  const apertures = lens
+    ? getAvailableApertures(lens.id, focalLength)
+    : (camera.apertures || [1.4, 2.0, 2.8, 4.0, 5.6, 8.0])
+
+  return {
+    cameraType: camera.type || cameraType,
+    camera: camera.id,
+    lens: lens?.id || '',
+    focalLength,
+    aperture: apertures[0] || 2.0,
+    effects: []
+  }
+}
+
 /**
  * 相机特效映射表
  */
@@ -3325,4 +3369,3 @@ export function getCameraEffects(effectIds) {
     .map(id => cameraEffectsMap[id])
     .filter(Boolean)
 }
-
