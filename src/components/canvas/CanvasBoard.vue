@@ -98,6 +98,7 @@ const quickSaveWorkflow = inject('quickSaveWorkflow', null)
 
 // 注入交互模式
 const interactionMode = inject('interactionMode', ref('comfyui'))
+const showCanvasMiniMap = inject('showCanvasMiniMap', ref(false))
 
 // VueFlow 交互配置（根据交互模式动态切换）
 const panOnDragConfig = computed(() => {
@@ -295,6 +296,7 @@ const {
   fitView,
   setViewport,
   getViewport,
+  setCenter,
   viewport: vfViewport,
   project,
   vueFlowRef,
@@ -312,7 +314,7 @@ const PAN_SPEED = 50
 /**
  * 自定义滚轮处理（根据 interactionMode 切换行为）
  * ComfyUI: 默认=缩放, Shift=水平平移, Ctrl=垂直平移
- * 无限画布: 默认=垂直平移, Shift=水平平移, Ctrl=缩放
+ * 无限画布: 默认=按触控板/滚轮 delta 平移, Shift=水平平移, Ctrl=缩放
  */
 let wheelRAF = null
 function handleWheel(event) {
@@ -356,9 +358,24 @@ function handleWheelInner(event) {
     const newY = mouseY - flowY * newZoom
     setViewport({ x: newX, y: newY, zoom: newZoom })
   } else {
+    if (Math.abs(event.deltaX || 0) > 0) {
+      setViewport({
+        x: viewport.x - event.deltaX,
+        y: viewport.y - event.deltaY,
+        zoom: viewport.zoom
+      })
+      return
+    }
     const dy = event.deltaY > 0 ? -PAN_SPEED : PAN_SPEED
     setViewport({ x: viewport.x, y: viewport.y + dy, zoom: viewport.zoom })
   }
+}
+
+function handleMiniMapClick({ position }) {
+  if (!position || typeof position.x !== 'number' || typeof position.y !== 'number') return
+  const viewport = getViewport()
+  setCenter(position.x, position.y, { zoom: viewport.zoom })
+  markViewportMoving()
 }
 
 // 🚀 自定义节点类型映射（已经过虚拟化 HOC 包装）
@@ -3678,8 +3695,25 @@ onUnmounted(() => {
         </svg>
       </template>
       
-      <!-- 小地图 (可选) -->
-      <!-- <MiniMap /> -->
+      <MiniMap
+        v-if="showCanvasMiniMap"
+        class="canvas-workflow-minimap"
+        position="bottom-left"
+        node-color="#f5f5f5"
+        node-stroke-color="#111111"
+        :node-stroke-width="1.5"
+        :node-border-radius="2"
+        mask-color="rgba(0, 0, 0, 0.28)"
+        mask-stroke-color="#111111"
+        :mask-stroke-width="1"
+        :mask-border-radius="2"
+        :pannable="true"
+        :zoomable="false"
+        :width="220"
+        :height="150"
+        aria-label="画布地图"
+        @click="handleMiniMapClick"
+      />
     </VueFlow>
   </div>
 </template>
@@ -3719,6 +3753,49 @@ onUnmounted(() => {
 
 :deep(.vue-flow__node.selected) {
   outline: none;
+}
+
+.canvas-board :deep(.canvas-workflow-minimap) {
+  bottom: 72px;
+  left: 24px;
+  width: 220px;
+  height: 150px;
+  background: rgba(10, 10, 10, 0.92);
+  border: 1px solid rgba(245, 245, 245, 0.18);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.canvas-board :deep(.canvas-workflow-minimap svg) {
+  display: block;
+}
+
+.canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-mask) {
+  fill: rgba(0, 0, 0, 0.28);
+  stroke: #111111;
+}
+
+.canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-node) {
+  fill: #f5f5f5;
+  stroke: #111111;
+}
+
+:root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap) {
+  background: rgba(255, 255, 255, 0.94);
+  border-color: rgba(0, 0, 0, 0.16);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
+}
+
+:root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-mask) {
+  fill: rgba(0, 0, 0, 0.18);
+  stroke: #111111;
+}
+
+:root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-node) {
+  fill: #111111;
+  stroke: #ffffff;
 }
 
 /* 框选区域样式 */

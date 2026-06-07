@@ -174,6 +174,7 @@ const canvasTheme = ref('dark')
 
 // 交互模式 (comfyui / infinite-canvas)
 const interactionMode = ref('comfyui')
+const showCanvasMiniMap = ref(false)
 
 // 自动保存定时器
 const autoSaveInterval = ref(null)
@@ -425,6 +426,11 @@ provide('userInfo', me)
 
 // 提供交互模式给子组件
 provide('interactionMode', interactionMode)
+provide('showCanvasMiniMap', showCanvasMiniMap)
+
+function toggleCanvasMiniMap() {
+  showCanvasMiniMap.value = !showCanvasMiniMap.value
+}
 
 // 打开模板面板
 function openTemplates() {
@@ -2858,6 +2864,22 @@ onUnmounted(() => {
 
       <!-- 底部左侧控制区域 -->
       <div class="canvas-bottom-left-controls">
+        <!-- 小地图开关 -->
+        <button
+          class="canvas-map-toggle-btn"
+          :class="{ active: showCanvasMiniMap }"
+          @click="toggleCanvasMiniMap"
+          @mousedown.stop
+          @touchstart.stop
+          title="地图"
+        >
+          <svg class="map-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z"/>
+            <path d="M9 3v15"/>
+            <path d="M15 6v15"/>
+          </svg>
+        </button>
+
         <!-- 交互模式切换 -->
         <button 
           class="canvas-mode-switch-btn"

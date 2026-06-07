@@ -915,7 +915,8 @@
   pointer-events: auto;
 }
 
-/* 交互模式切换按钮 */
+/* 地图 / 交互模式切换按钮 */
+.canvas-map-toggle-btn,
 .canvas-mode-switch-btn {
   display: flex;
   align-items: center;
@@ -931,12 +932,19 @@
   transition: all 0.2s ease;
 }
 
+.canvas-map-toggle-btn:hover,
+.canvas-map-toggle-btn.active,
 .canvas-mode-switch-btn:hover {
   background: var(--canvas-bg-hover);
   border-color: var(--canvas-border-hover);
   color: var(--canvas-text-primary);
 }
 
+.canvas-map-toggle-btn.active {
+  box-shadow: inset 0 0 0 1px var(--canvas-text-secondary);
+}
+
+.canvas-map-toggle-btn .map-icon,
 .canvas-mode-switch-btn .mode-icon {
   width: 18px;
   height: 18px;
