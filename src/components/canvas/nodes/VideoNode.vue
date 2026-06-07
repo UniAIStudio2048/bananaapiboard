@@ -7785,7 +7785,7 @@ function handleToolbarPreview() {
           <div
             :key="promptEditorRenderKey"
             ref="promptTextareaRef"
-            class="prompt-input"
+            class="prompt-input nodrag"
             :class="{ 'is-empty': !promptText }"
             contenteditable="true"
             role="textbox"
@@ -7800,7 +7800,12 @@ function handleToolbarPreview() {
             @focus="handlePromptTextareaFocus"
             @scroll="syncPromptHighlightOverlayScroll"
             @wheel="handlePromptWheel"
-            @mousedown="markPromptTextareaResizeIntent"
+            @mousedown.stop="markPromptTextareaResizeIntent"
+            @pointerdown.stop
+            @touchstart.stop
+            @touchmove.stop
+            @touchend.stop
+            @touchcancel.stop
             @dblclick.stop
           >
             <span

@@ -3298,6 +3298,22 @@ onUnmounted(() => {
   z-index: 100;
 }
 
+@media (orientation: portrait) and (max-width: 900px) {
+  .tabs-container {
+    top: 60px;
+    left: 16px;
+    right: 16px;
+    max-width: calc(100vw - 32px);
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabs-container::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* 模式切换按钮容器 */
 .mode-switch-wrapper {
   position: fixed;
@@ -3630,6 +3646,35 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   transition: right 0.25s ease;
+}
+
+@media (orientation: portrait) and (max-width: 900px) {
+  .canvas-top-right-controls {
+    left: 16px;
+    right: 16px;
+    max-width: calc(100vw - 32px);
+    justify-content: flex-end;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .canvas-top-right-controls::-webkit-scrollbar {
+    display: none;
+  }
+
+  .canvas-top-right-controls :deep(.space-label) {
+    max-width: 56px;
+  }
+
+  .canvas-top-right-controls :deep(.lang-trigger) {
+    padding: 8px 10px;
+  }
+
+  .canvas-points-display {
+    padding: 8px 10px;
+  }
 }
 
 /* 积分显示 */

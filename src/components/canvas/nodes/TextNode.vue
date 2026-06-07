@@ -2916,6 +2916,20 @@ function handleDoubleClick(e) {
   handleEdit()
 }
 
+const READY_EDIT_DOUBLE_TAP_MS = 350
+let lastReadyEditTapAt = 0
+
+function handleReadyEditTap(event) {
+  event?.stopPropagation?.()
+  const now = Date.now()
+  if (now - lastReadyEditTapAt <= READY_EDIT_DOUBLE_TAP_MS) {
+    lastReadyEditTapAt = 0
+    handleEdit()
+    return
+  }
+  lastReadyEditTapAt = now
+}
+
 // 开始调整尺寸
 function handleResizeStart(handle, event) {
   event.stopPropagation()
@@ -3162,6 +3176,9 @@ onUnmounted(() => {
           @blur="handleBlur"
           @input="handleInput"
           @mousedown.stop
+          @pointerdown.stop
+          @touchstart.stop
+          @touchmove.stop
           @mousemove.stop
           @mouseup.stop
           @click.stop
@@ -3200,7 +3217,15 @@ onUnmounted(() => {
           ></div>
           
           <!-- 待编辑状态（无内容）：显示双击提示 -->
-          <div v-else-if="nodeState === 'ready'" class="text-node-ready">
+          <div
+            v-else-if="nodeState === 'ready'"
+            class="text-node-ready quick-action nodrag"
+            @pointerdown.stop
+            @touchstart.stop
+            @touchmove.stop
+            @click.stop="handleReadyEditTap"
+            @dblclick.stop="handleEdit"
+          >
           <div class="ready-hint">双击开始编辑...</div>
         </div>
         
@@ -3210,7 +3235,10 @@ onUnmounted(() => {
             <div 
               v-for="action in quickActions"
               :key="action.labelKey"
-              class="text-node-action"
+              class="text-node-action quick-action nodrag"
+              @pointerdown.stop
+              @touchstart.stop
+              @touchmove.stop
               @click.stop="action.action"
             >
               <span class="action-icon">{{ action.icon }}</span>
@@ -3446,6 +3474,9 @@ onUnmounted(() => {
             @wheel.stop
             @focus="handleLLMInputFocus"
             @mousedown="markLLMInputResizeIntent"
+            @pointerdown.stop
+            @touchstart.stop
+            @touchmove.stop
             @dblclick.stop
           >
             <span

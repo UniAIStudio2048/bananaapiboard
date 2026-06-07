@@ -2408,16 +2408,17 @@ onUnmounted(() => {
 
 /* 全屏模式 */
 .history-panel-wrapper.fullscreen {
-  top: 20px;
+  top: max(20px, calc(env(safe-area-inset-top) + 20px));
   left: 20px;
   right: 20px;
-  bottom: 20px;
+  bottom: max(20px, calc(env(safe-area-inset-bottom) + 20px));
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
   pointer-events: auto;
+  z-index: 11000;
 }
 
 /* 面板 */
@@ -2441,8 +2442,8 @@ onUnmounted(() => {
 .history-panel.fullscreen {
   width: 90vw;
   max-width: 1400px;
-  height: calc(100vh - 40px);
-  max-height: none;
+  height: 100%;
+  max-height: 100%;
 }
 
 /* 头部 */
@@ -3344,7 +3345,7 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.95);
-  z-index: 10000;
+  z-index: 12000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3399,7 +3400,7 @@ onUnmounted(() => {
 /* 关闭按钮 */
 .close-preview-btn {
   position: absolute;
-  top: 16px;
+  top: max(16px, calc(env(safe-area-inset-top) + 16px));
   right: 16px;
   width: 40px;
   height: 40px;
@@ -3412,7 +3413,7 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   transition: all 0.2s;
-  z-index: 10;
+  z-index: 30;
 }
 
 .close-preview-btn:hover {

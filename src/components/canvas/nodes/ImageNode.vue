@@ -8035,7 +8035,7 @@ async function handleDrop(event) {
           <div
             :key="promptEditorRenderKey"
             ref="promptTextareaRef"
-            class="prompt-input"
+            class="prompt-input nodrag"
             :class="{ 'is-empty': !promptText }"
             contenteditable="true"
             role="textbox"
@@ -8049,7 +8049,12 @@ async function handleDrop(event) {
             @compositionend="handlePromptCompositionEnd"
             @focus="autoResizeTextarea"
             @wheel.stop
-            @mousedown="startTextareaAutoScroll"
+            @mousedown.stop="startTextareaAutoScroll"
+            @pointerdown.stop
+            @touchstart.stop
+            @touchmove.stop
+            @touchend.stop
+            @touchcancel.stop
             @dblclick.stop
           >
             <span
@@ -10075,28 +10080,36 @@ async function handleDrop(event) {
   padding: 8px 12px;
   border-top: 1px solid var(--canvas-border-subtle, #2a2a2a);
   gap: 12px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   min-height: 48px;
+  overflow: hidden;
 }
 
 .config-left {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  flex: 1 1 240px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .config-right {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
+  gap: 8px;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
+  max-width: 100%;
+  margin-left: auto;
+  min-width: 0;
 }
 
 /* 模型选择器（自定义下拉框）- 扁平化设计，与 VideoNode 统一 */
 .model-selector-custom {
   position: relative;
   z-index: 100;
+  max-width: 100%;
 }
 
 .model-selector-trigger {
@@ -10110,6 +10123,7 @@ async function handleDrop(event) {
   cursor: pointer;
   transition: background-color 0.2s ease, border-color 0.2s ease;
   min-height: 32px;
+  max-width: 100%;
 }
 
 .model-selector-trigger:hover {
@@ -10151,6 +10165,10 @@ async function handleDrop(event) {
   color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
   font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .select-arrow {
@@ -10447,6 +10465,7 @@ async function handleDrop(event) {
 /* 预设选择器样式 - 与 VideoNode 统一的扁平化设计 */
 .preset-selector-custom {
   position: relative;
+  max-width: 100%;
 }
 
 .preset-selector-trigger {
@@ -10461,6 +10480,7 @@ async function handleDrop(event) {
   transition: background-color 0.2s ease, border-color 0.2s ease;
   user-select: none;
   min-height: 32px;
+  max-width: 100%;
 }
 
 .preset-selector-trigger:hover {
@@ -10477,6 +10497,10 @@ async function handleDrop(event) {
   color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
   font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .preset-dropdown-list {
@@ -10803,6 +10827,7 @@ async function handleDrop(event) {
 .generate-btn {
   width: 36px;
   height: 36px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: var(--canvas-accent-primary, #3b82f6);
   border: none;
