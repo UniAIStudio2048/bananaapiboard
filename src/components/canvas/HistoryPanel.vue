@@ -17,12 +17,13 @@
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
 import { getHistory, getHistoryDetail, deleteHistory } from '@/api/canvas/history'
 import { saveAsset } from '@/api/canvas/assets'
+import { extractVideoFrame } from '@/api/canvas/workflow'
 import { getTenantHeaders, getMediaUrl, getApiUrl } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { getCachedHistory, cacheHistory, invalidateCache } from '@/utils/historyCache'
 import { preloadImages } from '@/utils/imageCache'
-import { toSameOriginUrl, getOriginalImageUrl } from '@/utils/canvasThumbnail'
+import { toSameOriginUrl, getOriginalImageUrl, getVideoPosterUrl } from '@/utils/canvasThumbnail'
 import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
 import { getHistoryAspectRatioStyle, normalizeHistoryAspectRatio } from '@/utils/historyAspectRatio'
 import { buildHistoryMediaDetails, enrichHistoryMediaDetails } from '@/utils/historyMediaDetails'
@@ -104,6 +105,8 @@ const videoThumbnailQueue = ref([]) // 待处理队列
 const processingThumbnails = ref(0) // 正在处理的数量
 const MAX_CONCURRENT_THUMBNAILS = 2 // 视频截帧很重，限制并发数
 const videoPosterLoadErrors = ref({})
+const serverVideoThumbnailPending = ref({})
+const serverVideoThumbnailFailed = ref({})
 
 // 图片加载失败的记录
 const imageLoadErrors = ref({})
@@ -1520,9 +1523,51 @@ function processNextThumbnail() {
 }
 
 // 获取视频缩略图（优化版：不会重复触发）
+function requestServerVideoThumbnail(item) {
+  if (!item?.id || !item.url) return
+  if (videoThumbnails.value[item.id]) return
+  if (serverVideoThumbnailPending.value[item.id] || serverVideoThumbnailFailed.value[item.id]) return
+
+  serverVideoThumbnailPending.value = {
+    ...serverVideoThumbnailPending.value,
+    [item.id]: true
+  }
+
+  extractVideoFrame({ videoUrl: item.url, time: 0.3, nodeId: `history-${item.id}` })
+    .then(result => {
+      const thumbnailUrl = result?.url ? getMediaUrl(result.url) : ''
+      if (thumbnailUrl) {
+        videoThumbnails.value = {
+          ...videoThumbnails.value,
+          [item.id]: thumbnailUrl
+        }
+      } else {
+        serverVideoThumbnailFailed.value = {
+          ...serverVideoThumbnailFailed.value,
+          [item.id]: true
+        }
+      }
+    })
+    .catch(error => {
+      console.warn('[HistoryPanel] 服务端视频缩略图提取失败:', error?.message || error)
+      serverVideoThumbnailFailed.value = {
+        ...serverVideoThumbnailFailed.value,
+        [item.id]: true
+      }
+    })
+    .finally(() => {
+      const nextPending = { ...serverVideoThumbnailPending.value }
+      delete nextPending[item.id]
+      serverVideoThumbnailPending.value = nextPending
+    })
+}
+
 function getVideoThumbnail(item) {
   if (item.thumbnail_url && !videoPosterLoadErrors.value[item.id]) return getMediaUrl(item.thumbnail_url)
   if (videoThumbnails.value[item.id]) return videoThumbnails.value[item.id]
+  const generatedPosterUrl = getVideoPosterUrl(toSameOriginUrl(item.url), 400)
+  if (generatedPosterUrl && !videoPosterLoadErrors.value[item.id]) return generatedPosterUrl
+  requestServerVideoThumbnail(item)
 
   // 只有在可见区域内才触发提取
   if (isContentReady.value && !videoThumbnailQueue.value.includes(item.id)) {
