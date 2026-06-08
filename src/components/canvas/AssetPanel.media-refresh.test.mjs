@@ -87,3 +87,13 @@ test('canvas preset managers use in-app confirmation modals for deletion', () =>
     assert.match(source, /class="preset-delete-modal"/)
   }
 })
+
+test('image node preset dropdown keeps an error state when presets fail to load', () => {
+  const imageNode = readFileSync(new URL('./nodes/ImageNode.vue', import.meta.url), 'utf8')
+
+  assert.match(imageNode, /const presetLoadError = ref\(''\)/)
+  assert.match(imageNode, /presetLoadError\.value = error\.message \|\| '图像预设加载失败'/)
+  assert.match(imageNode, /id: 'preset-load-error'/)
+  assert.match(imageNode, /type: 'error'/)
+  assert.match(imageNode, /'preset-dropdown-error': preset\.type === 'error'/)
+})

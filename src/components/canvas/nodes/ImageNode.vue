@@ -243,6 +243,7 @@ const presetDropdownUp = ref(true) // 预设下拉方向
 const selectedPreset = ref('')
 const tenantPresets = ref([]) // 租户全局预设
 const userPresets = ref([]) // 用户自定义预设
+const presetLoadError = ref('')
 const presetSelectorRef = ref(null)
 
 // 图像预设对话框和管理器
@@ -431,11 +432,15 @@ function handleModelDropdownClickOutside(event) {
 // 加载图像预设
 async function loadImagePresets() {
   try {
+    presetLoadError.value = ''
     const data = await getImagePresets()
     tenantPresets.value = data.tenant || []
     userPresets.value = data.user || []
     console.log('[ImageNode] 图像预设已加载:', { tenant: tenantPresets.value.length, user: userPresets.value.length })
   } catch (error) {
+    presetLoadError.value = error.message || '图像预设加载失败'
+    tenantPresets.value = []
+    userPresets.value = []
     console.error('[ImageNode] 加载图像预设失败:', error)
   }
 }
@@ -451,6 +456,15 @@ const availablePresets = computed(() => {
     prompt: '',
     type: 'none'
   })
+
+  if (presetLoadError.value) {
+    presets.push({
+      id: 'preset-load-error',
+      name: '预设加载失败',
+      description: presetLoadError.value,
+      type: 'error'
+    })
+  }
 
   // 2. 添加租户全局预设
   if (tenantPresets.value.length > 0) {
@@ -579,7 +593,7 @@ function selectPreset(presetId) {
   }
 
   const preset = availablePresets.value.find(p => p.id === presetId)
-  if (!preset || preset.type === 'divider') return
+  if (!preset || preset.type === 'divider' || preset.type === 'error') return
 
   selectedPreset.value = presetId
   isPresetDropdownOpen.value = false
@@ -8172,6 +8186,7 @@ async function handleDrop(event) {
                     'preset-dropdown-item': preset.type !== 'divider',
                     'preset-dropdown-divider': preset.type === 'divider',
                     'preset-action': preset.type === 'action',
+                    'preset-dropdown-error': preset.type === 'error',
                     'active': selectedPreset === preset.id
                   }"
                   @click="selectPreset(preset.id)"
@@ -10562,6 +10577,14 @@ async function handleDrop(event) {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.preset-dropdown-item.preset-dropdown-error {
+  cursor: default;
+}
+
+.preset-dropdown-item.preset-dropdown-error:hover {
+  background: transparent;
+}
+
 .preset-dropdown-item.active {
   background: rgba(59, 130, 246, 0.15);
 }
@@ -10602,6 +10625,14 @@ async function handleDrop(event) {
   white-space: nowrap;
   appearance: none;
   padding-right: 2px;
+}
+
+.preset-dropdown-error .preset-item-label {
+  color: #f87171;
+}
+
+.preset-dropdown-error .preset-item-desc {
+  color: rgba(248, 113, 113, 0.72);
 }
 
 /* 操作选项样式 */
@@ -12179,6 +12210,18 @@ async function handleDrop(event) {
 
 :root.canvas-theme-light .image-node .preset-dropdown-item.preset-action .preset-item-label {
   color: #8b5cf6;
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-item.preset-dropdown-error:hover {
+  background: transparent;
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-error .preset-item-label {
+  color: #dc2626;
+}
+
+:root.canvas-theme-light .image-node .preset-dropdown-error .preset-item-desc {
+  color: #b91c1c;
 }
 
 /* 🚀 性能优化：拖拽时降低图片渲染质量 */

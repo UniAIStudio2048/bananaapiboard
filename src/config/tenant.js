@@ -184,6 +184,65 @@ function filterByteforPointsCost(modelConfig, pointsCost) {
   )
 }
 
+function normalizeImageSupportedModes(supportedModes) {
+  if (!supportedModes) return { t2i: true, i2i: true, label: 'both' }
+
+  const normalizeToken = value => String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/_/g, '-')
+
+  const applyToken = (state, token) => {
+    const normalized = normalizeToken(token)
+    if (!normalized) return state
+
+    if (['both', 'all', 'text-image', 'txt2img-img2img'].includes(normalized)) {
+      state.t2i = true
+      state.i2i = true
+    } else if (['t2i', 'txt2img', 'text-to-image', 'text2image', 'text-image', 'generation'].includes(normalized)) {
+      state.t2i = true
+    } else if (['i2i', 'img2img', 'image-to-image', 'image2image', 'image-image', 'edit'].includes(normalized)) {
+      state.i2i = true
+    }
+
+    return state
+  }
+
+  let state = { t2i: false, i2i: false }
+
+  if (Array.isArray(supportedModes)) {
+    for (const mode of supportedModes) {
+      applyToken(state, mode)
+    }
+  } else if (typeof supportedModes === 'object') {
+    const readFlag = (...keys) => keys.some(key => supportedModes[key] === true)
+    state = {
+      t2i: readFlag('t2i', 'txt2img', 'textToImage', 'text_to_image', 'text-to-image'),
+      i2i: readFlag('i2i', 'img2img', 'imageToImage', 'image_to_image', 'image-to-image')
+    }
+  } else {
+    const tokens = String(supportedModes).split(/[,/|+\s]+/)
+    for (const token of tokens) {
+      applyToken(state, token)
+    }
+  }
+
+  if (!state.t2i && !state.i2i) {
+    state = { t2i: true, i2i: true }
+  }
+
+  return {
+    ...state,
+    label: state.t2i && state.i2i ? 'both' : (state.t2i ? 't2i' : 'i2i')
+  }
+}
+
+function isImageModeSupported(model, mode) {
+  if (!mode) return true
+  const supportedModes = normalizeImageSupportedModes(model?.supportedModes)
+  return mode === 't2i' ? supportedModes.t2i : supportedModes.i2i
+}
+
 // 从 localStorage 加载配置
 function loadFromStorage() {
   try {
@@ -655,10 +714,9 @@ export const getAvailableImageModels = (mode = null) => {
   // 根据模式过滤默认模型
   const filterByMode = (models) => {
     if (!mode) return models
-    return models.filter(m => {
-      const supportedModes = m.supportedModes || 'both'
-      return supportedModes === 'both' || supportedModes === mode
-    })
+    const filtered = models.filter(m => isImageModeSupported(m, mode))
+    if (filtered.length > 0 || models.length === 0) return filtered
+    return models.map(m => ({ ...m, modeFallback: true }))
   }
   
   // 优先使用 image_models 数组的顺序（保持后端配置的排序）
@@ -675,13 +733,7 @@ export const getAvailableImageModels = (mode = null) => {
       if ((modelConfig.apiType === 'openai' || !modelConfig.apiType) && modelConfig.actualModel === 'gpt-image-2' && key !== 'gpt-image-2') continue
       
       const modelPricingConfig = pricing[key] || {}
-      const supportedModes = modelConfig.supportedModes || 'both'
-      
-      // 根据模式过滤
-      if (mode) {
-        if (mode === 't2i' && supportedModes === 'i2i') continue
-        if (mode === 'i2i' && supportedModes === 't2i') continue
-      }
+      const supportedModes = normalizeImageSupportedModes(modelConfig.supportedModes).label
       
       models.push({
         value: key,
@@ -700,8 +752,9 @@ export const getAvailableImageModels = (mode = null) => {
     }
     
     if (models.length > 0) {
-      console.log('[tenant] 图片模型列表已按后端配置排序:', models.map(m => m.value))
-      return models
+      const filteredModels = filterByMode(models)
+      console.log('[tenant] 图片模型列表已按后端配置排序:', filteredModels.map(m => m.value))
+      return filteredModels
     }
   }
   
@@ -718,13 +771,7 @@ export const getAvailableImageModels = (mode = null) => {
       const modelPricingConfig = pricing[key] || {}
       // 查找新格式配置中的 supportedModes
       const modelFullConfig = imageModelsConfig.find(m => m.name === key || m.id === key)
-      const supportedModes = modelFullConfig?.supportedModes || 'both'
-      
-      // 根据模式过滤
-      if (mode) {
-        if (mode === 't2i' && supportedModes === 'i2i') continue
-        if (mode === 'i2i' && supportedModes === 't2i') continue
-      }
+      const supportedModes = normalizeImageSupportedModes(modelFullConfig?.supportedModes).label
       
       models.push({
         value: key,
@@ -740,7 +787,7 @@ export const getAvailableImageModels = (mode = null) => {
     }
   }
   
-  return models.length > 0 ? models : filterByMode(defaultModels)
+  return models.length > 0 ? filterByMode(models) : filterByMode(defaultModels)
 }
 
 // 获取所有可用的视频模型列表（从配置中动态获取）

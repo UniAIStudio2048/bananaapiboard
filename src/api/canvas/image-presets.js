@@ -35,6 +35,28 @@ export function invalidateImagePresetsCache() {
   imagePresetsRequest = null
 }
 
+export function normalizeImagePresetsPayload(payload = {}) {
+  const presets = payload?.presets ?? payload
+
+  if (Array.isArray(presets)) {
+    return { tenant: presets, user: [] }
+  }
+
+  return {
+    tenant: Array.isArray(presets?.tenant) ? presets.tenant : [],
+    user: Array.isArray(presets?.user) ? presets.user : []
+  }
+}
+
+async function readErrorMessage(response, fallback) {
+  try {
+    const error = await response.json()
+    return error.error || error.message || fallback
+  } catch {
+    return fallback
+  }
+}
+
 /**
  * 获取图像预设列表（租户全局预设 + 用户自定义预设）
  * @param {Object} options
@@ -65,12 +87,11 @@ export async function getImagePresets(options = {}) {
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || '获取预设失败')
+      throw new Error(await readErrorMessage(response, '获取预设失败'))
     }
 
     const data = await response.json()
-    const presets = data.presets || { tenant: [], user: [] }
+    const presets = normalizeImagePresetsPayload(data)
     imagePresetsCache = {
       key: cacheKey,
       expiresAt: Date.now() + IMAGE_PRESETS_CACHE_TTL,

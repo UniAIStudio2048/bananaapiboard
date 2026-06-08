@@ -115,6 +115,65 @@ test('getAvailableImageModels reads updated model resolutionEnabled config', () 
   assert.deepEqual(model.resolutionEnabled, { '2k': false, '3k': false, '4k': false })
 })
 
+test('getAvailableImageModels normalizes image supportedModes aliases and object config', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    image_models: [
+      {
+        name: 'text-only',
+        displayName: 'Text Only',
+        enabled: true,
+        supportedModes: ['text-to-image']
+      },
+      {
+        name: 'image-only',
+        displayName: 'Image Only',
+        enabled: true,
+        supportedModes: { textToImage: false, imageToImage: true }
+      },
+      {
+        name: 'both-model',
+        displayName: 'Both Model',
+        enabled: true,
+        supportedModes: 'txt2img,img2img'
+      }
+    ]
+  })
+
+  assert.deepEqual(
+    tenant.getAvailableImageModels('t2i').map(m => m.value),
+    ['text-only', 'both-model']
+  )
+  assert.deepEqual(
+    tenant.getAvailableImageModels('i2i').map(m => m.value),
+    ['image-only', 'both-model']
+  )
+})
+
+test('getAvailableImageModels keeps dropdown populated when mode filtering removes every configured model', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    image_models: [
+      {
+        name: 'tenant-i2i-only',
+        displayName: 'Tenant I2I Only',
+        enabled: true,
+        supportedModes: 'i2i'
+      }
+    ]
+  })
+
+  const models = tenant.getAvailableImageModels('t2i')
+  assert.deepEqual(models.map(m => m.value), ['tenant-i2i-only'])
+  assert.equal(models[0].modeFallback, true)
+})
+
 test('tenant config version lets Vue computed values recompute after runtime config updates', () => {
   const configVersion = tenant.useTenantConfigVersion()
 
