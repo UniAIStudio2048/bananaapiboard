@@ -26,7 +26,7 @@ test('image node tablet controls keep generate button inside prompt panel', () =
   const generateBtn = cssBlock(source, '.generate-btn')
 
   assert.match(configRow, /flex-wrap:\s*wrap;/)
-  assert.match(configRow, /overflow:\s*hidden;/)
+  assert.match(configRow, /overflow:\s*visible;/)
   assert.match(configLeft, /min-width:\s*0;/)
   assert.match(configLeft, /flex:\s*1\s+1\s+\d+px;/)
   assert.match(configRight, /max-width:\s*100%;/)

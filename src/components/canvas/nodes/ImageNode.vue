@@ -10097,7 +10097,7 @@ async function handleDrop(event) {
   gap: 12px;
   flex-wrap: wrap;
   min-height: 48px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .config-left {
