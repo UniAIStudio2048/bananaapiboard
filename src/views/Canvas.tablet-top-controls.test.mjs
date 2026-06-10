@@ -26,3 +26,23 @@ test('portrait tablet canvas top controls avoid overlapping workflow tabs', () =
     'Portrait tablet space switcher label should shrink to preserve room for icon controls'
   )
 })
+
+test('phone canvas top controls leave the mode menu accessible', () => {
+  assert.match(
+    source,
+    /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*?\.mode-switch-wrapper\s*\{[\s\S]*?z-index:\s*9200;/,
+    'Phone layout should keep the mode menu above the top function navigation'
+  )
+
+  assert.match(
+    source,
+    /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*?\.canvas-top-right-controls\s*\{[\s\S]*?left:\s*68px;[\s\S]*?right:\s*12px;[\s\S]*?max-width:\s*calc\(100vw - 80px\);[\s\S]*?justify-content:\s*flex-start;[\s\S]*?z-index:\s*900;/,
+    'Phone layout should offset top function navigation so it cannot cover the top-left mode button'
+  )
+
+  assert.match(
+    source,
+    /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*?\.mode-dropdown\s*\{[\s\S]*?max-width:\s*calc\(100vw - 24px\);/,
+    'Phone layout should keep all mode menu options inside the viewport'
+  )
+})

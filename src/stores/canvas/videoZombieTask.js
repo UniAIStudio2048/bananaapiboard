@@ -108,6 +108,7 @@ export const isTimedOutCanvasNode = isTimedOutCanvasVideoNode
 export function shouldFailCanvasVideoNodeWithoutTask(node, hasBackgroundTask, now = Date.now()) {
   if (!isCanvasGenerationNode(node)) return false
   if (!isVideoGenerationProcessingStatus(node?.data?.status)) return false
+  if (getCanvasNodeTaskId(node)) return false
   if (isTimedOutCanvasVideoNode(node, now)) return true
   return false
 }
@@ -115,7 +116,6 @@ export function shouldFailCanvasVideoNodeWithoutTask(node, hasBackgroundTask, no
 export function shouldResumeCanvasVideoNodeWithoutTask(node, hasBackgroundTask, now = Date.now()) {
   if (!isCanvasGenerationNode(node)) return false
   if (!isVideoGenerationProcessingStatus(node?.data?.status)) return false
-  if (isTimedOutCanvasVideoNode(node, now)) return false
   return !!getCanvasNodeTaskId(node) && !hasBackgroundTask
 }
 

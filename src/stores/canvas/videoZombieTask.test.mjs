@@ -41,6 +41,22 @@ test('resumes recent processing canvas video nodes when task id exists but backg
   assert.equal(shouldFailCanvasVideoNodeWithoutTask(node, true, Date.parse('2026-05-13T12:00:00.000Z')), false)
 })
 
+test('resumes timed out processing nodes with a task id so backend history can be reconciled', () => {
+  const now = Date.parse('2026-06-10T12:00:00.000Z')
+  const node = {
+    type: 'video',
+    data: {
+      status: 'processing',
+      taskId: 'cgt-20260609142057-f67zl',
+      taskType: 'video',
+      processingStartedAt: Date.parse('2026-06-09T14:20:57.000Z')
+    }
+  }
+
+  assert.equal(shouldResumeCanvasVideoNodeWithoutTask(node, false, now), true)
+  assert.equal(shouldFailCanvasVideoNodeWithoutTask(node, false, now), false)
+})
+
 test('resumes recent processing canvas image nodes when task id exists but background task is missing', () => {
   // 图像节点：15 分钟前提交，未超 30min 图像超时
   const now = Date.parse('2026-05-13T12:00:00.000Z')

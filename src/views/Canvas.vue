@@ -3314,6 +3314,15 @@ onUnmounted(() => {
   }
 }
 
+@media (max-width: 640px) {
+  .tabs-container {
+    top: 64px;
+    left: 12px;
+    right: 12px;
+    max-width: calc(100vw - 24px);
+  }
+}
+
 /* 模式切换按钮容器 */
 .mode-switch-wrapper {
   position: fixed;
@@ -3404,6 +3413,19 @@ onUnmounted(() => {
   width: 100vw;
   height: 100vh;
   z-index: 1;
+}
+
+@media (max-width: 640px) {
+  .mode-switch-wrapper {
+    top: 16px;
+    left: 12px;
+    z-index: 9200;
+  }
+
+  .mode-dropdown {
+    min-width: 176px;
+    max-width: calc(100vw - 24px);
+  }
 }
 
 .dropdown-fade-enter-active {
@@ -3674,6 +3696,22 @@ onUnmounted(() => {
 
   .canvas-points-display {
     padding: 8px 10px;
+  }
+}
+
+@media (max-width: 640px) {
+  .canvas-top-right-controls {
+    left: 68px;
+    right: 12px;
+    max-width: calc(100vw - 80px);
+    justify-content: flex-start;
+    z-index: 900;
+    padding-bottom: 2px;
+    overscroll-behavior-x: contain;
+  }
+
+  .canvas-top-right-controls > * {
+    flex: 0 0 auto;
   }
 }
 
