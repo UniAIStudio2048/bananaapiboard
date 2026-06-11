@@ -86,6 +86,9 @@ const teamStore = useTeamStore()
 const userInfo = inject('userInfo')
 const isCanvasViewportMoving = inject('isCanvasViewportMoving', ref(false))
 const canvasStableZoom = inject('canvasStableZoom', null)
+const canvasPromptInputScale = inject('canvasPromptInputScale', computed(() => ({ enabled: false, style: {} })))
+const isPromptInputFixedScale = computed(() => !!canvasPromptInputScale.value?.enabled)
+const promptInputFixedScaleStyle = computed(() => canvasPromptInputScale.value?.style || {})
 const { onHoverStart, onVideoHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
@@ -7928,9 +7931,10 @@ async function handleDrop(event) {
       class="config-panel"
       :class="{
         'config-panel-readonly': props.data?.readonly,
-        'config-panel-expanded': isConfigPanelExpanded
+        'config-panel-expanded': isConfigPanelExpanded,
+        'canvas-fixed-prompt-panel': isPromptInputFixedScale && !isConfigPanelExpanded
       }"
-      :style="{ '--config-panel-scale': configPanelScale }"
+      :style="[{ '--config-panel-scale': configPanelScale }, promptInputFixedScaleStyle]"
       @mousedown.stop
       @wheel="handleConfigPanelWheel($event, isConfigPanelExpanded)"
     >
@@ -9683,8 +9687,8 @@ async function handleDrop(event) {
   top: calc(100% + 12px);
   left: 50%;
   transform: translateX(-50%);
-  width: max-content;
-  min-width: max(100%, 520px);
+  width: min(max(100%, 780px), 90vw);
+  min-width: 0;
   max-width: 90vw;
   background: var(--canvas-bg-elevated, #1e1e1e);
   border: 1px solid var(--canvas-border-default, #3a3a3a);

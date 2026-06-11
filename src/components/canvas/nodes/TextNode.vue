@@ -52,6 +52,9 @@ const emit = defineEmits(['updateNodeInternals'])
 const canvasStore = useCanvasStore()
 const duplicateSubmitGuard = createCanvasDuplicateSubmitGuard()
 const userInfo = inject('userInfo')
+const canvasPromptInputScale = inject('canvasPromptInputScale', computed(() => ({ enabled: false, style: {} })))
+const isPromptInputFixedScale = computed(() => !!canvasPromptInputScale.value?.enabled)
+const promptInputFixedScaleStyle = computed(() => canvasPromptInputScale.value?.style || {})
 const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
@@ -3318,8 +3321,11 @@ onUnmounted(() => {
       v-show="isSoloSelected"
       ref="llmConfigPanelRef"
       class="llm-config-panel"
-      :class="{ 'llm-config-panel-expanded': isConfigPanelExpanded }"
-      :style="{ '--config-panel-scale': configPanelScale }"
+      :class="{
+        'llm-config-panel-expanded': isConfigPanelExpanded,
+        'canvas-fixed-prompt-panel': isPromptInputFixedScale && !isConfigPanelExpanded
+      }"
+      :style="[{ '--config-panel-scale': configPanelScale }, promptInputFixedScaleStyle]"
       @click.stop
       @mousedown.stop
       @wheel="handleConfigPanelWheel($event, isConfigPanelExpanded)"
@@ -4347,8 +4353,8 @@ onUnmounted(() => {
   top: calc(100% + 12px);
   left: 50%;
   transform: translateX(-50%);
-  width: max-content;
-  min-width: max(100%, 520px);
+  width: min(max(100%, 780px), 90vw);
+  min-width: 0;
   max-width: 90vw;
   background: var(--canvas-bg-elevated, #1e1e1e);
   border: 1px solid var(--canvas-border-default, #3a3a3a);

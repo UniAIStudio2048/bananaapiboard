@@ -1101,7 +1101,9 @@ export default {
       comfyuiTitle: 'ComfyUI 模式',
       comfyuiDesc: '左键拖拽平移画布\nShift/Ctrl+拖拽框选\n滚轮缩放画布',
       infiniteCanvasTitle: '无限画布模式',
-      infiniteCanvasDesc: '左键拖拽框选节点\n滚轮上下平移画布\nCtrl+滚轮缩放画布'
+      infiniteCanvasDesc: '左键拖拽框选节点\n滚轮上下平移画布\nCtrl+滚轮缩放画布',
+      promptInputFixedScale: '记忆输入框缩放',
+      promptInputFixedScaleDesc: '无限画布默认开启，ComfyUI 默认关闭，可按自己的习惯切换。'
     },
     tips: {
       title: '快捷操作',
@@ -1112,6 +1114,8 @@ export default {
     settings: {
       showOnboarding: '新手引导',
       showOnboardingDesc: '每次进入画布时显示新手引导',
+      promptInputFixedScale: '记忆输入框缩放',
+      promptInputFixedScaleDesc: '开启后提示词输入区不随画布缩放，便于缩小时继续编辑',
       edgeStyle: '连线样式',
       edgeStyleDesc: '设置节点之间连线的显示方式',
       edgeStyleSmoothstep: '折线（默认）',

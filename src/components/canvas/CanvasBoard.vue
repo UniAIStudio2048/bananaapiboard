@@ -57,6 +57,7 @@ import {
   getTouchMidpoint,
   getTouchPoint
 } from '@/utils/canvasTouchInteractions'
+import { buildPromptInputScaleStyle } from '@/utils/canvasPromptInputScale'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -231,6 +232,11 @@ const canvasZoomLevel = computed(() => {
   return 'normal'
 })
 
+const canvasPromptPanelScaleStyle = computed(() => buildPromptInputScaleStyle({
+  enabled: true,
+  zoom: canvasStore.viewport?.zoom
+}))
+
 /**
  * 稳定 zoom：viewport.zoom 停止变化 220ms 后才更新。
  *
@@ -331,6 +337,7 @@ function handleWheelInner(event) {
   const viewport = getViewport()
   const isInfiniteCanvas = interactionMode.value === 'infinite-canvas'
   const isCtrl = event.ctrlKey || event.metaKey
+  const TRACKPAD_PAN_SPEED_SCALE = 1 / 3
 
   // Shift+滚轮：水平平移（两种模式相同）
   if (event.shiftKey) {
@@ -360,8 +367,8 @@ function handleWheelInner(event) {
   } else {
     if (Math.abs(event.deltaX || 0) > 0) {
       setViewport({
-        x: viewport.x - event.deltaX,
-        y: viewport.y - event.deltaY,
+        x: viewport.x - event.deltaX * TRACKPAD_PAN_SPEED_SCALE,
+        y: viewport.y - event.deltaY * TRACKPAD_PAN_SPEED_SCALE,
         zoom: viewport.zoom
       })
       return
@@ -3568,6 +3575,7 @@ onUnmounted(() => {
     class="canvas-board" 
     :class="{ 'file-drag-over': isFileDragOver, 'pick-mode': pickMode }"
     :data-zoom-level="canvasZoomLevel"
+    :style="canvasPromptPanelScaleStyle"
     @dblclick="handleDoubleClick"
     @mousedown.middle.prevent
     @dragenter="handleFileDragEnter"

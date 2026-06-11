@@ -1095,7 +1095,9 @@ export default {
       comfyuiTitle: 'ComfyUI Mode',
       comfyuiDesc: 'Left drag to pan canvas\nShift/Ctrl+drag to select\nScroll to zoom',
       infiniteCanvasTitle: 'Infinite Canvas Mode',
-      infiniteCanvasDesc: 'Left drag to select nodes\nScroll to pan vertically\nCtrl+scroll to zoom'
+      infiniteCanvasDesc: 'Left drag to select nodes\nScroll to pan vertically\nCtrl+scroll to zoom',
+      promptInputFixedScale: 'Remember prompt input scale',
+      promptInputFixedScaleDesc: 'Infinite canvas turns this on by default; ComfyUI turns it off by default. You can change it here.'
     },
     tips: {
       title: 'Quick Tips',
@@ -1105,6 +1107,8 @@ export default {
     settings: {
       showOnboarding: 'Onboarding Guide',
       showOnboardingDesc: 'Show onboarding guide when entering canvas',
+      promptInputFixedScale: 'Remember prompt input scale',
+      promptInputFixedScaleDesc: 'Keep prompt editors readable while the canvas zoom changes',
       edgeStyle: 'Edge Style',
       edgeStyleDesc: 'Set the display style of connections between nodes',
       edgeStyleSmoothstep: 'Smooth Step (Default)',

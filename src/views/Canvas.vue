@@ -61,6 +61,12 @@ import { showAlert, showConfirm } from '@/composables/useCanvasDialog'
 import { needsMigration, analyzeWorkflow, migrateWorkflowData } from '@/utils/workflowMigration'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
+import {
+  PROMPT_INPUT_FIXED_SCALE_KEY,
+  buildPromptInputScaleStyle,
+  getPromptInputFixedScaleDefault,
+  resolvePromptInputFixedScalePreference
+} from '@/utils/canvasPromptInputScale'
 // 🔧 画布诊断工具 - 用于调试画布强制重新加载问题
 import { initCanvasDiagnostic, printCanvasDiagnosticReport } from '@/utils/canvasDiagnostic'
 import { createCanvasFpsMonitor } from '@/utils/canvasFpsMonitor'
@@ -175,6 +181,14 @@ const canvasTheme = ref('dark')
 // 交互模式 (comfyui / infinite-canvas)
 const interactionMode = ref('comfyui')
 const showCanvasMiniMap = ref(false)
+const promptInputFixedScale = ref(false)
+const canvasPromptInputScale = computed(() => ({
+  enabled: promptInputFixedScale.value,
+  style: buildPromptInputScaleStyle({
+    enabled: promptInputFixedScale.value,
+    zoom: canvasStore.viewport.zoom
+  })
+}))
 
 // 自动保存定时器
 const autoSaveInterval = ref(null)
@@ -427,6 +441,7 @@ provide('userInfo', me)
 // 提供交互模式给子组件
 provide('interactionMode', interactionMode)
 provide('showCanvasMiniMap', showCanvasMiniMap)
+provide('canvasPromptInputScale', canvasPromptInputScale)
 
 function toggleCanvasMiniMap() {
   showCanvasMiniMap.value = !showCanvasMiniMap.value
@@ -2554,6 +2569,11 @@ function loadInteractionMode() {
   }
 }
 
+function loadPromptInputFixedScalePreference() {
+  const fallback = getPromptInputFixedScaleDefault(interactionMode.value)
+  promptInputFixedScale.value = resolvePromptInputFixedScalePreference(me.value?.preferences, fallback)
+}
+
 // 保存交互模式到后端
 async function saveInteractionMode(mode) {
   try {
@@ -2574,6 +2594,29 @@ async function saveInteractionMode(mode) {
   }
 }
 
+async function savePromptInputFixedScalePreference(enabled) {
+  const nextEnabled = !!enabled
+  promptInputFixedScale.value = nextEnabled
+
+  try {
+    const currentPreferences = me.value?.preferences || {}
+    const updatedPreferences = {
+      ...currentPreferences,
+      canvas: {
+        ...(currentPreferences.canvas || {}),
+        [PROMPT_INPUT_FIXED_SCALE_KEY]: nextEnabled
+      }
+    }
+
+    const result = await updateUserPreferences(updatedPreferences)
+    if (result && me.value) {
+      me.value.preferences = updatedPreferences
+    }
+  } catch (error) {
+    console.error('[Canvas] 保存提示词输入框固定缩放偏好失败:', error)
+  }
+}
+
 // 切换交互模式
 function toggleInteractionMode() {
   const newMode = interactionMode.value === 'comfyui' ? 'infinite-canvas' : 'comfyui'
@@ -2582,10 +2625,17 @@ function toggleInteractionMode() {
 }
 
 // 新手引导中选择交互模式
-function handleOnboardingModeSelect(mode) {
+function handleOnboardingModeSelect(mode, promptFixedScale = getPromptInputFixedScaleDefault(mode)) {
   interactionMode.value = mode
   saveInteractionMode(mode)
+  savePromptInputFixedScalePreference(promptFixedScale)
 }
+
+watch(() => me.value?.preferences?.canvas?.[PROMPT_INPUT_FIXED_SCALE_KEY], (value) => {
+  if (typeof value === 'boolean' && value !== promptInputFixedScale.value) {
+    promptInputFixedScale.value = value
+  }
+})
 
 onMounted(async () => {
   // 🔧 初始化画布诊断工具 - 用于调试画布强制重新加载问题
@@ -2606,6 +2656,9 @@ onMounted(async () => {
   
   // 加载交互模式偏好
   loadInteractionMode()
+
+  // 加载提示词输入框缩放偏好
+  loadPromptInputFixedScalePreference()
   
   // 🔧 检测是否是异常刷新后的恢复（用于调试页面意外刷新问题）
   // 仅在当前页面确实由浏览器刷新重新加载时才提示，避免将正常进入 /canvas 误判为异常刷新。
@@ -3174,9 +3227,11 @@ onUnmounted(() => {
       <OnboardingGuide
         :visible="showOnboarding"
         :interaction-mode="interactionMode"
+        :prompt-input-fixed-scale="promptInputFixedScale"
         @close="closeOnboarding"
         @complete="handleOnboardingComplete"
         @mode-select="handleOnboardingModeSelect"
+        @prompt-input-fixed-scale-change="savePromptInputFixedScalePreference"
       />
 
       <!-- AI 灵感助手面板 -->

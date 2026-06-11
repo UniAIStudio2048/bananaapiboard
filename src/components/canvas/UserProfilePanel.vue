@@ -11,6 +11,10 @@ import { formatPoints, formatBalance } from '@/utils/format'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { useCanvasStore } from '@/stores/canvas'
+import {
+  PROMPT_INPUT_FIXED_SCALE_KEY,
+  resolvePromptInputFixedScalePreference
+} from '@/utils/canvasPromptInputScale'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -164,6 +168,9 @@ const selectedEdgeStyle = ref(
   localStorage.getItem('canvasEdgeStyle') ||
   'bezier'
 )
+const promptInputFixedScaleEnabled = ref(
+  resolvePromptInputFixedScalePreference(props.userInfo?.preferences, false)
+)
 
 // 监听用户信息变化，更新连线样式
 watch(() => props.userInfo?.preferences?.canvas?.edgeStyle, (newStyle) => {
@@ -171,6 +178,12 @@ watch(() => props.userInfo?.preferences?.canvas?.edgeStyle, (newStyle) => {
     selectedEdgeStyle.value = newStyle
     localStorage.setItem('canvasEdgeStyle', newStyle)
     window.dispatchEvent(new CustomEvent('canvas-edge-style-change', { detail: { style: newStyle } }))
+  }
+})
+
+watch(() => props.userInfo?.preferences?.canvas?.[PROMPT_INPUT_FIXED_SCALE_KEY], (enabled) => {
+  if (typeof enabled === 'boolean') {
+    promptInputFixedScaleEnabled.value = enabled
   }
 })
 
@@ -215,6 +228,32 @@ async function changeEdgeStyle(style) {
     }
   } catch (error) {
     console.error('[UserProfilePanel] 保存连线样式偏好时出错:', error)
+  }
+}
+
+async function togglePromptInputFixedScale(event) {
+  const enabled = event.target.checked
+  promptInputFixedScaleEnabled.value = enabled
+
+  try {
+    const currentPreferences = props.userInfo?.preferences || {}
+    const updatedPreferences = {
+      ...currentPreferences,
+      canvas: {
+        ...(currentPreferences.canvas || {}),
+        promptInputFixedScale: enabled
+      }
+    }
+
+    const result = await updateUserPreferences(updatedPreferences)
+    if (result) {
+      console.log('[UserProfilePanel] 提示词输入框缩放偏好已保存到后端:', enabled)
+      emit('update')
+    } else {
+      console.warn('[UserProfilePanel] 保存提示词输入框缩放偏好失败')
+    }
+  } catch (error) {
+    console.error('[UserProfilePanel] 保存提示词输入框缩放偏好时出错:', error)
   }
 }
 
@@ -2371,10 +2410,25 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                     <span class="setting-desc">{{ t('onboarding.settings.showOnboardingDesc') }}</span>
                   </div>
                   <label class="toggle-switch">
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       :checked="onboardingEnabled"
                       @change="toggleOnboarding"
+                    />
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+
+                <div class="setting-item prompt-fixed-scale-setting">
+                  <div class="setting-info">
+                    <span class="setting-label">{{ t('onboarding.settings.promptInputFixedScale') }}</span>
+                    <span class="setting-desc">{{ t('onboarding.settings.promptInputFixedScaleDesc') }}</span>
+                  </div>
+                  <label class="toggle-switch">
+                    <input
+                      type="checkbox"
+                      :checked="promptInputFixedScaleEnabled"
+                      @change="togglePromptInputFixedScale"
                     />
                     <span class="toggle-slider"></span>
                   </label>
@@ -4136,6 +4190,10 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
+}
+
+.setting-item + .setting-item {
+  margin-top: 8px;
 }
 
 .setting-info {

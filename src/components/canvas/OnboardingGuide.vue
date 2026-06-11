@@ -5,6 +5,7 @@
  */
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { useI18n } from '@/i18n'
+import { getPromptInputFixedScaleDefault } from '@/utils/canvasPromptInputScale'
 
 const { t } = useI18n()
 
@@ -16,10 +17,14 @@ const props = defineProps({
   interactionMode: {
     type: String,
     default: 'comfyui'
+  },
+  promptInputFixedScale: {
+    type: Boolean,
+    default: false
   }
 })
 
-const emit = defineEmits(['close', 'complete', 'modeSelect'])
+const emit = defineEmits(['close', 'complete', 'modeSelect', 'promptInputFixedScaleChange'])
 
 // 当前步骤索引
 const currentStep = ref(0)
@@ -29,6 +34,9 @@ const showContent = ref(false)
 
 // 新手引导中选择的交互模式
 const selectedMode = ref(props.interactionMode || 'comfyui')
+const selectedPromptInputFixedScale = ref(
+  props.promptInputFixedScale ?? getPromptInputFixedScaleDefault(selectedMode.value)
+)
 
 // 引导步骤配置
 const steps = computed(() => [
@@ -122,7 +130,13 @@ const progress = computed(() => ((currentStep.value + 1) / steps.value.length) *
 // 选择交互模式
 function selectMode(mode) {
   selectedMode.value = mode
-  emit('modeSelect', mode)
+  selectedPromptInputFixedScale.value = getPromptInputFixedScaleDefault(mode)
+  emit('modeSelect', mode, selectedPromptInputFixedScale.value)
+}
+
+function togglePromptInputFixedScale(event) {
+  selectedPromptInputFixedScale.value = event.target.checked
+  emit('promptInputFixedScaleChange', selectedPromptInputFixedScale.value)
 }
 
 // 下一步
@@ -193,6 +207,16 @@ watch(() => props.visible, (val) => {
     showContent.value = false
   }
 }, { immediate: true })
+
+watch(() => props.interactionMode, (newMode) => {
+  if (newMode === 'comfyui' || newMode === 'infinite-canvas') {
+    selectedMode.value = newMode
+  }
+})
+
+watch(() => props.promptInputFixedScale, (enabled) => {
+  selectedPromptInputFixedScale.value = enabled
+})
 </script>
 
 <template>
@@ -279,6 +303,20 @@ watch(() => props.visible, (val) => {
                 <div class="mode-card-title">{{ t('onboarding.interactionMode.infiniteCanvasTitle') }}</div>
                 <div class="mode-card-desc">{{ t('onboarding.interactionMode.infiniteCanvasDesc') }}</div>
               </button>
+            </div>
+            <div v-if="currentStepData.customContent === 'interaction-mode'" class="prompt-fixed-scale-option">
+              <div class="prompt-fixed-scale-copy">
+                <div class="prompt-fixed-scale-title">{{ t('onboarding.interactionMode.promptInputFixedScale') }}</div>
+                <div class="prompt-fixed-scale-desc">{{ t('onboarding.interactionMode.promptInputFixedScaleDesc') }}</div>
+              </div>
+              <label class="onboarding-toggle">
+                <input
+                  type="checkbox"
+                  :checked="selectedPromptInputFixedScale"
+                  @change="togglePromptInputFixedScale"
+                />
+                <span class="onboarding-toggle-slider"></span>
+              </label>
             </div>
             
             <!-- 步骤指示点 -->
@@ -868,6 +906,80 @@ watch(() => props.visible, (val) => {
   color: rgba(255, 255, 255, 0.6);
 }
 
+.prompt-fixed-scale-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.prompt-fixed-scale-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.prompt-fixed-scale-title {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.prompt-fixed-scale-desc {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.onboarding-toggle {
+  position: relative;
+  display: inline-flex;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.onboarding-toggle input {
+  width: 0;
+  height: 0;
+  opacity: 0;
+}
+
+.onboarding-toggle-slider {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 0.2s ease;
+}
+
+.onboarding-toggle-slider::before {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  top: 3px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 0.2s ease;
+}
+
+.onboarding-toggle input:checked + .onboarding-toggle-slider {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.onboarding-toggle input:checked + .onboarding-toggle-slider::before {
+  transform: translateX(20px);
+  background: #111111;
+}
+
 /* 响应式 */
 @media (max-width: 600px) {
   .onboarding-container {
@@ -924,4 +1036,3 @@ watch(() => props.visible, (val) => {
   }
 }
 </style>
-

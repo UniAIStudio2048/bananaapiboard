@@ -52,6 +52,9 @@ const uploadManager = useUploadManager()
 const modelStatsStore = useModelStatsStore()
 modelStatsStore.ensureStarted()
 const userInfo = inject('userInfo')
+const canvasPromptInputScale = inject('canvasPromptInputScale', computed(() => ({ enabled: false, style: {} })))
+const isPromptInputFixedScale = computed(() => !!canvasPromptInputScale.value?.enabled)
+const promptInputFixedScaleStyle = computed(() => canvasPromptInputScale.value?.style || {})
 
 // Vue Flow 实例 - 用于在节点尺寸变化时更新连线
 const { updateNodeInternals, setViewport, getViewport, getSelectedNodes } = useVueFlow()
@@ -1868,8 +1871,11 @@ function handleSpeedDropdownClickOutside(event) {
       v-show="showConfigPanel"
       ref="configPanelRef"
       class="config-panel audio-config-panel"
-      :class="{ 'config-panel-expanded': isConfigPanelExpanded }"
-      :style="{ '--config-panel-scale': configPanelScale }"
+      :class="{
+        'config-panel-expanded': isConfigPanelExpanded,
+        'canvas-fixed-prompt-panel': isPromptInputFixedScale && !isConfigPanelExpanded
+      }"
+      :style="[{ '--config-panel-scale': configPanelScale }, promptInputFixedScaleStyle]"
       @mousedown.stop
       @wheel="handleConfigPanelWheel($event, isConfigPanelExpanded)"
     >
