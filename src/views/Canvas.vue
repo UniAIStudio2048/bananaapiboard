@@ -46,8 +46,10 @@ import {
   stopAutoSave as stopHistoryAutoSave,
   manualSave as saveToHistory,
   getWorkflowHistory,
-  getWorkflowSession,
+  getWorkflowSessionAsync,
+  getLastActiveWorkflowPointer,
   saveWorkflowSession,
+  saveWorkflowSessionAsync,
   clearWorkflowSession
 } from '@/stores/canvas/workflowAutoSave'
 import { initBackgroundTaskManager, getPendingTasks, registerTask, ensureTaskPolling, subscribeTask, removeCompletedTask, cleanup as cleanupBackgroundTasks } from '@/stores/canvas/backgroundTaskManager'
@@ -197,6 +199,7 @@ const autoSaveEnabled = ref(false) // 只有保存过的工作流才启用自动
 let exitPersistInFlight = null
 let lastExitPersistKey = ''
 const AUTO_SAVE_INTERVAL_MS = 60 * 1000
+const AUTO_SAVE_INTERVAL_LARGE_MS = 20 * 1000 // 🔧 节点 > 50 时用更短间隔，缩小丢失窗口
 
 // 后台任务完成后的"立即持久化"防抖控制
 // 原因：updateNodeFromTask 只改前端内存节点，不写库；如果用户不主动保存且未达 5 分钟
@@ -1105,22 +1108,42 @@ function stopCanvasFpsMonitor() {
 }
 
 // 启动自动保存定时器（后台静默保存已保存工作流进度）
+// 🔧 节点多时缩短间隔，并用 setTimeout 递归按当前节点数动态调整下次延迟
 function startAutoSave() {
   if (autoSaveInterval.value) {
-    clearInterval(autoSaveInterval.value)
+    clearTimeout(autoSaveInterval.value)
+    autoSaveInterval.value = null
   }
-  
-  autoSaveInterval.value = setInterval(() => {
-    autoSaveWorkflow({ reason: 'interval' })
-  }, AUTO_SAVE_INTERVAL_MS)
-  
-  console.log(`[Canvas] 自动保存已启用，间隔: ${AUTO_SAVE_INTERVAL_MS / 1000}秒`)
+
+  const scheduleNext = () => {
+    // 节点 > 50 时用 20 秒，缩小大画布的丢失窗口
+    const delay = canvasStore.nodes.length > 50
+      ? AUTO_SAVE_INTERVAL_LARGE_MS
+      : AUTO_SAVE_INTERVAL_MS
+    autoSaveInterval.value = setTimeout(async () => {
+      try {
+        await autoSaveWorkflow({ reason: 'interval' })
+      } catch (e) {
+        // autoSaveWorkflow 内部已处理异常，这里兜底防止打断定时链
+      }
+      // 🔧 周期性刷新本地会话快照（不再只依赖退出事件），大会话 await 落 IndexedDB
+      try {
+        await saveCurrentWorkflowSessionAsync()
+      } catch (e) {
+        // 会话快照失败不影响下一周期
+      }
+      scheduleNext()
+    }, delay)
+  }
+
+  scheduleNext()
+  console.log(`[Canvas] 自动保存已启用，间隔: 节点>50 时 ${AUTO_SAVE_INTERVAL_LARGE_MS / 1000}秒，否则 ${AUTO_SAVE_INTERVAL_MS / 1000}秒`)
 }
 
 // 停止自动保存
 function stopAutoSave() {
   if (autoSaveInterval.value) {
-    clearInterval(autoSaveInterval.value)
+    clearTimeout(autoSaveInterval.value)
     autoSaveInterval.value = null
   }
 }
@@ -1153,9 +1176,20 @@ function saveCurrentWorkflowSession() {
   return saveWorkflowSession(session)
 }
 
-function tryAutoRestoreWorkflowSession() {
+// 🔧 周期性快照专用：大会话能 await IndexedDB 完整落盘
+async function saveCurrentWorkflowSessionAsync() {
+  const session = canvasStore.exportWorkflowSession()
+  if (!session?.tabs?.length) {
+    clearWorkflowSession()
+    return false
+  }
+  return saveWorkflowSessionAsync(session)
+}
+
+async function tryAutoRestoreWorkflowSession() {
   try {
-    const session = getWorkflowSession()
+    // 🔧 异步读取：同时兼顾 localStorage 内联会话与 IndexedDB 大会话
+    const session = await getWorkflowSessionAsync()
     if (!session?.tabs?.length) {
       return false
     }
@@ -1208,6 +1242,33 @@ function tryAutoRestoreRecentWorkflow() {
     return true
   } catch (error) {
     console.error('[Canvas] 自动恢复工作流失败:', error)
+    return false
+  }
+}
+
+// 🔧 服务器恢复回退：本地会话/历史都失效时，从上次活动的已保存工作流加载（userId 隔离）
+async function tryRestoreFromServerPointer() {
+  try {
+    const pointer = getLastActiveWorkflowPointer()
+    if (!pointer?.workflowId) {
+      return false
+    }
+    // userId 隔离：指针的 userId 必须与当前登录用户一致
+    if (me.value && String(pointer.userId) !== String(me.value.id)) {
+      console.log('[Canvas] 服务器回退跳过：指针 userId 与当前用户不匹配')
+      return false
+    }
+
+    console.log('[Canvas] 本地恢复失败，尝试从服务器加载上次工作流:', pointer.workflowId)
+    const result = await loadWorkflowFromServer(pointer.workflowId)
+    if (result?.workflow) {
+      canvasStore.openWorkflowInNewTab(result.workflow)
+      console.log('[Canvas] 已从服务器恢复工作流:', result.workflow.name)
+      return true
+    }
+    return false
+  } catch (error) {
+    console.warn('[Canvas] 从服务器回退加载工作流失败:', error.message || error)
     return false
   }
 }
@@ -2725,7 +2786,10 @@ onMounted(async () => {
   }
 
   if (!restoredOrLoaded && !loadWorkflowId) {
-    restoredOrLoaded = tryAutoRestoreWorkflowSession() || tryAutoRestoreRecentWorkflow()
+    // 🔧 会话恢复改为异步（兼顾 IndexedDB 大会话），并在本地恢复全部失败时从服务器回退
+    restoredOrLoaded = await tryAutoRestoreWorkflowSession()
+      || tryAutoRestoreRecentWorkflow()
+      || await tryRestoreFromServerPointer()
   }
 
   // 如果没有指定加载且没有自动恢复，则初始化默认标签

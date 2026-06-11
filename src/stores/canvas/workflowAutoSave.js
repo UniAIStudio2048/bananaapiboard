@@ -15,15 +15,87 @@
 
 const STORAGE_KEY = 'workflow_auto_saves'
 const SESSION_STORAGE_KEY = 'workflow_tab_session'
+const LAST_ACTIVE_WORKFLOW_KEY = 'canvas_last_active_workflow'  // 🔧 服务器恢复回退用的轻量指针
 const MAX_HISTORY_COUNT = 20  // 最多保存20条历史记录
 const CACHE_DURATION = 15 * 24 * 60 * 60 * 1000  // 15天（毫秒）
 const SESSION_RESTORE_DURATION = CACHE_DURATION  // 标签会话与最近历史同样保留15天
 const AUTO_SAVE_INTERVAL = 60 * 1000  // 1分钟（毫秒）
 const MAX_SINGLE_WORKFLOW_SIZE = 300 * 1024  // 单个工作流最大 300KB
 const MAX_TOTAL_STORAGE_SIZE = 3 * 1024 * 1024  // 总存储最大 3MB
-const MAX_SESSION_STORAGE_SIZE = 2 * 1024 * 1024  // 标签会话最大 2MB
+const MAX_SESSION_STORAGE_SIZE = 2 * 1024 * 1024  // 标签会话最大 2MB（超限改走 IndexedDB）
+
+// 🔧 大会话兜底：localStorage 2MB 装不下多节点会话时写入 IndexedDB
+const SESSION_IDB_DB_NAME = 'BananaCanvasSession'
+const SESSION_IDB_STORE = 'session'
+const SESSION_IDB_KEY = 'current'  // 固定 key，多用户通过记录内 userId 区分
 
 let autoSaveTimer = null
+let sessionDbPromise = null
+
+/**
+ * 🔧 打开（或复用）画布会话 IndexedDB。不支持时返回 reject，调用方需 graceful 降级。
+ */
+function getSessionDB() {
+  if (sessionDbPromise) return sessionDbPromise
+
+  sessionDbPromise = new Promise((resolve, reject) => {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+      reject(new Error('IndexedDB not supported'))
+      return
+    }
+    const request = indexedDB.open(SESSION_IDB_DB_NAME, 1)
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result
+      if (!db.objectStoreNames.contains(SESSION_IDB_STORE)) {
+        db.createObjectStore(SESSION_IDB_STORE, { keyPath: 'id' })
+      }
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () => reject(request.error)
+  })
+
+  // 打开失败时清空缓存，下次还能重试
+  sessionDbPromise.catch(() => { sessionDbPromise = null })
+  return sessionDbPromise
+}
+
+/**
+ * 🔧 把完整会话写入 IndexedDB（尽力而为，失败不抛错）
+ */
+async function saveSessionToIndexedDB(payload) {
+  try {
+    const db = await getSessionDB()
+    return await new Promise((resolve) => {
+      const tx = db.transaction([SESSION_IDB_STORE], 'readwrite')
+      const store = tx.objectStore(SESSION_IDB_STORE)
+      store.put({ id: SESSION_IDB_KEY, ...payload })
+      tx.oncomplete = () => resolve(true)
+      tx.onerror = () => resolve(false)
+      tx.onabort = () => resolve(false)
+    })
+  } catch (e) {
+    console.warn('[WorkflowAutoSave] IndexedDB 会话写入失败，已降级:', e?.message || e)
+    return false
+  }
+}
+
+/**
+ * 🔧 从 IndexedDB 读取完整会话（无/不可用时返回 null）
+ */
+async function readSessionFromIndexedDB() {
+  try {
+    const db = await getSessionDB()
+    return await new Promise((resolve) => {
+      const tx = db.transaction([SESSION_IDB_STORE], 'readonly')
+      const store = tx.objectStore(SESSION_IDB_STORE)
+      const request = store.get(SESSION_IDB_KEY)
+      request.onsuccess = () => resolve(request.result || null)
+      request.onerror = () => resolve(null)
+    })
+  } catch (e) {
+    return null
+  }
+}
 
 function getCurrentUserId() {
   try {
@@ -317,7 +389,80 @@ export function getWorkflowHistory() {
 }
 
 /**
+ * 🔧 构建会话存储载荷（清理大数据 + 附加 userId/savedAt）
+ */
+function buildSessionPayload(session) {
+  const tabs = session.tabs.slice(0, 10).map(tab => {
+    const cleanedNodes = cleanNodeData(tab.nodes || [])
+    const cleanedEdges = JSON.parse(JSON.stringify(tab.edges || []))
+    return {
+      id: tab.id,
+      name: tab.name || '未命名工作流',
+      description: tab.description || '',
+      workflowId: tab.workflowId || null,
+      workflowUid: tab.workflowUid || null,
+      workflowSpaceType: tab.workflowSpaceType || null,
+      workflowTeamId: tab.workflowTeamId || null,
+      nodes: cleanedNodes,
+      edges: cleanedEdges,
+      viewport: tab.viewport ? { ...tab.viewport } : { x: 0, y: 0, zoom: 1 },
+      hasChanges: !!tab.hasChanges
+    }
+  })
+
+  return {
+    tabs,
+    activeTabId: tabs.some(tab => tab.id === session.activeTabId) ? session.activeTabId : tabs[0]?.id,
+    userId: getCurrentUserId(),
+    savedAt: Date.now()
+  }
+}
+
+/**
+ * 🔧 记录最近活动的已保存工作流，用于本地恢复全部失败时从服务器回退加载。
+ * 只在 activeTab 已落库（有 workflowId）时写入。
+ */
+function saveLastActiveWorkflowPointer(payload) {
+  try {
+    const activeTab = payload.tabs.find(tab => tab.id === payload.activeTabId)
+    if (!activeTab || !activeTab.workflowId) {
+      localStorage.removeItem(LAST_ACTIVE_WORKFLOW_KEY)
+      return
+    }
+    localStorage.setItem(LAST_ACTIVE_WORKFLOW_KEY, JSON.stringify({
+      workflowId: activeTab.workflowId,
+      spaceType: activeTab.workflowSpaceType || null,
+      teamId: activeTab.workflowTeamId || null,
+      userId: payload.userId,
+      savedAt: payload.savedAt
+    }))
+  } catch (e) {
+    // 指针写入失败不影响主流程
+  }
+}
+
+/**
+ * 🔧 把会话指针（标记数据在 IndexedDB）写入 localStorage，避免残留旧的大数据。
+ */
+function writeSessionPointer(payload) {
+  try {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+      __idb: true,
+      userId: payload.userId,
+      savedAt: payload.savedAt,
+      tabCount: payload.tabs.length
+    }))
+    return true
+  } catch (e) {
+    console.error('[WorkflowAutoSave] 写入会话指针失败:', e)
+    return false
+  }
+}
+
+/**
  * 保存当前多标签会话，用于页面刷新后恢复左上角打开的工作流标签
+ * 小会话直接存 localStorage；超过 2MB 时改写 IndexedDB（fire-and-forget），
+ * 退出事件中可能来不及落盘，由周期性快照的 saveWorkflowSessionAsync 保证完整。
  * @param {Object} session - { tabs, activeTabId }
  */
 export function saveWorkflowSession(session) {
@@ -326,35 +471,16 @@ export function saveWorkflowSession(session) {
   }
 
   try {
-    const tabs = session.tabs.slice(0, 10).map(tab => {
-      const cleanedNodes = cleanNodeData(tab.nodes || [])
-      const cleanedEdges = JSON.parse(JSON.stringify(tab.edges || []))
-      return {
-        id: tab.id,
-        name: tab.name || '未命名工作流',
-        description: tab.description || '',
-        workflowId: tab.workflowId || null,
-        workflowUid: tab.workflowUid || null,
-        workflowSpaceType: tab.workflowSpaceType || null,
-        workflowTeamId: tab.workflowTeamId || null,
-        nodes: cleanedNodes,
-        edges: cleanedEdges,
-        viewport: tab.viewport ? { ...tab.viewport } : { x: 0, y: 0, zoom: 1 },
-        hasChanges: !!tab.hasChanges
-      }
-    })
-
-    const payload = {
-      tabs,
-      activeTabId: tabs.some(tab => tab.id === session.activeTabId) ? session.activeTabId : tabs[0]?.id,
-      userId: getCurrentUserId(),
-      savedAt: Date.now()
-    }
+    const payload = buildSessionPayload(session)
+    saveLastActiveWorkflowPointer(payload)
 
     const jsonData = JSON.stringify(payload)
     if (jsonData.length > MAX_SESSION_STORAGE_SIZE) {
-      console.warn(`[WorkflowAutoSave] 标签会话过大 (${(jsonData.length / 1024).toFixed(1)}KB)，跳过保存`)
-      return false
+      // 🔧 大会话：localStorage 写指针，完整数据异步落 IndexedDB（尽力而为）
+      console.warn(`[WorkflowAutoSave] 标签会话过大 (${(jsonData.length / 1024).toFixed(1)}KB)，改用 IndexedDB 兜底`)
+      writeSessionPointer(payload)
+      saveSessionToIndexedDB(payload)
+      return true
     }
 
     localStorage.setItem(SESSION_STORAGE_KEY, jsonData)
@@ -366,31 +492,73 @@ export function saveWorkflowSession(session) {
 }
 
 /**
- * 读取最近的多标签会话。过期或无效会话会自动清理。
+ * 🔧 异步保存会话：与 saveWorkflowSession 相同，但大会话写 IndexedDB 时会 await 完成。
+ * 供周期性快照使用，确保大会话能完整落盘（退出事件请用同步版 saveWorkflowSession）。
+ */
+export async function saveWorkflowSessionAsync(session) {
+  if (!session || !Array.isArray(session.tabs) || session.tabs.length === 0) {
+    return false
+  }
+
+  try {
+    const payload = buildSessionPayload(session)
+    saveLastActiveWorkflowPointer(payload)
+
+    const jsonData = JSON.stringify(payload)
+    if (jsonData.length > MAX_SESSION_STORAGE_SIZE) {
+      writeSessionPointer(payload)
+      const ok = await saveSessionToIndexedDB(payload)
+      if (!ok) {
+        console.warn('[WorkflowAutoSave] 大会话 IndexedDB 落盘失败，已降级保留指针')
+      }
+      return true
+    }
+
+    localStorage.setItem(SESSION_STORAGE_KEY, jsonData)
+    return true
+  } catch (error) {
+    console.error('[WorkflowAutoSave] 异步保存标签会话失败:', error)
+    return false
+  }
+}
+
+/**
+ * 🔧 校验会话记录的有效性（标签非空、userId 匹配、未过期）
+ * @returns {Object|null} 有效返回会话本身，无效返回 null
+ */
+function validateSessionRecord(session) {
+  if (!session || !Array.isArray(session.tabs) || session.tabs.length === 0) {
+    return null
+  }
+  const currentUserId = getCurrentUserId()
+  if (currentUserId && session.userId !== currentUserId) {
+    return null
+  }
+  if (Date.now() - (session.savedAt || 0) > SESSION_RESTORE_DURATION) {
+    return null
+  }
+  return session
+}
+
+/**
+ * 读取最近的多标签会话（同步）。仅处理 localStorage 内联数据，
+ * 大会话指针（IndexedDB）需用 getWorkflowSessionAsync 读取。
+ * 过期或无效会话会自动清理。
  */
 export function getWorkflowSession() {
   try {
     const data = localStorage.getItem(SESSION_STORAGE_KEY)
     if (!data) return null
 
-    const session = JSON.parse(data)
-    const savedAt = session?.savedAt || 0
-    if (!Array.isArray(session?.tabs) || session.tabs.length === 0) {
+    const parsed = JSON.parse(data)
+    // 大会话指针：同步读不了 IndexedDB，交给异步版本处理
+    if (parsed && parsed.__idb) return null
+
+    const session = validateSessionRecord(parsed)
+    if (!session) {
       localStorage.removeItem(SESSION_STORAGE_KEY)
       return null
     }
-
-    const currentUserId = getCurrentUserId()
-    if (currentUserId && session.userId !== currentUserId) {
-      localStorage.removeItem(SESSION_STORAGE_KEY)
-      return null
-    }
-
-    if (Date.now() - savedAt > SESSION_RESTORE_DURATION) {
-      localStorage.removeItem(SESSION_STORAGE_KEY)
-      return null
-    }
-
     return session
   } catch (error) {
     console.error('[WorkflowAutoSave] 读取标签会话失败:', error)
@@ -404,15 +572,82 @@ export function getWorkflowSession() {
 }
 
 /**
+ * 🔧 异步读取会话：同时检查 localStorage 内联数据与 IndexedDB 大会话，
+ * 返回较新（savedAt 大）的有效会话。供页面恢复链使用。
+ */
+export async function getWorkflowSessionAsync() {
+  let lsSession = null
+  let isPointer = false
+
+  try {
+    const data = localStorage.getItem(SESSION_STORAGE_KEY)
+    if (data) {
+      const parsed = JSON.parse(data)
+      if (parsed && parsed.__idb) {
+        isPointer = true
+      } else {
+        lsSession = validateSessionRecord(parsed)
+        if (!lsSession) {
+          try { localStorage.removeItem(SESSION_STORAGE_KEY) } catch (e) { /* 忽略 */ }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[WorkflowAutoSave] 读取标签会话失败:', error)
+  }
+
+  // 内联会话已是最新且无指针时，直接返回，省去 IndexedDB 读取
+  let idbSession = null
+  if (isPointer || !lsSession) {
+    idbSession = validateSessionRecord(await readSessionFromIndexedDB())
+  }
+
+  if (lsSession && idbSession) {
+    return (idbSession.savedAt || 0) > (lsSession.savedAt || 0) ? idbSession : lsSession
+  }
+  return lsSession || idbSession
+}
+
+/**
  * 清理已保存的多标签会话
  */
 export function clearWorkflowSession() {
   try {
     localStorage.removeItem(SESSION_STORAGE_KEY)
-    return true
+    localStorage.removeItem(LAST_ACTIVE_WORKFLOW_KEY)
   } catch (error) {
     console.error('[WorkflowAutoSave] 清理标签会话失败:', error)
-    return false
+  }
+  // IndexedDB 兜底数据一并清理（尽力而为）
+  getSessionDB().then(db => {
+    try {
+      const tx = db.transaction([SESSION_IDB_STORE], 'readwrite')
+      tx.objectStore(SESSION_IDB_STORE).delete(SESSION_IDB_KEY)
+    } catch (e) { /* 忽略 */ }
+  }).catch(() => {})
+  return true
+}
+
+/**
+ * 🔧 读取最近活动的已保存工作流指针（本地恢复全部失败时的服务器回退用）。
+ * userId 不匹配或不存在时返回 null，避免恢复到别的用户的工作流。
+ */
+export function getLastActiveWorkflowPointer() {
+  try {
+    const data = localStorage.getItem(LAST_ACTIVE_WORKFLOW_KEY)
+    if (!data) return null
+    const pointer = JSON.parse(data)
+    if (!pointer || !pointer.workflowId) return null
+
+    const currentUserId = getCurrentUserId()
+    if (currentUserId && pointer.userId !== currentUserId) return null
+    if (Date.now() - (pointer.savedAt || 0) > SESSION_RESTORE_DURATION) {
+      localStorage.removeItem(LAST_ACTIVE_WORKFLOW_KEY)
+      return null
+    }
+    return pointer
+  } catch (error) {
+    return null
   }
 }
 
