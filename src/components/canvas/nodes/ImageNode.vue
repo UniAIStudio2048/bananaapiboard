@@ -40,6 +40,7 @@ import Pose3DViewer from '../Pose3DViewer.vue'
 import CameraControlPanel from '../CameraControlPanel.vue'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
 import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl, onCanvasImageError, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { getSmartImageUrl } from '@/utils/cloudMediaUrl'
 import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
@@ -1710,7 +1711,7 @@ async function detectPanoramaImage(url) {
   try {
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    const loadUrl = getProxiedImageUrl(url)
+    const loadUrl = getSmartImageUrl(url)
     await new Promise((resolve, reject) => {
       img.onload = resolve
       img.onerror = reject
@@ -1737,7 +1738,7 @@ function closePanoramaPreview() {
 }
 
 function resolvePanoramaImageUrl(url) {
-  return getProxiedImageUrl(url)
+  return getSmartImageUrl(url)
 }
 
 // 工具栏预览弹窗
@@ -2277,60 +2278,7 @@ const showCropper = ref(false)
 const cropperImageUrl = ref('')
 const cropperMode = ref('crop') // 'crop' | 'outpaint'
 
-/**
- * 获取可用于 canvas 操作的图片 URL
- * 对于外部 URL（跨域），使用后端代理绕过 CORS 限制
- */
-function getProxiedImageUrl(imageUrl) {
-  if (!imageUrl) return null
-  
-  // 如果是 data URL 或 blob URL，直接使用
-  if (imageUrl.startsWith('data:') || imageUrl.startsWith('blob:')) {
-    return imageUrl
-  }
-  
-  // 如果是相对路径（本地存储），直接使用
-  if (imageUrl.startsWith('/storage/') || imageUrl.startsWith('/api/')) {
-    return imageUrl
-  }
-  
-  // 检查是否是外部 URL（以 http:// 或 https:// 开头）
-  if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-    const currentHost = window.location.host
-    try {
-      const urlObj = new URL(imageUrl)
-      // 同源直接使用
-      if (urlObj.host === currentHost) {
-        return imageUrl
-      }
-      // 同项目的其他子域名：提取 /api/ 路径通过当前后端地址访问
-      // 从 VITE_API_BASE 环境变量读取后端地址，动态判断基域名
-      if (urlObj.pathname.startsWith('/api/')) {
-        try {
-          const apiBase = import.meta.env.VITE_API_BASE
-          if (apiBase) {
-            const apiHost = new URL(apiBase).hostname
-            const getBaseDomain = (h) => { const p = h.split('.'); return p.length >= 2 ? p.slice(-2).join('.') : h }
-            if (getBaseDomain(urlObj.hostname) === getBaseDomain(apiHost)) {
-              const localUrl = `${apiBase}${urlObj.pathname}${urlObj.search}`
-              console.log('[ImageNode] 同项目域名，转为当前API地址:', localUrl.substring(0, 80))
-              return localUrl
-            }
-          }
-        } catch (_) {}
-      }
-    } catch (e) {
-      // URL 解析失败，继续使用代理
-    }
-    
-    // 外部 URL，使用代理接口绕过 CORS
-    console.log('[ImageNode] 使用代理加载外部图片:', imageUrl.substring(0, 60) + '...')
-    return `${getApiUrl('/api/images/proxy')}?force=1&url=${encodeURIComponent(imageUrl)}`
-  }
-  
-  // 其他情况直接返回
-  return imageUrl
-}
+// 获取可用于 canvas 操作的图片 URL（统一走 cloudMediaUrl 的 getSmartImageUrl）
 
 // 辅助函数：等待下一帧渲染完成（用于异步分批创建节点，防止浏览器崩溃）
 function nextFrame() {
@@ -2374,7 +2322,7 @@ async function loadImageForCanvas(imageUrl) {
     return img
   }
   
-  const proxiedUrl = getProxiedImageUrl(imageUrl)
+  const proxiedUrl = getSmartImageUrl(imageUrl)
   const isProxied = proxiedUrl !== imageUrl
   
   // 策略1: 通过代理 fetch（带重试）

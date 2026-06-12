@@ -16,6 +16,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
+import { getSmartImageUrl } from '@/utils/cloudMediaUrl'
 import { deductCropPoints } from '@/api/canvas/nodes'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { startStreamDownload } from '@/api/client'
@@ -279,45 +280,7 @@ async function uploadCropToCloud(nodeId, file, blobUrl) {
   }
 }
 
-/**
- * 获取可用于 canvas 操作的图片 URL
- * 对于外部 URL（跨域），使用后端代理绕过 CORS 限制
- */
-function getProxiedImageUrl(url) {
-  if (!url) return null
-  
-  // 如果是 data URL 或 blob URL，直接使用
-  if (url.startsWith('data:') || url.startsWith('blob:')) {
-    return url
-  }
-  
-  // 如果是相对路径（本地存储），直接使用
-  if (url.startsWith('/storage/') || url.startsWith('/api/')) {
-    return url
-  }
-  
-  // 检查是否是外部 URL（以 http:// 或 https:// 开头）
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    // 检查是否是同源（当前后端的域名）
-    const currentHost = window.location.host
-    try {
-      const urlObj = new URL(url)
-      // 如果是同一个域名，直接使用
-      if (urlObj.host === currentHost) {
-        return url
-      }
-    } catch (e) {
-      // URL 解析失败，继续使用代理
-    }
-    
-    // 外部 URL，使用代理接口绕过 CORS
-    console.log('[ImageToolbar] 使用代理加载外部图片:', url.substring(0, 60) + '...')
-    return `${getApiUrl('/api/images/proxy')}?force=1&url=${encodeURIComponent(url)}`
-  }
-  
-  // 其他情况直接返回
-  return url
-}
+// 获取可用于 canvas 操作的图片 URL（统一走 cloudMediaUrl 的 getSmartImageUrl）
 
 async function fetchImageAsBlob(url) {
   const response = await fetch(url)
@@ -356,7 +319,7 @@ async function loadImageForCanvas(imageUrl) {
     return img
   }
 
-  const proxiedUrl = getProxiedImageUrl(imageUrl)
+  const proxiedUrl = getSmartImageUrl(imageUrl)
   const isProxied = proxiedUrl !== imageUrl
   const MAX_RETRIES = 3
   let lastError = null
@@ -694,7 +657,7 @@ async function handleGrid4Crop() {
     // 加载图片 - 使用代理URL绕过CORS限制
     const img = new Image()
     img.crossOrigin = 'anonymous'
-    const proxiedUrl = getProxiedImageUrl(imageUrl.value)
+    const proxiedUrl = getSmartImageUrl(imageUrl.value)
     console.log('[ImageToolbar] 4宫格裁剪：加载图片', proxiedUrl?.substring(0, 80))
     
     await new Promise((resolve, reject) => {

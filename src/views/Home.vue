@@ -13,6 +13,7 @@ import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { resolveGenerationAspectRatio } from '@/utils/aspectRatio'
 import { normalizeImageHistoryItems } from '@/utils/imageHistoryPrompt'
+import { getSmartImageUrl } from '@/utils/cloudMediaUrl'
 import {
   getAvailableImageResolutionOptions,
   getImageResolutionCost,
@@ -1321,20 +1322,22 @@ async function regenerateFromHistory(item) {
           const isExternalUrl = imageUrl && (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) && !imageUrl.includes(window.location.hostname)
           
           if (isExternalUrl) {
-            // 外部URL：通过后端API代理下载，避免CORS问题
-            console.log('[regenerateFromHistory] 检测到外部URL，使用后端代理:', imageUrl)
-            fetchUrl = `/api/images/proxy?url=${encodeURIComponent(imageUrl)}`
+            // 外部URL：通过 getSmartImageUrl 决定直连或走后端代理，避免CORS问题
+            console.log('[regenerateFromHistory] 检测到外部URL，使用 getSmartImageUrl:', imageUrl)
+            fetchUrl = getSmartImageUrl(imageUrl)
           }
           
           console.log('[regenerateFromHistory] 最终请求URL:', fetchUrl)
-          
+
+          // 判断是否为跨域直连URL：是则发简单GET请求（不带自定义头），避免触发OPTIONS预检导致CDN源站403
+          // 本站/相对路径仍需带后端鉴权头（Authorization + 租户头）
+          const isCrossOriginDirect = /^https?:\/\//.test(fetchUrl) && !fetchUrl.includes(window.location.host)
+          const fetchOptions = isCrossOriginDirect
+            ? {}
+            : { headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+
           // 从服务器下载图片
-          const response = await fetch(fetchUrl, {
-            headers: {
-              ...getTenantHeaders(),
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-          })
+          const response = await fetch(fetchUrl, fetchOptions)
           
           console.log('[regenerateFromHistory] 图片响应状态:', response.status, response.ok)
           
@@ -1442,20 +1445,22 @@ async function loadImageToImg2Img(item) {
     const isExternalUrl = item.url && (item.url.startsWith('http://') || item.url.startsWith('https://')) && !item.url.includes(window.location.hostname)
     
     if (isExternalUrl) {
-      // 外部URL：通过后端API代理下载，避免CORS问题
-      console.log('[loadImageToImg2Img] 检测到外部URL，使用后端代理:', item.url)
-      fetchUrl = `/api/images/proxy?url=${encodeURIComponent(item.url)}`
+      // 外部URL：通过 getSmartImageUrl 决定直连或走后端代理，避免CORS问题
+      console.log('[loadImageToImg2Img] 检测到外部URL，使用 getSmartImageUrl:', item.url)
+      fetchUrl = getSmartImageUrl(item.url)
     }
     
     console.log('[loadImageToImg2Img] 最终请求URL:', fetchUrl)
-    
+
+    // 判断是否为跨域直连URL：是则发简单GET请求（不带自定义头），避免触发OPTIONS预检导致CDN源站403
+    // 本站/相对路径仍需带后端鉴权头（Authorization + 租户头）
+    const isCrossOriginDirect = /^https?:\/\//.test(fetchUrl) && !fetchUrl.includes(window.location.host)
+    const fetchOptions = isCrossOriginDirect
+      ? {}
+      : { headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${localStorage.getItem('token')}` } }
+
     // 从服务器下载图片
-    const response = await fetch(fetchUrl, {
-      headers: {
-        ...getTenantHeaders(),
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
-    })
+    const response = await fetch(fetchUrl, fetchOptions)
     
     console.log('[loadImageToImg2Img] 图片响应状态:', response.status, response.ok)
     

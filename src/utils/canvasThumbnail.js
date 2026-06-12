@@ -14,7 +14,7 @@
  */
 
 import { getApiUrl } from '@/config/tenant'
-import { getCloudVideoPosterUrl, getCosProxyUrl, isCosCdn, isQiniuCdn, isVideoUrl } from './cloudMediaUrl.js'
+import { getCloudVideoPosterUrl, getCosProxyUrl, getSmartImageUrl, isCosCdn, isQiniuCdn, isVideoUrl } from './cloudMediaUrl.js'
 import { selectLodWidth, MIN_CANVAS_PREVIEW_WIDTH, PREVIEW_WIDTHS, ORIGINAL_THRESHOLD } from './lodSelector.js'
 
 const DEFAULT_THUMB_WIDTH = 1024
@@ -199,39 +199,15 @@ export function getVideoPosterUrl(url, width = DEFAULT_THUMB_WIDTH) {
 }
 
 /**
- * 将外部 CDN 图片 URL 转为可跨域访问的代理 URL
+ * 将外部 CDN 图片 URL 转为可跨域访问的 URL
  * 用于 Canvas 绘图操作（需要 crossOrigin 或 fetch）
+ * 内部委托给 cloudMediaUrl 的 getSmartImageUrl 统一收敛逻辑：
  * - blob:/data: 直接返回
- * - /api/ 开头的相对路径直接返回
+ * - /storage/ 或 /api/ 开头的相对路径直接返回
  * - 同源 URL 直接返回
- * - 外部 URL 通过 /api/images/proxy 代理
+ * - 自有 CDN（开关开启时）直连，否则与第三方一样走 /api/images/proxy 代理
+ * 保留导出名 getProxiedImageUrl 以保持向后兼容（其他文件 import 它）。
  */
 export function getProxiedImageUrl(url) {
-  if (!url) return null
-  if (url.startsWith('data:') || url.startsWith('blob:')) return url
-  if (url.startsWith('/storage/') || url.startsWith('/api/')) return url
-
-  if (url.startsWith('http://') || url.startsWith('https://')) {
-    try {
-      const urlObj = new URL(url)
-      if (urlObj.host === window.location.host) return url
-
-      if (urlObj.pathname.startsWith('/api/')) {
-        try {
-          const apiBase = import.meta.env.VITE_API_BASE
-          if (apiBase) {
-            const apiHost = new URL(apiBase).hostname
-            const baseDomain = (h) => { const p = h.split('.'); return p.length >= 2 ? p.slice(-2).join('.') : h }
-            if (baseDomain(urlObj.hostname) === baseDomain(apiHost)) {
-              return `${apiBase}${urlObj.pathname}${urlObj.search}`
-            }
-          }
-        } catch (_) {}
-      }
-    } catch (_) {}
-
-    return `${getApiUrl('/api/images/proxy')}?force=1&url=${encodeURIComponent(url)}`
-  }
-
-  return url
+  return getSmartImageUrl(url)
 }
