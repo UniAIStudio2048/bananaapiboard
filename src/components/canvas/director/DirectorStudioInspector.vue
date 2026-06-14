@@ -14,6 +14,24 @@ import {
 
 const DEG_TO_RAD = Math.PI / 180
 const RAD_TO_DEG = 180 / Math.PI
+const BODY_CONTROL_RANGES = {
+  core: {
+    height: [0.45, 1.8],
+    torsoWidth: [0.45, 2.2],
+    headScale: [0.55, 1.8],
+    torsoLeanDeg: [-45, 45]
+  },
+  arms: {
+    length: [0.45, 1.8],
+    thickness: [0.45, 2],
+    spreadDeg: [-35, 35]
+  },
+  legs: {
+    length: [0.45, 1.8],
+    thickness: [0.45, 2],
+    spreadDeg: [-25, 35]
+  }
+}
 
 const props = defineProps({
   selectedItem: { type: Object, default: null },
@@ -78,6 +96,10 @@ function clampNumber(value, fallback, min, max) {
   const numeric = Number(value)
   if (!Number.isFinite(numeric)) return fallback
   return Math.min(max, Math.max(min, numeric))
+}
+
+function getBodyControlRange(section, key) {
+  return BODY_CONTROL_RANGES[section]?.[key] || [-360, 360]
 }
 
 function patchSelected(patch) {
@@ -147,14 +169,15 @@ function updateBodyStyle(event) {
 }
 
 function updateBodyValue(section, key, event) {
+  const [min, max] = getBodyControlRange(section, key)
   patchSelected({
-    bodyControls: {
+    bodyControls: normalizeDirectorStudioBodyControls({
       ...bodyControls.value,
       [section]: {
         ...bodyControls.value[section],
-        [key]: clampNumber(event.target.value, bodyControls.value[section]?.[key], -360, 360)
+        [key]: clampNumber(event.target.value, bodyControls.value[section]?.[key], min, max)
       }
-    }
+    })
   })
 }
 

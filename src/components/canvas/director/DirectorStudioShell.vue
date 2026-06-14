@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import DirectorStudioScene from './DirectorStudioScene.vue'
 import DirectorStudioToolbar from './DirectorStudioToolbar.vue'
 import DirectorStudioProjectPanel from './DirectorStudioProjectPanel.vue'
@@ -57,6 +57,27 @@ const shortcutsOpen = ref(false)
 const itemClipboard = ref(null)
 const undoStack = ref([])
 const redoStack = ref([])
+
+const SHORTCUT_ACTIONS = [
+  ['transformMove', 'transformMove'],
+  ['transformRotate', 'transformRotate'],
+  ['transformScale', 'transformScale'],
+  ['focus', 'focus'],
+  ['fit', 'fit'],
+  ['reset', 'reset'],
+  ['screenshot', 'screenshot'],
+  ['model', 'model'],
+  ['lighting', 'lighting'],
+  ['grid', 'grid'],
+  ['prompt', 'prompt'],
+  ['shortcuts', 'shortcuts'],
+  ['save', 'save'],
+  ['delete', 'delete'],
+  ['copy', 'copy'],
+  ['paste', 'paste'],
+  ['undo', 'undo'],
+  ['redo', 'redo']
+]
 
 const items = computed(() => Array.isArray(props.data.items) ? props.data.items : [])
 const selectedSceneItemId = computed(() => props.selectedItemId == null ? null : String(props.selectedItemId))
@@ -338,12 +359,12 @@ function patchGrid(patch) {
   patchNodeData({ grid: { ...grid.value, ...patch } })
 }
 
-function buildOutputPatch(url) {
-  const currentUrls = Array.isArray(props.data.output?.urls)
-    ? props.data.output.urls.filter(item => typeof item === 'string' && item.trim())
+function buildOutputPatch(url, baseOutput = props.data.output) {
+  const currentUrls = Array.isArray(baseOutput?.urls)
+    ? baseOutput.urls.filter(item => typeof item === 'string' && item.trim())
     : []
   return {
-    ...(props.data.output || {}),
+    ...(baseOutput || {}),
     url,
     urls: [url, ...currentUrls.filter(item => item !== url)].slice(0, 12)
   }
@@ -412,8 +433,12 @@ function saveProject() {
 function selectProject(projectId) {
   const record = normalizeDirectorProjectRecord(projects.value.find(project => project.id === projectId))
   if (!record) return
+  const projectSnapshotUrl = typeof record.snapshot.snapshotUrl === 'string' && record.snapshot.snapshotUrl.trim()
+    ? record.snapshot.snapshotUrl.trim()
+    : null
   patchNodeData({
     ...record.snapshot,
+    output: projectSnapshotUrl ? buildOutputPatch(projectSnapshotUrl, record.snapshot.output) : { url: null, urls: [] },
     title: record.name,
     activeDirectorStudioProjectId: record.id
   })
@@ -454,56 +479,94 @@ function isEditableTarget(target) {
   return target.isContentEditable || target.matches('input, textarea, select')
 }
 
+function isShellShortcutTarget(event) {
+  if (shortcutsOpen.value || isEditableTarget(event.target)) return false
+  const root = rootEl.value
+  if (!root || typeof document === 'undefined' || typeof Element === 'undefined') return false
+  const target = event.target instanceof Element ? event.target : null
+  if (!target || !root.contains(target)) return false
+  if (target.closest('.director-studio-scene')) return false
+  const active = document.activeElement instanceof Element ? document.activeElement : null
+  return active === root || (active != null && root.contains(active))
+}
+
+function normalizeShortcutKey(value) {
+  const key = String(value || '').trim().toLowerCase()
+  if (key === ' ' || key === 'spacebar') return 'space'
+  if (key === 'del') return 'delete'
+  if (key === 'esc') return 'escape'
+  if (key === 'return') return 'enter'
+  return key
+}
+
+function parseShortcutBinding(shortcut) {
+  const parts = String(shortcut || '').split('+').map(part => part.trim().toLowerCase()).filter(Boolean)
+  if (parts.length === 0) return null
+  const binding = {
+    commandEither: false,
+    meta: false,
+    ctrl: false,
+    shift: false,
+    alt: false,
+    key: ''
+  }
+
+  parts.forEach(part => {
+    if (part === 'cmd/ctrl' || part === 'ctrl/cmd') binding.commandEither = true
+    else if (part === 'cmd' || part === 'command' || part === 'meta') binding.meta = true
+    else if (part === 'ctrl' || part === 'control') binding.ctrl = true
+    else if (part === 'shift') binding.shift = true
+    else if (part === 'alt' || part === 'option') binding.alt = true
+    else binding.key = normalizeShortcutKey(part)
+  })
+
+  return binding.key ? binding : null
+}
+
+function matchesShortcut(event, shortcut) {
+  const binding = parseShortcutBinding(shortcut)
+  if (!binding) return false
+  if (binding.commandEither) {
+    if (!event.metaKey && !event.ctrlKey) return false
+  } else {
+    if (event.metaKey !== binding.meta || event.ctrlKey !== binding.ctrl) return false
+  }
+  if (event.shiftKey !== binding.shift || event.altKey !== binding.alt) return false
+  return normalizeShortcutKey(event.key) === binding.key
+}
+
+function resolveShortcutAction(event) {
+  const bindings = shortcuts.value
+  const match = SHORTCUT_ACTIONS.find(([key]) => matchesShortcut(event, bindings[key]))
+  return match?.[1] || null
+}
+
 function handleShellKeydown(event) {
-  if (isEditableTarget(event.target)) return
-  const key = event.key.toLowerCase()
-  const commandKey = event.metaKey || event.ctrlKey
+  if (!isShellShortcutTarget(event)) return
+  const action = resolveShortcutAction(event)
+  if (!action) return
 
-  if (commandKey && key === 's') {
-    event.preventDefault()
-    saveProject()
-    return
-  }
-  if (commandKey && key === 'c') {
-    event.preventDefault()
-    copySelectedItem()
-    return
-  }
-  if (commandKey && key === 'v') {
-    event.preventDefault()
-    pasteItem()
-    return
-  }
-  if (commandKey && key === 'z' && event.shiftKey) {
-    event.preventDefault()
-    redoItems()
-    return
-  }
-  if (commandKey && key === 'z') {
-    event.preventDefault()
-    undoItems()
-    return
-  }
-
-  if (event.key === 'Delete' || event.key === 'Backspace') {
-    event.preventDefault()
-    deleteSelectedItem()
-    return
-  }
-  if (key === '1') transformMode.value = 'move'
-  else if (key === '2') transformMode.value = 'rotate'
-  else if (key === '3') transformMode.value = 'scale'
-  else if (key === 'f') focusSelected()
-  else if (key === 'z') sceneRef.value?.fitCamera?.()
-  else if (key === 'r') sceneRef.value?.resetCamera?.()
-  else if (key === 'c') captureScreenshot()
-  else if (key === 'm') leftPanel.value = 'models'
-  else if (key === 'l') inspectorActiveSection.value = 'lighting'
-  else if (key === 'g') inspectorActiveSection.value = 'grid'
-  else if (key === 'p') inspectorActiveSection.value = 'prompt'
-  else if (key === 'h') shortcutsOpen.value = true
-  else return
   event.preventDefault()
+  event.stopPropagation()
+
+  if (action === 'transformMove') transformMode.value = 'move'
+  else if (action === 'transformRotate') transformMode.value = 'rotate'
+  else if (action === 'transformScale') transformMode.value = 'scale'
+  else if (action === 'focus') focusSelected()
+  else if (action === 'fit') sceneRef.value?.fitCamera?.()
+  else if (action === 'reset') sceneRef.value?.resetCamera?.()
+  else if (action === 'screenshot') captureScreenshot()
+  else if (action === 'model') leftPanel.value = 'models'
+  else if (action === 'lighting') inspectorActiveSection.value = 'lighting'
+  else if (action === 'grid') inspectorActiveSection.value = 'grid'
+  else if (action === 'prompt') inspectorActiveSection.value = 'prompt'
+  else if (action === 'shortcuts') shortcutsOpen.value = true
+  else if (action === 'save') saveProject()
+  else if (action === 'delete') deleteSelectedItem()
+  else if (action === 'copy') copySelectedItem()
+  else if (action === 'paste') pasteItem()
+  else if (action === 'undo') undoItems()
+  else if (action === 'redo') redoItems()
 }
 
 watch(items, nextItems => {
@@ -513,19 +576,14 @@ watch(items, nextItems => {
 })
 
 onMounted(async () => {
-  window.addEventListener('keydown', handleShellKeydown)
   await nextTick()
   rootEl.value?.focus?.()
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleShellKeydown)
 })
 </script>
 
 <template>
   <div class="director-shell-backdrop nodrag nopan" @click.self="emit('close')">
-    <section ref="rootEl" class="director-shell" tabindex="-1" @click.stop>
+    <section ref="rootEl" class="director-shell" tabindex="-1" @click.stop @keydown="handleShellKeydown">
       <DirectorStudioToolbar
         :project-name="projectName"
         :transform-mode="transformMode"
@@ -757,6 +815,52 @@ onBeforeUnmount(() => {
 
   .director-shell-workspace {
     grid-template-columns: 260px minmax(0, 1fr) 320px;
+  }
+}
+
+@media (max-width: 860px) {
+  .director-shell {
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    min-width: 0;
+  }
+
+  .director-shell-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(320px, 52vh) auto auto;
+    overflow: auto;
+  }
+
+  .director-shell-stage {
+    order: 1;
+    min-height: 320px;
+  }
+
+  .director-shell-left {
+    order: 2;
+    min-height: 180px;
+    max-height: 36vh;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-right: 0;
+  }
+
+  :deep(.director-inspector) {
+    order: 3;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: auto;
+    max-height: 44vh;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: 0;
+  }
+
+  .director-shell-status {
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 28px;
+  }
+
+  .director-shell-status span:nth-child(n + 3) {
+    display: none;
   }
 }
 </style>

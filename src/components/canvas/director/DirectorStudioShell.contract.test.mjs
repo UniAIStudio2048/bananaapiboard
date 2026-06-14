@@ -49,6 +49,42 @@ test('director studio shell exposes left rail item selection', () => {
   assert.match(source, /<DirectorStudioItemList[\s\S]*:items="items"[\s\S]*:selected-item-id="selectedSceneItemId"[\s\S]*@select-item="handleItemListSelect"/)
 })
 
+test('director studio shell shortcuts are scoped to focused shell and honor configured bindings', () => {
+  const source = read('components/canvas/director/DirectorStudioShell.vue')
+
+  assert.doesNotMatch(source, /window\.addEventListener\('keydown',\s*handleShellKeydown\)/)
+  assert.doesNotMatch(source, /window\.removeEventListener\('keydown',\s*handleShellKeydown\)/)
+  assert.match(source, /<section[\s\S]*ref="rootEl"[\s\S]*@keydown="handleShellKeydown"/)
+  assert.match(source, /function\s+isShellShortcutTarget\s*\(\s*event\s*\)\s*\{[\s\S]*shortcutsOpen\.value[\s\S]*rootEl\.value[\s\S]*\.director-studio-scene[\s\S]*\}/)
+  assert.match(source, /function\s+matchesShortcut\s*\(\s*event\s*,\s*shortcut\s*\)/)
+  assert.match(source, /function\s+resolveShortcutAction\s*\(\s*event\s*\)\s*\{[\s\S]*shortcuts\.value[\s\S]*matchesShortcut\(event,[\s\S]*\}/)
+  assert.match(source, /function\s+handleShellKeydown\s*\(\s*event\s*\)\s*\{[\s\S]*if\s*\(!isShellShortcutTarget\(event\)\)\s*return[\s\S]*resolveShortcutAction\(event\)[\s\S]*event\.stopPropagation\(\)[\s\S]*\}/)
+})
+
+test('director studio shell syncs project snapshot output when loading a saved project', () => {
+  const source = read('components/canvas/director/DirectorStudioShell.vue')
+
+  assert.match(source, /function\s+selectProject\s*\(\s*projectId\s*\)\s*\{[\s\S]*const\s+projectSnapshotUrl\s*=[\s\S]*record\.snapshot\.snapshotUrl[\s\S]*patchNodeData\(\{[\s\S]*output:\s*projectSnapshotUrl\s*\?\s*buildOutputPatch\(projectSnapshotUrl,\s*record\.snapshot\.output\)\s*:\s*\{\s*url:\s*null,\s*urls:\s*\[\]\s*\}[\s\S]*activeDirectorStudioProjectId:\s*record\.id[\s\S]*\}\)/)
+})
+
+test('director studio shell keeps the scene usable on narrow viewports', () => {
+  const source = read('components/canvas/director/DirectorStudioShell.vue')
+
+  assert.match(source, /@media\s*\(max-width:\s*860px\)/)
+  assert.match(source, /@media\s*\(max-width:\s*860px\)[\s\S]*\.director-shell-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*grid-template-rows:[\s\S]*\}/)
+  assert.match(source, /@media\s*\(max-width:\s*860px\)[\s\S]*\.director-shell-stage\s*\{[\s\S]*min-height:\s*320px[\s\S]*\}/)
+  assert.match(source, /@media\s*\(max-width:\s*860px\)[\s\S]*:deep\(\.director-inspector\)\s*\{[\s\S]*max-height:[\s\S]*\}/)
+})
+
+test('director studio inspector clamps body controls by field-specific ranges', () => {
+  const source = read('components/canvas/director/DirectorStudioInspector.vue')
+
+  assert.match(source, /const\s+BODY_CONTROL_RANGES\s*=\s*\{[\s\S]*torsoLeanDeg:\s*\[-45,\s*45\][\s\S]*arms:[\s\S]*thickness:\s*\[0\.45,\s*2\][\s\S]*legs:[\s\S]*thickness:\s*\[0\.45,\s*2\][\s\S]*\}/)
+  assert.match(source, /function\s+getBodyControlRange\s*\(\s*section\s*,\s*key\s*\)/)
+  assert.match(source, /function\s+updateBodyValue\s*\(\s*section,\s*key,\s*event\s*\)\s*\{[\s\S]*const\s+\[min,\s*max\]\s*=\s*getBodyControlRange\(section,\s*key\)[\s\S]*normalizeDirectorStudioBodyControls\(\{[\s\S]*\[section\]:[\s\S]*\[key\]:\s*clampNumber\(event\.target\.value,[\s\S]*min,\s*max\)[\s\S]*\}\)[\s\S]*\}/)
+  assert.doesNotMatch(source, /clampNumber\(event\.target\.value,\s*bodyControls\.value\[section\]\?\.\[key\],\s*-360,\s*360\)/)
+})
+
 test('director studio node bridges shell events into shallow node data updates', () => {
   const source = read('components/canvas/nodes/DirectorStudioNode.vue')
 
