@@ -95,6 +95,10 @@ export function clampDirectorNumber(value, fallback, min, max) {
   return Math.min(max, Math.max(min, numeric))
 }
 
+export function normalizeDirectorMode(value) {
+  return value === 'panorama' ? 'panorama' : 'flat'
+}
+
 export function normalizeDirectorCamera(camera) {
   const activePreset = DIRECTOR_CAMERA_PRESETS.some(preset => preset.id === camera?.activePreset)
     ? camera.activePreset
@@ -189,13 +193,14 @@ export function appendDirectorSnapshotHistory(snapshotHistory, snapshotUrl) {
 export function createDirectorBlankSnapshot() {
   return {
     mode: 'flat',
-    backgroundUrl: null,
     backgroundImageUrl: null,
+    backgroundPanoramaUrl: null,
     items: [],
     referenceImages: [],
     customActionPresets: [],
     customActionPoses: {},
     basePrompt: '',
+    themeColor: null,
     camera: cloneJson(DEFAULT_DIRECTOR_CAMERA),
     lighting: cloneJson(DEFAULT_DIRECTOR_LIGHTING),
     grid: cloneJson(DEFAULT_DIRECTOR_GRID),
@@ -215,9 +220,9 @@ export function normalizeDirectorSnapshot(snapshot) {
   const snapshotUrl = normalizeDirectorNullableString(snapshot.snapshotUrl)
 
   return {
-    mode: snapshot.mode === 'panorama' ? 'panorama' : 'flat',
-    backgroundUrl: normalizeDirectorNullableString(snapshot.backgroundUrl),
+    mode: normalizeDirectorMode(snapshot.mode),
     backgroundImageUrl: normalizeDirectorNullableString(snapshot.backgroundImageUrl),
+    backgroundPanoramaUrl: normalizeDirectorNullableString(snapshot.backgroundPanoramaUrl),
     items: Array.isArray(snapshot.items) ? cloneJson(snapshot.items) : [],
     referenceImages: Array.isArray(snapshot.referenceImages) ? cloneJson(snapshot.referenceImages) : [],
     customActionPresets: Array.isArray(snapshot.customActionPresets) ? cloneJson(snapshot.customActionPresets) : [],
@@ -225,6 +230,7 @@ export function normalizeDirectorSnapshot(snapshot) {
       ? cloneJson(snapshot.customActionPoses)
       : {},
     basePrompt: normalizeDirectorString(snapshot.basePrompt, ''),
+    themeColor: normalizeDirectorNullableString(snapshot.themeColor),
     aspectRatio: normalizeDirectorString(snapshot.aspectRatio, '') || '16:9',
     camera: normalizeDirectorCamera(snapshot.camera),
     lighting: normalizeDirectorLighting(snapshot.lighting),
@@ -244,8 +250,17 @@ export function captureDirectorSnapshot(data, snapshotUrl) {
 
   return {
     ...snapshot,
-    mode: data?.mode === 'three' ? 'three' : 'flat',
+    mode: normalizeDirectorMode(data?.mode),
+    backgroundImageUrl: normalizeDirectorNullableString(data?.backgroundImageUrl),
+    backgroundPanoramaUrl: normalizeDirectorNullableString(data?.backgroundPanoramaUrl),
     items: Array.isArray(data?.items) ? cloneJson(data.items) : [],
+    referenceImages: Array.isArray(data?.referenceImages) ? cloneJson(data.referenceImages) : [],
+    customActionPresets: Array.isArray(data?.customActionPresets) ? cloneJson(data.customActionPresets) : [],
+    customActionPoses: data?.customActionPoses && typeof data.customActionPoses === 'object' && !Array.isArray(data.customActionPoses)
+      ? cloneJson(data.customActionPoses)
+      : {},
+    basePrompt: normalizeDirectorString(data?.basePrompt, ''),
+    themeColor: normalizeDirectorNullableString(data?.themeColor),
     camera: normalizeDirectorCamera(data?.camera),
     lighting: normalizeDirectorLighting(data?.lighting),
     grid: normalizeDirectorGrid(data?.grid),
@@ -289,10 +304,17 @@ export function createDefaultDirectorStudioData(overrides = {}) {
   return {
     title: typeof overrides.title === 'string' && overrides.title.trim() ? overrides.title.trim() : '3D导演台',
     label: typeof overrides.label === 'string' && overrides.label.trim() ? overrides.label.trim() : '3D导演台',
-    type: DIRECTOR_STUDIO_NODE_TYPE,
-    mode: overrides.mode === 'three' ? 'three' : 'flat',
+    mode: normalizeDirectorMode(overrides.mode),
+    backgroundImageUrl: normalizeDirectorNullableString(overrides.backgroundImageUrl),
+    backgroundPanoramaUrl: normalizeDirectorNullableString(overrides.backgroundPanoramaUrl),
     items: Array.isArray(overrides.items) ? cloneJson(overrides.items) : [],
     referenceImages: Array.isArray(overrides.referenceImages) ? cloneJson(overrides.referenceImages) : [],
+    customActionPresets: Array.isArray(overrides.customActionPresets) ? cloneJson(overrides.customActionPresets) : [],
+    customActionPoses: overrides.customActionPoses && typeof overrides.customActionPoses === 'object' && !Array.isArray(overrides.customActionPoses)
+      ? cloneJson(overrides.customActionPoses)
+      : {},
+    basePrompt: normalizeDirectorString(overrides.basePrompt, ''),
+    themeColor: normalizeDirectorString(overrides.themeColor, '') || '#38bdf8',
     openDirectorStudioOnCreate: typeof overrides.openDirectorStudioOnCreate === 'boolean'
       ? overrides.openDirectorStudioOnCreate
       : false,
