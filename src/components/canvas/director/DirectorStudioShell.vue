@@ -1,4 +1,6 @@
 <script setup>
+import DirectorStudioScene from './DirectorStudioScene.vue'
+
 defineProps({
   nodeId: { type: String, required: true },
   data: { type: Object, default: () => ({}) },
@@ -8,6 +10,10 @@ defineProps({
 })
 
 const emit = defineEmits(['close', 'update:selectedItemId'])
+
+function handleSceneSelectItem(itemId) {
+  emit('update:selectedItemId', itemId)
+}
 </script>
 
 <template>
@@ -24,7 +30,19 @@ const emit = defineEmits(['close', 'update:selectedItemId'])
       </header>
 
       <div class="director-shell-body">
-        <p>导演台编辑器将在后续任务中接入。</p>
+        <DirectorStudioScene
+          :items="items"
+          :selected-item-id="selectedItemId == null ? null : String(selectedItemId)"
+          :mode="data.mode || 'flat'"
+          :background-panorama-url="data.backgroundPanoramaUrl"
+          :camera-settings="data.camera || {}"
+          :lighting="data.lighting || {}"
+          :grid="data.grid || {}"
+          :view-settings="data.viewSettings || {}"
+          :transform-mode="null"
+          :aspect-frame="data.aspectFrame || data.aspectRatio || '16:9'"
+          @select-item="handleSceneSelectItem"
+        />
         <div class="director-shell-stats">
           <span>项目 {{ data.directorStudioProjects?.length || 0 }}</span>
           <span>镜头 {{ items.length }}</span>
@@ -48,8 +66,8 @@ const emit = defineEmits(['close', 'update:selectedItemId'])
 }
 
 .director-shell {
-  width: min(720px, calc(100vw - 48px));
-  min-height: 280px;
+  width: min(960px, calc(100vw - 48px));
+  min-height: 520px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   background: #18181b;
@@ -104,14 +122,11 @@ const emit = defineEmits(['close', 'update:selectedItemId'])
   font-size: 14px;
 }
 
-.director-shell-body p {
-  margin: 0 0 16px;
-}
-
 .director-shell-stats {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 14px;
 }
 
 .director-shell-stats span {
