@@ -244,15 +244,18 @@ export function createDefaultDirectorStudioData(overrides = {}) {
     lighting: normalizeDirectorLighting(overrides.lighting),
     grid: normalizeDirectorGrid(overrides.grid),
     viewSettings: normalizeDirectorViewSettings(overrides.viewSettings),
-    shortcuts: cloneJson(DEFAULT_DIRECTOR_STUDIO_SHORTCUTS),
+    directorStudioShortcuts: cloneJson(DEFAULT_DIRECTOR_STUDIO_SHORTCUTS),
     aspectRatio: typeof overrides.aspectRatio === 'string' && overrides.aspectRatio.trim() ? overrides.aspectRatio.trim() : '16:9',
     aspectFrame: normalizeDirectorAspectFrame(overrides.aspectFrame),
     screenshotResolution: normalizeDirectorScreenshotResolution(overrides.screenshotResolution),
     snapshotUrl: typeof overrides.snapshotUrl === 'string' && overrides.snapshotUrl.trim() ? overrides.snapshotUrl.trim() : null,
     snapshotHistory: normalizeDirectorSnapshotHistory(overrides.snapshotUrl, overrides.snapshotHistory),
-    projects: Array.isArray(overrides.projects)
-      ? overrides.projects.map(normalizeDirectorProjectRecord).filter(Boolean)
+    directorStudioProjects: Array.isArray(overrides.directorStudioProjects)
+      ? overrides.directorStudioProjects.map(normalizeDirectorProjectRecord).filter(Boolean)
       : [],
+    activeDirectorStudioProjectId: typeof overrides.activeDirectorStudioProjectId === 'string' && overrides.activeDirectorStudioProjectId.trim()
+      ? overrides.activeDirectorStudioProjectId.trim()
+      : null,
     output: {
       url: outputUrl,
       urls: outputUrls

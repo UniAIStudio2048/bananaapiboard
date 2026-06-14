@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict'
 import {
   DEFAULT_DIRECTOR_CAMERA,
+  DEFAULT_DIRECTOR_GRID,
+  DEFAULT_DIRECTOR_LIGHTING,
+  DEFAULT_DIRECTOR_STUDIO_SHORTCUTS,
+  DEFAULT_DIRECTOR_VIEW_SETTINGS,
   appendDirectorSnapshotHistory,
   createDefaultDirectorStudioData,
   createDirectorBlankSnapshot,
@@ -16,12 +20,22 @@ assert.equal(defaults.label, '3D导演台')
 assert.equal(defaults.mode, 'flat')
 assert.deepEqual(defaults.items, [])
 assert.deepEqual(defaults.referenceImages, [])
+assert.deepEqual(defaults.camera, DEFAULT_DIRECTOR_CAMERA)
+assert.deepEqual(defaults.lighting, DEFAULT_DIRECTOR_LIGHTING)
+assert.deepEqual(defaults.grid, DEFAULT_DIRECTOR_GRID)
+assert.deepEqual(defaults.viewSettings, DEFAULT_DIRECTOR_VIEW_SETTINGS)
+assert.deepEqual(defaults.directorStudioShortcuts, DEFAULT_DIRECTOR_STUDIO_SHORTCUTS)
+assert.equal(defaults.snapshotUrl, null)
+assert.deepEqual(defaults.snapshotHistory, [])
+assert.deepEqual(defaults.directorStudioProjects, [])
+assert.equal(defaults.activeDirectorStudioProjectId, null)
 assert.equal(defaults.openDirectorStudioOnCreate, false)
 assert.deepEqual(defaults.sourceImages, [])
 assert.equal(defaults.status, 'idle')
 assert.equal(defaults.aspectFrame, '16:9')
 assert.equal(defaults.screenshotResolution, '1080p')
 assert.deepEqual(defaults.output, { url: null, urls: [] })
+assert.equal(Object.prototype.hasOwnProperty.call(defaults, 'projects'), false)
 
 assert.deepEqual(normalizeDirectorCamera({ fov: 400, lensDistance: -1 }), {
   ...DEFAULT_DIRECTOR_CAMERA,
