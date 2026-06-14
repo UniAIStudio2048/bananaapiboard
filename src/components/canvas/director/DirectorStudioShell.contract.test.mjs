@@ -28,6 +28,7 @@ test('director studio shell renders the workstation panels and drives the scene 
   for (const component of [
     'DirectorStudioToolbar',
     'DirectorStudioProjectPanel',
+    'DirectorStudioItemList',
     'DirectorStudioModelLibrary',
     'DirectorStudioSnapshotPanel',
     'DirectorStudioInspector',
@@ -39,6 +40,13 @@ test('director studio shell renders the workstation panels and drives the scene 
 
   assert.match(source, /<DirectorStudioScene[\s\S]*:items="items"[\s\S]*:selected-item-id="selectedSceneItemId"[\s\S]*:transform-mode="transformMode"/)
   assert.match(source, /@update-item="handleSceneUpdateItem"/)
+})
+
+test('director studio shell exposes left rail item selection', () => {
+  const source = read('components/canvas/director/DirectorStudioShell.vue')
+
+  assert.match(source, /function\s+handleItemListSelect\s*\(\s*id\s*\)\s*\{[\s\S]*emit\('update:selectedItemId',\s*id == null \? null : String\(id\)\)[\s\S]*\}/)
+  assert.match(source, /<DirectorStudioItemList[\s\S]*:items="items"[\s\S]*:selected-item-id="selectedSceneItemId"[\s\S]*@select-item="handleItemListSelect"/)
 })
 
 test('director studio node bridges shell events into shallow node data updates', () => {

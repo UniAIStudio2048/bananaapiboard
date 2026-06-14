@@ -116,7 +116,7 @@ export function normalizeDirectorLighting(lighting) {
     enabled: typeof lighting?.enabled === 'boolean' ? lighting.enabled : DEFAULT_DIRECTOR_LIGHTING.enabled,
     mainIntensity: clampDirectorNumber(lighting?.mainIntensity, DEFAULT_DIRECTOR_LIGHTING.mainIntensity, 0, 4),
     mainYaw: clampDirectorNumber(lighting?.mainYaw, DEFAULT_DIRECTOR_LIGHTING.mainYaw, -180, 180),
-    mainPitch: clampDirectorNumber(lighting?.mainPitch, DEFAULT_DIRECTOR_LIGHTING.mainPitch, -20, 90),
+    mainPitch: clampDirectorNumber(lighting?.mainPitch, DEFAULT_DIRECTOR_LIGHTING.mainPitch, -20, 89),
     mainColor: normalizeDirectorColor(lighting?.mainColor, DEFAULT_DIRECTOR_LIGHTING.mainColor),
     ambientIntensity: clampDirectorNumber(lighting?.ambientIntensity, DEFAULT_DIRECTOR_LIGHTING.ambientIntensity, 0, 3),
     ambientColor: normalizeDirectorColor(lighting?.ambientColor, DEFAULT_DIRECTOR_LIGHTING.ambientColor)

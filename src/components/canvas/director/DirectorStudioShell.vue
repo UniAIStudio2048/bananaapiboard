@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import DirectorStudioScene from './DirectorStudioScene.vue'
 import DirectorStudioToolbar from './DirectorStudioToolbar.vue'
 import DirectorStudioProjectPanel from './DirectorStudioProjectPanel.vue'
+import DirectorStudioItemList from './DirectorStudioItemList.vue'
 import DirectorStudioModelLibrary from './DirectorStudioModelLibrary.vue'
 import DirectorStudioSnapshotPanel from './DirectorStudioSnapshotPanel.vue'
 import DirectorStudioInspector from './DirectorStudioInspector.vue'
@@ -300,6 +301,10 @@ function handleSceneSelectItem(itemId) {
   emit('update:selectedItemId', itemId == null ? null : String(itemId))
 }
 
+function handleItemListSelect(id) {
+  emit('update:selectedItemId', id == null ? null : String(id))
+}
+
 function handleSceneUpdateItem(nextItem) {
   replaceItem(nextItem, { trackHistory: false })
 }
@@ -555,6 +560,11 @@ onBeforeUnmount(() => {
             :title="projectName"
             @save-project="saveProject"
             @select-project="selectProject"
+          />
+          <DirectorStudioItemList
+            :items="items"
+            :selected-item-id="selectedSceneItemId"
+            @select-item="handleItemListSelect"
           />
           <DirectorStudioModelLibrary
             :categories="DIRECTOR_STUDIO_MODEL_CATEGORIES"

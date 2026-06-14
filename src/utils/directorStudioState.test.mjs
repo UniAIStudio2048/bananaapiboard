@@ -83,6 +83,7 @@ assert.equal(lighting.mainIntensity, 4)
 assert.equal(lighting.mainYaw, 180)
 assert.equal(lighting.mainPitch, -20)
 assert.equal(lighting.ambientIntensity, 3)
+assert.equal(normalizeDirectorLighting({ mainPitch: 120 }).mainPitch, 89)
 
 const history = normalizeDirectorSnapshotHistory('https://cdn/new.png', [
   'https://cdn/a.png',
