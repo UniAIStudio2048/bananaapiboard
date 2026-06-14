@@ -67,6 +67,40 @@ const workflow = {
         isUploading: true,
         sourceImages: [blobUrl]
       }
+    },
+    {
+      id: 'director',
+      type: 'director-studio',
+      position: { x: 300, y: 0 },
+      data: {
+        title: '3D导演台',
+        snapshotUrl: dataUrl,
+        snapshotHistory: [blobUrl, dataUrl, cdnUrl],
+        backgroundImageUrl: blobUrl,
+        backgroundPanoramaUrl: cdnUrl,
+        sourceImages: [dataUrl, cdnUrl],
+        output: { url: dataUrl, urls: [dataUrl, cdnUrl] },
+        directorStudioProjects: [
+          {
+            id: 'project-1',
+            name: '项目1',
+            createdAt: 1,
+            updatedAt: 2,
+            coverUrl: dataUrl,
+            snapshot: {
+              snapshotUrl: dataUrl,
+              snapshotHistory: [blobUrl, cdnUrl],
+              backgroundImageUrl: blobUrl,
+              backgroundPanoramaUrl: cdnUrl,
+              items: [],
+              referenceImages: [
+                { url: dataUrl, label: 'inline' },
+                { url: cdnUrl, label: 'cdn' }
+              ]
+            }
+          }
+        ]
+      }
     }
   ],
   edges: [
@@ -106,7 +140,7 @@ assert.equal(serialized.includes(cdnUrl), true, '云端 URL 必须保留')
 
 assert.deepEqual(
   sanitized.nodes.map(node => node.id),
-  ['source', 'target', 'lost-upload'],
+  ['source', 'target', 'lost-upload', 'director'],
   '保存清理不能静默删除节点，否则大工作流保存成功后会丢节点'
 )
 
@@ -131,6 +165,18 @@ const lostUpload = sanitized.nodes.find(node => node.id === 'lost-upload')
 assert.deepEqual(lostUpload.data.sourceImages, [])
 assert.equal(lostUpload.data.isUploading, undefined)
 assert.equal(lostUpload.data.uploadFailed, undefined)
+
+const director = sanitized.nodes.find(node => node.id === 'director')
+assert.equal(director.data.snapshotUrl, null)
+assert.deepEqual(director.data.snapshotHistory, [cdnUrl])
+assert.equal(director.data.backgroundImageUrl, null)
+assert.equal(director.data.backgroundPanoramaUrl, cdnUrl)
+assert.deepEqual(director.data.sourceImages, [cdnUrl])
+assert.deepEqual(director.data.output.urls, [cdnUrl])
+assert.equal(director.data.directorStudioProjects[0].coverUrl, null)
+assert.equal(director.data.directorStudioProjects[0].snapshot.snapshotUrl, null)
+assert.deepEqual(director.data.directorStudioProjects[0].snapshot.snapshotHistory, [cdnUrl])
+assert.deepEqual(director.data.directorStudioProjects[0].snapshot.referenceImages, [{ url: cdnUrl, label: 'cdn' }])
 
 assert.equal(sanitized.edges.length, 2)
 assert.equal(sanitized.edges[0].sourceNode, undefined)

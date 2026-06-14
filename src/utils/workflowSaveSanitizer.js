@@ -130,6 +130,21 @@ function sanitizeReferenceImages(values) {
   })
 }
 
+function sanitizeDirectorStudioProject(project) {
+  if (!project || typeof project !== 'object') return null
+  const cleaned = sanitizeInlineValue(project) || {}
+  if (isTransientWorkflowUrl(cleaned.coverUrl)) cleaned.coverUrl = null
+  if (cleaned.snapshot && typeof cleaned.snapshot === 'object') {
+    if (Array.isArray(cleaned.snapshot.snapshotHistory)) {
+      cleaned.snapshot.snapshotHistory = persistentUrlList(cleaned.snapshot.snapshotHistory)
+    }
+    if (Array.isArray(cleaned.snapshot.referenceImages)) {
+      cleaned.snapshot.referenceImages = sanitizeReferenceImages(cleaned.snapshot.referenceImages)
+    }
+  }
+  return cleaned
+}
+
 export function sanitizeWorkflowNodeForSave(node) {
   const cleanedNode = removeEmptyRuntimeStyle(copyWithoutKeys(node, NODE_RUNTIME_KEYS))
   if (!cleanedNode.data) {
@@ -168,6 +183,16 @@ export function sanitizeWorkflowNodeForSave(node) {
       if (typeof url !== 'string') return url != null
       return !isTransientWorkflowUrl(url)
     })
+  }
+
+  if (Array.isArray(data.snapshotHistory)) {
+    data.snapshotHistory = persistentUrlList(data.snapshotHistory)
+  }
+
+  if (Array.isArray(data.directorStudioProjects)) {
+    data.directorStudioProjects = data.directorStudioProjects
+      .map(project => sanitizeDirectorStudioProject(project))
+      .filter(Boolean)
   }
 
   delete data.isUploading
