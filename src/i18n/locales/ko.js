@@ -61,6 +61,58 @@ export default {
     user: '사용자'
   },
 
+  directorStudio: {
+    title: '3D Director Studio',
+    openFullscreen: 'Open Director Studio',
+    close: 'Close',
+    saveProject: 'Save Project',
+    projects: 'Projects',
+    elements: 'Elements',
+    snapshots: 'Snapshots',
+    addToCanvas: 'Add Snapshot to Canvas',
+    addToCanvasTitle: 'Add the current Director Studio snapshot to the canvas',
+    addToCanvasNoSnapshot: 'Take a snapshot in Director Studio first',
+    addToCanvasFailed: 'Failed to add snapshot to canvas',
+    snapshotSourceName: 'Director Studio Snapshot',
+    generationNodeName: 'Director Studio Generation',
+    referenceSourceName: 'Reference: {label}',
+    assetFallbackName: 'Reference {count}',
+    panoramaAssetFallbackName: 'Panorama {count}',
+    cameraPresets: {
+      standard: 'Standard',
+      wide: 'Wide',
+      ultraWide: 'Ultra Wide',
+      portrait: 'Portrait',
+      telephoto: 'Telephoto',
+      superTelephoto: 'Super Telephoto',
+      fisheye: 'Fisheye'
+    },
+    aspectFrames: {
+      panorama: 'Panorama',
+      square: '1:1',
+      fourThree: '4:3',
+      threeFour: '3:4',
+      sixteenNine: '16:9',
+      nineSixteen: '9:16',
+      threeTwo: '3:2',
+      twoThree: '2:3',
+      twentyOneNine: '21:9'
+    },
+    resolutions: {
+      p1080: '1080p',
+      p1440: '1440p',
+      k4: '4K'
+    },
+    nodeCard: {
+      emptyPreview: 'Click to open Director Studio',
+      snapshotAlt: 'Director Studio snapshot',
+      enter: 'Open Director Studio',
+      flatEnvironment: 'Flat scene',
+      panoramaEnvironment: 'Panorama scene',
+      summary: '{environment} · {count} elements · {refs} refs'
+    }
+  },
+
   // 네비게이션
   nav: {
     home: '홈',
@@ -485,6 +537,7 @@ export default {
       imageInput: { label: '이미지', desc: '참조 이미지 업로드' },
       videoInput: { label: '비디오', desc: '참조 비디오 업로드' },
       audioInput: { label: '오디오', desc: '오디오 파일 업로드' },
+      directorStudio: { label: '3D Director Studio', desc: 'Build 3D blocking, camera, lighting, and references' },
       textToImage: { label: '텍스트에서 이미지', desc: '텍스트로 이미지 생성' },
       imageToImage: { label: '이미지에서 이미지', desc: '이미지 스타일 변환' },
       textToVideo: { label: '텍스트에서 비디오', desc: '텍스트로 비디오 생성' },

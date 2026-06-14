@@ -57,6 +57,58 @@ export default {
     about: '關於'
   },
 
+  directorStudio: {
+    title: '3D導演台',
+    openFullscreen: '開啟導演台',
+    close: '關閉',
+    saveProject: '儲存專案',
+    projects: '專案',
+    elements: '元素',
+    snapshots: '截圖',
+    addToCanvas: '截圖到畫布',
+    addToCanvasTitle: '將目前導演台截圖加入畫布',
+    addToCanvasNoSnapshot: '請先在導演台內截圖',
+    addToCanvasFailed: '截圖加入畫布失敗',
+    snapshotSourceName: '導演台截圖',
+    generationNodeName: '導演台生成',
+    referenceSourceName: '參考圖：{label}',
+    assetFallbackName: '參考圖{count}',
+    panoramaAssetFallbackName: '全景圖{count}',
+    cameraPresets: {
+      standard: '標準',
+      wide: '廣角',
+      ultraWide: '超廣角',
+      portrait: '人像',
+      telephoto: '長焦',
+      superTelephoto: '超長焦',
+      fisheye: '魚眼'
+    },
+    aspectFrames: {
+      panorama: '全景',
+      square: '1:1',
+      fourThree: '4:3',
+      threeFour: '3:4',
+      sixteenNine: '16:9',
+      nineSixteen: '9:16',
+      threeTwo: '3:2',
+      twoThree: '2:3',
+      twentyOneNine: '21:9'
+    },
+    resolutions: {
+      p1080: '1080p',
+      p1440: '1440p',
+      k4: '4K'
+    },
+    nodeCard: {
+      emptyPreview: '點擊開啟導演台',
+      snapshotAlt: '導演台截圖',
+      enter: '開啟導演台',
+      flatEnvironment: '平面場景',
+      panoramaEnvironment: '全景場景',
+      summary: '{environment} · {count} 個元素 · {refs} 張參考'
+    }
+  },
+
   // 導航
   nav: {
     home: '首頁',
@@ -408,6 +460,7 @@ export default {
       imageInput: { label: '圖片', desc: '上傳參考圖片' },
       videoInput: { label: '影片', desc: '上傳參考影片' },
       audioInput: { label: '音訊', desc: '上傳音訊檔案' },
+      directorStudio: { label: '3D導演台', desc: '搭建三維走位、鏡頭、燈光和參考圖' },
       textToImage: { label: '文生圖', desc: '文字生成圖片' },
       imageToImage: { label: '圖生圖', desc: '圖片風格轉換' },
       textToVideo: { label: '文生影片', desc: '文字生成影片' },

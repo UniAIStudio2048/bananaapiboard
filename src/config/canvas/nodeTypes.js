@@ -10,6 +10,7 @@ export const NODE_TYPES = {
   IMAGE_INPUT: 'image-input',
   VIDEO_INPUT: 'video-input',
   AUDIO_INPUT: 'audio-input',
+  DIRECTOR_STUDIO: 'director-studio',
   
   // 生成类
   TEXT_TO_IMAGE: 'text-to-image',
@@ -97,6 +98,19 @@ export const NODE_TYPE_CONFIG = {
     hasInput: false,
     hasOutput: true,
     outputType: 'audio'
+  },
+
+  [NODE_TYPES.DIRECTOR_STUDIO]: {
+    label: 'canvas.nodeConfig.directorStudio.label',
+    description: 'canvas.nodeConfig.directorStudio.desc',
+    icon: '3D',
+    category: 'input',
+    color: '#38bdf8',
+    hasInput: true,
+    hasOutput: true,
+    inputType: 'image',
+    outputType: 'image',
+    consumesPoints: false
   },
   
   [NODE_TYPES.TEXT_TO_IMAGE]: {
@@ -420,7 +434,8 @@ export const CONNECTION_RULES = {
     NODE_TYPES.TEXT_TO_VIDEO,
     NODE_TYPES.LLM_PROMPT_ENHANCE,
     NODE_TYPES.LLM_CONTENT_EXPAND,
-    NODE_TYPES.LLM_STORYBOARD
+    NODE_TYPES.LLM_STORYBOARD,
+    NODE_TYPES.DIRECTOR_STUDIO
   ],
   
   // 文本节点别名
@@ -429,7 +444,8 @@ export const CONNECTION_RULES = {
     NODE_TYPES.TEXT_TO_VIDEO,
     NODE_TYPES.LLM_PROMPT_ENHANCE,
     NODE_TYPES.LLM_CONTENT_EXPAND,
-    NODE_TYPES.LLM_STORYBOARD
+    NODE_TYPES.LLM_STORYBOARD,
+    NODE_TYPES.DIRECTOR_STUDIO
   ],
   
   [NODE_TYPES.IMAGE_INPUT]: [
@@ -437,6 +453,7 @@ export const CONNECTION_RULES = {
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推
     NODE_TYPES.STORYBOARD_GRID,     // 分镜格子
+    NODE_TYPES.DIRECTOR_STUDIO,     // 3D导演台
     NODE_TYPES.TEXT_INPUT            // 文本节点（自动切换为图片反推预设）
   ],
   
@@ -446,6 +463,7 @@ export const CONNECTION_RULES = {
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推
     NODE_TYPES.STORYBOARD_GRID,     // 分镜格子
+    NODE_TYPES.DIRECTOR_STUDIO,     // 3D导演台
     NODE_TYPES.TEXT_INPUT            // 文本节点（自动切换为图片反推预设）
   ],
   
@@ -455,6 +473,7 @@ export const CONNECTION_RULES = {
     NODE_TYPES.IMAGE_TO_VIDEO,
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片反推
     NODE_TYPES.STORYBOARD_GRID,     // 分镜格子
+    NODE_TYPES.DIRECTOR_STUDIO,     // 3D导演台
     NODE_TYPES.TEXT_INPUT            // 文本节点（自动切换为图片反推预设）
   ],
   
@@ -511,6 +530,7 @@ export const CONNECTION_RULES = {
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片描述
     NODE_TYPES.STORYBOARD_GRID,     // 分镜格子
+    NODE_TYPES.DIRECTOR_STUDIO,     // 3D导演台
     NODE_TYPES.TEXT_INPUT            // 文本节点（自动切换为图片反推预设）
   ],
 
@@ -519,7 +539,16 @@ export const CONNECTION_RULES = {
     NODE_TYPES.IMAGE_TO_VIDEO,      // 图生视频
     NODE_TYPES.LLM_IMAGE_DESCRIBE,  // 图片描述
     NODE_TYPES.STORYBOARD_GRID,     // 分镜格子
+    NODE_TYPES.DIRECTOR_STUDIO,     // 3D导演台
     NODE_TYPES.TEXT_INPUT            // 文本节点（自动切换为图片反推预设）
+  ],
+
+  [NODE_TYPES.DIRECTOR_STUDIO]: [
+    NODE_TYPES.IMAGE_TO_IMAGE,
+    NODE_TYPES.IMAGE_TO_VIDEO,
+    NODE_TYPES.LLM_IMAGE_DESCRIBE,
+    NODE_TYPES.STORYBOARD_GRID,
+    NODE_TYPES.PREVIEW_OUTPUT
   ],
   
   [NODE_TYPES.TEXT_TO_VIDEO]: [
@@ -539,18 +568,21 @@ export const CONNECTION_RULES = {
   [NODE_TYPES.LLM_PROMPT_ENHANCE]: [
     NODE_TYPES.TEXT_TO_IMAGE,
     NODE_TYPES.TEXT_TO_VIDEO,
+    NODE_TYPES.DIRECTOR_STUDIO,
     NODE_TYPES.PREVIEW_OUTPUT
   ],
   
   [NODE_TYPES.LLM_IMAGE_DESCRIBE]: [
     NODE_TYPES.TEXT_TO_IMAGE,
     NODE_TYPES.LLM_PROMPT_ENHANCE,
+    NODE_TYPES.DIRECTOR_STUDIO,
     NODE_TYPES.PREVIEW_OUTPUT
   ],
   
   [NODE_TYPES.LLM_CONTENT_EXPAND]: [
     NODE_TYPES.TEXT_TO_IMAGE,
     NODE_TYPES.TEXT_TO_VIDEO,
+    NODE_TYPES.DIRECTOR_STUDIO,
     NODE_TYPES.PREVIEW_OUTPUT
   ],
   
@@ -610,7 +642,13 @@ export const CONNECTION_RULES = {
 export const NODE_CATEGORIES = {
   input: {
     label: '添加节点',
-    types: [NODE_TYPES.TEXT_INPUT, NODE_TYPES.IMAGE_INPUT, NODE_TYPES.VIDEO_INPUT, NODE_TYPES.AUDIO_INPUT]
+    types: [
+      NODE_TYPES.TEXT_INPUT,
+      NODE_TYPES.IMAGE_INPUT,
+      NODE_TYPES.VIDEO_INPUT,
+      NODE_TYPES.AUDIO_INPUT,
+      NODE_TYPES.DIRECTOR_STUDIO
+    ]
   },
   generate: {
     label: '生成',
@@ -742,6 +780,15 @@ export const UPSTREAM_RULES = {
     NODE_TYPES.IMAGE_TO_IMAGE,
     NODE_TYPES.SEEDANCE_CHARACTER
   ],
+
+  [NODE_TYPES.DIRECTOR_STUDIO]: [
+    NODE_TYPES.TEXT_INPUT,
+    NODE_TYPES.IMAGE_INPUT,
+    NODE_TYPES.TEXT_TO_IMAGE,
+    NODE_TYPES.IMAGE_TO_IMAGE,
+    NODE_TYPES.LLM_PROMPT_ENHANCE,
+    NODE_TYPES.LLM_IMAGE_DESCRIBE
+  ],
   
   // 分镜脚本节点：可以接收文本和图片（图片会先转为描述再生成分镜）
   [NODE_TYPES.LLM_STORYBOARD]: [
@@ -781,4 +828,3 @@ export function getUpstreamOptions(targetType) {
     }))
     .filter(node => node.label)
 }
-

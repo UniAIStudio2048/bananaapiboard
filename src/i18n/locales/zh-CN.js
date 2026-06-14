@@ -61,6 +61,58 @@ export default {
     user: '用户'
   },
 
+  directorStudio: {
+    title: '3D导演台',
+    openFullscreen: '打开导演台',
+    close: '关闭',
+    saveProject: '保存项目',
+    projects: '项目',
+    elements: '元素',
+    snapshots: '截图',
+    addToCanvas: '截图到画布',
+    addToCanvasTitle: '把当前导演台截图添加到画布',
+    addToCanvasNoSnapshot: '请先在导演台内截图',
+    addToCanvasFailed: '截图添加到画布失败',
+    snapshotSourceName: '导演台截图',
+    generationNodeName: '导演台生成',
+    referenceSourceName: '参考图：{label}',
+    assetFallbackName: '参考图{count}',
+    panoramaAssetFallbackName: '全景图{count}',
+    cameraPresets: {
+      standard: '标准',
+      wide: '广角',
+      ultraWide: '超广角',
+      portrait: '人像',
+      telephoto: '长焦',
+      superTelephoto: '超长焦',
+      fisheye: '鱼眼'
+    },
+    aspectFrames: {
+      panorama: '全景',
+      square: '1:1',
+      fourThree: '4:3',
+      threeFour: '3:4',
+      sixteenNine: '16:9',
+      nineSixteen: '9:16',
+      threeTwo: '3:2',
+      twoThree: '2:3',
+      twentyOneNine: '21:9'
+    },
+    resolutions: {
+      p1080: '1080p',
+      p1440: '1440p',
+      k4: '4K'
+    },
+    nodeCard: {
+      emptyPreview: '点击打开导演台',
+      snapshotAlt: '导演台截图',
+      enter: '打开导演台',
+      flatEnvironment: '平面场景',
+      panoramaEnvironment: '全景场景',
+      summary: '{environment} · {count} 个元素 · {refs} 张参考'
+    }
+  },
+
   // 导航
   nav: {
     home: '首页',
@@ -555,6 +607,7 @@ export default {
       imageInput: { label: '图片', desc: '上传参考图片' },
       videoInput: { label: '视频', desc: '上传参考视频' },
       audioInput: { label: '音频', desc: '上传音频文件' },
+      directorStudio: { label: '3D导演台', desc: '搭建三维走位、镜头、灯光和参考图' },
       textToImage: { label: '文生图', desc: '文本生成图片' },
       imageToImage: { label: '图生图', desc: '图片风格转换' },
       textToVideo: { label: '文生视频', desc: '文本生成视频' },

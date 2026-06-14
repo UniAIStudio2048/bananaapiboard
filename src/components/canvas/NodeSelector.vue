@@ -11,6 +11,7 @@ import { getAvailableVideoModels, isSeedanceFeaturesEnabled } from '@/config/ten
 import { clampNodePositionToGroup } from '@/utils/canvasConnectionPosition'
 import { buildVideoQuickActionNode, VIDEO_QUICK_ACTION_TYPES } from '@/utils/canvasVideoQuickActions'
 import { isSeedanceSd2VideoModel } from '@/utils/videoGenerationMode'
+import { createDefaultDirectorStudioData, DIRECTOR_STUDIO_NODE_TYPE } from '@/utils/directorStudioState'
 
 const { t } = useI18n()
 
@@ -165,6 +166,7 @@ function getDefaultNodeSize(type, data = {}) {
     'video-input': { width: 420, height: 280 },
     'video': { width: 420, height: 280 },
     'storyboard': { width: data.nodeWidth || 720, height: 360 },
+    'director-studio': { width: 440, height: 340 },
     'seedance-character': { width: 220, height: 220 },
     'bytefor-character': { width: 220, height: 220 }
   }
@@ -404,6 +406,13 @@ function selectNodeType(type) {
     actualNodeType = 'text-input'
     nodeData.selectedPreset = LLM_PRESET_MAP[type]
     nodeData.title = NODE_TYPE_CONFIG[type]?.label || '文本'
+  }
+
+  if (type === DIRECTOR_STUDIO_NODE_TYPE) {
+    actualNodeType = DIRECTOR_STUDIO_NODE_TYPE
+    Object.assign(nodeData, createDefaultDirectorStudioData({
+      openDirectorStudioOnCreate: false
+    }))
   }
   
   // 特殊处理：分镜格子节点（从图片节点右侧触发时，自动创建3x3分镜）

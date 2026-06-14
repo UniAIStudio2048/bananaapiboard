@@ -56,6 +56,58 @@ export default {
     about: 'Über'
   },
 
+  directorStudio: {
+    title: '3D Director Studio',
+    openFullscreen: 'Open Director Studio',
+    close: 'Close',
+    saveProject: 'Save Project',
+    projects: 'Projects',
+    elements: 'Elements',
+    snapshots: 'Snapshots',
+    addToCanvas: 'Add Snapshot to Canvas',
+    addToCanvasTitle: 'Add the current Director Studio snapshot to the canvas',
+    addToCanvasNoSnapshot: 'Take a snapshot in Director Studio first',
+    addToCanvasFailed: 'Failed to add snapshot to canvas',
+    snapshotSourceName: 'Director Studio Snapshot',
+    generationNodeName: 'Director Studio Generation',
+    referenceSourceName: 'Reference: {label}',
+    assetFallbackName: 'Reference {count}',
+    panoramaAssetFallbackName: 'Panorama {count}',
+    cameraPresets: {
+      standard: 'Standard',
+      wide: 'Wide',
+      ultraWide: 'Ultra Wide',
+      portrait: 'Portrait',
+      telephoto: 'Telephoto',
+      superTelephoto: 'Super Telephoto',
+      fisheye: 'Fisheye'
+    },
+    aspectFrames: {
+      panorama: 'Panorama',
+      square: '1:1',
+      fourThree: '4:3',
+      threeFour: '3:4',
+      sixteenNine: '16:9',
+      nineSixteen: '9:16',
+      threeTwo: '3:2',
+      twoThree: '2:3',
+      twentyOneNine: '21:9'
+    },
+    resolutions: {
+      p1080: '1080p',
+      p1440: '1440p',
+      k4: '4K'
+    },
+    nodeCard: {
+      emptyPreview: 'Click to open Director Studio',
+      snapshotAlt: 'Director Studio snapshot',
+      enter: 'Open Director Studio',
+      flatEnvironment: 'Flat scene',
+      panoramaEnvironment: 'Panorama scene',
+      summary: '{environment} · {count} elements · {refs} refs'
+    }
+  },
+
   nav: {
     home: 'Startseite',
     generate: 'Generieren',
@@ -400,6 +452,7 @@ export default {
       imageInput: { label: 'Bild', desc: 'Referenzbilder hochladen' },
       videoInput: { label: 'Video', desc: 'Referenzvideos hochladen' },
       audioInput: { label: 'Audio', desc: 'Audiodateien hochladen' },
+      directorStudio: { label: '3D Director Studio', desc: 'Build 3D blocking, camera, lighting, and references' },
       textToImage: { label: 'Text zu Bild', desc: 'Bilder aus Text generieren' },
       imageToImage: { label: 'Bild zu Bild', desc: 'Bildstilübertragung' },
       textToVideo: { label: 'Text zu Video', desc: 'Videos aus Text generieren' },
