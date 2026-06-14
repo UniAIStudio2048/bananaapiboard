@@ -22,8 +22,16 @@ const selectedItemId = ref(null)
 const openLabel = computed(() => translateWithFallback('directorStudio.nodeCard.enter', '打开导演台'))
 const snapshotLabel = computed(() => translateWithFallback('directorStudio.addToCanvas', '截图到画布'))
 const title = computed(() => props.data.title || translateWithFallback('directorStudio.title', '3D导演台'))
+const elementsLabel = computed(() => translateWithFallback('directorStudio.elements', '元素'))
+const referencesLabel = computed(() => translateWithFallback('node.imageNode.refImage', '参考'))
+const projectsLabel = computed(() => translateWithFallback('directorStudio.projects', '项目'))
 const items = computed(() => Array.isArray(props.data.items) ? props.data.items : [])
-const referenceImages = computed(() => mergeDirectorStudioReferenceImages(props.id, props.data, canvasStore.nodes, canvasStore.edges))
+const referenceImages = computed(() => {
+  if (readonlyPreview) {
+    return mergeDirectorStudioReferenceImages(props.id, props.data, [], [])
+  }
+  return mergeDirectorStudioReferenceImages(props.id, props.data, canvasStore.nodes, canvasStore.edges)
+})
 const projects = computed(() => Array.isArray(props.data.directorStudioProjects) ? props.data.directorStudioProjects : [])
 const snapshotUrl = computed(() => props.data.snapshotUrl || null)
 
@@ -49,21 +57,27 @@ function handleAddSnapshotToCanvas(event) {
   const currentNode = canvasStore.nodes.find(node => node.id === props.id)
   const currentPosition = currentNode?.position || { x: 0, y: 0 }
   const newNodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+  const savedTriggerNodeId = canvasStore.triggerNodeId
 
-  canvasStore.addNode({
-    id: newNodeId,
-    type: 'image-input',
-    position: {
-      x: currentPosition.x + 540,
-      y: currentPosition.y
-    },
-    data: {
-      title: snapshotLabel.value,
-      nodeRole: 'source',
-      sourceImages: [snapshotUrl.value],
-      imageUrl: snapshotUrl.value
-    }
-  })
+  try {
+    canvasStore.triggerNodeId = null
+    canvasStore.addNode({
+      id: newNodeId,
+      type: 'image-input',
+      position: {
+        x: currentPosition.x + 540,
+        y: currentPosition.y
+      },
+      data: {
+        title: snapshotLabel.value,
+        nodeRole: 'source',
+        sourceImages: [snapshotUrl.value],
+        imageUrl: snapshotUrl.value
+      }
+    })
+  } finally {
+    canvasStore.triggerNodeId = savedTriggerNodeId
+  }
 
   canvasStore.selectNode(newNodeId)
 }
@@ -73,19 +87,29 @@ function mergeDirectorStudioReferenceImages(nodeId, data, nodes, edges) {
   const seen = new Set()
 
   function add(url, label = '参考图', color = '#60a5fa', id = null) {
-    if (!url || seen.has(url)) return
-    seen.add(url)
+    const normalizedUrl = typeof url === 'string' ? url.trim() : ''
+    if (!normalizedUrl || seen.has(normalizedUrl)) return
+    seen.add(normalizedUrl)
     merged.push({
       id: id || `ref-${merged.length + 1}`,
-      url,
+      url: normalizedUrl,
       label,
       color
     })
   }
 
-  const nodeById = new Map((Array.isArray(nodes) ? nodes : []).map(node => [node.id, node]))
+  const nodeById = new Map(
+    (Array.isArray(nodes) ? nodes : [])
+      .filter(node => node && typeof node === 'object' && typeof node.id === 'string' && node.id.trim())
+      .map(node => [node.id, node])
+  )
   ;(Array.isArray(edges) ? edges : [])
-    .filter(edge => edge.target === nodeId)
+    .filter(edge => {
+      if (!edge || typeof edge !== 'object') return false
+      const source = typeof edge.source === 'string' ? edge.source.trim() : ''
+      const target = typeof edge.target === 'string' ? edge.target.trim() : ''
+      return source && target && target === nodeId
+    })
     .forEach(edge => {
       const source = nodeById.get(edge.source)
       const sourceData = source?.data || {}
@@ -105,7 +129,7 @@ function mergeDirectorStudioReferenceImages(nodeId, data, nodes, edges) {
     data.referenceImages.forEach((entry, index) => {
       if (typeof entry === 'string') {
         add(entry, '参考图', '#22c55e', `reference-${index}`)
-      } else {
+      } else if (entry && typeof entry === 'object') {
         add(entry?.url, entry?.label || '参考图', entry?.color || '#22c55e', entry?.id || `reference-${index}`)
       }
     })
@@ -113,7 +137,8 @@ function mergeDirectorStudioReferenceImages(nodeId, data, nodes, edges) {
 
   if (Array.isArray(data?.items)) {
     data.items.forEach((item, index) => {
-      add(item?.refImageUrl, item?.title || item?.name || `镜头 ${index + 1}`, item?.color || '#fb7185', item?.id || `item-${index}`)
+      if (!item || typeof item !== 'object') return
+      add(item.refImageUrl, item.title || item.name || `镜头 ${index + 1}`, item.color || '#fb7185', item.id || `item-${index}`)
     })
   }
 
@@ -164,15 +189,15 @@ function mergeDirectorStudioReferenceImages(nodeId, data, nodes, edges) {
     <div class="director-counters">
       <div>
         <strong>{{ items.length }}</strong>
-        <span>镜头</span>
+        <span>{{ elementsLabel }}</span>
       </div>
       <div>
         <strong>{{ referenceImages.length }}</strong>
-        <span>参考</span>
+        <span>{{ referencesLabel }}</span>
       </div>
       <div>
         <strong>{{ projects.length }}</strong>
-        <span>项目</span>
+        <span>{{ projectsLabel }}</span>
       </div>
     </div>
 
@@ -192,16 +217,18 @@ function mergeDirectorStudioReferenceImages(nodeId, data, nodes, edges) {
       </button>
     </div>
 
-    <DirectorStudioShell
-      v-if="directorStudioOpen"
-      :node-id="id"
-      :data="props.data"
-      :items="items"
-      :reference-images="referenceImages"
-      :selected-item-id="selectedItemId"
-      @update:selected-item-id="selectedItemId = $event"
-      @close="closeDirectorStudio"
-    />
+    <Teleport to="body">
+      <DirectorStudioShell
+        v-if="directorStudioOpen"
+        :node-id="id"
+        :data="props.data"
+        :items="items"
+        :reference-images="referenceImages"
+        :selected-item-id="selectedItemId"
+        @update:selected-item-id="selectedItemId = $event"
+        @close="closeDirectorStudio"
+      />
+    </Teleport>
   </div>
 </template>
 
