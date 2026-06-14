@@ -16,6 +16,7 @@ import { createAssetGroup, listAssetGroups, createAsset as createVolcAsset, poll
 import { getOriginalImageUrl } from '@/utils/canvasThumbnail'
 import { getSeedanceCharacterNodeLayout } from '@/utils/seedanceCharacterLayout'
 import { buildVideoQuickActionNode, VIDEO_QUICK_ACTION_TYPES } from '@/utils/canvasVideoQuickActions'
+import { createDefaultDirectorStudioData, DIRECTOR_STUDIO_NODE_TYPE } from '@/utils/directorStudioState'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -256,6 +257,17 @@ const menuStyle = computed(() => ({
 
 // ========== 节点操作 ==========
 
+function createContextMenuNodeData(type, data = {}) {
+  if (type !== DIRECTOR_STUDIO_NODE_TYPE) return data
+
+  return {
+    ...createDefaultDirectorStudioData({
+      openDirectorStudioOnCreate: false
+    }),
+    ...data
+  }
+}
+
 // 从当前节点创建下游节点
 function createDownstreamNode(type) {
   if (!props.node) return
@@ -330,7 +342,7 @@ function createDownstreamNode(type) {
   const newNode = canvasStore.addNode({
     type,
     position,
-    data: {}
+    data: createContextMenuNodeData(type)
   })
   
   canvasStore.addEdge({
