@@ -24,10 +24,13 @@ test('uses direct URL attachments for remote media to avoid browser CORS fetches
   )
 })
 
-test('still fetches transient and backend-local media so it can be uploaded before chat', () => {
-  assert.equal(shouldFetchAssistantAttachmentUrl('/api/images/file/video-123'), true)
+test('only fetches transient media so API and storage URLs avoid browser CORS downloads', () => {
+  assert.equal(shouldFetchAssistantAttachmentUrl('/api/images/file/video-123'), false)
+  assert.equal(shouldFetchAssistantAttachmentUrl('/api/cos-proxy/default-tenant-001/images/a.jpg'), false)
+  assert.equal(shouldFetchAssistantAttachmentUrl('/storage/default-tenant-001/images/a.jpg'), false)
+  assert.equal(shouldFetchAssistantAttachmentUrl('/uploads/default-tenant-001/images/a.jpg'), false)
+  assert.equal(shouldFetchAssistantAttachmentUrl('https://app.nananobanana.cn/api/images/file/a.jpg'), false)
+  assert.equal(shouldFetchAssistantAttachmentUrl('http://localhost:5173/api/images/file/a.jpg'), false)
   assert.equal(shouldFetchAssistantAttachmentUrl('blob:https://app.local/123'), true)
   assert.equal(shouldFetchAssistantAttachmentUrl('data:image/png;base64,abc'), true)
-  assert.equal(shouldFetchAssistantAttachmentUrl('https://app.nananobanana.cn/api/images/file/a.jpg'), true)
-  assert.equal(shouldFetchAssistantAttachmentUrl('http://localhost:5173/api/images/file/a.jpg'), true)
 })

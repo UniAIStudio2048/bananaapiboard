@@ -1783,7 +1783,12 @@ async function addAttachmentFromUrl(url, type, name) {
 
   try {
     if (!shouldFetchAssistantAttachmentUrl(url)) {
-      pushAttachment(buildDirectUrlAttachment({ url, type, name: fileName }))
+      let directUrl = url
+      if (url.startsWith('/api/') || url.startsWith('/storage/') || url.startsWith('/uploads/')) {
+        const { getApiUrl } = await import('@/config/tenant')
+        directUrl = getApiUrl(url)
+      }
+      pushAttachment(buildDirectUrlAttachment({ url: directUrl, type, name: fileName }))
       await nextTick()
       inputRef.value?.focus()
       return

@@ -52,10 +52,6 @@ export function shouldFetchAssistantAttachmentUrl(url) {
   if (!url || typeof url !== 'string') return false
 
   if (url.startsWith('data:') || url.startsWith('blob:')) return true
-  if (url.startsWith('/api/') || url.startsWith('/storage/') || url.startsWith('/uploads/')) return true
-  if (/^https?:\/\/localhost(?::\d+)?\/api\//i.test(url)) return true
-  if (/^https?:\/\/127\.0\.0\.1(?::\d+)?\/api\//i.test(url)) return true
-  if (/^https?:\/\/[^/]+\/api\//i.test(url)) return true
 
   return false
 }

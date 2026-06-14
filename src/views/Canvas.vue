@@ -861,6 +861,7 @@ async function quickSaveWorkflow() {
       })
       
       canvasStore.markCurrentTabSaved()
+      persistManualSaveRecoverySnapshot()
       lastAutoSave.value = new Date()
       displayToast(`「${currentTab.name}」已保存`, 'success', 2000)
       console.log('[Canvas] 快速保存成功:', currentTab.name)
@@ -929,6 +930,7 @@ function handleWorkflowSaved(workflow) {
     space_type: workflow.space_type,
     team_id: workflow.team_id
   })
+  persistManualSaveRecoverySnapshot()
 
   // 启用自动保存
   if (!autoSaveEnabled.value) {
@@ -942,6 +944,18 @@ function handleWorkflowSaved(workflow) {
   if (workflowPanelRef.value && typeof workflowPanelRef.value.forceRefresh === 'function') {
     workflowPanelRef.value.forceRefresh()
     console.log('[Canvas] 已触发工作流面板刷新')
+  }
+}
+
+function persistManualSaveRecoverySnapshot() {
+  try {
+    saveCurrentWorkflowSession()
+    const workflowData = getCurrentWorkflowData()
+    if (workflowData?.nodes?.length > 0) {
+      saveToHistory(workflowData)
+    }
+  } catch (error) {
+    console.warn('[Canvas] 手动保存后刷新本地恢复快照失败:', error?.message || error)
   }
 }
 
