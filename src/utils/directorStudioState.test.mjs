@@ -12,8 +12,13 @@ import {
 
 const defaults = createDefaultDirectorStudioData()
 assert.equal(defaults.title, '3D导演台')
+assert.equal(defaults.label, '3D导演台')
 assert.equal(defaults.mode, 'flat')
 assert.deepEqual(defaults.items, [])
+assert.deepEqual(defaults.referenceImages, [])
+assert.equal(defaults.openDirectorStudioOnCreate, false)
+assert.deepEqual(defaults.sourceImages, [])
+assert.equal(defaults.status, 'idle')
 assert.equal(defaults.aspectFrame, '16:9')
 assert.equal(defaults.screenshotResolution, '1080p')
 assert.deepEqual(defaults.output, { url: null, urls: [] })

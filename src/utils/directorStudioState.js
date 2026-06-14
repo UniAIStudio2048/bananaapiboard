@@ -230,9 +230,16 @@ export function createDefaultDirectorStudioData(overrides = {}) {
 
   return {
     title: typeof overrides.title === 'string' && overrides.title.trim() ? overrides.title.trim() : '3D导演台',
+    label: typeof overrides.label === 'string' && overrides.label.trim() ? overrides.label.trim() : '3D导演台',
     type: DIRECTOR_STUDIO_NODE_TYPE,
     mode: overrides.mode === 'three' ? 'three' : 'flat',
     items: Array.isArray(overrides.items) ? cloneJson(overrides.items) : [],
+    referenceImages: Array.isArray(overrides.referenceImages) ? cloneJson(overrides.referenceImages) : [],
+    openDirectorStudioOnCreate: typeof overrides.openDirectorStudioOnCreate === 'boolean'
+      ? overrides.openDirectorStudioOnCreate
+      : false,
+    sourceImages: Array.isArray(overrides.sourceImages) ? cloneJson(overrides.sourceImages) : [],
+    status: typeof overrides.status === 'string' && overrides.status.trim() ? overrides.status.trim() : 'idle',
     camera: normalizeDirectorCamera(overrides.camera),
     lighting: normalizeDirectorLighting(overrides.lighting),
     grid: normalizeDirectorGrid(overrides.grid),
