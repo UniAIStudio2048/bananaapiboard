@@ -282,6 +282,7 @@ export function normalizeDirectorProjectRecord(project) {
   const updatedAt = normalizeFiniteTimestamp(project.updatedAt, Date.now())
   const createdAt = normalizeFiniteTimestamp(project.createdAt, updatedAt)
   const name = typeof project.name === 'string' && project.name.trim() ? project.name.trim() : id
+  const coverUrl = normalizeDirectorNullableString(project.coverUrl)
 
   return {
     ...cloneJson(project),
@@ -289,6 +290,7 @@ export function normalizeDirectorProjectRecord(project) {
     name,
     createdAt,
     updatedAt,
+    coverUrl,
     snapshot: normalizeDirectorSnapshot(project.snapshot)
   }
 }

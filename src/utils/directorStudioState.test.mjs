@@ -207,11 +207,21 @@ const project = normalizeDirectorProjectRecord({
   name: '',
   createdAt: Number.NaN,
   updatedAt: 123,
+  coverUrl: ' https://cdn/cover.png ',
   snapshot: blank
 })
 assert.equal(project.id, 'project-a')
 assert.equal(project.name, 'project-a')
 assert.equal(project.createdAt, 123)
 assert.equal(project.updatedAt, 123)
+assert.equal(project.coverUrl, 'https://cdn/cover.png')
+
+const projectWithoutCover = normalizeDirectorProjectRecord({
+  id: 'project-no-cover',
+  updatedAt: 456,
+  coverUrl: 123,
+  snapshot: blank
+})
+assert.equal(projectWithoutCover.coverUrl, null)
 
 console.log('directorStudioState tests passed')

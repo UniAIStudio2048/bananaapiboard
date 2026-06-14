@@ -5,6 +5,13 @@ import { Camera, Maximize2 } from '@lucide/vue'
 import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
 import DirectorStudioShell from '@/components/canvas/director/DirectorStudioShell.vue'
+import { appendDirectorSnapshotHistory } from '@/utils/directorStudioState.js'
+import { persistDirectorStudioImageSource, isDirectorDataImageUrl } from '@/utils/directorStudioMedia.js'
+import { buildDirectorStudioPrompt } from '@/utils/directorStudioPrompt.js'
+import {
+  resolveDirectorAspectRatio,
+  resolveDirectorAiRequestAspectRatio
+} from '@/utils/directorStudioSceneExport.js'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -18,6 +25,7 @@ const { t } = useI18n()
 
 const directorStudioOpen = ref(false)
 const selectedItemId = ref(null)
+const addingSnapshotToCanvas = ref(false)
 
 const openLabel = computed(() => translateWithFallback('directorStudio.nodeCard.enter', '打开导演台'))
 const snapshotLabel = computed(() => translateWithFallback('directorStudio.addToCanvas', '截图到画布'))
@@ -26,8 +34,15 @@ const elementsLabel = computed(() => translateWithFallback('directorStudio.eleme
 const referencesLabel = computed(() => translateWithFallback('node.imageNode.refImage', '参考'))
 const projectsLabel = computed(() => translateWithFallback('directorStudio.projects', '项目'))
 const items = computed(() => Array.isArray(props.data.items) ? props.data.items : [])
-const imageAssets = computed(() => Array.isArray(props.data.imageAssets) ? props.data.imageAssets : [])
-const panoramaAssets = computed(() => Array.isArray(props.data.panoramaAssets) ? props.data.panoramaAssets : [])
+const canvasImageAssets = computed(() => readonlyPreview ? [] : collectDirectorStudioCanvasImageAssets(canvasStore.nodes))
+const imageAssets = computed(() => mergeDirectorStudioAssetLists([
+  props.data.imageAssets,
+  canvasImageAssets.value
+]))
+const panoramaAssets = computed(() => mergeDirectorStudioAssetLists([
+  props.data.panoramaAssets,
+  canvasImageAssets.value
+]))
 const referenceImages = computed(() => {
   if (readonlyPreview) {
     return mergeDirectorStudioReferenceImages(props.id, props.data, [], [])
@@ -62,9 +77,10 @@ function handleDirectorNodeDataChange(patch) {
   canvasStore.updateNodeData(props.id, patch)
 }
 
-function handleAddSnapshotToCanvas(payloadOrEvent) {
+async function handleAddSnapshotToCanvas(payloadOrEvent) {
   const isEvent = payloadOrEvent && typeof payloadOrEvent.stopPropagation === 'function'
   if (isEvent) payloadOrEvent.stopPropagation()
+  if (addingSnapshotToCanvas.value) return
   const payloadUrl = typeof payloadOrEvent === 'string'
     ? payloadOrEvent
     : !isEvent && typeof payloadOrEvent?.snapshotUrl === 'string'
@@ -73,32 +89,101 @@ function handleAddSnapshotToCanvas(payloadOrEvent) {
   const nextSnapshotUrl = payloadUrl || snapshotUrl.value
   if (!nextSnapshotUrl || readonlyPreview) return
 
-  const currentNode = canvasStore.nodes.find(node => node.id === props.id)
-  const currentPosition = currentNode?.position || { x: 0, y: 0 }
-  const newNodeId = `node_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
-  const savedTriggerNodeId = canvasStore.triggerNodeId
-
+  addingSnapshotToCanvas.value = true
   try {
-    canvasStore.triggerNodeId = null
-    canvasStore.addNode({
-      id: newNodeId,
-      type: 'image-input',
-      position: {
-        x: currentPosition.x + 540,
-        y: currentPosition.y
-      },
-      data: {
-        title: snapshotLabel.value,
-        nodeRole: 'source',
-        sourceImages: [nextSnapshotUrl],
-        imageUrl: nextSnapshotUrl
-      }
+    const persistentSnapshotUrl = await persistDirectorStudioImageSource(nextSnapshotUrl)
+    if (!persistentSnapshotUrl) return
+
+    const currentNode = canvasStore.nodes.find(node => node.id === props.id)
+    const currentPosition = currentNode?.position || { x: 0, y: 0 }
+    const sourceNodeId = `node_${Date.now()}_source_${Math.random().toString(36).slice(2, 11)}`
+    const generationNodeId = `node_${Date.now()}_generation_${Math.random().toString(36).slice(2, 11)}`
+    const aspectRatio = resolveDirectorAspectRatio(props.data)
+    const aiAspectRatio = resolveDirectorAiRequestAspectRatio(props.data)
+    const prompt = buildDirectorStudioPrompt({
+      ...props.data,
+      mode: props.data.mode,
+      backgroundImageUrl: props.data.backgroundImageUrl || props.data.backgroundPanoramaUrl || null,
+      items: items.value,
+      referenceImages: referenceImages.value,
+      basePrompt: props.data.basePrompt || '',
+      referenceTokenStartIndex: 2,
+      referenceTokenPrefix: '图'
+    })
+    const generationReferenceImages = [
+      persistentSnapshotUrl,
+      ...referenceImages.value.map(item => item?.url).filter(url => url && url !== persistentSnapshotUrl)
+    ]
+    const savedTriggerNodeId = canvasStore.triggerNodeId
+
+    try {
+      canvasStore.triggerNodeId = null
+      canvasStore.addNode({
+        id: sourceNodeId,
+        type: 'image-input',
+        position: {
+          x: currentPosition.x + 500,
+          y: currentPosition.y
+        },
+        data: {
+          title: '导演台截图',
+          nodeRole: 'source',
+          sourceImages: generationReferenceImages,
+          imageUrl: persistentSnapshotUrl,
+          aspectRatio,
+          status: 'success'
+        }
+      })
+      canvasStore.addNode({
+        id: generationNodeId,
+        type: 'image-to-image',
+        position: {
+          x: currentPosition.x + 960,
+          y: currentPosition.y
+        },
+        data: {
+          title: '导演台生成',
+          prompt,
+          userPrompt: prompt,
+          referenceImages: generationReferenceImages,
+          sourceImages: generationReferenceImages,
+          aspectRatio: aiAspectRatio,
+          aspectRatioMode: aspectRatio,
+          requestAspectRatio: aiAspectRatio,
+          status: 'idle'
+        }
+      })
+    } finally {
+      canvasStore.triggerNodeId = savedTriggerNodeId
+    }
+
+    canvasStore.addEdge({
+      source: sourceNodeId,
+      sourceHandle: 'output',
+      target: generationNodeId,
+      targetHandle: 'input'
+    })
+    canvasStore.selectNode(generationNodeId)
+
+    if (isDirectorDataImageUrl(nextSnapshotUrl) && persistentSnapshotUrl !== nextSnapshotUrl) {
+      canvasStore.updateNodeData(props.id, {
+        snapshotUrl: persistentSnapshotUrl,
+        snapshotHistory: appendDirectorSnapshotHistory(props.data.snapshotHistory, persistentSnapshotUrl),
+        sourceImages: [persistentSnapshotUrl],
+        output: { url: persistentSnapshotUrl, urls: [persistentSnapshotUrl] },
+        status: 'success'
+      })
+    }
+
+    directorStudioOpen.value = false
+  } catch (error) {
+    canvasStore.updateNodeData(props.id, {
+      status: 'error',
+      errorMessage: error?.message || '导演台截图添加失败'
     })
   } finally {
-    canvasStore.triggerNodeId = savedTriggerNodeId
+    addingSnapshotToCanvas.value = false
   }
-
-  canvasStore.selectNode(newNodeId)
 }
 
 function mergeDirectorStudioReferenceImages(nodeId, data, nodes, edges) {
@@ -162,6 +247,68 @@ function mergeDirectorStudioReferenceImages(nodeId, data, nodes, edges) {
   }
 
   return merged
+}
+
+function mergeDirectorStudioAssetLists(lists) {
+  const merged = []
+  const seen = new Set()
+
+  ;(Array.isArray(lists) ? lists : []).forEach(list => {
+    ;(Array.isArray(list) ? list : []).forEach((entry, index) => {
+      const source = entry && typeof entry === 'object' ? entry : { url: entry }
+      const url = typeof source.url === 'string' && source.url.trim()
+        ? source.url.trim()
+        : typeof source.imageUrl === 'string' && source.imageUrl.trim()
+          ? source.imageUrl.trim()
+          : ''
+      if (!url || seen.has(url)) return
+      seen.add(url)
+      merged.push({
+        id: source.id || `asset-${merged.length + 1}-${index}`,
+        url,
+        label: source.label || source.title || source.name || `图片 ${merged.length + 1}`,
+        color: source.color || '#38bdf8'
+      })
+    })
+  })
+
+  return merged
+}
+
+function collectDirectorStudioCanvasImageAssets(nodes) {
+  const imageNodeTypes = new Set(['image', 'image-input', 'image-gen', 'text-to-image', 'image-to-image', 'grid-preview'])
+  const assets = []
+  const seen = new Set()
+
+  function add(url, label, id, color = '#38bdf8') {
+    const normalizedUrl = typeof url === 'string' ? url.trim() : ''
+    if (!normalizedUrl || seen.has(normalizedUrl)) return
+    seen.add(normalizedUrl)
+    assets.push({
+      id: id || `canvas-image-${assets.length + 1}`,
+      url: normalizedUrl,
+      label: label || `画布图片 ${assets.length + 1}`,
+      color
+    })
+  }
+
+  ;(Array.isArray(nodes) ? nodes : []).forEach((node, index) => {
+    if (!node || !imageNodeTypes.has(node.type)) return
+    const data = node.data || {}
+    const label = data.title || data.label || `画布图片 ${index + 1}`
+
+    if (Array.isArray(data.sourceImages)) {
+      data.sourceImages.forEach((url, urlIndex) => add(url, label, `${node.id}-source-${urlIndex}`, '#38bdf8'))
+    }
+    if (Array.isArray(data.output?.urls)) {
+      data.output.urls.forEach((url, urlIndex) => add(url, label, `${node.id}-output-${urlIndex}`, '#a78bfa'))
+    }
+    add(data.output?.url, label, `${node.id}-output`, '#a78bfa')
+    add(data.imageUrl, label, `${node.id}-image`, '#f59e0b')
+    add(data.thumbnailUrl, label, `${node.id}-thumb`, '#22c55e')
+  })
+
+  return assets
 }
 </script>
 
@@ -228,7 +375,7 @@ function mergeDirectorStudioReferenceImages(nodeId, data, nodes, edges) {
       <button
         type="button"
         class="director-action nodrag nopan"
-        :disabled="!snapshotUrl || readonlyPreview"
+        :disabled="!snapshotUrl || readonlyPreview || addingSnapshotToCanvas"
         @click.stop="handleAddSnapshotToCanvas"
       >
         <Camera :size="15" stroke-width="2" />

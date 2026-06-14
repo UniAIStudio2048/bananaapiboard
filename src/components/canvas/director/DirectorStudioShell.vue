@@ -25,6 +25,7 @@ import {
 } from '@/utils/directorStudioState.js'
 import { ensureDirectorPos3d, pos3dToDirectorLegacy, readDirectorUiAxis } from '@/utils/directorStudioCoordinates.js'
 import { computeDirectorScreenshotSize } from '@/utils/directorStudioSceneExport.js'
+import { persistDirectorStudioImageSource } from '@/utils/directorStudioMedia.js'
 import {
   DIRECTOR_STUDIO_MODEL_CATALOG,
   DIRECTOR_STUDIO_MODEL_CATEGORIES
@@ -49,12 +50,17 @@ const emit = defineEmits([
 
 const rootEl = ref(null)
 const sceneRef = ref(null)
+const snapshotPanelRef = ref(null)
+const panoramaFileInput = ref(null)
 const sceneErrorMessage = ref('')
 const transformMode = ref('move')
 const leftPanel = ref(null)
 const inspectorActiveSection = ref('camera')
 const shortcutsOpen = ref(false)
 const itemClipboard = ref(null)
+const selectedSnapshotUrl = ref(null)
+const screenshotBusy = ref(false)
+const panoramaBusy = ref(false)
 const undoStack = ref([])
 const redoStack = ref([])
 
@@ -97,6 +103,7 @@ const projects = computed(() => (
 ))
 const snapshotUrl = computed(() => typeof props.data.snapshotUrl === 'string' && props.data.snapshotUrl.trim() ? props.data.snapshotUrl.trim() : null)
 const snapshotHistory = computed(() => appendDirectorSnapshotHistory(props.data.snapshotHistory, snapshotUrl.value))
+const snapshotHistoryNewestFirst = computed(() => [...snapshotHistory.value].reverse())
 const hasSelection = computed(() => Boolean(selectedItem.value))
 const canPaste = computed(() => Boolean(itemClipboard.value))
 const itemCount = computed(() => items.value.length)
@@ -105,6 +112,10 @@ const peopleModels = computed(() => DIRECTOR_STUDIO_MODEL_CATALOG.filter(model =
 const referenceAssets = computed(() => normalizeReferenceAssets([
   ...props.referenceImages,
   ...props.imageAssets
+]))
+const panoramaImportAssets = computed(() => normalizeReferenceAssets([
+  ...props.panoramaAssets,
+  ...referenceAssets.value
 ]))
 
 const selectedStatusText = computed(() => {
@@ -370,30 +381,82 @@ function buildOutputPatch(url, baseOutput = props.data.output) {
   }
 }
 
-function captureScreenshot() {
-  const size = computeDirectorScreenshotSize(aspectFrame.value, screenshotResolution.value)
-  const url = sceneRef.value?.exportPng?.(size)
-  if (!url) return null
-  patchNodeData({
-    snapshotUrl: url,
-    snapshotHistory: appendDirectorSnapshotHistory(props.data.snapshotHistory, url),
-    output: buildOutputPatch(url)
-  })
-  return url
+function getDirectorOperationErrorMessage(error, fallback) {
+  return error?.message || fallback
 }
 
-function addSnapshotToCanvas() {
-  const url = snapshotUrl.value || captureScreenshot()
+async function captureScreenshot() {
+  if (screenshotBusy.value) return null
+  screenshotBusy.value = true
+  try {
+    const size = computeDirectorScreenshotSize(aspectFrame.value, screenshotResolution.value)
+    const dataUrl = sceneRef.value?.exportPng?.(size)
+    if (!dataUrl) return null
+    const snapshotUrl = await persistDirectorStudioImageSource(dataUrl)
+    patchNodeData({
+      snapshotUrl,
+      snapshotHistory: appendDirectorSnapshotHistory(props.data.snapshotHistory, snapshotUrl),
+      sourceImages: [snapshotUrl],
+      output: { url: snapshotUrl, urls: [snapshotUrl] },
+      status: 'success'
+    })
+    sceneErrorMessage.value = ''
+    selectedSnapshotUrl.value = snapshotUrl
+    leftPanel.value = 'snapshots'
+    await nextTick()
+    snapshotPanelRef.value?.focus?.()
+    return snapshotUrl
+  } catch (error) {
+    sceneErrorMessage.value = getDirectorOperationErrorMessage(error, 'Snapshot upload failed.')
+    patchNodeData({ status: 'error' })
+    return null
+  } finally {
+    screenshotBusy.value = false
+  }
+}
+
+async function addSnapshotToCanvas() {
+  const url = selectedSnapshotUrl.value || snapshotUrl.value || await captureScreenshot()
   if (!url) return
   emit('add-snapshot-to-canvas', { snapshotUrl: url })
 }
 
+function addSelectedSnapshotToCanvas() {
+  const url = selectedSnapshotUrl.value || snapshotUrl.value
+  if (!url) return
+  emit('add-snapshot-to-canvas', { snapshotUrl: url })
+}
+
+function selectCurrentSnapshot() {
+  if (!snapshotUrl.value) return
+  selectedSnapshotUrl.value = snapshotUrl.value
+  leftPanel.value = 'snapshots'
+}
+
 function selectSnapshot(url) {
   if (!url) return
+  selectedSnapshotUrl.value = url
   patchNodeData({
     snapshotUrl: url,
     snapshotHistory: appendDirectorSnapshotHistory(props.data.snapshotHistory, url),
-    output: buildOutputPatch(url)
+    sourceImages: [url],
+    output: { url, urls: [url] },
+    status: 'success'
+  })
+}
+
+function deleteSelectedSnapshot() {
+  const url = selectedSnapshotUrl.value
+  if (!url) return
+  const nextHistory = snapshotHistory.value.filter(item => item !== url)
+  const nextSnapshotUrl = snapshotUrl.value === url ? nextHistory.at(-1) || null : snapshotUrl.value
+  selectedSnapshotUrl.value = nextSnapshotUrl
+  patchNodeData({
+    snapshotHistory: nextHistory,
+    snapshotUrl: nextSnapshotUrl,
+    sourceImages: nextSnapshotUrl ? [nextSnapshotUrl] : [],
+    output: nextSnapshotUrl ? { url: nextSnapshotUrl, urls: [nextSnapshotUrl] } : { url: null, urls: [] },
+    status: nextSnapshotUrl ? 'success' : 'idle'
   })
 }
 
@@ -407,26 +470,65 @@ function downloadSnapshot(url) {
   link.remove()
 }
 
-function saveProject() {
+function buildProjectRecord(id, existing = null, name = projectName.value) {
   const now = Date.now()
-  const activeId = typeof props.data.activeDirectorStudioProjectId === 'string' ? props.data.activeDirectorStudioProjectId : null
-  const existing = projects.value.find(project => project.id === activeId)
-  const id = existing?.id || `director-project-${props.sourceNodeId}-${now}`
-  const snapshot = captureDirectorSnapshot({ ...props.data, items: items.value }, snapshotUrl.value)
-  const record = normalizeDirectorProjectRecord({
+  return normalizeDirectorProjectRecord({
     id,
-    name: projectName.value,
+    name,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
-    snapshot
+    coverUrl: snapshotUrl.value || existing?.coverUrl || null,
+    snapshot: captureDirectorSnapshot({
+      ...props.data,
+      items: items.value,
+      directorStudioProjects: props.data.directorStudioProjects
+    }, snapshotUrl.value)
   })
+}
+
+function writeProjectRecord(record) {
+  if (!record) return
   const nextProjects = [
-    ...projects.value.filter(project => project.id !== id),
+    ...projects.value.filter(project => project.id !== record.id),
     record
   ].filter(Boolean)
   patchNodeData({
     directorStudioProjects: nextProjects,
-    activeDirectorStudioProjectId: id
+    activeDirectorStudioProjectId: record.id
+  })
+}
+
+function saveProjectAsNew() {
+  const projectSeed = {
+    id: `director-project-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  }
+  writeProjectRecord(buildProjectRecord(projectSeed.id, null, projectName.value))
+}
+
+function saveActiveProject() {
+  const activeId = typeof props.data.activeDirectorStudioProjectId === 'string' ? props.data.activeDirectorStudioProjectId : null
+  const existing = projects.value.find(project => project.id === activeId)
+  if (!existing) {
+    saveProjectAsNew()
+    return
+  }
+  writeProjectRecord(buildProjectRecord(existing.id, existing, existing.name))
+}
+
+function saveProject() {
+  saveActiveProject()
+}
+
+function renameProject(projectId) {
+  const record = normalizeDirectorProjectRecord(projects.value.find(project => project.id === projectId))
+  if (!record || typeof window === 'undefined') return
+  const nextName = window.prompt('Project name', record.name)
+  if (typeof nextName !== 'string' || !nextName.trim()) return
+  patchNodeData({
+    directorStudioProjects: projects.value.map(project => project.id === record.id
+      ? normalizeDirectorProjectRecord({ ...project, name: nextName.trim(), updatedAt: Date.now() })
+      : project
+    ).filter(Boolean)
   })
 }
 
@@ -443,6 +545,86 @@ function selectProject(projectId) {
     activeDirectorStudioProjectId: record.id
   })
   emit('update:selectedItemId', null)
+}
+
+function restoreProject(projectId) {
+  const record = normalizeDirectorProjectRecord(projects.value.find(project => project.id === projectId))
+  if (!record) return
+  const projectSnapshotUrl = typeof record.snapshot.snapshotUrl === 'string' && record.snapshot.snapshotUrl.trim()
+    ? record.snapshot.snapshotUrl.trim()
+    : null
+  selectedSnapshotUrl.value = projectSnapshotUrl
+  patchNodeData({
+    ...record.snapshot,
+    output: projectSnapshotUrl ? buildOutputPatch(projectSnapshotUrl, record.snapshot.output) : { url: null, urls: [] },
+    title: record.name,
+    activeDirectorStudioProjectId: record.id
+  })
+  emit('update:selectedItemId', null)
+}
+
+function deleteProject(projectId) {
+  const nextProjects = projects.value.filter(project => project.id !== projectId)
+  const nextActiveId = props.data.activeDirectorStudioProjectId === projectId ? null : props.data.activeDirectorStudioProjectId
+  patchNodeData({
+    directorStudioProjects: nextProjects,
+    activeDirectorStudioProjectId: nextActiveId
+  })
+}
+
+function updateProjectCoverFromSnapshot(projectId) {
+  if (!snapshotUrl.value) return
+  patchNodeData({
+    directorStudioProjects: projects.value.map(project => project.id === projectId
+      ? normalizeDirectorProjectRecord({ ...project, coverUrl: snapshotUrl.value, updatedAt: Date.now() })
+      : project
+    ).filter(Boolean)
+  })
+}
+
+function readDirectorFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => resolve(typeof reader.result === 'string' ? reader.result : ''))
+    reader.addEventListener('error', () => reject(reader.error || new Error('Failed to read image file')))
+    reader.readAsDataURL(file)
+  })
+}
+
+async function selectPanoramaSource(source) {
+  if (panoramaBusy.value) return
+  const url = typeof source === 'string'
+    ? source.trim()
+    : typeof source?.url === 'string'
+      ? source.url.trim()
+      : ''
+  if (!url) return
+  panoramaBusy.value = true
+  try {
+    const persistentUrl = await persistDirectorStudioImageSource(url)
+    patchNodeData({
+      mode: 'panorama',
+      backgroundPanoramaUrl: persistentUrl,
+      backgroundImageUrl: persistentUrl
+    })
+    sceneErrorMessage.value = ''
+  } catch (error) {
+    sceneErrorMessage.value = getDirectorOperationErrorMessage(error, 'Panorama import failed.')
+  } finally {
+    panoramaBusy.value = false
+  }
+}
+
+async function handlePanoramaFileChange(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  const dataUrl = await readDirectorFileAsDataUrl(file)
+  await selectPanoramaSource(dataUrl)
+}
+
+function clearPanoramaSource() {
+  patchNodeData({ mode: 'flat', backgroundPanoramaUrl: null })
 }
 
 function saveCustomPose(payload) {
@@ -555,7 +737,7 @@ function handleShellKeydown(event) {
   else if (action === 'focus') focusSelected()
   else if (action === 'fit') sceneRef.value?.fitCamera?.()
   else if (action === 'reset') sceneRef.value?.resetCamera?.()
-  else if (action === 'screenshot') captureScreenshot()
+  else if (action === 'screenshot') void captureScreenshot()
   else if (action === 'model') leftPanel.value = 'models'
   else if (action === 'lighting') inspectorActiveSection.value = 'lighting'
   else if (action === 'grid') inspectorActiveSection.value = 'grid'
@@ -574,6 +756,11 @@ watch(items, nextItems => {
   const stillExists = nextItems.some(item => String(item?.id) === selectedSceneItemId.value)
   if (!stillExists) emit('update:selectedItemId', null)
 })
+
+watch(snapshotHistory, nextHistory => {
+  if (selectedSnapshotUrl.value && nextHistory.includes(selectedSnapshotUrl.value)) return
+  selectedSnapshotUrl.value = snapshotUrl.value || nextHistory.at(-1) || null
+}, { immediate: true })
 
 onMounted(async () => {
   await nextTick()
@@ -612,12 +799,64 @@ onMounted(async () => {
 
       <div class="director-shell-workspace">
         <aside class="director-shell-left">
+          <section class="director-panorama-panel">
+            <div class="director-panel-heading">
+              <div>
+                <span>Panorama</span>
+                <strong>{{ props.data.mode === 'panorama' ? 'Active' : 'Flat' }}</strong>
+              </div>
+              <div class="director-panorama-actions">
+                <button
+                  type="button"
+                  class="director-mini-button"
+                  title="Upload panorama"
+                  :disabled="panoramaBusy"
+                  @click="panoramaFileInput?.click?.()"
+                >Upload</button>
+                <button
+                  type="button"
+                  class="director-mini-button"
+                  title="Clear panorama"
+                  :disabled="panoramaBusy"
+                  @click="clearPanoramaSource"
+                >Clear</button>
+              </div>
+            </div>
+            <input
+              ref="panoramaFileInput"
+              class="director-hidden-input"
+              type="file"
+              accept="image/*"
+              @change="handlePanoramaFileChange"
+            >
+            <div class="director-panorama-assets">
+              <button
+                v-for="asset in panoramaImportAssets"
+                :key="asset.id || asset.url"
+                type="button"
+                class="director-panorama-asset"
+                :class="{ active: asset.url === props.data.backgroundPanoramaUrl }"
+                :disabled="panoramaBusy"
+                @click="selectPanoramaSource(asset)"
+              >
+                <img :src="asset.url" alt="">
+                <span>{{ asset.label || asset.url }}</span>
+              </button>
+              <div v-if="panoramaImportAssets.length === 0" class="director-empty-row">No image assets</div>
+            </div>
+          </section>
           <DirectorStudioProjectPanel
             :projects="projects"
             :active-project-id="props.data.activeDirectorStudioProjectId"
             :title="projectName"
             @save-project="saveProject"
+            @save-new-project="saveProjectAsNew"
+            @save-active-project="saveActiveProject"
             @select-project="selectProject"
+            @rename-project="renameProject"
+            @restore-project="restoreProject"
+            @delete-project="deleteProject"
+            @update-project-cover="updateProjectCoverFromSnapshot"
           />
           <DirectorStudioItemList
             :items="items"
@@ -631,14 +870,20 @@ onMounted(async () => {
             @add-model="addModel"
             @add-pedestrian="addPedestrians"
           />
-          <DirectorStudioSnapshotPanel
-            :snapshot-url="snapshotUrl"
-            :snapshot-history="snapshotHistory"
-            @capture-screenshot="captureScreenshot"
-            @add-to-canvas="addSnapshotToCanvas"
-            @select-snapshot="selectSnapshot"
-            @download-snapshot="downloadSnapshot"
-          />
+          <div ref="snapshotPanelRef" class="director-snapshot-panel-focus" tabindex="-1">
+            <DirectorStudioSnapshotPanel
+              :snapshot-url="snapshotUrl"
+              :snapshot-history="snapshotHistoryNewestFirst"
+              :selected-snapshot-url="selectedSnapshotUrl"
+              :busy="screenshotBusy"
+              @capture-screenshot="captureScreenshot"
+              @add-to-canvas="addSelectedSnapshotToCanvas"
+              @select-current="selectCurrentSnapshot"
+              @select-snapshot="selectSnapshot"
+              @delete-snapshot="deleteSelectedSnapshot"
+              @download-snapshot="downloadSnapshot"
+            />
+          </div>
         </aside>
 
         <main class="director-shell-stage">
@@ -743,6 +988,125 @@ onMounted(async () => {
   overflow: auto;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   background: #111317;
+}
+
+.director-panorama-panel {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.director-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.director-panel-heading div:first-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.director-panel-heading span {
+  color: #9ca3af;
+  font-size: 10px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.director-panel-heading strong {
+  overflow: hidden;
+  color: #f4f4f5;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.director-panorama-actions {
+  display: inline-flex;
+  gap: 5px;
+}
+
+.director-mini-button {
+  display: inline-flex;
+  min-width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  background: #24272d;
+  color: #d4d4d8;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.director-mini-button:hover:not(:disabled) {
+  background: #30343b;
+  color: #f8fafc;
+}
+
+.director-hidden-input {
+  display: none;
+}
+
+.director-panorama-assets {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.director-panorama-asset {
+  display: grid;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: #0b0d10;
+  color: #cbd5e1;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.director-panorama-asset:hover {
+  border-color: rgba(34, 211, 238, 0.28);
+}
+
+.director-panorama-asset.active {
+  border-color: rgba(34, 211, 238, 0.58);
+}
+
+.director-panorama-asset img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.director-panorama-asset span {
+  overflow: hidden;
+  padding: 5px 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.director-empty-row {
+  grid-column: 1 / -1;
+  padding: 8px;
+  color: #8b949e;
+  font-size: 11px;
+}
+
+.director-snapshot-panel-focus {
+  outline: none;
 }
 
 .director-shell-stage {

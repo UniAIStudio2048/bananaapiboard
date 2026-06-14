@@ -1,12 +1,21 @@
 <script setup>
-import { Camera, Download } from '@lucide/vue'
+import { Camera, Check, Download, Trash2 } from '@lucide/vue'
 
 defineProps({
   snapshotUrl: { type: String, default: null },
-  snapshotHistory: { type: Array, default: () => [] }
+  snapshotHistory: { type: Array, default: () => [] },
+  selectedSnapshotUrl: { type: String, default: null },
+  busy: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['capture-screenshot', 'add-to-canvas', 'select-snapshot', 'download-snapshot'])
+const emit = defineEmits([
+  'capture-screenshot',
+  'add-to-canvas',
+  'select-snapshot',
+  'select-current',
+  'delete-snapshot',
+  'download-snapshot'
+])
 </script>
 
 <template>
@@ -17,23 +26,54 @@ const emit = defineEmits(['capture-screenshot', 'add-to-canvas', 'select-snapsho
         <strong>{{ snapshotHistory.length }}</strong>
       </div>
       <div class="director-snapshot-actions">
-        <button type="button" class="director-mini-button" title="Capture screenshot" @click="emit('capture-screenshot')">
+        <button
+          type="button"
+          class="director-mini-button"
+          title="Capture screenshot"
+          :disabled="busy"
+          @click="emit('capture-screenshot')"
+        >
           <Camera :size="14" stroke-width="2" />
         </button>
         <button
           type="button"
           class="director-mini-button"
-          title="Add snapshot to canvas"
+          title="Add selected snapshot to canvas"
+          :disabled="busy || !selectedSnapshotUrl"
           @click="emit('add-to-canvas')"
         >
           <Download :size="14" stroke-width="2" />
+        </button>
+        <button
+          type="button"
+          class="director-mini-button"
+          title="Download active snapshot"
+          :disabled="busy || !snapshotUrl"
+          @click="emit('download-snapshot', snapshotUrl)"
+        >
+          <Download :size="14" stroke-width="2" />
+        </button>
+        <button
+          type="button"
+          class="director-mini-button"
+          title="Delete selected snapshot"
+          :disabled="busy || !selectedSnapshotUrl"
+          @click="emit('delete-snapshot')"
+        >
+          <Trash2 :size="14" stroke-width="2" />
         </button>
       </div>
     </div>
 
     <div v-if="snapshotUrl" class="director-active-snapshot">
-      <button type="button" title="Download active snapshot" @click="emit('download-snapshot', snapshotUrl)">
+      <button
+        type="button"
+        title="Select current snapshot"
+        :class="{ active: snapshotUrl === selectedSnapshotUrl }"
+        @click="emit('select-current')"
+      >
         <img :src="snapshotUrl" alt="">
+        <span><Check :size="13" stroke-width="2" /></span>
       </button>
     </div>
 
@@ -43,7 +83,7 @@ const emit = defineEmits(['capture-screenshot', 'add-to-canvas', 'select-snapsho
         :key="url"
         type="button"
         class="director-snapshot-thumb"
-        :class="{ active: url === snapshotUrl }"
+        :class="{ active: url === selectedSnapshotUrl }"
         @click="emit('select-snapshot', url)"
       >
         <img :src="url" alt="">
@@ -116,6 +156,7 @@ const emit = defineEmits(['capture-screenshot', 'add-to-canvas', 'select-snapsho
 }
 
 .director-active-snapshot button {
+  position: relative;
   display: block;
   width: 100%;
   height: 92px;
@@ -125,6 +166,24 @@ const emit = defineEmits(['capture-screenshot', 'add-to-canvas', 'select-snapsho
   background: #080a0d;
   overflow: hidden;
   cursor: pointer;
+}
+
+.director-active-snapshot button.active {
+  border-color: rgba(34, 211, 238, 0.58);
+}
+
+.director-active-snapshot span {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(8, 145, 178, 0.92);
+  color: #ecfeff;
 }
 
 .director-active-snapshot img,
