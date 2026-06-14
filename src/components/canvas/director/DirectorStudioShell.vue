@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from 'vue'
 import DirectorStudioScene from './DirectorStudioScene.vue'
 
 defineProps({
@@ -10,9 +11,18 @@ defineProps({
 })
 
 const emit = defineEmits(['close', 'update:selectedItemId'])
+const sceneErrorMessage = ref('')
 
 function handleSceneSelectItem(itemId) {
   emit('update:selectedItemId', itemId)
+}
+
+function handleSceneReady() {
+  sceneErrorMessage.value = ''
+}
+
+function handleSceneError(error) {
+  sceneErrorMessage.value = error?.message || '3D scene failed to load.'
 }
 </script>
 
@@ -42,7 +52,13 @@ function handleSceneSelectItem(itemId) {
           :transform-mode="null"
           :aspect-frame="data.aspectFrame || data.aspectRatio || '16:9'"
           @select-item="handleSceneSelectItem"
+          @scene-ready="handleSceneReady"
+          @scene-error="handleSceneError"
         />
+        <div v-if="sceneErrorMessage" class="director-shell-scene-error" role="alert">
+          <strong>3D scene unavailable</strong>
+          <span>{{ sceneErrorMessage }}</span>
+        </div>
         <div class="director-shell-stats">
           <span>项目 {{ data.directorStudioProjects?.length || 0 }}</span>
           <span>镜头 {{ items.length }}</span>
@@ -127,6 +143,29 @@ function handleSceneSelectItem(itemId) {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+}
+
+.director-shell-scene-error {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(248, 113, 113, 0.32);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.22);
+  color: #fecaca;
+}
+
+.director-shell-scene-error strong {
+  color: #fee2e2;
+  font-size: 13px;
+  line-height: 1.2;
+}
+
+.director-shell-scene-error span {
+  color: #fecaca;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .director-shell-stats span {

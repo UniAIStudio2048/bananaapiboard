@@ -148,7 +148,7 @@ function resetCamera() {
 }
 
 function fitCamera() {
-  const itemList = Array.isArray(props.items) ? props.items : []
+  const itemList = Array.isArray(props.items) ? props.items.filter(item => item && item.id != null) : []
   if (itemList.length === 0) {
     resetCamera()
     return
@@ -211,26 +211,30 @@ function getSuggestedInsertPosition() {
 
 function exportPng({ width, height, mimeType = 'image/png' } = {}) {
   if (!renderer || !camera || !scene) return null
+  const activeRenderer = renderer
+  const activeCamera = camera
+  const activeScene = scene
   const currentSize = new THREE.Vector2()
-  renderer.getSize(currentSize)
-  const currentPixelRatio = renderer.getPixelRatio()
-  const currentAspect = camera.aspect
+  activeRenderer.getSize(currentSize)
+  const currentPixelRatio = activeRenderer.getPixelRatio()
+  const currentAspect = activeCamera.aspect
   const targetWidth = Math.max(1, Math.round(width || currentSize.x || 1))
   const targetHeight = Math.max(1, Math.round(height || currentSize.y || 1))
 
-  renderer.setPixelRatio(1)
-  renderer.setSize(targetWidth, targetHeight, false)
-  camera.aspect = targetWidth / targetHeight
-  camera.updateProjectionMatrix()
-  renderNow()
-  const dataUrl = renderer.domElement.toDataURL(mimeType)
-
-  renderer.setPixelRatio(currentPixelRatio)
-  renderer.setSize(currentSize.x, currentSize.y, false)
-  camera.aspect = currentAspect
-  camera.updateProjectionMatrix()
-  renderNow()
-  return dataUrl
+  try {
+    activeRenderer.setPixelRatio(1)
+    activeRenderer.setSize(targetWidth, targetHeight, false)
+    activeCamera.aspect = targetWidth / targetHeight
+    activeCamera.updateProjectionMatrix()
+    activeRenderer.render(activeScene, activeCamera)
+    return activeRenderer.domElement.toDataURL(mimeType)
+  } finally {
+    activeRenderer.setPixelRatio(currentPixelRatio)
+    activeRenderer.setSize(currentSize.x, currentSize.y, false)
+    activeCamera.aspect = currentAspect
+    activeCamera.updateProjectionMatrix()
+    activeRenderer.render(activeScene, activeCamera)
+  }
 }
 
 defineExpose({
@@ -386,6 +390,7 @@ function initScene() {
     window.addEventListener('resize', syncSize)
     emit('scene-ready')
   } catch (error) {
+    cleanupSceneResources()
     handleSceneError(error)
   }
 }
@@ -461,10 +466,13 @@ function syncGrid() {
 }
 
 function disposePanoramaTexture() {
-  if (panoramaTexture) {
-    panoramaTexture.dispose()
-    panoramaTexture = null
+  const texture = panoramaTexture
+  if (panoramaSphere?.material?.map === texture) {
+    panoramaSphere.material.map = null
+    panoramaSphere.material.needsUpdate = true
   }
+  panoramaTexture = null
+  texture?.dispose()
 }
 
 function syncPanorama() {
@@ -472,11 +480,6 @@ function syncPanorama() {
   const loadToken = ++panoramaLoadToken
   const mode = normalizeDirectorMode(props.mode)
   panoramaSphere.visible = mode === 'panorama'
-  const material = panoramaSphere.material
-  if (material.map) {
-    material.map = null
-    material.needsUpdate = true
-  }
   disposePanoramaTexture()
 
   const url = typeof props.backgroundPanoramaUrl === 'string' ? props.backgroundPanoramaUrl.trim() : ''
@@ -630,6 +633,52 @@ function emitPatchFromObject(itemId) {
 
 function handleSceneError(error) {
   emit('scene-error', error)
+}
+
+function resetPointerState() {
+  pointerState.active = false
+  pointerState.pointerId = null
+  pointerState.mode = 'idle'
+  pointerState.lastX = 0
+  pointerState.lastY = 0
+  pointerState.moved = false
+  hoverItemId = null
+}
+
+function cleanupSceneResources({ forceContextLoss = false } = {}) {
+  mounted = false
+  if (renderFrame) {
+    window.cancelAnimationFrame(renderFrame)
+    renderFrame = 0
+  }
+  window.removeEventListener('resize', syncSize)
+  resizeObserver?.disconnect()
+  resizeObserver = null
+  transformControls?.detach()
+  transformControls?.dispose()
+  transformControls = null
+  transformHelper = null
+  panoramaLoadToken += 1
+  disposePanoramaTexture()
+  if (scene) disposeDirectorObject3D(scene)
+  meshById.clear()
+  if (renderer) {
+    renderer.dispose()
+    if (forceContextLoss) renderer.forceContextLoss?.()
+    if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement)
+  }
+  renderer = null
+  scene = null
+  camera = null
+  itemsGroup = null
+  gridGroup = null
+  floorMesh = null
+  axesHelper = null
+  ambientLight = null
+  directionalLight = null
+  selectionRing = null
+  panoramaSphere = null
+  resetPointerState()
 }
 
 function localPointer(event) {
@@ -822,40 +871,7 @@ onMounted(async () => {
   initScene()
 })
 
-onBeforeUnmount(() => {
-  mounted = false
-  if (renderFrame) {
-    window.cancelAnimationFrame(renderFrame)
-    renderFrame = 0
-  }
-  window.removeEventListener('resize', syncSize)
-  resizeObserver?.disconnect()
-  resizeObserver = null
-  transformControls?.detach()
-  transformControls?.dispose()
-  transformControls = null
-  transformHelper = null
-  panoramaLoadToken += 1
-  disposePanoramaTexture()
-  if (scene) disposeDirectorObject3D(scene)
-  meshById.clear()
-  if (renderer) {
-    renderer.dispose()
-    renderer.forceContextLoss?.()
-    if (renderer.domElement.parentNode) renderer.domElement.parentNode.removeChild(renderer.domElement)
-  }
-  renderer = null
-  scene = null
-  camera = null
-  itemsGroup = null
-  gridGroup = null
-  floorMesh = null
-  axesHelper = null
-  ambientLight = null
-  directionalLight = null
-  selectionRing = null
-  panoramaSphere = null
-})
+onBeforeUnmount(() => cleanupSceneResources({ forceContextLoss: true }))
 </script>
 
 <template>
