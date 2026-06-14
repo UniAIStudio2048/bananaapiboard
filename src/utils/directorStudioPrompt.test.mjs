@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { buildDirectorStudioPrompt, dedupeDirectorReferenceUrls } from './directorStudioPrompt.js'
 
 assert.deepEqual(dedupeDirectorReferenceUrls(['a', 'b', 'a', null, undefined, '']), ['a', 'b'])
+assert.deepEqual(dedupeDirectorReferenceUrls({ bad: true }), [])
+assert.deepEqual(dedupeDirectorReferenceUrls('https://cdn/not-an-array.png'), [])
 
 const prompt = buildDirectorStudioPrompt({
   mode: 'flat',
@@ -69,6 +71,26 @@ assert.match(panoramaPrompt, /360-degree panorama/)
 assert.match(panoramaPrompt, /scene \/ environment references/)
 assert.match(panoramaPrompt, /店铺\/咖啡店/)
 assert.match(panoramaPrompt, /body controls: body style strong/)
+assert.doesNotMatch(panoramaPrompt, /available identity references/)
+
+const labelFallbackPrompt = buildDirectorStudioPrompt({
+  items: [
+    {
+      id: 'person-label-fallback',
+      label: '角色B',
+      category: 'person',
+      refImageUrl: 'https://cdn/stale-url.png',
+      refImageName: '角色B参考',
+      pos3d: { x: 0, y: 0, z: -2 }
+    }
+  ],
+  referenceImages: [{ id: 'ref-b', url: 'https://cdn/ref-b.png', label: '角色B参考' }],
+  referenceTokenStartIndex: 4,
+  referenceTokenPrefix: '图'
+})
+
+assert.match(labelFallbackPrompt, /use reference image @图4 for identity/)
+assert.doesNotMatch(labelFallbackPrompt, /reference image named "角色B参考"/)
 
 const nullConfigPrompt = buildDirectorStudioPrompt(null)
 assert.equal(typeof nullConfigPrompt, 'string')

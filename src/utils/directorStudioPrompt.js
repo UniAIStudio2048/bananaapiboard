@@ -72,11 +72,8 @@ function buildReferenceTokenMaps(config, referenceTokenForIndex) {
 function resolveItemReference(item, referenceTokenByUrl, referenceTokenByLabel, purpose) {
   const refImageUrl = getString(item?.refImageUrl)
   const refImageName = getString(item?.refImageName)
-  const refToken = refImageUrl
-    ? referenceTokenByUrl.get(refImageUrl)
-    : refImageName
-      ? referenceTokenByLabel.get(refImageName)
-      : ''
+  const refToken = (refImageUrl ? referenceTokenByUrl.get(refImageUrl) : '') ||
+    (refImageName ? referenceTokenByLabel.get(refImageName) : '')
 
   if (refToken) return `, use reference image ${refToken} for ${purpose}`
   if (refImageName) return `, use reference image named "${refImageName}" for ${purpose}`
@@ -101,8 +98,11 @@ function describePosition(item, mode) {
 export function dedupeDirectorReferenceUrls(urls) {
   const seen = new Set()
   const result = []
+  const values = Array.isArray(urls) || (urls && typeof urls !== 'string' && typeof urls[Symbol.iterator] === 'function')
+    ? urls
+    : []
 
-  for (const value of urls || []) {
+  for (const value of values) {
     const url = getString(value)
     if (!url || seen.has(url)) continue
     seen.add(url)
@@ -110,6 +110,36 @@ export function dedupeDirectorReferenceUrls(urls) {
   }
 
   return result
+}
+
+function getSceneReferenceKeys(items) {
+  const keys = new Set()
+  for (const item of items) {
+    if (item?.category !== 'scene') continue
+    const refImageUrl = getString(item?.refImageUrl)
+    const refImageName = getString(item?.refImageName)
+    const refImageId = getString(item?.refImageId)
+    if (refImageUrl) keys.add(`url:${refImageUrl}`)
+    if (refImageName) keys.add(`label:${refImageName}`)
+    if (refImageId) keys.add(`id:${refImageId}`)
+  }
+  return keys
+}
+
+function isSceneReference(reference, sceneReferenceKeys) {
+  if (reference?.category === 'scene' || reference?.type === 'scene') return true
+  const url = getString(reference?.url)
+  const label = getString(reference?.label)
+  const id = getString(reference?.id)
+  return (url && sceneReferenceKeys.has(`url:${url}`)) ||
+    (label && sceneReferenceKeys.has(`label:${label}`)) ||
+    (id && sceneReferenceKeys.has(`id:${id}`))
+}
+
+function describeReferenceImage(reference, token, index) {
+  const label = getString(reference?.label) || `reference ${index + 1}`
+  const color = getString(reference?.color)
+  return `${token}: image reference named "${label}"${color ? `, director marker color ${color}` : ''}`
 }
 
 export function buildDirectorStudioPrompt(config = {}) {
@@ -124,6 +154,19 @@ export function buildDirectorStudioPrompt(config = {}) {
     : 1
   const referenceTokenForIndex = index => `@${referenceTokenPrefix}${referenceTokenStartIndex + index}`
   const { referenceTokenByUrl, referenceTokenByLabel } = buildReferenceTokenMaps({ referenceImages }, referenceTokenForIndex)
+  const sceneItems = items.filter(item => item?.category === 'scene')
+  const placedItems = items.filter(item => item?.category !== 'scene')
+  const sceneReferenceKeys = getSceneReferenceKeys(sceneItems)
+  const identityReferences = []
+  const environmentReferences = []
+
+  referenceImages.forEach((reference, index) => {
+    if (isSceneReference(reference, sceneReferenceKeys)) {
+      environmentReferences.push({ reference, index })
+    } else {
+      identityReferences.push({ reference, index })
+    }
+  })
 
   const modeInstructions = mode === 'panorama'
     ? [
@@ -138,18 +181,11 @@ export function buildDirectorStudioPrompt(config = {}) {
       'camera reference: x<0 is screen-left, x>0 is screen-right, positive depth-from-camera means farther away from the viewer, y is height above the floor'
     ].join(', ')
 
-  const referenceImagesText = referenceImages.length > 0
-    ? `available identity references: ${referenceImages
-      .map((reference, index) => {
-        const label = getString(reference?.label) || `reference ${index + 1}`
-        const color = getString(reference?.color)
-        return `${referenceTokenForIndex(index)}: image reference named "${label}"${color ? `, director marker color ${color}` : ''}`
-      })
+  const identityReferencesText = identityReferences.length > 0
+    ? `available identity references: ${identityReferences
+      .map(({ reference, index }) => describeReferenceImage(reference, referenceTokenForIndex(index), index))
       .join('; ')}`
     : ''
-
-  const sceneItems = items.filter(item => item?.category === 'scene')
-  const placedItems = items.filter(item => item?.category !== 'scene')
 
   const placements = placedItems.length > 0
     ? `subjects to place: ${placedItems.map((item, index) => {
@@ -170,21 +206,30 @@ export function buildDirectorStudioPrompt(config = {}) {
     }).join('; ')}`
     : ''
 
-  const sceneReferences = sceneItems.length > 0
-    ? `scene / environment references: ${sceneItems.map(item => {
-      const label = getString(item?.label) || getString(item?.id) || 'scene'
-      const ref = resolveItemReference(item, referenceTokenByUrl, referenceTokenByLabel, 'scene / environment reference')
-      const presetLabel = resolveDirectorStudioPresetLabel(item?.presetId)
-      const preset = presetLabel ? `, scene type: ${presetLabel}` : ''
-      const transform = describeTransform(item)
-      const rel = describeRelationAndNote(item, 'scene note')
-      return `"${label}"${ref}${preset}${transform}${rel}`
-    }).join(', ')}`
+  const environmentReferenceDescriptions = environmentReferences.map(({ reference, index }) => {
+    return describeReferenceImage(reference, referenceTokenForIndex(index), index)
+  })
+
+  const sceneItemDescriptions = sceneItems.map(item => {
+    const label = getString(item?.label) || getString(item?.id) || 'scene'
+    const ref = resolveItemReference(item, referenceTokenByUrl, referenceTokenByLabel, 'scene / environment reference')
+    const presetLabel = resolveDirectorStudioPresetLabel(item?.presetId)
+    const preset = presetLabel ? `, scene type: ${presetLabel}` : ''
+    const transform = describeTransform(item)
+    const rel = describeRelationAndNote(item, 'scene note')
+    return `"${label}"${ref}${preset}${transform}${rel}`
+  })
+
+  const sceneReferences = environmentReferenceDescriptions.length > 0 || sceneItemDescriptions.length > 0
+    ? `scene / environment references: ${[
+      ...environmentReferenceDescriptions,
+      ...sceneItemDescriptions
+    ].join(', ')}`
     : ''
 
   return [
     modeInstructions,
-    referenceImagesText,
+    identityReferencesText,
     placements,
     sceneReferences,
     basePrompt,
