@@ -70,4 +70,43 @@ assert.match(panoramaPrompt, /scene \/ environment references/)
 assert.match(panoramaPrompt, /店铺\/咖啡店/)
 assert.match(panoramaPrompt, /body controls: body style strong/)
 
+const nullConfigPrompt = buildDirectorStudioPrompt(null)
+assert.equal(typeof nullConfigPrompt, 'string')
+assert.match(nullConfigPrompt, /Use the Director Studio screenshot as the primary composition reference/)
+
+const malformedConfigPrompt = buildDirectorStudioPrompt({
+  referenceImages: {},
+  items: 'bad',
+  basePrompt: 42,
+  referenceTokenPrefix: { bad: true }
+})
+assert.equal(typeof malformedConfigPrompt, 'string')
+assert.match(malformedConfigPrompt, /Use the Director Studio screenshot as the primary composition reference/)
+
+const unknownPresetPrompt = buildDirectorStudioPrompt({
+  items: [
+    {
+      id: 'unknown-preset',
+      label: '未知模型',
+      category: 'object',
+      presetId: 'unknown-preset-id',
+      pos3d: { x: 0, y: 0, z: -1 }
+    }
+  ]
+})
+assert.doesNotMatch(unknownPresetPrompt, /visual type \/ model preset/)
+
+const neutralBodyPrompt = buildDirectorStudioPrompt({
+  items: [
+    {
+      id: 'neutral-body',
+      label: '中性角色',
+      category: 'person',
+      bodyControls: { showControls: true },
+      pos3d: { x: 0, y: 0, z: -1 }
+    }
+  ]
+})
+assert.doesNotMatch(neutralBodyPrompt, /body controls:/)
+
 console.log('directorStudioPrompt tests passed')

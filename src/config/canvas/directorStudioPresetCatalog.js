@@ -128,7 +128,6 @@ export function hasMeaningfulDirectorStudioBodyControls(controls) {
   if (!controls) return false
   const normalized = normalizeDirectorStudioBodyControls(controls)
   return normalized.style !== 'preset' ||
-    normalized.showControls ||
     Math.abs(normalized.core.height - 1) > 0.01 ||
     Math.abs(normalized.core.torsoWidth - 1) > 0.01 ||
     Math.abs(normalized.core.headScale - 1) > 0.01 ||

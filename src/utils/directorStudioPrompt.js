@@ -58,7 +58,7 @@ function buildReferenceTokenMaps(config, referenceTokenForIndex) {
   const referenceTokenByUrl = new Map()
   const referenceTokenByLabel = new Map()
 
-  for (const [index, reference] of (config.referenceImages || []).entries()) {
+  for (const [index, reference] of config.referenceImages.entries()) {
     const token = referenceTokenForIndex(index)
     const url = getString(reference?.url)
     const label = getString(reference?.label)
@@ -113,13 +113,17 @@ export function dedupeDirectorReferenceUrls(urls) {
 }
 
 export function buildDirectorStudioPrompt(config = {}) {
-  const mode = config.mode === 'panorama' ? 'panorama' : 'flat'
-  const referenceTokenPrefix = config.referenceTokenPrefix ?? '图'
-  const referenceTokenStartIndex = Number.isFinite(Number(config.referenceTokenStartIndex))
-    ? Number(config.referenceTokenStartIndex)
+  const safeConfig = config && typeof config === 'object' && !Array.isArray(config) ? config : {}
+  const referenceImages = Array.isArray(safeConfig.referenceImages) ? safeConfig.referenceImages : []
+  const items = Array.isArray(safeConfig.items) ? safeConfig.items : []
+  const basePrompt = getString(safeConfig.basePrompt)
+  const mode = safeConfig.mode === 'panorama' ? 'panorama' : 'flat'
+  const referenceTokenPrefix = getString(safeConfig.referenceTokenPrefix) || '图'
+  const referenceTokenStartIndex = Number.isFinite(Number(safeConfig.referenceTokenStartIndex))
+    ? Number(safeConfig.referenceTokenStartIndex)
     : 1
   const referenceTokenForIndex = index => `@${referenceTokenPrefix}${referenceTokenStartIndex + index}`
-  const { referenceTokenByUrl, referenceTokenByLabel } = buildReferenceTokenMaps(config, referenceTokenForIndex)
+  const { referenceTokenByUrl, referenceTokenByLabel } = buildReferenceTokenMaps({ referenceImages }, referenceTokenForIndex)
 
   const modeInstructions = mode === 'panorama'
     ? [
@@ -134,8 +138,8 @@ export function buildDirectorStudioPrompt(config = {}) {
       'camera reference: x<0 is screen-left, x>0 is screen-right, positive depth-from-camera means farther away from the viewer, y is height above the floor'
     ].join(', ')
 
-  const referenceImages = (config.referenceImages || []).length > 0
-    ? `available identity references: ${(config.referenceImages || [])
+  const referenceImagesText = referenceImages.length > 0
+    ? `available identity references: ${referenceImages
       .map((reference, index) => {
         const label = getString(reference?.label) || `reference ${index + 1}`
         const color = getString(reference?.color)
@@ -144,7 +148,6 @@ export function buildDirectorStudioPrompt(config = {}) {
       .join('; ')}`
     : ''
 
-  const items = Array.isArray(config.items) ? config.items : []
   const sceneItems = items.filter(item => item?.category === 'scene')
   const placedItems = items.filter(item => item?.category !== 'scene')
 
@@ -181,10 +184,10 @@ export function buildDirectorStudioPrompt(config = {}) {
 
   return [
     modeInstructions,
-    referenceImages,
+    referenceImagesText,
     placements,
     sceneReferences,
-    config.basePrompt?.trim() || '',
+    basePrompt,
     'Use the Director Studio screenshot as the primary composition reference. Keep positions, camera framing, relative scale, and lighting intent consistent.'
   ].filter(Boolean).join('\n\n')
 }
