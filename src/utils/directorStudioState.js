@@ -106,7 +106,7 @@ export function normalizeDirectorCamera(camera) {
 
   return {
     fov: clampDirectorNumber(camera?.fov, DEFAULT_DIRECTOR_CAMERA.fov, 10, 150),
-    lensDistance: clampDirectorNumber(camera?.lensDistance, DEFAULT_DIRECTOR_CAMERA.lensDistance, 2, 30),
+    lensDistance: clampDirectorNumber(camera?.lensDistance, DEFAULT_DIRECTOR_CAMERA.lensDistance, 2, 80),
     activePreset
   }
 }

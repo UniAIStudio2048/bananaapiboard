@@ -26,6 +26,8 @@ const elementsLabel = computed(() => translateWithFallback('directorStudio.eleme
 const referencesLabel = computed(() => translateWithFallback('node.imageNode.refImage', '参考'))
 const projectsLabel = computed(() => translateWithFallback('directorStudio.projects', '项目'))
 const items = computed(() => Array.isArray(props.data.items) ? props.data.items : [])
+const imageAssets = computed(() => Array.isArray(props.data.imageAssets) ? props.data.imageAssets : [])
+const panoramaAssets = computed(() => Array.isArray(props.data.panoramaAssets) ? props.data.panoramaAssets : [])
 const referenceImages = computed(() => {
   if (readonlyPreview) {
     return mergeDirectorStudioReferenceImages(props.id, props.data, [], [])
@@ -50,9 +52,26 @@ function closeDirectorStudio() {
   directorStudioOpen.value = false
 }
 
-function handleAddSnapshotToCanvas(event) {
-  event?.stopPropagation()
-  if (!snapshotUrl.value || readonlyPreview) return
+function handleDirectorItemsChange(nextItems) {
+  if (readonlyPreview) return
+  canvasStore.updateNodeData(props.id, { items: nextItems })
+}
+
+function handleDirectorNodeDataChange(patch) {
+  if (readonlyPreview || !patch || typeof patch !== 'object' || Array.isArray(patch)) return
+  canvasStore.updateNodeData(props.id, patch)
+}
+
+function handleAddSnapshotToCanvas(payloadOrEvent) {
+  const isEvent = payloadOrEvent && typeof payloadOrEvent.stopPropagation === 'function'
+  if (isEvent) payloadOrEvent.stopPropagation()
+  const payloadUrl = typeof payloadOrEvent === 'string'
+    ? payloadOrEvent
+    : !isEvent && typeof payloadOrEvent?.snapshotUrl === 'string'
+      ? payloadOrEvent.snapshotUrl
+      : null
+  const nextSnapshotUrl = payloadUrl || snapshotUrl.value
+  if (!nextSnapshotUrl || readonlyPreview) return
 
   const currentNode = canvasStore.nodes.find(node => node.id === props.id)
   const currentPosition = currentNode?.position || { x: 0, y: 0 }
@@ -71,8 +90,8 @@ function handleAddSnapshotToCanvas(event) {
       data: {
         title: snapshotLabel.value,
         nodeRole: 'source',
-        sourceImages: [snapshotUrl.value],
-        imageUrl: snapshotUrl.value
+        sourceImages: [nextSnapshotUrl],
+        imageUrl: nextSnapshotUrl
       }
     })
   } finally {
@@ -220,12 +239,16 @@ function mergeDirectorStudioReferenceImages(nodeId, data, nodes, edges) {
     <Teleport to="body">
       <DirectorStudioShell
         v-if="directorStudioOpen"
-        :node-id="id"
+        :source-node-id="id"
         :data="props.data"
-        :items="items"
         :reference-images="referenceImages"
+        :image-assets="imageAssets"
+        :panorama-assets="panoramaAssets"
         :selected-item-id="selectedItemId"
         @update:selected-item-id="selectedItemId = $event"
+        @items-change="handleDirectorItemsChange"
+        @update-node-data="handleDirectorNodeDataChange"
+        @add-snapshot-to-canvas="handleAddSnapshotToCanvas"
         @close="closeDirectorStudio"
       />
     </Teleport>

@@ -67,6 +67,7 @@ assert.deepEqual(normalizeDirectorCamera({ fov: 400, lensDistance: -1 }), {
   fov: 150,
   lensDistance: 2
 })
+assert.equal(normalizeDirectorCamera({ lensDistance: 120 }).lensDistance, 80)
 
 const lighting = normalizeDirectorLighting({
   enabled: false,
