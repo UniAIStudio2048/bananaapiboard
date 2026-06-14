@@ -1,5 +1,6 @@
 <script setup>
 import { Camera, Check, Download, Trash2 } from '@lucide/vue'
+import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
 
 defineProps({
   snapshotUrl: { type: String, default: null },
@@ -16,20 +17,22 @@ const emit = defineEmits([
   'delete-snapshot',
   'download-snapshot'
 ])
+
+const { dt } = useDirectorStudioI18n()
 </script>
 
 <template>
   <section class="director-snapshot-panel">
     <div class="director-panel-heading">
       <div>
-        <span>Snapshots</span>
+        <span>{{ dt('snapshots.title', '截图') }}</span>
         <strong>{{ snapshotHistory.length }}</strong>
       </div>
       <div class="director-snapshot-actions">
         <button
           type="button"
           class="director-mini-button"
-          title="Capture screenshot"
+          :title="dt('snapshots.capture', '截图')"
           :disabled="busy"
           @click="emit('capture-screenshot')"
         >
@@ -38,7 +41,7 @@ const emit = defineEmits([
         <button
           type="button"
           class="director-mini-button"
-          title="Add selected snapshot to canvas"
+          :title="dt('snapshots.addToCanvas', '添加选中截图到画布')"
           :disabled="busy || !selectedSnapshotUrl"
           @click="emit('add-to-canvas')"
         >
@@ -47,7 +50,7 @@ const emit = defineEmits([
         <button
           type="button"
           class="director-mini-button"
-          title="Download active snapshot"
+          :title="dt('snapshots.downloadActive', '下载当前截图')"
           :disabled="busy || !snapshotUrl"
           @click="emit('download-snapshot', snapshotUrl)"
         >
@@ -56,7 +59,7 @@ const emit = defineEmits([
         <button
           type="button"
           class="director-mini-button"
-          title="Delete selected snapshot"
+          :title="dt('snapshots.deleteSelected', '删除选中截图')"
           :disabled="busy || !selectedSnapshotUrl"
           @click="emit('delete-snapshot')"
         >
@@ -68,7 +71,7 @@ const emit = defineEmits([
     <div v-if="snapshotUrl" class="director-active-snapshot">
       <button
         type="button"
-        title="Select current snapshot"
+        :title="dt('snapshots.selectCurrent', '选择当前截图')"
         :class="{ active: snapshotUrl === selectedSnapshotUrl }"
         @click="emit('select-current')"
       >
@@ -88,7 +91,7 @@ const emit = defineEmits([
       >
         <img :src="url" alt="">
       </button>
-      <div v-if="snapshotHistory.length === 0" class="director-empty-row">No snapshots</div>
+      <div v-if="snapshotHistory.length === 0" class="director-empty-row">{{ dt('snapshots.empty', '暂无截图') }}</div>
     </div>
   </section>
 </template>
@@ -134,14 +137,15 @@ const emit = defineEmits([
 
 .director-mini-button {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
+  width: var(--director-control-height, 34px);
+  min-height: var(--director-control-height, 34px);
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   background: #24272d;
   color: #d4d4d8;
+  line-height: var(--director-control-line-height, 1.35);
   cursor: pointer;
 }
 

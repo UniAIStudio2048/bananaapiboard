@@ -191,6 +191,17 @@ const canvasPromptInputScale = computed(() => ({
     zoom: canvasStore.viewport.zoom
   })
 }))
+const canvasFullscreenOverlayIds = ref(new Set())
+const isCanvasFullscreenOverlayOpen = computed(() => canvasFullscreenOverlayIds.value.size > 0)
+
+function setCanvasFullscreenOverlayActive(id, active) {
+  const overlayId = String(id || 'canvas-fullscreen-overlay')
+  if (active) {
+    canvasFullscreenOverlayIds.value.add(overlayId)
+    return
+  }
+  canvasFullscreenOverlayIds.value.delete(overlayId)
+}
 
 // 自动保存定时器
 const autoSaveInterval = ref(null)
@@ -445,6 +456,9 @@ provide('userInfo', me)
 provide('interactionMode', interactionMode)
 provide('showCanvasMiniMap', showCanvasMiniMap)
 provide('canvasPromptInputScale', canvasPromptInputScale)
+provide('canvasFullscreenOverlayControls', {
+  setActive: setCanvasFullscreenOverlayActive
+})
 
 function toggleCanvasMiniMap() {
   showCanvasMiniMap.value = !showCanvasMiniMap.value
@@ -3053,6 +3067,7 @@ onUnmounted(() => {
       
       <!-- 右上角控制区域 -->
       <div 
+        v-if="!isCanvasFullscreenOverlayOpen"
         class="canvas-top-right-controls" 
         :class="{ 'panel-open': showAIAssistant }"
         :style="showAIAssistant ? { right: (aiPanelWidth + 24) + 'px' } : {}"

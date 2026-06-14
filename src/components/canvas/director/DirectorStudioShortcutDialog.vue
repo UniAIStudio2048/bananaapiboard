@@ -1,6 +1,7 @@
 <script setup>
 import { computed } from 'vue'
 import { X } from '@lucide/vue'
+import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -8,35 +9,36 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close'])
+const { dt } = useDirectorStudioI18n()
 
 const shortcutRows = computed(() => [
-  ['Move tool', props.shortcuts.transformMove || '1'],
-  ['Rotate tool', props.shortcuts.transformRotate || '2'],
-  ['Scale tool', props.shortcuts.transformScale || '3'],
-  ['Focus selected', props.shortcuts.focus || 'F'],
-  ['Fit scene', props.shortcuts.fit || 'Z'],
-  ['Reset camera', props.shortcuts.reset || 'R'],
-  ['Capture screenshot', props.shortcuts.screenshot || 'C'],
-  ['Model library', props.shortcuts.model || 'M'],
-  ['Lighting panel', props.shortcuts.lighting || 'L'],
-  ['Grid panel', props.shortcuts.grid || 'G'],
-  ['Prompt panel', props.shortcuts.prompt || 'P'],
-  ['Shortcuts', props.shortcuts.shortcuts || 'H'],
-  ['Save project', props.shortcuts.save || 'Cmd/Ctrl+S'],
-  ['Delete selected', props.shortcuts.delete || 'Delete'],
-  ['Copy selected', props.shortcuts.copy || 'Cmd/Ctrl+C'],
-  ['Paste item', props.shortcuts.paste || 'Cmd/Ctrl+V'],
-  ['Undo item operation', props.shortcuts.undo || 'Cmd/Ctrl+Z'],
-  ['Redo item operation', props.shortcuts.redo || 'Cmd/Ctrl+Shift+Z']
+  [dt('shortcuts.moveTool', '移动工具'), props.shortcuts.transformMove || '1'],
+  [dt('shortcuts.rotateTool', '旋转工具'), props.shortcuts.transformRotate || '2'],
+  [dt('shortcuts.scaleTool', '缩放工具'), props.shortcuts.transformScale || '3'],
+  [dt('shortcuts.focusSelected', '聚焦选中'), props.shortcuts.focus || 'F'],
+  [dt('shortcuts.fitScene', '适配场景'), props.shortcuts.fit || 'Z'],
+  [dt('shortcuts.resetCamera', '重置镜头'), props.shortcuts.reset || 'R'],
+  [dt('shortcuts.captureScreenshot', '截图'), props.shortcuts.screenshot || 'C'],
+  [dt('shortcuts.modelLibrary', '模型库'), props.shortcuts.model || 'M'],
+  [dt('shortcuts.lightingPanel', '灯光面板'), props.shortcuts.lighting || 'L'],
+  [dt('shortcuts.gridPanel', '网格面板'), props.shortcuts.grid || 'G'],
+  [dt('shortcuts.promptPanel', '提示词面板'), props.shortcuts.prompt || 'P'],
+  [dt('shortcuts.shortcuts', '快捷键'), props.shortcuts.shortcuts || 'H'],
+  [dt('shortcuts.saveProject', '保存项目'), props.shortcuts.save || 'Cmd/Ctrl+S'],
+  [dt('shortcuts.deleteSelected', '删除选中'), props.shortcuts.delete || 'Delete'],
+  [dt('shortcuts.copySelected', '复制选中'), props.shortcuts.copy || 'Cmd/Ctrl+C'],
+  [dt('shortcuts.pasteItem', '粘贴元素'), props.shortcuts.paste || 'Cmd/Ctrl+V'],
+  [dt('shortcuts.undoItemOperation', '撤销元素操作'), props.shortcuts.undo || 'Cmd/Ctrl+Z'],
+  [dt('shortcuts.redoItemOperation', '重做元素操作'), props.shortcuts.redo || 'Cmd/Ctrl+Shift+Z']
 ])
 </script>
 
 <template>
   <div v-if="open" class="director-shortcut-backdrop" @click.self="emit('close')">
-    <section class="director-shortcut-dialog" role="dialog" aria-modal="true" aria-label="Director Studio shortcuts">
+    <section class="director-shortcut-dialog" role="dialog" aria-modal="true" :aria-label="dt('shortcuts.dialogLabel', '导演台快捷键')">
       <header>
-        <h2>Shortcuts</h2>
-        <button type="button" title="Close shortcuts" @click="emit('close')">
+        <h2>{{ dt('shortcuts.title', '快捷键') }}</h2>
+        <button type="button" :title="dt('shortcuts.close', '关闭快捷键')" @click="emit('close')">
           <X :size="17" stroke-width="2" />
         </button>
       </header>

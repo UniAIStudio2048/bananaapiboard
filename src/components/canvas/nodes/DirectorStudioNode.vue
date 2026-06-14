@@ -1,5 +1,5 @@
 <script setup>
-import { computed, inject, ref } from 'vue'
+import { computed, inject, onUnmounted, ref, watch } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
 import { Camera, Maximize2 } from '@lucide/vue'
 import { useI18n } from '@/i18n'
@@ -23,12 +23,14 @@ const props = defineProps({
 })
 
 const readonlyPreview = inject('canvasReadonlyPreview', false)
+const canvasFullscreenOverlayControls = inject('canvasFullscreenOverlayControls', null)
 const canvasStore = useCanvasStore()
 const { t } = useI18n()
 
 const directorStudioOpen = ref(false)
 const selectedItemId = ref(null)
 const addingSnapshotToCanvas = ref(false)
+const canvasFullscreenOverlayId = `director-studio-${props.id}`
 
 const DIRECTOR_REFERENCE_COLOR_PALETTE = [
   '#60a5fa',
@@ -45,9 +47,14 @@ const DIRECTOR_IMAGE_NODE_TYPES = new Set(['image', 'image-input', 'image-gen', 
 const openLabel = computed(() => translateWithFallback('directorStudio.nodeCard.enter', '打开导演台'))
 const snapshotLabel = computed(() => translateWithFallback('directorStudio.addToCanvas', '截图到画布'))
 const title = computed(() => props.data.title || translateWithFallback('directorStudio.title', '3D导演台'))
+const kickerLabel = computed(() => translateWithFallback('directorStudio.title', '3D导演台'))
 const elementsLabel = computed(() => translateWithFallback('directorStudio.elements', '元素'))
 const referencesLabel = computed(() => translateWithFallback('node.imageNode.refImage', '参考'))
 const projectsLabel = computed(() => translateWithFallback('directorStudio.projects', '项目'))
+const statusLabel = computed(() => {
+  const status = props.data.status || 'idle'
+  return translateWithFallback(`directorStudio.statusValues.${status}`, status)
+})
 const items = computed(() => Array.isArray(props.data.items) ? props.data.items : [])
 const canvasImageAssets = computed(() => readonlyPreview ? [] : collectDirectorStudioCanvasImageAssets(canvasStore.nodes))
 const imageAssets = computed(() => mergeDirectorStudioAssetLists([
@@ -81,6 +88,18 @@ function openDirectorStudio(event) {
 function closeDirectorStudio() {
   directorStudioOpen.value = false
 }
+
+function setCanvasFullscreenOverlayActive(active) {
+  canvasFullscreenOverlayControls?.setActive?.(canvasFullscreenOverlayId, Boolean(active))
+}
+
+watch(directorStudioOpen, isOpen => {
+  setCanvasFullscreenOverlayActive(isOpen)
+}, { immediate: true })
+
+onUnmounted(() => {
+  setCanvasFullscreenOverlayActive(false)
+})
 
 function handleDirectorItemsChange(nextItems) {
   if (readonlyPreview) return
@@ -439,10 +458,10 @@ function collectDirectorStudioCanvasImageAssets(nodes) {
 
     <div class="director-header">
       <div class="director-title-block">
-        <span class="director-kicker">Director Studio</span>
+        <span class="director-kicker">{{ kickerLabel }}</span>
         <h3>{{ title }}</h3>
       </div>
-      <span class="director-status">{{ props.data.status || 'idle' }}</span>
+      <span class="director-status">{{ statusLabel }}</span>
     </div>
 
     <button

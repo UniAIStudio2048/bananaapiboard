@@ -14,9 +14,11 @@ import {
   Trash2,
   X
 } from '@lucide/vue'
+import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
+import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
 
 const props = defineProps({
-  projectName: { type: String, default: 'Director Studio' },
+  projectName: { type: String, default: '3D导演台' },
   transformMode: { type: String, default: 'move' },
   camera: { type: Object, default: () => ({}) },
   lighting: { type: Object, default: () => ({}) },
@@ -44,6 +46,8 @@ const emit = defineEmits([
   'delete-selected'
 ])
 
+const { dt } = useDirectorStudioI18n()
+
 function selectTransform(mode) {
   emit('update:transformMode', mode)
 }
@@ -61,42 +65,42 @@ function selectCameraPreset(event) {
 <template>
   <header class="director-toolbar">
     <div class="director-toolbar-project">
-      <button type="button" class="director-icon-button" title="Close" @click="emit('close')">
+      <button type="button" class="director-icon-button" :title="dt('close', '关闭')" @click="emit('close')">
         <X :size="17" stroke-width="2.1" />
       </button>
       <Box :size="18" stroke-width="2" class="director-toolbar-mark" />
       <div class="director-toolbar-title">
-        <span>Director Studio</span>
+        <span>{{ dt('title', '3D导演台') }}</span>
         <strong>{{ projectName }}</strong>
       </div>
     </div>
 
     <div class="director-toolbar-group">
-      <button type="button" class="director-command" title="Save project" @click="emit('save-project')">
+      <button type="button" class="director-command" :title="dt('toolbar.saveProjectTitle', '保存项目')" @click="emit('save-project')">
         <Save :size="15" stroke-width="2" />
-        <span>Save</span>
+        <span>{{ dt('toolbar.save', '保存') }}</span>
       </button>
-      <button type="button" class="director-command" title="Capture screenshot" @click="emit('capture-screenshot')">
+      <button type="button" class="director-command" :title="dt('toolbar.captureTitle', '截图')" @click="emit('capture-screenshot')">
         <Camera :size="15" stroke-width="2" />
-        <span>Capture</span>
+        <span>{{ dt('toolbar.capture', '截图') }}</span>
       </button>
       <button
         type="button"
         class="director-command"
-        title="Add snapshot to canvas"
+        :title="dt('toolbar.addToCanvasTitle', '添加截图到画布')"
         @click="emit('add-to-canvas')"
       >
         <Download :size="15" stroke-width="2" />
-        <span>Canvas</span>
+        <span>{{ dt('toolbar.canvas', '画布') }}</span>
       </button>
     </div>
 
-    <div class="director-toolbar-segment" aria-label="Transform mode">
+    <div class="director-toolbar-segment" :aria-label="dt('toolbar.transformMode', '变换模式')">
       <button
         type="button"
         class="director-tool-button"
         :class="{ active: transformMode === 'move' }"
-        title="Move"
+        :title="dt('toolbar.move', '移动')"
         @click="selectTransform('move')"
       >
         <Move3D :size="16" stroke-width="2" />
@@ -105,7 +109,7 @@ function selectCameraPreset(event) {
         type="button"
         class="director-tool-button"
         :class="{ active: transformMode === 'rotate' }"
-        title="Rotate"
+        :title="dt('toolbar.rotate', '旋转')"
         @click="selectTransform('rotate')"
       >
         <RotateCcw :size="16" stroke-width="2" />
@@ -114,7 +118,7 @@ function selectCameraPreset(event) {
         type="button"
         class="director-tool-button"
         :class="{ active: transformMode === 'scale' }"
-        title="Scale"
+        :title="dt('toolbar.scale', '缩放')"
         @click="selectTransform('scale')"
       >
         <Scale3D :size="16" stroke-width="2" />
@@ -124,21 +128,21 @@ function selectCameraPreset(event) {
     <div class="director-toolbar-group compact">
       <select
         class="director-toolbar-select"
-        title="Camera preset"
+        :title="dt('toolbar.cameraPreset', '镜头预设')"
         :value="camera.activePreset || 'standard'"
         @change="selectCameraPreset"
       >
         <option v-for="preset in cameraPresets" :key="preset.id" :value="preset.id">
-          {{ preset.id }}
+          {{ dt(preset.labelKey, preset.id) }}
         </option>
       </select>
-      <button type="button" class="director-icon-button" title="Focus selected" :disabled="!hasSelection" @click="emit('focus-selected')">
+      <button type="button" class="director-icon-button" :title="dt('toolbar.focusSelected', '聚焦选中')" :disabled="!hasSelection" @click="emit('focus-selected')">
         <Maximize2 :size="16" stroke-width="2" />
       </button>
-      <button type="button" class="director-icon-button" title="Fit scene" @click="emit('fit-scene')">
+      <button type="button" class="director-icon-button" :title="dt('toolbar.fitScene', '适配场景')" @click="emit('fit-scene')">
         <Maximize2 :size="16" stroke-width="2" />
       </button>
-      <button type="button" class="director-icon-button" title="Reset camera" @click="emit('reset-camera')">
+      <button type="button" class="director-icon-button" :title="dt('toolbar.resetCamera', '重置镜头')" @click="emit('reset-camera')">
         <RotateCcw :size="16" stroke-width="2" />
       </button>
     </div>
@@ -148,7 +152,7 @@ function selectCameraPreset(event) {
         type="button"
         class="director-icon-button"
         :class="{ active: lighting.enabled !== false }"
-        title="Toggle lighting"
+        :title="dt('toolbar.toggleLighting', '切换灯光')"
         @click="emit('lighting-patch', { enabled: lighting.enabled === false })"
       >
         <Lamp :size="16" stroke-width="2" />
@@ -157,20 +161,24 @@ function selectCameraPreset(event) {
         type="button"
         class="director-icon-button"
         :class="{ active: grid.visible !== false }"
-        title="Toggle grid"
+        :title="dt('toolbar.toggleGrid', '切换网格')"
         @click="emit('grid-patch', { visible: grid.visible === false })"
       >
         <Grid3X3 :size="16" stroke-width="2" />
       </button>
-      <button type="button" class="director-icon-button" title="Copy selected" :disabled="!hasSelection" @click="emit('copy-selected')">
+      <button type="button" class="director-icon-button" :title="dt('toolbar.copySelected', '复制选中')" :disabled="!hasSelection" @click="emit('copy-selected')">
         <Copy :size="16" stroke-width="2" />
       </button>
-      <button type="button" class="director-icon-button" title="Paste item" :disabled="!canPaste" @click="emit('paste-item')">
+      <button type="button" class="director-icon-button" :title="dt('toolbar.pasteItem', '粘贴元素')" :disabled="!canPaste" @click="emit('paste-item')">
         <Download :size="16" stroke-width="2" />
       </button>
-      <button type="button" class="director-icon-button danger" title="Delete selected" :disabled="!hasSelection" @click="emit('delete-selected')">
+      <button type="button" class="director-icon-button danger" :title="dt('toolbar.deleteSelected', '删除选中')" :disabled="!hasSelection" @click="emit('delete-selected')">
         <Trash2 :size="16" stroke-width="2" />
       </button>
+    </div>
+
+    <div class="director-toolbar-language">
+      <LanguageSwitcher compact :is-dark="true" direction="down" />
     </div>
   </header>
 </template>
@@ -178,7 +186,7 @@ function selectCameraPreset(event) {
 <style scoped>
 .director-toolbar {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) auto auto auto auto;
+  grid-template-columns: minmax(220px, 1fr) auto auto auto auto auto;
   gap: 8px;
   align-items: center;
   min-height: 46px;
@@ -190,7 +198,8 @@ function selectCameraPreset(event) {
 
 .director-toolbar-project,
 .director-toolbar-group,
-.director-toolbar-segment {
+.director-toolbar-segment,
+.director-toolbar-language {
   display: inline-flex;
   align-items: center;
   min-width: 0;
@@ -238,8 +247,14 @@ function selectCameraPreset(event) {
   gap: 4px;
 }
 
+.director-toolbar-language {
+  justify-content: flex-end;
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .director-toolbar-segment {
-  height: 32px;
+  min-height: calc(var(--director-control-height, 34px) + 4px);
   padding: 2px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 7px;
@@ -252,12 +267,13 @@ function selectCameraPreset(event) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 32px;
-  height: 32px;
+  min-width: var(--director-control-height, 34px);
+  min-height: var(--director-control-height, 34px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 7px;
   background: #23262b;
   color: #d4d4d8;
+  line-height: var(--director-control-line-height, 1.35);
   cursor: pointer;
 }
 
@@ -302,13 +318,15 @@ function selectCameraPreset(event) {
 }
 
 .director-toolbar-select {
-  width: 112px;
-  height: 32px;
+  width: 118px;
+  min-height: var(--director-control-height, 34px);
+  padding: 0 10px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 7px;
   background: #0f1114;
   color: #e5e7eb;
   font-size: 12px;
+  line-height: var(--director-control-line-height, 1.35);
 }
 
 @media (max-width: 1180px) {
@@ -331,11 +349,16 @@ function selectCameraPreset(event) {
   }
 
   .director-toolbar-group,
-  .director-toolbar-segment {
+  .director-toolbar-segment,
+  .director-toolbar-language {
     width: 100%;
     padding-left: 0;
     border-left: 0;
     overflow-x: auto;
+  }
+
+  .director-toolbar-language {
+    justify-content: flex-start;
   }
 
   .director-toolbar-group {

@@ -507,7 +507,7 @@ function syncPanorama() {
     undefined,
     error => {
       if (loadToken !== panoramaLoadToken) return
-      handleSceneError(error || new Error('Failed to load Director Studio panorama'))
+      handleSceneError(error || new Error('全景图加载失败'))
       if (panoramaSphere) panoramaSphere.visible = normalizeDirectorMode(props.mode) === 'panorama'
       requestRender()
     }

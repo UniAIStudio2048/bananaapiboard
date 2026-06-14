@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -7,6 +8,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['select-item'])
+const { dt } = useDirectorStudioI18n()
 
 const visibleItems = computed(() => (
   Array.isArray(props.items)
@@ -15,11 +17,16 @@ const visibleItems = computed(() => (
 ))
 
 function itemLabel(item, index) {
-  return item.label || item.title || item.name || item.id || `Item ${index + 1}`
+  return item.label || item.title || item.name || item.id || dt('items.defaultName', '元素 {count}', { count: index + 1 })
 }
 
 function itemCategory(item) {
   return item.category || item.itemCategory || 'object'
+}
+
+function itemCategoryLabel(item) {
+  const category = itemCategory(item)
+  return dt(`categories.${category}`, category)
 }
 </script>
 
@@ -27,7 +34,7 @@ function itemCategory(item) {
   <section class="director-item-list">
     <div class="director-item-list-heading">
       <div>
-        <span>Items</span>
+        <span>{{ dt('items.title', '元素') }}</span>
         <strong>{{ visibleItems.length }}</strong>
       </div>
     </div>
@@ -44,10 +51,10 @@ function itemCategory(item) {
         <span class="director-item-swatch" :style="{ backgroundColor: item.color || '#38bdf8' }" />
         <span class="director-item-main">
           <strong>{{ itemLabel(item, index) }}</strong>
-          <small>{{ itemCategory(item) }}</small>
+          <small>{{ itemCategoryLabel(item) }}</small>
         </span>
       </button>
-      <div v-if="visibleItems.length === 0" class="director-empty-row">No items</div>
+      <div v-if="visibleItems.length === 0" class="director-empty-row">{{ dt('items.empty', '暂无元素') }}</div>
     </div>
   </section>
 </template>

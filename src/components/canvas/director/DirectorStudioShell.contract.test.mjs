@@ -42,6 +42,38 @@ test('director studio shell renders the workstation panels and drives the scene 
   assert.match(source, /@update-item="handleSceneUpdateItem"/)
 })
 
+test('director studio workstation localizes visible controls and exposes language switching', () => {
+  const toolbar = read('components/canvas/director/DirectorStudioToolbar.vue')
+  const shell = read('components/canvas/director/DirectorStudioShell.vue')
+  const inspector = read('components/canvas/director/DirectorStudioInspector.vue')
+  const modelLibrary = read('components/canvas/director/DirectorStudioModelLibrary.vue')
+  const projectPanel = read('components/canvas/director/DirectorStudioProjectPanel.vue')
+  const itemList = read('components/canvas/director/DirectorStudioItemList.vue')
+  const snapshotPanel = read('components/canvas/director/DirectorStudioSnapshotPanel.vue')
+  const shortcutDialog = read('components/canvas/director/DirectorStudioShortcutDialog.vue')
+  const zhLocale = read('i18n/locales/zh-CN.js')
+  const enLocale = read('i18n/locales/en.js')
+
+  assert.match(toolbar, /import\s+LanguageSwitcher\s+from\s+['"]@\/components\/LanguageSwitcher\.vue['"]/)
+  assert.match(toolbar, /<LanguageSwitcher[\s\S]*compact[\s\S]*:is-dark="true"[\s\S]*direction="down"/)
+
+  for (const source of [toolbar, shell, inspector, modelLibrary, projectPanel, itemList, snapshotPanel, shortcutDialog]) {
+    assert.match(source, /useI18n|useDirectorStudioI18n/)
+    assert.match(source, /dt\('/)
+  }
+
+  for (const source of [toolbar, shell, inspector, modelLibrary, projectPanel, itemList, snapshotPanel, shortcutDialog]) {
+    assert.doesNotMatch(source, />\s*(Director Studio|Save|Capture|Canvas|Panorama|Upload|Clear|Inspector|Focus|Paste|Duplicate|Name|Category|Color|Action|Relation|Note|Camera|Lighting|Grid|View|Prompt|Shortcuts|Model Library|Search models|Pedestrians|Projects|Snapshots|No snapshots|No item selected)\s*</)
+  }
+
+  for (const localeSource of [zhLocale, enLocale]) {
+    assert.match(localeSource, /toolbar:\s*\{/)
+    assert.match(localeSource, /inspector:\s*\{/)
+    assert.match(localeSource, /modelLibrary:\s*\{/)
+    assert.match(localeSource, /shortcuts:\s*\{/)
+  }
+})
+
 test('director studio shell exposes left rail item selection', () => {
   const source = read('components/canvas/director/DirectorStudioShell.vue')
 
@@ -89,7 +121,7 @@ test('director studio shell snapshot actions use persistent selected history ent
   assert.match(panel, /selectedSnapshotUrl:\s*\{\s*type:\s*String,\s*default:\s*null\s*\}/)
   assert.match(panel, /defineEmits\(\[[\s\S]*'select-current'[\s\S]*'delete-snapshot'[\s\S]*\]\)/)
   assert.match(panel, /:class="\{\s*active:\s*url\s*===\s*selectedSnapshotUrl\s*\}"/)
-  assert.match(panel, /title="Download active snapshot"[\s\S]*@click="emit\('download-snapshot',\s*snapshotUrl\)"/)
+  assert.match(panel, /:title="dt\('snapshots\.downloadActive'[\s\S]*@click="emit\('download-snapshot',\s*snapshotUrl\)"/)
 })
 
 test('director studio shell project library can create, overwrite, rename, restore, delete, and update covers', () => {
@@ -138,7 +170,7 @@ test('director studio shell keeps the scene usable on narrow viewports', () => {
   assert.match(source, /@media\s*\(max-width:\s*860px\)[\s\S]*:deep\(\.director-inspector\)\s*\{[\s\S]*max-height:[\s\S]*\}/)
   assert.match(source, /@media\s*\(max-width:\s*640px\)[\s\S]*\.director-shell-left\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*\}/)
   assert.match(toolbarSource, /@media\s*\(max-width:\s*860px\)[\s\S]*\.director-toolbar\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*\}/)
-  assert.match(toolbarSource, /@media\s*\(max-width:\s*860px\)[\s\S]*\.director-toolbar-group,\s*\n\s*\.director-toolbar-segment\s*\{[\s\S]*width:\s*100%[\s\S]*overflow-x:\s*auto[\s\S]*\}/)
+  assert.match(toolbarSource, /@media\s*\(max-width:\s*860px\)[\s\S]*\.director-toolbar-group,\s*\n\s*\.director-toolbar-segment,\s*\n\s*\.director-toolbar-language\s*\{[\s\S]*width:\s*100%[\s\S]*overflow-x:\s*auto[\s\S]*\}/)
   assert.match(toolbarSource, /@media\s*\(max-width:\s*640px\)[\s\S]*\.director-command\s+span\s*\{[\s\S]*display:\s*none[\s\S]*\}/)
   assert.match(projectSource, /@media\s*\(max-width:\s*520px\)[\s\S]*\.director-project-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*\}/)
   assert.match(projectSource, /@media\s*\(max-width:\s*520px\)[\s\S]*\.director-project-row-actions\s*\{[\s\S]*flex-wrap:\s*wrap[\s\S]*\}/)

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { Box, Move3D } from '@lucide/vue'
+import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
 
 const props = defineProps({
   categories: { type: Array, default: () => [] },
@@ -18,6 +19,7 @@ const pedestrianColumns = ref(3)
 const pedestrianSpacingX = ref(1.2)
 const pedestrianSpacingZ = ref(1.2)
 const pedestrianRadius = ref(3)
+const { dt } = useDirectorStudioI18n()
 
 const filteredModels = computed(() => {
   const query = searchTerm.value.trim().toLowerCase()
@@ -61,7 +63,7 @@ function addPedestrians() {
   <section class="director-model-library" :class="{ highlighted }">
     <div class="director-panel-heading">
       <div>
-        <span>Model Library</span>
+        <span>{{ dt('modelLibrary.title', '模型库') }}</span>
         <strong>{{ filteredModels.length }}</strong>
       </div>
       <Box :size="16" stroke-width="2" />
@@ -71,11 +73,11 @@ function addPedestrians() {
       v-model="searchTerm"
       class="director-library-search"
       type="search"
-      placeholder="Search models"
+      :placeholder="dt('modelLibrary.searchPlaceholder', '搜索模型')"
       autocomplete="off"
     >
 
-    <div class="director-category-tabs" aria-label="Model categories">
+    <div class="director-category-tabs" :aria-label="dt('modelLibrary.categoriesLabel', '模型分类')">
       <button
         v-for="category in categories"
         :key="category.id"
@@ -83,7 +85,7 @@ function addPedestrians() {
         :class="{ active: category.id === activeCategoryId }"
         @click="activeCategoryId = category.id"
       >
-        {{ category.id }}
+        {{ dt(category.labelKey, category.id) }}
       </button>
     </div>
 
@@ -101,49 +103,49 @@ function addPedestrians() {
           <small>{{ model.presetId }}</small>
         </span>
       </button>
-      <div v-if="filteredModels.length === 0" class="director-empty-row">No models</div>
+      <div v-if="filteredModels.length === 0" class="director-empty-row">{{ dt('modelLibrary.empty', '暂无模型') }}</div>
     </div>
 
     <div class="director-pedestrian-panel">
       <div class="director-pedestrian-heading">
         <Move3D :size="14" stroke-width="2" />
-        <span>Pedestrians</span>
+        <span>{{ dt('modelLibrary.pedestrians', '行人') }}</span>
       </div>
 
       <div class="director-field-row">
-        <label>Mode</label>
+        <label>{{ dt('modelLibrary.mode', '模式') }}</label>
         <select v-model="pedestrianMode">
-          <option value="single">one person</option>
-          <option value="array">array</option>
-          <option value="random">random</option>
+          <option value="single">{{ dt('modelLibrary.modes.single', '单人') }}</option>
+          <option value="array">{{ dt('modelLibrary.modes.array', '阵列') }}</option>
+          <option value="random">{{ dt('modelLibrary.modes.random', '随机') }}</option>
         </select>
       </div>
 
       <div v-if="pedestrianMode !== 'single'" class="director-field-grid">
         <label>
-          <span>Count</span>
+          <span>{{ dt('modelLibrary.count', '数量') }}</span>
           <input v-model.number="pedestrianCount" type="number" min="1" max="80" step="1">
         </label>
         <label v-if="pedestrianMode === 'array'">
-          <span>Columns</span>
+          <span>{{ dt('modelLibrary.columns', '列数') }}</span>
           <input v-model.number="pedestrianColumns" type="number" min="1" max="20" step="1">
         </label>
         <label v-if="pedestrianMode === 'array'">
-          <span>X spacing</span>
+          <span>{{ dt('modelLibrary.xSpacing', 'X 间距') }}</span>
           <input v-model.number="pedestrianSpacingX" type="number" min="0.2" max="10" step="0.1">
         </label>
         <label v-if="pedestrianMode === 'array'">
-          <span>Z spacing</span>
+          <span>{{ dt('modelLibrary.zSpacing', 'Z 间距') }}</span>
           <input v-model.number="pedestrianSpacingZ" type="number" min="0.2" max="10" step="0.1">
         </label>
         <label v-if="pedestrianMode === 'random'">
-          <span>Radius</span>
+          <span>{{ dt('modelLibrary.radius', '半径') }}</span>
           <input v-model.number="pedestrianRadius" type="number" min="0.2" max="30" step="0.1">
         </label>
       </div>
 
       <button type="button" class="director-add-pedestrians" @click="addPedestrians">
-        Add pedestrians
+        {{ dt('modelLibrary.addPedestrians', '添加行人') }}
       </button>
     </div>
   </section>
@@ -199,12 +201,13 @@ function addPedestrians() {
 .director-field-row select,
 .director-field-grid input {
   width: 100%;
-  height: 30px;
+  min-height: var(--director-control-height, 34px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   background: #0f1114;
   color: #e5e7eb;
   font-size: 12px;
+  line-height: var(--director-control-line-height, 1.35);
 }
 
 .director-library-search {
@@ -218,13 +221,14 @@ function addPedestrians() {
 }
 
 .director-category-tabs button {
-  height: 28px;
+  min-height: 32px;
   min-width: 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
   background: #171a1f;
   color: #a1a1aa;
   font-size: 11px;
+  line-height: var(--director-control-line-height, 1.35);
   cursor: pointer;
 }
 
@@ -330,13 +334,14 @@ function addPedestrians() {
 }
 
 .director-add-pedestrians {
-  height: 30px;
+  min-height: var(--director-control-height, 34px);
   border: 1px solid rgba(34, 197, 94, 0.28);
   border-radius: 7px;
   background: rgba(21, 128, 61, 0.22);
   color: #bbf7d0;
   font-size: 12px;
   font-weight: 700;
+  line-height: var(--director-control-line-height, 1.35);
   cursor: pointer;
 }
 

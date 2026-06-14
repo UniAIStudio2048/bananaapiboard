@@ -11,6 +11,7 @@ import {
   DIRECTOR_STUDIO_BODY_STYLES,
   normalizeDirectorStudioBodyControls
 } from '@/config/canvas/directorStudioPresetCatalog.js'
+import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
 
 const DEG_TO_RAD = Math.PI / 180
 const RAD_TO_DEG = 180 / Math.PI
@@ -66,10 +67,11 @@ const emit = defineEmits([
 ])
 
 const poseName = ref('')
+const { dt } = useDirectorStudioI18n()
 
 const itemLabel = computed(() => {
   const item = props.selectedItem
-  return item?.label || item?.title || item?.name || item?.id || 'No selection'
+  return item?.label || item?.title || item?.name || item?.id || dt('status.noSelection', '未选择')
 })
 
 const itemPosition = computed(() => props.selectedItem ? ensureDirectorPos3d(props.selectedItem) : { x: 0, y: 0, z: 0 })
@@ -192,7 +194,7 @@ function updateBodyShowControls(event) {
 
 function savePose() {
   if (!props.selectedItem?.id) return
-  const rawName = poseName.value.trim() || `${itemLabel.value} pose`
+  const rawName = poseName.value.trim() || dt('inspector.defaultPoseName', '{name} 姿势', { name: itemLabel.value })
   const key = rawName.toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/gi, '-').replace(/^-|-$/g, '') || `pose-${Date.now()}`
   emit('save-custom-pose', {
     key,
@@ -254,18 +256,18 @@ function patchView(key, event) {
   <aside class="director-inspector">
     <section class="director-inspector-band">
       <div class="director-inspector-title">
-        <span>Inspector</span>
+        <span>{{ dt('inspector.title', '检查器') }}</span>
         <strong>{{ itemLabel }}</strong>
       </div>
 
       <div class="director-transform-tabs">
-        <button type="button" :class="{ active: transformMode === 'move' }" title="Move" @click="emit('update:transformMode', 'move')">
+        <button type="button" :class="{ active: transformMode === 'move' }" :title="dt('toolbar.move', '移动')" @click="emit('update:transformMode', 'move')">
           <Move3D :size="15" stroke-width="2" />
         </button>
-        <button type="button" :class="{ active: transformMode === 'rotate' }" title="Rotate" @click="emit('update:transformMode', 'rotate')">
+        <button type="button" :class="{ active: transformMode === 'rotate' }" :title="dt('toolbar.rotate', '旋转')" @click="emit('update:transformMode', 'rotate')">
           <RotateCcw :size="15" stroke-width="2" />
         </button>
-        <button type="button" :class="{ active: transformMode === 'scale' }" title="Scale" @click="emit('update:transformMode', 'scale')">
+        <button type="button" :class="{ active: transformMode === 'scale' }" :title="dt('toolbar.scale', '缩放')" @click="emit('update:transformMode', 'scale')">
           <Scale3D :size="15" stroke-width="2" />
         </button>
       </div>
@@ -274,59 +276,59 @@ function patchView(key, event) {
     <section class="director-inspector-section">
       <template v-if="selectedItem">
         <div class="director-action-row">
-          <button type="button" @click="emit('focus-selected')">Focus</button>
-          <button type="button" title="Copy selected" @click="emit('copy-item')">
+          <button type="button" @click="emit('focus-selected')">{{ dt('inspector.focus', '聚焦') }}</button>
+          <button type="button" :title="dt('toolbar.copySelected', '复制选中')" @click="emit('copy-item')">
             <Copy :size="14" stroke-width="2" />
           </button>
-          <button type="button" :disabled="!canPaste" @click="emit('paste-item')">Paste</button>
-          <button type="button" @click="emit('duplicate-item')">Duplicate</button>
-          <button type="button" class="danger" title="Delete selected" @click="emit('delete-item')">
+          <button type="button" :disabled="!canPaste" @click="emit('paste-item')">{{ dt('inspector.paste', '粘贴') }}</button>
+          <button type="button" @click="emit('duplicate-item')">{{ dt('inspector.duplicate', '复制副本') }}</button>
+          <button type="button" class="danger" :title="dt('toolbar.deleteSelected', '删除选中')" @click="emit('delete-item')">
             <Trash2 :size="14" stroke-width="2" />
           </button>
         </div>
 
         <label class="director-field">
-          <span>Name</span>
+          <span>{{ dt('inspector.name', '名称') }}</span>
           <input :value="selectedItem.label || ''" type="text" @change="updateStringField('label', $event)">
         </label>
 
         <div class="director-field-grid three">
           <label>
-            <span>Category</span>
+            <span>{{ dt('inspector.category', '分类') }}</span>
             <select :value="selectedItem.category || 'object'" @change="updateStringField('category', $event)">
-              <option value="person">person</option>
-              <option value="object">object</option>
-              <option value="scene">scene</option>
+              <option value="person">{{ dt('categories.person', '人物') }}</option>
+              <option value="object">{{ dt('categories.object', '物体') }}</option>
+              <option value="scene">{{ dt('categories.scene', '场景') }}</option>
             </select>
           </label>
           <label>
-            <span>Color</span>
+            <span>{{ dt('inspector.color', '颜色') }}</span>
             <input :value="selectedItem.color || '#38bdf8'" type="color" @input="updateStringField('color', $event)">
           </label>
           <label class="director-checkbox-field">
             <input :checked="selectedItem.showLabel !== false" type="checkbox" @change="updateBooleanField('showLabel', $event)">
-            <span>Label</span>
+            <span>{{ dt('inspector.label', '标签') }}</span>
           </label>
         </div>
 
         <label class="director-field">
-          <span>Action</span>
+          <span>{{ dt('inspector.action', '动作') }}</span>
           <input :value="selectedItem.action || ''" type="text" @change="updateStringField('action', $event)">
         </label>
 
         <label class="director-field">
-          <span>Relation</span>
+          <span>{{ dt('inspector.relation', '关系') }}</span>
           <input :value="selectedItem.relation || ''" type="text" @change="updateStringField('relation', $event)">
         </label>
 
         <label class="director-field">
-          <span>Note</span>
+          <span>{{ dt('inspector.note', '备注') }}</span>
           <textarea :value="selectedItem.note || ''" rows="2" @change="updateStringField('note', $event)" />
         </label>
 
         <div class="director-field-grid three">
           <label v-for="axis in ['x', 'y', 'z']" :key="`pos-${axis}`">
-            <span>Pos {{ axis.toUpperCase() }}</span>
+            <span>{{ dt('inspector.position', '位置') }} {{ axis.toUpperCase() }}</span>
             <input
               :value="readDirectorUiAxis(itemPosition, axis).toFixed(2)"
               type="number"
@@ -338,7 +340,7 @@ function patchView(key, event) {
 
         <div class="director-field-grid three">
           <label v-for="axis in ['x', 'y', 'z']" :key="`rot-${axis}`">
-            <span>Rot {{ axis.toUpperCase() }}</span>
+            <span>{{ dt('inspector.rotation', '旋转') }} {{ axis.toUpperCase() }}</span>
             <input
               :value="Math.round(itemRotation[axis] * RAD_TO_DEG)"
               type="number"
@@ -350,15 +352,15 @@ function patchView(key, event) {
 
         <div class="director-field-grid three">
           <label v-for="axis in ['x', 'y', 'z']" :key="`scale-${axis}`">
-            <span>Scale {{ axis.toUpperCase() }}</span>
+            <span>{{ dt('inspector.scale', '缩放') }} {{ axis.toUpperCase() }}</span>
             <input :value="itemScale[axis].toFixed(2)" type="number" min="0.05" max="10" step="0.05" @change="updateScale(axis, $event)">
           </label>
         </div>
 
         <div class="director-field-row">
-          <label>Reference</label>
+          <label>{{ dt('inspector.reference', '参考图') }}</label>
           <select :value="currentReferenceUrl" @change="updateReference">
-            <option value="">unlinked</option>
+            <option value="">{{ dt('inspector.unlinked', '未关联') }}</option>
             <option v-for="asset in referenceAssets" :key="asset.id || asset.url" :value="asset.url">
               {{ asset.label || asset.url }}
             </option>
@@ -366,180 +368,180 @@ function patchView(key, event) {
         </div>
 
         <div v-if="selectedItem.category === 'person'" class="director-body-controls">
-          <div class="director-section-subtitle">Body</div>
+          <div class="director-section-subtitle">{{ dt('inspector.body', '身体') }}</div>
           <div class="director-field-row">
-            <label>Style</label>
+            <label>{{ dt('inspector.style', '风格') }}</label>
             <select :value="bodyControls.style" @change="updateBodyStyle">
               <option v-for="style in DIRECTOR_STUDIO_BODY_STYLES" :key="style.value" :value="style.value">
-                {{ style.value }}
+                {{ dt(style.labelKey, style.value) }}
               </option>
             </select>
           </div>
           <label class="director-checkbox-field inline">
             <input :checked="bodyControls.showControls" type="checkbox" @change="updateBodyShowControls">
-            <span>Controls</span>
+            <span>{{ dt('inspector.controls', '控制点') }}</span>
           </label>
           <div class="director-field-grid two">
             <label>
-              <span>Height</span>
+              <span>{{ dt('inspector.height', '身高') }}</span>
               <input :value="bodyControls.core.height" type="number" min="0.45" max="1.8" step="0.01" @change="updateBodyValue('core', 'height', $event)">
             </label>
             <label>
-              <span>Torso</span>
+              <span>{{ dt('inspector.torso', '躯干') }}</span>
               <input :value="bodyControls.core.torsoWidth" type="number" min="0.45" max="2.2" step="0.01" @change="updateBodyValue('core', 'torsoWidth', $event)">
             </label>
             <label>
-              <span>Head</span>
+              <span>{{ dt('inspector.head', '头部') }}</span>
               <input :value="bodyControls.core.headScale" type="number" min="0.55" max="1.8" step="0.01" @change="updateBodyValue('core', 'headScale', $event)">
             </label>
             <label>
-              <span>Lean</span>
+              <span>{{ dt('inspector.lean', '倾斜') }}</span>
               <input :value="bodyControls.core.torsoLeanDeg" type="number" min="-45" max="45" step="1" @change="updateBodyValue('core', 'torsoLeanDeg', $event)">
             </label>
             <label>
-              <span>Arm len</span>
+              <span>{{ dt('inspector.armLength', '手臂长度') }}</span>
               <input :value="bodyControls.arms.length" type="number" min="0.45" max="1.8" step="0.01" @change="updateBodyValue('arms', 'length', $event)">
             </label>
             <label>
-              <span>Arm thick</span>
+              <span>{{ dt('inspector.armThickness', '手臂粗细') }}</span>
               <input :value="bodyControls.arms.thickness" type="number" min="0.45" max="2" step="0.01" @change="updateBodyValue('arms', 'thickness', $event)">
             </label>
             <label>
-              <span>Leg len</span>
+              <span>{{ dt('inspector.legLength', '腿部长度') }}</span>
               <input :value="bodyControls.legs.length" type="number" min="0.45" max="1.8" step="0.01" @change="updateBodyValue('legs', 'length', $event)">
             </label>
             <label>
-              <span>Leg thick</span>
+              <span>{{ dt('inspector.legThickness', '腿部粗细') }}</span>
               <input :value="bodyControls.legs.thickness" type="number" min="0.45" max="2" step="0.01" @change="updateBodyValue('legs', 'thickness', $event)">
             </label>
           </div>
         </div>
 
         <div class="director-custom-pose">
-          <div class="director-section-subtitle">Custom poses</div>
+          <div class="director-section-subtitle">{{ dt('inspector.customPoses', '自定义姿势') }}</div>
           <div class="director-field-row">
-            <label>Apply</label>
+            <label>{{ dt('inspector.apply', '应用') }}</label>
             <select value="" @change="$event.target.value && emit('apply-custom-pose', $event.target.value)">
-              <option value="">none</option>
+              <option value="">{{ dt('inspector.none', '无') }}</option>
               <option v-for="[key, pose] in customPoseEntries" :key="key" :value="key">
                 {{ pose.name || key }}
               </option>
             </select>
           </div>
           <div class="director-field-row">
-            <label>Name</label>
+            <label>{{ dt('inspector.name', '名称') }}</label>
             <input v-model="poseName" type="text">
           </div>
-          <button type="button" class="director-wide-button" @click="savePose">Save pose</button>
+          <button type="button" class="director-wide-button" @click="savePose">{{ dt('inspector.savePose', '保存姿势') }}</button>
         </div>
       </template>
-      <div v-else class="director-empty-selection">No item selected</div>
+      <div v-else class="director-empty-selection">{{ dt('inspector.noItemSelected', '未选择元素') }}</div>
     </section>
 
     <details class="director-inspector-section" :open="activeSection === 'camera'">
-      <summary>Camera</summary>
+      <summary>{{ dt('inspector.camera', '镜头') }}</summary>
       <div class="director-slider-field">
-        <span>FOV {{ Math.round(camera.fov || 40) }}</span>
+        <span>{{ dt('inspector.fov', '视角') }} {{ Math.round(camera.fov || 40) }}</span>
         <input :value="camera.fov || 40" type="range" min="10" max="150" step="1" @input="patchCamera('fov', $event)">
       </div>
       <div class="director-slider-field">
-        <span>Lens {{ Number(camera.lensDistance || 8).toFixed(1) }}</span>
+        <span>{{ dt('inspector.lens', '镜头距离') }} {{ Number(camera.lensDistance || 8).toFixed(1) }}</span>
         <input :value="camera.lensDistance || 8" type="range" min="2" max="80" step="0.5" @input="patchCamera('lensDistance', $event)">
       </div>
     </details>
 
     <details class="director-inspector-section" :open="activeSection === 'lighting'">
-      <summary>Lighting</summary>
+      <summary>{{ dt('inspector.lighting', '灯光') }}</summary>
       <label class="director-checkbox-field inline">
         <input :checked="lighting.enabled !== false" type="checkbox" @change="patchLighting('enabled', $event, 'boolean')">
-        <span>Enabled</span>
+        <span>{{ dt('inspector.enabled', '启用') }}</span>
       </label>
       <div class="director-slider-field">
-        <span>Main {{ Number(lighting.mainIntensity || 0).toFixed(2) }}</span>
+        <span>{{ dt('inspector.mainLight', '主光') }} {{ Number(lighting.mainIntensity || 0).toFixed(2) }}</span>
         <input :value="lighting.mainIntensity || 0" type="range" min="0" max="4" step="0.05" @input="patchLighting('mainIntensity', $event)">
       </div>
       <div class="director-field-grid two">
         <label>
-          <span>Yaw</span>
+          <span>{{ dt('inspector.yaw', '水平角') }}</span>
           <input :value="lighting.mainYaw || 0" type="number" min="-180" max="180" step="1" @change="patchLighting('mainYaw', $event)">
         </label>
         <label>
-          <span>Pitch</span>
+          <span>{{ dt('inspector.pitch', '俯仰角') }}</span>
           <input :value="lighting.mainPitch || 0" type="number" min="-20" max="89" step="1" @change="patchLighting('mainPitch', $event)">
         </label>
         <label>
-          <span>Main color</span>
+          <span>{{ dt('inspector.mainColor', '主光颜色') }}</span>
           <input :value="lighting.mainColor || '#ffffff'" type="color" @input="patchLighting('mainColor', $event, 'color')">
         </label>
         <label>
-          <span>Ambient color</span>
+          <span>{{ dt('inspector.ambientColor', '环境光颜色') }}</span>
           <input :value="lighting.ambientColor || '#ffffff'" type="color" @input="patchLighting('ambientColor', $event, 'color')">
         </label>
       </div>
       <div class="director-slider-field">
-        <span>Ambient {{ Number(lighting.ambientIntensity || 0).toFixed(2) }}</span>
+        <span>{{ dt('inspector.ambientLight', '环境光') }} {{ Number(lighting.ambientIntensity || 0).toFixed(2) }}</span>
         <input :value="lighting.ambientIntensity || 0" type="range" min="0" max="3" step="0.05" @input="patchLighting('ambientIntensity', $event)">
       </div>
     </details>
 
     <details class="director-inspector-section" :open="activeSection === 'grid'">
-      <summary>Grid</summary>
+      <summary>{{ dt('inspector.grid', '网格') }}</summary>
       <label class="director-checkbox-field inline">
         <input :checked="grid.visible !== false" type="checkbox" @change="patchGrid('visible', $event, 'boolean')">
-        <span>Visible</span>
+        <span>{{ dt('inspector.visible', '显示') }}</span>
       </label>
       <div class="director-slider-field">
-        <span>Height {{ Number(grid.height || 0).toFixed(1) }}</span>
+        <span>{{ dt('inspector.gridHeight', '网格高度') }} {{ Number(grid.height || 0).toFixed(1) }}</span>
         <input :value="grid.height || 0" type="range" min="-5" max="10" step="0.1" @input="patchGrid('height', $event)">
       </div>
     </details>
 
     <details class="director-inspector-section" :open="activeSection === 'view'">
-      <summary>View</summary>
+      <summary>{{ dt('inspector.view', '视图') }}</summary>
       <label class="director-checkbox-field inline">
         <input :checked="viewSettings.wheelZoomEnabled !== false" type="checkbox" @change="patchView('wheelZoomEnabled', $event)">
-        <span>Wheel zoom</span>
+        <span>{{ dt('inspector.wheelZoom', '滚轮缩放') }}</span>
       </label>
       <label class="director-checkbox-field inline">
         <input :checked="viewSettings.reverseWheelZoom === true" type="checkbox" @change="patchView('reverseWheelZoom', $event)">
-        <span>Reverse wheel</span>
+        <span>{{ dt('inspector.reverseWheel', '反向滚轮') }}</span>
       </label>
       <label class="director-checkbox-field inline">
         <input :checked="viewSettings.showAdvancedPedestrianTags === true" type="checkbox" @change="patchView('showAdvancedPedestrianTags', $event)">
-        <span>Pedestrian tags</span>
+        <span>{{ dt('inspector.pedestrianTags', '行人标签') }}</span>
       </label>
     </details>
 
     <details class="director-inspector-section" :open="activeSection === 'aspect'">
-      <summary>Frame</summary>
+      <summary>{{ dt('inspector.frame', '画幅') }}</summary>
       <div class="director-field-row">
-        <label>Aspect</label>
+        <label>{{ dt('inspector.aspect', '比例') }}</label>
         <select :value="aspectFrame" @change="patchNodeData({ aspectFrame: $event.target.value, aspectRatio: $event.target.value })">
           <option v-for="frame in aspectFrames" :key="frame.value" :value="frame.value">
-            {{ frame.value }}
+            {{ dt(frame.labelKey, frame.value) }}
           </option>
         </select>
       </div>
       <div class="director-field-row">
-        <label>Resolution</label>
+        <label>{{ dt('inspector.resolution', '分辨率') }}</label>
         <select :value="screenshotResolution" @change="patchNodeData({ screenshotResolution: $event.target.value })">
           <option v-for="resolution in screenshotResolutions" :key="resolution.value" :value="resolution.value">
-            {{ resolution.value }}
+            {{ dt(resolution.labelKey, resolution.value) }}
           </option>
         </select>
       </div>
     </details>
 
     <details class="director-inspector-section" :open="activeSection === 'prompt'">
-      <summary>Prompt</summary>
+      <summary>{{ dt('inspector.prompt', '提示词') }}</summary>
       <label class="director-field">
-        <span>Base prompt</span>
+        <span>{{ dt('inspector.basePrompt', '基础提示词') }}</span>
         <textarea :value="basePrompt" rows="4" @change="patchNodeData({ basePrompt: $event.target.value })" />
       </label>
     </details>
 
     <section class="director-inspector-section">
-      <button type="button" class="director-wide-button" @click="emit('open-shortcuts')">Shortcuts</button>
+      <button type="button" class="director-wide-button" @click="emit('open-shortcuts')">{{ dt('shortcuts.title', '快捷键') }}</button>
     </section>
   </aside>
 </template>
@@ -605,7 +607,7 @@ function patchView(key, event) {
 .director-action-row button,
 .director-wide-button {
   display: inline-flex;
-  height: 30px;
+  min-height: var(--director-control-height, 34px);
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -614,11 +616,12 @@ function patchView(key, event) {
   color: #d4d4d8;
   font-size: 12px;
   font-weight: 700;
+  line-height: var(--director-control-line-height, 1.35);
   cursor: pointer;
 }
 
 .director-transform-tabs button {
-  width: 30px;
+  width: var(--director-control-height, 34px);
 }
 
 .director-action-row button {
@@ -686,11 +689,14 @@ textarea {
   background: #0f1114;
   color: #e5e7eb;
   font-size: 12px;
+  line-height: var(--director-control-line-height, 1.35);
 }
 
 input,
 select {
-  height: 30px;
+  min-height: var(--director-control-height, 34px);
+  padding: 0 8px;
+  line-height: var(--director-control-line-height, 1.35);
 }
 
 input[type="color"] {
@@ -728,8 +734,10 @@ textarea {
 
 .director-checkbox-field input {
   width: 14px;
+  min-height: 14px;
   height: 14px;
   flex: none;
+  padding: 0;
 }
 
 .director-body-controls,
@@ -746,7 +754,9 @@ textarea {
 }
 
 .director-slider-field input {
+  min-height: 20px;
   height: 20px;
+  padding: 0;
 }
 
 summary {
