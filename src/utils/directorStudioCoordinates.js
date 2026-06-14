@@ -7,11 +7,19 @@ export const DIRECTOR_AXIS_COLORS = {
   z: '#10b981'
 }
 
+function normalizeLegacyCoordinate(value, fallback) {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : fallback
+}
+
 export function legacyDirectorTo3D(x, y) {
+  const legacyX = normalizeLegacyCoordinate(x, DIRECTOR_LEGACY_2D_W / 2)
+  const legacyY = normalizeLegacyCoordinate(y, DIRECTOR_LEGACY_2D_H / 2)
+
   return {
-    x: (Number(x) / DIRECTOR_LEGACY_2D_W - 0.5) * 10,
+    x: (legacyX / DIRECTOR_LEGACY_2D_W - 0.5) * 10,
     y: 0,
-    z: (Number(y) / DIRECTOR_LEGACY_2D_H - 0.5) * 6
+    z: (legacyY / DIRECTOR_LEGACY_2D_H - 0.5) * 6
   }
 }
 

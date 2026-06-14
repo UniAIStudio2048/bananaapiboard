@@ -20,5 +20,7 @@ assert.deepEqual(writeDirectorUiAxis(pos, 'z', 7), { x: 2, y: 7, z: 4 })
 
 assert.deepEqual(ensureDirectorPos3d({ pos3d: { x: 1, y: 2, z: 3 }, x: 0, y: 0 }), { x: 1, y: 2, z: 3 })
 assert.deepEqual(ensureDirectorPos3d({ x: 260, y: 130 }), { x: 0, y: 0, z: 0 })
+assert.deepEqual(legacyDirectorTo3D('bad', undefined), { x: 0, y: 0, z: 0 })
+assert.deepEqual(ensureDirectorPos3d({ x: 'bad', y: undefined }), { x: 0, y: 0, z: 0 })
 
 console.log('directorStudioCoordinates tests passed')

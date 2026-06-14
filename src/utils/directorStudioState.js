@@ -75,6 +75,15 @@ function normalizeDirectorColor(value, fallback) {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback
 }
 
+function normalizeDirectorString(value, fallback = '') {
+  return typeof value === 'string' ? value.trim() : fallback
+}
+
+function normalizeDirectorNullableString(value) {
+  const normalized = normalizeDirectorString(value, '')
+  return normalized || null
+}
+
 function normalizeFiniteTimestamp(value, fallback) {
   const numeric = Number(value)
   return Number.isFinite(numeric) ? numeric : fallback
@@ -180,16 +189,52 @@ export function appendDirectorSnapshotHistory(snapshotHistory, snapshotUrl) {
 export function createDirectorBlankSnapshot() {
   return {
     mode: 'flat',
+    backgroundUrl: null,
+    backgroundImageUrl: null,
     items: [],
+    referenceImages: [],
+    customActionPresets: [],
+    customActionPoses: {},
+    basePrompt: '',
     camera: cloneJson(DEFAULT_DIRECTOR_CAMERA),
     lighting: cloneJson(DEFAULT_DIRECTOR_LIGHTING),
     grid: cloneJson(DEFAULT_DIRECTOR_GRID),
     viewSettings: cloneJson(DEFAULT_DIRECTOR_VIEW_SETTINGS),
+    directorStudioShortcuts: cloneJson(DEFAULT_DIRECTOR_STUDIO_SHORTCUTS),
     aspectRatio: '16:9',
     aspectFrame: '16:9',
     screenshotResolution: DIRECTOR_SCREENSHOT_RESOLUTIONS[0].value,
     snapshotUrl: null,
     snapshotHistory: []
+  }
+}
+
+export function normalizeDirectorSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return createDirectorBlankSnapshot()
+
+  const snapshotUrl = normalizeDirectorNullableString(snapshot.snapshotUrl)
+
+  return {
+    mode: snapshot.mode === 'panorama' ? 'panorama' : 'flat',
+    backgroundUrl: normalizeDirectorNullableString(snapshot.backgroundUrl),
+    backgroundImageUrl: normalizeDirectorNullableString(snapshot.backgroundImageUrl),
+    items: Array.isArray(snapshot.items) ? cloneJson(snapshot.items) : [],
+    referenceImages: Array.isArray(snapshot.referenceImages) ? cloneJson(snapshot.referenceImages) : [],
+    customActionPresets: Array.isArray(snapshot.customActionPresets) ? cloneJson(snapshot.customActionPresets) : [],
+    customActionPoses: snapshot.customActionPoses && typeof snapshot.customActionPoses === 'object' && !Array.isArray(snapshot.customActionPoses)
+      ? cloneJson(snapshot.customActionPoses)
+      : {},
+    basePrompt: normalizeDirectorString(snapshot.basePrompt, ''),
+    aspectRatio: normalizeDirectorString(snapshot.aspectRatio, '') || '16:9',
+    camera: normalizeDirectorCamera(snapshot.camera),
+    lighting: normalizeDirectorLighting(snapshot.lighting),
+    grid: normalizeDirectorGrid(snapshot.grid),
+    viewSettings: normalizeDirectorViewSettings(snapshot.viewSettings),
+    directorStudioShortcuts: normalizeDirectorStudioShortcuts(snapshot.directorStudioShortcuts),
+    aspectFrame: normalizeDirectorAspectFrame(snapshot.aspectFrame),
+    screenshotResolution: normalizeDirectorScreenshotResolution(snapshot.screenshotResolution),
+    snapshotUrl,
+    snapshotHistory: normalizeDirectorSnapshotHistory(snapshotUrl, snapshot.snapshotHistory)
   }
 }
 
@@ -229,7 +274,7 @@ export function normalizeDirectorProjectRecord(project) {
     name,
     createdAt,
     updatedAt,
-    snapshot: project.snapshot ? cloneJson(project.snapshot) : createDirectorBlankSnapshot()
+    snapshot: normalizeDirectorSnapshot(project.snapshot)
   }
 }
 

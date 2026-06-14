@@ -11,6 +11,7 @@ import {
   normalizeDirectorCamera,
   normalizeDirectorLighting,
   normalizeDirectorProjectRecord,
+  normalizeDirectorSnapshot,
   normalizeDirectorSnapshotHistory
 } from './directorStudioState.js'
 
@@ -83,6 +84,56 @@ const blank = createDirectorBlankSnapshot()
 assert.equal(blank.mode, 'flat')
 assert.equal(blank.aspectRatio, '16:9')
 assert.deepEqual(blank.snapshotHistory, [])
+
+const primitiveSnapshotProject = normalizeDirectorProjectRecord({
+  id: 'primitive-snapshot',
+  updatedAt: 456,
+  snapshot: 'bad'
+})
+assert.deepEqual(primitiveSnapshotProject.snapshot, createDirectorBlankSnapshot())
+
+const malformedSnapshot = normalizeDirectorSnapshot({
+  mode: 'three',
+  backgroundUrl: 123,
+  backgroundImageUrl: ' https://cdn/bg.png ',
+  items: 'bad',
+  referenceImages: 'bad',
+  customActionPresets: 'bad',
+  customActionPoses: null,
+  basePrompt: 123,
+  aspectRatio: '',
+  camera: { fov: 999 },
+  lighting: { mainIntensity: 99 },
+  grid: { height: 999 },
+  viewSettings: { wheelZoomEnabled: 'bad' },
+  directorStudioShortcuts: { screenshot: 'S' },
+  aspectFrame: 'bad',
+  screenshotResolution: 'bad',
+  snapshotUrl: ' https://cdn/snap.png ',
+  snapshotHistory: ['https://cdn/a.png', 'https://cdn/a.png', '', 'https://cdn/b.png']
+})
+assert.equal(malformedSnapshot.mode, 'flat')
+assert.equal(malformedSnapshot.backgroundUrl, null)
+assert.equal(malformedSnapshot.backgroundImageUrl, 'https://cdn/bg.png')
+assert.deepEqual(malformedSnapshot.items, [])
+assert.deepEqual(malformedSnapshot.referenceImages, [])
+assert.deepEqual(malformedSnapshot.customActionPresets, [])
+assert.deepEqual(malformedSnapshot.customActionPoses, {})
+assert.equal(malformedSnapshot.basePrompt, '')
+assert.equal(malformedSnapshot.aspectRatio, '16:9')
+assert.equal(malformedSnapshot.camera.fov, 150)
+assert.equal(malformedSnapshot.lighting.mainIntensity, 4)
+assert.equal(malformedSnapshot.grid.height, 20)
+assert.deepEqual(malformedSnapshot.viewSettings, DEFAULT_DIRECTOR_VIEW_SETTINGS)
+assert.equal(malformedSnapshot.directorStudioShortcuts.screenshot, 'S')
+assert.equal(malformedSnapshot.aspectFrame, '16:9')
+assert.equal(malformedSnapshot.screenshotResolution, '1080p')
+assert.equal(malformedSnapshot.snapshotUrl, 'https://cdn/snap.png')
+assert.deepEqual(malformedSnapshot.snapshotHistory, [
+  'https://cdn/a.png',
+  'https://cdn/b.png',
+  'https://cdn/snap.png'
+])
 
 assert.equal(normalizeDirectorProjectRecord(null), null)
 const project = normalizeDirectorProjectRecord({

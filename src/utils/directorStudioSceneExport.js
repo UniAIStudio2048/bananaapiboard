@@ -2,14 +2,20 @@ import { DIRECTOR_ASPECT_FRAMES, DIRECTOR_SCREENSHOT_RESOLUTIONS } from './direc
 
 const AI_REQUEST_RATIOS = new Set(['1:1', '16:9', '9:16', '4:3', '3:4', '21:9'])
 
+function isDirectorAspectFrameValue(value) {
+  return DIRECTOR_ASPECT_FRAMES.some(frame => frame.value === value)
+}
+
 export function getDirectorAspectFrameRatio(frameValue) {
   return DIRECTOR_ASPECT_FRAMES.find(frame => frame.value === frameValue)?.ratio ?? null
 }
 
 export function resolveDirectorAspectRatio(data) {
-  if (data?.aspectFrame && data.aspectFrame !== 'panorama') return data.aspectFrame
+  const aspectFrame = typeof data?.aspectFrame === 'string' ? data.aspectFrame.trim() : ''
+  if (aspectFrame && aspectFrame !== 'panorama' && isDirectorAspectFrameValue(aspectFrame)) return aspectFrame
+
   const aspectRatio = typeof data?.aspectRatio === 'string' ? data.aspectRatio.trim() : ''
-  return aspectRatio && aspectRatio !== 'panorama' ? aspectRatio : '16:9'
+  return aspectRatio && aspectRatio !== 'panorama' && isDirectorAspectFrameValue(aspectRatio) ? aspectRatio : '16:9'
 }
 
 export function resolveDirectorAiRequestAspectRatio(data) {
