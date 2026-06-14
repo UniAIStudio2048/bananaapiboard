@@ -127,11 +127,23 @@ test('director studio shell imports panorama backgrounds from assets or local up
 
 test('director studio shell keeps the scene usable on narrow viewports', () => {
   const source = read('components/canvas/director/DirectorStudioShell.vue')
+  const toolbarSource = read('components/canvas/director/DirectorStudioToolbar.vue')
+  const projectSource = read('components/canvas/director/DirectorStudioProjectPanel.vue')
+  const inspectorSource = read('components/canvas/director/DirectorStudioInspector.vue')
 
   assert.match(source, /@media\s*\(max-width:\s*860px\)/)
   assert.match(source, /@media\s*\(max-width:\s*860px\)[\s\S]*\.director-shell-workspace\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*grid-template-rows:[\s\S]*\}/)
   assert.match(source, /@media\s*\(max-width:\s*860px\)[\s\S]*\.director-shell-stage\s*\{[\s\S]*min-height:\s*320px[\s\S]*\}/)
+  assert.match(source, /@media\s*\(max-width:\s*860px\)[\s\S]*\.director-shell-left\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)[\s\S]*\}/)
   assert.match(source, /@media\s*\(max-width:\s*860px\)[\s\S]*:deep\(\.director-inspector\)\s*\{[\s\S]*max-height:[\s\S]*\}/)
+  assert.match(source, /@media\s*\(max-width:\s*640px\)[\s\S]*\.director-shell-left\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*\}/)
+  assert.match(toolbarSource, /@media\s*\(max-width:\s*860px\)[\s\S]*\.director-toolbar\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*\}/)
+  assert.match(toolbarSource, /@media\s*\(max-width:\s*860px\)[\s\S]*\.director-toolbar-group,\s*\n\s*\.director-toolbar-segment\s*\{[\s\S]*width:\s*100%[\s\S]*overflow-x:\s*auto[\s\S]*\}/)
+  assert.match(toolbarSource, /@media\s*\(max-width:\s*640px\)[\s\S]*\.director-command\s+span\s*\{[\s\S]*display:\s*none[\s\S]*\}/)
+  assert.match(projectSource, /@media\s*\(max-width:\s*520px\)[\s\S]*\.director-project-row\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*\}/)
+  assert.match(projectSource, /@media\s*\(max-width:\s*520px\)[\s\S]*\.director-project-row-actions\s*\{[\s\S]*flex-wrap:\s*wrap[\s\S]*\}/)
+  assert.match(inspectorSource, /@media\s*\(max-width:\s*520px\)[\s\S]*\.director-field-grid\.three\s*\{[\s\S]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)[\s\S]*\}/)
+  assert.match(inspectorSource, /@media\s*\(max-width:\s*420px\)[\s\S]*\.director-field-grid\.two,\s*\n\s*\.director-field-grid\.three\s*\{[\s\S]*grid-template-columns:\s*minmax\(0,\s*1fr\)[\s\S]*\}/)
 })
 
 test('director studio inspector clamps body controls by field-specific ranges', () => {

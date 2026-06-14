@@ -1029,7 +1029,9 @@ onMounted(async () => {
 
 .director-panorama-actions {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 5px;
+  justify-content: flex-end;
 }
 
 .director-mini-button {
@@ -1200,11 +1202,19 @@ onMounted(async () => {
   }
 
   .director-shell-left {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
     order: 2;
     min-height: 180px;
-    max-height: 36vh;
+    max-height: none;
+    overflow: visible;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     border-right: 0;
+  }
+
+  .director-shell-left > * {
+    min-width: 0;
   }
 
   :deep(.director-inspector) {
@@ -1225,6 +1235,16 @@ onMounted(async () => {
 
   .director-shell-status span:nth-child(n + 3) {
     display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .director-shell-left {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .director-panorama-assets {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

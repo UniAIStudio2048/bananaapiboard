@@ -317,4 +317,60 @@ function selectCameraPreset(event) {
     grid-auto-flow: row;
   }
 }
+
+@media (max-width: 860px) {
+  .director-toolbar {
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    max-height: 38vh;
+    overflow-y: auto;
+  }
+
+  .director-toolbar-project {
+    width: 100%;
+  }
+
+  .director-toolbar-group,
+  .director-toolbar-segment {
+    width: 100%;
+    padding-left: 0;
+    border-left: 0;
+    overflow-x: auto;
+  }
+
+  .director-toolbar-group {
+    flex-wrap: nowrap;
+  }
+
+  .director-command {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .director-toolbar-select {
+    flex: 1 1 120px;
+    min-width: 96px;
+  }
+}
+
+@media (max-width: 640px) {
+  .director-toolbar {
+    max-height: 42vh;
+  }
+
+  .director-command {
+    flex: none;
+    width: 32px;
+    min-width: 32px;
+    padding: 0;
+  }
+
+  .director-command span {
+    display: none;
+  }
+
+  .director-toolbar-title strong {
+    font-size: 12px;
+  }
+}
 </style>

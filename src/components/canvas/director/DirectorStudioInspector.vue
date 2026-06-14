@@ -768,4 +768,25 @@ summary {
   color: #8b949e;
   font-size: 12px;
 }
+
+@media (max-width: 520px) {
+  .director-field-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .director-field-grid.three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .director-inspector-band {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .director-field-grid.two,
+  .director-field-grid.three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 </style>

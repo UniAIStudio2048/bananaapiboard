@@ -230,4 +230,15 @@ function formatTime(value) {
 .director-empty-row {
   padding: 8px;
 }
+
+@media (max-width: 520px) {
+  .director-project-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .director-project-row-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
 </style>
