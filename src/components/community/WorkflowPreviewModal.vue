@@ -27,6 +27,7 @@ import GroupNode from '@/components/canvas/nodes/GroupNode.vue'
 import CharacterCardNode from '@/components/canvas/nodes/CharacterCardNode.vue'
 import StoryboardNode from '@/components/canvas/nodes/StoryboardNode.vue'
 import SeedanceCharacterNode from '@/components/canvas/nodes/SeedanceCharacterNode.vue'
+import DirectorStudioNode from '@/components/canvas/nodes/DirectorStudioNode.vue'
 
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -52,6 +53,7 @@ const emit = defineEmits(['update:modelValue', 'purchased'])
 
 const previewUserInfo = ref(null)
 provide('userInfo', previewUserInfo)
+provide('canvasReadonlyPreview', true)
 
 const isLocked = computed(() => props.isPaid && !props.isPurchased && !props.isOwn)
 const isProject = computed(() => props.projectWorkflows.length > 0)
@@ -87,6 +89,7 @@ const nodeTypes = {
   'character-card': markRaw(CharacterCardNode),
   'seedance-character': markRaw(SeedanceCharacterNode),
   'bytefor-character': markRaw(SeedanceCharacterNode),
+  'director-studio': markRaw(DirectorStudioNode),
   'storyboard': markRaw(StoryboardNode)
 }
 

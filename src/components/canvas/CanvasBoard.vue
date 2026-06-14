@@ -71,6 +71,7 @@ import GroupNode from './nodes/GroupNode.vue'
 import CharacterCardNode from './nodes/CharacterCardNode.vue'
 import StoryboardNode from './nodes/StoryboardNode.vue'
 import SeedanceCharacterNode from './nodes/SeedanceCharacterNode.vue'
+import DirectorStudioNode from './nodes/DirectorStudioNode.vue'
 
 // 🚀 节点虚拟化：HOC + 控制器
 // 当节点总数超过阈值时，视口外的节点由 NodeShell 替换，避免挂载重量级组件
@@ -419,6 +420,7 @@ const nodeTypes = {
   'character-card': V(CharacterCardNode),  // Sora角色卡节点
   'seedance-character': V(SeedanceCharacterNode),  // Seedance角色节点
   'bytefor-character': V(SeedanceCharacterNode),  // Bytefor角色节点
+  'director-studio': V(DirectorStudioNode),
   'storyboard': V(StoryboardNode)    // 分镜格子节点
 }
 
