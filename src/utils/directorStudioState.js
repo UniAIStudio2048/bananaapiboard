@@ -131,6 +131,19 @@ export function normalizeDirectorViewSettings(viewSettings) {
   }
 }
 
+export function normalizeDirectorStudioShortcuts(shortcuts) {
+  const normalized = cloneJson(DEFAULT_DIRECTOR_STUDIO_SHORTCUTS)
+  if (!shortcuts || typeof shortcuts !== 'object' || Array.isArray(shortcuts)) return normalized
+
+  for (const key of Object.keys(DEFAULT_DIRECTOR_STUDIO_SHORTCUTS)) {
+    if (typeof shortcuts[key] === 'string' && shortcuts[key].trim()) {
+      normalized[key] = shortcuts[key].trim()
+    }
+  }
+
+  return normalized
+}
+
 export function normalizeDirectorAspectFrame(value, fallback = '16:9') {
   const normalized = typeof value === 'string' ? value.trim() : ''
   if (DIRECTOR_ASPECT_FRAMES.some(frame => frame.value === normalized)) return normalized
@@ -244,7 +257,7 @@ export function createDefaultDirectorStudioData(overrides = {}) {
     lighting: normalizeDirectorLighting(overrides.lighting),
     grid: normalizeDirectorGrid(overrides.grid),
     viewSettings: normalizeDirectorViewSettings(overrides.viewSettings),
-    directorStudioShortcuts: cloneJson(DEFAULT_DIRECTOR_STUDIO_SHORTCUTS),
+    directorStudioShortcuts: normalizeDirectorStudioShortcuts(overrides.directorStudioShortcuts),
     aspectRatio: typeof overrides.aspectRatio === 'string' && overrides.aspectRatio.trim() ? overrides.aspectRatio.trim() : '16:9',
     aspectFrame: normalizeDirectorAspectFrame(overrides.aspectFrame),
     screenshotResolution: normalizeDirectorScreenshotResolution(overrides.screenshotResolution),

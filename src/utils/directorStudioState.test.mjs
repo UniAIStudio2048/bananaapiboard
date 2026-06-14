@@ -37,6 +37,10 @@ assert.equal(defaults.screenshotResolution, '1080p')
 assert.deepEqual(defaults.output, { url: null, urls: [] })
 assert.equal(Object.prototype.hasOwnProperty.call(defaults, 'projects'), false)
 
+const customized = createDefaultDirectorStudioData({ directorStudioShortcuts: { screenshot: 'S' } })
+assert.equal(customized.directorStudioShortcuts.screenshot, 'S')
+assert.equal(customized.directorStudioShortcuts.model, DEFAULT_DIRECTOR_STUDIO_SHORTCUTS.model)
+
 assert.deepEqual(normalizeDirectorCamera({ fov: 400, lensDistance: -1 }), {
   ...DEFAULT_DIRECTOR_CAMERA,
   fov: 150,
