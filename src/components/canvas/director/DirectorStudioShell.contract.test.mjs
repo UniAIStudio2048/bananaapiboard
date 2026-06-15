@@ -42,6 +42,26 @@ test('director studio shell renders the workstation panels and drives the scene 
   assert.match(source, /@update-item="handleSceneUpdateItem"/)
 })
 
+test('director studio node card hides secondary counters from the canvas', () => {
+  const source = read('components/canvas/nodes/DirectorStudioNode.vue')
+
+  assert.doesNotMatch(source, /class="director-counters"/)
+  assert.doesNotMatch(source, /\.director-counters\b/)
+  assert.doesNotMatch(source, /const\s+(elementsLabel|referencesLabel|projectsLabel)\s*=/)
+})
+
+test('director studio stage uses the selected aspect frame as a screenshot preview window', () => {
+  const shell = read('components/canvas/director/DirectorStudioShell.vue')
+  const scene = read('components/canvas/director/DirectorStudioScene.vue')
+
+  assert.match(scene, /--director-aspect-ratio/)
+  assert.match(scene, /class="director-aspect-frame"/)
+  assert.match(scene, /watch\(\(\)\s*=>\s*props\.aspectFrame,[\s\S]*syncSize/)
+  assert.doesNotMatch(shell, /aspect-ratio:\s*auto\s*!important/)
+  assert.match(shell, /\.director-shell-stage\s*\{[\s\S]*align-items:\s*center[\s\S]*justify-content:\s*center/)
+  assert.match(shell, /:deep\(\.director-studio-scene\)\s*\{[\s\S]*var\(--director-aspect-ratio/)
+})
+
 test('director studio workstation localizes visible controls and exposes language switching', () => {
   const toolbar = read('components/canvas/director/DirectorStudioToolbar.vue')
   const shell = read('components/canvas/director/DirectorStudioShell.vue')

@@ -48,9 +48,6 @@ const openLabel = computed(() => translateWithFallback('directorStudio.nodeCard.
 const snapshotLabel = computed(() => translateWithFallback('directorStudio.addToCanvas', '截图到画布'))
 const title = computed(() => props.data.title || translateWithFallback('directorStudio.title', '3D导演台'))
 const kickerLabel = computed(() => translateWithFallback('directorStudio.title', '3D导演台'))
-const elementsLabel = computed(() => translateWithFallback('directorStudio.elements', '元素'))
-const referencesLabel = computed(() => translateWithFallback('node.imageNode.refImage', '参考'))
-const projectsLabel = computed(() => translateWithFallback('directorStudio.projects', '项目'))
 const statusLabel = computed(() => {
   const status = props.data.status || 'idle'
   return translateWithFallback(`directorStudio.statusValues.${status}`, status)
@@ -71,7 +68,6 @@ const referenceImages = computed(() => {
   }
   return mergeDirectorStudioReferenceImages(props.id, props.data, canvasStore.nodes, canvasStore.edges)
 })
-const projects = computed(() => Array.isArray(props.data.directorStudioProjects) ? props.data.directorStudioProjects : [])
 const snapshotUrl = computed(() => props.data.snapshotUrl || null)
 
 function translateWithFallback(key, fallback) {
@@ -477,21 +473,6 @@ function collectDirectorStudioCanvasImageAssets(nodes) {
       </span>
     </button>
 
-    <div class="director-counters">
-      <div>
-        <strong>{{ items.length }}</strong>
-        <span>{{ elementsLabel }}</span>
-      </div>
-      <div>
-        <strong>{{ referenceImages.length }}</strong>
-        <span>{{ referencesLabel }}</span>
-      </div>
-      <div>
-        <strong>{{ projects.length }}</strong>
-        <span>{{ projectsLabel }}</span>
-      </div>
-    </div>
-
     <div class="director-actions nodrag nopan">
       <button type="button" class="director-action primary nodrag nopan" @click.stop="openDirectorStudio">
         <Maximize2 :size="15" stroke-width="2" />
@@ -626,36 +607,6 @@ function collectDirectorStudioCanvasImageAssets(nodes) {
   font-size: 14px;
 }
 
-.director-counters {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-  padding: 12px 16px 0;
-}
-
-.director-counters div {
-  min-width: 0;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.director-counters strong {
-  display: block;
-  color: #f4f4f5;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.1;
-}
-
-.director-counters span {
-  display: block;
-  margin-top: 2px;
-  color: #a1a1aa;
-  font-size: 11px;
-  line-height: 1.2;
-}
-
 .director-actions {
   display: flex;
   gap: 8px;
@@ -726,7 +677,6 @@ function collectDirectorStudioCanvasImageAssets(nodes) {
 }
 
 :root.canvas-theme-light .director-status,
-:root.canvas-theme-light .director-counters div,
 :root.canvas-theme-light .director-action {
   background: rgba(24, 24, 27, 0.06);
   color: #3f3f46;

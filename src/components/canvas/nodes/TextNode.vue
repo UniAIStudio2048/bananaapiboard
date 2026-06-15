@@ -43,6 +43,7 @@ import PromptMediaTag from '../PromptMediaTag.vue'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
+import { getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 
 const { t } = useI18n()
 
@@ -930,8 +931,36 @@ function selectLanguage(languageCode) {
   showLanguageDropdown.value = false
 }
 
-// 动态获取上游节点的数据（支持实时更新）
-const upstreamNodes = computed(() => canvasStore.getUpstreamNodes(props.id))
+const IMAGE_NODE_TYPES = [
+  'image', 'image-input', 'image-gen',
+  'text-to-image', 'image-to-image', 'grid-preview'
+]
+const VIDEO_NODE_TYPES = [
+  'video', 'video-input', 'video-gen',
+  'text-to-video', 'image-to-video', 'audio-to-video'
+]
+const AUDIO_NODE_TYPES = ['audio', 'audio-input', 'text-to-audio', 'tts']
+
+const MEDIA_LABEL_PREFIX = {
+  video: '视频',
+  image: '图片',
+  audio: '音频'
+}
+
+const MEDIA_ORDER_KEYS = {
+  video: 'videoOrder',
+  image: 'imageOrder',
+  audio: 'audioOrder'
+}
+
+// 动态获取上游节点的数据（支持实时更新，与 ImageNode 一样按上游边顺序读取）
+const upstreamEdges = computed(() => canvasStore.edgesByTarget.get(props.id) || [])
+const upstreamNodes = computed(() => {
+  const nodeIndex = canvasStore.nodesById
+  return upstreamEdges.value
+    .map(edge => nodeIndex.get(edge.source))
+    .filter(Boolean)
+})
 
 // 参考缩略图拖拽排序状态
 const dragSortIndex = ref(-1)
@@ -953,15 +982,29 @@ function applyCustomOrder(items, customOrder) {
   return ordered
 }
 
+function buildMediaItems(type, urls) {
+  const labelPrefix = MEDIA_LABEL_PREFIX[type] || ''
+  return (urls || []).map((url, i) => ({
+    type,
+    index: i + 1,
+    url,
+    label: `${labelPrefix}${i + 1}`,
+    key: getMediaMentionKey({ type, url }),
+    ...(type === 'video' ? { thumbnailUrl: getUpstreamVideoThumbnail(url) } : {})
+  }))
+}
+
 // 单独收集上游视频 URL（用于显示视频缩略图）
 const upstreamVideoUrls = computed(() => {
   const videos = []
   for (const node of upstreamNodes.value) {
     const nodeType = node.type || ''
     
-    if (nodeType === 'video' || nodeType === 'video-input' || nodeType === 'video-gen') {
+    if (VIDEO_NODE_TYPES.includes(nodeType)) {
       if (node.data?.output?.url) {
         videos.push(node.data.output.url)
+      } else if (node.data?.output?.urls?.length) {
+        videos.push(...node.data.output.urls.filter(Boolean))
       } else if (node.data?.sourceVideo) {
         videos.push(node.data.sourceVideo)
       } else if (node.data?.videoUrl) {
@@ -976,7 +1019,7 @@ function getUpstreamVideoThumbnail(url) {
   if (!url) return ''
   for (const node of upstreamNodes.value) {
     const nodeType = node.type || ''
-    if (nodeType !== 'video' && nodeType !== 'video-input' && nodeType !== 'video-gen') {
+    if (!VIDEO_NODE_TYPES.includes(nodeType)) {
       continue
     }
 
@@ -1000,26 +1043,54 @@ function getUpstreamVideoThumbnail(url) {
   return ''
 }
 
+function getReferenceVideoPreviewSrc(media) {
+  const url = typeof media === 'string' ? media : media?.url
+  if (!url) return ''
+  const thumbnail = typeof media === 'object' && media?.thumbnailUrl
+    ? media.thumbnailUrl
+    : getUpstreamVideoThumbnail(url)
+  if (thumbnail) return toSameOriginUrl(thumbnail)
+  return getVideoPosterUrl(toSameOriginUrl(url), 384)
+}
+
+const failedReferenceVideoPreviewUrls = ref(new Set())
+
+function shouldShowReferenceVideoImage(media) {
+  const url = typeof media === 'string' ? media : media?.url
+  return !!url && !!getReferenceVideoPreviewSrc(media) && !failedReferenceVideoPreviewUrls.value.has(url)
+}
+
+function handleReferenceVideoPreviewError(media) {
+  const url = typeof media === 'string' ? media : media?.url
+  if (!url) return
+  failedReferenceVideoPreviewUrls.value = new Set([...failedReferenceVideoPreviewUrls.value, url])
+}
+
 // 单独收集上游图片 URL
 const upstreamImageUrls = computed(() => {
   const images = []
   for (const node of upstreamNodes.value) {
     const nodeType = node.type || ''
 
-    // 跳过视频节点和音频节点
-    if (nodeType === 'video' || nodeType === 'video-input' || nodeType === 'video-gen' || nodeType === 'audio' || nodeType === 'audio-input') {
+    if (!IMAGE_NODE_TYPES.includes(nodeType)) {
       continue
     }
 
-    // 图片输入节点
-    if (node.data?.sourceImages?.length) {
+    if (node.data?.nodeRole === 'source' && node.data?.sourceImages?.length) {
+      images.push(...node.data.sourceImages)
+    }
+    else if (node.data?.output?.urls?.length) {
+      images.push(...node.data.output.urls)
+    } else if (node.data?.output?.url) {
+      images.push(node.data.output.url)
+    } else if (node.data?.sourceImages?.length) {
       images.push(...node.data.sourceImages)
     } else if (node.data?.images?.length) {
       images.push(...node.data.images)
-    }
-    // 图片生成节点的输出
-    else if (node.data?.output?.urls?.length) {
-      images.push(...node.data.output.urls)
+    } else if (node.data?.imageUrl) {
+      images.push(node.data.imageUrl)
+    } else if (node.data?.url) {
+      images.push(node.data.url)
     }
   }
   return applyCustomOrder(images, props.data.imageOrder)
@@ -1030,8 +1101,8 @@ const upstreamAudioUrls = computed(() => {
   const audios = []
   for (const node of upstreamNodes.value) {
     const nodeType = node.type || ''
-    if (nodeType === 'audio' || nodeType === 'audio-input') {
-      const url = node.data?.audioUrl || node.data?.output?.url || node.data?.audioData
+    if (AUDIO_NODE_TYPES.includes(nodeType)) {
+      const url = node.data?.output?.url || node.data?.audioUrl || node.data?.audioData || node.data?.sourceAudio
       if (url) audios.push(url)
     }
   }
@@ -1073,41 +1144,95 @@ const upstreamImages = computed(() => {
 const totalMediaCount = computed(() => upstreamVideoUrls.value.length + upstreamImageUrls.value.length + upstreamAudioUrls.value.length)
 
 const referenceMediaList = computed(() => {
-  const list = []
-  const videos = upstreamVideoUrls.value || []
-  const images = upstreamImageUrls.value || []
-  const audios = upstreamAudioUrls.value || []
-  
-  videos.forEach((url, i) => {
-    list.push({
-      type: 'video',
-      index: i + 1,
-      url,
-      label: `视频${i + 1}`,
-      key: getMediaMentionKey({ type: 'video', url }),
-      thumbnailUrl: getUpstreamVideoThumbnail(url)
-    })
-  })
-  images.forEach((url, i) => {
-    list.push({
-      type: 'image',
-      index: i + 1,
-      url,
-      label: `图片${i + 1}`,
-      key: getMediaMentionKey({ type: 'image', url })
-    })
-  })
-  audios.forEach((url, i) => {
-    list.push({
-      type: 'audio',
-      index: i + 1,
-      url,
-      label: `音频${i + 1}`,
-      key: getMediaMentionKey({ type: 'audio', url })
-    })
-  })
-  return list
+  return [
+    ...buildMediaItems('video', upstreamVideoUrls.value),
+    ...buildMediaItems('image', upstreamImageUrls.value),
+    ...buildMediaItems('audio', upstreamAudioUrls.value)
+  ]
 })
+
+function handleReferenceMediaHover(media, event) {
+  if (media?.type === 'video') {
+    onVideoHoverStart(toSameOriginUrl(media.url), event)
+  } else if (media?.type === 'audio') {
+    onAudioHoverStart(media.url, event)
+  } else if (media?.url) {
+    onHoverStart(media.url, event)
+  }
+}
+
+function getReferenceUrlsForType(type) {
+  if (type === 'video') return upstreamVideoUrls.value || []
+  if (type === 'image') return upstreamImageUrls.value || []
+  if (type === 'audio') return upstreamAudioUrls.value || []
+  return []
+}
+
+function nodeContainsReferenceMedia(node, media) {
+  const url = media?.url
+  if (!node?.data || !url) return false
+
+  if (media.type === 'video') {
+    return VIDEO_NODE_TYPES.includes(node.type) && (
+      node.data?.sourceVideo === url ||
+      node.data?.videoUrl === url ||
+      node.data?.output?.url === url ||
+      node.data?.output?.urls?.includes(url)
+    )
+  }
+
+  if (media.type === 'image') {
+    return IMAGE_NODE_TYPES.includes(node.type) && (
+      node.data?.sourceImages?.includes(url) ||
+      node.data?.images?.includes(url) ||
+      node.data?.output?.url === url ||
+      node.data?.output?.urls?.includes(url) ||
+      node.data?.imageUrl === url ||
+      node.data?.url === url
+    )
+  }
+
+  if (media.type === 'audio') {
+    return AUDIO_NODE_TYPES.includes(node.type) && (
+      node.data?.output?.url === url ||
+      node.data?.audioUrl === url ||
+      node.data?.audioData === url ||
+      node.data?.sourceAudio === url
+    )
+  }
+
+  return false
+}
+
+function removeReferenceMedia(media) {
+  if (!media?.type || !media?.url) return
+
+  const orderKey = MEDIA_ORDER_KEYS[media.type]
+  const nextOrder = getReferenceUrlsForType(media.type).filter(url => url !== media.url)
+  const nextCounts = {
+    video: media.type === 'video' ? nextOrder.length : upstreamVideoUrls.value.length,
+    image: media.type === 'image' ? nextOrder.length : upstreamImageUrls.value.length,
+    audio: media.type === 'audio' ? nextOrder.length : upstreamAudioUrls.value.length
+  }
+
+  if (orderKey) {
+    canvasStore.updateNodeData(props.id, {
+      [orderKey]: nextOrder,
+      hasUpstream: nextCounts.video + nextCounts.image + nextCounts.audio > 0
+    })
+  }
+
+  const edgesToRemove = []
+  const nodeIndex = canvasStore.nodesById
+  for (const edge of upstreamEdges.value) {
+    const sourceNode = nodeIndex.get(edge.source)
+    if (nodeContainsReferenceMedia(sourceNode, media)) {
+      edgesToRemove.push(edge.id)
+    }
+  }
+
+  edgesToRemove.forEach(edgeId => canvasStore.removeEdge(edgeId))
+}
 
 function updatePromptMentionBindings(bindings) {
   promptMentionBindings.value = bindings || {}
@@ -1170,7 +1295,7 @@ function getMediaForPromptTag(text) {
 function handlePromptTagHover(media, event) {
   if (!media) return
   if (media.type === 'video') {
-    onVideoHoverStart(media.url, event)
+    onVideoHoverStart(toSameOriginUrl(media.url), event)
   } else if (media.type === 'audio') {
     onAudioHoverStart(media.url, event)
   } else {
@@ -3281,100 +3406,76 @@ onUnmounted(() => {
         </svg>
       </button>
       <!-- 参考媒体区域（视频/图片/音频/混合） -->
-      <div v-if="inheritedImages.length > 0" class="reference-section">
-        <span class="reference-label">{{ referenceLabel }}</span>
-        <span class="reference-hint">点击插入引用 · 拖动调整顺序 · 共{{ totalMediaCount }}{{ upstreamMediaType === 'image' ? '张' : '个' }}</span>
+      <div class="reference-section">
+        <div class="reference-header">
+          <span class="reference-label">{{ referenceLabel }}</span>
+          <span class="reference-hint">
+            {{ referenceMediaList.length > 0 ? `点击插入引用 · 拖动调整顺序 · 共${totalMediaCount}${upstreamMediaType === 'image' ? '张' : '个'}` : '连接图片、视频或音频节点作为参考' }}
+          </span>
+        </div>
         <div class="reference-images">
-          <!-- 视频缩略图 -->
           <div
-            v-for="(videoUrl, idx) in upstreamVideoUrls"
-            :key="'video-' + idx"
-            class="reference-image-item reference-video-item reference-clickable"
-            :class="{
-              'drag-over': dragSortType === 'video' && dragOverIndex === idx,
-              'dragging': dragSortType === 'video' && dragSortIndex === idx
-            }"
-            draggable="true"
-            :title="`点击插入 @视频${idx + 1}`"
-            @mousedown.stop
-            @click="insertMediaTag({ type: 'video', index: idx + 1, label: `视频${idx + 1}` })"
-            @dragstart="handleRefMediaDragStart($event, idx, 'video')"
-            @dragover="handleRefMediaDragOver($event, idx, 'video')"
-            @dragleave="handleRefMediaDragLeave"
-            @drop="handleRefMediaDrop($event, idx, 'video')"
-            @dragend="handleRefMediaDragEnd"
-            @mouseenter="onVideoHoverStart(videoUrl, $event)"
-            @mouseleave="onHoverEnd"
+            v-if="referenceMediaList.length === 0"
+            class="reference-empty-item"
+            title="连接图片、视频或音频节点作为参考"
+            aria-label="暂无参考素材"
           >
-            <img
-              v-if="getUpstreamVideoThumbnail(videoUrl)"
-              :src="getUpstreamVideoThumbnail(videoUrl)"
-              class="reference-video-thumb"
-              alt="参考视频封面"
-              loading="lazy"
-              decoding="async"
-            />
-            <video
-              v-else
-              :src="videoUrl"
-              preload="metadata"
-              muted
-              class="reference-video-thumb"
-              @loadeddata="$event.target.currentTime = 0.1"
-            ></video>
-            <span class="reference-index-badge">{{ idx + 1 }}</span>
-            <div class="video-badge">▶</div>
-            <span class="reference-tag-badge">@视频{{ idx + 1 }}</span>
+            <span class="reference-empty-icon">+</span>
+            <span class="reference-empty-text">添加</span>
           </div>
-          <!-- 图片缩略图 -->
           <div
-            v-for="(img, idx) in upstreamImageUrls"
-            :key="'img-' + idx"
+            v-for="(media, idx) in referenceMediaList"
+            :key="media.key || `${media.type}-${idx}`"
             class="reference-image-item reference-clickable"
             :class="{
-              'drag-over': dragSortType === 'image' && dragOverIndex === idx,
-              'dragging': dragSortType === 'image' && dragSortIndex === idx
+              'reference-video-item': media.type === 'video',
+              'reference-audio-item': media.type === 'audio',
+              'drag-over': dragSortType === media.type && dragOverIndex === media.index - 1,
+              'dragging': dragSortType === media.type && dragSortIndex === media.index - 1
             }"
             draggable="true"
-            :title="`点击插入 @图片${idx + 1}`"
+            :title="`点击插入 @${media.label}`"
             @mousedown.stop
-            @click="insertMediaTag({ type: 'image', index: idx + 1, label: `图片${idx + 1}` })"
-            @dragstart="handleRefMediaDragStart($event, idx, 'image')"
-            @dragover="handleRefMediaDragOver($event, idx, 'image')"
+            @click="insertMediaTag(media)"
+            @dragstart="handleRefMediaDragStart($event, media.index - 1, media.type)"
+            @dragover="handleRefMediaDragOver($event, media.index - 1, media.type)"
             @dragleave="handleRefMediaDragLeave"
-            @drop="handleRefMediaDrop($event, idx, 'image')"
+            @drop="handleRefMediaDrop($event, media.index - 1, media.type)"
             @dragend="handleRefMediaDragEnd"
-            @mouseenter="onHoverStart(img, $event)"
+            @mouseenter="handleReferenceMediaHover(media, $event)"
             @mouseleave="onHoverEnd"
           >
-            <img :src="img" :alt="`参考图 ${idx + 1}`" />
-            <span class="reference-index-badge">{{ idx + 1 }}</span>
-            <span class="reference-tag-badge">@图片{{ idx + 1 }}</span>
-          </div>
-          <!-- 音频缩略图 -->
-          <div
-            v-for="(audioUrl, idx) in upstreamAudioUrls"
-            :key="'audio-' + idx"
-            class="reference-image-item reference-audio-item reference-clickable"
-            :class="{
-              'drag-over': dragSortType === 'audio' && dragOverIndex === idx,
-              'dragging': dragSortType === 'audio' && dragSortIndex === idx
-            }"
-            draggable="true"
-            :title="`点击插入 @音频${idx + 1}`"
-            @mousedown.stop
-            @click="insertMediaTag({ type: 'audio', index: idx + 1, label: `音频${idx + 1}` })"
-            @dragstart="handleRefMediaDragStart($event, idx, 'audio')"
-            @dragover="handleRefMediaDragOver($event, idx, 'audio')"
-            @dragleave="handleRefMediaDragLeave"
-            @drop="handleRefMediaDrop($event, idx, 'audio')"
-            @dragend="handleRefMediaDragEnd"
-            @mouseenter="onAudioHoverStart(audioUrl, $event)"
-            @mouseleave="onHoverEnd"
-          >
-            <span class="audio-icon-large">♪</span>
-            <span class="reference-index-badge">{{ idx + 1 }}</span>
-            <span class="reference-tag-badge">@音频{{ idx + 1 }}</span>
+            <template v-if="media.type === 'video'">
+              <img
+                v-if="shouldShowReferenceVideoImage(media)"
+                :src="getReferenceVideoPreviewSrc(media)"
+                class="reference-video-thumb"
+                alt="参考视频封面"
+                loading="lazy"
+                decoding="async"
+                @error="handleReferenceVideoPreviewError(media)"
+              />
+              <video
+                v-else
+                :src="toSameOriginUrl(media.url)"
+                preload="metadata"
+                muted
+                class="reference-video-thumb"
+                @loadeddata="$event.target.currentTime = 0.1"
+              ></video>
+            </template>
+            <img v-else-if="media.type === 'image'" :src="media.url" :alt="`参考图 ${media.index}`" />
+            <span v-else class="audio-icon-large">♪</span>
+            <span class="reference-index-badge">{{ media.index }}</span>
+            <span class="reference-tag-badge">@{{ media.label }}</span>
+            <button
+              class="reference-media-remove"
+              type="button"
+              :title="`删除 @${media.label}`"
+              aria-label="删除参考素材"
+              @click.stop="removeReferenceMedia(media)"
+              @mousedown.stop
+            >×</button>
           </div>
         </div>
       </div>
@@ -4387,7 +4488,7 @@ onUnmounted(() => {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: 0;
 }
 
 .reference-image-item {
@@ -4406,6 +4507,34 @@ onUnmounted(() => {
   border-radius: 7px;
 }
 
+.reference-empty-item {
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  border: 1px dashed var(--canvas-border-default, #3a3a3a);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--canvas-text-tertiary, #666);
+  background: transparent;
+  box-sizing: border-box;
+  user-select: none;
+}
+
+.reference-empty-icon {
+  font-size: 24px;
+  line-height: 1;
+  color: var(--canvas-text-secondary, #888);
+}
+
+.reference-empty-text {
+  font-size: 11px;
+  line-height: 1;
+  color: var(--canvas-text-tertiary, #666);
+}
+
 /* 可点击的缩略图（@引用） */
 .reference-clickable {
   cursor: pointer;
@@ -4417,6 +4546,37 @@ onUnmounted(() => {
   border-color: #7c3aed;
   box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
   z-index: 2;
+}
+
+.reference-image-item:hover .reference-media-remove {
+  opacity: 1;
+}
+
+.reference-media-remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(239, 68, 68, 0.92);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  z-index: 4;
+}
+
+.reference-media-remove:hover {
+  background: #ef4444;
+  transform: scale(1.05);
 }
 
 /* @标记徽章（与视频节点可灵O1风格一致） */
@@ -4476,6 +4636,8 @@ onUnmounted(() => {
   height: 100%;
   object-fit: cover;
   background: #000;
+  border-radius: 7px;
+  display: block;
 }
 
 .video-badge {
@@ -4521,10 +4683,19 @@ onUnmounted(() => {
 /* 参考图片区域 */
 .reference-section {
   display: flex;
-  align-items: center;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
   padding: 12px;
   border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
+}
+
+.reference-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  flex-wrap: wrap;
 }
 
 .reference-label {
@@ -4540,14 +4711,16 @@ onUnmounted(() => {
 .reference-hint {
   font-size: 12px;
   color: var(--canvas-text-tertiary, #666);
-  flex: 1;
+  flex: 0 1 auto;
 }
 
 .reference-images {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .reference-image-item.dragging {

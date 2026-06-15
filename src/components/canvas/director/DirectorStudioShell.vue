@@ -1121,17 +1121,18 @@ onMounted(async () => {
   display: flex;
   min-width: 0;
   min-height: 0;
-  align-items: stretch;
-  justify-content: stretch;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
+  padding: 18px;
   background: #071012;
 }
 
 .director-shell-stage :deep(.director-studio-scene) {
-  width: 100%;
-  height: 100%;
+  width: min(100%, calc((100vh - 112px) * var(--director-aspect-ratio, 1.7777778)));
+  height: auto;
+  max-height: 100%;
   min-height: 0;
-  aspect-ratio: auto !important;
 }
 
 .director-shell-scene-error {
@@ -1204,6 +1205,11 @@ onMounted(async () => {
   .director-shell-stage {
     order: 1;
     min-height: 320px;
+    padding: 12px;
+  }
+
+  .director-shell-stage :deep(.director-studio-scene) {
+    width: min(100%, calc((52vh - 40px) * var(--director-aspect-ratio, 1.7777778)));
   }
 
   .director-shell-left {

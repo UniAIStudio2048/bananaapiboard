@@ -115,12 +115,17 @@ function switchToImage(url) {
   currentType = 'image'
 }
 
+function playVideoPreview() {
+  if (!videoEl) return
+  videoEl.play().catch(() => {})
+}
+
 function switchToVideo(url) {
   imgEl.style.display = 'none'
   videoEl.style.display = 'block'
   videoEl.src = url
-  videoEl.play().catch(() => {})
   currentType = 'video'
+  playVideoPreview()
 }
 
 function startAliveCheck() {
@@ -151,6 +156,9 @@ function doShow(url, type) {
       switchToImage(getPreviewUrl(url))
     }
     currentUrl = url
+  } else if (type === 'video') {
+    videoEl.style.display = 'block'
+    playVideoPreview()
   }
 
   if (targetEl) {

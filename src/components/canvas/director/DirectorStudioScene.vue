@@ -83,8 +83,25 @@ const cameraState = {
 }
 
 const aspectStyle = computed(() => ({
+  '--director-aspect-ratio': String(getAspectRatioNumber(props.aspectFrame)),
   aspectRatio: getAspectRatioCss(props.aspectFrame)
 }))
+
+function getAspectRatioNumber(frame) {
+  switch (frame) {
+    case '1:1': return 1
+    case '4:3': return 4 / 3
+    case '3:4': return 3 / 4
+    case '9:16': return 9 / 16
+    case '3:2': return 3 / 2
+    case '2:3': return 2 / 3
+    case '21:9': return 21 / 9
+    case 'panorama': return 2
+    case '16:9':
+    default:
+      return 16 / 9
+  }
+}
 
 function getAspectRatioCss(frame) {
   switch (frame) {
@@ -865,6 +882,9 @@ watch(() => props.cameraSettings, syncCameraSettings, { deep: true })
 watch(() => props.lighting, syncLighting, { deep: true })
 watch(() => props.grid, syncGrid, { deep: true })
 watch(() => [props.mode, props.backgroundPanoramaUrl], syncPanorama)
+watch(() => props.aspectFrame, () => {
+  nextTick(() => syncSize())
+})
 
 onMounted(async () => {
   await nextTick()
@@ -880,15 +900,19 @@ onBeforeUnmount(() => cleanupSceneResources({ forceContextLoss: true }))
     class="director-studio-scene nodrag nopan nowheel"
     :style="aspectStyle"
     tabindex="0"
-    @pointerdown="handlePointerDown"
-    @pointermove="handlePointerMove"
-    @pointerup="handlePointerUp"
-    @pointercancel="handlePointerUp"
-    @wheel="handleWheel"
     @keydown="handleKeydown"
-    @contextmenu.prevent
   >
-    <div ref="canvasHost" class="director-studio-scene-canvas" />
+    <div
+      class="director-aspect-frame"
+      @pointerdown="handlePointerDown"
+      @pointermove="handlePointerMove"
+      @pointerup="handlePointerUp"
+      @pointercancel="handlePointerUp"
+      @wheel="handleWheel"
+      @contextmenu.prevent
+    >
+      <div ref="canvasHost" class="director-studio-scene-canvas" />
+    </div>
   </div>
 </template>
 
@@ -896,7 +920,7 @@ onBeforeUnmount(() => cleanupSceneResources({ forceContextLoss: true }))
 .director-studio-scene {
   position: relative;
   width: 100%;
-  min-height: 320px;
+  min-height: 0;
   overflow: hidden;
   background: #071012;
   outline: none;
@@ -906,6 +930,17 @@ onBeforeUnmount(() => cleanupSceneResources({ forceContextLoss: true }))
 
 .director-studio-scene:focus-visible {
   box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.58);
+}
+
+.director-aspect-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border: 1px solid rgba(125, 211, 252, 0.58);
+  background: #071012;
+  box-shadow:
+    0 0 0 9999px rgba(0, 0, 0, 0.28),
+    0 18px 50px rgba(0, 0, 0, 0.24);
 }
 
 .director-studio-scene-canvas {
