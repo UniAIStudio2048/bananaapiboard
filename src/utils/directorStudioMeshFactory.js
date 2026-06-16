@@ -1,6 +1,9 @@
 import * as THREE from 'three'
 import { ensureDirectorPos3d } from './directorStudioCoordinates.js'
-import { normalizeDirectorStudioBodyControls } from '../config/canvas/directorStudioPresetCatalog.js'
+import {
+  normalizeDirectorStudioBodyControls,
+  normalizeDirectorStudioBoneControls
+} from '../config/canvas/directorStudioPresetCatalog.js'
 
 const DEFAULT_ITEM_COLOR = '#38bdf8'
 const DETAIL_MATERIAL_KEY = 'directorStudioDetailMaterial'
@@ -296,6 +299,7 @@ function createDirectorPersonMesh(item, color) {
     constants: { legH, armH, height }
   }
   applyPersonActionPose(body, item?.action)
+  applyDirectorStudioBoneControls(body, item?.boneControls)
   return body
 }
 
@@ -367,6 +371,29 @@ function applyPersonActionPose(body, action) {
     body.position.y = 0.25
   }
   body.userData.poseYOffset = body.position.y
+}
+
+function applyBoneRotation(target, controls) {
+  if (!target || !controls) return
+  target.rotation.x += THREE.MathUtils.degToRad(controls.xDeg || 0)
+  target.rotation.y += THREE.MathUtils.degToRad(controls.yDeg || 0)
+  target.rotation.z += THREE.MathUtils.degToRad(controls.zDeg || 0)
+}
+
+function applyDirectorStudioBoneControls(body, controls) {
+  const bones = body.userData.bones
+  if (!bones) return
+  const normalized = normalizeDirectorStudioBoneControls(controls)
+  applyBoneRotation(bones.headGroup, normalized.head)
+  applyBoneRotation(bones.torsoMesh, normalized.torso)
+  applyBoneRotation(bones.leftShoulder, normalized.leftShoulder)
+  applyBoneRotation(bones.leftElbow, normalized.leftElbow)
+  applyBoneRotation(bones.rightShoulder, normalized.rightShoulder)
+  applyBoneRotation(bones.rightElbow, normalized.rightElbow)
+  applyBoneRotation(bones.leftHip, normalized.leftHip)
+  applyBoneRotation(bones.leftKnee, normalized.leftKnee)
+  applyBoneRotation(bones.rightHip, normalized.rightHip)
+  applyBoneRotation(bones.rightKnee, normalized.rightKnee)
 }
 
 function createBasicShapeMesh(presetId, material, height) {
@@ -768,7 +795,8 @@ export function createDirectorMeshForItem(item, options = {}) {
     item?.visualId || '',
     item?.action || '',
     color,
-    JSON.stringify(item?.bodyControls || {})
+    JSON.stringify(item?.bodyControls || {}),
+    JSON.stringify(item?.boneControls || {})
   ].join('|')
   tagMeshes(root, itemId)
   updateDirectorObjectTransform(root, item)

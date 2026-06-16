@@ -193,6 +193,12 @@ export default {
       xSpacing: 'X spacing',
       zSpacing: 'Z spacing',
       radius: 'Radius',
+      crowdAction: 'Crowd action',
+      crowdActions: {
+        standing: 'random standing',
+        walking: 'random walking',
+        conversation: 'conversation groups'
+      },
       addPedestrians: 'Add pedestrians',
       categories: {
         basic: 'Basic',
@@ -229,6 +235,9 @@ export default {
       color: 'Color',
       label: 'Label',
       action: 'Action',
+      posePresets: 'Pose presets',
+      actionPreset: 'Solo',
+      interactionPreset: 'Pair',
       relation: 'Relation',
       note: 'Note',
       position: 'Pos',
@@ -239,6 +248,7 @@ export default {
       body: 'Body',
       style: 'Style',
       controls: 'Controls',
+      boneControls: 'Bone action',
       height: 'Height',
       torso: 'Torso',
       head: 'Head',
@@ -270,12 +280,54 @@ export default {
       view: 'View',
       wheelZoom: 'Wheel zoom',
       reverseWheel: 'Reverse wheel',
+      reverseVerticalOrbit: 'Reverse vertical drag',
       pedestrianTags: 'Pedestrian tags',
       frame: 'Frame',
       aspect: 'Aspect',
       resolution: 'Resolution',
       prompt: 'Prompt',
       basePrompt: 'Base prompt'
+    },
+    bones: {
+      head: 'Head',
+      torso: 'Torso',
+      leftShoulder: 'Left upper arm',
+      leftElbow: 'Left forearm',
+      rightShoulder: 'Right upper arm',
+      rightElbow: 'Right forearm',
+      leftHip: 'Left thigh',
+      leftKnee: 'Left shin',
+      rightHip: 'Right thigh',
+      rightKnee: 'Right shin'
+    },
+    boneAxes: {
+      x: 'front',
+      y: 'twist',
+      z: 'side'
+    },
+    actionPoses: {
+      stand: 'Stand',
+      sit: 'Sit',
+      walk: 'Walk',
+      run: 'Run',
+      wave: 'Wave',
+      point: 'Point',
+      'look-back': 'Look back',
+      bend: 'Bend',
+      squat: 'Squat',
+      lie: 'Lie down',
+      'fold-arms': 'Fold arms'
+    },
+    interactionPoses: {
+      'face-to-face-dialogue': 'Face-to-face dialogue',
+      'side-dialogue': 'Side-by-side dialogue',
+      handshake: 'Handshake',
+      'pass-object': 'Pass object',
+      hug: 'Hug',
+      confrontation: 'Confrontation',
+      support: 'Support',
+      'shared-look': 'Shared look',
+      interview: 'Interview'
     },
     shortcuts: {
       title: 'Shortcuts',

@@ -85,6 +85,45 @@ const STYLE_DEFAULTS = {
   }
 }
 
+export const DIRECTOR_STUDIO_BONE_CONTROL_GROUPS = [
+  { key: 'head', labelKey: 'directorStudio.bones.head' },
+  { key: 'torso', labelKey: 'directorStudio.bones.torso' },
+  { key: 'leftShoulder', labelKey: 'directorStudio.bones.leftShoulder' },
+  { key: 'leftElbow', labelKey: 'directorStudio.bones.leftElbow' },
+  { key: 'rightShoulder', labelKey: 'directorStudio.bones.rightShoulder' },
+  { key: 'rightElbow', labelKey: 'directorStudio.bones.rightElbow' },
+  { key: 'leftHip', labelKey: 'directorStudio.bones.leftHip' },
+  { key: 'leftKnee', labelKey: 'directorStudio.bones.leftKnee' },
+  { key: 'rightHip', labelKey: 'directorStudio.bones.rightHip' },
+  { key: 'rightKnee', labelKey: 'directorStudio.bones.rightKnee' }
+]
+
+export const DIRECTOR_STUDIO_BONE_AXES = [
+  { key: 'xDeg', labelKey: 'directorStudio.boneAxes.x' },
+  { key: 'yDeg', labelKey: 'directorStudio.boneAxes.y' },
+  { key: 'zDeg', labelKey: 'directorStudio.boneAxes.z' }
+]
+
+const DEFAULT_BONE_AXIS = { xDeg: 0, yDeg: 0, zDeg: 0 }
+const BONE_CONTROL_RANGES = {
+  head: { xDeg: [-45, 45], yDeg: [-90, 90], zDeg: [-35, 35] },
+  torso: { xDeg: [-55, 55], yDeg: [-90, 90], zDeg: [-55, 55] },
+  leftShoulder: { xDeg: [-160, 120], yDeg: [-100, 100], zDeg: [-130, 130] },
+  rightShoulder: { xDeg: [-160, 120], yDeg: [-100, 100], zDeg: [-130, 130] },
+  leftElbow: { xDeg: [-150, 20], yDeg: [-80, 80], zDeg: [-100, 100] },
+  rightElbow: { xDeg: [-150, 20], yDeg: [-80, 80], zDeg: [-100, 100] },
+  leftHip: { xDeg: [-130, 100], yDeg: [-70, 70], zDeg: [-80, 80] },
+  rightHip: { xDeg: [-130, 100], yDeg: [-70, 70], zDeg: [-80, 80] },
+  leftKnee: { xDeg: [-20, 150], yDeg: [-30, 30], zDeg: [-30, 30] },
+  rightKnee: { xDeg: [-20, 150], yDeg: [-30, 30], zDeg: [-30, 30] }
+}
+
+function defaultBoneControls() {
+  return Object.fromEntries(DIRECTOR_STUDIO_BONE_CONTROL_GROUPS.map(group => [group.key, { ...DEFAULT_BONE_AXIS }]))
+}
+
+export const DEFAULT_DIRECTOR_STUDIO_BONE_CONTROLS = defaultBoneControls()
+
 function clampNumber(value, fallback, min, max) {
   const numeric = Number(value)
   return Number.isFinite(numeric) ? Math.min(max, Math.max(min, numeric)) : fallback
@@ -124,6 +163,202 @@ export function normalizeDirectorStudioBodyControls(controls) {
   }
 }
 
+export function normalizeDirectorStudioBoneControls(controls) {
+  const source = controls && typeof controls === 'object' && !Array.isArray(controls) ? controls : {}
+  const normalized = {}
+
+  for (const group of DIRECTOR_STUDIO_BONE_CONTROL_GROUPS) {
+    const key = group.key
+    const input = source[key] && typeof source[key] === 'object' && !Array.isArray(source[key]) ? source[key] : {}
+    const ranges = BONE_CONTROL_RANGES[key] || {}
+    normalized[key] = {
+      xDeg: clampNumber(input.xDeg, DEFAULT_BONE_AXIS.xDeg, ranges.xDeg?.[0] ?? -180, ranges.xDeg?.[1] ?? 180),
+      yDeg: clampNumber(input.yDeg, DEFAULT_BONE_AXIS.yDeg, ranges.yDeg?.[0] ?? -180, ranges.yDeg?.[1] ?? 180),
+      zDeg: clampNumber(input.zDeg, DEFAULT_BONE_AXIS.zDeg, ranges.zDeg?.[0] ?? -180, ranges.zDeg?.[1] ?? 180)
+    }
+  }
+
+  return normalized
+}
+
+export function hasMeaningfulDirectorStudioBoneControls(controls) {
+  const normalized = normalizeDirectorStudioBoneControls(controls)
+  return Object.values(normalized).some(group =>
+    Math.abs(group.xDeg) > 0.5 ||
+    Math.abs(group.yDeg) > 0.5 ||
+    Math.abs(group.zDeg) > 0.5
+  )
+}
+
+function posePreset(id, name, action, boneControls, bodyControls = {}, relation = '') {
+  return {
+    id,
+    name,
+    labelKey: `directorStudio.actionPoses.${id}`,
+    action,
+    relation,
+    bodyControls,
+    boneControls: normalizeDirectorStudioBoneControls(boneControls)
+  }
+}
+
+export const DIRECTOR_STUDIO_ACTION_POSE_PRESETS = [
+  posePreset('stand', '站立', '站立', {}),
+  posePreset('sit', '坐姿', '坐姿', {
+    leftHip: { xDeg: -88 },
+    rightHip: { xDeg: -88 },
+    leftKnee: { xDeg: 92 },
+    rightKnee: { xDeg: 92 },
+    torso: { xDeg: -4 }
+  }),
+  posePreset('walk', '走路', '走路', {
+    leftHip: { xDeg: -28 },
+    rightHip: { xDeg: 18 },
+    leftKnee: { xDeg: 24 },
+    leftShoulder: { xDeg: 18 },
+    rightShoulder: { xDeg: -24 }
+  }),
+  posePreset('run', '奔跑', '奔跑', {
+    leftHip: { xDeg: -56 },
+    rightHip: { xDeg: 32 },
+    leftKnee: { xDeg: 75 },
+    rightShoulder: { xDeg: -52 },
+    rightElbow: { xDeg: -58 },
+    leftShoulder: { xDeg: 42 },
+    torso: { xDeg: -12 }
+  }),
+  posePreset('wave', '挥手', '挥手', {
+    rightShoulder: { xDeg: -118, yDeg: 12, zDeg: -18 },
+    rightElbow: { xDeg: -42 },
+    head: { yDeg: 10 }
+  }),
+  posePreset('point', '指向', '指向', {
+    rightShoulder: { xDeg: -92, yDeg: 8, zDeg: -8 },
+    rightElbow: { xDeg: -8 },
+    head: { yDeg: 12 }
+  }),
+  posePreset('look-back', '回头', '回头', {
+    head: { yDeg: 70 },
+    torso: { yDeg: 22 }
+  }),
+  posePreset('bend', '弯腰', '弯腰', {
+    torso: { xDeg: -34 },
+    leftShoulder: { xDeg: -18 },
+    rightShoulder: { xDeg: -18 }
+  }),
+  posePreset('squat', '蹲下', '蹲下', {
+    leftHip: { xDeg: -92 },
+    rightHip: { xDeg: -92 },
+    leftKnee: { xDeg: 112 },
+    rightKnee: { xDeg: 112 },
+    torso: { xDeg: -18 }
+  }),
+  posePreset('lie', '躺下', '躺下', {
+    torso: { xDeg: -90 }
+  }),
+  posePreset('fold-arms', '抱臂', '抱臂', {
+    leftShoulder: { xDeg: -62, yDeg: 32, zDeg: 18 },
+    rightShoulder: { xDeg: -62, yDeg: -32, zDeg: -18 },
+    leftElbow: { xDeg: -92, zDeg: -28 },
+    rightElbow: { xDeg: -92, zDeg: 28 }
+  })
+]
+
+function interactionPreset(id, name, relation, secondaryOffset, primary, secondary) {
+  return {
+    id,
+    name,
+    labelKey: `directorStudio.interactionPoses.${id}`,
+    relation,
+    secondaryOffset,
+    primary,
+    secondary
+  }
+}
+
+export const DIRECTOR_STUDIO_INTERACTION_POSE_PRESETS = [
+  interactionPreset(
+    'face-to-face-dialogue',
+    '面对面对话',
+    '面对面对话',
+    { x: 0, z: -1.25 },
+    { action: '对话', boneControls: normalizeDirectorStudioBoneControls({ rightShoulder: { xDeg: -46, yDeg: 8 }, rightElbow: { xDeg: -70 }, head: { yDeg: 8 } }) },
+    { action: '倾听回应', boneControls: normalizeDirectorStudioBoneControls({ leftShoulder: { xDeg: -32, yDeg: -8 }, leftElbow: { xDeg: -52 }, head: { yDeg: -8 } }) }
+  ),
+  interactionPreset(
+    'side-dialogue',
+    '并肩对话',
+    '并肩对话',
+    { x: 0.95, z: 0 },
+    { action: '侧身交谈', boneControls: normalizeDirectorStudioBoneControls({ rightShoulder: { xDeg: -34, zDeg: -10 }, head: { yDeg: 18 } }) },
+    { action: '侧身回应', boneControls: normalizeDirectorStudioBoneControls({ leftShoulder: { xDeg: -34, zDeg: 10 }, head: { yDeg: -18 } }) }
+  ),
+  interactionPreset(
+    'handshake',
+    '握手',
+    '握手互动',
+    { x: 0, z: -1.05 },
+    { action: '伸手握手', boneControls: normalizeDirectorStudioBoneControls({ rightShoulder: { xDeg: -88, yDeg: 6 }, rightElbow: { xDeg: -18 } }) },
+    { action: '伸手握手', boneControls: normalizeDirectorStudioBoneControls({ rightShoulder: { xDeg: -88, yDeg: -6 }, rightElbow: { xDeg: -18 } }) }
+  ),
+  interactionPreset(
+    'pass-object',
+    '递物',
+    '递接物品',
+    { x: 0, z: -1.15 },
+    { action: '递出物品', boneControls: normalizeDirectorStudioBoneControls({ rightShoulder: { xDeg: -96 }, rightElbow: { xDeg: -8 }, torso: { xDeg: -6 } }) },
+    { action: '接过物品', boneControls: normalizeDirectorStudioBoneControls({ leftShoulder: { xDeg: -92 }, leftElbow: { xDeg: -18 }, torso: { xDeg: -4 } }) }
+  ),
+  interactionPreset(
+    'hug',
+    '拥抱',
+    '拥抱互动',
+    { x: 0, z: -0.72 },
+    { action: '拥抱', boneControls: normalizeDirectorStudioBoneControls({ leftShoulder: { xDeg: -82, zDeg: 22 }, rightShoulder: { xDeg: -82, zDeg: -22 }, leftElbow: { xDeg: -72 }, rightElbow: { xDeg: -72 } }) },
+    { action: '拥抱回应', boneControls: normalizeDirectorStudioBoneControls({ leftShoulder: { xDeg: -78, zDeg: 18 }, rightShoulder: { xDeg: -78, zDeg: -18 }, leftElbow: { xDeg: -70 }, rightElbow: { xDeg: -70 } }) }
+  ),
+  interactionPreset(
+    'confrontation',
+    '争执对峙',
+    '争执对峙',
+    { x: 0, z: -1.35 },
+    { action: '争执指向', boneControls: normalizeDirectorStudioBoneControls({ rightShoulder: { xDeg: -92, zDeg: -10 }, rightElbow: { xDeg: -8 }, torso: { xDeg: -6 } }) },
+    { action: '防御后退', boneControls: normalizeDirectorStudioBoneControls({ leftShoulder: { xDeg: -54, zDeg: 16 }, rightShoulder: { xDeg: -46, zDeg: -16 }, torso: { xDeg: 8 } }) }
+  ),
+  interactionPreset(
+    'support',
+    '搀扶',
+    '一人搀扶另一人',
+    { x: 0.68, z: -0.42 },
+    { action: '搀扶', boneControls: normalizeDirectorStudioBoneControls({ rightShoulder: { xDeg: -72, yDeg: 18 }, rightElbow: { xDeg: -48 }, torso: { zDeg: -8 } }) },
+    { action: '被搀扶', boneControls: normalizeDirectorStudioBoneControls({ leftShoulder: { xDeg: -42 }, torso: { xDeg: -10, zDeg: 8 } }) }
+  ),
+  interactionPreset(
+    'shared-look',
+    '共同看向',
+    '两人看同一方向',
+    { x: 0.9, z: 0 },
+    { action: '看向同一方向', boneControls: normalizeDirectorStudioBoneControls({ head: { yDeg: 24 }, rightShoulder: { xDeg: -82 }, rightElbow: { xDeg: -10 } }) },
+    { action: '看向同一方向', boneControls: normalizeDirectorStudioBoneControls({ head: { yDeg: 24 } }) }
+  ),
+  interactionPreset(
+    'interview',
+    '采访问答',
+    '采访/问答',
+    { x: 0, z: -1.25 },
+    { action: '采访提问', boneControls: normalizeDirectorStudioBoneControls({ rightShoulder: { xDeg: -86 }, rightElbow: { xDeg: -26 }, head: { yDeg: 8 } }) },
+    { action: '回答问题', boneControls: normalizeDirectorStudioBoneControls({ leftShoulder: { xDeg: -28 }, rightShoulder: { xDeg: -32 }, head: { yDeg: -8 } }) }
+  )
+]
+
+export function resolveDirectorStudioActionPosePreset(id) {
+  return DIRECTOR_STUDIO_ACTION_POSE_PRESETS.find(preset => preset.id === id) || null
+}
+
+export function resolveDirectorStudioInteractionPosePreset(id) {
+  return DIRECTOR_STUDIO_INTERACTION_POSE_PRESETS.find(preset => preset.id === id) || null
+}
+
 export function hasMeaningfulDirectorStudioBodyControls(controls) {
   if (!controls) return false
   const normalized = normalizeDirectorStudioBodyControls(controls)
@@ -152,4 +387,13 @@ export function describeDirectorStudioBodyControls(controls) {
     `arms length ${normalized.arms.length.toFixed(2)}x / thickness ${normalized.arms.thickness.toFixed(2)}x / spread ${Math.round(normalized.arms.spreadDeg)} deg`,
     `legs length ${normalized.legs.length.toFixed(2)}x / thickness ${normalized.legs.thickness.toFixed(2)}x / spread ${Math.round(normalized.legs.spreadDeg)} deg`
   ].join(', ')
+}
+
+export function describeDirectorStudioBoneControls(controls) {
+  if (!hasMeaningfulDirectorStudioBoneControls(controls)) return ''
+  const normalized = normalizeDirectorStudioBoneControls(controls)
+  return Object.entries(normalized)
+    .filter(([, value]) => Math.abs(value.xDeg) > 0.5 || Math.abs(value.yDeg) > 0.5 || Math.abs(value.zDeg) > 0.5)
+    .map(([key, value]) => `${key} (${Math.round(value.xDeg)} deg x, ${Math.round(value.yDeg)} deg y, ${Math.round(value.zDeg)} deg z)`)
+    .join(', ')
 }

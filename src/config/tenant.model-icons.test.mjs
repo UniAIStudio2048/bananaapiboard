@@ -93,6 +93,38 @@ test('getAvailableLLMModels propagates configured model description', () => {
   assert.equal(models[0].description, '适合复杂推理和长上下文任务')
 })
 
+test('getAvailableLLMModels propagates configured model capabilities', () => {
+  tenant.updateRuntimeConfig({
+    llm_models: [
+      {
+        id: 'gemini-3-pro',
+        name: 'Gemini 3 Pro',
+        icon: '',
+        provider: 'google',
+        pointsCost: 2,
+        capabilities: {
+          image: true,
+          video: true,
+          audio: false,
+          webSearch: true,
+          file: true
+        },
+        enabled: true
+      }
+    ]
+  })
+
+  const models = tenant.getAvailableLLMModels()
+  assert.equal(models.length, 1)
+  assert.deepEqual(models[0].capabilities, {
+    image: true,
+    video: true,
+    audio: false,
+    webSearch: true,
+    file: true
+  })
+})
+
 test('getAvailableImageModels reads updated model resolutionEnabled config', () => {
   tenant.updateRuntimeConfig({
     modelNames: { image: {}, video: {} },

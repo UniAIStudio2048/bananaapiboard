@@ -31,6 +31,10 @@ import {
   DIRECTOR_STUDIO_MODEL_CATALOG,
   DIRECTOR_STUDIO_MODEL_CATEGORIES
 } from '@/config/canvas/directorStudioModelCatalog.js'
+import {
+  resolveDirectorStudioActionPosePreset,
+  resolveDirectorStudioInteractionPosePreset
+} from '@/config/canvas/directorStudioPresetCatalog.js'
 
 const props = defineProps({
   sourceNodeId: { type: String, required: true },
@@ -139,6 +143,19 @@ function cloneItems(value) {
   return Array.isArray(value) ? cloneJson(value) : []
 }
 
+function mergePlainObject(base, patch) {
+  const result = cloneJson(base || {})
+  const input = patch && typeof patch === 'object' && !Array.isArray(patch) ? patch : {}
+  Object.entries(input).forEach(([key, value]) => {
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      result[key] = mergePlainObject(result[key], value)
+    } else {
+      result[key] = cloneJson(value)
+    }
+  })
+  return result
+}
+
 function normalizeReferenceAssets(entries) {
   const seen = new Set()
   const normalized = []
@@ -224,7 +241,51 @@ function createItemFromModel(model, pos3d, index = 0) {
     action: '',
     relation: '',
     note: '',
-    bodyControls: cloneJson(model.bodyControls || {})
+    bodyControls: cloneJson(model.bodyControls || {}),
+    boneControls: cloneJson(model.boneControls || {})
+  }
+}
+
+function isPersonItem(item) {
+  return item?.category === 'person' ||
+    String(item?.presetId || '').startsWith('person-') ||
+    String(item?.visualId || '').startsWith('person-')
+}
+
+function patchItemWithPose(item, pose = {}, relationFallback = '') {
+  const next = cloneJson(item)
+  if (typeof pose.action === 'string') next.action = pose.action
+  if (typeof pose.relation === 'string') next.relation = pose.relation
+  else if (relationFallback) next.relation = relationFallback
+  if (pose.bodyControls) next.bodyControls = mergePlainObject(next.bodyControls, pose.bodyControls)
+  if (pose.boneControls) next.boneControls = cloneJson(pose.boneControls)
+  return next
+}
+
+function updateItemPosition(item, pos3d) {
+  const legacy = pos3dToDirectorLegacy(pos3d)
+  return {
+    ...item,
+    x: legacy.x,
+    y: legacy.y,
+    pos3d
+  }
+}
+
+function yawToward(fromPos, toPos) {
+  const dx = toPos.x - fromPos.x
+  const dz = toPos.z - fromPos.z
+  if (Math.hypot(dx, dz) < 0.001) return 0
+  return Math.atan2(dx, dz)
+}
+
+function updateItemYaw(item, yaw) {
+  return {
+    ...item,
+    rotation3d: {
+      ...(item.rotation3d || { x: 0, y: 0, z: 0 }),
+      y: yaw
+    }
   }
 }
 
@@ -243,6 +304,8 @@ function addPedestrians(options = {}) {
   const spacingX = Math.max(0.2, Math.min(10, Number(options.spacingX) || 1.2))
   const spacingZ = Math.max(0.2, Math.min(10, Number(options.spacingZ) || 1.2))
   const radius = Math.max(0.2, Math.min(30, Number(options.radius) || 3))
+  const walkPreset = resolveDirectorStudioActionPosePreset('walk')
+  const talkPreset = resolveDirectorStudioActionPosePreset('wave')
   const created = []
 
   for (let index = 0; index < count; index += 1) {
@@ -264,7 +327,19 @@ function addPedestrians(options = {}) {
       }
     }
     const model = models[index % models.length]
-    created.push(createItemFromModel(model, { x: base.x + offset.x, y: base.y, z: base.z + offset.z }, index))
+    let item = createItemFromModel(model, { x: base.x + offset.x, y: base.y, z: base.z + offset.z }, index)
+    if (options.actionMode === 'walking') {
+      item = patchItemWithPose(item, walkPreset || { action: '走路' })
+      item.rotation3d = { ...item.rotation3d, y: Math.random() * Math.PI * 2 }
+    } else if (options.actionMode === 'conversation') {
+      item = patchItemWithPose(item, talkPreset || { action: '对话' }, dt('modelLibrary.crowdActions.conversation', '交谈小组'))
+      item.relation = dt('modelLibrary.crowdActions.conversation', '交谈小组')
+      item.rotation3d = { ...item.rotation3d, y: (index % 2 === 0 ? 1 : -1) * 0.38 }
+    } else {
+      item.action = dt('modelLibrary.crowdActions.standing', '随机站立')
+      item.rotation3d = { ...item.rotation3d, y: Math.random() * Math.PI * 2 }
+    }
+    created.push(item)
   }
 
   emitItemsChange([...cloneItems(items.value), ...created], { selectId: created[0]?.id || null })
@@ -313,6 +388,48 @@ function deleteSelectedItem() {
   if (!selectedItem.value) return
   const id = String(selectedItem.value.id)
   emitItemsChange(items.value.filter(item => String(item?.id) !== id), { selectId: null })
+}
+
+function applyActionPosePreset(presetId) {
+  const preset = resolveDirectorStudioActionPosePreset(presetId)
+  if (!preset || !selectedItem.value) return
+  updateSelectedItem(patchItemWithPose(selectedItem.value, preset))
+}
+
+function applyInteractionPosePreset(presetId) {
+  const preset = resolveDirectorStudioInteractionPosePreset(presetId)
+  if (!preset || !selectedItem.value || !isPersonItem(selectedItem.value)) return
+
+  const primaryId = String(selectedItem.value.id)
+  const nextItems = cloneItems(items.value)
+  const primaryIndex = nextItems.findIndex(item => String(item?.id) === primaryId)
+  if (primaryIndex < 0) return
+
+  const primaryPos = ensureDirectorPos3d(nextItems[primaryIndex])
+  const offset = preset.secondaryOffset || { x: 0, z: -1.2 }
+  const secondaryPos = {
+    x: primaryPos.x + (Number(offset.x) || 0),
+    y: primaryPos.y,
+    z: primaryPos.z + (Number(offset.z) || -1.2)
+  }
+  let secondaryIndex = nextItems.findIndex((item, index) => index !== primaryIndex && isPersonItem(item))
+
+  if (secondaryIndex < 0) {
+    const model = peopleModels.value[1] || peopleModels.value[0] || DIRECTOR_STUDIO_MODEL_CATALOG.find(item => item.itemCategory === 'person')
+    if (!model) return
+    nextItems.push(createItemFromModel(model, secondaryPos, nextItems.length))
+    secondaryIndex = nextItems.length - 1
+  } else {
+    nextItems[secondaryIndex] = updateItemPosition(nextItems[secondaryIndex], secondaryPos)
+  }
+
+  let primary = patchItemWithPose(nextItems[primaryIndex], preset.primary, preset.relation)
+  let secondary = patchItemWithPose(nextItems[secondaryIndex], preset.secondary, preset.relation)
+  primary = updateItemYaw(primary, yawToward(primaryPos, secondaryPos))
+  secondary = updateItemYaw(secondary, yawToward(secondaryPos, primaryPos))
+  nextItems[primaryIndex] = primary
+  nextItems[secondaryIndex] = secondary
+  emitItemsChange(nextItems, { selectId: primary.id })
 }
 
 function undoItems() {
@@ -936,6 +1053,8 @@ onMounted(async () => {
           @patch-node-data="applyNodePatch"
           @save-custom-pose="saveCustomPose"
           @apply-custom-pose="applyCustomPose"
+          @apply-action-preset="applyActionPosePreset"
+          @apply-interaction-preset="applyInteractionPosePreset"
           @focus-selected="focusSelected"
           @update:transform-mode="transformMode = $event"
           @open-shortcuts="shortcutsOpen = true"

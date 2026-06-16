@@ -193,6 +193,12 @@ export default {
       xSpacing: 'X 间距',
       zSpacing: 'Z 间距',
       radius: '半径',
+      crowdAction: '群众动作',
+      crowdActions: {
+        standing: '随机站立',
+        walking: '随机行走',
+        conversation: '交谈小组'
+      },
       addPedestrians: '添加行人',
       categories: {
         basic: '基础',
@@ -229,6 +235,9 @@ export default {
       color: '颜色',
       label: '标签',
       action: '动作',
+      posePresets: '姿势预设',
+      actionPreset: '单人',
+      interactionPreset: '双人',
       relation: '关系',
       note: '备注',
       position: '位置',
@@ -239,6 +248,7 @@ export default {
       body: '身体',
       style: '风格',
       controls: '控制点',
+      boneControls: '骨骼动作',
       height: '身高',
       torso: '躯干',
       head: '头部',
@@ -270,12 +280,54 @@ export default {
       view: '视图',
       wheelZoom: '滚轮缩放',
       reverseWheel: '反向滚轮',
+      reverseVerticalOrbit: '反向上下拖拽',
       pedestrianTags: '行人标签',
       frame: '画幅',
       aspect: '比例',
       resolution: '分辨率',
       prompt: '提示词',
       basePrompt: '基础提示词'
+    },
+    bones: {
+      head: '头部',
+      torso: '躯干',
+      leftShoulder: '左上臂',
+      leftElbow: '左前臂',
+      rightShoulder: '右上臂',
+      rightElbow: '右前臂',
+      leftHip: '左大腿',
+      leftKnee: '左小腿',
+      rightHip: '右大腿',
+      rightKnee: '右小腿'
+    },
+    boneAxes: {
+      x: '前后',
+      y: '扭转',
+      z: '侧摆'
+    },
+    actionPoses: {
+      stand: '站立',
+      sit: '坐姿',
+      walk: '走路',
+      run: '奔跑',
+      wave: '挥手',
+      point: '指向',
+      'look-back': '回头',
+      bend: '弯腰',
+      squat: '蹲下',
+      lie: '躺下',
+      'fold-arms': '抱臂'
+    },
+    interactionPoses: {
+      'face-to-face-dialogue': '面对面对话',
+      'side-dialogue': '并肩对话',
+      handshake: '握手',
+      'pass-object': '递物',
+      hug: '拥抱',
+      confrontation: '争执对峙',
+      support: '搀扶',
+      'shared-look': '共同看向',
+      interview: '采访问答'
     },
     shortcuts: {
       title: '快捷键',

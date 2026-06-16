@@ -12,6 +12,8 @@ test('text node LLM submission uses media URL policy instead of browser-fetching
   assert.match(source, /uploadTextNodeLlmMediaItems/)
   assert.match(source, /videoUrls:\s*upstreamVideoUrls\.value/)
   assert.match(source, /imageUrls:\s*upstreamImageUrls\.value/)
+  assert.match(source, /hasReferenceMedia:\s*totalMediaCount\.value\s*>\s*0/)
+  assert.match(source, /if\s*\(\s*totalMediaCount\.value\s*>\s*0\s*\)\s*\{/)
   assert.doesNotMatch(source, /uploadImagesToQiniu\(imageOnlyUrls\)/)
   assert.doesNotMatch(source, /uploadVideosToCloud\(videoUrls\)/)
 })

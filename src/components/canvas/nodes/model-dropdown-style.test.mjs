@@ -62,3 +62,34 @@ assert.match(
   /\.model-item-icon[\s\S]*?width:\s*(?:34|36|40|42|44)px[\s\S]*?height:\s*(?:34|36|40|42|44)px/,
   'model icon blocks should be large square badges like the reference'
 )
+
+const textNode = source('src/components/canvas/nodes/TextNode.vue')
+const bottomPanel = source('src/components/canvas/CanvasBottomPanel.vue')
+
+for (const [label, code] of [
+  ['TextNode', textNode],
+  ['CanvasBottomPanel', bottomPanel]
+]) {
+  const capabilityConfig = code.match(/const llmCapabilityOptions = \[[\s\S]*?\]\n\nfunction getEnabledLlmCapabilities/)?.[0] || ''
+  const capabilityMarkup = code.match(/<div v-if=".*?getEnabledLlmCapabilities\(model\)\.length" class="model-capability-row"[\s\S]*?<\/div>/)?.[0] || ''
+  assert.match(
+    code,
+    /getEnabledLlmCapabilities/,
+    `${label} should compute enabled LLM capability icons`
+  )
+  assert.match(
+    code,
+    /model-capability-row/,
+    `${label} should render a compact capability icon row`
+  )
+  assert.match(
+    code,
+    /model-capability-icon/,
+    `${label} should style individual capability icons`
+  )
+  assert.doesNotMatch(capabilityConfig + capabilityMarkup, /🖼️|📺|🎵/, `${label} should avoid colorful emoji capability icons`)
+  assert.match(code, /model-capability-glyph--image/, `${label} should render a monochrome image glyph`)
+  assert.match(code, /model-capability-glyph--video/, `${label} should render a monochrome TV glyph`)
+  assert.match(code, /model-capability-glyph--audio/, `${label} should render a monochrome music glyph`)
+  assert.match(code, /stroke="currentColor"/, `${label} capability icons should inherit theme color`)
+}

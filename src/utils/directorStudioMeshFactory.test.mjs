@@ -63,6 +63,26 @@ assert.equal(person.userData.directorStudioMeshType, 'person')
 assert.ok(collectMeshes(person).length >= 10)
 assert.ok(person.userData.bones?.rightShoulder)
 
+const posedPerson = createDirectorMeshForItem({
+  id: 'person-posed',
+  category: 'person',
+  presetId: 'person-adult-male-average',
+  color: '#60a5fa',
+  bodyControls: { showControls: true },
+  boneControls: {
+    rightShoulder: { xDeg: -90, yDeg: 12, zDeg: -18 },
+    rightElbow: { xDeg: -55 },
+    head: { yDeg: 22 }
+  }
+})
+
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightShoulder.rotation.x)), -90)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightShoulder.rotation.y)), 12)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightShoulder.rotation.z)), -8)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightElbow.rotation.x)), -55)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.headGroup.rotation.y)), 22)
+assert.match(posedPerson.userData.cacheKey, /rightShoulder/)
+
 const ring = createDirectorSelectionRing({ id: 'cube-1', presetId: 'cube' })
 assert.ok(ring.geometry instanceof THREE.RingGeometry)
 assert.equal(ring.userData.itemId, 'cube-1')

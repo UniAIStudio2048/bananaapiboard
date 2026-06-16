@@ -10,6 +10,7 @@ import {
   createDefaultDirectorStudioData,
   createDirectorBlankSnapshot,
   normalizeDirectorCamera,
+  normalizeDirectorViewSettings,
   normalizeDirectorLighting,
   normalizeDirectorMode,
   normalizeDirectorProjectRecord,
@@ -68,6 +69,10 @@ assert.deepEqual(normalizeDirectorCamera({ fov: 400, lensDistance: -1 }), {
   lensDistance: 2
 })
 assert.equal(normalizeDirectorCamera({ lensDistance: 120 }).lensDistance, 80)
+
+assert.equal(DEFAULT_DIRECTOR_VIEW_SETTINGS.reverseVerticalOrbit, true)
+assert.equal(normalizeDirectorViewSettings({ reverseVerticalOrbit: false }).reverseVerticalOrbit, false)
+assert.equal(normalizeDirectorViewSettings({ reverseVerticalOrbit: 'bad' }).reverseVerticalOrbit, true)
 
 const lighting = normalizeDirectorLighting({
   enabled: false,
@@ -137,7 +142,7 @@ const malformedSnapshot = normalizeDirectorSnapshot({
   camera: { fov: 999 },
   lighting: { mainIntensity: 99 },
   grid: { height: 999 },
-  viewSettings: { wheelZoomEnabled: 'bad' },
+  viewSettings: { wheelZoomEnabled: 'bad', reverseVerticalOrbit: false },
   directorStudioShortcuts: { screenshot: 'S' },
   aspectFrame: 'bad',
   screenshotResolution: 'bad',
@@ -158,7 +163,10 @@ assert.equal(malformedSnapshot.aspectRatio, '16:9')
 assert.equal(malformedSnapshot.camera.fov, 150)
 assert.equal(malformedSnapshot.lighting.mainIntensity, 4)
 assert.equal(malformedSnapshot.grid.height, 20)
-assert.deepEqual(malformedSnapshot.viewSettings, DEFAULT_DIRECTOR_VIEW_SETTINGS)
+assert.deepEqual(malformedSnapshot.viewSettings, {
+  ...DEFAULT_DIRECTOR_VIEW_SETTINGS,
+  reverseVerticalOrbit: false
+})
 assert.equal(malformedSnapshot.directorStudioShortcuts.screenshot, 'S')
 assert.equal(malformedSnapshot.aspectFrame, '16:9')
 assert.equal(malformedSnapshot.screenshotResolution, '1080p')

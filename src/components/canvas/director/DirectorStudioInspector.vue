@@ -8,7 +8,12 @@ import {
   writeDirectorUiAxis
 } from '@/utils/directorStudioCoordinates.js'
 import {
+  DIRECTOR_STUDIO_ACTION_POSE_PRESETS,
+  DIRECTOR_STUDIO_BONE_AXES,
+  DIRECTOR_STUDIO_BONE_CONTROL_GROUPS,
   DIRECTOR_STUDIO_BODY_STYLES,
+  DIRECTOR_STUDIO_INTERACTION_POSE_PRESETS,
+  normalizeDirectorStudioBoneControls,
   normalizeDirectorStudioBodyControls
 } from '@/config/canvas/directorStudioPresetCatalog.js'
 import { useDirectorStudioI18n } from './useDirectorStudioI18n.js'
@@ -61,6 +66,8 @@ const emit = defineEmits([
   'patch-node-data',
   'save-custom-pose',
   'apply-custom-pose',
+  'apply-action-preset',
+  'apply-interaction-preset',
   'focus-selected',
   'update:transformMode',
   'open-shortcuts'
@@ -86,6 +93,7 @@ const itemScale = computed(() => ({
   z: numberOr(props.selectedItem?.scale3d?.z, 1)
 }))
 const bodyControls = computed(() => normalizeDirectorStudioBodyControls(props.selectedItem?.bodyControls))
+const boneControls = computed(() => normalizeDirectorStudioBoneControls(props.selectedItem?.boneControls))
 const customPoseEntries = computed(() => Object.entries(props.customActionPoses || {}))
 const currentReferenceUrl = computed(() => props.selectedItem?.refImageUrl || '')
 
@@ -190,6 +198,30 @@ function updateBodyShowControls(event) {
       showControls: event.target.checked
     }
   })
+}
+
+function updateBoneValue(boneKey, axisKey, event) {
+  patchSelected({
+    boneControls: normalizeDirectorStudioBoneControls({
+      ...boneControls.value,
+      [boneKey]: {
+        ...boneControls.value[boneKey],
+        [axisKey]: clampNumber(event.target.value, boneControls.value[boneKey]?.[axisKey], -180, 180)
+      }
+    })
+  })
+}
+
+function handleActionPresetChange(event) {
+  const value = event.target.value
+  if (value) emit('apply-action-preset', value)
+  event.target.value = ''
+}
+
+function handleInteractionPresetChange(event) {
+  const value = event.target.value
+  if (value) emit('apply-interaction-preset', value)
+  event.target.value = ''
 }
 
 function savePose() {
@@ -316,6 +348,28 @@ function patchView(key, event) {
           <input :value="selectedItem.action || ''" type="text" @change="updateStringField('action', $event)">
         </label>
 
+        <div v-if="selectedItem.category === 'person'" class="director-pose-controls">
+          <div class="director-section-subtitle">{{ dt('inspector.posePresets', '姿势预设') }}</div>
+          <div class="director-field-row">
+            <label>{{ dt('inspector.actionPreset', '单人') }}</label>
+            <select value="" @change="handleActionPresetChange">
+              <option value="">{{ dt('inspector.none', '无') }}</option>
+              <option v-for="preset in DIRECTOR_STUDIO_ACTION_POSE_PRESETS" :key="preset.id" :value="preset.id">
+                {{ dt(preset.labelKey, preset.name) }}
+              </option>
+            </select>
+          </div>
+          <div class="director-field-row">
+            <label>{{ dt('inspector.interactionPreset', '双人') }}</label>
+            <select value="" @change="handleInteractionPresetChange">
+              <option value="">{{ dt('inspector.none', '无') }}</option>
+              <option v-for="preset in DIRECTOR_STUDIO_INTERACTION_POSE_PRESETS" :key="preset.id" :value="preset.id">
+                {{ dt(preset.labelKey, preset.name) }}
+              </option>
+            </select>
+          </div>
+        </div>
+
         <label class="director-field">
           <span>{{ dt('inspector.relation', '关系') }}</span>
           <input :value="selectedItem.relation || ''" type="text" @change="updateStringField('relation', $event)">
@@ -415,6 +469,24 @@ function patchView(key, event) {
               <input :value="bodyControls.legs.thickness" type="number" min="0.45" max="2" step="0.01" @change="updateBodyValue('legs', 'thickness', $event)">
             </label>
           </div>
+
+          <div v-if="selectedItem.category === 'person' && bodyControls.showControls" class="director-bone-controls">
+            <div class="director-section-subtitle">{{ dt('inspector.boneControls', '骨骼动作') }}</div>
+            <div v-for="bone in DIRECTOR_STUDIO_BONE_CONTROL_GROUPS" :key="bone.key" class="director-bone-row">
+              <span>{{ dt(bone.labelKey, bone.key) }}</span>
+              <label v-for="axis in DIRECTOR_STUDIO_BONE_AXES" :key="`${bone.key}-${axis.key}`">
+                <small>{{ dt(axis.labelKey, axis.key.replace('Deg', '').toUpperCase()) }}</small>
+                <input
+                  :value="Math.round(boneControls[bone.key][axis.key])"
+                  type="number"
+                  min="-180"
+                  max="180"
+                  step="1"
+                  @change="updateBoneValue(bone.key, axis.key, $event)"
+                >
+              </label>
+            </div>
+          </div>
         </div>
 
         <div class="director-custom-pose">
@@ -505,6 +577,10 @@ function patchView(key, event) {
       <label class="director-checkbox-field inline">
         <input :checked="viewSettings.reverseWheelZoom === true" type="checkbox" @change="patchView('reverseWheelZoom', $event)">
         <span>{{ dt('inspector.reverseWheel', '反向滚轮') }}</span>
+      </label>
+      <label class="director-checkbox-field inline">
+        <input :checked="viewSettings.reverseVerticalOrbit === true" type="checkbox" @change="patchView('reverseVerticalOrbit', $event)">
+        <span>{{ dt('inspector.reverseVerticalOrbit', '反向上下拖拽') }}</span>
       </label>
       <label class="director-checkbox-field inline">
         <input :checked="viewSettings.showAdvancedPedestrianTags === true" type="checkbox" @change="patchView('showAdvancedPedestrianTags', $event)">
@@ -741,11 +817,43 @@ textarea {
 }
 
 .director-body-controls,
+.director-pose-controls,
 .director-custom-pose {
   display: grid;
   gap: 8px;
   padding-top: 8px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.director-bone-controls {
+  display: grid;
+  gap: 7px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.director-bone-row {
+  display: grid;
+  grid-template-columns: 92px repeat(3, minmax(0, 1fr));
+  gap: 5px;
+  align-items: end;
+}
+
+.director-bone-row > span {
+  align-self: center;
+  color: #d4d4d8;
+  font-size: 11px;
+}
+
+.director-bone-row label {
+  display: grid;
+  gap: 2px;
+}
+
+.director-bone-row small {
+  color: #8b949e;
+  font-size: 10px;
+  line-height: 1;
 }
 
 .director-slider-field {

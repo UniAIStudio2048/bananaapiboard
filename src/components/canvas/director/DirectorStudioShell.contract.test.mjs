@@ -207,6 +207,61 @@ test('director studio inspector clamps body controls by field-specific ranges', 
   assert.doesNotMatch(source, /clampNumber\(event\.target\.value,\s*bodyControls\.value\[section\]\?\.\[key\],\s*-360,\s*360\)/)
 })
 
+test('director studio exposes character bone controls and action presets', () => {
+  const inspector = read('components/canvas/director/DirectorStudioInspector.vue')
+  const shell = read('components/canvas/director/DirectorStudioShell.vue')
+  const catalog = read('config/canvas/directorStudioPresetCatalog.js')
+
+  assert.match(catalog, /DIRECTOR_STUDIO_ACTION_POSE_PRESETS/)
+  assert.match(catalog, /DIRECTOR_STUDIO_INTERACTION_POSE_PRESETS/)
+  assert.match(catalog, /function\s+normalizeDirectorStudioBoneControls/)
+  assert.match(catalog, /face-to-face-dialogue/)
+  assert.match(catalog, /handshake/)
+  assert.match(catalog, /pass-object/)
+
+  assert.match(inspector, /DIRECTOR_STUDIO_BONE_CONTROL_GROUPS/)
+  assert.match(inspector, /DIRECTOR_STUDIO_ACTION_POSE_PRESETS/)
+  assert.match(inspector, /DIRECTOR_STUDIO_INTERACTION_POSE_PRESETS/)
+  assert.match(inspector, /const\s+boneControls\s*=\s*computed/)
+  assert.match(inspector, /function\s+updateBoneValue\s*\(\s*boneKey,\s*axisKey,\s*event\s*\)/)
+  assert.match(inspector, /selectedItem\.category === 'person' && bodyControls\.showControls/)
+  assert.match(inspector, /@change="handleActionPresetChange"/)
+  assert.match(inspector, /@change="handleInteractionPresetChange"/)
+  assert.match(inspector, /'apply-action-preset'/)
+  assert.match(inspector, /'apply-interaction-preset'/)
+
+  assert.match(shell, /function\s+applyActionPosePreset\s*\(\s*presetId\s*\)/)
+  assert.match(shell, /function\s+applyInteractionPosePreset\s*\(\s*presetId\s*\)/)
+  assert.match(shell, /@apply-action-preset="applyActionPosePreset"/)
+  assert.match(shell, /@apply-interaction-preset="applyInteractionPosePreset"/)
+})
+
+test('director studio crowd insertion defaults to useful multi-person groups', () => {
+  const library = read('components/canvas/director/DirectorStudioModelLibrary.vue')
+  const shell = read('components/canvas/director/DirectorStudioShell.vue')
+
+  assert.match(library, /const\s+pedestrianMode\s*=\s*ref\('array'\)/)
+  assert.match(library, /const\s+pedestrianCount\s*=\s*ref\(8\)/)
+  assert.match(library, /const\s+crowdActionMode\s*=\s*ref\('standing'\)/)
+  assert.match(library, /actionMode:\s*crowdActionMode\.value/)
+  assert.match(library, /modelLibrary\.crowdAction/)
+  assert.match(shell, /options\.actionMode === 'walking'/)
+  assert.match(shell, /options\.actionMode === 'conversation'/)
+})
+
+test('director studio scene keeps camera distance stable during transform updates and reverses vertical orbit by setting', () => {
+  const scene = read('components/canvas/director/DirectorStudioScene.vue')
+
+  assert.match(scene, /let\s+lastCameraFov\s*=/)
+  assert.match(scene, /let\s+lastCameraLensDistance\s*=/)
+  assert.match(scene, /const\s+lensChanged\s*=/)
+  assert.match(scene, /if\s*\(lensChanged\)\s*\{[\s\S]*cameraState\.distance\s*=/)
+  assert.doesNotMatch(scene, /cameraState\.distance\s*=\s*THREE\.MathUtils\.clamp\(settings\.lensDistance,\s*1\.8,\s*90\)\s*\n\s*applyCamera\(\)/)
+  assert.match(scene, /normalizeDirectorViewSettings\(props\.viewSettings\)/)
+  assert.match(scene, /settings\.reverseVerticalOrbit\s*\?\s*1\s*:\s*-1/)
+  assert.match(scene, /cameraState\.pitch\s*\+=\s*dy\s*\*\s*0\.005\s*\*\s*verticalDirection/)
+})
+
 test('director studio node bridges shell events into shallow node data updates', () => {
   const source = read('components/canvas/nodes/DirectorStudioNode.vue')
 

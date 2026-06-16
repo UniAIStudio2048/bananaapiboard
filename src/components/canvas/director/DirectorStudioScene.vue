@@ -65,6 +65,8 @@ let resizeObserver = null
 let renderFrame = 0
 let hoverItemId = null
 let mounted = false
+let lastCameraFov = null
+let lastCameraLensDistance = null
 
 const meshById = new Map()
 const pointerState = {
@@ -333,6 +335,8 @@ function initScene() {
     const cameraSettings = normalizeDirectorCamera(props.cameraSettings)
     camera = new THREE.PerspectiveCamera(cameraSettings.fov, size.width / size.height, 0.1, 500)
     cameraState.distance = cameraSettings.lensDistance
+    lastCameraFov = cameraSettings.fov
+    lastCameraLensDistance = cameraSettings.lensDistance
 
     renderer = new THREE.WebGLRenderer({
       antialias: true,
@@ -439,9 +443,17 @@ function syncSize() {
 function syncCameraSettings() {
   if (!camera) return
   const settings = normalizeDirectorCamera(props.cameraSettings)
-  camera.fov = settings.fov
-  camera.updateProjectionMatrix()
-  cameraState.distance = THREE.MathUtils.clamp(settings.lensDistance, 1.8, 90)
+  const fovChanged = lastCameraFov == null || Math.abs(settings.fov - lastCameraFov) > 0.001
+  const lensChanged = lastCameraLensDistance == null || Math.abs(settings.lensDistance - lastCameraLensDistance) > 0.001
+  if (fovChanged) {
+    camera.fov = settings.fov
+    camera.updateProjectionMatrix()
+    lastCameraFov = settings.fov
+  }
+  if (lensChanged) {
+    cameraState.distance = THREE.MathUtils.clamp(settings.lensDistance, 1.8, 90)
+    lastCameraLensDistance = settings.lensDistance
+  }
   applyCamera()
   requestRender()
 }
@@ -538,7 +550,8 @@ function meshCacheKey(item) {
     item?.visualId || '',
     item?.action || '',
     item?.color || '',
-    JSON.stringify(item?.bodyControls || {})
+    JSON.stringify(item?.bodyControls || {}),
+    JSON.stringify(item?.boneControls || {})
   ].join('|')
 }
 
@@ -780,8 +793,10 @@ function handlePointerMove(event) {
   pointerState.lastY = event.clientY
 
   if (pointerState.mode === 'orbit') {
+    const settings = normalizeDirectorViewSettings(props.viewSettings)
+    const verticalDirection = settings.reverseVerticalOrbit ? 1 : -1
     cameraState.yaw -= dx * 0.006
-    cameraState.pitch -= dy * 0.005
+    cameraState.pitch += dy * 0.005 * verticalDirection
   } else if (pointerState.mode === 'pan') {
     const panScale = cameraState.distance * 0.0018
     const forward = new THREE.Vector3()

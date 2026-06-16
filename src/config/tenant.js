@@ -1865,7 +1865,8 @@ export const getAvailableLLMModels = () => {
         icon: resolveModelIcon(modelConfig.icon, modelConfig.name, modelConfig.id),
         provider: modelConfig.provider || 'google',
         pointsCost: modelConfig.pointsCost || 1,
-        description: modelConfig.description || ''
+        description: modelConfig.description || '',
+        capabilities: modelConfig.capabilities || {}
       })
     }
     

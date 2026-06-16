@@ -55,6 +55,19 @@ const llmConfig = ref({
   defaultModel: 'gemini-2.5-pro'
 })
 
+const llmCapabilityOptions = [
+  { key: 'image', label: '图片理解', icon: '' },
+  { key: 'video', label: '视频理解', icon: '' },
+  { key: 'audio', label: '音频理解', icon: '' },
+  { key: 'webSearch', label: '联网搜索', icon: '⌕' },
+  { key: 'file', label: '文件理解', icon: '□' }
+]
+
+function getEnabledLlmCapabilities(model = {}) {
+  const capabilities = model.capabilities || {}
+  return llmCapabilityOptions.filter(option => capabilities[option.key] === true)
+}
+
 // 加载 LLM 配置
 async function loadLLMConfig() {
   try {
@@ -82,7 +95,8 @@ const availableModels = computed(() => {
         label: m.name,
         icon: m.icon || m.name || m.id,
         pointsCost: m.pointsCost,
-        description: m.description || ''
+        description: m.description || '',
+        capabilities: m.capabilities || {}
       }))
     }
     // 默认 LLM 模型列表
@@ -693,7 +707,31 @@ function handleKeyDown(event) {
                     :class="{ 'llm-icon': isTextNode }"
                   />
                   <span class="model-option-name">{{ model.label }}</span>
-                  <span v-if="typeof model.pointsCost === 'number'" class="model-option-cost">💎{{ formatPoints(model.pointsCost) }}</span>
+                  <div class="model-option-meta">
+                    <span v-if="typeof model.pointsCost === 'number'" class="model-option-cost">💎{{ formatPoints(model.pointsCost) }}</span>
+                    <div v-if="isTextNode && getEnabledLlmCapabilities(model).length" class="model-capability-row">
+                      <span
+                        v-for="capability in getEnabledLlmCapabilities(model)"
+                        :key="capability.key"
+                        class="model-capability-icon"
+                        :class="`model-capability-icon--${capability.key}`"
+                        :title="capability.label"
+                        :aria-label="capability.label"
+                      >
+                        <svg v-if="capability.key === 'image'" class="model-capability-glyph model-capability-glyph--image" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <rect x="2.5" y="3" width="11" height="10" rx="1.6" stroke="currentColor" stroke-width="1.4"/>
+                          <circle cx="6" cy="6.3" r="1.1" fill="currentColor"/>
+                          <path d="M3.5 11.8L7 8.5l2.1 2 1.4-1.4 2.1 2.7" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <svg v-else-if="capability.key === 'video'" class="model-capability-glyph model-capability-glyph--video" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                          <rect x="2.5" y="4" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.4"/>
+                          <path d="M6.2 2.2L8 4l1.8-1.8M6.4 13.8h3.2M8 12v1.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span v-else-if="capability.key === 'audio'" class="model-capability-glyph model-capability-glyph--audio" aria-hidden="true">♪</span>
+                        <template v-else>{{ capability.icon }}</template>
+                      </span>
+                    </div>
+                  </div>
                 </div>
                 <div v-if="model.description" class="model-option-desc">
                   {{ model.description }}
@@ -701,9 +739,7 @@ function handleKeyDown(event) {
               </div>
             </div>
           </div>
-        </div>
-        
-        <div class="canvas-controls-right">
+
           <div v-if="isImageGenerateNode && availableImageSizes.length > 0" class="size-selector">
             <button
               v-for="option in availableImageSizes"
@@ -717,7 +753,9 @@ function handleKeyDown(event) {
               <span class="size-cost">💎{{ formatPoints(option.pointsCost) }}</span>
             </button>
           </div>
-
+        </div>
+          
+        <div class="canvas-controls-right">
           <!-- 生成次数 -->
           <span class="generate-count">{{ generateCount }}x</span>
           
@@ -840,7 +878,10 @@ function handleKeyDown(event) {
 .canvas-bottom-controls {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 12px;
+  overflow: hidden;
   padding-top: 12px;
   border-top: 1px solid var(--canvas-border-subtle, #2a2a2a);
 }
@@ -848,13 +889,18 @@ function handleKeyDown(event) {
 .canvas-controls-left {
   display: flex;
   align-items: center;
+  flex: 1 1 auto;
   gap: 12px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .canvas-controls-right {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 12px;
+  margin-left: auto;
 }
 
 /* 模型选择器 */
@@ -862,7 +908,10 @@ function handleKeyDown(event) {
   position: relative;
   display: flex;
   align-items: center;
+  flex: 0 1 240px;
   gap: 8px;
+  min-width: 0;
+  max-width: 320px;
   padding: 8px 12px;
   background: var(--canvas-bg-tertiary, #1a1a1a);
   border: 1px solid var(--canvas-border-subtle, #2a2a2a);
@@ -921,6 +970,10 @@ function handleKeyDown(event) {
   color: var(--canvas-text-primary, #ffffff);
   font-size: 13px;
   font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dropdown-arrow {
@@ -1001,6 +1054,64 @@ function handleKeyDown(event) {
   color: var(--canvas-text-primary, #ffffff);
   font-size: 14px;
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model-option-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-left: auto;
+  min-width: 48px;
+}
+
+.model-capability-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  min-height: 18px;
+}
+
+.model-capability-icon {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
+  color: rgba(255, 255, 255, 0.64);
+  background: rgba(255, 255, 255, 0.04);
+  font-family: system-ui, sans-serif;
+  font-size: 12px;
+  line-height: 1;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.model-capability-glyph {
+  display: block;
+  color: currentColor;
+  flex-shrink: 0;
+}
+
+.model-capability-glyph--image,
+.model-capability-glyph--video {
+  width: 15px;
+  height: 15px;
+}
+
+.model-capability-glyph--audio {
+  font-size: 16px;
+  line-height: 1;
+  transform: translateY(-0.5px);
 }
 
 .model-option-desc {
@@ -1022,6 +1133,7 @@ function handleKeyDown(event) {
 .size-selector {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 4px;
   padding: 3px;
   background: var(--canvas-bg-tertiary, #1a1a1a);

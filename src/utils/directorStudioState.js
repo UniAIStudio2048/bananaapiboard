@@ -43,6 +43,7 @@ export const DEFAULT_DIRECTOR_GRID = { visible: true, height: 0 }
 export const DEFAULT_DIRECTOR_VIEW_SETTINGS = {
   wheelZoomEnabled: true,
   reverseWheelZoom: false,
+  reverseVerticalOrbit: true,
   showAdvancedPedestrianTags: false
 }
 export const DEFAULT_DIRECTOR_STUDIO_SHORTCUTS = {
@@ -138,6 +139,9 @@ export function normalizeDirectorViewSettings(viewSettings) {
     reverseWheelZoom: typeof viewSettings?.reverseWheelZoom === 'boolean'
       ? viewSettings.reverseWheelZoom
       : DEFAULT_DIRECTOR_VIEW_SETTINGS.reverseWheelZoom,
+    reverseVerticalOrbit: typeof viewSettings?.reverseVerticalOrbit === 'boolean'
+      ? viewSettings.reverseVerticalOrbit
+      : DEFAULT_DIRECTOR_VIEW_SETTINGS.reverseVerticalOrbit,
     showAdvancedPedestrianTags: typeof viewSettings?.showAdvancedPedestrianTags === 'boolean'
       ? viewSettings.showAdvancedPedestrianTags
       : DEFAULT_DIRECTOR_VIEW_SETTINGS.showAdvancedPedestrianTags

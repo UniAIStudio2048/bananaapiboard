@@ -13,12 +13,13 @@ const emit = defineEmits(['add-model', 'add-pedestrian'])
 
 const activeCategoryId = ref('basic')
 const searchTerm = ref('')
-const pedestrianMode = ref('single')
-const pedestrianCount = ref(6)
+const pedestrianMode = ref('array')
+const pedestrianCount = ref(8)
 const pedestrianColumns = ref(3)
 const pedestrianSpacingX = ref(1.2)
 const pedestrianSpacingZ = ref(1.2)
 const pedestrianRadius = ref(3)
+const crowdActionMode = ref('standing')
 const { dt } = useDirectorStudioI18n()
 
 const filteredModels = computed(() => {
@@ -54,7 +55,8 @@ function addPedestrians() {
     columns: clampInteger(pedestrianColumns.value, 3, 1, 20),
     spacingX: clampNumber(pedestrianSpacingX.value, 1.2, 0.2, 10),
     spacingZ: clampNumber(pedestrianSpacingZ.value, 1.2, 0.2, 10),
-    radius: clampNumber(pedestrianRadius.value, 3, 0.2, 30)
+    radius: clampNumber(pedestrianRadius.value, 3, 0.2, 30),
+    actionMode: crowdActionMode.value
   })
 }
 </script>
@@ -118,6 +120,15 @@ function addPedestrians() {
           <option value="single">{{ dt('modelLibrary.modes.single', '单人') }}</option>
           <option value="array">{{ dt('modelLibrary.modes.array', '阵列') }}</option>
           <option value="random">{{ dt('modelLibrary.modes.random', '随机') }}</option>
+        </select>
+      </div>
+
+      <div class="director-field-row">
+        <label>{{ dt('modelLibrary.crowdAction', '群众动作') }}</label>
+        <select v-model="crowdActionMode">
+          <option value="standing">{{ dt('modelLibrary.crowdActions.standing', '随机站立') }}</option>
+          <option value="walking">{{ dt('modelLibrary.crowdActions.walking', '随机行走') }}</option>
+          <option value="conversation">{{ dt('modelLibrary.crowdActions.conversation', '交谈小组') }}</option>
         </select>
       </div>
 
