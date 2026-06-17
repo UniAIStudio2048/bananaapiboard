@@ -244,7 +244,7 @@ function hasModelStats(modelName) {
 // 预设选择器状态
 const isPresetDropdownOpen = ref(false)
 const presetDropdownUp = ref(true) // 预设下拉方向
-const selectedPreset = ref('')
+const selectedPreset = ref(props.data?.selectedPreset || '')
 const tenantPresets = ref([]) // 租户全局预设
 const userPresets = ref([]) // 用户自定义预设
 const presetLoadError = ref('')
@@ -255,7 +255,7 @@ const showImagePresetDialog = ref(false)
 const showImagePresetManager = ref(false)
 const editingImagePreset = ref(null)
 const imagePresetManagerRef = ref(null)
-const tempCustomPrompt = ref('') // 临时自定义提示词
+const tempCustomPrompt = ref(props.data?.tempCustomPrompt || (props.data?.selectedPreset === 'temp-custom' ? props.data?.selectedPresetPrompt || '' : '')) // 临时自定义提示词
 
 // 相机控制状态
 const showCameraControl = ref(false)
@@ -541,7 +541,8 @@ const selectedPresetLabel = computed(() => {
   }
 
   const preset = availablePresets.value.find(p => p.id === selectedPreset.value)
-  return preset ? preset.name : '无预设'
+  if (preset) return preset.name
+  return props.data?.selectedPresetName || '无预设'
 })
 
 // 当前选中预设的提示词（用于拼接）
@@ -554,8 +555,34 @@ const currentPresetPrompt = computed(() => {
   }
   
   const preset = availablePresets.value.find(p => p.id === selectedPreset.value)
-  return preset?.prompt || ''
+  return preset?.prompt || props.data?.selectedPresetPrompt || ''
 })
+
+function buildSelectedPresetDataPatch(preset = null) {
+  const resolvedPreset = preset || availablePresets.value.find(p => p.id === selectedPreset.value)
+  const presetPrompt = selectedPreset.value === 'temp-custom'
+    ? tempCustomPrompt.value
+    : (resolvedPreset?.prompt || props.data?.selectedPresetPrompt || '')
+  const presetName = selectedPreset.value === 'temp-custom'
+    ? '📌 临时自定义'
+    : (selectedPreset.value ? (resolvedPreset?.name || props.data?.selectedPresetName || '') : '')
+  const presetType = selectedPreset.value === 'temp-custom'
+    ? 'temp-custom'
+    : (resolvedPreset?.type || props.data?.selectedPresetType || (selectedPreset.value ? 'snapshot' : 'none'))
+
+  return {
+    selectedPreset: selectedPreset.value,
+    selectedPresetPrompt: presetPrompt,
+    selectedPresetName: presetName,
+    selectedPresetType: presetType,
+    tempCustomPrompt: selectedPreset.value === 'temp-custom' ? tempCustomPrompt.value : ''
+  }
+}
+
+function persistSelectedPreset(presetId, preset = null) {
+  selectedPreset.value = presetId || ''
+  canvasStore.updateNodeData(props.id, buildSelectedPresetDataPatch(preset))
+}
 
 // 检测下拉菜单方向（基于元素位置和屏幕空间）
 function checkDropdownDirection(element, dropdownHeight = 300) {
@@ -599,7 +626,7 @@ function selectPreset(presetId) {
   const preset = availablePresets.value.find(p => p.id === presetId)
   if (!preset || preset.type === 'divider' || preset.type === 'error') return
 
-  selectedPreset.value = presetId
+  persistSelectedPreset(presetId, preset)
   isPresetDropdownOpen.value = false
 
   // 增加使用次数（异步，不等待）
@@ -630,7 +657,14 @@ async function handleImagePresetSubmit(data) {
   try {
     if (editingImagePreset.value) {
       // 更新现有预设
-      await updateImagePreset(editingImagePreset.value.id, data)
+      const updatedPreset = await updateImagePreset(editingImagePreset.value.id, data)
+      if (selectedPreset.value === `user-${updatedPreset.id}`) {
+        persistSelectedPreset(selectedPreset.value, {
+          ...updatedPreset,
+          name: `📝 ${updatedPreset.name}`,
+          type: 'user-custom'
+        })
+      }
       console.log('[ImageNode] 图像预设已更新')
     } else {
       // 创建新预设
@@ -638,7 +672,11 @@ async function handleImagePresetSubmit(data) {
       console.log('[ImageNode] 图像预设已创建')
 
       // 自动选择新创建的预设
-      selectedPreset.value = `user-${result.id}`
+      persistSelectedPreset(`user-${result.id}`, {
+        ...result,
+        name: `📝 ${result.name}`,
+        type: 'user-custom'
+      })
     }
 
     // 重新加载预设列表
@@ -660,7 +698,12 @@ async function handleImagePresetSubmit(data) {
 // 临时使用自定义提示词（不保存）
 function handleImagePresetTempUse(data) {
   tempCustomPrompt.value = data.prompt
-  selectedPreset.value = 'temp-custom'
+  persistSelectedPreset('temp-custom', {
+    id: 'temp-custom',
+    name: '📌 临时自定义',
+    prompt: tempCustomPrompt.value,
+    type: 'temp-custom'
+  })
   console.log('[ImageNode] 使用临时自定义提示词')
 }
 
@@ -672,7 +715,11 @@ function openImagePresetManager() {
 
 // 从管理器中选择预设
 function handlePresetSelect(preset) {
-  selectedPreset.value = `user-${preset.id}`
+  persistSelectedPreset(`user-${preset.id}`, {
+    ...preset,
+    name: `📝 ${preset.name}`,
+    type: 'user-custom'
+  })
   showImagePresetManager.value = false
 }
 

@@ -5,6 +5,7 @@ import {
   createDirectorPanoramaSphere,
   createDirectorSelectionRing,
   disposeDirectorObject3D,
+  updateDirectorObjectBoneControls,
   updateDirectorObjectTransform
 } from './directorStudioMeshFactory.js'
 
@@ -82,6 +83,28 @@ assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.righ
 assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightElbow.rotation.x)), -55)
 assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.headGroup.rotation.y)), 22)
 assert.match(posedPerson.userData.cacheKey, /rightShoulder/)
+const boneHandles = collectMeshes(posedPerson).filter(mesh => mesh.userData.directorStudioBoneHandle)
+assert.equal(boneHandles.length, 10)
+assert.deepEqual(
+  new Set(boneHandles.map(mesh => mesh.userData.boneKey)),
+  new Set(['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow', 'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'head', 'torso'])
+)
+assert.equal(updateDirectorObjectBoneControls(posedPerson, {
+  rightShoulder: { xDeg: -35, yDeg: 5, zDeg: -4 },
+  rightElbow: { xDeg: -20 }
+}), true)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightShoulder.rotation.x)), -35)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightShoulder.rotation.y)), 5)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightShoulder.rotation.z)), 6)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightElbow.rotation.x)), -20)
+assert.equal(updateDirectorObjectBoneControls(posedPerson, {
+  rightShoulder: { xDeg: -10 },
+  rightElbow: { xDeg: -5 }
+}), true)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightShoulder.rotation.x)), -10)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightShoulder.rotation.y)), 0)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightShoulder.rotation.z)), 10)
+assert.equal(Math.round(THREE.MathUtils.radToDeg(posedPerson.userData.bones.rightElbow.rotation.x)), -5)
 
 const ring = createDirectorSelectionRing({ id: 'cube-1', presetId: 'cube' })
 assert.ok(ring.geometry instanceof THREE.RingGeometry)

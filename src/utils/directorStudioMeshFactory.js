@@ -8,6 +8,18 @@ import {
 const DEFAULT_ITEM_COLOR = '#38bdf8'
 const DETAIL_MATERIAL_KEY = 'directorStudioDetailMaterial'
 const PANORAMA_RADIUS = 50
+const DIRECTOR_STUDIO_BONE_TARGETS = [
+  ['head', 'headGroup'],
+  ['torso', 'torsoMesh'],
+  ['leftShoulder', 'leftShoulder'],
+  ['leftElbow', 'leftElbow'],
+  ['rightShoulder', 'rightShoulder'],
+  ['rightElbow', 'rightElbow'],
+  ['leftHip', 'leftHip'],
+  ['leftKnee', 'leftKnee'],
+  ['rightHip', 'rightHip'],
+  ['rightKnee', 'rightKnee']
+]
 
 function normalizeColor(value, fallback = DEFAULT_ITEM_COLOR) {
   const color = typeof value === 'string' && value.trim() ? value.trim() : fallback
@@ -157,6 +169,40 @@ function createCapsule(radius, length, material) {
   )
 }
 
+function getDirectorStudioBoneTarget(bones, boneKey) {
+  const targetKey = DIRECTOR_STUDIO_BONE_TARGETS.find(([key]) => key === boneKey)?.[1]
+  return targetKey ? bones?.[targetKey] : null
+}
+
+function captureDirectorStudioBoneRestRotations(bones) {
+  const rest = {}
+  DIRECTOR_STUDIO_BONE_TARGETS.forEach(([boneKey]) => {
+    const target = getDirectorStudioBoneTarget(bones, boneKey)
+    if (target) {
+      rest[boneKey] = {
+        x: target.rotation.x,
+        y: target.rotation.y,
+        z: target.rotation.z
+      }
+    }
+  })
+  return rest
+}
+
+function restoreDirectorStudioBoneRestRotations(bones, restRotations) {
+  if (!bones || !restRotations) return false
+  let restored = false
+  DIRECTOR_STUDIO_BONE_TARGETS.forEach(([boneKey]) => {
+    const target = getDirectorStudioBoneTarget(bones, boneKey)
+    const rest = restRotations[boneKey]
+    if (target && rest) {
+      target.rotation.set(rest.x || 0, rest.y || 0, rest.z || 0)
+      restored = true
+    }
+  })
+  return restored
+}
+
 function createDirectorPersonMesh(item, color) {
   const controls = getPersonControls(item)
   const presetId = typeof item?.presetId === 'string' ? item.presetId.toLowerCase() : ''
@@ -276,12 +322,25 @@ function createDirectorPersonMesh(item, color) {
   const rightLeg = makeLeg(1)
 
   if (controls.showControls) {
-    ;[leftArm.shoulder, rightArm.shoulder, leftArm.elbow, rightArm.elbow, leftLeg.hip, rightLeg.hip, leftLeg.knee, rightLeg.knee, headGroup, torsoGroup]
-      .forEach((target, index) => {
-        const block = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.055, 0.055), marker)
-        block.renderOrder = 900 + index
-        target.add(block)
-      })
+    ;[
+      ['leftShoulder', leftArm.shoulder],
+      ['rightShoulder', rightArm.shoulder],
+      ['leftElbow', leftArm.elbow],
+      ['rightElbow', rightArm.elbow],
+      ['leftHip', leftLeg.hip],
+      ['rightHip', rightLeg.hip],
+      ['leftKnee', leftLeg.knee],
+      ['rightKnee', rightLeg.knee],
+      ['head', headGroup],
+      ['torso', torsoGroup]
+    ].forEach(([boneKey, target], index) => {
+      target.userData.directorStudioBoneKey = boneKey
+      const block = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.055, 0.055), marker)
+      block.renderOrder = 900 + index
+      block.userData.directorStudioBoneHandle = true
+      block.userData.boneKey = boneKey
+      target.add(block)
+    })
   }
 
   body.userData.directorStudioMeshType = 'person'
@@ -299,6 +358,7 @@ function createDirectorPersonMesh(item, color) {
     constants: { legH, armH, height }
   }
   applyPersonActionPose(body, item?.action)
+  body.userData.directorStudioBoneRestRotations = captureDirectorStudioBoneRestRotations(body.userData.bones)
   applyDirectorStudioBoneControls(body, item?.boneControls)
   return body
 }
@@ -787,6 +847,7 @@ export function createDirectorMeshForItem(item, options = {}) {
   root.userData.itemId = itemId
   root.userData.directorStudioMeshType = asset.userData.directorStudioMeshType || 'object'
   if (asset.userData.bones) root.userData.bones = asset.userData.bones
+  if (asset.userData.directorStudioBoneRestRotations) root.userData.directorStudioBoneRestRotations = asset.userData.directorStudioBoneRestRotations
   if (asset.userData.poseYOffset) root.userData.poseYOffset = asset.userData.poseYOffset
   root.userData.cacheKey = [
     root.userData.directorStudioMeshType,
@@ -826,6 +887,15 @@ export function updateDirectorObjectTransform(object3d, item) {
   object3d.rotation.set(rotation.x, rotation.y, rotation.z)
   object3d.scale.set(scale.x, scale.y, scale.z)
   if (item?.id != null) object3d.userData.itemId = String(item.id)
+}
+
+export function updateDirectorObjectBoneControls(object3d, controls) {
+  const bones = object3d?.userData?.bones
+  const restRotations = object3d?.userData?.directorStudioBoneRestRotations
+  if (!bones || !restoreDirectorStudioBoneRestRotations(bones, restRotations)) return false
+  applyDirectorStudioBoneControls(object3d, controls)
+  object3d.userData.boneControlsKey = JSON.stringify(normalizeDirectorStudioBoneControls(controls))
+  return true
 }
 
 export function createDirectorSelectionRing(item) {

@@ -754,6 +754,7 @@ function saveCustomPose(payload) {
       name: payload?.name || key,
       action: payload?.action || '',
       bodyControls: cloneJson(payload?.bodyControls || {}),
+      boneControls: cloneJson(payload?.boneControls || {}),
       note: payload?.note || '',
       updatedAt: Date.now()
     }
@@ -766,7 +767,8 @@ function applyCustomPose(key) {
   if (!pose || !selectedItem.value) return
   updateSelectedItem({
     action: pose.action || selectedItem.value.action || '',
-    bodyControls: cloneJson(pose.bodyControls || selectedItem.value.bodyControls || {})
+    bodyControls: cloneJson(pose.bodyControls || selectedItem.value.bodyControls || {}),
+    boneControls: cloneJson(pose.boneControls || selectedItem.value.boneControls || {})
   })
 }
 

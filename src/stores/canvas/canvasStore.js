@@ -8,6 +8,7 @@ import { useVueFlow } from '@vue-flow/core'
 import { t } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { sanitizeWorkflowForSave } from '@/utils/workflowSaveSanitizer'
+import { syncPastedNodeSelection } from '@/utils/canvasPasteSelection'
 import { sanitizeNodesForHistoryRestore } from './historyRestore'
 import { createOpHistory } from './opHistory'
 import { getGlobalNodeDataCache } from './nodeDataCache'
@@ -1132,13 +1133,16 @@ export const useCanvasStore = defineStore('canvas', () => {
       }
     }
     
+    const pastedNodeIds = syncPastedNodeSelection({
+      existingNodes: nodes.value,
+      pastedNodes: newNodes
+    })
+
     nodes.value.push(...newNodes)
     edges.value.push(...newEdges)
     
-    selectedNodeIds.value = newNodes.map(n => n.id)
-    if (newNodes.length === 1) {
-      selectedNodeId.value = newNodes[0].id
-    }
+    selectedNodeIds.value = pastedNodeIds
+    selectedNodeId.value = pastedNodeIds[0] || null
     
     console.log(`[Canvas] 已粘贴 ${newNodes.length} 个节点`)
   }

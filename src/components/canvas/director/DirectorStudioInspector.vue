@@ -96,6 +96,29 @@ const bodyControls = computed(() => normalizeDirectorStudioBodyControls(props.se
 const boneControls = computed(() => normalizeDirectorStudioBoneControls(props.selectedItem?.boneControls))
 const customPoseEntries = computed(() => Object.entries(props.customActionPoses || {}))
 const currentReferenceUrl = computed(() => props.selectedItem?.refImageUrl || '')
+const activeActionPresetId = computed(() => resolveActiveActionPresetId(props.selectedItem))
+const activeInteractionPresetId = computed(() => resolveActiveInteractionPresetId(props.selectedItem))
+
+function trimmedString(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function resolveActiveActionPresetId(item) {
+  const action = trimmedString(item?.action)
+  if (!action) return ''
+  return DIRECTOR_STUDIO_ACTION_POSE_PRESETS.find(preset => preset.action === action)?.id || ''
+}
+
+function resolveActiveInteractionPresetId(item) {
+  const relation = trimmedString(item?.relation)
+  const action = trimmedString(item?.action)
+  if (!relation && !action) return ''
+
+  return DIRECTOR_STUDIO_INTERACTION_POSE_PRESETS.find(preset =>
+    (relation && preset.relation === relation) ||
+    (action && (preset.primary?.action === action || preset.secondary?.action === action))
+  )?.id || ''
+}
 
 function numberOr(value, fallback) {
   const numeric = Number(value)
@@ -215,13 +238,11 @@ function updateBoneValue(boneKey, axisKey, event) {
 function handleActionPresetChange(event) {
   const value = event.target.value
   if (value) emit('apply-action-preset', value)
-  event.target.value = ''
 }
 
 function handleInteractionPresetChange(event) {
   const value = event.target.value
   if (value) emit('apply-interaction-preset', value)
-  event.target.value = ''
 }
 
 function savePose() {
@@ -233,6 +254,7 @@ function savePose() {
     name: rawName,
     action: props.selectedItem.action || '',
     bodyControls: props.selectedItem.bodyControls || {},
+    boneControls: props.selectedItem.boneControls || {},
     note: props.selectedItem.note || ''
   })
   poseName.value = ''
@@ -352,7 +374,7 @@ function patchView(key, event) {
           <div class="director-section-subtitle">{{ dt('inspector.posePresets', '姿势预设') }}</div>
           <div class="director-field-row">
             <label>{{ dt('inspector.actionPreset', '单人') }}</label>
-            <select value="" @change="handleActionPresetChange">
+            <select :value="activeActionPresetId" @change="handleActionPresetChange">
               <option value="">{{ dt('inspector.none', '无') }}</option>
               <option v-for="preset in DIRECTOR_STUDIO_ACTION_POSE_PRESETS" :key="preset.id" :value="preset.id">
                 {{ dt(preset.labelKey, preset.name) }}
@@ -361,7 +383,7 @@ function patchView(key, event) {
           </div>
           <div class="director-field-row">
             <label>{{ dt('inspector.interactionPreset', '双人') }}</label>
-            <select value="" @change="handleInteractionPresetChange">
+            <select :value="activeInteractionPresetId" @change="handleInteractionPresetChange">
               <option value="">{{ dt('inspector.none', '无') }}</option>
               <option v-for="preset in DIRECTOR_STUDIO_INTERACTION_POSE_PRESETS" :key="preset.id" :value="preset.id">
                 {{ dt(preset.labelKey, preset.name) }}
@@ -482,7 +504,7 @@ function patchView(key, event) {
                   min="-180"
                   max="180"
                   step="1"
-                  @change="updateBoneValue(bone.key, axis.key, $event)"
+                  @input="updateBoneValue(bone.key, axis.key, $event)"
                 >
               </label>
             </div>

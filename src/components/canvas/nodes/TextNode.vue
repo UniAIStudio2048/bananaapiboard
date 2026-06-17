@@ -1937,9 +1937,6 @@ function tryApplyAutoPreset() {
   )
   if (imageDescribePreset) {
     selectedPreset.value = imageDescribePreset.id
-    if (nodeState.value === 'empty') {
-      nodeState.value = 'ready'
-    }
     canvasStore.updateNodeData(props.id, { autoPreset: null })
     return true
   }

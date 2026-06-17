@@ -7,6 +7,7 @@ import {
   createDirectorPanoramaSphere,
   createDirectorSelectionRing,
   disposeDirectorObject3D,
+  updateDirectorObjectBoneControls,
   updateDirectorObjectTransform
 } from '@/utils/directorStudioMeshFactory.js'
 import { ensureDirectorPos3d, pos3dToDirectorLegacy } from '@/utils/directorStudioCoordinates.js'
@@ -17,6 +18,7 @@ import {
   normalizeDirectorMode,
   normalizeDirectorViewSettings
 } from '@/utils/directorStudioState.js'
+import { normalizeDirectorStudioBoneControls } from '@/config/canvas/directorStudioPresetCatalog.js'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -45,11 +47,19 @@ const CAMERA_DEFAULTS = {
 const SCENE_CLEAR = 0x071012
 const GRID_HEIGHT_EPSILON = 0.006
 const CAMERA_MOVE_KEYS = new Set(['w', 'a', 's', 'd', 'q', 'e'])
+const BONE_DRAG_DEGREES_PER_PIXEL = 0.45
+const LABEL_TEXTURE_WIDTH = 512
+const LABEL_TEXTURE_HEIGHT = 128
+const LABEL_FONT_SIZE = 44
+const LABEL_MAX_CHARS = 30
+const LABEL_WORLD_HEIGHT = 0.52
+const LABEL_FONT_FAMILY = '"PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'
 
 let renderer = null
 let scene = null
 let camera = null
 let itemsGroup = null
+let labelGroup = null
 let gridGroup = null
 let floorMesh = null
 let axesHelper = null
@@ -69,6 +79,7 @@ let lastCameraFov = null
 let lastCameraLensDistance = null
 
 const meshById = new Map()
+const labelById = new Map()
 const pointerState = {
   active: false,
   pointerId: null,
@@ -76,6 +87,15 @@ const pointerState = {
   lastX: 0,
   lastY: 0,
   moved: false
+}
+const boneDragState = {
+  active: false,
+  itemId: null,
+  boneKey: null,
+  startX: 0,
+  startY: 0,
+  startControls: null,
+  axisLock: null
 }
 const cameraState = {
   yaw: CAMERA_DEFAULTS.yaw,
@@ -140,6 +160,146 @@ function requestRender() {
 function renderNow() {
   if (!renderer || !scene || !camera) return
   renderer.render(scene, camera)
+}
+
+function getItemLabelText(item) {
+  const raw = item?.label || item?.title || item?.name || item?.id || ''
+  const text = String(raw).trim()
+  if (!text) return ''
+  if (text.length <= LABEL_MAX_CHARS) return text
+  return `${text.slice(0, LABEL_MAX_CHARS - 3)}...`
+}
+
+function drawRoundedRect(context, x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2)
+  context.beginPath()
+  context.moveTo(x + r, y)
+  context.lineTo(x + width - r, y)
+  context.quadraticCurveTo(x + width, y, x + width, y + r)
+  context.lineTo(x + width, y + height - r)
+  context.quadraticCurveTo(x + width, y + height, x + width - r, y + height)
+  context.lineTo(x + r, y + height)
+  context.quadraticCurveTo(x, y + height, x, y + height - r)
+  context.lineTo(x, y + r)
+  context.quadraticCurveTo(x, y, x + r, y)
+  context.closePath()
+}
+
+function createLabelTexture(text, color) {
+  if (typeof document === 'undefined') return null
+  const canvas = document.createElement('canvas')
+  canvas.width = LABEL_TEXTURE_WIDTH
+  canvas.height = LABEL_TEXTURE_HEIGHT
+  const context = canvas.getContext('2d')
+  if (!context) return null
+
+  context.clearRect(0, 0, canvas.width, canvas.height)
+  context.font = `700 ${LABEL_FONT_SIZE}px ${LABEL_FONT_FAMILY}`
+  context.textAlign = 'center'
+  context.textBaseline = 'middle'
+
+  const textWidth = Math.min(context.measureText(text).width, LABEL_TEXTURE_WIDTH - 72)
+  const boxWidth = Math.max(168, Math.min(LABEL_TEXTURE_WIDTH - 24, textWidth + 64))
+  const boxHeight = 74
+  const boxX = (LABEL_TEXTURE_WIDTH - boxWidth) / 2
+  const boxY = (LABEL_TEXTURE_HEIGHT - boxHeight) / 2
+
+  drawRoundedRect(context, boxX, boxY, boxWidth, boxHeight, 18)
+  context.fillStyle = 'rgba(7, 16, 18, 0.82)'
+  context.fill()
+  context.lineWidth = 4
+  context.strokeStyle = color || '#38bdf8'
+  context.stroke()
+
+  context.shadowColor = 'rgba(0, 0, 0, 0.72)'
+  context.shadowBlur = 8
+  context.shadowOffsetY = 2
+  context.fillStyle = '#f8fafc'
+  context.fillText(text, LABEL_TEXTURE_WIDTH / 2, LABEL_TEXTURE_HEIGHT / 2 + 1, LABEL_TEXTURE_WIDTH - 96)
+
+  const texture = new THREE.CanvasTexture(canvas)
+  texture.colorSpace = THREE.SRGBColorSpace
+  texture.needsUpdate = true
+  return texture
+}
+
+function disposeLabelSprite(sprite) {
+  if (!sprite) return
+  sprite.material?.map?.dispose?.()
+  sprite.material?.dispose?.()
+}
+
+function removeLabelForItem(itemId) {
+  const id = itemId != null ? String(itemId) : ''
+  const sprite = labelById.get(id)
+  if (!sprite) return
+  labelGroup?.remove(sprite)
+  labelById.delete(id)
+  disposeLabelSprite(sprite)
+}
+
+function updateLabelTexture(sprite, item, text) {
+  const color = typeof item?.color === 'string' && item.color.trim() ? item.color.trim() : '#38bdf8'
+  const textureKey = `${text}|${color}`
+  if (sprite.userData.textureKey === textureKey) return
+  const texture = createLabelTexture(text, color)
+  if (!texture) {
+    sprite.visible = false
+    return
+  }
+  const previousTexture = sprite.material.map
+  sprite.material.map = texture
+  sprite.material.needsUpdate = true
+  previousTexture?.dispose?.()
+  sprite.userData.textureKey = textureKey
+  sprite.visible = true
+}
+
+function syncLabelPosition(sprite, mesh) {
+  if (!sprite || !mesh) return
+  const box = new THREE.Box3().setFromObject(mesh)
+  if (box.isEmpty()) {
+    sprite.visible = false
+    return
+  }
+  const center = new THREE.Vector3()
+  const size = new THREE.Vector3()
+  box.getCenter(center)
+  box.getSize(size)
+  const offset = THREE.MathUtils.clamp(size.y * 0.12, 0.18, 0.5)
+  sprite.position.set(center.x, box.max.y + offset, center.z)
+  sprite.scale.set(LABEL_WORLD_HEIGHT * (LABEL_TEXTURE_WIDTH / LABEL_TEXTURE_HEIGHT), LABEL_WORLD_HEIGHT, 1)
+}
+
+function syncLabelForItem(item, mesh) {
+  if (!labelGroup || item?.id == null || !mesh) return
+  const id = String(item.id)
+  const text = getItemLabelText(item)
+  const shouldShowLabel = item?.showLabel !== false && Boolean(text)
+  if (!shouldShowLabel) {
+    removeLabelForItem(id)
+    return
+  }
+
+  let sprite = labelById.get(id)
+  if (!sprite) {
+    sprite = new THREE.Sprite(new THREE.SpriteMaterial({
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      sizeAttenuation: true,
+      fog: false
+    }))
+    sprite.renderOrder = 1200
+    sprite.userData.itemId = id
+    labelById.set(id, sprite)
+    labelGroup.add(sprite)
+  } else if (sprite.parent !== labelGroup) {
+    labelGroup.add(sprite)
+  }
+
+  updateLabelTexture(sprite, item, text)
+  syncLabelPosition(sprite, mesh)
 }
 
 function applyCamera() {
@@ -386,6 +546,10 @@ function initScene() {
     itemsGroup.name = '__directorItems'
     scene.add(itemsGroup)
 
+    labelGroup = new THREE.Group()
+    labelGroup.name = '__directorLabels'
+    scene.add(labelGroup)
+
     transformControls = new TransformControls(camera, renderer.domElement)
     transformControls.enabled = false
     transformControls.setSize(0.85)
@@ -550,8 +714,7 @@ function meshCacheKey(item) {
     item?.visualId || '',
     item?.action || '',
     item?.color || '',
-    JSON.stringify(item?.bodyControls || {}),
-    JSON.stringify(item?.boneControls || {})
+    JSON.stringify(item?.bodyControls || {})
   ].join('|')
 }
 
@@ -564,6 +727,7 @@ function syncMeshes() {
     if (!ids.has(id)) {
       itemsGroup.remove(mesh)
       meshById.delete(id)
+      removeLabelForItem(id)
       disposeDirectorObject3D(mesh)
     }
   }
@@ -585,8 +749,10 @@ function syncMeshes() {
       meshById.set(id, mesh)
     } else {
       updateDirectorObjectTransform(mesh, item)
+      updateDirectorObjectBoneControls(mesh, item?.boneControls)
       if (mesh.parent !== itemsGroup) itemsGroup.add(mesh)
     }
+    syncLabelForItem(item, mesh)
   })
 
   syncSelection()
@@ -622,6 +788,13 @@ function toThreeTransformMode(mode) {
 
 function syncTransformControls() {
   if (!transformControls || !transformHelper) return
+  if (pointerState.mode === 'bone') {
+    transformControls.detach()
+    transformControls.enabled = false
+    transformHelper.visible = false
+    requestRender()
+    return
+  }
   const mode = toThreeTransformMode(props.transformMode)
   const selectedId = props.selectedItemId != null ? String(props.selectedItemId) : null
   const mesh = selectedId ? meshById.get(selectedId) : null
@@ -651,6 +824,7 @@ function emitPatchFromObject(itemId) {
   const legacy = pos3dToDirectorLegacy(pos3d)
   const rotation3d = { x: mesh.rotation.x, y: mesh.rotation.y, z: mesh.rotation.z }
   const scale3d = { x: mesh.scale.x, y: mesh.scale.y, z: mesh.scale.z }
+  syncLabelForItem(item, mesh)
   emit('update-item', {
     ...item,
     x: legacy.x,
@@ -665,6 +839,16 @@ function handleSceneError(error) {
   emit('scene-error', error)
 }
 
+function resetBoneDragState() {
+  boneDragState.active = false
+  boneDragState.itemId = null
+  boneDragState.boneKey = null
+  boneDragState.startX = 0
+  boneDragState.startY = 0
+  boneDragState.startControls = null
+  boneDragState.axisLock = null
+}
+
 function resetPointerState() {
   pointerState.active = false
   pointerState.pointerId = null
@@ -673,6 +857,7 @@ function resetPointerState() {
   pointerState.lastY = 0
   pointerState.moved = false
   hoverItemId = null
+  resetBoneDragState()
 }
 
 function cleanupSceneResources({ forceContextLoss = false } = {}) {
@@ -692,6 +877,7 @@ function cleanupSceneResources({ forceContextLoss = false } = {}) {
   disposePanoramaTexture()
   if (scene) disposeDirectorObject3D(scene)
   meshById.clear()
+  labelById.clear()
   if (renderer) {
     renderer.dispose()
     if (forceContextLoss) renderer.forceContextLoss?.()
@@ -701,6 +887,7 @@ function cleanupSceneResources({ forceContextLoss = false } = {}) {
   scene = null
   camera = null
   itemsGroup = null
+  labelGroup = null
   gridGroup = null
   floorMesh = null
   axesHelper = null
@@ -745,6 +932,107 @@ function raycastItem(local) {
   return null
 }
 
+function findItemById(itemId) {
+  return props.items.find(entry => String(entry?.id) === String(itemId)) || null
+}
+
+function resolveHitItemId(object) {
+  let current = object
+  while (current) {
+    if (current.userData?.itemId != null) return String(current.userData.itemId)
+    if (typeof current.name === 'string' && current.name.startsWith('item:')) return current.name.slice(5)
+    current = current.parent
+  }
+  return null
+}
+
+function resolveHitBoneKey(object) {
+  let current = object
+  while (current) {
+    if (current.userData?.directorStudioBoneHandle && current.userData?.boneKey) {
+      return String(current.userData.boneKey)
+    }
+    if (current.userData?.directorStudioBoneKey) return String(current.userData.directorStudioBoneKey)
+    current = current.parent
+  }
+  return null
+}
+
+function raycastBoneHandle(local) {
+  if (!camera || !itemsGroup) return null
+  const raycaster = new THREE.Raycaster()
+  raycaster.setFromCamera(toNdc(local), camera)
+  const hits = raycaster.intersectObjects(itemsGroup.children, true)
+  for (const hit of hits) {
+    const boneKey = resolveHitBoneKey(hit.object)
+    const itemId = resolveHitItemId(hit.object)
+    if (boneKey && itemId) return { itemId, boneKey, object: hit.object }
+  }
+  return null
+}
+
+function emitBoneControlPatch(itemId, boneKey, nextBoneControls) {
+  const item = findItemById(itemId)
+  if (!item || !nextBoneControls?.[boneKey]) return
+  emit('update-item', {
+    ...item,
+    boneControls: normalizeDirectorStudioBoneControls(nextBoneControls)
+  })
+}
+
+function startBoneDrag(event, hit) {
+  const item = findItemById(hit?.itemId)
+  if (!item || !hit?.boneKey) return false
+  pointerState.active = true
+  pointerState.pointerId = event.pointerId
+  pointerState.lastX = event.clientX
+  pointerState.lastY = event.clientY
+  pointerState.moved = false
+  pointerState.mode = 'bone'
+  boneDragState.active = true
+  boneDragState.itemId = String(hit.itemId)
+  boneDragState.boneKey = String(hit.boneKey)
+  boneDragState.startX = event.clientX
+  boneDragState.startY = event.clientY
+  boneDragState.startControls = normalizeDirectorStudioBoneControls(item.boneControls)
+  boneDragState.axisLock = event.shiftKey ? 'zDeg' : null
+  emit('select-item', boneDragState.itemId)
+  syncTransformControls()
+  try {
+    event.currentTarget.setPointerCapture(event.pointerId)
+  } catch {
+    // Pointer capture is best effort.
+  }
+  event.preventDefault()
+  return true
+}
+
+function updateBoneDrag(event) {
+  if (!boneDragState.active || !boneDragState.itemId || !boneDragState.boneKey || !boneDragState.startControls) return
+  const boneKey = boneDragState.boneKey
+  const startBone = boneDragState.startControls[boneKey]
+  if (!startBone) return
+  const dx = event.clientX - boneDragState.startX
+  const dy = event.clientY - boneDragState.startY
+  const nextControls = normalizeDirectorStudioBoneControls({
+    ...boneDragState.startControls,
+    [boneKey]: boneDragState.axisLock === 'zDeg'
+      ? {
+          ...startBone,
+          zDeg: startBone.zDeg + dx * BONE_DRAG_DEGREES_PER_PIXEL
+        }
+      : {
+          ...startBone,
+          xDeg: startBone.xDeg + dy * BONE_DRAG_DEGREES_PER_PIXEL,
+          yDeg: startBone.yDeg + dx * BONE_DRAG_DEGREES_PER_PIXEL
+        }
+  })
+  const mesh = meshById.get(boneDragState.itemId)
+  updateDirectorObjectBoneControls(mesh, nextControls)
+  emitBoneControlPatch(boneDragState.itemId, boneKey, nextControls)
+  requestRender()
+}
+
 function pointerOverTransform(local, button = 0) {
   if (!transformControls?.enabled || !props.transformMode || !props.selectedItemId) return false
   if (transformControls.dragging) return true
@@ -757,6 +1045,8 @@ function handlePointerDown(event) {
   if (!renderer || event.button > 2) return
   rootEl.value?.focus?.()
   const local = localPointer(event)
+  const boneHit = event.button === 0 ? raycastBoneHandle(local) : null
+  if (boneHit && startBoneDrag(event, boneHit)) return
   if (pointerOverTransform(local, event.button)) {
     pointerState.mode = 'transform'
     return
@@ -792,6 +1082,11 @@ function handlePointerMove(event) {
   pointerState.lastX = event.clientX
   pointerState.lastY = event.clientY
 
+  if (pointerState.mode === 'bone') {
+    updateBoneDrag(event)
+    return
+  }
+
   if (pointerState.mode === 'orbit') {
     const settings = normalizeDirectorViewSettings(props.viewSettings)
     const verticalDirection = settings.reverseVerticalOrbit ? 1 : -1
@@ -814,15 +1109,18 @@ function handlePointerMove(event) {
 function handlePointerUp(event) {
   if (!pointerState.active) return
   const wasClick = !pointerState.moved
+  const wasBoneDrag = pointerState.mode === 'bone'
   pointerState.active = false
   pointerState.pointerId = null
   pointerState.mode = 'idle'
+  resetBoneDragState()
+  syncTransformControls()
   try {
     event.currentTarget.releasePointerCapture(event.pointerId)
   } catch {
     // Pointer capture is best effort.
   }
-  if (wasClick) {
+  if (wasClick && !wasBoneDrag) {
     const id = raycastItem(localPointer(event))
     emit('select-item', id)
   }

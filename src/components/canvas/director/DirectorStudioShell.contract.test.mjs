@@ -225,6 +225,7 @@ test('director studio exposes character bone controls and action presets', () =>
   assert.match(inspector, /const\s+boneControls\s*=\s*computed/)
   assert.match(inspector, /function\s+updateBoneValue\s*\(\s*boneKey,\s*axisKey,\s*event\s*\)/)
   assert.match(inspector, /selectedItem\.category === 'person' && bodyControls\.showControls/)
+  assert.match(inspector, /@input="updateBoneValue\(bone\.key,\s*axis\.key,\s*\$event\)"/)
   assert.match(inspector, /@change="handleActionPresetChange"/)
   assert.match(inspector, /@change="handleInteractionPresetChange"/)
   assert.match(inspector, /'apply-action-preset'/)
@@ -234,6 +235,15 @@ test('director studio exposes character bone controls and action presets', () =>
   assert.match(shell, /function\s+applyInteractionPosePreset\s*\(\s*presetId\s*\)/)
   assert.match(shell, /@apply-action-preset="applyActionPosePreset"/)
   assert.match(shell, /@apply-interaction-preset="applyInteractionPosePreset"/)
+})
+
+test('director studio custom poses preserve manual bone controls', () => {
+  const inspector = read('components/canvas/director/DirectorStudioInspector.vue')
+  const shell = read('components/canvas/director/DirectorStudioShell.vue')
+
+  assert.match(inspector, /boneControls:\s*props\.selectedItem\.boneControls\s*\|\|\s*\{\}/)
+  assert.match(shell, /function\s+saveCustomPose\s*\(\s*payload\s*\)\s*\{[\s\S]*boneControls:\s*cloneJson\(payload\?\.boneControls\s*\|\|\s*\{\}\)[\s\S]*\}/)
+  assert.match(shell, /function\s+applyCustomPose\s*\(\s*key\s*\)\s*\{[\s\S]*boneControls:\s*cloneJson\(pose\.boneControls\s*\|\|\s*selectedItem\.value\.boneControls\s*\|\|\s*\{\}\)[\s\S]*\}/)
 })
 
 test('director studio crowd insertion defaults to useful multi-person groups', () => {
@@ -260,6 +270,22 @@ test('director studio scene keeps camera distance stable during transform update
   assert.match(scene, /normalizeDirectorViewSettings\(props\.viewSettings\)/)
   assert.match(scene, /settings\.reverseVerticalOrbit\s*\?\s*1\s*:\s*-1/)
   assert.match(scene, /cameraState\.pitch\s*\+=\s*dy\s*\*\s*0\.005\s*\*\s*verticalDirection/)
+})
+
+test('director studio scene exposes mouse drag controls for person bone keypoints', () => {
+  const scene = read('components/canvas/director/DirectorStudioScene.vue')
+
+  assert.match(scene, /updateDirectorObjectBoneControls/)
+  assert.doesNotMatch(scene, /function\s+meshCacheKey\s*\(\s*item\s*\)\s*\{[\s\S]*JSON\.stringify\(item\?\.boneControls\s*\|\|\s*\{\}\)[\s\S]*\}/)
+  assert.match(scene, /updateDirectorObjectBoneControls\(mesh,\s*item\?\.boneControls\)/)
+  assert.match(scene, /boneDragState\s*=/)
+  assert.match(scene, /function\s+raycastBoneHandle\s*\(\s*local\s*\)/)
+  assert.match(scene, /function\s+startBoneDrag\s*\(\s*event,\s*hit\s*\)/)
+  assert.match(scene, /function\s+updateBoneDrag\s*\(\s*event\s*\)/)
+  assert.match(scene, /function\s+emitBoneControlPatch\s*\(\s*itemId,\s*boneKey,\s*nextBoneControls\s*\)/)
+  assert.match(scene, /pointerState\.mode\s*=\s*'bone'/)
+  assert.match(scene, /event\.shiftKey\s*\?\s*'zDeg'\s*:\s*null/)
+  assert.match(scene, /@pointermove="handlePointerMove"/)
 })
 
 test('director studio node bridges shell events into shallow node data updates', () => {
