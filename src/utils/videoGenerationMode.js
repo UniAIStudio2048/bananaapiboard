@@ -104,6 +104,7 @@ export function getDefaultGenerationModeForVideoModel(modelConfig) {
 
 export function resolveVideoRequestModel(modelConfig, modelValue) {
   const apiType = modelConfig?.apiType || ''
+  if (!apiType || apiType === 'openai') return modelValue
   if (apiType === 'bytefor') return modelValue
   if (isSeedanceSd2VideoModel(modelConfig)) return modelValue
   if (apiType === 'seedance-openapi-pro' || apiType === 'seedance-openai') {

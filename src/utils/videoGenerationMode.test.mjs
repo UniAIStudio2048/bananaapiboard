@@ -140,6 +140,23 @@ test('video generation payload keeps configured model id for backend routing', (
   assert.equal(entries.get('model'), 'bytefor-seedance-2.0')
 })
 
+test('OpenAI video payload keeps configured model id for backend routing', () => {
+  const entries = buildVideoGenerationFormEntries({
+    modelConfig: {
+      apiType: 'openai',
+      name: 'omni_flash-10s-co',
+      actualModel: 'omni_flash-10s'
+    },
+    prompt: 'make a product shot move',
+    model: 'omni_flash-10s-co',
+    aspectRatio: '16:9',
+    duration: '10',
+    mode: 'text'
+  })
+
+  assert.equal(entries.get('model'), 'omni_flash-10s-co')
+})
+
 test('Bytefor request model keeps model id instead of provider model', () => {
   const configuredProviderModel = 'Custom Bytefor Model From Settings'
   assert.equal(

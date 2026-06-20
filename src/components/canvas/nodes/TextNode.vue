@@ -557,7 +557,7 @@ watch(llmInputText, (newVal) => {
 })
 
 const selectedModel = ref('gemini-2.5-pro')
-const selectedPreset = ref('') // 选中的功能预设
+const selectedPreset = ref(props.data?.selectedPreset || '') // 选中的功能预设
 const selectedLanguage = ref('zh') // 选中的语言
 const isGenerating = ref(false)
 const showModelDropdown = ref(false)
@@ -605,7 +605,7 @@ const userPresets = ref([]) // 用户自定义预设列表
 const showCustomPresetDialog = ref(false) // 自定义预设对话框
 const showPresetManager = ref(false) // 预设管理抽屉
 const editingPreset = ref(null) // 正在编辑的预设
-const tempCustomPrompt = ref('') // 临时自定义提示词
+const tempCustomPrompt = ref(props.data?.tempCustomPrompt || (props.data?.selectedPreset === 'temp-custom' ? props.data?.selectedPresetPrompt || '' : '')) // 临时自定义提示词
 const presetManagerRef = ref(null) // 预设管理器引用
 
 // 加载用户自定义预设
@@ -637,7 +637,15 @@ async function handlePresetSubmit(data) {
   try {
     if (editingPreset.value) {
       // 更新现有预设
-      await updateUserLLMPreset(editingPreset.value.id, data)
+      const result = await updateUserLLMPreset(editingPreset.value.id, data)
+      if (selectedPreset.value === `user-${result.preset.id}`) {
+        persistSelectedPreset(selectedPreset.value, {
+          ...result.preset,
+          id: `user-${result.preset.id}`,
+          name: `📝 ${result.preset.name}`,
+          type: 'user-custom'
+        })
+      }
       console.log('[TextNode] 预设已更新')
     } else {
       // 创建新预设
@@ -645,7 +653,12 @@ async function handlePresetSubmit(data) {
       console.log('[TextNode] 预设已创建')
 
       // 自动选择新创建的预设
-      selectedPreset.value = `user-${result.preset.id}`
+      persistSelectedPreset(`user-${result.preset.id}`, {
+        ...result.preset,
+        id: `user-${result.preset.id}`,
+        name: `📝 ${result.preset.name}`,
+        type: 'user-custom'
+      })
     }
 
     // 重新加载预设列表
@@ -667,7 +680,12 @@ async function handlePresetSubmit(data) {
 // 临时使用自定义提示词（不保存）
 function handleTempUse(data) {
   tempCustomPrompt.value = data.systemPrompt
-  selectedPreset.value = 'temp-custom'
+  persistSelectedPreset('temp-custom', {
+    id: 'temp-custom',
+    name: '📌 临时自定义',
+    systemPrompt: tempCustomPrompt.value,
+    type: 'temp-custom'
+  })
   console.log('[TextNode] 使用临时自定义提示词')
 }
 
@@ -873,8 +891,45 @@ const selectedPresetLabel = computed(() => {
 
   // 查找租户预设
   const preset = llmConfig.value.presets?.find(p => p.id === selectedPreset.value)
-  return preset ? preset.name : '通用对话'
+  if (preset) return preset.name
+  return props.data?.selectedPresetName || '通用对话'
 })
+
+function buildSelectedPresetDataPatch(preset = null) {
+  if (!selectedPreset.value) {
+    return {
+      selectedPreset: '',
+      selectedPresetPrompt: '',
+      selectedPresetName: '',
+      selectedPresetType: 'none',
+      tempCustomPrompt: ''
+    }
+  }
+
+  const resolvedPreset = preset || availablePresets.value.find(p => p.id === selectedPreset.value)
+  const presetPrompt = selectedPreset.value === 'temp-custom'
+    ? tempCustomPrompt.value
+    : (resolvedPreset?.systemPrompt || resolvedPreset?.prompt || props.data?.selectedPresetPrompt || '')
+  const presetName = selectedPreset.value === 'temp-custom'
+    ? '📌 临时自定义'
+    : (resolvedPreset?.name || props.data?.selectedPresetName || '')
+  const presetType = selectedPreset.value === 'temp-custom'
+    ? 'temp-custom'
+    : (resolvedPreset?.type || props.data?.selectedPresetType || 'snapshot')
+
+  return {
+    selectedPreset: selectedPreset.value,
+    selectedPresetPrompt: presetPrompt,
+    selectedPresetName: presetName,
+    selectedPresetType: presetType,
+    tempCustomPrompt: selectedPreset.value === 'temp-custom' ? tempCustomPrompt.value : ''
+  }
+}
+
+function persistSelectedPreset(presetId, preset = null) {
+  selectedPreset.value = presetId || ''
+  canvasStore.updateNodeData(props.id, buildSelectedPresetDataPatch(preset))
+}
 
 // 切换功能预设下拉菜单
 function togglePresetDropdown(event) {
@@ -902,12 +957,14 @@ function selectPreset(presetId) {
   }
 
   // 忽略分隔线
-  if (presetId.startsWith('divider-')) {
+  if (presetId?.startsWith('divider-')) {
     return
   }
 
   // 选择预设
-  selectedPreset.value = presetId
+  const preset = presetId ? availablePresets.value.find(p => p.id === presetId) : null
+  if (presetId && (!preset || preset.type === 'divider' || preset.type === 'action')) return
+  persistSelectedPreset(presetId, preset)
   showPresetDropdown.value = false
 }
 
@@ -1936,7 +1993,7 @@ function tryApplyAutoPreset() {
     p => p.id === 'image-describe' || p.name?.includes('图片反推') || p.name?.includes('反推')
   )
   if (imageDescribePreset) {
-    selectedPreset.value = imageDescribePreset.id
+    persistSelectedPreset(imageDescribePreset.id, imageDescribePreset)
     canvasStore.updateNodeData(props.id, { autoPreset: null })
     return true
   }

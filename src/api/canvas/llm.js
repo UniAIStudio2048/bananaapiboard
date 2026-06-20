@@ -16,11 +16,39 @@ function getHeaders(options = {}) {
   }
 }
 
+function normalizeLLMNetworkError(error) {
+  const message = String(error?.message || error || '')
+  const name = String(error?.name || '')
+
+  if (name === 'AbortError' || message.includes('abort')) {
+    return new Error('LLM 请求超时，请稍后重试')
+  }
+
+  if (
+    message.includes('Failed to fetch') ||
+    message.includes('fetch failed') ||
+    message.includes('NetworkError') ||
+    message.includes('Load failed')
+  ) {
+    return new Error('LLM 请求连接失败，请检查网络或稍后重试')
+  }
+
+  return error
+}
+
+async function fetchLLMApi(path, options = {}) {
+  try {
+    return await fetch(getApiUrl(path), options)
+  } catch (error) {
+    throw normalizeLLMNetworkError(error)
+  }
+}
+
 /**
  * 获取 LLM 配置（包含可用模型列表）
  */
 export async function getLLMConfig() {
-  const response = await fetch(getApiUrl('/api/canvas/llm/config'), {
+  const response = await fetchLLMApi('/api/canvas/llm/config', {
     headers: getHeaders()
   })
   
@@ -43,7 +71,7 @@ export async function chatWithLLM(params) {
   const teamStore = useTeamStore()
   const spaceParams = teamStore.getSpaceParams('current')
   
-  const response = await fetch(getApiUrl('/api/canvas/llm/chat'), {
+  const response = await fetchLLMApi('/api/canvas/llm/chat', {
     method: 'POST',
     headers: getHeaders({ json: true }),
     body: JSON.stringify({
@@ -81,7 +109,7 @@ export async function chatWithLLMStream(params) {
     const teamStore = useTeamStore()
     const spaceParams = teamStore.getSpaceParams('current')
     
-    const response = await fetch(getApiUrl('/api/canvas/llm/chat'), {
+    const response = await fetchLLMApi('/api/canvas/llm/chat', {
       method: 'POST',
       headers: getHeaders({ json: true }),
       body: JSON.stringify({
@@ -182,7 +210,7 @@ async function callLLM(action, params) {
   const teamStore = useTeamStore()
   const spaceParams = teamStore.getSpaceParams('current')
   
-  const response = await fetch(getApiUrl(`/api/canvas/llm/${action}`), {
+  const response = await fetchLLMApi(`/api/canvas/llm/${action}`, {
     method: 'POST',
     headers: getHeaders({ json: true }),
     body: JSON.stringify({
@@ -273,7 +301,7 @@ export function getLLMCost(action) {
  * @returns {Promise<{success: boolean, presets: Array, total: number, limit: number}>}
  */
 export async function getUserLLMPresets() {
-  const response = await fetch(getApiUrl('/api/canvas/llm/user-presets'), {
+  const response = await fetchLLMApi('/api/canvas/llm/user-presets', {
     headers: getHeaders()
   })
 
@@ -293,7 +321,7 @@ export async function getUserLLMPresets() {
  * @returns {Promise<{success: boolean, preset: Object}>}
  */
 export async function createUserLLMPreset({ name, systemPrompt }) {
-  const response = await fetch(getApiUrl('/api/canvas/llm/user-presets'), {
+  const response = await fetchLLMApi('/api/canvas/llm/user-presets', {
     method: 'POST',
     headers: getHeaders({ json: true }),
     body: JSON.stringify({ name, systemPrompt })
@@ -316,7 +344,7 @@ export async function createUserLLMPreset({ name, systemPrompt }) {
  * @returns {Promise<{success: boolean, preset: Object}>}
  */
 export async function updateUserLLMPreset(id, { name, systemPrompt }) {
-  const response = await fetch(getApiUrl(`/api/canvas/llm/user-presets/${id}`), {
+  const response = await fetchLLMApi(`/api/canvas/llm/user-presets/${id}`, {
     method: 'PUT',
     headers: getHeaders({ json: true }),
     body: JSON.stringify({ name, systemPrompt })
@@ -336,7 +364,7 @@ export async function updateUserLLMPreset(id, { name, systemPrompt }) {
  * @returns {Promise<{success: boolean, message: string}>}
  */
 export async function deleteUserLLMPreset(id) {
-  const response = await fetch(getApiUrl(`/api/canvas/llm/user-presets/${id}`), {
+  const response = await fetchLLMApi(`/api/canvas/llm/user-presets/${id}`, {
     method: 'DELETE',
     headers: getHeaders()
   })

@@ -22,7 +22,7 @@ test('image describe auto preset keeps an empty text node in initial quick-actio
   const source = readTextNode()
   const block = functionBlock(source, 'tryApplyAutoPreset')
 
-  assert.match(block, /selectedPreset\.value\s*=\s*imageDescribePreset\.id/)
+  assert.match(block, /persistSelectedPreset\(imageDescribePreset\.id,\s*imageDescribePreset\)/)
   assert.match(block, /canvasStore\.updateNodeData\(props\.id,\s*\{\s*autoPreset:\s*null\s*\}\)/)
   assert.doesNotMatch(block, /nodeState\.value\s*=\s*['"]ready['"]/)
   assert.doesNotMatch(block, /nodeState\.value\s*=\s*['"]editing['"]/)

@@ -181,12 +181,56 @@ function formatDataSize(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
 
+function isLocalWorkflowMediaUrl(url) {
+  return typeof url === 'string' && (url.startsWith('blob:') || url.startsWith('data:'))
+}
+
+function getMediaExtension(mimeType, fallbackType) {
+  if (mimeType?.includes('png')) return 'png'
+  if (mimeType?.includes('webp')) return 'webp'
+  if (mimeType?.includes('gif')) return 'gif'
+  if (mimeType?.includes('svg')) return 'svg'
+  if (mimeType?.includes('mp4')) return 'mp4'
+  if (mimeType?.includes('webm')) return 'webm'
+  if (mimeType?.includes('quicktime')) return 'mov'
+  if (mimeType?.includes('wav')) return 'wav'
+  if (mimeType?.includes('ogg')) return 'ogg'
+  if (mimeType?.includes('mpeg') || mimeType?.includes('mp3')) return 'mp3'
+  return fallbackType === 'video' ? 'mp4' : fallbackType === 'audio' ? 'mp3' : 'jpg'
+}
+
+function inferUploadType(blob, fallbackType = 'image') {
+  if (blob?.type?.startsWith('video/')) return 'video'
+  if (blob?.type?.startsWith('audio/')) return 'audio'
+  return fallbackType
+}
+
+async function uploadLocalWorkflowMediaUrl(url, fallbackType, uploadCanvasMedia) {
+  const response = await fetch(url)
+  if (!response.ok) {
+    throw new Error(`读取本地文件失败 (${response.status})`)
+  }
+
+  const blob = await response.blob()
+  const uploadType = inferUploadType(blob, fallbackType)
+  const mimeType = blob.type || (uploadType === 'video' ? 'video/mp4' : uploadType === 'audio' ? 'audio/mpeg' : 'image/jpeg')
+  const ext = getMediaExtension(mimeType, uploadType)
+  const file = new File([blob], `workflow-${uploadType}-${Date.now()}.${ext}`, { type: mimeType })
+  const result = await uploadCanvasMedia(file, uploadType)
+
+  if (!result?.url) {
+    throw new Error('上传成功但未返回URL')
+  }
+
+  return result.url
+}
+
 // 检查是否有未上传完成的本地文件
 function checkLocalFiles() {
   const issues = {
     uploading: [],    // 正在上传
     uploadFailed: [], // 上传失败
-    blobUrls: []      // 仍然是 blob URL
+    blobUrls: []      // 仍然是 blob/data 本地 URL
   }
   
   for (const node of canvasStore.nodes) {
@@ -211,15 +255,17 @@ function checkLocalFiles() {
       })
     }
     
-    // 检查是否有 blob URL（表示还没上传成功）
+    // 检查是否有本地 URL（表示还没上传成功）
     const urlsToCheck = [
       ...(data.sourceImages || []),
+      data.sourceVideo,
       data.audioUrl,
-      data.output?.url
+      data.output?.url,
+      ...(data.output?.urls || [])
     ].filter(Boolean)
     
     for (const url of urlsToCheck) {
-      if (typeof url === 'string' && url.startsWith('blob:')) {
+      if (typeof url === 'string' && (url.startsWith('blob:') || url.startsWith('data:'))) {
         issues.blobUrls.push({
           id: node.id,
           type: node.type,
@@ -235,7 +281,6 @@ function checkLocalFiles() {
 
 // 重试上传失败的节点图片
 async function retryFailedUploads(failedNodes) {
-  const { uploadImages } = await import('@/api/canvas/nodes.js')
   const { uploadCanvasMedia } = await import('@/api/canvas/workflow')
 
   for (const nodeInfo of failedNodes) {
@@ -243,30 +288,37 @@ async function retryFailedUploads(failedNodes) {
     if (!node) continue
 
     const data = node.data || {}
+    const uploadedUrlCache = new Map()
+    const uploadLocalUrl = async (localUrl, fallbackType = 'image') => {
+      if (!uploadedUrlCache.has(localUrl)) {
+        uploadedUrlCache.set(localUrl, uploadLocalWorkflowMediaUrl(localUrl, fallbackType, uploadCanvasMedia))
+      }
+      return uploadedUrlCache.get(localUrl)
+    }
 
-    // 处理 sourceImages 中的 blob URL（图片）
-    const blobUrls = (data.sourceImages || []).filter(url => typeof url === 'string' && url.startsWith('blob:'))
+    // 处理 sourceImages 中的本地 URL（图片）
+    const localImageUrls = (data.sourceImages || []).filter(isLocalWorkflowMediaUrl)
 
-    for (const blobUrl of blobUrls) {
+    for (const localUrl of localImageUrls) {
       try {
-        const response = await fetch(blobUrl)
-        const blob = await response.blob()
-        const file = new File([blob], `retry-upload-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' })
+        const fileResponse = await fetch(localUrl)
+        if (!fileResponse.ok) throw new Error(`读取本地文件失败 (${fileResponse.status})`)
+        const blob = await fileResponse.blob()
+        const file = new File([blob], `workflow-image-${Date.now()}.${getMediaExtension(blob.type || 'image/jpeg', 'image')}`, { type: blob.type || 'image/jpeg' })
+        const result = await uploadCanvasMedia(file, 'image')
+        const serverUrl = result.url
+        uploadedUrlCache.set(localUrl, Promise.resolve(serverUrl))
 
-        const urls = await uploadImages([file])
-        if (urls && urls.length > 0) {
-          const serverUrl = urls[0]
-          const currentNode = canvasStore.nodes.find(n => n.id === nodeInfo.id)
-          if (currentNode?.data) {
-            const updatedSourceImages = (currentNode.data.sourceImages || []).map(
-              url => url === blobUrl ? serverUrl : url
-            )
-            canvasStore.updateNodeData(nodeInfo.id, {
-              sourceImages: updatedSourceImages,
-              uploadFailed: false,
-              uploadError: null
-            })
-          }
+        const currentNode = canvasStore.nodes.find(n => n.id === nodeInfo.id)
+        if (currentNode?.data) {
+          const updatedSourceImages = (currentNode.data.sourceImages || []).map(
+            url => url === localUrl ? serverUrl : url
+          )
+          canvasStore.updateNodeData(nodeInfo.id, {
+            sourceImages: updatedSourceImages,
+            uploadFailed: false,
+            uploadError: null
+          })
         }
       } catch (err) {
         console.warn('[SaveDialog] 重试上传失败:', err.message)
@@ -274,15 +326,12 @@ async function retryFailedUploads(failedNodes) {
       }
     }
 
-    // 处理 sourceVideo 中的 blob URL（视频）
-    if (data.sourceVideo && typeof data.sourceVideo === 'string' && data.sourceVideo.startsWith('blob:')) {
+    // 处理 sourceVideo 中的本地 URL（视频）
+    if (isLocalWorkflowMediaUrl(data.sourceVideo)) {
       try {
-        const response = await fetch(data.sourceVideo)
-        const blob = await response.blob()
-        const file = new File([blob], `retry-video-${Date.now()}.mp4`, { type: blob.type || 'video/mp4' })
-        const result = await uploadCanvasMedia(file, 'video')
+        const serverUrl = await uploadLocalUrl(data.sourceVideo, 'video')
         canvasStore.updateNodeData(nodeInfo.id, {
-          sourceVideo: result.url,
+          sourceVideo: serverUrl,
           uploadFailed: false,
           uploadError: null
         })
@@ -291,16 +340,13 @@ async function retryFailedUploads(failedNodes) {
       }
     }
 
-    // 处理 audioUrl 中的 blob URL（音频）
-    if (data.audioUrl && typeof data.audioUrl === 'string' && data.audioUrl.startsWith('blob:')) {
+    // 处理 audioUrl 中的本地 URL（音频）
+    if (isLocalWorkflowMediaUrl(data.audioUrl)) {
       try {
-        const response = await fetch(data.audioUrl)
-        const blob = await response.blob()
-        const file = new File([blob], `retry-audio-${Date.now()}.mp3`, { type: blob.type || 'audio/mpeg' })
-        const result = await uploadCanvasMedia(file, 'audio')
+        const serverUrl = await uploadLocalUrl(data.audioUrl, 'audio')
         canvasStore.updateNodeData(nodeInfo.id, {
-          audioUrl: result.url,
-          output: { ...(data.output || {}), url: result.url },
+          audioUrl: serverUrl,
+          output: { ...(data.output || {}), url: serverUrl },
           uploadFailed: false,
           uploadError: null
         })
@@ -309,42 +355,24 @@ async function retryFailedUploads(failedNodes) {
       }
     }
 
-    // 处理 output.url 和 output.urls 中的 blob URL
+    // 处理 output.url 和 output.urls 中的本地 URL
     if (data.output) {
-      const outputBlobUrls = [
-        ...(data.output.url && typeof data.output.url === 'string' && data.output.url.startsWith('blob:') ? [data.output.url] : []),
-        ...(data.output.urls || []).filter(url => typeof url === 'string' && url.startsWith('blob:'))
+      const outputLocalUrls = [
+        ...(isLocalWorkflowMediaUrl(data.output.url) ? [data.output.url] : []),
+        ...(data.output.urls || []).filter(isLocalWorkflowMediaUrl)
       ]
 
-      for (const blobUrl of outputBlobUrls) {
+      for (const localUrl of outputLocalUrls) {
         try {
-          const response = await fetch(blobUrl)
-          const blob = await response.blob()
-          const isVideo = blob.type?.startsWith('video/')
-          const isAudio = blob.type?.startsWith('audio/')
-          
-          let serverUrl
-          if (isVideo) {
-            const file = new File([blob], `retry-video-${Date.now()}.mp4`, { type: blob.type })
-            const result = await uploadCanvasMedia(file, 'video')
-            serverUrl = result.url
-          } else if (isAudio) {
-            const file = new File([blob], `retry-audio-${Date.now()}.mp3`, { type: blob.type })
-            const result = await uploadCanvasMedia(file, 'audio')
-            serverUrl = result.url
-          } else {
-            const file = new File([blob], `retry-upload-${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' })
-            const urls = await uploadImages([file])
-            serverUrl = urls?.[0]
-          }
+          const serverUrl = await uploadLocalUrl(localUrl, 'image')
           
           if (serverUrl) {
             const currentNode = canvasStore.nodes.find(n => n.id === nodeInfo.id)
             if (currentNode?.data?.output) {
               const updatedOutput = { ...currentNode.data.output }
-              if (updatedOutput.url === blobUrl) updatedOutput.url = serverUrl
+              if (updatedOutput.url === localUrl) updatedOutput.url = serverUrl
               if (Array.isArray(updatedOutput.urls)) {
-                updatedOutput.urls = updatedOutput.urls.map(u => u === blobUrl ? serverUrl : u)
+                updatedOutput.urls = updatedOutput.urls.map(u => u === localUrl ? serverUrl : u)
               }
               canvasStore.updateNodeData(nodeInfo.id, { output: updatedOutput, uploadFailed: false, uploadError: null })
             }

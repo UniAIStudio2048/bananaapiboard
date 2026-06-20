@@ -187,10 +187,18 @@ assert.equal(sanitized.edges[0].targetY, undefined)
 const dialogSrc = readFileSync(join(repoRoot, 'src', 'components', 'canvas', 'SaveWorkflowDialog.vue'), 'utf8')
 const currentDataSizeBody = dialogSrc.match(/const currentDataSize = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || ''
 const calculateDataSizeBody = dialogSrc.match(/function calculateDataSize\(\) \{[\s\S]*?\n\}/)?.[0] || ''
+const checkLocalFilesBody = dialogSrc.match(/function checkLocalFiles\(\) \{[\s\S]*?\n\}/)?.[0] || ''
+const retryFailedUploadsBody = dialogSrc.match(/async function retryFailedUploads\(failedNodes\) \{[\s\S]*?\n\}/)?.[0] || ''
 
 assert.match(currentDataSizeBody, /exportWorkflowForSave\(\)/, '实时大小显示必须按清理后的保存数据计算')
 assert.match(calculateDataSizeBody, /exportWorkflowForSave\(\)/, '保存预检必须按清理后的保存数据计算')
 assert.equal(/canvasStore\.exportWorkflow\(\)/.test(currentDataSizeBody), false)
 assert.equal(/canvasStore\.exportWorkflow\(\)/.test(calculateDataSizeBody), false)
+
+assert.match(checkLocalFilesBody, /data\.sourceVideo/, '保存前必须检查视频源本地 URL，避免工作流保存临时地址')
+assert.match(checkLocalFilesBody, /data\.output\?\.urls/, '保存前必须检查 output.urls 中的本地 URL')
+assert.match(checkLocalFilesBody, /startsWith\('data:'\)/, '保存前必须检查 data: 内联媒体并尝试上传')
+assert.match(retryFailedUploadsBody, /uploadCanvasMedia\(file,\s*'image'\)/, '保存重试图片上传必须复用画布媒体上传接口')
+assert.doesNotMatch(retryFailedUploadsBody, /uploadImages/, '保存重试图片上传不能走独立 uploadImages 路径')
 
 console.log('workflowSaveSanitizer tests passed')
