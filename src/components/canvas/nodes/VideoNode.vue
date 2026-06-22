@@ -1573,6 +1573,42 @@ const currentModelConfig = computed(() => {
   return models.value.find(m => m.value === selectedModel.value) || {}
 })
 
+const OMNI_MAX_REFERENCES = 7
+
+function isOmniVideoModelName(value) {
+  const normalized = String(value || '').trim().toLowerCase()
+  return normalized === 'omni_flash-10s' || normalized.startsWith('omni_')
+}
+
+function getOmniModelCandidates(modelConfig, selectedValue) {
+  return [
+    selectedValue,
+    resolveVideoRequestModel(modelConfig, selectedValue),
+    modelConfig?.actualModel,
+    modelConfig?.model,
+    modelConfig?.name,
+    modelConfig?.id,
+    modelConfig?.otuapiConfig?.model
+  ]
+}
+
+const isOmniVideoModel = computed(() => {
+  return getOmniModelCandidates(currentModelConfig.value, selectedModel.value).some(isOmniVideoModelName)
+})
+
+function buildOmniReferenceUrls(images = referenceImages.value, videos = referenceVideos.value) {
+  const urls = []
+  const add = value => {
+    if (typeof value !== 'string') return
+    const trimmed = value.trim()
+    if (trimmed && !urls.includes(trimmed)) urls.push(trimmed)
+  }
+
+  images.forEach(add)
+  videos.forEach(add)
+  return urls.slice(0, OMNI_MAX_REFERENCES)
+}
+
 // 可用的时长选项（优先从模型配置的 durations 数组获取，兼容从 pointsCost 计算）
 const availableDurations = computed(() => {
   // 优先使用模型配置中的 durations 数组
@@ -4204,6 +4240,13 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
     formData.append('seedance_face_codes', JSON.stringify(capturedState.byteforFaceCodes))
     console.log('[VideoNode] Bytefor 人物 face codes:', capturedState.byteforFaceCodes)
   }
+
+  if (capturedState.isOmniVideoModel) {
+    for (const referenceUrl of (capturedState.omniReferences || []).slice(0, OMNI_MAX_REFERENCES)) {
+      formData.append('omni_references', referenceUrl)
+    }
+    console.log('[VideoNode] Omni 参考素材:', capturedState.omniReferences?.length || 0)
+  }
   
   const response = await fetch(getApiUrl('/api/videos/generate'), {
     method: 'POST',
@@ -4511,6 +4554,63 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
   })
 }
 
+async function ensureReferenceVideoUrlsAccessible(nodeId, targetNodeId) {
+  const currentRefVideos = referenceVideos.value || []
+  const hasBlobVideos = currentRefVideos.some(url => url.startsWith('blob:'))
+  if (!hasBlobVideos) return currentRefVideos
+
+  console.log('[VideoNode] 检测到参考视频含 blob URL，开始上传到云端...')
+  canvasStore.updateNodeData(targetNodeId, { progress: '正在处理参考视频...' })
+
+  for (const videoUrl of currentRefVideos) {
+    if (!videoUrl.startsWith('blob:')) continue
+    try {
+      const resp = await fetch(videoUrl)
+      if (!resp.ok) throw new Error(`获取 blob 视频失败: ${resp.status}`)
+      const blob = await resp.blob()
+      const file = new File([blob], `ref_video_${Date.now()}.mp4`, { type: blob.type || 'video/mp4' })
+
+      const uploadFormData = new FormData()
+      uploadFormData.append('file', file)
+      const token = localStorage.getItem('token')
+      const uploadResp = await fetch(getApiUrl('/api/videos/upload'), {
+        method: 'POST',
+        headers: {
+          ...getTenantHeaders(),
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        },
+        body: uploadFormData
+      })
+
+      if (uploadResp.ok) {
+        const uploadResult = await uploadResp.json()
+        if (uploadResult.url) {
+          console.log('[VideoNode] 参考视频 blob 上传成功:', uploadResult.url)
+          const upstreamEdges = canvasStore.edges.filter(e => e.target === nodeId)
+          for (const edge of upstreamEdges) {
+            const sn = canvasStore.nodes.find(n => n.id === edge.source)
+            if (!sn?.data) continue
+            if (sn.data.sourceVideo === videoUrl) {
+              canvasStore.updateNodeData(sn.id, { sourceVideo: uploadResult.url })
+              break
+            }
+            if (sn.data.output?.url === videoUrl) {
+              canvasStore.updateNodeData(sn.id, { output: { ...sn.data.output, url: uploadResult.url } })
+              break
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[VideoNode] 参考视频 blob 上传失败:', err.message)
+      throw err
+    }
+  }
+
+  console.log('[VideoNode] 参考视频处理完成，当前列表:', referenceVideos.value)
+  return referenceVideos.value || []
+}
+
 // 后台执行生成的重操作（图片压缩/上传/API提交），不阻塞UI
 async function processGenerationInBackground(targetNodeId, allNodeIds, finalPrompt, finalImages, generateCount, capturedState, submitFingerprint = '') {
   try {
@@ -4573,60 +4673,16 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       console.log('[VideoNode] 处理后的可访问 URLs:', finalImages)
     }
     
-    // 确保参考视频可访问（blob URL 无法被外部 API 使用）
-    if (capturedState.isSeedance2) {
-      const currentRefVideos = referenceVideos.value || []
-      const hasBlobVideos = currentRefVideos.some(url => url.startsWith('blob:'))
-      if (hasBlobVideos) {
-        console.log('[VideoNode] 检测到参考视频含 blob URL，开始上传到云端...')
-        canvasStore.updateNodeData(targetNodeId, { progress: '正在处理参考视频...' })
-        for (const videoUrl of currentRefVideos) {
-          if (!videoUrl.startsWith('blob:')) continue
-          try {
-            const resp = await fetch(videoUrl)
-            if (!resp.ok) throw new Error(`获取 blob 视频失败: ${resp.status}`)
-            const blob = await resp.blob()
-            const file = new File([blob], `ref_video_${Date.now()}.mp4`, { type: blob.type || 'video/mp4' })
-            
-            const uploadFormData = new FormData()
-            uploadFormData.append('file', file)
-            const token = localStorage.getItem('token')
-            const uploadResp = await fetch(getApiUrl('/api/videos/upload'), {
-              method: 'POST',
-              headers: {
-                ...getTenantHeaders(),
-                ...(token ? { Authorization: `Bearer ${token}` } : {})
-              },
-              body: uploadFormData
-            })
-            
-            if (uploadResp.ok) {
-              const uploadResult = await uploadResp.json()
-              if (uploadResult.url) {
-                console.log('[VideoNode] 参考视频 blob 上传成功:', uploadResult.url)
-                const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
-                for (const edge of upstreamEdges) {
-                  const sn = canvasStore.nodes.find(n => n.id === edge.source)
-                  if (!sn?.data) continue
-                  if (sn.data.sourceVideo === videoUrl) {
-                    canvasStore.updateNodeData(sn.id, { sourceVideo: uploadResult.url })
-                    break
-                  }
-                  if (sn.data.output?.url === videoUrl) {
-                    canvasStore.updateNodeData(sn.id, { output: { ...sn.data.output, url: uploadResult.url } })
-                    break
-                  }
-                }
-              }
-            }
-          } catch (err) {
-            console.error('[VideoNode] 参考视频 blob 上传失败:', err.message)
-          }
-        }
-        console.log('[VideoNode] 参考视频处理完成，当前列表:', referenceVideos.value)
+    const shouldPrepareReferenceVideos = capturedState.isSeedance2 || capturedState.isOmniVideoModel
+    if (shouldPrepareReferenceVideos) {
+      const accessibleReferenceVideos = await ensureReferenceVideoUrlsAccessible(capturedState.nodeId, targetNodeId)
+      if (capturedState.isOmniVideoModel) {
+        capturedState.omniReferences = buildOmniReferenceUrls(finalImages, accessibleReferenceVideos)
       }
+    }
 
-      // 确保参考音频可访问（blob URL 无法被外部 API 使用）
+    // 确保参考音频可访问（blob URL 无法被外部 API 使用）
+    if (capturedState.isSeedance2) {
       const currentRefAudios = referenceAudios.value || []
       const hasBlobAudios = currentRefAudios.some(url => url.startsWith('blob:'))
       if (hasBlobAudios) {
@@ -4898,6 +4954,8 @@ async function handleGenerate(options = {}) {
     model: selectedModel.value,
     isSeedance2: isSeedance2Model.value,
     isSeedanceOpenApiPro: isSeedanceOpenApiProModel.value,
+    isOmniVideoModel: isOmniVideoModel.value,
+    omniReferences: isOmniVideoModel.value ? buildOmniReferenceUrls(finalImages, referenceVideos.value) : [],
     characterAssetUris: upstreamData.characterAssetUris || [],
     faceCodes: upstreamData.faceCodes || [],
     byteforFaceCodes: upstreamData.byteforFaceCodes || [],
