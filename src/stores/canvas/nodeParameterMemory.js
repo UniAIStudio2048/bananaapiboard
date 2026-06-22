@@ -5,7 +5,10 @@ const REMEMBERABLE_NODE_DATA_KEYS = {
     'resolution',
     'imageSize',
     'count',
-    'botType'
+    'botType',
+    'cameraControlEnabled',
+    'cameraSettings',
+    'cameraPrompt'
   ],
   video: [
     'model',
@@ -13,6 +16,7 @@ const REMEMBERABLE_NODE_DATA_KEYS = {
     'duration',
     'count',
     'generationMode',
+    'viduMode',
     'viduOffPeak',
     'viduResolution',
     'veoMode',
@@ -26,15 +30,23 @@ const REMEMBERABLE_NODE_DATA_KEYS = {
     'klingMotionVideoUrl',
     'klingMotionMode',
     'seedanceSoundEnabled',
-    'seedance2Mode'
+    'seedance2Mode',
+    'klingO1Mode',
+    'omniKeepSound',
+    'klingV3OmniMode',
+    'v3OmniKeepSound',
+    'wanMode'
   ],
   'text-input': [
     'model',
+    'language',
     'preset'
   ],
   'audio-input': [
     'model',
     'musicModel',
+    'customMode',
+    'makeInstrumental',
     'voice',
     'duration'
   ]

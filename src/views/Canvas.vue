@@ -556,14 +556,8 @@ function handleTabSwitch(tab) {
 }
 
 // 标签关闭
-async function handleTabClose(tabId) {
-  const isLastTab = canvasStore.workflowTabs.length === 1
-
+function handleTabClose(tabId) {
   canvasStore.closeTab(tabId)
-
-  if (isLastTab) {
-    await router.push('/')
-  }
 }
 
 // 新建标签

@@ -556,9 +556,9 @@ watch(llmInputText, (newVal) => {
   })
 })
 
-const selectedModel = ref('gemini-2.5-pro')
+const selectedModel = ref(props.data?.model || 'gemini-2.5-pro')
 const selectedPreset = ref(props.data?.selectedPreset || '') // 选中的功能预设
-const selectedLanguage = ref('zh') // 选中的语言
+const selectedLanguage = ref(props.data?.language || 'zh') // 选中的语言
 const isGenerating = ref(false)
 const showModelDropdown = ref(false)
 const showPresetDropdown = ref(false) // 功能预设下拉菜单
@@ -586,6 +586,35 @@ const llmConfig = ref({
   languages: [], // 支持的语言列表
   defaultModel: 'gemini-2.5-pro'
 })
+
+function persistLlmSelection() {
+  canvasStore.updateNodeData(props.id, {
+    model: selectedModel.value,
+    language: selectedLanguage.value || 'zh'
+  })
+}
+
+watch([selectedModel, selectedLanguage], persistLlmSelection)
+
+function normalizeSelectedLlmModel(models = llmConfig.value.models, defaultModel = llmConfig.value.defaultModel) {
+  const modelIds = (Array.isArray(models) ? models : [])
+    .map(model => model.id)
+    .filter(Boolean)
+  if (modelIds.length === 0 || modelIds.includes(selectedModel.value)) return
+
+  const restoredModel = props.data?.model
+  if (restoredModel && modelIds.includes(restoredModel)) {
+    selectedModel.value = restoredModel
+    return
+  }
+
+  if (defaultModel && modelIds.includes(defaultModel)) {
+    selectedModel.value = defaultModel
+    return
+  }
+
+  selectedModel.value = modelIds[0]
+}
 
 const llmCapabilityOptions = [
   { key: 'image', label: '图片理解', icon: '' },
@@ -698,37 +727,35 @@ function openPresetManager() {
 // 加载 LLM 配置
 async function loadLLMConfig() {
   try {
+    let nextConfig = llmConfig.value
+
     // 优先使用租户配置的模型列表（从 brand-config API 加载）
     const tenantModels = getAvailableLLMModels()
     if (tenantModels && tenantModels.length > 0) {
       console.log('[TextNode] 使用租户配置的 LLM 模型:', tenantModels)
-      llmConfig.value = {
-        ...llmConfig.value,
+      nextConfig = {
+        ...nextConfig,
         enabled: true,
         models: tenantModels
       }
-      // 如果当前选中的模型不在租户模型列表中，使用第一个模型
-      const modelIds = tenantModels.map(m => m.id)
-      if (!modelIds.includes(selectedModel.value)) {
-        selectedModel.value = tenantModels[0].id
-      }
+      llmConfig.value = nextConfig
     }
     
     // 然后尝试从 API 获取完整配置（包含 presets、languages 等）
     const config = await getLLMConfig()
     if (config && config.models && config.models.length > 0) {
-      llmConfig.value = config
-      if (config.defaultModel) {
-        selectedModel.value = config.defaultModel
-      }
+      nextConfig = config
+      llmConfig.value = nextConfig
     } else if (config) {
       // 如果 API 返回了配置但模型为空，保留租户模型，合并其他配置
-      llmConfig.value = {
+      nextConfig = {
         ...config,
         enabled: true,
-        models: llmConfig.value.models // 保留租户模型
+        models: nextConfig.models // 保留租户模型
       }
+      llmConfig.value = nextConfig
     }
+    normalizeSelectedLlmModel()
   } catch (error) {
     console.error('[TextNode] 加载 LLM 配置失败:', error)
     // 失败时使用租户模型
@@ -740,6 +767,7 @@ async function loadLLMConfig() {
         models: tenantModels
       }
     }
+    normalizeSelectedLlmModel()
   }
 }
 
@@ -817,6 +845,7 @@ function toggleModelDropdown(event) {
 function selectModel(modelValue) {
   selectedModel.value = modelValue
   showModelDropdown.value = false
+  persistLlmSelection()
 }
 
 // 可用功能预设列表
@@ -1000,6 +1029,7 @@ function toggleLanguageDropdown(event) {
 function selectLanguage(languageCode) {
   selectedLanguage.value = languageCode
   showLanguageDropdown.value = false
+  persistLlmSelection()
 }
 
 const IMAGE_NODE_TYPES = [

@@ -3343,8 +3343,8 @@ function handleMotionImitation() {
 }
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode, selectedWanMode], 
-  ([model, aspectRatio, duration, count, prompt, mode, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode, wanMode]) => {
+watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode, selectedKlingO1Mode, omniKeepSound, selectedKlingV3OmniMode, v3OmniKeepSound, selectedWanMode],
+  ([model, aspectRatio, duration, count, prompt, mode, viduMd, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode, klingO1Mode, keepSound, klingV3OmniMode, v3KeepSound, wanMode]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       aspectRatio,
@@ -3352,6 +3352,7 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
       count,
       prompt,
       generationMode: mode,
+      viduMode: viduMd,
       viduOffPeak: offPeak,
       viduResolution: resolution,
       veoMode: veoMd,
@@ -3366,6 +3367,10 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
       klingMotionMode: motionMode,
       seedanceSoundEnabled: seedanceSndEnabled,
       seedance2Mode: sd2Mode,
+      klingO1Mode: klingO1Mode,
+      omniKeepSound: keepSound,
+      klingV3OmniMode: klingV3OmniMode,
+      v3OmniKeepSound: v3KeepSound,
       wanMode
     })
   },

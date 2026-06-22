@@ -258,18 +258,26 @@ const imagePresetManagerRef = ref(null)
 const tempCustomPrompt = ref(props.data?.tempCustomPrompt || (props.data?.selectedPreset === 'temp-custom' ? props.data?.selectedPresetPrompt || '' : '')) // 临时自定义提示词
 
 // 相机控制状态
+function defaultCameraSettings() {
+  return {
+    camera: '',
+    cameraName: '',
+    cameraType: 'DIGITAL',
+    lens: '',
+    lensName: '',
+    focalLength: 35,
+    aperture: 2.0,
+    effects: [],
+    prompt: ''
+  }
+}
+
 const showCameraControl = ref(false)
-const cameraControlEnabled = ref(false)
+const cameraControlEnabled = ref(props.data?.cameraControlEnabled === true)
 const cameraSettings = ref({
-  camera: '',
-  cameraName: '',
-  cameraType: 'DIGITAL',
-  lens: '',
-  lensName: '',
-  focalLength: 35,
-  aperture: 2.0,
-  effects: [],
-  prompt: ''
+  ...defaultCameraSettings(),
+  ...(props.data?.cameraSettings || {}),
+  prompt: props.data?.cameraSettings?.prompt || props.data?.cameraPrompt || ''
 })
 
 // 图片列表拖拽排序状态
@@ -735,6 +743,11 @@ function handleCameraControlSave(settings) {
   cameraSettings.value = { ...settings }
   cameraControlEnabled.value = true
   showCameraControl.value = false
+  canvasStore.updateNodeData(props.id, {
+    cameraControlEnabled: true,
+    cameraSettings: { ...settings },
+    cameraPrompt: settings.prompt || ''
+  })
   console.log('[ImageNode] 相机控制已保存:', settings)
 }
 
@@ -745,18 +758,14 @@ function closeCameraControl() {
 
 // 禁用相机控制
 function disableCameraControl() {
+  const emptyCameraSettings = defaultCameraSettings()
   cameraControlEnabled.value = false
-  cameraSettings.value = {
-    camera: '',
-    cameraName: '',
-    cameraType: 'DIGITAL',
-    lens: '',
-    lensName: '',
-    focalLength: 35,
-    aperture: 2.0,
-    effects: [],
-    prompt: ''
-  }
+  cameraSettings.value = emptyCameraSettings
+  canvasStore.updateNodeData(props.id, {
+    cameraControlEnabled: false,
+    cameraSettings: emptyCameraSettings,
+    cameraPrompt: null
+  })
 }
 
 // 组件挂载时添加全局点击事件监听
