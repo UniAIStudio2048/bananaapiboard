@@ -10102,8 +10102,8 @@ async function handleDrop(event) {
   justify-content: space-between;
   padding: 8px 12px;
   border-top: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
+  flex-wrap: nowrap;
   min-height: 48px;
   overflow: visible;
 }
@@ -10111,17 +10111,18 @@ async function handleDrop(event) {
 .config-left {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex: 1 1 240px;
-  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
   min-width: 0;
 }
 
 .config-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   flex: 0 1 auto;
+  flex-shrink: 0;
   flex-wrap: nowrap;
   max-width: 100%;
   margin-left: auto;
@@ -10132,20 +10133,23 @@ async function handleDrop(event) {
 .model-selector-custom {
   position: relative;
   z-index: 100;
+  flex: 0 1 150px;
+  min-width: 0;
   max-width: 100%;
 }
 
 .model-selector-trigger {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   cursor: pointer;
   transition: background-color 0.2s ease, border-color 0.2s ease;
   min-height: 32px;
+  min-width: 0;
   max-width: 100%;
 }
 
@@ -10452,8 +10456,9 @@ async function handleDrop(event) {
 .ratio-selector {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
+  flex-shrink: 0;
+  gap: 3px;
+  padding: 4px 7px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
@@ -10488,14 +10493,16 @@ async function handleDrop(event) {
 /* 预设选择器样式 - 与 VideoNode 统一的扁平化设计 */
 .preset-selector-custom {
   position: relative;
+  flex: 0 1 96px;
+  min-width: 0;
   max-width: 100%;
 }
 
 .preset-selector-trigger {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
@@ -10503,6 +10510,7 @@ async function handleDrop(event) {
   transition: background-color 0.2s ease, border-color 0.2s ease;
   user-select: none;
   min-height: 32px;
+  min-width: 0;
   max-width: 100%;
 }
 
@@ -10661,19 +10669,22 @@ async function handleDrop(event) {
   position: relative;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
   gap: 4px;
 }
 
 .camera-toggle-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  flex-shrink: 0;
+  gap: 4px;
+  padding: 4px 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   color: rgba(255, 255, 255, 0.7);
   font-size: 11px;
+  white-space: nowrap;
   cursor: pointer;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
   position: relative;
@@ -10768,18 +10779,20 @@ async function handleDrop(event) {
 
 /* 参数选择芯片 - 与 VideoNode 扁平化设计统一 */
 .param-chip {
-  padding: 4px 10px;
+  padding: 4px 8px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
   color: rgba(255, 255, 255, 0.7);
   font-size: 11px;
+  white-space: nowrap;
   cursor: pointer;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
   user-select: none;
   min-height: 32px;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
 .param-chip:hover {
@@ -10796,7 +10809,9 @@ async function handleDrop(event) {
 
 .param-chip-group {
   display: flex;
-  gap: 6px;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
+  gap: 4px;
 }
 
 /* MJ botType 选择器样式 - 支持亮/暗主题 */

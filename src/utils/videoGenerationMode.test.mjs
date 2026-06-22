@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   buildVideoGenerationFormEntries,
   getDefaultGenerationModeForVideoModel,
+  getWanModesForConfig,
   getWanDurationOptions,
   isSeedanceSd2VideoModel,
   isWanVideoModel,
@@ -214,11 +215,15 @@ test('Seedance SD2 submit payload keeps selected config id for backend billing',
   assert.equal(entries.get('duration'), '9')
 })
 
-test('Wan video models use text defaults and clamp r2v durations with video references', () => {
+test('Wan video models use text defaults and keep animate mix out of core wan2.7 modes', () => {
   assert.equal(isWanVideoModel({ apiType: 'wan' }), true)
   assert.equal(isWanVideoModel({ apiType: 'seedance-2.0' }), false)
   assert.equal(getDefaultGenerationModeForVideoModel({ apiType: 'wan' }), 'text')
-  assert.ok(WAN_MODES.some(mode => mode.value === 'animate_mix' && mode.needsImage && mode.needsVideo))
+  assert.ok(WAN_MODES.every(mode => mode.value !== 'animate_mix'))
+  assert.deepEqual(
+    getWanModesForConfig({ t2v: false, i2v: false, r2v: false, videoedit: false, animate_mix: true }).map(mode => mode.value),
+    ['animate_mix']
+  )
 
   assert.deepEqual(
     getWanDurationOptions({

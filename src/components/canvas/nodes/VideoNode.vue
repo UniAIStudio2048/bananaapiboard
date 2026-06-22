@@ -63,6 +63,7 @@ import {
   shouldShowVideoGenerationTimeoutHint
 } from '@/utils/videoGenerationProgress'
 import {
+  getWanModesForConfig,
   getWanDurationOptions,
   isSeedanceSd2VideoModel,
   isWanVideoModel,
@@ -1302,17 +1303,18 @@ const currentSeedance2ModeConfig = computed(() => {
 // Wan 2.7 模式选择（对齐 Seedance 2.0）
 const isWanModel = computed(() => isWanVideoModel(currentModelConfig.value))
 const selectedWanMode = ref(props.data.wanMode || 't2v')
+const selectedWanAnimateMode = ref(props.data.wanAnimateMode || 'wan-std')
+const wanAnimateModeOptions = [
+  { value: 'wan-std', label: '标准' },
+  { value: 'wan-pro', label: '专业' }
+]
 
 const wanSupportedModesConfig = computed(() => {
   return currentModelConfig.value?.wanConfig?.supportedModes || null
 })
 
 const wanModes = computed(() => {
-  const modes = WAN_MODES.filter(mode => {
-    if (!wanSupportedModesConfig.value) return true
-    return wanSupportedModesConfig.value[mode.value] !== false
-  })
-  return modes.length > 0 ? modes : WAN_MODES
+  return getWanModesForConfig(wanSupportedModesConfig.value)
 })
 
 const currentWanModeConfig = computed(() => {
@@ -2956,13 +2958,24 @@ const upstreamVideoDuration = computed(() => {
 
 const wanBillingDuration = computed(() => {
   if (selectedWanMode.value !== 'videoedit' && selectedWanMode.value !== 'animate_mix') return Number(selectedDuration.value) || 5
-  return Math.ceil(upstreamVideoDuration.value || currentModelConfig.value?.wanConfig?.defaultDuration || 5)
+  const fallbackDuration = selectedWanMode.value === 'animate_mix' ? 10 : 5
+  return Math.ceil(upstreamVideoDuration.value || currentModelConfig.value?.wanConfig?.defaultDuration || fallbackDuration)
+})
+
+const wanAnimateCostPerSecond = computed(() => {
+  if (!isWanModel.value || selectedWanMode.value !== 'animate_mix') return 0
+  const rateConfig = currentModelConfig.value.costPerSecond || currentModelConfig.value.wanConfig?.costPerSecond
+  const animateMode = selectedWanAnimateMode.value || currentModelConfig.value.wanConfig?.animateMode || 'wan-std'
+  if (typeof rateConfig === 'object') {
+    return Number(rateConfig[animateMode] || rateConfig.std || rateConfig['wan-std']) || 10
+  }
+  return Number(rateConfig) || 10
 })
 
 // 积分消耗计算（从模型配置中读取）
 const pointsCost = computed(() => {
   let cost = 1
-  
+
   // VEO 模型：使用当前模式的积分配置
   if (isVeoModel.value) {
     cost = currentVeoModeConfig.value.pointsCost || 100
@@ -3012,12 +3025,7 @@ const pointsCost = computed(() => {
   const modelPointsCost = currentModelConfig.value.pointsCost
   
   if (isWanModel.value && selectedWanMode.value === 'animate_mix') {
-    const rateConfig = currentModelConfig.value.costPerSecond || currentModelConfig.value.wanConfig?.costPerSecond
-    const animateMode = currentModelConfig.value.wanConfig?.animateMode || 'wan-std'
-    const perSecondCost = typeof rateConfig === 'object'
-      ? (Number(rateConfig[animateMode] || rateConfig.std || rateConfig['wan-std']) || 10)
-      : (Number(rateConfig) || 10)
-    return Math.ceil(wanBillingDuration.value || 30) * perSecondCost
+    return Math.ceil(wanBillingDuration.value || 10) * (wanAnimateCostPerSecond.value || 10)
   }
 
   if (isWanModel.value && currentModelConfig.value.hasDurationPricing && typeof modelPointsCost === 'object') {
@@ -3343,8 +3351,8 @@ function handleMotionImitation() {
 }
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode, selectedKlingO1Mode, omniKeepSound, selectedKlingV3OmniMode, v3OmniKeepSound, selectedWanMode],
-  ([model, aspectRatio, duration, count, prompt, mode, viduMd, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode, klingO1Mode, keepSound, klingV3OmniMode, v3KeepSound, wanMode]) => {
+watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode, selectedKlingO1Mode, omniKeepSound, selectedKlingV3OmniMode, v3OmniKeepSound, selectedWanMode, selectedWanAnimateMode],
+  ([model, aspectRatio, duration, count, prompt, mode, viduMd, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode, klingO1Mode, keepSound, klingV3OmniMode, v3KeepSound, wanMode, wanAnimateMode]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       aspectRatio,
@@ -3371,7 +3379,8 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
       omniKeepSound: keepSound,
       klingV3OmniMode: klingV3OmniMode,
       v3OmniKeepSound: v3KeepSound,
-      wanMode
+      wanMode,
+      wanAnimateMode
     })
   },
   { deep: true }
@@ -3432,9 +3441,20 @@ watch(selectedModel, () => {
 
   if (isWanVideoModel(modelConfig)) {
     selectedWanMode.value = getFirstAvailableMode(modelConfig?.wanConfig?.defaultMode || 't2v', wanModes.value, 't2v')
+    selectedWanAnimateMode.value = modelConfig?.wanConfig?.animateMode || 'wan-std'
     console.log('[VideoNode] 切换到 Wan 模型，模式重置为', selectedWanMode.value)
   }
 })
+
+watch(
+  currentModelConfig,
+  modelConfig => {
+    if (props.data.wanAnimateMode) return
+    if (!isWanVideoModel(modelConfig)) return
+    selectedWanAnimateMode.value = modelConfig?.wanConfig?.animateMode || 'wan-std'
+  },
+  { immediate: true }
+)
 
 // 监听 promptText 变化，自动调整文本框高度
 watch(promptText, () => {
@@ -3746,25 +3766,28 @@ const API_TYPE_IMAGE_LIMITS = {
   'tencentaigc': 5 * 1024 * 1024,
 }
 
-function shouldCompressForApiType(apiType) {
-  return apiType in API_TYPE_IMAGE_LIMITS
+function getImageLimitForApiType(apiType, options = {}) {
+  if (apiType === 'wan') {
+    return options.wanMode === 'animate_mix' ? 5 * 1024 * 1024 : 0
+  }
+  return API_TYPE_IMAGE_LIMITS[apiType] || 0
 }
 
-function getImageLimitForApiType(apiType) {
-  return API_TYPE_IMAGE_LIMITS[apiType] || 0
+function shouldCompressForApiType(apiType, options = {}) {
+  return getImageLimitForApiType(apiType, options) > 0
 }
 
 // 视频模型输入图片压缩：根据 API 类型判断是否需要压缩
 // 默认传原图，仅对有严格大小要求的 API 类型做前端预压缩
-async function compressVideoInputImages(images, apiType) {
+async function compressVideoInputImages(images, apiType, options = {}) {
   if (!images || images.length === 0) return images
 
-  if (!shouldCompressForApiType(apiType)) {
+  if (!shouldCompressForApiType(apiType, options)) {
     console.log(`[VideoNode] API 类型 "${apiType}" 无需前端压缩，传递原图`)
     return images
   }
 
-  const MAX_SIZE = getImageLimitForApiType(apiType)
+  const MAX_SIZE = getImageLimitForApiType(apiType, options)
   console.log(`[VideoNode] API 类型 "${apiType}" 需要压缩，限制 ${(MAX_SIZE / 1024 / 1024).toFixed(0)}MB/张`)
 
   const sizes = await Promise.all(images.map(img => getImageSourceSize(img)))
@@ -4179,7 +4202,8 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
   }
 
   if (isWanModel.value) {
-    const wanMode = selectedWanMode.value
+    const wanMode = capturedState.wanMode || selectedWanMode.value
+    const wanAnimateMode = capturedState.wanAnimateMode || selectedWanAnimateMode.value || currentModelConfig.value?.wanConfig?.animateMode || 'wan-std'
     const wanResolution = currentModelConfig.value?.wanConfig?.resolution ||
       currentModelConfig.value?.resolution ||
       '720P'
@@ -4187,7 +4211,7 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
     formData.append('seedance_resolution', wanResolution)
     formData.append('resolution', wanResolution)
     formData.append('seedance_ratio', selectedAspectRatio.value)
-    formData.append('seedance_watermark', currentModelConfig.value?.wanConfig?.watermark === false ? 'false' : 'true')
+    formData.append('seedance_watermark', currentModelConfig.value?.wanConfig?.watermark === true ? 'true' : 'false')
     console.log('[VideoNode] Wan 模式:', wanMode, '分辨率:', wanResolution, '比例:', selectedAspectRatio.value)
 
     if (wanMode === 'i2v') {
@@ -4221,6 +4245,7 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
       }
       console.log('[VideoNode] Wan 视频编辑 | 上游视频:', orderedVideos.length)
     } else if (wanMode === 'animate_mix') {
+      formData.append('wan_animate_mode', wanAnimateMode)
       if (finalImages.length > 0) {
         formData.append('first_frame_image', finalImages[0])
       }
@@ -4228,8 +4253,8 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
       if (orderedVideos.length > 0) {
         formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, 1)))
       }
-      formData.append('source_video_duration', String(Math.ceil(upstreamVideoDuration.value || currentModelConfig.value?.wanConfig?.defaultDuration || 30)))
-      console.log('[VideoNode] Wan 换人混合 | 人物图:', finalImages.length > 0, '参考视频:', orderedVideos.length)
+      formData.append('source_video_duration', String(Math.ceil(upstreamVideoDuration.value || currentModelConfig.value?.wanConfig?.defaultDuration || 10)))
+      console.log('[VideoNode] Wan 换人混合 | mode:', wanAnimateMode, '人物图:', finalImages.length > 0, '参考视频:', orderedVideos.length)
     }
   }
   
@@ -4621,7 +4646,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
   try {
     // 图片压缩：仅对有严格大小要求的 API 类型（如 kling）做前端预压缩，其他类型传原图
     if (finalImages.length > 0) {
-      finalImages = await compressVideoInputImages(finalImages, capturedState.apiType)
+      finalImages = await compressVideoInputImages(finalImages, capturedState.apiType, { wanMode: capturedState.wanMode })
     }
     
     // Seedance 2.0 角色素材处理
@@ -4678,7 +4703,9 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       console.log('[VideoNode] 处理后的可访问 URLs:', finalImages)
     }
     
-    const shouldPrepareReferenceVideos = capturedState.isSeedance2 || capturedState.isOmniVideoModel
+    const shouldPrepareReferenceVideos = capturedState.isSeedance2 ||
+      capturedState.isOmniVideoModel ||
+      (capturedState.apiType === 'wan' && ['r2v', 'videoedit', 'animate_mix'].includes(capturedState.wanMode))
     if (shouldPrepareReferenceVideos) {
       const accessibleReferenceVideos = await ensureReferenceVideoUrlsAccessible(capturedState.nodeId, targetNodeId)
       if (capturedState.isOmniVideoModel) {
@@ -4937,6 +4964,7 @@ async function handleGenerate(options = {}) {
       referenceAudios: referenceAudios.value,
       seedanceMode: isSeedance2Model.value ? selectedSeedance2Mode.value : '',
       wanMode: isWanModel.value ? selectedWanMode.value : '',
+      wanAnimateMode: isWanModel.value && selectedWanMode.value === 'animate_mix' ? selectedWanAnimateMode.value : '',
       klingO1Mode: isKlingO1Model.value ? selectedKlingO1Mode.value : '',
       klingV3OmniMode: isKlingV3OmniModel.value ? selectedKlingV3OmniMode.value : ''
     })
@@ -4966,7 +4994,9 @@ async function handleGenerate(options = {}) {
     byteforFaceCodes: upstreamData.byteforFaceCodes || [],
     quickAssetUris: upstreamData.quickAssetUris || [],
     quickAssetSourceUrls: upstreamData.quickAssetSourceUrls || [],
-    apiType: currentModelConfig.value?.apiType || ''
+    apiType: currentModelConfig.value?.apiType || '',
+    wanMode: isWanModel.value ? selectedWanMode.value : '',
+    wanAnimateMode: isWanModel.value && selectedWanMode.value === 'animate_mix' ? selectedWanAnimateMode.value : ''
   }
   
   const targetNode = (!retry && props.data.status === 'processing')
@@ -8116,6 +8146,9 @@ function handleToolbarPreview() {
             <template v-if="isKlingMotionControl">
               {{ formatPoints(motionCostPerSecond) }}积分/s
             </template>
+            <template v-else-if="isWanModel && selectedWanMode === 'animate_mix'">
+              {{ formatPoints(wanAnimateCostPerSecond) }}积分/s
+            </template>
             <template v-else>
               {{ formatPoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}
               <span v-if="shouldApplySeedanceVideoInputMultiplier" class="points-multiplier-chip">
@@ -8515,6 +8548,19 @@ function handleToolbarPreview() {
             </button>
           </div>
           <div class="sd2-mode-desc">{{ currentWanModeConfig.desc }}</div>
+          <div v-if="selectedWanMode === 'animate_mix'" class="sd2-o1-option-row">
+            <span class="sd2-o1-option-label">模式</span>
+            <div class="sd2-o1-option-btns">
+              <button
+                v-for="opt in wanAnimateModeOptions"
+                :key="opt.value"
+                @click="selectedWanAnimateMode = opt.value"
+                :class="['sd2-mode-btn sd2-mode-btn-sm', { active: selectedWanAnimateMode === opt.value }]"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+          </div>
           <div v-if="selectedWanMode === 'i2v' && referenceImages.length === 0" class="sd2-mode-warn">
             ⚠ 图生视频需要连接或上传1张首帧图
           </div>
