@@ -3,6 +3,7 @@
  * AI 灵感助手相关 API
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { createPromptSafetyError } from '@/utils/promptSafetyError'
 
 // 获取通用请求头
 function getHeaders(options = {}) {
@@ -12,6 +13,12 @@ function getHeaders(options = {}) {
     ...(options.json ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.extra
+  }
+}
+
+function throwPromptSafetyErrorIfNeeded(error) {
+  if (error?.error === 'prompt_safety_blocked') {
+    throw createPromptSafetyError(error)
   }
 }
 
@@ -146,6 +153,7 @@ export async function sendMessage(params) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+    throwPromptSafetyErrorIfNeeded(error)
     throw new Error(error.message || error.error || 'AI 助手请求失败')
   }
 
@@ -184,6 +192,7 @@ export async function sendMessageStream(params) {
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
+      throwPromptSafetyErrorIfNeeded(error)
       throw new Error(error.message || error.error || 'AI 助手请求失败')
     }
 

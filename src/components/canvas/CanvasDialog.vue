@@ -157,6 +157,7 @@ function handleCancel() {
   margin: 12px 0 0;
   color: #999;
   font-weight: 400;
+  white-space: pre-line;
 }
 
 .dialog-footer {

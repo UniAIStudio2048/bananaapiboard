@@ -14,6 +14,15 @@ let dialogContainer = null
 // Toast 容器
 let toastContainer = null
 
+function getDefaultConfirmText() {
+  const language = String(
+    (typeof localStorage !== 'undefined' && localStorage.getItem('language')) ||
+    (typeof navigator !== 'undefined' && (navigator.language || navigator.userLanguage)) ||
+    ''
+  ).toLowerCase()
+  return language.startsWith('en') ? 'OK' : '确定'
+}
+
 /**
  * 显示弹窗
  * @param {Object} options - 弹窗配置
@@ -94,13 +103,13 @@ function showDialog(options) {
  * @param {String} detail - 详细描述（可选）
  * @returns {Promise<boolean>}
  */
-export function showAlert(message, title = '', detail = '') {
+export function showAlert(message, title = '', detail = '', confirmText = '') {
   return showDialog({
     type: 'alert',
     title,
     message,
     detail,
-    confirmText: '确定'
+    confirmText: confirmText || getDefaultConfirmText()
   })
 }
 

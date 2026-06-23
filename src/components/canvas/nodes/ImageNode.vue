@@ -43,6 +43,7 @@ import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl,
 import { getSmartImageUrl } from '@/utils/cloudMediaUrl'
 import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
+import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
@@ -5721,6 +5722,9 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
     const errorDetail = {
       name: error.name,
       message: error.message,
+      code: error.code,
+      safety: error.safety,
+      payload: error.payload,
       stack: error.stack,
       model: selectedModel.value,
       hasReferenceImages: referenceImages.value.length > 0,
@@ -6031,7 +6035,12 @@ async function handleGenerate(options = {}) {
       const detail = failedResults[0]?.detail || {}
       console.error('[ImageNode] 所有任务都失败，首个错误:', firstError, detail)
       const err = new Error(firstError)
-      if (detail) err.detail = detail
+      if (detail) {
+        err.detail = detail
+        err.code = detail.code
+        err.safety = detail.safety
+        err.payload = detail.payload
+      }
       throw err
     }
     
@@ -6043,6 +6052,16 @@ async function handleGenerate(options = {}) {
     isGenerating.value = false
     if (error.code === 'concurrent_limit_exceeded') {
       await showAlert(error.message, '并发限制')
+      return
+    }
+    if (isPromptSafetyBlockedError(error)) {
+      const dialog = buildPromptSafetyDialog(error)
+      errorMessage.value = dialog.message
+      canvasStore.updateNodeData(targetNodeId, {
+        status: 'error',
+        error: dialog.message
+      })
+      await showAlert(dialog.message, dialog.title, dialog.detail)
       return
     }
     errorMessage.value = error.message || '生成失败'
@@ -6124,6 +6143,16 @@ async function handleGenerateSingle() {
     
   } catch (error) {
     console.error('[ImageNode] 生成失败:', error)
+    if (isPromptSafetyBlockedError(error)) {
+      const dialog = buildPromptSafetyDialog(error)
+      errorMessage.value = dialog.message
+      canvasStore.updateNodeData(props.id, {
+        status: 'error',
+        error: dialog.message
+      })
+      await showAlert(dialog.message, dialog.title, dialog.detail)
+      return
+    }
     errorMessage.value = error.message || '生成失败'
     canvasStore.updateNodeData(props.id, {
       status: 'error',

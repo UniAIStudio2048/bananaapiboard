@@ -8,6 +8,7 @@ import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
 import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
 import { classifyBackgroundTaskStatus } from '@/stores/canvas/backgroundTaskStatus'
 import { normalizePromptLineEndings } from '@/utils/promptText'
+import { createPromptSafetyError } from '@/utils/promptSafetyError'
 import { buildTaskQueryError } from './taskQueryError.js'
 
 async function parseApiResponse(response, fallbackMessage) {
@@ -49,6 +50,12 @@ function getHeaders(options = {}) {
     ...(options.json ? { 'Content-Type': 'application/json' } : {}),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.extra
+  }
+}
+
+function throwPromptSafetyErrorIfNeeded(error) {
+  if (error?.error === 'prompt_safety_blocked') {
+    throw createPromptSafetyError(error)
   }
 }
 
@@ -119,6 +126,7 @@ export async function generateImageFromText(params) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+    throwPromptSafetyErrorIfNeeded(error)
     if (error.error === 'insufficient_points' || response.status === 402) {
       throw new Error('当前积分余额不足，任务提交失败')
     }
@@ -206,6 +214,7 @@ export async function generateImageFromImage(params) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     console.error('[API] 图生图请求失败:', error)
+    throwPromptSafetyErrorIfNeeded(error)
     if (error.error === 'insufficient_points' || response.status === 402) {
       throw new Error('当前积分余额不足，任务提交失败')
     }
@@ -269,6 +278,7 @@ export async function generateVideoFromText(params) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+    throwPromptSafetyErrorIfNeeded(error)
     // 统一积分不足错误提示
     if (error.error === 'insufficient_points' || response.status === 402) {
       throw new Error('当前积分余额不足，任务提交失败')
@@ -328,6 +338,7 @@ export async function generateVideoFromImage(params) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+    throwPromptSafetyErrorIfNeeded(error)
     // 统一积分不足错误提示
     if (error.error === 'insufficient_points' || response.status === 402) {
       throw new Error('当前积分余额不足，任务提交失败')
@@ -447,6 +458,7 @@ export async function submitAudioEdit(params) {
 
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
+    throwPromptSafetyErrorIfNeeded(data)
     throw new Error(data.message || data.error || '音频处理任务提交失败')
   }
 

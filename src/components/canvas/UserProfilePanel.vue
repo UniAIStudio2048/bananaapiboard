@@ -54,9 +54,10 @@ const ledgerPageSizeOptions = [10, 20, 50]
 const packages = ref([])
 const activePackage = ref(null) // 用户当前活跃套餐
 const invite = ref({ invite_code: '', uses: [] })
-const checkinStatus = ref({ hasCheckedInToday: false, consecutiveDays: 0 })
+const checkinStatus = ref({ enabled: true, reward: 1, hasCheckedInToday: false, consecutiveDays: 0 })
 const loading = ref(false)
 const appSettings = ref({}) // 租户配置（包含邀请奖励积分等）
+const isCheckinEnabled = computed(() => appSettings.value.checkin_enabled !== false && checkinStatus.value.enabled !== false)
 
 // 套餐悬浮提示状态
 const hoveredPackage = ref(null)
@@ -442,7 +443,10 @@ async function loadData() {
       invite.value = data
       console.log('[UserProfilePanel] 邀请数据:', data)
     }
-    if (checkinRes.ok) checkinStatus.value = await checkinRes.json()
+    if (checkinRes.ok) {
+      const data = await checkinRes.json()
+      checkinStatus.value = { ...checkinStatus.value, ...data }
+    }
     if (activePackageRes.ok) {
       const data = await activePackageRes.json()
       activePackage.value = data.package || null
@@ -757,6 +761,7 @@ async function handleTransferOwnership(team, newOwnerId) {
 
 // 签到
 async function performCheckin() {
+  if (!isCheckinEnabled.value) return
   if (checkinStatus.value.hasCheckedInToday) return
   
   try {
@@ -1870,7 +1875,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             <!-- 个人主页 -->
             <div v-if="activeMenu === 'home'" class="content-section">
               <!-- 签到卡片 -->
-              <div class="checkin-card">
+              <div v-if="isCheckinEnabled" class="checkin-card">
                 <div class="checkin-info">
                   <span class="checkin-days">{{ t('user.consecutiveCheckin', { days: checkinStatus.consecutiveDays }) }}</span>
                 </div>

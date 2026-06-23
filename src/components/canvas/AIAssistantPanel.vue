@@ -643,6 +643,8 @@ import {
   syncAssistantAttachmentMentions
 } from '@/utils/aiAssistantAttachmentMentions'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
+import { showAlert } from '@/composables/useCanvasDialog'
+import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 
 const props = defineProps({
   visible: {
@@ -1380,6 +1382,17 @@ async function sendMessage() {
     isStreaming: true
   })
 
+  let safetyErrorHandled = false
+  let safetyAlertPromise = null
+  const handlePromptSafetyError = (error) => {
+    safetyErrorHandled = true
+    const dialog = buildPromptSafetyDialog(error)
+    messages.value[assistantMessageIndex].content = dialog.message
+    messages.value[assistantMessageIndex].isStreaming = false
+    safetyAlertPromise = showAlert(dialog.message, dialog.title, dialog.detail)
+    return safetyAlertPromise
+  }
+
   try {
     // 如果有附件（图片或文件），本地临时资源先上传，公网 URL 直接传给后端
     let uploadedAttachments = messageAttachments
@@ -1473,6 +1486,10 @@ async function sendMessage() {
         loadSessions()
       },
       onError: (error) => {
+        if (isPromptSafetyBlockedError(error)) {
+          handlePromptSafetyError(error)
+          return
+        }
         messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
         messages.value[assistantMessageIndex].isStreaming = false
       }
@@ -1480,6 +1497,14 @@ async function sendMessage() {
 
   } catch (error) {
     console.error('[AI-Assistant] 发送消息失败:', error)
+    if (isPromptSafetyBlockedError(error)) {
+      if (safetyErrorHandled) {
+        await safetyAlertPromise
+      } else {
+        await handlePromptSafetyError(error)
+      }
+      return
+    }
     messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
     messages.value[assistantMessageIndex].isStreaming = false
   } finally {

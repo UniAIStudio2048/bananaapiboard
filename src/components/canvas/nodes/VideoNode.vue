@@ -27,6 +27,7 @@ import { showAlert, showInsufficientPointsDialog, showToast } from '@/composable
 import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl, onCanvasImageError, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { isModelReferenceMediaUrl, isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
+import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { fetchVideoTaskStatus, isVideoHdTask } from '@/utils/videoTaskStatus'
 import { applyOrderedMediaReplacements } from '@/utils/videoReferenceOrdering'
@@ -4451,6 +4452,20 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
   } catch (error) {
     console.error(`[VideoNode] 任务 ${taskIndex + 1} 失败:`, error)
     const model = capturedState.model || selectedModel.value
+    if (isPromptSafetyBlockedError(error)) {
+      const dialog = buildPromptSafetyDialog(error)
+      canvasStore.updateNodeData(nodeId, {
+        status: 'error',
+        error: dialog.message,
+        safetyError: {
+          code: error.code,
+          message: error.message,
+          safety: error.safety,
+          payload: error.payload
+        }
+      })
+      return null
+    }
     canvasStore.updateNodeData(nodeId, {
       status: 'error',
       error: formatVideoNodeErrorMessage(error.message, { model })
@@ -4792,6 +4807,13 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     
     if (successResults.length === 0) {
       const firstNodeData = canvasStore.nodes.find(n => n.id === allNodeIds[0])?.data
+      if (firstNodeData?.safetyError) {
+        const safetyErr = new Error(firstNodeData.safetyError.message || firstNodeData.error || '提示词未通过安全审核，请修改后重试')
+        safetyErr.code = firstNodeData.safetyError.code
+        safetyErr.safety = firstNodeData.safetyError.safety
+        safetyErr.payload = firstNodeData.safetyError.payload
+        throw safetyErr
+      }
       const specificError = firstNodeData?.error || '所有任务提交都失败了'
       throw new Error(specificError)
     }
@@ -4802,6 +4824,16 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     console.error('[VideoNode] 后台生成失败:', error)
     if (error.code === 'concurrent_limit_exceeded') {
       showAlert(error.message, '并发限制')
+      return
+    }
+    if (isPromptSafetyBlockedError(error)) {
+      const dialog = buildPromptSafetyDialog(error)
+      errorMessage.value = dialog.message
+      canvasStore.updateNodeData(targetNodeId, {
+        status: 'error',
+        error: dialog.message
+      })
+      await showAlert(dialog.message, dialog.title, dialog.detail)
       return
     }
     const model = capturedState.model || selectedModel.value

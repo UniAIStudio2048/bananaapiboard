@@ -1,5 +1,6 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { logApiRequest, logApiResponse, logApiError, logAuth, logUserAction } from '@/utils/logger'
+import { createPromptSafetyError } from '@/utils/promptSafetyError'
 import {
   buildDirectCdnDownloadUrl,
   buildMediaProxyDownloadPath,
@@ -551,10 +552,13 @@ export async function apiRequest(path, options = {}) {
     error.status = r.status
     try {
       error.data = await r.json()
-      error.message = error.data.message || error.data.error || 'request_failed'
     } catch {
       try { error.data = await r.text() } catch {}
     }
+    if (error.data?.error === 'prompt_safety_blocked') {
+      throw createPromptSafetyError(error.data)
+    }
+    error.message = error.data?.message || error.data?.error || 'request_failed'
     throw error
   }
   

@@ -14,6 +14,8 @@ import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { useI18n } from '@/i18n'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
+import { showAlert } from '@/composables/useCanvasDialog'
+import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 
 const { t } = useI18n()
 
@@ -237,6 +239,15 @@ async function handleExecute() {
     
   } catch (error) {
     console.error('[LLM] 执行失败:', error)
+    if (isPromptSafetyBlockedError(error)) {
+      const dialog = buildPromptSafetyDialog(error)
+      canvasStore.updateNodeData(props.id, {
+        status: 'error',
+        error: dialog.message
+      })
+      await showAlert(dialog.message, dialog.title, dialog.detail)
+      return
+    }
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       error: error.message

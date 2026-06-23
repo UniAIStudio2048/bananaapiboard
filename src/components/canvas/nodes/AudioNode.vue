@@ -24,6 +24,7 @@ import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
+import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import MusicTagsSelector from '@/components/canvas/MusicTagsSelector.vue'
@@ -317,6 +318,16 @@ async function handleGenerateMusic() {
     
   } catch (error) {
     console.error('[AudioNode] 音乐生成失败:', error)
+    if (isPromptSafetyBlockedError(error)) {
+      const dialog = buildPromptSafetyDialog(error)
+      canvasStore.updateNodeData(targetNodeId, {
+        status: 'error',
+        error: dialog.message
+      })
+      await showAlert(dialog.message, dialog.title, dialog.detail)
+      isGeneratingMusic.value = false
+      return
+    }
     canvasStore.updateNodeData(targetNodeId, {
       status: 'error',
       error: formatAudioErrorMessage(error.response?.data?.message || error.response?.data?.error || error.message || '生成失败')
@@ -822,6 +833,11 @@ async function handleAudioEditorSubmit(editOptions) {
     })
   } catch (error) {
     console.error('[AudioNode] 音频编辑提交失败:', error)
+    if (isPromptSafetyBlockedError(error)) {
+      const dialog = buildPromptSafetyDialog(error)
+      await showAlert(dialog.message, dialog.title, dialog.detail)
+      return
+    }
     await showAlert(formatAudioErrorMessage(error.message || '音频处理任务提交失败'), '错误')
   }
 }

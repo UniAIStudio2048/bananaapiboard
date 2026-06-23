@@ -43,7 +43,9 @@ import PromptMediaTag from '../PromptMediaTag.vue'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
+import { showAlert } from '@/composables/useCanvasDialog'
 import { getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 
 const { t } = useI18n()
 
@@ -1788,6 +1790,15 @@ async function handleLLMGenerate() {
       window.dispatchEvent(new CustomEvent('user-info-updated'))
     } catch (llmError) {
       console.error('[TextNode] LLM 对话失败:', llmError)
+      if (isPromptSafetyBlockedError(llmError)) {
+        const dialog = buildPromptSafetyDialog(llmError)
+        canvasStore.updateNodeData(targetNodeId, {
+          status: 'error',
+          error: dialog.message
+        })
+        await showAlert(dialog.message, dialog.title, dialog.detail)
+        return
+      }
       canvasStore.updateNodeData(targetNodeId, {
         status: 'error',
         error: llmError.message || 'LLM 对话失败'
@@ -1799,6 +1810,16 @@ async function handleLLMGenerate() {
     
   } catch (error) {
     console.error('[TextNode] LLM 对话失败:', error)
+    if (isPromptSafetyBlockedError(error)) {
+      const dialog = buildPromptSafetyDialog(error)
+      canvasStore.updateNodeData(props.id, {
+        status: 'error',
+        error: dialog.message
+      })
+      await showAlert(dialog.message, dialog.title, dialog.detail)
+      isGenerating.value = false
+      return
+    }
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       error: error.message || 'LLM 对话失败'

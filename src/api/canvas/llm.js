@@ -4,6 +4,7 @@
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useTeamStore } from '@/stores/team'
+import { createPromptSafetyError } from '@/utils/promptSafetyError'
 
 // 获取通用请求头
 function getHeaders(options = {}) {
@@ -41,6 +42,12 @@ async function fetchLLMApi(path, options = {}) {
     return await fetch(getApiUrl(path), options)
   } catch (error) {
     throw normalizeLLMNetworkError(error)
+  }
+}
+
+function throwPromptSafetyErrorIfNeeded(error) {
+  if (error?.error === 'prompt_safety_blocked') {
+    throw createPromptSafetyError(error)
   }
 }
 
@@ -83,6 +90,7 @@ export async function chatWithLLM(params) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+    throwPromptSafetyErrorIfNeeded(error)
     // 统一积分不足错误提示
     if (error.error === 'insufficient_points' || response.status === 402) {
       throw new Error('当前积分余额不足，任务提交失败')
@@ -122,6 +130,7 @@ export async function chatWithLLMStream(params) {
     
     if (!response.ok) {
       const error = await response.json().catch(() => ({}))
+      throwPromptSafetyErrorIfNeeded(error)
       throw new Error(error.message || error.error || 'LLM 请求失败')
     }
     
@@ -222,6 +231,7 @@ async function callLLM(action, params) {
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
+    throwPromptSafetyErrorIfNeeded(error)
     // 统一积分不足错误提示
     if (error.error === 'insufficient_points' || response.status === 402) {
       throw new Error('当前积分余额不足，任务提交失败')
