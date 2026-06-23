@@ -78,6 +78,7 @@ function buildNodeImagePatch(node, newUrl) {
     return {
       output: {
         ...node.data.output,
+        url: newUrl,
         urls: [newUrl, ...(node.data.output.urls.slice(1) || [])]
       }
     }
@@ -245,7 +246,7 @@ function calculateEditorSize() {
 
 // ==================== 保存与取消 ====================
 
-// 处理保存（立即关闭编辑器，后台上传）
+// 处理保存：先上传最终图并写回稳定 URL，再关闭编辑器，避免刷新后回到旧图
 async function handleSave(data) {
   console.log('[ImageEditMode] handleSave 被调用', !!data?.image)
 
@@ -274,13 +275,10 @@ async function handleSave(data) {
         _editSaving: true
       })
       nodeEditCache.delete(nodeId)
+      await uploadEditedImageInBackground(nodeId, nodeSnapshot, data)
     }
 
     canvasStore.exitEditMode()
-
-    if (data.image) {
-      uploadEditedImageInBackground(nodeId, nodeSnapshot, data)
-    }
   } catch (error) {
     console.error('[ImageEditMode] handleSave 异常:', error)
     canvasStore.exitEditMode()

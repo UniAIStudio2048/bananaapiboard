@@ -18,8 +18,18 @@ assert.doesNotMatch(
 )
 assert.match(
   source,
-  /canvasStore\.exitEditMode\(\)[\s\S]*persistEditSessionInBackground/,
-  'ImageEditMode should close edit mode after final image upload before optional history persistence'
+  /await uploadEditedImageInBackground\(nodeId, nodeSnapshot, data\)[\s\S]*canvasStore\.exitEditMode\(\)/,
+  'ImageEditMode should keep edit mode alive until final image upload updates the node'
+)
+assert.doesNotMatch(
+  source,
+  /canvasStore\.exitEditMode\(\)\s*\n\s*if \(data\.image\) \{[\s\S]*uploadEditedImageInBackground\(nodeId, nodeSnapshot, data\)/,
+  'ImageEditMode should not exit before starting the final image upload'
+)
+assert.match(
+  source,
+  /function buildNodeImagePatch\(node, newUrl\) \{[\s\S]*node\.data\?\.output\?\.urls\?\.length > 0[\s\S]*url: newUrl[\s\S]*urls: \[newUrl,/,
+  'ImageEditMode should keep output.url synchronized with output.urls[0] after edits'
 )
 
 console.log('ImageEditMode save flow tests passed')
