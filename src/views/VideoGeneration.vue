@@ -105,7 +105,7 @@ const isPrivate = ref(true) // 默认true，隐藏选项
 
 // ========== Seedance 2.0 相关状态 ==========
 const seedanceMode = ref('text2video') // 当前选择的 Seedance 模式
-const seedanceResolution = ref('720p') // 分辨率：480p / 720p
+const seedanceResolution = ref('720p') // 分辨率：480p / 720p / 1080p / 4k
 const seedanceRatio = ref('adaptive') // 宽高比
 const seedanceDuration = ref(5) // 时长：4-15秒
 const seedanceGenerateAudio = ref(true) // 生成有声视频
@@ -2540,6 +2540,10 @@ onUnmounted(() => {
                       <button type="button" @click="seedanceResolution = '1080p'"
                         :class="['flex-1 py-1.5 px-2 text-xs font-medium rounded-lg border transition-all', seedanceResolution === '1080p' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900 dark:border-gray-200' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500 hover:border-gray-400']">
                         1080p
+                      </button>
+                      <button v-if="currentModelConfig?.apiType !== 'happyhorse'" type="button" @click="seedanceResolution = '4k'"
+                        :class="['flex-1 py-1.5 px-2 text-xs font-medium rounded-lg border transition-all', seedanceResolution === '4k' ? 'bg-gray-700 text-white border-gray-700 dark:bg-gray-200 dark:text-gray-900 dark:border-gray-200' : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500 hover:border-gray-400']">
+                        4k
                       </button>
                     </div>
                   </div>

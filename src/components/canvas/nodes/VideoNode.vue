@@ -71,7 +71,7 @@ import {
   WAN_MODES
 } from '@/utils/videoGenerationMode'
 import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
-import { exportVideoTimeline, getSubtitleEraseTask } from '@/api/canvas/video-tools'
+import { exportVideoTimeline, getSubtitleEraseConfig, getSubtitleEraseTask } from '@/api/canvas/video-tools'
 import { smartDownload } from '@/api/client'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import CanvasNodeImage from '@/components/canvas/CanvasNodeImage.vue'
@@ -6394,10 +6394,36 @@ const showToolbar = computed(() => {
   return hasOutput.value
 })
 
+const subtitleEraseToolbarEnabled = ref(false)
+const subtitleEraseToolbarLoading = ref(false)
+const showSubtitleEraseToolbarAction = computed(() => showToolbar.value && subtitleEraseToolbarEnabled.value)
+
+async function refreshSubtitleEraseToolbarAvailability() {
+  if (subtitleEraseToolbarLoading.value) return
+  subtitleEraseToolbarLoading.value = true
+  try {
+    const config = await getSubtitleEraseConfig()
+    subtitleEraseToolbarEnabled.value = config?.enabled === true
+  } catch {
+    subtitleEraseToolbarEnabled.value = false
+  } finally {
+    subtitleEraseToolbarLoading.value = false
+  }
+}
+
+watch(showToolbar, (visible) => {
+  if (!visible) {
+    subtitleEraseToolbarEnabled.value = false
+    return
+  }
+  refreshSubtitleEraseToolbarAvailability()
+}, { immediate: true })
+
 const showCreateCharacterToolbarAction = computed(() => isSoraCharacterLibraryEnabled())
 
 function openVideoToolModal(mode) {
   if (!hasOutput.value) return
+  if (mode === VIDEO_TOOL_MODAL_MODES.subtitle.initialMode && !subtitleEraseToolbarEnabled.value) return
   videoToolInitialMode.value = mode === VIDEO_TOOL_MODAL_MODES.edit.initialMode
     ? VIDEO_TOOL_MODAL_MODES.edit.initialMode
     : VIDEO_TOOL_MODAL_MODES.subtitle.initialMode
@@ -7367,7 +7393,7 @@ function handleToolbarPreview() {
         </svg>
         <span>剪辑</span>
       </button>
-      <button class="toolbar-btn" title="字幕擦除" @mousedown.stop.prevent="openVideoToolModal('subtitle')" @click.stop.prevent>
+      <button v-if="showSubtitleEraseToolbarAction" class="toolbar-btn" title="字幕擦除" @mousedown.stop.prevent="openVideoToolModal('subtitle')" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="5" width="18" height="14" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M7 15h4" stroke-linecap="round" stroke-linejoin="round"/>
