@@ -27,6 +27,15 @@ test('normalizes Qiniu and local preview URLs back to original URLs for model pa
   )
 })
 
+test('normalizes image proxy URLs back to their original cloud URLs for model params', () => {
+  const originalUrl = 'https://filescos.nananobanana.cn/tenant-a/ref-images/a.jpg?imageMogr2/thumbnail/1024x/format/webp'
+
+  assert.equal(
+    normalizeModelImageUrl(`/api/images/proxy?force=1&url=${encodeURIComponent(originalUrl)}`),
+    'https://filescos.nananobanana.cn/tenant-a/ref-images/a.jpg'
+  )
+})
+
 test('recognizes cloud CDN and backend proxy URLs but rejects transient inline URLs', () => {
   assert.equal(isPreferredModelMediaUrl('https://files.nananobanana.cn/a.jpg'), true)
   assert.equal(isPreferredModelMediaUrl('https://filescos.nananobanana.cn/a.jpg'), true)

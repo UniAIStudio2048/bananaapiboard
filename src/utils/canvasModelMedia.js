@@ -17,6 +17,23 @@ export function isModelReferenceMediaUrl(url) {
 }
 
 function stripImageTransformParams(url) {
+  if (url.includes('/api/images/proxy')) {
+    try {
+      const urlObj = new URL(url, 'http://local.test')
+      const originalUrl = urlObj.searchParams.get('url')
+      if (originalUrl) return stripImageTransformParams(decodeURIComponent(originalUrl))
+    } catch {
+      const match = url.match(/[?&]url=([^&]+)/)
+      if (match?.[1]) {
+        try {
+          return stripImageTransformParams(decodeURIComponent(match[1]))
+        } catch {
+          return match[1]
+        }
+      }
+    }
+  }
+
   if (url.includes('/api/images/file/')) {
     try {
       const urlObj = new URL(url, 'http://local.test')
