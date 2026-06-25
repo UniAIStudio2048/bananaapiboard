@@ -1198,10 +1198,17 @@ const isKlingProMode = computed(() => {
 // Kling 2.6+ 声音开关（默认开启，仅 isKling26Plus 时生效）
 const klingSoundEnabled = ref(props.data.klingSoundEnabled ?? true)
 
+const isCozeVideoSwapModel = computed(() => {
+  const modelName = selectedModel.value?.toLowerCase() || ''
+  return currentModelConfig.value?.apiType === 'coze-video-swap' || modelName.includes('coze-video-swap')
+})
+
 // 检测是否是 Kling 动作迁移模型（Motion Control）
 const isKlingMotionControl = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
-  return modelName.includes('kling') && modelName.includes('motion')
+  return (modelName.includes('kling') && modelName.includes('motion')) ||
+    isCozeVideoSwapModel.value ||
+    currentModelConfig.value?.isMotionControl === true
 })
 
 // Kling 动作迁移相关参数
@@ -3076,8 +3083,9 @@ const motionCostPerSecond = computed(() => {
   if (!isKlingMotionControl.value) return 0
   const costPerSecond = currentModelConfig.value?.costPerSecond
   if (!costPerSecond) return 6  // 默认值
+  if (typeof costPerSecond === 'number') return costPerSecond
   // 根据当前选择的模式返回对应的每秒积分
-  return costPerSecond[klingMotionMode.value] || costPerSecond.std || 6
+  return costPerSecond.coze || costPerSecond[klingMotionMode.value] || costPerSecond.std || 6
 })
 
 // 用户积分
@@ -4086,17 +4094,27 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
   
   // Kling 动作迁移模型特有参数
   if (isKlingMotionControl.value) {
+    if (isCozeVideoSwapModel.value && finalImages.length === 0) {
+      throw new Error('Coze 视频换人需要连接或上传1张人物图片')
+    }
     // 从上游视频节点获取参考视频
-    const motionVideoUrl = upstreamVideoUrl.value
+    const motionVideoUrl = isCozeVideoSwapModel.value
+      ? (capturedState?.motionVideoUrl || upstreamVideoUrl.value)
+      : upstreamVideoUrl.value
     if (!motionVideoUrl) {
-      throw new Error('请连接一个视频节点作为参考视频来源')
+      throw new Error(isCozeVideoSwapModel.value ? 'Coze 视频换人需要连接一个视频节点作为参考视频来源' : '请连接一个视频节点作为参考视频来源')
     }
     // 参考视频 URL（来自上游视频节点）
     formData.append('kling_motion_video_url', motionVideoUrl)
-    console.log('[VideoNode] Kling 动作迁移参考视频（来自上游节点）:', motionVideoUrl)
-    // 模式参数
-    formData.append('kling_motion_mode', klingMotionMode.value)
-    console.log('[VideoNode] Kling 动作迁移模式:', klingMotionMode.value)
+    if (isCozeVideoSwapModel.value) {
+      formData.append('source_video_duration', String(Math.ceil(upstreamVideoDuration.value || currentModelConfig.value?.prePaidDuration || 10)))
+      console.log('[VideoNode] Coze 视频换人参考视频（来自上游节点）:', motionVideoUrl)
+    } else {
+      console.log('[VideoNode] Kling 动作迁移参考视频（来自上游节点）:', motionVideoUrl)
+      // 模式参数
+      formData.append('kling_motion_mode', klingMotionMode.value)
+      console.log('[VideoNode] Kling 动作迁移模式:', klingMotionMode.value)
+    }
   }
   
   // Seedance 模型特有参数：声音生成
@@ -4720,11 +4738,15 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     
     const shouldPrepareReferenceVideos = capturedState.isSeedance2 ||
       capturedState.isOmniVideoModel ||
+      capturedState.isCozeVideoSwapModel ||
       (capturedState.apiType === 'wan' && ['r2v', 'videoedit', 'animate_mix'].includes(capturedState.wanMode))
     if (shouldPrepareReferenceVideos) {
       const accessibleReferenceVideos = await ensureReferenceVideoUrlsAccessible(capturedState.nodeId, targetNodeId)
       if (capturedState.isOmniVideoModel) {
         capturedState.omniReferences = buildOmniReferenceUrls(finalImages, accessibleReferenceVideos)
+      }
+      if (capturedState.isCozeVideoSwapModel) {
+        capturedState.motionVideoUrl = accessibleReferenceVideos?.[0] || capturedState.motionVideoUrl
       }
     }
 
@@ -4960,9 +4982,25 @@ async function handleGenerate(options = {}) {
     }
   }
 
+  if (isCozeVideoSwapModel.value) {
+    if (finalImages.length === 0) {
+      await showAlert('Coze 视频换人需要连接或上传1张人物图片', '提示')
+      return
+    }
+    if (finalImages.length > 1) {
+      await showAlert('Coze 视频换人最多支持1张人物图片', '提示')
+      return
+    }
+    if (referenceVideos.value.length === 0) {
+      await showAlert('Coze 视频换人需要连接上游视频节点', '提示')
+      return
+    }
+  }
+
   const hasSeedanceVideoInput = isSeedance2Model.value && referenceVideos.value.length > 0
   const hasWanVideoInput = isWanModel.value && ['r2v', 'videoedit', 'animate_mix'].includes(selectedWanMode.value) && referenceVideos.value.length > 0
-  if (!finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput && !hasWanVideoInput) {
+  const hasMotionVideoInput = isCozeVideoSwapModel.value && referenceVideos.value.length > 0
+  if (!finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput && !hasWanVideoInput && !hasMotionVideoInput) {
     await showAlert('请输入提示词或连接参考图片', '提示')
     return
   }
@@ -5020,6 +5058,7 @@ async function handleGenerate(options = {}) {
     isSeedance2: isSeedance2Model.value,
     isSeedanceOpenApiPro: isSeedanceOpenApiProModel.value,
     isOmniVideoModel: isOmniVideoModel.value,
+    isCozeVideoSwapModel: isCozeVideoSwapModel.value,
     omniReferences: isOmniVideoModel.value ? buildOmniReferenceUrls(finalImages, referenceVideos.value) : [],
     characterAssetUris: upstreamData.characterAssetUris || [],
     faceCodes: upstreamData.faceCodes || [],
@@ -8124,7 +8163,7 @@ function handleToolbarPreview() {
           </div>
           
           <!-- 动作迁移模式切换（std/pro） -->
-          <div v-if="isKlingMotionControl" class="param-chip-group">
+          <div v-if="isKlingMotionControl && !isCozeVideoSwapModel" class="param-chip-group">
             <div 
               class="param-chip"
               :class="{ active: klingMotionMode === 'std' }"
@@ -8384,7 +8423,7 @@ function handleToolbarPreview() {
               <div class="kling-section-divider"></div>
               
               <div class="kling-motion-section">
-                <div class="kling-motion-title">🎬 动作迁移配置</div>
+                <div class="kling-motion-title">🎬 {{ isCozeVideoSwapModel ? 'Coze 视频换人配置' : '动作迁移配置' }}</div>
                 
                 <!-- 参考视频来源提示 -->
                 <div class="sora2-option-row vertical">
@@ -8394,7 +8433,7 @@ function handleToolbarPreview() {
                     <span v-else class="kling-motion-error-tag">❌ 未连接</span>
                   </div>
                   <div v-if="hasUpstreamVideo" class="kling-motion-hint">
-                    ✅ 参考视频来自上游视频节点，按实际秒数计费（最长30秒）
+                    ✅ 参考视频来自上游视频节点，{{ isCozeVideoSwapModel ? '预扣10秒，完成后按源视频实际秒数结算' : '按实际秒数计费（最长30秒）' }}
                   </div>
                   <div v-else class="kling-motion-error">
                     ⚠️ 请连接一个视频节点作为参考视频来源

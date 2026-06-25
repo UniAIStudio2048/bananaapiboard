@@ -1607,6 +1607,9 @@ export const getAvailableVideoModels = (options = {}) => {
         defaultKlingV3OmniMode: modelConfig.defaultKlingV3OmniMode || undefined,
         // 可灵动作迁移按秒计费配置（用于前端显示积分消耗）
         costPerSecond: modelConfig.costPerSecond,
+        prePaidDuration: modelConfig.prePaidDuration,
+        isMotionControl: modelConfig.isMotionControl,
+        cozeConfig: modelConfig.cozeConfig,
         // VEO 模型特有属性
         isVeoModel: defaultConfig.isVeoModel,
         veoModes: defaultConfig.veoModes,
@@ -1777,7 +1780,10 @@ export const getAvailableVideoModels = (options = {}) => {
         defaultKlingO1Mode: modelFullConfig.defaultKlingO1Mode || undefined,
         defaultKlingV3OmniMode: modelFullConfig.defaultKlingV3OmniMode || undefined,
         // 可灵动作迁移按秒计费配置（用于前端显示积分消耗）
-        costPerSecond: modelFullConfig.costPerSecond
+        costPerSecond: modelFullConfig.costPerSecond,
+        prePaidDuration: modelFullConfig.prePaidDuration,
+        isMotionControl: modelFullConfig.isMotionControl,
+        cozeConfig: modelFullConfig.cozeConfig
       })
     }
   }
