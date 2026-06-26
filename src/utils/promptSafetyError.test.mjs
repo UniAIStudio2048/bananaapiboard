@@ -66,6 +66,49 @@ test('buildPromptSafetyDialog localizes generic category fallback in Chinese', (
   assert.doesNotMatch(dialog.detail, /Contains content related/)
 })
 
+test('buildPromptSafetyDialog displays raw matched content when provided', () => {
+  const dialog = buildPromptSafetyDialog({
+    safety: {
+      level: 'unsafe',
+      categories: ['custom'],
+      blockedContent: 'Matched custom safety policy.',
+      matchedContent: ['维尼熊', '儿童']
+    }
+  }, { language: 'zh-CN' })
+
+  assert.match(dialog.detail, /需要修改的内容：维尼熊、儿童/)
+  assert.doesNotMatch(dialog.detail, /Matched custom safety policy/)
+})
+
+test('buildPromptSafetyDialog localizes policy category ids in Chinese', () => {
+  const dialog = buildPromptSafetyDialog({
+    safety: {
+      level: 'unsafe',
+      categories: ['sexual_explicit'],
+      reason: 'Safety: Unsafe\nCategories: sexual_explicit',
+      blockedContent: 'Contains content related to sexual_explicit.'
+    }
+  }, { language: 'zh-CN' })
+
+  assert.match(dialog.detail, /需要修改的内容：包含露骨性内容相关内容/)
+  assert.match(dialog.detail, /风险类别：露骨性内容/)
+  assert.doesNotMatch(dialog.detail, /sexual_explicit/)
+})
+
+test('buildPromptSafetyDialog localizes policy category ids in English', () => {
+  const dialog = buildPromptSafetyDialog({
+    safety: {
+      level: 'unsafe',
+      categories: ['sexual_explicit'],
+      reason: 'Safety: Unsafe\nCategories: sexual_explicit'
+    }
+  }, { language: 'en' })
+
+  assert.match(dialog.detail, /What to edit: Remove or rewrite the parts related to Explicit sexual content\./)
+  assert.match(dialog.detail, /Risk categories: Explicit sexual content/)
+  assert.doesNotMatch(dialog.detail, /sexual_explicit/)
+})
+
 test('buildPromptSafetyDialog supports English copy', () => {
   const dialog = buildPromptSafetyDialog({
     safety: {

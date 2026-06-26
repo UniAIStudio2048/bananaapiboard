@@ -22,6 +22,21 @@ const COPY = {
 }
 
 const ZH_CATEGORY_LABELS = {
+  sexual_minors: '未成年人性安全',
+  sexual_explicit: '露骨性内容',
+  sexual_suggestive: '成人暗示',
+  violence_threat: '暴力威胁',
+  violence_graphic: '血腥暴力',
+  self_harm: '自伤自杀',
+  hate_slur: '仇恨歧视',
+  illegal_drugs: '违禁药物',
+  weapons_explosives: '武器爆炸物',
+  fraud_scam: '诈骗钓鱼',
+  privacy_doxxing: '隐私泄露',
+  cyber_abuse: '网络滥用',
+  profanity: '粗口脏话',
+  political_persuasion: '政治劝服',
+  custom: '自定义',
   violent: '暴力',
   violence: '暴力',
   'sexual content or sexual acts': '性内容或性行为',
@@ -38,15 +53,55 @@ const ZH_CATEGORY_LABELS = {
   privacy: '隐私'
 }
 
+const EN_CATEGORY_LABELS = {
+  sexual_minors: 'Minor sexual safety',
+  sexual_explicit: 'Explicit sexual content',
+  sexual_suggestive: 'Suggestive adult content',
+  violence_threat: 'Violent threats',
+  violence_graphic: 'Graphic violence',
+  self_harm: 'Self-harm',
+  hate_slur: 'Hate and slurs',
+  illegal_drugs: 'Illegal drugs',
+  weapons_explosives: 'Weapons and explosives',
+  fraud_scam: 'Fraud and scams',
+  privacy_doxxing: 'Privacy and doxxing',
+  cyber_abuse: 'Cyber abuse',
+  profanity: 'Profanity',
+  political_persuasion: 'Political persuasion',
+  custom: 'Custom',
+  violent: 'Violence',
+  violence: 'Violence',
+  'sexual content or sexual acts': 'Sexual Content or Sexual Acts',
+  sexual: 'Sexual content',
+  politics: 'Political content',
+  political: 'Political content',
+  hate: 'Hate or discrimination',
+  harassment: 'Harassment',
+  illegal: 'Illegal behavior',
+  selfharm: 'Self-harm',
+  weapons: 'Weapons',
+  drugs: 'Drugs',
+  privacy: 'Privacy'
+}
+
 function normalizeCategories(categories) {
   if (!Array.isArray(categories)) return []
   return [...new Set(categories.map(item => String(item || '').trim()).filter(Boolean))]
 }
 
+function humanizeCategoryId(value) {
+  return String(value || '')
+    .trim()
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/\b\w/g, char => char.toUpperCase())
+}
+
 function localizeCategory(category, language) {
   const value = String(category || '').trim()
-  if (language !== 'zh') return value
-  return ZH_CATEGORY_LABELS[value.toLowerCase()] || value
+  const key = value.toLowerCase()
+  if (language === 'zh') return ZH_CATEGORY_LABELS[key] || humanizeCategoryId(value)
+  return EN_CATEGORY_LABELS[key] || humanizeCategoryId(value)
 }
 
 function localizeCategories(categories, language) {
@@ -92,6 +147,11 @@ function isGenericCategoryContent(value) {
 }
 
 function getBlockedContent(safety, categories, copy, language) {
+  const matchedContent = normalizeCategories(safety.matchedContent)
+  if (matchedContent.length > 0) {
+    return matchedContent.join(language === 'en' ? ', ' : '、')
+  }
+
   const explicit = String(
     safety.blockedContent ||
     safety.explanation ||
@@ -101,7 +161,7 @@ function getBlockedContent(safety, categories, copy, language) {
   ).trim()
 
   if (explicit && !/^none$/i.test(explicit)) {
-    if (!(language === 'zh' && isGenericCategoryContent(explicit) && categories.length > 0)) {
+    if (!(isGenericCategoryContent(explicit) && categories.length > 0)) {
       return explicit
     }
   }
