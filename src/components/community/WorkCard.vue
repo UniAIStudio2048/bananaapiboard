@@ -2,6 +2,8 @@
   <div
     class="group cursor-pointer"
     @click="$emit('click', work)"
+    @mouseenter="playPreviewVideo"
+    @mouseleave="resetPreviewVideo"
   >
     <!-- 封面图区域 -->
     <div class="relative overflow-hidden rounded-lg" :class="landscape ? 'aspect-video' : 'aspect-[3/4]'">
@@ -37,7 +39,18 @@
           class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           loading="lazy"
         />
-        <div v-else class="w-full h-full bg-neutral-900 flex items-center justify-center">
+        <video
+          v-if="isVideoPreviewActive && isVideoWork && videoPreviewUrl"
+          ref="previewVideoRef"
+          :src="videoPreviewUrl"
+          :poster="displayImageUrl"
+          class="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+          muted
+          loop
+          playsinline
+          preload="metadata"
+        />
+        <div v-if="!displayImageUrl" class="w-full h-full bg-neutral-900 flex items-center justify-center">
           <svg class="w-10 h-10 text-neutral-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
           </svg>
@@ -47,7 +60,7 @@
       <!-- 付费标签 -->
       <div
         v-if="work.share_mode === 'paid' && work.price"
-        class="absolute top-2 left-2 px-2 py-0.5 rounded bg-amber-500/90 text-white text-xs font-medium"
+        class="community-work-card-paid-badge absolute top-2 left-2 px-2 py-0.5 rounded-md border border-white/35 bg-white/75 text-neutral-950 text-xs font-semibold shadow-[0_4px_16px_rgba(0,0,0,0.22)] backdrop-blur-md"
       >
         {{ work.price }} 积分
       </div>
@@ -55,7 +68,7 @@
       <!-- 精选标签 -->
       <div
         v-if="work.is_featured"
-        class="absolute top-2 text-xs font-medium px-2 py-0.5 rounded bg-purple-500/90 text-white"
+        class="community-work-card-featured-badge absolute top-2 text-xs font-medium px-2 py-0.5 rounded-md border border-white/20 bg-black/45 text-white shadow-[0_4px_16px_rgba(0,0,0,0.24)] backdrop-blur-md"
         :class="work.share_mode === 'paid' && work.price ? 'left-16' : 'left-2'"
       >
         精选
@@ -68,7 +81,8 @@
           <span class="text-xs text-white/70 truncate block mt-0.5 drop-shadow-sm">@{{ work.author_name || '匿名用户' }}</span>
         </div>
         <button
-          class="flex flex-col items-center gap-0.5 shrink-0 transition-transform hover:scale-110"
+          class="community-work-card-like flex flex-col items-center gap-0.5 shrink-0 opacity-0 pointer-events-none transition-all duration-200 group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto hover:scale-110"
+          :aria-label="work.is_liked ? '取消点赞' : '点赞'"
           @click.stop="$emit('like', work)"
         >
           <svg
@@ -85,7 +99,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { getImageMediaUrls } from '@/utils/communityMedia'
 
 const props = defineProps({
@@ -96,6 +110,8 @@ const props = defineProps({
 defineEmits(['click', 'like'])
 
 const currentSlideIndex = ref(0)
+const previewVideoRef = ref(null)
+const isVideoPreviewActive = ref(false)
 let slideTimer = null
 
 const mediaUrls = computed(() => {
@@ -104,8 +120,15 @@ const mediaUrls = computed(() => {
 
 const isSlideshow = computed(() => mediaUrls.value.length > 1)
 
+const isVideoWork = computed(() => props.work?.media_type === 'video')
+
 const displayImageUrl = computed(() => {
   return mediaUrls.value[0] || props.work.cover_url
+})
+
+const videoPreviewUrl = computed(() => {
+  if (!isVideoWork.value) return ''
+  return props.work.video_url || props.work.media_url || ''
 })
 
 const currentSlideUrl = computed(() => {
@@ -128,11 +151,32 @@ function stopSlideshow() {
   }
 }
 
+async function playPreviewVideo() {
+  if (!isVideoWork.value || !videoPreviewUrl.value) return
+  isVideoPreviewActive.value = true
+  await nextTick()
+  const video = previewVideoRef.value
+  if (!video) return
+  video.play?.()?.catch?.(() => {})
+}
+
+function resetPreviewVideo() {
+  const video = previewVideoRef.value
+  if (video) {
+    video.pause?.()
+    video.currentTime = 0
+  }
+  isVideoPreviewActive.value = false
+}
+
 onMounted(() => {
   if (isSlideshow.value) startSlideshow()
 })
 
-onBeforeUnmount(() => stopSlideshow())
+onBeforeUnmount(() => {
+  stopSlideshow()
+  resetPreviewVideo()
+})
 
 watch(isSlideshow, (val) => {
   if (val) startSlideshow()
