@@ -118,6 +118,23 @@ const packageLevels = {
   yearly: 6
 }
 
+async function loadConvertExchangeRate() {
+  try {
+    const configRes = await fetch(getApiUrl('/api/points-config'), {
+      headers: getTenantHeaders()
+    })
+    if (!configRes.ok) return
+
+    const configData = await configRes.json()
+    const rate = Number(configData.exchange_rate_points_per_currency)
+    if (Number.isFinite(rate) && rate > 0) {
+      convertExchangeRate.value = Number(rate)
+    }
+  } catch (e) {
+    console.warn('[PackageModal] 加载余额兑换汇率失败:', e)
+  }
+}
+
 // 加载套餐列表
 async function loadPackages() {
   loading.value = true
@@ -130,6 +147,8 @@ async function loadPackages() {
       loading.value = false
       return
     }
+
+    void loadConvertExchangeRate()
 
     // 获取用户信息
     const userRes = await fetch(getApiUrl(`/api/user/me?_t=${Date.now()}`), {
