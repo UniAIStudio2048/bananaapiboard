@@ -148,6 +148,10 @@ const currentModelCost = computed(() => {
   return model?.pointsCost || 1
 })
 
+function getModelPackageMessage(model) {
+  return model?.accessMessage || '需要购买对应套餐后使用'
+}
+
 // 是否是文本节点（显示LLM对话功能）
 const isTextNode = computed(() => {
   return canvasStore.selectedNode?.type === 'text-input'
@@ -173,6 +177,11 @@ function toggleModelDropdown() {
 
 // 选择模型
 function selectModel(modelValue) {
+  const model = availableModels.value.find(m => m.value === modelValue)
+  if (model?.disabled) {
+    alert(getModelPackageMessage(model))
+    return
+  }
   selectedModel.value = modelValue
   selectedSize.value = normalizeImageSelectedSize(selectedModelConfig.value || {}, selectedSize.value)
   showModelDropdown.value = false
@@ -528,6 +537,11 @@ function getUpstreamImagesRealtime(nodeId) {
 
 // 处理图片生成
 async function handleImageGenerate(nodeId, nodeType) {
+  if (selectedModelConfig.value?.usable === false) {
+    alert(getModelPackageMessage(selectedModelConfig.value))
+    return
+  }
+
   // 更新节点状态为处理中
   canvasStore.updateNodeData(nodeId, {
     text: inputText.value,
@@ -696,7 +710,7 @@ function handleKeyDown(event) {
                 v-for="model in availableModels" 
                 :key="model.value"
                 class="model-option"
-                :class="{ active: selectedModel === model.value }"
+                :class="{ active: selectedModel === model.value, disabled: model.disabled }"
                 @click.stop="selectModel(model.value)"
               >
                 <div class="model-option-main">
@@ -706,7 +720,7 @@ function handleKeyDown(event) {
                     class="model-option-icon"
                     :class="{ 'llm-icon': isTextNode }"
                   />
-                  <span class="model-option-name">{{ model.label }}</span>
+                  <span class="model-option-name">{{ model.label }}{{ model.disabled ? ' - 需套餐' : '' }}</span>
                   <div class="model-option-meta">
                     <span v-if="typeof model.pointsCost === 'number'" class="model-option-cost">💎{{ formatPoints(model.pointsCost) }}</span>
                     <div v-if="isTextNode && getEnabledLlmCapabilities(model).length" class="model-capability-row">
@@ -1009,6 +1023,15 @@ function handleKeyDown(event) {
 
 .model-option:hover {
   background: var(--canvas-bg-elevated, #242424);
+}
+
+.model-option.disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.model-option.disabled:hover {
+  background: transparent;
 }
 
 .model-option.active {

@@ -3,7 +3,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { clearAuthSession, getMe } from '@/api/client'
 import { getTheme, toggleTheme as toggleThemeUtil } from '@/utils/theme'
-import { getTenantHeaders, getBrand, loadBrandConfig, getApiUrl } from '@/config/tenant'
+import { getTenantHeaders, getBrand, loadBrandConfig, getApiUrl, loadModelEntitlements } from '@/config/tenant'
 import NotificationBar from '@/components/NotificationBar.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import { formatPoints } from '@/utils/format'
@@ -49,6 +49,7 @@ function toggleTheme() {
 async function refreshUserInfo() {
   // 强制刷新，禁用缓存，确保获取最新数据
   me.value = await getMe(true)
+  await loadModelEntitlements()
   console.log('[App] 用户信息已刷新:', { 
     points: me.value?.points, 
     package_points: me.value?.package_points,
@@ -107,6 +108,7 @@ onMounted(async () => {
   
   // 监听用户信息更新事件
   window.addEventListener('user-info-updated', refreshUserInfo)
+  window.addEventListener('auth-session-updated', refreshUserInfo)
   
   // 初始化时检查 localStorage
   const savedLayoutMode = localStorage.getItem('layoutMode')
@@ -115,6 +117,8 @@ onMounted(async () => {
 
 onUnmounted(() => {
   document.removeEventListener('click', closeMenus)
+  window.removeEventListener('user-info-updated', refreshUserInfo)
+  window.removeEventListener('auth-session-updated', refreshUserInfo)
 })
 
 // 生成下拉菜单项

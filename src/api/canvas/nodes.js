@@ -136,6 +136,12 @@ export async function generateImageFromText(params) {
       err.details = error.details
       throw err
     }
+    if (response.status === 403 && error.error === 'model_package_required') {
+      const err = new Error(error.message || '需要购买对应套餐后使用')
+      err.code = 'model_package_required'
+      err.details = error.entitlement
+      throw err
+    }
     throw new Error(error.message || error.error || '图片生成失败')
   }
 
@@ -222,6 +228,12 @@ export async function generateImageFromImage(params) {
       const err = new Error(error.message || '已达到并发限制，请升级套餐')
       err.code = 'concurrent_limit_exceeded'
       err.details = error.details
+      throw err
+    }
+    if (response.status === 403 && error.error === 'model_package_required') {
+      const err = new Error(error.message || '需要购买对应套餐后使用')
+      err.code = 'model_package_required'
+      err.details = error.entitlement
       throw err
     }
     throw new Error(error.message || error.error || '图片生成失败')

@@ -5905,6 +5905,17 @@ async function handleGenerate(options = {}) {
     return
   }
 
+  if (selectedModelConfig.value?.usable === false) {
+    const message = selectedModelConfig.value.accessMessage || '需要购买对应套餐后使用'
+    if (fromGroup) {
+      console.log(`[ImageNode] 编组执行跳过节点 ${props.id}：模型需要套餐权限`)
+      canvasStore.updateNodeData(props.id, { status: 'skipped' })
+      return
+    }
+    await showAlert(message, '模型权限')
+    return
+  }
+
   // 检查总积分是否足够（单次消耗 * 次数）
   const totalCost = currentPointsCost.value * selectedCount.value
   if (userPoints.value < totalCost) {

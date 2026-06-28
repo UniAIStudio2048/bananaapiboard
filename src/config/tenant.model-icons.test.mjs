@@ -206,6 +206,114 @@ test('getAvailableImageModels keeps dropdown populated when mode filtering remov
   assert.equal(models[0].modeFallback, true)
 })
 
+test('getAvailableImageModels merges entitlements and hides private unavailable models', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    image_models: [
+      {
+        name: 'locked-image',
+        displayName: 'Locked Image',
+        enabled: true,
+        supportedModes: 'both'
+      },
+      {
+        name: 'private-image',
+        displayName: 'Private Image',
+        enabled: true,
+        supportedModes: 'both'
+      }
+    ],
+    modelEntitlements: {
+      image: {
+        'locked-image': {
+          visible: true,
+          usable: false,
+          reason: 'package_required',
+          message: '需要购买 Pro 套餐',
+          requiredPackage: { type: 'pro', level: 2, name: 'Pro' }
+        },
+        'private-image': {
+          visible: false,
+          usable: false,
+          reason: 'private_package_required'
+        }
+      },
+      video: {}
+    }
+  })
+
+  const models = tenant.getAvailableImageModels()
+  assert.deepEqual(models.map(m => m.value), ['locked-image'])
+  assert.equal(models[0].usable, false)
+  assert.equal(models[0].disabled, true)
+  assert.equal(models[0].accessReason, 'package_required')
+  assert.equal(models[0].accessMessage, '需要购买 Pro 套餐')
+  assert.deepEqual(models[0].requiredPackage, { type: 'pro', level: 2, name: 'Pro' })
+})
+
+test('getAvailableImageModels falls back to model package gates when entitlements are not loaded', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    image_models: [
+      {
+        name: 'locked-image-fallback',
+        displayName: 'Locked Image Fallback',
+        enabled: true,
+        supportedModes: 'both',
+        packageAccessMode: 'public_locked',
+        requiredPackageType: 'pro',
+        requiredPackageLevel: 2
+      },
+      {
+        name: 'private-image-fallback',
+        displayName: 'Private Image Fallback',
+        enabled: true,
+        supportedModes: 'both',
+        packageAccessMode: 'private_hidden',
+        requiredPackageType: 'vip',
+        requiredPackageLevel: 3
+      }
+    ],
+    modelEntitlements: { image: {}, video: {} }
+  })
+
+  const models = tenant.getAvailableImageModels()
+  assert.deepEqual(models.map(m => m.value), ['locked-image-fallback'])
+  assert.equal(models[0].usable, false)
+  assert.equal(models[0].disabled, true)
+  assert.equal(models[0].accessReason, 'package_required')
+})
+
+test('getAvailableImageModels treats access mode without package requirement as ungated', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    image_models: [
+      {
+        name: 'legacy-access-mode-only',
+        displayName: 'Legacy Access Mode Only',
+        enabled: true,
+        supportedModes: 'both',
+        packageAccessMode: 'private_hidden'
+      }
+    ],
+    modelEntitlements: { image: {}, video: {} }
+  })
+
+  const models = tenant.getAvailableImageModels()
+  assert.deepEqual(models.map(m => m.value), ['legacy-access-mode-only'])
+  assert.equal(models[0].usable, true)
+  assert.equal(models[0].disabled, false)
+})
+
 test('tenant config version lets Vue computed values recompute after runtime config updates', () => {
   const configVersion = tenant.useTenantConfigVersion()
 
@@ -247,6 +355,136 @@ test('tenant config version lets Vue computed values recompute after runtime con
   })
 
   assert.deepEqual(modelResolutionEnabled.value, { '2k': false, '3k': false, '4k': false })
+})
+
+test('getAvailableVideoModels merges entitlements and hides private unavailable models', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    video_models: [
+      {
+        name: 'locked-video',
+        displayName: 'Locked Video',
+        enabled: true,
+        apiType: 'wan',
+        pointsCost: 20,
+        durations: ['5']
+      },
+      {
+        name: 'private-video',
+        displayName: 'Private Video',
+        enabled: true,
+        apiType: 'wan',
+        pointsCost: 30,
+        durations: ['5']
+      }
+    ],
+    modelEntitlements: {
+      image: {},
+      video: {
+        'locked-video': {
+          visible: true,
+          usable: false,
+          reason: 'package_required',
+          message: '需要购买 Pro 套餐',
+          requiredPackage: { type: 'pro', level: 2, name: 'Pro' }
+        },
+        'private-video': {
+          visible: false,
+          usable: false,
+          reason: 'private_package_required'
+        }
+      }
+    }
+  })
+
+  const models = tenant.getAvailableVideoModels()
+  assert.equal(models.some(m => m.value === 'private-video'), false)
+  const lockedModel = models.find(m => m.value === 'locked-video')
+  assert.ok(lockedModel)
+  assert.equal(lockedModel.usable, false)
+  assert.equal(lockedModel.disabled, true)
+  assert.equal(lockedModel.accessReason, 'package_required')
+  assert.equal(lockedModel.accessMessage, '需要购买 Pro 套餐')
+  assert.deepEqual(lockedModel.requiredPackage, { type: 'pro', level: 2, name: 'Pro' })
+})
+
+test('getAvailableVideoModels applies entitlements to default fallback models', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    video_models: [],
+    modelEntitlements: {
+      image: {},
+      video: {
+        veo3: {
+          visible: false,
+          usable: false,
+          reason: 'private_package_required'
+        },
+        sora2: {
+          visible: true,
+          usable: false,
+          reason: 'package_required',
+          message: '需要购买 Sora 套餐'
+        }
+      }
+    }
+  })
+
+  const models = tenant.getAvailableVideoModels()
+  assert.equal(models.some(m => m.value === 'veo3'), false)
+  const sora = models.find(m => m.value === 'sora2')
+  assert.ok(sora)
+  assert.equal(sora.usable, false)
+  assert.equal(sora.disabled, true)
+  assert.equal(sora.accessMessage, '需要购买 Sora 套餐')
+})
+
+test('getAvailableVideoModels falls back to model package gates when entitlements are not loaded', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    video_models: [
+      {
+        name: 'locked-video-fallback',
+        displayName: 'Locked Video Fallback',
+        enabled: true,
+        apiType: 'wan',
+        pointsCost: 20,
+        durations: ['5'],
+        packageAccessMode: 'public_locked',
+        requiredPackageType: 'pro',
+        requiredPackageLevel: 2
+      },
+      {
+        name: 'private-video-fallback',
+        displayName: 'Private Video Fallback',
+        enabled: true,
+        apiType: 'wan',
+        pointsCost: 30,
+        durations: ['5'],
+        packageAccessMode: 'private_hidden',
+        requiredPackageType: 'vip',
+        requiredPackageLevel: 3
+      }
+    ],
+    modelEntitlements: { image: {}, video: {} }
+  })
+
+  const models = tenant.getAvailableVideoModels()
+  assert.equal(models.some(m => m.value === 'private-video-fallback'), false)
+  const locked = models.find(m => m.value === 'locked-video-fallback')
+  assert.ok(locked)
+  assert.equal(locked.usable, false)
+  assert.equal(locked.disabled, true)
+  assert.equal(locked.accessReason, 'package_required')
 })
 
 test('getAvailableVideoModels filters unsupported 3 second Bytefor duration pricing', () => {

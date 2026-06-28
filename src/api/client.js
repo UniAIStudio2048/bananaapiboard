@@ -15,6 +15,8 @@ export function setApiKey(k) { KEY = k || '' }
 export function getApiKey() { return KEY }
 
 export function persistAuthSession(token, user = null) {
+  const previousToken = localStorage.getItem('token')
+
   if (token) {
     localStorage.setItem('token', token)
   } else {
@@ -33,6 +35,10 @@ export function persistAuthSession(token, user = null) {
     localStorage.removeItem('avatar')
     localStorage.removeItem('user_id')
     localStorage.removeItem('userId')
+  }
+
+  if (token && token !== previousToken && typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('auth-session-updated'))
   }
 }
 

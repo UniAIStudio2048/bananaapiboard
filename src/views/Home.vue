@@ -909,6 +909,12 @@ async function generate() {
     error.value = '请先上传参考图片'
     return 
   }
+
+  const selectedModelInfo = availableModels.value.find(m => m.value === model.value)
+  if (selectedModelInfo?.usable === false) {
+    error.value = getModelPackageMessage(selectedModelInfo)
+    return
+  }
   
   loading.value = true
   error.value = ''
@@ -1027,6 +1033,8 @@ async function generate() {
       error.value = '积分不足，请先获取积分'
     } else if (e && e.status === 401) {
       error.value = '未登录，请先登录'
+    } else if (e && e.status === 403 && e.body?.error === 'model_package_required') {
+      error.value = e.body.message || '需要购买对应套餐后使用'
     } else if (e && e.status === 429) {
       // 并发限制错误
       const hasPackage = userPackageInfo.value.hasPackage
@@ -1750,6 +1758,10 @@ const availableModels = computed(() => {
   return getAvailableImageModels(currentMode)
 })
 
+function getModelPackageMessage(modelInfo) {
+  return modelInfo?.accessMessage || '需要购买对应套餐后使用'
+}
+
 // 获取模型显示名称
 const getModelName = (modelKey) => {
   const customName = getModelDisplayName(modelKey, 'image')
@@ -2179,8 +2191,8 @@ onUnmounted(() => {
               <span>模型</span>
             </label>
             <select v-model="model" class="input text-sm">
-              <option v-for="m in availableModels" :key="m.value" :value="m.value">
-                {{ m.label }} ({{ getModelPointsCost(m.value) }}积分)
+              <option v-for="m in availableModels" :key="m.value" :value="m.value" :disabled="m.disabled">
+                {{ m.label }} ({{ getModelPointsCost(m.value) }}积分){{ m.disabled ? ' - 需套餐' : '' }}
               </option>
             </select>
           </div>

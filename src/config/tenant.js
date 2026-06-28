@@ -243,6 +243,126 @@ function isImageModeSupported(model, mode) {
   return mode === 't2i' ? supportedModes.t2i : supportedModes.i2i
 }
 
+function getModelEntitlement(type, modelKey) {
+  return config.modelEntitlements?.[type]?.[modelKey] || null
+}
+
+function normalizePackageAccessMode(value, model = {}) {
+  const hasPackageRequirement = Boolean(model.requiredPackageType) || Number(model.requiredPackageLevel || 0) > 0
+  if (!hasPackageRequirement) return 'none'
+  const mode = String(value || '').trim()
+  if (mode === 'public_locked' || mode === 'private_hidden') return mode
+  return 'public_locked'
+}
+
+function buildRequiredPackageFromModel(model = {}) {
+  return {
+    type: model.requiredPackageType || '',
+    level: Number(model.requiredPackageLevel || 0),
+    name: ''
+  }
+}
+
+function getFallbackModelEntitlement(model = {}) {
+  const accessMode = normalizePackageAccessMode(model.packageAccessMode, model)
+  if (accessMode === 'none') return null
+
+  const requiredPackage = buildRequiredPackageFromModel(model)
+  if (accessMode === 'private_hidden') {
+    return {
+      visible: false,
+      usable: false,
+      reason: 'private_package_required',
+      message: '需要购买对应套餐后使用',
+      requiredPackage
+    }
+  }
+
+  return {
+    visible: true,
+    usable: false,
+    reason: 'package_required',
+    message: '需要购买对应套餐后使用',
+    requiredPackage
+  }
+}
+
+function getModelPackageGateFields(modelConfig = {}) {
+  return {
+    packageAccessMode: normalizePackageAccessMode(modelConfig.packageAccessMode, modelConfig),
+    requiredPackageType: modelConfig.requiredPackageType || '',
+    requiredPackageLevel: Number(modelConfig.requiredPackageLevel || 0)
+  }
+}
+
+function applyModelEntitlement(model, type, fallbackKeys = []) {
+  const keys = [model?.value, model?.actualModel, ...fallbackKeys].filter(Boolean)
+  const entitlement = keys.map(key => getModelEntitlement(type, key)).find(Boolean) || getFallbackModelEntitlement(model)
+  if (!entitlement) {
+    return {
+      ...model,
+      usable: model?.usable !== false,
+      disabled: model?.disabled === true
+    }
+  }
+  if (entitlement.visible === false) return null
+  const usable = entitlement.usable !== false
+  return {
+    ...model,
+    usable,
+    disabled: !usable,
+    accessReason: entitlement.reason || '',
+    accessMessage: entitlement.message || '',
+    requiredPackage: entitlement.requiredPackage || null,
+    entitlement
+  }
+}
+
+function applyModelEntitlements(models, type) {
+  return (models || [])
+    .map(model => {
+      const fallbackKeys = []
+      if (Array.isArray(model?.veoModes)) {
+        fallbackKeys.push(...model.veoModes.map(mode => mode.actualModel).filter(Boolean))
+      }
+      if (Array.isArray(model?.klingO1Modes)) {
+        fallbackKeys.push(...model.klingO1Modes.map(mode => mode.actualModel).filter(Boolean))
+      }
+      if (Array.isArray(model?.klingV3OmniModes)) {
+        fallbackKeys.push(...model.klingV3OmniModes.map(mode => mode.actualModel).filter(Boolean))
+      }
+      return applyModelEntitlement(model, type, fallbackKeys)
+    })
+    .filter(Boolean)
+}
+
+export async function loadModelEntitlements() {
+  const token = localStorage.getItem('token')
+  if (!token) {
+    runtimeConfig.modelEntitlements = { image: {}, video: {} }
+    bumpTenantConfigVersion()
+    return runtimeConfig.modelEntitlements
+  }
+
+  try {
+    const response = await fetch(getApiUrl('/api/user/model-entitlements'), {
+      headers: {
+        ...getTenantHeaders(),
+        Authorization: `Bearer ${token}`
+      }
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const data = await response.json()
+    runtimeConfig.modelEntitlements = data.entitlements || { image: {}, video: {} }
+    bumpTenantConfigVersion()
+    return runtimeConfig.modelEntitlements
+  } catch (e) {
+    console.warn('[tenant] 模型权益加载失败:', e.message)
+    runtimeConfig.modelEntitlements = runtimeConfig.modelEntitlements || { image: {}, video: {} }
+    return runtimeConfig.modelEntitlements
+  }
+}
+
 // 从 localStorage 加载配置
 function loadFromStorage() {
   try {
@@ -291,6 +411,7 @@ export async function loadBrandConfig(forceReload = false) {
           console.log('[tenant] 使用缓存的品牌配置')
           applyThemeColor(runtimeConfig.brand.primaryColor)
           applyFavicon(runtimeConfig.brand.favicon)
+          await loadModelEntitlements()
           return runtimeConfig.brand
         }
       }
@@ -372,6 +493,7 @@ export async function loadBrandConfig(forceReload = false) {
         runtimeConfig.video_model_groups = data.video_model_groups
         console.log('[tenant] 视频模型分组配置已更新:', data.video_model_groups)
       }
+      await loadModelEntitlements()
       
       // 更新 Sora 角色创建配置
       if (data.soraCharacterConfig) {
@@ -620,7 +742,8 @@ try {
     modelPricing: savedTenantConfig?.modelPricing || defaultConfig.modelPricing,
     image_models: savedTenantConfig?.image_models || [],
     video_models: savedTenantConfig?.video_models || [],
-    video_model_groups: savedTenantConfig?.video_model_groups || []
+    video_model_groups: savedTenantConfig?.video_model_groups || [],
+    modelEntitlements: savedTenantConfig?.modelEntitlements || { image: {}, video: {} }
   }
   
   console.log('[tenant] 初始化完成，租户ID:', envConfig.tenantId)
@@ -747,12 +870,13 @@ export const getAvailableImageModels = (mode = null) => {
         supportedModes,
         // API 类型（用于判断是否是 MJ 模型）
         apiType: modelConfig.apiType || null,
-        defaultQuality: modelConfig.defaultQuality || undefined
+        defaultQuality: modelConfig.defaultQuality || undefined,
+        ...getModelPackageGateFields(modelConfig)
       })
     }
     
     if (models.length > 0) {
-      const filteredModels = filterByMode(models)
+      const filteredModels = applyModelEntitlements(filterByMode(models), 'image')
       console.log('[tenant] 图片模型列表已按后端配置排序:', filteredModels.map(m => m.value))
       return filteredModels
     }
@@ -760,7 +884,7 @@ export const getAvailableImageModels = (mode = null) => {
   
   // 降级：如果配置为空，返回默认模型
   if (Object.keys(imageModels).length === 0) {
-    return filterByMode(defaultModels)
+    return applyModelEntitlements(filterByMode(defaultModels), 'image')
   }
   
   // 从旧格式配置中构建模型列表（不保证顺序）
@@ -782,12 +906,13 @@ export const getAvailableImageModels = (mode = null) => {
         hasResolutionPricing: modelPricingConfig.hasResolutionPricing || false,
         pointsCost: modelPricingConfig.pointsCost || 1,
         resolutionEnabled: modelPricingConfig.resolutionEnabled,
-        supportedModes
+        supportedModes,
+        ...getModelPackageGateFields(modelFullConfig || {})
       })
     }
   }
   
-  return models.length > 0 ? filterByMode(models) : filterByMode(defaultModels)
+  return applyModelEntitlements(models.length > 0 ? filterByMode(models) : filterByMode(defaultModels), 'image')
 }
 
 // 获取所有可用的视频模型列表（从配置中动态获取）
@@ -1501,7 +1626,8 @@ export const getAvailableVideoModels = (options = {}) => {
           actualModel: modelConfig.actualModel || modelConfig.seedanceOpenConfig?.model || modelConfig.seedanceConfig?.model || key,
           isVeoModel: false,
           vendor: modelConfig.vendor || '',
-          vendorLogo: modelConfig.vendorLogo || ''
+          vendorLogo: modelConfig.vendorLogo || '',
+          ...getModelPackageGateFields(modelConfig)
         })
         continue
       }
@@ -1624,7 +1750,8 @@ export const getAvailableVideoModels = (options = {}) => {
         maxRefImages: modelConfig.maxRefImages || defaultConfig.maxRefImages || undefined,
         // 厂商信息
         vendor: modelConfig.vendor || '',
-        vendorLogo: modelConfig.vendorLogo || ''
+        vendorLogo: modelConfig.vendorLogo || '',
+        ...getModelPackageGateFields(modelConfig)
       })
     }
     
@@ -1701,14 +1828,15 @@ export const getAvailableVideoModels = (options = {}) => {
           return 0
         })
       }
-      console.log('[tenant] 视频模型列表已按分组配置排序:', models.map(m => `${m.groupName || '未分组'}/${m.value}`))
-      return models
+      const entitledModels = applyModelEntitlements(models, 'video')
+      console.log('[tenant] 视频模型列表已按分组配置排序:', entitledModels.map(m => `${m.groupName || '未分组'}/${m.value}`))
+      return entitledModels
     }
   }
   
   // 降级：如果没有新格式配置，使用旧格式 modelNames 对象
   if (Object.keys(videoModels).length === 0) {
-    return defaultModels
+    return applyModelEntitlements(defaultModels, 'video')
   }
   
   // 从旧格式配置中构建模型列表（不保证顺序）
@@ -1783,7 +1911,8 @@ export const getAvailableVideoModels = (options = {}) => {
         costPerSecond: modelFullConfig.costPerSecond,
         prePaidDuration: modelFullConfig.prePaidDuration,
         isMotionControl: modelFullConfig.isMotionControl,
-        cozeConfig: modelFullConfig.cozeConfig
+        cozeConfig: modelFullConfig.cozeConfig,
+        ...getModelPackageGateFields(modelFullConfig)
       })
     }
   }
@@ -1839,7 +1968,7 @@ export const getAvailableVideoModels = (options = {}) => {
     })
   }
 
-  return models.length > 0 ? models : defaultModels
+  return applyModelEntitlements(models.length > 0 ? models : defaultModels, 'video')
 }
 
 // 获取所有可用的 LLM/文本模型列表（从配置中动态获取）

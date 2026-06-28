@@ -4314,6 +4314,12 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
       err.code = 'concurrent_limit_exceeded'
       throw err
     }
+    if (response.status === 403 && data.error === 'model_package_required') {
+      const err = new Error(data.message || '需要购买对应套餐后使用')
+      err.code = 'model_package_required'
+      err.details = data.entitlement
+      throw err
+    }
     throw new Error(data.message || data.error || '生成失败')
   }
   
@@ -5002,6 +5008,11 @@ async function handleGenerate(options = {}) {
   const hasMotionVideoInput = isCozeVideoSwapModel.value && referenceVideos.value.length > 0
   if (!finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput && !hasWanVideoInput && !hasMotionVideoInput) {
     await showAlert('请输入提示词或连接参考图片', '提示')
+    return
+  }
+
+  if (currentModelConfig.value?.usable === false) {
+    await showAlert(currentModelConfig.value.accessMessage || '需要购买对应套餐后使用', '模型权限')
     return
   }
   
