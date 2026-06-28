@@ -61,6 +61,13 @@ assert.match(viewSource, /revokeGroupAllocation\(/, 'GroupCredits should call re
 assert.match(viewSource, /revokeAllGroupMemberCredits\(/, 'GroupCredits should call revokeAllGroupMemberCredits')
 assert.match(viewSource, /getGroupLedger\(/, 'GroupCredits should load ledger data')
 assert.match(viewSource, /ledgerDrawerOpen/, 'GroupCredits should implement ledger drawer state')
+assert.match(viewSource, /function closeLedgerDrawer\(\)/, 'GroupCredits should expose a dedicated ledger drawer collapse handler')
+const ledgerHeader = viewSource.match(/<h3 class="text-lg font-semibold">团队积分流水<\/h3>[\s\S]*?<div class="flex gap-2 border-b/)
+assert.ok(ledgerHeader, 'Ledger drawer header should be present')
+assert.doesNotMatch(ledgerHeader[0], />\s*收起\s*</, 'Ledger drawer collapse control should not be in the header')
+const ledgerFooter = viewSource.match(/<span>共 \{\{ ledgerPagination\.total \}\} 条<\/span>[\s\S]*?下一页[\s\S]*?<\/div>\n\s*<\/div>\n\s*<\/aside>/)
+assert.ok(ledgerFooter, 'Ledger drawer footer should be present')
+assert.match(ledgerFooter[0], />\s*收起\s*</, 'Ledger drawer should include a visible collapse control in the footer')
 assert.match(viewSource, /previousPolicy/, 'GroupCredits should rollback failed policy saves')
 assert.match(viewSource, /forbidden|unauthorized|403/, 'GroupCredits should render unauthorized state')
 

@@ -248,6 +248,10 @@ async function openLedger(member = null) {
   await loadLedger()
 }
 
+function closeLedgerDrawer() {
+  ledgerDrawerOpen.value = false
+}
+
 async function loadLedger(page = ledgerPagination.value.page) {
   if (!selectedTeam.value) return
   ledgerLoading.value = true
@@ -466,7 +470,6 @@ onMounted(loadTeams)
     <aside v-if="ledgerDrawerOpen" class="fixed inset-y-0 right-0 z-40 flex w-full max-w-xl flex-col border-l border-slate-200 bg-white shadow-2xl dark:border-dark-600 dark:bg-dark-800">
       <div class="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-dark-600">
         <h3 class="text-lg font-semibold">团队积分流水</h3>
-        <button type="button" class="rounded-md p-1 text-slate-500 hover:bg-slate-100 dark:hover:bg-dark-700" @click="ledgerDrawerOpen = false">✕</button>
       </div>
       <div class="flex gap-2 border-b border-slate-200 px-4 py-3 dark:border-dark-600">
         <select v-model="ledgerFilters.type" class="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-dark-600 dark:bg-dark-900" @change="loadLedger(1)">
@@ -498,7 +501,12 @@ onMounted(loadTeams)
         </div>
       </div>
       <div class="flex items-center justify-between border-t border-slate-200 px-4 py-3 text-sm dark:border-dark-600">
-        <span>共 {{ ledgerPagination.total }} 条</span>
+        <div class="flex items-center gap-3">
+          <span>共 {{ ledgerPagination.total }} 条</span>
+          <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 dark:border-dark-600 dark:text-slate-300 dark:hover:bg-dark-700" @click="closeLedgerDrawer">
+            收起
+          </button>
+        </div>
         <div class="flex gap-2">
           <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-50 dark:border-dark-600" :disabled="ledgerPagination.page <= 1" @click="loadLedger(ledgerPagination.page - 1)">上一页</button>
           <button type="button" class="rounded-md border border-slate-300 px-3 py-1.5 disabled:opacity-50 dark:border-dark-600" :disabled="ledgerPagination.page * ledgerPagination.pageSize >= ledgerPagination.total" @click="loadLedger(ledgerPagination.page + 1)">下一页</button>
