@@ -1,4 +1,5 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { useTeamStore } from '@/stores/team'
 
 function getAuthHeaders({ json = false } = {}) {
   const token = localStorage.getItem('token')
@@ -47,6 +48,16 @@ async function videoToolFetch(path, { method = 'GET', body } = {}) {
   return parseVideoToolResponse(response, '视频工具请求失败')
 }
 
+function withCurrentSpaceParams(payload = {}) {
+  const teamStore = useTeamStore()
+  const spaceParams = teamStore.getSpaceParams('current')
+  return {
+    ...payload,
+    spaceType: spaceParams.spaceType,
+    ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
+  }
+}
+
 export function getSubtitleEraseConfig() {
   return videoToolFetch('/api/video-tools/subtitle-erase/config')
 }
@@ -61,7 +72,7 @@ export function estimateSubtitleErase(payload) {
 export function createSubtitleEraseTask(payload) {
   return videoToolFetch('/api/video-tools/subtitle-erase/tasks', {
     method: 'POST',
-    body: payload
+    body: withCurrentSpaceParams(payload)
   })
 }
 
