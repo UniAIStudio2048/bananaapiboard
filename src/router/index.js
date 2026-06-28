@@ -8,6 +8,7 @@ const AdminBoard = () => import('@/views/AdminBoard.vue')
 const Canvas = () => import('@/views/Canvas.vue')
 const WorkflowList = () => import('@/views/WorkflowList.vue')
 const Landing3D = () => import('@/views/Landing3D.vue')
+const GroupCredits = () => import('@/views/GroupCredits.vue')
 
 const landingMode = import.meta.env.VITE_LANDING_MODE
 
@@ -39,6 +40,12 @@ const router = createRouter({
       name: 'workflows',
       component: WorkflowList,
       meta: { title: '工作流列表', requiresAuth: true }
+    },
+    {
+      path: '/group',
+      name: 'groupCredits',
+      component: GroupCredits,
+      meta: { title: '团队积分', requiresAuth: true }
     },
     { 
       path: '/video', 
@@ -186,7 +193,6 @@ router.beforeEach(async (to, from, next) => {
 })
 
 export default router
-
 
 
 
