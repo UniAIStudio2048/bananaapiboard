@@ -22,6 +22,12 @@ import {
   validateSeedanceModeInputs
 } from '@/utils/seedanceMediaValidation'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
+import { useTeamStore } from '@/stores/team'
+import {
+  appendSpaceParamsToFormData,
+  buildSpaceHistoryUrl,
+  getCurrentBeginnerSpaceParams
+} from '@/utils/beginnerSpaceParams'
 import {
   getVideoGenerationProgressText,
   hasVideoGenerationTimedOut,
@@ -259,6 +265,28 @@ const pollingTimers = new Map()
 const elapsedTimeNow = ref(Date.now())
 let elapsedTimeTimer = null
 const modelStatsStore = useModelStatsStore()
+const teamStore = useTeamStore()
+
+function getBeginnerSpaceParams() {
+  return getCurrentBeginnerSpaceParams(teamStore)
+}
+
+async function initializeBeginnerSpace() {
+  if (!me.value?.id) {
+    teamStore.switchToPersonalSpace()
+    return
+  }
+  teamStore.setCurrentUserId(me.value.id)
+  await teamStore.restoreSpaceState()
+}
+
+async function handleBeginnerSpaceSwitched() {
+  gallery.value = []
+  history.value = []
+  videoHistoryOffset.value = 0
+  hasMoreVideoHistory.value = true
+  await loadHistory(true)
+}
 
 const showVideoModal = ref(false)
 const currentVideo = ref(null)
@@ -1099,6 +1127,7 @@ async function generateVideo() {
     formData.append('hd', hd.value ? 'true' : 'false')
     formData.append('watermark', watermark.value ? 'true' : 'false')
     formData.append('private', isPrivate.value ? 'true' : 'false')
+    appendSpaceParamsToFormData(formData, getBeginnerSpaceParams())
     
     // Vidu 错峰模式
     if (isViduModel.value && offPeak.value) {
@@ -1438,7 +1467,12 @@ async function loadHistory(reset = true) {
     
     loadingMoreVideoHistory.value = true
 
-    const response = await fetch(getApiUrl(`/api/videos/history?limit=${VIDEO_PAGE_SIZE}&offset=${videoHistoryOffset.value}`), {
+    const historyUrl = buildSpaceHistoryUrl('/api/videos/history', {
+      limit: VIDEO_PAGE_SIZE,
+      offset: videoHistoryOffset.value,
+      ...getBeginnerSpaceParams()
+    })
+    const response = await fetch(getApiUrl(historyUrl), {
       headers: { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
     })
 
@@ -2043,6 +2077,7 @@ onMounted(async () => {
   // 加载视频配置（优先加载，以便后续计算积分）
   await loadVideoConfig()
   await refreshUser()
+  await initializeBeginnerSpace()
   await loadHistory()
 
   // 选择一个启用的默认模型（从配置动态获取）
@@ -2112,6 +2147,8 @@ onMounted(async () => {
       sessionStorage.removeItem('videoGenerationImage')
     }
   }
+
+  window.addEventListener('space-switched', handleBeginnerSpaceSwitched)
 })
 
 onUnmounted(() => {
@@ -2123,6 +2160,7 @@ onUnmounted(() => {
   }
   clearImages()
   clearSeedanceFiles()
+  window.removeEventListener('space-switched', handleBeginnerSpaceSwitched)
 })
 </script>
 
