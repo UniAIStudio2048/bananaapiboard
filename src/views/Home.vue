@@ -14,6 +14,11 @@ import { getTotalUserPoints } from '@/utils/points'
 import { resolveGenerationAspectRatio } from '@/utils/aspectRatio'
 import { normalizeImageHistoryItems } from '@/utils/imageHistoryPrompt'
 import { getSmartImageUrl } from '@/utils/cloudMediaUrl'
+import { useTeamStore } from '@/stores/team'
+import {
+  buildSpaceHistoryUrl,
+  getCurrentBeginnerSpaceParams
+} from '@/utils/beginnerSpaceParams'
 import {
   getAvailableImageResolutionOptions,
   getImageResolutionCost,
@@ -50,6 +55,30 @@ const layoutMode = ref('comfortable') // 布局模式：comfortable(舒适), wid
 
 // 路由
 const router = useRouter()
+const teamStore = useTeamStore()
+
+function getBeginnerSpaceParams() {
+  return getCurrentBeginnerSpaceParams(teamStore)
+}
+
+async function initializeBeginnerSpace() {
+  if (!me.value?.id) {
+    teamStore.switchToPersonalSpace()
+    return
+  }
+  teamStore.setCurrentUserId(me.value.id)
+  await teamStore.restoreSpaceState()
+}
+
+async function handleBeginnerSpaceSwitched() {
+  historyMemoryCache.value = null
+  historyCacheTimestamp.value = 0
+  historyOffset.value = 0
+  hasMoreHistory.value = true
+  items.value = []
+  history.value = []
+  await loadHistory(true)
+}
 
 // 图片标注相关
 const imageAnnotatorRef = ref(null)
@@ -681,7 +710,12 @@ async function loadHistory(reset = true) {
     }
     
     loadingMoreHistory.value = true
-    const r = await fetch(getApiUrl(`/api/images/history?limit=${HISTORY_PAGE_SIZE}&offset=${historyOffset.value}`), { headers })
+    const historyUrl = buildSpaceHistoryUrl('/api/images/history', {
+      limit: HISTORY_PAGE_SIZE,
+      offset: historyOffset.value,
+      ...getBeginnerSpaceParams()
+    })
+    const r = await fetch(getApiUrl(historyUrl), { headers })
     
     if (r.status === 304) return
     if (r.ok) {
@@ -737,7 +771,12 @@ async function loadHistory(reset = true) {
 // SWR 后台静默刷新：不阻塞 UI，刷新完毕后更新数据
 async function _refreshHistoryInBackground(headers) {
   try {
-    const r = await fetch(getApiUrl(`/api/images/history?limit=${HISTORY_PAGE_SIZE}&offset=0`), { headers })
+    const historyUrl = buildSpaceHistoryUrl('/api/images/history', {
+      limit: HISTORY_PAGE_SIZE,
+      offset: 0,
+      ...getBeginnerSpaceParams()
+    })
+    const r = await fetch(getApiUrl(historyUrl), { headers })
     if (!r.ok || r.status === 304) return
     const data = await r.json()
     const newImages = normalizeImageHistoryItems(data.images || [])
@@ -985,6 +1024,9 @@ async function generate() {
     if (mode.value === 'image' && images.length > 0) {
       payload.image = images
     }
+    
+    const spaceParams = getBeginnerSpaceParams()
+    Object.assign(payload, spaceParams)
     
     // 调用生成API
     const j = await generateImage(payload)
@@ -2043,6 +2085,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
 
 onMounted(async () => {
   me.value = await getMe()
+  await initializeBeginnerSpace()
   
   await loadHistory()
   
@@ -2101,6 +2144,7 @@ onMounted(async () => {
   
   // 监听兑换券入口点击事件
   window.addEventListener('open-voucher-modal', openVoucherModal)
+  window.addEventListener('space-switched', handleBeginnerSpaceSwitched)
   
   // 历史记录滚动加载更多（IntersectionObserver）
   nextTick(() => {
@@ -2120,6 +2164,7 @@ onUnmounted(() => {
   if (historyObserver) { historyObserver.disconnect(); historyObserver = null }
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('open-voucher-modal', openVoucherModal)
+  window.removeEventListener('space-switched', handleBeginnerSpaceSwitched)
 })
 </script>
 
