@@ -83,6 +83,16 @@ export async function revokeGroupAllocation(teamId, allocationId) {
   return parseGroupResponse(response, '收回积分失败')
 }
 
+export async function revokeGroupMemberCredits(teamId, userId, amount) {
+  const response = await fetch(getApiUrl(`/api/group/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}/revoke`), {
+    method: 'POST',
+    credentials: 'include',
+    headers: getAuthHeaders(true),
+    body: JSON.stringify({ amount })
+  })
+  return parseGroupResponse(response, '收回成员积分失败')
+}
+
 export async function revokeAllGroupMemberCredits(teamId, userId) {
   const response = await fetch(getApiUrl(`/api/group/teams/${encodeURIComponent(teamId)}/members/${encodeURIComponent(userId)}/revoke-all`), {
     method: 'POST',
