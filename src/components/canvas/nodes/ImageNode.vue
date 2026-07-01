@@ -830,6 +830,72 @@ function handleConfigPanelOutsideMouseDown(event) {
   collapseConfigPanel()
 }
 
+function collectImageTaskOutputUrls(result) {
+  const urls = []
+  const pushUrl = (url) => {
+    if (typeof url !== 'string') return
+    const trimmed = url.trim()
+    if (trimmed && !urls.includes(trimmed)) urls.push(trimmed)
+  }
+
+  pushUrl(getTaskMediaUrl(result, 'image'))
+  pushUrl(result?.url)
+  if (Array.isArray(result?.urls)) {
+    result.urls.forEach(pushUrl)
+  }
+  if (Array.isArray(result?.images)) {
+    result.images.forEach(item => {
+      if (typeof item === 'string') pushUrl(item)
+      else pushUrl(item?.url || item?.image_url || item?.outputUrl || item?.output_url)
+    })
+  }
+
+  return urls
+}
+
+function normalizeExtraImageNodeUrls(items) {
+  const urls = []
+  const pushUrl = (url) => {
+    if (typeof url !== 'string') return
+    const trimmed = url.trim()
+    if (trimmed && !urls.includes(trimmed)) urls.push(trimmed)
+  }
+
+  if (Array.isArray(items)) {
+    items.forEach(item => {
+      if (typeof item === 'string') pushUrl(item)
+      else pushUrl(item?.url || item?.image_url || item?.outputUrl || item?.output_url)
+    })
+  }
+
+  return urls.map(url => ({ url }))
+}
+
+function collectExtraImageNodeUrls(result, outputUrls = collectImageTaskOutputUrls(result)) {
+  const extraUrls = []
+  const pushUrl = (url) => {
+    if (typeof url !== 'string') return
+    const trimmed = url.trim()
+    if (trimmed && trimmed !== outputUrls[0] && !extraUrls.includes(trimmed)) extraUrls.push(trimmed)
+  }
+
+  if (Array.isArray(result?._groupImageUrls)) {
+    result._groupImageUrls.forEach(item => {
+      if (typeof item === 'string') pushUrl(item)
+      else pushUrl(item?.url || item?.image_url || item?.outputUrl || item?.output_url)
+    })
+  }
+
+  outputUrls.slice(1).forEach(pushUrl)
+
+  return extraUrls.map(url => ({ url }))
+}
+
+function hasExistingGroupImageNodes() {
+  const groupNodeIds = Array.isArray(props.data?.groupNodeIds) ? props.data.groupNodeIds : []
+  return groupNodeIds.some(nodeId => canvasStore.nodes.some(node => node.id === nodeId))
+}
+
 // 🔧 后台任务事件处理 - 统一使用 backgroundTaskManager 轮询，避免双重轮询导致页面卡顿
 function handleBackgroundTaskComplete(event) {
   const { taskId, task } = event.detail
@@ -863,11 +929,11 @@ function handleBackgroundTaskComplete(event) {
   // 获取主图URL（文生图/图生图）
   // 用 getTaskMediaUrl 兜底，确保能从嵌套字段（data.url / images[].url 等）抽到 URL，
   // 与 Canvas.vue / VideoNode 的提取逻辑保持一致。
-  const imageUrl = getTaskMediaUrl(task.result, 'image') || task.result?.url || task.result?.urls?.[0]
-  if (imageUrl) {
+  const outputUrls = collectImageTaskOutputUrls(task.result)
+  if (outputUrls.length > 0) {
     canvasStore.updateNodeData(props.id, {
       status: 'success',
-      output: { type: 'image', urls: [imageUrl] }
+      output: { type: 'image', urls: [outputUrls[0]], url: outputUrls[0] }
     })
     invalidateCanvasHistory()
   } else {
@@ -878,11 +944,11 @@ function handleBackgroundTaskComplete(event) {
     })
   }
   
-  // 🔥 组图处理：为每张额外的组图创建独立节点
-  const groupImageUrls = task.result?._groupImageUrls
-  if (groupImageUrls && Array.isArray(groupImageUrls) && groupImageUrls.length > 0) {
-    console.log(`[ImageNode] 组图生成完成，创建 ${groupImageUrls.length} 个额外节点`)
-    createGroupImageNodes(groupImageUrls, task)
+  // 🔥 组图处理：为每张额外图片创建独立节点
+  const extraImageUrls = collectExtraImageNodeUrls(task.result, outputUrls)
+  if (extraImageUrls.length > 0 && !hasExistingGroupImageNodes()) {
+    console.log(`[ImageNode] 组图生成完成，创建 ${extraImageUrls.length} 个额外节点`)
+    createGroupImageNodes(extraImageUrls, task)
   }
   
   removeCompletedTask(taskId)
@@ -894,6 +960,8 @@ function handleBackgroundTaskComplete(event) {
 function createGroupImageNodes(groupImageUrls, task) {
   const currentNode = canvasStore.nodes.find(n => n.id === props.id)
   if (!currentNode) return
+  const normalizedGroupImageUrls = normalizeExtraImageNodeUrls(groupImageUrls)
+  if (normalizedGroupImageUrls.length === 0) return
   
   const nodeWidth = 320
   const nodeGap = 40
@@ -902,8 +970,8 @@ function createGroupImageNodes(groupImageUrls, task) {
   
   const createdNodeIds = []
   
-  for (let i = 0; i < groupImageUrls.length; i++) {
-    const { url } = groupImageUrls[i]
+  for (let i = 0; i < normalizedGroupImageUrls.length; i++) {
+    const { url } = normalizedGroupImageUrls[i]
     const newNodeId = `${props.id}_group_${i + 1}_${Date.now()}`
     
     const newNode = canvasStore.addNode({
@@ -932,10 +1000,12 @@ function createGroupImageNodes(groupImageUrls, task) {
   }
   
   // 更新主节点的组图关联信息
-  canvasStore.updateNodeData(props.id, {
-    groupNodeIds: createdNodeIds,
-    isGroupParent: true
-  })
+  if (createdNodeIds.length > 0) {
+    canvasStore.updateNodeData(props.id, {
+      groupNodeIds: createdNodeIds,
+      isGroupParent: true
+    })
+  }
 }
 
 function handleBackgroundTaskFailed(event) {
@@ -1027,15 +1097,25 @@ function checkAndRestoreBackgroundTasks() {
       const imageUrl = (task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout')
         ? (getTaskMediaUrl(task.result, 'image') || task.result?.outputUrl || task.result?.url)
         : (getTaskMediaUrl(task.result, 'image') || task.result?.url || task.result?.urls?.[0])
-      if (imageUrl) {
+      const outputUrls = task.type === 'image'
+        ? collectImageTaskOutputUrls(task.result)
+        : (imageUrl ? [imageUrl] : [])
+      if (outputUrls.length > 0) {
         canvasStore.updateNodeData(props.id, {
           status: 'success',
           progress: null,
-          output: { type: 'image', urls: [imageUrl] },
+          output: { type: 'image', urls: [outputUrls[0]], url: outputUrls[0] },
           ...(task.type === 'image-hd' ? { hdUpscaled: true, pointsCost: task.result?.pointsCost || 0 } : {}),
           ...(task.type === 'image-panorama' ? { panoramaGenerated: true, pointsCost: task.result?.pointsCost || 0 } : {}),
           ...(task.type === 'image-cutout' ? { cutoutResult: true, isTransparent: task.result?.isTransparent, cutoutBgType: task.result?.bgType } : {})
         })
+        const extraImageUrls = task.type === 'image'
+          ? collectExtraImageNodeUrls(task.result, outputUrls)
+          : []
+        if (extraImageUrls.length > 0 && !hasExistingGroupImageNodes()) {
+          console.log(`[ImageNode] 恢复组图任务，创建 ${extraImageUrls.length} 个额外节点`)
+          createGroupImageNodes(extraImageUrls, task)
+        }
       } else {
         canvasStore.updateNodeData(props.id, {
           status: 'error',

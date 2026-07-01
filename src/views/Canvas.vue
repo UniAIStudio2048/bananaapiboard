@@ -89,6 +89,35 @@ const canvasStore = useCanvasStore()
 const teamStore = useTeamStore()
 const uploadManager = useUploadManager()
 
+function collectImageTaskOutputUrls(result) {
+  const urls = []
+  const pushUrl = (url) => {
+    if (typeof url !== 'string') return
+    const trimmed = url.trim()
+    if (trimmed && !urls.includes(trimmed)) urls.push(trimmed)
+  }
+
+  pushUrl(getTaskMediaUrl(result, 'image'))
+  pushUrl(result?.url)
+  if (Array.isArray(result?.urls)) {
+    result.urls.forEach(pushUrl)
+  }
+  if (Array.isArray(result?.images)) {
+    result.images.forEach(item => {
+      if (typeof item === 'string') pushUrl(item)
+      else pushUrl(item?.url || item?.image_url || item?.outputUrl || item?.output_url)
+    })
+  }
+  if (Array.isArray(result?._groupImageUrls)) {
+    result._groupImageUrls.forEach(item => {
+      if (typeof item === 'string') pushUrl(item)
+      else pushUrl(item?.url || item?.image_url || item?.outputUrl || item?.output_url)
+    })
+  }
+
+  return urls
+}
+
 // Phase 3.2：WebSocket 实时同步（opt-in，跟随 workflowMeta.id 自动连接/断开）
 // 失败时只在 console 提示，不影响主流程。
 try {
@@ -1573,12 +1602,7 @@ function updateNodeFromTask(task) {
     // 各分支统一：用 getTaskMediaUrl 兜底 URL 提取；
     // 保留 taskId 防止刷新后丢失；status:'success' + progress:null 与节点级处理对齐。
     if (task.type === 'image') {
-      // 组图（_groupImageUrls）优先；单图则用 url/urls/getTaskMediaUrl
-      const groupUrls = Array.isArray(result?._groupImageUrls)
-        ? result._groupImageUrls.map(g => g?.url).filter(Boolean)
-        : []
-      const singleUrl = getTaskMediaUrl(result, 'image') || result.url || (Array.isArray(result.urls) ? result.urls[0] : null)
-      const urls = groupUrls.length > 0 ? groupUrls : (singleUrl ? [singleUrl] : [])
+      const urls = collectImageTaskOutputUrls(result)
       if (urls.length > 0) {
         applyNodePatch({
           status: 'success',
@@ -1586,7 +1610,8 @@ function updateNodeFromTask(task) {
           taskId: task.taskId,
           output: {
             type: 'image',
-            urls
+            urls: [urls[0]],
+            url: urls[0]
           }
         })
         console.log(`[Canvas] 图像任务完成，节点 ${task.nodeId} 已更新（${urls.length} 张）`)

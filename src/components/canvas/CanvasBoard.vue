@@ -32,7 +32,7 @@
  * - Ctrl+G：编组选中的节点
  */
 import { ref, computed, watch, onMounted, onUnmounted, inject, nextTick, provide } from 'vue'
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { SelectionMode, VueFlow, useVueFlow } from '@vue-flow/core'
 import { Background } from '@vue-flow/background'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -3610,6 +3610,7 @@ onUnmounted(() => {
       :selection-on-drag="true"
       :select-nodes-on-drag="true"
       :selection-key-code="selectionKeyCodeConfig"
+      :selection-mode="SelectionMode.Partial"
       :pan-on-scroll="false"
       :zoom-on-scroll="false"
       :zoom-on-pinch="false"
