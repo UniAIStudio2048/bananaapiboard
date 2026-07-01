@@ -7,7 +7,7 @@ import {
   getGroupTeamMembers,
   getGroupTeams,
   revokeAllGroupMemberCredits,
-  revokeGroupAllocation,
+  revokeGroupMemberCredits,
   updateGroupBillingPolicy
 } from '@/api/group'
 
@@ -35,6 +35,13 @@ const allocationForm = ref({
   amount: '',
   expiresMode: 'none',
   customDate: ''
+})
+
+const showRevokeMemberModal = ref(false)
+const revokeMemberSubmitting = ref(false)
+const revokeMemberTarget = ref(null)
+const revokeMemberForm = ref({
+  amount: ''
 })
 
 const ledgerDrawerOpen = ref(false)
@@ -215,15 +222,42 @@ async function submitAllocation() {
   }
 }
 
-async function revokeAllocationPrompt(member) {
-  const allocationId = window.prompt('输入要收回的分配记录 ID')
-  if (!allocationId || !selectedTeam.value) return
+function openRevokeMemberCredits(member) {
+  revokeMemberTarget.value = member
+  revokeMemberForm.value = {
+    amount: ''
+  }
+  showRevokeMemberModal.value = true
+}
+
+function closeRevokeMemberCredits() {
+  if (revokeMemberSubmitting.value) return
+  showRevokeMemberModal.value = false
+  revokeMemberTarget.value = null
+}
+
+async function submitRevokeMemberCredits() {
+  if (!selectedTeam.value || !revokeMemberTarget.value || revokeMemberSubmitting.value) return
+  const amount = Number(revokeMemberForm.value.amount)
+  if (!Number.isFinite(amount) || amount <= 0) {
+    showStatus('请输入有效积分')
+    return
+  }
+  if (amount > Number(revokeMemberTarget.value.active_remaining_points || 0)) {
+    showStatus('收回积分不能超过成员剩余积分')
+    return
+  }
+  revokeMemberSubmitting.value = true
   try {
-    await revokeGroupAllocation(selectedTeam.value.id, allocationId.trim())
+    await revokeGroupMemberCredits(selectedTeam.value.id, revokeMemberTarget.value.user_id, amount)
+    showRevokeMemberModal.value = false
+    revokeMemberTarget.value = null
     await Promise.all([loadTeams(), loadMembers()])
     showStatus('未使用积分已收回')
   } catch (error) {
     showStatus(error.message || '收回失败')
+  } finally {
+    revokeMemberSubmitting.value = false
   }
 }
 
@@ -415,7 +449,7 @@ onMounted(loadTeams)
                         <div class="flex justify-end gap-2">
                           <button type="button" class="rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700" @click="openAllocation(member)">分配</button>
                           <button type="button" class="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="openLedger(member)">流水</button>
-                          <button type="button" class="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="revokeAllocationPrompt(member)">按ID收回</button>
+                          <button type="button" class="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="openRevokeMemberCredits(member)">部分收回</button>
                           <button type="button" class="rounded-md border border-red-200 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-900/20" @click="revokeMember(member)">全部收回</button>
                         </div>
                       </td>
@@ -463,6 +497,50 @@ onMounted(loadTeams)
         <div class="mt-5 flex justify-end gap-2">
           <button type="button" class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="closeAllocation">取消</button>
           <button type="button" class="rounded-md bg-primary-600 px-3 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-60" :disabled="allocationSubmitting" @click="submitAllocation">确认分配</button>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="showRevokeMemberModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
+      <section class="w-full max-w-md rounded-lg bg-white shadow-xl dark:bg-dark-800">
+        <div class="border-b border-slate-200 px-5 py-4 dark:border-dark-600">
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <h3 class="text-lg font-semibold">部分收回积分</h3>
+              <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">{{ revokeMemberTarget?.nickname || revokeMemberTarget?.username || revokeMemberTarget?.email || revokeMemberTarget?.user_id }}</p>
+            </div>
+            <button type="button" class="rounded-md p-1 text-slate-500 hover:bg-slate-100 disabled:opacity-50 dark:hover:bg-dark-700" :disabled="revokeMemberSubmitting" @click="closeRevokeMemberCredits">✕</button>
+          </div>
+        </div>
+        <div class="px-5 py-4">
+          <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-900/20 dark:text-amber-100">
+            从该成员当前剩余团队积分中收回指定数量，优先收回最近到期的未使用积分。
+          </div>
+          <label class="mt-4 block">
+            <span class="text-sm font-medium">收回积分数量</span>
+            <input
+              v-model="revokeMemberForm.amount"
+              type="number"
+              min="0"
+              step="1"
+              class="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 dark:border-dark-600 dark:bg-dark-900"
+              :max="revokeMemberTarget?.active_remaining_points || 0"
+              placeholder="输入要收回的积分"
+              @keyup.enter="submitRevokeMemberCredits"
+            />
+            <span class="mt-1 block text-xs text-slate-500">当前可收回：{{ formatPoints(revokeMemberTarget?.active_remaining_points || 0) }}</span>
+          </label>
+        </div>
+        <div class="flex justify-end gap-2 border-t border-slate-200 px-5 py-4 dark:border-dark-600">
+          <button type="button" class="rounded-md border border-slate-300 px-3 py-2 text-sm hover:bg-slate-50 disabled:opacity-50 dark:border-dark-600 dark:hover:bg-dark-700" :disabled="revokeMemberSubmitting" @click="closeRevokeMemberCredits">取消</button>
+          <button
+            type="button"
+            class="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+            :disabled="revokeMemberSubmitting || !(Number(revokeMemberForm.amount) > 0)"
+            @click="submitRevokeMemberCredits"
+          >
+            {{ revokeMemberSubmitting ? '收回中' : '确认收回' }}
+          </button>
         </div>
       </section>
     </div>

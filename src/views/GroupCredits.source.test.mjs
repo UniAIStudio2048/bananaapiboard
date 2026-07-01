@@ -40,6 +40,7 @@ for (const exportName of [
   'updateGroupBillingPolicy',
   'allocateGroupCredits',
   'revokeGroupAllocation',
+  'revokeGroupMemberCredits',
   'revokeAllGroupMemberCredits',
   'getGroupLedger'
 ]) {
@@ -51,13 +52,24 @@ assert.match(apiSource, /getTenantHeaders\(\)/, 'API should include tenant heade
 assert.match(apiSource, /Authorization:\s*`Bearer \$\{token\}`/, 'API should include bearer token')
 assert.match(apiSource, /error\.status = response\.status/, 'API errors should expose HTTP status')
 assert.match(apiSource, /error\.body = data/, 'API errors should expose response body')
+assert.match(apiSource, /members\/\$\{encodeURIComponent\(userId\)\}\/revoke/, 'API should call partial member revoke endpoint')
+assert.match(apiSource, /body:\s*JSON\.stringify\(\{ amount \}\)/, 'API should submit partial revoke amount')
 
 assert.match(viewSource, /billingPolicies\s*=\s*\[/, 'GroupCredits should define billing policy controls')
 assert.match(viewSource, /team_only/, 'GroupCredits should expose team-only policy')
 assert.match(viewSource, /team_first/, 'GroupCredits should expose team-first policy')
 assert.match(viewSource, /showAllocationModal/, 'GroupCredits should implement allocation modal state')
 assert.match(viewSource, /allocateGroupCredits\(/, 'GroupCredits should call allocateGroupCredits')
-assert.match(viewSource, /revokeGroupAllocation\(/, 'GroupCredits should call revokeGroupAllocation')
+assert.match(viewSource, /showRevokeMemberModal/, 'GroupCredits should implement a dedicated partial member revoke modal state')
+assert.match(viewSource, /revokeMemberForm/, 'GroupCredits should track partial member revoke form input')
+assert.match(viewSource, /async function submitRevokeMemberCredits\(\)/, 'GroupCredits should submit partial member revoke from the custom modal')
+assert.match(viewSource, /revokeGroupMemberCredits\(/, 'GroupCredits should call revokeGroupMemberCredits for partial member revoke')
+assert.match(viewSource, /部分收回/, 'GroupCredits should label the member action as partial revoke')
+assert.match(viewSource, /收回积分数量/, 'GroupCredits should ask for an amount instead of an allocation id')
+assert.match(viewSource, /确认收回/, 'GroupCredits should render a confirm action for revoke-by-ID')
+assert.doesNotMatch(viewSource, /window\.prompt/, 'GroupCredits should not use native prompt for revoke-by-ID')
+assert.doesNotMatch(viewSource, /分配记录 ID/, 'GroupCredits partial member revoke should not ask for allocation id')
+assert.doesNotMatch(viewSource, /revokeGroupAllocation\(/, 'GroupCredits should not use allocation-id revocation from the member row')
 assert.match(viewSource, /revokeAllGroupMemberCredits\(/, 'GroupCredits should call revokeAllGroupMemberCredits')
 assert.match(viewSource, /getGroupLedger\(/, 'GroupCredits should load ledger data')
 assert.match(viewSource, /ledgerDrawerOpen/, 'GroupCredits should implement ledger drawer state')

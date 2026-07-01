@@ -30,18 +30,53 @@ test('Canvas initializes background task manager after canvas nodes are restored
   const sessionRestoreIndex = mountedBody.indexOf('tryAutoRestoreWorkflowSession()')
   const defaultTabIndex = mountedBody.indexOf('canvasStore.initDefaultTab()')
   const restoreSubscriptionsIndex = mountedBody.indexOf('restoreBackgroundTasks()')
+  const recoverSubmissionsIndex = mountedBody.indexOf('startPendingVideoSubmissionRecovery()')
   const zombieCheckIndex = mountedBody.indexOf('failZombieCanvasVideoNodes()')
 
   assert.notEqual(initIndex, -1, 'Canvas should initialize the background task manager on mount')
   assert.notEqual(sessionRestoreIndex, -1, 'Canvas should try to restore workflow session nodes')
   assert.notEqual(defaultTabIndex, -1, 'Canvas should create a default tab when no workflow is restored')
   assert.notEqual(restoreSubscriptionsIndex, -1, 'Canvas should subscribe to restored background tasks')
+  assert.notEqual(recoverSubmissionsIndex, -1, 'Canvas should recover pending video submissions after reload')
   assert.notEqual(zombieCheckIndex, -1, 'Canvas should check zombie nodes after task state is loaded')
 
   assert.ok(sessionRestoreIndex < initIndex, 'background task manager should start after workflow session restore')
   assert.ok(defaultTabIndex < initIndex, 'background task manager should start after default tab initialization branch')
   assert.ok(initIndex < restoreSubscriptionsIndex, 'background task subscriptions should run after task state is loaded')
-  assert.ok(restoreSubscriptionsIndex < zombieCheckIndex, 'zombie node checks should run after task subscriptions are restored')
+  assert.ok(restoreSubscriptionsIndex < recoverSubmissionsIndex, 'pending submission recovery should run after task subscriptions are restored')
+  assert.ok(recoverSubmissionsIndex < zombieCheckIndex, 'zombie node checks should run after pending submission recovery has a chance to attach task ids')
+})
+
+test('Canvas wires pending video submission recovery to the backend recovery endpoint', () => {
+  assert.match(
+    source,
+    /recoverPendingCanvasVideoSubmissions/,
+    'Canvas should import and call the pending video submission recovery helper'
+  )
+  assert.match(
+    source,
+    /\/api\/videos\/submission\/\$\{encodeURIComponent\(submissionId\)\}/,
+    'Canvas should recover backend tasks by client submission id'
+  )
+  assert.match(
+    source,
+    /ensureTaskPolling/,
+    'Recovered video submissions should restart background polling'
+  )
+})
+
+test('Canvas retries pending video submission recovery when backend history is not ready yet', () => {
+  assert.match(source, /PENDING_VIDEO_SUBMISSION_RECOVERY_INTERVAL_MS\s*=\s*3000/)
+  assert.doesNotMatch(
+    source,
+    /PENDING_VIDEO_SUBMISSION_RECOVERY_MAX_ATTEMPTS/,
+    'pending video submissions should not stop retrying by attempt count while their 48h recovery record is still fresh'
+  )
+  assert.match(source, /shouldRetryPendingVideoSubmissionRecovery\(result\)/)
+  assert.match(source, /result\.notFound \|\| result\.errors \|\| result\.missingNode/)
+  assert.match(source, /getPendingGenerationSubmissions\(\{ type: 'video', includeDeleted: false \}\)/)
+  assert.match(source, /schedulePendingVideoSubmissionRecoveryRetry\(result\)/)
+  assert.match(source, /clearPendingVideoSubmissionRecoveryTimer\(\)/)
 })
 
 test('Canvas exit persistence saves existing workflows even when the dirty flag was missed', () => {

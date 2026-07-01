@@ -1414,8 +1414,33 @@ const showCameraControlOption = computed(() => {
   return true
 })
 
+const aspectRatios = [
+  { value: 'auto', label: 'Auto (自动)' },
+  { value: '16:9', label: '16:9' },
+  { value: '1:1', label: '1:1' },
+  { value: '9:16', label: '9:16' },
+  { value: '4:3', label: '4:3' },
+  { value: '3:4', label: '3:4' },
+  { value: '2:3', label: '2:3' },
+  { value: '3:2', label: '3:2' },
+  { value: '4:5', label: '4:5' },
+  { value: '5:4', label: '5:4' },
+  { value: '21:9', label: '21:9' }
+]
+
+const availableImageAspectRatios = computed(() => {
+  const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
+  const configuredRatios = Array.isArray(currentModel?.aspectRatios)
+    ? currentModel.aspectRatios.map(ratio => typeof ratio === 'string' ? ratio : ratio?.value).filter(Boolean)
+    : []
+  if (configuredRatios.length === 0) return aspectRatios
+  const configuredSet = new Set(configuredRatios)
+  const filtered = aspectRatios.filter(ratio => configuredSet.has(ratio.value))
+  return filtered.length > 0 ? filtered : aspectRatios
+})
+
 // 监听模型变化，如果模型不支持1K且当前选择1K，自动切换到2K
-watch([selectedModel, imageSizes], () => {
+watch([selectedModel, imageSizes, availableImageAspectRatios], () => {
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   const apiType = currentModel?.apiType
   
@@ -1431,6 +1456,12 @@ watch([selectedModel, imageSizes], () => {
   if (!availableSizes.includes(imageSize.value)) {
     imageSize.value = availableSizes[0] || '2K'
     console.log('[ImageNode] 当前尺寸不可用，已切换到:', imageSize.value)
+  }
+
+  const availableRatios = availableImageAspectRatios.value.map(ratio => ratio.value)
+  if (!availableRatios.includes(selectedAspectRatio.value)) {
+    selectedAspectRatio.value = availableRatios[0] || '1:1'
+    console.log('[ImageNode] 当前比例不可用，已切换到:', selectedAspectRatio.value)
   }
 }, { immediate: true })
 
@@ -1465,20 +1496,6 @@ const currentPointsCost = computed(() => {
   
   return cost
 })
-
-const aspectRatios = [
-  { value: 'auto', label: 'Auto (自动)' },
-  { value: '16:9', label: '16:9' },
-  { value: '1:1', label: '1:1' },
-  { value: '9:16', label: '9:16' },
-  { value: '4:3', label: '4:3' },
-  { value: '3:4', label: '3:4' },
-  { value: '2:3', label: '2:3' },
-  { value: '3:2', label: '3:2' },
-  { value: '4:5', label: '4:5' },
-  { value: '5:4', label: '5:4' },
-  { value: '21:9', label: '21:9' }
-]
 
 // 节点尺寸
 const nodeWidth = ref(props.data.width || 380)
@@ -8210,7 +8227,7 @@ async function handleDrop(event) {
           <div class="ratio-selector">
             <span class="ratio-icon">📐</span>
             <select v-model="selectedAspectRatio" class="ratio-select-input">
-              <option v-for="ratio in aspectRatios" :key="ratio.value" :value="ratio.value">
+              <option v-for="ratio in availableImageAspectRatios" :key="ratio.value" :value="ratio.value">
                 {{ ratio.label }}
               </option>
             </select>

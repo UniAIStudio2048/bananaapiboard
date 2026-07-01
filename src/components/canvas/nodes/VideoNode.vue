@@ -22,6 +22,11 @@ import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAv
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
+import {
+  createPendingGenerationSubmission,
+  markSubmissionTaskCreated,
+  removeGenerationSubmission
+} from '@/stores/canvas/pendingGenerationSubmissions'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl, onCanvasImageError, toSameOriginUrl } from '@/utils/canvasThumbnail'
@@ -1111,6 +1116,30 @@ const isViduModel = computed(() => {
   // 腾讯 AIGC 的 Vidu 不支持原生 Vidu 的错峰、720P折扣等功能
   if (apiType === 'tencentaigc') return false
   return modelName.includes('vidu') || apiType === 'vidu'
+})
+
+const isVectorEngineJsonModel = computed(() => {
+  return currentModelConfig.value?.apiType === 'vectorengine' &&
+    currentModelConfig.value?.vectorengineConfig?.format === 'openai-json'
+})
+
+const vectorengineResolution = ref(props.data.vectorengineResolution || '480p')
+
+const vectorengineResolutionOptions = computed(() => {
+  if (!isVectorEngineJsonModel.value) return []
+  const rawOptions = currentModelConfig.value?.resolutionOptions ||
+    currentModelConfig.value?.vectorengineConfig?.resolutions ||
+    ['480p', '720p']
+  return rawOptions
+    .map(option => {
+      const value = typeof option === 'string' ? option : option?.value
+      if (!value) return null
+      return {
+        value,
+        label: typeof option === 'object' && option?.label ? option.label : String(value).toUpperCase()
+      }
+    })
+    .filter(Boolean)
 })
 
 // Vidu 图生视频模式选择
@@ -3360,8 +3389,8 @@ function handleMotionImitation() {
 }
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduMode, viduOffPeak, viduResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode, selectedKlingO1Mode, omniKeepSound, selectedKlingV3OmniMode, v3OmniKeepSound, selectedWanMode, selectedWanAnimateMode],
-  ([model, aspectRatio, duration, count, prompt, mode, viduMd, offPeak, resolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode, klingO1Mode, keepSound, klingV3OmniMode, v3KeepSound, wanMode, wanAnimateMode]) => {
+watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduMode, viduOffPeak, viduResolution, vectorengineResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode, selectedKlingO1Mode, omniKeepSound, selectedKlingV3OmniMode, v3OmniKeepSound, selectedWanMode, selectedWanAnimateMode],
+  ([model, aspectRatio, duration, count, prompt, mode, viduMd, offPeak, resolution, veResolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode, klingO1Mode, keepSound, klingV3OmniMode, v3KeepSound, wanMode, wanAnimateMode]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       aspectRatio,
@@ -3372,6 +3401,7 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
       viduMode: viduMd,
       viduOffPeak: offPeak,
       viduResolution: resolution,
+      vectorengineResolution: veResolution,
       veoMode: veoMd,
       veoResolution: veoRes,
       klingCameraEnabled: klingCamEnabled,
@@ -3394,6 +3424,14 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
   },
   { deep: true }
 )
+
+watch([selectedModel, vectorengineResolutionOptions], () => {
+  if (!isVectorEngineJsonModel.value) return
+  const options = vectorengineResolutionOptions.value.map(option => option.value)
+  if (options.length > 0 && !options.includes(vectorengineResolution.value)) {
+    vectorengineResolution.value = options[0]
+  }
+})
 
 // 🔧 监听 VEO 模式切换，如果当前清晰度不被支持，自动切换到支持的第一个清晰度
 watch(veoMode, () => {
@@ -3955,12 +3993,34 @@ async function ensureAccessibleUrls(imageUrls) {
 }
 
 // 单次生成请求
-async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {}) {
+async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedState = {}) {
   const token = localStorage.getItem('token')
+  const currentTab = canvasStore.getCurrentTab?.()
+  const submission = createPendingGenerationSubmission({
+    type: 'video',
+    nodeId,
+    tabId: currentTab?.id,
+    workflowId: currentTab?.workflowId,
+    prompt: finalPrompt,
+    model: capturedState.model || selectedModel.value,
+    aspectRatio: selectedAspectRatio.value,
+    duration: selectedDuration.value,
+    metadata: {
+      source: 'canvas-video-node'
+    }
+  })
   
   // 构建请求数据
   const formData = new FormData()
   formData.append('prompt', finalPrompt || '根据图片生成视频')
+  formData.append('client_submission_id', submission.submissionId)
+  formData.append('canvas_node_id', nodeId)
+  if (currentTab?.id) {
+    formData.append('canvas_tab_id', currentTab.id)
+  }
+  if (currentTab?.workflowId) {
+    formData.append('canvas_workflow_id', currentTab.workflowId)
+  }
   
   // VEO 模型：使用实际的模型名称
   if (isVeoModel.value) {
@@ -4066,6 +4126,11 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
   if (isViduModel.value) {
     formData.append('resolution', viduResolution.value)
     console.log('[VideoNode] Vidu 清晰度:', viduResolution.value)
+  }
+
+  if (isVectorEngineJsonModel.value) {
+    formData.append('resolution', vectorengineResolution.value)
+    console.log('[VideoNode] VectorEngine JSON 清晰度:', vectorengineResolution.value)
   }
   
   // Kling 模型特有参数：摄像机控制
@@ -4312,18 +4377,36 @@ async function sendGenerateRequest(finalPrompt, finalImages, capturedState = {})
     if (response.status === 429 && data.error === 'user_concurrent_limit_exceeded') {
       const err = new Error(data.message || '已达到并发限制，请升级套餐')
       err.code = 'concurrent_limit_exceeded'
+      err.payload = data
+      err.clientSubmissionId = submission.submissionId
       throw err
     }
     if (response.status === 403 && data.error === 'model_package_required') {
       const err = new Error(data.message || '需要购买对应套餐后使用')
       err.code = 'model_package_required'
       err.details = data.entitlement
+      err.payload = data
+      err.clientSubmissionId = submission.submissionId
       throw err
     }
-    throw new Error(data.message || data.error || '生成失败')
+    if (data?.error === 'prompt_safety_blocked') {
+      const err = new Error(data.message || '提示词未通过安全审核，请修改后重试')
+      err.code = 'prompt_safety_blocked'
+      err.safety = data.safety
+      err.payload = data
+      err.clientSubmissionId = submission.submissionId
+      throw err
+    }
+    const err = new Error(data.message || data.error || '生成失败')
+    err.payload = data
+    err.clientSubmissionId = submission.submissionId
+    throw err
   }
   
-  return data
+  return {
+    data,
+    submissionId: submission.submissionId
+  }
 }
 
 const NEW_OUTPUT_NODE_VERTICAL_GAP = 80
@@ -4418,11 +4501,12 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       _preserveRawVideoError: false
     })
     
-    const result = await sendGenerateRequest(finalPrompt, finalImages, capturedState)
+    const { data: result, submissionId } = await sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedState)
     const taskId = result.task_id || result.id
     
     if (taskId) {
       console.log(`[VideoNode] 任务 ${taskIndex + 1} 已提交:`, taskId)
+      markSubmissionTaskCreated(submissionId, taskId)
       
       // 注册到后台任务管理器（即使用户离开画布也继续执行）
       const currentTab = canvasStore.getCurrentTab()
@@ -4434,7 +4518,8 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
         metadata: {
           prompt: finalPrompt,
           model: selectedModel.value,
-          aspectRatio: selectedAspectRatio.value
+          aspectRatio: selectedAspectRatio.value,
+          clientSubmissionId: submissionId
         }
       })
 
@@ -4444,7 +4529,8 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       // 找不到 taskId，节点永远停在"生成中"，直到 120 分钟超时才标失败。
       canvasStore.updateNodeData(nodeId, {
         taskId,
-        soraTaskId: taskId
+        soraTaskId: taskId,
+        clientSubmissionId: submissionId
       })
 
       // ⚠️ 不再调用 pollVideoTaskForNode，使用 backgroundTaskManager 统一轮询
@@ -4466,6 +4552,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
           url: videoUrl
         }
       })
+      removeGenerationSubmission(submissionId)
       window.dispatchEvent(new CustomEvent('canvas-history-invalidate', {
         detail: { type: 'video', phase: 'completed' }
       }))
@@ -4476,7 +4563,35 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
   } catch (error) {
     console.error(`[VideoNode] 任务 ${taskIndex + 1} 失败:`, error)
     const model = capturedState.model || selectedModel.value
+    const submissionId = error?.clientSubmissionId
+    const taskId = error?.payload?.task_id || error?.payload?.id
+    if (submissionId && taskId) {
+      markSubmissionTaskCreated(submissionId, taskId)
+      const currentTab = canvasStore.getCurrentTab()
+      registerTask({
+        taskId,
+        type: 'video',
+        nodeId,
+        tabId: currentTab?.id,
+        metadata: {
+          prompt: finalPrompt,
+          model,
+          aspectRatio: selectedAspectRatio.value,
+          clientSubmissionId: submissionId,
+          restoredFromErrorResponse: true
+        }
+      })
+      canvasStore.updateNodeData(nodeId, {
+        status: 'processing',
+        progress: '生成中...',
+        taskId,
+        soraTaskId: taskId,
+        clientSubmissionId: submissionId
+      })
+      return taskId
+    }
     if (isPromptSafetyBlockedError(error)) {
+      if (submissionId) removeGenerationSubmission(submissionId)
       const dialog = buildPromptSafetyDialog(error)
       canvasStore.updateNodeData(nodeId, {
         status: 'error',
@@ -4490,6 +4605,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       })
       return null
     }
+    if (submissionId) removeGenerationSubmission(submissionId)
     canvasStore.updateNodeData(nodeId, {
       status: 'error',
       error: formatVideoNodeErrorMessage(error.message, { model })
@@ -8237,6 +8353,19 @@ function handleToolbarPreview() {
           >
             {{ viduResolution === '1080p' ? '1080P' : '720P' }}
           </div>
+
+          <div v-if="isVectorEngineJsonModel && vectorengineResolutionOptions.length > 1" class="vectorengine-resolution-options">
+            <button
+              v-for="res in vectorengineResolutionOptions"
+              :key="res.value"
+              type="button"
+              class="vectorengine-resolution-btn"
+              :class="{ active: vectorengineResolution === res.value }"
+              @click="vectorengineResolution = res.value"
+            >
+              {{ res.label }}
+            </button>
+          </div>
         </div>
         
         <div class="config-right">
@@ -10476,6 +10605,31 @@ function handleToolbarPreview() {
   color: rgb(110, 231, 183);
 }
 
+.vectorengine-resolution-options {
+  display: flex;
+  gap: 4px;
+}
+
+.vectorengine-resolution-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--canvas-text-secondary, rgba(255, 255, 255, 0.62));
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.vectorengine-resolution-btn:hover,
+.vectorengine-resolution-btn.active {
+  border-color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
 /* 白昼模式 - 清晰度切换 */
 :root.canvas-theme-light .video-node .resolution-chip {
   background: transparent;
@@ -10492,6 +10646,19 @@ function handleToolbarPreview() {
   background: rgba(16, 185, 129, 0.1);
   border-color: rgba(16, 185, 129, 0.45);
   color: rgb(5, 150, 105);
+}
+
+:root.canvas-theme-light .vectorengine-resolution-btn {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.03);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .vectorengine-resolution-btn:hover,
+:root.canvas-theme-light .vectorengine-resolution-btn.active {
+  border-color: rgba(0, 0, 0, 0.32);
+  background: rgba(0, 0, 0, 0.1);
+  color: #111827;
 }
 
 .off-peak-toggle .toggle-text {

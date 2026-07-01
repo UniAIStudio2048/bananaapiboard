@@ -54,6 +54,11 @@ import {
 } from '@/stores/canvas/workflowAutoSave'
 import { initBackgroundTaskManager, getPendingTasks, registerTask, ensureTaskPolling, subscribeTask, removeCompletedTask, cleanup as cleanupBackgroundTasks } from '@/stores/canvas/backgroundTaskManager'
 import {
+  getPendingGenerationSubmissions,
+  recoverPendingCanvasVideoSubmissions,
+  removeGenerationSubmission
+} from '@/stores/canvas/pendingGenerationSubmissions'
+import {
   getCanvasNodeTaskId,
   getCanvasNodeBackgroundTaskType,
   shouldFailCanvasVideoNodeWithoutTask,
@@ -221,6 +226,9 @@ let _persistAfterTaskTimer = null
 // 任务完成后到落库的延迟：以前是 800ms 去抖，会与 BTM 5s 后清理任务、拖拽中跳过保存等
 // 共同造成"已生成但刷新后丢失"的竞态。任务结果（图片/视频 URL）必须立即写库，因此降到 200ms。
 const PERSIST_AFTER_TASK_DEBOUNCE_MS = 200
+let _pendingVideoSubmissionRecoveryTimer = null
+let _pendingVideoSubmissionRecoveryAttempts = 0
+const PENDING_VIDEO_SUBMISSION_RECOVERY_INTERVAL_MS = 3000
 
 // 🔧 Toast 通知状态（用于显示保存状态等）
 const toastMessage = ref('')
@@ -1316,6 +1324,9 @@ function restoreBackgroundTasks() {
       onComplete: (completedTask) => {
         console.log('[Canvas] 后台任务完成:', completedTask.taskId)
         updateNodeFromTask(completedTask)
+        if (completedTask.metadata?.clientSubmissionId) {
+          removeGenerationSubmission(completedTask.metadata.clientSubmissionId)
+        }
         // 与全局事件路径保持一致：完成后立即去抖落库
         schedulePersistAfterTask(`restore-complete:${completedTask.taskId}`)
         // 延迟清理完成的任务
@@ -1324,11 +1335,84 @@ function restoreBackgroundTasks() {
       onError: (failedTask) => {
         console.log('[Canvas] 后台任务失败:', failedTask.taskId)
         updateNodeFromTask(failedTask)
+        if (failedTask.metadata?.clientSubmissionId) {
+          removeGenerationSubmission(failedTask.metadata.clientSubmissionId)
+        }
         schedulePersistAfterTask(`restore-failed:${failedTask.taskId}`)
         setTimeout(() => removeCompletedTask(failedTask.taskId), 5000)
       }
     })
   }
+}
+
+async function fetchVideoSubmissionRecovery(submissionId) {
+  const token = localStorage.getItem('token')
+  const response = await fetch(getApiUrl(`/api/videos/submission/${encodeURIComponent(submissionId)}`), {
+    headers: {
+      ...getTenantHeaders(),
+      ...(token ? { Authorization: `Bearer ${token}` } : {})
+    }
+  })
+
+  if (response.status === 404) return null
+
+  const data = await response.json().catch(() => ({}))
+  if (!response.ok) {
+    throw new Error(data.message || data.error || `视频任务恢复失败 (${response.status})`)
+  }
+  return data
+}
+
+function clearPendingVideoSubmissionRecoveryTimer() {
+  if (_pendingVideoSubmissionRecoveryTimer) {
+    clearTimeout(_pendingVideoSubmissionRecoveryTimer)
+    _pendingVideoSubmissionRecoveryTimer = null
+  }
+}
+
+function shouldRetryPendingVideoSubmissionRecovery(result) {
+  if (!result || (result.notFound || result.errors || result.missingNode) <= 0) return false
+  return getPendingGenerationSubmissions({ type: 'video', includeDeleted: false })
+    .some(submission => !submission.taskId && submission.status !== 'task-created')
+}
+
+function schedulePendingVideoSubmissionRecoveryRetry(result) {
+  clearPendingVideoSubmissionRecoveryTimer()
+  if (!shouldRetryPendingVideoSubmissionRecovery(result)) return
+
+  _pendingVideoSubmissionRecoveryTimer = setTimeout(() => {
+    _pendingVideoSubmissionRecoveryTimer = null
+    startPendingVideoSubmissionRecovery({ retry: true }).catch(error => {
+      console.warn('[Canvas] 视频提交恢复重试失败:', error?.message || error)
+    })
+  }, PENDING_VIDEO_SUBMISSION_RECOVERY_INTERVAL_MS)
+}
+
+async function startPendingVideoSubmissionRecovery({ retry = false } = {}) {
+  if (!retry) {
+    _pendingVideoSubmissionRecoveryAttempts = 0
+  }
+  _pendingVideoSubmissionRecoveryAttempts += 1
+
+  const result = await recoverPendingCanvasVideoSubmissions({
+    canvasStore,
+    fetchSubmissionStatus: fetchVideoSubmissionRecovery,
+    ensureTaskPolling
+  })
+
+  if (result.recovered || result.completed || result.failed) {
+    console.log('[Canvas] 已恢复视频提交任务:', result)
+    saveCurrentWorkflowSession()
+    schedulePersistAfterTask('pending-video-submission-recovered')
+  } else if (result.checked || result.notFound || result.errors || result.missingNode || result.skippedDeleted) {
+    console.log('[Canvas] 视频提交恢复检查完成:', result)
+  }
+
+  if (result.recovered || result.completed || result.failed) {
+    restoreBackgroundTasks()
+  }
+  schedulePendingVideoSubmissionRecoveryRetry(result)
+  return result
 }
 
 function reconcileTasksForActiveTab() {
@@ -1407,6 +1491,9 @@ function handleBackgroundTaskComplete(event) {
   if (!task) return
   console.log('[Canvas] 后台任务完成:', task.taskId)
   updateNodeFromTask(task)
+  if (task.metadata?.clientSubmissionId) {
+    removeGenerationSubmission(task.metadata.clientSubmissionId)
+  }
   // 任务完成结果（图片/视频/音频 URL）只在前端内存里更新，必须立即写库，
   // 避免刷新页面后 canvas_workflows.workflow_data 仍是旧值导致画布看不到结果。
   schedulePersistAfterTask(`complete:${task.taskId}`)
@@ -1418,6 +1505,9 @@ function handleBackgroundTaskFailed(event) {
   if (!task) return
   console.log('[Canvas] 后台任务失败:', task.taskId)
   updateNodeFromTask(task)
+  if (task.metadata?.clientSubmissionId) {
+    removeGenerationSubmission(task.metadata.clientSubmissionId)
+  }
   // 失败状态也需要落库，否则刷新后节点会回到 processing 重新轮询拿到失败再次扣分前端体验差
   schedulePersistAfterTask(`failed:${task.taskId}`)
   setTimeout(() => removeCompletedTask(task.taskId), 5000)
@@ -2824,6 +2914,8 @@ onMounted(async () => {
   initBackgroundTaskManager()
   restoreBackgroundTasks()
 
+  await startPendingVideoSubmissionRecovery()
+
   failZombieCanvasVideoNodes()
   
   document.addEventListener('keydown', handleKeyDown)
@@ -2868,6 +2960,7 @@ onUnmounted(() => {
     clearTimeout(_persistAfterTaskTimer)
     _persistAfterTaskTimer = null
   }
+  clearPendingVideoSubmissionRecoveryTimer()
   stopAutoSave()
   stopHistoryAutoSave()
   stopCanvasFpsMonitor()
