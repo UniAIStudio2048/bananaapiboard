@@ -14,6 +14,7 @@ import { createOpHistory } from './opHistory'
 import { getGlobalNodeDataCache } from './nodeDataCache'
 import { buildNodeDataWithRememberedParameters } from './nodeParameterMemory'
 import { applyNodeDataPatchToTabs } from './tabNodePatch'
+import { markNodeGenerationSubmissionsDeleted } from './pendingGenerationSubmissions'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -362,6 +363,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   function removeNode(nodeId) {
     saveHistory({ force: true })
     markCurrentTabChanged()
+    markNodeGenerationSubmissionsDeleted(nodeId, { tabId: activeTabId.value })
     
     // 删除相关连线（通过 removeEdge 逐条删除，确保 Storyboard 格子图片同步清理）
     const edgesToRemove = edges.value.filter(
@@ -387,6 +389,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     markCurrentTabChanged()
     
     const nodeIdSet = new Set(nodeIds)
+    for (const nodeId of nodeIdSet) {
+      markNodeGenerationSubmissionsDeleted(nodeId, { tabId: activeTabId.value })
+    }
     
     const edgesToRemove = edges.value.filter(
       e => nodeIdSet.has(e.source) || nodeIdSet.has(e.target)

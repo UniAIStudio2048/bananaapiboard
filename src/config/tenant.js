@@ -243,6 +243,22 @@ function isImageModeSupported(model, mode) {
   return mode === 't2i' ? supportedModes.t2i : supportedModes.i2i
 }
 
+function isVectorEngineVeoModel(modelConfig = {}) {
+  const vectorengineFormat = modelConfig.vectorengineConfig?.format || modelConfig.vectorengineFormat || ''
+  if (vectorengineFormat === 'openai-json') return false
+  const text = [
+    modelConfig.name,
+    modelConfig.displayName,
+    modelConfig.actualModel,
+    modelConfig.vectorengineConfig?.model
+  ].map(value => String(value || '').toLowerCase()).join(' ')
+  return text.includes('veo3') || text.includes('veo_3') || text.includes('veo')
+}
+
+function getVideoResolutionOptions(modelConfig = {}) {
+  return modelConfig.resolutionOptions || modelConfig.vectorengineConfig?.resolutions || undefined
+}
+
 function getModelEntitlement(type, modelKey) {
   return config.modelEntitlements?.[type]?.[modelKey] || null
 }
@@ -867,6 +883,7 @@ export const getAvailableImageModels = (mode = null) => {
         hasResolutionPricing: modelConfig.hasResolutionPricing || modelPricingConfig.hasResolutionPricing || false,
         pointsCost: modelConfig.pointsCost || modelPricingConfig.pointsCost || 1,
         resolutionEnabled: modelConfig.resolutionEnabled || modelPricingConfig.resolutionEnabled,
+        aspectRatios: modelConfig.aspectRatios,
         supportedModes,
         // API 类型（用于判断是否是 MJ 模型）
         apiType: modelConfig.apiType || null,
@@ -1085,7 +1102,7 @@ export const getAvailableVideoModels = (options = {}) => {
     const hasVeoInConfig = videoModelsConfig.some(m => {
       const n = (m.name || '').toLowerCase()
       const d = (m.displayName || '').toLowerCase()
-      const isVeo = m.apiType === 'vectorengine' || n.includes('veo3') || n.includes('veo_3') || d.includes('veo')
+      const isVeo = isVectorEngineVeoModel(m)
       return isVeo && !n.includes('4k') && !d.includes('4k')
     })
     
@@ -1108,10 +1125,7 @@ export const getAvailableVideoModels = (options = {}) => {
       // 检测 VEO 模型（通过 apiType 或模型名称）
       const keyLower = key.toLowerCase()
       const displayLower = (modelConfig.displayName || '').toLowerCase()
-      const isVeoSubModel = modelConfig.apiType === 'vectorengine' || 
-                           keyLower.includes('veo3') ||
-                           keyLower.includes('veo_3') ||
-                           displayLower.includes('veo')
+      const isVeoSubModel = isVectorEngineVeoModel(modelConfig)
       
       if (isVeoSubModel) {
         if (key.toLowerCase().includes('4k') || (modelConfig.displayName || '').toLowerCase().includes('4k')) {
@@ -1153,10 +1167,7 @@ export const getAvailableVideoModels = (options = {}) => {
       if (m.enabled === false) continue
       const mNameLower = (m.name || '').toLowerCase()
       const mDisplayLower = (m.displayName || '').toLowerCase()
-      const isVeo = m.apiType === 'vectorengine' || 
-                   mNameLower.includes('veo3') ||
-                   mNameLower.includes('veo_3') ||
-                   mDisplayLower.includes('veo')
+      const isVeo = isVectorEngineVeoModel(m)
       if (isVeo) {
         veoInsertIndex = i
         break
@@ -1577,10 +1588,7 @@ export const getAvailableVideoModels = (options = {}) => {
       // 🔧 支持多种命名格式：veo3, veo_3, veo3.1, veo_3_1 等
       const keyLower2 = key.toLowerCase()
       const displayLower2 = (modelConfig.displayName || '').toLowerCase()
-      const isVeoSubModel = modelConfig.apiType === 'vectorengine' || 
-                           keyLower2.includes('veo3') ||
-                           keyLower2.includes('veo_3') ||
-                           displayLower2.includes('veo')
+      const isVeoSubModel = isVectorEngineVeoModel(modelConfig)
       
       // 🆕 检测是否是 VEO 4K 子模型
       const isVeo4kSubModel = isVeoSubModel && (
@@ -1623,6 +1631,8 @@ export const getAvailableVideoModels = (options = {}) => {
           aspectRatios: modelConfig.aspectRatios || [{ value: '16:9', label: '横屏 (16:9)' }],
           supportedModes: { t2v: true, i2v: true, a2v: false },
           apiType: 'vectorengine',
+          vectorengineConfig: modelConfig.vectorengineConfig,
+          resolutionOptions: getVideoResolutionOptions(modelConfig),
           actualModel: modelConfig.actualModel || modelConfig.seedanceOpenConfig?.model || modelConfig.seedanceConfig?.model || key,
           isVeoModel: false,
           vendor: modelConfig.vendor || '',
@@ -1727,6 +1737,8 @@ export const getAvailableVideoModels = (options = {}) => {
         seedanceConfig: modelConfig.seedanceConfig,
         seedanceOpenConfig: modelConfig.seedanceOpenConfig,
         happyHorseConfig: modelConfig.happyHorseConfig,
+        vectorengineConfig: modelConfig.vectorengineConfig,
+        resolutionOptions: getVideoResolutionOptions(modelConfig),
         defaultVideoMode: modelConfig.defaultVideoMode || undefined,
         defaultSeedance2Mode: modelConfig.defaultSeedance2Mode || modelConfig.seedanceConfig?.defaultMode || undefined,
         defaultKlingO1Mode: modelConfig.defaultKlingO1Mode || undefined,
@@ -1757,7 +1769,7 @@ export const getAvailableVideoModels = (options = {}) => {
     
     // 如果没有 VEO 子模型配置，但需要显示默认 VEO，添加到末尾
     // 🔧 仅在未禁用整合时添加；如果配置中存在 VEO 模型但全部禁用，则不显示默认入口
-    if (!veoInserted && !disableVeoMerge && !hasVeoInConfig) {
+    if (!veoInserted && !disableVeoMerge && !hasVeoInConfig && videoModelsConfig.length === 0) {
       models.push(veoEntry)
     }
     
@@ -1903,6 +1915,8 @@ export const getAvailableVideoModels = (options = {}) => {
         seedanceConfig: modelFullConfig.seedanceConfig,
         seedanceOpenConfig: modelFullConfig.seedanceOpenConfig,
         happyHorseConfig: modelFullConfig.happyHorseConfig,
+        vectorengineConfig: modelFullConfig.vectorengineConfig,
+        resolutionOptions: getVideoResolutionOptions(modelFullConfig),
         defaultVideoMode: modelFullConfig.defaultVideoMode || undefined,
         defaultSeedance2Mode: modelFullConfig.defaultSeedance2Mode || modelFullConfig.seedanceConfig?.defaultMode || undefined,
         defaultKlingO1Mode: modelFullConfig.defaultKlingO1Mode || undefined,

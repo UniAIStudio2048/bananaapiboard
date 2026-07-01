@@ -674,10 +674,16 @@ export function pollTaskStatus(taskId, type = 'image', options = {}) {
  * @returns {Promise<{success: boolean, pointsCost: number, message: string}>}
  */
 export async function deductCropPoints(cropType) {
+  const teamStore = useTeamStore()
+  const spaceParams = teamStore.getSpaceParams('current')
   const response = await fetch(getApiUrl('/api/canvas/crop-deduct'), {
     method: 'POST',
     headers: getHeaders({ json: true }),
-    body: JSON.stringify({ cropType })
+    body: JSON.stringify({
+      cropType,
+      spaceType: spaceParams.spaceType,
+      ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
+    })
   })
   
   const data = await response.json()

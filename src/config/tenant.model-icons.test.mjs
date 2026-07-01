@@ -147,6 +147,33 @@ test('getAvailableImageModels reads updated model resolutionEnabled config', () 
   assert.deepEqual(model.resolutionEnabled, { '2k': false, '3k': false, '4k': false })
 })
 
+test('getAvailableImageModels propagates configured image aspect ratios', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    image_models: [
+      {
+        name: 'RH_youchuan_v81',
+        displayName: 'RH Youchuan V81',
+        enabled: true,
+        apiType: 'runninghub-youchuan-v81',
+        pointsCost: { '1k': 3, '2k': 5 },
+        resolutionEnabled: { '1k': true, '2k': true, '4k': false },
+        aspectRatios: ['1:1', '4:3', '3:2', '16:9', '3:4', '2:3', '9:16'],
+        supportedModes: 'both'
+      }
+    ]
+  })
+
+  const model = tenant.getAvailableImageModels().find(m => m.value === 'RH_youchuan_v81')
+  assert.deepEqual(
+    model.aspectRatios,
+    ['1:1', '4:3', '3:2', '16:9', '3:4', '2:3', '9:16']
+  )
+})
+
 test('getAvailableImageModels normalizes image supportedModes aliases and object config', () => {
   tenant.updateRuntimeConfig({
     modelNames: { image: {}, video: {} },
@@ -204,6 +231,55 @@ test('getAvailableImageModels keeps dropdown populated when mode filtering remov
   const models = tenant.getAvailableImageModels('t2i')
   assert.deepEqual(models.map(m => m.value), ['tenant-i2i-only'])
   assert.equal(models[0].modeFallback, true)
+})
+
+test('getAvailableVideoModels keeps VectorEngine Grok JSON model out of VEO merge', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    video_models: [
+      {
+        name: 'grok-imagine-video-1.5-preview',
+        displayName: 'Grok Imagine Video 1.5 Preview',
+        enabled: true,
+        apiType: 'vectorengine',
+        actualModel: 'grok-imagine-video-1.5-preview',
+        vectorengineConfig: {
+          model: 'grok-imagine-video-1.5-preview',
+          format: 'openai-json',
+          resolution: '480p',
+          resolutions: ['480p', '720p']
+        },
+        resolutionOptions: ['480p', '720p'],
+        pointsCost: { '4': 40 },
+        hasDurationPricing: true,
+        durations: [4],
+        aspectRatios: ['16:9'],
+        supportedModes: ['i2v'],
+        defaultVideoMode: 'i2v',
+        isImageToVideo: true
+      }
+    ]
+  })
+
+  const models = tenant.getAvailableVideoModels()
+  const grokModel = models.find(m => m.value === 'grok-imagine-video-1.5-preview')
+
+  assert.ok(grokModel)
+  assert.equal(grokModel.apiType, 'vectorengine')
+  assert.equal(grokModel.actualModel, 'grok-imagine-video-1.5-preview')
+  assert.equal(grokModel.isVeoModel, undefined)
+  assert.deepEqual(grokModel.supportedModes, ['i2v'])
+  assert.deepEqual(grokModel.vectorengineConfig, {
+    model: 'grok-imagine-video-1.5-preview',
+    format: 'openai-json',
+    resolution: '480p',
+    resolutions: ['480p', '720p']
+  })
+  assert.deepEqual(grokModel.resolutionOptions, ['480p', '720p'])
+  assert.equal(models.some(m => m.value === 'veo3'), false)
 })
 
 test('getAvailableImageModels merges entitlements and hides private unavailable models', () => {
