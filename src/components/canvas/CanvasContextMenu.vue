@@ -268,7 +268,7 @@ function handleMenuClick(event) {
       <div class="canvas-context-menu-item" @click="handlePasteFromClipboard">
         <span class="icon">📋</span>
         从剪贴板粘贴
-        <span class="shortcut">Ctrl+V</span>
+        <span class="shortcut">{{ hasClipboard ? '' : 'Ctrl+V' }}</span>
       </div>
 
       <div class="canvas-context-menu-divider"></div>

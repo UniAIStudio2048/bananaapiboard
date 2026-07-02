@@ -33,8 +33,8 @@ assert.deepEqual(
 
 assert.equal(
   resolveCanvasPasteSource({ hasNodeClipboard: true, clipboardData: { files: [screenshot] } }),
-  'system-files',
-  'system screenshot wins even when nodes were copied earlier'
+  'nodes',
+  'copied canvas nodes win over stale system clipboard files'
 )
 
 assert.equal(

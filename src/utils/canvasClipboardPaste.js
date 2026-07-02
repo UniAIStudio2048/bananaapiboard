@@ -16,12 +16,12 @@ export function getClipboardFiles(clipboardData) {
 }
 
 export function resolveCanvasPasteSource({ hasNodeClipboard, clipboardData }) {
-  if (getClipboardFiles(clipboardData).length > 0) {
-    return 'system-files'
-  }
-
   if (hasNodeClipboard) {
     return 'nodes'
+  }
+
+  if (getClipboardFiles(clipboardData).length > 0) {
+    return 'system-files'
   }
 
   return 'none'
