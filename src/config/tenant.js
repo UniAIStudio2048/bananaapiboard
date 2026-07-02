@@ -267,7 +267,7 @@ function normalizePackageAccessMode(value, model = {}) {
   const hasPackageRequirement = Boolean(model.requiredPackageType) || Number(model.requiredPackageLevel || 0) > 0
   if (!hasPackageRequirement) return 'none'
   const mode = String(value || '').trim()
-  if (mode === 'public_locked' || mode === 'private_hidden') return mode
+  if (mode === 'public_locked' || mode === 'private_hidden' || mode === 'private_assigned') return mode
   return 'public_locked'
 }
 
@@ -284,11 +284,11 @@ function getFallbackModelEntitlement(model = {}) {
   if (accessMode === 'none') return null
 
   const requiredPackage = buildRequiredPackageFromModel(model)
-  if (accessMode === 'private_hidden') {
+  if (accessMode === 'private_hidden' || accessMode === 'private_assigned') {
     return {
       visible: false,
       usable: false,
-      reason: 'private_package_required',
+      reason: accessMode === 'private_assigned' ? 'private_assigned_required' : 'private_package_required',
       message: '需要购买对应套餐后使用',
       requiredPackage
     }

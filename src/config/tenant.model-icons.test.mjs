@@ -354,6 +354,15 @@ test('getAvailableImageModels falls back to model package gates when entitlement
         packageAccessMode: 'private_hidden',
         requiredPackageType: 'vip',
         requiredPackageLevel: 3
+      },
+      {
+        name: 'assigned-image-fallback',
+        displayName: 'Assigned Image Fallback',
+        enabled: true,
+        supportedModes: 'both',
+        packageAccessMode: 'private_assigned',
+        requiredPackageType: 'vip',
+        requiredPackageLevel: 3
       }
     ],
     modelEntitlements: { image: {}, video: {} }
@@ -549,6 +558,17 @@ test('getAvailableVideoModels falls back to model package gates when entitlement
         packageAccessMode: 'private_hidden',
         requiredPackageType: 'vip',
         requiredPackageLevel: 3
+      },
+      {
+        name: 'assigned-video-fallback',
+        displayName: 'Assigned Video Fallback',
+        enabled: true,
+        apiType: 'wan',
+        pointsCost: 30,
+        durations: ['5'],
+        packageAccessMode: 'private_assigned',
+        requiredPackageType: 'vip',
+        requiredPackageLevel: 3
       }
     ],
     modelEntitlements: { image: {}, video: {} }
@@ -556,6 +576,7 @@ test('getAvailableVideoModels falls back to model package gates when entitlement
 
   const models = tenant.getAvailableVideoModels()
   assert.equal(models.some(m => m.value === 'private-video-fallback'), false)
+  assert.equal(models.some(m => m.value === 'assigned-video-fallback'), false)
   const locked = models.find(m => m.value === 'locked-video-fallback')
   assert.ok(locked)
   assert.equal(locked.usable, false)
