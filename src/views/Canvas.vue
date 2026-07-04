@@ -30,6 +30,7 @@ import InplaceImageEditor from '@/components/canvas/InplaceImageEditor.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import OnboardingGuide from '@/components/canvas/OnboardingGuide.vue'
 import AIAssistantPanel from '@/components/canvas/AIAssistantPanel.vue'
+import SkillsPanel from '@/components/canvas/SkillsPanel.vue'
 import CanvasNotification from '@/components/canvas/CanvasNotification.vue'
 import CanvasSupport from '@/components/canvas/CanvasSupport.vue'
 import CanvasToast from '@/components/canvas/CanvasToast.vue'
@@ -200,6 +201,7 @@ const showAIAssistant = ref(false)
 const aiPanelWidth = ref(0) // AI 面板宽度
 const aiAssistantRef = ref(null) // AI 面板组件引用
 const canvasPickMode = ref(false) // 画布选择模式（从AI助手触发）
+const showSkillsPanel = ref(false)
 
 // 套餐购买弹窗
 const showPackageModal = ref(false)
@@ -2049,10 +2051,27 @@ function handlePaneClick(event) {
   closeLeftPanels()
 }
 
+function toggleSkillsPanel() {
+  const nextOpen = !showSkillsPanel.value
+  showSkillsPanel.value = nextOpen
+  if (nextOpen) {
+    showAIAssistant.value = false
+  }
+}
+
+function toggleAIAssistantPanel() {
+  const nextOpen = !showAIAssistant.value
+  showAIAssistant.value = nextOpen
+  if (nextOpen) {
+    showSkillsPanel.value = false
+  }
+}
+
 // 处理节点右键「发送到灵感助手」
 async function handleSendToAssistant({ url, type }) {
   // 打开 AI 面板
   showAIAssistant.value = true
+  showSkillsPanel.value = false
   // 等待面板渲染完成后添加附件
   await nextTick()
   // 再等一帧确保 AIAssistantPanel 已完全挂载
@@ -2124,6 +2143,7 @@ function handlePickNode(nodeId) {
 
   // 添加到 AI 助手附件
   showAIAssistant.value = true
+  showSkillsPanel.value = false
   nextTick(() => {
     nextTick(() => {
       // 从 URL 或节点数据中提取文件名
@@ -2286,7 +2306,7 @@ async function handleKeyDown(event) {
   if (event.key === 'Tab') {
     event.preventDefault() // 完全阻止 Tab 的默认焦点切换行为
     event.stopPropagation()
-    showAIAssistant.value = !showAIAssistant.value
+    toggleAIAssistantPanel()
     return
   }
   
@@ -3217,6 +3237,18 @@ onUnmounted(() => {
         <!-- 客服支持 -->
         <CanvasSupport :theme="canvasTheme" />
 
+        <!-- Skills 按钮 -->
+        <button
+          class="canvas-icon-btn canvas-skills-btn"
+          title="Skills"
+          @click="toggleSkillsPanel"
+        >
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 3l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V7l7-4z"/>
+            <path d="M9 12l2 2 4-4"/>
+          </svg>
+        </button>
+
         <!-- 主题切换按钮 -->
         <button
           class="canvas-icon-btn canvas-theme-toggle"
@@ -3427,6 +3459,8 @@ onUnmounted(() => {
       
       <!-- 原地图片编辑器 - 用于重绘、擦除 -->
       <InplaceImageEditor />
+
+      <SkillsPanel v-if="showSkillsPanel" @close="showSkillsPanel = false" />
       
       <!-- 新手引导 -->
       <OnboardingGuide
@@ -3453,7 +3487,7 @@ onUnmounted(() => {
         class="ai-assistant-trigger"
         :class="{ active: showAIAssistant }"
         :style="showAIAssistant ? { right: (aiPanelWidth + 24) + 'px' } : {}"
-        @click="showAIAssistant = !showAIAssistant"
+        @click="toggleAIAssistantPanel"
         :title="showAIAssistant ? '关闭 AI 助手' : '打开 AI 助手'"
       >
         <div class="trigger-icon">

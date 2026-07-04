@@ -9,6 +9,7 @@ const Canvas = () => import('@/views/Canvas.vue')
 const WorkflowList = () => import('@/views/WorkflowList.vue')
 const Landing3D = () => import('@/views/Landing3D.vue')
 const GroupCredits = () => import('@/views/GroupCredits.vue')
+const Docs = () => import('@/views/Docs.vue')
 
 const landingMode = import.meta.env.VITE_LANDING_MODE
 
@@ -34,6 +35,12 @@ const router = createRouter({
       name: 'canvas',
       component: Canvas,
       meta: { title: '创作画布', requiresAuth: true }
+    },
+    {
+      path: '/docs',
+      name: 'docs',
+      component: Docs,
+      meta: { title: '文档', requiresAuth: false }
     },
     {
       path: '/workflows',
@@ -193,6 +200,5 @@ router.beforeEach(async (to, from, next) => {
 })
 
 export default router
-
 
 
