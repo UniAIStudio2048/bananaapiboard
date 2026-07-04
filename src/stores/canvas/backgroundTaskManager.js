@@ -106,20 +106,8 @@ function saveTasksToStorage() {
  * 恢复所有待处理的任务
  */
 function resumePendingTasks() {
-  const now = Date.now()
   for (const [taskId, task] of tasks) {
     if (task.status === 'pending' || task.status === 'processing') {
-      const pollTimeout = getTaskStatusConfig(task.type).longRunning
-        ? VIDEO_POLL_TIMEOUT : IMAGE_POLL_TIMEOUT
-      if (now - task.createdAt > pollTimeout) {
-        console.log(`[BackgroundTaskManager] 任务 ${taskId} 已超时 (${Math.round((now - task.createdAt) / 60000)}分钟), 标记为失败`)
-        task.status = 'failed'
-        task.error = formatTaskError(task, '任务超时，请重试', '任务超时，请重试')
-        task.updatedAt = now
-        tasks.set(taskId, task)
-        notifyTaskFailed(taskId, task)
-        continue
-      }
       console.log(`[BackgroundTaskManager] 恢复任务轮询: ${taskId}`)
       startPolling(taskId)
     }
@@ -173,6 +161,15 @@ export function ensureTaskPolling({ taskId, type, nodeId, tabId }) {
   const existingTask = tasks.get(taskId)
   if (existingTask) {
     if (existingTask.status === 'completed' || existingTask.status === 'failed') {
+      const forceRefreshTerminal = existingTask.nodeId === nodeId && !pollingTimers.has(taskId)
+      if (forceRefreshTerminal) {
+        existingTask.status = 'processing'
+        existingTask.error = null
+        existingTask.updatedAt = Date.now()
+        tasks.set(taskId, existingTask)
+        saveTasksToStorage()
+        startPolling(taskId)
+      }
       return existingTask
     }
     if ((existingTask.status === 'pending' || existingTask.status === 'processing') && !pollingTimers.has(taskId)) {
@@ -207,26 +204,8 @@ function startPolling(taskId) {
       stopPolling(taskId)
       return
     }
-    
-    // 前端超时检测：根据任务类型使用不同阈值
-    const taskConfig = getTaskStatusConfig(task.type)
-    const pollTimeout = taskConfig.longRunning
-      ? VIDEO_POLL_TIMEOUT : IMAGE_POLL_TIMEOUT
-    const taskAge = Date.now() - task.createdAt
-    if (taskAge > pollTimeout) {
-      const minutes = Math.round(taskAge / 60000)
-      console.log(`[BackgroundTaskManager] 任务 ${taskId} 前端超时 (${minutes}分钟), 标记为失败`)
-      task.status = 'failed'
-      task.error = formatTaskError(task, `任务超时（${minutes}分钟），请重试`, '任务超时，请重试')
-      task.updatedAt = Date.now()
-      tasks.set(taskId, task)
-      saveTasksToStorage()
-      stopPolling(taskId)
-      notifyTaskFailed(taskId, task)
-      return
-    }
-    
     try {
+      const taskConfig = getTaskStatusConfig(task.type)
       // 根据任务类型选择对应的状态查询函数
       let getStatus
       if (taskConfig.statusApi === 'video-hd') getStatus = getVideoHdTaskStatus
@@ -312,9 +291,22 @@ function startPolling(taskId) {
           console.log(`[BackgroundTaskManager] 任务 ${taskId} success 但缺 URL，等待中 (${task._successNoUrlCount}/${SUCCESS_NO_URL_GRACE})`)
         }
       } else {
-        // 正常 processing，重置宽限计数（避免 success → processing → success 序列错误累计）
-        task._successNoUrlCount = 0
-        task.status = 'processing'
+        const pollTimeout = taskConfig.longRunning
+          ? VIDEO_POLL_TIMEOUT : IMAGE_POLL_TIMEOUT
+        const taskAge = Date.now() - task.createdAt
+        if (taskAge > pollTimeout) {
+          const minutes = Math.round(taskAge / 60000)
+          console.log(`[BackgroundTaskManager] 任务 ${taskId} 后端仍处理中且前端超时 (${minutes}分钟), 标记为失败`)
+          task.status = 'failed'
+          task.error = formatTaskError(task, `任务超时（${minutes}分钟），请重试`, '任务超时，请重试')
+          task.result = result
+          stopPolling(taskId)
+          notifyTaskFailed(taskId, task)
+        } else {
+          // 正常 processing，重置宽限计数（避免 success → processing → success 序列错误累计）
+          task._successNoUrlCount = 0
+          task.status = 'processing'
+        }
       }
       
       // 只对进行中的任务更新状态和通知进度
