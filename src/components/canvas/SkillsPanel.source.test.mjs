@@ -16,5 +16,6 @@ assert.match(source, /window\.location\.origin/)
 assert.match(source, /\/docs/)
 assert.match(source, /SKILL\.md/)
 assert.match(source, /api_key/)
+assert.match(source, /packageData\.value\?\.key\?\.api_key/)
 
 console.log('SkillsPanel source tests passed')

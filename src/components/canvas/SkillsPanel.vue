@@ -78,7 +78,7 @@ const showKey = ref(false)
 const baseUrl = ref(window.location.origin)
 
 const activeKey = computed(() => keys.value.find(key => key.status === 'active') || keys.value[0] || null)
-const fullKey = computed(() => activeKey.value?.api_key || packageData.value?.api_key || '')
+const fullKey = computed(() => activeKey.value?.api_key || packageData.value?.key?.api_key || '')
 const visibleKey = computed(() => {
   if (!fullKey.value) return '创建或重置后会显示完整 API Key'
   if (showKey.value) return fullKey.value
@@ -190,7 +190,7 @@ onMounted(loadSkills)
   max-height: calc(100vh - 90px);
   overflow: auto;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 12px;
+  border-radius: 8px;
   background: rgba(16, 18, 24, 0.96);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
   color: rgba(255, 255, 255, 0.9);
@@ -251,7 +251,7 @@ onMounted(loadSkills)
   margin: 0 18px 14px;
   padding: 14px;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
+  border-radius: 8px;
   background: rgba(255, 255, 255, 0.055);
 }
 
