@@ -41,6 +41,7 @@ import TicketDrawer from '@/components/ticket/TicketDrawer.vue'
 import TicketList from '@/components/ticket/TicketList.vue'
 import TicketDetail from '@/components/ticket/TicketDetail.vue'
 import CreateTicketForm from '@/components/ticket/CreateTicketForm.vue'
+import { Sparkles } from '@lucide/vue'
 import { useI18n } from '@/i18n'
 import {
   startAutoSave as startHistoryAutoSave,
@@ -3243,10 +3244,8 @@ onUnmounted(() => {
           title="Skills"
           @click="toggleSkillsPanel"
         >
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 3l7 4v6c0 4-3 7-7 8-4-1-7-4-7-8V7l7-4z"/>
-            <path d="M9 12l2 2 4-4"/>
-          </svg>
+          <Sparkles class="skills-burst-icon" :stroke-width="2.35" />
+          <span class="skills-button-label">Skills</span>
         </button>
 
         <!-- 主题切换按钮 -->
@@ -4124,6 +4123,87 @@ onUnmounted(() => {
   transform: translateY(-1px);
 }
 
+.canvas-skills-btn {
+  position: relative;
+  width: auto;
+  min-width: 112px;
+  height: 36px;
+  gap: 8px;
+  padding: 0 15px 0 12px;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, #fff8d6 0%, #f6d77d 28%, #b87a19 54%, #f5c96a 78%, #7b4b0b 100%);
+  border-color: rgba(255, 231, 158, 0.58);
+  border-radius: 10px;
+  color: #2d1a03;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -1px 0 rgba(74, 42, 0, 0.3),
+    0 10px 28px rgba(177, 115, 21, 0.28),
+    0 4px 14px rgba(0, 0, 0, 0.22);
+}
+
+.canvas-skills-btn::before {
+  content: '';
+  position: absolute;
+  inset: 1px;
+  pointer-events: none;
+  border-radius: 9px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.08) 42%, rgba(60, 33, 0, 0.16));
+  mix-blend-mode: screen;
+}
+
+.canvas-skills-btn::after {
+  content: '';
+  position: absolute;
+  top: -55%;
+  bottom: -55%;
+  left: -34%;
+  width: 42%;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+  transform: rotate(18deg);
+  transition: left 0.45s ease;
+}
+
+.canvas-skills-btn:hover {
+  background:
+    linear-gradient(135deg, #fffbe5 0%, #ffe08d 28%, #c98b23 54%, #ffd477 78%, #8a560d 100%);
+  border-color: rgba(255, 239, 184, 0.78);
+  color: #241301;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(74, 42, 0, 0.26),
+    0 12px 32px rgba(198, 134, 28, 0.36),
+    0 8px 22px rgba(0, 0, 0, 0.28);
+}
+
+.canvas-skills-btn:hover::after {
+  left: 96%;
+}
+
+.skills-burst-icon {
+  position: relative;
+  z-index: 1;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  color: #7a4b00;
+  filter: drop-shadow(0 1px 0 rgba(255, 248, 214, 0.68));
+}
+
+.skills-button-label {
+  position: relative;
+  z-index: 1;
+  color: #2d1a03;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  text-shadow: 0 1px 0 rgba(255, 245, 207, 0.56);
+}
+
 /* 亮色主题下的按钮样式 */
 :root.canvas-theme-light .canvas-icon-btn {
   background: rgba(255, 255, 255, 0.64);
@@ -4137,6 +4217,30 @@ onUnmounted(() => {
   border-color: rgba(24, 24, 27, 0.18);
   color: rgba(24, 24, 27, 0.92);
   box-shadow: 0 10px 28px rgba(24, 24, 27, 0.12);
+}
+
+:root.canvas-theme-light .canvas-skills-btn {
+  background:
+    linear-gradient(135deg, #fff8d6 0%, #f6d77d 28%, #b87a19 54%, #f5c96a 78%, #7b4b0b 100%);
+  border-color: rgba(171, 113, 18, 0.32);
+  color: #2d1a03;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 -1px 0 rgba(74, 42, 0, 0.22),
+    0 10px 24px rgba(156, 111, 24, 0.18),
+    0 6px 18px rgba(24, 24, 27, 0.1);
+}
+
+:root.canvas-theme-light .canvas-skills-btn:hover {
+  background:
+    linear-gradient(135deg, #fffbe5 0%, #ffe08d 28%, #c98b23 54%, #ffd477 78%, #8a560d 100%);
+  border-color: rgba(171, 113, 18, 0.46);
+  color: #241301;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 0 -1px 0 rgba(74, 42, 0, 0.22),
+    0 12px 28px rgba(156, 111, 24, 0.24),
+    0 8px 20px rgba(24, 24, 27, 0.12);
 }
 
 /* 主题切换按钮特殊效果 */

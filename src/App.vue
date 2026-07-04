@@ -222,11 +222,12 @@ const isCommunityLandingPage = computed(() => route.path === '/' && import.meta.
 const isCommunityPage = computed(() => route.path.startsWith('/community') || isCommunityLandingPage.value)
 const isHomeNoticeVisible = computed(() => route.path === '/' || route.path === '/community')
 const hasIcpFooterLinks = computed(() => Boolean(icpConfig.value.icp_number || icpConfig.value.icp_license_number || icpConfig.value.network_culture_license || icpConfig.value.broadcast_license))
+const isStandaloneSurface = computed(() => route.path === '/canvas' || route.path === '/workflows' || route.path === '/docs' || route.name === 'communityWorkflow')
+const isGlobalNavVisible = computed(() => route.path !== '/' && !isStandaloneSurface.value && !route.path.startsWith('/community'))
 const isIcpFooterVisible = computed(() => {
-  const isStandaloneSurface = route.path === '/canvas' || route.path === '/workflows' || route.name === 'communityWorkflow'
   const isThreeDLandingPage = route.path === '/' && !isCommunityLandingPage.value
 
-  return !isStandaloneSurface && !isThreeDLandingPage && icpConfig.value.enabled && hasIcpFooterLinks.value
+  return !isStandaloneSurface.value && !isThreeDLandingPage && icpConfig.value.enabled && hasIcpFooterLinks.value
 })
 
 </script>
@@ -234,7 +235,7 @@ const isIcpFooterVisible = computed(() => {
 <template>
   <div class="min-h-screen flex flex-col">
     <!-- 导航栏 - 落地页、画布页、工作流页和社区页面不显示 -->
-    <nav v-if="route.path !== '/' && route.path !== '/canvas' && route.path !== '/workflows' && !route.path.startsWith('/community')" class="glass sticky top-0 z-50 border-b border-slate-200/50 dark:border-dark-600/50">
+    <nav v-if="isGlobalNavVisible" class="glass sticky top-0 z-50 border-b border-slate-200/50 dark:border-dark-600/50">
       <div class="mx-auto" 
         :class="isWidescreenMode && route.path === '/' ? 'px-0' : 'max-w-7xl px-4 sm:px-6 lg:px-8'">
         <div class="flex justify-between items-center min-h-16 py-2 gap-2 sm:gap-4"
