@@ -14,22 +14,24 @@ test('video node persists all visible mode and format selections to node data', 
   const watcherBlock = source.slice(watcherStart, watcherEnd)
 
   for (const stateName of [
+    'selectedKlingOfficialQuality',
     'viduMode',
     'selectedKlingO1Mode',
     'omniKeepSound',
-    'selectedKlingV3OmniMode',
-    'v3OmniKeepSound'
+    'selectedKlingV3OmniMode'
   ]) {
     assert.match(watcherBlock, new RegExp(`\\b${stateName}\\b`), `${stateName} should be watched`)
   }
 
   for (const dataKey of [
+    'klingOfficialQuality',
     'viduMode',
     'klingO1Mode',
     'omniKeepSound',
-    'klingV3OmniMode',
-    'v3OmniKeepSound'
+    'klingV3OmniMode'
   ]) {
     assert.match(watcherBlock, new RegExp(`${dataKey}:`), `${dataKey} should be written to node data`)
   }
+
+  assert.doesNotMatch(watcherBlock, /\bv3OmniKeepSound\b/, 'hidden v3 Omni sound toggle should not be persisted')
 })

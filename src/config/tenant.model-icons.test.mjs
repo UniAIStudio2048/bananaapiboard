@@ -282,6 +282,64 @@ test('getAvailableVideoModels keeps VectorEngine Grok JSON model out of VEO merg
   assert.equal(models.some(m => m.value === 'veo3'), false)
 })
 
+test('getAvailableVideoModels keeps Kling v3 Omni variants split by configured model id and price', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    video_models: [
+      {
+        name: 'kling-v3-omni-fast',
+        displayName: 'Kling v3 Omni 720p',
+        enabled: true,
+        apiType: 'kling-v3-omni',
+        pointsCost: { '6': 66, '10': 110 },
+        costPerSecond: 11,
+        durations: ['6', '10'],
+        klingConfig: { quality: 'std', mode: 'std' }
+      },
+      {
+        name: 'kling-v3-omni-pro',
+        displayName: '可灵 v3 Omni 1080P',
+        enabled: true,
+        apiType: 'kling-v3-omni',
+        pointsCost: { '6': 90, '10': 150 },
+        costPerSecond: 15,
+        durations: ['6', '10'],
+        klingConfig: { quality: 'pro', mode: 'pro' }
+      },
+      {
+        name: 'kling-v3-omni-4k',
+        displayName: '可灵 v3 Omni 4K版',
+        enabled: true,
+        apiType: 'kling-v3-omni',
+        pointsCost: { '6': 216, '10': 360 },
+        costPerSecond: 36,
+        durations: ['6', '10'],
+        klingConfig: { quality: '4k', mode: '4k' }
+      }
+    ],
+    video_model_groups: [
+      {
+        name: 'kling',
+        models: ['kling-v3-omni-fast', 'kling-v3-omni-pro', 'kling-v3-omni-4k']
+      }
+    ]
+  })
+
+  const models = tenant.getAvailableVideoModels()
+  assert.deepEqual(
+    models.filter(m => m.apiType === 'kling-v3-omni').map(m => m.value),
+    ['kling-v3-omni-fast', 'kling-v3-omni-pro', 'kling-v3-omni-4k']
+  )
+  assert.equal(models.some(m => m.value === 'klingV3Omni'), false)
+  assert.deepEqual(models.find(m => m.value === 'kling-v3-omni-fast')?.pointsCost, { '6': 66, '10': 110 })
+  assert.deepEqual(models.find(m => m.value === 'kling-v3-omni-pro')?.pointsCost, { '6': 90, '10': 150 })
+  assert.deepEqual(models.find(m => m.value === 'kling-v3-omni-4k')?.pointsCost, { '6': 216, '10': 360 })
+  assert.equal(models.find(m => m.value === 'kling-v3-omni-4k')?.klingConfig?.quality, '4k')
+})
+
 test('getAvailableImageModels merges entitlements and hides private unavailable models', () => {
   tenant.updateRuntimeConfig({
     modelNames: { image: {}, video: {} },

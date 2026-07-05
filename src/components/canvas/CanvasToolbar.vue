@@ -90,12 +90,24 @@ function handleNodePanelMouseEnter() {
   showNodePanel.value = true
 }
 
+function getVisibleCanvasFlowPosition() {
+  const container = document.querySelector('.canvas-board')
+  const rect = container?.getBoundingClientRect()
+  const viewport = canvasStore.viewport || { x: 0, y: 0, zoom: 1 }
+  const zoom = viewport.zoom || 1
+
+  const screenX = rect ? rect.width / 2 : window.innerWidth / 2
+  const screenY = rect ? rect.height / 2 : window.innerHeight / 2
+
+  return {
+    x: (screenX - (viewport.x || 0)) / zoom - 120,
+    y: (screenY - (viewport.y || 0)) / zoom - 50
+  }
+}
+
 // 创建节点
 function createNode(nodeType) {
-  const position = {
-    x: 300,
-    y: window.innerHeight / 2 - 100
-  }
+  const position = getVisibleCanvasFlowPosition()
   
   canvasStore.addNode({
     type: nodeType,
@@ -111,7 +123,9 @@ function handleUpload() {
   // 触发文件上传逻辑
   canvasStore.openNodeSelector(
     { x: 80, y: window.innerHeight / 2 - 100 },
-    'toolbar'
+    'toolbar',
+    null,
+    getVisibleCanvasFlowPosition()
   )
   showNodePanel.value = false
 }

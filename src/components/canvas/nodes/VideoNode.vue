@@ -378,7 +378,58 @@ function getDefaultVideoModel(mode = 'text') {
 const selectedModel = ref(props.data.model || getDefaultVideoModel(props.data.generationMode || 'text'))
 const selectedAspectRatio = ref(props.data.aspectRatio || '16:9')
 const selectedDuration = ref(props.data.duration || '10')
+const selectedKlingOfficialQuality = ref(props.data.klingOfficialQuality || props.data.quality || '')
 const selectedCount = ref(props.data.count || 1)
+
+// 可用模型列表（从配置动态获取，支持新增模型自动同步）
+const models = computed(() => {
+  const allModels = getAvailableVideoModels({ disableVeoMerge: true })
+
+  // 如果有模型启用检查函数，则过滤
+  let filteredModels = allModels
+  if (typeof isModelEnabled === 'function') {
+    filteredModels = allModels.filter(m => isModelEnabled(m.value, 'video'))
+  }
+
+  // 🔧 根据实际图片输入状态判断当前模式（而不是依赖可能过时的 generationMode）
+  // 当有图片连接时，显示图生视频模型；否则显示文生视频模型
+  // 注意：直接检查上游连接，避免依赖顺序问题
+  const allEdges = [...canvasStore.edges]
+  const allNodes = [...canvasStore.nodes]
+  const IMAGE_TYPES = ['image', 'image-input', 'image-gen', 'flux-image', 'image-expand']
+  const upstreamEdges = allEdges.filter(edge => edge.target === props.id)
+  const hasImageInput = upstreamEdges.some(edge => {
+    const sourceNode = allNodes.find(n => n.id === edge.source)
+    return sourceNode && IMAGE_TYPES.includes(sourceNode.type)
+  })
+  const currentMode = hasImageInput ? 'i2v' : 't2v'
+
+  const result = filteredModels.filter(m => {
+    const supportedModes = m.supportedModes
+    if (!supportedModes) return true // 无配置默认支持所有模式
+
+    // 支持两种格式：数组 ['t2v', 'i2v'] 或 对象 { t2v: true, i2v: true }
+    if (Array.isArray(supportedModes)) {
+      return supportedModes.includes(currentMode)
+    } else if (typeof supportedModes === 'object') {
+      return supportedModes[currentMode] === true
+    }
+    return true
+  })
+
+  // 调试日志（仅在开发环境或需要时输出）
+  if (process.env.NODE_ENV === 'development') {
+    console.log('[VideoNode] models 计算属性更新:', {
+      hasImageInput,
+      currentMode,
+      allModelsCount: allModels.length,
+      filteredCount: result.length,
+      modelNames: result.map(m => m.value)
+    })
+  }
+
+  return result
+})
 
 // 生成次数选项循环：1 -> 2 -> 4 -> 1
 const countOptions = [1, 2, 4]
@@ -1582,15 +1633,31 @@ const omniKeepSound = ref(props.data.omniKeepSound || 'yes')
 // ========== Kling v3 Omni 全能视频 ==========
 // 当前模型是否为 Kling v3 Omni 整合模型
 const isKlingV3OmniModel = computed(() => {
-  return !!currentModelConfig.value?.isKlingV3OmniModel
+  return !!currentModelConfig.value?.isKlingV3OmniModel ||
+    currentModelConfig.value?.apiType === 'kling-v3-omni'
 })
 
 // Kling v3 Omni 模式选择
 const selectedKlingV3OmniMode = ref(props.data.klingV3OmniMode || 'text2video')
 
+function getDefaultKlingV3OmniModes(modelConfig = {}) {
+  const actualModel = modelConfig.value || modelConfig.name || selectedModel.value
+  return [
+    { value: 'text2video', label: '文生视频', subMode: 'text2video', actualModel, maxImages: 0, description: '纯文本生成视频' },
+    { value: 'image2video', label: '图生视频', subMode: 'image2video', actualModel, maxImages: 1, description: '单张首帧图生成视频' },
+    { value: 'first_last_frame', label: '首尾帧', subMode: 'first_last_frame', actualModel, maxImages: 2, description: '首帧和尾帧控制视频' },
+    { value: 'subject_control', label: '主体控制', subMode: 'subject_control', actualModel, maxImages: 7, description: '使用参考图控制主体' },
+    { value: 'video_reference', label: '视频参考', subMode: 'video_reference', actualModel, maxImages: 4, description: '参考视频风格或动作' },
+    { value: 'multi_shot', label: '多镜头', subMode: 'multi_shot', actualModel, maxImages: 7, description: '多镜头叙事视频' }
+  ]
+}
+
 // Kling v3 Omni 可用模式列表
 const klingV3OmniModes = computed(() => {
-  return currentModelConfig.value?.klingV3OmniModes || []
+  const modes = currentModelConfig.value?.klingV3OmniModes
+  return Array.isArray(modes) && modes.length > 0
+    ? modes
+    : (isKlingV3OmniModel.value ? getDefaultKlingV3OmniModes(currentModelConfig.value) : [])
 })
 
 // 当前选中的 Kling v3 Omni 模式配置对象
@@ -1601,11 +1668,8 @@ const currentKlingV3OmniModeConfig = computed(() => {
 // 获取 Kling v3 Omni 实际要使用的模型名称
 const klingV3OmniActualModel = computed(() => {
   if (!isKlingV3OmniModel.value) return selectedModel.value
-  return currentKlingV3OmniModeConfig.value?.actualModel || selectedModel.value
+  return currentModelConfig.value?.value || selectedModel.value
 })
-
-// v3 Omni 视频参考模式：保留原声
-const v3OmniKeepSound = ref(props.data.v3OmniKeepSound || 'yes')
 
 // 获取当前选中的模型对象
 const currentModelConfig = computed(() => {
@@ -1635,6 +1699,60 @@ const isOmniVideoModel = computed(() => {
   return getOmniModelCandidates(currentModelConfig.value, selectedModel.value).some(isOmniVideoModelName)
 })
 
+function isKlingOfficialDurationModel(modelConfig = {}) {
+  return modelConfig.apiType === 'kling-3-turbo' ||
+    modelConfig.apiType === 'kling-v3-omni' ||
+    modelConfig.isKlingV3OmniModel === true
+}
+
+const klingOfficialDurationOptions = Array.from({ length: 13 }, (_, index) => String(index + 3))
+
+function normalizeKlingOfficialQuality(modelConfig = {}, value) {
+  const apiType = modelConfig.apiType
+  const klingConfig = modelConfig.klingConfig || {}
+
+  if (apiType === 'kling-3-turbo') {
+    const fallback = klingConfig.quality || klingConfig.resolution || modelConfig.quality || modelConfig.resolution || '720p'
+    const normalized = String(value || fallback).trim().toLowerCase()
+    return normalized === '1080p' ? '1080p' : '720p'
+  }
+
+  const fallback = klingConfig.quality || klingConfig.mode || modelConfig.quality || modelConfig.mode || 'std'
+  const normalized = String(value || fallback).trim().toLowerCase()
+  return ['std', 'pro', '4k'].includes(normalized) ? normalized : 'std'
+}
+
+const klingOfficialQualityOptions = computed(() => {
+  const modelConfig = currentModelConfig.value || {}
+  if (modelConfig.apiType === 'kling-3-turbo') {
+    return [
+      { value: '720p', label: '720P' },
+      { value: '1080p', label: '1080P' }
+    ]
+  }
+
+  if (modelConfig.apiType === 'kling-v3-omni' || modelConfig.isKlingV3OmniModel === true) {
+    const options = [
+      { value: 'std', label: 'std' },
+      { value: 'pro', label: 'pro' },
+      { value: '4k', label: '4K' }
+    ]
+    return selectedKlingV3OmniMode.value === 'video_reference'
+      ? options.filter(option => option.value !== '4k')
+      : options
+  }
+
+  return []
+})
+
+const klingOfficialRequestQuality = computed(() => {
+  const modelConfig = currentModelConfig.value || {}
+  if (modelConfig.apiType === 'kling-v3-omni' || modelConfig.isKlingV3OmniModel === true) {
+    return normalizeKlingOfficialQuality(modelConfig)
+  }
+  return normalizeKlingOfficialQuality(modelConfig, selectedKlingOfficialQuality.value)
+})
+
 function buildOmniReferenceUrls(images = referenceImages.value, videos = referenceVideos.value) {
   const urls = []
   const add = value => {
@@ -1650,6 +1768,10 @@ function buildOmniReferenceUrls(images = referenceImages.value, videos = referen
 
 // 可用的时长选项（优先从模型配置的 durations 数组获取，兼容从 pointsCost 计算）
 const availableDurations = computed(() => {
+  if (isKlingOfficialDurationModel(currentModelConfig.value)) {
+    return klingOfficialDurationOptions
+  }
+
   // 优先使用模型配置中的 durations 数组
   const modelDurations = currentModelConfig.value.durations
   if (modelDurations !== undefined && modelDurations !== null) {
@@ -1672,55 +1794,15 @@ const availableDurations = computed(() => {
   return ['10', '15']
 })
 
-// 可用模型列表（从配置动态获取，支持新增模型自动同步）
-const models = computed(() => {
-  const allModels = getAvailableVideoModels({ disableVeoMerge: true })
-  
-  // 如果有模型启用检查函数，则过滤
-  let filteredModels = allModels
-  if (typeof isModelEnabled === 'function') {
-    filteredModels = allModels.filter(m => isModelEnabled(m.value, 'video'))
+watch([currentModelConfig, selectedKlingV3OmniMode, klingOfficialQualityOptions], () => {
+  if (!isKlingOfficialDurationModel(currentModelConfig.value)) return
+  const options = klingOfficialQualityOptions.value.map(option => option.value)
+  const normalized = normalizeKlingOfficialQuality(currentModelConfig.value, selectedKlingOfficialQuality.value)
+  const nextQuality = options.includes(normalized) ? normalized : (options[0] || normalized)
+  if (selectedKlingOfficialQuality.value !== nextQuality) {
+    selectedKlingOfficialQuality.value = nextQuality
   }
-  
-  // 🔧 根据实际图片输入状态判断当前模式（而不是依赖可能过时的 generationMode）
-  // 当有图片连接时，显示图生视频模型；否则显示文生视频模型
-  // 注意：直接检查上游连接，避免依赖顺序问题
-  const allEdges = [...canvasStore.edges]
-  const allNodes = [...canvasStore.nodes]
-  const IMAGE_TYPES = ['image', 'image-input', 'image-gen', 'flux-image', 'image-expand']
-  const upstreamEdges = allEdges.filter(edge => edge.target === props.id)
-  const hasImageInput = upstreamEdges.some(edge => {
-    const sourceNode = allNodes.find(n => n.id === edge.source)
-    return sourceNode && IMAGE_TYPES.includes(sourceNode.type)
-  })
-  const currentMode = hasImageInput ? 'i2v' : 't2v'
-  
-  const result = filteredModels.filter(m => {
-    const supportedModes = m.supportedModes
-    if (!supportedModes) return true // 无配置默认支持所有模式
-    
-    // 支持两种格式：数组 ['t2v', 'i2v'] 或 对象 { t2v: true, i2v: true }
-    if (Array.isArray(supportedModes)) {
-      return supportedModes.includes(currentMode)
-    } else if (typeof supportedModes === 'object') {
-      return supportedModes[currentMode] === true
-    }
-    return true
-  })
-  
-  // 调试日志（仅在开发环境或需要时输出）
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[VideoNode] models 计算属性更新:', {
-      hasImageInput,
-      currentMode,
-      allModelsCount: allModels.length,
-      filteredCount: result.length,
-      modelNames: result.map(m => m.value)
-    })
-  }
-  
-  return result
-})
+}, { immediate: true })
 
 watch(seedance2Modes, (modes) => {
   const defaultMode = getDefaultSeedance2ModeForModel(currentModelConfig.value)
@@ -3091,7 +3173,7 @@ const pointsCost = computed(() => {
   }
   
   // Kling 2.6+ 声音模式：开启时积分翻倍
-  if (isKling26Plus.value && klingSoundEnabled.value) {
+  if (isKling26Plus.value && !isKlingV3OmniModel.value && klingSoundEnabled.value) {
     cost = cost * 2
   }
   
@@ -3105,6 +3187,15 @@ const pointsCost = computed(() => {
   }
   
   return cost
+})
+
+const klingOfficialSelectedDurationCost = computed(() => {
+  return isKlingOfficialDurationModel(currentModelConfig.value) ? pointsCost.value : 0
+})
+
+const klingOfficialSelectedDurationCostText = computed(() => {
+  // Keep this in script because templates unwrap refs before property access.
+  return selectedDuration.value ? `${selectedDuration.value}s = ${formatPoints(klingOfficialSelectedDurationCost.value)}积分` : ''
 })
 
 // 动作迁移模型每秒积分（用于显示 "X积分/s" 格式）
@@ -3389,12 +3480,13 @@ function handleMotionImitation() {
 }
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, promptText, generationMode, viduMode, viduOffPeak, viduResolution, vectorengineResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode, selectedKlingO1Mode, omniKeepSound, selectedKlingV3OmniMode, v3OmniKeepSound, selectedWanMode, selectedWanAnimateMode],
-  ([model, aspectRatio, duration, count, prompt, mode, viduMd, offPeak, resolution, veResolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode, klingO1Mode, keepSound, klingV3OmniMode, v3KeepSound, wanMode, wanAnimateMode]) => {
+watch([selectedModel, selectedAspectRatio, selectedDuration, selectedKlingOfficialQuality, selectedCount, promptText, generationMode, viduMode, viduOffPeak, viduResolution, vectorengineResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode, selectedKlingO1Mode, omniKeepSound, selectedKlingV3OmniMode, selectedWanMode, selectedWanAnimateMode],
+  ([model, aspectRatio, duration, klingOfficialQuality, count, prompt, mode, viduMd, offPeak, resolution, veResolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode, klingO1Mode, keepSound, klingV3OmniMode, wanMode, wanAnimateMode]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       aspectRatio,
       duration,
+      klingOfficialQuality: klingOfficialQuality,
       count,
       prompt,
       generationMode: mode,
@@ -3417,7 +3509,6 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedCount, prom
       klingO1Mode: klingO1Mode,
       omniKeepSound: keepSound,
       klingV3OmniMode: klingV3OmniMode,
-      v3OmniKeepSound: v3KeepSound,
       wanMode,
       wanAnimateMode
     })
@@ -4060,7 +4151,6 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
 
     if (selectedKlingV3OmniMode.value === 'video_reference') {
       // 视频参考模式：需要上游视频
-      formData.append('kling_omni_keep_sound', v3OmniKeepSound.value)
       const videoUrl = upstreamVideoUrl.value
       if (videoUrl) {
         formData.append('kling_omni_video_url', videoUrl)
@@ -4088,6 +4178,9 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   // VEO3 / Wan 视频编辑不需要时长参数
   if (!isVeo3Model.value && !(isWanModel.value && selectedWanMode.value === 'videoedit')) {
     formData.append('duration', selectedDuration.value)
+  }
+  if (isKlingOfficialDurationModel(currentModelConfig.value)) {
+    formData.append('quality', klingOfficialRequestQuality.value)
   }
   const negativePrompt = props.data?.negativePrompt || props.data?.negative_prompt || ''
   if (negativePrompt) {
@@ -4134,7 +4227,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   }
   
   // Kling 模型特有参数：摄像机控制
-  if (isKlingModel.value && klingCameraEnabled.value) {
+  if (isKlingModel.value && !isKlingV3OmniModel.value && klingCameraEnabled.value) {
     const cameraControl = buildKlingCameraControl()
     if (cameraControl) {
       formData.append('camera_control', JSON.stringify(cameraControl))
@@ -4143,7 +4236,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   }
   
   // Kling 2.6+ 模型特有参数：声音开关和音色
-  if (isKling26Plus.value) {
+  if (isKling26Plus.value && !isKlingV3OmniModel.value) {
     // 声音开关参数
     formData.append('kling_sound', klingSoundEnabled.value ? 'on' : 'off')
     console.log('[VideoNode] Kling 声音:', klingSoundEnabled.value ? 'on' : 'off')
@@ -8366,6 +8459,7 @@ function handleToolbarPreview() {
               {{ res.label }}
             </button>
           </div>
+
         </div>
         
         <div class="config-right">
@@ -8385,6 +8479,9 @@ function handleToolbarPreview() {
             </template>
             <template v-else-if="isWanModel && selectedWanMode === 'animate_mix'">
               {{ formatPoints(wanAnimateCostPerSecond) }}积分/s
+            </template>
+            <template v-else-if="isKlingOfficialDurationModel(currentModelConfig)">
+              {{ klingOfficialSelectedDurationCostText }}
             </template>
             <template v-else>
               {{ formatPoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}
@@ -8459,7 +8556,7 @@ function handleToolbarPreview() {
       </template>
       
       <!-- Kling 高级选项 - 摄像机控制（动作迁移模型不显示） -->
-      <template v-if="isKlingModel && !isKlingMotionControl">
+      <template v-if="isKlingModel && !isKlingMotionControl && !isKlingV3OmniModel">
         <!-- 展开/收起按钮 -->
         <button class="sora2-collapse-trigger" @click="showKlingAdvancedOptions = !showKlingAdvancedOptions">
           <span class="sora2-collapse-icon" :class="{ 'expanded': showKlingAdvancedOptions }">∧</span>
@@ -8748,14 +8845,6 @@ function handleToolbarPreview() {
             >
               <span class="sd2-mode-label">{{ opt.label }}</span>
             </button>
-          </div>
-          <!-- 视频参考模式：保留原声开关 -->
-          <div v-if="selectedKlingV3OmniMode === 'video_reference'" class="sd2-o1-option-row">
-            <span class="sd2-o1-option-label">原声</span>
-            <div class="sd2-o1-option-btns">
-              <button @click="v3OmniKeepSound = 'yes'" :class="['sd2-mode-btn sd2-mode-btn-sm', { active: v3OmniKeepSound === 'yes' }]">保留</button>
-              <button @click="v3OmniKeepSound = 'no'" :class="['sd2-mode-btn sd2-mode-btn-sm', { active: v3OmniKeepSound === 'no' }]">不保留</button>
-            </div>
           </div>
           <div class="sd2-mode-desc">{{ currentKlingV3OmniModeConfig.description || '' }}</div>
           <div v-if="selectedKlingV3OmniMode === 'video_reference' && !hasUpstreamVideo" class="sd2-mode-warn">

@@ -259,6 +259,8 @@ function getVideoResolutionOptions(modelConfig = {}) {
   return modelConfig.resolutionOptions || modelConfig.vectorengineConfig?.resolutions || undefined
 }
 
+const klingOfficialDurations = Array.from({ length: 13 }, (_, index) => String(index + 3))
+
 function getModelEntitlement(type, modelKey) {
   return config.modelEntitlements?.[type]?.[modelKey] || null
 }
@@ -1114,9 +1116,6 @@ export const getAvailableVideoModels = (options = {}) => {
     // 🆕 Kling O1 整合逻辑：收集所有 kling-omni / kling-omni-edit 子模型
     const klingO1SubModels = []
 
-    // 🆕 Kling v3 Omni 整合逻辑：收集所有 kling-v3-omni 子模型
-    const klingV3OmniSubModels = []
-    
     for (const modelConfig of videoModelsConfig) {
       const key = modelConfig.name
       if (!key) continue
@@ -1138,11 +1137,6 @@ export const getAvailableVideoModels = (options = {}) => {
       // 检测 Kling O1 模型（通过 apiType）
       if (modelConfig.apiType === 'kling-omni' || modelConfig.apiType === 'kling-omni-edit') {
         klingO1SubModels.push(modelConfig)
-      }
-
-      // 检测 Kling v3 Omni 模型（通过 apiType）
-      if (modelConfig.apiType === 'kling-v3-omni') {
-        klingV3OmniSubModels.push(modelConfig)
       }
     }
     
@@ -1447,134 +1441,11 @@ export const getAvailableVideoModels = (options = {}) => {
       console.log('[tenant] Kling O1 模型已整合，子模型数量:', klingO1SubModels.length, '模式:', klingO1Modes.map(m => m.label))
     }
 
-    // ========== Kling v3 Omni 全能视频整合 ==========
-    let klingV3OmniEntry = null
-
-    if (klingV3OmniSubModels.length > 0) {
-      const klingV3OmniModes = []
-
-      const omniModel = klingV3OmniSubModels[0]
-      const baseActualModel = omniModel.name
-      const basePointsCost = omniModel.pointsCost || { '3': 30, '5': 50, '8': 80, '10': 100, '12': 120, '15': 150 }
-      const enabledModes = omniModel.klingV3OmniModes || {}
-
-      // 文生视频模式
-      if (enabledModes.t2v !== false) {
-        klingV3OmniModes.push({
-          value: 'text2video',
-          label: '文生视频',
-          description: '纯文本描述生成视频',
-          subMode: 'text2video',
-          actualModel: baseActualModel,
-          maxImages: 0,
-          needsVideo: false,
-          pointsCost: basePointsCost
-        })
-      }
-
-      // 图生视频模式
-      if (enabledModes.i2v !== false) {
-        klingV3OmniModes.push({
-          value: 'image2video',
-          label: '图生视频',
-          description: '首帧图片+文本生成视频',
-          subMode: 'image2video',
-          actualModel: baseActualModel,
-          maxImages: 1,
-          needsVideo: false,
-          pointsCost: basePointsCost
-        })
-      }
-
-      // 首尾帧模式
-      if (enabledModes.first_last !== false) {
-        klingV3OmniModes.push({
-          value: 'first_last_frame',
-          label: '首尾帧',
-          description: '首帧+尾帧图片控制',
-          subMode: 'first_last_frame',
-          actualModel: baseActualModel,
-          maxImages: 2,
-          needsVideo: false,
-          pointsCost: basePointsCost
-        })
-      }
-
-      // 主体控制模式
-      if (enabledModes.subject !== false) {
-        klingV3OmniModes.push({
-          value: 'subject_control',
-          label: '主体控制',
-          description: '角色/元素参考图（最多7张），prompt用<<<image_N>>>引用',
-          subMode: 'subject_control',
-          actualModel: baseActualModel,
-          maxImages: 7,
-          needsVideo: false,
-          pointsCost: basePointsCost
-        })
-      }
-
-      // 视频参考模式
-      if (enabledModes.video_ref !== false) {
-        klingV3OmniModes.push({
-          value: 'video_reference',
-          label: '视频参考',
-          description: '参考视频风格迁移（仅std/pro，3-10s）',
-          subMode: 'video_reference',
-          actualModel: baseActualModel,
-          maxImages: 4,
-          needsVideo: true,
-          pointsCost: basePointsCost
-        })
-      }
-
-      // 多镜头模式
-      if (enabledModes.multi_shot !== false) {
-        klingV3OmniModes.push({
-          value: 'multi_shot',
-          label: '多镜头',
-          description: '多镜头分镜叙事',
-          subMode: 'multi_shot',
-          actualModel: baseActualModel,
-          maxImages: 7,
-          needsVideo: false,
-          pointsCost: basePointsCost
-        })
-      }
-
-      klingV3OmniEntry = {
-        value: 'klingV3Omni',
-        label: 'Kling v3 Omni',
-        icon: 'K',
-        description: '可灵 v3 Omni 全能视频，支持文生视频、图生视频、首尾帧、主体控制、视频参考、多镜头',
-        hasDurationPricing: true,
-        pointsCost: basePointsCost,
-        durations: ['3', '5', '8', '10', '12', '15'],
-        aspectRatios: omniModel.aspectRatios || [
-          { value: '16:9', label: '横屏 (16:9)' },
-          { value: '9:16', label: '竖屏 (9:16)' },
-          { value: '1:1', label: '方形 (1:1)' }
-        ],
-        supportedModes: { t2v: true, i2v: true, a2v: false },
-        apiType: omniModel.apiType,
-        isKlingV3OmniModel: true,
-        isKlingOmni: true,
-        klingV3OmniModes,
-        defaultKlingV3OmniMode: omniModel.defaultKlingV3OmniMode || omniModel.defaultVideoSubMode || omniModel.seedanceConfig?.defaultMode || 'text2video',
-        maxRefImages: 7,
-        vendor: omniModel.vendor || 'Kling',
-        vendorLogo: omniModel.vendorLogo || ''
-      }
-
-      console.log('[tenant] Kling v3 Omni 模型已整合，子模型数量:', klingV3OmniSubModels.length, '模式:', klingV3OmniModes.map(m => m.label))
-    }
-
     // 🔧 按原始配置顺序处理所有模型，在 VEO/KlingO1 位置插入整合入口
     // 遍历原始配置，保持顺序
     let veoInserted = false
     let veo4kInserted = false
     let klingO1Inserted = false
-    let klingV3OmniInserted = false
     
     for (let i = 0; i < videoModelsConfig.length; i++) {
       const modelConfig = videoModelsConfig[i]
@@ -1652,16 +1523,6 @@ export const getAvailableVideoModels = (options = {}) => {
         }
         continue  // 跳过 Kling O1 子模型，不单独显示
       }
-
-      // 🆕 Kling v3 Omni 整合逻辑：遇到第一个 kling-v3-omni 子模型时插入整合入口，跳过所有子模型
-      const isKlingV3OmniSubModel = modelConfig.apiType === 'kling-v3-omni'
-      if (isKlingV3OmniSubModel && klingV3OmniEntry) {
-        if (!klingV3OmniInserted) {
-          models.push(klingV3OmniEntry)
-          klingV3OmniInserted = true
-        }
-        continue  // 跳过 Kling v3 Omni 子模型，不单独显示
-      }
       
       const modelPricingConfig = pricing[key] || {}
       const defaultConfig = defaultModelConfig[key] || {}
@@ -1734,6 +1595,9 @@ export const getAvailableVideoModels = (options = {}) => {
         // API 类型（用于判断是否是 Vidu 模型）
         apiType: modelConfig.apiType,
         actualModel: modelConfig.actualModel || modelConfig.seedanceOpenConfig?.model || modelConfig.seedanceConfig?.model || key,
+        klingConfig: modelConfig.klingConfig,
+        quality: modelConfig.quality,
+        resolution: modelConfig.resolution,
         seedanceConfig: modelConfig.seedanceConfig,
         seedanceOpenConfig: modelConfig.seedanceOpenConfig,
         happyHorseConfig: modelConfig.happyHorseConfig,
@@ -1912,6 +1776,9 @@ export const getAvailableVideoModels = (options = {}) => {
         // API 类型（用于判断是否是 Vidu 模型）
         apiType: modelFullConfig.apiType,
         actualModel: modelFullConfig.actualModel || modelFullConfig.seedanceOpenConfig?.model || modelFullConfig.seedanceConfig?.model || key,
+        klingConfig: modelFullConfig.klingConfig,
+        quality: modelFullConfig.quality,
+        resolution: modelFullConfig.resolution,
         seedanceConfig: modelFullConfig.seedanceConfig,
         seedanceOpenConfig: modelFullConfig.seedanceOpenConfig,
         happyHorseConfig: modelFullConfig.happyHorseConfig,
