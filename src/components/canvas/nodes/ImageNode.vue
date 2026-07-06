@@ -19,7 +19,7 @@ import { useTeamStore } from '@/stores/team'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints, removeImageBackground } from '@/api/canvas/nodes'
 import { extractVideoFrame } from '@/api/canvas/workflow'
 import { createQuickSeedanceCharacterAsset, listAssetGroups, pollAssetStatus } from '@/api/canvas/volcengine-assets'
-import { registerTask, removeCompletedTask, getTasksByNodeId } from '@/stores/canvas/backgroundTaskManager'
+import { registerTask, removeCompletedTask, getTasksByNodeId, ensureTaskPolling } from '@/stores/canvas/backgroundTaskManager'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
@@ -1016,6 +1016,19 @@ function handleBackgroundTaskFailed(event) {
   
   console.log(`[ImageNode] 后台任务失败: ${taskId}`, task)
 
+  const outputUrls = task.type === 'image' ? collectImageTaskOutputUrls(task.result) : []
+  if (outputUrls.length > 0) {
+    canvasStore.updateNodeData(props.id, {
+      status: 'success',
+      error: null,
+      progress: null,
+      output: { type: 'image', urls: [outputUrls[0]], url: outputUrls[0] }
+    })
+    invalidateCanvasHistory()
+    removeCompletedTask(taskId)
+    return
+  }
+
   if (task.type === 'image-hd' || task.type === 'image-panorama' || task.type === 'image-cutout') {
     canvasStore.updateNodeData(props.id, {
       status: 'error',
@@ -1087,6 +1100,33 @@ function handleBackgroundTaskNetworkRecovered(event) {
 
 // 检查并恢复已完成的后台任务
 function checkAndRestoreBackgroundTasks() {
+  const recoverableTaskId = props.data?.taskId
+  const shouldReconnectServerTask = recoverableTaskId &&
+    (props.data?.status === 'error' || props.data?.status === 'processing' || props.data?.status === 'pending') &&
+    props.data?.extractedFromVideo !== true &&
+    props.data?.sourceType !== 'multiangle' &&
+    props.data?.localProcessing !== 'spot-heal'
+
+  if (shouldReconnectServerTask) {
+    const reconnectedTask = ensureTaskPolling({
+      taskId: recoverableTaskId,
+      type: props.data?.taskType || 'image',
+      nodeId: props.id,
+      tabId: canvasStore.getCurrentTab?.()?.id || canvasStore.activeTabId
+    })
+    if (reconnectedTask && (reconnectedTask.status === 'pending' || reconnectedTask.status === 'processing')) {
+      canvasStore.updateNodeData(props.id, {
+        status: 'processing',
+        error: null,
+        progress: props.data?.taskType === 'image-hd'
+          ? '高清处理中...'
+          : (props.data?.taskType === 'image-panorama'
+            ? '全景图生成中...'
+            : (props.data?.taskType === 'image-cutout' ? '抠图处理中...' : '生成中...'))
+      })
+    }
+  }
+
   const nodeTasks = getTasksByNodeId(props.id)
   const ZOMBIE_THRESHOLD = 15 * 60 * 1000 // 15 分钟
   
@@ -7904,7 +7944,6 @@ async function handleDrop(event) {
               <div class="error-icon">{{ isContentSafetyError(data.error || errorMessage) ? '🛡️' : isTimeoutError(data.error || errorMessage) ? '⏱️' : '❌' }}</div>
               <div class="error-text">{{ data.error || errorMessage || '生成失败' }}</div>
               <div v-if="getErrorHint(data.error || errorMessage)" class="error-hint">{{ getErrorHint(data.error || errorMessage) }}</div>
-              <button class="retry-btn" @click="handleRegenerate">重试</button>
             </div>
             
             <!-- 数据丢失状态（旧格式 blob URL 失效） -->
