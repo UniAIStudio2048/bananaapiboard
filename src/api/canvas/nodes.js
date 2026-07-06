@@ -75,7 +75,8 @@ export async function generateImageFromText(params) {
     enableGroupGeneration = false,
     maxGroupImages = 3,
     webSearch,
-    quality
+    quality,
+    imagePresetId
   } = params
   
   // 优先使用 image_size，否则使用 size（向后兼容）
@@ -103,6 +104,10 @@ export async function generateImageFromText(params) {
 
   if (quality && quality !== 'auto') {
     body.quality = quality
+  }
+
+  if (imagePresetId) {
+    body.image_preset_id = imagePresetId
   }
 
   // Seedream 5.0 Lite 联网搜索
@@ -162,7 +167,8 @@ export async function generateImageFromImage(params) {
     aspectRatio = 'auto',
     aspectRatioMode,
     enableGroupGeneration = false,
-    maxGroupImages = 3
+    maxGroupImages = 3,
+    imagePresetId
   } = params
   
   const prompt = normalizePromptLineEndings(rawPrompt)
@@ -184,6 +190,10 @@ export async function generateImageFromImage(params) {
     response_format: 'url',
     spaceType: spaceParams.spaceType,
     ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
+  }
+
+  if (imagePresetId) {
+    body.image_preset_id = imagePresetId
   }
   
   // Seedream 组图生成参数

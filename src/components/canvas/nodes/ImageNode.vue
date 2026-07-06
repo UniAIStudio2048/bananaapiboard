@@ -31,7 +31,7 @@ import {
 } from '@/utils/videoGenerationProgress'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
-import { getImagePresets, incrementPresetUseCount, createImagePreset, updateImagePreset } from '@/api/canvas/image-presets'
+import { getImagePresets, incrementPresetUseCount, createImagePreset, updateImagePreset, normalizePresetPointsCost } from '@/api/canvas/image-presets'
 import ImagePresetDialog from '../dialogs/ImagePresetDialog.vue'
 import ImagePresetManager from '../dialogs/ImagePresetManager.vue'
 import ImageCropper from '../ImageCropper.vue'
@@ -258,6 +258,17 @@ const editingImagePreset = ref(null)
 const imagePresetManagerRef = ref(null)
 const tempCustomPrompt = ref(props.data?.tempCustomPrompt || (props.data?.selectedPreset === 'temp-custom' ? props.data?.selectedPresetPrompt || '' : '')) // 临时自定义提示词
 
+function roundPoints(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0
+  return Math.round(numeric * 100) / 100
+}
+
+function formatPresetOptionName(name, pointsCost = 0) {
+  const normalizedCost = normalizePresetPointsCost(pointsCost)
+  return normalizedCost > 0 ? `${name} (+${formatPoints(normalizedCost)}积分/张)` : name
+}
+
 // 相机控制状态
 function defaultCameraSettings() {
   return {
@@ -467,7 +478,8 @@ const availablePresets = computed(() => {
     id: '',
     name: '无预设',
     prompt: '',
-    type: 'none'
+    type: 'none',
+    pointsCost: 0
   })
 
   if (presetLoadError.value) {
@@ -481,14 +493,18 @@ const availablePresets = computed(() => {
 
   // 2. 添加租户全局预设
   if (tenantPresets.value.length > 0) {
-    presets.push(...tenantPresets.value.map(p => ({
-      id: `tenant-${p.id}`,
-      name: p.name,
-      prompt: p.prompt,
-      description: p.description,
-      type: 'tenant-global',
-      _rawId: p.id
-    })))
+    presets.push(...tenantPresets.value.map(p => {
+      const pointsCost = normalizePresetPointsCost(p.pointsCost ?? p.points_cost)
+      return {
+        id: `tenant-${p.id}`,
+        name: formatPresetOptionName(p.name, pointsCost),
+        prompt: p.prompt,
+        description: p.description,
+        type: 'tenant-global',
+        pointsCost,
+        _rawId: p.id
+      }
+    }))
   }
 
   // 3. 添加用户自定义预设
@@ -500,6 +516,7 @@ const availablePresets = computed(() => {
       prompt: p.prompt,
       description: p.description,
       type: 'user-custom',
+      pointsCost: 0,
       _rawId: p.id
     })))
   }
@@ -512,7 +529,8 @@ const availablePresets = computed(() => {
     presets.push({
       id: 'temp-custom',
       name: '📌 临时自定义',
-      type: 'temp-custom'
+      type: 'temp-custom',
+      pointsCost: 0
     })
   }
 
@@ -567,8 +585,15 @@ const currentPresetPrompt = computed(() => {
   return preset?.prompt || props.data?.selectedPresetPrompt || ''
 })
 
+const selectedPresetPointsCost = computed(() => {
+  if (!selectedPreset.value?.startsWith('tenant-')) return 0
+  const preset = availablePresets.value.find(p => p.id === selectedPreset.value)
+  return normalizePresetPointsCost(preset?.pointsCost ?? props.data?.selectedPresetPointsCost)
+})
+
 function buildSelectedPresetDataPatch(preset = null) {
   const resolvedPreset = preset || availablePresets.value.find(p => p.id === selectedPreset.value)
+  const isTenantPreset = selectedPreset.value.startsWith('tenant-')
   const presetPrompt = selectedPreset.value === 'temp-custom'
     ? tempCustomPrompt.value
     : (resolvedPreset?.prompt || props.data?.selectedPresetPrompt || '')
@@ -584,6 +609,8 @@ function buildSelectedPresetDataPatch(preset = null) {
     selectedPresetPrompt: presetPrompt,
     selectedPresetName: presetName,
     selectedPresetType: presetType,
+    selectedPresetRawId: isTenantPreset ? (resolvedPreset?._rawId || '') : '',
+    selectedPresetPointsCost: isTenantPreset ? normalizePresetPointsCost(resolvedPreset?.pointsCost ?? 0) : 0,
     tempCustomPrompt: selectedPreset.value === 'temp-custom' ? tempCustomPrompt.value : ''
   }
 }
@@ -1603,18 +1630,13 @@ const basePointsCost = computed(() => {
 
 // 计算当前积分消耗（考虑组图和批次）
 const currentPointsCost = computed(() => {
-  let cost = basePointsCost.value
-  
-  // 如果开启了组图生成，积分 = 组图数量 × 批次数 × 单次积分
-  if (enableGroupGeneration.value && isSeedream45Model.value) {
-    const groupCount = Math.max(2, Math.min(10, maxGroupImages.value || 3))
-    cost = basePointsCost.value * groupCount * selectedCount.value
-  } else {
-    // 普通模式：积分 = 批次数 × 单次积分
-    cost = basePointsCost.value * selectedCount.value
-  }
-  
-  return cost
+  const groupCount = enableGroupGeneration.value && isSeedream45Model.value
+    ? Math.max(2, Math.min(10, maxGroupImages.value || 3))
+    : 1
+  const presetPointsCost = selectedPresetPointsCost.value
+  const outputCount = groupCount * selectedCount.value
+
+  return roundPoints((basePointsCost.value + presetPointsCost) * outputCount)
 })
 
 // 节点尺寸
@@ -5582,6 +5604,9 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
   }
 
   // 构建基础参数
+  const selectedTenantPresetId = selectedPreset.value.startsWith('tenant-')
+    ? (availablePresets.value.find(p => p.id === selectedPreset.value)?._rawId || props.data?.selectedPresetRawId || '')
+    : ''
   const baseParams = {
     prompt: finalPrompt || '保持原图风格',
     userPrompt: userPrompt || finalPrompt || '',
@@ -5597,6 +5622,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     // Seedream 组图生成参数
     enableGroupGeneration: enableGroupGeneration.value,
     maxGroupImages: maxGroupImages.value,
+    imagePresetId: selectedTenantPresetId,
     // Seedream 5.0 Lite 联网搜索参数
     ...(isSeedream50LiteModel.value && { webSearch: enableWebSearch.value })
   }
@@ -6053,8 +6079,8 @@ async function handleGenerate(options = {}) {
     return
   }
 
-  // 检查总积分是否足够（单次消耗 * 次数）
-  const totalCost = currentPointsCost.value * selectedCount.value
+  // 检查总积分是否足够
+  const totalCost = currentPointsCost.value
   if (userPoints.value < totalCost) {
     if (fromGroup) {
       console.log(`[ImageNode] 编组执行跳过节点 ${props.id}：积分不足`)

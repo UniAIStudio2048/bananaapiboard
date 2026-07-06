@@ -23,6 +23,6 @@ test('image presets mutations invalidate cached lists', () => {
 test('image presets API normalizes legacy and partial list payloads', () => {
   assert.match(source, /export function normalizeImagePresetsPayload/)
   assert.match(source, /Array\.isArray\(presets\)/)
-  assert.match(source, /tenant:\s*Array\.isArray\(presets\?\.tenant\)\s*\?\s*presets\.tenant\s*:\s*\[\]/)
-  assert.match(source, /user:\s*Array\.isArray\(presets\?\.user\)\s*\?\s*presets\.user\s*:\s*\[\]/)
+  assert.match(source, /tenant:\s*normalizeImagePresetList\(presets\?\.tenant\)/)
+  assert.match(source, /user:\s*normalizeImagePresetList\(presets\?\.user,\s*\{\s*forceFree:\s*true\s*\}\)/)
 })

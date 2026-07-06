@@ -35,16 +35,35 @@ export function invalidateImagePresetsCache() {
   imagePresetsRequest = null
 }
 
+export function normalizePresetPointsCost(value) {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0
+  return Math.round(numeric * 100) / 100
+}
+
+function normalizeImagePresetList(list, options = {}) {
+  const { forceFree = false } = options
+  if (!Array.isArray(list)) return []
+  return list.map(preset => {
+    const pointsCost = forceFree ? 0 : normalizePresetPointsCost(preset.pointsCost ?? preset.points_cost)
+    return {
+      ...preset,
+      pointsCost,
+      points_cost: pointsCost
+    }
+  })
+}
+
 export function normalizeImagePresetsPayload(payload = {}) {
   const presets = payload?.presets ?? payload
 
   if (Array.isArray(presets)) {
-    return { tenant: presets, user: [] }
+    return { tenant: normalizeImagePresetList(presets), user: [] }
   }
 
   return {
-    tenant: Array.isArray(presets?.tenant) ? presets.tenant : [],
-    user: Array.isArray(presets?.user) ? presets.user : []
+    tenant: normalizeImagePresetList(presets?.tenant),
+    user: normalizeImagePresetList(presets?.user, { forceFree: true })
   }
 }
 
