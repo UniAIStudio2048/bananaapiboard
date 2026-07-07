@@ -81,6 +81,17 @@ test('formats async non-seedance errors with the default formatter', () => {
   assert.equal(formatVideoNodeAsyncErrorMessage(raw, 'kling-v3', { includeNoChargeNotice: true }), '视频生成失败，未扣除积分')
 })
 
+test('formats browser fetch failures as recoverable network status', () => {
+  assert.equal(
+    formatVideoNodeErrorMessage('Failed to fetch'),
+    '网络连接异常，正在确认任务状态，请稍后查看结果'
+  )
+  assert.equal(
+    formatVideoNodeAsyncErrorMessage('Failed to fetch', 'kling-v3', { includeNoChargeNotice: true }),
+    '网络连接异常，正在确认任务状态，请稍后查看结果，未扣除积分'
+  )
+})
+
 test('keeps audio callers unchanged unless no-charge notice is requested', () => {
   assert.equal(formatVideoNodeErrorMessage('生成失败'), '生成失败')
 })

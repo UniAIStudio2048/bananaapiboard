@@ -82,7 +82,7 @@ import { smartDownload } from '@/api/client'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import CanvasNodeImage from '@/components/canvas/CanvasNodeImage.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
-import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedanceVideoModel } from './video-error-message.js'
+import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedanceVideoModel, isVideoNodeNetworkError } from './video-error-message.js'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PromptMediaTag from '../PromptMediaTag.vue'
 
@@ -179,6 +179,17 @@ function buildAsyncVideoErrorData(message, model) {
     error: formatVideoNodeAsyncErrorMessage(message, model),
     _preserveRawVideoError: preserveRaw
   }
+}
+
+function isTransientVideoSubmissionError(error) {
+  return !!error?.isVideoSubmissionNetworkError || isVideoNodeNetworkError(error?.message)
+}
+
+function requestPendingVideoSubmissionRecovery(submissionId) {
+  if (!submissionId || typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('canvas-video-submission-recovery-requested', {
+    detail: { submissionId }
+  }))
 }
 
 function isContentSafetyError(msg) {
@@ -317,6 +328,8 @@ function getProcessingTimingData(data = props.data) {
 }
 
 function processingProgressText(data = props.data) {
+  const progress = typeof data?.progress === 'string' ? data.progress.trim() : ''
+  if (progress && progress.includes('正在确认任务状态')) return progress
   return getVideoGenerationProgressText(getProcessingTimingData(data), elapsedTimeNow.value)
 }
 
@@ -4455,14 +4468,21 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     console.log('[VideoNode] Omni 参考素材:', capturedState.omniReferences?.length || 0)
   }
   
-  const response = await fetch(getApiUrl('/api/videos/generate'), {
-    method: 'POST',
-    headers: {
-      ...getTenantHeaders(),
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: formData
-  })
+  let response
+  try {
+    response = await fetch(getApiUrl('/api/videos/generate'), {
+      method: 'POST',
+      headers: {
+        ...getTenantHeaders(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: formData
+    })
+  } catch (error) {
+    error.clientSubmissionId = submission.submissionId
+    error.isVideoSubmissionNetworkError = true
+    throw error
+  }
   
   const data = await response.json()
   
@@ -4697,6 +4717,17 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
         }
       })
       return null
+    }
+    if (submissionId && isTransientVideoSubmissionError(error)) {
+      canvasStore.updateNodeData(nodeId, {
+        status: 'processing',
+        progress: '网络异常，正在确认任务状态...',
+        clientSubmissionId: submissionId,
+        processingStartedAt: props.data.processingStartedAt || Date.now(),
+        error: null
+      })
+      requestPendingVideoSubmissionRecovery(submissionId)
+      return submissionId
     }
     if (submissionId) removeGenerationSubmission(submissionId)
     canvasStore.updateNodeData(nodeId, {
@@ -7872,7 +7903,6 @@ function handleToolbarPreview() {
             <div v-if="getErrorHint(data.error || errorMessage)" class="error-hint">{{ getErrorHint(data.error || errorMessage) }}</div>
             <div class="error-actions">
               <button v-if="data._failedTaskId || data.taskId || data.soraTaskId" class="retry-btn" @click.stop="handleManualRetryFetch">重新获取</button>
-              <button class="retry-btn" @click="handleRegenerate">重试</button>
             </div>
           </div>
           

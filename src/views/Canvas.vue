@@ -1447,6 +1447,12 @@ async function startPendingVideoSubmissionRecovery({ retry = false } = {}) {
   return result
 }
 
+function handleVideoSubmissionRecoveryRequested() {
+  startPendingVideoSubmissionRecovery({ retry: true }).catch(error => {
+    console.warn('[Canvas] 视频提交恢复请求失败:', error?.message || error)
+  })
+}
+
 function reconcileTasksForActiveTab() {
   for (const node of canvasStore.nodes) {
     if (node.data?.status !== 'processing' || !node.data?.taskId) continue
@@ -2906,6 +2912,7 @@ onMounted(async () => {
   window.addEventListener('background-task-progress', handleBackgroundTaskProgress)
   window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.addEventListener('background-task-failed', handleBackgroundTaskFailed)
+  window.addEventListener('canvas-video-submission-recovery-requested', handleVideoSubmissionRecoveryRequested)
 
   // 监听页面关闭事件，保存工作流到历史
   window.addEventListener('beforeunload', handleBeforeUnload)
@@ -2998,6 +3005,7 @@ onUnmounted(() => {
   window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
   window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
+  window.removeEventListener('canvas-video-submission-recovery-requested', handleVideoSubmissionRecoveryRequested)
   // 性能优化: 清理拖拽状态监听器
   window.removeEventListener('canvas-drag-start', _onCanvasDragStart)
   window.removeEventListener('canvas-drag-end', _onCanvasDragEnd)

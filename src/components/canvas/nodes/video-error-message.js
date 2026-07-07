@@ -14,6 +14,16 @@ function extractRequestId(message) {
   return match?.[1] || ''
 }
 
+export function isVideoNodeNetworkError(message) {
+  const normalized = String(message || '').trim().toLowerCase()
+  if (!normalized) return false
+  return normalized.includes('failed to fetch') ||
+    normalized.includes('networkerror') ||
+    normalized.includes('network request failed') ||
+    normalized.includes('load failed') ||
+    normalized.includes('网络连接异常')
+}
+
 function formatKnownSeedanceError(message) {
   if (!message || typeof message !== 'string') return ''
 
@@ -49,6 +59,10 @@ export function formatVideoNodeErrorMessage(message, options = {}) {
 
   const trimmed = message.trim()
   const lower = trimmed.toLowerCase()
+  if (isVideoNodeNetworkError(trimmed)) {
+    return maybeWithNoChargeNotice('网络连接异常，正在确认任务状态，请稍后查看结果', includeNoChargeNotice)
+  }
+
   const knownContentSafetyMessage = formatKnownSeedanceError(trimmed)
   if (knownContentSafetyMessage) {
     return maybeWithNoChargeNotice(knownContentSafetyMessage, includeNoChargeNotice)
@@ -78,6 +92,10 @@ export function formatVideoNodeErrorMessage(message, options = {}) {
 
 export function formatVideoNodeAsyncErrorMessage(message, model, options = {}) {
   const { includeNoChargeNotice = false } = options
+
+  if (isVideoNodeNetworkError(message)) {
+    return maybeWithNoChargeNotice('网络连接异常，正在确认任务状态，请稍后查看结果', includeNoChargeNotice)
+  }
 
   if (isSeedanceVideoModel(model)) {
     const seedanceMessage = formatKnownSeedanceError(message)

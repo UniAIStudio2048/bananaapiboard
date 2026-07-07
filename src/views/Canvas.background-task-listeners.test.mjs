@@ -65,6 +65,29 @@ test('Canvas wires pending video submission recovery to the backend recovery end
   )
 })
 
+test('Canvas can retry pending video submission recovery after an in-page submit network failure', () => {
+  assert.match(
+    source,
+    /window\.addEventListener\('canvas-video-submission-recovery-requested'/,
+    'Canvas should listen for video submission recovery requests from VideoNode'
+  )
+  assert.match(
+    source,
+    /function handleVideoSubmissionRecoveryRequested/,
+    'Canvas should define an in-page recovery request handler'
+  )
+  assert.match(
+    source,
+    /startPendingVideoSubmissionRecovery\(\{ retry: true \}\)/,
+    'Canvas should run pending submission recovery without waiting for a page reload'
+  )
+  assert.match(
+    source,
+    /window\.removeEventListener\('canvas-video-submission-recovery-requested'/,
+    'Canvas should remove the recovery request listener on unmount'
+  )
+})
+
 test('Canvas retries pending video submission recovery when backend history is not ready yet', () => {
   assert.match(source, /PENDING_VIDEO_SUBMISSION_RECOVERY_INTERVAL_MS\s*=\s*3000/)
   assert.doesNotMatch(
