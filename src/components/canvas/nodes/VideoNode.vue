@@ -3206,9 +3206,13 @@ const klingOfficialSelectedDurationCost = computed(() => {
   return isKlingOfficialDurationModel(currentModelConfig.value) ? pointsCost.value : 0
 })
 
+const klingOfficialSelectedDurationTotalCost = computed(() => {
+  return klingOfficialSelectedDurationCost.value * selectedCount.value
+})
+
 const klingOfficialSelectedDurationCostText = computed(() => {
   // Keep this in script because templates unwrap refs before property access.
-  return selectedDuration.value ? `${selectedDuration.value}s = ${formatPoints(klingOfficialSelectedDurationCost.value)}积分` : ''
+  return selectedDuration.value ? `${selectedDuration.value}s = ${formatPoints(klingOfficialSelectedDurationTotalCost.value)}积分` : ''
 })
 
 // 动作迁移模型每秒积分（用于显示 "X积分/s" 格式）
