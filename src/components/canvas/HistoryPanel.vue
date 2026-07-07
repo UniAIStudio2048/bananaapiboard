@@ -405,6 +405,12 @@ async function _refreshHistoryInBackground(spaceParams, spaceType, teamId, optio
   }
 }
 
+async function refreshOpenHistorySilently(options = {}) {
+  const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
+  const { spaceType, teamId } = spaceParams
+  await _refreshHistoryInBackground(spaceParams, spaceType, teamId, { noCache: true, ...options })
+}
+
 /**
  * 团队空间实时同步 - 检查是否有新数据
  * 获取全量数据后精确比较，避免 limit:1 过滤不一致导致误判
@@ -425,7 +431,7 @@ async function checkTeamSync() {
     if (!_isHistoryPrefixEqual(freshData, historyList.value)) {
       console.log('[HistoryPanel] 团队空间检测到新数据，更新列表')
       dataCached.value = false
-      await loadHistory(true)
+      await refreshOpenHistorySilently()
     }
   } catch (error) {
     console.error('[HistoryPanel] 团队同步检查失败:', error)
@@ -478,7 +484,7 @@ function startAutoRefresh() {
       if (!_isHistoryPrefixEqual(freshData, historyList.value)) {
         console.log('[HistoryPanel] 检测到新数据，更新列表')
         dataCached.value = false
-        await loadHistory(true)
+        await refreshOpenHistorySilently()
       }
     } catch (e) {
       // 静默失败
@@ -1752,7 +1758,7 @@ let resizeObserver = null
 function handleCanvasHistoryInvalidate() {
   dataCached.value = false
   invalidateCache('all').catch(() => {})
-  loadHistory(true)
+  refreshOpenHistorySilently()
 }
 
 onMounted(() => {
