@@ -135,6 +135,7 @@
         <p>
           视频接口用于文生视频、图生视频、视频参考和多素材工作流。图片或视频素材都必须是可访问 URL；
           本地素材先通过上传流程转换成 <code>asset_url</code>，再放进 <code>source_assets</code> 或 <code>reference_assets</code>。
+          服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审，智能体只需要调用统一 Skills 视频端点。
         </p>
         <CodeBlock
           id="video-generate"
@@ -203,6 +204,8 @@
           <span>invalid_skill_key</span><p>API Key 缺失、格式错误或不匹配。让用户回到画布 Skills 面板复制新 key。</p>
           <span>skill_key_revoked</span><p>API Key 已重置或撤销。停止当前请求，要求用户重新复制。</p>
           <span>model_package_required</span><p>当前模型不可用。重新读取模型列表，选择可用模型，或提示用户升级/分配权限。</p>
+          <span>skills_image_review_failed</span><p>视频渠道要求图片过审，但图片未通过。换一张可用图片或让用户确认真人素材权限。</p>
+          <span>skills_image_review_timeout</span><p>图片过审仍在处理中。稍后重试同一请求，或换用不需要过审的素材/模型。</p>
           <span>insufficient_points</span><p>积分不足。停止生成并提示用户充值或切换可用空间。</p>
           <span>403</span><p>模型、空间或画布写回权限不足。不要改用其他认证方式。</p>
           <span>404</span><p>任务、工作流或节点不存在。确认 task_id、workflow_id、node_id 后再重试。</p>
@@ -302,7 +305,8 @@ const quickStartPrompt = `请帮我安装 Banana Canvas Skills。
 - 只调用 ${baseUrl}/api/skills/*。
 
 安装后先调用 GET ${baseUrl}/api/skills/models 验证 key 和模型列表。
-如果用户提供本地图片或视频，先调用 POST ${baseUrl}/api/skills/uploads/presign，把文件 PUT 到 upload_url，再把 asset_url 传给生成接口。`
+如果用户提供本地图片或视频，先调用 POST ${baseUrl}/api/skills/uploads/presign，把文件 PUT 到 upload_url，再把 asset_url 传给生成接口。
+视频统一调用 POST ${baseUrl}/api/skills/videos/generate；服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审。`
 
 const envExample = `BANANA_SKILLS_BASE_URL=${baseUrl}
 BANANA_SKILLS_API_KEY=bsk_your_key`
@@ -416,6 +420,9 @@ const errorExample = `function explainSkillError(error) {
   }
   if (code === 'model_package_required') {
     return '当前模型不可用，请重新读取模型列表并选择 usable 的模型。'
+  }
+  if (code === 'skills_image_review_failed' || code === 'skills_image_review_timeout') {
+    return '视频图片过审未完成，请更换素材或稍后重试。'
   }
   if (code === 'insufficient_points' || code === '402') {
     return '积分不足，请充值或切换可用空间。'
