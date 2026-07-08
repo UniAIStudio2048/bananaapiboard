@@ -17,6 +17,7 @@ import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints, removeImageBackground } from '@/api/canvas/nodes'
+import { getHistory } from '@/api/canvas/history'
 import { extractVideoFrame } from '@/api/canvas/workflow'
 import { createQuickSeedanceCharacterAsset, listAssetGroups, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 import { registerTask, removeCompletedTask, getTasksByNodeId, ensureTaskPolling } from '@/stores/canvas/backgroundTaskManager'
@@ -5829,12 +5830,125 @@ function createStackedOutputNodes(count, basePosition) {
 // @param {string} finalPrompt - 最终提示词（包含预设）
 // @param {number} taskIndex - 任务索引
 // @param {string} userPrompt - 用户原始输入（不含预设，用于历史记录显示）
+function isNativeFetchNetworkError(error) {
+  if (error?.code) return false
+  const message = error?.message || ''
+  return error?.name === 'TypeError' && (
+    message.includes('Failed to fetch') ||
+    message.includes('NetworkError') ||
+    message.includes('Load failed')
+  )
+}
+
+function normalizeHistoryPrompt(value) {
+  return String(value || '').trim()
+}
+
+function isHistoryTextMatch(historyText, requestText) {
+  const historyValue = normalizeHistoryPrompt(historyText)
+  const requestValue = normalizeHistoryPrompt(requestText)
+  if (!historyValue || !requestValue) return false
+  return historyValue === requestValue ||
+    historyValue.includes(requestValue) ||
+    requestValue.includes(historyValue) ||
+    historyValue.startsWith(requestValue.slice(0, 30)) ||
+    requestValue.startsWith(historyValue.slice(0, 30))
+}
+
+function isHistoryPromptMatch(item, { prompt, userPrompt }) {
+  const requestPrompts = [userPrompt, prompt].map(normalizeHistoryPrompt).filter(Boolean)
+  const historyPrompts = [item?.prompt, item?.fullPrompt, item?.user_prompt].map(normalizeHistoryPrompt).filter(Boolean)
+  if (!requestPrompts.length || !historyPrompts.length) return false
+  return historyPrompts.some(historyText => requestPrompts.some(requestText => isHistoryTextMatch(historyText, requestText)))
+}
+
+function isHistoryModelMatch(historyModel, model) {
+  const historyValue = String(historyModel || '').trim().toLowerCase()
+  const modelValue = String(model || '').trim().toLowerCase()
+  if (!historyValue || !modelValue) return true
+  return historyValue === modelValue || historyValue.includes(modelValue) || modelValue.includes(historyValue)
+}
+
+function pickBestHistoryMatch(items, { prompt, userPrompt, submittedAt, model }) {
+  const minCreatedAt = submittedAt - 60000
+  return items
+    .filter(item => item?.type === 'image' && item?.url)
+    .map(item => ({
+      item,
+      createdAt: item.created_at ? new Date(item.created_at).getTime() : 0
+    }))
+    .filter(({ item, createdAt }) => (
+      Number.isFinite(createdAt) &&
+      createdAt >= minCreatedAt &&
+      isHistoryPromptMatch(item, { prompt, userPrompt })
+    ))
+    .sort((a, b) => {
+      const aLate = a.createdAt >= submittedAt ? 1 : 0
+      const bLate = b.createdAt >= submittedAt ? 1 : 0
+      if (aLate !== bLate) return bLate - aLate
+      const aDistance = Math.abs(a.createdAt - submittedAt)
+      const bDistance = Math.abs(b.createdAt - submittedAt)
+      if (aDistance !== bDistance) return aDistance - bDistance
+      const aModelMatch = isHistoryModelMatch(a.item.model, model) ? 1 : 0
+      const bModelMatch = isHistoryModelMatch(b.item.model, model) ? 1 : 0
+      if (aModelMatch !== bModelMatch) return bModelMatch - aModelMatch
+      return b.createdAt - a.createdAt
+    })[0]?.item || null
+}
+
+async function reconcileNodeFromHistory(nodeId, { prompt, userPrompt, submittedAt, model }) {
+  const maxAttempts = 6
+  const intervalMs = 5000
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) await delay(intervalMs)
+
+    try {
+      const spaceParams = teamStore.getSpaceParams('current')
+      const data = await getHistory({
+        type: 'image',
+        spaceType: spaceParams.spaceType,
+        ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {}),
+        limit: 20,
+        noCache: true
+      })
+      const history = Array.isArray(data?.history) ? data.history : []
+      const matched = pickBestHistoryMatch(history, { prompt, userPrompt, submittedAt, model })
+
+      if (matched?.url) {
+        canvasStore.updateNodeData(nodeId, {
+          status: 'success',
+          progress: null,
+          error: null,
+          _reconciling: false,
+          output: { type: 'image', urls: [matched.url], url: matched.url }
+        })
+        invalidateCanvasHistory()
+        return true
+      }
+    } catch (historyError) {
+      // 历史接口本身可能抖动，继续下一轮核对。
+      console.warn('[ImageNode] 历史对账失败，继续重试:', historyError)
+    }
+  }
+
+  canvasStore.updateNodeData(nodeId, {
+    status: 'error',
+    progress: null,
+    _reconciling: false,
+    error: '网络异常，未能确认生成结果，请查看历史记录'
+  })
+  return false
+}
+
 async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt = null) {
+  const targetNode = canvasStore.nodes.find(n => n.id === nodeId)
+  const submittedAt = targetNode?.data?.processingStartedAt || Date.now()
   try {
     canvasStore.updateNodeData(nodeId, {
       status: 'processing',
       progress: '生成中...',
-      processingStartedAt: Date.now(),
+      processingStartedAt: submittedAt,
       taskType: 'image'
     })
 
@@ -5895,11 +6009,29 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
     }
     console.error(`[ImageNode] 任务 ${taskIndex + 1} 失败:`, error)
     console.error(`[ImageNode] 错误详情:`, errorDetail)
+    if (!isNativeFetchNetworkError(error)) {
+      canvasStore.updateNodeData(nodeId, {
+        status: 'error',
+        error: error.message
+      })
+      return { error: error.message, detail: errorDetail }
+    }
+
+    // 原生 fetch 丢包可能发生在后端已受理之后，先从历史记录自动对账。
     canvasStore.updateNodeData(nodeId, {
-      status: 'error',
-      error: error.message
+      status: 'processing',
+      progress: '网络波动，正在核对结果...',
+      _reconciling: true
     })
-    return { error: error.message, detail: errorDetail }
+    const reconciled = await reconcileNodeFromHistory(nodeId, {
+      prompt: finalPrompt,
+      userPrompt,
+      submittedAt,
+      model: selectedModel.value
+    })
+    return reconciled
+      ? { reconciled: true }
+      : { error: '网络异常，未能确认生成结果，请查看历史记录', detail: errorDetail }
   }
 }
 

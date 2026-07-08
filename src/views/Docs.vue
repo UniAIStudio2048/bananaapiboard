@@ -136,6 +136,8 @@
           视频接口用于文生视频、图生视频、视频参考和多素材工作流。图片或视频素材都必须是可访问 URL；
           本地素材先通过上传流程转换成 <code>asset_url</code>，再放进 <code>source_assets</code> 或 <code>reference_assets</code>。
           服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审，智能体只需要调用统一 Skills 视频端点。
+          <code>mode</code> 可省略；明确需要细分能力时，可传 Seedance 2.0 的 <code>multimodal_ref</code>/<code>video_edit</code>/<code>video_extend</code>
+          或 Kling v3 Omni 的 <code>subject_control</code>/<code>video_reference</code>/<code>multi_shot</code> 等子模式。
         </p>
         <CodeBlock
           id="video-generate"
@@ -371,14 +373,14 @@ Content-Type: application/json
 
 {
   "model": "video-model-key-from-models",
-  "prompt": "slow camera push in, soft studio light",
+  "prompt": "use the person image and the motion from the video",
   "duration": 5,
   "resolution": "720p",
   "source_assets": [
-    "https://cdn.example.com/skills/source-image.png"
+    { "url": "https://cdn.example.com/skills/person.png", "media_type": "image" }
   ],
   "reference_assets": [
-    "https://cdn.example.com/skills/reference-video.mp4"
+    { "url": "https://cdn.example.com/skills/reference-video.mp4", "media_type": "video" }
   ]
 }`
 
