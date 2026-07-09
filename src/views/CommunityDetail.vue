@@ -538,8 +538,7 @@ const currentQualityLabel = computed(() => qualityOptions.find(q => q.value === 
 const progressPercent = computed(() => duration.value ? (currentTime.value / duration.value) * 100 : 0)
 
 const videoStreamUrl = computed(() => {
-  if (!work.value?.id) return ''
-  return `/api/community/works/${work.value.id}/stream`
+  return work.value?.media_url || ''
 })
 
 const authorId = computed(() => work.value?.author_id || work.value?.user_id || '')
