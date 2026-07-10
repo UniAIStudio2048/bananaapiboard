@@ -59,9 +59,10 @@ export function isCosCdn(url) {
 }
 
 export function isCanvasDirectCdnUrl(url) {
-  if (!isCosCdn(url)) return false
   try {
-    return new URL(url).pathname.startsWith('/canvas/')
+    const parsed = new URL(url)
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      parsed.pathname.startsWith('/canvas/')
   } catch {
     return false
   }

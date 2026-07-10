@@ -7,6 +7,7 @@ import {
   buildStreamDownloadPath,
   cleanCosCdnDownloadUrl,
   cleanStreamDownloadUrl,
+  isCanvasDirectCdnDownloadUrl,
   isDirectCdnDownloadUrl
 } from './downloadRouting.js'
 
@@ -439,6 +440,11 @@ export function startStreamDownload(url, filename) {
 
   if (isQiniuCdnUrl(cleanUrl)) {
     triggerUrlDownload(buildQiniuForceDownloadUrl(cleanUrl, correctedFilename), correctedFilename)
+    return
+  }
+
+  if (isCanvasDirectCdnDownloadUrl(cleanUrl)) {
+    triggerUrlDownload(cleanUrl, correctedFilename)
     return
   }
 

@@ -884,6 +884,11 @@ function openSaveDialog() {
 // 已有工作流直接更新，新工作流弹出对话框
 async function quickSaveWorkflow() {
   const currentTab = canvasStore.getCurrentTab()
+
+  if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges).length > 0) {
+    displayToast('素材仍在上传，请等待完成后重试', 'warning', 3000)
+    return
+  }
   
   // 检查是否有内容
   const workflowData = canvasStore.exportWorkflow()
@@ -1874,6 +1879,10 @@ function sendBeaconExitSave(payload) {
 
 async function persistCurrentWorkflowOnExit(reason = 'exit', options = {}) {
   const state = saveCanvasExitState(reason)
+  if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges).length > 0) {
+    console.log(`[Canvas] ${reason} 跳过服务器保存：素材仍在上传，请等待完成后重试`)
+    return false
+  }
   const payload = buildExitSavePayload(state)
   if (!payload) return false
 

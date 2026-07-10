@@ -7,14 +7,18 @@ function containsTransientUrl(value) {
 
 function canonicalMediaValues(data = {}) {
   return [
+    data.sourceImage,
+    data.imageUrl,
     data.sourceImages,
     data.images,
     data.referenceImages,
     data.sourceVideo,
     data.videoUrl,
+    data.sourceVideos,
     data.referenceVideos,
     data.audioUrl,
     data.audioData,
+    data.audioUrls,
     data.referenceAudios,
     data.output,
     data.inheritedData,

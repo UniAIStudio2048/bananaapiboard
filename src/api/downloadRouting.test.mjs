@@ -3,7 +3,11 @@ import assert from 'node:assert/strict'
 
 import { buildMediaProxyDownloadPath } from './downloadRouting.js'
 import { buildStreamDownloadPath } from './downloadRouting.js'
-import { buildDirectCdnDownloadUrl, isDirectCdnDownloadUrl } from './downloadRouting.js'
+import {
+  buildDirectCdnDownloadUrl,
+  isCanvasDirectCdnDownloadUrl,
+  isDirectCdnDownloadUrl
+} from './downloadRouting.js'
 
 test('routes video downloads through the video download endpoint', () => {
   const path = buildMediaProxyDownloadPath('/api/images/file/video-123', 'clip.mp4')
@@ -36,6 +40,25 @@ test('detects COS CDN URLs as direct CDN download targets', () => {
   assert.equal(
     isDirectCdnDownloadUrl('https://filescos.nananobanana.cn/default-tenant-001/images/image.png'),
     true
+  )
+})
+
+test('detects tenant CDN canvas URLs as direct download targets', () => {
+  assert.equal(
+    isCanvasDirectCdnDownloadUrl('https://cdn.tenant-example.com/canvas/tenant/image.png'),
+    true
+  )
+  assert.equal(
+    isDirectCdnDownloadUrl('https://cdn.tenant-example.com/canvas/tenant/image.png'),
+    true
+  )
+  assert.equal(
+    isDirectCdnDownloadUrl('https://cdn.tenant-example.com/assets/tenant/image.png'),
+    false
+  )
+  assert.equal(
+    isCanvasDirectCdnDownloadUrl('https://filescos.nananobanana.cn/default-tenant-001/images/image.png'),
+    false
   )
 })
 

@@ -35,4 +35,43 @@ assert.deepEqual(findBlockingCanvasUploads([
   }
 ], []), [])
 
+const canonicalMediaFields = [
+  'sourceImage',
+  'imageUrl',
+  'sourceImages',
+  'images',
+  'referenceImages',
+  'sourceVideo',
+  'videoUrl',
+  'sourceVideos',
+  'referenceVideos',
+  'audioUrl',
+  'audioData',
+  'audioUrls',
+  'referenceAudios',
+  'output',
+  'inheritedData',
+  'imageOrder',
+  'videoOrder',
+  'audioOrder'
+]
+
+for (const [index, field] of canonicalMediaFields.entries()) {
+  const transientUrl = index % 2 === 0 ? `blob:${field}` : `data:${field}`
+  const value = field === 'output' || field === 'inheritedData'
+    ? { nested: { url: transientUrl } }
+    : field.endsWith('s') || field.endsWith('Order')
+      ? [transientUrl]
+      : transientUrl
+  const blockers = findBlockingCanvasUploads([
+    { id: `node-${field}`, data: { [field]: value } }
+  ], [])
+
+  assert.deepEqual(
+    blockers,
+    [{ nodeId: `node-${field}`, reason: 'transient_media' }],
+    `${field} must block durable canvas operations`
+  )
+}
+
 console.log('canvasUploadGuard tests passed')

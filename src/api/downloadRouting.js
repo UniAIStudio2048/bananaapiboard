@@ -11,8 +11,18 @@ export function isCosCdnDownloadUrl(url) {
     lower.includes('.tencentcos.cn')
 }
 
+export function isCanvasDirectCdnDownloadUrl(url) {
+  try {
+    const parsed = new URL(url)
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      parsed.pathname.startsWith('/canvas/')
+  } catch {
+    return false
+  }
+}
+
 export function isDirectCdnDownloadUrl(url) {
-  return isCosCdnDownloadUrl(url)
+  return isCosCdnDownloadUrl(url) || isCanvasDirectCdnDownloadUrl(url)
 }
 
 export function cleanCosCdnDownloadUrl(url) {

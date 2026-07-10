@@ -3,6 +3,8 @@ import { createCanvasUploadCheckpointStore } from './canvasUploadCheckpoint.js'
 const DEFAULT_PART_SIZE = 8 * 1024 * 1024
 const DEFAULT_CONCURRENCY = 3
 const MAX_PART_ATTEMPTS = 3
+const DEFAULT_SINGLE_RETRIES = 2
+const MAX_SINGLE_RETRIES = 5
 
 function uploadError(code, details = {}) {
   const error = new Error(code)
@@ -78,6 +80,16 @@ function abortError(error, signal) {
   return signal?.aborted || error?.name === 'AbortError'
 }
 
+function singleRetryCount(value) {
+  if (!Number.isInteger(value) || value < 0) return DEFAULT_SINGLE_RETRIES
+  return Math.min(value, MAX_SINGLE_RETRIES)
+}
+
+function isRetryableSinglePutError(error) {
+  if (error?.status != null) return error.status >= 500
+  return error?.code !== 'canvas_upload_missing_etag'
+}
+
 export function createCanvasDirectUploader({
   apiFetch,
   directFetch = globalThis.fetch,
@@ -127,9 +139,21 @@ export function createCanvasDirectUploader({
 
   const uploadSingle = async (file, upload, options) => {
     options.onProgress?.(0)
-    const etag = await putDirect(upload.upload_url, upload.headers, file, options.signal)
-    options.onProgress?.(1)
-    return complete(upload.id, { etag }, options.signal)
+    const maxRetries = singleRetryCount(options.maxRetries)
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        const etag = await putDirect(upload.upload_url, upload.headers, file, options.signal)
+        options.onProgress?.(1)
+        return complete(upload.id, { etag }, options.signal)
+      } catch (error) {
+        if (abortError(error, options.signal)) throw error
+        if (attempt > 0 && error?.status === 409) {
+          options.onProgress?.(1)
+          return complete(upload.id, {}, options.signal)
+        }
+        if (attempt === maxRetries || !isRetryableSinglePutError(error)) throw error
+      }
+    }
   }
 
   const presignParts = async (uploadId, partNumbers, signal) => {

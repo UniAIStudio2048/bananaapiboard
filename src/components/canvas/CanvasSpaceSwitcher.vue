@@ -10,6 +10,7 @@ import { ref, computed, toRaw, onMounted, onUnmounted } from 'vue'
 import { useTeamStore } from '@/stores/team'
 import { useCanvasStore } from '@/stores/canvas'
 import { useI18n } from '@/i18n'
+import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -49,10 +50,21 @@ async function saveAllTabsAndReset() {
   const tabs = canvasStore.workflowTabs
   if (!tabs.length) {
     canvasStore.closeAllTabs()
-    return
+    return true
   }
 
   const oldSpaceParams = teamStore.getSpaceParams('current')
+
+  for (const tab of tabs) {
+    if (!tab.hasChanges) continue
+    const isActive = tab.id === canvasStore.activeTabId
+    const tabNodes = isActive ? toRaw(canvasStore.nodes) : toRaw(tab.nodes)
+    const tabEdges = isActive ? toRaw(canvasStore.edges) : toRaw(tab.edges)
+    if (findBlockingCanvasUploads(tabNodes || [], tabEdges || []).length > 0) {
+      console.warn('[SpaceSwitcher] 切换已取消：素材仍在上传，请等待完成后重试')
+      return false
+    }
+  }
 
   for (const tab of tabs) {
     if (!tab.hasChanges) continue
@@ -106,6 +118,7 @@ async function saveAllTabsAndReset() {
   }
 
   canvasStore.closeAllTabs()
+  return true
 }
 
 async function selectSpace(space) {
@@ -116,7 +129,8 @@ async function selectSpace(space) {
 
   isSwitching.value = true
   try {
-    await saveAllTabsAndReset()
+    const reset = await saveAllTabsAndReset()
+    if (!reset) return
 
     if (space.type === 'personal') {
       teamStore.switchToPersonalSpace()

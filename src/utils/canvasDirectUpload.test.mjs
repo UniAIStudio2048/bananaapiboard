@@ -234,4 +234,150 @@ function directResponse(etag, status = 200) {
   assert.ok(apiCalls.some(call => call.url === '/api/canvas/uploads/up-abort' && call.method === 'DELETE'))
 }
 
+{
+  const file = new File([new Uint8Array([1, 2, 3])], 'retry.png', { type: 'image/png' })
+  const apiCalls = []
+  const directCalls = []
+  const uploader = createCanvasDirectUploader({
+    checkpointStore: createMemoryCanvasUploadCheckpointStore(),
+    apiFetch: async (url, options = {}) => {
+      apiCalls.push({ url, ...options })
+      if (url.endsWith('/presign')) {
+        return {
+          upload: {
+            id: 'up-retry', mode: 'single',
+            upload_url: 'https://cos.example/canvas/retry.png?same-signature',
+            headers: { 'Content-Type': 'image/png' }
+          }
+        }
+      }
+      return {
+        upload: { id: 'up-retry', status: 'completed' },
+        asset: { id: 'asset-retry', url: 'https://cdn.example.com/canvas/retry.png' }
+      }
+    },
+    directFetch: async (url, options) => {
+      directCalls.push({ url, ...options })
+      if (directCalls.length === 1) throw new TypeError('network interrupted')
+      if (directCalls.length === 2) return directResponse(null, 503)
+      return directResponse('"etag-retry"')
+    }
+  })
+
+  const result = await uploader.upload(file, { mediaType: 'image' })
+  assert.equal(result.status, 'completed')
+  assert.equal(directCalls.length, 3)
+  assert.deepEqual(
+    directCalls.map(call => call.url),
+    Array(3).fill('https://cos.example/canvas/retry.png?same-signature')
+  )
+  assert.ok(directCalls.every(call => call.body === file))
+  assert.equal(apiCalls.filter(call => call.url.endsWith('/presign')).length, 1)
+  assert.equal(apiCalls.at(-1).body.etag, '"etag-retry"')
+  assert.ok(apiCalls.every(call => !(call.body instanceof Blob)))
+}
+
+{
+  const file = new File([new Uint8Array([1])], 'limited.png', { type: 'image/png' })
+  let directAttempts = 0
+  const uploader = createCanvasDirectUploader({
+    checkpointStore: createMemoryCanvasUploadCheckpointStore(),
+    apiFetch: async url => url.endsWith('/presign')
+      ? { upload: { id: 'up-limited', mode: 'single', upload_url: 'https://cos.example/limited', headers: {} } }
+      : { upload: { id: 'up-limited', status: 'completed' }, asset: { url: 'https://cdn.example.com/canvas/limited.png' } },
+    directFetch: async () => {
+      directAttempts++
+      return directResponse(null, 500)
+    }
+  })
+
+  await assert.rejects(
+    uploader.upload(file, { mediaType: 'image', maxRetries: 0 }),
+    /canvas_upload_direct_put_failed/
+  )
+  assert.equal(directAttempts, 1)
+}
+
+{
+  const file = new File([new Uint8Array([1])], 'capped.png', { type: 'image/png' })
+  let directAttempts = 0
+  const uploader = createCanvasDirectUploader({
+    checkpointStore: createMemoryCanvasUploadCheckpointStore(),
+    apiFetch: async url => url.endsWith('/presign')
+      ? { upload: { id: 'up-capped', mode: 'single', upload_url: 'https://cos.example/capped', headers: {} } }
+      : { upload: { id: 'up-capped', status: 'completed' }, asset: { url: 'https://cdn.example.com/canvas/capped.png' } },
+    directFetch: async () => {
+      directAttempts++
+      return directResponse(null, 500)
+    }
+  })
+
+  await assert.rejects(
+    uploader.upload(file, { mediaType: 'image', maxRetries: 99 }),
+    /canvas_upload_direct_put_failed/
+  )
+  assert.equal(directAttempts, 6)
+}
+
+{
+  const file = new File([new Uint8Array([1])], 'conflict.png', { type: 'image/png' })
+  const apiCalls = []
+  let directAttempts = 0
+  const uploader = createCanvasDirectUploader({
+    checkpointStore: createMemoryCanvasUploadCheckpointStore(),
+    apiFetch: async (url, options = {}) => {
+      apiCalls.push({ url, ...options })
+      if (url.endsWith('/presign')) {
+        return { upload: { id: 'up-conflict', mode: 'single', upload_url: 'https://cos.example/conflict', headers: {} } }
+      }
+      return {
+        upload: { id: 'up-conflict', status: 'completed' },
+        asset: { id: 'asset-conflict', url: 'https://cdn.example.com/canvas/conflict.png' }
+      }
+    },
+    directFetch: async () => {
+      directAttempts++
+      return directAttempts === 1 ? directResponse(null, 500) : directResponse(null, 409)
+    }
+  })
+
+  const result = await uploader.upload(file, { mediaType: 'image' })
+  assert.equal(result.status, 'completed')
+  assert.equal(directAttempts, 2)
+  assert.deepEqual(apiCalls.map(call => call.url), [
+    '/api/canvas/uploads/presign',
+    '/api/canvas/uploads/up-conflict/complete'
+  ])
+  assert.deepEqual(apiCalls.at(-1).body, {})
+}
+
+{
+  const controller = new AbortController()
+  const file = new File([new Uint8Array([1])], 'abort-single.png', { type: 'image/png' })
+  const apiCalls = []
+  let directAttempts = 0
+  const uploader = createCanvasDirectUploader({
+    checkpointStore: createMemoryCanvasUploadCheckpointStore(),
+    apiFetch: async (url, options = {}) => {
+      apiCalls.push({ url, ...options })
+      if (url.endsWith('/presign')) {
+        return { upload: { id: 'up-abort-single', mode: 'single', upload_url: 'https://cos.example/abort-single', headers: {} } }
+      }
+      return { success: true, upload: { id: 'up-abort-single', status: 'aborted' } }
+    },
+    directFetch: async () => {
+      directAttempts++
+      controller.abort()
+      throw new DOMException('aborted', 'AbortError')
+    }
+  })
+
+  await assert.rejects(
+    uploader.upload(file, { mediaType: 'image', signal: controller.signal }),
+    /aborted/i
+  )
+  assert.equal(directAttempts, 1)
+  assert.equal(apiCalls.filter(call => call.method === 'DELETE').length, 1)
+}
+
 console.log('canvasDirectUpload tests passed')
