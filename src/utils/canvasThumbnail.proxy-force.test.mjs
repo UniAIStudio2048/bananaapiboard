@@ -5,9 +5,15 @@ import { dirname, join } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(join(__dirname, 'canvasThumbnail.js'), 'utf8')
+const cloudMediaSource = readFileSync(join(__dirname, 'cloudMediaUrl.js'), 'utf8')
 
 assert.match(
   source,
+  /return getSmartImageUrl\(url\)/,
+  'canvas editor URLs should delegate to the shared media URL policy'
+)
+assert.match(
+  cloudMediaSource,
   /getApiUrl\('\/api\/images\/proxy'\)}\?force=1&url=\$\{encodeURIComponent\(url\)\}/,
-  'canvas editor proxy URLs must force server-side proxying to avoid 302-to-CDN CORS failures'
+  'legacy and third-party canvas URLs must still force server-side proxying'
 )

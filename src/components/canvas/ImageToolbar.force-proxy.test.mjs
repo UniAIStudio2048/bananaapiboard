@@ -5,9 +5,15 @@ import { dirname, join } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(join(__dirname, 'ImageToolbar.vue'), 'utf8')
+const cloudMediaSource = readFileSync(join(__dirname, '../../utils/cloudMediaUrl.js'), 'utf8')
 
 assert.match(
   source,
+  /getSmartImageUrl\(imageUrl/,
+  'ImageToolbar grid crop URLs should delegate to the shared media URL policy'
+)
+assert.match(
+  cloudMediaSource,
   /getApiUrl\('\/api\/images\/proxy'\)}\?force=1&url=\$\{encodeURIComponent\(url\)\}/,
-  'ImageToolbar grid crop proxy URLs must force server-side proxying to avoid 302-to-CDN CORS failures'
+  'legacy ImageToolbar URLs must still force server-side proxying'
 )

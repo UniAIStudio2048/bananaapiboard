@@ -21,6 +21,9 @@ export function getSmartImageUrl(url) {
   // 同源直连
   try { if (new URL(url).host === window.location.host) return url } catch (_) {}
 
+  // 新画布资产已在上传阶段完成 COS/CORS 校验，始终绕过应用服务器直读 CDN。
+  if (isCanvasDirectCdnUrl(url)) return url
+
   // 自家 CDN：开关开启时直连（依赖 COS 已配 CORS），否则暂走 proxy
   if (DIRECT_CDN_ENABLED && (isCosCdn(url) || isQiniuCdn(url))) {
     return url
@@ -53,6 +56,15 @@ export function isCosCdn(url) {
   return lower.includes('filescos.nananobanana.cn') ||
          (lower.includes('.cos.') && lower.includes('.myqcloud.com')) ||
          lower.includes('.tencentcos.cn')
+}
+
+export function isCanvasDirectCdnUrl(url) {
+  if (!isCosCdn(url)) return false
+  try {
+    return new URL(url).pathname.startsWith('/canvas/')
+  } catch {
+    return false
+  }
 }
 
 export function getCosProxyUrl(url) {
