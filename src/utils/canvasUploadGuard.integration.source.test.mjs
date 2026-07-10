@@ -64,6 +64,21 @@ assert.ok(
   saveTabsSource.indexOf('findBlockingCanvasUploads(') < saveTabsSource.lastIndexOf('canvasStore.closeAllTabs()'),
   'space switching must preflight dirty tabs before closing them'
 )
+const blockerPreflightStart = saveTabsSource.indexOf('for (const tab of tabs)')
+const dirtySaveStart = saveTabsSource.indexOf('for (const tab of tabs)', blockerPreflightStart + 1)
+assert.notEqual(dirtySaveStart, -1, 'space switching must keep separate blocker and dirty-save loops')
+const blockerPreflightSource = saveTabsSource.slice(blockerPreflightStart, dirtySaveStart)
+const dirtySaveSource = saveTabsSource.slice(dirtySaveStart)
+assert.doesNotMatch(
+  blockerPreflightSource,
+  /if \(!tab\.hasChanges\) continue/,
+  'a clean tab with an upload blocker must still cancel closeAllTabs and space switching'
+)
+assert.match(
+  dirtySaveSource,
+  /if \(!tab\.hasChanges\) continue/,
+  'only changed tabs should be saved after every tab passes blocker preflight'
+)
 
 const selectSpaceSource = extractFunction(switcherSource, 'selectSpace')
 assert.match(selectSpaceSource, /const reset = await saveAllTabsAndReset\(\)/)

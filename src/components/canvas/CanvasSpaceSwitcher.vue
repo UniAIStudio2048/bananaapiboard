@@ -56,7 +56,6 @@ async function saveAllTabsAndReset() {
   const oldSpaceParams = teamStore.getSpaceParams('current')
 
   for (const tab of tabs) {
-    if (!tab.hasChanges) continue
     const isActive = tab.id === canvasStore.activeTabId
     const tabNodes = isActive ? toRaw(canvasStore.nodes) : toRaw(tab.nodes)
     const tabEdges = isActive ? toRaw(canvasStore.edges) : toRaw(tab.edges)
