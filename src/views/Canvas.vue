@@ -79,6 +79,7 @@ import {
 // 🔧 画布诊断工具 - 用于调试画布强制重新加载问题
 import { initCanvasDiagnostic, printCanvasDiagnosticReport } from '@/utils/canvasDiagnostic'
 import { createCanvasFpsMonitor } from '@/utils/canvasFpsMonitor'
+import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 
 // 导入画布样式
 import '@/styles/canvas.css'
@@ -1020,6 +1021,11 @@ async function autoSaveWorkflow(options = {}) {
 
   // 检查是否有内容需要保存
   if (!currentTab) {
+    return
+  }
+
+  if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges).length > 0) {
+    console.log('[Canvas] 自动保存跳过：素材仍在上传，请等待完成后重试')
     return
   }
   

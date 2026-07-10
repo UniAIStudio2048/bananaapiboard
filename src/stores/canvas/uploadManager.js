@@ -116,6 +116,7 @@ export const useUploadManager = defineStore('uploadManager', () => {
 
       task.status = 'success'
       task.cloudUrl = result.url
+      task.uploaded = result
       console.log(`[UploadManager] 重试上传成功: ${result.url}`)
 
       updateNodeWithCloudUrl(task)
@@ -149,49 +150,19 @@ export const useUploadManager = defineStore('uploadManager', () => {
       const node = canvasStore.nodes.find(n => n.id === task.nodeId)
       if (!node) return
 
-      const updates = { isUploading: false, uploadFailed: false, uploadError: null }
-
-      if (task.type === 'image') {
-        if (node.data?.sourceImages) {
-          updates.sourceImages = node.data.sourceImages.map(
-            url => (url === task.blobUrl || url?.startsWith('blob:')) ? task.cloudUrl : url
-          )
-        }
-        if (node.data?.output?.urls) {
-          updates.output = {
-            ...node.data.output,
-            urls: node.data.output.urls.map(
-              url => (url === task.blobUrl || url?.startsWith('blob:')) ? task.cloudUrl : url
-            )
-          }
-        }
-        if (node.data?.output?.url === task.blobUrl || node.data?.output?.url?.startsWith('blob:')) {
-          updates.output = {
-            ...(updates.output || node.data.output),
-            url: task.cloudUrl
-          }
-        }
-      } else if (task.type === 'video') {
-        updates.output = { ...node.data.output, url: task.cloudUrl }
-        if (node.data?.sourceVideo === task.blobUrl) {
-          updates.sourceVideo = task.cloudUrl
-        }
-      } else if (task.type === 'audio') {
-        updates.audioUrl = task.cloudUrl
-        updates.output = { ...node.data.output, url: task.cloudUrl }
+      const uploaded = task.uploaded || {
+        url: task.cloudUrl,
+        status: 'completed',
+        uploadId: task.uploadId,
+        assetId: task.assetId
       }
-
-      if (node.data?._dataLost) {
-        updates._dataLost = false
-        updates._lostReason = null
-      }
-
-      canvasStore.updateNodeData(task.nodeId, updates)
+      canvasStore.commitMediaUpload({
+        nodeId: task.nodeId,
+        blobUrl: task.blobUrl,
+        mediaType: task.type,
+        uploaded
+      })
       console.log(`[UploadManager] 节点 ${task.nodeId} 已更新为云存储URL`)
-
-      if (task.blobUrl) {
-        try { URL.revokeObjectURL(task.blobUrl) } catch (e) { /* ignore */ }
-      }
     } catch (e) {
       console.error(`[UploadManager] 更新节点失败:`, e.message)
     }

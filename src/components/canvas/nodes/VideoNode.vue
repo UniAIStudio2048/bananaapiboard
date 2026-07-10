@@ -53,6 +53,7 @@ import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
 import { getSeedanceQuickAsset } from '@/utils/seedanceQuickAsset'
+import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import {
   applySeedanceVideoInputMultiplier,
   formatSeedanceVideoInputMultiplier,
@@ -5101,6 +5102,10 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
 async function handleGenerate(options = {}) {
   const { retry = false } = options
   if (isGenerating.value) return
+  if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges, props.id).length > 0) {
+    showToast('素材仍在上传，请等待完成后重试', 'warning')
+    return
+  }
   collapseConfigPanel()
   
   // 动态获取上游节点的最新数据
@@ -5662,23 +5667,11 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
   try {
     console.log('[VideoNode] 后台异步上传开始:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
     
-    const urls = await uploadImages([file])
-    if (urls && urls.length > 0) {
-      const serverUrl = urls[0]
+    const uploaded = await uploadCanvasMedia(file, 'image')
+    if (uploaded.url) {
+      const serverUrl = uploaded.url
       console.log('[VideoNode] 后台上传成功，服务器URL:', serverUrl)
-      
-      // 静默更新节点中的 URL
-      const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
-      if (currentNode?.data?.sourceImages?.includes(blobUrl)) {
-        const updatedSourceImages = currentNode.data.sourceImages.map(
-          url => url === blobUrl ? serverUrl : url
-        )
-        canvasStore.updateNodeData(nodeId, { sourceImages: updatedSourceImages })
-        console.log('[VideoNode] 已静默更新 sourceImages')
-      }
-      
-      // 释放 blob URL 内存
-      URL.revokeObjectURL(blobUrl)
+      canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'image', uploaded })
     }
   } catch (error) {
     console.warn('[VideoNode] 后台上传失败，保持使用 blob URL:', error.message)
@@ -5707,18 +5700,7 @@ async function uploadVideoFileAsync(file, blobUrl, nodeId) {
     
     if (serverUrl) {
       console.log('[VideoNode] 视频后台上传成功，服务器URL:', serverUrl)
-      const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
-      if (currentNode) {
-        const updates = { isUploading: false, uploadFailed: false, uploadError: null }
-        if (currentNode.data?.sourceVideo === blobUrl) {
-          updates.sourceVideo = serverUrl
-        }
-        if (currentNode.data?.output?.url === blobUrl) {
-          updates.output = { ...currentNode.data.output, url: serverUrl }
-        }
-        canvasStore.updateNodeData(nodeId, updates)
-      }
-      try { URL.revokeObjectURL(blobUrl) } catch (e) { /* ignore */ }
+      canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'video', uploaded: result })
     }
   } catch (error) {
     console.warn('[VideoNode] 视频后台上传失败:', error.message)
@@ -5945,18 +5927,7 @@ async function uploadAudioFileAsync(file, blobUrl, nodeId) {
     const serverUrl = result.url
 
     if (serverUrl) {
-      const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
-      if (currentNode) {
-        const updates = {
-          audioUrl: serverUrl,
-          output: { ...currentNode.data.output, url: serverUrl },
-          isUploading: false,
-          uploadFailed: false,
-          uploadError: null
-        }
-        canvasStore.updateNodeData(nodeId, updates)
-      }
-      try { URL.revokeObjectURL(blobUrl) } catch (e) { /* ignore */ }
+      canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'audio', uploaded: result })
     }
   } catch (error) {
     console.warn('[VideoNode] 音频后台上传失败:', error.message)

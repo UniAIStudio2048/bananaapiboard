@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import test from 'node:test'
 
 const source = readFileSync(new URL('./ImageNode.vue', import.meta.url), 'utf8')
+const commitSource = readFileSync(new URL('../../../stores/canvas/mediaUploadCommit.js', import.meta.url), 'utf8')
 
 test('generated output preview exposes an icon-only replace upload button', () => {
   const outputPreviewMatch = source.match(
@@ -49,11 +50,8 @@ test('output replace upload action swaps the displayed output to the local blob 
 test('background upload replacement keeps output url and urls fields in sync', () => {
   const uploadAsyncMatch = source.match(/async function uploadImageFileAsync\(file, blobUrl, nodeId\) \{[\s\S]*?\n\}/)
   assert.ok(uploadAsyncMatch, 'uploadImageFileAsync should exist')
-  assert.match(uploadAsyncMatch[0], /currentNode\.data\?\.output\?\.url === blobUrl/)
-  assert.match(uploadAsyncMatch[0], /url: serverUrl/)
-
-  const downstreamMatch = source.match(/function updateDownstreamBlobReferences\(blobUrl, serverUrl\) \{[\s\S]*?\n\}/)
-  assert.ok(downstreamMatch, 'updateDownstreamBlobReferences should exist')
-  assert.match(downstreamMatch[0], /node\.data\?\.output\?\.url === blobUrl/)
-  assert.match(downstreamMatch[0], /updates\.output = \{[\s\S]*url: serverUrl/)
+  assert.match(uploadAsyncMatch[0], /canvasStore\.commitMediaUpload\(/)
+  assert.match(uploadAsyncMatch[0], /mediaType: 'image'/)
+  assert.match(commitSource, /next\.url === from/)
+  assert.match(commitSource, /replaceArray\(next\.urls, from, to\)/)
 })

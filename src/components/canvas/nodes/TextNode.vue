@@ -46,6 +46,7 @@ import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { showAlert } from '@/composables/useCanvasDialog'
 import { getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 
 const { t } = useI18n()
@@ -1671,6 +1672,10 @@ const hasUpstreamInput = computed(() => inheritedText.value || totalMediaCount.v
 
 // 处理 LLM 对话
 async function handleLLMGenerate() {
+  if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges, props.id).length > 0) {
+    alert('素材仍在上传，请等待完成后重试')
+    return
+  }
   // 获取当前节点上方显示的文本内容（作为上轮对话）
   const currentNodeTextRaw = props.data.llmResponse || localText.value
   // 提取纯文本，去除HTML标签

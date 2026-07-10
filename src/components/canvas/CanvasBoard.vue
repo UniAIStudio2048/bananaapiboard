@@ -3383,43 +3383,10 @@ async function uploadFilesToCloud(tasks) {
       console.log(`[CanvasBoard] 开始上传${type}到云存储:`, file.name, '大小:', Math.round(file.size / 1024), 'KB')
 
       const result = await uploadCanvasMedia(file, type)
-      const cloudUrl = result.url
-      
-      console.log(`[CanvasBoard] ${type}上传成功，云URL:`, cloudUrl)
-      
-      // 更新节点数据，将 blob URL 替换为云存储 URL
-      const node = canvasStore.nodes.find(n => n.id === nodeId)
-      if (node) {
-        if (type === 'image') {
-          // 图片节点：更新 sourceImages
-          const newSourceImages = node.data.sourceImages.map(url => url === blobUrl ? cloudUrl : url)
-          canvasStore.updateNodeData(nodeId, { 
-            sourceImages: newSourceImages,
-            isUploading: false
-          })
-        } else if (type === 'video') {
-          // 视频节点：更新 output.url
-          canvasStore.updateNodeData(nodeId, { 
-            output: { ...node.data.output, url: cloudUrl },
-            isUploading: false
-          })
-        } else if (type === 'audio') {
-          // 音频节点：更新 audioUrl 和 output.url
-          canvasStore.updateNodeData(nodeId, { 
-            audioUrl: cloudUrl,
-            output: { ...node.data.output, url: cloudUrl },
-            isUploading: false
-          })
-        }
-        
+      console.log(`[CanvasBoard] ${type}上传成功，云URL:`, result.url)
+
+      if (canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: type, uploaded: result })) {
         console.log(`[CanvasBoard] 节点 ${nodeId} 已更新为云存储URL`)
-      }
-      
-      // 释放 blob URL 内存
-      try {
-        URL.revokeObjectURL(blobUrl)
-      } catch (e) {
-        // 忽略
       }
       
     } catch (error) {

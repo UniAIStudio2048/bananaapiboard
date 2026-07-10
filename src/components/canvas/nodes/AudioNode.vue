@@ -1177,27 +1177,8 @@ async function uploadAudioFileAsync(file, blobUrl, nodeId) {
     console.log('[AudioNode] 后台异步上传音频开始:', file.name, '大小:', Math.round(file.size / 1024), 'KB')
     
     const result = await uploadCanvasMedia(file, 'audio')
-    const cloudUrl = result.url
-    
-    console.log('[AudioNode] 音频上传成功，云URL:', cloudUrl)
-    
-    // 更新节点数据，将 blob URL 替换为云存储 URL
-    const node = canvasStore.nodes.find(n => n.id === nodeId)
-    if (node) {
-      canvasStore.updateNodeData(nodeId, {
-        audioUrl: cloudUrl,
-        output: { ...node.data.output, url: cloudUrl },
-        isUploading: false
-      })
-      console.log('[AudioNode] 节点已更新为云存储URL')
-    }
-    
-    // 释放 blob URL 内存
-    try {
-      URL.revokeObjectURL(blobUrl)
-    } catch (e) {
-      // 忽略
-    }
+    console.log('[AudioNode] 音频上传成功，云URL:', result.url)
+    canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'audio', uploaded: result })
     
   } catch (error) {
     console.error('[AudioNode] 音频上传失败:', error.message)

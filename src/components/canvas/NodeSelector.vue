@@ -832,30 +832,8 @@ async function uploadFileToCloud(nodeId, task) {
   try {
     console.log(`[NodeSelector] 后台上传 ${type} 到云端:`, file.name, '大小:', Math.round(file.size / 1024), 'KB')
     const result = await uploadCanvasMedia(file, type)
-    const cloudUrl = result.url
-    console.log(`[NodeSelector] ${type} 上传成功，云 URL:`, cloudUrl)
-    
-    const node = canvasStore.nodes.find(n => n.id === nodeId)
-    if (node) {
-      if (type === 'image') {
-        const newSourceImages = (node.data.sourceImages || []).map(url => url === blobUrl ? cloudUrl : url)
-        canvasStore.updateNodeData(nodeId, { sourceImages: newSourceImages, isUploading: false })
-      } else if (type === 'video') {
-        canvasStore.updateNodeData(nodeId, { 
-          output: { ...node.data.output, url: cloudUrl },
-          isUploading: false
-        })
-      } else if (type === 'audio') {
-        canvasStore.updateNodeData(nodeId, { 
-          audioUrl: cloudUrl,
-          output: { ...node.data.output, url: cloudUrl },
-          isUploading: false
-        })
-      }
-    }
-    
-    // 释放 blob URL
-    try { URL.revokeObjectURL(blobUrl) } catch (e) { /* ignore */ }
+    console.log(`[NodeSelector] ${type} 上传成功，云 URL:`, result.url)
+    canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: type, uploaded: result })
   } catch (error) {
     console.error(`[NodeSelector] ${type} 上传失败:`, error.message)
     const node = canvasStore.nodes.find(n => n.id === nodeId)

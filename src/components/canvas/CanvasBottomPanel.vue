@@ -21,6 +21,7 @@ import { getTotalUserPoints } from '@/utils/points'
 import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { resolveGenerationAspectRatio } from '@/utils/aspectRatio'
 import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
+import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import {
   getAvailableImageResolutionOptions,
   getImageResolutionCost,
@@ -537,6 +538,10 @@ function getUpstreamImagesRealtime(nodeId) {
 
 // 处理图片生成
 async function handleImageGenerate(nodeId, nodeType) {
+  if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges, nodeId).length > 0) {
+    await showAlert('素材仍在上传，请等待完成后重试', '提示')
+    return
+  }
   if (selectedModelConfig.value?.usable === false) {
     alert(getModelPackageMessage(selectedModelConfig.value))
     return

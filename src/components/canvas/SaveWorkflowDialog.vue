@@ -12,6 +12,7 @@ import { saveWorkflow, getStorageQuota } from '@/api/canvas/workflow'
 import { getProjectList, createProject } from '@/api/canvas/project'
 import { useI18n } from '@/i18n'
 import PublishWorkDialog from '@/components/community/PublishWorkDialog.vue'
+import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -425,6 +426,11 @@ async function handleSave() {
 
   if (canvasStore.nodes.length === 0) {
     saveError.value = t('canvas.emptyCanvas')
+    return
+  }
+
+  if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges).length > 0) {
+    saveError.value = '素材仍在上传，请等待完成后重试'
     return
   }
 

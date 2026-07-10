@@ -18,7 +18,7 @@ import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints, removeImageBackground } from '@/api/canvas/nodes'
 import { getHistory } from '@/api/canvas/history'
-import { extractVideoFrame } from '@/api/canvas/workflow'
+import { extractVideoFrame, uploadCanvasMedia } from '@/api/canvas/workflow'
 import { createQuickSeedanceCharacterAsset, listAssetGroups, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 import { registerTask, removeCompletedTask, getTasksByNodeId, ensureTaskPolling } from '@/stores/canvas/backgroundTaskManager'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
@@ -61,6 +61,7 @@ import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { isPanoramaVrSupportedRatio } from '@/utils/canvasPanoramaExport'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
+import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PromptMediaTag from '../PromptMediaTag.vue'
 import CanvasNodeImage from '../CanvasNodeImage.vue'
@@ -4631,9 +4632,9 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
   try {
     console.log('[ImageNode] 后台异步上传开始:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
     
-    const urls = await uploadImages([file])
-    if (urls && urls.length > 0) {
-      const serverUrl = urls[0]
+    const uploaded = await uploadCanvasMedia(file, 'image')
+    if (uploaded.url) {
+      const serverUrl = uploaded.url
       console.log('[ImageNode] 后台上传成功，服务器URL:', serverUrl)
       
       // 🔧 重要：在释放 blob URL 之前，先保存映射关系
@@ -4641,44 +4642,12 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
       blobToServerUrlMap.set(blobUrl, serverUrl)
       console.log('[ImageNode] 保存 blob->server 映射:', blobUrl.substring(0, 30), '->', serverUrl.substring(0, 60))
       
-      // 静默更新节点中的 URL（将 blob URL 替换为服务器 URL）
-      const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
-      if (currentNode) {
-        // 🔧 上传成功后清除上传状态
-        canvasStore.updateNodeData(nodeId, { isUploading: false })
-        
-        // 检查并更新 sourceImages 中的 blob URL
-        if (currentNode.data?.sourceImages?.includes(blobUrl)) {
-          const updatedSourceImages = currentNode.data.sourceImages.map(
-            url => url === blobUrl ? serverUrl : url
-          )
-          canvasStore.updateNodeData(nodeId, { sourceImages: updatedSourceImages })
-          console.log('[ImageNode] 已静默更新 sourceImages:', blobUrl.substring(0, 30), '->', serverUrl.substring(0, 60))
-        }
-        
-        // 也检查 output.url / output.urls（如果图片被移到了输出中）
-        if (currentNode.data?.output?.url === blobUrl || currentNode.data?.output?.urls?.includes(blobUrl)) {
-          const updatedOutput = {
-            ...currentNode.data.output,
-            ...(currentNode.data.output.url === blobUrl ? { url: serverUrl } : {})
-          }
-          if (Array.isArray(updatedOutput.urls)) {
-            updatedOutput.urls = updatedOutput.urls.map(
-              url => url === blobUrl ? serverUrl : url
-            )
-          }
-          canvasStore.updateNodeData(nodeId, { 
-            output: updatedOutput
-          })
-          console.log('[ImageNode] 已静默更新 output.url/output.urls')
-        }
-      }
-      
-      // 同时更新所有下游节点中引用该 blob URL 的地方
-      updateDownstreamBlobReferences(blobUrl, serverUrl)
-      
-      // 释放 blob URL 内存（从跟踪列表中移除）
-      revokeTrackedBlobUrl(blobUrl)
+      if (canvasStore.commitMediaUpload({
+        nodeId,
+        blobUrl,
+        mediaType: 'image',
+        uploaded
+      })) revokeTrackedBlobUrl(blobUrl)
     }
   } catch (error) {
     console.warn('[ImageNode] 后台上传失败，保持使用 blob URL:', error.message)
@@ -4694,48 +4663,6 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
         field: 'sourceImages',
         error: error.message
       })
-    }
-  }
-}
-
-// 更新所有下游节点中引用该 blob URL 的地方
-function updateDownstreamBlobReferences(blobUrl, serverUrl) {
-  // 遍历所有节点，查找并更新引用该 blob URL 的地方
-  for (const node of canvasStore.nodes) {
-    let updated = false
-    const updates = {}
-    
-    // 检查 sourceImages
-    if (node.data?.sourceImages?.includes(blobUrl)) {
-      updates.sourceImages = node.data.sourceImages.map(
-        url => url === blobUrl ? serverUrl : url
-      )
-      updated = true
-    }
-    
-    // 检查 output.url / output.urls
-    if (node.data?.output?.url === blobUrl || node.data?.output?.urls?.includes(blobUrl)) {
-      updates.output = {
-        ...node.data.output,
-        ...(node.data.output.url === blobUrl ? { url: serverUrl } : {})
-      }
-      if (Array.isArray(updates.output.urls)) {
-        updates.output.urls = updates.output.urls.map(url => url === blobUrl ? serverUrl : url)
-      }
-      updated = true
-    }
-    
-    // 检查 referenceImages
-    if (node.data?.referenceImages?.includes(blobUrl)) {
-      updates.referenceImages = node.data.referenceImages.map(
-        url => url === blobUrl ? serverUrl : url
-      )
-      updated = true
-    }
-    
-    if (updated) {
-      canvasStore.updateNodeData(node.id, updates)
-      console.log('[ImageNode] 更新下游节点 blob 引用:', node.id)
     }
   }
 }
@@ -6123,6 +6050,10 @@ function createNewOutputNode() {
 // 开始生成（输出节点用）
 async function handleGenerate(options = {}) {
   const { fromGroup = false, retry = false } = options
+  if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges, props.id).length > 0) {
+    showToast('素材仍在上传，请等待完成后重试', 'warning')
+    return
+  }
   // 动态获取上游节点的最新提示词（可能有多个文本节点连接）
   const upstreamPrompt = getUpstreamPrompt()
   const userPrompt = promptText.value.trim()

@@ -15,6 +15,7 @@ import { getGlobalNodeDataCache } from './nodeDataCache'
 import { buildNodeDataWithRememberedParameters } from './nodeParameterMemory'
 import { applyNodeDataPatchToTabs } from './tabNodePatch'
 import { markNodeGenerationSubmissionsDeleted } from './pendingGenerationSubmissions'
+import { buildMediaUploadCommit } from './mediaUploadCommit'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -299,6 +300,28 @@ export const useCanvasStore = defineStore('canvas', () => {
         markCurrentTabChanged()
       }
     }
+  }
+
+  function commitMediaUpload({ nodeId, blobUrl, uploaded, mediaType }) {
+    const result = buildMediaUploadCommit({
+      nodes: nodes.value,
+      edges: edges.value,
+      nodeId,
+      blobUrl,
+      uploaded,
+      mediaType
+    })
+    if (!result.sourcePatch) return false
+
+    updateNodeData(nodeId, result.sourcePatch, { skipStoryboardBindingSync: true })
+    for (const downstream of result.downstreamPatches) {
+      updateNodeData(downstream.nodeId, downstream.patch, { skipStoryboardBindingSync: true })
+    }
+    for (const edge of edges.value.filter(item => item.source === nodeId)) {
+      propagateData(edge.source, edge.target, edge.targetHandle)
+    }
+    if (blobUrl?.startsWith('blob:')) URL.revokeObjectURL(blobUrl)
+    return true
   }
 
   function findInactiveWorkflowTabNode(nodeId) {
@@ -2769,6 +2792,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 节点操作
     addNode,
     updateNodeData,
+    commitMediaUpload,
     findInactiveWorkflowTabNode,
     updateInactiveWorkflowTabNodeData,
     updateNodePosition,
