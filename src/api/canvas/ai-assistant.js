@@ -4,6 +4,7 @@
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { createPromptSafetyError } from '@/utils/promptSafetyError'
+import { uploadCanvasFile } from './direct-upload.js'
 
 // 获取通用请求头
 function getHeaders(options = {}) {
@@ -28,29 +29,14 @@ function throwPromptSafetyErrorIfNeeded(error) {
  * @returns {Promise<{url: string, storage: string}>} 上传结果
  */
 export async function uploadAttachment(file) {
-  const formData = new FormData()
-  formData.append('images', file)
-
-  const token = localStorage.getItem('token')
-  const response = await fetch(getApiUrl('/api/images/upload'), {
-    method: 'POST',
-    headers: {
-      ...getTenantHeaders(),
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: formData
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || error.error || '上传附件失败')
-  }
-
-  const result = await response.json()
-  // 返回第一个上传的URL
+  const fileType = detectFileType(file)
+  if (fileType === 'file') throw new Error('仅支持图片、视频或音频附件')
+  const result = await uploadCanvasFile(file, fileType)
   return {
-    url: result.urls?.[0] || null,
-    storage: result.storage || 'local'
+    url: result.url,
+    storage: 'cos',
+    assetId: result.assetId,
+    uploadId: result.uploadId
   }
 }
 

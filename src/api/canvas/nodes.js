@@ -10,6 +10,7 @@ import { classifyBackgroundTaskStatus } from '@/stores/canvas/backgroundTaskStat
 import { normalizePromptLineEndings } from '@/utils/promptText'
 import { createPromptSafetyError } from '@/utils/promptSafetyError'
 import { buildTaskQueryError } from './taskQueryError.js'
+import { uploadCanvasFile } from './direct-upload.js'
 
 async function parseApiResponse(response, fallbackMessage) {
   const contentType = response.headers.get('content-type') || ''
@@ -507,79 +508,12 @@ export async function getAudioEditTaskStatus(taskId) {
  * 上传图片（内置重试机制）
  */
 export async function uploadImages(files, retryOptions = {}) {
-  const form = new FormData()
-  for (const f of files.slice(0, 9)) {
-    form.append('images', f)
+  const results = []
+  for (const file of files.slice(0, 9)) {
+    const uploaded = await uploadCanvasFile(file, 'image', retryOptions)
+    results.push(uploaded.url)
   }
-  
-  const token = localStorage.getItem('token')
-  const maxRetries = retryOptions.maxRetries ?? 3
-  const baseDelay = retryOptions.baseDelay ?? 2000
-  const totalSize = files.reduce((sum, f) => sum + f.size, 0)
-  const timeoutMs = retryOptions.timeoutMs ?? (totalSize > 10 * 1024 * 1024 ? 180000 : 120000)
-  
-  let lastError
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    if (attempt > 0) {
-      const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000
-      console.log(`[uploadImages] 第 ${attempt} 次重试，等待 ${Math.round(delay)}ms...`)
-      await new Promise(r => setTimeout(r, delay))
-      const retryForm = new FormData()
-      for (const f of files.slice(0, 9)) {
-        retryForm.append('images', f)
-      }
-    }
-    
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-    
-    try {
-      const uploadForm = attempt === 0 ? form : (() => {
-        const f = new FormData()
-        for (const file of files.slice(0, 9)) f.append('images', file)
-        return f
-      })()
-      
-      const response = await fetch(getApiUrl('/api/images/upload'), {
-        method: 'POST',
-        headers: {
-          ...getTenantHeaders(),
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: uploadForm,
-        signal: controller.signal
-      })
-      clearTimeout(timeoutId)
-      
-      if (response.status >= 500 && attempt < maxRetries) {
-        lastError = new Error(`服务器错误 ${response.status}`)
-        continue
-      }
-      
-      if (!response.ok) {
-        throw new Error('图片上传失败')
-      }
-      
-      const data = await response.json()
-      return data.urls || []
-    } catch (err) {
-      clearTimeout(timeoutId)
-      lastError = err
-      
-      const isRetryable = err.name === 'AbortError' ||
-        err.message?.includes('Failed to fetch') ||
-        err.message?.includes('NetworkError') ||
-        err.message?.includes('network')
-      
-      if (!isRetryable || attempt >= maxRetries) {
-        if (err.name === 'AbortError') {
-          throw new Error('图片上传超时，请检查网络')
-        }
-        throw err
-      }
-    }
-  }
-  throw lastError
+  return results
 }
 
 /**

@@ -15,6 +15,7 @@ import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } f
 import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled, isByteforCharacterLibraryEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
+import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import SeedanceCharacterPanel from './SeedanceCharacterPanel.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
@@ -1248,42 +1249,12 @@ async function submitAddCharacter() {
   addCharacterError.value = ''
   
   try {
-    // 1. 先上传文件到服务器
-    const formData = new FormData()
-    
-    // 根据文件类型选择正确的 API 和字段名
-    const uploadUrl = fileType === 'video' 
-      ? `${getApiUrl('')}/api/videos/upload`
-      : `${getApiUrl('')}/api/images/upload`
-    
-    // 视频上传使用 'file' 字段，图片上传使用 'images' 字段
-    if (fileType === 'video') {
-      formData.append('file', file)
-    } else {
-      formData.append('images', file)
+    // 1. 浏览器直传 COS，服务端 HEAD 验证后才使用 CDN URL
+    const uploadResult = await uploadCanvasMedia(file, fileType)
+    if (uploadResult.status !== 'completed' || !uploadResult.url) {
+      throw new Error('媒体上传未完成')
     }
-    
-    const token = localStorage.getItem('token')
-    const uploadResponse = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        ...getTenantHeaders(),
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: formData
-    })
-    
-    if (!uploadResponse.ok) {
-      const err = await uploadResponse.json().catch(() => ({}))
-      throw new Error(err.error || err.message || '文件上传失败')
-    }
-    
-    const uploadResult = await uploadResponse.json()
-    const fileUrl = uploadResult.url || uploadResult.urls?.[0]
-    
-    if (!fileUrl) {
-      throw new Error('文件上传失败：未返回URL')
-    }
+    const fileUrl = uploadResult.url
     
     // 2. 保存为 sora-character 资产（包含当前空间信息）
     const spaceParams = teamStore.getSpaceParams('current')

@@ -2,6 +2,7 @@
  * Canvas 工作流 API
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { uploadCanvasFile } from './direct-upload.js'
 
 /**
  * 获取带认证的请求头（包含用户token和租户信息）
@@ -427,64 +428,6 @@ export function deleteWorkflowLocal(workflowId) {
 }
 
 /**
- * 带重试和超时的 fetch 上传封装
- * 针对带宽不稳定场景，自动重试网络错误和超时
- */
-async function fetchWithRetry(url, options, { maxRetries = 3, baseDelay = 2000, timeoutMs = 120000, label = '' } = {}) {
-  let lastError
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
-    
-    try {
-      if (attempt > 0) {
-        const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000
-        console.log(`[Upload] ${label} 第 ${attempt} 次重试，等待 ${Math.round(delay)}ms...`)
-        await new Promise(r => setTimeout(r, delay))
-      }
-      
-      const response = await fetch(url, { ...options, signal: controller.signal })
-      clearTimeout(timeoutId)
-      
-      if (response.status >= 500) {
-        const errBody = await response.json().catch(() => ({}))
-        lastError = new Error(errBody.message || errBody.error || `服务器错误 ${response.status}`)
-        lastError.retryable = true
-        if (attempt < maxRetries) continue
-        throw lastError
-      }
-      
-      if (!response.ok) {
-        clearTimeout(timeoutId)
-        const errBody = await response.json().catch(() => ({}))
-        throw new Error(errBody.message || errBody.error || `上传失败 (${response.status})`)
-      }
-      
-      return response
-    } catch (err) {
-      clearTimeout(timeoutId)
-      lastError = err
-      
-      const isRetryable = err.name === 'AbortError' ||
-        err.message?.includes('Failed to fetch') ||
-        err.message?.includes('NetworkError') ||
-        err.message?.includes('network') ||
-        err.message?.includes('timeout') ||
-        err.message?.includes('ERR_CONNECTION') ||
-        err.retryable
-      
-      if (!isRetryable || attempt >= maxRetries) {
-        if (err.name === 'AbortError') {
-          throw new Error(`上传超时（${Math.round(timeoutMs / 1000)}秒）`)
-        }
-        throw err
-      }
-    }
-  }
-  throw lastError
-}
-
-/**
  * 上传画布媒体文件到云存储（图片、视频、音频）
  * 内置自动重试（最多3次）和超时控制，适应带宽不稳定场景
  * 
@@ -494,59 +437,7 @@ async function fetchWithRetry(url, options, { maxRetries = 3, baseDelay = 2000, 
  * @returns {Promise<{url: string, isCloud: boolean}>}
  */
 export async function uploadCanvasMedia(file, type = 'image', retryOptions = {}) {
-  const token = localStorage.getItem('token')
-  const headers = {
-    ...getTenantHeaders(),
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
-  }
-  
-  const formData = new FormData()
-  
-  let uploadUrl
-  if (type === 'image') {
-    formData.append('images', file)
-    uploadUrl = getApiUrl(`/api/images/upload`)
-  } else if (type === 'video') {
-    formData.append('file', file)
-    uploadUrl = getApiUrl(`/api/videos/upload`)
-  } else if (type === 'audio') {
-    formData.append('file', file)
-    uploadUrl = getApiUrl(`/api/canvas/upload-audio`)
-  } else {
-    throw new Error(`不支持的文件类型: ${type}`)
-  }
-  
-  const sizeMB = (file.size / 1024 / 1024).toFixed(2)
-  console.log(`[Canvas] 开始上传${type}文件到云存储:`, file.name, `大小: ${sizeMB}MB`)
-  
-  const timeoutMs = file.size > 50 * 1024 * 1024 ? 300000 :
-                    file.size > 10 * 1024 * 1024 ? 180000 : 120000
-  
-  const response = await fetchWithRetry(uploadUrl, {
-    method: 'POST',
-    credentials: 'include',
-    headers,
-    body: formData
-  }, {
-    maxRetries: retryOptions.maxRetries ?? 3,
-    baseDelay: retryOptions.baseDelay ?? 2000,
-    timeoutMs: retryOptions.timeoutMs ?? timeoutMs,
-    label: `${type}(${file.name})`
-  })
-  
-  const data = await response.json()
-  const url = data.url || (data.urls && data.urls[0])
-  
-  if (!url) {
-    throw new Error('上传成功但未返回URL')
-  }
-  
-  console.log(`[Canvas] ${type}文件上传成功:`, url)
-  
-  return {
-    url,
-    isCloud: true
-  }
+  return uploadCanvasFile(file, type, retryOptions)
 }
 
 export async function extractVideoFrame({ videoUrl, time = 0, mode = 'time', nodeId = '' }) {

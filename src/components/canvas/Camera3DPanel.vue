@@ -9,6 +9,7 @@ import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as THREE from 'three'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { useTeamStore } from '@/stores/team'
+import { uploadCanvasMedia } from '@/api/canvas/workflow'
 
 const props = defineProps({
   imageUrl: {
@@ -482,7 +483,7 @@ function handleApply() {
   })
 }
 
-async function uploadImageToQiniu(imageUrl) {
+async function uploadCameraImageToCloud(imageUrl) {
   const token = localStorage.getItem('token')
   if (!token) throw new Error('请先登录')
 
@@ -502,19 +503,11 @@ async function uploadImageToQiniu(imageUrl) {
     throw new Error('不支持的图片URL格式')
   }
 
-  const formData = new FormData()
-  formData.append('image', blob, 'camera3d-source.jpg')
-  const uploadResponse = await fetch(getApiUrl('/api/canvas/upload-temp-image'), {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${token}`, ...getTenantHeaders() },
-    body: formData
-  })
-  if (!uploadResponse.ok) {
-    const errorData = await uploadResponse.json()
-    throw new Error(errorData.message || '图片上传失败')
+  const file = new File([blob], 'camera3d-source.jpg', { type: blob.type || 'image/jpeg' })
+  const uploadResult = await uploadCanvasMedia(file, 'image')
+  if (uploadResult.status !== 'completed' || !uploadResult.url) {
+    throw new Error('媒体上传未完成')
   }
-  const uploadResult = await uploadResponse.json()
-  if (!uploadResult.url) throw new Error('未获取到图片URL')
   return uploadResult.url
 }
 
@@ -537,7 +530,7 @@ async function handleGenerate() {
     if (props.imageUrl.startsWith('blob:') || props.imageUrl.startsWith('data:')) {
       generateProgress.value = '上传图片到云端...'
       try {
-        finalImageUrl = await uploadImageToQiniu(props.imageUrl)
+        finalImageUrl = await uploadCameraImageToCloud(props.imageUrl)
       } catch (uploadError) {
         throw new Error(`图片上传失败: ${uploadError.message}`)
       }

@@ -4875,7 +4875,8 @@ async function ensureReferenceVideoUrlsAccessible(nodeId, targetNodeId) {
   console.log('[VideoNode] 检测到参考视频含 blob URL，开始上传到云端...')
   canvasStore.updateNodeData(targetNodeId, { progress: '正在处理参考视频...' })
 
-  for (const videoUrl of currentRefVideos) {
+  const accessibleVideos = [...currentRefVideos]
+  for (const [videoIndex, videoUrl] of currentRefVideos.entries()) {
     if (!videoUrl.startsWith('blob:')) continue
     try {
       const resp = await fetch(videoUrl)
@@ -4883,35 +4884,23 @@ async function ensureReferenceVideoUrlsAccessible(nodeId, targetNodeId) {
       const blob = await resp.blob()
       const file = new File([blob], `ref_video_${Date.now()}.mp4`, { type: blob.type || 'video/mp4' })
 
-      const uploadFormData = new FormData()
-      uploadFormData.append('file', file)
-      const token = localStorage.getItem('token')
-      const uploadResp = await fetch(getApiUrl('/api/videos/upload'), {
-        method: 'POST',
-        headers: {
-          ...getTenantHeaders(),
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: uploadFormData
-      })
-
-      if (uploadResp.ok) {
-        const uploadResult = await uploadResp.json()
-        if (uploadResult.url) {
-          console.log('[VideoNode] 参考视频 blob 上传成功:', uploadResult.url)
-          const upstreamEdges = canvasStore.edges.filter(e => e.target === nodeId)
-          for (const edge of upstreamEdges) {
-            const sn = canvasStore.nodes.find(n => n.id === edge.source)
-            if (!sn?.data) continue
-            if (sn.data.sourceVideo === videoUrl) {
-              canvasStore.updateNodeData(sn.id, { sourceVideo: uploadResult.url })
-              break
-            }
-            if (sn.data.output?.url === videoUrl) {
-              canvasStore.updateNodeData(sn.id, { output: { ...sn.data.output, url: uploadResult.url } })
-              break
-            }
-          }
+      const uploadResult = await uploadCanvasMedia(file, 'video')
+      if (uploadResult.status !== 'completed' || !uploadResult.url) {
+        throw new Error('媒体上传未完成')
+      }
+      accessibleVideos[videoIndex] = uploadResult.url
+      console.log('[VideoNode] 参考视频 blob 上传成功:', uploadResult.url)
+      const upstreamEdges = canvasStore.edges.filter(e => e.target === nodeId)
+      for (const edge of upstreamEdges) {
+        const sn = canvasStore.nodes.find(n => n.id === edge.source)
+        if (!sn?.data) continue
+        if (sn.data.sourceVideo === videoUrl) {
+          canvasStore.updateNodeData(sn.id, { sourceVideo: uploadResult.url })
+          break
+        }
+        if (sn.data.output?.url === videoUrl) {
+          canvasStore.updateNodeData(sn.id, { output: { ...sn.data.output, url: uploadResult.url } })
+          break
         }
       }
     } catch (err) {
@@ -4921,7 +4910,7 @@ async function ensureReferenceVideoUrlsAccessible(nodeId, targetNodeId) {
   }
 
   console.log('[VideoNode] 参考视频处理完成，当前列表:', referenceVideos.value)
-  return referenceVideos.value || []
+  return accessibleVideos
 }
 
 // 后台执行生成的重操作（图片压缩/上传/API提交），不阻塞UI
@@ -5016,39 +5005,26 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
             const ext = blob.type?.includes('wav') ? '.wav' : '.mp3'
             const file = new File([blob], `ref_audio_${Date.now()}${ext}`, { type: blob.type || 'audio/mpeg' })
             
-            const uploadFormData = new FormData()
-            uploadFormData.append('file', file)
-            const token = localStorage.getItem('token')
-            const uploadResp = await fetch(getApiUrl('/api/videos/upload'), {
-              method: 'POST',
-              headers: {
-                ...getTenantHeaders(),
-                ...(token ? { Authorization: `Bearer ${token}` } : {})
-              },
-              body: uploadFormData
-            })
-            
-            if (uploadResp.ok) {
-              const uploadResult = await uploadResp.json()
-              if (uploadResult.url) {
-                console.log('[VideoNode] 参考音频 blob 上传成功:', uploadResult.url)
-                const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
-                for (const edge of upstreamEdges) {
-                  const sn = canvasStore.nodes.find(n => n.id === edge.source)
-                  if (!sn?.data) continue
-                  if (sn.data.audioUrl === audioUrl) {
-                    canvasStore.updateNodeData(sn.id, { audioUrl: uploadResult.url })
-                    break
-                  }
-                  if (sn.data.audioData === audioUrl) {
-                    canvasStore.updateNodeData(sn.id, { audioData: uploadResult.url })
-                    break
-                  }
-                  if (sn.data.output?.url === audioUrl) {
-                    canvasStore.updateNodeData(sn.id, { output: { ...sn.data.output, url: uploadResult.url } })
-                    break
-                  }
-                }
+            const uploadResult = await uploadCanvasMedia(file, 'audio')
+            if (uploadResult.status !== 'completed' || !uploadResult.url) {
+              throw new Error('媒体上传未完成')
+            }
+            console.log('[VideoNode] 参考音频 blob 上传成功:', uploadResult.url)
+            const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
+            for (const edge of upstreamEdges) {
+              const sn = canvasStore.nodes.find(n => n.id === edge.source)
+              if (!sn?.data) continue
+              if (sn.data.audioUrl === audioUrl) {
+                canvasStore.updateNodeData(sn.id, { audioUrl: uploadResult.url })
+                break
+              }
+              if (sn.data.audioData === audioUrl) {
+                canvasStore.updateNodeData(sn.id, { audioData: uploadResult.url })
+                break
+              }
+              if (sn.data.output?.url === audioUrl) {
+                canvasStore.updateNodeData(sn.id, { output: { ...sn.data.output, url: uploadResult.url } })
+                break
               }
             }
           } catch (err) {
@@ -6955,23 +6931,10 @@ async function handleToolbarHD() {
           fileToUpload = new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' })
         }
         
-        const formData = new FormData()
-        formData.append('file', fileToUpload)
-        
-        const uploadResponse = await fetch(getApiUrl('/api/videos/upload'), {
-          method: 'POST',
-          headers: {
-            ...getTenantHeaders(),
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          },
-          body: formData
-        })
-        const uploadResult = await parseHDJsonResponse(uploadResponse, '视频上传失败')
-        
-        if (!uploadResponse.ok) {
-          throw new Error(uploadResult.message || uploadResult.error || '视频上传失败')
+        const uploadResult = await uploadCanvasMedia(fileToUpload, 'video')
+        if (uploadResult.status !== 'completed' || !uploadResult.url) {
+          throw new Error('媒体上传未完成')
         }
-        
         videoUrlForHD = uploadResult.url
         console.log('[VideoNode] blob视频上传成功:', videoUrlForHD)
         
@@ -7331,24 +7294,10 @@ async function executeCharacterCreation(clipData) {
           throw new Error('无法获取本地视频文件')
         }
         
-        const formData = new FormData()
-        formData.append('file', fileToUpload)
-        
-        const uploadResponse = await fetch(getApiUrl('/api/videos/upload'), {
-          method: 'POST',
-          headers: {
-            ...getTenantHeaders(),
-            ...(token ? { Authorization: `Bearer ${token}` } : {})
-          },
-          body: formData
-        })
-        
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json().catch(() => ({}))
-          throw new Error(errorData.message || '本地视频上传失败')
+        const uploadResult = await uploadCanvasMedia(fileToUpload, 'video')
+        if (uploadResult.status !== 'completed' || !uploadResult.url) {
+          throw new Error('媒体上传未完成')
         }
-        
-        const uploadResult = await uploadResponse.json()
         qiniuVideoUrl = uploadResult.url
         console.log('[VideoNode] 本地视频上传成功:', qiniuVideoUrl)
       } else {

@@ -12,6 +12,7 @@ import DOMPurify from 'dompurify'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getLLMConfig, chatWithLLM, getUserLLMPresets, createUserLLMPreset, updateUserLLMPreset } from '@/api/canvas/llm'
+import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { getAssets } from '@/api/canvas/assets'
@@ -1831,7 +1832,6 @@ async function handleLLMGenerate() {
 
 async function uploadTextNodeLlmMediaItems(items) {
   const uploadedItems = []
-  const token = localStorage.getItem('token')
 
   for (const item of items) {
     try {
@@ -1845,31 +1845,16 @@ async function uploadTextNodeLlmMediaItems(items) {
         mimeType
       })
 
-      const formData = new FormData()
-      formData.append('images', new File([blob], fileName, { type: mimeType }))
-
-      const uploadResponse = await fetch(getApiUrl('/api/images/upload'), {
-        method: 'POST',
-        headers: {
-          ...getTenantHeaders(),
-          ...(token ? { Authorization: `Bearer ${token}` } : {})
-        },
-        body: formData
-      })
-
-      if (!uploadResponse.ok) {
-        const error = await uploadResponse.json().catch(() => ({}))
-        throw new Error(error.message || error.error || '上传失败')
+      const file = new File([blob], fileName, { type: mimeType })
+      const uploadResult = await uploadCanvasMedia(file, item.type)
+      if (uploadResult.status !== 'completed' || !uploadResult.url) {
+        throw new Error('媒体上传未完成')
       }
-
-      const uploadResult = await uploadResponse.json()
-      const uploadedUrl = uploadResult.urls?.[0]
-      if (!uploadedUrl) throw new Error('上传返回数据异常')
 
       uploadedItems.push({
         type: item.type,
         sourceUrl: item.url,
-        url: uploadedUrl
+        url: uploadResult.url
       })
     } catch (error) {
       console.error('[TextNode] 本地参考媒体上传失败:', error, item.url?.substring?.(0, 60) || '')
