@@ -4,6 +4,7 @@ function uploadKey(nodeId, tabId) {
 
 export function createCanvasUploadCancellationRegistry() {
   const controllers = new Map()
+  const anonymousControllers = new Set()
 
   return {
     begin(nodeId, tabId) {
@@ -12,12 +13,18 @@ export function createCanvasUploadCancellationRegistry() {
       if (key) {
         controllers.get(key)?.abort()
         controllers.set(key, controller)
+      } else {
+        anonymousControllers.add(controller)
       }
       return controller
     },
     finish(nodeId, tabId, controller) {
       const key = uploadKey(nodeId, tabId)
-      if (key && controllers.get(key) === controller) controllers.delete(key)
+      if (key) {
+        if (controllers.get(key) === controller) controllers.delete(key)
+      } else {
+        anonymousControllers.delete(controller)
+      }
     },
     cancel(nodeId, tabId) {
       const key = uploadKey(nodeId, tabId)
@@ -30,7 +37,9 @@ export function createCanvasUploadCancellationRegistry() {
     },
     cancelAll() {
       for (const controller of controllers.values()) controller.abort()
+      for (const controller of anonymousControllers) controller.abort()
       controllers.clear()
+      anonymousControllers.clear()
     }
   }
 }

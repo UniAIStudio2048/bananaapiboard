@@ -1744,6 +1744,7 @@ async function handleLLMGenerate() {
         // 将媒体 URL 添加到用户消息中
         userMessage.images = processedImages
       } catch (uploadError) {
+        if (uploadError?.name === 'AbortError') throw uploadError
         console.error('[TextNode] 媒体处理失败:', uploadError)
         throw new Error('媒体处理失败，请重试')
       }
@@ -1815,6 +1816,10 @@ async function handleLLMGenerate() {
     }
     
   } catch (error) {
+    if (error?.name === 'AbortError') {
+      isGenerating.value = false
+      return
+    }
     console.error('[TextNode] LLM 对话失败:', error)
     if (isPromptSafetyBlockedError(error)) {
       const dialog = buildPromptSafetyDialog(error)
@@ -1851,7 +1856,7 @@ async function uploadTextNodeLlmMediaItems(items) {
       })
 
       const file = new File([blob], fileName, { type: mimeType })
-      const uploadResult = await uploadCanvasMedia(file, item.type)
+      const uploadResult = await uploadCanvasMedia(file, item.type, { nodeId: props.id, tabId: canvasStore.activeTabId })
       if (uploadResult.status !== 'completed' || !uploadResult.url) {
         throw new Error('媒体上传未完成')
       }
@@ -1862,6 +1867,7 @@ async function uploadTextNodeLlmMediaItems(items) {
         url: uploadResult.url
       })
     } catch (error) {
+      if (error?.name === 'AbortError') throw error
       console.error('[TextNode] 本地参考媒体上传失败:', error, item.url?.substring?.(0, 60) || '')
       throw error
     }

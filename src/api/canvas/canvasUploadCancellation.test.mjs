@@ -18,4 +18,11 @@ registry.cancelAll()
 assert.equal(otherTab.signal.aborted, true)
 assert.equal(another.signal.aborted, true)
 
+const anonymous = registry.begin()
+const finishedAnonymous = registry.begin()
+registry.finish(undefined, undefined, finishedAnonymous)
+registry.cancelAll()
+assert.equal(anonymous.signal.aborted, true)
+assert.equal(finishedAnonymous.signal.aborted, false)
+
 console.log('canvasUploadCancellation tests passed')
