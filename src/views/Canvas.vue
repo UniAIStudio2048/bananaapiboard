@@ -3159,10 +3159,10 @@ onUnmounted(() => {
           @touchstart.stop
           title="地图"
         >
-          <svg class="map-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-            <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z"/>
-            <path d="M9 3v15"/>
-            <path d="M15 6v15"/>
+          <svg class="map-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 17s5-4.35 5-9a5 5 0 0 0-10 0c0 4.65 5 9 5 9Z"/>
+            <circle cx="12" cy="8" r="1.75"/>
+            <path d="M8 14H6l-3 7h18l-3-7h-2"/>
           </svg>
         </button>
 

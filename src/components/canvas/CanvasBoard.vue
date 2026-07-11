@@ -3633,13 +3633,13 @@ onUnmounted(() => {
         v-if="showCanvasMiniMap"
         class="canvas-workflow-minimap"
         position="bottom-left"
-        node-color="#f5f5f5"
-        node-stroke-color="#111111"
-        :node-stroke-width="1.5"
+        node-color="#888888"
+        node-stroke-color="#242424"
+        :node-stroke-width="1"
         :node-border-radius="2"
-        mask-color="rgba(0, 0, 0, 0.28)"
-        mask-stroke-color="#111111"
-        :mask-stroke-width="1"
+        mask-color="rgba(9, 9, 9, 0.52)"
+        mask-stroke-color="rgba(190, 190, 190, 0.68)"
+        :mask-stroke-width="2"
         :mask-border-radius="2"
         :pannable="true"
         :zoomable="false"
@@ -3694,10 +3694,10 @@ onUnmounted(() => {
   left: 24px;
   width: 220px;
   height: 150px;
-  background: rgba(10, 10, 10, 0.92);
-  border: 1px solid rgba(245, 245, 245, 0.18);
-  border-radius: 8px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+  background: rgba(36, 36, 36, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.34);
   overflow: hidden;
   cursor: crosshair;
 }
@@ -3707,29 +3707,30 @@ onUnmounted(() => {
 }
 
 .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-mask) {
-  fill: rgba(0, 0, 0, 0.28);
-  stroke: #111111;
+  fill: rgba(9, 9, 9, 0.52);
+  stroke: rgba(190, 190, 190, 0.68);
+  stroke-width: 2;
 }
 
 .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-node) {
-  fill: #f5f5f5;
-  stroke: #111111;
+  fill: #888888;
+  stroke: #242424;
 }
 
 :root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap) {
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(0, 0, 0, 0.16);
+  background: rgba(250, 250, 250, 0.96);
+  border-color: rgba(0, 0, 0, 0.12);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
 }
 
 :root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-mask) {
-  fill: rgba(0, 0, 0, 0.18);
-  stroke: #111111;
+  fill: rgba(115, 115, 115, 0.24);
+  stroke: #737373;
 }
 
 :root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-node) {
-  fill: #111111;
-  stroke: #ffffff;
+  fill: #525252;
+  stroke: #fafafa;
 }
 
 /* 框选区域样式 */
