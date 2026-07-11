@@ -26,18 +26,24 @@ test('video batch submits immediately after shared media preparation', () => {
   assert.doesNotMatch(activeBatch, /delay\(|CONCURRENT_INTERVAL/)
 })
 
-test('video batch history records both the pre-layout baseline and post-layout state', () => {
+test('video batch history includes processing-node duplication in one transaction', () => {
   const batchLayout = source.slice(
-    source.indexOf('// 多批次生成时，创建网格输出节点并建立可视编组'),
+    source.indexOf('const generateCount = selectedCount.value'),
     source.indexOf('// 立即设置节点为 processing 状态')
   )
   const baselineSave = batchLayout.indexOf('canvasStore.saveHistory({ force: true })')
+  const duplicateCall = batchLayout.indexOf('canvasStore.duplicateNodeWithIncomingEdges')
   const groupCreate = batchLayout.indexOf('canvasStore.createVisibleGroup')
   const finalSave = batchLayout.indexOf('canvasStore.saveHistory({ force: true })', baselineSave + 1)
 
   assert.ok(baselineSave >= 0)
+  assert.ok(duplicateCall > baselineSave)
   assert.ok(groupCreate > baselineSave)
   assert.ok(finalSave > groupCreate)
+  assert.match(
+    batchLayout,
+    /duplicateNodeWithIncomingEdges\(props\.id, \{[\s\S]*?skipHistory: generateCount > 1[\s\S]*?\}\)/
+  )
 })
 
 test('video preprocessing failure terminates every unsubmitted batch node', () => {

@@ -36,6 +36,12 @@ assert.match(
   'processing resubmit duplication should copy only incoming edges'
 )
 
+assert.match(
+  duplicateBody,
+  /if \(!options\.skipHistory\)\s*\{\s*saveHistory\(\{ force: true \}\)\s*\}/,
+  'batch callers should be able to include duplication in their own history transaction'
+)
+
 assert.doesNotMatch(
   duplicateBody,
   /edges\.value\.filter\(e => e\.source === nodeId\)/,

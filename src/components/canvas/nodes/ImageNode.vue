@@ -6277,9 +6277,16 @@ async function handleGenerate(options = {}) {
   errorMessage.value = ''
   
   const generateCount = selectedCount.value
+
+  if (generateCount > 1) {
+    canvasStore.saveHistory({ force: true })
+  }
   
   const targetNode = (!fromGroup && !retry && props.data.status === 'processing')
-    ? canvasStore.duplicateNodeWithIncomingEdges(props.id, { offset: { x: 40, y: 40 } })
+    ? canvasStore.duplicateNodeWithIncomingEdges(props.id, {
+        offset: { x: 40, y: 40 },
+        skipHistory: generateCount > 1
+      })
     : null
   const targetNodeId = targetNode?.id || props.id
   
@@ -6288,7 +6295,6 @@ async function handleGenerate(options = {}) {
   if (generateCount > 1) {
     const currentNode = canvasStore.nodes.find(n => n.id === targetNodeId)
     if (currentNode) {
-      canvasStore.saveHistory({ force: true })
       const displayWidth = Math.ceil(Number(
         currentNode.dimensions?.width ||
         currentNode.data?.nodeWidth ||

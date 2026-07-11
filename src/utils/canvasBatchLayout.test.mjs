@@ -94,3 +94,39 @@ test('rebuilds group metadata from persisted visible group nodes', () => {
   }])
   assert.deepEqual(getVisibleNodeGroups([]), [])
 })
+
+test('keeps live logical groups while rebuilding visible group metadata', () => {
+  const logicalGroup = {
+    id: 'crop-group-1',
+    name: '九宫格裁剪',
+    nodeIds: ['crop-1', 'crop-2'],
+    color: 'rgba(9, 9, 9, 0.08)',
+    borderColor: 'rgba(9, 9, 9, 0.25)'
+  }
+  const nodes = [
+    { id: 'image-1', type: 'image', data: { groupId: 'visible-group-1' } },
+    { id: 'crop-1', type: 'image', data: { groupId: 'crop-group-1' } },
+    {
+      id: 'visible-group-1',
+      type: 'group',
+      data: {
+        groupName: '图片生成 ×2',
+        nodeIds: ['image-1', 'image-2']
+      }
+    }
+  ]
+
+  assert.deepEqual(getVisibleNodeGroups(nodes, [
+    logicalGroup,
+    { id: 'stale-group', name: '已删除组', nodeIds: ['missing-node'] }
+  ]), [
+    {
+      id: 'visible-group-1',
+      name: '图片生成 ×2',
+      nodeIds: ['image-1', 'image-2'],
+      color: 'rgba(100, 116, 139, 0.08)',
+      borderColor: 'rgba(100, 116, 139, 0.25)'
+    },
+    logicalGroup
+  ])
+})

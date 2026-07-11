@@ -19,11 +19,22 @@ test('canvas store exposes visible group construction', () => {
   assert.match(storeSource, /createVisibleGroup,/)
   assert.match(storeSource, /getVisibleNodeGroups/)
   assert.match(storeSource, /function syncNodeGroupsFromVisibleNodes\(\)/)
+  assert.match(storeSource, /getVisibleNodeGroups\(nodes\.value, nodeGroups\.value\)/)
 })
 
 test('manual grouping delegates to the shared visible group operation', () => {
   assert.match(boardSource, /canvasStore\.createVisibleGroup\(nodeIds\)/)
   assert.doesNotMatch(boardSource, /const groupWidth = maxX - minX/)
+
+  const visibleGroupSource = storeSource.slice(
+    storeSource.indexOf('function createVisibleGroup('),
+    storeSource.indexOf('function disbandGroup(')
+  )
+  assert.equal(
+    visibleGroupSource.match(/saveHistory\(\{ force: true \}\)/g)?.length,
+    2,
+    'default visible grouping should record both its baseline and completed state'
+  )
 })
 
 test('undo and redo rebuild redundant group metadata from visible group nodes', () => {

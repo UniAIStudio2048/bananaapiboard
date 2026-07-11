@@ -87,7 +87,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   }
 
   function syncNodeGroupsFromVisibleNodes() {
-    nodeGroups.value = getVisibleNodeGroups(nodes.value)
+    nodeGroups.value = getVisibleNodeGroups(nodes.value, nodeGroups.value)
   }
   
   // ========== 剪贴板 ==========
@@ -1049,7 +1049,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     const node = nodes.value.find(n => n.id === nodeId)
     if (!node) return null
 
-    saveHistory({ force: true })
+    if (!options.skipHistory) {
+      saveHistory({ force: true })
+    }
     markCurrentTabChanged()
 
     const offset = options.offset || { x: 40, y: 40 }
@@ -2418,6 +2420,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     }, true)
 
     selectNode(group.id)
+    if (!options.skipHistory) {
+      saveHistory({ force: true })
+    }
     return group
   }
   
