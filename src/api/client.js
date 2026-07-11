@@ -444,7 +444,7 @@ export function startStreamDownload(url, filename) {
   }
 
   if (isCanvasDirectCdnDownloadUrl(cleanUrl)) {
-    triggerUrlDownload(cleanUrl, correctedFilename)
+    triggerUrlDownload(getApiUrl(buildStreamDownloadPath(cleanUrl, correctedFilename)), correctedFilename)
     return
   }
 

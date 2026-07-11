@@ -15,7 +15,8 @@ import { getGlobalNodeDataCache } from './nodeDataCache'
 import { buildNodeDataWithRememberedParameters } from './nodeParameterMemory'
 import { applyNodeDataPatchToTabs } from './tabNodePatch'
 import { markNodeGenerationSubmissionsDeleted } from './pendingGenerationSubmissions'
-import { buildMediaUploadCommit } from './mediaUploadCommit'
+import { buildMediaUploadCommit, resolveMediaUploadCommitTarget } from './mediaUploadCommit'
+import { cancelCanvasUpload } from '@/api/canvas/direct-upload.js'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -302,16 +303,38 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
   }
 
-  function commitMediaUpload({ nodeId, blobUrl, uploaded, mediaType }) {
-    const result = buildMediaUploadCommit({
+  function commitMediaUpload({ nodeId, blobUrl, uploaded, mediaType, tabId = null }) {
+    const target = resolveMediaUploadCommitTarget({
       nodes: nodes.value,
       edges: edges.value,
+      workflowTabs: workflowTabs.value,
+      activeTabId: activeTabId.value,
+      tabId
+    })
+    if (!target) return false
+    const result = buildMediaUploadCommit({
+      nodes: target.nodes,
+      edges: target.edges,
       nodeId,
       blobUrl,
       uploaded,
       mediaType
     })
     if (!result.sourcePatch) return false
+
+    if (!target.isActive) {
+      const applyPatch = (targetNodeId, patch) => {
+        const node = target.nodes.find(item => item.id === targetNodeId)
+        if (node) node.data = mergeNodeData(node.data, patch)
+      }
+      applyPatch(nodeId, result.sourcePatch)
+      for (const downstream of result.downstreamPatches) {
+        applyPatch(downstream.nodeId, downstream.patch)
+      }
+      target.tab.hasChanges = true
+      if (blobUrl?.startsWith('blob:')) URL.revokeObjectURL(blobUrl)
+      return true
+    }
 
     updateNodeData(nodeId, result.sourcePatch, { skipStoryboardBindingSync: true })
     for (const downstream of result.downstreamPatches) {
@@ -386,6 +409,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   function removeNode(nodeId) {
     saveHistory({ force: true })
     markCurrentTabChanged()
+    cancelCanvasUpload(nodeId, activeTabId.value)
     markNodeGenerationSubmissionsDeleted(nodeId, { tabId: activeTabId.value })
     
     // 删除相关连线（通过 removeEdge 逐条删除，确保 Storyboard 格子图片同步清理）
@@ -413,6 +437,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     const nodeIdSet = new Set(nodeIds)
     for (const nodeId of nodeIdSet) {
+      cancelCanvasUpload(nodeId, activeTabId.value)
       markNodeGenerationSubmissionsDeleted(nodeId, { tabId: activeTabId.value })
     }
     

@@ -4629,10 +4629,11 @@ async function handleFileUpload(event) {
 
 // 后台异步上传图片 - 上传完成后静默更新节点URL（不阻塞UI）
 async function uploadImageFileAsync(file, blobUrl, nodeId) {
+  const tabId = canvasStore.activeTabId
   try {
     console.log('[ImageNode] 后台异步上传开始:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
     
-    const uploaded = await uploadCanvasMedia(file, 'image')
+    const uploaded = await uploadCanvasMedia(file, 'image', { nodeId, tabId })
     if (uploaded.url) {
       const serverUrl = uploaded.url
       console.log('[ImageNode] 后台上传成功，服务器URL:', serverUrl)
@@ -4646,10 +4647,12 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
         nodeId,
         blobUrl,
         mediaType: 'image',
-        uploaded
+        uploaded,
+        tabId
       })) revokeTrackedBlobUrl(blobUrl)
     }
   } catch (error) {
+    if (error?.name === 'AbortError') return
     console.warn('[ImageNode] 后台上传失败，保持使用 blob URL:', error.message)
     const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
     if (currentNode) {
@@ -4659,7 +4662,7 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
         uploadError: error.message
       })
       uploadManager.registerFailedUpload(`img_${nodeId}_${Date.now()}`, {
-        nodeId, file, type: 'image', blobUrl,
+        nodeId, tabId, file, type: 'image', blobUrl,
         field: 'sourceImages',
         error: error.message
       })

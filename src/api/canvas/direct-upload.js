@@ -2,6 +2,7 @@ import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useTeamStore } from '@/stores/team'
 import { createCanvasDirectUploader } from '@/utils/canvasDirectUpload'
 import { createCanvasUploadCheckpointStore } from '@/utils/canvasUploadCheckpoint'
+import { createCanvasUploadCancellationRegistry } from './canvasUploadCancellation.js'
 
 function authHeaders() {
   const token = localStorage.getItem('token')
@@ -42,6 +43,15 @@ const uploader = createCanvasDirectUploader({
   directFetch,
   checkpointStore: createCanvasUploadCheckpointStore()
 })
+const uploadCancellation = createCanvasUploadCancellationRegistry()
+
+export function cancelCanvasUpload(nodeId, tabId) {
+  return uploadCancellation.cancel(nodeId, tabId)
+}
+
+export function cancelAllCanvasUploads() {
+  uploadCancellation.cancelAll()
+}
 
 function currentSpaceOptions(options) {
   if (options.spaceType) return options
@@ -61,18 +71,29 @@ export async function uploadCanvasFile(file, mediaType, options = {}) {
   if (!['image', 'video', 'audio'].includes(mediaType)) {
     throw new Error(`不支持的文件类型: ${mediaType}`)
   }
-  const result = await uploader.upload(file, {
-    ...currentSpaceOptions(options),
-    mediaType
-  })
-  return {
-    url: result.url,
-    status: result.status,
-    isCloud: true,
-    assetId: result.assetId,
-    uploadId: result.uploadId,
-    key: result.key,
-    contentType: result.contentType,
-    size: result.size
+  const controller = uploadCancellation.begin(options.nodeId, options.tabId)
+  const abortUpload = () => controller.abort()
+  if (options.signal?.aborted) abortUpload()
+  else options.signal?.addEventListener('abort', abortUpload, { once: true })
+
+  try {
+    const result = await uploader.upload(file, {
+      ...currentSpaceOptions(options),
+      mediaType,
+      signal: controller.signal
+    })
+    return {
+      url: result.url,
+      status: result.status,
+      isCloud: true,
+      assetId: result.assetId,
+      uploadId: result.uploadId,
+      key: result.key,
+      contentType: result.contentType,
+      size: result.size
+    }
+  } finally {
+    options.signal?.removeEventListener('abort', abortUpload)
+    uploadCancellation.finish(options.nodeId, options.tabId, controller)
   }
 }

@@ -88,4 +88,12 @@ assert.ok(
   'a blocked tab must cancel the actual space switch'
 )
 
+const bottomPanelSource = fs.readFileSync(new URL('../components/canvas/CanvasBottomPanel.vue', import.meta.url), 'utf8')
+const bottomPanelImageGenerateSource = extractFunction(bottomPanelSource, 'handleImageGenerate')
+assert.match(
+  bottomPanelImageGenerateSource,
+  /if \(findBlockingCanvasUploads\([\s\S]*?isGenerating\.value = false\s+return/,
+  'the BottomPanel upload guard must reset its generating state before returning'
+)
+
 console.log('canvasUploadGuard integration source tests passed')

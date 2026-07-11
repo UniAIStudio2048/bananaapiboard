@@ -17,7 +17,7 @@ function extractFunction(name) {
   assert.fail(`${name} must have a complete body`)
 }
 
-test('startStreamDownload triggers tenant canvas CDN URLs without building an API path', () => {
+test('startStreamDownload routes tenant canvas CDN URLs through the download API', () => {
   assert.match(
     source,
     /import\s*\{[^}]*isCanvasDirectCdnDownloadUrl[^}]*\}\s*from\s*['"]\.\/downloadRouting\.js['"]/s
@@ -26,7 +26,7 @@ test('startStreamDownload triggers tenant canvas CDN URLs without building an AP
   const functionSource = extractFunction('startStreamDownload')
   assert.match(
     functionSource,
-    /if \(isCanvasDirectCdnDownloadUrl\(cleanUrl\)\) \{\s*triggerUrlDownload\(cleanUrl, correctedFilename\)\s*return\s*\}/
+    /if \(isCanvasDirectCdnDownloadUrl\(cleanUrl\)\) \{\s*triggerUrlDownload\(getApiUrl\(buildStreamDownloadPath\(cleanUrl, correctedFilename\)\), correctedFilename\)\s*return\s*\}/
   )
   assert.ok(
     functionSource.indexOf('isQiniuCdnUrl(cleanUrl)') <
@@ -35,7 +35,7 @@ test('startStreamDownload triggers tenant canvas CDN URLs without building an AP
   )
   assert.ok(
     functionSource.indexOf('isCanvasDirectCdnDownloadUrl(cleanUrl)') <
-      functionSource.indexOf('getApiUrl(buildStreamDownloadPath('),
-    'the canvas CDN branch must return before any stream API URL is built'
+      functionSource.indexOf("/\\/api\\/(cos-proxy|images\\/file)\\//"),
+    'the canvas CDN branch must run before same-origin API URL normalization'
   )
 })

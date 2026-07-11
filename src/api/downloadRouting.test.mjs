@@ -36,6 +36,30 @@ test('builds stream image downloads without waiting for preview image blobs', ()
   )
 })
 
+test('routes tenant canvas CDN image downloads through the image endpoint', () => {
+  const path = buildStreamDownloadPath(
+    'https://cdn.tenant-example.com/canvas/tenant/image.png',
+    'image.png'
+  )
+
+  assert.equal(
+    path,
+    '/api/images/download?url=https%3A%2F%2Fcdn.tenant-example.com%2Fcanvas%2Ftenant%2Fimage.png&filename=image.png'
+  )
+})
+
+test('routes tenant canvas CDN video downloads through the video endpoint', () => {
+  const path = buildStreamDownloadPath(
+    'https://cdn.tenant-example.com/canvas/tenant/clip.mp4',
+    'clip.mp4'
+  )
+
+  assert.equal(
+    path,
+    '/api/videos/download?url=https%3A%2F%2Fcdn.tenant-example.com%2Fcanvas%2Ftenant%2Fclip.mp4&filename=clip.mp4'
+  )
+})
+
 test('detects COS CDN URLs as direct CDN download targets', () => {
   assert.equal(
     isDirectCdnDownloadUrl('https://filescos.nananobanana.cn/default-tenant-001/images/image.png'),

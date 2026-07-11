@@ -540,6 +540,7 @@ function getUpstreamImagesRealtime(nodeId) {
 async function handleImageGenerate(nodeId, nodeType) {
   if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges, nodeId).length > 0) {
     await showAlert('素材仍在上传，请等待完成后重试', '提示')
+    isGenerating.value = false
     return
   }
   if (selectedModelConfig.value?.usable === false) {

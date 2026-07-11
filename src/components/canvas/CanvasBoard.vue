@@ -3376,20 +3376,22 @@ async function handleFileDrop(event) {
  * 后台异步上传文件到云存储，上传完成后更新节点 URL
  */
 async function uploadFilesToCloud(tasks) {
+  const tabId = canvasStore.activeTabId
   for (const task of tasks) {
     const { file, type, nodeId, blobUrl, field } = task
     
     try {
       console.log(`[CanvasBoard] 开始上传${type}到云存储:`, file.name, '大小:', Math.round(file.size / 1024), 'KB')
 
-      const result = await uploadCanvasMedia(file, type)
+      const result = await uploadCanvasMedia(file, type, { nodeId, tabId })
       console.log(`[CanvasBoard] ${type}上传成功，云URL:`, result.url)
 
-      if (canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: type, uploaded: result })) {
+      if (canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: type, uploaded: result, tabId })) {
         console.log(`[CanvasBoard] 节点 ${nodeId} 已更新为云存储URL`)
       }
       
     } catch (error) {
+      if (error?.name === 'AbortError') return
       console.error(`[CanvasBoard] ${type}上传失败:`, error.message)
       const node = canvasStore.nodes.find(n => n.id === nodeId)
       if (node) {
@@ -3399,7 +3401,7 @@ async function uploadFilesToCloud(tasks) {
           uploadError: error.message
         })
         uploadManager.registerFailedUpload(`cb_${nodeId}_${Date.now()}`, {
-          nodeId, file, type, blobUrl,
+          nodeId, tabId, file, type, blobUrl,
           field,
           error: error.message
         })

@@ -380,4 +380,157 @@ function directResponse(etag, status = 200) {
   assert.equal(apiCalls.filter(call => call.method === 'DELETE').length, 1)
 }
 
+{
+  const file = new File([new Uint8Array([1])], 'completed.png', { type: 'image/png', lastModified: 10 })
+  const fingerprint = 'completed.png:1:image/png:10'
+  const checkpointStore = createMemoryCanvasUploadCheckpointStore()
+  await checkpointStore.set(fingerprint, { uploadId: 'up-completed', mode: 'single', completedParts: [] })
+  const apiCalls = []
+  const uploader = createCanvasDirectUploader({
+    checkpointStore,
+    apiFetch: async (url, options = {}) => {
+      apiCalls.push({ url, ...options })
+      if (url === '/api/canvas/uploads/up-completed' && options.method === 'GET') {
+        return { upload: { id: 'up-completed', mode: 'single', status: 'completed' }, parts: [] }
+      }
+      return {
+        upload: { id: 'up-completed', status: 'completed' },
+        asset: { id: 'asset-completed', url: 'https://cdn.example.com/canvas/completed.png' }
+      }
+    },
+    directFetch: async () => { throw new Error('completed recovery must not PUT') }
+  })
+
+  const result = await uploader.upload(file, { mediaType: 'image' })
+  assert.equal(result.url, 'https://cdn.example.com/canvas/completed.png')
+  assert.deepEqual(apiCalls.map(call => call.url), [
+    '/api/canvas/uploads/up-completed',
+    '/api/canvas/uploads/up-completed/complete'
+  ])
+  assert.equal(await checkpointStore.get(fingerprint), null)
+}
+
+{
+  const file = {
+    name: 'completing.mp4', type: 'video/mp4', size: 16, lastModified: 11,
+    slice() { throw new Error('completing recovery must not slice or PUT') }
+  }
+  const fingerprint = 'completing.mp4:16:video/mp4:11'
+  const checkpointStore = createMemoryCanvasUploadCheckpointStore()
+  await checkpointStore.set(fingerprint, {
+    uploadId: 'up-completing', mode: 'multipart',
+    completedParts: [
+      { partNumber: 1, etag: '"e1"', size: 8 },
+      { partNumber: 2, etag: '"e2"', size: 8 }
+    ]
+  })
+  const apiCalls = []
+  const uploader = createCanvasDirectUploader({
+    checkpointStore,
+    partSize: 8,
+    apiFetch: async (url, options = {}) => {
+      apiCalls.push({ url, ...options })
+      if (url === '/api/canvas/uploads/up-completing' && options.method === 'GET') {
+        return { upload: { id: 'up-completing', mode: 'multipart', status: 'completing' }, parts: [] }
+      }
+      return {
+        upload: { id: 'up-completing', status: 'completed' },
+        asset: { id: 'asset-completing', url: 'https://cdn.example.com/canvas/completing.mp4' }
+      }
+    },
+    directFetch: async () => { throw new Error('completing recovery must not PUT') }
+  })
+
+  const result = await uploader.upload(file, { mediaType: 'video' })
+  assert.equal(result.status, 'completed')
+  assert.deepEqual(apiCalls.at(-1).body.parts, [
+    { part_number: 1, etag: '"e1"' },
+    { part_number: 2, etag: '"e2"' }
+  ])
+}
+
+{
+  const file = new File([new Uint8Array([1])], 'lost.png', { type: 'image/png', lastModified: 12 })
+  const fingerprint = 'lost.png:1:image/png:12'
+  const checkpointStore = createMemoryCanvasUploadCheckpointStore()
+  let phase = 'first'
+  let directAttempts = 0
+  const apiCalls = []
+  const uploader = createCanvasDirectUploader({
+    checkpointStore,
+    apiFetch: async (url, options = {}) => {
+      apiCalls.push({ phase, url, ...options })
+      if (url.endsWith('/presign')) {
+        return { upload: { id: 'up-lost', mode: 'single', status: 'created', upload_url: 'https://cos.example/lost', headers: {} } }
+      }
+      if (url === '/api/canvas/uploads/up-lost' && options.method === 'GET') {
+        return { upload: { id: 'up-lost', mode: 'single', status: 'completing' }, parts: [] }
+      }
+      if (phase === 'first') throw new TypeError('complete response lost')
+      return {
+        upload: { id: 'up-lost', status: 'completed' },
+        asset: { id: 'asset-lost', url: 'https://cdn.example.com/canvas/lost.png' }
+      }
+    },
+    directFetch: async () => {
+      directAttempts++
+      return directResponse('"etag-lost"')
+    }
+  })
+
+  await assert.rejects(uploader.upload(file, { mediaType: 'image' }), /complete response lost/)
+  assert.equal((await checkpointStore.get(fingerprint))?.uploadId, 'up-lost')
+  phase = 'resume'
+  const result = await uploader.upload(file, { mediaType: 'image' })
+  assert.equal(result.status, 'completed')
+  assert.equal(directAttempts, 1)
+  assert.equal(apiCalls.filter(call => call.url.endsWith('/presign')).length, 1)
+}
+
+{
+  const file = new File([new Uint8Array([1])], 'not-put.png', { type: 'image/png', lastModified: 13 })
+  const fingerprint = 'not-put.png:1:image/png:13'
+  const checkpointStore = createMemoryCanvasUploadCheckpointStore()
+  await checkpointStore.set(fingerprint, { uploadId: 'up-stale', mode: 'single', completedParts: [] })
+  const apiCalls = []
+  const directUrls = []
+  const uploader = createCanvasDirectUploader({
+    checkpointStore,
+    apiFetch: async (url, options = {}) => {
+      apiCalls.push({ url, ...options })
+      if (url === '/api/canvas/uploads/up-stale' && options.method === 'GET') {
+        return { upload: { id: 'up-stale', mode: 'single', status: 'created' }, parts: [] }
+      }
+      if (url === '/api/canvas/uploads/up-stale/complete') {
+        return {
+          ok: false,
+          status: 409,
+          async json() { return { success: false, error: 'canvas_upload_verification_failed' } }
+        }
+      }
+      if (url === '/api/canvas/uploads/up-stale' && options.method === 'DELETE') {
+        return { upload: { id: 'up-stale', status: 'aborted' } }
+      }
+      if (url.endsWith('/presign')) {
+        return { upload: { id: 'up-new', mode: 'single', status: 'created', upload_url: 'https://cos.example/new', headers: {} } }
+      }
+      return {
+        upload: { id: 'up-new', status: 'completed' },
+        asset: { id: 'asset-new', url: 'https://cdn.example.com/canvas/new.png' }
+      }
+    },
+    directFetch: async url => {
+      directUrls.push(url)
+      assert.equal(url, 'https://cos.example/new')
+      return directResponse('"etag-new"')
+    }
+  })
+
+  const result = await uploader.upload(file, { mediaType: 'image' })
+  assert.equal(result.url, 'https://cdn.example.com/canvas/new.png')
+  assert.deepEqual(directUrls, ['https://cos.example/new'])
+  assert.ok(apiCalls.some(call => call.url === '/api/canvas/uploads/up-stale' && call.method === 'DELETE'))
+  assert.equal(apiCalls.filter(call => call.url.endsWith('/presign')).length, 1)
+}
+
 console.log('canvasDirectUpload tests passed')

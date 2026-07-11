@@ -80,6 +80,7 @@ import {
 import { initCanvasDiagnostic, printCanvasDiagnosticReport } from '@/utils/canvasDiagnostic'
 import { createCanvasFpsMonitor } from '@/utils/canvasFpsMonitor'
 import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
+import { cancelAllCanvasUploads } from '@/api/canvas/direct-upload.js'
 
 // 导入画布样式
 import '@/styles/canvas.css'
@@ -3008,6 +3009,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  cancelAllCanvasUploads()
   persistCurrentWorkflowOnExit('unmounted')
 
   document.removeEventListener('keydown', handleKeyDown)

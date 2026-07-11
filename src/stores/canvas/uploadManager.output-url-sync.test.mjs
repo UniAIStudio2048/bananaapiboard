@@ -11,6 +11,8 @@ test('image upload retry syncs output.url as well as output.urls', () => {
   const fn = updateMatch[0]
 
   assert.match(fn, /canvasStore\.commitMediaUpload\(/)
+  assert.doesNotMatch(fn, /canvasStore\.nodes\.find/)
+  assert.match(fn, /tabId:\s*task\.tabId/)
   assert.match(fn, /blobUrl:\s*task\.blobUrl/)
   assert.match(fn, /uploaded/)
   assert.match(commitSource, /next\.url === from/)

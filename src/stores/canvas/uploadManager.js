@@ -37,13 +37,14 @@ export const useUploadManager = defineStore('uploadManager', () => {
   /**
    * 注册一个上传任务（在初次上传失败时调用）
    */
-  function registerFailedUpload(taskId, { nodeId, file, type, blobUrl, field, error }) {
+  function registerFailedUpload(taskId, { nodeId, tabId, file, type, blobUrl, field, error }) {
     const existing = pendingUploads.value.get(taskId)
     const retryCount = existing ? existing.retryCount : 0
 
     pendingUploads.value.set(taskId, {
       taskId,
       nodeId,
+      tabId,
       file,
       type,
       blobUrl,
@@ -112,7 +113,12 @@ export const useUploadManager = defineStore('uploadManager', () => {
         }
       }
 
-      const result = await uploadCanvasMedia(task.file, task.type, { maxRetries: 1, baseDelay: 1000 })
+      const result = await uploadCanvasMedia(task.file, task.type, {
+        maxRetries: 1,
+        baseDelay: 1000,
+        nodeId: task.nodeId,
+        tabId: task.tabId
+      })
 
       task.status = 'success'
       task.cloudUrl = result.url
@@ -147,8 +153,6 @@ export const useUploadManager = defineStore('uploadManager', () => {
     try {
       const { useCanvasStore } = await import('./canvasStore')
       const canvasStore = useCanvasStore()
-      const node = canvasStore.nodes.find(n => n.id === task.nodeId)
-      if (!node) return
 
       const uploaded = task.uploaded || {
         url: task.cloudUrl,
@@ -160,6 +164,7 @@ export const useUploadManager = defineStore('uploadManager', () => {
         nodeId: task.nodeId,
         blobUrl: task.blobUrl,
         mediaType: task.type,
+        tabId: task.tabId,
         uploaded
       })
       console.log(`[UploadManager] 节点 ${task.nodeId} 已更新为云存储URL`)

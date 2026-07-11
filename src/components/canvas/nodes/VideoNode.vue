@@ -5664,22 +5664,25 @@ function handleResizeEnd() {
 // ========== 首尾帧图片/视频拖拽上传 ==========
 // 后台异步上传图片 - 上传完成后静默更新节点URL
 async function uploadImageFileAsync(file, blobUrl, nodeId) {
+  const tabId = canvasStore.activeTabId
   try {
     console.log('[VideoNode] 后台异步上传开始:', file.name, '大小:', (file.size / 1024).toFixed(2), 'KB')
     
-    const uploaded = await uploadCanvasMedia(file, 'image')
+    const uploaded = await uploadCanvasMedia(file, 'image', { nodeId, tabId })
     if (uploaded.url) {
       const serverUrl = uploaded.url
       console.log('[VideoNode] 后台上传成功，服务器URL:', serverUrl)
-      canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'image', uploaded })
+      canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'image', uploaded, tabId })
     }
   } catch (error) {
+    if (error?.name === 'AbortError') return
     console.warn('[VideoNode] 后台上传失败，保持使用 blob URL:', error.message)
   }
 }
 
 // 后台异步上传视频 - 使用统一上传接口，内置重试机制
 async function uploadVideoFileAsync(file, blobUrl, nodeId) {
+  const tabId = canvasStore.activeTabId
   try {
     console.log('[VideoNode] 后台异步上传视频开始:', file.name, '大小:', (file.size / 1024 / 1024).toFixed(2), 'MB')
     
@@ -5695,14 +5698,15 @@ async function uploadVideoFileAsync(file, blobUrl, nodeId) {
     
     canvasStore.updateNodeData(nodeId, { isUploading: true })
     
-    const result = await uploadCanvasMedia(file, 'video')
+    const result = await uploadCanvasMedia(file, 'video', { nodeId, tabId })
     const serverUrl = result.url
     
     if (serverUrl) {
       console.log('[VideoNode] 视频后台上传成功，服务器URL:', serverUrl)
-      canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'video', uploaded: result })
+      canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'video', uploaded: result, tabId })
     }
   } catch (error) {
+    if (error?.name === 'AbortError') return
     console.warn('[VideoNode] 视频后台上传失败:', error.message)
     canvasStore.updateNodeData(nodeId, {
       isUploading: false,
@@ -5710,7 +5714,7 @@ async function uploadVideoFileAsync(file, blobUrl, nodeId) {
       uploadError: error.message
     })
     uploadManager.registerFailedUpload(`vid_${nodeId}_${Date.now()}`, {
-      nodeId, file, type: 'video', blobUrl,
+      nodeId, tabId, file, type: 'video', blobUrl,
       field: 'sourceVideo',
       error: error.message
     })
@@ -5920,16 +5924,18 @@ function createUpstreamAudioNode(audioUrl, metadata = {}) {
 }
 
 async function uploadAudioFileAsync(file, blobUrl, nodeId) {
+  const tabId = canvasStore.activeTabId
   try {
     console.log('[VideoNode] 后台异步上传音频开始:', file.name, '大小:', Math.round(file.size / 1024), 'KB')
 
-    const result = await uploadCanvasMedia(file, 'audio')
+    const result = await uploadCanvasMedia(file, 'audio', { nodeId, tabId })
     const serverUrl = result.url
 
     if (serverUrl) {
-      canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'audio', uploaded: result })
+      canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'audio', uploaded: result, tabId })
     }
   } catch (error) {
+    if (error?.name === 'AbortError') return
     console.warn('[VideoNode] 音频后台上传失败:', error.message)
     canvasStore.updateNodeData(nodeId, {
       isUploading: false,
@@ -5937,7 +5943,7 @@ async function uploadAudioFileAsync(file, blobUrl, nodeId) {
       uploadError: error.message
     })
     uploadManager.registerFailedUpload(`aud_${nodeId}_${Date.now()}`, {
-      nodeId, file, type: 'audio', blobUrl,
+      nodeId, tabId, file, type: 'audio', blobUrl,
       field: 'audioUrl',
       error: error.message
     })

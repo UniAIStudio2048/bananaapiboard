@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 
-import { buildMediaUploadCommit } from './mediaUploadCommit.js'
+import * as mediaUploadCommit from './mediaUploadCommit.js'
+
+const { buildMediaUploadCommit } = mediaUploadCommit
 
 const uploaded = {
   url: 'https://cdn.example.com/canvas/a.png',
@@ -150,6 +152,25 @@ const uploaded = {
   })
   assert.equal(stale.sourcePatch, null)
   assert.deepEqual(stale.downstreamPatches, [])
+}
+
+{
+  assert.equal(typeof mediaUploadCommit.resolveMediaUploadCommitTarget, 'function')
+  const inactiveTab = {
+    id: 'tab-upload',
+    nodes: [{ id: 'source', data: { sourceImages: ['blob:old'] } }],
+    edges: []
+  }
+  const target = mediaUploadCommit.resolveMediaUploadCommitTarget({
+    nodes: [{ id: 'active-only', data: {} }],
+    edges: [],
+    workflowTabs: [inactiveTab, { id: 'tab-active', nodes: [], edges: [] }],
+    activeTabId: 'tab-active',
+    tabId: 'tab-upload'
+  })
+  assert.equal(target.tab, inactiveTab)
+  assert.equal(target.nodes, inactiveTab.nodes)
+  assert.equal(target.edges, inactiveTab.edges)
 }
 
 console.log('mediaUploadCommit tests passed')

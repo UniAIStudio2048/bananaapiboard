@@ -140,20 +140,23 @@ export function createCanvasDirectUploader({
   const uploadSingle = async (file, upload, options) => {
     options.onProgress?.(0)
     const maxRetries = singleRetryCount(options.maxRetries)
+    let etag = null
+    let recoverConflict = false
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        const etag = await putDirect(upload.upload_url, upload.headers, file, options.signal)
-        options.onProgress?.(1)
-        return complete(upload.id, { etag }, options.signal)
+        etag = await putDirect(upload.upload_url, upload.headers, file, options.signal)
+        break
       } catch (error) {
         if (abortError(error, options.signal)) throw error
         if (attempt > 0 && error?.status === 409) {
-          options.onProgress?.(1)
-          return complete(upload.id, {}, options.signal)
+          recoverConflict = true
+          break
         }
         if (attempt === maxRetries || !isRetryableSinglePutError(error)) throw error
       }
     }
+    options.onProgress?.(1)
+    return complete(upload.id, recoverConflict ? {} : { etag }, options.signal)
   }
 
   const presignParts = async (uploadId, partNumbers, signal) => {
@@ -189,6 +192,7 @@ export function createCanvasDirectUploader({
     const saveCheckpoint = () => checkpointStore.set(fingerprint, {
       fingerprint,
       uploadId: upload.id,
+      mode: 'multipart',
       completedParts: [...completed.values()].sort((a, b) => a.partNumber - b.partNumber)
     })
     await saveCheckpoint()
@@ -273,6 +277,37 @@ export function createCanvasDirectUploader({
           }
         }
 
+        if (payload && checkpoint?.uploadId) {
+          const resumedUpload = payload.upload
+          if (resumedUpload?.status === 'completed' || resumedUpload?.status === 'completing') {
+            const body = resumedUpload.mode === 'multipart' && resumedUpload.status === 'completing'
+              ? {
+                  parts: (checkpoint.completedParts || []).map(part => ({
+                    part_number: part.partNumber,
+                    etag: part.etag
+                  }))
+                }
+              : {}
+            const result = await complete(resumedUpload.id, body, options.signal)
+            await checkpointStore.delete(fingerprint)
+            return result
+          }
+
+          if (resumedUpload?.mode === 'single' && ['created', 'uploading'].includes(resumedUpload.status)) {
+            try {
+              const result = await complete(resumedUpload.id, {}, options.signal)
+              await checkpointStore.delete(fingerprint)
+              return result
+            } catch (error) {
+              if (error.code !== 'canvas_upload_verification_failed' || error.status !== 409) throw error
+              await apiRequest(`/api/canvas/uploads/${resumedUpload.id}`, { method: 'DELETE' })
+              await checkpointStore.delete(fingerprint)
+              checkpoint = null
+              payload = null
+            }
+          }
+        }
+
         if (!payload) {
           payload = await apiRequest('/api/canvas/uploads/presign', {
             method: 'POST',
@@ -293,6 +328,15 @@ export function createCanvasDirectUploader({
         const upload = payload.upload
         if (!upload?.id || !['single', 'multipart'].includes(upload.mode)) {
           throw uploadError('canvas_upload_invalid_presign')
+        }
+        if (!checkpoint?.uploadId) {
+          checkpoint = {
+            fingerprint,
+            uploadId: upload.id,
+            mode: upload.mode,
+            completedParts: []
+          }
+          await checkpointStore.set(fingerprint, checkpoint)
         }
         const result = upload.mode === 'single'
           ? await uploadSingle(file, upload, options)

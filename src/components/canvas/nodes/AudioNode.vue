@@ -1173,14 +1173,16 @@ async function handleFileUpload(event) {
 
 // 后台异步上传音频文件到云存储
 async function uploadAudioFileAsync(file, blobUrl, nodeId) {
+  const tabId = canvasStore.activeTabId
   try {
     console.log('[AudioNode] 后台异步上传音频开始:', file.name, '大小:', Math.round(file.size / 1024), 'KB')
     
-    const result = await uploadCanvasMedia(file, 'audio')
+    const result = await uploadCanvasMedia(file, 'audio', { nodeId, tabId })
     console.log('[AudioNode] 音频上传成功，云URL:', result.url)
-    canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'audio', uploaded: result })
+    canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'audio', uploaded: result, tabId })
     
   } catch (error) {
+    if (error?.name === 'AbortError') return
     console.error('[AudioNode] 音频上传失败:', error.message)
     const node = canvasStore.nodes.find(n => n.id === nodeId)
     if (node) {
@@ -1190,7 +1192,7 @@ async function uploadAudioFileAsync(file, blobUrl, nodeId) {
         uploadError: error.message
       })
       uploadManager.registerFailedUpload(`aud_${nodeId}_${Date.now()}`, {
-        nodeId, file, type: 'audio', blobUrl,
+        nodeId, tabId, file, type: 'audio', blobUrl,
         field: 'audioUrl',
         error: error.message
       })

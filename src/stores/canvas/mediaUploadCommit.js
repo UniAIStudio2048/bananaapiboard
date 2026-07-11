@@ -117,6 +117,31 @@ function downstreamMediaPatch(node, mediaType, from, to) {
   return changed ? patch : null
 }
 
+export function resolveMediaUploadCommitTarget({
+  nodes,
+  edges,
+  workflowTabs = [],
+  activeTabId = null,
+  tabId = null
+}) {
+  if (tabId && tabId !== activeTabId) {
+    const tab = workflowTabs.find(item => item?.id === tabId)
+    if (!tab) return null
+    return {
+      nodes: Array.isArray(tab.nodes) ? tab.nodes : [],
+      edges: Array.isArray(tab.edges) ? tab.edges : [],
+      tab,
+      isActive: false
+    }
+  }
+  return {
+    nodes,
+    edges,
+    tab: workflowTabs.find(item => item?.id === activeTabId) || null,
+    isActive: true
+  }
+}
+
 export function buildMediaUploadCommit({ nodes, edges, nodeId, blobUrl, uploaded, mediaType }) {
   const sourceNode = nodes.find(node => node.id === nodeId)
   if (!sourceNode || !blobUrl || !uploaded?.url || uploaded.status !== 'completed') {
