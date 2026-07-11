@@ -50,6 +50,7 @@ import {
   syncPromptMediaMentions
 } from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
+import { getBatchGridPositions } from '@/utils/canvasBatchLayout'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
 import { getSeedanceQuickAsset } from '@/utils/seedanceQuickAsset'
@@ -3723,14 +3724,6 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
   }
 })
 
-// 并发间隔时间（毫秒）
-const CONCURRENT_INTERVAL = 5000
-
-// 延迟函数
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
 // ========== URL 可访问性处理（确保 AI 模型可访问参考图片） ==========
 
 // 判断是否是七牛云 CDN URL（公开可访问的 URL）
@@ -5062,15 +5055,9 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     canvasStore.updateNodeData(targetNodeId, { progress: '正在提交任务...' })
     
     // 提交所有任务
-    const submitPromises = allNodeIds.map((nodeId, index) => {
-      return new Promise(async (resolve) => {
-        if (index > 0) {
-          await delay(CONCURRENT_INTERVAL * index)
-        }
-        const result = await executeNodeGeneration(nodeId, finalPrompt, finalImages, index, capturedState)
-        resolve(result)
-      })
-    })
+    const submitPromises = allNodeIds.map((nodeId, index) =>
+      executeNodeGeneration(nodeId, finalPrompt, finalImages, index, capturedState)
+    )
     
     const allResults = await Promise.all(submitPromises)
     const successResults = allResults.filter(r => r !== null)
@@ -5330,28 +5317,38 @@ async function handleGenerate(options = {}) {
     : null
   const targetNodeId = targetNode?.id || props.id
   
-  // 多批次生成时，创建堆叠的输出节点
+  // 多批次生成时，创建网格输出节点并建立可视编组
   let allNodeIds = [targetNodeId]
   if (generateCount > 1) {
     const currentNode = canvasStore.nodes.find(n => n.id === targetNodeId)
     if (currentNode) {
+      canvasStore.saveHistory({ force: true })
+      const displayWidth = Math.ceil(Number(
+        currentNode.dimensions?.width ||
+        currentNode.data?.nodeWidth ||
+        currentNode.data?.width ||
+        nodeWidth.value ||
+        420
+      ))
+      const displayHeight = getCurrentNodeDisplayHeight(currentNode)
+      const positions = getBatchGridPositions({
+        origin: currentNode.position,
+        count: generateCount,
+        nodeWidth: displayWidth,
+        nodeHeight: displayHeight
+      })
+
       for (let i = 1; i < generateCount; i++) {
         const stackedNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        const stackOffset = 8
         canvasStore.addNode({
           id: stackedNodeId,
           type: 'video',
-          position: {
-            x: currentNode.position.x + stackOffset * i,
-            y: currentNode.position.y + stackOffset * i
-          },
-          zIndex: -i,
+          position: positions[i],
           data: {
             title: `Video ${i + 1}`,
             status: 'pending',
-            isStackedNode: true,
-            stackIndex: i,
-            parentNodeId: targetNodeId,
+            width: displayWidth,
+            height: displayHeight,
             prompt: promptText.value,
             model: selectedModel.value,
             aspectRatio: selectedAspectRatio.value,
@@ -5359,10 +5356,16 @@ async function handleGenerate(options = {}) {
             generationMode: generationMode.value,
             referenceImages: referenceImages.value
           }
-        })
+        }, true)
         allNodeIds.push(stackedNodeId)
       }
-      console.log('[VideoNode] 创建堆叠节点:', allNodeIds.slice(1))
+
+      canvasStore.createVisibleGroup(allNodeIds, `视频生成 ×${generateCount}`, {
+        skipHistory: true,
+        defaultWidth: displayWidth,
+        defaultHeight: displayHeight
+      })
+      console.log('[VideoNode] 创建批量生成编组:', allNodeIds)
     }
   }
   
