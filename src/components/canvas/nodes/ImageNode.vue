@@ -1016,6 +1016,8 @@ function createGroupImageNodes(groupImageUrls, task) {
         aspectRatio: selectedAspectRatio.value,
         imageSize: imageSize.value,
         prompt: promptText.value,
+        taskId: task.taskId,
+        taskType: task.type || 'image',
         output: {
           type: 'image',
           urls: [url]
