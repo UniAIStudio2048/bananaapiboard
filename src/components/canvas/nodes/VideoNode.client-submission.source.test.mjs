@@ -23,7 +23,8 @@ test('VideoNode creates a durable pending submission before posting video genera
 
 test('VideoNode links returned task ids back to the pending submission for later cleanup', () => {
   const executeStart = source.indexOf('async function executeNodeGeneration')
-  const executeSource = source.slice(executeStart, executeStart + 2200)
+  const executeEnd = source.indexOf('// 计算错峰模式的轮询间隔', executeStart)
+  const executeSource = source.slice(executeStart, executeEnd)
 
   assert.match(executeSource, /sendGenerateRequest\(nodeId,\s*finalPrompt,\s*finalImages,\s*capturedState\)/)
   assert.match(executeSource, /markSubmissionTaskCreated\(submissionId,\s*taskId\)/)

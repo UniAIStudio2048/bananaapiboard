@@ -15,7 +15,7 @@ import { getGlobalNodeDataCache } from './nodeDataCache'
 import { buildNodeDataWithRememberedParameters } from './nodeParameterMemory'
 import { applyNodeDataPatchToTabs } from './tabNodePatch'
 import { markNodeGenerationSubmissionsDeleted } from './pendingGenerationSubmissions'
-import { getVisibleGroupGeometry } from '@/utils/canvasBatchLayout'
+import { getVisibleGroupGeometry, getVisibleNodeGroups } from '@/utils/canvasBatchLayout'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -84,6 +84,10 @@ export const useCanvasStore = defineStore('canvas', () => {
       historyStack.value = new Array(opHistory.length).fill(null)
     }
     historyIndex.value = opHistory.index
+  }
+
+  function syncNodeGroupsFromVisibleNodes() {
+    nodeGroups.value = getVisibleNodeGroups(nodes.value)
   }
   
   // ========== 剪贴板 ==========
@@ -822,6 +826,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     opHistory.undo(state => {
       nodes.value = sanitizeNodesForHistoryRestore(state.nodes)
       edges.value = state.edges
+      syncNodeGroupsFromVisibleNodes()
     })
     syncHistoryRefs()
     isHistoryAction.value = false
@@ -837,6 +842,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     opHistory.redo(state => {
       nodes.value = sanitizeNodesForHistoryRestore(state.nodes)
       edges.value = state.edges
+      syncNodeGroupsFromVisibleNodes()
     })
     syncHistoryRefs()
     isHistoryAction.value = false

@@ -51,6 +51,7 @@ import {
 } from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { getBatchGridPositions } from '@/utils/canvasBatchLayout'
+import { findBatchSafetyError } from '@/utils/canvasBatchFailures'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
 import { getSeedanceQuickAsset } from '@/utils/seedanceQuickAsset'
@@ -4608,6 +4609,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       processingStartedAt: Date.now(),
       taskId: null,
       soraTaskId: null,
+      safetyError: null,
       _preserveRawVideoError: false
     })
     
@@ -4919,6 +4921,7 @@ async function ensureReferenceVideoUrlsAccessible(nodeId, targetNodeId) {
 
 // 后台执行生成的重操作（图片压缩/上传/API提交），不阻塞UI
 async function processGenerationInBackground(targetNodeId, allNodeIds, finalPrompt, finalImages, generateCount, capturedState, submitFingerprint = '') {
+  let submissionsStarted = false
   try {
     // 图片压缩：仅对有严格大小要求的 API 类型（如 kling）做前端预压缩，其他类型传原图
     if (finalImages.length > 0) {
@@ -5055,22 +5058,32 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     canvasStore.updateNodeData(targetNodeId, { progress: '正在提交任务...' })
     
     // 提交所有任务
+    submissionsStarted = true
     const submitPromises = allNodeIds.map((nodeId, index) =>
       executeNodeGeneration(nodeId, finalPrompt, finalImages, index, capturedState)
     )
     
     const allResults = await Promise.all(submitPromises)
     const successResults = allResults.filter(r => r !== null)
+    const batchSafetyError = findBatchSafetyError(allNodeIds.map(nodeId =>
+      canvasStore.nodes.find(node => node.id === nodeId)?.data
+    ))
     
     console.log('[VideoNode] 全部任务已提交:', successResults.length, '/', generateCount)
     
+    if (successResults.length > 0 && batchSafetyError) {
+      const dialog = buildPromptSafetyDialog(batchSafetyError)
+      errorMessage.value = dialog.message
+      await showAlert(dialog.message, dialog.title, dialog.detail)
+    }
+
     if (successResults.length === 0) {
       const firstNodeData = canvasStore.nodes.find(n => n.id === allNodeIds[0])?.data
-      if (firstNodeData?.safetyError) {
-        const safetyErr = new Error(firstNodeData.safetyError.message || firstNodeData.error || '提示词未通过安全审核，请修改后重试')
-        safetyErr.code = firstNodeData.safetyError.code
-        safetyErr.safety = firstNodeData.safetyError.safety
-        safetyErr.payload = firstNodeData.safetyError.payload
+      if (batchSafetyError) {
+        const safetyErr = new Error(batchSafetyError.message || firstNodeData?.error || '提示词未通过安全审核，请修改后重试')
+        safetyErr.code = batchSafetyError.code
+        safetyErr.safety = batchSafetyError.safety
+        safetyErr.payload = batchSafetyError.payload
         throw safetyErr
       }
       const specificError = firstNodeData?.error || '所有任务提交都失败了'
@@ -5081,6 +5094,17 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     
   } catch (error) {
     console.error('[VideoNode] 后台生成失败:', error)
+    if (!submissionsStarted) {
+      const model = capturedState.model || selectedModel.value
+      const batchError = formatVideoNodeErrorMessage(error.message || '生成失败', { model })
+      allNodeIds.forEach(nodeId => {
+        canvasStore.updateNodeData(nodeId, {
+          status: 'error',
+          progress: null,
+          error: batchError
+        })
+      })
+    }
     if (error.code === 'concurrent_limit_exceeded') {
       showAlert(error.message, '并发限制')
       return
@@ -5365,6 +5389,7 @@ async function handleGenerate(options = {}) {
         defaultWidth: displayWidth,
         defaultHeight: displayHeight
       })
+      canvasStore.saveHistory({ force: true })
       console.log('[VideoNode] 创建批量生成编组:', allNodeIds)
     }
   }

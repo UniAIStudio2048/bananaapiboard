@@ -59,6 +59,7 @@ import {
 } from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { getBatchGridPositions } from '@/utils/canvasBatchLayout'
+import { findBatchSafetyError } from '@/utils/canvasBatchFailures'
 import { isPanoramaVrSupportedRatio } from '@/utils/canvasPanoramaExport'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
@@ -5952,7 +5953,8 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
       status: 'processing',
       progress: '生成中...',
       processingStartedAt: submittedAt,
-      taskType: 'image'
+      taskType: 'image',
+      safetyError: null
     })
 
     const result = await sendImageGenerateRequest(finalPrompt, userPrompt)
@@ -6013,10 +6015,23 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
     console.error(`[ImageNode] 任务 ${taskIndex + 1} 失败:`, error)
     console.error(`[ImageNode] 错误详情:`, errorDetail)
     if (!isNativeFetchNetworkError(error)) {
-      canvasStore.updateNodeData(nodeId, {
-        status: 'error',
-        error: error.message
-      })
+      if (isPromptSafetyBlockedError(error)) {
+        canvasStore.updateNodeData(nodeId, {
+          status: 'error',
+          error: error.message,
+          safetyError: {
+            code: error.code,
+            message: error.message,
+            safety: error.safety,
+            payload: error.payload
+          }
+        })
+      } else {
+        canvasStore.updateNodeData(nodeId, {
+          status: 'error',
+          error: error.message
+        })
+      }
       return { error: error.message, detail: errorDetail }
     }
 
@@ -6316,6 +6331,7 @@ async function handleGenerate(options = {}) {
         defaultWidth: displayWidth,
         defaultHeight: displayHeight
       })
+      canvasStore.saveHistory({ force: true })
       console.log('[ImageNode] 创建批量生成编组:', allNodeIds)
     }
   }
@@ -6343,13 +6359,23 @@ async function handleGenerate(options = {}) {
     const allResults = await Promise.all(submitPromises)
     const successResults = allResults.filter(r => r !== null && !r?.error)
     const failedResults = allResults.filter(r => r?.error)
+    const batchSafetyError = findBatchSafetyError(failedResults)
     
     console.log('[ImageNode] 全部任务已提交:', successResults.length, '/', generateCount, 
       failedResults.length > 0 ? '失败详情:' : '', failedResults)
     
+    if (successResults.length > 0 && batchSafetyError) {
+      const dialog = buildPromptSafetyDialog(batchSafetyError)
+      errorMessage.value = dialog.message
+      await showAlert(dialog.message, dialog.title, dialog.detail)
+    }
+
     if (successResults.length === 0) {
-      const firstError = failedResults[0]?.error || '未知错误'
-      const detail = failedResults[0]?.detail || {}
+      const primaryFailure = batchSafetyError
+        ? { error: batchSafetyError.message, detail: batchSafetyError }
+        : failedResults[0]
+      const firstError = primaryFailure?.error || '未知错误'
+      const detail = primaryFailure?.detail || {}
       console.error('[ImageNode] 所有任务都失败，首个错误:', firstError, detail)
       const err = new Error(firstError)
       if (detail) {

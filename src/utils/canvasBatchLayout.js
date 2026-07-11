@@ -48,3 +48,17 @@ export function getVisibleGroupGeometry(nodes, {
     )
   }
 }
+
+export function getVisibleNodeGroups(nodes) {
+  if (!Array.isArray(nodes)) return []
+
+  return nodes
+    .filter(node => node?.type === 'group' && Array.isArray(node.data?.nodeIds) && node.data.nodeIds.length > 0)
+    .map(node => ({
+      id: node.id,
+      name: node.data.groupName || '新建组',
+      nodeIds: [...node.data.nodeIds],
+      color: node.data.groupColor || 'rgba(100, 116, 139, 0.08)',
+      borderColor: node.data.borderColor || 'rgba(100, 116, 139, 0.25)'
+    }))
+}
