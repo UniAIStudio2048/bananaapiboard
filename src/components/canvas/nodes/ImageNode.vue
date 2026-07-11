@@ -58,6 +58,7 @@ import {
   syncPromptMediaMentions
 } from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
+import { getBatchGridPositions } from '@/utils/canvasBatchLayout'
 import { isPanoramaVrSupportedRatio } from '@/utils/canvasPanoramaExport'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
@@ -6267,40 +6268,55 @@ async function handleGenerate(options = {}) {
     : null
   const targetNodeId = targetNode?.id || props.id
   
-  // 多批次生成时，创建堆叠的输出节点
+  // 多批次生成时，创建网格输出节点并建立可视编组
   let allNodeIds = [targetNodeId]
   if (generateCount > 1) {
-    // 对于目标节点创建额外的堆叠节点
     const currentNode = canvasStore.nodes.find(n => n.id === targetNodeId)
     if (currentNode) {
+      canvasStore.saveHistory({ force: true })
+      const displayWidth = Math.ceil(Number(
+        currentNode.dimensions?.width ||
+        currentNode.data?.nodeWidth ||
+        currentNode.data?.width ||
+        nodeWidth.value ||
+        380
+      ))
+      const displayHeight = getCurrentNodeDisplayHeight(currentNode)
+      const positions = getBatchGridPositions({
+        origin: currentNode.position,
+        count: generateCount,
+        nodeWidth: displayWidth,
+        nodeHeight: displayHeight
+      })
+
       for (let i = 1; i < generateCount; i++) {
         const stackedNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        const stackOffset = 8
         canvasStore.addNode({
           id: stackedNodeId,
           type: 'image',
-          position: {
-            x: currentNode.position.x + stackOffset * i,
-            y: currentNode.position.y + stackOffset * i
-          },
-          zIndex: -i,
+          position: positions[i],
           data: {
             title: `Image ${i + 1}`,
             nodeRole: 'output',
             status: 'pending',
-            isStackedNode: true,
-            stackIndex: i,
-            parentNodeId: targetNodeId,
+            width: displayWidth,
+            height: displayHeight,
             prompt: promptText.value,
             model: selectedModel.value,
             aspectRatio: selectedAspectRatio.value,
             imageSize: imageSize.value,
             referenceImages: referenceImages.value
           }
-        })
+        }, true)
         allNodeIds.push(stackedNodeId)
       }
-      console.log('[ImageNode] 创建堆叠节点:', allNodeIds.slice(1))
+
+      canvasStore.createVisibleGroup(allNodeIds, `图片生成 ×${generateCount}`, {
+        skipHistory: true,
+        defaultWidth: displayWidth,
+        defaultHeight: displayHeight
+      })
+      console.log('[ImageNode] 创建批量生成编组:', allNodeIds)
     }
   }
   
@@ -6319,16 +6335,9 @@ async function handleGenerate(options = {}) {
   try {
     // 提交所有任务（任务提交后立即返回，不等待完成）
     // basePrompt 是用户原始输入（不含预设提示词），用于历史记录显示
-    const submitPromises = allNodeIds.map((nodeId, index) => {
-      return new Promise(async (resolve) => {
-        // 间隔发送请求
-        if (index > 0) {
-          await delay(CONCURRENT_INTERVAL * index)
-        }
-        const result = await executeNodeGeneration(nodeId, finalPrompt, index, basePrompt)
-        resolve(result)
-      })
-    })
+    const submitPromises = allNodeIds.map((nodeId, index) =>
+      executeNodeGeneration(nodeId, finalPrompt, index, basePrompt)
+    )
     
     // 等待所有任务提交完成（不是等待任务结果完成）
     const allResults = await Promise.all(submitPromises)
