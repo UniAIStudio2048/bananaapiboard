@@ -15,6 +15,7 @@ import { getGlobalNodeDataCache } from './nodeDataCache'
 import { buildNodeDataWithRememberedParameters } from './nodeParameterMemory'
 import { applyNodeDataPatchToTabs } from './tabNodePatch'
 import { markNodeGenerationSubmissionsDeleted } from './pendingGenerationSubmissions'
+import { getVisibleGroupGeometry } from '@/utils/canvasBatchLayout'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -2323,13 +2324,15 @@ export const useCanvasStore = defineStore('canvas', () => {
   /**
    * 创建节点编组
    */
-  function createGroup(nodeIds, groupName = null) {
+  function createGroup(nodeIds, groupName = null, options = {}) {
     if (nodeIds.length < 2) {
       console.warn('[Canvas Store] 需要至少 2 个节点才能创建编组')
       return null
     }
     
-    saveHistory({ force: true })
+    if (!options.skipHistory) {
+      saveHistory({ force: true })
+    }
     
     const groupId = `group-${Date.now()}`
     const name = groupName || `新建组`
@@ -2365,6 +2368,50 @@ export const useCanvasStore = defineStore('canvas', () => {
     })
     
     console.log(`[Canvas Store] 已创建编组 "${name}"，包含 ${nodeIds.length} 个节点`)
+    return group
+  }
+
+  function createVisibleGroup(nodeIds, groupName = null, options = {}) {
+    const memberNodes = nodeIds
+      .map(nodeId => nodes.value.find(node => node.id === nodeId))
+      .filter(Boolean)
+    if (memberNodes.length < 2) return null
+
+    const geometry = getVisibleGroupGeometry(memberNodes, options)
+    if (!geometry) return null
+
+    if (!options.skipHistory) {
+      saveHistory({ force: true })
+    }
+    const group = createGroup(nodeIds, groupName, { skipHistory: true })
+    if (!group) return null
+
+    memberNodes.forEach(node => {
+      node.draggable = true
+      node.zIndex = 1
+      node.style = { ...node.style, zIndex: 1 }
+    })
+
+    addNode({
+      id: group.id,
+      type: 'group',
+      position: geometry.position,
+      zIndex: -1000,
+      style: { zIndex: -1000 },
+      draggable: true,
+      selectable: true,
+      data: {
+        groupName: group.name,
+        groupColor: group.color,
+        borderColor: group.borderColor,
+        nodeIds: [...nodeIds],
+        width: geometry.width,
+        height: geometry.height,
+        nodeOffsets: geometry.nodeOffsets
+      }
+    }, true)
+
+    selectNode(group.id)
     return group
   }
   
@@ -2805,6 +2852,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     // 编组操作
     createGroup,
+    createVisibleGroup,
     disbandGroup,
 
     // 编组执行
