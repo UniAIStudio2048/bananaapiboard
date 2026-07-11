@@ -838,15 +838,12 @@ async function uploadFileToCloud(nodeId, task) {
   } catch (error) {
     if (error?.name === 'AbortError') return
     console.error(`[NodeSelector] ${type} 上传失败:`, error.message)
-    const node = canvasStore.nodes.find(n => n.id === nodeId)
-    if (node) {
-      canvasStore.updateNodeData(nodeId, { isUploading: false, uploadFailed: true, uploadError: error.message })
-      uploadManager.registerFailedUpload(`ns_${nodeId}_${Date.now()}`, {
-        nodeId, tabId, file, type, blobUrl,
-        field: task.field,
-        error: error.message
-      })
-    }
+    canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
+    uploadManager.registerFailedUpload(`ns_${nodeId}_${Date.now()}`, {
+      nodeId, tabId, file, type, blobUrl,
+      field: task.field,
+      error: error.message
+    })
   }
 }
 

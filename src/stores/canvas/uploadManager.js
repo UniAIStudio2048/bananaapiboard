@@ -9,6 +9,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { cancelCanvasUpload } from '@/api/canvas/direct-upload.js'
 
 export const useUploadManager = defineStore('uploadManager', () => {
   const pendingUploads = ref(new Map())
@@ -80,6 +81,23 @@ export const useUploadManager = defineStore('uploadManager', () => {
     retryTimers.value.set(taskId, timer)
   }
 
+  function cancelNodeRetries(nodeId, tabId) {
+    cancelCanvasUpload(nodeId, tabId)
+    for (const [taskId, task] of pendingUploads.value) {
+      if (task.nodeId !== nodeId || task.tabId !== tabId) continue
+      const timer = retryTimers.value.get(taskId)
+      if (timer) clearTimeout(timer)
+      retryTimers.value.delete(taskId)
+      pendingUploads.value.delete(taskId)
+    }
+  }
+
+  function cancelAllRetries() {
+    for (const timer of retryTimers.value.values()) clearTimeout(timer)
+    retryTimers.value.clear()
+    pendingUploads.value.clear()
+  }
+
   /**
    * 执行重试上传
    */
@@ -133,6 +151,10 @@ export const useUploadManager = defineStore('uploadManager', () => {
       }, 5000)
 
     } catch (err) {
+      if (err?.name === 'AbortError') {
+        cancelNodeRetries(task.nodeId, task.tabId)
+        return
+      }
       console.error(`[UploadManager] 重试上传失败 (第 ${task.retryCount} 次):`, err.message)
       task.status = 'failed'
       task.error = err.message
@@ -224,6 +246,8 @@ export const useUploadManager = defineStore('uploadManager', () => {
     uploadingCount,
     hasPending,
     registerFailedUpload,
+    cancelNodeRetries,
+    cancelAllRetries,
     retryUpload,
     retryAllFailed,
     retrySingle,

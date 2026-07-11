@@ -1184,19 +1184,12 @@ async function uploadAudioFileAsync(file, blobUrl, nodeId) {
   } catch (error) {
     if (error?.name === 'AbortError') return
     console.error('[AudioNode] 音频上传失败:', error.message)
-    const node = canvasStore.nodes.find(n => n.id === nodeId)
-    if (node) {
-      canvasStore.updateNodeData(nodeId, {
-        isUploading: false,
-        uploadFailed: true,
-        uploadError: error.message
-      })
-      uploadManager.registerFailedUpload(`aud_${nodeId}_${Date.now()}`, {
-        nodeId, tabId, file, type: 'audio', blobUrl,
-        field: 'audioUrl',
-        error: error.message
-      })
-    }
+    canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
+    uploadManager.registerFailedUpload(`aud_${nodeId}_${Date.now()}`, {
+      nodeId, tabId, file, type: 'audio', blobUrl,
+      field: 'audioUrl',
+      error: error.message
+    })
   }
 }
 

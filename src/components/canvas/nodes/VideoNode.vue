@@ -5677,6 +5677,12 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
   } catch (error) {
     if (error?.name === 'AbortError') return
     console.warn('[VideoNode] 后台上传失败，保持使用 blob URL:', error.message)
+    canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
+    uploadManager.registerFailedUpload(`img_${nodeId}_${Date.now()}`, {
+      nodeId, tabId, file, type: 'image', blobUrl,
+      field: 'sourceImages',
+      error: error.message
+    })
   }
 }
 
@@ -5708,11 +5714,7 @@ async function uploadVideoFileAsync(file, blobUrl, nodeId) {
   } catch (error) {
     if (error?.name === 'AbortError') return
     console.warn('[VideoNode] 视频后台上传失败:', error.message)
-    canvasStore.updateNodeData(nodeId, {
-      isUploading: false,
-      uploadFailed: true,
-      uploadError: error.message
-    })
+    canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
     uploadManager.registerFailedUpload(`vid_${nodeId}_${Date.now()}`, {
       nodeId, tabId, file, type: 'video', blobUrl,
       field: 'sourceVideo',
@@ -5937,11 +5939,7 @@ async function uploadAudioFileAsync(file, blobUrl, nodeId) {
   } catch (error) {
     if (error?.name === 'AbortError') return
     console.warn('[VideoNode] 音频后台上传失败:', error.message)
-    canvasStore.updateNodeData(nodeId, {
-      isUploading: false,
-      uploadFailed: true,
-      uploadError: error.message
-    })
+    canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
     uploadManager.registerFailedUpload(`aud_${nodeId}_${Date.now()}`, {
       nodeId, tabId, file, type: 'audio', blobUrl,
       field: 'audioUrl',

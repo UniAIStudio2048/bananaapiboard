@@ -18,6 +18,19 @@ const nodeSelector = read('../../components/canvas/NodeSelector.vue')
 const imageNode = read('../../components/canvas/nodes/ImageNode.vue')
 const audioNode = read('../../components/canvas/nodes/AudioNode.vue')
 
+function extractFunction(source, name) {
+  const start = source.indexOf(`function ${name}`)
+  assert.notEqual(start, -1, `${name} must exist`)
+  const bodyStart = source.indexOf('{', source.indexOf(')', start))
+  let depth = 0
+  for (let index = bodyStart; index < source.length; index++) {
+    if (source[index] === '{') depth++
+    if (source[index] === '}') depth--
+    if (depth === 0) return source.slice(start, index + 1)
+  }
+  assert.fail(`${name} must have a complete body`)
+}
+
 assert.match(direct, /createCanvasDirectUploader/)
 assert.match(direct, /JSON\.stringify\(options\.body\)/)
 assert.match(direct, /credentials:\s*['"]omit['"]/)
@@ -51,28 +64,36 @@ for (const source of [textNode, videoNode, assetPanel, cameraPanel]) {
 }
 
 assert.match(canvasStore, /function removeNode\(nodeId\)[\s\S]*cancelCanvasUpload\(nodeId, activeTabId\.value\)/)
+assert.match(canvasStore, /function removeNode\(nodeId\)[\s\S]*cancelNodeRetries\(nodeId, activeTabId\.value\)/)
 assert.match(canvasStore, /function removeNodesBatch\(nodeIds\)[\s\S]*cancelCanvasUpload\(nodeId, activeTabId\.value\)/)
+assert.match(canvasStore, /function removeNodesBatch\(nodeIds\)[\s\S]*cancelNodeRetries\(nodeId, activeTabId\.value\)/)
 assert.doesNotMatch(canvasStore.match(/function switchToTab\(tabId\)[\s\S]*?\n  \}/)?.[0] || '', /cancelCanvasUpload/)
 assert.match(canvasView, /cancelAllCanvasUploads/)
 assert.match(canvasView.match(/onUnmounted\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || '', /cancelAllCanvasUploads\(\)/)
+assert.match(canvasView.match(/onUnmounted\(\(\) => \{[\s\S]*?\n\}\)/)?.[0] || '', /uploadManager\.cancelAllRetries\(\)/)
 assert.doesNotMatch(uploadManager.match(/async function updateNodeWithCloudUrl\(task\)[\s\S]*?^  \}/m)?.[0] || '', /canvasStore\.nodes\.find/)
 
-for (const [source, functionName] of [
-  [canvasBoard, 'uploadFilesToCloud'],
-  [nodeSelector, 'uploadFileToCloud'],
-  [imageNode, 'uploadImageFileAsync'],
-  [videoNode, 'uploadImageFileAsync'],
-  [videoNode, 'uploadVideoFileAsync'],
-  [videoNode, 'uploadAudioFileAsync'],
-  [audioNode, 'uploadAudioFileAsync']
+for (const [source, functionName, abortAction] of [
+  [canvasBoard, 'uploadFilesToCloud', 'continue'],
+  [nodeSelector, 'uploadFileToCloud', 'return'],
+  [imageNode, 'uploadImageFileAsync', 'return'],
+  [videoNode, 'uploadImageFileAsync', 'return'],
+  [videoNode, 'uploadVideoFileAsync', 'return'],
+  [videoNode, 'uploadAudioFileAsync', 'return'],
+  [audioNode, 'uploadAudioFileAsync', 'return']
 ]) {
-  const start = source.indexOf(`function ${functionName}`)
-  const nextFunction = source.indexOf('\nfunction ', start + 1)
-  const body = source.slice(start, nextFunction === -1 ? source.length : nextFunction)
+  const body = extractFunction(source, functionName)
   assert.match(body, /const tabId = canvasStore\.activeTabId/, `${functionName} captures tabId`)
   assert.match(body, /uploadCanvasMedia\([^\n]+\{\s*nodeId,\s*tabId\s*\}/, `${functionName} passes upload identity`)
   assert.match(body, /commitMediaUpload\(\{[\s\S]*?tabId/, `${functionName} commits to captured tab`)
-  assert.match(body, /catch \(error\) \{\s*if \(error\?\.name === 'AbortError'\) return/, `${functionName} ignores intentional aborts`)
+  assert.match(
+    body,
+    new RegExp(`catch \\(error\\) \\{\\s*if \\(error\\?\\.name === 'AbortError'\\) ${abortAction}`),
+    `${functionName} handles intentional aborts without stopping unrelated uploads`
+  )
+  assert.match(body, /markMediaUploadFailed\(\{[\s\S]*?nodeId,[\s\S]*?tabId,[\s\S]*?error/, `${functionName} marks failure on the captured tab`)
+  assert.match(body, /registerFailedUpload\([^,]+, \{[\s\S]*?nodeId, tabId,/, `${functionName} registers retry identity`)
+  assert.doesNotMatch(body, /canvasStore\.nodes\.find/, `${functionName} must not require the failed tab to stay active`)
 }
 
 console.log('canvas direct upload source tests passed')

@@ -3010,6 +3010,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   cancelAllCanvasUploads()
+  uploadManager.cancelAllRetries()
   persistCurrentWorkflowOnExit('unmounted')
 
   document.removeEventListener('keydown', handleKeyDown)

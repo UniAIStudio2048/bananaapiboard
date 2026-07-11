@@ -4654,19 +4654,12 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
   } catch (error) {
     if (error?.name === 'AbortError') return
     console.warn('[ImageNode] 后台上传失败，保持使用 blob URL:', error.message)
-    const currentNode = canvasStore.nodes.find(n => n.id === nodeId)
-    if (currentNode) {
-      canvasStore.updateNodeData(nodeId, {
-        isUploading: false,
-        uploadFailed: true,
-        uploadError: error.message
-      })
-      uploadManager.registerFailedUpload(`img_${nodeId}_${Date.now()}`, {
-        nodeId, tabId, file, type: 'image', blobUrl,
-        field: 'sourceImages',
-        error: error.message
-      })
-    }
+    canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
+    uploadManager.registerFailedUpload(`img_${nodeId}_${Date.now()}`, {
+      nodeId, tabId, file, type: 'image', blobUrl,
+      field: 'sourceImages',
+      error: error.message
+    })
   }
 }
 

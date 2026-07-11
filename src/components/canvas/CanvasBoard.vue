@@ -3391,21 +3391,14 @@ async function uploadFilesToCloud(tasks) {
       }
       
     } catch (error) {
-      if (error?.name === 'AbortError') return
+      if (error?.name === 'AbortError') continue
       console.error(`[CanvasBoard] ${type}上传失败:`, error.message)
-      const node = canvasStore.nodes.find(n => n.id === nodeId)
-      if (node) {
-        canvasStore.updateNodeData(nodeId, { 
-          isUploading: false,
-          uploadFailed: true,
-          uploadError: error.message
-        })
-        uploadManager.registerFailedUpload(`cb_${nodeId}_${Date.now()}`, {
-          nodeId, tabId, file, type, blobUrl,
-          field,
-          error: error.message
-        })
-      }
+      canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
+      uploadManager.registerFailedUpload(`cb_${nodeId}_${Date.now()}`, {
+        nodeId, tabId, file, type, blobUrl,
+        field,
+        error: error.message
+      })
     }
   }
 }

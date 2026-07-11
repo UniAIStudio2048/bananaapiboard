@@ -17,6 +17,7 @@ import { applyNodeDataPatchToTabs } from './tabNodePatch'
 import { markNodeGenerationSubmissionsDeleted } from './pendingGenerationSubmissions'
 import { buildMediaUploadCommit, resolveMediaUploadCommitTarget } from './mediaUploadCommit'
 import { cancelCanvasUpload } from '@/api/canvas/direct-upload.js'
+import { useUploadManager } from './uploadManager'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -347,6 +348,33 @@ export const useCanvasStore = defineStore('canvas', () => {
     return true
   }
 
+  function markMediaUploadFailed({ nodeId, tabId = null, error }) {
+    const target = resolveMediaUploadCommitTarget({
+      nodes: nodes.value,
+      edges: edges.value,
+      workflowTabs: workflowTabs.value,
+      activeTabId: activeTabId.value,
+      tabId
+    })
+    if (!target) return false
+    const node = target.nodes.find(item => item.id === nodeId)
+    if (!node) return false
+    const patch = {
+      isUploading: false,
+      uploadFailed: true,
+      uploadError: error?.message || String(error || '上传失败')
+    }
+
+    if (!target.isActive) {
+      node.data = mergeNodeData(node.data, patch)
+      target.tab.hasChanges = true
+      return true
+    }
+
+    updateNodeData(nodeId, patch)
+    return true
+  }
+
   function findInactiveWorkflowTabNode(nodeId) {
     if (!nodeId) return null
     for (const tab of workflowTabs.value) {
@@ -410,6 +438,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     saveHistory({ force: true })
     markCurrentTabChanged()
     cancelCanvasUpload(nodeId, activeTabId.value)
+    useUploadManager().cancelNodeRetries(nodeId, activeTabId.value)
     markNodeGenerationSubmissionsDeleted(nodeId, { tabId: activeTabId.value })
     
     // 删除相关连线（通过 removeEdge 逐条删除，确保 Storyboard 格子图片同步清理）
@@ -438,6 +467,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     const nodeIdSet = new Set(nodeIds)
     for (const nodeId of nodeIdSet) {
       cancelCanvasUpload(nodeId, activeTabId.value)
+      useUploadManager().cancelNodeRetries(nodeId, activeTabId.value)
       markNodeGenerationSubmissionsDeleted(nodeId, { tabId: activeTabId.value })
     }
     
@@ -2818,6 +2848,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     addNode,
     updateNodeData,
     commitMediaUpload,
+    markMediaUploadFailed,
     findInactiveWorkflowTabNode,
     updateInactiveWorkflowTabNodeData,
     updateNodePosition,
