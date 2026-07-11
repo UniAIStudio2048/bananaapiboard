@@ -17,6 +17,7 @@ import { getOriginalImageUrl } from '@/utils/canvasThumbnail'
 import { getSeedanceCharacterNodeLayout } from '@/utils/seedanceCharacterLayout'
 import { buildVideoQuickActionNode, VIDEO_QUICK_ACTION_TYPES } from '@/utils/canvasVideoQuickActions'
 import { createDefaultDirectorStudioData, DIRECTOR_STUDIO_NODE_TYPE } from '@/utils/directorStudioState'
+import { getCanvasMediaTaskIds } from '@/utils/canvasMediaTaskIds'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -34,6 +35,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'send-to-assistant'])
 const canvasStore = useCanvasStore()
+const copyableTaskIds = computed(() => getCanvasMediaTaskIds(props.node, canvasStore.nodes))
 
 // 加入资产的加载状态
 const isAddingAsset = ref(false)
@@ -256,6 +258,44 @@ const menuStyle = computed(() => ({
 }))
 
 // ========== 节点操作 ==========
+
+function fallbackCopyText(text) {
+  const textArea = document.createElement('textarea')
+  textArea.value = text
+  textArea.style.position = 'fixed'
+  textArea.style.left = '-9999px'
+  document.body.appendChild(textArea)
+  textArea.select()
+
+  try {
+    return document.execCommand('copy')
+  } catch (error) {
+    console.error('[NodeContextMenu] 任务 ID 降级复制失败:', error)
+    return false
+  } finally {
+    textArea.remove()
+  }
+}
+
+async function copyTaskIds() {
+  const text = copyableTaskIds.value.join('\n')
+  if (!text) return
+
+  let copied = false
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable')
+    await navigator.clipboard.writeText(text)
+    copied = true
+  } catch (error) {
+    copied = fallbackCopyText(text)
+  }
+
+  emit('close')
+  showToast(
+    t(copied ? 'canvas.contextMenu.taskIdCopied' : 'canvas.contextMenu.taskIdCopyFailed'),
+    copied ? 'success' : 'error'
+  )
+}
 
 function createContextMenuNodeData(type, data = {}) {
   if (type !== DIRECTOR_STUDIO_NODE_TYPE) return data
@@ -1223,6 +1263,10 @@ function handleMenuClick(event) {
     </template>
     
     <!-- 节点操作 -->
+    <div v-if="copyableTaskIds.length" class="canvas-context-menu-item" @click="copyTaskIds">
+      <span class="icon">⧉</span>
+      {{ $t('canvas.contextMenu.copyTaskId') }}
+    </div>
     <div class="canvas-context-menu-item" @click="copyNode">
       <span class="icon">⧉</span>
       {{ $t('canvas.contextMenu.copyNode') }}

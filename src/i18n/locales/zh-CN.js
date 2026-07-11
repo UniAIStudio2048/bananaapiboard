@@ -585,6 +585,9 @@ export default {
       copyNode: '复制节点',
       pasteNode: '粘贴节点',
       deleteNode: '删除节点',
+      copyTaskId: '复制任务 ID',
+      taskIdCopied: '任务 ID 已复制',
+      taskIdCopyFailed: '任务 ID 复制失败',
       assetSaved: '{type}已加入我的资产！',
       canvasGenerated: '画布生成'
     },

@@ -585,6 +585,9 @@ export default {
       copyNode: 'Copy Node',
       pasteNode: 'Paste Node',
       deleteNode: 'Delete Node',
+      copyTaskId: 'Copy task ID',
+      taskIdCopied: 'Task ID copied',
+      taskIdCopyFailed: 'Failed to copy task ID',
       assetSaved: '{type} added to my assets!',
       canvasGenerated: 'Canvas Generated'
     },
