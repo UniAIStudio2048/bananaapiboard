@@ -6,6 +6,19 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(join(__dirname, 'VideoNode.vue'), 'utf8')
 
+function extractFunction(name) {
+  const start = source.indexOf(`function ${name}`)
+  assert.notEqual(start, -1, `${name} must exist`)
+  const bodyStart = source.indexOf('{', source.indexOf(')', start))
+  let depth = 0
+  for (let index = bodyStart; index < source.length; index++) {
+    if (source[index] === '{') depth++
+    if (source[index] === '}') depth--
+    if (depth === 0) return source.slice(start, index + 1)
+  }
+  assert.fail(`${name} must have a complete body`)
+}
+
 assert.match(
   source,
   /accept="image\/\*,video\/\*,audio\/\*"/,
@@ -18,10 +31,19 @@ assert.match(
   'Video node should create an upstream audio node when users add reference audio'
 )
 
+const uploadAudioSource = extractFunction('uploadAudioFileAsync')
+assert.match(uploadAudioSource, /const tabId = canvasStore\.activeTabId/)
+assert.match(uploadAudioSource, /uploadCanvasMedia\(file, 'audio', \{ nodeId, tabId \}\)/)
+assert.match(uploadAudioSource, /commitMediaUpload\(\{ nodeId, blobUrl, mediaType: 'audio', uploaded: result, tabId \}\)/)
 assert.match(
-  source,
-  /async function uploadAudioFileAsync\(file, blobUrl, nodeId\) \{[\s\S]*?uploadCanvasMedia\(file, 'audio'\)[\s\S]*?uploadManager\.registerFailedUpload/,
-  'Video node should upload added reference audio through the canvas media uploader and register failed uploads'
+  uploadAudioSource,
+  /uploadManager\.registerFailedUpload\([^,]+, \{[\s\S]*?nodeId, tabId, file, type: 'audio'/,
+  'Video node should preserve tab identity when registering failed reference audio uploads'
+)
+assert.ok(
+  uploadAudioSource.indexOf("if (error?.name === 'AbortError') return") <
+    uploadAudioSource.indexOf('uploadManager.registerFailedUpload'),
+  'Intentional reference audio upload aborts must not register a retry'
 )
 
 assert.match(
