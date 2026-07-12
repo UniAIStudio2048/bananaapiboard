@@ -58,6 +58,7 @@ import {
   getTouchPoint
 } from '@/utils/canvasTouchInteractions'
 import { buildPromptInputScaleStyle } from '@/utils/canvasPromptInputScale'
+import { organizeCanvasNodes } from '@/utils/canvasOrganization'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -82,6 +83,10 @@ const props = defineProps({
   pickMode: {
     type: Boolean,
     default: false
+  },
+  gridSnapEnabled: {
+    type: Boolean,
+    default: true
   }
 })
 
@@ -315,6 +320,12 @@ const {
 const MIN_ZOOM = 0.1
 const MAX_ZOOM = 5
 const ZOOM_SPEED = 0.1
+
+function clampCanvasZoom(zoom) {
+  const numericZoom = Number(zoom)
+  if (!Number.isFinite(numericZoom)) return 1
+  return Math.min(Math.max(numericZoom, MIN_ZOOM), MAX_ZOOM)
+}
 
 const PAN_SPEED = 50
 
@@ -3364,6 +3375,73 @@ async function uploadFilesToCloud(tasks) {
   }
 }
 
+async function fitCanvasToScreen() {
+  await nextTick()
+  return fitView({ padding: 0.2, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM })
+}
+
+async function organizeCanvas() {
+  if (canvasStore.nodes.length === 0) return { changed: false, failed: false, empty: true }
+
+  const snapshot = {
+    positions: Object.fromEntries(
+      canvasStore.nodes.map(node => [node.id, { ...node.position }])
+    ),
+    viewport: { ...getViewport(), zoom: clampCanvasZoom(getViewport()?.zoom) }
+  }
+  const result = organizeCanvasNodes(canvasStore.nodes, {
+    snapToGrid: props.gridSnapEnabled,
+    grid: 20
+  })
+
+  if (result.failed) return { ...result, snapshot }
+  if (result.changed) {
+    for (const [nodeId, nextPosition] of Object.entries(result.positions)) {
+      const node = canvasStore.nodes.find(candidate => candidate.id === nodeId)
+      if (!node) continue
+
+      const deltaX = nextPosition.x - node.position.x
+      const deltaY = nextPosition.y - node.position.y
+      if (node.type === 'group') {
+        const childIds = new Set(node.data?.nodeIds || [])
+        for (const child of canvasStore.nodes) {
+          if (!childIds.has(child.id)) continue
+          const childPosition = child.position || { x: 0, y: 0 }
+          canvasStore.updateNodePosition(child.id, {
+            x: childPosition.x + deltaX,
+            y: childPosition.y + deltaY
+          })
+        }
+      }
+      canvasStore.updateNodePosition(nodeId, { ...nextPosition })
+    }
+    canvasStore.markCurrentTabChanged()
+  }
+
+  await fitCanvasToScreen()
+  return { ...result, snapshot }
+}
+
+function restoreOrganizedCanvas(snapshot) {
+  if (!snapshot) return false
+
+  let restored = false
+  for (const [nodeId, position] of Object.entries(snapshot.positions || {})) {
+    if (!canvasStore.nodes.some(node => node.id === nodeId)) continue
+    canvasStore.updateNodePosition(nodeId, { ...position })
+    restored = true
+  }
+
+  if (snapshot.viewport) {
+    setViewport({
+      ...snapshot.viewport,
+      zoom: clampCanvasZoom(snapshot.viewport.zoom)
+    }, { duration: 0 })
+  }
+  if (restored) canvasStore.markCurrentTabChanged()
+  return restored
+}
+
 // 暴露给父组件的方法
 defineExpose({
   // 设置缩放级别（不触发store更新，避免循环）
@@ -3372,7 +3450,7 @@ defineExpose({
       const currentViewport = getViewport()
       setViewport({
         ...currentViewport,
-        zoom
+        zoom: clampCanvasZoom(zoom)
       }, { duration: options.duration || 200 })
     }
   },
@@ -3383,7 +3461,10 @@ defineExpose({
   // 编组选中的节点
   groupSelectedNodes,
   // 从剪贴板文件创建节点（供右键菜单调用）
-  handleClipboardFiles
+  handleClipboardFiles,
+  organizeCanvas,
+  restoreOrganizedCanvas,
+  fitCanvasToScreen
 })
 
 onMounted(() => {
@@ -3392,7 +3473,7 @@ onMounted(() => {
   // 初始化视口 - 增加延迟确保 VueFlow 完全就绪
   const initViewport = () => {
     try {
-      fitView({ padding: 0.2 })
+      fitView({ padding: 0.2, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM })
       console.log('[CanvasBoard] 视口初始化完成')
     } catch (e) {
       console.warn('[CanvasBoard] fitView 失败，重试中...', e)
@@ -3525,7 +3606,7 @@ onUnmounted(() => {
       :default-edge-options="defaultEdgeOptions"
       :min-zoom="0.1"
       :max-zoom="5"
-      :snap-to-grid="true"
+      :snap-to-grid="gridSnapEnabled"
       :snap-grid="[20, 20]"
       :connection-mode="'loose'"
       :only-render-visible-elements="false"
