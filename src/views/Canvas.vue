@@ -77,6 +77,7 @@ import {
   resolvePromptInputFixedScalePreference
 } from '@/utils/canvasPromptInputScale'
 import { buildOrganizationSignature } from '@/utils/canvasOrganization'
+import { getCanvasNodeMedia } from '@/utils/canvasDirectory'
 import { createCanvasOrganizationPreviewController } from '@/utils/canvasOrganizationPreview'
 import {
   CANVAS_GRID_SNAP_STORAGE_KEY,
@@ -2675,103 +2676,104 @@ function createDownstreamNode(nodeType, nodeTitle) {
   console.log(`[Canvas] 快捷键创建 ${nodeType} 节点，${selectedIds.length} 个源节点连接到该节点`)
 }
 
-// 下载选中节点的文件
-async function downloadSelectedNodeFile() {
-  const selectedId = canvasStore.selectedNodeId
-  if (!selectedId) {
-    console.log('[Canvas] 没有选中的节点')
-    return
-  }
-  
-  const node = canvasStore.nodes.find(n => n.id === selectedId)
+function getActiveDirectoryNode(nodeId) {
+  return canvasStore.nodes.find(node => node.id === nodeId) || null
+}
+
+async function handleDirectorySelectLocate(nodeId) {
+  const node = getActiveDirectoryNode(nodeId)
   if (!node) return
-  
-  const data = node.data || {}
-  let fileUrl = null
-  let fileName = ''
-  
-  // 根据节点类型获取文件 URL
-  // 图片节点
-  if (data.sourceImages?.length > 0) {
-    fileUrl = data.sourceImages[0]
-    fileName = `image_${selectedId}.png`
-  } else if (data.output?.urls?.length > 0) {
-    fileUrl = data.output.urls[0]
-    fileName = `image_${selectedId}.png`
-  } else if (data.images?.length > 0) {
-    fileUrl = data.images[0]
-    fileName = `image_${selectedId}.png`
+  await canvasBoardRef.value?.focusCanvasNode?.(nodeId, {
+    select: true,
+    playVideo: node.type?.includes('video')
+  })
+}
+
+async function handleDirectoryLocate(nodeId) {
+  if (!getActiveDirectoryNode(nodeId)) return
+  await canvasBoardRef.value?.focusCanvasNode?.(nodeId, { select: false })
+}
+
+function handleDirectoryRename({ nodeId, name, isGroup }) {
+  const node = getActiveDirectoryNode(nodeId)
+  const normalizedName = typeof name === 'string' ? name.trim() : ''
+  if (!node || !normalizedName) return
+  canvasStore.updateNodeData(nodeId, isGroup || node.type === 'group'
+    ? { groupName: normalizedName }
+    : { title: normalizedName, label: normalizedName })
+}
+
+async function handleDirectoryDuplicate(nodeId) {
+  const sourceNode = getActiveDirectoryNode(nodeId)
+  if (!sourceNode || sourceNode.type === 'group') return
+  const duplicate = canvasStore.duplicateNodeWithIncomingEdges(nodeId, { preserveResults: true })
+  if (!duplicate) return
+
+  const sourceGroupId = sourceNode.data?.groupId
+  if (sourceGroupId && getActiveDirectoryNode(sourceGroupId)?.type === 'group') {
+    canvasStore.addNodeToGroup(duplicate.id, sourceGroupId)
   }
-  // 视频节点
-  else if (data.output?.url && (data.output?.type === 'video' || node.type.includes('video'))) {
-    fileUrl = data.output.url
-    fileName = `video_${selectedId}.mp4`
-  } else if (data.video) {
-    fileUrl = data.video
-    fileName = `video_${selectedId}.mp4`
+  await canvasBoardRef.value?.focusCanvasNode?.(duplicate.id, { select: true })
+}
+
+function handleDirectoryMoveToGroup({ nodeId, targetGroupId }) {
+  if (!getActiveDirectoryNode(nodeId)) return
+  canvasStore.moveNodeToGroup(nodeId, targetGroupId || null)
+}
+
+async function handleDirectoryDownload(nodeId) {
+  await downloadNodeFile(nodeId)
+}
+
+async function downloadNodeFile(nodeId) {
+  const node = getActiveDirectoryNode(nodeId)
+  const media = getCanvasNodeMedia(node)
+  if (!node || !media) {
+    console.log('[Canvas] 节点没有可下载的文件')
+    return false
   }
-  // 音频节点
-  else if (data.audioData || data.audioUrl) {
-    fileUrl = data.audioData || data.audioUrl
-    fileName = `audio_${selectedId}.mp3`
-  }
-  // 文本节点 - 导出为 txt
-  else if (data.text) {
-    const blob = new Blob([data.text], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
+
+  const rawName = node.data?.title || node.data?.label || `${media.kind}_${nodeId}`
+  const safeName = String(rawName).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 80) || media.kind
+  const fileName = `${safeName}.${media.extension}`
+
+  if (media.kind === 'text') {
+    const blobUrl = URL.createObjectURL(new Blob([media.text], { type: 'text/plain;charset=utf-8' }))
     const link = document.createElement('a')
-    link.href = url
-    link.download = `text_${selectedId}.txt`
+    link.href = blobUrl
+    link.download = fileName
     document.body.appendChild(link)
     link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-    console.log('[Canvas] 下载文本文件:', link.download)
-    return
+    link.remove()
+    URL.revokeObjectURL(blobUrl)
+    return true
   }
-  
-  if (!fileUrl) {
-    console.log('[Canvas] 选中的节点没有可下载的文件')
-    return
-  }
-  
+
   try {
-    // dataUrl 或 blob URL 直接下载
-    if (fileUrl.startsWith('data:') || fileUrl.startsWith('blob:')) {
-      const response = fileUrl.startsWith('data:') ? null : await fetch(fileUrl)
-      let blob
-      if (fileUrl.startsWith('data:')) {
-        const parts = fileUrl.split(',')
-        const mime = parts[0].match(/:(.*?);/)?.[1] || 'application/octet-stream'
-        const base64 = parts[1]
-        const byteCharacters = atob(base64)
-        const byteNumbers = new Array(byteCharacters.length)
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i)
-        }
-        blob = new Blob([new Uint8Array(byteNumbers)], { type: mime })
-      } else {
-        blob = await response.blob()
-      }
-      const blobUrl = URL.createObjectURL(blob)
+    if (media.url.startsWith('data:') || media.url.startsWith('blob:')) {
+      const response = await fetch(media.url)
+      const blobUrl = URL.createObjectURL(await response.blob())
       const link = document.createElement('a')
       link.href = blobUrl
       link.download = fileName
       document.body.appendChild(link)
       link.click()
-      document.body.removeChild(link)
+      link.remove()
       URL.revokeObjectURL(blobUrl)
-      console.log('[Canvas] 下载文件:', fileName)
-      return
+      return true
     }
-    
-    // 远程 URL 走流式下载，触发浏览器原生下载栏（带进度），点击即响应
+
     const { startStreamDownload } = await import('@/api/client')
-    startStreamDownload(fileUrl, fileName)
-    console.log('[Canvas] 已开始下载:', fileName)
+    startStreamDownload(media.url, fileName)
+    return true
   } catch (error) {
     console.error('[Canvas] 下载失败:', error)
+    return false
   }
+}
+
+function downloadSelectedNodeFile() {
+  return downloadNodeFile(canvasStore.selectedNodeId)
 }
 
 // 处理解散编组
@@ -3773,8 +3775,18 @@ onUnmounted(() => {
       <!-- 资产面板 -->
       <AssetPanel
         :visible="showAssetPanel"
+        :nodes="canvasStore.nodes"
+        :selected-node-id="canvasStore.selectedNodeId"
+        :selected-node-ids="canvasStore.selectedNodeIds"
+        :workflow-key="canvasStore.activeTabId || ''"
         @close="closeAssetPanel"
         @insert-asset="handleAssetInsert"
+        @select-locate="handleDirectorySelectLocate"
+        @locate="handleDirectoryLocate"
+        @rename="handleDirectoryRename"
+        @duplicate="handleDirectoryDuplicate"
+        @download="handleDirectoryDownload"
+        @move-to-group="handleDirectoryMoveToGroup"
       />
       
       <!-- 历史记录面板 -->

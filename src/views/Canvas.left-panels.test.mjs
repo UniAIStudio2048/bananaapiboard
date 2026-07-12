@@ -28,3 +28,16 @@ for (const [name, state] of [
 ]) {
   assert.match(toggleBody, new RegExp(`${state}\\.value\\s*=\\s*panel\\s*===\\s*'${name}'\\s*&&\\s*!wasOpen`), `${name} panel should close when another left panel opens`)
 }
+
+assert.match(source, /:nodes="canvasStore\.nodes"/)
+assert.match(source, /:selected-node-id="canvasStore\.selectedNodeId"/)
+assert.match(source, /:selected-node-ids="canvasStore\.selectedNodeIds"/)
+assert.match(source, /:workflow-key="canvasStore\.activeTabId \|\| ''"/)
+assert.match(source, /@select-locate="handleDirectorySelectLocate"/)
+assert.match(source, /@locate="handleDirectoryLocate"/)
+assert.match(source, /@rename="handleDirectoryRename"/)
+assert.match(source, /@duplicate="handleDirectoryDuplicate"/)
+assert.match(source, /@download="handleDirectoryDownload"/)
+assert.match(source, /@move-to-group="handleDirectoryMoveToGroup"/)
+assert.match(source, /async function downloadNodeFile\(nodeId\)/)
+assert.match(source, /function downloadSelectedNodeFile\(\)[\s\S]*downloadNodeFile\(canvasStore\.selectedNodeId\)/)

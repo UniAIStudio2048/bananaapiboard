@@ -59,6 +59,7 @@ import {
 } from '@/utils/canvasTouchInteractions'
 import { buildPromptInputScaleStyle } from '@/utils/canvasPromptInputScale'
 import {
+  getOrganizationNodeSize,
   getOrganizationGroupChildIds,
   organizeCanvasNodes,
   runCanvasFit
@@ -3405,6 +3406,35 @@ async function fitCanvasToScreen() {
   })
 }
 
+async function focusCanvasNode(nodeId, options = {}) {
+  const node = canvasStore.nodes.find(candidate => candidate.id === nodeId)
+  if (!node) return false
+
+  if (options.select) {
+    selectSingleNodeFromTouch(nodeId)
+  }
+
+  const size = getOrganizationNodeSize(node)
+  const zoom = clampCanvasZoom(options.zoom || getViewport()?.zoom || 1)
+  await setCenter(
+    node.position.x + size.width / 2,
+    node.position.y + size.height / 2,
+    { zoom, duration: options.duration ?? 260 }
+  )
+  markViewportMoving()
+
+  if (options.playVideo) {
+    await nextTick()
+    await new Promise(resolve => requestAnimationFrame(resolve))
+    const nodeElement = [...(canvasBoardRef.value?.querySelectorAll('.vue-flow__node') || [])]
+      .find(element => element.getAttribute('data-id') === String(nodeId))
+    const videoWrapper = nodeElement?.querySelector('.video-output-wrapper')
+    videoWrapper?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }))
+  }
+
+  return true
+}
+
 async function organizeCanvas() {
   if (canvasStore.nodes.length === 0) return { changed: false, failed: false, empty: true }
 
@@ -3487,6 +3517,7 @@ defineExpose({
   groupSelectedNodes,
   // 从剪贴板文件创建节点（供右键菜单调用）
   handleClipboardFiles,
+  focusCanvasNode,
   organizeCanvas,
   restoreOrganizedCanvas,
   fitCanvasToScreen
