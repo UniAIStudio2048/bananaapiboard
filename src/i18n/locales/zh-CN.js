@@ -589,20 +589,7 @@ export default {
       taskIdCopied: '任务 ID 已复制',
       taskIdCopyFailed: '任务 ID 复制失败',
       assetSaved: '{type}已加入我的资产！',
-      canvasGenerated: '画布生成',
-      directory: {
-        canvasTab: '画布',
-        assetsTab: '资产',
-        title: '画布元素',
-        searchPlaceholder: '搜索画布元素...',
-        empty: '当前工作流暂无节点',
-        root: '未编组',
-        rename: '重命名',
-        duplicate: '复制',
-        download: '下载',
-        locate: '在画布中定位',
-        total: '共 {count} 个节点'
-      }
+      canvasGenerated: '画布生成'
     },
     unnamed: '未命名',
     doubleClickRename: '双击重命名 - {name}',
@@ -832,7 +819,20 @@ export default {
       applyToCanvas: '应用到画布',
       addToCanvas: '添加到画布',
       deleteConfirm: '确定删除 "{name}" 吗？',
-      canvasGenerated: '画布生成'
+      canvasGenerated: '画布生成',
+      directory: {
+        canvasTab: '画布',
+        assetsTab: '资产',
+        title: '画布元素',
+        searchPlaceholder: '搜索画布元素...',
+        empty: '当前工作流暂无节点',
+        root: '未编组',
+        rename: '重命名',
+        duplicate: '复制',
+        download: '下载',
+        locate: '在画布中定位',
+        total: '共 {count} 个节点'
+      }
     },
     // 历史记录面板
     historyPanel: {

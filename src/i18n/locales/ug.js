@@ -337,20 +337,7 @@ export default {
       pasteNode: 'تۈگۈن چاپلاش',
       deleteNode: 'تۈگۈن ئۆچۈرۈش',
       assetSaved: '{type} مېنىڭ مۈلكۈمگە قوشۇلدى!',
-      canvasGenerated: 'كارتىنا تاختىسى ھاسىللاندى',
-      directory: {
-        canvasTab: 'كارتىنا تاختىسى',
-        assetsTab: 'مۈلۈك',
-        title: 'كارتىنا تاختىسىدىكى تۈگۈنلەر',
-        searchPlaceholder: 'تۈگۈن ئىزدەش...',
-        empty: 'بۇ خىزمەت ئېقىمىدا تۈگۈن يوق',
-        root: 'گۇرۇپپىلانمىغان',
-        rename: 'نامىنى ئۆزگەرتىش',
-        duplicate: 'كۆپەيتىش',
-        download: 'چۈشۈرۈش',
-        locate: 'كارتىنا تاختىسىدا تېپىش',
-        total: 'جەمئىي {count} تۈگۈن'
-      }
+      canvasGenerated: 'كارتىنا تاختىسى ھاسىللاندى'
     },
     unnamed: 'نامسىز',
     doubleClickRename: 'قوش چېكىش بىلەن نام ئۆزگەرتىش - {name}',
@@ -566,7 +553,20 @@ export default {
       applyToCanvas: 'كارتىنا تاختىسىغا قوللىنىش',
       addToCanvas: 'كارتىنا تاختىسىغا قوشۇش',
       deleteConfirm: '«{name}» نى ئۆچۈرۈشنى جەزملەمسىز؟',
-      canvasGenerated: 'كارتىنا تاختىسى ھاسىللاندى'
+      canvasGenerated: 'كارتىنا تاختىسى ھاسىللاندى',
+      directory: {
+        canvasTab: 'كارتىنا تاختىسى',
+        assetsTab: 'مۈلۈك',
+        title: 'كارتىنا تاختىسىدىكى تۈگۈنلەر',
+        searchPlaceholder: 'تۈگۈن ئىزدەش...',
+        empty: 'بۇ خىزمەت ئېقىمىدا تۈگۈن يوق',
+        root: 'گۇرۇپپىلانمىغان',
+        rename: 'نامىنى ئۆزگەرتىش',
+        duplicate: 'كۆپەيتىش',
+        download: 'چۈشۈرۈش',
+        locate: 'كارتىنا تاختىسىدا تېپىش',
+        total: 'جەمئىي {count} تۈگۈن'
+      }
     },
     // تارىخ خاتىرىسى تاختىسى
     historyPanel: {

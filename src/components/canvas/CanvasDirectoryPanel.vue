@@ -699,46 +699,64 @@ onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPoin
   padding: 0 12px;
 }
 
-:global(:root.canvas-theme-light) .canvas-directory-panel {
+@media (max-width: 640px) {
+  .directory-row {
+    grid-template-columns: minmax(0, 1fr) 34px 34px;
+    min-height: 44px;
+  }
+
+  .directory-row-main {
+    height: 42px;
+  }
+
+  .directory-icon-button {
+    width: 32px;
+    height: 32px;
+  }
+}
+</style>
+
+<style>
+:root.canvas-theme-light .canvas-directory-panel {
   color: #263142;
 }
 
-:global(:root.canvas-theme-light) .directory-search,
-:global(:root.canvas-theme-light) .directory-thumbnail {
+:root.canvas-theme-light .directory-search,
+:root.canvas-theme-light .directory-thumbnail {
   border-color: #d8dde6;
   background: #f4f6f9;
 }
 
-:global(:root.canvas-theme-light) .directory-search input {
+:root.canvas-theme-light .directory-search input {
   color: #263142;
 }
 
-:global(:root.canvas-theme-light) .directory-row:hover {
+:root.canvas-theme-light .directory-row:hover {
   background: #edf1f6;
 }
 
-:global(:root.canvas-theme-light) .directory-row-selected,
-:global(:root.canvas-theme-light) .directory-row-selected:hover {
+:root.canvas-theme-light .directory-row-selected,
+:root.canvas-theme-light .directory-row-selected:hover {
   border-color: rgba(43, 102, 218, 0.45);
   background: #e3ecff;
   color: #18376f;
 }
 
-:global(:root.canvas-theme-light) .directory-menu {
+:root.canvas-theme-light .directory-menu {
   border-color: #d3d9e2;
   background: #ffffff;
   box-shadow: 0 8px 22px rgba(35, 45, 60, 0.15);
 }
 
-:global(:root.canvas-theme-light) .directory-menu button {
+:root.canvas-theme-light .directory-menu button {
   color: #263142;
 }
 
-:global(:root.canvas-theme-light) .directory-menu button:hover:not(:disabled) {
+:root.canvas-theme-light .directory-menu button:hover:not(:disabled) {
   background: #edf1f6;
 }
 
-:global(:root.canvas-theme-light) .directory-rename-input {
+:root.canvas-theme-light .directory-rename-input {
   color: #22304a;
   background: #ffffff;
 }

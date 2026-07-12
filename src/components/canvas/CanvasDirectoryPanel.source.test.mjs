@@ -39,4 +39,11 @@ test('canvas directory keeps labels inside stable action rows', () => {
   assert.match(source, /min-width:\s*0/)
   assert.match(source, /text-overflow:\s*ellipsis/)
   assert.match(source, /grid-template-columns:/)
+  assert.match(source, /@media\s*\(max-width:\s*640px\)[\s\S]*?min-height:\s*44px/)
+  assert.match(source, /@media\s*\(max-width:\s*640px\)[\s\S]*?\.directory-icon-button[\s\S]*?width:\s*32px/)
+})
+
+test('canvas directory exposes light theme rules outside scoped styles', () => {
+  assert.doesNotMatch(source, /:global\(:root\.canvas-theme-light\)/)
+  assert.match(source, /<style>\s*:root\.canvas-theme-light[\s\S]*?<\/style>/)
 })
