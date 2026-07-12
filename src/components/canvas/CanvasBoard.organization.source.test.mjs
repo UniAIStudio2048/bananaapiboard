@@ -23,5 +23,10 @@ assert.match(source, /onNodeDragStop\([\s\S]*?emit\('organization-mutation-end'\
 assert.match(source, /onNodeDrag\([\s\S]*?emit\('organization-mutation-start'\)/)
 assert.match(source, /function\s+startTouchNodeDrag[\s\S]*?emit\('organization-mutation-start'\)/)
 assert.match(source, /function\s+finishTouchNodeDrag[\s\S]*?emit\('organization-mutation-end'\)/)
+assert.match(source, /async\s+function\s+focusCanvasNode\(nodeId, options = \{\}\)/)
+assert.match(source, /focusCanvasNode[\s\S]*?setCenter\(/)
+assert.match(source, /options\.select[\s\S]*?selectSingleNodeFromTouch\(nodeId\)/)
+assert.match(source, /dispatchEvent\(new CustomEvent\('canvas-directory-play'/)
+assert.match(source, /focusCanvasNode,[\s\S]*?fitCanvasToScreen/)
 
 console.log('CanvasBoard organization source tests passed')

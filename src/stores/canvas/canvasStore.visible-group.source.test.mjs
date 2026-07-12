@@ -50,3 +50,29 @@ test('undo and redo rebuild redundant group metadata from visible group nodes', 
   assert.match(undoSource, /syncNodeGroupsFromVisibleNodes\(\)/)
   assert.match(redoSource, /syncNodeGroupsFromVisibleNodes\(\)/)
 })
+
+test('directory moves update both visible group membership records atomically', () => {
+  const moveSource = storeSource.slice(
+    storeSource.indexOf('function moveNodeToGroup('),
+    storeSource.indexOf('/**\n   * 删除节点')
+  )
+
+  assert.match(storeSource, /function moveNodeToGroup\(nodeId, targetGroupId = null\)/)
+  assert.match(moveSource, /saveHistory\(\{ force: true \}\)/)
+  assert.match(moveSource, /delete sourceOffsets\[nodeId\]/)
+  assert.match(moveSource, /groupId:\s*null/)
+  assert.match(moveSource, /clampNodePositionToGroup\(node, targetGroupNode\)/)
+  assert.match(moveSource, /updateNodePosition\(nodeId, targetPosition\)/)
+  assert.match(moveSource, /addNodeToGroup\(nodeId, targetGroupId\)/)
+  assert.match(storeSource, /moveNodeToGroup,/)
+})
+
+test('directory duplication can preserve generated media without changing existing callers', () => {
+  const duplicateSource = storeSource.slice(
+    storeSource.indexOf('function duplicateNodeWithIncomingEdges('),
+    storeSource.indexOf('function pasteNodes(')
+  )
+
+  assert.match(duplicateSource, /!options\.preserveResults/)
+  assert.match(duplicateSource, /cleanNodeDataForProcessingDuplicate\(newNode\.data, node\.type\)/)
+})

@@ -515,7 +515,20 @@ export default {
       type: 'Type',
       size: 'Taille',
       createdAt: 'Créé le',
-      applyToCanvas: 'Appliquer au Canvas'
+      applyToCanvas: 'Appliquer au Canvas',
+      directory: {
+        canvasTab: 'Canvas',
+        assetsTab: 'Ressources',
+        title: 'Éléments du canvas',
+        searchPlaceholder: 'Rechercher dans le canvas...',
+        empty: 'Aucun nœud dans ce workflow',
+        root: 'Non groupé',
+        rename: 'Renommer',
+        duplicate: 'Dupliquer',
+        download: 'Télécharger',
+        locate: 'Localiser sur le canvas',
+        total: '{count} nœuds'
+      }
     },
     emptyState: {
       doubleClick: 'Double-cliquez',

@@ -361,6 +361,69 @@ export const useCanvasStore = defineStore('canvas', () => {
     })
     markCurrentTabChanged()
   }
+
+  function clampNodePositionToGroup(node, groupNode) {
+    const padding = 24
+    const nodeWidth = Number(node?.dimensions?.width || node?.data?.width || node?.style?.width || 320)
+    const nodeHeight = Number(node?.dimensions?.height || node?.data?.height || node?.style?.height || 240)
+    const groupWidth = Number(groupNode?.data?.width || groupNode?.dimensions?.width || 400)
+    const groupHeight = Number(groupNode?.data?.height || groupNode?.dimensions?.height || 300)
+    const minX = groupNode.position.x + padding
+    const minY = groupNode.position.y + padding
+    const maxX = Math.max(minX, groupNode.position.x + groupWidth - nodeWidth - padding)
+    const maxY = Math.max(minY, groupNode.position.y + groupHeight - nodeHeight - padding)
+
+    return {
+      x: Math.min(Math.max(node.position.x, minX), maxX),
+      y: Math.min(Math.max(node.position.y, minY), maxY)
+    }
+  }
+
+  function moveNodeToGroup(nodeId, targetGroupId = null) {
+    const node = nodes.value.find(candidate => candidate.id === nodeId)
+    if (!node || node.type === 'group') return false
+
+    const sourceGroupId = node.data?.groupId || null
+    if (sourceGroupId === targetGroupId) return false
+
+    const targetGroupNode = targetGroupId
+      ? nodes.value.find(candidate => candidate.id === targetGroupId && candidate.type === 'group')
+      : null
+    if (targetGroupId && !targetGroupNode) return false
+
+    saveHistory({ force: true })
+
+    if (sourceGroupId) {
+      const sourceGroupNode = nodes.value.find(candidate => candidate.id === sourceGroupId && candidate.type === 'group')
+      const sourceGroup = nodeGroups.value.find(candidate => candidate.id === sourceGroupId)
+      const sourceOffsets = { ...(sourceGroupNode?.data?.nodeOffsets || {}) }
+      delete sourceOffsets[nodeId]
+
+      if (sourceGroupNode) {
+        updateNodeData(sourceGroupId, {
+          nodeIds: (sourceGroupNode.data?.nodeIds || []).filter(id => id !== nodeId),
+          nodeOffsets: sourceOffsets
+        })
+      }
+      if (sourceGroup) {
+        sourceGroup.nodeIds = sourceGroup.nodeIds.filter(id => id !== nodeId)
+      }
+    }
+
+    updateNodeData(nodeId, {
+      groupId: null,
+      groupColor: null
+    })
+
+    if (targetGroupNode) {
+      const targetPosition = clampNodePositionToGroup(node, targetGroupNode)
+      updateNodePosition(nodeId, targetPosition)
+      addNodeToGroup(nodeId, targetGroupId)
+    }
+
+    markCurrentTabChanged()
+    return true
+  }
   
   /**
    * 删除节点
@@ -1076,7 +1139,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       selected: false
     }
 
-    if (newNode.data) {
+    if (newNode.data && !options.preserveResults) {
       cleanNodeDataForProcessingDuplicate(newNode.data, node.type)
     }
 
@@ -2842,6 +2905,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     updateInactiveWorkflowTabNodeData,
     updateNodePosition,
     addNodeToGroup,
+    moveNodeToGroup,
     removeNode,
     removeNodesBatch,
     selectNode,

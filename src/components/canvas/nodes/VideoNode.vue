@@ -6669,11 +6669,12 @@ async function handleVideoError(event) {
 }
 
 // 鼠标进入视频区域 - 自动播放（带声音）
-function activateVideoPreview() {
+function activateVideoPreview(options = {}) {
+  const force = options?.force === true
   // 🚀 性能优化：大画布模式下禁用悬停播放
-  if (canvasStore.isLargeCanvas) return
+  if (canvasStore.isLargeCanvas && !force) return
   // 🚀 性能优化：拖拽时不自动播放视频
-  if (isCanvasMediaMoving.value) return
+  if (isCanvasMediaMoving.value && !force) return
 
   isVideoPreviewActive.value = true
   nextTick(() => handleVideoMouseEnter())
@@ -7869,6 +7870,7 @@ function handleToolbarPreview() {
           class="video-output-wrapper"
           :style="videoWrapperStyle"
           @mouseenter="activateVideoPreview"
+          @canvas-directory-play="activateVideoPreview({ force: true })"
           @mouseleave="handleVideoMouseLeave"
           @click="handleVideoWrapperClick"
         >

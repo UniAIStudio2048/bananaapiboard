@@ -68,7 +68,7 @@ assert.match(
 
 assert.match(
   source,
-  /<img[\s\S]*v-else-if="videoPosterUrl && !videoPosterFailed"[\s\S]*@error="handleVideoPosterError"/,
+  /<img[\s\S]*v-if="videoPosterUrl && !videoPosterFailed"[\s\S]*@error="handleVideoPosterError"/,
   'VideoNode should render a lightweight poster image and handle load failures'
 )
 

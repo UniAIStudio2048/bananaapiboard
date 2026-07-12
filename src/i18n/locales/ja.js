@@ -524,7 +524,20 @@ export default {
       type: 'タイプ',
       size: 'サイズ',
       createdAt: '作成日',
-      applyToCanvas: 'キャンバスに適用'
+      applyToCanvas: 'キャンバスに適用',
+      directory: {
+        canvasTab: 'キャンバス',
+        assetsTab: 'アセット',
+        title: 'キャンバス要素',
+        searchPlaceholder: 'キャンバス要素を検索...',
+        empty: 'このワークフローにノードはありません',
+        root: '未グループ',
+        rename: '名前を変更',
+        duplicate: '複製',
+        download: 'ダウンロード',
+        locate: 'キャンバス上で表示',
+        total: '{count} ノード'
+      }
     },
     emptyState: {
       doubleClick: 'ダブルクリック',

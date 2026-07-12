@@ -390,7 +390,20 @@ export default {
       type: 'Typ',
       size: 'Größe',
       createdAt: 'Erstellt',
-      applyToCanvas: 'Auf Canvas anwenden'
+      applyToCanvas: 'Auf Canvas anwenden',
+      directory: {
+        canvasTab: 'Canvas',
+        assetsTab: 'Assets',
+        title: 'Canvas-Elemente',
+        searchPlaceholder: 'Canvas-Elemente durchsuchen...',
+        empty: 'Keine Knoten in diesem Workflow',
+        root: 'Nicht gruppiert',
+        rename: 'Umbenennen',
+        duplicate: 'Duplizieren',
+        download: 'Herunterladen',
+        locate: 'Auf Canvas anzeigen',
+        total: '{count} Knoten'
+      }
     },
     // Kategorien
     categories: {
