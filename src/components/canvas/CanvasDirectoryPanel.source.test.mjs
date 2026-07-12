@@ -20,6 +20,8 @@ test('canvas directory exposes navigation and row actions', () => {
 test('canvas directory supports folders and validated node drag targets', () => {
   assert.match(source, /isCanvasDirectoryMoveAllowed/)
   assert.match(source, /draggable="true"/)
+  assert.match(source, /@keydown\.right\.prevent=/)
+  assert.match(source, /@keydown\.left\.prevent=/)
   assert.match(source, /@dragstart=/)
   assert.match(source, /@drop(?:\.[\w.-]+)?=/)
   assert.match(source, /aria-expanded=/)
@@ -46,4 +48,5 @@ test('canvas directory keeps labels inside stable action rows', () => {
 test('canvas directory exposes light theme rules outside scoped styles', () => {
   assert.doesNotMatch(source, /:global\(:root\.canvas-theme-light\)/)
   assert.match(source, /<style>\s*:root\.canvas-theme-light[\s\S]*?<\/style>/)
+  assert.match(source, /:root\.canvas-theme-light \.directory-row\s*\{[\s\S]*?color:\s*#465267/)
 })

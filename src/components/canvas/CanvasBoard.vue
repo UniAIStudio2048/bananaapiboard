@@ -3429,7 +3429,7 @@ async function focusCanvasNode(nodeId, options = {}) {
     const nodeElement = [...(canvasBoardRef.value?.querySelectorAll('.vue-flow__node') || [])]
       .find(element => element.getAttribute('data-id') === String(nodeId))
     const videoWrapper = nodeElement?.querySelector('.video-output-wrapper')
-    videoWrapper?.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }))
+    videoWrapper?.dispatchEvent(new CustomEvent('canvas-directory-play', { bubbles: false }))
   }
 
   return true

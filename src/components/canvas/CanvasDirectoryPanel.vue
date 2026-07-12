@@ -258,6 +258,8 @@ onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPoin
             type="button"
             :aria-expanded="isFolderExpanded(folder.id)"
             @click="toggleFolder(folder.id)"
+            @keydown.right.prevent="!isFolderExpanded(folder.id) && toggleFolder(folder.id)"
+            @keydown.left.prevent="isFolderExpanded(folder.id) && toggleFolder(folder.id)"
           >
             <component :is="isFolderExpanded(folder.id) ? ChevronDown : ChevronRight" :size="15" aria-hidden="true" />
             <Folder :size="18" class="directory-folder-icon" aria-hidden="true" />
@@ -729,6 +731,21 @@ onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPoin
 
 :root.canvas-theme-light .directory-search input {
   color: #263142;
+}
+
+:root.canvas-theme-light .directory-row {
+  color: #465267;
+}
+
+:root.canvas-theme-light .directory-heading,
+:root.canvas-theme-light .directory-footer,
+:root.canvas-theme-light .directory-folder-count,
+:root.canvas-theme-light .directory-icon-button {
+  color: #667085;
+}
+
+:root.canvas-theme-light .directory-folder-children {
+  border-left-color: #d8dde6;
 }
 
 :root.canvas-theme-light .directory-row:hover {

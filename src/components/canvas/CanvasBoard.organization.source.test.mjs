@@ -26,7 +26,7 @@ assert.match(source, /function\s+finishTouchNodeDrag[\s\S]*?emit\('organization-
 assert.match(source, /async\s+function\s+focusCanvasNode\(nodeId, options = \{\}\)/)
 assert.match(source, /focusCanvasNode[\s\S]*?setCenter\(/)
 assert.match(source, /options\.select[\s\S]*?selectSingleNodeFromTouch\(nodeId\)/)
-assert.match(source, /dispatchEvent\(new MouseEvent\('mouseenter'/)
+assert.match(source, /dispatchEvent\(new CustomEvent\('canvas-directory-play'/)
 assert.match(source, /focusCanvasNode,[\s\S]*?fitCanvasToScreen/)
 
 console.log('CanvasBoard organization source tests passed')
