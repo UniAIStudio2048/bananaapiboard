@@ -18,5 +18,10 @@ assert.match(source, /fitView\(\{\s*padding:\s*0\.2,\s*minZoom:\s*MIN_ZOOM,\s*ma
 assert.match(source, /function\s+clampCanvasZoom\s*\(/)
 assert.match(source, /const\s+clampedZoom\s*=\s*clampCanvasZoom\(newZoom\)[\s\S]*canvasStore\.updateViewport\(\{\s*x:\s*newX,\s*y:\s*newY,\s*zoom:\s*clampedZoom\s*\}\)/)
 assert.match(source, /organizeCanvas,[\s\S]*restoreOrganizedCanvas,[\s\S]*fitCanvasToScreen/)
+assert.match(source, /defineEmits\(\[[\s\S]*'organization-mutation-start'[\s\S]*'organization-mutation-end'[\s\S]*\]\)/)
+assert.match(source, /onNodeDragStop\([\s\S]*?emit\('organization-mutation-end'\)[\s\S]*?\n\}\)/)
+assert.match(source, /onNodeDrag\([\s\S]*?emit\('organization-mutation-start'\)/)
+assert.match(source, /function\s+startTouchNodeDrag[\s\S]*?emit\('organization-mutation-start'\)/)
+assert.match(source, /function\s+finishTouchNodeDrag[\s\S]*?emit\('organization-mutation-end'\)/)
 
 console.log('CanvasBoard organization source tests passed')

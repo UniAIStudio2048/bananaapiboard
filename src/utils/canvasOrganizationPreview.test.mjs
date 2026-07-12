@@ -73,3 +73,67 @@ test('workflow action runs only after an open preview is kept', () => {
   assert.equal(result, 'new-tab')
   assert.deepEqual(events, ['history', 'preview-open', 'preview-closed', 'switch'])
 })
+
+test('restore cancels the temporary layout operation without adding undo or redo', () => {
+  assert.equal(typeof previewModule.createCanvasOrganizationPreviewController, 'function')
+  const before = {
+    nodes: [{ id: 'a', position: { x: 0, y: 0 }, data: {} }],
+    edges: []
+  }
+  const arranged = {
+    nodes: [{ id: 'a', position: { x: 200, y: 0 }, data: {} }],
+    edges: []
+  }
+  const history = createOpHistory({ baseline: before })
+  let current = arranged
+  const controller = previewModule.createCanvasOrganizationPreviewController({
+    saveHistory: () => history.record(current),
+    cancelHistory: () => history.cancelLatest(current)
+  })
+
+  controller.open({ snapshot: before })
+  current = before
+  assert.equal(typeof controller.cancel, 'function')
+  assert.equal(controller.cancel(), true)
+  assert.equal(history.canUndo, false)
+  assert.equal(history.canRedo, false)
+})
+
+test('continuous drag records the final frame for redo', () => {
+  assert.equal(typeof previewModule.createCanvasOrganizationPreviewController, 'function')
+  const before = {
+    nodes: [{ id: 'a', position: { x: 0, y: 0 }, data: {} }],
+    edges: []
+  }
+  const arranged = {
+    nodes: [{ id: 'a', position: { x: 200, y: 0 }, data: {} }],
+    edges: []
+  }
+  const firstDragFrame = {
+    nodes: [{ id: 'a', position: { x: 220, y: 0 }, data: {} }],
+    edges: []
+  }
+  const finalDragFrame = {
+    nodes: [{ id: 'a', position: { x: 320, y: 40 }, data: {} }],
+    edges: []
+  }
+  const history = createOpHistory({ baseline: before })
+  let current = arranged
+  const controller = previewModule.createCanvasOrganizationPreviewController({
+    saveHistory: () => history.record(current)
+  })
+
+  controller.open({ snapshot: before })
+  assert.equal(typeof controller.beginContinuousMutation, 'function')
+  assert.equal(typeof controller.finishContinuousMutation, 'function')
+  controller.beginContinuousMutation()
+  current = firstDragFrame
+  controller.keepAfterMutation()
+  current = finalDragFrame
+  controller.finishContinuousMutation()
+
+  history.undo(state => { current = state })
+  assert.deepEqual(current, arranged)
+  history.redo(state => { current = state })
+  assert.deepEqual(current, finalDragFrame)
+})

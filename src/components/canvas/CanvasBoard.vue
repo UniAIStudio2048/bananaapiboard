@@ -94,7 +94,14 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['dblclick', 'canvas-contextmenu', 'pane-click', 'pick-node'])
+const emit = defineEmits([
+  'dblclick',
+  'canvas-contextmenu',
+  'pane-click',
+  'pick-node',
+  'organization-mutation-start',
+  'organization-mutation-end'
+])
 const canvasStore = useCanvasStore()
 const uploadManager = useUploadManager()
 
@@ -657,6 +664,7 @@ onNodeDragStop((event) => {
   
   // 🚀 性能优化：通知节点恢复正常渲染质量
   window.dispatchEvent(new CustomEvent('canvas-drag-end'))
+  emit('organization-mutation-end')
 })
 
 
@@ -666,6 +674,7 @@ onNodeDrag((event) => {
 
   // 🚀 性能优化：标记拖拽开始，首次拖拽时触发
   if (!isDraggingNode.value) {
+    emit('organization-mutation-start')
     isDraggingNode.value = true
     // 通知节点降低渲染质量
     window.dispatchEvent(new CustomEvent('canvas-drag-start'))
@@ -1994,6 +2003,7 @@ function startTouchNodeDrag(point) {
   }
 
   if (!isDraggingNode.value) {
+    emit('organization-mutation-start')
     isDraggingNode.value = true
     window.dispatchEvent(new CustomEvent('canvas-drag-start'))
   }
@@ -2011,6 +2021,7 @@ function finishTouchNodeDrag() {
 
   isDraggingNode.value = false
   window.dispatchEvent(new CustomEvent('canvas-drag-end'))
+  emit('organization-mutation-end')
 }
 
 function handleTouchPinchMove(event) {

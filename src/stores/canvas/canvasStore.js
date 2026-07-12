@@ -815,6 +815,17 @@ export const useCanvasStore = defineStore('canvas', () => {
     opHistory.trim(effectiveMaxHistory)
     syncHistoryRefs()
   }
+
+  function cancelLatestHistory() {
+    const cleanedNodes = nodes.value.map(node => cleanNodeForHistory(toRaw(node)))
+    const state = {
+      nodes: JSON.parse(JSON.stringify(cleanedNodes)),
+      edges: JSON.parse(JSON.stringify(toRaw(edges.value)))
+    }
+    const cancelled = opHistory.cancelLatest(state)
+    syncHistoryRefs()
+    return cancelled
+  }
   
   /**
    * 撤销（op-based）
@@ -2846,6 +2857,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     // 历史记录操作
     saveHistory,
+    cancelLatestHistory,
     undo,
     redo,
     trimHistory,

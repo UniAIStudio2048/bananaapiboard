@@ -244,6 +244,7 @@ const zoomInput = ref('100')
 const organizationPreview = ref(null)
 const organizationPreviewController = createCanvasOrganizationPreviewController({
   saveHistory: options => canvasStore.saveHistory(options),
+  cancelHistory: () => canvasStore.cancelLatestHistory(),
   onChange: preview => {
     organizationPreview.value = preview
   }
@@ -2364,6 +2365,14 @@ function keepOrganizedCanvas() {
   return organizationPreviewController.keep()
 }
 
+function handleOrganizationMutationStart() {
+  organizationPreviewController.beginContinuousMutation()
+}
+
+function handleOrganizationMutationEnd() {
+  organizationPreviewController.finishContinuousMutation()
+}
+
 async function restoreOrganizedCanvas() {
   const preview = organizationPreview.value
   if (!preview) return
@@ -2371,7 +2380,7 @@ async function restoreOrganizedCanvas() {
   try {
     canvasBoardRef.value?.restoreOrganizedCanvas?.(preview.snapshot)
     await nextTick()
-    organizationPreviewController.keepAfterMutation()
+    organizationPreviewController.cancel()
   } finally {
     isApplyingOrganization = false
   }
@@ -3352,6 +3361,8 @@ onUnmounted(() => {
         @dblclick="handleCanvasDoubleClick"
         @pane-click="handlePaneClick"
         @pick-node="handlePickNode"
+        @organization-mutation-start="handleOrganizationMutationStart"
+        @organization-mutation-end="handleOrganizationMutationEnd"
       />
       
       <!-- 顶部标签栏 - 仅在有标签时显示 -->

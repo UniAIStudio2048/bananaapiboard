@@ -188,6 +188,14 @@ export function createOpHistory({ maxSize = 50, baseline = null } = {}) {
     return true
   }
 
+  function cancelLatest(currentState) {
+    if (!base || index < 0 || index !== stack.length - 1) return false
+    stack.pop()
+    index--
+    base = deepClone(currentState)
+    return true
+  }
+
   function clear() {
     stack = []
     index = -1
@@ -220,6 +228,7 @@ export function createOpHistory({ maxSize = 50, baseline = null } = {}) {
     record,
     undo,
     redo,
+    cancelLatest,
     clear,
     trim,
     setBaseline,

@@ -164,4 +164,24 @@ function snap(nodes, edges = []) {
   assert.equal(history.canUndo, false)
 }
 
+// --- cancelLatest 移除临时操作并采用恢复后的当前状态 ---
+{
+  const before = snap([{ id: 'a', x: 0 }])
+  const arranged = snap([{ id: 'a', x: 200 }])
+  const restoredWithFreshData = snap([{ id: 'a', x: 0, status: 'complete' }])
+  const history = createOpHistory({ baseline: before })
+  history.record(arranged)
+
+  assert.equal(typeof history.cancelLatest, 'function', '历史栈必须支持取消最新临时操作')
+  assert.equal(history.cancelLatest(restoredWithFreshData), true)
+  assert.equal(history.length, 0)
+  assert.equal(history.canUndo, false)
+  assert.equal(history.canRedo, false)
+
+  history.record(snap([{ id: 'a', x: 20, status: 'complete' }]))
+  let current = null
+  history.undo(state => { current = state })
+  assert.deepEqual(current, restoredWithFreshData)
+}
+
 console.log('opHistory unit tests passed')
