@@ -2207,6 +2207,12 @@ watch(
   ([newX, newY, newZoom]) => {
     if (!setViewport || !getViewport) return
 
+    const clampedZoom = clampCanvasZoom(newZoom)
+    if (clampedZoom !== newZoom) {
+      canvasStore.updateViewport({ x: newX, y: newY, zoom: clampedZoom })
+      return
+    }
+
     // 获取当前 VueFlow 的视口
     const currentViewport = getViewport()
 

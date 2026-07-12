@@ -94,8 +94,16 @@ export function organizeCanvasNodes(nodes = [], options = {}) {
   const visibleGroupIds = new Set(
     nodes.filter(node => node?.type === 'group').map(node => node.id)
   )
+  const visibleGroupChildIds = new Set(
+    nodes
+      .filter(node => node?.type === 'group')
+      .flatMap(node => node.data?.nodeIds || [])
+  )
   const items = nodes
-    .filter(node => node && (node.type === 'group' || !visibleGroupIds.has(node.data?.groupId)))
+    .filter(node => node && (
+      node.type === 'group' ||
+      (!visibleGroupIds.has(node.data?.groupId) && !visibleGroupChildIds.has(node.id))
+    ))
     .map(node => ({
       id: node.id,
       position: {

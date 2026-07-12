@@ -16,6 +16,7 @@ assert.match(source, /function\s+restoreOrganizedCanvas\s*\(/)
 assert.match(source, /const\s+deltaX\s*=[\s\S]*child\.position[\s\S]*deltaX[\s\S]*deltaY/)
 assert.match(source, /fitView\(\{\s*padding:\s*0\.2,\s*minZoom:\s*MIN_ZOOM,\s*maxZoom:\s*MAX_ZOOM\s*\}\)/)
 assert.match(source, /function\s+clampCanvasZoom\s*\(/)
+assert.match(source, /const\s+clampedZoom\s*=\s*clampCanvasZoom\(newZoom\)[\s\S]*canvasStore\.updateViewport\(\{\s*x:\s*newX,\s*y:\s*newY,\s*zoom:\s*clampedZoom\s*\}\)/)
 assert.match(source, /organizeCanvas,[\s\S]*restoreOrganizedCanvas,[\s\S]*fitCanvasToScreen/)
 
 console.log('CanvasBoard organization source tests passed')

@@ -70,6 +70,20 @@ test('treats a visible group as one item and omits its children', () => {
   assert.equal(Object.hasOwn(result.positions, 'child'), false)
 })
 
+test('uses visible group nodeIds to omit legacy children without groupId', () => {
+  const result = organizeCanvasNodes([
+    {
+      id: 'group-1',
+      type: 'group',
+      position: { x: 0, y: 0 },
+      data: { width: 300, height: 240, nodeIds: ['legacy-child'] }
+    },
+    imageNode('legacy-child', 30, 50)
+  ])
+
+  assert.deepEqual(result.itemIds, ['group-1'])
+})
+
 test('treats a child with a missing group as an independent item', () => {
   const result = organizeCanvasNodes([
     imageNode('orphan', 0, 0, 100, 100, { groupId: 'missing-group' })
