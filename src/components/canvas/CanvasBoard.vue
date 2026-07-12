@@ -58,7 +58,11 @@ import {
   getTouchPoint
 } from '@/utils/canvasTouchInteractions'
 import { buildPromptInputScaleStyle } from '@/utils/canvasPromptInputScale'
-import { organizeCanvasNodes } from '@/utils/canvasOrganization'
+import {
+  getOrganizationGroupChildIds,
+  organizeCanvasNodes,
+  runCanvasFit
+} from '@/utils/canvasOrganization'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -3383,7 +3387,11 @@ async function uploadFilesToCloud(tasks) {
 
 async function fitCanvasToScreen() {
   await nextTick()
-  return fitView({ padding: 0.2, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM })
+  return runCanvasFit(fitView, {
+    padding: 0.2,
+    minZoom: MIN_ZOOM,
+    maxZoom: MAX_ZOOM
+  })
 }
 
 async function organizeCanvas() {
@@ -3409,7 +3417,7 @@ async function organizeCanvas() {
       const deltaX = nextPosition.x - node.position.x
       const deltaY = nextPosition.y - node.position.y
       if (node.type === 'group') {
-        const childIds = new Set(node.data?.nodeIds || [])
+        const childIds = new Set(getOrganizationGroupChildIds(canvasStore.nodes, node))
         for (const child of canvasStore.nodes) {
           if (!childIds.has(child.id)) continue
           const childPosition = child.position || { x: 0, y: 0 }
@@ -3424,8 +3432,8 @@ async function organizeCanvas() {
     canvasStore.markCurrentTabChanged()
   }
 
-  await fitCanvasToScreen()
-  return { ...result, snapshot }
+  const fitted = await fitCanvasToScreen()
+  return { ...result, snapshot, fitFailed: !fitted }
 }
 
 function restoreOrganizedCanvas(snapshot) {

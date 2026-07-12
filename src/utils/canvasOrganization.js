@@ -67,20 +67,68 @@ function compareItems(a, b) {
   )
 }
 
-function compareCandidates(origin) {
-  return (a, b) => {
-    const aDistance = (a.x - origin.x) ** 2 + (a.y - origin.y) ** 2
-    const bDistance = (b.x - origin.x) ** 2 + (b.y - origin.y) ** 2
-    return aDistance - bDistance || a.y - b.y || a.x - b.x
+function createRectangleSpatialIndex(gap, cellSize = 256) {
+  const cells = new Map()
+
+  function cellRange(rectangle, expansion = 0) {
+    return {
+      minX: Math.floor((rectangle.x - expansion) / cellSize),
+      maxX: Math.floor((rectangle.x + rectangle.width + expansion) / cellSize),
+      minY: Math.floor((rectangle.y - expansion) / cellSize),
+      maxY: Math.floor((rectangle.y + rectangle.height + expansion) / cellSize)
+    }
   }
+
+  function add(rectangle) {
+    const range = cellRange(rectangle)
+    for (let x = range.minX; x <= range.maxX; x += 1) {
+      for (let y = range.minY; y <= range.maxY; y += 1) {
+        const key = `${x}:${y}`
+        const bucket = cells.get(key)
+        if (bucket) bucket.push(rectangle)
+        else cells.set(key, [rectangle])
+      }
+    }
+  }
+
+  function conflicts(rectangle) {
+    const range = cellRange(rectangle, gap)
+    const visited = new Set()
+    for (let x = range.minX; x <= range.maxX; x += 1) {
+      for (let y = range.minY; y <= range.maxY; y += 1) {
+        for (const other of cells.get(`${x}:${y}`) || []) {
+          if (visited.has(other)) continue
+          visited.add(other)
+          if (rectanglesConflict(rectangle, other, gap)) return true
+        }
+      }
+    }
+    return false
+  }
+
+  return { add, conflicts }
 }
 
-function dedupeCandidates(candidates) {
-  const unique = new Map()
-  for (const candidate of candidates) {
-    unique.set(`${candidate.x}:${candidate.y}`, candidate)
+export function getOrganizationGroupChildIds(nodes = [], groupNode) {
+  if (!groupNode?.id) return []
+  const declaredIds = new Set(groupNode.data?.nodeIds || [])
+
+  return nodes
+    .filter(node => (
+      node &&
+      node.id !== groupNode.id &&
+      (declaredIds.has(node.id) || node.data?.groupId === groupNode.id)
+    ))
+    .map(node => node.id)
+}
+
+export async function runCanvasFit(fitView, options) {
+  try {
+    await fitView(options)
+    return true
+  } catch {
+    return false
   }
-  return [...unique.values()]
 }
 
 export function organizeCanvasNodes(nodes = [], options = {}) {
@@ -115,6 +163,7 @@ export function organizeCanvasNodes(nodes = [], options = {}) {
     .sort(compareItems)
 
   const placed = []
+  const spatialIndex = createRectangleSpatialIndex(gap)
   const positions = {}
   const rectangles = {}
 
@@ -123,23 +172,39 @@ export function organizeCanvasNodes(nodes = [], options = {}) {
       x: snapNearest(item.position.x),
       y: snapNearest(item.position.y)
     }
-    const candidates = [origin]
+    const xCandidates = new Set([origin.x])
+    const yCandidates = new Set([origin.y])
+    let position = null
+    let positionDistance = Infinity
 
-    for (const other of placed) {
-      candidates.push(
-        { x: snapUp(other.x + other.width + gap), y: origin.y },
-        { x: snapDown(other.x - item.width - gap), y: origin.y },
-        { x: origin.x, y: snapUp(other.y + other.height + gap) },
-        { x: origin.x, y: snapDown(other.y - item.height - gap) }
-      )
+    function considerCandidate(x, y) {
+      const distance = (x - origin.x) ** 2 + (y - origin.y) ** 2
+      if (
+        position &&
+        (distance > positionDistance ||
+          (distance === positionDistance && (y > position.y || (y === position.y && x >= position.x))))
+      ) return
+
+      const rectangle = { x, y, width: item.width, height: item.height }
+      if (spatialIndex.conflicts(rectangle)) return
+
+      position = { x, y }
+      positionDistance = distance
     }
 
-    const position = dedupeCandidates(candidates)
-      .sort(compareCandidates(origin))
-      .find(candidate => {
-        const rectangle = { ...candidate, width: item.width, height: item.height }
-        return !placed.some(other => rectanglesConflict(rectangle, other, gap))
-      })
+    for (const other of placed) {
+      xCandidates.add(snapUp(other.x + other.width + gap))
+      xCandidates.add(snapDown(other.x - item.width - gap))
+      yCandidates.add(snapUp(other.y + other.height + gap))
+      yCandidates.add(snapDown(other.y - item.height - gap))
+    }
+    considerCandidate(origin.x, origin.y)
+    for (const x of xCandidates) {
+      if (x !== origin.x) considerCandidate(x, origin.y)
+    }
+    for (const y of yCandidates) {
+      if (y !== origin.y) considerCandidate(origin.x, y)
+    }
 
     if (!position) {
       return {
@@ -159,6 +224,7 @@ export function organizeCanvasNodes(nodes = [], options = {}) {
     positions[item.id] = position
     rectangles[item.id] = rectangle
     placed.push(rectangle)
+    spatialIndex.add(rectangle)
   }
 
   return {

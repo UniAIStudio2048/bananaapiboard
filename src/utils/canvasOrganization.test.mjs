@@ -1,12 +1,15 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { performance } from 'node:perf_hooks'
 
-import {
+import * as canvasOrganization from './canvasOrganization.js'
+
+const {
   buildOrganizationSignature,
   getOrganizationNodeSize,
   organizeCanvasNodes,
   rectanglesConflict
-} from './canvasOrganization.js'
+} = canvasOrganization
 
 function imageNode(id, x, y, width = 100, height = 100, data = {}) {
   return {
@@ -129,4 +132,54 @@ test('signature ignores task data but detects positions, grouping, and edges', (
     buildOrganizationSignature(baseNodes, []),
     buildOrganizationSignature(baseNodes, [{ id: 'edge-1', source: 'a', target: 'b' }])
   )
+})
+
+test('group movement membership includes declared and groupId-only children', () => {
+  assert.equal(
+    typeof canvasOrganization.getOrganizationGroupChildIds,
+    'function',
+    'canvasOrganization must expose runtime group membership resolution'
+  )
+
+  const group = {
+    id: 'group-1',
+    type: 'group',
+    data: { nodeIds: ['declared-child', 'missing-child'] }
+  }
+  const nodes = [
+    group,
+    imageNode('declared-child', 0, 0),
+    imageNode('group-id-child', 20, 20, 100, 100, { groupId: 'group-1' }),
+    imageNode('other-group-child', 40, 40, 100, 100, { groupId: 'group-2' })
+  ]
+
+  assert.deepEqual(
+    canvasOrganization.getOrganizationGroupChildIds(nodes, group),
+    ['declared-child', 'group-id-child']
+  )
+})
+
+test('fit helper reports a rejected fit without rejecting organization', async () => {
+  assert.equal(
+    typeof canvasOrganization.runCanvasFit,
+    'function',
+    'canvasOrganization must expose rejection-safe fit execution'
+  )
+
+  const rejection = new Error('fit failed')
+  assert.equal(await canvasOrganization.runCanvasFit(async () => { throw rejection }), false)
+  assert.equal(await canvasOrganization.runCanvasFit(async () => {}), true)
+})
+
+test('organizes 2000 fully overlapping nodes within the large-canvas budget', () => {
+  const nodes = Array.from({ length: 2000 }, (_, index) => (
+    imageNode(`node-${index}`, 0, 0)
+  ))
+  const startedAt = performance.now()
+  const result = organizeCanvasNodes(nodes, { gap: 40, snapToGrid: true, grid: 20 })
+  const duration = performance.now() - startedAt
+
+  assert.equal(result.failed, false)
+  assert.equal(result.itemIds.length, 2000)
+  assert.ok(duration < 2000, `organization took ${Math.round(duration)}ms; expected < 2000ms`)
 })

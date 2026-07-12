@@ -77,6 +77,7 @@ import {
   resolvePromptInputFixedScalePreference
 } from '@/utils/canvasPromptInputScale'
 import { buildOrganizationSignature } from '@/utils/canvasOrganization'
+import { createCanvasOrganizationPreviewController } from '@/utils/canvasOrganizationPreview'
 import {
   CANVAS_GRID_SNAP_STORAGE_KEY,
   CANVAS_LAST_EDGE_STYLE_STORAGE_KEY,
@@ -241,6 +242,12 @@ const edgesHidden = computed(() => selectedEdgeStyle.value === 'hidden')
 const showZoomMenu = ref(false)
 const zoomInput = ref('100')
 const organizationPreview = ref(null)
+const organizationPreviewController = createCanvasOrganizationPreviewController({
+  saveHistory: options => canvasStore.saveHistory(options),
+  onChange: preview => {
+    organizationPreview.value = preview
+  }
+})
 let isApplyingOrganization = false
 const promptInputFixedScale = ref(false)
 const canvasPromptInputScale = computed(() => ({
@@ -587,7 +594,9 @@ async function handleWorkflowLoaded(workflow) {
     }
     
     // 在新标签中打开
-    const tab = canvasStore.openWorkflowInNewTab(workflow)
+    const tab = organizationPreviewController.beforeCanvasSwitch(
+      () => canvasStore.openWorkflowInNewTab(workflow)
+    )
     if (!tab) {
       displayToast('标签页已达上限，请关闭一些标签后重试', 'warning')
       return
@@ -609,32 +618,28 @@ async function handleWorkflowLoaded(workflow) {
 // 新建工作流的回调
 function handleWorkflowNew() {
   console.log('[Canvas] 新建工作流')
-  canvasStore.createTab()
+  organizationPreviewController.beforeCanvasSwitch(() => canvasStore.createTab())
 }
 
 // 标签切换
 function handleTabSwitch(tab) {
-  keepOrganizedCanvas()
-  canvasStore.switchToTab(tab.id)
+  organizationPreviewController.beforeCanvasSwitch(() => canvasStore.switchToTab(tab.id))
 }
 
 // 标签关闭
 function handleTabClose(tabId) {
-  keepOrganizedCanvas()
-  canvasStore.closeTab(tabId)
+  organizationPreviewController.beforeCanvasSwitch(() => canvasStore.closeTab(tabId))
 }
 
 // 新建标签
 function handleTabNew() {
-  keepOrganizedCanvas()
-  canvasStore.createTab()
+  organizationPreviewController.beforeCanvasSwitch(() => canvasStore.createTab())
 }
 
 // 标签保存
 function handleTabSave(tabId) {
-  keepOrganizedCanvas()
   // 切换到该标签并打开保存对话框
-  canvasStore.switchToTab(tabId)
+  organizationPreviewController.beforeCanvasSwitch(() => canvasStore.switchToTab(tabId))
   showSaveDialog.value = true
 }
 
@@ -2342,10 +2347,10 @@ async function requestCanvasOrganization() {
     if (!result?.changed) return
 
     await nextTick()
-    organizationPreview.value = {
+    organizationPreviewController.open({
       snapshot: result.snapshot,
       arrangedSignature: buildOrganizationSignature(canvasStore.nodes, canvasStore.edges)
-    }
+    })
   } catch (error) {
     console.error('[Canvas] 整理画布失败:', error)
     displayToast('整理画布失败，请稍后重试', 'error')
@@ -2356,10 +2361,7 @@ async function requestCanvasOrganization() {
 }
 
 function keepOrganizedCanvas() {
-  if (!organizationPreview.value) return false
-  canvasStore.saveHistory({ force: true })
-  organizationPreview.value = null
-  return true
+  return organizationPreviewController.keep()
 }
 
 async function restoreOrganizedCanvas() {
@@ -2369,7 +2371,7 @@ async function restoreOrganizedCanvas() {
   try {
     canvasBoardRef.value?.restoreOrganizedCanvas?.(preview.snapshot)
     await nextTick()
-    organizationPreview.value = null
+    organizationPreviewController.keepAfterMutation()
   } finally {
     isApplyingOrganization = false
   }
@@ -2379,7 +2381,9 @@ watch(
   () => buildOrganizationSignature(canvasStore.nodes, canvasStore.edges),
   (signature) => {
     if (isApplyingOrganization || !organizationPreview.value) return
-    if (signature !== organizationPreview.value.arrangedSignature) keepOrganizedCanvas()
+    if (signature !== organizationPreview.value.arrangedSignature) {
+      organizationPreviewController.keepAfterMutation()
+    }
   }
 )
 
