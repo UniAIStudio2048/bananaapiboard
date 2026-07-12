@@ -1407,11 +1407,13 @@ const isMJModel = computed(() => {
 // 辅助函数：检查是否是 Seedream 5.0 Lite 模型
 function checkIsSeedream50Lite(model) {
   if (!model) return false
-  const modelName = (model.name || model.label || model.value || '').toLowerCase()
-  const modelValue = (model.value || '').toLowerCase()
-  const actualModel = (model.actualModel || '').toLowerCase()
-  const searchText = `${modelName} ${modelValue} ${actualModel}`
-  return searchText.includes('seedream-5.0') || searchText.includes('seedream-5-0') || searchText.includes('5-0-260128')
+  const searchText = [model.name, model.label, model.value, model.actualModel]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  const hasLiteName = searchText.includes('seedream-5.0-lite') || searchText.includes('seedream-5-0-lite')
+  const hasLiteModelId = searchText.includes('doubao-seedream-5-0-260128')
+  return !searchText.includes('pro') && (hasLiteName || hasLiteModelId)
 }
 
 // 辅助函数：检查是否是 Seedream 4.5 模型（包括即梦4.5/jimeng-4.5）
