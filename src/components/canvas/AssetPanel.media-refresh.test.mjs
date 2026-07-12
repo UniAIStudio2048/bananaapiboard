@@ -25,6 +25,18 @@ test('AssetPanel uses extracted asset card and preview components', () => {
   assert.match(assetPanel, /<AssetPreviewModal\b/)
 })
 
+test('AssetPanel keeps the asset library while adding a Canvas-first directory view', () => {
+  assert.match(assetPanel, /import CanvasDirectoryPanel from '\.\/CanvasDirectoryPanel\.vue'/)
+  assert.match(assetPanel, /const activePanelView = ref\('canvas'\)/)
+  assert.match(assetPanel, /activePanelView\.value = 'canvas'/)
+  assert.match(assetPanel, /class="asset-panel-tabs"/)
+  assert.match(assetPanel, /<CanvasDirectoryPanel\b/)
+  assert.match(assetPanel, /v-show="activePanelView === 'assets'"/)
+  assert.match(assetPanel, /@select-locate="emit\('select-locate', \$event\)"/)
+  assert.match(assetPanel, /@move-to-group="emit\('move-to-group', \$event\)"/)
+  assert.match(assetPanel, /\.asset-library-view\s*\{[\s\S]*?min-height:\s*0/)
+})
+
 test('AssetPanel media cards preserve original media ratio and bottom tag filter bar', () => {
   const assetCard = readFileSync(new URL('./AssetCard.vue', import.meta.url), 'utf8')
   assert.match(assetCard, /const measuredAspectRatio = ref\(''\)/)

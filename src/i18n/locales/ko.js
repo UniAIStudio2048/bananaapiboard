@@ -523,7 +523,20 @@ export default {
       type: '유형',
       size: '크기',
       createdAt: '생성일',
-      applyToCanvas: '캔버스에 적용'
+      applyToCanvas: '캔버스에 적용',
+      directory: {
+        canvasTab: '캔버스',
+        assetsTab: '에셋',
+        title: '캔버스 요소',
+        searchPlaceholder: '캔버스 요소 검색...',
+        empty: '이 워크플로우에 노드가 없습니다',
+        root: '그룹 없음',
+        rename: '이름 바꾸기',
+        duplicate: '복제',
+        download: '다운로드',
+        locate: '캔버스에서 찾기',
+        total: '노드 {count}개'
+      }
     },
     emptyState: {
       doubleClick: '더블클릭',

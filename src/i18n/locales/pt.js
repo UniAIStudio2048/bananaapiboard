@@ -390,7 +390,20 @@ export default {
       type: 'Tipo',
       size: 'Tamanho',
       createdAt: 'Criado em',
-      applyToCanvas: 'Aplicar ao Canvas'
+      applyToCanvas: 'Aplicar ao Canvas',
+      directory: {
+        canvasTab: 'Canvas',
+        assetsTab: 'Recursos',
+        title: 'Elementos do canvas',
+        searchPlaceholder: 'Pesquisar elementos do canvas...',
+        empty: 'Nenhum nó neste workflow',
+        root: 'Sem grupo',
+        rename: 'Renomear',
+        duplicate: 'Duplicar',
+        download: 'Baixar',
+        locate: 'Localizar no canvas',
+        total: '{count} nós'
+      }
     },
     // Categorias
     categories: {

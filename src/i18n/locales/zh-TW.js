@@ -398,7 +398,20 @@ export default {
       type: '類型',
       size: '大小',
       createdAt: '建立時間',
-      applyToCanvas: '套用到畫布'
+      applyToCanvas: '套用到畫布',
+      directory: {
+        canvasTab: '畫布',
+        assetsTab: '資產',
+        title: '畫布元素',
+        searchPlaceholder: '搜尋畫布元素...',
+        empty: '目前工作流暫無節點',
+        root: '未編組',
+        rename: '重新命名',
+        duplicate: '複製',
+        download: '下載',
+        locate: '在畫布中定位',
+        total: '共 {count} 個節點'
+      }
     },
     // 分類
     categories: {
