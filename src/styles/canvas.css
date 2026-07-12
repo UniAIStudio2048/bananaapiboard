@@ -919,6 +919,7 @@
    ======================================== */
 /* 底部左侧控制区域 */
 .canvas-bottom-left-controls {
+  --canvas-bottom-left-scale: 0.75;
   position: absolute;
   bottom: 24px;
   left: 24px;
@@ -927,6 +928,8 @@
   gap: 8px;
   z-index: 100;
   pointer-events: none;
+  transform: scale(var(--canvas-bottom-left-scale));
+  transform-origin: left bottom;
 }
 
 .canvas-bottom-left-controls > * {

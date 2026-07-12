@@ -3630,10 +3630,14 @@ onUnmounted(() => {
 
         <!-- 帮助/快捷键按钮（仅图标） -->
         <button class="canvas-icon-btn" :title="t('common.help')" @click="showHelp = true">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          <svg class="canvas-shortcut-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="14" rx="3"/>
+            <circle cx="7" cy="10" r="0.75" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="10" r="0.75" fill="currentColor" stroke="none"/>
+            <circle cx="17" cy="10" r="0.75" fill="currentColor" stroke="none"/>
+            <circle cx="8.5" cy="13" r="0.75" fill="currentColor" stroke="none"/>
+            <circle cx="15.5" cy="13" r="0.75" fill="currentColor" stroke="none"/>
+            <path d="M7 15h10"/>
           </svg>
         </button>
       </div>

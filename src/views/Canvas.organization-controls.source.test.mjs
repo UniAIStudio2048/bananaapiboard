@@ -63,5 +63,7 @@ assert.match(source, /@organization-mutation-end="handleOrganizationMutationEnd"
 
 assert.match(canvasStyles, /:root\.canvas-theme-light\s+\.canvas-zoom-menu/)
 assert.match(canvasStyles, /@media\s*\(max-width:[\s\S]*canvas-bottom-left-controls/)
+assert.match(canvasStyles, /--canvas-bottom-left-scale:\s*0\.75/, 'Bottom-left controls should render at three quarters scale')
+assert.match(canvasStyles, /transform:\s*scale\(var\(--canvas-bottom-left-scale\)\)/, 'Bottom-left controls should scale as a single UI group')
 
 console.log('Canvas organization controls source tests passed')
