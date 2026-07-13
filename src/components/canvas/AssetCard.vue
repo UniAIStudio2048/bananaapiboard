@@ -2,7 +2,6 @@
 import { computed, ref } from 'vue'
 import CachedImage from '@/components/CachedImage.vue'
 import { getMediaUrl } from '@/config/tenant'
-import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 
 const props = defineProps({
   asset: {
@@ -53,15 +52,15 @@ const previewUrl = computed(() => {
   if (props.asset.type === 'video') {
     return props.asset.thumbnail_url || (isImageThumbnailUrl(props.videoThumbnail) ? props.videoThumbnail : '')
   }
+  if (isCharacter.value) {
+    const assetUrl = isImageThumbnailUrl(props.asset.url) ? props.asset.url : ''
+    return props.asset.thumbnail_url || (isImageThumbnailUrl(props.videoThumbnail) ? props.videoThumbnail : '') || assetUrl
+  }
   return props.asset.thumbnail_url || props.videoThumbnail || props.asset.url
 })
 const showVideoPoster = computed(() => {
   if (props.asset.type !== 'video') return false
   return !!(props.asset.thumbnail_url || isImageThumbnailUrl(props.videoThumbnail))
-})
-const hasCharacterVideo = computed(() => {
-  const url = props.asset.url || ''
-  return props.asset.type === 'sora-character' && (url.includes('/api/images/file/') || url.includes('.mp4'))
 })
 const thumbStyle = computed(() => ({
   '--asset-thumb-ratio': getAssetAspectRatio(props.asset)
@@ -128,16 +127,6 @@ function handleMediaImageLoad(payload = {}) {
   updateMeasuredAspectRatio(payload.naturalWidth, payload.naturalHeight)
 }
 
-function handleVideoMetadata(event) {
-  const video = event?.target
-  updateMeasuredAspectRatio(video?.videoWidth, video?.videoHeight)
-}
-
-function handleVideoLoadedData(event) {
-  handleVideoMetadata(event)
-  event.target.currentTime = 0.1
-}
-
 function textPreview(asset) {
   const content = asset.content || ''
   return content.length > 100 ? `${content.substring(0, 100)}...` : content
@@ -198,15 +187,9 @@ function handleFavorite(event) {
           loading="eager"
           @load="handleMediaImageLoad"
         />
-        <video
-          v-else-if="asset.url"
-          :src="toSameOriginUrl(asset.url)"
-          class="asset-card-media"
-          muted
-          preload="metadata"
-          @loadedmetadata="handleVideoMetadata"
-          @loadeddata="handleVideoLoadedData"
-        />
+        <div v-else class="video-placeholder" aria-hidden="true">
+          <span class="video-placeholder-icon">▷</span>
+        </div>
         <div class="video-play-icon">▶</div>
       </div>
 
@@ -234,19 +217,8 @@ function handleFavorite(event) {
           class="thumb-backdrop"
           :style="{ backgroundImage: `url(${getMediaUrl(previewUrl)})` }"
         ></div>
-        <video
-          v-if="hasCharacterVideo"
-          :src="toSameOriginUrl(asset.url)"
-          :poster="videoThumbnail ? getMediaUrl(videoThumbnail) : undefined"
-          class="asset-card-media"
-          muted
-          loop
-          playsinline
-          preload="metadata"
-          @loadedmetadata="handleVideoMetadata"
-        />
         <CachedImage
-          v-else-if="previewUrl"
+          v-if="previewUrl"
           :src="getMediaUrl(previewUrl)"
           :alt="asset.name"
           img-class="asset-card-media"
@@ -379,6 +351,24 @@ function handleFavorite(event) {
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 8;
+}
+
+.video-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(135deg, rgba(39, 39, 42, 0.8), rgba(9, 9, 11, 0.95)),
+    repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 8px);
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.video-placeholder-icon {
+  font-size: 32px;
+  transform: translateX(2px);
 }
 
 .video-play-icon {

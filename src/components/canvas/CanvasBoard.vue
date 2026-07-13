@@ -64,6 +64,7 @@ import {
   organizeCanvasNodes,
   runCanvasFit
 } from '@/utils/canvasOrganization'
+import { projectCanvasRenderState } from '@/utils/canvasRenderProjection.js'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -78,6 +79,7 @@ import CharacterCardNode from './nodes/CharacterCardNode.vue'
 import StoryboardNode from './nodes/StoryboardNode.vue'
 import SeedanceCharacterNode from './nodes/SeedanceCharacterNode.vue'
 import DirectorStudioNode from './nodes/DirectorStudioNode.vue'
+import CanvasMiniMapOverview from './CanvasMiniMapOverview.vue'
 
 // 🚀 节点虚拟化：HOC + 控制器
 // 当节点总数超过阈值时，视口外的节点由 NodeShell 替换，避免挂载重量级组件
@@ -188,8 +190,18 @@ const lastMousePosition = ref(null)
 // 选中的节点ID列表（用于批量删除）
 const selectedNodeIds = ref([])
 
+function getInitialCanvasBoardSize() {
+  if (typeof window === 'undefined') return { width: 1, height: 1 }
+  return {
+    width: Math.max(1, Math.round(window.innerWidth || 0)),
+    height: Math.max(1, Math.round(window.innerHeight || 0))
+  }
+}
+
 // 画布容器引用
 const canvasBoardRef = ref(null)
+const canvasBoardSize = ref(getInitialCanvasBoardSize())
+let canvasBoardResizeObserver = null
 
 // 文件拖拽状态
 const isFileDragOver = ref(false)
@@ -295,6 +307,16 @@ function markViewportMoving() {
     isViewportMoving.value = false
   }, 180)
   pendingTimeouts.add(viewportMovingTimer)
+}
+
+function updateCanvasBoardSize() {
+  const rect = canvasBoardRef.value?.getBoundingClientRect?.()
+  const width = Math.round(rect?.width || 0)
+  const height = Math.round(rect?.height || 0)
+  if (!width || !height) return
+  if (canvasBoardSize.value.width === width && canvasBoardSize.value.height === height) return
+  canvasBoardSize.value = { width, height }
+  canvasVirtualization?.recalculate?.()
 }
 
 // 性能优化：组内节点位置同步的 rAF 节流句柄
@@ -493,6 +515,28 @@ const connectStartInfo = ref(null)
 const isVueFlowConnecting = ref(false) // 标记是否正在使用 Vue Flow 原生连线
 const connectionSucceeded = ref(false) // 标记连接是否成功
 const justOpenedSelectorFromConnection = ref(false) // 标记是否刚刚通过连线打开了选择器（防止 paneClick 立即关闭）
+
+const renderProjectionActiveIds = computed(() => {
+  const ids = new Set()
+  const dragSourceId = canvasStore.dragConnectionSource?.nodeId
+  if (dragSourceId) ids.add(dragSourceId)
+  if (connectStartInfo.value?.nodeId) ids.add(connectStartInfo.value.nodeId)
+  return ids
+})
+
+const renderProjection = computed(() => projectCanvasRenderState({
+  nodes: canvasStore.nodes,
+  edges: canvasStore.edges,
+  viewport: canvasStore.viewport,
+  containerRect: canvasBoardSize.value,
+  selectedIds: virtualizationSelectedIds.value,
+  activeIds: renderProjectionActiveIds.value,
+  performanceMode: canvasPerformanceMode.value,
+  threshold: 220,
+  bufferRatio: 1.75
+}))
+const renderedFlowNodes = computed(() => renderProjection.value.nodes)
+const renderedFlowEdges = computed(() => renderProjection.value.edges)
 
 // 处理连线开始
 onConnectStart((event) => {
@@ -3527,6 +3571,11 @@ onMounted(() => {
   
   // 添加滚轮事件监听（以鼠标位置为中心缩放）
   if (canvasBoardRef.value) {
+    updateCanvasBoardSize()
+    if (typeof ResizeObserver !== 'undefined') {
+      canvasBoardResizeObserver = new ResizeObserver(updateCanvasBoardSize)
+      canvasBoardResizeObserver.observe(canvasBoardRef.value)
+    }
     canvasBoardRef.value.addEventListener('wheel', handleWheel, { passive: false })
     canvasBoardRef.value.addEventListener('touchstart', handleTouchStart, { passive: false, capture: true })
     // 添加原生右键菜单事件监听
@@ -3558,6 +3607,10 @@ onUnmounted(() => {
     canvasBoardRef.value.removeEventListener('wheel', handleWheel)
     canvasBoardRef.value.removeEventListener('touchstart', handleTouchStart, { capture: true })
     canvasBoardRef.value.removeEventListener('contextmenu', handleNativeContextMenu)
+  }
+  if (canvasBoardResizeObserver) {
+    canvasBoardResizeObserver.disconnect()
+    canvasBoardResizeObserver = null
   }
   resetTouchState()
   
@@ -3617,8 +3670,8 @@ onUnmounted(() => {
     </div>
     
     <VueFlow
-      v-model:nodes="canvasStore.nodes"
-      v-model:edges="canvasStore.edges"
+      :nodes="renderedFlowNodes"
+      :edges="renderedFlowEdges"
       :node-types="nodeTypes"
       :default-viewport="{ x: 0, y: 0, zoom: 1 }"
       :default-edge-options="defaultEdgeOptions"
@@ -3729,7 +3782,7 @@ onUnmounted(() => {
       </template>
       
       <MiniMap
-        v-if="showCanvasMiniMap"
+        v-if="showCanvasMiniMap && !renderProjection.enabled"
         class="canvas-workflow-minimap"
         position="bottom-left"
         node-color="#888888"
@@ -3745,6 +3798,14 @@ onUnmounted(() => {
         :width="220"
         :height="150"
         aria-label="画布地图"
+        @click="handleMiniMapClick"
+      />
+      <CanvasMiniMapOverview
+        v-else-if="showCanvasMiniMap && renderProjection.enabled"
+        :items="renderProjection.minimapItems"
+        :viewport-bounds="renderProjection.viewportBounds"
+        :width="220"
+        :height="150"
         @click="handleMiniMapClick"
       />
     </VueFlow>

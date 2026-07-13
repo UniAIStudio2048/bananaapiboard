@@ -959,14 +959,6 @@ function processNextThumbnail() {
 function getVideoThumbnail(asset) {
   if (asset.thumbnail_url) return asset.thumbnail_url
   if (videoThumbnails.value[asset.id]) return videoThumbnails.value[asset.id]
-
-  // 立即触发提取（不使用 nextTick，确保尽快开始加载）
-  if (!videoThumbnails.value[`loading_${asset.id}`]) {
-    videoThumbnails.value[`loading_${asset.id}`] = true
-    extractVideoThumbnail(asset)
-  }
-
-  // 缩略图生成中，不使用视频 URL 冒充图片
   return ''
 }
 

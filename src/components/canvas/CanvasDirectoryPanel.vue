@@ -316,7 +316,6 @@ onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPoin
               <span class="directory-indent" aria-hidden="true" />
               <span class="directory-thumbnail">
                 <img v-if="row.mediaKind === 'image' && row.previewUrl" :src="toSameOriginUrl(row.previewUrl)" alt="" />
-                <video v-else-if="row.mediaKind === 'video' && row.previewUrl" :src="toSameOriginUrl(row.previewUrl)" muted preload="metadata" />
                 <component v-else :is="getRowIcon(row.type)" :size="16" aria-hidden="true" />
               </span>
               <input
@@ -379,7 +378,6 @@ onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPoin
         <button class="directory-row-main" type="button" @click="activateRow(row.id)">
           <span class="directory-thumbnail">
             <img v-if="row.mediaKind === 'image' && row.previewUrl" :src="toSameOriginUrl(row.previewUrl)" alt="" />
-            <video v-else-if="row.mediaKind === 'video' && row.previewUrl" :src="toSameOriginUrl(row.previewUrl)" muted preload="metadata" />
             <component v-else :is="getRowIcon(row.type)" :size="16" aria-hidden="true" />
           </span>
           <input
