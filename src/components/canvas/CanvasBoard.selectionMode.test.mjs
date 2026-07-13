@@ -14,6 +14,6 @@ assert.match(
 
 assert.match(
   source,
-  /:selection-mode="SelectionMode\.Partial"/,
-  'CanvasBoard drag selection should select nodes touched by the selection rectangle'
+  /:selection-mode="SelectionMode\.Full"/,
+  'CanvasBoard drag selection should select only nodes fully contained by the selection rectangle'
 )
