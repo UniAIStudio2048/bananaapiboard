@@ -18,7 +18,11 @@ import { markNodeGenerationSubmissionsDeleted } from './pendingGenerationSubmiss
 import { buildMediaUploadCommit, resolveMediaUploadCommitTarget } from './mediaUploadCommit'
 import { cancelCanvasUpload } from '@/api/canvas/direct-upload.js'
 import { useUploadManager } from './uploadManager'
-import { getVisibleGroupGeometry, getVisibleNodeGroups } from '@/utils/canvasBatchLayout'
+import {
+  getVisibleGroupGeometry,
+  getVisibleNodeGroups,
+  resolveVisibleGroupGeometryNodes
+} from '@/utils/canvasBatchLayout'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -2537,7 +2541,8 @@ export const useCanvasStore = defineStore('canvas', () => {
       .filter(Boolean)
     if (memberNodes.length < 2) return null
 
-    const geometry = getVisibleGroupGeometry(memberNodes, options)
+    const geometryNodes = resolveVisibleGroupGeometryNodes(memberNodes, options.geometryNodes)
+    const geometry = getVisibleGroupGeometry(geometryNodes, options)
     if (!geometry) return null
 
     if (!options.skipHistory) {

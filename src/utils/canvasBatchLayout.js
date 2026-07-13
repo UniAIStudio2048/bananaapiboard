@@ -19,6 +19,20 @@ export function getBatchGridPositions({
   }))
 }
 
+export function resolveVisibleGroupGeometryNodes(memberNodes, geometryNodes) {
+  if (!Array.isArray(memberNodes)) return []
+  if (!Array.isArray(geometryNodes) || geometryNodes.length !== memberNodes.length) return memberNodes
+
+  const geometryById = new Map()
+  for (const node of geometryNodes) {
+    if (!node?.id || geometryById.has(node.id)) return memberNodes
+    geometryById.set(node.id, node)
+  }
+
+  if (!memberNodes.every(node => geometryById.has(node.id))) return memberNodes
+  return memberNodes.map(node => geometryById.get(node.id))
+}
+
 export function getVisibleGroupGeometry(nodes, {
   padding = 60,
   titleHeight = 30,

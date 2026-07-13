@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import {
   getBatchGridPositions,
   getVisibleGroupGeometry,
-  getVisibleNodeGroups
+  getVisibleNodeGroups,
+  resolveVisibleGroupGeometryNodes
 } from './canvasBatchLayout.js'
 
 test('keeps 1x at the origin and leaves gaps between batch cells', () => {
@@ -70,6 +71,44 @@ test('builds padded visible-group geometry and member offsets', () => {
       b: { x: 480, y: 90 }
     }
   })
+})
+
+test('manual group geometry prefers a complete live selection over stale stored dimensions', () => {
+  const storedNodes = [
+    {
+      id: 'top',
+      position: { x: 0, y: 0 },
+      dimensions: { width: 380, height: 320 },
+      data: { width: 380, height: 320 }
+    },
+    {
+      id: 'bottom',
+      position: { x: 0, y: 800 },
+      dimensions: { width: 380, height: 320 },
+      data: { width: 380, height: 320 }
+    }
+  ]
+  const liveNodes = storedNodes.map(node => ({
+    ...node,
+    dimensions: { width: 380, height: 640 }
+  }))
+
+  const geometryNodes = resolveVisibleGroupGeometryNodes(storedNodes, liveNodes)
+  assert.deepEqual(geometryNodes, liveNodes)
+  assert.equal(getVisibleGroupGeometry(geometryNodes).height, 1590)
+})
+
+test('manual group geometry falls back when live selection IDs are incomplete or mismatched', () => {
+  const storedNodes = [
+    { id: 'a', position: { x: 0, y: 0 }, dimensions: { width: 100, height: 100 }, data: {} },
+    { id: 'b', position: { x: 200, y: 0 }, dimensions: { width: 100, height: 100 }, data: {} }
+  ]
+
+  assert.equal(resolveVisibleGroupGeometryNodes(storedNodes, [storedNodes[0]]), storedNodes)
+  assert.equal(resolveVisibleGroupGeometryNodes(storedNodes, [
+    storedNodes[0],
+    { id: 'other', position: { x: 200, y: 0 }, dimensions: { width: 100, height: 100 }, data: {} }
+  ]), storedNodes)
 })
 
 test('rebuilds group metadata from persisted visible group nodes', () => {

@@ -14,7 +14,7 @@ test('canvas store exposes visible group construction', () => {
     storeSource,
     /function createVisibleGroup\(nodeIds, groupName = null, options = \{\}\)/
   )
-  assert.match(storeSource, /getVisibleGroupGeometry\(memberNodes/)
+  assert.match(storeSource, /getVisibleGroupGeometry\(geometryNodes, options\)/)
   assert.match(storeSource, /createGroup\(nodeIds, groupName, \{ skipHistory: true \}\)/)
   assert.match(storeSource, /createVisibleGroup,/)
   assert.match(storeSource, /getVisibleNodeGroups/)
@@ -23,7 +23,7 @@ test('canvas store exposes visible group construction', () => {
 })
 
 test('manual grouping delegates to the shared visible group operation', () => {
-  assert.match(boardSource, /canvasStore\.createVisibleGroup\(nodeIds\)/)
+  assert.match(boardSource, /canvasStore\.createVisibleGroup\(nodeIds, null, \{ geometryNodes: selectedNodes \}\)/)
   assert.doesNotMatch(boardSource, /const groupWidth = maxX - minX/)
 
   const visibleGroupSource = storeSource.slice(

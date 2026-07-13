@@ -2273,7 +2273,7 @@ function groupSelectedNodes() {
   }
   
   const nodeIds = selectedNodes.map(n => n.id)
-  canvasStore.createVisibleGroup(nodeIds)
+  canvasStore.createVisibleGroup(nodeIds, null, { geometryNodes: selectedNodes })
 }
 
 // 同步视口变化到 store
