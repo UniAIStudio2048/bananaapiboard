@@ -2548,6 +2548,7 @@ export const useCanvasStore = defineStore('canvas', () => {
 
     memberNodes.forEach(node => {
       node.draggable = true
+      node.selected = false
       node.zIndex = 1
       node.style = { ...node.style, zIndex: 1 }
     })
@@ -2560,6 +2561,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       style: { zIndex: -1000 },
       draggable: true,
       selectable: true,
+      selected: true,
       data: {
         groupName: group.name,
         groupColor: group.color,
@@ -2572,6 +2574,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     }, true)
 
     selectNode(group.id)
+    selectedNodeId.value = group.id
+    selectedNodeIds.value = [group.id]
     if (!options.skipHistory) {
       saveHistory({ force: true })
     }

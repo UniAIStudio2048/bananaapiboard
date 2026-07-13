@@ -37,6 +37,18 @@ test('manual grouping delegates to the shared visible group operation', () => {
   )
 })
 
+test('visible grouping replaces the member selection with the group node', () => {
+  const visibleGroupSource = storeSource.slice(
+    storeSource.indexOf('function createVisibleGroup('),
+    storeSource.indexOf('function disbandGroup(')
+  )
+
+  assert.match(visibleGroupSource, /memberNodes\.forEach\(node => \{[\s\S]*?node\.selected = false/)
+  assert.match(visibleGroupSource, /selectable: true,[\s\S]*?selected: true/)
+  assert.match(visibleGroupSource, /selectedNodeId\.value = group\.id/)
+  assert.match(visibleGroupSource, /selectedNodeIds\.value = \[group\.id\]/)
+})
+
 test('undo and redo rebuild redundant group metadata from visible group nodes', () => {
   const undoSource = storeSource.slice(
     storeSource.indexOf('function undo()'),
