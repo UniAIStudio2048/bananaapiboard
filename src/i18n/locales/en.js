@@ -585,6 +585,9 @@ export default {
       copyNode: 'Copy Node',
       pasteNode: 'Paste Node',
       deleteNode: 'Delete Node',
+      copyTaskId: 'Copy task ID',
+      taskIdCopied: 'Task ID copied',
+      taskIdCopyFailed: 'Failed to copy task ID',
       assetSaved: '{type} added to my assets!',
       canvasGenerated: 'Canvas Generated'
     },
@@ -815,7 +818,20 @@ export default {
       createdAt: 'Created',
       applyToCanvas: 'Apply to Canvas',
       deleteConfirm: 'Are you sure to delete "{name}"?',
-      canvasGenerated: 'Canvas Generated'
+      canvasGenerated: 'Canvas Generated',
+      directory: {
+        canvasTab: 'Canvas',
+        assetsTab: 'Assets',
+        title: 'Canvas elements',
+        searchPlaceholder: 'Search canvas elements...',
+        empty: 'No nodes in this workflow',
+        root: 'Ungrouped',
+        rename: 'Rename',
+        duplicate: 'Duplicate',
+        download: 'Download',
+        locate: 'Locate on canvas',
+        total: '{count} nodes'
+      }
     },
     // History panel
     historyPanel: {

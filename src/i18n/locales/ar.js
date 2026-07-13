@@ -378,7 +378,20 @@ export default {
       type: 'النوع',
       size: 'الحجم',
       createdAt: 'تاريخ الإنشاء',
-      applyToCanvas: 'تطبيق على اللوحة'
+      applyToCanvas: 'تطبيق على اللوحة',
+      directory: {
+        canvasTab: 'اللوحة',
+        assetsTab: 'الموارد',
+        title: 'عناصر اللوحة',
+        searchPlaceholder: 'البحث في عناصر اللوحة...',
+        empty: 'لا توجد عقد في سير العمل الحالي',
+        root: 'غير مجمّع',
+        rename: 'إعادة تسمية',
+        duplicate: 'نسخ',
+        download: 'تنزيل',
+        locate: 'تحديد على اللوحة',
+        total: '{count} عقدة'
+      }
     },
     // الفئات
     categories: {

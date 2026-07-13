@@ -15,8 +15,10 @@ assert.match(storeSrc, /const\s+opHistory\s*=\s*createOpHistory/, 'canvasStore �
 assert.match(storeSrc, /opHistory\.record\(/, 'saveHistory 必须调用 opHistory.record')
 assert.match(storeSrc, /opHistory\.undo\(/, 'undo 必须委托给 opHistory')
 assert.match(storeSrc, /opHistory\.redo\(/, 'redo 必须委托给 opHistory')
+assert.match(storeSrc, /opHistory\.cancelLatest\(/, '临时整理恢复必须取消最新历史操作')
 assert.match(storeSrc, /opHistory\.clear\(\)/, 'clearHistory 必须调用 opHistory.clear')
 assert.match(storeSrc, /opHistory\.trim\(/, 'trimHistory 必须调用 opHistory.trim')
+assert.match(storeSrc, /cancelLatestHistory,/, 'canvasStore 必须暴露取消最新历史操作')
 
 // canUndo 必须是 >= 0（op-based 语义）
 assert.match(

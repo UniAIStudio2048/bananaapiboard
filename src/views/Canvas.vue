@@ -76,6 +76,17 @@ import {
   getPromptInputFixedScaleDefault,
   resolvePromptInputFixedScalePreference
 } from '@/utils/canvasPromptInputScale'
+import { buildOrganizationSignature } from '@/utils/canvasOrganization'
+import { getCanvasNodeMedia } from '@/utils/canvasDirectory'
+import { createCanvasOrganizationPreviewController } from '@/utils/canvasOrganizationPreview'
+import {
+  CANVAS_GRID_SNAP_STORAGE_KEY,
+  CANVAS_LAST_EDGE_STYLE_STORAGE_KEY,
+  resolveCanvasGridSnap,
+  resolveEdgeRestoreStyle,
+  writeCanvasGridSnap,
+  writeEdgeRestoreStyle
+} from '@/utils/canvasControlPreferences'
 // 🔧 画布诊断工具 - 用于调试画布强制重新加载问题
 import { initCanvasDiagnostic, printCanvasDiagnosticReport } from '@/utils/canvasDiagnostic'
 import { createCanvasFpsMonitor } from '@/utils/canvasFpsMonitor'
@@ -222,6 +233,26 @@ const canvasTheme = ref('dark')
 // 交互模式 (comfyui / infinite-canvas)
 const interactionMode = ref('comfyui')
 const showCanvasMiniMap = ref(false)
+const gridSnapEnabled = ref(resolveCanvasGridSnap(
+  {},
+  localStorage.getItem(CANVAS_GRID_SNAP_STORAGE_KEY)
+))
+const selectedEdgeStyle = ref(localStorage.getItem('canvasEdgeStyle') || 'bezier')
+const lastVisibleEdgeStyle = ref(resolveEdgeRestoreStyle(
+  localStorage.getItem(CANVAS_LAST_EDGE_STYLE_STORAGE_KEY)
+))
+const edgesHidden = computed(() => selectedEdgeStyle.value === 'hidden')
+const showZoomMenu = ref(false)
+const zoomInput = ref('100')
+const organizationPreview = ref(null)
+const organizationPreviewController = createCanvasOrganizationPreviewController({
+  saveHistory: options => canvasStore.saveHistory(options),
+  cancelHistory: () => canvasStore.cancelLatestHistory(),
+  onChange: preview => {
+    organizationPreview.value = preview
+  }
+})
+let isApplyingOrganization = false
 const promptInputFixedScale = ref(false)
 const canvasPromptInputScale = computed(() => ({
   enabled: promptInputFixedScale.value,
@@ -567,7 +598,9 @@ async function handleWorkflowLoaded(workflow) {
     }
     
     // 在新标签中打开
-    const tab = canvasStore.openWorkflowInNewTab(workflow)
+    const tab = organizationPreviewController.beforeCanvasSwitch(
+      () => canvasStore.openWorkflowInNewTab(workflow)
+    )
     if (!tab) {
       displayToast('标签页已达上限，请关闭一些标签后重试', 'warning')
       return
@@ -589,28 +622,28 @@ async function handleWorkflowLoaded(workflow) {
 // 新建工作流的回调
 function handleWorkflowNew() {
   console.log('[Canvas] 新建工作流')
-  canvasStore.createTab()
+  organizationPreviewController.beforeCanvasSwitch(() => canvasStore.createTab())
 }
 
 // 标签切换
 function handleTabSwitch(tab) {
-  canvasStore.switchToTab(tab.id)
+  organizationPreviewController.beforeCanvasSwitch(() => canvasStore.switchToTab(tab.id))
 }
 
 // 标签关闭
 function handleTabClose(tabId) {
-  canvasStore.closeTab(tabId)
+  organizationPreviewController.beforeCanvasSwitch(() => canvasStore.closeTab(tabId))
 }
 
 // 新建标签
 function handleTabNew() {
-  canvasStore.createTab()
+  organizationPreviewController.beforeCanvasSwitch(() => canvasStore.createTab())
 }
 
 // 标签保存
 function handleTabSave(tabId) {
   // 切换到该标签并打开保存对话框
-  canvasStore.switchToTab(tabId)
+  organizationPreviewController.beforeCanvasSwitch(() => canvasStore.switchToTab(tabId))
   showSaveDialog.value = true
 }
 
@@ -2252,10 +2285,133 @@ function handlePasteClipboard(files) {
 }
 
 // ========== 缩放控制 ==========
-// 缩放步进值
 const ZOOM_STEP = 0.1
 const MIN_ZOOM = 0.1  // 最小10%
 const MAX_ZOOM = 5.0  // 最大500%
+
+function clampZoom(newZoom) {
+  return Math.min(Math.max(Number(newZoom), MIN_ZOOM), MAX_ZOOM)
+}
+
+async function saveCanvasControlPreference(key, value) {
+  try {
+    const currentPreferences = me.value?.preferences || {}
+    const updatedPreferences = {
+      ...currentPreferences,
+      canvas: {
+        ...(currentPreferences.canvas || {}),
+        [key]: value
+      }
+    }
+    const result = await updateUserPreferences(updatedPreferences)
+    if (result && me.value) me.value.preferences = updatedPreferences
+  } catch (error) {
+    console.error(`[Canvas] 保存 ${key} 偏好失败:`, error)
+  }
+}
+
+function toggleGridSnap() {
+  gridSnapEnabled.value = !gridSnapEnabled.value
+  writeCanvasGridSnap(localStorage, gridSnapEnabled.value)
+  saveCanvasControlPreference('gridSnap', gridSnapEnabled.value)
+}
+
+function applyCanvasEdgeStyle(style, { persist = true } = {}) {
+  const nextStyle = style === 'hidden' ? 'hidden' : resolveEdgeRestoreStyle(style)
+  selectedEdgeStyle.value = nextStyle
+  localStorage.setItem('canvasEdgeStyle', nextStyle)
+  if (nextStyle !== 'hidden') {
+    lastVisibleEdgeStyle.value = nextStyle
+    writeEdgeRestoreStyle(localStorage, nextStyle)
+  }
+  window.dispatchEvent(new CustomEvent('canvas-edge-style-change', {
+    detail: { style: nextStyle }
+  }))
+  if (persist) saveCanvasControlPreference('edgeStyle', nextStyle)
+}
+
+function toggleEdgesHidden() {
+  if (edgesHidden.value) {
+    applyCanvasEdgeStyle(lastVisibleEdgeStyle.value)
+    return
+  }
+  lastVisibleEdgeStyle.value = resolveEdgeRestoreStyle(selectedEdgeStyle.value)
+  writeEdgeRestoreStyle(localStorage, lastVisibleEdgeStyle.value)
+  applyCanvasEdgeStyle('hidden')
+}
+
+function handleCanvasEdgeStyleChanged(event) {
+  const style = event.detail?.style
+  if (!style) return
+  selectedEdgeStyle.value = style
+  if (style !== 'hidden') {
+    lastVisibleEdgeStyle.value = resolveEdgeRestoreStyle(style)
+    writeEdgeRestoreStyle(localStorage, lastVisibleEdgeStyle.value)
+  }
+}
+
+async function requestCanvasOrganization() {
+  if (!canvasBoardRef.value?.organizeCanvas) return
+  keepOrganizedCanvas()
+  canvasStore.saveHistory({ force: true })
+  isApplyingOrganization = true
+
+  try {
+    const result = await canvasBoardRef.value.organizeCanvas()
+    if (result?.failed) {
+      displayToast('整理画布失败，请稍后重试', 'error')
+      return
+    }
+    if (!result?.changed) return
+
+    await nextTick()
+    organizationPreviewController.open({
+      snapshot: result.snapshot,
+      arrangedSignature: buildOrganizationSignature(canvasStore.nodes, canvasStore.edges)
+    })
+  } catch (error) {
+    console.error('[Canvas] 整理画布失败:', error)
+    displayToast('整理画布失败，请稍后重试', 'error')
+  } finally {
+    await nextTick()
+    isApplyingOrganization = false
+  }
+}
+
+function keepOrganizedCanvas() {
+  return organizationPreviewController.keep()
+}
+
+function handleOrganizationMutationStart() {
+  organizationPreviewController.beginContinuousMutation()
+}
+
+function handleOrganizationMutationEnd() {
+  organizationPreviewController.finishContinuousMutation()
+}
+
+async function restoreOrganizedCanvas() {
+  const preview = organizationPreview.value
+  if (!preview) return
+  isApplyingOrganization = true
+  try {
+    canvasBoardRef.value?.restoreOrganizedCanvas?.(preview.snapshot)
+    await nextTick()
+    organizationPreviewController.cancel()
+  } finally {
+    isApplyingOrganization = false
+  }
+}
+
+watch(
+  () => buildOrganizationSignature(canvasStore.nodes, canvasStore.edges),
+  (signature) => {
+    if (isApplyingOrganization || !organizationPreview.value) return
+    if (signature !== organizationPreview.value.arrangedSignature) {
+      organizationPreviewController.keepAfterMutation()
+    }
+  }
+)
 
 // 放大画布
 function handleZoomIn() {
@@ -2269,21 +2425,49 @@ function handleZoomOut() {
   zoomToCenter(newZoom)
 }
 
-// 滑块拖动处理
-function handleZoomSlider(event) {
-  const value = parseFloat(event.target.value)
-  zoomToCenter(value)
+function toggleZoomMenu() {
+  showZoomMenu.value = !showZoomMenu.value
+  zoomInput.value = String(Math.round(canvasStore.viewport.zoom * 100))
+}
+
+function commitZoomInput() {
+  const percentage = Number.parseFloat(zoomInput.value)
+  if (!Number.isFinite(percentage)) {
+    zoomInput.value = String(Math.round(canvasStore.viewport.zoom * 100))
+    return
+  }
+  const zoom = clampZoom(percentage / 100)
+  zoomInput.value = String(Math.round(zoom * 100))
+  zoomToCenter(zoom)
+}
+
+function setZoomPreset(percentage) {
+  zoomInput.value = String(percentage)
+  zoomToCenter(percentage / 100)
+  showZoomMenu.value = false
+}
+
+function fitCanvasToScreen() {
+  canvasBoardRef.value?.fitCanvasToScreen?.()
+  showZoomMenu.value = false
+}
+
+function handleDocumentPointerDown(event) {
+  if (!showZoomMenu.value) return
+  if (event.target?.closest?.('.canvas-zoom-controls')) return
+  showZoomMenu.value = false
 }
 
 // 以画布中心点为锚点进行缩放
 function zoomToCenter(newZoom) {
+  const clampedZoom = Math.min(Math.max(Number(newZoom), MIN_ZOOM), MAX_ZOOM)
   // 获取画布容器
   const canvasContainer = document.querySelector('.canvas-board')
   if (!canvasContainer) {
     // 如果没有找到容器，直接更新 zoom
     canvasStore.updateViewport({
       ...canvasStore.viewport,
-      zoom: newZoom
+      zoom: clampedZoom
     })
     return
   }
@@ -2300,23 +2484,29 @@ function zoomToCenter(newZoom) {
   const canvasCenterY = (centerY - oldViewport.y) / oldZoom
   
   // 计算新的偏移，使画布中心点保持在屏幕中心
-  const newX = centerX - canvasCenterX * newZoom
-  const newY = centerY - canvasCenterY * newZoom
+  const newX = centerX - canvasCenterX * clampedZoom
+  const newY = centerY - canvasCenterY * clampedZoom
   
   canvasStore.updateViewport({
     x: newX,
     y: newY,
-    zoom: newZoom
+    zoom: clampedZoom
   })
-}
-
-// 重置缩放到100%
-function handleZoomReset() {
-  zoomToCenter(1.0)
 }
 
 // 键盘快捷键（页面级别）
 // 注意：大部分快捷键已移至 CanvasBoard.vue 中实现
+function isEditableShortcutTarget(target) {
+  const tagName = target?.tagName
+  return (
+    tagName === 'INPUT' ||
+    tagName === 'TEXTAREA' ||
+    tagName === 'SELECT' ||
+    target?.isContentEditable ||
+    Boolean(target?.closest?.('[contenteditable="true"]'))
+  )
+}
+
 async function handleKeyDown(event) {
   // 检查是否在输入框或可编辑区域中
   const target = event.target
@@ -2324,6 +2514,14 @@ async function handleKeyDown(event) {
                     target.tagName === 'TEXTAREA' || 
                     target.isContentEditable ||
                     target.closest('[contenteditable="true"]')
+
+  if (!event.repeat && event.shiftKey && event.altKey && event.key.toLowerCase() === 'f') {
+    if (isEditableShortcutTarget(event.target)) return
+    event.preventDefault()
+    event.stopPropagation()
+    requestCanvasOrganization()
+    return
+  }
   
   // Tab 键切换 AI 灵感助手面板（在任何情况下都生效）
   if (event.key === 'Tab') {
@@ -2335,6 +2533,10 @@ async function handleKeyDown(event) {
   
   // Escape 关闭弹窗
   if (event.key === 'Escape') {
+    if (showZoomMenu.value) {
+      showZoomMenu.value = false
+      return
+    }
     // 如果在画布选择模式，先退出
     if (canvasPickMode.value) {
       canvasPickMode.value = false
@@ -2490,103 +2692,104 @@ function createDownstreamNode(nodeType, nodeTitle) {
   console.log(`[Canvas] 快捷键创建 ${nodeType} 节点，${selectedIds.length} 个源节点连接到该节点`)
 }
 
-// 下载选中节点的文件
-async function downloadSelectedNodeFile() {
-  const selectedId = canvasStore.selectedNodeId
-  if (!selectedId) {
-    console.log('[Canvas] 没有选中的节点')
-    return
-  }
-  
-  const node = canvasStore.nodes.find(n => n.id === selectedId)
+function getActiveDirectoryNode(nodeId) {
+  return canvasStore.nodes.find(node => node.id === nodeId) || null
+}
+
+async function handleDirectorySelectLocate(nodeId) {
+  const node = getActiveDirectoryNode(nodeId)
   if (!node) return
-  
-  const data = node.data || {}
-  let fileUrl = null
-  let fileName = ''
-  
-  // 根据节点类型获取文件 URL
-  // 图片节点
-  if (data.sourceImages?.length > 0) {
-    fileUrl = data.sourceImages[0]
-    fileName = `image_${selectedId}.png`
-  } else if (data.output?.urls?.length > 0) {
-    fileUrl = data.output.urls[0]
-    fileName = `image_${selectedId}.png`
-  } else if (data.images?.length > 0) {
-    fileUrl = data.images[0]
-    fileName = `image_${selectedId}.png`
+  await canvasBoardRef.value?.focusCanvasNode?.(nodeId, {
+    select: true,
+    playVideo: node.type?.includes('video')
+  })
+}
+
+async function handleDirectoryLocate(nodeId) {
+  if (!getActiveDirectoryNode(nodeId)) return
+  await canvasBoardRef.value?.focusCanvasNode?.(nodeId, { select: false })
+}
+
+function handleDirectoryRename({ nodeId, name, isGroup }) {
+  const node = getActiveDirectoryNode(nodeId)
+  const normalizedName = typeof name === 'string' ? name.trim() : ''
+  if (!node || !normalizedName) return
+  canvasStore.updateNodeData(nodeId, isGroup || node.type === 'group'
+    ? { groupName: normalizedName }
+    : { title: normalizedName, label: normalizedName })
+}
+
+async function handleDirectoryDuplicate(nodeId) {
+  const sourceNode = getActiveDirectoryNode(nodeId)
+  if (!sourceNode || sourceNode.type === 'group') return
+  const duplicate = canvasStore.duplicateNodeWithIncomingEdges(nodeId, { preserveResults: true })
+  if (!duplicate) return
+
+  const sourceGroupId = sourceNode.data?.groupId
+  if (sourceGroupId && getActiveDirectoryNode(sourceGroupId)?.type === 'group') {
+    canvasStore.addNodeToGroup(duplicate.id, sourceGroupId)
   }
-  // 视频节点
-  else if (data.output?.url && (data.output?.type === 'video' || node.type.includes('video'))) {
-    fileUrl = data.output.url
-    fileName = `video_${selectedId}.mp4`
-  } else if (data.video) {
-    fileUrl = data.video
-    fileName = `video_${selectedId}.mp4`
+  await canvasBoardRef.value?.focusCanvasNode?.(duplicate.id, { select: true })
+}
+
+function handleDirectoryMoveToGroup({ nodeId, targetGroupId }) {
+  if (!getActiveDirectoryNode(nodeId)) return
+  canvasStore.moveNodeToGroup(nodeId, targetGroupId || null)
+}
+
+async function handleDirectoryDownload(nodeId) {
+  await downloadNodeFile(nodeId)
+}
+
+async function downloadNodeFile(nodeId) {
+  const node = getActiveDirectoryNode(nodeId)
+  const media = getCanvasNodeMedia(node)
+  if (!node || !media) {
+    console.log('[Canvas] 节点没有可下载的文件')
+    return false
   }
-  // 音频节点
-  else if (data.audioData || data.audioUrl) {
-    fileUrl = data.audioData || data.audioUrl
-    fileName = `audio_${selectedId}.mp3`
-  }
-  // 文本节点 - 导出为 txt
-  else if (data.text) {
-    const blob = new Blob([data.text], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
+
+  const rawName = node.data?.title || node.data?.label || `${media.kind}_${nodeId}`
+  const safeName = String(rawName).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 80) || media.kind
+  const fileName = `${safeName}.${media.extension}`
+
+  if (media.kind === 'text') {
+    const blobUrl = URL.createObjectURL(new Blob([media.text], { type: 'text/plain;charset=utf-8' }))
     const link = document.createElement('a')
-    link.href = url
-    link.download = `text_${selectedId}.txt`
+    link.href = blobUrl
+    link.download = fileName
     document.body.appendChild(link)
     link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-    console.log('[Canvas] 下载文本文件:', link.download)
-    return
+    link.remove()
+    URL.revokeObjectURL(blobUrl)
+    return true
   }
-  
-  if (!fileUrl) {
-    console.log('[Canvas] 选中的节点没有可下载的文件')
-    return
-  }
-  
+
   try {
-    // dataUrl 或 blob URL 直接下载
-    if (fileUrl.startsWith('data:') || fileUrl.startsWith('blob:')) {
-      const response = fileUrl.startsWith('data:') ? null : await fetch(fileUrl)
-      let blob
-      if (fileUrl.startsWith('data:')) {
-        const parts = fileUrl.split(',')
-        const mime = parts[0].match(/:(.*?);/)?.[1] || 'application/octet-stream'
-        const base64 = parts[1]
-        const byteCharacters = atob(base64)
-        const byteNumbers = new Array(byteCharacters.length)
-        for (let i = 0; i < byteCharacters.length; i++) {
-          byteNumbers[i] = byteCharacters.charCodeAt(i)
-        }
-        blob = new Blob([new Uint8Array(byteNumbers)], { type: mime })
-      } else {
-        blob = await response.blob()
-      }
-      const blobUrl = URL.createObjectURL(blob)
+    if (media.url.startsWith('data:') || media.url.startsWith('blob:')) {
+      const response = await fetch(media.url)
+      const blobUrl = URL.createObjectURL(await response.blob())
       const link = document.createElement('a')
       link.href = blobUrl
       link.download = fileName
       document.body.appendChild(link)
       link.click()
-      document.body.removeChild(link)
+      link.remove()
       URL.revokeObjectURL(blobUrl)
-      console.log('[Canvas] 下载文件:', fileName)
-      return
+      return true
     }
-    
-    // 远程 URL 走流式下载，触发浏览器原生下载栏（带进度），点击即响应
+
     const { startStreamDownload } = await import('@/api/client')
-    startStreamDownload(fileUrl, fileName)
-    console.log('[Canvas] 已开始下载:', fileName)
+    startStreamDownload(media.url, fileName)
+    return true
   } catch (error) {
     console.error('[Canvas] 下载失败:', error)
+    return false
   }
+}
+
+function downloadSelectedNodeFile() {
+  return downloadNodeFile(canvasStore.selectedNodeId)
 }
 
 // 处理解散编组
@@ -2810,6 +3013,24 @@ function loadInteractionMode() {
   }
 }
 
+function loadCanvasControlPreferences() {
+  gridSnapEnabled.value = resolveCanvasGridSnap(
+    me.value?.preferences,
+    localStorage.getItem(CANVAS_GRID_SNAP_STORAGE_KEY)
+  )
+  writeCanvasGridSnap(localStorage, gridSnapEnabled.value)
+
+  const savedEdgeStyle = me.value?.preferences?.canvas?.edgeStyle ||
+    localStorage.getItem('canvasEdgeStyle') ||
+    'bezier'
+  selectedEdgeStyle.value = savedEdgeStyle
+  localStorage.setItem('canvasEdgeStyle', savedEdgeStyle)
+  if (savedEdgeStyle !== 'hidden') {
+    lastVisibleEdgeStyle.value = resolveEdgeRestoreStyle(savedEdgeStyle)
+    writeEdgeRestoreStyle(localStorage, lastVisibleEdgeStyle.value)
+  }
+}
+
 function loadPromptInputFixedScalePreference() {
   const fallback = getPromptInputFixedScaleDefault(interactionMode.value)
   promptInputFixedScale.value = resolvePromptInputFixedScalePreference(me.value?.preferences, fallback)
@@ -2878,6 +3099,17 @@ watch(() => me.value?.preferences?.canvas?.[PROMPT_INPUT_FIXED_SCALE_KEY], (valu
   }
 })
 
+watch(() => me.value?.preferences?.canvas?.gridSnap, (value) => {
+  if (typeof value !== 'boolean' || value === gridSnapEnabled.value) return
+  gridSnapEnabled.value = value
+  writeCanvasGridSnap(localStorage, value)
+})
+
+watch(() => me.value?.preferences?.canvas?.edgeStyle, (style) => {
+  if (!style || style === selectedEdgeStyle.value) return
+  applyCanvasEdgeStyle(style, { persist: false })
+})
+
 onMounted(async () => {
   // 🔧 初始化画布诊断工具 - 用于调试画布强制重新加载问题
   // 在浏览器控制台运行 printCanvasDiagnosticReport() 查看诊断报告
@@ -2897,6 +3129,9 @@ onMounted(async () => {
   
   // 加载交互模式偏好
   loadInteractionMode()
+
+  // 加载网格吸附和连线显示偏好
+  loadCanvasControlPreferences()
 
   // 加载提示词输入框缩放偏好
   loadPromptInputFixedScalePreference()
@@ -2988,6 +3223,8 @@ onMounted(async () => {
   failZombieCanvasVideoNodes()
   
   document.addEventListener('keydown', handleKeyDown)
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
+  window.addEventListener('canvas-edge-style-change', handleCanvasEdgeStyleChanged)
   
   // 延迟设置画布就绪状态，确保转场动画完成后再渲染 VueFlow
   // 这解决了转场动画与 VueFlow 初始化冲突导致画布卡住的问题
@@ -3011,9 +3248,12 @@ onMounted(async () => {
 onUnmounted(() => {
   cancelAllCanvasUploads()
   uploadManager.cancelAllRetries()
+  keepOrganizedCanvas()
   persistCurrentWorkflowOnExit('unmounted')
 
   document.removeEventListener('keydown', handleKeyDown)
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  window.removeEventListener('canvas-edge-style-change', handleCanvasEdgeStyleChanged)
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('pagehide', handlePageHide)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
@@ -3133,7 +3373,17 @@ onUnmounted(() => {
         </div>
       </Transition>
       <!-- 无限画布 - 使用 key 强制在就绪后重新挂载 -->
-      <CanvasBoard ref="canvasBoardRef" :key="'canvas-board-' + canvasReady" :pick-mode="canvasPickMode" @dblclick="handleCanvasDoubleClick" @pane-click="handlePaneClick" @pick-node="handlePickNode" />
+      <CanvasBoard
+        ref="canvasBoardRef"
+        :key="'canvas-board-' + canvasReady"
+        :pick-mode="canvasPickMode"
+        :grid-snap-enabled="gridSnapEnabled"
+        @dblclick="handleCanvasDoubleClick"
+        @pane-click="handlePaneClick"
+        @pick-node="handlePickNode"
+        @organization-mutation-start="handleOrganizationMutationStart"
+        @organization-mutation-end="handleOrganizationMutationEnd"
+      />
       
       <!-- 顶部标签栏 - 仅在有标签时显示 -->
       <div v-if="canvasStore.workflowTabs.length > 0" class="tabs-container">
@@ -3166,27 +3416,75 @@ onUnmounted(() => {
         </div>
       </Transition>
 
+      <Transition name="canvas-organization-banner">
+        <div
+          v-if="organizationPreview"
+          class="canvas-organization-confirm"
+          role="status"
+          aria-live="polite"
+        >
+          <span>画布已整理</span>
+          <button type="button" @click="keepOrganizedCanvas">保留</button>
+          <button type="button" @click="restoreOrganizedCanvas">恢复原样</button>
+        </div>
+      </Transition>
+
       <!-- 底部左侧控制区域 -->
       <div class="canvas-bottom-left-controls">
+        <button
+          type="button"
+          class="canvas-control-btn canvas-asset-toggle-btn"
+          @click="openAssetPanel"
+          @mousedown.stop
+          @touchstart.stop
+          title="资产管理"
+          aria-label="资产管理"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="16" rx="2"/>
+            <path d="M9 4v16M9 10h12"/>
+          </svg>
+          <span class="canvas-control-label">资产管理</span>
+        </button>
+
+        <button
+          type="button"
+          class="canvas-control-btn canvas-organize-btn"
+          @click="requestCanvasOrganization"
+          @mousedown.stop
+          @touchstart.stop
+          title="整理画布 Shift+Alt+F"
+          aria-label="整理画布"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+            <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+            <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+          </svg>
+        </button>
+
         <!-- 小地图开关 -->
         <button
-          class="canvas-map-toggle-btn"
+          type="button"
+          class="canvas-control-btn canvas-map-toggle-btn"
           :class="{ active: showCanvasMiniMap }"
           @click="toggleCanvasMiniMap"
           @mousedown.stop
           @touchstart.stop
           title="地图"
         >
-          <svg class="map-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-            <path d="M9 18l-6 3V6l6-3 6 3 6-3v15l-6 3-6-3z"/>
-            <path d="M9 3v15"/>
-            <path d="M15 6v15"/>
+          <svg class="map-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 17s5-4.35 5-9a5 5 0 0 0-10 0c0 4.65 5 9 5 9Z"/>
+            <circle cx="12" cy="8" r="1.75"/>
+            <path d="M8 14H6l-3 7h18l-3-7h-2"/>
           </svg>
         </button>
 
         <!-- 交互模式切换 -->
         <button 
-          class="canvas-mode-switch-btn"
+          type="button"
+          class="canvas-control-btn canvas-mode-switch-btn"
           @click="toggleInteractionMode"
           @mousedown.stop
           :title="interactionMode === 'comfyui' ? t('canvas.switchToInfiniteCanvas') : t('canvas.switchToComfyui')"
@@ -3199,28 +3497,74 @@ onUnmounted(() => {
             <path d="M3 9h18M3 15h18M9 3v18M15 3v18" opacity="0.3"/>
           </svg>
         </button>
-        
+
+        <button
+          type="button"
+          class="canvas-control-btn canvas-edge-toggle-btn"
+          :class="{ active: edgesHidden }"
+          @click="toggleEdgesHidden"
+          @mousedown.stop
+          @touchstart.stop
+          :title="edgesHidden ? '显示节点连线' : '隐藏节点连线'"
+          :aria-label="edgesHidden ? '显示节点连线' : '隐藏节点连线'"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="5" cy="7" r="2"/>
+            <circle cx="19" cy="17" r="2"/>
+            <path d="M7 8c4 1 6 7 10 8"/>
+            <path v-if="edgesHidden" d="M4 20L20 4"/>
+          </svg>
+        </button>
+
+        <button
+          type="button"
+          class="canvas-control-btn canvas-grid-snap-btn"
+          :class="{ active: gridSnapEnabled }"
+          @click="toggleGridSnap"
+          @mousedown.stop
+          @touchstart.stop
+          :title="gridSnapEnabled ? '关闭节点网格吸附' : '开启节点网格吸附'"
+          :aria-label="gridSnapEnabled ? '关闭节点网格吸附' : '开启节点网格吸附'"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 4v7a5 5 0 0 0 10 0V4"/>
+            <path d="M7 8h4M13 8h4"/>
+            <path v-if="!gridSnapEnabled" d="M4 20L20 4"/>
+          </svg>
+        </button>
+
         <!-- 缩放控制 -->
         <div class="canvas-zoom-controls" @mousedown.stop @touchstart.stop>
-          <button class="canvas-zoom-btn" @click="handleZoomOut" :disabled="canvasStore.viewport.zoom <= MIN_ZOOM" title="缩小 (-)">−</button>
-          <input
-            type="range"
-            class="canvas-zoom-slider"
-            :min="MIN_ZOOM"
-            :max="MAX_ZOOM"
-            step="0.01"
-            :value="canvasStore.viewport.zoom"
-            @input="handleZoomSlider"
-            @mousedown.stop
-            @touchstart.stop
-            :title="`缩放: ${Math.round(canvasStore.viewport.zoom * 100)}%`"
-          />
-          <span
-            class="canvas-zoom-value"
-            @click="handleZoomReset"
-            :title="'点击重置为100%'"
-          >{{ Math.round(canvasStore.viewport.zoom * 100) }}%</span>
-          <button class="canvas-zoom-btn" @click="handleZoomIn" :disabled="canvasStore.viewport.zoom >= MAX_ZOOM" title="放大 (+)">+</button>
+          <button
+            type="button"
+            class="canvas-zoom-trigger"
+            :aria-expanded="showZoomMenu"
+            aria-haspopup="menu"
+            @click="toggleZoomMenu"
+          >{{ Math.round(canvasStore.viewport.zoom * 100) }}%</button>
+
+          <div v-if="showZoomMenu" class="canvas-zoom-menu" role="menu">
+            <label class="canvas-zoom-input-row">
+              <input
+                v-model="zoomInput"
+                type="number"
+                min="10"
+                max="500"
+                step="1"
+                aria-label="缩放百分比"
+                @keydown.enter.prevent="commitZoomInput"
+                @blur="commitZoomInput"
+              />
+              <span>%</span>
+            </label>
+            <button type="button" role="menuitem" @click="handleZoomIn"><span>放大</span><kbd>+</kbd></button>
+            <button type="button" role="menuitem" @click="handleZoomOut"><span>缩小</span><kbd>−</kbd></button>
+            <button type="button" role="menuitem" @click="fitCanvasToScreen"><span>适合屏幕</span><kbd>0</kbd></button>
+            <div class="canvas-zoom-menu-divider"></div>
+            <button type="button" role="menuitem" @click="setZoomPreset(50)">缩放至50%</button>
+            <button type="button" role="menuitem" @click="setZoomPreset(100)">缩放至100%</button>
+            <button type="button" role="menuitem" @click="setZoomPreset(500)">缩放至500%</button>
+          </div>
         </div>
       </div>
       
@@ -3306,10 +3650,14 @@ onUnmounted(() => {
 
         <!-- 帮助/快捷键按钮（仅图标） -->
         <button class="canvas-icon-btn" :title="t('common.help')" @click="showHelp = true">
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-            <line x1="12" y1="17" x2="12.01" y2="17"/>
+          <svg class="canvas-shortcut-icon w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="3" y="5" width="18" height="14" rx="3"/>
+            <circle cx="7" cy="10" r="0.75" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="10" r="0.75" fill="currentColor" stroke="none"/>
+            <circle cx="17" cy="10" r="0.75" fill="currentColor" stroke="none"/>
+            <circle cx="8.5" cy="13" r="0.75" fill="currentColor" stroke="none"/>
+            <circle cx="15.5" cy="13" r="0.75" fill="currentColor" stroke="none"/>
+            <path d="M7 15h10"/>
           </svg>
         </button>
       </div>
@@ -3449,8 +3797,18 @@ onUnmounted(() => {
       <!-- 资产面板 -->
       <AssetPanel
         :visible="showAssetPanel"
+        :nodes="canvasStore.nodes"
+        :selected-node-id="canvasStore.selectedNodeId"
+        :selected-node-ids="canvasStore.selectedNodeIds"
+        :workflow-key="canvasStore.activeTabId || ''"
         @close="closeAssetPanel"
         @insert-asset="handleAssetInsert"
+        @select-locate="handleDirectorySelectLocate"
+        @locate="handleDirectoryLocate"
+        @rename="handleDirectoryRename"
+        @duplicate="handleDirectoryDuplicate"
+        @download="handleDirectoryDownload"
+        @move-to-group="handleDirectoryMoveToGroup"
       />
       
       <!-- 历史记录面板 -->

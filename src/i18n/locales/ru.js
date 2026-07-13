@@ -378,7 +378,20 @@ export default {
       type: 'Тип',
       size: 'Размер',
       createdAt: 'Создано',
-      applyToCanvas: 'Применить к холсту'
+      applyToCanvas: 'Применить к холсту',
+      directory: {
+        canvasTab: 'Холст',
+        assetsTab: 'Ресурсы',
+        title: 'Элементы холста',
+        searchPlaceholder: 'Поиск элементов холста...',
+        empty: 'В этом процессе нет узлов',
+        root: 'Без группы',
+        rename: 'Переименовать',
+        duplicate: 'Дублировать',
+        download: 'Скачать',
+        locate: 'Показать на холсте',
+        total: '{count} узлов'
+      }
     },
     // Категории
     categories: {

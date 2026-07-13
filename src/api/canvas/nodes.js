@@ -394,7 +394,8 @@ export async function getImageTaskStatus(taskId) {
  */
 export async function getVideoTaskStatus(taskId) {
   const response = await fetch(getApiUrl(`/api/videos/task/${taskId}`), {
-    headers: getHeaders()
+    cache: 'no-store',
+    headers: getHeaders({ extra: { 'Cache-Control': 'no-cache' } })
   })
   const data = await parseApiResponse(response, '查询任务状态失败：后端没有返回 JSON')
 

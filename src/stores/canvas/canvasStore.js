@@ -18,6 +18,7 @@ import { markNodeGenerationSubmissionsDeleted } from './pendingGenerationSubmiss
 import { buildMediaUploadCommit, resolveMediaUploadCommitTarget } from './mediaUploadCommit'
 import { cancelCanvasUpload } from '@/api/canvas/direct-upload.js'
 import { useUploadManager } from './uploadManager'
+import { getVisibleGroupGeometry, getVisibleNodeGroups } from '@/utils/canvasBatchLayout'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -86,6 +87,10 @@ export const useCanvasStore = defineStore('canvas', () => {
       historyStack.value = new Array(opHistory.length).fill(null)
     }
     historyIndex.value = opHistory.index
+  }
+
+  function syncNodeGroupsFromVisibleNodes() {
+    nodeGroups.value = getVisibleNodeGroups(nodes.value, nodeGroups.value)
   }
   
   // ========== 剪贴板 ==========
@@ -429,6 +434,69 @@ export const useCanvasStore = defineStore('canvas', () => {
       nodeOffsets
     })
     markCurrentTabChanged()
+  }
+
+  function clampNodePositionToGroup(node, groupNode) {
+    const padding = 24
+    const nodeWidth = Number(node?.dimensions?.width || node?.data?.width || node?.style?.width || 320)
+    const nodeHeight = Number(node?.dimensions?.height || node?.data?.height || node?.style?.height || 240)
+    const groupWidth = Number(groupNode?.data?.width || groupNode?.dimensions?.width || 400)
+    const groupHeight = Number(groupNode?.data?.height || groupNode?.dimensions?.height || 300)
+    const minX = groupNode.position.x + padding
+    const minY = groupNode.position.y + padding
+    const maxX = Math.max(minX, groupNode.position.x + groupWidth - nodeWidth - padding)
+    const maxY = Math.max(minY, groupNode.position.y + groupHeight - nodeHeight - padding)
+
+    return {
+      x: Math.min(Math.max(node.position.x, minX), maxX),
+      y: Math.min(Math.max(node.position.y, minY), maxY)
+    }
+  }
+
+  function moveNodeToGroup(nodeId, targetGroupId = null) {
+    const node = nodes.value.find(candidate => candidate.id === nodeId)
+    if (!node || node.type === 'group') return false
+
+    const sourceGroupId = node.data?.groupId || null
+    if (sourceGroupId === targetGroupId) return false
+
+    const targetGroupNode = targetGroupId
+      ? nodes.value.find(candidate => candidate.id === targetGroupId && candidate.type === 'group')
+      : null
+    if (targetGroupId && !targetGroupNode) return false
+
+    saveHistory({ force: true })
+
+    if (sourceGroupId) {
+      const sourceGroupNode = nodes.value.find(candidate => candidate.id === sourceGroupId && candidate.type === 'group')
+      const sourceGroup = nodeGroups.value.find(candidate => candidate.id === sourceGroupId)
+      const sourceOffsets = { ...(sourceGroupNode?.data?.nodeOffsets || {}) }
+      delete sourceOffsets[nodeId]
+
+      if (sourceGroupNode) {
+        updateNodeData(sourceGroupId, {
+          nodeIds: (sourceGroupNode.data?.nodeIds || []).filter(id => id !== nodeId),
+          nodeOffsets: sourceOffsets
+        })
+      }
+      if (sourceGroup) {
+        sourceGroup.nodeIds = sourceGroup.nodeIds.filter(id => id !== nodeId)
+      }
+    }
+
+    updateNodeData(nodeId, {
+      groupId: null,
+      groupColor: null
+    })
+
+    if (targetGroupNode) {
+      const targetPosition = clampNodePositionToGroup(node, targetGroupNode)
+      updateNodePosition(nodeId, targetPosition)
+      addNodeToGroup(nodeId, targetGroupId)
+    }
+
+    markCurrentTabChanged()
+    return true
   }
   
   /**
@@ -888,6 +956,17 @@ export const useCanvasStore = defineStore('canvas', () => {
     opHistory.trim(effectiveMaxHistory)
     syncHistoryRefs()
   }
+
+  function cancelLatestHistory() {
+    const cleanedNodes = nodes.value.map(node => cleanNodeForHistory(toRaw(node)))
+    const state = {
+      nodes: JSON.parse(JSON.stringify(cleanedNodes)),
+      edges: JSON.parse(JSON.stringify(toRaw(edges.value)))
+    }
+    const cancelled = opHistory.cancelLatest(state)
+    syncHistoryRefs()
+    return cancelled
+  }
   
   /**
    * 撤销（op-based）
@@ -899,6 +978,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     opHistory.undo(state => {
       nodes.value = sanitizeNodesForHistoryRestore(state.nodes)
       edges.value = state.edges
+      syncNodeGroupsFromVisibleNodes()
     })
     syncHistoryRefs()
     isHistoryAction.value = false
@@ -914,6 +994,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     opHistory.redo(state => {
       nodes.value = sanitizeNodesForHistoryRestore(state.nodes)
       edges.value = state.edges
+      syncNodeGroupsFromVisibleNodes()
     })
     syncHistoryRefs()
     isHistoryAction.value = false
@@ -1120,7 +1201,9 @@ export const useCanvasStore = defineStore('canvas', () => {
     const node = nodes.value.find(n => n.id === nodeId)
     if (!node) return null
 
-    saveHistory({ force: true })
+    if (!options.skipHistory) {
+      saveHistory({ force: true })
+    }
     markCurrentTabChanged()
 
     const offset = options.offset || { x: 40, y: 40 }
@@ -1134,7 +1217,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       selected: false
     }
 
-    if (newNode.data) {
+    if (newNode.data && !options.preserveResults) {
       cleanNodeDataForProcessingDuplicate(newNode.data, node.type)
     }
 
@@ -2401,13 +2484,15 @@ export const useCanvasStore = defineStore('canvas', () => {
   /**
    * 创建节点编组
    */
-  function createGroup(nodeIds, groupName = null) {
+  function createGroup(nodeIds, groupName = null, options = {}) {
     if (nodeIds.length < 2) {
       console.warn('[Canvas Store] 需要至少 2 个节点才能创建编组')
       return null
     }
     
-    saveHistory({ force: true })
+    if (!options.skipHistory) {
+      saveHistory({ force: true })
+    }
     
     const groupId = `group-${Date.now()}`
     const name = groupName || `新建组`
@@ -2443,6 +2528,53 @@ export const useCanvasStore = defineStore('canvas', () => {
     })
     
     console.log(`[Canvas Store] 已创建编组 "${name}"，包含 ${nodeIds.length} 个节点`)
+    return group
+  }
+
+  function createVisibleGroup(nodeIds, groupName = null, options = {}) {
+    const memberNodes = nodeIds
+      .map(nodeId => nodes.value.find(node => node.id === nodeId))
+      .filter(Boolean)
+    if (memberNodes.length < 2) return null
+
+    const geometry = getVisibleGroupGeometry(memberNodes, options)
+    if (!geometry) return null
+
+    if (!options.skipHistory) {
+      saveHistory({ force: true })
+    }
+    const group = createGroup(nodeIds, groupName, { skipHistory: true })
+    if (!group) return null
+
+    memberNodes.forEach(node => {
+      node.draggable = true
+      node.zIndex = 1
+      node.style = { ...node.style, zIndex: 1 }
+    })
+
+    addNode({
+      id: group.id,
+      type: 'group',
+      position: geometry.position,
+      zIndex: -1000,
+      style: { zIndex: -1000 },
+      draggable: true,
+      selectable: true,
+      data: {
+        groupName: group.name,
+        groupColor: group.color,
+        borderColor: group.borderColor,
+        nodeIds: [...nodeIds],
+        width: geometry.width,
+        height: geometry.height,
+        nodeOffsets: geometry.nodeOffsets
+      }
+    }, true)
+
+    selectNode(group.id)
+    if (!options.skipHistory) {
+      saveHistory({ force: true })
+    }
     return group
   }
   
@@ -2853,6 +2985,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     updateInactiveWorkflowTabNodeData,
     updateNodePosition,
     addNodeToGroup,
+    moveNodeToGroup,
     removeNode,
     removeNodesBatch,
     selectNode,
@@ -2868,6 +3001,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     // 历史记录操作
     saveHistory,
+    cancelLatestHistory,
     undo,
     redo,
     trimHistory,
@@ -2885,6 +3019,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     // 编组操作
     createGroup,
+    createVisibleGroup,
     disbandGroup,
 
     // 编组执行

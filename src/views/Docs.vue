@@ -82,6 +82,7 @@
         <p>
           图片生成和视频生成接口接收 URL，不接收本地文件路径或原始字节。用户上传本地图片或视频时，智能体应先申请一次性上传地址，
           把文件直接 PUT 到腾讯云 COS CDN 存储，再把返回的 <code>asset_url</code> 用作图片 <code>input</code>、视频 <code>source_assets</code> 或 <code>reference_assets</code>。
+          上传只负责存储，不代表图片已经通过视频供应商审核。
         </p>
         <ol class="docs-steps">
           <li>调用 <code>POST /api/skills/uploads/presign</code>，传入文件名、MIME、字节大小和媒体类型。</li>
@@ -136,6 +137,7 @@
           视频接口用于文生视频、图生视频、视频参考和多素材工作流。图片或视频素材都必须是可访问 URL；
           本地素材先通过上传流程转换成 <code>asset_url</code>，再放进 <code>source_assets</code> 或 <code>reference_assets</code>。
           服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审，智能体只需要调用统一 Skills 视频端点。
+          视频请求阶段会按该 Skills Key 所属租户和锁定渠道自动过审，不会故障转移到其他渠道；过审失败或超时会停止视频提交。
           <code>mode</code> 可省略；明确需要细分能力时，可传 Seedance 2.0 的 <code>multimodal_ref</code>/<code>video_edit</code>/<code>video_extend</code>
           或 Kling v3 Omni 的 <code>subject_control</code>/<code>video_reference</code>/<code>multi_shot</code> 等子模式。
         </p>
@@ -307,8 +309,8 @@ const quickStartPrompt = `请帮我安装 Banana Canvas Skills。
 - 只调用 ${baseUrl}/api/skills/*。
 
 安装后先调用 GET ${baseUrl}/api/skills/models 验证 key 和模型列表。
-如果用户提供本地图片或视频，先调用 POST ${baseUrl}/api/skills/uploads/presign，把文件 PUT 到 upload_url，再把 asset_url 传给生成接口。
-视频统一调用 POST ${baseUrl}/api/skills/videos/generate；服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审。`
+如果用户提供本地图片或视频，先调用 POST ${baseUrl}/api/skills/uploads/presign，把文件 PUT 到 upload_url，再把 asset_url 传给生成接口；上传只负责存储，不代表图片已经过审。
+视频统一调用 POST ${baseUrl}/api/skills/videos/generate；服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审。视频请求阶段会按该 Skills Key 所属租户和锁定渠道自动过审，不会故障转移到其他渠道；过审失败或超时会停止视频提交。`
 
 const envExample = `BANANA_SKILLS_BASE_URL=${baseUrl}
 BANANA_SKILLS_API_KEY=bsk_your_key`

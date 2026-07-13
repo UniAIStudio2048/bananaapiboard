@@ -58,6 +58,8 @@ import {
   syncPromptMediaMentions
 } from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
+import { getBatchGridPositions } from '@/utils/canvasBatchLayout'
+import { findBatchSafetyError } from '@/utils/canvasBatchFailures'
 import { isPanoramaVrSupportedRatio } from '@/utils/canvasPanoramaExport'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
@@ -1017,6 +1019,8 @@ function createGroupImageNodes(groupImageUrls, task) {
         aspectRatio: selectedAspectRatio.value,
         imageSize: imageSize.value,
         prompt: promptText.value,
+        taskId: task.taskId,
+        taskType: task.type || 'image',
         output: {
           type: 'image',
           urls: [url]
@@ -1404,11 +1408,13 @@ const isMJModel = computed(() => {
 // 辅助函数：检查是否是 Seedream 5.0 Lite 模型
 function checkIsSeedream50Lite(model) {
   if (!model) return false
-  const modelName = (model.name || model.label || model.value || '').toLowerCase()
-  const modelValue = (model.value || '').toLowerCase()
-  const actualModel = (model.actualModel || '').toLowerCase()
-  const searchText = `${modelName} ${modelValue} ${actualModel}`
-  return searchText.includes('seedream-5.0') || searchText.includes('seedream-5-0') || searchText.includes('5-0-260128')
+  const searchText = [model.name, model.label, model.value, model.actualModel]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  const hasLiteName = searchText.includes('seedream-5.0-lite') || searchText.includes('seedream-5-0-lite')
+  const hasLiteModelId = searchText.includes('doubao-seedream-5-0-260128')
+  return !searchText.includes('pro') && (hasLiteName || hasLiteModelId)
 }
 
 // 辅助函数：检查是否是 Seedream 4.5 模型（包括即梦4.5/jimeng-4.5）
@@ -5872,7 +5878,8 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
       status: 'processing',
       progress: '生成中...',
       processingStartedAt: submittedAt,
-      taskType: 'image'
+      taskType: 'image',
+      safetyError: null
     })
 
     const result = await sendImageGenerateRequest(finalPrompt, userPrompt)
@@ -5933,10 +5940,23 @@ async function executeNodeGeneration(nodeId, finalPrompt, taskIndex, userPrompt 
     console.error(`[ImageNode] 任务 ${taskIndex + 1} 失败:`, error)
     console.error(`[ImageNode] 错误详情:`, errorDetail)
     if (!isNativeFetchNetworkError(error)) {
-      canvasStore.updateNodeData(nodeId, {
-        status: 'error',
-        error: error.message
-      })
+      if (isPromptSafetyBlockedError(error)) {
+        canvasStore.updateNodeData(nodeId, {
+          status: 'error',
+          error: error.message,
+          safetyError: {
+            code: error.code,
+            message: error.message,
+            safety: error.safety,
+            payload: error.payload
+          }
+        })
+      } else {
+        canvasStore.updateNodeData(nodeId, {
+          status: 'error',
+          error: error.message
+        })
+      }
       return { error: error.message, detail: errorDetail }
     }
 
@@ -6186,46 +6206,68 @@ async function handleGenerate(options = {}) {
   errorMessage.value = ''
   
   const generateCount = selectedCount.value
+
+  if (generateCount > 1) {
+    canvasStore.saveHistory({ force: true })
+  }
   
   const targetNode = (!fromGroup && !retry && props.data.status === 'processing')
-    ? canvasStore.duplicateNodeWithIncomingEdges(props.id, { offset: { x: 40, y: 40 } })
+    ? canvasStore.duplicateNodeWithIncomingEdges(props.id, {
+        offset: { x: 40, y: 40 },
+        skipHistory: generateCount > 1
+      })
     : null
   const targetNodeId = targetNode?.id || props.id
   
-  // 多批次生成时，创建堆叠的输出节点
+  // 多批次生成时，创建网格输出节点并建立可视编组
   let allNodeIds = [targetNodeId]
   if (generateCount > 1) {
-    // 对于目标节点创建额外的堆叠节点
     const currentNode = canvasStore.nodes.find(n => n.id === targetNodeId)
     if (currentNode) {
+      const displayWidth = Math.ceil(Number(
+        currentNode.dimensions?.width ||
+        currentNode.data?.nodeWidth ||
+        currentNode.data?.width ||
+        nodeWidth.value ||
+        380
+      ))
+      const displayHeight = getCurrentNodeDisplayHeight(currentNode)
+      const positions = getBatchGridPositions({
+        origin: currentNode.position,
+        count: generateCount,
+        nodeWidth: displayWidth,
+        nodeHeight: displayHeight
+      })
+
       for (let i = 1; i < generateCount; i++) {
         const stackedNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        const stackOffset = 8
         canvasStore.addNode({
           id: stackedNodeId,
           type: 'image',
-          position: {
-            x: currentNode.position.x + stackOffset * i,
-            y: currentNode.position.y + stackOffset * i
-          },
-          zIndex: -i,
+          position: positions[i],
           data: {
             title: `Image ${i + 1}`,
             nodeRole: 'output',
             status: 'pending',
-            isStackedNode: true,
-            stackIndex: i,
-            parentNodeId: targetNodeId,
+            width: displayWidth,
+            height: displayHeight,
             prompt: promptText.value,
             model: selectedModel.value,
             aspectRatio: selectedAspectRatio.value,
             imageSize: imageSize.value,
             referenceImages: referenceImages.value
           }
-        })
+        }, true)
         allNodeIds.push(stackedNodeId)
       }
-      console.log('[ImageNode] 创建堆叠节点:', allNodeIds.slice(1))
+
+      canvasStore.createVisibleGroup(allNodeIds, `图片生成 ×${generateCount}`, {
+        skipHistory: true,
+        defaultWidth: displayWidth,
+        defaultHeight: displayHeight
+      })
+      canvasStore.saveHistory({ force: true })
+      console.log('[ImageNode] 创建批量生成编组:', allNodeIds)
     }
   }
   
@@ -6244,28 +6286,31 @@ async function handleGenerate(options = {}) {
   try {
     // 提交所有任务（任务提交后立即返回，不等待完成）
     // basePrompt 是用户原始输入（不含预设提示词），用于历史记录显示
-    const submitPromises = allNodeIds.map((nodeId, index) => {
-      return new Promise(async (resolve) => {
-        // 间隔发送请求
-        if (index > 0) {
-          await delay(CONCURRENT_INTERVAL * index)
-        }
-        const result = await executeNodeGeneration(nodeId, finalPrompt, index, basePrompt)
-        resolve(result)
-      })
-    })
+    const submitPromises = allNodeIds.map((nodeId, index) =>
+      executeNodeGeneration(nodeId, finalPrompt, index, basePrompt)
+    )
     
     // 等待所有任务提交完成（不是等待任务结果完成）
     const allResults = await Promise.all(submitPromises)
     const successResults = allResults.filter(r => r !== null && !r?.error)
     const failedResults = allResults.filter(r => r?.error)
+    const batchSafetyError = findBatchSafetyError(failedResults)
     
     console.log('[ImageNode] 全部任务已提交:', successResults.length, '/', generateCount, 
       failedResults.length > 0 ? '失败详情:' : '', failedResults)
     
+    if (successResults.length > 0 && batchSafetyError) {
+      const dialog = buildPromptSafetyDialog(batchSafetyError)
+      errorMessage.value = dialog.message
+      await showAlert(dialog.message, dialog.title, dialog.detail)
+    }
+
     if (successResults.length === 0) {
-      const firstError = failedResults[0]?.error || '未知错误'
-      const detail = failedResults[0]?.detail || {}
+      const primaryFailure = batchSafetyError
+        ? { error: batchSafetyError.message, detail: batchSafetyError }
+        : failedResults[0]
+      const firstError = primaryFailure?.error || '未知错误'
+      const detail = primaryFailure?.detail || {}
       console.error('[ImageNode] 所有任务都失败，首个错误:', firstError, detail)
       const err = new Error(firstError)
       if (detail) {

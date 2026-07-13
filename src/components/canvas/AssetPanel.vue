@@ -16,12 +16,14 @@ import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, is
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { Images, LayoutDashboard } from '@lucide/vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import SeedanceCharacterPanel from './SeedanceCharacterPanel.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
 import AssetCard from './AssetCard.vue'
 import AssetHoverPreview from './AssetHoverPreview.vue'
 import AssetPreviewModal from './AssetPreviewModal.vue'
+import CanvasDirectoryPanel from './CanvasDirectoryPanel.vue'
 import {
   setCanvasSpaceFilterFromGlobal,
   syncGlobalSpaceFromFilter,
@@ -32,12 +34,26 @@ const { t, currentLanguage } = useI18n()
 const teamStore = useTeamStore()
 
 const props = defineProps({
-  visible: Boolean
+  visible: Boolean,
+  nodes: { type: Array, default: () => [] },
+  selectedNodeId: { type: String, default: null },
+  selectedNodeIds: { type: Array, default: () => [] },
+  workflowKey: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'insert-asset'])
+const emit = defineEmits([
+  'close',
+  'insert-asset',
+  'select-locate',
+  'locate',
+  'rename',
+  'duplicate',
+  'download',
+  'move-to-group'
+])
 
 // ========== 状态 ==========
+const activePanelView = ref('canvas')
 const loading = ref(false)
 const assets = ref([])
 const selectedType = ref('all') // all | text | image | video | audio
@@ -1415,6 +1431,7 @@ function closeTagManager() {
 
 watch(() => props.visible, async (visible) => {
   if (visible) {
+    activePanelView.value = 'canvas'
     await loadSeedanceGroups()
     await loadAssets()
     startTeamSync()
@@ -1428,6 +1445,12 @@ watch(() => props.visible, async (visible) => {
     stopTeamSync()
   }
 })
+
+function setActivePanelView(view) {
+  activePanelView.value = view
+  closeHoverPreview()
+  if (view === 'canvas') closePreview()
+}
 
 // 键盘事件
 function handleKeydown(e) {
@@ -1515,7 +1538,7 @@ onUnmounted(() => {
       v-if="visible" 
       class="asset-panel-container"
     >
-      <div class="asset-panel">
+      <div class="asset-panel" :class="{ 'canvas-directory-mode': activePanelView === 'canvas' }">
         <!-- 头部 -->
         <div class="panel-header">
           <div class="header-title">
@@ -1534,6 +1557,45 @@ onUnmounted(() => {
             </svg>
           </button>
         </div>
+
+        <div class="asset-panel-tabs" role="tablist" :aria-label="t('canvas.assetPanel.title')">
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="activePanelView === 'canvas'"
+            :class="{ active: activePanelView === 'canvas' }"
+            @click="setActivePanelView('canvas')"
+          >
+            <LayoutDashboard :size="15" aria-hidden="true" />
+            {{ t('canvas.assetPanel.directory.canvasTab') }}
+          </button>
+          <button
+            type="button"
+            role="tab"
+            :aria-selected="activePanelView === 'assets'"
+            :class="{ active: activePanelView === 'assets' }"
+            @click="setActivePanelView('assets')"
+          >
+            <Images :size="15" aria-hidden="true" />
+            {{ t('canvas.assetPanel.directory.assetsTab') }}
+          </button>
+        </div>
+
+        <CanvasDirectoryPanel
+          v-if="activePanelView === 'canvas'"
+          :nodes="nodes"
+          :selected-node-id="selectedNodeId"
+          :selected-node-ids="selectedNodeIds"
+          :workflow-key="workflowKey"
+          @select-locate="emit('select-locate', $event)"
+          @locate="emit('locate', $event)"
+          @rename="emit('rename', $event)"
+          @duplicate="emit('duplicate', $event)"
+          @download="emit('download', $event)"
+          @move-to-group="emit('move-to-group', $event)"
+        />
+
+        <div v-show="activePanelView === 'assets'" class="asset-library-view">
         
         <!-- 空间切换器 -->
         <SpaceSwitcher 
@@ -1940,6 +2002,7 @@ onUnmounted(() => {
             </div>
           </div>
         </Transition>
+        </div>
       </div>
     </div>
   </Transition>
@@ -2088,6 +2151,67 @@ onUnmounted(() => {
     0 24px 80px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   pointer-events: auto; /* 面板本身可以接收事件 */
+  transition: width 0.18s ease;
+}
+
+.asset-panel.canvas-directory-mode {
+  width: 360px;
+}
+
+.asset-library-view {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+}
+
+.asset-panel-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.asset-panel-tabs button {
+  display: flex;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.52);
+  background: transparent;
+  font-size: 12px;
+}
+
+.asset-panel-tabs button:hover {
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.asset-panel-tabs button.active {
+  color: #ffffff;
+  background: rgba(75, 112, 224, 0.22);
+}
+
+:root.canvas-theme-light .asset-panel-tabs {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .asset-panel-tabs button {
+  color: rgba(30, 41, 59, 0.58);
+}
+
+:root.canvas-theme-light .asset-panel-tabs button:hover {
+  color: #1e293b;
+  background: rgba(15, 23, 42, 0.05);
+}
+
+:root.canvas-theme-light .asset-panel-tabs button.active {
+  color: #1d4ed8;
+  background: #e4edff;
 }
 
 /* 头部 */

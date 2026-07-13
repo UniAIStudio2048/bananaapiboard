@@ -58,6 +58,12 @@ import {
   getTouchPoint
 } from '@/utils/canvasTouchInteractions'
 import { buildPromptInputScaleStyle } from '@/utils/canvasPromptInputScale'
+import {
+  getOrganizationNodeSize,
+  getOrganizationGroupChildIds,
+  organizeCanvasNodes,
+  runCanvasFit
+} from '@/utils/canvasOrganization'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -82,10 +88,21 @@ const props = defineProps({
   pickMode: {
     type: Boolean,
     default: false
+  },
+  gridSnapEnabled: {
+    type: Boolean,
+    default: true
   }
 })
 
-const emit = defineEmits(['dblclick', 'canvas-contextmenu', 'pane-click', 'pick-node'])
+const emit = defineEmits([
+  'dblclick',
+  'canvas-contextmenu',
+  'pane-click',
+  'pick-node',
+  'organization-mutation-start',
+  'organization-mutation-end'
+])
 const canvasStore = useCanvasStore()
 const uploadManager = useUploadManager()
 
@@ -315,6 +332,12 @@ const {
 const MIN_ZOOM = 0.1
 const MAX_ZOOM = 5
 const ZOOM_SPEED = 0.1
+
+function clampCanvasZoom(zoom) {
+  const numericZoom = Number(zoom)
+  if (!Number.isFinite(numericZoom)) return 1
+  return Math.min(Math.max(numericZoom, MIN_ZOOM), MAX_ZOOM)
+}
 
 const PAN_SPEED = 50
 
@@ -642,6 +665,7 @@ onNodeDragStop((event) => {
   
   // 🚀 性能优化：通知节点恢复正常渲染质量
   window.dispatchEvent(new CustomEvent('canvas-drag-end'))
+  emit('organization-mutation-end')
 })
 
 
@@ -651,6 +675,7 @@ onNodeDrag((event) => {
 
   // 🚀 性能优化：标记拖拽开始，首次拖拽时触发
   if (!isDraggingNode.value) {
+    emit('organization-mutation-start')
     isDraggingNode.value = true
     // 通知节点降低渲染质量
     window.dispatchEvent(new CustomEvent('canvas-drag-start'))
@@ -1979,6 +2004,7 @@ function startTouchNodeDrag(point) {
   }
 
   if (!isDraggingNode.value) {
+    emit('organization-mutation-start')
     isDraggingNode.value = true
     window.dispatchEvent(new CustomEvent('canvas-drag-start'))
   }
@@ -1996,6 +2022,7 @@ function finishTouchNodeDrag() {
 
   isDraggingNode.value = false
   window.dispatchEvent(new CustomEvent('canvas-drag-end'))
+  emit('organization-mutation-end')
 }
 
 function handleTouchPinchMove(event) {
@@ -2157,84 +2184,7 @@ function groupSelectedNodes() {
   }
   
   const nodeIds = selectedNodes.map(n => n.id)
-  
-  // 计算选中节点的边界（最小外接矩形）
-  // 使用更大的默认尺寸来确保包含节点
-  let minX = Infinity, minY = Infinity
-  let maxX = -Infinity, maxY = -Infinity
-  
-  selectedNodes.forEach(node => {
-    const x = node.position.x
-    const y = node.position.y
-    // 使用更准确的节点尺寸（根据实际节点类型）
-    const width = node.dimensions?.width || node.data?.width || 380
-    const height = node.dimensions?.height || node.data?.height || 320
-    
-    minX = Math.min(minX, x)
-    minY = Math.min(minY, y)
-    maxX = Math.max(maxX, x + width)
-    maxY = Math.max(maxY, y + height)
-  })
-  
-  // 添加更大的边距确保完全包围
-  const padding = 60
-  minX -= padding
-  minY -= padding + 30 // 标题栏额外空间
-  maxX += padding
-  maxY += padding
-  
-  const groupWidth = maxX - minX
-  const groupHeight = maxY - minY
-  
-  // 在 store 中创建编组
-  const group = canvasStore.createGroup(nodeIds)
-  
-  if (group) {
-    // 计算并保存组内节点相对于组的位置偏移
-    const nodeOffsets = {}
-    nodeIds.forEach(nodeId => {
-      const node = canvasStore.nodes.find(n => n.id === nodeId)
-      if (node) {
-        nodeOffsets[nodeId] = {
-          x: node.position.x - minX,
-          y: node.position.y - minY
-        }
-        // 保持节点可拖拽（在组内自由移动）
-        node.draggable = true
-        // 设置节点的 zIndex 为正数，确保在编组框之上
-        node.zIndex = 1
-        node.style = { ...node.style, zIndex: 1 }
-      }
-    })
-    
-    // 创建可视化的编组节点（背景框）
-    const groupNode = {
-      id: group.id,
-      type: 'group',
-      position: { x: minX, y: minY },
-      zIndex: -1000, // 放在最底层，作为背景
-      style: { zIndex: -1000 }, // 通过 style 也设置 zIndex
-      draggable: true, // 组可以拖动
-      selectable: true, // 组可以选中
-      data: {
-        groupName: group.name,
-        groupColor: group.color,
-        borderColor: group.borderColor,
-        nodeIds: nodeIds,
-        width: groupWidth,
-        height: groupHeight,
-        nodeOffsets: nodeOffsets
-      }
-    }
-    
-    // 添加编组节点（跳过历史保存，因为 createGroup 已经保存了）
-    canvasStore.addNode(groupNode, true)
-    
-    // 选中新创建的编组节点
-    canvasStore.selectNode(group.id)
-    
-    console.log(`[Canvas] 已创建编组 "${group.name}"，包含 ${nodeIds.length} 个节点，尺寸: ${groupWidth}x${groupHeight}`)
-  }
+  canvasStore.createVisibleGroup(nodeIds)
 }
 
 // 同步视口变化到 store
@@ -2272,6 +2222,12 @@ watch(
   () => [canvasStore.viewport.x, canvasStore.viewport.y, canvasStore.viewport.zoom],
   ([newX, newY, newZoom]) => {
     if (!setViewport || !getViewport) return
+
+    const clampedZoom = clampCanvasZoom(newZoom)
+    if (clampedZoom !== newZoom) {
+      canvasStore.updateViewport({ x: newX, y: newY, zoom: clampedZoom })
+      return
+    }
 
     // 获取当前 VueFlow 的视口
     const currentViewport = getViewport()
@@ -3403,6 +3359,106 @@ async function uploadFilesToCloud(tasks) {
   }
 }
 
+async function fitCanvasToScreen() {
+  await nextTick()
+  return runCanvasFit(fitView, {
+    padding: 0.2,
+    minZoom: MIN_ZOOM,
+    maxZoom: MAX_ZOOM
+  })
+}
+
+async function focusCanvasNode(nodeId, options = {}) {
+  const node = canvasStore.nodes.find(candidate => candidate.id === nodeId)
+  if (!node) return false
+
+  if (options.select) {
+    selectSingleNodeFromTouch(nodeId)
+  }
+
+  const size = getOrganizationNodeSize(node)
+  const zoom = clampCanvasZoom(options.zoom || getViewport()?.zoom || 1)
+  await setCenter(
+    node.position.x + size.width / 2,
+    node.position.y + size.height / 2,
+    { zoom, duration: options.duration ?? 260 }
+  )
+  markViewportMoving()
+
+  if (options.playVideo) {
+    await nextTick()
+    await new Promise(resolve => requestAnimationFrame(resolve))
+    const nodeElement = [...(canvasBoardRef.value?.querySelectorAll('.vue-flow__node') || [])]
+      .find(element => element.getAttribute('data-id') === String(nodeId))
+    const videoWrapper = nodeElement?.querySelector('.video-output-wrapper')
+    videoWrapper?.dispatchEvent(new CustomEvent('canvas-directory-play', { bubbles: false }))
+  }
+
+  return true
+}
+
+async function organizeCanvas() {
+  if (canvasStore.nodes.length === 0) return { changed: false, failed: false, empty: true }
+
+  const snapshot = {
+    positions: Object.fromEntries(
+      canvasStore.nodes.map(node => [node.id, { ...node.position }])
+    ),
+    viewport: { ...getViewport(), zoom: clampCanvasZoom(getViewport()?.zoom) }
+  }
+  const result = organizeCanvasNodes(canvasStore.nodes, {
+    snapToGrid: props.gridSnapEnabled,
+    grid: 20
+  })
+
+  if (result.failed) return { ...result, snapshot }
+  if (result.changed) {
+    for (const [nodeId, nextPosition] of Object.entries(result.positions)) {
+      const node = canvasStore.nodes.find(candidate => candidate.id === nodeId)
+      if (!node) continue
+
+      const deltaX = nextPosition.x - node.position.x
+      const deltaY = nextPosition.y - node.position.y
+      if (node.type === 'group') {
+        const childIds = new Set(getOrganizationGroupChildIds(canvasStore.nodes, node))
+        for (const child of canvasStore.nodes) {
+          if (!childIds.has(child.id)) continue
+          const childPosition = child.position || { x: 0, y: 0 }
+          canvasStore.updateNodePosition(child.id, {
+            x: childPosition.x + deltaX,
+            y: childPosition.y + deltaY
+          })
+        }
+      }
+      canvasStore.updateNodePosition(nodeId, { ...nextPosition })
+    }
+    canvasStore.markCurrentTabChanged()
+  }
+
+  const fitted = await fitCanvasToScreen()
+  return { ...result, snapshot, fitFailed: !fitted }
+}
+
+function restoreOrganizedCanvas(snapshot) {
+  if (!snapshot) return false
+
+  let restored = false
+  for (const [nodeId, position] of Object.entries(snapshot.positions || {})) {
+    if (!canvasStore.nodes.some(node => node.id === nodeId)) continue
+    canvasStore.updateNodePosition(nodeId, { ...position })
+    restored = true
+  }
+
+  if (snapshot.viewport) {
+    setViewport({
+      ...snapshot.viewport,
+      zoom: clampCanvasZoom(snapshot.viewport.zoom)
+    }, { duration: 0 })
+  }
+  if (restored) canvasStore.markCurrentTabChanged()
+  return restored
+}
+
 // 暴露给父组件的方法
 defineExpose({
   // 设置缩放级别（不触发store更新，避免循环）
@@ -3411,7 +3467,7 @@ defineExpose({
       const currentViewport = getViewport()
       setViewport({
         ...currentViewport,
-        zoom
+        zoom: clampCanvasZoom(zoom)
       }, { duration: options.duration || 200 })
     }
   },
@@ -3422,7 +3478,11 @@ defineExpose({
   // 编组选中的节点
   groupSelectedNodes,
   // 从剪贴板文件创建节点（供右键菜单调用）
-  handleClipboardFiles
+  handleClipboardFiles,
+  focusCanvasNode,
+  organizeCanvas,
+  restoreOrganizedCanvas,
+  fitCanvasToScreen
 })
 
 onMounted(() => {
@@ -3431,7 +3491,7 @@ onMounted(() => {
   // 初始化视口 - 增加延迟确保 VueFlow 完全就绪
   const initViewport = () => {
     try {
-      fitView({ padding: 0.2 })
+      fitView({ padding: 0.2, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM })
       console.log('[CanvasBoard] 视口初始化完成')
     } catch (e) {
       console.warn('[CanvasBoard] fitView 失败，重试中...', e)
@@ -3564,7 +3624,7 @@ onUnmounted(() => {
       :default-edge-options="defaultEdgeOptions"
       :min-zoom="0.1"
       :max-zoom="5"
-      :snap-to-grid="true"
+      :snap-to-grid="gridSnapEnabled"
       :snap-grid="[20, 20]"
       :connection-mode="'loose'"
       :only-render-visible-elements="false"
@@ -3672,13 +3732,13 @@ onUnmounted(() => {
         v-if="showCanvasMiniMap"
         class="canvas-workflow-minimap"
         position="bottom-left"
-        node-color="#f5f5f5"
-        node-stroke-color="#111111"
-        :node-stroke-width="1.5"
+        node-color="#888888"
+        node-stroke-color="#242424"
+        :node-stroke-width="1"
         :node-border-radius="2"
-        mask-color="rgba(0, 0, 0, 0.28)"
-        mask-stroke-color="#111111"
-        :mask-stroke-width="1"
+        mask-color="rgba(9, 9, 9, 0.52)"
+        mask-stroke-color="rgba(190, 190, 190, 0.68)"
+        :mask-stroke-width="2"
         :mask-border-radius="2"
         :pannable="true"
         :zoomable="false"
@@ -3733,10 +3793,10 @@ onUnmounted(() => {
   left: 24px;
   width: 220px;
   height: 150px;
-  background: rgba(10, 10, 10, 0.92);
-  border: 1px solid rgba(245, 245, 245, 0.18);
-  border-radius: 8px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.38);
+  background: rgba(36, 36, 36, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.34);
   overflow: hidden;
   cursor: crosshair;
 }
@@ -3746,29 +3806,30 @@ onUnmounted(() => {
 }
 
 .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-mask) {
-  fill: rgba(0, 0, 0, 0.28);
-  stroke: #111111;
+  fill: rgba(9, 9, 9, 0.52);
+  stroke: rgba(190, 190, 190, 0.68);
+  stroke-width: 2;
 }
 
 .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-node) {
-  fill: #f5f5f5;
-  stroke: #111111;
+  fill: #888888;
+  stroke: #242424;
 }
 
 :root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap) {
-  background: rgba(255, 255, 255, 0.94);
-  border-color: rgba(0, 0, 0, 0.16);
+  background: rgba(250, 250, 250, 0.96);
+  border-color: rgba(0, 0, 0, 0.12);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.14);
 }
 
 :root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-mask) {
-  fill: rgba(0, 0, 0, 0.18);
-  stroke: #111111;
+  fill: rgba(115, 115, 115, 0.24);
+  stroke: #737373;
 }
 
 :root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-node) {
-  fill: #111111;
-  stroke: #ffffff;
+  fill: #525252;
+  stroke: #fafafa;
 }
 
 /* 框选区域样式 */

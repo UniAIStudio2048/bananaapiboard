@@ -50,6 +50,8 @@ import {
   syncPromptMediaMentions
 } from '@/utils/promptMediaBindings'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
+import { getBatchGridPositions } from '@/utils/canvasBatchLayout'
+import { findBatchSafetyError } from '@/utils/canvasBatchFailures'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
 import { getSeedanceQuickAsset } from '@/utils/seedanceQuickAsset'
@@ -3724,14 +3726,6 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
   }
 })
 
-// 并发间隔时间（毫秒）
-const CONCURRENT_INTERVAL = 5000
-
-// 延迟函数
-function delay(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
 // ========== URL 可访问性处理（确保 AI 模型可访问参考图片） ==========
 
 // 判断是否是七牛云 CDN URL（公开可访问的 URL）
@@ -4616,6 +4610,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       processingStartedAt: Date.now(),
       taskId: null,
       soraTaskId: null,
+      safetyError: null,
       _preserveRawVideoError: false
     })
     
@@ -4916,6 +4911,7 @@ async function ensureReferenceVideoUrlsAccessible(nodeId, targetNodeId) {
 
 // 后台执行生成的重操作（图片压缩/上传/API提交），不阻塞UI
 async function processGenerationInBackground(targetNodeId, allNodeIds, finalPrompt, finalImages, generateCount, capturedState, submitFingerprint = '') {
+  let submissionsStarted = false
   try {
     // 图片压缩：仅对有严格大小要求的 API 类型（如 kling）做前端预压缩，其他类型传原图
     if (finalImages.length > 0) {
@@ -5039,28 +5035,32 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     canvasStore.updateNodeData(targetNodeId, { progress: '正在提交任务...' })
     
     // 提交所有任务
-    const submitPromises = allNodeIds.map((nodeId, index) => {
-      return new Promise(async (resolve) => {
-        if (index > 0) {
-          await delay(CONCURRENT_INTERVAL * index)
-        }
-        const result = await executeNodeGeneration(nodeId, finalPrompt, finalImages, index, capturedState)
-        resolve(result)
-      })
-    })
+    submissionsStarted = true
+    const submitPromises = allNodeIds.map((nodeId, index) =>
+      executeNodeGeneration(nodeId, finalPrompt, finalImages, index, capturedState)
+    )
     
     const allResults = await Promise.all(submitPromises)
     const successResults = allResults.filter(r => r !== null)
+    const batchSafetyError = findBatchSafetyError(allNodeIds.map(nodeId =>
+      canvasStore.nodes.find(node => node.id === nodeId)?.data
+    ))
     
     console.log('[VideoNode] 全部任务已提交:', successResults.length, '/', generateCount)
     
+    if (successResults.length > 0 && batchSafetyError) {
+      const dialog = buildPromptSafetyDialog(batchSafetyError)
+      errorMessage.value = dialog.message
+      await showAlert(dialog.message, dialog.title, dialog.detail)
+    }
+
     if (successResults.length === 0) {
       const firstNodeData = canvasStore.nodes.find(n => n.id === allNodeIds[0])?.data
-      if (firstNodeData?.safetyError) {
-        const safetyErr = new Error(firstNodeData.safetyError.message || firstNodeData.error || '提示词未通过安全审核，请修改后重试')
-        safetyErr.code = firstNodeData.safetyError.code
-        safetyErr.safety = firstNodeData.safetyError.safety
-        safetyErr.payload = firstNodeData.safetyError.payload
+      if (batchSafetyError) {
+        const safetyErr = new Error(batchSafetyError.message || firstNodeData?.error || '提示词未通过安全审核，请修改后重试')
+        safetyErr.code = batchSafetyError.code
+        safetyErr.safety = batchSafetyError.safety
+        safetyErr.payload = batchSafetyError.payload
         throw safetyErr
       }
       const specificError = firstNodeData?.error || '所有任务提交都失败了'
@@ -5071,6 +5071,17 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     
   } catch (error) {
     console.error('[VideoNode] 后台生成失败:', error)
+    if (!submissionsStarted) {
+      const model = capturedState.model || selectedModel.value
+      const batchError = formatVideoNodeErrorMessage(error.message || '生成失败', { model })
+      allNodeIds.forEach(nodeId => {
+        canvasStore.updateNodeData(nodeId, {
+          status: 'error',
+          progress: null,
+          error: batchError
+        })
+      })
+    }
     if (error.code === 'concurrent_limit_exceeded') {
       showAlert(error.message, '并发限制')
       return
@@ -5286,6 +5297,10 @@ async function handleGenerate(options = {}) {
   errorMessage.value = ''
   
   const generateCount = selectedCount.value
+
+  if (generateCount > 1) {
+    canvasStore.saveHistory({ force: true })
+  }
   
   // 快照当前状态，供后台任务使用
   const capturedState = {
@@ -5307,32 +5322,44 @@ async function handleGenerate(options = {}) {
   }
   
   const targetNode = (!retry && props.data.status === 'processing')
-    ? canvasStore.duplicateNodeWithIncomingEdges(props.id, { offset: { x: 40, y: 40 } })
+    ? canvasStore.duplicateNodeWithIncomingEdges(props.id, {
+        offset: { x: 40, y: 40 },
+        skipHistory: generateCount > 1
+      })
     : null
   const targetNodeId = targetNode?.id || props.id
   
-  // 多批次生成时，创建堆叠的输出节点
+  // 多批次生成时，创建网格输出节点并建立可视编组
   let allNodeIds = [targetNodeId]
   if (generateCount > 1) {
     const currentNode = canvasStore.nodes.find(n => n.id === targetNodeId)
     if (currentNode) {
+      const displayWidth = Math.ceil(Number(
+        currentNode.dimensions?.width ||
+        currentNode.data?.nodeWidth ||
+        currentNode.data?.width ||
+        nodeWidth.value ||
+        420
+      ))
+      const displayHeight = getCurrentNodeDisplayHeight(currentNode)
+      const positions = getBatchGridPositions({
+        origin: currentNode.position,
+        count: generateCount,
+        nodeWidth: displayWidth,
+        nodeHeight: displayHeight
+      })
+
       for (let i = 1; i < generateCount; i++) {
         const stackedNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-        const stackOffset = 8
         canvasStore.addNode({
           id: stackedNodeId,
           type: 'video',
-          position: {
-            x: currentNode.position.x + stackOffset * i,
-            y: currentNode.position.y + stackOffset * i
-          },
-          zIndex: -i,
+          position: positions[i],
           data: {
             title: `Video ${i + 1}`,
             status: 'pending',
-            isStackedNode: true,
-            stackIndex: i,
-            parentNodeId: targetNodeId,
+            width: displayWidth,
+            height: displayHeight,
             prompt: promptText.value,
             model: selectedModel.value,
             aspectRatio: selectedAspectRatio.value,
@@ -5340,10 +5367,17 @@ async function handleGenerate(options = {}) {
             generationMode: generationMode.value,
             referenceImages: referenceImages.value
           }
-        })
+        }, true)
         allNodeIds.push(stackedNodeId)
       }
-      console.log('[VideoNode] 创建堆叠节点:', allNodeIds.slice(1))
+
+      canvasStore.createVisibleGroup(allNodeIds, `视频生成 ×${generateCount}`, {
+        skipHistory: true,
+        defaultWidth: displayWidth,
+        defaultHeight: displayHeight
+      })
+      canvasStore.saveHistory({ force: true })
+      console.log('[VideoNode] 创建批量生成编组:', allNodeIds)
     }
   }
   
@@ -6586,11 +6620,12 @@ async function handleVideoError(event) {
 }
 
 // 鼠标进入视频区域 - 自动播放（带声音）
-function activateVideoPreview() {
+function activateVideoPreview(options = {}) {
+  const force = options?.force === true
   // 🚀 性能优化：大画布模式下禁用悬停播放
-  if (canvasStore.isLargeCanvas) return
+  if (canvasStore.isLargeCanvas && !force) return
   // 🚀 性能优化：拖拽时不自动播放视频
-  if (isCanvasMediaMoving.value) return
+  if (isCanvasMediaMoving.value && !force) return
 
   isVideoPreviewActive.value = true
   nextTick(() => handleVideoMouseEnter())
@@ -7759,6 +7794,7 @@ function handleToolbarPreview() {
           class="video-output-wrapper"
           :style="videoWrapperStyle"
           @mouseenter="activateVideoPreview"
+          @canvas-directory-play="activateVideoPreview({ force: true })"
           @mouseleave="handleVideoMouseLeave"
           @click="handleVideoWrapperClick"
         >
