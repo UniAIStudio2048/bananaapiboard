@@ -1744,7 +1744,7 @@ const hasMoved = ref(false)
 const DRAG_THRESHOLD = 5 // 移动超过5px才算拖动
 
 // 是否显示工具栏（单独选中且有图片内容）- 与 TextNode 保持一致
-// 使用 store 中的选中状态作为备选，确保响应及时
+// 以 store 主选节点为准，并同时检查 Vue Flow/store 的多选状态
 const showToolbar = computed(() => {
   if (props.data?.readonly) return false
   // 优先使用 props.selected，同时检查 store 中的选中状态
@@ -1760,12 +1760,10 @@ const showToolbar = computed(() => {
 // 修改：源节点也显示配置面板，以便添加参考图片
 // 使用 store 中的选中状态作为备选，确保响应及时
 const showConfigPanel = computed(() => {
-  // 优先使用 props.selected，同时检查 store 中的选中状态
-  const isSelected = props.selected || canvasStore.selectedNodeId === props.id
-  if (!isSelected) return false
-  // 检查是否多选（使用 Vue Flow 或 store 的状态）
+  const isSelected = canvasStore.selectedNodeId === props.id
   const isMultiSelect = getSelectedNodes.value.length > 1 || canvasStore.selectedNodeIds.length > 1
-  return !isMultiSelect
+  if (!isSelected || isMultiSelect) return false
+  return true
 })
 
 watch(showConfigPanel, (val) => {

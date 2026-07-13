@@ -117,13 +117,11 @@ const { onHoverStart, onVideoHoverStart, onAudioHoverStart, onHoverEnd } = useIm
 const { updateNodeInternals, setViewport, getViewport, getSelectedNodes } = useVueFlow()
 
 // 是否单独选中（多选时不显示底部配置面板）
-// 使用 nextTick 确保 Vue Flow 的选中状态已经更新
+// 以 store 主选节点为准，并同时检查 Vue Flow/store 的多选状态
 const isSoloSelected = computed(() => {
-  // 优先使用 props.selected，因为它是最先被设置的
-  // 同时检查 store 中的选中状态作为备选
-  const isSelected = props.selected || canvasStore.selectedNodeId === props.id
-  const isSingleSelection = getSelectedNodes.value.length <= 1 || canvasStore.selectedNodeIds.length <= 1
-  return isSelected && isSingleSelection
+  const isSelected = canvasStore.selectedNodeId === props.id
+  const isMultiSelect = getSelectedNodes.value.length > 1 || canvasStore.selectedNodeIds.length > 1
+  return isSelected && !isMultiSelect
 })
 
 watch(isSoloSelected, (val) => {
