@@ -350,7 +350,8 @@ const {
   project,
   vueFlowRef,
   addSelectedEdges,
-  removeSelectedNodes
+  removeSelectedNodes,
+  findNode
 } = useVueFlow()
 
 // 缩放配置
@@ -1140,6 +1141,19 @@ function syncGroupChildrenPositions(groupNode, options = {}) {
     ...result.childPositions
   }
   canvasStore.updateNodePositionsBatch(positionsById)
+
+  // 关键修复：同步 Vue Flow 内部 node.position，确保拖拽编组时子节点 DOM 实时跟随。
+  // 单向 :nodes 绑定下，外部 mutate node.position（改属性不改数组引用）不触发 Vue Flow 内部 store 同步，
+  // updateNodePositionsBatch 虽改了 Pinia store 子节点坐标，但 Vue Flow 不重绘子节点 DOM，
+  // 子节点留在原地、编组移走 → 视觉上"跑出编组"。用 findNode 直接改内部 node.position 强制重绘。
+  if (typeof findNode === 'function') {
+    for (const childId in result.childPositions) {
+      const internalNode = findNode(childId)
+      if (internalNode) {
+        internalNode.position = { ...result.childPositions[childId] }
+      }
+    }
+  }
 
   if (result.offsetsChanged && Object.keys(result.nodeOffsets).length > 0) {
     canvasStore.updateNodeData(groupNode.id, { nodeOffsets: result.nodeOffsets })

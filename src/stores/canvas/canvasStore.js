@@ -413,15 +413,12 @@ export const useCanvasStore = defineStore('canvas', () => {
   function updateNodePositionsBatch(positionsById) {
     if (!positionsById || typeof positionsById !== 'object') return
 
-    let changed = false
-    const nextNodes = nodes.value.map(node => {
+    nodes.value.forEach(node => {
       const position = positionsById[node.id]
-      if (!position) return node
-      changed = true
-      return { ...node, position: { ...position } }
+      if (position) {
+        node.position = { ...position }
+      }
     })
-
-    if (changed) nodes.value = nextNodes
   }
 
   function addNodeToGroup(nodeId, groupId) {

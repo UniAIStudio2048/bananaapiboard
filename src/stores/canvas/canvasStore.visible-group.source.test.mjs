@@ -49,7 +49,7 @@ test('visible grouping replaces the member selection with the group node', () =>
   assert.match(visibleGroupSource, /selectedNodeIds\.value = \[group\.id\]/)
 })
 
-test('group movement publishes the group and child positions through one immutable node batch', () => {
+test('group movement publishes the group and child positions through one batch update', () => {
   const batchPositionSource = storeSource.slice(
     storeSource.indexOf('function updateNodePositionsBatch('),
     storeSource.indexOf('function addNodeToGroup(')
@@ -60,8 +60,8 @@ test('group movement publishes the group and child positions through one immutab
   )
 
   assert.match(storeSource, /function updateNodePositionsBatch\(positionsById\)/)
-  assert.match(batchPositionSource, /const nextNodes = nodes\.value\.map/)
-  assert.match(batchPositionSource, /nodes\.value = nextNodes/)
+  assert.match(batchPositionSource, /nodes\.value\.forEach/)
+  assert.match(batchPositionSource, /node\.position\s*=\s*\{\s*\.\.\.position\s*\}/)
   assert.match(syncSource, /const positionsById = \{[\s\S]*?\[groupNode\.id\]: \{ \.\.\.groupNode\.position \}[\s\S]*?\.\.\.result\.childPositions[\s\S]*?\}/)
   assert.match(syncSource, /canvasStore\.updateNodePositionsBatch\(positionsById\)/)
   assert.doesNotMatch(syncSource, /canvasStore\.updateNodePosition\(nodeId, position\)/)
