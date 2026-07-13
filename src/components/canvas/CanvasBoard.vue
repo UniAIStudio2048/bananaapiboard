@@ -64,6 +64,7 @@ import {
   organizeCanvasNodes,
   runCanvasFit
 } from '@/utils/canvasOrganization'
+import { getMovedGroupChildPositions } from '@/utils/canvasGroupMovement'
 import { projectCanvasRenderState } from '@/utils/canvasRenderProjection.js'
 
 // 导入自定义节点组件
@@ -322,12 +323,14 @@ function updateCanvasBoardSize() {
 // 性能优化：组内节点位置同步的 rAF 节流句柄
 // 拖拽组节点时 onNodeDrag 每帧都触发，用 rAF 确保每帧最多同步一次位置
 let _syncGroupRafId = null
+const groupDragStartPositions = new Map()
 
 // Vue Flow 实例
 const { 
   onConnect, 
   onConnectStart,
   onConnectEnd,
+  onNodeDragStart,
   onNodeDragStop,
   onNodeDrag,
   onNodeClick,
@@ -661,9 +664,22 @@ onConnect((connection) => {
   }
 })
 
+onNodeDragStart((event) => {
+  const node = event.node
+  if (node?.type !== 'group') return
+
+  const storeGroupNode = canvasStore.nodes.find(n => n.id === node.id && n.type === 'group')
+  groupDragStartPositions.set(node.id, {
+    ...(storeGroupNode?.position || node.position || { x: 0, y: 0 })
+  })
+})
+
 // 处理节点拖拽结束
 onNodeDragStop((event) => {
   const node = event.node
+  const previousGroupPosition = node.type === 'group'
+    ? (groupDragStartPositions.get(node.id) || { ...(canvasStore.nodes.find(n => n.id === node.id)?.position || node.position || { x: 0, y: 0 }) })
+    : null
   
   // 🚀 性能优化：标记拖拽结束
   isDraggingNode.value = false
@@ -698,8 +714,11 @@ onNodeDragStop((event) => {
   canvasStore.updateNodePosition(node.id, finalPosition)
   
   // 如果拖拽的是编组节点，同步更新组内节点位置
-  if (node.type === 'group' && node.data?.nodeIds) {
-    syncGroupChildrenPositions(node)
+  if (node.type === 'group') {
+    syncGroupChildrenPositions({ ...node, position: finalPosition }, {
+      previousPosition: previousGroupPosition
+    })
+    groupDragStartPositions.delete(node.id)
   }
   
   // 如果拖拽的是组内节点，更新相对组的偏移量
@@ -727,10 +746,12 @@ onNodeDrag((event) => {
 
   // 如果拖拽的是编组节点，实时同步组内节点位置
   // 性能优化: 用 rAF 节流，每帧最多同步一次，拖大组时不再每帧都做 O(n) 位置遍历
-  if (node.type === 'group' && node.data?.nodeIds && node.data?.nodeOffsets) {
+  if (node.type === 'group') {
     if (_syncGroupRafId) cancelAnimationFrame(_syncGroupRafId)
     _syncGroupRafId = requestAnimationFrame(() => {
-      syncGroupChildrenPositions(node)
+      syncGroupChildrenPositions(node, {
+        previousPosition: groupDragStartPositions.get(node.id)
+      })
       _syncGroupRafId = null
     })
   }
@@ -1088,20 +1109,39 @@ function adjustGroupSizeForNode(node) {
 }
 
 // 同步编组内节点位置
-function syncGroupChildrenPositions(groupNode) {
-  const nodeIds = groupNode.data.nodeIds || []
-  const nodeOffsets = groupNode.data.nodeOffsets || {}
-  
-  nodeIds.forEach(nodeId => {
-    const childNode = canvasStore.nodes.find(n => n.id === nodeId)
-    if (childNode && nodeOffsets[nodeId]) {
-      const newPosition = {
-        x: groupNode.position.x + nodeOffsets[nodeId].x,
-        y: groupNode.position.y + nodeOffsets[nodeId].y
-      }
-      childNode.position = newPosition
+function syncGroupChildrenPositions(groupNode, options = {}) {
+  if (!groupNode?.id || groupNode.type !== 'group') return
+
+  const storeGroupNode = canvasStore.nodes.find(n => n.id === groupNode.id && n.type === 'group')
+  const mergedData = {
+    ...(storeGroupNode?.data || {}),
+    ...(groupNode.data || {})
+  }
+  if (storeGroupNode?.data?.nodeOffsets) {
+    mergedData.nodeOffsets = storeGroupNode.data.nodeOffsets
+  }
+
+  const groupForMove = {
+    ...(storeGroupNode || {}),
+    ...groupNode,
+    data: mergedData
+  }
+  const result = getMovedGroupChildPositions(
+    canvasStore.nodes,
+    groupForMove,
+    groupNode.position,
+    {
+      previousPosition: options.previousPosition || storeGroupNode?.position
     }
+  )
+
+  Object.entries(result.childPositions).forEach(([nodeId, position]) => {
+    canvasStore.updateNodePosition(nodeId, position)
   })
+
+  if (result.offsetsChanged && Object.keys(result.nodeOffsets).length > 0) {
+    canvasStore.updateNodeData(groupNode.id, { nodeOffsets: result.nodeOffsets })
+  }
 }
 
 // 处理选择变化 (通过组件事件)
@@ -2009,6 +2049,9 @@ function moveTouchDraggedNode(point) {
   if (!touchState?.nodeId || !touchState.lastPoint) return
   const node = canvasStore.nodes.find(n => n.id === touchState.nodeId)
   if (!node) return
+  const previousGroupPosition = node.type === 'group'
+    ? { ...(node.position || { x: 0, y: 0 }) }
+    : null
 
   const viewport = getViewport()
   const zoom = viewport?.zoom || 1
@@ -2027,8 +2070,10 @@ function moveTouchDraggedNode(point) {
 
   canvasStore.updateNodePosition(node.id, nextPosition)
 
-  if (node.type === 'group' && node.data?.nodeIds) {
-    syncGroupChildrenPositions({ ...node, position: nextPosition })
+  if (node.type === 'group') {
+    syncGroupChildrenPositions({ ...node, position: nextPosition }, {
+      previousPosition: previousGroupPosition
+    })
   }
 
   if (node.type !== 'group' && node.data?.groupId) {
@@ -3612,6 +3657,7 @@ onUnmounted(() => {
     canvasBoardResizeObserver.disconnect()
     canvasBoardResizeObserver = null
   }
+  groupDragStartPositions.clear()
   resetTouchState()
   
   // 移除全局拖拽事件监听

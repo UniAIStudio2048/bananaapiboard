@@ -1,7 +1,11 @@
+## Branch Workflow
+
+Use the default `main` branch for development unless the user explicitly asks to create a new development branch. Do not create feature branches proactively; only create one when the user clearly requests a new branch or isolated branch workflow.
+
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **bananaapiboard** (20090 symbols, 32588 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **bananaapiboard** (20782 symbols, 33462 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
