@@ -109,6 +109,7 @@ function toDirectoryRow(node) {
     name: getCanvasNodeDisplayName(node),
     typeLabel: getCanvasNodeTypeLabel(node),
     groupId: node.data?.groupId || null,
+    mediaUrl: media?.url || null,
     previewUrl: media?.previewUrl || null,
     mediaKind: media?.kind || null,
     downloadable: Boolean(media)

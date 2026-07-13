@@ -1135,9 +1135,11 @@ function syncGroupChildrenPositions(groupNode, options = {}) {
     }
   )
 
-  Object.entries(result.childPositions).forEach(([nodeId, position]) => {
-    canvasStore.updateNodePosition(nodeId, position)
-  })
+  const positionsById = {
+    [groupNode.id]: { ...groupNode.position },
+    ...result.childPositions
+  }
+  canvasStore.updateNodePositionsBatch(positionsById)
 
   if (result.offsetsChanged && Object.keys(result.nodeOffsets).length > 0) {
     canvasStore.updateNodeData(groupNode.id, { nodeOffsets: result.nodeOffsets })

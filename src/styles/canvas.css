@@ -45,6 +45,13 @@
   --canvas-radius-md: 10px;
   --canvas-radius-lg: 16px;
   --canvas-radius-xl: 20px;
+
+  /* 画布滚动条 */
+  --canvas-scrollbar-size: 10px;
+  --canvas-scrollbar-track: transparent;
+  --canvas-scrollbar-thumb: rgba(255, 255, 255, 0.24);
+  --canvas-scrollbar-thumb-hover: rgba(255, 255, 255, 0.34);
+  --canvas-scrollbar-thumb-active: rgba(255, 255, 255, 0.44);
 }
 
 /* 白昼模式主题（参考 Figma/Miro 亮色主题） */
@@ -83,6 +90,337 @@
   --canvas-shadow-md: 0 4px 6px rgba(0, 0, 0, 0.08);
   --canvas-shadow-lg: 0 10px 15px rgba(0, 0, 0, 0.1);
   --canvas-shadow-glow: 0 0 20px rgba(59, 130, 246, 0.15);
+
+  /* 画布滚动条 */
+  --canvas-scrollbar-thumb: rgba(28, 25, 23, 0.24);
+  --canvas-scrollbar-thumb-hover: rgba(28, 25, 23, 0.34);
+  --canvas-scrollbar-thumb-active: rgba(28, 25, 23, 0.44);
+}
+
+/* ========================================
+   统一画布滚动条
+   ======================================== */
+body:has(.canvas-page),
+body:has(.canvas-page) *,
+.canvas-page,
+.canvas-page *,
+.asset-panel,
+.asset-panel *,
+.asset-preview-overlay,
+.asset-preview-overlay *,
+.add-character-overlay,
+.add-character-overlay *,
+.copy-dialog-overlay,
+.copy-dialog-overlay *,
+.workflow-panel,
+.workflow-panel *,
+.history-panel,
+.history-panel *,
+.ai-assistant-panel,
+.ai-assistant-panel *,
+.profile-panel,
+.profile-panel *,
+.video-tool-modal,
+.video-tool-modal *,
+.audio-editor-overlay,
+.audio-editor-overlay *,
+.keyframe-editor-overlay,
+.keyframe-editor-overlay *,
+.panorama-modal,
+.panorama-modal *,
+.fullscreen-preview-overlay,
+.fullscreen-preview-overlay *,
+.seedance-dialog-overlay,
+.seedance-dialog-overlay *,
+.fv-overlay,
+.fv-overlay *,
+.canvas-notification-popup,
+.canvas-notification-popup * {
+  scrollbar-width: thin;
+  scrollbar-color: var(--canvas-scrollbar-thumb) var(--canvas-scrollbar-track);
+}
+
+body:has(.canvas-page)::-webkit-scrollbar,
+body:has(.canvas-page) *::-webkit-scrollbar,
+.canvas-page::-webkit-scrollbar,
+.canvas-page *::-webkit-scrollbar,
+.asset-panel::-webkit-scrollbar,
+.asset-panel *::-webkit-scrollbar,
+.asset-preview-overlay::-webkit-scrollbar,
+.asset-preview-overlay *::-webkit-scrollbar,
+.add-character-overlay::-webkit-scrollbar,
+.add-character-overlay *::-webkit-scrollbar,
+.copy-dialog-overlay::-webkit-scrollbar,
+.copy-dialog-overlay *::-webkit-scrollbar,
+.workflow-panel::-webkit-scrollbar,
+.workflow-panel *::-webkit-scrollbar,
+.history-panel::-webkit-scrollbar,
+.history-panel *::-webkit-scrollbar,
+.ai-assistant-panel::-webkit-scrollbar,
+.ai-assistant-panel *::-webkit-scrollbar,
+.profile-panel::-webkit-scrollbar,
+.profile-panel *::-webkit-scrollbar,
+.video-tool-modal::-webkit-scrollbar,
+.video-tool-modal *::-webkit-scrollbar,
+.audio-editor-overlay::-webkit-scrollbar,
+.audio-editor-overlay *::-webkit-scrollbar,
+.keyframe-editor-overlay::-webkit-scrollbar,
+.keyframe-editor-overlay *::-webkit-scrollbar,
+.panorama-modal::-webkit-scrollbar,
+.panorama-modal *::-webkit-scrollbar,
+.fullscreen-preview-overlay::-webkit-scrollbar,
+.fullscreen-preview-overlay *::-webkit-scrollbar,
+.seedance-dialog-overlay::-webkit-scrollbar,
+.seedance-dialog-overlay *::-webkit-scrollbar,
+.fv-overlay::-webkit-scrollbar,
+.fv-overlay *::-webkit-scrollbar,
+.canvas-notification-popup::-webkit-scrollbar,
+.canvas-notification-popup *::-webkit-scrollbar {
+  width: var(--canvas-scrollbar-size) !important;
+  height: var(--canvas-scrollbar-size) !important;
+}
+
+body:has(.canvas-page)::-webkit-scrollbar-track,
+body:has(.canvas-page) *::-webkit-scrollbar-track,
+.canvas-page::-webkit-scrollbar-track,
+.canvas-page *::-webkit-scrollbar-track,
+.asset-panel::-webkit-scrollbar-track,
+.asset-panel *::-webkit-scrollbar-track,
+.asset-preview-overlay::-webkit-scrollbar-track,
+.asset-preview-overlay *::-webkit-scrollbar-track,
+.add-character-overlay::-webkit-scrollbar-track,
+.add-character-overlay *::-webkit-scrollbar-track,
+.copy-dialog-overlay::-webkit-scrollbar-track,
+.copy-dialog-overlay *::-webkit-scrollbar-track,
+.workflow-panel::-webkit-scrollbar-track,
+.workflow-panel *::-webkit-scrollbar-track,
+.history-panel::-webkit-scrollbar-track,
+.history-panel *::-webkit-scrollbar-track,
+.ai-assistant-panel::-webkit-scrollbar-track,
+.ai-assistant-panel *::-webkit-scrollbar-track,
+.profile-panel::-webkit-scrollbar-track,
+.profile-panel *::-webkit-scrollbar-track,
+.video-tool-modal::-webkit-scrollbar-track,
+.video-tool-modal *::-webkit-scrollbar-track,
+.audio-editor-overlay::-webkit-scrollbar-track,
+.audio-editor-overlay *::-webkit-scrollbar-track,
+.keyframe-editor-overlay::-webkit-scrollbar-track,
+.keyframe-editor-overlay *::-webkit-scrollbar-track,
+.panorama-modal::-webkit-scrollbar-track,
+.panorama-modal *::-webkit-scrollbar-track,
+.fullscreen-preview-overlay::-webkit-scrollbar-track,
+.fullscreen-preview-overlay *::-webkit-scrollbar-track,
+.seedance-dialog-overlay::-webkit-scrollbar-track,
+.seedance-dialog-overlay *::-webkit-scrollbar-track,
+.fv-overlay::-webkit-scrollbar-track,
+.fv-overlay *::-webkit-scrollbar-track,
+.canvas-notification-popup::-webkit-scrollbar-track,
+.canvas-notification-popup *::-webkit-scrollbar-track {
+  background: var(--canvas-scrollbar-track) !important;
+  border-radius: 999px !important;
+}
+
+body:has(.canvas-page)::-webkit-scrollbar-thumb,
+body:has(.canvas-page) *::-webkit-scrollbar-thumb,
+.canvas-page::-webkit-scrollbar-thumb,
+.canvas-page *::-webkit-scrollbar-thumb,
+.asset-panel::-webkit-scrollbar-thumb,
+.asset-panel *::-webkit-scrollbar-thumb,
+.asset-preview-overlay::-webkit-scrollbar-thumb,
+.asset-preview-overlay *::-webkit-scrollbar-thumb,
+.add-character-overlay::-webkit-scrollbar-thumb,
+.add-character-overlay *::-webkit-scrollbar-thumb,
+.copy-dialog-overlay::-webkit-scrollbar-thumb,
+.copy-dialog-overlay *::-webkit-scrollbar-thumb,
+.workflow-panel::-webkit-scrollbar-thumb,
+.workflow-panel *::-webkit-scrollbar-thumb,
+.history-panel::-webkit-scrollbar-thumb,
+.history-panel *::-webkit-scrollbar-thumb,
+.ai-assistant-panel::-webkit-scrollbar-thumb,
+.ai-assistant-panel *::-webkit-scrollbar-thumb,
+.profile-panel::-webkit-scrollbar-thumb,
+.profile-panel *::-webkit-scrollbar-thumb,
+.video-tool-modal::-webkit-scrollbar-thumb,
+.video-tool-modal *::-webkit-scrollbar-thumb,
+.audio-editor-overlay::-webkit-scrollbar-thumb,
+.audio-editor-overlay *::-webkit-scrollbar-thumb,
+.keyframe-editor-overlay::-webkit-scrollbar-thumb,
+.keyframe-editor-overlay *::-webkit-scrollbar-thumb,
+.panorama-modal::-webkit-scrollbar-thumb,
+.panorama-modal *::-webkit-scrollbar-thumb,
+.fullscreen-preview-overlay::-webkit-scrollbar-thumb,
+.fullscreen-preview-overlay *::-webkit-scrollbar-thumb,
+.seedance-dialog-overlay::-webkit-scrollbar-thumb,
+.seedance-dialog-overlay *::-webkit-scrollbar-thumb,
+.fv-overlay::-webkit-scrollbar-thumb,
+.fv-overlay *::-webkit-scrollbar-thumb,
+.canvas-notification-popup::-webkit-scrollbar-thumb,
+.canvas-notification-popup *::-webkit-scrollbar-thumb {
+  min-height: 36px !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  background: var(--canvas-scrollbar-thumb) !important;
+  background-clip: content-box !important;
+}
+
+body:has(.canvas-page)::-webkit-scrollbar-thumb:hover,
+body:has(.canvas-page) *::-webkit-scrollbar-thumb:hover,
+.canvas-page::-webkit-scrollbar-thumb:hover,
+.canvas-page *::-webkit-scrollbar-thumb:hover,
+.asset-panel::-webkit-scrollbar-thumb:hover,
+.asset-panel *::-webkit-scrollbar-thumb:hover,
+.asset-preview-overlay::-webkit-scrollbar-thumb:hover,
+.asset-preview-overlay *::-webkit-scrollbar-thumb:hover,
+.add-character-overlay::-webkit-scrollbar-thumb:hover,
+.add-character-overlay *::-webkit-scrollbar-thumb:hover,
+.copy-dialog-overlay::-webkit-scrollbar-thumb:hover,
+.copy-dialog-overlay *::-webkit-scrollbar-thumb:hover,
+.workflow-panel::-webkit-scrollbar-thumb:hover,
+.workflow-panel *::-webkit-scrollbar-thumb:hover,
+.history-panel::-webkit-scrollbar-thumb:hover,
+.history-panel *::-webkit-scrollbar-thumb:hover,
+.ai-assistant-panel::-webkit-scrollbar-thumb:hover,
+.ai-assistant-panel *::-webkit-scrollbar-thumb:hover,
+.profile-panel::-webkit-scrollbar-thumb:hover,
+.profile-panel *::-webkit-scrollbar-thumb:hover,
+.video-tool-modal::-webkit-scrollbar-thumb:hover,
+.video-tool-modal *::-webkit-scrollbar-thumb:hover,
+.audio-editor-overlay::-webkit-scrollbar-thumb:hover,
+.audio-editor-overlay *::-webkit-scrollbar-thumb:hover,
+.keyframe-editor-overlay::-webkit-scrollbar-thumb:hover,
+.keyframe-editor-overlay *::-webkit-scrollbar-thumb:hover,
+.panorama-modal::-webkit-scrollbar-thumb:hover,
+.panorama-modal *::-webkit-scrollbar-thumb:hover,
+.fullscreen-preview-overlay::-webkit-scrollbar-thumb:hover,
+.fullscreen-preview-overlay *::-webkit-scrollbar-thumb:hover,
+.seedance-dialog-overlay::-webkit-scrollbar-thumb:hover,
+.seedance-dialog-overlay *::-webkit-scrollbar-thumb:hover,
+.fv-overlay::-webkit-scrollbar-thumb:hover,
+.fv-overlay *::-webkit-scrollbar-thumb:hover,
+.canvas-notification-popup::-webkit-scrollbar-thumb:hover,
+.canvas-notification-popup *::-webkit-scrollbar-thumb:hover {
+  background: var(--canvas-scrollbar-thumb-hover) !important;
+  background-clip: content-box !important;
+}
+
+body:has(.canvas-page)::-webkit-scrollbar-thumb:active,
+body:has(.canvas-page) *::-webkit-scrollbar-thumb:active,
+.canvas-page::-webkit-scrollbar-thumb:active,
+.canvas-page *::-webkit-scrollbar-thumb:active,
+.asset-panel::-webkit-scrollbar-thumb:active,
+.asset-panel *::-webkit-scrollbar-thumb:active,
+.asset-preview-overlay::-webkit-scrollbar-thumb:active,
+.asset-preview-overlay *::-webkit-scrollbar-thumb:active,
+.add-character-overlay::-webkit-scrollbar-thumb:active,
+.add-character-overlay *::-webkit-scrollbar-thumb:active,
+.copy-dialog-overlay::-webkit-scrollbar-thumb:active,
+.copy-dialog-overlay *::-webkit-scrollbar-thumb:active,
+.workflow-panel::-webkit-scrollbar-thumb:active,
+.workflow-panel *::-webkit-scrollbar-thumb:active,
+.history-panel::-webkit-scrollbar-thumb:active,
+.history-panel *::-webkit-scrollbar-thumb:active,
+.ai-assistant-panel::-webkit-scrollbar-thumb:active,
+.ai-assistant-panel *::-webkit-scrollbar-thumb:active,
+.profile-panel::-webkit-scrollbar-thumb:active,
+.profile-panel *::-webkit-scrollbar-thumb:active,
+.video-tool-modal::-webkit-scrollbar-thumb:active,
+.video-tool-modal *::-webkit-scrollbar-thumb:active,
+.audio-editor-overlay::-webkit-scrollbar-thumb:active,
+.audio-editor-overlay *::-webkit-scrollbar-thumb:active,
+.keyframe-editor-overlay::-webkit-scrollbar-thumb:active,
+.keyframe-editor-overlay *::-webkit-scrollbar-thumb:active,
+.panorama-modal::-webkit-scrollbar-thumb:active,
+.panorama-modal *::-webkit-scrollbar-thumb:active,
+.fullscreen-preview-overlay::-webkit-scrollbar-thumb:active,
+.fullscreen-preview-overlay *::-webkit-scrollbar-thumb:active,
+.seedance-dialog-overlay::-webkit-scrollbar-thumb:active,
+.seedance-dialog-overlay *::-webkit-scrollbar-thumb:active,
+.fv-overlay::-webkit-scrollbar-thumb:active,
+.fv-overlay *::-webkit-scrollbar-thumb:active,
+.canvas-notification-popup::-webkit-scrollbar-thumb:active,
+.canvas-notification-popup *::-webkit-scrollbar-thumb:active {
+  background: var(--canvas-scrollbar-thumb-active) !important;
+  background-clip: content-box !important;
+}
+
+body:has(.canvas-page)::-webkit-scrollbar-button,
+body:has(.canvas-page) *::-webkit-scrollbar-button,
+.canvas-page::-webkit-scrollbar-button,
+.canvas-page *::-webkit-scrollbar-button,
+.asset-panel::-webkit-scrollbar-button,
+.asset-panel *::-webkit-scrollbar-button,
+.asset-preview-overlay::-webkit-scrollbar-button,
+.asset-preview-overlay *::-webkit-scrollbar-button,
+.add-character-overlay::-webkit-scrollbar-button,
+.add-character-overlay *::-webkit-scrollbar-button,
+.copy-dialog-overlay::-webkit-scrollbar-button,
+.copy-dialog-overlay *::-webkit-scrollbar-button,
+.workflow-panel::-webkit-scrollbar-button,
+.workflow-panel *::-webkit-scrollbar-button,
+.history-panel::-webkit-scrollbar-button,
+.history-panel *::-webkit-scrollbar-button,
+.ai-assistant-panel::-webkit-scrollbar-button,
+.ai-assistant-panel *::-webkit-scrollbar-button,
+.profile-panel::-webkit-scrollbar-button,
+.profile-panel *::-webkit-scrollbar-button,
+.video-tool-modal::-webkit-scrollbar-button,
+.video-tool-modal *::-webkit-scrollbar-button,
+.audio-editor-overlay::-webkit-scrollbar-button,
+.audio-editor-overlay *::-webkit-scrollbar-button,
+.keyframe-editor-overlay::-webkit-scrollbar-button,
+.keyframe-editor-overlay *::-webkit-scrollbar-button,
+.panorama-modal::-webkit-scrollbar-button,
+.panorama-modal *::-webkit-scrollbar-button,
+.fullscreen-preview-overlay::-webkit-scrollbar-button,
+.fullscreen-preview-overlay *::-webkit-scrollbar-button,
+.seedance-dialog-overlay::-webkit-scrollbar-button,
+.seedance-dialog-overlay *::-webkit-scrollbar-button,
+.fv-overlay::-webkit-scrollbar-button,
+.fv-overlay *::-webkit-scrollbar-button,
+.canvas-notification-popup::-webkit-scrollbar-button,
+.canvas-notification-popup *::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+body:has(.canvas-page)::-webkit-scrollbar-corner,
+body:has(.canvas-page) *::-webkit-scrollbar-corner,
+.canvas-page::-webkit-scrollbar-corner,
+.canvas-page *::-webkit-scrollbar-corner,
+.asset-panel::-webkit-scrollbar-corner,
+.asset-panel *::-webkit-scrollbar-corner,
+.asset-preview-overlay::-webkit-scrollbar-corner,
+.asset-preview-overlay *::-webkit-scrollbar-corner,
+.add-character-overlay::-webkit-scrollbar-corner,
+.add-character-overlay *::-webkit-scrollbar-corner,
+.copy-dialog-overlay::-webkit-scrollbar-corner,
+.copy-dialog-overlay *::-webkit-scrollbar-corner,
+.workflow-panel::-webkit-scrollbar-corner,
+.workflow-panel *::-webkit-scrollbar-corner,
+.history-panel::-webkit-scrollbar-corner,
+.history-panel *::-webkit-scrollbar-corner,
+.ai-assistant-panel::-webkit-scrollbar-corner,
+.ai-assistant-panel *::-webkit-scrollbar-corner,
+.profile-panel::-webkit-scrollbar-corner,
+.profile-panel *::-webkit-scrollbar-corner,
+.video-tool-modal::-webkit-scrollbar-corner,
+.video-tool-modal *::-webkit-scrollbar-corner,
+.audio-editor-overlay::-webkit-scrollbar-corner,
+.audio-editor-overlay *::-webkit-scrollbar-corner,
+.keyframe-editor-overlay::-webkit-scrollbar-corner,
+.keyframe-editor-overlay *::-webkit-scrollbar-corner,
+.panorama-modal::-webkit-scrollbar-corner,
+.panorama-modal *::-webkit-scrollbar-corner,
+.fullscreen-preview-overlay::-webkit-scrollbar-corner,
+.fullscreen-preview-overlay *::-webkit-scrollbar-corner,
+.seedance-dialog-overlay::-webkit-scrollbar-corner,
+.seedance-dialog-overlay *::-webkit-scrollbar-corner,
+.fv-overlay::-webkit-scrollbar-corner,
+.fv-overlay *::-webkit-scrollbar-corner,
+.canvas-notification-popup::-webkit-scrollbar-corner,
+.canvas-notification-popup *::-webkit-scrollbar-corner {
+  background: transparent !important;
 }
 
 /* ========================================

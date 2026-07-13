@@ -21,7 +21,8 @@ import {
   buildCanvasDirectory,
   isCanvasDirectoryMoveAllowed
 } from '@/utils/canvasDirectory'
-import { toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import AssetHoverPreview from './AssetHoverPreview.vue'
 
 const props = defineProps({
   nodes: { type: Array, default: () => [] },
@@ -50,6 +51,12 @@ const editingId = ref(null)
 const editingValue = ref('')
 const draggedNodeId = ref(null)
 const dropTargetId = ref(null)
+const failedPreviewKeys = ref(new Set())
+const hoverAsset = ref(null)
+const hoverAnchorRect = ref(null)
+const showHoverPreview = ref(false)
+let showHoverTimer = null
+let hideHoverTimer = null
 
 const directory = computed(() => buildCanvasDirectory(props.nodes, { search: searchQuery.value }))
 const visibleGroupIds = computed(() => new Set(
@@ -70,6 +77,8 @@ watch(() => props.workflowKey, () => {
   editingValue.value = ''
   draggedNodeId.value = null
   dropTargetId.value = null
+  failedPreviewKeys.value = new Set()
+  closeHoverPreview()
 })
 
 watch(() => directory.value.folders.map(folder => folder.id), folderIds => {
@@ -104,6 +113,114 @@ function getRowIcon(type) {
   if (type?.includes('audio')) return Music
   if (type === 'text' || type === 'text-input' || type?.startsWith('llm')) return FileText
   return Workflow
+}
+
+function isImagePreviewUrl(url) {
+  if (!url || typeof url !== 'string') return false
+  const lower = url.toLowerCase()
+  const path = lower.split(/[?#]/, 1)[0]
+  if (lower.startsWith('data:image/')) return true
+  if (path.includes('/api/images/')) return true
+  if (lower.includes('ci-process=snapshot') || lower.includes('vframe/')) return true
+  if (/\.(png|jpe?g|webp|gif|avif|bmp|svg)$/.test(path)) return true
+  if (/\.(mp4|webm|mov|m4v|avi|mkv)$/.test(path)) return false
+  if (path.includes('/api/videos/file/')) return false
+  return false
+}
+
+function getPreviewKey(row) {
+  return `${row?.id || ''}:${row?.previewUrl || ''}`
+}
+
+function getRowPreviewUrl(row) {
+  if (!row?.previewUrl || failedPreviewKeys.value.has(getPreviewKey(row))) return ''
+  const previewUrl = toSameOriginUrl(row.previewUrl)
+  if (row.mediaKind === 'image') return previewUrl
+  if (row.mediaKind !== 'video') return ''
+  if (isImagePreviewUrl(previewUrl)) return previewUrl
+  return getVideoPosterUrl(previewUrl, 160) || ''
+}
+
+function handleRowPreviewError(row) {
+  const next = new Set(failedPreviewKeys.value)
+  next.add(getPreviewKey(row))
+  failedPreviewKeys.value = next
+}
+
+function toHoverAsset(row) {
+  if (!['image', 'video', 'audio'].includes(row?.mediaKind) || !row?.mediaUrl) return null
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.mediaKind,
+    url: row.mediaUrl,
+    thumbnail_url: row.previewUrl || null
+  }
+}
+
+function updateHoverAnchor(event) {
+  hoverAnchorRect.value = {
+    left: event.clientX,
+    right: event.clientX,
+    top: event.clientY,
+    bottom: event.clientY,
+    width: 0,
+    height: 0
+  }
+}
+
+function clearHoverTimers() {
+  if (showHoverTimer) {
+    clearTimeout(showHoverTimer)
+    showHoverTimer = null
+  }
+  if (hideHoverTimer) {
+    clearTimeout(hideHoverTimer)
+    hideHoverTimer = null
+  }
+}
+
+function closeHoverPreview() {
+  clearHoverTimers()
+  showHoverPreview.value = false
+  hoverAsset.value = null
+  hoverAnchorRect.value = null
+}
+
+function cancelHoverPreviewClose() {
+  if (!hideHoverTimer) return
+  clearTimeout(hideHoverTimer)
+  hideHoverTimer = null
+}
+
+function handleThumbnailMouseEnter(event, row) {
+  const asset = toHoverAsset(row)
+  if (!asset) {
+    closeHoverPreview()
+    return
+  }
+
+  clearHoverTimers()
+  updateHoverAnchor(event)
+  if (showHoverPreview.value) {
+    hoverAsset.value = asset
+    return
+  }
+
+  showHoverTimer = setTimeout(() => {
+    hoverAsset.value = asset
+    showHoverPreview.value = true
+    showHoverTimer = null
+  }, 200)
+}
+
+function scheduleHoverPreviewClose() {
+  if (showHoverTimer) {
+    clearTimeout(showHoverTimer)
+    showHoverTimer = null
+  }
+  if (hideHoverTimer) clearTimeout(hideHoverTimer)
+  hideHoverTimer = setTimeout(closeHoverPreview, 120)
 }
 
 function activateRow(nodeId) {
@@ -200,7 +317,10 @@ function handleDocumentPointerDown(event) {
 }
 
 onMounted(() => document.addEventListener('pointerdown', handleDocumentPointerDown))
-onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPointerDown))
+onUnmounted(() => {
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
+  closeHoverPreview()
+})
 </script>
 
 <template>
@@ -223,6 +343,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPoin
     <div
       class="directory-list"
       :class="{ 'directory-drop-active': dropTargetId === 'root' }"
+      @scroll="closeHoverPreview"
       @dragover.self="setDropTarget($event, null)"
       @drop.self="dropNode($event, null)"
     >
@@ -314,9 +435,20 @@ onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPoin
           >
             <button class="directory-row-main" type="button" @click="activateRow(row.id)">
               <span class="directory-indent" aria-hidden="true" />
-              <span class="directory-thumbnail">
-                <img v-if="row.mediaKind === 'image' && row.previewUrl" :src="toSameOriginUrl(row.previewUrl)" alt="" />
-                <component v-else :is="getRowIcon(row.type)" :size="16" aria-hidden="true" />
+              <span
+                class="directory-thumbnail"
+                @mouseenter="handleThumbnailMouseEnter($event, row)"
+                @mousemove="updateHoverAnchor"
+                @mouseleave="scheduleHoverPreviewClose"
+              >
+                <img
+                  v-if="getRowPreviewUrl(row)"
+                  :src="getRowPreviewUrl(row)"
+                  alt=""
+                  @error="handleRowPreviewError(row)"
+                />
+                <span v-if="row.mediaKind === 'video' && getRowPreviewUrl(row)" class="directory-video-play-icon" aria-hidden="true">▶</span>
+                <component v-if="!getRowPreviewUrl(row)" :is="getRowIcon(row.type)" :size="16" aria-hidden="true" />
               </span>
               <input
                 v-if="editingId === row.id"
@@ -376,9 +508,20 @@ onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPoin
         @dragend="clearDrag"
       >
         <button class="directory-row-main" type="button" @click="activateRow(row.id)">
-          <span class="directory-thumbnail">
-            <img v-if="row.mediaKind === 'image' && row.previewUrl" :src="toSameOriginUrl(row.previewUrl)" alt="" />
-            <component v-else :is="getRowIcon(row.type)" :size="16" aria-hidden="true" />
+          <span
+            class="directory-thumbnail"
+            @mouseenter="handleThumbnailMouseEnter($event, row)"
+            @mousemove="updateHoverAnchor"
+            @mouseleave="scheduleHoverPreviewClose"
+          >
+            <img
+              v-if="getRowPreviewUrl(row)"
+              :src="getRowPreviewUrl(row)"
+              alt=""
+              @error="handleRowPreviewError(row)"
+            />
+            <span v-if="row.mediaKind === 'video' && getRowPreviewUrl(row)" class="directory-video-play-icon" aria-hidden="true">▶</span>
+            <component v-if="!getRowPreviewUrl(row)" :is="getRowIcon(row.type)" :size="16" aria-hidden="true" />
           </span>
           <input
             v-if="editingId === row.id"
@@ -431,6 +574,14 @@ onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPoin
       {{ t('canvas.assetPanel.directory.total', { count: directory.total }) }}
     </footer>
   </section>
+
+  <AssetHoverPreview
+    :visible="showHoverPreview"
+    :asset="hoverAsset"
+    :anchor-rect="hoverAnchorRect"
+    @mouseenter="cancelHoverPreviewClose"
+    @mouseleave="scheduleHoverPreviewClose"
+  />
 </template>
 
 <style scoped>
@@ -583,6 +734,7 @@ onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPoin
 }
 
 .directory-thumbnail {
+  position: relative;
   display: flex;
   width: 28px;
   height: 28px;
@@ -601,6 +753,23 @@ onUnmounted(() => document.removeEventListener('pointerdown', handleDocumentPoin
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+.directory-video-play-icon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 7px;
+  line-height: 1;
+  transform: translate(-50%, -50%);
 }
 
 .directory-icon-button {

@@ -45,6 +45,27 @@ test('canvas directory keeps labels inside stable action rows', () => {
   assert.match(source, /@media\s*\(max-width:\s*640px\)[\s\S]*?\.directory-icon-button[\s\S]*?width:\s*32px/)
 })
 
+test('canvas directory renders loaded video rows as thumbnails with a play badge', () => {
+  assert.match(source, /getVideoPosterUrl/)
+  assert.match(source, /function getRowPreviewUrl\(row\)/)
+  assert.match(source, /row\.mediaKind === 'video'/)
+  assert.match(source, /class="directory-video-play-icon"/)
+  assert.match(source, /v-if="getRowPreviewUrl\(row\)"/)
+  assert.match(source, /v-if="!getRowPreviewUrl\(row\)"/)
+})
+
+test('canvas directory previews media only from thumbnail hover', () => {
+  assert.match(source, /import AssetHoverPreview from '\.\/AssetHoverPreview\.vue'/)
+  assert.match(source, /class="directory-thumbnail"[\s\S]*?@mouseenter="handleThumbnailMouseEnter\(\$event, row\)"/)
+  assert.match(source, /@mousemove="updateHoverAnchor"/)
+  assert.match(source, /@mouseleave="scheduleHoverPreviewClose"/)
+  assert.match(source, /<AssetHoverPreview[\s\S]*?:visible="showHoverPreview"/)
+  assert.match(source, /@mouseenter="cancelHoverPreviewClose"/)
+  assert.match(source, /@mouseleave="scheduleHoverPreviewClose"/)
+  assert.match(source, /function closeHoverPreview\(\)/)
+  assert.match(source, /@scroll="closeHoverPreview"/)
+})
+
 test('canvas directory exposes light theme rules outside scoped styles', () => {
   assert.doesNotMatch(source, /:global\(:root\.canvas-theme-light\)/)
   assert.match(source, /<style>\s*:root\.canvas-theme-light[\s\S]*?<\/style>/)

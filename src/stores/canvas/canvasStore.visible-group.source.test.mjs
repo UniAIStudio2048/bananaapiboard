@@ -49,6 +49,24 @@ test('visible grouping replaces the member selection with the group node', () =>
   assert.match(visibleGroupSource, /selectedNodeIds\.value = \[group\.id\]/)
 })
 
+test('group movement publishes the group and child positions through one immutable node batch', () => {
+  const batchPositionSource = storeSource.slice(
+    storeSource.indexOf('function updateNodePositionsBatch('),
+    storeSource.indexOf('function addNodeToGroup(')
+  )
+  const syncSource = boardSource.slice(
+    boardSource.indexOf('function syncGroupChildrenPositions('),
+    boardSource.indexOf('// 处理选择变化')
+  )
+
+  assert.match(storeSource, /function updateNodePositionsBatch\(positionsById\)/)
+  assert.match(batchPositionSource, /const nextNodes = nodes\.value\.map/)
+  assert.match(batchPositionSource, /nodes\.value = nextNodes/)
+  assert.match(syncSource, /const positionsById = \{[\s\S]*?\[groupNode\.id\]: \{ \.\.\.groupNode\.position \}[\s\S]*?\.\.\.result\.childPositions[\s\S]*?\}/)
+  assert.match(syncSource, /canvasStore\.updateNodePositionsBatch\(positionsById\)/)
+  assert.doesNotMatch(syncSource, /canvasStore\.updateNodePosition\(nodeId, position\)/)
+})
+
 test('undo and redo rebuild redundant group metadata from visible group nodes', () => {
   const undoSource = storeSource.slice(
     storeSource.indexOf('function undo()'),

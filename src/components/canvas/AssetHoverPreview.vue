@@ -62,13 +62,12 @@ function cleanupMedia() {
   media.currentTime = 0
 }
 
-watch(() => props.visible, async (visible) => {
+watch([() => props.visible, () => props.asset?.id], async ([visible]) => {
+  cleanupMedia()
   if (visible) {
     await nextTick()
     updatePosition()
     mediaRef.value?.play?.().catch(() => {})
-  } else {
-    cleanupMedia()
   }
 })
 
@@ -101,6 +100,7 @@ watch(() => props.anchorRect, async () => {
 
         <video
           v-else-if="hasVideo"
+          :key="asset.id"
           ref="mediaRef"
           class="hover-video"
           :src="toSameOriginUrl(asset.url)"
@@ -115,7 +115,7 @@ watch(() => props.anchorRect, async () => {
           <div class="mini-wave">
             <span></span><span></span><span></span><span></span><span></span>
           </div>
-          <audio ref="mediaRef" :src="getMediaUrl(asset.url)" autoplay></audio>
+          <audio :key="asset.id" ref="mediaRef" :src="getMediaUrl(asset.url)" autoplay></audio>
           <strong>{{ asset.name }}</strong>
         </div>
 
@@ -127,6 +127,7 @@ watch(() => props.anchorRect, async () => {
         <div v-else-if="isCharacter" class="hover-character">
           <video
             v-if="characterHasVideo"
+            :key="asset.id"
             ref="mediaRef"
             class="hover-video"
             :src="toSameOriginUrl(asset.url)"

@@ -46,6 +46,40 @@ test('normalizes names and resolves downloadable media', () => {
   assert.equal(getCanvasNodeMedia({ id: 'empty', type: 'llm', data: {} }), null)
 })
 
+test('directory rows retain original media URLs for hover previews', () => {
+  const directory = buildCanvasDirectory([
+    {
+      id: 'image-1',
+      type: 'image',
+      position: { x: 0, y: 0 },
+      data: { imageUrl: 'image.png', thumbnailUrl: 'image-thumb.png' }
+    },
+    {
+      id: 'video-1',
+      type: 'video',
+      position: { x: 0, y: 1 },
+      data: { videoUrl: 'video.mp4', thumbnailUrl: 'video-thumb.png' }
+    },
+    {
+      id: 'audio-1',
+      type: 'audio',
+      position: { x: 0, y: 2 },
+      data: { audioUrl: 'audio.mp3' }
+    }
+  ])
+
+  assert.deepEqual(directory.root.map(row => ({
+    id: row.id,
+    mediaKind: row.mediaKind,
+    mediaUrl: row.mediaUrl,
+    previewUrl: row.previewUrl
+  })), [
+    { id: 'image-1', mediaKind: 'image', mediaUrl: 'image.png', previewUrl: 'image-thumb.png' },
+    { id: 'video-1', mediaKind: 'video', mediaUrl: 'video.mp4', previewUrl: 'video-thumb.png' },
+    { id: 'audio-1', mediaKind: 'audio', mediaUrl: 'audio.mp3', previewUrl: null }
+  ])
+})
+
 test('allows normal-node transfers and rejects groups and same-target drops', () => {
   const node = { id: 'n', type: 'image', data: { groupId: 'a' } }
   assert.equal(isCanvasDirectoryMoveAllowed(node, 'b', new Set(['a', 'b'])), true)

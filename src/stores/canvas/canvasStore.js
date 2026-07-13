@@ -410,6 +410,20 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
   }
 
+  function updateNodePositionsBatch(positionsById) {
+    if (!positionsById || typeof positionsById !== 'object') return
+
+    let changed = false
+    const nextNodes = nodes.value.map(node => {
+      const position = positionsById[node.id]
+      if (!position) return node
+      changed = true
+      return { ...node, position: { ...position } }
+    })
+
+    if (changed) nodes.value = nextNodes
+  }
+
   function addNodeToGroup(nodeId, groupId) {
     const node = nodes.value.find(n => n.id === nodeId)
     const groupNode = nodes.value.find(n => n.id === groupId && n.type === 'group')
@@ -2993,6 +3007,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     findInactiveWorkflowTabNode,
     updateInactiveWorkflowTabNodeData,
     updateNodePosition,
+    updateNodePositionsBatch,
     addNodeToGroup,
     moveNodeToGroup,
     removeNode,
