@@ -17,6 +17,18 @@ import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 let sharedObserver = null
 const callbacks = new WeakMap()
 
+export function isRectNearViewport(rect, {
+  viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0,
+  viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0,
+  margin = 300
+} = {}) {
+  if (!rect) return false
+  return rect.right >= -margin &&
+    rect.left <= viewportWidth + margin &&
+    rect.bottom >= -margin &&
+    rect.top <= viewportHeight + margin
+}
+
 /**
  * 把可见性同步到 DOM 节点最近的 .vue-flow__node 祖先上（data-node-visible="true|false"）。
  * canvas.css 的 content-visibility: auto 规则依赖这个属性来虚拟化视口外节点。
@@ -35,10 +47,11 @@ function getSharedObserver() {
   sharedObserver = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) {
+        const visible = entry.isIntersecting || isRectNearViewport(entry.boundingClientRect)
         const cb = callbacks.get(entry.target)
-        if (cb) cb(entry.isIntersecting)
+        if (cb) cb(visible)
         // 双轨：JS 状态用于 v-if，DOM 属性用于 CSS content-visibility 虚拟化
-        syncNodeVisibilityAttr(entry.target, entry.isIntersecting)
+        syncNodeVisibilityAttr(entry.target, visible)
       }
     },
     { rootMargin: '300px' }

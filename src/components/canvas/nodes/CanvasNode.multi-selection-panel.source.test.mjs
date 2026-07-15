@@ -16,23 +16,25 @@ function readComputedBody(source, name) {
   return match[1]
 }
 
-test('image prompt panel requires the sole authoritative node selection', () => {
+test('image prompt panel uses the store selection without transient Vue Flow state', () => {
   const source = readNodeSource('ImageNode.vue')
   const body = readComputedBody(source, 'showConfigPanel')
 
   assert.match(body, /const isSelected = canvasStore\.selectedNodeId === props\.id/)
-  assert.match(body, /getSelectedNodes\.value\.length > 1 \|\| canvasStore\.selectedNodeIds\.length > 1/)
+  assert.match(body, /canvasStore\.selectedNodeIds\.length > 1/)
+  assert.doesNotMatch(body, /getSelectedNodes\.value/)
   assert.match(body, /if \(!isSelected \|\| isMultiSelect\) return false/)
   assert.doesNotMatch(body, /props\.selected \|\|/)
   assert.match(source, /v-if="showConfigPanel"/)
 })
 
-test('video prompt panel requires the sole authoritative node selection', () => {
+test('video prompt panel uses the store selection without transient Vue Flow state', () => {
   const source = readNodeSource('VideoNode.vue')
   const body = readComputedBody(source, 'isSoloSelected')
 
   assert.match(body, /const isSelected = canvasStore\.selectedNodeId === props\.id/)
-  assert.match(body, /getSelectedNodes\.value\.length > 1 \|\| canvasStore\.selectedNodeIds\.length > 1/)
+  assert.match(body, /canvasStore\.selectedNodeIds\.length > 1/)
+  assert.doesNotMatch(body, /getSelectedNodes\.value/)
   assert.match(body, /return isSelected && !isMultiSelect/)
   assert.doesNotMatch(body, /props\.selected \|\|/)
   assert.doesNotMatch(body, /length <= 1 \|\|/)

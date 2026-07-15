@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { strict as assert } from 'node:assert'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
+import { isRectNearViewport } from './useNodeVisibility.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(join(__dirname, 'useNodeVisibility.js'), 'utf8')
@@ -68,6 +69,24 @@ assert.match(
   source,
   /setAttribute\('data-node-visible'/,
   'Must set data-node-visible attribute on the Vue Flow wrapper'
+)
+
+assert.equal(
+  isRectNearViewport(
+    { left: -5000, top: -5000, right: 5000, bottom: 5000 },
+    { viewportWidth: 1280, viewportHeight: 720 }
+  ),
+  true,
+  'An oversized node covering the viewport must remain visible even if IntersectionObserver reports a transient miss'
+)
+
+assert.equal(
+  isRectNearViewport(
+    { left: 2000, top: 2000, right: 2400, bottom: 2400 },
+    { viewportWidth: 1280, viewportHeight: 720 }
+  ),
+  false,
+  'A node outside the viewport preload margin should remain virtualized'
 )
 
 console.log('useNodeVisibility shared-observer tests passed')
