@@ -33,8 +33,8 @@ assert.deepEqual(
     threshold: 220
   })
   assert.equal(result.enabled, false)
-  assert.notEqual(result.nodes, nodes, 'normal-size projections need a fresh node list so data updates reach Vue Flow')
-  assert.notEqual(result.edges, edges, 'normal-size projections need a fresh edge list so updates reach Vue Flow')
+  assert.equal(result.nodes, nodes, 'normal-size projections must return the original node array so Vue Flow keeps selection state')
+  assert.equal(result.edges, edges, 'normal-size projections must return the original edge array so Vue Flow keeps selection state')
   assert.deepEqual(result.nodes, nodes)
   assert.deepEqual(result.edges, edges)
 }

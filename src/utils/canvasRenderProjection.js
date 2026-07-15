@@ -91,8 +91,8 @@ export function projectCanvasRenderState({
   if (!enabled) {
     return {
       enabled: false,
-      nodes: [...sourceNodes],
-      edges: [...sourceEdges],
+      nodes: sourceNodes,
+      edges: sourceEdges,
       nodeIds: sourceNodes.map(item => item.id),
       edgeIds: sourceEdges.map(item => item.id),
       viewportBounds: null,
