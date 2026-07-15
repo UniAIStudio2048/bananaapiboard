@@ -23,6 +23,23 @@ assert.deepEqual(
 )
 
 {
+  const nodes = [node('a', 0, 0)]
+  const edges = [{ id: 'e-a', source: 'a', target: 'a' }]
+  const result = projectCanvasRenderState({
+    nodes,
+    edges,
+    viewport,
+    containerRect,
+    threshold: 220
+  })
+  assert.equal(result.enabled, false)
+  assert.notEqual(result.nodes, nodes, 'normal-size projections need a fresh node list so data updates reach Vue Flow')
+  assert.notEqual(result.edges, edges, 'normal-size projections need a fresh edge list so updates reach Vue Flow')
+  assert.deepEqual(result.nodes, nodes)
+  assert.deepEqual(result.edges, edges)
+}
+
+{
   const nodes = [
     node('visible', 100, 100),
     node('far', 5000, 5000),
