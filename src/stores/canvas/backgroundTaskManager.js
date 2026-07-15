@@ -49,6 +49,22 @@ let tasks = new Map()
 let pollingTimers = new Map()
 let taskCallbacks = new Map()
 
+// vite 开发模式 HMR 状态保留：模块热重载时这三个 Map 会被重新初始化为空，
+// 导致正在轮询的任务丢失、完成事件不再广播、画布节点不渲染(必须刷新页面才显示)。
+// 通过 import.meta.hot.data 在旧模块 dispose 时保存、新模块初始化时恢复，保证 HMR 期间轮询不中断。
+if (import.meta.hot) {
+  if (import.meta.hot.data) {
+    tasks = import.meta.hot.data.tasks || tasks
+    pollingTimers = import.meta.hot.data.pollingTimers || pollingTimers
+    taskCallbacks = import.meta.hot.data.taskCallbacks || taskCallbacks
+  }
+  import.meta.hot.dispose((data) => {
+    data.tasks = tasks
+    data.pollingTimers = pollingTimers
+    data.taskCallbacks = taskCallbacks
+  })
+}
+
 function formatTaskError(task, message, fallback) {
   if (NO_CHARGE_TASK_TYPES.has(task?.type)) {
     return withNoChargeNotice(message, fallback)

@@ -949,6 +949,8 @@ function handleBackgroundTaskComplete(event) {
         pointsCost: task.result?.pointsCost || 0,
         ...(task.type === 'image-hd' ? { hdUpscaled: true } : { panoramaGenerated: true })
       })
+      const internalNodeHd = findNode(props.id)
+      if (internalNodeHd) internalNodeHd.data = canvasStore.nodes.find(n => n.id === props.id)?.data
       showToast(`${task.type === 'image-hd' ? '图片高清' : '全景图生成'}完成${task.result?.pointsCost > 0 ? `，消耗 ${formatPoints(task.result.pointsCost)} 积分` : ''}`, 'success')
     } else {
       canvasStore.updateNodeData(props.id, { status: 'error', error: task.type === 'image-hd' ? '高清完成但未获取到图片' : '全景图生成完成但未获取到图片' })
@@ -966,6 +968,8 @@ function handleBackgroundTaskComplete(event) {
       status: 'success',
       output: { type: 'image', urls: [outputUrls[0]], url: outputUrls[0] }
     })
+    const internalNode = findNode(props.id)
+    if (internalNode) internalNode.data = canvasStore.nodes.find(n => n.id === props.id)?.data
     invalidateCanvasHistory()
   } else {
     console.warn(`[ImageNode] 任务完成但无图片URL: ${taskId}`, task.result)
@@ -973,6 +977,8 @@ function handleBackgroundTaskComplete(event) {
       status: 'error',
       error: '生成完成但未获取到图片'
     })
+    const internalNodeErr = findNode(props.id)
+    if (internalNodeErr) internalNodeErr.data = canvasStore.nodes.find(n => n.id === props.id)?.data
   }
   
   // 🔥 组图处理：为每张额外图片创建独立节点

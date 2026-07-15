@@ -44,6 +44,24 @@ assert.match(
 
 assert.match(
   source,
+  /selectedIds:\s*projectionEnabled\s*\?\s*virtualizationSelectedIds\.value\s*:\s*EMPTY_RENDER_PROJECTION_IDS/,
+  'normal-size workflows should not rebuild the Vue Flow node list for selection-only changes'
+)
+
+assert.match(
+  source,
+  /nodes:\s*\[\.\.\.projection\.nodes\]/,
+  'normal-size workflows should refresh the node array when projected node data changes'
+)
+
+assert.match(
+  source,
+  /edges:\s*\[\.\.\.projection\.edges\]/,
+  'normal-size workflows should refresh the edge array when projected edge data changes'
+)
+
+assert.match(
+  source,
   /function\s+getInitialCanvasBoardSize\(\)/,
   'CanvasBoard should have a first-render size fallback so large canvases never pass all nodes to Vue Flow'
 )

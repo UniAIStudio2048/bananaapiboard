@@ -378,6 +378,7 @@ export async function generateVideoFromImage(params) {
  */
 export async function getImageTaskStatus(taskId) {
   const response = await fetch(getApiUrl(`/api/images/task/${taskId}`), {
+    cache: 'no-store',
     headers: getHeaders()
   })
 

@@ -528,17 +528,37 @@ const renderProjectionActiveIds = computed(() => {
   return ids
 })
 
-const renderProjection = computed(() => projectCanvasRenderState({
-  nodes: canvasStore.nodes,
-  edges: canvasStore.edges,
-  viewport: canvasStore.viewport,
-  containerRect: canvasBoardSize.value,
-  selectedIds: virtualizationSelectedIds.value,
-  activeIds: renderProjectionActiveIds.value,
-  performanceMode: canvasPerformanceMode.value,
-  threshold: 220,
-  bufferRatio: 1.75
-}))
+const RENDER_PROJECTION_THRESHOLD = 220
+const EMPTY_RENDER_PROJECTION_IDS = new Set()
+const renderProjection = computed(() => {
+  const projectionEnabled =
+    canvasStore.nodes.length > RENDER_PROJECTION_THRESHOLD &&
+    canvasBoardSize.value.width > 0 &&
+    canvasBoardSize.value.height > 0
+
+  const projection = projectCanvasRenderState({
+    nodes: canvasStore.nodes,
+    edges: canvasStore.edges,
+    viewport: canvasStore.viewport,
+    containerRect: canvasBoardSize.value,
+    // 小画布不读取选择状态，避免点选节点时仅因 selectedIds 改变而重建 Vue Flow 节点。
+    selectedIds: projectionEnabled ? virtualizationSelectedIds.value : EMPTY_RENDER_PROJECTION_IDS,
+    activeIds: projectionEnabled ? renderProjectionActiveIds.value : EMPTY_RENDER_PROJECTION_IDS,
+    performanceMode: canvasPerformanceMode.value,
+    threshold: RENDER_PROJECTION_THRESHOLD,
+    bufferRatio: 1.75
+  })
+
+  if (projection.enabled) return projection
+
+  // Vue Flow 通过 nodes/edges 数组引用同步外部 data。节点状态变化时提供新数组，
+  // 让“生成中”和最终媒体结果立即进入内部节点；纯选择变化不会触发本 computed。
+  return {
+    ...projection,
+    nodes: [...projection.nodes],
+    edges: [...projection.edges]
+  }
+})
 const renderedFlowNodes = computed(() => renderProjection.value.nodes)
 const renderedFlowEdges = computed(() => renderProjection.value.edges)
 
