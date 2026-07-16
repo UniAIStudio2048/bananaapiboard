@@ -20,6 +20,7 @@ import { getApiUrl, getTenantHeaders, getAvailableLLMModels } from '@/config/ten
 import { useI18n } from '@/i18n'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
+import { handlePromptWheel as handlePromptWheelEvent } from '@/utils/promptWheel'
 import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
@@ -82,6 +83,11 @@ const { isVisible: isNodeVisible } = useNodeVisibility(textNodeRootRef)
 const isConfigPanelExpanded = ref(false)
 const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
 const { configPanelScale, handleConfigPanelWheel, resetConfigPanelScale } = createConfigPanelWheelZoom()
+const interactionMode = inject('interactionMode', ref('comfyui'))
+
+function handlePromptWheel(event) {
+  handlePromptWheelEvent(event, { getViewport, setViewport, interactionMode })
+}
 
 // 是否单独选中（只选了这一个节点时才显示工具栏和底部面板）
 const isSoloSelected = computed(() => {
@@ -3355,7 +3361,7 @@ onUnmounted(() => {
           @mouseup.stop
           @click.stop
           @dblclick.stop
-          @wheel.stop
+          @wheel="handlePromptWheel"
         ></div>
         
         <!-- 非编辑模式下显示内容 -->
@@ -3622,7 +3628,7 @@ onUnmounted(() => {
             @paste="handleLLMPaste"
             @compositionstart="handleLLMCompositionStart"
             @compositionend="handleLLMCompositionEnd"
-            @wheel.stop
+            @wheel="handlePromptWheel"
             @focus="handleLLMInputFocus"
             @mousedown="markLLMInputResizeIntent"
             @pointerdown.stop

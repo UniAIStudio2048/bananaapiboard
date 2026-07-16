@@ -77,7 +77,7 @@
 
     <!-- 开始创作 -->
     <section class="max-w-[1400px] mx-auto px-6 pt-8">
-      <CreationEntry />
+      <CreationEntry :is-logged-in="isLoggedIn" />
     </section>
 
     <!-- 模板库 -->

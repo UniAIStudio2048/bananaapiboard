@@ -39,7 +39,6 @@ import { MiniMap } from '@vue-flow/minimap'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import {
-  clampNodePositionToGroup,
   flowPositionToScreenPosition,
   resolveConnectionSourcePosition,
   shouldTreatTargetAsGroupCanvas
@@ -64,7 +63,7 @@ import {
   organizeCanvasNodes,
   runCanvasFit
 } from '@/utils/canvasOrganization'
-import { getMovedGroupChildPositions } from '@/utils/canvasGroupMovement'
+import { getMovedGroupChildPositions, getNodeDropGroupId } from '@/utils/canvasGroupMovement'
 import { projectCanvasRenderState } from '@/utils/canvasRenderProjection.js'
 
 // 导入自定义节点组件
@@ -324,6 +323,28 @@ function updateCanvasBoardSize() {
 // 拖拽组节点时 onNodeDrag 每帧都触发，用 rAF 确保每帧最多同步一次位置
 let _syncGroupRafId = null
 const groupDragStartPositions = new Map()
+
+function rebaseGroupNodeOffsets(groupNode, position) {
+  if (!groupNode?.id || groupNode.type !== 'group') return
+
+  const startPosition = { ...(position || groupNode.position || { x: 0, y: 0 }) }
+  const rebased = getMovedGroupChildPositions(
+    canvasStore.nodes,
+    groupNode,
+    startPosition,
+    { previousPosition: startPosition, rebaseOffsets: true }
+  )
+  const previousOffsets = groupNode.data?.nodeOffsets || {}
+  const offsetsChanged = Object.keys(rebased.nodeOffsets).some(nodeId => {
+    const previous = previousOffsets[nodeId]
+    const next = rebased.nodeOffsets[nodeId]
+    return !previous || Number(previous.x) !== next.x || Number(previous.y) !== next.y
+  }) || Object.keys(previousOffsets).length !== Object.keys(rebased.nodeOffsets).length
+
+  if (offsetsChanged && Object.keys(rebased.nodeOffsets).length > 0) {
+    canvasStore.updateNodeData(groupNode.id, { nodeOffsets: rebased.nodeOffsets })
+  }
+}
 
 // Vue Flow 实例
 const { 
@@ -690,9 +711,14 @@ onNodeDragStart((event) => {
   if (node?.type !== 'group') return
 
   const storeGroupNode = canvasStore.nodes.find(n => n.id === node.id && n.type === 'group')
-  groupDragStartPositions.set(node.id, {
+  const startPosition = {
     ...(storeGroupNode?.position || node.position || { x: 0, y: 0 })
-  })
+  }
+  groupDragStartPositions.set(node.id, startPosition)
+
+  // 刷新后以当前已渲染的子节点坐标为准，校准可能过期的持久化偏移快照。
+  // 后续拖拽帧继续使用这份稳定快照，避免子节点坐标随每帧移动而重复累加。
+  rebaseGroupNodeOffsets(storeGroupNode, startPosition)
 })
 
 // 处理节点拖拽结束
@@ -722,13 +748,9 @@ onNodeDragStop((event) => {
   }
   
   // 计算最终位置
-  let finalPosition = {
+  const finalPosition = {
     x: snapX !== null ? snapX : currentX,
     y: snapY !== null ? snapY : currentY
-  }
-
-  if (node.type !== 'group' && node.data?.groupId) {
-    finalPosition = clampPositionInsideNodeGroup(node, finalPosition)
   }
   
   // 只使用 store 的更新方法，不直接修改 node.position
@@ -742,9 +764,9 @@ onNodeDragStop((event) => {
     groupDragStartPositions.delete(node.id)
   }
   
-  // 如果拖拽的是组内节点，更新相对组的偏移量
-  if (node.type !== 'group' && node.data?.groupId) {
-    updateGroupOffsetForNode({ ...node, position: finalPosition })
+  // 普通节点根据落点自动加入、切换或移出编组
+  if (node.type !== 'group') {
+    commitNodeGroupDrop({ ...node, position: finalPosition })
   }
   
   // 🚀 性能优化：通知节点恢复正常渲染质量
@@ -775,13 +797,6 @@ onNodeDrag((event) => {
       })
       _syncGroupRafId = null
     })
-  }
-
-  // 如果拖拽的是组内节点，限制在组内移动并同步偏移量
-  if (node.type !== 'group' && node.data?.groupId) {
-    const clampedPosition = clampPositionInsideNodeGroup(node, node.position)
-    node.position = clampedPosition
-    canvasStore.updateNodePosition(node.id, clampedPosition)
   }
 
   scheduleActiveEdgePathsRead()
@@ -985,18 +1000,6 @@ function getNodeSize(node) {
   }
 }
 
-function clampPositionInsideNodeGroup(node, position) {
-  const groupNode = canvasStore.nodes.find(n => n.id === node.data?.groupId && n.type === 'group')
-  if (!groupNode) return position
-
-  return clampNodePositionToGroup({
-    position,
-    nodeSize: getNodeSize(node),
-    groupNode,
-    padding: 20
-  })
-}
-
 function updateGroupOffsetForNode(node) {
   const groupId = node.data?.groupId
   const groupNode = canvasStore.nodes.find(n => n.id === groupId && n.type === 'group')
@@ -1011,6 +1014,34 @@ function updateGroupOffsetForNode(node) {
   }
 
   canvasStore.updateNodeData(groupId, { nodeOffsets })
+}
+
+function commitNodeGroupDrop(node) {
+  const storeNode = canvasStore.nodes.find(candidate => candidate.id === node?.id)
+  if (!storeNode || storeNode.type === 'group') return null
+
+  const sourceGroupId = storeNode.data?.groupId || null
+  const targetGroupId = getNodeDropGroupId(
+    canvasStore.nodes,
+    storeNode,
+    node.position,
+    getNodeSize(storeNode)
+  )
+
+  if (targetGroupId !== sourceGroupId) {
+    canvasStore.moveNodeToGroup(storeNode.id, targetGroupId)
+
+    // moveNodeToGroup 在加入目标组时可能为节点补齐边距，同步 Vue Flow 内部坐标。
+    const movedNode = canvasStore.nodes.find(candidate => candidate.id === storeNode.id)
+    const internalNode = typeof findNode === 'function' ? findNode(storeNode.id) : null
+    if (movedNode && internalNode) {
+      internalNode.position = { ...movedNode.position }
+    }
+  } else if (sourceGroupId) {
+    updateGroupOffsetForNode({ ...storeNode, position: node.position })
+  }
+
+  return targetGroupId
 }
 
 // 调整组大小以包含被拖拽的节点（只扩展不缩小）
@@ -2094,13 +2125,9 @@ function moveTouchDraggedNode(point) {
     x: (point.x - touchState.lastPoint.x) / zoom,
     y: (point.y - touchState.lastPoint.y) / zoom
   }
-  let nextPosition = {
+  const nextPosition = {
     x: node.position.x + delta.x,
     y: node.position.y + delta.y
-  }
-
-  if (node.type !== 'group' && node.data?.groupId) {
-    nextPosition = clampPositionInsideNodeGroup(node, nextPosition)
   }
 
   canvasStore.updateNodePosition(node.id, nextPosition)
@@ -2111,16 +2138,16 @@ function moveTouchDraggedNode(point) {
     })
   }
 
-  if (node.type !== 'group' && node.data?.groupId) {
-    updateGroupOffsetForNode({ ...node, position: nextPosition })
-  }
-
   scheduleActiveEdgePathsRead()
   touchState.lastPoint = point
 }
 
 function startTouchNodeDrag(point) {
   selectSingleNodeFromTouch(touchState.nodeId)
+  const node = canvasStore.nodes.find(n => n.id === touchState.nodeId)
+  if (node?.type === 'group') {
+    rebaseGroupNodeOffsets(node, node.position)
+  }
   touchState = {
     ...touchState,
     mode: 'node-drag',
@@ -2137,6 +2164,11 @@ function startTouchNodeDrag(point) {
 }
 
 function finishTouchNodeDrag() {
+  const node = canvasStore.nodes.find(candidate => candidate.id === touchState?.nodeId)
+  if (node?.type !== 'group') {
+    commitNodeGroupDrop(node)
+  }
+
   alignmentGuides.value = { vertical: null, horizontal: null }
   snapPosition.value = { x: null, y: null }
   if (alignmentThrottleTimer.value) {

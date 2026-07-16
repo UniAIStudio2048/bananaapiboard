@@ -49,6 +49,7 @@ import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
+import { handlePromptWheel as handlePromptWheelEvent } from '@/utils/promptWheel'
 import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import {
   bindMediaMention,
@@ -128,6 +129,11 @@ const configPanelRef = ref(null)
 const isConfigPanelExpanded = ref(false)
 const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
 const { configPanelScale, handleConfigPanelWheel, resetConfigPanelScale } = createConfigPanelWheelZoom()
+const interactionMode = inject('interactionMode', ref('comfyui'))
+
+function handlePromptWheel(event) {
+  handlePromptWheelEvent(event, { getViewport, setViewport, interactionMode })
+}
 
 // 文件上传引用
 const fileInputRef = ref(null)
@@ -8380,7 +8386,7 @@ async function handleDrop(event) {
             @compositionstart="handlePromptCompositionStart"
             @compositionend="handlePromptCompositionEnd"
             @focus="autoResizeTextarea"
-            @wheel.stop
+            @wheel="handlePromptWheel"
             @mousedown.stop="startTextareaAutoScroll"
             @pointerdown.stop
             @touchstart.stop

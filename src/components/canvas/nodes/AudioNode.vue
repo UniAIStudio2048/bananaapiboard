@@ -23,6 +23,7 @@ import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
+import { handlePromptWheel as handlePromptWheelEvent } from '@/utils/promptWheel'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, removePromptEditorOrphanTextNodes, restorePromptEditorSelection, serializePromptEditorContent } from '@/utils/promptMention'
@@ -72,6 +73,7 @@ const configPanelRef = ref(null)
 const isConfigPanelExpanded = ref(false)
 const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
 const { configPanelScale, handleConfigPanelWheel, resetConfigPanelScale } = createConfigPanelWheelZoom()
+const interactionMode = inject('interactionMode', ref('comfyui'))
 
 // 可用音乐模型列表 - 从租户配置动态获取
 const musicModels = computed(() => {
@@ -552,15 +554,7 @@ watch(musicPrompt, () => {
 
 // 处理提示词框滚轮事件（阻止冒泡，让滚轮作用于文本框滚动条）
 function handlePromptWheel(event) {
-  const textarea = promptTextareaRef.value
-  if (!textarea) return
-  
-  // 检查是否有内容需要滚动
-  const hasScroll = textarea.scrollHeight > textarea.clientHeight
-  if (hasScroll) {
-    // 阻止事件冒泡，让滚轮只作用于文本框
-    event.stopPropagation()
-  }
+  handlePromptWheelEvent(event, { getViewport, setViewport, interactionMode })
 }
 
 // 配置面板放大：把节点居中到视口中心，方便放大后查看

@@ -518,7 +518,7 @@ async function handleSave() {
     uploadToCloud: true, // 手动保存时上传到云存储
     spaceType: spaceParams.spaceType,
     teamId: spaceParams.teamId,
-    project_id: selectedProjectId.value || undefined,
+    project_id: selectedProjectId.value || canvasStore.workflowMeta?.project_id || undefined,
     ...workflowData
   }
 
@@ -526,7 +526,8 @@ async function handleSave() {
   canvasStore.workflowMeta = {
     id: idToSave || `temp-${Date.now()}`, // 临时 ID
     name: nameToSave,
-    description: descToSave
+    description: descToSave,
+    project_id: selectedProjectId.value || canvasStore.workflowMeta?.project_id || undefined
   }
 
   // 🔧 立即关闭对话框，提升用户体验
@@ -552,7 +553,8 @@ async function handleSave() {
       id: savedWorkflow.id,
       workflow_uid: savedWorkflow.workflow_uid,
       name: savedWorkflow.name,
-      description: savedWorkflow.description
+      description: savedWorkflow.description,
+      project_id: dataToSave.project_id || savedWorkflow.project_id || undefined
     }
     
     // 🔧 保存成功，清除本地备份

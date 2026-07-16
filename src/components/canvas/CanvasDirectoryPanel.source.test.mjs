@@ -45,6 +45,13 @@ test('canvas directory keeps labels inside stable action rows', () => {
   assert.match(source, /@media\s*\(max-width:\s*640px\)[\s\S]*?\.directory-icon-button[\s\S]*?width:\s*32px/)
 })
 
+test('canvas directory only shows locate actions while a row is hovered or focused', () => {
+  assert.match(source, /class="directory-icon-button directory-locate-button"/)
+  assert.match(source, /\.directory-locate-button\s*\{\s*opacity:\s*0;/)
+  assert.match(source, /\.directory-row:hover \.directory-locate-button/)
+  assert.match(source, /\.directory-row:focus-within \.directory-locate-button/)
+})
+
 test('canvas directory renders loaded video rows as thumbnails with a play badge', () => {
   assert.match(source, /getVideoPosterUrl/)
   assert.match(source, /function getRowPreviewUrl\(row\)/)

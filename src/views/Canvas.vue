@@ -3180,6 +3180,7 @@ onMounted(async () => {
   window.addEventListener('unload', handleUnload)
   
   const loadWorkflowId = route.query.load
+  const projectId = route.query.projectId ? String(route.query.projectId) : ''
   let restoredOrLoaded = false
 
   // 检查URL参数，如果有load参数则优先加载指定工作流，不自动恢复上次会话
@@ -3201,7 +3202,8 @@ onMounted(async () => {
     }
   }
 
-  if (!restoredOrLoaded && !loadWorkflowId) {
+  // 从社区空项目进入时，跳过上次会话恢复，确保新工作流归入目标项目。
+  if (!restoredOrLoaded && !loadWorkflowId && !projectId) {
     // 🔧 会话恢复改为异步（兼顾 IndexedDB 大会话），并在本地恢复全部失败时从服务器回退
     restoredOrLoaded = await tryAutoRestoreWorkflowSession()
       || tryAutoRestoreRecentWorkflow()
@@ -3211,6 +3213,9 @@ onMounted(async () => {
   // 如果没有指定加载且没有自动恢复，则初始化默认标签
   if (!restoredOrLoaded) {
     canvasStore.initDefaultTab()
+    if (projectId) {
+      canvasStore.workflowMeta = { project_id: projectId }
+    }
   }
 
   // 初始化后台任务管理器，恢复未完成的任务。必须在节点恢复/创建后启动，
@@ -3957,6 +3962,7 @@ onUnmounted(() => {
 
 <style scoped>
 .canvas-page {
+  --canvas-top-control-height: 40px;
   width: 100%;
   height: 100vh;
   overflow: hidden;
@@ -3973,6 +3979,12 @@ onUnmounted(() => {
   top: 16px;
   left: 70px;
   z-index: 100;
+}
+
+.tabs-container :deep(.workflow-tabs) {
+  height: var(--canvas-top-control-height);
+  padding: 3px 8px;
+  box-sizing: border-box;
 }
 
 @media (orientation: portrait) and (max-width: 900px) {
@@ -4018,8 +4030,8 @@ onUnmounted(() => {
 }
 
 .mode-switch-icon {
-  width: 40px;
-  height: 40px;
+  width: var(--canvas-top-control-height);
+  height: var(--canvas-top-control-height);
   background: rgba(30, 30, 30, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 10px;
@@ -4347,6 +4359,22 @@ onUnmounted(() => {
   transition: right 0.25s ease;
 }
 
+.canvas-top-right-controls :deep(.space-trigger),
+.canvas-top-right-controls :deep(.canvas-notification-trigger),
+.canvas-top-right-controls :deep(.canvas-support-trigger),
+.canvas-top-right-controls :deep(.ticket-btn),
+.canvas-top-right-controls :deep(.lang-trigger) {
+  height: var(--canvas-top-control-height);
+  box-sizing: border-box;
+  border-radius: 10px;
+}
+
+.canvas-top-right-controls :deep(.canvas-notification-trigger),
+.canvas-top-right-controls :deep(.canvas-support-trigger),
+.canvas-top-right-controls :deep(.ticket-btn) {
+  width: var(--canvas-top-control-height);
+}
+
 @media (orientation: portrait) and (max-width: 900px) {
   .canvas-top-right-controls {
     left: 16px;
@@ -4396,8 +4424,10 @@ onUnmounted(() => {
 .canvas-points-display {
   display: flex;
   align-items: center;
+  height: var(--canvas-top-control-height);
+  box-sizing: border-box;
   gap: 6px;
-  padding: 8px 14px;
+  padding: 0 14px;
   background: rgba(18, 18, 18, 0.68);
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 10px;
@@ -4485,8 +4515,9 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: var(--canvas-top-control-height);
+  height: var(--canvas-top-control-height);
+  box-sizing: border-box;
   padding: 0;
   background: rgba(18, 18, 18, 0.68);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -4511,7 +4542,7 @@ onUnmounted(() => {
   position: relative;
   width: auto;
   min-width: 112px;
-  height: 36px;
+  height: var(--canvas-top-control-height);
   gap: 8px;
   padding: 0 15px 0 12px;
   overflow: hidden;

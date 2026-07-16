@@ -40,6 +40,7 @@ import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
+import { handlePromptWheel as handlePromptWheelEvent } from '@/utils/promptWheel'
 import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isBrowserRenderableUrl, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, sanitizePromptEditorText, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import {
   bindMediaMention,
@@ -219,6 +220,7 @@ const configPanelRef = ref(null)
 const isConfigPanelExpanded = ref(false)
 const EXPANDED_CONFIG_PANEL_NODE_ZOOM = 1
 const { configPanelScale, handleConfigPanelWheel, resetConfigPanelScale } = createConfigPanelWheelZoom()
+const interactionMode = inject('interactionMode', ref('comfyui'))
 const hasManualPromptTextareaSize = ref(false)
 const promptMentionBindings = ref(props.data.promptMentionBindings || {})
 
@@ -704,15 +706,7 @@ function getPromptEditorCaretViewportRect(editor = promptTextareaRef.value) {
 
 // 处理提示词框滚轮事件（阻止冒泡，让滚轮作用于文本框滚动条）
 function handlePromptWheel(event) {
-  const textarea = promptTextareaRef.value
-  if (!textarea) return
-  
-  // 检查是否有内容需要滚动
-  const hasScroll = textarea.scrollHeight > textarea.clientHeight
-  if (hasScroll) {
-    // 阻止事件冒泡，让滚轮只作用于文本框
-    event.stopPropagation()
-  }
+  handlePromptWheelEvent(event, { getViewport, setViewport, interactionMode })
 }
 
 // 所有视频节点都支持 @标记引用上游媒体素材

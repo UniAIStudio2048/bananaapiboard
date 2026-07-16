@@ -76,7 +76,7 @@ function handleDragStart(e, tab) {
   e.dataTransfer.setData('text/plain', tab.id)
   
   // 设置拖拽时的视觉效果
-  const target = e.target.closest('.tab-item')
+  const target = e.target.closest('.tab-item, .more-menu-item')
   if (target) {
     e.dataTransfer.setDragImage(target, target.offsetWidth / 2, target.offsetHeight / 2)
   }
@@ -149,6 +149,10 @@ const editInputRef = ref(null)
 // 双击标签名开始编辑
 function handleDoubleClick(e, tab) {
   e.stopPropagation()
+  if (e.currentTarget?.closest?.('.more-menu-item') && moreTabClickTimer) {
+    clearTimeout(moreTabClickTimer)
+    moreTabClickTimer = null
+  }
   
   // 开始编辑
   editState.value = {
@@ -161,9 +165,10 @@ function handleDoubleClick(e, tab) {
   
   // 等待 DOM 更新后聚焦
   nextTick(() => {
-    if (editInputRef.value) {
-      editInputRef.value.focus()
-      editInputRef.value.select()
+    const input = Array.isArray(editInputRef.value) ? editInputRef.value[0] : editInputRef.value
+    if (input) {
+      input.focus()
+      input.select()
     }
   })
 }
@@ -324,6 +329,18 @@ function selectFromMore(tab) {
   showMoreMenu.value = false
 }
 
+// 延迟关闭菜单，给折叠标签的双击事件留出触发时间
+let moreTabClickTimer = null
+
+function handleMoreTabClick(e, tab) {
+  e.stopPropagation()
+  if (moreTabClickTimer) clearTimeout(moreTabClickTimer)
+  moreTabClickTimer = setTimeout(() => {
+    selectFromMore(tab)
+    moreTabClickTimer = null
+  }, 200)
+}
+
 // 挂载时添加全局点击监听
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
@@ -332,6 +349,7 @@ onMounted(() => {
 // 卸载时移除监听
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  if (moreTabClickTimer) clearTimeout(moreTabClickTimer)
 })
 </script>
 
@@ -428,10 +446,39 @@ onUnmounted(() => {
               v-for="tab in hiddenTabs"
               :key="tab.id"
               class="more-menu-item"
-              :class="{ active: tab.id === activeTabId }"
-              @click="selectFromMore(tab)"
+              :class="{
+                active: tab.id === activeTabId,
+                dragging: dragState.dragTabId === tab.id,
+                'drag-over': dragState.dragOverTabId === tab.id
+              }"
+              draggable="true"
+              @click="handleMoreTabClick($event, tab)"
+              @dblclick="handleDoubleClick($event, tab)"
+              @dragstart="handleDragStart($event, tab)"
+              @dragover="handleDragOver($event, tab)"
+              @dragleave="handleDragLeave($event, tab)"
+              @drop="handleDrop($event, tab)"
+              @dragend="handleDragEnd"
             >
-              <span class="menu-item-name">{{ tab.name || t('canvas.unnamed') }}</span>
+              <input
+                v-if="editState.editing && editState.tabId === tab.id"
+                ref="editInputRef"
+                type="text"
+                class="tab-name-input menu-item-name-input"
+                :value="editState.newName"
+                :disabled="editState.saving"
+                @input="handleEditInput"
+                @keydown="handleEditKeydown"
+                @blur="handleEditBlur"
+                @click.stop
+              />
+              <span
+                v-else
+                class="menu-item-name"
+                :title="t('canvas.doubleClickRename', { name: tab.name || t('canvas.unnamed') })"
+              >
+                {{ tab.name || t('canvas.unnamed') }}
+              </span>
               <span v-if="tab.hasChanges" class="unsaved-dot"></span>
             </div>
           </div>
@@ -698,6 +745,15 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.more-menu-item.dragging {
+  opacity: 0.5;
+}
+
+.more-menu-item.drag-over {
+  background: rgba(255, 255, 255, 0.15);
+  outline: 1px solid rgba(255, 255, 255, 0.4);
+}
+
 .more-menu-item.active {
   background: rgba(255, 255, 255, 0.12);
 }
@@ -705,6 +761,16 @@ onUnmounted(() => {
 .menu-item-name {
   font-size: 13px;
   color: rgba(255, 255, 255, 0.8);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.menu-item-name-input {
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
 }
 
 /* 新建按钮 */
@@ -901,23 +967,36 @@ onUnmounted(() => {
   color: rgba(0, 0, 0, 0.8);
 }
 
-:root.canvas-theme-light .workflow-tabs .more-tabs-menu {
+:root.canvas-theme-light .workflow-tabs .more-menu {
   background: #ffffff;
   border-color: rgba(0, 0, 0, 0.1);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
 
-:root.canvas-theme-light .workflow-tabs .more-tabs-item {
+:root.canvas-theme-light .workflow-tabs .more-menu-item {
   color: rgba(0, 0, 0, 0.7);
 }
 
-:root.canvas-theme-light .workflow-tabs .more-tabs-item:hover {
+:root.canvas-theme-light .workflow-tabs .more-menu-item .menu-item-name {
+  color: rgba(0, 0, 0, 0.7);
+}
+
+:root.canvas-theme-light .workflow-tabs .more-menu-item:hover {
   background: rgba(0, 0, 0, 0.04);
 }
 
-:root.canvas-theme-light .workflow-tabs .more-tabs-item.active {
+:root.canvas-theme-light .workflow-tabs .more-menu-item.active {
   color: #1c1917;
   background: rgba(59, 130, 246, 0.1);
+}
+
+:root.canvas-theme-light .workflow-tabs .more-menu-item.active .menu-item-name {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .workflow-tabs .more-menu-item.drag-over {
+  background: rgba(59, 130, 246, 0.12);
+  outline-color: rgba(59, 130, 246, 0.5);
 }
 
 :root.canvas-theme-light .workflow-tabs .close-confirm-overlay {

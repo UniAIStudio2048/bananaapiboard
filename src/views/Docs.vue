@@ -138,6 +138,8 @@
           本地素材先通过上传流程转换成 <code>asset_url</code>，再放进 <code>source_assets</code> 或 <code>reference_assets</code>。
           服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审，智能体只需要调用统一 Skills 视频端点。
           视频请求阶段会按该 Skills Key 所属租户和锁定渠道自动过审，不会故障转移到其他渠道；过审失败或超时会停止视频提交。
+          先读取 <code>GET /api/skills/models</code> 中视频模型的 <code>imageInputReview</code>：9000 端口的租户管理后台只是配置入口，不能把端口或模型名硬编码成“必审模型”。
+          只有请求带图片且锁定渠道与当前租户的审图渠道严格匹配时才会过审；审图结果只对该锁定渠道有效，智能体无需也不应直接调用供应商过审接口。
           <code>mode</code> 可省略；明确需要细分能力时，可传 Seedance 2.0 的 <code>multimodal_ref</code>/<code>video_edit</code>/<code>video_extend</code>
           或 Kling v3 Omni 的 <code>subject_control</code>/<code>video_reference</code>/<code>multi_shot</code> 等子模式。
         </p>
@@ -310,7 +312,8 @@ const quickStartPrompt = `请帮我安装 Banana Canvas Skills。
 
 安装后先调用 GET ${baseUrl}/api/skills/models 验证 key 和模型列表。
 如果用户提供本地图片或视频，先调用 POST ${baseUrl}/api/skills/uploads/presign，把文件 PUT 到 upload_url，再把 asset_url 传给生成接口；上传只负责存储，不代表图片已经过审。
-视频统一调用 POST ${baseUrl}/api/skills/videos/generate；服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审。视频请求阶段会按该 Skills Key 所属租户和锁定渠道自动过审，不会故障转移到其他渠道；过审失败或超时会停止视频提交。`
+视频统一调用 POST ${baseUrl}/api/skills/videos/generate；服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审。视频请求阶段会按该 Skills Key 所属租户和锁定渠道自动过审，不会故障转移到其他渠道；过审失败或超时会停止视频提交。
+先读取 GET ${baseUrl}/api/skills/models 返回的 video[].imageInputReview。9000 端口的租户管理后台只是配置入口，不要把端口或模型名硬编码成必审模型；只有图片输入且锁定视频渠道与当前租户审图渠道严格匹配时才自动过审，过审结果不能跨渠道复用。不要直接调用供应商过审接口。`
 
 const envExample = `BANANA_SKILLS_BASE_URL=${baseUrl}
 BANANA_SKILLS_API_KEY=bsk_your_key`

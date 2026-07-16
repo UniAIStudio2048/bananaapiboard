@@ -407,7 +407,7 @@ onUnmounted(() => {
             <MoreHorizontal :size="16" aria-hidden="true" />
           </button>
           <button
-            class="directory-icon-button"
+            class="directory-icon-button directory-locate-button"
             type="button"
             :aria-label="t('canvas.assetPanel.directory.locate')"
             :title="t('canvas.assetPanel.directory.locate')"
@@ -472,7 +472,7 @@ onUnmounted(() => {
               <MoreHorizontal :size="16" aria-hidden="true" />
             </button>
             <button
-              class="directory-icon-button"
+              class="directory-icon-button directory-locate-button"
               type="button"
               :aria-label="t('canvas.assetPanel.directory.locate')"
               :title="t('canvas.assetPanel.directory.locate')"
@@ -545,7 +545,7 @@ onUnmounted(() => {
           <MoreHorizontal :size="16" aria-hidden="true" />
         </button>
         <button
-          class="directory-icon-button"
+          class="directory-icon-button directory-locate-button"
           type="button"
           :aria-label="t('canvas.assetPanel.directory.locate')"
           :title="t('canvas.assetPanel.directory.locate')"
@@ -794,9 +794,19 @@ onUnmounted(() => {
   opacity: 0;
 }
 
+.directory-locate-button {
+  opacity: 0;
+}
+
 .directory-row:hover .directory-more-button,
 .directory-row:focus-within .directory-more-button,
 .directory-row-selected .directory-more-button {
+  opacity: 1;
+}
+
+.directory-row:hover .directory-locate-button,
+.directory-row:focus-within .directory-locate-button,
+.directory-locate-button:focus-visible {
   opacity: 1;
 }
 

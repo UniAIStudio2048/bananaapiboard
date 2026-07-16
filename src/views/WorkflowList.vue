@@ -5,7 +5,7 @@
  * 两级结构：项目列表 → 项目内工作流列表
  */
 import { computed, ref, onMounted, onActivated, nextTick, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { getWorkflowList, deleteWorkflow, getStorageQuota, renameWorkflow } from '@/api/canvas/workflow'
 import { getProjectList, createProject, updateProject, deleteProject } from '@/api/canvas/project'
 import { useCanvasStore } from '@/stores/canvas'
@@ -19,6 +19,7 @@ import {
 } from '@/components/canvas/spaceFilterState'
 
 const router = useRouter()
+const route = useRoute()
 const canvasStore = useCanvasStore()
 const teamStore = useTeamStore()
 const spaceFilter = useCanvasSpaceFilter(teamStore)
@@ -126,7 +127,7 @@ function goBackToProjects() {
 }
 
 // 加载项目列表
-async function loadProjects() {
+async function loadProjects({ openQueryProject = false } = {}) {
   loading.value = true
   try {
     const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
@@ -135,6 +136,12 @@ async function loadProjects() {
       teamId: spaceParams.teamId
     })
     projects.value = result.data || []
+    if (openQueryProject && route.query.projectId) {
+      const requestedProject = projects.value.find(project => String(project.id) === String(route.query.projectId))
+      if (requestedProject) {
+        enterProject(requestedProject)
+      }
+    }
   } catch (error) {
     console.error('[WorkflowList] 加载项目失败:', error)
     alert('加载项目列表失败：' + error.message)
@@ -493,9 +500,9 @@ function onDocumentClick() {
 }
 
 // 初始化
-onMounted(() => {
+onMounted(async () => {
   teamStore.loadMyTeams()
-  loadProjects()
+  await loadProjects({ openQueryProject: true })
   loadQuota()
   document.addEventListener('click', onDocumentClick)
 })

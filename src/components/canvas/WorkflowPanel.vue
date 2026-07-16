@@ -5,7 +5,7 @@
  * 我的工作流现在分为：左边手动保存的工作流 | 右边历史记录工作流
  */
 import { ref, watch, onMounted, computed, nextTick, onUnmounted } from 'vue'
-import { getWorkflowList, deleteWorkflow, loadWorkflow, saveWorkflow, getStorageQuota, getWorkflowTemplates } from '@/api/canvas/workflow'
+import { getWorkflowList, deleteWorkflow, loadWorkflow, saveWorkflow, renameWorkflow, getStorageQuota, getWorkflowTemplates } from '@/api/canvas/workflow'
 import { useCanvasStore } from '@/stores/canvas'
 import { useI18n } from '@/i18n'
 import {
@@ -50,6 +50,8 @@ const selectedId = ref(null)
 const isDragging = ref(false)
 const draggingWorkflow = ref(null)
 const dragOverProjectId = ref(null)
+const contextMenu = ref({ visible: false, x: 0, y: 0, workflow: null, type: null })
+const contextMenuEl = ref(null)
 const spaceFilter = useCanvasSpaceFilter(teamStore) // 空间筛选: 'personal' | 'team-xxx' | 'all'
 
 // ========== 历史工作流数据 ==========
@@ -105,6 +107,9 @@ const expandedProjects = ref(new Set())
 // 重命名状态
 const renamingProject = ref(null)
 const renameInput = ref('')
+const renamingWorkflowId = ref(null)
+const workflowRenameInput = ref('')
+const workflowRenameSaving = ref(false)
 
 // 删除确认状态
 const deleteProjectConfirm = ref({ visible: false, group: null, inputName: '' })
@@ -235,14 +240,23 @@ async function handleResourceMoved() {
 
 // ========== 计算属性 ==========
 
+function matchesWorkflowSearch(workflow, rawQuery) {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query) return true
+
+  return [
+    workflow.name,
+    workflow.description,
+    workflow.id,
+    workflow.workflow_uid,
+    workflow.workflowId,
+    workflow.workflowUid
+  ].some(value => String(value ?? '').toLowerCase().includes(query))
+}
+
 // 筛选后的工作流
 const filteredWorkflows = computed(() => {
-  if (!searchQuery.value.trim()) return workflows.value
-  const query = searchQuery.value.toLowerCase()
-  return workflows.value.filter(w =>
-    w.name.toLowerCase().includes(query) ||
-    (w.description && w.description.toLowerCase().includes(query))
-  )
+  return workflows.value.filter(workflow => matchesWorkflowSearch(workflow, searchQuery.value))
 })
 
 // 找到默认项目
@@ -326,12 +340,7 @@ watch(projectTree, (newTree) => {
 
 // 筛选后的历史工作流
 const filteredHistoryWorkflows = computed(() => {
-  if (!searchQuery.value.trim()) return historyWorkflows.value
-  const query = searchQuery.value.toLowerCase()
-  return historyWorkflows.value.filter(w =>
-    w.name.toLowerCase().includes(query) ||
-    (w.description && w.description.toLowerCase().includes(query))
-  )
+  return historyWorkflows.value.filter(workflow => matchesWorkflowSearch(workflow, searchQuery.value))
 })
 
 // 筛选后的模板
@@ -676,6 +685,123 @@ function clearSelectedWorkflowDetails() {
   clearWorkflowSelectionClickTimer()
   selectedId.value = null
   selectedHistoryId.value = null
+  closeWorkflowContextMenu()
+}
+
+function closeWorkflowContextMenu() {
+  contextMenu.value = { visible: false, x: 0, y: 0, workflow: null, type: null }
+}
+
+function handleWorkflowContextMenu(event, workflow, type) {
+  clearWorkflowSelectionClickTimer()
+  contextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    workflow,
+    type
+  }
+
+  nextTick(() => {
+    if (!contextMenuEl.value) return
+    const margin = 8
+    const menuWidth = contextMenuEl.value.offsetWidth
+    const menuHeight = contextMenuEl.value.offsetHeight
+    contextMenu.value.x = Math.max(margin, Math.min(event.clientX, window.innerWidth - menuWidth - margin))
+    contextMenu.value.y = Math.max(margin, Math.min(event.clientY, window.innerHeight - menuHeight - margin))
+  })
+}
+
+function handleWorkflowContextAction(action) {
+  const { workflow, type } = contextMenu.value
+  closeWorkflowContextMenu()
+  if (!workflow) return
+
+  if (action === 'load') {
+    if (type === 'history') {
+      handleLoadHistoryWorkflow(workflow)
+    } else {
+      handleLoadMyWorkflow(workflow)
+    }
+    return
+  }
+
+  if (action === 'rename' && type === 'saved') {
+    handleRenameWorkflow(workflow)
+    return
+  }
+
+  if (type !== 'saved') return
+  if (action === 'move') {
+    openMoveResource(workflow, 'workflow')
+  } else if (action === 'copy') {
+    openMoveResource(workflow, 'workflow', 'copy')
+  } else if (action === 'copy-uid' && workflow.workflow_uid) {
+    copyWorkflowUid(workflow.workflow_uid)
+  }
+}
+
+function handleRenameWorkflow(workflow) {
+  if (!workflow?.id || workflowRenameSaving.value) return
+  renamingWorkflowId.value = workflow.id
+  workflowRenameInput.value = workflow.name || ''
+  nextTick(() => {
+    const input = document.querySelector('.workflow-rename-input')
+    if (input) {
+      input.focus()
+      input.select()
+    }
+  })
+}
+
+function cancelRenameWorkflow() {
+  renamingWorkflowId.value = null
+  workflowRenameInput.value = ''
+  workflowRenameSaving.value = false
+}
+
+function handleWorkflowRenameKeydown(event, workflow) {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    confirmRenameWorkflow(workflow)
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    cancelRenameWorkflow()
+  }
+}
+
+function handleWorkflowRenameBlur(workflow) {
+  setTimeout(() => {
+    if (renamingWorkflowId.value === workflow.id && !workflowRenameSaving.value) {
+      confirmRenameWorkflow(workflow)
+    }
+  }, 100)
+}
+
+async function confirmRenameWorkflow(workflow) {
+  if (workflowRenameSaving.value) return
+  const nextName = workflowRenameInput.value.trim()
+  if (!nextName || nextName === workflow.name) {
+    cancelRenameWorkflow()
+    return
+  }
+
+  workflowRenameSaving.value = true
+  try {
+    await renameWorkflow(workflow.id, nextName)
+    workflow.name = nextName
+    const listedWorkflow = workflows.value.find(item => String(item.id) === String(workflow.id))
+    if (listedWorkflow) listedWorkflow.name = nextName
+    const cachedWorkflow = loadedWorkflowCache.get(workflow.id)
+    if (cachedWorkflow) {
+      loadedWorkflowCache.set(workflow.id, { ...cachedWorkflow, name: nextName })
+    }
+    cancelRenameWorkflow()
+  } catch (error) {
+    console.error('[WorkflowPanel] 重命名工作流失败:', error)
+    alert('重命名失败：' + error.message)
+    workflowRenameSaving.value = false
+  }
 }
 
 // 加载我的工作流到画布（在新标签中打开）
@@ -1101,6 +1227,7 @@ watch(() => props.visible, async (visible) => {
   } else {
     isContentReady.value = false
     clearWorkflowSelectionClickTimer()
+    closeWorkflowContextMenu()
 
     // 停止团队空间实时同步
     stopTeamSync()
@@ -1111,16 +1238,25 @@ watch(() => props.visible, async (visible) => {
 function handleKeydown(e) {
   if (!props.visible) return
   if (e.key === 'Escape') {
+    closeWorkflowContextMenu()
     emit('close')
+  }
+}
+
+function handleDocumentMouseDown(event) {
+  if (contextMenuEl.value && !contextMenuEl.value.contains(event.target)) {
+    closeWorkflowContextMenu()
   }
 }
 
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
+  document.addEventListener('mousedown', handleDocumentMouseDown)
 })
 
 onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('mousedown', handleDocumentMouseDown)
   clearWorkflowSelectionClickTimer()
   clearSavedDescriptionTimers()
 
@@ -1346,6 +1482,7 @@ defineExpose({
                         draggable="true"
                         @click.stop="handleWorkflowClick(workflow)"
                         @dblclick.stop.prevent="handleLoadMyWorkflowFromDoubleClick(workflow)"
+                        @contextmenu.prevent.stop="handleWorkflowContextMenu($event, { ...workflow, project_id: group.id }, 'saved')"
                         @dragstart="handleDragStart($event, workflow)"
                         @dragend="handleDragEnd"
                       >
@@ -1360,13 +1497,24 @@ defineExpose({
                           </div>
 
                           <div class="item-info">
-                            <div class="item-name">{{ workflow.name }}</div>
-                            <div class="item-meta">
+                            <input
+                              v-if="renamingWorkflowId === workflow.id"
+                              v-model="workflowRenameInput"
+                              class="workflow-rename-input"
+                              :disabled="workflowRenameSaving"
+                              @click.stop
+                              @dblclick.stop
+                              @mousedown.stop
+                              @keydown="handleWorkflowRenameKeydown($event, workflow)"
+                              @blur="handleWorkflowRenameBlur(workflow)"
+                            />
+                            <div v-else class="item-name">{{ workflow.name }}</div>
+                            <div class="item-meta workflow-meta">
                               <span v-if="workflow.workflow_uid" class="workflow-uid" :title="t('canvas.copyWorkflowUid')" @click.stop="copyWorkflowUid(workflow.workflow_uid)">{{ workflow.workflow_uid }}</span>
                               <span v-if="workflow.workflow_uid">·</span>
                               <span>{{ workflow.node_count }} {{ t('canvas.nodeLabel') }}</span>
                               <span>·</span>
-                              <span>保存 {{ formatBeijingSaveTime(workflow.updated_at) }}</span>
+                              <span class="workflow-time">保存 {{ formatBeijingSaveTime(workflow.updated_at) }}</span>
                               <template v-if="teamStore.isInTeamSpace.value && workflow.last_updated_by_username">
                                 <span>·</span>
                                 <span class="item-author">
@@ -1381,25 +1529,6 @@ defineExpose({
                           </div>
 
                           <div class="item-actions">
-                            <button
-                              class="action-btn load-btn"
-                              @click.stop="handleLoadMyWorkflow(workflow)"
-                              :title="t('canvas.open')"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M5 12h14M12 5l7 7-7 7"/>
-                              </svg>
-                            </button>
-                            <button
-                              class="action-btn move-btn"
-                              @click.stop="openMoveResource({ ...workflow, project_id: group.id }, 'workflow')"
-                              title="移动工作流"
-                            >↗</button>
-                            <button
-                              class="action-btn move-btn"
-                              @click.stop="openMoveResource({ ...workflow, project_id: group.id }, 'workflow', 'copy')"
-                              title="创建工作流副本"
-                            >⧉</button>
                             <button
                               class="action-btn delete-btn"
                               @click.stop="confirmDelete($event, workflow, false)"
@@ -1482,6 +1611,7 @@ defineExpose({
                     draggable="true"
                     @click.stop="handleHistoryWorkflowClick(workflow)"
                     @dblclick.stop.prevent="handleLoadHistoryWorkflowFromDoubleClick(workflow)"
+                    @contextmenu.prevent.stop="handleWorkflowContextMenu($event, workflow, 'history')"
                     @dragstart="handleHistoryDragStart($event, workflow)"
                     @dragend="handleDragEnd"
                   >
@@ -1495,24 +1625,14 @@ defineExpose({
 
                       <div class="item-info">
                         <div class="item-name">{{ workflow.name }}</div>
-                        <div class="item-meta">
+                        <div class="item-meta workflow-meta">
                           <span>{{ workflow.nodeCount }} {{ t('canvas.nodeLabel') }}</span>
                           <span>·</span>
-                          <span>自动保存 {{ formatBeijingSaveTime(workflow.savedAt) }}</span>
+                          <span class="workflow-time">自动保存 {{ formatBeijingSaveTime(workflow.savedAt) }}</span>
                         </div>
                       </div>
 
                       <div class="item-actions">
-                        <button
-                          class="action-btn load-btn"
-                          @click.stop="handleLoadHistoryWorkflow(workflow)"
-                          :title="t('canvas.restore')"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                            <path d="M3 3v5h5"/>
-                          </svg>
-                        </button>
                         <button
                           class="action-btn delete-btn"
                           @click.stop="confirmDelete($event, workflow, true)"
@@ -1599,7 +1719,61 @@ defineExpose({
 
         <!-- 底部提示 -->
         <div class="panel-footer">
-          <span class="tip">{{ t('canvas.doubleClickOpenDragMerge') }}</span>
+          <span class="tip">{{ t('canvas.doubleClickOpenDragMerge') }} · 右键更多操作</span>
+        </div>
+
+        <!-- 工作流右键菜单 -->
+        <div
+          v-if="contextMenu.visible"
+          ref="contextMenuEl"
+          class="workflow-context-menu"
+          :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+          @mousedown.stop
+          @click.stop
+        >
+          <template v-if="contextMenu.type === 'saved'">
+            <button class="context-menu-item" @click="handleWorkflowContextAction('rename')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+              </svg>
+              <span>重命名工作流</span>
+            </button>
+            <button class="context-menu-item" @click="handleWorkflowContextAction('load')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+              <span>加载工作流</span>
+            </button>
+            <button class="context-menu-item" @click="handleWorkflowContextAction('move')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <path d="M5 12h14M13 6l6 6-6 6"/>
+                <path d="M19 12H9"/>
+              </svg>
+              <span>移动工作流</span>
+            </button>
+            <button class="context-menu-item" @click="handleWorkflowContextAction('copy')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <rect x="9" y="9" width="11" height="11" rx="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              <span>创建工作流副本</span>
+            </button>
+            <button v-if="contextMenu.workflow?.workflow_uid" class="context-menu-item" @click="handleWorkflowContextAction('copy-uid')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <rect x="4" y="4" width="16" height="16" rx="2"/>
+                <path d="M8 8h8M8 12h5M8 16h8"/>
+              </svg>
+              <span>复制工作流 ID</span>
+            </button>
+          </template>
+          <button v-else class="context-menu-item" @click="handleWorkflowContextAction('load')">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            <span>恢复工作流</span>
+          </button>
         </div>
 
         <!-- 删除确认 -->
@@ -1692,7 +1866,8 @@ defineExpose({
 
 /* 面板 - 更宽以容纳双列 */
 .workflow-panel {
-  width: 680px;
+  width: 820px;
+  max-width: calc(100vw - 120px);
   max-height: calc(100vh - 120px);
   height: 100%;
   background: rgba(20, 20, 20, 0.95);
@@ -1710,7 +1885,7 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 10px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -1750,7 +1925,7 @@ defineExpose({
 .panel-tabs {
   display: flex;
   gap: 4px;
-  padding: 12px 16px;
+  padding: 8px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -1760,7 +1935,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 10px 16px;
+  padding: 7px 12px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 10px;
@@ -1806,7 +1981,7 @@ defineExpose({
 .panel-toolbar {
   display: flex;
   gap: 10px;
-  padding: 12px 16px;
+  padding: 8px 12px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -1860,7 +2035,7 @@ defineExpose({
 
 /* 配额 */
 .quota-bar {
-  padding: 10px 16px;
+  padding: 6px 12px;
   background: rgba(255, 255, 255, 0.03);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -1869,7 +2044,7 @@ defineExpose({
   display: flex;
   align-items: baseline;
   gap: 4px;
-  margin-bottom: 6px;
+  margin-bottom: 3px;
 }
 
 .quota-used {
@@ -1936,8 +2111,8 @@ defineExpose({
 
 .panel-content.two-columns {
   display: flex;
-  gap: 12px;
-  padding: 12px;
+  gap: 8px;
+  padding: 8px;
 }
 
 .column {
@@ -1955,7 +2130,7 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 7px 10px;
   background: rgba(255, 255, 255, 0.04);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   font-size: 12px;
@@ -1994,8 +2169,8 @@ defineExpose({
 .column-content {
   flex: 1;
   overflow-y: auto;
-  padding: 6px;
-  padding-bottom: 16px;
+  padding: 4px;
+  padding-bottom: 8px;
 }
 
 .column-content::-webkit-scrollbar {
@@ -2107,7 +2282,7 @@ defineExpose({
 .project-tree {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .project-group {
@@ -2119,7 +2294,7 @@ defineExpose({
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s;
@@ -2285,14 +2460,14 @@ defineExpose({
 .project-workflows {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding-left: 8px;
-  margin-left: 6px;
+  gap: 1px;
+  padding-left: 6px;
+  margin-left: 5px;
   border-left: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .workflow-item.tree-item {
-  padding: 8px;
+  padding: 6px 8px;
 }
 
 .workflow-item.tree-item .item-icon {
@@ -2304,14 +2479,14 @@ defineExpose({
 .workflow-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 1px;
 }
 
 .workflow-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
+  gap: 8px;
+  padding: 7px 8px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
@@ -2332,7 +2507,7 @@ defineExpose({
 .workflow-item.history-item {
   align-items: stretch;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .workflow-item.history-item {
@@ -2353,7 +2528,7 @@ defineExpose({
 
 .workflow-description-editor,
 .history-description-editor {
-  padding-left: 42px;
+  padding-left: 36px;
 }
 
 .workflow-description-input,
@@ -2384,8 +2559,8 @@ defineExpose({
 }
 
 .item-icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2412,16 +2587,39 @@ defineExpose({
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-bottom: 2px;
+  margin-bottom: 0;
+}
+
+.workflow-rename-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 2px 5px;
+  border: 1px solid rgba(59, 130, 246, 0.6);
+  border-radius: 4px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  line-height: 1.3;
+}
+
+.workflow-rename-input:focus {
+  border-color: #3b82f6;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .item-meta {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 4px;
   font-size: 11px;
   color: rgba(255, 255, 255, 0.4);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .workflow-uid {
@@ -2461,7 +2659,7 @@ defineExpose({
 }
 
 .workflow-item:hover .item-actions,
-.workflow-item.selected .item-actions {
+.workflow-item:focus-within .item-actions {
   opacity: 1;
 }
 
@@ -2492,6 +2690,45 @@ defineExpose({
 .move-btn:hover {
   background: rgba(96, 165, 250, 0.15);
   color: #60a5fa;
+}
+
+/* 工作流右键菜单 */
+.workflow-context-menu {
+  position: fixed;
+  z-index: 500;
+  min-width: 196px;
+  padding: 5px;
+  background: rgba(30, 30, 30, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 9px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(16px);
+}
+
+.context-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.context-menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.context-menu-item svg {
+  flex-shrink: 0;
+  opacity: 0.72;
 }
 
 /* 模板网格 */
@@ -2564,7 +2801,7 @@ defineExpose({
 
 /* 底部 */
 .panel-footer {
-  padding: 10px 16px;
+  padding: 7px 12px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   text-align: center;
 }
@@ -3018,6 +3255,12 @@ defineExpose({
   color: #1c1917 !important;
 }
 
+:root.canvas-theme-light .workflow-panel .workflow-rename-input {
+  background: rgba(0, 0, 0, 0.04) !important;
+  border-color: rgba(59, 130, 246, 0.55) !important;
+  color: #1c1917 !important;
+}
+
 :root.canvas-theme-light .workflow-panel .item-meta {
   color: rgba(0, 0, 0, 0.45) !important;
 }
@@ -3048,6 +3291,21 @@ defineExpose({
 :root.canvas-theme-light .workflow-panel .delete-btn:hover {
   background: rgba(255, 100, 100, 0.1) !important;
   color: #ef4444 !important;
+}
+
+:root.canvas-theme-light .workflow-panel .workflow-context-menu {
+  background: rgba(255, 255, 255, 0.98) !important;
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .context-menu-item {
+  color: rgba(0, 0, 0, 0.72) !important;
+}
+
+:root.canvas-theme-light .workflow-panel .context-menu-item:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1c1917 !important;
 }
 
 /* 模板卡片 */

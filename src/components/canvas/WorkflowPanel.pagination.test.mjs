@@ -86,4 +86,16 @@ assert.match(
   'Project tree rendering should be driven from the merged saved workflows collection'
 )
 
+assert.match(
+  source,
+  /function matchesWorkflowSearch\(workflow, rawQuery\)[\s\S]*?workflow\.workflow_uid[\s\S]*?workflow\.workflowId/,
+  'Workflow search should include both saved and history workflow identifiers'
+)
+
+assert.match(
+  source,
+  /String\(value \?\? ''\)\.toLowerCase\(\)\.includes\(query\)/,
+  'Workflow search should use case-insensitive fuzzy matching for normalized field values'
+)
+
 console.log('WorkflowPanel pagination source tests passed')
