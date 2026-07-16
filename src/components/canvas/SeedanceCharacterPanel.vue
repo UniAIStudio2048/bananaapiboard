@@ -14,8 +14,6 @@ import {
 } from '@/api/canvas/volcengine-assets'
 import { saveAsset, getAssets, updateAsset, deleteAsset as deleteLocalAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
-import { checkFaceVerifyStatus } from '@/api/face-verify'
-import FaceVerifyDialog from './FaceVerifyDialog.vue'
 import { getApiUrl } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { smartDownload } from '@/api/client'
@@ -93,10 +91,6 @@ const livenessQrDataUrl = ref('')
 // 上传角色
 const uploadLoading = ref(false)
 const fileInputRef = ref(null)
-
-// 真人认证上传
-const showFaceVerifyDialog = ref(false)
-const pendingFaceVerifyFiles = ref(null)
 
 // 轮询取消器
 const pollers = ref({})
@@ -533,29 +527,18 @@ function triggerUpload() {
 }
 
 async function triggerFaceVerifyUpload() {
-  if (isSeedanceOpenApiProProvider.value) {
-    triggerUpload()
+  if (livenessVerifying.value) return
+  if (!supportsLiveness.value) {
+    errorMessage.value = '当前渠道不支持真人人像认证'
     return
   }
-  try {
-    const status = await checkFaceVerifyStatus()
-    if (!status.enabled) {
-      triggerUpload()
-      return
-    }
-    if (status.verified) {
-      triggerUpload()
-      return
-    }
-    showFaceVerifyDialog.value = true
-  } catch (e) {
-    triggerUpload()
-  }
-}
 
-function onFaceVerified() {
-  showFaceVerifyDialog.value = false
-  triggerUpload()
+  createGroupType.value = 'LivenessFace'
+  createGroupForm.value = { Name: '默认真人人像分组', Description: '' }
+  errorMessage.value = ''
+  showCreateGroupModal.value = true
+  await nextTick()
+  await handleCreateGroupLiveness()
 }
 
 async function handleFileUpload(event) {
@@ -1018,7 +1001,7 @@ onUnmounted(() => {
               <path d="M3.5 6A5.5 5.5 0 0 1 13 5.5M12.5 10a5.5 5.5 0 0 1-9.5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-          <button class="btn-toolbar" @click="triggerFaceVerifyUpload" :disabled="uploadLoading" title="真人认证上传" aria-label="真人认证上传">
+          <button class="btn-toolbar" @click="triggerFaceVerifyUpload" :disabled="uploadLoading || livenessVerifying" title="真人认证上传" aria-label="真人认证上传">
             <svg viewBox="0 0 16 16" fill="none" width="13" height="13">
               <circle cx="8" cy="5.5" r="2.5" stroke="currentColor" stroke-width="1.3"/>
               <path d="M3 14c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
@@ -1541,10 +1524,6 @@ onUnmounted(() => {
       </Transition>
     </Teleport>
 
-    <FaceVerifyDialog
-      v-model:visible="showFaceVerifyDialog"
-      @verified="onFaceVerified"
-    />
   </div>
 </template>
 

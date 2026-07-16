@@ -862,17 +862,7 @@ function selectModel(modelValue) {
 const availablePresets = computed(() => {
   const presets = []
 
-  // 1. 添加租户配置的预设
-  if (llmConfig.value.presets && llmConfig.value.presets.length > 0) {
-    presets.push(...llmConfig.value.presets)
-  }
-
-  // 2. 添加分隔线
-  if (presets.length > 0 && userPresets.value.length > 0) {
-    presets.push({ id: 'divider-1', type: 'divider' })
-  }
-
-  // 3. 添加用户自定义预设
+  // 1. 添加用户自定义预设
   if (userPresets.value.length > 0) {
     presets.push(...userPresets.value.map(p => ({
       id: `user-${p.id}`,
@@ -881,6 +871,16 @@ const availablePresets = computed(() => {
       systemPrompt: p.systemPrompt,
       _rawId: p.id
     })))
+  }
+
+  // 2. 添加分隔线
+  if (userPresets.value.length > 0 && llmConfig.value.presets?.length > 0) {
+    presets.push({ id: 'divider-1', type: 'divider' })
+  }
+
+  // 3. 添加租户配置的预设
+  if (llmConfig.value.presets && llmConfig.value.presets.length > 0) {
+    presets.push(...llmConfig.value.presets)
   }
 
   // 4. 添加临时自定义（如果正在使用）

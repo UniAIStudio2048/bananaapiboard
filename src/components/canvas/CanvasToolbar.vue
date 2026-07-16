@@ -8,6 +8,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import UserProfilePanel from './UserProfilePanel.vue'
 import { useI18n } from '@/i18n'
 import { getTotalUserPoints } from '@/utils/points'
+import { FolderOpen } from '@lucide/vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -277,13 +278,7 @@ async function handleUserUpdate() {
       :title="t('canvas.assets')"
       @click="openAssets"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <!-- 资产图标 -->
-        <path d="M20 7h-9"/>
-        <path d="M14 17H5"/>
-        <circle cx="17" cy="17" r="3"/>
-        <circle cx="7" cy="7" r="3"/>
-      </svg>
+      <FolderOpen aria-hidden="true" />
     </button>
     
     <!-- 我的工作流 -->

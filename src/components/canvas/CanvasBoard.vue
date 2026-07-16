@@ -64,6 +64,7 @@ import {
   runCanvasFit
 } from '@/utils/canvasOrganization'
 import { getMovedGroupChildPositions, getNodeDropGroupId } from '@/utils/canvasGroupMovement'
+import { getDraggedNodeFinalPositions } from '@/utils/canvasDragPositions'
 import { projectCanvasRenderState } from '@/utils/canvasRenderProjection.js'
 
 // 导入自定义节点组件
@@ -208,6 +209,7 @@ const isFileDragOver = ref(false)
 const fileDragCounter = ref(0)
 
 // 平移状态（空格+拖动 / 鼠标中键 / 右键拖动）
+const isSelectionModifierPressed = ref(false)
 const isSpacePressed = ref(false)
 const isPanning = ref(false)
 const isMiddleButtonPanning = ref(false)
@@ -454,6 +456,12 @@ function handleMiniMapClick({ position }) {
   const viewport = getViewport()
   setCenter(position.x, position.y, { zoom: viewport.zoom })
   markViewportMoving()
+}
+
+function getMiniMapNodeClass(node) {
+  if (node?.type === 'group') return 'is-group'
+  if (node?.data?.groupId) return 'is-grouped'
+  return ''
 }
 
 // 🚀 自定义节点类型映射（已经过虚拟化 HOC 包装）
@@ -753,8 +761,12 @@ onNodeDragStop((event) => {
     y: snapY !== null ? snapY : currentY
   }
   
-  // 只使用 store 的更新方法，不直接修改 node.position
-  canvasStore.updateNodePosition(node.id, finalPosition)
+  // Vue Flow 会同时移动所有选中节点，结束时必须一次性写回整组选区。
+  // 对齐吸附产生的偏移也统一应用，避免节点间相对位置发生变化。
+  const draggedNodes = event.nodes?.length ? event.nodes : [node]
+  canvasStore.updateNodePositionsBatch(
+    getDraggedNodeFinalPositions(draggedNodes, node, finalPosition)
+  )
   
   // 如果拖拽的是编组节点，同步更新组内节点位置
   if (node.type === 'group') {
@@ -1406,6 +1418,10 @@ function isTextInputEventTarget(target) {
 }
 
 function handleKeyDown(event) {
+  if (event.key === 'Shift' || event.key === 'Control') {
+    isSelectionModifierPressed.value = true
+  }
+
   const target = event.target
   const isInInput = isTextInputEventTarget(target)
   const isCtrlOrCmd = event.ctrlKey || event.metaKey
@@ -1583,6 +1599,10 @@ function handleKeyDown(event) {
 
 // 键盘释放事件处理
 function handleKeyUp(event) {
+  if (event.key === 'Shift' || event.key === 'Control') {
+    isSelectionModifierPressed.value = event.shiftKey || event.ctrlKey
+  }
+
   // 空格键释放：禁用平移模式
   if (event.key === ' ') {
     event.preventDefault()
@@ -3763,7 +3783,14 @@ onUnmounted(() => {
   <div 
     ref="canvasBoardRef" 
     class="canvas-board" 
-    :class="{ 'file-drag-over': isFileDragOver, 'pick-mode': pickMode }"
+    :class="{
+      'file-drag-over': isFileDragOver,
+      'pick-mode': pickMode,
+      'edges-hidden': isEdgeHidden,
+      'selection-cursor': interactionMode === 'infinite-canvas' || isSelectionModifierPressed,
+      'pan-ready': isSpacePressed,
+      'is-panning': isPanning
+    }"
     :data-zoom-level="canvasZoomLevel"
     :style="canvasPromptPanelScaleStyle"
     @dblclick="handleDoubleClick"
@@ -3797,7 +3824,7 @@ onUnmounted(() => {
       :pan-on-drag="panOnDragConfig"
       :selection-on-drag="true"
       :select-nodes-on-drag="true"
-      :selection-key-code="selectionKeyCodeConfig"
+      :selection-key-code="isSpacePressed ? false : selectionKeyCodeConfig"
       :selection-mode="SelectionMode.Full"
       :pan-on-scroll="false"
       :zoom-on-scroll="false"
@@ -3900,6 +3927,7 @@ onUnmounted(() => {
         position="bottom-left"
         node-color="#888888"
         node-stroke-color="#242424"
+        :node-class-name="getMiniMapNodeClass"
         :node-stroke-width="1"
         :node-border-radius="2"
         mask-color="rgba(9, 9, 9, 0.52)"
@@ -3939,6 +3967,12 @@ onUnmounted(() => {
   touch-action: none;
 }
 
+.canvas-board.edges-hidden :deep(.vue-flow__edge),
+.canvas-board.edges-hidden :deep(.vue-flow__connection-line),
+.canvas-board.edges-hidden .connection-guide-line {
+  display: none;
+}
+
 /* Vue Flow 样式覆盖 */
 :deep(.vue-flow) {
   background: var(--canvas-bg-primary);
@@ -3952,6 +3986,23 @@ onUnmounted(() => {
 /* 拖拽画布时变为抓取中光标 */
 :deep(.vue-flow__pane.dragging) {
   cursor: grabbing;
+}
+
+/* 框选状态：细长三角形光标；无限画布默认框选，ComfyUI 按 Shift/Ctrl 时框选 */
+.canvas-board.selection-cursor :deep(.vue-flow__pane),
+.canvas-board.selection-cursor :deep(.vue-flow__pane.dragging) {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M2.5 2.5L21 10.5L12 13L8 21.5Z' fill='%23fff' stroke='%23171717' stroke-width='1.25' stroke-linejoin='round'/%3E%3C/svg%3E") 3 3, default;
+}
+
+/* 空格按住期间整张画布持续显示小手，实际平移时显示抓取中的小手 */
+.canvas-board.pan-ready :deep(.vue-flow__pane),
+.canvas-board.pan-ready :deep(.vue-flow__pane *) {
+  cursor: grab !important;
+}
+
+.canvas-board.is-panning :deep(.vue-flow__pane),
+.canvas-board.is-panning :deep(.vue-flow__pane *) {
+  cursor: grabbing !important;
 }
 
 :deep(.vue-flow__node) {
@@ -3990,6 +4041,18 @@ onUnmounted(() => {
   stroke: #242424;
 }
 
+.canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-node.is-grouped) {
+  fill: #b8b8b8;
+  stroke: #525252;
+}
+
+.canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-node.is-group) {
+  fill: transparent;
+  stroke: rgba(212, 212, 212, 0.72);
+  stroke-width: 1.5px;
+  vector-effect: non-scaling-stroke;
+}
+
 :root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap) {
   background: rgba(250, 250, 250, 0.96);
   border-color: rgba(0, 0, 0, 0.12);
@@ -4004,6 +4067,16 @@ onUnmounted(() => {
 :root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-node) {
   fill: #525252;
   stroke: #fafafa;
+}
+
+:root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-node.is-grouped) {
+  fill: #858585;
+  stroke: #404040;
+}
+
+:root.canvas-theme-light .canvas-board :deep(.canvas-workflow-minimap .vue-flow__minimap-node.is-group) {
+  fill: transparent;
+  stroke: rgba(82, 82, 82, 0.72);
 }
 
 /* 框选区域样式 */

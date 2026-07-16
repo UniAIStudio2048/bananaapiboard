@@ -41,7 +41,7 @@ import TicketDrawer from '@/components/ticket/TicketDrawer.vue'
 import TicketList from '@/components/ticket/TicketList.vue'
 import TicketDetail from '@/components/ticket/TicketDetail.vue'
 import CreateTicketForm from '@/components/ticket/CreateTicketForm.vue'
-import { Sparkles } from '@lucide/vue'
+import { FolderOpen, Sparkles } from '@lucide/vue'
 import { useI18n } from '@/i18n'
 import {
   startAutoSave as startHistoryAutoSave,
@@ -3445,10 +3445,7 @@ onUnmounted(() => {
           title="资产管理"
           aria-label="资产管理"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="4" width="18" height="16" rx="2"/>
-            <path d="M9 4v16M9 10h12"/>
-          </svg>
+          <FolderOpen aria-hidden="true" />
           <span class="canvas-control-label">资产管理</span>
         </button>
 

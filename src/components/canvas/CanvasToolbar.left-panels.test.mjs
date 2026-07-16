@@ -6,6 +6,8 @@ import { dirname, join } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(join(__dirname, 'CanvasToolbar.vue'), 'utf8')
 
+assert.match(source, /import\s*\{[^}]*FolderOpen[^}]*\}\s*from\s*['"]@lucide\/vue['"]/)
+assert.match(source, /asset-btn[\s\S]*?@click="openAssets"[\s\S]*?<FolderOpen\b[^>]*aria-hidden="true"[^>]*\/>/)
 assert.match(source, /function closeToolbarPanels\(\)/, 'CanvasToolbar should centralize closing local flyout panels')
 
 for (const functionName of ['handleOpenTemplates', 'openWorkflows', 'openAssets', 'openHistory', 'saveWorkflow', 'openProfilePanel']) {

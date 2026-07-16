@@ -84,6 +84,7 @@ export function projectCanvasRenderState({
   const minimapItems = sourceNodes.map(item => ({
     id: item.id,
     type: item.type,
+    groupId: item.data?.groupId || null,
     ...getCanvasNodeBounds(item)
   }))
   const enabled = sourceNodes.length > threshold && containerRect?.width > 0 && containerRect?.height > 0

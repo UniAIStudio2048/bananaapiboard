@@ -49,6 +49,13 @@
                 <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" /></svg>
                 开始创作
               </button>
+              <button
+                class="w-full px-4 py-3 text-left text-sm text-gray-200 hover:bg-neutral-800 flex items-center gap-2.5 transition-colors"
+                @click="enterBeginnerMode"
+              >
+                <svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904 9 18l-.813-2.096a4.5 4.5 0 0 0-2.091-2.091L4 13l2.096-.813a4.5 4.5 0 0 0 2.091-2.091L9 8l.813 2.096a4.5 4.5 0 0 0 2.091 2.091L14 13l-2.096.813a4.5 4.5 0 0 0-2.091 2.091ZM18.259 8.715 18 9.5l-.259-.785a2.25 2.25 0 0 0-1.456-1.456L15.5 7l.785-.259a2.25 2.25 0 0 0 1.456-1.456L18 4.5l.259.785a2.25 2.25 0 0 0 1.456 1.456L20.5 7l-.785.259a2.25 2.25 0 0 0-1.456 1.456Z" /></svg>
+                进入新手模式
+              </button>
               <div class="border-t border-neutral-700/60" />
               <button
                 class="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-neutral-800 flex items-center gap-2.5 transition-colors"
@@ -283,6 +290,13 @@ function goToProfile() {
 function goToCanvas() {
   showUserMenu.value = false
   router.push('/canvas')
+}
+
+function enterBeginnerMode() {
+  showUserMenu.value = false
+  localStorage.setItem('userMode', 'simple')
+  window.dispatchEvent(new CustomEvent('user-info-updated'))
+  router.push('/generate')
 }
 
 function handleLogout() {

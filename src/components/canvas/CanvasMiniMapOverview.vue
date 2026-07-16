@@ -54,10 +54,11 @@ const viewportRect = computed(() => {
 
 function nodeClass(item) {
   const type = String(item?.type || '')
+  if (type === 'group') return 'overview-node is-group'
+  if (item?.groupId) return 'overview-node is-grouped'
   if (type.includes('video')) return 'overview-node is-video'
   if (type.includes('audio')) return 'overview-node is-audio'
   if (type.includes('text') || type.includes('llm')) return 'overview-node is-text'
-  if (type === 'group') return 'overview-node is-group'
   return 'overview-node'
 }
 
@@ -143,6 +144,7 @@ function handleClick(event) {
 .overview-node.is-video { fill: rgba(244, 114, 182, 0.66); }
 .overview-node.is-audio { fill: rgba(251, 191, 36, 0.66); }
 .overview-node.is-text { fill: rgba(125, 211, 252, 0.66); }
+.overview-node.is-grouped { fill: rgba(203, 213, 225, 0.78); }
 .overview-node.is-group { fill: transparent; stroke: rgba(255, 255, 255, 0.55); }
 
 .overview-viewport {
@@ -160,6 +162,15 @@ function handleClick(event) {
 
 :root.canvas-theme-light .overview-bg {
   fill: rgba(245, 245, 245, 0.82);
+}
+
+:root.canvas-theme-light .overview-node.is-grouped {
+  fill: rgba(82, 82, 82, 0.72);
+}
+
+:root.canvas-theme-light .overview-node.is-group {
+  fill: transparent;
+  stroke: rgba(82, 82, 82, 0.62);
 }
 
 :root.canvas-theme-light .overview-viewport {

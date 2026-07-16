@@ -28,6 +28,8 @@ for (const hook of controlHooks) {
 }
 
 assert.match(source, /canvas-asset-toggle-btn[\s\S]*?@click="openAssetPanel"/)
+assert.match(source, /import\s*\{[^}]*FolderOpen[^}]*\}\s*from\s*['"]@lucide\/vue['"]/)
+assert.match(source, /canvas-asset-toggle-btn[\s\S]*?<FolderOpen\b[^>]*aria-hidden="true"[^>]*\/>/)
 assert.match(source, /canvas-asset-toggle-btn[\s\S]*?<span class="canvas-control-label">资产管理<\/span>/)
 assert.match(source, /canvas-organize-btn[\s\S]*?@click="requestCanvasOrganization"/)
 assert.match(source, /canvas-edge-toggle-btn[\s\S]*?@click="toggleEdgesHidden"/)

@@ -66,6 +66,11 @@ assert.deepEqual(
   assert.deepEqual(result.nodeIds.sort(), ['child-in-group', 'group-visible', 'selected-far', 'visible'].sort())
   assert.deepEqual(result.edgeIds.sort(), ['e-visible'].sort())
   assert.equal(result.minimapItems.length, nodes.length)
+  assert.equal(
+    result.minimapItems.find(item => item.id === 'child-in-group')?.groupId,
+    'group-visible',
+    'minimap projections must preserve group membership for grouped-node styling'
+  )
 }
 
 {
