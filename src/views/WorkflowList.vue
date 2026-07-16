@@ -11,7 +11,7 @@ import { getProjectList, createProject, updateProject, deleteProject } from '@/a
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import SpaceSwitcher from '@/components/canvas/SpaceSwitcher.vue'
-import MoveToProjectDialog from '@/components/canvas/MoveToProjectDialog.vue'
+import MoveResourceDialog from '@/components/canvas/MoveResourceDialog.vue'
 import {
   setCanvasSpaceFilterFromGlobal,
   syncGlobalSpaceFromFilter,
@@ -88,9 +88,9 @@ const contextMenu = ref({
   type: '' // 'project' | 'workflow'
 })
 
-// 移动工作流弹窗
+// 移动项目/工作流弹窗
 const showMoveDialog = ref(false)
-const moveTarget = ref({ id: '', name: '' })
+const moveTarget = ref({ type: 'workflow', operation: 'move', id: '', name: '', workflowCount: 0, spaceType: 'personal', teamId: '', projectId: '', sourceRole: '', isDefault: false })
 
 // 重命名
 const renameState = ref({
@@ -400,21 +400,40 @@ function handleContextAction(action) {
   if (type === 'project') {
     if (action === 'rename') openRenameProject(item)
     else if (action === 'delete') confirmDeleteProject(item)
+    else if (action === 'move') openMoveDialog(item, 'project', 'move')
+    else if (action === 'copy') openMoveDialog(item, 'project', 'copy')
   } else if (type === 'workflow') {
     if (action === 'delete') confirmDelete(item)
-    else if (action === 'move') openMoveDialog(item)
+    else if (action === 'move') openMoveDialog(item, 'workflow', 'move')
+    else if (action === 'copy') openMoveDialog(item, 'workflow', 'copy')
   }
 }
 
-// === 移动工作流 ===
+// === 移动项目/工作流 ===
 
-function openMoveDialog(workflow) {
-  moveTarget.value = { id: workflow.id, name: workflow.name }
+function getTeamRole(teamId) {
+  return teamStore.myTeams.value.find(team => String(team.id) === String(teamId))?.my_role || ''
+}
+
+function openMoveDialog(item, type, operation = 'move') {
+  moveTarget.value = {
+    type,
+    operation,
+    id: item.id,
+    name: item.name,
+    workflowCount: Number(item.workflow_count || 0),
+    spaceType: item.space_type || currentProject.value?.space_type || 'personal',
+    teamId: item.team_id || currentProject.value?.team_id || '',
+    projectId: type === 'workflow' ? (item.project_id || currentProject.value?.id || '') : '',
+    sourceRole: getTeamRole(item.team_id || currentProject.value?.team_id),
+    isDefault: !!item.is_default
+  }
   showMoveDialog.value = true
 }
 
-function onWorkflowMoved() {
-  loadWorkflows()
+async function onResourceMoved() {
+  if (currentProject.value || moveTarget.value.type === 'project') goBackToProjects()
+  else await loadProjects()
 }
 
 // === 工作流删除 ===
@@ -803,7 +822,19 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
         :style="{ left: contextMenu.x + 'px', top: contextMenu.y + 'px' }"
         @click.stop
       >
-        <template v-if="contextMenu.type === 'project'">
+      <template v-if="contextMenu.type === 'project'">
+          <button
+            class="context-item"
+            :class="{ 'context-disabled': contextMenu.item?.is_default }"
+            @click="contextMenu.item?.is_default ? null : handleContextAction('move')"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+            {{ contextMenu.item?.is_default ? '默认项目不可移动' : '移动到其他空间' }}
+          </button>
+          <button class="context-item" @click="handleContextAction('copy')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            创建项目副本
+          </button>
           <button class="context-item" @click="handleContextAction('rename')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
             重命名
@@ -821,6 +852,10 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
           <button class="context-item" @click="handleContextAction('move')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             移动到项目
+          </button>
+          <button class="context-item" @click="handleContextAction('copy')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            创建工作流副本
           </button>
           <button class="context-item context-danger" @click="handleContextAction('delete')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
@@ -932,14 +967,21 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
       </div>
     </Transition>
 
-    <!-- 移动工作流弹窗 -->
-    <MoveToProjectDialog
+    <!-- 移动项目/工作流弹窗 -->
+    <MoveResourceDialog
       v-model="showMoveDialog"
-      :workflow-id="String(moveTarget.id)"
-      :workflow-name="moveTarget.name"
-      :current-project-id="String(currentProject?.id || '')"
+      :resource-type="moveTarget.type"
+      :resource-id="String(moveTarget.id)"
+      :resource-name="moveTarget.name"
+      :workflow-count="moveTarget.workflowCount"
+      :current-space-type="moveTarget.spaceType"
+      :current-team-id="String(moveTarget.teamId || '')"
+      :current-project-id="String(moveTarget.projectId || '')"
       :space-filter="spaceFilter"
-      @moved="onWorkflowMoved"
+      :source-role="moveTarget.sourceRole"
+      :is-default-project="moveTarget.isDefault"
+      :operation="moveTarget.operation"
+      @moved="onResourceMoved"
     />
   </div>
 </template>
@@ -1590,6 +1632,210 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
 }
 
 .btn-delete:hover { background: #fff; }
+
+/* 白昼模式 */
+:root.canvas-theme-light .workflow-page {
+  background: #f5f5f4;
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .top-bar {
+  background: rgba(255, 255, 255, 0.95);
+  border-bottom-color: rgba(28, 25, 23, 0.1);
+}
+
+:root.canvas-theme-light .back-btn,
+:root.canvas-theme-light .page-btn {
+  background: rgba(28, 25, 23, 0.05);
+  border-color: rgba(28, 25, 23, 0.12);
+  color: #44403c;
+}
+
+:root.canvas-theme-light .back-btn:hover,
+:root.canvas-theme-light .page-btn:hover:not(:disabled) {
+  background: rgba(28, 25, 23, 0.09);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .breadcrumb-link,
+:root.canvas-theme-light .page-count,
+:root.canvas-theme-light .quota-label,
+:root.canvas-theme-light .stat-text,
+:root.canvas-theme-light .loading-state,
+:root.canvas-theme-light .page-text {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .breadcrumb-link:hover {
+  color: #292524;
+  background: rgba(28, 25, 23, 0.06);
+}
+
+:root.canvas-theme-light .breadcrumb-sep,
+:root.canvas-theme-light .stat-max {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .breadcrumb-current,
+:root.canvas-theme-light .page-title,
+:root.canvas-theme-light .quota-value,
+:root.canvas-theme-light .stat-num {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .new-btn,
+:root.canvas-theme-light .create-btn,
+:root.canvas-theme-light .btn-confirm,
+:root.canvas-theme-light .btn-delete {
+  background: #1c1917;
+  color: #ffffff;
+}
+
+:root.canvas-theme-light .new-btn:hover,
+:root.canvas-theme-light .create-btn:hover,
+:root.canvas-theme-light .btn-confirm:hover,
+:root.canvas-theme-light .btn-delete:hover {
+  background: #292524;
+}
+
+:root.canvas-theme-light .quota-section {
+  background: rgba(255, 255, 255, 0.55);
+  border-bottom-color: rgba(28, 25, 23, 0.08);
+}
+
+:root.canvas-theme-light .quota-bar {
+  background: rgba(28, 25, 23, 0.1);
+}
+
+:root.canvas-theme-light .quota-fill {
+  background: #57534e;
+}
+
+:root.canvas-theme-light .vip-tag {
+  background: rgba(28, 25, 23, 0.08);
+  border-color: rgba(28, 25, 23, 0.18);
+  color: #292524;
+}
+
+:root.canvas-theme-light .spinner {
+  border-color: rgba(28, 25, 23, 0.12);
+  border-top-color: #57534e;
+}
+
+:root.canvas-theme-light .empty-icon {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .empty-state h3 {
+  color: #292524;
+}
+
+:root.canvas-theme-light .empty-state p,
+:root.canvas-theme-light .project-meta .meta-item,
+:root.canvas-theme-light .card-desc,
+:root.canvas-theme-light .card-meta .meta-item,
+:root.canvas-theme-light .card-time {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .project-card,
+:root.canvas-theme-light .workflow-card {
+  background: #ffffff;
+  border-color: rgba(28, 25, 23, 0.1);
+  box-shadow: 0 1px 3px rgba(28, 25, 23, 0.05);
+}
+
+:root.canvas-theme-light .project-card:hover,
+:root.canvas-theme-light .workflow-card:hover {
+  background: #ffffff;
+  border-color: rgba(28, 25, 23, 0.2);
+  box-shadow: 0 8px 20px rgba(28, 25, 23, 0.08);
+}
+
+:root.canvas-theme-light .project-thumb,
+:root.canvas-theme-light .card-thumb {
+  background: linear-gradient(135deg, #fafaf9, #e7e5e4);
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .project-title,
+:root.canvas-theme-light .card-title {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .default-badge {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(28, 25, 23, 0.15);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .inline-rename-input,
+:root.canvas-theme-light .modal-input {
+  background: #ffffff;
+  border-color: rgba(28, 25, 23, 0.18);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .inline-rename-input:focus,
+:root.canvas-theme-light .modal-input:focus {
+  background: #ffffff;
+  border-color: #78716c;
+}
+
+:root.canvas-theme-light .modal-input::placeholder {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .card-meta,
+:root.canvas-theme-light .modal-header,
+:root.canvas-theme-light .modal-footer {
+  border-color: rgba(28, 25, 23, 0.09);
+}
+
+:root.canvas-theme-light .delete-btn {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .delete-btn:hover,
+:root.canvas-theme-light .modal-close:hover,
+:root.canvas-theme-light .context-item:hover {
+  background: rgba(28, 25, 23, 0.07);
+  color: #292524;
+}
+
+:root.canvas-theme-light .context-menu,
+:root.canvas-theme-light .modal-box {
+  background: #ffffff;
+  border-color: rgba(28, 25, 23, 0.12);
+  box-shadow: 0 12px 32px rgba(28, 25, 23, 0.14);
+}
+
+:root.canvas-theme-light .context-item,
+:root.canvas-theme-light .context-disabled:hover,
+:root.canvas-theme-light .modal-header h2,
+:root.canvas-theme-light .modal-body p {
+  color: #292524;
+}
+
+:root.canvas-theme-light .modal-overlay {
+  background: rgba(28, 25, 23, 0.38);
+}
+
+:root.canvas-theme-light .modal-close,
+:root.canvas-theme-light .modal-body .warning,
+:root.canvas-theme-light .input-label {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .btn-cancel {
+  background: rgba(28, 25, 23, 0.06);
+  border-color: rgba(28, 25, 23, 0.12);
+  color: #44403c;
+}
+
+:root.canvas-theme-light .btn-cancel:hover {
+  background: rgba(28, 25, 23, 0.1);
+}
 
 /* 过渡动画 */
 .fade-enter-active,

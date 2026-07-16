@@ -782,7 +782,6 @@ onNodeDrag((event) => {
     const clampedPosition = clampPositionInsideNodeGroup(node, node.position)
     node.position = clampedPosition
     canvasStore.updateNodePosition(node.id, clampedPosition)
-    updateGroupOffsetForNode({ ...node, position: clampedPosition })
   }
 
   scheduleActiveEdgePathsRead()

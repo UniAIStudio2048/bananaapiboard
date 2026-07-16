@@ -4026,7 +4026,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--canvas-text-secondary, #cbd5e1);
   transition: all 0.3s ease;
   backdrop-filter: blur(10px);
 }
@@ -4039,7 +4039,7 @@ onUnmounted(() => {
 .mode-switch-btn:hover .mode-switch-icon {
   background: rgba(60, 60, 60, 0.95);
   border-color: rgba(255, 255, 255, 0.25);
-  color: #ffffff;
+  color: var(--canvas-text-primary, #ffffff);
   transform: scale(1.05);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
 }
@@ -4050,8 +4050,8 @@ onUnmounted(() => {
   top: calc(100% + 8px);
   left: 0;
   min-width: 180px;
-  background: rgba(30, 30, 30, 0.98);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--canvas-bg-elevated, rgba(30, 30, 30, 0.98));
+  border: 1px solid var(--canvas-border, rgba(255, 255, 255, 0.12));
   border-radius: 12px;
   padding: 6px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
@@ -4066,15 +4066,15 @@ onUnmounted(() => {
   padding: 10px 14px;
   border-radius: 8px;
   cursor: pointer;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--canvas-text-primary, #f8fafc);
   font-size: 14px;
   transition: all 0.15s ease;
   white-space: nowrap;
 }
 
 .mode-dropdown-item:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--canvas-bg-hover, rgba(255, 255, 255, 0.1));
+  color: var(--canvas-text-primary, #fff);
 }
 
 .mode-dropdown-item svg {
@@ -4950,7 +4950,7 @@ onUnmounted(() => {
 }
 
 :root.canvas-theme-light .mode-dropdown-item {
-  color: #44403c;
+  color: var(--canvas-text-primary, #1c1917);
 }
 
 :root.canvas-theme-light .mode-dropdown-item:hover {

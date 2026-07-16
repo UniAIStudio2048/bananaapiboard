@@ -103,3 +103,57 @@ export async function moveWorkflowToProject(workflowId, projectId) {
   }
   return response.json()
 }
+
+/** 将单个工作流移动到其他空间/项目 */
+export async function transferWorkflowSpace(workflowId, data) {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/transfer-space`), {
+    method: 'PUT',
+    credentials: 'include',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message || '移动工作流失败')
+  }
+  return response.json()
+}
+
+/** 将整个项目及其中工作流移动到其他空间 */
+export async function transferProjectSpace(projectId, data) {
+  const response = await fetch(getApiUrl(`/api/canvas/projects/${projectId}/transfer-space`), {
+    method: 'PUT',
+    credentials: 'include',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data)
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message || '移动项目失败')
+  }
+  return response.json()
+}
+
+/** 创建工作流副本到其他空间/项目 */
+export async function copyWorkflowToSpace(workflowId, data) {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/copy-space`), {
+    method: 'POST', credentials: 'include', headers: getAuthHeaders(), body: JSON.stringify(data)
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message || '创建工作流副本失败')
+  }
+  return response.json()
+}
+
+/** 创建项目副本到其他空间 */
+export async function copyProjectToSpace(projectId, data) {
+  const response = await fetch(getApiUrl(`/api/canvas/projects/${projectId}/copy-space`), {
+    method: 'POST', credentials: 'include', headers: getAuthHeaders(), body: JSON.stringify(data)
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.message || '创建项目副本失败')
+  }
+  return response.json()
+}

@@ -206,7 +206,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   padding: 6px 10px;
   border: 1px solid var(--canvas-border, rgba(255, 255, 255, 0.12));
   background: var(--canvas-bg-secondary, rgba(255, 255, 255, 0.06));
-  color: var(--canvas-text-primary, rgba(255, 255, 255, 0.9));
+  color: var(--canvas-text-primary, #f8fafc);
   font-size: 12px;
   border-radius: 8px;
   cursor: pointer;
@@ -266,7 +266,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   border-radius: 7px;
   cursor: pointer;
   transition: all 0.12s ease;
-  color: var(--canvas-text-primary, rgba(255, 255, 255, 0.85));
+  color: var(--canvas-text-primary, #f8fafc);
   font-size: 13px;
 }
 
@@ -338,7 +338,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
 :root.canvas-theme-light .space-trigger {
   border-color: rgba(0, 0, 0, 0.1);
   background: rgba(0, 0, 0, 0.04);
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--canvas-text-primary, #1c1917);
 }
 :root.canvas-theme-light .space-trigger:hover {
   background: rgba(0, 0, 0, 0.07);
@@ -350,7 +350,7 @@ onUnmounted(() => document.removeEventListener('click', handleClickOutside))
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
 }
 :root.canvas-theme-light .space-option {
-  color: rgba(0, 0, 0, 0.85);
+  color: var(--canvas-text-primary, #1c1917);
 }
 :root.canvas-theme-light .space-option:hover {
   background: rgba(0, 0, 0, 0.05);

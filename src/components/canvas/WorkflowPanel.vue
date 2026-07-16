@@ -18,6 +18,7 @@ import {
 import { useTeamStore } from '@/stores/team'
 import { getProjectList, updateProject, createProject, moveWorkflowToProject } from '@/api/canvas/project'
 import SpaceSwitcher from './SpaceSwitcher.vue'
+import MoveResourceDialog from './MoveResourceDialog.vue'
 import {
   setCanvasSpaceFilterFromGlobal,
   syncGlobalSpaceFromFilter,
@@ -107,6 +108,8 @@ const renameInput = ref('')
 
 // 删除确认状态
 const deleteProjectConfirm = ref({ visible: false, group: null, inputName: '' })
+const moveResourceDialog = ref(false)
+const moveResourceTarget = ref({ type: 'workflow', operation: 'move', id: '', name: '', workflowCount: 0, spaceType: 'personal', teamId: '', projectId: '', sourceRole: '', isDefault: false })
 
 function getProjectKey(group) {
   return group.id || '__uncategorized__'
@@ -204,6 +207,32 @@ function cancelDeleteProject() {
   deleteProjectConfirm.value = { visible: false, group: null, inputName: '' }
 }
 
+function getTeamRole(teamId) {
+  return teamStore.myTeams.value.find(team => String(team.id) === String(teamId))?.my_role || ''
+}
+
+function openMoveResource(resource, type, operation = 'move') {
+  moveResourceTarget.value = {
+    type,
+    operation,
+    id: resource.id,
+    name: resource.name,
+    workflowCount: Number(resource.workflows?.length || resource.workflow_count || 0),
+    spaceType: resource.space_type || (teamStore.globalSpaceType.value === 'team' ? 'team' : 'personal'),
+    teamId: resource.team_id || teamStore.globalTeamId.value || '',
+    projectId: type === 'workflow' ? (resource.project_id || '') : '',
+    sourceRole: getTeamRole(resource.team_id || teamStore.globalTeamId.value),
+    isDefault: !!(resource.is_default || resource.isDefault)
+  }
+  moveResourceDialog.value = true
+}
+
+async function handleResourceMoved() {
+  moveResourceDialog.value = false
+  workflowsCached.value = false
+  await loadWorkflows(true)
+}
+
 // ========== 计算属性 ==========
 
 // 筛选后的工作流
@@ -232,6 +261,10 @@ const projectTree = computed(() => {
       id: p.id,
       name: p.name,
       isDefault: !!p.is_default,
+      is_default: !!p.is_default,
+      space_type: p.space_type,
+      team_id: p.team_id,
+      workflow_count: p.workflow_count,
       workflows: []
     })
   }
@@ -1109,7 +1142,7 @@ defineExpose({
 
 <template>
   <Transition name="panel">
-    <div
+      <div
       v-if="visible"
       class="workflow-panel-container"
       :class="{ 'is-dragging': isDragging }"
@@ -1289,6 +1322,18 @@ defineExpose({
                           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                         </svg>
                       </button>
+                      <button
+                        v-if="group.id && !group.isDefault"
+                        class="folder-move-btn"
+                        @click.stop="openMoveResource(group, 'project')"
+                        title="移动项目到其他空间"
+                      >↗</button>
+                      <button
+                        v-if="group.id && !group.isDefault"
+                        class="folder-move-btn"
+                        @click.stop="openMoveResource(group, 'project', 'copy')"
+                        title="创建项目副本"
+                      >⧉</button>
                     </div>
 
                     <!-- 项目内工作流列表 -->
@@ -1345,6 +1390,16 @@ defineExpose({
                                 <path d="M5 12h14M12 5l7 7-7 7"/>
                               </svg>
                             </button>
+                            <button
+                              class="action-btn move-btn"
+                              @click.stop="openMoveResource({ ...workflow, project_id: group.id }, 'workflow')"
+                              title="移动工作流"
+                            >↗</button>
+                            <button
+                              class="action-btn move-btn"
+                              @click.stop="openMoveResource({ ...workflow, project_id: group.id }, 'workflow', 'copy')"
+                              title="创建工作流副本"
+                            >⧉</button>
                             <button
                               class="action-btn delete-btn"
                               @click.stop="confirmDelete($event, workflow, false)"
@@ -1597,6 +1652,20 @@ defineExpose({
             </div>
           </div>
         </Transition>
+        <MoveResourceDialog
+          v-model="moveResourceDialog"
+          :resource-type="moveResourceTarget.type"
+          :resource-id="String(moveResourceTarget.id)"
+          :resource-name="moveResourceTarget.name"
+          :workflow-count="moveResourceTarget.workflowCount"
+          :current-space-type="moveResourceTarget.spaceType"
+          :current-team-id="String(moveResourceTarget.teamId || '')"
+          :current-project-id="String(moveResourceTarget.projectId || '')"
+          :source-role="moveResourceTarget.sourceRole"
+          :is-default-project="moveResourceTarget.isDefault"
+          :operation="moveResourceTarget.operation"
+          @moved="handleResourceMoved"
+        />
       </div>
     </div>
   </Transition>
@@ -2122,6 +2191,24 @@ defineExpose({
   color: #ff6b6b;
 }
 
+.folder-move-btn {
+  margin-left: 4px;
+  padding: 1px 4px;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.project-folder:hover .folder-move-btn {
+  opacity: 1;
+}
+
+.folder-move-btn:hover {
+  color: #60a5fa;
+}
+
 .project-delete-dialog {
   max-width: 340px;
   user-select: text;
@@ -2400,6 +2487,11 @@ defineExpose({
 .delete-btn:hover {
   background: rgba(255, 100, 100, 0.15);
   color: #ff6b6b;
+}
+
+.move-btn:hover {
+  background: rgba(96, 165, 250, 0.15);
+  color: #60a5fa;
 }
 
 /* 模板网格 */

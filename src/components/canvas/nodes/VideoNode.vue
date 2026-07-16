@@ -4021,7 +4021,7 @@ async function ensureAccessibleUrls(imageUrls) {
         }
         const blob = await response.blob()
         const file = new File([blob], `blob_${Date.now()}.png`, { type: blob.type || 'image/png' })
-        
+
         // 上传到服务器（服务器会上传到云存储）
         const urls = await uploadImages([file])
         if (urls && urls.length > 0) {
@@ -4618,7 +4618,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
     if (taskId) {
       console.log(`[VideoNode] 任务 ${taskIndex + 1} 已提交:`, taskId)
       markSubmissionTaskCreated(submissionId, taskId)
-      
+
       // 注册到后台任务管理器（即使用户离开画布也继续执行）
       const currentTab = canvasStore.getCurrentTab()
       registerTask({
@@ -4736,25 +4736,11 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
   }
 }
 
-// 计算错峰模式的轮询间隔
-function getOffPeakPollInterval(taskCreatedAt) {
-  const elapsed = Date.now() - taskCreatedAt
-  const EIGHTY_MINUTES = 80 * 60 * 1000
-  
-  if (elapsed < EIGHTY_MINUTES) {
-    // 前80分钟：正常轮询（5秒）
-    return 5000
-  } else {
-    // 80分钟后：每10分钟轮询一次
-    return 10 * 60 * 1000
-  }
-}
-
 // 轮询视频任务状态（针对特定节点）
 async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreatedAt = null) {
   const token = localStorage.getItem('token')
-  // 错峰模式：最长48小时；普通模式：80分钟
-  const MAX_POLL_TIME = isOffPeak ? 48 * 60 * 60 * 1000 : 80 * 60 * 1000
+  // 所有视频任务统一 40 分钟硬超时，与后端一致。
+  const MAX_POLL_TIME = 40 * 60 * 1000
   const NORMAL_POLL_INTERVAL = 4000 // 普通模式4秒轮询一次
   const startTime = taskCreatedAt || Date.now()
   
@@ -4767,15 +4753,6 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
     
     const poll = async () => {
       try {
-        // 检查超时
-        if (Date.now() - startTime > MAX_POLL_TIME) {
-          reject(new Error(isOffPeak ? '错峰模式生成超时（48小时），请联系客服' : '生成超时，请稍后在历史记录中查看'))
-          return
-        }
-        
-        // 计算本次轮询间隔
-        const pollInterval = isOffPeak ? getOffPeakPollInterval(startTime) : NORMAL_POLL_INTERVAL
-        
         const response = await fetch(getApiUrl(`/api/videos/task/${taskId}`), {
           headers: { 
             ...getTenantHeaders(), 
@@ -4814,7 +4791,7 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
               // 最多额外等待3次（约12秒），让后端完成异步上传
               if (pollState.cloudUrlWaitCount <= 3) {
                 console.log(`[VideoNode] 检测到临时URL，等待云存储URL (第${pollState.cloudUrlWaitCount}次)...`)
-                setTimeout(poll, pollInterval)
+                setTimeout(poll, NORMAL_POLL_INTERVAL)
                 return
               }
               pollState.waitedForCloudUrl = true
@@ -4841,16 +4818,15 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
           reject(new Error(data.error || data.fail_reason || '视频生成失败'))
           return
         }
-        
-        // 继续轮询（错峰模式会动态调整间隔）
-        if (isOffPeak) {
-          const nextInterval = getOffPeakPollInterval(startTime)
-          console.log(`[VideoNode] 错峰模式轮询 | 已过: ${Math.round((Date.now() - startTime) / 60000)}分钟 | 下次间隔: ${nextInterval / 1000}秒`)
-          setTimeout(poll, nextInterval)
-        } else {
-          setTimeout(poll, pollInterval)
+
+        // 后端查询优先，以确保超时任务进入统一退款链路；这里只保留前端兜底。
+        if (Date.now() - startTime > MAX_POLL_TIME) {
+          reject(new Error('生成超时（超过40分钟），已自动退还积分'))
+          return
         }
         
+        setTimeout(poll, NORMAL_POLL_INTERVAL)
+
       } catch (error) {
         reject(error)
       }
@@ -5402,8 +5378,8 @@ async function handleGenerate(options = {}) {
 // 轮询视频任务状态
 async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
   const token = localStorage.getItem('token')
-  // 错峰模式：最长48小时；普通模式：80分钟
-  const MAX_POLL_TIME = isOffPeak ? 48 * 60 * 60 * 1000 : 80 * 60 * 1000
+  // 所有视频任务统一 40 分钟硬超时，与后端一致。
+  const MAX_POLL_TIME = 40 * 60 * 1000
   const NORMAL_POLL_INTERVAL = 4000 // 普通模式4秒轮询一次
   const startTime = taskCreatedAt || Date.now()
   
@@ -5415,14 +5391,6 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
   
   const poll = async () => {
     try {
-      // 计算本次轮询间隔
-      const pollInterval = isOffPeak ? getOffPeakPollInterval(startTime) : NORMAL_POLL_INTERVAL
-      
-      // 检查超时
-      if (Date.now() - startTime > MAX_POLL_TIME) {
-        throw new Error(isOffPeak ? '错峰模式生成超时（48小时），请联系客服' : '生成超时，请稍后在历史记录中查看')
-      }
-      
       const response = await fetch(getApiUrl(`/api/videos/task/${taskId}`), {
         headers: { 
           ...getTenantHeaders(), 
@@ -5458,7 +5426,7 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
             pollState.cloudUrlWaitCount++
             if (pollState.cloudUrlWaitCount <= 3) {
               console.log(`[VideoNode] 检测到临时URL，等待云存储URL (第${pollState.cloudUrlWaitCount}次)...`)
-              setTimeout(poll, pollInterval)
+              setTimeout(poll, NORMAL_POLL_INTERVAL)
               return
             }
             pollState.waitedForCloudUrl = true
@@ -5484,16 +5452,14 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
       if (status === 'failed' || status === 'failure' || status === 'error') {
         throw new Error(data.error || data.fail_reason || '视频生成失败')
       }
-      
-      // 继续轮询（错峰模式会动态调整间隔）
-      if (isOffPeak) {
-        const nextInterval = getOffPeakPollInterval(startTime)
-        console.log(`[VideoNode] 错峰模式轮询 | 已过: ${Math.round((Date.now() - startTime) / 60000)}分钟 | 下次间隔: ${nextInterval / 1000}秒`)
-        setTimeout(poll, nextInterval)
-      } else {
-        setTimeout(poll, pollInterval)
+
+      // 后端查询优先，以确保超时任务进入统一退款链路；这里只保留前端兜底。
+      if (Date.now() - startTime > MAX_POLL_TIME) {
+        throw new Error('生成超时（超过40分钟），已自动退还积分')
       }
       
+      setTimeout(poll, NORMAL_POLL_INTERVAL)
+
     } catch (error) {
       console.error('[VideoNode] 轮询失败:', error)
       const model = props.data?.model || selectedModel.value
@@ -6619,9 +6585,8 @@ async function handleVideoError(event) {
 
 // 鼠标进入视频区域 - 自动播放（带声音）
 function activateVideoPreview(options = {}) {
+  // 大画布也需要支持视频节点悬停预览；仅在拖拽节点时跳过播放，避免与画布交互冲突。
   const force = options?.force === true
-  // 🚀 性能优化：大画布模式下禁用悬停播放
-  if (canvasStore.isLargeCanvas && !force) return
   // 🚀 性能优化：拖拽时不自动播放视频
   if (isCanvasMediaMoving.value && !force) return
 
@@ -6643,14 +6608,11 @@ function handleVideoWrapperClick(event) {
 function handleVideoMouseEnter() {
   const video = videoPlayerRef.value
   if (video && video.paused) {
-    video.muted = false // 悬停播放时取消静音，播放声音
-    video.play().catch(e => {
-      // 如果带声音播放失败（浏览器自动播放策略），则尝试静音播放
-      console.log('[VideoNode] 带声音播放失败，尝试静音播放:', e.message)
-      video.muted = true
-      video.play().catch(err => {
-        console.log('[VideoNode] 静音播放也失败:', err.message)
-      })
+    // 生产环境可能没有用户手势，先静音播放以兼容浏览器自动播放策略。
+    video.muted = true
+    video.defaultMuted = true
+    video.play().catch(err => {
+      console.log('[VideoNode] 悬停自动播放失败:', err.message)
     })
   }
 }

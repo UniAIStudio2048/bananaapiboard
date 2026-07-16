@@ -6226,7 +6226,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
   flex: 1;
   font-size: 14px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--canvas-text-primary, #f8fafc);
 }
 
 .current-space .dropdown-arrow {
@@ -7078,7 +7078,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 }
 
 :root.canvas-theme-light .current-space .space-name {
-  color: rgba(0, 0, 0, 0.9);
+  color: var(--canvas-text-primary, #1c1917);
 }
 
 :root.canvas-theme-light .space-dropdown {
