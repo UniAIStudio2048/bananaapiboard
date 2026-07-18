@@ -344,6 +344,24 @@ function revokeTrackedBlobUrl(url) {
   }
 }
 
+async function uploadCropBlob(blob, fileName, nodeId) {
+  if (!blob) throw new Error('裁剪图片为空')
+  const file = new File([blob], fileName, { type: blob.type || 'image/png' })
+  const uploaded = await uploadCanvasMedia(file, 'image', {
+    nodeId,
+    tabId: canvasStore.activeTabId
+  })
+  if (!uploaded?.url) throw new Error('裁剪图片上传失败')
+  return uploaded.url
+}
+
+function notifyCanvasMediaUploadComplete(nodeId) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('canvas-media-upload-complete', {
+    detail: { nodeId }
+  }))
+}
+
 // 清理所有跟踪的 blob URL
 function cleanupAllBlobUrls() {
   console.log('[ImageNode] 清理所有 blob URL，数量:', createdBlobUrls.length)
@@ -2728,12 +2746,12 @@ async function handleGenericGridCrop(cols, rows) {
         ctx.drawImage(img, col * cellWidth, row * cellHeight, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight)
         
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
-        const blobUrl = URL.createObjectURL(blob)
+        const nodeId = `grid-crop-${timestamp}-${index}`
+        const serverUrl = await uploadCropBlob(blob, `grid-crop-${index}.png`, nodeId)
         
         canvas.width = 0
         canvas.height = 0
         
-        const nodeId = `grid-crop-${timestamp}-${index}`
         const nodeX = baseX + offsetX + col * (nodeWidth + gap)
         const nodeY = baseY + row * (nodeHeight + gap)
         
@@ -2744,15 +2762,11 @@ async function handleGenericGridCrop(cols, rows) {
           data: {
             label: `裁剪 ${row + 1}-${col + 1}`,
             nodeRole: 'source',
-            sourceImages: [blobUrl],
+            sourceImages: [serverUrl],
             isGenerated: true,
-            fromGridCrop: true,
-            isUploading: true
+            fromGridCrop: true
           }
         })
-        
-        const cropFile = new File([blob], `grid-crop-${index}.png`, { type: 'image/png' })
-        uploadImageFileAsync(cropFile, blobUrl, nodeId)
         
         newNodeIds.push(nodeId)
         
@@ -2768,7 +2782,8 @@ async function handleGenericGridCrop(cols, rows) {
       canvasStore.createGroup(newNodeIds, `${count}宫格裁剪`)
     }
     
-    console.log(`[ImageNode] ${count}宫格裁剪完成，创建了`, newNodeIds.length, '个节点，正在后台上传到云端')
+    notifyCanvasMediaUploadComplete(newNodeIds[0])
+    console.log(`[ImageNode] ${count}宫格裁剪完成，创建了`, newNodeIds.length, '个节点')
     
   } catch (error) {
     console.error(`[ImageNode] ${count}宫格裁剪失败:`, error)
@@ -2842,7 +2857,6 @@ async function createStoryboardFromCrop(cols, rows) {
     
     // 裁剪所有图片
     const croppedUrls = []
-    const uploadTasks = []
     
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
@@ -2855,12 +2869,7 @@ async function createStoryboardFromCrop(cols, rows) {
         ctx.drawImage(img, col * cellWidth, row * cellHeight, cellWidth, cellHeight, 0, 0, cellWidth, cellHeight)
         
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
-        const blobUrl = URL.createObjectURL(blob)
-        croppedUrls.push(blobUrl)
-        
-        // 收集上传任务，稍后执行
-        const file = new File([blob], `storyboard-${index}.png`, { type: 'image/png' })
-        uploadTasks.push({ file, index, blobUrl })
+        croppedUrls.push(await uploadCropBlob(blob, `storyboard-${index}.png`, storyboardNodeId))
       }
     }
     
@@ -2899,27 +2908,7 @@ async function createStoryboardFromCrop(cols, rows) {
     
     console.log(`[ImageNode] 创建分镜格子完成: ${storyboardNodeId}`)
     
-    // 节点创建完成后，后台异步上传裁剪图到云端
-    for (const task of uploadTasks) {
-      ;(async (t) => {
-        try {
-          const urls = await uploadImages([t.file])
-          if (urls?.length > 0) {
-            const node = canvasStore.nodes.find(n => n.id === storyboardNodeId)
-            if (node && node.data?.images) {
-              const newImages = [...node.data.images]
-              newImages[t.index] = urls[0]
-              canvasStore.updateNodeData(storyboardNodeId, { images: newImages })
-            }
-            // 等待 Vue 响应式更新传播到 StoryboardNode 后再回收 blob URL
-            await nextTick()
-            try { URL.revokeObjectURL(t.blobUrl) } catch(e) {}
-          }
-        } catch(err) {
-          console.error('[ImageNode] 分镜图片上传失败:', err)
-        }
-      })(task)
-    }
+    notifyCanvasMediaUploadComplete(storyboardNodeId)
     
   } catch (error) {
     console.error('[ImageNode] 创建分镜格子失败:', error)
@@ -3152,13 +3141,13 @@ async function handleToolbarGridCrop() {
         )
         
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
-        const blobUrl = URL.createObjectURL(blob)
+        const nodeId = `grid-crop-${timestamp}-${index}`
+        const serverUrl = await uploadCropBlob(blob, `grid-crop-${index}.png`, nodeId)
         
         canvas.width = 0
         canvas.height = 0
         
-        // 创建节点（先使用 blob URL 显示，后台上传后替换）
-        const nodeId = `grid-crop-${timestamp}-${index}`
+        // 上传完成后再创建节点，避免临时 blob URL 进入工作流
         const nodeX = baseX + offsetX + col * (nodeWidth + gap)
         const nodeY = baseY + row * (nodeHeight + gap)
         
@@ -3169,18 +3158,13 @@ async function handleToolbarGridCrop() {
           data: {
             label: `裁剪 ${row + 1}-${col + 1}`,
             nodeRole: 'source',
-            sourceImages: [blobUrl],
+            sourceImages: [serverUrl],
             isGenerated: true,
-            fromGridCrop: true,
-            isUploading: true
+            fromGridCrop: true
           }
         })
         
         newNodeIds.push(nodeId)
-        
-        // 🔧 后台异步上传裁剪图到云端
-        const cropFile = new File([blob], `grid-crop-${index}.png`, { type: 'image/png' })
-        uploadImageFileAsync(cropFile, blobUrl, nodeId)
         
         // 🔧 优化：每创建一个节点后，等待下一帧渲染，让浏览器有时间处理
         await nextFrame()
@@ -3198,7 +3182,8 @@ async function handleToolbarGridCrop() {
       canvasStore.createGroup(newNodeIds, '9宫格裁剪')
     }
     
-    console.log('[ImageNode] 9宫格裁剪完成，创建了', newNodeIds.length, '个节点，正在后台上传到云端')
+    notifyCanvasMediaUploadComplete(newNodeIds[0])
+    console.log('[ImageNode] 9宫格裁剪完成，创建了', newNodeIds.length, '个节点')
     
   } catch (error) {
     console.error('[ImageNode] 9宫格裁剪失败:', error)
@@ -3287,13 +3272,13 @@ async function handleToolbarGrid4Crop() {
         )
         
         const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
-        const blobUrl = URL.createObjectURL(blob)
+        const nodeId = `grid4-crop-${timestamp}-${index}`
+        const serverUrl = await uploadCropBlob(blob, `grid4-crop-${index}.png`, nodeId)
         
         canvas.width = 0
         canvas.height = 0
         
-        // 创建节点（先使用 blob URL 显示，后台上传后替换）
-        const nodeId = `grid4-crop-${timestamp}-${index}`
+        // 上传完成后再创建节点，避免临时 blob URL 进入工作流
         const nodeX = baseX + offsetX + col * (nodeWidth + gap)
         const nodeY = baseY + row * (nodeHeight + gap)
         
@@ -3304,16 +3289,11 @@ async function handleToolbarGrid4Crop() {
           data: {
             label: `裁剪 ${row + 1}-${col + 1}`,
             nodeRole: 'source',
-            sourceImages: [blobUrl],
+            sourceImages: [serverUrl],
             isGenerated: true,
-            fromGridCrop: true,
-            isUploading: true
+            fromGridCrop: true
           }
         })
-        
-        // 🔧 后台异步上传裁剪图到云端
-        const cropFile = new File([blob], `grid4-crop-${index}.png`, { type: 'image/png' })
-        uploadImageFileAsync(cropFile, blobUrl, nodeId)
         
         newNodeIds.push(nodeId)
         
@@ -3333,6 +3313,7 @@ async function handleToolbarGrid4Crop() {
       canvasStore.createGroup(newNodeIds, '4宫格裁剪')
     }
     
+    notifyCanvasMediaUploadComplete(newNodeIds[0])
     console.log('[ImageNode] 4宫格裁剪完成，创建了', newNodeIds.length, '个节点')
     
   } catch (error) {
@@ -3615,7 +3596,7 @@ function handleToolbarCrop() {
 }
 
 // 处理裁剪保存 - 创建新的图像节点
-function handleCropSave(result) {
+async function handleCropSave(result) {
   console.log('[ImageNode] 裁剪/扩图完成', result)
   
   // 获取当前节点位置
@@ -3626,38 +3607,43 @@ function handleCropSave(result) {
     return
   }
   
-  // 在当前节点右侧创建新节点
-  const newNodeId = `crop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  const newNodePosition = {
-    x: currentNode.position.x + 380,
-    y: currentNode.position.y
-  }
-  
-  // 创建新的图像节点
-  canvasStore.addNode({
-    id: newNodeId,
-    type: 'image',
-    position: newNodePosition,
-    data: {
-      label: result.isExpanded ? '扩图' : '裁剪',
-      output: {
-        url: result.dataUrl,
-        urls: [result.dataUrl]
-      },
-      sourceNodeId: props.id,
-      cropInfo: {
-        width: result.width,
-        height: result.height,
-        isExpanded: result.isExpanded
-      }
+  try {
+    const newNodeId = `crop_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const blob = await (await fetch(result.dataUrl)).blob()
+    const serverUrl = await uploadCropBlob(blob, `crop-${newNodeId}.png`, newNodeId)
+    const newNodePosition = {
+      x: currentNode.position.x + 380,
+      y: currentNode.position.y
     }
-  })
-  
-  console.log('[ImageNode] 已创建新节点:', newNodeId, `${result.width}x${result.height}`, result.isExpanded ? '(扩图)' : '(裁剪)')
-  
-  // 关闭裁剪组件
-  showCropper.value = false
-  cropperImageUrl.value = ''
+
+    canvasStore.addNode({
+      id: newNodeId,
+      type: 'image',
+      position: newNodePosition,
+      data: {
+        label: result.isExpanded ? '扩图' : '裁剪',
+        output: {
+          url: serverUrl,
+          urls: [serverUrl]
+        },
+        sourceNodeId: props.id,
+        cropInfo: {
+          width: result.width,
+          height: result.height,
+          isExpanded: result.isExpanded
+        }
+      }
+    })
+
+    notifyCanvasMediaUploadComplete(newNodeId)
+    console.log('[ImageNode] 已创建新节点:', newNodeId, `${result.width}x${result.height}`, result.isExpanded ? '(扩图)' : '(裁剪)')
+  } catch (error) {
+    console.error('[ImageNode] 裁剪结果上传失败:', error)
+    await showAlert('裁剪失败', error.message || '裁剪结果上传失败，请重试')
+  } finally {
+    showCropper.value = false
+    cropperImageUrl.value = ''
+  }
 }
 
 // 处理裁剪取消
@@ -3827,6 +3813,7 @@ async function handleEditorSave(data) {
         canvasStore.updateNodeData(props.id, {
           output: {
             ...props.data.output,
+            url: newUrl,
             urls: [newUrl, ...(props.data.output?.urls?.slice(1) || [])]
           }
         })
@@ -3837,6 +3824,7 @@ async function handleEditorSave(data) {
         })
       }
       
+      notifyCanvasMediaUploadComplete(props.id)
       console.log('[ImageNode] 图片已更新:', newUrl)
     }
   } catch (error) {
@@ -4558,6 +4546,8 @@ function handleUploadImageFlow(blobUrl) {
   canvasStore.updateNodeData(props.id, {
     nodeRole: 'source',
     sourceImages: [blobUrl],
+    uploadId: null,
+    assetId: null,
     uploadFailed: false,
     uploadError: null,
     _dataLost: false,
@@ -4583,6 +4573,9 @@ function handleReplaceOutputImageFlow(blobUrl) {
       url: blobUrl,
       urls: [blobUrl]
     },
+    // 新替换必须脱离旧上传会话，否则完成回写会被误判为过期上传。
+    uploadId: null,
+    assetId: null,
     uploadFailed: false,
     uploadError: null,
     _dataLost: false,
@@ -4659,13 +4652,17 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
       blobToServerUrlMap.set(blobUrl, serverUrl)
       console.log('[ImageNode] 保存 blob->server 映射:', blobUrl.substring(0, 30), '->', serverUrl.substring(0, 60))
       
-      if (canvasStore.commitMediaUpload({
+      const committed = canvasStore.commitMediaUpload({
         nodeId,
         blobUrl,
         mediaType: 'image',
         uploaded,
         tabId
-      })) revokeTrackedBlobUrl(blobUrl)
+      })
+      if (committed) {
+        revokeTrackedBlobUrl(blobUrl)
+        notifyCanvasMediaUploadComplete(nodeId)
+      }
     }
   } catch (error) {
     if (error?.name === 'AbortError') return
@@ -4964,6 +4961,9 @@ async function updateSourceImage(event) {
     // 🔧 同时清除上传失败状态
     canvasStore.updateNodeData(props.id, {
       sourceImages: [blobUrl],
+      // 清除旧上传身份，允许新文件的云端上传结果提交。
+      uploadId: null,
+      assetId: null,
       uploadFailed: false,
       uploadError: null,
       _dataLost: false,

@@ -1345,6 +1345,10 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 更新多选节点列表
    */
   function setSelectedNodeIds(ids) {
+    const selectedIds = new Set(ids)
+    nodes.value.forEach(node => {
+      node.selected = selectedIds.has(node.id)
+    })
     selectedNodeIds.value = ids
   }
   

@@ -387,6 +387,9 @@ async function uploadEditedImageInBackground(nodeId, nodeSnapshot, data) {
         ...nodePatch,
         _editSaving: false
       })
+      window.dispatchEvent(new CustomEvent('canvas-media-upload-complete', {
+        detail: { nodeId }
+      }))
 
       const savedNode = {
         ...nodeSnapshot,

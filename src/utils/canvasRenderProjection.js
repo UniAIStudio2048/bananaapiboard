@@ -75,21 +75,22 @@ export function projectCanvasRenderState({
   containerRect,
   selectedIds = new Set(),
   activeIds = new Set(),
+  positionOverrides = new Map(),
   performanceMode = 'full',
   threshold = 220,
   bufferRatio = 1.5
 } = {}) {
   const sourceNodes = Array.isArray(nodes) ? nodes : []
   const sourceEdges = Array.isArray(edges) ? edges : []
-  const minimapItems = sourceNodes.map(item => ({
-    id: item.id,
-    type: item.type,
-    groupId: item.data?.groupId || null,
-    ...getCanvasNodeBounds(item)
-  }))
   const enabled = sourceNodes.length > threshold && containerRect?.width > 0 && containerRect?.height > 0
 
   if (!enabled) {
+    const minimapItems = sourceNodes.map(item => ({
+      id: item.id,
+      type: item.type,
+      groupId: item.data?.groupId || null,
+      ...getCanvasNodeBounds(item)
+    }))
     return {
       enabled: false,
       nodes: sourceNodes,
@@ -102,10 +103,26 @@ export function projectCanvasRenderState({
   }
 
   const bounds = getCanvasViewportBounds({ viewport, containerRect, bufferRatio })
-  const nodeById = new Map(sourceNodes.map(item => [item.id, item]))
+  const projectedNodes = sourceNodes.map(item => {
+    const override = positionOverrides?.get?.(item.id) || positionOverrides?.[item.id]
+    if (!override || !Number.isFinite(Number(override.x)) || !Number.isFinite(Number(override.y))) {
+      return item
+    }
+    return {
+      ...item,
+      position: { x: Number(override.x), y: Number(override.y) }
+    }
+  })
+  const minimapItems = projectedNodes.map(item => ({
+    id: item.id,
+    type: item.type,
+    groupId: item.data?.groupId || null,
+    ...getCanvasNodeBounds(item)
+  }))
+  const nodeById = new Map(projectedNodes.map(item => [item.id, item]))
   const include = new Set()
 
-  for (const item of sourceNodes) {
+  for (const item of projectedNodes) {
     if (!item?.id) continue
     const pinned =
       selectedIds?.has?.(item.id) ||
@@ -117,7 +134,7 @@ export function projectCanvasRenderState({
     if (pinned || intersects(getCanvasNodeBounds(item), bounds)) include.add(item.id)
   }
 
-  for (const item of sourceNodes) {
+  for (const item of projectedNodes) {
     const groupId = item?.data?.groupId
     if (groupId && include.has(item.id) && nodeById.has(groupId)) include.add(groupId)
   }
@@ -133,7 +150,7 @@ export function projectCanvasRenderState({
     }
   }
 
-  const renderNodes = sourceNodes.filter(item => include.has(item.id))
+  const renderNodes = projectedNodes.filter(item => include.has(item.id))
   const renderEdges = sourceEdges
     .filter(item => edgeInclude.has(item.id))
     .map(edge => ({ ...edge, animated: false }))

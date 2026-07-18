@@ -1596,6 +1596,10 @@ function handleBackgroundTaskFailed(event) {
   setTimeout(() => removeCompletedTask(task.taskId), 5000)
 }
 
+function handleCanvasMediaUploadComplete(event) {
+  schedulePersistAfterTask(`media-upload:${event.detail?.nodeId || 'unknown'}`)
+}
+
 // 任务完成后，去抖触发一次"立即持久化"
 // 仅在工作流已经存在 workflowId 时直接调用 autoSaveWorkflow（已支持 hasChanges 检查）
 // 新建工作流场景由 autoSaveWorkflow 内部"节点 >= 2 时自动建草稿"逻辑兜底
@@ -3163,6 +3167,7 @@ onMounted(async () => {
   window.addEventListener('background-task-progress', handleBackgroundTaskProgress)
   window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.addEventListener('background-task-failed', handleBackgroundTaskFailed)
+  window.addEventListener('canvas-media-upload-complete', handleCanvasMediaUploadComplete)
   window.addEventListener('canvas-video-submission-recovery-requested', handleVideoSubmissionRecoveryRequested)
 
   // 监听页面关闭事件，保存工作流到历史
@@ -3268,6 +3273,7 @@ onUnmounted(() => {
   window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
   window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
+  window.removeEventListener('canvas-media-upload-complete', handleCanvasMediaUploadComplete)
   window.removeEventListener('canvas-video-submission-recovery-requested', handleVideoSubmissionRecoveryRequested)
   // 性能优化: 清理拖拽状态监听器
   window.removeEventListener('canvas-drag-start', _onCanvasDragStart)

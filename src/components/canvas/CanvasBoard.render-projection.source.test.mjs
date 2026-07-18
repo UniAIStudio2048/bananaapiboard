@@ -62,6 +62,24 @@ assert.match(
 
 assert.match(
   source,
+  /positionOverrides:\s*activeDragPositions/,
+  'large-canvas projections should receive Vue Flow live drag positions'
+)
+
+assert.match(
+  source,
+  /onNodeDrag\(\(event\) => \{[\s\S]*?updateActiveDragPositions\(event\)/,
+  'node drag events should refresh the transient projected positions'
+)
+
+assert.match(
+  source,
+  /onNodeDragStop\(\(event\) => \{[\s\S]*?clearActiveDragPositions\(\)/,
+  'transient drag positions should be cleared after final positions reach the store'
+)
+
+assert.match(
+  source,
   /function\s+getInitialCanvasBoardSize\(\)/,
   'CanvasBoard should have a first-render size fallback so large canvases never pass all nodes to Vue Flow'
 )

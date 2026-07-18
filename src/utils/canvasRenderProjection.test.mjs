@@ -109,4 +109,24 @@ assert.deepEqual(
   assert.equal(result.minimapItems.length, 1000)
 }
 
+{
+  const nodes = [node('dragged', 10000, 10000), node('visible', 100, 100)]
+  const result = projectCanvasRenderState({
+    nodes,
+    edges: [],
+    viewport,
+    containerRect,
+    selectedIds: new Set(),
+    activeIds: new Set(['dragged']),
+    positionOverrides: new Map([['dragged', { x: 120, y: 140 }]]),
+    threshold: 1,
+    bufferRatio: 1
+  })
+  assert.deepEqual(
+    result.nodes.find(item => item.id === 'dragged')?.position,
+    { x: 120, y: 140 },
+    'a projected node must keep Vue Flow\'s live drag position when the store still has its old position'
+  )
+}
+
 console.log('canvasRenderProjection tests passed')

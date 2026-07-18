@@ -45,6 +45,17 @@ test('output replace upload action swaps the displayed output to the local blob 
   assert.ok(replaceFlowMatch, 'handleReplaceOutputImageFlow should exist')
   assert.match(replaceFlowMatch[0], /status: 'success'/)
   assert.match(replaceFlowMatch[0], /output:\s*\{[\s\S]*url: blobUrl,[\s\S]*urls: \[blobUrl\]/)
+  assert.match(replaceFlowMatch[0], /uploadId: null/)
+  assert.match(replaceFlowMatch[0], /assetId: null/)
+  assert.match(replaceFlowMatch[0], /isUploading: false/)
+})
+
+test('source image replacement clears the previous upload identity before uploading', () => {
+  const updateSourceMatch = source.match(/async function updateSourceImage\(event\) \{[\s\S]*?\n\}/)
+  assert.ok(updateSourceMatch, 'updateSourceImage should exist')
+  assert.match(updateSourceMatch[0], /uploadId: null/)
+  assert.match(updateSourceMatch[0], /assetId: null/)
+  assert.match(updateSourceMatch[0], /isUploading: true/)
 })
 
 test('background upload replacement keeps output url and urls fields in sync', () => {
