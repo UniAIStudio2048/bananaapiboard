@@ -9,7 +9,7 @@ defineOptions({
 import { ref, computed, inject, nextTick, watch, onMounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
-import { enhancePrompt, describeImage, expandContent, getLLMCost } from '@/api/canvas/llm'
+import { enhancePrompt, describeImage, expandContent, getLLMCost, getLLMConfig } from '@/api/canvas/llm'
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { useI18n } from '@/i18n'
@@ -38,6 +38,7 @@ const llmNodeRootRef = ref(null)
 const { isVisible: isNodeVisible } = useNodeVisibility(llmNodeRootRef)
 
 onMounted(() => {
+  loadConfiguredPointsCost()
   nextTick(() => {
     updateNodeInternals(props.id)
   })
@@ -75,6 +76,20 @@ const LLM_TYPES = {
 const nodeType = computed(() => props.data.type || 'llm-prompt-enhance')
 const typeConfig = computed(() => LLM_TYPES[nodeType.value] || LLM_TYPES['llm-prompt-enhance'])
 
+const configuredPointsCost = ref(null)
+
+async function loadConfiguredPointsCost() {
+  try {
+    const config = await getLLMConfig()
+    const configuredPreset = config?.presets?.find(preset => preset.id === typeConfig.value.action)
+    const value = Number(configuredPreset?.pointsCost ?? configuredPreset?.points_cost)
+    configuredPointsCost.value = configuredPreset && Number.isFinite(value) && value >= 0 ? value : null
+  } catch (error) {
+    configuredPointsCost.value = null
+    console.warn('[LLMNode] 获取预设积分配置失败，使用默认值:', error.message)
+  }
+}
+
 // 节点尺寸 - LLM节点使用竖向矩形，适合输入输出显示
 const nodeWidth = ref(props.data.width || 360)
 const nodeHeight = ref(props.data.height || 300)
@@ -109,7 +124,7 @@ const inheritedImages = computed(() => props.data.inheritedData?.urls || [])
 const outputText = computed(() => props.data.output?.content || '')
 
 // 积分消耗
-const pointsCost = computed(() => getLLMCost(typeConfig.value.action))
+const pointsCost = computed(() => configuredPointsCost.value === null ? getLLMCost(typeConfig.value.action) : configuredPointsCost.value)
 
 // 格式化积分显示
 const formattedPointsCost = computed(() => {

@@ -813,8 +813,12 @@ const selectedModelIcon = computed(() => {
   return model?.icon || selectedModelLabel.value || selectedModel.value
 })
 
-// 当前模型积分消耗
+// 当前 LLM 调用积分消耗：租户功能预设优先，其次使用模型配置
 const currentModelCost = computed(() => {
+  const preset = llmConfig.value.presets?.find(preset => preset.id === selectedPreset.value)
+  const presetCost = Number(preset?.pointsCost ?? preset?.points_cost)
+  if (preset && Number.isFinite(presetCost) && presetCost >= 0) return presetCost
+
   const model = availableModels.value.find(m => m.value === selectedModel.value)
   return model?.pointsCost || 1
 })
