@@ -16,6 +16,7 @@ import { useI18n } from '@/i18n'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { showAlert } from '@/composables/useCanvasDialog'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
+import { calculateLLMCost } from '@/utils/llmCost'
 
 const { t } = useI18n()
 
@@ -77,6 +78,7 @@ const nodeType = computed(() => props.data.type || 'llm-prompt-enhance')
 const typeConfig = computed(() => LLM_TYPES[nodeType.value] || LLM_TYPES['llm-prompt-enhance'])
 
 const configuredPointsCost = ref(null)
+const configuredModelPointsCost = ref(null)
 
 async function loadConfiguredPointsCost() {
   try {
@@ -84,8 +86,12 @@ async function loadConfiguredPointsCost() {
     const configuredPreset = config?.presets?.find(preset => preset.id === typeConfig.value.action)
     const value = Number(configuredPreset?.pointsCost ?? configuredPreset?.points_cost)
     configuredPointsCost.value = configuredPreset && Number.isFinite(value) && value >= 0 ? value : null
+    const defaultModel = config?.models?.find(model => model.id === config?.defaultModel)
+    const modelValue = Number(defaultModel?.pointsCost)
+    configuredModelPointsCost.value = Number.isFinite(modelValue) && modelValue >= 0 ? modelValue : null
   } catch (error) {
     configuredPointsCost.value = null
+    configuredModelPointsCost.value = null
     console.warn('[LLMNode] 获取预设积分配置失败，使用默认值:', error.message)
   }
 }
@@ -124,7 +130,12 @@ const inheritedImages = computed(() => props.data.inheritedData?.urls || [])
 const outputText = computed(() => props.data.output?.content || '')
 
 // 积分消耗
-const pointsCost = computed(() => configuredPointsCost.value === null ? getLLMCost(typeConfig.value.action) : configuredPointsCost.value)
+const pointsCost = computed(() => calculateLLMCost(
+  configuredModelPointsCost.value,
+  configuredPointsCost.value,
+  1,
+  getLLMCost(typeConfig.value.action)
+))
 
 // 格式化积分显示
 const formattedPointsCost = computed(() => {

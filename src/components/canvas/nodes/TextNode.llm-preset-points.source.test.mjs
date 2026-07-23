@@ -13,5 +13,6 @@ test('Text node uses the selected tenant preset cost for display and balance che
   assert.match(costBlock, /llmConfig\.value\.presets\?\.find\(preset => preset\.id === selectedPreset\.value\)/)
   assert.match(costBlock, /preset\?\.pointsCost/)
   assert.match(costBlock, /Number\.isFinite/)
+  assert.match(costBlock, /calculateLLMCost\(model\?\.pointsCost, templateExtra\)/)
   assert.match(source, /userPoints\.value < currentModelCost\.value/)
 })

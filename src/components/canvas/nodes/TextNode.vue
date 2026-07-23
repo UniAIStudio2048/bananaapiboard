@@ -49,6 +49,7 @@ import { showAlert } from '@/composables/useCanvasDialog'
 import { getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
+import { calculateLLMCost } from '@/utils/llmCost'
 
 const { t } = useI18n()
 
@@ -813,14 +814,13 @@ const selectedModelIcon = computed(() => {
   return model?.icon || selectedModelLabel.value || selectedModel.value
 })
 
-// 当前 LLM 调用积分消耗：租户功能预设优先，其次使用模型配置
+// 当前 LLM 调用积分消耗：模型基础费用 + 租户功能预设附加费用
 const currentModelCost = computed(() => {
   const preset = llmConfig.value.presets?.find(preset => preset.id === selectedPreset.value)
   const presetCost = Number(preset?.pointsCost ?? preset?.points_cost)
-  if (preset && Number.isFinite(presetCost) && presetCost >= 0) return presetCost
-
   const model = availableModels.value.find(m => m.value === selectedModel.value)
-  return model?.pointsCost || 1
+  const templateExtra = preset && Number.isFinite(presetCost) && presetCost >= 0 ? presetCost : 0
+  return calculateLLMCost(model?.pointsCost, templateExtra)
 })
 
 // 格式化积分显示
