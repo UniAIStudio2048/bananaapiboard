@@ -1,5 +1,9 @@
 export const SEEDANCE_MAX_IMAGE_PIXELS = 36_000_000
 export const SEEDANCE_MAX_IMAGE_BYTES = 30 * 1024 * 1024
+export const SEEDANCE_MIN_VIDEO_PIXELS = 409_600
+export const SEEDANCE_MAX_VIDEO_PIXELS = 927_408
+export const SEEDANCE_ANT_MAX_VIDEO_PIXELS = 2_086_876
+export const SEEDANCE_MAX_VIDEO_BYTES = 50 * 1024 * 1024
 
 function toPositiveNumber(value) {
   const n = Number(value)
@@ -53,6 +57,88 @@ export function validatePreparedSeedanceImage(meta = {}) {
     return '图片大小超过30MB，自动压缩后仍不符合要求，请更换图片'
   }
   return ''
+}
+
+function evenCeil(value) {
+  return Math.ceil(value / 2) * 2
+}
+
+function getMinimumVideoDimensions(width, height) {
+  const scale = Math.sqrt(SEEDANCE_MIN_VIDEO_PIXELS / (width * height))
+  const targetWidth = evenCeil(width * scale)
+  let targetHeight = evenCeil(height * scale)
+  while (targetWidth * targetHeight < SEEDANCE_MIN_VIDEO_PIXELS) targetHeight += 2
+  return { width: targetWidth, height: targetHeight }
+}
+
+export function validateSeedanceVideoMetadata(meta = {}, options = {}) {
+  const { index = 0, apiType = '' } = options
+  const label = `参考视频${index + 1}`
+  const width = Math.round(toPositiveNumber(meta.width))
+  const height = Math.round(toPositiveNumber(meta.height))
+  const duration = toPositiveNumber(meta.duration)
+  const size = toPositiveNumber(meta.size)
+  const type = String(meta.type || '').toLowerCase()
+  const maxPixels = apiType === 'ant' ? SEEDANCE_ANT_MAX_VIDEO_PIXELS : SEEDANCE_MAX_VIDEO_PIXELS
+
+  if (type && !['video/mp4', 'video/quicktime'].includes(type)) {
+    return `${label}格式不受支持，请使用 MP4 或 MOV`
+  }
+  if (size > SEEDANCE_MAX_VIDEO_BYTES) {
+    return `${label}大小超过50MB，请压缩文件后重试`
+  }
+  if (duration < 2 || duration > 15) {
+    return `${label}时长需在2到15秒之间`
+  }
+  if (!width || !height) {
+    return `无法读取${label}的分辨率，请更换视频文件`
+  }
+  if (width < 300 || height < 300 || width > 6000 || height > 6000) {
+    return `${label}尺寸为 ${width}×${height}，宽高均需在 300到6000 像素之间`
+  }
+
+  const aspectRatio = width / height
+  if (aspectRatio < 0.4 || aspectRatio > 2.5) {
+    return `${label}宽高比为 ${aspectRatio.toFixed(2)}，要求在 0.4到2.5之间`
+  }
+
+  const pixels = width * height
+  if (pixels < SEEDANCE_MIN_VIDEO_PIXELS) {
+    const recommended = getMinimumVideoDimensions(width, height)
+    return `${label}分辨率过低：当前 ${width}×${height}（${pixels} 像素），要求至少 ${SEEDANCE_MIN_VIDEO_PIXELS} 像素，请提升到 ${recommended.width}×${recommended.height} 或更高后重试`
+  }
+  if (pixels > maxPixels) {
+    return `${label}分辨率过高：当前 ${width}×${height}（${pixels} 像素），当前渠道最多支持 ${maxPixels} 像素`
+  }
+  return ''
+}
+
+export function readLocalVideoMetadata(file) {
+  return new Promise((resolve, reject) => {
+    const video = document.createElement('video')
+    const url = URL.createObjectURL(file)
+    const timeoutId = setTimeout(() => finish(new Error('读取视频规格超时，请更换视频文件')), 10_000)
+    const finish = (error, metadata) => {
+      clearTimeout(timeoutId)
+      video.onloadedmetadata = null
+      video.onerror = null
+      video.removeAttribute('src')
+      URL.revokeObjectURL(url)
+      if (error) reject(error)
+      else resolve(metadata)
+    }
+
+    video.preload = 'metadata'
+    video.onloadedmetadata = () => finish(null, {
+      width: video.videoWidth,
+      height: video.videoHeight,
+      duration: Number.isFinite(video.duration) ? video.duration : 0,
+      size: file.size,
+      type: file.type
+    })
+    video.onerror = () => finish(new Error('无法读取视频规格，请更换视频文件'))
+    video.src = url
+  })
 }
 
 export const SEEDANCE_MAX_IMAGES = 9

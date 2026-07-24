@@ -6,6 +6,7 @@ import {
   SEEDANCE_MAX_IMAGE_PIXELS,
   getSeedanceImageCompressionPlan,
   validatePreparedSeedanceImage,
+  validateSeedanceVideoMetadata,
   validateSeedanceModeInputs
 } from './seedanceMediaValidation.js'
 
@@ -62,5 +63,42 @@ test('seedance mode validation returns concrete missing input messages', () => {
   assert.equal(
     validateSeedanceModeInputs({ mode: 'video_edit', imageCount: 0, videoCount: 0 }),
     'Seedance 视频编辑模式至少需要一个参考视频'
+  )
+})
+
+test('seedance video metadata validation rejects low pixel count with exact dimensions', () => {
+  assert.equal(
+    validateSeedanceVideoMetadata({
+      width: 360,
+      height: 640,
+      duration: 14.5,
+      size: 544369,
+      type: 'video/mp4'
+    }, { index: 0, apiType: 'ant' }),
+    '参考视频1分辨率过低：当前 360×640（230400 像素），要求至少 409600 像素，请提升到 480×854 或更高后重试'
+  )
+})
+
+test('seedance video metadata validation rejects invalid size and accepts valid video', () => {
+  assert.match(
+    validateSeedanceVideoMetadata({
+      width: 720,
+      height: 1280,
+      duration: 10,
+      size: 50 * 1024 * 1024 + 1,
+      type: 'video/mp4'
+    }, { index: 1, apiType: 'ant' }),
+    /参考视频2.*50MB/
+  )
+
+  assert.equal(
+    validateSeedanceVideoMetadata({
+      width: 720,
+      height: 1280,
+      duration: 10,
+      size: 8 * 1024 * 1024,
+      type: 'video/mp4'
+    }, { index: 0, apiType: 'ant' }),
+    ''
   )
 })

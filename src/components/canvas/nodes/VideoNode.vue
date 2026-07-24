@@ -65,9 +65,12 @@ import {
 import { compressImage, getImageFileDimensions } from '@/utils/imageCompress'
 import {
   SEEDANCE_MAX_IMAGE_PIXELS,
+  readLocalVideoMetadata,
   validatePreparedSeedanceImage,
+  validateSeedanceVideoMetadata,
   validateSeedanceModeInputs
 } from '@/utils/seedanceMediaValidation'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 import {
   getVideoGenerationProgressText,
   shouldShowVideoGenerationTimeoutHint
@@ -2900,17 +2903,12 @@ function getLocalMediaDuration(file, mediaType) {
 }
 
 async function validateSeedanceVideoFile(file) {
-  if (!['video/mp4', 'video/quicktime'].includes(file.type)) {
-    throw new Error('参考视频格式不受支持，请使用 MP4 或 MOV')
-  }
-  if (file.size > 50 * 1024 * 1024) {
-    throw new Error('参考视频不能超过50MB')
-  }
-  const duration = await getLocalMediaDuration(file, 'video')
-  if (duration < 2 || duration > 15) {
-    throw new Error('参考视频时长需在2到15秒之间')
-  }
-  return duration
+  const metadata = await readLocalVideoMetadata(file)
+  const validationMessage = validateSeedanceVideoMetadata(metadata, {
+    apiType: currentModelConfig.value?.apiType
+  })
+  if (validationMessage) throw new Error(validationMessage)
+  return metadata.duration
 }
 
 // 继承的文本提示词（来自上游文本节点）
@@ -4501,7 +4499,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       err.clientSubmissionId = submission.submissionId
       throw err
     }
-    const err = new Error(data.message || data.error || '生成失败')
+    const err = new Error(getApiErrorMessage(data, '生成失败'))
     err.payload = data
     err.clientSubmissionId = submission.submissionId
     throw err

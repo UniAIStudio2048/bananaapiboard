@@ -18,9 +18,12 @@ import {
 import { compressImage, getImageFileDimensions } from '@/utils/imageCompress'
 import {
   SEEDANCE_MAX_IMAGE_PIXELS,
+  readLocalVideoMetadata,
   validatePreparedSeedanceImage,
+  validateSeedanceVideoMetadata,
   validateSeedanceModeInputs
 } from '@/utils/seedanceMediaValidation'
+import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
 import {
@@ -727,20 +730,24 @@ async function handleSeedanceRefVideos(e) {
   const selected = []
   let totalDuration = seedanceRefVideoPreviews.value.reduce((sum, item) => sum + (Number(item.duration) || 0), 0)
   try {
-    for (const file of files.slice(0, remaining)) {
-      const dur = await getLocalMediaDuration(file, 'video')
-      if (dur < 2 || dur > 15) {
-        error.value = '参考视频时长需在2到15秒之间'
+    for (const [index, file] of files.slice(0, remaining).entries()) {
+      const metadata = await readLocalVideoMetadata(file)
+      const validationMessage = validateSeedanceVideoMetadata(metadata, {
+        index: seedanceRefVideos.value.length + seedanceRefVideoUrls.value.length + index,
+        apiType: currentModelConfig.value?.apiType
+      })
+      if (validationMessage) {
+        error.value = validationMessage
         e.target.value = ''
         return
       }
-      if (totalDuration + dur > 15) {
+      if (totalDuration + metadata.duration > 15) {
         error.value = '参考视频总时长不能超过15秒'
         e.target.value = ''
         return
       }
-      totalDuration += dur
-      selected.push({ file, duration: dur })
+      totalDuration += metadata.duration
+      selected.push({ file, ...metadata })
     }
   } catch (err) {
     error.value = err.message || '无法读取视频时长，请更换视频文件'
@@ -753,6 +760,8 @@ async function handleSeedanceRefVideos(e) {
       name: item.file.name,
       size: (item.file.size / 1024 / 1024).toFixed(2),
       duration: item.duration,
+      width: item.width,
+      height: item.height,
       url: URL.createObjectURL(item.file)
     })
   }
@@ -1265,7 +1274,7 @@ async function generateVideo() {
     console.log('[video] 响应数据:', data)
     if (!response.ok) {
       console.error('[video] 请求失败:', response.status, data)
-      const err = new Error(data.message || data.error || '生成失败')
+      const err = new Error(getApiErrorMessage(data, '生成失败'))
       err.status = response.status
       err.body = data
       throw err
