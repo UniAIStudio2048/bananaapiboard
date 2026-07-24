@@ -11,6 +11,7 @@ import { getTenantHeaders, getModelDisplayName, getAvailableImageModels, getApiU
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
+import { getImagePresets, incrementPresetUseCount, normalizePresetPointsCost } from '@/api/canvas/image-presets'
 import { resolveGenerationAspectRatio } from '@/utils/aspectRatio'
 import { normalizeImageHistoryItems } from '@/utils/imageHistoryPrompt'
 import { getSmartImageUrl } from '@/utils/cloudMediaUrl'
@@ -30,6 +31,10 @@ const prompt = ref('')
 const model = ref('') // 默认为空，会在 onMounted 中设置为模型列表第一个
 const aspectRatio = ref('auto') // 默认使用 Auto
 const imageSize = ref('4K') // 图生图默认尺寸改为 4K
+const selectedImagePresetId = ref('')
+const tenantImagePresets = ref([])
+const userImagePresets = ref([])
+const imagePresetLoadError = ref('')
 const loading = ref(false)
 const error = ref('')
 const items = ref([])
@@ -101,6 +106,63 @@ const pointsCostConfig = computed(() => {
   }
   return config
 })
+
+function buildImagePresetOption(preset, scope) {
+  const pointsCost = scope === 'tenant'
+    ? normalizePresetPointsCost(preset.pointsCost ?? preset.points_cost)
+    : 0
+  return {
+    ...preset,
+    value: `${scope}-${preset.id}`,
+    rawId: preset.id,
+    scope,
+    pointsCost,
+    displayName: pointsCost > 0
+      ? `${preset.name} (+${formatPoints(pointsCost)}积分/张)`
+      : preset.name
+  }
+}
+
+const tenantImagePresetOptions = computed(() => (
+  tenantImagePresets.value.map(preset => buildImagePresetOption(preset, 'tenant'))
+))
+
+const userImagePresetOptions = computed(() => (
+  userImagePresets.value.map(preset => buildImagePresetOption(preset, 'user'))
+))
+
+const selectedImagePreset = computed(() => (
+  [...tenantImagePresetOptions.value, ...userImagePresetOptions.value]
+    .find(preset => preset.value === selectedImagePresetId.value) || null
+))
+
+const selectedImagePresetPointsCost = computed(() => {
+  if (selectedImagePreset.value?.scope !== 'tenant') return 0
+  return normalizePresetPointsCost(selectedImagePreset.value.pointsCost)
+})
+
+async function loadImagePresets() {
+  try {
+    imagePresetLoadError.value = ''
+    const data = await getImagePresets()
+    tenantImagePresets.value = data.tenant || []
+    userImagePresets.value = data.user || []
+  } catch (presetError) {
+    imagePresetLoadError.value = presetError.message || '提示词预设加载失败'
+    tenantImagePresets.value = []
+    userImagePresets.value = []
+  }
+}
+
+async function handleImagePresetChange() {
+  const selected = selectedImagePreset.value
+  if (!selected?.rawId) return
+  try {
+    await incrementPresetUseCount(selected.rawId)
+  } catch (presetError) {
+    console.warn('[Home] 更新提示词预设使用次数失败:', presetError.message)
+  }
+}
 
 // 获取模型积分消耗（用于下拉列表显示）
 function getModelPointsCost(modelKey) {
@@ -930,6 +992,10 @@ async function refreshGallery() {
 // 生成图像
 async function generate() {
   error.value = ''
+  const userPrompt = prompt.value.trim()
+  const finalPrompt = [userPrompt, selectedImagePreset.value?.prompt]
+    .filter(Boolean)
+    .join(', ')
   
   // 检查登录状态 - 必须先登录（检查用户对象而不是 token）
   if (!me.value) {
@@ -938,7 +1004,7 @@ async function generate() {
   }
   
   // 文生图模式：必须有提示词
-  if (mode.value === 'text' && !prompt.value) { 
+  if (mode.value === 'text' && !finalPrompt) {
     error.value = '请输入提示词'
     return 
   }
@@ -998,9 +1064,14 @@ async function generate() {
     }
     
     const payload = { 
-      prompt: prompt.value, 
+      prompt: finalPrompt,
+      user_prompt: userPrompt,
       model: model.value, 
       response_format: 'url'
+    }
+
+    if (selectedImagePreset.value?.scope === 'tenant') {
+      payload.image_preset_id = selectedImagePreset.value.rawId
     }
     
     // 解析比例：auto 模式下根据文生图/图生图自动确定比例
@@ -1043,7 +1114,7 @@ async function generate() {
       created: j.created || Math.floor(Date.now() / 1000), 
       model: j.model || model.value, 
       size: imageSize.value,
-      prompt: prompt.value,
+      prompt: userPrompt,
       aspect_ratio: aspectRatio.value,
       error: null
     }
@@ -1741,9 +1812,9 @@ const currentPointsCost = computed(() => {
   return getImageResolutionCost(modelInfo || {}, imageSize.value)
 })
 
-// 计算总积分消耗（含高速通道附加）
+// 计算总积分消耗（模型 + 租户共享预设）
 const totalPointsCost = computed(() => {
-  return currentPointsCost.value
+  return currentPointsCost.value + selectedImagePresetPointsCost.value
 })
 
 // 检查积分是否足够
@@ -2086,6 +2157,9 @@ async function tryAutoPurchasePackage(voucherBalance) {
 onMounted(async () => {
   me.value = await getMe()
   await initializeBeginnerSpace()
+  if (me.value) {
+    await loadImagePresets()
+  }
   
   await loadHistory()
   
@@ -2289,6 +2363,38 @@ onUnmounted(() => {
               <option value="medium">Medium (标准)</option>
               <option value="high">High (高质量)</option>
             </select>
+          </div>
+
+          <!-- 提示词预设（与画布生图节点共用数据） -->
+          <div>
+            <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400"
+              :class="layoutMode === 'widescreen' ? 'mb-1' : 'mb-1.5'">
+              <span>◈</span>
+              <span>提示词预设</span>
+            </label>
+            <select
+              v-model="selectedImagePresetId"
+              class="input text-sm"
+              @change="handleImagePresetChange"
+            >
+              <option value="">无预设</option>
+              <optgroup label="平台预设">
+                <option v-for="preset in tenantImagePresetOptions" :key="preset.value" :value="preset.value">
+                  {{ preset.displayName }}
+                </option>
+              </optgroup>
+              <optgroup label="我的预设">
+                <option v-for="preset in userImagePresetOptions" :key="preset.value" :value="preset.value">
+                  {{ preset.displayName }}
+                </option>
+              </optgroup>
+            </select>
+            <p v-if="imagePresetLoadError" class="mt-1 text-xs text-red-500">
+              {{ imagePresetLoadError }}
+            </p>
+            <p v-else-if="selectedImagePreset?.description" class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              {{ selectedImagePreset.description }}
+            </p>
           </div>
 
           <!-- 提示词 -->
