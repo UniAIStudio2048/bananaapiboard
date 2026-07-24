@@ -1,5 +1,7 @@
 import { shallowRef } from 'vue'
 import { normalizeRechargeLimits } from '@/utils/rechargeLimits'
+import { normalizeAudioModels, VOICE_DESIGN_STYLES } from './audioModels.js'
+export { VOICE_DESIGN_STYLES } from './audioModels.js'
 
 /**
  * 租户配置模块
@@ -508,6 +510,10 @@ export async function loadBrandConfig(forceReload = false) {
       if (data.video_models) {
         runtimeConfig.video_models = data.video_models
         console.log('[tenant] 视频模型完整配置已更新:', data.video_models)
+      }
+      if (data.audio_models) {
+        runtimeConfig.audio_models = data.audio_models
+        console.log('[tenant] 音频模型完整配置已更新:', data.audio_models)
       }
       if (data.video_model_groups) {
         runtimeConfig.video_model_groups = data.video_model_groups
@@ -2015,5 +2021,7 @@ export const getAvailableMusicModels = () => {
     pointsCost: model.pointsCost
   }))
 }
+
+export const getAvailableAudioModels = () => normalizeAudioModels(config.audio_models || [])
 
 export default config

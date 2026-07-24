@@ -16,7 +16,7 @@ import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from '
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
-import { getTenantHeaders, getAvailableMusicModels, refreshBrandConfig } from '@/config/tenant'
+import { getTenantHeaders, getAvailableMusicModels, getAvailableAudioModels, refreshBrandConfig, VOICE_DESIGN_STYLES } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import { formatPoints } from '@/utils/format'
@@ -77,7 +77,10 @@ const interactionMode = inject('interactionMode', ref('comfyui'))
 
 // 可用音乐模型列表 - 从租户配置动态获取
 const musicModels = computed(() => {
-  return getAvailableMusicModels()
+  return [
+    ...getAvailableMusicModels().map(model => ({ ...model, kind: 'music' })),
+    ...getAvailableAudioModels().map(model => ({ ...model, kind: 'coze-audio', icon: '◉' }))
+  ]
 })
 
 // 音乐生成相关状态
@@ -91,6 +94,7 @@ const tags = ref(props.data.tags || '')
 const negativeTags = ref(props.data.negativeTags || '')
 const makeInstrumental = ref(props.data.makeInstrumental || false)
 const isGeneratingMusic = ref(false)
+const voiceStyle = ref(props.data.voiceStyle || 'general')
 
 // 模型下拉框状态
 const isMusicModelDropdownOpen = ref(false)
@@ -104,6 +108,20 @@ const showAdvancedOptions = ref(false)
 const currentMusicModelConfig = computed(() => {
   return musicModels.value.find(m => m.value === selectedMusicModel.value) || musicModels.value[0]
 })
+const audioCapability = computed(() => currentMusicModelConfig.value?.kind === 'coze-audio' ? currentMusicModelConfig.value.capability : null)
+const inheritedAudioUrl = computed(() => props.data.inheritedData?.url || props.data.inheritedData?.previewUrl || '')
+const inheritedVoiceId = computed(() => props.data.inheritedData?.voiceId || props.data.inheritedData?.voice_id || '')
+const audioPromptPlaceholder = computed(() => {
+  if (audioCapability.value === 'voice_design') return '描述希望设计的音色。'
+  if (audioCapability.value === 'tts') return '输入需要合成的文案。'
+  if (audioCapability.value === 'voice_clone') return '请连接或上传一段参考音频。'
+  return '描述您想要的音乐。'
+})
+const canGenerateCurrentAudio = computed(() => {
+  if (audioCapability.value === 'voice_clone') return !!inheritedAudioUrl.value
+  if (audioCapability.value === 'tts') return !!musicPrompt.value.trim() && !!(inheritedVoiceId.value || inheritedAudioUrl.value)
+  return !!musicPrompt.value.trim()
+})
 
 function formatModelAvgDuration(modelName) {
   const seconds = modelStatsStore.getAudioModelAvgDurationSeconds(modelName)
@@ -116,7 +134,10 @@ function formatModelSuccessRate(modelName) {
 }
 
 // 音乐生成积分消耗（生成2首歌）
-const musicPointsCost = computed(() => (currentMusicModelConfig.value?.pointsCost || 20) * 2)
+const musicPointsCost = computed(() => {
+  const cost = currentMusicModelConfig.value?.pointsCost || 20
+  return audioCapability.value ? cost : cost * 2
+})
 
 function formatAudioErrorMessage(message) {
   return formatVideoNodeErrorMessage(message || '生成失败')
@@ -148,8 +169,8 @@ watch(inheritedText, (newText) => {
 }, { immediate: true })
 
 // 监听音乐生成参数变化，保存到节点数据
-watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, makeInstrumental],
-  ([model, mode, prompt, t, tgs, ntgs, inst]) => {
+watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, makeInstrumental, voiceStyle],
+  ([model, mode, prompt, t, tgs, ntgs, inst, style]) => {
     canvasStore.updateNodeData(props.id, {
       musicModel: model,
       customMode: mode,
@@ -157,7 +178,8 @@ watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, m
       title: t,
       tags: tgs,
       negativeTags: ntgs,
-      makeInstrumental: inst
+      makeInstrumental: inst,
+      voiceStyle: style
     })
   }
 )
@@ -205,6 +227,10 @@ function handleDropdownWheel(event) {
 
 // 生成音乐
 async function handleGenerateMusic() {
+  if (audioCapability.value) {
+    await handleGenerateCozeAudio()
+    return
+  }
   // 检查积分
   if (userPoints.value < musicPointsCost.value) {
     await showInsufficientPointsDialog(musicPointsCost.value, userPoints.value, 1)
@@ -335,6 +361,86 @@ async function handleGenerateMusic() {
       error: formatAudioErrorMessage(error.response?.data?.message || error.response?.data?.error || error.message || '生成失败')
     })
     isGeneratingMusic.value = false
+  }
+}
+
+async function handleGenerateCozeAudio() {
+  if (!canGenerateCurrentAudio.value) {
+    const message = audioCapability.value === 'voice_clone'
+      ? '请连接或上传参考音频'
+      : audioCapability.value === 'tts'
+        ? '请输入文案，并且只连接一种音色来源'
+        : '请输入音色描述'
+    await showAlert(message, '提示')
+    return
+  }
+  if (userPoints.value < musicPointsCost.value) {
+    await showInsufficientPointsDialog(musicPointsCost.value, userPoints.value, 1)
+    return
+  }
+
+  const targetNode = props.data.status === 'processing'
+    ? canvasStore.duplicateNodeWithIncomingEdges(props.id, { offset: { x: 40, y: 40 } })
+    : null
+  const targetNodeId = targetNode?.id || props.id
+  isGeneratingMusic.value = true
+  canvasStore.updateNodeData(targetNodeId, { status: 'processing', error: null, output: null, audioUrl: null })
+  try {
+    const teamStore = useTeamStore()
+    const spaceParams = teamStore.getSpaceParams('current')
+    const body = {
+      model: selectedMusicModel.value,
+      spaceType: spaceParams.spaceType,
+      ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
+    }
+    if (audioCapability.value === 'voice_design') {
+      body.prompt = musicPrompt.value
+      body.style = voiceStyle.value
+    } else if (audioCapability.value === 'voice_clone') {
+      body.reference_audio_url = inheritedAudioUrl.value
+    } else {
+      body.text = musicPrompt.value
+      if (inheritedVoiceId.value) body.voice_id = inheritedVoiceId.value
+      else body.reference_audio_url = inheritedAudioUrl.value
+    }
+    const response = await apiClient.post('/api/audio/generate', body)
+    canvasStore.updateNodeData(targetNodeId, { taskId: response.task_id, taskType: 'audio-generation', status: 'processing' })
+    pollCozeAudioStatus(targetNodeId, response.task_id)
+  } catch (error) {
+    canvasStore.updateNodeData(targetNodeId, { status: 'error', error: formatAudioErrorMessage(error.response?.data?.error || error.message) })
+  } finally {
+    isGeneratingMusic.value = false
+  }
+}
+
+async function pollCozeAudioStatus(nodeId, taskId) {
+  try {
+    const response = await apiClient.get(`/api/audio/query/${taskId}`)
+    if (response.status === 'failed') {
+      canvasStore.updateNodeData(nodeId, { status: 'error', error: response.data?.error_message || '音频生成失败' })
+      return
+    }
+    if (response.status !== 'completed') {
+      setTimeout(() => pollCozeAudioStatus(nodeId, taskId), 3000)
+      return
+    }
+    const data = response.data || {}
+    const url = data.audio_url || data.preview_url
+    canvasStore.updateNodeData(nodeId, {
+      status: 'success',
+      audioUrl: url,
+      audioData: url,
+      voiceId: data.voice_id || null,
+      output: {
+        type: 'audio',
+        url,
+        voiceId: data.voice_id || null,
+        capability: data.capability
+      }
+    })
+    window.dispatchEvent(new CustomEvent('user-info-updated'))
+  } catch (error) {
+    setTimeout(() => pollCozeAudioStatus(nodeId, taskId), 3000)
   }
 }
 
@@ -613,6 +719,9 @@ onMounted(async () => {
   nextTick(() => {
     updateNodeInternals(props.id)
     checkAndRestoreAudioEditTasks()
+    if (props.data?.taskType === 'audio-generation' && props.data?.taskId && ['processing', 'queued'].includes(props.data?.status)) {
+      pollCozeAudioStatus(props.id, props.data.taskId)
+    }
   })
   
   // 刷新品牌配置以获取最新的音乐模型配置
@@ -1897,7 +2006,7 @@ function handleSpeedDropdownClickOutside(event) {
             contenteditable="true"
             role="textbox"
             aria-multiline="true"
-            data-placeholder="描述您想要的音乐。"
+            :data-placeholder="audioPromptPlaceholder"
             @keydown="handleMusicKeyDown"
             @wheel="handlePromptWheel"
             @input="handleMusicInput"
@@ -1921,8 +2030,8 @@ function handleSpeedDropdownClickOutside(event) {
         <div class="control-bar">
           <!-- 左侧：类型选择 -->
           <div class="type-selector">
-            <span class="type-icon">♫</span>
-            <span class="type-label">音乐</span>
+            <span class="type-icon">{{ audioCapability ? '◉' : '♫' }}</span>
+            <span class="type-label">{{ audioCapability === 'voice_design' ? '音色设计' : audioCapability === 'voice_clone' ? '声音克隆' : audioCapability === 'tts' ? 'TTS' : '音乐' }}</span>
             <span class="type-arrow">▾</span>
           </div>
           
@@ -1980,7 +2089,7 @@ function handleSpeedDropdownClickOutside(event) {
           <!-- 生成按钮 -->
           <button
             class="gen-btn"
-            :disabled="isGeneratingMusic || !musicPrompt.trim()"
+            :disabled="isGeneratingMusic || !canGenerateCurrentAudio"
             @click="handleGenerateMusic"
           >
             <svg v-if="!isGeneratingMusic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
@@ -1998,7 +2107,7 @@ function handleSpeedDropdownClickOutside(event) {
         
         <!-- 高级选项 -->
         <Transition name="slide-down">
-          <div v-if="showAdvancedOptions" class="advanced-options">
+          <div v-if="showAdvancedOptions && !audioCapability" class="advanced-options">
             <!-- 纯音乐开关 -->
             <div class="option-row">
               <span class="option-label">纯音乐</span>
@@ -2033,6 +2142,20 @@ function handleSpeedDropdownClickOutside(event) {
             <div class="option-row vertical">
               <span class="option-label">排除标签</span>
               <input v-model="negativeTags" type="text" class="option-input" placeholder="逗号分隔" />
+            </div>
+          </div>
+          <div v-else-if="showAdvancedOptions && audioCapability === 'voice_design'" class="advanced-options">
+            <div class="option-row vertical">
+              <span class="option-label">音色风格</span>
+              <select v-model="voiceStyle" class="option-input">
+                <option v-for="style in VOICE_DESIGN_STYLES" :key="style.value" :value="style.value">{{ style.label }}</option>
+              </select>
+            </div>
+          </div>
+          <div v-else-if="showAdvancedOptions && (audioCapability === 'voice_clone' || audioCapability === 'tts')" class="advanced-options">
+            <div class="option-row vertical">
+              <span class="option-label">音色来源</span>
+              <span class="option-hint">{{ inheritedVoiceId ? `已连接音色 ${inheritedVoiceId}` : inheritedAudioUrl ? '已连接参考音频' : '请连接上游音频节点' }}</span>
             </div>
           </div>
         </Transition>

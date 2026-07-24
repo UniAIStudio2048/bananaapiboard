@@ -241,6 +241,31 @@ export async function getHistory(params = {}) {
         '获取音频历史'
       ).then(data => ({ type: 'audio', data }))
     )
+    requests.push(
+      fetchHistoryPages(
+        '/api/audio/history',
+        'data',
+        params,
+        headers,
+        rows => rows.filter(aud => aud.status === 'completed').map(aud => ({
+          id: aud.id || aud.task_id,
+          task_id: aud.task_id,
+          type: 'audio',
+          history_source: 'coze-audio',
+          name: aud.capability === 'voice_design' ? '音色设计' : aud.capability === 'voice_clone' ? '声音克隆' : (aud.input_text?.substring(0, 30) || '语音合成'),
+          url: aud.audio_url || aud.output_url,
+          prompt: aud.prompt || aud.input_text,
+          model: aud.model,
+          model_display_name: aud.model_display_name || '',
+          capability: aud.capability,
+          voice_id: aud.voice_id,
+          status: 'completed',
+          created_at: aud.created_at,
+          finished_at: aud.updated_at
+        })),
+        '获取 Coze 音频历史'
+      ).then(data => ({ type: 'audio', data }))
+    )
   }
   
   // 并行执行所有请求
@@ -298,11 +323,19 @@ export async function deleteHistory(historyId, type = 'image') {
     endpoint = `/api/images/history/${historyId}`
   }
     
-  const response = await fetch(getApiUrl(endpoint), {
+  let response = await fetch(getApiUrl(endpoint), {
     method: 'DELETE',
     credentials: 'include',
     headers: getAuthHeaders()
   })
+
+  if (type === 'audio' && response.status === 404) {
+    response = await fetch(getApiUrl(`/api/audio/history/${historyId}`), {
+      method: 'DELETE',
+      credentials: 'include',
+      headers: getAuthHeaders()
+    })
+  }
   
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
