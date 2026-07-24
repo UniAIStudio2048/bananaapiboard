@@ -1,4 +1,5 @@
 import { shallowRef } from 'vue'
+import { normalizeRechargeLimits } from '@/utils/rechargeLimits'
 
 /**
  * 租户配置模块
@@ -122,7 +123,8 @@ const defaultConfig = {
   // 音乐模型配置
   music_config: {
     models: []  // 从租户端配置获取
-  }
+  },
+  rechargeLimits: normalizeRechargeLimits()
 }
 
 // 从环境变量读取配置（品牌配置不再从环境变量读取）
@@ -530,6 +532,8 @@ export async function loadBrandConfig(forceReload = false) {
         runtimeConfig.music_config = data.music_config
         console.log('[tenant] 音乐模型配置已更新:', data.music_config)
       }
+
+      runtimeConfig.rechargeLimits = normalizeRechargeLimits(data.rechargeLimits)
       
       // 更新 Seedance 功能开关
       if (data.enableSeedanceFeatures !== undefined) {
@@ -712,7 +716,8 @@ export async function loadRemoteConfig() {
           primaryColor: data.primaryColor || runtimeConfig.brand.primaryColor,
           description: runtimeConfig.brand.description
         },
-        features: runtimeConfig.features
+        features: runtimeConfig.features,
+        rechargeLimits: runtimeConfig.rechargeLimits || normalizeRechargeLimits()
       }
       bumpTenantConfigVersion()
       
@@ -761,7 +766,8 @@ try {
     image_models: savedTenantConfig?.image_models || [],
     video_models: savedTenantConfig?.video_models || [],
     video_model_groups: savedTenantConfig?.video_model_groups || [],
-    modelEntitlements: savedTenantConfig?.modelEntitlements || { image: {}, video: {} }
+    modelEntitlements: savedTenantConfig?.modelEntitlements || { image: {}, video: {} },
+    rechargeLimits: normalizeRechargeLimits(savedTenantConfig?.rechargeLimits)
   }
   
   console.log('[tenant] 初始化完成，租户ID:', envConfig.tenantId)
@@ -790,6 +796,7 @@ export const getModelNames = () => config.modelNames || defaultConfig.modelNames
 export const getModelEnabled = () => config.modelEnabled || defaultConfig.modelEnabled
 export const getModelDescriptions = () => config.modelDescriptions || defaultConfig.modelDescriptions
 export const getModelPricing = () => config.modelPricing || defaultConfig.modelPricing
+export const getRechargeLimits = () => normalizeRechargeLimits(config.rechargeLimits)
 
 // 获取 Sora 角色创建配置（积分消耗等）
 export const getSoraCharacterConfig = () => config.soraCharacterConfig || { points_cost: 0 }

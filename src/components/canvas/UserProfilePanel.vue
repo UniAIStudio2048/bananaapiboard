@@ -6,7 +6,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { redeemVoucher as redeemVoucherApi, updateUserPreferences, clearAuthSession } from '@/api/client'
-import { getTenantHeaders, getApiUrl } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
@@ -85,6 +85,8 @@ const paymentMethods = ref([])
 const rechargeSelectedMethod = ref(null)
 const rechargeCards = ref([]) // 充值卡片列表
 const selectedRechargeCard = ref(null) // 选中的充值卡片
+const rechargeLimits = computed(() => getRechargeLimits())
+const rechargeAmountPlaceholder = computed(() => `${rechargeLimits.value.minAmount}-${rechargeLimits.value.maxAmount}`)
 // 充值支付等待状态
 const showRechargePaymentEmbed = ref(false)
 const rechargePaymentUrl = ref('')
@@ -1397,7 +1399,7 @@ function getFinalRechargeAmount() {
   }
   if (rechargeCustomAmount.value) {
     const yuan = parseFloat(rechargeCustomAmount.value)
-    if (yuan >= 1 && yuan <= 1500) {
+    if (Number.isFinite(yuan)) {
       return Math.floor(yuan * 100)
     }
   }
@@ -1408,13 +1410,13 @@ function getFinalRechargeAmount() {
 async function submitRecharge() {
   const amount = getFinalRechargeAmount()
   
-  if (amount < 100) {
-    rechargeError.value = t('user.minRechargeAmount')
+  if (amount < rechargeLimits.value.minAmount * 100) {
+    rechargeError.value = t('user.minRechargeAmount', { amount: rechargeLimits.value.minAmount })
     showAlert(rechargeError.value)
     return
   }
-  if (amount > 150000) {
-    rechargeError.value = t('user.maxRechargeAmount')
+  if (amount > rechargeLimits.value.maxAmount * 100) {
+    rechargeError.value = t('user.maxRechargeAmount', { amount: rechargeLimits.value.maxAmount })
     showAlert(rechargeError.value)
     return
   }
@@ -2599,9 +2601,9 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 v-model="rechargeCustomAmount" 
                 type="number" 
                 class="form-input"
-                placeholder="1-1500"
-                min="1"
-                max="1500"
+                :placeholder="rechargeAmountPlaceholder"
+                :min="rechargeLimits.minAmount"
+                :max="rechargeLimits.maxAmount"
                 step="1"
                 @input="rechargeAmount = 0"
               />

@@ -16,6 +16,12 @@ test('AssetPanel refresh event can prepend the newly saved asset before server r
   assert.match(assetPanel, /upsertAssetInList\(event\.detail\.asset\)/)
 })
 
+test('Seedance asset updates refresh both group metadata and the My Assets list', () => {
+  assert.match(assetPanel, /async function handleSeedanceAssetsUpdated\(\)/)
+  assert.match(assetPanel, /handleSeedanceAssetsUpdated[\s\S]*?await loadSeedanceGroups\(\)[\s\S]*?await loadAssets\(true\)/)
+  assert.match(assetPanel, /@groups-updated="handleSeedanceAssetsUpdated"/)
+})
+
 test('AssetPanel uses extracted asset card and preview components', () => {
   assert.match(assetPanel, /import AssetCard from '\.\/AssetCard\.vue'/)
   assert.match(assetPanel, /import AssetHoverPreview from '\.\/AssetHoverPreview\.vue'/)

@@ -7,7 +7,7 @@ import { getMyWorks, getMyPurchases, getMyIncome, deleteWork, toggleWorkVisibili
 import { buildStreamDownloadPath } from '@/api/downloadRouting'
 import CachedImage from '@/components/CachedImage.vue'
 import { getTheme, setTheme, toggleTheme as toggleThemeUtil, themes } from '@/utils/theme'
-import { getTenantHeaders, getModelDisplayName, getApiUrl, getMediaUrl } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName, getApiUrl, getMediaUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { getHistoryImageDisplayUrl, makeHistoryImagePlaceholder } from '@/utils/historyImageDisplay'
 import { getHistoryAspectRatioStyle } from '@/utils/historyAspectRatio'
@@ -225,6 +225,7 @@ const paymentMethods = ref([])
 const quickAmounts = [300, 500, 1000, 5000, 10000] // 单位：分
 const rechargeCards = ref([]) // 充值卡片列表
 const selectedRechargeCard = ref(null) // 选中的充值卡片
+const rechargeLimits = computed(() => getRechargeLimits())
 
 // 账单中心相关
 const billOrders = ref([])
@@ -2107,7 +2108,7 @@ function getFinalRechargeAmount() {
   }
   if (rechargeCustomAmount.value) {
     const yuan = parseFloat(rechargeCustomAmount.value)
-    if (yuan >= 1 && yuan <= 1500) {
+    if (Number.isFinite(yuan)) {
       return Math.floor(yuan * 100)
     }
   }
@@ -2118,12 +2119,12 @@ function getFinalRechargeAmount() {
 async function submitRecharge() {
   const amount = getFinalRechargeAmount()
   
-  if (amount < 100) {
-    rechargeError.value = '最低充值金额为1元'
+  if (amount < rechargeLimits.value.minAmount * 100) {
+    rechargeError.value = `最低充值金额为${rechargeLimits.value.minAmount}元`
     return
   }
-  if (amount > 150000) {
-    rechargeError.value = '单笔最高充值1500元'
+  if (amount > rechargeLimits.value.maxAmount * 100) {
+    rechargeError.value = `单笔最高充值${rechargeLimits.value.maxAmount}元`
     return
   }
   if (!rechargeSelectedMethod.value) {
@@ -4901,15 +4902,15 @@ onUnmounted(() => {
           <!-- 自定义金额 -->
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              或输入自定义金额（1-1500元）
+              或输入自定义金额（{{ rechargeLimits.minAmount }}-{{ rechargeLimits.maxAmount }}元）
             </label>
             <div class="relative">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 text-lg">¥</span>
               <input
                 v-model="rechargeCustomAmount"
                 type="number"
-                min="1"
-                max="1500"
+                :min="rechargeLimits.minAmount"
+                :max="rechargeLimits.maxAmount"
                 step="0.01"
                 class="input w-full pl-10 text-lg"
                 placeholder="输入金额"
@@ -4970,7 +4971,7 @@ onUnmounted(() => {
               <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1">
                 <p>• 充值后金额将直接到账户余额</p>
                 <p>• 账户余额可用于购买套餐或划转为积分</p>
-                <p>• 最低充值1元，单笔最高1500元</p>
+                <p>• 最低充值{{ rechargeLimits.minAmount }}元，单笔最高{{ rechargeLimits.maxAmount }}元</p>
               </div>
             </div>
           </div>

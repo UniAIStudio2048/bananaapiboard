@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { getTenantHeaders, getApiUrl } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
 import { useI18n } from '@/i18n'
 
@@ -53,6 +53,8 @@ const rechargeLoading = ref(false)
 const rechargeError = ref('')
 const rechargeCards = ref([])
 const selectedRechargeCard = ref(null)
+const rechargeLimits = computed(() => getRechargeLimits())
+const rechargeAmountPlaceholder = computed(() => `${rechargeLimits.value.minAmount}-${rechargeLimits.value.maxAmount}`)
 
 // 余额划转永久积分状态
 const showConvertModal = ref(false)
@@ -332,7 +334,7 @@ function getRechargeAmountInCents() {
   }
   if (customAmount.value) {
     const amount = parseFloat(customAmount.value)
-    if (!isNaN(amount) && amount > 0) {
+    if (!isNaN(amount)) {
       return Math.round(amount * 100)
     }
   }
@@ -343,8 +345,12 @@ function getRechargeAmountInCents() {
 async function confirmRecharge() {
   const amountInCents = getRechargeAmountInCents()
   
-  if (amountInCents <= 0) {
-    rechargeError.value = '请选择或输入充值金额'
+  if (amountInCents < rechargeLimits.value.minAmount * 100) {
+    rechargeError.value = `最低充值金额为${rechargeLimits.value.minAmount}元`
+    return
+  }
+  if (amountInCents > rechargeLimits.value.maxAmount * 100) {
+    rechargeError.value = `单笔最高充值${rechargeLimits.value.maxAmount}元`
     return
   }
   
@@ -1706,9 +1712,9 @@ watch(() => props.visible, (newVal) => {
                 <input
                   type="number"
                   v-model="customAmount"
-                  placeholder="1-10000"
-                  min="1"
-                  max="10000"
+                  :placeholder="rechargeAmountPlaceholder"
+                  :min="rechargeLimits.minAmount"
+                  :max="rechargeLimits.maxAmount"
                   class="custom-amount-input"
                   @input="rechargeAmount = null; selectedRechargeCard = null"
                 />
@@ -4004,12 +4010,21 @@ watch(() => props.visible, (newVal) => {
 
 .custom-amount-input {
   flex: 1;
+  min-width: 0;
+  width: 100%;
   background: transparent;
   border: none;
   outline: none;
+  box-shadow: none;
   padding: 14px 12px;
   color: #ffffff;
   font-size: 16px;
+}
+
+.custom-amount-input:focus {
+  border: none;
+  outline: none;
+  box-shadow: none;
 }
 
 .custom-amount-input::placeholder {

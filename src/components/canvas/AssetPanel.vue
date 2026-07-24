@@ -1078,6 +1078,11 @@ async function loadSeedanceGroups() {
   }
 }
 
+async function handleSeedanceAssetsUpdated() {
+  await loadSeedanceGroups()
+  await loadAssets(true)
+}
+
 function showSeedanceDropdown() {
   if (seedanceDropdownTimer) {
     clearTimeout(seedanceDropdownTimer)
@@ -1720,7 +1725,7 @@ onUnmounted(() => {
             :selectedGroupId="selectedSeedanceGroupId"
             :pendingAction="seedancePendingAction"
             :spaceFilter="spaceFilter"
-            @groups-updated="loadSeedanceGroups"
+            @groups-updated="handleSeedanceAssetsUpdated"
             @clear-group="selectedSeedanceGroupId = null"
             @action-consumed="seedancePendingAction = null"
             @insert-to-canvas="handleSeedanceInsert"

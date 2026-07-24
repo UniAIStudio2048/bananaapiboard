@@ -592,12 +592,11 @@ async function handleFileUpload(event) {
             teamId: spaceParams.teamId
           })
           canvasAssetId = saved.id || saved.asset?.id
+          emit('groups-updated')
         } catch (e) {
           console.error('[SeedancePanel] 保存到本地资产库失败:', e)
         }
-        if (isSeedanceOpenApiProProvider.value) {
-          emit('groups-updated')
-        } else {
+        if (!isSeedanceOpenApiProProvider.value) {
           startPolling(assetId, targetGroupId, url, fileName, canvasAssetId)
         }
       }

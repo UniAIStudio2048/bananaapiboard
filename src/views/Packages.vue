@@ -598,15 +598,15 @@
           <!-- 自定义金额 -->
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              或输入自定义金额（1-1500元）
+              或输入自定义金额（{{ rechargeLimits.minAmount }}-{{ rechargeLimits.maxAmount }}元）
             </label>
             <div class="relative">
               <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 text-lg">¥</span>
               <input
                 v-model="rechargeCustomAmount"
                 type="number"
-                min="1"
-                max="1500"
+                :min="rechargeLimits.minAmount"
+                :max="rechargeLimits.maxAmount"
                 step="0.01"
                 class="w-full pl-10 px-4 py-3 rounded-lg border border-slate-300 dark:border-dark-500 bg-white dark:bg-dark-600 text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:ring-2 focus:ring-amber-500 focus:border-transparent transition-all text-lg"
                 placeholder="输入金额"
@@ -677,7 +677,7 @@
               <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1">
                 <p>• 充值后金额将直接到账户余额</p>
                 <p>• 账户余额可用于购买套餐或划转为积分</p>
-                <p>• 最低充值1元，单笔最高1500元</p>
+                <p>• 最低充值{{ rechargeLimits.minAmount }}元，单笔最高{{ rechargeLimits.maxAmount }}元</p>
               </div>
             </div>
           </div>
@@ -780,7 +780,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { redeemVoucher, getMe } from '@/api/client'
-import { getTenantHeaders, getApiUrl } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
 
 const router = useRouter()
@@ -816,6 +816,7 @@ const paymentMethods = ref([])
 const quickAmounts = [300, 500, 1000, 5000, 10000] // 单位：分
 const rechargeCards = ref([]) // 充值卡片列表
 const selectedRechargeCard = ref(null) // 选中的充值卡片
+const rechargeLimits = computed(() => getRechargeLimits())
 
 // 支付弹窗相关
 const showPaymentModal = ref(false)
@@ -1332,7 +1333,7 @@ function getFinalRechargeAmount() {
   }
   if (rechargeCustomAmount.value) {
     const yuan = parseFloat(rechargeCustomAmount.value)
-    if (yuan >= 1 && yuan <= 1500) {
+    if (Number.isFinite(yuan)) {
       return Math.floor(yuan * 100)
     }
   }
@@ -1342,12 +1343,12 @@ function getFinalRechargeAmount() {
 async function submitRecharge() {
   const amount = getFinalRechargeAmount()
   
-  if (amount < 100) {
-    rechargeError.value = '最低充值金额为1元'
+  if (amount < rechargeLimits.value.minAmount * 100) {
+    rechargeError.value = `最低充值金额为${rechargeLimits.value.minAmount}元`
     return
   }
-  if (amount > 150000) {
-    rechargeError.value = '单笔最高充值1500元'
+  if (amount > rechargeLimits.value.maxAmount * 100) {
+    rechargeError.value = `单笔最高充值${rechargeLimits.value.maxAmount}元`
     return
   }
   if (!rechargeSelectedMethod.value) {
@@ -1835,7 +1836,6 @@ onUnmounted(() => {
   animation: scale-in 0.2s ease-out;
 }
 </style>
-
 
 
 
