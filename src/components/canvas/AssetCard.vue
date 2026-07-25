@@ -228,6 +228,15 @@ function handleFavorite(event) {
         />
         <div v-else class="character-placeholder">{{ typeIcon }}</div>
       </div>
+
+      <div class="asset-card-info">
+        <div class="asset-card-title">{{ asset.name || asset.type }}</div>
+        <div class="asset-card-meta">
+          <span>{{ formattedSize }}</span>
+          <span>·</span>
+          <span>{{ formattedDate }}</span>
+        </div>
+      </div>
     </div>
 
     <button
@@ -240,14 +249,6 @@ function handleFavorite(event) {
       {{ asset.is_favorite ? '★' : '☆' }}
     </button>
 
-    <div class="asset-card-info">
-      <div class="asset-card-title">{{ asset.name || asset.type }}</div>
-      <div class="asset-card-meta">
-        <span>{{ formattedSize }}</span>
-        <span>·</span>
-        <span>{{ formattedDate }}</span>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -520,8 +521,27 @@ function handleFavorite(event) {
 }
 
 .asset-card-info {
-  padding: 10px 11px 11px;
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 20px 11px 11px;
   min-width: 0;
+  background: linear-gradient(180deg, rgba(12, 12, 15, 0.08), rgba(12, 12, 15, 0.76));
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.asset-card.asset-card-v2:hover .asset-card-info,
+.asset-card.asset-card-v2:focus-within .asset-card-info {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .asset-card-title {
@@ -567,6 +587,15 @@ function handleFavorite(event) {
 :global(body.canvas-theme-light) .asset-card-title,
 :global(.canvas-theme-light) .asset-card-title {
   color: #111827 !important;
+}
+
+:global(:root.canvas-theme-light) .asset-card-info,
+:global(html.canvas-theme-light) .asset-card-info,
+:global(body.canvas-theme-light) .asset-card-info,
+:global(.canvas-theme-light) .asset-card-info {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.82));
+  border-top-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 -8px 24px rgba(15, 23, 42, 0.08);
 }
 
 :global(:root.canvas-theme-light) .asset-card-meta,

@@ -350,7 +350,7 @@ onUnmounted(destroyAudioVisualizer)
 .asset-preview-overlay {
   position: fixed;
   inset: 0;
-  z-index: 10000;
+  z-index: 12000;
   display: flex;
   align-items: center;
   justify-content: center;

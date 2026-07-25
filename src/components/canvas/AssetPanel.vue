@@ -64,13 +64,18 @@ const showTagManager = ref(false)
 const editingAsset = ref(null)
 const newTagInput = ref('')
 
-// ========== 虚拟滚动 ==========
+// ========== 无限瀑布流 ==========
 const assetListRef = ref(null)
 const assetScrollTop = ref(0)
-const assetContainerHeight = ref(600)
-const ASSET_ROW_HEIGHT = 560
-const ASSET_COLS = 3
-const ASSET_BUFFER = 4
+const isFullscreen = ref(false)
+const INITIAL_DISPLAY_COUNT = 30
+const LOAD_MORE_STEP = 30
+const LOAD_MORE_THRESHOLD_PX = 600
+const ASSET_PAGE_SIZE = 100
+const displayCount = ref(INITIAL_DISPLAY_COUNT)
+const assetPage = ref(1)
+const hasMoreAssets = ref(true)
+const loadingMore = ref(false)
 
 // 全屏预览状态
 const showPreview = ref(false)
@@ -233,36 +238,46 @@ const filteredAssets = computed(() => {
   })
 })
 
-const visibleAssets = computed(() => {
-  const items = filteredAssets.value
-  const total = items.length
-  if (total <= 30) {
-    return items.map((item, index) => ({ item, index }))
+const displayedAssets = computed(() => filteredAssets.value.slice(0, displayCount.value))
+const hasMoreToRender = computed(() => displayCount.value < filteredAssets.value.length)
+const assetColumnCount = computed(() => isFullscreen.value ? 6 : 3)
+
+function getAssetMasonryWeight(asset) {
+  if (!['image', 'video', 'sora-character', 'seedance-character', 'bytefor-character'].includes(asset?.type)) {
+    return 1
   }
 
-  const startRow = Math.max(0, Math.floor(assetScrollTop.value / ASSET_ROW_HEIGHT) - ASSET_BUFFER)
-  const endRow = Math.ceil((assetScrollTop.value + assetContainerHeight.value) / ASSET_ROW_HEIGHT) + ASSET_BUFFER
-  const startIndex = startRow * ASSET_COLS
-  const endIndex = Math.min(total, (endRow + 1) * ASSET_COLS)
+  const metadata = typeof asset.metadata === 'string'
+    ? (() => {
+        try { return JSON.parse(asset.metadata) } catch { return {} }
+      })()
+    : (asset.metadata || {})
+  const width = Number(
+    asset.width || asset.image_width || asset.video_width ||
+    metadata.width || metadata.imageWidth || metadata.videoWidth || metadata.dimensions?.width
+  )
+  const height = Number(
+    asset.height || asset.image_height || asset.video_height ||
+    metadata.height || metadata.imageHeight || metadata.videoHeight || metadata.dimensions?.height
+  )
 
-  const visible = []
-  for (let i = startIndex; i < endIndex; i++) {
-    if (items[i]) visible.push({ item: items[i], index: i })
-  }
-  return visible
-})
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return 1
+  return Math.min(2.4, Math.max(0.45, height / width))
+}
 
-const assetTotalHeight = computed(() => {
-  const total = filteredAssets.value.length
-  if (total <= 30) return 'auto'
-  return Math.ceil(total / ASSET_COLS) * ASSET_ROW_HEIGHT + 'px'
-})
+const assetColumns = computed(() => {
+  const columns = Array.from({ length: assetColumnCount.value }, () => ({ assets: [], weight: 0 }))
 
-const assetOffsetY = computed(() => {
-  const total = filteredAssets.value.length
-  if (total <= 30) return 0
-  const startRow = Math.max(0, Math.floor(assetScrollTop.value / ASSET_ROW_HEIGHT) - ASSET_BUFFER)
-  return startRow * ASSET_ROW_HEIGHT
+  displayedAssets.value.forEach(asset => {
+    let targetColumn = columns[0]
+    for (const column of columns) {
+      if (column.weight < targetColumn.weight) targetColumn = column
+    }
+    targetColumn.assets.push(asset)
+    targetColumn.weight += getAssetMasonryWeight(asset)
+  })
+
+  return columns.map(column => column.assets)
 })
 
 // 按类型分组的资产统计
@@ -276,10 +291,35 @@ let assetScrollRAF = null
 function handleAssetScroll(e) {
   closeHoverPreview()
   if (assetScrollRAF) return
+  const target = e.target
   assetScrollRAF = requestAnimationFrame(() => {
-    assetScrollTop.value = e.target.scrollTop
+    assetScrollTop.value = target.scrollTop
+    maybeLoadMoreAssets(target)
     assetScrollRAF = null
   })
+}
+
+function maybeLoadMoreAssets(target) {
+  if (!target) return
+  const distanceToBottom = target.scrollHeight - target.scrollTop - target.clientHeight
+  if (distanceToBottom >= LOAD_MORE_THRESHOLD_PX) return
+
+  if (hasMoreToRender.value) {
+    displayCount.value = Math.min(displayCount.value + LOAD_MORE_STEP, filteredAssets.value.length)
+    nextTick(ensureScrollableOrLoadMore)
+    return
+  }
+
+  if (hasMoreAssets.value && !loadingMore.value) {
+    loadMoreAssets().then(() => nextTick(ensureScrollableOrLoadMore))
+  }
+}
+
+function ensureScrollableOrLoadMore() {
+  if (!props.visible || activePanelView.value !== 'assets') return
+  const target = assetListRef.value
+  if (!target) return
+  maybeLoadMoreAssets(target)
 }
 
 function closeHoverPreview() {
@@ -297,6 +337,8 @@ function closeHoverPreview() {
 }
 
 function handleCardMouseEnter(e, asset) {
+  const anchorRect = e.currentTarget?.getBoundingClientRect()
+  if (!anchorRect) return
   if (hideHoverTimer) {
     clearTimeout(hideHoverTimer)
     hideHoverTimer = null
@@ -304,7 +346,7 @@ function handleCardMouseEnter(e, asset) {
   if (showHoverTimer) clearTimeout(showHoverTimer)
   showHoverTimer = setTimeout(() => {
     hoverAsset.value = asset
-    hoverAnchorRect.value = e.currentTarget.getBoundingClientRect()
+    hoverAnchorRect.value = anchorRect
     showHoverPreview.value = true
     showHoverTimer = null
   }, 250)
@@ -336,9 +378,11 @@ function handleHoverPreviewLeave() {
 watch([selectedType, selectedTag, searchQuery], () => {
   closeHoverPreview()
   assetScrollTop.value = 0
+  displayCount.value = INITIAL_DISPLAY_COUNT
   if (assetListRef.value) {
     assetListRef.value.scrollTop = 0
   }
+  nextTick(ensureScrollableOrLoadMore)
 })
 
 // 加载资产列表（带 IndexedDB 缓存 + stale-while-revalidate）
@@ -348,8 +392,14 @@ async function loadAssets(forceRefresh = false) {
   // 1. 内存缓存检查
   if (!forceRefresh && dataCached.value && (now - lastLoadTime.value < CACHE_DURATION)) {
     console.log('[AssetPanel] 使用内存缓存')
+    nextTick(ensureScrollableOrLoadMore)
     return
   }
+
+  assetPage.value = 1
+  hasMoreAssets.value = true
+  displayCount.value = INITIAL_DISPLAY_COUNT
+  assetScrollTop.value = 0
   
   const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
   const { spaceType, teamId } = spaceParams
@@ -360,10 +410,12 @@ async function loadAssets(forceRefresh = false) {
       const cachedData = await getCachedAssets('all', spaceType, teamId)
       if (cachedData) {
         assets.value = cachedData
+        hasMoreAssets.value = cachedData.length >= ASSET_PAGE_SIZE
         dataCached.value = true
         lastLoadTime.value = now
         console.log('[AssetPanel] 使用 IndexedDB 缓存:', cachedData.length, '个，后台刷新中...')
         _refreshAssetsInBackground(spaceParams, spaceType, teamId)
+        nextTick(ensureScrollableOrLoadMore)
         return
       }
     } catch (e) {
@@ -376,6 +428,7 @@ async function loadAssets(forceRefresh = false) {
   try {
     const freshData = await _fetchAssetsFromServer(spaceParams, spaceType, teamId)
     assets.value = freshData
+    hasMoreAssets.value = freshData.length >= ASSET_PAGE_SIZE
     dataCached.value = true
     lastLoadTime.value = now
     checkAudioAvailability(freshData)
@@ -383,15 +436,18 @@ async function loadAssets(forceRefresh = false) {
     console.error('[AssetPanel] 加载资产失败:', error)
   } finally {
     loading.value = false
+    nextTick(ensureScrollableOrLoadMore)
   }
 }
 
-async function _fetchAssetsFromServer(spaceParams, spaceType, teamId) {
-  const result = await getAssets(spaceParams)
+async function _fetchAssetsFromServer(spaceParams, spaceType, teamId, page = 1) {
+  const result = await getAssets({ ...spaceParams, page, pageSize: ASSET_PAGE_SIZE })
   const freshData = result.assets || []
-  console.log('[AssetPanel] 从服务器加载:', freshData.length, '个')
+  console.log(`[AssetPanel] 从服务器加载第 ${page} 页:`, freshData.length, '个')
   
-  cacheAssets('all', spaceType, teamId, freshData).catch(() => {})
+  if (page === 1) {
+    cacheAssets('all', spaceType, teamId, freshData).catch(() => {})
+  }
   
   const preloadUrls = freshData
     .filter(item => item.type === 'image' && item.url)
@@ -404,12 +460,40 @@ async function _fetchAssetsFromServer(spaceParams, spaceType, teamId) {
   return freshData
 }
 
+async function loadMoreAssets() {
+  if (loadingMore.value || !hasMoreAssets.value) return
+
+  loadingMore.value = true
+  const nextPage = assetPage.value + 1
+  try {
+    const spaceParams = teamStore.getSpaceParams(spaceFilter.value)
+    const { spaceType, teamId } = spaceParams
+    const freshData = await _fetchAssetsFromServer(spaceParams, spaceType, teamId, nextPage)
+    const existingIds = new Set(assets.value.map(asset => asset.id))
+    const appendedAssets = freshData.filter(asset => !existingIds.has(asset.id))
+
+    if (appendedAssets.length > 0) {
+      assets.value = [...assets.value, ...appendedAssets]
+      checkAudioAvailability(appendedAssets)
+    }
+    assetPage.value = nextPage
+    hasMoreAssets.value = freshData.length >= ASSET_PAGE_SIZE
+  } catch (error) {
+    console.error('[AssetPanel] 加载更多资产失败:', error)
+  } finally {
+    loadingMore.value = false
+  }
+}
+
 async function _refreshAssetsInBackground(spaceParams, spaceType, teamId) {
   try {
     const freshData = await _fetchAssetsFromServer(spaceParams, spaceType, teamId)
     if (freshData.length !== assets.value.length || 
         JSON.stringify(freshData.map(d => d.id).slice(0, 5)) !== JSON.stringify(assets.value.map(d => d.id).slice(0, 5))) {
-      assets.value = freshData
+      const refreshedIds = new Set(freshData.map(asset => asset.id))
+      const loadedTail = assets.value.slice(ASSET_PAGE_SIZE).filter(asset => !refreshedIds.has(asset.id))
+      assets.value = [...freshData, ...loadedTail]
+      hasMoreAssets.value = freshData.length >= ASSET_PAGE_SIZE
       console.log('[AssetPanel] 后台刷新完成，数据已更新')
     }
   } catch (e) {
@@ -1098,7 +1182,7 @@ function startHideSeedanceDropdown() {
   seedanceDropdownTimer = setTimeout(() => {
     showSeedanceDropdownMenu.value = false
     seedanceDropdownTimer = null
-  }, 2000)
+  }, 500)
 }
 
 function selectSeedanceGroup(group) {
@@ -1439,6 +1523,7 @@ watch(() => props.visible, async (visible) => {
   } else {
     closeHoverPreview()
     closePreview()
+    isFullscreen.value = false
     stopTeamSync()
   }
 })
@@ -1446,7 +1531,22 @@ watch(() => props.visible, async (visible) => {
 function setActivePanelView(view) {
   activePanelView.value = view
   closeHoverPreview()
-  if (view === 'canvas') closePreview()
+  if (view === 'canvas') {
+    closePreview()
+    isFullscreen.value = false
+  } else {
+    nextTick(ensureScrollableOrLoadMore)
+  }
+}
+
+function toggleFullscreen() {
+  isFullscreen.value = !isFullscreen.value
+  nextTick(() => {
+    if (assetListRef.value) {
+      assetListRef.value.scrollTop = assetScrollTop.value
+    }
+    ensureScrollableOrLoadMore()
+  })
 }
 
 // 键盘事件
@@ -1461,6 +1561,8 @@ function handleKeydown(e) {
       closeContextMenu()
     } else if (showTagManager.value) {
       closeTagManager()
+    } else if (isFullscreen.value) {
+      toggleFullscreen()
     } else {
       emit('close')
     }
@@ -1487,24 +1589,6 @@ function handleAssetsUpdated(event) {
   loadAssets(true)
 }
 
-let assetResizeObserver = null
-
-watch(assetListRef, (el) => {
-  if (assetResizeObserver) {
-    assetResizeObserver.disconnect()
-    assetResizeObserver = null
-  }
-  if (el && 'ResizeObserver' in window) {
-    assetResizeObserver = new ResizeObserver(() => {
-      if (assetListRef.value) {
-        assetContainerHeight.value = assetListRef.value.clientHeight
-      }
-    })
-    assetResizeObserver.observe(el)
-    assetContainerHeight.value = el.clientHeight
-  }
-})
-
 onMounted(() => {
   document.addEventListener('keydown', handleKeydown)
   document.addEventListener('click', handleGlobalClick)
@@ -1520,11 +1604,6 @@ onUnmounted(() => {
   // 停止团队空间实时同步
   stopTeamSync()
   closeHoverPreview()
-
-  if (assetResizeObserver) {
-    assetResizeObserver.disconnect()
-    assetResizeObserver = null
-  }
 })
 </script>
 
@@ -1534,8 +1613,15 @@ onUnmounted(() => {
     <div 
       v-if="visible" 
       class="asset-panel-container"
+      :class="{ fullscreen: isFullscreen }"
     >
-      <div class="asset-panel" :class="{ 'canvas-directory-mode': activePanelView === 'canvas' }">
+      <div
+        class="asset-panel"
+        :class="{
+          'canvas-directory-mode': activePanelView === 'canvas',
+          fullscreen: isFullscreen
+        }"
+      >
         <!-- 头部 -->
         <div class="panel-header">
           <div class="header-title">
@@ -1547,12 +1633,28 @@ onUnmounted(() => {
             </svg>
             <span>{{ t('canvas.assetPanel.title') }}</span>
           </div>
-          <button class="close-btn" @click="$emit('close')">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          <div class="header-actions">
+            <button
+              v-if="activePanelView === 'assets'"
+              class="header-btn"
+              :class="{ active: isFullscreen }"
+              @click="toggleFullscreen"
+              :title="isFullscreen ? '退出全屏' : '全屏显示'"
+            >
+              <svg v-if="!isFullscreen" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+              </svg>
+              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
+              </svg>
+            </button>
+            <button class="close-btn" @click="$emit('close')">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div class="asset-panel-tabs" role="tablist" :aria-label="t('canvas.assetPanel.title')">
@@ -1754,37 +1856,37 @@ onUnmounted(() => {
             <p class="empty-hint">{{ t('canvas.assetPanel.autoSaveHint') }}</p>
           </div>
 
-          <template v-else>
+          <div v-else class="asset-waterfall-grid">
             <div
-              class="asset-grid-window"
-              :style="filteredAssets.length > 30 ? { minHeight: assetTotalHeight } : null"
+              v-for="(columnAssets, columnIndex) in assetColumns"
+              :key="columnIndex"
+              class="asset-waterfall-column"
             >
-            <div
-              class="asset-grid-track"
-              :style="filteredAssets.length > 30 ? { transform: `translateY(${assetOffsetY}px)` } : null"
-            >
-            <AssetCard
-              v-for="{ item: asset } in visibleAssets"
-              :key="asset.id"
-              :asset="asset"
-              :file-types="fileTypes"
-              :audio-unavailable="audioUnavailableSet.has(asset.id)"
-              :video-thumbnail="getVideoThumbnail(asset)"
-              :formatted-size="formatFileSize(asset.size)"
-              :formatted-date="formatDate(asset.created_at)"
-              :character-status="getCharacterStatus(asset)"
-              :character-fail-reason="getCharacterFailReason(asset) || ''"
-              @click="handleAssetClick"
-              @dblclick="handleAssetDoubleClick"
-              @contextmenu="handleContextMenu"
-              @dragstart="handleDragStart"
-              @mouseenter="handleCardMouseEnter"
-              @mouseleave="handleCardMouseLeave"
-              @favorite="handleToggleFavorite"
-            />
+              <AssetCard
+                v-for="asset in columnAssets"
+                :key="asset.id"
+                :asset="asset"
+                :file-types="fileTypes"
+                :audio-unavailable="audioUnavailableSet.has(asset.id)"
+                :video-thumbnail="getVideoThumbnail(asset)"
+                :formatted-size="formatFileSize(asset.size)"
+                :formatted-date="formatDate(asset.created_at)"
+                :character-status="getCharacterStatus(asset)"
+                :character-fail-reason="getCharacterFailReason(asset) || ''"
+                @click="handleAssetClick"
+                @dblclick="handleAssetDoubleClick"
+                @contextmenu="handleContextMenu"
+                @dragstart="handleDragStart"
+                @mouseenter="handleCardMouseEnter"
+                @mouseleave="handleCardMouseLeave"
+                @favorite="handleToggleFavorite"
+              />
             </div>
-            </div>
-          </template>
+          </div>
+          <div v-if="loadingMore" class="asset-load-more">
+            <div class="spinner"></div>
+            <span>{{ t('common.loading') }}</span>
+          </div>
           </template>
         </div>
 
@@ -2133,6 +2235,18 @@ onUnmounted(() => {
   pointer-events: none; /* 让拖拽可以穿透 */
 }
 
+.asset-panel-container.fullscreen {
+  position: fixed;
+  inset: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+  z-index: 11000;
+}
+
 /* 面板 - 更大尺寸 */
 .asset-panel {
   width: 780px;
@@ -2153,6 +2267,13 @@ onUnmounted(() => {
 
 .asset-panel.canvas-directory-mode {
   width: 360px;
+}
+
+.asset-panel.fullscreen {
+  width: 90vw;
+  max-width: 1400px;
+  height: 100%;
+  max-height: 100%;
 }
 
 .asset-library-view {
@@ -2232,6 +2353,32 @@ onUnmounted(() => {
 .header-title svg {
   opacity: 0.8;
   color: #a78bfa;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.45);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.header-btn:hover,
+.header-btn.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 .close-btn {
@@ -2457,34 +2604,48 @@ onUnmounted(() => {
   color: rgba(255, 255, 255, 0.7);
 }
 
-/* 资产列表 - 3列布局 */
+/* 资产列表 - 无限瀑布流 */
 .asset-list {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 16px 20px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  align-content: start;
   max-height: 100%;
   min-height: 0;
 }
 
 .asset-list > .seedance-panel {
-  grid-column: 1 / -1;
-}
-
-.asset-grid-window {
-  grid-column: 1 / -1;
   width: 100%;
 }
 
-.asset-grid-track {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.asset-waterfall-grid {
+  display: flex;
+  align-items: flex-start;
   gap: 16px;
-  align-items: start;
+  width: 100%;
+}
+
+.asset-waterfall-column {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.asset-load-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 72px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 12px;
+}
+
+.asset-load-more .spinner {
+  width: 18px;
+  height: 18px;
 }
 
 .asset-list::-webkit-scrollbar {
@@ -3350,14 +3511,11 @@ onUnmounted(() => {
     max-height: calc(100vh - 40px);
   }
   
-  .asset-list {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 @media (max-width: 640px) {
-  .asset-list {
-    grid-template-columns: 1fr;
+  .asset-panel-container.fullscreen {
+    inset: 8px;
   }
 }
 
@@ -4450,6 +4608,10 @@ onUnmounted(() => {
    ======================================== */
 
 /* 面板背景 */
+:root.canvas-theme-light .asset-panel-container.fullscreen {
+  background: rgba(241, 245, 249, 0.72) !important;
+}
+
 :root.canvas-theme-light .asset-panel {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 250, 252, 0.98) 100%) !important;
   border-color: rgba(0, 0, 0, 0.08) !important;
@@ -4478,6 +4640,20 @@ onUnmounted(() => {
 :root.canvas-theme-light .asset-panel .close-btn:hover {
   background: rgba(0, 0, 0, 0.06) !important;
   color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .asset-panel .header-btn {
+  color: rgba(0, 0, 0, 0.42) !important;
+}
+
+:root.canvas-theme-light .asset-panel .header-btn:hover,
+:root.canvas-theme-light .asset-panel .header-btn.active {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .asset-panel .asset-load-more {
+  color: rgba(0, 0, 0, 0.46) !important;
 }
 
 /* 文件类型筛选 */

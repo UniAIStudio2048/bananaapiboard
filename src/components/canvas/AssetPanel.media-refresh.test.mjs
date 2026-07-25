@@ -56,13 +56,52 @@ test('AssetPanel media cards preserve original media ratio and bottom tag filter
   assert.match(assetCard, /\.asset-card-media\s*\{[\s\S]*?object-fit:\s*contain/)
   assert.match(assetCard, /\.favorite-overlay\s*\{[\s\S]*?opacity:\s*0/)
   assert.match(assetCard, /\.asset-card\.asset-card-v2:hover \.favorite-overlay/)
-  assert.match(assetPanel, /const ASSET_ROW_HEIGHT = 560/)
-  assert.match(assetPanel, /class="asset-grid-window"/)
-  assert.match(assetPanel, /class="asset-grid-track"/)
-  assert.match(assetPanel, /\.asset-grid-track\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/)
+  assert.doesNotMatch(assetPanel, /ASSET_ROW_HEIGHT/)
+  assert.doesNotMatch(assetPanel, /class="asset-grid-window"/)
+  assert.doesNotMatch(assetPanel, /class="asset-grid-track"/)
+  assert.match(assetPanel, /const assetColumnCount = computed\(\(\) => isFullscreen\.value \? 6 : 3\)/)
+  assert.match(assetPanel, /class="asset-waterfall-grid"/)
+  assert.match(assetPanel, /class="asset-waterfall-column"/)
   assert.doesNotMatch(assetPanel, /\?\s*\{ display:\s*'contents' \}/)
   assert.match(assetPanel, /class="asset-tag-bar-bottom"/)
   assert.doesNotMatch(assetPanel, /class="tag-filter"/)
+})
+
+test('AssetPanel progressively loads every asset page in an infinite waterfall', () => {
+  assert.match(assetPanel, /const ASSET_PAGE_SIZE = 100/)
+  assert.match(assetPanel, /const INITIAL_DISPLAY_COUNT = 30/)
+  assert.match(assetPanel, /const hasMoreAssets = ref\(true\)/)
+  assert.match(assetPanel, /async function loadMoreAssets\(/)
+  assert.match(assetPanel, /_fetchAssetsFromServer\(spaceParams, spaceType, teamId, nextPage\)/)
+  assert.match(assetPanel, /getAssets\(\{ \.\.\.spaceParams, page, pageSize: ASSET_PAGE_SIZE \}\)/)
+  assert.match(assetPanel, /pageSize:\s*ASSET_PAGE_SIZE/)
+  assert.match(assetPanel, /function maybeLoadMoreAssets\(/)
+  assert.match(assetPanel, /@scroll="handleAssetScroll"/)
+  assert.match(assetPanel, /v-for="\(columnAssets, columnIndex\) in assetColumns"/)
+})
+
+test('AssetPanel has the same fullscreen collection control pattern as HistoryPanel', () => {
+  assert.match(assetPanel, /const isFullscreen = ref\(false\)/)
+  assert.match(assetPanel, /function toggleFullscreen\(/)
+  assert.match(assetPanel, /:class="\{ fullscreen: isFullscreen \}"/)
+  assert.match(assetPanel, /:title="isFullscreen \? '退出全屏' : '全屏显示'"/)
+  assert.match(assetPanel, /class="header-actions"/)
+  assert.match(assetPanel, /\.asset-panel-container\.fullscreen\s*\{[\s\S]*?position:\s*fixed/)
+  assert.match(assetPanel, /\.asset-panel\.fullscreen\s*\{[\s\S]*?width:\s*90vw/)
+})
+
+test('AssetCard reveals its metadata inside the thumbnail with theme-aware glass styling', () => {
+  const assetCard = readFileSync(new URL('./AssetCard.vue', import.meta.url), 'utf8')
+  const thumbStart = assetCard.indexOf('<div class="asset-card-thumb"')
+  const infoStart = assetCard.indexOf('<div class="asset-card-info">')
+  const thumbEnd = assetCard.indexOf('</div>', infoStart)
+
+  assert.ok(thumbStart >= 0 && infoStart > thumbStart && thumbEnd > infoStart)
+  assert.match(assetCard, /\.asset-card-info\s*\{[\s\S]*?position:\s*absolute[\s\S]*?left:\s*0[\s\S]*?bottom:\s*0/)
+  assert.match(assetCard, /\.asset-card-info\s*\{[\s\S]*?backdrop-filter:\s*blur\(/)
+  assert.match(assetCard, /\.asset-card-info\s*\{[\s\S]*?opacity:\s*0/)
+  assert.match(assetCard, /\.asset-card\.asset-card-v2:hover \.asset-card-info/)
+  assert.match(assetCard, /:global\(:root\.canvas-theme-light\) \.asset-card-info/)
 })
 
 test('AssetPanel bottom tag bar has explicit light theme colors', () => {
@@ -81,6 +120,8 @@ test('AssetPreviewModal constrains cached preview images without cropping', () =
 
 test('AssetPanel closes hover preview on scroll and keeps preview hoverable', () => {
   assert.match(assetPanel, /function handleAssetScroll\([\s\S]*?closeHoverPreview\(\)/)
+  assert.match(assetPanel, /function handleCardMouseEnter\([\s\S]*?const anchorRect = e\.currentTarget\?\.getBoundingClientRect\(\)[\s\S]*?setTimeout/)
+  assert.match(assetPanel, /hoverAnchorRect\.value = anchorRect/)
   assert.match(assetPanel, /@mouseenter="handleHoverPreviewEnter"/)
   assert.match(assetPanel, /@mouseleave="handleHoverPreviewLeave"/)
 })
