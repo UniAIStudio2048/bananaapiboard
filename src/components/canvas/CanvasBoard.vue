@@ -9,7 +9,7 @@
  * - 左键拖拽空白区域：平移画布
  * - Shift / Ctrl + 拖动：框选节点
  * - 滚轮：以鼠标位置为中心缩放
- * - Ctrl + 滚轮：垂直平移画布
+ * - Ctrl + 滚轮：以鼠标位置为中心缩放（覆盖浮层和设备差异）
  * 
  * [无限画布模式]
  * - 左键拖拽：框选节点
@@ -20,7 +20,7 @@
  * [通用]
  * - 右键点击空白区域：打开画布菜单
  * - 鼠标中键拖动：始终平移画布
- * - Shift + 滚轮：水平平移画布
+ * - Shift + 滚轮：水平平移画布（未按 Ctrl/⌘ 时）
  * - 空格 + 鼠标拖动：平移画布
  * - Delete/Backspace：删除选中的节点
  * - 双击空白区域：打开节点选择器
@@ -392,36 +392,51 @@ const PAN_SPEED = 50
 
 /**
  * 自定义滚轮处理（根据 interactionMode 切换行为）
- * ComfyUI: 默认=缩放, Shift=水平平移, Ctrl=垂直平移
+ * ComfyUI: 默认=缩放, Shift=水平平移, Ctrl=缩放
  * 无限画布: 默认=按触控板/滚轮 delta 平移, Shift=水平平移, Ctrl=缩放
  */
 let wheelRAF = null
-function handleWheel(event) {
+let pendingForceZoom = false
+function handleWheel(event, { forceZoom = false } = {}) {
   event.preventDefault()
+  if (forceZoom && wheelRAF) {
+    cancelAnimationFrame(wheelRAF)
+    wheelRAF = null
+    pendingForceZoom = false
+  }
+  pendingForceZoom = pendingForceZoom || forceZoom
 
   // 🚀 RAF 节流：避免高频滚轮事件导致卡顿
   if (wheelRAF) return
   wheelRAF = requestAnimationFrame(() => {
     wheelRAF = null
-    handleWheelInner(event)
+    const shouldForceZoom = pendingForceZoom
+    pendingForceZoom = false
+    handleWheelInner(event, shouldForceZoom)
   })
 }
-function handleWheelInner(event) {
+function handleGlobalWheel(event) {
+  if (!event.ctrlKey && !event.metaKey) return
+  event.preventDefault()
+  event.stopPropagation()
+  handleWheel(event, { forceZoom: true })
+}
+function handleWheelInner(event, forceZoom = false) {
   const viewport = getViewport()
   const isInfiniteCanvas = interactionMode.value === 'infinite-canvas'
   const isCtrl = event.ctrlKey || event.metaKey
   const TRACKPAD_PAN_SPEED_SCALE = 1 / 3
 
   // Shift+滚轮：水平平移（两种模式相同）
-  if (event.shiftKey) {
+  if (event.shiftKey && !forceZoom) {
     const dx = event.deltaY > 0 ? -PAN_SPEED : PAN_SPEED
     setViewport({ x: viewport.x + dx, y: viewport.y, zoom: viewport.zoom })
     return
   }
 
-  // ComfyUI: 无修饰键=缩放, Ctrl=垂直平移
+  // ComfyUI: 无修饰键=缩放；Ctrl/⌘ 由全局监听统一强制缩放
   // 无限画布: 无修饰键=垂直平移, Ctrl=缩放
-  const shouldZoom = isInfiniteCanvas ? isCtrl : !isCtrl
+  const shouldZoom = forceZoom || (isInfiniteCanvas ? isCtrl : !isCtrl)
 
   if (shouldZoom) {
     const delta = event.deltaY > 0 ? -ZOOM_SPEED : ZOOM_SPEED
@@ -3737,6 +3752,7 @@ onMounted(() => {
   document.addEventListener('mouseup', handleMouseUp)
   
   // 添加滚轮事件监听（以鼠标位置为中心缩放）
+  window.addEventListener('wheel', handleGlobalWheel, { passive: false, capture: true })
   if (canvasBoardRef.value) {
     updateCanvasBoardSize()
     if (typeof ResizeObserver !== 'undefined') {
@@ -3770,6 +3786,12 @@ onUnmounted(() => {
   document.body.style.cursor = 'default'
   
   // 移除滚轮和右键事件监听
+  window.removeEventListener('wheel', handleGlobalWheel, { capture: true })
+  if (wheelRAF) {
+    cancelAnimationFrame(wheelRAF)
+    wheelRAF = null
+  }
+  pendingForceZoom = false
   if (canvasBoardRef.value) {
     canvasBoardRef.value.removeEventListener('wheel', handleWheel)
     canvasBoardRef.value.removeEventListener('touchstart', handleTouchStart, { capture: true })

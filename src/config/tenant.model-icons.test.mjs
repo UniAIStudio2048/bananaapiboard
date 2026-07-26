@@ -664,3 +664,26 @@ test('getAvailableVideoModels filters unsupported 3 second Bytefor duration pric
   assert.deepEqual(model.durations, ['4', '5'])
   assert.deepEqual(model.pointsCost, { '4': 40, '5': 50 })
 })
+
+test('getAvailableVideoModels preserves explicitly empty duration and aspect ratio lists', () => {
+  tenant.updateRuntimeConfig({
+    modelNames: { image: {}, video: {} },
+    modelEnabled: { image: {}, video: {} },
+    modelDescriptions: { image: {}, video: {} },
+    modelPricing: { image: {}, video: {} },
+    video_models: [{
+      name: 'video-without-optional-selectors',
+      displayName: 'Video Without Optional Selectors',
+      enabled: true,
+      apiType: 'coze-video-workflow',
+      pointsCost: 20,
+      durations: [],
+      aspectRatios: []
+    }]
+  })
+
+  const model = tenant.getAvailableVideoModels().find(item => item.value === 'video-without-optional-selectors')
+  assert.ok(model)
+  assert.deepEqual(model.durations, [])
+  assert.deepEqual(model.aspectRatios, [])
+})

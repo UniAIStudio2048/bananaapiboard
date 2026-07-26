@@ -20,3 +20,12 @@ test('voice output keeps voiceId and audio nodes may connect to audio nodes', ()
   assert.match(source, /props\.data\.inheritedData\?\.voiceId/)
   assert.match(rules, /'audio':\s*\[\s*NODE_TYPES\.AUDIO_INPUT/)
 })
+
+test('Coze audio generation does not require input parameters at the node boundary', () => {
+  assert.match(source, /const canGenerateCurrentAudio = computed\(\(\) => \{\s*if \(audioCapability\.value\) return true/)
+})
+
+test('audio output duration is normalized to a number after metadata loads', () => {
+  assert.match(source, /const audioDuration = Number\(audioRef\.value\.duration\)/)
+  assert.match(source, /output: \{ \.\.\.props\.data\.output, duration: audioDuration \}/)
+})

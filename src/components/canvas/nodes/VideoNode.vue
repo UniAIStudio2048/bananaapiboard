@@ -396,7 +396,8 @@ function getDefaultVideoModel(mode = 'text') {
 // 生成参数 - 默认使用根据当前生成模式过滤后的第一个模型
 const selectedModel = ref(props.data.model || getDefaultVideoModel(props.data.generationMode || 'text'))
 const selectedAspectRatio = ref(props.data.aspectRatio || '16:9')
-const selectedDuration = ref(props.data.duration || '10')
+const selectedDuration = ref(props.data.duration || '')
+const hasExplicitDurationSelection = ref(false)
 const selectedKlingOfficialQuality = ref(props.data.klingOfficialQuality || props.data.quality || '')
 const selectedCount = ref(props.data.count || 1)
 
@@ -473,13 +474,21 @@ function toggleCount() {
   selectedCount.value = nextCount
 }
 
+function selectVideoDuration(value) {
+  hasExplicitDurationSelection.value = true
+  selectedDuration.value = value
+}
+
 // 模型下拉框方法
 const dropdownDirection = ref('down') // 'down' 或 'up'
 const modelSelectorRef = ref(null)
 const modelDropdownListRef = ref(null)
+const videoModeDropdownOpen = ref(null)
+const videoModeDropdownDirection = ref('down')
 
 function toggleModelDropdown(event) {
   event.stopPropagation()
+  videoModeDropdownOpen.value = null
 
   // 计算下拉方向
   if (modelSelectorRef.value) {
@@ -507,6 +516,7 @@ function toggleModelDropdown(event) {
 function selectModel(modelValue) {
   selectedModel.value = modelValue
   isModelDropdownOpen.value = false
+  videoModeDropdownOpen.value = null
 }
 
 function closeModelDropdown() {
@@ -519,6 +529,31 @@ function handleModelDropdownClickOutside(event) {
   if (!dropdown) {
     isModelDropdownOpen.value = false
   }
+  const videoModeDropdown = event.target.closest('.video-mode-selector, .ratio-selector')
+  if (!videoModeDropdown) {
+    videoModeDropdownOpen.value = null
+  }
+}
+
+function toggleVideoModeDropdown(key, event) {
+  event.stopPropagation()
+
+  const selector = key === 'ratio'
+    ? { options: availableAspectRatios.value }
+    : (key === 'sub' ? activeVideoSubmodeSelector.value : activeVideoModeSelector.value)
+  if (!selector) return
+
+  const trigger = event.currentTarget?.closest('.video-mode-selector')
+  const rect = trigger?.getBoundingClientRect()
+  const dropdownHeight = Math.max(140, selector.options.length * 48 + 54)
+  if (rect && rect.bottom + dropdownHeight > window.innerHeight && rect.top > dropdownHeight) {
+    videoModeDropdownDirection.value = 'up'
+  } else {
+    videoModeDropdownDirection.value = 'down'
+  }
+
+  videoModeDropdownOpen.value = videoModeDropdownOpen.value === key ? null : key
+  isModelDropdownOpen.value = false
 }
 
 // 处理下拉列表的鼠标滚轮事件
@@ -1294,6 +1329,11 @@ const isCozeVideoSwapModel = computed(() => {
   return currentModelConfig.value?.apiType === 'coze-video-swap' || modelName.includes('coze-video-swap')
 })
 
+const isPerSecondBilling = computed(() => {
+  return currentModelConfig.value?.isPerSecondBilling === true ||
+    currentModelConfig.value?.pricingMode === 'per_second'
+})
+
 // 检测是否是 Kling 动作迁移模型（Motion Control）
 const isKlingMotionControl = computed(() => {
   const modelName = selectedModel.value?.toLowerCase() || ''
@@ -1779,6 +1819,12 @@ function buildOmniReferenceUrls(images = referenceImages.value, videos = referen
 
 // 可用的时长选项（优先从模型配置的 durations 数组获取，兼容从 pointsCost 计算）
 const availableDurations = computed(() => {
+  const configuredDurations = currentModelConfig.value?.durations
+  if (Array.isArray(configuredDurations)) {
+    // 显式空数组表示该模型不提供时长选择；非空时尊重管理后台的具体配置。
+    return configuredDurations
+  }
+
   if (isKlingOfficialDurationModel(currentModelConfig.value)) {
     return klingOfficialDurationOptions
   }
@@ -1829,8 +1875,24 @@ watch(seedance2Modes, (modes) => {
 
 const aspectRatios = [
   { value: '16:9', label: '16:9 横屏' },
-  { value: '9:16', label: '9:16 竖屏' }
+  { value: '9:16', label: '9:16 竖屏' },
+  { value: '1:1', label: '1:1 方形' },
+  { value: '3:4', label: '3:4' },
+  { value: '4:3', label: '4:3' }
 ]
+
+const availableAspectRatios = computed(() => {
+  const configuredRatios = currentModelConfig.value?.aspectRatios
+  if (!Array.isArray(configuredRatios)) return aspectRatios
+
+  const configuredValues = configuredRatios
+    .map(ratio => typeof ratio === 'string' ? ratio : ratio?.value)
+    .filter(Boolean)
+  if (configuredValues.length === 0) return []
+
+  const configuredSet = new Set(configuredValues)
+  return aspectRatios.filter(ratio => configuredSet.has(ratio.value))
+})
 
 // ========== 厂商分组下拉布局 ==========
 
@@ -1888,6 +1950,37 @@ const durations = computed(() => {
     label: `${d}s`
   }))
 })
+
+watch([selectedModel, availableAspectRatios], () => {
+  const options = availableAspectRatios.value.map(ratio => ratio.value)
+  if (options.length === 0) {
+    if (selectedAspectRatio.value) selectedAspectRatio.value = ''
+    return
+  }
+  if (!options.includes(selectedAspectRatio.value)) {
+    selectedAspectRatio.value = options[0]
+  }
+}, { immediate: true })
+
+watch(selectedModel, () => {
+  hasExplicitDurationSelection.value = false
+})
+
+watch([selectedModel, availableDurations, isPerSecondBilling], () => {
+  // 按秒计费默认不选择固定时长；只有用户主动选择时才向后端传 duration。
+  if (isPerSecondBilling.value && !hasExplicitDurationSelection.value) {
+    if (selectedDuration.value) selectedDuration.value = ''
+    return
+  }
+  const options = availableDurations.value.map(duration => String(duration))
+  if (options.length === 0) {
+    if (selectedDuration.value) selectedDuration.value = ''
+    return
+  }
+  if (!options.includes(String(selectedDuration.value))) {
+    selectedDuration.value = options[0]
+  }
+}, { immediate: true })
 
 // 100% 卡住兜底：自动重试获取视频URL
 let stuckRetryTimer = null
@@ -2312,7 +2405,7 @@ onMounted(() => {
   }, 1000)
 
   // 如果当前模型支持时长选择，但当前选中的时长不在可用列表中，则重置为第一个可用时长
-  if (availableDurations.value.length > 0 && !availableDurations.value.includes(selectedDuration.value)) {
+  if (!isPerSecondBilling.value && availableDurations.value.length > 0 && !availableDurations.value.includes(selectedDuration.value)) {
     selectedDuration.value = availableDurations.value[0]
   }
   
@@ -2519,13 +2612,21 @@ const contentStyle = computed(() => {
   }
 })
 
-// 视频容器样式（根据选择的比例设置）
+// 视频容器样式（优先使用选择的比例；未选择时使用视频实际比例）
 const videoWrapperStyle = computed(() => {
-  const ratio = props.data.aspectRatio || selectedAspectRatio.value || '16:9'
-  if (ratio === '9:16') {
-    return { aspectRatio: '9 / 16' }
-  }
-  return { aspectRatio: '16 / 9' }
+  const configuredRatio = availableAspectRatios.value.length > 0
+    ? props.data.aspectRatio || selectedAspectRatio.value
+    : ''
+  const detectedRatio = props.data.videoWidth && props.data.videoHeight
+    ? `${props.data.videoWidth}:${props.data.videoHeight}`
+    : detectedVideoDimensions.value
+      ? `${detectedVideoDimensions.value.width}:${detectedVideoDimensions.value.height}`
+      : ''
+  const ratio = configuredRatio || detectedRatio || '16:9'
+  const parsed = parseAspectRatioValue(ratio)
+  return parsed
+    ? { aspectRatio: `${parsed.width} / ${parsed.height}` }
+    : { aspectRatio: '16 / 9' }
 })
 
 // 进度百分比只用于卡住后的手动重试判断，不再作为生成中展示内容。
@@ -2863,6 +2964,145 @@ watch([selectedWanMode, referenceVideos, isWanModel], () => {
   }
 })
 
+function getVideoModeIconClass(value) {
+  const normalized = String(value || '').toLowerCase()
+  if (['text2video', 't2v', 'text', 'standard', 'fast', 'auto', 'std', 'wan-std'].includes(normalized)) return 'mode-icon-text'
+  if (['image2video', 'image2video_first', 'i2v', 'image', 'subject_control'].includes(normalized)) return 'mode-icon-image'
+  if (['first_last_frame', 'image2video_first_last', 'start-end'].includes(normalized)) return 'mode-icon-frames'
+  if (['video_reference', 'r2v', 'videoedit', 'video_edit', 'video_extend'].includes(normalized)) return 'mode-icon-video'
+  if (['multimodal_ref', 'reference', 'multi_shot', 'animate_mix'].includes(normalized)) return 'mode-icon-reference'
+  if (['pro', 'wan-pro'].includes(normalized)) return 'mode-icon-pro'
+  if (normalized.includes('motion')) return 'mode-icon-motion'
+  return 'mode-icon-default'
+}
+
+function getAspectRatioIconClass(value) {
+  if (value === '1:1') return 'ratio-icon-square'
+  if (value === '3:4') return 'ratio-icon-3-4'
+  if (value === '4:3') return 'ratio-icon-4-3'
+  return value === '9:16' ? 'ratio-icon-portrait' : 'ratio-icon-landscape'
+}
+
+// 当前模型的视频模式选择器：仅改变入口 UI，沿用各模式原有状态与持久化字段。
+const activeVideoModeSelector = computed(() => {
+  if (isKlingMotionControl.value && !isCozeVideoSwapModel.value) {
+    return {
+      key: 'kling-motion',
+      label: '运镜模式',
+      value: klingMotionMode.value,
+      options: [
+        { value: 'std', label: '标准' },
+        { value: 'pro', label: '专业' }
+      ]
+    }
+  }
+
+  if (isViduModel.value && referenceImages.value.length > 0) {
+    return {
+      key: 'vidu',
+      label: '图生模式',
+      value: viduMode.value,
+      options: VIDU_MODE_OPTIONS
+    }
+  }
+
+  if (isVeoModel.value) {
+    return {
+      key: 'veo',
+      label: 'VEO 模式',
+      value: veoMode.value,
+      options: VEO_MODE_OPTIONS.value
+    }
+  }
+
+  if (isKlingO1Model.value) {
+    return {
+      key: 'kling-o1',
+      label: 'O1 模式',
+      value: selectedKlingO1Mode.value,
+      options: klingO1Modes.value
+    }
+  }
+
+  if (isKlingV3OmniModel.value) {
+    return {
+      key: 'kling-v3-omni',
+      label: 'v3 Omni 模式',
+      value: selectedKlingV3OmniMode.value,
+      options: klingV3OmniModes.value
+    }
+  }
+
+  if (isWanModel.value) {
+    return {
+      key: 'wan',
+      label: 'Wan 模式',
+      value: selectedWanMode.value,
+      options: wanModes.value
+    }
+  }
+
+  if (isSeedance2Model.value) {
+    return {
+      key: 'seedance-2',
+      label: isHappyHorseModel.value ? 'Happy Horse 模式' : 'SD2 模式',
+      value: selectedSeedance2Mode.value,
+      options: seedance2Modes.value
+    }
+  }
+
+  return null
+})
+
+const activeVideoSubmodeSelector = computed(() => {
+  if (isWanModel.value && selectedWanMode.value === 'animate_mix') {
+    return {
+      label: '换人模式',
+      value: selectedWanAnimateMode.value,
+      options: wanAnimateModeOptions
+    }
+  }
+
+  return null
+})
+
+function setActiveVideoMode(value) {
+  const selector = activeVideoModeSelector.value
+  if (!selector) return
+
+  switch (selector.key) {
+    case 'kling-motion':
+      klingMotionMode.value = value
+      break
+    case 'vidu':
+      viduMode.value = value
+      break
+    case 'veo':
+      veoMode.value = value
+      break
+    case 'kling-o1':
+      selectedKlingO1Mode.value = value
+      break
+    case 'kling-v3-omni':
+      selectedKlingV3OmniMode.value = value
+      break
+    case 'wan':
+      selectedWanMode.value = value
+      break
+    case 'seedance-2':
+      selectedSeedance2Mode.value = value
+      break
+    default:
+      break
+  }
+}
+
+function setActiveVideoSubmode(value) {
+  if (activeVideoSubmodeSelector.value) {
+    selectedWanAnimateMode.value = value
+  }
+}
+
 async function prepareSeedanceImageFile(file) {
   if (!file || !file.type?.startsWith('image/')) return null
   const compressed = await compressImage(file, {
@@ -3148,6 +3388,15 @@ const pointsCost = computed(() => {
   }
 
   const modelPointsCost = currentModelConfig.value.pointsCost
+
+  if (isPerSecondBilling.value) {
+    const rateConfig = currentModelConfig.value.costPerSecond
+    const rate = typeof rateConfig === 'object'
+      ? Number(rateConfig.coze || rateConfig.std || 10)
+      : Number(rateConfig) || 10
+    const billingDuration = Number(selectedDuration.value) || Number(currentModelConfig.value.prePaidDuration) || 10
+    return Math.ceil(rate * billingDuration)
+  }
   
   if (isWanModel.value && selectedWanMode.value === 'animate_mix') {
     return Math.ceil(wanBillingDuration.value || 10) * (wanAnimateCostPerSecond.value || 10)
@@ -3206,6 +3455,15 @@ const klingOfficialSelectedDurationTotalCost = computed(() => {
 const klingOfficialSelectedDurationCostText = computed(() => {
   // Keep this in script because templates unwrap refs before property access.
   return selectedDuration.value ? `${selectedDuration.value}s = ${formatPoints(klingOfficialSelectedDurationTotalCost.value)}积分` : ''
+})
+
+// 按秒计费模型在画布上展示单秒价格；pointsCost 仍保留为提交时的预扣总积分。
+const perSecondBillingCostPerSecond = computed(() => {
+  const rateConfig = currentModelConfig.value?.costPerSecond
+  if (typeof rateConfig === 'object' && rateConfig) {
+    return Number(rateConfig.coze || rateConfig.std || rateConfig.default || 10) || 10
+  }
+  return Number(rateConfig) || 10
 })
 
 // 动作迁移模型每秒积分（用于显示 "X积分/s" 格式）
@@ -4061,7 +4319,7 @@ async function ensureAccessibleUrls(imageUrls) {
           const byteArray = new Uint8Array(byteNumbers)
           const blob = new Blob([byteArray], { type: `image/${imageType}` })
           const file = new File([blob], `base64_${Date.now()}.${imageType}`, { type: blob.type })
-          
+
           const urls = await uploadImages([file])
         if (urls && urls.length > 0) {
             console.log('[VideoNode] base64 上传成功，新 URL:', urls[0])
@@ -4170,7 +4428,9 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     formData.append('model', resolveVideoRequestModel(currentModelConfig.value, selectedModel.value))
   }
   
-  formData.append('aspect_ratio', selectedAspectRatio.value)
+  if (selectedAspectRatio.value) {
+    formData.append('aspect_ratio', selectedAspectRatio.value)
+  }
   const spaceParams = teamStore.getSpaceParams('current')
   formData.append('spaceType', spaceParams.spaceType)
   if (spaceParams.teamId) {
@@ -4178,7 +4438,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   }
   
   // VEO3 / Wan 视频编辑不需要时长参数
-  if (!isVeo3Model.value && !(isWanModel.value && selectedWanMode.value === 'videoedit')) {
+  if (!isVeo3Model.value && !(isWanModel.value && selectedWanMode.value === 'videoedit') && selectedDuration.value) {
     formData.append('duration', selectedDuration.value)
   }
   if (isKlingOfficialDurationModel(currentModelConfig.value)) {
@@ -4327,7 +4587,9 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       currentModelConfig.value?.happyHorseConfig?.resolution ||
       (isHappyHorseModel.value ? '1080p' : '720p')
     formData.append('seedance_resolution', seedanceResolution)
-    formData.append('seedance_ratio', selectedAspectRatio.value)
+    if (selectedAspectRatio.value) {
+      formData.append('seedance_ratio', selectedAspectRatio.value)
+    }
     formData.append('seedance_watermark', 'false')
     if (isSeedanceOpenApiProModel.value && capturedState.faceCodes?.length > 0) {
       formData.append('seedance_face_codes', JSON.stringify(capturedState.faceCodes))
@@ -4389,7 +4651,9 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     formData.append('seedance_mode', wanMode)
     formData.append('seedance_resolution', wanResolution)
     formData.append('resolution', wanResolution)
-    formData.append('seedance_ratio', selectedAspectRatio.value)
+    if (selectedAspectRatio.value) {
+      formData.append('seedance_ratio', selectedAspectRatio.value)
+    }
     formData.append('seedance_watermark', currentModelConfig.value?.wanConfig?.watermark === true ? 'true' : 'false')
     console.log('[VideoNode] Wan 模式:', wanMode, '分辨率:', wanResolution, '比例:', selectedAspectRatio.value)
 
@@ -4435,6 +4699,24 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       formData.append('source_video_duration', String(Math.ceil(upstreamVideoDuration.value || currentModelConfig.value?.wanConfig?.defaultDuration || 10)))
       console.log('[VideoNode] Wan 换人混合 | mode:', wanAnimateMode, '人物图:', finalImages.length > 0, '参考视频:', orderedVideos.length)
     }
+  }
+
+  // Coze 视频工作流需要把画布上的参考媒体显式映射到工作流参数；仅传 image_urls
+  // 会丢失音频/视频输入，且工作流会收到空的 URL。
+  if (currentModelConfig.value?.apiType === 'coze-video-workflow') {
+    if (finalImages.length > 0) {
+      formData.append('first_frame_image', finalImages[0])
+      if (finalImages.length > 1) formData.append('last_frame_image', finalImages[1])
+    }
+    const cozeReferenceVideos = (referenceVideos.value || []).filter(Boolean)
+    const cozeReferenceAudios = (referenceAudios.value || []).filter(Boolean)
+    if (cozeReferenceVideos.length > 0) {
+      formData.append('reference_videos', JSON.stringify(cozeReferenceVideos))
+    }
+    if (cozeReferenceAudios.length > 0) {
+      formData.append('reference_audios', JSON.stringify(cozeReferenceAudios))
+    }
+    console.log('[VideoNode] Coze 视频工作流参考媒体 | 首帧:', finalImages.length > 0, '视频:', cozeReferenceVideos.length, '音频:', cozeReferenceAudios.length)
   }
   
   // 所有模型都通过 image_urls 传递参考图片（后端兼容 + 作为 Seedance 2.0 reference_images 的备用）
@@ -4526,7 +4808,13 @@ function getCurrentNodeDisplayHeight(currentNode) {
   const measuredHeight = Number(currentNode.dimensions?.height || 0)
   const savedHeight = Number(currentNode.data?.nodeHeight || currentNode.data?.height || nodeHeight.value || 0)
   const displayWidth = Number(currentNode.dimensions?.width || currentNode.data?.nodeWidth || currentNode.data?.width || nodeWidth.value || 420)
-  const ratio = parseAspectRatioValue(currentNode.data?.aspectRatio || selectedAspectRatio.value || '16:9')
+  const detectedRatio = currentNode.data?.videoWidth && currentNode.data?.videoHeight
+    ? `${currentNode.data.videoWidth}:${currentNode.data.videoHeight}`
+    : ''
+  const configuredRatio = availableAspectRatios.value.length > 0
+    ? currentNode.data?.aspectRatio || selectedAspectRatio.value
+    : ''
+  const ratio = parseAspectRatioValue(configuredRatio || detectedRatio || '16:9')
   const ratioMediaHeight = ratio
     ? displayWidth * (ratio.height / ratio.width)
     : 0
@@ -6421,22 +6709,80 @@ function handleAddRightClick(event) {
 
 // 视频播放器引用
 const videoPlayerRef = ref(null)
+const detectedVideoDimensions = ref(null)
 
 // 全屏预览状态
 const isFullscreenPreview = ref(false)
 
 // 视频元数据加载完成
+function applyDetectedVideoDimensions(width, height) {
+  const videoWidth = Number(width)
+  const videoHeight = Number(height)
+  if (!Number.isFinite(videoWidth) || !Number.isFinite(videoHeight) || videoWidth <= 0 || videoHeight <= 0) {
+    return
+  }
+
+  detectedVideoDimensions.value = { width: videoWidth, height: videoHeight }
+
+  const hasRatioSelector = availableAspectRatios.value.length > 0
+  const configuredRatio = hasRatioSelector
+    ? parseAspectRatioValue(props.data.aspectRatio || selectedAspectRatio.value)
+    : null
+  const updates = {}
+  if (Number(props.data.videoWidth) !== videoWidth) updates.videoWidth = videoWidth
+  if (Number(props.data.videoHeight) !== videoHeight) updates.videoHeight = videoHeight
+
+  // 未选择比例时，以视频实际尺寸作为节点比例，避免竖屏视频被放进 16:9 容器产生黑边。
+  if (!configuredRatio) {
+    const targetWidth = videoHeight > videoWidth ? 280 : 420
+    const targetHeight = Math.round(targetWidth * videoHeight / videoWidth)
+    const dimensionsChanged = nodeWidth.value !== targetWidth || nodeHeight.value !== targetHeight
+    nodeWidth.value = targetWidth
+    nodeHeight.value = targetHeight
+    if (dimensionsChanged) {
+      updates.width = targetWidth
+      updates.height = targetHeight
+    }
+  }
+
+  if (Object.keys(updates).length > 0) {
+    canvasStore.updateNodeData(props.id, updates)
+  }
+}
+
+function handleVideoPosterLoad(event) {
+  const image = event?.target
+  applyDetectedVideoDimensions(image?.naturalWidth, image?.naturalHeight)
+}
+
+watch(availableAspectRatios, (ratios) => {
+  if (ratios.length === 0) {
+    applyDetectedVideoDimensions(props.data.videoWidth, props.data.videoHeight)
+  }
+}, { immediate: true })
+
 function handleVideoLoaded(event) {
   const video = event.target
+  applyDetectedVideoDimensions(video.videoWidth, video.videoHeight)
+  const videoDuration = Number(video.duration)
   console.log('[VideoNode] 视频元数据加载完成:', {
     originalUrl: props.data.output?.url?.substring(0, 60),
     normalizedUrl: normalizedVideoUrl.value?.substring(0, 60),
-    duration: video.duration,
+    duration: videoDuration,
     videoWidth: video.videoWidth,
     videoHeight: video.videoHeight,
     isCharacterNode: props.data?.isCharacterNode,
     clipStartTime: props.data?.clipStartTime
   })
+
+  if (Number.isFinite(videoDuration) && videoDuration > 0) {
+    canvasStore.updateNodeData(props.id, {
+      videoDuration,
+      ...(props.data.output
+        ? { output: { ...props.data.output, duration: videoDuration } }
+        : {})
+    })
+  }
   
   // 检测视频比例，如果是竖屏自动调整为 9:16
   if (video.videoWidth && video.videoHeight) {
@@ -6444,7 +6790,7 @@ function handleVideoLoaded(event) {
     const currentRatio = props.data.aspectRatio || selectedAspectRatio.value
     
     // 如果视频是竖屏但当前比例是横屏，自动切换
-    if (isPortrait && currentRatio !== '9:16') {
+    if (isPortrait && currentRatio === '16:9' && availableAspectRatios.value.some(ratio => ratio.value === '9:16')) {
       console.log('[VideoNode] 检测到竖屏视频，自动切换为 9:16 比例')
       selectedAspectRatio.value = '9:16'
       // 调整节点尺寸为竖屏比例（保持宽度，调整高度）
@@ -6460,7 +6806,7 @@ function handleVideoLoaded(event) {
       })
     }
     // 如果视频是横屏但当前比例是竖屏，自动切换
-    else if (!isPortrait && currentRatio === '9:16') {
+    else if (!isPortrait && currentRatio === '9:16' && availableAspectRatios.value.some(ratio => ratio.value === '16:9')) {
       console.log('[VideoNode] 检测到横屏视频，自动切换为 16:9 比例')
       selectedAspectRatio.value = '16:9'
       // 调整节点尺寸为横屏比例
@@ -7757,6 +8103,7 @@ function handleToolbarPreview() {
             alt="视频封面"
             loading="lazy"
             decoding="async"
+            @load="handleVideoPosterLoad"
             @error="handleVideoPosterError"
           />
           <video 
@@ -8317,59 +8664,169 @@ function handleToolbarPreview() {
               </div>
             </Transition>
           </div>
-          
-          <!-- 比例选择（下拉框） -->
-          <div class="ratio-selector">
-            <span class="ratio-icon">📐</span>
-            <select v-model="selectedAspectRatio" class="ratio-select-input">
-              <option v-for="ratio in aspectRatios" :key="ratio.value" :value="ratio.value">
-                {{ ratio.label }}
-              </option>
-            </select>
+
+          <!-- 视频模式选择器：统一放在模型与比例之间，沿用各模型原有状态 -->
+          <div
+            v-if="activeVideoModeSelector"
+            class="video-mode-selector"
+            @mousedown.stop
+            @click.stop
+          >
+            <button
+              type="button"
+              class="video-mode-trigger"
+              @click="toggleVideoModeDropdown('main', $event)"
+            >
+              <span
+                class="video-mode-option-icon"
+                :class="getVideoModeIconClass(activeVideoModeSelector.value)"
+                aria-hidden="true"
+              ></span>
+              <span class="video-mode-trigger-value">
+                {{ activeVideoModeSelector.options.find(option => option.value === activeVideoModeSelector.value)?.label || activeVideoModeSelector.label }}
+              </span>
+              <span class="video-mode-trigger-arrow" :class="{ 'arrow-up': videoModeDropdownOpen === 'main' }">⌃</span>
+            </button>
+            <Transition name="dropdown-fade">
+              <div
+                v-if="videoModeDropdownOpen === 'main'"
+                class="video-mode-dropdown-panel"
+                :class="{ 'dropdown-up': videoModeDropdownDirection === 'up' }"
+              >
+                <div class="video-mode-dropdown-title">{{ activeVideoModeSelector.label }}</div>
+                <button
+                  v-for="option in activeVideoModeSelector.options"
+                  :key="option.value"
+                  type="button"
+                  class="video-mode-dropdown-item"
+                  :class="{ active: option.value === activeVideoModeSelector.value }"
+                  @click="setActiveVideoMode(option.value); videoModeDropdownOpen = null"
+                >
+                  <span
+                    class="video-mode-option-icon"
+                    :class="getVideoModeIconClass(option.value)"
+                    aria-hidden="true"
+                  ></span>
+                  <span>{{ option.label }}</span>
+                </button>
+              </div>
+            </Transition>
           </div>
-          
-          <!-- 动作迁移模式切换（std/pro） -->
-          <div v-if="isKlingMotionControl && !isCozeVideoSwapModel" class="param-chip-group">
-            <div 
-              class="param-chip"
-              :class="{ active: klingMotionMode === 'std' }"
-              @click="klingMotionMode = 'std'"
+
+          <div
+            v-if="activeVideoSubmodeSelector"
+            class="video-mode-selector"
+            @mousedown.stop
+            @click.stop
+          >
+            <button
+              type="button"
+              class="video-mode-trigger"
+              @click="toggleVideoModeDropdown('sub', $event)"
             >
-              标准
-            </div>
-            <div 
-              class="param-chip"
-              :class="{ active: klingMotionMode === 'pro' }"
-              @click="klingMotionMode = 'pro'"
+              <span
+                class="video-mode-option-icon"
+                :class="getVideoModeIconClass(activeVideoSubmodeSelector.value)"
+                aria-hidden="true"
+              ></span>
+              <span class="video-mode-trigger-value">
+                {{ activeVideoSubmodeSelector.options.find(option => option.value === activeVideoSubmodeSelector.value)?.label || activeVideoSubmodeSelector.label }}
+              </span>
+              <span class="video-mode-trigger-arrow" :class="{ 'arrow-up': videoModeDropdownOpen === 'sub' }">⌃</span>
+            </button>
+            <Transition name="dropdown-fade">
+              <div
+                v-if="videoModeDropdownOpen === 'sub'"
+                class="video-mode-dropdown-panel"
+                :class="{ 'dropdown-up': videoModeDropdownDirection === 'up' }"
+              >
+                <div class="video-mode-dropdown-title">{{ activeVideoSubmodeSelector.label }}</div>
+                <button
+                  v-for="option in activeVideoSubmodeSelector.options"
+                  :key="option.value"
+                  type="button"
+                  class="video-mode-dropdown-item"
+                  :class="{ active: option.value === activeVideoSubmodeSelector.value }"
+                  @click="setActiveVideoSubmode(option.value); videoModeDropdownOpen = null"
+                >
+                  <span
+                    class="video-mode-option-icon"
+                    :class="getVideoModeIconClass(option.value)"
+                    aria-hidden="true"
+                  ></span>
+                  <span>{{ option.label }}</span>
+                </button>
+              </div>
+            </Transition>
+          </div>
+
+          <!-- 比例选择（下拉框） -->
+          <div v-if="availableAspectRatios.length > 0" class="ratio-selector" @mousedown.stop @click.stop>
+            <button
+              type="button"
+              class="video-mode-trigger ratio-mode-trigger"
+              @click="toggleVideoModeDropdown('ratio', $event)"
             >
-              专业
-            </div>
+              <span
+                class="ratio-icon"
+                :class="getAspectRatioIconClass(selectedAspectRatio)"
+                aria-hidden="true"
+              ></span>
+              <span class="video-mode-trigger-value">
+                {{ availableAspectRatios.find(ratio => ratio.value === selectedAspectRatio)?.label || selectedAspectRatio }}
+              </span>
+              <span class="video-mode-trigger-arrow" :class="{ 'arrow-up': videoModeDropdownOpen === 'ratio' }">⌃</span>
+            </button>
+            <Transition name="dropdown-fade">
+              <div
+                v-if="videoModeDropdownOpen === 'ratio'"
+                class="video-mode-dropdown-panel ratio-dropdown-panel"
+                :class="{ 'dropdown-up': videoModeDropdownDirection === 'up' }"
+              >
+                <div class="video-mode-dropdown-title">画面比例</div>
+                <button
+                  v-for="ratio in availableAspectRatios"
+                  :key="ratio.value"
+                  type="button"
+                  class="video-mode-dropdown-item"
+                  :class="{ active: ratio.value === selectedAspectRatio }"
+                  @click="selectedAspectRatio = ratio.value; videoModeDropdownOpen = null"
+                >
+                  <span
+                    class="video-mode-option-icon ratio-icon"
+                    :class="getAspectRatioIconClass(ratio.value)"
+                    aria-hidden="true"
+                  ></span>
+                  <span>{{ ratio.label }}</span>
+                </button>
+              </div>
+            </Transition>
           </div>
           
           <!-- 时长切换（VEO3模型和动作迁移模型不显示） -->
-          <div v-if="!isVeo3Model && !isKlingMotionControl && durations.length > 0 && durations.length < 6" class="param-chip-group">
+          <div v-if="!isPerSecondBilling && !isVeo3Model && !isKlingMotionControl && durations.length > 0 && durations.length < 6" class="param-chip-group">
             <div
               v-for="d in durations"
               :key="d.value"
               class="param-chip"
               :class="{ active: selectedDuration === d.value }"
-              @click="selectedDuration = d.value"
+                  @click="selectVideoDuration(d.value)"
             >
               {{ d.label }}
             </div>
           </div>
           <!-- 时长下拉选择（选项较多时使用） -->
-          <div v-if="!isVeo3Model && !isKlingMotionControl && durations.length >= 6" class="duration-select-row">
+          <div v-if="!isPerSecondBilling && !isVeo3Model && !isKlingMotionControl && durations.length >= 6" class="duration-select-row">
             <span class="duration-select-label">时长</span>
             <select
               :value="selectedDuration"
-              @change="selectedDuration = $event.target.value"
+              @change="selectVideoDuration($event.target.value)"
               class="duration-select"
             >
               <option v-for="d in durations" :key="d.value" :value="d.value">{{ d.label }}</option>
             </select>
           </div>
-          
+
           <!-- Vidu 错峰模式开关 -->
           <label 
             v-if="isViduModel" 
@@ -8425,6 +8882,9 @@ function handleToolbarPreview() {
             </template>
             <template v-else-if="isWanModel && selectedWanMode === 'animate_mix'">
               {{ formatPoints(wanAnimateCostPerSecond) }}积分/s
+            </template>
+            <template v-else-if="isPerSecondBilling">
+              {{ formatPoints(perSecondBillingCostPerSecond) }}积分/s
             </template>
             <template v-else-if="isKlingOfficialDurationModel(currentModelConfig)">
               {{ klingOfficialSelectedDurationCostText }}
@@ -8658,21 +9118,6 @@ function handleToolbarPreview() {
       <!-- Vidu 图生视频模式选择 -->
       <template v-if="isViduModel && referenceImages.length > 0">
         <div class="vidu-mode-section">
-          <div class="vidu-mode-header">
-            <span class="vidu-mode-label">🎬 图生视频模式</span>
-            <span class="vidu-mode-hint">当前: {{ currentViduModeConfig.label }}</span>
-          </div>
-          <div class="vidu-mode-options">
-            <button
-              v-for="opt in VIDU_MODE_OPTIONS"
-              :key="opt.value"
-              @click="viduMode = opt.value"
-              :class="['vidu-mode-btn', { active: viduMode === opt.value }]"
-            >
-              <span class="vidu-mode-btn-label">{{ opt.label }}</span>
-              <span class="vidu-mode-btn-desc">{{ opt.maxImages === 7 ? '1-7张' : opt.minImages ? `${opt.minImages}张` : `${opt.maxImages}张` }}</span>
-            </button>
-          </div>
           <!-- 模式说明提示 -->
           <div v-if="viduMode === 'start-end'" class="vidu-mode-tip blue">
             💡 首尾帧模式：第1张图为视频起始帧，第2张图为结束帧
@@ -8693,21 +9138,6 @@ function handleToolbarPreview() {
       <!-- VEO 模型模式选择 -->
       <template v-if="isVeoModel">
         <div class="veo-mode-section">
-          <div class="veo-mode-header">
-            <span class="veo-mode-label">🎬 VEO 模式</span>
-            <span class="veo-mode-hint">当前: {{ currentVeoModeConfig.label }}</span>
-          </div>
-          <div class="veo-mode-options">
-            <button
-              v-for="opt in VEO_MODE_OPTIONS"
-              :key="opt.value"
-              @click="veoMode = opt.value"
-              :class="['veo-mode-btn', { active: veoMode === opt.value }]"
-            >
-              <span class="veo-mode-btn-label">{{ opt.label }}</span>
-              <span class="veo-mode-btn-desc">{{ opt.maxImages }}张</span>
-            </button>
-          </div>
           <!-- VEO 清晰度切换（根据模式动态显示可用选项） -->
           <div class="veo-resolution-section" v-if="availableVeoResolutions.length > 1">
             <span class="veo-resolution-label">清晰度</span>
@@ -8743,20 +9173,6 @@ function handleToolbarPreview() {
       <!-- Kling O1 模型模式选择（使用 SD2 风格） -->
       <template v-if="isKlingO1Model">
         <div class="sd2-mode-section">
-          <div class="sd2-mode-header">
-            <span class="sd2-mode-title">O1 模式</span>
-            <span class="sd2-mode-current">{{ currentKlingO1ModeConfig.label }}</span>
-          </div>
-          <div class="sd2-mode-grid">
-            <button
-              v-for="opt in klingO1Modes"
-              :key="opt.value"
-              @click="selectedKlingO1Mode = opt.value"
-              :class="['sd2-mode-btn', { active: selectedKlingO1Mode === opt.value }]"
-            >
-              <span class="sd2-mode-label">{{ opt.label }}</span>
-            </button>
-          </div>
           <!-- 视频编辑模式：保留原声开关 -->
           <div v-if="selectedKlingO1Mode === 'video_edit'" class="sd2-o1-option-row">
             <span class="sd2-o1-option-label">原声</span>
@@ -8778,20 +9194,6 @@ function handleToolbarPreview() {
       <!-- Kling v3 Omni 模型模式选择（使用 SD2 风格） -->
       <template v-if="isKlingV3OmniModel">
         <div class="sd2-mode-section">
-          <div class="sd2-mode-header">
-            <span class="sd2-mode-title">v3 Omni 模式</span>
-            <span class="sd2-mode-current">{{ currentKlingV3OmniModeConfig.label }}</span>
-          </div>
-          <div class="sd2-mode-grid">
-            <button
-              v-for="opt in klingV3OmniModes"
-              :key="opt.value"
-              @click="selectedKlingV3OmniMode = opt.value"
-              :class="['sd2-mode-btn', { active: selectedKlingV3OmniMode === opt.value }]"
-            >
-              <span class="sd2-mode-label">{{ opt.label }}</span>
-            </button>
-          </div>
           <div class="sd2-mode-desc">{{ currentKlingV3OmniModeConfig.description || '' }}</div>
           <div v-if="selectedKlingV3OmniMode === 'video_reference' && !hasUpstreamVideo" class="sd2-mode-warn">
             ⚠ 视频参考需要连接上游视频节点
@@ -8805,34 +9207,7 @@ function handleToolbarPreview() {
       <!-- Wan 2.7 模式选择（使用 SD2 风格） -->
       <template v-if="isWanModel">
         <div class="sd2-mode-section">
-          <div class="sd2-mode-header">
-            <span class="sd2-mode-title">Wan 模式</span>
-            <span class="sd2-mode-current">{{ currentWanModeConfig.label }}</span>
-          </div>
-          <div class="sd2-mode-grid">
-            <button
-              v-for="opt in wanModes"
-              :key="opt.value"
-              @click="selectedWanMode = opt.value"
-              :class="['sd2-mode-btn', { active: selectedWanMode === opt.value }]"
-            >
-              <span class="sd2-mode-label">{{ opt.label }}</span>
-            </button>
-          </div>
           <div class="sd2-mode-desc">{{ currentWanModeConfig.desc }}</div>
-          <div v-if="selectedWanMode === 'animate_mix'" class="sd2-o1-option-row">
-            <span class="sd2-o1-option-label">模式</span>
-            <div class="sd2-o1-option-btns">
-              <button
-                v-for="opt in wanAnimateModeOptions"
-                :key="opt.value"
-                @click="selectedWanAnimateMode = opt.value"
-                :class="['sd2-mode-btn sd2-mode-btn-sm', { active: selectedWanAnimateMode === opt.value }]"
-              >
-                {{ opt.label }}
-              </button>
-            </div>
-          </div>
           <div v-if="selectedWanMode === 'i2v' && referenceImages.length === 0" class="sd2-mode-warn">
             ⚠ 图生视频需要连接或上传1张首帧图
           </div>
@@ -8863,20 +9238,6 @@ function handleToolbarPreview() {
       <!-- Seedance 2.0 模式选择 -->
       <template v-if="isSeedance2Model">
         <div class="sd2-mode-section">
-          <div class="sd2-mode-header">
-            <span class="sd2-mode-title">{{ isHappyHorseModel ? 'Happy Horse 模式' : 'SD2 模式' }}</span>
-            <span class="sd2-mode-current">{{ currentSeedance2ModeConfig.label }}</span>
-          </div>
-          <div class="sd2-mode-grid">
-            <button
-              v-for="opt in seedance2Modes"
-              :key="opt.value"
-              @click="selectedSeedance2Mode = opt.value"
-              :class="['sd2-mode-btn', { active: selectedSeedance2Mode === opt.value }]"
-            >
-              <span class="sd2-mode-label">{{ opt.label }}</span>
-            </button>
-          </div>
           <div class="sd2-mode-desc">{{ currentSeedance2ModeConfig.desc }}</div>
           <div v-if="currentSeedance2ModeConfig.needsVideo && !hasUpstreamVideo" class="sd2-mode-warn">
             ⚠ {{ currentSeedance2ModeConfig.label }}需要连接上游视频节点
@@ -10301,51 +10662,237 @@ function handleToolbarPreview() {
   background: var(--canvas-border-active, #4a4a4a);
 }
 
-/* 比例选择器 - 扁平化设计 */
-.ratio-selector {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-  min-height: 32px;
+/* 视频模式选择器：参考底部工具栏的深色浮层风格 */
+.video-mode-selector {
+  position: relative;
+  z-index: 110;
 }
 
-.ratio-selector:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.15);
+.video-mode-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  max-width: 170px;
+  padding: 5px 10px;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.video-mode-trigger:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.video-mode-option-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1;
+}
+
+.video-mode-option-icon::before {
+  display: block;
+  line-height: 1;
+}
+
+.mode-icon-text::before {
+  content: 'T';
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 12px;
+  text-align: center;
+}
+
+.mode-icon-image::before {
+  content: '▱';
+  font-size: 18px;
+  transform: rotate(90deg);
+}
+
+.mode-icon-frames::before {
+  content: '▶';
+  font-size: 14px;
+}
+
+.mode-icon-video::before {
+  content: '▷';
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid currentColor;
+  border-radius: 3px;
+  font-size: 9px;
+  line-height: 11px;
+  text-align: center;
+}
+
+.mode-icon-reference::before {
+  content: '✦';
+  font-size: 15px;
+}
+
+.mode-icon-pro::before {
+  content: '✦';
+  font-size: 13px;
+}
+
+.mode-icon-motion::before {
+  content: '↑';
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.mode-icon-default::before {
+  content: '□';
+  font-size: 16px;
+}
+
+.video-mode-trigger-value {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-mode-trigger-arrow {
+  flex-shrink: 0;
+  margin-left: 2px;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 11px;
+  line-height: 1;
+  transform: rotate(180deg);
+  transition: transform 0.18s ease;
+}
+
+.video-mode-trigger-arrow.arrow-up {
+  transform: rotate(0deg);
+}
+
+.video-mode-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 210px;
+  padding: 10px;
+  overflow: hidden;
+  background: #252525;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  z-index: 1100;
+}
+
+.video-mode-dropdown-panel.dropdown-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.video-mode-dropdown-title {
+  padding: 6px 8px 8px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.video-mode-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 13px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.video-mode-dropdown-item:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.video-mode-dropdown-item.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.video-mode-dropdown-item.active .video-mode-option-icon {
+  color: #ffffff;
+}
+
+/* 比例选择器：复用视频模式的自定义浮层 */
+.ratio-selector {
+  position: relative;
+  z-index: 109;
 }
 
 .ratio-icon {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1;
 }
 
-.ratio-select-input {
-  background: transparent;
-  border: none;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 11px;
-  cursor: pointer;
-  outline: none;
-  padding: 0;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
+.ratio-icon::before {
+  content: '';
+  display: block;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
 }
 
-.ratio-select-input option {
-  background: #1a1a1a;
-  color: #ffffff;
-  padding: 8px;
+.ratio-icon-landscape::before {
+  width: 15px;
+  height: 10px;
 }
 
-.ratio-select-input:hover {
-  color: rgba(255, 255, 255, 1);
+.ratio-icon-portrait::before {
+  width: 10px;
+  height: 15px;
+}
+
+.ratio-icon-square::before {
+  width: 13px;
+  height: 13px;
+}
+
+.ratio-icon-3-4::before {
+  width: 11px;
+  height: 14px;
+}
+
+.ratio-icon-4-3::before {
+  width: 14px;
+  height: 11px;
+}
+
+.ratio-mode-trigger {
+  max-width: none;
 }
 
 /* 参数选择芯片 - 扁平化设计 */
@@ -10994,7 +11541,10 @@ function handleToolbarPreview() {
 /* 两栏厂商+模型布局 */
 .model-dropdown-list.vendor-layout {
   display: flex;
-  min-width: 340px;
+  /* 两栏模型卡片保持图 2 的参考宽度，避免按标题长度忽宽忽窄。 */
+  width: min(560px, calc(100vw - 32px));
+  min-width: min(560px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
   max-height: 360px;
   overflow: hidden;
   border-radius: 12px;
@@ -11212,7 +11762,7 @@ function handleToolbarPreview() {
 }
 
 :root.canvas-theme-light .config-panel-expanded .model-selector-trigger,
-:root.canvas-theme-light .config-panel-expanded .ratio-selector,
+:root.canvas-theme-light .config-panel-expanded .ratio-mode-trigger,
 :root.canvas-theme-light .config-panel-expanded .duration-select,
 :root.canvas-theme-light .config-panel-expanded .count-display.clickable,
 :root.canvas-theme-light .config-panel-expanded .param-chip,
@@ -11225,7 +11775,7 @@ function handleToolbarPreview() {
 }
 
 :root.canvas-theme-light .config-panel-expanded .model-selector-trigger:hover,
-:root.canvas-theme-light .config-panel-expanded .ratio-selector:hover,
+:root.canvas-theme-light .config-panel-expanded .ratio-mode-trigger:hover,
 :root.canvas-theme-light .config-panel-expanded .duration-select:hover,
 :root.canvas-theme-light .config-panel-expanded .count-display.clickable:hover,
 :root.canvas-theme-light .config-panel-expanded .param-chip:hover,
@@ -11247,12 +11797,10 @@ function handleToolbarPreview() {
   color: #78716c;
 }
 
-:root.canvas-theme-light .config-panel-expanded .ratio-select-input,
 :root.canvas-theme-light .config-panel-expanded .duration-select {
   color: #1c1917;
 }
 
-:root.canvas-theme-light .config-panel-expanded .ratio-select-input option,
 :root.canvas-theme-light .config-panel-expanded .duration-select option {
   background: #ffffff;
   color: #1c1917;
@@ -11681,28 +12229,48 @@ function handleToolbarPreview() {
   color: #57534e;
 }
 
-/* 比例选择器 - 白昼模式 */
-:root.canvas-theme-light .video-node .ratio-selector {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.1);
-}
-
-:root.canvas-theme-light .video-node .ratio-selector:hover {
-  background: rgba(0, 0, 0, 0.06);
-  border-color: rgba(0, 0, 0, 0.15);
-}
-
 :root.canvas-theme-light .video-node .ratio-icon {
   color: #78716c;
 }
 
-:root.canvas-theme-light .video-node .ratio-select-input {
-  color: #1c1917;
+:root.canvas-theme-light .video-node .video-mode-trigger {
+  color: #292524;
+  background: rgba(0, 0, 0, 0.07);
+  border-color: transparent;
 }
 
-:root.canvas-theme-light .video-node .ratio-select-input option {
-  background: #ffffff;
+:root.canvas-theme-light .video-node .video-mode-trigger:hover {
+  background: rgba(0, 0, 0, 0.1);
+  border-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .video-node .video-mode-option-icon,
+:root.canvas-theme-light .video-node .video-mode-trigger-arrow {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .video-node .video-mode-dropdown-panel {
+  background: #f5f5f4;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+:root.canvas-theme-light .video-node .video-mode-dropdown-title {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .video-node .video-mode-dropdown-item {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .video-node .video-mode-dropdown-item:hover {
+  color: #292524;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .video-node .video-mode-dropdown-item.active {
   color: #1c1917;
+  background: rgba(0, 0, 0, 0.11);
 }
 
 /* 参数选择芯片 - 白昼模式 */

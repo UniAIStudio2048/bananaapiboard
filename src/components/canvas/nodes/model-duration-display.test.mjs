@@ -53,3 +53,16 @@ test('image model dropdown keeps model names on one line with adaptive content w
     'image model description should render as a separate second row'
   )
 })
+
+test('video vendor model dropdown keeps a consistent reference width', () => {
+  assert.match(
+    videoSource,
+    /\.model-dropdown-list\.vendor-layout\s*\{[\s\S]*?min-width:\s*min\(560px,\s*calc\(100vw\s*-\s*32px\)\);/,
+    'video vendor model dropdown should keep the reference minimum width'
+  )
+  assert.match(
+    videoSource,
+    /\.model-dropdown-list\.vendor-layout\s*\{[\s\S]*?width:\s*min\(560px,\s*calc\(100vw\s*-\s*32px\)\);/,
+    'video vendor model dropdown should stay within the viewport on small screens'
+  )
+})

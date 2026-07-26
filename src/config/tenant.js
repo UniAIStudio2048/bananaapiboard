@@ -1547,10 +1547,12 @@ export const getAvailableVideoModels = (options = {}) => {
       
       // 优先使用后端配置的 durations，然后是默认配置
       let modelDurations = ['10', '15'] // 最终兜底
-      if (modelConfig.durations && Array.isArray(modelConfig.durations) && modelConfig.durations.length > 0) {
-        // 使用后端配置的 durations（确保为字符串格式）
+      if (Array.isArray(modelConfig.durations)) {
+        // 显式空数组表示该模型不提供时长选择，不回退到默认时长。
         modelDurations = modelConfig.durations.map(d => String(d))
-      } else if (defaultConfig.durations && defaultConfig.durations.length > 0) {
+      } else if (modelConfig.apiType === 'kling-3-turbo' || modelConfig.apiType === 'kling-v3-omni') {
+        modelDurations = [...klingOfficialDurations]
+      } else if (Array.isArray(defaultConfig.durations) && defaultConfig.durations.length > 0) {
         // 使用默认配置的 durations
         modelDurations = defaultConfig.durations.map(d => String(d))
       }
@@ -1596,6 +1598,7 @@ export const getAvailableVideoModels = (options = {}) => {
         // 积分配置
         hasDurationPricing: hasDurPricing,
         pointsCost: pCost,
+        pricingMode: modelConfig.pricingMode || modelPricingConfig.pricingMode || defaultConfig.pricingMode,
         // 时长选项
         durations: modelDurations,
         aspectRatios,
@@ -1625,6 +1628,7 @@ export const getAvailableVideoModels = (options = {}) => {
         costPerSecond: modelConfig.costPerSecond,
         prePaidDuration: modelConfig.prePaidDuration,
         isMotionControl: modelConfig.isMotionControl,
+        isPerSecondBilling: modelConfig.isPerSecondBilling === true || modelConfig.pricingMode === 'per_second',
         cozeConfig: modelConfig.cozeConfig,
         // VEO 模型特有属性
         isVeoModel: defaultConfig.isVeoModel,
@@ -1746,9 +1750,12 @@ export const getAvailableVideoModels = (options = {}) => {
       const pCost = filterByteforPointsCost(modelFullConfig, modelPricingConfig.pointsCost || defaultConfig.pointsCost || 1)
       
       let modelDurations = ['10', '15'] // 最终兜底
-      if (modelFullConfig.durations && Array.isArray(modelFullConfig.durations) && modelFullConfig.durations.length > 0) {
+      if (Array.isArray(modelFullConfig.durations)) {
+        // 显式空数组表示该模型不提供时长选择，不回退到默认时长。
         modelDurations = modelFullConfig.durations.map(d => String(d))
-      } else if (defaultConfig.durations && defaultConfig.durations.length > 0) {
+      } else if (modelFullConfig.apiType === 'kling-3-turbo' || modelFullConfig.apiType === 'kling-v3-omni') {
+        modelDurations = [...klingOfficialDurations]
+      } else if (Array.isArray(defaultConfig.durations) && defaultConfig.durations.length > 0) {
         modelDurations = defaultConfig.durations.map(d => String(d))
       }
       modelDurations = filterByteforDurations(modelFullConfig, modelDurations)
@@ -1779,6 +1786,7 @@ export const getAvailableVideoModels = (options = {}) => {
         description: descriptions[key] || '',
         hasDurationPricing: hasDurPricing,
         pointsCost: pCost,
+        pricingMode: modelFullConfig.pricingMode || modelPricingConfig.pricingMode || defaultConfig.pricingMode,
         durations: modelDurations,
         aspectRatios,
         supportedModes,
@@ -1807,6 +1815,7 @@ export const getAvailableVideoModels = (options = {}) => {
         costPerSecond: modelFullConfig.costPerSecond,
         prePaidDuration: modelFullConfig.prePaidDuration,
         isMotionControl: modelFullConfig.isMotionControl,
+        isPerSecondBilling: modelFullConfig.isPerSecondBilling === true || modelFullConfig.pricingMode === 'per_second',
         cozeConfig: modelFullConfig.cozeConfig,
         ...getModelPackageGateFields(modelFullConfig)
       })

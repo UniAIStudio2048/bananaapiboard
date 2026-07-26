@@ -118,8 +118,7 @@ const audioPromptPlaceholder = computed(() => {
   return '描述您想要的音乐。'
 })
 const canGenerateCurrentAudio = computed(() => {
-  if (audioCapability.value === 'voice_clone') return !!inheritedAudioUrl.value
-  if (audioCapability.value === 'tts') return !!musicPrompt.value.trim() && !!(inheritedVoiceId.value || inheritedAudioUrl.value)
+  if (audioCapability.value) return true
   return !!musicPrompt.value.trim()
 })
 
@@ -1316,8 +1315,16 @@ function handleTimeUpdate() {
 
 function handleLoadedMetadata() {
   if (audioRef.value) {
-    duration.value = audioRef.value.duration
-    canvasStore.updateNodeData(props.id, { audioDuration: audioRef.value.duration })
+    const audioDuration = Number(audioRef.value.duration)
+    if (Number.isFinite(audioDuration) && audioDuration > 0) {
+      duration.value = audioDuration
+      canvasStore.updateNodeData(props.id, {
+        audioDuration,
+        ...(props.data.output
+          ? { output: { ...props.data.output, duration: audioDuration } }
+          : {})
+      })
+    }
     // 应用保存的播放速度
     audioRef.value.playbackRate = playbackRate.value
   }
