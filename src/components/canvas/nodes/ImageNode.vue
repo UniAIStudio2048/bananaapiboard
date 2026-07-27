@@ -254,6 +254,7 @@ function hasModelStats(modelName) {
 
 // 预设选择器状态
 const isPresetDropdownOpen = ref(false)
+const isPresetActionsOpen = ref(false)
 const presetDropdownUp = ref(true) // 预设下拉方向
 const selectedPreset = ref(props.data?.selectedPreset || '')
 const tenantPresets = ref([]) // 租户全局预设
@@ -383,6 +384,9 @@ const getDefaultModel = () => {
 const selectedModel = ref(props.data.model || getDefaultModel())
 const selectedResolution = ref(props.data.resolution || '1024')
 const selectedAspectRatio = ref(props.data.aspectRatio || 'auto')
+const aspectRatioDropdownOpen = ref(false)
+const aspectRatioDropdownDirection = ref('down')
+const aspectRatioSelectorRef = ref(null)
 const selectedCount = ref(props.data.count || 1)
 const imageSize = ref(props.data.imageSize || '4K') // 尺寸选项（仅 nano-banana-2）
 const selectedQuality = ref('high')
@@ -471,12 +475,42 @@ function handleModelDropdownClickOutside(event) {
   // 检查点击是否在下拉框外
   const dropdown = event.target.closest('.model-selector-custom')
   const presetDropdown = event.target.closest('.preset-selector-custom')
+  const ratioDropdown = event.target.closest('.ratio-selector')
   if (!dropdown) {
     isModelDropdownOpen.value = false
   }
   if (!presetDropdown) {
     isPresetDropdownOpen.value = false
+    isPresetActionsOpen.value = false
   }
+  if (!ratioDropdown) {
+    aspectRatioDropdownOpen.value = false
+  }
+}
+
+function toggleAspectRatioDropdown(event) {
+  event?.stopPropagation()
+  if (!aspectRatioDropdownOpen.value) {
+    const selector = aspectRatioSelectorRef.value
+    const rect = selector?.getBoundingClientRect()
+    const dropdownHeight = Math.min(520, Math.max(140, availableImageAspectRatios.value.length * 48 + 54))
+    if (rect && rect.bottom + dropdownHeight > window.innerHeight && rect.top > dropdownHeight) {
+      aspectRatioDropdownDirection.value = 'up'
+    } else {
+      aspectRatioDropdownDirection.value = 'down'
+    }
+  }
+  aspectRatioDropdownOpen.value = !aspectRatioDropdownOpen.value
+  isModelDropdownOpen.value = false
+  isPresetDropdownOpen.value = false
+}
+
+function getAspectRatioIconClass(value) {
+  if (value === '1:1') return 'ratio-icon-square'
+  if (value === '3:4') return 'ratio-icon-3-4'
+  if (value === '4:3') return 'ratio-icon-4-3'
+  const [width, height] = String(value || '').split(':').map(Number)
+  return width > 0 && height > 0 && width < height ? 'ratio-icon-portrait' : 'ratio-icon-landscape'
 }
 
 // ========== 预设管理功能 ==========
@@ -519,7 +553,30 @@ const availablePresets = computed(() => {
     })
   }
 
-  // 2. 添加租户全局预设
+  // 2. 添加用户自定义预设
+  if (userPresets.value.length > 0 || selectedPreset.value === 'temp-custom') {
+    presets.push({ id: 'divider-user', type: 'divider', label: '我的预设' })
+    presets.push(...userPresets.value.map(p => ({
+      id: `user-${p.id}`,
+      name: `📝 ${p.name}`,
+      prompt: p.prompt,
+      description: p.description,
+      type: 'user-custom',
+      pointsCost: 0,
+      _rawId: p.id
+    })))
+
+    if (selectedPreset.value === 'temp-custom') {
+      presets.push({
+        id: 'temp-custom',
+        name: '📌 临时自定义',
+        type: 'temp-custom',
+        pointsCost: 0
+      })
+    }
+  }
+
+  // 3. 添加租户预设（不显示额外分组标题）
   if (tenantPresets.value.length > 0) {
     presets.push(...tenantPresets.value.map(p => {
       const pointsCost = normalizePresetPointsCost(p.pointsCost ?? p.points_cost)
@@ -534,46 +591,6 @@ const availablePresets = computed(() => {
       }
     }))
   }
-
-  // 3. 添加用户自定义预设
-  if (userPresets.value.length > 0) {
-    presets.push({ id: 'divider-user', type: 'divider', label: '我的预设' })
-    presets.push(...userPresets.value.map(p => ({
-      id: `user-${p.id}`,
-      name: `📝 ${p.name}`,
-      prompt: p.prompt,
-      description: p.description,
-      type: 'user-custom',
-      pointsCost: 0,
-      _rawId: p.id
-    })))
-  }
-
-  // 4. 添加临时自定义（如果正在使用）
-  if (selectedPreset.value === 'temp-custom') {
-    if (presets.length > 0) {
-      presets.push({ id: 'divider-temp', type: 'divider' })
-    }
-    presets.push({
-      id: 'temp-custom',
-      name: '📌 临时自定义',
-      type: 'temp-custom',
-      pointsCost: 0
-    })
-  }
-
-  // 5. 添加操作选项
-  presets.push({ id: 'divider-actions', type: 'divider' })
-  presets.push({
-    id: 'action-new',
-    name: '➕ 新建自定义预设',
-    type: 'action'
-  })
-  presets.push({
-    id: 'action-manage',
-    name: '⚙️ 管理我的预设',
-    type: 'action'
-  })
 
   return presets
 })
@@ -665,7 +682,14 @@ function togglePresetDropdown(event) {
     presetDropdownUp.value = checkDropdownDirection(presetSelectorRef.value, 350)
   }
   isPresetDropdownOpen.value = !isPresetDropdownOpen.value
+  isPresetActionsOpen.value = false
   isModelDropdownOpen.value = false
+}
+
+function togglePresetActions(event) {
+  event?.stopPropagation()
+  if (!isPresetDropdownOpen.value) return
+  isPresetActionsOpen.value = !isPresetActionsOpen.value
 }
 
 // 选择预设
@@ -674,11 +698,13 @@ function selectPreset(presetId) {
   if (presetId === 'action-new') {
     openImagePresetDialog()
     isPresetDropdownOpen.value = false
+    isPresetActionsOpen.value = false
     return
   }
 
   if (presetId === 'action-manage') {
     openImagePresetManager()
+    isPresetActionsOpen.value = false
     return
   }
 
@@ -1601,9 +1627,9 @@ const showCameraControlOption = computed(() => {
 
 const aspectRatios = [
   { value: 'auto', label: 'Auto (自动)' },
-  { value: '16:9', label: '16:9' },
-  { value: '1:1', label: '1:1' },
-  { value: '9:16', label: '9:16' },
+  { value: '16:9', label: '16:9 横屏' },
+  { value: '1:1', label: '1:1 方形' },
+  { value: '9:16', label: '9:16 竖屏' },
   { value: '4:3', label: '4:3' },
   { value: '3:4', label: '3:4' },
   { value: '2:3', label: '2:3' },
@@ -8483,13 +8509,46 @@ async function handleDrop(event) {
           </div>
           
           <!-- 比例选择（下拉框） -->
-          <div class="ratio-selector">
-            <span class="ratio-icon">📐</span>
-            <select v-model="selectedAspectRatio" class="ratio-select-input">
-              <option v-for="ratio in availableImageAspectRatios" :key="ratio.value" :value="ratio.value">
-                {{ ratio.label }}
-              </option>
-            </select>
+          <div v-if="availableImageAspectRatios.length > 0" ref="aspectRatioSelectorRef" class="ratio-selector" @mousedown.stop @click.stop>
+            <button
+              type="button"
+              class="video-mode-trigger ratio-mode-trigger"
+              @click="toggleAspectRatioDropdown"
+            >
+              <span
+                class="ratio-icon"
+                :class="getAspectRatioIconClass(selectedAspectRatio)"
+                aria-hidden="true"
+              ></span>
+              <span class="video-mode-trigger-value">
+                {{ availableImageAspectRatios.find(ratio => ratio.value === selectedAspectRatio)?.label || selectedAspectRatio }}
+              </span>
+              <span class="video-mode-trigger-arrow" :class="{ 'arrow-up': aspectRatioDropdownOpen }">⌃</span>
+            </button>
+            <Transition name="dropdown-fade">
+              <div
+                v-if="aspectRatioDropdownOpen"
+                class="video-mode-dropdown-panel ratio-dropdown-panel"
+                :class="{ 'dropdown-up': aspectRatioDropdownDirection === 'up' }"
+              >
+                <div class="video-mode-dropdown-title">画面比例</div>
+                <button
+                  v-for="ratio in availableImageAspectRatios"
+                  :key="ratio.value"
+                  type="button"
+                  class="video-mode-dropdown-item"
+                  :class="{ active: ratio.value === selectedAspectRatio }"
+                  @click="selectedAspectRatio = ratio.value; aspectRatioDropdownOpen = false"
+                >
+                  <span
+                    class="video-mode-option-icon ratio-icon"
+                    :class="getAspectRatioIconClass(ratio.value)"
+                    aria-hidden="true"
+                  ></span>
+                  <span>{{ ratio.label }}</span>
+                </button>
+              </div>
+            </Transition>
           </div>
           
           <!-- 预设选择器（MJ模型时隐藏） -->
@@ -8503,30 +8562,58 @@ async function handleDrop(event) {
             <!-- 预设下拉列表 -->
             <Transition name="dropdown-fade">
               <div v-if="isPresetDropdownOpen" class="preset-dropdown-list" :class="{ 'dropdown-up': presetDropdownUp, 'dropdown-down': !presetDropdownUp }" @wheel.stop>
-                <div
-                  v-for="preset in availablePresets"
-                  :key="preset.id"
-                  :class="{
-                    'preset-dropdown-item': preset.type !== 'divider',
-                    'preset-dropdown-divider': preset.type === 'divider',
-                    'preset-action': preset.type === 'action',
-                    'preset-dropdown-error': preset.type === 'error',
-                    'active': selectedPreset === preset.id
-                  }"
-                  @click="selectPreset(preset.id)"
-                >
-                  <template v-if="preset.type !== 'divider'">
-                    <div class="preset-item-main">
-                      <span class="preset-item-label">{{ preset.name }}</span>
-                    </div>
-                    <div v-if="preset.description" class="preset-item-desc">
-                      {{ preset.description }}
-                    </div>
-                  </template>
-                  <template v-else>
-                    <span class="divider-label">{{ preset.label }}</span>
-                  </template>
+                <div class="preset-dropdown-scroll" @wheel.stop>
+                  <div
+                    v-for="preset in availablePresets"
+                    :key="preset.id"
+                    :class="{
+                      'preset-dropdown-item': preset.type !== 'divider',
+                      'preset-dropdown-divider': preset.type === 'divider',
+                      'preset-dropdown-error': preset.type === 'error',
+                      'active': selectedPreset === preset.id
+                    }"
+                    @click="selectPreset(preset.id)"
+                  >
+                    <template v-if="preset.type === 'none'">
+                      <div class="preset-none-option">
+                        <span class="preset-item-label">{{ preset.name }}</span>
+                        <button
+                          type="button"
+                          class="preset-actions-trigger"
+                          aria-label="预设管理"
+                          title="预设管理"
+                          @click.stop="togglePresetActions"
+                        >
+                          ⚙
+                        </button>
+                      </div>
+                    </template>
+                    <template v-else-if="preset.type !== 'divider'">
+                      <div class="preset-item-main">
+                        <span class="preset-item-label">{{ preset.name }}</span>
+                      </div>
+                      <div v-if="preset.description" class="preset-item-desc">
+                        {{ preset.description }}
+                      </div>
+                    </template>
+                    <template v-else>
+                      <span class="divider-label">{{ preset.label }}</span>
+                    </template>
+                  </div>
                 </div>
+                <Transition name="dropdown-fade">
+                  <div v-if="isPresetActionsOpen" class="preset-actions-popover" @click.stop>
+                    <div class="preset-actions-title">预设管理</div>
+                    <button type="button" class="preset-actions-item" @click="selectPreset('action-manage')">
+                      <span class="preset-actions-item-icon" aria-hidden="true">⚙</span>
+                      <span>管理预设</span>
+                    </button>
+                    <button type="button" class="preset-actions-item" @click="selectPreset('action-new')">
+                      <span class="preset-actions-item-icon" aria-hidden="true">＋</span>
+                      <span>新建预设</span>
+                    </button>
+                  </div>
+                </Transition>
               </div>
             </Transition>
           </div>
@@ -10768,42 +10855,165 @@ async function handleDrop(event) {
   transform: translateY(8px);
 }
 
-/* 比例选择器 - 与 VideoNode 统一的扁平化设计 */
+/* 比例选择器：与 VideoNode 统一的自定义浮层和比例图标 */
 .ratio-selector {
+  position: relative;
+  z-index: 109;
+}
+
+.ratio-mode-trigger {
+  max-width: none;
+}
+
+.video-mode-trigger {
   display: flex;
   align-items: center;
-  flex-shrink: 0;
-  gap: 3px;
-  padding: 4px 7px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
+  gap: 7px;
   min-height: 32px;
+  max-width: 170px;
+  padding: 5px 10px;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
 }
 
-.ratio-selector:hover {
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.15);
+.video-mode-trigger:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
-.ratio-icon {
+.video-mode-trigger-value {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-mode-trigger-arrow {
+  flex-shrink: 0;
+  margin-left: 2px;
+  color: rgba(255, 255, 255, 0.52);
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  line-height: 1;
+  transform: rotate(180deg);
+  transition: transform 0.18s ease;
 }
 
-.ratio-select-input {
+.video-mode-trigger-arrow.arrow-up {
+  transform: rotate(0deg);
+}
+
+.video-mode-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 210px;
+  padding: 10px;
+  overflow: hidden;
+  background: #252525;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  z-index: 1100;
+}
+
+.ratio-dropdown-panel {
+  max-height: min(520px, calc(100vh - 24px));
+  overflow-y: auto;
+}
+
+.video-mode-dropdown-panel.dropdown-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.video-mode-dropdown-title {
+  padding: 6px 8px 8px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.video-mode-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 13px;
+  text-align: left;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.9);
-  font-size: 11px;
+  border-radius: 9px;
   cursor: pointer;
-  outline: none;
-  padding: 0;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.video-mode-dropdown-item:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.video-mode-dropdown-item.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.video-mode-dropdown-item.active .video-mode-option-icon {
+  color: #ffffff;
+}
+
+.video-mode-option-icon,
+.ratio-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1;
+}
+
+.ratio-icon::before {
+  content: '';
+  display: block;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+
+.ratio-icon-landscape::before {
+  width: 15px;
+  height: 10px;
+}
+
+.ratio-icon-portrait::before {
+  width: 10px;
+  height: 15px;
+}
+
+.ratio-icon-square::before {
+  width: 13px;
+  height: 13px;
+}
+
+.ratio-icon-3-4::before {
+  width: 11px;
+  height: 14px;
+}
+
+.ratio-icon-4-3::before {
+  width: 14px;
+  height: 11px;
 }
 
 /* 预设选择器样式 - 与 VideoNode 统一的扁平化设计 */
@@ -10853,10 +11063,12 @@ async function handleDrop(event) {
 .preset-dropdown-list {
   position: absolute;
   left: 0;
+  display: flex;
+  flex-direction: column;
   min-width: 220px;
   max-height: 350px;
-  overflow-y: auto;
-  background: #141414;
+  overflow: hidden;
+  background: #252525;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
@@ -10875,22 +11087,27 @@ async function handleDrop(event) {
   bottom: auto;
 }
 
+.preset-dropdown-scroll {
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* 滚动条样式 */
-.preset-dropdown-list::-webkit-scrollbar {
+.preset-dropdown-scroll::-webkit-scrollbar {
   width: 6px;
 }
 
-.preset-dropdown-list::-webkit-scrollbar-track {
+.preset-dropdown-scroll::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.02);
   border-radius: 3px;
 }
 
-.preset-dropdown-list::-webkit-scrollbar-thumb {
+.preset-dropdown-scroll::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.15);
   border-radius: 3px;
 }
 
-.preset-dropdown-list::-webkit-scrollbar-thumb:hover {
+.preset-dropdown-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.25);
 }
 
@@ -10959,6 +11176,39 @@ async function handleDrop(event) {
   padding-right: 2px;
 }
 
+.preset-none-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preset-actions-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 15px;
+  line-height: 1;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.preset-actions-trigger:hover,
+.preset-actions-trigger:focus-visible {
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.12);
+  outline: none;
+}
+
 .preset-dropdown-error .preset-item-label {
   color: #f87171;
 }
@@ -10967,17 +11217,61 @@ async function handleDrop(event) {
   color: rgba(248, 113, 113, 0.72);
 }
 
-/* 操作选项样式 */
-.preset-dropdown-item.preset-action {
-  color: var(--primary-color, #8b5cf6);
+.preset-actions-popover {
+  position: absolute;
+  top: 48px;
+  right: 8px;
+  width: 172px;
+  padding: 8px;
+  background: #252525;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  z-index: 1101;
 }
 
-.preset-dropdown-item.preset-action:hover {
-  background: rgba(139, 92, 246, 0.12);
+.preset-actions-title {
+  padding: 5px 8px 7px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 11px;
+  font-weight: 600;
 }
 
-.preset-dropdown-item.preset-action .preset-item-label {
-  color: var(--primary-color, #8b5cf6);
+.preset-actions-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.preset-actions-item:hover,
+.preset-actions-item:focus-visible {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.07);
+  outline: none;
+}
+
+.preset-actions-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: 13px;
+  line-height: 1;
 }
 
 /* 摄影机控制开关样式 - 与 VideoNode 扁平化设计统一 */
@@ -12016,15 +12310,15 @@ async function handleDrop(event) {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-:root.canvas-theme-light .config-panel-expanded .preset-dropdown-list::-webkit-scrollbar-track {
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-scroll::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.02);
 }
 
-:root.canvas-theme-light .config-panel-expanded .preset-dropdown-list::-webkit-scrollbar-thumb {
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-scroll::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.1);
 }
 
-:root.canvas-theme-light .config-panel-expanded .preset-dropdown-list::-webkit-scrollbar-thumb:hover {
+:root.canvas-theme-light .config-panel-expanded .preset-dropdown-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.2);
 }
 
@@ -12054,13 +12348,39 @@ async function handleDrop(event) {
   color: #1c1917;
 }
 
-:root.canvas-theme-light .config-panel-expanded .preset-dropdown-item.preset-action,
-:root.canvas-theme-light .config-panel-expanded .preset-dropdown-item.preset-action .preset-item-label {
-  color: #8b5cf6;
+:root.canvas-theme-light .config-panel-expanded .preset-actions-trigger {
+  color: #78716c;
 }
 
-:root.canvas-theme-light .config-panel-expanded .preset-dropdown-item.preset-action:hover {
-  background: rgba(139, 92, 246, 0.08);
+:root.canvas-theme-light .config-panel-expanded .preset-actions-trigger:hover,
+:root.canvas-theme-light .config-panel-expanded .preset-actions-trigger:focus-visible {
+  color: #292524;
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-actions-popover {
+  background: #f5f5f4;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-actions-title {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-actions-item {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-actions-item:hover,
+:root.canvas-theme-light .config-panel-expanded .preset-actions-item:focus-visible {
+  color: #292524;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .config-panel-expanded .preset-actions-item-icon {
+  color: #78716c;
 }
 
 :root.canvas-theme-light .config-panel-expanded .param-chip.active {
@@ -12305,32 +12625,48 @@ async function handleDrop(event) {
 }
 
 /* 比例选择器 - 白昼模式（与 VideoNode 统一） */
-:root.canvas-theme-light .image-node .ratio-selector {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.1);
-}
-
-:root.canvas-theme-light .image-node .ratio-selector:hover {
-  background: rgba(0, 0, 0, 0.06);
-  border-color: rgba(0, 0, 0, 0.15);
-}
-
 :root.canvas-theme-light .image-node .ratio-icon {
   color: #78716c;
 }
 
-:root.canvas-theme-light .image-node .ratio-select-input {
-  background: transparent;
-  color: #1c1917;
+:root.canvas-theme-light .image-node .video-mode-trigger {
+  color: #292524;
+  background: rgba(0, 0, 0, 0.07);
+  border-color: transparent;
 }
 
-:root.canvas-theme-light .image-node .ratio-select-input option {
-  background: #ffffff;
-  color: #1c1917;
+:root.canvas-theme-light .image-node .video-mode-trigger:hover {
+  background: rgba(0, 0, 0, 0.1);
+  border-color: rgba(0, 0, 0, 0.06);
 }
 
-:root.canvas-theme-light .image-node .ratio-select-input:hover {
+:root.canvas-theme-light .image-node .video-mode-option-icon,
+:root.canvas-theme-light .image-node .video-mode-trigger-arrow {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .image-node .video-mode-dropdown-panel {
+  background: #f5f5f4;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+:root.canvas-theme-light .image-node .video-mode-dropdown-title {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .image-node .video-mode-dropdown-item {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .video-mode-dropdown-item:hover {
+  color: #292524;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .image-node .video-mode-dropdown-item.active {
   color: #1c1917;
+  background: rgba(0, 0, 0, 0.11);
 }
 
 /* 参数选择芯片 - 白昼模式（与 VideoNode 统一） */
@@ -12498,15 +12834,15 @@ async function handleDrop(event) {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-:root.canvas-theme-light .image-node .preset-dropdown-list::-webkit-scrollbar-track {
+:root.canvas-theme-light .image-node .preset-dropdown-scroll::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.02);
 }
 
-:root.canvas-theme-light .image-node .preset-dropdown-list::-webkit-scrollbar-thumb {
+:root.canvas-theme-light .image-node .preset-dropdown-scroll::-webkit-scrollbar-thumb {
   background: rgba(0, 0, 0, 0.1);
 }
 
-:root.canvas-theme-light .image-node .preset-dropdown-list::-webkit-scrollbar-thumb:hover {
+:root.canvas-theme-light .image-node .preset-dropdown-scroll::-webkit-scrollbar-thumb:hover {
   background: rgba(0, 0, 0, 0.2);
 }
 
@@ -12539,16 +12875,39 @@ async function handleDrop(event) {
   color: #78716c;
 }
 
-:root.canvas-theme-light .image-node .preset-dropdown-item.preset-action {
-  color: #8b5cf6;
+:root.canvas-theme-light .image-node .preset-actions-trigger {
+  color: #78716c;
 }
 
-:root.canvas-theme-light .image-node .preset-dropdown-item.preset-action:hover {
-  background: rgba(139, 92, 246, 0.08);
+:root.canvas-theme-light .image-node .preset-actions-trigger:hover,
+:root.canvas-theme-light .image-node .preset-actions-trigger:focus-visible {
+  color: #292524;
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
 }
 
-:root.canvas-theme-light .image-node .preset-dropdown-item.preset-action .preset-item-label {
-  color: #8b5cf6;
+:root.canvas-theme-light .image-node .preset-actions-popover {
+  background: #f5f5f4;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+:root.canvas-theme-light .image-node .preset-actions-title {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .image-node .preset-actions-item {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .image-node .preset-actions-item:hover,
+:root.canvas-theme-light .image-node .preset-actions-item:focus-visible {
+  color: #292524;
+  background: rgba(0, 0, 0, 0.05);
+}
+
+:root.canvas-theme-light .image-node .preset-actions-item-icon {
+  color: #78716c;
 }
 
 :root.canvas-theme-light .image-node .preset-dropdown-item.preset-dropdown-error:hover {

@@ -113,6 +113,7 @@ export default {
     generate: 'Генерация',
     imageGenerate: 'Генерация изображений',
     videoGenerate: 'Генерация видео',
+    textGenerate: 'Генерация текста',
     canvas: 'Творческий холст',
     canvasBeta: 'Творческий холст (beta)',
     packages: 'Пакеты',
@@ -585,6 +586,9 @@ export default {
     checkinReward: 'Награда за отметку +{0} баллов',
     consecutiveDays: '{0} дней подряд',
     pointsHistory: 'История баллов',
+    ledgerType: {
+      audio_generation: 'Генерация аудио'
+    },
     transactionType: 'Тип',
     transactionAmount: 'Сумма',
     transactionTime: 'Время',

@@ -119,6 +119,7 @@ export default {
     generate: '생성',
     imageGenerate: '이미지 생성',
     videoGenerate: '비디오 생성',
+    textGenerate: '텍스트 생성',
     canvas: '크리에이티브 캔버스',
     canvasBeta: '크리에이티브 캔버스 (베타)',
     packages: '패키지 구매',
@@ -780,7 +781,8 @@ export default {
       voucher: '쿠폰 교환',
       admin: '관리자 조정',
       refund: '환불',
-      other: '기타'
+      other: '기타',
+      audio_generation: '오디오 생성'
     }
   },
 

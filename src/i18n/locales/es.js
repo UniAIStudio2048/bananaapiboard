@@ -117,6 +117,7 @@ export default {
     generate: 'Generar',
     imageGenerate: 'Generación de imágenes',
     videoGenerate: 'Generación de videos',
+    textGenerate: 'Generación de texto',
     canvas: 'Lienzo creativo',
     canvasBeta: 'Lienzo creativo (beta)',
     packages: 'Paquetes',
@@ -767,7 +768,8 @@ export default {
       voucher: 'Canje de cupón',
       admin: 'Ajuste de admin',
       refund: 'Reembolso',
-      other: 'Otro'
+      other: 'Otro',
+      audio_generation: 'Generación de audio'
     }
   },
 

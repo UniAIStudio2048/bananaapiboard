@@ -113,6 +113,7 @@ export default {
     generate: 'إنشاء',
     imageGenerate: 'إنشاء الصور',
     videoGenerate: 'إنشاء الفيديو',
+    textGenerate: 'إنشاء النص',
     canvas: 'لوحة الإبداع',
     canvasBeta: 'لوحة الإبداع (تجريبي)',
     packages: 'الباقات',
@@ -585,6 +586,9 @@ export default {
     checkinReward: 'مكافأة التسجيل +{0} نقطة',
     consecutiveDays: '{0} أيام متتالية',
     pointsHistory: 'سجل النقاط',
+    ledgerType: {
+      audio_generation: 'إنشاء الصوت'
+    },
     transactionType: 'النوع',
     transactionAmount: 'المبلغ',
     transactionTime: 'الوقت',

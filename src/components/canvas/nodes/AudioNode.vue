@@ -10,16 +10,16 @@ defineOptions({
  * - 主体区域：空状态显示快捷操作，有输出显示音频播放器
  * - 左侧(+)：可选输入
  * - 右侧(+)：输出连接
- * - 快捷操作：图片对口型、音频生视频、音频提取文案
+ * - 快捷创建：通过右侧输出端口连接到目标节点
  */
 import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
-import { getTenantHeaders, getAvailableMusicModels, getAvailableAudioModels, refreshBrandConfig, VOICE_DESIGN_STYLES } from '@/config/tenant'
-import { useI18n } from '@/i18n'
+import { getTenantHeaders, getAvailableMusicModels, getAvailableAudioModels, refreshBrandConfig } from '@/config/tenant'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import { formatPoints } from '@/utils/format'
+import { calculateAudioPointsCost } from '@/utils/audioPricing'
 import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
@@ -37,8 +37,11 @@ import { useTeamStore } from '@/stores/team'
 import { registerTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import { formatVideoNodeErrorMessage } from './video-error-message.js'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
+import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
+import PromptMediaTag from '../PromptMediaTag.vue'
+import VoicePresetPicker from '../VoicePresetPicker.vue'
 
-const { t } = useI18n()
+const { onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
 
 const props = defineProps({
   id: String,
@@ -79,8 +82,29 @@ const interactionMode = inject('interactionMode', ref('comfyui'))
 const musicModels = computed(() => {
   return [
     ...getAvailableMusicModels().map(model => ({ ...model, kind: 'music' })),
-    ...getAvailableAudioModels().map(model => ({ ...model, kind: 'coze-audio', icon: '◉' }))
+    ...getAvailableAudioModels().map(model => ({ ...model, kind: 'coze-audio', icon: model.icon || '◉' }))
   ]
+})
+
+const selectedAudioGroup = ref('')
+const audioModelGroups = computed(() => {
+  const groups = []
+  const groupMap = new Map()
+  musicModels.value.forEach(model => {
+    const name = model.kind === 'music' ? '音乐' : (model.groupName || '其他')
+    const value = `${model.kind}:${name}`
+    if (!groupMap.has(value)) {
+      const group = { name, value, logo: model.groupLogo || model.icon || '♫', models: [] }
+      groupMap.set(value, group)
+      groups.push(group)
+    }
+    groupMap.get(value).models.push(model)
+  })
+  return groups
+})
+const currentAudioGroupModels = computed(() => {
+  const selectedGroup = audioModelGroups.value.find(group => group.value === selectedAudioGroup.value)
+  return selectedGroup?.models || audioModelGroups.value[0]?.models || musicModels.value
 })
 
 // 音乐生成相关状态
@@ -94,12 +118,41 @@ const tags = ref(props.data.tags || '')
 const negativeTags = ref(props.data.negativeTags || '')
 const makeInstrumental = ref(props.data.makeInstrumental || false)
 const isGeneratingMusic = ref(false)
-const voiceStyle = ref(props.data.voiceStyle || 'general')
+const voiceDialect = ref(props.data.voiceDialect || '')
+const voiceAgeGender = ref(props.data.voiceAgeGender || '')
+const voiceTexture = ref(props.data.voiceTexture || '')
+const voicePace = ref(props.data.voicePace || '')
+const voiceMood = ref(props.data.voiceMood || '')
+const voiceCustomDescription = ref(props.data.voiceCustomDescription || (props.data.voiceStyle !== 'general' ? props.data.voiceStyle || '' : ''))
+const selectedVoicePreset = ref(props.data.selectedVoicePreset || null)
+const showVoicePresetPicker = ref(false)
+
+const voiceDesignOptions = {
+  dialect: ['普通话', '中文方言', '英文', '日语', '韩语'],
+  ageGender: ['儿童', '青年男声', '青年女声', '中年男声', '中年女声', '老年男声', '老年女声'],
+  texture: ['清亮通透', '温暖醇厚', '低沉磁性', '柔和甜美', '沙哑颗粒感'],
+  pace: ['语速缓慢', '语速适中', '语速偏快', '节奏明快', '节奏舒缓'],
+  mood: ['自然亲切', '沉稳专业', '轻松愉悦', '温柔治愈', '富有感染力']
+}
+const voiceDesignStyle = computed(() => [
+  voiceDialect.value,
+  voiceAgeGender.value,
+  voiceTexture.value,
+  voicePace.value,
+  voiceMood.value,
+  voiceCustomDescription.value.trim()
+].filter(Boolean).join('，'))
+const voiceStyleTriggerLabel = computed(() => voiceAgeGender.value ? `${voiceAgeGender.value}音色` : '音色')
+const voicePresetTriggerLabel = computed(() => selectedVoicePreset.value?.name || '选择音色')
 
 // 模型下拉框状态
 const isMusicModelDropdownOpen = ref(false)
 const musicModelSelectorRef = ref(null)
 const dropdownDirection = ref('down')
+const isVoiceStyleDropdownOpen = ref(false)
+const voiceStyleSelectorRef = ref(null)
+const voiceStyleDropdownDirection = ref('down')
+const activeVoiceStyleCategory = ref(null)
 
 // 高级选项折叠状态
 const showAdvancedOptions = ref(false)
@@ -109,17 +162,43 @@ const currentMusicModelConfig = computed(() => {
   return musicModels.value.find(m => m.value === selectedMusicModel.value) || musicModels.value[0]
 })
 const audioCapability = computed(() => currentMusicModelConfig.value?.kind === 'coze-audio' ? currentMusicModelConfig.value.capability : null)
-const inheritedAudioUrl = computed(() => props.data.inheritedData?.url || props.data.inheritedData?.previewUrl || '')
-const inheritedVoiceId = computed(() => props.data.inheritedData?.voiceId || props.data.inheritedData?.voice_id || '')
+const AUDIO_REFERENCE_NODE_TYPES = ['audio-input', 'audio']
+const inheritedAudioSource = computed(() => {
+  const edge = canvasStore.edges.find(edge => edge.target === props.id && AUDIO_REFERENCE_NODE_TYPES.includes(
+    canvasStore.nodes.find(node => node.id === edge.source)?.type
+  ))
+  if (!edge) return null
+
+  const sourceNode = canvasStore.nodes.find(node => node.id === edge.source)
+  const sourceData = sourceNode?.data || {}
+  const url = sourceData.output?.url || sourceData.audioUrl || sourceData.audioData || sourceData.previewUrl || ''
+  return url ? { edgeId: edge.id, sourceData, url } : null
+})
+const inheritedAudioUrl = computed(() => inheritedAudioSource.value?.url || '')
+const inheritedVoiceId = computed(() => {
+  const sourceData = inheritedAudioSource.value?.sourceData
+  return sourceData?.voiceId || sourceData?.voice_id || sourceData?.output?.voiceId || sourceData?.output?.voice_id || ''
+})
 const audioPromptPlaceholder = computed(() => {
-  if (audioCapability.value === 'voice_design') return '描述希望设计的音色。'
+  if (audioCapability.value === 'voice_design') return '说话的文本内容，描述希望角色说出的内容'
   if (audioCapability.value === 'tts') return '输入需要合成的文案。'
-  if (audioCapability.value === 'voice_clone') return '请连接或上传一段参考音频。'
+  if (audioCapability.value === 'voice_clone') return '说话的文本内容，描述你需要克隆的文本内容'
   return '描述您想要的音乐。'
 })
 const canGenerateCurrentAudio = computed(() => {
   if (audioCapability.value) return true
   return !!musicPrompt.value.trim()
+})
+
+watch(audioCapability, (capability) => {
+  if (capability !== 'voice_design') {
+    isVoiceStyleDropdownOpen.value = false
+    activeVoiceStyleCategory.value = null
+  }
+})
+
+watch(selectedVoicePreset, preset => {
+  canvasStore.updateNodeData(props.id, { selectedVoicePreset: preset ? { ...preset } : null })
 })
 
 function formatModelAvgDuration(modelName) {
@@ -135,7 +214,9 @@ function formatModelSuccessRate(modelName) {
 // 音乐生成积分消耗（生成2首歌）
 const musicPointsCost = computed(() => {
   const cost = currentMusicModelConfig.value?.pointsCost || 20
-  return audioCapability.value ? cost : cost * 2
+  return audioCapability.value
+    ? calculateAudioPointsCost(cost, musicPrompt.value)
+    : cost * 2
 })
 
 function formatAudioErrorMessage(message) {
@@ -153,11 +234,40 @@ const inheritedText = computed(() => props.data.inheritedData?.content || '')
 
 const highlightedMusicPromptSegments = computed(() => {
   if (!musicPrompt.value) return []
-  return [{
-    text: musicPrompt.value,
-    start: 0,
-    end: musicPrompt.value.length
-  }]
+  const segments = []
+  const regex = /@音频\d+/g
+  let lastIndex = 0
+  let match
+  while ((match = regex.exec(musicPrompt.value)) !== null) {
+    if (match.index > lastIndex) {
+      segments.push({
+        text: musicPrompt.value.slice(lastIndex, match.index),
+        start: lastIndex,
+        end: match.index,
+        isTag: false
+      })
+    }
+    const index = Number(match[0].replace('@音频', ''))
+    segments.push({
+      text: match[0],
+      start: match.index,
+      end: regex.lastIndex,
+      isTag: true,
+      media: index === 1 && inheritedAudioUrl.value
+        ? { type: 'audio', index, label: `音频${index}`, url: inheritedAudioUrl.value }
+        : null
+    })
+    lastIndex = regex.lastIndex
+  }
+  if (lastIndex < musicPrompt.value.length) {
+    segments.push({
+      text: musicPrompt.value.slice(lastIndex),
+      start: lastIndex,
+      end: musicPrompt.value.length,
+      isTag: false
+    })
+  }
+  return segments
 })
 
 // 监听继承数据，自动填充到提示词
@@ -168,8 +278,8 @@ watch(inheritedText, (newText) => {
 }, { immediate: true })
 
 // 监听音乐生成参数变化，保存到节点数据
-watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, makeInstrumental, voiceStyle],
-  ([model, mode, prompt, t, tgs, ntgs, inst, style]) => {
+watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, makeInstrumental, voiceDialect, voiceAgeGender, voiceTexture, voicePace, voiceMood, voiceCustomDescription, voiceDesignStyle],
+  ([model, mode, prompt, t, tgs, ntgs, inst, dialect, ageGender, texture, pace, mood, customDescription, style]) => {
     canvasStore.updateNodeData(props.id, {
       musicModel: model,
       customMode: mode,
@@ -178,6 +288,12 @@ watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, m
       tags: tgs,
       negativeTags: ntgs,
       makeInstrumental: inst,
+      voiceDialect: dialect,
+      voiceAgeGender: ageGender,
+      voiceTexture: texture,
+      voicePace: pace,
+      voiceMood: mood,
+      voiceCustomDescription: customDescription,
       voiceStyle: style
     })
   }
@@ -200,22 +316,55 @@ function toggleMusicModelDropdown(event) {
     }
   }
   
-  isMusicModelDropdownOpen.value = !isMusicModelDropdownOpen.value
+  const nextOpen = !isMusicModelDropdownOpen.value
+  if (nextOpen) {
+    const selectedGroup = audioModelGroups.value.find(group =>
+      group.models.some(model => model.value === selectedMusicModel.value)
+    )
+    selectedAudioGroup.value = selectedGroup?.value || audioModelGroups.value[0]?.value || ''
+  }
+  isMusicModelDropdownOpen.value = nextOpen
+  if (nextOpen) isVoiceStyleDropdownOpen.value = false
+}
+
+function toggleVoiceStyleDropdown(event) {
+  event.stopPropagation()
+  const nextOpen = !isVoiceStyleDropdownOpen.value
+  if (nextOpen) {
+    const rect = voiceStyleSelectorRef.value?.getBoundingClientRect()
+    const dropdownHeight = 420
+    voiceStyleDropdownDirection.value = rect && rect.bottom + dropdownHeight > window.innerHeight && rect.top > dropdownHeight
+      ? 'up'
+      : 'down'
+    activeVoiceStyleCategory.value = null
+    isMusicModelDropdownOpen.value = false
+  }
+  isVoiceStyleDropdownOpen.value = nextOpen
 }
 
 // 选择模型
 function selectMusicModel(modelValue) {
   selectedMusicModel.value = modelValue
+  const selectedGroup = audioModelGroups.value.find(group => group.models.some(model => model.value === modelValue))
+  selectedAudioGroup.value = selectedGroup?.value || selectedAudioGroup.value
   isMusicModelDropdownOpen.value = false
   // 保存到节点数据
   canvasStore.updateNodeData(props.id, { musicModel: modelValue })
 }
 
+function selectVoicePreset(voice) {
+  selectedVoicePreset.value = voice
+  showVoicePresetPicker.value = false
+}
+
 // 点击外部关闭下拉框
 function handleMusicModelDropdownClickOutside(event) {
-  const dropdown = event.target.closest('.music-model-selector')
-  if (!dropdown) {
+  if (!event.target.closest('.model-selector')) {
     isMusicModelDropdownOpen.value = false
+  }
+  if (!event.target.closest('.voice-style-selector')) {
+    isVoiceStyleDropdownOpen.value = false
+    activeVoiceStyleCategory.value = null
   }
 }
 
@@ -394,13 +543,20 @@ async function handleGenerateCozeAudio() {
     }
     if (audioCapability.value === 'voice_design') {
       body.prompt = musicPrompt.value
-      body.style = voiceStyle.value
+      body.style = voiceDesignStyle.value
     } else if (audioCapability.value === 'voice_clone') {
+      body.prompt = musicPrompt.value
       body.reference_audio_url = inheritedAudioUrl.value
     } else {
       body.text = musicPrompt.value
-      if (inheritedVoiceId.value) body.voice_id = inheritedVoiceId.value
-      else body.reference_audio_url = inheritedAudioUrl.value
+      if (inheritedAudioUrl.value) {
+        body.reference_audio_url = inheritedAudioUrl.value
+      } else if (selectedVoicePreset.value?.previewUrl) {
+        body.voice_id = selectedVoicePreset.value.previewUrl
+        body.reference_audio_text = selectedVoicePreset.value.transcript
+      } else if (inheritedVoiceId.value) {
+        body.voice_id = inheritedVoiceId.value
+      }
     }
     const response = await apiClient.post('/api/audio/generate', body)
     canvasStore.updateNodeData(targetNodeId, { taskId: response.task_id, taskType: 'audio-generation', status: 'processing' })
@@ -626,6 +782,45 @@ function insertMusicEditorPlainText(text) {
   })
 }
 
+function insertAudioReferenceTag() {
+  const editor = promptTextareaRef.value
+  const tag = '@音频1'
+  if (!editor) {
+    const prefix = musicPrompt.value && !/[\s\n]$/.test(musicPrompt.value) ? ' ' : ''
+    musicPrompt.value += `${prefix}${tag} `
+    return
+  }
+
+  const currentText = serializePromptEditorContent(editor)
+  if (currentText !== musicPrompt.value) {
+    musicPrompt.value = currentText
+  }
+  const { start, end } = getPromptEditorSelectionRange(editor)
+  const before = currentText.slice(0, start)
+  const after = currentText.slice(end)
+  const prefix = before && !/[\s\n]$/.test(before) ? ' ' : ''
+  const suffix = !after || !/^[\s\n]/.test(after) ? ' ' : ''
+  const resultText = before + prefix + tag + suffix + after
+  const resultCursor = start + prefix.length + tag.length + suffix.length
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+  musicPrompt.value = resultText
+  promptEditorRenderKey.value += 1
+  nextTick(() => {
+    const nextEditor = promptTextareaRef.value || editor
+    removePromptEditorOrphanTextNodes(nextEditor)
+    autoResizeTextarea()
+    restorePromptEditorSelection(nextEditor, resultCursor, resultCursor)
+    nextEditor.scrollTop = scrollPosition.scrollTop
+    nextEditor.scrollLeft = scrollPosition.scrollLeft
+  })
+}
+
+function removeReferenceAudio(event) {
+  event?.stopPropagation()
+  const edgeId = inheritedAudioSource.value?.edgeId
+  if (edgeId) canvasStore.removeEdge(edgeId)
+}
+
 // 自动调整文本框高度
 function autoResizeTextarea() {
   if (hasManualPromptTextareaSize.value) return
@@ -710,7 +905,7 @@ function handleConfigPanelOutsideMouseDown(event) {
 // 组件挂载时添加全局点击事件监听并刷新配置
 onMounted(async () => {
   document.addEventListener('click', handleMusicModelDropdownClickOutside)
-  document.addEventListener('click', handleSpeedDropdownClickOutside)
+  document.addEventListener('click', handleSpeedEditorClickOutside)
   document.addEventListener('mousedown', handleConfigPanelOutsideMouseDown)
   window.addEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.addEventListener('background-task-failed', handleBackgroundTaskFailed)
@@ -735,7 +930,7 @@ onMounted(async () => {
 // 组件卸载时移除监听
 onUnmounted(() => {
   document.removeEventListener('click', handleMusicModelDropdownClickOutside)
-  document.removeEventListener('click', handleSpeedDropdownClickOutside)
+  document.removeEventListener('click', handleSpeedEditorClickOutside)
   document.removeEventListener('mousedown', handleConfigPanelOutsideMouseDown)
   window.removeEventListener('background-task-complete', handleBackgroundTaskComplete)
   window.removeEventListener('background-task-failed', handleBackgroundTaskFailed)
@@ -762,8 +957,8 @@ let volumeIndicatorTimer = null
 
 // 播放速度
 const playbackRate = ref(props.data.playbackRate || 1)
-const playbackRateOptions = [1, 1.25, 1.5, 1.75, 2, 2.5, 3]
-const showSpeedDropdown = ref(false)
+const pendingPlaybackRate = ref(playbackRate.value)
+const showSpeedEditor = ref(false)
 
 // 拖拽状态
 const isDragOver = ref(false)
@@ -1074,157 +1269,18 @@ function handleLabelKeyDown(event) {
   }
 }
 
-// 快捷操作 - 简化版
-const quickActions = [
-  { 
-    icon: '↑',
-    label: '上传本地音频', 
-    action: () => triggerUpload()
-  },
-  { 
-    icon: '♫',
-    label: '音频生视频', 
-    action: () => handleAudioToVideo()
-  }
-]
-
-// 图片对口型：创建图片节点 + 视频节点，连接 图片->视频, 音频->视频
-function handleLipSync() {
-  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
-  if (!currentNode) return
-  
-  // 在上方创建图片节点
-  const imageNodePosition = {
-    x: currentNode.position.x,
-    y: currentNode.position.y - 350
-  }
-  const imageNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  
-  canvasStore.addNode({
-    id: imageNodeId,
-    type: 'image-input',
-    position: imageNodePosition,
-    data: {
-      title: '人物图片',
-      sourceImages: ['/logo.svg'],
-      status: 'success'
-    }
-  })
-  
-  // 在右侧创建视频节点
-  const videoNodePosition = {
-    x: currentNode.position.x + 500,
-    y: currentNode.position.y - 100
-  }
-  const videoNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  
-  canvasStore.addNode({
-    id: videoNodeId,
-    type: 'video',
-    position: videoNodePosition,
-    data: {
-      title: t('canvas.nodes.video'),
-      label: t('canvas.nodes.video'),
-      status: 'idle',
-      generationMode: 'lip-sync'
-    }
-  })
-  
-  // 连接图片节点到视频节点
-  canvasStore.addEdge({
-    source: imageNodeId,
-    target: videoNodeId,
-    sourceHandle: 'output',
-    targetHandle: 'input'
-  })
-  
-  // 连接当前音频节点到视频节点
-  canvasStore.addEdge({
-    source: props.id,
-    target: videoNodeId,
-    sourceHandle: 'output',
-    targetHandle: 'input'
-  })
-  
-  // 选中视频节点
-  canvasStore.selectNode(videoNodeId)
-}
-
-// 音频生视频：创建视频节点，连接 音频->视频
-function handleAudioToVideo() {
-  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
-  if (!currentNode) return
-  
-  // 在右侧创建视频节点
-  const videoNodePosition = {
-    x: currentNode.position.x + 500,
-    y: currentNode.position.y
-  }
-  const videoNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  
-  canvasStore.addNode({
-    id: videoNodeId,
-    type: 'video',
-    position: videoNodePosition,
-    data: {
-      title: t('canvas.nodes.video'),
-      label: t('canvas.nodes.video'),
-      status: 'idle',
-      generationMode: 'audio-to-video'
-    }
-  })
-  
-  // 连接当前音频节点到视频节点
-  canvasStore.addEdge({
-    source: props.id,
-    target: videoNodeId,
-    sourceHandle: 'output',
-    targetHandle: 'input'
-  })
-  
-  // 选中视频节点
-  canvasStore.selectNode(videoNodeId)
-}
-
-// 音频提取文案：创建文本节点，连接 音频->文本
-function handleAudioToText() {
-  const currentNode = canvasStore.nodes.find(n => n.id === props.id)
-  if (!currentNode) return
-  
-  // 在右侧创建文本节点
-  const textNodePosition = {
-    x: currentNode.position.x + 500,
-    y: currentNode.position.y
-  }
-  const textNodeId = `node_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  
-  canvasStore.addNode({
-    id: textNodeId,
-    type: 'text-input',
-    position: textNodePosition,
-    data: {
-      title: '提取文案',
-      text: '',
-      placeholder: '音频转文字结果将显示在这里...'
-    }
-  })
-  
-  // 连接当前音频节点到文本节点
-  canvasStore.addEdge({
-    source: props.id,
-    target: textNodeId,
-    sourceHandle: 'output',
-    targetHandle: 'input'
-  })
-  
-  // 选中文本节点
-  canvasStore.selectNode(textNodeId)
-}
-
 // 触发上传
 function triggerUpload() {
   fileInputRef.value?.click()
 }
+
+const quickActions = [
+  {
+    icon: '↑',
+    label: '上传本地音频',
+    action: () => triggerUpload()
+  }
+]
 
 // 处理文件上传 - 使用 blob URL 秒加载 + 后台异步上传到云存储
 async function handleFileUpload(event) {
@@ -1603,16 +1659,6 @@ function handleResizeEnd() {
   document.removeEventListener('mouseup', handleResizeEnd)
 }
 
-// 重置/更换音频
-function handleReupload() {
-  canvasStore.updateNodeData(props.id, {
-    audioUrl: null,
-    audioData: null,
-    output: null,
-    status: 'idle'
-  })
-}
-
 // ========== 工具栏处理函数 ==========
 
 // 走 startStreamDownload：浏览器原生下载栏（带进度），点击立即响应
@@ -1655,16 +1701,18 @@ async function handleToolbarDownload() {
   }
 }
 
-// 切换播放速度下拉
-function toggleSpeedDropdown(event) {
+// 打开变速面板：调整期间不改变当前播放速度，确认后才写入节点数据。
+function toggleSpeedEditor(event) {
   event.stopPropagation()
-  showSpeedDropdown.value = !showSpeedDropdown.value
+  pendingPlaybackRate.value = playbackRate.value
+  showSpeedEditor.value = !showSpeedEditor.value
 }
 
-// 选择播放速度
-function selectPlaybackRate(rate) {
+function applyPlaybackRate() {
+  const rate = Math.max(0.1, Math.min(4, Number(pendingPlaybackRate.value) || 1))
   playbackRate.value = rate
-  showSpeedDropdown.value = false
+  pendingPlaybackRate.value = rate
+  showSpeedEditor.value = false
   
   // 更新音频元素的播放速度
   if (audioRef.value) {
@@ -1683,11 +1731,9 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
   }
 })
 
-// 点击外部关闭速度下拉
-function handleSpeedDropdownClickOutside(event) {
-  const dropdown = event.target.closest('.speed-dropdown')
-  if (!dropdown) {
-    showSpeedDropdown.value = false
+function handleSpeedEditorClickOutside(event) {
+  if (!event.target.closest('.speed-editor') && !event.target.closest('.speed-toolbar-btn')) {
+    showSpeedEditor.value = false
   }
 }
 
@@ -1703,49 +1749,24 @@ function handleSpeedDropdownClickOutside(event) {
     @dragover="handleDragOver"
     @drop="handleDrop"
   >
-    <!-- 左侧输入端口（隐藏但保留给 Vue Flow 用于边渲染） -->
-    <Handle
-      type="target"
-      :position="Position.Left"
-      id="input"
-      class="node-handle node-handle-hidden"
-      :style="{ position: 'absolute', left: '-34px', top: '50%', transform: 'translateY(-50%)' }"
-    />
-    
     <!-- 音频工具栏（选中且有音频时显示）- 与 ImageNode 保持一致 -->
     <div v-show="showToolbar && !props.data?.readonly" class="audio-toolbar">
-      <!-- 倍速选择器 -->
-      <div class="speed-dropdown" @click.stop>
-        <button class="toolbar-btn speed-btn" title="播放速度" @click="toggleSpeedDropdown">
-          <span class="speed-value">{{ playbackRate }}x</span>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </button>
-        <!-- 速度下拉列表 -->
-        <Transition name="dropdown-fade">
-          <div v-if="showSpeedDropdown" class="speed-dropdown-list">
-            <div
-              v-for="rate in playbackRateOptions"
-              :key="rate"
-              class="speed-option"
-              :class="{ 'active': playbackRate === rate }"
-              @click="selectPlaybackRate(rate)"
-            >
-              {{ rate }}x
-            </div>
-          </div>
-        </Transition>
-      </div>
-      
+      <button class="toolbar-btn" title="截取音频" @mousedown.stop.prevent="openAudioEditor" @click.stop.prevent>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 7h3a3 3 0 013 3v4a3 3 0 003 3h7" stroke-linecap="round"/>
+          <path d="M4 17h3a3 3 0 003-3v-4a3 3 0 013-3h7M16 5l4 4m0-4l-4 4M16 15l4 4m0-4l-4 4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>截取</span>
+      </button>
+
       <div class="toolbar-divider"></div>
 
-      <!-- 音频编辑按钮 -->
-      <button class="toolbar-btn icon-only" title="音频编辑" @mousedown.stop.prevent="openAudioEditor" @click.stop.prevent>
+      <button class="toolbar-btn speed-toolbar-btn" title="变速" @mousedown.stop.prevent="toggleSpeedEditor" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M4 14l10-10 6 6-10 10H4v-6z" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M13 5l6 6" stroke-linecap="round"/>
+          <path d="M12 7V3l-4 4 4 4V7a5 5 0 11-4.8 6.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M15.5 12.5l-3 2v-4z" stroke-linejoin="round"/>
         </svg>
+        <span>变速</span>
       </button>
 
       <div class="toolbar-divider"></div>
@@ -1755,6 +1776,17 @@ function handleSpeedDropdownClickOutside(event) {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
+      </button>
+    </div>
+
+    <div v-if="showToolbar && showSpeedEditor && !props.data?.readonly" class="speed-editor" @click.stop>
+      <button class="speed-editor-cancel" @click="showSpeedEditor = false">×　变速</button>
+      <span class="speed-boundary">0.1x</span>
+      <input v-model.number="pendingPlaybackRate" class="speed-slider" type="range" min="0.1" max="4" step="0.05" aria-label="播放速度" />
+      <span class="speed-boundary">4.0x</span>
+      <input v-model.number="pendingPlaybackRate" class="speed-number" type="number" min="0.1" max="4" step="0.05" aria-label="播放速度数值" />
+      <button class="speed-editor-apply" title="应用变速" @click="applyPlaybackRate">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 20V4m0 0L5 11m7-7l7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </div>
     
@@ -1781,6 +1813,15 @@ function handleSpeedDropdownClickOutside(event) {
     
     <!-- 节点主体 -->
     <div class="node-wrapper">
+      <!-- 左侧输入端口（与左侧加号共用定位坐标系） -->
+      <Handle
+        type="target"
+        :position="Position.Left"
+        id="input"
+        class="node-handle node-handle-hidden"
+        :style="{ position: 'absolute', left: '-34.5px', top: '50%', transform: 'translateY(-50%)' }"
+      />
+
       <!-- 左侧添加按钮 -->
       <button 
         class="node-add-btn node-add-btn-left"
@@ -1793,9 +1834,49 @@ function handleSpeedDropdownClickOutside(event) {
       <!-- 节点卡片 -->
       <div 
         class="node-card" 
-        :class="{ 'drag-over': isDragOver }"
+        :class="{
+          'drag-over': isDragOver,
+          'is-processing': props.data?.status === 'processing'
+        }"
         :style="contentStyle"
       >
+        <!-- 彗星环绕发光特效（与视频/图像节点的处理中状态一致） -->
+        <svg
+          v-if="props.data?.status === 'processing' && canvasStore.performanceMode === 'full'"
+          class="comet-border"
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient :id="'comet-gradient-audio-' + id" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="transparent" />
+              <stop offset="70%" stop-color="rgba(74, 222, 128, 0.3)" />
+              <stop offset="90%" stop-color="rgba(74, 222, 128, 0.8)" />
+              <stop offset="100%" stop-color="#4ade80" />
+            </linearGradient>
+            <filter :id="'comet-glow-audio-' + id" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="2" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+          <rect x="1" y="1" width="98" height="98" rx="8" fill="none" stroke="rgba(74, 222, 128, 0.15)" stroke-width="1" />
+          <rect
+            class="comet-path"
+            x="1"
+            y="1"
+            width="98"
+            height="98"
+            rx="8"
+            fill="none"
+            :stroke="'url(#comet-gradient-audio-' + id + ')'"
+            stroke-width="2"
+            :filter="'url(#comet-glow-audio-' + id + ')'"
+          />
+        </svg>
+
         <!-- 隐藏的文件上传 -->
         <input 
           ref="fileInputRef"
@@ -1805,9 +1886,16 @@ function handleSpeedDropdownClickOutside(event) {
           @change="handleFileUpload"
         />
         
+        <!-- 生成中状态（与视频/图像节点统一） -->
+        <div v-if="props.data?.status === 'processing'" class="node-content preview-loading">
+          <div class="loading-spinner"></div>
+          <span class="loading-title">音频生成中...</span>
+          <span class="loading-hint">音频生成需要一定时间，请耐心等待</span>
+        </div>
+
         <!-- 有音频时显示播放器 -->
         <div
-          v-if="hasAudio"
+          v-else-if="hasAudio"
           class="audio-output-wrapper"
           @mouseenter="handleMouseEnter"
           @mouseleave="handleMouseLeave"
@@ -1953,7 +2041,7 @@ function handleSpeedDropdownClickOutside(event) {
         :position="Position.Right"
         id="output"
         class="node-handle node-handle-hidden"
-        :style="{ position: 'absolute', right: '-34px', top: '50%', transform: 'translateY(-50%)' }"
+        :style="{ position: 'absolute', right: '-34.5px', top: '50%', transform: 'translateY(-50%)' }"
       />
 
       <!-- 右侧添加按钮 -->
@@ -2001,8 +2089,38 @@ function handleSpeedDropdownClickOutside(event) {
           <path d="M14 10l7-7" />
         </svg>
       </button>
-      <!-- 音乐生成配置（无音频时显示） -->
-      <div v-if="!hasAudio" class="music-gen-panel">
+      <!-- 音乐生成配置（与视频/图像节点一致，生成后仍可继续输入和提交） -->
+      <div class="music-gen-panel">
+        <!-- 参考音频，与视频节点参考素材区保持相同层级 -->
+        <div class="audio-reference-section">
+          <div class="audio-reference-header">
+            <span class="audio-reference-label">参考音频</span>
+            <span class="audio-reference-hint">连接音频节点作为音色来源</span>
+          </div>
+          <div class="audio-reference-list">
+            <div
+              v-if="inheritedAudioUrl"
+              class="audio-reference-item nodrag"
+              title="点击插入 @音频1"
+              role="button"
+              tabindex="0"
+              @mousedown.stop
+              @click="insertAudioReferenceTag"
+              @keydown.enter.prevent="insertAudioReferenceTag"
+              @mouseenter="onAudioHoverStart(inheritedAudioUrl, $event)"
+              @mouseleave="onHoverEnd"
+            >
+              <span class="audio-reference-icon">♪</span>
+              <span class="audio-reference-tag">@音频1</span>
+              <button class="audio-reference-remove" type="button" title="移除参考音频" aria-label="移除参考音频" @click.stop="removeReferenceAudio">×</button>
+            </div>
+            <button class="audio-reference-add nodrag" type="button" @click="handleAddLeftClick">
+              <span class="audio-reference-add-icon">+</span>
+              <span>添加</span>
+            </button>
+          </div>
+        </div>
+
         <!-- 大文本输入区 -->
         <div class="prompt-area">
           <div
@@ -2026,26 +2144,28 @@ function handleSpeedDropdownClickOutside(event) {
               v-for="(seg, i) in highlightedMusicPromptSegments"
               :key="i"
               class="prompt-highlight-segment"
+              :class="{ 'is-prompt-tag-slot': seg.isTag }"
               :data-prompt-segment-index="i"
               :data-prompt-segment-start="seg.start"
               :data-prompt-segment-end="seg.end"
-            >{{ seg.text }}</span>
+              :data-prompt-mention="seg.isTag ? seg.text : undefined"
+              :contenteditable="seg.isTag ? 'false' : undefined"
+            ><PromptMediaTag
+              v-if="seg.isTag"
+              :text="seg.text"
+              :media="seg.media"
+              @mouseenter="seg.media && onAudioHoverStart(seg.media.url, $event)"
+              @mouseleave="onHoverEnd"
+            /><template v-else>{{ seg.text }}</template></span>
           </div>
         </div>
         
         <!-- 控制栏 -->
         <div class="control-bar">
-          <!-- 左侧：类型选择 -->
-          <div class="type-selector">
-            <span class="type-icon">{{ audioCapability ? '◉' : '♫' }}</span>
-            <span class="type-label">{{ audioCapability === 'voice_design' ? '音色设计' : audioCapability === 'voice_clone' ? '声音克隆' : audioCapability === 'tts' ? 'TTS' : '音乐' }}</span>
-            <span class="type-arrow">▾</span>
-          </div>
-          
-          <!-- 模型选择器 -->
+          <!-- 模型选择器：左侧分组，右侧对应模型 -->
           <div class="model-selector" ref="musicModelSelectorRef" @click.stop>
             <div class="model-trigger" @click="toggleMusicModelDropdown">
-              <span class="model-icon">∥</span>
+              <span class="model-icon">{{ currentMusicModelConfig?.icon || '♫' }}</span>
               <span class="model-name">{{ currentMusicModelConfig?.label || selectedMusicModel }}</span>
               <span class="model-arrow" :class="{ 'rotate': isMusicModelDropdownOpen }">▾</span>
             </div>
@@ -2055,41 +2175,128 @@ function handleSpeedDropdownClickOutside(event) {
               <div 
                 v-if="isMusicModelDropdownOpen" 
                 class="model-dropdown-list"
-                :class="{ 'dropdown-up': dropdownDirection === 'up', 'dropdown-down': dropdownDirection === 'down' }"
+                :class="{ 'dropdown-up': dropdownDirection === 'up', 'dropdown-down': dropdownDirection === 'down', 'audio-vendor-layout': audioModelGroups.length > 1 }"
                 @wheel="handleDropdownWheel"
               >
-                <div
-                  v-for="m in musicModels"
-                  :key="m.value"
-                  class="model-option model-dropdown-item"
-                  :class="{ 'active': selectedMusicModel === m.value }"
-                  @click="selectMusicModel(m.value)"
-                >
-                  <div class="model-item-main">
-                    <span class="model-item-icon">{{ m.icon || '♫' }}</span>
-                    <div class="model-item-content">
-                      <span class="option-name model-item-label">{{ m.label }}</span>
-                      <span v-if="m.description" class="option-desc model-item-desc">{{ m.description }}</span>
-                    </div>
-                    <span class="model-audio-stats model-item-meta">
-                      <span class="signal-percent">{{ formatModelSuccessRate(m.value) }}</span>
-                      <span v-if="formatModelAvgDuration(m.value)" class="model-duration-text">
-                        {{ formatModelAvgDuration(m.value) }}
+                <div v-if="audioModelGroups.length > 1" class="audio-group-column">
+                  <button
+                    v-for="group in audioModelGroups"
+                    :key="group.value"
+                    type="button"
+                    class="audio-group-item"
+                    :class="{ active: selectedAudioGroup === group.value }"
+                    @click.stop="selectedAudioGroup = group.value"
+                  >
+                    <span class="audio-group-logo">{{ group.logo || group.name.charAt(0) }}</span>
+                    <span class="audio-group-name">{{ group.name }}</span>
+                  </button>
+                </div>
+                <div class="audio-model-column">
+                  <div
+                    v-for="m in currentAudioGroupModels"
+                    :key="m.value"
+                    class="model-option model-dropdown-item"
+                    :class="{ 'active': selectedMusicModel === m.value }"
+                    @click="selectMusicModel(m.value)"
+                  >
+                    <div class="model-item-main">
+                      <span class="model-item-icon">{{ m.icon || '♫' }}</span>
+                      <div class="model-item-content">
+                        <span class="option-name model-item-label">{{ m.label }}</span>
+                        <span v-if="m.description" class="option-desc model-item-desc">{{ m.description }}</span>
+                      </div>
+                      <span class="model-audio-stats model-item-meta">
+                        <span class="signal-percent">{{ formatModelSuccessRate(m.value) }}</span>
+                        <span v-if="formatModelAvgDuration(m.value)" class="model-duration-text">
+                          {{ formatModelAvgDuration(m.value) }}
+                        </span>
                       </span>
-                      <span v-if="m.pointsCost" class="model-item-points">{{ m.pointsCost }}点</span>
-                    </span>
+                    </div>
                   </div>
                 </div>
               </div>
             </Transition>
           </div>
+
+          <div
+            v-if="audioCapability === 'voice_design'"
+            ref="voiceStyleSelectorRef"
+            class="voice-style-selector"
+            @mousedown.stop
+            @click.stop
+          >
+            <button type="button" class="voice-style-trigger" @click="toggleVoiceStyleDropdown">
+              <span>{{ voiceStyleTriggerLabel }}</span>
+              <span class="voice-style-trigger-arrow" :class="{ 'arrow-up': isVoiceStyleDropdownOpen }">⌃</span>
+            </button>
+            <Transition name="dropdown-fade">
+              <div
+                v-if="isVoiceStyleDropdownOpen"
+                class="voice-style-dropdown-panel"
+                :class="{ 'dropdown-up': voiceStyleDropdownDirection === 'up' }"
+              >
+                <div class="voice-style-dropdown-title">音色设计</div>
+
+                <button type="button" class="voice-style-category" :class="{ active: activeVoiceStyleCategory === 'dialect' }" @click="activeVoiceStyleCategory = activeVoiceStyleCategory === 'dialect' ? null : 'dialect'">
+                  <span>方言 / 语种</span><span>{{ voiceDialect || '请选择' }}</span><span>›</span>
+                </button>
+                <div v-if="activeVoiceStyleCategory === 'dialect'" class="voice-style-options">
+                  <button v-for="option in voiceDesignOptions.dialect" :key="option" type="button" :class="{ active: voiceDialect === option }" @click="voiceDialect = option; activeVoiceStyleCategory = null">{{ option }}</button>
+                </div>
+
+                <button type="button" class="voice-style-category" :class="{ active: activeVoiceStyleCategory === 'ageGender' }" @click="activeVoiceStyleCategory = activeVoiceStyleCategory === 'ageGender' ? null : 'ageGender'">
+                  <span>年龄 / 性别</span><span>{{ voiceAgeGender || '请选择' }}</span><span>›</span>
+                </button>
+                <div v-if="activeVoiceStyleCategory === 'ageGender'" class="voice-style-options">
+                  <button v-for="option in voiceDesignOptions.ageGender" :key="option" type="button" :class="{ active: voiceAgeGender === option }" @click="voiceAgeGender = option; activeVoiceStyleCategory = null">{{ option }}</button>
+                </div>
+
+                <button type="button" class="voice-style-category" :class="{ active: activeVoiceStyleCategory === 'texture' }" @click="activeVoiceStyleCategory = activeVoiceStyleCategory === 'texture' ? null : 'texture'">
+                  <span>音色质感</span><span>{{ voiceTexture || '请选择' }}</span><span>›</span>
+                </button>
+                <div v-if="activeVoiceStyleCategory === 'texture'" class="voice-style-options">
+                  <button v-for="option in voiceDesignOptions.texture" :key="option" type="button" :class="{ active: voiceTexture === option }" @click="voiceTexture = option; activeVoiceStyleCategory = null">{{ option }}</button>
+                </div>
+
+                <button type="button" class="voice-style-category" :class="{ active: activeVoiceStyleCategory === 'pace' }" @click="activeVoiceStyleCategory = activeVoiceStyleCategory === 'pace' ? null : 'pace'">
+                  <span>语速 / 节奏</span><span>{{ voicePace || '请选择' }}</span><span>›</span>
+                </button>
+                <div v-if="activeVoiceStyleCategory === 'pace'" class="voice-style-options">
+                  <button v-for="option in voiceDesignOptions.pace" :key="option" type="button" :class="{ active: voicePace === option }" @click="voicePace = option; activeVoiceStyleCategory = null">{{ option }}</button>
+                </div>
+
+                <button type="button" class="voice-style-category" :class="{ active: activeVoiceStyleCategory === 'mood' }" @click="activeVoiceStyleCategory = activeVoiceStyleCategory === 'mood' ? null : 'mood'">
+                  <span>情绪 / 画面感</span><span>{{ voiceMood || '请选择' }}</span><span>›</span>
+                </button>
+                <div v-if="activeVoiceStyleCategory === 'mood'" class="voice-style-options">
+                  <button v-for="option in voiceDesignOptions.mood" :key="option" type="button" :class="{ active: voiceMood === option }" @click="voiceMood = option; activeVoiceStyleCategory = null">{{ option }}</button>
+                </div>
+
+                <label class="voice-style-custom-input">
+                  <span>自定义描述</span>
+                  <input v-model="voiceCustomDescription" type="text" placeholder="可手动补充音色描述" />
+                </label>
+              </div>
+            </Transition>
+          </div>
+
+          <button
+            v-if="audioCapability === 'tts'"
+            type="button"
+            class="voice-preset-trigger"
+            :title="inheritedAudioUrl ? '已连接参考音频，生成时将优先使用参考音频' : '选择预设音色'"
+            @click="showVoicePresetPicker = true"
+          >
+            <span class="voice-preset-icon">♬</span>
+            <span>{{ inheritedAudioUrl ? '参考音频优先' : voicePresetTriggerLabel }}</span>
+            <span class="voice-preset-arrow">▾</span>
+          </button>
           
           <!-- 字数统计 -->
           <span class="char-count">{{ musicPrompt.length }}/4100</span>
           
           <!-- 积分显示 -->
           <div class="points-badge">
-            <span class="points-icon">◎</span>
             <span class="points-value">{{ formatPoints(musicPointsCost) }}积分</span>
           </div>
           
@@ -2151,14 +2358,6 @@ function handleSpeedDropdownClickOutside(event) {
               <input v-model="negativeTags" type="text" class="option-input" placeholder="逗号分隔" />
             </div>
           </div>
-          <div v-else-if="showAdvancedOptions && audioCapability === 'voice_design'" class="advanced-options">
-            <div class="option-row vertical">
-              <span class="option-label">音色风格</span>
-              <select v-model="voiceStyle" class="option-input">
-                <option v-for="style in VOICE_DESIGN_STYLES" :key="style.value" :value="style.value">{{ style.label }}</option>
-              </select>
-            </div>
-          </div>
           <div v-else-if="showAdvancedOptions && (audioCapability === 'voice_clone' || audioCapability === 'tts')" class="advanced-options">
             <div class="option-row vertical">
               <span class="option-label">音色来源</span>
@@ -2168,40 +2367,6 @@ function handleSpeedDropdownClickOutside(event) {
         </Transition>
       </div>
       
-      <!-- 有音频时的面板 -->
-      <div v-else class="audio-info-panel">
-        <div class="audio-info-header">
-          <span class="audio-info-title">{{ audioTitle }}</span>
-        </div>
-        <div class="audio-actions-row">
-          <div class="audio-actions-left">
-            <button class="audio-action-btn" @click.stop="handleLipSync">
-              <span class="action-icon">◐</span>
-              <span class="action-text">对口型</span>
-            </button>
-            <button class="audio-action-btn" @click.stop="handleAudioToVideo">
-              <span class="action-icon">▶</span>
-              <span class="action-text">生视频</span>
-            </button>
-            <button class="audio-action-btn" @click.stop="handleAudioToText">
-              <span class="action-icon">✎</span>
-              <span class="action-text">提文案</span>
-            </button>
-          </div>
-          <div class="audio-actions-right">
-            <!-- 重新生成按钮 - 蓝色圆形icon -->
-            <button
-              class="audio-regenerate-btn"
-              @click.stop="handleReupload"
-              title="重新生成"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
     </Teleport>
     <Teleport to="body">
@@ -2212,6 +2377,12 @@ function handleSpeedDropdownClickOutside(event) {
         :duration="duration"
         @close="showAudioEditor = false"
         @submit="handleAudioEditorSubmit"
+      />
+      <VoicePresetPicker
+        v-if="showVoicePresetPicker"
+        :model-value="selectedVoicePreset"
+        @close="showVoicePresetPicker = false"
+        @select="selectVoicePreset"
       />
     </Teleport>
   </div>
@@ -2289,64 +2460,39 @@ function handleSpeedDropdownClickOutside(event) {
   margin: 0 6px;
 }
 
-/* 倍速选择器 */
-.speed-dropdown {
-  position: relative;
-}
-
-.speed-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.speed-btn .speed-value {
-  font-weight: 500;
-  min-width: 32px;
-  text-align: center;
-}
-
-.speed-btn svg {
-  width: 12px;
-  height: 12px;
-}
-
-.speed-dropdown-list {
+/* 变速面板 */
+.speed-editor {
   position: absolute;
-  top: calc(100% + 8px);
+  top: calc(100% + 24px);
   left: 50%;
-  transform: translateX(-50%);
-  background: #1e1e1e;
-  border: 1px solid #333333;
-  border-radius: 12px;
-  padding: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  z-index: 300;
-  min-width: 80px;
-}
-
-.speed-option {
+  z-index: 1000;
   display: flex;
   align-items: center;
-  justify-content: center;
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #888;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.speed-option:hover {
+  gap: 12px;
+  min-width: 520px;
+  padding: 10px 16px;
+  transform: translateX(-50%);
+  border: 1px solid #3c3c3c;
+  border-radius: 20px;
   background: #2a2a2a;
-  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+  pointer-events: auto;
 }
 
-.speed-option.active {
-  background: #3a3a3a;
-  color: #fff;
-  font-weight: 500;
+.speed-editor-cancel {
+  padding: 6px 4px;
+  border: 0;
+  background: transparent;
+  color: #f5f5f5;
+  font-size: 16px;
+  white-space: nowrap;
+  cursor: pointer;
 }
+
+.speed-boundary { color: #a3a3a3; font-size: 13px; white-space: nowrap; }
+.speed-slider { flex: 1; min-width: 120px; accent-color: #13c2e8; cursor: pointer; }
+.speed-number { width: 76px; min-height: 38px; padding: 0 8px; border: 0; border-radius: 10px; background: #4a4a4a; color: #fff; font-size: 16px; font-weight: 600; }
+.speed-editor-apply { display: grid; width: 48px; height: 48px; place-items: center; border: 0; border-radius: 12px; background: #f5f5f5; color: #1f1f1f; cursor: pointer; }.speed-editor-apply svg { width: 24px; height: 24px; }
 
 /* 节点标签 */
 .node-label {
@@ -2432,6 +2578,37 @@ function handleSpeedDropdownClickOutside(event) {
   box-shadow: none;
 }
 
+/* ========== 彗星环绕发光特效（生成中，与视频/图像节点一致） ========== */
+.node-card.is-processing {
+  position: relative;
+  overflow: visible;
+  box-shadow:
+    0 0 10px rgba(74, 222, 128, 0.2),
+    0 0 20px rgba(74, 222, 128, 0.1),
+    inset 0 0 0 1px rgba(74, 222, 128, 0.3);
+}
+
+.comet-border {
+  position: absolute;
+  inset: -4px;
+  width: calc(100% + 8px);
+  height: calc(100% + 8px);
+  pointer-events: none;
+  z-index: 10;
+  border-radius: 18px;
+}
+
+.comet-path {
+  stroke-dasharray: 25 75;
+  stroke-dashoffset: 0;
+  animation: comet-rotate 2.5s linear infinite;
+}
+
+@keyframes comet-rotate {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
 /* 主内容区域 */
 .node-content {
   flex: 1;
@@ -2439,6 +2616,42 @@ function handleSpeedDropdownClickOutside(event) {
   display: flex;
   flex-direction: column;
   min-height: 200px;
+}
+
+/* 处理中预览状态 */
+.preview-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  font-size: 13px;
+}
+
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--canvas-border-default, #3a3a3a);
+  border-top-color: var(--canvas-accent-primary, #3b82f6);
+  border-radius: 50%;
+  animation: audio-loading-spin 1s linear infinite;
+}
+
+@keyframes audio-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+.loading-title {
+  color: var(--canvas-text-primary, #fff);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.loading-hint {
+  color: var(--canvas-text-tertiary, #666);
+  font-size: 11px;
 }
 
 /* 空状态（与 VideoNode 统一） */
@@ -2827,15 +3040,23 @@ function handleSpeedDropdownClickOutside(event) {
 
 /* 调整 Handle 位置与 + 按钮中心对齐 */
 :deep(.vue-flow__handle.target) {
-  left: -34px !important;
+  left: -34.5px !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
 }
 
 :deep(.vue-flow__handle.source) {
-  right: -34px !important;
+  right: -34.5px !important;
   top: 50% !important;
   transform: translateY(-50%) !important;
+}
+
+:deep(.vue-flow__handle.node-handle) {
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 1px !important;
+  min-height: 1px !important;
+  border: none !important;
 }
 
 /* 添加按钮 */
@@ -2944,10 +3165,12 @@ function handleSpeedDropdownClickOutside(event) {
   top: calc(100% + 12px);
   left: 50%;
   transform: translateX(-50%);
-  width: 520px;
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
-  border-radius: 16px;
+  width: min(max(100%, 780px), 90vw);
+  min-width: 0;
+  max-width: 90vw;
+  background: var(--canvas-bg-elevated, #1e1e1e);
+  border: 1px solid var(--canvas-border-default, #3a3a3a);
+  border-radius: 12px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
   overflow: visible;
   z-index: 1000;
@@ -3016,24 +3239,168 @@ function handleSpeedDropdownClickOutside(event) {
   flex-direction: column;
 }
 
+/* 参考音频区：与视频节点的参考素材区保持相同的信息层级 */
+.audio-reference-section {
+  padding: 14px 20px 16px;
+  border-bottom: 1px solid #252525;
+}
+
+.audio-reference-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.audio-reference-label {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.32);
+  color: #d4d4d4;
+  font-size: 12px;
+}
+
+.audio-reference-hint {
+  color: #666666;
+  font-size: 12px;
+}
+
+.audio-reference-list {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.audio-reference-item,
+.audio-reference-add {
+  width: 60px;
+  height: 60px;
+  min-height: 60px;
+  border: 1px dashed #3a3a3a;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.audio-reference-item {
+  position: relative;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border-style: solid;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(168, 85, 247, 0.1));
+  color: rgba(200, 180, 255, 0.95);
+  cursor: pointer;
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.audio-reference-item:hover {
+  transform: scale(1.08);
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+  z-index: 2;
+}
+
+.audio-reference-icon {
+  font-size: 22px;
+  line-height: 1;
+  color: rgba(192, 132, 252, 0.95);
+}
+
+.audio-reference-tag {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #f9fafb;
+  font-size: 9px;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.audio-reference-remove {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  display: flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #ffffff;
+  background: #ef4444;
+  border: 2px solid #1e1e1e;
+  border-radius: 50%;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
+}
+
+.audio-reference-item:hover .audio-reference-remove,
+.audio-reference-remove:focus-visible {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.audio-reference-remove:hover {
+  background: #dc2626;
+}
+
+.audio-reference-add-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.audio-reference-add {
+  font-size: 11px;
+}
+
+.audio-reference-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #858585;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.audio-reference-add:hover {
+  border-color: #5a5a5a;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+}
+
 /* 提示词输入区域 */
 .prompt-area {
   position: relative;
-  padding: 16px 16px 12px;
+  padding: 12px;
+  border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
 }
 
 .prompt-textarea {
   position: relative;
   width: 100%;
-  min-height: 48px;
+  min-height: 63px;
   max-height: min(50vh, 420px);
-  padding: 4px 0;
+  padding: 8px 10px;
   background: transparent;
   border: none;
-  color: #ffffff;
+  color: var(--canvas-text-primary, #fff);
   font-size: 14px;
   font-family: inherit;
-  line-height: 1.6;
+  line-height: 1.5;
   resize: vertical;
   outline: none;
   overflow-y: auto;
@@ -3049,10 +3416,10 @@ function handleSpeedDropdownClickOutside(event) {
 .prompt-textarea.is-empty:empty::before {
   content: attr(data-placeholder);
   position: absolute;
-  top: 4px;
-  left: 0;
-  right: 0;
-  color: #666666;
+  top: 8px;
+  left: 10px;
+  right: 10px;
+  color: var(--canvas-text-placeholder, #4a4a4a);
   pointer-events: none;
   white-space: pre-wrap;
 }
@@ -3097,43 +3464,190 @@ function handleSpeedDropdownClickOutside(event) {
   border-top: 1px solid #252525;
 }
 
-/* 类型选择器 */
-.type-selector {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background: #252525;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.type-selector:hover {
-  background: #2a2a2a;
-}
-
-.type-icon {
-  font-size: 16px;
-  color: #888888;
-}
-
-.type-label {
-  font-size: 14px;
-  color: #ffffff;
-  font-weight: 500;
-}
-
-.type-arrow {
-  font-size: 10px;
-  color: #666666;
-}
-
 /* 模型选择器 */
 .model-selector {
   position: relative;
   flex: 1;
   min-width: 0;
+}
+
+.voice-style-selector {
+  position: relative;
+  z-index: 110;
+  flex-shrink: 0;
+}
+
+.voice-style-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 10px;
+  color: rgba(255, 255, 255, 0.92);
+  background: #252525;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.voice-style-trigger:hover {
+  background: #2a2a2a;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.voice-preset-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 34px;
+  max-width: 180px;
+  padding: 6px 10px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #252525;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.voice-preset-trigger:hover { background: #2a2a2a; border-color: rgba(255, 255, 255, 0.08); }
+.voice-preset-icon { color: #c084fc; }.voice-preset-arrow { margin-left: auto; color: rgba(255, 255, 255, .48); font-size: 10px; }
+
+.voice-style-trigger-arrow {
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 11px;
+  line-height: 1;
+  transform: rotate(180deg);
+  transition: transform 0.18s ease;
+}
+
+.voice-style-trigger-arrow.arrow-up {
+  transform: rotate(0deg);
+}
+
+.voice-style-dropdown-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 32px));
+  padding: 10px;
+  overflow-y: auto;
+  background: #252525;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  z-index: 1100;
+}
+
+.voice-style-dropdown-panel.dropdown-up {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
+.voice-style-dropdown-title {
+  padding: 6px 8px 8px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.voice-style-category {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 12px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 13px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.voice-style-category:hover,
+.voice-style-category.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.voice-style-category span:nth-child(2) {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 11px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.voice-style-category span:last-child {
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 16px;
+}
+
+.voice-style-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px 8px 10px;
+}
+
+.voice-style-options button {
+  min-height: 32px;
+  padding: 5px 8px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.voice-style-options button:hover,
+.voice-style-options button.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.voice-style-custom-input {
+  display: grid;
+  gap: 6px;
+  padding: 10px 8px 4px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+}
+
+.voice-style-custom-input input {
+  width: 100%;
+  padding: 8px 10px;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  outline: none;
+}
+
+.voice-style-custom-input input:focus {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.voice-style-custom-input input::placeholder {
+  color: rgba(255, 255, 255, 0.32);
 }
 
 .model-trigger {
@@ -3204,6 +3718,77 @@ function handleSpeedDropdownClickOutside(event) {
 .model-dropdown-list.dropdown-down {
   top: calc(100% + 8px);
   bottom: auto;
+}
+
+.model-dropdown-list.audio-vendor-layout {
+  display: flex;
+  width: min(560px, calc(100vw - 32px));
+  min-width: min(560px, calc(100vw - 32px));
+  max-height: 360px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.audio-group-column {
+  width: 88px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(22, 22, 28, 0.6), rgba(15, 15, 20, 0.8));
+}
+
+.audio-group-item {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  border: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  border-right: 2px solid transparent;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+}
+
+.audio-group-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.audio-group-item.active {
+  border-right-color: rgba(139, 92, 246, 0.6);
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(139, 92, 246, 0.08));
+  color: rgba(200, 180, 255, 0.9);
+}
+
+.audio-group-logo {
+  display: flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.audio-group-name {
+  max-width: 72px;
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: center;
+  word-break: break-all;
+}
+
+.audio-model-column {
+  min-width: 0;
+  flex: 1;
+  overflow-y: auto;
 }
 
 .model-option {
@@ -3293,14 +3878,6 @@ function handleSpeedDropdownClickOutside(event) {
   line-height: 1.4;
 }
 
-.model-item-points {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.62);
-  background: rgba(255, 255, 255, 0.07);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
 .model-audio-stats {
   display: flex;
   flex-direction: column;
@@ -3333,15 +3910,9 @@ function handleSpeedDropdownClickOutside(event) {
 .points-badge {
   display: flex;
   align-items: center;
-  gap: 4px;
   padding: 6px 12px;
   background: #252525;
   border-radius: 20px;
-}
-
-.points-icon {
-  font-size: 14px;
-  color: #888888;
 }
 
 .points-value {
@@ -3533,101 +4104,6 @@ function handleSpeedDropdownClickOutside(event) {
   color: #ffffff;
 }
 
-/* ===== 有音频时的信息面板 ===== */
-.audio-info-panel {
-  padding: 0;
-}
-
-.audio-info-header {
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
-}
-
-.audio-info-title {
-  font-size: 14px;
-  color: #ffffff;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.audio-actions-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  gap: 16px;
-}
-
-.audio-actions-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-  min-width: 0;
-}
-
-.audio-actions-right {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-/* 快捷操作按钮 - 模仿图像节点的模型选择器样式 */
-.audio-action-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
-  border-radius: 8px;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.2s ease;
-  white-space: nowrap;
-}
-
-.audio-action-btn:hover {
-  border-color: var(--canvas-border-active, #4a4a4a);
-}
-
-.audio-action-btn .action-icon {
-  font-size: 14px;
-}
-
-.audio-action-btn .action-text {
-  font-size: 13px;
-}
-
-/* 重新生成按钮 - 蓝色圆形icon */
-.audio-regenerate-btn {
-  width: 36px;
-  height: 36px;
-  background: var(--canvas-accent-primary, #3b82f6);
-  border: none;
-  border-radius: 50%;
-  color: #ffffff;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  flex-shrink: 0;
-}
-
-.audio-regenerate-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 16px rgba(59, 130, 246, 0.5);
-}
-
-.audio-regenerate-btn:active {
-  transform: scale(0.95);
-}
-
 /* 下拉动画 */
 .slide-down-enter-active,
 .slide-down-leave-active {
@@ -3754,6 +4230,34 @@ function handleSpeedDropdownClickOutside(event) {
   background: transparent;
 }
 
+:root.canvas-theme-light .audio-config-panel .audio-reference-section {
+  border-bottom-color: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .audio-config-panel .audio-reference-label {
+  background: rgba(0, 0, 0, 0.05);
+  color: #57534e;
+}
+
+:root.canvas-theme-light .audio-config-panel .audio-reference-hint,
+:root.canvas-theme-light .audio-config-panel .audio-reference-add {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .audio-config-panel .audio-reference-item,
+:root.canvas-theme-light .audio-config-panel .audio-reference-add {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .audio-config-panel .audio-reference-remove {
+  border-color: #ffffff;
+}
+
+:root.canvas-theme-light .audio-config-panel .audio-reference-add:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: #1c1917;
+}
+
 :root.canvas-theme-light .audio-node .prompt-textarea {
   background: transparent;
   color: #1c1917;
@@ -3784,47 +4288,6 @@ function handleSpeedDropdownClickOutside(event) {
   border-top-color: rgba(0, 0, 0, 0.06);
 }
 
-/* 类型选择器 */
-:root.canvas-theme-light .audio-node .type-selector {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-:root.canvas-theme-light .audio-config-panel .type-selector {
-  background: rgba(0, 0, 0, 0.04);
-}
-
-:root.canvas-theme-light .audio-node .type-selector:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-:root.canvas-theme-light .audio-config-panel .type-selector:hover {
-  background: rgba(0, 0, 0, 0.06);
-}
-
-:root.canvas-theme-light .audio-node .type-icon {
-  color: #57534e;
-}
-
-:root.canvas-theme-light .audio-config-panel .type-icon {
-  color: #57534e;
-}
-
-:root.canvas-theme-light .audio-node .type-label {
-  color: #1c1917;
-}
-
-:root.canvas-theme-light .audio-config-panel .type-label {
-  color: #1c1917;
-}
-
-:root.canvas-theme-light .audio-node .type-arrow {
-  color: #78716c;
-}
-
-:root.canvas-theme-light .audio-config-panel .type-arrow {
-  color: #78716c;
-}
-
 /* 模型选择器 */
 :root.canvas-theme-light .audio-node .model-trigger {
   background: rgba(0, 0, 0, 0.04);
@@ -3840,6 +4303,80 @@ function handleSpeedDropdownClickOutside(event) {
 
 :root.canvas-theme-light .audio-config-panel .model-trigger:hover {
   background: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .audio-node .voice-style-trigger {
+  color: #1c1917;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .audio-node .voice-style-trigger:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .audio-node .voice-preset-trigger {
+  color: #1c1917;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .audio-node .voice-preset-trigger:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .audio-node .voice-preset-arrow { color: rgba(0, 0, 0, .42); }
+
+:root.canvas-theme-light .audio-node .voice-style-trigger-arrow,
+:root.canvas-theme-light .audio-node .voice-style-category span:nth-child(2),
+:root.canvas-theme-light .audio-node .voice-style-category span:last-child {
+  color: rgba(0, 0, 0, 0.42);
+}
+
+:root.canvas-theme-light .audio-node .voice-style-dropdown-panel {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .audio-node .voice-style-dropdown-title {
+  color: rgba(0, 0, 0, 0.42);
+}
+
+:root.canvas-theme-light .audio-node .voice-style-category {
+  color: rgba(0, 0, 0, 0.65);
+}
+
+:root.canvas-theme-light .audio-node .voice-style-category:hover,
+:root.canvas-theme-light .audio-node .voice-style-category.active {
+  color: #1c1917;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+:root.canvas-theme-light .audio-node .voice-style-options button {
+  color: rgba(0, 0, 0, 0.58);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+:root.canvas-theme-light .audio-node .voice-style-options button:hover,
+:root.canvas-theme-light .audio-node .voice-style-options button.active {
+  color: #1c1917;
+  background: rgba(0, 0, 0, 0.09);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .audio-node .voice-style-custom-input {
+  color: rgba(0, 0, 0, 0.58);
+}
+
+:root.canvas-theme-light .audio-node .voice-style-custom-input input {
+  color: #1c1917;
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .audio-node .voice-style-custom-input input::placeholder {
+  color: rgba(0, 0, 0, 0.32);
 }
 
 :root.canvas-theme-light .audio-node .model-icon {
@@ -3879,6 +4416,31 @@ function handleSpeedDropdownClickOutside(event) {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12);
 }
 
+:root.canvas-theme-light .audio-config-panel .audio-group-column {
+  border-right-color: rgba(0, 0, 0, 0.06);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .audio-config-panel .audio-group-item {
+  color: #78716c;
+  border-bottom-color: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .audio-config-panel .audio-group-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .audio-config-panel .audio-group-item.active {
+  background: rgba(139, 92, 246, 0.1);
+  color: #7c3aed;
+}
+
+:root.canvas-theme-light .audio-config-panel .audio-group-logo {
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.04);
+  color: #57534e;
+}
+
 :root.canvas-theme-light .audio-node .model-option {
   color: #1c1917;
 }
@@ -3915,16 +4477,6 @@ function handleSpeedDropdownClickOutside(event) {
   border-color: rgba(0, 0, 0, 0.08);
 }
 
-:root.canvas-theme-light .audio-node .model-item-points {
-  color: rgba(28, 25, 23, 0.62);
-  background: rgba(0, 0, 0, 0.05);
-}
-
-:root.canvas-theme-light .audio-config-panel .model-item-points {
-  color: rgba(28, 25, 23, 0.62);
-  background: rgba(0, 0, 0, 0.05);
-}
-
 :root.canvas-theme-light .audio-node .option-name {
   color: #1c1917;
 }
@@ -3949,10 +4501,6 @@ function handleSpeedDropdownClickOutside(event) {
 /* 积分徽章 */
 :root.canvas-theme-light .audio-node .points-badge {
   background: rgba(0, 0, 0, 0.04);
-}
-
-:root.canvas-theme-light .audio-node .points-icon {
-  color: #57534e;
 }
 
 :root.canvas-theme-light .audio-node .points-value {
@@ -4030,31 +4578,6 @@ function handleSpeedDropdownClickOutside(event) {
   color: #3b82f6;
 }
 
-/* 音频信息面板 */
-:root.canvas-theme-light .audio-node .audio-info-panel {
-  background: rgba(255, 255, 255, 0.98);
-}
-
-:root.canvas-theme-light .audio-node .audio-info-header {
-  border-bottom-color: rgba(0, 0, 0, 0.06);
-}
-
-:root.canvas-theme-light .audio-node .audio-info-title {
-  color: #1c1917;
-}
-
-/* 音频操作按钮 */
-:root.canvas-theme-light .audio-node .audio-action-btn {
-  background: rgba(0, 0, 0, 0.02);
-  border-color: rgba(0, 0, 0, 0.1);
-  color: #1c1917;
-}
-
-:root.canvas-theme-light .audio-node .audio-action-btn:hover {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.15);
-}
-
 /* 工具栏 */
 :root.canvas-theme-light .audio-node .audio-toolbar {
   background: rgba(255, 255, 255, 0.95);
@@ -4075,25 +4598,20 @@ function handleSpeedDropdownClickOutside(event) {
   background: rgba(0, 0, 0, 0.1);
 }
 
-/* 速度下拉 */
-:root.canvas-theme-light .audio-node .speed-dropdown-list {
+/* 变速面板 */
+:root.canvas-theme-light .audio-node .speed-editor {
   background: rgba(255, 255, 255, 0.98);
   border-color: rgba(0, 0, 0, 0.1);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
-:root.canvas-theme-light .audio-node .speed-option {
+:root.canvas-theme-light .audio-node .speed-editor-cancel,
+:root.canvas-theme-light .audio-node .speed-number {
   color: #57534e;
 }
 
-:root.canvas-theme-light .audio-node .speed-option:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #1c1917;
-}
-
-:root.canvas-theme-light .audio-node .speed-option.active {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
+:root.canvas-theme-light .audio-node .speed-number {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* 节点标签 */

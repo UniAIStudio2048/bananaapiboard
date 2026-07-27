@@ -113,6 +113,7 @@ export default {
     generate: 'Generieren',
     imageGenerate: 'Bildgenerierung',
     videoGenerate: 'Videogenerierung',
+    textGenerate: 'Textgenerierung',
     canvas: 'Kreatives Canvas',
     canvasBeta: 'Kreatives Canvas (beta)',
     packages: 'Pakete',
@@ -585,6 +586,9 @@ export default {
     checkinReward: 'Check-in Belohnung +{0} Punkte',
     consecutiveDays: '{0} aufeinanderfolgende Tage',
     pointsHistory: 'Punkteverlauf',
+    ledgerType: {
+      audio_generation: 'Audiogenerierung'
+    },
     transactionType: 'Typ',
     transactionAmount: 'Betrag',
     transactionTime: 'Zeit',

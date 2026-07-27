@@ -1,61 +1,57 @@
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 
 const props = defineProps({
-  audioUrl: {
-    type: String,
-    required: true
-  },
-  title: {
-    type: String,
-    default: '音频'
-  },
-  duration: {
-    type: Number,
-    default: 0
-  }
+  audioUrl: { type: String, required: true },
+  title: { type: String, default: '音频' },
+  duration: { type: Number, default: 0 }
 })
 
 const emit = defineEmits(['close', 'submit'])
 
 const audioRef = ref(null)
+const timelineRef = ref(null)
 const loadedDuration = ref(props.duration || 0)
 const currentTime = ref(0)
 const isPlaying = ref(false)
 const showAdvanced = ref(false)
-
 const startTime = ref(0)
-const endTime = ref(Math.min(props.duration || 10, 10))
+const endTime = ref(Math.min(props.duration || 2, 2))
 const volume = ref(1)
 const pitch = ref(0)
 const speed = ref(1)
 const fadeIn = ref(0)
 const fadeOut = ref(0)
 const format = ref('mp3')
+const dragState = ref(null)
 
+const waveformBars = Array.from({ length: 72 }, (_, index) => 18 + ((index * 17 + index % 5 * 9) % 54))
 const maxDuration = computed(() => loadedDuration.value || props.duration || 0)
 const clipDuration = computed(() => Math.max(0, endTime.value - startTime.value))
 const canSubmit = computed(() => props.audioUrl && clipDuration.value > 0)
-
-watch(maxDuration, value => {
-  if (value > 0 && (!endTime.value || endTime.value > value)) {
-    endTime.value = Math.min(value, 10)
+const selectionStyle = computed(() => {
+  const duration = maxDuration.value || 1
+  return {
+    left: `${(startTime.value / duration) * 100}%`,
+    width: `${(clipDuration.value / duration) * 100}%`
   }
 })
 
+watch(maxDuration, value => {
+  if (value > 0 && (!endTime.value || endTime.value > value)) endTime.value = Math.min(value, 2)
+})
+
 function formatTime(seconds) {
-  if (!Number.isFinite(seconds)) return '0:00'
+  if (!Number.isFinite(seconds)) return '00:00'
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
-  return `${mins}:${secs.toString().padStart(2, '0')}`
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
 function handleLoadedMetadata() {
   if (!audioRef.value) return
   loadedDuration.value = audioRef.value.duration || props.duration || 0
-  if (!endTime.value || endTime.value > loadedDuration.value) {
-    endTime.value = Math.min(loadedDuration.value, 10)
-  }
+  if (!endTime.value || endTime.value > loadedDuration.value) endTime.value = Math.min(loadedDuration.value, 2)
 }
 
 function handleTimeUpdate() {
@@ -82,20 +78,43 @@ function togglePlay() {
   isPlaying.value = true
 }
 
-function previewClip() {
-  nextTick(() => togglePlay())
+function getPointerTime(event) {
+  const rect = timelineRef.value?.getBoundingClientRect()
+  if (!rect || !maxDuration.value) return 0
+  return Math.max(0, Math.min(maxDuration.value, ((event.clientX - rect.left) / rect.width) * maxDuration.value))
 }
 
-function clampRange(changed) {
-  const max = maxDuration.value || 0
-  startTime.value = Math.max(0, Math.min(Number(startTime.value) || 0, max))
-  endTime.value = Math.max(0, Math.min(Number(endTime.value) || 0, max))
-  if (changed === 'start' && startTime.value >= endTime.value) {
-    endTime.value = Math.min(max, startTime.value + 1)
+function startSelectionDrag(mode, event) {
+  event.preventDefault()
+  event.stopPropagation()
+  dragState.value = {
+    mode,
+    pointerTime: getPointerTime(event),
+    startTime: startTime.value,
+    endTime: endTime.value
   }
-  if (changed === 'end' && endTime.value <= startTime.value) {
-    startTime.value = Math.max(0, endTime.value - 1)
+  window.addEventListener('pointermove', handleSelectionDrag)
+  window.addEventListener('pointerup', stopSelectionDrag, { once: true })
+}
+
+function handleSelectionDrag(event) {
+  const state = dragState.value
+  if (!state) return
+  const pointerTime = getPointerTime(event)
+  const minimum = Math.min(0.1, maxDuration.value)
+  if (state.mode === 'start') startTime.value = Math.min(Math.max(0, pointerTime), endTime.value - minimum)
+  if (state.mode === 'end') endTime.value = Math.max(Math.min(maxDuration.value, pointerTime), startTime.value + minimum)
+  if (state.mode === 'move') {
+    const length = state.endTime - state.startTime
+    const nextStart = Math.max(0, Math.min(maxDuration.value - length, state.startTime + pointerTime - state.pointerTime))
+    startTime.value = nextStart
+    endTime.value = nextStart + length
   }
+}
+
+function stopSelectionDrag() {
+  dragState.value = null
+  window.removeEventListener('pointermove', handleSelectionDrag)
 }
 
 function handleSubmit() {
@@ -112,278 +131,82 @@ function handleSubmit() {
     mode: showAdvanced.value ? 'edit' : 'trim'
   })
 }
+
+onUnmounted(stopSelectionDrag)
 </script>
 
 <template>
-  <div class="audio-editor-overlay" @click.self="emit('close')">
-    <div class="audio-editor">
-      <div class="audio-editor-header">
+  <div class="audio-editor-overlay">
+    <section class="audio-editor" aria-label="音频截取">
+      <header class="audio-editor-header">
         <div>
-          <h3>音频编辑</h3>
+          <span class="audio-editor-kicker">♫ 节点</span>
+          <h3>音频截取</h3>
           <p>{{ title }}</p>
         </div>
         <button class="icon-btn" title="关闭" @click="emit('close')">×</button>
+      </header>
+
+      <audio ref="audioRef" :src="audioUrl" @loadedmetadata="handleLoadedMetadata" @timeupdate="handleTimeUpdate" @pause="isPlaying = false" @ended="isPlaying = false" />
+
+      <div ref="timelineRef" class="trim-timeline" :class="{ dragging: dragState }">
+        <div class="waveform" aria-hidden="true">
+          <i v-for="(height, index) in waveformBars" :key="index" :style="{ height: `${height}%` }"></i>
+        </div>
+        <div class="trim-selection" :style="selectionStyle" @pointerdown="startSelectionDrag('move', $event)">
+          <button class="trim-handle trim-handle-start" aria-label="调整截取起点" @pointerdown="startSelectionDrag('start', $event)"></button>
+          <span class="trim-duration">{{ clipDuration.toFixed(2) }}<small>s</small></span>
+          <button class="trim-handle trim-handle-end" aria-label="调整截取终点" @pointerdown="startSelectionDrag('end', $event)"></button>
+        </div>
       </div>
 
-      <audio
-        ref="audioRef"
-        :src="audioUrl"
-        @loadedmetadata="handleLoadedMetadata"
-        @timeupdate="handleTimeUpdate"
-        @pause="isPlaying = false"
-        @ended="isPlaying = false"
-      />
-
-      <div class="wave-preview">
-        <div v-for="i in 36" :key="i" class="wave-bar" :style="{ height: `${18 + ((i * 11) % 42)}px` }"></div>
-      </div>
-
-      <div class="range-row">
-        <label>
-          <span>开始</span>
-          <input v-model.number="startTime" type="number" min="0" :max="maxDuration" step="0.1" @input="clampRange('start')" />
-        </label>
-        <label>
-          <span>结束</span>
-          <input v-model.number="endTime" type="number" min="0" :max="maxDuration" step="0.1" @input="clampRange('end')" />
-        </label>
-        <div class="duration-pill">{{ formatTime(clipDuration) }}</div>
-      </div>
-
-      <div class="timeline">
-        <input v-model.number="startTime" type="range" min="0" :max="maxDuration" step="0.1" @input="clampRange('start')" />
-        <input v-model.number="endTime" type="range" min="0" :max="maxDuration" step="0.1" @input="clampRange('end')" />
-      </div>
-
-      <div class="preview-row">
-        <button class="primary-btn" @click="previewClip">{{ isPlaying ? '暂停' : '预览片段' }}</button>
+      <div class="audio-status">
         <span>{{ formatTime(currentTime) }} / {{ formatTime(maxDuration) }}</span>
+        <button class="play-btn" :title="isPlaying ? '暂停' : '播放截取片段'" @click="togglePlay">
+          <svg v-if="isPlaying" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+          <svg v-else viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
       </div>
 
-      <button class="advanced-toggle" @click="showAdvanced = !showAdvanced">
-        {{ showAdvanced ? '收起高级剪辑' : '高级剪辑' }}
-      </button>
-
+      <button class="advanced-toggle" @click="showAdvanced = !showAdvanced">{{ showAdvanced ? '收起高级编辑' : '高级编辑' }}</button>
       <div v-if="showAdvanced" class="advanced-grid">
-        <label>
-          <span>音量 {{ volume }}x</span>
-          <input v-model.number="volume" type="range" min="0" max="3" step="0.1" />
-        </label>
-        <label>
-          <span>变调 {{ pitch }} 半音</span>
-          <input v-model.number="pitch" type="range" min="-12" max="12" step="1" />
-        </label>
-        <label>
-          <span>速度 {{ speed }}x</span>
-          <input v-model.number="speed" type="range" min="0.5" max="2" step="0.05" />
-        </label>
-        <label>
-          <span>淡入 {{ fadeIn }}s</span>
-          <input v-model.number="fadeIn" type="range" min="0" :max="clipDuration" step="0.1" />
-        </label>
-        <label>
-          <span>淡出 {{ fadeOut }}s</span>
-          <input v-model.number="fadeOut" type="range" min="0" :max="clipDuration" step="0.1" />
-        </label>
-        <label>
-          <span>格式</span>
-          <select v-model="format">
-            <option value="mp3">MP3</option>
-            <option value="wav">WAV</option>
-            <option value="m4a">M4A</option>
-          </select>
-        </label>
+        <label><span>音量 {{ volume }}x</span><input v-model.number="volume" type="range" min="0" max="3" step="0.1" /></label>
+        <label><span>变调 {{ pitch }} 半音</span><input v-model.number="pitch" type="range" min="-12" max="12" step="1" /></label>
+        <label><span>速度 {{ speed }}x</span><input v-model.number="speed" type="range" min="0.5" max="2" step="0.05" /></label>
+        <label><span>淡入 {{ fadeIn }}s</span><input v-model.number="fadeIn" type="range" min="0" :max="clipDuration" step="0.1" /></label>
+        <label><span>淡出 {{ fadeOut }}s</span><input v-model.number="fadeOut" type="range" min="0" :max="clipDuration" step="0.1" /></label>
+        <label><span>格式</span><select v-model="format"><option value="mp3">MP3</option><option value="wav">WAV</option><option value="m4a">M4A</option></select></label>
       </div>
 
-      <div class="audio-editor-actions">
-        <button class="secondary-btn" @click="emit('close')">取消</button>
-        <button class="primary-btn" :disabled="!canSubmit" @click="handleSubmit">提交处理</button>
-      </div>
-    </div>
+      <footer class="audio-editor-actions">
+        <button class="secondary-btn" @click="emit('close')">×　截取</button>
+        <span class="range-pill">{{ formatTime(startTime) }} - {{ formatTime(endTime) }}</span>
+        <button class="generate-btn" :disabled="!canSubmit" @click="handleSubmit">生成</button>
+      </footer>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.audio-editor-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.62);
-  backdrop-filter: blur(8px);
-}
-
-.audio-editor {
-  width: min(640px, calc(100vw - 32px));
-  max-height: calc(100vh - 48px);
-  overflow: auto;
-  padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 10px;
-  background: #171717;
-  color: #f4f4f5;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
-}
-
-.audio-editor-header,
-.preview-row,
-.audio-editor-actions,
-.range-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.audio-editor-header {
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.audio-editor-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.audio-editor-header p {
-  margin: 4px 0 0;
-  color: #a1a1aa;
-  font-size: 12px;
-}
-
-.icon-btn,
-.secondary-btn,
-.primary-btn,
-.advanced-toggle {
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 7px;
-  background: #242424;
-  color: #f4f4f5;
-  cursor: pointer;
-}
-
-.icon-btn {
-  width: 32px;
-  height: 32px;
-  font-size: 22px;
-  line-height: 1;
-}
-
-.primary-btn,
-.secondary-btn,
-.advanced-toggle {
-  padding: 8px 12px;
-  font-size: 13px;
-}
-
-.primary-btn {
-  border-color: rgba(139, 92, 246, 0.55);
-  background: #7c3aed;
-}
-
-.primary-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.wave-preview {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  height: 96px;
-  margin-bottom: 16px;
-  border: 1px solid rgba(139, 92, 246, 0.28);
-  border-radius: 8px;
-  background: #241f35;
-}
-
-.wave-bar {
-  width: 4px;
-  border-radius: 999px;
-  background: #a78bfa;
-}
-
-.range-row {
-  align-items: flex-end;
-}
-
-.range-row label,
-.advanced-grid label {
-  display: grid;
-  gap: 6px;
-  color: #d4d4d8;
-  font-size: 12px;
-}
-
-.range-row label {
-  flex: 1;
-}
-
-input,
-select {
-  min-height: 34px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  background: #101010;
-  color: #f4f4f5;
-  padding: 0 8px;
-}
-
-input[type="range"] {
-  padding: 0;
-}
-
-.duration-pill {
-  min-width: 64px;
-  height: 34px;
-  border-radius: 999px;
-  background: #27272a;
-  text-align: center;
-  line-height: 34px;
-  color: #c4b5fd;
-  font-size: 12px;
-}
-
-.timeline {
-  display: grid;
-  gap: 6px;
-  margin: 14px 0;
-}
-
-.preview-row {
-  justify-content: space-between;
-  color: #a1a1aa;
-  font-size: 12px;
-}
-
-.advanced-toggle {
-  width: 100%;
-  margin-top: 14px;
-}
-
-.advanced-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.audio-editor-actions {
-  justify-content: flex-end;
-  margin-top: 18px;
-}
-
-@media (max-width: 640px) {
-  .range-row,
-  .advanced-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .range-row {
-    display: grid;
-  }
-}
+.audio-editor-overlay { position: fixed; inset: 0; z-index: 10000; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, .62); backdrop-filter: blur(8px); }
+.audio-editor { width: min(640px, calc(100vw - 32px)); padding: 20px; border: 1px solid rgba(255,255,255,.5); border-radius: 24px; background: #242424; color: #f5f5f5; box-shadow: 0 24px 80px rgba(0,0,0,.45); }
+.audio-editor-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+.audio-editor-kicker { color: #bcbcbc; font-size: 13px; }
+.audio-editor-header h3 { margin: 5px 0 0; font-size: 20px; }
+.audio-editor-header p { margin: 3px 0 0; color: #a1a1aa; font-size: 12px; }
+.icon-btn { width: 32px; height: 32px; border: 0; border-radius: 50%; background: transparent; color: #cfcfcf; font-size: 25px; cursor: pointer; }
+.trim-timeline { position: relative; height: 196px; overflow: hidden; border: 10px solid #363636; border-radius: 20px; background: #1c1c1c; user-select: none; touch-action: none; }
+.waveform { position: absolute; inset: 18px 8px; display: flex; align-items: center; justify-content: space-around; gap: 4px; }
+.waveform i { width: 4px; min-height: 13px; border-radius: 999px; background: #4a4a4a; }
+.trim-selection { position: absolute; top: 0; bottom: 0; min-width: 8px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border: 2px solid #e6e6e6; border-radius: 14px; background: rgba(255,255,255,.11); cursor: grab; }
+.trim-timeline.dragging .trim-selection { cursor: grabbing; }
+.trim-selection::before { content: ''; position: absolute; top: 0; bottom: 0; left: -2px; width: 4px; border-radius: 999px; background: #ff5d5d; }
+.trim-handle { position: absolute; top: 0; bottom: 0; width: 18px; border: 0; background: transparent; cursor: ew-resize; }
+.trim-handle-start { left: -9px; }.trim-handle-end { right: -9px; }
+.trim-duration { padding: 10px 15px; border-radius: 18px; background: #161616; color: #fff; font-size: 28px; font-weight: 700; line-height: 1; pointer-events: none; }.trim-duration small { margin-left: 3px; font-size: 20px; }
+.audio-status { display: flex; align-items: center; justify-content: space-between; min-height: 70px; padding: 0 8px; color: #d4d4d4; font-size: 22px; }.play-btn { display: grid; width: 48px; height: 48px; place-items: center; border: 1px solid #5b5b5b; border-radius: 50%; background: #1d1d1d; color: #eee; cursor: pointer; }.play-btn svg { width: 25px; height: 25px; }
+.advanced-toggle { display: block; margin: 0 auto 12px; border: 0; background: transparent; color: #a3a3a3; cursor: pointer; font-size: 12px; }
+.advanced-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }.advanced-grid label { display: grid; gap: 6px; color: #d4d4d8; font-size: 12px; }.advanced-grid input, .advanced-grid select { min-height: 32px; padding: 0 8px; border: 1px solid #555; border-radius: 6px; background: #171717; color: #f4f4f5; }
+.audio-editor-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding: 8px; border-radius: 18px; background: #303030; }.secondary-btn, .generate-btn { min-height: 46px; padding: 0 18px; border: 0; border-radius: 12px; font-size: 16px; cursor: pointer; }.secondary-btn { background: transparent; color: #f2f2f2; }.range-pill { padding: 10px 16px; border-radius: 12px; background: #494949; color: #f5f5f5; font-size: 15px; }.generate-btn { background: #f4f4f5; color: #1b1b1b; }.generate-btn:disabled { opacity: .45; cursor: not-allowed; }
+@media (max-width: 640px) { .audio-editor { padding: 14px; border-radius: 18px; }.trim-timeline { height: 150px; }.trim-duration { font-size: 22px; }.audio-status { font-size: 18px; }.audio-editor-actions { gap: 6px; }.secondary-btn, .generate-btn { padding: 0 12px; }.range-pill { padding: 10px; font-size: 12px; }.advanced-grid { grid-template-columns: 1fr; } }
 </style>

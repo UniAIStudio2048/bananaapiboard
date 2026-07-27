@@ -368,6 +368,7 @@ export default {
     generate: '生成',
     imageGenerate: '图片生成',
     videoGenerate: '视频生成',
+    textGenerate: '文本生成',
     canvas: '创作画布',
     canvasBeta: '创作画布（beta）',
     packages: '购买套餐',
@@ -1161,7 +1162,8 @@ export default {
       sora_character_cost: 'Sora 角色创建',
       sora_character_cost_package: 'Sora 角色创建',
       subtitle_erase: '字幕擦除',
-      subtitle_erase_package: '字幕擦除'
+      subtitle_erase_package: '字幕擦除',
+      audio_generation: '音频生成'
     }
   },
 

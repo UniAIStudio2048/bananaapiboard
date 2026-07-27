@@ -119,6 +119,7 @@ export default {
     generate: '生成',
     imageGenerate: '画像生成',
     videoGenerate: '動画生成',
+    textGenerate: 'テキスト生成',
     canvas: 'クリエイティブキャンバス',
     canvasBeta: 'クリエイティブキャンバス（ベータ）',
     packages: 'パッケージ購入',
@@ -781,7 +782,8 @@ export default {
       voucher: 'クーポン引き換え',
       admin: '管理者調整',
       refund: '返金',
-      other: 'その他'
+      other: 'その他',
+      audio_generation: '音声生成'
     }
   },
 

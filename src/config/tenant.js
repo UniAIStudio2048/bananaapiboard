@@ -515,6 +515,10 @@ export async function loadBrandConfig(forceReload = false) {
         runtimeConfig.audio_models = data.audio_models
         console.log('[tenant] 音频模型完整配置已更新:', data.audio_models)
       }
+      if (data.audio_model_groups) {
+        runtimeConfig.audio_model_groups = data.audio_model_groups
+        console.log('[tenant] 音频模型分组配置已更新:', data.audio_model_groups)
+      }
       if (data.video_model_groups) {
         runtimeConfig.video_model_groups = data.video_model_groups
         console.log('[tenant] 视频模型分组配置已更新:', data.video_model_groups)
@@ -771,7 +775,9 @@ try {
     modelPricing: savedTenantConfig?.modelPricing || defaultConfig.modelPricing,
     image_models: savedTenantConfig?.image_models || [],
     video_models: savedTenantConfig?.video_models || [],
+    audio_models: savedTenantConfig?.audio_models || [],
     video_model_groups: savedTenantConfig?.video_model_groups || [],
+    audio_model_groups: savedTenantConfig?.audio_model_groups || [],
     modelEntitlements: savedTenantConfig?.modelEntitlements || { image: {}, video: {} },
     rechargeLimits: normalizeRechargeLimits(savedTenantConfig?.rechargeLimits)
   }
@@ -2031,6 +2037,6 @@ export const getAvailableMusicModels = () => {
   }))
 }
 
-export const getAvailableAudioModels = () => normalizeAudioModels(config.audio_models || [])
+export const getAvailableAudioModels = () => normalizeAudioModels(config.audio_models || [], config.audio_model_groups || [])
 
 export default config

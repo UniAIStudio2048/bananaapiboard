@@ -115,6 +115,7 @@ export default {
     generate: '生成',
     imageGenerate: '圖片生成',
     videoGenerate: '影片生成',
+    textGenerate: '文字生成',
     canvas: '創作畫布',
     canvasBeta: '創作畫布（beta）',
     packages: '購買套餐',
@@ -598,6 +599,9 @@ export default {
     checkinReward: '簽到獎勵 +{0} 積分',
     consecutiveDays: '連續簽到 {0} 天',
     pointsHistory: '積分流水',
+    ledgerType: {
+      audio_generation: '音訊生成'
+    },
     transactionType: '類型',
     transactionAmount: '金額',
     transactionTime: '時間',

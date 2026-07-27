@@ -119,6 +119,7 @@ export default {
     generate: 'ھاسىللاش',
     imageGenerate: 'رەسىم ھاسىللاش',
     videoGenerate: 'سىن ھاسىللاش',
+    textGenerate: 'تېكىست ھاسىللاش',
     canvas: 'ئىجادىي كارتىنا تاختىسى',
     canvasBeta: 'ئىجادىي كارتىنا تاختىسى (beta)',
     packages: 'بولاق سېتىۋېلىش',
@@ -880,7 +881,8 @@ export default {
       points_transfer_in: 'نومۇر كىرگۈزۈش',
       motion_control_refund: 'ھەرىكەت يۆتكەش قايتۇرۇش',
       canvas_crop: 'كارتىنا تاختىسى كېسىش',
-      image_panorama_generate: 'پۈتۈن كۆرۈنۈش سۈرەت ھاسىللاش'
+      image_panorama_generate: 'پۈتۈن كۆرۈنۈش سۈرەت ھاسىللاش',
+      audio_generation: 'ئاۋاز ھاسىللاش'
     }
   },
 

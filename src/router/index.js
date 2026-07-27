@@ -4,6 +4,7 @@ import Home from '@/views/Home.vue'
 const User = () => import('@/views/User.vue')
 const Packages = () => import('@/views/Packages.vue')
 const VideoGeneration = () => import('@/views/VideoGeneration.vue')
+const TextGeneration = () => import('@/views/TextGeneration.vue')
 const AdminBoard = () => import('@/views/AdminBoard.vue')
 const Canvas = () => import('@/views/Canvas.vue')
 const WorkflowList = () => import('@/views/WorkflowList.vue')
@@ -59,6 +60,12 @@ const router = createRouter({
       name: 'video',
       component: VideoGeneration,
       meta: { title: '视频生成', requiresAuth: true }
+    },
+    {
+      path: '/text',
+      name: 'text',
+      component: TextGeneration,
+      meta: { title: '文本生成', requiresAuth: true }
     },
     // /auth 路由已移除，登录统一从落地页进入
     { 

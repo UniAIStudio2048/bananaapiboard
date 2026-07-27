@@ -8,3 +8,14 @@ test('publishes enabled Coze audio models and fixed voice styles', () => {
     'general', 'narration', 'conversational', 'advertising', 'character', 'emotional'
   ])
 })
+
+test('attaches custom icons and orders models by configured audio groups', () => {
+  const models = normalizeAudioModels([
+    { name: 'ungrouped', displayName: '未分组', apiType: 'coze-audio-workflow', enabled: true },
+    { name: 'clone', displayName: '克隆', apiType: 'coze-audio-workflow', icon: 'C', enabled: true },
+    { name: 'design', displayName: '设计', apiType: 'coze-audio-workflow', icon: 'D', enabled: true }
+  ], [{ name: '声音', logo: '🎙️', models: ['clone', 'design'] }])
+  assert.deepEqual(models.map(model => model.value), ['clone', 'design', 'ungrouped'])
+  assert.equal(models[0].groupLogo, '🎙️')
+  assert.equal(models[0].icon, 'C')
+})

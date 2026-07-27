@@ -123,6 +123,7 @@ onUnmounted(() => {
 
 // 生成下拉菜单项
 const generateMenuItems = computed(() => [
+  { path: '/text', label: t('nav.textGenerate'), icon: '✍️' },
   { path: '/generate', label: t('nav.imageGenerate'), icon: '🎨' },
   { path: '/video', label: t('nav.videoGenerate'), icon: '🎬' },
   { path: '/canvas', label: t('nav.canvasBeta'), icon: '🎯' },

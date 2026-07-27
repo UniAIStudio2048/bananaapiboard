@@ -368,6 +368,7 @@ export default {
     generate: 'Generate',
     imageGenerate: 'Image Generation',
     videoGenerate: 'Video Generation',
+    textGenerate: 'Text Generation',
     canvas: 'Creative Canvas',
     canvasBeta: 'Creative Canvas (beta)',
     packages: 'Buy Packages',
@@ -1155,7 +1156,8 @@ export default {
       sora_character_cost: 'Sora Character Creation',
       sora_character_cost_package: 'Sora Character Creation',
       subtitle_erase: 'Subtitle Erase',
-      subtitle_erase_package: 'Subtitle Erase'
+      subtitle_erase_package: 'Subtitle Erase',
+      audio_generation: 'Audio Generation'
     }
   },
 
