@@ -1051,6 +1051,8 @@ function getNodeSize(node) {
     'video-input': { width: 420, height: 280 },
     'video': { width: 420, height: 280 },
     'video-gen': { width: 420, height: 280 },
+    'audio-input': { width: 420, height: 280 },
+    'audio': { width: 420, height: 280 },
     'seedance-character': { width: 220, height: 220 },
     'bytefor-character': { width: 220, height: 220 },
     'storyboard': { width: 720, height: 360 }
@@ -2704,10 +2706,12 @@ function getHandlePosition(nodeId, handleType) {
     'video-input': { width: 420, height: 280 },
     'video': { width: 420, height: 280 },
     'video-gen': { width: 420, height: 280 },
+    'audio-input': { width: 420, height: 280 },
+    'audio': { width: 420, height: 280 },
     'seedance-character': { width: 220, height: 220 },
     'bytefor-character': { width: 220, height: 220 }
   }
-  
+
   const defaults = defaultSizes[node.type] || { width: 380, height: 280 }
   const nodeWidth = node.data?.width || defaults.width
   const nodeHeight = node.data?.height || defaults.height

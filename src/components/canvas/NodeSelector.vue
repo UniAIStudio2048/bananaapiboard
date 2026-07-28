@@ -165,6 +165,8 @@ function getDefaultNodeSize(type, data = {}) {
     'image': { width: 380, height: 320 },
     'video-input': { width: 420, height: 280 },
     'video': { width: 420, height: 280 },
+    'audio-input': { width: 420, height: 280 },
+    'audio': { width: 420, height: 280 },
     'storyboard': { width: data.nodeWidth || 720, height: 360 },
     'director-studio': { width: 440, height: 340 },
     'seedance-character': { width: 220, height: 220 },

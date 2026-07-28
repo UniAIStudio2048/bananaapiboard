@@ -16,8 +16,8 @@ import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from '
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
-import { getTenantHeaders, getAvailableMusicModels, getAvailableAudioModels, refreshBrandConfig } from '@/config/tenant'
-import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
+import { config, getTenantHeaders, getAvailableMusicModels, getAvailableAudioModels, refreshBrandConfig } from '@/config/tenant'
+import { showAlert, showConfirm, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import { formatPoints } from '@/utils/format'
 import { formatVideoGenerationElapsed, getVideoGenerationElapsedSeconds } from '@/utils/videoGenerationProgress.js'
 import { calculateAudioPointsCost } from '@/utils/audioPricing'
@@ -117,6 +117,7 @@ const customMode = ref(props.data.customMode || false)
 const musicPrompt = ref(props.data.musicPrompt || '')
 const promptEditorRenderKey = ref(0)
 const hasManualPromptTextareaSize = ref(false)
+const isSpeechToneMenuOpen = ref(false)
 const title = ref(props.data.title || '')
 const tags = ref(props.data.tags || '')
 const negativeTags = ref(props.data.negativeTags || '')
@@ -127,23 +128,97 @@ const voiceAgeGender = ref(props.data.voiceAgeGender || '')
 const voiceTexture = ref(props.data.voiceTexture || '')
 const voicePace = ref(props.data.voicePace || '')
 const voiceMood = ref(props.data.voiceMood || '')
-const voiceCustomDescription = ref(props.data.voiceCustomDescription || (props.data.voiceStyle !== 'general' ? props.data.voiceStyle || '' : ''))
+const voiceArticulation = ref(props.data.voiceArticulation || '')
+const voiceDelivery = ref(props.data.voiceDelivery || '')
+const voiceIntensity = ref(props.data.voiceIntensity || '')
+const voiceCustomDescription = ref(props.data.voiceCustomDescription || '')
+const savedVoiceStyles = ref(
+  Array.isArray(props.data.savedVoiceStyles)
+    ? props.data.savedVoiceStyles.slice(0, 10).map((style, index) => ({
+      id: String(style?.id || `voice-style-${index}`),
+      name: String(style?.name || `音色方案 ${index + 1}`),
+      dialect: String(style?.dialect || ''),
+      ageGender: String(style?.ageGender || ''),
+      texture: String(style?.texture || ''),
+      pace: String(style?.pace || ''),
+      mood: String(style?.mood || ''),
+      articulation: String(style?.articulation || ''),
+      delivery: String(style?.delivery || ''),
+      intensity: String(style?.intensity || ''),
+      customDescription: String(style?.customDescription || '')
+    }))
+    : []
+)
+const voiceStyleSaveName = ref('')
 const selectedVoicePreset = ref(props.data.selectedVoicePreset || null)
 const showVoicePresetPicker = ref(false)
 
 const voiceDesignOptions = {
-  dialect: ['普通话', '中文方言', '英文', '日语', '韩语'],
-  ageGender: ['儿童', '青年男声', '青年女声', '中年男声', '中年女声', '老年男声', '老年女声'],
-  texture: ['清亮通透', '温暖醇厚', '低沉磁性', '柔和甜美', '沙哑颗粒感'],
-  pace: ['语速缓慢', '语速适中', '语速偏快', '节奏明快', '节奏舒缓'],
-  mood: ['自然亲切', '沉稳专业', '轻松愉悦', '温柔治愈', '富有感染力']
+  dialect: ['普通话', '粤语', '四川话', '吴语', '东北话', '河南话', '陕西话', '山东话', '天津话', '闽南话', '英文', '日语', '韩语', '西班牙语', '法语', '德语', '俄语', '阿拉伯语', '泰语', '越南语', '印尼语', '意大利语', '葡萄牙语', '印地语'],
+  ageGender: ['儿童', '少年', '少女', '青年男声', '青年女声', '成熟男声', '成熟女声', '中年男声', '中年女声', '老年男声', '老年女声'],
+  texture: ['清亮通透', '温暖醇厚', '低沉磁性', '柔和甜美', '沙哑颗粒感', '明亮有活力', '圆润饱满', '冷冽通透', '略带鼻音', '干净贴耳', '播音腔', '气声感'],
+  pace: ['语速缓慢', '语速适中', '语速偏快', '节奏明快', '节奏舒缓', '从容有层次', '紧凑利落', '急促紧张', '渐快', '渐慢'],
+  mood: ['自然亲切', '沉稳专业', '轻松愉悦', '温柔治愈', '富有感染力', '略带微笑', '平静真诚', '克制失落', '忧郁伤感', '无奈叹息', '惊喜兴奋', '紧张忐忑', '半信半疑', '庄重威严', '愤怒不满', '俏皮调侃'],
+  articulation: ['吐字清晰', '字正腔圆', '咬字轻柔', '自然连读', '口语化自然', '像聊天一样亲近', '像讲故事一样娓娓道来', '略带含混', '慢慢咬字', '接地气'],
+  delivery: ['短暂停顿', '转折处停顿', '每个短句之间留白', '关键词轻微重读', '数字与结论重读', '句尾稍作停留', '句尾轻微上扬', '句尾收住', '先轻后重', '结尾坚定'],
+  intensity: ['轻声耳语感', '压低声音', '轻柔克制', '温和有力', '饱满有力', '情绪逐步加强', '强忍情绪', '爆发式表达', '略带喘息感', '近距离贴耳感']
 }
+const voiceDesignFields = [
+  { key: 'dialect', label: '方言 / 语种', options: voiceDesignOptions.dialect },
+  { key: 'ageGender', label: '年龄 / 性别', options: voiceDesignOptions.ageGender },
+  { key: 'texture', label: '音色质感', options: voiceDesignOptions.texture },
+  { key: 'pace', label: '语速 / 节奏', options: voiceDesignOptions.pace },
+  { key: 'mood', label: '情绪 / 画面感', options: voiceDesignOptions.mood },
+  { key: 'articulation', label: '吐字 / 口语感', options: voiceDesignOptions.articulation },
+  { key: 'delivery', label: '停顿 / 重音', options: voiceDesignOptions.delivery },
+  { key: 'intensity', label: '气息 / 力度', options: voiceDesignOptions.intensity }
+]
+const speechToneGroups = [
+  {
+    label: '笑声与叹气',
+    tones: [
+      { label: '笑声', token: '[laughing]' },
+      { label: '叹气', token: '[sigh]' }
+    ]
+  },
+  {
+    label: '停顿与思考',
+    tones: [
+      { label: '呃…', token: '[Uhm]' },
+      { label: '嘘', token: '[Shh]' },
+      { label: '咳嗽', token: '[cough]' }
+    ]
+  },
+  {
+    label: '疑问与确认语气',
+    tones: [
+      { label: '疑问啊', token: '[Question-ah]' },
+      { label: '疑问诶', token: '[Question-ei]' },
+      { label: '疑问嗯', token: '[Question-en]' },
+      { label: '疑问哦', token: '[Question-oh]' },
+      { label: '确认嗯', token: '[Confirmation-en]' }
+    ]
+  },
+  {
+    label: '惊讶与小情绪',
+    tones: [
+      { label: '惊讶哇', token: '[Surprise-wa]' },
+      { label: '惊讶哟', token: '[Surprise-yo]' },
+      { label: '惊讶啊', token: '[Surprise-ah]' },
+      { label: '惊讶哦', token: '[Surprise-oh]' },
+      { label: '不满哼', token: '[Dissatisfaction-hnn]' }
+    ]
+  }
+]
 const voiceDesignStyle = computed(() => [
   voiceDialect.value,
   voiceAgeGender.value,
   voiceTexture.value,
   voicePace.value,
   voiceMood.value,
+  voiceArticulation.value,
+  voiceDelivery.value,
+  voiceIntensity.value,
   voiceCustomDescription.value.trim()
 ].filter(Boolean).join('，'))
 const voiceStyleTriggerLabel = computed(() => voiceAgeGender.value ? `${voiceAgeGender.value}音色` : '音色')
@@ -156,7 +231,9 @@ const dropdownDirection = ref('down')
 const isVoiceStyleDropdownOpen = ref(false)
 const voiceStyleSelectorRef = ref(null)
 const voiceStyleDropdownDirection = ref('down')
-const activeVoiceStyleCategory = ref(null)
+const openVoiceStyleField = ref(null)
+const voiceStyleFieldDropdownDirection = ref('down')
+const isVoiceStyleConfirmOpen = ref(false)
 
 // 高级选项折叠状态
 const showAdvancedOptions = ref(false)
@@ -183,6 +260,17 @@ const inheritedVoiceId = computed(() => {
   const sourceData = inheritedAudioSource.value?.sourceData
   return sourceData?.voiceId || sourceData?.voice_id || sourceData?.output?.voiceId || sourceData?.output?.voice_id || ''
 })
+const DEFAULT_VOICE_CLONE_READING_TEXTS = [
+  '每一段影像背后，都藏着一个想被表达的故事。有人记录城市的变化，有人记录家庭的日常，也有人把想象中的世界做成画面。工具的意义，不只是提高效率，更是帮助创作者降低表达的门槛。只要愿意开始，一个普通的想法，也可能变成动人的作品。',
+  '清晨的阳光透过窗帘，落在安静的桌面上。请放慢语速，清晰地读出每一个字，让声音自然、稳定，并保留恰到好处的情感起伏。',
+  '镜头缓缓推进，城市的灯光在夜色中闪烁。此刻，所有声音都变得遥远，只有心跳格外清晰。我们终会明白，有些旅程不是为了抵达，而是为了重新认识自己。'
+]
+const voiceCloneReadingTexts = computed(() => {
+  const texts = Array.isArray(config.voice_clone_reading_texts)
+    ? config.voice_clone_reading_texts.map(text => String(text || '').trim()).filter(Boolean).slice(0, 10)
+    : []
+  return texts.length ? texts : DEFAULT_VOICE_CLONE_READING_TEXTS
+})
 const audioPromptPlaceholder = computed(() => {
   if (audioCapability.value === 'voice_design') return '说话的文本内容，描述希望角色说出的内容'
   if (audioCapability.value === 'tts') return '输入需要合成的文案。'
@@ -197,7 +285,6 @@ const canGenerateCurrentAudio = computed(() => {
 watch(audioCapability, (capability) => {
   if (capability !== 'voice_design') {
     isVoiceStyleDropdownOpen.value = false
-    activeVoiceStyleCategory.value = null
   }
 })
 
@@ -294,8 +381,8 @@ watch(inheritedText, (newText) => {
 }, { immediate: true })
 
 // 监听音乐生成参数变化，保存到节点数据
-watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, makeInstrumental, voiceDialect, voiceAgeGender, voiceTexture, voicePace, voiceMood, voiceCustomDescription, voiceDesignStyle],
-  ([model, mode, prompt, t, tgs, ntgs, inst, dialect, ageGender, texture, pace, mood, customDescription, style]) => {
+watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, makeInstrumental, voiceDialect, voiceAgeGender, voiceTexture, voicePace, voiceMood, voiceArticulation, voiceDelivery, voiceIntensity, voiceCustomDescription, voiceDesignStyle, savedVoiceStyles],
+  ([model, mode, prompt, t, tgs, ntgs, inst, dialect, ageGender, texture, pace, mood, articulation, delivery, intensity, customDescription, style, savedStyles]) => {
     canvasStore.updateNodeData(props.id, {
       musicModel: model,
       customMode: mode,
@@ -309,8 +396,12 @@ watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, m
       voiceTexture: texture,
       voicePace: pace,
       voiceMood: mood,
+      voiceArticulation: articulation,
+      voiceDelivery: delivery,
+      voiceIntensity: intensity,
       voiceCustomDescription: customDescription,
-      voiceStyle: style
+      voiceStyle: style,
+      savedVoiceStyles: savedStyles
     })
   }
 )
@@ -324,7 +415,7 @@ function toggleMusicModelDropdown(event) {
     const rect = musicModelSelectorRef.value.getBoundingClientRect()
     const viewportHeight = window.innerHeight
     const dropdownHeight = 200
-    
+
     if (rect.bottom + dropdownHeight > viewportHeight && rect.top > dropdownHeight) {
       dropdownDirection.value = 'up'
     } else {
@@ -348,14 +439,117 @@ function toggleVoiceStyleDropdown(event) {
   const nextOpen = !isVoiceStyleDropdownOpen.value
   if (nextOpen) {
     const rect = voiceStyleSelectorRef.value?.getBoundingClientRect()
-    const dropdownHeight = 420
+    const dropdownHeight = 560
     voiceStyleDropdownDirection.value = rect && rect.bottom + dropdownHeight > window.innerHeight && rect.top > dropdownHeight
       ? 'up'
       : 'down'
-    activeVoiceStyleCategory.value = null
     isMusicModelDropdownOpen.value = false
   }
   isVoiceStyleDropdownOpen.value = nextOpen
+}
+
+function resetVoiceDesignStyle() {
+  voiceDialect.value = ''
+  voiceAgeGender.value = ''
+  voiceTexture.value = ''
+  voicePace.value = ''
+  voiceMood.value = ''
+  voiceArticulation.value = ''
+  voiceDelivery.value = ''
+  voiceIntensity.value = ''
+  voiceCustomDescription.value = ''
+  openVoiceStyleField.value = null
+}
+
+function toggleVoiceStyleFieldDropdown(field, event) {
+  event.stopPropagation()
+  const nextOpen = openVoiceStyleField.value !== field
+  if (nextOpen) {
+    const rect = event.currentTarget?.getBoundingClientRect()
+    const dropdownHeight = 260
+    voiceStyleFieldDropdownDirection.value = rect && rect.bottom + dropdownHeight > window.innerHeight && rect.top > dropdownHeight
+      ? 'up'
+      : 'down'
+  }
+  openVoiceStyleField.value = nextOpen ? field : null
+}
+
+function getVoiceStyleFieldValue(field) {
+  if (field === 'dialect') return voiceDialect.value
+  if (field === 'ageGender') return voiceAgeGender.value
+  if (field === 'texture') return voiceTexture.value
+  if (field === 'pace') return voicePace.value
+  if (field === 'mood') return voiceMood.value
+  if (field === 'articulation') return voiceArticulation.value
+  if (field === 'delivery') return voiceDelivery.value
+  if (field === 'intensity') return voiceIntensity.value
+  return ''
+}
+
+function selectVoiceStyleField(field, value) {
+  if (field === 'dialect') voiceDialect.value = value
+  if (field === 'ageGender') voiceAgeGender.value = value
+  if (field === 'texture') voiceTexture.value = value
+  if (field === 'pace') voicePace.value = value
+  if (field === 'mood') voiceMood.value = value
+  if (field === 'articulation') voiceArticulation.value = value
+  if (field === 'delivery') voiceDelivery.value = value
+  if (field === 'intensity') voiceIntensity.value = value
+  openVoiceStyleField.value = null
+}
+
+function resetVoiceDesignField(field) {
+  selectVoiceStyleField(field, '')
+}
+
+function getCurrentVoiceDesignStyle() {
+  return {
+    dialect: voiceDialect.value,
+    ageGender: voiceAgeGender.value,
+    texture: voiceTexture.value,
+    pace: voicePace.value,
+    mood: voiceMood.value,
+    articulation: voiceArticulation.value,
+    delivery: voiceDelivery.value,
+    intensity: voiceIntensity.value,
+    customDescription: voiceCustomDescription.value
+  }
+}
+
+function saveVoiceDesignStyle() {
+  if (!voiceDesignStyle.value || savedVoiceStyles.value.length >= 10) return
+  const name = voiceStyleSaveName.value.trim() || `音色方案 ${savedVoiceStyles.value.length + 1}`
+  savedVoiceStyles.value = [
+    ...savedVoiceStyles.value,
+    { id: `voice-style-${Date.now()}`, name, ...getCurrentVoiceDesignStyle() }
+  ]
+  voiceStyleSaveName.value = ''
+}
+
+function applySavedVoiceDesignStyle(style) {
+  voiceDialect.value = style.dialect
+  voiceAgeGender.value = style.ageGender
+  voiceTexture.value = style.texture
+  voicePace.value = style.pace
+  voiceMood.value = style.mood
+  voiceArticulation.value = style.articulation
+  voiceDelivery.value = style.delivery
+  voiceIntensity.value = style.intensity
+  voiceCustomDescription.value = style.customDescription
+  openVoiceStyleField.value = null
+}
+
+async function removeSavedVoiceDesignStyle(style) {
+  isVoiceStyleConfirmOpen.value = true
+  try {
+    const confirmed = await showConfirm(`确定删除“${style.name}”吗？`, '删除保存的音色', {
+      detail: '删除后无法恢复。',
+      confirmText: '删除'
+    })
+    if (confirmed) savedVoiceStyles.value = savedVoiceStyles.value.filter(item => item.id !== style.id)
+  } finally {
+    isVoiceStyleConfirmOpen.value = false
+  }
 }
 
 // 选择模型
@@ -378,9 +572,12 @@ function handleMusicModelDropdownClickOutside(event) {
   if (!event.target.closest('.model-selector')) {
     isMusicModelDropdownOpen.value = false
   }
-  if (!event.target.closest('.voice-style-selector')) {
+  if (!event.target.closest('.speech-tone-toolbar')) {
+    isSpeechToneMenuOpen.value = false
+  }
+  if (!event.target.closest('.voice-style-selector') && !isVoiceStyleConfirmOpen.value) {
     isVoiceStyleDropdownOpen.value = false
-    activeVoiceStyleCategory.value = null
+    openVoiceStyleField.value = null
   }
 }
 
@@ -465,7 +662,7 @@ async function handleGenerateMusic() {
       promptLength: musicPrompt.value?.length,
       makeInstrumental: makeInstrumental.value
     })
-    
+
     const teamStore = useTeamStore()
     const spaceParams = teamStore.getSpaceParams('current')
     
@@ -794,15 +991,34 @@ function handlePromptTranslated(translatedText) {
 
 function insertMusicEditorPlainText(text) {
   const editor = promptTextareaRef.value
-  if (!editor) return
+  if (!editor) {
+    musicPrompt.value += text
+    return
+  }
+  const currentText = serializePromptEditorContent(editor)
+  if (currentText !== musicPrompt.value) {
+    musicPrompt.value = currentText
+  }
   const { start, end } = getPromptEditorSelectionRange(editor)
-  musicPrompt.value = musicPrompt.value.slice(0, start) + text + musicPrompt.value.slice(end)
+  const resultText = currentText.slice(0, start) + text + currentText.slice(end)
+  const resultCursor = start + text.length
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
+  musicPrompt.value = resultText
+  promptEditorRenderKey.value += 1
   nextTick(() => {
-    removePromptEditorOrphanTextNodes(editor)
-    const nextPos = start + text.length
-    restorePromptEditorSelection(editor, nextPos, nextPos)
+    const nextEditor = promptTextareaRef.value || editor
+    removePromptEditorOrphanTextNodes(nextEditor)
+    nextEditor.focus()
+    restorePromptEditorSelection(nextEditor, resultCursor, resultCursor)
     autoResizeTextarea()
+    nextEditor.scrollTop = scrollPosition.scrollTop
+    nextEditor.scrollLeft = scrollPosition.scrollLeft
   })
+}
+
+function insertSpeechTone(tone) {
+  insertMusicEditorPlainText(tone.token)
+  isSpeechToneMenuOpen.value = false
 }
 
 function insertAudioReferenceTag() {
@@ -994,7 +1210,7 @@ const showSpeedEditor = ref(false)
 const isDragOver = ref(false)
 const dragCounter = ref(0)
 
-// 节点尺寸 - 与 VideoNode 类似的比例
+// 节点尺寸 - 与 VideoNode 对齐 420×280
 const nodeWidth = ref(props.data.width || 420)
 const nodeHeight = ref(props.data.height || 280)
 const addRightBtnRef = ref(null)
@@ -1032,6 +1248,7 @@ const showToolbar = computed(() => {
 })
 
 const showAudioEditor = ref(false)
+const isFullscreenPreview = ref(false)
 
 // 是否有音频
 const hasAudio = computed(() => {
@@ -1250,10 +1467,10 @@ const contentStyle = computed(() => {
 
 // 格式化时间
 function formatTime(seconds) {
-  if (!seconds || isNaN(seconds)) return '0:00'
+  if (!seconds || isNaN(seconds)) return '00:00'
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
-  return `${mins}:${secs.toString().padStart(2, '0')}`
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
 // 播放进度百分比
@@ -1733,6 +1950,20 @@ async function handleToolbarDownload() {
   }
 }
 
+function openFullscreenPreview() {
+  if (audioUrl.value) {
+    isFullscreenPreview.value = true
+  }
+}
+
+function closeFullscreenPreview() {
+  isFullscreenPreview.value = false
+}
+
+function handleToolbarPreview() {
+  openFullscreenPreview()
+}
+
 // 打开变速面板：调整期间不改变当前播放速度，确认后才写入节点数据。
 function toggleSpeedEditor(event) {
   event.stopPropagation()
@@ -1809,9 +2040,14 @@ function handleSpeedEditorClickOutside(event) {
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </button>
+      <button class="toolbar-btn icon-only" title="全屏预览" @mousedown.stop.prevent="handleToolbarPreview" @click.stop.prevent>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
     </div>
 
-    <div v-if="showToolbar && showSpeedEditor && !props.data?.readonly" class="speed-editor" @click.stop>
+    <div v-if="showToolbar && showSpeedEditor && !props.data?.readonly" class="speed-editor nodrag" @mousedown.stop @pointerdown.stop @click.stop>
       <button class="speed-editor-cancel" @click="showSpeedEditor = false">×　变速</button>
       <span class="speed-boundary">0.1x</span>
       <input v-model.number="pendingPlaybackRate" class="speed-slider" type="range" min="0.1" max="4" step="0.05" aria-label="播放速度" />
@@ -1956,14 +2192,20 @@ function handleSpeedEditorClickOutside(event) {
           </div>
 
           <!-- 音频可视化区域 -->
-          <div class="audio-visual">
+          <div class="audio-visual" title="点击跳转播放进度" @click="handleProgressClick">
             <div class="audio-wave">
-              <span v-for="i in 7" :key="i" :class="{ active: isPlaying }"></span>
+              <span v-for="i in 43" :key="i" :class="{ active: isPlaying }"></span>
             </div>
+            <div class="audio-playhead" :style="{ left: progressPercent + '%' }"></div>
           </div>
 
           <!-- 播放控制 -->
           <div class="audio-controls">
+            <!-- 时间显示 -->
+            <div class="time-display">
+              {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
+            </div>
+
             <button class="play-btn" @click="togglePlay">
               <svg v-if="isPlaying" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <rect x="6" y="4" width="4" height="16" rx="1"/>
@@ -1973,20 +2215,8 @@ function handleSpeedEditorClickOutside(event) {
                 <path d="M8 5v14l11-7z"/>
               </svg>
             </button>
-
-            <!-- 进度条 -->
-            <div class="progress-bar" @click="handleProgressClick">
-              <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
-            </div>
-
-            <!-- 时间显示 -->
-            <div class="time-display">
-              {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
-            </div>
+            <span class="audio-controls-spacer" aria-hidden="true"></span>
           </div>
-
-          <!-- 文件名 -->
-          <div class="audio-title">{{ audioTitle }}</div>
 
         </div>
         
@@ -2091,7 +2321,7 @@ function handleSpeedEditorClickOutside(event) {
     <!-- 底部配置面板（选中时显示） - 黑白现代风格 -->
     <Teleport to="body" :disabled="!isConfigPanelExpanded">
     <div
-      v-show="showConfigPanel"
+      v-show="showConfigPanel && !showSpeedEditor"
       ref="configPanelRef"
       class="config-panel audio-config-panel"
       :class="{
@@ -2124,6 +2354,29 @@ function handleSpeedEditorClickOutside(event) {
       </button>
       <!-- 音乐生成配置（与视频/图像节点一致，生成后仍可继续输入和提交） -->
       <div class="music-gen-panel">
+        <div class="speech-tone-toolbar nodrag" @mousedown.prevent.stop>
+          <button
+            type="button"
+            class="speech-tone-trigger"
+            :aria-expanded="isSpeechToneMenuOpen"
+            @click.stop="isSpeechToneMenuOpen = !isSpeechToneMenuOpen"
+          >语气插入</button>
+          <div v-if="isSpeechToneMenuOpen" class="speech-tone-menu" @mousedown.prevent @click.stop>
+            <section v-for="group in speechToneGroups" :key="group.label" class="speech-tone-group">
+              <div class="speech-tone-group-label">{{ group.label }}</div>
+              <div class="speech-tone-options">
+                <button
+                  v-for="tone in group.tones"
+                  :key="tone.token"
+                  type="button"
+                  :title="tone.token"
+                  @click="insertSpeechTone(tone)"
+                >{{ tone.label }}</button>
+              </div>
+            </section>
+          </div>
+        </div>
+
         <!-- 参考音频，与视频节点参考素材区保持相同层级 -->
         <div class="audio-reference-section">
           <div class="audio-reference-header">
@@ -2267,48 +2520,46 @@ function handleSpeedEditorClickOutside(event) {
                 v-if="isVoiceStyleDropdownOpen"
                 class="voice-style-dropdown-panel"
                 :class="{ 'dropdown-up': voiceStyleDropdownDirection === 'up' }"
+                @wheel.stop
               >
-                <div class="voice-style-dropdown-title">音色设计</div>
-
-                <button type="button" class="voice-style-category" :class="{ active: activeVoiceStyleCategory === 'dialect' }" @click="activeVoiceStyleCategory = activeVoiceStyleCategory === 'dialect' ? null : 'dialect'">
-                  <span>方言 / 语种</span><span>{{ voiceDialect || '请选择' }}</span><span>›</span>
-                </button>
-                <div v-if="activeVoiceStyleCategory === 'dialect'" class="voice-style-options">
-                  <button v-for="option in voiceDesignOptions.dialect" :key="option" type="button" :class="{ active: voiceDialect === option }" @click="voiceDialect = option; activeVoiceStyleCategory = null">{{ option }}</button>
+                <div class="voice-style-dropdown-title">
+                  <span>音色设计</span>
+                  <button type="button" class="voice-style-reset-all" @click="resetVoiceDesignStyle">重置全部</button>
+                </div>
+                <div class="voice-style-flat-grid">
+                  <section v-for="field in voiceDesignFields" :key="field.key" class="voice-style-flat-section">
+                    <div class="voice-style-flat-heading"><span>{{ field.label }}</span><button type="button" class="voice-style-reset" :disabled="!getVoiceStyleFieldValue(field.key)" @click="resetVoiceDesignField(field.key)">重置</button></div>
+                    <button type="button" class="voice-style-field-trigger" @click="toggleVoiceStyleFieldDropdown(field.key, $event)">
+                      <span>{{ getVoiceStyleFieldValue(field.key) || '请选择' }}</span>
+                      <span class="voice-style-field-arrow" :class="{ 'arrow-up': openVoiceStyleField === field.key }">⌃</span>
+                    </button>
+                    <Transition name="dropdown-fade">
+                      <div v-if="openVoiceStyleField === field.key" class="voice-style-field-dropdown" :class="{ 'dropdown-up': voiceStyleFieldDropdownDirection === 'up' }" @wheel.stop>
+                        <div class="voice-style-field-dropdown-title">{{ field.label }}</div>
+                        <button v-for="option in field.options" :key="option" type="button" class="voice-style-field-dropdown-item" :class="{ active: getVoiceStyleFieldValue(field.key) === option }" @click="selectVoiceStyleField(field.key, option)">{{ option }}</button>
+                      </div>
+                    </Transition>
+                  </section>
                 </div>
 
-                <button type="button" class="voice-style-category" :class="{ active: activeVoiceStyleCategory === 'ageGender' }" @click="activeVoiceStyleCategory = activeVoiceStyleCategory === 'ageGender' ? null : 'ageGender'">
-                  <span>年龄 / 性别</span><span>{{ voiceAgeGender || '请选择' }}</span><span>›</span>
-                </button>
-                <div v-if="activeVoiceStyleCategory === 'ageGender'" class="voice-style-options">
-                  <button v-for="option in voiceDesignOptions.ageGender" :key="option" type="button" :class="{ active: voiceAgeGender === option }" @click="voiceAgeGender = option; activeVoiceStyleCategory = null">{{ option }}</button>
+                <div class="voice-style-custom-input">
+                  <span>自定义描述 <button type="button" class="voice-style-reset" :disabled="!voiceCustomDescription" @click.prevent="voiceCustomDescription = ''">重置</button></span>
+                  <textarea v-model="voiceCustomDescription" rows="4" placeholder="威严深沉的恶魔男声，语速缓慢，自带回音感和极强的压迫力，仿佛高高在上的神明。"></textarea>
                 </div>
-
-                <button type="button" class="voice-style-category" :class="{ active: activeVoiceStyleCategory === 'texture' }" @click="activeVoiceStyleCategory = activeVoiceStyleCategory === 'texture' ? null : 'texture'">
-                  <span>音色质感</span><span>{{ voiceTexture || '请选择' }}</span><span>›</span>
-                </button>
-                <div v-if="activeVoiceStyleCategory === 'texture'" class="voice-style-options">
-                  <button v-for="option in voiceDesignOptions.texture" :key="option" type="button" :class="{ active: voiceTexture === option }" @click="voiceTexture = option; activeVoiceStyleCategory = null">{{ option }}</button>
+                <div class="saved-voice-style-section">
+                  <div class="saved-voice-style-heading"><span>已保存音色</span><small>{{ savedVoiceStyles.length }}/10</small></div>
+                  <div class="saved-voice-style-save-row">
+                    <input v-model="voiceStyleSaveName" type="text" maxlength="24" placeholder="方案名称（可选）" @keyup.enter="saveVoiceDesignStyle">
+                    <button type="button" :disabled="!voiceDesignStyle || savedVoiceStyles.length >= 10" @click="saveVoiceDesignStyle">保存当前</button>
+                  </div>
+                  <p class="saved-voice-style-limit">最多保存 10 组</p>
+                  <div v-if="savedVoiceStyles.length" class="saved-voice-style-list">
+                    <div v-for="style in savedVoiceStyles" :key="style.id" class="saved-voice-style-item">
+                      <button type="button" class="saved-voice-style-apply" :title="[style.ageGender, style.texture, style.mood].filter(Boolean).join('，')" @click="applySavedVoiceDesignStyle(style)">{{ style.name }}</button>
+                      <button type="button" class="saved-voice-style-remove" :aria-label="`删除${style.name}`" @click="removeSavedVoiceDesignStyle(style)">×</button>
+                    </div>
+                  </div>
                 </div>
-
-                <button type="button" class="voice-style-category" :class="{ active: activeVoiceStyleCategory === 'pace' }" @click="activeVoiceStyleCategory = activeVoiceStyleCategory === 'pace' ? null : 'pace'">
-                  <span>语速 / 节奏</span><span>{{ voicePace || '请选择' }}</span><span>›</span>
-                </button>
-                <div v-if="activeVoiceStyleCategory === 'pace'" class="voice-style-options">
-                  <button v-for="option in voiceDesignOptions.pace" :key="option" type="button" :class="{ active: voicePace === option }" @click="voicePace = option; activeVoiceStyleCategory = null">{{ option }}</button>
-                </div>
-
-                <button type="button" class="voice-style-category" :class="{ active: activeVoiceStyleCategory === 'mood' }" @click="activeVoiceStyleCategory = activeVoiceStyleCategory === 'mood' ? null : 'mood'">
-                  <span>情绪 / 画面感</span><span>{{ voiceMood || '请选择' }}</span><span>›</span>
-                </button>
-                <div v-if="activeVoiceStyleCategory === 'mood'" class="voice-style-options">
-                  <button v-for="option in voiceDesignOptions.mood" :key="option" type="button" :class="{ active: voiceMood === option }" @click="voiceMood = option; activeVoiceStyleCategory = null">{{ option }}</button>
-                </div>
-
-                <label class="voice-style-custom-input">
-                  <span>自定义描述</span>
-                  <input v-model="voiceCustomDescription" type="text" placeholder="可手动补充音色描述" />
-                </label>
               </div>
             </Transition>
           </div>
@@ -2405,6 +2656,13 @@ function handleSpeedEditorClickOutside(event) {
     </div>
     </Teleport>
     <Teleport to="body">
+      <div v-if="isFullscreenPreview" class="audio-fullscreen-preview-overlay" @click="closeFullscreenPreview">
+        <div class="audio-fullscreen-preview-container" @click.stop>
+          <span class="audio-fullscreen-preview-title">{{ audioTitle }}</span>
+          <audio :src="audioUrl" controls autoplay class="audio-fullscreen-preview-player"></audio>
+          <button class="audio-fullscreen-preview-close" title="关闭预览" @click="closeFullscreenPreview">✕</button>
+        </div>
+      </div>
       <AudioEditorModal
         v-if="showAudioEditor"
         :audio-url="audioUrl"
@@ -2416,6 +2674,7 @@ function handleSpeedEditorClickOutside(event) {
       <VoicePresetPicker
         v-if="showVoicePresetPicker"
         :model-value="selectedVoicePreset"
+        :reading-texts="voiceCloneReadingTexts"
         @close="showVoicePresetPicker = false"
         @select="selectVoicePreset"
       />
@@ -2495,12 +2754,68 @@ function handleSpeedEditorClickOutside(event) {
   margin: 0 6px;
 }
 
+/* ========== 全屏音频预览 ========== */
+.audio-fullscreen-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.82);
+}
+
+.audio-fullscreen-preview-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: min(680px, 100%);
+  padding: 48px 40px 40px;
+  border: 1px solid #4a4a4a;
+  border-radius: 20px;
+  background: #242424;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.audio-fullscreen-preview-title {
+  overflow: hidden;
+  color: #f5f5f5;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.audio-fullscreen-preview-player {
+  width: 100%;
+}
+
+.audio-fullscreen-preview-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #4a4a4a;
+  border-radius: 50%;
+  background: #303030;
+  color: #f5f5f5;
+  cursor: pointer;
+}
+
+.audio-fullscreen-preview-close:hover {
+  background: #424242;
+}
+
 /* 变速面板 */
 .speed-editor {
   position: absolute;
   top: calc(100% + 24px);
   left: 50%;
-  z-index: 1000;
+  z-index: 1100;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2539,7 +2854,7 @@ function handleSpeedEditorClickOutside(event) {
   cursor: pointer;
   padding: 4px 8px;
   border-radius: 4px;
-  transition: color 0.2s ease, background-color 0.2s ease;
+  transition: background-color 0.2s ease;
   user-select: none;
 }
 
@@ -2841,30 +3156,22 @@ function handleSpeedEditorClickOutside(event) {
   border-radius: 8px;
 }
 
-/* ========== 音频输出预览 - 毛玻璃现代设计 ========== */
+/* ========== 音频输出预览 ========== */
 .audio-output-wrapper {
   position: relative;
+  box-sizing: border-box;
   width: 100%;
-  padding: 20px;
-  border-radius: 16px;
-  background: linear-gradient(135deg,
-    rgba(35, 38, 48, 0.95) 0%,
-    rgba(25, 28, 38, 0.95) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: 13px 14px 14px;
+  border: 1px solid #989898;
+  border-radius: 20px;
+  background: #242424;
+  box-shadow: none;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .audio-node.selected .audio-output-wrapper {
-  border-color: rgba(168, 85, 247, 0.4);
-  box-shadow: 
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    0 0 0 1px rgba(168, 85, 247, 0.3),
-    0 0 30px rgba(168, 85, 247, 0.15),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  border-color: #d0d0d0;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
 }
 
 /* 音量指示器 */
@@ -2901,147 +3208,115 @@ function handleSpeedEditorClickOutside(event) {
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
-/* 音频可视化 - 毛玻璃风格 */
+/* 音频可视化 */
 .audio-visual {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 80px;
-  background: linear-gradient(135deg,
-    rgba(168, 85, 247, 0.12) 0%,
-    rgba(139, 92, 246, 0.08) 100%
-  );
-  border: 1px solid rgba(168, 85, 247, 0.15);
-  border-radius: 14px;
-  margin-bottom: 16px;
+  height: 172px;
+  overflow: hidden;
+  border-radius: 13px;
+  background: #373737;
+  cursor: pointer;
 }
 
 .audio-wave {
   display: flex;
-  gap: 6px;
+  width: calc(100% - 34px);
+  gap: clamp(3px, 0.7vw, 6px);
   align-items: center;
-  height: 50px;
+  justify-content: center;
+  height: 90px;
 }
 
 .audio-wave span {
-  width: 5px;
-  background: linear-gradient(180deg, #a855f7 0%, #d8b4fe 100%);
-  border-radius: 3px;
-  transition: height 0.2s;
+  width: 3px;
+  max-width: 3px;
+  flex: 1 1 3px;
+  background: #f2f2f2;
+  border-radius: 4px;
+  transition: transform 0.2s ease;
 }
 
-.audio-wave span:nth-child(1) { height: 18px; }
-.audio-wave span:nth-child(2) { height: 28px; }
-.audio-wave span:nth-child(3) { height: 40px; }
-.audio-wave span:nth-child(4) { height: 50px; }
-.audio-wave span:nth-child(5) { height: 40px; }
-.audio-wave span:nth-child(6) { height: 28px; }
-.audio-wave span:nth-child(7) { height: 18px; }
+.audio-wave span:nth-child(7n + 1) { height: 26px; }
+.audio-wave span:nth-child(7n + 2) { height: 58px; }
+.audio-wave span:nth-child(7n + 3) { height: 38px; }
+.audio-wave span:nth-child(7n + 4) { height: 72px; }
+.audio-wave span:nth-child(7n + 5) { height: 52px; }
+.audio-wave span:nth-child(7n + 6) { height: 44px; }
+.audio-wave span:nth-child(7n) { height: 32px; }
+
+.audio-wave span:nth-child(11n + 3),
+.audio-wave span:nth-child(13n + 5) {
+  height: 14px;
+}
 
 .audio-wave span.active {
-  animation: wave 0.5s ease-in-out infinite;
+  animation: wave 0.5s ease-in-out infinite alternate;
 }
 
-.audio-wave span:nth-child(1).active { animation-delay: 0s; }
-.audio-wave span:nth-child(2).active { animation-delay: 0.08s; }
-.audio-wave span:nth-child(3).active { animation-delay: 0.16s; }
-.audio-wave span:nth-child(4).active { animation-delay: 0.24s; }
-.audio-wave span:nth-child(5).active { animation-delay: 0.32s; }
-.audio-wave span:nth-child(6).active { animation-delay: 0.4s; }
-.audio-wave span:nth-child(7).active { animation-delay: 0.48s; }
+.audio-wave span:nth-child(3n).active { animation-delay: 0.12s; }
+.audio-wave span:nth-child(3n + 1).active { animation-delay: 0.24s; }
 
 @keyframes wave {
-  0%, 100% { transform: scaleY(1); }
-  50% { transform: scaleY(1.4); }
+  from { transform: scaleY(0.72); }
+  to { transform: scaleY(1.08); }
 }
 
-/* 播放控制 - 毛玻璃现代设计 */
+.audio-playhead {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  width: 4px;
+  border-radius: 4px;
+  background: #ff4b4b;
+  box-shadow: 0 0 8px rgba(255, 75, 75, 0.45);
+  transform: translateX(-2px);
+  transition: left 0.1s linear;
+}
+
+/* 播放控制 */
 .audio-controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 14px;
-  margin-bottom: 12px;
+  min-height: 56px;
+  padding: 7px 2px 0;
 }
 
 .play-btn {
+  grid-column: 2;
   width: 44px;
   height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg,
-    rgb(168, 85, 247) 0%,
-    rgb(147, 51, 234) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #272727;
+  border: 1px solid #4d4d4d;
   border-radius: 50%;
-  color: #fff;
+  color: #f5f5f5;
   cursor: pointer;
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-  flex-shrink: 0;
-  box-shadow: 
-    0 4px 16px rgba(168, 85, 247, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .play-btn:hover {
-  transform: scale(1.08);
-  box-shadow: 
-    0 6px 24px rgba(168, 85, 247, 0.5),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.25);
-}
-
-.progress-bar {
-  flex: 1;
-  height: 6px;
-  background: linear-gradient(90deg,
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(255, 255, 255, 0.12) 100%
-  );
-  border-radius: 3px;
-  cursor: pointer;
-  overflow: hidden;
-  position: relative;
-}
-
-.progress-bar::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  pointer-events: none;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, 
-    rgba(168, 85, 247, 0.9) 0%,
-    rgba(216, 180, 254, 0.95) 100%
-  );
-  border-radius: 3px;
-  transition: width 0.1s;
-  box-shadow: 0 0 8px rgba(168, 85, 247, 0.4);
+  background: #333333;
+  border-color: #777777;
+  transform: scale(1.04);
 }
 
 .time-display {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
-  min-width: 80px;
-  text-align: right;
-  flex-shrink: 0;
+  grid-column: 1;
+  font-size: 17px;
+  color: #d1d1d1;
+  text-align: left;
   font-variant-numeric: tabular-nums;
 }
 
-/* 标题 */
-.audio-title {
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.7);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-align: center;
+.audio-controls-spacer {
+  grid-column: 3;
 }
 
 /* 拖拽覆盖层 */
@@ -3285,7 +3560,6 @@ function handleSpeedEditorClickOutside(event) {
 /* 参考音频区：与视频节点的参考素材区保持相同的信息层级 */
 .audio-reference-section {
   padding: 14px 20px 16px;
-  border-bottom: 1px solid #252525;
 }
 
 .audio-reference-header {
@@ -3429,7 +3703,83 @@ function handleSpeedEditorClickOutside(event) {
 .prompt-area {
   position: relative;
   padding: 12px;
+  border-top: 1px solid var(--canvas-border-subtle, #2a2a2a);
   border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
+}
+
+.speech-tone-toolbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 14px 20px 0;
+}
+
+.speech-tone-trigger {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  min-height: 28px;
+  padding: 4px 9px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.speech-tone-trigger:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.speech-tone-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 20;
+  width: min(360px, calc(100vw - 48px));
+  padding: 10px;
+  background: #292929;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+
+.speech-tone-group + .speech-tone-group {
+  margin-top: 10px;
+}
+
+.speech-tone-group-label {
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.speech-tone-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.speech-tone-options button {
+  min-height: 27px;
+  padding: 4px 8px;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.speech-tone-options button:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.12);
 }
 
 .prompt-textarea {
@@ -3578,9 +3928,9 @@ function handleSpeedEditorClickOutside(event) {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  width: min(320px, calc(100vw - 32px));
-  max-height: min(420px, calc(100vh - 32px));
-  padding: 10px;
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(560px, calc(100vh - 32px));
+  padding: 14px;
   overflow-y: auto;
   background: #252525;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -3595,76 +3945,271 @@ function handleSpeedEditorClickOutside(event) {
 }
 
 .voice-style-dropdown-title {
-  padding: 6px 8px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 4px 12px;
   color: rgba(255, 255, 255, 0.42);
   font-size: 11px;
   font-weight: 600;
 }
 
-.voice-style-category {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+.saved-voice-style-section {
+  padding: 10px;
+  margin-top: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+}
+
+.saved-voice-style-heading {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 40px;
-  padding: 9px 12px;
-  color: rgba(255, 255, 255, 0.72);
-  font-size: 13px;
-  text-align: left;
-  background: transparent;
-  border: none;
-  border-radius: 9px;
-  cursor: pointer;
-  transition: color 0.15s ease, background-color 0.15s ease;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  font-weight: 600;
 }
 
-.voice-style-category:hover,
-.voice-style-category.active {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.09);
-}
-
-.voice-style-category span:nth-child(2) {
-  overflow: hidden;
+.saved-voice-style-heading small,
+.saved-voice-style-limit {
   color: rgba(255, 255, 255, 0.42);
   font-size: 11px;
-  text-align: right;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.voice-style-category span:last-child {
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 16px;
+.saved-voice-style-save-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
 }
 
-.voice-style-options {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px;
-  padding: 6px 8px 10px;
-}
-
-.voice-style-options button {
-  min-height: 32px;
-  padding: 5px 8px;
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.58);
+.saved-voice-style-save-row input {
+  min-width: 0;
+  flex: 1;
+  height: 32px;
+  padding: 0 9px;
+  color: #ffffff;
   font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  outline: none;
+}
+
+.saved-voice-style-save-row input:focus {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.saved-voice-style-save-row button {
+  padding: 0 10px;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 0;
   border-radius: 7px;
   cursor: pointer;
 }
 
-.voice-style-options button:hover,
-.voice-style-options button.active {
+.saved-voice-style-save-row button:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.saved-voice-style-save-row button:disabled {
+  color: rgba(255, 255, 255, 0.26);
+  cursor: default;
+}
+
+.saved-voice-style-limit {
+  margin: 6px 0 0;
+}
+
+.saved-voice-style-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.saved-voice-style-item {
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 7px;
+}
+
+.saved-voice-style-apply,
+.saved-voice-style-remove {
+  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.saved-voice-style-apply {
+  max-width: 180px;
+  padding: 6px 5px 6px 9px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.saved-voice-style-remove {
+  padding: 4px 8px 4px 5px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.saved-voice-style-item:hover .saved-voice-style-apply {
+  color: #ffffff;
+}
+
+.saved-voice-style-remove:hover {
+  color: #ffffff;
+}
+
+.voice-style-reset-all,
+.voice-style-reset {
+  padding: 3px 6px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+  line-height: 1.2;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.voice-style-reset-all:hover,
+.voice-style-reset:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.voice-style-reset:disabled {
+  color: rgba(255, 255, 255, 0.22);
+  cursor: default;
+}
+
+.voice-style-flat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.voice-style-flat-section {
+  min-width: 0;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 10px;
+}
+
+.voice-style-flat-heading {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.voice-style-flat-heading .voice-style-reset {
+  margin-left: auto;
+}
+
+.voice-style-field-trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 9px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 12px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.voice-style-field-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.voice-style-field-arrow {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 11px;
+  line-height: 1;
+  transform: rotate(180deg);
+  transition: transform 0.18s ease;
+}
+
+.voice-style-field-arrow.arrow-up {
+  transform: rotate(0deg);
+}
+
+.voice-style-flat-section {
+  position: relative;
+}
+
+.voice-style-field-dropdown {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  max-height: 260px;
+  padding: 8px;
+  overflow-y: auto;
+  background: #252525;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.45);
+  z-index: 10;
+}
+
+.voice-style-field-dropdown.dropdown-up {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.voice-style-field-dropdown-title {
+  grid-column: 1 / -1;
+  padding: 4px 6px 7px;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.voice-style-field-dropdown-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.voice-style-field-dropdown-item:hover,
+.voice-style-field-dropdown-item.active {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .voice-style-custom-input {
@@ -3675,21 +4220,29 @@ function handleSpeedEditorClickOutside(event) {
   font-size: 12px;
 }
 
-.voice-style-custom-input input {
+.voice-style-custom-input > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.voice-style-custom-input textarea {
   width: 100%;
+  min-height: 104px;
   padding: 8px 10px;
   color: #ffffff;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 7px;
   outline: none;
+  resize: vertical;
 }
 
-.voice-style-custom-input input:focus {
+.voice-style-custom-input textarea:focus {
   border-color: rgba(255, 255, 255, 0.35);
 }
 
-.voice-style-custom-input input::placeholder {
+.voice-style-custom-input textarea::placeholder {
   color: rgba(255, 255, 255, 0.32);
 }
 
@@ -4271,10 +4824,7 @@ function handleSpeedEditorClickOutside(event) {
 
 :root.canvas-theme-light .audio-config-panel .prompt-area {
   background: transparent;
-}
-
-:root.canvas-theme-light .audio-config-panel .audio-reference-section {
-  border-bottom-color: rgba(0, 0, 0, 0.06);
+  border-top-color: rgba(0, 0, 0, 0.06);
 }
 
 :root.canvas-theme-light .audio-config-panel .audio-reference-label {
@@ -4299,6 +4849,39 @@ function handleSpeedEditorClickOutside(event) {
 :root.canvas-theme-light .audio-config-panel .audio-reference-add:hover {
   background: rgba(0, 0, 0, 0.03);
   color: #1c1917;
+}
+
+:root.canvas-theme-light .audio-config-panel .speech-tone-trigger {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .audio-config-panel .speech-tone-trigger:hover {
+  color: #1c1917;
+  background: rgba(0, 0, 0, 0.09);
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
+:root.canvas-theme-light .audio-config-panel .speech-tone-menu {
+  background: #f5f5f4;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.16);
+}
+
+:root.canvas-theme-light .audio-config-panel .speech-tone-group-label {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+:root.canvas-theme-light .audio-config-panel .speech-tone-options button {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.035);
+}
+
+:root.canvas-theme-light .audio-config-panel .speech-tone-options button:hover {
+  color: #1c1917;
+  background: rgba(0, 0, 0, 0.09);
+  border-color: rgba(0, 0, 0, 0.1);
 }
 
 :root.canvas-theme-light .audio-node .prompt-textarea {
@@ -4370,11 +4953,9 @@ function handleSpeedEditorClickOutside(event) {
 
 :root.canvas-theme-light .audio-node .voice-preset-arrow { color: rgba(0, 0, 0, .42); }
 
-:root.canvas-theme-light .audio-node .voice-style-trigger-arrow,
-:root.canvas-theme-light .audio-node .voice-style-category span:nth-child(2),
-:root.canvas-theme-light .audio-node .voice-style-category span:last-child {
-  color: rgba(0, 0, 0, 0.42);
-}
+    :root.canvas-theme-light .audio-node .voice-style-trigger-arrow {
+      color: rgba(0, 0, 0, 0.42);
+    }
 
 :root.canvas-theme-light .audio-node .voice-style-dropdown-panel {
   background: rgba(255, 255, 255, 0.98);
@@ -4386,39 +4967,107 @@ function handleSpeedEditorClickOutside(event) {
   color: rgba(0, 0, 0, 0.42);
 }
 
-:root.canvas-theme-light .audio-node .voice-style-category {
-  color: rgba(0, 0, 0, 0.65);
+:root.canvas-theme-light .audio-node .voice-style-flat-section {
+  background: rgba(0, 0, 0, 0.025);
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
-:root.canvas-theme-light .audio-node .voice-style-category:hover,
-:root.canvas-theme-light .audio-node .voice-style-category.active {
-  color: #1c1917;
-  background: rgba(0, 0, 0, 0.06);
-}
+    :root.canvas-theme-light .audio-node .voice-style-flat-heading {
+      color: rgba(0, 0, 0, 0.65);
+    }
 
-:root.canvas-theme-light .audio-node .voice-style-options button {
-  color: rgba(0, 0, 0, 0.58);
-  background: rgba(0, 0, 0, 0.03);
-}
+    :root.canvas-theme-light .audio-node .saved-voice-style-section {
+      background: rgba(0, 0, 0, 0.025);
+      border-color: rgba(0, 0, 0, 0.08);
+    }
 
-:root.canvas-theme-light .audio-node .voice-style-options button:hover,
-:root.canvas-theme-light .audio-node .voice-style-options button.active {
-  color: #1c1917;
-  background: rgba(0, 0, 0, 0.09);
-  border-color: rgba(0, 0, 0, 0.12);
-}
+    :root.canvas-theme-light .audio-node .saved-voice-style-heading {
+      color: rgba(0, 0, 0, 0.65);
+    }
+
+    :root.canvas-theme-light .audio-node .saved-voice-style-heading small,
+    :root.canvas-theme-light .audio-node .saved-voice-style-limit {
+      color: rgba(0, 0, 0, 0.42);
+    }
+
+    :root.canvas-theme-light .audio-node .saved-voice-style-save-row input {
+      color: #1c1917;
+      background: rgba(0, 0, 0, 0.03);
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+
+    :root.canvas-theme-light .audio-node .saved-voice-style-save-row button {
+      color: #57534e;
+      background: rgba(0, 0, 0, 0.07);
+    }
+
+    :root.canvas-theme-light .audio-node .saved-voice-style-item {
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    :root.canvas-theme-light .audio-node .saved-voice-style-apply,
+    :root.canvas-theme-light .audio-node .saved-voice-style-remove {
+      color: rgba(0, 0, 0, 0.58);
+    }
+
+    :root.canvas-theme-light .audio-node .voice-style-field-trigger {
+      color: rgba(0, 0, 0, 0.58);
+      background: rgba(0, 0, 0, 0.03);
+      border-color: rgba(0, 0, 0, 0.1);
+    }
+
+    :root.canvas-theme-light .audio-node .voice-style-field-trigger:hover {
+      color: #1c1917;
+      border-color: rgba(0, 0, 0, 0.24);
+    }
+
+    :root.canvas-theme-light .audio-node .voice-style-field-dropdown {
+      background: #f5f5f4;
+      border-color: rgba(0, 0, 0, 0.1);
+      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.16);
+    }
+
+    :root.canvas-theme-light .audio-node .voice-style-field-dropdown-title,
+    :root.canvas-theme-light .audio-node .voice-style-field-arrow {
+      color: rgba(0, 0, 0, 0.42);
+    }
+
+    :root.canvas-theme-light .audio-node .voice-style-field-dropdown-item {
+      color: rgba(0, 0, 0, 0.58);
+    }
+
+    :root.canvas-theme-light .audio-node .voice-style-field-dropdown-item:hover,
+    :root.canvas-theme-light .audio-node .voice-style-field-dropdown-item.active {
+      color: #1c1917;
+      background: rgba(0, 0, 0, 0.1);
+    }
+
+    :root.canvas-theme-light .audio-node .voice-style-reset-all,
+    :root.canvas-theme-light .audio-node .voice-style-reset {
+      color: rgba(0, 0, 0, 0.48);
+    }
+
+    :root.canvas-theme-light .audio-node .voice-style-reset-all:hover,
+    :root.canvas-theme-light .audio-node .voice-style-reset:hover:not(:disabled) {
+      color: #1c1917;
+      background: rgba(0, 0, 0, 0.07);
+    }
+
+    :root.canvas-theme-light .audio-node .voice-style-reset:disabled {
+      color: rgba(0, 0, 0, 0.2);
+    }
 
 :root.canvas-theme-light .audio-node .voice-style-custom-input {
   color: rgba(0, 0, 0, 0.58);
 }
 
-:root.canvas-theme-light .audio-node .voice-style-custom-input input {
+:root.canvas-theme-light .audio-node .voice-style-custom-input textarea {
   color: #1c1917;
   background: rgba(0, 0, 0, 0.03);
   border-color: rgba(0, 0, 0, 0.1);
 }
 
-:root.canvas-theme-light .audio-node .voice-style-custom-input input::placeholder {
+:root.canvas-theme-light .audio-node .voice-style-custom-input textarea::placeholder {
   color: rgba(0, 0, 0, 0.32);
 }
 
