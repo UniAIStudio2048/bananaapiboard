@@ -42,6 +42,7 @@ import CustomPresetDialog from '../dialogs/CustomPresetDialog.vue'
 import PresetManager from '../dialogs/PresetManager.vue'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PromptMediaTag from '../PromptMediaTag.vue'
+import PromptTranslateButton from '../PromptTranslateButton.vue'
 import ModelIcon from '@/components/common/ModelIcon.vue'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
@@ -566,6 +567,11 @@ watch(llmInputText, (newVal) => {
     syncLLMHighlightOverlayScroll()
   })
 })
+
+function handlePromptTranslated(translatedText) {
+  llmInputText.value = translatedText
+  llmInputRenderKey.value += 1
+}
 
 const selectedModel = ref(props.data?.model || 'gemini-2.5-pro')
 const selectedPreset = ref(props.data?.selectedPreset || '') // 选中的功能预设
@@ -3774,6 +3780,8 @@ onUnmounted(() => {
         <div class="controls-right">
           <!-- 生成次数 -->
           <span class="generate-count">1x</span>
+
+          <PromptTranslateButton :text="llmInputText" @translated="handlePromptTranslated" />
           
           <!-- 积分消耗显示 -->
           <span class="points-cost-display">
@@ -5020,12 +5028,16 @@ onUnmounted(() => {
   align-items: center;
   gap: 8px;
   flex-wrap: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .controls-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 /* 功能预设选择器 */
@@ -5516,6 +5528,7 @@ onUnmounted(() => {
 .generate-btn {
   width: 40px;
   height: 40px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: var(--canvas-accent-primary, #3b82f6);
   border: none;

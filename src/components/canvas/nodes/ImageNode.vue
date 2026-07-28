@@ -67,6 +67,7 @@ import { getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
 import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PromptMediaTag from '../PromptMediaTag.vue'
+import PromptTranslateButton from '../PromptTranslateButton.vue'
 import CanvasNodeImage from '../CanvasNodeImage.vue'
 import PanoramaPreviewModal from '../PanoramaPreviewModal.vue'
 import ModelIcon from '../../common/ModelIcon.vue'
@@ -4391,6 +4392,11 @@ function syncPromptMentionsWithMedia() {
   updatePromptMentionBindings(result.bindings)
 }
 
+function handlePromptTranslated(translatedText) {
+  promptText.value = translatedText
+  promptEditorRenderKey.value += 1
+}
+
 const highlightedPromptSegments = computed(() => {
   if (!promptText.value) return []
   const segments = []
@@ -8691,6 +8697,8 @@ async function handleDrop(event) {
           >
             {{ selectedCount }}x
           </span>
+
+          <PromptTranslateButton :text="promptText" @translated="handlePromptTranslated" />
           
           <!-- 积分消耗显示 -->
           <span class="points-cost-display">

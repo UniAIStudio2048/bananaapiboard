@@ -18,6 +18,7 @@ for (const text of [
   '/api/skills/models',
   '/api/skills/generate',
   '/api/skills/videos/generate',
+  '/api/skills/audio/generate',
   '/api/skills/tasks',
   'canvas_writeback',
   '计费与空间',
@@ -48,6 +49,17 @@ assert.match(source, /upload_url/)
 assert.match(source, /asset_url/)
 assert.match(source, /source_assets/)
 assert.match(source, /reference_assets/)
+assert.match(source, /audio\[\]/)
+assert.match(source, /voice_design/)
+assert.match(source, /voice_clone/)
+assert.match(source, /reference_audio_url/)
+assert.match(source, /reference_audio_text/)
+assert.match(source, /audio\/mpeg/)
+assert.match(source, /100 MB/)
+assert.match(source, /const audioExample = `/)
+assert.match(source, /audioExample/)
+assert.match(source, /真实音频下载并存储成功后才扣积分/)
+assert.match(source, /30 分钟超时不扣费/)
 assert.match(source, /服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审/)
 assert.match(source, /上传只负责存储/)
 assert.match(source, /视频请求阶段会按该 Skills Key 所属租户和锁定渠道自动过审/)
@@ -61,6 +73,7 @@ assert.match(source, /media_type/)
 assert.match(source, /图片过审/)
 assert.match(source, /pollTaskExample/)
 assert.match(source, /async function pollTask\(taskId\)/)
+assert.match(source, /response\.task \|\| response/)
 assert.match(source, /writebackExample/)
 assert.match(source, /completeAgentExample/)
 assert.match(source, /Codex、Claude Code、WorkBuddy、OpenClaw、Hermes/)

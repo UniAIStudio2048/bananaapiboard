@@ -24,13 +24,13 @@
         <h2>快速开始</h2>
         <p>
           最省事的安装方式是在画布右上角打开 Skills，创建 API Key，然后复制“安装提示词”给你的智能体。
-          智能体安装后应先调用模型列表接口验证 key，再根据用户需求选择图片、视频、上传或写回流程。
+          智能体安装后应先调用模型列表接口验证 key，再根据用户需求选择图片、视频、音频、上传或写回流程。
         </p>
         <ol class="docs-steps">
           <li>打开画布右上角 Skills。</li>
           <li>复制安装提示词，交给 Codex、Claude Code、WorkBuddy、OpenClaw、Hermes 或其他支持 Skills 调用的智能体。</li>
           <li>智能体只调用当前站点下的 <code>/api/skills/*</code>，请求头使用 <code>Authorization: Bearer bsk_...</code>。</li>
-          <li>用户提供本地图片或视频时，先走 COS CDN 直传，再把返回的 URL 传给生成接口。</li>
+          <li>用户提供本地图片、视频或声音克隆参考音频时，先走 COS CDN 直传，再把返回的 URL 传给生成接口。</li>
         </ol>
         <CodeBlock
           id="quick-start-prompt"
@@ -82,6 +82,7 @@
         <p>
           图片生成和视频生成接口接收 URL，不接收本地文件路径或原始字节。用户上传本地图片或视频时，智能体应先申请一次性上传地址，
           把文件直接 PUT 到腾讯云 COS CDN 存储，再把返回的 <code>asset_url</code> 用作图片 <code>input</code>、视频 <code>source_assets</code> 或 <code>reference_assets</code>。
+          声音克隆参考文件使用 <code>audio/mpeg</code>、<code>audio/wav</code>、<code>audio/ogg</code> 或 <code>audio/mp4</code>，单文件最大 100 MB。
           上传只负责存储，不代表图片已经通过视频供应商审核。
         </p>
         <ol class="docs-steps">
@@ -102,7 +103,8 @@
         <p class="section-label">Models</p>
         <h2>/api/skills/models</h2>
         <p>
-          模型列表返回当前用户可用的图片和视频模型。智能体应优先使用返回的 <code>name</code> 或 <code>id</code>，
+          模型列表返回当前用户可用的图片、视频和音频模型。音频模型通过 <code>audio[].capability</code> 区分
+          <code>voice_design</code>、<code>voice_clone</code> 和 <code>tts</code>。智能体应优先使用返回的 <code>name</code> 或 <code>id</code>，
           并避开不可用或需要额外套餐的模型。
         </p>
         <CodeBlock
@@ -149,6 +151,26 @@
           :code="codeBlocks.videoExample"
           :copied="copiedKey === 'videoExample'"
           @copy="copyCode('videoExample')"
+        />
+      </section>
+
+      <section id="audio" class="docs-section">
+        <p class="section-label">Audio</p>
+        <h2>/api/skills/audio/generate</h2>
+        <p>
+          音频接口统一接入音色设计、声音克隆和 TTS 语音合成。先从 <code>GET /api/skills/models</code> 的
+          <code>audio[]</code> 按 <code>capability</code> 选择模型：音色设计传 <code>prompt</code> 与 <code>style</code>，
+          声音克隆传 <code>reference_audio_url</code>（或 <code>reference_assets</code>），TTS 传 <code>voice_id</code>，
+          也可以用 <code>reference_audio_url</code> + <code>reference_audio_text</code> 直接合成。
+          任务必须轮询统一任务接口；只有真实音频下载并存储成功后才扣积分，失败和 30 分钟超时不扣费。
+          需要回写画布音频节点时，在请求中加入 <code>canvas_writeback</code>。
+        </p>
+        <CodeBlock
+          id="audio-generate"
+          title="音色设计、声音克隆与 TTS"
+          :code="codeBlocks.audioExample"
+          :copied="copiedKey === 'audioExample'"
+          @copy="copyCode('audioExample')"
         />
       </section>
 
@@ -280,6 +302,7 @@ const docsSections = [
   { id: 'models', title: '模型列表' },
   { id: 'images', title: '图片生成' },
   { id: 'videos', title: '视频生成' },
+  { id: 'audio', title: '音频生成' },
   { id: 'tasks', title: '任务轮询' },
   { id: 'writeback', title: '画布写回' },
   { id: 'billing', title: '计费与空间' },
@@ -311,7 +334,8 @@ const quickStartPrompt = `请帮我安装 Banana Canvas Skills。
 - 只调用 ${baseUrl}/api/skills/*。
 
 安装后先调用 GET ${baseUrl}/api/skills/models 验证 key 和模型列表。
-如果用户提供本地图片或视频，先调用 POST ${baseUrl}/api/skills/uploads/presign，把文件 PUT 到 upload_url，再把 asset_url 传给生成接口；上传只负责存储，不代表图片已经过审。
+如果用户提供本地图片、视频或音频，先调用 POST ${baseUrl}/api/skills/uploads/presign，把文件 PUT 到 upload_url，再把 asset_url 传给生成接口；上传只负责存储，不代表图片已经过审。
+音色设计、声音克隆和 TTS 统一调用 POST ${baseUrl}/api/skills/audio/generate，先从 audio[] 按 capability 选择模型；真实音频完成后才计费并可写回画布。
 视频统一调用 POST ${baseUrl}/api/skills/videos/generate；服务端会根据当前租户渠道自动选择视频模式并执行必要的图片过审。视频请求阶段会按该 Skills Key 所属租户和锁定渠道自动过审，不会故障转移到其他渠道；过审失败或超时会停止视频提交。
 先读取 GET ${baseUrl}/api/skills/models 返回的 video[].imageInputReview。9000 端口的租户管理后台只是配置入口，不要把端口或模型名硬编码成必审模型；只有图片输入且锁定视频渠道与当前租户审图渠道严格匹配时才自动过审，过审结果不能跨渠道复用。不要直接调用供应商过审接口。`
 
@@ -327,6 +351,7 @@ const modelsExample = `GET ${baseUrl}/api/skills/models
 响应中优先使用：
 - image_models[].name 或 image_models[].id
 - video_models[].name 或 video_models[].id
+- audio[].name 或 audio[].id，并按 capability 选择 voice_design、voice_clone 或 tts
 - usable / disabled / accessMessage 用来判断当前模型是否能用`
 
 const presignUploadExample = `POST ${baseUrl}/api/skills/uploads/presign
@@ -356,6 +381,43 @@ headers = upload.headers
 body = 文件字节
 
 上传成功后，将 asset_url 放进 input、source_assets 或 reference_assets。`
+
+const audioExample = `# 统一音频接口：音色设计、声音克隆、TTS
+POST ${baseUrl}/api/skills/audio/generate
+Authorization: Bearer bsk_your_key
+Content-Type: application/json
+
+# 音色设计：prompt + style
+{
+  "model": "voice-design-model-from-audio",
+  "capability": "voice_design",
+  "prompt": "请朗读：欢迎来到 Banana Canvas",
+  "style": "普通话、温暖醇厚的青年女声、语速适中"
+}
+
+# 声音克隆：先通过 uploads/presign 上传参考音频，再传 asset_url
+{
+  "model": "voice-clone-model-from-audio",
+  "capability": "voice_clone",
+  "prompt": "请用参考音色朗读：欢迎来到 Banana Canvas",
+  "reference_audio_url": "https://cdn.example.com/skills/reference.mp3"
+}
+
+# TTS：可复用 voice_id，或直接提供参考音频及其文本
+{
+  "model": "tts-model-from-audio",
+  "capability": "tts",
+  "prompt": "欢迎来到 Banana Canvas",
+  "voice_id": "voice-id-from-provider",
+  "canvas_writeback": {
+    "workflow_id": "existing-workflow-id",
+    "node_id": "audio-node-id",
+    "mode": "replace_output"
+  }
+}
+
+服务端会轮询供应商任务，只有下载并存储真实音频后才计费；失败或 30 分钟超时不扣费。
+完成后轮询 /api/skills/tasks/:taskId，使用 response.task.result_urls[0] 播放或下载 MP3/WAV。`
 
 const imageExample = `POST ${baseUrl}/api/skills/generate
 Authorization: Bearer bsk_your_key
@@ -391,7 +453,8 @@ Content-Type: application/json
 
 const pollTaskExample = `async function pollTask(taskId) {
   while (true) {
-    const task = await request('/api/skills/tasks/' + encodeURIComponent(taskId))
+    const response = await request('/api/skills/tasks/' + encodeURIComponent(taskId))
+    const task = response.task || response
     if (['completed', 'failed', 'timeout', 'cancelled'].includes(task.status)) {
       return task
     }
@@ -484,7 +547,8 @@ async function uploadFileToCOS(bytes, upload) {
 
 async function pollTask(taskId) {
   while (true) {
-    const task = await request('/api/skills/tasks/' + encodeURIComponent(taskId))
+    const response = await request('/api/skills/tasks/' + encodeURIComponent(taskId))
+    const task = response.task || response
     if (['completed', 'failed', 'timeout', 'cancelled'].includes(task.status)) return task
     await new Promise(resolve => setTimeout(resolve, 3000))
   }
@@ -520,6 +584,7 @@ const codeBlocks = computed(() => ({
   authExample,
   modelsExample,
   presignUploadExample,
+  audioExample,
   imageExample,
   videoExample,
   pollTaskExample,

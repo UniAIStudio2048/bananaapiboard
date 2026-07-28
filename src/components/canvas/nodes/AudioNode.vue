@@ -19,6 +19,7 @@ import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { getTenantHeaders, getAvailableMusicModels, getAvailableAudioModels, refreshBrandConfig } from '@/config/tenant'
 import { showAlert, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import { formatPoints } from '@/utils/format'
+import { formatVideoGenerationElapsed, getVideoGenerationElapsedSeconds } from '@/utils/videoGenerationProgress.js'
 import { calculateAudioPointsCost } from '@/utils/audioPricing'
 import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
@@ -39,6 +40,7 @@ import { formatVideoNodeErrorMessage } from './video-error-message.js'
 import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import PromptMediaTag from '../PromptMediaTag.vue'
+import PromptTranslateButton from '../PromptTranslateButton.vue'
 import VoicePresetPicker from '../VoicePresetPicker.vue'
 
 const { onAudioHoverStart, onHoverEnd } = useImageHoverPreview()
@@ -56,6 +58,8 @@ const duplicateSubmitGuard = createCanvasDuplicateSubmitGuard()
 const uploadManager = useUploadManager()
 const modelStatsStore = useModelStatsStore()
 modelStatsStore.ensureStarted()
+const elapsedTimeNow = ref(Date.now())
+let elapsedTimeTimer = null
 const userInfo = inject('userInfo')
 const canvasPromptInputScale = inject('canvasPromptInputScale', computed(() => ({ enabled: false, style: {} })))
 const isPromptInputFixedScale = computed(() => !!canvasPromptInputScale.value?.enabled)
@@ -221,6 +225,18 @@ const musicPointsCost = computed(() => {
 
 function formatAudioErrorMessage(message) {
   return formatVideoNodeErrorMessage(message || '生成失败')
+}
+
+function getAudioProcessingTimingData(data = props.data) {
+  return {
+    processingStartedAt: data?.processingStartedAt,
+    created_at: data?.created_at,
+    createdAt: data?.createdAt
+  }
+}
+
+function audioProcessingElapsedText(data = props.data) {
+  return formatVideoGenerationElapsed(getVideoGenerationElapsedSeconds(getAudioProcessingTimingData(data), elapsedTimeNow.value))
 }
 
 // 用户积分
@@ -424,6 +440,7 @@ async function handleGenerateMusic() {
   // 更新节点状态，保存所有参数
   canvasStore.updateNodeData(targetNodeId, {
     status: 'processing',
+    processingStartedAt: Date.now(),
     audioUrl: null,
     audioData: null,
     output: null,
@@ -483,7 +500,8 @@ async function handleGenerateMusic() {
     // 保存任务ID到节点数据
     canvasStore.updateNodeData(targetNodeId, {
       taskIds,
-      status: 'processing'
+      status: 'processing',
+      processingStartedAt: Date.now()
     })
     
     // 任务提交成功，立即恢复按钮状态
@@ -532,7 +550,7 @@ async function handleGenerateCozeAudio() {
     : null
   const targetNodeId = targetNode?.id || props.id
   isGeneratingMusic.value = true
-  canvasStore.updateNodeData(targetNodeId, { status: 'processing', error: null, output: null, audioUrl: null })
+  canvasStore.updateNodeData(targetNodeId, { status: 'processing', processingStartedAt: Date.now(), error: null, output: null, audioUrl: null })
   try {
     const teamStore = useTeamStore()
     const spaceParams = teamStore.getSpaceParams('current')
@@ -552,14 +570,14 @@ async function handleGenerateCozeAudio() {
       if (inheritedAudioUrl.value) {
         body.reference_audio_url = inheritedAudioUrl.value
       } else if (selectedVoicePreset.value?.previewUrl) {
-        body.voice_id = selectedVoicePreset.value.previewUrl
+        body.reference_audio_url = selectedVoicePreset.value.previewUrl
         body.reference_audio_text = selectedVoicePreset.value.transcript
       } else if (inheritedVoiceId.value) {
         body.voice_id = inheritedVoiceId.value
       }
     }
     const response = await apiClient.post('/api/audio/generate', body)
-    canvasStore.updateNodeData(targetNodeId, { taskId: response.task_id, taskType: 'audio-generation', status: 'processing' })
+    canvasStore.updateNodeData(targetNodeId, { taskId: response.task_id, taskType: 'audio-generation', status: 'processing', processingStartedAt: Date.now() })
     pollCozeAudioStatus(targetNodeId, response.task_id)
   } catch (error) {
     canvasStore.updateNodeData(targetNodeId, { status: 'error', error: formatAudioErrorMessage(error.response?.data?.error || error.message) })
@@ -769,6 +787,11 @@ function handleMusicInput(event) {
   }
 }
 
+function handlePromptTranslated(translatedText) {
+  musicPrompt.value = translatedText
+  promptEditorRenderKey.value += 1
+}
+
 function insertMusicEditorPlainText(text) {
   const editor = promptTextareaRef.value
   if (!editor) return
@@ -904,6 +927,9 @@ function handleConfigPanelOutsideMouseDown(event) {
 
 // 组件挂载时添加全局点击事件监听并刷新配置
 onMounted(async () => {
+  elapsedTimeTimer = setInterval(() => {
+    elapsedTimeNow.value = Date.now()
+  }, 1000)
   document.addEventListener('click', handleMusicModelDropdownClickOutside)
   document.addEventListener('click', handleSpeedEditorClickOutside)
   document.addEventListener('mousedown', handleConfigPanelOutsideMouseDown)
@@ -929,6 +955,10 @@ onMounted(async () => {
 
 // 组件卸载时移除监听
 onUnmounted(() => {
+  if (elapsedTimeTimer) {
+    clearInterval(elapsedTimeTimer)
+    elapsedTimeTimer = null
+  }
   document.removeEventListener('click', handleMusicModelDropdownClickOutside)
   document.removeEventListener('click', handleSpeedEditorClickOutside)
   document.removeEventListener('mousedown', handleConfigPanelOutsideMouseDown)
@@ -1082,6 +1112,7 @@ function createAudioEditProcessingNode(taskId, editOptions) {
       label,
       title: label,
       status: 'processing',
+      processingStartedAt: Date.now(),
       progress: editOptions.mode === 'trim' ? '裁剪中...' : '编辑中...',
       taskId,
       taskType: 'audio-edit',
@@ -1184,6 +1215,7 @@ function handleBackgroundTaskProgress(event) {
 
   canvasStore.updateNodeData(props.id, {
     status: 'processing',
+    processingStartedAt: Date.now(),
     progress: task.result?.progress || task.progress || '编辑中...'
   })
 }
@@ -1890,6 +1922,7 @@ function handleSpeedEditorClickOutside(event) {
         <div v-if="props.data?.status === 'processing'" class="node-content preview-loading">
           <div class="loading-spinner"></div>
           <span class="loading-title">音频生成中...</span>
+          <span class="processing-duration-text">{{ audioProcessingElapsedText(props.data) }}</span>
           <span class="loading-hint">音频生成需要一定时间，请耐心等待</span>
         </div>
 
@@ -2294,6 +2327,8 @@ function handleSpeedEditorClickOutside(event) {
           
           <!-- 字数统计 -->
           <span class="char-count">{{ musicPrompt.length }}/4100</span>
+
+          <PromptTranslateButton :text="musicPrompt" @translated="handlePromptTranslated" />
           
           <!-- 积分显示 -->
           <div class="points-badge">
@@ -2647,6 +2682,14 @@ function handleSpeedEditorClickOutside(event) {
   color: var(--canvas-text-primary, #fff);
   font-size: 14px;
   font-weight: 500;
+}
+
+.processing-duration-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--canvas-accent-primary, #4ade80);
+  letter-spacing: 0;
+  opacity: 0.9;
 }
 
 .loading-hint {

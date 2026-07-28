@@ -92,6 +92,7 @@ import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedanceVideoModel, isVideoNodeNetworkError } from './video-error-message.js'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PromptMediaTag from '../PromptMediaTag.vue'
+import PromptTranslateButton from '../PromptTranslateButton.vue'
 
 const { t, currentLanguage } = useI18n()
 const teamStore = useTeamStore()
@@ -802,6 +803,11 @@ function syncPromptMentionsWithMedia(mediaItems = referenceMediaList.value) {
     promptText.value = result.text
   }
   updatePromptMentionBindings(result.bindings)
+}
+
+function handlePromptTranslated(translatedText) {
+  promptText.value = translatedText
+  promptEditorRenderKey.value += 1
 }
 
 function getReferenceImageThumbnail(url) {
@@ -8874,6 +8880,8 @@ function handleToolbarPreview() {
           >
             {{ selectedCount }}x
           </span>
+
+          <PromptTranslateButton :text="promptText" @translated="handlePromptTranslated" />
           
           <!-- 积分消耗显示 -->
           <span class="points-cost-display">
@@ -10334,20 +10342,24 @@ function handleToolbarPreview() {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .config-right {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
+  gap: 6px;
+  flex: 0 0 auto;
+  min-width: 0;
 }
 
 /* 模型选择器（自定义下拉框）- 扁平化设计 */
 .model-selector-custom {
   position: relative;
   z-index: 100;
+  flex: 1 1 150px;
+  min-width: 0;
 }
 
 .model-selector-trigger {
@@ -10379,6 +10391,10 @@ function handleToolbarPreview() {
   color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
   font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .select-arrow {
@@ -11309,6 +11325,7 @@ function handleToolbarPreview() {
 .generate-btn {
   width: 36px;
   height: 36px;
+  flex-shrink: 0;
   border-radius: 50%;
   background: var(--canvas-accent-primary, #3b82f6);
   border: none;

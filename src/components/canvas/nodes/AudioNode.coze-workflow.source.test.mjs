@@ -22,6 +22,11 @@ test('AudioNode switches among Coze voice design, clone and TTS capabilities', (
   assert.match(source, /function removeReferenceAudio\(/)
   assert.match(source, /canvasStore\.edges\.find\(edge => edge\.target === props\.id/)
   assert.match(source, /body\.style = voiceDesignStyle\.value/)
+  assert.match(source, /audioCapability\.value === 'tts'[\s\S]*body\.prompt = musicPrompt\.value/)
+  assert.doesNotMatch(source, /body\.text = musicPrompt\.value/)
+  assert.match(source, /const parsedResponse = typeof response === 'string' \? JSON\.parse\(response\) : response/)
+  assert.match(source, /const payload = parsedResponse\?\.data\?\.status \? parsedResponse\.data : parsedResponse/)
+  assert.match(source, /const url = data\.audio_url \|\| data\.preview_url \|\| data\.url/)
   assert.match(source, /audioCapability\.value === 'voice_clone'\) \{\s*body\.prompt = musicPrompt\.value\s*body\.reference_audio_url = inheritedAudioUrl\.value/)
   assert.match(source, /说话的文本内容，描述希望角色说出的内容/)
   assert.match(source, /说话的文本内容，描述你需要克隆的文本内容/)
@@ -32,8 +37,16 @@ test('TTS offers a preset voice picker and respects reference audio priority', (
   assert.match(source, /selectedVoicePreset/)
   assert.match(source, /audioCapability === 'tts'/)
   assert.match(source, /body\.reference_audio_url = inheritedAudioUrl\.value/)
-  assert.match(source, /body\.voice_id = selectedVoicePreset\.value\.previewUrl/)
+  assert.match(source, /body\.voice_id = selectedVoicePreset\.value\.sourceVoice/)
   assert.match(source, /body\.reference_audio_text = selectedVoicePreset\.value\.transcript/)
+})
+
+test('selected TTS voice displays its complete ID in the control bar', () => {
+  assert.match(source, /voicePresetTriggerLabel[\s\S]*selectedVoicePreset\.value\.sourceVoice/)
+  const voicePresetStyle = source.match(/\.voice-preset-trigger \{([\s\S]*?)\n\}/)?.[1] || ''
+  assert.doesNotMatch(voicePresetStyle, /max-width:/)
+  assert.doesNotMatch(voicePresetStyle, /overflow:\s*hidden/)
+  assert.doesNotMatch(voicePresetStyle, /text-overflow:\s*ellipsis/)
 })
 
 test('voice output keeps voiceId and audio nodes may connect to audio nodes', () => {

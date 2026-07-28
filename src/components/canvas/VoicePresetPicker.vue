@@ -36,6 +36,10 @@
             <strong>{{ voice.name }}</strong>
             <small v-if="voice.description">{{ voice.description }}</small>
             <span>{{ voice.tags?.join(' · ') }}</span>
+            <div v-if="voice.sourceVoice" class="voice-id">
+              <span>音色ID：{{ voice.sourceVoice }}</span>
+              <button type="button" @click.stop="copyVoiceId(voice.sourceVoice)">{{ copiedVoiceId === voice.sourceVoice ? '已复制' : '复制' }}</button>
+            </div>
           </div>
           <div class="voice-meta"><span>{{ localeLabels[voice.locale] || voice.locale }}</span><span>{{ genderLabel(voice.gender) }}</span><span>{{ styleLabels[voice.style] || voice.style }}</span></div>
           <button type="button" class="select-button" :disabled="!voice.hasPreview" @click="emit('select', voice)">{{ modelValue?.id === voice.id ? '已选' : '选择' }}</button>
@@ -66,6 +70,7 @@ const style = ref('')
 const loading = ref(false)
 const error = ref('')
 const playingId = ref('')
+const copiedVoiceId = ref('')
 const currentPage = ref(1)
 const pageSize = 12
 let previewAudio = null
@@ -119,6 +124,18 @@ function genderLabel(value) {
   return value === 'female' ? '女' : value === 'male' ? '男' : value
 }
 
+async function copyVoiceId(voiceId) {
+  try {
+    await navigator.clipboard.writeText(voiceId)
+    copiedVoiceId.value = voiceId
+    window.setTimeout(() => {
+      if (copiedVoiceId.value === voiceId) copiedVoiceId.value = ''
+    }, 1600)
+  } catch {
+    error.value = '复制音色 ID 失败，请检查浏览器权限'
+  }
+}
+
 async function loadVoices() {
   loading.value = true
   error.value = ''
@@ -162,14 +179,15 @@ onBeforeUnmount(stopPreview)
 </script>
 
 <style scoped>
-.voice-picker-backdrop { position: fixed; inset: 0; z-index: 12000; display: grid; place-items: center; padding: 24px; background: rgba(0, 0, 0, .68); backdrop-filter: blur(8px); }
-.voice-picker { display: flex; flex-direction: column; width: min(1120px, 100%); max-height: min(760px, calc(100vh - 48px)); overflow: hidden; color: #f5f5f5; background: #242424; border: 1px solid rgba(255,255,255,.1); border-radius: 22px; box-shadow: 0 28px 90px rgba(0,0,0,.5); }
-.voice-picker-header { display: flex; align-items: center; justify-content: space-between; padding: 24px 30px; border-bottom: 1px solid rgba(255,255,255,.08); }
-.voice-picker-header h2 { margin: 0; font-size: 22px; }.close-button { color: #aaa; font-size: 36px; line-height: 1; background: none; border: 0; cursor: pointer; }.close-button:hover { color: #fff; }
-.voice-picker-toolbar { display: flex; gap: 16px; align-items: center; padding: 26px 30px 14px; }.voice-picker-tabs { display: flex; gap: 4px; padding: 6px; background: #343434; border-radius: 14px; }.voice-picker-tabs button { padding: 10px 16px; color: #aaa; background: transparent; border: 0; border-radius: 10px; cursor: pointer; }.voice-picker-tabs button.active { color: #fff; background: #606060; }.voice-picker-tabs .clone-tab { cursor: not-allowed; opacity: .45; }
-.voice-search { display: flex; flex: 1; gap: 10px; align-items: center; min-width: 180px; padding: 0 16px; background: #343434; border-radius: 14px; color: #aaa; }.voice-search span { font-size: 26px; }.voice-search input { width: 100%; height: 54px; color: #fff; font-size: 16px; background: transparent; border: 0; outline: 0; }
-.voice-picker-filters { display: flex; gap: 10px; padding: 0 30px 14px; }.voice-picker-filters select { min-width: 120px; padding: 9px 12px; color: #ddd; background: #343434; border: 1px solid rgba(255,255,255,.08); border-radius: 9px; outline: 0; }
-.voice-picker-list { min-height: 240px; padding: 0 30px 22px; overflow-y: auto; }.voice-row { display: flex; gap: 16px; align-items: center; min-height: 92px; margin: 9px 0; padding: 14px 20px; background: #323232; border: 1px solid transparent; border-radius: 18px; }.voice-row.selected { background: #414141; border-color: rgba(255,255,255,.18); }.preview-button { width: 46px; height: 46px; color: #fff; font-size: 16px; background: #515151; border: 0; border-radius: 12px; cursor: pointer; }.preview-button:disabled { cursor: wait; opacity: .4; }.voice-main { display: grid; flex: 1; min-width: 140px; gap: 5px; }.voice-main strong { font-size: 18px; }.voice-main small { overflow: hidden; color: #d5d5d5; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }.voice-main span { overflow: hidden; color: #aaa; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }.voice-meta { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }.voice-meta span { padding: 4px 7px; color: #aaa; font-size: 12px; background: #444; border-radius: 5px; }.select-button { min-width: 72px; padding: 10px 14px; color: #202020; font-weight: 700; background: #fff; border: 0; border-radius: 999px; cursor: pointer; }.select-button:disabled { cursor: not-allowed; color: #aaa; background: #555; }.favorite-button { padding: 6px; color: #aaa; font-size: 28px; background: transparent; border: 0; cursor: pointer; }.favorite-button.active { color: #f4cf49; }.voice-empty { padding: 80px 0; color: #aaa; text-align: center; }
-.voice-picker-pagination { display: flex; justify-content: center; gap: 8px; padding: 0 30px 24px; }.voice-picker-pagination button { min-width: 36px; padding: 8px 12px; color: #ccc; background: #343434; border: 1px solid rgba(255,255,255,.08); border-radius: 8px; cursor: pointer; }.voice-picker-pagination button.active { color: #202020; background: #fff; }.voice-picker-pagination button:disabled { cursor: not-allowed; opacity: .4; }
+.voice-picker-backdrop { position: fixed; inset: 0; z-index: 12000; display: grid; place-items: center; padding: 18px; background: rgba(0, 0, 0, .68); backdrop-filter: blur(8px); }
+.voice-picker { display: flex; flex-direction: column; width: min(930px, 100%); max-height: min(650px, calc(100vh - 36px)); overflow: hidden; color: #f5f5f5; background: #242424; border: 1px solid rgba(255,255,255,.1); border-radius: 16px; box-shadow: 0 24px 72px rgba(0,0,0,.5); }
+.voice-picker-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,.08); }
+.voice-picker-header h2 { margin: 0; font-size: 17px; font-weight: 600; }.close-button { color: #aaa; font-size: 28px; line-height: 1; background: none; border: 0; cursor: pointer; }.close-button:hover { color: #fff; }
+.voice-picker-toolbar { display: flex; gap: 10px; align-items: center; padding: 14px 20px 9px; }.voice-picker-tabs { display: flex; gap: 2px; padding: 4px; background: #343434; border-radius: 9px; }.voice-picker-tabs button { padding: 7px 10px; color: #aaa; font-size: 13px; background: transparent; border: 0; border-radius: 6px; cursor: pointer; }.voice-picker-tabs button.active { color: #fff; background: #606060; }.voice-picker-tabs .clone-tab { cursor: not-allowed; opacity: .45; }
+.voice-search { display: flex; flex: 1; gap: 7px; align-items: center; min-width: 160px; padding: 0 11px; background: #343434; border-radius: 9px; color: #aaa; }.voice-search span { font-size: 19px; }.voice-search input { width: 100%; height: 36px; color: #fff; font-size: 13px; background: transparent; border: 0; outline: 0; }
+.voice-picker-filters { display: flex; gap: 7px; padding: 0 20px 9px; }.voice-picker-filters select { min-width: 98px; padding: 6px 8px; color: #ddd; font-size: 13px; background: #343434; border: 1px solid rgba(255,255,255,.08); border-radius: 7px; outline: 0; }
+.voice-picker-list { min-height: 200px; padding: 0 20px 12px; overflow-y: auto; }.voice-row { display: flex; gap: 10px; align-items: center; min-height: 66px; margin: 5px 0; padding: 9px 12px; background: #323232; border: 1px solid transparent; border-radius: 11px; }.voice-row.selected { background: #414141; border-color: rgba(255,255,255,.18); }.preview-button { width: 34px; height: 34px; color: #fff; font-size: 13px; background: #515151; border: 0; border-radius: 8px; cursor: pointer; }.preview-button:disabled { cursor: wait; opacity: .4; }.voice-main { display: grid; flex: 1; min-width: 140px; gap: 2px; }.voice-main strong { font-size: 14px; font-weight: 600; }.voice-main small { overflow: hidden; color: #d5d5d5; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.voice-main span { overflow: hidden; color: #aaa; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }.voice-meta { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }.voice-meta span { padding: 3px 5px; color: #aaa; font-size: 10px; background: #444; border-radius: 4px; }.select-button { min-width: 58px; padding: 7px 10px; color: #202020; font-size: 12px; font-weight: 600; background: #fff; border: 0; border-radius: 999px; cursor: pointer; }.select-button:disabled { cursor: not-allowed; color: #aaa; background: #555; }.favorite-button { padding: 4px; color: #aaa; font-size: 20px; background: transparent; border: 0; cursor: pointer; }.favorite-button.active { color: #f4cf49; }.voice-empty { padding: 56px 0; color: #aaa; text-align: center; }
+.voice-id { display: flex; gap: 6px; align-items: center; min-width: 0; }.voice-id span { color: #b9b9b9; font-size: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }.voice-id button { flex: 0 0 auto; padding: 1px 5px; color: #ddd; font-size: 10px; line-height: 16px; background: #4b4b4b; border: 1px solid rgba(255,255,255,.12); border-radius: 4px; cursor: pointer; }.voice-id button:hover { color: #fff; background: #5b5b5b; }
+.voice-picker-pagination { display: flex; justify-content: center; gap: 5px; padding: 0 20px 15px; }.voice-picker-pagination button { min-width: 28px; padding: 5px 8px; color: #ccc; font-size: 12px; background: #343434; border: 1px solid rgba(255,255,255,.08); border-radius: 6px; cursor: pointer; }.voice-picker-pagination button.active { color: #202020; background: #fff; }.voice-picker-pagination button:disabled { cursor: not-allowed; opacity: .4; }
 @media (max-width: 760px) { .voice-picker-backdrop { padding: 12px; }.voice-picker-header, .voice-picker-toolbar, .voice-picker-filters, .voice-picker-list { padding-left: 16px; padding-right: 16px; }.voice-picker-toolbar { align-items: stretch; flex-direction: column; }.voice-picker-tabs { overflow-x: auto; }.voice-picker-tabs button { flex: 0 0 auto; }.voice-row { gap: 10px; padding: 12px; }.voice-meta { display: none; }.voice-main strong { font-size: 15px; } }
 </style>
