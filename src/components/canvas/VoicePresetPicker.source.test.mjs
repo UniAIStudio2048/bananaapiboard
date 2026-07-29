@@ -5,13 +5,16 @@ import { readFileSync } from 'node:fs'
 const source = readFileSync(new URL('./VoicePresetPicker.vue', import.meta.url), 'utf8')
 
 test('voice picker defaults to simplified Chinese', () => {
-  assert.match(source, /const locale = ref\('zh-CN'\)/)
+  assert.match(source, /const locale = ref\(isMiniMax\.value \? '' : 'zh-CN'\)/)
   assert.match(source, /中文（简体）/)
 })
 
 test('voice picker paginates the list from the bottom', () => {
   assert.match(source, /const currentPage = ref\(1\)/)
   assert.match(source, /const paginatedVoices = computed\(/)
+  assert.match(source, /const visiblePageItems = computed\(/)
+  assert.match(source, /function getVisiblePageItems\(total, current\)/)
+  assert.match(source, /item\.type === 'ellipsis'/)
   assert.match(source, /class="voice-picker-pagination"/)
   assert.match(source, /上一页/)
   assert.match(source, /下一页/)
@@ -36,9 +39,40 @@ test('voice clone displays a live waveform while recording', () => {
 })
 
 test('my voices supports uploading MP3 files between 3 and 35 seconds', () => {
+  assert.match(source, /v-if="!isMiniMax" class="mine-upload"/)
   assert.match(source, /accept="audio\/mpeg,\.mp3"/)
   assert.match(source, /function handleMineAudioUpload\(event\)/)
   assert.match(source, /duration > 3 && duration < 35/)
+})
+
+test('MiniMax picker exposes clone controls only when the configured fixed price is available', () => {
+  assert.match(source, /provider: \{ type: String, default: 'coze' \}/)
+  assert.match(source, /const isMiniMax = computed\(\(\) => props\.provider === 'minimax'\)/)
+  assert.match(source, /\/api\/audio\/minimax\/system-voices\?model=/)
+  assert.match(source, /\/api\/audio\/user-voices\?provider=minimax/)
+  assert.match(source, /const isMiniMaxCloneEnabled = computed\(\(\) => isMiniMax\.value && Number\.isFinite\(props\.clonePointsCost\)/)
+  assert.match(source, /v-if="!isMiniMax \|\| isMiniMaxCloneEnabled"[^>]*>克隆新音色/)
+  assert.match(source, /accept="audio\/mpeg,audio\/mp4,audio\/wav,\.mp3,\.m4a,\.wav"/)
+  assert.match(source, /\/api\/audio\/minimax\/voices\/clone/)
+  assert.match(source, /本次复刻将消耗/)
+  assert.match(source, /我确认拥有该声音的合法授权/)
+  assert.match(source, /v-if="!isMiniMax" class="mine-upload"/)
+  assert.match(source, /:disabled="!voice\.hasPreview && !isMiniMax"/)
+})
+
+test('MiniMax clone checks file constraints and keeps the provider-required source format', () => {
+  assert.match(source, /复刻音频不能超过20MB/)
+  assert.match(source, /复刻音频时长需在10秒至5分钟之间/)
+  assert.match(source, /function getRecordingExtension\(mimeType = ''\)/)
+  assert.match(source, /recording-\$\{Date\.now\(\)\}\$\{getRecordingExtension\(blob\.type\)\}/)
+  assert.match(source, /if \(recordSeconds\.value >= 300\) stopRecording\(\)/)
+})
+
+test('MiniMax official voices can generate and cache a playable preview', () => {
+  assert.match(source, /\/api\/audio\/minimax\/system-voices\/\$\{encodeURIComponent\(voice\.sourceVoice\)\}\/preview/)
+  assert.match(source, /const previewLoadingId = ref\(''\)/)
+  assert.match(source, /function requestMiniMaxSystemPreview\(voice, attempts = 0\)/)
+  assert.match(source, /previewLoadingId\.value === voice\.id/)
 })
 
 test('my voices displays transcripts only for recorded clone voices', () => {

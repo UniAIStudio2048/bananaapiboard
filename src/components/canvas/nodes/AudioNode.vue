@@ -54,6 +54,7 @@ const props = defineProps({
 const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
+const teamStore = useTeamStore()
 const duplicateSubmitGuard = createCanvasDuplicateSubmitGuard()
 const uploadManager = useUploadManager()
 const modelStatsStore = useModelStatsStore()
@@ -86,7 +87,7 @@ const interactionMode = inject('interactionMode', ref('comfyui'))
 const musicModels = computed(() => {
   return [
     ...getAvailableMusicModels().map(model => ({ ...model, kind: 'music' })),
-    ...getAvailableAudioModels().map(model => ({ ...model, kind: 'coze-audio', icon: model.icon || '◉' }))
+    ...getAvailableAudioModels().map(model => ({ ...model, kind: 'audio-model', icon: model.icon || '◉' }))
   ]
 })
 
@@ -118,6 +119,9 @@ const musicPrompt = ref(props.data.musicPrompt || '')
 const promptEditorRenderKey = ref(0)
 const hasManualPromptTextareaSize = ref(false)
 const isSpeechToneMenuOpen = ref(false)
+const isSpeechPauseMenuOpen = ref(false)
+const isParalinguisticMenuOpen = ref(false)
+const customSpeechPauseSeconds = ref('')
 const title = ref(props.data.title || '')
 const tags = ref(props.data.tags || '')
 const negativeTags = ref(props.data.negativeTags || '')
@@ -210,6 +214,11 @@ const speechToneGroups = [
     ]
   }
 ]
+const speechPauseOptions = [0.25, 0.5, 1, 1.5]
+const paralinguisticCues = [
+  '笑声', '轻笑', '咳嗽', '清嗓子', '呻吟', '正常换气', '喘气', '吸气',
+  '叹气', '哼', '打嗝', '咂嘴', '哼唱', '嘶嘶声', '呃', '喷嚏'
+]
 const voiceDesignStyle = computed(() => [
   voiceDialect.value,
   voiceAgeGender.value,
@@ -242,7 +251,10 @@ const showAdvancedOptions = ref(false)
 const currentMusicModelConfig = computed(() => {
   return musicModels.value.find(m => m.value === selectedMusicModel.value) || musicModels.value[0]
 })
-const audioCapability = computed(() => currentMusicModelConfig.value?.kind === 'coze-audio' ? currentMusicModelConfig.value.capability : null)
+const isMiniMaxAudio = computed(() => currentMusicModelConfig.value?.provider === 'minimax')
+const audioCapability = computed(() => currentMusicModelConfig.value?.kind === 'audio-model' ? currentMusicModelConfig.value.capability : null)
+const voiceClonePointsCost = computed(() => currentMusicModelConfig.value?.voiceClonePointsCost ?? null)
+const voiceCloneSpaceParams = computed(() => teamStore.getSpaceParams('current'))
 const AUDIO_REFERENCE_NODE_TYPES = ['audio-input', 'audio']
 const inheritedAudioSource = computed(() => {
   const edge = canvasStore.edges.find(edge => edge.target === props.id && AUDIO_REFERENCE_NODE_TYPES.includes(
@@ -272,12 +284,25 @@ const voiceCloneReadingTexts = computed(() => {
   return texts.length ? texts : DEFAULT_VOICE_CLONE_READING_TEXTS
 })
 const audioPromptPlaceholder = computed(() => {
+  if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 500 字）'
+  if (isMiniMaxAudio.value && audioCapability.value === 'tts') return '输入需要合成的文案（最多 50000 字）'
   if (audioCapability.value === 'voice_design') return '说话的文本内容，描述希望角色说出的内容'
   if (audioCapability.value === 'tts') return '输入需要合成的文案。'
   if (audioCapability.value === 'voice_clone') return '说话的文本内容，描述你需要克隆的文本内容'
   return '描述您想要的音乐。'
 })
+const audioPromptLimit = computed(() => {
+  if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return 500
+  if (isMiniMaxAudio.value && audioCapability.value === 'tts') return 50000
+  return 4100
+})
 const canGenerateCurrentAudio = computed(() => {
+  if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') {
+    return !!musicPrompt.value.trim() && !!voiceDesignStyle.value.trim() && musicPrompt.value.length <= audioPromptLimit.value
+  }
+  if (isMiniMaxAudio.value && audioCapability.value === 'tts') {
+    return !!musicPrompt.value.trim() && !!selectedVoicePreset.value?.sourceVoice && musicPrompt.value.length <= audioPromptLimit.value
+  }
   if (audioCapability.value) return true
   return !!musicPrompt.value.trim()
 })
@@ -305,6 +330,7 @@ function formatModelSuccessRate(modelName) {
 // 音乐生成积分消耗（生成2首歌）
 const musicPointsCost = computed(() => {
   const cost = currentMusicModelConfig.value?.pointsCost || 20
+  if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return cost
   return audioCapability.value
     ? calculateAudioPointsCost(cost, musicPrompt.value)
     : cost * 2
@@ -574,6 +600,8 @@ function handleMusicModelDropdownClickOutside(event) {
   }
   if (!event.target.closest('.speech-tone-toolbar')) {
     isSpeechToneMenuOpen.value = false
+    isSpeechPauseMenuOpen.value = false
+    isParalinguisticMenuOpen.value = false
   }
   if (!event.target.closest('.voice-style-selector') && !isVoiceStyleConfirmOpen.value) {
     isVoiceStyleDropdownOpen.value = false
@@ -663,7 +691,6 @@ async function handleGenerateMusic() {
       makeInstrumental: makeInstrumental.value
     })
 
-    const teamStore = useTeamStore()
     const spaceParams = teamStore.getSpaceParams('current')
     
     const requestBody = {
@@ -729,7 +756,11 @@ async function handleGenerateMusic() {
 
 async function handleGenerateCozeAudio() {
   if (!canGenerateCurrentAudio.value) {
-    const message = audioCapability.value === 'voice_clone'
+    const message = isMiniMaxAudio.value && audioCapability.value === 'voice_design'
+      ? '请填写音色描述和试听文案'
+      : isMiniMaxAudio.value && audioCapability.value === 'tts'
+        ? '请输入文案并选择官方音色或我的音色'
+        : audioCapability.value === 'voice_clone'
       ? '请连接或上传参考音频'
       : audioCapability.value === 'tts'
         ? '请输入文案，并且只连接一种音色来源'
@@ -749,14 +780,19 @@ async function handleGenerateCozeAudio() {
   isGeneratingMusic.value = true
   canvasStore.updateNodeData(targetNodeId, { status: 'processing', processingStartedAt: Date.now(), error: null, output: null, audioUrl: null })
   try {
-    const teamStore = useTeamStore()
     const spaceParams = teamStore.getSpaceParams('current')
     const body = {
       model: selectedMusicModel.value,
       spaceType: spaceParams.spaceType,
       ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
     }
-    if (audioCapability.value === 'voice_design') {
+    if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') {
+      body.prompt = voiceDesignStyle.value
+      body.preview_text = musicPrompt.value
+    } else if (isMiniMaxAudio.value && audioCapability.value === 'tts') {
+      body.text = musicPrompt.value
+      body.voice_id = selectedVoicePreset.value?.sourceVoice
+    } else if (audioCapability.value === 'voice_design') {
       body.prompt = musicPrompt.value
       body.style = voiceDesignStyle.value
     } else if (audioCapability.value === 'voice_clone') {
@@ -774,7 +810,17 @@ async function handleGenerateCozeAudio() {
       }
     }
     const response = await apiClient.post('/api/audio/generate', body)
-    canvasStore.updateNodeData(targetNodeId, { taskId: response.task_id, taskType: 'audio-generation', status: 'processing', processingStartedAt: Date.now() })
+    canvasStore.updateNodeData(targetNodeId, {
+      taskId: response.task_id,
+      taskType: 'audio-generation',
+      status: 'processing',
+      processingStartedAt: Date.now(),
+      audioProvider: isMiniMaxAudio.value ? 'minimax' : 'coze',
+      audioModel: selectedMusicModel.value,
+      audioCapability: audioCapability.value,
+      canSaveDesignedVoice: false,
+      designedVoiceSaved: false
+    })
     pollCozeAudioStatus(targetNodeId, response.task_id)
   } catch (error) {
     canvasStore.updateNodeData(targetNodeId, { status: 'error', error: formatAudioErrorMessage(error.response?.data?.error || error.message) })
@@ -796,11 +842,17 @@ async function pollCozeAudioStatus(nodeId, taskId) {
     }
     const data = response.data || {}
     const url = data.audio_url || data.preview_url
+    const generatedNodeData = canvasStore.nodes.find(node => node.id === nodeId)?.data || {}
     canvasStore.updateNodeData(nodeId, {
       status: 'success',
       audioUrl: url,
       audioData: url,
       voiceId: data.voice_id || null,
+      audioProvider: generatedNodeData.audioProvider || currentMusicModelConfig.value?.provider || 'coze',
+      audioModel: generatedNodeData.audioModel || selectedMusicModel.value,
+      audioCapability: generatedNodeData.audioCapability || audioCapability.value,
+      canSaveDesignedVoice: generatedNodeData.audioProvider === 'minimax' && generatedNodeData.audioCapability === 'voice_design',
+      designedVoiceSaved: false,
       output: {
         type: 'audio',
         url,
@@ -811,6 +863,22 @@ async function pollCozeAudioStatus(nodeId, taskId) {
     window.dispatchEvent(new CustomEvent('user-info-updated'))
   } catch (error) {
     setTimeout(() => pollCozeAudioStatus(nodeId, taskId), 3000)
+  }
+}
+
+const isSavingDesignedVoice = ref(false)
+
+async function saveDesignedVoice() {
+  if (!props.data?.taskId || isSavingDesignedVoice.value) return
+  isSavingDesignedVoice.value = true
+  try {
+    await apiClient.post('/api/audio/user-voices/from-design', { task_id: props.data.taskId })
+    canvasStore.updateNodeData(props.id, { designedVoiceSaved: true })
+    await showAlert('音色已保存到“我的音色”', '保存成功')
+  } catch (error) {
+    await showAlert(error.response?.data?.error || error.message || '保存音色失败', '保存失败')
+  } finally {
+    isSavingDesignedVoice.value = false
   }
 }
 
@@ -1019,6 +1087,26 @@ function insertMusicEditorPlainText(text) {
 function insertSpeechTone(tone) {
   insertMusicEditorPlainText(tone.token)
   isSpeechToneMenuOpen.value = false
+}
+
+function formatSpeechPauseToken(seconds) {
+  const value = Number(seconds)
+  if (!Number.isFinite(value) || value <= 0) return ''
+  const formattedSeconds = value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
+  return `<#${formattedSeconds}#>`
+}
+
+function insertSpeechPause(seconds) {
+  const token = formatSpeechPauseToken(seconds)
+  if (!token) return
+  insertMusicEditorPlainText(token)
+  customSpeechPauseSeconds.value = ''
+  isSpeechPauseMenuOpen.value = false
+}
+
+function insertParalinguisticCue(cue) {
+  insertMusicEditorPlainText(`（${cue}）`)
+  isParalinguisticMenuOpen.value = false
 }
 
 function insertAudioReferenceTag() {
@@ -2218,6 +2306,17 @@ function handleSpeedEditorClickOutside(event) {
             <span class="audio-controls-spacer" aria-hidden="true"></span>
           </div>
 
+          <button
+            v-if="props.data?.canSaveDesignedVoice && !props.data?.designedVoiceSaved"
+            type="button"
+            class="save-designed-voice-btn"
+            :disabled="isSavingDesignedVoice"
+            @click.stop="saveDesignedVoice"
+          >
+            {{ isSavingDesignedVoice ? '保存中…' : '保存到我的音色' }}
+          </button>
+          <p v-else-if="props.data?.canSaveDesignedVoice" class="designed-voice-saved">已保存到我的音色</p>
+
         </div>
         
         <!-- 生成中状态 -->
@@ -2359,7 +2458,7 @@ function handleSpeedEditorClickOutside(event) {
             type="button"
             class="speech-tone-trigger"
             :aria-expanded="isSpeechToneMenuOpen"
-            @click.stop="isSpeechToneMenuOpen = !isSpeechToneMenuOpen"
+            @click.stop="isSpeechToneMenuOpen = !isSpeechToneMenuOpen; isSpeechPauseMenuOpen = false; isParalinguisticMenuOpen = false"
           >语气插入</button>
           <div v-if="isSpeechToneMenuOpen" class="speech-tone-menu" @mousedown.prevent @click.stop>
             <section v-for="group in speechToneGroups" :key="group.label" class="speech-tone-group">
@@ -2374,6 +2473,62 @@ function handleSpeedEditorClickOutside(event) {
                 >{{ tone.label }}</button>
               </div>
             </section>
+          </div>
+          <div v-if="isMiniMaxAudio && audioCapability === 'tts'" class="minimax-speech-tools">
+            <div class="speech-tool">
+              <button
+                type="button"
+                class="speech-tone-trigger"
+                :aria-expanded="isSpeechPauseMenuOpen"
+                @click.stop="isSpeechPauseMenuOpen = !isSpeechPauseMenuOpen; isSpeechToneMenuOpen = false; isParalinguisticMenuOpen = false"
+              >停顿插入</button>
+              <div v-if="isSpeechPauseMenuOpen" class="speech-tone-menu speech-pause-menu" @mousedown.prevent @click.stop>
+                <div class="speech-tone-group-label">选择停顿时长</div>
+                <div class="speech-tone-options">
+                  <button
+                    v-for="seconds in speechPauseOptions"
+                    :key="seconds"
+                    type="button"
+                    :title="formatSpeechPauseToken(seconds)"
+                    @click="insertSpeechPause(seconds)"
+                  >{{ seconds.toFixed(seconds % 1 === 0 ? 1 : 2).replace(/0$/, '') }}s</button>
+                </div>
+                <div class="speech-pause-custom">
+                  <input
+                    v-model="customSpeechPauseSeconds"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    placeholder="自定义停顿"
+                    aria-label="自定义停顿秒数"
+                    @mousedown.stop
+                    @keydown.enter.prevent="insertSpeechPause(customSpeechPauseSeconds)"
+                  />
+                  <span>秒</span>
+                  <button type="button" :disabled="!formatSpeechPauseToken(customSpeechPauseSeconds)" @click="insertSpeechPause(customSpeechPauseSeconds)">插入</button>
+                </div>
+              </div>
+            </div>
+            <div class="speech-tool">
+              <button
+                type="button"
+                class="speech-tone-trigger"
+                :aria-expanded="isParalinguisticMenuOpen"
+                @click.stop="isParalinguisticMenuOpen = !isParalinguisticMenuOpen; isSpeechToneMenuOpen = false; isSpeechPauseMenuOpen = false"
+              >语气词插入</button>
+              <div v-if="isParalinguisticMenuOpen" class="speech-tone-menu paralinguistic-menu" @mousedown.prevent @click.stop>
+                <div class="speech-tone-group-label">以“（中文描述）”插入</div>
+                <div class="speech-tone-options paralinguistic-options">
+                  <button
+                    v-for="cue in paralinguisticCues"
+                    :key="cue"
+                    type="button"
+                    :title="`（${cue}）`"
+                    @click="insertParalinguisticCue(cue)"
+                  >{{ cue }}</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -2568,16 +2723,16 @@ function handleSpeedEditorClickOutside(event) {
             v-if="audioCapability === 'tts'"
             type="button"
             class="voice-preset-trigger"
-            :title="inheritedAudioUrl ? '已连接参考音频，生成时将优先使用参考音频' : '选择预设音色'"
+            :title="isMiniMaxAudio ? '选择官方音色或我的音色' : (inheritedAudioUrl ? '已连接参考音频，生成时将优先使用参考音频' : '选择预设音色')"
             @click="showVoicePresetPicker = true"
           >
             <span class="voice-preset-icon">♬</span>
-            <span>{{ inheritedAudioUrl ? '参考音频优先' : voicePresetTriggerLabel }}</span>
+            <span>{{ !isMiniMaxAudio && inheritedAudioUrl ? '参考音频优先' : voicePresetTriggerLabel }}</span>
             <span class="voice-preset-arrow">▾</span>
           </button>
           
           <!-- 字数统计 -->
-          <span class="char-count">{{ musicPrompt.length }}/4100</span>
+          <span class="char-count">{{ musicPrompt.length }}/{{ audioPromptLimit }}</span>
 
           <PromptTranslateButton :text="musicPrompt" @translated="handlePromptTranslated" />
           
@@ -2675,6 +2830,11 @@ function handleSpeedEditorClickOutside(event) {
         v-if="showVoicePresetPicker"
         :model-value="selectedVoicePreset"
         :reading-texts="voiceCloneReadingTexts"
+        :provider="isMiniMaxAudio ? 'minimax' : 'coze'"
+        :model="selectedMusicModel"
+        :clone-points-cost="voiceClonePointsCost"
+        :space-type="voiceCloneSpaceParams.spaceType"
+        :team-id="voiceCloneSpaceParams.teamId || ''"
         @close="showVoicePresetPicker = false"
         @select="selectVoicePreset"
       />
@@ -3319,6 +3479,32 @@ function handleSpeedEditorClickOutside(event) {
   grid-column: 3;
 }
 
+.save-designed-voice-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 9px 12px;
+  color: #202020;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fff;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.save-designed-voice-btn:disabled {
+  cursor: wait;
+  color: #aaa;
+  background: #555;
+}
+
+.designed-voice-saved {
+  margin: 10px 0 0;
+  color: #7de4a5;
+  font-size: 12px;
+  text-align: center;
+}
+
 /* 拖拽覆盖层 */
 .drag-overlay {
   position: absolute;
@@ -3715,6 +3901,17 @@ function handleSpeedEditorClickOutside(event) {
   padding: 14px 20px 0;
 }
 
+.minimax-speech-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.speech-tool {
+  position: relative;
+  display: flex;
+}
+
 .speech-tone-trigger {
   display: inline-flex;
   gap: 5px;
@@ -3780,6 +3977,78 @@ function handleSpeedEditorClickOutside(event) {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.14);
   border-color: rgba(255, 255, 255, 0.12);
+}
+
+.speech-pause-custom {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.speech-pause-custom input {
+  box-sizing: border-box;
+  width: 98px;
+  min-height: 27px;
+  padding: 4px 8px;
+  color: rgba(255, 255, 255, 0.78);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid transparent;
+  border-radius: 5px;
+  outline: none;
+  appearance: textfield;
+}
+
+.speech-pause-custom input::-webkit-inner-spin-button,
+.speech-pause-custom input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.speech-pause-custom input::placeholder,
+.speech-pause-custom span {
+  color: rgba(255, 255, 255, 0.48);
+}
+
+.speech-pause-custom span {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.speech-pause-custom input:focus {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.speech-pause-custom button {
+  min-height: 27px;
+  padding: 4px 8px;
+  color: rgba(255, 255, 255, 0.78);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.speech-pause-custom button:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.speech-pause-custom button:disabled {
+  color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: not-allowed;
 }
 
 .prompt-textarea {
@@ -4879,6 +5148,28 @@ function handleSpeedEditorClickOutside(event) {
 }
 
 :root.canvas-theme-light .audio-config-panel .speech-tone-options button:hover {
+  color: #1c1917;
+  background: rgba(0, 0, 0, 0.09);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+:root.canvas-theme-light .audio-config-panel .speech-pause-custom {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .audio-config-panel .speech-pause-custom input,
+:root.canvas-theme-light .audio-config-panel .speech-pause-custom button {
+  color: #57534e;
+  background: rgba(0, 0, 0, 0.035);
+}
+
+:root.canvas-theme-light .audio-config-panel .speech-pause-custom input::placeholder,
+:root.canvas-theme-light .audio-config-panel .speech-pause-custom span {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+:root.canvas-theme-light .audio-config-panel .speech-pause-custom input:focus,
+:root.canvas-theme-light .audio-config-panel .speech-pause-custom button:hover:not(:disabled) {
   color: #1c1917;
   background: rgba(0, 0, 0, 0.09);
   border-color: rgba(0, 0, 0, 0.1);

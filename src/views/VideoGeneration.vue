@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { getMe, isQiniuCdnUrl, buildVideoDownloadUrl } from '@/api/client'
+import { getMe, isQiniuCdnUrl, buildVideoDownloadUrl, uploadImages } from '@/api/client'
 import { getTenantHeaders, getModelDisplayName, isModelEnabled, getAvailableVideoModels, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
@@ -26,6 +26,7 @@ import {
 import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
+import { createQuickSeedanceCharacterAsset, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 import {
   appendSpaceParamsToFormData,
   buildSpaceHistoryUrl,
@@ -258,6 +259,11 @@ const successMessage = ref('')
 const imageFiles = ref([])
 const previewUrls = ref([])
 const isDragging = ref(false)
+const imageReviews = ref(new Map())
+const reviewChannel = ref(null)
+const reviewChannelMessage = ref('')
+const isQuickImageReviewSubmitting = ref(false)
+let reviewChannelRequestId = 0
 
 const me = ref(null)
 const history = ref([])
@@ -599,7 +605,179 @@ function clearImages() {
   previewUrls.value.forEach(url => URL.revokeObjectURL(url))
   imageFiles.value = []
   previewUrls.value = []
+  clearImageReviews()
 }
+
+const reviewableImageFiles = computed(() => {
+  if (isSeedanceModel.value) {
+    if (seedanceMode.value === 'image2video_first') {
+      return seedanceFirstFrameFile.value ? [seedanceFirstFrameFile.value] : []
+    }
+    if (seedanceMode.value === 'image2video_first_last') {
+      return [seedanceFirstFrameFile.value, seedanceLastFrameFile.value].filter(Boolean)
+    }
+    return seedanceRefImages.value
+  }
+  if (mode.value === 'image' && !isKlingV3OmniModel.value) return imageFiles.value
+  return []
+})
+
+const quickImageReviewSummary = computed(() => {
+  const files = reviewableImageFiles.value
+  if (files.length === 0) return ''
+  const reviews = files.map(file => imageReviews.value.get(file)).filter(Boolean)
+  const approved = reviews.filter(item => item.status === 'approved').length
+  const processing = reviews.filter(item => item.status === 'processing').length
+  const failed = reviews.filter(item => item.status === 'failed').length
+  if (processing > 0) return `审核中 ${processing}/${files.length}`
+  if (failed > 0) return `过审失败 ${failed}/${files.length}`
+  if (approved === files.length) return `已过审 ${approved}/${files.length}`
+  return ''
+})
+
+function clearImageReviews() {
+  reviewChannelRequestId += 1
+  imageReviews.value = new Map()
+  reviewChannel.value = null
+  reviewChannelMessage.value = ''
+}
+
+function updateImageReview(file, patch) {
+  const next = new Map(imageReviews.value)
+  next.set(file, { ...(next.get(file) || {}), ...patch })
+  imageReviews.value = next
+}
+
+function getQuickImageReviewSubmission(files = reviewableImageFiles.value) {
+  const reviews = files.map(file => imageReviews.value.get(file))
+  const hasReviews = reviews.some(Boolean)
+  const hasProcessing = reviews.some(item => item?.status === 'processing')
+  const allApproved = files.length > 0 && reviews.every(item => item?.status === 'approved' && item.assetUri)
+  const channelId = allApproved ? reviews[0].channelId : ''
+  const channelIndex = allApproved ? reviews[0].channelIndex : -1
+  const sameChannel = allApproved && reviews.every(item => item.channelId === channelId && item.channelIndex === channelIndex)
+
+  return {
+    hasReviews,
+    hasProcessing,
+    approved: allApproved && sameChannel,
+    channelId,
+    channelIndex,
+    assetUris: allApproved && sameChannel ? reviews.map(item => item.assetUri) : [],
+    assetUrisByFile: new Map(files.map((file, index) => [file, reviews[index]?.assetUri || '']))
+  }
+}
+
+function appendReviewChannel(formData, reviewSubmission) {
+  if (!reviewSubmission.approved) return
+  formData.append('review_channel_id', reviewSubmission.channelId)
+  formData.append('review_channel_index', String(reviewSubmission.channelIndex))
+}
+
+async function loadReviewChannel() {
+  const files = reviewableImageFiles.value
+  const requestId = ++reviewChannelRequestId
+  reviewChannel.value = null
+  reviewChannelMessage.value = ''
+  if (!me.value || files.length === 0) return null
+
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(getApiUrl(`/api/videos/review-channel?model=${encodeURIComponent(model.value)}`), {
+      headers: {
+        ...getTenantHeaders(),
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    })
+    const data = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(data.message || data.error || '当前模型不支持图片过审')
+    if (!data.channelId || !Number.isInteger(Number(data.channelIndex)) || !data.providerType) {
+      throw new Error('当前模型没有可用的图片过审渠道')
+    }
+    if (requestId !== reviewChannelRequestId) return null
+    reviewChannel.value = data
+    return data
+  } catch (reviewError) {
+    if (requestId !== reviewChannelRequestId) return null
+    reviewChannelMessage.value = reviewError.message || '当前模型未配置可用的图片过审渠道'
+    return null
+  }
+}
+
+async function handleQuickImageReview() {
+  if (isQuickImageReviewSubmitting.value) return
+  const files = reviewableImageFiles.value
+  if (files.length === 0) return
+
+  const channel = reviewChannel.value || await loadReviewChannel()
+  if (!channel) {
+    error.value = reviewChannelMessage.value || '当前模型未配置可用的图片过审渠道'
+    return
+  }
+
+  isQuickImageReviewSubmitting.value = true
+  try {
+    for (const [index, file] of files.entries()) {
+      const existing = imageReviews.value.get(file)
+      if (existing?.status === 'approved' && existing.channelId === channel.channelId && existing.channelIndex === Number(channel.channelIndex)) continue
+      if (existing?.status === 'processing') continue
+
+      const [url] = await uploadImages([file])
+      if (!url) throw new Error('上传图片失败')
+      const result = await createQuickSeedanceCharacterAsset({
+        URL: url,
+        Name: `新手视频过审_${Date.now()}_${index + 1}`,
+        providerType: channel.providerType,
+        spaceType: getBeginnerSpaceParams().spaceType,
+        teamId: getBeginnerSpaceParams().teamId
+      })
+      const assetId = result.quickAsset?.assetId || result.asset?.Id || result.asset?.FaceCode || result.Id
+      if (!assetId) throw new Error('图片过审接口返回数据异常')
+
+      const providerType = result.quickAsset?.providerType || channel.providerType
+      const initialFaceCode = result.quickAsset?.faceCode || result.asset?.FaceCode || result.asset?.faceCode || assetId
+      const isFaceReference = providerType === 'seedance_openapi_pro' || providerType === 'bytefor'
+      updateImageReview(file, {
+        status: 'processing',
+        assetUri: result.quickAsset?.assetUri || (isFaceReference ? `face:${initialFaceCode}` : `asset://${assetId}`),
+        channelId: channel.channelId,
+        channelIndex: Number(channel.channelIndex),
+        providerType
+      })
+
+      const { promise } = pollAssetStatus(assetId, { interval: 5000, timeout: 2700000, providerType })
+      promise.then((asset) => {
+        const finalFaceCode = asset.FaceCode || asset.faceCode || initialFaceCode
+        updateImageReview(file, {
+          status: 'approved',
+          assetUri: isFaceReference ? `face:${finalFaceCode}` : `asset://${asset.Id || assetId}`
+        })
+      }).catch((pollError) => {
+        console.error('[VideoGeneration] 图片过审轮询失败:', pollError)
+        updateImageReview(file, { status: 'failed', error: pollError.message || '图片过审失败' })
+      })
+    }
+    successMessage.value = '图片已提交过审，审核完成后会自动使用对应渠道的素材格式生成视频'
+  } catch (reviewError) {
+    console.error('[VideoGeneration] 图片过审失败:', reviewError)
+    error.value = `提交图片过审失败：${reviewError.message || '未知错误'}`
+  } finally {
+    isQuickImageReviewSubmitting.value = false
+  }
+}
+
+watch(
+  [model, mode, () => reviewableImageFiles.value.length],
+  ([, , imageCount]) => {
+    if (imageCount > 0) {
+      void loadReviewChannel()
+      return
+    }
+    reviewChannel.value = null
+    reviewChannelMessage.value = ''
+  },
+  { immediate: true }
+)
 
 // ========== Seedance 文件上传函数 ==========
 
@@ -861,6 +1039,7 @@ function removeSeedanceRefAudioUrl(idx) {
 }
 
 function clearSeedanceFiles() {
+  clearImageReviews()
   removeSeedanceFirstFrame()
   removeSeedanceLastFrame()
   seedanceRefImagePreviews.value.forEach(url => URL.revokeObjectURL(url))
@@ -1117,6 +1296,16 @@ async function generateVideo() {
     }
   }
 
+  const reviewSubmission = getQuickImageReviewSubmission()
+  if (reviewSubmission.hasProcessing) {
+    error.value = '图片正在审核中，请等待审核完成后再生成视频'
+    return
+  }
+  if (reviewSubmission.hasReviews && !reviewSubmission.approved) {
+    error.value = '请将当前上传图片全部过审后再使用审核素材生成视频'
+    return
+  }
+
   loading.value = true
   
   // 保存当前输入，用于创建任务
@@ -1148,9 +1337,13 @@ async function generateVideo() {
       formData.append('resolution', resolution.value)
     }
     
-    if (mode.value === 'image') {
-      for (const file of imageFiles.value) {
-        formData.append('images', file)
+    if (mode.value === 'image' && !isSeedanceModel.value && !isKlingV3OmniModel.value) {
+      if (reviewSubmission.approved) {
+        formData.append('image_urls', JSON.stringify(reviewSubmission.assetUris))
+      } else {
+        for (const file of imageFiles.value) {
+          formData.append('images', file)
+        }
       }
     }
 
@@ -1164,19 +1357,32 @@ async function generateVideo() {
       formData.append('seedance_watermark', seedanceWatermark.value ? 'true' : 'false')
 
       // 首帧图片（文件上传字段名需与 multer 配置一致，使用驼峰命名）
-      if (seedanceFirstFrameFile.value) {
+      const firstFrameReviewUri = reviewSubmission.assetUrisByFile.get(seedanceFirstFrameFile.value)
+      if (firstFrameReviewUri) {
+        formData.append('first_frame_image', firstFrameReviewUri)
+      } else if (seedanceFirstFrameFile.value) {
         formData.append('firstFrameImage', seedanceFirstFrameFile.value)
       }
       // 尾帧图片
-      if (seedanceLastFrameFile.value) {
+      const lastFrameReviewUri = reviewSubmission.assetUrisByFile.get(seedanceLastFrameFile.value)
+      if (lastFrameReviewUri) {
+        formData.append('last_frame_image', lastFrameReviewUri)
+      } else if (seedanceLastFrameFile.value) {
         formData.append('lastFrameImage', seedanceLastFrameFile.value)
       }
       // 多模态参考图片（文件上传）
+      const reviewedReferenceImageUris = []
       for (const file of seedanceRefImages.value) {
-        formData.append('referenceImages', file)
+        const reviewedUri = reviewSubmission.assetUrisByFile.get(file)
+        if (reviewedUri) {
+          reviewedReferenceImageUris.push(reviewedUri)
+        } else {
+          formData.append('referenceImages', file)
+        }
       }
-      if (seedanceRefImageUrls.value.length > 0) {
-        formData.append('reference_images', JSON.stringify(seedanceRefImageUrls.value))
+      const seedanceReferenceImageUrls = [...seedanceRefImageUrls.value, ...reviewedReferenceImageUris]
+      if (seedanceReferenceImageUrls.length > 0) {
+        formData.append('reference_images', JSON.stringify(seedanceReferenceImageUrls))
       }
       // 参考视频（文件上传）
       for (const file of seedanceRefVideos.value) {
@@ -1225,6 +1431,8 @@ async function generateVideo() {
         formData.append('kling_omni_keep_sound', klingV3OmniKeepSound.value)
       }
     }
+
+    appendReviewChannel(formData, reviewSubmission)
 
     console.log('[video] 请求参数:', {
       prompt: currentPrompt,
@@ -1998,6 +2206,7 @@ function toggleHistoryDrawer() {
 
 // 监听模型变化
 watch(model, (newModel) => {
+  clearImageReviews()
   // HD 选项已弃用，始终关闭
   if (hd.value) {
     hd.value = false
@@ -2758,6 +2967,23 @@ onUnmounted(() => {
                 </div>
                 <p class="text-xs text-slate-500 mt-1">仅 std/pro 模式支持，时长限制 3-10s</p>
               </div>
+            </div>
+
+            <div v-if="reviewableImageFiles.length > 0" class="rounded-lg border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700/50 p-2.5 space-y-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <span class="text-xs font-medium text-slate-700 dark:text-slate-300">🛡️ 图片审核</span>
+                <button
+                  v-if="reviewChannel"
+                  type="button"
+                  :disabled="isQuickImageReviewSubmitting || quickImageReviewSummary.startsWith('审核中')"
+                  class="px-2.5 py-1 text-xs font-medium rounded-md bg-gray-700 text-white hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed dark:bg-gray-200 dark:text-gray-900"
+                  @click="handleQuickImageReview"
+                >
+                  {{ isQuickImageReviewSubmitting ? '提交中...' : quickImageReviewSummary.startsWith('已过审') ? '已过审' : '一键过审' }}
+                </button>
+              </div>
+              <p v-if="quickImageReviewSummary" class="text-xs text-slate-500 dark:text-slate-400">{{ quickImageReviewSummary }}</p>
+              <p v-else-if="!reviewChannel" class="text-xs text-amber-600 dark:text-amber-400">{{ reviewChannelMessage || '正在检查当前模型的审核渠道...' }}</p>
             </div>
 
             <!-- 图生视频上传区域（非 Seedance 模型时显示） -->

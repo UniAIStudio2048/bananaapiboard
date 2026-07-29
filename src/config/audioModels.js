@@ -17,7 +17,7 @@ export function normalizeAudioModels(models = [], groups = []) {
     })
   })
   return (Array.isArray(models) ? models : [])
-    .filter(model => model?.enabled !== false && model?.apiType === 'coze-audio-workflow')
+    .filter(model => model?.enabled !== false && ['coze-audio-workflow', 'minimax-audio'].includes(model?.apiType))
     .map((model, sourceIndex) => ({
       value: model.name || model.id,
       label: model.displayName || model.name || model.id,
@@ -25,6 +25,11 @@ export function normalizeAudioModels(models = [], groups = []) {
       pointsCost: Number(model.pointsCost) || 0,
       capability: model.capability,
       apiType: model.apiType,
+      provider: model.apiType === 'minimax-audio' ? 'minimax' : 'coze',
+      actualModel: model.actualModel || '',
+      voiceClonePointsCost: model.voiceClonePointsCost === null || model.voiceClonePointsCost === undefined || model.voiceClonePointsCost === ''
+        ? null
+        : Math.max(0, Number(model.voiceClonePointsCost) || 0),
       icon: model.icon || '♫',
       groupName: groupMeta.get(model.name || model.id)?.name || '',
       groupLogo: groupMeta.get(model.name || model.id)?.logo || '',

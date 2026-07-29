@@ -9,6 +9,24 @@ test('publishes enabled Coze audio models and fixed voice styles', () => {
   ])
 })
 
+test('publishes enabled MiniMax audio models without exposing configuration secrets', () => {
+  const model = normalizeAudioModels([{
+    name: 'minimax-tts',
+    displayName: 'MiniMax 语音合成',
+    apiType: 'minimax-audio',
+    capability: 'tts',
+    actualModel: 'speech-2.8-hd',
+    voiceClonePointsCost: 18,
+    apiKey: 'must-not-be-published',
+    enabled: true
+  }])[0]
+
+  assert.equal(model.provider, 'minimax')
+  assert.equal(model.actualModel, 'speech-2.8-hd')
+  assert.equal(model.voiceClonePointsCost, 18)
+  assert.equal(Object.hasOwn(model, 'apiKey'), false)
+})
+
 test('attaches custom icons and orders models by configured audio groups', () => {
   const models = normalizeAudioModels([
     { name: 'ungrouped', displayName: '未分组', apiType: 'coze-audio-workflow', enabled: true },
