@@ -10,6 +10,7 @@ export const NODE_TYPES = {
   IMAGE_INPUT: 'image-input',
   VIDEO_INPUT: 'video-input',
   AUDIO_INPUT: 'audio-input',
+  DIGITAL_HUMAN: 'digital-human',
   DIRECTOR_STUDIO: 'director-studio',
   
   // 生成类
@@ -98,6 +99,17 @@ export const NODE_TYPE_CONFIG = {
     hasInput: false,
     hasOutput: true,
     outputType: 'audio'
+  },
+
+  [NODE_TYPES.DIGITAL_HUMAN]: {
+    label: '数字人',
+    description: 'HeyGen 专属数字人资产',
+    icon: '🧑',
+    category: 'input',
+    color: '#38bdf8',
+    hasInput: false,
+    hasOutput: true,
+    outputType: 'digital-human'
   },
 
   [NODE_TYPES.DIRECTOR_STUDIO]: {
@@ -638,6 +650,11 @@ export const CONNECTION_RULES = {
 
   [NODE_TYPES.SEEDANCE_CHARACTER]: [
     NODE_TYPES.IMAGE_TO_VIDEO
+  ],
+
+  [NODE_TYPES.DIGITAL_HUMAN]: [
+    NODE_TYPES.VIDEO_INPUT,
+    'video'
   ]
 }
 

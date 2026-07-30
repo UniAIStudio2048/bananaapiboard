@@ -70,6 +70,24 @@ const currentModelConfig = computed(() => {
   return availableModels.value.find(m => m.value === model.value) || {}
 })
 
+const isRunningHubAiAppVideoModel = computed(() => currentModelConfig.value?.apiType === 'runninghub-ai-app-video')
+
+const videoResolutionOptions = computed(() => {
+  const configuredOptions = currentModelConfig.value?.resolutionOptions
+  if (Array.isArray(configuredOptions) && configuredOptions.length > 0) {
+    return configuredOptions.map(option => {
+      const value = typeof option === 'string' ? option : option?.value
+      return { value, label: String(option?.label || value || '').toUpperCase() }
+    }).filter(option => option.value)
+  }
+  if (isViduModel.value) {
+    return [{ value: '720p', label: '720P' }, { value: '1080p', label: '1080P' }]
+  }
+  return []
+})
+
+const hasVideoResolutionSelection = computed(() => videoResolutionOptions.value.length > 0)
+
 // 可用的方向选项 - 从模型配置中读取
 const availableAspectRatios = computed(() => {
   const aspectRatios = currentModelConfig.value?.aspectRatios
@@ -104,6 +122,8 @@ const availableAspectRatios = computed(() => {
 
 // VEO3模型的图片数量限制
 const maxImagesForModel = computed(() => {
+  const configuredMaxImages = Number(currentModelConfig.value?.maxRefImages)
+  if (Number.isFinite(configuredMaxImages) && configuredMaxImages > 0) return configuredMaxImages
   // components 版本支持最多 3 张图
   if (model.value === 'veo3.1-components' || model.value === 'veo3.1-components-4k') return 3
   // 其他 VEO3 模型支持最多 2 张图（首尾帧）
@@ -344,6 +364,20 @@ const currentPointsCost = computed(() => {
     // 如果是数字直接返回，如果是对象取默认值
     return typeof veoConfig === 'number' ? veoConfig : (veoConfig || 100)
   }
+
+  if (isRunningHubAiAppVideoModel.value) {
+    const modelCfg = currentModelConfig.value
+    const seconds = Number(duration.value)
+    const costPerSecond = Number(modelCfg?.costPerSecond)
+    const fixedCost = modelCfg?.resolutionFixedCosts?.[resolution.value]
+    if (fixedCost !== undefined && fixedCost !== null && String(fixedCost).trim() !== '') {
+      const fixedPoints = Number(fixedCost)
+      if (Number.isFinite(fixedPoints) && fixedPoints >= 0) return Math.round(fixedPoints)
+    }
+    const multipliers = modelCfg?.resolutionMultipliers || {}
+    const multiplier = Number(multipliers[resolution.value] ?? ({ '720p': 1, '1080p': 1.5, '4k': 2 }[resolution.value] ?? 1))
+    return Math.round((Number.isFinite(seconds) ? seconds : 0) * (Number.isFinite(costPerSecond) ? costPerSecond : 1) * (Number.isFinite(multiplier) ? multiplier : 1))
+  }
   
   const modelConfig = pointsCostConfig.value[model.value]
   // 如果 pointsCost 是数字（固定积分），直接使用
@@ -491,6 +525,15 @@ watch(model, (newModel) => {
   if (aspectValues.length > 0 && !aspectValues.includes(aspectRatio.value)) {
     aspectRatio.value = aspectValues[0]
     console.log('[VideoGeneration] 方向已重置为:', aspectRatio.value)
+  }
+
+  const configuredResolutionOptions = Array.isArray(modelConfig?.resolutionOptions)
+    ? modelConfig.resolutionOptions.map(option => typeof option === 'string' ? option : option?.value).filter(Boolean)
+    : []
+  if (modelConfig?.apiType === 'runninghub-ai-app-video' && configuredResolutionOptions.length > 0) {
+    resolution.value = configuredResolutionOptions[0]
+  } else if (configuredResolutionOptions.length > 0 && !configuredResolutionOptions.includes(resolution.value)) {
+    resolution.value = configuredResolutionOptions[0]
   }
 
   if (isSeedanceSd2VideoModel(modelConfig)) {
@@ -1332,8 +1375,8 @@ async function generateVideo() {
       formData.append('off_peak', 'true')
     }
     
-    // Vidu 清晰度
-    if (isViduModel.value) {
+    // 模型能力驱动的清晰度参数
+    if (hasVideoResolutionSelection.value) {
       formData.append('resolution', resolution.value)
     }
     
@@ -1442,7 +1485,7 @@ async function generateVideo() {
       hd: hd.value,
       mode: mode.value,
       imageCount: imageFiles.value.length,
-      resolution: isViduModel.value ? resolution.value : undefined,
+      resolution: hasVideoResolutionSelection.value ? resolution.value : undefined,
       offPeak: isViduModel.value ? offPeak.value : undefined
     })
     
@@ -2455,39 +2498,29 @@ onUnmounted(() => {
               </div>
             </div>
             
-            <!-- Vidu 清晰度选择 -->
-            <div v-if="isViduModel">
+            <!-- 模型能力驱动的清晰度选择 -->
+            <div v-if="hasVideoResolutionSelection">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>📺</span>
                 <span>清晰度</span>
               </label>
               <div class="flex space-x-2">
                 <button
+                  v-for="option in videoResolutionOptions"
+                  :key="option.value"
                   type="button"
-                  @click="resolution = '720p'"
+                  @click="resolution = option.value"
                   :class="[
                     'flex-1 py-2 px-3 text-sm font-medium rounded-lg border transition-all',
-                    resolution === '720p'
+                    resolution === option.value
                       ? 'bg-white text-black border-white dark:bg-gray-200 dark:text-black dark:border-gray-200'
                       : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:border-gray-400'
                   ]"
                 >
-                  720P
-                  <span v-if="currentModelConfig?.resolution720Discount" class="ml-1 text-xs opacity-80">
+                  {{ option.label }}
+                  <span v-if="isViduModel && option.value === '720p' && currentModelConfig?.resolution720Discount" class="ml-1 text-xs opacity-80">
                     ({{ Math.round(currentModelConfig.resolution720Discount * 100) }}%价格)
                   </span>
-                </button>
-                <button
-                  type="button"
-                  @click="resolution = '1080p'"
-                  :class="[
-                    'flex-1 py-2 px-3 text-sm font-medium rounded-lg border transition-all',
-                    resolution === '1080p'
-                      ? 'bg-white text-black border-white dark:bg-gray-200 dark:text-black dark:border-gray-200'
-                      : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:border-gray-400'
-                  ]"
-                >
-                  1080P
                 </button>
               </div>
             </div>
@@ -2589,7 +2622,10 @@ onUnmounted(() => {
                   <input ref="seedanceFirstFrameInputRef" type="file" accept="image/*" @change="handleSeedanceFirstFrame" class="hidden" />
                 </div>
                 <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
-                  <img :src="seedanceFirstFramePreview" class="w-12 h-12 object-cover rounded flex-shrink-0" />
+                  <div class="relative flex-shrink-0">
+                    <img :src="seedanceFirstFramePreview" class="w-12 h-12 object-cover rounded" />
+                    <span v-if="imageReviews.get(seedanceFirstFrameFile)?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">已过审</span>
+                  </div>
                   <div class="flex-1 min-w-0">
                     <p class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ seedanceFirstFrameFile.name }}</p>
                     <p class="text-xs text-slate-500">{{ (seedanceFirstFrameFile.size / 1024 / 1024).toFixed(2) }} MB</p>
@@ -2609,7 +2645,10 @@ onUnmounted(() => {
                   <input ref="seedanceLastFrameInputRef" type="file" accept="image/*" @change="handleSeedanceLastFrame" class="hidden" />
                 </div>
                 <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
-                  <img :src="seedanceLastFramePreview" class="w-12 h-12 object-cover rounded flex-shrink-0" />
+                  <div class="relative flex-shrink-0">
+                    <img :src="seedanceLastFramePreview" class="w-12 h-12 object-cover rounded" />
+                    <span v-if="imageReviews.get(seedanceLastFrameFile)?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">已过审</span>
+                  </div>
                   <div class="flex-1 min-w-0">
                     <p class="text-xs text-slate-700 dark:text-slate-300 truncate">{{ seedanceLastFrameFile.name }}</p>
                     <p class="text-xs text-slate-500">{{ (seedanceLastFrameFile.size / 1024 / 1024).toFixed(2) }} MB</p>
@@ -2652,7 +2691,10 @@ onUnmounted(() => {
                 </div>
                 <div v-if="seedanceRefImagePreviews.length > 0" class="space-y-1.5 mt-1.5 max-h-36 overflow-y-auto">
                   <div v-for="(url, idx) in seedanceRefImagePreviews" :key="idx" class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-1.5 border border-slate-200 dark:border-dark-600">
-                    <img :src="url" class="w-10 h-10 object-cover rounded flex-shrink-0" />
+                    <div class="relative flex-shrink-0">
+                      <img :src="url" class="w-10 h-10 object-cover rounded" />
+                      <span v-if="imageReviews.get(seedanceRefImages[idx])?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">已过审</span>
+                    </div>
                     <span class="flex-1 text-xs text-slate-600 dark:text-slate-300 truncate">{{ seedanceRefImages[idx]?.name }}</span>
                     <button @click="removeSeedanceRefImage(idx)" class="w-5 h-5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded flex items-center justify-center text-xs">✕</button>
                   </div>
@@ -3069,10 +3111,13 @@ onUnmounted(() => {
                     </div>
                     
                     <!-- 缩略图 -->
-                    <img 
-                      :src="url" 
-                      class="w-12 h-12 object-cover rounded flex-shrink-0" 
-                    />
+                    <div class="relative flex-shrink-0">
+                      <img
+                        :src="url"
+                        class="w-12 h-12 object-cover rounded"
+                      />
+                      <span v-if="imageReviews.get(imageFiles[idx])?.status === 'approved'" class="absolute left-0 top-0 rounded-br bg-emerald-600 px-1 py-0.5 text-[10px] leading-none text-white">已过审</span>
+                    </div>
                     
                     <!-- 文件信息 -->
                     <div class="flex-1 min-w-0">

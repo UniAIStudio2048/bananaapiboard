@@ -21,6 +21,7 @@ import { getTotalUserPoints } from '@/utils/points'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { createDigitalHumanLipsync, createDigitalHumanVideo, getDigitalHumanChannels } from '@/api/canvas/digital-humans'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import {
   createPendingGenerationSubmission,
@@ -372,30 +373,35 @@ const isCanvasMediaMoving = computed(() => isCanvasDragging.value || isCanvasVie
 // 生成模式：image（图生视频）, text（纯文本）
 const generationMode = ref(props.data.generationMode || 'text')
 
+const isHeygenModel = model => model?.apiType === 'heygen'
+
+function supportsCurrentMode(model, currentMode) {
+  const supportedModes = model.supportedModes
+  if (!supportedModes) return true
+
+  if (Array.isArray(supportedModes)) {
+    return supportedModes.includes(currentMode)
+  }
+  if (typeof supportedModes === 'object') {
+    return supportedModes[currentMode] === true
+  }
+  return true
+}
+
 // 获取默认模型（根据当前生成模式过滤后的第一个模型）
 function getDefaultVideoModel(mode = 'text') {
   const allModels = getAvailableVideoModels({ disableVeoMerge: true })
   
   // 根据模式过滤模型
   const currentMode = mode === 'text' ? 't2v' : 'i2v'
-  const filteredModels = allModels.filter(m => {
-    const supportedModes = m.supportedModes
-    if (!supportedModes) return true // 无配置默认支持所有模式
-    
-    // 支持两种格式：数组 ['t2v', 'i2v'] 或 对象 { t2v: true, i2v: true }
-    if (Array.isArray(supportedModes)) {
-      return supportedModes.includes(currentMode)
-    } else if (typeof supportedModes === 'object') {
-      return supportedModes[currentMode] === true
-    }
-    return true
-  })
+  const filteredModels = allModels.filter(m => supportsCurrentMode(m, currentMode))
   
   return filteredModels.length > 0 ? filteredModels[0].value : 'sora2'
 }
 
 // 生成参数 - 默认使用根据当前生成模式过滤后的第一个模型
 const selectedModel = ref(props.data.model || getDefaultVideoModel(props.data.generationMode || 'text'))
+const heygenChannels = ref([])
 const selectedAspectRatio = ref(props.data.aspectRatio || '16:9')
 const selectedDuration = ref(props.data.duration || '')
 const hasExplicitDurationSelection = ref(false)
@@ -425,18 +431,7 @@ const models = computed(() => {
   })
   const currentMode = hasImageInput ? 'i2v' : 't2v'
 
-  const result = filteredModels.filter(m => {
-    const supportedModes = m.supportedModes
-    if (!supportedModes) return true // 无配置默认支持所有模式
-
-    // 支持两种格式：数组 ['t2v', 'i2v'] 或 对象 { t2v: true, i2v: true }
-    if (Array.isArray(supportedModes)) {
-      return supportedModes.includes(currentMode)
-    } else if (typeof supportedModes === 'object') {
-      return supportedModes[currentMode] === true
-    }
-    return true
-  })
+  const result = filteredModels.filter(m => isHeygenModel(m) || supportsCurrentMode(m, currentMode))
 
   // 调试日志（仅在开发环境或需要时输出）
   if (process.env.NODE_ENV === 'development') {
@@ -530,7 +525,7 @@ function handleModelDropdownClickOutside(event) {
   if (!dropdown) {
     isModelDropdownOpen.value = false
   }
-  const videoModeDropdown = event.target.closest('.video-mode-selector, .ratio-selector')
+  const videoModeDropdown = event.target.closest('.video-mode-selector, .ratio-selector, .heygen-channel-selector')
   if (!videoModeDropdown) {
     videoModeDropdownOpen.value = null
   }
@@ -541,10 +536,12 @@ function toggleVideoModeDropdown(key, event) {
 
   const selector = key === 'ratio'
     ? { options: availableAspectRatios.value }
-    : (key === 'sub' ? activeVideoSubmodeSelector.value : activeVideoModeSelector.value)
+    : (key === 'heygen-channel'
+        ? { options: heygenChannels.value }
+        : (key === 'sub' ? activeVideoSubmodeSelector.value : activeVideoModeSelector.value))
   if (!selector) return
 
-  const trigger = event.currentTarget?.closest('.video-mode-selector')
+  const trigger = event.currentTarget?.closest('.video-mode-selector, .ratio-selector, .heygen-channel-selector')
   const rect = trigger?.getBoundingClientRect()
   const dropdownHeight = Math.max(140, selector.options.length * 48 + 54)
   if (rect && rect.bottom + dropdownHeight > window.innerHeight && rect.top > dropdownHeight) {
@@ -1733,6 +1730,32 @@ const currentModelConfig = computed(() => {
   return models.value.find(m => m.value === selectedModel.value) || {}
 })
 
+const isRunningHubAiAppVideoModel = computed(() => {
+  return currentModelConfig.value?.apiType === 'runninghub-ai-app-video'
+})
+
+const runningHubResolution = ref(props.data.resolution || '720p')
+
+const runningHubResolutionOptions = computed(() => {
+  if (!isRunningHubAiAppVideoModel.value) return []
+  const configuredOptions = currentModelConfig.value?.resolutionOptions
+  const options = Array.isArray(configuredOptions) && configuredOptions.length > 0
+    ? configuredOptions
+    : ['720p', '1080p', '4k']
+  return options
+    .map(option => {
+      const value = typeof option === 'string' ? option : option?.value
+      if (!value) return null
+      return {
+        value: String(value).toLowerCase(),
+        label: typeof option === 'object' && option?.label ? option.label : String(value).toUpperCase()
+      }
+    })
+    .filter(Boolean)
+})
+
+const isHeygenModelSelected = computed(() => isHeygenModel(currentModelConfig.value))
+
 const OMNI_MAX_REFERENCES = 7
 
 function isOmniVideoModelName(value) {
@@ -2416,6 +2439,7 @@ onMounted(() => {
   }
   
   // 📊 模型成功率統計已由 modelStatsStore 集中管理（10 分鐘輪詢）
+  loadHeygenChannels()
   
   // 🔧 初始化时检查当前模型是否支持当前的生成模式（使用 nextTick 确保计算属性已更新）
   nextTick(() => {
@@ -2954,6 +2978,44 @@ const referenceAudios = computed(() => {
 
 const hasReferenceAudios = computed(() => referenceAudios.value.length > 0)
 
+const activeDigitalHuman = computed(() => getUpstreamData().digitalHumans[0] || null)
+const isDigitalHumanMode = computed(() => !!activeDigitalHuman.value)
+const isHeygenLipsyncMode = computed(() => !isDigitalHumanMode.value && referenceVideos.value.length > 0 && referenceAudios.value.length > 0)
+const isHeygenMode = computed(() => isHeygenModelSelected.value || isDigitalHumanMode.value || isHeygenLipsyncMode.value)
+const heygenInputHint = computed(() => {
+  if (isDigitalHumanMode.value) return '输入：数字人资产 + 音频'
+  if (isHeygenLipsyncMode.value) return '输入：视频 + 音频（换口型）'
+  return '支持：数字人资产 + 音频，或视频 + 音频（换口型）'
+})
+const heygenChannelId = computed(() => activeDigitalHuman.value?.channelId || props.data?.heygenChannelId || '')
+const selectedHeygenChannelName = computed(() => {
+  const channel = heygenChannels.value.find(item => item.id === heygenChannelId.value)
+  if (!channel) return '选择渠道'
+  return heygenChannels.value.length === 1 ? '默认渠道' : channel.name
+})
+const heygenPointsPerSecond = computed(() => {
+  const channel = heygenChannels.value.find(item => item.id === heygenChannelId.value)
+  const pricing = channel?.pricing || {}
+  const points = isDigitalHumanMode.value ? pricing.avatarVideoPerSecond : pricing.lipsyncPerSecond
+  return Number.isFinite(Number(points)) && Number(points) > 0 ? Number(points) : 0
+})
+const heygenPointsCost = computed(() => {
+  const seconds = Math.ceil(Number(getUpstreamData().audioDuration) || 0)
+  return seconds > 0 ? heygenPointsPerSecond.value * seconds : 0
+})
+
+async function loadHeygenChannels() {
+  try {
+    const result = await getDigitalHumanChannels()
+    heygenChannels.value = result.channels || []
+    if (!props.data?.heygenChannelId && !isDigitalHumanMode.value && heygenChannels.value[0]) {
+      canvasStore.updateNodeData(props.id, { heygenChannelId: heygenChannels.value[0].id })
+    }
+  } catch (error) {
+    console.warn('[VideoNode] 加载 HeyGen 渠道失败:', error.message)
+  }
+}
+
 watch(wanModes, (modes) => {
   if (!isWanModel.value) return
   if (!modes.some(mode => mode.value === selectedWanMode.value)) {
@@ -3175,12 +3237,14 @@ const inheritedPrompt = computed(() => {
 function getUpstreamData() {
   // 查找所有连接到当前节点的上游边
   const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
-  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [], audios: [], characterAssetUris: [], faceCodes: [], byteforFaceCodes: [], quickAssetUris: [], quickAssetSourceUrls: [] }
+  if (upstreamEdges.length === 0) return { prompts: [], images: [], videos: [], audios: [], audioDuration: 0, digitalHumans: [], characterAssetUris: [], faceCodes: [], byteforFaceCodes: [], quickAssetUris: [], quickAssetSourceUrls: [] }
   
   let prompts = []
   let images = []
   let videos = []
   let audios = []
+  let audioDuration = 0
+  let digitalHumans = []
   let characterAssetUris = []
   let faceCodes = []
   let byteforFaceCodes = []
@@ -3191,6 +3255,22 @@ function getUpstreamData() {
   for (const edge of upstreamEdges) {
     const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
     if (!sourceNode) continue
+
+    if (sourceNode.type === 'digital-human') {
+      const metadata = typeof sourceNode.data?.metadata === 'string'
+        ? (() => { try { return JSON.parse(sourceNode.data.metadata) } catch { return {} } })()
+        : (sourceNode.data?.metadata || {})
+      const assetId = sourceNode.data?.assetId
+      const channelId = sourceNode.data?.channelId || metadata.channelId || ''
+      if (assetId && channelId) digitalHumans.push({
+        assetId,
+        channelId,
+        name: sourceNode.data?.name || sourceNode.data?.title || '',
+        imageWidth: Number(metadata.imageWidth) || 0,
+        imageHeight: Number(metadata.imageHeight) || 0
+      })
+      continue
+    }
     
     // 文本节点：获取文本内容（收集所有文本节点的内容）
     if (sourceNode.type === 'text-input' || sourceNode.type === 'text') {
@@ -3209,6 +3289,26 @@ function getUpstreamData() {
     
     // 图片节点：获取图片（使用统一的图片节点类型列表）
     if (IMAGE_NODE_TYPES.includes(sourceNode.type)) {
+      const metadata = typeof sourceNode.data?.metadata === 'string'
+        ? (() => { try { return JSON.parse(sourceNode.data.metadata) } catch { return {} } })()
+        : (sourceNode.data?.metadata || {})
+      const markedDigitalHumanAssetId = metadata.digitalHumanAssetId || sourceNode.data?.digitalHumanAssetId || ''
+      const legacyDigitalHumanAssetId = sourceNode.data?.assetType === 'digital-human' ? sourceNode.data?.assetId : ''
+      const digitalHumanAssetId = isHeygenModelSelected.value
+        ? (markedDigitalHumanAssetId || legacyDigitalHumanAssetId)
+        : ''
+      const channelId = metadata.channelId || sourceNode.data?.digitalHumanChannelId || props.data?.heygenChannelId || ''
+      if (digitalHumanAssetId) {
+        digitalHumans.push({
+          assetId: digitalHumanAssetId,
+          channelId,
+          name: sourceNode.data?.title || sourceNode.data?.label || '',
+          imageWidth: Number(metadata.imageWidth) || 0,
+          imageHeight: Number(metadata.imageHeight) || 0
+        })
+        continue
+      }
+
       console.log('[VideoNode] 检测到图片节点:', {
         type: sourceNode.type,
         id: sourceNode.id,
@@ -3279,12 +3379,16 @@ function getUpstreamData() {
       const audioUrl = sourceNode.data?.output?.url || sourceNode.data?.audioUrl || sourceNode.data?.audioData
       if (audioUrl) {
         audios.push(audioUrl)
+        if (audioDuration <= 0) {
+          const duration = Number(sourceNode.data?.audioDuration || sourceNode.data?.output?.duration || 0)
+          if (Number.isFinite(duration) && duration > 0) audioDuration = duration
+        }
       }
     }
   }
   
-  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos, audios, characterAssetUris, faceCodes, byteforFaceCodes, quickAssetUris })
-  return { prompts, images, videos, audios, characterAssetUris, faceCodes, byteforFaceCodes, quickAssetUris, quickAssetSourceUrls }
+  console.log('[VideoNode] getUpstreamData 结果:', { prompts, images, videos, audios, audioDuration, digitalHumans, characterAssetUris, faceCodes, byteforFaceCodes, quickAssetUris })
+  return { prompts, images, videos, audios, audioDuration, digitalHumans, characterAssetUris, faceCodes, byteforFaceCodes, quickAssetUris, quickAssetSourceUrls }
 }
 
 // 实时获取上游文本内容（用于显示在"上下文文字参考"区域）
@@ -3394,6 +3498,20 @@ const pointsCost = computed(() => {
   }
 
   const modelPointsCost = currentModelConfig.value.pointsCost
+
+  if (isRunningHubAiAppVideoModel.value) {
+    const resolution = String(runningHubResolution.value || '720p').trim().toLowerCase()
+    const configuredFixedCost = currentModelConfig.value?.resolutionFixedCosts?.[resolution]
+    const fixedCost = Number(configuredFixedCost)
+    if (configuredFixedCost !== undefined && configuredFixedCost !== null && String(configuredFixedCost).trim() !== '' && Number.isFinite(fixedCost) && fixedCost >= 0) {
+      return Math.round(fixedCost)
+    }
+    const defaultMultipliers = { '720p': 1, '1080p': 1.5, '4k': 2 }
+    const multiplier = Number(currentModelConfig.value?.resolutionMultipliers?.[resolution] ?? defaultMultipliers[resolution] ?? 1)
+    const costPerSecond = Number(currentModelConfig.value?.costPerSecond) || 1
+    const duration = Number(selectedDuration.value) || 4
+    return Math.round(duration * costPerSecond * multiplier)
+  }
 
   if (isPerSecondBilling.value) {
     const rateConfig = currentModelConfig.value.costPerSecond
@@ -3796,6 +3914,20 @@ watch([selectedModel, vectorengineResolutionOptions], () => {
   if (options.length > 0 && !options.includes(vectorengineResolution.value)) {
     vectorengineResolution.value = options[0]
   }
+})
+
+watch([selectedModel, runningHubResolutionOptions], () => {
+  if (!isRunningHubAiAppVideoModel.value) return
+  const options = runningHubResolutionOptions.value.map(option => option.value)
+  const fallback = options.find(option => option.toLowerCase() === '720p') || options[0] || '720p'
+  if (!options.includes(runningHubResolution.value)) {
+    runningHubResolution.value = fallback
+  }
+}, { immediate: true })
+
+watch(runningHubResolution, (resolution) => {
+  if (!isRunningHubAiAppVideoModel.value) return
+  canvasStore.updateNodeData(props.id, { resolution })
 })
 
 // 🔧 监听 VEO 模式切换，如果当前清晰度不被支持，自动切换到支持的第一个清晰度
@@ -4366,6 +4498,33 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       source: 'canvas-video-node'
     }
   })
+
+  if (capturedState.isHeygenMode) {
+    try {
+      const upstreamData = getUpstreamData()
+      const data = capturedState.isDigitalHumanMode
+        ? await createDigitalHumanVideo({
+            assetId: capturedState.digitalHuman?.assetId,
+            audioUrl: upstreamData.audios[0] || '',
+            title: capturedState.digitalHuman?.name || '',
+            aspectRatio: capturedState.digitalHuman?.imageHeight > capturedState.digitalHuman?.imageWidth
+              ? '9:16'
+              : selectedAspectRatio.value,
+            estimatedDuration: upstreamData.audioDuration
+          })
+        : await createDigitalHumanLipsync({
+            channelId: capturedState.heygenChannelId,
+            videoUrl: upstreamData.videos[0] || '',
+            audioUrl: upstreamData.audios[0] || '',
+            title: finalPrompt || '视频换口型',
+            mode: 'precision'
+          })
+      return { data, submissionId: submission.submissionId }
+    } catch (error) {
+      error.clientSubmissionId = submission.submissionId
+      throw error
+    }
+  }
   
   // 构建请求数据
   const formData = new FormData()
@@ -4492,6 +4651,11 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   if (isVectorEngineJsonModel.value) {
     formData.append('resolution', vectorengineResolution.value)
     console.log('[VideoNode] VectorEngine JSON 清晰度:', vectorengineResolution.value)
+  }
+
+  if (capturedState.apiType === 'runninghub-ai-app-video') {
+    formData.append('resolution', capturedState.resolution || runningHubResolution.value)
+    console.log('[VideoNode] RunningHub 清晰度:', capturedState.resolution || runningHubResolution.value)
   }
   
   // Kling 模型特有参数：摄像机控制
@@ -4859,6 +5023,7 @@ function createNewOutputNode() {
       model: selectedModel.value,
       aspectRatio: selectedAspectRatio.value,
       duration: selectedDuration.value,
+      ...(isRunningHubAiAppVideoModel.value ? { resolution: runningHubResolution.value } : {}),
       generationMode: generationMode.value,
       referenceImages: referenceImages.value,
       // 复制上游连接信息
@@ -4909,7 +5074,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       const currentTab = canvasStore.getCurrentTab()
       registerTask({
         taskId,
-        type: 'video',
+        type: capturedState.isHeygenMode ? 'digital-human-video' : 'video',
         nodeId,
         tabId: currentTab?.id,
         metadata: {
@@ -4927,6 +5092,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       canvasStore.updateNodeData(nodeId, {
         taskId,
         soraTaskId: taskId,
+        taskType: capturedState.isHeygenMode ? 'digital-human-video' : 'video',
         clientSubmissionId: submissionId
       })
 
@@ -4967,7 +5133,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       const currentTab = canvasStore.getCurrentTab()
       registerTask({
         taskId,
-        type: 'video',
+        type: capturedState.isHeygenMode ? 'digital-human-video' : 'video',
         nodeId,
         tabId: currentTab?.id,
         metadata: {
@@ -4983,6 +5149,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
         progress: '生成中...',
         taskId,
         soraTaskId: taskId,
+        taskType: capturedState.isHeygenMode ? 'digital-human-video' : 'video',
         clientSubmissionId: submissionId
       })
       return taskId
@@ -5396,6 +5563,25 @@ async function handleGenerate(options = {}) {
   if (supportsMediaTags.value) {
     finalPrompt = escapePromptTags(finalPrompt)
   }
+
+  const isHeygenFlow = isHeygenModelSelected.value || upstreamData.digitalHumans.length > 0 || (upstreamData.videos.length > 0 && upstreamData.audios.length > 0)
+  const isDigitalHumanFlow = upstreamData.digitalHumans.length > 0
+  if (isDigitalHumanFlow && upstreamData.digitalHumans.length > 1) {
+    await showAlert('一个视频节点一次只能使用一个数字人', '提示')
+    return
+  }
+  if (isDigitalHumanFlow && upstreamData.audios.length === 0) {
+    await showAlert('数字人口播请连接音频', '提示')
+    return
+  }
+  if (!isDigitalHumanFlow && isHeygenFlow && (upstreamData.videos.length === 0 || upstreamData.audios.length === 0)) {
+    await showAlert('HeyGen 需要连接数字人资产和音频，或同时连接视频和音频', '提示')
+    return
+  }
+  if (!isDigitalHumanFlow && isHeygenFlow && !props.data?.heygenChannelId) {
+    await showAlert('请选择 HeyGen 渠道后再进行视频换口型', '提示')
+    return
+  }
   
   // 合并参考图片
   let finalImages = referenceImages.value.length > 0 ? normalizeModelImageUrls(referenceImages.value) : []
@@ -5413,7 +5599,7 @@ async function handleGenerate(options = {}) {
     currentStatus: props.data.status
   })
   
-  if (isSeedance2Model.value) {
+  if (!isHeygenFlow && isSeedance2Model.value) {
     const seedanceValidationMessage = validateSeedanceModeInputs({
       mode: selectedSeedance2Mode.value,
       imageCount: finalImages.length,
@@ -5443,7 +5629,7 @@ async function handleGenerate(options = {}) {
     }
   }
 
-  if (isWanModel.value) {
+  if (!isHeygenFlow && isWanModel.value) {
     const wanMode = selectedWanMode.value
     const wanReferenceCount = finalImages.length + referenceVideos.value.length
     if (!finalPrompt) {
@@ -5484,7 +5670,7 @@ async function handleGenerate(options = {}) {
     }
   }
 
-  if (isCozeVideoSwapModel.value) {
+  if (!isHeygenFlow && isCozeVideoSwapModel.value) {
     if (finalImages.length === 0) {
       await showAlert('Coze 视频换人需要连接或上传1张人物图片', '提示')
       return
@@ -5502,25 +5688,25 @@ async function handleGenerate(options = {}) {
   const hasSeedanceVideoInput = isSeedance2Model.value && referenceVideos.value.length > 0
   const hasWanVideoInput = isWanModel.value && ['r2v', 'videoedit', 'animate_mix'].includes(selectedWanMode.value) && referenceVideos.value.length > 0
   const hasMotionVideoInput = isCozeVideoSwapModel.value && referenceVideos.value.length > 0
-  if (!finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput && !hasWanVideoInput && !hasMotionVideoInput) {
+  if (!isHeygenFlow && !finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput && !hasWanVideoInput && !hasMotionVideoInput) {
     await showAlert('请输入提示词或连接参考图片', '提示')
     return
   }
 
-  if (currentModelConfig.value?.usable === false) {
+  if (!isHeygenFlow && currentModelConfig.value?.usable === false) {
     await showAlert(currentModelConfig.value.accessMessage || '需要购买对应套餐后使用', '模型权限')
     return
   }
   
   // 检查积分（同步校验，不阻塞）
   const totalCost = pointsCost.value * selectedCount.value
-  if (userPoints.value < totalCost) {
+  if (!isHeygenFlow && userPoints.value < totalCost) {
     await showInsufficientPointsDialog(totalCost, userPoints.value, selectedCount.value)
     return
   }
   
   // 检查并发限制
-  if (selectedCount.value > userConcurrentLimit.value) {
+  if (!isHeygenFlow && selectedCount.value > userConcurrentLimit.value) {
     await showAlert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐`, '并发限制')
     return
   }
@@ -5531,9 +5717,10 @@ async function handleGenerate(options = {}) {
       nodeId: props.id,
       nodeType: 'video',
       prompt: finalPrompt,
-      model: selectedModel.value,
+      model: isHeygenFlow ? `heygen:${isDigitalHumanFlow ? 'avatar' : 'lipsync'}` : selectedModel.value,
       aspectRatio: selectedAspectRatio.value,
       duration: selectedDuration.value,
+      resolution: isRunningHubAiAppVideoModel.value ? runningHubResolution.value : '',
       selectedCount: selectedCount.value,
       generationMode: generationMode.value,
       referenceImages: finalImages,
@@ -5556,7 +5743,7 @@ async function handleGenerate(options = {}) {
   isGenerating.value = true
   errorMessage.value = ''
   
-  const generateCount = selectedCount.value
+  const generateCount = isHeygenFlow ? 1 : selectedCount.value
 
   if (generateCount > 1) {
     canvasStore.saveHistory({ force: true })
@@ -5566,6 +5753,10 @@ async function handleGenerate(options = {}) {
   const capturedState = {
     nodeId: props.id,
     model: selectedModel.value,
+    isHeygenMode: isHeygenFlow,
+    isDigitalHumanMode: isDigitalHumanFlow,
+    digitalHuman: upstreamData.digitalHumans[0] || null,
+    heygenChannelId: isDigitalHumanFlow ? upstreamData.digitalHumans[0]?.channelId : props.data?.heygenChannelId,
     isSeedance2: isSeedance2Model.value,
     isSeedanceOpenApiPro: isSeedanceOpenApiProModel.value,
     isOmniVideoModel: isOmniVideoModel.value,
@@ -5577,6 +5768,7 @@ async function handleGenerate(options = {}) {
     quickAssetUris: upstreamData.quickAssetUris || [],
     quickAssetSourceUrls: upstreamData.quickAssetSourceUrls || [],
     apiType: currentModelConfig.value?.apiType || '',
+    resolution: isRunningHubAiAppVideoModel.value ? runningHubResolution.value : '',
     wanMode: isWanModel.value ? selectedWanMode.value : '',
     wanAnimateMode: isWanModel.value && selectedWanMode.value === 'animate_mix' ? selectedWanAnimateMode.value : ''
   }
@@ -5624,6 +5816,7 @@ async function handleGenerate(options = {}) {
             model: selectedModel.value,
             aspectRatio: selectedAspectRatio.value,
             duration: selectedDuration.value,
+            resolution: isRunningHubAiAppVideoModel.value ? runningHubResolution.value : '',
             generationMode: generationMode.value,
             referenceImages: referenceImages.value
           }
@@ -8551,7 +8744,7 @@ function handleToolbarPreview() {
       <div class="config-row">
         <div class="config-left">
           <!-- 模型选择器（自定义下拉框，支持显示描述） -->
-          <div class="model-selector-custom" ref="modelSelectorRef" @click.stop>
+          <div v-if="!isHeygenMode || isHeygenModelSelected" class="model-selector-custom" ref="modelSelectorRef" @click.stop>
             <div 
               class="model-selector-trigger"
               @click="toggleModelDropdown"
@@ -8669,6 +8862,45 @@ function handleToolbarPreview() {
                 </template>
               </div>
             </Transition>
+          </div>
+
+          <div v-if="isHeygenMode" class="heygen-flow-control">
+            <div class="heygen-channel-stack">
+              <div class="heygen-channel-row">
+                <span class="heygen-field-label">渠道</span>
+                <span v-if="isDigitalHumanMode" class="heygen-flow-channel">已随数字人资产绑定</span>
+                <div v-else class="heygen-channel-selector" @mousedown.stop @click.stop>
+                  <button
+                    type="button"
+                    class="video-mode-trigger heygen-channel-trigger"
+                    @click="toggleVideoModeDropdown('heygen-channel', $event)"
+                  >
+                    <span class="video-mode-trigger-value">{{ selectedHeygenChannelName }}</span>
+                    <span class="video-mode-trigger-arrow" :class="{ 'arrow-up': videoModeDropdownOpen === 'heygen-channel' }">⌃</span>
+                  </button>
+                  <Transition name="dropdown-fade">
+                    <div
+                      v-if="videoModeDropdownOpen === 'heygen-channel'"
+                      class="video-mode-dropdown-panel heygen-channel-dropdown-panel"
+                      :class="{ 'dropdown-up': videoModeDropdownDirection === 'up' }"
+                    >
+                      <div class="video-mode-dropdown-title">选择渠道</div>
+                      <button
+                        v-for="channel in heygenChannels"
+                        :key="channel.id"
+                        type="button"
+                        class="video-mode-dropdown-item"
+                        :class="{ active: channel.id === heygenChannelId }"
+                        @click="canvasStore.updateNodeData(id, { heygenChannelId: channel.id }); videoModeDropdownOpen = null"
+                      >
+                        <span>{{ heygenChannels.length === 1 ? '默认渠道' : channel.name }}</span>
+                      </button>
+                      <div class="heygen-channel-input-hint">{{ heygenInputHint }}</div>
+                    </div>
+                  </Transition>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- 视频模式选择器：统一放在模型与比例之间，沿用各模型原有状态 -->
@@ -8869,6 +9101,19 @@ function handleToolbarPreview() {
             </button>
           </div>
 
+          <div v-if="isRunningHubAiAppVideoModel && runningHubResolutionOptions.length > 1" class="vectorengine-resolution-options">
+            <button
+              v-for="res in runningHubResolutionOptions"
+              :key="res.value"
+              type="button"
+              class="vectorengine-resolution-btn"
+              :class="{ active: runningHubResolution === res.value }"
+              @click="runningHubResolution = res.value"
+            >
+              {{ res.label }}
+            </button>
+          </div>
+
         </div>
         
         <div class="config-right">
@@ -8885,7 +9130,10 @@ function handleToolbarPreview() {
           
           <!-- 积分消耗显示 -->
           <span class="points-cost-display">
-            <template v-if="isKlingMotionControl">
+            <template v-if="isHeygenMode">
+              {{ heygenPointsPerSecond > 0 ? `${formatPoints(heygenPointsPerSecond)}积分/秒 · 预计${formatPoints(heygenPointsCost)}积分` : 'HeyGen 渠道计费' }}
+            </template>
+            <template v-else-if="isKlingMotionControl">
               {{ formatPoints(motionCostPerSecond) }}积分/s
             </template>
             <template v-else-if="isWanModel && selectedWanMode === 'animate_mix'">
@@ -10355,6 +10603,15 @@ function handleToolbarPreview() {
 }
 
 /* 模型选择器（自定义下拉框）- 扁平化设计 */
+.heygen-flow-control { display: flex; align-items: center; min-width: 0; color: var(--canvas-text-secondary, #a0a0a0); font-size: 12px; }
+.heygen-channel-stack { display: grid; grid-template-columns: max-content minmax(0, 1fr); column-gap: 6px; row-gap: 3px; min-width: 0; }
+.heygen-channel-row { display: contents; }
+.heygen-field-label { grid-column: 1; grid-row: 1; align-self: center; color: var(--canvas-text-secondary, #a0a0a0); white-space: nowrap; }
+.heygen-channel-selector { position: relative; z-index: 109; grid-column: 2; grid-row: 1; }
+.heygen-channel-trigger { min-width: 112px; max-width: 160px; }
+.heygen-channel-dropdown-panel { min-width: 180px; }
+.heygen-flow-channel { grid-column: 2; grid-row: 1; align-self: center; color: var(--canvas-text-muted, #888); white-space: nowrap; }
+.heygen-channel-input-hint { margin-top: 6px; padding: 9px 12px 2px; border-top: 1px solid var(--canvas-border-subtle, #2a2a2a); color: var(--canvas-text-muted, #888); font-size: 11px; line-height: 1.4; }
 .model-selector-custom {
   position: relative;
   z-index: 100;

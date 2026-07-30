@@ -154,6 +154,7 @@ const envConfig = {
 
 // 当前运行时配置（可动态更新）
 let runtimeConfig = { ...envConfig }
+runtimeConfig.enableDigitalHumanLibrary = false
 const tenantConfigVersion = shallowRef(0)
 
 function bumpTenantConfigVersion() {
@@ -569,6 +570,14 @@ export async function loadBrandConfig(forceReload = false) {
       }
       console.log('[tenant] Bytefor 角色库开关:', runtimeConfig.enableByteforCharacterLibrary)
 
+      // 更新 HeyGen 数字人资产库开关
+      if (data.enableDigitalHumanLibrary !== undefined) {
+        runtimeConfig.enableDigitalHumanLibrary = data.enableDigitalHumanLibrary
+      } else {
+        runtimeConfig.enableDigitalHumanLibrary = false
+      }
+      console.log('[tenant] HeyGen 数字人资产库开关:', runtimeConfig.enableDigitalHumanLibrary)
+
       // 更新画布底部 Logo 开关
       if (data.enableCanvasLogo !== undefined) {
         runtimeConfig.enableCanvasLogo = data.enableCanvasLogo
@@ -727,6 +736,7 @@ export async function loadRemoteConfig() {
           description: runtimeConfig.brand.description
         },
         features: runtimeConfig.features,
+        enableDigitalHumanLibrary: data.enableDigitalHumanLibrary === true,
         rechargeLimits: runtimeConfig.rechargeLimits || normalizeRechargeLimits()
       }
       bumpTenantConfigVersion()
@@ -779,6 +789,7 @@ try {
     video_model_groups: savedTenantConfig?.video_model_groups || [],
     audio_model_groups: savedTenantConfig?.audio_model_groups || [],
     modelEntitlements: savedTenantConfig?.modelEntitlements || { image: {}, video: {} },
+    enableDigitalHumanLibrary: savedTenantConfig?.enableDigitalHumanLibrary === true,
     rechargeLimits: normalizeRechargeLimits(savedTenantConfig?.rechargeLimits)
   }
   
@@ -821,6 +832,9 @@ export const isSoraCharacterLibraryEnabled = () => config.enableSoraCharacterLib
 
 // 检查 Bytefor 角色库是否启用
 export const isByteforCharacterLibraryEnabled = () => config.enableByteforCharacterLibrary === true
+
+// 检查 HeyGen 数字人资产库是否启用
+export const isDigitalHumanLibraryEnabled = () => config.enableDigitalHumanLibrary === true
 
 // 检查画布底部 Logo 是否启用
 export const isCanvasLogoEnabled = () => config.enableCanvasLogo !== false
@@ -1626,6 +1640,8 @@ export const getAvailableVideoModels = (options = {}) => {
         huayingConfig: modelConfig.huayingConfig,
         vectorengineConfig: modelConfig.vectorengineConfig,
         resolutionOptions: getVideoResolutionOptions(modelConfig),
+        resolutionMultipliers: modelConfig.resolutionMultipliers,
+        resolutionFixedCosts: modelConfig.resolutionFixedCosts,
         defaultVideoMode: modelConfig.defaultVideoMode || undefined,
         defaultSeedance2Mode: modelConfig.defaultSeedance2Mode || modelConfig.seedanceConfig?.defaultMode || undefined,
         defaultKlingO1Mode: modelConfig.defaultKlingO1Mode || undefined,
@@ -1813,6 +1829,8 @@ export const getAvailableVideoModels = (options = {}) => {
         huayingConfig: modelFullConfig.huayingConfig,
         vectorengineConfig: modelFullConfig.vectorengineConfig,
         resolutionOptions: getVideoResolutionOptions(modelFullConfig),
+        resolutionMultipliers: modelFullConfig.resolutionMultipliers,
+        resolutionFixedCosts: modelFullConfig.resolutionFixedCosts,
         defaultVideoMode: modelFullConfig.defaultVideoMode || undefined,
         defaultSeedance2Mode: modelFullConfig.defaultSeedance2Mode || modelFullConfig.seedanceConfig?.defaultMode || undefined,
         defaultKlingO1Mode: modelFullConfig.defaultKlingO1Mode || undefined,

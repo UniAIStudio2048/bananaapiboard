@@ -7,18 +7,20 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { getAssets, deleteAsset, toggleFavorite, updateAssetTags, updateAsset, saveAsset } from '@/api/canvas/assets'
+import { deleteDigitalHuman } from '@/api/canvas/digital-humans'
 import { getCachedAssets, cacheAssets, invalidateAssetCache } from '@/utils/assetCache'
 import { getAssetPanelStats, getAssetPanelTagCounts, getAssetPanelUserTags, getVisibleAssetPanelAssets } from '@/utils/assetPanelVisibility'
 import { preloadImages } from '@/utils/imageCache'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } from '@/api/canvas/volcengine-assets'
-import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled, isByteforCharacterLibraryEnabled } from '@/config/tenant'
+import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled, isByteforCharacterLibraryEnabled, isDigitalHumanLibraryEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { Images, LayoutDashboard } from '@lucide/vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import SeedanceCharacterPanel from './SeedanceCharacterPanel.vue'
+import DigitalHumanPanel from './DigitalHumanPanel.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
 import AssetCard from './AssetCard.vue'
 import AssetHoverPreview from './AssetHoverPreview.vue'
@@ -56,7 +58,7 @@ const emit = defineEmits([
 const activePanelView = ref('canvas')
 const loading = ref(false)
 const assets = ref([])
-const selectedType = ref('all') // all | text | image | video | audio
+const selectedType = ref('all') // all | text | image | video | audio | digital-human
 const selectedTag = ref('all')  // all | favorite | 或自定义标签
 const searchQuery = ref('')
 const spaceFilter = useCanvasSpaceFilter(teamStore) // 空间筛选: 'personal' | 'team-xxx' | 'all'
@@ -157,11 +159,13 @@ const lastSyncId = ref(null) // 记录最新一条记录的ID
 const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
 const soraCharacterLibraryEnabled = computed(() => isSoraCharacterLibraryEnabled())
 const byteforCharacterLibraryEnabled = computed(() => isByteforCharacterLibraryEnabled())
+const digitalHumanLibraryEnabled = computed(() => isDigitalHumanLibraryEnabled())
 const seedanceActiveGroupIds = computed(() => seedanceGroups.value.map(g => g.Id).filter(Boolean))
 const assetVisibilityContext = computed(() => ({
   seedanceFeaturesEnabled: seedanceFeaturesEnabled.value,
   soraCharacterLibraryEnabled: soraCharacterLibraryEnabled.value,
   byteforCharacterLibraryEnabled: byteforCharacterLibraryEnabled.value,
+  digitalHumanLibraryEnabled: digitalHumanLibraryEnabled.value,
   seedanceActiveProvider: seedanceActiveProvider.value,
   seedanceActiveGroupIds: seedanceActiveGroupIds.value
 }))
@@ -173,6 +177,7 @@ const allFileTypes = [
   { key: 'image', labelKey: 'canvas.nodes.image', icon: '◫' },
   { key: 'video', labelKey: 'canvas.nodes.video', icon: '▷' },
   { key: 'audio', labelKey: 'canvas.nodes.audio', icon: '♪' },
+  { key: 'digital-human', label: '数字人', icon: '🧑' },
   { key: 'sora-character', labelKey: 'canvas.soraCharacterLib', icon: '👤' },
   { key: 'seedance-character', labelKey: 'canvas.seedanceCharacterLib', icon: '👥' },
   { key: 'bytefor-character', labelKey: 'canvas.byteforCharacterLib', icon: '人' }
@@ -182,6 +187,7 @@ const fileTypes = computed(() =>
     if (ft.key === 'seedance-character') return seedanceFeaturesEnabled.value
     if (ft.key === 'sora-character') return soraCharacterLibraryEnabled.value
     if (ft.key === 'bytefor-character') return byteforCharacterLibraryEnabled.value
+    if (ft.key === 'digital-human') return digitalHumanLibraryEnabled.value
     return true
   })
 )
@@ -243,7 +249,7 @@ const hasMoreToRender = computed(() => displayCount.value < filteredAssets.value
 const assetColumnCount = computed(() => isFullscreen.value ? 6 : 3)
 
 function getAssetMasonryWeight(asset) {
-  if (!['image', 'video', 'sora-character', 'seedance-character', 'bytefor-character'].includes(asset?.type)) {
+  if (!['image', 'video', 'sora-character', 'seedance-character', 'bytefor-character', 'digital-human'].includes(asset?.type)) {
     return 1
   }
 
@@ -679,7 +685,11 @@ async function handleToggleFavorite(e, asset) {
 async function performDeleteAsset(asset) {
   if (!asset?.id) return
   try {
-    await deleteAsset(asset.id)
+    if (asset.type === 'digital-human') {
+      await deleteDigitalHuman(asset.id)
+    } else {
+      await deleteAsset(asset.id)
+    }
     assets.value = assets.value.filter(a => a.id !== asset.id)
     if (previewAsset.value?.id === asset.id) {
       closePreview()
@@ -1222,6 +1232,32 @@ function handleSeedanceInsert(assetData) {
   emit('close')
 }
 
+function handleDigitalHumanImageInsert(asset) {
+  const metadata = typeof asset?.metadata === 'string'
+    ? (() => { try { return JSON.parse(asset.metadata) } catch { return {} } })()
+    : (asset?.metadata || {})
+  const imageUrl = metadata.previewUrl || asset?.thumbnail_url || ''
+  if (!imageUrl) {
+    showToast('该数字人暂未返回可引用的形象图', 'error')
+    return
+  }
+  emit('insert-asset', {
+    ...asset,
+    type: 'image',
+    assetType: 'digital-human',
+    digitalHumanAssetId: asset.id,
+    digitalHumanChannelId: metadata.channelId || '',
+    name: `${asset.name || '数字人'}形象图`,
+    url: imageUrl,
+    thumbnail_url: imageUrl,
+    metadata: {
+      ...metadata,
+      digitalHumanAssetId: asset.id
+    }
+  })
+  emit('close')
+}
+
 // 删除 seedance 分组
 const showDeleteSeedanceGroupConfirm = ref(false)
 const deleteSeedanceGroupTarget = ref(null)
@@ -1413,6 +1449,10 @@ function handleDragStart(e, asset) {
   }
 
   if (asset.type === 'seedance-character') {
+    assetData.metadata = asset.metadata || {}
+  }
+
+  if (asset.type === 'digital-human') {
     assetData.metadata = asset.metadata || {}
   }
   
@@ -1841,6 +1881,14 @@ onUnmounted(() => {
             :spaceFilter="spaceFilter"
             @groups-updated="loadAssets(true)"
             @insert-to-canvas="handleSeedanceInsert"
+          />
+
+          <DigitalHumanPanel
+            v-else-if="selectedType === 'digital-human' && digitalHumanLibraryEnabled"
+            :assets="assets"
+            @insert-image="handleDigitalHumanImageInsert"
+            @refresh="loadAssets(true)"
+            @upsert="upsertAssetInList"
           />
 
           <template v-else>

@@ -42,4 +42,28 @@ assert.match(
   'the beginner image upload UI should expose one-click review'
 )
 
+assert.match(
+  source,
+  /imageReviews\.get\(seedanceFirstFrameFile\)\?\.status === 'approved'/,
+  'reviewed Seedance first-frame uploads should show an approved badge'
+)
+
+assert.match(
+  source,
+  /imageReviews\.get\(seedanceLastFrameFile\)\?\.status === 'approved'/,
+  'reviewed Seedance last-frame uploads should show an approved badge'
+)
+
+assert.match(
+  source,
+  /imageReviews\.get\(seedanceRefImages\[idx\]\)\?\.status === 'approved'/,
+  'reviewed Seedance reference uploads should show an approved badge'
+)
+
+assert.match(
+  source,
+  /imageReviews\.get\(imageFiles\[idx\]\)\?\.status === 'approved'/,
+  'reviewed generic image uploads should show an approved badge'
+)
+
 console.log('VideoGeneration image review source tests passed')

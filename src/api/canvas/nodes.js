@@ -408,6 +408,19 @@ export async function getVideoTaskStatus(taskId) {
 }
 
 /**
+ * 查询 HeyGen 数字人视频或换口型任务状态。
+ */
+export async function getDigitalHumanTaskStatus(taskId) {
+  const response = await fetch(getApiUrl(`/api/digital-humans/tasks/${encodeURIComponent(taskId)}`), {
+    cache: 'no-store',
+    headers: getHeaders({ extra: { 'Cache-Control': 'no-cache' } })
+  })
+  const data = await parseApiResponse(response, '查询数字人任务状态失败：后端没有返回 JSON')
+  if (!response.ok) throw buildTaskQueryError(response, data, '查询数字人任务状态失败')
+  return data
+}
+
+/**
  * 查询视频高清放大任务状态
  */
 export async function getVideoHdTaskStatus(taskId) {

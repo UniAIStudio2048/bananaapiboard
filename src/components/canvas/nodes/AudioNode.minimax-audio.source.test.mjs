@@ -15,17 +15,25 @@ test('MiniMax TTS only submits the selected controlled voice ID and supports 500
   assert.match(source, /isMiniMaxAudio\.value && audioCapability\.value === 'tts'[\s\S]*?body\.text = musicPrompt\.value[\s\S]*?body\.voice_id = selectedVoicePreset\.value\?\.sourceVoice/)
   assert.match(source, /return 50000/)
   assert.match(source, /!!selectedVoicePreset\.value\?\.sourceVoice/)
-  assert.match(source, /:provider="isMiniMaxAudio \? 'minimax' : 'coze'"/)
+  assert.match(source, /:provider="isMiniMaxAudio \? 'minimax' : isFishAudio \? 'fish' : 'coze'"/)
   assert.match(source, /const voiceClonePointsCost = computed\(\(\) => currentMusicModelConfig\.value\?\.voiceClonePointsCost \?\? null\)/)
   assert.match(source, /:clone-points-cost="voiceClonePointsCost"/)
   assert.match(source, /:space-type="voiceCloneSpaceParams\.spaceType"/)
 })
 
 test('a completed MiniMax voice design can be saved manually to my voices', () => {
-  assert.match(source, /canSaveDesignedVoice: generatedNodeData\.audioProvider === 'minimax' && generatedNodeData\.audioCapability === 'voice_design'/)
+  assert.match(source, /\['minimax', 'fish'\]\.includes\(generatedNodeData\.audioProvider\) && generatedNodeData\.audioCapability === 'voice_design'/)
   assert.match(source, /function saveDesignedVoice\(\)/)
   assert.match(source, /\/api\/audio\/user-voices\/from-design/)
   assert.match(source, /保存到我的音色/)
+})
+
+test('Fish Audio allows an optional voice for synchronous TTS and preserves its provider on completion', () => {
+  assert.match(source, /const isFishAudio = computed\(\(\) => currentMusicModelConfig\.value\?\.provider === 'fish'\)/)
+  assert.match(source, /isFishAudio\.value && audioCapability\.value === 'voice_design'[\s\S]*?return 150/)
+  assert.match(source, /isFishAudio\.value && audioCapability\.value === 'tts'[\s\S]*?return 50000/)
+  assert.match(source, /body\.voice_id = selectedVoicePreset\.value\.sourceVoice/)
+  assert.match(source, /audioProvider: isMiniMaxAudio\.value \? 'minimax' : isFishAudio\.value \? 'fish' : 'coze'/)
 })
 
 test('MiniMax TTS exposes pause and Chinese paralinguistic insertion controls only for that provider', () => {

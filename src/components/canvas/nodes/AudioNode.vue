@@ -252,6 +252,7 @@ const currentMusicModelConfig = computed(() => {
   return musicModels.value.find(m => m.value === selectedMusicModel.value) || musicModels.value[0]
 })
 const isMiniMaxAudio = computed(() => currentMusicModelConfig.value?.provider === 'minimax')
+const isFishAudio = computed(() => currentMusicModelConfig.value?.provider === 'fish')
 const audioCapability = computed(() => currentMusicModelConfig.value?.kind === 'audio-model' ? currentMusicModelConfig.value.capability : null)
 const voiceClonePointsCost = computed(() => currentMusicModelConfig.value?.voiceClonePointsCost ?? null)
 const voiceCloneSpaceParams = computed(() => teamStore.getSpaceParams('current'))
@@ -286,6 +287,8 @@ const voiceCloneReadingTexts = computed(() => {
 const audioPromptPlaceholder = computed(() => {
   if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 500 字）'
   if (isMiniMaxAudio.value && audioCapability.value === 'tts') return '输入需要合成的文案（最多 50000 字）'
+  if (isFishAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 150 字，可选）'
+  if (isFishAudio.value && audioCapability.value === 'tts') return '输入需要合成的文案（最多 50000 字）'
   if (audioCapability.value === 'voice_design') return '说话的文本内容，描述希望角色说出的内容'
   if (audioCapability.value === 'tts') return '输入需要合成的文案。'
   if (audioCapability.value === 'voice_clone') return '说话的文本内容，描述你需要克隆的文本内容'
@@ -294,6 +297,8 @@ const audioPromptPlaceholder = computed(() => {
 const audioPromptLimit = computed(() => {
   if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return 500
   if (isMiniMaxAudio.value && audioCapability.value === 'tts') return 50000
+  if (isFishAudio.value && audioCapability.value === 'voice_design') return 150
+  if (isFishAudio.value && audioCapability.value === 'tts') return 50000
   return 4100
 })
 const canGenerateCurrentAudio = computed(() => {
@@ -302,6 +307,12 @@ const canGenerateCurrentAudio = computed(() => {
   }
   if (isMiniMaxAudio.value && audioCapability.value === 'tts') {
     return !!musicPrompt.value.trim() && !!selectedVoicePreset.value?.sourceVoice && musicPrompt.value.length <= audioPromptLimit.value
+  }
+  if (isFishAudio.value && audioCapability.value === 'voice_design') {
+    return !!voiceDesignStyle.value.trim() && musicPrompt.value.length <= audioPromptLimit.value
+  }
+  if (isFishAudio.value && audioCapability.value === 'tts') {
+    return !!musicPrompt.value.trim() && musicPrompt.value.length <= audioPromptLimit.value
   }
   if (audioCapability.value) return true
   return !!musicPrompt.value.trim()
@@ -330,7 +341,7 @@ function formatModelSuccessRate(modelName) {
 // 音乐生成积分消耗（生成2首歌）
 const musicPointsCost = computed(() => {
   const cost = currentMusicModelConfig.value?.pointsCost || 20
-  if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return cost
+  if ((isMiniMaxAudio.value || isFishAudio.value) && audioCapability.value === 'voice_design') return cost
   return audioCapability.value
     ? calculateAudioPointsCost(cost, musicPrompt.value)
     : cost * 2
@@ -758,6 +769,8 @@ async function handleGenerateCozeAudio() {
   if (!canGenerateCurrentAudio.value) {
     const message = isMiniMaxAudio.value && audioCapability.value === 'voice_design'
       ? '请填写音色描述和试听文案'
+      : isFishAudio.value && audioCapability.value === 'voice_design'
+        ? '请填写音色描述'
       : isMiniMaxAudio.value && audioCapability.value === 'tts'
         ? '请输入文案并选择官方音色或我的音色'
         : audioCapability.value === 'voice_clone'
@@ -792,6 +805,12 @@ async function handleGenerateCozeAudio() {
     } else if (isMiniMaxAudio.value && audioCapability.value === 'tts') {
       body.text = musicPrompt.value
       body.voice_id = selectedVoicePreset.value?.sourceVoice
+    } else if (isFishAudio.value && audioCapability.value === 'voice_design') {
+      body.prompt = voiceDesignStyle.value
+      body.preview_text = musicPrompt.value
+    } else if (isFishAudio.value && audioCapability.value === 'tts') {
+      body.text = musicPrompt.value
+      if (selectedVoicePreset.value?.sourceVoice) body.voice_id = selectedVoicePreset.value.sourceVoice
     } else if (audioCapability.value === 'voice_design') {
       body.prompt = musicPrompt.value
       body.style = voiceDesignStyle.value
@@ -815,7 +834,7 @@ async function handleGenerateCozeAudio() {
       taskType: 'audio-generation',
       status: 'processing',
       processingStartedAt: Date.now(),
-      audioProvider: isMiniMaxAudio.value ? 'minimax' : 'coze',
+      audioProvider: isMiniMaxAudio.value ? 'minimax' : isFishAudio.value ? 'fish' : 'coze',
       audioModel: selectedMusicModel.value,
       audioCapability: audioCapability.value,
       canSaveDesignedVoice: false,
@@ -851,7 +870,7 @@ async function pollCozeAudioStatus(nodeId, taskId) {
       audioProvider: generatedNodeData.audioProvider || currentMusicModelConfig.value?.provider || 'coze',
       audioModel: generatedNodeData.audioModel || selectedMusicModel.value,
       audioCapability: generatedNodeData.audioCapability || audioCapability.value,
-      canSaveDesignedVoice: generatedNodeData.audioProvider === 'minimax' && generatedNodeData.audioCapability === 'voice_design',
+      canSaveDesignedVoice: ['minimax', 'fish'].includes(generatedNodeData.audioProvider) && generatedNodeData.audioCapability === 'voice_design',
       designedVoiceSaved: false,
       output: {
         type: 'audio',
@@ -2830,7 +2849,7 @@ function handleSpeedEditorClickOutside(event) {
         v-if="showVoicePresetPicker"
         :model-value="selectedVoicePreset"
         :reading-texts="voiceCloneReadingTexts"
-        :provider="isMiniMaxAudio ? 'minimax' : 'coze'"
+        :provider="isMiniMaxAudio ? 'minimax' : isFishAudio ? 'fish' : 'coze'"
         :model="selectedMusicModel"
         :clone-points-cost="voiceClonePointsCost"
         :space-type="voiceCloneSpaceParams.spaceType"

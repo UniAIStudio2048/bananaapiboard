@@ -700,7 +700,11 @@ function handleAssetInsert(asset) {
         sourceImages: [asset.url],
         nodeRole: 'source',
         fromAsset: true,
-        assetId: asset.id
+        assetId: asset.id,
+        metadata: asset.metadata || {},
+        digitalHumanAssetId: asset.digitalHumanAssetId || asset.metadata?.digitalHumanAssetId || '',
+        digitalHumanChannelId: asset.digitalHumanChannelId || asset.metadata?.channelId || '',
+        assetType: asset.assetType || ''
       }
       break
     case 'video':

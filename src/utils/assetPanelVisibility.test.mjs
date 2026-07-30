@@ -72,3 +72,23 @@ test('Seedance OpenAPI Pro assets are visible only when that provider is active'
     ['seedance-openapi', 'seedance-character']
   ])
 })
+
+test('数字人资产仅在租户开启数字人资产库后显示', () => {
+  const digitalHuman = { id: 'human-1', type: 'digital-human', name: '品牌数字人', metadata: { channelId: 'heygen-a' } }
+  const hidden = getVisibleAssetPanelAssets([digitalHuman], {
+    selectedType: 'digital-human',
+    selectedTag: 'all',
+    searchQuery: '',
+    digitalHumanLibraryEnabled: false
+  })
+  const visible = getVisibleAssetPanelAssets([digitalHuman], {
+    selectedType: 'digital-human',
+    selectedTag: 'all',
+    searchQuery: '',
+    digitalHumanLibraryEnabled: true
+  })
+  assert.deepEqual(hidden, [])
+  assert.deepEqual(visible.map(asset => asset.id), ['human-1'])
+  assert.equal(getAssetPanelStats([digitalHuman], { digitalHumanLibraryEnabled: false })['digital-human'], 0)
+  assert.equal(getAssetPanelStats([digitalHuman], { digitalHumanLibraryEnabled: true })['digital-human'], 1)
+})

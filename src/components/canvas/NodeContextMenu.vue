@@ -8,8 +8,9 @@ import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { getDownstreamOptions, NODE_TYPES } from '@/config/canvas/nodeTypes'
-import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled, isByteforCharacterLibraryEnabled, getAvailableVideoModels } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled, isByteforCharacterLibraryEnabled, isDigitalHumanLibraryEnabled, getAvailableVideoModels } from '@/config/tenant'
 import { saveAsset } from '@/api/canvas/assets'
+import { createDigitalHuman, getDigitalHumanChannels } from '@/api/canvas/digital-humans'
 import { uploadImages } from '@/api/canvas/nodes'
 import { extractVideoFrame } from '@/api/canvas/workflow'
 import { createAssetGroup, listAssetGroups, createAsset as createVolcAsset, pollAssetStatus } from '@/api/canvas/volcengine-assets'
@@ -805,6 +806,36 @@ const canSendToAssistant = computed(() => {
 
 const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
 const byteforCharacterLibraryEnabled = computed(() => isByteforCharacterLibraryEnabled())
+const digitalHumanLibraryEnabled = computed(() => isDigitalHumanLibraryEnabled())
+const isCreatingDigitalHuman = ref(false)
+
+async function createDigitalHumanFromNode() {
+  if (!digitalHumanLibraryEnabled.value || isCreatingDigitalHuman.value) return
+  const type = isVideoNodeWithOutput.value ? 'video' : (isImageNodeWithOutput.value ? 'image' : '')
+  const rawUrl = type === 'video' ? videoUrl.value : imageUrl.value
+  if (!type || !rawUrl) return
+
+  isCreatingDigitalHuman.value = true
+  try {
+    const channels = await getDigitalHumanChannels()
+    const channel = channels.channels?.[0]
+    if (!channel) throw new Error('当前租户未配置可用的 HeyGen 渠道')
+    const sourceUrl = await uploadToCloudForAsset(rawUrl, type)
+    await createDigitalHuman({
+      name: String(props.node?.data?.title || `${type === 'video' ? '视频' : '图片'}数字人`).trim().slice(0, 255),
+      kind: type === 'video' ? 'digital_twin' : 'photo_avatar',
+      sourceUrl,
+      channelId: channel.id
+    })
+    showToast('HeyGen 数字人已创建，训练完成后会显示在资产库中', 'success')
+    emit('close')
+  } catch (error) {
+    console.error('[DigitalHuman] 从画布创建数字人失败:', error)
+    showToast(error.message || '创建 HeyGen 数字人失败', 'error')
+  } finally {
+    isCreatingDigitalHuman.value = false
+  }
+}
 
 // ========== Seedance 2.0 角色创建 ==========
 
@@ -1223,6 +1254,16 @@ function handleMenuClick(event) {
         <span class="icon">✦</span>
         {{ $t('canvas.contextMenu.sendToAssistant') }}
       </div>
+
+      <div
+        v-if="digitalHumanLibraryEnabled && (isImageNodeWithOutput || isVideoNodeWithOutput)"
+        class="canvas-context-menu-item digital-human-item"
+        :class="{ loading: isCreatingDigitalHuman }"
+        @click="createDigitalHumanFromNode"
+      >
+        <span class="icon">✦</span>
+        {{ isCreatingDigitalHuman ? '创建中…' : '一键创建 HeyGen 数字人' }}
+      </div>
       
       <!-- 创建 Seedance 2.0 角色 -->
       <div 
@@ -1480,6 +1521,14 @@ function handleMenuClick(event) {
 }
 .seedance-item:hover {
   background: rgba(245, 158, 11, 0.15) !important;
+}
+
+.digital-human-item {
+  color: #c4b5fd !important;
+}
+
+.digital-human-item:hover {
+  background: rgba(139, 92, 246, .16) !important;
 }
 
 /* Seedance 弹窗样式 */

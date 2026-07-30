@@ -9,9 +9,9 @@
       <div class="voice-picker-toolbar">
         <div class="voice-picker-tabs" role="tablist" aria-label="音色分类">
           <button type="button" :class="{ active: activeTab === 'all' }" @click="activeTab = 'all'">音色库</button>
-          <button v-if="!isMiniMax" type="button" :class="{ active: activeTab === 'favorites' }" @click="activeTab = 'favorites'">收藏音色</button>
+          <button v-if="!isMiniMax && !isFish" type="button" :class="{ active: activeTab === 'favorites' }" @click="activeTab = 'favorites'">收藏音色</button>
           <button type="button" :class="{ active: activeTab === 'mine' }" @click="switchToMine">我的音色</button>
-          <button v-if="!isMiniMax || isMiniMaxCloneEnabled" type="button" :class="{ active: activeTab === 'clone' }" @click="activeTab = 'clone'">克隆新音色</button>
+          <button v-if="(!isMiniMax && !isFish) || isMiniMaxCloneEnabled || isFishCloneEnabled" type="button" :class="{ active: activeTab === 'clone' }" @click="activeTab = 'clone'">克隆新音色</button>
         </div>
         <label class="voice-search">
           <span aria-hidden="true">⌕</span>
@@ -19,7 +19,7 @@
         </label>
       </div>
 
-      <div v-if="!isMiniMax" class="voice-picker-filters">
+      <div v-if="!isMiniMax && !isFish" class="voice-picker-filters">
         <select v-model="locale"><option value="">全部语种</option><option v-for="item in locales" :key="item" :value="item">{{ localeLabels[item] || item }}</option></select>
         <select v-model="gender"><option value="">全部性别</option><option value="female">女声</option><option value="male">男声</option></select>
         <select v-model="style"><option value="">全部风格</option><option v-for="item in styles" :key="item" :value="item">{{ styleLabels[item] || item }}</option></select>
@@ -39,11 +39,11 @@
             <div class="clone-controls">
               <button v-if="!isRecording" type="button" class="clone-record-button" @click="startRecording">开始录音</button>
               <button v-else type="button" class="clone-record-button recording" @click="stopRecording">停止录音（{{ recordSeconds }}s）</button>
-              <input v-if="isMiniMax" ref="cloneAudioInput" type="file" accept="audio/mpeg,audio/mp4,audio/wav,.mp3,.m4a,.wav" class="mine-upload-input" @change="handleMiniMaxCloneAudioUpload" />
-              <button v-if="isMiniMax" type="button" class="mine-upload-button" :disabled="cloneSaving" @click="openMiniMaxCloneAudioUpload">上传音频</button>
+              <input v-if="isMiniMax || isFish" ref="cloneAudioInput" type="file" accept="audio/mpeg,audio/mp4,audio/wav,.mp3,.m4a,.wav" class="mine-upload-input" @change="handleMiniMaxCloneAudioUpload" />
+              <button v-if="isMiniMax || isFish" type="button" class="mine-upload-button" :disabled="cloneSaving" @click="openMiniMaxCloneAudioUpload">上传音频</button>
               <audio v-if="recordedBlobUrl" :src="recordedBlobUrl" controls class="clone-preview"></audio>
             </div>
-            <p v-if="isMiniMax" class="clone-upload-hint">支持 MP3、M4A、WAV，时长 10 秒至 5 分钟，文件不超过 20MB。</p>
+            <p v-if="isMiniMax || isFish" class="clone-upload-hint">支持 MP3、M4A、WAV，时长 10 秒至 5 分钟，文件不超过 20MB。</p>
             <div v-if="isRecording" class="clone-waveform" role="status">
               <canvas ref="waveformCanvas" aria-label="录音实时波形"></canvas>
               <span>正在录音，实时显示麦克风波形</span>
@@ -55,7 +55,7 @@
                 {{ cloneSaving ? '保存中…' : '保存音色' }}
               </button>
             </div>
-            <div v-if="isMiniMax && recordedBlob" class="minimax-clone-billing">
+            <div v-if="(isMiniMax || isFish) && recordedBlob" class="minimax-clone-billing">
               <strong>本次复刻将消耗 {{ formatClonePoints(clonePointsCost) }} 积分</strong>
               <label><input v-model="cloneAuthorized" type="checkbox" /> 我确认拥有该声音的合法授权</label>
             </div>
@@ -64,7 +64,7 @@
         </div>
       </div>
       <div v-else-if="activeTab === 'mine'" class="voice-picker-list">
-        <div v-if="!isMiniMax" class="mine-upload">
+        <div v-if="!isMiniMax && !isFish" class="mine-upload">
           <input ref="mineAudioInput" type="file" accept="audio/mpeg,.mp3" class="mine-upload-input" @change="handleMineAudioUpload" />
           <button type="button" class="mine-upload-button" :disabled="mineUploading" @click="openMineAudioUpload">{{ mineUploading ? '上传中…' : '上传 MP3' }}</button>
           <span>仅支持大于 3 秒且小于 35 秒的 MP3 文件</span>
@@ -72,7 +72,7 @@
         <p v-if="mineUploadError" class="clone-error">{{ mineUploadError }}</p>
         <p v-if="mineLoading" class="voice-empty">正在加载我的音色…</p>
         <p v-else-if="mineError" class="voice-empty">{{ mineError }}</p>
-        <p v-else-if="!mineVoices.length" class="voice-empty">{{ isMiniMax ? '还没有保存的 MiniMax 设计音色，先使用“音色设计”创建并保存吧' : '还没有个人音色，去“克隆新音色”创建一个吧' }}</p>
+        <p v-else-if="!mineVoices.length" class="voice-empty">{{ isMiniMax ? '还没有保存的 MiniMax 设计音色，先使用“音色设计”创建并保存吧' : isFish ? '还没有个人 Fish 音色，先使用“音色设计”或“克隆新音色”创建吧' : '还没有个人音色，去“克隆新音色”创建一个吧' }}</p>
         <article v-for="voice in mineVoices" :key="voice.id" class="voice-row" :class="{ selected: modelValue?.id === voice.id }">
           <button type="button" class="preview-button" :disabled="!voice.hasPreview" :title="voice.hasPreview ? '试听音色' : '试听素材准备中'" @click="togglePreview(voice)">
             {{ playingId === voice.id ? '■' : '▶' }}
@@ -82,7 +82,7 @@
             <small v-if="voice.transcript">{{ voice.transcript }}</small>
             <small v-if="isMiniMax && voice.cloneExpiresAt && !voice.cloneActivatedAt" class="minimax-clone-expiry">请在 {{ formatCloneExpiry(voice.cloneExpiresAt) }} 前首次使用该音色合成</small>
           </div>
-          <button type="button" class="select-button" :disabled="!voice.hasPreview && !isMiniMax" @click="emit('select', voice)">{{ modelValue?.id === voice.id ? '已选' : '选择' }}</button>
+          <button type="button" class="select-button" :disabled="!voice.hasPreview && !isMiniMax && !isFish" @click="emit('select', voice)">{{ modelValue?.id === voice.id ? '已选' : '选择' }}</button>
           <button type="button" class="favorite-button delete-button" title="删除" @click="requestDeleteMineVoice(voice)">删除</button>
         </article>
       </div>
@@ -104,8 +104,8 @@
             </div>
           </div>
           <div class="voice-meta"><span>{{ localeLabels[voice.locale] || voice.locale }}</span><span>{{ genderLabel(voice.gender) }}</span><span>{{ styleLabels[voice.style] || voice.style }}</span></div>
-          <button type="button" class="select-button" :disabled="!voice.hasPreview && !isMiniMax" @click="emit('select', voice)">{{ modelValue?.id === voice.id ? '已选' : '选择' }}</button>
-          <button v-if="!isMiniMax" type="button" class="favorite-button" :class="{ active: voice.isFavorite }" :title="voice.isFavorite ? '取消收藏' : '收藏'" @click="toggleFavorite(voice)">{{ voice.isFavorite ? '★' : '☆' }}</button>
+          <button type="button" class="select-button" :disabled="!voice.hasPreview && !isMiniMax && !isFish" @click="emit('select', voice)">{{ modelValue?.id === voice.id ? '已选' : '选择' }}</button>
+          <button v-if="!isMiniMax && !isFish" type="button" class="favorite-button" :class="{ active: voice.isFavorite }" :title="voice.isFavorite ? '取消收藏' : '收藏'" @click="toggleFavorite(voice)">{{ voice.isFavorite ? '★' : '☆' }}</button>
         </article>
       </div>
       <footer v-if="activeTab !== 'clone' && activeTab !== 'mine' && pageCount > 1" class="voice-picker-pagination" aria-label="音色分页">
@@ -149,11 +149,13 @@ const props = defineProps({
 })
 const emit = defineEmits(['select', 'close'])
 const isMiniMax = computed(() => props.provider === 'minimax')
+const isFish = computed(() => props.provider === 'fish')
 const isMiniMaxCloneEnabled = computed(() => isMiniMax.value && Number.isFinite(props.clonePointsCost) && props.clonePointsCost >= 0)
+const isFishCloneEnabled = computed(() => isFish.value && Number.isFinite(props.clonePointsCost) && props.clonePointsCost >= 0)
 const voices = ref([])
 const activeTab = ref('all')
 const keyword = ref('')
-const locale = ref(isMiniMax.value ? '' : 'zh-CN')
+const locale = ref(isMiniMax.value || isFish.value ? '' : 'zh-CN')
 const gender = ref('')
 const style = ref('')
 const loading = ref(false)
@@ -192,11 +194,11 @@ const filteredVoices = computed(() => {
   const query = keyword.value.toLocaleLowerCase()
   return voices.value.filter(voice => {
     const searchable = [voice.name, voice.description, voice.locale, voice.gender, voice.style, ...(voice.tags || [])].join(' ').toLocaleLowerCase()
-    return (isMiniMax.value || activeTab.value !== 'favorites' || voice.isFavorite) &&
+    return ((isMiniMax.value || isFish.value) || activeTab.value !== 'favorites' || voice.isFavorite) &&
       (!query || searchable.includes(query)) &&
-      (isMiniMax.value || !locale.value || voice.locale === locale.value) &&
-      (isMiniMax.value || !gender.value || voice.gender === gender.value) &&
-      (isMiniMax.value || !style.value || voice.style === style.value)
+      ((isMiniMax.value || isFish.value) || !locale.value || voice.locale === locale.value) &&
+      ((isMiniMax.value || isFish.value) || !gender.value || voice.gender === gender.value) &&
+      ((isMiniMax.value || isFish.value) || !style.value || voice.style === style.value)
   })
 })
 const pageCount = computed(() => Math.max(1, Math.ceil(filteredVoices.value.length / pageSize)))
@@ -254,7 +256,9 @@ async function loadVoices() {
   try {
     const response = isMiniMax.value
       ? await apiClient.get(`/api/audio/minimax/system-voices?model=${encodeURIComponent(props.model)}`)
-      : await apiClient.get('/api/audio/voice-presets')
+      : isFish.value
+        ? await apiClient.get(`/api/audio/fish/voices?model=${encodeURIComponent(props.model)}`)
+        : await apiClient.get('/api/audio/voice-presets')
     voices.value = response.data || []
   } catch (requestError) {
     error.value = requestError?.message || '音色库加载失败，请稍后重试'
@@ -359,8 +363,8 @@ const currentReadingText = computed(() => {
 })
 const canSaveClone = computed(() => {
   if (cloneSaving.value || !cloneName.value) return false
-  if (!isMiniMax.value) return Boolean(recordedBlob.value)
-  return isMiniMaxCloneEnabled.value && Boolean(cloneFile.value) && cloneDurationSeconds.value >= 10 && cloneDurationSeconds.value <= 300 && cloneAuthorized.value
+  if (!isMiniMax.value && !isFish.value) return Boolean(recordedBlob.value)
+  return (isMiniMaxCloneEnabled.value || isFishCloneEnabled.value) && Boolean(cloneFile.value) && cloneDurationSeconds.value >= 10 && cloneDurationSeconds.value <= 300 && cloneAuthorized.value
 })
 
 function refreshReadingText() {
@@ -373,15 +377,15 @@ async function loadMineVoices() {
   mineLoading.value = true
   mineError.value = ''
   try {
-    const response = await apiClient.get(isMiniMax.value ? '/api/audio/user-voices?provider=minimax' : '/api/audio/user-voices')
+    const response = await apiClient.get(isMiniMax.value ? '/api/audio/user-voices?provider=minimax' : isFish.value ? '/api/audio/user-voices?provider=fish' : '/api/audio/user-voices')
     const list = Array.isArray(response?.data) ? response.data : []
     mineVoices.value = list.map(item => ({
       id: item.id,
       name: item.name,
       previewUrl: item.reference_audio_url || item.previewUrl || '',
       transcript: item.transcript || '',
-      sourceVoice: item.sourceVoice || (isMiniMax.value ? '' : item.reference_audio_url || ''),
-      provider: item.provider || (isMiniMax.value ? 'minimax' : 'reference'),
+      sourceVoice: item.sourceVoice || ((isMiniMax.value || isFish.value) ? '' : item.reference_audio_url || ''),
+      provider: item.provider || (isMiniMax.value ? 'minimax' : isFish.value ? 'fish' : 'reference'),
       cloneExpiresAt: item.cloneExpiresAt || null,
       cloneActivatedAt: item.cloneActivatedAt || null,
       hasPreview: Boolean(item.reference_audio_url || item.previewUrl)
@@ -555,7 +559,7 @@ function startRecording() {
         const blob = new Blob(recordChunks, { type: mediaRecorder.mimeType || 'audio/webm' })
         recordedBlob.value = blob
         recordedBlobUrl.value = URL.createObjectURL(blob)
-        if (isMiniMax.value) {
+        if (isMiniMax.value || isFish.value) {
           cloneFile.value = new File([blob], `recording-${Date.now()}${getRecordingExtension(blob.type)}`, { type: blob.type })
           cloneDurationSeconds.value = recordSeconds.value
         }
@@ -683,7 +687,7 @@ async function saveCloneVoice() {
   cloneSaving.value = true
   cloneError.value = ''
   try {
-    if (isMiniMax.value) {
+    if (isMiniMax.value || isFish.value) {
       if (cloneDurationSeconds.value < 10 || cloneDurationSeconds.value > 300) {
         throw new Error('复刻音频时长需在10秒至5分钟之间')
       }
@@ -695,7 +699,7 @@ async function saveCloneVoice() {
       form.append('authorized', 'true')
       form.append('spaceType', props.spaceType)
       if (props.teamId) form.append('teamId', props.teamId)
-      await apiRequest('/api/audio/minimax/voices/clone', { method: 'POST', body: form, json: false })
+      await apiRequest(isFish.value ? '/api/audio/fish/voices/clone' : '/api/audio/minimax/voices/clone', { method: 'POST', body: form, json: false })
       clearRecordedAudio()
       cloneName.value = ''
       recordSeconds.value = 0

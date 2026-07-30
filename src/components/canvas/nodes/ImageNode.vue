@@ -18,6 +18,7 @@ import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints, removeImageBackground } from '@/api/canvas/nodes'
 import { getHistory } from '@/api/canvas/history'
+import { getAsset } from '@/api/canvas/assets'
 import { extractVideoFrame, uploadCanvasMedia } from '@/api/canvas/workflow'
 import { createQuickSeedanceCharacterAsset, listAssetGroups, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 import { registerTask, removeCompletedTask, getTasksByNodeId, ensureTaskPolling } from '@/stores/canvas/backgroundTaskManager'
@@ -86,6 +87,17 @@ const props = defineProps({
   selected: Boolean
 })
 
+const isHeygenDigitalHumanReference = computed(() => {
+  const metadata = typeof props.data?.metadata === 'string'
+    ? (() => { try { return JSON.parse(props.data.metadata) } catch { return {} } })()
+    : (props.data?.metadata || {})
+  return Boolean(
+    props.data?.digitalHumanAssetId ||
+    metadata.digitalHumanAssetId ||
+    (props.data?.assetType === 'digital-human' && props.data?.assetId)
+  )
+})
+
 const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
@@ -123,6 +135,37 @@ function scheduleNodeInternalsUpdate() {
       nodeInternalsUpdateQueued = false
     })
   })
+}
+
+async function restoreDigitalHumanAssetReference() {
+  if (isHeygenDigitalHumanReference.value || !props.data?.fromAsset) return
+  const assetId = props.data?.assetId
+  if (!assetId) return
+
+  try {
+    const result = await getAsset(assetId)
+    const asset = result?.asset
+    if (asset?.type !== 'digital-human') return
+    const metadata = typeof asset.metadata === 'string'
+      ? (() => { try { return JSON.parse(asset.metadata) } catch { return {} } })()
+      : (asset.metadata || {})
+    const nodeMetadata = typeof props.data?.metadata === 'string'
+      ? (() => { try { return JSON.parse(props.data.metadata) } catch { return {} } })()
+      : (props.data?.metadata || {})
+
+    canvasStore.updateNodeData(props.id, {
+      metadata: {
+        ...nodeMetadata,
+        digitalHumanAssetId: asset.id,
+        ...(metadata.channelId ? { channelId: metadata.channelId } : {})
+      },
+      digitalHumanAssetId: asset.id,
+      digitalHumanChannelId: metadata.channelId || '',
+      assetType: 'digital-human'
+    })
+  } catch (error) {
+    console.warn('[ImageNode] 恢复数字人形象图标记失败:', error.message)
+  }
 }
 
 // 配置面板放大相关（与 VideoNode 保持一致的交互逻辑）
@@ -1288,6 +1331,7 @@ function checkAndRestoreBackgroundTasks() {
 
 onMounted(() => {
   nodeGeometryDisposed = false
+  restoreDigitalHumanAssetReference()
   elapsedTimeTimer = setInterval(() => {
     elapsedTimeNow.value = Date.now()
   }, 1000)
@@ -8023,6 +8067,8 @@ async function handleDrop(event) {
         @dragleave="handleDragLeave"
         @drop="handleDrop"
       >
+        <div v-if="isHeygenDigitalHumanReference" class="heygen-digital-human-badge">HeyGen数字人</div>
+
         <!-- 彗星环绕发光特效（生成中显示） -->
         <svg v-if="data.status === 'processing'" class="comet-border" viewBox="0 0 100 100" preserveAspectRatio="none">
           <defs>
@@ -9561,6 +9607,24 @@ async function handleDrop(event) {
   flex-direction: column;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
   contain: content;
+}
+
+.heygen-digital-human-badge {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  z-index: 20;
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  transform: rotate(8deg);
+  pointer-events: none;
+  box-shadow: 0 2px 6px rgba(30, 64, 175, 0.35);
 }
 
 /* 源节点（有图片）- 无边框 */

@@ -27,6 +27,33 @@ test('publishes enabled MiniMax audio models without exposing configuration secr
   assert.equal(Object.hasOwn(model, 'apiKey'), false)
 })
 
+test('publishes enabled Fish Audio models without exposing configuration secrets', () => {
+  const model = normalizeAudioModels([{
+    name: 'fish-tts-default',
+    displayName: 'Fish Audio TTS',
+    apiType: 'fish-audio',
+    capability: 'tts',
+    actualModel: 's2.1-pro-free',
+    voiceClonePointsCost: 10,
+    apiKey: 'must-not-be-published',
+    enabled: true
+  }])[0]
+
+  assert.equal(model.provider, 'fish')
+  assert.equal(model.actualModel, 's2.1-pro-free')
+  assert.equal(model.voiceClonePointsCost, 10)
+  assert.equal(Object.hasOwn(model, 'apiKey'), false)
+})
+
+test('keeps Fish voice clone as a TTS picker action instead of a standalone generation model', () => {
+  assert.equal(normalizeAudioModels([{
+    name: 'fish-voice-clone-default',
+    apiType: 'fish-audio',
+    capability: 'voice_clone',
+    enabled: true
+  }]).length, 0)
+})
+
 test('attaches custom icons and orders models by configured audio groups', () => {
   const models = normalizeAudioModels([
     { name: 'ungrouped', displayName: '未分组', apiType: 'coze-audio-workflow', enabled: true },

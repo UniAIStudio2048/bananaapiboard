@@ -47,7 +47,7 @@ function isImageThumbnailUrl(url) {
 }
 
 const typeIcon = computed(() => props.fileTypes.find(f => f.key === props.asset.type)?.icon || '◇')
-const isCharacter = computed(() => ['sora-character', 'seedance-character', 'bytefor-character'].includes(props.asset.type))
+const isCharacter = computed(() => ['sora-character', 'seedance-character', 'bytefor-character', 'digital-human'].includes(props.asset.type))
 const previewUrl = computed(() => {
   if (props.asset.type === 'video') {
     return props.asset.thumbnail_url || (isImageThumbnailUrl(props.videoThumbnail) ? props.videoThumbnail : '')
@@ -87,7 +87,7 @@ function getNumericDimension(...values) {
 }
 
 function getAssetAspectRatio(asset) {
-  if (!['image', 'video', 'sora-character', 'seedance-character', 'bytefor-character'].includes(asset?.type)) {
+  if (!['image', 'video', 'sora-character', 'seedance-character', 'bytefor-character', 'digital-human'].includes(asset?.type)) {
     return '1 / 1'
   }
 

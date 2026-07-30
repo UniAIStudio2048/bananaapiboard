@@ -4,6 +4,7 @@ const SEEDANCE_QUICK_TYPE = 'seedance-quick-character'
 const SEEDANCE_TYPE = 'seedance-character'
 const SORA_TYPE = 'sora-character'
 const BYTEFOR_TYPE = 'bytefor-character'
+const DIGITAL_HUMAN_TYPE = 'digital-human'
 
 const EMPTY_STATS = {
   all: 0,
@@ -13,7 +14,8 @@ const EMPTY_STATS = {
   audio: 0,
   [SORA_TYPE]: 0,
   [SEEDANCE_TYPE]: 0,
-  [BYTEFOR_TYPE]: 0
+  [BYTEFOR_TYPE]: 0,
+  [DIGITAL_HUMAN_TYPE]: 0
 }
 
 function normalizeGroupIdSet(groupIds) {
@@ -78,6 +80,7 @@ export function isAssetVisibleInAssetPanel(asset, context = {}) {
   if (STANDARD_ASSET_TYPES.has(asset.type)) return true
   if (asset.type === SORA_TYPE) return context.soraCharacterLibraryEnabled !== false
   if (asset.type === BYTEFOR_TYPE) return context.byteforCharacterLibraryEnabled === true
+  if (asset.type === DIGITAL_HUMAN_TYPE) return context.digitalHumanLibraryEnabled === true
   if ([SEEDANCE_TYPE, SEEDANCE_OPENAPI_TYPE, SEEDANCE_QUICK_TYPE].includes(asset.type)) {
     return isSeedanceAssetVisible(asset, context)
   }

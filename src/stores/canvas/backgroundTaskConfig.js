@@ -17,5 +17,8 @@ export function getTaskStatusConfig(taskType) {
   if (taskType === 'video') {
     return { statusApi: 'video', resultType: 'video', longRunning: true }
   }
+  if (taskType === 'digital-human-video') {
+    return { statusApi: 'digital-human-video', resultType: 'video', longRunning: true }
+  }
   return { statusApi: 'image', resultType: 'image', longRunning: false }
 }

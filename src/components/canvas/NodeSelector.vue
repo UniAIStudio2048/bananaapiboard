@@ -7,7 +7,7 @@ import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions } from '@/config/canvas/nodeTypes'
 import { useI18n } from '@/i18n'
 import { extractVideoFrame, uploadCanvasMedia } from '@/api/canvas/workflow'
-import { getAvailableVideoModels, isSeedanceFeaturesEnabled } from '@/config/tenant'
+import { getAvailableVideoModels, isSeedanceFeaturesEnabled, isDigitalHumanLibraryEnabled } from '@/config/tenant'
 import { clampNodePositionToGroup } from '@/utils/canvasConnectionPosition'
 import { buildVideoQuickActionNode, VIDEO_QUICK_ACTION_TYPES } from '@/utils/canvasVideoQuickActions'
 import { isSeedanceSd2VideoModel } from '@/utils/videoGenerationMode'
@@ -959,6 +959,13 @@ function formatFileSize(bytes) {
     <template v-if="!triggerNode">
       <div class="node-selector-divider"></div>
       <div class="node-selector-title">功能节点</div>
+      <div v-if="isDigitalHumanLibraryEnabled()" class="node-selector-item" @click="selectNodeType(NODE_TYPES.DIGITAL_HUMAN)">
+        <div class="node-selector-icon">{{ NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].icon }}</div>
+        <div class="node-selector-info">
+          <div class="node-selector-name">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].label) }}</div>
+          <div class="node-selector-desc">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].description) }}</div>
+        </div>
+      </div>
       <div v-if="isSeedanceFeaturesEnabled()" class="node-selector-item" @click="selectNodeType(NODE_TYPES.SEEDANCE_CHARACTER)">
         <div class="node-selector-icon">{{ NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].icon }}</div>
         <div class="node-selector-info">

@@ -8,7 +8,7 @@
  * - 用户返回画布时自动恢复任务状态
  */
 
-import { getImageTaskStatus, getVideoTaskStatus, getVideoHdTaskStatus, getImageHdTaskStatus, getImagePanoramaTaskStatus, getRemoveBackgroundTaskStatus, getAudioEditTaskStatus } from '@/api/canvas/nodes'
+import { getImageTaskStatus, getVideoTaskStatus, getVideoHdTaskStatus, getImageHdTaskStatus, getImagePanoramaTaskStatus, getRemoveBackgroundTaskStatus, getAudioEditTaskStatus, getDigitalHumanTaskStatus } from '@/api/canvas/nodes'
 import { normalizeTaskMediaResult } from '@/utils/canvasTaskResult'
 import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
 import { getTaskStatusConfig } from './backgroundTaskConfig'
@@ -229,6 +229,7 @@ function startPolling(taskId) {
       else if (taskConfig.statusApi === 'image-panorama') getStatus = getImagePanoramaTaskStatus
       else if (taskConfig.statusApi === 'image-cutout') getStatus = getRemoveBackgroundTaskStatus
       else if (taskConfig.statusApi === 'audio-edit') getStatus = getAudioEditTaskStatus
+      else if (taskConfig.statusApi === 'digital-human-video') getStatus = getDigitalHumanTaskStatus
       else if (taskConfig.statusApi === 'video') getStatus = getVideoTaskStatus
       else getStatus = getImageTaskStatus
       const rawResult = await getStatus(taskId)

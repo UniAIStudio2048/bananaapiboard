@@ -77,6 +77,7 @@ import LLMNode from './nodes/LLMNode.vue'
 import PreviewNode from './nodes/PreviewNode.vue'
 import GroupNode from './nodes/GroupNode.vue'
 import CharacterCardNode from './nodes/CharacterCardNode.vue'
+import DigitalHumanNode from './nodes/DigitalHumanNode.vue'
 import StoryboardNode from './nodes/StoryboardNode.vue'
 import SeedanceCharacterNode from './nodes/SeedanceCharacterNode.vue'
 import DirectorStudioNode from './nodes/DirectorStudioNode.vue'
@@ -511,6 +512,7 @@ const nodeTypes = {
   'grid-preview': V(ImageNode),      // 9宫格分镜（使用 ImageNode，可以生成和输出图片）
   'group': V(GroupNode, { alwaysReal: true }),  // 编组节点（视觉容器，永远渲染真组件）
   'character-card': V(CharacterCardNode),  // Sora角色卡节点
+  'digital-human': V(DigitalHumanNode),
   'seedance-character': V(SeedanceCharacterNode),  // Seedance角色节点
   'bytefor-character': V(SeedanceCharacterNode),  // Bytefor角色节点
   'director-studio': V(DirectorStudioNode),
@@ -3321,7 +3323,11 @@ async function handleFileDrop(event) {
                 thumbnail_url: asset.thumbnail_url || asset.url,
                 nodeRole: 'source',
                 fromAsset: true,
-                assetId: asset.id
+                assetId: asset.id,
+                metadata: asset.metadata || {},
+                digitalHumanAssetId: asset.digitalHumanAssetId || asset.metadata?.digitalHumanAssetId || '',
+                digitalHumanChannelId: asset.digitalHumanChannelId || asset.metadata?.channelId || '',
+                assetType: asset.assetType || ''
               }
             })
             break
