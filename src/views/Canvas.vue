@@ -2131,6 +2131,45 @@ function toggleAIAssistantPanel() {
   }
 }
 
+const agentCanvasContext = computed(() => {
+  const currentTab = canvasStore.getCurrentTab()
+  const space = currentTab?.workflowSpaceType
+    ? {
+        spaceType: currentTab.workflowSpaceType,
+        teamId: currentTab.workflowSpaceType === 'team' ? currentTab.workflowTeamId : null
+      }
+    : teamStore.getSpaceParams('current')
+  const selectedFromNodes = canvasStore.nodes.filter(node => node.selected).map(node => node.id)
+  const nodeIds = canvasStore.selectedNodeIds?.length
+    ? [...canvasStore.selectedNodeIds]
+    : (canvasStore.selectedNodeId ? [canvasStore.selectedNodeId] : selectedFromNodes)
+  return {
+    workflow_id: currentTab?.workflowId || null,
+    node_ids: nodeIds,
+    space_type: space?.spaceType || 'personal',
+    team_id: space?.teamId || null
+  }
+})
+
+function handleAIAssistantCanvasWriteback(payload = {}) {
+  const selectedNodeIds = canvasStore.selectedNodeIds?.length
+    ? [...canvasStore.selectedNodeIds]
+    : (canvasStore.selectedNodeId ? [canvasStore.selectedNodeId] : [])
+  const nodeId = payload.node_id || payload.nodeId || selectedNodeIds[0]
+  const urls = Array.isArray(payload.result_urls) ? payload.result_urls.filter(Boolean) : []
+  if (!nodeId || !urls.length) return
+  const mediaType = payload.media_type === 'video' ? 'video' : 'image'
+  canvasStore.updateNodeData(nodeId, {
+    status: 'success',
+    progress: null,
+    taskId: payload.history_id || undefined,
+    output: mediaType === 'video'
+      ? { type: 'video', url: urls[0], urls }
+      : { type: 'image', url: urls[0], urls }
+  })
+  schedulePersistAfterTask('ai-assistant-skill-writeback')
+}
+
 // 处理节点右键「发送到灵感助手」
 async function handleSendToAssistant({ url, type }) {
   // 打开 AI 面板
@@ -3855,7 +3894,11 @@ onUnmounted(() => {
       <!-- 原地图片编辑器 - 用于重绘、擦除 -->
       <InplaceImageEditor />
 
-      <SkillsPanel v-if="showSkillsPanel" @close="showSkillsPanel = false" />
+      <SkillsPanel
+        v-if="showSkillsPanel"
+        :canvas-context="agentCanvasContext"
+        @close="showSkillsPanel = false"
+      />
       
       <!-- 新手引导 -->
       <OnboardingGuide
@@ -3872,8 +3915,10 @@ onUnmounted(() => {
       <AIAssistantPanel
         ref="aiAssistantRef"
         :visible="showAIAssistant"
+        :canvas-context="agentCanvasContext"
         @close="showAIAssistant = false"
         @width-change="aiPanelWidth = $event"
+        @canvas-writeback="handleAIAssistantCanvasWriteback"
         @start-canvas-pick="startCanvasPick"
       />
 

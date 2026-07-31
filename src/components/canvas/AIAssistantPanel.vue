@@ -1,6 +1,6 @@
 <template>
   <Transition name="slide-right">
-    <div v-if="visible" class="ai-assistant-container" :class="{ 'compact-mode': isCompactMode }" :style="containerStyle">
+    <div v-if="visible" class="ai-assistant-container" :class="{ 'compact-mode': isCompactMode, 'narrow-mode': isNarrowMode }" :style="containerStyle">
       <!-- 左侧拖拽手柄 -->
       <div 
         class="resize-handle"
@@ -86,6 +86,7 @@
               <div class="history-item__title">{{ session.title }}</div>
               <div class="history-item__preview">{{ session.last_message }}</div>
               <button
+                v-if="modelPickerTypes.length"
                 class="history-item__delete"
                 @click.stop="deleteSessionItem(session.id)"
                 title="删除"
@@ -291,6 +292,20 @@
           </div>
         </div>
 
+        <div v-if="pendingAgentApproval" class="agent-approval-bar">
+          <span>Skill「{{ pendingAgentApproval.skill?.name || pendingAgentApproval.skill_name }}」请求以下授权</span>
+          <div v-for="action in pendingApprovalActions" :key="`${action.capability}:${action.model}`" class="agent-approval-action">
+            <code>{{ action.capability }}</code>
+            <span v-if="action.model">模型：{{ action.model }}</span>
+            <span v-if="action.estimated_points">预计 {{ action.estimated_points }} 积分</span>
+            <span v-if="action.write_target">写回：{{ action.write_target.workflow_id }} / {{ action.write_target.node_id }}</span>
+          </div>
+          <div>
+            <button type="button" :disabled="approvalDeciding" @click="decideSkillRun('deny')">拒绝</button>
+            <button type="button" :disabled="approvalDeciding" @click="decideSkillRun('allow_once')">确认本次</button>
+          </div>
+        </div>
+
         <!-- 输入区域 -->
         <div 
           class="input-area prompt-input-wrapper" 
@@ -359,6 +374,9 @@
               <div class="mode-selector">
                 <button
                   class="toolbar-btn mode-btn"
+                  type="button"
+                  title="对话模式"
+                  aria-label="选择对话模式"
                   @click.stop="showModeDropdown = !showModeDropdown"
                 >
                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none">
@@ -371,7 +389,7 @@
                     </defs>
                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="url(#mode-icon-gradient)" stroke-width="2" fill="none"/>
                   </svg>
-                  <span>{{ selectedMode?.name || '创意灵感' }}</span>
+                  <span class="toolbar-label">{{ selectedMode?.name || '创意灵感' }}</span>
                   <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 15l-6-6-6 6"/>
                   </svg>
@@ -397,16 +415,46 @@
                 </Transition>
               </div>
 
+              <!-- Canvas Skill 执行模式：自动调用或每次调用前确认 -->
+              <div class="skill-execution-selector">
+                <button
+                  class="toolbar-btn skill-mode-btn"
+                  type="button"
+                  aria-label="Skill 调用模式"
+                  @click.stop="showSkillExecutionDropdown = !showSkillExecutionDropdown"
+                  title="Skill 调用模式"
+                >
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 3v18M3 12h18M5 5l14 14M19 5L5 19" />
+                  </svg>
+                  <span class="toolbar-label">{{ skillExecutionMode === 'auto' ? '自动模式' : '手动模式' }}</span>
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+                </button>
+                <Transition name="dropdown">
+                  <div v-if="showSkillExecutionDropdown" class="mode-dropdown skill-mode-dropdown">
+                    <button class="mode-option" :class="{ active: skillExecutionMode === 'manual' }" @click="selectSkillExecutionMode('manual')">
+                      <span class="mode-icon">☝</span><span class="mode-name">手动模式</span><small>Agent 在每次生成前询问</small>
+                    </button>
+                    <button class="mode-option" :class="{ active: skillExecutionMode === 'auto' }" @click="selectSkillExecutionMode('auto')">
+                      <span class="mode-icon">⟳</span><span class="mode-name">自动模式</span><small>Agent 完全自动生成</small>
+                    </button>
+                  </div>
+                </Transition>
+              </div>
+
               <!-- 预设选择器 -->
               <div class="preset-selector">
                 <button
                   class="toolbar-btn preset-btn"
+                  type="button"
+                  title="选择预设"
+                  aria-label="选择预设"
                   @click.stop="showPresetDropdown = !showPresetDropdown"
                 >
                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
                   </svg>
-                  <span>{{ selectedPreset ? selectedPreset.name : '自定义预设' }}</span>
+                  <span class="toolbar-label">{{ selectedPreset ? selectedPreset.name : '自定义预设' }}</span>
                   <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 15l-6-6-6 6"/>
                   </svg>
@@ -459,9 +507,9 @@
 
               <!-- 附件按钮（带下拉菜单） -->
               <div class="attach-selector" ref="attachSelectorRef">
-                <button class="toolbar-btn" @click="showAttachDropdown = !showAttachDropdown" title="添加附件">
+                <button class="toolbar-btn" type="button" @click="showAttachDropdown = !showAttachDropdown" title="添加附件" aria-label="添加附件">
                   <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
+                    <path d="M12 5v14M5 12h14"/>
                   </svg>
                 </button>
                 <Transition name="dropdown">
@@ -493,6 +541,18 @@
                 class="hidden"
                 @change="handleFileSelect"
               />
+              <button
+                class="toolbar-btn icon-btn model-picker-trigger"
+                type="button"
+                :class="{ active: selectedModelValue }"
+                title="选择生图模型"
+                aria-label="选择生图模型"
+                @click.stop="showModelPicker = true"
+              >
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 3l2.8 5.7L21 9.6l-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3z" />
+                </svg>
+              </button>
             </div>
             
             <!-- 右侧功能组 -->
@@ -527,8 +587,11 @@
               <!-- 发送按钮 -->
               <button
                 class="send-btn"
+                type="button"
                 :disabled="!canSend"
                 @click="sendMessage"
+                title="发送"
+                aria-label="发送"
               >
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
@@ -540,6 +603,34 @@
       </div>
     </div>
   </Transition>
+
+  <Teleport to="body">
+    <Transition name="model-picker-fade">
+      <div v-if="showModelPicker" class="model-picker-overlay" @click.self="showModelPicker = false">
+        <section class="model-picker-dialog" role="dialog" aria-modal="true" aria-label="选择模型">
+          <header class="model-picker-header">
+            <div><h2>选择模型</h2><p>仅显示当前租户与 Skill 允许调用的模型</p></div>
+            <button type="button" class="model-picker-close" title="关闭" aria-label="关闭模型选择" @click="showModelPicker = false">×</button>
+          </header>
+          <div class="model-picker-tabs" role="tablist">
+            <button v-for="type in modelPickerTypes" :key="type" type="button" role="tab" :aria-selected="modelPickerType === type" :class="{ active: modelPickerType === type }" @click="modelPickerType = type">{{ modelTypeLabel(type) }}</button>
+          </div>
+          <div class="model-picker-list">
+            <button v-for="model in modelPickerModels" :key="model.value" type="button" class="model-picker-item" :class="{ selected: isAssistantModelSelected(model) }" @click="selectAssistantModel(model)">
+              <span class="picker-model-icon"><ModelIcon :icon="model.icon" :label="model.label || model.value" /></span>
+              <span class="picker-model-copy"><strong>{{ model.label || model.value }}</strong><small>{{ model.description || '已启用模型' }}</small></span>
+              <span v-if="model.pointsCost != null" class="picker-model-cost">{{ formatModelCost(model.pointsCost) }} 积分</span>
+              <span class="picker-model-action" :class="{ selected: isAssistantModelSelected(model) }" :aria-label="isAssistantModelSelected(model) ? '已选择' : '选择模型'">
+                <svg v-if="isAssistantModelSelected(model)" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
+                <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
+              </span>
+            </button>
+            <p v-if="!modelPickerModels.length" class="model-picker-empty">当前没有可选择的{{ modelTypeLabel(modelPickerType) }}。</p>
+          </div>
+        </section>
+      </div>
+    </Transition>
+  </Teleport>
 
   <!-- 预设管理器 -->
   <PresetManager
@@ -608,12 +699,13 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, inject } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted, inject } from 'vue'
 import AIAssistantMessage from './AIAssistantMessage.vue'
 import PromptMentionPopup from './PromptMentionPopup.vue'
 import PromptMediaTag from './PromptMediaTag.vue'
 import PresetManager from './dialogs/PresetManager.vue'
 import CustomPresetDialog from './dialogs/CustomPresetDialog.vue'
+import ModelIcon from '../common/ModelIcon.vue'
 import {
   getAIAssistantConfig,
   sendMessageStream,
@@ -645,15 +737,21 @@ import {
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { showAlert } from '@/composables/useCanvasDialog'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
+import { createAgentIdempotencyKey, createAgentRun, decideAgentRun, getSkillCatalog, streamAgentRun } from '@/api/agent'
+import { config as tenantConfig, getAvailableImageModels, getAvailableVideoModels, useTenantConfigVersion } from '@/config/tenant'
 
 const props = defineProps({
   visible: {
     type: Boolean,
     default: false
+  },
+  canvasContext: {
+    type: Object,
+    default: () => ({})
   }
 })
 
-const emit = defineEmits(['close', 'width-change', 'start-canvas-pick'])
+const emit = defineEmits(['close', 'width-change', 'start-canvas-pick', 'canvas-writeback'])
 
 // 注入用户信息
 const userInfo = inject('userInfo', { value: { username: 'User' } })
@@ -684,8 +782,21 @@ const sessions = ref([])
 const selectedModeId = ref('')
 const deepThinkEnabled = ref(false)
 const webSearchEnabled = ref(false)
+const agentSkills = ref([])
+const selectedSkillId = ref('')
+const pendingAgentApproval = ref(null)
+const pendingAgentMessageIndex = ref(-1)
+const approvalDeciding = ref(false)
+const pendingApprovalActions = computed(() => pendingAgentApproval.value?.approval?.actions || pendingAgentApproval.value?.actions || [])
+let agentStreamController = null
+const showModelPicker = ref(false)
+const modelPickerType = ref('image')
+const selectedModelByType = ref({ image: '', video: '' })
+const tenantConfigVersion = useTenantConfigVersion()
 
 const showModeDropdown = ref(false)
+const showSkillExecutionDropdown = ref(false)
+const skillExecutionMode = ref('auto')
 const showPresetDropdown = ref(false)
 const showHistory = ref(false)
 
@@ -736,16 +847,69 @@ const containerStyle = computed(() => ({
 }))
 
 // 判断面板是否为紧凑模式（宽度较小时）
-const isCompactMode = computed(() => panelWidth.value < 440)
+const isCompactMode = computed(() => panelWidth.value < 525)
+const isNarrowMode = computed(() => panelWidth.value < 440)
 
 // 计算属性
 const selectedMode = computed(() => {
   return config.value.modes?.find(m => m.id === selectedModeId.value)
 })
 
+const selectedSkill = computed(() => agentSkills.value.find(skill => skill.id === selectedSkillId.value) || null)
+const modelPickerTypes = computed(() => {
+  const capabilities = agentSkills.value.flatMap(skill => Array.isArray(skill?.capabilities) ? skill.capabilities : [])
+  return ['image', 'video'].filter(type => capabilities.includes(`${type}:generate`))
+})
+const selectedModelValue = computed(() => selectedModelByType.value[modelPickerType.value] || '')
+const modelPickerModels = computed(() => {
+  tenantConfigVersion.value
+  const configuredModels = modelPickerType.value === 'video' ? tenantConfig.video_models : tenantConfig.image_models
+  if (!Array.isArray(configuredModels) || configuredModels.length === 0) return []
+  const configuredOrder = new Map(configuredModels.map((item, index) => [String(item?.name || item?.id || ''), index]))
+  const models = (modelPickerType.value === 'video' ? getAvailableVideoModels({ disableVeoMerge: true }) : getAvailableImageModels())
+    .sort((left, right) => {
+      const leftIndex = configuredOrder.get(String(left.value || left.name || left.id)) ?? Number.MAX_SAFE_INTEGER
+      const rightIndex = configuredOrder.get(String(right.value || right.name || right.id)) ?? Number.MAX_SAFE_INTEGER
+      return leftIndex - rightIndex
+    })
+  const allowlist = Array.isArray(selectedSkill.value?.model_allowlist) ? selectedSkill.value.model_allowlist : []
+  if (!allowlist.length) return models
+  return models.filter(model => allowlist.includes(model.value) || allowlist.includes(model.id) || allowlist.includes(model.name))
+})
+
+function modelTypeLabel(type) {
+  return type === 'video' ? '视频' : '图片'
+}
+
+function formatModelCost(value) {
+  if (value && typeof value === 'object') return Object.values(value).join(' / ')
+  return Number(value || 0)
+}
+
+function selectAssistantModel(model) {
+  const selectedValue = model.veoModes?.find(mode => mode.value === model.defaultVeoMode)?.actualModel ||
+    model.klingO1Modes?.find(mode => mode.value === model.defaultKlingO1Mode)?.actualModel ||
+    model.actualModel || model.value
+  selectedModelByType.value = { ...selectedModelByType.value, [modelPickerType.value]: selectedValue }
+  showModelPicker.value = false
+}
+
+function isAssistantModelSelected(model) {
+  const selected = selectedModelValue.value
+  if (!selected) return false
+  const aliases = [model.value, model.id, model.name, model.actualModel]
+  const subModels = [...(model.veoModes || []), ...(model.klingO1Modes || [])]
+  return aliases.includes(selected) || subModels.some(item => item?.actualModel === selected)
+}
+
 const canSend = computed(() => {
   return (inputText.value.trim() || attachments.value.length > 0) && !isLoading.value && !isUploading.value
 })
+
+function selectSkillExecutionMode(mode) {
+  skillExecutionMode.value = mode === 'manual' ? 'manual' : 'auto'
+  showSkillExecutionDropdown.value = false
+}
 
 const attachmentMentionItems = computed(() => buildAssistantMentionItems(attachments.value))
 
@@ -872,6 +1036,17 @@ async function loadConfig() {
     }
   } catch (error) {
     console.error('[AI-Assistant] 加载配置失败:', error)
+  }
+}
+
+async function loadAgentSkills() {
+  try {
+    const catalogResult = await getSkillCatalog()
+    agentSkills.value = catalogResult.skills || []
+    if (!selectedSkillId.value) selectedSkillId.value = agentSkills.value.find(skill => skill.id === 'builtin-canvas-image-generate')?.id || agentSkills.value[0]?.id || ''
+    if (!modelPickerTypes.value.includes(modelPickerType.value)) modelPickerType.value = modelPickerTypes.value[0] || 'image'
+  } catch (error) {
+    console.warn('[AI-Assistant] 加载 Canvas Skills 失败:', error)
   }
 }
 
@@ -1381,6 +1556,23 @@ async function sendMessage() {
     timestamp: Date.now(),
     isStreaming: true
   })
+  let canvasWritebackSent = false
+  const applyGeneratedResult = (result) => {
+    applyAgentResultToMessage(assistantMessageIndex, result)
+    const urls = Array.isArray(result?.result_urls) ? result.result_urls.filter(Boolean) : []
+    const workflowId = props.canvasContext?.workflow_id || props.canvasContext?.workflowId
+    const nodeId = props.canvasContext?.node_ids?.[0] || props.canvasContext?.node_id || props.canvasContext?.nodeId
+    if (!canvasWritebackSent && urls.length) {
+      canvasWritebackSent = true
+      emit('canvas-writeback', {
+        workflow_id: workflowId || null,
+        node_id: nodeId || null,
+        media_type: result.media_type || 'image',
+        result_urls: urls,
+        history_id: result.task_id || result.id || null
+      })
+    }
+  }
 
   let safetyErrorHandled = false
   let safetyAlertPromise = null
@@ -1463,12 +1655,17 @@ async function sendMessage() {
       mode_id: selectedModeId.value,
       options: {
         deep_think: deepThinkEnabled.value,
-        web_search: webSearchEnabled.value
+        web_search: webSearchEnabled.value,
+        skill_mode: skillExecutionMode.value,
+        skill_model: selectedModelValue.value || undefined,
+        skill_model_type: selectedModelValue.value ? modelPickerType.value : undefined
       },
+      canvas_context: props.canvasContext,
       attachments: uploadedAttachments,
       system_prompt: selectedPreset.value?.systemPrompt,
       onSession: (sessionId) => {
         currentSessionId.value = sessionId
+        loadSessions()
       },
       onContent: (chunk, fullContent) => {
         messages.value[assistantMessageIndex].content = fullContent
@@ -1478,12 +1675,33 @@ async function sendMessage() {
         messages.value[assistantMessageIndex].thinking = fullThinking
         throttledScrollToBottom()
       },
+      onToolEvent: (event) => {
+        if (event?.type === 'tool_started') {
+          const skillLabel = event.skill_id === 'builtin-canvas-video-generate' ? '生视频' :
+            event.skill_id === 'builtin-canvas-image-generate' ? '生图' : '媒体'
+          messages.value[assistantMessageIndex].content = `正在调用 Skill${skillLabel}…`
+          messages.value[assistantMessageIndex].isStreaming = true
+        } else if (event?.type === 'tool_progress') {
+          messages.value[assistantMessageIndex].content = '生成任务已提交，正在等待结果…'
+        } else if (event?.type === 'tool_completed') {
+          applyGeneratedResult(event.result)
+        }
+        throttledScrollToBottom()
+      },
       onDone: (fullContent, result) => {
         messages.value[assistantMessageIndex].isStreaming = false
         if (result?.session_id) {
           currentSessionId.value = result.session_id
         }
+        const generated = findGeneratedMediaResult(result?.tool_results)
+        if (generated) applyGeneratedResult(generated)
         loadSessions()
+      },
+      onApproval: (approval) => {
+        pendingAgentApproval.value = approval
+        pendingAgentMessageIndex.value = assistantMessageIndex
+        messages.value[assistantMessageIndex].content = 'MCP 工具调用需要授权'
+        messages.value[assistantMessageIndex].isStreaming = false
       },
       onError: (error) => {
         if (isPromptSafetyBlockedError(error)) {
@@ -1508,6 +1726,132 @@ async function sendMessage() {
     messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
     messages.value[assistantMessageIndex].isStreaming = false
   } finally {
+    isLoading.value = false
+    scrollToBottom()
+  }
+}
+
+async function sendSkillMessage() {
+  const messageText = inputText.value.trim()
+  if (!messageText) return
+  inputText.value = ''
+  autoResize()
+  messages.value.push({ role: 'user', content: messageText, timestamp: Date.now() })
+  const index = messages.value.length
+  messages.value.push({ role: 'assistant', content: '正在准备 Skill 调用…', timestamp: Date.now(), isStreaming: true })
+  isLoading.value = true
+  try {
+    const result = await createAgentRun({
+      skill_id: selectedSkillId.value,
+      message: messageText,
+      canvas_context: props.canvasContext,
+      authorization_mode: skillExecutionMode.value === 'manual' ? 'once' : 'auto',
+      idempotency_key: createAgentIdempotencyKey('assistant')
+    })
+    if (result.status === 'approval_required') {
+      pendingAgentApproval.value = result
+      pendingAgentMessageIndex.value = index
+      messages.value[index].content = `需要授权调用 ${pendingApprovalActions.value.map(action => action.capability).join('、')}`
+      messages.value[index].isStreaming = false
+    } else {
+      await watchAgentRun(result.run_id, index)
+    }
+  } catch (error) {
+    messages.value[index].content = `Skill 调用失败: ${error.message}`
+    messages.value[index].isStreaming = false
+  } finally {
+    isLoading.value = false
+    scrollToBottom()
+  }
+}
+
+function applyAgentResultToMessage(index, result) {
+  if (!messages.value[index]) return
+  const urls = Array.isArray(result?.result_urls) ? result.result_urls.filter(Boolean) : []
+  if (urls.length) {
+    const mediaType = ['image', 'video', 'audio'].includes(result?.media_type) ? result.media_type : 'image'
+    messages.value[index].attachments = urls.map((url, mediaIndex) => ({
+      type: mediaType,
+      url,
+      name: `${mediaType === 'image' ? '生成图片' : mediaType === 'video' ? '生成视频' : '生成音频'} ${mediaIndex + 1}`
+    }))
+    messages.value[index].content = mediaType === 'image'
+      ? `已生成 ${urls.length} 张图片`
+      : `${mediaType === 'video' ? '视频' : '音频'}生成完成`
+    return
+  }
+  messages.value[index].content = result?.content || JSON.stringify(result || {})
+}
+
+function findGeneratedMediaResult(results) {
+  if (!Array.isArray(results)) return null
+  return [...results].reverse().find(result => Array.isArray(result?.result_urls) && result.result_urls.some(Boolean)) || null
+}
+
+async function watchAgentRun(runId, index) {
+  agentStreamController?.abort()
+  agentStreamController = new AbortController()
+  let lastEventId = 0
+  let terminal = false
+  for (let attempt = 0; attempt < 5 && !terminal; attempt += 1) {
+    try {
+      await streamAgentRun(runId, {
+        signal: agentStreamController.signal,
+        lastEventId,
+        onEvent(event, id) {
+        lastEventId = id
+        if (!messages.value[index]) return
+        if (event.type === 'tool_started') {
+          messages.value[index].content = `正在执行 ${event.capability}…`
+          messages.value[index].isStreaming = true
+        } else if (event.type === 'tool_progress') {
+          messages.value[index].content = `任务已提交，正在等待 ${event.capability} 完成…`
+        } else if (event.type === 'tool_completed') {
+          applyAgentResultToMessage(index, event.result)
+        } else if (event.type === 'done') {
+          terminal = true
+          applyAgentResultToMessage(index, event.result)
+          messages.value[index].isStreaming = false
+        } else if (event.type === 'error') {
+          terminal = true
+          messages.value[index].content = `Skill 调用失败: ${event.error}`
+          messages.value[index].isStreaming = false
+        }
+        scrollToBottom()
+        }
+      })
+    } catch (error) {
+      if (agentStreamController.signal.aborted || attempt === 4) throw error
+    }
+    if (!terminal && attempt < 4) await new Promise(resolve => setTimeout(resolve, 400))
+  }
+}
+
+async function decideSkillRun(decision) {
+  const approval = pendingAgentApproval.value
+  if (!approval?.run_id) return
+  const index = pendingAgentMessageIndex.value
+  isLoading.value = true
+  approvalDeciding.value = true
+  try {
+    const result = await decideAgentRun(approval.run_id, {
+      decision,
+      approval_id: approval.approval?.approval_id || approval.approval_id,
+      idempotency_key: createAgentIdempotencyKey('decision')
+    })
+    pendingAgentApproval.value = null
+    pendingAgentMessageIndex.value = -1
+    if (decision === 'deny') {
+      if (messages.value[index]) messages.value[index].content = '已拒绝本次 Skill 调用'
+    } else {
+      await watchAgentRun(result.run_id || approval.run_id, index)
+    }
+  } catch (error) {
+    if (messages.value[index]) messages.value[index].content = `授权处理失败: ${error.message}`
+  } finally {
+    pendingAgentApproval.value = null
+    pendingAgentMessageIndex.value = -1
+    approvalDeciding.value = false
     isLoading.value = false
     scrollToBottom()
   }
@@ -1750,6 +2094,7 @@ function startResize(e) {
 watch(() => props.visible, (visible) => {
   if (visible) {
     loadConfig()
+    loadAgentSkills()
     loadSessions()
     loadUserPresets()
     nextTick(() => {
@@ -1783,15 +2128,24 @@ function handleClickOutside(event) {
   if (showAttachDropdown.value && !event.target.closest('.attach-selector')) {
     showAttachDropdown.value = false
   }
+  if (showSkillExecutionDropdown.value && !event.target.closest('.skill-execution-selector')) {
+    showSkillExecutionDropdown.value = false
+  }
 }
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   if (props.visible) {
     loadConfig()
+    loadAgentSkills()
     loadSessions()
     loadUserPresets()
   }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+  agentStreamController?.abort()
 })
 
 /**
@@ -1927,6 +2281,7 @@ defineExpose({
 
 .ai-assistant-panel {
   flex: 1;
+  min-width: 0;
   height: 100%;
   display: flex;
   flex-direction: column;
@@ -2636,6 +2991,43 @@ defineExpose({
   flex-wrap: nowrap; /* 不允许换行，保持一行 */
 }
 
+.assistant-skill-selector {
+  max-width: 154px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 11px;
+}
+
+.agent-approval-bar {
+  display: grid;
+  gap: 8px;
+  margin: 0 14px 8px;
+  padding: 10px;
+  border: 1px solid rgba(245, 180, 72, 0.3);
+  border-radius: 8px;
+  background: rgba(245, 180, 72, 0.1);
+  color: rgba(255, 236, 199, 0.92);
+  font-size: 12px;
+}
+
+.agent-approval-bar div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agent-approval-bar button {
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  color: inherit;
+}
+
 .toolbar-left {
   display: flex;
   align-items: center;
@@ -2675,6 +3067,64 @@ defineExpose({
 
 .toolbar-btn.mode-btn {
   padding: 6px 10px;
+}
+
+.toolbar-label { display: none; max-width: 72px; }
+
+.model-picker-trigger { margin-left: 2px; }
+
+.model-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9100;
+  display: block;
+  background: transparent;
+}
+
+.model-picker-dialog {
+  position: absolute;
+  right: clamp(12px, 2vw, 28px);
+  bottom: 88px;
+  width: min(430px, calc(100vw - 24px));
+  max-height: min(520px, calc(100vh - 112px));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(21, 25, 35, 0.98);
+  color: #eef2f7;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  transform-origin: bottom right;
+}
+
+.model-picker-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 15px 16px 10px; }
+.model-picker-header h2 { margin: 0; font-size: 17px; }
+.model-picker-header p { margin: 5px 0 0; color: #8f9bad; font-size: 11px; }
+.model-picker-close { width: 28px; height: 28px; padding: 0; border: 0; border-radius: 7px; background: transparent; color: #9ca8b8; font-size: 22px; line-height: 1; cursor: pointer; }
+.model-picker-close:hover { background: rgba(255,255,255,.08); color: #fff; }
+.model-picker-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin: 0 16px 10px; padding: 3px; border: 1px solid rgba(255,255,255,.08); border-radius: 9px; background: rgba(255,255,255,.04); }
+.model-picker-tabs button { padding: 7px 12px; border: 0; border-radius: 7px; background: transparent; color: #8f9bad; font-size: 12px; cursor: pointer; }
+.model-picker-tabs button.active { background: rgba(111, 93, 252, .24); color: #e4e0ff; box-shadow: 0 2px 8px rgba(0,0,0,.16); }
+.model-picker-list { display: grid; gap: 6px; max-height: 360px; overflow: auto; padding: 2px 12px 14px; }
+.model-picker-item { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto 28px; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; background: rgba(27, 32, 44, .94); color: inherit; text-align: left; cursor: pointer; }
+.model-picker-item:hover, .model-picker-item.selected { border-color: #7668e8; background: #24233e; }
+.picker-model-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 8px; background: #30374a; color: #d9d5ff; font-weight: 700; }
+.picker-model-copy { display: grid; min-width: 0; gap: 3px; }
+.picker-model-copy strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.picker-model-copy small { overflow: hidden; color: #8f9bad; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.picker-model-cost { color: #aeb7c8; font-size: 11px; white-space: nowrap; }
+.picker-model-action { display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid rgba(255,255,255,.14); border-radius: 50%; color: #aeb7c8; }
+.picker-model-action svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.picker-model-action.selected { border-color: #9b8cff; background: #7668e8; color: #fff; }
+.model-picker-empty { margin: 20px 0; color: #8f9bad; font-size: 12px; text-align: center; }
+.model-picker-fade-enter-active, .model-picker-fade-leave-active { transition: opacity .18s ease; }
+.model-picker-fade-enter-active .model-picker-dialog, .model-picker-fade-leave-active .model-picker-dialog { transition: transform .18s ease, opacity .18s ease; }
+.model-picker-fade-enter-from, .model-picker-fade-leave-to { opacity: 0; }
+.model-picker-fade-enter-from .model-picker-dialog, .model-picker-fade-leave-to .model-picker-dialog { opacity: 0; transform: translateY(10px) scale(.98); }
+
+@media (max-width: 500px) {
+  .model-picker-dialog { right: 10px; bottom: 76px; width: calc(100vw - 20px); max-height: calc(100vh - 96px); }
+  .model-picker-list { max-height: min(330px, calc(100vh - 220px)); }
+  .picker-model-cost { display: none; }
 }
 
 /* 下拉按钮中的文字 - 限制最大宽度并显示省略号 */
@@ -2900,6 +3350,10 @@ defineExpose({
 
 .ai-assistant-container.compact-mode .toolbar-btn span {
   max-width: 56px;
+}
+
+.ai-assistant-container.narrow-mode .toolbar-btn span {
+  display: none;
 }
 
 /* 在紧凑模式下隐藏下拉箭头 */
@@ -3306,8 +3760,32 @@ defineExpose({
   color: #1c1917;
 }
 
+:root.canvas-theme-light .ai-assistant-panel .history-close {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-close:hover {
+  color: #292524;
+}
+
 :root.canvas-theme-light .ai-assistant-panel .history-item {
   color: #57534e;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-item__title {
+  color: #292524;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-item__preview {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-item__delete {
+  color: #a8a29e;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-item__delete:hover {
+  color: #dc2626;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .history-item:hover {
@@ -3316,6 +3794,14 @@ defineExpose({
 
 :root.canvas-theme-light .ai-assistant-panel .history-item.active {
   background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-item.active .history-item__title {
+  color: #1d4ed8;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .history-item.active .history-item__preview {
   color: #3b82f6;
 }
 
@@ -3361,6 +3847,75 @@ defineExpose({
 :root.canvas-theme-light .ai-assistant-panel .message-actions button:hover {
   background: rgba(0, 0, 0, 0.05);
   color: rgba(0, 0, 0, 0.7);
+}
+
+/* 模型选择面板 - 白昼模式 */
+:root.canvas-theme-light .model-picker-dialog {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: rgba(255, 255, 255, 0.98);
+  color: #1c1917;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.03);
+}
+
+:root.canvas-theme-light .model-picker-header p,
+:root.canvas-theme-light .picker-model-copy small,
+:root.canvas-theme-light .model-picker-empty {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .model-picker-close {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .model-picker-close:hover {
+  background: rgba(15, 23, 42, 0.06);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .model-picker-tabs {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: rgba(15, 23, 42, 0.04);
+}
+
+:root.canvas-theme-light .model-picker-tabs button {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .model-picker-tabs button.active {
+  background: #ede9fe;
+  color: #6d28d9;
+  box-shadow: 0 2px 8px rgba(109, 40, 217, 0.12);
+}
+
+:root.canvas-theme-light .model-picker-item {
+  border-color: rgba(15, 23, 42, 0.1);
+  background: #f8fafc;
+}
+
+:root.canvas-theme-light .model-picker-item:hover,
+:root.canvas-theme-light .model-picker-item.selected {
+  border-color: #8b5cf6;
+  background: #f5f3ff;
+}
+
+:root.canvas-theme-light .picker-model-icon {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+:root.canvas-theme-light .picker-model-cost {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .picker-model-action {
+  border-color: rgba(15, 23, 42, 0.14);
+  color: #78716c;
+}
+
+:root.canvas-theme-light .picker-model-action.selected {
+  border-color: #8b5cf6;
+  background: #8b5cf6;
+  color: #fff;
 }
 
 /* ========================================

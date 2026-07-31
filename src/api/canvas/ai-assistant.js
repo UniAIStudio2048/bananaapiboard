@@ -161,7 +161,7 @@ export async function sendMessage(params) {
  * @param {Array} [params.attachments] - 附件列表
  */
 export async function sendMessageStream(params) {
-  const { onContent, onThinking, onSession, onDone, onError, ...requestParams } = params
+  const { onContent, onThinking, onSession, onDone, onError, onApproval, onToolEvent, ...requestParams } = params
 
   try {
     const response = await fetch(getApiUrl('/api/canvas/ai-assistant/chat'), {
@@ -231,13 +231,25 @@ export async function sendMessageStream(params) {
                   result = {
                     session_id: sessionId,
                     cost: json.cost,
-                    balance: json.balance
+                    balance: json.balance,
+                    tool_results: Array.isArray(json.tool_results) ? json.tool_results : []
                   }
                   if (onDone) onDone(fullContent, result)
                   return
 
+                case 'tool_started':
+                case 'tool_progress':
+                case 'tool_completed':
+                  if (onToolEvent) onToolEvent(json)
+                  break
+
                 case 'error':
                   throw new Error(json.error || 'AI 助手返回错误')
+
+                case 'approval_required':
+                  result = json
+                  if (onApproval) onApproval(json)
+                  return json
               }
               continue
             }
