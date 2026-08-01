@@ -30,7 +30,7 @@ test('assistant model picker uses tenant-allowed models and sends a selected mod
   assert.match(source, /选择生图模型/)
   assert.match(source, /model-picker-dialog/)
   assert.match(source, /getAvailableImageModels/)
-  assert.match(source, /<ModelIcon :icon="model\.icon" :label="model\.label \|\| model\.value" \/>/)
+  assert.match(source, /<ModelIcon :icon="getAssistantModelIcon\(model\)" :label="model\.label \|\| model\.value" \/>/)
   assert.match(source, /tenantConfig\.image_models/)
   assert.match(source, /configuredOrder = new Map/)
   assert.match(source, /skill_model: selectedModelValue\.value \|\| undefined/)

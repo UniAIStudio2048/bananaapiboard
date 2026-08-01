@@ -63,6 +63,11 @@ import {
   formatSeedanceVideoInputMultiplier,
   normalizeSeedanceVideoInputMultiplier
 } from '@/utils/seedanceVideoInputMultiplier'
+import {
+  calculateSeedanceResolutionCost,
+  getSeedanceResolutionOptions
+} from '@/utils/seedanceResolutionPricing'
+import { calculateVideoResolutionPrice, getEnabledVideoResolutionOptions } from '@/utils/videoResolutionPricing'
 import { compressImage, getImageFileDimensions } from '@/utils/imageCompress'
 import {
   SEEDANCE_MAX_IMAGE_PIXELS,
@@ -94,6 +99,7 @@ import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedan
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PromptMediaTag from '../PromptMediaTag.vue'
 import PromptTranslateButton from '../PromptTranslateButton.vue'
+import VideoParametersDropdown from '../VideoParametersDropdown.vue'
 
 const { t, currentLanguage } = useI18n()
 const teamStore = useTeamStore()
@@ -1230,7 +1236,7 @@ const vectorengineResolutionOptions = computed(() => {
   const rawOptions = currentModelConfig.value?.resolutionOptions ||
     currentModelConfig.value?.vectorengineConfig?.resolutions ||
     ['480p', '720p']
-  return rawOptions
+  return filterResolutionDisplay(rawOptions
     .map(option => {
       const value = typeof option === 'string' ? option : option?.value
       if (!value) return null
@@ -1239,7 +1245,7 @@ const vectorengineResolutionOptions = computed(() => {
         label: typeof option === 'object' && option?.label ? option.label : String(value).toUpperCase()
       }
     })
-    .filter(Boolean)
+    .filter(Boolean))
 })
 
 // Vidu 图生视频模式选择
@@ -1250,6 +1256,15 @@ const viduOffPeak = ref(props.data.viduOffPeak || false)
 
 // Vidu 清晰度选择
 const viduResolution = ref(props.data.viduResolution || '1080p')
+
+// Vidu 清晰度显示配置：后台勾选的分辨率未启用时不可切换（默认 720P/1080P）
+const viduDisplayResolutions = computed(() => {
+  const display = currentModelConfig.value?.displayResolutions
+  if (display === undefined || display === null) return ['720p', '1080p']
+  return display
+    .map(value => String(value).toLowerCase())
+    .filter(value => value === '720p' || value === '1080p')
+})
 
 // Vidu 模式选项
 const VIDU_MODE_OPTIONS = [
@@ -1396,6 +1411,7 @@ const isSeedance2Model = computed(() => {
 
 // Seedance 2.0 模式选择
 const selectedSeedance2Mode = ref(props.data.seedance2Mode || 'text2video')
+const seedanceResolution = ref(props.data.seedanceResolution || '720p')
 let didInitializeSeedance2Mode = Boolean(props.data.seedance2Mode)
 
 const MODE_TO_SD2_MODE = {
@@ -1440,6 +1456,36 @@ const seedance2Modes = computed(() => {
 
 const currentSeedance2ModeConfig = computed(() => {
   return seedance2Modes.value.find(m => m.value === selectedSeedance2Mode.value) || seedance2Modes.value[0] || SEEDANCE2_MODES[0]
+})
+
+// MiniMax H3 官方直连（minimax-h3）模式选择
+const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3')
+
+const selectedMinimaxH3Mode = ref(props.data.minimaxH3Mode || '')
+const minimaxH3Resolution = ref(props.data.minimaxH3Resolution || '')
+let didInitializeMinimaxH3Mode = Boolean(props.data.minimaxH3Mode)
+
+const MINIMAX_H3_MODES = [
+  { value: 'text2video', label: '文生视频', desc: '纯文本提示词生成视频', needsImage: false, maxImages: 0 },
+  { value: 'image2video_first', label: '首帧', desc: '1张图片作为首帧', needsImage: true, maxImages: 1 },
+  { value: 'image2video_first_last', label: '首尾帧', desc: '2张图片分别作为首帧和尾帧', needsImage: true, maxImages: 2 },
+  { value: 'multimodal_ref', label: '多模态参考', desc: '参考图片/视频/音频生成视频', needsImage: false, maxImages: 9 }
+]
+
+const minimaxH3Modes = computed(() => {
+  const supported = currentModelConfig.value?.minimaxConfig?.supportedModes || {}
+  const modes = MINIMAX_H3_MODES.filter(mode => supported[mode.value] !== false)
+  return modes.length > 0 ? modes : MINIMAX_H3_MODES
+})
+
+const minimaxH3DefaultMode = computed(() => {
+  const configured = currentModelConfig.value?.minimaxConfig?.defaultMode || currentModelConfig.value?.defaultMinimaxH3Mode
+  if (configured && minimaxH3Modes.value.some(m => m.value === configured)) return configured
+  return minimaxH3Modes.value[0]?.value || 'image2video_first'
+})
+
+const currentMinimaxH3ModeConfig = computed(() => {
+  return minimaxH3Modes.value.find(m => m.value === selectedMinimaxH3Mode.value) || minimaxH3Modes.value[0] || MINIMAX_H3_MODES[0]
 })
 
 // Wan 2.7 模式选择（对齐 Seedance 2.0）
@@ -1621,9 +1667,9 @@ const VEO_MODE_OPTIONS = computed(() => {
 // VEO 清晰度选项（从模型配置获取）
 // 注意：普通 VEO 模型只支持 1080p，4K 选项已单独作为 VEO 4K 组
 const VEO_RESOLUTION_OPTIONS = computed(() => {
-  return currentModelConfig.value?.veoResolutions || [
+  return filterResolutionDisplay(currentModelConfig.value?.veoResolutions || [
     { value: '1080p', label: '1080P', extraCost: 0 }
-  ]
+  ])
 })
 
 // 当前 VEO 模式配置
@@ -1730,6 +1776,83 @@ const currentModelConfig = computed(() => {
   return models.value.find(m => m.value === selectedModel.value) || {}
 })
 
+// 输出分辨率显示配置：后台勾选的分辨率仅展示已启用的档位；
+// 未配置（undefined/null）时不限制；显式空数组 = 全部隐藏（前端不展示分辨率选择）
+// 兼容对象（{ value, label }）与纯字符串两种选项形式
+function filterResolutionDisplay(options) {
+  const display = currentModelConfig.value?.displayResolutions
+  if (display === undefined || display === null) return options
+  const displaySet = new Set(display.map(value => String(value).toLowerCase()))
+  return options.filter(option => {
+    const value = typeof option === 'string' ? option : option?.value
+    return displaySet.has(String(value ?? '').toLowerCase())
+  })
+}
+
+const genericVideoResolution = ref(props.data.videoResolution || '')
+
+const genericVideoResolutionOptions = computed(() => {
+  return getEnabledVideoResolutionOptions(currentModelConfig.value?.resolutionPricing)
+    .map(value => ({ value, label: String(value).toUpperCase() }))
+})
+
+function syncGenericVideoResolution(value) {
+  genericVideoResolution.value = value
+  if (isSeedance2Model.value) seedanceResolution.value = value
+  else if (isMinimaxH3Model.value) minimaxH3Resolution.value = value
+  else if (isViduModel.value) viduResolution.value = value
+  else if (isVectorEngineJsonModel.value) vectorengineResolution.value = value
+  else if (isRunningHubAiAppVideoModel.value) runningHubResolution.value = value
+  else if (isMinimaxHailuoModel.value) minimaxHailuoResolution.value = value
+  else if (isVeoModel.value) veoResolution.value = value
+}
+
+const minimaxH3ResolutionOptions = computed(() => {
+  if (!isMinimaxH3Model.value) return []
+  const minimaxConfig = currentModelConfig.value?.minimaxConfig || {}
+  const configuredResolutions = Array.isArray(minimaxConfig.resolutions) && minimaxConfig.resolutions.length > 0
+    ? minimaxConfig.resolutions
+    : Object.keys(minimaxConfig.resolutionCosts || {})
+  const fallbackResolution = minimaxConfig.resolution || currentModelConfig.value?.resolution || '2K'
+  const resolutions = configuredResolutions.length > 0 ? configuredResolutions : [fallbackResolution]
+  return filterResolutionDisplay(resolutions).map(value => ({
+    value: String(value),
+    label: String(value).toUpperCase()
+  }))
+})
+
+// 后台显示配置不含当前分辨率时，重置到可展示档位（1080P 优先）
+// 注意：必须放在 currentModelConfig 声明之后，否则 immediate 求值会触发 TDZ
+watch([selectedModel, viduDisplayResolutions], () => {
+  const options = viduDisplayResolutions.value
+  if (options.length === 0) return
+  if (!options.includes(viduResolution.value)) {
+    viduResolution.value = options.includes('1080p') ? '1080p' : options[0]
+  }
+}, { immediate: true })
+
+watch(minimaxH3Modes, (modes) => {
+  const defaultMode = minimaxH3DefaultMode.value
+  if (!didInitializeMinimaxH3Mode && isMinimaxH3Model.value) {
+    selectedMinimaxH3Mode.value = pickInitialSubmode(props.data.minimaxH3Mode, defaultMode, modes)
+    didInitializeMinimaxH3Mode = true
+    return
+  }
+  if (!modes.some(mode => mode.value === selectedMinimaxH3Mode.value)) {
+    selectedMinimaxH3Mode.value = pickConfiguredSubmode(defaultMode, modes)
+  }
+}, { immediate: true })
+
+watch([selectedModel, minimaxH3ResolutionOptions], () => {
+  if (!isMinimaxH3Model.value) return
+  const options = minimaxH3ResolutionOptions.value.map(option => option.value)
+  if (options.length === 0) return
+  const defaultResolution = String(currentModelConfig.value?.minimaxConfig?.resolution || '2K')
+  if (!options.includes(minimaxH3Resolution.value)) {
+    minimaxH3Resolution.value = options.includes(defaultResolution) ? defaultResolution : options[0]
+  }
+}, { immediate: true })
+
 const isRunningHubAiAppVideoModel = computed(() => {
   return currentModelConfig.value?.apiType === 'runninghub-ai-app-video'
 })
@@ -1742,7 +1865,7 @@ const runningHubResolutionOptions = computed(() => {
   const options = Array.isArray(configuredOptions) && configuredOptions.length > 0
     ? configuredOptions
     : ['720p', '1080p', '4k']
-  return options
+  return filterResolutionDisplay(options
     .map(option => {
       const value = typeof option === 'string' ? option : option?.value
       if (!value) return null
@@ -1751,8 +1874,69 @@ const runningHubResolutionOptions = computed(() => {
         label: typeof option === 'object' && option?.label ? option.label : String(value).toUpperCase()
       }
     })
-    .filter(Boolean)
+    .filter(Boolean))
 })
+
+// ==================== MiniMax 海螺官方直连（minimax-hailuo）分辨率 ====================
+// 分辨率选项与按分辨率计费来自 9000 租户后台（resolutionCosts / minimaxConfig），
+// 未配置时按官方模型能力提供默认选项。
+const isMinimaxHailuoModel = computed(() => {
+  return currentModelConfig.value?.apiType === 'minimax-hailuo'
+})
+
+const minimaxHailuoResolution = ref(props.data.minimaxHailuoResolution || '')
+
+// 官方分辨率/时长矩阵（https://platform.minimaxi.com/docs/api-reference/video-generation-i2v）
+const minimaxHailuoDurationsByResolution = {
+  '512P': [6, 10],
+  '720P': [6],
+  '768P': [6, 10],
+  '1080P': [6]
+}
+
+const minimaxHailuoResolutionOptions = computed(() => {
+  if (!isMinimaxHailuoModel.value) return []
+  const configured = currentModelConfig.value?.resolutionCosts
+  const configuredResolutions = configured && typeof configured === 'object'
+    ? Object.keys(configured).filter(res => {
+        const costs = configured[res]
+        return costs && typeof costs === 'object' && Object.keys(costs).length > 0
+      })
+    : []
+  if (configuredResolutions.length > 0) return filterResolutionDisplay(configuredResolutions)
+  const model = String(currentModelConfig.value?.actualModel || currentModelConfig.value?.minimaxConfig?.model || '').toLowerCase()
+  if (model.includes('i2v-01')) return filterResolutionDisplay(['720P'])
+  if (model.includes('hailuo-02')) return filterResolutionDisplay(['512P', '768P', '1080P'])
+  return filterResolutionDisplay(['768P', '1080P'])
+})
+
+const defaultMinimaxHailuoResolution = computed(() => {
+  const options = minimaxHailuoResolutionOptions.value
+  if (options.length === 0) return currentModelConfig.value?.minimaxConfig?.resolution || '1080P'
+  const configuredDefault = currentModelConfig.value?.minimaxConfig?.resolution
+  if (configuredDefault && options.includes(configuredDefault)) return configuredDefault
+  return options[0]
+})
+
+watch([selectedModel, minimaxHailuoResolutionOptions], () => {
+  if (!isMinimaxHailuoModel.value) return
+  const options = minimaxHailuoResolutionOptions.value
+  if (options.length > 0 && !options.includes(minimaxHailuoResolution.value)) {
+    minimaxHailuoResolution.value = defaultMinimaxHailuoResolution.value
+  }
+}, { immediate: true })
+
+watch(minimaxHailuoResolution, (resolution) => {
+  if (!isMinimaxHailuoModel.value) return
+  canvasStore.updateNodeData(props.id, { minimaxHailuoResolution: resolution })
+})
+
+watch([selectedModel, genericVideoResolutionOptions], () => {
+  const options = genericVideoResolutionOptions.value.map(option => option.value)
+  if (options.length > 0 && !options.includes(genericVideoResolution.value)) {
+    syncGenericVideoResolution(options[0])
+  }
+}, { immediate: true })
 
 const isHeygenModelSelected = computed(() => isHeygenModel(currentModelConfig.value))
 
@@ -1851,6 +2035,14 @@ const availableDurations = computed(() => {
   const configuredDurations = currentModelConfig.value?.durations
   if (Array.isArray(configuredDurations)) {
     // 显式空数组表示该模型不提供时长选择；非空时尊重管理后台的具体配置。
+    // MiniMax 海螺：分辨率限制可选时长（1080P 仅 6 秒，与 9000 后台显示一致）
+    if (isMinimaxHailuoModel.value) {
+      const resDurations = minimaxHailuoDurationsByResolution[minimaxHailuoResolution.value]
+      if (Array.isArray(resDurations)) {
+        const filtered = configuredDurations.filter(d => resDurations.includes(Number(d)))
+        if (filtered.length > 0) return filtered.map(d => String(d))
+      }
+    }
     return configuredDurations
   }
 
@@ -1978,6 +2170,68 @@ const durations = computed(() => {
     value: d,
     label: `${d}s`
   }))
+})
+
+const seedanceResolutionOptions = computed(() => {
+  if (!isSeedance2Model.value) return []
+  const config = currentModelConfig.value?.seedanceConfig || {}
+  return getSeedanceResolutionOptions({
+    displayResolutions: currentModelConfig.value?.displayResolutions,
+    resolutions: config.resolutions,
+    resolutionCosts: config.resolutionCosts,
+    defaultResolution: config.resolution || currentModelConfig.value?.seedanceOpenConfig?.defaultResolution
+  }).map(value => ({ value, label: value.toUpperCase() }))
+})
+
+const videoParameterResolutionOptions = computed(() => {
+  if (genericVideoResolutionOptions.value.length > 0) return genericVideoResolutionOptions.value
+  if (isSeedance2Model.value) return seedanceResolutionOptions.value
+  if (isMinimaxH3Model.value) return minimaxH3ResolutionOptions.value.map(value => ({ value: value.value, label: value.label }))
+  if (isViduModel.value) {
+    return viduDisplayResolutions.value.map(value => ({ value, label: value.toUpperCase() }))
+  }
+  if (isVectorEngineJsonModel.value) return vectorengineResolutionOptions.value
+  if (isRunningHubAiAppVideoModel.value) return runningHubResolutionOptions.value
+  if (isMinimaxHailuoModel.value) {
+    return minimaxHailuoResolutionOptions.value.map(value => ({ value, label: value }))
+  }
+  if (isVeoModel.value) return availableVeoResolutions.value
+  return []
+})
+
+const selectedVideoParameterResolution = computed({
+  get() {
+    if (genericVideoResolutionOptions.value.length > 0) return genericVideoResolution.value
+    if (isSeedance2Model.value) return seedanceResolution.value
+    if (isMinimaxH3Model.value) return minimaxH3Resolution.value
+    if (isViduModel.value) return viduResolution.value
+    if (isVectorEngineJsonModel.value) return vectorengineResolution.value
+    if (isRunningHubAiAppVideoModel.value) return runningHubResolution.value
+    if (isMinimaxHailuoModel.value) return minimaxHailuoResolution.value
+    if (isVeoModel.value) return veoResolution.value
+    return ''
+  },
+  set(value) {
+    if (!videoParameterResolutionOptions.value.some(option => option.value === value)) return
+    if (genericVideoResolutionOptions.value.length > 0) syncGenericVideoResolution(value)
+    else if (isSeedance2Model.value) seedanceResolution.value = value
+    else if (isMinimaxH3Model.value) minimaxH3Resolution.value = value
+    else if (isViduModel.value) viduResolution.value = value
+    else if (isVectorEngineJsonModel.value) vectorengineResolution.value = value
+    else if (isRunningHubAiAppVideoModel.value) runningHubResolution.value = value
+    else if (isMinimaxHailuoModel.value) minimaxHailuoResolution.value = value
+    else if (isVeoModel.value) veoResolution.value = value
+  }
+})
+
+const showVideoParameterDuration = computed(() => {
+  return !isPerSecondBilling.value && !isVeo3Model.value && !isKlingMotionControl.value && durations.value.length > 0
+})
+
+const hasVideoParameterMenu = computed(() => {
+  return availableAspectRatios.value.length > 0 ||
+    videoParameterResolutionOptions.value.length > 0 ||
+    showVideoParameterDuration.value
 })
 
 watch([selectedModel, availableAspectRatios], () => {
@@ -3044,13 +3298,6 @@ function getVideoModeIconClass(value) {
   return 'mode-icon-default'
 }
 
-function getAspectRatioIconClass(value) {
-  if (value === '1:1') return 'ratio-icon-square'
-  if (value === '3:4') return 'ratio-icon-3-4'
-  if (value === '4:3') return 'ratio-icon-4-3'
-  return value === '9:16' ? 'ratio-icon-portrait' : 'ratio-icon-landscape'
-}
-
 // 当前模型的视频模式选择器：仅改变入口 UI，沿用各模式原有状态与持久化字段。
 const activeVideoModeSelector = computed(() => {
   if (isKlingMotionControl.value && !isCozeVideoSwapModel.value) {
@@ -3119,6 +3366,15 @@ const activeVideoModeSelector = computed(() => {
     }
   }
 
+  if (isMinimaxH3Model.value) {
+    return {
+      key: 'minimax-h3',
+      label: 'H3 模式',
+      value: selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value,
+      options: minimaxH3Modes.value
+    }
+  }
+
   return null
 })
 
@@ -3159,6 +3415,9 @@ function setActiveVideoMode(value) {
       break
     case 'seedance-2':
       selectedSeedance2Mode.value = value
+      break
+    case 'minimax-h3':
+      selectedMinimaxH3Mode.value = value
       break
     default:
       break
@@ -3451,6 +3710,13 @@ const wanAnimateCostPerSecond = computed(() => {
 const pointsCost = computed(() => {
   let cost = 1
 
+  const genericResolutionPrice = calculateVideoResolutionPrice(
+    currentModelConfig.value?.resolutionPricing,
+    genericVideoResolution.value,
+    selectedDuration.value
+  )
+  if (genericResolutionPrice !== null) return genericResolutionPrice
+
   // VEO 模型：使用当前模式的积分配置
   if (isVeoModel.value) {
     cost = currentVeoModeConfig.value.pointsCost || 100
@@ -3499,6 +3765,19 @@ const pointsCost = computed(() => {
 
   const modelPointsCost = currentModelConfig.value.pointsCost
 
+  if (isSeedance2Model.value) {
+    const seedanceResolutionCost = calculateSeedanceResolutionCost({
+      resolutionCosts: currentModelConfig.value?.seedanceConfig?.resolutionCosts,
+      resolution: seedanceResolution.value,
+      duration: selectedDuration.value
+    })
+    if (seedanceResolutionCost !== null) {
+      return shouldApplySeedanceVideoInputMultiplier.value
+        ? applySeedanceVideoInputMultiplier(seedanceResolutionCost, seedanceVideoInputMultiplier.value, true)
+        : seedanceResolutionCost
+    }
+  }
+
   if (isRunningHubAiAppVideoModel.value) {
     const resolution = String(runningHubResolution.value || '720p').trim().toLowerCase()
     const configuredFixedCost = currentModelConfig.value?.resolutionFixedCosts?.[resolution]
@@ -3529,6 +3808,35 @@ const pointsCost = computed(() => {
   if (isWanModel.value && currentModelConfig.value.hasDurationPricing && typeof modelPointsCost === 'object') {
     cost = modelPointsCost[String(wanBillingDuration.value)] || modelPointsCost[wanBillingDuration.value] || modelPointsCost['5'] || 20
     return cost
+  }
+
+  // MiniMax 海螺官方直连：按分辨率+时长计费（与 9000 后台显示的 resolutionCosts 一致，未配置时回退 pointsCost）
+  if (isMinimaxHailuoModel.value) {
+    const resCosts = currentModelConfig.value?.resolutionCosts?.[minimaxHailuoResolution.value]
+    const durationKey = String(selectedDuration.value)
+    const resCost = resCosts?.[durationKey]
+    if (resCost !== undefined && resCost !== null && resCost !== '') {
+      cost = Number(resCost) || 1
+    } else if (typeof modelPointsCost === 'object') {
+      cost = modelPointsCost[durationKey] || 20
+    } else {
+      cost = typeof modelPointsCost === 'number' ? modelPointsCost : 1
+    }
+    return cost
+  }
+
+  // MiniMax H3 官方直连：按输出分辨率每秒计费（视频输入时应用独立倍率）
+  if (isMinimaxH3Model.value) {
+    const h3Cfg = currentModelConfig.value.minimaxConfig || {}
+    const h3Res = minimaxH3Resolution.value || h3Cfg.resolution || '2K'
+    const h3PerSecond = Number(h3Cfg.resolutionCosts?.[h3Res])
+      || Number(currentModelConfig.value.costPerSecond) || 15
+    let h3Cost = Math.round(h3PerSecond * (Number(selectedDuration.value) || 5))
+    const h3Multiplier = Number(h3Cfg.videoInputMultiplier) || 1
+    if (h3Multiplier > 1 && referenceVideos.value.length > 0) {
+      h3Cost = Math.round(h3Cost * h3Multiplier)
+    }
+    return h3Cost
   }
 
   // 如果是按时长计费的模型
@@ -3872,8 +4180,8 @@ function handleMotionImitation() {
 }
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedAspectRatio, selectedDuration, selectedKlingOfficialQuality, selectedCount, promptText, generationMode, viduMode, viduOffPeak, viduResolution, vectorengineResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode, selectedKlingO1Mode, omniKeepSound, selectedKlingV3OmniMode, selectedWanMode, selectedWanAnimateMode],
-  ([model, aspectRatio, duration, klingOfficialQuality, count, prompt, mode, viduMd, offPeak, resolution, veResolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode, klingO1Mode, keepSound, klingV3OmniMode, wanMode, wanAnimateMode]) => {
+watch([selectedModel, selectedAspectRatio, selectedDuration, selectedKlingOfficialQuality, selectedCount, promptText, generationMode, viduMode, viduOffPeak, viduResolution, vectorengineResolution, veoMode, veoResolution, klingCameraEnabled, klingCameraType, klingCameraConfig, klingCameraValue, klingVoiceList, klingMotionVideoUrl, klingMotionMode, seedanceSoundEnabled, klingSoundEnabled, selectedSeedance2Mode, seedanceResolution, selectedKlingO1Mode, omniKeepSound, selectedKlingV3OmniMode, selectedWanMode, selectedWanAnimateMode, minimaxHailuoResolution, minimaxH3Resolution, selectedMinimaxH3Mode],
+  ([model, aspectRatio, duration, klingOfficialQuality, count, prompt, mode, viduMd, offPeak, resolution, veResolution, veoMd, veoRes, klingCamEnabled, klingCamType, klingCamConfig, klingCamValue, klingVoices, motionVideoUrl, motionMode, seedanceSndEnabled, klingSndEnabled, sd2Mode, seedanceRes, klingO1Mode, keepSound, klingV3OmniMode, wanMode, wanAnimateMode, minimaxHailuoRes, minimaxH3Res, minimaxH3Mode]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       aspectRatio,
@@ -3885,6 +4193,7 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedKlingOffici
       viduMode: viduMd,
       viduOffPeak: offPeak,
       viduResolution: resolution,
+      minimaxHailuoResolution: minimaxHailuoRes,
       vectorengineResolution: veResolution,
       veoMode: veoMd,
       veoResolution: veoRes,
@@ -3898,6 +4207,9 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedKlingOffici
       klingMotionMode: motionMode,
       seedanceSoundEnabled: seedanceSndEnabled,
       seedance2Mode: sd2Mode,
+      seedanceResolution: seedanceRes,
+      minimaxH3Resolution: minimaxH3Res,
+      minimaxH3Mode: minimaxH3Mode,
       klingO1Mode: klingO1Mode,
       omniKeepSound: keepSound,
       klingV3OmniMode: klingV3OmniMode,
@@ -3908,6 +4220,11 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedKlingOffici
   { deep: true }
 )
 
+watch(genericVideoResolution, (videoResolution) => {
+  if (genericVideoResolutionOptions.value.length === 0) return
+  canvasStore.updateNodeData(props.id, { videoResolution })
+})
+
 watch([selectedModel, vectorengineResolutionOptions], () => {
   if (!isVectorEngineJsonModel.value) return
   const options = vectorengineResolutionOptions.value.map(option => option.value)
@@ -3915,6 +4232,17 @@ watch([selectedModel, vectorengineResolutionOptions], () => {
     vectorengineResolution.value = options[0]
   }
 })
+
+watch([selectedModel, seedanceResolutionOptions], () => {
+  if (!isSeedance2Model.value) return
+  const options = seedanceResolutionOptions.value.map(option => option.value)
+  if (options.length === 0) return
+  const configured = String(currentModelConfig.value?.seedanceConfig?.resolution || '').toLowerCase()
+  const fallback = options.includes(configured) ? configured : options[0]
+  if (!options.includes(seedanceResolution.value)) {
+    seedanceResolution.value = fallback
+  }
+}, { immediate: true })
 
 watch([selectedModel, runningHubResolutionOptions], () => {
   if (!isRunningHubAiAppVideoModel.value) return
@@ -3981,6 +4309,14 @@ watch(selectedModel, () => {
     const defaultMode = getDefaultSeedance2ModeForModel(modelConfig)
     selectedSeedance2Mode.value = getFirstAvailableMode(defaultMode, seedance2Modes.value)
     console.log('[VideoNode] 切换到 Seedance/Happy Horse 模型，模式重置为', selectedSeedance2Mode.value)
+  }
+
+  if (modelConfig?.apiType === 'minimax-h3') {
+    selectedMinimaxH3Mode.value = pickConfiguredSubmode(
+      modelConfig.minimaxConfig?.defaultMode || modelConfig.defaultMinimaxH3Mode,
+      minimaxH3Modes.value
+    )
+    console.log('[VideoNode] 切换到 MiniMax H3 模型，模式重置为', selectedMinimaxH3Mode.value)
   }
 
   if (isWanVideoModel(modelConfig)) {
@@ -4541,7 +4877,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   // VEO 模型：使用实际的模型名称
   if (isVeoModel.value) {
     formData.append('model', veoActualModel.value)
-    formData.append('veo_resolution', veoResolution.value)
+    formData.append('veo_resolution', capturedState.videoResolution || veoResolution.value)
     console.log('[VideoNode] VEO 实际模型:', veoActualModel.value, '清晰度:', veoResolution.value)
   } else if (isKlingO1Model.value) {
     // Kling O1 整合模型：使用当前模式对应的实际模型名称
@@ -4609,6 +4945,11 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   if (isKlingOfficialDurationModel(currentModelConfig.value)) {
     formData.append('quality', klingOfficialRequestQuality.value)
   }
+  const hasModelSpecificResolution = isVeoModel.value || isSeedance2Model.value || isMinimaxH3Model.value ||
+    isViduModel.value || isVectorEngineJsonModel.value || isRunningHubAiAppVideoModel.value || isMinimaxHailuoModel.value || isWanModel.value
+  if (capturedState.videoResolution && !hasModelSpecificResolution) {
+    formData.append('resolution', capturedState.videoResolution || genericVideoResolution.value)
+  }
   const negativePrompt = props.data?.negativePrompt || props.data?.negative_prompt || ''
   if (negativePrompt) {
     formData.append('negative_prompt', negativePrompt)
@@ -4644,18 +4985,24 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   
   // Vidu 模型特有参数：清晰度
   if (isViduModel.value) {
-    formData.append('resolution', viduResolution.value)
+    formData.append('resolution', capturedState.videoResolution || viduResolution.value)
     console.log('[VideoNode] Vidu 清晰度:', viduResolution.value)
   }
 
   if (isVectorEngineJsonModel.value) {
-    formData.append('resolution', vectorengineResolution.value)
+    formData.append('resolution', capturedState.videoResolution || vectorengineResolution.value)
     console.log('[VideoNode] VectorEngine JSON 清晰度:', vectorengineResolution.value)
   }
 
   if (capturedState.apiType === 'runninghub-ai-app-video') {
-    formData.append('resolution', capturedState.resolution || runningHubResolution.value)
+    formData.append('resolution', capturedState.videoResolution || capturedState.resolution || runningHubResolution.value)
     console.log('[VideoNode] RunningHub 清晰度:', capturedState.resolution || runningHubResolution.value)
+  }
+
+  // MiniMax 海螺官方直连：分辨率参数（后端按 resolutionCosts 计费）
+  if (isMinimaxHailuoModel.value) {
+    formData.append('resolution', capturedState.videoResolution || capturedState.minimaxHailuoResolution || minimaxHailuoResolution.value)
+    console.log('[VideoNode] MiniMax 海螺清晰度:', capturedState.minimaxHailuoResolution || minimaxHailuoResolution.value)
   }
   
   // Kling 模型特有参数：摄像机控制
@@ -4715,36 +5062,35 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     console.log('[VideoNode] Seedance 生成声音:', audioEnabled)
   }
 
-  // Seedance 2.0 音频时长验证（API 限制单个音频 2~15 秒，总时长 ≤ 15 秒）
-  if (isSeedance2Model.value) {
-    const sd2Mode = selectedSeedance2Mode.value
-    if (['multimodal_ref', 'video_edit'].includes(sd2Mode)) {
-      const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
-      const allNodes = canvasStore.nodes
-      let totalAudioDuration = 0
-      for (const edge of upstreamEdges) {
-        const sourceNode = allNodes.find(n => n.id === edge.source)
-        if (!sourceNode?.data) continue
-        if (['audio-input', 'audio'].includes(sourceNode.type)) {
-          const dur = sourceNode.data.audioDuration
-          if (dur && dur < 2) {
-            await showAlert(`参考音频时长 ${dur.toFixed(1)} 秒，不满足 Seedance 2.0 限制（单个音频不短于 2 秒）。请更换音频后重试。`, '音频时长不足')
-            isGenerating.value = false
-            return
-          }
-          if (dur && dur > 15) {
-            await showAlert(`参考音频时长 ${Math.round(dur)} 秒，超过 Seedance 2.0 限制（单个音频不超过 15 秒）。请裁剪音频后重试。`, '音频时长超限')
-            isGenerating.value = false
-            return
-          }
-          if (dur) totalAudioDuration += dur
+  // Seedance 2.0 / MiniMax H3 音频时长验证（API 限制单个音频 2~15 秒，总时长 ≤ 15 秒）
+  const needsAudioDurationValidation = (isSeedance2Model.value && ['multimodal_ref', 'video_edit'].includes(selectedSeedance2Mode.value)) ||
+    (isMinimaxH3Model.value && (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) === 'multimodal_ref')
+  if (needsAudioDurationValidation) {
+    const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
+    const allNodes = canvasStore.nodes
+    let totalAudioDuration = 0
+    for (const edge of upstreamEdges) {
+      const sourceNode = allNodes.find(n => n.id === edge.source)
+      if (!sourceNode?.data) continue
+      if (['audio-input', 'audio'].includes(sourceNode.type)) {
+        const dur = sourceNode.data.audioDuration
+        if (dur && dur < 2) {
+          await showAlert(`参考音频时长 ${dur.toFixed(1)} 秒，不满足模型限制（单个音频不短于 2 秒）。请更换音频后重试。`, '音频时长不足')
+          isGenerating.value = false
+          return
         }
+        if (dur && dur > 15) {
+          await showAlert(`参考音频时长 ${Math.round(dur)} 秒，超过模型限制（单个音频不超过 15 秒）。请裁剪音频后重试。`, '音频时长超限')
+          isGenerating.value = false
+          return
+        }
+        if (dur) totalAudioDuration += dur
       }
-      if (totalAudioDuration > 15) {
-        await showAlert(`参考音频总时长 ${Math.round(totalAudioDuration)} 秒，超过 Seedance 2.0 限制（总时长不超过 15 秒）。请减少音频或裁剪后重试。`, '音频时长超限')
-        isGenerating.value = false
-        return
-      }
+    }
+    if (totalAudioDuration > 15) {
+      await showAlert(`参考音频总时长 ${Math.round(totalAudioDuration)} 秒，超过模型限制（总时长不超过 15 秒）。请减少音频或裁剪后重试。`, '音频时长超限')
+      isGenerating.value = false
+      return
     }
   }
 
@@ -4752,11 +5098,11 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   if (isSeedance2Model.value) {
     const sd2Mode = selectedSeedance2Mode.value
     formData.append('seedance_mode', sd2Mode)
-    const seedanceResolution = currentModelConfig.value?.seedanceConfig?.resolution ||
+    const configuredSeedanceResolution = currentModelConfig.value?.seedanceConfig?.resolution ||
       currentModelConfig.value?.seedanceOpenConfig?.defaultResolution ||
       currentModelConfig.value?.happyHorseConfig?.resolution ||
       (isHappyHorseModel.value ? '1080p' : '720p')
-    formData.append('seedance_resolution', seedanceResolution)
+    formData.append('seedance_resolution', capturedState.seedanceResolution || seedanceResolution.value || configuredSeedanceResolution)
     if (selectedAspectRatio.value) {
       formData.append('seedance_ratio', selectedAspectRatio.value)
     }
@@ -4765,7 +5111,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       formData.append('seedance_face_codes', JSON.stringify(capturedState.faceCodes))
       console.log('[VideoNode] Seedance OpenAPI Pro 人物 face codes:', capturedState.faceCodes)
     }
-    console.log('[VideoNode] Seedance 2.0/Happy Horse 模式:', sd2Mode, '分辨率:', seedanceResolution, '比例:', selectedAspectRatio.value)
+    console.log('[VideoNode] Seedance 2.0/Happy Horse 模式:', sd2Mode, '分辨率:', capturedState.seedanceResolution || seedanceResolution.value || configuredSeedanceResolution, '比例:', selectedAspectRatio.value)
 
     if (sd2Mode === 'image2video_first') {
       if (finalImages.length > 0) {
@@ -4812,10 +5158,41 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     // text2video 不需要额外参数，直接用 prompt
   }
 
+  // MiniMax H3 官方直连：模式参数（后端按 seedance_mode 组装多模态 content[]）
+  if (isMinimaxH3Model.value) {
+    const h3Mode = capturedState.minimaxH3Mode || selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value
+    formData.append('seedance_mode', h3Mode)
+    formData.append('resolution', capturedState.minimaxH3Resolution || minimaxH3Resolution.value)
+    if (h3Mode === 'image2video_first') {
+      if (finalImages.length > 0) {
+        formData.append('first_frame_image', finalImages[0])
+        console.log('[VideoNode] H3 首帧图:', finalImages[0])
+      }
+    } else if (h3Mode === 'image2video_first_last') {
+      if (finalImages.length > 0) formData.append('first_frame_image', finalImages[0])
+      if (finalImages.length > 1) formData.append('last_frame_image', finalImages[1])
+      console.log('[VideoNode] H3 首尾帧:', finalImages.slice(0, 2))
+    } else if (h3Mode === 'multimodal_ref') {
+      if (finalImages.length > 0) {
+        formData.append('reference_images', JSON.stringify(finalImages.slice(0, 9)))
+      }
+      const h3Videos = referenceVideos.value || []
+      if (h3Videos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(h3Videos.slice(0, 3)))
+      }
+      const h3Audios = referenceAudios.value || []
+      if (h3Audios.length > 0) {
+        formData.append('reference_audios', JSON.stringify(h3Audios.slice(0, 3)))
+      }
+      console.log('[VideoNode] H3 多模态参考 | 图片:', finalImages.length, '视频:', h3Videos.length, '音频:', h3Audios.length)
+    }
+    console.log('[VideoNode] MiniMax H3 模式:', h3Mode)
+  }
+
   if (isWanModel.value) {
     const wanMode = capturedState.wanMode || selectedWanMode.value
     const wanAnimateMode = capturedState.wanAnimateMode || selectedWanAnimateMode.value || currentModelConfig.value?.wanConfig?.animateMode || 'wan-std'
-    const wanResolution = currentModelConfig.value?.wanConfig?.resolution ||
+    const wanResolution = capturedState.videoResolution || currentModelConfig.value?.wanConfig?.resolution ||
       currentModelConfig.value?.resolution ||
       '720P'
     formData.append('seedance_mode', wanMode)
@@ -5023,6 +5400,7 @@ function createNewOutputNode() {
       model: selectedModel.value,
       aspectRatio: selectedAspectRatio.value,
       duration: selectedDuration.value,
+      videoResolution: genericVideoResolutionOptions.value.length > 0 ? genericVideoResolution.value : '',
       ...(isRunningHubAiAppVideoModel.value ? { resolution: runningHubResolution.value } : {}),
       generationMode: generationMode.value,
       referenceImages: referenceImages.value,
@@ -5402,7 +5780,8 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     const shouldPrepareReferenceVideos = capturedState.isSeedance2 ||
       capturedState.isOmniVideoModel ||
       capturedState.isCozeVideoSwapModel ||
-      (capturedState.apiType === 'wan' && ['r2v', 'videoedit', 'animate_mix'].includes(capturedState.wanMode))
+      (capturedState.apiType === 'wan' && ['r2v', 'videoedit', 'animate_mix'].includes(capturedState.wanMode)) ||
+      (capturedState.isMinimaxH3 && capturedState.minimaxH3Mode === 'multimodal_ref')
     if (shouldPrepareReferenceVideos) {
       const accessibleReferenceVideos = await ensureReferenceVideoUrlsAccessible(capturedState.nodeId, targetNodeId)
       if (capturedState.isOmniVideoModel) {
@@ -5414,7 +5793,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     }
 
     // 确保参考音频可访问（blob URL 无法被外部 API 使用）
-    if (capturedState.isSeedance2) {
+    if (capturedState.isSeedance2 || capturedState.isMinimaxH3) {
       const currentRefAudios = referenceAudios.value || []
       const hasBlobAudios = currentRefAudios.some(url => url.startsWith('blob:'))
       if (hasBlobAudios) {
@@ -5629,6 +6008,41 @@ async function handleGenerate(options = {}) {
     }
   }
 
+  // MiniMax H3 官方直连：模式输入校验（多模态参考视频时长限制与 Seedance 一致）
+  if (!isHeygenFlow && isMinimaxH3Model.value) {
+    const h3Mode = selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value
+    if (h3Mode === 'image2video_first' && finalImages.length === 0) {
+      await showAlert('H3 首帧模式需要连接或上传1张图片', '提示')
+      return
+    }
+    if (h3Mode === 'image2video_first_last' && finalImages.length < 2) {
+      await showAlert('H3 首尾帧模式需要连接或上传2张图片', '提示')
+      return
+    }
+    if (h3Mode === 'multimodal_ref' && finalImages.length === 0 && referenceVideos.value.length === 0) {
+      await showAlert('H3 多模态参考模式需要至少连接1张图片或1个视频', '提示')
+      return
+    }
+    if (h3Mode === 'multimodal_ref') {
+      const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
+      let totalH3VideoDuration = 0
+      for (const edge of upstreamEdges) {
+        const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
+        const dur = Number(sourceNode?.data?.videoDuration)
+        if (!Number.isFinite(dur) || dur <= 0) continue
+        if (dur < 2 || dur > 15) {
+          await showAlert('H3 参考视频时长需在2到15秒之间', '提示')
+          return
+        }
+        totalH3VideoDuration += dur
+      }
+      if (totalH3VideoDuration > 15) {
+        await showAlert('H3 参考视频总时长不能超过15秒', '提示')
+        return
+      }
+    }
+  }
+
   if (!isHeygenFlow && isWanModel.value) {
     const wanMode = selectedWanMode.value
     const wanReferenceCount = finalImages.length + referenceVideos.value.length
@@ -5720,13 +6134,16 @@ async function handleGenerate(options = {}) {
       model: isHeygenFlow ? `heygen:${isDigitalHumanFlow ? 'avatar' : 'lipsync'}` : selectedModel.value,
       aspectRatio: selectedAspectRatio.value,
       duration: selectedDuration.value,
-      resolution: isRunningHubAiAppVideoModel.value ? runningHubResolution.value : '',
+      resolution: genericVideoResolutionOptions.value.length > 0
+        ? genericVideoResolution.value
+        : (isRunningHubAiAppVideoModel.value ? runningHubResolution.value : ''),
       selectedCount: selectedCount.value,
       generationMode: generationMode.value,
       referenceImages: finalImages,
       referenceVideos: referenceVideos.value,
       referenceAudios: referenceAudios.value,
       seedanceMode: isSeedance2Model.value ? selectedSeedance2Mode.value : '',
+      minimaxH3Mode: isMinimaxH3Model.value ? (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) : '',
       wanMode: isWanModel.value ? selectedWanMode.value : '',
       wanAnimateMode: isWanModel.value && selectedWanMode.value === 'animate_mix' ? selectedWanAnimateMode.value : '',
       klingO1Mode: isKlingO1Model.value ? selectedKlingO1Mode.value : '',
@@ -5758,6 +6175,7 @@ async function handleGenerate(options = {}) {
     digitalHuman: upstreamData.digitalHumans[0] || null,
     heygenChannelId: isDigitalHumanFlow ? upstreamData.digitalHumans[0]?.channelId : props.data?.heygenChannelId,
     isSeedance2: isSeedance2Model.value,
+    isMinimaxH3: isMinimaxH3Model.value,
     isSeedanceOpenApiPro: isSeedanceOpenApiProModel.value,
     isOmniVideoModel: isOmniVideoModel.value,
     isCozeVideoSwapModel: isCozeVideoSwapModel.value,
@@ -5768,7 +6186,12 @@ async function handleGenerate(options = {}) {
     quickAssetUris: upstreamData.quickAssetUris || [],
     quickAssetSourceUrls: upstreamData.quickAssetSourceUrls || [],
     apiType: currentModelConfig.value?.apiType || '',
+    videoResolution: genericVideoResolutionOptions.value.length > 0 ? genericVideoResolution.value : '',
     resolution: isRunningHubAiAppVideoModel.value ? runningHubResolution.value : '',
+    seedanceResolution: isSeedance2Model.value ? seedanceResolution.value : '',
+    minimaxHailuoResolution: isMinimaxHailuoModel.value ? minimaxHailuoResolution.value : '',
+    minimaxH3Resolution: isMinimaxH3Model.value ? minimaxH3Resolution.value : '',
+    minimaxH3Mode: isMinimaxH3Model.value ? (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) : '',
     wanMode: isWanModel.value ? selectedWanMode.value : '',
     wanAnimateMode: isWanModel.value && selectedWanMode.value === 'animate_mix' ? selectedWanAnimateMode.value : ''
   }
@@ -5816,7 +6239,9 @@ async function handleGenerate(options = {}) {
             model: selectedModel.value,
             aspectRatio: selectedAspectRatio.value,
             duration: selectedDuration.value,
+            videoResolution: genericVideoResolutionOptions.value.length > 0 ? genericVideoResolution.value : '',
             resolution: isRunningHubAiAppVideoModel.value ? runningHubResolution.value : '',
+            minimaxHailuoResolution: isMinimaxHailuoModel.value ? minimaxHailuoResolution.value : '',
             generationMode: generationMode.value,
             referenceImages: referenceImages.value
           }
@@ -8998,71 +9423,17 @@ function handleToolbarPreview() {
             </Transition>
           </div>
 
-          <!-- 比例选择（下拉框） -->
-          <div v-if="availableAspectRatios.length > 0" class="ratio-selector" @mousedown.stop @click.stop>
-            <button
-              type="button"
-              class="video-mode-trigger ratio-mode-trigger"
-              @click="toggleVideoModeDropdown('ratio', $event)"
-            >
-              <span
-                class="ratio-icon"
-                :class="getAspectRatioIconClass(selectedAspectRatio)"
-                aria-hidden="true"
-              ></span>
-              <span class="video-mode-trigger-value">
-                {{ availableAspectRatios.find(ratio => ratio.value === selectedAspectRatio)?.label || selectedAspectRatio }}
-              </span>
-              <span class="video-mode-trigger-arrow" :class="{ 'arrow-up': videoModeDropdownOpen === 'ratio' }">⌃</span>
-            </button>
-            <Transition name="dropdown-fade">
-              <div
-                v-if="videoModeDropdownOpen === 'ratio'"
-                class="video-mode-dropdown-panel ratio-dropdown-panel"
-                :class="{ 'dropdown-up': videoModeDropdownDirection === 'up' }"
-              >
-                <div class="video-mode-dropdown-title">画面比例</div>
-                <button
-                  v-for="ratio in availableAspectRatios"
-                  :key="ratio.value"
-                  type="button"
-                  class="video-mode-dropdown-item"
-                  :class="{ active: ratio.value === selectedAspectRatio }"
-                  @click="selectedAspectRatio = ratio.value; videoModeDropdownOpen = null"
-                >
-                  <span
-                    class="video-mode-option-icon ratio-icon"
-                    :class="getAspectRatioIconClass(ratio.value)"
-                    aria-hidden="true"
-                  ></span>
-                  <span>{{ ratio.label }}</span>
-                </button>
-              </div>
-            </Transition>
-          </div>
-          
-          <!-- 时长切换（VEO3模型和动作迁移模型不显示） -->
-          <div v-if="!isPerSecondBilling && !isVeo3Model && !isKlingMotionControl && durations.length > 0 && durations.length < 6" class="param-chip-group">
-            <div
-              v-for="d in durations"
-              :key="d.value"
-              class="param-chip"
-              :class="{ active: selectedDuration === d.value }"
-                  @click="selectVideoDuration(d.value)"
-            >
-              {{ d.label }}
-            </div>
-          </div>
-          <!-- 时长下拉选择（选项较多时使用） -->
-          <div v-if="!isPerSecondBilling && !isVeo3Model && !isKlingMotionControl && durations.length >= 6" class="duration-select-row">
-            <span class="duration-select-label">时长</span>
-            <select
-              :value="selectedDuration"
-              @change="selectVideoDuration($event.target.value)"
-              class="duration-select"
-            >
-              <option v-for="d in durations" :key="d.value" :value="d.value">{{ d.label }}</option>
-            </select>
+          <div v-if="hasVideoParameterMenu" class="video-parameter-selector">
+            <VideoParametersDropdown
+              :aspect-ratios="availableAspectRatios"
+              v-model:aspect-ratio="selectedAspectRatio"
+              :resolution-options="videoParameterResolutionOptions"
+              v-model:resolution="selectedVideoParameterResolution"
+              :duration-options="durations"
+              :duration="selectedDuration"
+              @update:duration="selectVideoDuration"
+              :show-duration="showVideoParameterDuration"
+            />
           </div>
 
           <!-- Vidu 错峰模式开关 -->
@@ -9077,43 +9448,6 @@ function handleToolbarPreview() {
             <span class="toggle-text">错峰</span>
           </label>
           
-          <!-- Vidu 清晰度切换 -->
-          <div 
-            v-if="isViduModel" 
-            class="resolution-chip"
-            :class="{ 'is-720p': viduResolution === '720p' }"
-            @click="viduResolution = viduResolution === '1080p' ? '720p' : '1080p'"
-            :title="viduResolution === '1080p' ? '点击切换到720P（享受折扣）' : '点击切换到1080P（高清）'"
-          >
-            {{ viduResolution === '1080p' ? '1080P' : '720P' }}
-          </div>
-
-          <div v-if="isVectorEngineJsonModel && vectorengineResolutionOptions.length > 1" class="vectorengine-resolution-options">
-            <button
-              v-for="res in vectorengineResolutionOptions"
-              :key="res.value"
-              type="button"
-              class="vectorengine-resolution-btn"
-              :class="{ active: vectorengineResolution === res.value }"
-              @click="vectorengineResolution = res.value"
-            >
-              {{ res.label }}
-            </button>
-          </div>
-
-          <div v-if="isRunningHubAiAppVideoModel && runningHubResolutionOptions.length > 1" class="vectorengine-resolution-options">
-            <button
-              v-for="res in runningHubResolutionOptions"
-              :key="res.value"
-              type="button"
-              class="vectorengine-resolution-btn"
-              :class="{ active: runningHubResolution === res.value }"
-              @click="runningHubResolution = res.value"
-            >
-              {{ res.label }}
-            </button>
-          </div>
-
         </div>
         
         <div class="config-right">
@@ -9500,6 +9834,16 @@ function handleToolbarPreview() {
           </div>
           <div v-if="currentSeedance2ModeConfig.needsImage && referenceImages.length === 0 && selectedSeedance2Mode !== 'text2video'" class="sd2-mode-warn">
             ⚠ {{ currentSeedance2ModeConfig.label }}需要连接上游图片节点
+          </div>
+        </div>
+      </template>
+
+      <!-- MiniMax H3 模式选择 -->
+      <template v-if="isMinimaxH3Model">
+        <div class="sd2-mode-section">
+          <div class="sd2-mode-desc">{{ currentMinimaxH3ModeConfig.desc }}</div>
+          <div v-if="currentMinimaxH3ModeConfig.needsImage && referenceImages.length === 0 && (selectedMinimaxH3Mode || minimaxH3DefaultMode) !== 'text2video'" class="sd2-mode-warn">
+            ⚠ {{ currentMinimaxH3ModeConfig.label }}需要连接上游图片节点
           </div>
         </div>
       </template>

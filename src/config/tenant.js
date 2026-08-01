@@ -1283,6 +1283,8 @@ export const getAvailableVideoModels = (options = {}) => {
       veoResolutions: [
         { value: '1080p', label: '1080P', extraCost: 0 }
       ],
+      displayResolutions: veoSubModels[0]?.displayResolutions,
+      resolutionPricing: veoSubModels[0]?.resolutionPricing,
       defaultVeoMode: finalVeoModes[0]?.value || 'standard',
       defaultVeoResolution: '1080p',
       vendor: veoSubModels[0]?.vendor || 'Google',
@@ -1376,8 +1378,10 @@ export const getAvailableVideoModels = (options = {}) => {
         veoModes: uniqueVeo4kModes,
         veoResolutions: [
           { value: '4k', label: '4K', extraCost: 0 }
-        ],
-        defaultVeoMode: uniqueVeo4kModes[0]?.value || 'standard',
+      ],
+      displayResolutions: veo4kSubModels[0]?.displayResolutions,
+      resolutionPricing: veo4kSubModels[0]?.resolutionPricing,
+      defaultVeoMode: uniqueVeo4kModes[0]?.value || 'standard',
         defaultVeoResolution: '4k',
         vendor: veo4kSubModels[0]?.vendor || 'Google',
         vendorLogo: veo4kSubModels[0]?.vendorLogo || ''
@@ -1537,6 +1541,8 @@ export const getAvailableVideoModels = (options = {}) => {
           apiType: 'vectorengine',
           vectorengineConfig: modelConfig.vectorengineConfig,
           resolutionOptions: getVideoResolutionOptions(modelConfig),
+          displayResolutions: modelConfig.displayResolutions,
+          resolutionPricing: modelConfig.resolutionPricing,
           actualModel: modelConfig.actualModel || modelConfig.seedanceOpenConfig?.model || modelConfig.seedanceConfig?.model || key,
           isVeoModel: false,
           vendor: modelConfig.vendor || '',
@@ -1640,8 +1646,14 @@ export const getAvailableVideoModels = (options = {}) => {
         huayingConfig: modelConfig.huayingConfig,
         vectorengineConfig: modelConfig.vectorengineConfig,
         resolutionOptions: getVideoResolutionOptions(modelConfig),
+        displayResolutions: modelConfig.displayResolutions,
+        resolutionPricing: modelConfig.resolutionPricing,
         resolutionMultipliers: modelConfig.resolutionMultipliers,
         resolutionFixedCosts: modelConfig.resolutionFixedCosts,
+        // MiniMax 海螺官方直连：分辨率计费与默认配置（来自 9000 租户后台）
+        minimaxConfig: modelConfig.minimaxConfig,
+        resolutionCosts: modelConfig.resolutionCosts,
+        hasResolutionPricing: modelConfig.hasResolutionPricing === true,
         defaultVideoMode: modelConfig.defaultVideoMode || undefined,
         defaultSeedance2Mode: modelConfig.defaultSeedance2Mode || modelConfig.seedanceConfig?.defaultMode || undefined,
         defaultKlingO1Mode: modelConfig.defaultKlingO1Mode || undefined,
@@ -1829,8 +1841,14 @@ export const getAvailableVideoModels = (options = {}) => {
         huayingConfig: modelFullConfig.huayingConfig,
         vectorengineConfig: modelFullConfig.vectorengineConfig,
         resolutionOptions: getVideoResolutionOptions(modelFullConfig),
+        displayResolutions: modelFullConfig.displayResolutions,
+        resolutionPricing: modelFullConfig.resolutionPricing,
         resolutionMultipliers: modelFullConfig.resolutionMultipliers,
         resolutionFixedCosts: modelFullConfig.resolutionFixedCosts,
+        // MiniMax 海螺官方直连：分辨率计费与默认配置（来自 9000 租户后台）
+        minimaxConfig: modelFullConfig.minimaxConfig,
+        resolutionCosts: modelFullConfig.resolutionCosts,
+        hasResolutionPricing: modelFullConfig.hasResolutionPricing === true,
         defaultVideoMode: modelFullConfig.defaultVideoMode || undefined,
         defaultSeedance2Mode: modelFullConfig.defaultSeedance2Mode || modelFullConfig.seedanceConfig?.defaultMode || undefined,
         defaultKlingO1Mode: modelFullConfig.defaultKlingO1Mode || undefined,

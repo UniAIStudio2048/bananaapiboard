@@ -329,11 +329,16 @@
           </div>
           
           <!-- 输入框 -->
+          <div v-if="selectedAssistantModel" class="selected-model-tag">
+            <span class="selected-model-tag-icon"><ModelIcon :icon="getAssistantModelIcon(selectedAssistantModel)" :label="selectedAssistantModel.label || selectedAssistantModel.value" /></span>
+            <span class="selected-model-tag-label">{{ selectedAssistantModel.label || selectedAssistantModel.value }}</span>
+            <button type="button" class="selected-model-tag-remove" title="移除已选模型" aria-label="移除已选模型" @click="clearAssistantModel">×</button>
+          </div>
           <div
             :key="inputEditorRenderKey"
             ref="inputRef"
             class="input-textarea"
-            :class="{ 'is-empty': !inputText }"
+            :class="{ 'is-empty': !inputText && !selectedAssistantModel }"
             contenteditable="true"
             role="textbox"
             aria-multiline="true"
@@ -617,7 +622,7 @@
           </div>
           <div class="model-picker-list">
             <button v-for="model in modelPickerModels" :key="model.value" type="button" class="model-picker-item" :class="{ selected: isAssistantModelSelected(model) }" @click="selectAssistantModel(model)">
-              <span class="picker-model-icon"><ModelIcon :icon="model.icon" :label="model.label || model.value" /></span>
+              <span class="picker-model-icon"><ModelIcon :icon="getAssistantModelIcon(model)" :label="model.label || model.value" /></span>
               <span class="picker-model-copy"><strong>{{ model.label || model.value }}</strong><small>{{ model.description || '已启用模型' }}</small></span>
               <span v-if="model.pointsCost != null" class="picker-model-cost">{{ formatModelCost(model.pointsCost) }} 积分</span>
               <span class="picker-model-action" :class="{ selected: isAssistantModelSelected(model) }" :aria-label="isAssistantModelSelected(model) ? '已选择' : '选择模型'">
@@ -739,6 +744,7 @@ import { showAlert } from '@/composables/useCanvasDialog'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { createAgentIdempotencyKey, createAgentRun, decideAgentRun, getSkillCatalog, streamAgentRun } from '@/api/agent'
 import { config as tenantConfig, getAvailableImageModels, getAvailableVideoModels, useTenantConfigVersion } from '@/config/tenant'
+import { getAssistantModelIcon } from '@/utils/aiAssistantModels'
 
 const props = defineProps({
   visible: {
@@ -876,6 +882,10 @@ const modelPickerModels = computed(() => {
   if (!allowlist.length) return models
   return models.filter(model => allowlist.includes(model.value) || allowlist.includes(model.id) || allowlist.includes(model.name))
 })
+const selectedAssistantModel = computed(() => {
+  if (!selectedModelValue.value) return null
+  return modelPickerModels.value.find(model => isAssistantModelSelected(model)) || null
+})
 
 function modelTypeLabel(type) {
   return type === 'video' ? '视频' : '图片'
@@ -900,6 +910,10 @@ function isAssistantModelSelected(model) {
   const aliases = [model.value, model.id, model.name, model.actualModel]
   const subModels = [...(model.veoModes || []), ...(model.klingO1Modes || [])]
   return aliases.includes(selected) || subModels.some(item => item?.actualModel === selected)
+}
+
+function clearAssistantModel() {
+  selectedModelByType.value = { ...selectedModelByType.value, [modelPickerType.value]: '' }
 }
 
 const canSend = computed(() => {
@@ -2958,6 +2972,54 @@ defineExpose({
   white-space: pre-wrap;
 }
 
+.selected-model-tag {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 6px;
+  max-width: 100%;
+  margin-bottom: -4px;
+  padding: 5px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.selected-model-tag-icon {
+  display: grid;
+  width: 14px;
+  height: 14px;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.selected-model-tag-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-model-tag-remove {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.56);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.selected-model-tag-remove:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
 .prompt-highlight-segment.is-prompt-tag-slot {
   display: inline-flex;
   align-items: center;
@@ -3683,6 +3745,21 @@ defineExpose({
 
 :root.canvas-theme-light .ai-assistant-panel .input-textarea.is-empty::before {
   color: rgba(0, 0, 0, 0.35);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .selected-model-tag {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(15, 23, 42, 0.05);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .selected-model-tag-remove {
+  color: rgba(15, 23, 42, 0.45);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .selected-model-tag-remove:hover {
+  background: rgba(15, 23, 42, 0.08);
+  color: #1c1917;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .input-textarea:focus {

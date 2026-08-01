@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('./VideoNode.vue', import.meta.url), 'utf8')
 
-test('video mode selector is placed between model and aspect ratio controls', () => {
+test('video mode selector is placed between model and unified video parameter controls', () => {
   const configRowStart = source.indexOf('<div class="config-row">')
   const configRowEnd = source.indexOf('<div class="config-right">', configRowStart)
   assert.ok(configRowStart >= 0, 'video config row should exist')
@@ -13,11 +13,11 @@ test('video mode selector is placed between model and aspect ratio controls', ()
   const configLeft = source.slice(configRowStart, configRowEnd)
   const modelIndex = configLeft.indexOf('class="model-selector-custom"')
   const modeIndex = configLeft.indexOf('class="video-mode-selector"')
-  const ratioIndex = configLeft.indexOf('class="ratio-selector"')
+  const parametersIndex = configLeft.indexOf('class="video-parameter-selector"')
 
   assert.ok(modelIndex >= 0, 'model selector should remain visible')
   assert.ok(modeIndex > modelIndex, 'mode selector should follow model selector')
-  assert.ok(ratioIndex > modeIndex, 'mode selector should precede aspect ratio selector')
+  assert.ok(parametersIndex > modeIndex, 'mode selector should precede unified video parameter selector')
   assert.match(configLeft, /class="video-mode-trigger"/)
   assert.match(configLeft, /class="video-mode-dropdown-panel"/)
   assert.match(configLeft, /v-for="option in activeVideoModeSelector\.options"/)
@@ -40,19 +40,24 @@ test('video mode selector reuses existing mode state and available option lists'
   assert.doesNotMatch(source, /v-for="opt in wanAnimateModeOptions"[\s\S]*class="sd2-mode-btn"/)
 })
 
-test('aspect ratio selector uses the same custom dropdown style', () => {
-  const ratioStart = source.indexOf('<div v-if="availableAspectRatios.length > 0" class="ratio-selector"')
-  const ratioEnd = source.indexOf('<!-- 时长切换', ratioStart)
-  assert.ok(ratioStart >= 0, 'aspect ratio selector should exist')
-  assert.ok(ratioEnd > ratioStart, 'aspect ratio selector section should be complete')
+test('video ratio, resolution, and duration share one dropdown trigger', () => {
+  const configRowStart = source.indexOf('<div class="config-row">')
+  const configRowEnd = source.indexOf('<div class="config-right">', configRowStart)
+  const configLeft = source.slice(configRowStart, configRowEnd)
 
-  const ratioSection = source.slice(ratioStart, ratioEnd)
-  assert.match(ratioSection, /class="video-mode-trigger ratio-mode-trigger"/)
-  assert.match(ratioSection, /videoModeDropdownOpen === 'ratio'/)
-  assert.match(ratioSection, /v-for="ratio in availableAspectRatios"/)
-  assert.match(ratioSection, /selectedAspectRatio = ratio\.value/)
-  assert.doesNotMatch(ratioSection, /<select/)
-  assert.match(ratioSection, /getAspectRatioIconClass\(selectedAspectRatio\)/)
+  assert.match(source, /import VideoParametersDropdown from '\.\.\/VideoParametersDropdown\.vue'/)
+  assert.match(configLeft, /class="video-parameter-selector"/)
+  assert.match(configLeft, /<VideoParametersDropdown/)
+  assert.match(configLeft, /:aspect-ratios="availableAspectRatios"/)
+  assert.match(configLeft, /v-model:aspect-ratio="selectedAspectRatio"/)
+  assert.match(configLeft, /:resolution-options="videoParameterResolutionOptions"/)
+  assert.match(configLeft, /v-model:resolution="selectedVideoParameterResolution"/)
+  assert.match(configLeft, /:duration-options="durations"/)
+  assert.match(configLeft, /:duration="selectedDuration"/)
+  assert.match(configLeft, /@update:duration="selectVideoDuration"/)
+  assert.doesNotMatch(configLeft, /class="ratio-selector"/)
+  assert.doesNotMatch(configLeft, /class="param-chip-group"/)
+  assert.doesNotMatch(configLeft, /class="duration-select-row"/)
 })
 
 test('video aspect ratios follow model configuration and include square and portrait variants', () => {
@@ -60,11 +65,7 @@ test('video aspect ratios follow model configuration and include square and port
   for (const ratio of ['1:1', '3:4', '4:3']) {
     assert.match(source, new RegExp(`value: '${ratio}'`))
   }
-  assert.match(source, /v-if="availableAspectRatios\.length > 0" class="ratio-selector"/)
-  assert.match(source, /v-for="ratio in availableAspectRatios"/)
-  assert.match(source, /ratio-icon-square/)
-  assert.match(source, /ratio-icon-3-4/)
-  assert.match(source, /ratio-icon-4-3/)
+  assert.match(source, /:aspect-ratios="availableAspectRatios"/)
 })
 
 test('video duration and ratio selections can both be empty', () => {

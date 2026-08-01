@@ -134,7 +134,7 @@ function handleDoubleClickHint() {
 </script>
 
 <template>
-  <div class="canvas-empty-state">
+  <div class="canvas-empty-state" @dblclick="handleDoubleClickHint">
     <!-- 双击提示 -->
     <div class="canvas-empty-icon">
       <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">

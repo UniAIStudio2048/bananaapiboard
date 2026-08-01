@@ -7,6 +7,7 @@ import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
+import { calculateVideoResolutionPrice, getEnabledVideoResolutionOptions } from '@/utils/videoResolutionPricing'
 import { normalizePromptLineEndings } from '@/utils/promptText'
 import { pickConfiguredSubmode } from '@/utils/videoSubmodeDefaults'
 import {
@@ -73,6 +74,16 @@ const currentModelConfig = computed(() => {
 const isRunningHubAiAppVideoModel = computed(() => currentModelConfig.value?.apiType === 'runninghub-ai-app-video')
 
 const videoResolutionOptions = computed(() => {
+  const enabledPricingResolutions = getEnabledVideoResolutionOptions(currentModelConfig.value?.resolutionPricing)
+  if (enabledPricingResolutions.length > 0) {
+    return enabledPricingResolutions.map(value => ({ value, label: String(value || '').toUpperCase() }))
+  }
+  const displayResolutions = currentModelConfig.value?.displayResolutions
+  if (Array.isArray(displayResolutions)) {
+    return displayResolutions
+      .map(value => ({ value, label: String(value || '').toUpperCase() }))
+      .filter(option => option.value)
+  }
   const configuredOptions = currentModelConfig.value?.resolutionOptions
   if (Array.isArray(configuredOptions) && configuredOptions.length > 0) {
     return configuredOptions.map(option => {
@@ -358,6 +369,13 @@ const totalPoints = computed(() => {
 })
 
 const currentPointsCost = computed(() => {
+  const configuredResolutionPrice = calculateVideoResolutionPrice(
+    currentModelConfig.value?.resolutionPricing,
+    resolution.value,
+    isSeedanceModel.value ? seedanceDuration.value : duration.value
+  )
+  if (configuredResolutionPrice !== null) return configuredResolutionPrice
+
   // VEO3模型使用固定积分
   if (isVeo3Model.value) {
     const veoConfig = pointsCostConfig.value[model.value]
@@ -527,9 +545,17 @@ watch(model, (newModel) => {
     console.log('[VideoGeneration] 方向已重置为:', aspectRatio.value)
   }
 
-  const configuredResolutionOptions = Array.isArray(modelConfig?.resolutionOptions)
-    ? modelConfig.resolutionOptions.map(option => typeof option === 'string' ? option : option?.value).filter(Boolean)
-    : []
+  const configuredPricingResolutions = getEnabledVideoResolutionOptions(modelConfig?.resolutionPricing)
+  const displayResolutions = Array.isArray(modelConfig?.displayResolutions)
+    ? modelConfig.displayResolutions.map(value => String(value)).filter(Boolean)
+    : undefined
+  const configuredResolutionOptions = configuredPricingResolutions.length > 0
+    ? configuredPricingResolutions
+    : (displayResolutions !== undefined
+    ? displayResolutions
+    : (Array.isArray(modelConfig?.resolutionOptions)
+        ? modelConfig.resolutionOptions.map(option => typeof option === 'string' ? option : option?.value).filter(Boolean)
+        : []))
   if (modelConfig?.apiType === 'runninghub-ai-app-video' && configuredResolutionOptions.length > 0) {
     resolution.value = configuredResolutionOptions[0]
   } else if (configuredResolutionOptions.length > 0 && !configuredResolutionOptions.includes(resolution.value)) {
@@ -539,7 +565,7 @@ watch(model, (newModel) => {
   if (isSeedanceSd2VideoModel(modelConfig)) {
     const seedanceConfig = modelConfig.seedanceConfig || {}
     const isHappyHorse = modelConfig.apiType === 'happyhorse'
-    seedanceResolution.value = seedanceConfig.resolution || (isHappyHorse ? '1080p' : '720p')
+    seedanceResolution.value = configuredPricingResolutions[0] || seedanceConfig.resolution || (isHappyHorse ? '1080p' : '720p')
     seedanceRatio.value = seedanceConfig.ratio || (isHappyHorse ? '16:9' : 'adaptive')
     seedanceDuration.value = Number(seedanceConfig.duration || durations[0] || 5)
     seedanceGenerateAudio.value = seedanceConfig.generateAudio !== false
@@ -1392,8 +1418,11 @@ async function generateVideo() {
 
     // Seedance 2.0 参数
     if (isSeedanceModel.value) {
+      const selectedSeedanceResolution = getEnabledVideoResolutionOptions(currentModelConfig.value?.resolutionPricing).length > 0
+        ? resolution.value
+        : seedanceResolution.value
       formData.append('seedance_mode', seedanceMode.value)
-      formData.append('seedance_resolution', seedanceResolution.value)
+      formData.append('seedance_resolution', selectedSeedanceResolution)
       formData.append('seedance_ratio', seedanceRatio.value)
       formData.append('seedance_generate_audio', seedanceGenerateAudio.value ? 'true' : 'false')
       formData.append('web_search', seedanceWebSearch.value ? 'true' : 'false')
@@ -2813,7 +2842,7 @@ onUnmounted(() => {
                 </button>
                 <div v-show="seedanceAdvancedOpen" class="px-3 py-3 border-t border-slate-200 dark:border-dark-600 space-y-3">
                   <!-- 分辨率 -->
-                  <div>
+                  <div v-if="getEnabledVideoResolutionOptions(currentModelConfig?.resolutionPricing).length === 0">
                     <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">分辨率</label>
                     <div class="flex space-x-2">
                       <button type="button" @click="seedanceResolution = '480p'"
