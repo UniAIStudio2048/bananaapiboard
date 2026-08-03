@@ -8,6 +8,7 @@ import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/util
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { calculateVideoResolutionPrice, getEnabledVideoResolutionOptions } from '@/utils/videoResolutionPricing'
+import { calculateSeedanceResolutionCost } from '@/utils/seedanceResolutionPricing'
 import { normalizePromptLineEndings } from '@/utils/promptText'
 import { pickConfiguredSubmode } from '@/utils/videoSubmodeDefaults'
 import {
@@ -375,6 +376,13 @@ const currentPointsCost = computed(() => {
     isSeedanceModel.value ? seedanceDuration.value : duration.value
   )
   if (configuredResolutionPrice !== null) return configuredResolutionPrice
+
+  const seedanceResolutionCost = calculateSeedanceResolutionCost({
+    resolutionCosts: currentModelConfig.value?.seedanceConfig?.resolutionCosts,
+    resolution: seedanceResolution.value,
+    duration: seedanceDuration.value
+  })
+  if (seedanceResolutionCost !== null) return seedanceResolutionCost
 
   // VEO3模型使用固定积分
   if (isVeo3Model.value) {
@@ -1402,7 +1410,7 @@ async function generateVideo() {
     }
     
     // 模型能力驱动的清晰度参数
-    if (hasVideoResolutionSelection.value) {
+    if (hasVideoResolutionSelection.value && !isSeedanceModel.value) {
       formData.append('resolution', resolution.value)
     }
     

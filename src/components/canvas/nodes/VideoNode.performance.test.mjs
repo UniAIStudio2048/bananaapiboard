@@ -26,6 +26,12 @@ assert.match(
 
 assert.match(
   source,
+  /props\.data\.output\?\.thumbnail\s*\|\|\s*props\.data\.output\?\.thumbnail_url/,
+  'VideoNode poster selection should use the thumbnail returned with a completed canvas video task'
+)
+
+assert.match(
+  source,
   /const shouldFallbackToVideoFrame = computed\(/,
   'VideoNode should allow video previews to fall back to the video first frame when no poster exists'
 )

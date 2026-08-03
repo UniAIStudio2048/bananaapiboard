@@ -2801,6 +2801,7 @@ const videoPosterUrl = computed(() => {
   const explicitPoster =
     props.data.output?.cover_url ||
     props.data.output?.coverUrl ||
+    props.data.output?.thumbnail ||
     props.data.output?.thumbnail_url ||
     props.data.output?.thumbnailUrl ||
     props.data.cover_url ||
