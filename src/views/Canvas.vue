@@ -4014,7 +4014,7 @@ onUnmounted(() => {
 
 <style scoped>
 .canvas-page {
-  --canvas-top-control-height: 40px;
+  --canvas-top-control-height: 34px;
   width: 100%;
   height: 100vh;
   overflow: hidden;

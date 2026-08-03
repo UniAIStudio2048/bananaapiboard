@@ -6,6 +6,7 @@
  */
 import { ref, watch, onMounted, computed, nextTick, onUnmounted } from 'vue'
 import { getWorkflowList, deleteWorkflow, loadWorkflow, saveWorkflow, renameWorkflow, getStorageQuota, getWorkflowTemplates } from '@/api/canvas/workflow'
+import { Folder, LayoutGrid, Plus, Search, User, X } from '@lucide/vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { useI18n } from '@/i18n'
 import {
@@ -1284,7 +1285,7 @@ defineExpose({
       :class="{ 'is-dragging': isDragging }"
       @dragleave="handlePanelDragLeave"
     >
-      <div class="workflow-panel">
+      <div class="workflow-panel canvas-panel">
         <!-- 头部 -->
         <div class="panel-header">
           <div class="header-title">
@@ -1298,10 +1299,7 @@ defineExpose({
             <span>{{ t('canvas.workflow') }}</span>
           </div>
           <button class="close-btn" @click="$emit('close')">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
+            <X :size="18" aria-hidden="true" />
           </button>
         </div>
 
@@ -1320,10 +1318,7 @@ defineExpose({
             :class="{ active: activeTab === 'my' }"
             @click="activeTab = 'my'"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
+            <User :size="16" aria-hidden="true" />
             {{ t('canvas.myWorkflows') }}
             <span v-if="workflows.length > 0 || historyWorkflows.length > 0" class="tab-count">
               {{ workflowsTotal + historyWorkflows.length }}
@@ -1334,12 +1329,7 @@ defineExpose({
             :class="{ active: activeTab === 'templates' }"
             @click="activeTab = 'templates'"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="3" width="7" height="7"/>
-              <rect x="14" y="3" width="7" height="7"/>
-              <rect x="14" y="14" width="7" height="7"/>
-              <rect x="3" y="14" width="7" height="7"/>
-            </svg>
+            <LayoutGrid :size="16" aria-hidden="true" />
             {{ t('canvas.workflowTemplates') }}
           </button>
         </div>
@@ -1349,10 +1339,7 @@ defineExpose({
           <!-- 工具栏 -->
           <div class="panel-toolbar">
             <div class="search-box">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/>
-                <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
+              <Search :size="16" aria-hidden="true" />
               <input
                 v-model="searchQuery"
                 type="text"
@@ -1361,10 +1348,7 @@ defineExpose({
               />
             </div>
             <button class="new-btn" @click="handleNew">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19"/>
-                <line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
+              <Plus :size="16" aria-hidden="true" />
               {{ t('canvas.new') }}
             </button>
           </div>
@@ -1382,11 +1366,7 @@ defineExpose({
             <!-- 左侧：手动保存的工作流（按项目分组目录树） -->
             <div class="column saved-column">
               <div class="column-header">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                  <polyline points="17 21 17 13 7 13 7 21"/>
-                  <polyline points="7 3 7 8 15 8"/>
-                </svg>
+                <Folder :size="14" aria-hidden="true" />
                 <span>{{ t('canvas.savedWorkflows') }}</span>
                 <span class="column-count">{{ workflowsTotal }}</span>
               </div>
@@ -1870,10 +1850,10 @@ defineExpose({
   max-width: calc(100vw - 120px);
   max-height: calc(100vh - 120px);
   height: 100%;
-  background: rgba(20, 20, 20, 0.95);
+  background: var(--canvas-bg-secondary);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
@@ -1885,8 +1865,8 @@ defineExpose({
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--canvas-border-subtle);
 }
 
 .header-title {
@@ -1895,7 +1875,7 @@ defineExpose({
   gap: 10px;
   font-size: 15px;
   font-weight: 600;
-  color: #fff;
+  color: var(--canvas-text-primary);
 }
 
 .header-title svg {
@@ -1911,14 +1891,14 @@ defineExpose({
   background: transparent;
   border: none;
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--canvas-text-tertiary);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 /* 标签页 */
@@ -2940,18 +2920,18 @@ defineExpose({
 
 /* 面板背景 */
 :root.canvas-theme-light .workflow-panel {
-  background: rgba(255, 255, 255, 0.98) !important;
-  border-color: rgba(0, 0, 0, 0.08) !important;
+  background: var(--canvas-bg-secondary) !important;
+  border-color: var(--canvas-border-subtle) !important;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1) !important;
 }
 
 /* 头部 */
 :root.canvas-theme-light .workflow-panel .panel-header {
-  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+  border-bottom-color: var(--canvas-border-subtle) !important;
 }
 
 :root.canvas-theme-light .workflow-panel .header-title {
-  color: #1c1917 !important;
+  color: var(--canvas-text-primary) !important;
 }
 
 :root.canvas-theme-light .workflow-panel .header-title svg {
@@ -2959,12 +2939,12 @@ defineExpose({
 }
 
 :root.canvas-theme-light .workflow-panel .close-btn {
-  color: rgba(0, 0, 0, 0.4) !important;
+  color: var(--canvas-text-tertiary) !important;
 }
 
 :root.canvas-theme-light .workflow-panel .close-btn:hover {
-  background: rgba(0, 0, 0, 0.06) !important;
-  color: #1c1917 !important;
+  background: var(--canvas-bg-tertiary) !important;
+  color: var(--canvas-text-primary) !important;
 }
 
 /* 标签页 */

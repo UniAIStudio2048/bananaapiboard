@@ -15,6 +15,7 @@
  * - 视频缩略图节流: 限制同时提取数量
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
+import { History, Maximize2, Minimize2, SquareCheck, X } from '@lucide/vue'
 import { getHistory, getHistoryDetail, deleteHistory } from '@/api/canvas/history'
 import { saveAsset } from '@/api/canvas/assets'
 import { extractVideoFrame } from '@/api/canvas/workflow'
@@ -1817,49 +1818,36 @@ onUnmounted(() => {
       class="history-panel-wrapper"
       :class="{ fullscreen: isFullscreen }"
     >
-      <div class="history-panel" :class="{ fullscreen: isFullscreen }">
+      <div class="history-panel canvas-panel" :class="{ fullscreen: isFullscreen }">
         <!-- 头部 -->
         <div class="panel-header">
           <div class="header-title">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-              <circle cx="12" cy="12" r="10"/>
-              <polyline points="12 6 12 12 16 14"/>
-            </svg>
+            <History :size="20" aria-hidden="true" />
             <span>{{ t('canvas.historyPanel.title') }}</span>
           </div>
           <div class="header-actions">
             <!-- 批量选择按钮 -->
-            <button 
-              class="header-btn" 
+            <button
+              class="header-btn"
               :class="{ active: isSelectMode }"
               @click="toggleSelectMode"
               :title="isSelectMode ? '退出选择' : '批量选择'"
             >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="9 11 12 14 22 4"/>
-                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-              </svg>
+              <SquareCheck :size="18" aria-hidden="true" />
             </button>
             <!-- 全屏展开按钮 -->
-            <button 
-              class="header-btn" 
+            <button
+              class="header-btn"
               :class="{ active: isFullscreen }"
               @click="toggleFullscreen"
               :title="isFullscreen ? '退出全屏' : '全屏显示'"
             >
-              <svg v-if="!isFullscreen" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-              </svg>
-              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
-              </svg>
+              <Maximize2 v-if="!isFullscreen" :size="18" aria-hidden="true" />
+              <Minimize2 v-else :size="18" aria-hidden="true" />
             </button>
             <!-- 关闭按钮 -->
             <button class="close-btn" @click="$emit('close')">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
+              <X :size="18" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -2432,13 +2420,13 @@ onUnmounted(() => {
   width: 480px;
   height: 100%;
   max-height: calc(100vh - 80px);
-  background: linear-gradient(180deg, rgba(28, 28, 32, 0.98) 0%, rgba(20, 20, 24, 0.98) 100%);
+  background: var(--canvas-bg-secondary);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
-  box-shadow: 
+  box-shadow:
     0 24px 80px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   pointer-events: auto;
@@ -2459,8 +2447,8 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--canvas-border-subtle);
 }
 
 .header-title {
@@ -2468,9 +2456,9 @@ onUnmounted(() => {
   align-items: center;
   gap: 12px;
   min-width: 0;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  color: #fff;
+  color: var(--canvas-text-primary);
 }
 
 .header-title span {
@@ -2480,7 +2468,7 @@ onUnmounted(() => {
 
 .header-title svg {
   opacity: 0.6;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--canvas-text-secondary);
 }
 
 /* 头部按钮组 */
@@ -2501,14 +2489,14 @@ onUnmounted(() => {
   background: transparent;
   border: none;
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--canvas-text-tertiary);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .header-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 .header-btn.active {
@@ -2610,14 +2598,14 @@ onUnmounted(() => {
   background: transparent;
   border: none;
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--canvas-text-tertiary);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 /* 文件类型筛选 */
@@ -3876,33 +3864,33 @@ onUnmounted(() => {
 
 /* 面板背景 */
 :root.canvas-theme-light .history-panel {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 250, 252, 0.98) 100%) !important;
-  border-color: rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 
+  background: var(--canvas-bg-secondary) !important;
+  border-color: var(--canvas-border-subtle) !important;
+  box-shadow:
     0 24px 80px rgba(0, 0, 0, 0.12),
     0 0 0 1px rgba(0, 0, 0, 0.03) inset !important;
 }
 
 /* 头部 */
 :root.canvas-theme-light .history-panel .panel-header {
-  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+  border-bottom-color: var(--canvas-border-subtle) !important;
 }
 
 :root.canvas-theme-light .history-panel .header-title {
-  color: #1c1917 !important;
+  color: var(--canvas-text-primary) !important;
 }
 
 :root.canvas-theme-light .history-panel .header-title svg {
-  color: rgba(0, 0, 0, 0.6) !important;
+  color: var(--canvas-text-secondary) !important;
 }
 
 :root.canvas-theme-light .history-panel .header-btn {
-  color: rgba(0, 0, 0, 0.4) !important;
+  color: var(--canvas-text-tertiary) !important;
 }
 
 :root.canvas-theme-light .history-panel .header-btn:hover {
-  background: rgba(0, 0, 0, 0.06) !important;
-  color: #1c1917 !important;
+  background: var(--canvas-bg-tertiary) !important;
+  color: var(--canvas-text-primary) !important;
 }
 
 :root.canvas-theme-light .history-panel .header-btn.active {
@@ -3911,12 +3899,12 @@ onUnmounted(() => {
 }
 
 :root.canvas-theme-light .history-panel .close-btn {
-  color: rgba(0, 0, 0, 0.4) !important;
+  color: var(--canvas-text-tertiary) !important;
 }
 
 :root.canvas-theme-light .history-panel .close-btn:hover {
-  background: rgba(0, 0, 0, 0.06) !important;
-  color: #1c1917 !important;
+  background: var(--canvas-bg-tertiary) !important;
+  color: var(--canvas-text-primary) !important;
 }
 
 /* 批量操作栏 */

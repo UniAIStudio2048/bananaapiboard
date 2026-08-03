@@ -915,6 +915,41 @@ body:has(.canvas-page) *::-webkit-scrollbar-corner,
   border-color: var(--canvas-accent-error);
 }
 
+/* ========================================
+   节点外壳统一三态 / 选中态（NodeShell.vue）
+   收敛到 .canvas-node-shell 一处，统一走 canvas token
+   ======================================== */
+.vue-flow__node .canvas-node-shell[data-shell-status='running'],
+.vue-flow__node .canvas-node-shell[data-shell-status='processing'] {
+  border-color: var(--canvas-accent-warning);
+  animation: canvasShellGlowWarning 1.6s ease-in-out infinite;
+}
+
+.vue-flow__node .canvas-node-shell[data-shell-status='completed'],
+.vue-flow__node .canvas-node-shell[data-shell-status='success'] {
+  border-color: var(--canvas-accent-success);
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.18);
+}
+
+.vue-flow__node .canvas-node-shell[data-shell-status='failed'],
+.vue-flow__node .canvas-node-shell[data-shell-status='error'] {
+  border-color: var(--canvas-accent-error);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.18);
+}
+
+/* 选中态：保留蓝色，1.5px 边框 + 外层 4px 半透明光晕 */
+.vue-flow__node .canvas-node-shell.shell-selected {
+  border-width: 1.5px;
+  border-color: var(--canvas-accent-primary);
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15);
+  opacity: 0.85;
+}
+
+@keyframes canvasShellGlowWarning {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.18); }
+  50% { box-shadow: 0 0 12px 2px rgba(245, 158, 11, 0.26); }
+}
+
 /* 节点内按钮 */
 .canvas-node-btn {
   background: var(--canvas-accent-primary);
@@ -1102,7 +1137,7 @@ body:has(.canvas-page) *::-webkit-scrollbar-corner,
 .vue-flow__handle:hover {
   border-color: var(--canvas-accent-primary);
   background: var(--canvas-accent-primary);
-  transform: scale(1.2);
+  transform: scale(1.25);
 }
 
 .vue-flow__handle.connecting {
@@ -1989,6 +2024,148 @@ body:has(.canvas-page) *::-webkit-scrollbar-corner,
 :root.canvas-theme-light .vue-flow__handle {
   background: #ffffff;
   border-color: rgba(0, 0, 0, 0.2);
+}
+
+/* ========================================
+   统一画布侧栏面板（阶段C1 视觉统一）
+   surface-1 背景 / hairline 边框 / radius-lg 12px
+   亮暗主题通过 --canvas-* token 自动切换
+   ======================================== */
+.canvas-panel {
+  background: var(--canvas-bg-secondary);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: 12px;
+  color: var(--canvas-text-primary);
+}
+
+.canvas-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--canvas-border-subtle);
+  flex-shrink: 0;
+}
+
+.canvas-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--canvas-text-primary);
+}
+
+.canvas-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.canvas-panel-close {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--canvas-text-tertiary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.canvas-panel-close:hover {
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
+}
+
+/* 画布工具按钮 — 32px 方形 / rounded-md / hover 时 surface-2 抬升 */
+.canvas-tool-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--canvas-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.canvas-tool-btn:hover {
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
+}
+
+.canvas-tool-btn.active {
+  color: var(--canvas-accent-primary);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* 画布内按钮分级（阶段C1）：btn-primary 香蕉黄 / btn-secondary 抬升 / btn-ghost 纯文本
+   仅作用于统一面板（.canvas-panel）内，避免影响主站与其它画布组件的 .btn-* 用法 */
+.canvas-panel .btn,
+.canvas-panel .btn-primary,
+.canvas-panel .btn-secondary,
+.canvas-panel .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.canvas-panel .btn-primary {
+  background: var(--canvas-accent-banana, #fbbf24);
+  border-color: transparent;
+  color: #1a1a1a;
+}
+
+.canvas-panel .btn-primary:hover:not(:disabled) {
+  background: var(--canvas-accent-warning, #f59e0b);
+  color: #1a1a1a;
+}
+
+.canvas-panel .btn-secondary {
+  background: var(--canvas-bg-tertiary);
+  border-color: var(--canvas-border-subtle);
+  color: var(--canvas-text-secondary);
+}
+
+.canvas-panel .btn-secondary:hover:not(:disabled) {
+  background: var(--canvas-bg-elevated);
+  color: var(--canvas-text-primary);
+}
+
+.canvas-panel .btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--canvas-text-secondary);
+}
+
+.canvas-panel .btn-ghost:hover:not(:disabled) {
+  color: var(--canvas-text-primary);
+}
+
+.canvas-panel .btn-primary:disabled,
+.canvas-panel .btn-secondary:disabled,
+.canvas-panel .btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 :root.canvas-theme-light .vue-flow__handle:hover {

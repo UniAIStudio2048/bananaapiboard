@@ -63,6 +63,10 @@ const iconList = [
   { name: 'infinity', label: '无穷', paths: ['M12 12c-2-2.67-4-4-6-4a4 4 0 1 0 0 8c2 0 4-1.33 6-4Zm0 0c2 2.67 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.33-6 4Z'] },
   { name: 'music', label: '音乐', paths: ['M9 18V5l12-2v13'], circles: [[6, 18, 3], [18, 16, 3]] },
   { name: 'smile', label: '笑脸', circles: [[12, 12, 10]], paths: ['M8 14s1.5 2 4 2 4-2 4-2'], lines: [[9, 9, 9.01, 9], [15, 9, 15.01, 9]] },
+
+  // 社交（community_features 表实际使用的图标，与租户管理端规范图标集对齐）
+  { name: 'globe', label: '地球', paths: ['M22 12a10 10 0 0 1-10 10', 'M12 2a14.5 14.5 0 0 0 0 20', 'M12 2a14.5 14.5 0 0 1 0 20'], circles: [[12, 12, 10]], lines: [[2, 12, 22, 12]] },
+  { name: 'users', label: '用户组', paths: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'], circles: [[9, 7, 4]] },
 ]
 
 const iconMap = {}

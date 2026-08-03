@@ -515,7 +515,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 4px 10px;
   background: rgba(20, 20, 20, 0.9);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -535,7 +535,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 5px 9px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid transparent;
   border-radius: 8px;
@@ -775,8 +775,8 @@ onUnmounted(() => {
 
 /* 新建按钮 */
 .new-tab-btn {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;

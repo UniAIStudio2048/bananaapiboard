@@ -60,7 +60,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.TEXT_INPUT]: {
     label: 'canvas.nodeConfig.textInput.label',
     description: 'canvas.nodeConfig.textInput.desc',
-    icon: 'Aa',
+    icon: 'text',
     category: 'input',
     color: '#3b82f6',
     hasInput: false,
@@ -71,7 +71,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.IMAGE_INPUT]: {
     label: 'canvas.nodeConfig.imageInput.label',
     description: 'canvas.nodeConfig.imageInput.desc',
-    icon: '◫',
+    icon: 'image',
     category: 'input',
     color: '#22c55e',
     hasInput: false,
@@ -82,7 +82,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.VIDEO_INPUT]: {
     label: 'canvas.nodeConfig.videoInput.label',
     description: 'canvas.nodeConfig.videoInput.desc',
-    icon: '▷',
+    icon: 'video',
     category: 'input',
     color: '#f59e0b',
     hasInput: false,
@@ -93,7 +93,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.AUDIO_INPUT]: {
     label: 'canvas.nodeConfig.audioInput.label',
     description: 'canvas.nodeConfig.audioInput.desc',
-    icon: '♪',
+    icon: 'audio',
     category: 'input',
     color: '#a855f7',
     hasInput: false,
@@ -104,7 +104,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.DIGITAL_HUMAN]: {
     label: '数字人',
     description: 'HeyGen 专属数字人资产',
-    icon: '🧑',
+    icon: 'digital-human',
     category: 'input',
     color: '#38bdf8',
     hasInput: false,
@@ -115,7 +115,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.DIRECTOR_STUDIO]: {
     label: 'canvas.nodeConfig.directorStudio.label',
     description: 'canvas.nodeConfig.directorStudio.desc',
-    icon: '3D',
+    icon: 'director',
     category: 'input',
     color: '#38bdf8',
     hasInput: true,
@@ -128,7 +128,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.TEXT_TO_IMAGE]: {
     label: 'canvas.nodeConfig.textToImage.label',
     description: 'canvas.nodeConfig.textToImage.desc',
-    icon: '⬡',
+    icon: 'text-image',
     category: 'generate',
     color: '#8b5cf6',
     hasInput: true,
@@ -141,7 +141,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.IMAGE_TO_IMAGE]: {
     label: 'canvas.nodeConfig.imageToImage.label',
     description: 'canvas.nodeConfig.imageToImage.desc',
-    icon: '⟲',
+    icon: 'image-edit',
     category: 'generate',
     color: '#ec4899',
     hasInput: true,
@@ -154,7 +154,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.TEXT_TO_VIDEO]: {
     label: 'canvas.nodeConfig.textToVideo.label',
     description: 'canvas.nodeConfig.textToVideo.desc',
-    icon: '▶',
+    icon: 'text-video',
     category: 'generate',
     color: '#f97316',
     hasInput: true,
@@ -167,7 +167,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.IMAGE_TO_VIDEO]: {
     label: 'canvas.nodeConfig.imageToVideo.label',
     description: 'canvas.nodeConfig.imageToVideo.desc',
-    icon: '◈',
+    icon: 'image-video',
     category: 'generate',
     color: '#ef4444',
     hasInput: true,
@@ -180,7 +180,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.LLM_PROMPT_ENHANCE]: {
     label: 'canvas.nodeConfig.promptEnhance.label',
     description: 'canvas.nodeConfig.promptEnhance.desc',
-    icon: 'A+',
+    icon: 'llm',
     category: 'llm',
     color: '#06b6d4',
     hasInput: true,
@@ -194,7 +194,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.LLM_IMAGE_DESCRIBE]: {
     label: 'canvas.nodeConfig.imageDescribe.label',
     description: 'canvas.nodeConfig.imageDescribe.desc',
-    icon: '◎',
+    icon: 'image-describe',
     category: 'llm',
     color: '#14b8a6',
     hasInput: true,
@@ -208,7 +208,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.LLM_CONTENT_EXPAND]: {
     label: 'canvas.nodeConfig.contentExpand.label',
     description: 'canvas.nodeConfig.contentExpand.desc',
-    icon: '≡',
+    icon: 'expand',
     category: 'llm',
     color: '#0ea5e9',
     hasInput: true,
@@ -222,7 +222,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.LLM_STORYBOARD]: {
     label: 'canvas.nodeConfig.storyboard.label',
     description: 'canvas.nodeConfig.storyboard.desc',
-    icon: '⊞',
+    icon: 'storyboard',
     category: 'llm',
     color: '#6366f1',
     hasInput: true,
@@ -236,7 +236,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.PREVIEW_OUTPUT]: {
     label: 'canvas.nodeConfig.previewOutput.label',
     description: 'canvas.nodeConfig.previewOutput.desc',
-    icon: '◉',
+    icon: 'preview',
     category: 'output',
     color: '#64748b',
     hasInput: true,
@@ -248,7 +248,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.STORYBOARD_GRID]: {
     label: 'canvas.nodeConfig.storyboardGrid.label',
     description: 'canvas.nodeConfig.storyboardGrid.desc',
-    icon: '⊞',
+    icon: 'storyboard-grid',
     category: 'input',
     color: '#6366f1',
     hasInput: true,
@@ -260,7 +260,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.IMAGE_REPAINT]: {
     label: 'canvas.nodeConfig.imageRepaint.label',
     description: 'canvas.nodeConfig.imageRepaint.desc',
-    icon: '✎',
+    icon: 'repaint',
     category: 'edit',
     color: '#f472b6',
     hasInput: true,
@@ -273,7 +273,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.IMAGE_ERASE]: {
     label: 'canvas.nodeConfig.imageErase.label',
     description: 'canvas.nodeConfig.imageErase.desc',
-    icon: '⌫',
+    icon: 'eraser',
     category: 'edit',
     color: '#fb923c',
     hasInput: true,
@@ -286,7 +286,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.IMAGE_UPSCALE]: {
     label: 'canvas.nodeConfig.imageUpscale.label',
     description: 'canvas.nodeConfig.imageUpscale.desc',
-    icon: '⇧',
+    icon: 'upscale',
     category: 'edit',
     color: '#a78bfa',
     hasInput: true,
@@ -299,7 +299,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.IMAGE_CUTOUT]: {
     label: 'canvas.nodeConfig.imageCutout.label',
     description: 'canvas.nodeConfig.imageCutout.desc',
-    icon: '✂',
+    icon: 'cutout',
     category: 'edit',
     color: '#4ade80',
     hasInput: true,
@@ -312,7 +312,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.IMAGE_EXPAND]: {
     label: 'canvas.nodeConfig.imageExpand.label',
     description: 'canvas.nodeConfig.imageExpand.desc',
-    icon: '⇔',
+    icon: 'image-expand',
     category: 'edit',
     color: '#38bdf8',
     hasInput: true,
@@ -325,7 +325,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.GRID_PREVIEW]: {
     label: 'canvas.nodeConfig.gridPreview.label',
     description: 'canvas.nodeConfig.gridPreview.desc',
-    icon: '⊞',
+    icon: 'grid-preview',
     category: 'generate',  // 改为 generate 类别，因为它会生成图片
     color: '#94a3b8',
     hasInput: true,
@@ -338,7 +338,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.VIDEO_LAST_FRAME]: {
     label: 'canvas.nodeConfig.videoLastFrame.label',
     description: 'canvas.nodeConfig.videoLastFrame.desc',
-    icon: '▮',
+    icon: 'last-frame',
     category: 'video',
     color: '#f97316',
     hasInput: true,
@@ -350,7 +350,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.LLM_VIDEO_DESCRIBE]: {
     label: 'canvas.nodeConfig.videoDescribe.label',
     description: 'canvas.nodeConfig.videoDescribe.desc',
-    icon: '▷◎',
+    icon: 'video-describe',
     category: 'llm',
     color: '#14b8a6',
     hasInput: true,
@@ -364,7 +364,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.VIDEO_EDIT]: {
     label: 'canvas.nodeConfig.videoEdit.label',
     description: 'canvas.nodeConfig.videoEdit.desc',
-    icon: '▶✎',
+    icon: 'video-edit',
     category: 'video',
     color: '#f97316',
     hasInput: true,
@@ -376,7 +376,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.VIDEO_EXTEND]: {
     label: 'canvas.nodeConfig.videoExtend.label',
     description: 'canvas.nodeConfig.videoExtend.desc',
-    icon: '▶▶',
+    icon: 'video-extend',
     category: 'video',
     color: '#f97316',
     hasInput: true,
@@ -390,7 +390,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.AUDIO_TO_VIDEO]: {
     label: 'canvas.nodeConfig.audioToVideo.label',
     description: 'canvas.nodeConfig.audioToVideo.desc',
-    icon: '♪▶',
+    icon: 'audio-video',
     category: 'generate',
     color: '#f97316',
     hasInput: true,
@@ -403,7 +403,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.AUDIO_TO_TEXT]: {
     label: 'canvas.nodeConfig.audioToText.label',
     description: 'canvas.nodeConfig.audioToText.desc',
-    icon: '♪Aa',
+    icon: 'audio-text',
     category: 'llm',
     color: '#06b6d4',
     hasInput: true,
@@ -415,7 +415,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.AUDIO_LIP_SYNC]: {
     label: 'canvas.nodeConfig.audioLipSync.label',
     description: 'canvas.nodeConfig.audioLipSync.desc',
-    icon: '◐▶',
+    icon: 'lip-sync',
     category: 'generate',
     color: '#ec4899',
     hasInput: true,
@@ -428,7 +428,7 @@ export const NODE_TYPE_CONFIG = {
   [NODE_TYPES.SEEDANCE_CHARACTER]: {
     label: 'canvas.nodeConfig.seedanceCharacter.label',
     description: 'canvas.nodeConfig.seedanceCharacter.desc',
-    icon: '👥',
+    icon: 'seedance-character',
     category: 'input',
     color: '#e11d48',
     hasInput: false,

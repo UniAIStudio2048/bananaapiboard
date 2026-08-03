@@ -6,7 +6,7 @@
       ;(function() {
         var theme = 'light'
         try { theme = localStorage.getItem('theme') || 'light' } catch(e) {}
-        var darkThemes = ['dark', 'oceanBlue']
+        var darkThemes = ['dark']
         var cl = document.documentElement.classList
         cl.add('theme-' + theme)
         if (darkThemes.indexOf(theme) !== -1) cl.add('dark')
