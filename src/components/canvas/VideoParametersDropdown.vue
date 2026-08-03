@@ -396,31 +396,60 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
 .opens-upward.video-parameters-fade-leave-to {
   transform: translateY(6px);
 }
+</style>
 
-:global(:root.canvas-theme-light) .video-parameters-trigger {
+<!-- 白昼模式（画布浅色）适配：html 挂 canvas-theme-light 类时切换到浅色配色 -->
+<style>
+html.canvas-theme-light .video-parameters-trigger {
   color: rgba(0, 0, 0, 0.76);
   background: rgba(0, 0, 0, 0.05);
   border-color: rgba(0, 0, 0, 0.12);
 }
 
-:global(:root.canvas-theme-light) .video-parameters-panel {
+html.canvas-theme-light .video-parameters-trigger:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.18);
+}
+
+html.canvas-theme-light .video-parameters-trigger-arrow {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+html.canvas-theme-light .video-parameters-panel {
   background: #ffffff;
   border-color: rgba(0, 0, 0, 0.12);
 }
 
-:global(:root.canvas-theme-light) .video-parameters-section h3,
-:global(:root.canvas-theme-light) .video-aspect-ratio-option,
-:global(:root.canvas-theme-light) .video-resolution-option,
-:global(:root.canvas-theme-light) .video-duration-option {
+html.canvas-theme-light .video-parameters-section h3,
+html.canvas-theme-light .video-aspect-ratio-option,
+html.canvas-theme-light .video-resolution-option,
+html.canvas-theme-light .video-duration-option {
   color: rgba(0, 0, 0, 0.56);
   border-color: rgba(0, 0, 0, 0.2);
 }
 
-:global(:root.canvas-theme-light) .video-aspect-ratio-option.active,
-:global(:root.canvas-theme-light) .video-resolution-option.active,
-:global(:root.canvas-theme-light) .video-duration-option.active {
+html.canvas-theme-light .video-aspect-ratio-option:hover,
+html.canvas-theme-light .video-resolution-option:hover,
+html.canvas-theme-light .video-duration-option:hover {
+  color: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.35);
+}
+
+html.canvas-theme-light .video-aspect-ratio-option.active,
+html.canvas-theme-light .video-resolution-option.active,
+html.canvas-theme-light .video-duration-option.active {
   color: rgba(0, 0, 0, 0.92);
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.78);
+}
+
+html.canvas-theme-light .video-duration-slider-row input {
+  accent-color: #1d4ed8;
+}
+
+html.canvas-theme-light .video-duration-slider-row output {
+  color: rgba(0, 0, 0, 0.8);
+  background: rgba(0, 0, 0, 0.06);
 }
 </style>

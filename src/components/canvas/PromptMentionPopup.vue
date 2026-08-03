@@ -255,3 +255,26 @@ watch(() => props.activeIndex, async () => {
 .prompt-mention-popup .mention-item-label { color: #e5e5e5; }
 .prompt-mention-popup .mention-item-type { color: rgba(255, 255, 255, 0.4); }
 </style>
+
+<!-- 白昼模式（画布浅色）适配：html 挂 canvas-theme-light 类时切换到浅色面板 -->
+<style>
+html.canvas-theme-light .prompt-mention-popup {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+html.canvas-theme-light .prompt-mention-popup .mention-popup-header {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+}
+html.canvas-theme-light .prompt-mention-popup .mention-popup-icon { color: #525252; }
+html.canvas-theme-light .prompt-mention-popup .mention-popup-title { color: rgba(0, 0, 0, 0.55); }
+html.canvas-theme-light .prompt-mention-popup .mention-popup-list::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.2); }
+html.canvas-theme-light .prompt-mention-popup .mention-popup-item:hover,
+html.canvas-theme-light .prompt-mention-popup .mention-popup-item.active { background: rgba(0, 0, 0, 0.06); }
+html.canvas-theme-light .prompt-mention-popup .mention-item-video-thumb { background: #f0f0f0; }
+html.canvas-theme-light .prompt-mention-popup .mention-item-audio-thumb { background: #f0f0f0; }
+html.canvas-theme-light .prompt-mention-popup .mention-item-file-thumb { background: #f0f0f0; }
+html.canvas-theme-light .prompt-mention-popup .mention-item-placeholder-thumb { background: rgba(0, 0, 0, 0.08); }
+html.canvas-theme-light .prompt-mention-popup .mention-item-label { color: #1f2937; }
+html.canvas-theme-light .prompt-mention-popup .mention-item-type { color: rgba(0, 0, 0, 0.45); }
+</style>
