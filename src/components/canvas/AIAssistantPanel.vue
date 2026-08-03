@@ -8,7 +8,7 @@
       >
         <div class="resize-indicator"></div>
       </div>
-      <div class="ai-assistant-panel">
+      <div class="ai-assistant-panel canvas-panel">
         <!-- 头部 -->
         <div class="panel-header">
           <div class="header-left">
@@ -44,20 +44,16 @@
           </div>
           <div class="header-actions">
             <button class="header-btn" @click="startNewChat" title="新对话">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
+              <MessageSquarePlus :size="16" aria-hidden="true" />
             </button>
             <button class="header-btn" @click="showHistory = !showHistory" title="历史记录">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="12" cy="12" r="10"/>
-                <polyline points="12 6 12 12 16 14"/>
-              </svg>
+              <History :size="16" aria-hidden="true" />
+            </button>
+            <button class="header-btn" @click="window.open('/inspiration', '_blank')" title="打开灵感中心">
+              <Sparkle :size="16" aria-hidden="true" />
             </button>
             <button class="header-btn close-btn" @click="$emit('close')" title="关闭">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 6L6 18M6 6l12 12"/>
-              </svg>
+              <X :size="16" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -67,9 +63,7 @@
           <div class="history-header">
             <span>历史对话</span>
             <button class="history-close" @click="showHistory = false">
-              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 6L6 18M6 6l12 12"/>
-              </svg>
+              <X :size="16" aria-hidden="true" />
             </button>
           </div>
           <div class="history-list">
@@ -705,6 +699,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted, inject } from 'vue'
+import { History, MessageSquarePlus, Sparkle, X } from '@lucide/vue'
 import AIAssistantMessage from './AIAssistantMessage.vue'
 import PromptMentionPopup from './PromptMentionPopup.vue'
 import PromptMediaTag from './PromptMediaTag.vue'
@@ -2299,15 +2294,12 @@ defineExpose({
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: linear-gradient(135deg, 
-    rgba(22, 24, 30, 0.92) 0%,
-    rgba(18, 20, 26, 0.95) 100%
-  );
-  border-left: none;
+  background: var(--canvas-bg-secondary);
+  border-left: 1px solid var(--canvas-border-subtle);
   pointer-events: auto;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border-radius: 16px 0 0 16px;
+  border-radius: 12px 0 0 12px;
   overflow: visible; /* 允许下拉菜单溢出显示 */
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.2);
 }
@@ -2318,14 +2310,14 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   padding: 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(135deg, 
+  border-bottom: 1px solid var(--canvas-border-subtle);
+  background: linear-gradient(135deg,
     rgba(28, 30, 38, 0.85) 0%,
     rgba(24, 26, 34, 0.9) 100%
   );
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-radius: 16px 0 0 0; /* 保持左上角圆角 */
+  border-radius: 12px 0 0 0; /* 保持左上角圆角 */
 }
 
 .header-left {
@@ -2368,24 +2360,24 @@ defineExpose({
 }
 
 .header-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--canvas-text-secondary);
   transition: all 0.2s;
 }
 
 .header-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.95);
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 .close-btn:hover {
-  background: rgba(239, 68, 68, 0.8);
-  color: white;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 /* 历史记录抽屉 - 毛玻璃设计 */
@@ -3655,28 +3647,25 @@ defineExpose({
    AIAssistantPanel 白昼模式样式适配
    ======================================== */
 :root.canvas-theme-light .ai-assistant-panel {
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.85) 0%,
-    rgba(248, 250, 252, 0.9) 100%
-  ) !important;
+  background: var(--canvas-bg-secondary) !important;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
-  border-left: 1px solid rgba(0, 0, 0, 0.06);
+  border-left: 1px solid var(--canvas-border-subtle);
   box-shadow: -8px 0 32px rgba(0, 0, 0, 0.06);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .panel-header {
-  background: linear-gradient(135deg, 
+  background: linear-gradient(135deg,
     rgba(255, 255, 255, 0.8) 0%,
     rgba(250, 250, 252, 0.85) 100%
   );
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border-bottom-color: rgba(0, 0, 0, 0.06);
+  border-bottom-color: var(--canvas-border-subtle);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .header-icon {
-  background: linear-gradient(135deg, 
+  background: linear-gradient(135deg,
     rgba(139, 92, 246, 0.15) 0%,
     rgba(99, 102, 241, 0.1) 100%
   );
@@ -3684,21 +3673,21 @@ defineExpose({
 }
 
 :root.canvas-theme-light .ai-assistant-panel .header-title {
-  color: #1c1917;
+  color: var(--canvas-text-primary);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .header-btn {
-  color: rgba(0, 0, 0, 0.5);
+  color: var(--canvas-text-secondary);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .header-btn:hover {
-  background: rgba(0, 0, 0, 0.05);
-  color: rgba(0, 0, 0, 0.8);
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .close-btn:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .welcome-title {

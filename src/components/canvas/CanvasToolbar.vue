@@ -8,7 +8,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import UserProfilePanel from './UserProfilePanel.vue'
 import { useI18n } from '@/i18n'
 import { getTotalUserPoints } from '@/utils/points'
-import { FolderOpen } from '@lucide/vue'
+import { FolderOpen, History, Save } from '@lucide/vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -282,8 +282,8 @@ async function handleUserUpdate() {
     </button>
     
     <!-- 我的工作流 -->
-    <button 
-      class="canvas-toolbar-btn icon-btn" 
+    <button
+      class="canvas-toolbar-btn icon-btn"
       :title="t('canvas.myWorkflows')"
       @click="openWorkflows"
     >
@@ -296,30 +296,23 @@ async function handleUserUpdate() {
         <path d="M19 10 L19 12 L12 12"></path>
       </svg>
     </button>
-    
+
     <!-- 历史记录 -->
-    <button 
-      class="canvas-toolbar-btn icon-btn history-btn" 
+    <button
+      class="canvas-toolbar-btn icon-btn history-btn"
       :title="t('canvas.history')"
       @click="openHistory"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"></circle>
-        <polyline points="12 6 12 12 16 14"></polyline>
-      </svg>
+      <History :size="18" aria-hidden="true" />
     </button>
-    
+
     <!-- 保存工作流 -->
-    <button 
-      class="canvas-toolbar-btn icon-btn" 
+    <button
+      class="canvas-toolbar-btn icon-btn"
       :title="t('canvas.saveWorkflow')"
       @click="saveWorkflow"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
-        <polyline points="17 21 17 13 7 13 7 21"></polyline>
-        <polyline points="7 3 7 8 15 8"></polyline>
-      </svg>
+      <Save :size="18" aria-hidden="true" />
     </button>
     
     <div class="canvas-toolbar-divider"></div>
@@ -354,21 +347,21 @@ async function handleUserUpdate() {
   flex-direction: column;
   gap: 6px;
   z-index: 50;
-  background: rgba(20, 20, 20, 0.95);
+  background: var(--canvas-bg-secondary);
   backdrop-filter: blur(10px);
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 12px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--canvas-border-subtle);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .canvas-toolbar-btn {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.6);
+  color: var(--canvas-text-secondary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -379,8 +372,8 @@ async function handleUserUpdate() {
 }
 
 .canvas-toolbar-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.9);
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 /* 添加节点容器 */
@@ -389,12 +382,12 @@ async function handleUserUpdate() {
 }
 
 .add-btn {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   background: white;
   color: #0a0a0a;
-  border-radius: 12px;
-  font-size: 28px;
+  border-radius: 10px;
+  font-size: 26px;
   font-weight: 300;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
@@ -406,17 +399,14 @@ async function handleUserUpdate() {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
 }
 
-/* 图标按钮 */
+/* 图标按钮 — 尺寸继承基础 44×44，仅改 font-size */
 .icon-btn {
   font-size: 20px;
 }
 
-.icon-btn svg {
-  stroke: rgba(255, 255, 255, 0.6);
-}
-
-.icon-btn:hover svg {
-  stroke: rgba(255, 255, 255, 0.9);
+.icon-btn:hover {
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 
@@ -567,8 +557,8 @@ async function handleUserUpdate() {
    CanvasToolbar 白昼模式样式适配
    ======================================== */
 :root.canvas-theme-light .canvas-toolbar {
-  background: rgba(255, 255, 255, 0.95) !important;
-  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  background: var(--canvas-bg-secondary) !important;
+  border: 1px solid var(--canvas-border-subtle) !important;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08) !important;
 }
 
@@ -647,14 +637,5 @@ async function handleUserUpdate() {
 
 :root.canvas-theme-light .canvas-toolbar .node-desc {
   color: rgba(0, 0, 0, 0.5);
-}
-
-/* 图标按钮 SVG 颜色 - 白昼模式 */
-:root.canvas-theme-light .canvas-toolbar .icon-btn svg {
-  stroke: rgba(0, 0, 0, 0.5);
-}
-
-:root.canvas-theme-light .canvas-toolbar .icon-btn:hover svg {
-  stroke: rgba(0, 0, 0, 0.8);
 }
 </style>

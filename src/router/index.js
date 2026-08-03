@@ -134,6 +134,13 @@ const router = createRouter({
       component: () => import('@/views/CommunityDetail.vue'),
       meta: { title: '作品详情', requiresAuth: false }
     },
+    // 灵感中心
+    {
+      path: '/inspiration',
+      name: 'inspiration',
+      component: () => import('@/views/Inspiration.vue'),
+      meta: { title: '灵感中心', requiresAuth: false }
+    },
     // 404 重定向到首页
     {
       path: '/:pathMatch(.*)*',

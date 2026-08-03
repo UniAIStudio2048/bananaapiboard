@@ -6,6 +6,7 @@
 import { ref, computed, nextTick, onMounted } from 'vue'
 import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
+import IconSet from '@/components/common/IconSet.vue'
 import { useTeamStore } from '@/stores/team'
 import { getDownstreamOptions, NODE_TYPES } from '@/config/canvas/nodeTypes'
 import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled, isByteforCharacterLibraryEnabled, isDigitalHumanLibraryEnabled, getAvailableVideoModels } from '@/config/tenant'
@@ -1297,7 +1298,7 @@ function handleMenuClick(event) {
         class="canvas-context-menu-item"
         @click="createDownstreamNode(option.type)"
       >
-        <span class="icon">{{ option.icon }}</span>
+        <span class="icon"><IconSet :name="option.icon" :size="14" /></span>
         {{ $t(option.label) }}
       </div>
       <div class="canvas-context-menu-divider"></div>

@@ -4541,7 +4541,7 @@ onUnmounted(() => {
               选择您喜欢的界面主题
             </p>
             
-            <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div class="grid grid-cols-2 gap-4">
               <!-- 浅色主题 -->
               <button
                 @click="setThemeDirect('light')"
@@ -4568,51 +4568,6 @@ onUnmounted(() => {
                 <p class="font-medium text-slate-900 dark:text-slate-100">深色模式</p>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">适合夜晚使用</p>
                 <div v-if="currentTheme === 'dark'" class="mt-2 text-indigo-600 dark:text-indigo-400 text-xs font-semibold">
-                  ✓ 当前使用
-                </div>
-              </button>
-
-              <!-- 奶油绿主题 -->
-              <button
-                @click="setThemeDirect('creamGreen')"
-                :class="['p-6 border-2 rounded-xl transition-all duration-200 hover:scale-105', currentTheme === 'creamGreen' ? 'border-green-500 bg-green-50 dark:bg-green-900/20 ring-2 ring-green-300' : 'border-slate-200 dark:border-dark-600 hover:border-green-300 dark:hover:border-green-700']"
-              >
-                <div class="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-green-50 to-emerald-100 rounded-lg shadow-md flex items-center justify-center border border-green-200">
-                  <span class="text-3xl">🍃</span>
-                </div>
-                <p class="font-medium text-slate-900 dark:text-slate-100">奶油绿</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">清新自然，舒缓双眼</p>
-                <div v-if="currentTheme === 'creamGreen'" class="mt-2 text-green-600 dark:text-green-400 text-xs font-semibold">
-                  ✓ 当前使用
-                </div>
-              </button>
-
-              <!-- 热情橙主题 -->
-              <button
-                @click="setThemeDirect('warmOrange')"
-                :class="['p-6 border-2 rounded-xl transition-all duration-200 hover:scale-105', currentTheme === 'warmOrange' ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 ring-2 ring-orange-300' : 'border-slate-200 dark:border-dark-600 hover:border-orange-300 dark:hover:border-orange-700']"
-              >
-                <div class="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-orange-50 to-red-100 rounded-lg shadow-md flex items-center justify-center border border-orange-200">
-                  <span class="text-3xl">🔥</span>
-                </div>
-                <p class="font-medium text-slate-900 dark:text-slate-100">热情橙</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">活力四射，激发创造力</p>
-                <div v-if="currentTheme === 'warmOrange'" class="mt-2 text-orange-600 dark:text-orange-400 text-xs font-semibold">
-                  ✓ 当前使用
-                </div>
-              </button>
-
-              <!-- 浩瀚蓝主题 -->
-              <button
-                @click="setThemeDirect('oceanBlue')"
-                :class="['p-6 border-2 rounded-xl transition-all duration-200 hover:scale-105', currentTheme === 'oceanBlue' ? 'border-sky-500 bg-sky-50 dark:bg-sky-900/20 ring-2 ring-sky-300' : 'border-slate-200 dark:border-dark-600 hover:border-sky-300 dark:hover:border-sky-700']"
-              >
-                <div class="w-16 h-16 mx-auto mb-3 bg-gradient-to-br from-sky-600 to-blue-800 rounded-lg shadow-md flex items-center justify-center">
-                  <span class="text-3xl">🌊</span>
-                </div>
-                <p class="font-medium text-slate-900 dark:text-slate-100">浩瀚蓝</p>
-                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1">深邃宁静，沉浸体验</p>
-                <div v-if="currentTheme === 'oceanBlue'" class="mt-2 text-sky-600 dark:text-sky-400 text-xs font-semibold">
                   ✓ 当前使用
                 </div>
               </button>

@@ -17,7 +17,7 @@ import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, is
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
-import { Images, LayoutDashboard } from '@lucide/vue'
+import { Images, LayoutDashboard, Maximize2, Minimize2, SlidersHorizontal, X } from '@lucide/vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import SeedanceCharacterPanel from './SeedanceCharacterPanel.vue'
 import DigitalHumanPanel from './DigitalHumanPanel.vue'
@@ -1656,7 +1656,7 @@ onUnmounted(() => {
       :class="{ fullscreen: isFullscreen }"
     >
       <div
-        class="asset-panel"
+        class="asset-panel canvas-panel"
         :class="{
           'canvas-directory-mode': activePanelView === 'canvas',
           fullscreen: isFullscreen
@@ -1665,12 +1665,7 @@ onUnmounted(() => {
         <!-- 头部 -->
         <div class="panel-header">
           <div class="header-title">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M20 7h-9"/>
-              <path d="M14 17H5"/>
-              <circle cx="17" cy="17" r="3"/>
-              <circle cx="7" cy="7" r="3"/>
-            </svg>
+            <SlidersHorizontal :size="20" aria-hidden="true" />
             <span>{{ t('canvas.assetPanel.title') }}</span>
           </div>
           <div class="header-actions">
@@ -1681,18 +1676,11 @@ onUnmounted(() => {
               @click="toggleFullscreen"
               :title="isFullscreen ? '退出全屏' : '全屏显示'"
             >
-              <svg v-if="!isFullscreen" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
-              </svg>
-              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M8 3v3a2 2 0 0 1-2 2H3m18 0h-3a2 2 0 0 1-2-2V3m0 18v-3a2 2 0 0 1 2-2h3M3 16h3a2 2 0 0 1 2 2v3"/>
-              </svg>
+              <Maximize2 v-if="!isFullscreen" :size="18" aria-hidden="true" />
+              <Minimize2 v-else :size="18" aria-hidden="true" />
             </button>
             <button class="close-btn" @click="$emit('close')">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="18" y1="6" x2="6" y2="18"/>
-                <line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
+              <X :size="18" aria-hidden="true" />
             </button>
           </div>
         </div>
@@ -2300,13 +2288,13 @@ onUnmounted(() => {
   width: 780px;
   max-height: calc(100vh - 80px);
   height: 100%;
-  background: linear-gradient(180deg, rgba(28, 28, 32, 0.98) 0%, rgba(20, 20, 24, 0.98) 100%);
+  background: var(--canvas-bg-secondary);
   backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
-  box-shadow: 
+  box-shadow:
     0 24px 80px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.05) inset;
   pointer-events: auto; /* 面板本身可以接收事件 */
@@ -2385,17 +2373,17 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--canvas-border-subtle);
 }
 
 .header-title {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
-  color: #fff;
+  color: var(--canvas-text-primary);
 }
 
 .header-title svg {
@@ -2418,15 +2406,15 @@ onUnmounted(() => {
   border: 0;
   border-radius: 8px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--canvas-text-tertiary);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .header-btn:hover,
 .header-btn.active {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 .close-btn {
@@ -2438,14 +2426,14 @@ onUnmounted(() => {
   background: transparent;
   border: none;
   border-radius: 8px;
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--canvas-text-tertiary);
   cursor: pointer;
   transition: all 0.15s;
 }
 
 .close-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: #fff;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 .close-btn.small {
@@ -4661,20 +4649,20 @@ onUnmounted(() => {
 }
 
 :root.canvas-theme-light .asset-panel {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(250, 250, 252, 0.98) 100%) !important;
-  border-color: rgba(0, 0, 0, 0.08) !important;
-  box-shadow: 
+  background: var(--canvas-bg-secondary) !important;
+  border-color: var(--canvas-border-subtle) !important;
+  box-shadow:
     0 24px 80px rgba(0, 0, 0, 0.12),
     0 0 0 1px rgba(0, 0, 0, 0.03) inset !important;
 }
 
 /* 头部 */
 :root.canvas-theme-light .asset-panel .panel-header {
-  border-bottom-color: rgba(0, 0, 0, 0.06) !important;
+  border-bottom-color: var(--canvas-border-subtle) !important;
 }
 
 :root.canvas-theme-light .asset-panel .header-title {
-  color: #1c1917 !important;
+  color: var(--canvas-text-primary) !important;
 }
 
 :root.canvas-theme-light .asset-panel .header-title svg {
@@ -4682,22 +4670,22 @@ onUnmounted(() => {
 }
 
 :root.canvas-theme-light .asset-panel .close-btn {
-  color: rgba(0, 0, 0, 0.4) !important;
+  color: var(--canvas-text-tertiary) !important;
 }
 
 :root.canvas-theme-light .asset-panel .close-btn:hover {
-  background: rgba(0, 0, 0, 0.06) !important;
-  color: #1c1917 !important;
+  background: var(--canvas-bg-tertiary) !important;
+  color: var(--canvas-text-primary) !important;
 }
 
 :root.canvas-theme-light .asset-panel .header-btn {
-  color: rgba(0, 0, 0, 0.42) !important;
+  color: var(--canvas-text-tertiary) !important;
 }
 
 :root.canvas-theme-light .asset-panel .header-btn:hover,
 :root.canvas-theme-light .asset-panel .header-btn.active {
-  background: rgba(0, 0, 0, 0.06) !important;
-  color: #1c1917 !important;
+  background: var(--canvas-bg-tertiary) !important;
+  color: var(--canvas-text-primary) !important;
 }
 
 :root.canvas-theme-light .asset-panel .asset-load-more {

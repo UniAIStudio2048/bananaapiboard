@@ -12,8 +12,13 @@
  *   - 不挂载 Handle / 配置面板 / 上传 / 工具栏
  *   - 只读取 props.data 中的极少字段：title / status
  *   - 模板极简，<60 行 DOM
+ *
+ * 品牌视觉统一（阶段D）：头部统一为「类型图标 + 类别点 + 标题 + 状态徽标」，
+ * 三态/选中态样式收敛在 canvas.css 的 .canvas-node-shell 规则（统一 token）。
  */
 import { computed } from 'vue'
+import { NODE_TYPE_CONFIG, NODE_CATEGORIES } from '@/config/canvas/nodeTypes'
+import IconSet from '@/components/common/IconSet.vue'
 
 const props = defineProps({
   id: { type: String, required: true },
@@ -30,21 +35,51 @@ const title = computed(() => {
 
 const status = computed(() => props.data?.status || 'idle')
 
-// 简化节点类型到一类标签（用 CSS 区分颜色），不做图标精细化
-const categoryLabel = computed(() => {
-  const t = String(props.type || '').toLowerCase()
-  if (t.includes('image')) return 'IMG'
-  if (t.includes('video')) return 'VID'
-  if (t.includes('audio')) return 'AUD'
-  if (t.includes('llm')) return 'LLM'
-  if (t.includes('text')) return 'TXT'
-  if (t.includes('preview')) return 'PRV'
-  if (t.includes('character')) return 'CHR'
-  if (t.includes('storyboard')) return 'SB'
-  return 'NODE'
+// 节点类型配置（icon/category/color 来自 nodeTypes.js，静态读取）
+const typeConfig = computed(() => NODE_TYPE_CONFIG[props.type] || null)
+
+// 别名节点类型 → 规范图标名（画布统一注册的 'image'/'video'/'llm' 等）
+const TYPE_ICON_ALIAS = {
+  image: 'image',
+  'image-gen': 'image',
+  video: 'video',
+  'video-gen': 'video',
+  audio: 'audio',
+  llm: 'llm',
+  'character-card': 'character',
+  'bytefor-character': 'seedance-character'
+}
+
+// NODE_CATEGORIES 未覆盖的类别兜底中文名
+const FALLBACK_CATEGORY_LABELS = { edit: '编辑', video: '视频', character: '角色', 'seedance-character': '角色' }
+
+const iconName = computed(() => {
+  if (typeConfig.value?.icon) return typeConfig.value.icon
+  return TYPE_ICON_ALIAS[props.type] || 'preview'
 })
 
-const categoryClass = computed(() => `shell-cat-${categoryLabel.value.toLowerCase()}`)
+// 类别：优先 NODE_CATEGORIES.label，其次兜底映射，最后用类别键
+const categoryKey = computed(() => {
+  const cfg = typeConfig.value
+  return cfg?.category || TYPE_ICON_ALIAS[props.type] || 'input'
+})
+
+const categoryLabel = computed(
+  () => NODE_CATEGORIES[categoryKey.value]?.label || FALLBACK_CATEGORY_LABELS[categoryKey.value] || categoryKey.value
+)
+
+const categoryColor = computed(() => typeConfig.value?.color || '#8b8b8b')
+
+// 状态徽标文案与语义色（对齐 canvas.css 的 --canvas-accent-* token）
+const statusBadge = computed(() => {
+  const s = status.value
+  if (s === 'running' || s === 'processing') return { text: '运行中', cls: 'shell-status-running' }
+  if (s === 'completed' || s === 'success') return { text: '完成', cls: 'shell-status-success' }
+  if (s === 'failed' || s === 'error') return { text: '失败', cls: 'shell-status-error' }
+  return null
+})
+
+const categoryClass = computed(() => `shell-cat-${categoryKey.value}`)
 </script>
 
 <template>
@@ -55,8 +90,15 @@ const categoryClass = computed(() => `shell-cat-${categoryLabel.value.toLowerCas
     :data-shell-node-id="id"
   >
     <div class="shell-header">
-      <span class="shell-badge">{{ categoryLabel }}</span>
+      <span class="shell-icon">
+        <IconSet :name="iconName" :size="16" :stroke-width="1.8" />
+      </span>
+      <span class="shell-category">
+        <span class="shell-category-dot" :style="{ background: categoryColor }"></span>
+        {{ categoryLabel }}
+      </span>
       <span class="shell-title">{{ title || '节点' }}</span>
+      <span v-if="statusBadge" class="shell-status" :class="statusBadge.cls">{{ statusBadge.text }}</span>
     </div>
     <div class="shell-body" />
   </div>
@@ -86,24 +128,70 @@ const categoryClass = computed(() => `shell-cat-${categoryLabel.value.toLowerCas
   border-bottom: 1px solid var(--canvas-border-subtle, rgba(255, 255, 255, 0.05));
 }
 
-.shell-badge {
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.55);
+/* 类型图标：16px 圆角方块底（surface-2）+ SVG 线性图标 */
+.shell-icon {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--canvas-bg-tertiary, #242424);
+  border: 1px solid var(--canvas-border-subtle, rgba(255, 255, 255, 0.06));
+  color: var(--canvas-text-secondary, rgba(255, 255, 255, 0.65));
+}
+
+/* 类别标识：彩色小圆点 + 类别名（caption 级） */
+.shell-category {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--canvas-text-tertiary, rgba(255, 255, 255, 0.45));
+  flex-shrink: 0;
+}
+
+.shell-category-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
   flex-shrink: 0;
 }
 
 .shell-title {
   font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.55);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1;
+  min-width: 0;
+}
+
+/* 状态徽标（右侧，语义色，对齐 canvas.css token） */
+.shell-status {
+  flex-shrink: 0;
+  font-size: 10px;
+  line-height: 1.4;
+  padding: 1px 6px;
+  border-radius: 9999px;
+}
+
+.shell-status-running {
+  color: var(--canvas-accent-warning, #f59e0b);
+  background: rgba(245, 158, 11, 0.15);
+}
+
+.shell-status-success {
+  color: var(--canvas-accent-success, #22c55e);
+  background: rgba(34, 197, 94, 0.15);
+}
+
+.shell-status-error {
+  color: var(--canvas-accent-error, #ef4444);
+  background: rgba(239, 68, 68, 0.15);
 }
 
 .shell-body {
@@ -112,32 +200,5 @@ const categoryClass = computed(() => `shell-cat-${categoryLabel.value.toLowerCas
   margin: 8px;
   background: rgba(255, 255, 255, 0.02);
   border-radius: 4px;
-}
-
-/* 状态色（与现有节点状态色对齐） */
-.canvas-node-shell[data-shell-status='running'] {
-  border-color: var(--canvas-color-accent, #3b82f6);
-}
-.canvas-node-shell[data-shell-status='completed'],
-.canvas-node-shell[data-shell-status='success'] {
-  border-color: var(--canvas-color-success, #10b981);
-}
-.canvas-node-shell[data-shell-status='failed'],
-.canvas-node-shell[data-shell-status='error'] {
-  border-color: var(--canvas-color-danger, #ef4444);
-}
-
-/* 不同类型用极淡的色相区分（便于扫视画布全景） */
-.shell-cat-img .shell-badge { color: rgba(96, 165, 250, 0.85); }
-.shell-cat-vid .shell-badge { color: rgba(244, 114, 182, 0.85); }
-.shell-cat-aud .shell-badge { color: rgba(251, 191, 36, 0.85); }
-.shell-cat-llm .shell-badge { color: rgba(167, 139, 250, 0.85); }
-.shell-cat-txt .shell-badge { color: rgba(148, 163, 184, 0.85); }
-.shell-cat-prv .shell-badge { color: rgba(52, 211, 153, 0.85); }
-
-/* 即使虚拟化下被选中（理论上不会出现，因为 HOC 会切回真组件），仍提供选中样式作兜底 */
-.canvas-node-shell.shell-selected {
-  opacity: 0.85;
-  border-color: var(--canvas-color-accent, #3b82f6);
 }
 </style>

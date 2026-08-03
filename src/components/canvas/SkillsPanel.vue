@@ -1,13 +1,13 @@
 <template>
   <div class="skills-panel-backdrop" @click.self="emit('close')">
-    <section class="skills-panel" role="dialog" aria-modal="true" aria-labelledby="skills-panel-title">
+    <section class="skills-panel canvas-panel" role="dialog" aria-modal="true" aria-labelledby="skills-panel-title">
       <header class="skills-panel-header">
         <div>
           <p class="skills-panel-kicker">Banana Canvas Skills</p>
           <h2 id="skills-panel-title">安装到 AI Agent</h2>
         </div>
         <button class="skills-close-btn" type="button" title="关闭" @click="emit('close')">
-          <span aria-hidden="true">×</span>
+          <X :size="18" aria-hidden="true" />
         </button>
       </header>
 
@@ -37,7 +37,7 @@
         <div class="skills-prompt-label">提示词</div>
         <pre class="skills-prompt-box">{{ agentInstallPrompt }}</pre>
         <div class="skills-actions centered">
-          <button type="button" :disabled="!agentInstallPrompt" @click="copyText(agentInstallPrompt, '安装提示词已复制')">复制安装提示词</button>
+          <button class="btn-primary" type="button" :disabled="!agentInstallPrompt" @click="copyText(agentInstallPrompt, '安装提示词已复制')">复制安装提示词</button>
         </div>
       </section>
 
@@ -62,9 +62,9 @@
             </button>
           </div>
           <div class="skills-actions">
-            <button type="button" :disabled="!fullKey" @click="copyText(fullKey, 'API Key 已复制')">复制 Key</button>
-            <button type="button" :disabled="!activeKey?.id || resetting" @click="confirmResetKey">重置 Key</button>
-            <button type="button" :disabled="loading" @click="ensureKey">创建 Key</button>
+            <button class="btn-secondary" type="button" :disabled="!fullKey" @click="copyText(fullKey, 'API Key 已复制')">复制 Key</button>
+            <button class="btn-secondary" type="button" :disabled="!activeKey?.id || resetting" @click="confirmResetKey">重置 Key</button>
+            <button class="btn-secondary" type="button" :disabled="loading" @click="ensureKey">创建 Key</button>
           </div>
         </div>
 
@@ -78,8 +78,8 @@
           </div>
           <pre class="skills-markdown-preview">{{ markdownPreview }}</pre>
           <div class="skills-actions">
-            <button type="button" :disabled="!skillMarkdown" @click="copyText(skillMarkdown, 'SKILL.md 已复制')">复制 SKILL.md</button>
-            <button type="button" :disabled="!packagePayload" @click="downloadPackage">下载 package.json</button>
+            <button class="btn-secondary" type="button" :disabled="!skillMarkdown" @click="copyText(skillMarkdown, 'SKILL.md 已复制')">复制 SKILL.md</button>
+            <button class="btn-secondary" type="button" :disabled="!packagePayload" @click="downloadPackage">下载 package.json</button>
           </div>
         </div>
       </section>
@@ -94,6 +94,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { X } from '@lucide/vue'
 import { createSkillKey, getSkillKeys, getSkillPackage, resetSkillKey } from '@/api/skills'
 
 const emit = defineEmits(['close'])
@@ -250,11 +251,11 @@ onMounted(loadSkills)
   width: min(860px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   overflow: auto;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  background: rgba(14, 15, 18, 0.98);
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: 12px;
+  background: var(--canvas-bg-secondary);
   box-shadow: 0 30px 120px rgba(0, 0, 0, 0.58);
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--canvas-text-primary);
   backdrop-filter: blur(22px);
 }
 
@@ -269,7 +270,8 @@ onMounted(loadSkills)
 }
 
 .skills-panel-header {
-  padding: 22px 24px 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--canvas-border-subtle);
 }
 
 .skills-panel-kicker,
@@ -282,14 +284,13 @@ onMounted(loadSkills)
 
 .skills-panel h2 {
   margin: 0;
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .skills-close-btn,
 .skills-icon-btn,
 .skills-link-btn,
-.skills-actions button,
 .skills-docs-link {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
@@ -305,6 +306,15 @@ onMounted(loadSkills)
   height: 32px;
   font-size: 22px;
   line-height: 1;
+  border: none;
+  background: transparent;
+  color: var(--canvas-text-tertiary);
+  border-radius: 8px;
+}
+
+.skills-close-btn:hover {
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
 }
 
 .skills-field,
@@ -356,14 +366,17 @@ onMounted(loadSkills)
   justify-content: center;
 }
 
-.skills-actions button,
+.skills-actions button {
+  /* 视觉由 btn-primary / btn-secondary 分级类控制 */
+  font-size: 13px;
+}
+
 .skills-docs-link,
 .skills-link-btn,
 .skills-icon-btn {
   padding: 8px 10px;
 }
 
-.skills-actions button:disabled,
 .skills-icon-btn:disabled,
 .skills-link-btn:disabled {
   cursor: not-allowed;
@@ -491,20 +504,28 @@ onMounted(loadSkills)
   color: #111827;
 }
 
-:root.canvas-theme-light .skills-close-btn,
+:root.canvas-theme-light .skills-close-btn {
+  border-color: transparent;
+  background: transparent;
+  color: var(--canvas-text-tertiary);
+}
+
+:root.canvas-theme-light .skills-close-btn:hover {
+  border-color: transparent;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
+}
+
 :root.canvas-theme-light .skills-icon-btn,
 :root.canvas-theme-light .skills-link-btn,
-:root.canvas-theme-light .skills-actions button,
 :root.canvas-theme-light .skills-docs-link {
   border-color: rgba(15, 23, 42, 0.12);
   background: rgba(248, 250, 252, 0.92);
   color: #0f172a;
 }
 
-:root.canvas-theme-light .skills-close-btn:hover,
 :root.canvas-theme-light .skills-icon-btn:hover,
 :root.canvas-theme-light .skills-link-btn:hover,
-:root.canvas-theme-light .skills-actions button:hover,
 :root.canvas-theme-light .skills-docs-link:hover {
   border-color: rgba(15, 23, 42, 0.2);
   background: #ffffff;
@@ -579,11 +600,11 @@ onMounted(loadSkills)
   }
 
   .skills-panel-header {
-    padding: 18px 16px 12px;
+    padding: 14px 16px;
   }
 
   .skills-panel h2 {
-    font-size: 20px;
+    font-size: 15px;
   }
 
   .skills-install-tabs {

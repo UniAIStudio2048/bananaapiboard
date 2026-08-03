@@ -28,42 +28,6 @@ export const themes = {
       text: '#f1f5f9',
       primary: '#60a5fa',
     }
-  },
-  creamGreen: {
-    id: 'creamGreen',
-    name: '奶油绿',
-    description: '清新自然，舒缓双眼',
-    icon: '🍃',
-    isDark: false,
-    colors: {
-      bg: '#f0fdf4',
-      text: '#14532d',
-      primary: '#22c55e',
-    }
-  },
-  warmOrange: {
-    id: 'warmOrange',
-    name: '热情橙',
-    description: '活力四射，激发创造力',
-    icon: '🔥',
-    isDark: false,
-    colors: {
-      bg: '#fff7ed',
-      text: '#7c2d12',
-      primary: '#f97316',
-    }
-  },
-  oceanBlue: {
-    id: 'oceanBlue',
-    name: '浩瀚蓝',
-    description: '深邃宁静，沉浸体验',
-    icon: '🌊',
-    isDark: true,
-    colors: {
-      bg: '#0c4a6e',
-      text: '#e0f2fe',
-      primary: '#38bdf8',
-    }
   }
 }
 

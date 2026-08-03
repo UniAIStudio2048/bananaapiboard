@@ -9,6 +9,7 @@ defineOptions({
 import { ref, computed, inject, nextTick, watch, onMounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
+import IconSet from '@/components/common/IconSet.vue'
 import { enhancePrompt, describeImage, expandContent, getLLMCost, getLLMConfig } from '@/api/canvas/llm'
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
@@ -49,7 +50,7 @@ onMounted(() => {
 const LLM_TYPES = {
   'llm-prompt-enhance': {
     label: '提示词优化',
-    icon: 'A+',
+    icon: 'llm',
     description: 'AI 优化提示词，生成更专业的描述',
     inputType: 'text',
     outputType: 'text',
@@ -57,7 +58,7 @@ const LLM_TYPES = {
   },
   'llm-image-describe': {
     label: '图片描述',
-    icon: '◎',
+    icon: 'image-describe',
     description: '分析图片，生成详细提示词',
     inputType: 'image',
     outputType: 'text',
@@ -65,7 +66,7 @@ const LLM_TYPES = {
   },
   'llm-content-expand': {
     label: '内容扩写',
-    icon: '≡',
+    icon: 'expand',
     description: 'AI 扩展内容，增加细节',
     inputType: 'text',
     outputType: 'text',
@@ -335,7 +336,7 @@ watch(() => props.data.executeTriggered, (newVal, oldVal) => {
     <!-- 节点头部 -->
     <div class="canvas-node-header">
       <div class="canvas-node-title">
-        <span class="icon">{{ typeConfig.icon }}</span>
+        <span class="icon"><IconSet :name="typeConfig.icon" :size="16" /></span>
         {{ data.title || typeConfig.label }}
       </div>
       <div class="canvas-node-actions">

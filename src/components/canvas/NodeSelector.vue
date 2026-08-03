@@ -4,6 +4,7 @@
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
+import IconSet from '@/components/common/IconSet.vue'
 import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions } from '@/config/canvas/nodeTypes'
 import { useI18n } from '@/i18n'
 import { extractVideoFrame, uploadCanvasMedia } from '@/api/canvas/workflow'
@@ -904,7 +905,7 @@ function formatFileSize(bytes) {
             :class="{ selected: selectedType === node.type }"
             @click="selectNodeType(node.type)"
           >
-            <div class="node-selector-icon">{{ node.icon }}</div>
+            <div class="node-selector-icon"><IconSet :name="node.icon" :size="16" /></div>
             <div class="node-selector-info">
               <div class="node-selector-name">{{ node.label ? t(node.label) : '' }}</div>
               <div class="node-selector-desc" v-if="node.description">{{ node.description ? t(node.description) : '' }}</div>
@@ -922,7 +923,7 @@ function formatFileSize(bytes) {
             :class="{ selected: selectedType === node.type }"
             @click="selectNodeType(node.type)"
           >
-            <div class="node-selector-icon">{{ node.icon }}</div>
+            <div class="node-selector-icon"><IconSet :name="node.icon" :size="16" /></div>
             <div class="node-selector-info">
               <div class="node-selector-name">{{ t(node.label) }}</div>
               <div class="node-selector-desc" v-if="node.description">{{ t(node.description) }}</div>
@@ -960,14 +961,14 @@ function formatFileSize(bytes) {
       <div class="node-selector-divider"></div>
       <div class="node-selector-title">功能节点</div>
       <div v-if="isDigitalHumanLibraryEnabled()" class="node-selector-item" @click="selectNodeType(NODE_TYPES.DIGITAL_HUMAN)">
-        <div class="node-selector-icon">{{ NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].icon }}</div>
+        <div class="node-selector-icon"><IconSet :name="NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].icon" :size="16" /></div>
         <div class="node-selector-info">
           <div class="node-selector-name">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].label) }}</div>
           <div class="node-selector-desc">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].description) }}</div>
         </div>
       </div>
       <div v-if="isSeedanceFeaturesEnabled()" class="node-selector-item" @click="selectNodeType(NODE_TYPES.SEEDANCE_CHARACTER)">
-        <div class="node-selector-icon">{{ NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].icon }}</div>
+        <div class="node-selector-icon"><IconSet :name="NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].icon" :size="16" /></div>
         <div class="node-selector-info">
           <div class="node-selector-name">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].label) }}</div>
           <div class="node-selector-desc">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].description) }}</div>

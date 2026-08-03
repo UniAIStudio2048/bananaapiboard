@@ -32,7 +32,26 @@ export default {
           700: '#334155',
           800: '#1e293b',
           900: '#0f172a',
-        }
+        },
+        // 表面阶梯（对齐方案 §2.3 与画布 --canvas-* token）
+        // 通过 --theme-* 变量桥接，.theme-light / .theme-dark 下取值自动切换
+        canvas: 'var(--theme-canvas, #f5f5f4)',
+        surface: {
+          1: 'var(--theme-surface-1, #ffffff)',
+          2: 'var(--theme-surface-2, #fafafa)',
+          3: 'var(--theme-surface-3, #f0f0ef)',
+        },
+        hairline: {
+          DEFAULT: 'var(--theme-hairline, #e4e4e7)',
+          strong: 'var(--theme-hairline-strong, #e4e4e7)',
+        },
+      },
+      borderRadius: {
+        sm: '6px',
+        md: '8px',
+        lg: '12px',
+        xl: '16px',
+        pill: '9999px',
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],

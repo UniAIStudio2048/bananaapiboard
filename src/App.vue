@@ -6,6 +6,7 @@ import { getTheme, toggleTheme as toggleThemeUtil } from '@/utils/theme'
 import { getTenantHeaders, getBrand, loadBrandConfig, getApiUrl, loadModelEntitlements } from '@/config/tenant'
 import NotificationBar from '@/components/NotificationBar.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
+import IconSet from '@/components/common/IconSet.vue'
 import { formatPoints } from '@/utils/format'
 import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
@@ -305,7 +306,17 @@ const isIcpFooterVisible = computed(() => {
               <span class="mr-2">{{ item.icon }}</span>
               {{ item.label }}
             </RouterLink>
-            
+
+            <!-- 灵感中心入口 -->
+            <RouterLink
+              to="/inspiration"
+              class="nav-link flex items-center"
+              :class="{ active: isActive('/inspiration') }"
+            >
+              <IconSet name="sparkles" :size="16" class="mr-0 xl:mr-1" />
+              <span class="hidden xl:inline">灵感中心</span>
+            </RouterLink>
+
             <!-- 购买套餐入口 -->
             <RouterLink
               v-show="me"
@@ -495,7 +506,18 @@ const isIcpFooterVisible = computed(() => {
             <span class="mr-2">{{ item.icon }}</span>
             {{ item.label }}
           </RouterLink>
-          
+
+          <!-- 移动端灵感中心入口 -->
+          <RouterLink
+            to="/inspiration"
+            class="block nav-link"
+            :class="{ active: isActive('/inspiration') }"
+            @click="isMenuOpen = false"
+          >
+            <span class="mr-2 inline-flex align-middle"><IconSet name="sparkles" :size="18" /></span>
+            <span class="align-middle">灵感中心</span>
+          </RouterLink>
+
           <!-- 移动端购买套餐入口 -->
           <RouterLink
             v-if="me"
