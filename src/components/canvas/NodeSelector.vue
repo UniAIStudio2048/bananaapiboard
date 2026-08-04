@@ -941,7 +941,7 @@ function formatFileSize(bytes) {
           :class="{ selected: selectedType === node.type }"
           @click="selectNodeType(node.type)"
         >
-          <div class="node-selector-icon">{{ node.icon }}</div>
+          <div class="node-selector-icon"><IconSet :name="node.icon" :size="16" /></div>
           <div class="node-selector-info">
             <div class="node-selector-name">{{ t(node.label) }}</div>
             <div class="node-selector-desc" v-if="node.description">{{ t(node.description) }}</div>

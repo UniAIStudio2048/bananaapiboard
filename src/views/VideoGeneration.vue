@@ -73,6 +73,23 @@ const currentModelConfig = computed(() => {
 })
 
 const isRunningHubAiAppVideoModel = computed(() => currentModelConfig.value?.apiType === 'runninghub-ai-app-video')
+const isRunningHubAiAppVideoV31Model = computed(() => currentModelConfig.value?.apiType === 'runninghub-ai-app-video-v31')
+
+// RunningHub 全能视频 V3.1 六种生成模式
+const RUNNINGHUB_V31_MODES = [
+  { value: 't2v', label: '文生视频', icon: '✍️', needsImages: 0, needsAudio: false },
+  { value: 'i2v', label: '图生视频（首帧）', icon: '🎬', needsImages: 1, needsAudio: false },
+  { value: 'first_last_frame', label: '首尾帧生视频', icon: '🖼️', needsImages: 2, needsAudio: false },
+  { value: 'last_frame', label: '尾帧生视频', icon: '🔚', needsImages: 1, needsAudio: false },
+  { value: 'multi_image', label: '多图生视频（≤3图）', icon: '🗂️', needsImages: 1, maxImages: 3, needsAudio: false },
+  { value: 'image_audio', label: '图像+音频生视频', icon: '🎵', needsImages: 1, needsAudio: true }
+]
+const v31Mode = ref('t2v')
+const v31AudioFile = ref(null)
+const v31AudioInputRef = ref(null)
+const v31ModeConfig = computed(() => RUNNINGHUB_V31_MODES.find(m => m.value === v31Mode.value) || RUNNINGHUB_V31_MODES[0])
+const v31NeedsImages = computed(() => v31ModeConfig.value.needsImages > 0)
+const v31NeedsAudio = computed(() => v31ModeConfig.value.needsAudio)
 
 const videoResolutionOptions = computed(() => {
   const enabledPricingResolutions = getEnabledVideoResolutionOptions(currentModelConfig.value?.resolutionPricing)
@@ -134,6 +151,7 @@ const availableAspectRatios = computed(() => {
 
 // VEO3模型的图片数量限制
 const maxImagesForModel = computed(() => {
+  if (isRunningHubAiAppVideoV31Model.value) return v31ModeConfig.value.maxImages || v31ModeConfig.value.needsImages
   const configuredMaxImages = Number(currentModelConfig.value?.maxRefImages)
   if (Number.isFinite(configuredMaxImages) && configuredMaxImages > 0) return configuredMaxImages
   // components 版本支持最多 3 张图
@@ -391,7 +409,7 @@ const currentPointsCost = computed(() => {
     return typeof veoConfig === 'number' ? veoConfig : (veoConfig || 100)
   }
 
-  if (isRunningHubAiAppVideoModel.value) {
+  if (isRunningHubAiAppVideoModel.value || isRunningHubAiAppVideoV31Model.value) {
     const modelCfg = currentModelConfig.value
     const seconds = Number(duration.value)
     const costPerSecond = Number(modelCfg?.costPerSecond)
@@ -400,8 +418,9 @@ const currentPointsCost = computed(() => {
       const fixedPoints = Number(fixedCost)
       if (Number.isFinite(fixedPoints) && fixedPoints >= 0) return Math.round(fixedPoints)
     }
-    const multipliers = modelCfg?.resolutionMultipliers || {}
-    const multiplier = Number(multipliers[resolution.value] ?? ({ '720p': 1, '1080p': 1.5, '4k': 2 }[resolution.value] ?? 1))
+    const multiplier = isRunningHubAiAppVideoV31Model.value
+      ? 1
+      : Number((modelCfg?.resolutionMultipliers || {})[resolution.value] ?? ({ '720p': 1, '1080p': 1.5, '4k': 2 }[resolution.value] ?? 1))
     return Math.round((Number.isFinite(seconds) ? seconds : 0) * (Number.isFinite(costPerSecond) ? costPerSecond : 1) * (Number.isFinite(multiplier) ? multiplier : 1))
   }
   
@@ -656,6 +675,12 @@ function onFilesChange(e) {
   e.target.value = ''
 }
 
+function handleV31AudioChange(e) {
+  const file = e.target.files?.[0]
+  v31AudioFile.value = file || null
+  e.target.value = ''
+}
+
 function onDragOver(e) {
   e.preventDefault()
   isDragging.value = true
@@ -695,7 +720,7 @@ const reviewableImageFiles = computed(() => {
     }
     return seedanceRefImages.value
   }
-  if (mode.value === 'image' && !isKlingV3OmniModel.value) return imageFiles.value
+  if ((mode.value === 'image' || isRunningHubAiAppVideoV31Model.value) && !isKlingV3OmniModel.value) return imageFiles.value
   return []
 })
 
@@ -1373,6 +1398,28 @@ async function generateVideo() {
     }
   }
 
+  // RunningHub 全能视频 V3.1 验证
+  if (isRunningHubAiAppVideoV31Model.value) {
+    const requiredImages = v31ModeConfig.value.needsImages
+    const needsAudio = v31ModeConfig.value.needsAudio
+    if (requiredImages > 0 && imageFiles.value.length === 0) {
+      error.value = `请上传至少 1 张图片`
+      return
+    }
+    if (v31Mode.value === 'first_last_frame' && imageFiles.value.length < 2) {
+      error.value = '首尾帧生视频需要 2 张图片（首帧+尾帧），请继续上传'
+      return
+    }
+    if (v31Mode.value === 'multi_image' && imageFiles.value.length > 3) {
+      error.value = '多图生视频最多支持 3 张图片'
+      return
+    }
+    if (needsAudio && !v31AudioFile.value) {
+      error.value = '请上传 1 段音频'
+      return
+    }
+  }
+
   const reviewSubmission = getQuickImageReviewSubmission()
   if (reviewSubmission.hasProcessing) {
     error.value = '图片正在审核中，请等待审核完成后再生成视频'
@@ -1414,13 +1461,21 @@ async function generateVideo() {
       formData.append('resolution', resolution.value)
     }
     
-    if (mode.value === 'image' && !isSeedanceModel.value && !isKlingV3OmniModel.value) {
+    if ((mode.value === 'image' || isRunningHubAiAppVideoV31Model.value) && !isSeedanceModel.value && !isKlingV3OmniModel.value) {
       if (reviewSubmission.approved) {
         formData.append('image_urls', JSON.stringify(reviewSubmission.assetUris))
       } else {
         for (const file of imageFiles.value) {
           formData.append('images', file)
         }
+      }
+    }
+
+    // RunningHub 全能视频 V3.1 模式与音频
+    if (isRunningHubAiAppVideoV31Model.value) {
+      formData.append('video_mode', v31Mode.value)
+      if (v31AudioFile.value) {
+        formData.append('referenceAudios', v31AudioFile.value)
       }
     }
 
@@ -1535,6 +1590,7 @@ async function generateVideo() {
     clearImages()
     if (isSeedanceModel.value) clearSeedanceFiles()
     if (isKlingV3OmniModel.value) clearKlingV3OmniFiles()
+    v31AudioFile.value = null
     prompt.value = ''
     loading.value = false
     successMessage.value = '任务已提交，正在处理...'
@@ -2324,6 +2380,13 @@ watch(model, (newModel) => {
     clearKlingV3OmniFiles()
   }
 
+  // 切换到 RunningHub 全能视频 V3.1 时重置模式，切换离开时清空音频
+  const isRunningHubV31 = modelCfg?.apiType === 'runninghub-ai-app-video-v31'
+  v31Mode.value = isRunningHubV31 ? (modelCfg?.defaultVideoMode || 't2v') : v31Mode.value
+  if (!isRunningHubV31) {
+    v31AudioFile.value = null
+  }
+
   // VEO3模型不需要时长选项（固定 8 秒）
   if (VEO3_MODELS.includes(newModel)) {
     console.log('[VideoGeneration] VEO3模型不支持时长选择，固定8秒')
@@ -2447,8 +2510,8 @@ onUnmounted(() => {
       <!-- 左侧控制面板 -->
       <div class="lg:col-span-3">
         <div class="card p-5 sticky top-24">
-          <!-- 模式切换标签（非 Seedance 模型时显示） -->
-          <div v-if="!isSeedanceModel && !isKlingV3OmniModel" class="flex bg-slate-100 dark:bg-dark-700 rounded-xl p-1 mb-5">
+          <!-- 模式切换标签（非 Seedance / Kling v3 Omni / RunningHub V3.1 模型时显示） -->
+          <div v-if="!isSeedanceModel && !isKlingV3OmniModel && !isRunningHubAiAppVideoV31Model" class="flex bg-slate-100 dark:bg-dark-700 rounded-xl p-1 mb-5">
             <button 
               @click="mode = 'image'" 
               :class="mode === 'image' 
@@ -2469,6 +2532,31 @@ onUnmounted(() => {
               <span class="text-xl">✍️</span>
               <span class="text-sm">文生视频</span>
             </button>
+          </div>
+
+          <!-- RunningHub 全能视频 V3.1 生成模式选择 -->
+          <div v-if="isRunningHubAiAppVideoV31Model" class="mb-5">
+            <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+              <span>🎛️</span>
+              <span>生成模式</span>
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+              <button
+                v-for="m in RUNNINGHUB_V31_MODES"
+                :key="m.value"
+                @click="v31Mode = m.value"
+                :class="v31Mode === m.value
+                  ? 'bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border-purple-400/60 text-purple-300'
+                  : 'bg-white dark:bg-dark-700 border-slate-200 dark:border-dark-600 text-slate-600 dark:text-slate-300 hover:border-purple-300'"
+                class="flex items-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-medium transition-all duration-200"
+              >
+                <span>{{ m.icon }}</span>
+                <span>{{ m.label }}</span>
+              </button>
+            </div>
+            <p class="mt-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+              时长 3-15 秒，输出 480p，按秒计费
+            </p>
           </div>
 
           <div class="space-y-4">
@@ -3048,6 +3136,34 @@ onUnmounted(() => {
               </div>
             </div>
 
+            <!-- RunningHub V3.1 图像+音频模式音频上传 -->
+            <div v-if="isRunningHubAiAppVideoV31Model && v31NeedsAudio" class="space-y-2.5 rounded-lg border border-slate-200 dark:border-dark-600 p-3">
+              <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
+                <span>🎵</span>
+                <span>上传驱动音频（MP3）</span>
+              </label>
+              <input ref="v31AudioInputRef" type="file" accept="audio/*,.mp3" class="hidden" @change="handleV31AudioChange" />
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-200 dark:bg-dark-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-dark-500 transition-colors"
+                  @click="v31AudioInputRef?.click()"
+                >
+                  {{ v31AudioFile ? '重新选择' : '选择音频' }}
+                </button>
+                <span v-if="v31AudioFile" class="text-xs text-slate-500 truncate">{{ v31AudioFile.name }}</span>
+                <button
+                  v-if="v31AudioFile"
+                  type="button"
+                  class="text-xs text-red-400 hover:text-red-300"
+                  @click="v31AudioFile = null"
+                >
+                  移除
+                </button>
+              </div>
+              <p class="text-[11px] text-slate-400">最长 15 秒视频，音频按秒参与计费。</p>
+            </div>
+
             <div v-if="reviewableImageFiles.length > 0" class="rounded-lg border border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700/50 p-2.5 space-y-1.5">
               <div class="flex items-center justify-between gap-2">
                 <span class="text-xs font-medium text-slate-700 dark:text-slate-300">🛡️ 图片审核</span>
@@ -3066,11 +3182,11 @@ onUnmounted(() => {
             </div>
 
             <!-- 图生视频上传区域（非 Seedance 模型时显示） -->
-            <div v-if="mode === 'image' && !isSeedanceModel && !isKlingV3OmniModel" class="space-y-2.5">
+            <div v-if="(mode === 'image' || (isRunningHubAiAppVideoV31Model && v31NeedsImages)) && !isSeedanceModel && !isKlingV3OmniModel" class="space-y-2.5">
               <div class="flex items-center justify-between">
                 <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
                   <span>🖼️</span>
-                  <span>上传参考图片</span>
+                  <span>{{ isRunningHubAiAppVideoV31Model ? (v31Mode === 'first_last_frame' ? '上传首帧与尾帧图片（按顺序）' : v31Mode === 'last_frame' ? '上传尾帧图片' : v31Mode === 'multi_image' ? '上传参考图片（最多3张）' : '上传图片') : '上传参考图片' }}</span>
                 </label>
                 <div class="text-xs text-slate-500 dark:text-slate-400">
                   <span class="font-semibold text-gray-700 dark:text-gray-300">{{ imageFiles.length }}</span> / {{ maxImagesForModel }}张

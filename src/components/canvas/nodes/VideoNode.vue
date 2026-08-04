@@ -1854,13 +1854,29 @@ watch([selectedModel, minimaxH3ResolutionOptions], () => {
 }, { immediate: true })
 
 const isRunningHubAiAppVideoModel = computed(() => {
-  return currentModelConfig.value?.apiType === 'runninghub-ai-app-video'
+  const apiType = currentModelConfig.value?.apiType
+  return apiType === 'runninghub-ai-app-video' || apiType === 'runninghub-ai-app-video-v31'
 })
+
+// RunningHub 全能视频 V3.1：六种生成模式（与视频生成页快速模板一致）
+const RUNNINGHUB_V31_MODES = [
+  { value: 't2v', label: '文生视频', needsImages: 0, needsAudio: false },
+  { value: 'i2v', label: '图生视频（首帧）', needsImages: 1, needsAudio: false },
+  { value: 'first_last_frame', label: '首尾帧生视频', needsImages: 2, needsAudio: false },
+  { value: 'last_frame', label: '尾帧生视频', needsImages: 1, needsAudio: false },
+  { value: 'multi_image', label: '多图生视频（≤3图）', needsImages: 1, needsAudio: false },
+  { value: 'image_audio', label: '图像+音频生视频', needsImages: 1, needsAudio: true }
+]
+const isRunningHubAiAppVideoV31Model = computed(() => currentModelConfig.value?.apiType === 'runninghub-ai-app-video-v31')
+const v31Mode = ref(props.data.v31Mode || 't2v')
+const v31ModeConfig = computed(() => RUNNINGHUB_V31_MODES.find(m => m.value === v31Mode.value) || RUNNINGHUB_V31_MODES[0])
 
 const runningHubResolution = ref(props.data.resolution || '720p')
 
 const runningHubResolutionOptions = computed(() => {
   if (!isRunningHubAiAppVideoModel.value) return []
+  // RunningHub 全能视频 V3.1 固定 480p 输出，不提供分辨率选项
+  if (currentModelConfig.value?.apiType === 'runninghub-ai-app-video-v31') return []
   const configuredOptions = currentModelConfig.value?.resolutionOptions
   const options = Array.isArray(configuredOptions) && configuredOptions.length > 0
     ? configuredOptions
@@ -2225,7 +2241,8 @@ const selectedVideoParameterResolution = computed({
 })
 
 const showVideoParameterDuration = computed(() => {
-  return !isPerSecondBilling.value && !isVeo3Model.value && !isKlingMotionControl.value && durations.value.length > 0
+  // RunningHub 全能视频 V3.1 按秒计费但支持 3-15 秒时长选择
+  return (isRunningHubAiAppVideoV31Model.value || !isPerSecondBilling.value) && !isVeo3Model.value && !isKlingMotionControl.value && durations.value.length > 0
 })
 
 const hasVideoParameterMenu = computed(() => {
@@ -2249,10 +2266,28 @@ watch(selectedModel, () => {
   hasExplicitDurationSelection.value = false
 })
 
-watch([selectedModel, availableDurations, isPerSecondBilling], () => {
+// 模型配置是否已加载完成（空对象 = 异步配置尚未返回，此时 availableDurations 是兜底列表）
+const isVideoModelConfigLoaded = () => {
+  const config = currentModelConfig.value
+  return !!config && Object.keys(config).length > 0
+}
+
+watch([selectedModel, availableDurations, isPerSecondBilling, isRunningHubAiAppVideoV31Model], () => {
   // 按秒计费默认不选择固定时长；只有用户主动选择时才向后端传 duration。
-  if (isPerSecondBilling.value && !hasExplicitDurationSelection.value) {
+  if (isPerSecondBilling.value && !isRunningHubAiAppVideoV31Model.value && !hasExplicitDurationSelection.value) {
     if (selectedDuration.value) selectedDuration.value = ''
+    return
+  }
+  // 模型配置尚未加载完成时，不要用兜底时长列表覆盖节点已保存/已选的时长（避免 5s 被改成 10s）
+  if (!isVideoModelConfigLoaded()) return
+  // RunningHub 全能视频 V3.1：等模型配置加载后再取时长，避免使用配置加载前的兜底列表（如 10s）
+  if (isRunningHubAiAppVideoV31Model.value) {
+    const configuredDurations = currentModelConfig.value?.durations
+    if (!Array.isArray(configuredDurations) || configuredDurations.length === 0) return
+    const v31Options = configuredDurations.map(duration => String(duration))
+    if (!v31Options.includes(String(selectedDuration.value))) {
+      selectedDuration.value = v31Options[0]
+    }
     return
   }
   const options = availableDurations.value.map(duration => String(duration))
@@ -2688,7 +2723,7 @@ onMounted(() => {
   }, 1000)
 
   // 如果当前模型支持时长选择，但当前选中的时长不在可用列表中，则重置为第一个可用时长
-  if (!isPerSecondBilling.value && availableDurations.value.length > 0 && !availableDurations.value.includes(selectedDuration.value)) {
+  if (isVideoModelConfigLoaded() && !isPerSecondBilling.value && availableDurations.value.length > 0 && !availableDurations.value.includes(selectedDuration.value)) {
     selectedDuration.value = availableDurations.value[0]
   }
   
@@ -3291,9 +3326,10 @@ function getVideoModeIconClass(value) {
   const normalized = String(value || '').toLowerCase()
   if (['text2video', 't2v', 'text', 'standard', 'fast', 'auto', 'std', 'wan-std'].includes(normalized)) return 'mode-icon-text'
   if (['image2video', 'image2video_first', 'i2v', 'image', 'subject_control'].includes(normalized)) return 'mode-icon-image'
-  if (['first_last_frame', 'image2video_first_last', 'start-end'].includes(normalized)) return 'mode-icon-frames'
+  if (['first_last_frame', 'image2video_first_last', 'start-end', 'last_frame'].includes(normalized)) return 'mode-icon-frames'
   if (['video_reference', 'r2v', 'videoedit', 'video_edit', 'video_extend'].includes(normalized)) return 'mode-icon-video'
-  if (['multimodal_ref', 'reference', 'multi_shot', 'animate_mix'].includes(normalized)) return 'mode-icon-reference'
+  if (['multimodal_ref', 'reference', 'multi_shot', 'animate_mix', 'multi_image'].includes(normalized)) return 'mode-icon-reference'
+  if (['image_audio'].includes(normalized)) return 'mode-icon-audio'
   if (['pro', 'wan-pro'].includes(normalized)) return 'mode-icon-pro'
   if (normalized.includes('motion')) return 'mode-icon-motion'
   return 'mode-icon-default'
@@ -3376,6 +3412,15 @@ const activeVideoModeSelector = computed(() => {
     }
   }
 
+  if (isRunningHubAiAppVideoV31Model.value) {
+    return {
+      key: 'runninghub-v31',
+      label: '生成模式',
+      value: v31Mode.value,
+      options: RUNNINGHUB_V31_MODES
+    }
+  }
+
   return null
 })
 
@@ -3419,6 +3464,9 @@ function setActiveVideoMode(value) {
       break
     case 'minimax-h3':
       selectedMinimaxH3Mode.value = value
+      break
+    case 'runninghub-v31':
+      v31Mode.value = value
       break
     default:
       break
@@ -4306,6 +4354,12 @@ watch(selectedModel, () => {
     console.log('[VideoNode] 切换到 Kling v3 Omni 整合模型，模式重置为', selectedKlingV3OmniMode.value)
   }
 
+  // RunningHub 全能视频 V3.1：切换时重置六种模式
+  if (modelConfig?.apiType === 'runninghub-ai-app-video-v31') {
+    v31Mode.value = modelConfig.defaultVideoMode || 't2v'
+    console.log('[VideoNode] 切换到 RunningHub 全能视频 V3.1，模式重置为', v31Mode.value)
+  }
+
   if (isSeedanceSd2VideoModel(modelConfig)) {
     const defaultMode = getDefaultSeedance2ModeForModel(modelConfig)
     selectedSeedance2Mode.value = getFirstAvailableMode(defaultMode, seedance2Modes.value)
@@ -4325,6 +4379,12 @@ watch(selectedModel, () => {
     selectedWanAnimateMode.value = modelConfig?.wanConfig?.animateMode || 'wan-std'
     console.log('[VideoNode] 切换到 Wan 模型，模式重置为', selectedWanMode.value)
   }
+})
+
+// 🔧 持久化 RunningHub 全能视频 V3.1 模式
+watch(v31Mode, (mode) => {
+  if (!isRunningHubAiAppVideoV31Model.value) return
+  canvasStore.updateNodeData(props.id, { v31Mode: mode })
 })
 
 watch(
@@ -5000,6 +5060,16 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     console.log('[VideoNode] RunningHub 清晰度:', capturedState.resolution || runningHubResolution.value)
   }
 
+  // RunningHub 全能视频 V3.1：六种生成模式与图像音频模式的驱动音频
+  if (capturedState.apiType === 'runninghub-ai-app-video-v31') {
+    const activeV31Mode = capturedState.v31Mode || v31Mode.value
+    formData.append('video_mode', activeV31Mode)
+    if (activeV31Mode === 'image_audio' && referenceAudios.value.length > 0) {
+      formData.append('reference_audios', JSON.stringify(referenceAudios.value.slice(0, 1)))
+    }
+    console.log('[VideoNode] RunningHub 全能视频 V3.1 模式:', activeV31Mode, '音频:', referenceAudios.value.length)
+  }
+
   // MiniMax 海螺官方直连：分辨率参数（后端按 resolutionCosts 计费）
   if (isMinimaxHailuoModel.value) {
     formData.append('resolution', capturedState.videoResolution || capturedState.minimaxHailuoResolution || minimaxHailuoResolution.value)
@@ -5403,6 +5473,7 @@ function createNewOutputNode() {
       duration: selectedDuration.value,
       videoResolution: genericVideoResolutionOptions.value.length > 0 ? genericVideoResolution.value : '',
       ...(isRunningHubAiAppVideoModel.value ? { resolution: runningHubResolution.value } : {}),
+      ...(isRunningHubAiAppVideoV31Model.value ? { v31Mode: v31Mode.value } : {}),
       generationMode: generationMode.value,
       referenceImages: referenceImages.value,
       // 复制上游连接信息
@@ -6100,6 +6171,27 @@ async function handleGenerate(options = {}) {
     }
   }
 
+  // RunningHub 全能视频 V3.1：六种模式输入校验
+  if (!isHeygenFlow && isRunningHubAiAppVideoV31Model.value) {
+    const requiredImages = v31ModeConfig.value.needsImages
+    if (requiredImages > 0 && finalImages.length === 0) {
+      await showAlert(`${v31ModeConfig.value.label}需要连接至少 1 张图片`, '提示')
+      return
+    }
+    if (v31Mode.value === 'first_last_frame' && finalImages.length < 2) {
+      await showAlert('首尾帧生视频需要按顺序连接 2 张图片（首帧→尾帧）', '提示')
+      return
+    }
+    if (v31Mode.value === 'multi_image' && finalImages.length > 3) {
+      await showAlert('多图生视频最多支持 3 张图片', '提示')
+      return
+    }
+    if (v31ModeConfig.value.needsAudio && referenceAudios.value.length === 0) {
+      await showAlert('图像+音频生视频需要连接 1 段音频', '提示')
+      return
+    }
+  }
+
   const hasSeedanceVideoInput = isSeedance2Model.value && referenceVideos.value.length > 0
   const hasWanVideoInput = isWanModel.value && ['r2v', 'videoedit', 'animate_mix'].includes(selectedWanMode.value) && referenceVideos.value.length > 0
   const hasMotionVideoInput = isCozeVideoSwapModel.value && referenceVideos.value.length > 0
@@ -6148,7 +6240,8 @@ async function handleGenerate(options = {}) {
       wanMode: isWanModel.value ? selectedWanMode.value : '',
       wanAnimateMode: isWanModel.value && selectedWanMode.value === 'animate_mix' ? selectedWanAnimateMode.value : '',
       klingO1Mode: isKlingO1Model.value ? selectedKlingO1Mode.value : '',
-      klingV3OmniMode: isKlingV3OmniModel.value ? selectedKlingV3OmniMode.value : ''
+      klingV3OmniMode: isKlingV3OmniModel.value ? selectedKlingV3OmniMode.value : '',
+      v31Mode: isRunningHubAiAppVideoV31Model.value ? v31Mode.value : ''
     })
     const duplicateResult = duplicateSubmitGuard.check(submitFingerprint)
     if (duplicateResult.blocked) {
@@ -6187,6 +6280,7 @@ async function handleGenerate(options = {}) {
     quickAssetUris: upstreamData.quickAssetUris || [],
     quickAssetSourceUrls: upstreamData.quickAssetSourceUrls || [],
     apiType: currentModelConfig.value?.apiType || '',
+    v31Mode: isRunningHubAiAppVideoV31Model.value ? v31Mode.value : '',
     videoResolution: genericVideoResolutionOptions.value.length > 0 ? genericVideoResolution.value : '',
     resolution: isRunningHubAiAppVideoModel.value ? runningHubResolution.value : '',
     seedanceResolution: isSeedance2Model.value ? seedanceResolution.value : '',
@@ -6242,6 +6336,7 @@ async function handleGenerate(options = {}) {
             duration: selectedDuration.value,
             videoResolution: genericVideoResolutionOptions.value.length > 0 ? genericVideoResolution.value : '',
             resolution: isRunningHubAiAppVideoModel.value ? runningHubResolution.value : '',
+            v31Mode: isRunningHubAiAppVideoV31Model.value ? v31Mode.value : '',
             minimaxHailuoResolution: isMinimaxHailuoModel.value ? minimaxHailuoResolution.value : '',
             generationMode: generationMode.value,
             referenceImages: referenceImages.value
@@ -9795,6 +9890,25 @@ function handleToolbarPreview() {
         </div>
       </template>
 
+      <!-- RunningHub 全能视频 V3.1 六种模式提示 -->
+      <template v-if="isRunningHubAiAppVideoV31Model">
+        <div class="sd2-mode-section">
+          <div class="sd2-mode-desc">时长 3-15 秒，输出 480p，按秒计费</div>
+          <div v-if="v31ModeConfig.needsImages > 0 && referenceImages.length === 0" class="sd2-mode-warn">
+            ⚠ {{ v31ModeConfig.label }}需要连接至少 1 张图片
+          </div>
+          <div v-if="v31Mode === 'first_last_frame' && referenceImages.length > 0 && referenceImages.length < 2" class="sd2-mode-warn">
+            ⚠ 首尾帧生视频需要按顺序连接 2 张图片（首帧→尾帧）
+          </div>
+          <div v-if="v31Mode === 'multi_image' && referenceImages.length > 3" class="sd2-mode-warn">
+            ⚠ 多图生视频最多支持 3 张图片
+          </div>
+          <div v-if="v31Mode === 'image_audio' && !hasReferenceAudios" class="sd2-mode-warn">
+            ⚠ 图像+音频生视频需要连接 1 段音频
+          </div>
+        </div>
+      </template>
+
       <!-- Wan 2.7 模式选择（使用 SD2 风格） -->
       <template v-if="isWanModel">
         <div class="sd2-mode-section">
@@ -11360,6 +11474,12 @@ function handleToolbarPreview() {
 .mode-icon-reference::before {
   content: '✦';
   font-size: 15px;
+}
+
+.mode-icon-audio::before {
+  content: '♪';
+  font-size: 17px;
+  font-weight: 600;
 }
 
 .mode-icon-pro::before {
