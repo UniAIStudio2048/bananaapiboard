@@ -16,9 +16,10 @@ test('stream content updates are throttled and flushed on done', () => {
 
 test('media generation shows a generating state instead of skill text', () => {
   assert.match(source, /const generatingType = skillId === 'builtin-canvas-video-generate' \? 'video'[\s\S]*?: skillId === 'builtin-canvas-image-generate' \? 'image' : ''/)
-  assert.match(source, /messages\.value\[assistantMessageIndex\]\.mediaGenerating = generatingType/)
-  assert.match(source, /messages\.value\[assistantMessageIndex\]\.content = ''/)
-  assert.match(source, /if \(!messages\.value\[assistantMessageIndex\]\.mediaGenerating\) \{[\s\S]*?'生成任务已提交，正在等待结果…'/)
-  assert.match(source, /const applyGeneratedResult = \(result\) => \{[\s\S]*?delete messages\.value\[assistantMessageIndex\]\.mediaGenerating/)
+  assert.match(source, /message\.mediaGenerating = generatingType/)
+  assert.match(source, /message\.toolEvents\.push\(\{[\s\S]*?name: formatAssistantToolName\(event\.tool_name \|\| ''\)/)
+  assert.match(source, /const applyGeneratedResult = \(result\) => \{[\s\S]*?delete message\.mediaGenerating/)
   assert.match(source, /onDone: \(fullContent, result\) => \{[\s\S]*?delete messages\.value\[assistantMessageIndex\]\.mediaGenerating/)
+  assert.match(source, /if \(event\.result && !event\.result\?\.error && Array\.isArray\(event\.result\?\.result_urls\)\)/)
+  assert.match(source, /if \(!urls\.length\) return[\s\S]*?if \(!message\.content\)/)
 })

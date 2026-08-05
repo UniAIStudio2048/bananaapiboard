@@ -66,6 +66,31 @@
         </div>
       </div>
 
+      <!-- 工具执行卡片（运行中/完成/失败，来自 SSE 事件流） -->
+      <div v-if="message.toolEvents?.length" class="ai-tool-cards">
+        <div
+          v-for="tool in message.toolEvents"
+          :key="tool.id"
+          class="ai-tool-card"
+          :class="`ai-tool-card--${tool.status}`"
+        >
+          <div class="ai-tool-card__header">
+            <span v-if="tool.status === 'running'" class="ai-tool-card__spinner"></span>
+            <svg v-else class="ai-tool-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path v-if="tool.status === 'done'" d="M20 6 9 17l-5-5"/>
+              <path v-else d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+            <span class="ai-tool-card__name">{{ tool.name }}</span>
+            <span class="ai-tool-card__status">
+              <template v-if="tool.status === 'running'">执行中…</template>
+              <template v-else-if="tool.status === 'done'">完成{{ tool.duration ? ` · ${formatDuration(tool.duration)}` : '' }}</template>
+              <template v-else>失败</template>
+            </span>
+          </div>
+          <div v-if="tool.detail" class="ai-tool-card__detail">{{ tool.detail }}</div>
+        </div>
+      </div>
+
       <!-- 媒体生成中 -->
       <div
         v-if="message.mediaGenerating"
@@ -124,9 +149,9 @@
       </Teleport>
 
       <!-- 附件预览 -->
-      <div v-if="message.attachments?.length" class="ai-attachments">
+      <div v-if="visibleAttachments.length" class="ai-attachments">
         <div
-          v-for="(att, index) in message.attachments"
+          v-for="(att, index) in visibleAttachments"
           :key="index"
           class="ai-attachment"
           draggable="true"
@@ -240,6 +265,21 @@ const props = defineProps({
     type: Boolean,
     default: false
   }
+})
+
+// 归一化附件渲染：按 URL 去重；视频只保留第一个可播放地址，
+// 避免历史数据中混入封面/临时 URL 出现无法播放的重复视频框。
+const visibleAttachments = computed(() => {
+  const atts = Array.isArray(props.message.attachments) ? props.message.attachments : []
+  const seen = new Set()
+  const result = []
+  for (const att of atts) {
+    if (!att?.url || seen.has(att.url)) continue
+    seen.add(att.url)
+    if (att.type === 'video' && result.some(item => item.type === 'video')) continue
+    result.push(att)
+  }
+  return result
 })
 
 defineEmits(['preview-media'])
@@ -363,6 +403,12 @@ function formatTime(timestamp) {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+function formatDuration(ms) {
+  if (!ms || ms < 0) return ''
+  if (ms < 1000) return `${Math.round(ms)}ms`
+  return `${(ms / 1000).toFixed(1)}s`
 }
 
 // 右键菜单处理
@@ -814,6 +860,99 @@ onUnmounted(() => {
   font-size: 12px;
 }
 
+.ai-tool-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ai-tool-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(148, 163, 184, 0.08);
+  font-size: 12px;
+}
+
+.ai-tool-card--running {
+  border-color: rgba(59, 130, 246, 0.4);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.ai-tool-card--done {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.ai-tool-card--error {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.ai-tool-card__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai-tool-card__name {
+  font-weight: 500;
+}
+
+.ai-tool-card__status {
+  margin-left: auto;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.ai-tool-card--running .ai-tool-card__status {
+  color: #60a5fa;
+}
+
+.ai-tool-card--done .ai-tool-card__status {
+  color: #4ade80;
+}
+
+.ai-tool-card--error .ai-tool-card__status {
+  color: #f87171;
+}
+
+.ai-tool-card__detail {
+  color: rgba(148, 163, 184, 0.85);
+  line-height: 1.4;
+}
+
+.ai-tool-card__icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.ai-tool-card--done .ai-tool-card__icon {
+  color: #4ade80;
+}
+
+.ai-tool-card--error .ai-tool-card__icon {
+  color: #f87171;
+}
+
+.ai-tool-card__spinner {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border: 2px solid rgba(96, 165, 250, 0.3);
+  border-top-color: #60a5fa;
+  border-radius: 50%;
+  animation: ai-tool-spin 0.8s linear infinite;
+}
+
+@keyframes ai-tool-spin {
+  to { transform: rotate(360deg); }
+}
+
 .ai-attachments {
   display: flex;
   flex-wrap: wrap;
@@ -1187,6 +1326,26 @@ onUnmounted(() => {
   background: rgba(59, 130, 246, 0.1);
   border-color: rgba(59, 130, 246, 0.2);
   color: #2563eb;
+}
+
+:root.canvas-theme-light .ai-tool-card {
+  border-color: rgba(100, 116, 139, 0.25);
+  background: rgba(100, 116, 139, 0.06);
+}
+
+:root.canvas-theme-light .ai-tool-card--running {
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+:root.canvas-theme-light .ai-tool-card--done {
+  border-color: rgba(22, 163, 74, 0.35);
+  background: rgba(22, 163, 74, 0.08);
+}
+
+:root.canvas-theme-light .ai-tool-card--error {
+  border-color: rgba(220, 38, 38, 0.35);
+  background: rgba(220, 38, 38, 0.08);
 }
 
 /* 附件文件 - 白昼模式 */

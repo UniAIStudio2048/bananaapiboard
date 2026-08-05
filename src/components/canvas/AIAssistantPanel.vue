@@ -1634,9 +1634,11 @@ async function sendMessage() {
     }
   }
   const applyGeneratedResult = (result) => {
-    delete messages.value[assistantMessageIndex].mediaGenerating
-    applyAgentResultToMessage(assistantMessageIndex, result)
-    const urls = Array.isArray(result?.result_urls) ? result.result_urls.filter(Boolean) : []
+    const message = messages.value[assistantMessageIndex]
+    if (!message) return
+    delete message.mediaGenerating
+    const mediaType = ['image', 'video', 'audio'].includes(result?.media_type) ? result.media_type : 'image'
+    const urls = normalizeResultUrls(result?.result_urls, mediaType)
     const workflowId = props.canvasContext?.workflow_id || props.canvasContext?.workflowId
     const nodeId = props.canvasContext?.node_ids?.[0] || props.canvasContext?.node_id || props.canvasContext?.nodeId
     if (!canvasWritebackSent && urls.length) {
@@ -1648,6 +1650,19 @@ async function sendMessage() {
         result_urls: urls,
         history_id: result.task_id || result.id || null
       })
+    }
+    // 非媒体结果（搜索/MCP 等）只更新工具卡片，不覆盖正文
+    if (!urls.length) return
+    message.attachments = urls.map((url, mediaIndex) => ({
+      type: mediaType,
+      url,
+      name: `${mediaType === 'image' ? '生成图片' : mediaType === 'video' ? '生成视频' : '生成音频'} ${mediaIndex + 1}`
+    }))
+    // 仅在正文为空时使用默认文案，保留模型的流式输出
+    if (!message.content) {
+      message.content = mediaType === 'image'
+        ? `已生成 ${urls.length} 张图片`
+        : `${mediaType === 'video' ? '视频' : '音频'}生成完成`
     }
   }
 
@@ -1760,23 +1775,41 @@ async function sendMessage() {
         throttledScrollToBottom()
       },
       onToolEvent: (event) => {
+        const message = messages.value[assistantMessageIndex]
+        if (!message) return
+        if (!Array.isArray(message.toolEvents)) message.toolEvents = []
+        const skillId = event.skill_id || ''
+        const generatingType = skillId === 'builtin-canvas-video-generate' ? 'video'
+          : skillId === 'builtin-canvas-image-generate' ? 'image' : ''
         if (event?.type === 'tool_started') {
-          const skillId = event.skill_id || ''
-          const generatingType = skillId === 'builtin-canvas-video-generate' ? 'video'
-            : skillId === 'builtin-canvas-image-generate' ? 'image' : ''
           if (generatingType) {
-            messages.value[assistantMessageIndex].mediaGenerating = generatingType
-            messages.value[assistantMessageIndex].content = ''
-          } else {
-            messages.value[assistantMessageIndex].content = `正在调用 Skill${skillId === 'builtin-canvas-video-generate' ? '生视频' : skillId === 'builtin-canvas-image-generate' ? '生图' : '媒体'}…`
+            message.mediaGenerating = generatingType
           }
-          messages.value[assistantMessageIndex].isStreaming = true
+          message.toolEvents.push({
+            id: event.tool_call_id || `tool-${message.toolEvents.length}-${Date.now()}`,
+            name: formatAssistantToolName(event.tool_name || ''),
+            status: 'running',
+            startedAt: Date.now(),
+            detail: ''
+          })
+          message.isStreaming = true
         } else if (event?.type === 'tool_progress') {
-          if (!messages.value[assistantMessageIndex].mediaGenerating) {
-            messages.value[assistantMessageIndex].content = '生成任务已提交，正在等待结果…'
+          const runningCard = [...message.toolEvents].reverse().find(item => item.status === 'running')
+          if (runningCard) {
+            runningCard.detail = event.message || (message.mediaGenerating ? '生成任务已提交，正在等待结果…' : '')
           }
         } else if (event?.type === 'tool_completed') {
-          applyGeneratedResult(event.result)
+          const runningCard = [...message.toolEvents].reverse().find(item => item.status === 'running')
+          if (runningCard) {
+            runningCard.status = event.result?.error ? 'error' : 'done'
+            runningCard.duration = Date.now() - runningCard.startedAt
+            runningCard.result = event.result
+          }
+          if (message.mediaGenerating) delete message.mediaGenerating
+          // 媒体结果应用生成结果；其他工具结果只显示在卡片上，正文保留模型输出
+          if (event.result && !event.result?.error && Array.isArray(event.result?.result_urls)) {
+            applyGeneratedResult(event.result)
+          }
         }
         throttledScrollToBottom()
       },
@@ -1859,11 +1892,37 @@ async function sendSkillMessage() {
   }
 }
 
+/**
+ * 把后端工具名转换为友好的中文展示名。
+ * canvas_skill__{id} → 技能名（内置技能映射为中文），web_search → 联网搜索，MCP 保留原名。
+ */
+function formatAssistantToolName(toolName) {
+  if (!toolName) return '工具调用'
+  const builtinNames = {
+    'canvas_skill__builtin-canvas-image-generate': '画布生图',
+    'canvas_skill__builtin-canvas-video-generate': '画布生视频'
+  }
+  if (builtinNames[toolName]) return builtinNames[toolName]
+  if (toolName === 'web_search') return '联网搜索'
+  if (toolName.startsWith('canvas_skill__')) return `技能: ${toolName.slice('canvas_skill__'.length)}`
+  return toolName
+}
+
+/**
+ * 归一化媒体结果 URL：去重；视频只保留第一个可播放地址
+ * （后端 video result_urls 按 [qiniu_url, video_url, url] 顺序返回，
+ * 其中提供方临时 URL 可能过期导致无法播放，前端只渲染第一个即可）。
+ */
+function normalizeResultUrls(urls, mediaType) {
+  const unique = [...new Set((Array.isArray(urls) ? urls : []).filter(Boolean))]
+  return mediaType === 'video' ? unique.slice(0, 1) : unique
+}
+
 function applyAgentResultToMessage(index, result) {
   if (!messages.value[index]) return
-  const urls = Array.isArray(result?.result_urls) ? result.result_urls.filter(Boolean) : []
+  const mediaType = ['image', 'video', 'audio'].includes(result?.media_type) ? result.media_type : 'image'
+  const urls = normalizeResultUrls(result?.result_urls, mediaType)
   if (urls.length) {
-    const mediaType = ['image', 'video', 'audio'].includes(result?.media_type) ? result.media_type : 'image'
     messages.value[index].attachments = urls.map((url, mediaIndex) => ({
       type: mediaType,
       url,
