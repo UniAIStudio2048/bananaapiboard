@@ -3939,6 +3939,12 @@ const klingOfficialSelectedDurationCostText = computed(() => {
   return selectedDuration.value ? `${selectedDuration.value}s = ${formatPoints(klingOfficialSelectedDurationTotalCost.value)}积分` : ''
 })
 
+// RunningHub 全能视频 V3.1：按所选秒数实时计算总消耗（不展示单秒价格）
+const runningHubV31CostText = computed(() => {
+  if (!isRunningHubAiAppVideoV31Model.value || !selectedDuration.value) return ''
+  return `${formatPoints(pointsCost.value * selectedCount.value)}积分`
+})
+
 // 按秒计费模型在画布上展示单秒价格；pointsCost 仍保留为提交时的预扣总积分。
 const perSecondBillingCostPerSecond = computed(() => {
   const rateConfig = currentModelConfig.value?.costPerSecond
@@ -9569,6 +9575,9 @@ function handleToolbarPreview() {
             </template>
             <template v-else-if="isWanModel && selectedWanMode === 'animate_mix'">
               {{ formatPoints(wanAnimateCostPerSecond) }}积分/s
+            </template>
+            <template v-else-if="isRunningHubAiAppVideoV31Model">
+              {{ runningHubV31CostText }}
             </template>
             <template v-else-if="isPerSecondBilling">
               {{ formatPoints(perSecondBillingCostPerSecond) }}积分/s
