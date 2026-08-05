@@ -541,12 +541,13 @@
                 @change="handleFileSelect"
               />
               <button
+                ref="modelPickerTriggerRef"
                 class="toolbar-btn icon-btn model-picker-trigger"
                 type="button"
                 :class="{ active: selectedModelValue }"
                 title="选择生图模型"
                 aria-label="选择生图模型"
-                @click.stop="showModelPicker = true"
+                @click.stop="openModelPicker()"
               >
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M12 3l2.8 5.7L21 9.6l-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9L12 3z" />
@@ -606,7 +607,7 @@
   <Teleport to="body">
     <Transition name="model-picker-fade">
       <div v-if="showModelPicker" class="model-picker-overlay" @click.self="showModelPicker = false">
-        <section class="model-picker-dialog" role="dialog" aria-modal="true" aria-label="选择模型">
+        <section class="model-picker-dialog" role="dialog" aria-modal="true" aria-label="选择模型" :style="modelPickerStyle">
           <header class="model-picker-header">
             <div><h2>选择模型</h2><p>仅显示当前租户与 Skill 允许调用的模型</p></div>
             <button type="button" class="model-picker-close" title="关闭" aria-label="关闭模型选择" @click="showModelPicker = false">×</button>
@@ -805,6 +806,35 @@ const approvalDeciding = ref(false)
 const pendingApprovalActions = computed(() => pendingAgentApproval.value?.approval?.actions || pendingAgentApproval.value?.actions || [])
 let agentStreamController = null
 const showModelPicker = ref(false)
+const modelPickerTriggerRef = ref(null)
+const modelPickerStyle = ref({})
+const MODEL_PICKER_WIDTH = 430
+
+// 弹窗跟随触发按钮（模型选择 icon）定位：面板可横向拖拽，固定位置会导致弹窗错位
+function updateModelPickerPosition() {
+  const trigger = modelPickerTriggerRef.value
+  if (!trigger || typeof window === 'undefined') return
+  // 窄屏（移动端）保留固定全宽布局，不跟随
+  if (window.innerWidth <= 500) {
+    modelPickerStyle.value = {}
+    return
+  }
+  const rect = trigger.getBoundingClientRect()
+  const width = Math.min(MODEL_PICKER_WIDTH, window.innerWidth - 24)
+  const gap = 8
+  // 弹窗右上角对齐按钮右上角，向上弹出；左右都不超出视口
+  const right = Math.min(
+    Math.max(4, window.innerWidth - rect.right + 4),
+    window.innerWidth - width - gap
+  )
+  const bottom = Math.max(4, window.innerHeight - rect.top + gap)
+  modelPickerStyle.value = { right: `${right}px`, bottom: `${bottom}px`, width: `${width}px` }
+}
+
+function openModelPicker() {
+  updateModelPickerPosition()
+  showModelPicker.value = true
+}
 const modelPickerType = ref('image')
 const selectedModelByType = ref({ image: '', video: '' })
 const tenantConfigVersion = useTenantConfigVersion()
@@ -1386,13 +1416,39 @@ function handleInputEvent(event) {
   if (editor) {
     const selectionRange = getPromptEditorSelectionRange(editor)
     const text = serializePromptEditorContent(editor)
+    const needsStructuralRepair = hasPromptEditorOrphanTextNodes(editor) ||
+      Array.from(editor.childNodes).some(node => node.nodeType === 1 && node.tagName !== 'SPAN')
+
+    // Chrome/Edge 的 IME 首个拼音字符会先以 insertText（isComposing=false）到达，
+    // 同一任务内才触发 compositionstart。若此时立即同步 inputText 并 bump renderKey，
+    // Vue 会在 IME 合成进行中重建 contenteditable，导致拼音预览无反馈、字符重叠。
+    // 推迟到下一帧：compositionstart 已在同一任务内触发（isInputComposing=true）则
+    // 跳过，交由 compositionend 统一同步修复；否则按普通英文输入立即补同步与结构修复。
+    if (shouldDeferPromptEditorBoundaryBeforeInputForIme(event) && needsStructuralRepair) {
+      nextTick(() => {
+        if (isInputComposing) return
+        if (text !== inputText.value) inputText.value = text
+        inputEditorRenderKey.value += 1
+        nextTick(() => {
+          const nextEditor = inputRef.value
+          if (nextEditor) {
+            nextEditor.focus()
+            restorePromptEditorSelection(nextEditor, selectionRange.start, selectionRange.end)
+          }
+        })
+      })
+      autoResize()
+      return
+    }
+
     if (text !== inputText.value) {
       inputText.value = text
     }
-    if (hasPromptEditorOrphanTextNodes(editor) ||
-      Array.from(editor.childNodes).some(node => node.nodeType === 1 && node.tagName !== 'SPAN')) {
+    if (needsStructuralRepair) {
       inputEditorRenderKey.value += 1
       nextTick(() => {
+        // IME 拼音合成中跳过 DOM 修复，避免误删合成文本或打断光标
+        if (isInputComposing) return
         const nextEditor = inputRef.value
         if (nextEditor) {
           nextEditor.focus()
@@ -1401,6 +1457,8 @@ function handleInputEvent(event) {
       })
     } else {
       nextTick(() => {
+        // IME 拼音合成中跳过 DOM 修复，避免误删合成文本或打断光标
+        if (isInputComposing) return
         removePromptEditorOrphanTextNodes(editor)
         restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
       })
@@ -2260,6 +2318,10 @@ function startResize(e) {
     document.removeEventListener('mouseup', onMouseUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
+    // 拖拽结束，双 rAF 等待布局稳定后刷新模型选择弹窗位置
+    if (showModelPicker.value) {
+      requestAnimationFrame(() => requestAnimationFrame(() => updateModelPickerPosition()))
+    }
   }
 
   document.body.style.cursor = 'ew-resize'
@@ -2289,11 +2351,16 @@ watch(() => props.visible, (visible) => {
 })
 
 // 监听面板宽度变化
+// flush: 'post' + 双 rAF：等待 DOM 布局（含 compact 模式切换）完全稳定后，
+// 再读取按钮新位置刷新弹窗，避免面板横向拖拽时弹窗停留在旧位置
 watch(panelWidth, (newWidth) => {
   if (props.visible) {
     emit('width-change', newWidth)
   }
-})
+  if (showModelPicker.value) {
+    requestAnimationFrame(() => requestAnimationFrame(() => updateModelPickerPosition()))
+  }
+}, { flush: 'post' })
 
 // 点击外部关闭下拉菜单
 function handleClickOutside(event) {

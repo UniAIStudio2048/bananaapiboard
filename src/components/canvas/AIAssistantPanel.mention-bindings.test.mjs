@@ -87,6 +87,20 @@ test('assistant input guards IME composition before serializing the contentedita
   assert.match(source, /@compositionend="handleInputCompositionEnd"/)
 })
 
+test('assistant input defers editor sync and remount for Chrome IME first pinyin character', () => {
+  const handler = source.match(/function\s+handleInputEvent\(event\)[\s\S]*?\n}\n/)?.[0] || ''
+  assert.match(
+    handler,
+    /shouldDeferPromptEditorBoundaryBeforeInputForIme\(event\)[\s\S]*?needsStructuralRepair[\s\S]*?nextTick\(\(\) => \{[\s\S]*?if \(isInputComposing\) return[\s\S]*?inputEditorRenderKey\.value\s*\+= 1/,
+    'assistant input should defer inputText sync and editor remount when a single latin char may start IME composition'
+  )
+  assert.match(
+    handler,
+    /shouldDeferPromptEditorBoundaryBeforeInputForIme\(event\)[\s\S]*?nextTick\(\(\) => \{[\s\S]*?inputText\.value[\s\S]*?inputEditorRenderKey\.value\s*\+= 1/,
+    'assistant input should fall back to syncing text and remounting when no composition starts'
+  )
+})
+
 test('assistant attachment drags reset local and canvas drag state on every drag end path', () => {
   assert.match(
     source,
