@@ -17,6 +17,8 @@ test('画布 VideoNode 输出分辨率显示配置：未配置时不限制，配
   assert.match(source, /return filterResolutionDisplay\(options\s*\.map\(option => \{\n\s*const value = typeof option === 'string' \? option : option\?\.value/)
   assert.match(source, /return filterResolutionDisplay\(configuredResolutions\)/)
   assert.match(source, /return filterResolutionDisplay\(\[['"']720P['"']\]\)/)
+  // 通用分辨率档位（resolutionPricing）也按显示配置过滤，避免展示后台未启用的档位
+  assert.match(source, /const genericVideoResolutionOptions = computed\(\(\) => \{[\s\S]*return filterResolutionDisplay\(getEnabledVideoResolutionOptions\(currentModelConfig\.value\?\.resolutionPricing\)/)
 })
 
 test('画布 Vidu 分辨率显示配置：仅在后台启用档位内切换，非法值自动重置', () => {

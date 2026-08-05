@@ -66,14 +66,38 @@
         </div>
       </div>
 
+      <!-- 媒体生成中 -->
+      <div
+        v-if="message.mediaGenerating"
+        class="media-generating"
+        :class="`media-generating--${message.mediaGenerating}`"
+      >
+        <div class="media-generating__icon">
+          <svg v-if="message.mediaGenerating === 'video'" class="media-generating__svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="5" width="13" height="14" rx="2.5" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="m20.5 9.5-4.5 2.5 4.5 2.5v-5Z" />
+          </svg>
+          <svg v-else class="media-generating__svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="4" width="18" height="16" rx="2.5" />
+            <circle cx="9" cy="10" r="1.8" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="m5.5 17.5 4.5-4.5 3 3 3-3 2.5 2.5" />
+          </svg>
+        </div>
+        <span class="media-generating__label">{{ message.mediaGenerating === 'video' ? '视频生成中' : '图片生成中' }}…</span>
+      </div>
+
       <!-- 主要内容 -->
       <div
+        v-else
         class="ai-message__text"
         :class="{ 'is-loading': message.isStreaming && !message.content }"
         @contextmenu="handleContextMenu"
       >
         <template v-if="message.isStreaming && !message.content">
           <span class="loading-dots">AI 正在回复</span>
+        </template>
+        <template v-else-if="message.isStreaming && message.content">
+          <div class="ai-message__text-stream">{{ message.content }}</div>
         </template>
         <template v-else>
           <div v-html="formattedContent"></div>
@@ -111,15 +135,15 @@
           <!-- 图片预览 -->
           <img
             v-if="att.type === 'image'"
-            :src="att.url"
+            :src="toSameOriginUrl(att.url)"
             :alt="att.name"
             class="ai-attachment__image"
-            @click="$emit('preview-media', { type: 'image', url: att.url, name: att.name })"
+            @click="$emit('preview-media', { type: 'image', url: toSameOriginUrl(att.url), name: att.name })"
           />
           <!-- 视频内联预览 -->
-          <div v-else-if="att.type === 'video'" class="ai-attachment__video-wrapper" @click="$emit('preview-media', { type: 'video', url: att.url, name: att.name })">
+          <div v-else-if="att.type === 'video'" class="ai-attachment__video-wrapper" @click="$emit('preview-media', { type: 'video', url: toSameOriginUrl(att.url), name: att.name })">
             <video
-              :src="att.url"
+              :src="toSameOriginUrl(att.url)"
               class="ai-attachment__video"
               muted
               preload="metadata"
@@ -201,6 +225,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
+import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 
 const props = defineProps({
   message: {
@@ -551,6 +576,88 @@ onUnmounted(() => {
 
 .ai-message__text.is-loading {
   opacity: 0.7;
+}
+
+.ai-message__text-stream {
+  padding: 12px 16px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: pre-wrap;
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  cursor: text;
+  background: linear-gradient(135deg,
+    rgba(45, 50, 65, 0.85) 0%,
+    rgba(35, 40, 55, 0.9) 100%
+  );
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  color: #e5e7eb;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom-left-radius: 6px;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.2),
+    0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.media-generating {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg,
+    rgba(45, 50, 65, 0.85) 0%,
+    rgba(35, 40, 55, 0.9) 100%
+  );
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom-left-radius: 6px;
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.2),
+    0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.media-generating__icon {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: 10px;
+  color: #a78bfa;
+  background: rgba(167, 139, 250, 0.12);
+  animation: media-generating-pulse 1.6s ease-in-out infinite;
+}
+
+.media-generating--video .media-generating__icon {
+  color: #60a5fa;
+  background: rgba(96, 165, 250, 0.12);
+}
+
+.media-generating__svg {
+  width: 22px;
+  height: 22px;
+}
+
+.media-generating__label {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+@keyframes media-generating-pulse {
+  0%, 100% {
+    opacity: 0.55;
+    transform: scale(0.96);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
 }
 
 .loading-dots {
@@ -999,6 +1106,33 @@ onUnmounted(() => {
   box-shadow: 
     0 4px 24px rgba(0, 0, 0, 0.06),
     inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+:root.canvas-theme-light .ai-message__text-stream {
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.75) 0%,
+    rgba(248, 250, 252, 0.85) 100%
+  );
+  color: #1c1917;
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+:root.canvas-theme-light .media-generating {
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.75) 0%,
+    rgba(248, 250, 252, 0.85) 100%
+  );
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+:root.canvas-theme-light .media-generating__label {
+  color: #1c1917;
 }
 
 /* 用户消息气泡 - 白昼模式 */

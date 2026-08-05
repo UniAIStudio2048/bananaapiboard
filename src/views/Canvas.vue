@@ -2157,17 +2157,54 @@ function handleAIAssistantCanvasWriteback(payload = {}) {
     : (canvasStore.selectedNodeId ? [canvasStore.selectedNodeId] : [])
   const nodeId = payload.node_id || payload.nodeId || selectedNodeIds[0]
   const urls = Array.isArray(payload.result_urls) ? payload.result_urls.filter(Boolean) : []
-  if (!nodeId || !urls.length) return
+  if (!urls.length) return
   const mediaType = payload.media_type === 'video' ? 'video' : 'image'
-  canvasStore.updateNodeData(nodeId, {
+  const selectedNode = canvasStore.nodes.find(node => node.id === nodeId)
+  // A media result cannot be rendered by a node of the other media type
+  // (for example, a video output inside an image node). Create a matching
+  // node instead of silently writing data that its renderer ignores.
+  const targetNodeId = selectedNode?.type === mediaType ? nodeId : null
+  const output = mediaType === 'video'
+    ? { type: 'video', url: urls[0], urls }
+    : { type: 'image', url: urls[0], urls }
+  if (!targetNodeId) {
+    const node = canvasStore.addNode({
+      type: mediaType,
+      position: getVisibleCanvasFlowPosition(),
+      data: {
+        status: 'success',
+        progress: null,
+        taskId: payload.history_id || undefined,
+        output
+      }
+    })
+    if (node?.id) {
+      schedulePersistAfterTask('ai-assistant-skill-writeback')
+      displayToast(`已加载到画布`, 'success')
+    }
+    return
+  }
+  canvasStore.updateNodeData(targetNodeId, {
     status: 'success',
     progress: null,
     taskId: payload.history_id || undefined,
-    output: mediaType === 'video'
-      ? { type: 'video', url: urls[0], urls }
-      : { type: 'image', url: urls[0], urls }
+    output
   })
   schedulePersistAfterTask('ai-assistant-skill-writeback')
+  displayToast(`已加载到画布`, 'success')
+}
+
+function getVisibleCanvasFlowPosition() {
+  const container = document.querySelector('.canvas-board')
+  const rect = container?.getBoundingClientRect()
+  const viewport = canvasStore.viewport || { x: 0, y: 0, zoom: 1 }
+  const zoom = viewport.zoom || 1
+  const screenX = rect ? rect.width / 2 : window.innerWidth / 2
+  const screenY = rect ? rect.height / 2 : window.innerHeight / 2
+  return {
+    x: (screenX - (viewport.x || 0)) / zoom - 120,
+    y: (screenY - (viewport.y || 0)) / zoom - 50
+  }
 }
 
 // 处理节点右键「发送到灵感助手」

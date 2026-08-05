@@ -618,7 +618,6 @@
             <button v-for="model in modelPickerModels" :key="model.value" type="button" class="model-picker-item" :class="{ selected: isAssistantModelSelected(model) }" @click="selectAssistantModel(model)">
               <span class="picker-model-icon"><ModelIcon :icon="getAssistantModelIcon(model)" :label="model.label || model.value" /></span>
               <span class="picker-model-copy"><strong>{{ model.label || model.value }}</strong><small>{{ model.description || '已启用模型' }}</small></span>
-              <span v-if="model.pointsCost != null" class="picker-model-cost">{{ formatModelCost(model.pointsCost) }} 积分</span>
               <span class="picker-model-action" :class="{ selected: isAssistantModelSelected(model) }" :aria-label="isAssistantModelSelected(model) ? '已选择' : '选择模型'">
                 <svg v-if="isAssistantModelSelected(model)" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 4 4L19 6" /></svg>
                 <svg v-else viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
@@ -692,6 +691,20 @@
           ></audio>
         </div>
         <div v-if="lightboxMedia.name" class="lightbox-caption">{{ lightboxMedia.name }}</div>
+        <div v-if="lightboxMedia.type === 'image' || lightboxMedia.type === 'video'" class="lightbox-actions">
+          <button type="button" class="lightbox-action-btn" @click="downloadLightboxMedia">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+            </svg>
+            下载到本地
+          </button>
+          <button type="button" class="lightbox-action-btn" @click="loadLightboxMediaToCanvas">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2M12 3v12m0 0 4-4m-4 4-4-4" />
+            </svg>
+            加载到画布
+          </button>
+        </div>
       </div>
     </Transition>
   </Teleport>
@@ -738,6 +751,7 @@ import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { showAlert } from '@/composables/useCanvasDialog'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { createAgentIdempotencyKey, createAgentRun, decideAgentRun, getSkillCatalog, streamAgentRun } from '@/api/agent'
+import { startStreamDownload } from '@/api/client'
 import { config as tenantConfig, getAvailableImageModels, getAvailableVideoModels, useTenantConfigVersion } from '@/config/tenant'
 import { getAssistantModelIcon } from '@/utils/aiAssistantModels'
 
@@ -858,24 +872,62 @@ const selectedMode = computed(() => {
 
 const selectedSkill = computed(() => agentSkills.value.find(skill => skill.id === selectedSkillId.value) || null)
 const modelPickerTypes = computed(() => {
+  tenantConfigVersion.value
   const capabilities = agentSkills.value.flatMap(skill => Array.isArray(skill?.capabilities) ? skill.capabilities : [])
-  return ['image', 'video'].filter(type => capabilities.includes(`${type}:generate`))
+  const hasSkillType = type => capabilities.includes(`${type}:generate`)
+  const hasConfiguredType = type => {
+    const models = type === 'video' ? tenantConfig.video_models : tenantConfig.image_models
+    return Array.isArray(models) && models.some(item => item?.enabled !== false)
+  }
+  return ['image', 'video'].filter(type => hasSkillType(type) || hasConfiguredType(type))
 })
 const selectedModelValue = computed(() => selectedModelByType.value[modelPickerType.value] || '')
 const modelPickerModels = computed(() => {
   tenantConfigVersion.value
-  const configuredModels = modelPickerType.value === 'video' ? tenantConfig.video_models : tenantConfig.image_models
+  const pickerType = modelPickerType.value
+  const configuredModels = pickerType === 'video' ? tenantConfig.video_models : tenantConfig.image_models
   if (!Array.isArray(configuredModels) || configuredModels.length === 0) return []
+  const allowlist = Array.isArray(selectedSkill.value?.model_allowlist) ? selectedSkill.value.model_allowlist : []
+  const isAllowlisted = model => !allowlist.length ||
+    allowlist.includes(model.value) || allowlist.includes(model.id) || allowlist.includes(model.name)
+  if (pickerType === 'video') {
+    const catalog = getAvailableVideoModels({ disableVeoMerge: true })
+    const catalogAliases = item => [item.value, item.id, item.name, item.actualModel, item.displayName].filter(Boolean).map(String)
+    const list = configuredModels
+      .filter(item => item?.enabled !== false && item?.canvas_exposed !== false)
+      .map(cfg => {
+        const metaIndex = catalog.findIndex(item => [cfg?.name, cfg?.id, cfg?.actualModel, cfg?.displayName]
+          .filter(Boolean).map(String)
+          .some(key => catalogAliases(item).includes(key)))
+        const meta = metaIndex >= 0 ? catalog[metaIndex] : {}
+        return {
+          ...meta,
+          value: cfg.name || cfg.id || cfg.value || meta.value,
+          id: cfg.id || cfg.name || meta.id,
+          name: cfg.name || meta.name,
+          actualModel: cfg.actualModel || meta.actualModel,
+          label: cfg.displayName || cfg.label || meta.label || cfg.name || cfg.id,
+          description: cfg.description || meta.description || '已启用视频模型',
+          pointsCost: cfg.pointsCost != null ? cfg.pointsCost : meta.pointsCost,
+          ...(cfg.veoModes ? { veoModes: cfg.veoModes } : {}),
+          ...(cfg.klingO1Modes ? { klingO1Modes: cfg.klingO1Modes } : {}),
+          __catalogOrder: metaIndex >= 0 ? metaIndex : Number.MAX_SAFE_INTEGER
+        }
+      })
+    // 与视频节点一致：目录已按 video_model_groups 分组排序，配置模型按其相对顺序排列，未匹配的排最后
+    list.sort((left, right) => left.__catalogOrder - right.__catalogOrder)
+    return list
+      .map(({ __catalogOrder, ...model }) => model)
+      .filter(isAllowlisted)
+  }
   const configuredOrder = new Map(configuredModels.map((item, index) => [String(item?.name || item?.id || ''), index]))
-  const models = (modelPickerType.value === 'video' ? getAvailableVideoModels({ disableVeoMerge: true }) : getAvailableImageModels())
+  const models = getAvailableImageModels()
     .sort((left, right) => {
       const leftIndex = configuredOrder.get(String(left.value || left.name || left.id)) ?? Number.MAX_SAFE_INTEGER
       const rightIndex = configuredOrder.get(String(right.value || right.name || right.id)) ?? Number.MAX_SAFE_INTEGER
       return leftIndex - rightIndex
     })
-  const allowlist = Array.isArray(selectedSkill.value?.model_allowlist) ? selectedSkill.value.model_allowlist : []
-  if (!allowlist.length) return models
-  return models.filter(model => allowlist.includes(model.value) || allowlist.includes(model.id) || allowlist.includes(model.name))
+  return models.filter(isAllowlisted)
 })
 const selectedAssistantModel = computed(() => {
   if (!selectedModelValue.value) return null
@@ -884,11 +936,6 @@ const selectedAssistantModel = computed(() => {
 
 function modelTypeLabel(type) {
   return type === 'video' ? '视频' : '图片'
-}
-
-function formatModelCost(value) {
-  if (value && typeof value === 'object') return Object.values(value).join(' / ')
-  return Number(value || 0)
 }
 
 function selectAssistantModel(model) {
@@ -1042,6 +1089,10 @@ async function loadConfig() {
       if (config.value.modes[0].deep_think_default) {
         deepThinkEnabled.value = true
       }
+      // 租户启用联网搜索时默认开启，避免用户要求搜索时模型没有搜索工具
+      if (config.value.web_search?.enabled) {
+        webSearchEnabled.value = true
+      }
     }
   } catch (error) {
     console.error('[AI-Assistant] 加载配置失败:', error)
@@ -1081,6 +1132,10 @@ async function loadSessions() {
 function selectMode(mode) {
   selectedModeId.value = mode.id
   deepThinkEnabled.value = mode.deep_think_default || false
+  // 资料搜索等模式声明了 web_search 工具时自动开启联网搜索
+  if (mode.tools?.includes('web_search')) {
+    webSearchEnabled.value = true
+  }
   showModeDropdown.value = false
 }
 
@@ -1566,7 +1621,20 @@ async function sendMessage() {
     isStreaming: true
   })
   let canvasWritebackSent = false
+  let streamContentTimer = null
+  let pendingStreamContent = ''
+  const flushStreamContent = () => {
+    if (streamContentTimer) {
+      clearTimeout(streamContentTimer)
+      streamContentTimer = null
+    }
+    if (pendingStreamContent) {
+      messages.value[assistantMessageIndex].content = pendingStreamContent
+      pendingStreamContent = ''
+    }
+  }
   const applyGeneratedResult = (result) => {
+    delete messages.value[assistantMessageIndex].mediaGenerating
     applyAgentResultToMessage(assistantMessageIndex, result)
     const urls = Array.isArray(result?.result_urls) ? result.result_urls.filter(Boolean) : []
     const workflowId = props.canvasContext?.workflow_id || props.canvasContext?.workflowId
@@ -1677,7 +1745,14 @@ async function sendMessage() {
         loadSessions()
       },
       onContent: (chunk, fullContent) => {
-        messages.value[assistantMessageIndex].content = fullContent
+        pendingStreamContent = fullContent
+        if (streamContentTimer) return
+        streamContentTimer = setTimeout(() => {
+          streamContentTimer = null
+          messages.value[assistantMessageIndex].content = pendingStreamContent
+          pendingStreamContent = ''
+          throttledScrollToBottom()
+        }, 40)
         throttledScrollToBottom()
       },
       onThinking: (chunk, fullThinking) => {
@@ -1686,18 +1761,28 @@ async function sendMessage() {
       },
       onToolEvent: (event) => {
         if (event?.type === 'tool_started') {
-          const skillLabel = event.skill_id === 'builtin-canvas-video-generate' ? '生视频' :
-            event.skill_id === 'builtin-canvas-image-generate' ? '生图' : '媒体'
-          messages.value[assistantMessageIndex].content = `正在调用 Skill${skillLabel}…`
+          const skillId = event.skill_id || ''
+          const generatingType = skillId === 'builtin-canvas-video-generate' ? 'video'
+            : skillId === 'builtin-canvas-image-generate' ? 'image' : ''
+          if (generatingType) {
+            messages.value[assistantMessageIndex].mediaGenerating = generatingType
+            messages.value[assistantMessageIndex].content = ''
+          } else {
+            messages.value[assistantMessageIndex].content = `正在调用 Skill${skillId === 'builtin-canvas-video-generate' ? '生视频' : skillId === 'builtin-canvas-image-generate' ? '生图' : '媒体'}…`
+          }
           messages.value[assistantMessageIndex].isStreaming = true
         } else if (event?.type === 'tool_progress') {
-          messages.value[assistantMessageIndex].content = '生成任务已提交，正在等待结果…'
+          if (!messages.value[assistantMessageIndex].mediaGenerating) {
+            messages.value[assistantMessageIndex].content = '生成任务已提交，正在等待结果…'
+          }
         } else if (event?.type === 'tool_completed') {
           applyGeneratedResult(event.result)
         }
         throttledScrollToBottom()
       },
       onDone: (fullContent, result) => {
+        flushStreamContent()
+        delete messages.value[assistantMessageIndex].mediaGenerating
         messages.value[assistantMessageIndex].isStreaming = false
         if (result?.session_id) {
           currentSessionId.value = result.session_id
@@ -2043,6 +2128,31 @@ function previewMedia({ type, url, name }) {
 function closeLightbox() {
   lightboxVisible.value = false
   lightboxMedia.value = { type: '', url: '', name: '' }
+}
+
+function downloadLightboxMedia() {
+  const { url, name } = lightboxMedia.value
+  if (!url) return
+  try {
+    startStreamDownload(url, name || 'ai-assistant-media')
+  } catch (error) {
+    console.error('[AI-Assistant] 媒体下载失败:', error)
+    showAlert(`下载失败：${error.message || '未知错误'}`, '下载失败')
+  }
+  closeLightbox()
+}
+
+function loadLightboxMediaToCanvas() {
+  const { type, url } = lightboxMedia.value
+  if (!url || !['image', 'video'].includes(type)) return
+  emit('canvas-writeback', {
+    workflow_id: null,
+    node_id: null,
+    media_type: type,
+    result_urls: [url],
+    history_id: null
+  })
+  closeLightbox()
 }
 
 // ESC 关闭 Lightbox
@@ -3165,7 +3275,6 @@ defineExpose({
 .picker-model-copy { display: grid; min-width: 0; gap: 3px; }
 .picker-model-copy strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .picker-model-copy small { overflow: hidden; color: #8f9bad; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.picker-model-cost { color: #aeb7c8; font-size: 11px; white-space: nowrap; }
 .picker-model-action { display: grid; width: 26px; height: 26px; place-items: center; border: 1px solid rgba(255,255,255,.14); border-radius: 50%; color: #aeb7c8; }
 .picker-model-action svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .picker-model-action.selected { border-color: #9b8cff; background: #7668e8; color: #fff; }
@@ -3178,7 +3287,6 @@ defineExpose({
 @media (max-width: 500px) {
   .model-picker-dialog { right: 10px; bottom: 76px; width: calc(100vw - 20px); max-height: calc(100vh - 96px); }
   .model-picker-list { max-height: min(330px, calc(100vh - 220px)); }
-  .picker-model-cost { display: none; }
 }
 
 /* 下拉按钮中的文字 - 限制最大宽度并显示省略号 */
@@ -3629,6 +3737,63 @@ defineExpose({
   white-space: nowrap;
 }
 
+.lightbox-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.lightbox-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.lightbox-action-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+:root.canvas-theme-light .lightbox-action-btn {
+  border-color: transparent;
+  background: #7668e8;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(118, 104, 232, 0.35);
+}
+
+:root.canvas-theme-light .lightbox-action-btn:hover {
+  background: #6658d8;
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(118, 104, 232, 0.45);
+}
+
+:root.canvas-theme-light .media-lightbox {
+  background: rgba(248, 250, 252, 0.92);
+  backdrop-filter: blur(10px);
+}
+
+:root.canvas-theme-light .lightbox-close {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(0, 0, 0, 0.8);
+}
+
+:root.canvas-theme-light .lightbox-close:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .lightbox-caption {
+  color: rgba(0, 0, 0, 0.65);
+}
+
 .lightbox-fade-enter-active,
 .lightbox-fade-leave-active {
   transition: opacity 0.2s ease;
@@ -3967,10 +4132,6 @@ defineExpose({
 :root.canvas-theme-light .picker-model-icon {
   background: #ede9fe;
   color: #6d28d9;
-}
-
-:root.canvas-theme-light .picker-model-cost {
-  color: #78716c;
 }
 
 :root.canvas-theme-light .picker-model-action {

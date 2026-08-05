@@ -1792,8 +1792,9 @@ function filterResolutionDisplay(options) {
 const genericVideoResolution = ref(props.data.videoResolution || '')
 
 const genericVideoResolutionOptions = computed(() => {
-  return getEnabledVideoResolutionOptions(currentModelConfig.value?.resolutionPricing)
+  return filterResolutionDisplay(getEnabledVideoResolutionOptions(currentModelConfig.value?.resolutionPricing)
     .map(value => ({ value, label: String(value).toUpperCase() }))
+  )
 })
 
 function syncGenericVideoResolution(value) {
