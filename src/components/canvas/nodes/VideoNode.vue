@@ -3224,6 +3224,15 @@ const shouldApplySeedanceVideoInputMultiplier = computed(() => {
   return isSeedanceVideoInputMultiplierModel.value && hasReferenceVideos.value
 })
 
+const minimaxH3VideoInputMultiplier = computed(() => {
+  const h3Cfg = currentModelConfig.value?.minimaxConfig || {}
+  return Number(h3Cfg.videoInputMultiplier) || 1
+})
+
+const shouldApplyMinimaxH3VideoInputMultiplier = computed(() => {
+  return isMinimaxH3Model.value && minimaxH3VideoInputMultiplier.value > 1 && referenceVideos.value.length > 0
+})
+
 // 参考音频（来自上游音频节点）
 const AUDIO_NODE_TYPES = ['audio-input', 'audio']
 
@@ -3765,7 +3774,16 @@ const pointsCost = computed(() => {
     genericVideoResolution.value,
     selectedDuration.value
   )
-  if (genericResolutionPrice !== null) return genericResolutionPrice
+  if (genericResolutionPrice !== null) {
+    // 通用分辨率按秒计费同样应用视频输入倍率（与服务端计费保持一致）
+    if (shouldApplySeedanceVideoInputMultiplier.value) {
+      return applySeedanceVideoInputMultiplier(genericResolutionPrice, seedanceVideoInputMultiplier.value, true)
+    }
+    if (shouldApplyMinimaxH3VideoInputMultiplier.value) {
+      return Math.round(genericResolutionPrice * minimaxH3VideoInputMultiplier.value)
+    }
+    return genericResolutionPrice
+  }
 
   // VEO 模型：使用当前模式的积分配置
   if (isVeoModel.value) {
@@ -3882,9 +3900,8 @@ const pointsCost = computed(() => {
     const h3PerSecond = Number(h3Cfg.resolutionCosts?.[h3Res])
       || Number(currentModelConfig.value.costPerSecond) || 15
     let h3Cost = Math.round(h3PerSecond * (Number(selectedDuration.value) || 5))
-    const h3Multiplier = Number(h3Cfg.videoInputMultiplier) || 1
-    if (h3Multiplier > 1 && referenceVideos.value.length > 0) {
-      h3Cost = Math.round(h3Cost * h3Multiplier)
+    if (shouldApplyMinimaxH3VideoInputMultiplier.value) {
+      h3Cost = Math.round(h3Cost * minimaxH3VideoInputMultiplier.value)
     }
     return h3Cost
   }
@@ -9606,6 +9623,9 @@ function handleToolbarPreview() {
               {{ formatPoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}
               <span v-if="shouldApplySeedanceVideoInputMultiplier" class="points-multiplier-chip">
                 {{ formatSeedanceVideoInputMultiplier(seedanceVideoInputMultiplier) }}
+              </span>
+              <span v-if="shouldApplyMinimaxH3VideoInputMultiplier" class="points-multiplier-chip">
+                {{ formatPoints(minimaxH3VideoInputMultiplier) }}x
               </span>
             </template>
           </span>
