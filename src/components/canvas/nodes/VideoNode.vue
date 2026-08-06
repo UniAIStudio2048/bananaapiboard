@@ -5268,7 +5268,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   }
 
   // Fdai (SD2.0)：9 图 + 3 视频 + 3 音频全部提交，由后端组装进 images 数组
-  if (capturedState.apiType === 'fdai-video') {
+  if (String(capturedState.apiType || '').startsWith('fdai-video')) {
     const fdaiImages = finalImages.length > 0 ? finalImages : referenceImages.value
     if (fdaiImages.length > 0) {
       formData.append('reference_images', JSON.stringify(fdaiImages.slice(0, 9)))
