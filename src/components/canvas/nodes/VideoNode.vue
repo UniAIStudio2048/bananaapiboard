@@ -5267,6 +5267,23 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     console.log('[VideoNode] MiniMax H3 模式:', h3Mode)
   }
 
+  // Fdai (SD2.0)：9 图 + 3 视频 + 3 音频全部提交，由后端组装进 images 数组
+  if (capturedState.apiType === 'fdai-video') {
+    const fdaiImages = finalImages.length > 0 ? finalImages : referenceImages.value
+    if (fdaiImages.length > 0) {
+      formData.append('reference_images', JSON.stringify(fdaiImages.slice(0, 9)))
+    }
+    const fdaiVideos = referenceVideos.value || []
+    if (fdaiVideos.length > 0) {
+      formData.append('reference_videos', JSON.stringify(fdaiVideos.slice(0, 3)))
+    }
+    const fdaiAudios = referenceAudios.value || []
+    if (fdaiAudios.length > 0) {
+      formData.append('reference_audios', JSON.stringify(fdaiAudios.slice(0, 3)))
+    }
+    console.log('[VideoNode] Fdai SD2.0 多模态参考 | 图片:', fdaiImages.length, '视频:', fdaiVideos.length, '音频:', fdaiAudios.length)
+  }
+
   if (isWanModel.value) {
     const wanMode = capturedState.wanMode || selectedWanMode.value
     const wanAnimateMode = capturedState.wanAnimateMode || selectedWanAnimateMode.value || currentModelConfig.value?.wanConfig?.animateMode || 'wan-std'
