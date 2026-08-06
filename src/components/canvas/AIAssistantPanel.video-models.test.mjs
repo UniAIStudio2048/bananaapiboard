@@ -22,9 +22,13 @@ test('video model list is built from tenant video_models and filters canvas_expo
   assert.match(source, /pointsCost: cfg\.pointsCost != null \? cfg\.pointsCost : meta\.pointsCost/)
 })
 
+test('selected video model keeps the configured model id instead of a shared actualModel', () => {
+  assert.match(source, /const selectedValue = model\.veoModes\?\.find\(mode => mode\.value === model\.defaultVeoMode\)\?\.actualModel \|\|[\s\S]*?model\.value \|\| model\.actualModel/)
+})
+
 test('selected video model is sent as skill_model with skill_model_type video', () => {
-  assert.match(source, /skill_model: selectedModelValue\.value \|\| undefined/)
-  assert.match(source, /skill_model_type: selectedModelValue\.value \? modelPickerType\.value : undefined/)
+  assert.match(source, /skill_model: turnModelValue \|\| undefined/)
+  assert.match(source, /skill_model_type: turnModelType \|\| undefined/)
 })
 
 test('video model list is ordered by the grouped catalog order like the video node', () => {

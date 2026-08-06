@@ -478,7 +478,7 @@ function updateWorkPreview(file) {
   error.value = ''
 }
 
-function handleMultiImageChange(e) {
+async function handleMultiImageChange(e) {
   const files = e.target?.files || e.dataTransfer?.files
   if (!files || files.length === 0) return
 
@@ -489,19 +489,30 @@ function handleMultiImageChange(e) {
   }
 
   const newFiles = Array.from(files).slice(0, remaining)
-  for (const file of newFiles) {
-    if (!file.type.startsWith('image/')) {
+  const processedFiles = []
+  for (const rawFile of newFiles) {
+    if (!rawFile.type.startsWith('image/')) {
       error.value = '请选择图片文件'
       return
     }
+    let file = rawFile
     if (file.size > MAX_IMAGE_SIZE) {
-      error.value = `图片 ${file.name} 超过 10MB 限制`
-      return
+      if (file.type === 'image/gif') {
+        error.value = `图片 ${file.name} 超过 10MB 限制（GIF 不支持压缩）`
+        return
+      }
+      try {
+        file = await compressImage(file, { maxSizeMB: 10 })
+      } catch {
+        error.value = `图片 ${file.name} 压缩失败，请换一张图片`
+        return
+      }
     }
+    processedFiles.push(file)
   }
 
   error.value = ''
-  for (const file of newFiles) {
+  for (const file of processedFiles) {
     workFiles.value.push(file)
     workPreviews.value.push(URL.createObjectURL(file))
   }
@@ -747,7 +758,7 @@ async function handlePublish() {
                         <span class="text-[10px] text-white/20 mt-1">添加图片</span>
                       </div>
                     </div>
-                    <p class="text-[11px] text-white/20">支持 PNG、JPG、WebP（每张≤10MB，最多{{ MAX_IMAGE_COUNT }}张，已选{{ workPreviews.length }}张）</p>
+                    <p class="text-[11px] text-white/20">支持 PNG、JPG、WebP（超过10MB自动压缩，最多{{ MAX_IMAGE_COUNT }}张，已选{{ workPreviews.length }}张）</p>
                   </div>
                   <input ref="workInput" type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple class="hidden" @change="handleWorkFileChange" />
                 </template>

@@ -33,8 +33,8 @@ test('assistant model picker uses tenant-allowed models and sends a selected mod
   assert.match(source, /<ModelIcon :icon="getAssistantModelIcon\(model\)" :label="model\.label \|\| model\.value" \/>/)
   assert.match(source, /tenantConfig\.image_models/)
   assert.match(source, /configuredOrder = new Map/)
-  assert.match(source, /skill_model: selectedModelValue\.value \|\| undefined/)
-  assert.match(source, /skill_model_type: selectedModelValue\.value \? modelPickerType\.value : undefined/)
+  assert.match(source, /skill_model: turnModelValue \|\| undefined/)
+  assert.match(source, /skill_model_type: turnModelType \|\| undefined/)
 })
 
 test('assistant model picker is anchored above the toolbar and supports daytime theme', () => {

@@ -158,6 +158,25 @@ test('OpenAI video payload keeps configured model id for backend routing', () =>
   assert.equal(entries.get('model'), 'omni_flash-10s-co')
 })
 
+test('MiniMax H3 keeps the selected config id so shared actualModels stay unambiguous', () => {
+  assert.equal(
+    resolveVideoRequestModel({
+      apiType: 'minimax-h3',
+      name: 'minimax-h3-metaso',
+      actualModel: 'MiniMax-H3'
+    }, 'minimax-h3-metaso'),
+    'minimax-h3-metaso'
+  )
+  assert.equal(
+    resolveVideoRequestModel({
+      apiType: 'minimax-h3',
+      name: 'minimax-h3',
+      actualModel: 'MiniMax-H3'
+    }, 'minimax-h3'),
+    'minimax-h3'
+  )
+})
+
 test('Bytefor request model keeps model id instead of provider model', () => {
   const configuredProviderModel = 'Custom Bytefor Model From Settings'
   assert.equal(

@@ -322,38 +322,40 @@
             </div>
           </div>
           
-          <!-- 输入框 -->
-          <div v-if="selectedAssistantModel" class="selected-model-tag">
-            <span class="selected-model-tag-icon"><ModelIcon :icon="getAssistantModelIcon(selectedAssistantModel)" :label="selectedAssistantModel.label || selectedAssistantModel.value" /></span>
-            <span class="selected-model-tag-label">{{ selectedAssistantModel.label || selectedAssistantModel.value }}</span>
-            <button type="button" class="selected-model-tag-remove" title="移除已选模型" aria-label="移除已选模型" @click="clearAssistantModel">×</button>
-          </div>
-          <div
-            :key="inputEditorRenderKey"
-            ref="inputRef"
-            class="input-textarea"
-            :class="{ 'is-empty': !inputText && !selectedAssistantModel }"
-            contenteditable="true"
-            role="textbox"
-            aria-multiline="true"
-            data-placeholder="开启你的灵感之旅..."
-            @keydown="handleInputKeydown"
-            @beforeinput="handleInputBeforeInput"
-            @input="handleInputEvent"
-            @compositionstart="handleInputCompositionStart"
-            @compositionend="handleInputCompositionEnd"
-          >
-            <span
-              v-for="(seg, i) in highlightedInputSegments"
-              :key="i"
-              class="prompt-highlight-segment"
-              :class="{ 'is-prompt-tag-slot': seg.isTag }"
-              :data-prompt-segment-index="i"
-              :data-prompt-segment-start="seg.start"
-              :data-prompt-segment-end="seg.end"
-              :data-prompt-mention="seg.isTag ? seg.text : undefined"
-              :contenteditable="seg.isTag ? 'false' : undefined"
-            ><PromptMediaTag v-if="seg.isTag" :text="seg.text" :media="seg.media" /><template v-else>{{ seg.text }}</template></span>
+          <!-- 输入框：已选模型标签卡内嵌在输入框内，仅代表本次轮对话使用该模型 -->
+          <div class="input-box" @click.self="focusInputEditor">
+            <div v-if="selectedAssistantModel" class="selected-model-tag">
+              <span class="selected-model-tag-icon"><ModelIcon :icon="getAssistantModelIcon(selectedAssistantModel)" :label="selectedAssistantModel.label || selectedAssistantModel.value" /></span>
+              <span class="selected-model-tag-label">{{ selectedAssistantModel.label || selectedAssistantModel.value }}</span>
+              <button type="button" class="selected-model-tag-remove" title="移除已选模型" aria-label="移除已选模型" @click="clearAssistantModel">×</button>
+            </div>
+            <div
+              :key="inputEditorRenderKey"
+              ref="inputRef"
+              class="input-textarea"
+              :class="{ 'is-empty': !inputText && !selectedAssistantModel }"
+              contenteditable="true"
+              role="textbox"
+              aria-multiline="true"
+              data-placeholder="开启你的灵感之旅..."
+              @keydown="handleInputKeydown"
+              @beforeinput="handleInputBeforeInput"
+              @input="handleInputEvent"
+              @compositionstart="handleInputCompositionStart"
+              @compositionend="handleInputCompositionEnd"
+            >
+              <span
+                v-for="(seg, i) in highlightedInputSegments"
+                :key="i"
+                class="prompt-highlight-segment"
+                :class="{ 'is-prompt-tag-slot': seg.isTag }"
+                :data-prompt-segment-index="i"
+                :data-prompt-segment-start="seg.start"
+                :data-prompt-segment-end="seg.end"
+                :data-prompt-mention="seg.isTag ? seg.text : undefined"
+                :contenteditable="seg.isTag ? 'false' : undefined"
+              ><PromptMediaTag v-if="seg.isTag" :text="seg.text" :media="seg.media" /><template v-else>{{ seg.text }}</template></span>
+            </div>
           </div>
 
           <PromptMentionPopup
@@ -971,7 +973,7 @@ function modelTypeLabel(type) {
 function selectAssistantModel(model) {
   const selectedValue = model.veoModes?.find(mode => mode.value === model.defaultVeoMode)?.actualModel ||
     model.klingO1Modes?.find(mode => mode.value === model.defaultKlingO1Mode)?.actualModel ||
-    model.actualModel || model.value
+    model.value || model.actualModel
   selectedModelByType.value = { ...selectedModelByType.value, [modelPickerType.value]: selectedValue }
   showModelPicker.value = false
 }
@@ -986,6 +988,37 @@ function isAssistantModelSelected(model) {
 
 function clearAssistantModel() {
   selectedModelByType.value = { ...selectedModelByType.value, [modelPickerType.value]: '' }
+}
+
+/** 点击输入框空白区域时聚焦编辑器（标签卡内嵌后，输入框外沿仍有可点击区域） */
+function focusInputEditor() {
+  const editor = inputRef.value
+  if (!editor) return
+  editor.focus()
+  try {
+    const range = document.createRange()
+    range.selectNodeContents(editor)
+    range.collapse(false)
+    const selection = window.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+  } catch (e) {
+    // 忽略选区恢复失败
+  }
+}
+
+/**
+ * 仅本次轮对话：把已选的生图/生视频模型转成自然语言提示，
+ * 随本轮消息送入 LLM，由模型自行调用生成工具并指定该模型。
+ */
+function buildTurnModelHint() {
+  const model = selectedAssistantModel.value
+  if (!model) return ''
+  const typeLabel = modelPickerType.value === 'video' ? '视频' : '图片'
+  const label = model.label || model.value || model.name || ''
+  const modelId = selectedModelValue.value || model.value || model.actualModel || label
+  if (!modelId) return ''
+  return `【本次请使用${typeLabel}生成模型「${label || modelId}」（模型标识：${modelId}）生成${typeLabel}，调用生成工具时请将 requested_model 指定为 ${modelId}】`
 }
 
 const canSend = computed(() => {
@@ -1641,6 +1674,13 @@ async function sendMessage() {
 
   syncCurrentAttachmentMentions()
   const messageText = inputText.value.trim()
+  // 仅本次轮对话：捕获已选生图/生视频模型，转为自然语言提示随消息送入 LLM；发送后立即清除，不跨轮生效
+  const turnModelHint = buildTurnModelHint()
+  const turnModelValue = selectedModelValue.value
+  const turnModelType = turnModelHint ? modelPickerType.value : ''
+  if (turnModelHint) {
+    selectedModelByType.value = { image: '', video: '' }
+  }
   const messageAttachments = resolveAssistantAttachmentsForSend({
     text: inputText.value,
     bindings: attachmentMentionBindings.value,
@@ -1807,8 +1847,9 @@ async function sendMessage() {
         deep_think: deepThinkEnabled.value,
         web_search: webSearchEnabled.value,
         skill_mode: skillExecutionMode.value,
-        skill_model: selectedModelValue.value || undefined,
-        skill_model_type: selectedModelValue.value ? modelPickerType.value : undefined
+        skill_model: turnModelValue || undefined,
+        skill_model_type: turnModelType || undefined,
+        turn_model_hint: turnModelHint || undefined
       },
       canvas_context: props.canvasContext,
       attachments: uploadedAttachments,
@@ -3158,13 +3199,12 @@ defineExpose({
   }
 }
 
-.input-textarea {
+.input-box {
   position: relative;
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 44px;
-  max-height: 120px;
-  padding: 12px 16px;
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
   background: linear-gradient(135deg, 
     rgba(255, 255, 255, 0.06) 0%,
     rgba(255, 255, 255, 0.08) 100%
@@ -3173,6 +3213,33 @@ defineExpose({
   -webkit-backdrop-filter: blur(8px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 14px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.input-box:focus-within {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  border-color: rgba(59, 130, 246, 0.35);
+  box-shadow: 
+    0 0 0 3px rgba(59, 130, 246, 0.1),
+    inset 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.input-textarea {
+  position: relative;
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  min-height: 36px;
+  max-height: 120px;
+  padding: 8px 6px 8px 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: rgba(255, 255, 255, 0.95);
   font-size: 14px;
   line-height: 1.5;
@@ -3185,16 +3252,15 @@ defineExpose({
   user-select: text;
   -webkit-user-select: text;
   outline: none;
-  transition: all 0.3s ease;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
 }
 
 .input-textarea.is-empty::before {
   content: attr(data-placeholder);
   position: absolute;
-  top: 12px;
-  left: 16px;
-  right: 16px;
+  top: 8px;
+  left: 4px;
+  right: 4px;
   color: rgba(255, 255, 255, 0.3);
   pointer-events: none;
   white-space: pre-wrap;
@@ -3203,10 +3269,10 @@ defineExpose({
 .selected-model-tag {
   display: inline-flex;
   align-items: center;
-  align-self: flex-start;
+  align-self: flex-end;
+  flex-shrink: 0;
   gap: 6px;
-  max-width: 100%;
-  margin-bottom: -4px;
+  max-width: 55%;
   padding: 5px 7px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
@@ -3259,17 +3325,6 @@ defineExpose({
 
 .prompt-highlight-segment.is-prompt-tag-slot :deep(.prompt-media-tag-chip) {
   flex-shrink: 0;
-}
-
-.input-textarea:focus {
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(255, 255, 255, 0.1) 100%
-  );
-  border-color: rgba(59, 130, 246, 0.35);
-  box-shadow: 
-    0 0 0 3px rgba(59, 130, 246, 0.1),
-    inset 0 1px 2px rgba(0, 0, 0, 0.08);
 }
 
 /* 工具栏 */
@@ -4011,7 +4066,7 @@ defineExpose({
   -webkit-backdrop-filter: blur(12px);
 }
 
-:root.canvas-theme-light .ai-assistant-panel .input-textarea {
+:root.canvas-theme-light .ai-assistant-panel .input-box {
   background: linear-gradient(135deg, 
     rgba(255, 255, 255, 0.6) 0%,
     rgba(248, 250, 252, 0.7) 100%
@@ -4021,6 +4076,13 @@ defineExpose({
   border-color: rgba(0, 0, 0, 0.08);
   color: #1c1917;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .input-textarea {
+  background: transparent;
+  border-color: transparent;
+  color: #1c1917;
+  box-shadow: none;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .input-textarea.is-empty::before {
@@ -4042,7 +4104,7 @@ defineExpose({
   color: #1c1917;
 }
 
-:root.canvas-theme-light .ai-assistant-panel .input-textarea:focus {
+:root.canvas-theme-light .ai-assistant-panel .input-box:focus-within {
   background: rgba(255, 255, 255, 0.85);
   border-color: rgba(59, 130, 246, 0.35);
   box-shadow: 

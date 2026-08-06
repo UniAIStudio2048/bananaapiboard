@@ -7,11 +7,38 @@ import { dirname, join } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(join(__dirname, 'AIAssistantPanel.vue'), 'utf8')
 
-test('shows the selected model as a removable tag above the assistant prompt', () => {
-  assert.match(source, /<div v-if="selectedAssistantModel" class="selected-model-tag">/)
+function cssBlock(selector) {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const match = source.match(new RegExp(`${escapedSelector}\\s*\\{([\\s\\S]*?)\\n\\}`))
+  assert.ok(match, `Expected ${selector} block to exist`)
+  return match[1]
+}
+
+test('shows the selected model as a removable tag inside the assistant input box', () => {
+  assert.match(source, /<div class="input-box"[\s\S]*?>[\s\S]*?<div v-if="selectedAssistantModel" class="selected-model-tag">/)
   assert.match(source, /<ModelIcon :icon="getAssistantModelIcon\(selectedAssistantModel\)" :label="selectedAssistantModel\.label \|\| selectedAssistantModel\.value" \/>/)
   assert.match(source, /title="移除已选模型"[\s\S]*?@click="clearAssistantModel"/)
   assert.match(source, /const selectedAssistantModel = computed\(\(\) => \{[\s\S]*?modelPickerModels\.value\.find\(model => isAssistantModelSelected\(model\)\)/)
+  const inputBox = cssBlock('.input-box')
+  assert.match(inputBox, /display:\s*flex;/)
+  assert.match(inputBox, /align-items:\s*flex-end;/)
+  const tag = cssBlock('.selected-model-tag')
+  assert.match(tag, /flex-shrink:\s*0;/)
+})
+
+test('selected model is converted to a natural-language hint for this turn only', () => {
+  assert.match(source, /function buildTurnModelHint\(\)[\s\S]*?selectedAssistantModel\.value/)
+  assert.match(source, /modelPickerType\.value === 'video' \? '视频' : '图片'/)
+  assert.match(source, /requested_model 指定为/)
+  assert.match(source, /turn_model_hint: turnModelHint \|\| undefined/)
+})
+
+test('model selection is cleared after send so it never leaks into later turns', () => {
+  assert.match(source, /const turnModelHint = buildTurnModelHint\(\)/)
+  assert.match(source, /const turnModelValue = selectedModelValue\.value/)
+  assert.match(source, /if \(turnModelHint\) \{[\s\S]*?selectedModelByType\.value = \{ image: '', video: '' \}/)
+  assert.match(source, /skill_model: turnModelValue \|\| undefined/)
+  assert.match(source, /skill_model_type: turnModelType \|\| undefined/)
 })
 
 test('uses CDN thumbnail URLs for icons in the model picker', () => {
