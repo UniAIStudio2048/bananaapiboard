@@ -919,9 +919,13 @@ export const getAvailableImageModels = (mode = null) => {
         pointsCost: modelConfig.pointsCost || modelPricingConfig.pointsCost || 1,
         resolutionEnabled: modelConfig.resolutionEnabled || modelPricingConfig.resolutionEnabled,
         aspectRatios: modelConfig.aspectRatios,
+        qualityOptions: modelConfig.qualityOptions || modelConfig.qualities,
+        qualities: modelConfig.qualities,
         supportedModes,
         // API 类型（用于判断是否是 MJ 模型）
         apiType: modelConfig.apiType || null,
+        actualModel: modelConfig.actualModel || null,
+        pixmaxModel: modelConfig.pixmaxModel || null,
         defaultQuality: modelConfig.defaultQuality || undefined,
         ...getModelPackageGateFields(modelConfig)
       })
@@ -958,6 +962,10 @@ export const getAvailableImageModels = (mode = null) => {
         hasResolutionPricing: modelPricingConfig.hasResolutionPricing || false,
         pointsCost: modelPricingConfig.pointsCost || 1,
         resolutionEnabled: modelPricingConfig.resolutionEnabled,
+        aspectRatios: modelFullConfig?.aspectRatios,
+        qualityOptions: modelFullConfig?.qualityOptions || modelFullConfig?.qualities,
+        qualities: modelFullConfig?.qualities,
+        defaultQuality: modelFullConfig?.defaultQuality || undefined,
         supportedModes,
         ...getModelPackageGateFields(modelFullConfig || {})
       })

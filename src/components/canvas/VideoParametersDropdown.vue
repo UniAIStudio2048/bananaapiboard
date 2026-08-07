@@ -18,6 +18,15 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  qualityOptions: {
+    type: Array,
+    default: () => []
+  },
+  quality: {
+    type: String,
+    default: ''
+  },
+  resolutionFirst: Boolean,
   durationOptions: {
     type: Array,
     default: () => []
@@ -32,6 +41,7 @@ const props = defineProps({
 const emit = defineEmits([
   'update:aspectRatio',
   'update:resolution',
+  'update:quality',
   'update:duration'
 ])
 
@@ -47,6 +57,10 @@ const currentResolution = computed(() => {
   return props.resolutionOptions.find(option => option.value === props.resolution)
 })
 
+const currentQuality = computed(() => {
+  return props.qualityOptions.find(option => option.value === props.quality)
+})
+
 const currentDuration = computed(() => {
   return props.durationOptions.find(option => String(option.value) === String(props.duration))
 })
@@ -54,6 +68,9 @@ const currentDuration = computed(() => {
 const triggerLabel = computed(() => {
   const values = []
   if (currentAspectRatio.value?.value) values.push(currentAspectRatio.value.value)
+  if (currentQuality.value?.label || currentQuality.value?.value) {
+    values.push(currentQuality.value.label || currentQuality.value.value)
+  }
   if (currentResolution.value?.label || currentResolution.value?.value) {
     values.push(currentResolution.value.label || currentResolution.value.value)
   }
@@ -92,6 +109,10 @@ function selectResolution(value) {
   emit('update:resolution', value)
 }
 
+function selectQuality(value) {
+  emit('update:quality', value)
+}
+
 function selectDuration(value) {
   emit('update:duration', value)
 }
@@ -108,8 +129,10 @@ function handleDocumentMouseDown(event) {
   }
 }
 
-onMounted(() => document.addEventListener('mousedown', handleDocumentMouseDown))
-onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseDown))
+// 捕获阶段监听：节点配置面板会 stopPropagation mousedown，冒泡阶段收不到提示词等面板内点击；
+// 捕获阶段在事件到达面板前触发，点击提示词/面板其他区域即可自动关闭参数弹层（视频/图片节点通用）
+onMounted(() => document.addEventListener('mousedown', handleDocumentMouseDown, true))
+onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseDown, true))
 </script>
 
 <template>
@@ -131,6 +154,38 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
         class="video-parameters-panel"
         :class="{ 'opens-upward': openUpward }"
       >
+        <section v-if="qualityOptions.length > 0" class="video-parameters-section">
+          <h3>画质</h3>
+          <div class="video-quality-grid">
+            <button
+              v-for="option in qualityOptions"
+              :key="option.value"
+              type="button"
+              class="video-quality-option"
+              :class="{ active: option.value === quality }"
+              @click="selectQuality(option.value)"
+            >
+              {{ option.label || option.value }}
+            </button>
+          </div>
+        </section>
+
+        <section v-if="resolutionFirst && resolutionOptions.length > 0" class="video-parameters-section">
+          <h3>清晰度</h3>
+          <div class="video-resolution-grid">
+            <button
+              v-for="option in resolutionOptions"
+              :key="option.value"
+              type="button"
+              class="video-resolution-option"
+              :class="{ active: option.value === resolution }"
+              @click="selectResolution(option.value)"
+            >
+              {{ option.label || option.value }}
+            </button>
+          </div>
+        </section>
+
         <section v-if="aspectRatios.length > 0" class="video-parameters-section">
           <h3>比例</h3>
           <div class="video-aspect-ratio-grid">
@@ -148,7 +203,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
           </div>
         </section>
 
-        <section v-if="resolutionOptions.length > 0" class="video-parameters-section">
+        <section v-if="!resolutionFirst && resolutionOptions.length > 0" class="video-parameters-section">
           <h3>清晰度</h3>
           <div class="video-resolution-grid">
             <button
@@ -291,6 +346,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
 
 .video-aspect-ratio-option,
 .video-resolution-option,
+.video-quality-option,
 .video-duration-option {
   color: rgba(255, 255, 255, 0.58);
   background: transparent;
@@ -301,6 +357,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
 
 .video-aspect-ratio-option:hover,
 .video-resolution-option:hover,
+.video-quality-option:hover,
 .video-duration-option:hover {
   color: rgba(255, 255, 255, 0.9);
   background: rgba(255, 255, 255, 0.07);
@@ -309,6 +366,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
 
 .video-aspect-ratio-option.active,
 .video-resolution-option.active,
+.video-quality-option.active,
 .video-duration-option.active {
   color: #ffffff;
   background: rgba(255, 255, 255, 0.09);
@@ -337,8 +395,16 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
 .video-aspect-ratio-icon.ratio-16-9 { width: 22px; height: 13px; }
 .video-aspect-ratio-icon.ratio-9-16 { width: 12px; height: 22px; }
 .video-aspect-ratio-icon.ratio-1-1 { width: 17px; height: 17px; }
+.video-aspect-ratio-icon.ratio-1-2 { width: 12px; height: 22px; }
+.video-aspect-ratio-icon.ratio-2-1 { width: 22px; height: 12px; }
+.video-aspect-ratio-icon.ratio-2-3 { width: 14px; height: 20px; }
+.video-aspect-ratio-icon.ratio-3-2 { width: 20px; height: 14px; }
 .video-aspect-ratio-icon.ratio-3-4 { width: 14px; height: 19px; }
 .video-aspect-ratio-icon.ratio-4-3 { width: 19px; height: 14px; }
+.video-aspect-ratio-icon.ratio-4-5 { width: 14px; height: 17px; }
+.video-aspect-ratio-icon.ratio-5-4 { width: 17px; height: 14px; }
+.video-aspect-ratio-icon.ratio-9-21 { width: 10px; height: 22px; }
+.video-aspect-ratio-icon.ratio-21-9 { width: 22px; height: 10px; }
 
 .video-resolution-grid,
 .video-duration-option-grid {
@@ -348,7 +414,22 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
 }
 
 .video-resolution-option,
+.video-quality-option,
 .video-duration-option {
+  min-height: 42px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.video-quality-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(74px, 1fr));
+  gap: 8px;
+}
+
+.video-quality-option {
   min-height: 42px;
   padding: 6px 10px;
   border-radius: 10px;
@@ -423,6 +504,7 @@ html.canvas-theme-light .video-parameters-panel {
 html.canvas-theme-light .video-parameters-section h3,
 html.canvas-theme-light .video-aspect-ratio-option,
 html.canvas-theme-light .video-resolution-option,
+html.canvas-theme-light .video-quality-option,
 html.canvas-theme-light .video-duration-option {
   color: rgba(0, 0, 0, 0.56);
   border-color: rgba(0, 0, 0, 0.2);
@@ -430,6 +512,7 @@ html.canvas-theme-light .video-duration-option {
 
 html.canvas-theme-light .video-aspect-ratio-option:hover,
 html.canvas-theme-light .video-resolution-option:hover,
+html.canvas-theme-light .video-quality-option:hover,
 html.canvas-theme-light .video-duration-option:hover {
   color: rgba(0, 0, 0, 0.85);
   background: rgba(0, 0, 0, 0.06);
@@ -438,6 +521,7 @@ html.canvas-theme-light .video-duration-option:hover {
 
 html.canvas-theme-light .video-aspect-ratio-option.active,
 html.canvas-theme-light .video-resolution-option.active,
+html.canvas-theme-light .video-quality-option.active,
 html.canvas-theme-light .video-duration-option.active {
   color: rgba(0, 0, 0, 0.92);
   background: rgba(0, 0, 0, 0.04);

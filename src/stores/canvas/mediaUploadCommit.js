@@ -43,7 +43,7 @@ function replaceOutput(output, from, to) {
   return changed ? next : null
 }
 
-function sourceMediaPatch(data, mediaType, from, to) {
+export function sourceMediaPatch(data, mediaType, from, to) {
   const patch = {}
   let changed = false
   const arrayFields = mediaType === 'image'
@@ -78,7 +78,7 @@ function sourceMediaPatch(data, mediaType, from, to) {
   return changed ? patch : null
 }
 
-function downstreamMediaPatch(node, mediaType, from, to) {
+export function downstreamMediaPatch(node, mediaType, from, to) {
   const data = node?.data || {}
   const patch = {}
   let changed = false

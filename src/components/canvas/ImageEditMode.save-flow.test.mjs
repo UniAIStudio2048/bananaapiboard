@@ -18,7 +18,7 @@ assert.doesNotMatch(
 )
 assert.match(
   source,
-  /await uploadEditedImageInBackground\(nodeId, nodeSnapshot, data\)[\s\S]*canvasStore\.exitEditMode\(\)/,
+  /await uploadEditedImageInBackground\(nodeId, nodeSnapshot, data(?:,\s*\{[^}]*\})?\)[\s\S]*canvasStore\.exitEditMode\(\)/,
   'ImageEditMode should keep edit mode alive until final image upload updates the node'
 )
 assert.doesNotMatch(

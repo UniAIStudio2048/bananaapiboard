@@ -23,6 +23,7 @@ import {
   clampSessionHistory,
   isRestorableEditSession
 } from './imageEditSession.js'
+import { sourceMediaPatch, downstreamMediaPatch } from '@/stores/canvas/mediaUploadCommit'
 
 const canvasStore = useCanvasStore()
 
@@ -246,6 +247,60 @@ function calculateEditorSize() {
 
 // ==================== 保存与取消 ====================
 
+// 等待节点正在进行的原图上传落定（isUploading 变为 false）。
+// 若在编辑保存时直接覆盖节点里的 blob URL，原上传提交会因找不到 blob 而放弃，
+// 导致 isUploading 永远卡在 true、下游节点残留瞬时 URL，素材一直提示"上传中"。
+async function waitForNodeUploadSettled(nodeId, timeoutMs = 20000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const node = canvasStore.nodes.find(n => n.id === nodeId)
+    if (!node || node.data?.isUploading !== true) return true
+    await new Promise(resolve => setTimeout(resolve, 200))
+  }
+  return false
+}
+
+// 把节点及其直接下游节点中的旧图片 URL（原图 URL / 编辑预览 data URL）
+// 统一替换为最终服务器 URL，避免残留 blob:/data: 瞬时 URL 拦截下游提交。
+function replaceEditedMediaUrls(nodeId, fromUrls, toUrl) {
+  const fromList = [...new Set((fromUrls || []).filter(Boolean))]
+  if (fromList.length === 0 || !toUrl) return
+
+  const applyReplacements = (targetNode) => {
+    const patch = {}
+    let changed = false
+    for (const from of fromList) {
+      const mediaPatch = sourceMediaPatch(targetNode.data || {}, 'image', from, toUrl)
+      if (mediaPatch) {
+        Object.assign(patch, mediaPatch)
+        changed = true
+      }
+      const refPatch = downstreamMediaPatch(targetNode, 'image', from, toUrl)
+      if (refPatch) {
+        Object.assign(patch, refPatch)
+        changed = true
+      }
+    }
+    return changed ? patch : null
+  }
+
+  const sourceNode = canvasStore.nodes.find(n => n.id === nodeId)
+  if (sourceNode) {
+    const sourcePatch = applyReplacements(sourceNode)
+    if (sourcePatch) canvasStore.updateNodeData(nodeId, sourcePatch)
+  }
+
+  const targetIds = new Set(
+    canvasStore.edges.filter(edge => edge.source === nodeId).map(edge => edge.target)
+  )
+  for (const targetId of targetIds) {
+    const targetNode = canvasStore.nodes.find(n => n.id === targetId)
+    if (!targetNode) continue
+    const patch = applyReplacements(targetNode)
+    if (patch) canvasStore.updateNodeData(targetId, patch)
+  }
+}
+
 // 处理保存：先上传最终图并写回稳定 URL，再关闭编辑器，避免刷新后回到旧图
 async function handleSave(data) {
   console.log('[ImageEditMode] handleSave 被调用', !!data?.image)
@@ -268,6 +323,10 @@ async function handleSave(data) {
     }
 
     if (data.image) {
+      // 等待节点正在进行的原图上传落定后再写回编辑图，
+      // 避免编辑保存与原上传提交互相覆盖导致节点卡在"上传中"。
+      await waitForNodeUploadSettled(nodeId)
+      const settledUrl = currentImageUrl.value
       const previewPatch = buildNodeImagePatch(node, data.image)
       canvasStore.updateNodeData(nodeId, {
         ...previewPatch,
@@ -275,7 +334,7 @@ async function handleSave(data) {
         _editSaving: true
       })
       nodeEditCache.delete(nodeId)
-      await uploadEditedImageInBackground(nodeId, nodeSnapshot, data)
+      await uploadEditedImageInBackground(nodeId, nodeSnapshot, data, { settledUrl })
     }
 
     canvasStore.exitEditMode()
@@ -373,7 +432,9 @@ async function processSpotHealInBackground(nodeId, nodeSnapshot, data, sourceIma
 }
 
 // 后台上传编辑后的图片和蒙版
-async function uploadEditedImageInBackground(nodeId, nodeSnapshot, data) {
+async function uploadEditedImageInBackground(nodeId, nodeSnapshot, data, context = {}) {
+  const previewUrl = data.image
+  const settledUrl = context.settledUrl || null
   try {
     let newImageUrl = null
 
@@ -385,8 +446,15 @@ async function uploadEditedImageInBackground(nodeId, nodeSnapshot, data) {
       const nodePatch = buildNodeImagePatch(nodeSnapshot, newImageUrl)
       canvasStore.updateNodeData(nodeId, {
         ...nodePatch,
-        _editSaving: false
+        _editSaving: false,
+        isUploading: false,
+        uploadStatus: 'completed',
+        uploadFailed: false,
+        uploadError: null
       })
+      // 同步替换源节点与下游节点中的旧 URL（原图 URL / 编辑预览 data URL），
+      // 避免原上传提交失败后残留瞬时 URL 导致素材一直提示"上传中"。
+      replaceEditedMediaUrls(nodeId, [data.image, settledUrl], newImageUrl)
       window.dispatchEvent(new CustomEvent('canvas-media-upload-complete', {
         detail: { nodeId }
       }))
@@ -401,6 +469,8 @@ async function uploadEditedImageInBackground(nodeId, nodeSnapshot, data) {
       }
     } else {
       canvasStore.updateNodeData(nodeId, { _editSaving: false })
+      // 上传未产出 URL 时同样回滚预览的瞬时 data URL，避免残留拦截提交。
+      replaceEditedMediaUrls(nodeId, [data.image], settledUrl)
     }
 
     if (data.hasMask && data.mask) {
@@ -412,6 +482,9 @@ async function uploadEditedImageInBackground(nodeId, nodeSnapshot, data) {
   } catch (error) {
     console.error('[ImageEditMode] 后台上传失败:', error)
     canvasStore.updateNodeData(nodeId, { _editSaving: false })
+    // 回滚编辑预览的瞬时 data URL，避免节点残留超大 base64 图导致画布卡顿、
+    // 以及拦截节点和下游的素材提交。
+    replaceEditedMediaUrls(nodeId, [data.image], settledUrl)
   }
 }
 

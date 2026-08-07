@@ -173,4 +173,46 @@ const uploaded = {
   assert.equal(target.edges, inactiveTab.edges)
 }
 
+{
+  // 编辑保存场景：节点的 blob 原图上传尚未提交时，节点媒体已被编辑预览 data URL 覆盖，
+  // 编辑图上传完成后需要把 data URL 与旧 blob URL 一起替换为最终服务器 URL。
+  const previewUrl = 'data:image/png;base64,AAAA'
+  const originalBlobUrl = 'blob:original-upload'
+  const finalUrl = 'https://cdn.example.com/canvas/edited.png'
+
+  const sourcePatch = mediaUploadCommit.sourceMediaPatch({
+    sourceImages: [previewUrl],
+    referenceImages: [previewUrl],
+    imageOrder: [originalBlobUrl]
+  }, 'image', previewUrl, finalUrl)
+  assert.deepEqual(sourcePatch.sourceImages, [finalUrl])
+  assert.deepEqual(sourcePatch.referenceImages, [finalUrl])
+
+  const sourceBlobPatch = mediaUploadCommit.sourceMediaPatch({
+    sourceImages: [previewUrl],
+    output: { type: 'image', url: originalBlobUrl, urls: [originalBlobUrl] }
+  }, 'image', originalBlobUrl, finalUrl)
+  assert.equal(sourceBlobPatch.output.url, finalUrl)
+  assert.deepEqual(sourceBlobPatch.output.urls, [finalUrl])
+
+  const downstreamPatch = mediaUploadCommit.downstreamMediaPatch({
+    id: 'target',
+    type: 'image',
+    data: {
+      referenceImages: [originalBlobUrl],
+      imageOrder: [previewUrl],
+      inheritedData: { type: 'image', urls: [originalBlobUrl] }
+    }
+  }, 'image', originalBlobUrl, finalUrl)
+  assert.deepEqual(downstreamPatch.referenceImages, [finalUrl])
+  assert.deepEqual(downstreamPatch.inheritedData.urls, [finalUrl])
+
+  const downstreamPreviewPatch = mediaUploadCommit.downstreamMediaPatch({
+    id: 'target',
+    type: 'image',
+    data: { imageOrder: [previewUrl] }
+  }, 'image', previewUrl, finalUrl)
+  assert.deepEqual(downstreamPreviewPatch.imageOrder, [finalUrl])
+}
+
 console.log('mediaUploadCommit tests passed')

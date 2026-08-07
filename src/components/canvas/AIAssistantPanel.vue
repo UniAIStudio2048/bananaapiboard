@@ -324,10 +324,22 @@
           
           <!-- 输入框：已选模型标签卡内嵌在输入框内，仅代表本次轮对话使用该模型 -->
           <div class="input-box" @click.self="focusInputEditor">
-            <div v-if="selectedAssistantModel" class="selected-model-tag">
-              <span class="selected-model-tag-icon"><ModelIcon :icon="getAssistantModelIcon(selectedAssistantModel)" :label="selectedAssistantModel.label || selectedAssistantModel.value" /></span>
-              <span class="selected-model-tag-label">{{ selectedAssistantModel.label || selectedAssistantModel.value }}</span>
-              <button type="button" class="selected-model-tag-remove" title="移除已选模型" aria-label="移除已选模型" @click="clearAssistantModel">×</button>
+            <div v-if="selectedSkill || selectedAssistantModel" class="input-context-tags" aria-label="当前创作配置">
+              <div v-if="selectedSkill" class="input-context-tag selected-skill-tag" :title="selectedSkill.description || selectedSkill.name">
+                <span class="selected-skill-tag-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <path d="M14 2v6h6M8 13h8M8 17h5" />
+                    <path d="m18 13 .55 1.45L20 15l-1.45.55L18 17l-.55-1.45L16 15l1.45-.55L18 13Z" fill="currentColor" stroke="none" />
+                  </svg>
+                </span>
+                <span class="input-context-tag-label">{{ selectedSkill.name || selectedSkill.label || selectedSkill.id }}</span>
+              </div>
+              <div v-if="selectedAssistantModel" class="selected-model-tag">
+                <span class="selected-model-tag-icon"><ModelIcon :icon="getAssistantModelIcon(selectedAssistantModel)" :label="selectedAssistantModel.label || selectedAssistantModel.value" /></span>
+                <span class="input-context-tag-label">{{ selectedAssistantModel.label || selectedAssistantModel.value }}</span>
+                <button type="button" class="selected-model-tag-remove" title="移除已选模型" aria-label="移除已选模型" @click="clearAssistantModel">×</button>
+              </div>
             </div>
             <div
               :key="inputEditorRenderKey"
@@ -595,8 +607,8 @@
                 title="发送"
                 aria-label="发送"
               >
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                <svg class="w-5 h-5" style="width: 19px; height: 19px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                  <path d="M12 19V5M5 12l7-7 7 7"/>
                 </svg>
               </button>
             </div>
@@ -3128,24 +3140,23 @@ defineExpose({
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  padding-bottom: 20px; /* 增加底部内边距，确保发送按钮不被遮挡 */
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(135deg, 
-    rgba(24, 26, 34, 0.9) 0%,
-    rgba(20, 22, 30, 0.95) 100%
-  );
+  gap: 0;
+  min-height: 188px;
+  margin: 0 14px 16px;
+  padding: 14px 16px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 28px;
+  background: rgba(30, 30, 30, 0.72);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  transition: all 0.3s ease;
+  transition: border-color 0.2s ease, background 0.2s ease;
   flex-shrink: 0; /* 防止被压缩 */
   overflow: visible;
 }
 
 .input-area.is-dragging {
   background: rgba(59, 130, 246, 0.1);
-  border-top-color: rgba(59, 130, 246, 0.5);
+  border-color: rgba(59, 130, 246, 0.5);
 }
 
 /* 拖拽提示层 */
@@ -3202,41 +3213,84 @@ defineExpose({
 .input-box {
   position: relative;
   display: flex;
+  flex-direction: column;
   align-items: flex-end;
-  gap: 8px;
-  padding: 6px 8px 6px 12px;
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.06) 0%,
-    rgba(255, 255, 255, 0.08) 100%
-  );
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
-  transition: all 0.3s ease;
+  align-self: stretch;
+  gap: 6px;
+  min-height: 132px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  transition: none;
 }
 
 .input-box:focus-within {
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(255, 255, 255, 0.1) 100%
-  );
-  border-color: rgba(59, 130, 246, 0.35);
-  box-shadow: 
-    0 0 0 3px rgba(59, 130, 246, 0.1),
-    inset 0 1px 2px rgba(0, 0, 0, 0.08);
+  background: transparent;
+}
+
+.input-area:focus-within {
+  border-color: rgba(255, 255, 255, 0.38);
+}
+
+.input-context-tags {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 34px;
+}
+
+.input-context-tag,
+.selected-model-tag {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: min(260px, 100%);
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.selected-skill-tag-icon,
+.selected-model-tag-icon {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.selected-skill-tag-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.input-context-tag-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .input-textarea {
   position: relative;
   box-sizing: border-box;
-  flex: 1;
+  flex: 1 1 auto;
+  align-self: stretch;
   min-width: 0;
   width: auto;
-  min-height: 36px;
-  max-height: 120px;
-  padding: 8px 6px 8px 0;
+  min-height: 82px;
+  max-height: 160px;
+  padding: 8px 4px 8px 2px;
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -3259,41 +3313,16 @@ defineExpose({
   content: attr(data-placeholder);
   position: absolute;
   top: 8px;
-  left: 4px;
-  right: 4px;
+  left: 2px;
+  right: 2px;
   color: rgba(255, 255, 255, 0.3);
   pointer-events: none;
   white-space: pre-wrap;
 }
 
 .selected-model-tag {
-  display: inline-flex;
-  align-items: center;
-  align-self: flex-end;
+  max-width: min(300px, 100%);
   flex-shrink: 0;
-  gap: 6px;
-  max-width: 55%;
-  padding: 5px 7px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 12px;
-  line-height: 1;
-}
-
-.selected-model-tag-icon {
-  display: grid;
-  width: 14px;
-  height: 14px;
-  place-items: center;
-  flex-shrink: 0;
-}
-
-.selected-model-tag-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .selected-model-tag-remove {
@@ -3307,6 +3336,14 @@ defineExpose({
   cursor: pointer;
   font-size: 16px;
   line-height: 1;
+  opacity: 0;
+  overflow: hidden;
+  transition: opacity 0.15s ease;
+}
+
+.selected-model-tag:hover .selected-model-tag-remove,
+.selected-model-tag:focus-within .selected-model-tag-remove {
+  opacity: 1;
 }
 
 .selected-model-tag-remove:hover {
@@ -3333,6 +3370,8 @@ defineExpose({
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  align-self: stretch;
+  margin-top: 8px;
   flex-wrap: nowrap; /* 不允许换行，保持一行 */
 }
 
@@ -3431,7 +3470,7 @@ defineExpose({
   right: clamp(12px, 2vw, 28px);
   bottom: 88px;
   width: min(430px, calc(100vw - 24px));
-  max-height: min(520px, calc(100vh - 112px));
+  max-height: min(640px, calc(100vh - 96px));
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 16px;
@@ -3449,7 +3488,7 @@ defineExpose({
 .model-picker-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin: 0 16px 10px; padding: 3px; border: 1px solid rgba(255,255,255,.08); border-radius: 9px; background: rgba(255,255,255,.04); }
 .model-picker-tabs button { padding: 7px 12px; border: 0; border-radius: 7px; background: transparent; color: #8f9bad; font-size: 12px; cursor: pointer; }
 .model-picker-tabs button.active { background: rgba(111, 93, 252, .24); color: #e4e0ff; box-shadow: 0 2px 8px rgba(0,0,0,.16); }
-.model-picker-list { display: grid; gap: 6px; max-height: 360px; overflow: auto; padding: 2px 12px 14px; }
+.model-picker-list { display: grid; gap: 6px; max-height: 470px; overflow: auto; padding: 2px 12px 14px; }
 .model-picker-item { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto 28px; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; background: rgba(27, 32, 44, .94); color: inherit; text-align: left; cursor: pointer; }
 .model-picker-item:hover, .model-picker-item.selected { border-color: #7668e8; background: #24233e; }
 .picker-model-icon { display: grid; width: 32px; height: 32px; place-items: center; border-radius: 8px; background: #30374a; color: #d9d5ff; font-weight: 700; }
@@ -3466,8 +3505,8 @@ defineExpose({
 .model-picker-fade-enter-from .model-picker-dialog, .model-picker-fade-leave-to .model-picker-dialog { opacity: 0; transform: translateY(10px) scale(.98); }
 
 @media (max-width: 500px) {
-  .model-picker-dialog { right: 10px; bottom: 76px; width: calc(100vw - 20px); max-height: calc(100vh - 96px); }
-  .model-picker-list { max-height: min(330px, calc(100vh - 220px)); }
+  .model-picker-dialog { right: 10px; bottom: 76px; width: calc(100vw - 20px); max-height: calc(100vh - 80px); }
+  .model-picker-list { max-height: min(400px, calc(100vh - 200px)); }
 }
 
 /* 下拉按钮中的文字 - 限制最大宽度并显示省略号 */
@@ -3732,40 +3771,25 @@ defineExpose({
   width: 36px;
   height: 36px;
   border-radius: 12px;
-  background: linear-gradient(135deg, 
-    rgba(59, 130, 246, 0.9) 0%,
-    rgba(37, 99, 235, 0.95) 100%
-  );
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #f5f5f5;
+  color: #1f1f1f;
+  border: 0;
   cursor: pointer;
   transition: all 0.3s ease;
   flex-shrink: 0;
-  box-shadow: 
-    0 4px 12px rgba(59, 130, 246, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
 }
 
 .send-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, 
-    rgba(37, 99, 235, 0.95) 0%,
-    rgba(29, 78, 216, 1) 100%
-  );
-  transform: scale(1.05);
-  box-shadow: 
-    0 6px 16px rgba(59, 130, 246, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  background: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
 }
 
 .send-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
-  background: linear-gradient(135deg, 
-    rgba(100, 100, 100, 0.3) 0%,
-    rgba(80, 80, 80, 0.35) 100%
-  );
+  background: #c8c8c8;
   box-shadow: none;
 }
 
@@ -4057,25 +4081,17 @@ defineExpose({
 }
 
 :root.canvas-theme-light .ai-assistant-panel .input-area {
-  border-top-color: rgba(0, 0, 0, 0.06);
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.7) 0%,
-    rgba(250, 250, 252, 0.75) 100%
-  );
+  border-color: rgba(15, 23, 42, 0.16);
+  background: rgba(255, 255, 255, 0.82);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .input-box {
-  background: linear-gradient(135deg, 
-    rgba(255, 255, 255, 0.6) 0%,
-    rgba(248, 250, 252, 0.7) 100%
-  );
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border-color: rgba(0, 0, 0, 0.08);
+  background: transparent;
+  border-color: transparent;
   color: #1c1917;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+  box-shadow: none;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .input-textarea {
@@ -4095,6 +4111,12 @@ defineExpose({
   color: #1c1917;
 }
 
+:root.canvas-theme-light .ai-assistant-panel .selected-skill-tag {
+  border-color: rgba(15, 23, 42, 0.14);
+  background: rgba(15, 23, 42, 0.05);
+  color: #1c1917;
+}
+
 :root.canvas-theme-light .ai-assistant-panel .selected-model-tag-remove {
   color: rgba(15, 23, 42, 0.45);
 }
@@ -4105,11 +4127,9 @@ defineExpose({
 }
 
 :root.canvas-theme-light .ai-assistant-panel .input-box:focus-within {
-  background: rgba(255, 255, 255, 0.85);
-  border-color: rgba(59, 130, 246, 0.35);
-  box-shadow: 
-    0 0 0 3px rgba(59, 130, 246, 0.1),
-    inset 0 1px 2px rgba(0, 0, 0, 0.02);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .toolbar-btn {
@@ -4122,27 +4142,15 @@ defineExpose({
 }
 
 :root.canvas-theme-light .ai-assistant-panel .send-btn {
-  background: linear-gradient(135deg, 
-    rgba(59, 130, 246, 0.9) 0%,
-    rgba(37, 99, 235, 0.95) 100%
-  );
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 
-    0 4px 12px rgba(59, 130, 246, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  background: #1f2937;
+  color: #fff;
+  border: 0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .send-btn:hover {
-  background: linear-gradient(135deg, 
-    rgba(37, 99, 235, 0.95) 0%,
-    rgba(29, 78, 216, 1) 100%
-  );
-  box-shadow: 
-    0 6px 16px rgba(59, 130, 246, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  background: #111827;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.24);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .model-selector {

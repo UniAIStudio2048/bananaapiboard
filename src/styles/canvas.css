@@ -2168,6 +2168,46 @@ body:has(.canvas-page) *::-webkit-scrollbar-corner,
   cursor: not-allowed;
 }
 
+/* ========================================
+   画布节点取消阴影
+   节点自身及其卡片/媒体预览不再向周围绘制黑色残影；
+   节点内的工具栏、下拉菜单等浮层不受影响。
+   ======================================== */
+.canvas-page .vue-flow__node > :is(
+  .canvas-node,
+  .text-node,
+  .group-node,
+  .character-card-node,
+  .digital-human-node,
+  .storyboard-node,
+  .seedance-character-node,
+  .director-studio-node,
+  .canvas-node-shell
+),
+.canvas-page .vue-flow__node > :is(
+  .canvas-node,
+  .text-node,
+  .group-node,
+  .character-card-node,
+  .digital-human-node,
+  .storyboard-node,
+  .seedance-character-node,
+  .director-studio-node,
+  .canvas-node-shell
+) :is(
+  .node-card,
+  .text-node-card,
+  .digital-human-card,
+  .character-card-node,
+  .character-img,
+  .preview-image,
+  .video-output-wrapper,
+  .audio-output-wrapper,
+  .stack-photo
+) {
+  box-shadow: none !important;
+}
+
 :root.canvas-theme-light .vue-flow__handle:hover {
   border-color: var(--canvas-accent-primary);
   background: var(--canvas-accent-primary);

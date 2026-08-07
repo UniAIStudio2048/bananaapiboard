@@ -26,6 +26,15 @@ test('shows the selected model as a removable tag inside the assistant input box
   assert.match(tag, /flex-shrink:\s*0;/)
 })
 
+test('shows the active Skill and model together in a prompt context row', () => {
+  assert.match(source, /class="input-context-tags"[\s\S]*?v-if="selectedSkill" class="input-context-tag selected-skill-tag"/)
+  assert.match(source, /selectedSkill\.name \|\| selectedSkill\.label \|\| selectedSkill\.id/)
+  assert.match(source, /min-height:\s*188px;/)
+  assert.match(source, /\.send-btn\s*\{[\s\S]*?width:\s*36px;[\s\S]*?height:\s*36px;/)
+  assert.match(source, /style="width: 19px; height: 19px"/)
+  assert.match(source, /<path d="M12 19V5M5 12l7-7 7 7"\s*\/>/)
+})
+
 test('selected model is converted to a natural-language hint for this turn only', () => {
   assert.match(source, /function buildTurnModelHint\(\)[\s\S]*?selectedAssistantModel\.value/)
   assert.match(source, /modelPickerType\.value === 'video' \? '视频' : '图片'/)

@@ -167,6 +167,7 @@ export async function generateImageFromImage(params) {
     size,        // 也支持 size 参数（向后兼容）
     aspectRatio = 'auto',
     aspectRatioMode,
+    quality,
     enableGroupGeneration = false,
     maxGroupImages = 3,
     imagePresetId
@@ -191,6 +192,10 @@ export async function generateImageFromImage(params) {
     response_format: 'url',
     spaceType: spaceParams.spaceType,
     ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
+  }
+
+  if (quality && quality !== 'auto') {
+    body.quality = quality
   }
 
   if (imagePresetId) {

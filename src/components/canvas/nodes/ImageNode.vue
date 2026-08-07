@@ -42,6 +42,11 @@ import Pose3DViewer from '../Pose3DViewer.vue'
 import CameraControlPanel from '../CameraControlPanel.vue'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
 import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl, onCanvasImageError, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import {
+  getAvailableImageResolutionOptions,
+  getImageResolutionCost,
+  normalizeImageSelectedSize
+} from '@/utils/canvasImageResolutionOptions'
 import { getSmartImageUrl } from '@/utils/cloudMediaUrl'
 import { isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
@@ -69,6 +74,7 @@ import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PromptMediaTag from '../PromptMediaTag.vue'
 import PromptTranslateButton from '../PromptTranslateButton.vue'
+import VideoParametersDropdown from '../VideoParametersDropdown.vue'
 import CanvasNodeImage from '../CanvasNodeImage.vue'
 import PanoramaPreviewModal from '../PanoramaPreviewModal.vue'
 import ModelIcon from '../../common/ModelIcon.vue'
@@ -428,12 +434,9 @@ const getDefaultModel = () => {
 const selectedModel = ref(props.data.model || getDefaultModel())
 const selectedResolution = ref(props.data.resolution || '1024')
 const selectedAspectRatio = ref(props.data.aspectRatio || 'auto')
-const aspectRatioDropdownOpen = ref(false)
-const aspectRatioDropdownDirection = ref('down')
-const aspectRatioSelectorRef = ref(null)
 const selectedCount = ref(props.data.count || 1)
 const imageSize = ref(props.data.imageSize || '4K') // 尺寸选项（仅 nano-banana-2）
-const selectedQuality = ref('high')
+const selectedQuality = ref(props.data.quality || 'medium')
 const enableGroupGeneration = ref(props.data.enableGroupGeneration || false) // 组图生成开关
 const maxGroupImages = ref(Math.max(2, Math.min(10, props.data.maxGroupImages || 3))) // 最大组图数量（限制在2-10之间，默认3）
 const enableWebSearch = ref(props.data.enableWebSearch !== undefined ? props.data.enableWebSearch : true) // 联网搜索开关（默认开启）
@@ -458,26 +461,22 @@ const botTypeOptions = [
   { value: 'NIJI_JOURNEY', label: '动漫' }
 ]
 
-// 生成次数选项循环：1 -> 2 -> 4 -> 1
-const countOptions = [1, 2, 4]
-
 // 用户最大并发数限制
 const userConcurrentLimit = computed(() => {
   return userInfo?.value?.concurrent_limit || 1
 })
 
-// 切换生成次数
+// 生成次数选项循环：1 -> 2 -> 4 -> 1
+const countOptions = [1, 2, 4]
+
+// 切换生成次数，同时遵循当前套餐的并发上限
 async function toggleCount() {
   const currentIndex = countOptions.indexOf(selectedCount.value)
-  const nextIndex = (currentIndex + 1) % countOptions.length
-  const nextCount = countOptions[nextIndex]
-
-  // 检查是否超过用户套餐限制
+  const nextCount = countOptions[(currentIndex + 1) % countOptions.length]
   if (nextCount > userConcurrentLimit.value) {
     await showAlert(`您的套餐最大支持 ${userConcurrentLimit.value} 次并发，请升级套餐以使用更多并发`, '并发限制')
     return
   }
-
   selectedCount.value = nextCount
 }
 
@@ -519,7 +518,6 @@ function handleModelDropdownClickOutside(event) {
   // 检查点击是否在下拉框外
   const dropdown = event.target.closest('.model-selector-custom')
   const presetDropdown = event.target.closest('.preset-selector-custom')
-  const ratioDropdown = event.target.closest('.ratio-selector')
   if (!dropdown) {
     isModelDropdownOpen.value = false
   }
@@ -527,34 +525,6 @@ function handleModelDropdownClickOutside(event) {
     isPresetDropdownOpen.value = false
     isPresetActionsOpen.value = false
   }
-  if (!ratioDropdown) {
-    aspectRatioDropdownOpen.value = false
-  }
-}
-
-function toggleAspectRatioDropdown(event) {
-  event?.stopPropagation()
-  if (!aspectRatioDropdownOpen.value) {
-    const selector = aspectRatioSelectorRef.value
-    const rect = selector?.getBoundingClientRect()
-    const dropdownHeight = Math.min(520, Math.max(140, availableImageAspectRatios.value.length * 48 + 54))
-    if (rect && rect.bottom + dropdownHeight > window.innerHeight && rect.top > dropdownHeight) {
-      aspectRatioDropdownDirection.value = 'up'
-    } else {
-      aspectRatioDropdownDirection.value = 'down'
-    }
-  }
-  aspectRatioDropdownOpen.value = !aspectRatioDropdownOpen.value
-  isModelDropdownOpen.value = false
-  isPresetDropdownOpen.value = false
-}
-
-function getAspectRatioIconClass(value) {
-  if (value === '1:1') return 'ratio-icon-square'
-  if (value === '3:4') return 'ratio-icon-3-4'
-  if (value === '4:3') return 'ratio-icon-4-3'
-  const [width, height] = String(value || '').split(':').map(Number)
-  return width > 0 && height > 0 && width < height ? 'ratio-icon-portrait' : 'ratio-icon-landscape'
 }
 
 // ========== 预设管理功能 ==========
@@ -1597,15 +1567,12 @@ watch(maxGroupImages, (newVal) => {
   }
 })
 
-// 默认尺寸选项配置（当模型配置中没有指定积分时使用）
-const defaultSizePricing = { '1K': 3, '2K': 4, '4K': 5 }
-
-// 获取当前模型的尺寸选项（从模型配置中读取积分）
+// 获取当前模型的清晰度选项（积分与开关均来自租户后台）
 const imageSizes = computed(() => {
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   const pointsCost = currentModel?.pointsCost
-  const apiType = currentModel?.apiType
-  const resolutionEnabled = currentModel?.resolutionEnabled || {}
+  const hasResolutionPricing = currentModel?.hasResolutionPricing || (pointsCost && typeof pointsCost === 'object')
+  if (!hasResolutionPricing) return []
 
   // Seedream 5.0 只支持 2K 和 3K
   const isSeedream50 = checkIsSeedream50Lite(currentModel)
@@ -1619,45 +1586,62 @@ const imageSizes = computed(() => {
       ? ['2K', '4K']
       : isWan27I2I
         ? ['1K', '2K']
-        : ['1K', '2K', '4K']
+        : ['1K', '2K', '3K', '4K']
 
-  // 根据 9000 端口的 resolutionEnabled 配置过滤尺寸选项
-  if (Object.keys(resolutionEnabled).length > 0) {
-    supportedSizes = supportedSizes.filter(size => {
-      const key = size.toLowerCase()
-      const enabled = resolutionEnabled[key] ?? resolutionEnabled[size]
-      // 显式设为 false 时隐藏，未配置或为 true 时保留
-      return enabled !== false
-    })
-  }
-
-  // 如果是按分辨率计费且 pointsCost 是对象
-  if (currentModel?.hasResolutionPricing && typeof pointsCost === 'object') {
-    return supportedSizes.map(size => ({
-      value: size,
-      label: size,
-      points: pointsCost[size.toLowerCase()] || pointsCost[size] || defaultSizePricing[size]
-    }))
-  }
-
-  // 默认尺寸配置
-  return supportedSizes.map(size => ({
-    value: size,
-    label: size,
-    points: defaultSizePricing[size]
-  }))
+  const supportedSet = new Set(supportedSizes)
+  return getAvailableImageResolutionOptions(currentModel)
+    .filter(option => supportedSet.has(option.value))
 })
 
 // 是否显示尺寸选项（从模型配置中读取 hasResolutionPricing）
 const showResolutionOption = computed(() => {
   if (isMJModel.value) return false
-  if (imageSizes.value.length === 0) return false
+  return imageSizes.value.length > 0
+})
+
+// Pixmax PixImage 2 模型检测（画布支持 quality 低/中/高三档）
+const isPixmaxImage2Model = computed(() => {
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
-  return currentModel?.hasResolutionPricing || (currentModel?.pointsCost && typeof currentModel.pointsCost === 'object') || false
+  if (currentModel?.apiType !== 'pixmax-openapi') return false
+  const modelCode = currentModel?.pixmaxModel || currentModel?.actualModel || ''
+  // 兼容存量配置中的旧编码 PIXIMAGE_2
+  return modelCode === 'PIX_IMAGE_2' || modelCode === 'PIXIMAGE_2'
+})
+
+const pixmaxQualityOptions = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' }
+]
+
+const qualityOptions = computed(() => {
+  if (isPixmaxImage2Model.value) return pixmaxQualityOptions
+  const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
+  const configured = currentModel?.qualityOptions || currentModel?.qualities
+  if (Array.isArray(configured) && configured.length > 0) {
+    return configured.map(option => {
+      if (typeof option === 'string') return { value: option, label: option }
+      return { value: option.value, label: option.label || option.value }
+    }).filter(option => option.value)
+  }
+  // defaultQuality 代表该模型支持标准 low/medium/high 画质选择
+  if (currentModel?.defaultQuality) return pixmaxQualityOptions
+  return []
 })
 
 const showQualityOption = computed(() => {
-  return false
+  return isPixmaxImage2Model.value || qualityOptions.value.some(option => option.value !== 'auto')
+})
+
+const imageParameterQualityOptions = computed(() => {
+  const labels = { low: '低画质', medium: '标准画质', high: '高画质' }
+  return qualityOptions.value
+    .filter(option => option.value !== 'auto')
+    .map(option => ({ ...option, label: labels[option.value] || option.label }))
+})
+
+const hasImageParameterMenu = computed(() => {
+  return availableImageAspectRatios.value.length > 0 || showResolutionOption.value || (showQualityOption.value && imageParameterQualityOptions.value.length > 0)
 })
 
 // 是否显示预设选项（MJ模型时隐藏，因为不起作用）
@@ -1686,19 +1670,21 @@ const aspectRatios = [
 
 const availableImageAspectRatios = computed(() => {
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
-  const configuredRatios = Array.isArray(currentModel?.aspectRatios)
-    ? currentModel.aspectRatios.map(ratio => typeof ratio === 'string' ? ratio : ratio?.value).filter(Boolean)
-    : []
-  if (configuredRatios.length === 0) return aspectRatios
-  const configuredSet = new Set(configuredRatios)
-  const filtered = aspectRatios.filter(ratio => configuredSet.has(ratio.value))
-  return filtered.length > 0 ? filtered : aspectRatios
+  if (!Array.isArray(currentModel?.aspectRatios)) return aspectRatios
+  if (currentModel.aspectRatios.length === 0) return []
+
+  const configuredLabels = new Map(currentModel.aspectRatios.map(ratio => [
+    (typeof ratio === 'string' ? ratio : ratio?.value) || 'auto',
+    typeof ratio === 'string' ? '' : ratio?.label
+  ]))
+  return aspectRatios
+    .filter(ratio => configuredLabels.has(ratio.value))
+    .map(ratio => ({ ...ratio, label: configuredLabels.get(ratio.value) || ratio.label }))
 })
 
 // 监听模型变化，如果模型不支持1K且当前选择1K，自动切换到2K
-watch([selectedModel, imageSizes, availableImageAspectRatios], () => {
+watch([selectedModel, imageSizes, availableImageAspectRatios, imageParameterQualityOptions], () => {
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
-  const apiType = currentModel?.apiType
   
   // Seedream 4.5（包括即梦4.5/jimeng-4.5）不支持 1K，如果当前选择1K，自动切换到2K
   const isSeedream45 = checkIsSeedream45(currentModel)
@@ -1709,7 +1695,10 @@ watch([selectedModel, imageSizes, availableImageAspectRatios], () => {
   
   // 如果当前选择的尺寸不在可用尺寸列表中，切换到第一个可用尺寸
   const availableSizes = imageSizes.value.map(s => s.value)
-  if (!availableSizes.includes(imageSize.value)) {
+  const normalizedSize = normalizeImageSelectedSize(currentModel, imageSize.value)
+  if (availableSizes.includes(normalizedSize) && imageSize.value !== normalizedSize) {
+    imageSize.value = normalizedSize
+  } else if (!availableSizes.includes(imageSize.value)) {
     imageSize.value = availableSizes[0] || '2K'
     console.log('[ImageNode] 当前尺寸不可用，已切换到:', imageSize.value)
   }
@@ -1719,16 +1708,25 @@ watch([selectedModel, imageSizes, availableImageAspectRatios], () => {
     selectedAspectRatio.value = availableRatios[0] || '1:1'
     console.log('[ImageNode] 当前比例不可用，已切换到:', selectedAspectRatio.value)
   }
+
+  // Pixmax PixImage 2 质量档位校正：仅支持 low/medium/high，默认 medium
+  if (isPixmaxImage2Model.value && !['low', 'medium', 'high'].includes(selectedQuality.value)) {
+    selectedQuality.value = 'medium'
+  }
+
+  const availableQualities = imageParameterQualityOptions.value
+  if (availableQualities.length > 0 && !availableQualities.some(option => option.value === selectedQuality.value)) {
+    selectedQuality.value = availableQualities.find(option => option.value === currentModel?.defaultQuality)?.value || availableQualities[0].value
+  }
 }, { immediate: true })
 
 // 计算单次积分消耗（不考虑组图和批次）
 const basePointsCost = computed(() => {
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   
-  // 按分辨率计费的模型
-  if (currentModel?.hasResolutionPricing) {
-    const sizeOption = imageSizes.value.find(s => s.value === imageSize.value)
-    return sizeOption?.points || defaultSizePricing['1K']
+  // 按清晰度计费的模型
+  if (showResolutionOption.value) {
+    return getImageResolutionCost(currentModel, imageSize.value)
   }
   
   // 其他模型使用固定积分
@@ -4544,8 +4542,8 @@ const quickActions = [
 ]
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedResolution, selectedAspectRatio, selectedCount, promptText, imageSize, botType], 
-  ([model, resolution, aspectRatio, count, prompt, size, bot]) => {
+watch([selectedModel, selectedResolution, selectedAspectRatio, selectedCount, promptText, imageSize, selectedQuality, botType],
+  ([model, resolution, aspectRatio, count, prompt, size, quality, bot]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       resolution,
@@ -4553,6 +4551,7 @@ watch([selectedModel, selectedResolution, selectedAspectRatio, selectedCount, pr
       count,
       prompt,
       imageSize: size,
+      quality,
       botType: bot
     })
   }
@@ -5632,7 +5631,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     count: 1, // 单次请求固定为1
     // 所有模型都传递 image_size 参数
     image_size: imageSize.value || '2K',
-    quality: 'high',
+    quality: isPixmaxImage2Model.value ? selectedQuality.value : 'high',
     // MJ 模型的 botType 参数（写实/动漫）
     ...(isMJModel.value && { botType: botType.value }),
     // Seedream 组图生成参数
@@ -5641,6 +5640,10 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     imagePresetId: selectedTenantPresetId,
     // Seedream 5.0 Lite 联网搜索参数
     ...(isSeedream50LiteModel.value && { webSearch: enableWebSearch.value })
+  }
+
+  if (!isPixmaxImage2Model.value && imageParameterQualityOptions.value.length > 0) {
+    baseParams.quality = selectedQuality.value
   }
   
   if (imagesToProcess.length > 0) {
@@ -8560,47 +8563,17 @@ async function handleDrop(event) {
             </Transition>
           </div>
           
-          <!-- 比例选择（下拉框） -->
-          <div v-if="availableImageAspectRatios.length > 0" ref="aspectRatioSelectorRef" class="ratio-selector" @mousedown.stop @click.stop>
-            <button
-              type="button"
-              class="video-mode-trigger ratio-mode-trigger"
-              @click="toggleAspectRatioDropdown"
-            >
-              <span
-                class="ratio-icon"
-                :class="getAspectRatioIconClass(selectedAspectRatio)"
-                aria-hidden="true"
-              ></span>
-              <span class="video-mode-trigger-value">
-                {{ availableImageAspectRatios.find(ratio => ratio.value === selectedAspectRatio)?.label || selectedAspectRatio }}
-              </span>
-              <span class="video-mode-trigger-arrow" :class="{ 'arrow-up': aspectRatioDropdownOpen }">⌃</span>
-            </button>
-            <Transition name="dropdown-fade">
-              <div
-                v-if="aspectRatioDropdownOpen"
-                class="video-mode-dropdown-panel ratio-dropdown-panel"
-                :class="{ 'dropdown-up': aspectRatioDropdownDirection === 'up' }"
-              >
-                <div class="video-mode-dropdown-title">画面比例</div>
-                <button
-                  v-for="ratio in availableImageAspectRatios"
-                  :key="ratio.value"
-                  type="button"
-                  class="video-mode-dropdown-item"
-                  :class="{ active: ratio.value === selectedAspectRatio }"
-                  @click="selectedAspectRatio = ratio.value; aspectRatioDropdownOpen = false"
-                >
-                  <span
-                    class="video-mode-option-icon ratio-icon"
-                    :class="getAspectRatioIconClass(ratio.value)"
-                    aria-hidden="true"
-                  ></span>
-                  <span>{{ ratio.label }}</span>
-                </button>
-              </div>
-            </Transition>
+          <!-- 图像参数：沿用视频节点的统一弹层，不包含生成数量 -->
+          <div v-if="hasImageParameterMenu" class="video-parameter-selector">
+            <VideoParametersDropdown
+              :aspect-ratios="availableImageAspectRatios"
+              v-model:aspect-ratio="selectedAspectRatio"
+              :resolution-options="showResolutionOption ? imageSizes : []"
+              v-model:resolution="imageSize"
+              :quality-options="imageParameterQualityOptions"
+              v-model:quality="selectedQuality"
+              resolution-first
+            />
           </div>
           
           <!-- 预设选择器（MJ模型时隐藏） -->
@@ -8707,37 +8680,12 @@ async function handleDrop(event) {
             </div>
           </div>
           
-          <!-- 尺寸切换（根据模型配置显示） -->
-          <div v-if="showResolutionOption" class="param-chip-group">
-            <div 
-              v-for="size in imageSizes" 
-              :key="size.value"
-              class="param-chip"
-              :class="{ active: imageSize === size.value }"
-              @click="imageSize = size.value"
-            >
-              {{ size.label }}
-            </div>
-          </div>
-
-          <!-- gpt-image-2 质量选项 -->
-          <div v-if="showQualityOption" class="param-chip-group">
-            <div 
-              v-for="q in [{ value: 'auto', label: 'Auto' }, { value: 'low', label: '快速' }, { value: 'medium', label: '标准' }, { value: 'high', label: '高质量' }]" 
-              :key="q.value"
-              class="param-chip"
-              :class="{ active: selectedQuality === q.value }"
-              @click="selectedQuality = q.value"
-            >
-              {{ q.label }}
-            </div>
-          </div>
         </div>
         
         <div class="config-right">
-          <!-- 数量（可点击切换） -->
-          <span 
-            class="count-display clickable" 
+          <!-- 生成数量（保留原位置，点击切换 1x → 2x → 4x） -->
+          <span
+            class="count-display clickable"
             @click="toggleCount"
             :title="`点击切换：1x → 2x → 4x（当前套餐最大 ${userConcurrentLimit}x）`"
           >

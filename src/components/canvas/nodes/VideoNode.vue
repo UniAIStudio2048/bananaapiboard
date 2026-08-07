@@ -1409,6 +1409,22 @@ const isSeedance2Model = computed(() => {
   return isSeedanceSd2VideoModel(currentModelConfig.value) || isSeedanceOpenApiProModel.value
 })
 
+// Seedance 2.x 参考素材上限与时长范围（模型配置 seedanceConfig 优先，默认 9 图 / 3 视频 / 3 音频、4-15 秒；Seedance 2.5 为 30 / 10 / 10、3-30 秒）
+const seedance2Limits = computed(() => {
+  const config = currentModelConfig.value?.seedanceConfig || {}
+  const toPositiveNumber = (value, fallback) => {
+    const number = Number(value)
+    return Number.isFinite(number) && number > 0 ? number : fallback
+  }
+  return {
+    maxImages: toPositiveNumber(config.maxImages, 9),
+    maxVideos: toPositiveNumber(config.maxVideos, 3),
+    maxAudios: toPositiveNumber(config.maxAudios, 3),
+    minDuration: toPositiveNumber(config.minDuration, 4),
+    maxDuration: toPositiveNumber(config.maxDuration, 15)
+  }
+})
+
 // Seedance 2.0 模式选择
 const selectedSeedance2Mode = ref(props.data.seedance2Mode || 'text2video')
 const seedanceResolution = ref(props.data.seedanceResolution || '720p')
@@ -2116,7 +2132,8 @@ const aspectRatios = [
   { value: '9:16', label: '9:16 竖屏' },
   { value: '1:1', label: '1:1 方形' },
   { value: '3:4', label: '3:4' },
-  { value: '4:3', label: '4:3' }
+  { value: '4:3', label: '4:3' },
+  { value: '21:9', label: '21:9 超宽' }
 ]
 
 const availableAspectRatios = computed(() => {
@@ -5182,7 +5199,8 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
         if (dur) totalAudioDuration += dur
       }
     }
-    if (totalAudioDuration > 15) {
+    const totalAudioCap = isMinimaxH3Model.value || seedance2Limits.value.maxAudios <= 3 ? 15 : Infinity
+    if (totalAudioDuration > totalAudioCap) {
       await showAlert(`参考音频总时长 ${Math.round(totalAudioDuration)} 秒，超过模型限制（总时长不超过 15 秒）。请减少音频或裁剪后重试。`, '音频时长超限')
       isGenerating.value = false
       return
@@ -5219,15 +5237,15 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       console.log('[VideoNode] SD2 首尾帧:', finalImages.slice(0, 2))
     } else if (sd2Mode === 'multimodal_ref') {
       if (finalImages.length > 0) {
-        formData.append('reference_images', JSON.stringify(finalImages.slice(0, 9)))
+        formData.append('reference_images', JSON.stringify(finalImages.slice(0, seedance2Limits.value.maxImages)))
       }
       const orderedVideos = referenceVideos.value || []
       if (orderedVideos.length > 0) {
-        formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, 3)))
+        formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, seedance2Limits.value.maxVideos)))
       }
       const orderedAudios = referenceAudios.value || []
       if (orderedAudios.length > 0) {
-        formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, 3)))
+        formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, seedance2Limits.value.maxAudios)))
       }
       console.log('[VideoNode] SD2 多模态参考 | 图片:', finalImages.length, '视频:', orderedVideos.length, '音频:', orderedAudios.length)
     } else if (sd2Mode === 'video_edit') {
@@ -5240,13 +5258,13 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       }
       const orderedAudios = referenceAudios.value || []
       if (orderedAudios.length > 0) {
-        formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, 3)))
+        formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, seedance2Limits.value.maxAudios)))
       }
       console.log('[VideoNode] SD2 视频编辑 | 参考图:', finalImages.length, '参考视频:', orderedVideos.length, '音频:', orderedAudios.length)
     } else if (sd2Mode === 'video_extend') {
       const orderedVideos = referenceVideos.value || []
       if (orderedVideos.length > 0) {
-        formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, 3)))
+        formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, seedance2Limits.value.maxVideos)))
       }
       console.log('[VideoNode] SD2 视频延长 | 参考视频:', orderedVideos.length)
     }
@@ -6114,7 +6132,8 @@ async function handleGenerate(options = {}) {
         }
         totalVideoDuration += dur
       }
-      if (totalVideoDuration > 15) {
+      const totalVideoCap = seedance2Limits.value.maxVideos > 3 ? Infinity : 15
+      if (totalVideoDuration > totalVideoCap) {
         await showAlert('参考视频总时长不能超过15秒', '提示')
         return
       }
