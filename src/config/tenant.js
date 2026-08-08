@@ -858,6 +858,31 @@ export const getModelDescription = (modelKey, type = 'image') => {
   return modelDescriptions?.[type]?.[modelKey] || ''
 }
 
+/**
+ * 计算需要去重隐藏的 gptimage2 / gpt-image-2 渠道索引集合
+ *
+ * 去重规则：同一租户的 image_models 列表里，若存在多条已启用
+ * （enabled !== false）的 gptimage2 / gpt-image-2 渠道（真正的 GR 渠道），
+ * 只保留第一条，其余视为重复应隐藏；仅有一条时正常显示。
+ *
+ * @param {Array<Object>} imageModelsConfig 完整的 image_models 配置数组
+ * @returns {Set<number>} 应被去重隐藏的条目索引集合
+ */
+export const getDuplicateGptImage2Indexes = (imageModelsConfig) => {
+  const duplicateIndexes = new Set()
+  let firstEnabledIndex = -1
+  imageModelsConfig.forEach((modelConfig, index) => {
+    if (modelConfig.apiType !== 'gptimage2' || modelConfig.actualModel !== 'gpt-image-2') return
+    if (modelConfig.enabled === false) return
+    if (firstEnabledIndex === -1) {
+      firstEnabledIndex = index
+    } else {
+      duplicateIndexes.add(index)
+    }
+  })
+  return duplicateIndexes
+}
+
 // 获取所有可用的图片模型列表（从配置中动态获取）
 // mode: 可选参数，'t2i' = 文生图，'i2i' = 图生图，不传则返回所有
 export const getAvailableImageModels = (mode = null) => {
@@ -896,14 +921,18 @@ export const getAvailableImageModels = (mode = null) => {
   // 优先使用 image_models 数组的顺序（保持后端配置的排序）
   if (imageModelsConfig && Array.isArray(imageModelsConfig) && imageModelsConfig.length > 0) {
     const models = []
-    
-    for (const modelConfig of imageModelsConfig) {
+
+    // 预计算重复的 gptimage2 / gpt-image-2 渠道索引（多条已启用渠道仅保留第一条，其余去重隐藏）
+    const duplicateGptImage2Indexes = getDuplicateGptImage2Indexes(imageModelsConfig)
+
+    for (const [index, modelConfig] of imageModelsConfig.entries()) {
       const key = modelConfig.name
       if (!key) continue
-      
+
       // 跳过禁用的模型
       if (modelConfig.enabled === false || enabledModels[key] === false) continue
-      if (modelConfig.apiType === 'gptimage2' && modelConfig.actualModel === 'gpt-image-2') continue
+      // 多条 gptimage2 / gpt-image-2 渠道仅保留第一条，其余去重隐藏
+      if (duplicateGptImage2Indexes.has(index)) continue
       if ((modelConfig.apiType === 'openai' || !modelConfig.apiType) && modelConfig.actualModel === 'gpt-image-2' && key !== 'gpt-image-2') continue
       
       const modelPricingConfig = pricing[key] || {}

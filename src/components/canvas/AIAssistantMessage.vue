@@ -38,57 +38,61 @@
 
     <!-- 消息内容 -->
     <div class="ai-message__content">
-      <!-- 思考过程（可折叠） -->
-      <div v-if="message.thinking" class="ai-thinking">
+      <!-- 本轮引用：Skill、模型和附件都以紧凑标签呈现，避免抢占正文空间。 -->
+      <div v-if="message.role === 'user' && (message.skillRef || message.modelRef || visibleAttachments.length)" class="ai-message__references">
+        <div v-if="message.skillRef" class="ai-message-reference ai-message-reference--skill" :title="message.skillRef.label">
+          <svg class="ai-message-reference__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6M8 13h8M8 17h5" />
+          </svg>
+          <span>{{ message.skillRef.label }}</span>
+        </div>
+        <div v-if="message.modelRef" class="ai-message-reference ai-message-reference--model" :title="message.modelRef.modelId">
+          <svg class="ai-message-reference__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="3" y="4" width="18" height="16" rx="2.5" />
+            <circle cx="9" cy="10" r="1.8" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="m5.5 17.5 4.5-4.5 3 3 3-3 2.5 2.5" />
+          </svg>
+          <span>{{ message.modelRef.label || message.modelRef.modelId }}</span>
+        </div>
+        <button
+          v-for="(att, index) in visibleAttachments"
+          :key="`${att.url}-${index}`"
+          type="button"
+          class="ai-message-reference ai-message-reference--attachment"
+          :title="att.name"
+          @click="$emit('preview-media', { type: att.type, url: toSameOriginUrl(att.url), name: att.name })"
+        >
+          <img v-if="att.type === 'image'" :src="toSameOriginUrl(att.url)" :alt="att.name" class="ai-message-reference__thumbnail" />
+          <svg v-else class="ai-message-reference__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <path d="M14 2v6h6" />
+          </svg>
+          <span>{{ att.name || (att.type === 'image' ? '图片附件' : '附件') }}</span>
+        </button>
+      </div>
+
+      <!-- 思考过程（默认收起，只显示一行） -->
+      <div v-if="message.thinking || message.isThinking" class="ai-thinking">
         <button
           class="ai-thinking__toggle"
+          type="button"
+          :aria-expanded="showThinking"
           @click="showThinking = !showThinking"
         >
-          <svg class="w-4 h-4 transition-transform" :class="{ 'rotate-90': showThinking }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <span v-if="message.isThinking" class="ai-thinking__spinner" aria-hidden="true"></span>
+          <svg v-else class="w-4 h-4 transition-transform" :class="{ 'rotate-90': showThinking }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M9 18l6-6-6-6"/>
           </svg>
-          <span>思考过程</span>
+          <span :class="{ 'ai-live-shimmer': message.isThinking }">{{ message.isThinking ? '思考中…' : '思考过程' }}</span>
         </button>
-        <div v-if="showThinking" class="ai-thinking__content">
+        <div v-if="showThinking && message.thinking" class="ai-thinking__content">
           {{ message.thinking }}
         </div>
       </div>
 
-      <!-- 工具调用 -->
-      <div v-if="message.tool_calls?.length" class="ai-tool-calls">
-        <div v-for="tool in message.tool_calls" :key="tool.id" class="ai-tool-call">
-          <div class="ai-tool-call__header">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-            </svg>
-            <span>{{ getToolName(tool) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- 工具执行卡片（运行中/完成/失败，来自 SSE 事件流） -->
-      <div v-if="message.toolEvents?.length" class="ai-tool-cards">
-        <div
-          v-for="tool in message.toolEvents"
-          :key="tool.id"
-          class="ai-tool-card"
-          :class="`ai-tool-card--${tool.status}`"
-        >
-          <div class="ai-tool-card__header">
-            <span v-if="tool.status === 'running'" class="ai-tool-card__spinner"></span>
-            <svg v-else class="ai-tool-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path v-if="tool.status === 'done'" d="M20 6 9 17l-5-5"/>
-              <path v-else d="M18 6 6 18M6 6l12 12"/>
-            </svg>
-            <span class="ai-tool-card__name">{{ tool.name }}</span>
-            <span class="ai-tool-card__status">
-              <template v-if="tool.status === 'running'">执行中…</template>
-              <template v-else-if="tool.status === 'done'">完成{{ tool.duration ? ` · ${formatDuration(tool.duration)}` : '' }}</template>
-              <template v-else>失败</template>
-            </span>
-          </div>
-          <div v-if="tool.detail" class="ai-tool-card__detail">{{ tool.detail }}</div>
-        </div>
+      <div v-if="message.preGenerationContent" class="ai-message__text ai-message__text--pre-generation" @contextmenu="handleContextMenu">
+        <div v-html="formatContent(message.preGenerationContent)"></div>
       </div>
 
       <!-- 媒体生成中 -->
@@ -97,7 +101,8 @@
         class="media-generating"
         :class="`media-generating--${message.mediaGenerating}`"
       >
-        <div class="media-generating__icon">
+        <div class="media-generating__header">
+          <div class="media-generating__icon">
           <svg v-if="message.mediaGenerating === 'video'" class="media-generating__svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <rect x="3" y="5" width="13" height="14" rx="2.5" />
             <path stroke-linecap="round" stroke-linejoin="round" d="m20.5 9.5-4.5 2.5 4.5 2.5v-5Z" />
@@ -107,14 +112,18 @@
             <circle cx="9" cy="10" r="1.8" />
             <path stroke-linecap="round" stroke-linejoin="round" d="m5.5 17.5 4.5-4.5 3 3 3-3 2.5 2.5" />
           </svg>
+          </div>
+          <span class="media-generating__label">{{ message.mediaGenerating === 'video' ? '视频生成中' : '图片生成中' }}…</span>
         </div>
-        <span class="media-generating__label">{{ message.mediaGenerating === 'video' ? '视频生成中' : '图片生成中' }}…</span>
+        <div v-if="message.mediaGenerating === 'image'" class="media-generating__grid">
+          <div v-for="index in mediaGeneratingCount" :key="index" class="media-generating__placeholder" aria-hidden="true"></div>
+        </div>
       </div>
 
       <!-- 主要内容 -->
       <div
-        v-else
-        class="ai-message__text"
+        v-if="!message.isThinking && (!message.mediaGenerating || message.content)"
+        class="ai-message__text ai-message__text--after-generation"
         :class="{ 'is-loading': message.isStreaming && !message.content }"
         @contextmenu="handleContextMenu"
       >
@@ -127,6 +136,54 @@
         <template v-else>
           <div v-html="formattedContent"></div>
         </template>
+      </div>
+
+      <!-- 图片生成结果组：默认展开，可折叠为首图叠层。 -->
+      <div v-if="message.role === 'assistant' && mediaResults.length" class="ai-media-results">
+        <button type="button" class="ai-media-results__toggle" :aria-expanded="showMediaResults" @click="showMediaResults = !showMediaResults">
+          <svg class="ai-media-results__toggle-icon" :class="{ 'is-expanded': showMediaResults }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+          <span>{{ mediaResults[0].type === 'video' ? '视频已生成' : '图片已生成' }} ×{{ mediaResults.length }}</span>
+        </button>
+        <button v-if="!showMediaResults" type="button" class="ai-media-results__collapsed" @click="showMediaResults = true">
+          <span class="ai-media-results__stack" aria-hidden="true"></span>
+          <img v-if="mediaResults[0].type === 'image'" :src="toSameOriginUrl(mediaResults[0].url)" :alt="mediaResults[0].name" class="ai-media-results__collapsed-preview" />
+          <video v-else :src="toSameOriginUrl(mediaResults[0].url)" class="ai-media-results__collapsed-preview" preload="metadata"></video>
+          <span v-if="mediaResults.length > 1" class="ai-media-results__remaining">+{{ mediaResults.length - 1 }}</span>
+        </button>
+        <div v-else class="ai-media-results__grid">
+        <div v-for="media in mediaResults" :key="media.url" class="ai-media-card">
+          <img
+            v-if="media.type === 'image'"
+            :src="toSameOriginUrl(media.url)"
+            :alt="media.name"
+            class="ai-media-card__preview"
+            loading="lazy"
+            @click="$emit('preview-media', { type: 'image', url: toSameOriginUrl(media.url), name: media.name })"
+          />
+          <video
+            v-else
+            :src="toSameOriginUrl(media.url)"
+            class="ai-media-card__preview"
+            controls
+            preload="metadata"
+            @click="$emit('preview-media', { type: 'video', url: toSameOriginUrl(media.url), name: media.name })"
+          ></video>
+          <button
+            type="button"
+            class="ai-media-card__download"
+            title="下载"
+            aria-label="下载媒体文件"
+            @click.stop="startStreamDownload(media.url, media.name)"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            <span>下载</span>
+          </button>
+        </div>
+        </div>
       </div>
 
       <!-- 右键菜单 -->
@@ -149,7 +206,7 @@
       </Teleport>
 
       <!-- 附件预览 -->
-      <div v-if="visibleAttachments.length" class="ai-attachments">
+      <div v-if="message.role !== 'user' && visibleAttachments.length && !mediaResults.length" class="ai-attachments">
         <div
           v-for="(att, index) in visibleAttachments"
           :key="index"
@@ -251,6 +308,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { startStreamDownload } from '@/api/client'
 
 const props = defineProps({
   message: {
@@ -284,6 +342,80 @@ const visibleAttachments = computed(() => {
 
 defineEmits(['preview-media'])
 
+// 从 MCP 工具结果（task-status / image-gen / video-gen）中提取媒体 URL
+const MEDIA_TOOL_NAMES = ['task-status', 'image-gen', 'video-gen']
+const MEDIA_URL_RE = /https?:\/\/[^\s"'<>]+?\.(?:png|jpe?g|webp|gif|mp4|webm|mov)(?:[?#][^\s"'<>]*)?/gi
+
+function extractUrlsFromToolResult(result) {
+  if (!result) return []
+  const texts = []
+  if (Array.isArray(result.content)) {
+    for (const block of result.content) {
+      if (block && typeof block.text === 'string') texts.push(block.text)
+    }
+  } else if (typeof result === 'string') {
+    texts.push(result)
+  }
+  const urls = []
+  const collect = (obj, depth = 0) => {
+    if (!obj || typeof obj !== 'object' || depth > 5) return
+    for (const key of ['result_urls', 'preview_urls', 'urls', 'images']) {
+      const list = Array.isArray(obj[key]) ? obj[key] : []
+      for (const item of list) {
+        const u = typeof item === 'string' ? item : item && item.url
+        if (typeof u === 'string' && u.startsWith('http')) urls.push(u)
+      }
+    }
+    for (const nested of ['task', 'result', 'data']) {
+      if (obj[nested] && typeof obj[nested] === 'object') collect(obj[nested], depth + 1)
+    }
+  }
+  for (const text of texts) {
+    try {
+      collect(JSON.parse(text))
+    } catch {
+      // 非 JSON 文本，跳过
+    }
+  }
+  return urls
+}
+
+function mediaTypeFromUrl(url) {
+  const ext = (url.split('?')[0].split('#')[0].match(/\.([a-zA-Z0-9]+)$/) || [])[1]?.toLowerCase()
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(ext)) return 'image'
+  if (['mp4', 'webm', 'mov', 'avi'].includes(ext)) return 'video'
+  return null
+}
+
+// 汇总消息中可可视化的媒体：工具结果 + 最终回复文本中的媒体 URL
+const mediaResults = computed(() => {
+  const list = []
+  const push = (url, attachment = null) => {
+    const cleanUrl = String(url || '').trim().replace(/[),.;]+$/, '')
+    if (!cleanUrl || list.some(item => item.url === cleanUrl)) return
+    const type = attachment?.type || mediaTypeFromUrl(cleanUrl)
+    if (!type) return
+    if (!['image', 'video'].includes(type)) return
+    list.push({
+      url: cleanUrl,
+      type,
+      name: attachment?.name || decodeURIComponent(cleanUrl.split('?')[0].split('/').pop() || 'download')
+    })
+  }
+  for (const attachment of visibleAttachments.value) push(attachment.url, attachment)
+  for (const tool of Array.isArray(props.message.toolEvents) ? props.message.toolEvents : []) {
+    if (tool.status !== 'done') continue
+    const toolName = String(tool.name || '').toLowerCase()
+    if (!MEDIA_TOOL_NAMES.some(name => toolName.includes(name))) continue
+    for (const url of extractUrlsFromToolResult(tool.result)) push(url)
+  }
+  const content = typeof props.message.content === 'string' ? props.message.content : ''
+  for (const match of content.matchAll(MEDIA_URL_RE)) push(match[0])
+  return list
+})
+
+const mediaGeneratingCount = computed(() => Math.max(1, Number(props.message.mediaGeneratingCount) || 1))
+
 // 拖拽附件到画布
 function handleAttachmentDragStart(e, att) {
   const dragData = {
@@ -306,6 +438,7 @@ function handleAttachmentDragStart(e, att) {
 }
 
 const showThinking = ref(false)
+const showMediaResults = ref(true)
 const showContextMenu = ref(false)
 const contextMenuX = ref(0)
 const contextMenuY = ref(0)
@@ -372,12 +505,12 @@ marked.setOptions({
   gfm: true
 })
 
-const formattedContent = computed(() => {
-  if (!props.message.content) return ''
+function formatContent(content) {
+  if (!content) return ''
 
   try {
     // 使用 marked 解析 markdown
-    const html = marked.parse(props.message.content)
+    const html = marked.parse(content)
     // 使用 DOMPurify 清理 HTML
     return DOMPurify.sanitize(html, {
       ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'a', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
@@ -385,16 +518,13 @@ const formattedContent = computed(() => {
     })
   } catch (e) {
     // 如果解析失败，返回原始文本
-    return DOMPurify.sanitize(props.message.content.replace(/\n/g, '<br>'), { ALLOWED_TAGS: ['br'] })
+    return DOMPurify.sanitize(content.replace(/\n/g, '<br>'), { ALLOWED_TAGS: ['br'] })
   }
-})
-
-function getToolName(tool) {
-  const names = {
-    web_search: '联网搜索'
-  }
-  return names[tool.function?.name] || tool.function?.name || '工具调用'
 }
+
+const formattedContent = computed(() => {
+  return formatContent(props.message.content)
+})
 
 function formatTime(timestamp) {
   if (!timestamp) return ''
@@ -403,12 +533,6 @@ function formatTime(timestamp) {
     hour: '2-digit',
     minute: '2-digit'
   })
-}
-
-function formatDuration(ms) {
-  if (!ms || ms < 0) return ''
-  if (ms < 1000) return `${Math.round(ms)}ms`
-  return `${(ms / 1000).toFixed(1)}s`
 }
 
 // 右键菜单处理
@@ -598,6 +722,11 @@ onUnmounted(() => {
   max-width: 85%;
 }
 
+.ai-message--assistant .ai-message__content {
+  display: flex;
+  flex-direction: column;
+}
+
 .ai-message--user .ai-message__content {
   display: flex;
   flex-direction: column;
@@ -651,31 +780,26 @@ onUnmounted(() => {
 }
 
 .media-generating {
+  order: 2;
+  margin-top: 4px;
+}
+
+.media-generating__header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: 16px;
-  background: linear-gradient(135deg,
-    rgba(45, 50, 65, 0.85) 0%,
-    rgba(35, 40, 55, 0.9) 100%
-  );
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom-left-radius: 6px;
-  box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.2),
-    0 1px 3px rgba(0, 0, 0, 0.3);
+  gap: 8px;
+  color: rgba(226, 232, 240, 0.72);
 }
 
 .media-generating__icon {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 24px;
+  height: 24px;
   place-items: center;
   flex-shrink: 0;
-  border-radius: 10px;
-  color: #a78bfa;
-  background: rgba(167, 139, 250, 0.12);
+  border-radius: 7px;
+  color: rgba(226, 232, 240, 0.76);
+  background: rgba(148, 163, 184, 0.1);
   animation: media-generating-pulse 1.6s ease-in-out infinite;
 }
 
@@ -685,14 +809,33 @@ onUnmounted(() => {
 }
 
 .media-generating__svg {
-  width: 22px;
-  height: 22px;
+  width: 15px;
+  height: 15px;
 }
 
 .media-generating__label {
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
+}
+
+.media-generating__grid,
+.ai-media-results__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 16px;
+}
+
+.media-generating__placeholder {
+  aspect-ratio: 1;
+  min-height: 180px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  background-color: rgba(148, 163, 184, 0.065);
+  background-image: radial-gradient(circle, rgba(226, 232, 240, 0.14) 1.2px, transparent 1.4px);
+  background-position: 16px calc(100% - 16px);
+  background-size: 12px 12px;
+  animation: media-generating-placeholder 1.8s ease-in-out infinite alternate;
 }
 
 @keyframes media-generating-pulse {
@@ -704,6 +847,11 @@ onUnmounted(() => {
     opacity: 1;
     transform: scale(1.04);
   }
+}
+
+@keyframes media-generating-placeholder {
+  from { opacity: 0.5; }
+  to { opacity: 1; }
 }
 
 .loading-dots {
@@ -804,6 +952,7 @@ onUnmounted(() => {
 }
 
 .ai-thinking {
+  order: 0;
   margin-bottom: 8px;
 }
 
@@ -811,18 +960,29 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
-  background: rgba(139, 92, 246, 0.2);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  border-radius: 6px;
-  color: #a78bfa;
+  width: 100%;
+  padding: 4px 0;
+  background: transparent;
+  border: 0;
+  color: rgba(148, 163, 184, 0.9);
   font-size: 12px;
   cursor: pointer;
-  transition: background 0.2s;
+  text-align: left;
+  transition: color 0.2s;
 }
 
 .ai-thinking__toggle:hover {
-  background: rgba(139, 92, 246, 0.3);
+  color: #e2e8f0;
+}
+
+.ai-thinking__spinner {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 2px solid rgba(148, 163, 184, 0.36);
+  border-right-color: rgba(226, 232, 240, 0.9);
+  border-radius: 50%;
+  animation: ai-thinking-spin 0.8s linear infinite;
 }
 
 .ai-thinking__content {
@@ -836,120 +996,20 @@ onUnmounted(() => {
   white-space: pre-wrap;
 }
 
-.ai-tool-calls {
-  margin-bottom: 8px;
+.ai-live-shimmer {
+  background: linear-gradient(110deg, rgba(148, 163, 184, 0.85) 20%, rgba(255, 255, 255, 0.98) 45%, rgba(148, 163, 184, 0.85) 70%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ai-status-shimmer 1.45s linear infinite;
 }
 
-.ai-tool-call {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  margin-right: 8px;
-  margin-bottom: 4px;
+@keyframes ai-status-shimmer {
+  to { background-position: -220% 0; }
 }
 
-.ai-tool-call__header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: rgba(59, 130, 246, 0.2);
-  border: 1px solid rgba(59, 130, 246, 0.3);
-  border-radius: 6px;
-  color: #60a5fa;
-  font-size: 12px;
-}
-
-.ai-tool-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.ai-tool-card {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  background: rgba(148, 163, 184, 0.08);
-  font-size: 12px;
-}
-
-.ai-tool-card--running {
-  border-color: rgba(59, 130, 246, 0.4);
-  background: rgba(59, 130, 246, 0.1);
-}
-
-.ai-tool-card--done {
-  border-color: rgba(34, 197, 94, 0.35);
-  background: rgba(34, 197, 94, 0.08);
-}
-
-.ai-tool-card--error {
-  border-color: rgba(239, 68, 68, 0.4);
-  background: rgba(239, 68, 68, 0.08);
-}
-
-.ai-tool-card__header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.ai-tool-card__name {
-  font-weight: 500;
-}
-
-.ai-tool-card__status {
-  margin-left: auto;
-  color: rgba(148, 163, 184, 0.9);
-}
-
-.ai-tool-card--running .ai-tool-card__status {
-  color: #60a5fa;
-}
-
-.ai-tool-card--done .ai-tool-card__status {
-  color: #4ade80;
-}
-
-.ai-tool-card--error .ai-tool-card__status {
-  color: #f87171;
-}
-
-.ai-tool-card__detail {
-  color: rgba(148, 163, 184, 0.85);
-  line-height: 1.4;
-}
-
-.ai-tool-card__icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-}
-
-.ai-tool-card--done .ai-tool-card__icon {
-  color: #4ade80;
-}
-
-.ai-tool-card--error .ai-tool-card__icon {
-  color: #f87171;
-}
-
-.ai-tool-card__spinner {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-  border: 2px solid rgba(96, 165, 250, 0.3);
-  border-top-color: #60a5fa;
-  border-radius: 50%;
-  animation: ai-tool-spin 0.8s linear infinite;
-}
-
-@keyframes ai-tool-spin {
+@keyframes ai-thinking-spin {
   to { transform: rotate(360deg); }
 }
 
@@ -1274,6 +1334,28 @@ onUnmounted(() => {
   color: #1c1917;
 }
 
+:root.canvas-theme-light .media-generating__header,
+:root.canvas-theme-light .ai-media-results__toggle {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .media-generating__placeholder {
+  border-color: rgba(15, 23, 42, 0.12);
+  background-color: rgba(15, 23, 42, 0.035);
+  background-image: radial-gradient(circle, rgba(15, 23, 42, 0.13) 1.2px, transparent 1.4px);
+}
+
+:root.canvas-theme-light .ai-message-reference {
+  border-color: rgba(15, 23, 42, 0.14);
+  color: #292524;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+:root.canvas-theme-light .ai-message-reference--attachment:hover {
+  border-color: rgba(15, 23, 42, 0.24);
+  background: #fff;
+}
+
 /* 用户消息气泡 - 白昼模式 */
 :root.canvas-theme-light .ai-message--user .ai-message__text {
   background: linear-gradient(135deg, 
@@ -1307,45 +1389,20 @@ onUnmounted(() => {
 
 /* 思考过程 - 白昼模式 */
 :root.canvas-theme-light .ai-thinking__toggle {
-  background: rgba(139, 92, 246, 0.1);
-  border-color: rgba(139, 92, 246, 0.2);
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
   color: #7c3aed;
 }
 
 :root.canvas-theme-light .ai-thinking__toggle:hover {
-  background: rgba(139, 92, 246, 0.15);
+  background: transparent;
+  color: #6d28d9;
 }
 
 :root.canvas-theme-light .ai-thinking__content {
   background: rgba(139, 92, 246, 0.08);
   color: #6d28d9;
-}
-
-/* 工具调用 - 白昼模式 */
-:root.canvas-theme-light .ai-tool-call__header {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(59, 130, 246, 0.2);
-  color: #2563eb;
-}
-
-:root.canvas-theme-light .ai-tool-card {
-  border-color: rgba(100, 116, 139, 0.25);
-  background: rgba(100, 116, 139, 0.06);
-}
-
-:root.canvas-theme-light .ai-tool-card--running {
-  border-color: rgba(37, 99, 235, 0.35);
-  background: rgba(37, 99, 235, 0.08);
-}
-
-:root.canvas-theme-light .ai-tool-card--done {
-  border-color: rgba(22, 163, 74, 0.35);
-  background: rgba(22, 163, 74, 0.08);
-}
-
-:root.canvas-theme-light .ai-tool-card--error {
-  border-color: rgba(220, 38, 38, 0.35);
-  background: rgba(220, 38, 38, 0.08);
 }
 
 /* 附件文件 - 白昼模式 */
@@ -1699,5 +1756,189 @@ onUnmounted(() => {
   box-shadow: 
     0 4px 12px rgba(139, 92, 246, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+.ai-message__references {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ai-message-reference {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 220px;
+  height: 34px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(15, 23, 42, 0.35);
+  font-size: 12px;
+  line-height: 1;
+}
+
+.ai-message-reference > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-message-reference--attachment {
+  cursor: pointer;
+}
+
+.ai-message-reference--attachment:hover {
+  border-color: rgba(255, 255, 255, 0.34);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.ai-message-reference--skill {
+  border-color: rgba(196, 181, 253, 0.35);
+}
+
+.ai-message-reference--model {
+  border-color: rgba(147, 197, 253, 0.32);
+}
+
+.ai-message-reference__icon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  color: #c4b5fd;
+}
+
+.ai-message-reference__thumbnail {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.ai-media-results {
+  order: 3;
+  margin-top: 16px;
+}
+
+.ai-message__text--pre-generation {
+  order: 1;
+}
+
+.ai-message__text--after-generation {
+  order: 4;
+}
+
+.ai-media-results__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  color: rgba(226, 232, 240, 0.72);
+  background: transparent;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ai-media-results__toggle:hover {
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.ai-media-results__toggle-icon {
+  width: 16px;
+  height: 16px;
+  transition: transform 0.18s ease;
+  transform: rotate(-90deg);
+}
+
+.ai-media-results__toggle-icon.is-expanded {
+  transform: rotate(0deg);
+}
+
+.ai-media-results__collapsed {
+  position: relative;
+  display: block;
+  width: min(100%, 390px);
+  margin-top: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.ai-media-results__stack {
+  position: absolute;
+  z-index: 0;
+  inset: 10px -14px -12px 12px;
+  border-radius: 22px;
+  background: rgba(148, 163, 184, 0.25);
+  box-shadow: 6px 7px 0 rgba(148, 163, 184, 0.16), 12px 12px 0 rgba(148, 163, 184, 0.08);
+}
+
+.ai-media-results__collapsed-preview {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 22px;
+  object-fit: cover;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.ai-media-results__remaining {
+  position: absolute;
+  z-index: 2;
+  right: 12px;
+  bottom: 12px;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #1f2937;
+  background: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ai-media-card {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+  aspect-ratio: 1;
+  border-radius: 22px;
+  overflow: hidden;
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  background: rgba(127, 127, 127, 0.08);
+}
+.ai-media-card__preview {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: pointer;
+  background: rgba(127, 127, 127, 0.1);
+}
+.ai-media-card__download {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+}
+.ai-media-card__download:hover {
+  background: rgba(0, 0, 0, 0.75);
 }
 </style>

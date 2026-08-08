@@ -27,6 +27,10 @@ async function request(path, options = {}) {
 
 export const getSkillCatalog = () => request('/api/canvas/skills/catalog')
 export const getMySkills = () => request('/api/canvas/skills/mine')
+export const getFavoriteSkills = () => request('/api/canvas/skills/favorites')
+export const favoriteSkill = id => request(`/api/canvas/skills/${encodeURIComponent(id)}/favorite`, { method: 'POST' })
+export const unfavoriteSkill = id => request(`/api/canvas/skills/${encodeURIComponent(id)}/favorite`, { method: 'DELETE' })
+export const referenceSkill = id => request(`/api/canvas/skills/${encodeURIComponent(id)}/reference`, { method: 'POST' })
 export const getAgentGrants = () => request('/api/canvas/agent/grants')
 export const revokeAgentGrant = id => request(`/api/canvas/agent/grants/${encodeURIComponent(id)}`, { method: 'DELETE' })
 export const createMySkill = payload => request('/api/canvas/skills/mine', { method: 'POST', body: JSON.stringify(payload) })

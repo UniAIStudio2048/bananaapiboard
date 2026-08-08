@@ -1,628 +1,223 @@
 <template>
-  <div class="skills-panel-backdrop" @click.self="emit('close')">
-    <section class="skills-panel canvas-panel" role="dialog" aria-modal="true" aria-labelledby="skills-panel-title">
-      <header class="skills-panel-header">
+  <div class="skills-market-backdrop" :class="{ 'is-popover-backdrop': !showAll }" @click.self="emit('close')">
+    <section class="skills-market" :class="{ 'is-popover': !showAll, 'is-full-market': showAll, 'has-anchor': !showAll && anchor }" :style="showAll ? undefined : anchor" role="dialog" :aria-modal="showAll ? 'true' : 'false'" aria-labelledby="skills-market-title">
+      <header class="market-header">
         <div>
-          <p class="skills-panel-kicker">Banana Canvas Skills</p>
-          <h2 id="skills-panel-title">安装到 AI Agent</h2>
+          <h2 id="skills-market-title">Skill</h2>
         </div>
-        <button class="skills-close-btn" type="button" title="关闭" @click="emit('close')">
-          <X :size="18" aria-hidden="true" />
-        </button>
+        <div class="market-header-actions">
+          <button class="create-button" type="button" @click="startCreate"><Plus :size="15" /> 创建</button>
+          <button v-if="!showAll" class="all-button" type="button" @click="showAll = true">全部</button>
+          <button v-else class="all-button" type="button" @click="showAll = false">返回</button>
+          <button class="icon-button" type="button" aria-label="关闭 Skills 市场" @click="emit('close')"><X :size="18" /></button>
+        </div>
       </header>
 
-      <div v-if="error" class="skills-alert">{{ error }}</div>
-
-      <div class="skills-install-tabs" role="tablist" aria-label="安装方式">
-        <button
-          type="button"
-          :class="{ active: installMode === 'agent' }"
-          @click="installMode = 'agent'"
-        >
-          通过 AI Agent 安装
-        </button>
-        <button
-          type="button"
-          :class="{ active: installMode === 'manual' }"
-          @click="installMode = 'manual'"
-        >
-          手动安装
-        </button>
-      </div>
-
-      <section v-if="installMode === 'agent'" class="skills-card skills-agent-install">
-        <p class="skills-agent-copy">
-          将下面这段话直接发给你的 AI 助手，它会按当前域名和 API Key 完成安装与初始化，适用于 Codex、Claude Code、WorkBuddy、OpenClaw、Hermes 以及其他支持 Skills 调用的智能体。
-        </p>
-        <div class="skills-prompt-label">提示词</div>
-        <pre class="skills-prompt-box">{{ agentInstallPrompt }}</pre>
-        <div class="skills-actions centered">
-          <button class="btn-primary" type="button" :disabled="!agentInstallPrompt" @click="copyText(agentInstallPrompt, '安装提示词已复制')">复制安装提示词</button>
+      <!-- @reference 由 Canvas.vue 接收，打开 AI 助手并将 Skill 固定为本轮引用。 -->
+      <template v-if="!editing">
+        <div class="market-toolbar">
+          <div class="market-tabs" role="tablist" aria-label="Skills 分类">
+            <button v-for="item in tabs" :key="item.key" type="button" :class="{ active: activeTab === item.key }" @click="selectTab(item.key)">{{ item.label }}</button>
+          </div>
+          <label class="search-box"><Search :size="15" /><input v-model="query" type="search" placeholder="搜索 Skill" /></label>
         </div>
-      </section>
+        <p class="market-selection-hint">选择后会加载到对话框，发送才会调用。</p>
 
-      <section v-else class="skills-manual-grid">
-        <div class="skills-field">
-          <span>Base URL</span>
-          <code>{{ baseUrl }}</code>
-        </div>
-
-        <div class="skills-card">
-          <div class="skills-card-head">
-            <div>
-              <span class="skills-label">API Key</span>
-              <strong>{{ activeKey?.key_prefix || '未创建' }}</strong>
+        <p v-if="error" class="market-alert">{{ error }}</p>
+        <div v-if="viewing" class="market-detail">
+          <header class="market-header">
+            <div><h3>{{ viewing.name }}</h3></div>
+            <div class="market-header-actions">
+              <button class="icon-button" type="button" aria-label="关闭 Skill 详情" @click="viewing = null"><X :size="18" /></button>
             </div>
-            <button class="skills-link-btn" type="button" :disabled="loading" @click="loadSkills">刷新</button>
-          </div>
-          <div class="skills-key-row">
-            <code>{{ visibleKey }}</code>
-            <button class="skills-icon-btn" type="button" :disabled="!fullKey" @click="showKey = !showKey">
-              {{ showKey ? '隐藏' : '显示' }}
-            </button>
-          </div>
-          <div class="skills-actions">
-            <button class="btn-secondary" type="button" :disabled="!fullKey" @click="copyText(fullKey, 'API Key 已复制')">复制 Key</button>
-            <button class="btn-secondary" type="button" :disabled="!activeKey?.id || resetting" @click="confirmResetKey">重置 Key</button>
-            <button class="btn-secondary" type="button" :disabled="loading" @click="ensureKey">创建 Key</button>
+          </header>
+          <div class="detail-body">
+            <p class="detail-summary"><code>{{ viewing.trigger || `/${viewing.slug}` }}</code><span>{{ typeLabel(viewing.skill_type) }}</span></p>
+            <p class="detail-desc">{{ viewing.description || viewing.usage_scenario || '暂无使用说明' }}</p>
+            <dl v-if="viewing.usage_scenario || viewing.usage_guide || viewing.output_description" class="detail-fields">
+              <template v-if="viewing.usage_scenario"><dt>使用场景</dt><dd>{{ viewing.usage_scenario }}</dd></template>
+              <template v-if="viewing.usage_guide"><dt>如何使用</dt><dd>{{ viewing.usage_guide }}</dd></template>
+              <template v-if="viewing.output_description"><dt>输出内容</dt><dd>{{ viewing.output_description }}</dd></template>
+            </dl>
           </div>
         </div>
-
-        <div class="skills-card">
-          <div class="skills-card-head">
-            <div>
-              <span class="skills-label">SKILL.md</span>
-              <strong>安装内容</strong>
+        <div v-else-if="loading" class="market-empty">正在加载 Skills…</div>
+        <div v-else-if="filteredSkills.length" class="market-grid">
+          <article
+            v-for="skill in filteredSkills"
+            :key="skill.id"
+            class="market-card"
+            :class="{ selectable: skill.status === 'published' }"
+            :tabindex="skill.status === 'published' ? 0 : -1"
+            :aria-disabled="skill.status !== 'published'"
+            @click="skill.status === 'published' && reference(skill)"
+            @keydown.enter.prevent="skill.status === 'published' && reference(skill)"
+            @keydown.space.prevent="skill.status === 'published' && reference(skill)"
+          >
+            <div class="market-cover" :class="`type-${skill.skill_type || 'text'}`">
+              <img v-if="skill.cover_url" :src="skill.cover_url" :alt="`${skill.name} 封面`" />
+              <component v-else :is="typeIcon(skill.skill_type)" :size="22" aria-hidden="true" />
             </div>
-            <RouterLink class="skills-docs-link" to="/docs" target="_blank">打开文档</RouterLink>
-          </div>
-          <pre class="skills-markdown-preview">{{ markdownPreview }}</pre>
-          <div class="skills-actions">
-            <button class="btn-secondary" type="button" :disabled="!skillMarkdown" @click="copyText(skillMarkdown, 'SKILL.md 已复制')">复制 SKILL.md</button>
-            <button class="btn-secondary" type="button" :disabled="!packagePayload" @click="downloadPackage">下载 package.json</button>
-          </div>
+            <div class="card-copy">
+              <div class="card-title-row">
+                <h3>{{ skill.name }}</h3>
+                <code class="card-trigger">{{ skill.trigger || `/${skill.slug}` }}</code>
+              </div>
+              <p>{{ skill.description || skill.usage_scenario || '暂无使用说明' }}</p>
+              <div class="card-meta"><span>{{ typeLabel(skill.skill_type) }}</span></div>
+            </div>
+            <div class="card-actions">
+              <button v-if="skill.owner_type === 'tenant'" class="ghost-button" type="button" :title="skill.is_favorite ? '取消收藏' : '收藏'" @click.stop="toggleFavorite(skill)">
+                <Heart :size="15" :fill="skill.is_favorite ? 'currentColor' : 'none'" />
+              </button>
+              <button v-if="skill.owner_type === 'user'" class="ghost-button" type="button" title="编辑" @click.stop="startEdit(skill)"><Pencil :size="15" /></button>
+              <button class="reference-button" type="button" :disabled="skill.status !== 'published'" @click.stop="viewDetail(skill)">查看详情</button>
+            </div>
+          </article>
         </div>
-      </section>
+        <div v-else class="market-empty">{{ activeTab === 'favorites' ? '还没有收藏的通用 Skill' : '没有匹配的 Skill' }}</div>
+      </template>
 
-      <footer class="skills-panel-footer">
-        <span>{{ statusMessage || `使用 ${baseUrl} 调用 /api/skills/*。` }}</span>
-      </footer>
+      <form v-else class="skill-editor" @submit.prevent="save">
+        <div class="editor-header"><div><p class="market-kicker">仅自己可见</p><h3>{{ editing.id ? '编辑我的 Skill' : '创建我的 Skill' }}</h3></div><button class="ghost-button" type="button" @click="editing = null">返回市场</button></div>
+        <p class="editor-hint">个人 Skill 只能使用平台受控的生成能力，不支持 MCP 绑定。</p>
+        <label>名称<input v-model.trim="editing.name" required maxlength="120" placeholder="例如：我的商品文案助手" /></label>
+        <label>一句话介绍<textarea v-model.trim="editing.description" rows="2" placeholder="告诉其他自己，这个 Skill 用来做什么" /></label>
+        <label>类型<select v-model="editing.skill_type"><option value="text">文本</option><option value="image">图片</option><option value="video">视频</option><option value="audio">音频</option></select></label>
+        <label>使用场景<textarea v-model.trim="editing.usage_scenario" rows="2" /></label>
+        <label>如何使用<textarea v-model.trim="editing.usage_guide" rows="2" /></label>
+        <label>输出内容<textarea v-model.trim="editing.output_description" rows="2" /></label>
+        <label class="file-field"><span>SKILL.md</span><input type="file" accept=".md,text/markdown" @change="importSkillMarkdown" /><small>上传时仅提取名称、描述与正文为初始值；平台能力始终由此页面的类型控制。</small></label>
+        <label>SKILL.md 指令<textarea v-model="editing.instructions" rows="11" required placeholder="写入完整的 Skill 指令" /></label>
+        <div class="editor-actions"><button class="reference-button" type="submit" :disabled="saving">{{ saving ? '保存中…' : '保存并发布' }}</button><button v-if="editing.id" class="danger-button" type="button" @click="disable">停用</button></div>
+      </form>
     </section>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
-import { X } from '@lucide/vue'
-import { createSkillKey, getSkillKeys, getSkillPackage, resetSkillKey } from '@/api/skills'
+import { FileText, Heart, Image, Pencil, Plus, Search, Type, Video, Volume2, X } from '@lucide/vue'
+import { createMySkill, disableMySkill, favoriteSkill, getFavoriteSkills, getMySkills, getSkillCatalog, referenceSkill, unfavoriteSkill, updateMySkill } from '@/api/agent'
 
-const emit = defineEmits(['close'])
-
-const loading = ref(false)
-const resetting = ref(false)
-const keys = ref([])
-const packageData = ref(null)
-const error = ref('')
-const statusMessage = ref('')
-const showKey = ref(false)
-const installMode = ref('agent')
-const baseUrl = ref(normalizeSkillBaseUrl(window.location.origin))
-
-const activeKey = computed(() => keys.value.find(key => key.status === 'active') || keys.value[0] || null)
-const fullKey = computed(() => activeKey.value?.api_key || packageData.value?.key?.api_key || '')
-const visibleKey = computed(() => {
-  if (!fullKey.value) return '创建或重置后会显示完整 API Key'
-  if (showKey.value) return fullKey.value
-  const prefix = activeKey.value?.key_prefix || fullKey.value.slice(0, 16)
-  return `${prefix}••••••••••••••••`
+const props = defineProps({
+  anchor: {
+    type: Object,
+    default: null
+  }
 })
-const skillMarkdown = computed(() => packageData.value?.markdown || '')
-const markdownPreview = computed(() => skillMarkdown.value || '正在加载 SKILL.md...')
-const packagePayload = computed(() => packageData.value?.package || null)
-const agentInstallPrompt = computed(() => (
-  packageData.value?.agent_install_prompt ||
-  packagePayload.value?.files?.['AGENT_INSTALL_PROMPT.txt'] ||
-  `请帮我安装 Banana Canvas Skills：${baseUrl.value}。API Key 加载后会自动填入。`
-))
 
-function normalizeSkillBaseUrl(value) {
-  const raw = String(value || '').trim()
-  const candidate = raw.toLowerCase().startsWith('http://')
-    ? raw.replace(/^http:\/\//i, 'https://')
-    : raw.toLowerCase().startsWith('https://')
-      ? raw
-      : `https://${raw || window.location.host}`
-  try {
-    const url = new URL(candidate)
-    return `https://${url.host}`
-  } catch {
-    return `https://${window.location.host}`
-  }
-}
+const emit = defineEmits(['close', 'reference'])
 
-function normalizeKeyResponse(data) {
-  if (Array.isArray(data?.keys)) return data.keys
-  if (Array.isArray(data?.data)) return data.data
-  if (data?.key) return [data.key]
-  return []
-}
+const tabs = [{ key: 'general', label: '通用' }, { key: 'favorites', label: '收藏' }, { key: 'mine', label: '我的' }]
+const activeTab = ref('general')
+const query = ref('')
+const loading = ref(false)
+const saving = ref(false)
+const error = ref('')
+const catalog = ref([])
+const favorites = ref([])
+const mine = ref([])
+const editing = ref(null)
+const showAll = ref(false)
+const viewing = ref(null)
+const anchor = computed(() => props.anchor)
 
-async function loadSkills() {
+const sourceSkills = computed(() => ({ general: catalog.value.filter(item => item.owner_type === 'tenant'), favorites: favorites.value, mine: mine.value })[activeTab.value] || [])
+const filteredSkills = computed(() => {
+  const needle = query.value.trim().toLowerCase()
+  if (!needle) return sourceSkills.value
+  return sourceSkills.value.filter(skill => [skill.name, skill.description, skill.trigger, skill.usage_scenario].filter(Boolean).join(' ').toLowerCase().includes(needle))
+})
+
+function typeLabel(type) { return ({ image: '图片', video: '视频', audio: '音频', text: '文本' })[type] || '文本' }
+function typeIcon(type) { return ({ image: Image, video: Video, audio: Volume2, text: Type })[type] || FileText }
+function typeCapabilities(type) { return ({ image: ['image:generate'], video: ['video:generate'], audio: ['audio:generate'], text: ['llm:generate'] })[type] || ['llm:generate'] }
+function viewDetail(skill) { viewing.value = skill }
+
+async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [keysResult, packageResult] = await Promise.all([
-      getSkillKeys(),
-      getSkillPackage().catch(() => null)
-    ])
-    keys.value = normalizeKeyResponse(keysResult)
-    packageData.value = packageResult
-    if (packageResult?.baseUrl) {
-      baseUrl.value = normalizeSkillBaseUrl(packageResult.baseUrl)
-    }
-    if (!activeKey.value) {
-      await ensureKey()
-    }
-  } catch (err) {
-    error.value = err.message || '加载 Skills 失败'
-  } finally {
-    loading.value = false
-  }
+    const [catalogResult, favoriteResult, mineResult] = await Promise.all([getSkillCatalog(), getFavoriteSkills(), getMySkills()])
+    catalog.value = catalogResult.skills || []
+    favorites.value = favoriteResult.skills || []
+    mine.value = mineResult.skills || []
+  } catch (err) { error.value = err.message || '加载 Skills 市场失败' } finally { loading.value = false }
 }
 
-async function ensureKey() {
-  if (activeKey.value?.api_key) return
-  loading.value = true
-  error.value = ''
+async function selectTab(tab) { activeTab.value = tab; if (tab !== 'general') await load() }
+function blankSkill() { return { name: '', description: '', instructions: '', skill_type: 'text', usage_scenario: '', usage_guide: '', output_description: '', status: 'published' } }
+function startCreate() { editing.value = blankSkill() }
+function startEdit(skill) { editing.value = JSON.parse(JSON.stringify({ ...blankSkill(), ...skill })) }
+
+function parseSkillMarkdown(markdown) {
+  const source = String(markdown || '')
+  const match = source.match(/^---\s*\n([\s\S]*?)\n---\s*\n?/)
+  const frontmatter = match?.[1] || ''
+  const body = source.slice(match?.[0]?.length || 0).trim()
+  const field = key => frontmatter.match(new RegExp(`^${key}:\\s*["']?(.+?)["']?\\s*$`, 'mi'))?.[1]?.trim() || ''
+  const title = field('name') || field('title') || body.match(/^#\s+(.+)$/m)?.[1]?.trim() || ''
+  return { name: title, description: field('description'), instructions: body || source.trim() }
+}
+
+async function importSkillMarkdown(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+  const parsed = parseSkillMarkdown(await file.text())
+  editing.value = { ...editing.value, ...Object.fromEntries(Object.entries(parsed).filter(([, value]) => value)) }
+  event.target.value = ''
+}
+
+async function toggleFavorite(skill) {
   try {
-    const result = await createSkillKey({ name: 'Canvas Skill' })
-    keys.value = normalizeKeyResponse(result)
-    if (!keys.value.length && result?.key) keys.value = [result.key]
-    packageData.value = await getSkillPackage()
-    if (packageData.value?.baseUrl) {
-      baseUrl.value = normalizeSkillBaseUrl(packageData.value.baseUrl)
-    }
-    showKey.value = true
-    statusMessage.value = 'API Key 已创建'
-  } catch (err) {
-    error.value = err.message || '创建 API Key 失败'
-  } finally {
-    loading.value = false
-  }
+    if (skill.is_favorite) await unfavoriteSkill(skill.id)
+    else await favoriteSkill(skill.id)
+    await load()
+  } catch (err) { error.value = err.message || '更新收藏失败' }
 }
 
-async function confirmResetKey() {
-  if (!activeKey.value?.id) return
-  if (!window.confirm('重置后旧 API Key 会失效，继续？')) return
-  resetting.value = true
-  error.value = ''
+async function reference(skill) {
   try {
-    const result = await resetSkillKey(activeKey.value.id)
-    keys.value = normalizeKeyResponse(result)
-    if (!keys.value.length && result?.key) keys.value = [result.key]
-    packageData.value = await getSkillPackage()
-    if (packageData.value?.baseUrl) {
-      baseUrl.value = normalizeSkillBaseUrl(packageData.value.baseUrl)
-    }
-    showKey.value = true
-    statusMessage.value = 'API Key 已重置'
-  } catch (err) {
-    error.value = err.message || '重置 API Key 失败'
-  } finally {
-    resetting.value = false
-  }
+    const result = await referenceSkill(skill.id)
+    emit('reference', result.skill || skill)
+  } catch (err) { error.value = err.message || '引用 Skill 失败' }
 }
 
-async function copyText(text, message) {
-  if (!text) return
-  await navigator.clipboard.writeText(text)
-  statusMessage.value = message
+async function save() {
+  if (!editing.value?.name || !editing.value?.instructions) return
+  saving.value = true
+  try {
+    const payload = { ...editing.value, capabilities: typeCapabilities(editing.value.skill_type), tool_bindings: {}, allow_canvas_write: false, status: 'published' }
+    if (editing.value.id) await updateMySkill(editing.value.id, payload)
+    else await createMySkill(payload)
+    editing.value = null
+    activeTab.value = 'mine'
+    await load()
+  } catch (err) { error.value = err.message || '保存我的 Skill 失败' } finally { saving.value = false }
 }
 
-function downloadPackage() {
-  if (!packagePayload.value) return
-  const body = JSON.stringify(packagePayload.value, null, 2)
-  const blob = new Blob([body], { type: 'application/json;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = 'banana-canvas-skill.package.json'
-  link.click()
-  URL.revokeObjectURL(url)
+async function disable() {
+  if (!editing.value?.id) return
+  try { await disableMySkill(editing.value.id); editing.value = null; await load() } catch (err) { error.value = err.message || '停用 Skill 失败' }
 }
 
-onMounted(loadSkills)
+onMounted(load)
 </script>
 
 <style scoped>
-.skills-panel-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 9300;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(0, 0, 0, 0.54);
-}
-
-.skills-panel {
-  width: min(860px, calc(100vw - 32px));
-  max-height: calc(100vh - 48px);
-  overflow: auto;
-  border: 1px solid var(--canvas-border-subtle);
-  border-radius: 12px;
-  background: var(--canvas-bg-secondary);
-  box-shadow: 0 30px 120px rgba(0, 0, 0, 0.58);
-  color: var(--canvas-text-primary);
-  backdrop-filter: blur(22px);
-}
-
-.skills-panel-header,
-.skills-card-head,
-.skills-actions,
-.skills-panel-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.skills-panel-header {
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--canvas-border-subtle);
-}
-
-.skills-panel-kicker,
-.skills-label {
-  margin: 0 0 4px;
-  color: rgba(255, 255, 255, 0.52);
-  font-size: 12px;
-  text-transform: uppercase;
-}
-
-.skills-panel h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.skills-close-btn,
-.skills-icon-btn,
-.skills-link-btn,
-.skills-docs-link {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.86);
-  cursor: pointer;
-  font-size: 12px;
-  text-decoration: none;
-}
-
-.skills-close-btn {
-  width: 32px;
-  height: 32px;
-  font-size: 22px;
-  line-height: 1;
-  border: none;
-  background: transparent;
-  color: var(--canvas-text-tertiary);
-  border-radius: 8px;
-}
-
-.skills-close-btn:hover {
-  background: var(--canvas-bg-tertiary);
-  color: var(--canvas-text-primary);
-}
-
-.skills-field,
-.skills-card {
-  margin: 0 24px 16px;
-  padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.055);
-}
-
-.skills-field {
-  display: grid;
-  gap: 6px;
-  color: rgba(255, 255, 255, 0.58);
-  font-size: 12px;
-}
-
-.skills-field code,
-.skills-key-row code {
-  overflow: hidden;
-  color: rgba(255, 255, 255, 0.9);
-  font-family: 'SF Mono', Monaco, Consolas, monospace;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.skills-card-head strong {
-  display: block;
-  font-size: 14px;
-}
-
-.skills-key-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  margin: 12px 0;
-  padding: 10px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.22);
-}
-
-.skills-actions {
-  justify-content: flex-start;
-  flex-wrap: wrap;
-}
-
-.skills-actions.centered {
-  justify-content: center;
-}
-
-.skills-actions button {
-  /* 视觉由 btn-primary / btn-secondary 分级类控制 */
-  font-size: 13px;
-}
-
-.skills-docs-link,
-.skills-link-btn,
-.skills-icon-btn {
-  padding: 8px 10px;
-}
-
-.skills-icon-btn:disabled,
-.skills-link-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.skills-markdown-preview {
-  max-height: 190px;
-  overflow: auto;
-  margin: 12px 0;
-  padding: 12px;
-  border-radius: 8px;
-  background: rgba(0, 0, 0, 0.26);
-  color: rgba(255, 255, 255, 0.76);
-  font-size: 12px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-}
-
-.skills-install-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  margin: 0 auto 22px;
-  padding: 4px;
-  width: min(420px, calc(100% - 48px));
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.skills-install-tabs button {
-  min-width: 0;
-  min-height: 40px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.52);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.skills-install-tabs button.active {
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.94);
-}
-
-.skills-agent-install {
-  padding: 34px 36px 38px;
-}
-
-.skills-agent-copy {
-  max-width: 620px;
-  margin: 0 auto 28px;
-  color: rgba(255, 255, 255, 0.86);
-  font-size: 15px;
-  line-height: 1.7;
-  text-align: center;
-}
-
-.skills-prompt-label {
-  margin: 0 0 10px;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.skills-prompt-box {
-  min-height: 58px;
-  max-height: 220px;
-  overflow: auto;
-  margin: 0 0 24px;
-  padding: 14px 16px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.92);
-  font-family: 'SF Mono', Monaco, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.skills-manual-grid {
-  display: block;
-}
-
-.skills-alert {
-  margin: 0 24px 16px;
-  padding: 10px 12px;
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  border-radius: 8px;
-  background: rgba(127, 29, 29, 0.35);
-  color: #fecaca;
-  font-size: 13px;
-}
-
-.skills-panel-footer {
-  padding: 0 24px 22px;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 12px;
-  text-align: center;
-}
-
-:root.canvas-theme-light .skills-panel-backdrop {
-  background: rgba(15, 23, 42, 0.28);
-}
-
-:root.canvas-theme-light .skills-panel {
-  border-color: rgba(15, 23, 42, 0.1);
-  background: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.22);
-  color: #111827;
-}
-
-:root.canvas-theme-light .skills-panel-kicker,
-:root.canvas-theme-light .skills-label,
-:root.canvas-theme-light .skills-prompt-label {
-  color: #64748b;
-}
-
-:root.canvas-theme-light .skills-panel h2,
-:root.canvas-theme-light .skills-card-head strong {
-  color: #111827;
-}
-
-:root.canvas-theme-light .skills-close-btn {
-  border-color: transparent;
-  background: transparent;
-  color: var(--canvas-text-tertiary);
-}
-
-:root.canvas-theme-light .skills-close-btn:hover {
-  border-color: transparent;
-  background: var(--canvas-bg-tertiary);
-  color: var(--canvas-text-primary);
-}
-
-:root.canvas-theme-light .skills-icon-btn,
-:root.canvas-theme-light .skills-link-btn,
-:root.canvas-theme-light .skills-docs-link {
-  border-color: rgba(15, 23, 42, 0.12);
-  background: rgba(248, 250, 252, 0.92);
-  color: #0f172a;
-}
-
-:root.canvas-theme-light .skills-icon-btn:hover,
-:root.canvas-theme-light .skills-link-btn:hover,
-:root.canvas-theme-light .skills-docs-link:hover {
-  border-color: rgba(15, 23, 42, 0.2);
-  background: #ffffff;
-}
-
-:root.canvas-theme-light .skills-field {
-  border-color: rgba(15, 23, 42, 0.1);
-  background: rgba(248, 250, 252, 0.86);
-  color: #475569;
-}
-
-:root.canvas-theme-light .skills-card {
-  border-color: rgba(15, 23, 42, 0.1);
-  background: rgba(255, 255, 255, 0.86);
-}
-
-:root.canvas-theme-light .skills-field code,
-:root.canvas-theme-light .skills-key-row code {
-  color: #111827;
-}
-
-:root.canvas-theme-light .skills-key-row,
-:root.canvas-theme-light .skills-markdown-preview {
-  background: rgba(241, 245, 249, 0.88);
-  color: #334155;
-}
-
-:root.canvas-theme-light .skills-install-tabs {
-  border-color: rgba(15, 23, 42, 0.1);
-  background: rgba(241, 245, 249, 0.78);
-}
-
-:root.canvas-theme-light .skills-install-tabs button {
-  color: #64748b;
-}
-
-:root.canvas-theme-light .skills-install-tabs button.active {
-  background: #ffffff;
-  color: #111827;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.1);
-}
-
-:root.canvas-theme-light .skills-agent-copy {
-  color: #334155;
-}
-
-:root.canvas-theme-light .skills-prompt-box {
-  border-color: rgba(15, 23, 42, 0.1);
-  background: rgba(248, 250, 252, 0.95);
-  color: #111827;
-}
-
-:root.canvas-theme-light .skills-alert {
-  border-color: rgba(220, 38, 38, 0.22);
-  background: rgba(254, 226, 226, 0.78);
-  color: #991b1b;
-}
-
-:root.canvas-theme-light .skills-panel-footer {
-  color: #64748b;
-}
-
-@media (max-width: 640px) {
-  .skills-panel-backdrop {
-    padding: 12px;
-    align-items: stretch;
-  }
-
-  .skills-panel {
-    width: 100%;
-    max-height: calc(100vh - 24px);
-  }
-
-  .skills-panel-header {
-    padding: 14px 16px;
-  }
-
-  .skills-panel h2 {
-    font-size: 15px;
-  }
-
-  .skills-install-tabs {
-    width: calc(100% - 32px);
-    margin-bottom: 16px;
-  }
-
-  .skills-field,
-  .skills-card {
-    margin-inline: 16px;
-  }
-
-  .skills-agent-install {
-    padding: 24px 16px 28px;
-  }
-
-  .skills-panel-footer {
-    padding-inline: 16px;
-  }
-}
+.skills-market-backdrop { position: fixed; inset: 0; z-index: 9300; display: grid; place-items: center; padding: 24px; background: rgba(2, 6, 23, .62); backdrop-filter: blur(8px); }
+.skills-market-backdrop.is-popover-backdrop { display: block; padding: 0; background: transparent; backdrop-filter: none; }
+.skills-market { width: min(900px, calc(100vw - 32px)); max-height: min(780px, calc(100vh - 48px)); overflow: auto; border: 1px solid var(--canvas-border-subtle); border-radius: 14px; background: var(--canvas-bg-secondary); color: var(--canvas-text-primary); box-shadow: 0 30px 100px rgba(0, 0, 0, .45); }
+.skills-market.is-popover { position: fixed; top: 50%; left: 50%; width: min(780px, calc(100vw - 24px)); max-height: min(680px, calc(100vh - 24px)); transform: translate(-50%, -50%); background: rgba(24, 24, 24, .98); box-shadow: 0 18px 52px rgba(0, 0, 0, .45); }
+.skills-market.is-popover.has-anchor { transform: none; }
+.skills-market.is-full-market { width: min(1560px, calc(100vw - 48px)); max-height: min(820px, calc(100vh - 48px)); }
+.market-header,.market-toolbar,.market-header-actions,.card-title-row,.card-meta,.card-actions,.editor-header,.editor-actions { display: flex; align-items: center; gap: 10px; }
+.market-header,.editor-header { justify-content: space-between; padding: 17px 20px; border-bottom: 1px solid var(--canvas-border-subtle); }
+.market-kicker { margin: 0 0 4px; color: var(--canvas-text-secondary); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }.market-header h2,.editor-header h3 { margin: 0; font-size: 17px; }
+.icon-button,.ghost-button,.create-button,.all-button,.reference-button,.danger-button,.market-tabs button { border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--canvas-text-primary); cursor: pointer; }.icon-button,.ghost-button { display: inline-grid; place-items: center; width: 32px; height: 32px; }.icon-button:hover,.ghost-button:hover { background: rgba(148,163,184,.16); }
+.market-toolbar { padding: 14px 20px; border-bottom: 1px solid var(--canvas-border-subtle); flex-wrap: wrap; }.market-tabs { display: flex; padding: 3px; border-radius: 9px; background: rgba(148,163,184,.12); }.market-tabs button { padding: 6px 11px; color: var(--canvas-text-secondary); font-size: 12px; }.market-tabs button.active { background: rgba(255,255,255,.14); color: var(--canvas-text-primary); box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+.search-box { display: flex; align-items: center; flex: 1 1 180px; gap: 7px; min-width: 160px; padding: 7px 10px; border: 1px solid var(--canvas-border-subtle); border-radius: 8px; color: var(--canvas-text-secondary); }.search-box input,.skill-editor input,.skill-editor textarea,.skill-editor select { width: 100%; border: 0; outline: 0; background: transparent; color: inherit; font: inherit; }.create-button,.reference-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 11px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.12); color: var(--canvas-text-primary); font-size: 12px; }.create-button:hover,.reference-button:hover { background: rgba(255,255,255,.2); }.all-button { padding: 7px 12px; border-color: var(--canvas-border-subtle); color: var(--canvas-text-primary); font-size: 12px; }.all-button:hover { background: rgba(255,255,255,.12); }.reference-button:disabled { opacity: .45; cursor: not-allowed; }.market-selection-hint { margin: 0; padding: 9px 20px; border-bottom: 1px solid var(--canvas-border-subtle); color: var(--canvas-text-secondary); font-size: 12px; }.market-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; padding: 16px; }.market-card { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 10px; padding: 10px; border: 1px solid var(--canvas-border-subtle); border-radius: 11px; background: rgba(255,255,255,.035); }.market-card.selectable { cursor: pointer; }.market-card.selectable:hover { border-color: rgba(255,255,255,.32); background: rgba(255,255,255,.08); }.market-card.selectable:focus-visible { outline: 2px solid rgba(255,255,255,.72); outline-offset: 2px; }.market-cover { display: grid; place-items: center; width: 44px; height: 44px; overflow: hidden; border-radius: 9px; background: rgba(255,255,255,.1); color: var(--canvas-text-secondary); }.market-cover img { width: 100%; height: 100%; object-fit: cover; }.card-copy { min-width: 0; }.card-title-row { justify-content: space-between; }.card-title-row h3 { overflow: hidden; margin: 0; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }.card-trigger { flex: none; padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.08); color: var(--canvas-text-secondary); font-size: 10px; white-space: nowrap; }.market-card p { margin: 6px 0; color: var(--canvas-text-secondary); font-size: 12px; line-height: 1.45; }.card-meta { justify-content: space-between; color: var(--canvas-text-secondary); font-size: 11px; }.card-actions { grid-column: 1 / -1; justify-content: flex-end; }.card-actions .reference-button { padding: 6px 11px; }.market-empty,.market-alert { padding: 38px 20px; color: var(--canvas-text-secondary); text-align: center; }.market-alert { padding: 10px 20px; color: var(--canvas-text-primary); }.market-detail .detail-body { display: grid; gap: 12px; padding: 16px 20px; }.detail-summary { display: flex; align-items: center; gap: 10px; margin: 0; color: var(--canvas-text-primary); }.detail-summary code { flex: none; padding: 2px 7px; border-radius: 5px; background: rgba(255,255,255,.1); font-size: 12px; }.detail-summary span { color: var(--canvas-text-secondary); font-size: 12px; }.detail-desc { margin: 0; color: var(--canvas-text-secondary); font-size: 13px; line-height: 1.6; }.detail-fields { display: grid; gap: 10px; margin: 0; }.detail-fields dt { margin-bottom: 2px; color: var(--canvas-text-secondary); font-size: 11px; letter-spacing: .05em; }.detail-fields dd { margin: 0; color: var(--canvas-text-primary); font-size: 12px; line-height: 1.55; white-space: pre-wrap; }.skill-editor { display: grid; gap: 13px; padding: 0 20px 20px; }.skill-editor label { display: grid; gap: 6px; color: var(--canvas-text-secondary); font-size: 12px; }.skill-editor input,.skill-editor textarea,.skill-editor select { box-sizing: border-box; padding: 9px 10px; border: 1px solid var(--canvas-border-subtle); border-radius: 8px; background: rgba(255,255,255,.05); color: var(--canvas-text-primary); resize: vertical; }.editor-hint,.file-field small { margin: 0; color: var(--canvas-text-secondary); font-size: 12px; line-height: 1.45; }.file-field input { padding: 7px; }.editor-actions { justify-content: flex-end; }.danger-button { padding: 8px 11px; border-color: var(--canvas-border-subtle); color: var(--canvas-text-secondary); }
+.skills-market.is-popover .market-grid { grid-template-columns: 1fr; padding: 12px; }.skills-market.is-popover .market-card { grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; }.skills-market.is-popover .card-actions { grid-column: auto; }.skills-market.is-popover .market-selection-hint { display: none; }.skills-market.is-full-market .market-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }.skills-market.is-full-market .market-card { grid-template-columns: 96px minmax(0, 1fr); }.skills-market.is-full-market .market-cover { width: 96px; height: 96px; }.skills-market.is-full-market .card-actions { grid-column: 1 / -1; }
+@media (max-width: 640px) { .skills-market-backdrop { padding: 10px; }.skills-market { width: 100%; max-height: calc(100vh - 20px); }.skills-market.is-full-market { width: calc(100vw - 20px); }.skills-market.is-full-market .market-grid { grid-template-columns: 1fr; }.market-toolbar { align-items: stretch; }.create-button { width: 100%; }.market-grid { grid-template-columns: 1fr; padding: 12px; } }
 </style>

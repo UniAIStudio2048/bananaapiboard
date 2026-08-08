@@ -15,8 +15,9 @@ test('stream content updates are throttled and flushed on done', () => {
 })
 
 test('media generation shows a generating state instead of skill text', () => {
-  assert.match(source, /const generatingType = skillId === 'builtin-canvas-video-generate' \? 'video'[\s\S]*?: skillId === 'builtin-canvas-image-generate' \? 'image' : ''/)
+  assert.match(source, /const generatingType = getAssistantMediaGeneratingType\(event\)/)
   assert.match(source, /message\.mediaGenerating = generatingType/)
+  assert.match(source, /message\.mediaGeneratingCount = getRequestedMediaCount\(messageText, generatingType\)/)
   assert.match(source, /message\.toolEvents\.push\(\{[\s\S]*?name: formatAssistantToolName\(event\.tool_name \|\| ''\)/)
   assert.match(source, /const applyGeneratedResult = \(result\) => \{[\s\S]*?delete message\.mediaGenerating/)
   assert.match(source, /onDone: \(fullContent, result\) => \{[\s\S]*?delete messages\.value\[assistantMessageIndex\]\.mediaGenerating/)

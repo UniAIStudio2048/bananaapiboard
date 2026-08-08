@@ -161,7 +161,7 @@ export async function sendMessage(params) {
  * @param {Array} [params.attachments] - 附件列表
  */
 export async function sendMessageStream(params) {
-  const { onContent, onThinking, onSession, onDone, onError, onApproval, onToolEvent, ...requestParams } = params
+  const { onContent, onThinking, onSession, onDone, onError, onApproval, onToolEvent, signal, ...requestParams } = params
 
   try {
     const response = await fetch(getApiUrl('/api/canvas/ai-assistant/chat'), {
@@ -173,7 +173,8 @@ export async function sendMessageStream(params) {
           ...requestParams.options,
           stream: true
         }
-      })
+      }),
+      signal
     })
 
     if (!response.ok) {

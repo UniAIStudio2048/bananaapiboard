@@ -216,6 +216,7 @@ const aiPanelWidth = ref(0) // AI 面板宽度
 const aiAssistantRef = ref(null) // AI 面板组件引用
 const canvasPickMode = ref(false) // 画布选择模式（从AI助手触发）
 const showSkillsPanel = ref(false)
+const skillsPanelAnchor = ref(null)
 
 // 套餐购买弹窗
 const showPackageModal = ref(false)
@@ -2115,12 +2116,25 @@ function handlePaneClick(event) {
   closeLeftPanels()
 }
 
-function toggleSkillsPanel() {
+function toggleSkillsPanel(event) {
   const nextOpen = !showSkillsPanel.value
   showSkillsPanel.value = nextOpen
-  if (nextOpen) {
-    showAIAssistant.value = false
+  if (!nextOpen) {
+    skillsPanelAnchor.value = null
+    return
   }
+
+  if (!event?.currentTarget) {
+    skillsPanelAnchor.value = null
+    return
+  }
+
+  const rect = event.currentTarget.getBoundingClientRect()
+  const popoverWidth = Math.min(780, window.innerWidth - 24)
+  const left = Math.min(window.innerWidth - popoverWidth - 12, Math.max(12, rect.left - 16))
+  skillsPanelAnchor.value = rect.top > window.innerHeight / 2
+    ? { left: `${left}px`, bottom: `${Math.max(12, window.innerHeight - rect.top + 12)}px` }
+    : { left: `${left}px`, top: `${Math.min(window.innerHeight - 12, rect.bottom + 12)}px` }
 }
 
 function toggleAIAssistantPanel() {
@@ -2129,6 +2143,13 @@ function toggleAIAssistantPanel() {
   if (nextOpen) {
     showSkillsPanel.value = false
   }
+}
+
+async function handleSkillReference(skill) {
+  showSkillsPanel.value = false
+  showAIAssistant.value = true
+  await nextTick()
+  aiAssistantRef.value?.referenceSkill(skill)
 }
 
 const agentCanvasContext = computed(() => {
@@ -3703,7 +3724,6 @@ onUnmounted(() => {
           @click="toggleSkillsPanel"
         >
           <Sparkles class="skills-burst-icon" :stroke-width="2.35" />
-          <span class="skills-button-label">Skills</span>
         </button>
 
         <!-- 主题切换按钮 -->
@@ -3934,7 +3954,9 @@ onUnmounted(() => {
       <SkillsPanel
         v-if="showSkillsPanel"
         :canvas-context="agentCanvasContext"
+        :anchor="skillsPanelAnchor"
         @close="showSkillsPanel = false"
+        @reference="handleSkillReference"
       />
       
       <!-- 新手引导 -->
@@ -3949,7 +3971,7 @@ onUnmounted(() => {
       />
 
       <!-- AI 灵感助手面板 -->
-      <AIAssistantPanel
+        <AIAssistantPanel
         ref="aiAssistantRef"
         :visible="showAIAssistant"
         :canvas-context="agentCanvasContext"
@@ -3957,6 +3979,7 @@ onUnmounted(() => {
         @width-change="aiPanelWidth = $event"
         @canvas-writeback="handleAIAssistantCanvasWriteback"
         @start-canvas-pick="startCanvasPick"
+        @open-skills="toggleSkillsPanel"
       />
 
       <!-- AI 助手触发按钮 - 苹果风格3D图标 -->
@@ -4628,84 +4651,17 @@ onUnmounted(() => {
 }
 
 .canvas-skills-btn {
-  position: relative;
-  width: auto;
-  min-width: 112px;
+  width: var(--canvas-top-control-height);
+  min-width: 0;
   height: var(--canvas-top-control-height);
-  gap: 8px;
-  padding: 0 15px 0 12px;
-  overflow: hidden;
-  background:
-    linear-gradient(135deg, #fff8d6 0%, #f6d77d 28%, #b87a19 54%, #f5c96a 78%, #7b4b0b 100%);
-  border-color: rgba(255, 231, 158, 0.58);
-  border-radius: 10px;
-  color: #2d1a03;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.72),
-    inset 0 -1px 0 rgba(74, 42, 0, 0.3),
-    0 10px 28px rgba(177, 115, 21, 0.28),
-    0 4px 14px rgba(0, 0, 0, 0.22);
-}
-
-.canvas-skills-btn::before {
-  content: '';
-  position: absolute;
-  inset: 1px;
-  pointer-events: none;
-  border-radius: 9px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.08) 42%, rgba(60, 33, 0, 0.16));
-  mix-blend-mode: screen;
-}
-
-.canvas-skills-btn::after {
-  content: '';
-  position: absolute;
-  top: -55%;
-  bottom: -55%;
-  left: -34%;
-  width: 42%;
-  pointer-events: none;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
-  transform: rotate(18deg);
-  transition: left 0.45s ease;
-}
-
-.canvas-skills-btn:hover {
-  background:
-    linear-gradient(135deg, #fffbe5 0%, #ffe08d 28%, #c98b23 54%, #ffd477 78%, #8a560d 100%);
-  border-color: rgba(255, 239, 184, 0.78);
-  color: #241301;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.8),
-    inset 0 -1px 0 rgba(74, 42, 0, 0.26),
-    0 12px 32px rgba(198, 134, 28, 0.36),
-    0 8px 22px rgba(0, 0, 0, 0.28);
-}
-
-.canvas-skills-btn:hover::after {
-  left: 96%;
+  padding: 0;
 }
 
 .skills-burst-icon {
-  position: relative;
-  z-index: 1;
   width: 17px;
   height: 17px;
   flex: 0 0 auto;
-  color: #7a4b00;
-  filter: drop-shadow(0 1px 0 rgba(255, 248, 214, 0.68));
-}
-
-.skills-button-label {
-  position: relative;
-  z-index: 1;
-  color: #2d1a03;
-  font-size: 13px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0;
-  text-shadow: 0 1px 0 rgba(255, 245, 207, 0.56);
+  color: currentColor;
 }
 
 /* 亮色主题下的按钮样式 */
@@ -4721,30 +4677,6 @@ onUnmounted(() => {
   border-color: rgba(24, 24, 27, 0.18);
   color: rgba(24, 24, 27, 0.92);
   box-shadow: 0 10px 28px rgba(24, 24, 27, 0.12);
-}
-
-:root.canvas-theme-light .canvas-skills-btn {
-  background:
-    linear-gradient(135deg, #fff8d6 0%, #f6d77d 28%, #b87a19 54%, #f5c96a 78%, #7b4b0b 100%);
-  border-color: rgba(171, 113, 18, 0.32);
-  color: #2d1a03;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.78),
-    inset 0 -1px 0 rgba(74, 42, 0, 0.22),
-    0 10px 24px rgba(156, 111, 24, 0.18),
-    0 6px 18px rgba(24, 24, 27, 0.1);
-}
-
-:root.canvas-theme-light .canvas-skills-btn:hover {
-  background:
-    linear-gradient(135deg, #fffbe5 0%, #ffe08d 28%, #c98b23 54%, #ffd477 78%, #8a560d 100%);
-  border-color: rgba(171, 113, 18, 0.46);
-  color: #241301;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    inset 0 -1px 0 rgba(74, 42, 0, 0.22),
-    0 12px 28px rgba(156, 111, 24, 0.24),
-    0 8px 20px rgba(24, 24, 27, 0.12);
 }
 
 /* 主题切换按钮特殊效果 */

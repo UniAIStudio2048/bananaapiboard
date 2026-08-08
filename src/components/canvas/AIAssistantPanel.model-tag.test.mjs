@@ -26,9 +26,9 @@ test('shows the selected model as a removable tag inside the assistant input box
   assert.match(tag, /flex-shrink:\s*0;/)
 })
 
-test('shows the active Skill and model together in a prompt context row', () => {
-  assert.match(source, /class="input-context-tags"[\s\S]*?v-if="selectedSkill" class="input-context-tag selected-skill-tag"/)
-  assert.match(source, /selectedSkill\.name \|\| selectedSkill\.label \|\| selectedSkill\.id/)
+test('shows the selected model and an explicitly referenced Skill context tag', () => {
+  assert.match(source, /<div v-if="selectedAssistantModel \|\| referencedSkill" class="input-context-tags" aria-label="当前创作配置">/)
+  assert.match(source, /v-if="referencedSkill" class="selected-model-tag selected-skill-tag"/)
   assert.match(source, /min-height:\s*188px;/)
   assert.match(source, /\.send-btn\s*\{[\s\S]*?width:\s*36px;[\s\S]*?height:\s*36px;/)
   assert.match(source, /style="width: 19px; height: 19px"/)
@@ -53,4 +53,17 @@ test('model selection is cleared after send so it never leaks into later turns',
 test('uses CDN thumbnail URLs for icons in the model picker', () => {
   assert.match(source, /import \{ getAssistantModelIcon \} from '@\/utils\/aiAssistantModels'/)
   assert.match(source, /<ModelIcon :icon="getAssistantModelIcon\(model\)" :label="model\.label \|\| model\.value" \/>/)
+})
+
+test('enhanced mode converts the selected model tag into natural language for the Agent turn', () => {
+  assert.match(source, /async function sendEnhancedMessage\(\)[\s\S]*?const turnModelHint = buildTurnModelHint\(\)/)
+  assert.match(source, /const turnModelRef = buildTurnModelRef\(\)/)
+  assert.match(source, /const messageTextWithHint = \[[\s\S]*?messageText,[\s\S]*?turnModelHint,[\s\S]*?\]\.filter\(Boolean\)\.join\('\\n'\)/)
+  assert.match(source, /if \(turnModelHint\) \{[\s\S]*?selectedModelByType\.value = \{ image: '', video: '' \}/)
+  assert.match(source, /content: messageTextWithHint/)
+})
+
+test('user message keeps the model reference card for display while sending natural language', () => {
+  assert.match(source, /modelRef: turnModelRef/)
+  assert.match(source, /function buildTurnModelRef\(\)[\s\S]*?return \{ label, modelId, type: modelPickerType\.value \}/)
 })

@@ -1468,7 +1468,16 @@ async function loadSession(session) {
     } else {
       // 加载会话历史消息
       const result = await getSessionMessages(session.id)
-      messages.value = result.messages || []
+      messages.value = (result.messages || []).map((m) => {
+        // 中断遗留的 streaming 草稿归一化为明确提示，避免恢复时显示“正在生成中…”
+        if (m.role === 'assistant' && m.status === 'streaming') {
+          return {
+            ...m,
+            content: m.content && m.content !== '正在生成中…' ? m.content : '（该轮生成中断，未保存完整内容）'
+          }
+        }
+        return m
+      })
     }
 
     // 滚动到底部
@@ -1691,6 +1700,7 @@ function handleInputBeforeInput(event) {
   inputEditorRenderKey.value += 1
   showMentionPopup.value = false
   autoResize()
+  checkSlashTrigger()
   nextTick(() => {
     const nextEditor = inputRef.value
     if (nextEditor) {
@@ -1719,6 +1729,7 @@ function handleInputEvent(event) {
       nextTick(() => {
         if (isInputComposing) return
         if (text !== inputText.value) inputText.value = text
+        checkSlashTrigger()
         inputEditorRenderKey.value += 1
         nextTick(() => {
           const nextEditor = inputRef.value
@@ -1734,6 +1745,7 @@ function handleInputEvent(event) {
 
     if (text !== inputText.value) {
       inputText.value = text
+      checkSlashTrigger()
     }
     if (needsStructuralRepair) {
       inputEditorRenderKey.value += 1
