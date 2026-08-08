@@ -300,6 +300,24 @@
           </div>
         </div>
 
+        <!-- Codex 风格的跟进消息队列：当前回合运行时，普通发送会先排队 -->
+        <div v-if="queuedMessages.length" class="queued-message-bar" role="status" aria-live="polite">
+          <div class="queued-message-bar__copy">
+            <span class="queued-message-bar__dot ai-live-shimmer" aria-hidden="true"></span>
+            <span>已排队 {{ queuedMessages.length }} 条跟进消息</span>
+            <span class="queued-message-bar__preview">{{ queuedMessages[0].text }}</span>
+          </div>
+          <button
+            v-for="queued in queuedMessages"
+            :key="queued.id"
+            type="button"
+            class="queued-message-bar__force"
+            @click="forceInsertQueuedMessage(queued)"
+          >
+            立即插入
+          </button>
+        </div>
+
         <!-- 输入区域 -->
         <div 
           class="input-area prompt-input-wrapper" 
@@ -324,16 +342,12 @@
           
           <!-- 输入框：已选模型标签卡内嵌在输入框内，仅代表本次轮对话使用该模型 -->
           <div class="input-box" @click.self="focusInputEditor">
-            <div v-if="selectedSkill || selectedAssistantModel" class="input-context-tags" aria-label="当前创作配置">
-              <div v-if="selectedSkill" class="input-context-tag selected-skill-tag" :title="selectedSkill.description || selectedSkill.name">
-                <span class="selected-skill-tag-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                    <path d="M14 2v6h6M8 13h8M8 17h5" />
-                    <path d="m18 13 .55 1.45L20 15l-1.45.55L18 17l-.55-1.45L16 15l1.45-.55L18 13Z" fill="currentColor" stroke="none" />
-                  </svg>
-                </span>
-                <span class="input-context-tag-label">{{ selectedSkill.name || selectedSkill.label || selectedSkill.id }}</span>
+            <div v-if="selectedAssistantModel || referencedSkill" class="input-context-tags" aria-label="当前创作配置">
+              <div v-if="referencedSkill" class="selected-model-tag selected-skill-tag">
+                <Sparkle :size="14" />
+                <span class="input-context-tag-label">{{ referencedSkill.name }}</span>
+                <code v-if="referencedSkill.trigger">{{ referencedSkill.trigger }}</code>
+                <button type="button" class="selected-model-tag-remove" title="移除本轮引用 Skill" aria-label="移除本轮引用 Skill" @click="clearReferencedSkill">×</button>
               </div>
               <div v-if="selectedAssistantModel" class="selected-model-tag">
                 <span class="selected-model-tag-icon"><ModelIcon :icon="getAssistantModelIcon(selectedAssistantModel)" :label="selectedAssistantModel.label || selectedAssistantModel.value" /></span>
@@ -345,7 +359,7 @@
               :key="inputEditorRenderKey"
               ref="inputRef"
               class="input-textarea"
-              :class="{ 'is-empty': !inputText && !selectedAssistantModel }"
+              :class="{ 'is-empty': !inputText && !selectedAssistantModel && !referencedSkill }"
               contenteditable="true"
               role="textbox"
               aria-multiline="true"
@@ -370,6 +384,23 @@
             </div>
           </div>
 
+          <!-- 斜杠命令下拉 -->
+          <div v-if="slashMenuVisible" class="slash-menu">
+            <div class="slash-menu-header">可用技能</div>
+            <div
+              v-for="(item, index) in slashMenuItems"
+              :key="item.id"
+              class="slash-menu-item"
+              :class="{ active: index === slashMenuActiveIndex }"
+              @mousedown.prevent="selectSlashSkill(item)"
+              @mouseenter="slashMenuActiveIndex = index"
+            >
+              <span class="slash-menu-trigger">{{ item.trigger }}</span>
+              <span class="slash-menu-name">{{ item.name }}</span>
+            </div>
+            <div v-if="slashMenuItems.length === 0" class="slash-menu-empty">暂无可用斜杠技能</div>
+          </div>
+
           <PromptMentionPopup
             :visible="showMentionPopup"
             :items="filteredAttachmentMentionItems"
@@ -383,51 +414,6 @@
           <div class="input-toolbar">
             <!-- 左侧功能组 -->
             <div class="toolbar-left">
-              <!-- 对话模式选择器 -->
-              <div class="mode-selector">
-                <button
-                  class="toolbar-btn mode-btn"
-                  type="button"
-                  title="对话模式"
-                  aria-label="选择对话模式"
-                  @click.stop="showModeDropdown = !showModeDropdown"
-                >
-                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none">
-                    <defs>
-                      <linearGradient id="mode-icon-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stop-color="#e5e7eb"/>
-                        <stop offset="50%" stop-color="#d1d5db"/>
-                        <stop offset="100%" stop-color="#9ca3af"/>
-                      </linearGradient>
-                    </defs>
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" stroke="url(#mode-icon-gradient)" stroke-width="2" fill="none"/>
-                  </svg>
-                  <span class="toolbar-label">{{ selectedMode?.name || '创意灵感' }}</span>
-                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M18 15l-6-6-6 6"/>
-                  </svg>
-                </button>
-
-                <!-- 模式下拉菜单 -->
-                <Transition name="dropdown">
-                  <div v-if="showModeDropdown" class="mode-dropdown">
-                    <button
-                      v-for="mode in config.modes"
-                      :key="mode.id"
-                      class="mode-option"
-                      :class="{ active: selectedModeId === mode.id }"
-                      @click="selectMode(mode)"
-                    >
-                      <span class="mode-icon">{{ getModeIcon(mode.icon) }}</span>
-                      <span class="mode-name">{{ mode.name }}</span>
-                      <svg v-if="selectedModeId === mode.id" class="w-4 h-4 check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                    </button>
-                  </div>
-                </Transition>
-              </div>
-
               <!-- Canvas Skill 执行模式：自动调用或每次调用前确认 -->
               <div class="skill-execution-selector">
                 <button
@@ -455,8 +441,16 @@
                 </Transition>
               </div>
 
+              <button
+                class="toolbar-btn icon-btn skills-market-trigger"
+                type="button"
+                title="选择并引用 Skill"
+                aria-label="选择并引用 Skill"
+                @click="$emit('open-skills', $event)"
+              ><Box :size="16" aria-hidden="true" /></button>
+
               <!-- 预设选择器 -->
-              <div class="preset-selector">
+              <div v-if="false" class="preset-selector">
                 <button
                   class="toolbar-btn preset-btn"
                   type="button"
@@ -602,12 +596,16 @@
               <button
                 class="send-btn"
                 type="button"
-                :disabled="!canSend"
-                @click="sendMessage"
-                title="发送"
-                aria-label="发送"
+                :class="{ 'send-btn--stop': isLoading }"
+                :disabled="isLoading ? false : !canSend"
+                @click="isLoading ? stopCurrentActivity() : sendMessage()"
+                :title="isLoading ? '停止当前对话或任务' : '发送'"
+                :aria-label="isLoading ? '停止当前对话或任务' : '发送'"
               >
-                <svg class="w-5 h-5" style="width: 19px; height: 19px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <svg v-if="isLoading" class="w-5 h-5" style="width: 17px; height: 17px" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <rect x="6" y="6" width="12" height="12" rx="1.5"/>
+                </svg>
+                <svg v-else class="w-5 h-5" style="width: 19px; height: 19px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                   <path d="M12 19V5M5 12l7-7 7 7"/>
                 </svg>
               </button>
@@ -727,7 +725,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted, inject } from 'vue'
-import { History, MessageSquarePlus, Sparkle, X } from '@lucide/vue'
+import { Box, History, MessageSquarePlus, Sparkle, X } from '@lucide/vue'
 import AIAssistantMessage from './AIAssistantMessage.vue'
 import PromptMentionPopup from './PromptMentionPopup.vue'
 import PromptMediaTag from './PromptMediaTag.vue'
@@ -766,7 +764,8 @@ import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { showAlert } from '@/composables/useCanvasDialog'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { createAgentIdempotencyKey, createAgentRun, decideAgentRun, getSkillCatalog, streamAgentRun } from '@/api/agent'
-import { startStreamDownload } from '@/api/client'
+import { startStreamDownload, updateUserPreferences } from '@/api/client'
+import { getCodexSessions, getCodexSession, getCodexSessionMessages, deleteCodexSession, sendCodexMessage } from '@/api/codex-agent'
 import { config as tenantConfig, getAvailableImageModels, getAvailableVideoModels, useTenantConfigVersion } from '@/config/tenant'
 import { getAssistantModelIcon } from '@/utils/aiAssistantModels'
 
@@ -781,7 +780,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'width-change', 'start-canvas-pick', 'canvas-writeback'])
+const emit = defineEmits(['close', 'width-change', 'start-canvas-pick', 'canvas-writeback', 'open-skills'])
 
 // 注入用户信息
 const userInfo = inject('userInfo', { value: { username: 'User' } })
@@ -814,11 +813,22 @@ const deepThinkEnabled = ref(false)
 const webSearchEnabled = ref(false)
 const agentSkills = ref([])
 const selectedSkillId = ref('')
+const referencedSkill = ref(null)
+const skillExecutionMode = ref('auto')
+const enhancedMode = computed(() => skillExecutionMode.value === 'auto')
+const currentCodexThreadId = ref(null)
+const slashMenuVisible = ref(false)
+const slashMenuItems = ref([])
+const slashMenuActiveIndex = ref(0)
 const pendingAgentApproval = ref(null)
 const pendingAgentMessageIndex = ref(-1)
 const approvalDeciding = ref(false)
 const pendingApprovalActions = computed(() => pendingAgentApproval.value?.approval?.actions || pendingAgentApproval.value?.actions || [])
 let agentStreamController = null
+let normalStreamController = null
+const stopRequested = ref(false)
+const queuedMessages = ref([])
+let nextQueuedMessageId = 0
 const showModelPicker = ref(false)
 const modelPickerTriggerRef = ref(null)
 const modelPickerStyle = ref({})
@@ -855,7 +865,6 @@ const tenantConfigVersion = useTenantConfigVersion()
 
 const showModeDropdown = ref(false)
 const showSkillExecutionDropdown = ref(false)
-const skillExecutionMode = ref('auto')
 const showPresetDropdown = ref(false)
 const showHistory = ref(false)
 
@@ -1033,12 +1042,133 @@ function buildTurnModelHint() {
   return `【本次请使用${typeLabel}生成模型「${label || modelId}」（模型标识：${modelId}）生成${typeLabel}，调用生成工具时请将 requested_model 指定为 ${modelId}】`
 }
 
-const canSend = computed(() => {
-  return (inputText.value.trim() || attachments.value.length > 0) && !isLoading.value && !isUploading.value
-})
+/**
+ * 构建本次轮对话的模型引用（仅用于对话栏以标签卡形式展示，
+ * 传输给 LLM 的是 buildTurnModelHint 生成的自然语言文本）。
+ */
+function buildTurnModelRef() {
+  const model = selectedAssistantModel.value
+  if (!model) return null
+  const label = model.label || model.value || model.name || ''
+  const modelId = selectedModelValue.value || model.value || model.actualModel || label
+  if (!modelId) return null
+  return { label, modelId, type: modelPickerType.value }
+}
+
+function buildTurnSkillRef(messageText) {
+  const skill = referencedSkill.value
+  if (!skill) return null
+  return { label: skill.name || skill.label || skill.id }
+}
+
+function referenceSkill(skill) {
+  if (!skill?.id) return
+  referencedSkill.value = skill
+  selectedSkillId.value = skill.id
+  if (skill.runtime_defaults?.deep_think === true) deepThinkEnabled.value = true
+  nextTick(() => inputRef.value?.focus())
+}
+
+function clearReferencedSkill() {
+  referencedSkill.value = null
+}
+
+function getRequestedMediaCount(messageText, mediaType) {
+  if (mediaType !== 'image') return 1
+  const match = String(messageText || '').match(/(\d{1,2})\s*(?:张|幅|个|images?|pictures?)/i)
+  if (!match) return 1
+  return Math.min(12, Math.max(1, Number(match[1]) || 1))
+}
+
+function getAssistantMediaGeneratingType(event) {
+  const identifier = [event?.skill_id, event?.tool_name, event?.tool, event?.capability].filter(Boolean).join(' ').toLowerCase()
+  if (identifier.includes('video')) return 'video'
+  if (identifier.includes('image')) return 'image'
+  return ''
+}
+
+const hasDraft = computed(() => Boolean(inputText.value.trim() || attachments.value.length > 0))
+const canSend = computed(() => hasDraft.value && !isUploading.value)
+
+function snapshotDraft() {
+  return {
+    id: `queued-${Date.now()}-${nextQueuedMessageId++}`,
+    text: inputText.value.trim(),
+    attachments: attachments.value.slice(),
+    bindings: { ...(attachmentMentionBindings.value || {}) },
+    modelByType: { ...(selectedModelByType.value || {}) }
+  }
+}
+
+function clearDraft() {
+  inputText.value = ''
+  attachments.value = []
+  attachmentMentionBindings.value = {}
+  showMentionPopup.value = false
+  slashMenuVisible.value = false
+  autoResize()
+}
+
+function queueCurrentDraft() {
+  if (!hasDraft.value) return false
+  queuedMessages.value.push(snapshotDraft())
+  clearDraft()
+  return true
+}
+
+function restoreDraft(draft) {
+  if (!draft) return
+  inputText.value = draft.text || ''
+  attachments.value = Array.isArray(draft.attachments) ? draft.attachments : []
+  attachmentMentionBindings.value = { ...(draft.bindings || {}) }
+  selectedModelByType.value = { ...(draft.modelByType || selectedModelByType.value) }
+  nextTick(() => {
+    inputEditorRenderKey.value += 1
+    autoResize()
+  })
+}
+
+function drainQueuedMessages() {
+  if (isLoading.value || !queuedMessages.value.length) return
+  const [next] = queuedMessages.value.splice(0, 1)
+  restoreDraft(next)
+  nextTick(() => sendMessage(true))
+}
+
+function forceInsertQueuedMessage(queued) {
+  if (!queued) return
+  queuedMessages.value = [queued, ...queuedMessages.value.filter(item => item.id !== queued.id)]
+  stopCurrentActivity()
+  nextTick(drainQueuedMessages)
+}
+
+function stopCurrentActivity() {
+  stopRequested.value = true
+  normalStreamController?.abort()
+  agentStreamController?.abort()
+  normalStreamController = null
+  agentStreamController = null
+  isUploading.value = false
+  const activeMessage = [...messages.value].reverse().find(message => message.role === 'assistant' && message.isStreaming)
+  if (activeMessage) {
+    activeMessage.isStreaming = false
+    activeMessage.isThinking = false
+    delete activeMessage.mediaGenerating
+    delete activeMessage.mediaGeneratingCount
+    if (!activeMessage.content) activeMessage.content = '已停止当前对话或任务'
+  }
+  isLoading.value = false
+}
 
 function selectSkillExecutionMode(mode) {
-  skillExecutionMode.value = mode === 'manual' ? 'manual' : 'auto'
+  const isAutoMode = mode !== 'manual'
+  const nextMode = isAutoMode ? 'auto' : 'manual'
+  if (skillExecutionMode.value !== nextMode) {
+    skillExecutionMode.value = nextMode
+    startNewChat()
+    currentCodexThreadId.value = null
+  }
+  saveEnhancedModePreference(isAutoMode)
   showSkillExecutionDropdown.value = false
 }
 
@@ -1158,17 +1288,7 @@ function throttledScrollToBottom() {
 async function loadConfig() {
   try {
     config.value = await getAIAssistantConfig()
-    if (config.value.modes?.length > 0) {
-      selectedModeId.value = config.value.modes[0].id
-      // 应用模式的默认设置
-      if (config.value.modes[0].deep_think_default) {
-        deepThinkEnabled.value = true
-      }
-      // 租户启用联网搜索时默认开启，避免用户要求搜索时模型没有搜索工具
-      if (config.value.web_search?.enabled) {
-        webSearchEnabled.value = true
-      }
-    }
+    if (config.value.web_search?.enabled) webSearchEnabled.value = true
   } catch (error) {
     console.error('[AI-Assistant] 加载配置失败:', error)
   }
@@ -1197,8 +1317,18 @@ async function loadUserPresets() {
 
 async function loadSessions() {
   try {
-    const result = await getSessions()
-    sessions.value = result.sessions || []
+    if (enhancedMode.value) {
+      const result = await getCodexSessions()
+      sessions.value = (result.sessions || []).map(s => ({
+        id: s.thread_id,
+        title: s.summary || '增强模式会话',
+        last_message: s.summary || '',
+        ...s
+      }))
+    } else {
+      const result = await getSessions()
+      sessions.value = result.sessions || []
+    }
   } catch (error) {
     console.error('[AI-Assistant] 加载会话列表失败:', error)
   }
@@ -1215,6 +1345,8 @@ function selectMode(mode) {
 }
 
 function startNewChat() {
+  if (isLoading.value) stopCurrentActivity()
+  queuedMessages.value = []
   messages.value = []
   currentSessionId.value = null
   inputText.value = ''
@@ -1223,15 +1355,122 @@ function startNewChat() {
   showMentionPopup.value = false
 }
 
+async function saveEnhancedModePreference(value) {
+  try {
+    const currentPreferences = userInfo.value?.preferences || {}
+    const updatedPreferences = {
+      ...currentPreferences,
+      codex_enhanced_mode: value
+    }
+    const result = await updateUserPreferences(updatedPreferences)
+    if (result && userInfo.value) userInfo.value.preferences = updatedPreferences
+  } catch (error) {
+    console.error('[AI-Assistant] 保存增强模式偏好失败:', error)
+  }
+}
+
+function loadEnhancedModePreference() {
+  const pref = userInfo.value?.preferences?.codex_enhanced_mode
+  if (typeof pref === 'boolean') skillExecutionMode.value = pref ? 'auto' : 'manual'
+}
+
+function checkSlashTrigger() {
+  const text = inputText.value
+  // 只在以 / 开头且未包含空格时触发下拉
+  const match = text.match(/^\/([\w-]*)$/)
+  if (match) {
+    const query = match[1].toLowerCase()
+    const skills = agentSkills.value.filter(skill => {
+      const trigger = skill.trigger
+      if (!trigger) return false
+      return trigger.toLowerCase().includes(query) || (skill.slug && skill.slug.toLowerCase().includes(query))
+    })
+    slashMenuItems.value = skills
+    slashMenuVisible.value = skills.length > 0
+    slashMenuActiveIndex.value = 0
+  } else {
+    slashMenuVisible.value = false
+  }
+}
+
+function selectSlashSkill(skill) {
+  // 用 skill 的 trigger 替换输入框内容中的 /xxx 部分
+  const trigger = skill.trigger || `/${skill.slug}`
+  inputText.value = trigger + ' '
+  selectedSkillId.value = skill.id
+  referenceSkill(skill)
+  slashMenuVisible.value = false
+  inputEditorRenderKey.value += 1
+  nextTick(() => {
+    const editor = inputRef.value
+    if (editor) {
+      editor.focus()
+      // 将光标移到末尾
+      const range = document.createRange()
+      range.selectNodeContents(editor)
+      range.collapse(false)
+      const selection = window.getSelection()
+      selection.removeAllRanges()
+      selection.addRange(range)
+    }
+  })
+}
+
 async function loadSession(session) {
   try {
     currentSessionId.value = session.id
     showHistory.value = false
-    
-    // 加载会话历史消息
-    const result = await getSessionMessages(session.id)
-    messages.value = result.messages || []
-    
+
+    if (enhancedMode.value) {
+      currentCodexThreadId.value = session.id
+      let historyMessages = []
+      try {
+        const msgResult = await getCodexSessionMessages(session.id)
+        historyMessages = msgResult.messages || []
+      } catch (e) {
+        console.warn('[AI-Assistant] 加载增强模式历史消息失败:', e.message)
+      }
+      if (historyMessages.length) {
+        messages.value = historyMessages.map((m) => ({
+          role: m.role,
+          content: typeof m.content === 'string' ? m.content : '',
+          toolEvents: Array.isArray(m.content)
+            ? (m.content.find((entry) => entry.type === 'tool_events')?.toolEvents || [])
+            : [],
+          mediaGenerating: false,
+          isThinking: false,
+          isStreaming: false,
+          ts: m.ts
+        }))
+        // 回显文本内容（content 数组里的 type==='text' 项拼起来）
+        messages.value = messages.value.map((msg) => {
+          if (msg.content) return msg
+          const raw = historyMessages.find((hm) => hm.ts === msg.ts)
+          if (raw && Array.isArray(raw.content)) {
+            const text = raw.content
+              .filter((entry) => entry.type === 'text')
+              .map((entry) => entry.text)
+              .join('\n')
+            if (text) msg.content = text
+          }
+          return msg
+        })
+      } else {
+        // 无落盘消息时回退到会话详情摘要
+        const result = await getCodexSession(session.id)
+        const sessionData = result.session || {}
+        messages.value = [{
+          role: 'assistant',
+          content: sessionData.summary || '会话已恢复，可以继续对话。',
+          timestamp: Date.now()
+        }]
+      }
+    } else {
+      // 加载会话历史消息
+      const result = await getSessionMessages(session.id)
+      messages.value = result.messages || []
+    }
+
     // 滚动到底部
     await nextTick()
     scrollToBottom()
@@ -1248,10 +1487,15 @@ async function loadSession(session) {
 
 async function deleteSessionItem(sessionId) {
   try {
-    await deleteSession(sessionId)
+    if (enhancedMode.value) {
+      await deleteCodexSession(sessionId)
+    } else {
+      await deleteSession(sessionId)
+    }
     sessions.value = sessions.value.filter(s => s.id !== sessionId)
-    if (currentSessionId.value === sessionId) {
+    if (currentSessionId.value === sessionId || currentCodexThreadId.value === sessionId) {
       startNewChat()
+      currentCodexThreadId.value = null
     }
   } catch (error) {
     console.error('[AI-Assistant] 删除会话失败:', error)
@@ -1369,6 +1613,8 @@ function syncCurrentAttachmentMentions() {
   if (attachments.value.length === 0) {
     showMentionPopup.value = false
   }
+  // 斜杠命令检测
+  checkSlashTrigger()
 }
 
 function showAttachmentMentionPopup() {
@@ -1514,6 +1760,30 @@ function handleInputEvent(event) {
 }
 
 function handleInputKeydown(event) {
+  // 斜杠菜单键盘导航
+  if (slashMenuVisible.value) {
+    if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      slashMenuActiveIndex.value = (slashMenuActiveIndex.value + 1) % slashMenuItems.value.length
+      return
+    }
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      slashMenuActiveIndex.value = (slashMenuActiveIndex.value - 1 + slashMenuItems.value.length) % slashMenuItems.value.length
+      return
+    }
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      event.preventDefault()
+      const skill = slashMenuItems.value[slashMenuActiveIndex.value]
+      if (skill) selectSlashSkill(skill)
+      return
+    }
+    if (event.key === 'Escape') {
+      slashMenuVisible.value = false
+      return
+    }
+  }
+
   if (showMentionPopup.value && filteredAttachmentMentionItems.value.length > 0) {
     if (event.key === 'ArrowDown') {
       event.preventDefault()
@@ -1573,7 +1843,7 @@ function handleInputKeydown(event) {
 
   if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault()
-    sendMessage()
+    sendMessage(Boolean(event.ctrlKey || event.metaKey))
   }
 }
 
@@ -1681,18 +1951,32 @@ function resetAttachmentDragState() {
   window.dispatchEvent(new CustomEvent('canvas-drag-end'))
 }
 
-async function sendMessage() {
-  if (!canSend.value) return
-
-  syncCurrentAttachmentMentions()
+async function sendEnhancedMessage() {
   const messageText = inputText.value.trim()
-  // 仅本次轮对话：捕获已选生图/生视频模型，转为自然语言提示随消息送入 LLM；发送后立即清除，不跨轮生效
+  if (!messageText) return
+  const referencedSkillForTurn = referencedSkill.value
+
+  stopRequested.value = false
+  agentStreamController?.abort()
+  const requestController = new AbortController()
+  agentStreamController = requestController
+
+  // 仅本次轮对话：与普通模式一致，把已选生图/生视频模型转成自然语言提示随消息送入 Agent，
+  // 对话栏展示模型引用标签卡，实际传输给 LLM 的是自然语言文本；发送后立即清除，不跨轮生效
   const turnModelHint = buildTurnModelHint()
-  const turnModelValue = selectedModelValue.value
-  const turnModelType = turnModelHint ? modelPickerType.value : ''
+  const turnModelRef = buildTurnModelRef()
+  const turnSkillRef = buildTurnSkillRef(messageText)
+  referencedSkill.value = null
   if (turnModelHint) {
     selectedModelByType.value = { image: '', video: '' }
   }
+  const messageTextWithHint = [
+    messageText,
+    turnModelHint,
+    '生成任务完成后，请通过 task-status 获取结果；前端会根据 task-status 返回的结果自动写回当前画布，请不要调用 canvas-write。'
+  ].filter(Boolean).join('\n')
+
+  // 解析本轮要发送的附件（在清空输入之前）
   const messageAttachments = resolveAssistantAttachmentsForSend({
     text: inputText.value,
     bindings: attachmentMentionBindings.value,
@@ -1704,12 +1988,277 @@ async function sendMessage() {
   attachments.value = []
   attachmentMentionBindings.value = {}
   showMentionPopup.value = false
+  slashMenuVisible.value = false
   autoResize()
 
   // 添加用户消息（先用本地预览显示）
   messages.value.push({
     role: 'user',
     content: messageText,
+    modelRef: turnModelRef,
+    skillRef: turnSkillRef,
+    attachments: messageAttachments.map(a => ({
+      type: a.type,
+      url: a.preview || a.url,
+      name: a.name
+    })),
+    timestamp: Date.now()
+  })
+
+  scrollToBottom()
+  isLoading.value = true
+
+  // 添加空的助手消息用于流式更新
+  const assistantMessageIndex = messages.value.length
+  messages.value.push({
+    role: 'assistant',
+    content: '',
+    thinking: '',
+    isThinking: true,
+    timestamp: Date.now(),
+    isStreaming: true,
+    toolEvents: []
+  })
+
+  let pendingContent = ''
+  let contentTimer = null
+  const flushContent = () => {
+    if (contentTimer) {
+      clearTimeout(contentTimer)
+      contentTimer = null
+    }
+    if (pendingContent) {
+      messages.value[assistantMessageIndex].content = pendingContent
+      pendingContent = ''
+    }
+  }
+  let canvasWritebackSent = false
+  const applyGeneratedResult = (result) => {
+    const message = messages.value[assistantMessageIndex]
+    if (message) {
+      message.isThinking = false
+      delete message.mediaGenerating
+      delete message.mediaGeneratingCount
+    }
+    const mediaType = ['image', 'video', 'audio'].includes(result?.media_type) ? result.media_type : 'image'
+    const urls = normalizeResultUrls(result?.result_urls, mediaType)
+    if (!urls.length) return
+
+    applyAgentResultToMessage(assistantMessageIndex, result)
+    if (!canvasWritebackSent) {
+      canvasWritebackSent = true
+      emit('canvas-writeback', {
+        workflow_id: props.canvasContext?.workflow_id || props.canvasContext?.workflowId || null,
+        node_id: props.canvasContext?.node_ids?.[0] || props.canvasContext?.node_id || props.canvasContext?.nodeId || null,
+        media_type: mediaType,
+        result_urls: urls,
+        history_id: result.task_id || result.history_id || result.id || null
+      })
+    }
+  }
+
+  // 如果有附件（图片或文件），本地临时资源先上传，公网 URL 直接传给后端
+  let uploadedAttachments = messageAttachments
+    .filter(a => !a.file && a.url)
+    .map(a => ({
+      key: a.key,
+      type: a.type,
+      url: a.url,
+      name: a.name
+    }))
+
+  if (messageAttachments.length > 0) {
+    // 筛选出需要上传的文件（有file对象的）
+    const filesToUpload = messageAttachments.filter(a => a.file)
+
+    if (filesToUpload.length > 0) {
+      try {
+        isUploading.value = true
+        messages.value[assistantMessageIndex].content = '正在上传附件...'
+        const uploadResults = await uploadAttachments(filesToUpload.map(a => a.file))
+        const uploadedByOriginal = uploadResults.map((result, index) => ({
+          key: filesToUpload[index].key,
+          type: result.type,
+          url: result.url,
+          name: result.name
+        }))
+
+        // 构建上传后的附件列表
+        uploadedAttachments = [
+          ...uploadedAttachments,
+          ...uploadedByOriginal
+        ]
+        messages.value[assistantMessageIndex].content = ''
+
+        // 更新用户消息中的附件 URL 为云端 URL（避免 blob URL 失效）
+        const userMsg = messages.value[assistantMessageIndex - 1]
+        if (userMsg && userMsg.attachments) {
+          for (let i = 0; i < userMsg.attachments.length; i++) {
+            const uploaded = uploadedAttachments.find(u => u.key === messageAttachments[i]?.key || u.name === userMsg.attachments[i].name)
+            if (uploaded) {
+              userMsg.attachments[i].url = uploaded.url
+              userMsg.attachments[i].type = uploaded.type
+            }
+          }
+        }
+      } catch (uploadError) {
+        console.error('[AI-Assistant] 附件上传失败:', uploadError)
+        messages.value[assistantMessageIndex].content = `抱歉，附件上传失败: ${uploadError.message}`
+        messages.value[assistantMessageIndex].isStreaming = false
+        isLoading.value = false
+        isUploading.value = false
+        return
+      } finally {
+        isUploading.value = false
+      }
+    }
+  }
+
+  try {
+    await sendCodexMessage({
+      thread_id: currentCodexThreadId.value || undefined,
+      content: messageTextWithHint,
+      skill_id: referencedSkillForTurn?.id || null,
+      attachments: uploadedAttachments,
+      signal: requestController.signal,
+      onSession: (sessionId) => {
+        currentSessionId.value = sessionId
+      },
+      onThread: (threadId) => {
+        currentCodexThreadId.value = threadId
+        loadSessions()
+      },
+      onContent: (text, isFinal) => {
+        const message = messages.value[assistantMessageIndex]
+        message.isThinking = false
+        const contentOffset = message.generationContentOffset || 0
+        if (isFinal) {
+          flushContent()
+          message.content = text.slice(contentOffset)
+        } else {
+          // 增量文本追加
+          message.content += text
+        }
+        throttledScrollToBottom()
+      },
+      onToolEvent: (event) => {
+        const message = messages.value[assistantMessageIndex]
+        if (!message) return
+        if (!Array.isArray(message.toolEvents)) message.toolEvents = []
+        if (event.type === 'started') {
+          const generatingType = getAssistantMediaGeneratingType(event)
+          message.isThinking = false
+          if (generatingType) {
+            if (!message.preGenerationContent && message.content) {
+              message.preGenerationContent = message.content
+              message.generationContentOffset = message.content.length
+              message.content = ''
+            }
+            message.mediaGenerating = generatingType
+            message.mediaGeneratingCount = getRequestedMediaCount(messageText, generatingType)
+          }
+          message.toolEvents.push({
+            id: `${event.server}.${event.tool}-${message.toolEvents.length}-${Date.now()}`,
+            name: `${event.server}.${event.tool}`,
+            status: 'running',
+            startedAt: Date.now(),
+            detail: ''
+          })
+          message.isStreaming = true
+        } else if (event.type === 'completed') {
+          const runningCard = [...message.toolEvents].reverse().find(item => item.status === 'running')
+          if (runningCard) {
+            runningCard.status = event.status === 'completed' ? 'done' : 'error'
+            runningCard.duration = Date.now() - runningCard.startedAt
+            runningCard.result = event.result
+          }
+          if (getAssistantMediaGeneratingType(event)) {
+            delete message.mediaGenerating
+            delete message.mediaGeneratingCount
+          }
+          const generated = extractCodexGeneratedMediaResult(event.tool, event.result)
+          if (generated) applyGeneratedResult(generated)
+        }
+        throttledScrollToBottom()
+      },
+      onDone: (result) => {
+        flushContent()
+        messages.value[assistantMessageIndex].isThinking = false
+        delete messages.value[assistantMessageIndex].mediaGenerating
+        delete messages.value[assistantMessageIndex].mediaGeneratingCount
+        messages.value[assistantMessageIndex].isStreaming = false
+        if (result?.thread_id) {
+          currentCodexThreadId.value = result.thread_id
+        }
+        loadSessions()
+      },
+      onError: (error) => {
+        if (requestController.signal.aborted || stopRequested.value) return
+        flushContent()
+        messages.value[assistantMessageIndex].isThinking = false
+        messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
+        messages.value[assistantMessageIndex].isStreaming = false
+      }
+    })
+  } catch (error) {
+    if (requestController.signal.aborted || stopRequested.value) return
+    console.error('[AI-Assistant] 增强模式发送失败:', error)
+    flushContent()
+    messages.value[assistantMessageIndex].isThinking = false
+    messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
+    messages.value[assistantMessageIndex].isStreaming = false
+  } finally {
+    if (agentStreamController === requestController) {
+      isLoading.value = false
+      agentStreamController = null
+      scrollToBottom()
+      drainQueuedMessages()
+    }
+  }
+}
+
+async function sendMessage(force = false) {
+  if (!hasDraft.value || isUploading.value) return
+
+  if (isLoading.value && !force) {
+    queueCurrentDraft()
+    return
+  }
+
+  stopRequested.value = false
+
+  if (enhancedMode.value) {
+    return sendEnhancedMessage()
+  }
+
+  syncCurrentAttachmentMentions()
+  const messageText = inputText.value.trim()
+  // 仅本次轮对话：捕获已选生图/生视频模型，转为自然语言提示随消息送入 LLM；发送后立即清除，不跨轮生效
+  const turnModelHint = buildTurnModelHint()
+  const turnModelValue = selectedModelValue.value
+  const turnModelType = turnModelHint ? modelPickerType.value : ''
+  const turnModelRef = buildTurnModelRef()
+  const turnSkillRef = buildTurnSkillRef(messageText)
+  const referencedSkillForTurn = referencedSkill.value
+  referencedSkill.value = null
+  if (turnModelHint) {
+    selectedModelByType.value = { image: '', video: '' }
+  }
+  const messageAttachments = resolveAssistantAttachmentsForSend({
+    text: inputText.value,
+    bindings: attachmentMentionBindings.value,
+    attachments: attachments.value
+  })
+
+  // 清空输入
+  clearDraft()
+
+  // 添加用户消息（先用本地预览显示）
+  messages.value.push({
+    role: 'user',
+    content: messageText,
+    modelRef: turnModelRef,
+    skillRef: turnSkillRef,
     attachments: messageAttachments.map(a => ({
       type: a.type,
       url: a.preview,
@@ -1727,6 +2276,7 @@ async function sendMessage() {
     role: 'assistant',
     content: '',
     thinking: '',
+    isThinking: true,
     timestamp: Date.now(),
     isStreaming: true
   })
@@ -1746,7 +2296,9 @@ async function sendMessage() {
   const applyGeneratedResult = (result) => {
     const message = messages.value[assistantMessageIndex]
     if (!message) return
+    message.isThinking = false
     delete message.mediaGenerating
+    delete message.mediaGeneratingCount
     const mediaType = ['image', 'video', 'audio'].includes(result?.media_type) ? result.media_type : 'image'
     const urls = normalizeResultUrls(result?.result_urls, mediaType)
     const workflowId = props.canvasContext?.workflow_id || props.canvasContext?.workflowId
@@ -1782,10 +2334,15 @@ async function sendMessage() {
     safetyErrorHandled = true
     const dialog = buildPromptSafetyDialog(error)
     messages.value[assistantMessageIndex].content = dialog.message
+    messages.value[assistantMessageIndex].isThinking = false
     messages.value[assistantMessageIndex].isStreaming = false
     safetyAlertPromise = showAlert(dialog.message, dialog.title, dialog.detail)
     return safetyAlertPromise
   }
+
+  const requestController = new AbortController()
+  normalStreamController?.abort()
+  normalStreamController = requestController
 
   try {
     // 如果有附件（图片或文件），本地临时资源先上传，公网 URL 直接传给后端
@@ -1852,9 +2409,10 @@ async function sendMessage() {
     // 若下游模型不支持流式响应，后端会自动将完整内容切片模拟 SSE 流返回给前端，
     // 保证前端体验始终一致。
     await sendMessageStream({
+      signal: requestController.signal,
       session_id: currentSessionId.value,
       message: messageText,
-      mode_id: selectedModeId.value,
+      skill_id: referencedSkillForTurn?.id || null,
       options: {
         deep_think: deepThinkEnabled.value,
         web_search: webSearchEnabled.value,
@@ -1865,13 +2423,14 @@ async function sendMessage() {
       },
       canvas_context: props.canvasContext,
       attachments: uploadedAttachments,
-      system_prompt: selectedPreset.value?.systemPrompt,
       onSession: (sessionId) => {
         currentSessionId.value = sessionId
         loadSessions()
       },
       onContent: (chunk, fullContent) => {
-        pendingStreamContent = fullContent
+        const message = messages.value[assistantMessageIndex]
+        message.isThinking = false
+        pendingStreamContent = fullContent.slice(message.generationContentOffset || 0)
         if (streamContentTimer) return
         streamContentTimer = setTimeout(() => {
           streamContentTimer = null
@@ -1883,19 +2442,26 @@ async function sendMessage() {
       },
       onThinking: (chunk, fullThinking) => {
         messages.value[assistantMessageIndex].thinking = fullThinking
+        messages.value[assistantMessageIndex].isThinking = true
         throttledScrollToBottom()
       },
       onToolEvent: (event) => {
         const message = messages.value[assistantMessageIndex]
         if (!message) return
         if (!Array.isArray(message.toolEvents)) message.toolEvents = []
-        const skillId = event.skill_id || ''
-        const generatingType = skillId === 'builtin-canvas-video-generate' ? 'video'
-          : skillId === 'builtin-canvas-image-generate' ? 'image' : ''
+        const generatingType = getAssistantMediaGeneratingType(event)
         if (event?.type === 'tool_started') {
           if (generatingType) {
+            flushStreamContent()
+            if (!message.preGenerationContent && message.content) {
+              message.preGenerationContent = message.content
+              message.generationContentOffset = message.content.length
+              message.content = ''
+            }
             message.mediaGenerating = generatingType
+            message.mediaGeneratingCount = getRequestedMediaCount(messageText, generatingType)
           }
+          message.isThinking = false
           message.toolEvents.push({
             id: event.tool_call_id || `tool-${message.toolEvents.length}-${Date.now()}`,
             name: formatAssistantToolName(event.tool_name || ''),
@@ -1916,8 +2482,11 @@ async function sendMessage() {
             runningCard.duration = Date.now() - runningCard.startedAt
             runningCard.result = event.result
           }
-          if (message.mediaGenerating) delete message.mediaGenerating
-          // 媒体结果应用生成结果；其他工具结果只显示在卡片上，正文保留模型输出
+          if (generatingType) {
+            delete message.mediaGenerating
+            delete message.mediaGeneratingCount
+          }
+          // 只有媒体生成状态会可视化，其他工具事件仍保留用于内部结果解析。
           if (event.result && !event.result?.error && Array.isArray(event.result?.result_urls)) {
             applyGeneratedResult(event.result)
           }
@@ -1927,6 +2496,8 @@ async function sendMessage() {
       onDone: (fullContent, result) => {
         flushStreamContent()
         delete messages.value[assistantMessageIndex].mediaGenerating
+        delete messages.value[assistantMessageIndex].mediaGeneratingCount
+        messages.value[assistantMessageIndex].isThinking = false
         messages.value[assistantMessageIndex].isStreaming = false
         if (result?.session_id) {
           currentSessionId.value = result.session_id
@@ -1939,19 +2510,23 @@ async function sendMessage() {
         pendingAgentApproval.value = approval
         pendingAgentMessageIndex.value = assistantMessageIndex
         messages.value[assistantMessageIndex].content = 'MCP 工具调用需要授权'
+        messages.value[assistantMessageIndex].isThinking = false
         messages.value[assistantMessageIndex].isStreaming = false
       },
       onError: (error) => {
+        if (requestController.signal.aborted || stopRequested.value) return
         if (isPromptSafetyBlockedError(error)) {
           handlePromptSafetyError(error)
           return
         }
         messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
+        messages.value[assistantMessageIndex].isThinking = false
         messages.value[assistantMessageIndex].isStreaming = false
       }
     })
 
   } catch (error) {
+    if (requestController.signal.aborted || stopRequested.value) return
     console.error('[AI-Assistant] 发送消息失败:', error)
     if (isPromptSafetyBlockedError(error)) {
       if (safetyErrorHandled) {
@@ -1962,10 +2537,15 @@ async function sendMessage() {
       return
     }
     messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
+    messages.value[assistantMessageIndex].isThinking = false
     messages.value[assistantMessageIndex].isStreaming = false
   } finally {
-    isLoading.value = false
-    scrollToBottom()
+    if (normalStreamController === requestController) {
+      isLoading.value = false
+      normalStreamController = null
+      scrollToBottom()
+      drainQueuedMessages()
+    }
   }
 }
 
@@ -2052,15 +2632,29 @@ function findGeneratedMediaResult(results) {
   return [...results].reverse().find(result => Array.isArray(result?.result_urls) && result.result_urls.some(Boolean)) || null
 }
 
+function extractCodexGeneratedMediaResult(toolName, toolResult) {
+  if (!['image-gen', 'video-gen', 'task-status'].includes(toolName)) return null
+  const content = Array.isArray(toolResult?.content) ? toolResult.content : []
+  for (const item of content) {
+    if (item?.type !== 'text' || !item.text) continue
+    try {
+      const task = JSON.parse(item.text)?.result?.task
+      if (Array.isArray(task?.result_urls) && task.result_urls.some(Boolean)) return task
+    } catch {}
+  }
+  return null
+}
+
 async function watchAgentRun(runId, index) {
   agentStreamController?.abort()
-  agentStreamController = new AbortController()
+  const controller = new AbortController()
+  agentStreamController = controller
   let lastEventId = 0
   let terminal = false
   for (let attempt = 0; attempt < 5 && !terminal; attempt += 1) {
     try {
       await streamAgentRun(runId, {
-        signal: agentStreamController.signal,
+        signal: controller.signal,
         lastEventId,
         onEvent(event, id) {
         lastEventId = id
@@ -2085,7 +2679,8 @@ async function watchAgentRun(runId, index) {
         }
       })
     } catch (error) {
-      if (agentStreamController.signal.aborted || attempt === 4) throw error
+      if (controller.signal.aborted) return
+      if (attempt === 4) throw error
     }
     if (!terminal && attempt < 4) await new Promise(resolve => setTimeout(resolve, 400))
   }
@@ -2389,16 +2984,15 @@ watch(() => props.visible, (visible) => {
     loadConfig()
     loadAgentSkills()
     loadSessions()
-    loadUserPresets()
+    loadEnhancedModePreference()
     nextTick(() => {
       inputRef.value?.focus()
     })
     // 通知父组件面板宽度
     emit('width-change', panelWidth.value)
   } else {
-    showModeDropdown.value = false
-    showPresetDropdown.value = false
     showHistory.value = false
+    slashMenuVisible.value = false
     emit('width-change', 0)
   }
 })
@@ -2417,17 +3011,14 @@ watch(panelWidth, (newWidth) => {
 
 // 点击外部关闭下拉菜单
 function handleClickOutside(event) {
-  if (showModeDropdown.value && !event.target.closest('.mode-selector')) {
-    showModeDropdown.value = false
-  }
-  if (showPresetDropdown.value && !event.target.closest('.preset-selector')) {
-    showPresetDropdown.value = false
-  }
   if (showAttachDropdown.value && !event.target.closest('.attach-selector')) {
     showAttachDropdown.value = false
   }
   if (showSkillExecutionDropdown.value && !event.target.closest('.skill-execution-selector')) {
     showSkillExecutionDropdown.value = false
+  }
+  if (slashMenuVisible.value && !event.target.closest('.input-box, .slash-menu')) {
+    slashMenuVisible.value = false
   }
 }
 
@@ -2437,7 +3028,6 @@ onMounted(() => {
     loadConfig()
     loadAgentSkills()
     loadSessions()
-    loadUserPresets()
   }
 })
 
@@ -2530,11 +3120,81 @@ async function addAttachmentFromUrl(url, type, name) {
 }
 
 defineExpose({
-  addAttachmentFromUrl
+  addAttachmentFromUrl,
+  referenceSkill
 })
 </script>
 
 <style scoped>
+.slash-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+  z-index: 50;
+  margin-bottom: 4px;
+}
+.dark .slash-menu {
+  background: #1f2937;
+  border-color: #374151;
+}
+.slash-menu-header {
+  padding: 8px 12px;
+  font-size: 11px;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid #f3f4f6;
+}
+.dark .slash-menu-header {
+  border-bottom-color: #374151;
+}
+.slash-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.slash-menu-item:hover,
+.slash-menu-item.active {
+  background: #f3f4f6;
+}
+.dark .slash-menu-item:hover,
+.dark .slash-menu-item.active {
+  background: #374151;
+}
+.slash-menu-trigger {
+  font-family: monospace;
+  font-size: 13px;
+  color: #6366f1;
+  font-weight: 600;
+  min-width: 80px;
+}
+.slash-menu-name {
+  color: #6b7280;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dark .slash-menu-name {
+  color: #d1d5db;
+}
+.slash-menu-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
 .ai-assistant-container {
   position: fixed;
   top: 0;
@@ -3243,7 +3903,6 @@ defineExpose({
   min-height: 34px;
 }
 
-.input-context-tag,
 .selected-model-tag {
   display: inline-flex;
   align-items: center;
@@ -3260,18 +3919,12 @@ defineExpose({
   line-height: 1;
 }
 
-.selected-skill-tag-icon,
 .selected-model-tag-icon {
   display: grid;
   width: 18px;
   height: 18px;
   place-items: center;
   flex-shrink: 0;
-}
-
-.selected-skill-tag-icon svg {
-  width: 18px;
-  height: 18px;
 }
 
 .input-context-tag-label {
@@ -3412,6 +4065,57 @@ defineExpose({
   color: inherit;
 }
 
+.queued-message-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 14px 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.08);
+  color: rgba(226, 232, 240, 0.88);
+  font-size: 12px;
+}
+
+.queued-message-bar__copy {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+
+.queued-message-bar__dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #93c5fd;
+}
+
+.queued-message-bar__preview {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(148, 163, 184, 0.9);
+}
+
+.queued-message-bar__force {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: 1px solid rgba(147, 197, 253, 0.35);
+  border-radius: 6px;
+  background: rgba(59, 130, 246, 0.12);
+  color: #bfdbfe;
+  cursor: pointer;
+}
+
+.queued-message-bar__force:hover {
+  background: rgba(59, 130, 246, 0.22);
+}
+
 .toolbar-left {
   display: flex;
   align-items: center;
@@ -3454,6 +4158,19 @@ defineExpose({
 }
 
 .toolbar-label { display: none; max-width: 72px; }
+
+.skills-market-trigger {
+  padding: 6px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.skills-market-trigger:hover {
+  border-color: rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.95);
+}
 
 .model-picker-trigger { margin-left: 2px; }
 
@@ -3786,6 +4503,15 @@ defineExpose({
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.24);
 }
 
+.send-btn--stop {
+  background: #f87171;
+  color: #fff;
+}
+
+.send-btn--stop:hover:not(:disabled) {
+  background: #ef4444;
+}
+
 .send-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
@@ -4111,12 +4837,6 @@ defineExpose({
   color: #1c1917;
 }
 
-:root.canvas-theme-light .ai-assistant-panel .selected-skill-tag {
-  border-color: rgba(15, 23, 42, 0.14);
-  background: rgba(15, 23, 42, 0.05);
-  color: #1c1917;
-}
-
 :root.canvas-theme-light .ai-assistant-panel .selected-model-tag-remove {
   color: rgba(15, 23, 42, 0.45);
 }
@@ -4151,6 +4871,30 @@ defineExpose({
 :root.canvas-theme-light .ai-assistant-panel .send-btn:hover {
   background: #111827;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.24);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .send-btn--stop {
+  background: #dc2626;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .send-btn--stop:hover {
+  background: #b91c1c;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .queued-message-bar {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.045);
+  color: #44403c;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .queued-message-bar__preview {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .queued-message-bar__force {
+  border-color: rgba(37, 99, 235, 0.2);
+  background: rgba(37, 99, 235, 0.08);
+  color: #1d4ed8;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .model-selector {
