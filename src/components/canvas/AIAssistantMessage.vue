@@ -138,6 +138,28 @@
         </template>
       </div>
 
+      <div v-if="message.role === 'assistant' && assistantChoices && !message.isStreaming" class="ai-message-choices" :class="{ 'is-locked': choiceLocked }">
+        <p v-if="assistantChoices.question" class="ai-message-choices__question">{{ assistantChoices.question }}</p>
+        <div class="ai-message-choices__grid">
+          <button
+            v-for="option in assistantChoices.options"
+            :key="`${option.value}:${option.label}`"
+            type="button"
+            class="ai-message-choice"
+            :class="{ selected: selectedChoiceValue === option.value }"
+            :disabled="choiceLocked"
+            @click="selectChoice(option)"
+          >
+            <span class="ai-message-choice__value">{{ option.value }}</span>
+            <span class="ai-message-choice__label">{{ option.label }}</span>
+          </button>
+        </div>
+        <form v-if="assistantChoices.allowInput" class="ai-message-choice-input" @submit.prevent="submitChoiceInput">
+          <input v-model="choiceInput" type="text" :placeholder="assistantChoices.inputPlaceholder" :disabled="choiceLocked" aria-label="自定义回复" />
+          <button type="submit" :disabled="choiceLocked || !choiceInput.trim()">发送</button>
+        </form>
+      </div>
+
       <!-- 图片生成结果组：默认展开，可折叠为首图叠层。 -->
       <div v-if="message.role === 'assistant' && mediaResults.length" class="ai-media-results">
         <button type="button" class="ai-media-results__toggle" :aria-expanded="showMediaResults" @click="showMediaResults = !showMediaResults">
@@ -309,6 +331,7 @@ import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { startStreamDownload } from '@/api/client'
+import { parseAssistantContent } from '@/utils/aiAssistantContent'
 
 const props = defineProps({
   message: {
@@ -340,7 +363,29 @@ const visibleAttachments = computed(() => {
   return result
 })
 
-defineEmits(['preview-media'])
+const emit = defineEmits(['preview-media', 'select-choice'])
+
+const parsedContent = computed(() => parseAssistantContent(props.message.content))
+const assistantChoices = computed(() => props.message.role === 'assistant' ? parsedContent.value.choices : null)
+const choiceInput = ref('')
+const selectedChoiceValue = ref('')
+const choiceLocked = computed(() => Boolean(selectedChoiceValue.value))
+
+const streamDisplayContent = computed(() => parsedContent.value.content)
+
+function selectChoice(option) {
+  if (choiceLocked.value || !option?.value) return
+  selectedChoiceValue.value = option.value
+  emit('select-choice', option.value)
+}
+
+function submitChoiceInput() {
+  const value = choiceInput.value.trim()
+  if (!value || choiceLocked.value) return
+  selectedChoiceValue.value = value
+  choiceInput.value = ''
+  emit('select-choice', value)
+}
 
 // 从 MCP 工具结果（task-status / image-gen / video-gen）中提取媒体 URL
 const MEDIA_TOOL_NAMES = ['task-status', 'image-gen', 'video-gen']
@@ -505,15 +550,36 @@ marked.setOptions({
   gfm: true
 })
 
+const markdownRenderer = new marked.Renderer()
+markdownRenderer.table = function (token) {
+  const renderCell = (cell) => this.parser.parseInline(cell.tokens || [])
+  const header = Array.isArray(token.header) ? token.header : []
+  const rows = Array.isArray(token.rows) ? token.rows : []
+  const items = rows.map((row, rowIndex) => {
+    const cells = Array.isArray(row) ? row : []
+    const fallbackTitle = { tokens: [{ type: 'text', raw: `项目 ${rowIndex + 1}`, text: `项目 ${rowIndex + 1}` }] }
+    const title = renderCell(cells[0] || fallbackTitle)
+    const properties = cells.slice(1).map((cell, cellIndex) => {
+      const label = header[cellIndex + 1] ? renderCell(header[cellIndex + 1]) : `字段 ${cellIndex + 2}`
+      return `<div class="ai-table-list__property"><span class="ai-table-list__label">${label}</span><span class="ai-table-list__value">${renderCell(cell)}</span></div>`
+    }).join('')
+    const fallback = cells.length <= 1 ? cells.map((cell) => `<div class="ai-table-list__value">${renderCell(cell)}</div>`).join('') : ''
+    return `<article class="ai-table-list__item"><h4 class="ai-table-list__title">${title}</h4>${properties || fallback}</article>`
+  }).join('')
+  const empty = header.length ? `<article class="ai-table-list__item"><h4 class="ai-table-list__title">${header.map(renderCell).join(' · ')}</h4></article>` : ''
+  return `<div class="ai-table-list">${items || empty}</div>`
+}
+
 function formatContent(content) {
   if (!content) return ''
 
   try {
+    content = parseAssistantContent(content).content
     // 使用 marked 解析 markdown
-    const html = marked.parse(content)
+    const html = marked.parse(content, { renderer: markdownRenderer })
     // 使用 DOMPurify 清理 HTML
     return DOMPurify.sanitize(html, {
-      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'a', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'],
+      ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'a', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'article', 'span'],
       ALLOWED_ATTR: ['href', 'target', 'class']
     })
   } catch (e) {
@@ -523,7 +589,7 @@ function formatContent(content) {
 }
 
 const formattedContent = computed(() => {
-  return formatContent(props.message.content)
+  return formatContent(parsedContent.value.content)
 })
 
 function formatTime(timestamp) {
@@ -735,8 +801,8 @@ onUnmounted(() => {
 
 /* ========== 消息气泡 - 毛玻璃灵动设计 ========== */
 .ai-message__text {
-  padding: 12px 16px;
-  border-radius: 16px;
+  padding: 8px 0;
+  border-radius: 0;
   font-size: 14px;
   line-height: 1.6;
   word-break: break-word;
@@ -754,8 +820,8 @@ onUnmounted(() => {
 }
 
 .ai-message__text-stream {
-  padding: 12px 16px;
-  border-radius: 16px;
+  padding: 8px 0;
+  border-radius: 0;
   font-size: 14px;
   line-height: 1.6;
   word-break: break-word;
@@ -765,18 +831,8 @@ onUnmounted(() => {
   -moz-user-select: text;
   -ms-user-select: text;
   cursor: text;
-  background: linear-gradient(135deg,
-    rgba(45, 50, 65, 0.85) 0%,
-    rgba(35, 40, 55, 0.9) 100%
-  );
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  color: #e5e7eb;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom-left-radius: 6px;
-  box-shadow:
-    0 4px 24px rgba(0, 0, 0, 0.2),
-    0 1px 3px rgba(0, 0, 0, 0.3);
+  background: transparent;
+  color: var(--ai-message-assistant-text, #e5e7eb);
 }
 
 .media-generating {
@@ -870,34 +926,18 @@ onUnmounted(() => {
 
 /* AI 消息气泡 - 深色毛玻璃 */
 .ai-message--assistant .ai-message__text {
-  background: linear-gradient(135deg, 
-    rgba(45, 50, 65, 0.85) 0%,
-    rgba(35, 40, 55, 0.9) 100%
-  );
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  color: #e5e7eb;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom-left-radius: 6px;
-  box-shadow: 
-    0 4px 24px rgba(0, 0, 0, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: transparent;
+  color: var(--ai-message-assistant-text, #e5e7eb);
 }
 
 /* 用户消息气泡 - 蓝色毛玻璃 */
 .ai-message--user .ai-message__text {
-  background: linear-gradient(135deg, 
-    rgba(59, 130, 246, 0.85) 0%,
-    rgba(37, 99, 235, 0.9) 100%
-  );
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-bottom-right-radius: 6px;
-  box-shadow: 
-    0 4px 24px rgba(59, 130, 246, 0.25),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: #292929;
+  color: #f4f4f5;
+  border: 1px solid #525252;
+  box-shadow: none;
 }
 
 .ai-message__text :deep(p) {
@@ -949,6 +989,124 @@ onUnmounted(() => {
   padding-left: 12px;
   margin: 8px 0;
   color: #9ca3af;
+}
+
+.ai-message__text :deep(.ai-table-list) {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.ai-message__text :deep(.ai-table-list__item) {
+  padding: 10px 12px;
+  border: 1px solid var(--ai-message-border, rgba(255, 255, 255, 0.12));
+  border-radius: 10px;
+  background: var(--ai-message-list-bg, rgba(255, 255, 255, 0.035));
+}
+
+.ai-message__text :deep(.ai-table-list__title) {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ai-message__text :deep(.ai-table-list__property) {
+  display: grid;
+  grid-template-columns: minmax(70px, 0.35fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.ai-message__text :deep(.ai-table-list__label) {
+  color: var(--ai-message-muted, #a1a1aa);
+  font-size: 12px;
+}
+
+.ai-message__text :deep(.ai-table-list__value) {
+  min-width: 0;
+}
+
+.ai-message-choices {
+  margin-top: 10px;
+}
+
+.ai-message-choices__question {
+  margin: 0 0 8px;
+  color: var(--ai-message-muted, #a1a1aa);
+  font-size: 12px;
+}
+
+.ai-message-choices__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+}
+
+.ai-message-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--ai-message-border, rgba(255, 255, 255, 0.16));
+  border-radius: 10px;
+  background: var(--ai-message-list-bg, rgba(255, 255, 255, 0.04));
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ai-message-choice:hover:not(:disabled),
+.ai-message-choice.selected {
+  border-color: var(--ai-message-choice-active, #a1a1aa);
+  background: var(--ai-message-choice-active-bg, rgba(255, 255, 255, 0.1));
+}
+
+.ai-message-choice:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
+.ai-message-choice__value {
+  flex: 0 0 auto;
+  color: var(--ai-message-muted, #a1a1aa);
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.ai-message-choice__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ai-message-choice-input {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ai-message-choice-input input {
+  min-width: 0;
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--ai-message-border, rgba(255, 255, 255, 0.16));
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+}
+
+.ai-message-choice-input button {
+  padding: 0 12px;
+  border: 1px solid var(--ai-message-border, rgba(255, 255, 255, 0.16));
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.ai-message-choice-input button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .ai-thinking {
@@ -1756,6 +1914,42 @@ onUnmounted(() => {
   box-shadow: 
     0 4px 12px rgba(139, 92, 246, 0.35),
     inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* Conversation redesign: AI is inline text; user is a neutral monochrome card. */
+.ai-message--assistant .ai-message__text,
+.ai-message__text-stream {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  color: var(--ai-message-assistant-text, #e5e7eb) !important;
+}
+
+.ai-message--user .ai-message__text {
+  background: #292929 !important;
+  border: 1px solid #525252 !important;
+  border-radius: 12px !important;
+  box-shadow: none !important;
+  color: #f4f4f5 !important;
+}
+
+:root.canvas-theme-light .ai-message--assistant .ai-message__text,
+:root.canvas-theme-light .ai-message__text-stream {
+  --ai-message-assistant-text: #292524;
+  --ai-message-border: rgba(41, 37, 36, 0.16);
+  --ai-message-list-bg: rgba(41, 37, 36, 0.035);
+  --ai-message-muted: #78716c;
+  --ai-message-choice-active: #57534e;
+  --ai-message-choice-active-bg: rgba(41, 37, 36, 0.08);
+}
+
+:root.canvas-theme-light .ai-message--user .ai-message__text {
+  background: #f1f1f1 !important;
+  border-color: #c7c7c7 !important;
+  color: #242424 !important;
 }
 .ai-message__references {
   display: flex;
