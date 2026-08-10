@@ -19,8 +19,9 @@ test('media generation shows a generating state instead of skill text', () => {
   assert.match(source, /message\.mediaGenerating = generatingType/)
   assert.match(source, /message\.mediaGeneratingCount = getRequestedMediaCount\(messageText, generatingType\)/)
   assert.match(source, /message\.toolEvents\.push\(\{[\s\S]*?name: formatAssistantToolName\(event\.tool_name \|\| ''\)/)
-  assert.match(source, /const applyGeneratedResult = \(result\) => \{[\s\S]*?delete message\.mediaGenerating/)
-  assert.match(source, /onDone: \(fullContent, result\) => \{[\s\S]*?delete messages\.value\[assistantMessageIndex\]\.mediaGenerating/)
+  // 动效清理统一走 finalizeMediaGenerationState（生成中动效保持到 task.completed 真正返回结果）
+  assert.match(source, /const applyGeneratedResult = \(result\) => \{[\s\S]*?finalizeMediaGenerationState\(message\)/)
+  assert.match(source, /onDone: \(fullContent, result\) => \{[\s\S]*?finalizeMediaGenerationState\(messages\.value\[assistantMessageIndex\], \{ restoreBuffer: true \}\)/)
   assert.match(source, /if \(event\.result && !event\.result\?\.error && Array\.isArray\(event\.result\?\.result_urls\)\)/)
   assert.match(source, /if \(!urls\.length\) return[\s\S]*?if \(!message\.content\)/)
 })

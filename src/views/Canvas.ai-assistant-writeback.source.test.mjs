@@ -17,6 +17,13 @@ test('assistant writeback auto-creates a canvas node when no node is selected', 
   assert.match(source, /function getVisibleCanvasFlowPosition\(\) \{[\s\S]*?document\.querySelector\('\.canvas-board'\)/)
 })
 
+test('assistant writeback is idempotent: same task/url updates the existing node', () => {
+  assert.match(source, /const existingWritebackNode = !targetNodeId[\s\S]*?node\.type === mediaType && \(/)
+  assert.match(source, /payload\.history_id && node\.data\?\.taskId === payload\.history_id/)
+  assert.match(source, /node\.data\.output\.urls\.some\(u => urls\.includes\(u\)\)/)
+  assert.match(source, /if \(existingWritebackNode\) \{\s*canvasStore\.updateNodeData\(existingWritebackNode\.id,/)
+})
+
 test('assistant video writeback does not replace a selected image node', () => {
   assert.match(source, /const selectedNode = canvasStore\.nodes\.find\(node => node\.id === nodeId\)/)
   assert.match(source, /const targetNodeId = selectedNode\?\.type === mediaType \? nodeId : null/)

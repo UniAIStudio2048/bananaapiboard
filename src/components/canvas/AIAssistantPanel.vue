@@ -167,6 +167,9 @@
             @preview-media="previewMedia"
             @select-choice="sendChoiceMessage"
           />
+
+          <!-- 工具调用提示：跟随对话最后一行展示，不固定在输入框上方 -->
+          <AgentToolTimeline v-if="enhancedMode" :tools="activeToolEvents" />
         </div>
 
         <!-- 附件预览 -->
@@ -308,6 +311,14 @@
         </div>
 
         <!-- Codex 风格的跟进消息队列：当前回合运行时，普通发送会先排队 -->
+        <!-- 单轮对话只靠右下角发送键切换为停止按钮，不显示回合状态条；
+             仅当存在排队中的跟进消息（多轮）时才展示回合状态 -->
+        <AgentTurnStatusBar
+          v-if="enhancedMode && (queuedTurn || serverQueue.length > 0 || queuedMessages.length > 0)"
+          :turn="activeTurn"
+          @stop="stopCurrentActivity"
+        />
+
         <div v-if="queuedMessages.length" class="queued-message-bar" role="status" aria-live="polite">
           <div class="queued-message-bar__copy">
             <span class="queued-message-bar__dot ai-live-shimmer" aria-hidden="true"></span>
@@ -325,12 +336,23 @@
           </button>
         </div>
 
+        <AgentQueueBar
+          v-if="enhancedMode"
+          :items="serverQueue"
+          :active-turn-running="activeTurnRunning"
+          @insert="forceInsertQueuedMessage"
+          @remove="removeQueuedServerMessage"
+        />
+
         <!-- 后台执行 / 排队中提示 -->
         <div v-if="showRunningBanner" class="running-banner">
           <span class="status-dot status-dot--pulse"></span>
           任务正在后台执行中…
         </div>
-        <div v-if="queuedTurn" class="queued-banner">排队中，等待上一轮完成…</div>
+        <div v-if="queuedTurn" class="queued-banner" role="status" aria-live="polite">
+          <span class="queued-banner__label">排队中，等待上一轮完成…</span>
+          <span v-if="queuedTurnContent" class="queued-banner__preview">{{ queuedTurnContent }}</span>
+        </div>
 
         <!-- 输入区域 -->
         <div 
@@ -779,7 +801,10 @@ import { showAlert } from '@/composables/useCanvasDialog'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { createAgentIdempotencyKey, createAgentRun, decideAgentRun, getSkillCatalog, streamAgentRun } from '@/api/agent'
 import { startStreamDownload, updateUserPreferences } from '@/api/client'
-import { getCodexSessions, getCodexSession, getCodexSessionMessages, deleteCodexSession, sendCodexMessage, subscribeCodexStream } from '@/api/codex-agent'
+import { getCodexSessions, getCodexSession, getCodexSessionMessages, deleteCodexSession, sendCodexMessage, subscribeCodexStream, cancelCodexTurn, deleteQueuedCodexMessage } from '@/api/codex-agent'
+import AgentTurnStatusBar from './AgentTurnStatusBar.vue'
+import AgentToolTimeline from './AgentToolTimeline.vue'
+import AgentQueueBar from './AgentQueueBar.vue'
 import { config as tenantConfig, getAvailableImageModels, getAvailableVideoModels, useTenantConfigVersion } from '@/config/tenant'
 import { getAssistantModelIcon } from '@/utils/aiAssistantModels'
 
@@ -844,13 +869,55 @@ let reconnectController = null
 const stopRequested = ref(false)
 const queuedMessages = ref([])
 let nextQueuedMessageId = 0
+const serverQueue = ref([])
 const showRunningBanner = ref(false)
 const queuedTurn = ref(false)
+// 排队中提示展示的内容：真正排队（上一轮未结束）时显示用户输入的内容
+const queuedTurnContent = ref('')
 let statusPollTimer = null
 const showModelPicker = ref(false)
 const modelPickerTriggerRef = ref(null)
 const modelPickerStyle = ref({})
 const MODEL_PICKER_WIDTH = 430
+
+// 统一 activeTurn 状态（reliability design 7.1）—— 服务端状态真源，isLoading/queuedTurn 仅作兼容
+const activeTurn = ref({
+  id: null,
+  threadId: null,
+  clientMessageId: null,
+  status: 'idle',
+  phase: 'idle',
+  tool: null,
+  taskId: null,
+  startedAt: null,
+  lastEventAt: null,
+  cancellable: false,
+  cancelRequested: false,
+  error: null,
+})
+const activeToolEvents = ref([])
+
+const activeTurnRunning = computed(() =>
+  ['running', 'accepted', 'preparing', 'thinking', 'tool_calling', 'waiting_external_task', 'finalizing'].includes(activeTurn.value.status)
+)
+
+function resetActiveTurn() {
+  activeTurn.value = {
+    id: null,
+    threadId: null,
+    clientMessageId: null,
+    status: 'idle',
+    phase: 'idle',
+    tool: null,
+    taskId: null,
+    startedAt: null,
+    lastEventAt: null,
+    cancellable: false,
+    cancelRequested: false,
+    error: null,
+  }
+  activeToolEvents.value = []
+}
 
 // 弹窗跟随触发按钮（模型选择 icon）定位：面板可横向拖拽，固定位置会导致弹窗错位
 function updateModelPickerPosition() {
@@ -1129,9 +1196,43 @@ function clearDraft() {
 
 function queueCurrentDraft() {
   if (!hasDraft.value) return false
-  queuedMessages.value.push(snapshotDraft())
+  const draft = snapshotDraft()
+  draft.client_message_id = `cm_${Date.now()}-${nextQueuedMessageId}`
+  queuedMessages.value.push(draft)
+  if (enhancedMode.value && currentCodexThreadId.value) {
+    enqueueServerMessage(draft)
+  }
   clearDraft()
   return true
+}
+
+// 把排队消息写入服务端队列（send_mode=queue），并回填 turn_id / queue_position
+function enqueueServerMessage(draft) {
+  const clientMessageId = draft.client_message_id
+  sendCodexMessage({
+    thread_id: currentCodexThreadId.value,
+    content: draft.text || '',
+    client_message_id: clientMessageId,
+    send_mode: 'queue',
+    onAccepted: (json) => syncServerQueueItem(draft, json),
+    onQueued: (json) => syncServerQueueItem(draft, json),
+    onError: () => {},
+  }).catch(() => {})
+  refreshQueueAndFollow()
+}
+
+function syncServerQueueItem(draft, json) {
+  const item = {
+    id: json.turn_id || draft.id,
+    turn_id: json.turn_id || null,
+    client_message_id: json.client_message_id || draft.client_message_id,
+    text: draft.text || '',
+    queue_position: json.queue_position || null,
+    status: json.status || 'queued',
+  }
+  const idx = serverQueue.value.findIndex((s) => s.client_message_id === item.client_message_id || s.turn_id === item.turn_id)
+  if (idx >= 0) serverQueue.value[idx] = { ...serverQueue.value[idx], ...item }
+  else serverQueue.value.push(item)
 }
 
 function restoreDraft(draft) {
@@ -1155,13 +1256,128 @@ function drainQueuedMessages() {
 
 function forceInsertQueuedMessage(queued) {
   if (!queued) return
+  if (enhancedMode.value && currentCodexThreadId.value) {
+    // 服务端队列项：取消当前回合后以 interrupt 发送
+    const text = queued.text || queued.content || ''
+    const clientMessageId = queued.client_message_id || `cm_${Date.now()}-${nextQueuedMessageId}`
+    const targetTurnId = activeTurn.value.id || queued.turn_id || null
+    const removeFromQueue = () => {
+      serverQueue.value = serverQueue.value.filter((s) => s.id !== queued.id && s.turn_id !== queued.turn_id && s.client_message_id !== clientMessageId)
+      queuedMessages.value = queuedMessages.value.filter((s) => s.id !== queued.id)
+    }
+    if (targetTurnId && activeTurn.value.id) {
+      cancelCodexTurn(currentCodexThreadId.value, targetTurnId, { reason: 'force_insert' }).catch(() => {})
+    }
+    removeFromQueue()
+    restoreDraft(queued)
+    nextTick(() => sendEnhancedMessage(true))
+    return
+  }
   queuedMessages.value = [queued, ...queuedMessages.value.filter(item => item.id !== queued.id)]
   stopCurrentActivity()
   nextTick(drainQueuedMessages)
 }
 
+// 删除服务端队列中未 dispatch 的消息
+function removeQueuedServerMessage(queued) {
+  if (!queued) return
+  const turnId = queued.turn_id || queued.id
+  if (turnId && currentCodexThreadId.value) {
+    deleteQueuedCodexMessage(currentCodexThreadId.value, turnId).catch((error) => {
+      console.warn('[AI-Assistant] 删除队列消息失败:', error?.message)
+    })
+  }
+  serverQueue.value = serverQueue.value.filter((s) => s.id !== queued.id && s.turn_id !== turnId)
+  queuedMessages.value = queuedMessages.value.filter((s) => s.id !== queued.id)
+}
+
+let followQueueTimer = null
+let lastFollowedTurnId = null
+
+// 拉取当前线程最新消息并追加未渲染的条目（终态恢复：刷新后不出现空白 assistant 消息）
+async function loadSessionMessages() {
+  if (!currentCodexThreadId.value) return
+  try {
+    const msgResult = await getCodexSessionMessages(currentCodexThreadId.value)
+    const history = msgResult.messages || []
+    if (!history.length) return
+    const existing = new Set(
+      messages.value.map((m) => `${m.role}:${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`)
+    )
+    const existingTurnIds = new Set(messages.value.map((m) => m.turn_id).filter(Boolean))
+    for (const m of history) {
+      if (m.turn_id && existingTurnIds.has(m.turn_id)) continue
+      const contentArr = Array.isArray(m.content) ? m.content : []
+      const text = typeof m.content === 'string'
+        ? m.content
+        : contentArr.filter((e) => e.type === 'text').map((e) => e.text).join('\n')
+      const key = `${m.role}:${text}`
+      if (existing.has(key)) continue
+      const rawToolEvents = contentArr.find((e) => e.type === 'tool_events')?.toolEvents || []
+      messages.value.push({
+        role: m.role,
+        content: text || '',
+        skillRef: m.skillRef || null,
+        modelRef: m.modelRef || null,
+        attachments: Array.isArray(m.attachments) ? m.attachments : [],
+        toolEvents: rawToolEvents.map((te) => ({
+          ...te,
+          name: te.name || (te.tool ? `banana-tools.${te.tool}` : ''),
+          status: te.status === 'completed' ? 'done' : (te.status === 'failed' ? 'error' : te.status),
+        })),
+        mediaGenerating: false,
+        isThinking: false,
+        isStreaming: false,
+        ts: m.ts,
+        timestamp: m.ts || Date.now(),
+        turn_id: m.turn_id || null,
+      })
+      existing.add(key)
+    }
+    scrollToBottom()
+  } catch (e) {
+    console.warn('[AI-Assistant] 刷新会话消息失败:', e.message)
+  }
+}
+
+// 跟随服务端 FIFO 队列：当前回合结束后轮询，新回合启动时重连订阅，直到队列清空
+async function refreshQueueAndFollow() {
+  if (!enhancedMode.value || !currentCodexThreadId.value) return
+  try {
+    const data = await getCodexSession(currentCodexThreadId.value)
+    const queued = data?.session?.queued_turns || []
+    serverQueue.value = queued.map((t) => ({
+      id: t.turn_id,
+      turn_id: t.turn_id,
+      client_message_id: t.client_message_id,
+      text: t.content,
+      queue_position: t.queue_position,
+      status: t.status,
+    }))
+    const active = data?.session?.active_turn
+    if (active?.turn_id && active.turn_id !== lastFollowedTurnId && active.turn_id !== activeTurn.value.id) {
+      lastFollowedTurnId = active.turn_id
+      reconnectStream(currentCodexThreadId.value)
+    }
+    if (serverQueue.value.length === 0 && !active) {
+      lastFollowedTurnId = null
+      if (followQueueTimer) { clearInterval(followQueueTimer); followQueueTimer = null }
+      loadSessionMessages()
+    } else if (!followQueueTimer) {
+      followQueueTimer = setInterval(refreshQueueAndFollow, 2000)
+    }
+  } catch {
+    // 会话可能刚被删除，静默
+  }
+}
+
 function stopCurrentActivity() {
   stopRequested.value = true
+  if (enhancedMode.value && activeTurn.value.id && currentCodexThreadId.value && !activeTurn.value.cancelRequested) {
+    cancelCodexTurn(currentCodexThreadId.value, activeTurn.value.id, { reason: 'user_stop' }).catch((error) => {
+      console.warn('[AI-Assistant] 取消回合失败:', error?.message)
+    })
+  }
   normalStreamController?.abort()
   agentStreamController?.abort()
   normalStreamController = null
@@ -1172,6 +1388,7 @@ function stopCurrentActivity() {
   }
   showRunningBanner.value = false
   queuedTurn.value = false
+  queuedTurnContent.value = ''
   isUploading.value = false
   const activeMessage = [...messages.value].reverse().find(message => message.role === 'assistant' && message.isStreaming)
   if (activeMessage) {
@@ -1181,6 +1398,9 @@ function stopCurrentActivity() {
     delete activeMessage.mediaGeneratingCount
     if (!activeMessage.content) activeMessage.content = '已停止当前对话或任务'
   }
+  activeTurn.value.cancelRequested = true
+  activeTurn.value.status = 'cancel_requested'
+  activeTurn.value.cancellable = false
   isLoading.value = false
 }
 
@@ -1309,6 +1529,38 @@ function throttledScrollToBottom() {
 }
 
 /**
+ * 进入媒体生成中状态：把生成前的叙述文本移到 preGenerationContent（动效上方），
+ * 设置 mediaGenerating 与请求数量。多次工具/任务事件到达时幂等。
+ */
+function enterMediaGeneratingState(message, generatingType, messageText = '') {
+  if (!message) return
+  if (!message.preGenerationContent && message.content) {
+    message.preGenerationContent = message.content
+    message.generationContentOffset = message.content.length
+    message.content = ''
+  }
+  message.mediaGenerating = generatingType
+  message.mediaGeneratingCount = getRequestedMediaCount(messageText, generatingType)
+}
+
+/**
+ * 唯一清理媒体生成状态的入口：删除生成中动效并清空生成中缓冲文本。
+ * @param {Object} message
+ * @param {Object} [opts]
+ * @param {boolean} [opts.restoreBuffer=false] - 兜底场景（任务结果未返回）把生成中缓冲文本恢复进 content，避免空消息
+ */
+function finalizeMediaGenerationState(message, { restoreBuffer = false } = {}) {
+  if (!message) return
+  delete message.mediaGenerating
+  delete message.mediaGeneratingCount
+  const buffered = message.generationContentBuffer || ''
+  delete message.generationContentBuffer
+  if (restoreBuffer && buffered && !message.content) {
+    message.content = buffered
+  }
+}
+
+/**
  * 共享工具事件处理：sendEnhancedMessage 和 reconnectStream 复用
  * @param {Object} message - assistant 消息对象（messages.value 中的项）
  * @param {Object} event - 工具事件 {type:'started'|'completed', server, tool, status, result}
@@ -1323,21 +1575,23 @@ function handleToolEvent(message, event, opts = {}) {
     const generatingType = getAssistantMediaGeneratingType(event)
     message.isThinking = false
     if (generatingType) {
-      if (!message.preGenerationContent && message.content) {
-        message.preGenerationContent = message.content
-        message.generationContentOffset = message.content.length
-        message.content = ''
-      }
-      message.mediaGenerating = generatingType
-      message.mediaGeneratingCount = getRequestedMediaCount(opts.messageText || '', generatingType)
+      enterMediaGeneratingState(message, generatingType, opts.messageText || '')
     }
-    message.toolEvents.push({
-      id: `${event.server}.${event.tool}-${message.toolEvents.length}-${Date.now()}`,
-      name: `${event.server}.${event.tool}`,
-      status: 'running',
-      startedAt: Date.now(),
-      detail: ''
-    })
+    const toolName = `${event.server}.${event.tool}`
+    // 同一工具重复投递（主流 + 重连流）时复用正在运行的卡片，避免工具卡重复
+    const runningCard = [...message.toolEvents].reverse().find((item) => item.name === toolName && item.status === 'running')
+    if (runningCard) {
+      runningCard.startedAt = Date.now()
+      runningCard.detail = ''
+    } else {
+      message.toolEvents.push({
+        id: `${toolName}-${message.toolEvents.length}-${Date.now()}`,
+        name: toolName,
+        status: 'running',
+        startedAt: Date.now(),
+        detail: ''
+      })
+    }
     message.isStreaming = true
   } else if (event.type === 'completed') {
     const runningCard = [...message.toolEvents].reverse().find(item => item.status === 'running')
@@ -1346,10 +1600,8 @@ function handleToolEvent(message, event, opts = {}) {
       runningCard.duration = Date.now() - runningCard.startedAt
       runningCard.result = event.result
     }
-    if (getAssistantMediaGeneratingType(event)) {
-      delete message.mediaGenerating
-      delete message.mediaGeneratingCount
-    }
+    // tool.completed（image-gen/video-gen/task-status）只表示任务已提交到队列，
+    // 生成中动效必须保持到 task.completed 真正返回结果（或兜底 finalize），不能在这里删除。
     const generated = extractCodexGeneratedMediaResult(event.tool, event.result)
     if (generated && opts.onGeneratedResult) opts.onGeneratedResult(generated)
   }
@@ -1420,7 +1672,16 @@ function selectMode(mode) {
 function startNewChat() {
   if (isLoading.value) stopCurrentActivity()
   queuedMessages.value = []
+  serverQueue.value = []
+  queuedTurn.value = false
+  queuedTurnContent.value = ''
+  resetActiveTurn()
+  if (followQueueTimer) { clearInterval(followQueueTimer); followQueueTimer = null }
+  lastFollowedTurnId = null
   messages.value = []
+  // 新对话必须清空线程引用：否则第一条消息会续聊旧线程，
+  // 旧任务未结束时还会误显示「排队中，等待上一轮完成…」
+  currentCodexThreadId.value = null
   currentSessionId.value = null
   inputText.value = ''
   attachments.value = []
@@ -1529,7 +1790,8 @@ async function loadSession(session) {
             mediaGenerating: false,
             isThinking: false,
             isStreaming: false,
-            ts: m.ts
+            ts: m.ts,
+            turn_id: m.turn_id || null
           }
         })
       } else {
@@ -1602,6 +1864,13 @@ function reconnectStream(threadId) {
     onContent: (text, isFinal) => {
       const last = [...messages.value].reverse().find(m => m.role === 'assistant')
       if (!last || !text) return
+      if (last.mediaGenerating) {
+        // 生成中叙述文本暂存不上屏（与 sendEnhancedMessage 一致），任务完成/兜底时处理
+        last.generationContentBuffer = (last.generationContentBuffer || '') + text
+        last.isStreaming = true
+        throttledScrollToBottom()
+        return
+      }
       if (isFinal && text.startsWith(last.content || '')) {
         last.content = text
       } else {
@@ -1615,8 +1884,41 @@ function reconnectStream(threadId) {
       if (!last) return
       handleToolEvent(last, event)
     },
+    onTaskEvent: (event) => {
+      const last = [...messages.value].reverse().find(m => m.role === 'assistant')
+      if (!last) return
+      if (event.type === 'task.started' || event.type === 'task.progress') {
+        if (!last.mediaGenerating) {
+          enterMediaGeneratingState(last, getAssistantMediaGeneratingType({ tool_name: event.tool || 'image-gen' }) || 'image')
+          last.mediaGeneratingCount = Math.max(1, last.mediaGeneratingCount || 1)
+        }
+        throttledScrollToBottom()
+        return
+      }
+      if (event.type === 'task.completed') {
+        const index = messages.value.indexOf(last)
+        finalizeMediaGenerationState(last)
+        applyAgentResultToMessage(index, {
+          media_type: event.media_type || 'image',
+          result_urls: event.result_urls || event.preview_urls || [],
+          task_id: event.task_id || null,
+        })
+        last.isStreaming = false
+        throttledScrollToBottom()
+        return
+      }
+      if (event.type === 'task.failed' || event.type === 'task.timeout') {
+        finalizeMediaGenerationState(last)
+        if (!last.content) last.content = `媒体任务执行失败：${event.error || event.message || '未知错误'}`
+        last.isStreaming = false
+        throttledScrollToBottom()
+      }
+    },
     onDone: () => {
       showRunningBanner.value = false
+      const last = [...messages.value].reverse().find(m => m.role === 'assistant')
+      // 仅当任务结果未返回时恢复缓冲文本；task.completed 已处理时 buffered 已清空，无副作用
+      if (last) finalizeMediaGenerationState(last, { restoreBuffer: true })
       loadSessions()
       const tid = currentCodexThreadId.value
       if (tid) loadSession({ id: tid, turn_status: 'completed' })
@@ -1995,6 +2297,9 @@ function handleInputKeydown(event) {
   }
 
   if (event.key === 'Enter' && !event.shiftKey) {
+    // 中文输入法候选词确认的 Enter（isComposing）只应提交候选词，不应触发发送，
+    // 否则一次输入会重复发出两条相同消息
+    if (event.isComposing || isInputComposing) return
     event.preventDefault()
     sendMessage(Boolean(event.ctrlKey || event.metaKey))
   }
@@ -2104,15 +2409,51 @@ function resetAttachmentDragState() {
   window.dispatchEvent(new CustomEvent('canvas-drag-end'))
 }
 
-async function sendEnhancedMessage() {
+// 续聊时自动携带最近一次生成结果（图片/视频）作为本轮参考附件，
+// 支持“基于上一张图继续修改 / 加元素”等图生图续画需求
+function collectRecentAssistantMedia() {
+  for (let i = messages.value.length - 1; i >= 0; i -= 1) {
+    const msg = messages.value[i]
+    if (!msg || msg.role !== 'assistant') continue
+    const media = (Array.isArray(msg.attachments) ? msg.attachments : [])
+      .filter((a) => a?.url && a.url.startsWith('http') && (a.type === 'image' || a.type === 'video'))
+    if (media.length) {
+      const seen = new Set()
+      return media
+        .filter((a) => !seen.has(a.url) && seen.add(a.url))
+        .map((a, index) => ({
+          key: `history-media:${index}:${a.url}`,
+          type: a.type,
+          url: a.url,
+          name: a.name || (a.type === 'image' ? '参考图片' : '参考视频')
+        }))
+    }
+  }
+  return []
+}
+
+async function sendEnhancedMessage(force = false) {
   const messageText = inputText.value.trim()
   if (!messageText) return
   const referencedSkillForTurn = referencedSkill.value
 
   stopRequested.value = false
-  agentStreamController?.abort()
+  if (!force) agentStreamController?.abort()
   const requestController = new AbortController()
   agentStreamController = requestController
+  const clientMessageId = `cm_${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  let sendMode = undefined
+  let targetTurnId = null
+  // 强制插入（Ctrl/Cmd+Enter）：先取消当前回合，等待确认后以 interrupt 模式发送
+  if (force && activeTurn.value.id && currentCodexThreadId.value) {
+    sendMode = 'interrupt'
+    targetTurnId = activeTurn.value.id
+    try {
+      await cancelCodexTurn(currentCodexThreadId.value, activeTurn.value.id, { reason: 'force_insert' })
+    } catch (cancelError) {
+      console.warn('[AI-Assistant] interrupt cancel failed:', cancelError?.message)
+    }
+  }
 
   // 仅本次轮对话：与普通模式一致，把已选生图/生视频模型转成自然语言提示随消息送入 Agent，
   // 对话栏展示模型引用标签卡，实际传输给 LLM 的是自然语言文本；发送后立即清除，不跨轮生效
@@ -2131,11 +2472,18 @@ async function sendEnhancedMessage() {
   ].filter(Boolean).join('\n')
 
   // 解析本轮要发送的附件（在清空输入之前）
-  const messageAttachments = resolveAssistantAttachmentsForSend({
+  const userAttachments = resolveAssistantAttachmentsForSend({
     text: inputText.value,
     bindings: attachmentMentionBindings.value,
     attachments: attachments.value
   })
+  // 续聊时自动带上最近一次生成结果作为参考图，支持“基于上一张图继续修改”
+  const referenceAttachments = collectRecentAssistantMedia()
+  const seenAttachmentUrls = new Set(userAttachments.map((a) => a.url).filter(Boolean))
+  const messageAttachments = [
+    ...userAttachments,
+    ...referenceAttachments.filter((a) => !seenAttachmentUrls.has(a.url))
+  ]
 
   // 清空输入
   inputText.value = ''
@@ -2182,7 +2530,8 @@ async function sendEnhancedMessage() {
       contentTimer = null
     }
     if (pendingContent) {
-      messages.value[assistantMessageIndex].content = pendingContent
+      const message = messages.value[assistantMessageIndex]
+      if (message) message.content = pendingContent
       pendingContent = ''
     }
   }
@@ -2191,8 +2540,7 @@ async function sendEnhancedMessage() {
     const message = messages.value[assistantMessageIndex]
     if (message) {
       message.isThinking = false
-      delete message.mediaGenerating
-      delete message.mediaGeneratingCount
+      finalizeMediaGenerationState(message)
     }
     const mediaType = ['image', 'video', 'audio'].includes(result?.media_type) ? result.media_type : 'image'
     const urls = normalizeResultUrls(result?.result_urls, mediaType)
@@ -2272,22 +2620,53 @@ async function sendEnhancedMessage() {
     await sendCodexMessage({
       thread_id: currentCodexThreadId.value || undefined,
       content: messageText,
+      client_message_id: clientMessageId,
+      send_mode: sendMode,
+      target_turn_id: targetTurnId || undefined,
       hint: turnHint || undefined,
       skill_id: referencedSkillForTurn?.id || null,
       attachments: uploadedAttachments,
       skillRef: turnSkillRef || null,
       modelRef: turnModelRef || null,
       signal: requestController.signal,
+      onAccepted: (json) => {
+        if (json.turn_id && messages.value[assistantMessageIndex]) {
+          messages.value[assistantMessageIndex].turn_id = json.turn_id
+        }
+        activeTurn.value = {
+          ...activeTurn.value,
+          id: json.turn_id || activeTurn.value.id,
+          threadId: json.thread_id || currentCodexThreadId.value || activeTurn.value.threadId,
+          clientMessageId: json.client_message_id || clientMessageId,
+          status: json.status || 'accepted',
+          phase: 'accepted',
+          cancellable: true,
+          cancelRequested: false,
+          startedAt: Date.now(),
+          lastEventAt: Date.now(),
+          error: null,
+        }
+      },
       onSession: (sessionId) => {
         currentSessionId.value = sessionId
       },
       onThread: (threadId) => {
         currentCodexThreadId.value = threadId
+        activeTurn.value.threadId = threadId
         loadSessions()
       },
       onContent: (text, isFinal) => {
         const message = messages.value[assistantMessageIndex]
+        if (!message) return
         message.isThinking = false
+        if (message.mediaGenerating) {
+          // 媒体生成期间 agent 的叙述文本（“任务已提交，正在等待生成结果…”）暂存不上屏，
+          // 避免生成中动效旁弹出重复文案；任务真正完成或兜底 finalize 时再处理。
+          if (text) {
+            message.generationContentBuffer = (message.generationContentBuffer || '') + text
+          }
+          return
+        }
         if (isFinal) {
           // finalResponse 只用于兜底补齐：流式过程中已按增量拼接，
           // 这里绝不能覆盖/改写已经输出的内容（多段回复时 finalResponse 可能只是最后一段）。
@@ -2307,45 +2686,168 @@ async function sendEnhancedMessage() {
           messageText,
           onGeneratedResult: applyGeneratedResult
         })
+        if (event?.tool) {
+          activeTurn.value.tool = event.tool
+          activeTurn.value.lastEventAt = Date.now()
+          const statusMap = { started: 'running', progress: 'waiting', retrying: 'retrying', completed: 'completed', failed: 'failed' }
+          const status = statusMap[event.type] || 'running'
+          // 按 tool 名去重：重复投递（主流 + 重连流）只保留一张卡片，最新事件移到末尾
+          const existing = activeToolEvents.value.findIndex((t) => t.tool === event.tool)
+          const card = {
+            id: existing >= 0 ? activeToolEvents.value[existing].id : `${event.tool}-${Date.now()}`,
+            tool: event.tool,
+            display_name: event.tool,
+            status,
+            attempt: event.attempt,
+            max_attempts: event.max_attempts,
+            reason: event.reason,
+            error_code: event.error_code,
+            progress: event.progress,
+            message: event.message,
+          }
+          if (existing >= 0) activeToolEvents.value.splice(existing, 1)
+          activeToolEvents.value.push(card)
+        }
+      },
+      onTaskEvent: (event) => {
+        const message = messages.value[assistantMessageIndex]
+        if (event?.task_id) activeTurn.value.taskId = event.task_id
+        if (event.type === 'task.started' || event.type === 'task.progress') {
+          if (message && !message.mediaGenerating) {
+            enterMediaGeneratingState(
+              message,
+              getAssistantMediaGeneratingType({ tool_name: event.tool || activeTurn.value.tool || 'image-gen' }) || 'image',
+              messageText
+            )
+            message.mediaGeneratingCount = Math.max(1, message.mediaGeneratingCount || 1)
+          }
+        }
+        if (event.type === 'task.completed') {
+          applyGeneratedResult({
+            media_type: event.media_type || (activeTurn.value.tool?.includes('video') ? 'video' : 'image'),
+            result_urls: event.result_urls || event.preview_urls || [],
+            task_id: event.task_id,
+          })
+        }
+        if (event.type === 'task.failed') {
+          if (message) {
+            finalizeMediaGenerationState(message)
+            message.content = `媒体任务执行失败：${event.error || '未知错误'}`
+          }
+        }
+      },
+      onStatus: (json) => {
+        activeTurn.value.phase = json.phase || activeTurn.value.phase
+        activeTurn.value.lastEventAt = Date.now()
       },
       onQueued: () => {
+        queuedTurnContent.value = messageText
         queuedTurn.value = true
+        activeTurn.value.status = 'queued'
+        activeTurn.value.phase = 'queued'
+        activeTurn.value.cancellable = false
+      },
+      onCancelRequested: (json) => {
+        activeTurn.value.cancelRequested = true
+        activeTurn.value.status = 'cancel_requested'
+        activeTurn.value.lastEventAt = Date.now()
+      },
+      onCancelled: (json) => {
+        const message = messages.value[assistantMessageIndex]
+        activeTurn.value.status = 'cancelled'
+        activeTurn.value.phase = 'cancelled'
+        activeTurn.value.cancelRequested = false
+        activeTurn.value.cancellable = false
+        if (message && !message.content) {
+          message.content = '已停止当前对话或任务'
+        }
+        if (message) {
+          message.isThinking = false
+          message.isStreaming = false
+          finalizeMediaGenerationState(message)
+        }
+      },
+      onSnapshot: (json) => {
+        const message = messages.value[assistantMessageIndex]
+        const snapshot = json.snapshot || {}
+        if (message && !message.content && snapshot.partialContent) {
+          if (message.mediaGenerating) {
+            message.generationContentBuffer = (message.generationContentBuffer || '') + snapshot.partialContent
+          } else {
+            message.content = snapshot.partialContent
+          }
+        }
+        if (snapshot.toolEvents?.length) {
+          const seen = new Map()
+          for (const t of snapshot.toolEvents) {
+            seen.set(t.tool, {
+              id: `${t.tool}-${t.ts || Date.now()}`,
+              tool: t.tool,
+              display_name: t.tool,
+              status: t.status === 'failed' ? 'failed' : 'completed',
+              result: t.result || null,
+            })
+          }
+          activeToolEvents.value = [...seen.values()]
+        }
       },
       onDone: (result) => {
         flushContent()
-        messages.value[assistantMessageIndex].isThinking = false
-        delete messages.value[assistantMessageIndex].mediaGenerating
-        delete messages.value[assistantMessageIndex].mediaGeneratingCount
-        messages.value[assistantMessageIndex].isStreaming = false
+        const message = messages.value[assistantMessageIndex]
+        if (message) {
+          message.isThinking = false
+          finalizeMediaGenerationState(message, { restoreBuffer: true })
+          message.isStreaming = false
+        }
         if (result?.thread_id) {
           currentCodexThreadId.value = result.thread_id
         }
         queuedTurn.value = false
+        queuedTurnContent.value = ''
+        activeTurn.value.status = activeTurn.value.status === 'cancelled' ? 'cancelled' : 'completed'
+        activeTurn.value.phase = activeTurn.value.status === 'cancelled' ? 'cancelled' : 'completed'
+        activeTurn.value.cancellable = false
+        activeTurn.value.cancelRequested = false
         loadSessions()
+        refreshQueueAndFollow()
       },
       onError: (error) => {
         if (requestController.signal.aborted || stopRequested.value) return
         flushContent()
-        messages.value[assistantMessageIndex].isThinking = false
-        messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
-        messages.value[assistantMessageIndex].isStreaming = false
+        const message = messages.value[assistantMessageIndex]
+        if (!message) return
+        message.isThinking = false
+        finalizeMediaGenerationState(message)
+        if (!message.content) {
+          message.content = `抱歉，发生了错误: ${error.message}`
+        }
+        message.isStreaming = false
         queuedTurn.value = false
+        queuedTurnContent.value = ''
+        activeTurn.value.status = 'failed'
+        activeTurn.value.phase = 'failed'
+        activeTurn.value.cancellable = false
+        activeTurn.value.error = error.message
       }
     })
   } catch (error) {
     if (requestController.signal.aborted || stopRequested.value) return
     console.error('[AI-Assistant] 增强模式发送失败:', error)
     flushContent()
-    messages.value[assistantMessageIndex].isThinking = false
-    messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
-    messages.value[assistantMessageIndex].isStreaming = false
+    const message = messages.value[assistantMessageIndex]
+    if (message) {
+      message.isThinking = false
+      message.content = `抱歉，发生了错误: ${error.message}`
+      message.isStreaming = false
+    }
   } finally {
     if (agentStreamController === requestController) {
       isLoading.value = false
       agentStreamController = null
       queuedTurn.value = false
+      queuedTurnContent.value = ''
       scrollToBottom()
-      drainQueuedMessages()
+      refreshQueueAndFollow()
     }
   }
 }
@@ -2361,7 +2863,7 @@ async function sendMessage(force = false) {
   stopRequested.value = false
 
   if (enhancedMode.value) {
-    return sendEnhancedMessage()
+    return sendEnhancedMessage(force)
   }
 
   syncCurrentAttachmentMentions()
@@ -2377,11 +2879,18 @@ async function sendMessage(force = false) {
   if (turnModelHint) {
     selectedModelByType.value = { image: '', video: '' }
   }
-  const messageAttachments = resolveAssistantAttachmentsForSend({
+  const userAttachments = resolveAssistantAttachmentsForSend({
     text: inputText.value,
     bindings: attachmentMentionBindings.value,
     attachments: attachments.value
   })
+  // 续聊时自动带上最近一次生成结果作为参考图
+  const referenceAttachments = collectRecentAssistantMedia()
+  const seenAttachmentUrls = new Set(userAttachments.map((a) => a.url).filter(Boolean))
+  const messageAttachments = [
+    ...userAttachments,
+    ...referenceAttachments.filter((a) => !seenAttachmentUrls.has(a.url))
+  ]
 
   // 清空输入
   clearDraft()
@@ -2394,7 +2903,7 @@ async function sendMessage(force = false) {
     skillRef: turnSkillRef,
     attachments: messageAttachments.map(a => ({
       type: a.type,
-      url: a.preview,
+      url: a.preview || a.url,
       name: a.name
     })),
     timestamp: Date.now()
@@ -2430,8 +2939,7 @@ async function sendMessage(force = false) {
     const message = messages.value[assistantMessageIndex]
     if (!message) return
     message.isThinking = false
-    delete message.mediaGenerating
-    delete message.mediaGeneratingCount
+    finalizeMediaGenerationState(message)
     const mediaType = ['image', 'video', 'audio'].includes(result?.media_type) ? result.media_type : 'image'
     const urls = normalizeResultUrls(result?.result_urls, mediaType)
     const workflowId = props.canvasContext?.workflow_id || props.canvasContext?.workflowId
@@ -2563,6 +3071,11 @@ async function sendMessage(force = false) {
       onContent: (chunk, fullContent) => {
         const message = messages.value[assistantMessageIndex]
         message.isThinking = false
+        if (message.mediaGenerating) {
+          // 生成中叙述文本暂存不上屏，任务完成/兜底时处理
+          message.generationContentBuffer = (message.generationContentBuffer || '') + chunk
+          return
+        }
         pendingStreamContent = fullContent.slice(message.generationContentOffset || 0)
         if (streamContentTimer) return
         streamContentTimer = setTimeout(() => {
@@ -2615,11 +3128,8 @@ async function sendMessage(force = false) {
             runningCard.duration = Date.now() - runningCard.startedAt
             runningCard.result = event.result
           }
-          if (generatingType) {
-            delete message.mediaGenerating
-            delete message.mediaGeneratingCount
-          }
-          // 只有媒体生成状态会可视化，其他工具事件仍保留用于内部结果解析。
+          // tool_completed（image-gen/video-gen/task-status）只表示任务已提交到队列，
+          // 生成中动效保持到 task.completed 真正返回结果，这里不删除 mediaGenerating。
           if (event.result && !event.result?.error && Array.isArray(event.result?.result_urls)) {
             applyGeneratedResult(event.result)
           }
@@ -2628,8 +3138,7 @@ async function sendMessage(force = false) {
       },
       onDone: (fullContent, result) => {
         flushStreamContent()
-        delete messages.value[assistantMessageIndex].mediaGenerating
-        delete messages.value[assistantMessageIndex].mediaGeneratingCount
+        finalizeMediaGenerationState(messages.value[assistantMessageIndex], { restoreBuffer: true })
         messages.value[assistantMessageIndex].isThinking = false
         messages.value[assistantMessageIndex].isStreaming = false
         if (result?.session_id) {
@@ -2652,6 +3161,7 @@ async function sendMessage(force = false) {
           handlePromptSafetyError(error)
           return
         }
+        finalizeMediaGenerationState(messages.value[assistantMessageIndex])
         messages.value[assistantMessageIndex].content = `抱歉，发生了错误: ${error.message}`
         messages.value[assistantMessageIndex].isThinking = false
         messages.value[assistantMessageIndex].isStreaming = false
@@ -3172,6 +3682,10 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   agentStreamController?.abort()
+  if (followQueueTimer) {
+    clearInterval(followQueueTimer)
+    followQueueTimer = null
+  }
   if (reconnectController) {
     reconnectController.abort()
     reconnectController = null
@@ -4932,6 +5446,22 @@ defineExpose({
   color: #f59e0b;
   border-radius: 8px;
   font-size: 13px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+.queued-banner__label {
+  flex: none;
+}
+.queued-banner__preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.8;
+  font-size: 12px;
 }
 
 </style>

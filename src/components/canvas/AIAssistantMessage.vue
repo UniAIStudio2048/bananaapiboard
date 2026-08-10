@@ -120,6 +120,27 @@
         </div>
       </div>
 
+      <!-- 回合终态：失败 / 已停止（reliability design 12.1 — 失败无正文时仍有可读错误消息） -->
+      <div v-if="message.turnState === 'failed'" class="ai-message-turn-state ai-message-turn-state--failed" role="status">
+        <span class="ai-message-turn-state__dot" aria-hidden="true"></span>
+        <span class="ai-message-turn-state__summary">
+          {{ message.error_message || '回合执行失败' }}
+        </span>
+        <button
+          v-if="message.retryable !== false"
+          type="button"
+          class="ai-message-turn-state__retry"
+          aria-label="重试这个回合"
+          @click="$emit('retry', message)"
+        >
+          重试
+        </button>
+      </div>
+      <div v-else-if="message.turnState === 'cancelled'" class="ai-message-turn-state ai-message-turn-state--cancelled" role="status">
+        <span class="ai-message-turn-state__dot" aria-hidden="true"></span>
+        <span class="ai-message-turn-state__summary">已停止{{ message.cancel_reason ? `（${message.cancel_reason}）` : '' }}</span>
+      </div>
+
       <!-- 主要内容 -->
       <div
         v-if="!message.isThinking && (!message.mediaGenerating || message.content)"
@@ -363,7 +384,7 @@ const visibleAttachments = computed(() => {
   return result
 })
 
-const emit = defineEmits(['preview-media', 'select-choice'])
+const emit = defineEmits(['preview-media', 'select-choice', 'retry'])
 
 const parsedContent = computed(() => parseAssistantContent(props.message.content))
 const assistantChoices = computed(() => props.message.role === 'assistant' ? parsedContent.value.choices : null)
@@ -2135,4 +2156,53 @@ onUnmounted(() => {
 .ai-media-card__download:hover {
   background: rgba(0, 0, 0, 0.75);
 }
+
+.ai-message-turn-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.ai-message-turn-state--failed {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #b91c1c;
+}
+.ai-message-turn-state--cancelled {
+  background: rgba(107, 114, 128, 0.08);
+  border: 1px solid rgba(107, 114, 128, 0.25);
+  color: #6b7280;
+}
+.ai-message-turn-state__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+.ai-message-turn-state__summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ai-message-turn-state__retry {
+  flex: none;
+  padding: 2px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+  font-size: 11px;
+  cursor: pointer;
+}
+.ai-message-turn-state__retry:focus-visible {
+  outline: 2px solid rgba(239, 68, 68, 0.6);
+  outline-offset: 2px;
+}
+
 </style>

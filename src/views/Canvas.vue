@@ -2196,9 +2196,30 @@ function handleAIAssistantCanvasWriteback(payload = {}) {
   // (for example, a video output inside an image node). Create a matching
   // node instead of silently writing data that its renderer ignores.
   const targetNodeId = selectedNode?.type === mediaType ? nodeId : null
+  // 幂等写回：同一任务（history_id/taskId）或同一结果 URL 重复到达时更新已有节点，
+  // 避免主流与重连流重复投递导致画布出现两个相同图片节点。
+  const existingWritebackNode = !targetNodeId
+    ? canvasStore.nodes.find(node =>
+        node.type === mediaType && (
+          (payload.history_id && node.data?.taskId === payload.history_id) ||
+          (Array.isArray(node.data?.output?.urls) && node.data.output.urls.some(u => urls.includes(u)))
+        )
+      )
+    : null
   const output = mediaType === 'video'
     ? { type: 'video', url: urls[0], urls }
     : { type: 'image', url: urls[0], urls }
+  if (existingWritebackNode) {
+    canvasStore.updateNodeData(existingWritebackNode.id, {
+      status: 'success',
+      progress: null,
+      taskId: payload.history_id || existingWritebackNode.data?.taskId || undefined,
+      output
+    })
+    schedulePersistAfterTask('ai-assistant-skill-writeback')
+    displayToast(`已加载到画布`, 'success')
+    return
+  }
   if (!targetNodeId) {
     const node = canvasStore.addNode({
       type: mediaType,
