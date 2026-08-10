@@ -164,15 +164,21 @@ const maxImagesForModel = computed(() => {
 
 // Seedance 2.x 参考素材上限（模型配置 seedanceConfig 优先，默认 9 图 / 3 视频 / 3 音频；Seedance 2.5 为 30 / 10 / 10）
 const seedanceMaxRefImages = computed(() => {
-  const configured = Number(currentModelConfig.value?.seedanceConfig?.maxImages)
+  const configured = Number((isMinimaxH3Model.value
+    ? currentModelConfig.value?.minimaxConfig
+    : currentModelConfig.value?.seedanceConfig)?.maxImages)
   return Number.isFinite(configured) && configured > 0 ? configured : 9
 })
 const seedanceMaxRefVideos = computed(() => {
-  const configured = Number(currentModelConfig.value?.seedanceConfig?.maxVideos)
+  const configured = Number((isMinimaxH3Model.value
+    ? currentModelConfig.value?.minimaxConfig
+    : currentModelConfig.value?.seedanceConfig)?.maxVideos)
   return Number.isFinite(configured) && configured > 0 ? configured : 3
 })
 const seedanceMaxRefAudios = computed(() => {
-  const configured = Number(currentModelConfig.value?.seedanceConfig?.maxAudios)
+  const configured = Number((isMinimaxH3Model.value
+    ? currentModelConfig.value?.minimaxConfig
+    : currentModelConfig.value?.seedanceConfig)?.maxAudios)
   return Number.isFinite(configured) && configured > 0 ? configured : 3
 })
 const seedanceMinDuration = computed(() => {
@@ -284,19 +290,28 @@ const isSeedanceModel = computed(() => {
   return isSeedanceSd2VideoModel(modelConfig)
 })
 
+// MiniMax H3 官方直连也使用 Seedance 兼容的多模态参考素材字段
+const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3')
+const isReferenceVideoModel = computed(() => isSeedanceModel.value || isMinimaxH3Model.value)
+
 // Seedance 可用的模式（从模型配置的 seedanceConfig.supportedModes 读取）
 const seedanceAvailableModes = computed(() => {
-  if (!isSeedanceModel.value) return []
-  const config = currentModelConfig.value?.seedanceConfig
+  if (!isReferenceVideoModel.value) return []
+  const config = isMinimaxH3Model.value
+    ? currentModelConfig.value?.minimaxConfig
+    : currentModelConfig.value?.seedanceConfig
   const supported = config?.supportedModes
-  if (!supported) return SEEDANCE_MODES // 无配置则全部可用
+  const defaultModes = isMinimaxH3Model.value
+    ? SEEDANCE_MODES.filter(mode => ['text2video', 'image2video_first', 'image2video_first_last', 'multimodal_ref'].includes(mode.value))
+    : SEEDANCE_MODES
+  if (!supported) return defaultModes // 无配置则全部可用
   // supported 可以是数组 ['text2video', 'image2video_first'] 或对象 { text2video: true }
   if (Array.isArray(supported)) {
-    return SEEDANCE_MODES.filter(m => supported.includes(m.value))
+    return defaultModes.filter(m => supported.includes(m.value))
   } else if (typeof supported === 'object') {
-    return SEEDANCE_MODES.filter(m => supported[m.value] === true)
+    return defaultModes.filter(m => supported[m.value] === true)
   }
-  return SEEDANCE_MODES
+  return defaultModes
 })
 
 // Kling v3 Omni 模式定义
@@ -414,7 +429,7 @@ const currentPointsCost = computed(() => {
   const configuredResolutionPrice = calculateVideoResolutionPrice(
     currentModelConfig.value?.resolutionPricing,
     resolution.value,
-    isSeedanceModel.value ? seedanceDuration.value : duration.value
+    isReferenceVideoModel.value ? seedanceDuration.value : duration.value
   )
   if (configuredResolutionPrice !== null) return configuredResolutionPrice
 
@@ -454,7 +469,7 @@ const currentPointsCost = computed(() => {
   if (typeof modelConfig === 'number') {
     cost = modelConfig
   } else if (typeof modelConfig === 'object' && modelConfig !== null) {
-    const costDuration = isSeedanceModel.value ? String(seedanceDuration.value) : duration.value
+    const costDuration = isReferenceVideoModel.value ? String(seedanceDuration.value) : duration.value
     cost = modelConfig[costDuration] || 40
   } else {
     cost = 40
@@ -518,8 +533,8 @@ const availableModels = computed(() => {
   const currentMode = mode.value === 'text' ? 't2v' : 'i2v'
   
   return filteredByVersion.filter(m => {
-    // Seedance 2.0 / Ant / HappyHorse 模型始终显示（有自己的模式选择器）
-    if (isSeedanceSd2VideoModel(m)) return true
+    // Seedance 2.0 / MiniMax H3 / Ant / HappyHorse 模型始终显示（有自己的模式选择器）
+    if (isSeedanceSd2VideoModel(m) || m.apiType === 'minimax-h3') return true
 
     const supportedModes = m.supportedModes
     if (!supportedModes) return true // 无配置默认支持所有模式
@@ -624,6 +639,18 @@ watch(model, (newModel) => {
     if (!seedanceAvailableModes.value.some(m => m.value === seedanceMode.value)) {
       const defaultSeedanceMode = getDefaultSeedance2ModeForModel(modelConfig)
       seedanceMode.value = getFirstAvailableMode(defaultSeedanceMode, seedanceAvailableModes.value)
+    }
+  } else if (modelConfig?.apiType === 'minimax-h3') {
+    const minimaxConfig = modelConfig.minimaxConfig || {}
+    seedanceDuration.value = Number(minimaxConfig.duration || durations[0] || 5)
+    seedanceResolution.value = configuredPricingResolutions[0] || minimaxConfig.resolution || '2K'
+    seedanceRatio.value = minimaxConfig.ratio || 'adaptive'
+    seedanceGenerateAudio.value = false
+    seedanceWatermark.value = false
+    seedanceWebSearch.value = false
+    const defaultMode = minimaxConfig.defaultMode || modelConfig.defaultMinimaxH3Mode || 'text2video'
+    if (!seedanceAvailableModes.value.some(m => m.value === seedanceMode.value)) {
+      seedanceMode.value = getFirstAvailableMode(defaultMode, seedanceAvailableModes.value)
     }
   }
 }, { immediate: true })
@@ -734,7 +761,7 @@ function clearImages() {
 }
 
 const reviewableImageFiles = computed(() => {
-  if (isSeedanceModel.value) {
+  if (isReferenceVideoModel.value) {
     if (seedanceMode.value === 'image2video_first') {
       return seedanceFirstFrameFile.value ? [seedanceFirstFrameFile.value] : []
     }
@@ -1373,14 +1400,14 @@ async function generateVideo() {
   if (!prompt.value.trim()) {
     // Seedance 非文生视频模式允许空提示词
     // Kling v3 Omni 非文生视频模式也允许空提示词
-    const seedanceAllowEmpty = isSeedanceModel.value && seedanceMode.value !== 'text2video'
+    const seedanceAllowEmpty = isReferenceVideoModel.value && seedanceMode.value !== 'text2video'
     const klingOmniAllowEmpty = isKlingV3OmniModel.value && klingV3OmniMode.value !== 'text2video'
     if (!seedanceAllowEmpty && !klingOmniAllowEmpty) {
       error.value = '请输入提示词'
       return
     }
   }
-  if (mode.value === 'image' && !isSeedanceModel.value && !isKlingV3OmniModel.value && imageFiles.value.length === 0) {
+  if (mode.value === 'image' && !isReferenceVideoModel.value && !isKlingV3OmniModel.value && imageFiles.value.length === 0) {
     error.value = '请上传参考图片'
     return
   }
@@ -1392,7 +1419,7 @@ async function generateVideo() {
   }
 
   // Seedance 模式特定验证
-  if (isSeedanceModel.value) {
+  if (isReferenceVideoModel.value) {
     const sm = seedanceMode.value
     const imageCount = sm === 'image2video_first'
       ? (seedanceFirstFrameFile.value ? 1 : 0)
@@ -1468,7 +1495,7 @@ async function generateVideo() {
     formData.append('prompt', currentPrompt)
     formData.append('model', requestModel)
     formData.append('aspect_ratio', currentAspectRatio)
-    formData.append('duration', isSeedanceModel.value ? String(seedanceDuration.value) : currentDuration)
+    formData.append('duration', isReferenceVideoModel.value ? String(seedanceDuration.value) : currentDuration)
     formData.append('hd', hd.value ? 'true' : 'false')
     formData.append('watermark', watermark.value ? 'true' : 'false')
     formData.append('private', isPrivate.value ? 'true' : 'false')
@@ -1480,11 +1507,11 @@ async function generateVideo() {
     }
     
     // 模型能力驱动的清晰度参数
-    if (hasVideoResolutionSelection.value && !isSeedanceModel.value) {
+    if (hasVideoResolutionSelection.value && !isReferenceVideoModel.value) {
       formData.append('resolution', resolution.value)
     }
     
-    if ((mode.value === 'image' || isRunningHubAiAppVideoV31Model.value) && !isSeedanceModel.value && !isKlingV3OmniModel.value) {
+    if ((mode.value === 'image' || isRunningHubAiAppVideoV31Model.value) && !isReferenceVideoModel.value && !isKlingV3OmniModel.value) {
       if (reviewSubmission.approved) {
         formData.append('image_urls', JSON.stringify(reviewSubmission.assetUris))
       } else {
@@ -1503,7 +1530,7 @@ async function generateVideo() {
     }
 
     // Seedance 2.0 参数
-    if (isSeedanceModel.value) {
+    if (isReferenceVideoModel.value) {
       const selectedSeedanceResolution = getEnabledVideoResolutionOptions(currentModelConfig.value?.resolutionPricing).length > 0
         ? resolution.value
         : seedanceResolution.value
@@ -1611,7 +1638,7 @@ async function generateVideo() {
     
     // 立即清空输入框和图片，恢复UI状态
     clearImages()
-    if (isSeedanceModel.value) clearSeedanceFiles()
+    if (isReferenceVideoModel.value) clearSeedanceFiles()
     if (isKlingV3OmniModel.value) clearKlingV3OmniFiles()
     v31AudioFile.value = null
     prompt.value = ''
@@ -2534,7 +2561,7 @@ onUnmounted(() => {
       <div class="lg:col-span-3">
         <div class="card p-5 sticky top-24">
           <!-- 模式切换标签（非 Seedance / Kling v3 Omni / RunningHub V3.1 模型时显示） -->
-          <div v-if="!isSeedanceModel && !isKlingV3OmniModel && !isRunningHubAiAppVideoV31Model" class="flex bg-slate-100 dark:bg-dark-700 rounded-xl p-1 mb-5">
+          <div v-if="!isReferenceVideoModel && !isKlingV3OmniModel && !isRunningHubAiAppVideoV31Model" class="flex bg-slate-100 dark:bg-dark-700 rounded-xl p-1 mb-5">
             <button 
               @click="mode = 'image'" 
               :class="mode === 'image' 
@@ -2597,7 +2624,7 @@ onUnmounted(() => {
             </div>
 
             <!-- 画面比例/方向 - 从模型配置动态获取（非 Seedance/Kling Omni 模型） -->
-            <div v-if="!isSeedanceModel && !isKlingV3OmniModel">
+            <div v-if="!isReferenceVideoModel && !isKlingV3OmniModel">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>📐</span>
                 <span>画面方向</span>
@@ -2612,7 +2639,7 @@ onUnmounted(() => {
             </div>
 
             <!-- 视频长度（VEO3模型、Seedance模型和不支持时长选择的模型不显示） -->
-            <div v-if="!isVeo3Model && !isSeedanceModel && !isKlingV3OmniModel && availableDurations.length > 0">
+            <div v-if="!isVeo3Model && !isReferenceVideoModel && !isKlingV3OmniModel && availableDurations.length > 0">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>⏱️</span>
                 <span>视频长度</span>
@@ -2711,7 +2738,7 @@ onUnmounted(() => {
             </div>
 
             <!-- ========== Seedance 2.0 模式选择 ========== -->
-            <div v-if="isSeedanceModel" class="space-y-3">
+            <div v-if="isReferenceVideoModel" class="space-y-3">
               <!-- 模式选择区域（可展开/折叠） -->
               <div class="border border-slate-200 dark:border-dark-600 rounded-lg overflow-hidden">
                 <button
@@ -3205,7 +3232,7 @@ onUnmounted(() => {
             </div>
 
             <!-- 图生视频上传区域（非 Seedance 模型时显示） -->
-            <div v-if="(mode === 'image' || (isRunningHubAiAppVideoV31Model && v31NeedsImages)) && !isSeedanceModel && !isKlingV3OmniModel" class="space-y-2.5">
+            <div v-if="(mode === 'image' || (isRunningHubAiAppVideoV31Model && v31NeedsImages)) && !isReferenceVideoModel && !isKlingV3OmniModel" class="space-y-2.5">
               <div class="flex items-center justify-between">
                 <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
                   <span>🖼️</span>

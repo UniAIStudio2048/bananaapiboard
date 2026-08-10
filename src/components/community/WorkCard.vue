@@ -101,6 +101,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { getImageMediaUrls } from '@/utils/communityMedia'
+import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'
 
 const props = defineProps({
   work: { type: Object, required: true },
@@ -109,6 +110,8 @@ const props = defineProps({
 
 defineEmits(['click', 'like'])
 
+// 社区卡片最宽约 500px，600px 缩略图足以覆盖 2x 高分屏，避免加载 CDN 原图（实测单张 9MB+）
+const CARD_THUMBNAIL_WIDTH = 600
 const currentSlideIndex = ref(0)
 const previewVideoRef = ref(null)
 const isVideoPreviewActive = ref(false)
@@ -123,7 +126,7 @@ const isSlideshow = computed(() => mediaUrls.value.length > 1)
 const isVideoWork = computed(() => props.work?.media_type === 'video')
 
 const displayImageUrl = computed(() => {
-  return mediaUrls.value[0] || props.work.cover_url
+  return getCanvasThumbnailUrl(mediaUrls.value[0] || props.work.cover_url, CARD_THUMBNAIL_WIDTH)
 })
 
 const videoPreviewUrl = computed(() => {
@@ -133,7 +136,7 @@ const videoPreviewUrl = computed(() => {
 
 const currentSlideUrl = computed(() => {
   if (!isSlideshow.value) return displayImageUrl.value
-  return mediaUrls.value[currentSlideIndex.value] || props.work.cover_url
+  return getCanvasThumbnailUrl(mediaUrls.value[currentSlideIndex.value] || props.work.cover_url, CARD_THUMBNAIL_WIDTH)
 })
 
 function startSlideshow() {

@@ -2,9 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
-const source = await readFile(new URL('./SkillsPanel.vue', import.meta.url), 'utf8')
+const source = await readFile(new URL('./SkillsMarket.vue', import.meta.url), 'utf8')
 
-test('Skills panel renders the tenant market tabs and private Skill editor', () => {
+test('Skills market renders the tenant market tabs and private Skill editor', () => {
   assert.match(source, /通用/)
   assert.match(source, /收藏/)
   assert.match(source, /我的/)

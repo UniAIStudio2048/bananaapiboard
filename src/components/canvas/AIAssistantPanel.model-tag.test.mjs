@@ -58,9 +58,9 @@ test('uses CDN thumbnail URLs for icons in the model picker', () => {
 test('enhanced mode converts the selected model tag into natural language for the Agent turn', () => {
   assert.match(source, /async function sendEnhancedMessage\(\)[\s\S]*?const turnModelHint = buildTurnModelHint\(\)/)
   assert.match(source, /const turnModelRef = buildTurnModelRef\(\)/)
-  assert.match(source, /const messageTextWithHint = \[[\s\S]*?messageText,[\s\S]*?turnModelHint,[\s\S]*?\]\.filter\(Boolean\)\.join\('\\n'\)/)
+  assert.match(source, /const turnHint = \[[\s\S]*?turnModelHint,[\s\S]*?\]\.filter\(Boolean\)\.join\('\\n'\)/)
   assert.match(source, /if \(turnModelHint\) \{[\s\S]*?selectedModelByType\.value = \{ image: '', video: '' \}/)
-  assert.match(source, /content: messageTextWithHint/)
+  assert.match(source, /await sendCodexMessage\(\{[\s\S]*?content: messageText,[\s\S]*?hint: turnHint/)
 })
 
 test('user message keeps the model reference card for display while sending natural language', () => {

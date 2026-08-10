@@ -14,7 +14,7 @@
           <div :key="prevBannerKey" class="absolute inset-0">
             <img
               v-if="prevBanner?.cover_url"
-              :src="prevBanner.cover_url"
+              :src="bannerThumb(prevBanner.cover_url)"
               :alt="prevBanner.title || ''"
               class="w-full h-full object-cover"
             />
@@ -44,7 +44,7 @@
           <div :key="activeIndex" class="absolute inset-0">
             <img
               v-if="currentBanner?.cover_url"
-              :src="currentBanner.cover_url"
+              :src="bannerThumb(currentBanner.cover_url)"
               :alt="currentBanner.title || ''"
               class="w-full h-full object-cover"
             />
@@ -75,7 +75,7 @@
           <div :key="nextBannerKey" class="absolute inset-0">
             <img
               v-if="nextBanner?.cover_url"
-              :src="nextBanner.cover_url"
+              :src="bannerThumb(nextBanner.cover_url)"
               :alt="nextBanner.title || ''"
               class="w-full h-full object-cover"
             />
@@ -364,9 +364,17 @@
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import WorkflowPreviewModal from './WorkflowPreviewModal.vue'
 import { getWorkDetail, getProjectWorkflows } from '@/api/community'
+import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'
 import { useCommunityStore } from '@/stores/community'
 
 const communityStore = useCommunityStore()
+
+// 轮播卡片最大展示宽度约 1200px，1600px 缩略图覆盖 2x 高分屏，避免加载 CDN 原图（实测单张 2-9MB）
+const BANNER_THUMB_WIDTH = 1600
+
+function bannerThumb(url) {
+  return getCanvasThumbnailUrl(url, BANNER_THUMB_WIDTH)
+}
 
 const props = defineProps({
   banners: { type: Array, default: () => [] }

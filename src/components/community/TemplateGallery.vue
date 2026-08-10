@@ -22,7 +22,7 @@
            class="group cursor-pointer"
            @click="handlePreview(tpl)">
         <div class="relative aspect-video rounded-xl overflow-hidden bg-neutral-800">
-          <img v-if="tpl.cover_url" :src="tpl.cover_url" :alt="tpl.name"
+          <img v-if="tpl.cover_url" :src="getCanvasThumbnailUrl(tpl.cover_url, TEMPLATE_THUMB_WIDTH)" :alt="tpl.name"
                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
           <div v-else class="w-full h-full flex items-center justify-center text-neutral-600">
             <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -59,10 +59,14 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { getTemplates } from '@/api/community'
+import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'
 import { useCommunityStore } from '@/stores/community'
 import WorkflowPreviewModal from './WorkflowPreviewModal.vue'
 
 const communityStore = useCommunityStore()
+
+// 模板卡片宽度约 220px，600px 缩略图覆盖 2x 高分屏，避免加载 CDN 原图
+const TEMPLATE_THUMB_WIDTH = 600
 
 const templates = ref([])
 const loading = ref(true)
