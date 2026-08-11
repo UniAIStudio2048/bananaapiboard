@@ -2191,6 +2191,25 @@ function handleAIAssistantCanvasWriteback(payload = {}) {
   const urls = Array.isArray(payload.result_urls) ? payload.result_urls.filter(Boolean) : []
   if (!urls.length) return
   const mediaType = payload.media_type === 'video' ? 'video' : 'image'
+  // 优先：结果写回 AI 助手创建的同任务节点（taskId 匹配，processing → success 升级）。
+  // 这样生成结果始终回到发起生成的节点，不受用户中途点选其他节点影响（与手动生图一致）。
+  const taskId = payload.history_id || null
+  const taskWritebackNode = taskId
+    ? canvasStore.nodes.find(node => node.type === mediaType && node.data?.taskId === taskId)
+    : null
+  if (taskWritebackNode) {
+    const output = mediaType === 'video'
+      ? { type: 'video', url: urls[0], urls }
+      : { type: 'image', url: urls[0], urls }
+    canvasStore.updateNodeData(taskWritebackNode.id, {
+      status: 'success',
+      progress: null,
+      taskId: taskId || taskWritebackNode.data?.taskId || undefined,
+      output
+    })
+    schedulePersistAfterTask('ai-assistant-skill-writeback')
+    return
+  }
   const selectedNode = canvasStore.nodes.find(node => node.id === nodeId)
   // A media result cannot be rendered by a node of the other media type
   // (for example, a video output inside an image node). Create a matching
@@ -2247,6 +2266,132 @@ function handleAIAssistantCanvasWriteback(payload = {}) {
   displayToast(`已加载到画布`, 'success')
 }
 
+// AI 助手任务提交时同步创建画布节点（与手动生图一致：生成中 processing、参数对应、参考图连线）。
+// 事件源：tool.completed（提交响应）与 task.started/progress（后端参数透传）。幂等按 task_id 去重，
+// 主流 + 重连流重复投递不会重复建节点；结果到达由 handleAIAssistantCanvasWriteback 升级为 success。
+function handleAIAssistantCanvasTaskStarted(payload = {}) {
+  const taskId = payload.task_id || payload.taskId || null
+  if (!taskId) return
+  const mediaType = payload.media_type === 'video' ? 'video' : 'image'
+  // 幂等：该任务已存在节点（tool.completed 建过 / 重连流重复投递）→ 只补参数不重建
+  const existing = canvasStore.nodes.find((node) =>
+    node.type === mediaType && node.data?.taskId === taskId
+  )
+  if (existing) {
+    const patch = {}
+    if (payload.prompt && !existing.data?.prompt) patch.prompt = payload.prompt
+    if (payload.model && !existing.data?.model) patch.model = payload.model
+    if (payload.aspect_ratio && !existing.data?.aspectRatio) patch.aspectRatio = payload.aspect_ratio
+    if (payload.duration && !existing.data?.duration) patch.duration = String(payload.duration)
+    if (Object.keys(patch).length) {
+      canvasStore.updateNodeData(existing.id, patch)
+      schedulePersistAfterTask('ai-assistant-skill-writeback')
+    }
+    return
+  }
+
+  // 参考图连线：优先按来源节点 id 精确匹配（从画布选图时附件携带 sourceNodeId，
+  // 最可靠）；URL 反查兜底（output/sourceImages 含该 URL 的节点）。
+  const referenceUrls = Array.isArray(payload.reference_images) ? payload.reference_images : []
+  const referenceNodeIds = Array.isArray(payload.reference_node_ids) ? payload.reference_node_ids : []
+  const refNode = referenceNodeIds.length
+    ? canvasStore.nodes.find((node) => referenceNodeIds.includes(node.id))
+    : referenceUrls.length
+      ? canvasStore.nodes.find((node) => {
+          const outputs = Array.isArray(node.data?.output?.urls) ? node.data.output.urls : []
+          const sources = Array.isArray(node.data?.sourceImages) ? node.data.sourceImages : []
+          const url = node.data?.output?.url || ''
+          return [...outputs, ...sources, url].some((u) => referenceUrls.includes(u))
+        })
+      : null
+
+  // 就近原则：有参考图来源节点时，新节点紧邻来源节点右侧放置（避开已占用区域）；
+  // 否则在可视区域查找最近的空白位置。两者都不重叠。
+  const position = findCanvasFreePosition({
+    nearNode: refNode || null,
+    preferNear: Boolean(refNode)
+  })
+  const node = canvasStore.addNode({
+    type: mediaType,
+    position,
+    data: {
+      nodeRole: 'output',
+      status: 'processing',
+      progress: mediaType === 'video' ? '视频生成中...' : '生成中...',
+      processingStartedAt: Date.now(),
+      taskType: mediaType,
+      taskId,
+      prompt: payload.prompt || '',
+      model: payload.model || undefined,
+      aspectRatio: payload.aspect_ratio || undefined,
+      ...(payload.duration ? { duration: String(payload.duration) } : {}),
+    }
+  })
+  if (node?.id) {
+    // 参考图来源节点连线
+    if (refNode) {
+      canvasStore.addEdge({ source: refNode.id, target: node.id, sourceHandle: 'output', targetHandle: 'input' })
+    }
+    // 平移视口到新节点：AI 生成节点可能创建在视口外（如参考图下方），
+    // 自动滚动让用户看到新节点（保持缩放不变）。
+    panCanvasViewportToNode(node)
+    schedulePersistAfterTask('ai-assistant-skill-writeback')
+  }
+}
+
+/**
+ * 排版算法：为新建节点寻找不重叠的放置位置。
+ * - preferNear + nearNode：就近原则——从参考图来源节点右侧开始向右/向下搜索空白；
+ * - 否则：从可视区域中心偏左上起始，按网格螺旋/逐行扫描查找第一个不与任何节点
+ *   矩形相交的位置（就近原则：优先靠近可视中心，越远优先级越低）。
+ * 用节点实际包围盒（dimensions/data.width/fallback 320×240 + 间距 40）做碰撞检测，
+ * 保证新建节点不会盖在已有节点上。
+ */
+function findCanvasFreePosition({ nearNode = null, preferNear = false } = {}) {
+  // 竖排格子：新节点在参考图正下方逐行向下（列优先），避免连线交叉。
+  // 用实际渲染尺寸（dimensions）做碰撞检测，未渲染节点用小 fallback（220×180），
+  // 避免 320×240 大包围盒误判附近空位为重叠。
+  const NODE_W = 220
+  const NODE_H = 180
+  const GAP = 40
+  const nodeRects = (canvasStore.nodes || []).map((node) => {
+    const w = Number(node?.dimensions?.width || node?.data?.width || node?.style?.width || NODE_W)
+    const h = Number(node?.dimensions?.height || node?.data?.height || node?.style?.height || NODE_H)
+    return { x: node.position?.x ?? 0, y: node.position?.y ?? 0, w, h }
+  })
+  const overlaps = (x, y, w, h) => nodeRects.some((r) => x < r.x + r.w + GAP && x + w + GAP > r.x && y < r.y + r.h + GAP && y + h + GAP > r.y)
+
+  // 就近原则（有参考图来源节点）：竖排——新节点紧贴参考图正下方逐行向下（同 X 列），
+  // 该列被占满再右移一列继续竖排。连线从参考图右侧输出到新节点左侧输入，竖排不交叉。
+  if (preferNear && nearNode?.position) {
+    const baseW = Number(nearNode.dimensions?.width || nearNode.data?.width || NODE_W)
+    const baseH = Number(nearNode.dimensions?.height || nearNode.data?.height || NODE_H)
+    for (let col = 0; col < 8; col += 1) {
+      for (let row = 0; row < 16; row += 1) {
+        const x = nearNode.position.x + col * (NODE_W + GAP)
+        const y = nearNode.position.y + baseH + GAP + row * (NODE_H + GAP)
+        if (!overlaps(x, y, NODE_W, NODE_H)) return { x, y }
+      }
+    }
+    // 参考图下方整块都被占满：退回可视区域查找
+  }
+
+  // 无参考图：从可视区域中心（偏左上）起始，列优先竖排扫描（先向下排满一列再换列），
+  // 就近原则：越靠近可视中心优先级越高。
+  const start = getVisibleCanvasFlowPosition()
+  const startX = start.x
+  const startY = start.y
+  for (let col = 0; col < 12; col += 1) {
+    for (let row = 0; row < 16; row += 1) {
+      const x = startX + col * (NODE_W + GAP)
+      const y = startY + row * (NODE_H + GAP)
+      if (!overlaps(x, y, NODE_W, NODE_H)) return { x, y }
+    }
+  }
+  // 可视区域全满：返回起始点（理论不可达，保证总有返回值）
+  return { x: startX, y: startY }
+}
+
 function getVisibleCanvasFlowPosition() {
   const container = document.querySelector('.canvas-board')
   const rect = container?.getBoundingClientRect()
@@ -2258,6 +2403,26 @@ function getVisibleCanvasFlowPosition() {
     x: (screenX - (viewport.x || 0)) / zoom - 120,
     y: (screenY - (viewport.y || 0)) / zoom - 50
   }
+}
+
+/**
+ * 平移画布视口到指定节点，使其出现在可视区域中心（保持缩放不变）。
+ * 视口变换：screenX = node.x * zoom + viewport.x → 要让节点居中，
+ * viewport.x = 视口宽/2 - node.x * zoom。
+ */
+function panCanvasViewportToNode(node) {
+  if (!node?.position) return
+  const container = document.querySelector('.canvas-board')
+  const rect = container?.getBoundingClientRect()
+  const viewport = canvasStore.viewport || { x: 0, y: 0, zoom: 1 }
+  const zoom = viewport.zoom || 1
+  const cx = rect ? rect.width / 2 : window.innerWidth / 2
+  const cy = rect ? rect.height / 2 : window.innerHeight / 2
+  canvasStore.updateViewport({
+    x: cx - node.position.x * zoom,
+    y: cy - node.position.y * zoom,
+    zoom
+  })
 }
 
 // 处理节点右键「发送到灵感助手」
@@ -2366,7 +2531,7 @@ function handlePickNode(nodeId) {
       }
       
       console.log(`[CanvasPick] 添加附件到 AI 助手: type=${type}, url=${url}, name=${name}`)
-      aiAssistantRef.value?.addAttachmentFromUrl(url, type, name)
+      aiAssistantRef.value?.addAttachmentFromUrl(url, type, name, nodeId)
     })
   })
 }
@@ -4018,6 +4183,7 @@ onUnmounted(() => {
         @close="showAIAssistant = false"
         @width-change="aiPanelWidth = $event"
         @canvas-writeback="handleAIAssistantCanvasWriteback"
+        @canvas-task-started="handleAIAssistantCanvasTaskStarted"
         @start-canvas-pick="startCanvasPick"
         @open-skills="toggleSkillsMarket"
       />

@@ -297,6 +297,14 @@ function imageProcessingElapsedText(data = props.data) {
   return formatVideoGenerationElapsed(getVideoGenerationElapsedSeconds(getImageProcessingTimingData(data), elapsedTimeNow.value))
 }
 
+// 生成中卡片展示请求比例徽标：优先节点已存比例（AI 助手/手动生图提交时写入 data.aspectRatio），
+// 选中节点时回退当前选择；auto（待按参考图解析）或非法值不显示
+const processingAspectRatio = computed(() => {
+  const raw = String(props.data?.aspectRatio || selectedAspectRatio.value || '').trim()
+  if (!raw || raw.toLowerCase() === 'auto') return ''
+  return parseAspectRatioValue(raw) ? raw : ''
+})
+
 // 是否显示模型统计（总是显示，无数据时显示 --）
 function hasModelStats(modelName) {
   return true
@@ -6656,6 +6664,17 @@ watch(promptText, () => {
   })
 })
 
+// AI 助手等程序化创建节点后补写 data.prompt（updateNodeData）时，
+// 同步回填到提示词输入框——否则节点创建后输入区一直为空。
+watch(
+  () => props.data?.prompt,
+  (newPrompt) => {
+    if (typeof newPrompt === 'string' && newPrompt !== promptText.value) {
+      promptText.value = newPrompt
+    }
+  }
+)
+
 watch(
   () => referenceMediaList.value.map(item => `${item.key}:${item.label}`).join('|'),
   () => {
@@ -6853,9 +6872,12 @@ function handleContextMenu(event) {
 const showLeftMenu = ref(false)
 
 // 左侧快捷操作列表（图片节点的上游输入）- 使用翻译键
+// Reference Image 直接触发文件上传：上传后复用 createUpstreamImageNode
+// 创建带图 image-input 上游节点并连线（与参考图面板 + 号一致），
+// 而不是创建空节点让用户再手动上传。
 const leftQuickActions = [
   { icon: 'Aa', labelKey: 'canvas.imageNode.prompt', action: () => createUpstreamNode('text-input', t('canvas.imageNode.prompt')) },
-  { icon: '◫', labelKey: 'canvas.imageNode.refImage', action: () => createUpstreamNode('image-input', t('canvas.imageNode.refImage')) }
+  { icon: '◫', labelKey: 'canvas.imageNode.refImage', action: () => triggerRefImageUpload() }
 ]
 
 // 添加按钮交互
@@ -8158,6 +8180,8 @@ async function handleDrop(event) {
             <div v-if="data.status === 'processing'" class="preview-loading">
               <span class="processing-text">{{ data.progress || '生成中' }}</span>
               <span class="processing-duration-text">{{ imageProcessingElapsedText(data) }}</span>
+              <!-- 生成中即显示请求比例（AI 助手/手动生图提交的参数），全部生成完成后结果按实际比例展示 -->
+              <span v-if="processingAspectRatio" class="processing-aspect-ratio">{{ processingAspectRatio }}</span>
             </div>
             
             <!-- 错误状态 -->
@@ -9830,6 +9854,18 @@ async function handleDrop(event) {
   color: var(--canvas-accent-primary, #4ade80);
   letter-spacing: 0;
   opacity: 0.9;
+}
+
+/* 生成中请求比例徽标：胶囊标签，与计时文字区分，突出请求的构图比例 */
+.processing-aspect-ratio {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--canvas-text-secondary, #888);
+  background: var(--canvas-bg-secondary, #232323);
+  border: 1px solid var(--canvas-border-default, #333);
+  letter-spacing: 0;
 }
 
 .preview-error {

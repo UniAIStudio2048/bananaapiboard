@@ -347,6 +347,15 @@ function processingProgressText(data = props.data) {
   return getVideoGenerationProgressText(getProcessingTimingData(data), elapsedTimeNow.value)
 }
 
+// 生成中卡片展示请求比例徽标：优先节点已存比例（AI 助手/手动生图提交时写入 data.aspectRatio），
+// 选中节点时回退当前选择；高清处理无比例概念，auto（待解析）或非法值不显示
+const processingAspectRatio = computed(() => {
+  if (props.data?.taskType === 'video-hd') return ''
+  const raw = String(props.data?.aspectRatio || selectedAspectRatio.value || '').trim()
+  if (!raw || raw.toLowerCase() === 'auto') return ''
+  return parseAspectRatioValue(raw) ? raw : ''
+})
+
 function showProcessingTimeoutHint(data = props.data) {
   if (data?.taskType === 'video-hd') return false
   return shouldShowVideoGenerationTimeoutHint(
@@ -4445,6 +4454,17 @@ watch(promptText, () => {
     autoResizeTextarea()
   })
 })
+
+// AI 助手等程序化创建节点后补写 data.prompt（updateNodeData）时，
+// 同步回填到提示词输入框——否则节点创建后输入区一直为空。
+watch(
+  () => props.data?.prompt,
+  (newPrompt) => {
+    if (typeof newPrompt === 'string' && newPrompt !== promptText.value) {
+      promptText.value = newPrompt
+    }
+  }
+)
 
 watch(
   () => referenceMediaList.value.map(item => `${item.key}:${item.label}`).join('|'),
@@ -8928,6 +8948,8 @@ function handleToolbarPreview() {
           <div v-if="data.status === 'processing'" class="preview-loading">
             <div class="loading-spinner"></div>
             <span class="loading-title">{{ data.taskType === 'video-hd' ? '高清处理中...' : '视频生成中...' }}</span>
+            <!-- 生成中即显示请求比例（AI 助手/手动生图提交的参数），全部生成完成后结果按实际比例展示 -->
+            <span v-if="processingAspectRatio" class="loading-aspect-ratio">{{ processingAspectRatio }}</span>
             <span v-if="data.taskType !== 'video-hd'" class="progress-text">{{ processingProgressText(data) }}</span>
             <span class="loading-hint">
               {{ data.taskType === 'video-hd' ? '高清处理耗时较长，请耐心等待' : '视频生成需要一定时间，请耐心等待' }}
@@ -10248,6 +10270,17 @@ function handleToolbarPreview() {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* 生成中请求比例徽标：胶囊标签，与计时文字区分，突出请求的构图比例 */
+.loading-aspect-ratio {
+  padding: 3px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  background: var(--canvas-bg-secondary, #1f2937);
+  border: 1px solid var(--canvas-border-default, #3a3a3a);
 }
 
 .loading-hint {

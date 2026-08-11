@@ -56,7 +56,7 @@ export function shouldFetchAssistantAttachmentUrl(url) {
   return false
 }
 
-export function buildDirectUrlAttachment({ url, type, name }) {
+export function buildDirectUrlAttachment({ url, type, name, sourceNodeId }) {
   const fileName = normalizeAssistantAttachmentName({ url, type, name })
   const ext = fileName.split('.').pop()
 
@@ -67,6 +67,8 @@ export function buildDirectUrlAttachment({ url, type, name }) {
     ext,
     size: 0,
     preview: url,
-    url
+    url,
+    // 参考图来源画布节点（从画布选图时记录）：发送时据此在画布连线，URL 反查不可靠
+    ...(sourceNodeId ? { sourceNodeId } : {})
   }
 }

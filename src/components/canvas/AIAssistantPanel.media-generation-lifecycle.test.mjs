@@ -76,3 +76,83 @@ test('重连流 onContent 在生成中时也进缓冲，onDone 兜底 finalize',
   assert.match(reconnectBlock, /last\.generationContentBuffer = \(last\.generationContentBuffer \|\| ''\) \+ text/)
   assert.match(reconnectBlock, /finalizeMediaGenerationState\(last, \{ restoreBuffer: true \}\)/)
 })
+
+test('多图生成：applyAgentResultToMessage 按 URL 合并累积，不整体覆盖上一张', () => {
+  const block = source.match(/function applyAgentResultToMessage\(index, result\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(block, 'applyAgentResultToMessage must exist')
+  // 按 URL 去重追加，编号按累积顺序递增
+  assert.match(block, /const existing = Array\.isArray\(messages\.value\[index\]\.attachments\) \? messages\.value\[index\]\.attachments : \[\]/)
+  assert.match(block, /seen\.has\(url\)\) continue/)
+  assert.match(block, /existing\.push\(/)
+  assert.match(block, /messages\.value\[index\]\.attachments = existing/)
+  // 计数文案按累积数量生成（8 张全部返回后显示"已生成 8 张图片"）
+  assert.match(block, /已生成 \$\{imageCount\} 张图片/)
+})
+
+test('多图生成：applyGeneratedResult 每张完成时占位递减，全部完成才清除生成中状态', () => {
+  const block = source.match(/const applyGeneratedResult = \(result\) => \{\s*const message = messages\.value\[assistantMessageIndex\][\s\S]*?canvasWritebackSent = true/)?.[0]
+  assert.ok(block, 'enhanced applyGeneratedResult must exist')
+  assert.match(block, /countMediaByType\(message, mediaType\)/)
+  assert.match(block, /message\.mediaGeneratingCount = Math\.max\(0, \(message\.mediaGeneratingCount \|\| 1\) - added\)/)
+  assert.match(block, /if \(message\.mediaGeneratingCount <= 0\) finalizeMediaGenerationState\(message\)/)
+  // 单张/最后一张才整体 finalize，多张在途时保留生成中占位
+  assert.match(block, /} else \{\s*finalizeMediaGenerationState\(message\)\s*\}/)
+})
+
+test('enterMediaGeneratingState 幂等：已在生成中时保留首次解析的多图计数', () => {
+  const block = source.match(/function enterMediaGeneratingState\(message, generatingType, messageText = '', aspectRatio = null\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(block, 'enterMediaGeneratingState must exist')
+  // 多图拆分多次 image-gen 的 tool.started 不再重置占位计数
+  assert.match(block, /if \(!message\.mediaGenerating\) \{/)
+  assert.match(block, /message\.mediaGeneratingCount = getRequestedMediaCount\(messageText, generatingType\)/)
+})
+
+test('多图生成：按提交顺序记录 task_id（task.started），结果按此顺序排列显示', () => {
+  const block = source.match(/onTaskEvent: \(event\) => \{\s*const message = messages\.value\[assistantMessageIndex\][\s\S]*?\n      \},/)?.[0]
+  assert.ok(block, 'onTaskEvent must exist')
+  // task.started 按任务提交顺序到达，把 task_id 追加进 mediaSubmissionOrder（去重）
+  assert.match(block, /if \(!Array\.isArray\(message\.mediaSubmissionOrder\)\) message\.mediaSubmissionOrder = \[\]/)
+  assert.match(block, /if \(!message\.mediaSubmissionOrder\.includes\(event\.task_id\)\) message\.mediaSubmissionOrder\.push\(event\.task_id\)/)
+  // 重连流同样记录，保证重连回放后顺序一致
+  const reconnectBlock = source.match(/function reconnectStream\(threadId\) \{[\s\S]*?\n\}/)?.[0]
+  assert.match(reconnectBlock, /last\.mediaSubmissionOrder\.push\(event\.task_id\)/)
+})
+
+test('applyAgentResultToMessage 按提交顺序排序，后提交先完成不会排到前面', () => {
+  const block = source.match(/function applyAgentResultToMessage\(index, result\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(block, 'applyAgentResultToMessage must exist')
+  // attachment 记录 task_id，结果按 mediaSubmissionOrder 中的提交次序排序
+  assert.match(block, /newItems\.push\(\{ type: mediaType, url, task_id: taskId \}\)/)
+  assert.match(block, /existing\.sort\(\(a, b\) => orderIndex\(a\) - orderIndex\(b\)\)/)
+  assert.match(block, /order\.includes\(a\.task_id\)/)
+})
+
+test('多图生成：mediaGeneratingTotal 记录恒定总占位格数，与递减计数分离', () => {
+  // 缺陷：mediaGeneratingCount 同时承担「占位格总数」与「剩余待完成数」，每完成一张递减，
+  // 模板 v-for 用它渲染格子导致占位格随生成变少（8 张生成 6 张后只剩 2 格）。
+  // 修复：首次进入生成中时另存 mediaGeneratingTotal（恒定为请求数量），占位格数改由它决定。
+  const enterBlock = source.match(/function enterMediaGeneratingState\(message, generatingType, messageText = '', aspectRatio = null\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(enterBlock, 'enterMediaGeneratingState must exist')
+  assert.match(enterBlock, /message\.mediaGeneratingTotal = message\.mediaGeneratingCount/)
+})
+
+test('finalizeMediaGenerationState 一并清理 mediaGeneratingTotal', () => {
+  const block = source.match(/function finalizeMediaGenerationState\(message, \{ restoreBuffer = false \} = \{\}\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(block, 'finalizeMediaGenerationState must exist')
+  assert.match(block, /delete message\.mediaGeneratingTotal/)
+})
+
+test('兜底计数设置点同步记录 mediaGeneratingTotal，避免重连/兜底路径丢失恒定格数', () => {
+  const reconnectBlock = source.match(/function reconnectStream\(threadId\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(reconnectBlock, 'reconnectStream must exist')
+  assert.match(reconnectBlock, /last\.mediaGeneratingTotal = /)
+  const taskEventBlock = source.match(/onTaskEvent: \(event\) => \{\s*const message = messages\.value\[assistantMessageIndex\][\s\S]*?\n      \},/)?.[0]
+  assert.ok(taskEventBlock, 'enhanced onTaskEvent must exist')
+  assert.match(taskEventBlock, /message\.mediaGeneratingTotal = /)
+})
+
+test('普通模式 tool_started 设置计数时同步记录 mediaGeneratingTotal', () => {
+  const block = source.match(/onToolEvent: \(event\) => \{\s*const message = messages\.value\[assistantMessageIndex\]\s*if \(!message\) return[\s\S]*?throttledScrollToBottom\(\)\n      \},/)?.[0]
+  assert.ok(block, 'normal mode onToolEvent must exist')
+  assert.match(block, /message\.mediaGeneratingTotal = /)
+})

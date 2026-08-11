@@ -31,7 +31,7 @@ test('retry event is declared on the component', () => {
 })
 
 test('media generating placeholders and pre-generation content still exist (no regression)', () => {
-  assert.match(source, /v-for="index in mediaGeneratingCount"/)
+  assert.match(source, /v-for="\(_, slotIndex\) in mediaGeneratingCount"/)
   assert.match(source, /class="media-generating__placeholder"/)
   assert.match(source, /v-if="message\.preGenerationContent" class="ai-message__text ai-message__text--pre-generation"/)
 })

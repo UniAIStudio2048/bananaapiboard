@@ -116,12 +116,27 @@
           <span class="media-generating__label">{{ message.mediaGenerating === 'video' ? '视频生成中' : '图片生成中' }}…</span>
         </div>
         <div v-if="message.mediaGenerating === 'image'" class="media-generating__grid">
-          <div v-for="index in mediaGeneratingCount" :key="index" class="media-generating__placeholder" aria-hidden="true"></div>
+          <!-- 逐格填充：已完成的图片原位显示在对应占位格，未完成保持灰格 -->
+          <template v-for="(_, slotIndex) in mediaGeneratingCount" :key="slotIndex">
+            <img
+              v-if="mediaPlaceholderFill[slotIndex]"
+              :src="toSameOriginUrl(mediaPlaceholderFill[slotIndex].url)"
+              :alt="mediaPlaceholderFill[slotIndex].name"
+              class="media-generating__placeholder media-generating__placeholder--filled"
+              loading="lazy"
+              @click="$emit('preview-media', { type: 'image', url: toSameOriginUrl(mediaPlaceholderFill[slotIndex].url), name: mediaPlaceholderFill[slotIndex].name })"
+            />
+            <!-- 空占位格按请求比例显示（比例来自任务状态事件，未知时回退 1:1 方格子） -->
+            <div v-else class="media-generating__placeholder" :style="{ aspectRatio: imageGeneratingAspect.ratio }" aria-hidden="true"></div>
+          </template>
+          <!-- 有比例来源时标注请求比例（右下角徽标），未知时只展示占位格不猜测 -->
+          <span v-if="message.mediaGeneratingRatio" class="media-generating__grid-ratio">{{ imageGeneratingAspect.label }}</span>
         </div>
-        <!-- 视频生成中：按视频画幅 16:9 显示占位框并标注比例（图片生成中的 1:1 方格子对应图片画幅） -->
+        <!-- 视频生成中：按视频实际画幅比例显示占位框并标注比例（比例来自任务状态事件，未知时回退 16:9；
+             图片生成中占位格同样按请求比例展示，见上方） -->
         <div v-if="message.mediaGenerating === 'video'" class="media-generating__video" aria-hidden="true">
-          <div class="media-generating__video-frame">
-            <span class="media-generating__video-ratio">16:9</span>
+          <div class="media-generating__video-frame" :style="{ aspectRatio: videoGeneratingAspect.ratio }">
+            <span class="media-generating__video-ratio">{{ videoGeneratingAspect.label }}</span>
           </div>
         </div>
       </div>
@@ -187,8 +202,9 @@
         </form>
       </div>
 
-      <!-- 图片生成结果组：默认展开，可折叠为首图叠层。 -->
-      <div v-if="message.role === 'assistant' && mediaResults.length" class="ai-media-results">
+      <!-- 图片生成结果组：默认展开，可折叠为首图叠层。
+           图片生成中期间隐藏（已完成图片已在占位格原位显示），全部完成/视频时正常展示 -->
+      <div v-if="message.role === 'assistant' && mediaResults.length && message.mediaGenerating !== 'image'" class="ai-media-results">
         <button type="button" class="ai-media-results__toggle" :aria-expanded="showMediaResults" @click="showMediaResults = !showMediaResults">
           <svg class="ai-media-results__toggle-icon" :class="{ 'is-expanded': showMediaResults }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
           <span>{{ mediaResults[0].type === 'video' ? '视频已生成' : '图片已生成' }} ×{{ mediaResults.length }}</span>
@@ -204,6 +220,10 @@
           >
             <img v-if="media.type === 'image'" :src="toSameOriginUrl(media.url)" :alt="index === 0 ? media.name : ''" loading="lazy" />
             <video v-else :src="toSameOriginUrl(media.url)" :aria-label="index === 0 ? media.name : ''" preload="metadata"></video>
+            <!-- 收起态首个视频叠加播放键，提示这是可播放的视频而非静态封面 -->
+            <span v-if="index === 0 && media.type === 'video'" class="ai-media-results__collapsed-play" aria-hidden="true">
+              <svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+            </span>
           </span>
           <span v-if="mediaResults.length > collapsedStack.length" class="ai-media-results__remaining">+{{ mediaResults.length - collapsedStack.length }}</span>
         </button>
@@ -221,8 +241,10 @@
             v-else
             :src="toSameOriginUrl(media.url)"
             class="ai-media-card__preview"
+            :style="videoPreviewStyle(media)"
             controls
             preload="metadata"
+            @loadedmetadata="onVideoMetadata(media, $event)"
             @click="$emit('preview-media', { type: 'video', url: toSameOriginUrl(media.url), name: media.name })"
           ></video>
           <button
@@ -485,7 +507,8 @@ const mediaResults = computed(() => {
     list.push({
       url: cleanUrl,
       type,
-      name: attachment?.name || decodeURIComponent(cleanUrl.split('?')[0].split('/').pop() || 'download')
+      name: attachment?.name || decodeURIComponent(cleanUrl.split('?')[0].split('/').pop() || 'download'),
+      task_id: attachment?.task_id || null,
     })
   }
   for (const attachment of visibleAttachments.value) push(attachment.url, attachment)
@@ -500,7 +523,86 @@ const mediaResults = computed(() => {
   return list
 })
 
-const mediaGeneratingCount = computed(() => Math.max(1, Number(props.message.mediaGeneratingCount) || 1))
+// 占位网格总格数恒定：优先 mediaGeneratingTotal（进入生成中时记录的一次性请求数量，
+// 不会随完成递减）；历史消息无该字段时回退递减中的 mediaGeneratingCount。
+// 若直接用 mediaGeneratingCount 渲染格子，8 张生成 6 张后只剩 2 格（占位格数随生成变少）。
+const mediaGeneratingCount = computed(() => Math.max(1, Number(props.message.mediaGeneratingTotal) || Number(props.message.mediaGeneratingCount) || 1))
+
+// 多图生成中逐格填充：已完成图片按提交顺序（mediaSubmissionOrder 中的 task_id 次序）
+// 固定入格——先完成的后序图不会挤占前面空位，全部完成时也不会“刷新跳动”。
+// 无提交顺序记录时（历史消息/单图）退化为按返回顺序逐格填充。
+const mediaPlaceholderFill = computed(() => {
+  const images = mediaResults.value.filter(m => m.type === 'image')
+  const total = mediaGeneratingCount.value
+  const order = Array.isArray(props.message.mediaSubmissionOrder) ? props.message.mediaSubmissionOrder : []
+  if (!order.length || images.length === 0) return images
+  const orderIndex = new Map(order.map((taskId, index) => [taskId, index]))
+  const slots = new Array(total).fill(null)
+  const hasKnown = images.some(img => img.task_id && orderIndex.has(img.task_id))
+  if (!hasKnown) return images
+  for (const img of images) {
+    const idx = img.task_id && orderIndex.has(img.task_id) ? orderIndex.get(img.task_id) : null
+    if (idx !== null && idx >= 0 && idx < total) slots[idx] = img
+  }
+  // 已知槽位填充完，剩余的（历史消息无 task_id）按序填入空槽
+  let cursor = 0
+  for (const img of images) {
+    if (slots.includes(img)) continue
+    while (cursor < total && slots[cursor] !== null) cursor += 1
+    if (cursor >= total) break
+    slots[cursor] = img
+    cursor += 1
+  }
+  return slots
+})
+
+// 视频实际尺寸：loadedmetadata 后按视频自身宽高比展示（竖屏 9:16 不再被 16:9 容器压扁/裁切），
+// 加载前 CSS 保底 16:9，避免高度塌陷
+const videoDimensions = ref({})
+function onVideoMetadata(media, event) {
+  const video = event?.target
+  const w = Number(video?.videoWidth) || 0
+  const h = Number(video?.videoHeight) || 0
+  if (w > 0 && h > 0) {
+    videoDimensions.value = { ...videoDimensions.value, [media.url]: { w, h } }
+  }
+}
+function videoPreviewStyle(media) {
+  const dim = videoDimensions.value[media.url]
+  return dim ? { aspectRatio: `${dim.w} / ${dim.h}` } : null
+}
+
+/**
+ * 视频生成中占位框的实际画幅比例：优先任务状态事件带出的 aspect_ratio
+ * （video_history.aspect_ratio，用户提交时写入），未知时回退 16:9。
+ * 返回 { label: '16:9', ratio: '16 / 9' } 供模板与样式绑定使用。
+ */
+const videoGeneratingAspect = computed(() => {
+  const raw = String(props.message.mediaGeneratingRatio || '').trim().toLowerCase()
+  const valid = /^\d{1,2}\s*:\s*\d{1,2}$/.test(raw)
+  const ratio = valid ? raw : '16:9'
+  const [w = '16', h = '9'] = ratio.split(':')
+  const numW = Number(w)
+  const numH = Number(h)
+  const ratioStyle = (numW > 0 && numH > 0) ? `${numW} / ${numH}` : '16 / 9'
+  return { label: ratio, ratio: ratioStyle }
+})
+
+/**
+ * 图片生成中占位格的实际画幅比例：与视频一致，优先任务状态事件带出的 aspect_ratio
+ * （image_history.aspect_ratio，用户提交时写入），未知时回退 1:1。
+ * 返回 { label: '9:16', ratio: '9 / 16' } 供模板与样式绑定使用。
+ */
+const imageGeneratingAspect = computed(() => {
+  const raw = String(props.message.mediaGeneratingRatio || '').trim().toLowerCase()
+  const valid = /^\d{1,2}\s*:\s*\d{1,2}$/.test(raw)
+  const ratio = valid ? raw : '1:1'
+  const [w = '1', h = '1'] = ratio.split(':')
+  const numW = Number(w)
+  const numH = Number(h)
+  const ratioStyle = (numW > 0 && numH > 0) ? `${numW} / ${numH}` : '1 / 1'
+  return { label: ratio, ratio: ratioStyle }
+})
 
 // 折叠态堆叠层：最多展示前 3 张真实图片，其余并入 +N 角标
 const collapsedStack = computed(() => mediaResults.value.slice(0, 3))
@@ -930,6 +1032,11 @@ onUnmounted(() => {
   width: min(100%, 532px);
 }
 
+/* 图片生成中：网格为绝对定位比例徽标提供定位锚点（徽标悬浮在右下角，不参与布局） */
+.media-generating__grid {
+  position: relative;
+}
+
 .media-generating__placeholder {
   aspect-ratio: 1;
   min-height: 180px;
@@ -941,8 +1048,18 @@ onUnmounted(() => {
   background-size: 12px 12px;
   animation: media-generating-placeholder 1.8s ease-in-out infinite alternate;
 }
+/* 多图生成中：已完成图片原位填充占位格（覆盖灰格底色与动画，显示真实图片） */
+.media-generating__placeholder--filled {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  padding: 0;
+  cursor: pointer;
+  animation: none;
+  background: rgba(127, 127, 127, 0.08);
+}
 
-/* 视频生成中：16:9 画幅占位框（与图片 1:1 方格子对应，展示视频默认画幅比例） */
+/* 视频生成中：画幅占位框按实际比例展示（未知时回退 16:9，与图片 1:1 方格子对应） */
 .media-generating__video {
   margin-top: 16px;
   width: min(100%, 532px);
@@ -968,6 +1085,21 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.4;
   font-weight: 500;
+  color: rgba(226, 232, 240, 0.9);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+/* 图片生成中：请求比例徽标，样式与视频占位框的比例徽标一致 */
+.media-generating__grid-ratio {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+  z-index: 1;
   color: rgba(226, 232, 240, 0.9);
   background: rgba(15, 23, 42, 0.55);
 }
@@ -1582,7 +1714,8 @@ onUnmounted(() => {
   background-image: radial-gradient(circle, rgba(15, 23, 42, 0.13) 1.2px, transparent 1.4px);
 }
 
-:root.canvas-theme-light .media-generating__video-ratio {
+:root.canvas-theme-light .media-generating__video-ratio,
+:root.canvas-theme-light .media-generating__grid-ratio {
   color: rgba(28, 25, 23, 0.9);
   background: rgba(255, 255, 255, 0.82);
 }
@@ -2163,6 +2296,23 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+/* 收起态首个视频的播放键：居中半透明圆底，提示可播放 */
+.ai-media-results__collapsed-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+}
+.ai-media-results__collapsed-play svg {
+  width: 40px;
+  height: 40px;
+  padding: 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 .ai-media-results__remaining {

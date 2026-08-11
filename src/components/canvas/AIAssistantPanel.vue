@@ -835,7 +835,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'width-change', 'start-canvas-pick', 'canvas-writeback', 'open-skills'])
+const emit = defineEmits(['close', 'width-change', 'start-canvas-pick', 'canvas-writeback', 'canvas-task-started', 'open-skills'])
 
 // 注入用户信息
 const userInfo = inject('userInfo', { value: { username: 'User' } })
@@ -881,6 +881,9 @@ const approvalDeciding = ref(false)
 const pendingApprovalActions = computed(() => pendingAgentApproval.value?.approval?.actions || pendingAgentApproval.value?.actions || [])
 let agentStreamController = null
 let normalStreamController = null
+// image-gen/video-gen 工具调用参数队列（tool.started args 入队、tool.completed 出队），
+// 供组装画布同步建节点事件（prompt/model/比例/参考图）；并发多图时按调用序配对不错位。
+let pendingToolArgs = new Map()
 let reconnectController = null
 let lateTaskController = null
 const stopRequested = ref(false)
@@ -1413,11 +1416,27 @@ async function forceInsertQueuedMessage(queued) {
       } catch (error) {
         console.warn('[AI-Assistant] 队列消息已开始执行，无法强制插入:', error?.message)
         refreshQueueAndFollow()
+        showAlert('该消息已开始执行，无法立即插入。请点击「停止」取消当前任务后重试。', '无法立即插入')
         return
       }
     }
     if (targetTurnId && activeTurn.value.id) {
-      cancelCodexTurn(currentCodexThreadId.value, targetTurnId, { reason: 'force_insert' }).catch(() => {})
+      try {
+        await cancelCodexTurn(currentCodexThreadId.value, targetTurnId, { reason: 'force_insert' })
+      } catch (error) {
+        console.warn('[AI-Assistant] force insert cancel failed:', error?.message)
+      }
+      // 等待旧 turn 的 SSE 流真正结束（onCancelled/onDone 设置 status 为终态），
+      // 避免 Codex SDK thread writer 尚未释放时 resume 同一 thread 导致 thread-store conflict。
+      // 最多等 10 秒（后端 cancel 路由最多 5 秒 + SDK 收敛时间），超时后强制继续。
+      const waitDeadline = Date.now() + 10000
+      while (Date.now() < waitDeadline) {
+        if (['cancelled', 'completed', 'failed', 'idle'].includes(activeTurn.value.status)) break
+        await new Promise((r) => setTimeout(r, 200))
+      }
+      // 清除 activeTurn.id，避免 sendEnhancedMessage(force) 的 interrupt 分支
+      // 对同一旧 turn 重复 cancel 导致无限转圈
+      activeTurn.value.id = null
     }
     removeFromQueue()
     restoreDraft(queued)
@@ -1551,11 +1570,24 @@ function stopCurrentActivity() {
     activeMessage.isThinking = false
     delete activeMessage.mediaGenerating
     delete activeMessage.mediaGeneratingCount
+    delete activeMessage.mediaGeneratingTotal
     if (!activeMessage.content) activeMessage.content = '已停止当前对话或任务'
   }
   activeTurn.value.cancelRequested = true
   activeTurn.value.status = 'cancel_requested'
   activeTurn.value.cancellable = false
+  // 停止当前活动时一并取消排队中的跟进消息，避免回合取消后调度器自动执行它们
+  // （否则用户点「停止」后排队消息仍会逐个自动跑，表现为对话停不下来）
+  if (currentCodexThreadId.value) {
+    for (const queued of [...serverQueue.value, ...queuedMessages.value]) {
+      const turnId = queued.turn_id || queued.id
+      if (turnId) deleteQueuedCodexMessage(currentCodexThreadId.value, turnId).catch(() => {})
+    }
+  }
+  serverQueue.value = []
+  queuedMessages.value = []
+  if (followQueueTimer) { clearInterval(followQueueTimer); followQueueTimer = null }
+  lastFollowedTurnId = null
   isLoading.value = false
 }
 
@@ -1692,17 +1724,28 @@ function throttledScrollToBottom() {
 
 /**
  * 进入媒体生成中状态：把生成前的叙述文本移到 preGenerationContent（动效上方），
- * 设置 mediaGenerating 与请求数量。多次工具/任务事件到达时幂等。
+ * 设置 mediaGenerating、请求数量与画幅比例（aspectRatio 来自任务状态事件，
+ * 视频生成中占位框按实际比例展示，而不是固定 16:9）。
+ * 幂等：已在生成中（如多图拆分多次 image-gen 调用）时保留首次解析的请求数量，
+ * 避免后续 tool.started 把多图占位计数重置回初值。
  */
-function enterMediaGeneratingState(message, generatingType, messageText = '') {
+function enterMediaGeneratingState(message, generatingType, messageText = '', aspectRatio = null) {
   if (!message) return
   if (!message.preGenerationContent && message.content) {
     message.preGenerationContent = message.content
     message.generationContentOffset = message.content.length
     message.content = ''
   }
-  message.mediaGenerating = generatingType
-  message.mediaGeneratingCount = getRequestedMediaCount(messageText, generatingType)
+  if (!message.mediaGenerating) {
+    message.mediaGenerating = generatingType
+    message.mediaGeneratingCount = getRequestedMediaCount(messageText, generatingType)
+    // 总占位格数（恒定）与剩余待完成计数分离：mediaGeneratingCount 会随完成递减，
+    // 占位网格必须始终展示请求数量（如 8 张 → 8 格），否则生成中格子随图片变少
+    message.mediaGeneratingTotal = message.mediaGeneratingCount
+  }
+  if (aspectRatio && !message.mediaGeneratingRatio) {
+    message.mediaGeneratingRatio = aspectRatio
+  }
 }
 
 /**
@@ -1715,6 +1758,8 @@ function finalizeMediaGenerationState(message, { restoreBuffer = false } = {}) {
   if (!message) return
   delete message.mediaGenerating
   delete message.mediaGeneratingCount
+  delete message.mediaGeneratingRatio
+  delete message.mediaGeneratingTotal
   const buffered = message.generationContentBuffer || ''
   delete message.generationContentBuffer
   if (restoreBuffer && buffered && !message.content) {
@@ -1730,15 +1775,59 @@ function finalizeMediaGenerationState(message, { restoreBuffer = false } = {}) {
  * @param {string} [opts.messageText] - 本轮用户消息文本（用于 getRequestedMediaCount）
  * @param {Function} [opts.onGeneratedResult] - 媒体结果回调 (result) => void
  */
+// 画布同步建节点：任务提交（tool.completed 提交响应 / task.started 事件）时通知 Canvas.vue
+// 创建与手动生图一致的 processing 节点。参数来源：事件字段 → 工具 args → 空。
+// Canvas.vue 按 task_id 幂等去重，重复投递（主流+重连流）不会重复建节点。
+function emitCanvasTaskStarted({ task_id, media_type, tool, prompt = '', model = '', aspect_ratio = '', duration = null, reference_images = [], reference_node_ids = [] }) {
+  if (!task_id) return
+  emit('canvas-task-started', {
+    task_id,
+    media_type: media_type === 'video' ? 'video' : 'image',
+    tool: tool || null,
+    prompt: typeof prompt === 'string' ? prompt : '',
+    model: typeof model === 'string' ? model : '',
+    aspect_ratio: typeof aspect_ratio === 'string' ? aspect_ratio : '',
+    ...(duration ? { duration: String(duration) } : {}),
+    reference_images: Array.isArray(reference_images) ? reference_images.filter(u => typeof u === 'string' && u.startsWith('http')) : [],
+    reference_node_ids: Array.isArray(reference_node_ids) ? reference_node_ids.filter(Boolean) : [],
+    node_id: props.canvasContext?.node_ids?.[0] || props.canvasContext?.node_id || props.canvasContext?.nodeId || null,
+    workflow_id: props.canvasContext?.workflow_id || props.canvasContext?.workflowId || null,
+  })
+}
+
+// 从工具完成事件的 result 文本中提取提交响应 task_id（image-gen/video-gen 提交成功即有，
+// 即使结果未返回）。返回 null 表示提取失败（后续由 task.started 事件补建节点）。
+function extractTaskIdFromToolCompletedResult(result) {
+  const text = Array.isArray(result?.content)
+    ? result.content.map((c) => (c && typeof c.text === 'string' ? c.text : '')).join('\n')
+    : ''
+  const match = text.match(/\{[\s\S]*\}/)
+  if (!match) return null
+  try {
+    const parsed = JSON.parse(match[0])
+    return parsed?.result?.task_id || parsed?.result?.id || parsed?.task_id || parsed?.task?.id || parsed?.id || null
+  } catch {
+    return null
+  }
+}
+
 function handleToolEvent(message, event, opts = {}) {
   if (!message) return
   if (!Array.isArray(message.toolEvents)) message.toolEvents = []
   if (event.type === 'started') {
     const generatingType = getAssistantMediaGeneratingType(event)
-    message.isThinking = false
     if (generatingType) {
-      enterMediaGeneratingState(message, generatingType, opts.messageText || '')
+      // 进入媒体生成中：占位格动画本身就是明确反馈，退出思考态避免双提示
+      message.isThinking = false
+      // 生成中占位按请求比例展示：tool.started 的 args 带 aspect_ratio（image-gen/video-gen），
+      // 与 task.started 事件的 DB 真源透传互为补充，先到先得
+      enterMediaGeneratingState(message, generatingType, opts.messageText || '', event.args?.aspect_ratio)
+    } else if (message.content) {
+      // 普通工具调用且正文已有流式输出：切换为流式文本展示
+      message.isThinking = false
     }
+    // 正文仍为空时保留「思考中…」：长工具等待（skill-read/model-list 等）期间
+    // spinner 继续脉冲，而不是静止的「AI 正在回复」占位，避免看起来像卡死
     const toolName = `${event.server}.${event.tool}`
     // 同一工具重复投递（主流 + 重连流）时复用正在运行的卡片，避免工具卡重复
     const runningCard = [...message.toolEvents].reverse().find((item) => item.name === toolName && item.status === 'running')
@@ -2026,6 +2115,7 @@ function reconnectStream(threadId) {
     onContent: (text, isFinal) => {
       const last = [...messages.value].reverse().find(m => m.role === 'assistant')
       if (!last || !text) return
+      last.isThinking = false
       if (last.mediaGenerating) {
         // 生成中叙述文本暂存不上屏（与 sendEnhancedMessage 一致），任务完成/兜底时处理
         last.generationContentBuffer = (last.generationContentBuffer || '') + text
@@ -2051,8 +2141,14 @@ function reconnectStream(threadId) {
       if (!last) return
       if (event.type === 'task.started' || event.type === 'task.progress') {
         if (!last.mediaGenerating) {
-          enterMediaGeneratingState(last, getAssistantMediaGeneratingType({ tool_name: event.tool || 'image-gen' }) || 'image')
+          enterMediaGeneratingState(last, getAssistantMediaGeneratingType({ tool_name: event.tool || 'image-gen' }) || 'image', '', event.aspect_ratio)
           last.mediaGeneratingCount = Math.max(1, last.mediaGeneratingCount || 1)
+          if (!last.mediaGeneratingTotal) last.mediaGeneratingTotal = last.mediaGeneratingCount
+        }
+        // 重连回放也记录提交顺序，保证多图结果按提交顺序排列
+        if (event?.task_id && last) {
+          if (!Array.isArray(last.mediaSubmissionOrder)) last.mediaSubmissionOrder = []
+          if (!last.mediaSubmissionOrder.includes(event.task_id)) last.mediaSubmissionOrder.push(event.task_id)
         }
         throttledScrollToBottom()
         return
@@ -2061,7 +2157,7 @@ function reconnectStream(threadId) {
         const index = messages.value.indexOf(last)
         finalizeMediaGenerationState(last)
         applyAgentResultToMessage(index, {
-          media_type: event.media_type || 'image',
+          media_type: resolveMediaType(event),
           result_urls: event.result_urls || event.preview_urls || [],
           task_id: event.task_id || null,
         })
@@ -2674,6 +2770,10 @@ async function sendEnhancedMessage(force = false) {
     ...userAttachments,
     ...referenceAttachments.filter((a) => !seenAttachmentUrls.has(a.url))
   ]
+  // 参考图来源画布节点 id（从画布选图时记录在附件上）：供画布同步建节点时精确连线
+  const referenceNodeIds = [...new Set(
+    messageAttachments.map((a) => a?.sourceNodeId).filter(Boolean)
+  )]
 
   // 清空输入
   inputText.value = ''
@@ -2725,28 +2825,35 @@ async function sendEnhancedMessage(force = false) {
       pendingContent = ''
     }
   }
-  let canvasWritebackSent = false
   const applyGeneratedResult = (result) => {
     const message = messages.value[assistantMessageIndex]
-    if (message) {
-      message.isThinking = false
-      finalizeMediaGenerationState(message)
-    }
+    if (message) message.isThinking = false
     const mediaType = ['image', 'video', 'audio'].includes(result?.media_type) ? result.media_type : 'image'
     const urls = normalizeResultUrls(result?.result_urls, mediaType)
     if (!urls.length) return
 
+    // 多图拆分生成：每张结果到达时合并进消息（不覆盖之前已返回的图），
+    // 生成中占位按完成张数递减，全部完成（或非多图）才清除生成中状态。
+    const before = countMediaByType(message, mediaType)
     applyAgentResultToMessage(assistantMessageIndex, result)
-    if (!canvasWritebackSent) {
-      canvasWritebackSent = true
-      emit('canvas-writeback', {
-        workflow_id: props.canvasContext?.workflow_id || props.canvasContext?.workflowId || null,
-        node_id: props.canvasContext?.node_ids?.[0] || props.canvasContext?.node_id || props.canvasContext?.nodeId || null,
-        media_type: mediaType,
-        result_urls: urls,
-        history_id: result.task_id || result.history_id || result.id || null
-      })
+    const added = countMediaByType(message, mediaType) - before
+    if (message && added > 0) {
+      if (message.mediaGenerating === 'image' && (message.mediaGeneratingCount || 1) > 1) {
+        message.mediaGeneratingCount = Math.max(0, (message.mediaGeneratingCount || 1) - added)
+        if (message.mediaGeneratingCount <= 0) finalizeMediaGenerationState(message)
+      } else {
+        finalizeMediaGenerationState(message)
+      }
     }
+    // 多图拆分生成：每张结果到达都写回画布（幂等由 Canvas.vue 按 taskId/URL 去重），
+    // 不再用单次标志限制——否则 6 张只写回第一张。
+    emit('canvas-writeback', {
+      workflow_id: props.canvasContext?.workflow_id || props.canvasContext?.workflowId || null,
+      node_id: props.canvasContext?.node_ids?.[0] || props.canvasContext?.node_id || props.canvasContext?.nodeId || null,
+      media_type: mediaType,
+      result_urls: urls,
+      history_id: result.task_id || result.history_id || result.id || null
+    })
   }
 
   // 如果有附件（图片或文件），本地临时资源先上传，公网 URL 直接传给后端
@@ -2880,6 +2987,38 @@ async function sendEnhancedMessage(force = false) {
           messageText,
           onGeneratedResult: applyGeneratedResult
         })
+        // 捕获 image-gen/video-gen 提交参数（tool.started 的 args）入队，供画布同步建节点
+        if ((event.tool === 'image-gen' || event.tool === 'video-gen') && event.args && typeof event.args === 'object') {
+          const queue = pendingToolArgs.get(event.tool) || []
+          queue.push(event.args)
+          pendingToolArgs.set(event.tool, queue)
+        }
+        // 提交成功（tool.completed 含 task_id）：通知画布创建 processing 节点
+        if (event.type === 'completed' && (event.tool === 'image-gen' || event.tool === 'video-gen')) {
+          const taskId = extractTaskIdFromToolCompletedResult(event.result)
+          const queue = pendingToolArgs.get(event.tool) || []
+          const args = queue.shift() || {}
+          if (taskId) {
+            const refs = [
+              ...(Array.isArray(args.input_images) ? args.input_images : []),
+              ...(Array.isArray(args.image) ? args.image : []),
+              ...(Array.isArray(args.inputs) ? args.inputs : []),
+              ...(Array.isArray(args.reference_images) ? args.reference_images : []),
+              ...(Array.isArray(args.source_assets) ? args.source_assets : []),
+            ]
+            emitCanvasTaskStarted({
+              task_id: taskId,
+              media_type: event.tool === 'video-gen' ? 'video' : 'image',
+              tool: event.tool,
+              prompt: args.prompt,
+              model: args.model,
+              aspect_ratio: args.aspect_ratio,
+              duration: args.duration,
+              reference_images: refs,
+              reference_node_ids: referenceNodeIds,
+            })
+          }
+        }
         if (event?.tool) {
           activeTurn.value.tool = event.tool
           activeTurn.value.lastEventAt = Date.now()
@@ -2907,18 +3046,38 @@ async function sendEnhancedMessage(force = false) {
         const message = messages.value[assistantMessageIndex]
         if (event?.task_id) activeTurn.value.taskId = event.task_id
         if (event.type === 'task.started' || event.type === 'task.progress') {
+          // 后端任务进度桥透传的参数（DB 真源兜底，args 被脱敏时仍可靠）：
+          // 已由 tool.completed 建过节点时 Canvas.vue 按 task_id 幂等，只补参数。
+          emitCanvasTaskStarted({
+            task_id: event.task_id,
+            media_type: resolveMediaType(event),
+            tool: event.tool || 'image-gen',
+            prompt: event.prompt,
+            model: event.model,
+            aspect_ratio: event.aspect_ratio,
+            duration: event.duration,
+            reference_images: event.reference_images,
+            reference_node_ids: referenceNodeIds,
+          })
           if (message && !message.mediaGenerating) {
             enterMediaGeneratingState(
               message,
               getAssistantMediaGeneratingType({ tool_name: event.tool || activeTurn.value.tool || 'image-gen' }) || 'image',
-              messageText
+              messageText,
+              event.aspect_ratio
             )
             message.mediaGeneratingCount = Math.max(1, message.mediaGeneratingCount || 1)
+            if (!message.mediaGeneratingTotal) message.mediaGeneratingTotal = message.mediaGeneratingCount
+          }
+          // 记录提交顺序：task.started 按任务提交顺序到达，多图结果按此顺序排列显示
+          if (event?.task_id && message) {
+            if (!Array.isArray(message.mediaSubmissionOrder)) message.mediaSubmissionOrder = []
+            if (!message.mediaSubmissionOrder.includes(event.task_id)) message.mediaSubmissionOrder.push(event.task_id)
           }
         }
         if (event.type === 'task.completed') {
           applyGeneratedResult({
-            media_type: event.media_type || (activeTurn.value.tool?.includes('video') ? 'video' : 'image'),
+            media_type: resolveMediaType(event),
             result_urls: event.result_urls || event.preview_urls || [],
             task_id: event.task_id,
           })
@@ -3004,40 +3163,7 @@ async function sendEnhancedMessage(force = false) {
         activeTurn.value.cancelRequested = false
         // 任务追尾补拉：本轮提交过媒体任务但结果未回显（agent 提前结束回合 / 追尾超时），
         // 通过重连流补拉 task.completed —— 后端已把终态事件写入事件存储，非 running 回合也会回放。
-        const taskId = activeTurn.value.taskId
-        const hasMediaResult = Array.isArray(message?.attachments) && message.attachments.some(a => a?.type === 'image' || a?.type === 'video')
-        if (taskId && !hasMediaResult && activeTurn.value.status !== 'cancelled' && currentCodexThreadId.value) {
-          if (lateTaskController) lateTaskController.abort()
-          lateTaskController = new AbortController()
-          subscribeCodexStream(currentCodexThreadId.value, {
-            onTaskEvent: (event) => {
-              const msg = messages.value[assistantMessageIndex]
-              if (!msg) return
-              if (event.type === 'task.completed') {
-                finalizeMediaGenerationState(msg)
-                applyAgentResultToMessage(assistantMessageIndex, {
-                  media_type: event.media_type || 'video',
-                  result_urls: event.result_urls || event.preview_urls || [],
-                  task_id: event.task_id || null,
-                })
-                msg.isStreaming = false
-                activeTurn.value.taskId = null
-                lateTaskController?.abort()
-                scrollToBottom()
-              } else if (event.type === 'task.failed' || event.type === 'task.timeout') {
-                finalizeMediaGenerationState(msg)
-                if (!msg.content) msg.content = `媒体任务执行失败：${event.error || event.message || '未知错误'}`
-                msg.isStreaming = false
-                activeTurn.value.taskId = null
-                lateTaskController?.abort()
-                scrollToBottom()
-              }
-            },
-            onDone: () => { activeTurn.value.taskId = null },
-            onError: () => { activeTurn.value.taskId = null },
-            signal: lateTaskController.signal,
-          })
-        }
+        maybeLatePullTaskResult(assistantMessageIndex)
         loadSessions()
         refreshQueueAndFollow()
       },
@@ -3058,6 +3184,10 @@ async function sendEnhancedMessage(force = false) {
         activeTurn.value.phase = 'failed'
         activeTurn.value.cancellable = false
         activeTurn.value.error = error.message
+        // 回合失败/看门狗超时但媒体任务可能仍在执行：追尾补拉 task.completed，
+        // 已提交的视频/图片结果照常写回对话（参考 onDone 补拉），避免任务完成
+        // 却因回合失败导致对话永远显示「执行中」。
+        maybeLatePullTaskResult(assistantMessageIndex)
       }
     })
   } catch (error) {
@@ -3336,6 +3466,7 @@ async function sendMessage(force = false) {
             }
             message.mediaGenerating = generatingType
             message.mediaGeneratingCount = getRequestedMediaCount(messageText, generatingType)
+            message.mediaGeneratingTotal = message.mediaGeneratingCount
           }
           message.isThinking = false
           message.toolEvents.push({
@@ -3482,22 +3613,124 @@ function normalizeResultUrls(urls, mediaType) {
   return mediaType === 'video' ? unique.slice(0, 1) : unique
 }
 
+/** 统计消息中已合并的指定类型媒体数量（用于多图占位递减判断） */
+function countMediaByType(message, mediaType) {
+  if (!message || !Array.isArray(message.attachments)) return 0
+  return message.attachments.filter(a => a?.type === mediaType).length
+}
+
 function applyAgentResultToMessage(index, result) {
   if (!messages.value[index]) return
   const mediaType = ['image', 'video', 'audio'].includes(result?.media_type) ? result.media_type : 'image'
   const urls = normalizeResultUrls(result?.result_urls, mediaType)
   if (urls.length) {
-    messages.value[index].attachments = urls.map((url, mediaIndex) => ({
-      type: mediaType,
-      url,
-      name: `${mediaType === 'image' ? '生成图片' : mediaType === 'video' ? '生成视频' : '生成音频'} ${mediaIndex + 1}`
-    }))
-    messages.value[index].content = mediaType === 'image'
-      ? `已生成 ${urls.length} 张图片`
-      : `${mediaType === 'video' ? '视频' : '音频'}生成完成`
+    // 多图/多次结果合并累积：按 URL 去重追加，不再整体覆盖（否则生成一张返回一张时会覆盖上一张，
+    // 全部完成前对话里只剩最新一张）。编号按累积顺序递增。
+    const existing = Array.isArray(messages.value[index].attachments) ? messages.value[index].attachments : []
+    const seen = new Set(existing.map(a => a.url))
+    const taskId = result?.task_id || null
+    const newItems = []
+    for (const url of urls) {
+      if (seen.has(url)) continue
+      seen.add(url)
+      newItems.push({ type: mediaType, url, task_id: taskId })
+    }
+    if (newItems.length) existing.push(...newItems)
+
+    // 按提交顺序排列：结果 task_id 对应 mediaSubmissionOrder 中记录的任务提交次序，
+    // 后提交但先完成的任务不会排到前面；无 task_id 的历史项保持原相对顺序排后面。
+    const order = Array.isArray(messages.value[index].mediaSubmissionOrder) ? messages.value[index].mediaSubmissionOrder : []
+    if (order.length > 1) {
+      const orderIndex = (a) => (a?.task_id && order.includes(a.task_id) ? order.indexOf(a.task_id) : order.length)
+      existing.sort((a, b) => orderIndex(a) - orderIndex(b))
+      existing.forEach((a, i) => {
+        a.name = `${a.type === 'image' ? '生成图片' : a.type === 'video' ? '生成视频' : '生成音频'} ${i + 1}`
+      })
+    } else {
+      let nextId = existing.length + 1 - newItems.length
+      for (const item of newItems) {
+        item.name = `${item.type === 'image' ? '生成图片' : item.type === 'video' ? '生成视频' : '生成音频'} ${nextId++}`
+      }
+    }
+    messages.value[index].attachments = existing
+    const imageCount = existing.filter(a => a.type === 'image').length
+    const videoCount = existing.filter(a => a.type === 'video').length
+    messages.value[index].content = imageCount > 0
+      ? (videoCount > 0 ? `已生成 ${imageCount} 张图片、${videoCount} 个视频` : `已生成 ${imageCount} 张图片`)
+      : (videoCount > 0 ? `已生成 ${videoCount} 个视频` : (result?.content || JSON.stringify(result || {})))
     return
   }
   messages.value[index].content = result?.content || JSON.stringify(result || {})
+}
+
+/**
+ * 统一媒体类型兜底：优先事件字段，其次按结果 URL 扩展名判断（.mp4/.webm/.mov → video）。
+ * 服务端 task.completed 现已携带 media_type；此兜底覆盖事件存储回放/旧事件缺字段，
+ * 以及服务端 autoSubmitVideoTask 兜底提交（前端未收到 video-gen tool 事件）的场景，
+ * 避免视频被当成 image 渲染成坏 <img> 或结果丢失。
+ */
+function resolveMediaType(event) {
+  const explicit = event?.media_type
+  if (['image', 'video', 'audio'].includes(explicit)) return explicit
+  const urls = [...(Array.isArray(event?.result_urls) ? event.result_urls : []), ...(Array.isArray(event?.preview_urls) ? event.preview_urls : [])]
+  if (urls.some(u => /\.(mp4|webm|mov)(\?|$)/i.test(String(u)))) return 'video'
+  if (String(event?.tool || '').includes('video')) return 'video'
+  return 'image'
+}
+
+/**
+ * 清掉仍处于运行/等待中的状态卡（task-status 等），避免「执行中」残留显示。
+ * 正常路径 tool.completed 会置完成；turn.failed 等异常路径事件可能丢失，需手动清理。
+ */
+function clearPendingToolStatusCards() {
+  activeToolEvents.value = activeToolEvents.value.filter(t => t.status !== 'running' && t.status !== 'waiting')
+}
+
+/**
+ * 任务追尾补拉：本轮提交过媒体任务但结果未回显（agent 提前结束回合 / 回合失败 / 追尾超时）时，
+ * 通过重连流补拉 task.completed —— 后端已把终态事件写入事件存储，非 running 回合也会回放。
+ * 图片任务耗时短通常回合内拿到结果；视频任务慢、易越过回合边界，必须靠补拉写回对话，
+ * 否则消息永远停在「执行中」（历史记录正常、对话却丢失结果）。
+ * @returns {boolean} 是否发起了补拉
+ */
+function maybeLatePullTaskResult(assistantMessageIndex) {
+  const taskId = activeTurn.value.taskId
+  const message = messages.value[assistantMessageIndex]
+  const hasMediaResult = Array.isArray(message?.attachments) && message.attachments.some(a => a?.type === 'image' || a?.type === 'video')
+  if (!taskId || hasMediaResult || activeTurn.value.status === 'cancelled' || !currentCodexThreadId.value) return false
+  if (lateTaskController) lateTaskController.abort()
+  lateTaskController = new AbortController()
+  subscribeCodexStream(currentCodexThreadId.value, {
+    onTaskEvent: (event) => {
+      const msg = messages.value[assistantMessageIndex]
+      if (!msg) return
+      if (event.type === 'task.completed') {
+        finalizeMediaGenerationState(msg)
+        applyAgentResultToMessage(assistantMessageIndex, {
+          media_type: resolveMediaType(event),
+          result_urls: event.result_urls || event.preview_urls || [],
+          task_id: event.task_id || null,
+        })
+        msg.isStreaming = false
+        activeTurn.value.taskId = null
+        clearPendingToolStatusCards()
+        lateTaskController?.abort()
+        scrollToBottom()
+      } else if (event.type === 'task.failed' || event.type === 'task.timeout') {
+        finalizeMediaGenerationState(msg)
+        if (!msg.content) msg.content = `媒体任务执行失败：${event.error || event.message || '未知错误'}`
+        msg.isStreaming = false
+        activeTurn.value.taskId = null
+        clearPendingToolStatusCards()
+        lateTaskController?.abort()
+        scrollToBottom()
+      }
+    },
+    onDone: () => { activeTurn.value.taskId = null },
+    onError: () => { activeTurn.value.taskId = null },
+    signal: lateTaskController.signal,
+  })
+  return true
 }
 
 function findGeneratedMediaResult(results) {
@@ -3932,7 +4165,7 @@ onUnmounted(() => {
  * @param {string} type - 文件类型: 'image' | 'video' | 'audio'
  * @param {string} [name] - 文件名（可选）
  */
-async function addAttachmentFromUrl(url, type, name) {
+async function addAttachmentFromUrl(url, type, name, sourceNodeId) {
   if (!url) return
 
   const config = getAssistantAttachmentTypeConfig(type)
@@ -3945,7 +4178,7 @@ async function addAttachmentFromUrl(url, type, name) {
         const { getApiUrl } = await import('@/config/tenant')
         directUrl = getApiUrl(url)
       }
-      pushAttachment(buildDirectUrlAttachment({ url: directUrl, type, name: fileName }))
+      pushAttachment(buildDirectUrlAttachment({ url: directUrl, type, name: fileName, sourceNodeId }))
       await nextTick()
       inputRef.value?.focus()
       return
@@ -3977,7 +4210,8 @@ async function addAttachmentFromUrl(url, type, name) {
         file,
         fileType: 'image',
         ext: fileName.split('.').pop(),
-        preview: URL.createObjectURL(file)
+        preview: URL.createObjectURL(file),
+        sourceNodeId
       })
     } else if (type === 'video') {
       pushAttachment({
@@ -3987,7 +4221,8 @@ async function addAttachmentFromUrl(url, type, name) {
         fileType: 'video',
         ext: fileName.split('.').pop(),
         size: file.size,
-        preview: URL.createObjectURL(file)
+        preview: URL.createObjectURL(file),
+        sourceNodeId
       })
     } else if (type === 'audio') {
       pushAttachment({
@@ -3997,7 +4232,8 @@ async function addAttachmentFromUrl(url, type, name) {
         fileType: 'audio',
         ext: fileName.split('.').pop(),
         size: file.size,
-        preview: URL.createObjectURL(file)
+        preview: URL.createObjectURL(file),
+        sourceNodeId
       })
     }
 

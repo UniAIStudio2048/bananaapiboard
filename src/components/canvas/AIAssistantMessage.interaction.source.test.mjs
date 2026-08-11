@@ -14,7 +14,7 @@ test('thinking is a single collapsed disclosure row with a live thinking state',
 test('ordinary tool calls stay out of the conversation while image generation uses a visual grid', () => {
   assert.doesNotMatch(source, /v-if="message\.tool_calls\?\.length"/)
   assert.doesNotMatch(source, /v-if="message\.toolEvents\?\.length"/)
-  assert.match(source, /v-for="index in mediaGeneratingCount"/)
+  assert.match(source, /v-for="\(_, slotIndex\) in mediaGeneratingCount"/)
   assert.match(source, /class="media-generating__placeholder"/)
   assert.match(source, /const mediaGeneratingCount = computed\(\(\) =>/)
   assert.match(source, /v-if="message\.preGenerationContent" class="ai-message__text ai-message__text--pre-generation"/)
