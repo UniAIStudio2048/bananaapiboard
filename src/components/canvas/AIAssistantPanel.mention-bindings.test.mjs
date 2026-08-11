@@ -120,3 +120,26 @@ test('assistant attachment drags reset local and canvas drag state on every drag
     'attachment drag cleanup should release global canvas drag listeners'
   )
 })
+
+test('assistant @ mention candidates include conversation media (AI generated + user uploaded)', () => {
+  assert.match(
+    source,
+    /import \{ buildConversationMediaFromMessages, buildConversationMentionCandidates \} from '@\/utils\/aiAssistantConversationMedia'/,
+    'should import the conversation media merging helpers'
+  )
+  assert.match(
+    source,
+    /const conversationMentionItems = computed\(\(\) => buildConversationMentionCandidates\(\{[\s\S]*?currentAttachments: attachments\.value,[\s\S]*?conversationMedia: buildConversationMediaFromMessages\(messages\.value\)/,
+    'mention candidates should merge current attachments with all conversation media'
+  )
+  assert.match(
+    source,
+    /const filteredAttachmentMentionItems = computed\(\(\) => \{[\s\S]*?return conversationMentionItems\.value\.filter/,
+    'the @ popup list should filter over the conversation-scoped candidates'
+  )
+  assert.match(
+    source,
+    /function mergeMentionedHistoryMedia\(baseAttachments = \[\]\)[\s\S]*?key\.startsWith\('url:'\)/,
+    'history media referenced via @ should be merged into outgoing attachments'
+  )
+})

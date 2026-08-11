@@ -73,6 +73,13 @@ test('single round: turn status bar hidden, send button doubles as stop button',
 test('queue: force insert and delete call the server queue APIs', () => {
   assert.match(source, /cancelCodexTurn\(currentCodexThreadId\.value, targetTurnId, \{ reason: 'force_insert' \}\)/)
   assert.match(source, /deleteQueuedCodexMessage\(currentCodexThreadId\.value, turnId\)/)
+  assert.match(source, /deleteQueuedCodexMessage\(currentCodexThreadId\.value, queued\.turn_id\)/)
+  assert.match(source, /async function forceInsertQueuedMessage\(queued\)[\s\S]*?await deleteQueuedCodexMessage\(currentCodexThreadId\.value, queued\.turn_id\)[\s\S]*?catch \(error\)[\s\S]*?return/)
+  const forceInsertBlock = source.match(/async function forceInsertQueuedMessage\(queued\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(forceInsertBlock, 'forceInsertQueuedMessage must exist')
+  const deleteIndex = forceInsertBlock.indexOf('await deleteQueuedCodexMessage(currentCodexThreadId.value, queued.turn_id)')
+  const cancelIndex = forceInsertBlock.indexOf("cancelCodexTurn(currentCodexThreadId.value, targetTurnId, { reason: 'force_insert' })")
+  assert.ok(deleteIndex >= 0 && cancelIndex >= 0 && deleteIndex < cancelIndex, 'queued turn must be deleted before cancelling the active turn')
   assert.match(source, /function removeQueuedServerMessage\(queued\)/)
 })
 

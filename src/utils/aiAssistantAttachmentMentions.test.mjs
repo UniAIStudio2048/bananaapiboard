@@ -4,6 +4,7 @@ import assert from 'node:assert/strict'
 import {
   bindAssistantAttachmentMention,
   buildAssistantMentionItems,
+  buildConversationMentionCandidates,
   ensureAssistantAttachmentKey,
   resolveAssistantAttachmentsForSend,
   syncAssistantAttachmentMentions
@@ -135,4 +136,43 @@ test('resolves manually typed unbound labels by current order', () => {
   })
 
   assert.deepEqual(result.map(item => item.key), ['k-img-b'])
+})
+
+test('mention candidates merge current attachments with conversation media, dedup by url', () => {
+  const candidates = buildConversationMentionCandidates({
+    currentAttachments: [
+      { key: 'k-a', type: 'image', url: 'a.png', name: 'a.png' },
+      { key: 'k-v', type: 'video', url: 'v.mp4', name: 'v.mp4' },
+    ],
+    conversationMedia: [
+      { type: 'image', url: 'a.png', name: 'a.png' }, // 与当前附件同 url → 跳过
+      { type: 'image', url: 'gen-1.png', name: 'gen-1.png' }, // AI 生成图
+      { type: 'video', url: 'gen-v.mp4', name: 'gen-v.mp4' }, // AI 生成视频
+      { type: 'audio', url: 'gen-a.mp3', name: 'gen-a.mp3' },
+      { type: 'file', url: 'x.pdf', name: 'x.pdf' }, // 历史文件不纳入
+      { type: 'image', url: 'gen-1.png', name: 'dup' }, // 历史内重复 → 跳过
+    ],
+  })
+
+  assert.deepEqual(candidates.map(item => [item.key, item.label, item.type]), [
+    ['k-a', '图片1', 'image'],
+    ['k-v', '视频1', 'video'],
+    ['url:image:gen-1.png', '图片2', 'image'],
+    ['url:video:gen-v.mp4', '视频2', 'video'],
+    ['url:audio:gen-a.mp3', '音频1', 'audio'],
+  ])
+})
+
+test('conversation media without url is skipped from mention candidates', () => {
+  const candidates = buildConversationMentionCandidates({
+    currentAttachments: [],
+    conversationMedia: [
+      { type: 'image', name: 'no-url.png' }, // 无 url → 跳过
+      { type: 'video', url: 'v.mp4', name: 'v.mp4' },
+    ],
+  })
+
+  assert.deepEqual(candidates.map(item => [item.key, item.label]), [
+    ['url:video:v.mp4', '视频1'],
+  ])
 })

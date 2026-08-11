@@ -118,6 +118,12 @@
         <div v-if="message.mediaGenerating === 'image'" class="media-generating__grid">
           <div v-for="index in mediaGeneratingCount" :key="index" class="media-generating__placeholder" aria-hidden="true"></div>
         </div>
+        <!-- 视频生成中：按视频画幅 16:9 显示占位框并标注比例（图片生成中的 1:1 方格子对应图片画幅） -->
+        <div v-if="message.mediaGenerating === 'video'" class="media-generating__video" aria-hidden="true">
+          <div class="media-generating__video-frame">
+            <span class="media-generating__video-ratio">16:9</span>
+          </div>
+        </div>
       </div>
 
       <!-- 回合终态：失败 / 已停止（reliability design 12.1 — 失败无正文时仍有可读错误消息） -->
@@ -188,10 +194,18 @@
           <span>{{ mediaResults[0].type === 'video' ? '视频已生成' : '图片已生成' }} ×{{ mediaResults.length }}</span>
         </button>
         <button v-if="!showMediaResults" type="button" class="ai-media-results__collapsed" @click="showMediaResults = true">
-          <span class="ai-media-results__stack" aria-hidden="true"></span>
-          <img v-if="mediaResults[0].type === 'image'" :src="toSameOriginUrl(mediaResults[0].url)" :alt="mediaResults[0].name" class="ai-media-results__collapsed-preview" />
-          <video v-else :src="toSameOriginUrl(mediaResults[0].url)" class="ai-media-results__collapsed-preview" preload="metadata"></video>
-          <span v-if="mediaResults.length > 1" class="ai-media-results__remaining">+{{ mediaResults.length - 1 }}</span>
+          <!-- 真实图片堆叠：前 3 张错位露出边缘，其余并入 +N 角标；背面图片带轻微倾斜（分镜格子折叠感），层内缩不超出按钮边界，不与相邻文字重叠 -->
+          <span
+            v-for="(media, index) in collapsedStack"
+            :key="media.url"
+            class="ai-media-results__collapsed-layer"
+            :style="{ inset: `${index * 5}px ${(collapsedStack.length - 1 - index) * 12}px ${(collapsedStack.length - 1 - index) * 12}px ${index * 5}px`, transform: `rotate(${index * 1.5}deg)`, zIndex: collapsedStack.length - index }"
+            :aria-hidden="index > 0 ? 'true' : undefined"
+          >
+            <img v-if="media.type === 'image'" :src="toSameOriginUrl(media.url)" :alt="index === 0 ? media.name : ''" loading="lazy" />
+            <video v-else :src="toSameOriginUrl(media.url)" :aria-label="index === 0 ? media.name : ''" preload="metadata"></video>
+          </span>
+          <span v-if="mediaResults.length > collapsedStack.length" class="ai-media-results__remaining">+{{ mediaResults.length - collapsedStack.length }}</span>
         </button>
         <div v-else class="ai-media-results__grid">
         <div v-for="media in mediaResults" :key="media.url" class="ai-media-card">
@@ -342,6 +356,12 @@
       <div v-if="showTimestamp" class="ai-message__time">
         {{ formatTime(message.timestamp) }}
       </div>
+
+      <div v-if="message.role === 'assistant' && message.turn_id && !message.isStreaming && message.turnState !== 'cancelled'" class="ai-message-feedback" role="group" aria-label="回答反馈">
+        <span class="ai-message-feedback__label">这次回答有帮助吗？</span>
+        <button type="button" class="ai-message-feedback__button" :class="{ selected: message.feedback === 'up' }" :aria-pressed="message.feedback === 'up'" aria-label="有帮助" @click="$emit('feedback', { message, rating: 'up' })">👍</button>
+        <button type="button" class="ai-message-feedback__button" :class="{ selected: message.feedback === 'down' }" :aria-pressed="message.feedback === 'down'" aria-label="没帮助" @click="$emit('feedback', { message, rating: 'down' })">👎</button>
+      </div>
     </div>
   </div>
 </template>
@@ -384,7 +404,7 @@ const visibleAttachments = computed(() => {
   return result
 })
 
-const emit = defineEmits(['preview-media', 'select-choice', 'retry'])
+const emit = defineEmits(['preview-media', 'select-choice', 'retry', 'feedback'])
 
 const parsedContent = computed(() => parseAssistantContent(props.message.content))
 const assistantChoices = computed(() => props.message.role === 'assistant' ? parsedContent.value.choices : null)
@@ -481,6 +501,9 @@ const mediaResults = computed(() => {
 })
 
 const mediaGeneratingCount = computed(() => Math.max(1, Number(props.message.mediaGeneratingCount) || 1))
+
+// 折叠态堆叠层：最多展示前 3 张真实图片，其余并入 +N 角标
+const collapsedStack = computed(() => mediaResults.value.slice(0, 3))
 
 // 拖拽附件到画布
 function handleAttachmentDragStart(e, att) {
@@ -901,6 +924,10 @@ onUnmounted(() => {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
   margin-top: 16px;
+  /* 网格项顶对齐：不同比例图片（竖屏/横屏/方形）各自按高度展示，互不拉伸 */
+  align-items: start;
+  /* 图片有尺寸上限：面板/对话框再宽，网格也不随之放大（单图最大 256px，与折叠态一致） */
+  width: min(100%, 532px);
 }
 
 .media-generating__placeholder {
@@ -913,6 +940,36 @@ onUnmounted(() => {
   background-position: 16px calc(100% - 16px);
   background-size: 12px 12px;
   animation: media-generating-placeholder 1.8s ease-in-out infinite alternate;
+}
+
+/* 视频生成中：16:9 画幅占位框（与图片 1:1 方格子对应，展示视频默认画幅比例） */
+.media-generating__video {
+  margin-top: 16px;
+  width: min(100%, 532px);
+}
+.media-generating__video-frame {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  min-height: 160px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  background-color: rgba(148, 163, 184, 0.065);
+  background-image: radial-gradient(circle, rgba(226, 232, 240, 0.14) 1.2px, transparent 1.4px);
+  background-position: 16px calc(100% - 16px);
+  background-size: 12px 12px;
+  animation: media-generating-placeholder 1.8s ease-in-out infinite alternate;
+}
+.media-generating__video-ratio {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: rgba(226, 232, 240, 0.9);
+  background: rgba(15, 23, 42, 0.55);
 }
 
 @keyframes media-generating-pulse {
@@ -1518,10 +1575,16 @@ onUnmounted(() => {
   color: #57534e;
 }
 
-:root.canvas-theme-light .media-generating__placeholder {
+:root.canvas-theme-light .media-generating__placeholder,
+:root.canvas-theme-light .media-generating__video-frame {
   border-color: rgba(15, 23, 42, 0.12);
   background-color: rgba(15, 23, 42, 0.035);
   background-image: radial-gradient(circle, rgba(15, 23, 42, 0.13) 1.2px, transparent 1.4px);
+}
+
+:root.canvas-theme-light .media-generating__video-ratio {
+  color: rgba(28, 25, 23, 0.9);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 :root.canvas-theme-light .ai-message-reference {
@@ -2077,7 +2140,8 @@ onUnmounted(() => {
 .ai-media-results__collapsed {
   position: relative;
   display: block;
-  width: min(100%, 390px);
+  width: min(100%, 256px);
+  aspect-ratio: 1;
   margin-top: 14px;
   padding: 0;
   border: 0;
@@ -2086,31 +2150,26 @@ onUnmounted(() => {
   cursor: pointer;
 }
 
-.ai-media-results__stack {
+.ai-media-results__collapsed-layer {
   position: absolute;
-  z-index: 0;
-  inset: 10px -14px -12px 12px;
+  overflow: hidden;
   border-radius: 22px;
-  background: rgba(148, 163, 184, 0.25);
-  box-shadow: 6px 7px 0 rgba(148, 163, 184, 0.16), 12px 12px 0 rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(127, 127, 127, 0.2);
+  background: rgba(127, 127, 127, 0.08);
 }
-
-.ai-media-results__collapsed-preview {
-  position: relative;
-  z-index: 1;
+.ai-media-results__collapsed-layer img,
+.ai-media-results__collapsed-layer video {
   display: block;
   width: 100%;
-  aspect-ratio: 1;
-  border-radius: 22px;
+  height: 100%;
   object-fit: cover;
-  background: rgba(148, 163, 184, 0.12);
 }
 
 .ai-media-results__remaining {
   position: absolute;
-  z-index: 2;
-  right: 12px;
-  bottom: 12px;
+  z-index: 4;
+  right: 10px;
+  top: 10px;
   padding: 5px 8px;
   border-radius: 999px;
   color: #1f2937;
@@ -2123,17 +2182,27 @@ onUnmounted(() => {
   position: relative;
   min-width: 0;
   max-width: 100%;
-  aspect-ratio: 1;
   border-radius: 22px;
   overflow: hidden;
   border: 1px solid rgba(127, 127, 127, 0.2);
   background: rgba(127, 127, 127, 0.08);
 }
-.ai-media-card__preview {
+/* 图片按自身比例展示（竖屏图显示竖屏高度，无灰色边框留白）；加载前给保底高度避免塌陷 */
+img.ai-media-card__preview {
   display: block;
   width: 100%;
-  height: 100%;
-  object-fit: contain;
+  height: auto;
+  min-height: 160px;
+  object-fit: cover;
+  cursor: pointer;
+  background: rgba(127, 127, 127, 0.1);
+}
+/* 视频无固有宽高比，保底 16:9 */
+video.ai-media-card__preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
   cursor: pointer;
   background: rgba(127, 127, 127, 0.1);
 }
@@ -2202,6 +2271,38 @@ onUnmounted(() => {
 }
 .ai-message-turn-state__retry:focus-visible {
   outline: 2px solid rgba(239, 68, 68, 0.6);
+  outline-offset: 2px;
+}
+
+.ai-message-feedback {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  color: rgba(100, 116, 139, 0.9);
+  font-size: 11px;
+}
+.ai-message-feedback__label { margin-right: 2px; }
+.ai-message-feedback__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 25px;
+  height: 25px;
+  padding: 0;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  border-radius: 7px;
+  background: rgba(148, 163, 184, 0.08);
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+.ai-message-feedback__button:hover,
+.ai-message-feedback__button.selected {
+  border-color: rgba(129, 140, 248, 0.65);
+  background: rgba(129, 140, 248, 0.18);
+}
+.ai-message-feedback__button:focus-visible {
+  outline: 2px solid rgba(129, 140, 248, 0.75);
   outline-offset: 2px;
 }
 

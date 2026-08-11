@@ -74,13 +74,14 @@ export async function deleteCodexSession(threadId) {
  * @param {Function} [callbacks.onDone] - 流结束
  * @param {Function} [callbacks.onError] - 错误
  * @param {AbortSignal} [callbacks.signal] - 取消信号
+ * @param {number} [callbacks.lastEventId=0] - 从指定事件 ID 之后恢复
  */
 export async function subscribeCodexStream(threadId, callbacks = {}) {
-  const { onStatus, onContent, onToolEvent, onTaskEvent, onDone, onError, signal } = callbacks
+  const { onStatus, onContent, onToolEvent, onTaskEvent, onDone, onError, signal, lastEventId = 0 } = callbacks
   const url = getApiUrl(`/api/codex-agent/sessions/${encodeURIComponent(threadId)}/stream`)
   try {
     const response = await fetch(url, {
-      headers: headers(false),
+      headers: { ...headers(false), ...(Number(lastEventId) > 0 ? { 'Last-Event-ID': String(lastEventId) } : {}) },
       credentials: 'include',
       signal
     })
@@ -91,6 +92,7 @@ export async function subscribeCodexStream(threadId, callbacks = {}) {
     const reader = response.body.getReader()
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
+    let cursor = Number(lastEventId) || 0
     while (true) {
       const { done, value } = await reader.read()
       if (done) {
@@ -111,6 +113,9 @@ export async function subscribeCodexStream(threadId, callbacks = {}) {
         if (!eventName || !data) continue
         try {
           const json = JSON.parse(data)
+          const eventId = Number(json.event_id || 0)
+          if (eventId > 0 && eventId <= cursor) continue
+          if (eventId > cursor) cursor = eventId
           switch (eventName) {
             case 'status':
               if (onStatus) onStatus(json.turn_status, json)
@@ -167,6 +172,7 @@ export async function subscribeCodexStream(threadId, callbacks = {}) {
  * @param {string} [params.target_turn_id] - interrupt 模式下要取消的目标回合
  * @param {string} [params.hint] - 本轮额外指令（仅进入 LLM 提示词，不写入历史记录）
  * @param {Array} [params.attachments] - 附件列表 [{key,type,url,name}]
+ * @param {Object} [params.canvas_context] - 当前画布工作流/节点上下文
  * @param {Function} [params.onSession] - 收到 session_id
  * @param {Function} [params.onThread] - 收到 thread_id
  * @param {Function} [params.onContent] - 收到 agent_message 文本
@@ -199,6 +205,10 @@ export async function sendCodexMessage(params) {
       client_message_id: requestParams.client_message_id || undefined,
       send_mode: requestParams.send_mode || undefined,
       target_turn_id: requestParams.target_turn_id || undefined,
+      authorization_mode: requestParams.authorization_mode || undefined,
+      canvas_context: requestParams.canvas_context || undefined,
+      model: requestParams.model || undefined,
+      mode: requestParams.mode || undefined,
       ...extra,
     }
     return base
@@ -380,6 +390,21 @@ export async function deleteQueuedCodexMessage(threadId, turnId) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
     throw new Error(error.message || error.error || '删除队列消息失败')
+  }
+  return response.json()
+}
+
+/** 提交增强模式回合反馈；服务端按 tenant/user/turn 幂等更新。 */
+export async function submitCodexTurnFeedback(threadId, turnId, rating, reason = null) {
+  const response = await fetch(getApiUrl(`/api/codex-agent/sessions/${encodeURIComponent(threadId)}/turns/${encodeURIComponent(turnId)}/feedback`), {
+    method: 'POST',
+    headers: headers(true),
+    credentials: 'include',
+    body: JSON.stringify({ rating, reason }),
+  })
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}))
+    throw new Error(error.message || error.error || '提交反馈失败')
   }
   return response.json()
 }

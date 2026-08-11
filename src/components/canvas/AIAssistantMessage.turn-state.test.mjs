@@ -27,7 +27,7 @@ test('cancelled turn renders a gray stopped state', () => {
 })
 
 test('retry event is declared on the component', () => {
-  assert.match(source, /defineEmits\(\['preview-media', 'select-choice', 'retry'\]\)/)
+  assert.match(source, /defineEmits\(\['preview-media', 'select-choice', 'retry', 'feedback'\]\)/)
 })
 
 test('media generating placeholders and pre-generation content still exist (no regression)', () => {

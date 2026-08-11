@@ -2,7 +2,7 @@
   <Teleport to="body">
     <Transition name="mention-fade">
       <div
-        v-if="visible && items.length > 0"
+        v-if="visible"
         class="prompt-mention-popup"
         :style="popupStyle"
         @mousedown.prevent
@@ -11,7 +11,7 @@
           <span class="mention-popup-icon">@</span>
           <span class="mention-popup-title">插入引用</span>
         </div>
-        <div class="mention-popup-list" ref="listRef">
+        <div v-if="items.length" class="mention-popup-list" ref="listRef">
           <div
             v-for="(item, index) in items"
             :key="item.type + '-' + item.index"
@@ -49,6 +49,7 @@
             </div>
           </div>
         </div>
+        <div v-else class="mention-popup-empty">暂无可用媒体，可先上传或生成图片/视频</div>
       </div>
     </Transition>
   </Teleport>

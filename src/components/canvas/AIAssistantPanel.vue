@@ -166,6 +166,7 @@
             :user-name="userName"
             @preview-media="previewMedia"
             @select-choice="sendChoiceMessage"
+            @feedback="submitTurnFeedback"
           />
 
           <!-- 工具调用提示：跟随对话最后一行展示，不固定在输入框上方 -->
@@ -674,6 +675,20 @@
             </button>
             <p v-if="!modelPickerModels.length" class="model-picker-empty">当前没有可选择的{{ modelTypeLabel(modelPickerType) }}。</p>
           </div>
+          <!-- 视频模型生成模式选择：选中支持多模式的视频模型后显示（text2video/首帧/首尾帧/多模态） -->
+          <div v-if="modelPickerType === 'video' && selectedModelValue && selectedVideoModes.length" class="model-picker-modes">
+            <span class="model-picker-modes__label">生成模式</span>
+            <div class="model-picker-modes__list">
+              <button
+                v-for="mode in selectedVideoModes"
+                :key="mode.value"
+                type="button"
+                class="model-picker-mode"
+                :class="{ active: selectedVideoMode === mode.value }"
+                @click="selectAssistantVideoMode(mode.value)"
+              >{{ mode.label }}</button>
+            </div>
+          </div>
         </section>
       </div>
     </Transition>
@@ -796,12 +811,13 @@ import {
   resolveAssistantAttachmentsForSend,
   syncAssistantAttachmentMentions
 } from '@/utils/aiAssistantAttachmentMentions'
+import { buildConversationMediaFromMessages, buildConversationMentionCandidates } from '@/utils/aiAssistantConversationMedia'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
 import { showAlert } from '@/composables/useCanvasDialog'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { createAgentIdempotencyKey, createAgentRun, decideAgentRun, getSkillCatalog, streamAgentRun } from '@/api/agent'
 import { startStreamDownload, updateUserPreferences } from '@/api/client'
-import { getCodexSessions, getCodexSession, getCodexSessionMessages, deleteCodexSession, sendCodexMessage, subscribeCodexStream, cancelCodexTurn, deleteQueuedCodexMessage } from '@/api/codex-agent'
+import { getCodexSessions, getCodexSession, getCodexSessionMessages, deleteCodexSession, sendCodexMessage, subscribeCodexStream, cancelCodexTurn, deleteQueuedCodexMessage, submitCodexTurnFeedback } from '@/api/codex-agent'
 import AgentTurnStatusBar from './AgentTurnStatusBar.vue'
 import AgentToolTimeline from './AgentToolTimeline.vue'
 import AgentQueueBar from './AgentQueueBar.vue'
@@ -866,8 +882,11 @@ const pendingApprovalActions = computed(() => pendingAgentApproval.value?.approv
 let agentStreamController = null
 let normalStreamController = null
 let reconnectController = null
+let lateTaskController = null
 const stopRequested = ref(false)
 const queuedMessages = ref([])
+// 服务端队列恢复时暂存该草稿的授权模式，不改变用户当前模式偏好。
+const queuedAuthorizationMode = ref(null)
 let nextQueuedMessageId = 0
 const serverQueue = ref([])
 const showRunningBanner = ref(false)
@@ -896,6 +915,16 @@ const activeTurn = ref({
   error: null,
 })
 const activeToolEvents = ref([])
+
+async function submitTurnFeedback({ message, rating }) {
+  if (!message?.turn_id || !currentCodexThreadId.value) return
+  try {
+    await submitCodexTurnFeedback(currentCodexThreadId.value, message.turn_id, rating)
+    message.feedback = rating
+  } catch (error) {
+    console.warn('[AI-Assistant] 提交回合反馈失败:', error.message)
+  }
+}
 
 const activeTurnRunning = computed(() =>
   ['running', 'accepted', 'preparing', 'thinking', 'tool_calling', 'waiting_external_task', 'finalizing'].includes(activeTurn.value.status)
@@ -946,6 +975,8 @@ function openModelPicker() {
 }
 const modelPickerType = ref('image')
 const selectedModelByType = ref({ image: '', video: '' })
+// 视频生成模式（仅视频模型支持模式选择时生效；随模型选择器状态变化，选中即随本轮发送）
+const selectedVideoMode = ref('')
 const tenantConfigVersion = useTenantConfigVersion()
 
 const showModeDropdown = ref(false)
@@ -1047,6 +1078,11 @@ const modelPickerModels = computed(() => {
           label: cfg.displayName || cfg.label || meta.label || cfg.name || cfg.id,
           description: cfg.description || meta.description || '已启用视频模型',
           pointsCost: cfg.pointsCost != null ? cfg.pointsCost : meta.pointsCost,
+          apiType: cfg.apiType || meta.apiType || null,
+          supportedModes: cfg.supportedModes || null,
+          minimaxConfig: cfg.minimaxConfig || null,
+          seedanceConfig: cfg.seedanceConfig || null,
+          happyHorseConfig: cfg.happyHorseConfig || null,
           ...(cfg.veoModes ? { veoModes: cfg.veoModes } : {}),
           ...(cfg.klingO1Modes ? { klingO1Modes: cfg.klingO1Modes } : {}),
           __catalogOrder: metaIndex >= 0 ? metaIndex : Number.MAX_SAFE_INTEGER
@@ -1081,6 +1117,19 @@ function selectAssistantModel(model) {
     model.klingO1Modes?.find(mode => mode.value === model.defaultKlingO1Mode)?.actualModel ||
     model.value || model.actualModel
   selectedModelByType.value = { ...selectedModelByType.value, [modelPickerType.value]: selectedValue }
+  // 视频模型支持模式选择时，重置为模型默认模式（或可选列表第一个）
+  if (modelPickerType.value === 'video') {
+    const modes = selectedVideoModes.value
+    if (modes.length > 0) {
+      const supported = assistantModelSupportedModes(model)
+      const configured = model.defaultVideoMode || model.minimaxConfig?.defaultMode || model.seedanceConfig?.defaultMode
+      const mapped = String(configured || '').trim()
+      const normalized = mapped === 't2v' ? 'text2video' : mapped === 'i2v' ? 'image2video_first' : mapped
+      selectedVideoMode.value = modes.some(m => m.value === normalized) ? normalized : modes[0].value
+    } else {
+      selectedVideoMode.value = ''
+    }
+  }
   showModelPicker.value = false
 }
 
@@ -1092,8 +1141,46 @@ function isAssistantModelSelected(model) {
   return aliases.includes(selected) || subModels.some(item => item?.actualModel === selected)
 }
 
+// 视频生成模式选择（与 VideoNode 的 MINIMAX_H3_MODES/SEEDANCE2_MODES 对齐，用内部模式值）
+const VIDEO_GENERATION_MODES = [
+  { value: 'text2video', label: '文生视频' },
+  { value: 'image2video_first', label: '首帧' },
+  { value: 'image2video_first_last', label: '首尾帧' },
+  { value: 'multimodal_ref', label: '多模态' }
+]
+
+// 支持模式选择的视频模型 apiType：MiniMax H3 / Seedance 系（含 HappyHorse）/ Wan
+const VIDEO_MODE_MODEL_TYPES = ['minimax-h3', 'seedance-2.0', 'seedance-openai', 'seedance-openapi-pro', 'bytefor', 'happyhorse', 'wan']
+
+function assistantModelSupportedModes(model) {
+  if (!model) return null
+  const configs = [model.minimaxConfig, model.seedanceConfig, model.happyHorseConfig].filter(Boolean)
+  const supported = configs.find(c => c && typeof c.supportedModes === 'object' && c.supportedModes !== null)?.supportedModes || null
+  return supported
+}
+
+// 当前选中视频模型是否可进行模式选择（返回可选模式列表或空数组）
+const selectedVideoModes = computed(() => {
+  const type = modelPickerType.value
+  if (type !== 'video') return []
+  const model = modelPickerModels.value.find(m => isAssistantModelSelected(m))
+  if (!model) return []
+  if (!VIDEO_MODE_MODEL_TYPES.includes(String(model.apiType || '').trim())) return []
+  const supported = assistantModelSupportedModes(model)
+  const modes = VIDEO_GENERATION_MODES.filter(mode => {
+    if (!supported || typeof supported !== 'object') return true
+    return supported[mode.value] !== false
+  })
+  return modes.length > 0 ? modes : VIDEO_GENERATION_MODES
+})
+
+function selectAssistantVideoMode(modeValue) {
+  selectedVideoMode.value = modeValue
+}
+
 function clearAssistantModel() {
   selectedModelByType.value = { ...selectedModelByType.value, [modelPickerType.value]: '' }
+  if (modelPickerType.value === 'video') selectedVideoMode.value = ''
 }
 
 /** 点击输入框空白区域时聚焦编辑器（标签卡内嵌后，输入框外沿仍有可点击区域） */
@@ -1124,7 +1211,10 @@ function buildTurnModelHint() {
   const label = model.label || model.value || model.name || ''
   const modelId = selectedModelValue.value || model.value || model.actualModel || label
   if (!modelId) return ''
-  return `【本次请使用${typeLabel}生成模型「${label || modelId}」（模型标识：${modelId}）生成${typeLabel}，调用生成工具时请将 requested_model 指定为 ${modelId}】`
+  const modeInstruction = (modelPickerType.value === 'video' && selectedVideoMode.value && selectedVideoModes.value.length > 0)
+    ? `，并以「${selectedVideoMode.value}」模式（video-gen 的 video_mode 参数传 ${selectedVideoMode.value}）生成`
+    : ''
+  return `【本次请使用${typeLabel}生成模型「${label || modelId}」（模型标识：${modelId}）生成${typeLabel}${modeInstruction}，调用生成工具时请将 model 参数指定为「${modelId}」，确保本次生成使用该模型】`
 }
 
 /**
@@ -1176,12 +1266,26 @@ const hasDraft = computed(() => Boolean(inputText.value.trim() || attachments.va
 const canSend = computed(() => hasDraft.value && !isUploading.value)
 
 function snapshotDraft() {
+  const turnModelHint = buildTurnModelHint()
+  const turnModelRef = buildTurnModelRef()
+  const turnSkillRef = buildTurnSkillRef(inputText.value.trim())
   return {
     id: `queued-${Date.now()}-${nextQueuedMessageId++}`,
     text: inputText.value.trim(),
-    attachments: attachments.value.slice(),
+    attachments: mergeMentionedHistoryMedia(attachments.value.slice()),
     bindings: { ...(attachmentMentionBindings.value || {}) },
-    modelByType: { ...(selectedModelByType.value || {}) }
+    modelByType: { ...(selectedModelByType.value || {}) },
+    skillId: referencedSkill.value?.id || null,
+    authorizationMode: skillExecutionMode.value === 'auto' ? 'auto' : 'once',
+    hint: [
+      turnModelHint,
+      '生成任务完成后，请通过 task-status 获取结果；前端会根据 task-status 返回的结果自动写回当前画布，请不要调用 canvas-write。'
+    ].filter(Boolean).join('\n'),
+    model: turnModelRef?.modelId || null,
+    mode: modelPickerType.value === 'video' ? selectedVideoMode.value || null : null,
+    skillRef: turnSkillRef,
+    modelRef: turnModelRef,
+    canvasContext: props.canvasContext || null,
   }
 }
 
@@ -1207,18 +1311,45 @@ function queueCurrentDraft() {
 }
 
 // 把排队消息写入服务端队列（send_mode=queue），并回填 turn_id / queue_position
-function enqueueServerMessage(draft) {
+async function enqueueServerMessage(draft) {
   const clientMessageId = draft.client_message_id
-  sendCodexMessage({
+  let queuedAttachments = (Array.isArray(draft.attachments) ? draft.attachments : [])
+    .filter((attachment) => !attachment?.file && attachment?.url)
+    .map(({ key, type, url, name }) => ({ key, type, url, name }))
+  const filesToUpload = (Array.isArray(draft.attachments) ? draft.attachments : []).filter((attachment) => attachment?.file)
+  if (filesToUpload.length) {
+    try {
+      const uploaded = await uploadAttachments(filesToUpload.map((attachment) => attachment.file))
+      queuedAttachments = queuedAttachments.concat(uploaded.map((result, index) => ({
+        key: filesToUpload[index].key,
+        type: result.type,
+        url: result.url,
+        name: result.name,
+      })))
+    } catch (error) {
+      console.warn('[AI-Assistant] 排队附件上传失败:', error?.message)
+      return
+    }
+  }
+  await sendCodexMessage({
     thread_id: currentCodexThreadId.value,
     content: draft.text || '',
     client_message_id: clientMessageId,
     send_mode: 'queue',
+    skill_id: draft.skillId || null,
+    authorization_mode: draft.authorizationMode || 'once',
+    attachments: queuedAttachments,
+    hint: draft.hint || undefined,
+    model: draft.model || undefined,
+    mode: draft.mode || undefined,
+    skillRef: draft.skillRef || null,
+    modelRef: draft.modelRef || null,
+    canvas_context: draft.canvasContext || null,
     onAccepted: (json) => syncServerQueueItem(draft, json),
     onQueued: (json) => syncServerQueueItem(draft, json),
     onError: () => {},
   }).catch(() => {})
-  refreshQueueAndFollow()
+  await refreshQueueAndFollow()
 }
 
 function syncServerQueueItem(draft, json) {
@@ -1229,10 +1360,15 @@ function syncServerQueueItem(draft, json) {
     text: draft.text || '',
     queue_position: json.queue_position || null,
     status: json.status || 'queued',
+    attachments: Array.isArray(json.attachments) ? json.attachments : (draft.attachments || []),
+    skillId: json.skill_id || json.metadata?.skill_id || draft.skillId || null,
+    authorizationMode: json.authorization_mode || json.metadata?.authorization_mode || draft.authorizationMode || 'once',
   }
   const idx = serverQueue.value.findIndex((s) => s.client_message_id === item.client_message_id || s.turn_id === item.turn_id)
   if (idx >= 0) serverQueue.value[idx] = { ...serverQueue.value[idx], ...item }
   else serverQueue.value.push(item)
+  // 服务端队列已成为真源，移除本地镜像，避免同一条跟进消息在回合结束后再次发送。
+  queuedMessages.value = queuedMessages.value.filter((queued) => queued.id !== draft.id && queued.client_message_id !== item.client_message_id)
 }
 
 function restoreDraft(draft) {
@@ -1241,6 +1377,12 @@ function restoreDraft(draft) {
   attachments.value = Array.isArray(draft.attachments) ? draft.attachments : []
   attachmentMentionBindings.value = { ...(draft.bindings || {}) }
   selectedModelByType.value = { ...(draft.modelByType || selectedModelByType.value) }
+  const skillId = draft.skillId || draft.metadata?.skill_id || null
+  referencedSkill.value = skillId ? (agentSkills.value.find((skill) => skill.id === skillId) || null) : null
+  if (skillId) selectedSkillId.value = skillId
+  queuedAuthorizationMode.value = ['auto', 'once'].includes(draft.authorizationMode || draft.metadata?.authorization_mode)
+    ? (draft.authorizationMode || draft.metadata.authorization_mode)
+    : null
   nextTick(() => {
     inputEditorRenderKey.value += 1
     autoResize()
@@ -1254,7 +1396,7 @@ function drainQueuedMessages() {
   nextTick(() => sendMessage(true))
 }
 
-function forceInsertQueuedMessage(queued) {
+async function forceInsertQueuedMessage(queued) {
   if (!queued) return
   if (enhancedMode.value && currentCodexThreadId.value) {
     // 服务端队列项：取消当前回合后以 interrupt 发送
@@ -1264,6 +1406,15 @@ function forceInsertQueuedMessage(queued) {
     const removeFromQueue = () => {
       serverQueue.value = serverQueue.value.filter((s) => s.id !== queued.id && s.turn_id !== queued.turn_id && s.client_message_id !== clientMessageId)
       queuedMessages.value = queuedMessages.value.filter((s) => s.id !== queued.id)
+    }
+    if (queued.turn_id && currentCodexThreadId.value) {
+      try {
+        await deleteQueuedCodexMessage(currentCodexThreadId.value, queued.turn_id)
+      } catch (error) {
+        console.warn('[AI-Assistant] 队列消息已开始执行，无法强制插入:', error?.message)
+        refreshQueueAndFollow()
+        return
+      }
     }
     if (targetTurnId && activeTurn.value.id) {
       cancelCodexTurn(currentCodexThreadId.value, targetTurnId, { reason: 'force_insert' }).catch(() => {})
@@ -1353,6 +1504,10 @@ async function refreshQueueAndFollow() {
       text: t.content,
       queue_position: t.queue_position,
       status: t.status,
+      attachments: Array.isArray(t.attachments) ? t.attachments : [],
+      skillId: t.skill_id || t.metadata?.skill_id || null,
+      authorizationMode: t.authorization_mode || t.metadata?.authorization_mode || 'once',
+      metadata: t.metadata || null,
     }))
     const active = data?.session?.active_turn
     if (active?.turn_id && active.turn_id !== lastFollowedTurnId && active.turn_id !== activeTurn.value.id) {
@@ -1418,6 +1573,13 @@ function selectSkillExecutionMode(mode) {
 
 const attachmentMentionItems = computed(() => buildAssistantMentionItems(attachments.value))
 
+// @ 候选：当前待发送附件 + 本轮对话中出现过的所有媒体（AI 生成 + 用户上传），按 url 去重统一编号。
+// 当前附件保留原 key（可绑定/移除），历史媒体以 url:type:url 为 key 供发送时解析。
+const conversationMentionItems = computed(() => buildConversationMentionCandidates({
+  currentAttachments: attachments.value,
+  conversationMedia: buildConversationMediaFromMessages(messages.value)
+}))
+
 const highlightedInputSegments = computed(() => {
   if (!inputText.value) return []
   const segments = []
@@ -1459,7 +1621,7 @@ function getAttachmentForPromptTag(text) {
   const typeMap = { 图片: 'image', 视频: 'video', 音频: 'audio', 文件: 'file' }
   const type = typeMap[match[1]]
   const index = Number(match[2])
-  const item = attachmentMentionItems.value.find(entry => entry.type === type && entry.index === index)
+  const item = conversationMentionItems.value.find(entry => entry.type === type && entry.index === index)
   if (!item) return null
   return {
     ...item,
@@ -1505,8 +1667,8 @@ function handlePromptTagMousedown(seg, event) {
 
 const filteredAttachmentMentionItems = computed(() => {
   const query = mentionQuery.value.trim().toLowerCase()
-  if (!query) return attachmentMentionItems.value
-  return attachmentMentionItems.value.filter(item => {
+  if (!query) return conversationMentionItems.value
+  return conversationMentionItems.value.filter(item => {
     return item.label.toLowerCase().includes(query) ||
       String(item.name || '').toLowerCase().includes(query)
   })
@@ -2062,7 +2224,7 @@ function syncCurrentAttachmentMentions() {
   )
   inputText.value = result.text
   attachmentMentionBindings.value = result.bindings
-  if (attachments.value.length === 0) {
+  if (conversationMentionItems.value.length === 0) {
     showMentionPopup.value = false
   }
   // 斜杠命令检测
@@ -2070,20 +2232,29 @@ function syncCurrentAttachmentMentions() {
 }
 
 function showAttachmentMentionPopup() {
-  if (attachmentMentionItems.value.length === 0 || !inputRef.value) {
+  if (!inputRef.value) {
     showMentionPopup.value = false
     return
   }
 
-  const caretRect = getInputEditorCaretViewportRect(inputRef.value)
-  mentionPosition.value = getMentionPopupPosition({
-    caretRect,
-    fallbackRect: inputRef.value.getBoundingClientRect(),
-    popupHeight: 260,
-    viewportHeight: window.innerHeight
-  })
+  // 弹窗锚定输入框上方（不跟随光标）：bottom 对齐输入框顶部，上方空间不足时回退到输入框下方
+  const boxRect = (inputRef.value.closest('.input-box') || inputRef.value).getBoundingClientRect()
+  const popupHeight = 260
+  const viewportHeight = window.innerHeight
+  const viewportWidth = window.innerWidth
+  let top
+  if (boxRect.top >= popupHeight + 8) {
+    top = boxRect.top - popupHeight - 8
+  } else {
+    top = Math.min(boxRect.bottom + 8, viewportHeight - popupHeight - 8)
+  }
+  mentionPosition.value = {
+    top: Math.max(8, top),
+    left: Math.max(8, Math.min(boxRect.left, viewportWidth - 300 - 8))
+  }
   mentionActiveIndex.value = Math.min(mentionActiveIndex.value, Math.max(filteredAttachmentMentionItems.value.length - 1, 0))
-  showMentionPopup.value = filteredAttachmentMentionItems.value.length > 0
+  // 始终显示：有候选展示媒体列表，无候选展示空态提示（输入 @ 必须有反馈）
+  showMentionPopup.value = true
 }
 
 function updateAttachmentMentionPopup() {
@@ -2391,6 +2562,21 @@ function selectAttachmentMention(item) {
   })
 }
 
+// 把本轮对话中通过 @ 引用的历史媒体（bindings 里 url: 前缀 key）并入待发送附件，
+// 使 resolveAssistantAttachmentsForSend 能解析出历史媒体的真实 URL 发给后端。
+function mergeMentionedHistoryMedia(baseAttachments = []) {
+  const merged = [...baseAttachments]
+  const seen = new Set(merged.map(a => a.url).filter(Boolean))
+  for (const [key] of Object.entries(attachmentMentionBindings.value || {})) {
+    if (!key.startsWith('url:')) continue
+    const item = conversationMentionItems.value.find(c => c.key === key)
+    if (!item || !item.url || seen.has(item.url)) continue
+    seen.add(item.url)
+    merged.push({ type: item.type, url: item.url, name: item.name || '' })
+  }
+  return merged
+}
+
 function moveAttachment(fromIndex, toIndex) {
   if (fromIndex === toIndex || fromIndex < 0 || toIndex < 0) return
   const next = [...attachments.value]
@@ -2436,6 +2622,8 @@ async function sendEnhancedMessage(force = false) {
   const messageText = inputText.value.trim()
   if (!messageText) return
   const referencedSkillForTurn = referencedSkill.value
+  const authorizationModeForTurn = queuedAuthorizationMode.value || (skillExecutionMode.value === 'auto' ? 'auto' : 'once')
+  queuedAuthorizationMode.value = null
 
   stopRequested.value = false
   if (!force) agentStreamController?.abort()
@@ -2459,10 +2647,12 @@ async function sendEnhancedMessage(force = false) {
   // 对话栏展示模型引用标签卡，实际传输给 LLM 的是自然语言文本；发送后立即清除，不跨轮生效
   const turnModelHint = buildTurnModelHint()
   const turnModelRef = buildTurnModelRef()
+  const turnVideoMode = modelPickerType.value === 'video' ? selectedVideoMode.value || '' : ''
   const turnSkillRef = buildTurnSkillRef(messageText)
   referencedSkill.value = null
   if (turnModelHint) {
     selectedModelByType.value = { image: '', video: '' }
+    selectedVideoMode.value = ''
   }
   // 本轮额外指令（模型提示/任务约束）只进 LLM 提示词，不拼入用户消息正文，
   // 避免被持久化进历史记录后以“用户输入”形式回显
@@ -2471,12 +2661,12 @@ async function sendEnhancedMessage(force = false) {
     '生成任务完成后，请通过 task-status 获取结果；前端会根据 task-status 返回的结果自动写回当前画布，请不要调用 canvas-write。'
   ].filter(Boolean).join('\n')
 
-  // 解析本轮要发送的附件（在清空输入之前）
-  const userAttachments = resolveAssistantAttachmentsForSend({
+  // 解析本轮要发送的附件（在清空输入之前）；并入 @ 引用的对话历史媒体
+  const userAttachments = mergeMentionedHistoryMedia(resolveAssistantAttachmentsForSend({
     text: inputText.value,
     bindings: attachmentMentionBindings.value,
     attachments: attachments.value
-  })
+  }))
   // 续聊时自动带上最近一次生成结果作为参考图，支持“基于上一张图继续修改”
   const referenceAttachments = collectRecentAssistantMedia()
   const seenAttachmentUrls = new Set(userAttachments.map((a) => a.url).filter(Boolean))
@@ -2625,7 +2815,11 @@ async function sendEnhancedMessage(force = false) {
       target_turn_id: targetTurnId || undefined,
       hint: turnHint || undefined,
       skill_id: referencedSkillForTurn?.id || null,
+      authorization_mode: authorizationModeForTurn,
+      model: turnModelRef?.modelId || undefined,
+      mode: turnVideoMode || undefined,
       attachments: uploadedAttachments,
+      canvas_context: props.canvasContext || null,
       skillRef: turnSkillRef || null,
       modelRef: turnModelRef || null,
       signal: requestController.signal,
@@ -2808,6 +3002,42 @@ async function sendEnhancedMessage(force = false) {
         activeTurn.value.phase = activeTurn.value.status === 'cancelled' ? 'cancelled' : 'completed'
         activeTurn.value.cancellable = false
         activeTurn.value.cancelRequested = false
+        // 任务追尾补拉：本轮提交过媒体任务但结果未回显（agent 提前结束回合 / 追尾超时），
+        // 通过重连流补拉 task.completed —— 后端已把终态事件写入事件存储，非 running 回合也会回放。
+        const taskId = activeTurn.value.taskId
+        const hasMediaResult = Array.isArray(message?.attachments) && message.attachments.some(a => a?.type === 'image' || a?.type === 'video')
+        if (taskId && !hasMediaResult && activeTurn.value.status !== 'cancelled' && currentCodexThreadId.value) {
+          if (lateTaskController) lateTaskController.abort()
+          lateTaskController = new AbortController()
+          subscribeCodexStream(currentCodexThreadId.value, {
+            onTaskEvent: (event) => {
+              const msg = messages.value[assistantMessageIndex]
+              if (!msg) return
+              if (event.type === 'task.completed') {
+                finalizeMediaGenerationState(msg)
+                applyAgentResultToMessage(assistantMessageIndex, {
+                  media_type: event.media_type || 'video',
+                  result_urls: event.result_urls || event.preview_urls || [],
+                  task_id: event.task_id || null,
+                })
+                msg.isStreaming = false
+                activeTurn.value.taskId = null
+                lateTaskController?.abort()
+                scrollToBottom()
+              } else if (event.type === 'task.failed' || event.type === 'task.timeout') {
+                finalizeMediaGenerationState(msg)
+                if (!msg.content) msg.content = `媒体任务执行失败：${event.error || event.message || '未知错误'}`
+                msg.isStreaming = false
+                activeTurn.value.taskId = null
+                lateTaskController?.abort()
+                scrollToBottom()
+              }
+            },
+            onDone: () => { activeTurn.value.taskId = null },
+            onError: () => { activeTurn.value.taskId = null },
+            signal: lateTaskController.signal,
+          })
+        }
         loadSessions()
         refreshQueueAndFollow()
       },
@@ -2879,11 +3109,11 @@ async function sendMessage(force = false) {
   if (turnModelHint) {
     selectedModelByType.value = { image: '', video: '' }
   }
-  const userAttachments = resolveAssistantAttachmentsForSend({
+  const userAttachments = mergeMentionedHistoryMedia(resolveAssistantAttachmentsForSend({
     text: inputText.value,
     bindings: attachmentMentionBindings.value,
     attachments: attachments.value
-  })
+  }))
   // 续聊时自动带上最近一次生成结果作为参考图
   const referenceAttachments = collectRecentAssistantMedia()
   const seenAttachmentUrls = new Set(userAttachments.map((a) => a.url).filter(Boolean))
@@ -3793,16 +4023,17 @@ defineExpose({
   right: 0;
   max-height: 240px;
   overflow-y: auto;
-  background: #ffffff;
-  border: 1px solid #e5e7eb;
+  background: #1f2937;
+  border: 1px solid #374151;
   border-radius: 8px;
-  box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.4);
   z-index: 50;
   margin-bottom: 4px;
 }
-.dark .slash-menu {
-  background: #1f2937;
-  border-color: #374151;
+:root.canvas-theme-light .slash-menu {
+  background: #ffffff;
+  border-color: #e5e7eb;
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.08);
 }
 .slash-menu-header {
   padding: 8px 12px;
@@ -3810,10 +4041,10 @@ defineExpose({
   color: #9ca3af;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid #374151;
 }
-.dark .slash-menu-header {
-  border-bottom-color: #374151;
+:root.canvas-theme-light .slash-menu-header {
+  border-bottom-color: #f3f4f6;
 }
 .slash-menu-item {
   display: flex;
@@ -3825,28 +4056,31 @@ defineExpose({
 }
 .slash-menu-item:hover,
 .slash-menu-item.active {
-  background: #f3f4f6;
-}
-.dark .slash-menu-item:hover,
-.dark .slash-menu-item.active {
   background: #374151;
+}
+:root.canvas-theme-light .slash-menu-item:hover,
+:root.canvas-theme-light .slash-menu-item.active {
+  background: #f3f4f6;
 }
 .slash-menu-trigger {
   font-family: monospace;
   font-size: 13px;
-  color: #6366f1;
+  color: #818cf8;
   font-weight: 600;
   min-width: 80px;
 }
+:root.canvas-theme-light .slash-menu-trigger {
+  color: #6366f1;
+}
 .slash-menu-name {
-  color: #6b7280;
+  color: #d1d5db;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.dark .slash-menu-name {
-  color: #d1d5db;
+:root.canvas-theme-light .slash-menu-name {
+  color: #6b7280;
 }
 .slash-menu-empty {
   padding: 12px;
