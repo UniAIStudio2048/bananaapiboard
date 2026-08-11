@@ -235,8 +235,25 @@ export async function sendCodexMessage(params) {
     let sessionId = null
     let threadId = null
     let finalResponse = null
+    let completedTurn = null
     while (true) {
-      const { done, value } = await reader.read()
+      let readResult
+      try {
+        readResult = await reader.read()
+      } catch (error) {
+        if (!completedTurn) throw error
+        const result = {
+          session_id: sessionId,
+          thread_id: threadId,
+          finalResponse,
+          usage: completedTurn.usage,
+          turn_id: completedTurn.turn_id,
+          status: 'completed'
+        }
+        if (onDone) onDone(result)
+        return result
+      }
+      const { done, value } = readResult
       if (done) {
         if (onDone) onDone({ session_id: sessionId, thread_id: threadId, finalResponse })
         break
@@ -328,6 +345,7 @@ export async function sendCodexMessage(params) {
             case 'turn.completed':
               finalResponse = json.finalResponse || finalResponse
               if (finalResponse && onContent) onContent(finalResponse, true)
+              completedTurn = json
               break
             case 'turn.failed':
               throw new Error(json.error?.message || 'Codex agent 执行失败')
