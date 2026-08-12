@@ -460,7 +460,7 @@ export function startStreamDownload(url, filename) {
   triggerUrlDownload(getApiUrl(buildStreamDownloadPath(cleanUrl, correctedFilename)), correctedFilename)
 }
 
-export async function getMe(forceRefresh = false) {
+export async function getMe(forceRefresh = false, { teamId } = {}) {
   const token = localStorage.getItem('token')
   if (!token) return null
 
@@ -469,10 +469,12 @@ export async function getMe(forceRefresh = false) {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), 10000) // 10秒超时
 
-    // 添加时间戳参数避免缓存
-    const url = forceRefresh
-      ? getApiUrl(`/api/user/me?_t=${Date.now()}`)
-      : getApiUrl('/api/user/me')
+    // 构建查询参数
+    const params = new URLSearchParams()
+    if (forceRefresh) params.append('_t', String(Date.now()))
+    if (teamId) params.append('teamId', teamId)
+    const query = params.toString()
+    const url = getApiUrl(`/api/user/me${query ? '?' + query : ''}`)
 
     const r = await fetch(url, {
       headers: getHeaders(),
