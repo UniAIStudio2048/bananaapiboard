@@ -2015,6 +2015,10 @@ async function loadUserInfo() {
       // 初始化团队空间
       teamStore.setCurrentUserId(me.value.id)
       await teamStore.restoreSpaceState()
+      // 恢复空间状态后，带当前 teamId 刷新 team_points
+      if (teamStore.globalTeamId.value) {
+        me.value = await getMe(true, { teamId: teamStore.globalTeamId.value })
+      }
     }
   } catch (e) {
     console.error('[Canvas] 加载用户信息失败:', e)
@@ -2027,14 +2031,26 @@ async function loadUserInfo() {
 async function handleUserInfoUpdated() {
   try {
     // 强制刷新用户信息，获取最新的积分余额
-    me.value = await getMe(true)
-    console.log('[Canvas] 用户信息已更新:', { 
-      points: me.value?.points, 
+    me.value = await getMe(true, { teamId: teamStore.globalTeamId.value })
+    console.log('[Canvas] 用户信息已更新:', {
+      points: me.value?.points,
       package_points: me.value?.package_points,
-      balance: me.value?.balance 
+      team_points: me.value?.team_points,
+      balance: me.value?.balance
     })
   } catch (e) {
     console.error('[Canvas] 刷新用户信息失败:', e)
+  }
+}
+
+// 处理团队空间切换，刷新团队积分
+async function handleSpaceSwitched(e) {
+  try {
+    const { teamId } = e.detail || {}
+    me.value = await getMe(true, { teamId })
+    console.log('[Canvas] 空间切换已刷新用户信息:', { teamId, team_points: me.value?.team_points })
+  } catch (e) {
+    console.error('[Canvas] 空间切换刷新用户信息失败:', e)
   }
 }
 
@@ -3477,6 +3493,7 @@ onMounted(async () => {
   
   // 监听用户信息更新事件，实时更新积分余额
   window.addEventListener('user-info-updated', handleUserInfoUpdated)
+  window.addEventListener('space-switched', handleSpaceSwitched)
   
   // 🔧 防止页面意外刷新：监听 popstate 事件（浏览器后退/前进）
   window.addEventListener('popstate', handlePopState)
@@ -3568,6 +3585,7 @@ onUnmounted(() => {
   window.removeEventListener('pagehide', handlePageHide)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('user-info-updated', handleUserInfoUpdated)
+  window.removeEventListener('space-switched', handleSpaceSwitched)
   window.removeEventListener('popstate', handlePopState)
   window.removeEventListener('unload', handleUnload)
   window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
