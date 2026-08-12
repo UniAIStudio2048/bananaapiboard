@@ -10,8 +10,10 @@ const source = readFileSync(join(__dirname, 'AIAssistantPanel.vue'), 'utf8')
 test('automatic Agent mode uses the Codex transport without a separate toolbar control', () => {
   assert.doesNotMatch(source, /title="增强模式（Codex Agent）"/)
   assert.doesNotMatch(source, /class="header-enhanced-badge"/)
-  assert.match(source, /const enhancedMode = computed\(\(\) => skillExecutionMode\.value === 'auto'\)/)
-  assert.match(source, /function selectSkillExecutionMode\(mode\) \{[\s\S]*?const isAutoMode = mode !== 'manual'[\s\S]*?skillExecutionMode\.value = nextMode[\s\S]*?saveEnhancedModePreference\(isAutoMode\)/)
+  // AC-P1-04 Step 3: 引擎由 agentEngine 独立表达；授权模式不再切换后端
+  assert.match(source, /const agentEngine = ref\('codex'\)/)
+  assert.match(source, /const enhancedMode = computed\(\(\) => agentEngine\.value === 'codex'\)/)
+  assert.match(source, /function selectSkillExecutionMode\(mode\) \{[\s\S]*?skillExecutionMode\.value = nextMode[\s\S]*?saveEnhancedModePreference\(nextMode === 'auto'\)/)
 })
 
 test('shows only an explicitly referenced Skill as an input tag', () => {

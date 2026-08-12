@@ -77,7 +77,7 @@ export async function deleteCodexSession(threadId) {
  * @param {number} [callbacks.lastEventId=0] - 从指定事件 ID 之后恢复
  */
 export async function subscribeCodexStream(threadId, callbacks = {}) {
-  const { onStatus, onContent, onToolEvent, onTaskEvent, onDone, onError, signal, lastEventId = 0 } = callbacks
+  const { onStatus, onContent, onToolEvent, onTaskEvent, onDone, onError, onEventId, signal, lastEventId = 0 } = callbacks
   const url = getApiUrl(`/api/codex-agent/sessions/${encodeURIComponent(threadId)}/stream`)
   try {
     const response = await fetch(url, {
@@ -93,11 +93,17 @@ export async function subscribeCodexStream(threadId, callbacks = {}) {
     const decoder = new TextDecoder('utf-8')
     let buffer = ''
     let cursor = Number(lastEventId) || 0
+    let ended = false
     while (true) {
       const { done, value } = await reader.read()
       if (done) {
-        if (onDone) onDone({})
-        break
+        // AC-P1-01: 重连端点同样只在收到终态（done / turn 终态事件）后成功。
+        // 终态前 EOF（代理重置、服务端提前断流）视为 stream_incomplete，
+        // 由调用方进入退避重连，不得静默当作成功。
+        if (ended) break
+        const err = new Error('连接中断，正在恢复（stream_incomplete）')
+        err.code = 'stream_incomplete'
+        throw err
       }
       buffer += decoder.decode(value, { stream: true })
       const frames = buffer.split('\n\n')
@@ -116,6 +122,7 @@ export async function subscribeCodexStream(threadId, callbacks = {}) {
           const eventId = Number(json.event_id || 0)
           if (eventId > 0 && eventId <= cursor) continue
           if (eventId > cursor) cursor = eventId
+          if (eventId > 0 && onEventId) onEventId({ turn_id: json.turn_id || null, event_id: eventId })
           switch (eventName) {
             case 'status':
               if (onStatus) onStatus(json.turn_status, json)
@@ -130,9 +137,15 @@ export async function subscribeCodexStream(threadId, callbacks = {}) {
               break
             }
             case 'turn.completed':
+              ended = true
               if (onContent) onContent(json.finalResponse || '', true)
               break
+            case 'turn.cancelled':
+              ended = true
+              if (onDone) onDone(json)
+              return
             case 'done':
+              ended = true
               if (onDone) onDone(json)
               return
             case 'heartbeat':
@@ -209,6 +222,10 @@ export async function sendCodexMessage(params) {
       canvas_context: requestParams.canvas_context || undefined,
       model: requestParams.model || undefined,
       mode: requestParams.mode || undefined,
+      // AC-P1-04 / AC-P1-08: 增强模式开关与参考媒体策略真实进入请求
+      deep_think: requestParams.deep_think === true,
+      web_search: requestParams.web_search !== false,
+      reference_media_mode: requestParams.reference_media_mode || 'explicit',
       ...extra,
     }
     return base
@@ -236,27 +253,43 @@ export async function sendCodexMessage(params) {
     let threadId = null
     let finalResponse = null
     let completedTurn = null
+    let cancelledTurn = null
     while (true) {
       let readResult
       try {
         readResult = await reader.read()
       } catch (error) {
-        if (!completedTurn) throw error
+        if (!completedTurn && !cancelledTurn) throw error
         const result = {
           session_id: sessionId,
           thread_id: threadId,
           finalResponse,
-          usage: completedTurn.usage,
-          turn_id: completedTurn.turn_id,
-          status: 'completed'
+          usage: completedTurn?.usage,
+          turn_id: (completedTurn || cancelledTurn)?.turn_id,
+          status: completedTurn ? 'completed' : 'cancelled'
         }
         if (onDone) onDone(result)
         return result
       }
       const { done, value } = readResult
       if (done) {
-        if (onDone) onDone({ session_id: sessionId, thread_id: threadId, finalResponse })
-        break
+        // AC-P1-01: 只有收到终态后才算成功。终态前干净 EOF（连接被代理重置 /
+        // 服务端提前断流）必须抛 stream_incomplete，不能把半截回复标成完成。
+        if (completedTurn || cancelledTurn) {
+          const result = {
+            session_id: sessionId,
+            thread_id: threadId,
+            finalResponse,
+            usage: completedTurn?.usage,
+            turn_id: (completedTurn || cancelledTurn)?.turn_id,
+            status: completedTurn ? 'completed' : 'cancelled'
+          }
+          if (onDone) onDone(result)
+          return result
+        }
+        const err = new Error('连接中断，回复未完成（stream_incomplete）')
+        err.code = 'stream_incomplete'
+        throw err
       }
       buffer += decoder.decode(value, { stream: true })
       const frames = buffer.split('\n\n')
@@ -296,6 +329,7 @@ export async function sendCodexMessage(params) {
               if (onCancelRequested) onCancelRequested(json)
               break
             case 'turn.cancelled':
+              cancelledTurn = json
               if (onCancelled) onCancelled(json)
               break
             case 'turn.snapshot':
@@ -305,19 +339,19 @@ export async function sendCodexMessage(params) {
               // 保活心跳，忽略
               break
             case 'tool.started':
-              if (onToolEvent) onToolEvent({ type: 'started', server: json.server, tool: json.tool, args: json.args })
+              if (onToolEvent) onToolEvent({ type: 'started', server: json.server, tool: json.tool, args: json.args, tool_call_id: json.tool_call_id || null })
               break
             case 'tool.progress':
-              if (onToolEvent) onToolEvent({ type: 'progress', server: json.server, tool: json.tool, task_id: json.task_id, progress: json.progress, message: json.message })
+              if (onToolEvent) onToolEvent({ type: 'progress', server: json.server, tool: json.tool, task_id: json.task_id, progress: json.progress, message: json.message, tool_call_id: json.tool_call_id || null })
               break
             case 'tool.retrying':
-              if (onToolEvent) onToolEvent({ type: 'retrying', tool: json.tool, attempt: json.attempt, max_attempts: json.max_attempts, reason: json.reason })
+              if (onToolEvent) onToolEvent({ type: 'retrying', tool: json.tool, attempt: json.attempt, max_attempts: json.max_attempts, reason: json.reason, tool_call_id: json.tool_call_id || null })
               break
             case 'tool.completed':
-              if (onToolEvent) onToolEvent({ type: 'completed', server: json.server, tool: json.tool, status: json.status, result: json.result })
+              if (onToolEvent) onToolEvent({ type: 'completed', server: json.server, tool: json.tool, status: json.status, result: json.result, tool_call_id: json.tool_call_id || null })
               break
             case 'tool.failed':
-              if (onToolEvent) onToolEvent({ type: 'failed', tool: json.tool, error_code: json.error_code, retryable: json.retryable, result: json.result })
+              if (onToolEvent) onToolEvent({ type: 'failed', tool: json.tool, error_code: json.error_code, retryable: json.retryable, result: json.result, tool_call_id: json.tool_call_id || null })
               break
             case 'task.started':
             case 'task.progress':
@@ -329,14 +363,14 @@ export async function sendCodexMessage(params) {
             case 'item.started': {
               const item = json.item || {}
               if (item.type === 'mcp_tool_call') {
-                if (onToolEvent) onToolEvent({ type: 'started', server: item.server, tool: item.tool })
+                if (onToolEvent) onToolEvent({ type: 'started', server: item.server, tool: item.tool, tool_call_id: item.call_id || item.id || json.tool_call_id || null })
               }
               break
             }
             case 'item.completed': {
               const item = json.item || {}
               if (item.type === 'mcp_tool_call') {
-                if (onToolEvent) onToolEvent({ type: 'completed', server: item.server, tool: item.tool, status: item.status, result: item.result })
+                if (onToolEvent) onToolEvent({ type: 'completed', server: item.server, tool: item.tool, status: item.status, result: item.result, tool_call_id: item.call_id || item.id || json.tool_call_id || null })
               } else if (item.type === 'agent_message' && item.text) {
                 if (onContent) onContent(item.text)
               }
@@ -351,8 +385,11 @@ export async function sendCodexMessage(params) {
               throw new Error(json.error?.message || 'Codex agent 执行失败')
             case 'done':
               if (json.thread_id) threadId = json.thread_id
-              if (onDone) onDone({ session_id: sessionId, thread_id: threadId, finalResponse, usage: json.usage, turn_id: json.turn_id, status: json.status })
-              return
+              {
+                const result = { session_id: sessionId, thread_id: threadId, finalResponse, usage: json.usage, turn_id: json.turn_id, status: json.status }
+                if (onDone) onDone(result)
+                return result
+              }
           }
         } catch (e) {
           // JSON 解析失败不中断流；其它错误向上抛

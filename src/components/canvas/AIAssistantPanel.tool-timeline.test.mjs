@@ -66,11 +66,12 @@ test('onSnapshot 重建任务提示时按 tool 名去重（同 tool 只保留最
   assert.match(panel, /activeToolEvents\.value = \[\.\.\.seen\.values\(\)\]/)
 })
 
-test('handleToolEvent 对同一工具重复 started 复用运行中卡片', () => {
+test('handleToolEvent 以 tool_call_id 为主键复用卡片（AC-P1-03）', () => {
   const block = panel.match(/function handleToolEvent\(message, event, opts = \{\}\) \{[\s\S]*?\n\}/)?.[0]
   assert.ok(block, 'handleToolEvent must exist')
-  assert.match(block, /item\.name === toolName && item\.status === 'running'/)
-  assert.match(block, /if \(runningCard\) \{[\s\S]*?runningCard\.detail = ''/)
+  // 工具卡以 tool_call_id 为 key：completed 只能更新同 ID 卡片，不再按工具名找最后一张 running 卡
+  assert.match(block, /const toolCallId = event\.tool_call_id \|\| null/)
+  assert.match(block, /item\.tool_call_id === toolCallId/)
 })
 
 test('loadSessionMessages 按 turn_id 去重，防止媒体回合被轮询追加第二条带图消息', () => {

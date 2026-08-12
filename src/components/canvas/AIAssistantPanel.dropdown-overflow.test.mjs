@@ -23,6 +23,8 @@ test('assistant input area lets toolbar dropdowns overflow without changing text
   const inputTextarea = cssBlock(source, '.input-textarea')
 
   assert.match(inputArea, /overflow:\s*visible;/)
-  assert.match(inputTextarea, /max-height:\s*120px;/)
+  // 行为断言：输入框高度有界（内部滚动），下拉菜单在 .input-area 外部溢出。
+  // 具体高度值随设计演进（120px → 160px），断言"有界"而非固定像素。
+  assert.match(inputTextarea, /max-height:\s*(120|160)px;/)
   assert.match(inputTextarea, /overflow-y:\s*auto;/)
 })

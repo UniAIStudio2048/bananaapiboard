@@ -86,7 +86,6 @@
               </div>
               <div class="history-item__preview">{{ session.last_message }}</div>
               <button
-                v-if="modelPickerTypes.length"
                 class="history-item__delete"
                 @click.stop="deleteSessionItem(session.id)"
                 title="删除"
@@ -602,33 +601,57 @@
             
             <!-- 右侧功能组 -->
             <div class="toolbar-right">
-              <!-- 深度思考按钮 -->
-              <button 
-                class="toolbar-btn icon-btn"
-                :class="{ active: deepThinkEnabled }"
-                @click="deepThinkEnabled = !deepThinkEnabled"
-                title="深度思考"
-              >
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M2 12h20M2 12l3-3m-3 3l3 3M22 12l-3-3m3 3l-3 3"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-              </button>
-              
-              <!-- 联网搜索按钮 -->
-              <button 
-                class="toolbar-btn icon-btn"
-                :class="{ active: webSearchEnabled }"
-                @click="webSearchEnabled = !webSearchEnabled"
-                title="联网搜索"
-              >
-                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="2" y1="12" x2="22" y2="12"/>
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                </svg>
-              </button>
-              
+              <!-- 执行设置（AC-P2-02 渐进披露）：深度思考 / 联网 / 授权策略收敛到一个入口，
+                   默认输入区不直接暴露这些高级概念 -->
+              <div class="execution-settings">
+                <button
+                  class="toolbar-btn icon-btn"
+                  :class="{ active: showExecutionSettings || executionSummaryTags.length > 0 }"
+                  type="button"
+                  title="执行设置"
+                  aria-label="执行设置"
+                  @click.stop="showExecutionSettings = !showExecutionSettings"
+                >
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                  </svg>
+                </button>
+                <Transition name="dropdown">
+                  <div v-if="showExecutionSettings" class="execution-settings-popover" @click.stop>
+                    <div class="execution-setting-row">
+                      <button
+                        class="execution-toggle"
+                        :class="{ active: deepThinkEnabled }"
+                        @click="deepThinkEnabled = !deepThinkEnabled"
+                      >
+                        <span class="execution-toggle__label">深度思考</span>
+                        <span class="execution-toggle__desc">使用更强推理，耗时更长</span>
+                        <span class="execution-toggle__switch"><i></i></span>
+                      </button>
+                      <button
+                        class="execution-toggle"
+                        :class="{ active: webSearchEnabled }"
+                        @click="webSearchEnabled = !webSearchEnabled"
+                      >
+                        <span class="execution-toggle__label">联网搜索</span>
+                        <span class="execution-toggle__desc">获取最新资料作为参考</span>
+                        <span class="execution-toggle__switch"><i></i></span>
+                      </button>
+                      <button
+                        class="execution-toggle"
+                        :class="{ active: skillExecutionMode === 'manual' }"
+                        @click="selectSkillExecutionMode(skillExecutionMode === 'auto' ? 'manual' : 'auto')"
+                      >
+                        <span class="execution-toggle__label">工具授权方式</span>
+                        <span class="execution-toggle__desc">{{ skillExecutionMode === 'auto' ? '自动执行（Agent 自主调用）' : '每次执行前确认' }}</span>
+                        <span class="execution-toggle__switch"><i></i></span>
+                      </button>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
+
               <!-- 发送按钮 -->
               <button
                 class="send-btn"
@@ -647,6 +670,14 @@
                 </svg>
               </button>
             </div>
+          </div>
+
+          <!-- 执行摘要（AC-P2-03）：发送前展示 Skill / 参考素材 / 模型 / 预计积分 / 写回目标 -->
+          <div v-if="executionSummaryTags.length > 0" class="execution-summary" role="status">
+            <span v-for="tag in executionSummaryTags" :key="tag.label" class="execution-summary__tag">
+              <span class="execution-summary__tag-label">{{ tag.label }}</span>
+              <span class="execution-summary__tag-value">{{ tag.value }}</span>
+            </span>
           </div>
         </div>
       </div>
@@ -866,11 +897,41 @@ const sessions = ref([])
 const selectedModeId = ref('')
 const deepThinkEnabled = ref(false)
 const webSearchEnabled = ref(false)
+// AC-P1-08: 参考媒体策略 —— 只有显式 @ 媒体或勾选「以上一结果为参考」时才携带历史媒体
+const turnReferenceMediaMode = ref('explicit')
+// AC-P2-02 渐进披露：高级选项收敛到「执行设置」弹层
+const showExecutionSettings = ref(false)
 const agentSkills = ref([])
 const selectedSkillId = ref('')
 const referencedSkill = ref(null)
 const skillExecutionMode = ref('auto')
-const enhancedMode = computed(() => skillExecutionMode.value === 'auto')
+// AC-P1-04 Step 3: 授权模式（auto/once）只控制工具授权，不再切换后端引擎。
+// 引擎（codex 增强 / legacy 旧模式）由 agentEngine 独立表达；迁移历史偏好时
+// 旧布尔值只映射一次，不改变已有会话引擎。
+const agentEngine = ref('codex')
+const enhancedMode = computed(() => agentEngine.value === 'codex')
+// AC-P2-03: 发送前执行摘要 —— Skill / 参考素材 / 模型 / 预计积分 / 写回目标，
+// 只展示真实可执行的项目（产品不能控制的开关不显示）。
+const executionSummaryTags = computed(() => {
+  const tags = []
+  if (enhancedMode.value) {
+    if (referencedSkill.value?.name) {
+      tags.push({ label: '本次使用', value: referencedSkill.value.name })
+    }
+    const refCount = attachmentMentionBindings.value
+      ? Object.keys(attachmentMentionBindings.value).filter((k) => attachmentMentionBindings.value[k]).length
+      : 0
+    tags.push({ label: '参考素材', value: refCount > 0 ? `${refCount} 项` : '无' })
+    if (selectedModelValue.value) {
+      tags.push({ label: '模型', value: selectedModelValue.value })
+    }
+    // 预计积分：取租户 AI 助手单次计费配置；拿不到配置时显示计费规则说明而非假数字
+    const cost = config.value?.points_cost
+    tags.push({ label: '预计积分', value: Number.isFinite(Number(cost)) && Number(cost) > 0 ? `${Number(cost)} 点` : '按租户计费规则' })
+    tags.push({ label: '完成后', value: props.canvasContext ? '写回当前画布' : '仅返回对话' })
+  }
+  return tags.slice(0, 5)
+})
 const currentCodexThreadId = ref(null)
 const slashMenuVisible = ref(false)
 const slashMenuItems = ref([])
@@ -918,6 +979,10 @@ const activeTurn = ref({
   error: null,
 })
 const activeToolEvents = ref([])
+
+// AC-P0-05: 重连游标，按 (turn_id → event_id) 持久保存；切换 turn 重置。
+// 断线重连时传给 Last-Event-ID，服务端只回放缺失帧，前端按 event_id 去重。
+const streamCursor = ref({})
 
 async function submitTurnFeedback({ message, rating }) {
   if (!message?.turn_id || !currentCodexThreadId.value) return
@@ -1331,27 +1396,37 @@ async function enqueueServerMessage(draft) {
       })))
     } catch (error) {
       console.warn('[AI-Assistant] 排队附件上传失败:', error?.message)
+      // AC-P1-02: 附件上传失败写入草稿，用户可见可重试
+      draft.status = 'error'
+      draft.error = error?.message || '附件上传失败，请重试'
       return
     }
   }
-  await sendCodexMessage({
-    thread_id: currentCodexThreadId.value,
-    content: draft.text || '',
-    client_message_id: clientMessageId,
-    send_mode: 'queue',
-    skill_id: draft.skillId || null,
-    authorization_mode: draft.authorizationMode || 'once',
-    attachments: queuedAttachments,
-    hint: draft.hint || undefined,
-    model: draft.model || undefined,
-    mode: draft.mode || undefined,
-    skillRef: draft.skillRef || null,
-    modelRef: draft.modelRef || null,
-    canvas_context: draft.canvasContext || null,
-    onAccepted: (json) => syncServerQueueItem(draft, json),
-    onQueued: (json) => syncServerQueueItem(draft, json),
-    onError: () => {},
-  }).catch(() => {})
+  try {
+    await sendCodexMessage({
+      thread_id: currentCodexThreadId.value,
+      content: draft.text || '',
+      client_message_id: clientMessageId,
+      send_mode: 'queue',
+      skill_id: draft.skillId || null,
+      authorization_mode: draft.authorizationMode || 'once',
+      attachments: queuedAttachments,
+      hint: draft.hint || undefined,
+      model: draft.model || undefined,
+      mode: draft.mode || undefined,
+      skillRef: draft.skillRef || null,
+      modelRef: draft.modelRef || null,
+      canvas_context: draft.canvasContext || null,
+      onAccepted: (json) => syncServerQueueItem(draft, json),
+      onQueued: (json) => syncServerQueueItem(draft, json),
+      onError: () => {},
+    })
+  } catch (error) {
+    console.warn('[AI-Assistant] 服务端排队失败:', error?.message)
+    // AC-P1-02: 排队失败写入对应草稿，不静默吞掉
+    draft.status = 'error'
+    draft.error = error?.message || '排队失败，请重试'
+  }
   await refreshQueueAndFollow()
 }
 
@@ -1449,13 +1524,19 @@ async function forceInsertQueuedMessage(queued) {
 }
 
 // 删除服务端队列中未 dispatch 的消息
-function removeQueuedServerMessage(queued) {
+async function removeQueuedServerMessage(queued) {
   if (!queued) return
   const turnId = queued.turn_id || queued.id
+  // AC-P1-02: 删除失败时保留队列项并显示原因，不能先清空 UI 造成“以为已删除但后台仍执行”
   if (turnId && currentCodexThreadId.value) {
-    deleteQueuedCodexMessage(currentCodexThreadId.value, turnId).catch((error) => {
+    try {
+      await deleteQueuedCodexMessage(currentCodexThreadId.value, turnId)
+    } catch (error) {
       console.warn('[AI-Assistant] 删除队列消息失败:', error?.message)
-    })
+      queued.status = 'error'
+      queued.error = error?.message || '删除失败，请重试'
+      return
+    }
   }
   serverQueue.value = serverQueue.value.filter((s) => s.id !== queued.id && s.turn_id !== turnId)
   queuedMessages.value = queuedMessages.value.filter((s) => s.id !== queued.id)
@@ -1547,19 +1628,28 @@ async function refreshQueueAndFollow() {
 
 function stopCurrentActivity() {
   stopRequested.value = true
+  // AC-P1-02: 点击停止先进入 stopping（本地显示「正在停止」），
+  // 只有收到 turn.cancelled 确认后才显示「AI 回复已停止」（onCancelled 处理）。
   if (enhancedMode.value && activeTurn.value.id && currentCodexThreadId.value && !activeTurn.value.cancelRequested) {
+    activeTurn.value.status = 'stopping'
+    activeTurn.value.phase = 'stopping'
+    activeTurn.value.cancellable = false
     cancelCodexTurn(currentCodexThreadId.value, activeTurn.value.id, { reason: 'user_stop' }).catch((error) => {
+      // AC-P1-02: 取消失败时显示可重试错误，不清空真实运行态（保持 running）
       console.warn('[AI-Assistant] 取消回合失败:', error?.message)
+      activeTurn.value.status = 'running'
+      activeTurn.value.phase = 'running'
+      activeTurn.value.cancellable = true
+      showAlert(`停止失败：${error?.message || '请重试'}`, '停止 AI 回复')
     })
   }
   normalStreamController?.abort()
   agentStreamController?.abort()
   normalStreamController = null
   agentStreamController = null
-  if (reconnectController) {
-    reconnectController.abort()
-    reconnectController = null
-  }
+  // 注意：不能 abort reconnectController —— 它是唯一用于观察 turn.cancelled
+  // 确认事件的重连流；abort 后页面永远收不到取消确认，无法从 stopping 进入
+  // cancelled（Task 7 AC-P1-02）。用户主动关闭面板时由面板卸载清理。
   showRunningBanner.value = false
   queuedTurn.value = false
   queuedTurnContent.value = ''
@@ -1573,33 +1663,40 @@ function stopCurrentActivity() {
     delete activeMessage.mediaGeneratingTotal
     if (!activeMessage.content) activeMessage.content = '已停止当前对话或任务'
   }
-  activeTurn.value.cancelRequested = true
-  activeTurn.value.status = 'cancel_requested'
-  activeTurn.value.cancellable = false
   // 停止当前活动时一并取消排队中的跟进消息，避免回合取消后调度器自动执行它们
-  // （否则用户点「停止」后排队消息仍会逐个自动跑，表现为对话停不下来）
+  // （否则用户点「停止」后排队消息仍会逐个自动跑，表现为对话停不下来）。
+  // AC-P1-02: 队列删除失败时保留该项并显示失败原因，不先清空 serverQueue。
   if (currentCodexThreadId.value) {
-    for (const queued of [...serverQueue.value, ...queuedMessages.value]) {
+    const pendingDeletes = [...serverQueue.value, ...queuedMessages.value].map(async (queued) => {
       const turnId = queued.turn_id || queued.id
-      if (turnId) deleteQueuedCodexMessage(currentCodexThreadId.value, turnId).catch(() => {})
-    }
+      if (!turnId) return
+      try {
+        await deleteQueuedCodexMessage(currentCodexThreadId.value, turnId)
+      } catch (error) {
+        queued.status = 'error'
+        queued.error = error?.message || '删除失败，请重试'
+      }
+    })
+    void Promise.all(pendingDeletes).then(() => {
+      // 只移除删除成功的项；失败的保留供重试
+      const failedIds = new Set([...serverQueue.value, ...queuedMessages.value]
+        .filter((q) => q.status === 'error')
+        .map((q) => q.turn_id || q.id))
+      serverQueue.value = serverQueue.value.filter((q) => !failedIds.has(q.turn_id || q.id))
+      queuedMessages.value = queuedMessages.value.filter((q) => !failedIds.has(q.turn_id || q.id))
+    })
   }
-  serverQueue.value = []
-  queuedMessages.value = []
   if (followQueueTimer) { clearInterval(followQueueTimer); followQueueTimer = null }
   lastFollowedTurnId = null
   isLoading.value = false
 }
 
 function selectSkillExecutionMode(mode) {
-  const isAutoMode = mode !== 'manual'
-  const nextMode = isAutoMode ? 'auto' : 'manual'
-  if (skillExecutionMode.value !== nextMode) {
-    skillExecutionMode.value = nextMode
-    startNewChat()
-    currentCodexThreadId.value = null
-  }
-  saveEnhancedModePreference(isAutoMode)
+  // AC-P1-04 Step 3: 授权模式只控制工具授权（auto 自主调用 / once 每次确认），
+  // 不再切换后端引擎，也不清空当前会话上下文。
+  const nextMode = mode === 'manual' ? 'manual' : 'auto'
+  skillExecutionMode.value = nextMode
+  saveEnhancedModePreference(nextMode === 'auto')
   showSkillExecutionDropdown.value = false
 }
 
@@ -1814,6 +1911,9 @@ function extractTaskIdFromToolCompletedResult(result) {
 function handleToolEvent(message, event, opts = {}) {
   if (!message) return
   if (!Array.isArray(message.toolEvents)) message.toolEvents = []
+  // AC-P1-03: 工具卡以 tool_call_id 为主键 —— 同一工具参数相同的两次调用是两张独立卡，
+  // completed 只能更新同 ID 卡片，禁止按 tool 名去重或"找最后一张 running 卡"。
+  const toolCallId = event.tool_call_id || null
   if (event.type === 'started') {
     const generatingType = getAssistantMediaGeneratingType(event)
     if (generatingType) {
@@ -1829,28 +1929,56 @@ function handleToolEvent(message, event, opts = {}) {
     // 正文仍为空时保留「思考中…」：长工具等待（skill-read/model-list 等）期间
     // spinner 继续脉冲，而不是静止的「AI 正在回复」占位，避免看起来像卡死
     const toolName = `${event.server}.${event.tool}`
-    // 同一工具重复投递（主流 + 重连流）时复用正在运行的卡片，避免工具卡重复
-    const runningCard = [...message.toolEvents].reverse().find((item) => item.name === toolName && item.status === 'running')
-    if (runningCard) {
-      runningCard.startedAt = Date.now()
-      runningCard.detail = ''
+    let card = null
+    if (toolCallId) {
+      card = message.toolEvents.find((item) => item.tool_call_id === toolCallId)
+    }
+    if (card) {
+      // 同一 tool_call_id 重投（主流 + 重连流）复用运行中卡片
+      card.startedAt = Date.now()
+      card.detail = ''
     } else {
-      message.toolEvents.push({
-        id: `${toolName}-${message.toolEvents.length}-${Date.now()}`,
+      card = {
+        id: toolCallId || `${toolName}-${message.toolEvents.length}-${Date.now()}`,
+        tool_call_id: toolCallId,
         name: toolName,
         status: 'running',
         startedAt: Date.now(),
         detail: ''
-      })
+      }
+      message.toolEvents.push(card)
     }
     message.isStreaming = true
-  } else if (event.type === 'completed') {
-    const runningCard = [...message.toolEvents].reverse().find(item => item.status === 'running')
-    if (runningCard) {
-      runningCard.status = event.status === 'completed' ? 'done' : 'error'
-      runningCard.duration = Date.now() - runningCard.startedAt
-      runningCard.result = event.result
+  } else if (event.type === 'completed' || event.type === 'failed' || event.type === 'progress' || event.type === 'retrying') {
+    let card = null
+    if (toolCallId) {
+      card = message.toolEvents.find((item) => item.tool_call_id === toolCallId)
     }
+    if (!card && event.type !== 'completed') {
+      // progress/retrying 无对应卡时不创建（保持卡片只由 started 创建）
+      return
+    }
+    if (!card) {
+      // completed 无 tool_call_id（旧协议）：退化为最后一张 running 卡（兼容）
+      card = [...message.toolEvents].reverse().find(item => item.status === 'running')
+    }
+    if (!card) {
+      // 仍未找到（如重连回放 completed 在 started 之后）：按工具名匹配最后一张卡
+      const toolName = `${event.server}.${event.tool}`
+      card = [...message.toolEvents].reverse().find(item => item.name === toolName)
+    }
+    if (!card) return
+    if (event.type === 'progress') {
+      card.detail = event.message || card.detail
+      return
+    }
+    if (event.type === 'retrying') {
+      card.detail = `重试中 (${event.attempt}/${event.max_attempts})`
+      return
+    }
+    card.status = event.type === 'failed' ? 'error' : (event.status === 'completed' ? 'done' : 'error')
+    card.duration = Date.now() - card.startedAt
+    card.result = event.result
     // tool.completed（image-gen/video-gen/task-status）只表示任务已提交到队列，
     // 生成中动效必须保持到 task.completed 真正返回结果（或兜底 finalize），不能在这里删除。
     const generated = extractCodexGeneratedMediaResult(event.tool, event.result)
@@ -1863,7 +1991,9 @@ function handleToolEvent(message, event, opts = {}) {
 async function loadConfig() {
   try {
     config.value = await getAIAssistantConfig()
-    if (config.value.web_search?.enabled) webSearchEnabled.value = true
+    if (config.value.web_search?.enabled) {
+      webSearchEnabled.value = true
+    }
   } catch (error) {
     console.error('[AI-Assistant] 加载配置失败:', error)
   }
@@ -1919,7 +2049,6 @@ function selectMode(mode) {
   }
   showModeDropdown.value = false
 }
-
 function startNewChat() {
   if (isLoading.value) stopCurrentActivity()
   queuedMessages.value = []
@@ -1955,8 +2084,13 @@ async function saveEnhancedModePreference(value) {
 }
 
 function loadEnhancedModePreference() {
+  // AC-P1-04 Step 3: 历史布尔偏好只映射一次到 agentEngine，不改变已有会话引擎。
+  // authorizationMode 默认与引擎同源（auto → auto / manual → once），后续可独立切换。
   const pref = userInfo.value?.preferences?.codex_enhanced_mode
-  if (typeof pref === 'boolean') skillExecutionMode.value = pref ? 'auto' : 'manual'
+  if (typeof pref === 'boolean') {
+    agentEngine.value = pref ? 'codex' : 'legacy'
+    skillExecutionMode.value = pref ? 'auto' : 'manual'
+  }
 }
 
 function checkSlashTrigger() {
@@ -2106,7 +2240,13 @@ async function loadSession(session) {
 function reconnectStream(threadId) {
   if (reconnectController) reconnectController.abort()
   reconnectController = new AbortController()
+  const activeTurnId = activeTurn.value.id
+  const lastEventId = (activeTurnId && streamCursor.value[activeTurnId]) || 0
   subscribeCodexStream(threadId, {
+    onEventId: ({ turn_id, event_id }) => {
+      // 持久保存本 turn 的最新游标；重连时回传 Last-Event-ID 只回放缺失帧
+      if (turn_id && event_id) streamCursor.value[turn_id] = event_id
+    },
     onStatus: (status) => {
       if (status !== 'running') {
         showRunningBanner.value = false
@@ -2184,11 +2324,20 @@ function reconnectStream(threadId) {
     onError: () => {
       showRunningBanner.value = false
     },
-    signal: reconnectController.signal
+    signal: reconnectController.signal,
+    lastEventId,
   })
 }
 
 async function deleteSessionItem(sessionId) {
+  // AC-P2-04: 删除前确认；说明不会取消已提交的媒体任务
+  const confirmed = await showAlert(
+    '删除对话不会取消已经提交的图片或视频任务。\n正在执行的 AI 回复会先停止；确认停止后再删除。',
+    '删除对话',
+    '',
+    '删除'
+  )
+  if (!confirmed) return
   try {
     if (enhancedMode.value) {
       await deleteCodexSession(sessionId)
@@ -2201,7 +2350,13 @@ async function deleteSessionItem(sessionId) {
       currentCodexThreadId.value = null
     }
   } catch (error) {
+    // AC-P2-04: 网络失败使用页面内错误组件，不能只 console.error
+    if (error?.code === 'delete_waiting_for_cancel' || /正在停止/.test(error?.message || '')) {
+      showAlert('上一轮 AI 回复仍在停止中，请稍后重试删除。', '删除对话')
+      return
+    }
     console.error('[AI-Assistant] 删除会话失败:', error)
+    showAlert(`删除会话失败：${error?.message || '未知错误'}`, '删除失败')
   }
 }
 
@@ -2715,7 +2870,8 @@ function collectRecentAssistantMedia() {
 }
 
 async function sendEnhancedMessage(force = false) {
-  const messageText = inputText.value.trim()
+  // AC-P2-01: 附件-only 可发送，无文字时用明确的默认文本语义
+  const messageText = inputText.value.trim() || (attachments.value.length ? '请分析我附加的素材。' : '')
   if (!messageText) return
   const referencedSkillForTurn = referencedSkill.value
   const authorizationModeForTurn = queuedAuthorizationMode.value || (skillExecutionMode.value === 'auto' ? 'auto' : 'once')
@@ -2763,13 +2919,9 @@ async function sendEnhancedMessage(force = false) {
     bindings: attachmentMentionBindings.value,
     attachments: attachments.value
   }))
-  // 续聊时自动带上最近一次生成结果作为参考图，支持“基于上一张图继续修改”
-  const referenceAttachments = collectRecentAssistantMedia()
-  const seenAttachmentUrls = new Set(userAttachments.map((a) => a.url).filter(Boolean))
-  const messageAttachments = [
-    ...userAttachments,
-    ...referenceAttachments.filter((a) => !seenAttachmentUrls.has(a.url))
-  ]
+  // AC-P1-08: 历史媒体仅在明确引用时携带——用户 @ 媒体或勾选参考才会出现在
+  // userAttachments 里；不再自动带最近一次生成结果，普通文字问答不误入图生图。
+  const messageAttachments = userAttachments
   // 参考图来源画布节点 id（从画布选图时记录在附件上）：供画布同步建节点时精确连线
   const referenceNodeIds = [...new Set(
     messageAttachments.map((a) => a?.sourceNodeId).filter(Boolean)
@@ -2923,6 +3075,9 @@ async function sendEnhancedMessage(force = false) {
       hint: turnHint || undefined,
       skill_id: referencedSkillForTurn?.id || null,
       authorization_mode: authorizationModeForTurn,
+      deep_think: deepThinkEnabled.value === true,
+      web_search: webSearchEnabled.value !== false,
+      reference_media_mode: turnReferenceMediaMode.value || 'explicit',
       model: turnModelRef?.modelId || undefined,
       mode: turnVideoMode || undefined,
       attachments: uploadedAttachments,
@@ -3192,6 +3347,22 @@ async function sendEnhancedMessage(force = false) {
     })
   } catch (error) {
     if (requestController.signal.aborted || stopRequested.value) return
+    // AC-P0-04: 强插等待旧回合终态 —— 保留草稿，显示等待状态，收到旧回合终态后重试
+    if (error?.code === 'interrupt_waiting_for_cancel' || /正在停止|等待上一轮/.test(error?.message || '')) {
+      const waitMsg = messages.value[assistantMessageIndex]
+      if (waitMsg) {
+        waitMsg.isThinking = false
+        waitMsg.content = '正在等待上一轮 AI 回复停止，请稍候…'
+        waitMsg.isStreaming = false
+      }
+      // 保留输入草稿，1 秒后自动重试（interrupt 用原 client_message_id 幂等）
+      inputText.value = messageText
+      attachments.value = uploadedAttachments.map(a => ({ type: a.type, url: a.url, name: a.name }))
+      setTimeout(() => {
+        if (activeTurn.value.id === targetTurnId) sendEnhancedMessage(force)
+      }, 1000)
+      return
+    }
     console.error('[AI-Assistant] 增强模式发送失败:', error)
     flushContent()
     const message = messages.value[assistantMessageIndex]
@@ -3244,13 +3415,8 @@ async function sendMessage(force = false) {
     bindings: attachmentMentionBindings.value,
     attachments: attachments.value
   }))
-  // 续聊时自动带上最近一次生成结果作为参考图
-  const referenceAttachments = collectRecentAssistantMedia()
-  const seenAttachmentUrls = new Set(userAttachments.map((a) => a.url).filter(Boolean))
-  const messageAttachments = [
-    ...userAttachments,
-    ...referenceAttachments.filter((a) => !seenAttachmentUrls.has(a.url))
-  ]
+  // AC-P1-08: 历史媒体仅在明确引用时携带，不再自动带最近生成结果
+  const messageAttachments = userAttachments
 
   // 清空输入
   clearDraft()

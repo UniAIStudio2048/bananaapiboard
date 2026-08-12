@@ -33,11 +33,14 @@ defineEmits(['stop'])
 const PHASE_LABELS = {
   idle: '空闲',
   accepted: '已接受',
-  preparing: '准备中',
-  thinking: '正在思考',
-  tool_calling: '调用工具',
-  waiting_external_task: '等待媒体生成',
+  preparing: '正在准备任务',
+  thinking: '正在理解需求',
+  tool_calling: '正在准备任务',
+  waiting_media: '生成任务正在后台执行',
+  waiting_external_task: '生成任务正在后台执行',
+  stopping: '正在停止 AI 回复',
   finalizing: '整理回复',
+  reconnecting: '连接中断，正在恢复',
   completed: '已完成',
   failed: '执行失败',
   cancelled: '已停止',
@@ -49,19 +52,19 @@ const statusClass = computed(() => {
   if (status === 'failed') return 'failed'
   if (status === 'cancelled') return 'cancelled'
   if (status === 'completed') return 'completed'
-  if (props.turn?.cancelRequested) return 'cancelling'
+  if (props.turn?.cancelRequested || status === 'stopping') return 'cancelling'
   if (status === 'retrying') return 'retrying'
-  if (['running', 'accepted', 'preparing', 'thinking', 'tool_calling', 'waiting_external_task', 'finalizing'].includes(status)) return 'running'
+  if (['running', 'accepted', 'preparing', 'thinking', 'tool_calling', 'waiting_media', 'waiting_external_task', 'finalizing', 'reconnecting'].includes(status)) return 'running'
   return 'waiting'
 })
 
 const visible = computed(() => {
   if (!props.turn) return false
-  return ['running', 'accepted', 'preparing', 'thinking', 'tool_calling', 'waiting_external_task', 'finalizing', 'retrying'].includes(props.turn.status) || props.turn.cancelRequested
+  return ['running', 'accepted', 'preparing', 'thinking', 'tool_calling', 'waiting_media', 'waiting_external_task', 'finalizing', 'retrying', 'stopping', 'reconnecting'].includes(props.turn.status) || props.turn.cancelRequested
 })
 
 const phaseLabel = computed(() => {
-  if (props.turn?.cancelRequested) return '正在停止…'
+  if (props.turn?.cancelRequested || props.turn?.status === 'stopping') return '正在停止 AI 回复'
   const label = PHASE_LABELS[props.turn?.phase] || PHASE_LABELS[props.turn?.status] || '处理中'
   return props.turn?.tool ? `${label} · ${props.turn.tool}` : label
 })
@@ -77,7 +80,7 @@ const elapsedText = computed(() => {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 })
 
-const cancellable = computed(() => Boolean(props.turn?.cancellable && ['running', 'accepted', 'preparing', 'thinking', 'tool_calling', 'waiting_external_task', 'finalizing'].includes(props.turn?.status)))
+const cancellable = computed(() => Boolean(props.turn?.cancellable && ['running', 'accepted', 'preparing', 'thinking', 'tool_calling', 'waiting_media', 'waiting_external_task', 'finalizing'].includes(props.turn?.status)))
 const cancelRequested = computed(() => Boolean(props.turn?.cancelRequested))
 </script>
 

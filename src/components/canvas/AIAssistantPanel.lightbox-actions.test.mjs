@@ -14,7 +14,8 @@ test('lightbox shows download and load-to-canvas actions for image and video med
 })
 
 test('download reuses the stream download helper with the media name', () => {
-  assert.match(source, /import \{ startStreamDownload \} from '@\/api\/client'/)
+  // 命名导入集合可能随其他 API 一并引入（startStreamDownload + updateUserPreferences 等）
+  assert.match(source, /import \{ [^}]*startStreamDownload[^}]*\} from '@\/api\/client'/)
   assert.match(source, /function downloadLightboxMedia\(\) \{[\s\S]*?startStreamDownload\(url, name \|\| 'ai-assistant-media'\)[\s\S]*?closeLightbox\(\)/)
 })
 
