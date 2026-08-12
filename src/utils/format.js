@@ -21,6 +21,21 @@ export function formatPoints(points) {
 }
 
 /**
+ * 汇总当前空间的可用积分（团队积分 + 套餐积分 + 永久积分）并格式化
+ * 个人空间时 teamPoints 为 0，结果等价于套餐 + 永久
+ * @param {number|string} teamPoints - 团队积分
+ * @param {number|string} packagePoints - 套餐积分
+ * @param {number|string} permanentPoints - 永久积分
+ * @returns {string} 格式化后的积分字符串
+ */
+export function sumPoints(teamPoints, packagePoints, permanentPoints) {
+  const team = parseFloat(teamPoints) || 0
+  const pkg = parseFloat(packagePoints) || 0
+  const perm = parseFloat(permanentPoints) || 0
+  return formatPoints(team + pkg + perm)
+}
+
+/**
  * 格式化余额显示（分转元）
  * @param {number} balance - 余额（单位：分）
  * @returns {string} 格式化后的余额字符串

@@ -1,6 +1,8 @@
 /**
- * 执行摘要（AC-P2-03）测试：发送前展示 Skill / 参考素材 / 模型 / 预计积分 /
- * 写回目标；默认输入区不拥挤（高级项收敛到执行设置）。
+ * 执行设置（AC-P2-02/AC-P2-03 修订）测试：
+ * 默认输入区只突出输入/附件/模型/发送；深度思考/联网/授权收敛到执行设置；
+ * 弹层内不展示多余的解释文字；输入区下方不再渲染执行摘要条；
+ * 深度思考默认开启。
  *
  * Run: cd /opt/banana/bananaapiboard && node --test src/components/canvas/AIAssistantPanel.execution-summary.test.mjs
  */
@@ -24,24 +26,24 @@ test('默认输入区只突出输入/附件/模型/发送；深度思考/联网/
   assert.match(panel, /title="执行设置"/)
 })
 
-test('执行摘要包含 Skill / 参考素材 / 模型 / 预计积分 / 完成后（AC-P2-03）', () => {
-  const summary = panel.match(/<!-- 执行摘要（AC-P2-03）[\s\S]*?<\/div>\n        <\/div>\n      <\/div>\n    <\/div>\n  <\/Transition>/)?.[0]
-  assert.ok(summary, 'execution summary block must exist')
-  assert.match(summary, /executionSummaryTags\.length > 0/)
-  assert.match(summary, /execution-summary__tag/)
-  // 摘要标签由 executionSummaryTags computed 生成（模板内只渲染 tag，文案在 computed）
-  const computed = panel.match(/const executionSummaryTags = computed\(\(\) => \{[\s\S]*?\n\}\)/)?.[0]
-  assert.ok(computed, 'executionSummaryTags computed must exist')
-  assert.match(computed, /本次使用/)
-  assert.match(computed, /参考素材/)
-  assert.match(computed, /预计积分/)
-  assert.match(computed, /完成后/)
-  assert.match(computed, /写回当前画布/)
-  assert.match(computed, /仅返回对话/)
+test('执行设置弹层不展示多余解释文字（只保留开关与标题）', () => {
+  const popover = panel.match(/execution-settings-popover[\s\S]*?<\/Transition>/)?.[0]
+  assert.ok(popover, 'execution settings popover must exist')
+  assert.match(popover, /深度思考/)
+  assert.match(popover, /联网搜索/)
+  assert.match(popover, /工具授权方式/)
+  // 开关只保留标签与 switch，不再有 desc 解释文字
+  assert.doesNotMatch(popover, /execution-toggle__desc/, '弹层内不得有解释性 desc 文字')
+  assert.doesNotMatch(popover, /使用更强推理|获取最新资料|自动执行（Agent 自主调用）/)
+  assert.match(popover, /execution-toggle__switch/, '开关仍保留 toggle 控件')
 })
 
-test('摘要计算逻辑存在（executionSummaryTags）', () => {
-  assert.match(panel, /const executionSummaryTags = computed\(/)
-  assert.match(panel, /tags\.push\(\{ label: '本次使用'/)
-  assert.match(panel, /tags\.push\(\{ label: '预计积分'/)
+test('输入区下方不再渲染执行摘要条（AC-P2-03 移除）', () => {
+  assert.doesNotMatch(panel, /class="execution-summary"/, '执行摘要条不得存在')
+  assert.doesNotMatch(panel, /executionSummaryTags/, '执行摘要 computed 不得存在')
+  assert.doesNotMatch(panel, /参考素材无/, '摘要文案不得存在')
+})
+
+test('深度思考默认开启', () => {
+  assert.match(panel, /const deepThinkEnabled = ref\(true\)/, 'deepThinkEnabled 默认必须为 true')
 })

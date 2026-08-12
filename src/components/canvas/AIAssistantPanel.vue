@@ -344,11 +344,7 @@
           @remove="removeQueuedServerMessage"
         />
 
-        <!-- 后台执行 / 排队中提示 -->
-        <div v-if="showRunningBanner" class="running-banner">
-          <span class="status-dot status-dot--pulse"></span>
-          任务正在后台执行中…
-        </div>
+        <!-- 排队中提示 -->
         <div v-if="queuedTurn" class="queued-banner" role="status" aria-live="polite">
           <span class="queued-banner__label">排队中，等待上一轮完成…</span>
           <span v-if="queuedTurnContent" class="queued-banner__preview">{{ queuedTurnContent }}</span>
@@ -601,12 +597,12 @@
             
             <!-- 右侧功能组 -->
             <div class="toolbar-right">
-              <!-- 执行设置（AC-P2-02 渐进披露）：深度思考 / 联网 / 授权策略收敛到一个入口，
-                   默认输入区不直接暴露这些高级概念 -->
+              <!-- 执行设置（AC-P2-02 渐进披露）：深度思考 / 联网收敛到一个入口，
+                   默认输入区不直接暴露这些高级概念（工具授权方式即左侧的自动/手动模式，不再重复） -->
               <div class="execution-settings">
                 <button
                   class="toolbar-btn icon-btn"
-                  :class="{ active: showExecutionSettings || executionSummaryTags.length > 0 }"
+                  :class="{ active: showExecutionSettings }"
                   type="button"
                   title="执行设置"
                   aria-label="执行设置"
@@ -626,7 +622,6 @@
                         @click="deepThinkEnabled = !deepThinkEnabled"
                       >
                         <span class="execution-toggle__label">深度思考</span>
-                        <span class="execution-toggle__desc">使用更强推理，耗时更长</span>
                         <span class="execution-toggle__switch"><i></i></span>
                       </button>
                       <button
@@ -635,16 +630,6 @@
                         @click="webSearchEnabled = !webSearchEnabled"
                       >
                         <span class="execution-toggle__label">联网搜索</span>
-                        <span class="execution-toggle__desc">获取最新资料作为参考</span>
-                        <span class="execution-toggle__switch"><i></i></span>
-                      </button>
-                      <button
-                        class="execution-toggle"
-                        :class="{ active: skillExecutionMode === 'manual' }"
-                        @click="selectSkillExecutionMode(skillExecutionMode === 'auto' ? 'manual' : 'auto')"
-                      >
-                        <span class="execution-toggle__label">工具授权方式</span>
-                        <span class="execution-toggle__desc">{{ skillExecutionMode === 'auto' ? '自动执行（Agent 自主调用）' : '每次执行前确认' }}</span>
                         <span class="execution-toggle__switch"><i></i></span>
                       </button>
                     </div>
@@ -670,14 +655,6 @@
                 </svg>
               </button>
             </div>
-          </div>
-
-          <!-- 执行摘要（AC-P2-03）：发送前展示 Skill / 参考素材 / 模型 / 预计积分 / 写回目标 -->
-          <div v-if="executionSummaryTags.length > 0" class="execution-summary" role="status">
-            <span v-for="tag in executionSummaryTags" :key="tag.label" class="execution-summary__tag">
-              <span class="execution-summary__tag-label">{{ tag.label }}</span>
-              <span class="execution-summary__tag-value">{{ tag.value }}</span>
-            </span>
           </div>
         </div>
       </div>
@@ -895,7 +872,8 @@ const currentSessionId = ref(null)
 const sessions = ref([])
 
 const selectedModeId = ref('')
-const deepThinkEnabled = ref(false)
+// 深度思考默认开启（所有用户默认打开）
+const deepThinkEnabled = ref(true)
 const webSearchEnabled = ref(false)
 // AC-P1-08: 参考媒体策略 —— 只有显式 @ 媒体或勾选「以上一结果为参考」时才携带历史媒体
 const turnReferenceMediaMode = ref('explicit')
@@ -910,28 +888,6 @@ const skillExecutionMode = ref('auto')
 // 旧布尔值只映射一次，不改变已有会话引擎。
 const agentEngine = ref('codex')
 const enhancedMode = computed(() => agentEngine.value === 'codex')
-// AC-P2-03: 发送前执行摘要 —— Skill / 参考素材 / 模型 / 预计积分 / 写回目标，
-// 只展示真实可执行的项目（产品不能控制的开关不显示）。
-const executionSummaryTags = computed(() => {
-  const tags = []
-  if (enhancedMode.value) {
-    if (referencedSkill.value?.name) {
-      tags.push({ label: '本次使用', value: referencedSkill.value.name })
-    }
-    const refCount = attachmentMentionBindings.value
-      ? Object.keys(attachmentMentionBindings.value).filter((k) => attachmentMentionBindings.value[k]).length
-      : 0
-    tags.push({ label: '参考素材', value: refCount > 0 ? `${refCount} 项` : '无' })
-    if (selectedModelValue.value) {
-      tags.push({ label: '模型', value: selectedModelValue.value })
-    }
-    // 预计积分：取租户 AI 助手单次计费配置；拿不到配置时显示计费规则说明而非假数字
-    const cost = config.value?.points_cost
-    tags.push({ label: '预计积分', value: Number.isFinite(Number(cost)) && Number(cost) > 0 ? `${Number(cost)} 点` : '按租户计费规则' })
-    tags.push({ label: '完成后', value: props.canvasContext ? '写回当前画布' : '仅返回对话' })
-  }
-  return tags.slice(0, 5)
-})
 const currentCodexThreadId = ref(null)
 const slashMenuVisible = ref(false)
 const slashMenuItems = ref([])
@@ -972,6 +928,9 @@ const activeTurn = ref({
   phase: 'idle',
   tool: null,
   taskId: null,
+  // 本轮提交的全部媒体任务 id（image-gen-batch 并发多个）；taskId 为首个，
+  // 供追尾补拉覆盖全部任务（批量生图一张不漏）
+  taskIds: [],
   startedAt: null,
   lastEventAt: null,
   cancellable: false,
@@ -1007,6 +966,7 @@ function resetActiveTurn() {
     phase: 'idle',
     tool: null,
     taskId: null,
+    taskIds: [],
     startedAt: null,
     lastEventAt: null,
     cancellable: false,
@@ -1330,6 +1290,18 @@ function getAssistantMediaGeneratingType(event) {
   return ''
 }
 
+function hasCanvasWriteTarget(canvasContext = props.canvasContext) {
+  const workflowId = canvasContext?.workflow_id || canvasContext?.workflowId
+  const nodeId = canvasContext?.node_ids?.[0] || canvasContext?.node_id || canvasContext?.nodeId
+  return Boolean(workflowId && nodeId)
+}
+
+function buildMediaTurnInstruction() {
+  return hasCanvasWriteTarget()
+    ? '生成任务完成后，请通过 task-status 获取 completed 和 result_urls；然后调用 canvas-write 写回当前画布节点，并确认返回 success:true，未成功写回前不要结束回合。'
+    : '生成任务完成后，请通过 task-status 获取 completed 和 result_urls；前端会根据结果自动创建并持久化图片节点。'
+}
+
 const hasDraft = computed(() => Boolean(inputText.value.trim() || attachments.value.length > 0))
 const canSend = computed(() => hasDraft.value && !isUploading.value)
 
@@ -1347,7 +1319,7 @@ function snapshotDraft() {
     authorizationMode: skillExecutionMode.value === 'auto' ? 'auto' : 'once',
     hint: [
       turnModelHint,
-      '生成任务完成后，请通过 task-status 获取结果；前端会根据 task-status 返回的结果自动写回当前画布，请不要调用 canvas-write。'
+      buildMediaTurnInstruction()
     ].filter(Boolean).join('\n'),
     model: turnModelRef?.modelId || null,
     mode: modelPickerType.value === 'video' ? selectedVideoMode.value || null : null,
@@ -1908,6 +1880,33 @@ function extractTaskIdFromToolCompletedResult(result) {
   }
 }
 
+/**
+ * 从媒体工具提交结果中提取全部媒体任务 task_id（image-gen-batch 并发多个）。
+ * 与后端 extractTaskIdsFromToolResult 语义一致：优先 result.tasks[] 数组，
+ * 单发工具（image-gen/video-gen）回退单任务字段。返回空数组表示无有效任务。
+ */
+function extractTaskIdsFromToolCompletedResult(result) {
+  const text = Array.isArray(result?.content)
+    ? result.content.map((c) => (c && typeof c.text === 'string' ? c.text : '')).join('\n')
+    : ''
+  const match = text.match(/\{[\s\S]*\}/)
+  if (!match) return []
+  let parsed
+  try {
+    parsed = JSON.parse(match[0])
+  } catch {
+    return []
+  }
+  const extractOne = (obj) => obj?.task_id || obj?.id || obj?.task?.id || null
+  const tasks = parsed?.result?.tasks || parsed?.tasks || null
+  if (Array.isArray(tasks)) {
+    const ids = tasks.map(extractOne).filter(Boolean)
+    if (ids.length) return ids
+  }
+  const single = extractOne(parsed?.result || parsed)
+  return single ? [single] : []
+}
+
 function handleToolEvent(message, event, opts = {}) {
   if (!message) return
   if (!Array.isArray(message.toolEvents)) message.toolEvents = []
@@ -2212,6 +2211,27 @@ async function loadSession(session) {
     if (enhancedMode.value) {
       const turnStatus = session.turn_status || 'idle'
       if (turnStatus === 'running') {
+        // 运行中回合：把历史里的“半截助手快照”重置为空流式占位，交由 reconnectStream 从事件流
+        // 重建。否则 DB 快照与事件回放双重叠加会造成正文/工具卡重复；且回合尚未落盘正文（只有
+        // 用户消息）时没有 assistant 占位，回放事件被 `find assistant` 短路丢弃，表现为缺信息、
+        // 只有回合完成后才显示完整内容。
+        const lastMsg = messages.value[messages.value.length - 1]
+        const runningTurnId = lastMsg?.role === 'assistant' ? (lastMsg.turn_id || null) : null
+        const placeholder = {
+          role: 'assistant',
+          content: '',
+          thinking: '',
+          isThinking: true,
+          isStreaming: true,
+          toolEvents: [],
+          timestamp: lastMsg?.timestamp || Date.now(),
+          ...(runningTurnId ? { turn_id: runningTurnId } : {}),
+        }
+        if (lastMsg?.role === 'assistant') {
+          messages.value[messages.value.length - 1] = placeholder
+        } else {
+          messages.value.push(placeholder)
+        }
         showRunningBanner.value = true
         reconnectStream(session.id)
       } else {
@@ -2311,6 +2331,27 @@ function reconnectStream(threadId) {
         last.isStreaming = false
         throttledScrollToBottom()
       }
+    },
+    onSnapshot: (snapshot) => {
+      const last = [...messages.value].reverse().find(m => m.role === 'assistant')
+      if (!last || !snapshot) return
+      // 事件存储已过期/缺失：后端回退 turn.snapshot（partialContent + toolEvents），
+      // 是“当前已打印进度”的真源。用替换而非追加，避免与已显示内容重复。
+      const snapshotText = typeof snapshot.partialContent === 'string' && snapshot.partialContent
+        ? snapshot.partialContent
+        : (typeof snapshot.finalResponse === 'string' && snapshot.finalResponse ? snapshot.finalResponse : '')
+      if (snapshotText) last.content = snapshotText
+      if (Array.isArray(snapshot.toolEvents)) {
+        last.toolEvents = snapshot.toolEvents.map((te) => ({
+          ...te,
+          tool_call_id: te.tool_call_id || null,
+          name: te.name || (te.tool ? `banana-tools.${te.tool}` : ''),
+          status: te.status === 'completed' ? 'done' : (te.status === 'failed' ? 'error' : (te.status || 'done')),
+        }))
+      }
+      last.isThinking = false
+      last.isStreaming = snapshot.state === 'running'
+      throttledScrollToBottom()
     },
     onDone: () => {
       showRunningBanner.value = false
@@ -2910,7 +2951,7 @@ async function sendEnhancedMessage(force = false) {
   // 避免被持久化进历史记录后以“用户输入”形式回显
   const turnHint = [
     turnModelHint,
-    '生成任务完成后，请通过 task-status 获取结果；前端会根据 task-status 返回的结果自动写回当前画布，请不要调用 canvas-write。'
+    buildMediaTurnInstruction()
   ].filter(Boolean).join('\n')
 
   // 解析本轮要发送的附件（在清空输入之前）；并入 @ 引用的对话历史媒体
@@ -2997,15 +3038,17 @@ async function sendEnhancedMessage(force = false) {
         finalizeMediaGenerationState(message)
       }
     }
-    // 多图拆分生成：每张结果到达都写回画布（幂等由 Canvas.vue 按 taskId/URL 去重），
-    // 不再用单次标志限制——否则 6 张只写回第一张。
-    emit('canvas-writeback', {
-      workflow_id: props.canvasContext?.workflow_id || props.canvasContext?.workflowId || null,
-      node_id: props.canvasContext?.node_ids?.[0] || props.canvasContext?.node_id || props.canvasContext?.nodeId || null,
-      media_type: mediaType,
-      result_urls: urls,
-      history_id: result.task_id || result.history_id || result.id || null
-    })
+    // 有明确画布目标时由服务端 canvas-write 负责唯一写回，并以 success:true
+    // 作为回合成功条件；无目标时才由前端创建并持久化新的媒体节点。
+    if (!hasCanvasWriteTarget()) {
+      emit('canvas-writeback', {
+        workflow_id: null,
+        node_id: null,
+        media_type: mediaType,
+        result_urls: urls,
+        history_id: result.task_id || result.history_id || result.id || null
+      })
+    }
   }
 
   // 如果有附件（图片或文件），本地临时资源先上传，公网 URL 直接传给后端
@@ -3100,6 +3143,8 @@ async function sendEnhancedMessage(force = false) {
           cancelRequested: false,
           startedAt: Date.now(),
           lastEventAt: Date.now(),
+          taskId: null,
+          taskIds: [],
           error: null,
         }
       },
@@ -3149,20 +3194,29 @@ async function sendEnhancedMessage(force = false) {
           pendingToolArgs.set(event.tool, queue)
         }
         // 提交成功（tool.completed 含 task_id）：通知画布创建 processing 节点
-        if (event.type === 'completed' && (event.tool === 'image-gen' || event.tool === 'video-gen')) {
-          const taskId = extractTaskIdFromToolCompletedResult(event.result)
+        if (event.type === 'completed' && (event.tool === 'image-gen' || event.tool === 'video-gen' || event.tool === 'image-gen-batch')) {
+          // image-gen-batch 并发提交 N 个任务：提取全部 task_id 加入追尾集合，
+          // 不依赖 task.started 是否已送达（agent 提前结束回合时兜底补拉一张不漏）
+          const batchTaskIds = event.tool === 'image-gen-batch'
+            ? extractTaskIdsFromToolCompletedResult(event.result)
+            : (extractTaskIdFromToolCompletedResult(event.result) ? [extractTaskIdFromToolCompletedResult(event.result)] : [])
+          for (const tid of batchTaskIds) {
+            activeTurn.value.taskId = activeTurn.value.taskId || tid
+            if (!activeTurn.value.taskIds.includes(tid)) activeTurn.value.taskIds.push(tid)
+          }
+          const taskId = batchTaskIds[0] || null
           const queue = pendingToolArgs.get(event.tool) || []
           const args = queue.shift() || {}
-          if (taskId) {
-            const refs = [
-              ...(Array.isArray(args.input_images) ? args.input_images : []),
-              ...(Array.isArray(args.image) ? args.image : []),
-              ...(Array.isArray(args.inputs) ? args.inputs : []),
-              ...(Array.isArray(args.reference_images) ? args.reference_images : []),
-              ...(Array.isArray(args.source_assets) ? args.source_assets : []),
-            ]
+          const refs = [
+            ...(Array.isArray(args.input_images) ? args.input_images : []),
+            ...(Array.isArray(args.image) ? args.image : []),
+            ...(Array.isArray(args.inputs) ? args.inputs : []),
+            ...(Array.isArray(args.reference_images) ? args.reference_images : []),
+            ...(Array.isArray(args.source_assets) ? args.source_assets : []),
+          ]
+          for (const tid of batchTaskIds) {
             emitCanvasTaskStarted({
-              task_id: taskId,
+              task_id: tid,
               media_type: event.tool === 'video-gen' ? 'video' : 'image',
               tool: event.tool,
               prompt: args.prompt,
@@ -3199,7 +3253,14 @@ async function sendEnhancedMessage(force = false) {
       },
       onTaskEvent: (event) => {
         const message = messages.value[assistantMessageIndex]
-        if (event?.task_id) activeTurn.value.taskId = event.task_id
+        // 收集本轮全部媒体任务 id（image-gen-batch 并发多个），taskId 为首个，
+        // 供回合结束后追尾补拉覆盖全部任务（批量生图一张不漏）
+        if (event?.task_id) {
+          activeTurn.value.taskId = activeTurn.value.taskId || event.task_id
+          if (!activeTurn.value.taskIds.includes(event.task_id)) {
+            activeTurn.value.taskIds.push(event.task_id)
+          }
+        }
         if (event.type === 'task.started' || event.type === 'task.progress') {
           // 后端任务进度桥透传的参数（DB 真源兜底，args 被脱敏时仍可靠）：
           // 已由 tool.completed 建过节点时 Canvas.vue 按 task_id 幂等，只补参数。
@@ -3860,40 +3921,69 @@ function clearPendingToolStatusCards() {
  * @returns {boolean} 是否发起了补拉
  */
 function maybeLatePullTaskResult(assistantMessageIndex) {
-  const taskId = activeTurn.value.taskId
   const message = messages.value[assistantMessageIndex]
-  const hasMediaResult = Array.isArray(message?.attachments) && message.attachments.some(a => a?.type === 'image' || a?.type === 'video')
-  if (!taskId || hasMediaResult || activeTurn.value.status === 'cancelled' || !currentCodexThreadId.value) return false
+  if (activeTurn.value.status === 'cancelled' || !currentCodexThreadId.value) return false
+  // 本轮提交的全部媒体任务 id（image-gen-batch 并发多个）；taskIds 为空时回退单任务 taskId。
+  // 已实时到达的结果（attachments 中的 task_id）从待补拉集合剔除——不能以"已有部分结果"
+  // 短路，否则回合结束后完成的后序任务永远补拉不到（批量生图一张不漏）。
+  const submittedTaskIds = [...(Array.isArray(activeTurn.value.taskIds) ? activeTurn.value.taskIds : [])]
+  if (!submittedTaskIds.length && activeTurn.value.taskId) submittedTaskIds.push(activeTurn.value.taskId)
+  if (!submittedTaskIds.length) return false
+  const arrivedTaskIds = new Set(
+    (Array.isArray(message?.attachments) ? message.attachments : [])
+      .map(a => a?.task_id)
+      .filter(Boolean)
+  )
+  const pendingTaskIds = submittedTaskIds.filter(tid => !arrivedTaskIds.has(tid))
+  if (!pendingTaskIds.length) return false
   if (lateTaskController) lateTaskController.abort()
   lateTaskController = new AbortController()
+  const finishedTaskIds = new Set()
+  const stopLatePull = () => {
+    lateTaskController?.abort()
+    activeTurn.value.taskId = null
+    activeTurn.value.taskIds = []
+  }
+  const applyTaskResult = (event) => {
+    const msg = messages.value[assistantMessageIndex]
+    if (!msg) return
+    applyAgentResultToMessage(assistantMessageIndex, {
+      media_type: resolveMediaType(event),
+      result_urls: event.result_urls || event.preview_urls || [],
+      task_id: event.task_id || null,
+    })
+  }
   subscribeCodexStream(currentCodexThreadId.value, {
     onTaskEvent: (event) => {
       const msg = messages.value[assistantMessageIndex]
       if (!msg) return
       if (event.type === 'task.completed') {
+        const doneTaskId = event.task_id || null
+        if (doneTaskId) finishedTaskIds.add(doneTaskId)
         finalizeMediaGenerationState(msg)
-        applyAgentResultToMessage(assistantMessageIndex, {
-          media_type: resolveMediaType(event),
-          result_urls: event.result_urls || event.preview_urls || [],
-          task_id: event.task_id || null,
-        })
+        applyTaskResult(event)
         msg.isStreaming = false
-        activeTurn.value.taskId = null
         clearPendingToolStatusCards()
-        lateTaskController?.abort()
         scrollToBottom()
+        // 全部待补拉任务均已收到终态，终止补拉
+        if (pendingTaskIds.every(tid => finishedTaskIds.has(tid) || arrivedTaskIds.has(tid))) {
+          stopLatePull()
+        }
       } else if (event.type === 'task.failed' || event.type === 'task.timeout') {
+        const doneTaskId = event.task_id || null
+        if (doneTaskId) finishedTaskIds.add(doneTaskId)
         finalizeMediaGenerationState(msg)
         if (!msg.content) msg.content = `媒体任务执行失败：${event.error || event.message || '未知错误'}`
         msg.isStreaming = false
-        activeTurn.value.taskId = null
         clearPendingToolStatusCards()
-        lateTaskController?.abort()
         scrollToBottom()
+        if (pendingTaskIds.every(tid => finishedTaskIds.has(tid) || arrivedTaskIds.has(tid))) {
+          stopLatePull()
+        }
       }
     },
-    onDone: () => { activeTurn.value.taskId = null },
-    onError: () => { activeTurn.value.taskId = null },
+    onDone: () => { stopLatePull() },
+    onError: () => { stopLatePull() },
     signal: lateTaskController.signal,
   })
   return true
@@ -4575,7 +4665,7 @@ defineExpose({
   width: 36px;
   height: 36px;
   border-radius: 10px;
-  background: linear-gradient(135deg, 
+  background: linear-gradient(135deg,
     rgba(168, 85, 247, 0.25) 0%,
     rgba(99, 102, 241, 0.2) 50%,
     rgba(59, 130, 246, 0.25) 100%
@@ -4587,7 +4677,7 @@ defineExpose({
   align-items: center;
   justify-content: center;
   color: rgba(255, 255, 255, 0.9);
-  box-shadow: 
+  box-shadow:
     0 4px 12px rgba(139, 92, 246, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
@@ -5717,6 +5807,87 @@ defineExpose({
   transform: translateY(-8px);
 }
 
+/* 执行设置（AC-P2-02 渐进披露）：深度思考 / 联网的齿轮弹层 */
+.execution-settings {
+  position: relative;
+}
+
+.execution-settings-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  background: rgba(30, 32, 40, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  z-index: 100;
+}
+
+.execution-setting-row {
+  display: grid;
+  gap: 2px;
+}
+
+.execution-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+
+.execution-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.execution-toggle.active {
+  background: rgba(100, 150, 255, 0.15);
+  color: rgba(180, 200, 255, 1);
+}
+
+.execution-toggle__label {
+  flex: 1;
+}
+
+.execution-toggle__switch {
+  position: relative;
+  width: 30px;
+  height: 17px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  transition: background 0.2s;
+}
+
+.execution-toggle__switch i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  transition: transform 0.2s;
+}
+
+.execution-toggle.active .execution-toggle__switch {
+  background: rgba(100, 150, 255, 0.7);
+}
+
+.execution-toggle.active .execution-toggle__switch i {
+  transform: translateX(13px);
+}
+
 .toolbar-btn.icon-btn {
   padding: 6px;
   min-width: 32px;
@@ -6063,17 +6234,6 @@ defineExpose({
 @keyframes ai-status-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
-}
-.running-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin: 8px;
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-  border-radius: 8px;
-  font-size: 13px;
 }
 .queued-banner {
   padding: 8px 12px;
@@ -6494,6 +6654,46 @@ defineExpose({
 
 :root.canvas-theme-light .ai-assistant-panel .mode-option .check-icon {
   color: #3b82f6 !important;
+}
+
+/* 执行设置弹层 */
+:root.canvas-theme-light .ai-assistant-panel .execution-settings-popover {
+  background: linear-gradient(135deg,
+    rgba(255, 255, 255, 0.92) 0%,
+    rgba(250, 250, 252, 0.95) 100%
+  ) !important;
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  border-color: rgba(0, 0, 0, 0.08) !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .execution-toggle {
+  color: #57534e !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .execution-toggle:hover {
+  background: rgba(0, 0, 0, 0.05) !important;
+  color: #1c1917 !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .execution-toggle.active {
+  background: rgba(59, 130, 246, 0.1) !important;
+  color: #3b82f6 !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .execution-toggle__switch {
+  background: rgba(0, 0, 0, 0.15) !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .execution-toggle.active .execution-toggle__switch {
+  background: #3b82f6 !important;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .execution-toggle__switch i {
+  background: #fff !important;
 }
 
 /* 预设按钮 */

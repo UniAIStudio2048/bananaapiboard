@@ -21,10 +21,12 @@ test('提交响应（tool.completed）触发画布同步建节点，参数取自
   assert.match(source, /pendingToolArgs\.get\(event\.tool\) \|\| \[\]/)
   assert.match(source, /queue\.push\(event\.args\)/)
   assert.match(source, /queue\.shift\(\) \|\| \{\}/)
-  // image-gen/video-gen completed 且能提取 task_id 时 emit canvas-task-started
-  assert.match(source, /event\.type === 'completed' && \(event\.tool === 'image-gen' \|\| event\.tool === 'video-gen'\)/)
-  assert.match(source, /extractTaskIdFromToolCompletedResult\(event\.result\)/)
-  assert.match(source, /emitCanvasTaskStarted\(\{[\s\S]*?task_id: taskId/)
+  // image-gen/video-gen/image-gen-batch completed 且能提取 task_id 时 emit canvas-task-started
+  // （batch 并发提交的每个任务都建节点，一张不漏）
+  assert.match(source, /event\.type === 'completed' && \(event\.tool === 'image-gen' \|\| event\.tool === 'video-gen' \|\| event\.tool === 'image-gen-batch'\)/)
+  assert.match(source, /extractTaskIdsFromToolCompletedResult\(event\.result\)/)
+  assert.match(source, /for \(const tid of batchTaskIds\) \{/)
+  assert.match(source, /emitCanvasTaskStarted\(\{[\s\S]*?task_id: tid/)
   // 参考图 URL 从 args 的 input_images/image/inputs/reference_images/source_assets 收集
   assert.match(source, /args\.input_images[\s\S]*?args\.image[\s\S]*?args\.inputs[\s\S]*?args\.reference_images[\s\S]*?args\.source_assets/)
 })

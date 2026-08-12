@@ -71,13 +71,14 @@ export async function deleteCodexSession(threadId) {
  * @param {Function} [callbacks.onContent] - 收到 agent_message 文本
  * @param {Function} [callbacks.onToolEvent] - 工具调用事件
  * @param {Function} [callbacks.onTaskEvent] - 媒体任务状态事件（task.started/progress/completed/failed）
+ * @param {Function} [callbacks.onSnapshot] - turn.snapshot（事件过期时后端回退的 DB 快照）
  * @param {Function} [callbacks.onDone] - 流结束
  * @param {Function} [callbacks.onError] - 错误
  * @param {AbortSignal} [callbacks.signal] - 取消信号
  * @param {number} [callbacks.lastEventId=0] - 从指定事件 ID 之后恢复
  */
 export async function subscribeCodexStream(threadId, callbacks = {}) {
-  const { onStatus, onContent, onToolEvent, onTaskEvent, onDone, onError, onEventId, signal, lastEventId = 0 } = callbacks
+  const { onStatus, onContent, onToolEvent, onTaskEvent, onSnapshot, onDone, onError, onEventId, signal, lastEventId = 0 } = callbacks
   const url = getApiUrl(`/api/codex-agent/sessions/${encodeURIComponent(threadId)}/stream`)
   try {
     const response = await fetch(url, {
@@ -126,6 +127,11 @@ export async function subscribeCodexStream(threadId, callbacks = {}) {
           switch (eventName) {
             case 'status':
               if (onStatus) onStatus(json.turn_status, json)
+              break
+            case 'turn.snapshot':
+              // 事件存储过期/缺失时后端回退的 DB 快照（partialContent + toolEvents），
+              // 是“当前已打印进度”的真源；必须派发，否则进行中对话的部分信息丢失。
+              if (onSnapshot) onSnapshot(json.snapshot || json)
               break
             case 'item.completed': {
               const item = json.item || {}

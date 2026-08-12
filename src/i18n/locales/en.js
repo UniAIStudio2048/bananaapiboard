@@ -656,7 +656,7 @@ export default {
     collaborate: 'Collaborate',
     loading: 'Loading...',
     preparingCanvas: 'Preparing canvas...',
-    pointsDetail: 'Available points (Package + Permanent)',
+    pointsDetail: 'Available points (Team + Permanent + Package)',
     // Storage quota
     storageSpace: 'Storage Space',
     workflowCount: 'Workflow Count',

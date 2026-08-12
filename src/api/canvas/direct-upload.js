@@ -14,11 +14,12 @@ function authHeaders() {
 }
 
 async function apiFetch(path, options = {}) {
+  const rawBody = options.rawBody === true
   const response = await fetch(getApiUrl(path), {
     method: options.method || 'GET',
     credentials: 'include',
     headers: authHeaders(),
-    body: options.body == null ? undefined : JSON.stringify(options.body),
+    body: rawBody ? options.body : (options.body == null ? undefined : JSON.stringify(options.body)),
     signal: options.signal
   })
   const payload = await response.json().catch(() => ({}))

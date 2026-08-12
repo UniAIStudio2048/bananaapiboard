@@ -534,3 +534,92 @@ function directResponse(etag, status = 200) {
 }
 
 console.log('canvasDirectUpload tests passed')
+
+{
+  // 代理回退：直传网络失败（如 Chrome PNA 拦截）且重试耗尽后，走后端代理上传
+  const file = new File([new Uint8Array([1, 2, 3, 4])], 'pna.png', { type: 'image/png' })
+  const apiCalls = []
+  const directCalls = []
+  const uploader = createCanvasDirectUploader({
+    checkpointStore: createMemoryCanvasUploadCheckpointStore(),
+    apiFetch: async (url, options = {}) => {
+      apiCalls.push({ url, method: options.method, rawBody: options.rawBody === true })
+      if (url.endsWith('/presign')) {
+        return {
+          upload: {
+            id: 'up-pna', mode: 'single', status: 'created', method: 'PUT',
+            upload_url: 'https://bucket.cos.example/canvas/pna.png?signature',
+            headers: { 'Content-Type': 'image/png' }
+          }
+        }
+      }
+      return {
+        success: true,
+        upload: { id: 'up-pna', status: 'completed' },
+        asset: { id: 'asset-pna', url: 'https://cdn.example.com/canvas/pna.png' }
+      }
+    },
+    directFetch: async (url, options) => {
+      directCalls.push({ url, ...options })
+      throw new TypeError('Failed to fetch')
+    }
+  })
+
+  const result = await uploader.upload(file, { mediaType: 'image' })
+  assert.equal(result.status, 'completed')
+  // 默认 2 次重试 + 最后一次尝试 = 3 次直传，全部网络失败后回退代理
+  assert.equal(directCalls.length, 3)
+  const proxyCall = apiCalls.find(call => call.url.endsWith('/up-pna/proxy'))
+  assert.ok(proxyCall, '应调用后端代理上传端点')
+  assert.equal(proxyCall.method, 'POST')
+  assert.equal(proxyCall.rawBody, true)
+}
+
+{
+  // multipart（大视频）分片直传持续网络失败（如 Chrome PNA 拦截）→ 整文件回退后端代理上传
+  const partSize = 8
+  const file = new File([new Uint8Array(20)], 'big.mp4', { type: 'video/mp4' })
+  const apiCalls = []
+  const directCalls = []
+  const checkpointStore = createMemoryCanvasUploadCheckpointStore()
+  const apiFetch = async (url, options = {}) => {
+    apiCalls.push({ url, method: options.method, rawBody: options.rawBody === true })
+    if (url.endsWith('/presign') && !url.includes('/parts/')) {
+      return { upload: { id: 'up-mp', mode: 'multipart', status: 'created', part_size: partSize } }
+    }
+    if (url.endsWith('/parts/presign')) {
+      return {
+        upload: { id: 'up-mp', mode: 'multipart', status: 'uploading' },
+        parts: options.body.part_numbers.map(partNumber => ({
+          part_number: partNumber,
+          upload_url: `https://cos.example/part-${partNumber}`,
+          headers: {}
+        }))
+      }
+    }
+    return {
+      upload: { id: 'up-mp', status: 'completed' },
+      asset: { id: 'asset-mp', url: 'https://cdn.example.com/canvas/big.mp4' }
+    }
+  }
+  const directFetch = async (url) => {
+    directCalls.push(url)
+    throw new TypeError('Failed to fetch')
+  }
+  const uploader = createCanvasDirectUploader({
+    apiFetch,
+    directFetch,
+    checkpointStore,
+    partSize,
+    concurrency: 3
+  })
+  const result = await uploader.upload(file, { mediaType: 'video' })
+  assert.equal(result.status, 'completed')
+  const proxyCall = apiCalls.find(call => call.url.endsWith('/up-mp/proxy'))
+  assert.ok(proxyCall, 'multipart 分片失败后应调用整文件代理上传端点')
+  assert.equal(proxyCall.method, 'POST')
+  assert.equal(proxyCall.rawBody, true)
+  // 分片直传应全部尝试过（网络失败），且未走分片 complete
+  assert.ok(directCalls.length > 0)
+  assert.ok(!apiCalls.some(call => call.url.endsWith('/up-mp/complete') && !call.url.includes('/proxy')))
+}

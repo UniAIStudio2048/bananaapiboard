@@ -90,6 +90,17 @@ function isRetryableSinglePutError(error) {
   return error?.code !== 'canvas_upload_missing_etag'
 }
 
+// 浏览器直传被 Chrome Private Network Access 拦截时（COS 域名解析到
+// 内网/link-local 地址），fetch 会在网络层失败。这类错误需要回退到
+// 后端代理上传（同源请求，后端内网侧写入 COS）。
+function isProxyFallbackNetworkError(error) {
+  if (error?.status != null) return false
+  const name = String(error?.name || '')
+  const message = String(error?.message || error || '')
+  if (name === 'TypeError') return true
+  return /Failed to fetch|fetch failed|NetworkError|Load failed|ERR_BLOCKED_BY_ORB|ERR_FAILED|ERR_CONNECTION/i.test(message)
+}
+
 export function createCanvasDirectUploader({
   apiFetch,
   directFetch = globalThis.fetch,
@@ -112,20 +123,39 @@ export function createCanvasDirectUploader({
     return requirePayload(payload)
   }
 
-  const putDirect = async (url, headers, body, signal) => {
-    const response = await directFetch(url, {
-      method: 'PUT',
-      headers: headers || {},
-      body,
-      signal,
-      credentials: 'omit'
-    })
-    if (!response || response.ok === false) {
-      throw uploadError('canvas_upload_direct_put_failed', { status: response?.status })
+  const putDirect = async (url, headers, body, signal, options = {}) => {
+    try {
+      const response = await directFetch(url, {
+        method: 'PUT',
+        headers: headers || {},
+        body,
+        signal,
+        credentials: 'omit'
+      })
+      if (!response || response.ok === false) {
+        throw uploadError('canvas_upload_direct_put_failed', { status: response?.status })
+      }
+      const etag = getEtag(response.headers)
+      if (!etag) throw uploadError('canvas_upload_missing_etag')
+      return etag
+    } catch (error) {
+      // 直传被网络层拦截（如 Chrome PNA）时，回退到后端代理上传。
+      // 后端端点内部完成会话，返回占位 etag；后续 complete 幂等成功。
+      if (options.proxyFallback && isProxyFallbackNetworkError(error)) {
+        try {
+          await apiFetch(`/api/canvas/uploads/${options.uploadId}/proxy`, {
+            method: 'POST',
+            body,
+            rawBody: true,
+            signal
+          })
+          return 'proxy'
+        } catch (proxyError) {
+          throw error
+        }
+      }
+      throw error
     }
-    const etag = getEtag(response.headers)
-    if (!etag) throw uploadError('canvas_upload_missing_etag')
-    return etag
   }
 
   const complete = async (uploadId, body, signal) => {
@@ -144,7 +174,11 @@ export function createCanvasDirectUploader({
     let recoverConflict = false
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        etag = await putDirect(upload.upload_url, upload.headers, file, options.signal)
+        // 重试耗尽仍未成功时，若仍是网络层失败（如 PNA 拦截），回退到后端代理上传
+        etag = await putDirect(upload.upload_url, upload.headers, file, options.signal, {
+          uploadId: upload.id,
+          proxyFallback: attempt === maxRetries
+        })
         break
       } catch (error) {
         if (abortError(error, options.signal)) throw error
@@ -212,9 +246,10 @@ export function createCanvasDirectUploader({
     }
 
     let queueIndex = 0
+    let proxyFallbackTriggered = false
     const worker = async () => {
       while (queueIndex < pending.length) {
-        if (options.signal?.aborted) throw new DOMException('aborted', 'AbortError')
+        if (options.signal?.aborted || proxyFallbackTriggered) throw new DOMException('aborted', 'AbortError')
         const partNumber = pending[queueIndex++]
         const start = (partNumber - 1) * uploadPartSize
         const end = Math.min(start + uploadPartSize, file.size)
@@ -231,7 +266,14 @@ export function createCanvasDirectUploader({
             )
             break
           } catch (error) {
-            if (abortError(error, options.signal) || attempt === MAX_PART_ATTEMPTS) throw error
+            if (abortError(error, options.signal)) throw error
+            // 分片直传持续网络失败（如 Chrome PNA 拦截）：标记整文件回退，
+            // 中止其余 worker 由上层统一走后端代理上传
+            if (attempt === MAX_PART_ATTEMPTS && isProxyFallbackNetworkError(error)) {
+              proxyFallbackTriggered = true
+              throw new DOMException('aborted', 'AbortError')
+            }
+            if (attempt === MAX_PART_ATTEMPTS) throw error
             signed = (await presignParts(upload.id, [partNumber], options.signal)).get(partNumber)
           }
         }
@@ -244,10 +286,24 @@ export function createCanvasDirectUploader({
       }
     }
 
-    await Promise.all(Array.from(
-      { length: Math.min(safeConcurrency, pending.length || 1) },
-      () => worker()
-    ))
+    try {
+      await Promise.all(Array.from(
+        { length: Math.min(safeConcurrency, pending.length || 1) },
+        () => worker()
+      ))
+    } catch (error) {
+      // 分片直传被网络层拦截（如 Chrome PNA）时，整文件回退后端代理上传
+      if (proxyFallbackTriggered) {
+        const payload = await apiFetch(`/api/canvas/uploads/${upload.id}/proxy`, {
+          method: 'POST',
+          body: file,
+          rawBody: true,
+          signal: options.signal
+        })
+        return normalizeResult(payload)
+      }
+      throw error
+    }
 
     const parts = [...completed.values()]
       .sort((a, b) => a.partNumber - b.partNumber)

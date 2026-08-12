@@ -5,7 +5,7 @@
 import { ref, computed, watch, onMounted, onUnmounted, provide, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getMe, updateUserPreferences } from '@/api/client'
-import { formatPoints } from '@/utils/format'
+import { sumPoints } from '@/utils/format'
 import { getTenantHeaders, getBrand, isCanvasLogoEnabled, getApiUrl } from '@/config/tenant'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
@@ -364,12 +364,10 @@ async function confirmSwitchToSimpleMode() {
   }, 600)
 }
 
-// 计算用户积分总和（套餐积分 + 永久积分）
+// 计算用户积分总和（团队空间时为 团队积分 + 套餐积分 + 永久积分；个人空间时 team_points 为 0，等价于套餐 + 永久）
 const totalPoints = computed(() => {
   if (!me.value) return '0'
-  const packagePoints = parseFloat(me.value.package_points) || 0
-  const permanentPoints = parseFloat(me.value.points) || 0
-  return formatPoints(packagePoints + permanentPoints)
+  return sumPoints(me.value.team_points, me.value.package_points, me.value.points)
 })
 
 // 🔧 监控节点数量，防止内存溢出 + 大画布性能优化（静默处理，不打扰用户）
