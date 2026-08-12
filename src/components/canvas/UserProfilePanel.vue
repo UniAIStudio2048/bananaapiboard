@@ -43,6 +43,14 @@ const token = localStorage.getItem('token')
 // 当前激活的菜单
 const activeMenu = ref('home')
 
+// 团队空间余额总计 = 团队积分 + 套餐积分 + 永久积分
+const totalTeamBalance = computed(() => {
+  const team = parseFloat(props.userInfo?.team_points) || 0
+  const pkg = parseFloat(props.userInfo?.package_points) || 0
+  const perm = parseFloat(props.userInfo?.points) || 0
+  return team + pkg + perm
+})
+
 // 数据
 const ledger = ref([])
 const ledgerPage = ref(1)
@@ -346,7 +354,9 @@ const icons = {
   message: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>`,
   star: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>`,
   coin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v12"/><path d="M15 9.5a3 3 0 00-3-2.5c-1.7 0-3 1.1-3 2.5s1.3 2.5 3 2.5 3 1.1 3 2.5-1.3 2.5-3 2.5a3 3 0 01-3-2.5"/></svg>`,
-  'dollar-sign': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>`
+  'dollar-sign': `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg>`,
+  team: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>`,
+  total: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`
 }
 
 // 初始化数据
@@ -1855,6 +1865,18 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <span class="stat-icon" v-html="icons.coin"></span>
               <span class="stat-value">¥{{ formatBalance(userInfo?.balance || 0) }}</span>
               <span class="stat-label">{{ t('user.balance') }}</span>
+            </div>
+            <!-- 团队积分（仅团队空间显示，只读） -->
+            <div v-if="teamStore.globalSpaceType.value === 'team'" class="stat-item">
+              <span class="stat-icon" v-html="icons.team"></span>
+              <span class="stat-value">{{ formatPoints(userInfo?.team_points || 0) }}</span>
+              <span class="stat-label">{{ t('user.teamPoints') }}</span>
+            </div>
+            <!-- 余额总计（仅团队空间显示） -->
+            <div v-if="teamStore.globalSpaceType.value === 'team'" class="stat-item total-balance">
+              <span class="stat-icon" v-html="icons.total"></span>
+              <span class="stat-value">{{ formatPoints(totalTeamBalance) }}</span>
+              <span class="stat-label">{{ t('user.totalBalance') }}</span>
             </div>
           </div>
 
