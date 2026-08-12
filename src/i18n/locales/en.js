@@ -996,6 +996,8 @@ export default {
     packagePointsDesc: 'Remaining points in package (will expire)',
     permanentPoints: 'Permanent Points',
     permanentPointsDesc: 'Permanent points (never expire)',
+    teamPoints: 'Team Points',
+    totalBalance: 'Total Balance',
     balance: 'Balance',
     inviteCode: 'Invite Code',
     copyInviteCode: 'Copy Invite Code',

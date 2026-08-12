@@ -587,6 +587,8 @@ export default {
     packagePointsDesc: '套餐內剩餘積分（會到期）',
     permanentPoints: '永久積分',
     permanentPointsDesc: '永久積分（永不過期）',
+    teamPoints: '團隊積分',
+    totalBalance: '餘額總計',
     balance: '餘額',
     inviteCode: '邀請碼',
     copyInviteLink: '複製邀請連結',

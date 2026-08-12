@@ -574,6 +574,8 @@ export default {
     packagePointsDesc: 'Баллы из пакета (истекают)',
     permanentPoints: 'Постоянные баллы',
     permanentPointsDesc: 'Постоянные баллы (не истекают)',
+    teamPoints: 'Баллы команды',
+    totalBalance: 'Общий баланс',
     balance: 'Баланс',
     inviteCode: 'Код приглашения',
     copyInviteLink: 'Копировать ссылку приглашения',

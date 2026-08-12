@@ -669,6 +669,8 @@ export default {
     packagePointsDesc: '패키지 내 남은 포인트 (만료 예정)',
     permanentPoints: '영구 포인트',
     permanentPointsDesc: '영구 포인트 (만료되지 않음)',
+    teamPoints: '팀 포인트',
+    totalBalance: '총 잔액',
     balance: '잔액',
     inviteCode: '초대 코드',
     copyInviteCode: '초대 코드 복사',

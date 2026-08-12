@@ -574,6 +574,8 @@ export default {
     packagePointsDesc: 'Punkte aus dem Paket (laufen ab)',
     permanentPoints: 'Permanente Punkte',
     permanentPointsDesc: 'Permanente Punkte (laufen nicht ab)',
+    teamPoints: 'Team-Punkte',
+    totalBalance: 'Gesamtsaldo',
     balance: 'Guthaben',
     inviteCode: 'Einladungscode',
     copyInviteLink: 'Einladungslink kopieren',

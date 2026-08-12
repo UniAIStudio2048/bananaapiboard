@@ -670,6 +670,8 @@ export default {
     packagePointsDesc: 'パッケージ内の残りポイント（期限あり）',
     permanentPoints: '永久ポイント',
     permanentPointsDesc: '永久ポイント（期限なし）',
+    teamPoints: 'チームポイント',
+    totalBalance: '合計残高',
     balance: '残高',
     inviteCode: '招待コード',
     copyInviteCode: '招待コードをコピー',

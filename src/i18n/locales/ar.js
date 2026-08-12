@@ -574,6 +574,8 @@ export default {
     packagePointsDesc: 'نقاط من الباقة (تنتهي صلاحيتها)',
     permanentPoints: 'النقاط الدائمة',
     permanentPointsDesc: 'نقاط دائمة (لا تنتهي صلاحيتها)',
+    teamPoints: 'نقاط الفريق',
+    totalBalance: 'الرصيد الإجمالي',
     balance: 'الرصيد',
     inviteCode: 'رمز الدعوة',
     copyInviteLink: 'نسخ رابط الدعوة',

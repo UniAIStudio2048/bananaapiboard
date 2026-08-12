@@ -735,6 +735,8 @@ export default {
     packagePointsDesc: 'بولاقتا قالغان نومۇر (ۋاقتى ئۆتىدۇ)',
     permanentPoints: 'مەڭگۈلۈك نومۇر',
     permanentPointsDesc: 'مەڭگۈلۈك نومۇر (ھەرگىز ۋاقتى ئۆتمەيدۇ)',
+    teamPoints: 'كوللۇق نومۇر',
+    totalBalance: 'ئوممىي قالدۇق',
     balance: 'قالدۇق',
     inviteCode: 'تەكلىپ كودى',
     copyInviteCode: 'تەكلىپ كودىنى كۆچۈرۈش',

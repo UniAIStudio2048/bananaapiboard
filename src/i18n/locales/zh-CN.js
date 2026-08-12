@@ -1001,6 +1001,8 @@ export default {
     packagePointsDesc: '套餐内剩余积分（会到期）',
     permanentPoints: '永久积分',
     permanentPointsDesc: '永久积分（永不过期）',
+    teamPoints: '团队积分',
+    totalBalance: '余额总计',
     balance: '余额',
     inviteCode: '邀请码',
     copyInviteCode: '复制邀请码',
