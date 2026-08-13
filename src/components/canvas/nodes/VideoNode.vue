@@ -3306,7 +3306,8 @@ const hasReferenceAudios = computed(() => referenceAudios.value.length > 0)
 
 const activeDigitalHuman = computed(() => getUpstreamData().digitalHumans[0] || null)
 const isDigitalHumanMode = computed(() => !!activeDigitalHuman.value)
-const isHeygenLipsyncMode = computed(() => !isDigitalHumanMode.value && referenceVideos.value.length > 0 && referenceAudios.value.length > 0)
+// 换口型（视频 + 音频）仅在显式选择 HeyGen 模型时触发，避免普通视频模型仅因连了视频+音频就被自动误判为数字人换口型。
+const isHeygenLipsyncMode = computed(() => isHeygenModelSelected.value && !isDigitalHumanMode.value && referenceVideos.value.length > 0 && referenceAudios.value.length > 0)
 const isHeygenMode = computed(() => isHeygenModelSelected.value || isDigitalHumanMode.value || isHeygenLipsyncMode.value)
 const heygenInputHint = computed(() => {
   if (isDigitalHumanMode.value) return '输入：数字人资产 + 音频'
@@ -6094,7 +6095,7 @@ async function handleGenerate(options = {}) {
     finalPrompt = escapePromptTags(finalPrompt)
   }
 
-  const isHeygenFlow = isHeygenModelSelected.value || upstreamData.digitalHumans.length > 0 || (upstreamData.videos.length > 0 && upstreamData.audios.length > 0)
+  const isHeygenFlow = isHeygenModelSelected.value || upstreamData.digitalHumans.length > 0
   const isDigitalHumanFlow = upstreamData.digitalHumans.length > 0
   if (isDigitalHumanFlow && upstreamData.digitalHumans.length > 1) {
     await showAlert('一个视频节点一次只能使用一个数字人', '提示')
