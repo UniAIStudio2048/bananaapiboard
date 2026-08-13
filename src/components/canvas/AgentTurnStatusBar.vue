@@ -6,29 +6,28 @@
     aria-live="polite"
     :class="`agent-turn-status-bar--${statusClass}`"
   >
-    <span class="agent-turn-status-bar__dot" aria-hidden="true"></span>
     <span class="agent-turn-status-bar__phase">{{ phaseLabel }}</span>
     <span v-if="elapsedText" class="agent-turn-status-bar__elapsed">{{ elapsedText }}</span>
-    <button
-      v-if="cancellable && !cancelRequested"
-      type="button"
-      class="agent-turn-status-bar__stop"
-      aria-label="停止当前回合"
-      @click="$emit('stop')"
-    >
-      停止
-    </button>
-    <span v-else-if="cancelRequested" class="agent-turn-status-bar__cancelling">正在停止…</span>
+    <span v-if="cancelRequested" class="agent-turn-status-bar__cancelling">正在停止…</span>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
   turn: { type: Object, default: null },
 })
-defineEmits(['stop'])
+const now = ref(Date.now())
+let elapsedTimer = null
+
+onMounted(() => {
+  elapsedTimer = setInterval(() => { now.value = Date.now() }, 1000)
+})
+
+onUnmounted(() => {
+  if (elapsedTimer) clearInterval(elapsedTimer)
+})
 
 const PHASE_LABELS = {
   idle: '空闲',
@@ -72,7 +71,7 @@ const phaseLabel = computed(() => {
 const elapsedText = computed(() => {
   const startedAt = props.turn?.startedAt || props.turn?.ts
   if (!startedAt) return ''
-  const ms = Date.now() - startedAt
+  const ms = now.value - startedAt
   if (ms < 0) return ''
   const totalSeconds = Math.floor(ms / 1000)
   const minutes = Math.floor(totalSeconds / 60)
@@ -80,95 +79,60 @@ const elapsedText = computed(() => {
   return `${minutes}:${String(seconds).padStart(2, '0')}`
 })
 
-const cancellable = computed(() => Boolean(props.turn?.cancellable && ['running', 'accepted', 'preparing', 'thinking', 'tool_calling', 'waiting_media', 'waiting_external_task', 'finalizing'].includes(props.turn?.status)))
 const cancelRequested = computed(() => Boolean(props.turn?.cancelRequested))
 </script>
 
 <style scoped>
+/* 对齐 AgentToolTimeline：无边框、无圆点、等宽黑白灰；运行中文字扫光 */
 .agent-turn-status-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: 8px;
+  margin-top: 6px;
+  padding-left: 2px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, 'SF Mono', monospace;
   font-size: 12px;
-  line-height: 1;
-  background: rgba(6, 182, 212, 0.08);
-  color: #0e7490;
-  border: 1px solid rgba(6, 182, 212, 0.25);
+  line-height: 1.5;
+  color: var(--canvas-text-secondary);
 }
-.agent-turn-status-bar__dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
-  flex: none;
-  animation: agent-status-pulse 1.4s ease-in-out infinite;
+.agent-turn-status-bar__phase {
+  color: var(--canvas-text-primary);
+  font-weight: 500;
 }
-.agent-turn-status-bar--waiting {
-  background: rgba(129, 140, 248, 0.08);
-  color: #6366f1;
-  border-color: rgba(129, 140, 248, 0.25);
-}
-.agent-turn-status-bar--retrying {
-  background: rgba(234, 179, 8, 0.08);
-  color: #a16207;
-  border-color: rgba(234, 179, 8, 0.3);
-}
-.agent-turn-status-bar--completed {
-  background: rgba(34, 197, 94, 0.08);
-  color: #15803d;
-  border-color: rgba(34, 197, 94, 0.25);
-}
-.agent-turn-status-bar--completed .agent-turn-status-bar__dot {
-  animation: none;
-}
-.agent-turn-status-bar--failed {
-  background: rgba(239, 68, 68, 0.08);
-  color: #b91c1c;
-  border-color: rgba(239, 68, 68, 0.3);
-}
-.agent-turn-status-bar--failed .agent-turn-status-bar__dot {
-  animation: none;
-}
-.agent-turn-status-bar--cancelled {
-  background: rgba(107, 114, 128, 0.08);
-  color: #6b7280;
-  border-color: rgba(107, 114, 128, 0.25);
-}
-.agent-turn-status-bar--cancelled .agent-turn-status-bar__dot,
-.agent-turn-status-bar--cancelling .agent-turn-status-bar__dot {
-  animation: none;
-}
-.agent-turn-status-bar__elapsed {
-  font-variant-numeric: tabular-nums;
-  opacity: 0.75;
-}
-.agent-turn-status-bar__stop {
-  margin-left: auto;
-  padding: 3px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  background: rgba(239, 68, 68, 0.08);
-  color: #b91c1c;
-  font-size: 12px;
-  cursor: pointer;
-}
-.agent-turn-status-bar__stop:focus-visible {
-  outline: 2px solid rgba(239, 68, 68, 0.6);
-  outline-offset: 2px;
-}
+.agent-turn-status-bar__elapsed,
 .agent-turn-status-bar__cancelling {
-  margin-left: auto;
-  opacity: 0.7;
+  color: var(--canvas-text-tertiary);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
-@keyframes agent-status-pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
+.agent-turn-status-bar--running .agent-turn-status-bar__phase,
+.agent-turn-status-bar--waiting .agent-turn-status-bar__phase,
+.agent-turn-status-bar--retrying .agent-turn-status-bar__phase,
+.agent-turn-status-bar--cancelling .agent-turn-status-bar__phase {
+  background: linear-gradient(100deg,
+    var(--canvas-text-secondary) 40%,
+    var(--canvas-text-primary) 50%,
+    var(--canvas-text-secondary) 60%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: agent-status-text-shimmer 1.6s linear infinite;
+}
+@keyframes agent-status-text-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .agent-turn-status-bar__dot {
+  .agent-turn-status-bar--running .agent-turn-status-bar__phase,
+  .agent-turn-status-bar--waiting .agent-turn-status-bar__phase,
+  .agent-turn-status-bar--retrying .agent-turn-status-bar__phase,
+  .agent-turn-status-bar--cancelling .agent-turn-status-bar__phase {
     animation: none;
+    color: var(--canvas-text-primary);
+    background: none;
+    -webkit-background-clip: initial;
+    background-clip: initial;
   }
 }
 </style>

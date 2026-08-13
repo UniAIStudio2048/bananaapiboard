@@ -44,6 +44,7 @@ test('状态条：cancelled 显示「已停止」而非失败，cancelRequested 
   assert.doesNotMatch(bar, /cancelled: '失败'/)
   // cancelled 状态类不触发错误样式
   assert.match(bar, /status === 'cancelled'\) return 'cancelled'/)
+  assert.match(bar, /setInterval\(\(\) => \{ now\.value = Date\.now\(\) \}, 1000\)/)
 })
 
 test('取消失败不清空队列/运行态（可重试）', () => {

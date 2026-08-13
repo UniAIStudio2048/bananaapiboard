@@ -49,9 +49,6 @@
             <button class="header-btn" @click="showHistory = !showHistory" title="历史记录">
               <History :size="16" aria-hidden="true" />
             </button>
-            <button class="header-btn" @click="window.open('/inspiration', '_blank')" title="打开灵感中心">
-              <Sparkle :size="16" aria-hidden="true" />
-            </button>
             <button class="header-btn close-btn" @click="$emit('close')" title="关闭">
               <X :size="16" aria-hidden="true" />
             </button>
@@ -168,8 +165,12 @@
             @feedback="submitTurnFeedback"
           />
 
-          <!-- 工具调用提示：跟随对话最后一行展示，不固定在输入框上方 -->
+          <!-- 工具调用提示 + 已接受状态：跟随对话最后一行，不固定在输入框上方 -->
           <AgentToolTimeline v-if="enhancedMode" :tools="activeToolEvents" />
+          <AgentTurnStatusBar
+            v-if="enhancedMode"
+            :turn="activeTurn"
+          />
         </div>
 
         <!-- 附件预览 -->
@@ -310,17 +311,8 @@
           </div>
         </div>
 
-        <!-- Codex 风格跟进消息队列：当前回合运行时普通发送会先排队。
-             单轮对话只靠右下角发送键切换为停止按钮，不显示回合状态条；
-             仅当存在排队中的跟进消息（多轮）时才展示回合状态 -->
-        <AgentTurnStatusBar
-          v-if="enhancedMode && (queuedTurn || serverQueue.length > 0 || queuedMessages.length > 0)"
-          :turn="activeTurn"
-          @stop="stopCurrentActivity"
-        />
-
         <!-- 队列条（输入框上方）：合并本地乐观排队项与服务端队列项，每条支持
-             「立即插入」「删除」；本地项同步到服务端后由 serverQueue 接管显示 -->
+             「立即插入」「删除」；立即插入会取消当前回合并立刻发送该跟进。 -->
         <AgentQueueBar
           v-if="enhancedMode"
           :items="queueItems"
@@ -370,7 +362,7 @@
               :key="inputEditorRenderKey"
               ref="inputRef"
               class="input-textarea"
-              :class="{ 'is-empty': !inputText && !selectedAssistantModel && !referencedSkill }"
+              :class="{ 'is-empty': !inputText && !selectedAssistantModel && !referencedSkill && !isInputComposing }"
               contenteditable="true"
               role="textbox"
               aria-multiline="true"
@@ -426,27 +418,46 @@
             <!-- 左侧功能组 -->
             <div class="toolbar-left">
               <!-- Canvas Skill 执行模式：自动调用或每次调用前确认 -->
-              <div class="skill-execution-selector">
+              <div class="skill-execution-selector" role="group" aria-label="Skill 调用模式">
                 <button
-                  class="toolbar-btn skill-mode-btn"
                   type="button"
-                  aria-label="Skill 调用模式"
-                  @click.stop="showSkillExecutionDropdown = !showSkillExecutionDropdown"
+                  class="skill-mode-trigger"
+                  :aria-expanded="showSkillExecutionDropdown"
+                  aria-haspopup="listbox"
                   title="Skill 调用模式"
+                  @click.stop="showSkillExecutionDropdown = !showSkillExecutionDropdown"
                 >
-                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 3v18M3 12h18M5 5l14 14M19 5L5 19" />
-                  </svg>
-                  <span class="toolbar-label">{{ skillExecutionMode === 'auto' ? '自动模式' : '手动模式' }}</span>
-                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 15l-6-6-6 6"/></svg>
+                  <span class="skill-mode-trigger-value">{{ skillExecutionMode === 'auto' ? 'Agent' : '手动模式' }}</span>
+                  <span class="skill-mode-trigger-arrow" :class="{ open: showSkillExecutionDropdown }" aria-hidden="true">⌃</span>
                 </button>
                 <Transition name="dropdown">
-                  <div v-if="showSkillExecutionDropdown" class="mode-dropdown skill-mode-dropdown">
-                    <button class="mode-option" :class="{ active: skillExecutionMode === 'manual' }" @click="selectSkillExecutionMode('manual')">
-                      <span class="mode-icon">☝</span><span class="mode-name">手动模式</span><small>Agent 在每次生成前询问</small>
+                  <div
+                    v-if="showSkillExecutionDropdown"
+                    class="skill-mode-dropdown"
+                    role="listbox"
+                    aria-label="选择调用模式"
+                  >
+                    <button
+                      type="button"
+                      class="skill-mode-option"
+                      role="option"
+                      :class="{ active: skillExecutionMode === 'manual' }"
+                      :aria-selected="skillExecutionMode === 'manual'"
+                      @click="selectSkillExecutionMode('manual')"
+                    >
+                      <span class="skill-mode-option-name">手动模式</span>
+                      <small>每次生成前询问</small>
                     </button>
-                    <button class="mode-option" :class="{ active: skillExecutionMode === 'auto' }" @click="selectSkillExecutionMode('auto')">
-                      <span class="mode-icon">⟳</span><span class="mode-name">自动模式</span><small>Agent 完全自动生成</small>
+                    <button
+                      type="button"
+                      class="skill-mode-option"
+                      role="option"
+                      :class="{ active: skillExecutionMode === 'auto' }"
+                      :aria-selected="skillExecutionMode === 'auto'"
+                      @click="selectSkillExecutionMode('auto')"
+                    >
+                      <span class="skill-mode-option-name">Agent模式</span>
+                      <small>Agent 完全自动生成</small>
                     </button>
                   </div>
                 </Transition>
@@ -577,7 +588,7 @@
             <!-- 右侧功能组 -->
             <div class="toolbar-right">
               <!-- 执行设置（AC-P2-02 渐进披露）：深度思考 / 联网收敛到一个入口，
-                   默认输入区不直接暴露这些高级概念（工具授权方式即左侧的自动/手动模式，不再重复） -->
+                   默认输入区不直接暴露这些高级概念（工具授权方式即左侧的手动/Agent 模式，不再重复） -->
               <div class="execution-settings">
                 <button
                   class="toolbar-btn icon-btn"
@@ -990,8 +1001,8 @@ const selectedVideoMode = ref('')
 const tenantConfigVersion = useTenantConfigVersion()
 
 const showModeDropdown = ref(false)
-const showSkillExecutionDropdown = ref(false)
 const showPresetDropdown = ref(false)
+const showSkillExecutionDropdown = ref(false)
 const showHistory = ref(false)
 
 const attachments = ref([])
@@ -1007,7 +1018,7 @@ const mentionQuery = ref('')
 let dragCounter = 0 // 用于跟踪拖拽进入/离开次数
 let mentionStartPos = -1
 let nextAttachmentLocalId = 0
-let isInputComposing = false
+const isInputComposing = ref(false)
 
 // 预设管理相关
 const userPresets = ref([])
@@ -1474,6 +1485,7 @@ async function forceInsertQueuedMessage(queued) {
     queuedMessages.value = queuedMessages.value.filter((s) => s.id !== queued.id && s.client_message_id !== queued.client_message_id)
     await cancelActiveTurnAndWait()
     restoreDraft(queued)
+    emit('width-change', panelWidth.value)
     nextTick(() => sendEnhancedMessage(true))
     return
   }
@@ -1497,6 +1509,7 @@ async function forceInsertQueuedMessage(queued) {
     await cancelActiveTurnAndWait()
     removeFromQueue()
     restoreDraft(queued)
+    emit('width-change', panelWidth.value)
     nextTick(() => sendEnhancedMessage(true))
     return
   }
@@ -2602,16 +2615,16 @@ function updateAttachmentMentionPopup() {
 function handleInputCompositionStart() {
   const editor = inputRef.value
   if (editor) snapPromptEditorCaretOutOfMention(editor)
-  isInputComposing = true
+  isInputComposing.value = true
 }
 
 function handleInputCompositionEnd(event) {
-  isInputComposing = false
+  isInputComposing.value = false
   handleInputEvent(event)
 }
 
 function handleInputBeforeInput(event) {
-  if (isInputComposing || event?.isComposing) return
+  if (isInputComposing.value || event?.isComposing) return
   if (event.inputType !== 'insertText' || typeof event.data !== 'string' || !event.data) return
   if (shouldDeferPromptEditorBoundaryBeforeInputForIme(event)) return
   const editor = event.currentTarget || event.target
@@ -2644,7 +2657,7 @@ function handleInputBeforeInput(event) {
 }
 
 function handleInputEvent(event) {
-  if (isInputComposing || event?.isComposing) return
+  if (isInputComposing.value || event?.isComposing) return
   const editor = inputRef.value
   if (editor) {
     const selectionRange = getPromptEditorSelectionRange(editor)
@@ -2659,7 +2672,7 @@ function handleInputEvent(event) {
     // 跳过，交由 compositionend 统一同步修复；否则按普通英文输入立即补同步与结构修复。
     if (shouldDeferPromptEditorBoundaryBeforeInputForIme(event) && needsStructuralRepair) {
       nextTick(() => {
-        if (isInputComposing) return
+        if (isInputComposing.value) return
         if (text !== inputText.value) inputText.value = text
         checkSlashTrigger()
         inputEditorRenderKey.value += 1
@@ -2683,7 +2696,7 @@ function handleInputEvent(event) {
       inputEditorRenderKey.value += 1
       nextTick(() => {
         // IME 拼音合成中跳过 DOM 修复，避免误删合成文本或打断光标
-        if (isInputComposing) return
+        if (isInputComposing.value) return
         const nextEditor = inputRef.value
         if (nextEditor) {
           nextEditor.focus()
@@ -2693,7 +2706,7 @@ function handleInputEvent(event) {
     } else {
       nextTick(() => {
         // IME 拼音合成中跳过 DOM 修复，避免误删合成文本或打断光标
-        if (isInputComposing) return
+        if (isInputComposing.value) return
         removePromptEditorOrphanTextNodes(editor)
         restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
       })
@@ -2788,7 +2801,7 @@ function handleInputKeydown(event) {
   if (event.key === 'Enter' && !event.shiftKey) {
     // 中文输入法候选词确认的 Enter（isComposing）只应提交候选词，不应触发发送，
     // 否则一次输入会重复发出两条相同消息
-    if (event.isComposing || isInputComposing) return
+    if (event.isComposing || isInputComposing.value) return
     event.preventDefault()
     sendMessage(Boolean(event.ctrlKey || event.metaKey))
   }
@@ -4407,11 +4420,14 @@ function handleClickOutside(event) {
   if (showAttachDropdown.value && !event.target.closest('.attach-selector')) {
     showAttachDropdown.value = false
   }
+  if (slashMenuVisible.value && !event.target.closest('.input-box, .slash-menu')) {
+    slashMenuVisible.value = false
+  }
   if (showSkillExecutionDropdown.value && !event.target.closest('.skill-execution-selector')) {
     showSkillExecutionDropdown.value = false
   }
-  if (slashMenuVisible.value && !event.target.closest('.input-box, .slash-menu')) {
-    slashMenuVisible.value = false
+  if (showExecutionSettings.value && !event.target.closest('.execution-settings')) {
+    showExecutionSettings.value = false
   }
 }
 
@@ -5799,12 +5815,12 @@ defineExpose({
   bottom: calc(100% + 8px);
   right: 0;
   min-width: 220px;
-  background: rgba(30, 32, 40, 0.98);
+  background: #252525;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 6px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  z-index: 100;
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  z-index: 1200;
 }
 
 .execution-setting-row {
@@ -5817,24 +5833,25 @@ defineExpose({
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 9px 10px;
+  padding: 8px 12px;
   background: transparent;
   border: none;
-  border-radius: 8px;
-  color: rgba(255, 255, 255, 0.8);
+  border-radius: 9px;
+  color: rgba(255, 255, 255, 0.58);
   font-size: 13px;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: color 0.15s ease, background-color 0.15s ease;
   text-align: left;
 }
 
 .execution-toggle:hover {
-  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.07);
 }
 
 .execution-toggle.active {
-  background: rgba(100, 150, 255, 0.15);
-  color: rgba(180, 200, 255, 1);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .execution-toggle__label {
@@ -5847,7 +5864,7 @@ defineExpose({
   height: 17px;
   flex-shrink: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.18);
   transition: background 0.2s;
 }
 
@@ -5859,15 +5876,16 @@ defineExpose({
   height: 13px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.85);
-  transition: transform 0.2s;
+  transition: transform 0.2s, background 0.2s;
 }
 
 .execution-toggle.active .execution-toggle__switch {
-  background: rgba(100, 150, 255, 0.7);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .execution-toggle.active .execution-toggle__switch i {
   transform: translateX(13px);
+  background: #252525;
 }
 
 .toolbar-btn.icon-btn {
@@ -5877,8 +5895,116 @@ defineExpose({
 }
 
 .toolbar-btn.icon-btn.active {
-  background: rgba(100, 150, 255, 0.12);
-  color: rgba(150, 180, 255, 0.95);
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.skill-execution-selector {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.skill-mode-trigger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 5px 10px;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
+}
+
+.skill-mode-trigger:hover {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.skill-mode-trigger-value {
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.skill-mode-trigger-arrow {
+  flex-shrink: 0;
+  margin-left: 2px;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 11px;
+  line-height: 1;
+  transform: rotate(180deg);
+  transition: transform 0.18s ease;
+}
+
+.skill-mode-trigger-arrow.open {
+  transform: rotate(0deg);
+}
+
+.skill-mode-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 210px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #252525;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  z-index: 1200;
+}
+
+.skill-mode-option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  color: rgba(255, 255, 255, 0.58);
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.skill-mode-option:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.skill-mode-option.active {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.skill-mode-option-name {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.skill-mode-option small {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.skill-mode-option.active small {
+  color: rgba(255, 255, 255, 0.62);
 }
 
 /* 紧凑模式：当面板宽度较窄时自动应用 */
@@ -5904,6 +6030,24 @@ defineExpose({
   display: none;
 }
 
+.ai-assistant-container.compact-mode .skill-mode-trigger {
+  min-height: 28px;
+  padding: 4px 8px;
+}
+
+.ai-assistant-container.compact-mode .skill-mode-trigger-value {
+  font-size: 11px;
+}
+
+.ai-assistant-container.narrow-mode .skill-mode-trigger {
+  min-height: 28px;
+  padding: 4px 6px;
+}
+
+.ai-assistant-container.narrow-mode .skill-mode-trigger-value {
+  font-size: 11px;
+}
+
 /* 在紧凑模式下隐藏下拉箭头 */
 .ai-assistant-container.compact-mode .toolbar-btn .w-3:last-child {
   display: none;
@@ -5927,6 +6071,15 @@ defineExpose({
   
   .toolbar-btn span {
     max-width: 50px;
+  }
+
+  .skill-mode-trigger {
+    min-height: 28px;
+    padding: 4px 6px;
+  }
+
+  .skill-mode-trigger-value {
+    font-size: 11px;
   }
 }
 
@@ -6598,44 +6751,89 @@ defineExpose({
   color: #3b82f6 !important;
 }
 
+:root.canvas-theme-light .ai-assistant-panel .skill-mode-trigger {
+  color: #292524;
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .skill-mode-trigger:hover {
+  background: rgba(15, 23, 42, 0.1);
+  border-color: rgba(15, 23, 42, 0.12);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .skill-mode-trigger-arrow {
+  color: rgba(41, 37, 36, 0.45);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .skill-mode-dropdown {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+:root.canvas-theme-light .ai-assistant-panel .skill-mode-option {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .skill-mode-option:hover {
+  background: rgba(15, 23, 42, 0.05);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .skill-mode-option.active {
+  background: rgba(59, 130, 246, 0.14);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .skill-mode-option small {
+  color: #78716c;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .skill-mode-option.active small {
+  color: #57534e;
+}
+
 /* 执行设置弹层 */
 :root.canvas-theme-light .ai-assistant-panel .execution-settings-popover {
-  background: linear-gradient(135deg,
-    rgba(255, 255, 255, 0.92) 0%,
-    rgba(250, 250, 252, 0.95) 100%
-  ) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
-  border-color: rgba(0, 0, 0, 0.08) !important;
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.1);
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .execution-toggle {
-  color: #57534e !important;
+  color: #57534e;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .execution-toggle:hover {
-  background: rgba(0, 0, 0, 0.05) !important;
-  color: #1c1917 !important;
+  background: rgba(15, 23, 42, 0.05);
+  color: #1c1917;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .execution-toggle.active {
-  background: rgba(59, 130, 246, 0.1) !important;
-  color: #3b82f6 !important;
+  background: rgba(15, 23, 42, 0.08);
+  color: #1c1917;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .execution-toggle__switch {
-  background: rgba(0, 0, 0, 0.15) !important;
+  background: rgba(15, 23, 42, 0.18);
 }
 
 :root.canvas-theme-light .ai-assistant-panel .execution-toggle.active .execution-toggle__switch {
-  background: #3b82f6 !important;
+  background: #1c1917;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .execution-toggle__switch i {
-  background: #fff !important;
+  background: #ffffff;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .execution-toggle.active .execution-toggle__switch i {
+  background: #ffffff;
+}
+
+:root.canvas-theme-light .ai-assistant-panel .toolbar-btn.icon-btn.active {
+  background: rgba(15, 23, 42, 0.08);
+  color: #1c1917;
 }
 
 /* 预设按钮 */
