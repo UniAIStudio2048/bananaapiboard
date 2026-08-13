@@ -219,7 +219,7 @@ function isTimeoutError(msg) {
 
 function getErrorHint(msg) {
   const normalized = getDisplayErrorMessage(msg)
-  if (normalized.includes('时长超限')) return '可先把参考视频裁到 15 秒以内，再重新生成'
+  if (normalized.includes('时长超限')) return '参考视频时长超出当前渠道限制，请裁剪参考视频后重试'
   if (isContentSafetyError(normalized)) return '请修改提示词或更换参考图片后重试'
   if (isTimeoutError(normalized)) return '生成时间过长，请稍后重试或简化提示词'
   return ''
@@ -3558,7 +3558,8 @@ function getLocalMediaDuration(file, mediaType) {
 async function validateSeedanceVideoFile(file) {
   const metadata = await readLocalVideoMetadata(file)
   const validationMessage = validateSeedanceVideoMetadata(metadata, {
-    apiType: currentModelConfig.value?.apiType
+    apiType: currentModelConfig.value?.apiType,
+    maxDuration: seedance2Limits.value.maxDuration
   })
   if (validationMessage) throw new Error(validationMessage)
   return metadata.duration
@@ -6147,15 +6148,15 @@ async function handleGenerate(options = {}) {
         const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
         const dur = Number(sourceNode?.data?.videoDuration)
         if (!Number.isFinite(dur) || dur <= 0) continue
-        if (dur < 2 || dur > 15) {
-          await showAlert('参考视频时长需在2到15秒之间', '提示')
+        if (dur < 2 || dur > seedance2Limits.value.maxDuration) {
+          await showAlert(`参考视频时长需在2到${seedance2Limits.value.maxDuration}秒之间`, '提示')
           return
         }
         totalVideoDuration += dur
       }
-      const totalVideoCap = seedance2Limits.value.maxVideos > 3 ? Infinity : 15
+      const totalVideoCap = seedance2Limits.value.maxDuration
       if (totalVideoDuration > totalVideoCap) {
-        await showAlert('参考视频总时长不能超过15秒', '提示')
+        await showAlert(`参考视频总时长不能超过${totalVideoCap}秒`, '提示')
         return
       }
     }

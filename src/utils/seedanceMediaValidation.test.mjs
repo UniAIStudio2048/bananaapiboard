@@ -102,3 +102,39 @@ test('seedance video metadata validation rejects invalid size and accepts valid 
     ''
   )
 })
+
+test('seedance video metadata duration cap follows the configured maxDuration', () => {
+  // 默认上限 15 秒：16 秒拒绝
+  assert.match(
+    validateSeedanceVideoMetadata({
+      width: 720,
+      height: 1280,
+      duration: 16,
+      size: 8 * 1024 * 1024,
+      type: 'video/mp4'
+    }, { index: 0, apiType: 'ant' }),
+    /时长需在2到15秒之间/
+  )
+
+  // maxDuration=30（Seedance 2.5）：20 秒通过，31 秒拒绝
+  assert.equal(
+    validateSeedanceVideoMetadata({
+      width: 720,
+      height: 1280,
+      duration: 20,
+      size: 8 * 1024 * 1024,
+      type: 'video/mp4'
+    }, { index: 0, apiType: 'ant', maxDuration: 30 }),
+    ''
+  )
+  assert.match(
+    validateSeedanceVideoMetadata({
+      width: 720,
+      height: 1280,
+      duration: 31,
+      size: 8 * 1024 * 1024,
+      type: 'video/mp4'
+    }, { index: 0, apiType: 'ant', maxDuration: 30 }),
+    /时长需在2到30秒之间/
+  )
+})

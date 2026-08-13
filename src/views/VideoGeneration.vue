@@ -1064,15 +1064,16 @@ async function handleSeedanceRefVideos(e) {
       const metadata = await readLocalVideoMetadata(file)
       const validationMessage = validateSeedanceVideoMetadata(metadata, {
         index: seedanceRefVideos.value.length + seedanceRefVideoUrls.value.length + index,
-        apiType: currentModelConfig.value?.apiType
+        apiType: currentModelConfig.value?.apiType,
+        maxDuration: seedanceMaxDuration.value
       })
       if (validationMessage) {
         error.value = validationMessage
         e.target.value = ''
         return
       }
-      if (seedanceMaxRefVideos.value <= 3 && totalDuration + metadata.duration > 15) {
-        error.value = '参考视频总时长不能超过15秒'
+      if (totalDuration + metadata.duration > seedanceMaxDuration.value) {
+        error.value = `参考视频总时长不能超过${seedanceMaxDuration.value}秒`
         e.target.value = ''
         return
       }

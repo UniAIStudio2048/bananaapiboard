@@ -72,7 +72,7 @@ function getMinimumVideoDimensions(width, height) {
 }
 
 export function validateSeedanceVideoMetadata(meta = {}, options = {}) {
-  const { index = 0, apiType = '' } = options
+  const { index = 0, apiType = '', maxDuration = 15 } = options
   const label = `参考视频${index + 1}`
   const width = Math.round(toPositiveNumber(meta.width))
   const height = Math.round(toPositiveNumber(meta.height))
@@ -80,6 +80,7 @@ export function validateSeedanceVideoMetadata(meta = {}, options = {}) {
   const size = toPositiveNumber(meta.size)
   const type = String(meta.type || '').toLowerCase()
   const maxPixels = apiType === 'ant' ? SEEDANCE_ANT_MAX_VIDEO_PIXELS : SEEDANCE_MAX_VIDEO_PIXELS
+  const durationMax = toPositiveNumber(maxDuration) || 15
 
   if (type && !['video/mp4', 'video/quicktime'].includes(type)) {
     return `${label}格式不受支持，请使用 MP4 或 MOV`
@@ -87,8 +88,8 @@ export function validateSeedanceVideoMetadata(meta = {}, options = {}) {
   if (size > SEEDANCE_MAX_VIDEO_BYTES) {
     return `${label}大小超过50MB，请压缩文件后重试`
   }
-  if (duration < 2 || duration > 15) {
-    return `${label}时长需在2到15秒之间`
+  if (duration < 2 || duration > durationMax) {
+    return `${label}时长需在2到${durationMax}秒之间`
   }
   if (!width || !height) {
     return `无法读取${label}的分辨率，请更换视频文件`
