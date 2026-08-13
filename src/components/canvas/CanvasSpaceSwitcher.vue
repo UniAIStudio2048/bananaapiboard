@@ -11,6 +11,7 @@ import { useTeamStore } from '@/stores/team'
 import { useCanvasStore } from '@/stores/canvas'
 import { useI18n } from '@/i18n'
 import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
+import { saveSpaceWorkflowSession, getSpaceWorkflowSessionAsync } from '@/stores/canvas/workflowAutoSave'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -43,25 +44,39 @@ const currentId = computed(() => {
 })
 
 /**
- * 保存所有有变更的标签到各自所属空间，然后关闭所有标签。
+ * 由空间参数计算空间会话 key：个人空间 = 'personal'，团队空间 = `team_${teamId}`
+ */
+function spaceKeyOf(spaceParams) {
+  return spaceParams?.spaceType === 'team' && spaceParams.teamId
+    ? `team_${spaceParams.teamId}`
+    : 'personal'
+}
+
+/**
+ * 保存所有有变更的标签到各自所属空间，记住当前空间打开的标签会话，然后关闭所有标签。
  * 已保存的工作流使用标签记录的空间信息；新工作流使用切换前的全局空间。
+ * 恒返回 true（不再有取消路径）：即使画布有上传中素材也后台静默保存并继续切换。
  */
 async function saveAllTabsAndReset() {
   const tabs = canvasStore.workflowTabs
+  const oldSpaceParams = teamStore.getSpaceParams('current')
+  const currentSpaceKey = spaceKeyOf(oldSpaceParams)
+
   if (!tabs.length) {
+    // 记住当前空间「未打开任何工作流标签」的空状态，清除可能残留的历史会话
+    saveSpaceWorkflowSession(currentSpaceKey, null)
     canvasStore.closeAllTabs()
     return true
   }
 
-  const oldSpaceParams = teamStore.getSpaceParams('current')
-
+  // 后台静默：有上传中素材不再取消切换（素材节点结构仍会被保存，
+  // 素材字段由保存清理逻辑处理；切换后节点保留、素材可能需重新生成）。仅打 warn 用于观测。
   for (const tab of tabs) {
     const isActive = tab.id === canvasStore.activeTabId
     const tabNodes = isActive ? toRaw(canvasStore.nodes) : toRaw(tab.nodes)
     const tabEdges = isActive ? toRaw(canvasStore.edges) : toRaw(tab.edges)
     if (findBlockingCanvasUploads(tabNodes || [], tabEdges || []).length > 0) {
-      console.warn('[SpaceSwitcher] 切换已取消：素材仍在上传，请等待完成后重试')
-      return false
+      console.warn('[SpaceSwitcher] 存在上传中素材，本次切换改为后台静默保存并继续')
     }
   }
 
@@ -116,6 +131,9 @@ async function saveAllTabsAndReset() {
     }
   }
 
+  // 记住当前空间打开的标签会话（在保存有改动的工作流到后端之后、关闭标签之前）
+  saveSpaceWorkflowSession(currentSpaceKey, canvasStore.exportWorkflowSession())
+
   canvasStore.closeAllTabs()
   return true
 }
@@ -128,19 +146,38 @@ async function selectSpace(space) {
 
   isSwitching.value = true
   try {
-    const reset = await saveAllTabsAndReset()
-    if (!reset) return
+    // saveAllTabsAndReset 恒返回 true（不再有取消路径）：后台静默保存当前空间标签会话并清空画布
+    await saveAllTabsAndReset()
 
     if (space.type === 'personal') {
       teamStore.switchToPersonalSpace()
     } else {
       await teamStore.switchToTeam(space.teamId)
     }
+
+    // 恢复目标空间之前打开的工作流标签；无会话则保持空状态页（workflowTabs.length===0 显示 CanvasEmptyState）
+    await restoreSpaceWorkflowTabs(space.type === 'personal' ? 'personal' : `team_${space.teamId}`)
   } catch (e) {
     console.error('[SpaceSwitcher] 切换空间失败:', e?.message)
   } finally {
     isSwitching.value = false
     isOpen.value = false
+  }
+}
+
+/**
+ * 恢复目标空间之前打开的工作流标签会话。
+ * 有会话 → restoreWorkflowSession 恢复标签列表与 active tab；
+ * 无会话 → 保持 closeAllTabs 后的空状态，不 initDefaultTab。
+ * 注：restoreWorkflowSession 内部经 switchToTab 会再次同步空间（syncTeamSpaceFromWorkflowTab），
+ * 因按空间 key 隔离，恢复的标签必然属于当前空间，最多重复设置同一空间 + 重复派发一次
+ * space-switched 事件（Canvas.vue 刷新积分 / AIAssistantPanel 重置会话均为幂等且无循环路径），
+ * 可接受，故不加额外守卫。
+ */
+async function restoreSpaceWorkflowTabs(spaceKey) {
+  const session = await getSpaceWorkflowSessionAsync(spaceKey)
+  if (session?.tabs?.length) {
+    canvasStore.restoreWorkflowSession(session)
   }
 }
 

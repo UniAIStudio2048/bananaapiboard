@@ -60,15 +60,16 @@ function getSessionDB() {
 }
 
 /**
- * 🔧 把完整会话写入 IndexedDB（尽力而为，失败不抛错）
+ * 🔧 把完整会话写入 IndexedDB（尽力而为，失败不抛错）。
+ * key 默认用全局会话 key，空间维度会话可传入 spaceKey 作为独立记录 id。
  */
-async function saveSessionToIndexedDB(payload) {
+async function saveSessionToIndexedDB(payload, key = SESSION_IDB_KEY) {
   try {
     const db = await getSessionDB()
     return await new Promise((resolve) => {
       const tx = db.transaction([SESSION_IDB_STORE], 'readwrite')
       const store = tx.objectStore(SESSION_IDB_STORE)
-      store.put({ id: SESSION_IDB_KEY, ...payload })
+      store.put({ id: key, ...payload })
       tx.oncomplete = () => resolve(true)
       tx.onerror = () => resolve(false)
       tx.onabort = () => resolve(false)
@@ -80,15 +81,16 @@ async function saveSessionToIndexedDB(payload) {
 }
 
 /**
- * 🔧 从 IndexedDB 读取完整会话（无/不可用时返回 null）
+ * 🔧 从 IndexedDB 读取完整会话（无/不可用时返回 null）。
+ * key 默认用全局会话 key，空间维度会话可传入 spaceKey 读取对应记录。
  */
-async function readSessionFromIndexedDB() {
+async function readSessionFromIndexedDB(key = SESSION_IDB_KEY) {
   try {
     const db = await getSessionDB()
     return await new Promise((resolve) => {
       const tx = db.transaction([SESSION_IDB_STORE], 'readonly')
       const store = tx.objectStore(SESSION_IDB_STORE)
-      const request = store.get(SESSION_IDB_KEY)
+      const request = store.get(key)
       request.onsuccess = () => resolve(request.result || null)
       request.onerror = () => resolve(null)
     })
@@ -923,4 +925,144 @@ export function getStorageStats() {
   } catch (e) {
     return { error: e.message }
   }
+}
+
+// ========== 空间维度标签会话（切换空间时记住/恢复） ==========
+// 空间 key 规则：个人空间 = 'personal'，团队空间 = `team_${teamId}`（teamId 为 UUID）。
+// 与全局刷新会话（SESSION_STORAGE_KEY）隔离，互不影响；按空间 key 保证不同空间标签互不串扰。
+const SPACE_SESSION_PREFIX = 'workflow_tab_session_space_'
+
+function spaceSessionStorageKey(spaceKey) {
+  return `${SPACE_SESSION_PREFIX}${spaceKey}`
+}
+
+/**
+ * 🔧 删除 IndexedDB 中指定 key 的会话（尽力而为，供空间会话清除残留）
+ */
+async function deleteSessionFromIndexedDB(key) {
+  try {
+    const db = await getSessionDB()
+    const tx = db.transaction([SESSION_IDB_STORE], 'readwrite')
+    tx.objectStore(SESSION_IDB_STORE).delete(key)
+  } catch (e) {
+    // 忽略
+  }
+}
+
+/**
+ * 🔧 记住某个空间当前打开的「工作流标签会话」（切换空间前调用）。
+ * - session 为空 / 无标签：清除该空间的残留会话（记住空状态），返回 true。
+ * - 小会话内联存 localStorage；大会话（>2MB）写 localStorage 指针 + 完整数据异步落 IndexedDB
+ *   （复用现有兜底机制，key 为 spaceKey），读取请用 getSpaceWorkflowSessionAsync。
+ * @param {string} spaceKey - 空间 key：'personal' 或 `team_${teamId}`
+ * @param {Object|null} session - { tabs, activeTabId }；传 null 表示清除该空间记忆
+ */
+export function saveSpaceWorkflowSession(spaceKey, session) {
+  if (!spaceKey) return false
+
+  const storageKey = spaceSessionStorageKey(spaceKey)
+
+  // 空状态：清除该空间的残留会话（含 IndexedDB 兜底数据）
+  if (!session || !Array.isArray(session.tabs) || session.tabs.length === 0) {
+    try {
+      localStorage.removeItem(storageKey)
+    } catch (e) {
+      // 忽略
+    }
+    deleteSessionFromIndexedDB(spaceKey)
+    return true
+  }
+
+  try {
+    const payload = buildSessionPayload(session)
+    const jsonData = JSON.stringify(payload)
+
+    if (jsonData.length > MAX_SESSION_STORAGE_SIZE) {
+      // 🔧 大会话：localStorage 写指针，完整数据异步落 IndexedDB（尽力而为）
+      console.warn(`[WorkflowAutoSave] 空间标签会话过大 (${(jsonData.length / 1024).toFixed(1)}KB)，改用 IndexedDB 兜底`)
+      localStorage.setItem(storageKey, JSON.stringify({
+        __idb: true,
+        spaceKey,
+        userId: payload.userId,
+        savedAt: payload.savedAt,
+        tabCount: payload.tabs.length
+      }))
+      saveSessionToIndexedDB(payload, spaceKey)
+      return true
+    }
+
+    localStorage.setItem(storageKey, jsonData)
+    return true
+  } catch (error) {
+    console.error('[WorkflowAutoSave] 保存空间标签会话失败:', error)
+    return false
+  }
+}
+
+/**
+ * 🔧 读取空间标签会话（同步，仅 localStorage 内联数据）。
+ * 大会话指针（IndexedDB）请用 getSpaceWorkflowSessionAsync。过期 / 无效会话会自动清理。
+ */
+export function getSpaceWorkflowSession(spaceKey) {
+  if (!spaceKey) return null
+  const storageKey = spaceSessionStorageKey(spaceKey)
+
+  try {
+    const data = localStorage.getItem(storageKey)
+    if (!data) return null
+
+    const parsed = JSON.parse(data)
+    if (parsed && parsed.__idb) return null // 大会话指针：同步读不了 IndexedDB，交给异步版本
+
+    const session = validateSessionRecord(parsed)
+    if (!session) {
+      try { localStorage.removeItem(storageKey) } catch (e) { /* 忽略 */ }
+      return null
+    }
+    return session
+  } catch (error) {
+    console.error('[WorkflowAutoSave] 读取空间标签会话失败:', error)
+    try { localStorage.removeItem(storageKey) } catch (e) { /* 忽略 */ }
+    return null
+  }
+}
+
+/**
+ * 🔧 异步读取空间标签会话：同时检查 localStorage 内联数据与 IndexedDB 大会话，
+ * 返回较新（savedAt 大）的有效会话。供切换空间后恢复标签使用。
+ */
+export async function getSpaceWorkflowSessionAsync(spaceKey) {
+  if (!spaceKey) return null
+  const storageKey = spaceSessionStorageKey(spaceKey)
+
+  let lsSession = null
+  let isPointer = false
+
+  try {
+    const data = localStorage.getItem(storageKey)
+    if (data) {
+      const parsed = JSON.parse(data)
+      if (parsed && parsed.__idb) {
+        isPointer = true
+      } else {
+        lsSession = validateSessionRecord(parsed)
+        if (!lsSession) {
+          try { localStorage.removeItem(storageKey) } catch (e) { /* 忽略 */ }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[WorkflowAutoSave] 读取空间标签会话失败:', error)
+  }
+
+  // 内联会话已是最新且无指针时，直接返回，省去 IndexedDB 读取
+  let idbSession = null
+  if (isPointer || !lsSession) {
+    idbSession = validateSessionRecord(await readSessionFromIndexedDB(spaceKey))
+  }
+
+  if (lsSession && idbSession) {
+    return (idbSession.savedAt || 0) > (lsSession.savedAt || 0) ? idbSession : lsSession
+  }
+  return lsSession || idbSession
 }

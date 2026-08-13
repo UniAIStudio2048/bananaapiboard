@@ -72,7 +72,7 @@ const dirtySaveSource = saveTabsSource.slice(dirtySaveStart)
 assert.doesNotMatch(
   blockerPreflightSource,
   /if \(!tab\.hasChanges\) continue/,
-  'a clean tab with an upload blocker must still cancel closeAllTabs and space switching'
+  'a clean tab with an upload blocker must still be observed (silent save) before closeAllTabs'
 )
 assert.match(
   dirtySaveSource,
@@ -81,11 +81,12 @@ assert.match(
 )
 
 const selectSpaceSource = extractFunction(switcherSource, 'selectSpace')
-assert.match(selectSpaceSource, /const reset = await saveAllTabsAndReset\(\)/)
-assert.match(selectSpaceSource, /if \(!reset\) return/)
+// 需求变更：空间切换不再因上传中素材而取消（改为后台静默保存 + 按空间记住标签会话），恒继续切换
+assert.match(selectSpaceSource, /await saveAllTabsAndReset\(\)/)
+assert.doesNotMatch(selectSpaceSource, /if \(!reset\) return/, 'a blocked tab must no longer cancel the space switch')
 assert.ok(
-  selectSpaceSource.indexOf('if (!reset) return') < selectSpaceSource.indexOf('teamStore.switchToPersonalSpace()'),
-  'a blocked tab must cancel the actual space switch'
+  selectSpaceSource.indexOf('saveAllTabsAndReset()') < selectSpaceSource.indexOf('teamStore.switchToPersonalSpace()'),
+  'current-space session save must run before the actual space switch'
 )
 
 const bottomPanelSource = fs.readFileSync(new URL('../components/canvas/CanvasBottomPanel.vue', import.meta.url), 'utf8')

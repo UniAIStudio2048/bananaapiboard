@@ -17,6 +17,17 @@ function getHeaders(options = {}) {
   }
 }
 
+// 将空间过滤参数（spaceType/teamId）追加到 URL query
+function appendSpaceQuery(url, spaceParams) {
+  if (!spaceParams || !spaceParams.spaceType) return url
+  const query = new URLSearchParams()
+  query.set('spaceType', spaceParams.spaceType)
+  if (spaceParams.spaceType === 'team' && spaceParams.teamId) {
+    query.set('teamId', spaceParams.teamId)
+  }
+  return `${url}${url.includes('?') ? '&' : '?'}${query.toString()}`
+}
+
 function throwPromptSafetyErrorIfNeeded(error) {
   if (error?.error === 'prompt_safety_blocked') {
     throw createPromptSafetyError(error)
@@ -295,8 +306,9 @@ export async function sendMessageStream(params) {
  * 获取用户会话列表
  * @returns {Promise<{sessions: Array}>}
  */
-export async function getSessions() {
-  const response = await fetch(getApiUrl('/api/canvas/ai-assistant/sessions'), {
+export async function getSessions(spaceParams) {
+  const url = appendSpaceQuery(getApiUrl('/api/canvas/ai-assistant/sessions'), spaceParams)
+  const response = await fetch(url, {
     headers: getHeaders()
   })
 
@@ -331,8 +343,9 @@ export async function deleteSession(sessionId) {
  * @param {string} sessionId - 会话ID
  * @returns {Promise<{messages: Array}>}
  */
-export async function getSessionMessages(sessionId) {
-  const response = await fetch(getApiUrl(`/api/canvas/ai-assistant/session/${sessionId}/messages`), {
+export async function getSessionMessages(sessionId, spaceParams) {
+  const url = appendSpaceQuery(getApiUrl(`/api/canvas/ai-assistant/session/${sessionId}/messages`), spaceParams)
+  const response = await fetch(url, {
     headers: getHeaders()
   })
 

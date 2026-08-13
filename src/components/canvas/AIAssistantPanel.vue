@@ -810,6 +810,7 @@ import AgentToolTimeline from './AgentToolTimeline.vue'
 import AgentQueueBar from './AgentQueueBar.vue'
 import { config as tenantConfig, getAvailableImageModels, getAvailableVideoModels, useTenantConfigVersion } from '@/config/tenant'
 import { getAssistantModelIcon } from '@/utils/aiAssistantModels'
+import { useTeamStore } from '@/stores/team'
 
 const props = defineProps({
   visible: {
@@ -826,6 +827,8 @@ const emit = defineEmits(['close', 'width-change', 'start-canvas-pick', 'canvas-
 
 // 注入用户信息
 const userInfo = inject('userInfo', { value: { username: 'User' } })
+
+const teamStore = useTeamStore()
 
 const userName = computed(() => {
   return userInfo.value?.username || userInfo.value?.name || 'User'
@@ -1528,7 +1531,7 @@ let lastFollowedTurnId = null
 async function loadSessionMessages() {
   if (!currentCodexThreadId.value) return
   try {
-    const msgResult = await getCodexSessionMessages(currentCodexThreadId.value)
+    const msgResult = await getCodexSessionMessages(currentCodexThreadId.value, teamStore.getSpaceParams('current'))
     const history = msgResult.messages || []
     if (!history.length) return
     const existing = new Set(
@@ -2038,7 +2041,7 @@ async function loadUserPresets() {
 async function loadSessions() {
   try {
     if (enhancedMode.value) {
-      const result = await getCodexSessions()
+      const result = await getCodexSessions(teamStore.getSpaceParams('current'))
       sessions.value = (result.sessions || []).map(s => ({
         id: s.thread_id,
         title: s.summary || '增强模式会话',
@@ -2047,12 +2050,20 @@ async function loadSessions() {
         ...s
       }))
     } else {
-      const result = await getSessions()
+      const result = await getSessions(teamStore.getSpaceParams('current'))
       sessions.value = result.sessions || []
     }
   } catch (error) {
     console.error('[AI-Assistant] 加载会话列表失败:', error)
   }
+}
+
+// 空间切换后，旧空间的会话不再属于当前空间：重置当前打开的会话并重新拉取列表
+function handleSpaceSwitched() {
+  currentCodexThreadId.value = null
+  currentSessionId.value = null
+  messages.value = []
+  loadSessions()
 }
 
 function selectMode(mode) {
@@ -2158,7 +2169,7 @@ async function loadSession(session) {
       currentCodexThreadId.value = session.id
       let historyMessages = []
       try {
-        const msgResult = await getCodexSessionMessages(session.id)
+        const msgResult = await getCodexSessionMessages(session.id, teamStore.getSpaceParams('current'))
         historyMessages = msgResult.messages || []
       } catch (e) {
         console.warn('[AI-Assistant] 加载增强模式历史消息失败:', e.message)
@@ -2205,7 +2216,7 @@ async function loadSession(session) {
       }
     } else {
       // 加载会话历史消息
-      const result = await getSessionMessages(session.id)
+      const result = await getSessionMessages(session.id, teamStore.getSpaceParams('current'))
       messages.value = (result.messages || []).map((m) => {
         // 中断遗留的 streaming 草稿归一化为明确提示，避免恢复时显示“正在生成中…”
         if (m.role === 'assistant' && m.status === 'streaming') {
@@ -4406,6 +4417,7 @@ function handleClickOutside(event) {
 
 onMounted(() => {
   document.addEventListener('click', handleClickOutside)
+  window.addEventListener('space-switched', handleSpaceSwitched)
   if (props.visible) {
     loadConfig()
     loadAgentSkills()
@@ -4420,6 +4432,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('space-switched', handleSpaceSwitched)
   agentStreamController?.abort()
   if (followQueueTimer) {
     clearInterval(followQueueTimer)

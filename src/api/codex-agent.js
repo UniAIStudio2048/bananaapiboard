@@ -9,9 +9,21 @@ function headers(json = false) {
   }
 }
 
+// 将空间过滤参数（spaceType/teamId）追加到 URL query
+function appendSpaceQuery(url, spaceParams) {
+  if (!spaceParams || !spaceParams.spaceType) return url
+  const query = new URLSearchParams()
+  query.set('spaceType', spaceParams.spaceType)
+  if (spaceParams.spaceType === 'team' && spaceParams.teamId) {
+    query.set('teamId', spaceParams.teamId)
+  }
+  return `${url}${url.includes('?') ? '&' : '?'}${query.toString()}`
+}
+
 // 列出会话
-export async function getCodexSessions() {
-  const response = await fetch(getApiUrl('/api/codex-agent/sessions'), {
+export async function getCodexSessions(spaceParams) {
+  const url = appendSpaceQuery(getApiUrl('/api/codex-agent/sessions'), spaceParams)
+  const response = await fetch(url, {
     headers: headers(false),
     credentials: 'include'
   })
@@ -36,8 +48,9 @@ export async function getCodexSession(threadId) {
 }
 
 // 获取会话完整消息列表
-export async function getCodexSessionMessages(threadId) {
-  const response = await fetch(getApiUrl(`/api/codex-agent/sessions/${encodeURIComponent(threadId)}/messages`), {
+export async function getCodexSessionMessages(threadId, spaceParams) {
+  const url = appendSpaceQuery(getApiUrl(`/api/codex-agent/sessions/${encodeURIComponent(threadId)}/messages`), spaceParams)
+  const response = await fetch(url, {
     headers: headers(false),
     credentials: 'include'
   })
