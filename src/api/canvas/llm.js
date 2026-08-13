@@ -39,7 +39,12 @@ function normalizeLLMNetworkError(error) {
 
 async function fetchLLMApi(path, options = {}) {
   try {
-    return await fetch(getApiUrl(path), options)
+    // 统一超时控制：慢/不稳定的上游中转站快速失败，避免前端干等到浏览器默认超时
+    const timeoutMs = options.timeoutMs || 90000
+    return await fetch(getApiUrl(path), {
+      ...options,
+      signal: options.signal || AbortSignal.timeout(timeoutMs)
+    })
   } catch (error) {
     throw normalizeLLMNetworkError(error)
   }
