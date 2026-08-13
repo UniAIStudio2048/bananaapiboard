@@ -1,6 +1,6 @@
 /**
- * 队列错误（AC-P1-02 / AC-P1-12）测试：排队上传、服务端排队、队列删除失败
- * 必须写入对应草稿/队列项，不得静默吞掉。
+ * 队列错误测试：服务端队列删除失败必须保留队列项并显示原因，不得静默吞掉；
+ * 排队入队失败（附件上传 / 服务端排队）写入草稿 status='error'，用户可见可重试。
  *
  * Run: cd /opt/banana/bananaapiboard && node --test src/components/canvas/AIAssistantPanel.queue-error.test.mjs
  */
@@ -13,18 +13,11 @@ import { dirname, join } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const panel = await readFile(join(__dirname, 'AIAssistantPanel.vue'), 'utf8')
 
-test('排队附件上传失败写入草稿 status=error', () => {
-  const block = panel.match(/排队附件上传失败[\s\S]*?return/)?.[0]
-  assert.ok(block, 'upload failure block must exist')
-  assert.match(block, /draft\.status = 'error'/)
-  assert.match(block, /draft\.error = error\?\.message \|\| '附件上传失败，请重试'/)
-})
-
-test('服务端排队失败写入草稿 status=error（不静默吞掉）', () => {
-  const block = panel.match(/服务端排队失败[\s\S]*?await refreshQueueAndFollow/)?.[0]
-  assert.ok(block, 'server queue failure block must exist')
-  assert.match(block, /draft\.status = 'error'/)
-  assert.match(block, /draft\.error = error\?\.message \|\| '排队失败，请重试'/)
+test('本地排队机制恢复：enqueueServerMessage 走服务端排队，入队失败写入草稿', () => {
+  assert.match(panel, /enqueueServerMessage\(draft\)/)
+  assert.match(panel, /排队附件上传失败/)
+  assert.match(panel, /服务端排队失败/)
+  assert.match(panel, /draft\.status = 'error'/)
 })
 
 test('队列删除失败保留队列项并显示原因', () => {

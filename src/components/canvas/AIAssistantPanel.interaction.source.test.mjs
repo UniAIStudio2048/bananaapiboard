@@ -10,10 +10,13 @@ test('running requests use a square stop control', () => {
   assert.match(source, /function stopCurrentActivity\(/)
 })
 
-test('follow-up drafts queue above the composer and support force insertion', () => {
-  assert.match(source, /class="queued-message-bar"/)
-  assert.match(source, /@click="forceInsertQueuedMessage\(queued\)"/)
+test('running send queues the follow-up instead of interrupting the active turn', () => {
+  // 本地乐观排队条不单独渲染（队列显示收敛到 AgentQueueBar 合并队列条）
+  assert.doesNotMatch(source, /class="queued-message-bar"/)
+  // 本地乐观队列恢复：运行中普通发送 → queueCurrentDraft → send_mode=queue
   assert.match(source, /const queuedMessages = ref\(\[\]\)/)
-  assert.match(source, /if \(isLoading\.value && !force\)/)
+  assert.match(source, /if \(isLoading\.value && !force\) \{[\s\S]*?queueCurrentDraft\(\)\s*return\s*\}/)
+  assert.match(source, /send_mode: 'queue'/)
+  // Ctrl/Cmd+Enter 仍走强制发送路径（interrupt 接管）
   assert.match(source, /event\.ctrlKey \|\| event\.metaKey/)
 })

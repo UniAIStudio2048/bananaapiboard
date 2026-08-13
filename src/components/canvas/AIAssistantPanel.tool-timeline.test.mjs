@@ -17,10 +17,9 @@ const timeline = await readFile(join(__dirname, 'AgentToolTimeline.vue'), 'utf8'
 test('任务提示渲染在对话消息列表末尾，而不是固定在输入框上方', () => {
   // 时间线位于 messages-area 内、消息列表之后
   assert.match(panel, /v-for="\(msg, index\) in messages"[\s\S]*?<AgentToolTimeline v-if="enhancedMode" :tools="activeToolEvents" \/>[\s\S]*?\n        <\/div>/)
-  // 输入框上方（queued-banner 与 input-area 之间）不得再出现时间线
-  const footer = panel.match(/<div v-if="queuedTurn" class="queued-banner"[^>]*>[\s\S]*?<!-- 输入区域 -->/)?.[0]
-  assert.ok(footer, 'footer block must exist')
-  assert.doesNotMatch(footer, /AgentToolTimeline/)
+  // 面板中只有一个 AgentToolTimeline 实例（消息列表末尾），输入区域上方不得再出现时间线
+  const timelineUses = panel.match(/<AgentToolTimeline v-if="enhancedMode" :tools="activeToolEvents" \/>/g)
+  assert.ok(timelineUses && timelineUses.length === 1, 'AgentToolTimeline must appear exactly once, at end of message list')
 })
 
 test('任务状态无边框无圆点，黑白灰 + 执行中文字流光（IDE Codex 风格）', () => {

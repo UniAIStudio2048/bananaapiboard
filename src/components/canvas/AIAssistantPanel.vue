@@ -310,8 +310,8 @@
           </div>
         </div>
 
-        <!-- Codex 风格的跟进消息队列：当前回合运行时，普通发送会先排队 -->
-        <!-- 单轮对话只靠右下角发送键切换为停止按钮，不显示回合状态条；
+        <!-- Codex 风格跟进消息队列：当前回合运行时普通发送会先排队。
+             单轮对话只靠右下角发送键切换为停止按钮，不显示回合状态条；
              仅当存在排队中的跟进消息（多轮）时才展示回合状态 -->
         <AgentTurnStatusBar
           v-if="enhancedMode && (queuedTurn || serverQueue.length > 0 || queuedMessages.length > 0)"
@@ -319,36 +319,15 @@
           @stop="stopCurrentActivity"
         />
 
-        <div v-if="queuedMessages.length" class="queued-message-bar" role="status" aria-live="polite">
-          <div class="queued-message-bar__copy">
-            <span class="queued-message-bar__dot ai-live-shimmer" aria-hidden="true"></span>
-            <span>已排队 {{ queuedMessages.length }} 条跟进消息</span>
-            <span class="queued-message-bar__preview">{{ queuedMessages[0].text }}</span>
-          </div>
-          <button
-            v-for="queued in queuedMessages"
-            :key="queued.id"
-            type="button"
-            class="queued-message-bar__force"
-            @click="forceInsertQueuedMessage(queued)"
-          >
-            立即插入
-          </button>
-        </div>
-
+        <!-- 队列条（输入框上方）：合并本地乐观排队项与服务端队列项，每条支持
+             「立即插入」「删除」；本地项同步到服务端后由 serverQueue 接管显示 -->
         <AgentQueueBar
           v-if="enhancedMode"
-          :items="serverQueue"
+          :items="queueItems"
           :active-turn-running="activeTurnRunning"
           @insert="forceInsertQueuedMessage"
           @remove="removeQueuedServerMessage"
         />
-
-        <!-- 排队中提示 -->
-        <div v-if="queuedTurn" class="queued-banner" role="status" aria-live="polite">
-          <span class="queued-banner__label">排队中，等待上一轮完成…</span>
-          <span v-if="queuedTurnContent" class="queued-banner__preview">{{ queuedTurnContent }}</span>
-        </div>
 
         <!-- 输入区域 -->
         <div 
@@ -904,15 +883,15 @@ let pendingToolArgs = new Map()
 let reconnectController = null
 let lateTaskController = null
 const stopRequested = ref(false)
-const queuedMessages = ref([])
 // 服务端队列恢复时暂存该草稿的授权模式，不改变用户当前模式偏好。
 const queuedAuthorizationMode = ref(null)
 let nextQueuedMessageId = 0
+// 本地乐观排队队列：运行中普通发送先入本地，随后同步到服务端队列（serverQueue 为持久化真源）。
+// 仅作乐观展示，不含持久化语义。
+const queuedMessages = ref([])
 const serverQueue = ref([])
 const showRunningBanner = ref(false)
 const queuedTurn = ref(false)
-// 排队中提示展示的内容：真正排队（上一轮未结束）时显示用户输入的内容
-const queuedTurnContent = ref('')
 let statusPollTimer = null
 const showModelPicker = ref(false)
 const modelPickerTriggerRef = ref(null)
@@ -1305,6 +1284,7 @@ function buildMediaTurnInstruction() {
 const hasDraft = computed(() => Boolean(inputText.value.trim() || attachments.value.length > 0))
 const canSend = computed(() => hasDraft.value && !isUploading.value)
 
+// 快照当前输入草稿，用于运行中普通发送时排队（保留本轮模型/附件/技能选择，插入时可原样恢复）
 function snapshotDraft() {
   const turnModelHint = buildTurnModelHint()
   const turnModelRef = buildTurnModelRef()
@@ -1338,6 +1318,7 @@ function clearDraft() {
   autoResize()
 }
 
+// 运行中普通发送：快照当前草稿 → 推入本地乐观队列 → 同步到服务端队列（增强模式有线程时）→ 清空输入
 function queueCurrentDraft() {
   if (!hasDraft.value) return false
   const draft = snapshotDraft()
@@ -1350,7 +1331,8 @@ function queueCurrentDraft() {
   return true
 }
 
-// 把排队消息写入服务端队列（send_mode=queue），并回填 turn_id / queue_position
+// 把排队消息写入服务端队列（send_mode=queue），并回填 turn_id / queue_position；
+// 服务端队列是持久化真源，本地 queuedMessages 仅在同步完成前做乐观展示。
 async function enqueueServerMessage(draft) {
   const clientMessageId = draft.client_message_id
   let queuedAttachments = (Array.isArray(draft.attachments) ? draft.attachments : [])
@@ -1402,6 +1384,8 @@ async function enqueueServerMessage(draft) {
   await refreshQueueAndFollow()
 }
 
+// 服务端确认后把本地草稿合并进 serverQueue（真源），并移除本地乐观镜像，
+// 避免同一条跟进消息在回合结束后再次发送。
 function syncServerQueueItem(draft, json) {
   const item = {
     id: json.turn_id || draft.id,
@@ -1417,7 +1401,6 @@ function syncServerQueueItem(draft, json) {
   const idx = serverQueue.value.findIndex((s) => s.client_message_id === item.client_message_id || s.turn_id === item.turn_id)
   if (idx >= 0) serverQueue.value[idx] = { ...serverQueue.value[idx], ...item }
   else serverQueue.value.push(item)
-  // 服务端队列已成为真源，移除本地镜像，避免同一条跟进消息在回合结束后再次发送。
   queuedMessages.value = queuedMessages.value.filter((queued) => queued.id !== draft.id && queued.client_message_id !== item.client_message_id)
 }
 
@@ -1439,6 +1422,8 @@ function restoreDraft(draft) {
   })
 }
 
+// 旧版流式/未同步到服务端的兜底：当前回合结束后自动发下一条本地排队消息。
+// 增强模式下消息已由服务端队列自动派发，正常情况下不会走到这里。
 function drainQueuedMessages() {
   if (isLoading.value || !queuedMessages.value.length) return
   const [next] = queuedMessages.value.splice(0, 1)
@@ -1446,16 +1431,54 @@ function drainQueuedMessages() {
   nextTick(() => sendMessage(true))
 }
 
+// 队列条渲染用的合并列表：本地乐观排队项 + 服务端队列项（本地项带 _local 标志便于插入/删除区分）
+const queueItems = computed(() => [
+  ...queuedMessages.value.map((q) => ({ ...q, _local: true })),
+  ...serverQueue.value,
+])
+
+// 取消当前 active turn 并等待其进入终态（cancelled/completed/failed/idle）。
+// 旧 turn 未终态就 resume 同一 thread 会触发 Codex SDK thread-store conflict；
+// 后端 cancel 路由最多等 5 秒 + SDK 收敛时间，因此这里最多等 10 秒，超时后强制继续。
+// 返回是否在超时内到达终态；到达终态后清空 activeTurn.id，使后续发送回落为
+// direct（旧回合已终态时 interrupt 的 target_turn_id 会被后端 stale_turn 拒绝）。
+async function cancelActiveTurnAndWait() {
+  const turnId = activeTurn.value.id
+  if (!turnId || !currentCodexThreadId.value) return true
+  try {
+    await cancelCodexTurn(currentCodexThreadId.value, turnId, { reason: 'force_insert' })
+  } catch (error) {
+    console.warn('[AI-Assistant] interrupt cancel failed:', error?.message)
+  }
+  const waitDeadline = Date.now() + 10000
+  let settled = false
+  while (Date.now() < waitDeadline) {
+    if (['cancelled', 'completed', 'failed', 'idle'].includes(activeTurn.value.status)) {
+      settled = true
+      break
+    }
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  if (settled) activeTurn.value.id = null
+  return settled
+}
+
 async function forceInsertQueuedMessage(queued) {
   if (!queued) return
+  if (queued._local || !queued.turn_id) {
+    // 本地乐观项（尚未同步到服务端 / 增强模式无线程）：从本地队列移除后
+    // 取消当前回合，把草稿恢复进输入框并以强插方式立即发送。
+    queuedMessages.value = queuedMessages.value.filter((s) => s.id !== queued.id && s.client_message_id !== queued.client_message_id)
+    await cancelActiveTurnAndWait()
+    restoreDraft(queued)
+    nextTick(() => sendEnhancedMessage(true))
+    return
+  }
   if (enhancedMode.value && currentCodexThreadId.value) {
-    // 服务端队列项：取消当前回合后以 interrupt 发送
-    const text = queued.text || queued.content || ''
+    // 服务端队列项：先删除服务端队列中的该消息，再取消当前回合并立即以新消息接管发送
     const clientMessageId = queued.client_message_id || `cm_${Date.now()}-${nextQueuedMessageId}`
-    const targetTurnId = activeTurn.value.id || queued.turn_id || null
     const removeFromQueue = () => {
       serverQueue.value = serverQueue.value.filter((s) => s.id !== queued.id && s.turn_id !== queued.turn_id && s.client_message_id !== clientMessageId)
-      queuedMessages.value = queuedMessages.value.filter((s) => s.id !== queued.id)
     }
     if (queued.turn_id && currentCodexThreadId.value) {
       try {
@@ -1467,37 +1490,22 @@ async function forceInsertQueuedMessage(queued) {
         return
       }
     }
-    if (targetTurnId && activeTurn.value.id) {
-      try {
-        await cancelCodexTurn(currentCodexThreadId.value, targetTurnId, { reason: 'force_insert' })
-      } catch (error) {
-        console.warn('[AI-Assistant] force insert cancel failed:', error?.message)
-      }
-      // 等待旧 turn 的 SSE 流真正结束（onCancelled/onDone 设置 status 为终态），
-      // 避免 Codex SDK thread writer 尚未释放时 resume 同一 thread 导致 thread-store conflict。
-      // 最多等 10 秒（后端 cancel 路由最多 5 秒 + SDK 收敛时间），超时后强制继续。
-      const waitDeadline = Date.now() + 10000
-      while (Date.now() < waitDeadline) {
-        if (['cancelled', 'completed', 'failed', 'idle'].includes(activeTurn.value.status)) break
-        await new Promise((r) => setTimeout(r, 200))
-      }
-      // 清除 activeTurn.id，避免 sendEnhancedMessage(force) 的 interrupt 分支
-      // 对同一旧 turn 重复 cancel 导致无限转圈
-      activeTurn.value.id = null
-    }
+    // 取消当前回合并等待其进入终态（与 sendEnhancedMessage force 分支共用同一套防护）
+    await cancelActiveTurnAndWait()
     removeFromQueue()
     restoreDraft(queued)
     nextTick(() => sendEnhancedMessage(true))
     return
   }
-  queuedMessages.value = [queued, ...queuedMessages.value.filter(item => item.id !== queued.id)]
-  stopCurrentActivity()
-  nextTick(drainQueuedMessages)
 }
 
-// 删除服务端队列中未 dispatch 的消息
+// 删除队列中未 dispatch 的消息：本地项直接从乐观队列移除，服务端项调用删除 API
 async function removeQueuedServerMessage(queued) {
   if (!queued) return
+  if (queued._local || !queued.turn_id) {
+    queuedMessages.value = queuedMessages.value.filter((s) => s.id !== queued.id && s.client_message_id !== queued.client_message_id)
+    return
+  }
   const turnId = queued.turn_id || queued.id
   // AC-P1-02: 删除失败时保留队列项并显示原因，不能先清空 UI 造成“以为已删除但后台仍执行”
   if (turnId && currentCodexThreadId.value) {
@@ -1511,7 +1519,6 @@ async function removeQueuedServerMessage(queued) {
     }
   }
   serverQueue.value = serverQueue.value.filter((s) => s.id !== queued.id && s.turn_id !== turnId)
-  queuedMessages.value = queuedMessages.value.filter((s) => s.id !== queued.id)
 }
 
 let followQueueTimer = null
@@ -1624,15 +1631,14 @@ function stopCurrentActivity() {
   // cancelled（Task 7 AC-P1-02）。用户主动关闭面板时由面板卸载清理。
   showRunningBanner.value = false
   queuedTurn.value = false
-  queuedTurnContent.value = ''
   isUploading.value = false
   const activeMessage = [...messages.value].reverse().find(message => message.role === 'assistant' && message.isStreaming)
   if (activeMessage) {
     activeMessage.isStreaming = false
     activeMessage.isThinking = false
-    delete activeMessage.mediaGenerating
-    delete activeMessage.mediaGeneratingCount
-    delete activeMessage.mediaGeneratingTotal
+    // 生成中卡片冻结而非删除：保留占位网格，仅标记已停止（mediaStopped 由
+    // AIAssistantMessage 渲染为「已停止」文案并停止脉冲动画），不 delete 生成中字段。
+    if (activeMessage.mediaGenerating) activeMessage.mediaStopped = true
     if (!activeMessage.content) activeMessage.content = '已停止当前对话或任务'
   }
   // 停止当前活动时一并取消排队中的跟进消息，避免回合取消后调度器自动执行它们
@@ -1825,6 +1831,16 @@ function enterMediaGeneratingState(message, generatingType, messageText = '', as
  */
 function finalizeMediaGenerationState(message, { restoreBuffer = false } = {}) {
   if (!message) return
+  // 生成已被中断停止（mediaStopped）：保留冻结的生成中卡片（占位网格可见，
+  // 文案由 AIAssistantMessage 渲染为「已停止」），仅清理生成中缓冲文本。
+  if (message.mediaStopped) {
+    const buffered = message.generationContentBuffer || ''
+    delete message.generationContentBuffer
+    if (restoreBuffer && buffered && !message.content) {
+      message.content = buffered
+    }
+    return
+  }
   delete message.mediaGenerating
   delete message.mediaGeneratingCount
   delete message.mediaGeneratingRatio
@@ -2050,10 +2066,9 @@ function selectMode(mode) {
 }
 function startNewChat() {
   if (isLoading.value) stopCurrentActivity()
-  queuedMessages.value = []
   serverQueue.value = []
+  queuedMessages.value = []
   queuedTurn.value = false
-  queuedTurnContent.value = ''
   resetActiveTurn()
   if (followQueueTimer) { clearInterval(followQueueTimer); followQueueTimer = null }
   lastFollowedTurnId = null
@@ -2925,14 +2940,16 @@ async function sendEnhancedMessage(force = false) {
   const clientMessageId = `cm_${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
   let sendMode = undefined
   let targetTurnId = null
-  // 强制插入（Ctrl/Cmd+Enter）：先取消当前回合，等待确认后以 interrupt 模式发送
+  // 强制发送（任务运行时接管 / Ctrl/Cmd+Enter）：先取消当前回合并等待其 SSE 流进入终态，
+  // 再发送。旧 turn 未终态就 resume 同一 thread 会触发 Codex SDK thread-store conflict；
+  // 等待到终态后 activeTurn.id 已清空，本次发送回落为 direct（旧回合已终态时 interrupt
+  // 的 target_turn_id 会被后端 stale_turn 拒绝，direct 才是安全入口）；仅在超时（10s 后
+  // 仍 running）时保留 interrupt，由后端再做 5s 取消等待并排空。
   if (force && activeTurn.value.id && currentCodexThreadId.value) {
-    sendMode = 'interrupt'
-    targetTurnId = activeTurn.value.id
-    try {
-      await cancelCodexTurn(currentCodexThreadId.value, activeTurn.value.id, { reason: 'force_insert' })
-    } catch (cancelError) {
-      console.warn('[AI-Assistant] interrupt cancel failed:', cancelError?.message)
+    const settled = await cancelActiveTurnAndWait()
+    if (!settled) {
+      sendMode = 'interrupt'
+      targetTurnId = activeTurn.value.id || null
     }
   }
 
@@ -3310,7 +3327,6 @@ async function sendEnhancedMessage(force = false) {
         activeTurn.value.lastEventAt = Date.now()
       },
       onQueued: () => {
-        queuedTurnContent.value = messageText
         queuedTurn.value = true
         activeTurn.value.status = 'queued'
         activeTurn.value.phase = 'queued'
@@ -3333,6 +3349,10 @@ async function sendEnhancedMessage(force = false) {
         if (message) {
           message.isThinking = false
           message.isStreaming = false
+          // 中断取消旧回合：冻结生成中卡片（保留占位网格，文案变「已停止」），
+          // 而非删除 mediaGenerating 字段导致卡片消失；后续 onDone 的 finalize
+          // 因 mediaStopped 守卫只清理缓冲、保留冻结卡片。
+          if (message.mediaGenerating) message.mediaStopped = true
           finalizeMediaGenerationState(message)
         }
       },
@@ -3372,7 +3392,6 @@ async function sendEnhancedMessage(force = false) {
           currentCodexThreadId.value = result.thread_id
         }
         queuedTurn.value = false
-        queuedTurnContent.value = ''
         activeTurn.value.status = activeTurn.value.status === 'cancelled' ? 'cancelled' : 'completed'
         activeTurn.value.phase = activeTurn.value.status === 'cancelled' ? 'cancelled' : 'completed'
         activeTurn.value.cancellable = false
@@ -3395,7 +3414,6 @@ async function sendEnhancedMessage(force = false) {
         }
         message.isStreaming = false
         queuedTurn.value = false
-        queuedTurnContent.value = ''
         activeTurn.value.status = 'failed'
         activeTurn.value.phase = 'failed'
         activeTurn.value.cancellable = false
@@ -3437,7 +3455,6 @@ async function sendEnhancedMessage(force = false) {
       isLoading.value = false
       agentStreamController = null
       queuedTurn.value = false
-      queuedTurnContent.value = ''
       scrollToBottom()
       refreshQueueAndFollow()
     }
@@ -3448,6 +3465,8 @@ async function sendMessage(force = false) {
   if (!hasDraft.value || isUploading.value) return
 
   if (isLoading.value && !force) {
+    // 标准 harness 交互：任务运行时普通发送 → 消息进入队列（服务端 send_mode=queue），
+    // 输入框立即清空，当前任务继续运行、其生成中卡片不受影响。
     queueCurrentDraft()
     return
   }
@@ -3775,6 +3794,7 @@ async function sendMessage(force = false) {
       isLoading.value = false
       normalStreamController = null
       scrollToBottom()
+      // 旧版流式/未同步到服务端的兜底：回合结束后自动发下一条本地排队消息
       drainQueuedMessages()
     }
   }
@@ -5451,57 +5471,6 @@ defineExpose({
   color: inherit;
 }
 
-.queued-message-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 14px 8px;
-  padding: 8px 10px;
-  border: 1px solid rgba(148, 163, 184, 0.22);
-  border-radius: 10px;
-  background: rgba(148, 163, 184, 0.08);
-  color: rgba(226, 232, 240, 0.88);
-  font-size: 12px;
-}
-
-.queued-message-bar__copy {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-  flex: 1;
-}
-
-.queued-message-bar__dot {
-  width: 7px;
-  height: 7px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: #93c5fd;
-}
-
-.queued-message-bar__preview {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: rgba(148, 163, 184, 0.9);
-}
-
-.queued-message-bar__force {
-  flex-shrink: 0;
-  padding: 4px 8px;
-  border: 1px solid rgba(147, 197, 253, 0.35);
-  border-radius: 6px;
-  background: rgba(59, 130, 246, 0.12);
-  color: #bfdbfe;
-  cursor: pointer;
-}
-
-.queued-message-bar__force:hover {
-  background: rgba(59, 130, 246, 0.22);
-}
-
 .toolbar-left {
   display: flex;
   align-items: center;
@@ -6235,30 +6204,6 @@ defineExpose({
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
-.queued-banner {
-  padding: 8px 12px;
-  margin: 8px;
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
-  border-radius: 8px;
-  font-size: 13px;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.queued-banner__label {
-  flex: none;
-}
-.queued-banner__preview {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.8;
-  font-size: 12px;
-}
 
 </style>
 
@@ -6404,22 +6349,6 @@ defineExpose({
 
 :root.canvas-theme-light .ai-assistant-panel .send-btn--stop:hover {
   background: #b91c1c;
-}
-
-:root.canvas-theme-light .ai-assistant-panel .queued-message-bar {
-  border-color: rgba(15, 23, 42, 0.12);
-  background: rgba(15, 23, 42, 0.045);
-  color: #44403c;
-}
-
-:root.canvas-theme-light .ai-assistant-panel .queued-message-bar__preview {
-  color: #78716c;
-}
-
-:root.canvas-theme-light .ai-assistant-panel .queued-message-bar__force {
-  border-color: rgba(37, 99, 235, 0.2);
-  background: rgba(37, 99, 235, 0.08);
-  color: #1d4ed8;
 }
 
 :root.canvas-theme-light .ai-assistant-panel .model-selector {

@@ -99,7 +99,7 @@
       <div
         v-if="message.mediaGenerating"
         class="media-generating"
-        :class="`media-generating--${message.mediaGenerating}`"
+        :class="[`media-generating--${message.mediaGenerating}`, { 'media-generating--stopped': message.mediaStopped }]"
       >
         <div class="media-generating__header">
           <div class="media-generating__icon">
@@ -113,7 +113,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="m5.5 17.5 4.5-4.5 3 3 3-3 2.5 2.5" />
           </svg>
           </div>
-          <span class="media-generating__label">{{ message.mediaGenerating === 'video' ? '视频生成中' : '图片生成中' }}…</span>
+          <span class="media-generating__label">{{ message.mediaGenerating === 'video' ? (message.mediaStopped ? '视频生成已停止' : '视频生成中…') : (message.mediaStopped ? '图片生成已停止' : '图片生成中…') }}</span>
         </div>
         <div v-if="message.mediaGenerating === 'image'" class="media-generating__grid">
           <!-- 逐格填充：已完成的图片原位显示在对应占位格，未完成保持灰格 -->
@@ -180,27 +180,12 @@
         </template>
       </div>
 
-      <div v-if="message.role === 'assistant' && assistantChoices && !message.isStreaming" class="ai-message-choices" :class="{ 'is-locked': choiceLocked }">
-        <p v-if="assistantChoices.question" class="ai-message-choices__question">{{ assistantChoices.question }}</p>
-        <div class="ai-message-choices__grid">
-          <button
-            v-for="option in assistantChoices.options"
-            :key="`${option.value}:${option.label}`"
-            type="button"
-            class="ai-message-choice"
-            :class="{ selected: selectedChoiceValue === option.value }"
-            :disabled="choiceLocked"
-            @click="selectChoice(option)"
-          >
-            <span class="ai-message-choice__value">{{ option.value }}</span>
-            <span class="ai-message-choice__label">{{ option.label }}</span>
-          </button>
-        </div>
-        <form v-if="assistantChoices.allowInput" class="ai-message-choice-input" @submit.prevent="submitChoiceInput">
-          <input v-model="choiceInput" type="text" :placeholder="assistantChoices.inputPlaceholder" :disabled="choiceLocked" aria-label="自定义回复" />
-          <button type="submit" :disabled="choiceLocked || !choiceInput.trim()">发送</button>
-        </form>
-      </div>
+      <!-- 选择卡片独立子组件：选项选择只重渲染卡片本身，不触发整条消息的 markdown 重渲染 -->
+      <AIAssistantChoiceCard
+        v-if="message.role === 'assistant' && assistantChoices && !message.isStreaming"
+        :choices="assistantChoices"
+        @select="emitChoiceSelect"
+      />
 
       <!-- 图片生成结果组：默认展开，可折叠为首图叠层。
            图片生成中期间隐藏（已完成图片已在占位格原位显示），全部完成/视频时正常展示 -->
@@ -395,6 +380,7 @@ import DOMPurify from 'dompurify'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { startStreamDownload } from '@/api/client'
 import { parseAssistantContent } from '@/utils/aiAssistantContent'
+import AIAssistantChoiceCard from './AIAssistantChoiceCard.vue'
 
 const props = defineProps({
   message: {
@@ -430,23 +416,9 @@ const emit = defineEmits(['preview-media', 'select-choice', 'retry', 'feedback']
 
 const parsedContent = computed(() => parseAssistantContent(props.message.content))
 const assistantChoices = computed(() => props.message.role === 'assistant' ? parsedContent.value.choices : null)
-const choiceInput = ref('')
-const selectedChoiceValue = ref('')
-const choiceLocked = computed(() => Boolean(selectedChoiceValue.value))
 
-const streamDisplayContent = computed(() => parsedContent.value.content)
-
-function selectChoice(option) {
-  if (choiceLocked.value || !option?.value) return
-  selectedChoiceValue.value = option.value
-  emit('select-choice', option.value)
-}
-
-function submitChoiceInput() {
-  const value = choiceInput.value.trim()
-  if (!value || choiceLocked.value) return
-  selectedChoiceValue.value = value
-  choiceInput.value = ''
+// 选择卡片选中/输入状态已内聚到 AIAssistantChoiceCard，这里只转发选择结果
+function emitChoiceSelect(value) {
   emit('select-choice', value)
 }
 
@@ -716,22 +688,36 @@ markdownRenderer.table = function (token) {
   return `<div class="ai-table-list">${items || empty}</div>`
 }
 
+// 按 content 缓存 markdown 渲染结果：同一条消息正文不变时（选择选项、展开折叠、
+// hover、preGenerationContent 重复渲染）不重复跑 marked.parse + DOMPurify.sanitize。
+const formatContentCache = new Map()
+
 function formatContent(content) {
   if (!content) return ''
+  const cached = formatContentCache.get(content)
+  if (cached !== undefined) return cached
 
+  let result
   try {
-    content = parseAssistantContent(content).content
+    const plain = parseAssistantContent(content).content
     // 使用 marked 解析 markdown
-    const html = marked.parse(content, { renderer: markdownRenderer })
+    const html = marked.parse(plain, { renderer: markdownRenderer })
     // 使用 DOMPurify 清理 HTML
-    return DOMPurify.sanitize(html, {
+    result = DOMPurify.sanitize(html, {
       ALLOWED_TAGS: ['p', 'br', 'strong', 'em', 'code', 'pre', 'ul', 'ol', 'li', 'a', 'blockquote', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'article', 'span'],
       ALLOWED_ATTR: ['href', 'target', 'class']
     })
   } catch (e) {
     // 如果解析失败，返回原始文本
-    return DOMPurify.sanitize(content.replace(/\n/g, '<br>'), { ALLOWED_TAGS: ['br'] })
+    result = DOMPurify.sanitize(content.replace(/\n/g, '<br>'), { ALLOWED_TAGS: ['br'] })
   }
+  // 防缓存无界增长：超过上限时清空最旧的一半（消息正文内容唯一，数量有限）
+  if (formatContentCache.size >= 500) {
+    const oldest = [...formatContentCache.keys()].slice(0, 250)
+    for (const key of oldest) formatContentCache.delete(key)
+  }
+  formatContentCache.set(content, result)
+  return result
 }
 
 const formattedContent = computed(() => {
@@ -1048,6 +1034,17 @@ onUnmounted(() => {
   background-size: 12px 12px;
   animation: media-generating-placeholder 1.8s ease-in-out infinite alternate;
 }
+/* 生成被中断停止（mediaStopped）：占位格停止脉冲动画并降透明度，视觉上「冻结」，
+   占位网格与图片保持可见（不删除 mediaGenerating 相关字段）。 */
+.media-generating--stopped .media-generating__icon,
+.media-generating--stopped .media-generating__placeholder,
+.media-generating--stopped .media-generating__video-frame {
+  animation: none;
+  opacity: 0.55;
+}
+.media-generating--stopped .media-generating__header {
+  color: rgba(226, 232, 240, 0.45);
+}
 /* 多图生成中：已完成图片原位填充占位格（覆盖灰格底色与动画，显示真实图片） */
 .media-generating__placeholder--filled {
   width: 100%;
@@ -1234,89 +1231,6 @@ onUnmounted(() => {
 
 .ai-message__text :deep(.ai-table-list__value) {
   min-width: 0;
-}
-
-.ai-message-choices {
-  margin-top: 10px;
-}
-
-.ai-message-choices__question {
-  margin: 0 0 8px;
-  color: var(--ai-message-muted, #a1a1aa);
-  font-size: 12px;
-}
-
-.ai-message-choices__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 8px;
-}
-
-.ai-message-choice {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  min-width: 0;
-  padding: 9px 10px;
-  border: 1px solid var(--ai-message-border, rgba(255, 255, 255, 0.16));
-  border-radius: 10px;
-  background: var(--ai-message-list-bg, rgba(255, 255, 255, 0.04));
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.ai-message-choice:hover:not(:disabled),
-.ai-message-choice.selected {
-  border-color: var(--ai-message-choice-active, #a1a1aa);
-  background: var(--ai-message-choice-active-bg, rgba(255, 255, 255, 0.1));
-}
-
-.ai-message-choice:disabled {
-  cursor: default;
-  opacity: 0.58;
-}
-
-.ai-message-choice__value {
-  flex: 0 0 auto;
-  color: var(--ai-message-muted, #a1a1aa);
-  font-size: 12px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-}
-
-.ai-message-choice__label {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.ai-message-choice-input {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.ai-message-choice-input input {
-  min-width: 0;
-  flex: 1;
-  padding: 8px 10px;
-  border: 1px solid var(--ai-message-border, rgba(255, 255, 255, 0.16));
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-}
-
-.ai-message-choice-input button {
-  padding: 0 12px;
-  border: 1px solid var(--ai-message-border, rgba(255, 255, 255, 0.16));
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.ai-message-choice-input button:disabled {
-  cursor: default;
-  opacity: 0.45;
 }
 
 .ai-thinking {

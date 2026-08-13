@@ -50,3 +50,15 @@ test('取消失败不清空队列/运行态（可重试）', () => {
   // 取消 API 失败仅记录 warn，不清空 serverQueue
   assert.match(panel, /cancelCodexTurn\(currentCodexThreadId\.value, activeTurn\.value\.id, \{ reason: 'user_stop' \}\)\.catch/)
 })
+
+test('停止/中断时生成中卡片冻结而非删除（mediaStopped 保留占位网格）', () => {
+  const block = panel.match(/function stopCurrentActivity\(\)[\s\S]*?\n}/)?.[0]
+  assert.ok(block, 'stopCurrentActivity must exist')
+  // 冻结：设置 mediaStopped 标志，保留 mediaGenerating 相关字段（占位网格不消失）
+  assert.match(block, /if \(activeMessage\.mediaGenerating\) activeMessage\.mediaStopped = true/)
+  assert.doesNotMatch(block, /delete activeMessage\.mediaGenerating/)
+  // onCancelled 同样冻结：先标记 mediaStopped 再 finalize（守卫保留冻结卡片）
+  const cancelledBlock = panel.match(/onCancelled: \(json\) => \{[\s\S]*?\n      \},/)?.[0]
+  assert.ok(cancelledBlock, 'onCancelled must exist')
+  assert.match(cancelledBlock, /if \(message\.mediaGenerating\) message\.mediaStopped = true/)
+})

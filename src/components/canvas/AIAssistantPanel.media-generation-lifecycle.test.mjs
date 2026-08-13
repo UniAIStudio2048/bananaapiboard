@@ -142,6 +142,15 @@ test('finalizeMediaGenerationState 一并清理 mediaGeneratingTotal', () => {
   assert.match(block, /delete message\.mediaGeneratingTotal/)
 })
 
+test('finalizeMediaGenerationState 对 mediaStopped 保留冻结卡片（仅清理缓冲）', () => {
+  const block = source.match(/function finalizeMediaGenerationState\(message, \{ restoreBuffer = false \} = \{\}\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(block, 'finalizeMediaGenerationState must exist')
+  // 守卫：mediaStopped 时只清理生成中缓冲文本，不删除 mediaGenerating 等字段（卡片冻结保留）
+  assert.match(block, /if \(message\.mediaStopped\) \{/)
+  assert.match(block, /delete message\.generationContentBuffer/)
+  assert.match(block, /return\s*\}/)
+})
+
 test('兜底计数设置点同步记录 mediaGeneratingTotal，避免重连/兜底路径丢失恒定格数', () => {
   const reconnectBlock = source.match(/function reconnectStream\(threadId\) \{[\s\S]*?\n\}/)?.[0]
   assert.ok(reconnectBlock, 'reconnectStream must exist')

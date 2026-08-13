@@ -13,10 +13,14 @@ import { dirname, join } from 'node:path'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const panel = await readFile(join(__dirname, 'AIAssistantPanel.vue'), 'utf8')
 
-test('interrupt 分支先取消旧回合再以 interrupt 模式发送（target_turn_id）', () => {
-  const block = panel.match(/强制插入（Ctrl\/Cmd\+Enter）[\s\S]*?sendMode = 'interrupt'[\s\S]*?targetTurnId = activeTurn\.value\.id[\s\S]*?cancelCodexTurn\(currentCodexThreadId\.value, activeTurn\.value\.id, \{ reason: 'force_insert' \}\)/)?.[0]
+test('interrupt 分支先取消当前回合并等待终态（cancelActiveTurnAndWait），仅超时才回落 interrupt', () => {
+  const block = panel.match(/强制发送（任务运行时接管[\s\S]*?cancelActiveTurnAndWait\(\)[\s\S]*?targetTurnId = activeTurn\.value\.id \|\| null/)?.[0]
   assert.ok(block, 'interrupt send branch must exist')
-  assert.match(block, /cancelCodexTurn\(currentCodexThreadId\.value, activeTurn\.value\.id, \{ reason: 'force_insert' \}\)/)
+  assert.match(block, /const settled = await cancelActiveTurnAndWait\(\)/)
+  assert.match(block, /sendMode = 'interrupt'/)
+  assert.match(block, /targetTurnId = activeTurn\.value\.id \|\| null/)
+  // 取消逻辑在共享 helper 中：cancelCodexTurn 后等待旧回合进入终态，避免 thread-store conflict
+  assert.match(panel, /function cancelActiveTurnAndWait\(\)[\s\S]*?cancelCodexTurn\(currentCodexThreadId\.value, turnId, \{ reason: 'force_insert' \}\)/)
 })
 
 test('interrupt_waiting_for_cancel：保留草稿并显示等待，不直发新回合', () => {
