@@ -56,6 +56,22 @@ test('expanded video cards follow the video real aspect ratio (portrait 9:16 no 
   assert.match(source, /video\.ai-media-card__preview \{[\s\S]*?aspect-ratio: 16 \/ 9;/)
 })
 
+test('expanded image cards follow the image real aspect ratio after load (landscape no longer forced square)', () => {
+  // 缺陷：img.ai-media-card__preview 的 min-height: 160px 对横屏图（如 16:9）强制生效——
+  // 两列网格单列约 256px，16:9 图原比例高度约 144px < 160px，被撑成近正方形；
+  // 竖屏图（9:16）高度约 455px 不受影响，故表现为「竖屏正常、横屏异常」。
+  // 修复：图片加载后（@load 记录 naturalWidth/naturalHeight）用 inline style 覆盖
+  // 为真实比例并清除 min-height 兜底；CSS min-height: 160px 仅保留为加载前防塌陷。
+  assert.match(source, /function onImageLoad\(media, event\) \{[\s\S]*?naturalWidth[\s\S]*?naturalHeight[\s\S]*?imageDimensions\.value/)
+  assert.match(source, /function imagePreviewStyle\(media\) \{[\s\S]*?aspectRatio[\s\S]*?minHeight/)
+  assert.match(source, /class="ai-media-card__preview"[\s\S]*?:style="imagePreviewStyle\(media\)"/)
+  assert.match(source, /@load="onImageLoad\(media, \$event\)"/)
+  // 加载后 inline style 必须能覆盖 CSS 的 min-height 兜底，否则横屏图仍被撑高
+  assert.match(source, /imagePreviewStyle\(media\)[\s\S]*?minHeight: '0'/)
+  // CSS 兜底保留：加载前防塌陷
+  assert.match(source, /img\.ai-media-card__preview \{[\s\S]*?min-height: 160px;/)
+})
+
 test('collapsed first video shows a play button overlay', () => {
   // 收起态首个视频叠加播放键，提示可播放而非静态封面
   assert.match(source, /v-if="index === 0 && media\.type === 'video'" class="ai-media-results__collapsed-play"/)

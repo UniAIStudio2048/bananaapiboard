@@ -219,7 +219,9 @@
             :src="toSameOriginUrl(media.url)"
             :alt="media.name"
             class="ai-media-card__preview"
+            :style="imagePreviewStyle(media)"
             loading="lazy"
+            @load="onImageLoad(media, $event)"
             @click="$emit('preview-media', { type: 'image', url: toSameOriginUrl(media.url), name: media.name })"
           />
           <video
@@ -542,6 +544,24 @@ function onVideoMetadata(media, event) {
 function videoPreviewStyle(media) {
   const dim = videoDimensions.value[media.url]
   return dim ? { aspectRatio: `${dim.w} / ${dim.h}` } : null
+}
+
+// 图片实际尺寸：@load 后按图片自身宽高比展示（横屏 16:9 不再被 min-height: 160px 撑成近正方形），
+// 加载前 CSS min-height: 160px 保底，避免高度塌陷
+const imageDimensions = ref({})
+function onImageLoad(media, event) {
+  const img = event?.target
+  const w = Number(img?.naturalWidth) || 0
+  const h = Number(img?.naturalHeight) || 0
+  if (w > 0 && h > 0) {
+    imageDimensions.value = { ...imageDimensions.value, [media.url]: { w, h } }
+  }
+}
+function imagePreviewStyle(media) {
+  const dim = imageDimensions.value[media.url]
+  // 加载后以真实宽高比覆盖 CSS min-height 兜底（minHeight: '0'），
+  // 否则横屏图会被 160px 最小高度撑高；加载前返回 null 沿用 CSS 保底
+  return dim ? { aspectRatio: `${dim.w} / ${dim.h}`, minHeight: '0' } : null
 }
 
 /**
