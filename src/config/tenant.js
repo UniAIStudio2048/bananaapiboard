@@ -1687,6 +1687,8 @@ export const getAvailableVideoModels = (options = {}) => {
         resolutionPricing: modelConfig.resolutionPricing,
         resolutionMultipliers: modelConfig.resolutionMultipliers,
         resolutionFixedCosts: modelConfig.resolutionFixedCosts,
+        // 视频输入个数分档倍率：固定长度 10 数组，下标 = 输入视频个数 - 1（与后端结算一致）
+        videoInputMultipliers: modelConfig.videoInputMultipliers,
         // MiniMax 海螺官方直连：分辨率计费与默认配置（来自 9000 租户后台）
         minimaxConfig: modelConfig.minimaxConfig,
         resolutionCosts: modelConfig.resolutionCosts,

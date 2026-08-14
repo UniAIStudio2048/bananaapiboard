@@ -2177,12 +2177,35 @@ async function loadSession(session) {
   try {
     currentSessionId.value = session.id
     showHistory.value = false
+    let sessionData = { ...session }
 
     if (enhancedMode.value) {
+      agentStreamController?.abort()
+      agentStreamController = null
+      if (reconnectController) {
+        reconnectController.abort()
+        reconnectController = null
+      }
+      if (followQueueTimer) { clearInterval(followQueueTimer); followQueueTimer = null }
+      lastFollowedTurnId = null
+      stopRequested.value = false
+      isLoading.value = false
+      queuedTurn.value = false
+      queuedMessages.value = []
+      serverQueue.value = []
+      resetActiveTurn()
       currentCodexThreadId.value = session.id
+      const sessionDetailsPromise = getCodexSession(session.id)
+      const sessionMessagesPromise = getCodexSessionMessages(session.id, teamStore.getSpaceParams('current'))
       let historyMessages = []
       try {
-        const msgResult = await getCodexSessionMessages(session.id, teamStore.getSpaceParams('current'))
+        const result = await sessionDetailsPromise
+        sessionData = { ...sessionData, ...(result.session || {}) }
+      } catch (e) {
+        console.warn('[AI-Assistant] 加载增强模式会话状态失败:', e.message)
+      }
+      try {
+        const msgResult = await sessionMessagesPromise
         historyMessages = msgResult.messages || []
       } catch (e) {
         console.warn('[AI-Assistant] 加载增强模式历史消息失败:', e.message)
@@ -2219,13 +2242,40 @@ async function loadSession(session) {
         })
       } else {
         // 无落盘消息时回退到会话详情摘要
-        const result = await getCodexSession(session.id)
-        const sessionData = result.session || {}
         messages.value = [{
           role: 'assistant',
           content: sessionData.summary || '会话已恢复，可以继续对话。',
           timestamp: Date.now()
         }]
+      }
+      const queued = Array.isArray(sessionData.queued_turns) ? sessionData.queued_turns : []
+      serverQueue.value = queued.map((turn) => ({
+        id: turn.turn_id,
+        turn_id: turn.turn_id,
+        client_message_id: turn.client_message_id,
+        text: turn.content,
+        queue_position: turn.queue_position,
+        status: turn.status,
+        attachments: Array.isArray(turn.attachments) ? turn.attachments : [],
+        skillId: turn.skill_id || turn.metadata?.skill_id || null,
+        authorizationMode: turn.authorization_mode || turn.metadata?.authorization_mode || 'once',
+        metadata: turn.metadata || null,
+      }))
+      queuedTurn.value = serverQueue.value.length > 0
+      const active = sessionData.active_turn
+      if (active?.turn_id) {
+        activeTurn.value = {
+          ...activeTurn.value,
+          id: active.turn_id,
+          threadId: session.id,
+          status: active.state || 'running',
+          phase: active.cancelRequested ? 'stopping' : (active.state || 'running'),
+          cancellable: !active.cancelRequested,
+          cancelRequested: Boolean(active.cancelRequested),
+          startedAt: sessionData.turn_started_at || null,
+          lastEventAt: Date.now(),
+        }
+        isLoading.value = true
       }
     } else {
       // 加载会话历史消息
@@ -2248,7 +2298,7 @@ async function loadSession(session) {
 
     // 增强模式：检查 turn_status，running 则显示 banner 并重连实时流
     if (enhancedMode.value) {
-      const turnStatus = session.turn_status || 'idle'
+      const turnStatus = sessionData.turn_status || 'idle'
       if (turnStatus === 'running') {
         // 运行中回合：把历史里的“半截助手快照”重置为空流式占位，交由 reconnectStream 从事件流
         // 重建。否则 DB 快照与事件回放双重叠加会造成正文/工具卡重复；且回合尚未落盘正文（只有
@@ -2279,6 +2329,9 @@ async function loadSession(session) {
           reconnectController.abort()
           reconnectController = null
         }
+      }
+      if ((serverQueue.value.length > 0 || activeTurn.value.id) && !followQueueTimer) {
+        followQueueTimer = setInterval(refreshQueueAndFollow, 2000)
       }
     }
   } catch (error) {
@@ -3408,9 +3461,24 @@ async function sendEnhancedMessage(force = false) {
         flushContent()
         const message = messages.value[assistantMessageIndex]
         if (message) {
-          message.isThinking = false
-          finalizeMediaGenerationState(message, { restoreBuffer: true })
-          message.isStreaming = false
+          if (result?.status === 'queued') {
+            message.isThinking = true
+            message.isStreaming = true
+          } else {
+            message.isThinking = false
+            finalizeMediaGenerationState(message, { restoreBuffer: true })
+            message.isStreaming = false
+          }
+        }
+        if (result?.status === 'queued') {
+          queuedTurn.value = true
+          activeTurn.value.id = null
+          activeTurn.value.status = 'queued'
+          activeTurn.value.phase = 'queued'
+          activeTurn.value.cancellable = false
+          activeTurn.value.cancelRequested = false
+          refreshQueueAndFollow()
+          return
         }
         if (result?.thread_id) {
           currentCodexThreadId.value = result.thread_id

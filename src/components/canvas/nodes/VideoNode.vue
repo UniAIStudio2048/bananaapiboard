@@ -59,10 +59,10 @@ import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeD
 import { getSeedanceQuickAsset } from '@/utils/seedanceQuickAsset'
 import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import {
-  applySeedanceVideoInputMultiplier,
-  formatSeedanceVideoInputMultiplier,
-  normalizeSeedanceVideoInputMultiplier
-} from '@/utils/seedanceVideoInputMultiplier'
+  applyVideoInputMultiplier,
+  formatVideoInputMultiplier,
+  resolveVideoInputMultiplier
+} from '@/utils/videoInputMultiplier'
 import {
   calculateSeedanceResolutionCost,
   getSeedanceResolutionOptions
@@ -3242,21 +3242,20 @@ const isSeedanceVideoInputMultiplierModel = computed(() => {
   return isSeedanceSd2VideoModel(currentModelConfig.value) && apiType !== 'happyhorse'
 })
 
-const seedanceVideoInputMultiplier = computed(() => {
-  return normalizeSeedanceVideoInputMultiplier(currentModelConfig.value?.seedanceConfig?.videoInputMultiplier)
+// 当前实际输入视频个数对应的分档倍率（与后端 resolveVideoInputMultiplier 一致）
+const videoInputMultiplier = computed(() => {
+  return resolveVideoInputMultiplier(currentModelConfig.value, referenceVideos.value.length)
 })
 
-const shouldApplySeedanceVideoInputMultiplier = computed(() => {
-  return isSeedanceVideoInputMultiplierModel.value && hasReferenceVideos.value
-})
-
-const minimaxH3VideoInputMultiplier = computed(() => {
-  const h3Cfg = currentModelConfig.value?.minimaxConfig || {}
-  return Number(h3Cfg.videoInputMultiplier) || 1
-})
-
-const shouldApplyMinimaxH3VideoInputMultiplier = computed(() => {
-  return isMinimaxH3Model.value && minimaxH3VideoInputMultiplier.value > 1 && referenceVideos.value.length > 0
+// 是否对当前生成应用视频输入倍率：
+// - 配置了新字段 videoInputMultipliers 时，任意模型都按输入视频个数分档；
+// - 仅有旧字段（seedanceConfig/minimaxConfig/顶层 videoInputMultiplier）时，
+//   仅 seedance / minimax H3 生效（与后端旧逻辑一致）。
+const shouldApplyVideoInputMultiplier = computed(() => {
+  if (!hasReferenceVideos.value) return false
+  if (videoInputMultiplier.value <= 1) return false
+  if (Array.isArray(currentModelConfig.value?.videoInputMultipliers)) return true
+  return isSeedanceVideoInputMultiplierModel.value || isMinimaxH3Model.value
 })
 
 // 参考音频（来自上游音频节点）
@@ -3804,11 +3803,8 @@ const pointsCost = computed(() => {
   )
   if (genericResolutionPrice !== null) {
     // 通用分辨率按秒计费同样应用视频输入倍率（与服务端计费保持一致）
-    if (shouldApplySeedanceVideoInputMultiplier.value) {
-      return applySeedanceVideoInputMultiplier(genericResolutionPrice, seedanceVideoInputMultiplier.value, true)
-    }
-    if (shouldApplyMinimaxH3VideoInputMultiplier.value) {
-      return Math.round(genericResolutionPrice * minimaxH3VideoInputMultiplier.value)
+    if (shouldApplyVideoInputMultiplier.value) {
+      return applyVideoInputMultiplier(genericResolutionPrice, videoInputMultiplier.value)
     }
     return genericResolutionPrice
   }
@@ -3868,8 +3864,8 @@ const pointsCost = computed(() => {
       duration: selectedDuration.value
     })
     if (seedanceResolutionCost !== null) {
-      return shouldApplySeedanceVideoInputMultiplier.value
-        ? applySeedanceVideoInputMultiplier(seedanceResolutionCost, seedanceVideoInputMultiplier.value, true)
+      return shouldApplyVideoInputMultiplier.value
+        ? applyVideoInputMultiplier(seedanceResolutionCost, videoInputMultiplier.value)
         : seedanceResolutionCost
     }
   }
@@ -3928,8 +3924,8 @@ const pointsCost = computed(() => {
     const h3PerSecond = Number(h3Cfg.resolutionCosts?.[h3Res])
       || Number(currentModelConfig.value.costPerSecond) || 15
     let h3Cost = Math.round(h3PerSecond * (Number(selectedDuration.value) || 5))
-    if (shouldApplyMinimaxH3VideoInputMultiplier.value) {
-      h3Cost = Math.round(h3Cost * minimaxH3VideoInputMultiplier.value)
+    if (shouldApplyVideoInputMultiplier.value) {
+      h3Cost = applyVideoInputMultiplier(h3Cost, videoInputMultiplier.value)
     }
     return h3Cost
   }
@@ -3964,10 +3960,10 @@ const pointsCost = computed(() => {
     cost = cost * 2
   }
 
-  if (shouldApplySeedanceVideoInputMultiplier.value) {
-    cost = applySeedanceVideoInputMultiplier(cost, seedanceVideoInputMultiplier.value, true)
+  if (shouldApplyVideoInputMultiplier.value) {
+    cost = applyVideoInputMultiplier(cost, videoInputMultiplier.value)
   }
-  
+
   return cost
 })
 
@@ -9664,11 +9660,8 @@ function handleToolbarPreview() {
             </template>
             <template v-else>
               {{ formatPoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}
-              <span v-if="shouldApplySeedanceVideoInputMultiplier" class="points-multiplier-chip">
-                {{ formatSeedanceVideoInputMultiplier(seedanceVideoInputMultiplier) }}
-              </span>
-              <span v-if="shouldApplyMinimaxH3VideoInputMultiplier" class="points-multiplier-chip">
-                {{ formatPoints(minimaxH3VideoInputMultiplier) }}x
+              <span v-if="shouldApplyVideoInputMultiplier" class="points-multiplier-chip">
+                {{ formatVideoInputMultiplier(videoInputMultiplier) }}
               </span>
             </template>
           </span>

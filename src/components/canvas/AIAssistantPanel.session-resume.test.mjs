@@ -23,6 +23,7 @@ import { dirname, join } from 'node:path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const panel = await readFile(join(__dirname, 'AIAssistantPanel.vue'), 'utf8')
+const queueBar = await readFile(join(__dirname, 'AgentQueueBar.vue'), 'utf8')
 
 test('loadSession running 分支：重置运行中回合的半截助手快照为流式占位', () => {
   const block = panel.match(/if \(turnStatus === 'running'\) \{[\s\S]*?reconnectStream\(session\.id\)/)?.[0]
@@ -40,4 +41,28 @@ test('reconnectStream 提供 onSnapshot：事件过期时用 DB 快照重建进�
   assert.match(block, /onSnapshot:\s*\(/, 'reconnectStream 必须处理 onSnapshot')
   assert.match(block, /snapshot\.partialContent/, 'onSnapshot 应读取快照正文')
   assert.match(block, /snapshot\.toolEvents/, 'onSnapshot 应读取快照工具事件')
+})
+
+test('loadSession 以会话详情同步运行态，停止的历史会话不继承上一会话的 loading/queue', () => {
+  const block = panel.match(/async function loadSession\(session\) \{[\s\S]*?^}/m)?.[0]
+  assert.ok(block, 'loadSession must exist')
+  assert.match(block, /getCodexSession\(session\.id\)/, '应读取会话详情作为运行态真源')
+  assert.match(block, /const active = sessionData\.active_turn/, '应使用服务端 active_turn')
+  assert.match(block, /resetActiveTurn\(\)/, '切换历史会话时应清除旧 activeTurn')
+  assert.match(block, /isLoading\.value = false/, '非运行会话应恢复直接发送')
+  assert.match(block, /serverQueue\.value = queued\.map/, '历史队列应从服务端详情恢复')
+})
+
+test('停止后直发撞到锁释放窗口时，queued done 保留助手占位并让轮询重连同一 turn', () => {
+  const block = panel.match(/onDone: \(result\) => \{[\s\S]*?maybeLatePullTaskResult\(assistantMessageIndex\)/)?.[0]
+  assert.ok(block, 'sendEnhancedMessage onDone must exist')
+  assert.match(block, /if \(result\?\.status === 'queued'\)/)
+  assert.match(block, /message\.isThinking = true/)
+  assert.match(block, /message\.isStreaming = true/)
+  assert.match(block, /activeTurn\.value\.id = null/, '必须允许 refreshQueueAndFollow 对同一 turn_id 重连')
+  assert.match(block, /refreshQueueAndFollow\(\)/)
+})
+
+test('停止会话没有 active running turn 时不显示“立即插入”', () => {
+  assert.match(queueBar, /v-if="activeTurnRunning"[\s\S]*?\$emit\('insert', item\)/)
 })
