@@ -116,7 +116,7 @@ export async function chatWithLLM(params) {
  * @param {Function} [params.onError] - 错误回调函数 (error: Error) => void
  */
 export async function chatWithLLMStream(params) {
-  const { onChunk, onDone, onError, ...requestParams } = params
+  const { onChunk, onDone, onError, timeoutMs, ...requestParams } = params
   
   try {
     const teamStore = useTeamStore()
@@ -130,7 +130,8 @@ export async function chatWithLLMStream(params) {
         stream: true,
         spaceType: spaceParams.spaceType,
         ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
-      })
+      }),
+      timeoutMs
     })
     
     if (!response.ok) {
@@ -144,6 +145,7 @@ export async function chatWithLLMStream(params) {
     const decoder = new TextDecoder('utf-8')
     let fullText = ''
     let buffer = ''
+    let finalResult = null
     
     while (true) {
       const { done, value } = await reader.read()
@@ -151,9 +153,9 @@ export async function chatWithLLMStream(params) {
       if (done) {
         // 流结束，触发完成回调
         if (onDone) {
-          onDone(fullText)
+          onDone(finalResult?.result || fullText)
         }
-        break
+        return finalResult || { success: true, result: fullText }
       }
       
       // 解码数据块
@@ -172,30 +174,14 @@ export async function chatWithLLMStream(params) {
           // 检查是否为结束标记
           if (data === '[DONE]') {
             if (onDone) {
-              onDone(fullText)
+              onDone(finalResult?.result || fullText)
             }
-            return
+            return finalResult || { success: true, result: fullText }
           }
           
+          let json
           try {
-            const json = JSON.parse(data)
-            
-            // OpenAI 格式的流式响应
-            if (json.choices && json.choices[0]?.delta?.content) {
-              const chunk = json.choices[0].delta.content
-              fullText += chunk
-              if (onChunk) {
-                onChunk(chunk, fullText)
-              }
-            }
-            // 自定义格式的流式响应
-            else if (json.content || json.text || json.chunk) {
-              const chunk = json.content || json.text || json.chunk
-              fullText += chunk
-              if (onChunk) {
-                onChunk(chunk, fullText)
-              }
-            }
+            json = JSON.parse(data)
           } catch (e) {
             // 如果不是 JSON，可能是纯文本
             if (data && data !== '[DONE]') {
@@ -203,6 +189,38 @@ export async function chatWithLLMStream(params) {
               if (onChunk) {
                 onChunk(data, fullText)
               }
+            }
+            continue
+          }
+
+          if (json.success === true && typeof json.result === 'string') {
+            finalResult = json
+            fullText = json.result
+            continue
+          }
+
+          if (json.error) {
+            throwPromptSafetyErrorIfNeeded(json)
+            if (json.error === 'insufficient_points' || json.status === 402) {
+              throw new Error('当前积分余额不足，任务提交失败')
+            }
+            throw new Error(json.message || json.error || 'LLM 请求失败')
+          }
+
+          // OpenAI 格式的流式响应
+          if (json.choices && json.choices[0]?.delta?.content) {
+            const chunk = json.choices[0].delta.content
+            fullText += chunk
+            if (onChunk) {
+              onChunk(chunk, fullText)
+            }
+          }
+          // 自定义格式的流式响应
+          else if (json.content || json.text || json.chunk) {
+            const chunk = json.content || json.text || json.chunk
+            fullText += chunk
+            if (onChunk) {
+              onChunk(chunk, fullText)
             }
           }
         }

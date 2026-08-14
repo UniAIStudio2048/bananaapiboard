@@ -11,7 +11,7 @@ import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from '
 import DOMPurify from 'dompurify'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
-import { getLLMConfig, chatWithLLM, getUserLLMPresets, createUserLLMPreset, updateUserLLMPreset } from '@/api/canvas/llm'
+import { getLLMConfig, chatWithLLM, chatWithLLMStream, getUserLLMPresets, createUserLLMPreset, updateUserLLMPreset } from '@/api/canvas/llm'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
@@ -1798,7 +1798,9 @@ async function handleLLMGenerate() {
         apiParams.preset = selectedPreset.value
       }
 
-      const result = await chatWithLLM(apiParams)
+      const result = processedImages.length > 0
+        ? await chatWithLLMStream({ ...apiParams, timeoutMs: 300000 })
+        : await chatWithLLM(apiParams)
       
       canvasStore.updateNodeData(targetNodeId, {
         status: 'success',
