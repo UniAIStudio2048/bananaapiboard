@@ -48,6 +48,7 @@
 
     <!-- WorkflowPreviewModal -->
     <WorkflowPreviewModal
+      v-if="showPreview"
       v-model="showPreview"
       :workflow-id="selectedTemplate?.workflow_id || ''"
       :template-id="selectedTemplate?.id || 0"
@@ -57,13 +58,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { defineAsyncComponent, ref, onMounted } from 'vue'
 import { getTemplates } from '@/api/community'
 import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'
 import { useCommunityStore } from '@/stores/community'
-import WorkflowPreviewModal from './WorkflowPreviewModal.vue'
 
 const communityStore = useCommunityStore()
+const WorkflowPreviewModal = defineAsyncComponent(() => import('./WorkflowPreviewModal.vue'))
 
 // 模板卡片宽度约 220px，600px 缩略图覆盖 2x 高分屏，避免加载 CDN 原图
 const TEMPLATE_THUMB_WIDTH = 600

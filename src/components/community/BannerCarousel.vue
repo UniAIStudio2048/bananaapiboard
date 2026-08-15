@@ -14,9 +14,11 @@
           <div :key="prevBannerKey" class="absolute inset-0">
             <img
               v-if="prevBanner?.cover_url"
-              :src="bannerThumb(prevBanner.cover_url)"
+              :src="bannerThumb(prevBanner.cover_url, BANNER_SIDE_THUMB_WIDTH)"
               :alt="prevBanner.title || ''"
               class="w-full h-full object-cover"
+              fetchpriority="low"
+              decoding="async"
             />
             <div v-else class="w-full h-full bg-neutral-900 flex items-center justify-center">
               <span class="text-neutral-600 text-sm">暂无图片</span>
@@ -44,9 +46,11 @@
           <div :key="activeIndex" class="absolute inset-0">
             <img
               v-if="currentBanner?.cover_url"
-              :src="bannerThumb(currentBanner.cover_url)"
+              :src="bannerThumb(currentBanner.cover_url, BANNER_CENTER_THUMB_WIDTH)"
               :alt="currentBanner.title || ''"
               class="w-full h-full object-cover"
+              fetchpriority="high"
+              decoding="async"
             />
             <div v-else class="w-full h-full bg-neutral-900 flex items-center justify-center">
               <span class="text-neutral-600">暂无轮播图</span>
@@ -75,9 +79,11 @@
           <div :key="nextBannerKey" class="absolute inset-0">
             <img
               v-if="nextBanner?.cover_url"
-              :src="bannerThumb(nextBanner.cover_url)"
+              :src="bannerThumb(nextBanner.cover_url, BANNER_SIDE_THUMB_WIDTH)"
               :alt="nextBanner.title || ''"
               class="w-full h-full object-cover"
+              fetchpriority="low"
+              decoding="async"
             />
             <div v-else class="w-full h-full bg-neutral-900 flex items-center justify-center">
               <span class="text-neutral-600 text-sm">暂无图片</span>
@@ -342,6 +348,7 @@
 
           <!-- 工作流预览弹窗 -->
           <WorkflowPreviewModal
+            v-if="showWorkflowPreview"
             v-model="showWorkflowPreview"
             :workflow-id="previewWorkflowId"
             :work-id="bannerWorkId"
@@ -361,19 +368,21 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
-import WorkflowPreviewModal from './WorkflowPreviewModal.vue'
+import { ref, computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { getWorkDetail, getProjectWorkflows } from '@/api/community'
 import { getCanvasThumbnailUrl } from '@/utils/canvasThumbnail'
 import { useCommunityStore } from '@/stores/community'
 
 const communityStore = useCommunityStore()
 
-// 轮播卡片最大展示宽度约 1200px，1600px 缩略图覆盖 2x 高分屏，避免加载 CDN 原图（实测单张 2-9MB）
-const BANNER_THUMB_WIDTH = 1600
+const WorkflowPreviewModal = defineAsyncComponent(() => import('./WorkflowPreviewModal.vue'))
 
-function bannerThumb(url) {
-  return getCanvasThumbnailUrl(url, BANNER_THUMB_WIDTH)
+// 中间卡片最大约 476px，侧卡最大约 420px；分别覆盖 2x 高分屏，避免加载 CDN 原图。
+const BANNER_CENTER_THUMB_WIDTH = 1200
+const BANNER_SIDE_THUMB_WIDTH = 960
+
+function bannerThumb(url, width) {
+  return getCanvasThumbnailUrl(url, width)
 }
 
 const props = defineProps({

@@ -184,10 +184,6 @@
     <!-- 登录弹窗 -->
     <LoginModal v-model="communityStore.showLoginModal" @login-success="onLoginSuccess" />
 
-    <!-- 初始加载遮罩 -->
-    <div v-if="initialLoading" class="fixed inset-0 z-40 bg-black flex items-center justify-center">
-      <div class="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-    </div>
   </div>
 </template>
 
@@ -373,7 +369,7 @@ function buildParams(extra = {}) {
 // 加载横屏作品
 async function loadLandscapeWorks() {
   try {
-    const params = buildParams({ orientation: 'landscape', pageSize: 30, page: 1 })
+    const params = buildParams({ orientation: 'landscape', pageSize: 15, page: 1 })
     const res = await getWorks(params)
     const works = res.data?.works || res.works || []
     landscapeWorks.value = works.length > 0 ? works : generateMockWorks(24, 'landscape')
@@ -440,8 +436,6 @@ async function initLoad() {
     await Promise.all([
       communityStore.loadBanners(),
       communityStore.loadCategories(),
-      communityStore.loadTags(),
-      communityStore.loadSectionNames(),
       loadLandscapeWorks(),
       loadMixedWorks(true)
     ])
@@ -450,6 +444,9 @@ async function initLoad() {
     await nextTick()
     setupObserver()
   }
+
+  // 区块名称有默认值，不应阻塞首屏内容。
+  void communityStore.loadSectionNames()
 }
 
 // 筛选变更后重新加载
@@ -513,9 +510,10 @@ function setupObserver() {
 }
 
 onMounted(async () => {
-  initLoad()
   document.addEventListener('click', onClickOutsideMenu)
-  
+
+  await initLoad()
+
   try {
     const freshBrand = await loadBrandConfig(true)
     brand.value = freshBrand
