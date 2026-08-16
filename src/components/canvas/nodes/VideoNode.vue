@@ -2225,6 +2225,10 @@ const useVendorLayout = computed(() => vendorGroups.value.length > 1)
 
 // 时长选项（动态计算）
 const durations = computed(() => {
+  if (seedance25ModeConstraints.value?.duration === -1 && selectedSeedance2Mode.value === 'video_edit') {
+    return [{ value: '10', label: 'Auto' }]
+  }
+
   const sourceDurations = isWanModel.value
     ? getWanDurationOptions({
         modelDurations: availableDurations.value,
@@ -2323,7 +2327,11 @@ const isVideoModelConfigLoaded = () => {
   return !!config && Object.keys(config).length > 0
 }
 
-watch([selectedModel, availableDurations, isPerSecondBilling, isRunningHubAiAppVideoV31Model], () => {
+watch([selectedModel, availableDurations, isPerSecondBilling, isRunningHubAiAppVideoV31Model, seedance25ModeConstraints, selectedSeedance2Mode], () => {
+  if (seedance25ModeConstraints.value?.duration === -1 && selectedSeedance2Mode.value === 'video_edit') {
+    if (selectedDuration.value !== '10') selectedDuration.value = '10'
+    return
+  }
   // 按秒计费默认不选择固定时长；只有用户主动选择时才向后端传 duration。
   if (isPerSecondBilling.value && !isRunningHubAiAppVideoV31Model.value && !hasExplicitDurationSelection.value) {
     if (selectedDuration.value) selectedDuration.value = ''

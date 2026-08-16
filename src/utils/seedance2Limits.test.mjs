@@ -69,9 +69,7 @@ test('Seedance 2.5 applies special request constraints only to supported submode
   })
   assert.deepEqual(getSeedance25ModeConstraints(model, 'video_extend'), {
     ratio: 'adaptive',
-    omniReferenceTaskType: 'extend',
-    minReferenceVideoDuration: 4,
-    maxReferenceVideoDuration: 30
+    omniReferenceTaskType: 'extend'
   })
   assert.deepEqual(getSeedance25ModeConstraints(model, 'image2video_first'), { ratio: 'adaptive' })
   assert.deepEqual(getSeedance25ModeConstraints(model, 'image2video_first_last'), { ratio: 'adaptive' })

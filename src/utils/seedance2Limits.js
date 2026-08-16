@@ -35,8 +35,6 @@ const SEEDANCE25_MODE_CONSTRAINTS = Object.freeze({
   video_extend: Object.freeze({
     ratio: 'adaptive',
     omniReferenceTaskType: 'extend',
-    minReferenceVideoDuration: 4,
-    maxReferenceVideoDuration: 30,
     promptKeywords: ['向前延长', '向后延长', '延续', '续写']
   }),
   image2video_first: Object.freeze({ ratio: 'adaptive' }),

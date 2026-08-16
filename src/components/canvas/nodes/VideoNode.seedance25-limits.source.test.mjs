@@ -39,3 +39,13 @@ test('VideoNode accepts 4-30 second local reference videos for constrained Seeda
   assert.match(validationSource, /maxDuration: seedance25ModeConstraints\.value\?\.maxReferenceVideoDuration \|\| seedance2Limits\.value\.maxDuration/)
   assert.match(validationSource, /metadata\.duration < seedance25ModeConstraints\.value\.minReferenceVideoDuration/)
 })
+
+test('VideoNode locks Seedance 2.5 video edit duration to the ten-second Auto prepayment option', () => {
+  const durationOptionsStart = source.indexOf('const durations = computed')
+  assert.ok(durationOptionsStart >= 0, 'duration option resolver should exist')
+  const durationOptionsSource = source.slice(durationOptionsStart, durationOptionsStart + 900)
+
+  assert.match(durationOptionsSource, /seedance25ModeConstraints\.value\?\.duration === -1 && selectedSeedance2Mode\.value === 'video_edit'/)
+  assert.match(durationOptionsSource, /return \[\{ value: '10', label: 'Auto' \}\]/)
+  assert.match(source, /seedance25ModeConstraints\.value\?\.duration === -1 && selectedSeedance2Mode\.value === 'video_edit'[\s\S]*selectedDuration\.value = '10'/)
+})
