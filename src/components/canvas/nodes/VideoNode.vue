@@ -1424,7 +1424,9 @@ const isSeedanceOpenApiProModel = computed(() => currentModelConfig.value?.apiTy
 
 // 检测是否是 Seedance 2.0 模型（支持6种模式）
 const isSeedance2Model = computed(() => {
-  return isSeedanceSd2VideoModel(currentModelConfig.value) || isSeedanceOpenApiProModel.value
+  return isSeedanceSd2VideoModel(currentModelConfig.value) ||
+    isSeedanceOpenApiProModel.value ||
+    currentModelConfig.value?.apiType === 'seedance-2.5'
 })
 
 // Seedance 2.5 历史配置缺字段时按模型 ID 回退到 30 图 / 10 视频 / 10 音频。
