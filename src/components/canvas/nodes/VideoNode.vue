@@ -79,7 +79,12 @@ import {
   validateSeedanceVideoMetadata,
   validateSeedanceModeInputs
 } from '@/utils/seedanceMediaValidation'
-import { resolveSeedance2Limits, validateSeedanceReferenceCounts } from '@/utils/seedance2Limits'
+import {
+  getSeedance25ModeConstraints,
+  resolveSeedance2Limits,
+  validateSeedance25ModePrompt,
+  validateSeedanceReferenceCounts
+} from '@/utils/seedance2Limits'
 import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 import {
   getVideoGenerationProgressText,
@@ -1430,6 +1435,10 @@ const selectedSeedance2Mode = ref(props.data.seedance2Mode || 'text2video')
 const seedanceResolution = ref(props.data.seedanceResolution || '720p')
 let didInitializeSeedance2Mode = Boolean(props.data.seedance2Mode)
 
+const seedance25ModeConstraints = computed(() => (
+  getSeedance25ModeConstraints(currentModelConfig.value, selectedSeedance2Mode.value)
+))
+
 const MODE_TO_SD2_MODE = {
   t2v: 'text2video',
   i2v: 'image2video_first',
@@ -2139,6 +2148,12 @@ watch(seedance2Modes, (modes) => {
   }
 }, { immediate: true })
 
+watch(seedance25ModeConstraints, () => {
+  if (seedance25ModeConstraints.value?.ratio && selectedAspectRatio.value !== seedance25ModeConstraints.value.ratio) {
+    selectedAspectRatio.value = seedance25ModeConstraints.value.ratio
+  }
+}, { immediate: true })
+
 const aspectRatios = [
   { value: '16:9', label: '16:9 横屏' },
   { value: '9:16', label: '9:16 竖屏' },
@@ -2149,6 +2164,12 @@ const aspectRatios = [
 ]
 
 const availableAspectRatios = computed(() => {
+  if (seedance25ModeConstraints.value?.ratio) {
+    return [{
+      value: seedance25ModeConstraints.value.ratio,
+      displayLabel: currentLanguage.value?.startsWith('zh') ? '自适应' : 'Auto'
+    }]
+  }
   const configuredRatios = currentModelConfig.value?.aspectRatios
   if (!Array.isArray(configuredRatios)) return aspectRatios
 
@@ -3561,9 +3582,13 @@ async function validateSeedanceVideoFile(file) {
   const metadata = await readLocalVideoMetadata(file)
   const validationMessage = validateSeedanceVideoMetadata(metadata, {
     apiType: currentModelConfig.value?.apiType,
-    maxDuration: seedance2Limits.value.maxDuration
+    maxDuration: seedance25ModeConstraints.value?.maxReferenceVideoDuration || seedance2Limits.value.maxDuration
   })
   if (validationMessage) throw new Error(validationMessage)
+  if (seedance25ModeConstraints.value?.minReferenceVideoDuration &&
+    metadata.duration < seedance25ModeConstraints.value.minReferenceVideoDuration) {
+    throw new Error(`参考视频时长需在${seedance25ModeConstraints.value.minReferenceVideoDuration}到${seedance25ModeConstraints.value.maxReferenceVideoDuration}秒之间`)
+  }
   return metadata.duration
 }
 
@@ -5237,15 +5262,16 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       currentModelConfig.value?.happyHorseConfig?.resolution ||
       (isHappyHorseModel.value ? '1080p' : '720p')
     formData.append('seedance_resolution', capturedState.seedanceResolution || seedanceResolution.value || configuredSeedanceResolution)
-    if (selectedAspectRatio.value) {
-      formData.append('seedance_ratio', selectedAspectRatio.value)
+    const seedanceRatio = seedance25ModeConstraints.value?.ratio || selectedAspectRatio.value
+    if (seedanceRatio) {
+      formData.append('seedance_ratio', seedanceRatio)
     }
     formData.append('seedance_watermark', 'false')
     if (isSeedanceOpenApiProModel.value && capturedState.faceCodes?.length > 0) {
       formData.append('seedance_face_codes', JSON.stringify(capturedState.faceCodes))
       console.log('[VideoNode] Seedance OpenAPI Pro 人物 face codes:', capturedState.faceCodes)
     }
-    console.log('[VideoNode] Seedance 2.0/Happy Horse 模式:', sd2Mode, '分辨率:', capturedState.seedanceResolution || seedanceResolution.value || configuredSeedanceResolution, '比例:', selectedAspectRatio.value)
+    console.log('[VideoNode] Seedance 2.0/Happy Horse 模式:', sd2Mode, '分辨率:', capturedState.seedanceResolution || seedanceResolution.value || configuredSeedanceResolution, '比例:', seedanceRatio)
 
     if (sd2Mode === 'image2video_first') {
       if (finalImages.length > 0) {
@@ -6151,6 +6177,15 @@ async function handleGenerate(options = {}) {
       await showAlert(seedanceValidationMessage, '提示')
       return
     }
+    const seedance25PromptValidationMessage = validateSeedance25ModePrompt({
+      modelConfig: currentModelConfig.value,
+      mode: selectedSeedance2Mode.value,
+      prompt: finalPrompt
+    })
+    if (seedance25PromptValidationMessage) {
+      await showAlert(seedance25PromptValidationMessage, '提示')
+      return
+    }
     if (['multimodal_ref', 'video_edit', 'video_extend'].includes(selectedSeedance2Mode.value)) {
       const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
       let totalVideoDuration = 0
@@ -6158,8 +6193,10 @@ async function handleGenerate(options = {}) {
         const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
         const dur = Number(sourceNode?.data?.videoDuration)
         if (!Number.isFinite(dur) || dur <= 0) continue
-        if (dur < 2 || dur > seedance2Limits.value.maxDuration) {
-          await showAlert(`参考视频时长需在2到${seedance2Limits.value.maxDuration}秒之间`, '提示')
+        const minReferenceVideoDuration = seedance25ModeConstraints.value?.minReferenceVideoDuration || 2
+        const maxReferenceVideoDuration = seedance25ModeConstraints.value?.maxReferenceVideoDuration || seedance2Limits.value.maxDuration
+        if (dur < minReferenceVideoDuration || dur > maxReferenceVideoDuration) {
+          await showAlert(`参考视频时长需在${minReferenceVideoDuration}到${maxReferenceVideoDuration}秒之间`, '提示')
           return
         }
         totalVideoDuration += dur

@@ -19,3 +19,23 @@ test('VideoNode uses a 2.5 total video cap separate from the per-video cap', () 
   assert.match(source, /totalVideoCap = seedance2Limits\.value\.maxReferenceVideoDuration/)
   assert.match(source, /validateSeedanceReferenceCounts\(/)
 })
+
+test('VideoNode locks Seedance 2.5 special submodes to adaptive ratio and validates their prompts', () => {
+  assert.match(source, /getSeedance25ModeConstraints/)
+  assert.match(source, /validateSeedance25ModePrompt/)
+  assert.match(source, /const seedance25ModeConstraints = computed/)
+  assert.match(source, /selectedAspectRatio\.value = seedance25ModeConstraints\.value\.ratio/)
+  assert.match(source, /value: seedance25ModeConstraints\.value\.ratio,[\s\S]*displayLabel: currentLanguage\.value\?\.startsWith\('zh'\) \? '自适应' : 'Auto'/)
+  assert.match(source, /const seedanceRatio = seedance25ModeConstraints\.value\?\.ratio \|\| selectedAspectRatio\.value/)
+  assert.match(source, /formData\.append\('seedance_ratio', seedanceRatio\)/)
+  assert.match(source, /validateSeedance25ModePrompt\(\{[\s\S]*modelConfig: currentModelConfig\.value/)
+})
+
+test('VideoNode accepts 4-30 second local reference videos for constrained Seedance 2.5 submodes', () => {
+  const validationStart = source.indexOf('async function validateSeedanceVideoFile')
+  assert.ok(validationStart >= 0, 'local Seedance reference video validation should exist')
+  const validationSource = source.slice(validationStart, validationStart + 1000)
+
+  assert.match(validationSource, /maxDuration: seedance25ModeConstraints\.value\?\.maxReferenceVideoDuration \|\| seedance2Limits\.value\.maxDuration/)
+  assert.match(validationSource, /metadata\.duration < seedance25ModeConstraints\.value\.minReferenceVideoDuration/)
+})

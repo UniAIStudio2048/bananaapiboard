@@ -67,7 +67,7 @@ const currentDuration = computed(() => {
 
 const triggerLabel = computed(() => {
   const values = []
-  if (currentAspectRatio.value?.value) values.push(currentAspectRatio.value.value)
+  if (currentAspectRatio.value?.value) values.push(currentAspectRatio.value?.displayLabel || currentAspectRatio.value?.value)
   if (currentQuality.value?.label || currentQuality.value?.value) {
     values.push(currentQuality.value.label || currentQuality.value.value)
   }
@@ -198,7 +198,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
               @click="selectAspectRatio(option.value)"
             >
               <span class="video-aspect-ratio-icon" :class="getAspectRatioClass(option.value)" aria-hidden="true"></span>
-              <span>{{ option.value }}</span>
+              <span>{{ option.displayLabel || option.value }}</span>
             </button>
           </div>
         </section>
