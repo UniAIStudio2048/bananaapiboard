@@ -15,7 +15,7 @@ test('Seedance 2.5 falls back to its own reference limits for legacy model recor
       maxVideos: 10,
       maxAudios: 10,
       minDuration: 3,
-      maxDuration: 15,
+      maxDuration: 30,
       maxReferenceVideoDuration: 30
     }
   )
@@ -31,13 +31,13 @@ test('Seedance 2.5 uses the configured maximum selectable duration for each refe
   assert.equal(limits.maxReferenceVideoDuration, 30)
 })
 
-test('Seedance 2.5 never exposes an output or single-reference duration above 15 seconds', () => {
+test('Seedance 2.5 exposes its official 30-second output maximum', () => {
   const limits = resolveSeedance2Limits({
     actualModel: 'doubao-seedance-2-5-260628',
     seedanceConfig: { maxDuration: 30 }
   })
 
-  assert.equal(limits.maxDuration, 15)
+  assert.equal(limits.maxDuration, 30)
   assert.equal(limits.maxReferenceVideoDuration, 30)
 })
 

@@ -12,7 +12,7 @@ export const SEEDANCE25_LIMITS = Object.freeze({
   maxVideos: 10,
   maxAudios: 10,
   minDuration: 3,
-  maxDuration: 15,
+  maxDuration: 30,
   maxReferenceVideoDuration: 30
 })
 
