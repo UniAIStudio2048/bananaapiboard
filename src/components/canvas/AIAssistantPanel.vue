@@ -727,6 +727,33 @@
           :alt="lightboxMedia.name"
           class="lightbox-image"
         />
+        <div v-if="lightboxMedia.type === 'image' && lightboxImages.length > 1" class="lightbox-navigation">
+          <button
+            type="button"
+            class="lightbox-navigation__button"
+            :disabled="!hasPreviousLightboxImage"
+            title="上一张图片（左方向键）"
+            aria-label="上一张图片"
+            @click="showPreviousLightboxImage"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m15 18-6-6 6-6" />
+            </svg>
+          </button>
+          <span class="lightbox-image-counter" aria-live="polite">{{ lightboxImageIndex + 1 }} / {{ lightboxImages.length }}</span>
+          <button
+            type="button"
+            class="lightbox-navigation__button"
+            :disabled="!hasNextLightboxImage"
+            title="下一张图片（右方向键）"
+            aria-label="下一张图片"
+            @click="showNextLightboxImage"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" d="m9 18 6-6-6-6" />
+            </svg>
+          </button>
+        </div>
         <!-- 视频预览 -->
         <video
           v-else-if="lightboxMedia.type === 'video'"
@@ -4358,15 +4385,40 @@ function scrollToBottom() {
 // ========== 媒体预览 Lightbox ==========
 const lightboxVisible = ref(false)
 const lightboxMedia = ref({ type: '', url: '', name: '' })
+const lightboxImages = ref([])
+const lightboxImageIndex = ref(0)
+const hasPreviousLightboxImage = computed(() => lightboxImageIndex.value > 0)
+const hasNextLightboxImage = computed(() => lightboxImageIndex.value < lightboxImages.value.length - 1)
 
-function previewMedia({ type, url, name }) {
-  lightboxMedia.value = { type, url, name }
+function previewMedia({ type, url, name, images = [] }) {
+  const imageGroup = type === 'image'
+    ? images.filter(item => item?.type === 'image' && item.url)
+    : []
+  const imageIndex = imageGroup.findIndex(item => item.url === url)
+
+  lightboxImages.value = imageGroup
+  lightboxImageIndex.value = imageIndex >= 0 ? imageIndex : 0
+  lightboxMedia.value = imageIndex >= 0 ? imageGroup[imageIndex] : { type, url, name }
   lightboxVisible.value = true
+}
+
+function showPreviousLightboxImage() {
+  if (lightboxImageIndex.value <= 0) return
+  lightboxImageIndex.value -= 1
+  lightboxMedia.value = lightboxImages.value[lightboxImageIndex.value]
+}
+
+function showNextLightboxImage() {
+  if (lightboxImageIndex.value >= lightboxImages.value.length - 1) return
+  lightboxImageIndex.value += 1
+  lightboxMedia.value = lightboxImages.value[lightboxImageIndex.value]
 }
 
 function closeLightbox() {
   lightboxVisible.value = false
   lightboxMedia.value = { type: '', url: '', name: '' }
+  lightboxImages.value = []
+  lightboxImageIndex.value = 0
 }
 
 function downloadLightboxMedia() {
@@ -4394,10 +4446,17 @@ function loadLightboxMediaToCanvas() {
   closeLightbox()
 }
 
-// ESC 关闭 Lightbox
+// Lightbox 键盘操作：Esc 关闭，方向键仅切换同组图片。
 function handleLightboxKeydown(e) {
-  if (e.key === 'Escape' && lightboxVisible.value) {
+  if (!lightboxVisible.value) return
+  if (e.key === 'Escape') {
     closeLightbox()
+  } else if (lightboxMedia.value.type === 'image' && e.key === 'ArrowLeft') {
+    e.preventDefault()
+    showPreviousLightboxImage()
+  } else if (lightboxMedia.value.type === 'image' && e.key === 'ArrowRight') {
+    e.preventDefault()
+    showNextLightboxImage()
   }
 }
 
@@ -6284,6 +6343,64 @@ defineExpose({
   cursor: default;
 }
 
+.lightbox-navigation {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  pointer-events: none;
+}
+
+.lightbox-navigation__button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.lightbox-navigation__button svg {
+  width: 24px;
+  height: 24px;
+}
+
+.lightbox-navigation__button:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.lightbox-navigation__button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.lightbox-navigation__button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.lightbox-image-counter {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
 .lightbox-video {
   max-width: 90vw;
   max-height: 85vh;
@@ -6389,6 +6506,24 @@ defineExpose({
 
 :root.canvas-theme-light .lightbox-close:hover {
   background: rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .lightbox-navigation__button {
+  background: rgba(0, 0, 0, 0.07);
+  color: rgba(0, 0, 0, 0.82);
+}
+
+:root.canvas-theme-light .lightbox-navigation__button:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.14);
+}
+
+:root.canvas-theme-light .lightbox-navigation__button:focus-visible {
+  outline-color: rgba(0, 0, 0, 0.82);
+}
+
+:root.canvas-theme-light .lightbox-image-counter {
+  background: rgba(255, 255, 255, 0.72);
+  color: rgba(0, 0, 0, 0.7);
 }
 
 :root.canvas-theme-light .lightbox-caption {

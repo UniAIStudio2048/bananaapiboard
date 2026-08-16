@@ -70,12 +70,16 @@ import {
 import { calculateVideoResolutionPrice, getEnabledVideoResolutionOptions } from '@/utils/videoResolutionPricing'
 import { compressImage, getImageFileDimensions } from '@/utils/imageCompress'
 import {
+  SEEDANCE_MAX_AUDIOS,
+  SEEDANCE_MAX_IMAGES,
   SEEDANCE_MAX_IMAGE_PIXELS,
+  SEEDANCE_MAX_VIDEOS,
   readLocalVideoMetadata,
   validatePreparedSeedanceImage,
   validateSeedanceVideoMetadata,
   validateSeedanceModeInputs
 } from '@/utils/seedanceMediaValidation'
+import { resolveSeedance2Limits, validateSeedanceReferenceCounts } from '@/utils/seedance2Limits'
 import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 import {
   getVideoGenerationProgressText,
@@ -1418,21 +1422,8 @@ const isSeedance2Model = computed(() => {
   return isSeedanceSd2VideoModel(currentModelConfig.value) || isSeedanceOpenApiProModel.value
 })
 
-// Seedance 2.x 参考素材上限与时长范围（模型配置 seedanceConfig 优先，默认 9 图 / 3 视频 / 3 音频、4-15 秒；Seedance 2.5 为 30 / 10 / 10、3-30 秒）
-const seedance2Limits = computed(() => {
-  const config = currentModelConfig.value?.seedanceConfig || {}
-  const toPositiveNumber = (value, fallback) => {
-    const number = Number(value)
-    return Number.isFinite(number) && number > 0 ? number : fallback
-  }
-  return {
-    maxImages: toPositiveNumber(config.maxImages, 9),
-    maxVideos: toPositiveNumber(config.maxVideos, 3),
-    maxAudios: toPositiveNumber(config.maxAudios, 3),
-    minDuration: toPositiveNumber(config.minDuration, 4),
-    maxDuration: toPositiveNumber(config.maxDuration, 15)
-  }
-})
+// Seedance 2.5 历史配置缺字段时按模型 ID 回退到 30 图 / 10 视频 / 10 音频。
+const seedance2Limits = computed(() => resolveSeedance2Limits(currentModelConfig.value))
 
 // Seedance 2.0 模式选择
 const selectedSeedance2Mode = ref(props.data.seedance2Mode || 'text2video')
@@ -1476,7 +1467,19 @@ const seedance2Modes = computed(() => {
     if (!supportedModesConfig.value) return true
     return supportedModesConfig.value[mode.value] !== false
   })
-  return modes.length > 0 ? modes : SEEDANCE2_MODES
+  return (modes.length > 0 ? modes : SEEDANCE2_MODES).map(mode => {
+    if (mode.value === 'multimodal_ref') {
+      return {
+        ...mode,
+        maxImages: seedance2Limits.value.maxImages,
+        desc: `可连接上游视频/图像/文本/音频节点，最多 ${seedance2Limits.value.maxImages} 图 / ${seedance2Limits.value.maxVideos} 视频 / ${seedance2Limits.value.maxAudios} 音频`
+      }
+    }
+    if (mode.value === 'video_extend') {
+      return { ...mode, desc: `需连接上游视频节点，最多支持${seedance2Limits.value.maxVideos}段视频参考` }
+    }
+    return mode
+  })
 })
 
 const currentSeedance2ModeConfig = computed(() => {
@@ -6128,10 +6131,21 @@ async function handleGenerate(options = {}) {
   })
   
   if (!isHeygenFlow && isSeedance2Model.value) {
+    const seedanceReferenceCountMessage = validateSeedanceReferenceCounts({
+      imageCount: finalImages.length,
+      videoCount: referenceVideos.value.length,
+      audioCount: referenceAudios.value.length,
+      limits: seedance2Limits.value
+    })
+    if (seedanceReferenceCountMessage) {
+      await showAlert(seedanceReferenceCountMessage, '提示')
+      return
+    }
     const seedanceValidationMessage = validateSeedanceModeInputs({
       mode: selectedSeedance2Mode.value,
-      imageCount: finalImages.length,
-      videoCount: referenceVideos.value.length
+      imageCount: Math.min(finalImages.length, SEEDANCE_MAX_IMAGES),
+      videoCount: Math.min(referenceVideos.value.length, SEEDANCE_MAX_VIDEOS),
+      audioCount: Math.min(referenceAudios.value.length, SEEDANCE_MAX_AUDIOS)
     })
     if (seedanceValidationMessage) {
       await showAlert(seedanceValidationMessage, '提示')
@@ -6150,7 +6164,7 @@ async function handleGenerate(options = {}) {
         }
         totalVideoDuration += dur
       }
-      const totalVideoCap = seedance2Limits.value.maxDuration
+      const totalVideoCap = seedance2Limits.value.maxReferenceVideoDuration
       if (totalVideoDuration > totalVideoCap) {
         await showAlert(`参考视频总时长不能超过${totalVideoCap}秒`, '提示')
         return

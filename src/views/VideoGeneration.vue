@@ -19,12 +19,16 @@ import {
 } from '@/utils/videoGenerationMode'
 import { compressImage, getImageFileDimensions } from '@/utils/imageCompress'
 import {
+  SEEDANCE_MAX_AUDIOS,
+  SEEDANCE_MAX_IMAGES,
   SEEDANCE_MAX_IMAGE_PIXELS,
+  SEEDANCE_MAX_VIDEOS,
   readLocalVideoMetadata,
   validatePreparedSeedanceImage,
   validateSeedanceVideoMetadata,
   validateSeedanceModeInputs
 } from '@/utils/seedanceMediaValidation'
+import { resolveSeedance2Limits, validateSeedanceReferenceCounts } from '@/utils/seedance2Limits'
 import { getApiErrorMessage } from '@/utils/apiErrorMessage'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
@@ -162,30 +166,36 @@ const maxImagesForModel = computed(() => {
   return 9 // 其他模型
 })
 
-// Seedance 2.x 参考素材上限（模型配置 seedanceConfig 优先，默认 9 图 / 3 视频 / 3 音频；Seedance 2.5 为 30 / 10 / 10）
+// Seedance 2.x 参考素材上限（历史 2.5 记录即使未保存 seedanceConfig 也按模型 ID 回退）
+const seedanceModelLimits = computed(() => resolveSeedance2Limits(currentModelConfig.value))
 const seedanceMaxRefImages = computed(() => {
+  if (!isMinimaxH3Model.value) return seedanceModelLimits.value.maxImages
   const configured = Number((isMinimaxH3Model.value
     ? currentModelConfig.value?.minimaxConfig
     : currentModelConfig.value?.seedanceConfig)?.maxImages)
   return Number.isFinite(configured) && configured > 0 ? configured : 9
 })
 const seedanceMaxRefVideos = computed(() => {
+  if (!isMinimaxH3Model.value) return seedanceModelLimits.value.maxVideos
   const configured = Number((isMinimaxH3Model.value
     ? currentModelConfig.value?.minimaxConfig
     : currentModelConfig.value?.seedanceConfig)?.maxVideos)
   return Number.isFinite(configured) && configured > 0 ? configured : 3
 })
 const seedanceMaxRefAudios = computed(() => {
+  if (!isMinimaxH3Model.value) return seedanceModelLimits.value.maxAudios
   const configured = Number((isMinimaxH3Model.value
     ? currentModelConfig.value?.minimaxConfig
     : currentModelConfig.value?.seedanceConfig)?.maxAudios)
   return Number.isFinite(configured) && configured > 0 ? configured : 3
 })
 const seedanceMinDuration = computed(() => {
+  if (!isMinimaxH3Model.value) return seedanceModelLimits.value.minDuration
   const configured = Number(currentModelConfig.value?.seedanceConfig?.minDuration)
   return Number.isFinite(configured) && configured > 0 ? configured : 4
 })
 const seedanceMaxDuration = computed(() => {
+  if (!isMinimaxH3Model.value) return seedanceModelLimits.value.maxDuration
   const configured = Number(currentModelConfig.value?.seedanceConfig?.maxDuration)
   return Number.isFinite(configured) && configured > 0 ? configured : 15
 })
@@ -1072,8 +1082,8 @@ async function handleSeedanceRefVideos(e) {
         e.target.value = ''
         return
       }
-      if (totalDuration + metadata.duration > seedanceMaxDuration.value) {
-        error.value = `参考视频总时长不能超过${seedanceMaxDuration.value}秒`
+      if (totalDuration + metadata.duration > seedanceModelLimits.value.maxReferenceVideoDuration) {
+        error.value = `参考视频总时长不能超过${seedanceModelLimits.value.maxReferenceVideoDuration}秒`
         e.target.value = ''
         return
       }
@@ -1429,7 +1439,24 @@ async function generateVideo() {
         : seedanceRefImages.value.length + seedanceRefImageUrls.value.length
     const videoCount = seedanceRefVideos.value.length + seedanceRefVideoUrls.value.length
     const audioCount = seedanceRefAudios.value.length + seedanceRefAudioUrls.value.length
-    const seedanceValidationMessage = validateSeedanceModeInputs({ mode: sm, imageCount, videoCount, audioCount })
+    const seedanceReferenceCountMessage = validateSeedanceReferenceCounts({
+      imageCount,
+      videoCount,
+      audioCount,
+      limits: isMinimaxH3Model.value
+        ? { maxImages: seedanceMaxRefImages.value, maxVideos: seedanceMaxRefVideos.value, maxAudios: seedanceMaxRefAudios.value }
+        : seedanceModelLimits.value
+    })
+    if (seedanceReferenceCountMessage) {
+      error.value = seedanceReferenceCountMessage
+      return
+    }
+    const seedanceValidationMessage = validateSeedanceModeInputs({
+      mode: sm,
+      imageCount: Math.min(imageCount, SEEDANCE_MAX_IMAGES),
+      videoCount: Math.min(videoCount, SEEDANCE_MAX_VIDEOS),
+      audioCount: Math.min(audioCount, SEEDANCE_MAX_AUDIOS)
+    })
     if (seedanceValidationMessage) {
       error.value = seedanceValidationMessage
       return
@@ -1488,6 +1515,7 @@ async function generateVideo() {
   const currentModel = model.value
   const requestModel = resolveVideoRequestModel(currentModelConfig.value, currentModel)
   const currentDuration = duration.value
+  const requestedDuration = isReferenceVideoModel.value ? String(seedanceDuration.value) : currentDuration
   const currentAspectRatio = aspectRatio.value
   const pointsCost = currentPointsCost.value
   
@@ -1496,7 +1524,7 @@ async function generateVideo() {
     formData.append('prompt', currentPrompt)
     formData.append('model', requestModel)
     formData.append('aspect_ratio', currentAspectRatio)
-    formData.append('duration', isReferenceVideoModel.value ? String(seedanceDuration.value) : currentDuration)
+    formData.append('duration', requestedDuration)
     formData.append('hd', hd.value ? 'true' : 'false')
     formData.append('watermark', watermark.value ? 'true' : 'false')
     formData.append('private', isPrivate.value ? 'true' : 'false')
@@ -1624,7 +1652,7 @@ async function generateVideo() {
       prompt: currentPrompt,
       model: currentModel,
       aspect_ratio: currentAspectRatio,
-      duration: currentDuration,
+      duration: requestedDuration,
       hd: hd.value,
       mode: mode.value,
       imageCount: imageFiles.value.length,
@@ -1687,7 +1715,7 @@ async function generateVideo() {
       task_id: taskId,
       prompt: currentPrompt,
       model: currentModel,
-      duration: currentDuration,
+      duration: requestedDuration,
       aspect_ratio: currentAspectRatio,
       status: data.status || 'pending',
       progress: data.progress || '排队中',

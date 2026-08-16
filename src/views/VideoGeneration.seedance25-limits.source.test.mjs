@@ -4,13 +4,11 @@ import { readFileSync } from 'node:fs'
 
 const source = readFileSync(new URL('./VideoGeneration.vue', import.meta.url), 'utf8')
 
-test('VideoGeneration reads Seedance reference limits from seedanceConfig', () => {
+test('VideoGeneration resolves Seedance reference limits from the shared Seedance 2.x resolver', () => {
   assert.match(source, /seedanceMaxRefImages = computed\(\(\) => \{/)
-  assert.match(source, /currentModelConfig\.value\?\.seedanceConfig\?\.maxImages/)
+  assert.match(source, /const seedanceModelLimits = computed\(\(\) => resolveSeedance2Limits\(currentModelConfig\.value\)\)/)
   assert.match(source, /seedanceMaxRefVideos = computed\(\(\) => \{/)
-  assert.match(source, /currentModelConfig\.value\?\.seedanceConfig\?\.maxVideos/)
   assert.match(source, /seedanceMaxRefAudios = computed\(\(\) => \{/)
-  assert.match(source, /currentModelConfig\.value\?\.seedanceConfig\?\.maxAudios/)
 })
 
 test('VideoGeneration upload handlers use dynamic Seedance limits', () => {
@@ -34,7 +32,13 @@ test('VideoGeneration duration slider follows model duration range', () => {
   assert.match(source, /seedanceConfig\?\.maxDuration/)
 })
 
-test('VideoGeneration total duration caps only apply to legacy Seedance limits', () => {
-  assert.match(source, /seedanceMaxRefVideos\.value <= 3 && totalDuration \+ metadata\.duration > 15/)
-  assert.match(source, /seedanceMaxRefAudios\.value <= 3 && totalDuration \+ dur > 15/)
+test('VideoGeneration records the selected Seedance duration instead of the generic 10-second default', () => {
+  assert.match(source, /const requestedDuration = isReferenceVideoModel\.value \? String\(seedanceDuration\.value\) : currentDuration/)
+  assert.match(source, /formData\.append\('duration', requestedDuration\)/)
+  assert.match(source, /duration: requestedDuration,/)
+})
+
+test('VideoGeneration keeps the Seedance 2.5 30-second total video cap separate from each video cap', () => {
+  assert.match(source, /totalDuration \+ metadata\.duration > seedanceModelLimits\.value\.maxReferenceVideoDuration/)
+  assert.match(source, /validateSeedanceReferenceCounts\(/)
 })

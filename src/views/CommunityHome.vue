@@ -147,7 +147,7 @@
       <!-- 混合瀑布流 -->
       <div
         v-if="mixedWorks.length"
-        class="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-3 [column-fill:_balance-all]"
+        class="columns-2 sm:columns-3 lg:columns-4 xl:columns-5 gap-3 [column-fill:_balance]"
       >
         <div v-for="item in mixedWorks" :key="'mx-' + item.id" class="break-inside-avoid mb-3">
           <WorkCard
@@ -372,7 +372,7 @@ async function loadLandscapeWorks() {
     const params = buildParams({ orientation: 'landscape', pageSize: 15, page: 1 })
     const res = await getWorks(params)
     const works = res.data?.works || res.works || []
-    landscapeWorks.value = works.length > 0 ? works : generateMockWorks(24, 'landscape')
+    landscapeWorks.value = works
   } catch (e) {
     console.error('[CommunityHome] 加载横屏作品失败:', e)
     landscapeWorks.value = generateMockWorks(24, 'landscape')
@@ -395,12 +395,6 @@ async function loadMixedWorks(reset = false) {
     const params = buildParams({ page: mixedPage.value, pageSize: 20 })
     const res = await getWorks(params)
     const works = res.data?.works || res.works || []
-
-    if (reset && works.length === 0) {
-      mixedWorks.value = generateMockWorks(40, null)
-      noMore.value = true
-      return
-    }
 
     const landscapeIds = new Set(landscapeWorks.value.map(w => w.id))
     const filtered = works.filter(w => !landscapeIds.has(w.id))

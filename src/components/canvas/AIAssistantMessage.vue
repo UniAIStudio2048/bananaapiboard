@@ -124,7 +124,7 @@
               :alt="mediaPlaceholderFill[slotIndex].name"
               class="media-generating__placeholder media-generating__placeholder--filled"
               loading="lazy"
-              @click="$emit('preview-media', { type: 'image', url: toSameOriginUrl(mediaPlaceholderFill[slotIndex].url), name: mediaPlaceholderFill[slotIndex].name })"
+              @click="previewImage(mediaPlaceholderFill[slotIndex], mediaResults)"
             />
             <!-- 空占位格按请求比例显示（比例来自任务状态事件，未知时回退 1:1 方格子） -->
             <div v-else class="media-generating__placeholder" :style="{ aspectRatio: imageGeneratingAspect.ratio }" aria-hidden="true"></div>
@@ -222,7 +222,7 @@
             :style="imagePreviewStyle(media)"
             loading="lazy"
             @load="onImageLoad(media, $event)"
-            @click="$emit('preview-media', { type: 'image', url: toSameOriginUrl(media.url), name: media.name })"
+            @click="previewImage(media, mediaResults)"
           />
           <video
             v-else
@@ -415,6 +415,22 @@ const visibleAttachments = computed(() => {
 })
 
 const emit = defineEmits(['preview-media', 'select-choice', 'retry', 'feedback'])
+
+function previewImage(media, images) {
+  const imageGroup = images
+    .filter(item => item.type === 'image')
+    .map(item => ({
+      type: 'image',
+      url: toSameOriginUrl(item.url),
+      name: item.name
+    }))
+  emit('preview-media', {
+    type: 'image',
+    url: toSameOriginUrl(media.url),
+    name: media.name,
+    images: imageGroup
+  })
+}
 
 const parsedContent = computed(() => parseAssistantContent(props.message.content))
 const assistantChoices = computed(() => props.message.role === 'assistant' ? parsedContent.value.choices : null)
