@@ -67,7 +67,7 @@ import {
   calculateSeedanceResolutionCost,
   getSeedanceResolutionOptions
 } from '@/utils/seedanceResolutionPricing'
-import { calculateVideoResolutionPrice, getEnabledVideoResolutionOptions } from '@/utils/videoResolutionPricing'
+import { calculateVideoResolutionPrice, resolveVideoResolutionPricing, getEnabledVideoResolutionOptions } from '@/utils/videoResolutionPricing'
 import { compressImage, getImageFileDimensions } from '@/utils/imageCompress'
 import {
   SEEDANCE_MAX_AUDIOS,
@@ -1437,6 +1437,35 @@ const selectedSeedance2Mode = ref(props.data.seedance2Mode || 'text2video')
 const seedanceResolution = ref(props.data.seedanceResolution || '720p')
 let didInitializeSeedance2Mode = Boolean(props.data.seedance2Mode)
 
+// Seedance 2.5 编辑模式：每秒积分单价
+// 优先读 resolutionPricing（9000「输出分辨率显示配置」配的字段，与后端 getEnabledVideoResolutionPricing 一致），
+// 回退 seedanceConfig.resolutionCosts（旧字段，全 15，仅为兼容历史配置）。
+const seedanceCostPerSecond = computed(() => {
+  if (!isSeedance2Model.value) return 0
+  const pricing = currentModelConfig.value?.resolutionPricing
+  if (pricing && typeof pricing === 'object') {
+    const entry = resolveVideoResolutionPricing(pricing, seedanceResolution.value)
+    if (entry && Number.isFinite(entry.costPerSecond) && entry.costPerSecond >= 0) return entry.costPerSecond
+  }
+  const resolutionCosts = currentModelConfig.value?.seedanceConfig?.resolutionCosts
+  if (!resolutionCosts || typeof resolutionCosts !== 'object') return 0
+  const normalize = value => String(value || '').trim().toLowerCase()
+  const normalizedResolution = normalize(seedanceResolution.value)
+  const matchingKey = Object.keys(resolutionCosts).find(key => normalize(key) === normalizedResolution)
+  if (!matchingKey) return 0
+  const rate = Number(resolutionCosts[matchingKey])
+  return Number.isFinite(rate) && rate >= 0 ? rate : 0
+})
+
+// Seedance 2.5 编辑模式：是否走「自动长预扣 10s 多退少补」（video_edit / multimodal_ref auto）
+const isSeedancePrePaidBilling = computed(() => {
+  if (!isSeedance2Model.value) return false
+  // video_edit 模式后端永远预扣 10s（videos.legacy.txt:581-585），基于 mode 即时判定，不依赖 watch 异步修正 duration
+  if (selectedSeedance2Mode.value === 'video_edit') return true
+  // multimodal_ref 等其他模式：duration 已被修正为 '-1'，或 constraints 标记为预扣模式
+  return String(selectedDuration.value) === '-1' || seedance25ModeConstraints.value?.duration === -1
+})
+
 const seedance25ModeConstraints = computed(() => (
   getSeedance25ModeConstraints(currentModelConfig.value, selectedSeedance2Mode.value)
 ))
@@ -2166,15 +2195,15 @@ const aspectRatios = [
 ]
 
 const availableAspectRatios = computed(() => {
+  const isZh = currentLanguage.value?.startsWith('zh')
   if (seedance25ModeConstraints.value?.ratio) {
     return [{
       value: seedance25ModeConstraints.value.ratio,
-      displayLabel: currentLanguage.value?.startsWith('zh') ? '自适应' : 'Auto'
+      displayLabel: isZh ? '自适应' : 'Auto'
     }]
   }
   // multimodal_ref（reference）官方不限制比例：既可选具体宽高比，也可选自适应 adaptive。
   // 在比例列表前补一个「自适应」选项，让用户能显式选 adaptive。
-  const isZh = currentLanguage.value?.startsWith('zh')
   const adaptiveOption = { value: 'adaptive', label: isZh ? '自适应' : 'Auto', displayLabel: isZh ? '自适应' : 'Auto' }
   const isMultimodalRef = seedance25ModeConstraints.value?.omniReferenceTaskType === 'reference'
 
@@ -2190,7 +2219,8 @@ const availableAspectRatios = computed(() => {
 
   const configuredSet = new Set(configuredValues)
   const matched = aspectRatios.filter(ratio => configuredSet.has(ratio.value))
-  return isMultimodalRef ? [adaptiveOption, ...matched] : matched
+  const showAdaptive = isMultimodalRef || configuredSet.has('adaptive')
+  return showAdaptive ? [adaptiveOption, ...matched] : matched
 })
 
 // ========== 厂商分组下拉布局 ==========
@@ -2236,12 +2266,14 @@ const useVendorLayout = computed(() => vendorGroups.value.length > 1)
 
 // 时长选项（动态计算）
 const durations = computed(() => {
-  // auto 时长：video_edit 强制仅 auto；模型 seedanceConfig.autoDuration===true 时支持 auto（非 text2video）
-  const supportsAuto = (seedance25ModeConstraints.value?.duration === -1 && selectedSeedance2Mode.value === 'video_edit')
-    || currentModelConfig.value?.seedanceConfig?.autoDuration === true
-  if (supportsAuto && selectedSeedance2Mode.value === 'video_edit') {
+  // video_edit 模式时长固定为「自动」(-1)，基于 mode ref 即时判定，不依赖异步加载的 seedance25ModeConstraints
+  // （seedance2Limits.js: video_edit duration=-1 硬编码，后端永远预扣 10s）
+  if (selectedSeedance2Mode.value === 'video_edit') {
     return [{ value: '-1', label: '自动' }]
   }
+  // auto 时长：模型 seedanceConfig.autoDuration===true 时支持 auto（非 text2video）；或当前模式 constraints 标记 duration=-1
+  const supportsAuto = seedance25ModeConstraints.value?.duration === -1
+    || currentModelConfig.value?.seedanceConfig?.autoDuration === true
 
   const sourceDurations = isWanModel.value
     ? getWanDurationOptions({
@@ -2265,6 +2297,13 @@ const durations = computed(() => {
 
 const seedanceResolutionOptions = computed(() => {
   if (!isSeedance2Model.value) return []
+  // 优先 resolutionPricing 启用项（9000「输出分辨率显示配置」点亮的档位，与后端计费口径一致）
+  const pricing = currentModelConfig.value?.resolutionPricing
+  if (pricing && typeof pricing === 'object' && Object.keys(pricing).length > 0) {
+    const enabled = getEnabledVideoResolutionOptions(pricing)
+    if (enabled.length > 0) return enabled.map(value => ({ value, label: value.toUpperCase() }))
+  }
+  // 回退：seedanceConfig 旧字段
   const config = currentModelConfig.value?.seedanceConfig || {}
   return getSeedanceResolutionOptions({
     displayResolutions: currentModelConfig.value?.displayResolutions,
@@ -2348,8 +2387,8 @@ const isVideoModelConfigLoaded = () => {
 }
 
 watch([selectedModel, availableDurations, isPerSecondBilling, isRunningHubAiAppVideoV31Model, seedance25ModeConstraints, selectedSeedance2Mode, currentModelConfig], () => {
-  // video_edit 强制 auto(duration=-1)
-  if (seedance25ModeConstraints.value?.duration === -1 && selectedSeedance2Mode.value === 'video_edit') {
+  // video_edit 强制 auto(duration=-1)，基于 mode ref 即时判定（不依赖异步 constraints）
+  if (selectedSeedance2Mode.value === 'video_edit') {
     if (selectedDuration.value !== '-1') selectedDuration.value = '-1'
     return
   }
@@ -2805,7 +2844,10 @@ onMounted(() => {
   }, 1000)
 
   // 如果当前模型支持时长选择，但当前选中的时长不在可用列表中，则重置为第一个可用时长
-  if (isVideoModelConfigLoaded() && !isPerSecondBilling.value && availableDurations.value.length > 0 && !availableDurations.value.includes(selectedDuration.value)) {
+  // video_edit 模式使用 '-1'（自动时长，预扣10s），不在 availableDurations 里是正常现象，不应重置
+  if (isVideoModelConfigLoaded() && !isPerSecondBilling.value && availableDurations.value.length > 0
+      && selectedSeedance2Mode.value !== 'video_edit'
+      && !availableDurations.value.includes(selectedDuration.value)) {
     selectedDuration.value = availableDurations.value[0]
   }
   
@@ -3917,15 +3959,37 @@ const pointsCost = computed(() => {
   const modelPointsCost = currentModelConfig.value.pointsCost
 
   if (isSeedance2Model.value) {
+    // video_edit / multimodal_ref 自动时长占位符 '-1'，与后端预扣 10s 对齐（videos.legacy.txt:585）
+    const isSeedancePrePaidMode = selectedSeedance2Mode.value === 'video_edit' || seedance25ModeConstraints.value?.duration === -1
+    const seedanceBillingDuration = (String(selectedDuration.value) === '-1' || isSeedancePrePaidMode) ? 10 : selectedDuration.value
+    // 优先 resolutionPricing（9000「输出分辨率显示配置」配的字段，与后端 getEnabledVideoResolutionPricing × costPerSecond×duration 一致）
+    const resolutionPricing = currentModelConfig.value?.resolutionPricing
+    const pricingPrice = resolutionPricing
+      ? calculateVideoResolutionPrice(resolutionPricing, seedanceResolution.value, seedanceBillingDuration)
+      : null
+    if (pricingPrice !== null) {
+      return shouldApplyVideoInputMultiplier.value
+        ? applyVideoInputMultiplier(pricingPrice, videoInputMultiplier.value)
+        : pricingPrice
+    }
+    // 回退：seedanceConfig.resolutionCosts（旧字段）
     const seedanceResolutionCost = calculateSeedanceResolutionCost({
       resolutionCosts: currentModelConfig.value?.seedanceConfig?.resolutionCosts,
       resolution: seedanceResolution.value,
-      duration: selectedDuration.value
+      duration: seedanceBillingDuration
     })
     if (seedanceResolutionCost !== null) {
       return shouldApplyVideoInputMultiplier.value
         ? applyVideoInputMultiplier(seedanceResolutionCost, videoInputMultiplier.value)
         : seedanceResolutionCost
+    }
+    // 两者都没配当前分辨率：兜底用 perSecondBillingCostPerSecond × 时长，避免显示 0 积分误导用户
+    const fallbackPerSecond = perSecondBillingCostPerSecond.value
+    if (fallbackPerSecond > 0) {
+      const baseCost = Math.ceil(fallbackPerSecond * Number(seedanceBillingDuration))
+      return shouldApplyVideoInputMultiplier.value
+        ? applyVideoInputMultiplier(baseCost, videoInputMultiplier.value)
+        : baseCost
     }
   }
 
@@ -9734,6 +9798,12 @@ function handleToolbarPreview() {
             <template v-else-if="isRunningHubAiAppVideoV31Model">
               {{ runningHubV31CostText }}
             </template>
+            <template v-else-if="isSeedance2Model && isSeedancePrePaidBilling && seedanceCostPerSecond > 0">
+              {{ formatPoints(pointsCost * selectedCount) }}积分
+              <span v-if="shouldApplyVideoInputMultiplier" class="points-multiplier-chip">
+                {{ formatVideoInputMultiplier(videoInputMultiplier) }}
+              </span>
+            </template>
             <template v-else-if="isPerSecondBilling">
               {{ formatPoints(perSecondBillingCostPerSecond) }}积分/s
             </template>
@@ -10114,6 +10184,9 @@ function handleToolbarPreview() {
           </div>
           <div v-if="currentSeedance2ModeConfig.needsImage && referenceImages.length === 0 && selectedSeedance2Mode !== 'text2video'" class="sd2-mode-warn">
             ⚠ {{ currentSeedance2ModeConfig.label }}需要连接上游图片节点
+          </div>
+          <div v-if="isSeedancePrePaidBilling && seedanceCostPerSecond > 0" class="sd2-mode-billing-note">
+            按分辨率每秒计费 · 预扣10s · 完成后多退少补{{ shouldApplyVideoInputMultiplier ? ' · 含输入视频倍率' : '' }}
           </div>
         </div>
       </template>
@@ -11956,6 +12029,12 @@ function handleToolbarPreview() {
 .sd2-mode-warn {
   font-size: 10px;
   color: #d97706;
+  margin-top: 4px;
+}
+
+.sd2-mode-billing-note {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
   margin-top: 4px;
 }
 

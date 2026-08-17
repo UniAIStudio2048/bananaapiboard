@@ -13,11 +13,25 @@ function getEnabledEntry(pricing, resolution) {
   }) || null
 }
 
+const STANDARD_RESOLUTION_ORDER = ['480p', '512p', '720p', '768p', '1080p', '2k', '4k']
+
+function resolutionOrderIndex(value) {
+  return STANDARD_RESOLUTION_ORDER.indexOf(normalizeResolution(value))
+}
+
+function sortByStandardOrder(resolutions) {
+  const withIdx = resolutions.map(r => ({ r, idx: resolutionOrderIndex(r) }))
+  const known = withIdx.filter(x => x.idx >= 0).sort((a, b) => a.idx - b.idx)
+  const unknown = withIdx.filter(x => x.idx < 0)
+  return [...known, ...unknown].map(x => x.r)
+}
+
 export function getEnabledVideoResolutionOptions(pricing) {
   if (!pricing || typeof pricing !== 'object' || Array.isArray(pricing)) return []
-  return Object.entries(pricing)
+  const resolutions = Object.entries(pricing)
     .filter(([, entry]) => entry && typeof entry === 'object' && entry.enabled !== false)
     .map(([resolution]) => resolution)
+  return sortByStandardOrder(resolutions)
 }
 
 export function resolveVideoResolutionPricing(pricing, resolution) {
