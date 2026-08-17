@@ -2172,8 +2172,16 @@ const availableAspectRatios = computed(() => {
       displayLabel: currentLanguage.value?.startsWith('zh') ? '自适应' : 'Auto'
     }]
   }
+  // multimodal_ref（reference）官方不限制比例：既可选具体宽高比，也可选自适应 adaptive。
+  // 在比例列表前补一个「自适应」选项，让用户能显式选 adaptive。
+  const isZh = currentLanguage.value?.startsWith('zh')
+  const adaptiveOption = { value: 'adaptive', label: isZh ? '自适应' : 'Auto', displayLabel: isZh ? '自适应' : 'Auto' }
+  const isMultimodalRef = seedance25ModeConstraints.value?.omniReferenceTaskType === 'reference'
+
   const configuredRatios = currentModelConfig.value?.aspectRatios
-  if (!Array.isArray(configuredRatios)) return aspectRatios
+  if (!Array.isArray(configuredRatios)) {
+    return isMultimodalRef ? [adaptiveOption, ...aspectRatios] : aspectRatios
+  }
 
   const configuredValues = configuredRatios
     .map(ratio => typeof ratio === 'string' ? ratio : ratio?.value)
@@ -2181,7 +2189,8 @@ const availableAspectRatios = computed(() => {
   if (configuredValues.length === 0) return []
 
   const configuredSet = new Set(configuredValues)
-  return aspectRatios.filter(ratio => configuredSet.has(ratio.value))
+  const matched = aspectRatios.filter(ratio => configuredSet.has(ratio.value))
+  return isMultimodalRef ? [adaptiveOption, ...matched] : matched
 })
 
 // ========== 厂商分组下拉布局 ==========

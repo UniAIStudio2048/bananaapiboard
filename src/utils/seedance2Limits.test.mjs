@@ -54,9 +54,8 @@ test('Seedance 2.5 applies special request constraints only to supported submode
   const model = { actualModel: 'doubao-seedance-2-5-260628' }
 
   assert.deepEqual(getSeedance25ModeConstraints(model, 'multimodal_ref'), {
-    ratio: 'adaptive',
     duration: -1,
-    omniReferenceTaskType: 'auto',
+    omniReferenceTaskType: 'reference',
     minReferenceVideoDuration: 4,
     maxReferenceVideoDuration: 30
   })
@@ -64,12 +63,14 @@ test('Seedance 2.5 applies special request constraints only to supported submode
     ratio: 'adaptive',
     duration: -1,
     omniReferenceTaskType: 'edit',
+    outputFormat: 'mov',
     minReferenceVideoDuration: 4,
     maxReferenceVideoDuration: 30
   })
   assert.deepEqual(getSeedance25ModeConstraints(model, 'video_extend'), {
     ratio: 'adaptive',
-    omniReferenceTaskType: 'extend'
+    omniReferenceTaskType: 'extend',
+    outputFormat: 'mov'
   })
   assert.deepEqual(getSeedance25ModeConstraints(model, 'image2video_first'), { ratio: 'adaptive' })
   assert.deepEqual(getSeedance25ModeConstraints(model, 'image2video_first_last'), { ratio: 'adaptive' })

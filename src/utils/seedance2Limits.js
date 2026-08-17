@@ -18,9 +18,12 @@ export const SEEDANCE25_LIMITS = Object.freeze({
 
 const SEEDANCE25_MODE_CONSTRAINTS = Object.freeze({
   multimodal_ref: Object.freeze({
-    ratio: 'adaptive',
+    // reference 模式官方不限制 ratio（可选任意宽高比），这里不设 ratio，由调用方传入的比例优先、
+    // 缺省回落 adaptive。对比 edit/extend/首帧/首尾帧官方强制 adaptive。
     duration: -1,
-    omniReferenceTaskType: 'auto',
+    // 官方推荐显式指定 reference，避免 auto 自动判定与实际任务类型不一致触发异步报错
+    // （InvalidParameter.TaskTypeMismatch）。reference 即参考生视频，ratio/duration 无特殊限制。
+    omniReferenceTaskType: 'reference',
     minReferenceVideoDuration: 4,
     maxReferenceVideoDuration: 30
   }),
@@ -28,6 +31,8 @@ const SEEDANCE25_MODE_CONSTRAINTS = Object.freeze({
     ratio: 'adaptive',
     duration: -1,
     omniReferenceTaskType: 'edit',
+    // 编辑链路建议 mov（H.264 + yuv444p + PCM，高色彩精度），便于后续调色/抠像/合成
+    outputFormat: 'mov',
     minReferenceVideoDuration: 4,
     maxReferenceVideoDuration: 30,
     promptKeywords: ['编辑视频', '增加', '加上', '加一些', '删除', '去掉', '修改', '替换', '改成']
@@ -35,6 +40,8 @@ const SEEDANCE25_MODE_CONSTRAINTS = Object.freeze({
   video_extend: Object.freeze({
     ratio: 'adaptive',
     omniReferenceTaskType: 'extend',
+    // 延长链路同样建议 mov，保持与编辑链路一致的色彩精度
+    outputFormat: 'mov',
     promptKeywords: ['向前延长', '向后延长', '延续', '续写']
   }),
   image2video_first: Object.freeze({ ratio: 'adaptive' }),
