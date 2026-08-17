@@ -199,6 +199,9 @@ const seedanceMaxDuration = computed(() => {
   const configured = Number(currentModelConfig.value?.seedanceConfig?.maxDuration)
   return Number.isFinite(configured) && configured > 0 ? configured : 15
 })
+
+// 当前模型是否支持「自动时长」(auto)：seedanceConfig.autoDuration === true 时显示开关
+const canAutoDuration = computed(() => currentModelConfig.value?.seedanceConfig?.autoDuration === true)
 const watermark = ref(false) // 默认false，隐藏选项
 const isPrivate = ref(true) // 默认true，隐藏选项
 
@@ -207,6 +210,7 @@ const seedanceMode = ref('text2video') // 当前选择的 Seedance 模式
 const seedanceResolution = ref('720p') // 分辨率：480p / 720p / 1080p / 4k
 const seedanceRatio = ref('adaptive') // 宽高比
 const seedanceDuration = ref(5) // 时长：由当前 Seedance 模型配置决定
+const seedanceAutoDuration = ref(true) // 自动时长（auto）：开启时传 -1 由模型决定
 const seedanceGenerateAudio = ref(true) // 生成有声视频
 const seedanceWebSearch = ref(false) // 联网搜索增强
 const seedanceWatermark = ref(false) // 水印
@@ -643,6 +647,8 @@ watch(model, (newModel) => {
     seedanceResolution.value = configuredPricingResolutions[0] || seedanceConfig.resolution || (isHappyHorse ? '1080p' : '720p')
     seedanceRatio.value = seedanceConfig.ratio || (isHappyHorse ? '16:9' : 'adaptive')
     seedanceDuration.value = Number(seedanceConfig.duration || durations[0] || 5)
+    // 按新模型 autoDuration 配置重置 auto 开关：支持 auto 默认开，否则关；video_edit 强制开由 watch(seedanceMode) 处理
+    seedanceAutoDuration.value = seedanceConfig.autoDuration === true
     seedanceGenerateAudio.value = seedanceConfig.generateAudio !== false
     seedanceWatermark.value = seedanceConfig.watermark === true
     seedanceWebSearch.value = isHappyHorse ? false : seedanceConfig.webSearch === true
@@ -653,6 +659,8 @@ watch(model, (newModel) => {
   } else if (modelConfig?.apiType === 'minimax-h3') {
     const minimaxConfig = modelConfig.minimaxConfig || {}
     seedanceDuration.value = Number(minimaxConfig.duration || durations[0] || 5)
+    // minimax-h3 不支持 auto 时长，强制关闭
+    seedanceAutoDuration.value = false
     seedanceResolution.value = configuredPricingResolutions[0] || minimaxConfig.resolution || '2K'
     seedanceRatio.value = minimaxConfig.ratio || 'adaptive'
     seedanceGenerateAudio.value = false
@@ -684,6 +692,10 @@ watch(seedanceMode, () => {
   // 非文生视频模式时关闭联网搜索
   if (seedanceMode.value !== 'text2video') {
     seedanceWebSearch.value = false
+  }
+  // video_edit 必须强制 auto 时长（后端双保险）
+  if (seedanceMode.value === 'video_edit') {
+    seedanceAutoDuration.value = true
   }
 })
 
@@ -1515,7 +1527,9 @@ async function generateVideo() {
   const currentModel = model.value
   const requestModel = resolveVideoRequestModel(currentModelConfig.value, currentModel)
   const currentDuration = duration.value
-  const requestedDuration = isReferenceVideoModel.value ? String(seedanceDuration.value) : currentDuration
+  const requestedDuration = isReferenceVideoModel.value
+    ? (seedanceAutoDuration.value ? '-1' : String(seedanceDuration.value))
+    : currentDuration
   const currentAspectRatio = aspectRatio.value
   const pointsCost = currentPointsCost.value
   
@@ -3045,15 +3059,23 @@ onUnmounted(() => {
                       <option v-for="r in SEEDANCE_RATIOS" :key="r.value" :value="r.value">{{ r.label }}</option>
                     </select>
                   </div>
+                  <!-- 自动时长开关（模型支持 auto 且非 video_edit 时显示；video_edit 强制 auto） -->
+                  <label v-if="canAutoDuration && seedanceMode !== 'video_edit'" class="flex items-center justify-between cursor-pointer mb-1">
+                    <span class="text-xs text-slate-600 dark:text-slate-400">⚙️ 自动时长（由模型决定）</span>
+                    <div class="relative inline-flex items-center">
+                      <input type="checkbox" v-model="seedanceAutoDuration" class="sr-only peer" />
+                      <div class="w-9 h-5 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-600 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-gray-600"></div>
+                    </div>
+                  </label>
                   <!-- 时长滑块 -->
                   <div>
                     <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 flex items-center justify-between">
                       <span>时长</span>
-                      <span class="text-gray-700 dark:text-gray-300 font-semibold">{{ seedanceDuration }} 秒</span>
+                      <span class="text-gray-700 dark:text-gray-300 font-semibold">{{ seedanceAutoDuration ? '自动' : seedanceDuration + ' 秒' }}</span>
                     </label>
-                    <input type="range" v-model.number="seedanceDuration" :min="seedanceMinDuration" :max="seedanceMaxDuration" step="1"
+                    <input v-if="!seedanceAutoDuration" type="range" v-model.number="seedanceDuration" :min="seedanceMinDuration" :max="seedanceMaxDuration" step="1"
                       class="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full appearance-none cursor-pointer accent-gray-600" />
-                    <div class="flex justify-between text-xs text-slate-400 mt-0.5">
+                    <div v-if="!seedanceAutoDuration" class="flex justify-between text-xs text-slate-400 mt-0.5">
                       <span>{{ seedanceMinDuration }}s</span><span>{{ seedanceMaxDuration }}s</span>
                     </div>
                   </div>

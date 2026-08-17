@@ -2227,8 +2227,11 @@ const useVendorLayout = computed(() => vendorGroups.value.length > 1)
 
 // 时长选项（动态计算）
 const durations = computed(() => {
-  if (seedance25ModeConstraints.value?.duration === -1 && selectedSeedance2Mode.value === 'video_edit') {
-    return [{ value: '10', label: 'Auto' }]
+  // auto 时长：video_edit 强制仅 auto；模型 seedanceConfig.autoDuration===true 时支持 auto（非 text2video）
+  const supportsAuto = (seedance25ModeConstraints.value?.duration === -1 && selectedSeedance2Mode.value === 'video_edit')
+    || currentModelConfig.value?.seedanceConfig?.autoDuration === true
+  if (supportsAuto && selectedSeedance2Mode.value === 'video_edit') {
+    return [{ value: '-1', label: '自动' }]
   }
 
   const sourceDurations = isWanModel.value
@@ -2239,10 +2242,16 @@ const durations = computed(() => {
       })
     : availableDurations.value
 
-  return sourceDurations.map(d => ({
+  const secondOptions = sourceDurations.map(d => ({
     value: d,
     label: `${d}s`
   }))
+
+  // auto 选项插到最前（在 1 秒前），text2video 模式不显示 auto（与现有约束一致）
+  if (supportsAuto && selectedSeedance2Mode.value !== 'text2video') {
+    return [{ value: '-1', label: '自动' }, ...secondOptions]
+  }
+  return secondOptions
 })
 
 const seedanceResolutionOptions = computed(() => {
@@ -2329,9 +2338,10 @@ const isVideoModelConfigLoaded = () => {
   return !!config && Object.keys(config).length > 0
 }
 
-watch([selectedModel, availableDurations, isPerSecondBilling, isRunningHubAiAppVideoV31Model, seedance25ModeConstraints, selectedSeedance2Mode], () => {
+watch([selectedModel, availableDurations, isPerSecondBilling, isRunningHubAiAppVideoV31Model, seedance25ModeConstraints, selectedSeedance2Mode, currentModelConfig], () => {
+  // video_edit 强制 auto(duration=-1)
   if (seedance25ModeConstraints.value?.duration === -1 && selectedSeedance2Mode.value === 'video_edit') {
-    if (selectedDuration.value !== '10') selectedDuration.value = '10'
+    if (selectedDuration.value !== '-1') selectedDuration.value = '-1'
     return
   }
   // 按秒计费默认不选择固定时长；只有用户主动选择时才向后端传 duration。
@@ -2351,13 +2361,15 @@ watch([selectedModel, availableDurations, isPerSecondBilling, isRunningHubAiAppV
     }
     return
   }
-  const options = availableDurations.value.map(duration => String(duration))
-  if (options.length === 0) {
+  // 普通分支：用 durations 计算后的实际选项（含 auto 的 '-1'）兜底迁移
+  // 兼容旧画布 data.duration='10'（原 video_edit Auto 映射）→ 迁移到 '-1' 或首个具体值
+  const allOptions = durations.value.map(option => String(option.value))
+  if (allOptions.length === 0) {
     if (selectedDuration.value) selectedDuration.value = ''
     return
   }
-  if (!options.includes(String(selectedDuration.value))) {
-    selectedDuration.value = options[0]
+  if (!allOptions.includes(String(selectedDuration.value))) {
+    selectedDuration.value = allOptions[0]
   }
 }, { immediate: true })
 
