@@ -36,11 +36,15 @@ test('keyboard: running Enter queues the follow-up; running Ctrl/Meta+Enter forc
   const enterBlock = source.match(/if \(event\.key === 'Enter' && !event\.shiftKey\) \{[\s\S]*?\n  \}/)?.[0]
   assert.ok(enterBlock, 'Enter keydown block must exist')
   // IME 候选词确认的 Enter 不触发发送，避免一次输入重复发两条相同消息
-  assert.match(enterBlock, /if \(event\.isComposing \|\| isInputComposing\) return/)
+  assert.match(enterBlock, /if \(event\.isComposing \|\| isInputComposing\.value\) return/)
   assert.match(enterBlock, /event\.preventDefault\(\)/)
   assert.match(enterBlock, /sendMessage\(Boolean\(event\.ctrlKey \|\| event\.metaKey\)\)/)
-  // 运行中普通 Enter → 消息进入队列（send_mode=queue），当前任务继续运行、生成中卡片不受影响
-  assert.match(source, /if \(isLoading\.value && !force\) \{[\s\S]*?queueCurrentDraft\(\)\s*return\s*\}/)
+  // 运行中普通 Enter → 消息进入队列（send_mode=queue），当前任务继续运行、生成中卡片不受影响；
+  // 排队判断以真实会话状态为准（activeTurnRunning / serverQueue / queued 降级），不是仅 isLoading
+  const sendBlock = source.match(/const turnBusy = enhancedMode\.value[\s\S]*?if \(turnBusy && !force\) \{\s*queueCurrentDraft\(\)\s*return\s*\}/)?.[0]
+  assert.ok(sendBlock, 'turnBusy queue guard must exist')
+  assert.match(sendBlock, /activeTurnRunning\.value/)
+  assert.match(sendBlock, /serverQueue\.value\.length > 0/)
 })
 
 test('interrupt: force send cancels the active turn and waits for terminal state', () => {
@@ -68,9 +72,9 @@ test('queue UI: single merged queue bar; no duplicated queued banner', () => {
   // 队列显示收敛到 AgentQueueBar 单一队列条：不再渲染独立的 queued-message-bar / queued-banner
   assert.doesNotMatch(source, /queued-message-bar/)
   assert.doesNotMatch(source, /queued-banner/)
-  // 本地乐观排队项映射进队列条 items（queueItems 合并列表）；queued-banner 删除后
+  // 本地乐观排队项映射进队列条 items（queueItems 合并列表，已置顶项过滤隐藏）；queued-banner 删除后
   // queuedTurnContent 已无读取方，应一并清除（不留只写死变量）
-  assert.match(source, /const queueItems = computed\(\(\) => \[[\s\S]*?_local: true/)
+  assert.match(source, /const queueItems = computed\(\(\) => filterVisibleQueueItems\(\[[\s\S]*?_local: true[\s\S]*?\], promotedQueueKeys\.value\)\)/)
   assert.doesNotMatch(source, /queuedTurnContent/)
 })
 
@@ -91,23 +95,27 @@ test('accepted status bar sits at the bottom of the message list after the tool 
   assert.match(source, /@click="isLoading \? stopCurrentActivity\(\) : sendMessage\(\)"/)
 })
 
-test('queue: force insert deletes queued turn then cancels active turn via shared helper', () => {
-  // 「立即插入」必须真正接管：删队列 → 取消当前回合 → 恢复草稿并立即发送。
-  // 只把排队文案插进对话、不 cancel/重发，会让对话停在思考中/已排队。
-  assert.match(source, /async function cancelActiveTurnAndWait\(\)/)
-  assert.match(source, /cancelCodexTurn\(currentCodexThreadId\.value, turnId, \{ reason: 'force_insert' \}\)/)
-  assert.match(source, /deleteQueuedCodexMessage\(currentCodexThreadId\.value, turnId\)/)
+test('queue: force insert (running) promotes to next-after-current-round; idle branch deletes and sends directly', () => {
+  // 「立即插入」= 本轮结束后立即发送：运行中不打断当前回合，置顶（priority=100）并
+  // 立即在聊天区乐观展示消息对；只有空闲分支才删队列项直接发送。
   const forceInsertBlock = source.match(/async function forceInsertQueuedMessage\(queued\) \{[\s\S]*?^}/m)?.[0]
   assert.ok(forceInsertBlock, 'forceInsertQueuedMessage must exist')
+  // 运行中分支：置顶 + 隐藏队列项 + 乐观推送消息对，绝不取消当前回合
+  assert.match(forceInsertBlock, /promoteQueuedCodexMessage\(currentCodexThreadId\.value, queued\.turn_id\)/)
+  assert.match(forceInsertBlock, /hidePromotedQueueItem\(queued\)/)
+  assert.match(forceInsertBlock, /pushPromotedConversationMessages\(queued\)/)
   assert.doesNotMatch(forceInsertBlock, /只把排队项追加到当前对话/)
   assert.doesNotMatch(forceInsertBlock, /dismissed:\s*true/)
-  const srvBlock = forceInsertBlock.slice(forceInsertBlock.indexOf('if (enhancedMode.value && currentCodexThreadId.value) {'))
-  const deleteIndex = srvBlock.indexOf('await deleteQueuedCodexMessage(currentCodexThreadId.value, queued.turn_id)')
-  const cancelIndex = srvBlock.indexOf('await cancelActiveTurnAndWait()')
-  assert.ok(deleteIndex >= 0 && cancelIndex >= 0 && deleteIndex < cancelIndex, 'queued turn must be deleted before cancelling the active turn')
+  // 空闲分支：删服务端队列项 → 恢复草稿 → 直接发送（不取消任何回合）
+  const idleSrv = forceInsertBlock.slice(forceInsertBlock.lastIndexOf('if (enhancedMode.value && currentCodexThreadId.value) {'))
+  const deleteIndex = idleSrv.indexOf('await deleteQueuedCodexMessage(currentCodexThreadId.value, queued.turn_id)')
+  const sendIndex = idleSrv.indexOf('sendEnhancedMessage(true)')
+  assert.ok(deleteIndex >= 0 && sendIndex >= 0 && deleteIndex < sendIndex, 'idle branch must delete the queued turn before direct send')
   assert.match(forceInsertBlock, /queuedMessages\.value = queuedMessages\.value\.filter\(\(s\) => s\.id !== queued\.id/)
   assert.match(forceInsertBlock, /restoreDraft\(queued\)/)
   assert.match(forceInsertBlock, /sendEnhancedMessage\(true\)/)
+  // 取消防护仅保留给 Ctrl/Cmd+Enter 接管发送（sendEnhancedMessage force 分支），队列条插入不再走取消
+  assert.match(source, /if \(force && activeTurn\.value\.id && currentCodexThreadId\.value\) \{[\s\S]*?cancelActiveTurnAndWait\(\)/)
   assert.match(source, /function removeQueuedServerMessage\(queued\)/)
 })
 
@@ -115,9 +123,10 @@ test('queue follow must not inject a fake thinking message that freezes the thre
   const followBlock = source.match(/async function refreshQueueAndFollow\(\) \{[\s\S]*?^}/m)?.[0]
   assert.ok(followBlock, 'refreshQueueAndFollow must exist')
   assert.match(followBlock, /reconnectStream\(currentCodexThreadId\.value\)/)
+  // 仍禁止注入伪造 assistant 消息；同步 activeTurn/isLoading 仅限「发现新的非本地驱动回合」，
+  // 回合本身结束/队列清空时停表回读真源，不会锁死线程
   assert.doesNotMatch(followBlock, /role:\s*'assistant'/)
   assert.doesNotMatch(followBlock, /isThinking:\s*true/)
-  assert.doesNotMatch(followBlock, /isLoading\.value = true/)
 })
 
 test('assistant header and input tags stay in-flow so they follow panel resize', () => {

@@ -162,7 +162,6 @@
             :user-name="userName"
             @preview-media="previewMedia"
             @select-choice="sendChoiceMessage"
-            @feedback="submitTurnFeedback"
           />
 
           <!-- 工具调用提示 + 已接受状态：跟随对话最后一行，不固定在输入框上方 -->
@@ -312,7 +311,8 @@
         </div>
 
         <!-- 队列条（输入框上方）：合并本地乐观排队项与服务端队列项，每条支持
-             「立即插入」「删除」；立即插入会取消当前回合并立刻发送该跟进。 -->
+             「立即插入」「删除」；立即插入不打断当前回合，只把该消息置顶为
+             「本轮结束后立即发送」（空闲时则直接发送）。 -->
         <AgentQueueBar
           v-if="enhancedMode"
           :items="queueItems"
@@ -842,7 +842,8 @@ import { showAlert } from '@/composables/useCanvasDialog'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { createAgentIdempotencyKey, createAgentRun, decideAgentRun, getSkillCatalog, streamAgentRun } from '@/api/agent'
 import { startStreamDownload, updateUserPreferences } from '@/api/client'
-import { getCodexSessions, getCodexSession, getCodexSessionMessages, deleteCodexSession, sendCodexMessage, subscribeCodexStream, cancelCodexTurn, deleteQueuedCodexMessage, submitCodexTurnFeedback } from '@/api/codex-agent'
+import { getCodexSessions, getCodexSession, getCodexSessionMessages, deleteCodexSession, sendCodexMessage, subscribeCodexStream, cancelCodexTurn, deleteQueuedCodexMessage, promoteQueuedCodexMessage } from '@/api/codex-agent'
+import { isAssistantRoundBusy, pickNextQueuedIndex, filterVisibleQueueItems } from '@/utils/aiAssistantQueueInsert'
 import AgentTurnStatusBar from './AgentTurnStatusBar.vue'
 import AgentToolTimeline from './AgentToolTimeline.vue'
 import AgentQueueBar from './AgentQueueBar.vue'
@@ -962,16 +963,6 @@ const activeToolEvents = ref([])
 // AC-P0-05: 重连游标，按 (turn_id → event_id) 持久保存；切换 turn 重置。
 // 断线重连时传给 Last-Event-ID，服务端只回放缺失帧，前端按 event_id 去重。
 const streamCursor = ref({})
-
-async function submitTurnFeedback({ message, rating }) {
-  if (!message?.turn_id || !currentCodexThreadId.value) return
-  try {
-    await submitCodexTurnFeedback(currentCodexThreadId.value, message.turn_id, rating)
-    message.feedback = rating
-  } catch (error) {
-    console.warn('[AI-Assistant] 提交回合反馈失败:', error.message)
-  }
-}
 
 const activeTurnRunning = computed(() =>
   ['running', 'accepted', 'preparing', 'thinking', 'tool_calling', 'waiting_external_task', 'finalizing'].includes(activeTurn.value.status)
@@ -1457,26 +1448,32 @@ function restoreDraft(draft) {
   queuedAuthorizationMode.value = ['auto', 'once'].includes(draft.authorizationMode || draft.metadata?.authorization_mode)
     ? (draft.authorizationMode || draft.metadata.authorization_mode)
     : null
-  nextTick(() => {
-    inputEditorRenderKey.value += 1
-    autoResize()
-  })
+  // 与 inputText 等草稿字段在同一渲染周期内重建输入框（key 变化触发整树 remount），
+  // 避免 contenteditable 内 v-for 片段在空锚点下 mount 触发 insertBefore 崩溃
+  inputEditorRenderKey.value += 1
+  nextTick(() => autoResize())
 }
 
 // 旧版流式/未同步到服务端的兜底：当前回合结束后自动发下一条本地排队消息。
 // 增强模式下消息已由服务端队列自动派发，正常情况下不会走到这里。
 function drainQueuedMessages() {
   if (isLoading.value || !queuedMessages.value.length) return
-  const [next] = queuedMessages.value.splice(0, 1)
+  const nextIndex = pickNextQueuedIndex(queuedMessages.value)
+  const [next] = queuedMessages.value.splice(nextIndex, 1)
   restoreDraft(next)
   nextTick(() => sendMessage(true))
 }
 
-// 队列条渲染用的合并列表：本地乐观排队项 + 服务端队列项（本地项带 _local 标志便于插入/删除区分）
-const queueItems = computed(() => [
-  ...queuedMessages.value.map((q) => ({ ...q, _local: true })),
+// 已点「立即插入」并进入聊天区的排队消息：记录 turn_id / client_message_id，
+// 队列条据此隐藏（服务端在调度器认领前仍会返回该 queued turn）
+const promotedQueueKeys = ref(new Set())
+
+// 队列条渲染用的合并列表：本地乐观排队项 + 服务端队列项（本地项带 _local 标志便于插入/删除区分）；
+// 已置顶进入聊天区的项隐藏（消息对已在对话里乐观展示），本地置顶项排最前
+const queueItems = computed(() => filterVisibleQueueItems([
+  ...queuedMessages.value.map((q) => ({ ...q, _local: true })).sort((a, b) => Number(Boolean(b.priority)) - Number(Boolean(a.priority))),
   ...serverQueue.value,
-])
+], promotedQueueKeys.value))
 
 // 取消当前 active turn 并等待其进入终态（cancelled/completed/failed/idle）。
 // 旧 turn 未终态就 resume 同一 thread 会触发 Codex SDK thread-store conflict；
@@ -1504,20 +1501,93 @@ async function cancelActiveTurnAndWait() {
   return settled
 }
 
+function hidePromotedQueueItem(queued) {
+  if (!queued) return
+  if (queued.turn_id) promotedQueueKeys.value.add(queued.turn_id)
+  if (queued.client_message_id) promotedQueueKeys.value.add(queued.client_message_id)
+  promotedQueueKeys.value = new Set(promotedQueueKeys.value)
+}
+
+// 置顶插入的乐观展示：消息立即进聊天区（用户气泡 + 助手思考占位），
+// 回复等上一轮结束后流入占位——内容从点击起始终可见，不出现「消失再出现」空窗
+function pushPromotedConversationMessages(queued) {
+  messages.value.push({
+    role: 'user',
+    content: queued.text || '',
+    skillRef: queued.skillRef || null,
+    modelRef: queued.modelRef || null,
+    attachments: (Array.isArray(queued.attachments) ? queued.attachments : []).map(a => ({
+      type: a.type,
+      url: a.preview || a.url,
+      name: a.name
+    })),
+    timestamp: Date.now(),
+  })
+  messages.value.push({
+    role: 'assistant',
+    content: '',
+    thinking: '',
+    isThinking: true,
+    isStreaming: true,
+    toolEvents: [],
+    timestamp: Date.now(),
+    turn_id: queued.turn_id || null,
+  })
+  scrollToBottom()
+}
+
 async function forceInsertQueuedMessage(queued) {
   if (!queued) return
+  // 「立即插入」= 本轮对话结束后立即发送这条消息：
+  // - 回合运行中：不取消当前回合，把该消息置顶（priority=100）并立即显示在聊天区，
+  //   调度器会在当前回合终态释放锁后立即认领它，续在同一会话里；
+  // - 空闲：删除排队项并立即直接发送（不再取消任何回合）。
+  const roundBusy = isAssistantRoundBusy({
+    enhancedMode: enhancedMode.value,
+    isLoading: isLoading.value,
+    activeTurnRunning: activeTurnRunning.value,
+    serverQueueLength: serverQueue.value.length,
+    activeTurnStatus: activeTurn.value.status,
+  })
+  if (roundBusy) {
+    if (queued._local || !queued.turn_id) {
+      // 本地乐观项（尚未同步到服务端）：先同步进服务端队列拿到 turn_id，再置顶
+      if (enhancedMode.value && currentCodexThreadId.value) {
+        await enqueueServerMessage(queued)
+        const synced = serverQueue.value.find((s) => s.client_message_id === queued.client_message_id)
+        if (!queued.turn_id && !synced?.turn_id) {
+          showAlert('该消息尚未同步到服务端队列，请稍后重试。', '无法立即插入')
+          return
+        }
+        queued.turn_id = queued.turn_id || synced.turn_id
+      } else {
+        queued.priority = true
+        return
+      }
+    }
+    try {
+      await promoteQueuedCodexMessage(currentCodexThreadId.value, queued.turn_id)
+    } catch (error) {
+      console.warn('[AI-Assistant] 置顶队列消息失败:', error?.message)
+      refreshQueueAndFollow()
+      showAlert('该消息已开始执行，无法置顶。请点击「停止」取消当前任务后重试。', '无法立即插入')
+      return
+    }
+    hidePromotedQueueItem(queued)
+    pushPromotedConversationMessages(queued)
+    refreshQueueAndFollow()
+    return
+  }
   if (queued._local || !queued.turn_id) {
-    // 本地乐观项（尚未同步到服务端 / 增强模式无线程）：从本地队列移除后
-    // 取消当前回合，把草稿恢复进输入框并以强插方式立即发送。
+    // 空闲 + 本地项：从本地队列移除后直接发送
     queuedMessages.value = queuedMessages.value.filter((s) => s.id !== queued.id && s.client_message_id !== queued.client_message_id)
-    await cancelActiveTurnAndWait()
     restoreDraft(queued)
     emit('width-change', panelWidth.value)
-    nextTick(() => sendEnhancedMessage(true))
+    sendEnhancedMessage(true)
     return
   }
   if (enhancedMode.value && currentCodexThreadId.value) {
-    // 服务端队列项：先删除服务端队列中的该消息，再取消当前回合并立即以新消息接管发送
+    // 空闲 + 服务端队列项：先删除服务端队列中的该消息，再立即以新消息直接发送
     const clientMessageId = queued.client_message_id || `cm_${Date.now()}-${nextQueuedMessageId}`
     const removeFromQueue = () => {
       serverQueue.value = serverQueue.value.filter((s) => s.id !== queued.id && s.turn_id !== queued.turn_id && s.client_message_id !== clientMessageId)
@@ -1532,12 +1602,10 @@ async function forceInsertQueuedMessage(queued) {
         return
       }
     }
-    // 取消当前回合并等待其进入终态（与 sendEnhancedMessage force 分支共用同一套防护）
-    await cancelActiveTurnAndWait()
     removeFromQueue()
     restoreDraft(queued)
     emit('width-change', panelWidth.value)
-    nextTick(() => sendEnhancedMessage(true))
+    sendEnhancedMessage(true)
     return
   }
 }
@@ -1578,7 +1646,41 @@ async function loadSessionMessages() {
       messages.value.map((m) => `${m.role}:${typeof m.content === 'string' ? m.content : JSON.stringify(m.content)}`)
     )
     const existingTurnIds = new Set(messages.value.map((m) => m.turn_id).filter(Boolean))
+    // 置顶插入等乐观推送留下的流式助手占位：历史里同 turn_id 的 assistant 条目
+    // 直接回填占位（错过实时流也不丢回复、不追加重复气泡），其余逻辑不变
+    const streamingPlaceholderByTurnId = new Map(
+      messages.value
+        .map((m, index) => (m.role === 'assistant' && m.turn_id && m.isStreaming ? [m.turn_id, index] : null))
+        .filter(Boolean)
+    )
+    const fillStreamingPlaceholder = (placeholder, historyText, rawToolEvents, historyStatus) => {
+      // 服务端落库有节流，历史文本可能短于已流式显示的内容：只在不回退时覆盖
+      if (!placeholder.content || (historyText && historyText.length >= placeholder.content.length)) {
+        placeholder.content = historyText || placeholder.content
+      }
+      if (rawToolEvents.length) {
+        placeholder.toolEvents = rawToolEvents.map((te) => ({
+          ...te,
+          name: te.name || (te.tool ? `banana-tools.${te.tool}` : ''),
+          status: te.status === 'completed' ? 'done' : (te.status === 'failed' ? 'error' : te.status),
+        }))
+      }
+      placeholder.isThinking = false
+      placeholder.isStreaming = historyStatus === 'streaming'
+      placeholder.mediaGenerating = false
+    }
     for (const m of history) {
+      if (m.role === 'assistant' && m.turn_id && streamingPlaceholderByTurnId.has(m.turn_id)) {
+        const contentArr0 = Array.isArray(m.content) ? m.content : []
+        const text0 = typeof m.content === 'string'
+          ? m.content
+          : contentArr0.filter((e) => e.type === 'text').map((e) => e.text).join('\n')
+        const tools0 = contentArr0.find((e) => e.type === 'tool_events')?.toolEvents || []
+        const placeholder = messages.value[streamingPlaceholderByTurnId.get(m.turn_id)]
+        if (placeholder) fillStreamingPlaceholder(placeholder, text0, tools0, m.status)
+        streamingPlaceholderByTurnId.delete(m.turn_id)
+        continue
+      }
       if (m.turn_id && existingTurnIds.has(m.turn_id)) continue
       const contentArr = Array.isArray(m.content) ? m.content : []
       const text = typeof m.content === 'string'
@@ -1626,6 +1728,7 @@ async function refreshQueueAndFollow() {
       text: t.content,
       queue_position: t.queue_position,
       status: t.status,
+      priority: t.priority || 0,
       attachments: Array.isArray(t.attachments) ? t.attachments : [],
       skillId: t.skill_id || t.metadata?.skill_id || null,
       authorizationMode: t.authorization_mode || t.metadata?.authorization_mode || 'once',
@@ -1634,6 +1737,19 @@ async function refreshQueueAndFollow() {
     const active = data?.session?.active_turn
     if (active?.turn_id && active.turn_id !== lastFollowedTurnId && active.turn_id !== activeTurn.value.id) {
       lastFollowedTurnId = active.turn_id
+      // 自动派发的排队回合开始运行：本地 activeTurn 仍停留在上一轮终态，
+      // 同步运行态保证「立即插入」的忙判定与停止按钮正确
+      activeTurn.value = {
+        ...activeTurn.value,
+        id: active.turn_id,
+        threadId: currentCodexThreadId.value,
+        status: active.state || 'running',
+        phase: active.cancelRequested ? 'stopping' : (active.state || 'running'),
+        cancellable: !active.cancelRequested,
+        cancelRequested: Boolean(active.cancelRequested),
+        lastEventAt: Date.now(),
+      }
+      isLoading.value = true
       reconnectStream(currentCodexThreadId.value)
     }
     if (serverQueue.value.length === 0 && !active) {
@@ -1641,7 +1757,8 @@ async function refreshQueueAndFollow() {
       if (followQueueTimer) { clearInterval(followQueueTimer); followQueueTimer = null }
       loadSessionMessages()
     } else if (!followQueueTimer) {
-      followQueueTimer = setInterval(refreshQueueAndFollow, 2000)
+      // 1s 轮询：上一轮结束后尽快发现派发中的下一条，缩短「等待上一轮完成」的观感
+      followQueueTimer = setInterval(refreshQueueAndFollow, 1000)
     }
   } catch {
     // 会话可能刚被删除，静默
@@ -1705,11 +1822,27 @@ function stopCurrentActivity() {
         .map((q) => q.turn_id || q.id))
       serverQueue.value = serverQueue.value.filter((q) => !failedIds.has(q.turn_id || q.id))
       queuedMessages.value = queuedMessages.value.filter((q) => !failedIds.has(q.turn_id || q.id))
+      finalizeDeletedTurnPlaceholders(failedIds)
     })
   }
   if (followQueueTimer) { clearInterval(followQueueTimer); followQueueTimer = null }
   lastFollowedTurnId = null
   isLoading.value = false
+}
+
+// 停止时一并删除了排队（含已置顶进入聊天区的）回合：其乐观助手占位永远不会等到
+// 回复，必须收尾为「已停止」，不能留在永久思考中
+function finalizeDeletedTurnPlaceholders(failedIds) {
+  const failed = failedIds instanceof Set ? failedIds : new Set()
+  for (const message of messages.value) {
+    if (message.role !== 'assistant' || !message.isStreaming || !message.turn_id) continue
+    if (failed.has(message.turn_id)) continue // 删除失败的回合仍会被调度器执行，占位保留
+    if (promotedQueueKeys.value.has(message.turn_id)) {
+      message.isStreaming = false
+      message.isThinking = false
+      if (!message.content) message.content = '已停止当前对话或任务'
+    }
+  }
 }
 
 function selectSkillExecutionMode(mode) {
@@ -2120,6 +2253,7 @@ function startNewChat() {
   serverQueue.value = []
   queuedMessages.value = []
   queuedTurn.value = false
+  promotedQueueKeys.value = new Set()
   resetActiveTurn()
   if (followQueueTimer) { clearInterval(followQueueTimer); followQueueTimer = null }
   lastFollowedTurnId = null
@@ -2283,6 +2417,7 @@ async function loadSession(session) {
         text: turn.content,
         queue_position: turn.queue_position,
         status: turn.status,
+        priority: turn.priority || 0,
         attachments: Array.isArray(turn.attachments) ? turn.attachments : [],
         skillId: turn.skill_id || turn.metadata?.skill_id || null,
         authorizationMode: turn.authorization_mode || turn.metadata?.authorization_mode || 'once',
@@ -2358,7 +2493,7 @@ async function loadSession(session) {
         }
       }
       if ((serverQueue.value.length > 0 || activeTurn.value.id) && !followQueueTimer) {
-        followQueueTimer = setInterval(refreshQueueAndFollow, 2000)
+        followQueueTimer = setInterval(refreshQueueAndFollow, 1000)
       }
     }
   } catch (error) {
@@ -2742,8 +2877,17 @@ function handleInputEvent(event) {
   if (editor) {
     const selectionRange = getPromptEditorSelectionRange(editor)
     const text = serializePromptEditorContent(editor)
+    // 浏览器粘贴带样式/富文本内容时，Chrome 会在 contenteditable 里插入
+    // <span style="..."> 等非受控元素节点（可能在 editor 根级，也可能嵌套在
+    // 受控段内部）；只有 Vue 渲染的 prompt-highlight-segment 受控段、以及 tag
+    // 段内的 PromptMediaTag 渲染内容是受控节点，其余元素都视为结构性残留，需
+    // 走 remount 分支清理，否则粘贴文本会与受控 span 同时存在于 DOM 而重复
+    // 显示，且发送后残留输入区。
     const needsStructuralRepair = hasPromptEditorOrphanTextNodes(editor) ||
-      Array.from(editor.childNodes).some(node => node.nodeType === 1 && node.tagName !== 'SPAN')
+      Array.from(editor.querySelectorAll('*')).some(node =>
+        !node.classList?.contains('prompt-highlight-segment') &&
+        !node.closest?.('.prompt-highlight-segment.is-prompt-tag-slot')
+      )
 
     // Chrome/Edge 的 IME 首个拼音字符会先以 insertText（isComposing=false）到达，
     // 同一任务内才触发 compositionstart。若此时立即同步 inputText 并 bump renderKey，
@@ -3583,9 +3727,14 @@ async function sendEnhancedMessage(force = false) {
 async function sendMessage(force = false) {
   if (!hasDraft.value || isUploading.value) return
 
-  if (isLoading.value && !force) {
-    // 标准 harness 交互：任务运行时普通发送 → 消息进入队列（服务端 send_mode=queue），
-    // 输入框立即清空，当前任务继续运行、其生成中卡片不受影响。
+  // 标准 harness 交互：任务运行时普通发送 → 消息进入队列（服务端 send_mode=queue），
+  // 输入框立即清空，当前任务继续运行、其生成中卡片不受影响。
+  // 排队判断以「真实会话是否未结束」为准：增强模式参考 activeTurn 运行态与服务端队列
+  // （避免第一轮已结束、队列已空时新消息仍被误放进排队区等待派发），legacy 模式沿用 isLoading 兼容。
+  const turnBusy = enhancedMode.value
+    ? (isLoading.value || activeTurnRunning.value || serverQueue.value.length > 0 || activeTurn.value.status === 'queued')
+    : isLoading.value
+  if (turnBusy && !force) {
     queueCurrentDraft()
     return
   }

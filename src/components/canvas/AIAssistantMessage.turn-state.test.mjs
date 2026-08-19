@@ -27,7 +27,14 @@ test('cancelled turn renders a gray stopped state', () => {
 })
 
 test('retry event is declared on the component', () => {
-  assert.match(source, /defineEmits\(\['preview-media', 'select-choice', 'retry', 'feedback'\]\)/)
+  assert.match(source, /defineEmits\(\['preview-media', 'select-choice', 'retry'\]\)/)
+})
+
+test('message-level rating feedback UI is removed（不再显示「这次回答有帮助吗」👍/👎）', () => {
+  assert.doesNotMatch(source, /这次回答有帮助吗/)
+  assert.doesNotMatch(source, /ai-message-feedback/)
+  assert.doesNotMatch(source, /rating: 'up'/)
+  assert.doesNotMatch(source, /rating: 'down'/)
 })
 
 test('media generating placeholders and pre-generation content still exist (no regression)', () => {

@@ -101,6 +101,24 @@ test('assistant input defers editor sync and remount for Chrome IME first pinyin
   )
 })
 
+test('assistant input treats browser-pasted styled spans as needing structural repair', () => {
+  const handler = source.match(/function\s+handleInputEvent\(event\)[\s\S]*?\n}\n/)?.[0] || ''
+  // 浏览器粘贴带样式/富文本内容时会在 contenteditable 里插入 <span style="...">，
+  // 它不属于 Vue 受控的 prompt-highlight-segment span，可能在 editor 根级，也可能
+  // 嵌套在受控段内部；needsStructuralRepair 必须把它识别为结构性残留并走 remount
+  // 分支，否则粘贴文本会与受控 span 在 DOM 中同时存在而重复显示，且发送后残留输入区。
+  assert.match(
+    handler,
+    /needsStructuralRepair[\s\S]*?querySelectorAll\([^)]*\)[\s\S]*?prompt-highlight-segment/,
+    'assistant input should scan all element descendants (not only direct children) for non-controlled nodes when deciding structural repair'
+  )
+  assert.match(
+    handler,
+    /prompt-highlight-segment\.is-prompt-tag-slot/,
+    'assistant input should allow nested elements only inside prompt tag slots (PromptMediaTag render)'
+  )
+})
+
 test('assistant attachment drags reset local and canvas drag state on every drag end path', () => {
   assert.match(
     source,

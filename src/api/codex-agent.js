@@ -468,17 +468,23 @@ export async function deleteQueuedCodexMessage(threadId, turnId) {
   return response.json()
 }
 
-/** 提交增强模式回合反馈；服务端按 tenant/user/turn 幂等更新。 */
-export async function submitCodexTurnFeedback(threadId, turnId, rating, reason = null) {
-  const response = await fetch(getApiUrl(`/api/codex-agent/sessions/${encodeURIComponent(threadId)}/turns/${encodeURIComponent(turnId)}/feedback`), {
-    method: 'POST',
+/**
+ * 「立即插入」置顶排队消息：不打断当前回合，把它提为当前回合结束后
+ * 调度器立即派发的下一条（服务端 priority=100）。
+ * @param {string} threadId
+ * @param {string} turnId
+ * @returns {Promise<Object>}
+ */
+export async function promoteQueuedCodexMessage(threadId, turnId) {
+  const response = await fetch(getApiUrl(`/api/codex-agent/sessions/${encodeURIComponent(threadId)}/queue/${encodeURIComponent(turnId)}`), {
+    method: 'PATCH',
     headers: headers(true),
     credentials: 'include',
-    body: JSON.stringify({ rating, reason }),
+    body: JSON.stringify({ priority: 100 }),
   })
   if (!response.ok) {
     const error = await response.json().catch(() => ({}))
-    throw new Error(error.message || error.error || '提交反馈失败')
+    throw new Error(error.message || error.error || '置顶队列消息失败')
   }
   return response.json()
 }

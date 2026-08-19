@@ -365,12 +365,6 @@
       <div v-if="showTimestamp" class="ai-message__time">
         {{ formatTime(message.timestamp) }}
       </div>
-
-      <div v-if="message.role === 'assistant' && message.turn_id && !message.isStreaming && message.turnState !== 'cancelled'" class="ai-message-feedback" role="group" aria-label="回答反馈">
-        <span class="ai-message-feedback__label">这次回答有帮助吗？</span>
-        <button type="button" class="ai-message-feedback__button" :class="{ selected: message.feedback === 'up' }" :aria-pressed="message.feedback === 'up'" aria-label="有帮助" @click="$emit('feedback', { message, rating: 'up' })">👍</button>
-        <button type="button" class="ai-message-feedback__button" :class="{ selected: message.feedback === 'down' }" :aria-pressed="message.feedback === 'down'" aria-label="没帮助" @click="$emit('feedback', { message, rating: 'down' })">👎</button>
-      </div>
     </div>
   </div>
 </template>
@@ -414,7 +408,7 @@ const visibleAttachments = computed(() => {
   return result
 })
 
-const emit = defineEmits(['preview-media', 'select-choice', 'retry', 'feedback'])
+const emit = defineEmits(['preview-media', 'select-choice', 'retry'])
 
 function previewImage(media, images) {
   const imageGroup = images
@@ -2371,38 +2365,6 @@ video.ai-media-card__preview {
 }
 .ai-message-turn-state__retry:focus-visible {
   outline: 2px solid rgba(239, 68, 68, 0.6);
-  outline-offset: 2px;
-}
-
-.ai-message-feedback {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  color: rgba(100, 116, 139, 0.9);
-  font-size: 11px;
-}
-.ai-message-feedback__label { margin-right: 2px; }
-.ai-message-feedback__button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 25px;
-  height: 25px;
-  padding: 0;
-  border: 1px solid rgba(148, 163, 184, 0.32);
-  border-radius: 7px;
-  background: rgba(148, 163, 184, 0.08);
-  cursor: pointer;
-  transition: background-color 0.16s ease, border-color 0.16s ease;
-}
-.ai-message-feedback__button:hover,
-.ai-message-feedback__button.selected {
-  border-color: rgba(129, 140, 248, 0.65);
-  background: rgba(129, 140, 248, 0.18);
-}
-.ai-message-feedback__button:focus-visible {
-  outline: 2px solid rgba(129, 140, 248, 0.75);
   outline-offset: 2px;
 }
 

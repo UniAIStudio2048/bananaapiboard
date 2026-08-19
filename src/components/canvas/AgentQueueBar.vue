@@ -4,7 +4,6 @@
       <li v-for="item in items" :key="item.turn_id || item.id" class="agent-queue-bar__item">
         <span class="agent-queue-bar__preview">{{ item.text || item.content }}</span>
         <button
-          v-if="activeTurnRunning"
           type="button"
           class="agent-queue-bar__action"
           aria-label="立即插入这条消息"

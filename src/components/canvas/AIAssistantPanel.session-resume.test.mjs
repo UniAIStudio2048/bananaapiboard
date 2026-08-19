@@ -63,6 +63,8 @@ test('停止后直发撞到锁释放窗口时，queued done 保留助手占位�
   assert.match(block, /refreshQueueAndFollow\(\)/)
 })
 
-test('停止会话没有 active running turn 时不显示“立即插入”', () => {
-  assert.match(queueBar, /v-if="activeTurnRunning"[\s\S]*?\$emit\('insert', item\)/)
+test('「立即插入」按钮对可见排队项始终渲染：空闲时点击=直接发送，不再依赖 activeTurnRunning', () => {
+  const insertButton = queueBar.match(/<button[\s\S]*?aria-label="立即插入这条消息"[\s\S]*?<\/button>/)?.[0]
+  assert.ok(insertButton, 'insert button must exist')
+  assert.doesNotMatch(insertButton, /v-if="activeTurnRunning"/)
 })
