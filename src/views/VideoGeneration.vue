@@ -919,7 +919,12 @@ async function handleQuickImageReview() {
         providerType
       })
 
-      const { promise } = pollAssetStatus(assetId, { interval: 5000, timeout: 2700000, providerType })
+      const { promise } = pollAssetStatus(assetId, {
+        interval: 5000,
+        timeout: 2700000,
+        providerType,
+        groupId: result.quickAsset?.groupId || result.asset?.GroupId
+      })
       promise.then((asset) => {
         const finalFaceCode = asset.FaceCode || asset.faceCode || initialFaceCode
         updateImageReview(file, {

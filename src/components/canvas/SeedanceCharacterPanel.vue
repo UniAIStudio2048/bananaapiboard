@@ -72,7 +72,7 @@ const showCreateGroupModal = ref(false)
 const createGroupForm = ref({ Name: '', Description: '' })
 const createGroupLoading = ref(false)
 const createGroupType = ref('AIGC') // 'AIGC' | 'LivenessFace'
-const supportsLiveness = computed(() => ['volcengine', 'volcengine_proxy', 'thirdparty'].includes(activeProvider.value))
+const supportsLiveness = computed(() => ['volcengine', 'volcengine_proxy', 'thirdparty', 'stars_asset'].includes(activeProvider.value))
 const isByteforLibrary = computed(() => props.libraryType === 'bytefor')
 const requestedProviderType = computed(() => isByteforLibrary.value ? 'bytefor' : undefined)
 const isSeedanceOpenApiProProvider = computed(() => activeProvider.value === 'seedance_openapi_pro' || isByteforLibrary.value)
@@ -254,7 +254,10 @@ async function loadAssets() {
     for (const asset of staleAssets) {
       if (pollers.value[asset.Id]) continue
       try {
-        const statusResult = await getAsset(asset.Id)
+        const statusResult = await getAsset(asset.Id, {
+          providerType: asset.metadata?.providerType,
+          groupId: asset.GroupId
+        })
         const volcAsset = statusResult.asset || statusResult
         const realStatus = volcAsset.Status || volcAsset.status
         if (realStatus && realStatus !== asset.Status) {
@@ -300,7 +303,11 @@ async function syncFromCloud() {
   
   try {
     const groupIds = groups.value.map(g => g.Id)
-    const cloudResult = await listVolcAssets({ groupIds, pageSize: 100 })
+    const cloudResult = await listVolcAssets({
+      groupIds,
+      pageSize: 100,
+      providerType: requestedProviderType.value
+    })
     const cloudAssets = cloudResult.assets || []
     if (cloudAssets.length === 0) return
     
@@ -425,7 +432,8 @@ async function handleCreateGroupLiveness() {
   errorMessage.value = ''
   try {
     const session = await createLivenessSession({
-      CallbackURL: window.location.origin + '/face-verify-callback'
+      CallbackURL: window.location.origin + '/face-verify-callback',
+      ProviderType: requestedProviderType.value
     })
     if (!session.H5Link || !session.BytedToken) {
       throw new Error('获取认证链接失败')
@@ -449,7 +457,8 @@ async function handleCreateGroupLiveness() {
           Name: createGroupForm.value.Name,
           Description: createGroupForm.value.Description,
           spaceType: spaceParams.spaceType,
-          teamId: spaceParams.teamId
+          teamId: spaceParams.teamId,
+          ProviderType: requestedProviderType.value
         })
         if (result.GroupId) {
           showCreateGroupModal.value = false
@@ -614,6 +623,8 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
   const { promise, cancel } = pollAssetStatus(assetId, {
     interval: 5000,
     timeout: 2700000,
+    providerType: requestedProviderType.value,
+    groupId,
     onStatusChange(status) {
       const idx = allAssets.value.findIndex(a => (a.Id || a.id) === assetId)
       if (idx >= 0) allAssets.value[idx].Status = status
@@ -774,6 +785,11 @@ const editingName = ref('')
 const editingInputRef = ref(null)
 
 function startRename(asset) {
+  if (activeProvider.value === 'stars_asset') {
+    errorMessage.value = '当前素材渠道不支持资产改名'
+    closeContextMenu()
+    return
+  }
   editingAssetId.value = asset.Id
   editingName.value = asset.Name || ''
   closeContextMenu()
@@ -789,7 +805,10 @@ async function confirmRename(asset) {
   if (!newName || newName === asset.Name) return
   
   try {
-    await updateVolcAsset(asset.Id, { Name: newName })
+    await updateVolcAsset(asset.Id, { Name: newName }, {
+      providerType: asset.metadata?.providerType,
+      groupId: asset.GroupId
+    })
     if (asset._canvasId) {
       await updateAsset(asset._canvasId, { name: newName })
     }
@@ -837,7 +856,10 @@ async function confirmDelete() {
   
   try {
     try {
-      await deleteVolcAsset(asset.Id)
+      await deleteVolcAsset(asset.Id, {
+        providerType: asset.metadata?.providerType,
+        groupId: asset.GroupId
+      })
     } catch (volcErr) {
       console.warn('[SeedancePanel] 云端删除失败（继续删除本地）:', volcErr.message)
     }

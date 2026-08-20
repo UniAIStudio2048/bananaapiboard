@@ -1997,7 +1997,12 @@ async function handleQuickSeedanceReview() {
     })
     showToast('已提交 Seedance 角色过审，审核通过后会标记“已过审”', 'info')
 
-    const { promise } = pollAssetStatus(assetId, { interval: 5000, timeout: 2700000, providerType })
+    const { promise } = pollAssetStatus(assetId, {
+      interval: 5000,
+      timeout: 2700000,
+      providerType,
+      groupId: result.quickAsset?.groupId || result.asset?.GroupId
+    })
     promise.then((finalAsset) => {
       const finalFaceCode = finalAsset.FaceCode || finalAsset.faceCode || initialFaceCode
       updateSeedanceQuickAsset({

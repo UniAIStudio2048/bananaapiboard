@@ -5997,17 +5997,20 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     }
     
     // Seedance 2.0 角色素材处理
-    if (capturedState.isSeedance2 && (capturedState.characterAssetUris.length > 0 || (capturedState.isSeedanceOpenApiPro && capturedState.faceCodes?.length > 0))) {
+    // 进入与替换以实时收集的 characterReplacements 为准：capturedState.characterAssetUris 是
+    // 提交瞬间的快照，与后台实时遍历存在竞态，快照为空会整体跳过替换，导致已过审角色资产
+    // 以预览 URL 直传 API（seedance-2.0/2.5 表现一致）。
+    if (capturedState.isSeedance2) {
       const characterReplacements = collectSeedanceMediaReplacements(capturedState.nodeId, {
         includeCharacters: true,
         includeQuickAssets: false
       })
-      const charHttpUrls = new Set(characterReplacements.flatMap(item => item.sourceUrls || []))
       if (capturedState.isSeedanceOpenApiPro && capturedState.faceCodes?.length > 0) {
+        const charHttpUrls = new Set(characterReplacements.flatMap(item => item.sourceUrls || []))
         finalImages = finalImages.filter(u => !charHttpUrls.has(u))
         console.log('[VideoNode] Seedance OpenAPI Pro 仅保留普通参考图，角色素材通过 face codes 传递:', capturedState.faceCodes, '最终图片列表:', finalImages)
       }
-      if (!capturedState.isSeedanceOpenApiPro && capturedState.characterAssetUris.length > 0) {
+      if (!capturedState.isSeedanceOpenApiPro && characterReplacements.length > 0) {
         finalImages = applyOrderedMediaReplacements(finalImages, characterReplacements)
         console.log('[VideoNode] Seedance 2.0 注入角色素材 Asset URI:', capturedState.characterAssetUris, '最终图片列表:', finalImages)
       }
@@ -6030,13 +6033,15 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       console.log('[VideoNode] Bytefor 角色素材通过 face codes 传递:', capturedState.byteforFaceCodes, '最终图片列表:', finalImages)
     }
 
-    if (capturedState.isSeedance2 && capturedState.quickAssetUris.length > 0) {
+    if (capturedState.isSeedance2) {
       const quickReplacements = collectSeedanceMediaReplacements(capturedState.nodeId, {
         includeCharacters: false,
         includeQuickAssets: true
       })
-      finalImages = applyOrderedMediaReplacements(finalImages, quickReplacements)
-      console.log('[VideoNode] Seedance 2.0 注入快捷过审 Asset URI:', capturedState.quickAssetUris, '最终图片列表:', finalImages)
+      if (quickReplacements.length > 0) {
+        finalImages = applyOrderedMediaReplacements(finalImages, quickReplacements)
+        console.log('[VideoNode] Seedance 2.0 注入快捷过审 Asset URI:', capturedState.quickAssetUris, '最终图片列表:', finalImages)
+      }
     }
     
     // 确保参考图片可访问（可能耗时：串行 fetch + upload）

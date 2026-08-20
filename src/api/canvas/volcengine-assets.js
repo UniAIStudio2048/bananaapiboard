@@ -219,6 +219,7 @@ export async function listAssets(params = {}) {
 export async function getAsset(id, params = {}) {
   const queryParams = new URLSearchParams()
   if (params.providerType) queryParams.set('providerType', params.providerType)
+  if (params.groupId) queryParams.set('groupId', params.groupId)
   const qs = queryParams.toString()
   const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/${id}${qs ? '?' + qs : ''}`), {
     method: 'GET',
@@ -235,8 +236,12 @@ export async function getAsset(id, params = {}) {
 /**
  * 更新角色资产
  */
-export async function updateAsset(id, data) {
-  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/${id}`), {
+export async function updateAsset(id, data, params = {}) {
+  const queryParams = new URLSearchParams()
+  if (params.providerType) queryParams.set('providerType', params.providerType)
+  if (params.groupId) queryParams.set('groupId', params.groupId)
+  const qs = queryParams.toString()
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/${id}${qs ? '?' + qs : ''}`), {
     method: 'PUT',
     credentials: 'include',
     headers: getAuthHeaders(),
@@ -252,8 +257,12 @@ export async function updateAsset(id, data) {
 /**
  * 删除角色资产
  */
-export async function deleteAsset(id) {
-  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/${id}`), {
+export async function deleteAsset(id, params = {}) {
+  const queryParams = new URLSearchParams()
+  if (params.groupId) queryParams.set('groupId', params.groupId)
+  if (params.providerType) queryParams.set('providerType', params.providerType)
+  const qs = queryParams.toString()
+  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/${id}${qs ? '?' + qs : ''}`), {
     method: 'DELETE',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -289,7 +298,7 @@ export async function deleteAssetGroup(id) {
  * @param {Object} options - { interval, timeout, onStatusChange }
  * @returns {{ promise: Promise, cancel: Function }}
  */
-export function pollAssetStatus(assetId, { interval = 5000, timeout = 2700000, onStatusChange, providerType } = {}) {
+export function pollAssetStatus(assetId, { interval = 5000, timeout = 2700000, onStatusChange, providerType, groupId } = {}) {
   let cancelled = false
   let timer = null
 
@@ -300,7 +309,7 @@ export function pollAssetStatus(assetId, { interval = 5000, timeout = 2700000, o
     async function check() {
       if (cancelled) return
       try {
-        const result = await getAsset(assetId, { providerType })
+        const result = await getAsset(assetId, { providerType, groupId })
         const asset = result.asset || result
         const status = asset.Status || asset.status
         pollCount++

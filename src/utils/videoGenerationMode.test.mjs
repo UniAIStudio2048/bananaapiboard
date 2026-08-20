@@ -203,6 +203,27 @@ test('Seedance SD2 request model keeps selected config id for resolution-specifi
   )
 })
 
+test('Seedance 2.5 request model keeps selected config id so shared actualModels stay unambiguous', () => {
+  assert.equal(
+    resolveVideoRequestModel({
+      apiType: 'seedance-2.5',
+      name: 'seedance-2.5-zr',
+      actualModel: 'doubao-seedance-2-5-260628',
+      seedanceConfig: { model: 'doubao-seedance-2-5-260628' }
+    }, 'seedance-2.5-zr'),
+    'seedance-2.5-zr'
+  )
+  assert.equal(
+    resolveVideoRequestModel({
+      apiType: 'seedance-2.5',
+      name: 'seedance-2.5',
+      actualModel: 'doubao-seedance-2-5-260628',
+      seedanceConfig: { model: 'doubao-seedance-2-5-260628' }
+    }, 'seedance-2.5'),
+    'seedance-2.5'
+  )
+})
+
 test('Seedance SD2 submit payload keeps selected config id for backend billing', () => {
   const entries = buildVideoGenerationFormEntries({
     modelConfig: {

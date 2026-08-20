@@ -128,6 +128,7 @@ export function resolveVideoRequestModel(modelConfig, modelValue) {
   if (apiType === 'bytefor') return modelValue
   if (apiType === 'fdai-video' || apiType.startsWith('fdai-video:')) return modelValue
   if (apiType === 'minimax-h3') return modelValue
+  if (apiType === 'seedance-2.5') return modelValue
   if (isSeedanceSd2VideoModel(modelConfig)) return modelValue
   if (apiType === 'seedance-openapi-pro' || apiType === 'seedance-openai') {
     return modelConfig?.seedanceOpenConfig?.model || modelConfig?.seedanceConfig?.model || modelConfig?.actualModel || modelValue

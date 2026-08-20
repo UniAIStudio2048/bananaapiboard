@@ -38,7 +38,7 @@ async function resolveAssetUrl({ force = false } = {}) {
 
   isResolvingAsset.value = true
   try {
-    const result = await getVolcengineAsset(assetId)
+    const result = await getVolcengineAsset(assetId, { groupId: props.data?.groupId })
     const asset = result?.asset || result
     const freshUrl = asset?.URL || asset?.url
     if (!freshUrl) return
