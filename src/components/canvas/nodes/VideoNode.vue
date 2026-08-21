@@ -31,7 +31,7 @@ import {
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl, onCanvasImageError, toSameOriginUrl } from '@/utils/canvasThumbnail'
-import { isModelReferenceMediaUrl, isPreferredModelMediaUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
+import { isModelReferenceMediaUrl, isPreferredModelMediaUrl, normalizeModelImageUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
@@ -6047,7 +6047,10 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
         console.log('[VideoNode] Seedance OpenAPI Pro 仅保留普通参考图，角色素材通过 face codes 传递:', capturedState.faceCodes, '最终图片列表:', finalImages)
       }
       if (!capturedState.isSeedanceOpenApiPro && characterReplacements.length > 0) {
-        finalImages = applyOrderedMediaReplacements(finalImages, characterReplacements)
+        // finalImages 在捕获与 ensureAccessibleUrls 中会经 normalizeModelImageUrl 剥掉缩略参数/
+        // 解包代理，sourceUrls 是角色节点原始 URL；两侧按同一规则归一化后匹配，避免精确匹配
+        // 失配导致预览 URL 留在 @图片1、asset:// 被追加到末尾。
+        finalImages = applyOrderedMediaReplacements(finalImages, characterReplacements, { normalizeUrl: normalizeModelImageUrl })
         console.log('[VideoNode] Seedance 2.0 注入角色素材 Asset URI:', capturedState.characterAssetUris, '最终图片列表:', finalImages)
       }
     }
@@ -6075,7 +6078,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
         includeQuickAssets: true
       })
       if (quickReplacements.length > 0) {
-        finalImages = applyOrderedMediaReplacements(finalImages, quickReplacements)
+        finalImages = applyOrderedMediaReplacements(finalImages, quickReplacements, { normalizeUrl: normalizeModelImageUrl })
         console.log('[VideoNode] Seedance 2.0 注入快捷过审 Asset URI:', capturedState.quickAssetUris, '最终图片列表:', finalImages)
       }
     }

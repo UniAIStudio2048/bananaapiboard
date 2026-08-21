@@ -24,11 +24,18 @@ test('Seedance quick asset replacement is gated by live quickReplacements', () =
   assert.ok(idx > 0, 'quick asset injection log should exist')
   const quickBranch = backgroundSource.slice(idx - 700, idx + 300)
   assert.match(quickBranch, /if \(capturedState\.isSeedance2\) \{\s*const quickReplacements = collectSeedanceMediaReplacements/)
-  assert.match(quickBranch, /if \(quickReplacements\.length > 0\) \{\s*finalImages = applyOrderedMediaReplacements\(finalImages, quickReplacements\)/)
+  assert.match(quickBranch, /if \(quickReplacements\.length > 0\) \{\s*finalImages = applyOrderedMediaReplacements\(finalImages, quickReplacements, \{ normalizeUrl: normalizeModelImageUrl \}\)/)
   assert.doesNotMatch(quickBranch, /quickAssetUris\.length > 0/)
 })
 
 test('replacement injection logs still reference the collected replacements', () => {
-  assert.match(backgroundSource, /finalImages = applyOrderedMediaReplacements\(finalImages, characterReplacements\)/)
-  assert.match(backgroundSource, /finalImages = applyOrderedMediaReplacements\(finalImages, quickReplacements\)/)
+  assert.match(backgroundSource, /finalImages = applyOrderedMediaReplacements\(finalImages, characterReplacements, \{ normalizeUrl: normalizeModelImageUrl \}\)/)
+  assert.match(backgroundSource, /finalImages = applyOrderedMediaReplacements\(finalImages, quickReplacements, \{ normalizeUrl: normalizeModelImageUrl \}\)/)
+})
+
+test('character replacement matches urls with the same normalization as finalImages capture', () => {
+  // finalImages 捕获走 normalizeModelImageUrls（剥缩略参数/解包代理），sourceUrls 是
+  // 角色节点原始 URL；两侧必须按同一规则归一化匹配，否则精确匹配失配、预览 URL
+  // 留在 @图片1、asset:// 被追加到末尾（1080P 换头任务以裸 URL 直传的根因）。
+  assert.match(source, /import \{[^}]*normalizeModelImageUrl[^}]*\} from '@\/utils\/canvasModelMedia'/)
 })

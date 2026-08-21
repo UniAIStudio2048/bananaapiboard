@@ -1,17 +1,19 @@
-function normalizeUrl(value) {
-  return typeof value === 'string' ? value.trim() : ''
+function normalizeUrlWith(value, normalizeUrl) {
+  const base = typeof value === 'string' ? value.trim() : ''
+  if (!base) return ''
+  return typeof normalizeUrl === 'function' ? normalizeUrl(base) : base
 }
 
-function buildSourceReplacementMap(replacements) {
+function buildSourceReplacementMap(replacements, normalizeUrl) {
   const sourceMap = new Map()
   const normalizedReplacements = []
 
   for (const replacement of Array.isArray(replacements) ? replacements : []) {
-    const replacementUrl = normalizeUrl(replacement?.replacementUrl)
+    const replacementUrl = normalizeUrlWith(replacement?.replacementUrl, normalizeUrl)
     if (!replacementUrl) continue
 
     const sourceUrls = Array.isArray(replacement?.sourceUrls)
-      ? replacement.sourceUrls.map(normalizeUrl).filter(Boolean)
+      ? replacement.sourceUrls.map(url => normalizeUrlWith(url, normalizeUrl)).filter(Boolean)
       : []
     normalizedReplacements.push({ replacementUrl, sourceUrls })
 
@@ -25,9 +27,9 @@ function buildSourceReplacementMap(replacements) {
   return { sourceMap, normalizedReplacements }
 }
 
-export function applyOrderedMediaReplacements(orderedUrls, replacements = []) {
-  const urls = Array.isArray(orderedUrls) ? orderedUrls.map(normalizeUrl).filter(Boolean) : []
-  const { sourceMap, normalizedReplacements } = buildSourceReplacementMap(replacements)
+export function applyOrderedMediaReplacements(orderedUrls, replacements = [], { normalizeUrl } = {}) {
+  const urls = Array.isArray(orderedUrls) ? orderedUrls.map(url => normalizeUrlWith(url, normalizeUrl)).filter(Boolean) : []
+  const { sourceMap, normalizedReplacements } = buildSourceReplacementMap(replacements, normalizeUrl)
   const usedReplacements = new Set()
 
   const replacedUrls = urls.map(url => {
