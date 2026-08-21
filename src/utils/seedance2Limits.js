@@ -53,6 +53,9 @@ function toPositiveNumber(value) {
   return Number.isFinite(number) && number > 0 ? number : 0
 }
 
+// 与后端 isSeedance25Model 对齐：兼容第三方渠道自定义模型名（dreamina-seedance-2-5-*、seedance_2_5_pro、seedance2.5 等）
+const SEEDANCE25_MODEL_PATTERN = /seedance[-_\s]?2[-._\s]?5(?!\d)/i
+
 export function isSeedance25Model(modelConfig = {}) {
   const values = typeof modelConfig === 'object'
     ? [
@@ -63,7 +66,7 @@ export function isSeedance25Model(modelConfig = {}) {
         modelConfig.seedance2Model
       ]
     : [modelConfig]
-  return values.some(value => String(value || '').toLowerCase().includes('seedance-2-5'))
+  return values.some(value => SEEDANCE25_MODEL_PATTERN.test(String(value || '')))
 }
 
 export function getSeedance25ModeConstraints(modelConfig = {}, mode = '') {
