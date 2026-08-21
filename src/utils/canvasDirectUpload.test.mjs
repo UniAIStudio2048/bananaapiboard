@@ -623,3 +623,47 @@ console.log('canvasDirectUpload tests passed')
   assert.ok(directCalls.length > 0)
   assert.ok(!apiCalls.some(call => call.url.endsWith('/up-mp/complete') && !call.url.includes('/proxy')))
 }
+
+{
+  // R2 明确要求后端代理时，不尝试浏览器直传，也不依赖桶 CORS。
+  const file = new File([new Uint8Array([1, 2, 3, 4])], 'r2.png', { type: 'image/png' })
+  const apiCalls = []
+  let directCalls = 0
+  const uploader = createCanvasDirectUploader({
+    checkpointStore: createMemoryCanvasUploadCheckpointStore(),
+    apiFetch: async (url, options = {}) => {
+      apiCalls.push({ url, method: options.method, rawBody: options.rawBody === true })
+      if (url.endsWith('/presign')) {
+        return {
+          upload: {
+            id: 'up-r2',
+            mode: 'single',
+            status: 'created',
+            proxy: true
+          }
+        }
+      }
+      if (url.endsWith('/up-r2/proxy')) {
+        return {
+          success: true,
+          upload: { id: 'up-r2', status: 'completed' },
+          asset: { id: 'asset-r2', url: 'https://files.example.com/canvas/r2.png' }
+        }
+      }
+      throw new Error(`unexpected API request: ${url}`)
+    },
+    directFetch: async () => {
+      directCalls++
+      throw new Error('R2 proxy upload must not call directFetch')
+    }
+  })
+
+  const result = await uploader.upload(file, { mediaType: 'image' })
+  assert.equal(result.url, 'https://files.example.com/canvas/r2.png')
+  assert.equal(directCalls, 0)
+  assert.deepEqual(apiCalls.map(call => call.url), [
+    '/api/canvas/uploads/presign',
+    '/api/canvas/uploads/up-r2/proxy'
+  ])
+  assert.equal(apiCalls[1].rawBody, true)
+}

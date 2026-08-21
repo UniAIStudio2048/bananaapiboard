@@ -169,6 +169,16 @@ export function createCanvasDirectUploader({
 
   const uploadSingle = async (file, upload, options) => {
     options.onProgress?.(0)
+    if (upload.proxy === true) {
+      const payload = requirePayload(await readPayload(await apiFetch(`/api/canvas/uploads/${upload.id}/proxy`, {
+        method: 'POST',
+        body: file,
+        rawBody: true,
+        signal: options.signal
+      })))
+      options.onProgress?.(1)
+      return normalizeResult(payload)
+    }
     const maxRetries = singleRetryCount(options.maxRetries)
     let etag = null
     let recoverConflict = false
