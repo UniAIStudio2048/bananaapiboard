@@ -20,7 +20,7 @@ import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
-import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { saveWorkflow, uploadCanvasMedia } from '@/api/canvas/workflow'
 import { createDigitalHumanLipsync, createDigitalHumanVideo, getDigitalHumanChannels } from '@/api/canvas/digital-humans'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import {
@@ -5060,15 +5060,53 @@ async function ensureAccessibleUrls(imageUrls) {
   return normalizeModelImageUrls(accessibleUrls).filter(isModelReferenceMediaUrl)
 }
 
+async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
+  const currentTab = canvasStore.getCurrentTab?.()
+  const workflowData = canvasStore.exportWorkflowForSave()
+  if (!currentTab?.id || !workflowData.nodes?.some(node => node.id === nodeId)) {
+    throw new Error('画布保存失败，无法提交视频生成任务')
+  }
+
+  const currentSpace = currentTab.workflowSpaceType
+    ? {
+        spaceType: currentTab.workflowSpaceType,
+        teamId: currentTab.workflowSpaceType === 'team' ? currentTab.workflowTeamId : null
+      }
+    : teamStore.getSpaceParams('current')
+  const result = await saveWorkflow({
+    ...(currentTab.workflowId ? { id: currentTab.workflowId } : {}),
+    name: currentTab.name || `草稿_${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
+    uploadToCloud: false,
+    isDraft: true,
+    spaceType: currentSpace.spaceType,
+    teamId: currentSpace.teamId,
+    ...workflowData
+  })
+  const workflow = result?.workflow
+  const workflowId = workflow?.id || result?.id
+  if (!workflowId) {
+    throw new Error('画布保存失败，无法提交视频生成任务')
+  }
+
+  canvasStore.markCurrentTabSaved(workflowId, workflow?.workflow_uid, {
+    space_type: workflow?.space_type || currentSpace.spaceType,
+    team_id: workflow?.team_id || currentSpace.teamId || null
+  })
+  return {
+    currentTab: canvasStore.getCurrentTab?.() || currentTab,
+    workflowId
+  }
+}
+
 // 单次生成请求
 async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedState = {}) {
   const token = localStorage.getItem('token')
-  const currentTab = canvasStore.getCurrentTab?.()
+  const { currentTab, workflowId } = await ensureCanvasWorkflowForVideoSubmission(nodeId)
   const submission = createPendingGenerationSubmission({
     type: 'video',
     nodeId,
     tabId: currentTab?.id,
-    workflowId: currentTab?.workflowId,
+    workflowId,
     prompt: finalPrompt,
     model: capturedState.model || selectedModel.value,
     aspectRatio: selectedAspectRatio.value,
@@ -5113,9 +5151,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   if (currentTab?.id) {
     formData.append('canvas_tab_id', currentTab.id)
   }
-  if (currentTab?.workflowId) {
-    formData.append('canvas_workflow_id', currentTab.workflowId)
-  }
+  formData.append('canvas_workflow_id', workflowId)
   
   // VEO 模型：使用实际的模型名称
   if (isVeoModel.value) {
