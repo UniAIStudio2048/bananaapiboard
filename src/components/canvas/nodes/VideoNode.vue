@@ -6941,7 +6941,11 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
       canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'image', uploaded, tabId })
     }
   } catch (error) {
-    if (error?.name === 'AbortError') return
+    // 主动取消（离开画布）也必须复位 isUploading，否则节点永久卡"上传中"；取消场景不注册自动重试
+    if (error?.name === 'AbortError') {
+      canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
+      return
+    }
     console.warn('[VideoNode] 后台上传失败，保持使用 blob URL:', error.message)
     canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
     uploadManager.registerFailedUpload(`img_${nodeId}_${Date.now()}`, {
@@ -6978,7 +6982,11 @@ async function uploadVideoFileAsync(file, blobUrl, nodeId) {
       canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'video', uploaded: result, tabId })
     }
   } catch (error) {
-    if (error?.name === 'AbortError') return
+    // 主动取消（离开画布）也必须复位 isUploading，否则节点永久卡"上传中"；取消场景不注册自动重试
+    if (error?.name === 'AbortError') {
+      canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
+      return
+    }
     console.warn('[VideoNode] 视频后台上传失败:', error.message)
     canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
     uploadManager.registerFailedUpload(`vid_${nodeId}_${Date.now()}`, {
@@ -7203,7 +7211,11 @@ async function uploadAudioFileAsync(file, blobUrl, nodeId) {
       canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'audio', uploaded: result, tabId })
     }
   } catch (error) {
-    if (error?.name === 'AbortError') return
+    // 主动取消（离开画布）也必须复位 isUploading，否则节点永久卡"上传中"；取消场景不注册自动重试
+    if (error?.name === 'AbortError') {
+      canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
+      return
+    }
     console.warn('[VideoNode] 音频后台上传失败:', error.message)
     canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
     uploadManager.registerFailedUpload(`aud_${nodeId}_${Date.now()}`, {

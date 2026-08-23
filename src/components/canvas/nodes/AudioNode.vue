@@ -1696,7 +1696,11 @@ async function uploadAudioFileAsync(file, blobUrl, nodeId) {
     canvasStore.commitMediaUpload({ nodeId, blobUrl, mediaType: 'audio', uploaded: result, tabId })
     
   } catch (error) {
-    if (error?.name === 'AbortError') return
+    // 主动取消（离开画布）也必须复位 isUploading，否则节点永久卡"上传中"；取消场景不注册自动重试
+    if (error?.name === 'AbortError') {
+      canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
+      return
+    }
     console.error('[AudioNode] 音频上传失败:', error.message)
     canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
     uploadManager.registerFailedUpload(`aud_${nodeId}_${Date.now()}`, {

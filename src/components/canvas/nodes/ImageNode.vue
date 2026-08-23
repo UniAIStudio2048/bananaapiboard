@@ -4753,7 +4753,11 @@ async function uploadImageFileAsync(file, blobUrl, nodeId) {
       }
     }
   } catch (error) {
-    if (error?.name === 'AbortError') return
+    // 主动取消（离开画布）也必须复位 isUploading，否则节点永久卡"上传中"；取消场景不注册自动重试
+    if (error?.name === 'AbortError') {
+      canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
+      return
+    }
     console.warn('[ImageNode] 后台上传失败，保持使用 blob URL:', error.message)
     canvasStore.markMediaUploadFailed({ nodeId, tabId, error })
     uploadManager.registerFailedUpload(`img_${nodeId}_${Date.now()}`, {
