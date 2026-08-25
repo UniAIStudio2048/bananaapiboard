@@ -54,3 +54,18 @@ test('expired quick asset is marked invalid and falls back to original URL', () 
     'https://cdn.example/image.png'
   )
 })
+
+test('failed quick asset is exposed as failed instead of remaining in review', () => {
+  const now = Date.parse('2026-05-09T00:00:00.000Z')
+  const data = {
+    seedanceQuickAsset: {
+      assetId: 'asset-1',
+      assetUri: 'asset://asset-1',
+      status: 'rejected',
+      expiresAt: new Date(now + SEEDANCE_QUICK_ASSET_TTL_MS).toISOString()
+    }
+  }
+
+  assert.equal(getSeedanceQuickAsset(data, now).failed, true)
+  assert.equal(getSeedanceQuickAssetStatus(data, now), 'failed')
+})

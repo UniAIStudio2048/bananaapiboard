@@ -3,6 +3,10 @@
  * 管理角色组和角色资产的 CRUD 操作
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { normalizeAssetReviewStatus } from '@/utils/assetReviewStatus'
+
+const ASSET_REQUEST_TIMEOUT_MS = 30000
+const QUICK_SEEDANCE_SUBMIT_TIMEOUT_MS = 150000
 
 function getAuthHeaders() {
   const token = localStorage.getItem('token')
@@ -10,6 +14,24 @@ function getAuthHeaders() {
     'Content-Type': 'application/json',
     ...getTenantHeaders(),
     ...(token ? { Authorization: `Bearer ${token}` } : {})
+  }
+}
+
+async function fetchAssetApi(url, options, timeout = ASSET_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal })
+  } catch (error) {
+    if (controller.signal.aborted) {
+      const timeoutError = new Error('请求超时，请检查网络或素材渠道后重试')
+      timeoutError.code = 'TIMEOUT'
+      throw timeoutError
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
   }
 }
 
@@ -77,7 +99,7 @@ export async function listAssetGroups(params = {}) {
   if (params.teamId) queryParams.set('teamId', params.teamId)
   const qs = queryParams.toString()
   const url = getApiUrl(`/api/volcengine-asset/groups${qs ? '?' + qs : ''}`)
-  const response = await fetch(url, {
+  const response = await fetchAssetApi(url, {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -178,12 +200,12 @@ export async function createAsset(data) {
  * @param {Object} data - { URL, Name, sourceNodeId }
  */
 export async function createQuickSeedanceCharacterAsset(data) {
-  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/quick-seedance-character`), {
+  const response = await fetchAssetApi(getApiUrl(`/api/volcengine-asset/assets/quick-seedance-character`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
     body: JSON.stringify(data)
-  })
+  }, QUICK_SEEDANCE_SUBMIT_TIMEOUT_MS)
   return parseAssetResponse(response, '快捷创建 Seedance 角色资产失败')
 }
 
@@ -221,7 +243,7 @@ export async function getAsset(id, params = {}) {
   if (params.providerType) queryParams.set('providerType', params.providerType)
   if (params.groupId) queryParams.set('groupId', params.groupId)
   const qs = queryParams.toString()
-  const response = await fetch(getApiUrl(`/api/volcengine-asset/assets/${id}${qs ? '?' + qs : ''}`), {
+  const response = await fetchAssetApi(getApiUrl(`/api/volcengine-asset/assets/${id}${qs ? '?' + qs : ''}`), {
     method: 'GET',
     credentials: 'include',
     headers: getAuthHeaders()
@@ -311,17 +333,18 @@ export function pollAssetStatus(assetId, { interval = 5000, timeout = 2700000, o
       try {
         const result = await getAsset(assetId, { providerType, groupId })
         const asset = result.asset || result
-        const status = asset.Status || asset.status
+        const status = normalizeAssetReviewStatus(asset.Status || asset.status)
+        const normalizedAsset = { ...asset, Status: status }
         pollCount++
 
-        if (onStatusChange) onStatusChange(status, asset)
+        if (onStatusChange) onStatusChange(status, normalizedAsset)
 
         if (status === 'Active') {
-          resolve(asset)
+          resolve(normalizedAsset)
           return
         }
         if (status === 'Failed') {
-          reject(new Error(asset.FailMessage || '角色资产创建失败'))
+          reject(new Error(normalizedAsset.FailMessage || '角色资产审核失败'))
           return
         }
         if (Date.now() - startTime > timeout) {

@@ -1922,6 +1922,20 @@ const isQuickSeedanceSubmitting = ref(false)
 const seedanceQuickAssetStatus = computed(() => getSeedanceQuickAssetStatus(props.data))
 const showSeedanceQuickBadge = computed(() => seedanceQuickAssetStatus.value === 'approved' || seedanceQuickAssetStatus.value === 'expired')
 const seedanceQuickBadgeText = computed(() => seedanceQuickAssetStatus.value === 'expired' ? '已失效' : '已过审')
+const seedanceQuickReviewButtonText = computed(() => {
+  if (seedanceQuickAssetStatus.value === 'approved') return '已过审'
+  if (seedanceQuickAssetStatus.value === 'processing') return '审核中'
+  if (seedanceQuickAssetStatus.value === 'failed') return '审核失败，重试'
+  return '过审'
+})
+const seedanceQuickReviewButtonTitle = computed(() => {
+  if (seedanceQuickAssetStatus.value === 'approved') return '该图片已过审，可直接连接 Seedance 2.0 视频节点使用'
+  if (seedanceQuickAssetStatus.value === 'processing') return 'Seedance 角色审核中'
+  if (seedanceQuickAssetStatus.value === 'failed') {
+    return `Seedance 角色审核失败：${props.data?.seedanceQuickAsset?.error || '请检查素材渠道后重试'}`
+  }
+  return '提交 Seedance 角色过审'
+})
 
 async function resolveQuickSeedanceImageUrl(rawUrl) {
   const url = getOriginalImageUrl(rawUrl)
@@ -2001,7 +2015,13 @@ async function handleQuickSeedanceReview() {
       interval: 5000,
       timeout: 2700000,
       providerType,
-      groupId: result.quickAsset?.groupId || result.asset?.GroupId
+      groupId: result.quickAsset?.groupId || result.asset?.GroupId,
+      onStatusChange(status, asset) {
+        updateSeedanceQuickAsset({
+          status,
+          error: status === 'Failed' ? (asset.FailMessage || '角色审核未通过，请更换图片后重试') : null
+        })
+      }
     })
     promise.then((finalAsset) => {
       const finalFaceCode = finalAsset.FaceCode || finalAsset.faceCode || initialFaceCode
@@ -2014,15 +2034,18 @@ async function handleQuickSeedanceReview() {
         faceCode: isQuickOpenApiPro ? finalFaceCode : undefined,
         assetUrl: finalAsset.URL || url,
         reviewedAt: new Date().toISOString(),
-        expiresAt: result.quickAsset?.expiresAt
+        expiresAt: result.quickAsset?.expiresAt,
+        error: null
       })
       if ((finalAsset.Status || 'Active') === 'Active') {
         showToast('Seedance 角色已过审', 'success')
       }
     }).catch((error) => {
       console.error('[ImageNode] Seedance 快捷过审轮询失败:', error)
-      updateSeedanceQuickAsset({ status: 'Processing' })
-      showToast(error.message?.includes('超时') ? 'Seedance 角色仍在审核中' : `Seedance 角色过审失败：${error.message || '未知错误'}`, error.message?.includes('超时') ? 'info' : 'error')
+      const isTimeout = error.code === 'TIMEOUT' || /超时|timeout/i.test(error.message || '')
+      const message = isTimeout ? '审核状态查询超时，请检查网络或素材渠道后重试' : (error.message || '未知错误')
+      updateSeedanceQuickAsset({ status: 'Failed', error: message })
+      showToast(`Seedance 角色过审失败：${message}`, 'error')
     })
   } catch (error) {
     console.error('[ImageNode] Seedance 快捷过审失败:', error)
@@ -7955,9 +7978,9 @@ async function handleDrop(event) {
       <button
         v-if="seedanceFeaturesEnabled"
         class="toolbar-btn seedance-review-btn"
-        :class="{ 'is-processing': isQuickSeedanceSubmitting || seedanceQuickAssetStatus === 'processing', active: seedanceQuickAssetStatus === 'approved' }"
+        :class="{ 'is-processing': isQuickSeedanceSubmitting || seedanceQuickAssetStatus === 'processing', active: seedanceQuickAssetStatus === 'approved', 'is-failed': seedanceQuickAssetStatus === 'failed' }"
         :disabled="isQuickSeedanceSubmitting || seedanceQuickAssetStatus === 'processing'"
-        title="提交 Seedance 角色过审"
+        :title="seedanceQuickReviewButtonTitle"
         @mousedown.stop.prevent="handleQuickSeedanceReview"
         @click.stop.prevent
       >
@@ -7969,7 +7992,7 @@ async function handleDrop(event) {
           <path d="M12 3l7 4v5c0 4.2-2.8 7.5-7 9-4.2-1.5-7-4.8-7-9V7l7-4z" stroke-linecap="round" stroke-linejoin="round"/>
           <path d="M9 12l2 2 4-5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>{{ seedanceQuickAssetStatus === 'approved' ? '已过审' : seedanceQuickAssetStatus === 'processing' ? '审核中' : '过审' }}</span>
+        <span>{{ seedanceQuickReviewButtonText }}</span>
       </button>
       <div class="toolbar-divider"></div>
       <button class="toolbar-btn icon-only" title="标注" @mousedown.stop.prevent="handleToolbarAnnotate" @click.stop.prevent>
@@ -9076,6 +9099,12 @@ async function handleDrop(event) {
   background: rgba(34, 197, 94, 0.22);
   border-color: rgba(34, 197, 94, 0.5);
   color: #bbf7d0;
+}
+
+.image-toolbar .seedance-review-btn.is-failed {
+  background: rgba(239, 68, 68, 0.16);
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #fca5a5;
 }
 
 .seedance-review-badge {
