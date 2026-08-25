@@ -98,3 +98,32 @@ export async function uploadCanvasFile(file, mediaType, options = {}) {
     uploadCancellation.finish(options.nodeId, options.tabId, controller)
   }
 }
+
+// Wan3 参考文档使用独立入口，避免变更现有图片、视频和音频上传的兼容范围。
+export async function uploadCanvasDocument(file, options = {}) {
+  const controller = uploadCancellation.begin(options.nodeId, options.tabId)
+  const abortUpload = () => controller.abort()
+  if (options.signal?.aborted) abortUpload()
+  else options.signal?.addEventListener('abort', abortUpload, { once: true })
+
+  try {
+    const result = await uploader.upload(file, {
+      ...currentSpaceOptions(options),
+      mediaType: 'document',
+      signal: controller.signal
+    })
+    return {
+      url: result.url,
+      status: result.status,
+      isCloud: true,
+      assetId: result.assetId,
+      uploadId: result.uploadId,
+      key: result.key,
+      contentType: result.contentType,
+      size: result.size
+    }
+  } finally {
+    options.signal?.removeEventListener('abort', abortUpload)
+    uploadCancellation.finish(options.nodeId, options.tabId, controller)
+  }
+}

@@ -21,6 +21,7 @@ import { getTotalUserPoints } from '@/utils/points'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
 import { saveWorkflow, uploadCanvasMedia } from '@/api/canvas/workflow'
+import { uploadCanvasDocument } from '@/api/canvas/direct-upload'
 import { createDigitalHumanLipsync, createDigitalHumanVideo, getDigitalHumanChannels } from '@/api/canvas/digital-humans'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
 import {
@@ -96,6 +97,7 @@ import {
   isSeedanceSd2VideoModel,
   isWanVideoModel,
   resolveVideoRequestModel,
+  WAN3_MODES,
   WAN_MODES
 } from '@/utils/videoGenerationMode'
 import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
@@ -751,6 +753,7 @@ function handlePromptInput(event) {
 }
 
 function handlePromptTextareaFocus() {
+  wan3AttachmentPanel.value = ''
   updatePromptOverlayCaret()
 }
 
@@ -1556,6 +1559,109 @@ const minimaxH3DefaultMode = computed(() => {
 const currentMinimaxH3ModeConfig = computed(() => {
   return minimaxH3Modes.value.find(m => m.value === selectedMinimaxH3Mode.value) || minimaxH3Modes.value[0] || MINIMAX_H3_MODES[0]
 })
+
+// Wan 3.0 模式选择
+const isWan3Model = computed(() => currentModelConfig.value?.apiType === 'wan3')
+const selectedWan3Mode = ref(props.data.wan3Mode || 'text2video')
+const wan3File = ref(props.data.wan3File || null)
+const wan3Link = ref(props.data.wan3Link || '')
+const wan3AttachmentPanel = ref('')
+const wan3LinkDraft = ref(wan3Link.value)
+const wan3FileInputRef = ref(null)
+const wan3FileUploading = ref(false)
+const wan3DocumentDragOver = ref(false)
+
+const WAN3_DOCUMENT_CONTENT_TYPES = Object.freeze({
+  '.doc': 'application/msword',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xls': 'application/vnd.ms-excel',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  '.ppt': 'application/vnd.ms-powerpoint',
+  '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  '.pdf': 'application/pdf',
+  '.txt': 'text/plain',
+  '.key': 'application/vnd.apple.keynote',
+  '.pages': 'application/vnd.apple.pages',
+  '.numbers': 'application/vnd.apple.numbers',
+  '.md': 'text/markdown'
+})
+const WAN3_DOCUMENT_ACCEPT = Object.keys(WAN3_DOCUMENT_CONTENT_TYPES).join(',')
+const isWan3AttachmentMode = computed(() => ['file', 'link'].includes(selectedWan3Mode.value))
+
+function selectWan3AttachmentMode(mode) {
+  selectedWan3Mode.value = mode
+}
+
+function toggleWan3AttachmentPanel(panel) {
+  if (wan3AttachmentPanel.value === panel) {
+    wan3AttachmentPanel.value = ''
+    return
+  }
+
+  selectWan3AttachmentMode(panel)
+  if (panel === 'link') wan3LinkDraft.value = wan3Link.value
+  wan3AttachmentPanel.value = panel
+}
+
+function triggerWan3DocumentPicker() {
+  nextTick(() => wan3FileInputRef.value?.click())
+}
+
+function clearWan3Document() {
+  wan3File.value = null
+}
+
+function addWan3Link() {
+  const link = wan3LinkDraft.value.trim()
+  if (!link) return
+
+  wan3Link.value = link
+  wan3AttachmentPanel.value = ''
+}
+
+async function uploadWan3Document(file) {
+  if (!file) return
+
+  const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+  const contentType = WAN3_DOCUMENT_CONTENT_TYPES[extension]
+  if (!contentType) {
+    await showAlert('参考文件仅支持 doc、docx、xls、xlsx、ppt、pptx、pdf、txt、key、pages、numbers 或 md', '文件格式不支持')
+    return
+  }
+  if (file.size > 100 * 1024 * 1024) {
+    await showAlert('参考文件不能超过100MB', '文件过大')
+    return
+  }
+
+  wan3FileUploading.value = true
+  try {
+    const uploadFile = file.type === contentType
+      ? file
+      : new File([file], file.name, { type: contentType, lastModified: file.lastModified })
+    const uploaded = await uploadCanvasDocument(uploadFile, { nodeId: props.id, tabId: canvasStore.activeTabId })
+    if (uploaded.status !== 'completed' || !uploaded.url) {
+      throw new Error('参考文件上传未完成')
+    }
+    wan3File.value = { url: uploaded.url, name: file.name, size: file.size }
+    wan3Link.value = ''
+    showToast('参考文件上传完成', 'success')
+  } catch (error) {
+    await showAlert(error.message || '参考文件上传失败，请重试', '上传失败')
+  } finally {
+    wan3FileUploading.value = false
+  }
+}
+
+async function handleWan3DocumentFile(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  await uploadWan3Document(file)
+}
+
+async function handleWan3DocumentDrop(event) {
+  wan3DocumentDragOver.value = false
+  await uploadWan3Document(event.dataTransfer?.files?.[0])
+}
 
 // Wan 2.7 模式选择（对齐 Seedance 2.0）
 const isWanModel = computed(() => isWanVideoModel(currentModelConfig.value))
@@ -3519,6 +3625,15 @@ const activeVideoModeSelector = computed(() => {
     }
   }
 
+  if (isWan3Model.value) {
+    return {
+      key: 'wan3',
+      label: '万相 3.0 模式',
+      value: selectedWan3Mode.value,
+      options: WAN3_MODES
+    }
+  }
+
   if (isWanModel.value) {
     return {
       key: 'wan',
@@ -3589,6 +3704,9 @@ function setActiveVideoMode(value) {
       break
     case 'kling-v3-omni':
       selectedKlingV3OmniMode.value = value
+      break
+    case 'wan3':
+      selectedWan3Mode.value = value
       break
     case 'wan':
       selectedWanMode.value = value
@@ -4440,6 +4558,19 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedKlingOffici
   },
   { deep: true }
 )
+
+watch(selectedWan3Mode, wan3Mode => {
+  if (wan3Mode === 'file') wan3Link.value = ''
+  if (wan3Mode === 'link') wan3File.value = null
+  canvasStore.updateNodeData(props.id, { wan3Mode })
+})
+
+watch([wan3File, wan3Link], ([file, link]) => {
+  canvasStore.updateNodeData(props.id, {
+    wan3File: file,
+    wan3Link: link.trim()
+  })
+})
 
 watch(genericVideoResolution, (videoResolution) => {
   if (genericVideoResolutionOptions.value.length === 0) return
@@ -5557,6 +5688,45 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     }
   }
 
+  if (capturedState.apiType === 'wan3') {
+    const wan3Mode = capturedState.wan3Mode || selectedWan3Mode.value
+    const wan3Config = currentModelConfig.value?.wan3Config || {}
+    const maxImages = Math.min(10, Math.max(0, Number(wan3Config.maxImages) || 10))
+    const maxVideos = Math.min(5, Math.max(0, Number(wan3Config.maxVideos) || 5))
+    const maxAudios = Math.min(5, Math.max(0, Number(wan3Config.maxAudios) || 5))
+    formData.append('seedance_mode', wan3Mode)
+
+    if (wan3Mode === 'image2video_first') {
+      if (finalImages.length > 0) formData.append('first_frame_image', finalImages[0])
+    } else if (wan3Mode === 'image2video_first_last') {
+      if (finalImages.length > 0) formData.append('first_frame_image', finalImages[0])
+      if (finalImages.length > 1) formData.append('last_frame_image', finalImages[1])
+    } else if (wan3Mode === 'multimodal_ref') {
+      if (finalImages.length > 0) {
+        formData.append('reference_images', JSON.stringify(finalImages.slice(0, maxImages)))
+      }
+      const orderedVideos = referenceVideos.value || []
+      if (orderedVideos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, maxVideos)))
+      }
+      const orderedAudios = referenceAudios.value || []
+      if (orderedAudios.length > 0) {
+        formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, maxAudios)))
+      }
+    } else if (wan3Mode === 'file') {
+      const wan3FileUrl = String(capturedState.wan3File?.url || '').trim()
+      if (wan3FileUrl) {
+        formData.append('wan3_files', JSON.stringify([wan3FileUrl]))
+      }
+    } else if (wan3Mode === 'link') {
+      const wan3Link = String(capturedState.wan3Link || '').trim()
+      if (wan3Link) {
+        formData.append('wan3_links', JSON.stringify([wan3Link]))
+      }
+    }
+    console.log('[VideoNode] 万相 3.0 模式:', wan3Mode)
+  }
+
   // Coze 视频工作流需要把画布上的参考媒体显式映射到工作流参数；仅传 image_urls
   // 会丢失音频/视频输入，且工作流会收到空的 URL。
   if (currentModelConfig.value?.apiType === 'coze-video-workflow') {
@@ -6425,6 +6595,80 @@ async function handleGenerate(options = {}) {
     }
   }
 
+  if (!isHeygenFlow && isWan3Model.value) {
+    if (wan3FileUploading.value) {
+      await showAlert('参考文件仍在上传，请等待完成后生成', '文件上传中')
+      return
+    }
+
+    const wan3Mode = selectedWan3Mode.value
+    const wan3FileUrl = String(wan3File.value?.url || '').trim()
+    const wan3LinkUrl = wan3Link.value.trim()
+    const referenceVideoCount = referenceVideos.value.length
+    const referenceAudioCount = referenceAudios.value.length
+    const hasFrameOrReferenceMedia = finalImages.length > 0 || referenceVideoCount > 0 || referenceAudioCount > 0
+
+    if (wan3FileUrl && wan3LinkUrl) {
+      await showAlert('万相 3.0 文件和网页链接不能同时使用', '输入冲突')
+      return
+    }
+
+    if (wan3Mode === 'file' || wan3Mode === 'link') {
+      if (hasFrameOrReferenceMedia) {
+        await showAlert('万相 3.0 文件或网页链接不能与首尾帧、参考素材同时使用', '输入冲突')
+        return
+      }
+      if (wan3Mode === 'file' && !wan3FileUrl) {
+        await showAlert('请先上传一个参考文件', '缺少参考文件')
+        return
+      }
+      if (wan3Mode === 'link') {
+        try {
+          const parsedLink = new URL(wan3LinkUrl)
+          if (!['http:', 'https:'].includes(parsedLink.protocol)) throw new Error('unsupported_protocol')
+        } catch {
+          await showAlert('请输入一个可公开访问的 HTTP/HTTPS 网页链接', '网页链接无效')
+          return
+        }
+      }
+    } else if (wan3Mode === 'image2video_first') {
+      if (wan3FileUrl || wan3LinkUrl || referenceVideoCount > 0 || referenceAudioCount > 0) {
+        await showAlert('万相 3.0 首尾帧不能与参考素材、文件或网页链接同时使用', '输入冲突')
+        return
+      }
+      if (finalImages.length !== 1) {
+        await showAlert('万相 3.0 首帧模式需要且仅支持 1 张图片', '首帧数量不正确')
+        return
+      }
+    } else if (wan3Mode === 'image2video_first_last') {
+      if (wan3FileUrl || wan3LinkUrl || referenceVideoCount > 0 || referenceAudioCount > 0) {
+        await showAlert('万相 3.0 首尾帧不能与参考素材、文件或网页链接同时使用', '输入冲突')
+        return
+      }
+      if (finalImages.length !== 2) {
+        await showAlert('万相 3.0 首尾帧模式需要且仅支持 2 张图片', '首尾帧数量不正确')
+        return
+      }
+    } else if (wan3Mode === 'multimodal_ref') {
+      if (wan3FileUrl || wan3LinkUrl) {
+        await showAlert('万相 3.0 文件或网页链接不能与首尾帧、参考素材同时使用', '输入冲突')
+        return
+      }
+      const wan3Config = currentModelConfig.value?.wan3Config || {}
+      const maxImages = Math.min(10, Math.max(0, Number(wan3Config.maxImages) || 10))
+      const maxVideos = Math.min(5, Math.max(0, Number(wan3Config.maxVideos) || 5))
+      const maxAudios = Math.min(5, Math.max(0, Number(wan3Config.maxAudios) || 5))
+      if (finalImages.length === 0 && referenceVideoCount === 0 && referenceAudioCount === 0) {
+        await showAlert('万相 3.0 多模态参考模式至少需要一个参考素材', '缺少参考素材')
+        return
+      }
+      if (finalImages.length > maxImages || referenceVideoCount > maxVideos || referenceAudioCount > maxAudios) {
+        await showAlert('万相 3.0 参考素材数量超过当前模型配置上限', '参考素材过多')
+        return
+      }
+    }
+  }
+
   if (!isHeygenFlow && isCozeVideoSwapModel.value) {
     if (finalImages.length === 0) {
       await showAlert('Coze 视频换人需要连接或上传1张人物图片', '提示')
@@ -6463,8 +6707,12 @@ async function handleGenerate(options = {}) {
 
   const hasSeedanceVideoInput = isSeedance2Model.value && referenceVideos.value.length > 0
   const hasWanVideoInput = isWanModel.value && ['r2v', 'videoedit', 'animate_mix'].includes(selectedWanMode.value) && referenceVideos.value.length > 0
+  const hasWan3AttachmentInput = isWan3Model.value && (
+    (selectedWan3Mode.value === 'file' && Boolean(wan3File.value?.url)) ||
+    (selectedWan3Mode.value === 'link' && Boolean(wan3Link.value.trim()))
+  )
   const hasMotionVideoInput = isCozeVideoSwapModel.value && referenceVideos.value.length > 0
-  if (!isHeygenFlow && !finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput && !hasWanVideoInput && !hasMotionVideoInput) {
+  if (!isHeygenFlow && !finalPrompt && finalImages.length === 0 && !hasSeedanceVideoInput && !hasWanVideoInput && !hasWan3AttachmentInput && !hasMotionVideoInput) {
     await showAlert('请输入提示词或连接参考图片', '提示')
     return
   }
@@ -6506,6 +6754,9 @@ async function handleGenerate(options = {}) {
       referenceAudios: referenceAudios.value,
       seedanceMode: isSeedance2Model.value ? selectedSeedance2Mode.value : '',
       minimaxH3Mode: isMinimaxH3Model.value ? (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) : '',
+      wan3Mode: isWan3Model.value ? selectedWan3Mode.value : '',
+      wan3File: isWan3Model.value ? wan3File.value : null,
+      wan3Link: isWan3Model.value ? wan3Link.value : '',
       wanMode: isWanModel.value ? selectedWanMode.value : '',
       wanAnimateMode: isWanModel.value && selectedWanMode.value === 'animate_mix' ? selectedWanAnimateMode.value : '',
       klingO1Mode: isKlingO1Model.value ? selectedKlingO1Mode.value : '',
@@ -6556,6 +6807,9 @@ async function handleGenerate(options = {}) {
     minimaxHailuoResolution: isMinimaxHailuoModel.value ? minimaxHailuoResolution.value : '',
     minimaxH3Resolution: isMinimaxH3Model.value ? minimaxH3Resolution.value : '',
     minimaxH3Mode: isMinimaxH3Model.value ? (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) : '',
+    wan3Mode: isWan3Model.value ? selectedWan3Mode.value : '',
+    wan3File: wan3File.value,
+    wan3Link: wan3Link.value,
     wanMode: isWanModel.value ? selectedWanMode.value : '',
     wanAnimateMode: isWanModel.value && selectedWanMode.value === 'animate_mix' ? selectedWanAnimateMode.value : ''
   }
@@ -9347,7 +9601,8 @@ function handleToolbarPreview() {
         </svg>
       </button>
       <!-- 参考图片预览（支持拖拽上传） -->
-      <div 
+      <div
+        v-if="!isWan3AttachmentMode"
         class="panel-frames"
         :class="{ 'drag-over': isDragOver }"
         @mousedown.stop
@@ -9491,6 +9746,90 @@ function handleToolbarPreview() {
       
       <!-- 模式标签 + 提示词输入 -->
       <div class="prompt-section">
+        <div v-if="isWan3Model" class="wan3-attachment-toolbar" @mousedown.stop @click.stop>
+          <input
+            ref="wan3FileInputRef"
+            type="file"
+            :accept="WAN3_DOCUMENT_ACCEPT"
+            class="hidden-file-input"
+            @change="handleWan3DocumentFile"
+          />
+          <button
+            type="button"
+            class="wan3-attachment-chip"
+            :class="{ active: selectedWan3Mode === 'file' }"
+            :disabled="wan3FileUploading"
+            @click="toggleWan3AttachmentPanel('file')"
+          >
+            <span aria-hidden="true">▧</span>
+            {{ wan3FileUploading ? '上传中…' : '文档' }}
+          </button>
+          <button
+            type="button"
+            class="wan3-attachment-chip"
+            :class="{ active: selectedWan3Mode === 'link' }"
+            @click="toggleWan3AttachmentPanel('link')"
+          >
+            <span aria-hidden="true">↗</span>
+            链接
+          </button>
+          <div
+            v-if="isWan3Model && wan3AttachmentPanel === 'file'"
+            class="wan3-attachment-popover wan3-document-upload-popover"
+          >
+            <div
+              v-if="wan3File"
+              class="wan3-document-uploaded"
+            >
+              <div class="wan3-document-uploaded-main">
+                <span class="wan3-document-file-icon" aria-hidden="true">▧</span>
+                <span class="wan3-attachment-file-name" :title="wan3File.name">{{ wan3File.name }}</span>
+                <span class="wan3-attachment-file-size">{{ (Number(wan3File.size || 0) / 1024 / 1024).toFixed(1) }}MB</span>
+              </div>
+              <div class="wan3-document-uploaded-actions">
+                <button type="button" class="wan3-document-action" @click="triggerWan3DocumentPicker">重新上传</button>
+                <button type="button" class="wan3-attachment-remove" @click="clearWan3Document">移除</button>
+              </div>
+            </div>
+            <div
+              v-else
+              class="wan3-document-dropzone"
+              :class="{ 'is-drag-over': wan3DocumentDragOver, 'is-uploading': wan3FileUploading }"
+              @dragenter.prevent="wan3DocumentDragOver = true"
+              @dragover.prevent
+              @dragleave.prevent="wan3DocumentDragOver = false"
+              @drop.prevent="handleWan3DocumentDrop"
+              @click="triggerWan3DocumentPicker"
+            >
+              <svg class="wan3-document-upload-icon" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12 16V3" />
+                <path d="m7 8 5-5 5 5" />
+                <path d="M20 16.5v2A2.5 2.5 0 0 1 17.5 21h-11A2.5 2.5 0 0 1 4 18.5v-2" />
+              </svg>
+              <span class="wan3-document-upload-title">{{ wan3FileUploading ? '正在上传文档…' : '点击上传或拖拽文档至此处' }}</span>
+              <span class="wan3-document-upload-hint">支持 DOCX / DOC / XLSX / XLS / PPTX / PPT / PDF / TXT / MD / KEY / PAGES / NUMBERS，最大 100MB</span>
+            </div>
+          </div>
+
+          <div
+            v-if="isWan3Model && wan3AttachmentPanel === 'link'"
+            class="wan3-attachment-popover wan3-link-upload-popover"
+          >
+            <label class="wan3-link-upload-label" :for="`wan3-link-input-${props.id}`">粘贴链接地址</label>
+            <div class="wan3-link-upload-form">
+              <input
+                :id="`wan3-link-input-${props.id}`"
+                v-model="wan3LinkDraft"
+                type="url"
+                class="wan3-attachment-link-input"
+                placeholder="https://example.com/article"
+                @keydown.enter.prevent="addWan3Link"
+              />
+              <button type="button" class="wan3-link-add" :disabled="!wan3LinkDraft.trim()" @click="addWan3Link">添加</button>
+            </div>
+          </div>
+        </div>
+
         <div class="prompt-input-wrapper">
           <div
             :key="promptEditorRenderKey"
@@ -9510,7 +9849,7 @@ function handleToolbarPreview() {
             @focus="handlePromptTextareaFocus"
             @scroll="syncPromptHighlightOverlayScroll"
             @wheel="handlePromptWheel"
-            @mousedown.stop="markPromptTextareaResizeIntent"
+            @mousedown.stop="wan3AttachmentPanel = ''; markPromptTextareaResizeIntent($event)"
             @pointerdown.stop
             @touchstart.stop
             @touchmove.stop
@@ -11272,6 +11611,237 @@ function handleToolbarPreview() {
   border-bottom: 1px solid var(--canvas-border-subtle, #2a2a2a);
 }
 
+.wan3-attachment-toolbar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  width: fit-content;
+  z-index: 120;
+}
+
+.wan3-attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid var(--canvas-border-default, #3a3a3a);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--canvas-text-secondary, #a0a0a0);
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.wan3-attachment-chip:hover:not(:disabled),
+.wan3-attachment-chip.active {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--canvas-text-primary, #fff);
+}
+
+.wan3-attachment-chip:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.wan3-attachment-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 121;
+  box-sizing: border-box;
+  width: min(430px, calc(90vw - 32px));
+  padding: 12px;
+  border: 1px solid var(--canvas-border-default, #3a3a3a);
+  border-radius: 14px;
+  background: var(--canvas-bg-elevated, #242424);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.36);
+}
+
+.wan3-attachment-file-name,
+.wan3-attachment-file-size {
+  min-width: 0;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  font-size: 11px;
+}
+
+.wan3-attachment-file-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--canvas-text-primary, #fff);
+}
+
+.wan3-attachment-file-size {
+  flex: none;
+  color: var(--canvas-text-tertiary, #666);
+}
+
+.wan3-document-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 168px;
+  padding: 18px 22px;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.wan3-document-dropzone:hover,
+.wan3-document-dropzone.is-drag-over {
+  border-color: rgba(255, 255, 255, 0.52);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--canvas-text-primary, #fff);
+}
+
+.wan3-document-dropzone.is-uploading {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.wan3-document-upload-icon {
+  margin-bottom: 12px;
+  color: var(--canvas-text-secondary, #a0a0a0);
+}
+
+.wan3-document-upload-title {
+  color: var(--canvas-text-primary, #fff);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.wan3-document-upload-hint {
+  margin-top: 9px;
+  color: var(--canvas-text-tertiary, #666);
+  font-size: 11px;
+  line-height: 1.75;
+}
+
+.wan3-document-uploaded {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wan3-document-uploaded-main,
+.wan3-document-uploaded-actions,
+.wan3-link-upload-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wan3-document-uploaded-main {
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid var(--canvas-border-subtle, #2a2a2a);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.wan3-document-file-icon {
+  flex: none;
+  color: var(--canvas-text-secondary, #a0a0a0);
+}
+
+.wan3-document-uploaded-actions {
+  justify-content: flex-end;
+}
+
+.wan3-document-action,
+.wan3-attachment-remove {
+  flex: none;
+  border: 0;
+  padding: 3px 0;
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.wan3-document-action {
+  color: var(--canvas-text-secondary, #a0a0a0);
+}
+
+.wan3-document-action:hover {
+  color: var(--canvas-text-primary, #fff);
+}
+
+.wan3-attachment-remove {
+  color: #f87171;
+}
+
+.wan3-attachment-remove:hover {
+  color: #fca5a5;
+}
+
+.wan3-attachment-link-input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid var(--canvas-border-default, #3a3a3a);
+  border-radius: 8px;
+  outline: 0;
+  background: rgba(0, 0, 0, 0.18);
+  color: var(--canvas-text-primary, #fff);
+  font: inherit;
+  font-size: 12px;
+}
+
+.wan3-attachment-link-input:focus {
+  border-color: rgba(255, 255, 255, 0.42);
+}
+
+.wan3-attachment-link-input::placeholder {
+  color: var(--canvas-text-tertiary, #666);
+}
+
+.wan3-link-upload-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--canvas-text-secondary, #a0a0a0);
+  font-size: 12px;
+}
+
+.wan3-link-add {
+  flex: none;
+  min-height: 34px;
+  padding: 7px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--canvas-text-primary, #fff);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.wan3-link-add:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.32);
+  background: rgba(255, 255, 255, 0.17);
+}
+
+.wan3-link-add:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .mode-label {
   font-size: 14px;
   font-weight: 500;
@@ -12950,6 +13520,72 @@ function handleToolbarPreview() {
 
 :root.canvas-theme-light .video-node .prompt-input.is-empty:empty::before {
   color: #a8a29e;
+}
+
+:root.canvas-theme-light .video-node .wan3-attachment-chip {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #78716c;
+}
+
+:root.canvas-theme-light .video-node .wan3-attachment-chip:hover:not(:disabled),
+:root.canvas-theme-light .video-node .wan3-attachment-chip.active {
+  border-color: rgba(0, 0, 0, 0.25);
+  background: rgba(0, 0, 0, 0.08);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .video-node .wan3-attachment-popover {
+  border-color: rgba(0, 0, 0, 0.08);
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.12);
+}
+
+:root.canvas-theme-light .video-node .wan3-attachment-file-name,
+:root.canvas-theme-light .video-node .wan3-attachment-link-input {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .video-node .wan3-document-dropzone {
+  border-color: rgba(0, 0, 0, 0.18);
+  color: #78716c;
+}
+
+:root.canvas-theme-light .video-node .wan3-document-dropzone:hover,
+:root.canvas-theme-light .video-node .wan3-document-dropzone.is-drag-over {
+  border-color: rgba(0, 0, 0, 0.38);
+  background: rgba(0, 0, 0, 0.035);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .video-node .wan3-document-upload-title,
+:root.canvas-theme-light .video-node .wan3-document-action:hover {
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .video-node .wan3-document-uploaded-main {
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+:root.canvas-theme-light .video-node .wan3-attachment-link-input {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.025);
+}
+
+:root.canvas-theme-light .video-node .wan3-attachment-link-input:focus {
+  border-color: rgba(0, 0, 0, 0.35);
+}
+
+:root.canvas-theme-light .video-node .wan3-link-add {
+  border-color: rgba(0, 0, 0, 0.14);
+  background: rgba(0, 0, 0, 0.08);
+  color: #1c1917;
+}
+
+:root.canvas-theme-light .video-node .wan3-link-add:hover:not(:disabled) {
+  border-color: rgba(0, 0, 0, 0.26);
+  background: rgba(0, 0, 0, 0.13);
 }
 
 :root.canvas-theme-light .video-node .prompt-input::-webkit-scrollbar-track {

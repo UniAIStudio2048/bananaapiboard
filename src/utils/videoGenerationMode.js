@@ -20,6 +20,15 @@ export const WAN_MODES = [
   { value: 'videoedit', label: '视频编辑', desc: '需连接上游视频节点', needsImage: false, needsVideo: true }
 ]
 
+export const WAN3_MODES = [
+  { value: 'text2video', label: '文生视频', desc: '纯文本提示词生成视频' },
+  { value: 'image2video_first', label: '首帧', desc: '1 张图片作为首帧', needsImage: true, maxImages: 1 },
+  { value: 'image2video_first_last', label: '首尾帧', desc: '2 张图片分别作为首帧和尾帧', needsImage: true, maxImages: 2 },
+  { value: 'multimodal_ref', label: '多模态参考', desc: '参考图片、视频或音频生成视频' },
+  { value: 'file', label: '文件', desc: '参考文件生成视频' },
+  { value: 'link', label: '网页链接', desc: '参考网页链接生成视频' }
+]
+
 export const WAN_ANIMATE_MIX_MODE = {
   value: 'animate_mix',
   label: '换人混合',

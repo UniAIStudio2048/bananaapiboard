@@ -40,6 +40,46 @@ test('video mode selector reuses existing mode state and available option lists'
   assert.doesNotMatch(source, /v-for="opt in wanAnimateModeOptions"[\s\S]*class="sd2-mode-btn"/)
 })
 
+test('Wan3 models expose and persist the six-mode selector used for submissions', () => {
+  assert.match(source, /WAN3_MODES/)
+  assert.match(source, /const isWan3Model = computed\(\(\) => currentModelConfig\.value\?\.apiType === 'wan3'\)/)
+  assert.match(source, /const selectedWan3Mode = ref\(props\.data\.wan3Mode \|\| 'text2video'\)/)
+  assert.match(source, /if \(isWan3Model\.value\) \{[\s\S]*?key: 'wan3',[\s\S]*?value: selectedWan3Mode\.value,[\s\S]*?options: WAN3_MODES/)
+  assert.match(source, /case 'wan3':[\s\S]*?selectedWan3Mode\.value = value/)
+  assert.match(source, /watch\(selectedWan3Mode, wan3Mode => \{[\s\S]*?wan3Mode/)
+  assert.match(source, /const wan3Mode = capturedState\.wan3Mode \|\| selectedWan3Mode\.value[\s\S]*?formData\.append\('seedance_mode', wan3Mode\)/)
+})
+
+test('Wan3 file and link modes have independent persistent inputs and request fields', () => {
+  assert.match(source, /import \{ uploadCanvasDocument \} from '@\/api\/canvas\/direct-upload'/)
+  assert.match(source, /const wan3File = ref\(props\.data\.wan3File \|\| null\)/)
+  assert.match(source, /const wan3Link = ref\(props\.data\.wan3Link \|\| ''\)/)
+  assert.match(source, /async function uploadWan3Document\(file\)[\s\S]*?uploadCanvasDocument\(uploadFile, \{ nodeId: props\.id, tabId: canvasStore\.activeTabId \}\)/)
+  assert.match(source, /wan3File: wan3File\.value,\s*wan3Link: wan3Link\.value/)
+  assert.match(source, /wan3FileUrl[\s\S]*?formData\.append\('wan3_files', JSON\.stringify\(\[wan3FileUrl\]\)\)/)
+  assert.match(source, /wan3Link[\s\S]*?formData\.append\('wan3_links', JSON\.stringify\(\[wan3Link\]\)\)/)
+  assert.match(source, /class="wan3-attachment-toolbar"/)
+  assert.match(source, /const wan3AttachmentPanel = ref\(''\)/)
+  assert.match(source, /@click="toggleWan3AttachmentPanel\('file'\)"/)
+  assert.match(source, /@click="toggleWan3AttachmentPanel\('link'\)"/)
+  assert.match(source, /class="[^\"]*wan3-document-upload-popover"/)
+  assert.match(source, /@drop\.prevent="handleWan3DocumentDrop"/)
+  assert.match(source, /@click="triggerWan3DocumentPicker"/)
+  assert.match(source, /v-if="isWan3Model && wan3AttachmentPanel === 'link'"/)
+  assert.match(source, /v-model="wan3LinkDraft"/)
+  assert.match(source, /@click="addWan3Link"/)
+})
+
+test('Wan3 rejects files or links mixed with frame and reference inputs', () => {
+  assert.match(source, /万相 3\.0 文件和网页链接不能同时使用/)
+  assert.match(source, /万相 3\.0 文件或网页链接不能与首尾帧、参考素材同时使用/)
+})
+
+test('Wan3 attachment popover closes when prompt input regains interaction', () => {
+  assert.match(source, /function handlePromptTextareaFocus\(\) \{\s*wan3AttachmentPanel\.value = ''\s*updatePromptOverlayCaret\(\)/)
+  assert.match(source, /@mousedown\.stop="wan3AttachmentPanel = ''; markPromptTextareaResizeIntent\(\$event\)"/)
+})
+
 test('video ratio, resolution, and duration share one dropdown trigger', () => {
   const configRowStart = source.indexOf('<div class="config-row">')
   const configRowEnd = source.indexOf('<div class="config-right">', configRowStart)

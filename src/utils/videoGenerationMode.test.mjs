@@ -9,6 +9,7 @@ import {
   isSeedanceSd2VideoModel,
   isWanVideoModel,
   resolveVideoRequestModel,
+  WAN3_MODES,
   WAN_MODES
 } from './videoGenerationMode.js'
 
@@ -299,5 +300,12 @@ test('Wan video models use text defaults and keep animate mix out of core wan2.7
       hasVideoReference: true
     }),
     []
+  )
+})
+
+test('Wan3 exposes the six documented generation modes', () => {
+  assert.deepEqual(
+    WAN3_MODES.map(mode => mode.value),
+    ['text2video', 'image2video_first', 'image2video_first_last', 'multimodal_ref', 'file', 'link']
   )
 })
