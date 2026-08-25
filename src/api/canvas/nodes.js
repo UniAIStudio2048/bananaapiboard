@@ -9,6 +9,7 @@ import { withNoChargeNotice } from '@/utils/mediaTaskBillingMessage'
 import { classifyBackgroundTaskStatus } from '@/stores/canvas/backgroundTaskStatus'
 import { normalizePromptLineEndings } from '@/utils/promptText'
 import { createPromptSafetyError } from '@/utils/promptSafetyError'
+import { localizeExternalMediaErrorPayload } from '@/utils/externalMediaError'
 import { buildTaskQueryError } from './taskQueryError.js'
 import { uploadCanvasFile } from './direct-upload.js'
 
@@ -387,12 +388,13 @@ export async function getImageTaskStatus(taskId) {
     headers: getHeaders()
   })
 
+  const data = await response.json().catch(() => ({}))
+
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw buildTaskQueryError(response, error, '查询任务状态失败')
+    throw buildTaskQueryError(response, data, '查询任务状态失败')
   }
 
-  return response.json()
+  return localizeExternalMediaErrorPayload(data)
 }
 
 /**
@@ -409,7 +411,7 @@ export async function getVideoTaskStatus(taskId) {
     throw buildTaskQueryError(response, data, '查询任务状态失败')
   }
 
-  return data
+  return localizeExternalMediaErrorPayload(data)
 }
 
 /**

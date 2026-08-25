@@ -250,6 +250,20 @@ const seedanceRefImageInputRef = ref(null)
 const seedanceRefVideoInputRef = ref(null)
 const seedanceRefAudioInputRef = ref(null)
 
+// ========== 阿里云百炼万相 3.0 相关状态 ==========
+// 万相 3.0 与 Seedance 共用已验证的媒体选择器状态，但请求字段始终走自己的百炼协议。
+const wan3Mode = ref('text2video')
+const wan3ModeOpen = ref(true)
+const wan3AdvancedOpen = ref(false)
+const wan3Duration = ref(5)
+const wan3GenerateAudio = ref(true)
+const wan3PromptExtend = ref(true)
+const wan3Watermark = ref(false)
+const wan3Seed = ref('')
+const wan3File = ref(null)
+const wan3FileInputRef = ref(null)
+const wan3Link = ref('')
+
 // ========== Kling v3 Omni 相关状态 ==========
 const klingV3OmniMode = ref('text2video')
 const klingV3OmniModeOpen = ref(true)
@@ -285,6 +299,18 @@ const SEEDANCE_MODES = [
   { value: 'video_extend', label: '延长', icon: '⏩' }
 ]
 
+const WAN3_MODES = [
+  { value: 'text2video', label: '文生视频', icon: '✍️' },
+  { value: 'image2video_first', label: '首帧', icon: '🖼️' },
+  { value: 'image2video_first_last', label: '首尾帧', icon: '🎞️' },
+  { value: 'multimodal_ref', label: '多模态参考', icon: '🎨' },
+  { value: 'file', label: '参考文件', icon: '📄' },
+  { value: 'link', label: '网页链接', icon: '🔗' }
+]
+
+const WAN3_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/bmp', 'image/webp'])
+const WAN3_DOCUMENT_EXTENSIONS = new Set(['.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', '.pdf', '.txt', '.key', '.pages', '.numbers', '.md'])
+
 const SEEDANCE_RATIOS = [
   { value: 'adaptive', label: '自适应' },
   { value: '16:9', label: '16:9' },
@@ -307,6 +333,16 @@ const isSeedanceModel = computed(() => {
 // MiniMax H3 官方直连也使用 Seedance 兼容的多模态参考素材字段
 const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3')
 const isReferenceVideoModel = computed(() => isSeedanceModel.value || isMinimaxH3Model.value)
+const isWan3Model = computed(() => currentModelConfig.value?.apiType === 'wan3')
+
+function getWan3Limit(name, maximum) {
+  const configured = Number(currentModelConfig.value?.wan3Config?.[name])
+  return Number.isFinite(configured) && configured >= 0 ? Math.min(configured, maximum) : maximum
+}
+
+const wan3MaxRefImages = computed(() => getWan3Limit('maxImages', 10))
+const wan3MaxRefVideos = computed(() => getWan3Limit('maxVideos', 5))
+const wan3MaxRefAudios = computed(() => getWan3Limit('maxAudios', 5))
 
 // Seedance 可用的模式（从模型配置的 seedanceConfig.supportedModes 读取）
 const seedanceAvailableModes = computed(() => {
@@ -443,7 +479,7 @@ const currentPointsCost = computed(() => {
   const configuredResolutionPrice = calculateVideoResolutionPrice(
     currentModelConfig.value?.resolutionPricing,
     resolution.value,
-    isReferenceVideoModel.value ? seedanceDuration.value : duration.value
+    isReferenceVideoModel.value ? seedanceDuration.value : isWan3Model.value ? wan3Duration.value : duration.value
   )
   if (configuredResolutionPrice !== null) return configuredResolutionPrice
 
@@ -670,6 +706,16 @@ watch(model, (newModel) => {
     if (!seedanceAvailableModes.value.some(m => m.value === seedanceMode.value)) {
       seedanceMode.value = getFirstAvailableMode(defaultMode, seedanceAvailableModes.value)
     }
+  } else if (modelConfig?.apiType === 'wan3') {
+    const wan3Config = modelConfig.wan3Config || {}
+    wan3Duration.value = Number(wan3Config.duration || durations[0] || 5)
+    wan3GenerateAudio.value = wan3Config.audio !== false
+    wan3PromptExtend.value = wan3Config.promptExtend !== false
+    wan3Watermark.value = wan3Config.watermark === true
+    wan3Seed.value = ''
+    if (!WAN3_MODES.some(item => item.value === wan3Mode.value)) {
+      wan3Mode.value = 'text2video'
+    }
   }
 }, { immediate: true })
 
@@ -697,6 +743,10 @@ watch(seedanceMode, () => {
   if (seedanceMode.value === 'video_edit') {
     seedanceAutoDuration.value = true
   }
+})
+
+watch(wan3Mode, () => {
+  clearWan3Files()
 })
 
 // 监听 Kling v3 Omni 模式变化，清空上一个模式的文件
@@ -962,22 +1012,36 @@ watch(
 
 async function prepareSeedanceImageFile(file) {
   if (!file || !file.type.startsWith('image/')) return null
+  const isWan3 = isWan3Model.value
+  if (isWan3 && !WAN3_IMAGE_MIME_TYPES.has(String(file.type || '').toLowerCase())) {
+    throw new Error('万相 3.0 图片仅支持 JPEG、JPG、PNG、BMP 或 WEBP')
+  }
   const compressed = await compressImage(file, {
-    maxSizeMB: 30,
-    maxLongSide: 6000,
-    maxPixels: SEEDANCE_MAX_IMAGE_PIXELS,
+    maxSizeMB: isWan3 ? 20 : 30,
+    maxLongSide: isWan3Model.value ? 8000 : 6000,
+    maxPixels: isWan3 ? 64_000_000 : SEEDANCE_MAX_IMAGE_PIXELS,
     quality: 0.88,
     minQuality: 0.45,
     preservePng: false,
     mimeType: 'image/jpeg'
   })
   const dimensions = await getImageFileDimensions(compressed)
-  const message = validatePreparedSeedanceImage({
+  const message = isWan3 ? '' : validatePreparedSeedanceImage({
     width: dimensions?.width,
     height: dimensions?.height,
     size: compressed.size
   })
   if (message) throw new Error(message)
+  if (isWan3) {
+    const shortSide = Math.min(Number(dimensions?.width) || 0, Number(dimensions?.height) || 0)
+    const longSide = Math.max(Number(dimensions?.width) || 0, Number(dimensions?.height) || 0)
+    if (shortSide < 240 || longSide > 8000 || longSide / shortSide > 8) {
+      throw new Error('万相 3.0 图片单边需为240至8000像素，宽高比不能超过8:1')
+    }
+  }
+  if (isWan3 && compressed.size > 20 * 1024 * 1024) {
+    throw new Error('万相 3.0 图片不能超过20MB')
+  }
   return compressed
 }
 
@@ -1045,7 +1109,7 @@ function removeSeedanceLastFrame() {
 
 async function handleSeedanceRefImages(e) {
   const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'))
-  const MAX = seedanceMaxRefImages.value
+  const MAX = isWan3Model.value ? wan3MaxRefImages.value : seedanceMaxRefImages.value
   const remaining = MAX - seedanceRefImages.value.length - seedanceRefImageUrls.value.length
   const selected = []
   try {
@@ -1070,7 +1134,7 @@ function removeSeedanceRefImage(idx) {
 
 async function handleSeedanceRefVideos(e) {
   const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('video/'))
-  const MAX = seedanceMaxRefVideos.value
+  const MAX = isWan3Model.value ? wan3MaxRefVideos.value : seedanceMaxRefVideos.value
   const remaining = MAX - seedanceRefVideos.value.length - seedanceRefVideoUrls.value.length
   const invalidFormat = files.find(f => !['video/mp4', 'video/quicktime'].includes(f.type))
   if (invalidFormat) {
@@ -1078,9 +1142,10 @@ async function handleSeedanceRefVideos(e) {
     e.target.value = ''
     return
   }
-  const tooLarge = files.find(f => f.size > 50 * 1024 * 1024)
+  const maxVideoBytes = isWan3Model.value ? 100 * 1024 * 1024 : 50 * 1024 * 1024
+  const tooLarge = files.find(f => f.size > maxVideoBytes)
   if (tooLarge) {
-    error.value = '参考视频不能超过50MB'
+    error.value = `参考视频不能超过${isWan3Model.value ? 100 : 50}MB`
     e.target.value = ''
     return
   }
@@ -1089,18 +1154,34 @@ async function handleSeedanceRefVideos(e) {
   try {
     for (const [index, file] of files.slice(0, remaining).entries()) {
       const metadata = await readLocalVideoMetadata(file)
-      const validationMessage = validateSeedanceVideoMetadata(metadata, {
+      const wan3VideoInvalid = isWan3Model.value && (
+        metadata.duration < 1 || metadata.duration > 15 ||
+        metadata.width < 240 || metadata.height < 240 || metadata.width > 4096 || metadata.height > 4096 ||
+        Math.max(metadata.width, metadata.height) / Math.min(metadata.width, metadata.height) > 8
+      )
+      if (isWan3Model.value ? wan3VideoInvalid : validateSeedanceVideoMetadata(metadata, {
         index: seedanceRefVideos.value.length + seedanceRefVideoUrls.value.length + index,
         apiType: currentModelConfig.value?.apiType,
         maxDuration: seedanceMaxDuration.value
-      })
-      if (validationMessage) {
-        error.value = validationMessage
+      })) {
+        error.value = isWan3Model.value
+          ? '万相 3.0 参考视频需为1至15秒、单边240至4096像素且宽高比不超过8:1'
+          : validateSeedanceVideoMetadata(metadata, {
+            index: seedanceRefVideos.value.length + seedanceRefVideoUrls.value.length + index,
+            apiType: currentModelConfig.value?.apiType,
+            maxDuration: seedanceMaxDuration.value
+          })
         e.target.value = ''
         return
       }
-      if (totalDuration + metadata.duration > seedanceModelLimits.value.maxReferenceVideoDuration) {
-        error.value = `参考视频总时长不能超过${seedanceModelLimits.value.maxReferenceVideoDuration}秒`
+      const maxTotalDuration = isWan3Model.value ? 15 : seedanceModelLimits.value.maxReferenceVideoDuration
+      if (totalDuration + metadata.duration > maxTotalDuration) {
+        error.value = `参考视频总时长不能超过${maxTotalDuration}秒`
+        e.target.value = ''
+        return
+      }
+      if (isWan3Model.value && totalDuration + metadata.duration + Number(wan3Duration.value) > 30) {
+        error.value = '输入视频总时长与输出视频时长之和不能超过30秒'
         e.target.value = ''
         return
       }
@@ -1134,7 +1215,7 @@ function removeSeedanceRefVideo(idx) {
 
 async function handleSeedanceRefAudios(e) {
   const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('audio/'))
-  const MAX = seedanceMaxRefAudios.value
+  const MAX = isWan3Model.value ? wan3MaxRefAudios.value : seedanceMaxRefAudios.value
   const remaining = MAX - seedanceRefAudios.value.length - seedanceRefAudioUrls.value.length
   const invalidFormat = files.find(f => !['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav'].includes(f.type))
   if (invalidFormat) {
@@ -1153,12 +1234,12 @@ async function handleSeedanceRefAudios(e) {
   try {
     for (const file of files.slice(0, remaining)) {
       const dur = await getLocalMediaDuration(file, 'audio')
-      if (dur < 2 || dur > 15) {
-        error.value = '参考音频时长需在2到15秒之间'
+      if (isWan3Model.value ? (dur < 1 || dur > 15) : (dur < 2 || dur > 15)) {
+        error.value = isWan3Model.value ? '万相 3.0 参考音频时长需在1到15秒之间' : '参考音频时长需在2到15秒之间'
         e.target.value = ''
         return
       }
-      if (seedanceMaxRefAudios.value <= 3 && totalDuration + dur > 15) {
+      if ((isWan3Model.value || seedanceMaxRefAudios.value <= 3) && totalDuration + dur > 15) {
         error.value = '参考音频总时长不能超过15秒'
         e.target.value = ''
         return
@@ -1189,6 +1270,11 @@ function removeSeedanceRefAudio(idx) {
 
 function addSeedanceRefImageUrl() {
   const url = seedanceRefImageUrl.value.trim()
+  const maxImages = isWan3Model.value ? wan3MaxRefImages.value : seedanceMaxRefImages.value
+  if (seedanceRefImages.value.length + seedanceRefImageUrls.value.length >= maxImages) {
+    error.value = `参考图片数量不能超过${maxImages}张`
+    return
+  }
   if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
     seedanceRefImageUrls.value.push(url)
     seedanceRefImageUrl.value = ''
@@ -1199,6 +1285,11 @@ function removeSeedanceRefImageUrl(idx) {
 }
 function addSeedanceRefVideoUrl() {
   const url = seedanceRefVideoUrl.value.trim()
+  const maxVideos = isWan3Model.value ? wan3MaxRefVideos.value : seedanceMaxRefVideos.value
+  if (seedanceRefVideos.value.length + seedanceRefVideoUrls.value.length >= maxVideos) {
+    error.value = `参考视频数量不能超过${maxVideos}个`
+    return
+  }
   if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
     seedanceRefVideoUrls.value.push(url)
     seedanceRefVideoUrl.value = ''
@@ -1209,6 +1300,11 @@ function removeSeedanceRefVideoUrl(idx) {
 }
 function addSeedanceRefAudioUrl() {
   const url = seedanceRefAudioUrl.value.trim()
+  const maxAudios = isWan3Model.value ? wan3MaxRefAudios.value : seedanceMaxRefAudios.value
+  if (seedanceRefAudios.value.length + seedanceRefAudioUrls.value.length >= maxAudios) {
+    error.value = `参考音频数量不能超过${maxAudios}个`
+    return
+  }
   if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
     seedanceRefAudioUrls.value.push(url)
     seedanceRefAudioUrl.value = ''
@@ -1236,6 +1332,26 @@ function clearSeedanceFiles() {
   seedanceRefImageUrl.value = ''
   seedanceRefVideoUrl.value = ''
   seedanceRefAudioUrl.value = ''
+}
+
+function clearWan3Files() {
+  clearSeedanceFiles()
+  wan3File.value = null
+  wan3Link.value = ''
+}
+
+function handleWan3File(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+  if (!WAN3_DOCUMENT_EXTENSIONS.has(extension)) {
+    error.value = '参考文件仅支持 doc、docx、xls、xlsx、ppt、pptx、pdf、txt、key、pages、numbers 或 md'
+  } else if (file.size > 100 * 1024 * 1024) {
+    error.value = '参考文件不能超过100MB'
+  } else {
+    wan3File.value = file
+  }
+  e.target.value = ''
 }
 
 function clearKlingV3OmniFiles() {
@@ -1430,12 +1546,13 @@ async function generateVideo() {
     // Kling v3 Omni 非文生视频模式也允许空提示词
     const seedanceAllowEmpty = isReferenceVideoModel.value && seedanceMode.value !== 'text2video'
     const klingOmniAllowEmpty = isKlingV3OmniModel.value && klingV3OmniMode.value !== 'text2video'
-    if (!seedanceAllowEmpty && !klingOmniAllowEmpty) {
+    const wan3AllowEmpty = isWan3Model.value && wan3Mode.value !== 'text2video'
+    if (!seedanceAllowEmpty && !klingOmniAllowEmpty && !wan3AllowEmpty) {
       error.value = '请输入提示词'
       return
     }
   }
-  if (mode.value === 'image' && !isReferenceVideoModel.value && !isKlingV3OmniModel.value && imageFiles.value.length === 0) {
+  if (mode.value === 'image' && !isReferenceVideoModel.value && !isWan3Model.value && !isKlingV3OmniModel.value && imageFiles.value.length === 0) {
     error.value = '请上传参考图片'
     return
   }
@@ -1476,6 +1593,64 @@ async function generateVideo() {
     })
     if (seedanceValidationMessage) {
       error.value = seedanceValidationMessage
+      return
+    }
+  }
+
+  if (isWan3Model.value) {
+    const firstFrameCount = seedanceFirstFrameFile.value ? 1 : 0
+    const lastFrameCount = seedanceLastFrameFile.value ? 1 : 0
+    const imageCount = seedanceRefImages.value.length + seedanceRefImageUrls.value.length
+    const videoCount = seedanceRefVideos.value.length + seedanceRefVideoUrls.value.length
+    const audioCount = seedanceRefAudios.value.length + seedanceRefAudioUrls.value.length
+    const hasFrame = firstFrameCount + lastFrameCount > 0
+    const hasReference = imageCount + videoCount + audioCount > 0 || Boolean(wan3File.value) || Boolean(wan3Link.value.trim())
+
+    if (wan3File.value && wan3Link.value.trim()) {
+      error.value = '万相 3.0 文件和网页链接不能同时使用'
+      return
+    }
+    if (imageCount > wan3MaxRefImages.value || videoCount > wan3MaxRefVideos.value || audioCount > wan3MaxRefAudios.value) {
+      error.value = '万相 3.0 参考素材数量超过当前模型配置上限'
+      return
+    }
+    if (hasFrame && hasReference) {
+      error.value = '万相 3.0 首尾帧不能与参考素材、文件或网页链接同时使用'
+      return
+    }
+    if (wan3Mode.value === 'image2video_first' && !firstFrameCount) {
+      error.value = '请上传首帧图片'
+      return
+    }
+    if (wan3Mode.value === 'image2video_first_last' && (!firstFrameCount || !lastFrameCount)) {
+      error.value = '首尾帧模式需要同时上传首帧和尾帧图片'
+      return
+    }
+    if (wan3Mode.value === 'multimodal_ref' && imageCount + videoCount + audioCount === 0) {
+      error.value = '多模态参考模式至少需要一张参考图片、一段视频或一段音频'
+      return
+    }
+    if (wan3Mode.value === 'file' && !wan3File.value) {
+      error.value = '请上传一个参考文件'
+      return
+    }
+    if (wan3Mode.value === 'link' && !/^https?:\/\//i.test(wan3Link.value.trim())) {
+      error.value = '请输入可公开访问的网页链接'
+      return
+    }
+    const requestedWan3Duration = Number(wan3Duration.value)
+    if (!Number.isInteger(requestedWan3Duration) || requestedWan3Duration < 2 || requestedWan3Duration > 30) {
+      error.value = '万相 3.0 时长必须为2至30秒的整数'
+      return
+    }
+    const referenceVideoDuration = seedanceRefVideoPreviews.value.reduce((sum, item) => sum + (Number(item.duration) || 0), 0)
+    if (referenceVideoDuration + requestedWan3Duration > 30) {
+      error.value = '输入视频总时长与输出视频时长之和不能超过30秒'
+      return
+    }
+    const normalizedSeed = wan3Seed.value.trim()
+    if (normalizedSeed && (!/^\d+$/.test(normalizedSeed) || Number(normalizedSeed) > 2147483647)) {
+      error.value = '万相 3.0 随机种子必须为0至2147483647的整数'
       return
     }
   }
@@ -1534,7 +1709,7 @@ async function generateVideo() {
   const currentDuration = duration.value
   const requestedDuration = isReferenceVideoModel.value
     ? (seedanceAutoDuration.value ? '-1' : String(seedanceDuration.value))
-    : currentDuration
+    : isWan3Model.value ? String(wan3Duration.value) : currentDuration
   const currentAspectRatio = aspectRatio.value
   const pointsCost = currentPointsCost.value
   
@@ -1545,7 +1720,7 @@ async function generateVideo() {
     formData.append('aspect_ratio', currentAspectRatio)
     formData.append('duration', requestedDuration)
     formData.append('hd', hd.value ? 'true' : 'false')
-    formData.append('watermark', watermark.value ? 'true' : 'false')
+    formData.append('watermark', (isWan3Model.value ? wan3Watermark.value : watermark.value) ? 'true' : 'false')
     formData.append('private', isPrivate.value ? 'true' : 'false')
     appendSpaceParamsToFormData(formData, getBeginnerSpaceParams())
     
@@ -1559,7 +1734,7 @@ async function generateVideo() {
       formData.append('resolution', resolution.value)
     }
     
-    if ((mode.value === 'image' || isRunningHubAiAppVideoV31Model.value) && !isReferenceVideoModel.value && !isKlingV3OmniModel.value) {
+    if ((mode.value === 'image' || isRunningHubAiAppVideoV31Model.value) && !isReferenceVideoModel.value && !isWan3Model.value && !isKlingV3OmniModel.value) {
       if (reviewSubmission.approved) {
         formData.append('image_urls', JSON.stringify(reviewSubmission.assetUris))
       } else {
@@ -1633,6 +1808,46 @@ async function generateVideo() {
       }
     }
 
+    if (isWan3Model.value) {
+      formData.append('wan3_audio', wan3GenerateAudio.value ? 'true' : 'false')
+      formData.append('wan3_prompt_extend', wan3PromptExtend.value ? 'true' : 'false')
+      if (wan3Seed.value.trim()) {
+        formData.append('seed', wan3Seed.value.trim())
+      }
+      if (wan3Mode.value === 'image2video_first' || wan3Mode.value === 'image2video_first_last') {
+        formData.append('firstFrameImage', seedanceFirstFrameFile.value)
+      }
+      if (wan3Mode.value === 'image2video_first_last') {
+        formData.append('lastFrameImage', seedanceLastFrameFile.value)
+      }
+      if (wan3Mode.value === 'multimodal_ref') {
+        for (const file of seedanceRefImages.value) {
+          formData.append('referenceImages', file)
+        }
+        if (seedanceRefImageUrls.value.length > 0) {
+          formData.append('reference_images', JSON.stringify(seedanceRefImageUrls.value))
+        }
+        for (const file of seedanceRefVideos.value) {
+          formData.append('referenceVideos', file)
+        }
+        if (seedanceRefVideoUrls.value.length > 0) {
+          formData.append('reference_videos', JSON.stringify(seedanceRefVideoUrls.value))
+        }
+        for (const file of seedanceRefAudios.value) {
+          formData.append('referenceAudios', file)
+        }
+        if (seedanceRefAudioUrls.value.length > 0) {
+          formData.append('reference_audios', JSON.stringify(seedanceRefAudioUrls.value))
+        }
+      }
+      if (wan3Mode.value === 'file') {
+        formData.append('wan3Files', wan3File.value)
+      }
+      if (wan3Mode.value === 'link') {
+        formData.append('wan3_links', JSON.stringify([wan3Link.value.trim()]))
+      }
+    }
+
     // Kling v3 Omni 参数
     if (isKlingV3OmniModel.value) {
       formData.append('kling_omni_sub_mode', klingV3OmniMode.value)
@@ -1687,6 +1902,7 @@ async function generateVideo() {
     // 立即清空输入框和图片，恢复UI状态
     clearImages()
     if (isReferenceVideoModel.value) clearSeedanceFiles()
+    if (isWan3Model.value) clearWan3Files()
     if (isKlingV3OmniModel.value) clearKlingV3OmniFiles()
     v31AudioFile.value = null
     prompt.value = ''
@@ -2609,7 +2825,7 @@ onUnmounted(() => {
       <div class="lg:col-span-3">
         <div class="card p-5 sticky top-24">
           <!-- 模式切换标签（非 Seedance / Kling v3 Omni / RunningHub V3.1 模型时显示） -->
-          <div v-if="!isReferenceVideoModel && !isKlingV3OmniModel && !isRunningHubAiAppVideoV31Model" class="flex bg-slate-100 dark:bg-dark-700 rounded-xl p-1 mb-5">
+          <div v-if="!isReferenceVideoModel && !isWan3Model && !isKlingV3OmniModel && !isRunningHubAiAppVideoV31Model" class="flex bg-slate-100 dark:bg-dark-700 rounded-xl p-1 mb-5">
             <button 
               @click="mode = 'image'" 
               :class="mode === 'image' 
@@ -2687,7 +2903,18 @@ onUnmounted(() => {
             </div>
 
             <!-- 视频长度（VEO3模型、Seedance模型和不支持时长选择的模型不显示） -->
-            <div v-if="!isVeo3Model && !isReferenceVideoModel && !isKlingV3OmniModel && availableDurations.length > 0">
+            <div v-if="isWan3Model">
+              <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
+                <span>⏱️</span>
+                <span>视频长度</span>
+              </label>
+              <select v-model.number="wan3Duration" class="input text-sm">
+                <option v-for="dur in availableDurations" :key="dur" :value="Number(dur)">
+                  {{ dur }} 秒
+                </option>
+              </select>
+            </div>
+            <div v-else-if="!isVeo3Model && !isReferenceVideoModel && !isKlingV3OmniModel && availableDurations.length > 0">
               <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">
                 <span>⏱️</span>
                 <span>视频长度</span>
@@ -3103,6 +3330,132 @@ onUnmounted(() => {
                       </div>
                     </label>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ========== 阿里云百炼万相 3.0 输入模式 ========== -->
+            <div v-if="isWan3Model" class="space-y-3">
+              <div class="border border-amber-200 dark:border-amber-900/60 rounded-lg overflow-hidden">
+                <button
+                  type="button"
+                  @click="wan3ModeOpen = !wan3ModeOpen"
+                  class="w-full flex items-center justify-between px-3 py-2.5 bg-amber-50/70 dark:bg-amber-950/20 hover:bg-amber-100/70 dark:hover:bg-amber-950/35 transition-colors"
+                >
+                  <span class="flex items-center space-x-1.5 text-xs font-semibold text-amber-800 dark:text-amber-200">
+                    <span>🎬</span>
+                    <span>万相 3.0 输入模式</span>
+                    <span class="ml-1 px-1.5 py-0.5 bg-amber-100 dark:bg-amber-900/50 text-amber-800 dark:text-amber-200 rounded text-xs">
+                      {{ WAN3_MODES.find(item => item.value === wan3Mode)?.label }}
+                    </span>
+                  </span>
+                  <svg class="w-4 h-4 text-amber-700 dark:text-amber-300 transition-transform duration-200" :class="{ 'rotate-180': wan3ModeOpen }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                <div v-show="wan3ModeOpen" class="px-3 py-2.5 border-t border-amber-200 dark:border-amber-900/60">
+                  <div class="flex flex-wrap gap-1.5">
+                    <button
+                      v-for="item in WAN3_MODES"
+                      :key="item.value"
+                      type="button"
+                      @click="wan3Mode = item.value"
+                      :class="[
+                        'px-2.5 py-1.5 text-xs font-medium rounded-lg border transition-all duration-150',
+                        wan3Mode === item.value
+                          ? 'bg-amber-700 text-white border-amber-700 dark:bg-amber-300 dark:text-amber-950 dark:border-amber-300 shadow-sm'
+                          : 'bg-white dark:bg-dark-700 text-slate-600 dark:text-slate-300 border-slate-300 dark:border-dark-500 hover:border-amber-400'
+                      ]"
+                    >
+                      <span class="mr-1">{{ item.icon }}</span>{{ item.label }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <p class="text-xs text-amber-700 dark:text-amber-300">参考图片、视频、音频、文件和链接不能混用首尾帧；文件和网页链接也不能同时使用。</p>
+
+              <div v-if="wan3Mode === 'image2video_first' || wan3Mode === 'image2video_first_last'" class="space-y-2.5">
+                <div>
+                  <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5"><span>🖼️</span><span>首帧图片</span></label>
+                  <div v-if="!seedanceFirstFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-amber-400 transition-colors" @click="seedanceFirstFrameInputRef?.click()">
+                    <div class="text-2xl mb-1">📤</div><p class="text-xs text-slate-500 dark:text-slate-400">点击上传 JPEG/JPG/PNG/BMP/WEBP 图片（≤20MB）</p>
+                    <input ref="seedanceFirstFrameInputRef" type="file" accept="image/jpeg,image/png,image/bmp,image/webp" @change="handleSeedanceFirstFrame" class="hidden" />
+                  </div>
+                  <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
+                    <img :src="seedanceFirstFramePreview" class="w-12 h-12 object-cover rounded" />
+                    <span class="flex-1 text-xs text-slate-700 dark:text-slate-300 truncate">{{ seedanceFirstFrameFile.name }}</span>
+                    <button type="button" @click="removeSeedanceFirstFrame" class="w-6 h-6 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-xs">✕</button>
+                  </div>
+                </div>
+                <div v-if="wan3Mode === 'image2video_first_last'">
+                  <label class="flex items-center space-x-1 text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5"><span>🖼️</span><span>尾帧图片</span></label>
+                  <div v-if="!seedanceLastFrameFile" class="border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg p-3 text-center cursor-pointer hover:border-amber-400 transition-colors" @click="seedanceLastFrameInputRef?.click()">
+                    <div class="text-2xl mb-1">📤</div><p class="text-xs text-slate-500 dark:text-slate-400">点击上传 JPEG/JPG/PNG/BMP/WEBP 图片（≤20MB）</p>
+                    <input ref="seedanceLastFrameInputRef" type="file" accept="image/jpeg,image/png,image/bmp,image/webp" @change="handleSeedanceLastFrame" class="hidden" />
+                  </div>
+                  <div v-else class="flex items-center space-x-2 bg-slate-50 dark:bg-dark-700 rounded-lg p-2 border border-slate-200 dark:border-dark-600">
+                    <img :src="seedanceLastFramePreview" class="w-12 h-12 object-cover rounded" />
+                    <span class="flex-1 text-xs text-slate-700 dark:text-slate-300 truncate">{{ seedanceLastFrameFile.name }}</span>
+                    <button type="button" @click="removeSeedanceLastFrame" class="w-6 h-6 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded text-xs">✕</button>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="wan3Mode === 'multimodal_ref'" class="space-y-3 rounded-lg border border-slate-200 dark:border-dark-600 p-3">
+                <div>
+                  <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-slate-600 dark:text-slate-400">🖼️ 参考图片</label><span class="text-xs text-slate-500">{{ seedanceRefImages.length + seedanceRefImageUrls.length }} / {{ wan3MaxRefImages }} 张</span></div>
+                  <div class="flex gap-1.5"><input v-model="seedanceRefImageUrl" type="url" placeholder="粘贴公开图片 URL" class="input text-xs py-1.5" @keydown.enter.prevent="addSeedanceRefImageUrl" /><button type="button" @click="addSeedanceRefImageUrl" class="px-2 py-1.5 text-xs rounded-lg bg-amber-700 text-white hover:bg-amber-600">添加</button></div>
+                  <div class="flex flex-wrap gap-1.5 mt-1.5">
+                    <div v-for="(preview, index) in seedanceRefImagePreviews" :key="`wan3-image-${index}`" class="relative"><img :src="preview" class="w-12 h-12 object-cover rounded border border-slate-200 dark:border-dark-600" /><button type="button" @click="removeSeedanceRefImage(index)" class="absolute -right-1 -top-1 w-4 h-4 rounded-full bg-red-600 text-white text-[10px]">✕</button></div>
+                    <div v-for="(url, index) in seedanceRefImageUrls" :key="`wan3-image-url-${index}`" class="flex items-center gap-1 max-w-32 rounded border border-slate-200 dark:border-dark-600 px-1.5 py-1 text-xs text-slate-500"><span class="truncate">🔗 {{ url }}</span><button type="button" @click="removeSeedanceRefImageUrl(index)" class="text-red-500">✕</button></div>
+                  </div>
+                  <button v-if="seedanceRefImages.length + seedanceRefImageUrls.length < wan3MaxRefImages" type="button" @click="seedanceRefImageInputRef?.click()" class="mt-1.5 w-full py-2 border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg text-xs text-slate-500 hover:border-amber-400">+ 上传图片（≤20MB）</button>
+                  <input ref="seedanceRefImageInputRef" type="file" accept="image/jpeg,image/png,image/bmp,image/webp" multiple @change="handleSeedanceRefImages" class="hidden" />
+                </div>
+
+                <div>
+                  <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-slate-600 dark:text-slate-400">📹 参考视频</label><span class="text-xs text-slate-500">{{ seedanceRefVideos.length + seedanceRefVideoUrls.length }} / {{ wan3MaxRefVideos }} 个</span></div>
+                  <div class="flex gap-1.5"><input v-model="seedanceRefVideoUrl" type="url" placeholder="粘贴公开 MP4/MOV URL" class="input text-xs py-1.5" @keydown.enter.prevent="addSeedanceRefVideoUrl" /><button type="button" @click="addSeedanceRefVideoUrl" class="px-2 py-1.5 text-xs rounded-lg bg-amber-700 text-white hover:bg-amber-600">添加</button></div>
+                  <div v-for="(item, index) in seedanceRefVideoPreviews" :key="`wan3-video-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">{{ item.name }} · {{ item.duration.toFixed(1) }}s</span><button type="button" @click="removeSeedanceRefVideo(index)" class="text-red-500">移除</button></div>
+                  <div v-for="(url, index) in seedanceRefVideoUrls" :key="`wan3-video-url-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">🔗 {{ url }}</span><button type="button" @click="removeSeedanceRefVideoUrl(index)" class="text-red-500">移除</button></div>
+                  <button v-if="seedanceRefVideos.length + seedanceRefVideoUrls.length < wan3MaxRefVideos" type="button" @click="seedanceRefVideoInputRef?.click()" class="mt-1.5 w-full py-2 border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg text-xs text-slate-500 hover:border-amber-400">+ 上传 MP4/MOV（单个≤100MB，全部≤15 秒；输入+输出≤30秒）</button>
+                  <input ref="seedanceRefVideoInputRef" type="file" accept="video/mp4,video/quicktime" multiple @change="handleSeedanceRefVideos" class="hidden" />
+                </div>
+
+                <div>
+                  <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-slate-600 dark:text-slate-400">🎵 参考音频</label><span class="text-xs text-slate-500">{{ seedanceRefAudios.length + seedanceRefAudioUrls.length }} / {{ wan3MaxRefAudios }} 个</span></div>
+                  <div class="flex gap-1.5"><input v-model="seedanceRefAudioUrl" type="url" placeholder="粘贴公开 MP3/WAV URL" class="input text-xs py-1.5" @keydown.enter.prevent="addSeedanceRefAudioUrl" /><button type="button" @click="addSeedanceRefAudioUrl" class="px-2 py-1.5 text-xs rounded-lg bg-amber-700 text-white hover:bg-amber-600">添加</button></div>
+                  <div v-for="(item, index) in seedanceRefAudioPreviews" :key="`wan3-audio-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">{{ item.name }} · {{ item.duration.toFixed(1) }}s</span><button type="button" @click="removeSeedanceRefAudio(index)" class="text-red-500">移除</button></div>
+                  <div v-for="(url, index) in seedanceRefAudioUrls" :key="`wan3-audio-url-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">🔗 {{ url }}</span><button type="button" @click="removeSeedanceRefAudioUrl(index)" class="text-red-500">移除</button></div>
+                  <button v-if="seedanceRefAudios.length + seedanceRefAudioUrls.length < wan3MaxRefAudios" type="button" @click="seedanceRefAudioInputRef?.click()" class="mt-1.5 w-full py-2 border-2 border-dashed border-slate-300 dark:border-dark-600 rounded-lg text-xs text-slate-500 hover:border-amber-400">+ 上传 MP3/WAV（单个≤15MB，全部≤15 秒）</button>
+                  <input ref="seedanceRefAudioInputRef" type="file" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav" multiple @change="handleSeedanceRefAudios" class="hidden" />
+                </div>
+              </div>
+
+              <div v-if="wan3Mode === 'file'">
+                <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1.5">📄 参考文件</label>
+                <input ref="wan3FileInputRef" type="file" accept=".doc,.docx,.xls,.xlsx,.ppt,.pptx,.pdf,.txt,.key,.pages,.numbers,.md" class="hidden" @change="handleWan3File" />
+                <div class="flex items-center gap-2"><button type="button" @click="wan3FileInputRef?.click()" class="px-3 py-2 text-xs font-medium rounded-lg bg-slate-200 dark:bg-dark-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300">{{ wan3File ? '重新选择' : '选择文件' }}</button><span v-if="wan3File" class="flex-1 text-xs text-slate-500 truncate">{{ wan3File.name }}</span><button v-if="wan3File" type="button" @click="wan3File = null" class="text-xs text-red-500">移除</button></div>
+                <p class="text-xs text-slate-500 mt-1">支持 Office、PDF、TXT、Keynote、Pages、Numbers、Markdown，≤100MB。</p>
+              </div>
+
+              <div v-if="wan3Mode === 'link'">
+                <label class="text-xs font-semibold text-slate-600 dark:text-slate-400 block mb-1.5">🔗 网页链接</label>
+                <input v-model="wan3Link" type="url" class="input text-sm" placeholder="https://example.com/product" />
+                <p class="text-xs text-slate-500 mt-1">仅支持一个可公开访问的 HTTP/HTTPS 网页链接。</p>
+              </div>
+
+              <div class="border border-slate-200 dark:border-dark-600 rounded-lg overflow-hidden">
+                <button type="button" @click="wan3AdvancedOpen = !wan3AdvancedOpen" class="w-full flex items-center justify-between px-3 py-2.5 bg-slate-50 dark:bg-dark-700 hover:bg-slate-100 dark:hover:bg-dark-600 transition-colors">
+                  <span class="text-xs font-semibold text-slate-700 dark:text-slate-300">⚙️ 万相 3.0 高级设置</span>
+                  <span class="text-xs text-slate-500">{{ wan3AdvancedOpen ? '收起' : '展开' }}</span>
+                </button>
+                <div v-show="wan3AdvancedOpen" class="px-3 py-3 border-t border-slate-200 dark:border-dark-600 space-y-2.5">
+                  <label class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">生成音频</span><input v-model="wan3GenerateAudio" type="checkbox" class="rounded accent-amber-600" /></label>
+                  <label class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">智能扩写提示词</span><input v-model="wan3PromptExtend" type="checkbox" class="rounded accent-amber-600" /></label>
+                  <label class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">添加水印</span><input v-model="wan3Watermark" type="checkbox" class="rounded accent-amber-600" /></label>
+                  <div><label class="text-xs text-slate-600 dark:text-slate-400 block mb-1">随机种子（可选，0–2147483647）</label><input v-model="wan3Seed" inputmode="numeric" class="input text-xs py-1.5" placeholder="留空则随机" /></div>
                 </div>
               </div>
             </div>

@@ -56,7 +56,7 @@ test('Seedance 2.5 applies special request constraints only to supported submode
   assert.deepEqual(getSeedance25ModeConstraints(model, 'multimodal_ref'), {
     duration: -1,
     omniReferenceTaskType: 'reference',
-    minReferenceVideoDuration: 4,
+    minReferenceVideoDuration: 2,
     maxReferenceVideoDuration: 30
   })
   assert.deepEqual(getSeedance25ModeConstraints(model, 'video_edit'), {

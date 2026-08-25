@@ -24,7 +24,7 @@ const SEEDANCE25_MODE_CONSTRAINTS = Object.freeze({
     // 官方推荐显式指定 reference，避免 auto 自动判定与实际任务类型不一致触发异步报错
     // （InvalidParameter.TaskTypeMismatch）。reference 即参考生视频，ratio/duration 无特殊限制。
     omniReferenceTaskType: 'reference',
-    minReferenceVideoDuration: 4,
+    minReferenceVideoDuration: 2,
     maxReferenceVideoDuration: 30
   }),
   video_edit: Object.freeze({

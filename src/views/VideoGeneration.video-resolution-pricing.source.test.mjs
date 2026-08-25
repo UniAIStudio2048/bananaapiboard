@@ -8,8 +8,8 @@ test('视频生成页只向用户展示管理员启用的通用分辨率', () =>
   assert.match(source, /getEnabledVideoResolutionOptions\(currentModelConfig\.value\?\.resolutionPricing\)/)
 })
 
-test('视频生成页优先按配置的分辨率积分每秒预估', () => {
-  assert.match(source, /calculateVideoResolutionPrice\(\s*currentModelConfig\.value\?\.resolutionPricing,\s*resolution\.value,\s*isReferenceVideoModel\.value \? seedanceDuration\.value : duration\.value\s*\)/)
+test('万相 3.0 按其独立时长预估分辨率积分', () => {
+  assert.match(source, /calculateVideoResolutionPrice\(\s*currentModelConfig\.value\?\.resolutionPricing,\s*resolution\.value,\s*isReferenceVideoModel\.value \? seedanceDuration\.value : isWan3Model\.value \? wan3Duration\.value : duration\.value\s*\)/)
 })
 
 test('Seedance 请求在配置通用分辨率价格时使用当前通用分辨率', () => {

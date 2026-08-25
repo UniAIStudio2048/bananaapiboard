@@ -105,6 +105,7 @@ import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import CanvasNodeImage from '@/components/canvas/CanvasNodeImage.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedanceVideoModel, isVideoNodeNetworkError } from './video-error-message.js'
+import { resolveExternalMediaErrorMessage } from '@/utils/externalMediaError'
 import PromptMentionPopup from '../PromptMentionPopup.vue'
 import PromptMediaTag from '../PromptMediaTag.vue'
 import PromptTranslateButton from '../PromptTranslateButton.vue'
@@ -5636,7 +5637,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       err.clientSubmissionId = submission.submissionId
       throw err
     }
-    const err = new Error(getApiErrorMessage(data, '生成失败'))
+    const err = new Error(resolveExternalMediaErrorMessage(data, '生成失败'))
     err.payload = data
     err.clientSubmissionId = submission.submissionId
     throw err
