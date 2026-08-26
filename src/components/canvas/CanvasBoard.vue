@@ -39,6 +39,7 @@ import { MiniMap } from '@vue-flow/minimap'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import {
+  findConnectionSnapTarget,
   flowPositionToScreenPosition,
   resolveConnectionSourcePosition,
   shouldTreatTargetAsGroupCanvas
@@ -359,6 +360,9 @@ const {
   onNodeDrag,
   onNodeClick,
   onEdgeClick,
+  onEdgeMouseEnter,
+  onEdgeMouseMove,
+  onEdgeMouseLeave,
   onPaneClick,
   onPaneContextMenu,
   onNodeContextMenu,
@@ -1340,6 +1344,114 @@ onEdgeClick((event) => {
   
   // 关闭右键菜单
   canvasStore.closeAllContextMenus()
+})
+
+// ===== 连线悬停剪刀删除按钮（悬停 0.5s 在鼠标位置出现，点击删除连线） =====
+const EDGE_HOVER_DELETE_DELAY = 500
+const EDGE_HOVER_DELETE_HIDE_DELAY = 150
+const edgeHoverDelete = ref({ visible: false, edgeId: null, x: 0, y: 0 })
+let edgeHoverDeleteTimer = null
+let edgeHoverDeleteHideTimer = null
+
+function getVueFlowContainerRect() {
+  const el = vueFlowRef.value?.$el || vueFlowRef.value
+  return el?.getBoundingClientRect?.() || null
+}
+
+function clearEdgeHoverDeleteTimer() {
+  if (edgeHoverDeleteTimer) {
+    clearTimeout(edgeHoverDeleteTimer)
+    pendingTimeouts.delete(edgeHoverDeleteTimer)
+    edgeHoverDeleteTimer = null
+  }
+}
+
+function clearEdgeHoverDeleteHideTimer() {
+  if (edgeHoverDeleteHideTimer) {
+    clearTimeout(edgeHoverDeleteHideTimer)
+    pendingTimeouts.delete(edgeHoverDeleteHideTimer)
+    edgeHoverDeleteHideTimer = null
+  }
+}
+
+function hideEdgeHoverDelete() {
+  clearEdgeHoverDeleteTimer()
+  clearEdgeHoverDeleteHideTimer()
+  edgeHoverDelete.value = { visible: false, edgeId: null, x: 0, y: 0 }
+}
+
+// 按钮显示后鼠标会先离开连线去点按钮，宽限期内移入按钮则保持显示
+function scheduleEdgeHoverDeleteHide() {
+  clearEdgeHoverDeleteHideTimer()
+  edgeHoverDeleteHideTimer = setTimeout(() => {
+    pendingTimeouts.delete(edgeHoverDeleteHideTimer)
+    edgeHoverDeleteHideTimer = null
+    hideEdgeHoverDelete()
+  }, EDGE_HOVER_DELETE_HIDE_DELAY)
+  pendingTimeouts.add(edgeHoverDeleteHideTimer)
+}
+
+onEdgeMouseEnter(({ edge, event }) => {
+  if (isEdgeHidden.value) return
+  // 鼠标从按钮回到同一条连线：保持显示，不重新计时
+  if (edgeHoverDelete.value.visible && edgeHoverDelete.value.edgeId === edge.id) {
+    clearEdgeHoverDeleteHideTimer()
+    return
+  }
+  clearEdgeHoverDeleteTimer()
+  const rect = getVueFlowContainerRect()
+  if (!rect) return
+  const startX = event.clientX - rect.left
+  const startY = event.clientY - rect.top
+  edgeHoverDeleteTimer = setTimeout(() => {
+    pendingTimeouts.delete(edgeHoverDeleteTimer)
+    edgeHoverDeleteTimer = null
+    edgeHoverDelete.value = { visible: true, edgeId: edge.id, x: startX, y: startY }
+  }, EDGE_HOVER_DELETE_DELAY)
+  pendingTimeouts.add(edgeHoverDeleteTimer)
+})
+
+onEdgeMouseMove(({ event }) => {
+  // 等待期间跟随鼠标，按钮最终出现在鼠标停留位置
+  if (!edgeHoverDeleteTimer) return
+  const rect = getVueFlowContainerRect()
+  if (!rect) return
+  edgeHoverDelete.value = {
+    ...edgeHoverDelete.value,
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top
+  }
+})
+
+onEdgeMouseLeave(({ edge }) => {
+  if (edgeHoverDelete.value.visible && edgeHoverDelete.value.edgeId === edge.id) {
+    scheduleEdgeHoverDeleteHide()
+    return
+  }
+  clearEdgeHoverDeleteTimer()
+})
+
+function handleEdgeHoverDeleteBtnEnter() {
+  clearEdgeHoverDeleteHideTimer()
+}
+
+function handleEdgeHoverDeleteBtnLeave() {
+  scheduleEdgeHoverDeleteHide()
+}
+
+function handleEdgeHoverDeleteClick() {
+  const edgeId = edgeHoverDelete.value.edgeId
+  hideEdgeHoverDelete()
+  if (!edgeId) return
+  if (!canvasStore.edges.some(e => e.id === edgeId)) return
+  // 与键盘删除连线保持一致：先存历史再删除
+  canvasStore.saveHistory({ force: true })
+  canvasStore.removeEdge(edgeId)
+}
+
+// 平移/缩放后按钮与连线错位，直接隐藏
+watch(vfViewport, () => {
+  if (edgeHoverDelete.value.visible) hideEdgeHoverDelete()
 })
 
 // 处理画布点击 - 左键单击空白区域
@@ -2568,6 +2680,25 @@ function handleNativeContextMenu(event) {
 // 拖拽连线的起始位置（画布坐标）
 const dragLineStartPosition = ref({ x: 0, y: 0 })
 
+// 连线吸附：线尾接近下游节点左侧连接点（左+号中心）时自动吸附
+const CONNECTION_SNAP_RADIUS_PX = 60
+const connectionSnapTarget = ref(null)
+
+// 吸附用端口坐标：优先 Vue Flow 内部 handleBounds（DOM 实测，与连线渲染同源），
+// 拿不到时回退到 getHandlePosition 的尺寸近似模型
+function getSnapHandlePosition(nodeId, handleType) {
+  const graphNode = findNode(nodeId)
+  const bounds = handleType === 'input' ? graphNode?.handleBounds?.target : graphNode?.handleBounds?.source
+  const handle = Array.isArray(bounds) ? bounds[0] : null
+  if (graphNode && handle) {
+    return {
+      x: graphNode.computedPosition.x + handle.x + handle.width / 2,
+      y: graphNode.computedPosition.y + handle.y + handle.height / 2
+    }
+  }
+  return getHandlePosition(nodeId, handleType)
+}
+
 // 监听 store 中的拖拽状态变化
 watch(
   () => canvasStore.isDraggingConnection,
@@ -2575,8 +2706,9 @@ watch(
     // 统一管理全局监听器：开始拖拽时挂载，结束/取消时卸载
     // 使用 capture 兜底：避免 mouseup 被其他组件 stopPropagation 后漏掉
     const listenerOptions = { capture: true }
-    
+
     if (isDragging) {
+      connectionSnapTarget.value = null
       // 优先使用节点组件传入的起始位置（更准确，因为节点知道自己的真实尺寸）
       // 只有当位置无效时才使用 getHandlePosition 重新计算
       const storeStartPos = canvasStore.dragConnectionStartPosition
@@ -2596,8 +2728,9 @@ watch(
       window.addEventListener('mouseup', handleGlobalDragConnectionEnd, listenerOptions)
       return
     }
-    
+
     // 拖拽结束（包括成功连接/取消）时，确保清理监听器
+    connectionSnapTarget.value = null
     window.removeEventListener('mousemove', handleGlobalDragConnectionMove, listenerOptions)
     window.removeEventListener('mouseup', handleGlobalDragConnectionEnd, listenerOptions)
   },
@@ -2608,9 +2741,25 @@ watch(
 // 全局鼠标移动事件处理
 function handleGlobalDragConnectionMove(event) {
   if (!canvasStore.isDraggingConnection) return
-  
+
   const flowPos = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-  canvasStore.updateDragConnectionPosition(flowPos)
+  // 接近下游节点左侧连接点时吸附线尾，移出吸附半径则恢复跟随鼠标。
+  // flowPositionToScreenPosition 产出容器相对坐标，鼠标同样转为容器基准再比较距离；
+  // 视口取 getViewport() 与 screenToFlowPosition 保持同一数据源。
+  const containerRect = canvasBoardRef.value?.getBoundingClientRect()
+  const snapTarget = findConnectionSnapTarget({
+    screenPosition: {
+      x: event.clientX - (containerRect?.left || 0),
+      y: event.clientY - (containerRect?.top || 0)
+    },
+    sourceNodeId: canvasStore.dragConnectionSource?.nodeId,
+    nodes: canvasStore.nodes,
+    getHandlePosition: getSnapHandlePosition,
+    viewport: getViewport(),
+    snapRadius: CONNECTION_SNAP_RADIUS_PX
+  })
+  connectionSnapTarget.value = snapTarget
+  canvasStore.updateDragConnectionPosition(snapTarget ? snapTarget.position : flowPos)
 }
 
 // 全局鼠标释放事件处理
@@ -2631,9 +2780,12 @@ function finishDragConnectionAtScreenPosition(screenPos) {
   if (!canvasStore.isDraggingConnection) return
 
   try {
-    // 检测是否释放在某个节点上
+    // 吸附中的目标优先：即使鼠标未压在节点元素上，松手也直接连接
+    const snapTarget = connectionSnapTarget.value
     const targetElement = document.elementFromPoint(screenPos.x, screenPos.y)
-    let targetNode = findTargetNode(targetElement)
+    let targetNode = snapTarget
+      ? canvasStore.nodes.find(n => n.id === snapTarget.nodeId)
+      : findTargetNode(targetElement)
     const sourceNode = canvasStore.nodes.find(n => n.id === canvasStore.dragConnectionSource?.nodeId)
 
     if (shouldTreatTargetAsGroupCanvas({ sourceNode, targetNode })) {
@@ -2670,8 +2822,8 @@ function finishDragConnectionAtScreenPosition(screenPos) {
       }
     }
 
-    // 计算结束位置
-    const flowPos = screenToFlowPosition(screenPos)
+    // 计算结束位置（吸附命中时以吸附点为准）
+    const flowPos = (snapTarget && targetNode) ? { ...snapTarget.position } : screenToFlowPosition(screenPos)
 
     // 调用 store 的 endDragConnection（传入格子级 targetHandle）
     const connected = canvasStore.endDragConnection(targetNode, flowPos, screenPos, targetHandleId)
@@ -2690,6 +2842,56 @@ function finishDragConnectionAtScreenPosition(screenPos) {
     // 确保清理拖拽状态，防止画布冻结
     canvasStore.cancelDragConnection()
   }
+}
+
+// ========== 多选批量连线（框选 ≥2 节点时，选框右侧的 + 按钮） ==========
+// 与节点 + 按钮一致：按钮中心在选框右缘外 34px（按钮宽 36px）
+// 选中源读 Vue Flow 内部 getSelectedNodes：vue-flow 1.48.0 不 emit selection-change，
+// canvasStore.selectedNodeIds 在框选后不会更新，不能作为显示依据。
+const MULTI_SELECT_CONNECT_OFFSET = 34
+
+const multiSelectConnectAnchor = computed(() => {
+  const nodes = (getSelectedNodes.value || []).filter(node => node && node.type !== 'group')
+  if (!Array.isArray(nodes) || nodes.length < 2) return null
+  if (canvasStore.isDraggingConnection) return null
+  if (activeDragNodeIds.value.size > 0) return null
+
+  let minX = Infinity
+  let minY = Infinity
+  let maxX = -Infinity
+  let maxY = -Infinity
+  for (const node of nodes) {
+    const { width, height } = getNodeSize(node)
+    minX = Math.min(minX, node.position.x)
+    minY = Math.min(minY, node.position.y)
+    maxX = Math.max(maxX, node.position.x + width)
+    maxY = Math.max(maxY, node.position.y + height)
+  }
+  if (!Number.isFinite(minX)) return null
+
+  const rightCenter = flowPositionToScreenPosition({ x: maxX, y: (minY + maxY) / 2 }, canvasStore.viewport)
+  return { x: rightCenter.x + MULTI_SELECT_CONNECT_OFFSET, y: rightCenter.y }
+})
+
+// 从多选 + 按钮按下：立即以全部选中节点为源开始拖拽连线。
+// 松手在空白处时由 endDragConnection 打开节点选择器，创建节点后自动补齐所有连线。
+function handleMultiSelectConnectStart(event) {
+  if (!multiSelectConnectAnchor.value) return
+  event.stopPropagation()
+  event.preventDefault()
+
+  const sourceIds = (getSelectedNodes.value || [])
+    .filter(node => node && node.type !== 'group')
+    .map(node => node.id)
+  if (sourceIds.length < 2) return
+
+  const viewport = canvasStore.viewport
+  const startFlow = {
+    x: (multiSelectConnectAnchor.value.x - (viewport.x || 0)) / (viewport.zoom || 1),
+    y: (multiSelectConnectAnchor.value.y - (viewport.y || 0)) / (viewport.zoom || 1)
+  }
+
+  canvasStore.startDragConnection(sourceIds[0], 'output', startFlow, sourceIds)
 }
 
 // 获取节点端口的画布坐标
@@ -2779,7 +2981,7 @@ const connectionFlowLayers = computed(() => {
   const maxDash = 150
   const minDash = 8
   const duration = 9
-  const opacityPerLayer = 0.045
+  const opacityPerLayer = 0.09
   return Array.from({ length: N }, (_, i) => {
     const dash = maxDash - i * (maxDash - minDash) / (N - 1)
     const gap = period - dash
@@ -3957,7 +4159,27 @@ onUnmounted(() => {
           </template>
         </svg>
       </template>
-      
+
+      <!-- 连线悬停剪刀删除按钮（悬停 0.5s 出现在鼠标位置） -->
+      <button
+        v-if="edgeHoverDelete.visible"
+        class="edge-hover-delete-btn"
+        :style="{ left: `${edgeHoverDelete.x}px`, top: `${edgeHoverDelete.y}px` }"
+        title="删除连线"
+        @pointerdown.stop
+        @click.stop="handleEdgeHoverDeleteClick"
+        @mouseenter="handleEdgeHoverDeleteBtnEnter"
+        @mouseleave="handleEdgeHoverDeleteBtnLeave"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="6" cy="6" r="3" />
+          <circle cx="6" cy="18" r="3" />
+          <path d="M20 4 8.12 15.88" />
+          <path d="M14.47 14.48 20 20" />
+          <path d="M8.12 8.12 12 12" />
+        </svg>
+      </button>
+
       <!-- 对齐辅助线 -->
       <template v-if="alignmentGuidesScreen.vertical || alignmentGuidesScreen.horizontal">
         <svg class="alignment-guides">
@@ -3988,6 +4210,18 @@ onUnmounted(() => {
         </svg>
       </template>
       
+      <!-- 多选批量连线：框选 ≥2 节点时显示在选框右缘外侧的 + 按钮 -->
+      <button
+        v-if="multiSelectConnectAnchor"
+        type="button"
+        class="multi-select-connect-btn"
+        :style="{ left: `${multiSelectConnectAnchor.x - 18}px`, top: `${multiSelectConnectAnchor.y - 18}px` }"
+        title="拖拽到目标节点：将所有选中节点连接为下游输入"
+        aria-label="批量连接选中节点"
+        @mousedown="handleMultiSelectConnectStart"
+        @click.stop
+      >+</button>
+
       <MiniMap
         v-if="showCanvasMiniMap && !renderProjection.enabled"
         class="canvas-workflow-minimap"
@@ -4219,6 +4453,50 @@ onUnmounted(() => {
   z-index: 0;
 }
 
+/* 连线悬停剪刀删除按钮（VueFlow 插槽内，容器坐标系） */
+.edge-hover-delete-btn {
+  position: absolute;
+  z-index: 1002;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(24, 26, 32, 0.95);
+  color: #e5e7eb;
+  cursor: pointer;
+  pointer-events: auto;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.edge-hover-delete-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.edge-hover-delete-btn:hover {
+  background: var(--canvas-accent-primary, #3b82f6);
+  border-color: var(--canvas-accent-primary, #3b82f6);
+  color: #ffffff;
+}
+
+:root.canvas-theme-light .edge-hover-delete-btn {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.18);
+  color: rgba(0, 0, 0, 0.75);
+}
+
+:root.canvas-theme-light .edge-hover-delete-btn:hover {
+  background: var(--canvas-accent-primary, #3b82f6);
+  border-color: var(--canvas-accent-primary, #3b82f6);
+  color: #ffffff;
+}
+
 .connection-flow-base {
   stroke: var(--canvas-edge-default);
   stroke-width: 2;
@@ -4228,8 +4506,8 @@ onUnmounted(() => {
 }
 
 .connection-flow {
-  stroke: #60a5fa;
-  stroke-width: 2;
+  stroke: #93c5fd;
+  stroke-width: 2.5;
   stroke-linecap: round;
   fill: none;
   animation: connectionGlowFlow 9s linear infinite;
@@ -4254,6 +4532,48 @@ onUnmounted(() => {
 
 .alignment-guides line {
   filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.6));
+}
+
+/* 多选批量连线按钮（选框右缘外侧，容器坐标系，样式对齐节点 + 按钮） */
+.multi-select-connect-btn {
+  position: absolute;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(24, 26, 32, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 22px;
+  font-weight: 300;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: crosshair;
+  user-select: none;
+  touch-action: none;
+  z-index: 1002;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.multi-select-connect-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+:root.canvas-theme-light .multi-select-connect-btn {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: rgba(0, 0, 0, 0.5);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .multi-select-connect-btn:hover {
+  background: #ffffff;
+  border-color: rgba(0, 0, 0, 0.25);
+  color: rgba(0, 0, 0, 0.8);
 }
 
 @keyframes connectionGlowFlow {

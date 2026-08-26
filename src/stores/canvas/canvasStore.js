@@ -23,6 +23,7 @@ import {
   getVisibleNodeGroups,
   resolveVisibleGroupGeometryNodes
 } from '@/utils/canvasBatchLayout'
+import { resolveMultiConnectExtraSourceIds } from '@/utils/canvasMultiConnect'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -118,6 +119,8 @@ export const useCanvasStore = defineStore('canvas', () => {
   // ========== 拖拽连线状态 ==========
   const isDraggingConnection = ref(false)  // 是否正在拖拽连线
   const dragConnectionSource = ref(null)   // 拖拽连线的源节点 { nodeId, handleId }
+  const dragConnectionSourceIds = ref(null) // 多选批量连线：本次拖拽涉及的全部源节点ID（仅多选时为数组）
+  const pendingMultiConnectSourceIds = ref(null) // 多选批量连线：拖到空白处后，等待选择器创建下游节点时补连的源节点ID
   const dragConnectionStartPosition = ref({ x: 0, y: 0 }) // 拖拽连线的起始位置（画布坐标，+号按钮位置）
   const dragConnectionPosition = ref({ x: 0, y: 0 }) // 拖拽连线的当前位置（画布坐标，鼠标位置）
   const preventSelectorClose = ref(false)  // 防止选择器被立即关闭（用于连线拖拽后打开选择器的场景）
@@ -275,6 +278,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     nodes.value.push(newNode)
     
     // 如果是从另一个节点创建的，自动添加连线
+    const multiConnectPrimarySourceId = triggerNodeId.value // 多选批量连线的主源 = 触发节点
     if (triggerNodeId.value) {
       console.warn('[Store] addNode 消费了 triggerNodeId:', triggerNodeId.value, '新节点:', newNode.id, '调用栈:', new Error().stack?.split('\n').slice(1, 4).join(' <- '))
       addEdge({
@@ -282,6 +286,27 @@ export const useCanvasStore = defineStore('canvas', () => {
         target: newNode.id
       })
       triggerNodeId.value = null
+    }
+
+    // 多选批量连线：选择器创建的下游节点与主源连线已建，这里补齐其余选中源节点的连线
+    const pendingMultiSourceIds = pendingMultiConnectSourceIds.value
+    if (Array.isArray(pendingMultiSourceIds) && pendingMultiSourceIds.length > 0) {
+      pendingMultiConnectSourceIds.value = null
+      const extraSourceIds = resolveMultiConnectExtraSourceIds({
+        sourceIds: pendingMultiSourceIds,
+        primarySourceId: multiConnectPrimarySourceId,
+        nodes: nodes.value,
+        targetNode: newNode
+      })
+      for (const extraId of extraSourceIds) {
+        addEdge({
+          source: extraId,
+          target: newNode.id,
+          sourceHandle: 'output',
+          targetHandle: 'input'
+        })
+      }
+      console.log('[Store] 选择器创建节点后补齐多选批量连线', { newNodeId: newNode.id, extraSourceIds })
     }
     
     // 只有非编组节点才自动选中（编组节点由外部手动选中）
@@ -1384,6 +1409,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     isNodeSelectorOpen.value = false
     triggerNodeId.value = null
     nodeSelectorFlowPosition.value = null
+    pendingMultiConnectSourceIds.value = null // 关闭选择器即放弃未消费的多选补连
     pendingConnection.value = null // 清除待连接连线
   }
   
@@ -1408,15 +1434,18 @@ export const useCanvasStore = defineStore('canvas', () => {
    * @param {String} nodeId - 源节点ID
    * @param {String} handleId - 源端口ID（默认 'output'）
    * @param {Object} startPosition - 起始位置（画布坐标）
+   * @param {Array<String>|null} extraSourceIds - 多选批量连线时的全部源节点ID（仅多选时传入）
    */
-  function startDragConnection(nodeId, handleId = 'output', startPosition) {
+  function startDragConnection(nodeId, handleId = 'output', startPosition, extraSourceIds = null) {
     // 重要：先设置位置和源节点信息，再设置 isDraggingConnection
     // 因为 CanvasBoard 的 watch 会在 isDraggingConnection 变化时读取 dragConnectionStartPosition
     dragConnectionSource.value = { nodeId, handleId }
+    dragConnectionSourceIds.value = Array.isArray(extraSourceIds) && extraSourceIds.length > 1 ? extraSourceIds : null
+    pendingMultiConnectSourceIds.value = null // 新的拖拽取代旧的待补连状态
     dragConnectionStartPosition.value = startPosition  // 保存起始位置（+号按钮位置）
     dragConnectionPosition.value = startPosition  // 初始位置也设置为起始位置
     isDraggingConnection.value = true  // 最后设置，触发 watch
-    console.log('[Store] 开始拖拽连线', { nodeId, handleId, startPosition })
+    console.log('[Store] 开始拖拽连线', { nodeId, handleId, startPosition, multiSourceCount: dragConnectionSourceIds.value?.length || 1 })
   }
   
   /**
@@ -1458,17 +1487,51 @@ export const useCanvasStore = defineStore('canvas', () => {
         targetHandle: finalTargetHandle
       })
       console.log('[Store] 拖拽连线成功', sourceNodeId, '->', targetNode.id, 'handle:', finalTargetHandle)
-      
+
+      // 多选批量连线：把其余选中的源节点一起连到目标节点
+      const multiSourceIds = dragConnectionSourceIds.value
+      if (Array.isArray(multiSourceIds) && multiSourceIds.length > 0) {
+        // Storyboard 格子级输入同一 targetHandle 只保留一条入边，多源会互相覆盖，故只连主源
+        const cellLevelTarget = typeof finalTargetHandle === 'string' && finalTargetHandle.startsWith('input-')
+        const extraSourceIds = resolveMultiConnectExtraSourceIds({
+          sourceIds: multiSourceIds,
+          primarySourceId: sourceNodeId,
+          nodes: nodes.value,
+          targetNode,
+          cellLevelTarget
+        })
+        for (const extraId of extraSourceIds) {
+          addEdge({
+            source: extraId,
+            target: targetNode.id,
+            sourceHandle: sourceHandleId,
+            targetHandle: 'input'
+          })
+        }
+        console.log('[Store] 多选批量连线完成', {
+          targetNodeId: targetNode.id,
+          primarySourceId: sourceNodeId,
+          extraSourceIds,
+          cellLevelTarget
+        })
+      }
+
       // 清理状态
       isDraggingConnection.value = false
       dragConnectionSource.value = null
+      dragConnectionSourceIds.value = null
       dragConnectionStartPosition.value = { x: 0, y: 0 }
       dragConnectionPosition.value = { x: 0, y: 0 }
       return true
     } else {
       // 没有连接到节点，打开节点选择器
       console.log('[Store] 拖拽连线到空白处，打开节点选择器', { sourceNodeId, endPosition, screenPosition })
-      
+
+      // 多选批量连线：源节点列表留给选择器创建下游节点后补连
+      if (Array.isArray(dragConnectionSourceIds.value) && dragConnectionSourceIds.value.length > 0) {
+        pendingMultiConnectSourceIds.value = dragConnectionSourceIds.value
+      }
+
       // 设置待连接信息
       const pendingConn = {
         sourceNodeId,
@@ -1476,10 +1539,10 @@ export const useCanvasStore = defineStore('canvas', () => {
         sourcePosition: dragConnectionStartPosition.value,
         targetPosition: endPosition
       }
-      
+
       // 设置防止选择器被立即关闭的标志
       preventSelectorClose.value = true
-      
+
       // 打开节点选择器
       openNodeSelector(
         screenPosition,
@@ -1488,27 +1551,30 @@ export const useCanvasStore = defineStore('canvas', () => {
         endPosition,
         pendingConn
       )
-      
+
       // 延迟后重置标志
       setTimeout(() => {
         preventSelectorClose.value = false
       }, 300)
-      
+
       // 清理拖拽状态（但保留 pendingConnection）
       isDraggingConnection.value = false
       dragConnectionSource.value = null
+      dragConnectionSourceIds.value = null
       dragConnectionStartPosition.value = { x: 0, y: 0 }
       dragConnectionPosition.value = { x: 0, y: 0 }
       return false
     }
   }
-  
+
   /**
    * 取消拖拽连线
    */
   function cancelDragConnection() {
     isDraggingConnection.value = false
     dragConnectionSource.value = null
+    dragConnectionSourceIds.value = null
+    pendingMultiConnectSourceIds.value = null
     dragConnectionStartPosition.value = { x: 0, y: 0 }
     dragConnectionPosition.value = { x: 0, y: 0 }
     console.log('[Store] 取消拖拽连线')

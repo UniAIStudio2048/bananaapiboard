@@ -105,6 +105,39 @@ export function flowPositionToScreenPosition(position, viewport) {
   }
 }
 
+/**
+ * 拖拽连线时查找可吸附的下游节点左侧连接点。
+ * 距离按屏幕像素计算（与缩放无关），返回端口画布坐标供连线吸附渲染。
+ * @returns {{ nodeId: String, position: {x: Number, y: Number} }|null}
+ */
+export function findConnectionSnapTarget({
+  screenPosition,
+  sourceNodeId,
+  nodes,
+  getHandlePosition,
+  viewport,
+  snapRadius = 60
+}) {
+  if (!isFinitePosition(screenPosition) || !Array.isArray(nodes) || typeof getHandlePosition !== 'function') {
+    return null
+  }
+
+  let closest = null
+  let closestDistance = Number.POSITIVE_INFINITY
+  for (const node of nodes) {
+    if (!node?.id || node.id === sourceNodeId || node.type === 'group') continue
+    const handleFlowPosition = getHandlePosition(node.id, 'input')
+    if (!isFinitePosition(handleFlowPosition)) continue
+    const handleScreen = flowPositionToScreenPosition(handleFlowPosition, viewport)
+    const distance = Math.hypot(handleScreen.x - screenPosition.x, handleScreen.y - screenPosition.y)
+    if (distance <= snapRadius && distance < closestDistance) {
+      closest = { nodeId: node.id, position: handleFlowPosition }
+      closestDistance = distance
+    }
+  }
+  return closest
+}
+
 function isFinitePosition(position) {
   return position &&
     Number.isFinite(position.x) &&
