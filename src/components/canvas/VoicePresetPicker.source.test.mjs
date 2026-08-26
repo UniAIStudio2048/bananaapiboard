@@ -49,7 +49,7 @@ test('MiniMax picker exposes clone controls only when the configured fixed price
   assert.match(source, /provider: \{ type: String, default: 'coze' \}/)
   assert.match(source, /const isMiniMax = computed\(\(\) => props\.provider === 'minimax'\)/)
   assert.match(source, /\/api\/audio\/minimax\/system-voices\?model=/)
-  assert.match(source, /\/api\/audio\/user-voices\?provider=minimax/)
+  assert.match(source, /\?provider=minimax&_t=\$\{Date\.now\(\)\}/)
   assert.match(source, /const isMiniMaxCloneEnabled = computed\(\(\) => isMiniMax\.value && Number\.isFinite\(props\.clonePointsCost\)/)
   assert.match(source, /v-if="\(!isMiniMax && !isFish\) \|\| isMiniMaxCloneEnabled \|\| isFishCloneEnabled"[^>]*>克隆新音色/)
   assert.match(source, /accept="audio\/mpeg,audio\/mp4,audio\/wav,\.mp3,\.m4a,\.wav"/)
@@ -60,10 +60,16 @@ test('MiniMax picker exposes clone controls only when the configured fixed price
   assert.match(source, /:disabled="!voice\.hasPreview && !isMiniMax && !isFish"/)
 })
 
+test('my voices avoids stale caches and retries transient network failures', () => {
+  assert.match(source, /provider=minimax[^'`]*_t=\$\{Date\.now\(\)\}/)
+  assert.match(source, /Failed to fetch\|fetch failed\|NetworkError\|Load failed/)
+  assert.match(source, /loadMineVoices\(attempt \+ 1\)/)
+})
+
 test('Fish picker loads its voice library, permits voices without previews, and clones with authorization', () => {
   assert.match(source, /const isFish = computed\(\(\) => props\.provider === 'fish'\)/)
   assert.match(source, /\/api\/audio\/fish\/voices\?model=/)
-  assert.match(source, /\/api\/audio\/user-voices\?provider=fish/)
+  assert.match(source, /\?provider=fish&_t=\$\{Date\.now\(\)\}/)
   assert.match(source, /const isFishCloneEnabled = computed\(\(\) => isFish\.value && Number\.isFinite\(props\.clonePointsCost\)/)
   assert.match(source, /\/api\/audio\/fish\/voices\/clone/)
   assert.match(source, /isFish\.value \? 'fish' : 'reference'/)

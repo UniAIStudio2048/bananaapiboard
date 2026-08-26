@@ -373,11 +373,16 @@ function refreshReadingText() {
   clearRecordedAudio()
 }
 
-async function loadMineVoices() {
+async function loadMineVoices(attempt = 0) {
   mineLoading.value = true
   mineError.value = ''
   try {
-    const response = await apiClient.get(isMiniMax.value ? '/api/audio/user-voices?provider=minimax' : isFish.value ? '/api/audio/user-voices?provider=fish' : '/api/audio/user-voices')
+    const providerQuery = isMiniMax.value
+      ? `?provider=minimax&_t=${Date.now()}`
+      : isFish.value
+        ? `?provider=fish&_t=${Date.now()}`
+        : `?_t=${Date.now()}`
+    const response = await apiClient.get(`/api/audio/user-voices${providerQuery}`)
     const list = Array.isArray(response?.data) ? response.data : []
     mineVoices.value = list.map(item => ({
       id: item.id,
@@ -391,7 +396,13 @@ async function loadMineVoices() {
       hasPreview: Boolean(item.reference_audio_url || item.previewUrl)
     }))
   } catch (requestError) {
-    mineError.value = requestError?.message || '加载个人音色失败，请稍后重试'
+    const message = requestError?.message || ''
+    const isTransientNetworkError = /Failed to fetch|fetch failed|NetworkError|Load failed|ERR_CONNECTION/i.test(message)
+    if (isTransientNetworkError && attempt < 1) {
+      await new Promise(resolve => window.setTimeout(resolve, 300))
+      return loadMineVoices(attempt + 1)
+    }
+    mineError.value = message || '加载个人音色失败，请稍后重试'
   } finally {
     mineLoading.value = false
   }
