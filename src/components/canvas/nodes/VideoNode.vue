@@ -17,6 +17,7 @@ import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
 import { formatPoints } from '@/utils/format'
+import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
@@ -4015,7 +4016,7 @@ const wanAnimateCostPerSecond = computed(() => {
 })
 
 // 积分消耗计算（从模型配置中读取）
-const pointsCost = computed(() => {
+const basePointsCost = computed(() => {
   let cost = 1
 
   const genericResolutionPrice = calculateVideoResolutionPrice(
@@ -4209,6 +4210,14 @@ const pointsCost = computed(() => {
   }
 
   return cost
+})
+
+// 用户分组倍率：视频预估积分应用 rate_video，与后端实际扣费保持一致（取整到整数积分）。
+const pointsCost = computed(() => {
+  const base = basePointsCost.value
+  const rate = getUserNodeRate('video')
+  const scaled = base * rate
+  return Math.round(scaled)
 })
 
 const klingOfficialSelectedDurationCost = computed(() => {

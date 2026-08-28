@@ -24,6 +24,7 @@ import { createQuickSeedanceCharacterAsset, listAssetGroups, pollAssetStatus } f
 import { registerTask, removeCompletedTask, getTasksByNodeId, ensureTaskPolling } from '@/stores/canvas/backgroundTaskManager'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { formatPoints } from '@/utils/format'
+import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
 import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders, isSeedanceFeaturesEnabled } from '@/config/tenant'
@@ -1751,7 +1752,7 @@ const currentPointsCost = computed(() => {
   const presetPointsCost = selectedPresetPointsCost.value
   const outputCount = groupCount * selectedCount.value
 
-  return roundPoints((basePointsCost.value + presetPointsCost) * outputCount)
+  return roundPoints((basePointsCost.value + presetPointsCost) * outputCount * getUserNodeRate('image'))
 })
 
 // 节点尺寸

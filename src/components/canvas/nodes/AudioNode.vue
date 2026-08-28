@@ -21,6 +21,7 @@ import { showAlert, showConfirm, showInsufficientPointsDialog } from '@/composab
 import { formatPoints } from '@/utils/format'
 import { formatVideoGenerationElapsed, getVideoGenerationElapsedSeconds } from '@/utils/videoGenerationProgress.js'
 import { calculateAudioPointsCost } from '@/utils/audioPricing'
+import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
@@ -341,10 +342,13 @@ function formatModelSuccessRate(modelName) {
 // 音乐生成积分消耗（生成2首歌）
 const musicPointsCost = computed(() => {
   const cost = currentMusicModelConfig.value?.pointsCost || 20
-  if ((isMiniMaxAudio.value || isFishAudio.value) && audioCapability.value === 'voice_design') return cost
-  return audioCapability.value
-    ? calculateAudioPointsCost(cost, musicPrompt.value)
-    : cost * 2
+  const base = (isMiniMaxAudio.value || isFishAudio.value) && audioCapability.value === 'voice_design'
+    ? cost
+    : (audioCapability.value
+        ? calculateAudioPointsCost(cost, musicPrompt.value)
+        : cost * 2)
+  // 用户分组倍率：音频预估积分应用 rate_audio，与后端实际扣费保持一致
+  return Math.round(base * getUserNodeRate('audio'))
 })
 
 function formatAudioErrorMessage(message) {

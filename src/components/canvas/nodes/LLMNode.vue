@@ -18,6 +18,7 @@ import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { showAlert } from '@/composables/useCanvasDialog'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { calculateLLMCost } from '@/utils/llmCost'
+import { getUserNodeRate } from '@/utils/userGroupRate'
 
 const { t } = useI18n()
 
@@ -131,12 +132,16 @@ const inheritedImages = computed(() => props.data.inheritedData?.urls || [])
 const outputText = computed(() => props.data.output?.content || '')
 
 // 积分消耗
-const pointsCost = computed(() => calculateLLMCost(
-  configuredModelPointsCost.value,
-  configuredPointsCost.value,
-  1,
-  getLLMCost(typeConfig.value.action)
-))
+const pointsCost = computed(() => {
+  const base = calculateLLMCost(
+    configuredModelPointsCost.value,
+    configuredPointsCost.value,
+    1,
+    getLLMCost(typeConfig.value.action)
+  )
+  // 用户分组倍率：文本预估积分应用 rate_text，与后端实际扣费保持一致
+  return Math.round(base * getUserNodeRate('text'))
+})
 
 // 格式化积分显示
 const formattedPointsCost = computed(() => {

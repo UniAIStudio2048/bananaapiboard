@@ -51,6 +51,7 @@ import { getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { calculateLLMCost } from '@/utils/llmCost'
+import { getUserNodeRate } from '@/utils/userGroupRate'
 
 const { t } = useI18n()
 
@@ -826,7 +827,8 @@ const currentModelCost = computed(() => {
   const presetCost = Number(preset?.pointsCost ?? preset?.points_cost)
   const model = availableModels.value.find(m => m.value === selectedModel.value)
   const templateExtra = preset && Number.isFinite(presetCost) && presetCost >= 0 ? presetCost : 0
-  return calculateLLMCost(model?.pointsCost, templateExtra)
+  // 用户分组倍率：文本预估积分应用 rate_text，与后端实际扣费保持一致
+  return Math.round(calculateLLMCost(model?.pointsCost, templateExtra) * getUserNodeRate('text'))
 })
 
 // 格式化积分显示
