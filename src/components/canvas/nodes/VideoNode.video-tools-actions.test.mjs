@@ -30,10 +30,17 @@ assert.doesNotMatch(source, /class="video-tool-actions"/, 'VideoNode should not 
 assert.doesNotMatch(source, /\.video-tool-actions\b/, 'VideoNode should not keep overlay styles for video tool actions')
 
 assert.match(source, /@completed="handleVideoToolCompleted"|@completed='handleVideoToolCompleted'/, 'VideoNode should handle video tool completion')
+assert.match(source, /import\s+\{[^}]*createSubtitleEraseTask[^}]*\}\s+from\s+['"]@\/api\/canvas\/video-tools['"]/, 'VideoNode should own background subtitle task creation after the modal closes')
 assert.match(source, /function\s+handleVideoToolCompleted/, 'VideoNode should define completion handler')
 assert.match(source, /canvasStore\.addNode\(\{[\s\S]*type:\s*'video'[\s\S]*output:\s*\{[\s\S]*type:\s*'video'[\s\S]*url/s, 'VideoNode should add a video output node with output url')
 assert.match(source, /canvasStore\.addEdge\(\{[\s\S]*source:\s*props\.id[\s\S]*target:\s*newNodeId/s, 'VideoNode should connect the source video node to the result node')
 assert.match(source, /canvas-history-invalidate/, 'VideoNode should invalidate canvas history after creating a result node')
+
+const exportStartedBlock = source.match(/function\s+handleVideoToolExportStarted\(payload\)\s*\{[\s\S]*?\n\}/)?.[0] || ''
+assert.ok(exportStartedBlock.indexOf('canvasStore.addNode') < exportStartedBlock.indexOf('submitSubtitleEraseInBackground'), 'VideoNode should create the processing node before starting the subtitle request')
+assert.ok(exportStartedBlock.indexOf('showVideoToolModal.value = false') < exportStartedBlock.indexOf('submitSubtitleEraseInBackground'), 'VideoNode should close the modal before starting the subtitle request')
+assert.match(source, /createSubtitleEraseTask\(\{[\s\S]*clips:\s*payload\.clips[\s\S]*mode:\s*payload\.eraseMode/, 'VideoNode should submit subtitle erase from the background handoff payload')
+assert.match(source, /taskType:\s*'subtitle-erase'/, 'VideoNode should identify the immediate processing node as subtitle erase')
 
 const pollAttemptsMatch = source.match(/const\s+SUBTITLE_ERASE_POLL_ATTEMPTS\s*=\s*(\d+)/)
 const pollIntervalMatch = source.match(/const\s+SUBTITLE_ERASE_POLL_INTERVAL_MS\s*=\s*(\d+)/)

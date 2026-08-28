@@ -101,7 +101,7 @@ import {
   WAN_MODES
 } from '@/utils/videoGenerationMode'
 import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
-import { exportVideoTimeline, getSubtitleEraseConfig, getSubtitleEraseTask } from '@/api/canvas/video-tools'
+import { createSubtitleEraseTask, exportVideoTimeline, getSubtitleEraseConfig, getSubtitleEraseTask } from '@/api/canvas/video-tools'
 import { smartDownload } from '@/api/client'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import CanvasNodeImage from '@/components/canvas/CanvasNodeImage.vue'
@@ -2375,12 +2375,14 @@ const useVendorLayout = computed(() => vendorGroups.value.length > 1)
 const durations = computed(() => {
   // video_edit 模式时长固定为「自动」(-1)，基于 mode ref 即时判定，不依赖异步加载的 seedance25ModeConstraints
   // （seedance2Limits.js: video_edit duration=-1 硬编码，后端永远预扣 10s）
-  if (selectedSeedance2Mode.value === 'video_edit') {
+  if (isSeedance2Model.value && selectedSeedance2Mode.value === 'video_edit') {
     return [{ value: '-1', label: '自动' }]
   }
   // auto 时长：模型 seedanceConfig.autoDuration===true 时支持 auto（非 text2video）；或当前模式 constraints 标记 duration=-1
-  const supportsAuto = seedance25ModeConstraints.value?.duration === -1
-    || currentModelConfig.value?.seedanceConfig?.autoDuration === true
+  const supportsAuto = isSeedance2Model.value && (
+    seedance25ModeConstraints.value?.duration === -1
+      || currentModelConfig.value?.seedanceConfig?.autoDuration === true
+  )
 
   const sourceDurations = isWanModel.value
     ? getWanDurationOptions({
@@ -2495,7 +2497,7 @@ const isVideoModelConfigLoaded = () => {
 
 watch([selectedModel, availableDurations, isPerSecondBilling, isRunningHubAiAppVideoV31Model, seedance25ModeConstraints, selectedSeedance2Mode, currentModelConfig], () => {
   // video_edit 强制 auto(duration=-1)，基于 mode ref 即时判定（不依赖异步 constraints）
-  if (selectedSeedance2Mode.value === 'video_edit') {
+  if (isSeedance2Model.value && selectedSeedance2Mode.value === 'video_edit') {
     if (selectedDuration.value !== '-1') selectedDuration.value = '-1'
     return
   }
@@ -8364,6 +8366,7 @@ function handleVideoToolExportStarted(payload) {
       processingStartedAt: Date.now(),
       sourceNodeId: props.id,
       videoToolMode: isSubtitleErase ? 'subtitle' : 'edit',
+      ...(isSubtitleErase ? { taskType: 'subtitle-erase', eraseMode: payload.eraseMode } : {}),
       output: { type: 'video', url: '' }
     }
   })
@@ -8379,7 +8382,7 @@ function handleVideoToolExportStarted(payload) {
   showVideoToolModal.value = false
 
   const asyncTask = isSubtitleErase
-    ? pollSubtitleEraseTask(payload.taskId)
+    ? submitSubtitleEraseInBackground(payload, newNodeId)
     : exportVideoTimeline({ clips: payload.clips }).then(result =>
         result?.url || result?.video_url || result?.videoUrl || result?.resultUrl || result?.output?.url
       )
@@ -8399,6 +8402,24 @@ function handleVideoToolExportStarted(payload) {
   }).catch(error => {
     canvasStore.updateNodeData(newNodeId, { status: 'failed', error: error?.message || (isSubtitleErase ? '字幕擦除失败' : '视频合成失败') })
   })
+}
+
+async function submitSubtitleEraseInBackground(payload, nodeId) {
+  const task = await createSubtitleEraseTask({
+    clips: payload.clips,
+    mode: payload.eraseMode,
+    detectRect: payload.detectRect
+  })
+  const immediateUrl = task?.resultUrl || task?.url || task?.videoUrl || task?.video_url || task?.outputUrl || task?.output?.url
+  if (immediateUrl) return immediateUrl
+
+  const taskId = task?.taskId || task?.task_id || task?.id
+  if (!taskId) throw new Error('字幕擦除任务未返回任务 ID')
+  canvasStore.updateNodeData(nodeId, {
+    subtitleEraseTaskId: taskId,
+    progress: '字幕擦除中...'
+  })
+  return pollSubtitleEraseTask(taskId)
 }
 
 async function pollSubtitleEraseTask(taskId) {

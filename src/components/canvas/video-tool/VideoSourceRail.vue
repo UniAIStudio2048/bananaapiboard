@@ -134,10 +134,32 @@ async function handleUpload(event) {
   const file = event.target.files?.[0]
   if (!file) return
   uploadStatus.value = '上传中'
+  const localVideoUrl = URL.createObjectURL(file)
+  const durationPromise = probeVideoDuration(localVideoUrl)
+    .finally(() => URL.revokeObjectURL(localVideoUrl))
   try {
-    const result = await uploadCanvasMedia(file, 'video')
+    let result
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        result = await uploadCanvasMedia(file, 'video', {
+          maxRetries: 4,
+          onProgress: progress => {
+            const percent = Math.min(100, Math.max(0, Math.round(Number(progress || 0) * 100)))
+            uploadStatus.value = `上传中 ${percent}%`
+          }
+        })
+        break
+      } catch (error) {
+        const isAbort = error?.name === 'AbortError'
+        const isClientError = Number(error?.status) >= 400 && Number(error?.status) < 500
+        if (attempt > 0 || isAbort || isClientError) throw error
+        uploadStatus.value = '连接波动，正在重试...'
+        await new Promise(resolve => setTimeout(resolve, 300))
+      }
+    }
     const url = result.url
-    const dur = await probeVideoDuration(url)
+    if (!url) throw new Error('上传完成但未返回视频地址')
+    const dur = await durationPromise
     const source = {
       id: `upload-${Date.now()}`,
       name: file.name,
@@ -146,10 +168,11 @@ async function handleUpload(event) {
       duration: dur || 10
     }
     uploadStatus.value = '上传完成'
-    event.target.value = ''
     emit('add-source', source)
   } catch (error) {
     uploadStatus.value = error.message || '上传失败'
+  } finally {
+    event.target.value = ''
   }
 }
 

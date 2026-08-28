@@ -175,7 +175,6 @@ import VideoPreview from './video-tool/VideoPreview.vue'
 import { estimateSubtitleEraseBilling } from '@/utils/videoToolBilling'
 import { getTimelineTotalSeconds, normalizeTimelineClips } from '@/utils/videoToolTimeline'
 import {
-  createSubtitleEraseTask,
   estimateSubtitleErase,
   exportVideoTimeline,
   getSubtitleEraseConfig
@@ -384,14 +383,6 @@ async function addSourceToTimeline(source) {
   }
 }
 
-function getResultUrl(payload) {
-  return payload?.resultUrl || payload?.url || payload?.videoUrl || payload?.video_url || payload?.outputUrl || payload?.output?.url
-}
-
-function getTaskId(payload) {
-  return payload?.taskId || payload?.task_id || payload?.id
-}
-
 function computeLocalEstimate() {
   if (activeMode.value !== 'subtitle' || normalizedClips.value.length === 0 || !subtitleConfig.value) {
     return null
@@ -450,6 +441,10 @@ async function refreshEstimate() {
 
 async function submit() {
   if (normalizedClips.value.length === 0) return
+  if (activeMode.value === 'subtitle' && isSelectionEraseMode.value && !detectRect.value) {
+    statusText.value = '请先在视频上框选需要擦除的区域'
+    return
+  }
   submitting.value = true
   statusText.value = '提交中'
   try {
@@ -459,22 +454,16 @@ async function submit() {
       return
     }
 
-    const task = await createSubtitleEraseTask({
-      clips: normalizedClips.value,
-      mode: eraseMode.value,
-      detectRect: isSelectionEraseMode.value ? detectRect.value : undefined
+    const clipsSnapshot = JSON.parse(JSON.stringify(normalizedClips.value))
+    const detectRectSnapshot = isSelectionEraseMode.value
+      ? JSON.parse(JSON.stringify(detectRect.value))
+      : undefined
+    emit('export-started', {
+      mode: 'subtitle',
+      eraseMode: eraseMode.value,
+      clips: clipsSnapshot,
+      detectRect: detectRectSnapshot
     })
-    const immediateUrl = getResultUrl(task)
-    if (immediateUrl) {
-      emit('completed', { url: immediateUrl, resultUrl: immediateUrl, mode: 'subtitle', eraseMode: eraseMode.value, result: task })
-    } else {
-      emit('export-started', {
-        mode: 'subtitle',
-        eraseMode: eraseMode.value,
-        taskId: getTaskId(task),
-        task
-      })
-    }
   } catch (error) {
     statusText.value = error.message || '处理失败'
   } finally {
