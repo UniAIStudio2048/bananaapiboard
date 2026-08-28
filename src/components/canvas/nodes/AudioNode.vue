@@ -255,7 +255,14 @@ const currentMusicModelConfig = computed(() => {
 const isMiniMaxAudio = computed(() => currentMusicModelConfig.value?.provider === 'minimax')
 const isFishAudio = computed(() => currentMusicModelConfig.value?.provider === 'fish')
 const audioCapability = computed(() => currentMusicModelConfig.value?.kind === 'audio-model' ? currentMusicModelConfig.value.capability : null)
-const voiceClonePointsCost = computed(() => currentMusicModelConfig.value?.voiceClonePointsCost ?? null)
+const voiceClonePointsCost = computed(() => {
+  const raw = currentMusicModelConfig.value?.voiceClonePointsCost
+  if (raw === null || raw === undefined || raw === '') return null
+  const numeric = Number(raw)
+  if (!Number.isFinite(numeric)) return null
+  // 用户分组倍率：音色复刻/设计成本应用 rate_audio，与后端实际扣费保持一致
+  return Math.round(numeric * getUserNodeRate('audio') * 100) / 100
+})
 const voiceCloneSpaceParams = computed(() => teamStore.getSpaceParams('current'))
 const AUDIO_REFERENCE_NODE_TYPES = ['audio-input', 'audio']
 const inheritedAudioSource = computed(() => {

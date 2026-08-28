@@ -336,7 +336,9 @@ function roundPoints(value) {
 
 function formatPresetOptionName(name, pointsCost = 0) {
   const normalizedCost = normalizePresetPointsCost(pointsCost)
-  return normalizedCost > 0 ? `${name} (+${formatPoints(normalizedCost)}积分/张)` : name
+  // 用户分组倍率：预设附加积分同样按 rate_image 调整，与后端实际扣费保持一致
+  const discountedCost = normalizedCost > 0 ? roundPoints(normalizedCost * getUserNodeRate('image')) : 0
+  return discountedCost > 0 ? `${name} (+${formatPoints(discountedCost)}积分/张)` : name
 }
 
 // 相机控制状态
@@ -3445,7 +3447,9 @@ async function fetchMultiangleConfig() {
       const data = await response.json()
       console.log('[ImageNode] 获取到设置:', data)
       const config = data.image_multiangle_config || {}
-      multianglePointsCost.value = config.points_cost || 0
+      const rawMultiangleCost = config.points_cost || 0
+      // 用户分组倍率：多角度图片生成按 rate_image 调整，与后端实际扣费保持一致
+      multianglePointsCost.value = rawMultiangleCost > 0 ? roundPoints(rawMultiangleCost * getUserNodeRate('image')) : 0
       console.log('[ImageNode] 多角度积分消耗:', multianglePointsCost.value)
     } else {
       console.warn('[ImageNode] 获取设置失败:', response.status)

@@ -25,6 +25,6 @@ test('image generation passes only tenant preset raw id and estimate includes pr
   assert.match(source, /imagePresetId:\s*selectedTenantPresetId/)
   assert.match(source, /const presetPointsCost\s*=\s*selectedPresetPointsCost\.value/)
   assert.match(source, /const outputCount\s*=\s*groupCount\s*\*\s*selectedCount\.value/)
-  assert.match(source, /return roundPoints\(\(basePointsCost\.value\s*\+\s*presetPointsCost\)\s*\*\s*outputCount\)/)
+  assert.match(source, /return roundPoints\(\(basePointsCost\.value\s*\+\s*presetPointsCost\)\s*\*\s*outputCount\s*\*\s*getUserNodeRate\('image'\)\)/)
   assert.match(source, /const totalCost\s*=\s*currentPointsCost\.value/)
 })

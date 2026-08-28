@@ -16,7 +16,7 @@ test('MiniMax TTS only submits the selected controlled voice ID and supports 500
   assert.match(source, /return 50000/)
   assert.match(source, /!!selectedVoicePreset\.value\?\.sourceVoice/)
   assert.match(source, /:provider="isMiniMaxAudio \? 'minimax' : isFishAudio \? 'fish' : 'coze'"/)
-  assert.match(source, /const voiceClonePointsCost = computed\(\(\) => currentMusicModelConfig\.value\?\.voiceClonePointsCost \?\? null\)/)
+  assert.match(source, /const voiceClonePointsCost = computed\(\(\) => \{[\s\S]*?currentMusicModelConfig\.value\?\.voiceClonePointsCost[\s\S]*?getUserNodeRate\('audio'\)/)
   assert.match(source, /:clone-points-cost="voiceClonePointsCost"/)
   assert.match(source, /:space-type="voiceCloneSpaceParams\.spaceType"/)
 })

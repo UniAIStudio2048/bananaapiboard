@@ -3526,15 +3526,21 @@ const selectedHeygenChannelName = computed(() => {
   if (!channel) return '选择渠道'
   return heygenChannels.value.length === 1 ? '默认渠道' : channel.name
 })
-const heygenPointsPerSecond = computed(() => {
+const heygenRawPerSecond = computed(() => {
   const channel = heygenChannels.value.find(item => item.id === heygenChannelId.value)
   const pricing = channel?.pricing || {}
   const points = isDigitalHumanMode.value ? pricing.avatarVideoPerSecond : pricing.lipsyncPerSecond
   return Number.isFinite(Number(points)) && Number(points) > 0 ? Number(points) : 0
 })
+const heygenPointsPerSecond = computed(() => {
+  // 用户分组倍率：数字人按秒单价应用 rate_video，与后端实际扣费保持一致
+  return heygenRawPerSecond.value > 0 ? heygenRawPerSecond.value * getUserNodeRate('video') : 0
+})
 const heygenPointsCost = computed(() => {
   const seconds = Math.ceil(Number(getUpstreamData().audioDuration) || 0)
-  return seconds > 0 ? heygenPointsPerSecond.value * seconds : 0
+  return seconds > 0 && heygenRawPerSecond.value > 0
+    ? heygenRawPerSecond.value * seconds * getUserNodeRate('video')
+    : 0
 })
 
 async function loadHeygenChannels() {
@@ -4009,10 +4015,14 @@ const wanAnimateCostPerSecond = computed(() => {
   if (!isWanModel.value || selectedWanMode.value !== 'animate_mix') return 0
   const rateConfig = currentModelConfig.value.costPerSecond || currentModelConfig.value.wanConfig?.costPerSecond
   const animateMode = selectedWanAnimateMode.value || currentModelConfig.value.wanConfig?.animateMode || 'wan-std'
+  let raw = 10
   if (typeof rateConfig === 'object') {
-    return Number(rateConfig[animateMode] || rateConfig.std || rateConfig['wan-std']) || 10
+    raw = Number(rateConfig[animateMode] || rateConfig.std || rateConfig['wan-std']) || 10
+  } else {
+    raw = Number(rateConfig) || 10
   }
-  return Number(rateConfig) || 10
+  // 用户分组倍率：Wan 换人混合按秒单价应用 rate_video，与后端实际扣费保持一致
+  return raw * getUserNodeRate('video')
 })
 
 // 积分消耗计算（从模型配置中读取）
@@ -4242,20 +4252,31 @@ const runningHubV31CostText = computed(() => {
 // 按秒计费模型在画布上展示单秒价格；pointsCost 仍保留为提交时的预扣总积分。
 const perSecondBillingCostPerSecond = computed(() => {
   const rateConfig = currentModelConfig.value?.costPerSecond
+  let raw = 10
   if (typeof rateConfig === 'object' && rateConfig) {
-    return Number(rateConfig.coze || rateConfig.std || rateConfig.default || 10) || 10
+    raw = Number(rateConfig.coze || rateConfig.std || rateConfig.default || 10) || 10
+  } else {
+    raw = Number(rateConfig) || 10
   }
-  return Number(rateConfig) || 10
+  // 用户分组倍率：按秒计费单秒价格应用 rate_video，与后端实际扣费保持一致
+  return raw * getUserNodeRate('video')
 })
 
 // 动作迁移模型每秒积分（用于显示 "X积分/s" 格式）
 const motionCostPerSecond = computed(() => {
   if (!isKlingMotionControl.value) return 0
   const costPerSecond = currentModelConfig.value?.costPerSecond
-  if (!costPerSecond) return 6  // 默认值
-  if (typeof costPerSecond === 'number') return costPerSecond
-  // 根据当前选择的模式返回对应的每秒积分
-  return costPerSecond.coze || costPerSecond[klingMotionMode.value] || costPerSecond.std || 6
+  let raw = 6  // 默认值
+  if (costPerSecond) {
+    if (typeof costPerSecond === 'number') {
+      raw = costPerSecond
+    } else {
+      // 根据当前选择的模式返回对应的每秒积分
+      raw = costPerSecond.coze || costPerSecond[klingMotionMode.value] || costPerSecond.std || 6
+    }
+  }
+  // 用户分组倍率：动作迁移按秒单价应用 rate_video，与后端实际扣费保持一致
+  return raw * getUserNodeRate('video')
 })
 
 // 用户积分

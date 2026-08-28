@@ -3698,7 +3698,7 @@ onUnmounted(() => {
                     <span v-if="model.description" class="model-item-desc">{{ model.description }}</span>
                   </div>
                   <div class="model-item-meta">
-                    <span v-if="model.pointsCost" class="model-option-cost model-item-points">◆{{ formatPoints(model.pointsCost) }}</span>
+                    <span v-if="model.pointsCost" class="model-option-cost model-item-points">◆{{ formatPoints(model.pointsCost * getUserNodeRate('text')) }}</span>
                     <div v-if="getEnabledLlmCapabilities(model).length" class="model-capability-row">
                       <span
                         v-for="capability in getEnabledLlmCapabilities(model)"
