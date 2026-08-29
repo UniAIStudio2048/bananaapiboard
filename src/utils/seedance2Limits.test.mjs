@@ -16,7 +16,10 @@ test('Seedance 2.5 falls back to its own reference limits for legacy model recor
       maxAudios: 10,
       minDuration: 3,
       maxDuration: 30,
-      maxReferenceVideoDuration: 30
+      maxReferenceVideoDuration: 30,
+      minReferenceMediaDuration: 2,
+      maxReferenceMediaDuration: 30,
+      maxTotalReferenceMediaDuration: 30
     }
   )
 })
@@ -50,6 +53,13 @@ test('Seedance 2.5 accepts 30 images, 10 videos, and 10 audios but rejects the n
   assert.match(validateSeedanceReferenceCounts({ audioCount: 11, limits }), /不能超过10个/)
 })
 
+test('Seedance 2.5 reference media duration contract is 2-30 seconds with a 30-second total cap', () => {
+  const limits = resolveSeedance2Limits({ actualModel: 'doubao-seedance-2-5-260628' })
+  assert.equal(limits.minReferenceMediaDuration, 2)
+  assert.equal(limits.maxReferenceMediaDuration, 30)
+  assert.equal(limits.maxTotalReferenceMediaDuration, 30)
+})
+
 test('Seedance 2.5 applies special request constraints only to supported submodes', () => {
   const model = { actualModel: 'doubao-seedance-2-5-260628' }
 
@@ -64,7 +74,7 @@ test('Seedance 2.5 applies special request constraints only to supported submode
     duration: -1,
     omniReferenceTaskType: 'edit',
     outputFormat: 'mov',
-    minReferenceVideoDuration: 4,
+    minReferenceVideoDuration: 2,
     maxReferenceVideoDuration: 30
   })
   assert.deepEqual(getSeedance25ModeConstraints(model, 'video_extend'), {

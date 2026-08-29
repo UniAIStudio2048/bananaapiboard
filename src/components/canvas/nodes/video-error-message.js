@@ -68,6 +68,14 @@ export function formatVideoNodeErrorMessage(message, options = {}) {
     return maybeWithNoChargeNotice(knownContentSafetyMessage, includeNoChargeNotice)
   }
 
+  // Wan3.0 将参考视频时长和输出时长合并校验；上游返回英文表达式时统一给出中文规则。
+  if (/input[_ ]video[_ ]duration\s*\([^)]*\)\s*\+\s*duration\s*\([^)]*\).*exceeds\s*30s\s*limit/i.test(trimmed)) {
+    return maybeWithNoChargeNotice('参考视频时长与输出视频时长之和不能超过30秒；未提供参考视频时，最长支持30秒输出', includeNoChargeNotice)
+  }
+  if (/\bduration\s*\([^)]*\).*exceeds\s*30s\s*limit/i.test(trimmed)) {
+    return maybeWithNoChargeNotice('输出视频时长不能超过30秒；未提供参考视频时，最长支持30秒输出', includeNoChargeNotice)
+  }
+
   const videoDurationMatch = trimmed.match(/video duration \(seconds\).*?less than or equal to\s+(\d+(?:\.\d+)?)/i)
   if (videoDurationMatch) {
     return maybeWithNoChargeNotice(`参考视频时长超限：当前渠道最多支持 ${videoDurationMatch[1]} 秒，请裁剪参考视频后重试。`, includeNoChargeNotice)

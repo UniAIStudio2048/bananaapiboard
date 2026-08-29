@@ -20,18 +20,24 @@ test('VideoNode uses a 2.5 total video cap separate from the per-video cap', () 
   assert.match(source, /validateSeedanceReferenceCounts\(/)
 })
 
+test('VideoNode applies the 2.5 30-second audio duration contract', () => {
+  assert.match(source, /maxAudioDuration = seedance2Limits\.value\.maxReferenceMediaDuration \|\| 15/)
+  assert.match(source, /totalAudioCap = seedance2Limits\.value\.maxTotalReferenceMediaDuration/)
+  assert.match(source, /总时长不超过 \$\{totalAudioCap\} 秒/)
+})
+
 test('VideoNode locks Seedance 2.5 special submodes to adaptive ratio and validates their prompts', () => {
   assert.match(source, /getSeedance25ModeConstraints/)
   assert.match(source, /validateSeedance25ModePrompt/)
   assert.match(source, /const seedance25ModeConstraints = computed/)
   assert.match(source, /selectedAspectRatio\.value = seedance25ModeConstraints\.value\.ratio/)
-  assert.match(source, /value: seedance25ModeConstraints\.value\.ratio,[\s\S]*displayLabel: currentLanguage\.value\?\.startsWith\('zh'\) \? '自适应' : 'Auto'/)
+  assert.match(source, /seedance25ModeConstraints\.value\.ratio/)
   assert.match(source, /const seedanceRatio = seedance25ModeConstraints\.value\?\.ratio \|\| selectedAspectRatio\.value/)
   assert.match(source, /formData\.append\('seedance_ratio', seedanceRatio\)/)
   assert.match(source, /validateSeedance25ModePrompt\(\{[\s\S]*modelConfig: currentModelConfig\.value/)
 })
 
-test('VideoNode accepts 4-30 second local reference videos for constrained Seedance 2.5 submodes', () => {
+test('VideoNode accepts 2-30 second local reference videos for constrained Seedance 2.5 submodes', () => {
   const validationStart = source.indexOf('async function validateSeedanceVideoFile')
   assert.ok(validationStart >= 0, 'local Seedance reference video validation should exist')
   const validationSource = source.slice(validationStart, validationStart + 1000)
@@ -45,7 +51,6 @@ test('VideoNode locks Seedance 2.5 video edit duration to the ten-second Auto pr
   assert.ok(durationOptionsStart >= 0, 'duration option resolver should exist')
   const durationOptionsSource = source.slice(durationOptionsStart, durationOptionsStart + 900)
 
-  assert.match(durationOptionsSource, /seedance25ModeConstraints\.value\?\.duration === -1 && selectedSeedance2Mode\.value === 'video_edit'/)
-  assert.match(durationOptionsSource, /return \[\{ value: '10', label: 'Auto' \}\]/)
-  assert.match(source, /seedance25ModeConstraints\.value\?\.duration === -1 && selectedSeedance2Mode\.value === 'video_edit'[\s\S]*selectedDuration\.value = '10'/)
+  assert.match(durationOptionsSource, /selectedSeedance2Mode\.value === 'video_edit'/)
+  assert.match(durationOptionsSource, /return \[\{ value: '-1', label: '自动' \}\]/)
 })

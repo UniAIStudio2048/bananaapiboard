@@ -13,7 +13,10 @@ export const SEEDANCE25_LIMITS = Object.freeze({
   maxAudios: 10,
   minDuration: 3,
   maxDuration: 30,
-  maxReferenceVideoDuration: 30
+  maxReferenceVideoDuration: 30,
+  minReferenceMediaDuration: 2,
+  maxReferenceMediaDuration: 30,
+  maxTotalReferenceMediaDuration: 30
 })
 
 const SEEDANCE25_MODE_CONSTRAINTS = Object.freeze({
@@ -33,7 +36,7 @@ const SEEDANCE25_MODE_CONSTRAINTS = Object.freeze({
     omniReferenceTaskType: 'edit',
     // 编辑链路建议 mov（H.264 + yuv444p + PCM，高色彩精度），便于后续调色/抠像/合成
     outputFormat: 'mov',
-    minReferenceVideoDuration: 4,
+    minReferenceVideoDuration: 2,
     maxReferenceVideoDuration: 30,
     promptKeywords: ['编辑视频', '增加', '加上', '加一些', '删除', '去掉', '修改', '替换', '改成']
   }),
@@ -100,7 +103,14 @@ export function resolveSeedance2Limits(modelConfig = {}) {
     maxAudios: toPositiveNumber(config.maxAudios) || base.maxAudios,
     minDuration: Math.min(toPositiveNumber(config.minDuration) || base.minDuration, maxDuration),
     maxDuration,
-    maxReferenceVideoDuration: base.maxReferenceVideoDuration
+    maxReferenceVideoDuration: base.maxReferenceVideoDuration,
+    ...(isSeedance25Model(modelConfig)
+      ? {
+          minReferenceMediaDuration: base.minReferenceMediaDuration,
+          maxReferenceMediaDuration: base.maxReferenceMediaDuration,
+          maxTotalReferenceMediaDuration: base.maxTotalReferenceMediaDuration
+        }
+      : {})
   }
 }
 

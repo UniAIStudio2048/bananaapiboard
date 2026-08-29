@@ -5515,7 +5515,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     console.log('[VideoNode] Seedance 生成声音:', audioEnabled)
   }
 
-  // Seedance 2.0 / MiniMax H3 音频时长验证（API 限制单个音频 2~15 秒，总时长 ≤ 15 秒）
+  // Seedance 2.x / MiniMax H3 音频时长验证（2.5 为单个/累计 30 秒，旧版/H3 为 15 秒）
   const needsAudioDurationValidation = (isSeedance2Model.value && ['multimodal_ref', 'video_edit'].includes(selectedSeedance2Mode.value)) ||
     (isMinimaxH3Model.value && (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) === 'multimodal_ref')
   if (needsAudioDurationValidation) {
@@ -5532,17 +5532,18 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
           isGenerating.value = false
           return
         }
-        if (dur && dur > 15) {
-          await showAlert(`参考音频时长 ${Math.round(dur)} 秒，超过模型限制（单个音频不超过 15 秒）。请裁剪音频后重试。`, '音频时长超限')
+        const maxAudioDuration = seedance2Limits.value.maxReferenceMediaDuration || 15
+        if (dur && dur > maxAudioDuration) {
+          await showAlert(`参考音频时长 ${Math.round(dur)} 秒，超过模型限制（单个音频不超过 ${maxAudioDuration} 秒）。请裁剪音频后重试。`, '音频时长超限')
           isGenerating.value = false
           return
         }
         if (dur) totalAudioDuration += dur
       }
     }
-    const totalAudioCap = isMinimaxH3Model.value || seedance2Limits.value.maxAudios <= 3 ? 15 : Infinity
+    const totalAudioCap = seedance2Limits.value.maxTotalReferenceMediaDuration || (isMinimaxH3Model.value || seedance2Limits.value.maxAudios <= 3 ? 15 : Infinity)
     if (totalAudioDuration > totalAudioCap) {
-      await showAlert(`参考音频总时长 ${Math.round(totalAudioDuration)} 秒，超过模型限制（总时长不超过 15 秒）。请减少音频或裁剪后重试。`, '音频时长超限')
+      await showAlert(`参考音频总时长 ${Math.round(totalAudioDuration)} 秒，超过模型限制（总时长不超过 ${totalAudioCap} 秒）。请减少音频或裁剪后重试。`, '音频时长超限')
       isGenerating.value = false
       return
     }

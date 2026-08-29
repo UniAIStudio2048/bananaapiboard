@@ -1234,13 +1234,15 @@ async function handleSeedanceRefAudios(e) {
   try {
     for (const file of files.slice(0, remaining)) {
       const dur = await getLocalMediaDuration(file, 'audio')
-      if (isWan3Model.value ? (dur < 1 || dur > 15) : (dur < 2 || dur > 15)) {
-        error.value = isWan3Model.value ? '万相 3.0 参考音频时长需在1到15秒之间' : '参考音频时长需在2到15秒之间'
+      const seedanceAudioMax = isWan3Model.value ? 15 : (seedanceModelLimits.value.maxReferenceMediaDuration || 15)
+      if (isWan3Model.value ? (dur < 1 || dur > seedanceAudioMax) : (dur < 2 || dur > seedanceAudioMax)) {
+        error.value = isWan3Model.value ? '万相 3.0 参考音频时长需在1到15秒之间' : `参考音频时长需在2到${seedanceAudioMax}秒之间`
         e.target.value = ''
         return
       }
-      if ((isWan3Model.value || seedanceMaxRefAudios.value <= 3) && totalDuration + dur > 15) {
-        error.value = '参考音频总时长不能超过15秒'
+      const seedanceAudioTotalMax = isWan3Model.value ? 15 : (seedanceModelLimits.value.maxTotalReferenceMediaDuration || 15)
+      if (totalDuration + dur > seedanceAudioTotalMax) {
+        error.value = `参考音频总时长不能超过${seedanceAudioTotalMax}秒`
         e.target.value = ''
         return
       }

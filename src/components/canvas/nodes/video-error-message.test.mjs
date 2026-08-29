@@ -16,6 +16,31 @@ test('formats upstream ant duration errors as concise Chinese text', () => {
   assert.equal(result, '参考视频时长超限：当前渠道最多支持 15.2 秒，请裁剪参考视频后重试，未扣除积分')
 })
 
+test('formats Wan3 reference plus output duration limit errors in Chinese', () => {
+  const result = formatVideoNodeErrorMessage(
+    'input_video_duration(14.51s) + duration(16.5s) = 30.509999999999998s exceeds 30s limit'
+  )
+
+  assert.equal(result, '参考视频时长与输出视频时长之和不能超过30秒；未提供参考视频时，最长支持30秒输出')
+})
+
+test('formats Wan3 output-only duration limit errors in Chinese', () => {
+  assert.equal(
+    formatVideoNodeErrorMessage('duration(31s) exceeds 30s limit'),
+    '输出视频时长不能超过30秒；未提供参考视频时，最长支持30秒输出'
+  )
+})
+
+test('formats Wan3 async duration limit errors through the canvas task path', () => {
+  assert.equal(
+    formatVideoNodeAsyncErrorMessage(
+      'input_video_duration(14.51s) + duration(16.5s) = 30.509999999999998s exceeds 30s limit',
+      'wan3.0-video'
+    ),
+    '参考视频时长与输出视频时长之和不能超过30秒；未提供参考视频时，最长支持30秒输出'
+  )
+})
+
 test('removes raw request id noise from generic upstream messages', () => {
   const result = formatVideoNodeErrorMessage(
     '视频生成失败。Request id: 0217775348023375ab88183db28c1bc6b9ad1d3f70c5b50e3c749',
