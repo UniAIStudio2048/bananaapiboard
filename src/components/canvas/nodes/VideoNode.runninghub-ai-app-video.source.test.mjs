@@ -11,11 +11,12 @@ test('画布 RunningHub 视频节点提供模型配置的分辨率选项，并�
   assert.match(source, /const runningHubResolution = ref\(props\.data\.resolution \|\| '720p'\)/)
   assert.match(source, /const runningHubResolutionOptions = computed\(/)
   assert.match(source, /currentModelConfig\.value\?\.resolutionOptions/)
-  assert.match(source, /v-if="isRunningHubAiAppVideoModel && runningHubResolutionOptions\.length > 1"/)
+  assert.match(source, /if \(isRunningHubAiAppVideoModel\.value\) return runningHubResolutionOptions\.value/)
+  assert.match(source, /:resolution-options="videoParameterResolutionOptions"/)
 })
 
 test('画布 RunningHub 视频请求与节点数据携带所选分辨率', () => {
-  assert.match(source, /formData\.append\('resolution', capturedState\.resolution \|\| runningHubResolution\.value\)/)
+  assert.match(source, /formData\.append\('resolution', capturedState\.videoResolution \|\| capturedState\.resolution \|\| runningHubResolution\.value\)/)
   assert.match(source, /resolution: isRunningHubAiAppVideoModel\.value \? runningHubResolution\.value : ''/)
   assert.match(source, /canvasStore\.updateNodeData\(props\.id, \{ resolution \}\)/)
 })

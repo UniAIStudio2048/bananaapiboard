@@ -409,10 +409,10 @@ export const useCanvasStore = defineStore('canvas', () => {
     return true
   }
 
-  function findInactiveWorkflowTabNode(nodeId) {
+  function findInactiveWorkflowTabNode(nodeId, tabId = null) {
     if (!nodeId) return null
     for (const tab of workflowTabs.value) {
-      if (!tab || tab.id === activeTabId.value) continue
+      if (!tab || (tabId && tab.id !== tabId) || tab.id === activeTabId.value) continue
       const node = Array.isArray(tab.nodes)
         ? tab.nodes.find(item => item?.id === nodeId)
         : null
@@ -421,8 +421,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     return null
   }
 
-  function updateInactiveWorkflowTabNodeData(nodeId, data) {
-    return applyNodeDataPatchToTabs(workflowTabs.value, activeTabId.value, nodeId, data)
+  function updateInactiveWorkflowTabNodeData(nodeId, data, tabId = null) {
+    return applyNodeDataPatchToTabs(workflowTabs.value, activeTabId.value, nodeId, data, { tabId })
   }
   
   /**

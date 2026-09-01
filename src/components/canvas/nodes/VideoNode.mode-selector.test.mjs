@@ -42,7 +42,7 @@ test('video mode selector reuses existing mode state and available option lists'
 
 test('Wan3 models expose and persist the six-mode selector used for submissions', () => {
   assert.match(source, /WAN3_MODES/)
-  assert.match(source, /const isWan3Model = computed\(\(\) => currentModelConfig\.value\?\.apiType === 'wan3'\)/)
+  assert.match(source, /const isWan3Model = computed\(\(\) => \['wan3', 'routerbee-wan3'\]\.includes\(currentModelConfig\.value\?\.apiType\)\)/)
   assert.match(source, /const selectedWan3Mode = ref\(props\.data\.wan3Mode \|\| 'text2video'\)/)
   assert.match(source, /if \(isWan3Model\.value\) \{[\s\S]*?key: 'wan3',[\s\S]*?value: selectedWan3Mode\.value,[\s\S]*?options: WAN3_MODES/)
   assert.match(source, /case 'wan3':[\s\S]*?selectedWan3Mode\.value = value/)

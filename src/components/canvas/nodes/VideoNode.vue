@@ -1562,7 +1562,7 @@ const currentMinimaxH3ModeConfig = computed(() => {
 })
 
 // Wan 3.0 模式选择
-const isWan3Model = computed(() => currentModelConfig.value?.apiType === 'wan3')
+const isWan3Model = computed(() => ['wan3', 'routerbee-wan3'].includes(currentModelConfig.value?.apiType))
 const selectedWan3Mode = ref(props.data.wan3Mode || 'text2video')
 const wan3File = ref(props.data.wan3File || null)
 const wan3Link = ref(props.data.wan3Link || '')
@@ -5721,7 +5721,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     }
   }
 
-  if (capturedState.apiType === 'wan3') {
+  if (capturedState.apiType === 'wan3' || capturedState.apiType === 'routerbee-wan3') {
     const wan3Mode = capturedState.wan3Mode || selectedWan3Mode.value
     const wan3Config = currentModelConfig.value?.wan3Config || {}
     const maxImages = Math.min(10, Math.max(0, Number(wan3Config.maxImages) || 10))

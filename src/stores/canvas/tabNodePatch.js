@@ -22,9 +22,10 @@ export function applyNodeDataPatchToTabs(tabs, activeTabId, nodeId, patchData, o
   if (!Array.isArray(tabs) || !nodeId) return null
 
   const excludeActive = options.excludeActive !== false
+  const targetTabId = options.tabId || null
 
   for (const tab of tabs) {
-    if (!tab || (excludeActive && tab.id === activeTabId)) continue
+    if (!tab || (targetTabId && tab.id !== targetTabId) || (excludeActive && tab.id === activeTabId)) continue
     const node = Array.isArray(tab.nodes)
       ? tab.nodes.find(item => item?.id === nodeId)
       : null

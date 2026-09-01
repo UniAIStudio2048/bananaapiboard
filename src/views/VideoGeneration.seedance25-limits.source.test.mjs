@@ -12,9 +12,9 @@ test('VideoGeneration resolves Seedance reference limits from the shared Seedanc
 })
 
 test('VideoGeneration upload handlers use dynamic Seedance limits', () => {
-  assert.match(source, /const MAX = seedanceMaxRefImages\.value/)
-  assert.match(source, /const MAX = seedanceMaxRefVideos\.value/)
-  assert.match(source, /const MAX = seedanceMaxRefAudios\.value/)
+  assert.match(source, /const MAX = isWan3Model\.value \? wan3MaxRefImages\.value : seedanceMaxRefImages\.value/)
+  assert.match(source, /const MAX = isWan3Model\.value \? wan3MaxRefVideos\.value : seedanceMaxRefVideos\.value/)
+  assert.match(source, /const MAX = isWan3Model\.value \? wan3MaxRefAudios\.value : seedanceMaxRefAudios\.value/)
 })
 
 test('VideoGeneration template renders dynamic Seedance limits', () => {
@@ -33,13 +33,14 @@ test('VideoGeneration duration slider follows model duration range', () => {
 })
 
 test('VideoGeneration records the selected Seedance duration instead of the generic 10-second default', () => {
-  assert.match(source, /const requestedDuration = isReferenceVideoModel\.value \? String\(seedanceDuration\.value\) : currentDuration/)
+  assert.match(source, /const requestedDuration = isReferenceVideoModel\.value\s+\? \(seedanceAutoDuration\.value \? '-1' : String\(seedanceDuration\.value\)\)/)
   assert.match(source, /formData\.append\('duration', requestedDuration\)/)
   assert.match(source, /duration: requestedDuration,/)
 })
 
 test('VideoGeneration keeps the Seedance 2.5 30-second total video cap separate from each video cap', () => {
-  assert.match(source, /totalDuration \+ metadata\.duration > seedanceModelLimits\.value\.maxReferenceVideoDuration/)
+  assert.match(source, /const maxTotalDuration = isWan3Model\.value \? 15 : seedanceModelLimits\.value\.maxReferenceVideoDuration/)
+  assert.match(source, /totalDuration \+ metadata\.duration > maxTotalDuration/)
   assert.match(source, /validateSeedanceReferenceCounts\(/)
 })
 

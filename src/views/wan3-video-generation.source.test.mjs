@@ -12,7 +12,7 @@ test('万相 3.0 提供独立输入模式，避免沿用 Seedance 专有协议',
   for (const mode of ['text2video', 'image2video_first', 'image2video_first_last', 'multimodal_ref', 'file', 'link']) {
     assert.match(source, new RegExp(`value: '${mode}'`))
   }
-  assert.match(source, /const isWan3Model = computed\(\(\) => currentModelConfig\.value\?\.apiType === 'wan3'\)/)
+  assert.match(source, /const isWan3Model = computed\(\(\) => \['wan3', 'routerbee-wan3'\]\.includes\(currentModelConfig\.value\?\.apiType\)\)/)
   assert.doesNotMatch(source, /isReferenceVideoModel\.value \|\| isWan3Model\.value/)
 })
 
@@ -61,7 +61,8 @@ test('万相 3.0 本地媒体采用官方图像、视频和音频规格', () => 
   assert.match(source, /shortSide < 240 \|\| longSide > 8000 \|\| longSide \/ shortSide > 8/)
   assert.match(source, /metadata\.duration < 1 \|\| metadata\.duration > 15/)
   assert.match(source, /metadata\.width < 240 \|\| metadata\.height < 240 \|\| metadata\.width > 4096 \|\| metadata\.height > 4096/)
-  assert.match(source, /dur < 1 \|\| dur > 15/)
+  assert.match(source, /isWan3Model\.value \? \(dur < 1 \|\| dur > seedanceAudioMax\)/)
+  assert.match(source, /const seedanceAudioMax = isWan3Model\.value \? 15/)
 })
 
 test('万相 3.0 的非文生模式允许留空提示词，由媒体素材单独驱动生成', () => {

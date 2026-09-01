@@ -14,8 +14,8 @@ test('VideoNode exposes VectorEngine JSON resolution modes and persists selectio
 })
 
 test('VideoNode submits selected VectorEngine JSON resolution to video generation', () => {
-  assert.match(source, /if \(isVectorEngineJsonModel\.value\) \{[\s\S]*formData\.append\('resolution', vectorengineResolution\.value\)/)
-  assert.match(source, /v-if="isVectorEngineJsonModel && vectorengineResolutionOptions\.length > 1"/)
-  assert.match(source, /v-for="res in vectorengineResolutionOptions"/)
-  assert.match(source, /@click="vectorengineResolution = res\.value"/)
+  assert.match(source, /if \(isVectorEngineJsonModel\.value\) \{[\s\S]*?formData\.append\('resolution', capturedState\.videoResolution \|\| vectorengineResolution\.value\)/)
+  assert.match(source, /if \(isVectorEngineJsonModel\.value\) return vectorengineResolutionOptions\.value/)
+  assert.match(source, /:resolution-options="videoParameterResolutionOptions"/)
+  assert.match(source, /else if \(isVectorEngineJsonModel\.value\) vectorengineResolution\.value = value/)
 })

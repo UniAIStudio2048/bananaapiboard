@@ -333,10 +333,10 @@ const isSeedanceModel = computed(() => {
 // MiniMax H3 官方直连也使用 Seedance 兼容的多模态参考素材字段
 const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3')
 const isReferenceVideoModel = computed(() => isSeedanceModel.value || isMinimaxH3Model.value)
-const isWan3Model = computed(() => currentModelConfig.value?.apiType === 'wan3')
+const isWan3Model = computed(() => ['wan3', 'routerbee-wan3'].includes(currentModelConfig.value?.apiType))
 
 function getWan3Limit(name, maximum) {
-  const configured = Number(currentModelConfig.value?.wan3Config?.[name])
+  const configured = Number((currentModelConfig.value?.routerbeeConfig || currentModelConfig.value?.wan3Config)?.[name])
   return Number.isFinite(configured) && configured >= 0 ? Math.min(configured, maximum) : maximum
 }
 
@@ -706,8 +706,8 @@ watch(model, (newModel) => {
     if (!seedanceAvailableModes.value.some(m => m.value === seedanceMode.value)) {
       seedanceMode.value = getFirstAvailableMode(defaultMode, seedanceAvailableModes.value)
     }
-  } else if (modelConfig?.apiType === 'wan3') {
-    const wan3Config = modelConfig.wan3Config || {}
+  } else if (modelConfig?.apiType === 'wan3' || modelConfig?.apiType === 'routerbee-wan3') {
+    const wan3Config = modelConfig.routerbeeConfig || modelConfig.wan3Config || {}
     wan3Duration.value = Number(wan3Config.duration || durations[0] || 5)
     wan3GenerateAudio.value = wan3Config.audio !== false
     wan3PromptExtend.value = wan3Config.promptExtend !== false

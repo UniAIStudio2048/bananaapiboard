@@ -52,6 +52,57 @@ test('applies task result patches to an inactive workflow tab node', () => {
   assert.deepEqual(tabs[1].nodes[0].data.output.urls, ['https://cdn.example.com/final.png'])
 })
 
+test('targets the task tab when multiple tabs contain the same node id', () => {
+  const tabs = [
+    {
+      id: 'tab-wrong',
+      nodes: [{ id: 'shared-node', data: { status: 'idle', output: null } }],
+      hasChanges: false
+    },
+    {
+      id: 'tab-task',
+      nodes: [{ id: 'shared-node', data: { status: 'processing', output: null } }],
+      hasChanges: false
+    }
+  ]
+
+  const result = applyNodeDataPatchToTabs(tabs, 'tab-active', 'shared-node', {
+    status: 'success',
+    output: { type: 'image', url: 'https://cdn.example.com/final.png' }
+  }, { tabId: 'tab-task' })
+
+  assert.equal(result?.tabId, 'tab-task')
+  assert.equal(tabs[0].nodes[0].data.status, 'idle')
+  assert.equal(tabs[0].nodes[0].data.output, null)
+  assert.equal(tabs[0].hasChanges, false)
+  assert.equal(tabs[1].nodes[0].data.status, 'success')
+  assert.equal(tabs[1].nodes[0].data.output.url, 'https://cdn.example.com/final.png')
+  assert.equal(tabs[1].hasChanges, true)
+})
+
+test('does not fall back to another tab when an explicit task tab does not contain the node', () => {
+  const tabs = [
+    {
+      id: 'tab-other',
+      nodes: [{ id: 'shared-node', data: { status: 'idle' } }],
+      hasChanges: false
+    },
+    {
+      id: 'tab-task',
+      nodes: [],
+      hasChanges: false
+    }
+  ]
+
+  const result = applyNodeDataPatchToTabs(tabs, 'tab-active', 'shared-node', {
+    status: 'success'
+  }, { tabId: 'tab-task' })
+
+  assert.equal(result, null)
+  assert.equal(tabs[0].nodes[0].data.status, 'idle')
+  assert.equal(tabs[0].hasChanges, false)
+})
+
 test('does not patch the active tab when excludeActive is enabled', () => {
   const tabs = [
     {

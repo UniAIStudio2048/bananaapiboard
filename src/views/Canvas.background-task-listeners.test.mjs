@@ -47,6 +47,18 @@ test('Canvas initializes background task manager after canvas nodes are restored
   assert.ok(recoverSubmissionsIndex < zombieCheckIndex, 'zombie node checks should run after pending submission recovery has a chance to attach task ids')
 })
 
+test('Canvas applies media task results only to the tab recorded by the task', () => {
+  const updateStart = source.indexOf('function updateNodeFromTask(task)')
+  const updateEnd = source.indexOf('\nwatch(() => canvasStore.activeTabId', updateStart)
+  const updateSource = source.slice(updateStart, updateEnd)
+
+  assert.notEqual(updateStart, -1, 'Canvas should define updateNodeFromTask')
+  assert.match(updateSource, /const taskTabId = task\.tabId || null/)
+  assert.match(updateSource, /const targetsActiveTab = !taskTabId || taskTabId === canvasStore\.activeTabId/)
+  assert.match(updateSource, /findInactiveWorkflowTabNode\(task\.nodeId, taskTabId\)/)
+  assert.match(updateSource, /updateInactiveWorkflowTabNodeData\(task\.nodeId, patch, taskTabId\)/)
+})
+
 test('Canvas wires pending video submission recovery to the backend recovery endpoint', () => {
   assert.match(
     source,

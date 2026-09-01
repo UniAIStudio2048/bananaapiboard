@@ -88,7 +88,7 @@ for (const [source, functionName, abortAction] of [
   assert.match(body, /commitMediaUpload\(\{[\s\S]*?tabId/, `${functionName} commits to captured tab`)
   assert.match(
     body,
-    new RegExp(`catch \\(error\\) \\{\\s*if \\(error\\?\\.name === 'AbortError'\\) ${abortAction}`),
+    new RegExp(`catch \\(error\\) \\{\\s*(?:\\/\\/[^\\n]*\\n\\s*)?if \\(error\\?\\.name === 'AbortError'\\) \\{?\\s*(?:canvasStore\\.markMediaUploadFailed\\(\\{[\\s\\S]*?\\}\\)\\s*)?${abortAction}`),
     `${functionName} handles intentional aborts without stopping unrelated uploads`
   )
   assert.match(body, /markMediaUploadFailed\(\{[\s\S]*?nodeId,[\s\S]*?tabId,[\s\S]*?error/, `${functionName} marks failure on the captured tab`)

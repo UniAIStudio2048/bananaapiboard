@@ -17,5 +17,5 @@ test('Seedance 2.0 提交请求传递画布所选分辨率快照', () => {
 
 test('Seedance 2.0 以所选分辨率单价按秒计算后保留视频输入倍率', () => {
   assert.match(source, /calculateSeedanceResolutionCost\(/)
-  assert.match(source, /applySeedanceVideoInputMultiplier\(seedanceResolutionCost, seedanceVideoInputMultiplier\.value, true\)/)
+  assert.match(source, /shouldApplyVideoInputMultiplier\.value[\s\S]*?applyVideoInputMultiplier\(seedanceResolutionCost, videoInputMultiplier\.value\)/)
 })

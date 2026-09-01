@@ -1632,15 +1632,21 @@ function schedulePersistAfterTask(reason = 'background-task') {
 
 // 根据任务更新节点状态
 function updateNodeFromTask(task) {
-  const activeNode = canvasStore.nodes.find(n => n.id === task.nodeId)
-  const inactiveTarget = activeNode ? null : canvasStore.findInactiveWorkflowTabNode(task.nodeId)
+  const taskTabId = task.tabId || null
+  const targetsActiveTab = !taskTabId || taskTabId === canvasStore.activeTabId
+  const activeNode = targetsActiveTab
+    ? canvasStore.nodes.find(n => n.id === task.nodeId)
+    : null
+  const inactiveTarget = activeNode
+    ? null
+    : canvasStore.findInactiveWorkflowTabNode(task.nodeId, taskTabId)
   const node = activeNode || inactiveTarget?.node || null
   const applyNodePatch = (patch) => {
     if (activeNode) {
       canvasStore.updateNodeData(task.nodeId, patch)
       return { active: true }
     }
-    return canvasStore.updateInactiveWorkflowTabNodeData(task.nodeId, patch)
+    return canvasStore.updateInactiveWorkflowTabNodeData(task.nodeId, patch, taskTabId)
   }
 
   if (!node) {
