@@ -40,9 +40,9 @@ test('video mode selector reuses existing mode state and available option lists'
   assert.doesNotMatch(source, /v-for="opt in wanAnimateModeOptions"[\s\S]*class="sd2-mode-btn"/)
 })
 
-test('Wan3 models expose and persist the six-mode selector used for submissions', () => {
+test('DashScope Wan3 exposes and persists its six-mode selector used for submissions', () => {
   assert.match(source, /WAN3_MODES/)
-  assert.match(source, /const isWan3Model = computed\(\(\) => \['wan3', 'routerbee-wan3'\]\.includes\(currentModelConfig\.value\?\.apiType\)\)/)
+  assert.match(source, /const isWan3Model = computed\(\(\) => currentModelConfig\.value\?\.apiType === 'wan3'\)/)
   assert.match(source, /const selectedWan3Mode = ref\(props\.data\.wan3Mode \|\| 'text2video'\)/)
   assert.match(source, /if \(isWan3Model\.value\) \{[\s\S]*?key: 'wan3',[\s\S]*?value: selectedWan3Mode\.value,[\s\S]*?options: WAN3_MODES/)
   assert.match(source, /case 'wan3':[\s\S]*?selectedWan3Mode\.value = value/)
@@ -50,12 +50,28 @@ test('Wan3 models expose and persist the six-mode selector used for submissions'
   assert.match(source, /const wan3Mode = capturedState\.wan3Mode \|\| selectedWan3Mode\.value[\s\S]*?formData\.append\('seedance_mode', wan3Mode\)/)
 })
 
+test('RouterBee Wan3 uses an independent four-mode canvas adapter without file modes', () => {
+  assert.match(source, /ROUTERBEE_WAN3_MODES/)
+  assert.match(source, /const isRouterBeeWan3Model = computed\(\(\) => currentModelConfig\.value\?\.apiType === 'routerbee-wan3'\)/)
+  assert.match(source, /const selectedRouterBeeWan3Mode = ref\(normalizeRouterBeeWan3Mode\([\s\S]*?props\.data\.routerbeeWan3Mode \|\| props\.data\.wan3Mode \|\| 'text2video'/)
+  assert.match(source, /if \(isRouterBeeWan3Model\.value\) \{[\s\S]*?key: 'routerbee-wan3',[\s\S]*?options: ROUTERBEE_WAN3_MODES/)
+  assert.match(source, /case 'routerbee-wan3':[\s\S]*?selectedRouterBeeWan3Mode\.value = value/)
+  assert.match(source, /watch\(selectedRouterBeeWan3Mode, routerbeeWan3Mode => \{[\s\S]*?routerbeeWan3Mode/)
+  assert.match(source, /capturedState\.apiType === 'routerbee-wan3'[\s\S]*?routerbeeWan3Mode[\s\S]*?first_frame_image[\s\S]*?last_frame_image[\s\S]*?reference_images[\s\S]*?reference_videos[\s\S]*?reference_audios/)
+
+  const routerBeeSelectorStart = source.indexOf("key: 'routerbee-wan3'")
+  const routerBeeSelectorEnd = source.indexOf('}', routerBeeSelectorStart)
+  const routerBeeSelector = source.slice(routerBeeSelectorStart, routerBeeSelectorEnd)
+  assert.doesNotMatch(routerBeeSelector, /options: WAN3_MODES/)
+  assert.doesNotMatch(routerBeeSelector, /file|link/)
+})
+
 test('Wan3 file and link modes have independent persistent inputs and request fields', () => {
   assert.match(source, /import \{ uploadCanvasDocument \} from '@\/api\/canvas\/direct-upload'/)
   assert.match(source, /const wan3File = ref\(props\.data\.wan3File \|\| null\)/)
   assert.match(source, /const wan3Link = ref\(props\.data\.wan3Link \|\| ''\)/)
   assert.match(source, /async function uploadWan3Document\(file\)[\s\S]*?uploadCanvasDocument\(uploadFile, \{ nodeId: props\.id, tabId: canvasStore\.activeTabId \}\)/)
-  assert.match(source, /wan3File: wan3File\.value,\s*wan3Link: wan3Link\.value/)
+  assert.match(source, /wan3File: isWan3Model\.value \? wan3File\.value : null,\s*wan3Link: isWan3Model\.value \? wan3Link\.value : ''/)
   assert.match(source, /wan3FileUrl[\s\S]*?formData\.append\('wan3_files', JSON\.stringify\(\[wan3FileUrl\]\)\)/)
   assert.match(source, /wan3Link[\s\S]*?formData\.append\('wan3_links', JSON\.stringify\(\[wan3Link\]\)\)/)
   assert.match(source, /class="wan3-attachment-toolbar"/)

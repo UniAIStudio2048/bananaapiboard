@@ -97,6 +97,7 @@ import {
   getWanDurationOptions,
   isSeedanceSd2VideoModel,
   isWanVideoModel,
+  ROUTERBEE_WAN3_MODES,
   resolveVideoRequestModel,
   WAN3_MODES,
   WAN_MODES
@@ -1562,8 +1563,22 @@ const currentMinimaxH3ModeConfig = computed(() => {
 })
 
 // Wan 3.0 模式选择
-const isWan3Model = computed(() => ['wan3', 'routerbee-wan3'].includes(currentModelConfig.value?.apiType))
+const isWan3Model = computed(() => currentModelConfig.value?.apiType === 'wan3')
+const isRouterBeeWan3Model = computed(() => currentModelConfig.value?.apiType === 'routerbee-wan3')
 const selectedWan3Mode = ref(props.data.wan3Mode || 'text2video')
+
+function normalizeRouterBeeWan3Mode(mode) {
+  if (mode === 'image2video_first') return 'image2video'
+  if (mode === 'image2video_first_last') return 'first_last_frame'
+  return ROUTERBEE_WAN3_MODES.some(item => item.value === mode) ? mode : 'text2video'
+}
+
+const selectedRouterBeeWan3Mode = ref(normalizeRouterBeeWan3Mode(
+  props.data.routerbeeWan3Mode || props.data.wan3Mode || 'text2video'
+))
+const currentRouterBeeWan3ModeConfig = computed(() => (
+  ROUTERBEE_WAN3_MODES.find(item => item.value === selectedRouterBeeWan3Mode.value) || ROUTERBEE_WAN3_MODES[0]
+))
 const wan3File = ref(props.data.wan3File || null)
 const wan3Link = ref(props.data.wan3Link || '')
 const wan3AttachmentPanel = ref('')
@@ -3634,6 +3649,15 @@ const activeVideoModeSelector = computed(() => {
     }
   }
 
+  if (isRouterBeeWan3Model.value) {
+    return {
+      key: 'routerbee-wan3',
+      label: 'RouterBee 模式',
+      value: selectedRouterBeeWan3Mode.value,
+      options: ROUTERBEE_WAN3_MODES
+    }
+  }
+
   if (isWan3Model.value) {
     return {
       key: 'wan3',
@@ -3713,6 +3737,9 @@ function setActiveVideoMode(value) {
       break
     case 'kling-v3-omni':
       selectedKlingV3OmniMode.value = value
+      break
+    case 'routerbee-wan3':
+      selectedRouterBeeWan3Mode.value = value
       break
     case 'wan3':
       selectedWan3Mode.value = value
@@ -4595,6 +4622,10 @@ watch(selectedWan3Mode, wan3Mode => {
   if (wan3Mode === 'file') wan3Link.value = ''
   if (wan3Mode === 'link') wan3File.value = null
   canvasStore.updateNodeData(props.id, { wan3Mode })
+})
+
+watch(selectedRouterBeeWan3Mode, routerbeeWan3Mode => {
+  canvasStore.updateNodeData(props.id, { routerbeeWan3Mode })
 })
 
 watch([wan3File, wan3Link], ([file, link]) => {
@@ -5721,7 +5752,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     }
   }
 
-  if (capturedState.apiType === 'wan3' || capturedState.apiType === 'routerbee-wan3') {
+  if (capturedState.apiType === 'wan3') {
     const wan3Mode = capturedState.wan3Mode || selectedWan3Mode.value
     const wan3Config = currentModelConfig.value?.wan3Config || {}
     const maxImages = Math.min(10, Math.max(0, Number(wan3Config.maxImages) || 10))
@@ -5758,6 +5789,36 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       }
     }
     console.log('[VideoNode] 万相 3.0 模式:', wan3Mode)
+  }
+
+  if (capturedState.apiType === 'routerbee-wan3') {
+    const routerbeeWan3Mode = capturedState.routerbeeWan3Mode || selectedRouterBeeWan3Mode.value
+    const routerbeeConfig = currentModelConfig.value?.routerbeeConfig || {}
+    const maxImages = Math.min(10, Math.max(0, Number(routerbeeConfig.maxImages) || 10))
+    const maxVideos = Math.min(5, Math.max(0, Number(routerbeeConfig.maxVideos) || 5))
+    const maxAudios = Math.min(5, Math.max(0, Number(routerbeeConfig.maxAudios) || 5))
+    formData.append('seedance_mode', routerbeeWan3Mode)
+    formData.append('wan3_audio', routerbeeConfig.audio === false ? 'false' : 'true')
+
+    if (routerbeeWan3Mode === 'image2video') {
+      if (finalImages.length > 0) formData.append('first_frame_image', finalImages[0])
+    } else if (routerbeeWan3Mode === 'first_last_frame') {
+      if (finalImages.length > 0) formData.append('first_frame_image', finalImages[0])
+      if (finalImages.length > 1) formData.append('last_frame_image', finalImages[1])
+    } else if (routerbeeWan3Mode === 'multimodal_ref') {
+      if (finalImages.length > 0) {
+        formData.append('reference_images', JSON.stringify(finalImages.slice(0, maxImages)))
+      }
+      const orderedVideos = referenceVideos.value || []
+      if (orderedVideos.length > 0) {
+        formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, maxVideos)))
+      }
+      const orderedAudios = referenceAudios.value || []
+      if (orderedAudios.length > 0) {
+        formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, maxAudios)))
+      }
+    }
+    console.log('[VideoNode] RouterBee Wan 3.0 模式:', routerbeeWan3Mode)
   }
 
   // Coze 视频工作流需要把画布上的参考媒体显式映射到工作流参数；仅传 image_urls
@@ -6628,6 +6689,45 @@ async function handleGenerate(options = {}) {
     }
   }
 
+  if (!isHeygenFlow && isRouterBeeWan3Model.value) {
+    const routerbeeWan3Mode = selectedRouterBeeWan3Mode.value
+    const referenceVideoCount = referenceVideos.value.length
+    const referenceAudioCount = referenceAudios.value.length
+    const routerbeeConfig = currentModelConfig.value?.routerbeeConfig || {}
+    const maxImages = Math.min(10, Math.max(0, Number(routerbeeConfig.maxImages) || 10))
+    const maxVideos = Math.min(5, Math.max(0, Number(routerbeeConfig.maxVideos) || 5))
+    const maxAudios = Math.min(5, Math.max(0, Number(routerbeeConfig.maxAudios) || 5))
+
+    if (!finalPrompt) {
+      await showAlert('请输入 RouterBee 视频提示词', '提示')
+      return
+    }
+    if (routerbeeWan3Mode === 'text2video' && (finalImages.length > 0 || referenceVideoCount > 0 || referenceAudioCount > 0)) {
+      await showAlert('RouterBee 文生视频不能包含参考素材，请切换生成模式', '输入冲突')
+      return
+    }
+    if (routerbeeWan3Mode === 'image2video') {
+      if (referenceVideoCount > 0 || referenceAudioCount > 0 || finalImages.length !== 1) {
+        await showAlert('RouterBee 图生视频需要且仅支持 1 张首帧图片', '输入不正确')
+        return
+      }
+    } else if (routerbeeWan3Mode === 'first_last_frame') {
+      if (referenceVideoCount > 0 || referenceAudioCount > 0 || finalImages.length !== 2) {
+        await showAlert('RouterBee 首尾帧需要按顺序连接 2 张图片，且不能混用参考素材', '输入不正确')
+        return
+      }
+    } else if (routerbeeWan3Mode === 'multimodal_ref') {
+      if (finalImages.length === 0 && referenceVideoCount === 0 && referenceAudioCount === 0) {
+        await showAlert('RouterBee 多模态参考至少需要 1 个参考素材链接', '缺少参考素材')
+        return
+      }
+      if (finalImages.length > maxImages || referenceVideoCount > maxVideos || referenceAudioCount > maxAudios) {
+        await showAlert('RouterBee 参考素材最多支持 10 张图片、5 个视频和 5 个音频', '参考素材过多')
+        return
+      }
+    }
+  }
+
   if (!isHeygenFlow && isWan3Model.value) {
     if (wan3FileUploading.value) {
       await showAlert('参考文件仍在上传，请等待完成后生成', '文件上传中')
@@ -6790,6 +6890,7 @@ async function handleGenerate(options = {}) {
       wan3Mode: isWan3Model.value ? selectedWan3Mode.value : '',
       wan3File: isWan3Model.value ? wan3File.value : null,
       wan3Link: isWan3Model.value ? wan3Link.value : '',
+      routerbeeWan3Mode: isRouterBeeWan3Model.value ? selectedRouterBeeWan3Mode.value : '',
       wanMode: isWanModel.value ? selectedWanMode.value : '',
       wanAnimateMode: isWanModel.value && selectedWanMode.value === 'animate_mix' ? selectedWanAnimateMode.value : '',
       klingO1Mode: isKlingO1Model.value ? selectedKlingO1Mode.value : '',
@@ -6841,8 +6942,9 @@ async function handleGenerate(options = {}) {
     minimaxH3Resolution: isMinimaxH3Model.value ? minimaxH3Resolution.value : '',
     minimaxH3Mode: isMinimaxH3Model.value ? (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) : '',
     wan3Mode: isWan3Model.value ? selectedWan3Mode.value : '',
-    wan3File: wan3File.value,
-    wan3Link: wan3Link.value,
+    wan3File: isWan3Model.value ? wan3File.value : null,
+    wan3Link: isWan3Model.value ? wan3Link.value : '',
+    routerbeeWan3Mode: isRouterBeeWan3Model.value ? selectedRouterBeeWan3Mode.value : '',
     wanMode: isWanModel.value ? selectedWanMode.value : '',
     wanAnimateMode: isWanModel.value && selectedWanMode.value === 'animate_mix' ? selectedWanAnimateMode.value : ''
   }
@@ -10588,6 +10690,22 @@ function handleToolbarPreview() {
           </div>
           <div v-if="v31Mode === 'image_audio' && !hasReferenceAudios" class="sd2-mode-warn">
             ⚠ 图像+音频生视频需要连接 1 段音频
+          </div>
+        </div>
+      </template>
+
+      <!-- RouterBee Wan 3.0 独立四模式提示 -->
+      <template v-if="isRouterBeeWan3Model">
+        <div class="sd2-mode-section">
+          <div class="sd2-mode-desc">{{ currentRouterBeeWan3ModeConfig.desc }}</div>
+          <div v-if="selectedRouterBeeWan3Mode === 'multimodal_ref'" class="sd2-mode-desc">
+            提示词请按数组顺序使用 Image 1、Video 1 或 Audio 1 引用素材；仅发送公开链接，不发送文件。
+          </div>
+          <div v-if="selectedRouterBeeWan3Mode === 'image2video' && referenceImages.length !== 1" class="sd2-mode-warn">
+            ⚠ 图生视频需要且仅支持 1 张首帧图片
+          </div>
+          <div v-if="selectedRouterBeeWan3Mode === 'first_last_frame' && referenceImages.length !== 2" class="sd2-mode-warn">
+            ⚠ 首尾帧需要按顺序连接 2 张图片（首帧→尾帧）
           </div>
         </div>
       </template>

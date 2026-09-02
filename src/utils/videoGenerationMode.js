@@ -29,6 +29,13 @@ export const WAN3_MODES = [
   { value: 'link', label: '网页链接', desc: '参考网页链接生成视频' }
 ]
 
+export const ROUTERBEE_WAN3_MODES = [
+  { value: 'text2video', label: '文生视频', desc: '仅使用提示词生成视频' },
+  { value: 'image2video', label: '图生视频', desc: '1 张图片作为首帧生成视频', needsImage: true, maxImages: 1 },
+  { value: 'first_last_frame', label: '首尾帧', desc: '按顺序使用 2 张图片作为首帧和尾帧', needsImage: true, maxImages: 2 },
+  { value: 'multimodal_ref', label: '多模态参考', desc: '按顺序参考图片、视频或音频的公开链接' }
+]
+
 export const WAN_ANIMATE_MIX_MODE = {
   value: 'animate_mix',
   label: '换人混合',

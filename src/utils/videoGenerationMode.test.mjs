@@ -10,6 +10,7 @@ import {
   isWanVideoModel,
   resolveVideoRequestModel,
   WAN3_MODES,
+  ROUTERBEE_WAN3_MODES,
   WAN_MODES
 } from './videoGenerationMode.js'
 
@@ -307,5 +308,12 @@ test('Wan3 exposes the six documented generation modes', () => {
   assert.deepEqual(
     WAN3_MODES.map(mode => mode.value),
     ['text2video', 'image2video_first', 'image2video_first_last', 'multimodal_ref', 'file', 'link']
+  )
+})
+
+test('RouterBee Wan3 exposes its own four URL-based generation modes', () => {
+  assert.deepEqual(
+    ROUTERBEE_WAN3_MODES.map(mode => mode.value),
+    ['text2video', 'image2video', 'first_last_frame', 'multimodal_ref']
   )
 })
