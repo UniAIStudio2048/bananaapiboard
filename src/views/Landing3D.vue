@@ -210,11 +210,11 @@
           <!-- 登录/注册表单 -->
           <form v-if="!resetMode" @submit.prevent="submitAuth" class="auth-form">
             <!-- 注册模式且有白名单：显示用户名和邮箱分开的输入 -->
-            <div v-if="authMode === 'register' && emailConfig.require_email_verification && emailConfig.email_whitelist.length > 0" class="form-group">
+            <div v-if="authMode === 'register' && emailConfig.email_whitelist.length > 0" class="form-group">
               <input v-model="account" type="text" class="form-input" :placeholder="t('auth.username')" required />
             </div>
 
-            <div v-if="authMode === 'register' && emailConfig.require_email_verification && emailConfig.email_whitelist.length > 0" class="form-group">
+            <div v-if="authMode === 'register' && emailConfig.email_whitelist.length > 0" class="form-group">
               <div class="email-input-group">
                 <input v-model="emailPrefix" type="text" class="form-input email-prefix" :placeholder="t('auth.emailPrefix')" required />
                 <span class="email-at">@</span>
@@ -228,8 +228,8 @@
             </div>
 
             <!-- 其他模式：显示原来的邮箱/登录名输入框 -->
-            <div v-if="!(authMode === 'register' && emailConfig.require_email_verification && emailConfig.email_whitelist.length > 0)" class="form-group">
-              <input v-model="account" type="text" class="form-input" :placeholder="t('auth.emailOrUsername')" required />
+            <div v-if="!(authMode === 'register' && emailConfig.email_whitelist.length > 0)" class="form-group">
+              <input v-model="account" :type="authMode === 'register' ? 'email' : 'text'" class="form-input" :placeholder="t('auth.emailOrUsername')" required />
             </div>
 
             <div class="form-group">
@@ -357,6 +357,7 @@ import { persistAuthSession } from '@/api/client'
 import { getMe } from '@/api/client'
 import { useI18n } from '@/i18n'
 import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
+import { normalizeEmailWhitelist } from '@/utils/emailWhitelist'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 
 const { t } = useI18n()
@@ -423,7 +424,7 @@ const emailSuffix = ref('qq.com') // 邮箱后缀，默认为qq.com
 
 // 构建完整邮箱地址
 const fullEmail = computed(() => {
-  if (authMode.value === 'register' && emailConfig.value.require_email_verification && emailConfig.value.email_whitelist.length > 0) {
+  if (authMode.value === 'register' && emailConfig.value.email_whitelist.length > 0) {
     // 注册模式且有白名单，使用前缀+后缀
     if (emailPrefix.value && emailSuffix.value) {
       return `${emailPrefix.value}@${emailSuffix.value}`
@@ -460,7 +461,9 @@ async function loadEmailConfig() {
     })
     if (r.ok) {
       const data = await r.json()
-      emailConfig.value = data
+      const emailWhitelist = normalizeEmailWhitelist(data.email_whitelist)
+      emailConfig.value = { ...data, has_whitelist: emailWhitelist.length > 0, email_whitelist: emailWhitelist }
+      emailSuffix.value = emailWhitelist[0] || ''
       console.log('[Landing3D] 邮箱配置已加载:', data)
     }
   } catch (e) {
@@ -704,13 +707,13 @@ const submitAuth = async () => {
   // 获取实际使用的邮箱地址
   const email = fullEmail.value
   
-  // 注册时检查邮箱验证要求
-  if (authMode.value === 'register' && emailConfig.value.require_email_verification) {
+  // 注册邮箱始终必填；验证码仅在开启强制验证时必填。
+  if (authMode.value === 'register') {
     if (!email) {
       authError.value = t('auth.pleaseSelectSuffix')
       return
     }
-    if (!emailCode.value) {
+    if (emailConfig.value.require_email_verification && !emailCode.value) {
       authError.value = t('auth.emailCodeRequired')
       return
     }

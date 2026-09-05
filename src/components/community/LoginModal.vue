@@ -7,6 +7,7 @@ import { ref, watch, computed } from 'vue'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
 import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
+import { normalizeEmailWhitelist } from '@/utils/emailWhitelist'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false }
@@ -50,10 +51,11 @@ const emailCode = ref('')
 const sendingCode = ref(false)
 const codeSent = ref(false)
 const countdown = ref(0)
+const hasWhitelist = computed(() => emailConfig.value.email_whitelist.length > 0)
 
 // 构建完整邮箱
 const fullEmail = computed(() => {
-  if (emailConfig.value.require_email_verification && emailConfig.value.email_whitelist.length > 0) {
+  if (mode.value === 'register' && hasWhitelist.value) {
     if (emailPrefix.value && emailSuffix.value) {
       return `${emailPrefix.value}@${emailSuffix.value}`
     }
@@ -143,9 +145,10 @@ async function loadEmailConfig() {
     const r = await fetch(getApiUrl('/api/email/public-config'), { headers: getTenantHeaders() })
     if (r.ok) {
       const data = await r.json()
-      emailConfig.value = data
-      if (data.email_whitelist && data.email_whitelist.length > 0) {
-        emailSuffix.value = data.email_whitelist[0]
+      const emailWhitelist = normalizeEmailWhitelist(data.email_whitelist)
+      emailConfig.value = { ...data, has_whitelist: emailWhitelist.length > 0, email_whitelist: emailWhitelist }
+      if (emailWhitelist.length > 0) {
+        emailSuffix.value = emailWhitelist[0]
       }
     }
   } catch (e) {}
@@ -190,7 +193,7 @@ async function submit() {
   error.value = ''
   message.value = ''
 
-  const needEmailMode = emailConfig.value.require_email_verification && emailConfig.value.email_whitelist.length > 0
+  const needEmailMode = hasWhitelist.value
   if (mode.value === 'register' && needEmailMode) {
     if (!nickname.value.trim() || !password.value) {
       error.value = '请填写昵称和密码'
@@ -218,11 +221,11 @@ async function submit() {
       error.value = '请输入邀请码'
       return
     }
+    if (hasWhitelist.value && !fullEmail.value) {
+      error.value = '请填写邮箱地址'
+      return
+    }
     if (emailConfig.value.require_email_verification) {
-      if (!fullEmail.value) {
-        error.value = '请填写邮箱地址'
-        return
-      }
       if (!emailCode.value) {
         error.value = '请输入邮箱验证码'
         return
@@ -517,8 +520,8 @@ async function resetPassword() {
               />
             </div>
 
-            <!-- 邮箱验证模式：前缀+后缀下拉 -->
-            <div v-if="mode === 'register' && emailConfig.require_email_verification && emailConfig.email_whitelist.length > 0">
+            <!-- 白名单模式：前缀+后缀下拉 -->
+            <div v-if="mode === 'register' && hasWhitelist">
               <label class="block text-sm text-white/70 mb-1.5">邮箱 *</label>
               <div class="flex items-center gap-1">
                 <input
@@ -542,7 +545,7 @@ async function resetPassword() {
             </div>
 
             <!-- 普通模式：用户名/邮箱 -->
-            <div v-if="!(mode === 'register' && emailConfig.require_email_verification && emailConfig.email_whitelist.length > 0)">
+            <div v-if="!(mode === 'register' && hasWhitelist)">
               <label class="block text-sm text-white/70 mb-1.5">{{ mode === 'register' ? '邮箱' : '用户名/邮箱' }}</label>
               <input
                 v-model="account"

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
 import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
+import { normalizeEmailWhitelist } from '@/utils/emailWhitelist'
 
 const router = useRouter()
 const params = new URLSearchParams(location.search)
@@ -43,16 +44,14 @@ const emailPrefix = ref('') // 邮箱前缀
 const emailSuffix = ref('') // 邮箱后缀
 const emailAddress = ref('') // 完整邮箱地址（无白名单时使用）
 
-// 计算属性：是否需要显示独立的邮箱输入框
-const needSeparateEmailInput = computed(() => {
-  return mode.value === 'register' && emailConfig.value.require_email_verification
-})
-
 // 计算属性：是否有白名单
 const hasWhitelist = computed(() => {
-  return emailConfig.value.has_whitelist && 
-         Array.isArray(emailConfig.value.email_whitelist) && 
-         emailConfig.value.email_whitelist.length > 0
+  return Array.isArray(emailConfig.value.email_whitelist) && emailConfig.value.email_whitelist.length > 0
+})
+
+// 验证码或白名单任一启用时，注册需单独填写用户名和邮箱。
+const needSeparateEmailInput = computed(() => {
+  return mode.value === 'register' && (emailConfig.value.require_email_verification || hasWhitelist.value)
 })
 
 // 加载邀请奖励配置和注册设置
@@ -89,7 +88,9 @@ async function loadEmailConfig() {
     })
     if (r.ok) {
       const data = await r.json()
-      emailConfig.value = data
+      const emailWhitelist = normalizeEmailWhitelist(data.email_whitelist)
+      emailConfig.value = { ...data, has_whitelist: emailWhitelist.length > 0, email_whitelist: emailWhitelist }
+      emailSuffix.value = emailWhitelist[0] || ''
       console.log('[Auth] 邮箱配置已加载:', data)
       
       if (data.require_email_verification) {
@@ -246,8 +247,8 @@ async function submit() {
   // 获取实际使用的邮箱地址
   const email = fullEmail.value
 
-  // 注册时检查邮箱验证要求
-  if (mode.value === 'register' && emailConfig.value.require_email_verification) {
+  // 注册邮箱始终必填；验证码仅在开启强制验证时必填。
+  if (mode.value === 'register') {
     if (!email) {
       error.value = hasWhitelist.value ? '请填写邮箱前缀并选择后缀' : '请输入邮箱地址'
       return
@@ -258,7 +259,7 @@ async function submit() {
       error.value = '请输入有效的邮箱地址'
       return
     }
-    if (!emailCode.value) {
+    if (emailConfig.value.require_email_verification && !emailCode.value) {
       error.value = '请输入邮箱验证码'
       return
     }
@@ -477,7 +478,7 @@ async function submit() {
           </div>
 
           <!-- 邮箱验证码（注册时且需要验证时显示，或密码重置时） -->
-          <div v-if="needSeparateEmailInput || resetMode">
+          <div v-if="(mode === 'register' && emailConfig.require_email_verification) || resetMode">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
               📬 邮箱验证码 *
             </label>
