@@ -4745,7 +4745,26 @@ watch(selectedModel, () => {
     selectedWanAnimateMode.value = modelConfig?.wanConfig?.animateMode || 'wan-std'
     console.log('[VideoNode] 切换到 Wan 模型，模式重置为', selectedWanMode.value)
   }
+
+  if (modelConfig?.apiType === 'wan3') {
+    const configuredMode = modelConfig?.wan3Config?.defaultMode
+    selectedWan3Mode.value = WAN3_MODES.some(mode => mode.value === configuredMode)
+      ? configuredMode
+      : 'text2video'
+    console.log('[VideoNode] 切换到 Wan3 模型，模式重置为', selectedWan3Mode.value)
+  }
 })
+
+watch(currentModelConfig, modelConfig => {
+  if (modelConfig?.apiType !== 'wan3') return
+  const configuredMode = modelConfig.wan3Config?.defaultMode
+  selectedWan3Mode.value = pickInitialSubmode(
+    props.data.wan3Mode,
+    configuredMode,
+    WAN3_MODES,
+    'text2video'
+  )
+}, { immediate: true })
 
 // 🔧 持久化 RunningHub 全能视频 V3.1 模式
 watch(v31Mode, (mode) => {

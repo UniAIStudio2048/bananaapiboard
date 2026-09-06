@@ -189,6 +189,17 @@ function filterByteforPointsCost(modelConfig, pointsCost) {
   )
 }
 
+function mergeWan3Config(modelConfig = {}) {
+  const channel = Array.isArray(modelConfig.channels)
+    ? modelConfig.channels.find(item => item && item.enabled !== false && item.wan3Config)
+    : null
+
+  return {
+    ...(modelConfig.wan3Config || {}),
+    ...(channel?.wan3Config || {})
+  }
+}
+
 function normalizeImageSupportedModes(supportedModes) {
   if (!supportedModes) return { t2i: true, i2i: true, label: 'both' }
 
@@ -1682,6 +1693,7 @@ export const getAvailableVideoModels = (options = {}) => {
         happyHorseConfig: modelConfig.happyHorseConfig,
         huayingConfig: modelConfig.huayingConfig,
         vectorengineConfig: modelConfig.vectorengineConfig,
+        wan3Config: mergeWan3Config(modelConfig),
         resolutionOptions: getVideoResolutionOptions(modelConfig),
         displayResolutions: modelConfig.displayResolutions,
         resolutionPricing: modelConfig.resolutionPricing,
@@ -1879,6 +1891,7 @@ export const getAvailableVideoModels = (options = {}) => {
         happyHorseConfig: modelFullConfig.happyHorseConfig,
         huayingConfig: modelFullConfig.huayingConfig,
         vectorengineConfig: modelFullConfig.vectorengineConfig,
+        wan3Config: mergeWan3Config(modelFullConfig),
         resolutionOptions: getVideoResolutionOptions(modelFullConfig),
         displayResolutions: modelFullConfig.displayResolutions,
         resolutionPricing: modelFullConfig.resolutionPricing,
