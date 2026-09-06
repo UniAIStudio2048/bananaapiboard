@@ -1,4 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
+import path from 'node:path'
 import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 
@@ -13,7 +14,35 @@ export default defineConfig(({ mode }) => {
   const serverPort = portMap[mode] || 3000
 
   return {
-    plugins: [vue()],
+    plugins: [
+      vue(),
+      {
+        // /@fs/ 请求指向项目根之外时直接 403：恶意探测（如 /@fs/root/.bash_history?vue&src）
+        // 会绕过 Vite 只检查 ?raw/?url/?inline/.svg 的补丁，深入 plugin-vue load 触发
+        // readFileSync 抛 ENOENT/EACCES → 500 经 HMR websocket 广播成页面错误 overlay
+        name: 'fs-guard',
+        configureServer(server) {
+          const projectRoot = fileURLToPath(new URL('.', import.meta.url))
+          server.middlewares.use((req, res, next) => {
+            const url = (req.url || '').replace(/^\/{2,}/, '/')
+            const fsIndex = url.indexOf('/@fs/')
+            if (fsIndex === -1) return next()
+            let filePath
+            try {
+              filePath = path.resolve(decodeURIComponent(url.slice(fsIndex + 4).split('?')[0]))
+            } catch {
+              res.statusCode = 400
+              res.end('Bad Request')
+              return
+            }
+            if (filePath === projectRoot || filePath.startsWith(projectRoot)) return next()
+            server.config.logger.warn(`[fs-guard] blocked ${req.socket?.remoteAddress} ${url}`)
+            res.statusCode = 403
+            res.end('Forbidden')
+          })
+        }
+      }
+    ],
 
     server: {
       host: '0.0.0.0',
