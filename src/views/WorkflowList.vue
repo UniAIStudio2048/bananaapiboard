@@ -7,11 +7,13 @@
 import { computed, ref, onMounted, onActivated, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getWorkflowList, deleteWorkflow, getStorageQuota, renameWorkflow } from '@/api/canvas/workflow'
+import { getWorkflowShare, getWorkflowShareStatus } from '@/api/canvas/workflowShare'
 import { getProjectList, createProject, updateProject, deleteProject } from '@/api/canvas/project'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import SpaceSwitcher from '@/components/canvas/SpaceSwitcher.vue'
 import MoveResourceDialog from '@/components/canvas/MoveResourceDialog.vue'
+import WorkflowShareDialog from '@/components/canvas/WorkflowShareDialog.vue'
 import {
   setCanvasSpaceFilterFromGlobal,
   syncGlobalSpaceFromFilter,
@@ -92,6 +94,9 @@ const contextMenu = ref({
 // 移动项目/工作流弹窗
 const showMoveDialog = ref(false)
 const moveTarget = ref({ type: 'workflow', operation: 'move', id: '', name: '', workflowCount: 0, spaceType: 'personal', teamId: '', projectId: '', sourceRole: '', isDefault: false })
+const showWorkflowShareDialog = ref(false)
+const workflowToShare = ref(null)
+const workflowShareModes = ref({})
 
 // 重命名
 const renameState = ref({
@@ -172,6 +177,7 @@ async function loadWorkflows() {
     }
     const result = await getWorkflowList(params)
     workflows.value = result.list || []
+    loadWorkflowShareModes(workflows.value)
     const nextPagination = { ...pagination.value, ...(result.pagination || {}) }
     nextPagination.totalPages = nextPagination.totalPages || Math.ceil(nextPagination.total / nextPagination.pageSize) || 0
     pagination.value = nextPagination
@@ -201,6 +207,51 @@ function openWorkflow(workflow) {
     description: workflow.description
   }
   router.push(`/canvas?load=${workflow.id}`)
+}
+
+async function loadWorkflowShareModes(items) {
+  const entries = await Promise.all((items || []).map(async workflow => {
+    if (!workflow?.id) return null
+    try {
+      const result = workflow.space_type === 'team'
+        ? await getWorkflowShareStatus(workflow.id)
+        : await getWorkflowShare(workflow.id)
+      const data = result?.data || result
+      return [String(workflow.id), data?.mode || 'disabled']
+    } catch {
+      return [String(workflow.id), workflow.is_shared ? 'view' : 'disabled']
+    }
+  }))
+
+  workflowShareModes.value = Object.fromEntries(entries.filter(Boolean))
+}
+
+function getWorkflowShareMode(workflow) {
+  return workflowShareModes.value[String(workflow?.id)] || (workflow?.is_shared ? 'view' : 'disabled')
+}
+
+function isWorkflowShared(workflow) {
+  return getWorkflowShareMode(workflow) !== 'disabled'
+}
+
+function openWorkflowShare(workflow) {
+  if (!workflow?.id) return
+  workflowToShare.value = workflow
+  showWorkflowShareDialog.value = true
+}
+
+function handleWorkflowShareUpdated(update) {
+  const workflow = workflows.value.find(item => String(item.id) === String(update?.workflowId))
+  if (workflow) {
+    workflow.is_shared = update.mode !== 'disabled'
+    workflow.share_mode = update.mode
+  }
+  if (update?.workflowId) {
+    workflowShareModes.value = {
+      ...workflowShareModes.value,
+      [String(update.workflowId)]: update.mode
+    }
+  }
 }
 
 // 新建工作流
@@ -413,6 +464,7 @@ function handleContextAction(action) {
     if (action === 'delete') confirmDelete(item)
     else if (action === 'move') openMoveDialog(item, 'workflow', 'move')
     else if (action === 'copy') openMoveDialog(item, 'workflow', 'copy')
+    else if (action === 'share') openWorkflowShare(item)
   }
 }
 
@@ -798,6 +850,10 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
               </div>
               <div class="card-footer">
                 <span class="card-time">{{ formatDate(workflow.updated_at) }}</span>
+                <span v-if="isWorkflowShared(workflow)" class="share-status-badge">已分享</span>
+                <button class="share-btn" @click.stop="openWorkflowShare(workflow)" title="分享工作流">
+                  分享
+                </button>
                 <button class="delete-btn" @click.stop="confirmDelete(workflow)" title="删除">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -856,6 +912,10 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
           </button>
         </template>
         <template v-else-if="contextMenu.type === 'workflow'">
+          <button class="context-item" @click="handleContextAction('share')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-3.9M8.7 13.3l6.6 3.9"/></svg>
+            分享工作流
+          </button>
           <button class="context-item" @click="handleContextAction('move')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
             移动到项目
@@ -989,6 +1049,15 @@ watch([() => teamStore.globalSpaceType.value, () => teamStore.globalTeamId.value
       :is-default-project="moveTarget.isDefault"
       :operation="moveTarget.operation"
       @moved="onResourceMoved"
+    />
+
+    <WorkflowShareDialog
+      v-model="showWorkflowShareDialog"
+      :workflow="workflowToShare"
+      :workflow-id="workflowToShare?.id || ''"
+      :space-type="workflowToShare?.space_type || 'personal'"
+      :team-id="workflowToShare?.team_id || ''"
+      @updated="handleWorkflowShareUpdated"
     />
   </div>
 </template>

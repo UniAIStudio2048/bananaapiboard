@@ -5,7 +5,9 @@
 import { ref, computed, watch, onMounted, onUnmounted, provide, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { getMe, updateUserPreferences } from '@/api/client'
+import { getWorkflowShareStatus } from '@/api/canvas/workflowShare'
 import { sumPoints } from '@/utils/format'
+import { getSeedanceMediaType } from '@/utils/seedanceMedia'
 import { getTenantHeaders, getBrand, isCanvasLogoEnabled, getApiUrl } from '@/config/tenant'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
@@ -22,6 +24,7 @@ import GroupToolbar from '@/components/canvas/GroupToolbar.vue'
 import ImageToolbar from '@/components/canvas/ImageToolbar.vue'
 import SaveWorkflowDialog from '@/components/canvas/SaveWorkflowDialog.vue'
 import WorkflowPanel from '@/components/canvas/WorkflowPanel.vue'
+import WorkflowShareDialog from '@/components/canvas/WorkflowShareDialog.vue'
 import WorkflowTabs from '@/components/canvas/WorkflowTabs.vue'
 import AssetPanel from '@/components/canvas/AssetPanel.vue'
 import HistoryPanel from '@/components/canvas/HistoryPanel.vue'
@@ -80,6 +83,7 @@ import {
 import { buildOrganizationSignature } from '@/utils/canvasOrganization'
 import { getCanvasNodeMedia } from '@/utils/canvasDirectory'
 import { createCanvasOrganizationPreviewController } from '@/utils/canvasOrganizationPreview'
+import { normalizeWorkflowShareMode } from '@/utils/workflowShare'
 import {
   CANVAS_GRID_SNAP_STORAGE_KEY,
   CANVAS_LAST_EDGE_STYLE_STORAGE_KEY,
@@ -172,6 +176,34 @@ const showHelp = ref(false)
 
 // 保存工作流对话框
 const showSaveDialog = ref(false)
+const shareAfterSave = ref(false)
+
+// 工作流分享对话框
+const showWorkflowShareDialog = ref(false)
+const workflowToShare = ref(null)
+const teamWorkflowShareStatus = ref(null)
+const teamWorkflowShareLoading = ref(false)
+let teamWorkflowShareRequestId = 0
+
+const currentTeamWorkflow = computed(() => {
+  const currentTab = canvasStore.getCurrentTab()
+  const spaceType = currentTab?.workflowSpaceType || teamStore.globalSpaceType.value
+  const teamId = currentTab?.workflowTeamId || teamStore.globalTeamId.value
+  if (!currentTab?.workflowId || spaceType !== 'team' || !teamId) return null
+  return {
+    id: String(currentTab.workflowId),
+    teamId: String(teamId),
+    name: currentTab.name || '当前工作流'
+  }
+})
+
+const teamWorkflowShareNotice = computed(() => {
+  const currentWorkflow = currentTeamWorkflow.value
+  const status = teamWorkflowShareStatus.value
+  const mode = normalizeWorkflowShareMode(status?.mode)
+  if (!currentWorkflow || !status || status.workflowId !== currentWorkflow.id || mode === 'disabled') return null
+  return { ...status, mode }
+})
 
 // 工作流面板
 const showWorkflowPanel = ref(false)
@@ -763,10 +795,13 @@ function handleAssetInsert(asset) {
         assetName: asset.assetName,
         status: asset.status || 'Active',
         assetType: asset.assetType,
+        providerType: asset.providerType,
+        thumbnailUrl: asset.thumbnailUrl,
+        duration: asset.duration,
         width: 220,
         output: {
-          type: 'image',
-          url: asset.assetUrl
+          type: getSeedanceMediaType(asset),
+          url: asset.assetUri || `asset://${asset.assetId}`
         }
       }
       break
@@ -916,7 +951,74 @@ provide('openHistoryPanel', openHistoryPanel)
 
 // 打开保存对话框
 function openSaveDialog() {
+  shareAfterSave.value = false
   showSaveDialog.value = true
+}
+
+function getEditorShareWorkflow(workflow = {}) {
+  const currentTab = canvasStore.getCurrentTab()
+  return {
+    ...currentTab,
+    ...workflow,
+    id: workflow.id || currentTab?.workflowId || canvasStore.workflowMeta?.id || '',
+    name: workflow.name || currentTab?.name || canvasStore.workflowMeta?.name || '工作流',
+    description: workflow.description || currentTab?.description || canvasStore.workflowMeta?.description || '',
+    space_type: workflow.space_type || currentTab?.workflowSpaceType || teamStore.globalSpaceType.value,
+    team_id: workflow.team_id || currentTab?.workflowTeamId || teamStore.globalTeamId.value || ''
+  }
+}
+
+function openWorkflowShareDialog(workflow) {
+  const shareWorkflow = getEditorShareWorkflow(workflow)
+  if (!shareWorkflow.id) return
+  workflowToShare.value = shareWorkflow
+  showWorkflowShareDialog.value = true
+}
+
+async function loadCurrentTeamWorkflowShareStatus() {
+  const currentWorkflow = currentTeamWorkflow.value
+  const requestId = ++teamWorkflowShareRequestId
+  if (!currentWorkflow) {
+    teamWorkflowShareStatus.value = null
+    teamWorkflowShareLoading.value = false
+    return
+  }
+
+  teamWorkflowShareLoading.value = true
+  try {
+    const result = await getWorkflowShareStatus(currentWorkflow.id)
+    if (requestId !== teamWorkflowShareRequestId) return
+    const data = result?.data || result || {}
+    teamWorkflowShareStatus.value = { ...data, workflowId: currentWorkflow.id }
+  } catch (error) {
+    if (requestId === teamWorkflowShareRequestId) teamWorkflowShareStatus.value = null
+    console.warn('[Canvas] 获取团队工作流分享状态失败:', error.message || error)
+  } finally {
+    if (requestId === teamWorkflowShareRequestId) teamWorkflowShareLoading.value = false
+  }
+}
+
+watch(
+  () => [currentTeamWorkflow.value?.id || '', currentTeamWorkflow.value?.teamId || ''],
+  () => loadCurrentTeamWorkflowShareStatus(),
+  { immediate: true }
+)
+
+function handleWorkflowShareUpdated() {
+  workflowPanelRef.value?.forceRefresh?.()
+  loadCurrentTeamWorkflowShareStatus()
+}
+
+async function openShareWorkflow() {
+  const currentTab = canvasStore.getCurrentTab()
+  if (!currentTab?.workflowId) {
+    shareAfterSave.value = true
+    showSaveDialog.value = true
+    return
+  }
+
+  const saved = await quickSaveWorkflow()
+  if (saved) openWorkflowShareDialog(currentTab)
 }
 
 // 快速保存工作流（Ctrl+S 调用）
@@ -926,14 +1028,14 @@ async function quickSaveWorkflow() {
 
   if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges).length > 0) {
     displayToast('素材仍在上传，请等待完成后重试', 'warning', 3000)
-    return
+    return false
   }
   
   // 检查是否有内容
   const workflowData = canvasStore.exportWorkflow()
   if (!workflowData.nodes || workflowData.nodes.length === 0) {
     displayToast('画布为空，无需保存', 'warning', 2000)
-    return
+    return false
   }
   
   // 如果是已保存过的工作流，直接更新
@@ -963,13 +1065,16 @@ async function quickSaveWorkflow() {
       if (workflowPanelRef.value && typeof workflowPanelRef.value.forceRefresh === 'function') {
         workflowPanelRef.value.forceRefresh()
       }
+      return true
     } catch (error) {
       console.error('[Canvas] 快速保存失败:', error)
       displayToast(`保存失败：${error.message || '未知错误'}`, 'error', 3000)
+      return false
     }
   } else {
     // 新建工作流，打开保存对话框
     showSaveDialog.value = true
+    return false
   }
 }
 
@@ -1006,12 +1111,15 @@ function handleWorkflowSaving(data) {
 // 🔧 保存失败回调
 function handleWorkflowSaveError(data) {
   console.error('[Canvas] 工作流保存失败:', data.message)
+  shareAfterSave.value = false
   displayToast(`保存失败：${data.message}`, 'error', 5000)
 }
 
 // 保存成功回调
 function handleWorkflowSaved(workflow) {
   console.log('[Canvas] 工作流保存成功:', workflow)
+  const shouldOpenShare = shareAfterSave.value
+  shareAfterSave.value = false
 
   // 🔧 显示保存成功提示
   displayToast(`工作流「${workflow.name}」保存成功`, 'success', 2000)
@@ -1038,6 +1146,8 @@ function handleWorkflowSaved(workflow) {
     workflowPanelRef.value.forceRefresh()
     console.log('[Canvas] 已触发工作流面板刷新')
   }
+
+  if (shouldOpenShare) openWorkflowShareDialog(workflow)
 }
 
 function persistManualSaveRecoverySnapshot() {
@@ -3687,6 +3797,18 @@ onUnmounted(() => {
       :class="{ 'ai-panel-open': showAIAssistant, 'pick-mode': canvasPickMode }"
       :style="{ '--ai-panel-offset': (aiPanelWidth / 2) + 'px' }"
     >
+      <Transition name="canvas-team-share-banner">
+        <div v-if="teamWorkflowShareNotice" class="canvas-team-share-banner" role="status">
+          <span>
+            当前团队工作流“{{ currentTeamWorkflow?.name }}”已公开分享：
+            {{ teamWorkflowShareNotice.mode === 'clone' ? '可克隆' : '仅查看' }}
+          </span>
+          <button type="button" @click="openWorkflowShareDialog(getEditorShareWorkflow())">
+            {{ teamWorkflowShareNotice.canManage ? '管理分享' : '查看状态' }}
+          </button>
+        </div>
+      </Transition>
+
       <!-- 画布选择模式提示条 -->
       <Transition name="pick-banner">
         <div v-if="canvasPickMode" class="canvas-pick-banner">
@@ -3731,7 +3853,10 @@ onUnmounted(() => {
       </div>
       
       <!-- 左侧工具栏 -->
-      <CanvasToolbar @open-save-dialog="openSaveDialog" />
+      <CanvasToolbar
+        @open-save-dialog="openSaveDialog"
+        @open-share="openShareWorkflow"
+      />
       
       <!-- 空白状态引导 - 当画布为空或没有标签时显示 -->
       <CanvasEmptyState v-if="canvasStore.isEmpty || canvasStore.workflowTabs.length === 0" />
@@ -4113,6 +4238,15 @@ onUnmounted(() => {
         @saving="handleWorkflowSaving"
         @saved="handleWorkflowSaved"
         @error="handleWorkflowSaveError"
+      />
+
+      <WorkflowShareDialog
+        v-model="showWorkflowShareDialog"
+        :workflow="workflowToShare"
+        :workflow-id="workflowToShare?.id || ''"
+        :space-type="workflowToShare?.space_type || 'personal'"
+        :team-id="workflowToShare?.team_id || ''"
+        @updated="handleWorkflowShareUpdated"
       />
       
       <!-- 工作流面板 -->
@@ -4688,6 +4822,41 @@ onUnmounted(() => {
 }
 
 /* 右上角控制区域 */
+.canvas-team-share-banner {
+  position: fixed;
+  top: 62px;
+  left: 50%;
+  z-index: 8999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: min(680px, calc(100vw - 32px));
+  padding: 8px 12px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(39, 48, 64, 0.92);
+  border: 1px solid rgba(147, 197, 253, 0.28);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  transform: translateX(-50%);
+  backdrop-filter: blur(14px);
+  font-size: 12px;
+}
+
+.canvas-team-share-banner button {
+  flex: 0 0 auto;
+  padding: 4px 9px;
+  color: #dbeafe;
+  background: rgba(59, 130, 246, 0.2);
+  border: 1px solid rgba(147, 197, 253, 0.32);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.canvas-team-share-banner button:hover {
+  background: rgba(59, 130, 246, 0.34);
+}
+
 .canvas-top-right-controls {
   position: fixed;
   top: 16px;

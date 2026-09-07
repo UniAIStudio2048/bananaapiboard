@@ -1,4 +1,5 @@
 <script setup>
+import SeedanceReviewButton from '../SeedanceReviewButton.vue'
 defineOptions({
   inheritAttrs: false
 })
@@ -58,7 +59,9 @@ import { getBatchGridPositions } from '@/utils/canvasBatchLayout'
 import { findBatchSafetyError } from '@/utils/canvasBatchFailures'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
-import { getSeedanceQuickAsset } from '@/utils/seedanceQuickAsset'
+import { getSeedanceQuickAsset, getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
+import { getSeedanceMediaType } from '@/utils/seedanceMedia'
+import { normalizeAssetReviewStatus } from '@/utils/assetReviewStatus'
 import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import {
   applyVideoInputMultiplier,
@@ -3291,6 +3294,7 @@ const referenceImages = computed(() => {
     }
 
     if (sourceNode.type === 'seedance-character' || sourceNode.type === 'bytefor-character') {
+      if (getSeedanceMediaType(sourceNode.data) !== 'image') continue
       const previewUrl = getSeedanceCharacterPreviewUrl(sourceNode.data)
       if (previewUrl) upstreamImages.push(previewUrl)
       continue
@@ -3362,11 +3366,16 @@ function collectNodeMediaUrls(data) {
   add(data?.output?.url)
   if (Array.isArray(data?.output?.urls)) data.output.urls.forEach(add)
   if (Array.isArray(data?.sourceImages)) data.sourceImages.forEach(add)
+  add(data?.sourceVideo)
+  add(data?.audioUrl)
+  add(data?.audioData)
+  add(data?.seedanceQuickAsset?.sourceUrl)
+  add(data?.seedanceQuickAsset?.assetUrl)
 
   return [...new Set(urls)]
 }
 
-function collectSeedanceMediaReplacements(nodeId, { includeCharacters = true, includeQuickAssets = true } = {}) {
+function collectSeedanceMediaReplacements(nodeId, { includeCharacters = true, includeQuickAssets = true, mediaType = 'image' } = {}) {
   const replacements = []
   const upstreamEdges = canvasStore.edges.filter(e => e.target === nodeId)
 
@@ -3375,19 +3384,24 @@ function collectSeedanceMediaReplacements(nodeId, { includeCharacters = true, in
     if (!sourceNode?.data) continue
 
     if (includeCharacters && sourceNode.type === 'seedance-character') {
+      if (getSeedanceMediaType(sourceNode.data) !== mediaType) continue
+      if (sourceNode.data.status && normalizeAssetReviewStatus(sourceNode.data.status) !== 'Active') continue
       const id = sourceNode.data?.assetId
       const replacementUrl = (sourceNode.data?.assetUri && String(sourceNode.data.assetUri).trim()) ||
         (id != null && String(id).trim() !== '' ? `asset://${id}` : '')
       if (!replacementUrl) continue
 
-      const previewUrl = getSeedanceCharacterPreviewUrl(sourceNode.data)
+      const previewUrl = mediaType === 'image' ? getSeedanceCharacterPreviewUrl(sourceNode.data) : sourceNode.data.assetUrl
       replacements.push({
         replacementUrl,
         sourceUrls: [...new Set([...collectNodeMediaUrls(sourceNode.data), previewUrl].filter(Boolean))]
       })
     }
 
-    if (includeQuickAssets && IMAGE_NODE_TYPES.includes(sourceNode.type)) {
+    const allowedTypes = mediaType === 'video' ? VIDEO_NODE_TYPES : mediaType === 'audio' ? AUDIO_NODE_TYPES : IMAGE_NODE_TYPES
+    if (includeQuickAssets && allowedTypes.includes(sourceNode.type)) {
+      if (getSeedanceQuickAssetStatus(sourceNode.data) !== 'approved') continue
+      if (getSeedanceMediaType(sourceNode.data.seedanceQuickAsset) !== mediaType) continue
       const quickAsset = getSeedanceQuickAsset(sourceNode.data)
       if (!quickAsset.active || !quickAsset.assetUri) continue
       replacements.push({
@@ -3421,6 +3435,10 @@ const referenceVideos = computed(() => {
   
   for (const edge of upstreamEdges) {
     const sourceNode = allNodes.find(n => n.id === edge.source)
+    if (sourceNode?.type === 'seedance-character' && getSeedanceMediaType(sourceNode.data) === 'video') {
+      if (sourceNode.data?.assetUrl) upstreamVideos.push(sourceNode.data.assetUrl)
+      continue
+    }
     if (!sourceNode?.data || !VIDEO_NODE_TYPES.includes(sourceNode.type)) {
       continue
     }
@@ -3494,6 +3512,10 @@ const referenceAudios = computed(() => {
   
   for (const edge of upstreamEdges) {
     const sourceNode = allNodes.find(n => n.id === edge.source)
+    if (sourceNode?.type === 'seedance-character' && getSeedanceMediaType(sourceNode.data) === 'audio') {
+      if (sourceNode.data?.assetUrl) upstreamAudios.push(sourceNode.data.assetUrl)
+      continue
+    }
     if (!sourceNode?.data || !AUDIO_NODE_TYPES.includes(sourceNode.type)) continue
     
     if (sourceNode.data.output?.url) {
@@ -3857,6 +3879,17 @@ function getUpstreamData() {
     const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
     if (!sourceNode) continue
 
+    if (sourceNode.type === 'seedance-character' && getSeedanceMediaType(sourceNode.data) !== 'image') {
+      const mediaType = getSeedanceMediaType(sourceNode.data)
+      const mediaUrl = sourceNode.data?.assetUrl
+      if (mediaUrl && mediaType === 'video') videos.push(mediaUrl)
+      if (mediaUrl && mediaType === 'audio') {
+        audios.push(mediaUrl)
+        if (audioDuration <= 0) audioDuration = Number(sourceNode.data?.duration || sourceNode.data?.audioDuration || 0)
+      }
+      continue
+    }
+
     if (sourceNode.type === 'digital-human') {
       const metadata = typeof sourceNode.data?.metadata === 'string'
         ? (() => { try { return JSON.parse(sourceNode.data.metadata) } catch { return {} } })()
@@ -3936,7 +3969,7 @@ function getUpstreamData() {
       }
 
       const quickAsset = getSeedanceQuickAsset(sourceNode.data)
-      if (quickAsset.active) {
+      if (quickAsset.active && getSeedanceQuickAssetStatus(sourceNode.data) === 'approved') {
         quickAssetUris.push(quickAsset.assetUri)
         if (sourceNode.data?.sourceImages?.length > 0) quickAssetSourceUrls.push(...sourceNode.data.sourceImages)
         if (sourceNode.data?.output?.url) quickAssetSourceUrls.push(sourceNode.data.output.url)
@@ -5575,8 +5608,8 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     for (const edge of upstreamEdges) {
       const sourceNode = allNodes.find(n => n.id === edge.source)
       if (!sourceNode?.data) continue
-      if (['audio-input', 'audio'].includes(sourceNode.type)) {
-        const dur = sourceNode.data.audioDuration
+      if (['audio-input', 'audio'].includes(sourceNode.type) || (sourceNode.type === 'seedance-character' && getSeedanceMediaType(sourceNode.data) === 'audio')) {
+        const dur = Number(sourceNode.data.audioDuration || sourceNode.data.duration || sourceNode.data.output?.duration || 0)
         if (dur && dur < 2) {
           await showAlert(`参考音频时长 ${dur.toFixed(1)} 秒，不满足模型限制（单个音频不短于 2 秒）。请更换音频后重试。`, '音频时长不足')
           isGenerating.value = false
@@ -5602,6 +5635,13 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   // Seedance 2.0 模式参数
   if (isSeedance2Model.value) {
     const sd2Mode = selectedSeedance2Mode.value
+    let finalVideos = referenceVideos.value || []
+    let finalAudios = referenceAudios.value || []
+    if (!capturedState.isSeedanceOpenApiPro) {
+      const sourceNodeId = capturedState.nodeId || props.id
+      finalVideos = applyOrderedMediaReplacements(finalVideos, collectSeedanceMediaReplacements(sourceNodeId, { mediaType: 'video' }))
+      finalAudios = applyOrderedMediaReplacements(finalAudios, collectSeedanceMediaReplacements(sourceNodeId, { mediaType: 'audio' }))
+    }
     formData.append('seedance_mode', sd2Mode)
     const configuredSeedanceResolution = currentModelConfig.value?.seedanceConfig?.resolution ||
       currentModelConfig.value?.seedanceOpenConfig?.defaultResolution ||
@@ -5632,11 +5672,11 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       if (finalImages.length > 0) {
         formData.append('reference_images', JSON.stringify(finalImages.slice(0, seedance2Limits.value.maxImages)))
       }
-      const orderedVideos = referenceVideos.value || []
+      const orderedVideos = finalVideos
       if (orderedVideos.length > 0) {
         formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, seedance2Limits.value.maxVideos)))
       }
-      const orderedAudios = referenceAudios.value || []
+      const orderedAudios = finalAudios
       if (orderedAudios.length > 0) {
         formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, seedance2Limits.value.maxAudios)))
       }
@@ -5645,17 +5685,17 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       if (finalImages.length > 0) {
         formData.append('reference_images', JSON.stringify(finalImages))
       }
-      const orderedVideos = referenceVideos.value || []
+      const orderedVideos = finalVideos
       if (orderedVideos.length > 0) {
         formData.append('reference_videos', JSON.stringify(orderedVideos))
       }
-      const orderedAudios = referenceAudios.value || []
+      const orderedAudios = finalAudios
       if (orderedAudios.length > 0) {
         formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, seedance2Limits.value.maxAudios)))
       }
       console.log('[VideoNode] SD2 视频编辑 | 参考图:', finalImages.length, '参考视频:', orderedVideos.length, '音频:', orderedAudios.length)
     } else if (sd2Mode === 'video_extend') {
-      const orderedVideos = referenceVideos.value || []
+      const orderedVideos = finalVideos
       if (orderedVideos.length > 0) {
         formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, seedance2Limits.value.maxVideos)))
       }
@@ -9350,6 +9390,7 @@ function handleToolbarPreview() {
   <div ref="videoNodeRootRef" :class="nodeClass" @contextmenu="handleContextMenu">
     <!-- 视频工具栏（选中且有视频时显示）- 与 ImageNode 保持一致 -->
     <div v-show="showToolbar" class="video-toolbar">
+      <SeedanceReviewButton :node-id="id" :data="data" asset-type="Video" />
       <button 
         class="toolbar-btn" 
         :class="{ 'processing': isHDProcessing }"

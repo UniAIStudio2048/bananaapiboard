@@ -20,6 +20,8 @@ import { getSeedanceCharacterNodeLayout } from '@/utils/seedanceCharacterLayout'
 import { buildVideoQuickActionNode, VIDEO_QUICK_ACTION_TYPES } from '@/utils/canvasVideoQuickActions'
 import { createDefaultDirectorStudioData, DIRECTOR_STUDIO_NODE_TYPE } from '@/utils/directorStudioState'
 import { getCanvasMediaTaskIds } from '@/utils/canvasMediaTaskIds'
+import { resolveSeedanceMediaUrl } from '@/api/canvas/seedance-media-upload'
+import { buildSeedanceCharacterData } from '@/utils/seedanceMedia'
 
 const { t } = useI18n()
 const teamStore = useTeamStore()
@@ -853,7 +855,7 @@ const isSeedanceOpenApiProProvider = computed(() => activeProvider.value === 'se
 const isByteforProvider = computed(() => activeProvider.value === 'bytefor')
 
 async function openSeedanceDialog() {
-  if (!isImageNodeWithOutput.value) return
+  if (!isImageNodeWithOutput.value && !isVideoNodeWithOutput.value && !isAudioNodeWithOutput.value) return
   showSeedanceDialog.value = true
   seedanceGroupsLoading.value = true
   characterName.value = ''
@@ -865,6 +867,11 @@ async function openSeedanceDialog() {
     // 直接从后端获取当前用户拥有的分组（后端已做租户+用户级隔离）
     const result = await listAssetGroups({ pageSize: 100 })
     activeProvider.value = result.activeProvider || ''
+    if (!isImageNodeWithOutput.value && ['seedance_openapi_pro', 'bytefor'].includes(activeProvider.value)) {
+      showToast('当前素材渠道仅支持图片角色，不支持视频或音频', 'warning')
+      closeSeedanceDialog()
+      return
+    }
     seedanceGroups.value = result.groups || []
     if (!isSeedanceOpenApiProProvider.value && seedanceGroups.value.length === 0) {
       showNewGroupInput.value = true
@@ -927,21 +934,23 @@ async function createNewGroupAndAsset() {
     return
   }
   
-  const url = imageUrl.value
+  const url = assetUrlOrContent.value
+  const mediaAssetType = { image: 'Image', video: 'Video', audio: 'Audio' }[assetType.value]
+  const sourceNode = props.node
+  const providerType = activeProvider.value
   if (!url) {
-    showToast('未找到图片', 'error')
+    showToast('未找到素材', 'error')
     return
   }
 
   try {
-    const groupResult = await createAssetGroup({ Name: groupNameVal })
+    const groupResult = await createAssetGroup({ Name: groupNameVal, ProviderType: providerType })
     const groupId = groupResult.group?.Id || groupResult.Id
     if (!groupId) throw new Error('创建分组返回数据异常')
     
-    const providerType = activeProvider.value
     closeSeedanceDialog()
     showToast('已提交 Seedance 角色创建，后台处理中...', 'info')
-    createSeedanceCharacterAsync(groupId, url, charName, providerType)
+    createSeedanceCharacterAsync(groupId, url, charName, providerType, mediaAssetType, sourceNode)
   } catch (error) {
     console.error('[Seedance] 创建分组失败:', error)
     showToast('创建分组失败：' + (error.message || '未知错误'), 'error')
@@ -956,16 +965,18 @@ function selectGroupAndCreate(groupId) {
     return
   }
   
-  const url = imageUrl.value
+  const url = assetUrlOrContent.value
+  const mediaAssetType = { image: 'Image', video: 'Video', audio: 'Audio' }[assetType.value]
+  const sourceNode = props.node
   if (!url) {
-    showToast('未找到图片', 'error')
+    showToast('未找到素材', 'error')
     return
   }
 
   const providerType = activeProvider.value
   closeSeedanceDialog()
   showToast('已提交 Seedance 角色创建，后台处理中...', 'info')
-  createSeedanceCharacterAsync(groupId, url, charName, providerType)
+  createSeedanceCharacterAsync(groupId, url, charName, providerType, mediaAssetType, sourceNode)
 }
 
 function buildByteforFaceCode(name) {
@@ -978,23 +989,19 @@ function buildByteforFaceCode(name) {
   return `face_${Date.now().toString(36).slice(-8)}`
 }
 
-async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType = activeProvider.value) {
-  const sourceNode = props.node
-
+async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType = activeProvider.value, mediaAssetType = 'Image', sourceNode = props.node) {
+  const sourceDuration = sourceNode?.data?.duration || sourceNode?.data?.audioDuration || sourceNode?.data?.output?.duration
   try {
-    let url = rawUrl
-    if (needsUploadToCloud(url)) {
-      url = await uploadToCloudForAsset(url, 'image')
-    }
+    const url = await resolveSeedanceMediaUrl(rawUrl, mediaAssetType)
     const isBytefor = providerType === 'bytefor'
     
     const assetResult = await createVolcAsset({
       GroupId: groupId,
       URL: url,
-      AssetType: 'Image',
+      AssetType: mediaAssetType,
       Name: name,
       FaceCode: isBytefor ? buildByteforFaceCode(name) : undefined,
-      ProviderType: providerType === 'bytefor' ? 'bytefor' : undefined
+      ProviderType: providerType || undefined
     })
     
     const assetId = assetResult.asset?.Id || assetResult.Id
@@ -1017,8 +1024,11 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
           faceCode: isOpenApiPro ? faceCode : undefined,
           groupId,
           status: initialStatus,
-          assetType: 'Image',
-          providerType: isBytefor ? 'bytefor' : (isOpenApiPro ? 'seedance_openapi_pro' : undefined)
+          assetType: mediaAssetType,
+          assetUrl: url,
+          assetUri: savedAssetUrl,
+          duration: sourceDuration,
+          providerType
         },
         spaceType: spaceParams.spaceType,
         teamId: spaceParams.teamId
@@ -1026,6 +1036,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
       canvasAssetId = saved.asset?.id || saved.id
     } catch (e) {
       console.error('[Seedance] 保存到本地资产库失败:', e)
+      throw e
     }
 
     if (isOpenApiPro) {
@@ -1075,8 +1086,11 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
             faceCode: isOpenApiPro ? (finalAsset.FaceCode || finalAsset.faceCode || faceCode) : undefined,
             groupId: finalAsset.GroupId || groupId,
             status: finalAsset.Status || 'Active',
-            assetType: finalAsset.AssetType || 'Image',
-            providerType: isBytefor ? 'bytefor' : (isOpenApiPro ? 'seedance_openapi_pro' : undefined),
+            assetType: finalAsset.AssetType || mediaAssetType,
+            assetUrl: finalAsset.URL || url,
+            assetUri: savedAssetUrl,
+            duration: finalAsset.Duration || sourceDuration,
+            providerType,
             projectName: finalAsset.ProjectName,
             createTime: finalAsset.CreateTime,
             updateTime: finalAsset.UpdateTime
@@ -1084,6 +1098,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
         })
       } catch (e) {
         console.error('[Seedance] 更新本地资产状态失败:', e)
+        throw e
       }
     }
     
@@ -1098,6 +1113,7 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
         type: 'seedance-character',
         position,
         data: {
+          ...buildSeedanceCharacterData({ ...finalAsset, Id: finalAsset.Id || assetId, AssetUri: finalAssetUri, URL: finalAsset.URL || url, AssetType: finalAsset.AssetType || mediaAssetType, Duration: finalAsset.Duration || sourceDuration, providerType }),
           title: finalAsset.Name || name || 'Seedance角色',
           assetId: finalAsset.Id || assetId,
           assetUri: finalAssetUri,
@@ -1106,12 +1122,12 @@ async function createSeedanceCharacterAsync(groupId, rawUrl, name, providerType 
           groupId: finalAsset.GroupId || groupId,
           assetName: finalAsset.Name || name,
           status: 'Active',
-          assetType: finalAsset.AssetType || 'Image',
+          assetType: finalAsset.AssetType || mediaAssetType,
           width: size.width,
           height: size.height,
           output: {
-            type: 'image',
-            url: isOpenApiPro ? `face:${finalFaceCode}` : (finalAsset.URL || url)
+            type: mediaAssetType.toLowerCase(),
+            url: finalAssetUri
           }
         }
       })
@@ -1270,7 +1286,7 @@ function handleMenuClick(event) {
       
       <!-- 创建 Seedance 2.0 角色 -->
       <div 
-        v-if="isImageNodeWithOutput && seedanceFeaturesEnabled"
+        v-if="(isImageNodeWithOutput || isVideoNodeWithOutput || isAudioNodeWithOutput) && seedanceFeaturesEnabled"
         class="canvas-context-menu-item seedance-item"
         @click="openSeedanceDialog"
       >

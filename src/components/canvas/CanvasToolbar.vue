@@ -169,12 +169,17 @@ function openHistory() {
 }
 
 // 打开保存对话框
-const emit = defineEmits(['openSaveDialog'])
+const emit = defineEmits(['openSaveDialog', 'openShare'])
 
 function saveWorkflow() {
   closeToolbarPanels()
   // 统一交给父组件决定是否允许保存与如何提示，避免空画布时点击无响应
   emit('openSaveDialog')
+}
+
+function shareWorkflow() {
+  closeToolbarPanels()
+  emit('openShare')
 }
 
 // 计算总积分
@@ -313,6 +318,20 @@ async function handleUserUpdate() {
       @click="saveWorkflow"
     >
       <Save :size="18" aria-hidden="true" />
+    </button>
+
+    <!-- 分享工作流 -->
+    <button
+      class="canvas-toolbar-btn icon-btn"
+      title="分享工作流"
+      @click="shareWorkflow"
+    >
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+        <circle cx="18" cy="5" r="3" />
+        <circle cx="6" cy="12" r="3" />
+        <circle cx="18" cy="19" r="3" />
+        <path d="m8.7 10.7 6.6-3.9M8.7 13.3l6.6 3.9" />
+      </svg>
     </button>
     
     <div class="canvas-toolbar-divider"></div>

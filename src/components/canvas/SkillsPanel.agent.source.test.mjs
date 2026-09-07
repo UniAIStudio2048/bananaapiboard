@@ -5,6 +5,13 @@ import { readFile } from 'node:fs/promises'
 const panel = await readFile(new URL('./SkillsPanel.vue', import.meta.url), 'utf8')
 const assistant = await readFile(new URL('./AIAssistantPanel.vue', import.meta.url), 'utf8')
 
+test('installation panel uses tenant Skill branding instead of fixed Banana names', () => {
+  assert.match(panel, /\{\{ skillName \}\}/)
+  assert.match(panel, /packageData\.value\?\.skillName/)
+  assert.match(panel, /packageData\.value\?\.skillSlug/)
+  assert.doesNotMatch(panel, /Banana Canvas Skills|banana-canvas-skill/)
+})
+
 test('Canvas Skills panel exposes only external-agent and manual installation', () => {
   assert.match(panel, /<h2 id="skills-panel-title">安装到 AI Agent<\/h2>/)
   assert.match(panel, /通过 AI Agent 安装/)

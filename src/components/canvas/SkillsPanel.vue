@@ -3,7 +3,7 @@
     <section class="skills-panel canvas-panel" role="dialog" aria-modal="true" aria-labelledby="skills-panel-title">
       <header class="skills-panel-header">
         <div>
-          <p class="skills-panel-kicker">Banana Canvas Skills</p>
+          <p class="skills-panel-kicker">{{ skillName }}</p>
           <h2 id="skills-panel-title">安装到 AI Agent</h2>
         </div>
         <button class="skills-close-btn" type="button" title="关闭" @click="emit('close')">
@@ -96,6 +96,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { X } from '@lucide/vue'
 import { createSkillKey, getSkillKeys, getSkillPackage, resetSkillKey } from '@/api/skills'
+import tenantConfig from '@/config/tenant'
 
 const emit = defineEmits(['close'])
 
@@ -120,10 +121,11 @@ const visibleKey = computed(() => {
 const skillMarkdown = computed(() => packageData.value?.markdown || '')
 const markdownPreview = computed(() => skillMarkdown.value || '正在加载 SKILL.md...')
 const packagePayload = computed(() => packageData.value?.package || null)
+const skillName = computed(() => packageData.value?.skillName || `${tenantConfig.brand?.name || 'Banana AI'} skill`)
 const agentInstallPrompt = computed(() => (
   packageData.value?.agent_install_prompt ||
   packagePayload.value?.files?.['AGENT_INSTALL_PROMPT.txt'] ||
-  `请帮我安装 Banana Canvas Skills：${baseUrl.value}。API Key 加载后会自动填入。`
+  `请帮我安装 ${skillName.value}：${baseUrl.value}。API Key 加载后会自动填入。`
 ))
 
 function normalizeSkillBaseUrl(value) {
@@ -227,7 +229,7 @@ function downloadPackage() {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = 'banana-canvas-skill.package.json'
+  link.download = `${packageData.value?.skillSlug || 'canvas-skill'}.package.json`
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -279,7 +281,7 @@ onMounted(loadSkills)
   margin: 0 0 4px;
   color: rgba(255, 255, 255, 0.52);
   font-size: 12px;
-  text-transform: uppercase;
+  overflow-wrap: anywhere;
 }
 
 .skills-panel h2 {

@@ -8,6 +8,7 @@ const TextGeneration = () => import('@/views/TextGeneration.vue')
 const AdminBoard = () => import('@/views/AdminBoard.vue')
 const Canvas = () => import('@/views/Canvas.vue')
 const WorkflowList = () => import('@/views/WorkflowList.vue')
+const WorkflowShare = () => import('@/views/WorkflowShare.vue')
 const Landing3D = () => import('@/views/Landing3D.vue')
 const GroupCredits = () => import('@/views/GroupCredits.vue')
 const Docs = () => import('@/views/Docs.vue')
@@ -48,6 +49,12 @@ const router = createRouter({
       name: 'workflows',
       component: WorkflowList,
       meta: { title: '工作流列表', requiresAuth: true }
+    },
+    {
+      path: '/share/workflows/:token',
+      name: 'workflowShare',
+      component: WorkflowShare,
+      meta: { title: '工作流分享', requiresAuth: false, noindex: true, referrer: 'no-referrer' }
     },
     {
       path: '/group',
@@ -214,5 +221,4 @@ router.beforeEach(async (to, from, next) => {
 })
 
 export default router
-
 

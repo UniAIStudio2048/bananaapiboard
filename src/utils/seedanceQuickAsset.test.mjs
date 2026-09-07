@@ -69,3 +69,11 @@ test('failed quick asset is exposed as failed instead of remaining in review', (
   assert.equal(getSeedanceQuickAsset(data, now).failed, true)
   assert.equal(getSeedanceQuickAssetStatus(data, now), 'failed')
 })
+
+test('changing source media invalidates its saved review without deleting the asset', () => {
+  for (const assetType of ['Image', 'Video', 'Audio']) {
+    const data = { output: { url: 'new-media' }, seedanceQuickAsset: { assetId: 'old', assetUri: 'asset://old', assetType, sourceUrl: 'old-media', status: 'Active' } }
+    assert.equal(getSeedanceQuickAssetStatus(data), 'none')
+    assert.equal(getVideoReferenceImageUrlForTarget({ data }, 'new-media', true), 'new-media')
+  }
+})

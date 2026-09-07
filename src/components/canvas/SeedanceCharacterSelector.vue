@@ -7,6 +7,8 @@
 import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { listAssetGroups } from '@/api/canvas/volcengine-assets'
 import { getAssets } from '@/api/canvas/assets'
+import { getSeedanceMediaType, mapLocalSeedanceAsset } from '@/utils/seedanceMedia'
+import { normalizeAssetReviewStatus } from '@/utils/assetReviewStatus'
 const props = defineProps({
   visible: Boolean,
   currentAssetId: String
@@ -21,10 +23,13 @@ const assets = ref([])
 const assetsLoading = ref(false)
 const selectedAsset = ref(null)
 const allLocalAssets = ref([])
+const selectedMediaType = ref('all')
+const mediaTabs = [{ type: 'all', label: '全部' }, { type: 'image', label: '图片' }, { type: 'video', label: '视频' }, { type: 'audio', label: '音频' }]
+const availableAssets = computed(() => assets.value.filter(asset => normalizeAssetReviewStatus(asset.Status) === 'Active'))
 
 // 只显示 Active 资产
 const activeAssets = computed(() =>
-  assets.value.filter(a => a.Status === 'Active')
+  availableAssets.value.filter(asset => selectedMediaType.value === 'all' || getSeedanceMediaType(asset) === selectedMediaType.value)
 )
 
 async function loadGroups() {
@@ -55,19 +60,7 @@ async function loadAllLocalAssets() {
       spaceType: 'all',
       pageSize: 500
     })
-    allLocalAssets.value = (result.assets || []).map(a => {
-      const meta = typeof a.metadata === 'string' ? JSON.parse(a.metadata || '{}') : (a.metadata || {})
-      return {
-        Id: meta.assetId || a.id,
-        Name: a.name,
-        URL: a.thumbnail_url || a.url,
-        Status: meta.status || 'Active',
-        GroupId: meta.groupId,
-        AssetType: meta.assetType || 'Image',
-        _canvasId: a.id,
-        _userId: a.user_id
-      }
-    })
+    allLocalAssets.value = (result.assets || []).map(mapLocalSeedanceAsset)
   } catch (err) {
     console.error('[CharacterSelector] 加载本地资产失败:', err)
     allLocalAssets.value = []
@@ -76,7 +69,7 @@ async function loadAllLocalAssets() {
 
 function updateGroupCounts() {
   for (const group of groups.value) {
-    group._assetCount = allLocalAssets.value.filter(a => a.GroupId === group.Id).length
+    group._assetCount = allLocalAssets.value.filter(asset => asset.GroupId === group.Id && normalizeAssetReviewStatus(asset.Status) === 'Active').length
   }
 }
 
@@ -94,6 +87,7 @@ async function loadAssets(groupId) {
 }
 
 function selectGroup(groupId) {
+  handleAssetMouseLeave()
   selectedGroupId.value = groupId
   selectedAsset.value = null
   loadAssets(groupId)
@@ -111,13 +105,27 @@ function confirm() {
 }
 
 function close() {
+  handleAssetMouseLeave()
   emit('update:visible', false)
+}
+
+function selectMediaType(type) {
+  selectedMediaType.value = type
+  selectedAsset.value = null
+  handleAssetMouseLeave()
+}
+
+function getMediaCount(type) {
+  return availableAssets.value.filter(asset => type === 'all' || getSeedanceMediaType(asset) === type).length
 }
 
 watch(() => props.visible, (val) => {
   if (val) {
     selectedAsset.value = null
+    selectedMediaType.value = 'all'
     loadGroups()
+  } else {
+    handleAssetMouseLeave()
   }
 })
 
@@ -135,6 +143,7 @@ const hoverStyle = ref({})
 let hoverTimer = null
 
 function handleAssetMouseEnter(asset, event) {
+  if (getSeedanceMediaType(asset) !== 'image') return
   if (!asset.URL) return
   clearTimeout(hoverTimer)
   hoverTimer = setTimeout(() => {
@@ -214,14 +223,19 @@ function positionPreview(event) {
 
           <!-- 右侧：资产网格 -->
           <div class="asset-area">
+            <div class="media-tabs" role="tablist" aria-label="素材类型">
+              <button v-for="tab in mediaTabs" :key="tab.type" role="tab" :aria-selected="selectedMediaType === tab.type" :class="{ active: selectedMediaType === tab.type }" @click="selectMediaType(tab.type)">
+                {{ tab.label }} {{ getMediaCount(tab.type) }}
+              </button>
+            </div>
             <div v-if="assetsLoading" class="area-loading">
               <div class="spinner-sm"></div>
               <span>加载中...</span>
             </div>
             <div v-else-if="activeAssets.length === 0" class="area-empty">
-              <span>该组暂无可用角色</span>
+              <span>该分类暂无可用角色</span>
             </div>
-            <div v-else class="asset-grid">
+            <div v-else :key="`${selectedGroupId}:${selectedMediaType}`" class="asset-grid">
               <div
                 v-for="asset in activeAssets"
                 :key="asset.Id"
@@ -236,7 +250,12 @@ function positionPreview(event) {
                 @mouseleave="handleAssetMouseLeave"
               >
                 <div class="item-thumb">
-                  <img v-if="asset.URL" :src="asset.URL" :alt="asset.Name" loading="lazy" />
+                  <video v-if="asset.URL && getSeedanceMediaType(asset) === 'video'" :src="asset.URL" :poster="asset.ThumbnailURL !== asset.URL ? asset.ThumbnailURL : undefined" preload="metadata" controls playsinline @click.stop="selectAssetItem(asset)" />
+                  <div v-else-if="getSeedanceMediaType(asset) === 'audio'" class="audio-thumb">
+                    <span aria-hidden="true">♫</span>
+                    <audio v-if="asset.URL" :src="asset.URL" controls preload="none" @click.stop="selectAssetItem(asset)" />
+                  </div>
+                  <img v-else-if="asset.URL" :src="asset.URL" :alt="asset.Name" loading="lazy" />
                   <div v-else class="item-placeholder">👥</div>
                 </div>
                 <span class="item-name">{{ asset.Name || '未命名' }}</span>
@@ -273,6 +292,14 @@ function positionPreview(event) {
 </template>
 
 <style scoped>
+.media-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.media-tabs button { padding: 5px 8px; color: var(--canvas-text-secondary); border: 1px solid var(--canvas-border-default); background: transparent; border-radius: 6px; cursor: pointer; }
+.media-tabs button.active { color: var(--canvas-text-primary); background: var(--canvas-bg-hover); border-color: var(--canvas-accent-primary); }
+.media-tabs button:focus-visible { outline: 2px solid var(--canvas-accent-primary); }
+.item-thumb video { width: 100%; height: 100%; object-fit: contain; }
+.audio-thumb { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; gap: 12px; }
+.audio-thumb > span { font-size: 36px; color: var(--canvas-text-secondary); }
+.audio-thumb audio { width: 100%; height: 32px; }
 /* ========== 遮罩层 ========== */
 .selector-overlay {
   position: fixed;

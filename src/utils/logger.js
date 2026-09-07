@@ -40,7 +40,7 @@ let enabled = true
 export function initLogger(options = {}) {
   enabled = options.enabled !== false
   
-  if (!enabled) return
+  if (!enabled || isWorkflowSharePath()) return
   
   // 启动定时刷新
   startFlushTimer()
@@ -78,6 +78,7 @@ export function initLogger(options = {}) {
  */
 function createLog(level, type, action, details = {}) {
   if (!enabled) return
+  if (isWorkflowSharePath()) return
   
   const token = localStorage.getItem('token')
   const tenantHeaders = getTenantHeaders()
@@ -91,7 +92,7 @@ function createLog(level, type, action, details = {}) {
     source: 'frontend',  // 标记来源为主前端
     tenant_id: tenantHeaders['X-Tenant-ID'] || null,
     user_token: token ? token.substring(0, 20) + '...' : null,
-    url: window.location.href,
+    url: window.location.pathname,
     user_agent: navigator.userAgent,
     ...details
   }
@@ -118,6 +119,10 @@ function createLog(level, type, action, details = {}) {
  * 刷新日志缓冲区 - 上报到后端
  */
 async function flushLogs(sync = false) {
+  if (isWorkflowSharePath()) {
+    logBuffer = []
+    return
+  }
   if (logBuffer.length === 0) return
   
   const logsToSend = [...logBuffer]
@@ -172,6 +177,8 @@ function startFlushTimer() {
  * 记录API请求
  */
 export function logApiRequest(method, url, body = null, headers = {}) {
+  if (shouldSkipWorkflowLogging(url)) return
+
   return createLog(LOG_LEVEL.INFO, LOG_TYPE.API_REQUEST, `${method} ${url}`, {
     method,
     request_url: url,
@@ -184,6 +191,8 @@ export function logApiRequest(method, url, body = null, headers = {}) {
  * 记录API响应
  */
 export function logApiResponse(method, url, status, duration, responseBody = null) {
+  if (shouldSkipWorkflowLogging(url)) return
+
   const level = status >= 500 ? LOG_LEVEL.ERROR :
                 status >= 400 ? LOG_LEVEL.WARN : LOG_LEVEL.INFO
   
@@ -200,6 +209,8 @@ export function logApiResponse(method, url, status, duration, responseBody = nul
  * 记录API错误
  */
 export function logApiError(method, url, error, requestBody = null) {
+  if (shouldSkipWorkflowLogging(url)) return
+
   return createLog(LOG_LEVEL.ERROR, LOG_TYPE.API_ERROR, `${method} ${url} FAILED`, {
     method,
     request_url: url,
@@ -303,11 +314,40 @@ function sanitizeHeaders(headers) {
   return sanitized
 }
 
+function isWorkflowSharePath() {
+  return typeof window !== 'undefined' && /^\/share\/workflows(?:\/|$)/.test(window.location.pathname)
+}
+
+function getRequestPathname(url) {
+  const rawUrl = typeof url === 'string' ? url : url?.url || url?.href
+  if (!rawUrl) return ''
+
+  try {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost'
+    return new URL(rawUrl, origin).pathname
+  } catch {
+    return String(rawUrl).split(/[?#]/, 1)[0]
+  }
+}
+
+function isWorkflowShareRequest(url) {
+  const pathname = getRequestPathname(url)
+  return /^\/api\/workflow-shares(?:\/|$)/.test(pathname)
+    || /^\/api\/canvas\/workflows\/[^/]+\/share(?:\/|$)/.test(pathname)
+    || /^\/api\/canvas\/workflows\/[^/]+\/share-status(?:\/|$)/.test(pathname)
+}
+
+function shouldSkipWorkflowLogging(url) {
+  return isWorkflowSharePath() || isWorkflowShareRequest(url)
+}
+
 /**
  * 创建带日志的 fetch 包装器
  */
 export function createLoggedFetch(originalFetch = window.fetch) {
   return async function loggedFetch(url, options = {}) {
+    if (shouldSkipWorkflowLogging(url)) return originalFetch(url, options)
+
     const method = options.method || 'GET'
     const startTime = Date.now()
     
@@ -361,4 +401,3 @@ export default {
   LOG_LEVEL,
   LOG_TYPE
 }
-

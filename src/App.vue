@@ -79,6 +79,8 @@ async function loadSiteConfig() {
 }
 
 onMounted(async () => { 
+  if (route.name === 'workflowShare') return
+
   me.value = await getMe()
   await Promise.all([loadInviteCode(), loadSiteConfig()])
   
@@ -224,7 +226,7 @@ const isCommunityLandingPage = computed(() => route.path === '/' && import.meta.
 const isCommunityPage = computed(() => route.path.startsWith('/community') || isCommunityLandingPage.value)
 const isHomeNoticeVisible = computed(() => route.path === '/' || route.path === '/community')
 const hasIcpFooterLinks = computed(() => Boolean(icpConfig.value.icp_number || icpConfig.value.icp_license_number || icpConfig.value.network_culture_license || icpConfig.value.broadcast_license))
-const isStandaloneSurface = computed(() => route.path === '/canvas' || route.path === '/workflows' || route.path === '/docs' || route.name === 'communityWorkflow')
+const isStandaloneSurface = computed(() => route.path === '/canvas' || route.path === '/workflows' || route.path === '/docs' || route.name === 'communityWorkflow' || route.name === 'workflowShare')
 const isGlobalNavVisible = computed(() => route.path !== '/' && !isStandaloneSurface.value && !route.path.startsWith('/community'))
 const isIcpFooterVisible = computed(() => {
   const isThreeDLandingPage = route.path === '/' && !isCommunityLandingPage.value

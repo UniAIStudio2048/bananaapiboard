@@ -18,8 +18,10 @@ import {
 } from '@/stores/canvas/workflowAutoSave'
 import { useTeamStore } from '@/stores/team'
 import { getProjectList, updateProject, createProject, moveWorkflowToProject } from '@/api/canvas/project'
+import { getWorkflowShare, getWorkflowShareStatus } from '@/api/canvas/workflowShare'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import MoveResourceDialog from './MoveResourceDialog.vue'
+import WorkflowShareDialog from './WorkflowShareDialog.vue'
 import {
   setCanvasSpaceFilterFromGlobal,
   syncGlobalSpaceFromFilter,
@@ -116,6 +118,9 @@ const workflowRenameSaving = ref(false)
 const deleteProjectConfirm = ref({ visible: false, group: null, inputName: '' })
 const moveResourceDialog = ref(false)
 const moveResourceTarget = ref({ type: 'workflow', operation: 'move', id: '', name: '', workflowCount: 0, spaceType: 'personal', teamId: '', projectId: '', sourceRole: '', isDefault: false })
+const showWorkflowShareDialog = ref(false)
+const workflowToShare = ref(null)
+const workflowShareModes = ref({})
 
 function getProjectKey(group) {
   return group.id || '__uncategorized__'
@@ -215,6 +220,41 @@ function cancelDeleteProject() {
 
 function getTeamRole(teamId) {
   return teamStore.myTeams.value.find(team => String(team.id) === String(teamId))?.my_role || ''
+}
+
+function getWorkflowShareMode(workflow) {
+  return workflowShareModes.value[String(workflow?.id)] || workflow?.share_mode || (workflow?.is_shared ? 'view' : 'disabled')
+}
+
+function isWorkflowShared(workflow) {
+  return getWorkflowShareMode(workflow) !== 'disabled'
+}
+
+async function loadWorkflowShareModes(items, loadToken) {
+  const pending = (items || []).filter(workflow => workflow?.id)
+  const nextModes = {}
+  const concurrency = 6
+
+  for (let index = 0; index < pending.length; index += concurrency) {
+    if (loadToken !== workflowListLoadToken) return
+    const batch = pending.slice(index, index + concurrency)
+    const results = await Promise.all(batch.map(async workflow => {
+      try {
+        const result = workflow.space_type === 'team'
+          ? await getWorkflowShareStatus(workflow.id)
+          : await getWorkflowShare(workflow.id)
+        const data = result?.data || result
+        return [String(workflow.id), data?.mode || 'disabled']
+      } catch {
+        return [String(workflow.id), workflow.is_shared ? 'view' : 'disabled']
+      }
+    }))
+    results.forEach(([id, mode]) => { nextModes[id] = mode })
+  }
+
+  if (loadToken === workflowListLoadToken) {
+    workflowShareModes.value = nextModes
+  }
 }
 
 function openMoveResource(resource, type, operation = 'move') {
@@ -369,6 +409,7 @@ async function loadRemainingWorkflowPages({ token, firstPageList, totalPages, pa
       workflows.value = mergedWorkflows
     }
     workflowsCached.value = true
+    loadWorkflowShareModes(mergedWorkflows, token)
     console.log('[WorkflowPanel] 后台补齐工作流:', workflows.value.length, '个')
   } catch (error) {
     console.error('[WorkflowPanel] 后台补齐工作流失败:', error)
@@ -414,6 +455,7 @@ async function loadWorkflows(forceRefresh = false) {
     const total = Number(wfResult.pagination?.total ?? firstPageList.length)
     const totalPages = Math.ceil(total / pageSize)
     workflows.value = firstPageList
+    loadWorkflowShareModes(firstPageList, loadToken)
     workflowsTotal.value = total
     workflowsCached.value = true
     lastWorkflowsLoad.value = now
@@ -423,13 +465,13 @@ async function loadWorkflows(forceRefresh = false) {
       token: loadToken,
       spaceParams
     })
-    loadRemainingWorkflowPages({
+      loadRemainingWorkflowPages({
       token: loadToken,
       firstPageList,
       totalPages,
       pageSize,
       spaceParams
-    })
+      })
 
     if (workflows.value.length === 0 && historyWorkflows.value.length === 0 && activeTab.value === 'my') {
       activeTab.value = 'templates'
@@ -732,6 +774,11 @@ function handleWorkflowContextAction(action) {
     return
   }
 
+  if (action === 'share' && type === 'saved') {
+    openWorkflowShare(workflow)
+    return
+  }
+
   if (type !== 'saved') return
   if (action === 'move') {
     openMoveResource(workflow, 'workflow')
@@ -740,6 +787,19 @@ function handleWorkflowContextAction(action) {
   } else if (action === 'copy-uid' && workflow.workflow_uid) {
     copyWorkflowUid(workflow.workflow_uid)
   }
+}
+
+function openWorkflowShare(workflow) {
+  if (!workflow?.id) return
+  workflowToShare.value = workflow
+  showWorkflowShareDialog.value = true
+}
+
+function handleWorkflowShareUpdated(update) {
+  const workflow = workflows.value.find(item => String(item.id) === String(update?.workflowId))
+  if (!workflow) return
+  workflow.is_shared = update.mode !== 'disabled'
+  workflow.share_mode = update.mode
 }
 
 function handleRenameWorkflow(workflow) {
@@ -1495,6 +1555,7 @@ defineExpose({
                               <span>{{ workflow.node_count }} {{ t('canvas.nodeLabel') }}</span>
                               <span>·</span>
                               <span class="workflow-time">保存 {{ formatBeijingSaveTime(workflow.updated_at) }}</span>
+                              <span v-if="isWorkflowShared(workflow)" class="workflow-share-badge">已分享</span>
                               <template v-if="teamStore.isInTeamSpace.value && workflow.last_updated_by_username">
                                 <span>·</span>
                                 <span class="item-author">
@@ -1509,6 +1570,13 @@ defineExpose({
                           </div>
 
                           <div class="item-actions">
+                            <button
+                              class="action-btn share-btn"
+                              title="分享工作流"
+                              @click.stop="openWorkflowShare(workflow)"
+                            >
+                              ↗
+                            </button>
                             <button
                               class="action-btn delete-btn"
                               @click.stop="confirmDelete($event, workflow, false)"
@@ -1712,6 +1780,12 @@ defineExpose({
           @click.stop
         >
           <template v-if="contextMenu.type === 'saved'">
+            <button class="context-menu-item" @click="handleWorkflowContextAction('share')">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-3.9M8.7 13.3l6.6 3.9"/>
+              </svg>
+              <span>分享工作流</span>
+            </button>
             <button class="context-menu-item" @click="handleWorkflowContextAction('rename')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
                 <path d="M12 20h9"/>
@@ -1819,6 +1893,14 @@ defineExpose({
           :is-default-project="moveResourceTarget.isDefault"
           :operation="moveResourceTarget.operation"
           @moved="handleResourceMoved"
+        />
+        <WorkflowShareDialog
+          v-model="showWorkflowShareDialog"
+          :workflow="workflowToShare"
+          :workflow-id="workflowToShare?.id || ''"
+          :space-type="workflowToShare?.space_type || 'personal'"
+          :team-id="workflowToShare?.team_id || ''"
+          @updated="handleWorkflowShareUpdated"
         />
       </div>
     </div>
@@ -2909,6 +2991,13 @@ defineExpose({
   .workflow-panel {
     max-width: 100%;
   }
+}
+.workflow-share-badge {
+  padding: 1px 5px;
+  color: #d4d4d4;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  font-size: 10px;
 }
 </style>
 

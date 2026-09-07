@@ -58,6 +58,7 @@ import {
   getTouchPoint
 } from '@/utils/canvasTouchInteractions'
 import { buildPromptInputScaleStyle } from '@/utils/canvasPromptInputScale'
+import { getSeedanceMediaType, mapLocalSeedanceAsset, buildSeedanceCharacterData } from '@/utils/seedanceMedia'
 import {
   getOrganizationNodeSize,
   getOrganizationGroupChildIds,
@@ -3576,38 +3577,15 @@ async function handleFileDrop(event) {
           case 'seedance-character':
           case 'bytefor-character':
             {
-              const meta = asset.metadata || {}
-              const seedanceAssetId = meta.assetId || asset.id
-              // assetUrl 用于 <img> 直接展示，按优先级回退到任意可用 URL；
-              // 若全部缺失，SeedanceCharacterNode 挂载时会按 assetId 自动解析。
-              const seedanceDisplayUrl =
-                asset.thumbnail_url ||
-                meta.assetUrl ||
-                meta.thumbnailUrl ||
-                (asset.url && !asset.url.startsWith('asset://') ? asset.url : '') ||
-                ''
+              const characterData = buildSeedanceCharacterData(mapLocalSeedanceAsset(asset))
               canvasStore.addNode({
                 id: nodeId,
                 type: asset.type === 'bytefor-character' ? 'bytefor-character' : 'seedance-character',
                 position: { x: canvasX, y: canvasY },
                 data: {
+                  ...characterData,
                   title: asset.name || (asset.type === 'bytefor-character' ? 'Bytefor角色' : 'Seedance角色'),
-                  assetId: seedanceAssetId,
-                  assetUri: meta.assetUri || asset.url || `asset://${seedanceAssetId}`,
-                  assetUrl: seedanceDisplayUrl,
-                  groupId: meta.groupId,
-                  assetName: asset.name,
-                  status: meta.status || 'Active',
-                  assetType: meta.assetType || 'Image',
                   width: 220,
-                  thumbnailUrl: seedanceDisplayUrl,
-                  thumbnail_url: seedanceDisplayUrl,
-                  output: {
-                    type: 'image',
-                    url: meta.assetUri || asset.url || `asset://${seedanceAssetId}`,
-                    urls: [meta.assetUri || asset.url || `asset://${seedanceAssetId}`],
-                    thumbnailUrl: seedanceDisplayUrl
-                  },
                   fromAsset: true,
                   canvasAssetId: asset.id
                 }
@@ -3658,11 +3636,13 @@ async function handleFileDrop(event) {
             assetName: data.assetName,
             status: data.status || 'Active',
             assetType: data.assetType,
+            providerType: data.providerType,
+            duration: data.duration,
             width: 220,
             thumbnailUrl: data.thumbnailUrl || data.assetUrl,
             thumbnail_url: data.thumbnailUrl || data.assetUrl,
             output: {
-              type: 'image',
+              type: getSeedanceMediaType(data),
               url: data.assetUri || `asset://${data.assetId}`,
               urls: [data.assetUri || `asset://${data.assetId}`],
               thumbnailUrl: data.thumbnailUrl || data.assetUrl

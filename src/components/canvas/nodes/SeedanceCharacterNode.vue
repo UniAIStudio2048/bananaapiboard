@@ -9,6 +9,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import SeedanceCharacterSelector from '../SeedanceCharacterSelector.vue'
 import { smartDownload } from '@/api/client'
 import { getAsset as getVolcengineAsset } from '@/api/canvas/volcengine-assets'
+import { buildSeedanceCharacterData, getSeedanceMediaType, getSeedanceMediaFileInfo } from '@/utils/seedanceMedia'
 
 const LONG_PRESS_DURATION = 300
 
@@ -38,22 +39,26 @@ async function resolveAssetUrl({ force = false } = {}) {
 
   isResolvingAsset.value = true
   try {
-    const result = await getVolcengineAsset(assetId, { groupId: props.data?.groupId })
+    const result = await getVolcengineAsset(assetId, { groupId: props.data?.groupId, providerType: props.data?.providerType })
+    if (props.data?.assetId !== assetId) return
     const asset = result?.asset || result
     const freshUrl = asset?.URL || asset?.url
     if (!freshUrl) return
 
     const existingOutput = props.data?.output || {}
+    const mediaType = getSeedanceMediaType({ assetType: asset?.AssetType || props.data?.assetType })
+    const thumbnailUrl = mediaType === 'image' ? freshUrl : (asset.ThumbnailURL || props.data?.thumbnailUrl || '')
     canvasStore.updateNodeData(props.id, {
       assetUrl: freshUrl,
-      thumbnailUrl: freshUrl,
-      thumbnail_url: freshUrl,
+      thumbnailUrl,
+      thumbnail_url: thumbnailUrl,
       assetName: asset?.Name || props.data?.assetName,
       status: asset?.Status || props.data?.status,
       assetType: asset?.AssetType || props.data?.assetType,
       output: {
         ...existingOutput,
-        thumbnailUrl: freshUrl
+        type: mediaType,
+        thumbnailUrl
       }
     })
   } catch (err) {
@@ -157,6 +162,7 @@ let isLongPress = false
 let pressStartPos = { x: 0, y: 0 }
 
 const hasCharacter = computed(() => !!props.data?.assetId)
+const mediaType = computed(() => getSeedanceMediaType(props.data))
 const statusClass = computed(() => {
   const s = props.data?.status
   if (s === 'Active') return 'status-active'
@@ -184,7 +190,8 @@ const imageStyle = computed(() => ({
 function getCharacterDownloadFilename() {
   const rawName = props.data?.assetName || props.id || 'seedance-character'
   const safeName = String(rawName).trim().replace(/[\\/:*?"<>|]+/g, '_') || 'seedance-character'
-  return `${safeName}.png`
+  const { extension } = getSeedanceMediaFileInfo('', mediaType.value, props.data?.assetUrl || '')
+  return `${safeName}.${extension}`
 }
 
 function openSelector() {
@@ -192,26 +199,8 @@ function openSelector() {
 }
 
 function handleSelect(asset) {
-  canvasStore.updateNodeData(props.id, {
-    assetId: asset.Id,
-    assetUri: `asset://${asset.Id}`,
-    assetUrl: asset.URL,
-    groupId: asset.GroupId,
-    assetName: asset.Name,
-    status: asset.Status,
-    assetType: asset.AssetType,
-    thumbnailUrl: asset.URL,
-    thumbnail_url: asset.URL,
-    projectName: asset.ProjectName,
-    createTime: asset.CreateTime,
-    updateTime: asset.UpdateTime,
-    output: {
-      type: 'image',
-      url: `asset://${asset.Id}`,
-      urls: [`asset://${asset.Id}`],
-      thumbnailUrl: asset.URL
-    }
-  })
+  showPreviewModal.value = false
+  canvasStore.updateNodeData(props.id, buildSeedanceCharacterData(asset))
 }
 
 async function handleDownloadCharacter() {
@@ -219,7 +208,7 @@ async function handleDownloadCharacter() {
   try {
     await smartDownload(props.data.assetUrl, getCharacterDownloadFilename())
   } catch (error) {
-    console.error('[SeedanceCharacterNode] 下载角色图片失败:', error)
+    console.error('[SeedanceCharacterNode] 下载角色素材失败:', error)
   }
 }
 
@@ -445,6 +434,11 @@ onUnmounted(() => {
               <div class="failed-text">角色图片加载失败</div>
               <div class="failed-hint">点击重新选择角色</div>
             </div>
+            <video v-else-if="data.assetUrl && mediaType === 'video'" :key="data.assetId" :src="data.assetUrl" :poster="data.thumbnailUrl !== data.assetUrl ? data.thumbnailUrl : undefined" class="character-media nodrag" controls playsinline preload="metadata" @error="handleImageError" />
+            <div v-else-if="mediaType === 'audio'" class="character-audio nodrag">
+              <span aria-hidden="true">♫</span>
+              <audio v-if="data.assetUrl" :key="data.assetId" :src="data.assetUrl" controls preload="none" @error="handleImageError" />
+            </div>
             <img
               v-else-if="data.assetUrl"
               :src="data.assetUrl"
@@ -523,7 +517,9 @@ onUnmounted(() => {
               <path d="M18 6 6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </button>
-          <img
+          <video v-if="mediaType === 'video'" :src="data.assetUrl" controls playsinline autoplay class="character-preview-large" />
+          <audio v-else-if="mediaType === 'audio'" :src="data.assetUrl" controls autoplay class="character-preview-audio" />
+          <img v-else
             :src="data.assetUrl"
             :alt="data.assetName || '角色预览'"
             class="character-preview-large"
@@ -536,6 +532,11 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.character-media { width: 100%; max-height: 100%; object-fit: contain; }
+.character-audio { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 18px 8px; width: 100%; }
+.character-audio > span { font-size: 42px; color: var(--canvas-text-secondary); }
+.character-audio audio { width: 100%; }
+.character-preview-audio { width: min(560px, 90vw); }
 .seedance-character-node {
   position: relative;
   contain: layout style;

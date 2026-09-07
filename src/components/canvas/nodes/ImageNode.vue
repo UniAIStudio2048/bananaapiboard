@@ -20,14 +20,14 @@ import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadIm
 import { getHistory } from '@/api/canvas/history'
 import { getAsset } from '@/api/canvas/assets'
 import { extractVideoFrame, uploadCanvasMedia } from '@/api/canvas/workflow'
-import { createQuickSeedanceCharacterAsset, listAssetGroups, pollAssetStatus } from '@/api/canvas/volcengine-assets'
+import SeedanceReviewButton from '../SeedanceReviewButton.vue'
 import { registerTask, removeCompletedTask, getTasksByNodeId, ensureTaskPolling } from '@/stores/canvas/backgroundTaskManager'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { formatPoints } from '@/utils/format'
 import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
 import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
-import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders, isSeedanceFeaturesEnabled } from '@/config/tenant'
+import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
 import {
   formatVideoGenerationElapsed,
   getVideoGenerationElapsedSeconds
@@ -1920,143 +1920,9 @@ const canvasPreviewImages = computed(() => {
     .filter(item => Boolean(item.url))
 })
 
-const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
-const isQuickSeedanceSubmitting = ref(false)
 const seedanceQuickAssetStatus = computed(() => getSeedanceQuickAssetStatus(props.data))
 const showSeedanceQuickBadge = computed(() => seedanceQuickAssetStatus.value === 'approved' || seedanceQuickAssetStatus.value === 'expired')
 const seedanceQuickBadgeText = computed(() => seedanceQuickAssetStatus.value === 'expired' ? '已失效' : '已过审')
-const seedanceQuickReviewButtonText = computed(() => {
-  if (seedanceQuickAssetStatus.value === 'approved') return '已过审'
-  if (seedanceQuickAssetStatus.value === 'processing') return '审核中'
-  if (seedanceQuickAssetStatus.value === 'failed') return '审核失败，重试'
-  return '过审'
-})
-const seedanceQuickReviewButtonTitle = computed(() => {
-  if (seedanceQuickAssetStatus.value === 'approved') return '该图片已过审，可直接连接 Seedance 2.0 视频节点使用'
-  if (seedanceQuickAssetStatus.value === 'processing') return 'Seedance 角色审核中'
-  if (seedanceQuickAssetStatus.value === 'failed') {
-    return `Seedance 角色审核失败：${props.data?.seedanceQuickAsset?.error || '请检查素材渠道后重试'}`
-  }
-  return '提交 Seedance 角色过审'
-})
-
-async function resolveQuickSeedanceImageUrl(rawUrl) {
-  const url = getOriginalImageUrl(rawUrl)
-  if (!url) throw new Error('未找到图片')
-  if (url.startsWith('blob:') || url.startsWith('data:')) {
-    const response = await fetch(url)
-    if (!response.ok) throw new Error(`读取本地图片失败: ${response.status}`)
-    const blob = await response.blob()
-    const file = new File([blob], `seedance_quick_${Date.now()}.png`, { type: blob.type || 'image/png' })
-    const uploaded = await uploadImages([file])
-    if (!uploaded?.[0]) throw new Error('上传图片失败')
-    return uploaded[0]
-  }
-  return url
-}
-
-function updateSeedanceQuickAsset(partial) {
-  canvasStore.updateNodeData(props.id, {
-    seedanceQuickAsset: {
-      ...(props.data.seedanceQuickAsset || {}),
-      ...partial
-    }
-  })
-}
-
-async function getQuickSeedanceProviderType() {
-  const result = await listAssetGroups({ pageSize: 1 })
-  return result.activeProvider || ''
-}
-
-async function handleQuickSeedanceReview() {
-  if (isQuickSeedanceSubmitting.value) return
-  if (!currentImageUrl.value) {
-    showToast('未找到图片', 'warning')
-    return
-  }
-  if (seedanceQuickAssetStatus.value === 'approved') {
-    showToast('该图片已过审，可直接连接 Seedance 2.0 视频节点使用', 'info')
-    return
-  }
-
-  isQuickSeedanceSubmitting.value = true
-  try {
-    const url = await resolveQuickSeedanceImageUrl(currentImageUrl.value)
-    const spaceParams = teamStore.getSpaceParams('current')
-    const providerType = await getQuickSeedanceProviderType()
-    const result = await createQuickSeedanceCharacterAsset({
-      URL: url,
-      Name: `Seedance快捷角色_${props.id || Date.now()}`,
-      sourceNodeId: props.id || null,
-      providerType,
-      spaceType: spaceParams.spaceType,
-      teamId: spaceParams.teamId
-    })
-
-    const assetId = result.quickAsset?.assetId || result.asset?.Id || result.Id
-    if (!assetId) throw new Error('快捷资产接口返回数据异常')
-    const quickProviderType = result.quickAsset?.providerType
-    const isQuickOpenApiPro = quickProviderType === 'seedance_openapi_pro' || quickProviderType === 'bytefor'
-    const initialFaceCode = result.quickAsset?.faceCode || result.asset?.FaceCode || result.asset?.faceCode || assetId
-
-    updateSeedanceQuickAsset({
-      assetId,
-      assetUri: result.quickAsset?.assetUri || (isQuickOpenApiPro ? `face:${initialFaceCode}` : `asset://${assetId}`),
-      groupId: result.quickAsset?.groupId || result.asset?.GroupId,
-      status: result.quickAsset?.status || 'Processing',
-      providerType: quickProviderType,
-      faceCode: isQuickOpenApiPro ? initialFaceCode : undefined,
-      assetUrl: result.asset?.URL || url,
-      reviewedAt: null,
-      expiresAt: result.quickAsset?.expiresAt,
-      ttlDays: result.quickAsset?.ttlDays || 15
-    })
-    showToast('已提交 Seedance 角色过审，审核通过后会标记“已过审”', 'info')
-
-    const { promise } = pollAssetStatus(assetId, {
-      interval: 5000,
-      timeout: 2700000,
-      providerType,
-      groupId: result.quickAsset?.groupId || result.asset?.GroupId,
-      onStatusChange(status, asset) {
-        updateSeedanceQuickAsset({
-          status,
-          error: status === 'Failed' ? (asset.FailMessage || '角色审核未通过，请更换图片后重试') : null
-        })
-      }
-    })
-    promise.then((finalAsset) => {
-      const finalFaceCode = finalAsset.FaceCode || finalAsset.faceCode || initialFaceCode
-      updateSeedanceQuickAsset({
-        assetId: finalAsset.Id || assetId,
-        assetUri: isQuickOpenApiPro ? `face:${finalFaceCode}` : `asset://${finalAsset.Id || assetId}`,
-        groupId: finalAsset.GroupId || result.quickAsset?.groupId || result.asset?.GroupId,
-        status: finalAsset.Status || 'Active',
-        providerType: quickProviderType,
-        faceCode: isQuickOpenApiPro ? finalFaceCode : undefined,
-        assetUrl: finalAsset.URL || url,
-        reviewedAt: new Date().toISOString(),
-        expiresAt: result.quickAsset?.expiresAt,
-        error: null
-      })
-      if ((finalAsset.Status || 'Active') === 'Active') {
-        showToast('Seedance 角色已过审', 'success')
-      }
-    }).catch((error) => {
-      console.error('[ImageNode] Seedance 快捷过审轮询失败:', error)
-      const isTimeout = error.code === 'TIMEOUT' || /超时|timeout/i.test(error.message || '')
-      const message = isTimeout ? '审核状态查询超时，请检查网络或素材渠道后重试' : (error.message || '未知错误')
-      updateSeedanceQuickAsset({ status: 'Failed', error: message })
-      showToast(`Seedance 角色过审失败：${message}`, 'error')
-    })
-  } catch (error) {
-    console.error('[ImageNode] Seedance 快捷过审失败:', error)
-    showToast(`提交 Seedance 过审失败：${error.message || '未知错误'}`, 'error')
-  } finally {
-    isQuickSeedanceSubmitting.value = false
-  }
-}
 
 // 全景 VR 预览状态
 const showPanoramaPreview = ref(false)
@@ -7980,25 +7846,7 @@ async function handleDrop(event) {
         </svg>
         <span>姿态</span>
       </button>
-      <button
-        v-if="seedanceFeaturesEnabled"
-        class="toolbar-btn seedance-review-btn"
-        :class="{ 'is-processing': isQuickSeedanceSubmitting || seedanceQuickAssetStatus === 'processing', active: seedanceQuickAssetStatus === 'approved', 'is-failed': seedanceQuickAssetStatus === 'failed' }"
-        :disabled="isQuickSeedanceSubmitting || seedanceQuickAssetStatus === 'processing'"
-        :title="seedanceQuickReviewButtonTitle"
-        @mousedown.stop.prevent="handleQuickSeedanceReview"
-        @click.stop.prevent
-      >
-        <svg v-if="isQuickSeedanceSubmitting || seedanceQuickAssetStatus === 'processing'" class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/>
-          <path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
-        </svg>
-        <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M12 3l7 4v5c0 4.2-2.8 7.5-7 9-4.2-1.5-7-4.8-7-9V7l7-4z" stroke-linecap="round" stroke-linejoin="round"/>
-          <path d="M9 12l2 2 4-5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-        <span>{{ seedanceQuickReviewButtonText }}</span>
-      </button>
+      <SeedanceReviewButton :node-id="id" :data="data" asset-type="Image" />
       <div class="toolbar-divider"></div>
       <button class="toolbar-btn icon-only" title="标注" @mousedown.stop.prevent="handleToolbarAnnotate" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">

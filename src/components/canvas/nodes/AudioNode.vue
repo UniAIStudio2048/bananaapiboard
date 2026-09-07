@@ -1,4 +1,5 @@
 <script setup>
+import SeedanceReviewButton from '../SeedanceReviewButton.vue'
 defineOptions({
   inheritAttrs: false
 })
@@ -2136,6 +2137,7 @@ function handleSpeedEditorClickOutside(event) {
   >
     <!-- 音频工具栏（选中且有音频时显示）- 与 ImageNode 保持一致 -->
     <div v-show="showToolbar && !props.data?.readonly" class="audio-toolbar">
+      <SeedanceReviewButton :node-id="id" :data="data" asset-type="Audio" />
       <button class="toolbar-btn" title="截取音频" @mousedown.stop.prevent="openAudioEditor" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 7h3a3 3 0 013 3v4a3 3 0 003 3h7" stroke-linecap="round"/>
