@@ -1018,7 +1018,12 @@ async function openShareWorkflow() {
   }
 
   const saved = await quickSaveWorkflow()
-  if (saved) openWorkflowShareDialog(currentTab)
+  if (saved) openWorkflowShareDialog({
+    id: currentTab.workflowId,
+    name: currentTab.name,
+    space_type: currentTab.workflowSpaceType,
+    team_id: currentTab.workflowTeamId
+  })
 }
 
 // 快速保存工作流（Ctrl+S 调用）

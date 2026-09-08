@@ -40,7 +40,7 @@ const workflowKey = computed(() => String(resolvedWorkflowId.value || ''))
 const workflowTitle = computed(() => props.workflow?.name || '工作流')
 const currentMode = computed(() => normalizeWorkflowShareMode(shareState.value?.mode))
 const shareUrl = computed(() => buildWorkflowShareUrl(
-  window.location.origin,
+  shareState.value?.baseUrl || window.location.origin,
   shareState.value?.token
 ))
 const access = computed(() => getWorkflowShareAccess({
@@ -174,7 +174,7 @@ async function resetShareLink() {
 }
 
 async function copyShareLink(token = shareState.value?.token) {
-  const url = buildWorkflowShareUrl(window.location.origin, token)
+  const url = buildWorkflowShareUrl(shareState.value?.baseUrl || window.location.origin, token)
   if (!url) return false
 
   try {
@@ -224,8 +224,12 @@ watch(
               请先保存工作流，保存成功后再创建公开链接。
             </div>
 
+            <button v-else-if="!shareState" class="workflow-share-cancel" type="button" @click="loadStatus">
+              重新加载
+            </button>
+
             <template v-else>
-              <div v-if="!canManage" class="workflow-share-readonly">
+              <div v-if="resolvedSpaceType === 'team' && !canManage" class="workflow-share-readonly">
                 <strong>团队分享状态只读</strong>
                 <span>你可以查看当前状态；只有团队 owner/admin 可以修改分享范围。</span>
               </div>
