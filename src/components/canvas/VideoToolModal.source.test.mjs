@@ -27,7 +27,7 @@ for (const helperName of ['normalizeTimelineClips', 'getTimelineTotalSeconds']) 
   assert.match(modal, new RegExp(helperName), `VideoToolModal should use ${helperName}`)
 }
 
-for (const label of ['剪辑', '字幕擦除', '选区擦除', '全域智能擦除', '高级水印/字幕擦除', '选区水印/字幕擦除', '全域水印/字幕擦除', '合成视频', '开始擦除']) {
+for (const label of ['剪辑', '字幕擦除', '选区擦除', '全域智能擦除', '高级水印/字幕擦除', '选区水印/字幕擦除', '全域水印/字幕擦除', '导出到画布', '导出到本地', '开始擦除']) {
   assert.match(modal, new RegExp(label), `VideoToolModal should render ${label}`)
 }
 

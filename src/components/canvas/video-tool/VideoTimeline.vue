@@ -64,6 +64,7 @@
             class="video-timeline__clip"
             :class="{ active: index === selectedIndex }"
             :style="getClipStyle(clip, index)"
+            :title="`${clip.name || '视频片段'} · ${formatClipDuration(clip)} · ${(clip.playbackRate || 1).toFixed(2)}x`"
             draggable="true"
             @click="$emit('select', index)"
             @dragstart="handleDragStart(index)"
@@ -72,6 +73,7 @@
           >
             <span class="video-timeline__clip-duration">{{ formatClipDuration(clip) }}</span>
             <span class="video-timeline__clip-name">{{ clip.name || `片段 ${index + 1}` }}</span>
+            <span v-if="clip.playbackRate && clip.playbackRate !== 1" class="video-timeline__clip-rate">{{ clip.playbackRate.toFixed(2) }}x</span>
             <button
               type="button"
               class="video-timeline__clip-remove"
@@ -100,6 +102,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onBeforeUnmount } from 'vue'
+import { getClipDuration } from '@/utils/videoToolTimeline'
 
 const props = defineProps({
   clips: {
@@ -255,7 +258,7 @@ function formatTickLabel(seconds) {
 }
 
 function formatClipDuration(clip) {
-  const dur = Math.max(0, (clip.endTime || 0) - (clip.startTime || 0))
+  const dur = getClipDuration(clip)
   return `${dur.toFixed(1)}s`
 }
 
@@ -264,12 +267,12 @@ function getClipStyle(clip, index) {
   let offset = 0
   for (let i = 0; i < index; i++) {
     const c = props.clips[i]
-    offset += Math.max(0, (c.endTime || 0) - (c.startTime || 0))
+    offset += getClipDuration(c)
   }
-  const duration = Math.max(0, (clip.endTime || 0) - (clip.startTime || 0))
+  const duration = getClipDuration(clip)
   return {
     left: `${offset * pps}px`,
-    width: `${Math.max(60, duration * pps)}px`
+    width: `${duration * pps}px`
   }
 }
 
@@ -534,13 +537,14 @@ onBeforeUnmount(() => {
 
 /* 片段条 */
 .video-timeline__clip {
+  box-sizing: border-box;
   position: absolute;
   top: 4px;
   bottom: 4px;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 10px;
+  padding: 0;
   background: linear-gradient(135deg, #0d9488, #14b8a6);
   border-radius: 4px;
   cursor: grab;
@@ -575,6 +579,12 @@ onBeforeUnmount(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   flex: 1;
+}
+
+.video-timeline__clip-rate {
+  font-size: 10px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .video-timeline__clip-remove {

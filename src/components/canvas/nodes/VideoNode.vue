@@ -22,7 +22,7 @@ import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
-import { saveWorkflow, uploadCanvasMedia } from '@/api/canvas/workflow'
+import { saveWorkflow, uploadCanvasMedia, getWorkflowNodesBatch, patchWorkflowNode, postWorkflowOps } from '@/api/canvas/workflow'
 import { uploadCanvasDocument } from '@/api/canvas/direct-upload'
 import { createDigitalHumanLipsync, createDigitalHumanVideo, getDigitalHumanChannels } from '@/api/canvas/digital-humans'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
@@ -8480,6 +8480,78 @@ watch(showToolbar, (visible) => {
 
 const showCreateCharacterToolbarAction = computed(() => isSoraCharacterLibraryEnabled())
 
+let videoEditContext = null
+
+async function loadVideoEditDraft() {
+  const tab = canvasStore.getCurrentTab?.()
+  if (!tab?.id) throw new Error('当前画布不可用')
+  const saved = tab.workflowId ? { workflowId: tab.workflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
+  if (canvasStore.getCurrentTab?.()?.id !== tab.id) throw new Error('画布已切换，请重新打开剪辑')
+  let result = await getWorkflowNodesBatch(saved.workflowId, [props.id])
+  if (!result.nodes?.some(entry => entry.id === props.id)) {
+    await ensureCanvasWorkflowForVideoSubmission(props.id)
+    result = await getWorkflowNodesBatch(saved.workflowId, [props.id])
+  }
+  const node = result.nodes?.find(entry => entry.id === props.id)
+  if (!node) throw new Error('源视频节点不存在，请重新加载画布')
+  if (canvasStore.getCurrentTab?.()?.id !== tab.id) throw new Error('画布已切换，请重新打开剪辑')
+  videoEditContext = { workflowId: saved.workflowId, tabId: tab.id, version: node.version, sourceUrl: videoToolInitialSource.value?.url }
+  canvasStore.updateNodeData(props.id, { videoEditDraft: node.data?.videoEditDraft || null, _baseVersion: node.version }, { silent: true })
+  return node.data?.videoEditDraft || null
+}
+
+async function saveVideoEditDraft(draft) {
+  const context = videoEditContext
+  if (!context || canvasStore.getCurrentTab?.()?.id !== context.tabId) throw new Error('画布已切换，请重新打开剪辑')
+  if (draft.sourceUrl !== context.sourceUrl || videoToolInitialSource.value?.url !== context.sourceUrl) throw new Error('源视频已变化，请重新打开剪辑')
+  const result = await patchWorkflowNode(context.workflowId, props.id, { data: { videoEditDraft: draft } }, context.version)
+  context.version = result.version
+  if (canvasStore.getCurrentTab?.()?.id === context.tabId) {
+    canvasStore.updateNodeData(props.id, { videoEditDraft: draft, _baseVersion: result.version }, { silent: true })
+  }
+}
+
+async function exportEditedClipToCanvas(payload) {
+  const context = videoEditContext
+  const currentNode = canvasStore.nodes.find(entry => entry.id === props.id)
+  if (!context || !currentNode || canvasStore.getCurrentTab?.()?.id !== context.tabId) throw new Error('当前画布不可用')
+  const nodeId = `video_tool_${globalThis.crypto.randomUUID()}`
+  const node = {
+    id: nodeId,
+    type: 'video',
+    position: { x: currentNode.position.x + (Number(currentNode.data?.width) || 420) + 120, y: currentNode.position.y },
+    data: {
+      label: '视频剪辑', title: '视频剪辑', status: 'processing', progress: '片段导出中...',
+      processingStartedAt: Date.now(), sourceNodeId: props.id, videoToolMode: 'edit',
+      output: { type: 'video', url: '' }
+    }
+  }
+  const edge = { id: `edge_${props.id}_${nodeId}`, source: props.id, target: nodeId, sourceHandle: 'output', targetHandle: 'input' }
+  await postWorkflowOps(context.workflowId, [
+    { op: 'add', target: 'node', payload: node },
+    { op: 'add', target: 'edge', payload: edge }
+  ])
+  if (canvasStore.getCurrentTab?.()?.id === context.tabId) {
+    canvasStore.addNode(node)
+    canvasStore.addEdge(edge)
+  }
+  try {
+    const result = await exportVideoTimeline({ clips: payload.clips })
+    const url = result?.url || result?.video_url || result?.videoUrl || result?.resultUrl || result?.output?.url
+    if (!url) throw new Error('导出未返回视频地址')
+    const data = { status: 'success', progress: null, output: { type: 'video', url }, duration: payload.clips[0].duration }
+    await patchWorkflowNode(context.workflowId, nodeId, { data })
+    if (canvasStore.getCurrentTab?.()?.id === context.tabId) canvasStore.updateNodeData(nodeId, data)
+    window.dispatchEvent(new CustomEvent('canvas-history-invalidate', { detail: { type: 'video', phase: 'tool-completed', sourceNodeId: props.id, nodeId } }))
+    return url
+  } catch (error) {
+    const data = { status: 'failed', progress: null, error: error.message || '片段导出失败' }
+    await patchWorkflowNode(context.workflowId, nodeId, { data }).catch(() => {})
+    if (canvasStore.getCurrentTab?.()?.id === context.tabId) canvasStore.updateNodeData(nodeId, data)
+    throw error
+  }
+}
+
 function openVideoToolModal(mode) {
   if (!hasOutput.value) return
   if (mode === VIDEO_TOOL_MODAL_MODES.subtitle.initialMode && !subtitleEraseToolbarEnabled.value) return
@@ -9773,6 +9845,9 @@ function handleToolbarPreview() {
       :initial-mode="videoToolInitialMode"
       :initial-source="videoToolInitialSource"
       :canvas-videos="canvasVideoToolSources"
+      :load-draft="loadVideoEditDraft"
+      :save-draft="saveVideoEditDraft"
+      :export-clip-to-canvas="exportEditedClipToCanvas"
       @completed="handleVideoToolCompleted"
       @export-started="handleVideoToolExportStarted"
       @close="showVideoToolModal = false"

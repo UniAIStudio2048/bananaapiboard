@@ -13,13 +13,17 @@
         v-if="clip?.url"
         ref="videoRef"
         class="video-preview__video"
+        crossorigin="anonymous"
         :src="clip.url"
-        controls
+        :controls="showControls"
         playsinline
         @timeupdate="onTimeUpdate"
-        @play="emit('play')"
+        @seeked="onTimeUpdate"
+        @loadedmetadata="onMetadataLoaded"
+        @play="onPlay"
         @pause="onPause"
-        @ended="emit('ended')"
+        @ended="onNativeEnded"
+        @error="emit('preview-error', '视频预览加载失败，请检查素材地址及跨域访问权限')"
       />
       <div v-else class="video-preview__empty">选择视频片段</div>
       <div
@@ -37,10 +41,11 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { normalizePreviewRectToVideo } from '@/utils/videoToolRect'
 
 const props = defineProps({
+  showControls: { type: Boolean, default: true },
   clip: {
     type: Object,
     default: null
@@ -51,7 +56,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:detectRect', 'timeupdate', 'play', 'pause', 'ended'])
+const emit = defineEmits(['update:detectRect', 'timeupdate', 'play', 'pause', 'ended', 'preview-error', 'metadata'])
 
 const stageRef = ref(null)
 const videoRef = ref(null)
@@ -319,17 +324,107 @@ function handlePointerCancel(event) {
   clearDragState()
 }
 
-watch(() => [props.mode, props.clip?.url], clearSelectionState)
+watch([() => props.mode, () => props.clip?.url], clearSelectionState)
 
 const endedByBoundary = ref(false)
+let audioContext = null
+let gainNode = null
+let audioSource = null
+let audioElement = null
+let animationFrame = null
+let pendingSeek = null
+
+async function applyClipSettings() {
+  const video = videoRef.value
+  if (!video) return
+  if (audioElement && audioElement !== video) {
+    audioSource?.disconnect()
+    gainNode?.disconnect()
+    audioContext?.close().catch(() => {})
+    audioContext = null
+    audioSource = null
+    gainNode = null
+    audioElement = null
+  }
+  video.playbackRate = props.clip?.playbackRate || 1
+  video.preservesPitch = true
+  const volumeDb = props.clip?.volumeDb || 0
+  if (!gainNode && volumeDb === 0) return
+  try {
+    if (!audioContext) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext
+      if (!AudioContextClass) throw new Error('浏览器不支持音频处理')
+      audioContext = new AudioContextClass()
+      audioSource = audioContext.createMediaElementSource(video)
+      audioElement = video
+      gainNode = audioContext.createGain()
+      audioSource.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+    }
+    gainNode.gain.value = Math.pow(10, volumeDb / 20)
+    video.volume = 1
+    if (!video.paused) await audioContext.resume()
+  } catch (error) {
+    video.muted = true
+    emit('preview-error', `音量预览不可用，已静音：${error.message}。导出仍会应用音量设置。`)
+  }
+}
+
+function onMetadataLoaded() {
+  emit('metadata', { clipId: props.clip?.id, duration: videoRef.value?.duration })
+  seekTo(pendingSeek ?? props.clip?.startTime ?? 0)
+  applyClipSettings()
+}
+
+function updatePlaybackFrame() {
+  onTimeUpdate()
+  if (videoRef.value && !videoRef.value.paused) animationFrame = requestAnimationFrame(updatePlaybackFrame)
+}
+
+function onPlay() {
+  endedByBoundary.value = false
+  const video = videoRef.value
+  if (video && (video.currentTime < props.clip.startTime || video.currentTime >= props.clip.endTime)) seekTo(props.clip.startTime)
+  applyClipSettings()
+  cancelAnimationFrame(animationFrame)
+  animationFrame = requestAnimationFrame(updatePlaybackFrame)
+  emit('play')
+}
+
+function onNativeEnded() {
+  if (endedByBoundary.value) return
+  endedByBoundary.value = true
+  emit('ended')
+}
+
+watch([() => props.clip?.id, () => props.clip?.url], () => {
+  endedByBoundary.value = false
+  seekTo(props.clip?.startTime || 0)
+  applyClipSettings()
+}, { flush: 'post' })
+watch([() => props.clip?.playbackRate, () => props.clip?.volumeDb], applyClipSettings, { flush: 'post' })
+
+onBeforeUnmount(() => {
+  cancelAnimationFrame(animationFrame)
+  videoRef.value?.pause()
+  audioSource?.disconnect()
+  gainNode?.disconnect()
+  audioContext?.close().catch(() => {})
+})
 
 function onTimeUpdate() {
   const el = videoRef.value
   if (!el) return
+  const startTime = props.clip?.startTime || 0
   const endTime = props.clip?.endTime
+  if (el.currentTime < startTime || (el.paused && endTime != null && el.currentTime > endTime)) {
+    seekTo(el.currentTime)
+    return
+  }
   if (endTime != null && el.currentTime >= endTime && !el.paused) {
-    el.pause()
     endedByBoundary.value = true
+    el.pause()
+    emit('timeupdate', endTime)
     emit('ended')
     return
   }
@@ -337,8 +432,8 @@ function onTimeUpdate() {
 }
 
 function onPause() {
+  cancelAnimationFrame(animationFrame)
   if (endedByBoundary.value) {
-    endedByBoundary.value = false
     return
   }
   emit('pause')
@@ -346,10 +441,15 @@ function onPause() {
 
 function seekTo(time) {
   const el = videoRef.value
-  if (el) el.currentTime = time
+  const clamped = Math.max(props.clip?.startTime || 0, Math.min(props.clip?.endTime ?? time, time))
+  pendingSeek = clamped
+  if (el?.readyState >= 1) {
+    el.currentTime = clamped
+    pendingSeek = null
+  }
 }
 
-defineExpose({ seekTo })
+defineExpose({ seekTo, pause: () => videoRef.value?.pause() })
 </script>
 
 <style scoped>
