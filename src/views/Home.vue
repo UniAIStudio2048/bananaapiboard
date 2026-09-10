@@ -10,6 +10,7 @@ import { labelToPromptText, indexToLabel } from '@/utils/imageAnnotation'
 import { getTenantHeaders, getModelDisplayName, getAvailableImageModels, getApiUrl, getMediaUrl } from '@/config/tenant'
 import { shouldHistoryDrawerOpenByDefault } from '@/utils/deviceDetection'
 import { formatPoints } from '@/utils/format'
+import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 import { getTotalUserPoints } from '@/utils/points'
 import { getImagePresets, incrementPresetUseCount, normalizePresetPointsCost } from '@/api/canvas/image-presets'
 import { resolveGenerationAspectRatio } from '@/utils/aspectRatio'
@@ -47,6 +48,7 @@ const showImageModal = ref(false)
 const currentImage = ref(null)
 const currentImageIndex = ref(0)
 const me = ref(null)
+const { formatMoney } = useCurrencyDisplay()
 const pollingInterval = ref(null)
 const loadMoreSentinel = ref(null)
 let historyObserver = null
@@ -1939,7 +1941,7 @@ async function submitVoucher() {
     // 获取兑换券的面值余额（不是用户总余额）
     const voucherBalance = result.balance || 0
     
-    console.log('[Home/submitVoucher] 兑换成功，兑换券面值余额:', voucherBalance, '分 (¥' + (voucherBalance/100).toFixed(2) + ')')
+    console.log('[Home/submitVoucher] 兑换成功，兑换券面值余额:', voucherBalance, '分 (' + formatMoney(voucherBalance) + ')')
     
     // 如果兑换券有余额，尝试自动购买套餐
     if (voucherBalance > 0) {
@@ -1959,15 +1961,15 @@ async function submitVoucher() {
         } else {
           detailText = `\n• 赠送积分：${formatPoints(autoPurchaseResult.points)}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
         }
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额\n\n🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}\n\n💰 剩余余额：¥${(autoPurchaseResult.remainingBalance / 100).toFixed(2)}`
+        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(result.balance)} 余额\n\n🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}\n\n💰 剩余余额：${formatMoney(autoPurchaseResult.remainingBalance)}`
         // 刷新用户信息
         me.value = await getMe()
       } else if (autoPurchaseResult.reason === 'no_package') {
         // 没有可购买的套餐
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额\n\n💡 ${autoPurchaseResult.message}`
+        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(result.balance)} 余额\n\n💡 ${autoPurchaseResult.message}`
       } else if (autoPurchaseResult.reason === 'purchase_failed') {
         // 购买失败
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额\n\n⚠️ 自动购买套餐失败：${autoPurchaseResult.message}\n请手动前往套餐页面购买`
+        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(result.balance)} 余额\n\n⚠️ 自动购买套餐失败：${autoPurchaseResult.message}\n请手动前往套餐页面购买`
       } else {
         // 其他情况（只兑换了积分没有余额等）
         voucherSuccess.value = result.message || `成功兑换 ${formatPoints(result.points)} 积分！`
@@ -2000,7 +2002,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
       return { success: false, reason: 'no_token', message: '未登录' }
     }
     
-    console.log('[Home/tryAutoPurchasePackage] 兑换券面值:', voucherBalance, '分 (¥' + (voucherBalance/100).toFixed(2) + ')')
+    console.log('[Home/tryAutoPurchasePackage] 兑换券面值:', voucherBalance, '分 (' + formatMoney(voucherBalance) + ')')
     
     // 获取套餐列表
     console.log('[Home/tryAutoPurchasePackage] 获取套餐列表...')
@@ -2087,9 +2089,9 @@ async function tryAutoPurchasePackage(voucherBalance) {
       if (allDowngrade) {
         hint = `您当前是${activePackage.package_name}，兑换券面值只能购买更低级别套餐，不支持降级`
       } else if (minSameOrHigherPrice > 0 && voucherBalance < minSameOrHigherPrice) {
-        hint = `续费或升级套餐最低需要 ¥${(minSameOrHigherPrice/100).toFixed(2)}，兑换券面值 ¥${(voucherBalance/100).toFixed(2)} 不足`
+        hint = `续费或升级套餐最低需要 ${formatMoney(minSameOrHigherPrice)}，兑换券面值 ${formatMoney(voucherBalance)} 不足`
       } else if (minPrice > 0 && voucherBalance < minPrice) {
-        hint = `最便宜的套餐需要 ¥${(minPrice/100).toFixed(2)}，兑换券面值 ¥${(voucherBalance/100).toFixed(2)}`
+        hint = `最便宜的套餐需要 ${formatMoney(minPrice)}，兑换券面值 ${formatMoney(voucherBalance)}`
       }
       return { success: false, reason: 'no_package', message: hint }
     }
@@ -3545,7 +3547,7 @@ onUnmounted(() => {
           </div>
           <div class="flex items-center justify-between">
             <span class="text-sm text-slate-600 dark:text-slate-400">当前余额</span>
-            <span class="font-semibold text-green-600 dark:text-green-400">¥{{ ((me.balance || 0) / 100).toFixed(2) }}</span>
+            <span class="font-semibold text-green-600 dark:text-green-400">{{ formatMoney(me.balance || 0) }}</span>
           </div>
           <div class="pt-2 border-t border-slate-200 dark:border-dark-500 flex items-center justify-between">
             <span class="text-xs text-slate-500 dark:text-slate-500">积分总计</span>

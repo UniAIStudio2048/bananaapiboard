@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { formatPoints, sumPoints } from './format.js'
+import { formatPoints, sumPoints, formatMoney, formatMoneyAmount } from './format.js'
 
 test('formatPoints keeps up to two decimals and rounds the third decimal', () => {
   assert.equal(formatPoints(1.5), '1.5')
@@ -36,4 +36,24 @@ test('sumPoints 全部为空时返回 0', () => {
   assert.equal(sumPoints(), '0')
   assert.equal(sumPoints(undefined, undefined, undefined), '0')
   assert.equal(sumPoints('abc', NaN, null), '0')
+})
+
+test('formatMoney 分转当前货币并带符号（默认 CNY）', () => {
+  assert.equal(formatMoney(1000), '¥10.00')
+  assert.equal(formatMoney(1000, 'CNY'), '¥10.00')
+  assert.equal(formatMoney(1000, 'USD'), '$10.00')
+  assert.equal(formatMoney(0, 'USD'), '$0.00')
+  assert.equal(formatMoney(-550, 'USD'), '$-5.50')
+})
+
+test('formatMoney 对非法输入回退为 0.00', () => {
+  assert.equal(formatMoney(null, 'USD'), '$0.00')
+  assert.equal(formatMoney(undefined), '¥0.00')
+  assert.equal(formatMoney('abc', 'USD'), '$0.00')
+})
+
+test('formatMoneyAmount 返回不带符号的金额字符串', () => {
+  assert.equal(formatMoneyAmount(1000), '10.00')
+  assert.equal(formatMoneyAmount(1000, 'USD'), '10.00')
+  assert.equal(formatMoneyAmount(null), '0.00')
 })

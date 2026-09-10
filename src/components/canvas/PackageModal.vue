@@ -2,9 +2,11 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
+import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 import { useI18n } from '@/i18n'
 
 const { t } = useI18n()
+const { formatMoney, symbol: currencySymbol, unitLabel: currencyUnitLabel } = useCurrencyDisplay()
 
 const props = defineProps({
   visible: {
@@ -62,7 +64,7 @@ const convertAmount = ref('')
 const convertLoading = ref(false)
 const convertError = ref('')
 const convertSuccess = ref('')
-const convertExchangeRate = ref(10) // 1元 = 10积分
+const convertExchangeRate = ref(10) // 1货币单位 = 10积分
 
 // 永久积分转让状态
 const showTransferPointsModal = ref(false)
@@ -87,16 +89,16 @@ const showTransferConfirm = ref(false)
 const toastInfo = ref({ show: false, type: 'success', title: '', message: '' })
 let toastTimer = null
 
-// 快捷充值金额（单位：分）
-const quickAmounts = [
-  { label: '¥3', value: 300 },
-  { label: '¥20', value: 2000 },
-  { label: '¥50', value: 5000 },
-  { label: '¥100', value: 10000 },
-  { label: '¥200', value: 20000 },
-  { label: '¥500', value: 50000 },
-  { label: '¥888', value: 88800 }
-]
+// 快捷充值金额（单位：分，label 按租户货币符号动态生成）
+const quickAmounts = computed(() => [
+  { value: 300 },
+  { value: 2000 },
+  { value: 5000 },
+  { value: 10000 },
+  { value: 20000 },
+  { value: 50000 },
+  { value: 88800 }
+].map(item => ({ ...item, label: `${currencySymbol.value}${item.value / 100}` })))
 
 // 默认支付方式
 const defaultPaymentMethods = [
@@ -346,11 +348,11 @@ async function confirmRecharge() {
   const amountInCents = getRechargeAmountInCents()
   
   if (amountInCents < rechargeLimits.value.minAmount * 100) {
-    rechargeError.value = `最低充值金额为${rechargeLimits.value.minAmount}元`
+    rechargeError.value = `最低充值金额为${rechargeLimits.value.minAmount}${currencyUnitLabel.value}`
     return
   }
   if (amountInCents > rechargeLimits.value.maxAmount * 100) {
-    rechargeError.value = `单笔最高充值${rechargeLimits.value.maxAmount}元`
+    rechargeError.value = `单笔最高充值${rechargeLimits.value.maxAmount}${currencyUnitLabel.value}`
     return
   }
   
@@ -615,12 +617,12 @@ async function submitConvert() {
     return
   }
   if (yuan < 1) {
-    convertError.value = '最低划转金额为1元'
+    convertError.value = `最低划转金额为1${currencyUnitLabel.value}`
     return
   }
   const amountInCents = Math.floor(yuan * 100)
   if ((user.value?.balance || 0) < amountInCents) {
-    convertError.value = `余额不足，当前余额 ${((user.value?.balance || 0) / 100).toFixed(2)} 元`
+    convertError.value = `余额不足，当前余额 ${((user.value?.balance || 0) / 100).toFixed(2)} ${currencyUnitLabel.value}`
     return
   }
 
@@ -642,7 +644,7 @@ async function submitConvert() {
     const data = await res.json()
     if (!res.ok) throw new Error(data.message || '划转失败')
 
-    convertSuccess.value = data.message || `成功划转 ${yuan.toFixed(2)} 元为 ${formatPoints(data.points)} 积分`
+    convertSuccess.value = data.message || `成功划转 ${yuan.toFixed(2)} ${currencyUnitLabel.value}为 ${formatPoints(data.points)} 积分`
 
     if (data.newBalance !== undefined && data.newPoints !== undefined) {
       user.value = {
@@ -1008,7 +1010,7 @@ watch(() => props.visible, (newVal) => {
                   <line x1="1" y1="10" x2="23" y2="10"/>
                 </svg>
                 <span class="balance-label">{{ t('packages.accountBalance') }}</span>
-                <span class="balance-value">¥{{ ((user?.balance || 0) / 100).toFixed(2) }}</span>
+                <span class="balance-value">{{ formatMoney(user?.balance || 0) }}</span>
               </div>
               <div class="balance-actions">
                 <button type="button" class="asset-action-btn convert-btn" @click.stop="openConvertModal">
@@ -1068,7 +1070,7 @@ watch(() => props.visible, (newVal) => {
 
               <!-- 价格 -->
               <div class="package-price">
-                <span class="price-symbol">¥</span>
+                <span class="price-symbol">{{ currencySymbol }}</span>
                 <span class="price-value">{{ (pkg.price / 100).toFixed(0) }}</span>
               </div>
 
@@ -1167,7 +1169,7 @@ watch(() => props.visible, (newVal) => {
                     <div class="order-info-divider"></div>
                     <div class="order-info-row">
                       <span class="order-info-label">支付金额</span>
-                      <span class="order-info-amount">¥{{ selectedPackage ? (purchaseInfo.needPay / 100).toFixed(2) : (lastRechargeAmount / 100).toFixed(2) }}</span>
+                      <span class="order-info-amount">{{ selectedPackage ? formatMoney(purchaseInfo.needPay) : formatMoney(lastRechargeAmount) }}</span>
                     </div>
                   </div>
                   
@@ -1272,36 +1274,36 @@ watch(() => props.visible, (newVal) => {
                     </button>
                   </div>
                   <div v-if="couponError" class="coupon-error">{{ couponError }}</div>
-                  <div v-if="appliedCoupon" class="coupon-success">✓ 已优惠 ¥{{ (couponDiscount / 100).toFixed(2) }}</div>
+                  <div v-if="appliedCoupon" class="coupon-success">✓ 已优惠 {{ formatMoney(couponDiscount) }}</div>
                 </div>
 
                 <!-- 价格明细 -->
                 <div class="price-breakdown">
                   <div class="price-row">
                     <span class="price-label">套餐价格</span>
-                    <span class="price-value">¥{{ (purchaseInfo.totalAmount / 100).toFixed(2) }}</span>
+                    <span class="price-value">{{ formatMoney(purchaseInfo.totalAmount) }}</span>
                   </div>
                   <div v-if="purchaseInfo.upgradeDiscount > 0" class="price-row discount">
                     <span class="price-label">升级折抵</span>
-                    <span class="price-value">-¥{{ (purchaseInfo.upgradeDiscount / 100).toFixed(2) }}</span>
+                    <span class="price-value">-{{ formatMoney(purchaseInfo.upgradeDiscount) }}</span>
                   </div>
                   <div v-if="purchaseInfo.couponDiscount > 0" class="price-row discount">
                     <span class="price-label">优惠券</span>
-                    <span class="price-value">-¥{{ (purchaseInfo.couponDiscount / 100).toFixed(2) }}</span>
+                    <span class="price-value">-{{ formatMoney(purchaseInfo.couponDiscount) }}</span>
                   </div>
                   <div class="price-row">
                     <span class="price-label">
                       账户余额
-                      <span class="balance-hint">¥{{ (purchaseInfo.balance / 100).toFixed(2) }}</span>
+                      <span class="balance-hint">{{ formatMoney(purchaseInfo.balance) }}</span>
                     </span>
-                    <span class="price-value">-¥{{ (purchaseInfo.balanceUsed / 100).toFixed(2) }}</span>
+                    <span class="price-value">-{{ formatMoney(purchaseInfo.balanceUsed) }}</span>
                   </div>
                 </div>
 
                 <!-- 应付金额 -->
                 <div class="total-row">
                   <span class="total-label">{{ purchaseInfo.needOnlinePayment ? '需支付' : '余额支付' }}</span>
-                  <span class="total-value">¥{{ (purchaseInfo.needPay / 100).toFixed(2) }}</span>
+                  <span class="total-value">{{ formatMoney(purchaseInfo.needPay) }}</span>
                 </div>
               </div>
 
@@ -1394,7 +1396,7 @@ watch(() => props.visible, (newVal) => {
               <div class="convert-assets-info">
                 <div class="convert-asset-item">
                   <span class="convert-asset-label">当前余额</span>
-                  <span class="convert-asset-value">¥{{ ((user?.balance || 0) / 100).toFixed(2) }}</span>
+                  <span class="convert-asset-value">{{ formatMoney(user?.balance || 0) }}</span>
                 </div>
                 <div class="convert-asset-divider">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
@@ -1415,18 +1417,18 @@ watch(() => props.visible, (newVal) => {
                   <line x1="12" y1="16" x2="12" y2="12"/>
                   <line x1="12" y1="8" x2="12.01" y2="8"/>
                 </svg>
-                <span>汇率：1元 = {{ convertExchangeRate }}积分</span>
+                <span>汇率：1{{ currencyUnitLabel }} = {{ convertExchangeRate }}积分</span>
               </div>
 
               <!-- 输入金额 -->
               <div class="convert-input-section">
-                <label class="convert-input-label">划转金额（元）</label>
+                <label class="convert-input-label">划转金额（{{ currencyUnitLabel }}）</label>
                 <div class="convert-input-wrapper">
-                  <span class="convert-currency">¥</span>
+                  <span class="convert-currency">{{ currencySymbol }}</span>
                   <input
                     v-model="convertAmount"
                     type="number"
-                    placeholder="请输入划转金额，最低1元"
+                    :placeholder="`请输入划转金额，最低1${currencyUnitLabel}`"
                     min="1"
                     step="1"
                     class="convert-input"
@@ -1679,7 +1681,7 @@ watch(() => props.visible, (newVal) => {
                   @click="selectRechargeCard(card)"
                 >
                   <span v-if="card.bonus_enabled" class="bonus-star">★</span>
-                  <div class="card-amount-v2">¥{{ (card.amount / 100).toFixed(0) }}</div>
+                  <div class="card-amount-v2">{{ currencySymbol }}{{ (card.amount / 100).toFixed(0) }}</div>
                   <div v-if="card.bonus_enabled" class="card-bonus-hover">
                     <span v-if="card.bonus_type === 'random'">+{{ card.bonus_min }}~{{ card.bonus_max }} 随机积分</span>
                     <span v-else>+{{ card.bonus_fixed }} 积分奖励</span>
@@ -1706,9 +1708,9 @@ watch(() => props.visible, (newVal) => {
 
             <!-- 自定义金额 -->
             <div class="recharge-section">
-              <label class="section-label">或输入自定义金额（元）</label>
+              <label class="section-label">或输入自定义金额（{{ currencyUnitLabel }}）</label>
               <div class="custom-amount-wrapper">
-                <span class="currency-prefix">¥</span>
+                <span class="currency-prefix">{{ currencySymbol }}</span>
                 <input
                   type="number"
                   v-model="customAmount"

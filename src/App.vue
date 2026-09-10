@@ -4,6 +4,7 @@ import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { clearAuthSession, getMe } from '@/api/client'
 import { getTheme, toggleTheme as toggleThemeUtil } from '@/utils/theme'
 import { getTenantHeaders, getBrand, loadBrandConfig, getApiUrl, loadModelEntitlements } from '@/config/tenant'
+import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 import NotificationBar from '@/components/NotificationBar.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import IconSet from '@/components/common/IconSet.vue'
@@ -15,6 +16,7 @@ import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
 const { t, currentLanguage } = useI18n()
 
 const me = ref(null)
+const { formatMoney } = useCurrencyDisplay()
 const route = useRoute()
 const router = useRouter()
 const canvasStore = useCanvasStore()
@@ -354,7 +356,7 @@ const isIcpFooterVisible = computed(() => {
               <!-- 余额 -->
               <div class="px-2 py-1.5 bg-gradient-to-r from-green-500 to-green-600 rounded-full text-white text-sm font-medium shadow-lg whitespace-nowrap shrink-0">
                 <span class="mr-1">💰</span>
-                ¥{{ ((me.balance || 0) / 100).toFixed(2) }}
+                {{ formatMoney(me.balance || 0) }}
               </div>
             </div>
 
@@ -565,7 +567,7 @@ const isIcpFooterVisible = computed(() => {
             <div class="px-3 py-2 bg-gradient-to-r from-green-500 to-green-600 rounded-lg text-white text-sm font-medium shadow-lg">
               <div class="flex items-center justify-between">
                 <span><span class="mr-1">💰</span>{{ t('user.balance') }}</span>
-                <span class="font-bold">¥{{ ((me.balance || 0) / 100).toFixed(2) }}</span>
+                <span class="font-bold">{{ formatMoney(me.balance || 0) }}</span>
               </div>
             </div>
           </div>

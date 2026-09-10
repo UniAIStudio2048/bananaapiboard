@@ -443,6 +443,10 @@ export async function loadBrandConfig(forceReload = false) {
         // 如果距离上次更新不到1分钟，使用缓存（减少缓存时间以便更快同步配置变更）
         if (timeSinceUpdate < 1 * 60 * 1000) {
           console.log('[tenant] 使用缓存的品牌配置')
+          // 缓存期内沿用上次拉取的计价货币单位
+          try {
+            runtimeConfig.currencyUnit = localStorage.getItem('brand_config_currency') === 'USD' ? 'USD' : 'CNY'
+          } catch (e) { /* localStorage 不可用时保持默认 CNY */ }
           applyThemeColor(runtimeConfig.brand.primaryColor)
           applyFavicon(runtimeConfig.brand.favicon)
           await loadModelEntitlements()
@@ -488,6 +492,14 @@ export async function loadBrandConfig(forceReload = false) {
         primaryColor: data.primaryColor || runtimeConfig.brand.primaryColor,
         description: data.brandDescription || runtimeConfig.brand.description,
         siteTitle: data.siteTitle || ''
+      }
+
+      // 更新计价货币单位（CNY=¥/元，USD=$/美元）
+      runtimeConfig.currencyUnit = data.currency_unit === 'USD' ? 'USD' : 'CNY'
+      try {
+        localStorage.setItem('brand_config_currency', runtimeConfig.currencyUnit)
+      } catch (e) {
+        console.warn('[tenant] 缓存货币单位失败:', e)
       }
       
       // 更新模型名称配置
@@ -831,6 +843,11 @@ export const getModelEnabled = () => config.modelEnabled || defaultConfig.modelE
 export const getModelDescriptions = () => config.modelDescriptions || defaultConfig.modelDescriptions
 export const getModelPricing = () => config.modelPricing || defaultConfig.modelPricing
 export const getRechargeLimits = () => normalizeRechargeLimits(config.rechargeLimits)
+
+// 获取租户计价货币单位与展示符号/单位词（CNY=¥/元，USD=$/美元）
+export const getCurrencyUnit = () => config.currencyUnit === 'USD' ? 'USD' : 'CNY'
+export const getCurrencySymbol = () => config.currencyUnit === 'USD' ? '$' : '¥'
+export const getCurrencyUnitLabel = () => config.currencyUnit === 'USD' ? '美元' : '元'
 
 // 获取 Sora 角色创建配置（积分消耗等）
 export const getSoraCharacterConfig = () => config.soraCharacterConfig || { points_cost: 0 }

@@ -3,8 +3,10 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
+import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 
 const router = useRouter()
+const { formatMoney, symbol: currencySymbol, unitLabel: currencyUnitLabel } = useCurrencyDisplay()
 const me = ref(null)
 const users = ref([])
 
@@ -356,7 +358,7 @@ async function submitRecharge() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         amount: amountInCents,
-        description: rechargeForm.value.description || (isDeduction ? `管理员扣减 ¥${Math.abs(rechargeForm.value.amount)}` : `管理员充值 ¥${rechargeForm.value.amount}`)
+        description: rechargeForm.value.description || (isDeduction ? `管理员扣减 ${currencySymbol.value}${Math.abs(rechargeForm.value.amount)}` : `管理员充值 ${currencySymbol.value}${rechargeForm.value.amount}`)
       })
     })
     
@@ -370,7 +372,7 @@ async function submitRecharge() {
     }
     
     const result = await r.json()
-    success.value = `✅ ${isDeduction ? '扣减' : '充值'}成功！当前余额：¥${(result.balance / 100).toFixed(2)}`
+    success.value = `✅ ${isDeduction ? '扣减' : '充值'}成功！当前余额：${formatMoney(result.balance)}`
     
     // 更新编辑表单中的余额
     editForm.value.balance = result.balance
@@ -1990,7 +1992,7 @@ onUnmounted(() => {
                 <div class="flex items-center space-x-1">
                   <span class="text-lg">💰</span>
                   <span class="font-semibold text-green-600 dark:text-green-400">
-                    ¥{{ ((u.balance || 0) / 100).toFixed(2) }}
+                    {{ formatMoney(u.balance || 0) }}
                   </span>
                 </div>
               </td>
@@ -2334,7 +2336,7 @@ onUnmounted(() => {
                 </td>
                 <td class="px-4 py-3">
                   <span class="font-semibold text-green-600 dark:text-green-400">
-                    ¥{{ ((voucher.balance || 0) / 100).toFixed(2) }}
+                    {{ formatMoney(voucher.balance || 0) }}
                   </span>
                 </td>
                 <td class="px-4 py-3">
@@ -2464,12 +2466,12 @@ onUnmounted(() => {
             <div class="flex justify-between text-sm">
               <span class="text-slate-600 dark:text-slate-400">优惠:</span>
               <span class="font-medium text-primary-600">
-                {{ coupon.type === 'discount' ? `${(coupon.discount_value * 10).toFixed(1)}折` : `¥${(coupon.balance_value / 100).toFixed(2)}` }}
+                {{ coupon.type === 'discount' ? `${(coupon.discount_value * 10).toFixed(1)}折` : `${currencySymbol.value}${(coupon.balance_value / 100).toFixed(2)}` }}
               </span>
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-slate-600 dark:text-slate-400">最低消费:</span>
-              <span>¥{{ (coupon.min_amount / 100).toFixed(2) }}</span>
+              <span>{{ formatMoney(coupon.min_amount) }}</span>
             </div>
             <div class="flex justify-between text-sm">
               <span class="text-slate-600 dark:text-slate-400">使用次数:</span>
@@ -2548,7 +2550,7 @@ onUnmounted(() => {
           </div>
           <div v-if="couponForm.type === 'balance'">
             <label class="block text-sm font-medium mb-2">抵扣金额 * (分)</label>
-            <input v-model.number="couponForm.balance_value" type="number" class="input" placeholder="1000表示10元" />
+            <input v-model.number="couponForm.balance_value" type="number" class="input" :placeholder="`1000表示10${currencyUnitLabel}`" />
           </div>
           <div>
             <label class="block text-sm font-medium mb-2">最低消费金额 (分)</label>
@@ -2610,7 +2612,7 @@ onUnmounted(() => {
           </div>
           <div v-if="couponForm.type === 'balance'">
             <label class="block text-sm font-medium mb-2">抵扣金额 * (分)</label>
-            <input v-model.number="couponForm.balance_value" type="number" class="input" placeholder="1000表示10元" />
+            <input v-model.number="couponForm.balance_value" type="number" class="input" :placeholder="`1000表示10${currencyUnitLabel}`" />
           </div>
           <div>
             <label class="block text-sm font-medium mb-2">最低消费金额 (分)</label>
@@ -3012,7 +3014,7 @@ onUnmounted(() => {
               <div class="space-y-2 mb-4 text-sm">
                 <div class="flex justify-between">
                   <span class="text-slate-600 dark:text-slate-400">价格</span>
-                  <span class="font-semibold text-slate-900 dark:text-slate-100">¥{{ (pkg.price / 100).toFixed(2) }}</span>
+                  <span class="font-semibold text-slate-900 dark:text-slate-100">{{ formatMoney(pkg.price) }}</span>
                 </div>
                 <div class="flex justify-between">
                   <span class="text-slate-600 dark:text-slate-400">积分</span>
@@ -3193,7 +3195,7 @@ onUnmounted(() => {
               <input v-model.number="packageForm.duration_days" class="input w-full" type="number" min="1" />
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">价格（元）</label>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">价格（{{ currencyUnitLabel }}）</label>
               <input v-model.number="packageForm.price" class="input w-full" type="number" min="0" step="0.01" />
             </div>
           </div>
@@ -3404,7 +3406,7 @@ onUnmounted(() => {
             <div class="space-y-3">
               <div>
                 <label class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
-                  当前余额（元）
+                  当前余额（{{ currencyUnitLabel }}）
                 </label>
                 <div class="flex items-center space-x-2">
                   <input 
@@ -3511,7 +3513,7 @@ onUnmounted(() => {
           
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              充值金额（元） <span class="text-red-500">*</span>
+              充值金额（{{ currencyUnitLabel }}） <span class="text-red-500">*</span>
             </label>
             <input 
               v-model.number="rechargeForm.amount" 
@@ -3522,7 +3524,7 @@ onUnmounted(() => {
               @keyup.enter="submitRecharge"
             />
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              输入充值金额，单位为人民币元
+              输入充值金额，单位为当前计价货币
             </p>
             <div class="mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
               <p class="text-xs text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
@@ -3759,7 +3761,7 @@ onUnmounted(() => {
         
         <div>
           <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-            兑换余额（元）
+            兑换余额（{{ currencyUnitLabel }}）
             <span class="text-xs text-slate-500 ml-1">(积分和余额至少填一个)</span>
           </label>
           <input 

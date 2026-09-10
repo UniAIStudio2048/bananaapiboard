@@ -49,7 +49,7 @@
           </div>
           <div class="flex items-center gap-3">
             <div class="text-2xl font-bold text-amber-600 dark:text-amber-400">
-              ¥{{ (user?.balance / 100 || 0).toFixed(2) }}
+              {{ formatMoney(user?.balance || 0) }}
             </div>
             <button
               @click="openRechargeModal"
@@ -98,7 +98,7 @@
           <!-- 价格 -->
           <div class="text-center mb-6">
             <div class="text-4xl font-bold text-slate-900 dark:text-white mb-1">
-              ¥{{ (pkg.price / 100).toFixed(0) }}
+              {{ currencySymbol }}{{ (pkg.price / 100).toFixed(0) }}
             </div>
             <div class="text-sm text-slate-500 dark:text-slate-400">{{ getDurationText(pkg.duration_days) }}</div>
           </div>
@@ -330,7 +330,7 @@
             <div class="flex items-center justify-between mb-4">
               <h4 class="text-lg font-bold text-slate-900 dark:text-white">{{ selectedPackage.name }}</h4>
               <div class="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                ¥{{ (selectedPackage.price / 100).toFixed(2) }}
+                {{ formatMoney(selectedPackage.price) }}
               </div>
             </div>
             <div class="grid grid-cols-3 gap-4">
@@ -403,7 +403,7 @@
                 </button>
               </div>
               <div class="mt-1 text-xs text-green-600 dark:text-green-400">
-                优惠: -¥{{ (couponDiscount / 100).toFixed(2) }}
+                优惠: -{{ formatMoney(couponDiscount) }}
               </div>
             </div>
             <!-- 优惠券错误提示 -->
@@ -432,11 +432,11 @@
                   </svg>
                   <span class="font-medium text-slate-700 dark:text-slate-300">账户余额</span>
                 </div>
-                <span class="text-amber-600 dark:text-amber-400 font-bold">¥{{ (purchaseInfo.balance / 100).toFixed(2) }}</span>
+                <span class="text-amber-600 dark:text-amber-400 font-bold">{{ formatMoney(purchaseInfo.balance) }}</span>
               </div>
               <div class="flex items-center justify-between text-sm">
                 <span class="text-slate-600 dark:text-slate-400">使用余额</span>
-                <span class="font-bold text-green-600 dark:text-green-400">-¥{{ (purchaseInfo.balanceUsed / 100).toFixed(2) }}</span>
+                <span class="font-bold text-green-600 dark:text-green-400">-{{ formatMoney(purchaseInfo.balanceUsed) }}</span>
               </div>
             </div>
 
@@ -450,7 +450,7 @@
                     </svg>
                     <span class="font-medium text-slate-700 dark:text-slate-300">在线支付</span>
                   </div>
-                  <span class="text-blue-600 dark:text-blue-400 font-bold">¥{{ (purchaseInfo.needPay / 100).toFixed(2) }}</span>
+                  <span class="text-blue-600 dark:text-blue-400 font-bold">{{ formatMoney(purchaseInfo.needPay) }}</span>
                 </div>
                 
                 <!-- 支付方式选择 -->
@@ -483,25 +483,25 @@
           <div class="bg-slate-50 dark:bg-dark-600 rounded-xl p-4 space-y-2">
             <div class="flex items-center justify-between text-sm">
               <span class="text-slate-600 dark:text-slate-400">套餐原价</span>
-              <span class="text-slate-900 dark:text-white font-medium">¥{{ (selectedPackage.price / 100).toFixed(2) }}</span>
+              <span class="text-slate-900 dark:text-white font-medium">{{ formatMoney(selectedPackage.price) }}</span>
             </div>
             <div v-if="purchaseInfo.isUpgrade && purchaseInfo.upgradeDiscount > 0" class="flex items-center justify-between text-sm">
               <span class="text-slate-600 dark:text-slate-400">升级折抵</span>
-              <span class="text-blue-600 dark:text-blue-400 font-medium">-¥{{ (purchaseInfo.upgradeDiscount / 100).toFixed(2) }}</span>
+              <span class="text-blue-600 dark:text-blue-400 font-medium">-{{ formatMoney(purchaseInfo.upgradeDiscount) }}</span>
             </div>
             <div v-if="couponDiscount > 0" class="flex items-center justify-between text-sm">
               <span class="text-slate-600 dark:text-slate-400">优惠券优惠</span>
-              <span class="text-purple-600 dark:text-purple-400 font-medium">-¥{{ (couponDiscount / 100).toFixed(2) }}</span>
+              <span class="text-purple-600 dark:text-purple-400 font-medium">-{{ formatMoney(couponDiscount) }}</span>
             </div>
             <div class="flex items-center justify-between text-sm">
               <span class="text-slate-600 dark:text-slate-400">使用余额</span>
-              <span class="text-green-600 dark:text-green-400 font-medium">-¥{{ (purchaseInfo.balanceUsed / 100).toFixed(2) }}</span>
+              <span class="text-green-600 dark:text-green-400 font-medium">-{{ formatMoney(purchaseInfo.balanceUsed) }}</span>
             </div>
             <div class="border-t border-slate-200 dark:border-dark-500 pt-2 mt-2">
               <div class="flex items-center justify-between">
                 <span class="font-bold text-slate-900 dark:text-white">需要支付</span>
                 <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                  ¥{{ (purchaseInfo.needPay / 100).toFixed(2) }}
+                  {{ formatMoney(purchaseInfo.needPay) }}
                 </span>
               </div>
             </div>
@@ -585,7 +585,7 @@
               >
                 <!-- 奖励标识：小星星 -->
                 <span v-if="card.bonus_enabled" class="absolute -top-1 -right-1 text-yellow-400 text-lg">★</span>
-                <div>¥{{ (card.amount / 100).toFixed(0) }}</div>
+                <div>{{ currencySymbol }}{{ (card.amount / 100).toFixed(0) }}</div>
                 <!-- 奖励说明 -->
                 <div v-if="card.bonus_enabled" class="text-xs mt-1" :class="selectedRechargeCard?.id === card.id ? 'text-white/80' : 'text-amber-600 dark:text-amber-400'">
                   <span v-if="card.bonus_type === 'random'">+{{ card.bonus_min }}~{{ card.bonus_max }} 随机积分奖励</span>
@@ -598,10 +598,10 @@
           <!-- 自定义金额 -->
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              或输入自定义金额（{{ rechargeLimits.minAmount }}-{{ rechargeLimits.maxAmount }}元）
+              或输入自定义金额（{{ rechargeLimits.minAmount }}-{{ rechargeLimits.maxAmount }}{{ currencyUnitLabel }}）
             </label>
             <div class="relative">
-              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 text-lg">¥</span>
+              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 text-lg">{{ currencySymbol }}</span>
               <input
                 v-model="rechargeCustomAmount"
                 type="number"
@@ -650,7 +650,7 @@
             <div class="flex items-center justify-between">
               <span class="text-sm text-green-700 dark:text-green-300">充值金额</span>
               <span class="text-2xl font-bold text-green-600 dark:text-green-400">
-                ¥{{ (getFinalRechargeAmount() / 100).toFixed(2) }}
+                {{ formatMoney(getFinalRechargeAmount()) }}
               </span>
             </div>
             <!-- 选中充值卡片的奖励信息 -->
@@ -677,7 +677,7 @@
               <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1">
                 <p>• 充值后金额将直接到账户余额</p>
                 <p>• 账户余额可用于购买套餐或划转为积分</p>
-                <p>• 最低充值{{ rechargeLimits.minAmount }}元，单笔最高{{ rechargeLimits.maxAmount }}元</p>
+                <p>• 最低充值{{ rechargeLimits.minAmount }}{{ currencyUnitLabel }}，单笔最高{{ rechargeLimits.maxAmount }}{{ currencyUnitLabel }}</p>
               </div>
             </div>
           </div>
@@ -782,8 +782,10 @@ import { useRouter } from 'vue-router'
 import { redeemVoucher, getMe } from '@/api/client'
 import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
+import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 
 const router = useRouter()
+const { formatMoney, symbol: currencySymbol, unitLabel: currencyUnitLabel } = useCurrencyDisplay()
 const packages = ref([])
 const activePackage = ref(null)
 const user = ref(null)
@@ -1344,11 +1346,11 @@ async function submitRecharge() {
   const amount = getFinalRechargeAmount()
   
   if (amount < rechargeLimits.value.minAmount * 100) {
-    rechargeError.value = `最低充值金额为${rechargeLimits.value.minAmount}元`
+    rechargeError.value = `最低充值金额为${rechargeLimits.value.minAmount}${currencyUnitLabel.value}`
     return
   }
   if (amount > rechargeLimits.value.maxAmount * 100) {
-    rechargeError.value = `单笔最高充值${rechargeLimits.value.maxAmount}元`
+    rechargeError.value = `单笔最高充值${rechargeLimits.value.maxAmount}${currencyUnitLabel.value}`
     return
   }
   if (!rechargeSelectedMethod.value) {
@@ -1521,7 +1523,7 @@ async function submitVoucher() {
     // 检查是否有余额，如果有则自动购买最大套餐
     const balance = user.value?.balance || 0
     console.log('[submitVoucher] ========== 开始自动购买流程 ==========')
-    console.log('[submitVoucher] 兑换后用户余额:', balance, '分 (¥' + (balance/100).toFixed(2) + ')')
+    console.log('[submitVoucher] 兑换后用户余额:', balance, '分 (' + formatMoney(balance) + ')')
     console.log('[submitVoucher] 当前套餐列表数量:', packages.value ? packages.value.length : 0)
     
     // 强制重新加载套餐列表，确保数据最新
@@ -1557,18 +1559,18 @@ async function submitVoucher() {
           // 构建成功消息
           const remainingBalance = user.value?.balance || 0
           voucherSuccess.value = `
-            ✅ 兑换成功！获得 ¥${(balance / 100).toFixed(2)} 余额
+            ✅ 兑换成功！获得 ${formatMoney(balance)} 余额
             
             🎉 已自动购买「${affordablePackage.name}」套餐
             • 赠送积分：${formatPoints(affordablePackage.points)}
             • 并发限制：${affordablePackage.concurrent_limit}个
             • 有效期：${affordablePackage.duration_days}天
             
-            💰 剩余余额：¥${(remainingBalance / 100).toFixed(2)}
+            💰 剩余余额：${formatMoney(remainingBalance)}
           `.trim()
         } else {
           // 购买失败，显示兑换成功但未能自动购买
-          voucherSuccess.value = `✅ 兑换成功！获得 ¥${(balance / 100).toFixed(2)} 余额\n\n⚠️ 自动购买套餐失败：${purchaseResult.error}\n请手动购买套餐`
+          voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(balance)} 余额\n\n⚠️ 自动购买套餐失败：${purchaseResult.error}\n请手动购买套餐`
         }
       } else {
         // 余额不足以购买任何套餐，或所有套餐都是降级
@@ -1578,11 +1580,11 @@ async function submitVoucher() {
         const minPrice = minPricePackage ? minPricePackage.price : 0
         let hint = '当前余额不足以购买套餐'
         if (minPrice > 0 && balance < minPrice) {
-          hint = `最便宜的套餐需要 ¥${(minPrice/100).toFixed(2)}，当前余额 ¥${(balance/100).toFixed(2)}`
+          hint = `最便宜的套餐需要 ${formatMoney(minPrice)}，当前余额 ${formatMoney(balance)}`
         } else if (activePackage.value) {
           hint = '您当前已有套餐，可购买的套餐无法升级'
         }
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(balance / 100).toFixed(2)} 余额\n\n💡 ${hint}，您可以继续充值后购买`
+        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(balance)} 余额\n\n💡 ${hint}，您可以继续充值后购买`
       }
     } else {
       // 没有余额或没有套餐
@@ -1590,7 +1592,7 @@ async function submitVoucher() {
       if (balance === 0 && result.points > 0) {
         voucherSuccess.value = `✅ 成功兑换 ${result.points} 积分！`
       } else if (!packages.value || packages.value.length === 0) {
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(balance / 100).toFixed(2)} 余额\n\n⚠️ 暂无可用套餐，请稍后查看`
+        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(balance)} 余额\n\n⚠️ 暂无可用套餐，请稍后查看`
       } else {
         voucherSuccess.value = result.message || `成功兑换 ${result.points} 积分！`
       }
@@ -1613,7 +1615,7 @@ async function submitVoucher() {
 // 找到余额范围内可购买的最大套餐
 function findMaxAffordablePackage(balance) {
   console.log('[findMaxAffordablePackage] ========== 开始查找可购买套餐 ==========')
-  console.log('[findMaxAffordablePackage] 当前余额:', balance, '分 (¥' + (balance/100).toFixed(2) + ')')
+  console.log('[findMaxAffordablePackage] 当前余额:', balance, '分 (' + formatMoney(balance) + ')')
   
   if (!packages.value || packages.value.length === 0) {
     console.log('[findMaxAffordablePackage] ❌ 没有可用套餐列表')
@@ -1622,7 +1624,7 @@ function findMaxAffordablePackage(balance) {
   
   console.log('[findMaxAffordablePackage] 所有套餐列表:')
   packages.value.forEach(p => {
-    console.log(`  - ${p.name}: 价格=${p.price}分(¥${(p.price/100).toFixed(2)}), 类型=${p.type}, ID=${p.id}`)
+    console.log(`  - ${p.name}: 价格=${p.price}分(${formatMoney(p.price)}), 类型=${p.type}, ID=${p.id}`)
   })
   
   console.log('[findMaxAffordablePackage] 当前用户活跃套餐:', activePackage.value ? 
@@ -1660,7 +1662,7 @@ function findMaxAffordablePackage(balance) {
   })
   
   const selected = affordablePackages[0]
-  console.log(`[findMaxAffordablePackage] ✅ 选择套餐: "${selected.name}" (价格: ¥${(selected.price/100).toFixed(2)}, 类型: ${selected.type})`)
+  console.log(`[findMaxAffordablePackage] ✅ 选择套餐: "${selected.name}" (价格: ${formatMoney(selected.price)}, 类型: ${selected.type})`)
   console.log('[findMaxAffordablePackage] ========== 查找完成 ==========')
   
   return selected

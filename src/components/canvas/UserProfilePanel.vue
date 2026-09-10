@@ -8,6 +8,7 @@ import { useRouter } from 'vue-router'
 import { redeemVoucher as redeemVoucherApi, updateUserPreferences, clearAuthSession } from '@/api/client'
 import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
+import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { useCanvasStore } from '@/stores/canvas'
@@ -17,6 +18,7 @@ import {
 } from '@/utils/canvasPromptInputScale'
 
 const { t } = useI18n()
+const { formatMoney, symbol: currencySymbol, unitLabel: currencyUnitLabel } = useCurrencyDisplay()
 const teamStore = useTeamStore()
 const canvasStore = useCanvasStore()
 
@@ -118,7 +120,7 @@ const paymentCheckInterval = ref(null)
 // 余额划转
 const transferAmount = ref('')
 const transferLoading = ref(false)
-const exchangeRate = ref(10) // 1元 = 10积分
+const exchangeRate = ref(10) // 1货币单位 = 10积分
 
 // 返利中心
 const referralStats = ref({ available: 0, total_earned: 0, pending: 0, withdrawn: 0, transferred: 0, invitee_count: 0 })
@@ -808,7 +810,7 @@ async function redeemVoucher() {
     // 获取兑换券的面值余额
     const voucherBalance = result.balance || 0
     
-    console.log('[Canvas/redeemVoucher] 兑换成功，兑换券面值余额:', voucherBalance, '分 (¥' + (voucherBalance/100).toFixed(2) + ')')
+    console.log('[Canvas/redeemVoucher] 兑换成功，兑换券面值余额:', voucherBalance, '分 (' + formatMoney(voucherBalance) + ')')
     
     // 如果兑换券有余额，尝试自动购买套餐
     if (voucherBalance > 0) {
@@ -828,11 +830,11 @@ async function redeemVoucher() {
         } else {
           detailText = `\n• 赠送积分：${formatPoints(autoPurchaseResult.points)}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
         }
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(voucherBalance / 100).toFixed(2)} 余额\n\n🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}\n\n💰 剩余余额：¥${(autoPurchaseResult.remainingBalance / 100).toFixed(2)}`
+        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(voucherBalance)} 余额\n\n🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}\n\n💰 剩余余额：${formatMoney(autoPurchaseResult.remainingBalance)}`
       } else if (autoPurchaseResult.reason === 'no_package') {
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(voucherBalance / 100).toFixed(2)} 余额\n\n💡 ${autoPurchaseResult.message}`
+        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(voucherBalance)} 余额\n\n💡 ${autoPurchaseResult.message}`
       } else if (autoPurchaseResult.reason === 'purchase_failed') {
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(voucherBalance / 100).toFixed(2)} 余额\n\n⚠️ 自动购买套餐失败：${autoPurchaseResult.message}`
+        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(voucherBalance)} 余额\n\n⚠️ 自动购买套餐失败：${autoPurchaseResult.message}`
       } else {
         voucherSuccess.value = result.message || t('voucher.redeemSuccess')
       }
@@ -899,7 +901,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
       const minPrice = pkgList.reduce((min, p) => (!min || p.price < min.price) ? p : min, null)?.price || 0
       let hint = '兑换券面值不足以购买套餐'
       if (minPrice > 0 && voucherBalance < minPrice) {
-        hint = `最低套餐需要 ¥${(minPrice/100).toFixed(2)}，兑换券面值 ¥${(voucherBalance/100).toFixed(2)} 不足`
+        hint = `最低套餐需要 ${formatMoney(minPrice)}，兑换券面值 ${formatMoney(voucherBalance)} 不足`
       }
       return { success: false, reason: 'no_package', message: hint }
     }
@@ -1421,12 +1423,12 @@ async function submitRecharge() {
   const amount = getFinalRechargeAmount()
   
   if (amount < rechargeLimits.value.minAmount * 100) {
-    rechargeError.value = t('user.minRechargeAmount', { amount: rechargeLimits.value.minAmount })
+    rechargeError.value = t('user.minRechargeAmount', { amount: rechargeLimits.value.minAmount, unit: currencyUnitLabel.value })
     showAlert(rechargeError.value)
     return
   }
   if (amount > rechargeLimits.value.maxAmount * 100) {
-    rechargeError.value = t('user.maxRechargeAmount', { amount: rechargeLimits.value.maxAmount })
+    rechargeError.value = t('user.maxRechargeAmount', { amount: rechargeLimits.value.maxAmount, unit: currencyUnitLabel.value })
     showAlert(rechargeError.value)
     return
   }
@@ -1535,12 +1537,12 @@ function closeRechargePaymentEmbed() {
 async function submitTransfer() {
   const yuan = parseFloat(transferAmount.value)
   if (!yuan || yuan <= 0) {
-    showAlert(t('user.enterTransferAmount'))
+    showAlert(t('user.enterTransferAmount', { unit: currencyUnitLabel.value, symbol: currencySymbol.value }))
     return
   }
   
   if (yuan < 1) {
-    showAlert(t('user.minTransferAmount'))
+    showAlert(t('user.minTransferAmount', { unit: currencyUnitLabel.value, symbol: currencySymbol.value }))
     return
   }
   
@@ -1549,12 +1551,12 @@ async function submitTransfer() {
   
   // 检查余额是否足够
   if (props.userInfo?.balance < amountInCents) {
-    showAlert(t('user.insufficientBalanceTransfer', { balance: ((props.userInfo?.balance || 0) / 100).toFixed(2) }))
+    showAlert(t('user.insufficientBalanceTransfer', { balance: ((props.userInfo?.balance || 0) / 100).toFixed(2), symbol: currencySymbol.value }))
     return
   }
   
   const confirmed = await showConfirm(
-    t('user.transferConfirmMsg', { amount: yuan.toFixed(2), points: formatPoints(points) }), 
+    t('user.transferConfirmMsg', { amount: yuan.toFixed(2), points: formatPoints(points), symbol: currencySymbol.value }), 
     t('user.transferConfirm')
   )
   if (!confirmed) return
@@ -1626,7 +1628,7 @@ async function doReferralWithdraw() {
   if (!referralAlipayName.value.trim()) { showAlert('请输入支付宝真实姓名', '提示'); return }
   if (!referralAlipayAccount.value.trim()) { showAlert('请输入支付宝账号', '提示'); return }
   const amtFen = Math.round(amt * 100)
-  const confirmed = await showConfirm(`确定申请提现 ¥${amt.toFixed(2)} 到支付宝账号 ${referralAlipayAccount.value} 吗？提现需要审核通过后才能到账。`, '确认提现')
+  const confirmed = await showConfirm(`确定申请提现 ${currencySymbol.value}${amt.toFixed(2)} 到支付宝账号 ${referralAlipayAccount.value} 吗？提现需要审核通过后才能到账。`, '确认提现')
   if (!confirmed) return
   referralSubmitting.value = true
   try {
@@ -1658,7 +1660,7 @@ async function doReferralTransfer() {
   const amt = Number(referralActionAmount.value)
   if (!amt || amt <= 0) { showAlert('请输入有效金额', '提示'); return }
   const amtFen = Math.round(amt * 100)
-  const confirmed = await showConfirm(`确定将 ¥${amt.toFixed(2)} 划转到余额吗？划转后不可再提现。`, '确认划转')
+  const confirmed = await showConfirm(`确定将 ${currencySymbol.value}${amt.toFixed(2)} 划转到余额吗？划转后不可再提现。`, '确认划转')
   if (!confirmed) return
   referralSubmitting.value = true
   try {
@@ -1863,7 +1865,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             </div>
             <div class="stat-item">
               <span class="stat-icon" v-html="icons.coin"></span>
-              <span class="stat-value">¥{{ formatBalance(userInfo?.balance || 0) }}</span>
+              <span class="stat-value">{{ currencySymbol }}{{ formatBalance(userInfo?.balance || 0) }}</span>
               <span class="stat-label">{{ t('user.balance') }}</span>
             </div>
             <!-- 团队积分（仅团队空间显示，只读） -->
@@ -2131,7 +2133,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                     <span v-if="pkg.popular" class="popular-badge">{{ t('packages.recommended') }}</span>
                   </div>
                   <div class="package-price">
-                    <span class="price">¥{{ (pkg.price / 100).toFixed(0) }}</span>
+                    <span class="price">{{ currencySymbol }}{{ (pkg.price / 100).toFixed(0) }}</span>
                     <span class="unit">/{{ pkg.duration_days }}{{ t('time.days') }}</span>
                   </div>
                   <div class="package-points">{{ formatPoints(pkg.points) }} {{ t('user.points') }}</div>
@@ -2179,7 +2181,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                         </div>
                         <div class="detail-item price-highlight">
                           <span class="detail-icon">💰</span>
-                          <span class="detail-text">{{ t('packages.price') }} <strong>¥{{ (hoveredPackage.price / 100).toFixed(2) }}</strong></span>
+                          <span class="detail-text">{{ t('packages.price') }} <strong>{{ formatMoney(hoveredPackage.price) }}</strong></span>
                         </div>
                       </div>
                     </div>
@@ -2194,12 +2196,12 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <!-- 余额划转 -->
               <div class="transfer-section">
                 <h4 class="section-title">{{ t('user.balanceToPoints') }}</h4>
-                <p class="transfer-hint">{{ t('user.exchangeRateHint', { rate: exchangeRate }) }}</p>
+                <p class="transfer-hint">{{ t('user.exchangeRateHint', { rate: exchangeRate, unit: currencyUnitLabel.value }) }}</p>
                 <div class="transfer-form">
                   <input 
                     v-model="transferAmount" 
                     type="number" 
-                    :placeholder="t('user.enterTransferAmount')" 
+                    :placeholder="t('user.enterTransferAmount', { unit: currencyUnitLabel.value, symbol: currencySymbol.value })" 
                     min="1"
                   />
                   <button class="btn-primary" @click="submitTransfer" :disabled="transferLoading">
@@ -2276,15 +2278,15 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
                   <div style="font-size:11px;color:#aaa;margin-bottom:4px;">可用返利</div>
-                  <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">¥{{ formatRebateAmount(referralStats.available) }}</div>
+                  <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">{{ currencySymbol }}{{ formatRebateAmount(referralStats.available) }}</div>
                 </div>
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
                   <div style="font-size:11px;color:#aaa;margin-bottom:4px;">累计返利</div>
-                  <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">¥{{ formatRebateAmount(referralStats.total_earned) }}</div>
+                  <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">{{ currencySymbol }}{{ formatRebateAmount(referralStats.total_earned) }}</div>
                 </div>
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
                   <div style="font-size:11px;color:#aaa;margin-bottom:4px;">待审核提现</div>
-                  <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">¥{{ formatRebateAmount(referralStats.pending) }}</div>
+                  <div style="font-size:18px;font-weight:bold;color:#e5e7eb;">{{ currencySymbol }}{{ formatRebateAmount(referralStats.pending) }}</div>
                 </div>
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;text-align:center;">
                   <div style="font-size:11px;color:#aaa;margin-bottom:4px;">邀请人数</div>
@@ -2297,7 +2299,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;">
                   <div style="font-size:12px;font-weight:600;color:#f59e0b;margin-bottom:10px;">申请提现到支付宝</div>
                   <div style="margin-bottom:8px;">
-                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">提现金额（元）</div>
+                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">提现金额（{{ currencyUnitLabel }}）</div>
                     <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" placeholder="输入提现金额"
                       style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:13px;outline:none;box-sizing:border-box;" />
                   </div>
@@ -2321,7 +2323,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 <div style="background:rgba(255,255,255,0.05);border-radius:8px;padding:12px;">
                   <div style="font-size:12px;font-weight:600;color:#10b981;margin-bottom:10px;">划转到账户余额</div>
                   <div style="margin-bottom:8px;">
-                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">划转金额（元）</div>
+                    <div style="font-size:11px;color:#aaa;margin-bottom:4px;">划转金额（{{ currencyUnitLabel }}）</div>
                     <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" placeholder="输入划转金额"
                       style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.12);border-radius:6px;color:#e5e7eb;font-size:13px;outline:none;box-sizing:border-box;" />
                   </div>
@@ -2342,7 +2344,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                     <div style="color:#888;font-size:11px;">{{ formatRebateTime(r.created_at) }}</div>
                   </div>
                   <div style="text-align:right;">
-                    <div style="color:#e5e7eb;">+¥{{ formatRebateAmount(r.rebate_amount) }}</div>
+                    <div style="color:#e5e7eb;">{{ currencySymbol }}{{ formatRebateAmount(r.rebate_amount) }}</div>
                     <div style="color:#888;font-size:11px;">{{ ((r.rebate_rate || 0) * 100).toFixed(0) }}%</div>
                   </div>
                 </div>
@@ -2359,7 +2361,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                         {{ w.status === 'approved' ? '已通过' : w.status === 'rejected' ? '已拒绝' : '待审核' }}
                       </span>
                     </div>
-                    <div style="color:#ddd;font-weight:600;">¥{{ formatRebateAmount(w.amount) }}</div>
+                    <div style="color:#ddd;font-weight:600;">{{ currencySymbol }}{{ formatRebateAmount(w.amount) }}</div>
                   </div>
                   <div v-if="w.alipay_name" style="color:#888;font-size:11px;margin-top:2px;">{{ w.alipay_name }} · {{ w.alipay_account }}</div>
                   <div style="color:#888;font-size:11px;margin-top:2px;">{{ formatRebateTime(w.created_at) }}</div>
@@ -2531,7 +2533,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 <div class="waiting-order-info">
                   <div class="order-info-row">
                     <span class="order-label">充值金额</span>
-                    <span class="order-value highlight">¥{{ (rechargeOrderAmount / 100).toFixed(2) }}</span>
+                    <span class="order-value highlight">{{ formatMoney(rechargeOrderAmount) }}</span>
                   </div>
                 </div>
                 
@@ -2591,7 +2593,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 >
                   <!-- 奖励标识：白色小星星 -->
                   <span v-if="card.bonus_enabled" class="bonus-star">★</span>
-                  <div class="card-amount-v2">¥{{ (card.amount / 100).toFixed(0) }}</div>
+                  <div class="card-amount-v2">{{ currencySymbol }}{{ (card.amount / 100).toFixed(0) }}</div>
                   <!-- 奖励说明：悬停时显示 -->
                   <div v-if="card.bonus_enabled" class="card-bonus-hover">
                     <span v-if="card.bonus_type === 'random'">+{{ formatPoints(card.bonus_min) }}~{{ formatPoints(card.bonus_max) }} 随机积分</span>
@@ -2611,14 +2613,14 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                   :class="['amount-btn', { active: rechargeAmount === amount }]"
                   @click="rechargeAmount = amount; rechargeCustomAmount = ''; selectedRechargeCard = null"
                 >
-                  ¥{{ (amount / 100).toFixed(0) }}
+                  {{ currencySymbol }}{{ (amount / 100).toFixed(0) }}
                 </button>
               </div>
             </div>
             
             <!-- 自定义金额 -->
             <div class="form-section">
-              <label class="form-label">{{ t('user.customAmountHint') }}</label>
+              <label class="form-label">{{ t('user.customAmountHint', { unit: currencyUnitLabel.value }) }}</label>
               <input 
                 v-model="rechargeCustomAmount" 
                 type="number" 
@@ -2645,12 +2647,12 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             <div v-if="getFinalRechargeAmount() > 0" class="price-info">
               <div class="price-row">
                 <span>{{ t('user.rechargeAmount') }}</span>
-                <span>¥{{ (getFinalRechargeAmount() / 100).toFixed(2) }}</span>
+                <span>{{ formatMoney(getFinalRechargeAmount()) }}</span>
               </div>
               <div class="price-row total">
                 <span>{{ t('user.actualPayment') }}</span>
                 <span class="total-price">
-                  ¥{{ (getFinalRechargeAmount() / 100).toFixed(2) }}
+                  {{ formatMoney(getFinalRechargeAmount()) }}
                 </span>
               </div>
             </div>
@@ -2742,7 +2744,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                   </div>
                   <div class="order-info-row">
                     <span class="order-label">金额</span>
-                    <span class="order-value highlight">¥{{ ((purchaseInfo?.needPay || 0) / 100).toFixed(2) }}</span>
+                    <span class="order-value highlight">{{ formatMoney(purchaseInfo?.needPay || 0) }}</span>
                   </div>
                 </div>
                 
@@ -2799,7 +2801,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                       <span v-if="purchaseInfo?.isCurrent" class="package-current-tag">当前套餐</span>
                     </div>
                     <div class="package-detail-price">
-                      <span class="price-amount">¥{{ (selectedPackage.price / 100).toFixed(0) }}</span>
+                      <span class="price-amount">{{ currencySymbol }}{{ (selectedPackage.price / 100).toFixed(0) }}</span>
                       <span class="price-unit">/{{ selectedPackage.duration_days }}天</span>
                     </div>
                     <div class="package-detail-features">
@@ -2854,7 +2856,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                     </div>
                     <div v-if="purchaseCouponError" class="coupon-error">{{ purchaseCouponError }}</div>
                     <div v-if="appliedPurchaseCoupon" class="coupon-success">
-                      ✓ 已优惠 ¥{{ (purchaseCouponDiscount / 100).toFixed(2) }}
+                      ✓ 已优惠 {{ formatMoney(purchaseCouponDiscount) }}
                     </div>
                   </div>
                   
@@ -2885,26 +2887,26 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                     <div class="price-breakdown" v-if="purchaseInfo">
                       <div class="price-line">
                         <span>套餐价格</span>
-                        <span>¥{{ (purchaseInfo.totalAmount / 100).toFixed(2) }}</span>
+                        <span>{{ formatMoney(purchaseInfo.totalAmount) }}</span>
                       </div>
                       <div v-if="purchaseInfo.couponDiscount > 0" class="price-line discount">
                         <span>优惠券</span>
-                        <span>-¥{{ (purchaseInfo.couponDiscount / 100).toFixed(2) }}</span>
+                        <span>-{{ formatMoney(purchaseInfo.couponDiscount) }}</span>
                       </div>
                       <div class="price-line">
                         <span>账户余额</span>
-                        <span>¥{{ (purchaseInfo.balance / 100).toFixed(2) }}</span>
+                        <span>{{ formatMoney(purchaseInfo.balance) }}</span>
                       </div>
                       <div v-if="purchaseInfo.balanceUsed > 0" class="price-line used">
                         <span>余额抵扣</span>
-                        <span>-¥{{ (purchaseInfo.balanceUsed / 100).toFixed(2) }}</span>
+                        <span>-{{ formatMoney(purchaseInfo.balanceUsed) }}</span>
                       </div>
                       <div class="price-line final">
                         <span>{{ purchaseInfo.needOnlinePayment ? '还需支付' : '余额支付' }}</span>
                         <span class="final-amount">
-                          ¥{{ purchaseInfo.needOnlinePayment 
-                            ? (purchaseInfo.needPay / 100).toFixed(2) 
-                            : (purchaseInfo.balanceUsed / 100).toFixed(2) }}
+                          {{ purchaseInfo.needOnlinePayment 
+                            ? formatMoney(purchaseInfo.needPay) 
+                            : formatMoney(purchaseInfo.balanceUsed) }}
                         </span>
                       </div>
                     </div>
@@ -2916,7 +2918,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                   <!-- 提示信息 -->
                   <div class="purchase-hint">
                     <span v-if="purchaseInfo?.canPayWithBalance">💡 余额充足，将直接从余额扣款</span>
-                    <span v-else>💡 余额不足 ¥{{ ((purchaseInfo?.needPay || 0) / 100).toFixed(2) }}，需在线支付</span>
+                    <span v-else>💡 余额不足 {{ formatMoney(purchaseInfo?.needPay || 0) }}，需在线支付</span>
                   </div>
                 </div>
               </div>

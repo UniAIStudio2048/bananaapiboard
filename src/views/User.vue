@@ -15,8 +15,10 @@ import { getHistoryImageDownloadFilename, getHistoryImageShortcutAction } from '
 import { buildHistoryMediaDetails, enrichHistoryMediaDetails } from '@/utils/historyMediaDetails'
 import { toPointsNumber, getEffectivePackagePoints, getTotalUserPoints } from '@/utils/points'
 import { normalizePointsSources, getPointsSourcesMaxTotal } from '@/utils/pointsSources'
+import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 
 const { t } = useI18n()
+const { formatMoney, symbol: currencySymbol, unitLabel: currencyUnitLabel } = useCurrencyDisplay()
 
 const route = useRoute()
 
@@ -972,7 +974,7 @@ async function doReferralWithdraw() {
   if (!referralAlipayName.value.trim()) { showToast('请输入支付宝真实姓名', 'error'); return }
   if (!referralAlipayAccount.value.trim()) { showToast('请输入支付宝账号', 'error'); return }
   const amtFen = Math.round(amt * 100)
-  if (!confirm(`确定申请提现 ¥${amt.toFixed(2)} 到支付宝账号 ${referralAlipayAccount.value} 吗？提现需要审核通过后才能到账。`)) return
+  if (!confirm(`确定申请提现 ${currencySymbol.value}${amt.toFixed(2)} 到支付宝账号 ${referralAlipayAccount.value} 吗？提现需要审核通过后才能到账。`)) return
   referralSubmitting.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -1003,7 +1005,7 @@ async function doReferralTransfer() {
   const amt = Number(referralActionAmount.value)
   if (!amt || amt <= 0) { showToast('请输入有效金额', 'error'); return }
   const amtFen = Math.round(amt * 100)
-  if (!confirm(`确定将 ¥${amt.toFixed(2)} 划转到余额吗？划转后不可再提现。`)) return
+  if (!confirm(`确定将 ${currencySymbol.value}${amt.toFixed(2)} 划转到余额吗？划转后不可再提现。`)) return
   referralSubmitting.value = true
   try {
     const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
@@ -1497,7 +1499,7 @@ async function submitVoucher() {
     // 获取兑换券的面值余额（不是用户总余额）
     const voucherBalance = result.balance || 0
     
-    console.log('[User/submitVoucher] 兑换成功，兑换券面值余额:', voucherBalance, '分 (¥' + (voucherBalance/100).toFixed(2) + ')')
+    console.log('[User/submitVoucher] 兑换成功，兑换券面值余额:', voucherBalance, '分 (' + formatMoney(voucherBalance) + ')')
     
     // 如果兑换券有余额，尝试自动购买套餐
     if (voucherBalance > 0) {
@@ -1521,20 +1523,20 @@ async function submitVoucher() {
         } else {
           detailText = `\n• 赠送积分：${formatPoints(autoPurchaseResult.points)}\n• 并发限制：${autoPurchaseResult.concurrentLimit}个\n• 有效期：${autoPurchaseResult.durationDays}天`
         }
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额
+        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(result.balance)} 余额
 
 🎉 ${actionText}「${autoPurchaseResult.packageName}」套餐${detailText}
 
-💰 剩余余额：¥${(autoPurchaseResult.remainingBalance / 100).toFixed(2)}`
+💰 剩余余额：${formatMoney(autoPurchaseResult.remainingBalance)}`
         // 刷新用户信息
         await load()
       } else if (autoPurchaseResult.reason === 'no_package') {
         // 没有可购买的套餐
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额\n\n💡 ${autoPurchaseResult.message}`
+        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(result.balance)} 余额\n\n💡 ${autoPurchaseResult.message}`
         await load() // 刷新用户信息
       } else if (autoPurchaseResult.reason === 'purchase_failed') {
         // 购买失败
-        voucherSuccess.value = `✅ 兑换成功！获得 ¥${(result.balance / 100).toFixed(2)} 余额\n\n⚠️ 自动购买套餐失败：${autoPurchaseResult.message}\n请手动前往套餐页面购买`
+        voucherSuccess.value = `✅ 兑换成功！获得 ${formatMoney(result.balance)} 余额\n\n⚠️ 自动购买套餐失败：${autoPurchaseResult.message}\n请手动前往套餐页面购买`
         await load() // 刷新用户信息
       } else {
         // 其他情况（只兑换了积分没有余额等）
@@ -1570,7 +1572,7 @@ async function tryAutoPurchasePackage(voucherBalance) {
       return { success: false, reason: 'no_token', message: '未登录' }
     }
     
-    console.log('[User/tryAutoPurchasePackage] 兑换券面值:', voucherBalance, '分 (¥' + (voucherBalance/100).toFixed(2) + ')')
+    console.log('[User/tryAutoPurchasePackage] 兑换券面值:', voucherBalance, '分 (' + formatMoney(voucherBalance) + ')')
     
     // 获取套餐列表
     console.log('[User/tryAutoPurchasePackage] 获取套餐列表...')
@@ -1657,9 +1659,9 @@ async function tryAutoPurchasePackage(voucherBalance) {
       if (allDowngrade) {
         hint = `您当前是${activePackage.package_name}，兑换券面值只能购买更低级别套餐，不支持降级`
       } else if (minSameOrHigherPrice > 0 && voucherBalance < minSameOrHigherPrice) {
-        hint = `续费或升级套餐最低需要 ¥${(minSameOrHigherPrice/100).toFixed(2)}，兑换券面值 ¥${(voucherBalance/100).toFixed(2)} 不足`
+        hint = `续费或升级套餐最低需要 ${formatMoney(minSameOrHigherPrice)}，兑换券面值 ${formatMoney(voucherBalance)} 不足`
       } else if (minPrice > 0 && voucherBalance < minPrice) {
-        hint = `最便宜的套餐需要 ¥${(minPrice/100).toFixed(2)}，兑换券面值 ¥${(voucherBalance/100).toFixed(2)}`
+        hint = `最便宜的套餐需要 ${formatMoney(minPrice)}，兑换券面值 ${formatMoney(voucherBalance)}`
       }
       return { success: false, reason: 'no_package', message: hint }
     }
@@ -1790,14 +1792,14 @@ async function submitTransfer() {
   }
   
   if (yuan < 1) {
-    transferError.value = '最低划转金额为1元'
+    transferError.value = `最低划转金额为1${currencyUnitLabel.value}`
     return
   }
   
   const amountInCents = Math.floor(yuan * 100) // 转换为分
   
   if (me.value.balance < amountInCents) {
-    transferError.value = `余额不足，当前余额 ${(me.value.balance / 100).toFixed(2)} 元`
+    transferError.value = `余额不足，当前余额 ${(me.value.balance / 100).toFixed(2)} ${currencyUnitLabel.value}`
     return
   }
   
@@ -1830,7 +1832,7 @@ async function submitTransfer() {
       throw new Error(data.message || '划转失败')
     }
     
-    transferSuccess.value = data.message || `成功划转 ${yuan.toFixed(2)} 元 为 ${formatPoints(data.points)} 积分`
+    transferSuccess.value = data.message || `成功划转 ${yuan.toFixed(2)} ${currencyUnitLabel.value} 为 ${formatPoints(data.points)} 积分`
     
     // 立即使用API返回的最新数据更新本地状态（无需再次请求）
     if (data.newBalance !== undefined && data.newPoints !== undefined) {
@@ -2120,11 +2122,11 @@ async function submitRecharge() {
   const amount = getFinalRechargeAmount()
   
   if (amount < rechargeLimits.value.minAmount * 100) {
-    rechargeError.value = `最低充值金额为${rechargeLimits.value.minAmount}元`
+    rechargeError.value = `最低充值金额为${rechargeLimits.value.minAmount}${currencyUnitLabel.value}`
     return
   }
   if (amount > rechargeLimits.value.maxAmount * 100) {
-    rechargeError.value = `单笔最高充值${rechargeLimits.value.maxAmount}元`
+    rechargeError.value = `单笔最高充值${rechargeLimits.value.maxAmount}${currencyUnitLabel.value}`
     return
   }
   if (!rechargeSelectedMethod.value) {
@@ -2609,7 +2611,7 @@ onUnmounted(() => {
               <span class="text-2xl">💰</span>
             </div>
             <div class="text-right">
-              <p class="text-3xl font-bold text-green-600 dark:text-green-400">¥{{ (me.balance / 100).toFixed(2) }}</p>
+              <p class="text-3xl font-bold text-green-600 dark:text-green-400">{{ formatMoney(me.balance) }}</p>
               <p class="text-xs text-slate-500 dark:text-slate-400">可用余额</p>
             </div>
           </div>
@@ -3975,7 +3977,7 @@ onUnmounted(() => {
                   </div>
                   <div class="text-right">
                     <p class="text-lg font-bold" :class="order.status === 'paid' ? 'text-green-600 dark:text-green-400' : 'text-amber-600 dark:text-amber-400'">
-                      ¥{{ (order.amount / 100).toFixed(2) }}
+                      {{ formatMoney(order.amount) }}
                     </p>
                     <span class="text-xs px-2 py-1 rounded-full" :class="getOrderStatusColor(order.status)">
                       {{ formatOrderStatus(order.status) }}
@@ -4123,15 +4125,15 @@ onUnmounted(() => {
           <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <div class="card p-4 text-center">
               <p class="text-sm text-slate-500 dark:text-slate-400">可用返利</p>
-              <p class="text-2xl font-bold text-emerald-500 mt-1">¥{{ formatRebateAmount(referralStats.available) }}</p>
+              <p class="text-2xl font-bold text-emerald-500 mt-1">{{ currencySymbol }}{{ formatRebateAmount(referralStats.available) }}</p>
             </div>
             <div class="card p-4 text-center">
               <p class="text-sm text-slate-500 dark:text-slate-400">累计返利</p>
-              <p class="text-2xl font-bold text-amber-500 mt-1">¥{{ formatRebateAmount(referralStats.total_earned) }}</p>
+              <p class="text-2xl font-bold text-amber-500 mt-1">{{ currencySymbol }}{{ formatRebateAmount(referralStats.total_earned) }}</p>
             </div>
             <div class="card p-4 text-center">
               <p class="text-sm text-slate-500 dark:text-slate-400">待审核提现</p>
-              <p class="text-2xl font-bold text-yellow-500 mt-1">¥{{ formatRebateAmount(referralStats.pending) }}</p>
+              <p class="text-2xl font-bold text-yellow-500 mt-1">{{ currencySymbol }}{{ formatRebateAmount(referralStats.pending) }}</p>
             </div>
             <div class="card p-4 text-center">
               <p class="text-sm text-slate-500 dark:text-slate-400">邀请人数</p>
@@ -4145,7 +4147,7 @@ onUnmounted(() => {
                 <h4 class="text-sm font-semibold text-amber-500 mb-3">申请提现到支付宝</h4>
                 <div class="space-y-3">
                   <div>
-                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">提现金额（元）</label>
+                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">提现金额（{{ currencyUnitLabel }}）</label>
                     <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" class="input w-full" placeholder="输入提现金额" />
                   </div>
                   <div>
@@ -4166,7 +4168,7 @@ onUnmounted(() => {
                 <h4 class="text-sm font-semibold text-emerald-500 mb-3">划转到账户余额</h4>
                 <div class="space-y-3">
                   <div>
-                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">划转金额（元）</label>
+                    <label class="block text-xs text-slate-500 dark:text-slate-400 mb-1">划转金额（{{ currencyUnitLabel }}）</label>
                     <input v-model.number="referralActionAmount" type="number" step="0.01" min="0.01" class="input w-full" placeholder="输入划转金额" />
                   </div>
                   <button @click="doReferralTransfer" class="w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg transition-colors" :disabled="referralSubmitting">
@@ -4189,7 +4191,7 @@ onUnmounted(() => {
                       <p class="text-xs text-slate-500 mt-1">{{ formatRebateTime(r.created_at) }}</p>
                     </div>
                     <div class="text-right">
-                      <p class="text-emerald-500 font-bold">+¥{{ formatRebateAmount(r.rebate_amount) }}</p>
+                      <p class="text-emerald-500 font-bold">{{ currencySymbol }}{{ formatRebateAmount(r.rebate_amount) }}</p>
                       <p class="text-xs text-slate-400">{{ (r.rebate_rate * 100).toFixed(1) }}%</p>
                     </div>
                   </div>
@@ -4209,7 +4211,7 @@ onUnmounted(() => {
                       <p class="text-xs text-slate-500 mt-1">{{ formatRebateTime(w.created_at) }}</p>
                       <p v-if="w.admin_note" class="text-xs text-slate-400 mt-0.5">备注：{{ w.admin_note }}</p>
                     </div>
-                    <p class="font-bold text-slate-800 dark:text-slate-200">¥{{ formatRebateAmount(w.amount) }}</p>
+                    <p class="font-bold text-slate-800 dark:text-slate-200">{{ currencySymbol }}{{ formatRebateAmount(w.amount) }}</p>
                   </div>
                 </div>
               </div>
@@ -4685,7 +4687,7 @@ onUnmounted(() => {
           <div class="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
             <div class="flex items-center justify-between">
               <span class="text-sm text-slate-600 dark:text-slate-400">当前余额</span>
-              <span class="text-2xl font-bold text-green-600 dark:text-green-400">¥{{ (me.balance / 100).toFixed(2) }}</span>
+              <span class="text-2xl font-bold text-green-600 dark:text-green-400">{{ formatMoney(me.balance) }}</span>
             </div>
           </div>
           
@@ -4695,7 +4697,7 @@ onUnmounted(() => {
               <span class="text-2xl mr-2">💎</span>
               <div>
                 <p class="text-sm font-semibold text-blue-900 dark:text-blue-300">兑换汇率</p>
-                <p class="text-xs text-blue-700 dark:text-blue-400">1元 = {{ exchangeRate }} 积分</p>
+                <p class="text-xs text-blue-700 dark:text-blue-400">1{{ currencyUnitLabel }} = {{ exchangeRate }} 积分</p>
               </div>
             </div>
           </div>
@@ -4703,7 +4705,7 @@ onUnmounted(() => {
           <!-- 输入金额 -->
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              划转金额（元）
+              划转金额（{{ currencyUnitLabel }}）
             </label>
             <input 
               v-model="transferForm.amount"
@@ -4715,7 +4717,7 @@ onUnmounted(() => {
               :disabled="transferLoading"
             />
             <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              最低划转金额为1元
+              最低划转金额为1{{ currencyUnitLabel }}
             </p>
           </div>
           
@@ -4822,7 +4824,7 @@ onUnmounted(() => {
                     <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
                   </svg>
                 </div>
-                <div class="font-bold text-lg">¥{{ (card.amount / 100).toFixed(0) }}</div>
+                <div class="font-bold text-lg">{{ currencySymbol }}{{ (card.amount / 100).toFixed(0) }}</div>
                 <!-- 奖励说明 -->
                 <div v-if="card.bonus_enabled" class="text-xs mt-1" :class="selectedRechargeCard?.id === card.id ? 'text-white/90' : 'text-amber-600 dark:text-amber-400'">
                   <span v-if="card.bonus_type === 'random'">+{{ card.bonus_min }}~{{ card.bonus_max }}随机积分奖励</span>
@@ -4849,7 +4851,7 @@ onUnmounted(() => {
                     : 'bg-white dark:bg-dark-600 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-dark-500 hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20'
                 ]"
               >
-                ¥{{ amount / 100 }}
+                {{ currencySymbol }}{{ amount / 100 }}
               </button>
             </div>
           </div>
@@ -4857,10 +4859,10 @@ onUnmounted(() => {
           <!-- 自定义金额 -->
           <div>
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              或输入自定义金额（{{ rechargeLimits.minAmount }}-{{ rechargeLimits.maxAmount }}元）
+              或输入自定义金额（{{ rechargeLimits.minAmount }}-{{ rechargeLimits.maxAmount }}{{ currencyUnitLabel }}）
             </label>
             <div class="relative">
-              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 text-lg">¥</span>
+              <span class="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-400 text-lg">{{ currencySymbol }}</span>
               <input
                 v-model="rechargeCustomAmount"
                 type="number"
@@ -4909,7 +4911,7 @@ onUnmounted(() => {
             <div class="flex items-center justify-between">
               <span class="text-sm text-green-700 dark:text-green-300">充值金额</span>
               <span class="text-2xl font-bold text-green-600 dark:text-green-400">
-                ¥{{ (getFinalRechargeAmount() / 100).toFixed(2) }}
+                {{ formatMoney(getFinalRechargeAmount()) }}
               </span>
             </div>
           </div>
@@ -4926,7 +4928,7 @@ onUnmounted(() => {
               <div class="text-xs text-slate-600 dark:text-slate-400 space-y-1">
                 <p>• 充值后金额将直接到账户余额</p>
                 <p>• 账户余额可用于购买套餐或划转为积分</p>
-                <p>• 最低充值{{ rechargeLimits.minAmount }}元，单笔最高{{ rechargeLimits.maxAmount }}元</p>
+                <p>• 最低充值{{ rechargeLimits.minAmount }}{{ currencyUnitLabel }}，单笔最高{{ rechargeLimits.maxAmount }}{{ currencyUnitLabel }}</p>
               </div>
             </div>
           </div>

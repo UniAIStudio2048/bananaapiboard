@@ -63,11 +63,38 @@ export function formatNumber(num) {
   if (num === null || num === undefined) {
     return '0'
   }
-  
+
   const n = Number(num)
   if (isNaN(n)) {
     return '0'
   }
-  
+
   return n.toLocaleString('zh-CN')
+}
+
+/**
+ * 分转当前计价货币的带符号金额字符串（CNY=¥，USD=$），不做汇率换算
+ * @param {number} amountInCents - 金额（单位：分/美分）
+ * @param {'CNY'|'USD'} unit - 租户计价货币单位
+ * @returns {string} 如 "$10.00"
+ */
+export function formatMoney(amountInCents, unit = 'CNY') {
+  const symbol = unit === 'USD' ? '$' : '¥'
+  return `${symbol}${formatMoneyAmount(amountInCents)}`
+}
+
+/**
+ * 分转当前计价货币的金额字符串（不带符号）
+ * @param {number} amountInCents - 金额（单位：分/美分）
+ * @returns {string} 如 "10.00"
+ */
+export function formatMoneyAmount(amountInCents) {
+  if (amountInCents === null || amountInCents === undefined) {
+    return '0.00'
+  }
+  const num = Number(amountInCents)
+  if (isNaN(num)) {
+    return '0.00'
+  }
+  return (num / 100).toFixed(2)
 }
