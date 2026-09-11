@@ -1,5 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
+import { useSmsAuth } from '@/composables/useSmsAuth'
 import { useRouter } from 'vue-router'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
@@ -338,6 +340,11 @@ async function submit() {
     loading.value = false
   }
 }
+const { policy, policyError, smsLogin, phoneFormMode, copy, loadAuthPolicy, backToPassword } = useSmsAuth(mode, resetMode)
+function handleSmsAuthenticated() {
+  const redirect = new URLSearchParams(location.search).get('redirect') || '/'
+  location.href = redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/'
+}
 </script>
 
 <template>
@@ -370,7 +377,7 @@ async function submit() {
             👤 登录
           </button>
           <button 
-            @click="mode = 'register'"
+            v-if="policy.registration_enabled" @click="mode = 'register'"
             class="flex-1 py-2 px-4 rounded-md font-medium transition-all duration-200"
             :class="mode === 'register' 
               ? 'bg-white dark:bg-dark-700 text-primary-600 dark:text-primary-400 shadow-sm' 
@@ -381,15 +388,19 @@ async function submit() {
         </div>
         
         <!-- 重置密码标题 -->
-        <div v-if="resetMode" class="mb-6">
+        <div v-if="resetMode && !phoneFormMode" class="mb-6">
           <h3 class="text-lg font-semibold text-slate-800 dark:text-white">🔑 重置密码</h3>
           <p class="text-sm text-slate-600 dark:text-slate-400 mt-1">
             请输入注册邮箱，我们将发送验证码到您的邮箱
           </p>
         </div>
 
+        <div class="text-sm text-blue-500 mb-4"><button v-if="(resetMode ? policy.sms?.retrieve?.length : mode === 'login' && policy.sms?.login?.length)" type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button></div>
+        <p v-if="policyError" role="alert">{{ copy.loadError }} <button type="button" @click="loadAuthPolicy">{{ copy.retry }}</button></p>
+        <p v-if="mode === 'register' && !policy.registration_enabled" role="status">{{ copy.closed }}</p>
+        <PhoneAuthForm v-else-if="phoneFormMode" :mode="phoneFormMode" :policy="policy" :invite-code="inviteCode" :require-invite-code="requireInviteCode" @authenticated="handleSmsAuthenticated" @back="backToPassword" @retrieve="resetMode = true; smsLogin = true" />
         <!-- 表单 -->
-        <form @submit.prevent="resetMode ? resetPassword() : submit()" class="space-y-6">
+        <form v-else @submit.prevent="resetMode ? resetPassword() : submit()" class="space-y-6">
           <!-- 注册模式且需要邮箱验证：显示用户名和邮箱分开的输入 -->
           <div v-if="needSeparateEmailInput">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">

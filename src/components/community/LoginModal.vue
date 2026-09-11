@@ -4,6 +4,8 @@
  * 复用 Auth.vue 的登录注册逻辑，以弹窗形式展示
  */
 import { ref, watch, computed } from 'vue'
+import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
+import { useSmsAuth } from '@/composables/useSmsAuth'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
 import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
@@ -365,6 +367,8 @@ async function resetPassword() {
   }
 }
 
+const { policy, policyError, smsLogin, phoneFormMode, copy, loadAuthPolicy, backToPassword } = useSmsAuth(mode, resetMode, () => props.modelValue)
+function handleSmsAuthenticated() { emit('login-success'); close() }
 </script>
 
 <template>
@@ -414,12 +418,18 @@ async function resetPassword() {
             <button
               class="flex-1 py-2 rounded-md text-sm font-medium transition"
               :class="mode === 'register' ? 'bg-white/10 text-white' : 'text-white/50 hover:text-white/80'"
-              @click="mode = 'register'"
+              v-if="policy.registration_enabled" @click="mode = 'register'"
             >注册</button>
           </div>
 
+          <div class="text-sm text-blue-400 mb-4">
+            <button v-if="(resetMode ? policy.sms?.retrieve?.length : mode === 'login' && policy.sms?.login?.length)" type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button>
+          </div>
+          <p v-if="policyError" role="alert" class="text-sm text-red-400">{{ copy.loadError }} <button type="button" @click="loadAuthPolicy">{{ copy.retry }}</button></p>
+          <p v-if="mode === 'register' && !policy.registration_enabled" role="status" class="text-white/70">{{ copy.closed }}</p>
+          <PhoneAuthForm v-else-if="phoneFormMode" class="text-white" :mode="phoneFormMode" :policy="policy" :invite-code="inviteCode" :require-invite-code="requireInviteCode" @authenticated="handleSmsAuthenticated" @back="backToPassword" @retrieve="resetMode = true; smsLogin = true" />
           <!-- 找回密码表单 -->
-          <form v-if="resetMode" @submit.prevent="resetPassword" class="space-y-4">
+          <form v-else-if="resetMode" @submit.prevent="resetPassword" class="space-y-4">
             <p class="text-sm text-white/50 mb-2">输入注册时使用的邮箱，我们将发送验证码帮你重置密码。</p>
 
             <div>

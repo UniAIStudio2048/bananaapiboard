@@ -148,18 +148,22 @@
           <!-- 登录/注册切换 -->
           <div v-if="!resetMode" class="auth-toggle">
             <button :class="['toggle-btn', { active: authMode === 'login' }]" @click="authMode = 'login'">{{ t('auth.login') }}</button>
-            <button :class="['toggle-btn', { active: authMode === 'register' }]" @click="authMode = 'register'">{{ t('auth.register') }}</button>
+            <button :class="['toggle-btn', { active: authMode === 'register' }]" v-if="policy.registration_enabled" @click="authMode = 'register'">{{ t('auth.register') }}</button>
             <div class="toggle-indicator" :style="{ transform: authMode === 'register' ? 'translateX(100%)' : 'translateX(0)' }"></div>
           </div>
 
           <!-- 密码重置标题 -->
-          <div v-if="resetMode" class="reset-header">
+          <div v-if="resetMode && !phoneFormMode" class="reset-header">
             <h3 class="reset-title">🔑 重置密码</h3>
             <p class="reset-desc">请输入注册邮箱，我们将发送验证码到您的邮箱</p>
           </div>
 
+          <div class="sms-method-toggle"><button v-if="(resetMode ? policy.sms?.retrieve?.length : authMode === 'login' && policy.sms?.login?.length)" type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button></div>
+          <p v-if="policyError" role="alert">{{ copy.loadError }} <button type="button" @click="loadAuthPolicy">{{ copy.retry }}</button></p>
+          <p v-if="authMode === 'register' && !policy.registration_enabled" role="status">{{ copy.closed }}</p>
+          <PhoneAuthForm v-else-if="phoneFormMode" :mode="phoneFormMode" :policy="policy" :invite-code="inviteCode" @authenticated="handleSmsAuthenticated" @back="backToPassword" @retrieve="resetMode = true; smsLogin = true" />
           <!-- 密码重置表单 -->
-          <form v-if="resetMode" @submit.prevent="resetPassword" class="auth-form">
+          <form v-else-if="resetMode" @submit.prevent="resetPassword" class="auth-form">
             <div class="form-group">
               <input v-model="account" type="email" class="form-input" placeholder="请输入注册邮箱" required />
             </div>
@@ -208,7 +212,7 @@
           </form>
 
           <!-- 登录/注册表单 -->
-          <form v-if="!resetMode" @submit.prevent="submitAuth" class="auth-form">
+          <form v-else @submit.prevent="submitAuth" class="auth-form">
             <!-- 注册模式且有白名单：显示用户名和邮箱分开的输入 -->
             <div v-if="authMode === 'register' && emailConfig.email_whitelist.length > 0" class="form-group">
               <input v-model="account" type="text" class="form-input" :placeholder="t('auth.username')" required />
@@ -269,8 +273,8 @@
           </form>
 
           <div class="modal-footer">
-            <span class="footer-text">{{ authMode === 'login' ? t('auth.noAccount') : t('auth.hasAccount') }}</span>
-            <button class="link-btn" @click="authMode = authMode === 'login' ? 'register' : 'login'">
+            <span v-if="authMode === 'register' || policy.registration_enabled" class="footer-text">{{ authMode === 'login' ? t('auth.noAccount') : t('auth.hasAccount') }}</span>
+            <button v-if="authMode === 'register' || policy.registration_enabled" class="link-btn" @click="authMode = authMode === 'login' ? 'register' : 'login'">
               {{ authMode === 'login' ? t('auth.registerNow') : t('auth.loginNow') }}
             </button>
             <div v-if="authMode === 'login'" class="forgot-password">
@@ -349,6 +353,8 @@
 </template>
 
 <script setup>
+import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
+import { useSmsAuth } from '@/composables/useSmsAuth'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
@@ -1504,6 +1510,8 @@ onUnmounted(() => {
   })
   scenesData = []
 })
+const { policy, policyError, smsLogin, phoneFormMode, copy, loadAuthPolicy, backToPassword } = useSmsAuth(authMode, resetMode, () => showLoginModal.value)
+function handleSmsAuthenticated() { showLoginModal.value = false; showModeModal.value = true }
 </script>
 
 <style scoped>
@@ -2063,6 +2071,9 @@ onUnmounted(() => {
 
 .modal-container {
   position: relative;
+  box-sizing: border-box;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
   width: 90%;
   max-width: 400px;
   border-radius: 20px;

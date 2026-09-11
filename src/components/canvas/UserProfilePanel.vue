@@ -4,6 +4,7 @@
  * 点击左侧工具栏的P按钮时弹出
  */
 import { ref, computed, watch, onMounted } from 'vue'
+import PhoneBinding from '@/components/auth/PhoneBinding.vue'
 import { useRouter } from 'vue-router'
 import { redeemVoucher as redeemVoucherApi, updateUserPreferences, clearAuthSession } from '@/api/client'
 import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
@@ -1956,6 +1957,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 <label>{{ t('user.email') }}</label>
                 <input v-model="profileForm.email" type="email" :placeholder="t('user.enterEmail')" />
               </div>
+              <PhoneBinding @updated="emit('update')" />
               <div class="form-group">
                 <label>{{ t('user.bio') }}</label>
                 <textarea v-model="profileForm.bio" :placeholder="t('user.enterBio')" maxlength="200" rows="2"></textarea>

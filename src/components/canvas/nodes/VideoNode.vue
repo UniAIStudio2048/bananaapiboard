@@ -8526,7 +8526,7 @@ async function exportEditedClipToCanvas(payload) {
       output: { type: 'video', url: '' }
     }
   }
-  const edge = { id: `edge_${props.id}_${nodeId}`, source: props.id, target: nodeId, sourceHandle: 'output', targetHandle: 'input' }
+  const edge = { id: `edge_${globalThis.crypto.randomUUID()}`, source: props.id, target: nodeId, sourceHandle: 'output', targetHandle: 'input' }
   await postWorkflowOps(context.workflowId, [
     { op: 'add', target: 'node', payload: node },
     { op: 'add', target: 'edge', payload: edge }
