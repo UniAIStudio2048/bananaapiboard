@@ -1536,7 +1536,8 @@ const currentSeedance2ModeConfig = computed(() => {
 })
 
 // MiniMax H3 官方直连（minimax-h3）模式选择
-const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3')
+const isAtlasCloudVideoModel = computed(() => String(currentModelConfig.value?.apiType || '').startsWith('atlascloud-video'))
+const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3' || isAtlasCloudVideoModel.value)
 
 const selectedMinimaxH3Mode = ref(props.data.minimaxH3Mode || '')
 const minimaxH3Resolution = ref(props.data.minimaxH3Resolution || '')
@@ -2004,6 +2005,7 @@ function syncGenericVideoResolution(value) {
 
 const minimaxH3ResolutionOptions = computed(() => {
   if (!isMinimaxH3Model.value) return []
+  if (isAtlasCloudVideoModel.value) return filterResolutionDisplay(['768P', '2K']).map(value => ({ value, label: value }))
   const minimaxConfig = currentModelConfig.value?.minimaxConfig || {}
   const configuredResolutions = Array.isArray(minimaxConfig.resolutions) && minimaxConfig.resolutions.length > 0
     ? minimaxConfig.resolutions
@@ -4233,7 +4235,7 @@ const basePointsCost = computed(() => {
   }
 
   // MiniMax H3 官方直连：按输出分辨率每秒计费（视频输入时应用独立倍率）
-  if (isMinimaxH3Model.value) {
+  if (isMinimaxH3Model.value && !isAtlasCloudVideoModel.value) {
     const h3Cfg = currentModelConfig.value.minimaxConfig || {}
     const h3Res = minimaxH3Resolution.value || h3Cfg.resolution || '2K'
     const h3PerSecond = Number(h3Cfg.resolutionCosts?.[h3Res])

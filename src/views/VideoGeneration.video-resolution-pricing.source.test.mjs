@@ -13,7 +13,7 @@ test('万相 3.0 按其独立时长预估分辨率积分', () => {
 })
 
 test('Seedance 请求在配置通用分辨率价格时使用当前通用分辨率', () => {
-  assert.match(source, /const selectedSeedanceResolution = getEnabledVideoResolutionOptions\(currentModelConfig\.value\?\.resolutionPricing\)\.length > 0\s*\? resolution\.value\s*:\s*seedanceResolution\.value/)
+  assert.match(source, /const selectedSeedanceResolution = isAtlasCloudVideoModel\.value \|\| getEnabledVideoResolutionOptions\(currentModelConfig\.value\?\.resolutionPricing\)\.length > 0\s*\? resolution\.value\s*:\s*seedanceResolution\.value/)
   assert.match(source, /formData\.append\('seedance_resolution', selectedSeedanceResolution\)/)
 })
 

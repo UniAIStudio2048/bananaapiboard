@@ -331,7 +331,8 @@ const isSeedanceModel = computed(() => {
 })
 
 // MiniMax H3 官方直连也使用 Seedance 兼容的多模态参考素材字段
-const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3')
+const isAtlasCloudVideoModel = computed(() => String(currentModelConfig.value?.apiType || '').startsWith('atlascloud-video'))
+const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3' || isAtlasCloudVideoModel.value)
 const isReferenceVideoModel = computed(() => isSeedanceModel.value || isMinimaxH3Model.value)
 const isWan3Model = computed(() => ['wan3', 'routerbee-wan3'].includes(currentModelConfig.value?.apiType))
 
@@ -584,7 +585,7 @@ const availableModels = computed(() => {
   
   return filteredByVersion.filter(m => {
     // Seedance 2.0 / MiniMax H3 / Ant / HappyHorse 模型始终显示（有自己的模式选择器）
-    if (isSeedanceSd2VideoModel(m) || m.apiType === 'minimax-h3') return true
+    if (isSeedanceSd2VideoModel(m) || m.apiType === 'minimax-h3' || String(m.apiType || '').startsWith('atlascloud-video')) return true
 
     const supportedModes = m.supportedModes
     if (!supportedModes) return true // 无配置默认支持所有模式
@@ -692,13 +693,13 @@ watch(model, (newModel) => {
       const defaultSeedanceMode = getDefaultSeedance2ModeForModel(modelConfig)
       seedanceMode.value = getFirstAvailableMode(defaultSeedanceMode, seedanceAvailableModes.value)
     }
-  } else if (modelConfig?.apiType === 'minimax-h3') {
+  } else if (modelConfig?.apiType === 'minimax-h3' || String(modelConfig?.apiType || '').startsWith('atlascloud-video')) {
     const minimaxConfig = modelConfig.minimaxConfig || {}
     seedanceDuration.value = Number(minimaxConfig.duration || durations[0] || 5)
     // minimax-h3 不支持 auto 时长，强制关闭
     seedanceAutoDuration.value = false
     seedanceResolution.value = configuredPricingResolutions[0] || minimaxConfig.resolution || '2K'
-    seedanceRatio.value = minimaxConfig.ratio || 'adaptive'
+    seedanceRatio.value = minimaxConfig.ratio || (isAtlasCloudVideoModel.value ? (aspectValues[0] || '16:9') : 'adaptive')
     seedanceGenerateAudio.value = false
     seedanceWatermark.value = false
     seedanceWebSearch.value = false
@@ -1756,7 +1757,7 @@ async function generateVideo() {
 
     // Seedance 2.0 参数
     if (isReferenceVideoModel.value) {
-      const selectedSeedanceResolution = getEnabledVideoResolutionOptions(currentModelConfig.value?.resolutionPricing).length > 0
+      const selectedSeedanceResolution = isAtlasCloudVideoModel.value || getEnabledVideoResolutionOptions(currentModelConfig.value?.resolutionPricing).length > 0
         ? resolution.value
         : seedanceResolution.value
       formData.append('seedance_mode', seedanceMode.value)
@@ -3265,7 +3266,7 @@ onUnmounted(() => {
                 </button>
                 <div v-show="seedanceAdvancedOpen" class="px-3 py-3 border-t border-slate-200 dark:border-dark-600 space-y-3">
                   <!-- 分辨率 -->
-                  <div v-if="getEnabledVideoResolutionOptions(currentModelConfig?.resolutionPricing).length === 0">
+                  <div v-if="!isAtlasCloudVideoModel && getEnabledVideoResolutionOptions(currentModelConfig?.resolutionPricing).length === 0">
                     <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">分辨率</label>
                     <div class="flex space-x-2">
                       <button type="button" @click="seedanceResolution = '480p'"
@@ -3290,7 +3291,7 @@ onUnmounted(() => {
                   <div>
                     <label class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1 block">宽高比</label>
                     <select v-model="seedanceRatio" class="input text-xs">
-                      <option v-for="r in SEEDANCE_RATIOS" :key="r.value" :value="r.value">{{ r.label }}</option>
+                      <option v-for="r in (isAtlasCloudVideoModel ? availableAspectRatios : SEEDANCE_RATIOS)" :key="r.value" :value="r.value">{{ r.label }}</option>
                     </select>
                   </div>
                   <!-- 自动时长开关（模型支持 auto 且非 video_edit 时显示；video_edit 强制 auto） -->
@@ -3314,7 +3315,7 @@ onUnmounted(() => {
                     </div>
                   </div>
                   <!-- 开关选项 -->
-                  <div class="space-y-2">
+                  <div v-if="!isAtlasCloudVideoModel" class="space-y-2">
                     <!-- 联网搜索增强（仅文生视频） -->
                     <label v-if="seedanceMode === 'text2video'" class="flex items-center justify-between cursor-pointer">
                       <span class="text-xs text-slate-600 dark:text-slate-400">🌐 联网搜索增强</span>

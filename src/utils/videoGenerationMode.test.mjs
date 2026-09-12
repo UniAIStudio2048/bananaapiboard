@@ -1,6 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
+test('AtlasCloud keeps the selected configuration ID when channels share upstream model names', () => {
+  for (const apiType of ['atlascloud-video-t2v', 'atlascloud-video-i2v', 'atlascloud-video-r2v']) {
+    assert.equal(resolveVideoRequestModel({ apiType, actualModel: 'minimax/h3/text-to-video' }, 'tenant-model'), 'tenant-model')
+  }
+})
+
 import {
   buildVideoGenerationFormEntries,
   getDefaultGenerationModeForVideoModel,
