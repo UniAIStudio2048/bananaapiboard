@@ -1548,6 +1548,7 @@ export const getAvailableVideoModels = (options = {}) => {
     let veoInserted = false
     let veo4kInserted = false
     let klingO1Inserted = false
+    let atlasCloudInserted = false
     
     for (let i = 0; i < videoModelsConfig.length; i++) {
       const modelConfig = videoModelsConfig[i]
@@ -1556,6 +1557,22 @@ export const getAvailableVideoModels = (options = {}) => {
       
       // 跳过禁用的模型
       if (modelConfig.enabled === false || enabledModels[key] === false) continue
+
+      // AtlasCloud H3 的三个模式共用一个模型入口，模式下拉负责选择具体渠道。
+      if (String(modelConfig.apiType || '').startsWith('atlascloud-video')) {
+        if (atlasCloudInserted) continue
+        const atlasModels = videoModelsConfig.filter(m => m.enabled !== false && enabledModels[m.name] !== false && String(m.apiType || '').startsWith('atlascloud-video'))
+        const atlasChannels = atlasModels.flatMap(m => Array.isArray(m.channels) && m.channels.length > 0 ? m.channels : [{ id: m.name, ...m }])
+        const supportedModes = { text2video: false, image2video_first: false, multimodal_ref: false }
+        for (const channel of atlasChannels) {
+          for (const mode of Object.keys(supportedModes)) {
+            if (Array.isArray(channel.supportedModes) ? channel.supportedModes.includes(mode) : channel.supportedModes?.[mode] === true) supportedModes[mode] = true
+          }
+        }
+        models.push({ ...modelConfig, value: key, label: 'AtlasCloud H3', apiType: 'atlascloud-video', channels: atlasChannels, minimaxConfig: { ...(modelConfig.minimaxConfig || {}), supportedModes } })
+        atlasCloudInserted = true
+        continue
+      }
       
       // 检测是否是 VEO 子模型
       // 🔧 支持多种命名格式：veo3, veo_3, veo3.1, veo_3_1 等
