@@ -1566,7 +1566,7 @@ const currentMinimaxH3ModeConfig = computed(() => {
 })
 
 // Wan 3.0 模式选择
-const isWan3Model = computed(() => currentModelConfig.value?.apiType === 'wan3')
+const isWan3Model = computed(() => ['wan3', 'atlascloud-wan3'].includes(currentModelConfig.value?.apiType))
 const isRouterBeeWan3Model = computed(() => currentModelConfig.value?.apiType === 'routerbee-wan3')
 const selectedWan3Mode = ref(props.data.wan3Mode || 'text2video')
 
@@ -4784,7 +4784,7 @@ watch(selectedModel, () => {
     console.log('[VideoNode] 切换到 Wan 模型，模式重置为', selectedWanMode.value)
   }
 
-  if (modelConfig?.apiType === 'wan3') {
+  if (['wan3', 'atlascloud-wan3'].includes(modelConfig?.apiType)) {
     const configuredMode = modelConfig?.wan3Config?.defaultMode
     selectedWan3Mode.value = WAN3_MODES.some(mode => mode.value === configuredMode)
       ? configuredMode
@@ -4794,7 +4794,7 @@ watch(selectedModel, () => {
 })
 
 watch(currentModelConfig, modelConfig => {
-  if (modelConfig?.apiType !== 'wan3') return
+  if (!['wan3', 'atlascloud-wan3'].includes(modelConfig?.apiType)) return
   const configuredMode = modelConfig.wan3Config?.defaultMode
   selectedWan3Mode.value = pickInitialSubmode(
     props.data.wan3Mode,
@@ -5816,7 +5816,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     }
   }
 
-  if (capturedState.apiType === 'wan3') {
+  if (['wan3', 'atlascloud-wan3'].includes(capturedState.apiType)) {
     const wan3Mode = capturedState.wan3Mode || selectedWan3Mode.value
     const wan3Config = currentModelConfig.value?.wan3Config || {}
     const maxImages = Math.min(10, Math.max(0, Number(wan3Config.maxImages) || 10))

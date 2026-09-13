@@ -334,7 +334,7 @@ const isSeedanceModel = computed(() => {
 const isAtlasCloudVideoModel = computed(() => String(currentModelConfig.value?.apiType || '').startsWith('atlascloud-video'))
 const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3' || isAtlasCloudVideoModel.value)
 const isReferenceVideoModel = computed(() => isSeedanceModel.value || isMinimaxH3Model.value)
-const isWan3Model = computed(() => ['wan3', 'routerbee-wan3'].includes(currentModelConfig.value?.apiType))
+const isWan3Model = computed(() => ['wan3', 'routerbee-wan3', 'atlascloud-wan3'].includes(currentModelConfig.value?.apiType))
 
 function getWan3Limit(name, maximum) {
   const configured = Number((currentModelConfig.value?.routerbeeConfig || currentModelConfig.value?.wan3Config)?.[name])
@@ -707,7 +707,7 @@ watch(model, (newModel) => {
     if (!seedanceAvailableModes.value.some(m => m.value === seedanceMode.value)) {
       seedanceMode.value = getFirstAvailableMode(defaultMode, seedanceAvailableModes.value)
     }
-  } else if (modelConfig?.apiType === 'wan3' || modelConfig?.apiType === 'routerbee-wan3') {
+  } else if (['wan3', 'routerbee-wan3', 'atlascloud-wan3'].includes(modelConfig?.apiType)) {
     const wan3Config = modelConfig.routerbeeConfig || modelConfig.wan3Config || {}
     wan3Duration.value = Number(wan3Config.duration || durations[0] || 5)
     wan3GenerateAudio.value = wan3Config.audio !== false
@@ -1812,6 +1812,7 @@ async function generateVideo() {
     }
 
     if (isWan3Model.value) {
+      formData.append('seedance_mode', wan3Mode.value)
       formData.append('wan3_audio', wan3GenerateAudio.value ? 'true' : 'false')
       formData.append('wan3_prompt_extend', wan3PromptExtend.value ? 'true' : 'false')
       if (wan3Seed.value.trim()) {

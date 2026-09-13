@@ -12,7 +12,7 @@ test('万相 3.0 提供独立输入模式，避免沿用 Seedance 专有协议',
   for (const mode of ['text2video', 'image2video_first', 'image2video_first_last', 'multimodal_ref', 'file', 'link']) {
     assert.match(source, new RegExp(`value: '${mode}'`))
   }
-  assert.match(source, /const isWan3Model = computed\(\(\) => \['wan3', 'routerbee-wan3'\]\.includes\(currentModelConfig\.value\?\.apiType\)\)/)
+  assert.match(source, /const isWan3Model = computed\(\(\) => \['wan3', 'routerbee-wan3', 'atlascloud-wan3'\]\.includes\(currentModelConfig\.value\?\.apiType\)\)/)
   assert.doesNotMatch(source, /isReferenceVideoModel\.value \|\| isWan3Model\.value/)
 })
 
