@@ -3988,6 +3988,7 @@ onUnmounted(() => {
                   <span>创建时间：{{ new Date(order.created_at).toLocaleString() }}</span>
                   <span v-if="order.paid_at">支付时间：{{ new Date(order.paid_at).toLocaleString() }}</span>
                 </div>
+                <a v-if="order.crypto_checkout_url" :href="order.crypto_checkout_url" class="inline-block mt-3 text-sm text-primary-600 dark:text-primary-400 underline">查看 USDT 订单 / 继续支付</a>
               </div>
             </div>
             

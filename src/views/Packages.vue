@@ -1056,7 +1056,7 @@ async function purchasePackage(pkg) {
     })
     if (res.ok) {
       const data = await res.json()
-      paymentMethods.value = data.methods || []
+      paymentMethods.value = (data.methods || []).filter(method => method.module !== 'AicanPay')
       if (paymentMethods.value.length > 0) {
         purchasePaymentMethod.value = paymentMethods.value[0].id
       }
