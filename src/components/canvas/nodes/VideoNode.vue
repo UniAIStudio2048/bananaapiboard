@@ -1545,9 +1545,8 @@ let didInitializeMinimaxH3Mode = Boolean(props.data.minimaxH3Mode)
 
 const MINIMAX_H3_MODES = [
   { value: 'text2video', label: '文生视频', desc: '纯文本提示词生成视频', needsImage: false, maxImages: 0 },
-  { value: 'image2video_first', label: '首帧', desc: '1张图片作为首帧', needsImage: true, maxImages: 1 },
-  { value: 'image2video_first_last', label: '首尾帧', desc: '2张图片分别作为首帧和尾帧', needsImage: true, maxImages: 2 },
-  { value: 'multimodal_ref', label: '多模态参考', desc: '参考图片/视频/音频生成视频', needsImage: false, maxImages: 9 }
+  { value: 'image2video_first', label: '图生视频', desc: '1张图片作为首帧', needsImage: true, maxImages: 1 },
+  { value: 'multimodal_ref', label: '参考生视频', desc: '参考图片/视频/音频生成视频', needsImage: false, maxImages: 9 }
 ]
 
 const minimaxH3Modes = computed(() => {
@@ -2005,7 +2004,11 @@ function syncGenericVideoResolution(value) {
 
 const minimaxH3ResolutionOptions = computed(() => {
   if (!isMinimaxH3Model.value) return []
-  if (isAtlasCloudVideoModel.value) return filterResolutionDisplay(['768P', '2K']).map(value => ({ value, label: value }))
+  if (isAtlasCloudVideoModel.value) {
+    const configured = getEnabledVideoResolutionOptions(currentModelConfig.value?.resolutionPricing)
+    return filterResolutionDisplay(configured.length > 0 ? configured : ['768P', '2K'])
+      .map(value => ({ value, label: String(value).toUpperCase() }))
+  }
   const minimaxConfig = currentModelConfig.value?.minimaxConfig || {}
   const configuredResolutions = Array.isArray(minimaxConfig.resolutions) && minimaxConfig.resolutions.length > 0
     ? minimaxConfig.resolutions

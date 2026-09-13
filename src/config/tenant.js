@@ -1548,7 +1548,6 @@ export const getAvailableVideoModels = (options = {}) => {
     let veoInserted = false
     let veo4kInserted = false
     let klingO1Inserted = false
-    let atlasCloudInserted = false
     
     for (let i = 0; i < videoModelsConfig.length; i++) {
       const modelConfig = videoModelsConfig[i]
@@ -1558,19 +1557,35 @@ export const getAvailableVideoModels = (options = {}) => {
       // 跳过禁用的模型
       if (modelConfig.enabled === false || enabledModels[key] === false) continue
 
-      // AtlasCloud H3 的三个模式共用一个模型入口，模式下拉负责选择具体渠道。
+      // 后台配置的模型独立展示，仅聚合当前模型自身渠道的生成能力。
       if (String(modelConfig.apiType || '').startsWith('atlascloud-video')) {
-        if (atlasCloudInserted) continue
-        const atlasModels = videoModelsConfig.filter(m => m.enabled !== false && enabledModels[m.name] !== false && String(m.apiType || '').startsWith('atlascloud-video'))
-        const atlasChannels = atlasModels.flatMap(m => Array.isArray(m.channels) && m.channels.length > 0 ? m.channels : [{ id: m.name, ...m }])
+        const atlasChannels = Array.isArray(modelConfig.channels) && modelConfig.channels.length > 0
+          ? modelConfig.channels
+          : [{ id: key, ...modelConfig }]
+        // 渠道用 t2v/i2v 标注能力（未标注视为全支持，与后端 selectAvailableVideoChannels 一致）；
+        // i2v 渠道同时点亮首帧与多模态参考（后端把这两种模式都路由到 i2v 渠道）。
+        const channelSupports = (channel, modes) => {
+          const sm = channel.supportedModes
+          if (!sm) return true
+          if (Array.isArray(sm)) return modes.some(mode => sm.includes(mode))
+          return modes.some(mode => sm[mode] === true)
+        }
         const supportedModes = { text2video: false, image2video_first: false, multimodal_ref: false }
         for (const channel of atlasChannels) {
-          for (const mode of Object.keys(supportedModes)) {
-            if (Array.isArray(channel.supportedModes) ? channel.supportedModes.includes(mode) : channel.supportedModes?.[mode] === true) supportedModes[mode] = true
+          if (channelSupports(channel, ['t2v', 'text2video'])) supportedModes.text2video = true
+          if (channelSupports(channel, ['i2v', 'image2video_first', 'image2video_first_last', 'multimodal_ref', 'r2v'])) {
+            supportedModes.image2video_first = true
+            supportedModes.multimodal_ref = true
           }
         }
-        models.push({ ...modelConfig, value: key, label: 'AtlasCloud H3', apiType: 'atlascloud-video', channels: atlasChannels, minimaxConfig: { ...(modelConfig.minimaxConfig || {}), supportedModes } })
-        atlasCloudInserted = true
+        // 入口顶层能力必须聚合渠道的 t2v/i2v：画布在图生（i2v）状态下按顶层
+        // supportedModes 过滤模型，沿用子模型原配置会把入口整个滤掉。
+        let entryModes = [
+          ...(supportedModes.text2video ? ['t2v'] : []),
+          ...((supportedModes.image2video_first || supportedModes.multimodal_ref) ? ['i2v'] : [])
+        ]
+        if (entryModes.length === 0) entryModes = ['t2v', 'i2v']
+        models.push({ ...modelConfig, value: key, label: modelConfig.displayName || videoModels[key] || key, channels: atlasChannels, supportedModes: entryModes, minimaxConfig: { ...(modelConfig.minimaxConfig || {}), supportedModes } })
         continue
       }
       
