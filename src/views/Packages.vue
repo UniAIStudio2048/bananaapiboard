@@ -1056,7 +1056,7 @@ async function purchasePackage(pkg) {
     })
     if (res.ok) {
       const data = await res.json()
-      paymentMethods.value = (data.methods || []).filter(method => method.module !== 'AicanPay')
+      paymentMethods.value = data.methods || []
       if (paymentMethods.value.length > 0) {
         purchasePaymentMethod.value = paymentMethods.value[0].id
       }
@@ -1838,7 +1838,6 @@ onUnmounted(() => {
   animation: scale-in 0.2s ease-out;
 }
 </style>
-
 
 
 
