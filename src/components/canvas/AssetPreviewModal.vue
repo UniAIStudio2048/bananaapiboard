@@ -1,4 +1,5 @@
 <script setup>
+import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import CachedImage from '@/components/CachedImage.vue'
 import { getMediaUrl } from '@/config/tenant'
@@ -261,7 +262,7 @@ onUnmounted(destroyAudioVisualizer)
 
             <video
               v-else-if="asset.type === 'video'"
-              :src="toSameOriginUrl(asset.url)"
+              :src="toSameOriginUrl(asset.url)" v-stream-video="toSameOriginUrl(asset.url)"
               controls
               autoplay
               class="preview-video"
@@ -296,7 +297,7 @@ onUnmounted(destroyAudioVisualizer)
             <div v-else class="preview-character">
               <video
                 v-if="asset.url && (asset.url.includes('.mp4') || asset.url.includes('/api/images/file/'))"
-                :src="toSameOriginUrl(asset.url)"
+                :src="toSameOriginUrl(asset.url)" v-stream-video="toSameOriginUrl(asset.url)"
                 :poster="asset.thumbnail_url ? getMediaUrl(asset.thumbnail_url) : undefined"
                 controls
                 autoplay

@@ -1,4 +1,5 @@
 <script setup>
+import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import SeedanceReviewButton from '../SeedanceReviewButton.vue'
 defineOptions({
   inheritAttrs: false
@@ -3626,6 +3627,18 @@ function getVideoModeIconClass(value) {
   return 'mode-icon-default'
 }
 
+const atlasCloudModeOptions = computed(() => {
+  const imageCount = referenceImages.value.length
+  const hasOtherMedia = referenceVideos.value.length > 0 || referenceAudios.value.length > 0
+  const available = hasOtherMedia || imageCount > 1
+    ? ['multimodal_ref']
+    : imageCount === 1 ? ['image2video_first', 'multimodal_ref'] : ['text2video']
+  return MINIMAX_H3_MODES.map(mode => ({
+    ...mode,
+    disabled: !available.includes(mode.value) || !minimaxH3Modes.value.some(configured => configured.value === mode.value)
+  }))
+})
+
 // 当前模型的视频模式选择器：仅改变入口 UI，沿用各模式原有状态与持久化字段。
 const activeVideoModeSelector = computed(() => {
   if (isKlingMotionControl.value && !isCozeVideoSwapModel.value) {
@@ -3717,7 +3730,7 @@ const activeVideoModeSelector = computed(() => {
       key: 'minimax-h3',
       label: 'H3 模式',
       value: selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value,
-      options: minimaxH3Modes.value
+      options: isAtlasCloudVideoModel.value ? atlasCloudModeOptions.value : minimaxH3Modes.value
     }
   }
 
@@ -3747,7 +3760,8 @@ const activeVideoSubmodeSelector = computed(() => {
 
 function setActiveVideoMode(value) {
   const selector = activeVideoModeSelector.value
-  if (!selector) return
+  const option = selector?.options.find(option => option.value === value)
+  if (!option || option.disabled) return
 
   switch (selector.key) {
     case 'kling-motion':
@@ -4804,6 +4818,25 @@ watch(currentModelConfig, modelConfig => {
   )
 }, { immediate: true })
 
+// AtlasCloud 按连接素材自动选择生成方式，仅在已有选择失效时调整。
+watch([
+  currentModelConfig, referenceImages, referenceVideos, referenceAudios
+], () => {
+  const apiType = currentModelConfig.value?.apiType || ''
+  if (!apiType.startsWith('atlascloud-video') && apiType !== 'atlascloud-wan3') return
+  const availableModes = atlasCloudModeOptions.value.filter(mode => !mode.disabled)
+  const selectedMode = apiType === 'atlascloud-wan3' ? selectedWan3Mode : selectedMinimaxH3Mode
+  if (availableModes.some(mode => mode.value === selectedMode.value)) return
+  const mode = availableModes[0]?.value
+  if (!mode) return
+  if (apiType === 'atlascloud-wan3') {
+    if (mode === 'text2video' && ['file', 'link'].includes(selectedWan3Mode.value)) return
+    selectedWan3Mode.value = mode
+  } else {
+    selectedMinimaxH3Mode.value = mode
+  }
+}, { immediate: true })
+
 // 🔧 持久化 RunningHub 全能视频 V3.1 模式
 watch(v31Mode, (mode) => {
   if (!isRunningHubAiAppVideoV31Model.value) return
@@ -5406,7 +5439,9 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   formData.append('canvas_workflow_id', workflowId)
   
   // VEO 模型：使用实际的模型名称
-  if (isVeoModel.value) {
+  if (capturedState.apiType === 'atlascloud-wan3' || String(capturedState.apiType || '').startsWith('atlascloud-video')) {
+    formData.append('model', capturedState.model)
+  } else if (isVeoModel.value) {
     formData.append('model', veoActualModel.value)
     formData.append('veo_resolution', capturedState.videoResolution || veoResolution.value)
     console.log('[VideoNode] VEO 实际模型:', veoActualModel.value, '清晰度:', veoResolution.value)
@@ -5710,7 +5745,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   }
 
   // MiniMax H3 官方直连：模式参数（后端按 seedance_mode 组装多模态 content[]）
-  if (isMinimaxH3Model.value) {
+  if (capturedState.isMinimaxH3 ?? isMinimaxH3Model.value) {
     const h3Mode = capturedState.minimaxH3Mode || selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value
     formData.append('seedance_mode', h3Mode)
     formData.append('resolution', capturedState.minimaxH3Resolution || minimaxH3Resolution.value)
@@ -5727,11 +5762,11 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       if (finalImages.length > 0) {
         formData.append('reference_images', JSON.stringify(finalImages.slice(0, 9)))
       }
-      const h3Videos = referenceVideos.value || []
+      const h3Videos = capturedState.referenceVideos || referenceVideos.value || []
       if (h3Videos.length > 0) {
         formData.append('reference_videos', JSON.stringify(h3Videos.slice(0, 3)))
       }
-      const h3Audios = referenceAudios.value || []
+      const h3Audios = capturedState.referenceAudios || referenceAudios.value || []
       if (h3Audios.length > 0) {
         formData.append('reference_audios', JSON.stringify(h3Audios.slice(0, 3)))
       }
@@ -5833,11 +5868,11 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       if (finalImages.length > 0) {
         formData.append('reference_images', JSON.stringify(finalImages.slice(0, maxImages)))
       }
-      const orderedVideos = referenceVideos.value || []
+      const orderedVideos = capturedState.referenceVideos || referenceVideos.value || []
       if (orderedVideos.length > 0) {
         formData.append('reference_videos', JSON.stringify(orderedVideos.slice(0, maxVideos)))
       }
-      const orderedAudios = referenceAudios.value || []
+      const orderedAudios = capturedState.referenceAudios || referenceAudios.value || []
       if (orderedAudios.length > 0) {
         formData.append('reference_audios', JSON.stringify(orderedAudios.slice(0, maxAudios)))
       }
@@ -6306,8 +6341,7 @@ async function pollVideoTaskForNode(taskId, nodeId, isOffPeak = false, taskCreat
   })
 }
 
-async function ensureReferenceVideoUrlsAccessible(nodeId, targetNodeId) {
-  const currentRefVideos = referenceVideos.value || []
+async function ensureReferenceVideoUrlsAccessible(nodeId, targetNodeId, currentRefVideos = referenceVideos.value || []) {
   const hasBlobVideos = currentRefVideos.some(url => url.startsWith('blob:'))
   if (!hasBlobVideos) return currentRefVideos
 
@@ -6427,9 +6461,11 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
       capturedState.isOmniVideoModel ||
       capturedState.isCozeVideoSwapModel ||
       (capturedState.apiType === 'wan' && ['r2v', 'videoedit', 'animate_mix'].includes(capturedState.wanMode)) ||
-      (capturedState.isMinimaxH3 && capturedState.minimaxH3Mode === 'multimodal_ref')
+      (capturedState.isMinimaxH3 && capturedState.minimaxH3Mode === 'multimodal_ref') ||
+      (capturedState.apiType === 'atlascloud-wan3' && capturedState.wan3Mode === 'multimodal_ref')
     if (shouldPrepareReferenceVideos) {
-      const accessibleReferenceVideos = await ensureReferenceVideoUrlsAccessible(capturedState.nodeId, targetNodeId)
+      const accessibleReferenceVideos = await ensureReferenceVideoUrlsAccessible(capturedState.nodeId, targetNodeId, capturedState.referenceVideos)
+      capturedState.referenceVideos = accessibleReferenceVideos
       if (capturedState.isOmniVideoModel) {
         capturedState.omniReferences = buildOmniReferenceUrls(finalImages, accessibleReferenceVideos)
       }
@@ -6439,13 +6475,13 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
     }
 
     // 确保参考音频可访问（blob URL 无法被外部 API 使用）
-    if (capturedState.isSeedance2 || capturedState.isMinimaxH3) {
-      const currentRefAudios = referenceAudios.value || []
+    if (capturedState.isSeedance2 || capturedState.isMinimaxH3 || capturedState.apiType === 'atlascloud-wan3') {
+      const currentRefAudios = [...(capturedState.referenceAudios || referenceAudios.value || [])]
       const hasBlobAudios = currentRefAudios.some(url => url.startsWith('blob:'))
       if (hasBlobAudios) {
         console.log('[VideoNode] 检测到参考音频含 blob URL，开始上传到云端...')
         canvasStore.updateNodeData(targetNodeId, { progress: '正在处理参考音频...' })
-        for (const audioUrl of currentRefAudios) {
+        for (const [audioIndex, audioUrl] of currentRefAudios.entries()) {
           if (!audioUrl.startsWith('blob:')) continue
           try {
             const resp = await fetch(audioUrl)
@@ -6458,6 +6494,7 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
             if (uploadResult.status !== 'completed' || !uploadResult.url) {
               throw new Error('媒体上传未完成')
             }
+            currentRefAudios[audioIndex] = uploadResult.url
             console.log('[VideoNode] 参考音频 blob 上传成功:', uploadResult.url)
             const upstreamEdges = canvasStore.edges.filter(e => e.target === capturedState.nodeId)
             for (const edge of upstreamEdges) {
@@ -6478,10 +6515,12 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
             }
           } catch (err) {
             console.error('[VideoNode] 参考音频 blob 上传失败:', err.message)
+            throw err
           }
         }
         console.log('[VideoNode] 参考音频处理完成，当前列表:', referenceAudios.value)
       }
+      capturedState.referenceAudios = currentRefAudios
     }
     
     canvasStore.updateNodeData(targetNodeId, { progress: '正在提交任务...' })
@@ -6688,7 +6727,7 @@ async function handleGenerate(options = {}) {
       await showAlert('H3 首尾帧模式需要连接或上传2张图片', '提示')
       return
     }
-    if (h3Mode === 'multimodal_ref' && finalImages.length === 0 && referenceVideos.value.length === 0) {
+    if (h3Mode === 'multimodal_ref' && finalImages.length === 0 && referenceVideos.value.length === 0 && !(isAtlasCloudVideoModel.value && referenceAudios.value.length > 0)) {
       await showAlert('H3 多模态参考模式需要至少连接1张图片或1个视频', '提示')
       return
     }
@@ -6982,6 +7021,8 @@ async function handleGenerate(options = {}) {
   const capturedState = {
     nodeId: props.id,
     model: selectedModel.value,
+    referenceVideos: [...referenceVideos.value],
+    referenceAudios: [...referenceAudios.value],
     isHeygenMode: isHeygenFlow,
     isDigitalHumanMode: isDigitalHumanFlow,
     digitalHuman: upstreamData.digitalHumans[0] || null,
@@ -9655,7 +9696,7 @@ function handleToolbarPreview() {
           <video 
             v-if="shouldMountVideoElement && isNodeVisible"
             ref="videoPlayerRef"
-            :src="normalizedVideoUrl"
+            :src="normalizedVideoUrl" v-stream-video="normalizedVideoUrl"
             :preload="videoPreloadMode"
             muted
             :loop="!data?.isCharacterNode"
@@ -9811,7 +9852,7 @@ function handleToolbarPreview() {
       <div v-if="isFullscreenPreview" class="fullscreen-preview-overlay" @click="closeFullscreenPreview">
         <div class="fullscreen-preview-container" @click.stop>
           <video 
-            :src="normalizedVideoUrl"
+            :src="normalizedVideoUrl" v-stream-video="normalizedVideoUrl"
             controls 
             autoplay
             preload="metadata"
@@ -10375,6 +10416,7 @@ function handleToolbarPreview() {
                   type="button"
                   class="video-mode-dropdown-item"
                   :class="{ active: option.value === activeVideoModeSelector.value }"
+                  :disabled="option.disabled"
                   @click="setActiveVideoMode(option.value); videoModeDropdownOpen = null"
                 >
                   <span
@@ -12751,7 +12793,7 @@ function handleToolbarPreview() {
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 
-.video-mode-dropdown-item:hover {
+.video-mode-dropdown-item:hover:not(:disabled) {
   color: rgba(255, 255, 255, 0.9);
   background: rgba(255, 255, 255, 0.07);
 }
@@ -12763,6 +12805,11 @@ function handleToolbarPreview() {
 
 .video-mode-dropdown-item.active .video-mode-option-icon {
   color: #ffffff;
+}
+
+.video-mode-dropdown-item:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* 比例选择器：复用视频模式的自定义浮层 */
@@ -14260,7 +14307,7 @@ function handleToolbarPreview() {
   color: #57534e;
 }
 
-:root.canvas-theme-light .video-node .video-mode-dropdown-item:hover {
+:root.canvas-theme-light .video-node .video-mode-dropdown-item:hover:not(:disabled) {
   color: #292524;
   background: rgba(0, 0, 0, 0.05);
 }

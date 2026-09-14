@@ -1,4 +1,5 @@
 <script setup>
+import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getMe, isQiniuCdnUrl, buildVideoDownloadUrl, uploadImages } from '@/api/client'
 import { getTenantHeaders, getModelDisplayName, isModelEnabled, getAvailableVideoModels, getApiUrl, getMediaUrl } from '@/config/tenant'
@@ -3955,7 +3956,7 @@ onUnmounted(() => {
                 />
                 <video
                   v-else-if="item.video_url"
-                  :src="buildSafeVideoUrl(item.video_url)"
+                  :src="buildSafeVideoUrl(item.video_url)" v-stream-video="buildSafeVideoUrl(item.video_url)"
                   preload="metadata"
                   muted
                   class="w-full h-full object-cover pointer-events-none"
@@ -4117,7 +4118,7 @@ onUnmounted(() => {
                 />
                 <video
                   v-else-if="item.video_url"
-                  :src="buildSafeVideoUrl(item.video_url)"
+                  :src="buildSafeVideoUrl(item.video_url)" v-stream-video="buildSafeVideoUrl(item.video_url)"
                   preload="metadata"
                   muted
                   class="w-full h-full object-cover pointer-events-none"
@@ -4303,7 +4304,7 @@ onUnmounted(() => {
           <video 
             ref="videoPlayerRef"
             v-if="currentVideo?.video_url" 
-            :src="buildSafeVideoUrl(currentVideo.video_url)" 
+            :src="buildSafeVideoUrl(currentVideo.video_url)" v-stream-video="buildSafeVideoUrl(currentVideo.video_url)"
             controls 
             class="w-full h-full object-contain"
             playsinline

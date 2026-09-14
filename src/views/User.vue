@@ -1,4 +1,5 @@
 <script setup>
+import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from '@/i18n'
@@ -3439,7 +3440,7 @@ onUnmounted(() => {
                   <div class="bg-black relative cursor-pointer history-video-stage" :style="getVideoPreviewAspectStyle(video)" @click="videoSelectMode && video.video_url ? toggleVideoSelection(video.id) : viewVideo(video)">
                     <video
                       v-if="video.video_url"
-                      :src="getMediaUrl(video.video_url)"
+                      :src="getMediaUrl(video.video_url)" v-stream-video="getMediaUrl(video.video_url)"
                       class="w-full h-full object-contain"
                       muted
                       playsinline
@@ -5065,7 +5066,7 @@ onUnmounted(() => {
             <video
               ref="videoPlayerRef"
               v-if="selectedVideo.video_url"
-              :src="getMediaUrl(selectedVideo.video_url)"
+              :src="getMediaUrl(selectedVideo.video_url)" v-stream-video="getMediaUrl(selectedVideo.video_url)"
               controls
               playsinline
               class="w-full h-full object-contain"

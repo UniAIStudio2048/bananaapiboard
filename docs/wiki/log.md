@@ -2,10 +2,20 @@
 type: log
 title: 用户前端知识库变更日志
 tags: [bananaapiboard, canvas, wiki]
-timestamp: 2026-08-24
+timestamp: 2026-09-14
 ---
 
 # 变更日志
+
+## 2026-09-14
+
+- 新增 [R2 视频播放与源文件下载](r2-video-playback.md)：Stream/R2 HLS 播放切换、失败回退和下载一致性验证。
+
+- 修正 [AtlasCloud 手动模式与禁用规则](minimax-video-model-mapping.md)：单图可在图生和参考之间手选，无素材仅文生可选，其他项置灰；移除覆盖人工选择的监听行为，并通过 Chromium 组件交互验证。
+
+- 按用户要求重新构建并验证 [AtlasCloud 画布修复生效](minimax-video-model-mapping.md)：网站 HTTPS 返回的首页和入口/画布静态资源与新 `dist` 一致。
+
+- 更新 [MiniMax 视频模型展示与生成方式](minimax-video-model-mapping.md)：记录 AtlasCloud 按连线素材切换模式、排队请求保留模型与音视频素材、音频输入校验，以及 GitNexus 和既有 Omni 源码断言的验证限制。
 
 ## 2026-09-13
 
