@@ -5,6 +5,7 @@
  */
 import { ref, watch, computed } from 'vue'
 import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
+import PhoneCountrySelect from '@/components/auth/PhoneCountrySelect.vue'
 import { useSmsAuth } from '@/composables/useSmsAuth'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
@@ -246,7 +247,7 @@ async function submit() {
           ...(inviteCode.value ? { invite_code: inviteCode.value } : {}),
           ...(emailCode.value ? { email_code: emailCode.value } : {})
         }
-      : { username: account.value, email: account.value, password: password.value }
+      : { username: account.value, email: account.value, password: password.value, country: loginCountry.value }
 
     const r = await fetch(url, {
       method: 'POST',
@@ -367,7 +368,8 @@ async function resetPassword() {
   }
 }
 
-const { policy, policyError, smsLogin, phoneFormMode, copy, loadAuthPolicy, backToPassword } = useSmsAuth(mode, resetMode, () => props.modelValue)
+const { policy, policyError, policyLoading, smsLogin, showSmsMethod, phoneFormMode, copy, loadAuthPolicy, backToPassword, loginCountry, loginCountries } = useSmsAuth(mode, resetMode, () => props.modelValue)
+watch(policy, current => { emailConfig.value.require_email_verification = current.registration_mode === 'email' })
 function handleSmsAuthenticated() { emit('login-success'); close() }
 </script>
 
@@ -382,7 +384,7 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
       <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
       <!-- 弹窗 -->
-      <div class="relative w-full max-w-md mx-4 bg-gray-900 rounded-2xl border border-white/10 shadow-2xl animate-[slideUp_0.3s_ease]">
+      <div class="relative w-full max-w-md max-h-[calc(100dvh_-_2rem)] overflow-y-auto mx-4 bg-gray-900 text-white rounded-2xl border border-white/10 shadow-2xl animate-[slideUp_0.3s_ease]">
         <!-- 头部 -->
         <div class="flex items-center justify-between px-6 py-4 border-b border-white/10">
           <div class="flex items-center gap-2">
@@ -422,11 +424,13 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
             >注册</button>
           </div>
 
-          <div class="text-sm text-blue-400 mb-4">
-            <button v-if="(resetMode ? policy.sms?.retrieve?.length : mode === 'login' && policy.sms?.login?.length)" type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button>
+          <div v-if="showSmsMethod" class="text-sm text-blue-400 mb-4">
+            <button type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button>
           </div>
           <p v-if="policyError" role="alert" class="text-sm text-red-400">{{ copy.loadError }} <button type="button" @click="loadAuthPolicy">{{ copy.retry }}</button></p>
-          <p v-if="mode === 'register' && !policy.registration_enabled" role="status" class="text-white/70">{{ copy.closed }}</p>
+          <p v-if="policyLoading && mode === 'register'" role="status">{{ copy.loading }}</p>
+          <template v-else-if="policyError && mode === 'register'"></template>
+          <p v-else-if="mode === 'register' && !policy.registration_enabled" role="status" class="text-white/70">{{ copy.closed }}</p>
           <PhoneAuthForm v-else-if="phoneFormMode" class="text-white" :mode="phoneFormMode" :policy="policy" :invite-code="inviteCode" :require-invite-code="requireInviteCode" @authenticated="handleSmsAuthenticated" @back="backToPassword" @retrieve="resetMode = true; smsLogin = true" />
           <!-- 找回密码表单 -->
           <form v-else-if="resetMode" @submit.prevent="resetPassword" class="space-y-4">
@@ -518,6 +522,7 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
 
           <!-- 登录/注册表单 -->
           <form v-else @submit.prevent="submit" class="space-y-4">
+            <PhoneCountrySelect v-if="mode === 'login' && !resetMode" v-model="loginCountry" :countries="loginCountries" :account="account" />
             <!-- 注册：昵称 -->
             <div v-if="mode === 'register'">
               <label class="block text-sm text-white/70 mb-1.5">昵称 *</label>
@@ -556,12 +561,12 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
 
             <!-- 普通模式：用户名/邮箱 -->
             <div v-if="!(mode === 'register' && hasWhitelist)">
-              <label class="block text-sm text-white/70 mb-1.5">{{ mode === 'register' ? '邮箱' : '用户名/邮箱' }}</label>
+              <label class="block text-sm text-white/70 mb-1.5">{{ mode === 'register' ? '邮箱' : copy.loginAccount }}</label>
               <input
                 v-model="account"
                 :type="mode === 'register' ? 'email' : 'text'"
                 class="w-full px-3.5 py-2.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-500/50 transition"
-                :placeholder="mode === 'register' ? '请输入邮箱地址' : '请输入用户名或邮箱'"
+                :placeholder="mode === 'register' ? '请输入邮箱地址' : copy.loginAccountPlaceholder"
                 required
               />
             </div>

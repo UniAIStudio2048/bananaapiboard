@@ -40,10 +40,10 @@ onUnmounted(()=>clearInterval(timer))
   <div class="sms-fields">
     <p v-if="boundPhone" class="sms-bound">{{ boundPhone }}</p>
     <template v-else>
-      <label>{{ copy.country }}<select :value="modelValue.country" :disabled="sending || busy" @change="update({country:$event.target.value})"><option v-for="item in countryOptions" :key="item.country" :value="item.country">{{ item.country }} +{{ item.code }}</option></select></label>
-      <label>{{ copy.phone }}<input :value="modelValue.phone" type="tel" autocomplete="tel" :disabled="sending || busy" required maxlength="64" @input="update({phone:$event.target.value})" /></label>
+      <label v-if="countries.some(country => country !== 'CN')">{{ copy.country }}<select :value="modelValue.country" :disabled="sending || busy" @change="update({country:$event.target.value})"><option v-for="item in countryOptions" :key="item.country" :value="item.country">{{ item.country }} +{{ item.code }}</option></select></label>
+      <label>{{ copy.phone }}<input :value="modelValue.phone" :placeholder="copy.phonePlaceholder" type="tel" autocomplete="tel" :disabled="sending || busy" required maxlength="64" @input="update({phone:$event.target.value})" /></label>
     </template>
-    <label>{{ copy.code }}<div class="sms-code-row"><input :aria-label="copy.code" :value="modelValue.code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" :disabled="busy" required @input="update({code:$event.target.value.replace(/\D/g,'')})" /><button type="button" :disabled="sending || busy || remaining > 0 || !countries.length || (!boundPhone && !modelValue.phone)" @click="send">{{ sending ? copy.sending : remaining ? `${remaining}s` : copy.send }}</button></div></label>
+    <label>{{ copy.code }}<div class="sms-code-row"><input :aria-label="copy.code" :value="modelValue.code" :placeholder="copy.codePlaceholder" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" :disabled="busy" required @input="update({code:$event.target.value.replace(/\D/g,'')})" /><button type="button" :disabled="sending || busy || remaining > 0 || !countries.length || (!boundPhone && !modelValue.phone)" @click="send">{{ sending ? copy.sending : remaining ? `${remaining}s` : copy.send }}</button></div></label>
     <p v-if="error" role="alert" class="sms-error">{{ error }}</p><p v-else-if="sent" role="status">{{ copy.sent }}</p>
   </div>
 </template>

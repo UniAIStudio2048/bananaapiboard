@@ -33,18 +33,29 @@ async function submit(){
   <form class="phone-auth" @submit.prevent="submit" data-testid="phone-auth-form">
     <p v-if="done" role="status">{{ copy.resetDone }}</p>
     <template v-else-if="countries.length">
-      <label v-if="mode==='register'">{{ copy.username }}<input v-model="username" autocomplete="username" maxlength="64" required :disabled="busy" /></label>
+      <label v-if="mode==='register'">{{ copy.username }}<input v-model="username" :placeholder="copy.usernamePlaceholder" autocomplete="username" maxlength="64" required :disabled="busy" /></label>
       <PhoneVerificationFields v-model="verification" :purpose="mode" :countries="countries" :busy="busy" />
-      <template v-if="mode!=='login'"><label>{{ mode==='retrieve'?copy.newPassword:copy.password }}<input v-model="password" type="password" autocomplete="new-password" minlength="6" maxlength="256" required :disabled="busy" /></label><label>{{ copy.confirm }}<input v-model="confirm" type="password" autocomplete="new-password" required :disabled="busy" /></label></template>
-      <label v-if="mode==='register'">{{ copy.invite }}{{ requireInviteCode?' *':'' }}<input v-model="invite" maxlength="12" :required="requireInviteCode" :disabled="busy" /></label>
+      <template v-if="mode!=='login'"><label>{{ mode==='retrieve'?copy.newPassword:copy.password }}<input v-model="password" :placeholder="copy.passwordPlaceholder" type="password" autocomplete="new-password" minlength="6" maxlength="256" required :disabled="busy" /></label><label>{{ copy.confirm }}<input v-model="confirm" :placeholder="copy.confirmPlaceholder" type="password" autocomplete="new-password" required :disabled="busy" /></label></template>
+      <label v-if="mode==='register'">{{ copy.invite }}{{ requireInviteCode?' *':'' }}<input v-model="invite" :placeholder="requireInviteCode ? copy.inviteRequired : copy.invitePlaceholder" maxlength="12" :required="requireInviteCode" :disabled="busy" /></label>
       <p v-if="error" role="alert" class="sms-error">{{ error }}</p>
       <button type="submit" class="primary" :disabled="busy">{{ busy?copy.submitting:mode==='register'?copy.register:mode==='retrieve'?copy.reset:copy.login }}</button>
     </template>
     <p v-else role="status">{{ copy.unavailable }}</p>
-    <button v-if="mode==='login' && policy.sms?.retrieve?.length" type="button" @click="emit('retrieve')">{{ copy.retrieve }}</button>
-    <button type="button" @click="emit('back')">{{ copy.back }}</button>
+    <div class="phone-auth-actions">
+      <button type="button" class="phone-auth-link phone-auth-back" @click="emit('back')">
+        <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="m8 5-5 5 5 5M3 10h14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
+        <span>{{ copy.back }}</span>
+      </button>
+      <button v-if="mode==='login' && policy.sms?.retrieve?.length" type="button" class="phone-auth-link" @click="emit('retrieve')">{{ copy.retrieve }}</button>
+    </div>
   </form>
 </template>
 <style scoped>
 .phone-auth{display:grid;gap:14px;color:inherit}label{display:grid;gap:6px;font-size:14px}input{box-sizing:border-box;width:100%;padding:10px 12px;border:1px solid #64748b80;border-radius:8px;background:var(--sms-input-bg,#ffffff10);color:inherit}button{padding:10px;border-radius:8px;color:inherit}button.primary{background:#2563eb;color:white;font-weight:600}button:disabled{opacity:.5;cursor:not-allowed}input:focus-visible,button:focus-visible{outline:2px solid #60a5fa;outline-offset:2px}.sms-error{color:#ef4444}p{margin:0;font-size:14px}
+.phone-auth-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 20px;padding-top:4px;border-top:1px solid #64748b33}
+.phone-auth-link{min-height:36px;max-width:100%;padding:6px 0;font-size:13px;font-weight:400;line-height:20px;text-align:start;color:color-mix(in srgb,currentColor 65%,transparent);transition:color .15s}
+.phone-auth-link:hover,.phone-auth-link:focus-visible{color:inherit}
+.phone-auth-back{display:inline-flex;align-items:center;gap:6px}
+.phone-auth-back svg{width:14px;height:14px;flex-shrink:0}
+.phone-auth-back:dir(rtl) svg{transform:rotate(180deg)}
 </style>

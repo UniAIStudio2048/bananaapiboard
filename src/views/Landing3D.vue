@@ -158,9 +158,11 @@
             <p class="reset-desc">请输入注册邮箱，我们将发送验证码到您的邮箱</p>
           </div>
 
-          <div class="sms-method-toggle"><button v-if="(resetMode ? policy.sms?.retrieve?.length : authMode === 'login' && policy.sms?.login?.length)" type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button></div>
+          <div v-if="showSmsMethod" class="sms-method-toggle"><button type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button></div>
           <p v-if="policyError" role="alert">{{ copy.loadError }} <button type="button" @click="loadAuthPolicy">{{ copy.retry }}</button></p>
-          <p v-if="authMode === 'register' && !policy.registration_enabled" role="status">{{ copy.closed }}</p>
+          <p v-if="policyLoading && authMode === 'register'" role="status">{{ copy.loading }}</p>
+          <template v-else-if="policyError && authMode === 'register'"></template>
+          <p v-else-if="authMode === 'register' && !policy.registration_enabled" role="status">{{ copy.closed }}</p>
           <PhoneAuthForm v-else-if="phoneFormMode" :mode="phoneFormMode" :policy="policy" :invite-code="inviteCode" @authenticated="handleSmsAuthenticated" @back="backToPassword" @retrieve="resetMode = true; smsLogin = true" />
           <!-- 密码重置表单 -->
           <form v-else-if="resetMode" @submit.prevent="resetPassword" class="auth-form">
@@ -213,6 +215,7 @@
 
           <!-- 登录/注册表单 -->
           <form v-else @submit.prevent="submitAuth" class="auth-form">
+            <PhoneCountrySelect v-if="authMode === 'login' && !resetMode" v-model="loginCountry" :countries="loginCountries" :account="account" />
             <!-- 注册模式且有白名单：显示用户名和邮箱分开的输入 -->
             <div v-if="authMode === 'register' && emailConfig.email_whitelist.length > 0" class="form-group">
               <input v-model="account" type="text" class="form-input" :placeholder="t('auth.username')" required />
@@ -233,7 +236,7 @@
 
             <!-- 其他模式：显示原来的邮箱/登录名输入框 -->
             <div v-if="!(authMode === 'register' && emailConfig.email_whitelist.length > 0)" class="form-group">
-              <input v-model="account" :type="authMode === 'register' ? 'email' : 'text'" class="form-input" :placeholder="t('auth.emailOrUsername')" required />
+              <input v-model="account" :type="authMode === 'register' ? 'email' : 'text'" class="form-input" :placeholder="authMode === 'login' ? copy.loginAccountPlaceholder : t('auth.emailOrUsername')" required />
             </div>
 
             <div class="form-group">
@@ -354,8 +357,9 @@
 
 <script setup>
 import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
+import PhoneCountrySelect from '@/components/auth/PhoneCountrySelect.vue'
 import { useSmsAuth } from '@/composables/useSmsAuth'
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { watch, ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
@@ -736,7 +740,7 @@ const submitAuth = async () => {
           ...(inviteCode.value ? { invite_code: inviteCode.value } : {}),
           ...(emailCode.value ? { email_code: emailCode.value } : {})
         }
-      : { username: account.value, email: account.value, password: password.value }
+      : { username: account.value, email: account.value, password: password.value, country: loginCountry.value }
     const r = await fetch(url, { method: 'POST', headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!r.ok) {
       const data = await r.json()
@@ -1510,7 +1514,8 @@ onUnmounted(() => {
   })
   scenesData = []
 })
-const { policy, policyError, smsLogin, phoneFormMode, copy, loadAuthPolicy, backToPassword } = useSmsAuth(authMode, resetMode, () => showLoginModal.value)
+const { policy, policyError, policyLoading, smsLogin, showSmsMethod, phoneFormMode, copy, loadAuthPolicy, backToPassword, loginCountry, loginCountries } = useSmsAuth(authMode, resetMode, () => showLoginModal.value)
+watch(policy, current => { emailConfig.value.require_email_verification = current.registration_mode === 'email' })
 function handleSmsAuthenticated() { showLoginModal.value = false; showModeModal.value = true }
 </script>
 
@@ -2071,6 +2076,7 @@ function handleSmsAuthenticated() { showLoginModal.value = false; showModeModal.
 
 .modal-container {
   position: relative;
+  color: #fff;
   box-sizing: border-box;
   max-height: calc(100dvh - 32px);
   overflow-y: auto;

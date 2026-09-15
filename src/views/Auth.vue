@@ -1,6 +1,7 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { watch, ref, onMounted, computed } from 'vue'
 import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
+import PhoneCountrySelect from '@/components/auth/PhoneCountrySelect.vue'
 import { useSmsAuth } from '@/composables/useSmsAuth'
 import { useRouter } from 'vue-router'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
@@ -292,7 +293,7 @@ async function submit() {
           ...(inviteCode.value ? { invite_code: inviteCode.value } : {}),
           ...(emailCode.value ? { email_code: emailCode.value } : {})
         }
-      : { username: account.value, email: account.value, password: password.value }
+      : { username: account.value, email: account.value, password: password.value, country: loginCountry.value }
     const r = await fetch(url, { method: 'POST', headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
     if (!r.ok) {
       const data = await r.json()
@@ -340,7 +341,8 @@ async function submit() {
     loading.value = false
   }
 }
-const { policy, policyError, smsLogin, phoneFormMode, copy, loadAuthPolicy, backToPassword } = useSmsAuth(mode, resetMode)
+const { policy, policyError, policyLoading, smsLogin, showSmsMethod, phoneFormMode, copy, loadAuthPolicy, backToPassword, loginCountry, loginCountries } = useSmsAuth(mode, resetMode)
+watch(policy, current => { emailConfig.value.require_email_verification = current.registration_mode === 'email' })
 function handleSmsAuthenticated() {
   const redirect = new URLSearchParams(location.search).get('redirect') || '/'
   location.href = redirect.startsWith('/') && !redirect.startsWith('//') ? redirect : '/'
@@ -395,12 +397,15 @@ function handleSmsAuthenticated() {
           </p>
         </div>
 
-        <div class="text-sm text-blue-500 mb-4"><button v-if="(resetMode ? policy.sms?.retrieve?.length : mode === 'login' && policy.sms?.login?.length)" type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button></div>
+        <div v-if="showSmsMethod" class="text-sm text-blue-500 mb-4"><button type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button></div>
         <p v-if="policyError" role="alert">{{ copy.loadError }} <button type="button" @click="loadAuthPolicy">{{ copy.retry }}</button></p>
-        <p v-if="mode === 'register' && !policy.registration_enabled" role="status">{{ copy.closed }}</p>
+        <p v-if="policyLoading && mode === 'register'" role="status">{{ copy.loading }}</p>
+        <template v-else-if="policyError && mode === 'register'"></template>
+        <p v-else-if="mode === 'register' && !policy.registration_enabled" role="status">{{ copy.closed }}</p>
         <PhoneAuthForm v-else-if="phoneFormMode" :mode="phoneFormMode" :policy="policy" :invite-code="inviteCode" :require-invite-code="requireInviteCode" @authenticated="handleSmsAuthenticated" @back="backToPassword" @retrieve="resetMode = true; smsLogin = true" />
         <!-- 表单 -->
         <form v-else @submit.prevent="resetMode ? resetPassword() : submit()" class="space-y-6">
+          <PhoneCountrySelect v-if="mode === 'login' && !resetMode" v-model="loginCountry" :countries="loginCountries" :account="account" />
           <!-- 注册模式且需要邮箱验证：显示用户名和邮箱分开的输入 -->
           <div v-if="needSeparateEmailInput">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -464,13 +469,13 @@ function handleSmsAuthenticated() {
           <!-- 其他模式（登录/不需要邮箱验证的注册）：显示原来的邮箱/登录名输入框 -->
           <div v-if="!needSeparateEmailInput">
             <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              📧 邮箱/登录名
+              {{ mode === 'login' && !resetMode ? copy.loginAccount : '📧 邮箱/登录名' }}
             </label>
             <input 
               v-model="account" 
               type="text" 
               class="input"
-              placeholder="请输入邮箱或登录名"
+              :placeholder="mode === 'login' && !resetMode ? copy.loginAccountPlaceholder : '请输入邮箱或登录名'"
               required
             />
           </div>
