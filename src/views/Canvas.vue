@@ -3390,11 +3390,11 @@ function closePackageModal() {
   showPackageModal.value = false
 }
 
-// 套餐购买成功回调
+// 按业务订单类型显示支付成功提示
 function handlePurchaseSuccess(data) {
-  console.log('[Canvas] 套餐购买成功:', data)
-  displayToast('套餐购买成功！', 'success', 3000)
-  // 刷新用户信息
+  if (data?.kind === 'recharge') displayToast('余额充值成功！', 'success', 3000)
+  else if (data?.kind === 'package') displayToast('套餐购买成功！', 'success', 3000)
+  // 刷新用户信息（余额划转等无订单事件只刷新）
   handleUserInfoUpdated()
 }
 

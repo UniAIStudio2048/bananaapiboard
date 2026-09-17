@@ -1,4 +1,5 @@
 <script setup>
+import { openCheckout } from '@/utils/openCheckout'
 import { ref, computed, onMounted, watch } from 'vue'
 import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
@@ -29,8 +30,6 @@ const showPurchaseModal = ref(false)
 const selectedPackage = ref(null)
 const purchaseLoading = ref(false)
 const purchaseError = ref('')
-const paymentMethods = ref([])
-const purchasePaymentMethod = ref(null)
 
 // 优惠券状态
 const purchaseCouponCode = ref('')
@@ -39,18 +38,10 @@ const couponDiscount = ref(0)
 const couponError = ref('')
 const couponLoading = ref(false)
 
-// 等待支付状态
-const showPaymentWaiting = ref(false)
-const paymentUrl = ref('')
-const pendingOrderNo = ref('')
-const checkingPayment = ref(false)
-
 // 充值弹窗状态
 const showRechargeModal = ref(false)
 const rechargeAmount = ref(null)
-const lastRechargeAmount = ref(0) // 记录最后一次充值的金额，用于等待界面显示
 const customAmount = ref('')
-const rechargePaymentMethod = ref(null) // 在打开弹窗时设置默认值
 const rechargeLoading = ref(false)
 const rechargeError = ref('')
 const rechargeCards = ref([])
@@ -99,16 +90,6 @@ const quickAmounts = computed(() => [
   { value: 50000 },
   { value: 88800 }
 ].map(item => ({ ...item, label: `${currencySymbol.value}${item.value / 100}` })))
-
-// 默认支付方式
-const defaultPaymentMethods = [
-  { id: 'alipay_wechat', name: '支付宝/微信' }
-]
-
-// 充值支付方式选项（优先使用后端返回的，否则使用默认）
-const rechargePaymentOptions = computed(() => {
-  return paymentMethods.value.length > 0 ? paymentMethods.value : defaultPaymentMethods
-})
 
 // 套餐等级映射
 const packageLevels = {
@@ -222,88 +203,38 @@ async function purchasePackage(pkg) {
   // 打开支付确认模态框
   selectedPackage.value = pkg
   showPurchaseModal.value = true
-  purchasePaymentMethod.value = null
   purchaseError.value = ''
   purchaseCouponCode.value = ''
   appliedCoupon.value = null
   couponDiscount.value = 0
   couponError.value = ''
 
-  // 加载支付方式
-  try {
-    const token = localStorage.getItem('token')
-    const res = await fetch(getApiUrl('/api/user/payment-methods'), {
-      headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
-    })
-    if (res.ok) {
-      const data = await res.json()
-      paymentMethods.value = data.methods || []
-      if (paymentMethods.value.length > 0) {
-        purchasePaymentMethod.value = paymentMethods.value[0].id
-      }
-    }
-  } catch (e) {
-    console.error('[loadPaymentMethods] error:', e)
-  }
+
 }
 
 // 关闭购买确认弹窗
 function closePurchaseModal() {
   showPurchaseModal.value = false
   selectedPackage.value = null
-  purchasePaymentMethod.value = null
   purchaseError.value = ''
   purchaseCouponCode.value = ''
   appliedCoupon.value = null
   couponDiscount.value = 0
   couponError.value = ''
-  showPaymentWaiting.value = false
-  paymentUrl.value = ''
-  pendingOrderNo.value = ''
 }
 
 // 打开充值弹窗
 async function openRechargeModal() {
+  showRechargeModal.value = true
   rechargeAmount.value = null
   customAmount.value = ''
   rechargeError.value = ''
-  rechargePaymentMethod.value = null
   selectedRechargeCard.value = null
-  
   try {
-    const token = localStorage.getItem('token')
-    const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
-    
-    const [paymentRes, cardsRes] = await Promise.all([
-      fetch(getApiUrl('/api/user/payment-methods'), { headers }),
-      fetch(getApiUrl('/api/recharge-cards'), { headers })
-    ])
-    
-    if (paymentRes.ok) {
-      const data = await paymentRes.json()
-      paymentMethods.value = data.methods || []
-    }
-    
-    if (cardsRes.ok) {
-      const data = await cardsRes.json()
-      rechargeCards.value = data.recharge_cards || []
-    }
-  } catch (e) {
-    console.error('[openRechargeModal] 加载数据失败:', e)
-  }
-  
-  const options = rechargePaymentOptions.value
-  if (options.length > 0) {
-    rechargePaymentMethod.value = options[0].id
-  }
-  
-  showRechargeModal.value = true
-}
-
-// 选择充值支付方式
-function selectRechargePaymentMethod(methodId) {
-  rechargePaymentMethod.value = methodId
-  rechargeError.value = '' // 清除错误提示
+    const response = await fetch(getApiUrl('/api/recharge-cards'), { headers: getTenantHeaders() })
+    if (!response.ok) throw new Error('充值卡片加载失败')
+    rechargeCards.value = (await response.json()).recharge_cards || []
+  } catch (e) { rechargeCards.value = []; rechargeError.value = e.message }
 }
 
 // 关闭充值弹窗
@@ -311,7 +242,6 @@ function closeRechargeModal() {
   showRechargeModal.value = false
   rechargeAmount.value = null
   customAmount.value = ''
-  rechargePaymentMethod.value = null
   rechargeError.value = ''
   selectedRechargeCard.value = null
 }
@@ -346,78 +276,14 @@ function getRechargeAmountInCents() {
 // 确认充值
 async function confirmRecharge() {
   const amountInCents = getRechargeAmountInCents()
-  
-  if (amountInCents < rechargeLimits.value.minAmount * 100) {
-    rechargeError.value = `最低充值金额为${rechargeLimits.value.minAmount}${currencyUnitLabel.value}`
+  if (amountInCents < rechargeLimits.value.minAmount * 100 || amountInCents > rechargeLimits.value.maxAmount * 100) {
+    rechargeError.value = `充值金额须在 ${rechargeLimits.value.minAmount}–${rechargeLimits.value.maxAmount}${currencyUnitLabel.value}之间`
     return
   }
-  if (amountInCents > rechargeLimits.value.maxAmount * 100) {
-    rechargeError.value = `单笔最高充值${rechargeLimits.value.maxAmount}${currencyUnitLabel.value}`
-    return
-  }
-  
-  // 验证支付方式
-  if (!rechargePaymentMethod.value) {
-    rechargeError.value = '请选择支付方式'
-    return
-  }
-  
-  const paymentMethod = rechargePaymentMethod.value
-  
-  rechargeLoading.value = true
-  rechargeError.value = ''
-  
-  try {
-    const token = localStorage.getItem('token')
-    const response = await fetch(getApiUrl('/api/user/recharge'), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-        ...getTenantHeaders()
-      },
-      body: JSON.stringify({
-        amount: amountInCents,
-        payment_method_id: paymentMethod,
-        ...(selectedRechargeCard.value ? { recharge_card_id: selectedRechargeCard.value.id } : {})
-      })
-    })
-    
-    const data = await response.json()
-    
-    if (!response.ok || !data.success) {
-      throw new Error(data.message || data.error || '充值请求失败')
-    }
-    
-    // 如果是在线支付，显示支付等待界面
-    if (data.pay_url) {
-      paymentUrl.value = data.pay_url
-      pendingOrderNo.value = data.order_no
-      lastRechargeAmount.value = amountInCents
-      
-      closeRechargeModal()
-      
-      // 复用购买模态框的等待支付界面
-      showPaymentWaiting.value = true
-      showPurchaseModal.value = true
-      
-      // 打开支付页面
-      window.open(data.pay_url, '_blank', 'width=500,height=700')
-    } else {
-      // 直接充值成功（余额支付等）
-      closeRechargeModal()
-      // 刷新数据
-      await loadPackages()
-      emit('purchase-success')
-      // 触发全局用户信息更新事件
-      window.dispatchEvent(new CustomEvent('user-info-updated'))
-    }
-  } catch (err) {
-    console.error('充值失败:', err)
-    rechargeError.value = err.message || '充值失败，请稍后重试'
-  } finally {
-    rechargeLoading.value = false
-  }
+  const input = { kind: 'recharge', amount: amountInCents, ...(selectedRechargeCard.value ? { recharge_card_id: selectedRechargeCard.value.id } : {}) }
+  closeRechargeModal()
+  const result = await openCheckout(input, '账户充值')
+  if (result) { await loadPackages(); emit('purchase-success', result) }
 }
 
 // 计算支付信息
@@ -511,83 +377,13 @@ async function applyCoupon() {
 
 // 确认购买
 async function confirmPurchase() {
-  if (purchaseLoading.value) return
-
-  const info = purchaseInfo.value
-  if (!info) return
-
-  // 如果需要在线支付但没有选择支付方式
-  if (info.needOnlinePayment && !purchasePaymentMethod.value) {
-    purchaseError.value = '请选择支付方式'
-    return
-  }
-
-  try {
-    purchaseLoading.value = true
-    purchaseError.value = ''
-
-    const token = localStorage.getItem('token')
-    const payload = {
-      package_id: selectedPackage.value.id
-    }
-
-    // 如果使用了优惠券，添加优惠券码
-    if (appliedCoupon.value) {
-      payload.coupon_code = purchaseCouponCode.value
-    }
-
-    // 如果需要在线支付，添加支付方式
-    if (info.needOnlinePayment) {
-      payload.payment_method_id = purchasePaymentMethod.value
-    }
-
-    const res = await fetch(getApiUrl('/api/packages/purchase'), {
-      method: 'POST',
-      headers: {
-        ...getTenantHeaders(),
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify(payload)
-    })
-
-    const data = await res.json()
-
-    if (res.ok) {
-      // 如果返回了支付链接，打开新窗口并显示等待界面
-      if (data.pay_url) {
-        paymentUrl.value = data.pay_url
-        pendingOrderNo.value = data.order_no || ''
-        showPaymentWaiting.value = true
-        // 打开新窗口进行支付
-        window.open(data.pay_url, '_blank', 'width=500,height=700')
-        return
-      }
-
-      // 余额支付成功，立即刷新用户信息
-      if (data.user) {
-        user.value = data.user
-      }
-
-      // 立即刷新页面数据
-      await loadPackages()
-
-      closePurchaseModal()
-
-      // 触发成功事件
-      emit('purchase-success', data)
-
-      // 触发全局用户信息更新事件
-      window.dispatchEvent(new CustomEvent('user-info-updated'))
-    } else {
-      purchaseError.value = data.message || `${info.action}失败`
-    }
-  } catch (e) {
-    console.error('[confirmPurchase] error:', e)
-    purchaseError.value = '操作失败，请稍后重试'
-  } finally {
-    purchaseLoading.value = false
-  }
+  if (!selectedPackage.value || purchaseLoading.value) return
+  const input = { kind: 'package', package_id: selectedPackage.value.id,
+    ...(appliedCoupon.value ? { coupon_code: purchaseCouponCode.value.trim() } : {}) }
+  const title = selectedPackage.value.name || '套餐购买'
+  closePurchaseModal()
+  const result = await openCheckout(input, title)
+  if (result) { await loadPackages(); emit('purchase-success', result) }
 }
 
 // ========== 余额划转永久积分 ==========
@@ -814,60 +610,6 @@ function closeToast() {
 // 关闭弹窗
 function close() {
   emit('close')
-}
-
-// 重新打开支付页面
-function reopenPaymentPage() {
-  if (paymentUrl.value) {
-    window.open(paymentUrl.value, '_blank', 'width=500,height=700')
-  }
-}
-
-// 确认支付完成
-async function confirmPaymentDone() {
-  if (checkingPayment.value) return
-  
-  checkingPayment.value = true
-  purchaseError.value = ''
-  
-  try {
-    const token = localStorage.getItem('token')
-    // 检查订单支付状态
-    const res = await fetch(getApiUrl(`/api/payment/check-status?order_no=${pendingOrderNo.value}`), {
-      headers: { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
-    })
-    
-    const data = await res.json()
-    
-    if (res.ok && data.paid) {
-      // 支付成功
-      showPaymentWaiting.value = false
-      paymentUrl.value = ''
-      pendingOrderNo.value = ''
-      
-      // 刷新用户信息
-      await loadPackages()
-      closePurchaseModal()
-      
-      emit('purchase-success', data)
-      window.dispatchEvent(new CustomEvent('user-info-updated'))
-    } else {
-      purchaseError.value = data.message || '支付尚未完成，请完成支付后再确认'
-    }
-  } catch (e) {
-    console.error('[confirmPaymentDone] error:', e)
-    purchaseError.value = '检查支付状态失败，请稍后重试'
-  } finally {
-    checkingPayment.value = false
-  }
-}
-
-// 取消支付
-function cancelPayment() {
-  showPaymentWaiting.value = false
-  paymentUrl.value = ''
-  pendingOrderNo.value = ''
-  purchaseError.value = ''
 }
 
 // 格式化剩余时间
@@ -1139,72 +881,10 @@ watch(() => props.visible, (newVal) => {
             </div>
 
             <!-- 内容 -->
-            <div v-if="(selectedPackage && purchaseInfo) || showPaymentWaiting" class="modal-body">
-              <!-- 等待支付视图 -->
-              <template v-if="showPaymentWaiting">
-                <div class="payment-waiting">
-                  <!-- 顶部状态 -->
-                  <div class="waiting-header">
-                    <div class="waiting-icon-wrap">
-                      <div class="waiting-icon-inner">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                          <rect x="2" y="5" width="20" height="14" rx="2"/>
-                          <line x1="2" y1="10" x2="22" y2="10"/>
-                        </svg>
-                      </div>
-                      <div class="waiting-spinner"></div>
-                    </div>
-                    <div class="waiting-text">
-                      <div class="waiting-title">等待支付完成</div>
-                      <div class="waiting-subtitle">支付页面已在新窗口打开</div>
-                    </div>
-                  </div>
-                  
-                  <!-- 订单信息 -->
-                  <div class="waiting-order-card">
-                    <div class="order-info-row">
-                      <span class="order-info-label">{{ selectedPackage ? '套餐' : '项目' }}</span>
-                      <span class="order-info-value">{{ selectedPackage ? selectedPackage.name : '账户充值' }}</span>
-                    </div>
-                    <div class="order-info-divider"></div>
-                    <div class="order-info-row">
-                      <span class="order-info-label">支付金额</span>
-                      <span class="order-info-amount">{{ selectedPackage ? formatMoney(purchaseInfo.needPay) : formatMoney(lastRechargeAmount) }}</span>
-                    </div>
-                  </div>
-                  
-                  <!-- 步骤提示 -->
-                  <div class="waiting-steps-bar">
-                    <div class="step-dot active">1</div>
-                    <div class="step-line"></div>
-                    <div class="step-dot">2</div>
-                    <div class="step-line"></div>
-                    <div class="step-dot">3</div>
-                  </div>
-                  <div class="waiting-steps-labels">
-                    <span>完成支付</span>
-                    <span>点击确认</span>
-                    <span>激活套餐</span>
-                  </div>
-                  
-                  <!-- 错误提示 -->
-                  <div v-if="purchaseError" class="waiting-error">{{ purchaseError }}</div>
-                  
-                  <!-- 操作按钮 -->
-                  <div class="waiting-btn-group">
-                    <button class="waiting-btn-primary" @click="confirmPaymentDone" :disabled="checkingPayment">
-                      {{ checkingPayment ? '确认中...' : '我已完成支付' }}
-                    </button>
-                    <div class="waiting-btn-row">
-                      <button class="waiting-btn-secondary" @click="reopenPaymentPage">重新打开</button>
-                      <button class="waiting-btn-ghost" @click="cancelPayment">取消</button>
-                    </div>
-                  </div>
-                </div>
-              </template>
-              
+            <div v-if="selectedPackage && purchaseInfo" class="modal-body">
+
               <!-- 购买确认视图 -->
-              <template v-else>
+
               <!-- 套餐权益 -->
               <div class="benefits-section">
                 <div class="benefits-grid">
@@ -1307,27 +987,6 @@ watch(() => props.visible, (newVal) => {
                 </div>
               </div>
 
-              <!-- 支付方式 -->
-              <div v-if="purchaseInfo.needOnlinePayment && paymentMethods.length > 0" class="payment-section">
-                <div class="payment-label">支付方式</div>
-                <div class="payment-grid">
-                  <label
-                    v-for="method in paymentMethods"
-                    :key="method.id"
-                    class="payment-item"
-                    :class="{ active: purchasePaymentMethod === method.id }"
-                  >
-                    <input
-                      type="radio"
-                      :value="method.id"
-                      v-model="purchasePaymentMethod"
-                      class="sr-only"
-                    />
-                    <span class="payment-radio-dot"></span>
-                    <span class="payment-text">{{ method.name }}</span>
-                  </label>
-                </div>
-              </div>
 
               <!-- 余额充足提示 -->
               <div v-if="!purchaseInfo.needOnlinePayment" class="balance-tip">
@@ -1347,16 +1006,16 @@ watch(() => props.visible, (newVal) => {
                 </svg>
                 <span>{{ purchaseError }}</span>
               </div>
-              </template>
+
             </div>
 
             <!-- 底部按钮（等待支付时隐藏） -->
-            <div v-if="!showPaymentWaiting" class="modal-footer">
+            <div class="modal-footer">
               <button class="btn-cancel" @click="closePurchaseModal">取消</button>
               <button
                 class="btn-confirm"
                 @click="confirmPurchase"
-                :disabled="purchaseLoading || (purchaseInfo?.needOnlinePayment && !purchasePaymentMethod)"
+                :disabled="purchaseLoading"
               >
                 <span v-if="purchaseLoading" class="loading-dot"></span>
                 {{ purchaseLoading ? '处理中...' : (purchaseInfo?.needOnlinePayment ? '去支付' : '确认购买') }}
@@ -1720,33 +1379,6 @@ watch(() => props.visible, (newVal) => {
                   class="custom-amount-input"
                   @input="rechargeAmount = null; selectedRechargeCard = null"
                 />
-              </div>
-            </div>
-
-            <!-- 支付方式 -->
-            <div class="recharge-section">
-              <label class="section-label">支付方式</label>
-              <div class="payment-methods" v-if="rechargePaymentOptions.length > 0">
-                <label
-                  v-for="method in rechargePaymentOptions"
-                  :key="method.id"
-                  class="payment-method-item"
-                  :class="{ active: rechargePaymentMethod === method.id }"
-                  @click="selectRechargePaymentMethod(method.id)"
-                >
-                  <input
-                    type="radio"
-                    :value="method.id"
-                    v-model="rechargePaymentMethod"
-                    class="hidden-radio"
-                    @change="rechargeError = ''"
-                  />
-                  <span class="method-icon">💰</span>
-                  <span class="method-name">{{ method.name }}</span>
-                </label>
-              </div>
-              <div v-else class="payment-methods-empty">
-                <span>暂无可用支付方式</span>
               </div>
             </div>
 

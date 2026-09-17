@@ -1,4 +1,5 @@
 <script setup>
+import CheckoutDialog from '@/components/payment/CheckoutDialog.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { clearAuthSession, getMe } from '@/api/client'
@@ -729,6 +730,7 @@ const isIcpFooterVisible = computed(() => {
       </span>
     </footer>
   </div>
+  <CheckoutDialog />
 </template>
 
 <style scoped>

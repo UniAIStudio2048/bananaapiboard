@@ -1,4 +1,6 @@
 <script setup>
+import { openCheckout } from '@/utils/openCheckout'
+import CheckoutOrders from '@/components/payment/CheckoutOrders.vue'
 import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
@@ -221,10 +223,10 @@ const showTransferConfirmModal = ref(false)  // 显示转账确认弹窗
 const showRechargeModal = ref(false)
 const rechargeAmount = ref('')
 const rechargeCustomAmount = ref('')
-const rechargeSelectedMethod = ref(null)
+
 const rechargeLoading = ref(false)
 const rechargeError = ref('')
-const paymentMethods = ref([])
+
 const quickAmounts = [300, 500, 1000, 5000, 10000] // 单位：分
 const rechargeCards = ref([]) // 充值卡片列表
 const selectedRechargeCard = ref(null) // 选中的充值卡片
@@ -2047,38 +2049,15 @@ async function executeTransfer() {
 // 打开充值弹窗
 async function openRechargeModal() {
   showRechargeModal.value = true
-  rechargeAmount.value = ''
+  rechargeAmount.value = 0
   rechargeCustomAmount.value = ''
-  rechargeSelectedMethod.value = null
-  selectedRechargeCard.value = null
   rechargeError.value = ''
-
-  // 并行加载支付方式和充值卡片
+  selectedRechargeCard.value = null
   try {
-    const headers = { ...getTenantHeaders(), 'Authorization': `Bearer ${token}` }
-
-    const [paymentRes, cardsRes] = await Promise.all([
-      fetch(getApiUrl('/api/user/payment-methods'), { headers }),
-      fetch(getApiUrl('/api/recharge-cards'), { headers: getTenantHeaders() })
-    ])
-
-    // 处理支付方式
-    if (paymentRes.ok) {
-      const data = await paymentRes.json()
-      paymentMethods.value = data.methods || []
-      if (paymentMethods.value.length > 0) {
-        rechargeSelectedMethod.value = paymentMethods.value[0].id
-      }
-    }
-
-    // 处理充值卡片
-    if (cardsRes.ok) {
-      const data = await cardsRes.json()
-      rechargeCards.value = data.recharge_cards || []
-    }
-  } catch (e) {
-    console.error('[openRechargeModal] 加载数据失败:', e)
-  }
+    const response = await fetch(getApiUrl('/api/recharge-cards'), { headers: getTenantHeaders() })
+    if (!response.ok) throw new Error('充值卡片加载失败')
+    rechargeCards.value = (await response.json()).recharge_cards || []
+  } catch (e) { rechargeCards.value = []; rechargeError.value = e.message }
 }
 
 // 关闭充值弹窗
@@ -2121,63 +2100,14 @@ function getFinalRechargeAmount() {
 // 提交充值
 async function submitRecharge() {
   const amount = getFinalRechargeAmount()
-  
-  if (amount < rechargeLimits.value.minAmount * 100) {
-    rechargeError.value = `最低充值金额为${rechargeLimits.value.minAmount}${currencyUnitLabel.value}`
+  if (amount < rechargeLimits.value.minAmount * 100 || amount > rechargeLimits.value.maxAmount * 100) {
+    rechargeError.value = `充值金额须在 ${rechargeLimits.value.minAmount}–${rechargeLimits.value.maxAmount}${currencyUnitLabel.value}之间`
     return
   }
-  if (amount > rechargeLimits.value.maxAmount * 100) {
-    rechargeError.value = `单笔最高充值${rechargeLimits.value.maxAmount}${currencyUnitLabel.value}`
-    return
-  }
-  if (!rechargeSelectedMethod.value) {
-    rechargeError.value = '请选择支付方式'
-    return
-  }
-  
-  rechargeLoading.value = true
-  rechargeError.value = ''
-  
-  try {
-    const headers = {
-      ...getTenantHeaders(),
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json'
-    }
-    
-    const requestBody = {
-      amount: amount,
-      payment_method_id: rechargeSelectedMethod.value
-    }
-
-    // 如果选择了充值卡片，传递卡片ID
-    if (selectedRechargeCard.value) {
-      requestBody.recharge_card_id = selectedRechargeCard.value.id
-    }
-
-    const res = await fetch(getApiUrl('/api/user/recharge'), {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody)
-    })
-    
-    const data = await res.json()
-    
-    if (!res.ok) {
-      throw new Error(data.message || '创建订单失败')
-    }
-    
-    // 跳转到支付页面前，设置待刷新标记
-    if (data.pay_url) {
-      localStorage.setItem('pending_payment_refresh', 'true')
-      localStorage.setItem('payment_timestamp', Date.now().toString())
-      window.location.href = data.pay_url
-    }
-  } catch (e) {
-    rechargeError.value = e.message || '充值失败，请重试'
-  } finally {
-    rechargeLoading.value = false
-  }
+  const input = { kind: 'recharge', amount, ...(selectedRechargeCard.value ? { recharge_card_id: selectedRechargeCard.value.id } : {}) }
+  closeRechargeModal()
+  const result = await openCheckout(input, '账户充值')
+  if (result) { await load(); await loadBillOrders() }
 }
 
 // 加载账单列表
@@ -3928,6 +3858,7 @@ onUnmounted(() => {
 
         <!-- 账单中心 Tab -->
         <div v-show="activeTab === 'bills'">
+          <CheckoutOrders v-if="activeTab === 'bills'" />
           <div class="card p-6">
             <div class="flex items-center justify-between mb-6">
               <h3 class="text-xl font-bold gradient-text flex items-center">
@@ -4878,35 +4809,6 @@ onUnmounted(() => {
             </div>
           </div>
           
-          <!-- 支付方式 -->
-          <div v-if="paymentMethods.length > 0">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
-              选择支付方式
-            </label>
-            <div class="space-y-2">
-              <label
-                v-for="method in paymentMethods"
-                :key="method.id"
-                :class="[
-                  'flex items-center justify-between p-4 rounded-xl border-2 cursor-pointer transition-all duration-200',
-                  rechargeSelectedMethod === method.id
-                    ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
-                    : 'border-slate-200 dark:border-dark-500 hover:border-amber-400'
-                ]"
-              >
-                <div class="flex items-center space-x-3">
-                  <input
-                    type="radio"
-                    :value="method.id"
-                    v-model="rechargeSelectedMethod"
-                    class="w-4 h-4 text-amber-500"
-                  />
-                  <span class="font-medium text-slate-700 dark:text-slate-300">{{ method.name }}</span>
-                </div>
-                <span class="text-sm text-slate-500 dark:text-slate-400">{{ method.module }}</span>
-              </label>
-            </div>
-          </div>
           
           <!-- 充值金额预览 -->
           <div v-if="getFinalRechargeAmount() > 0" class="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl p-4">
@@ -4948,7 +4850,7 @@ onUnmounted(() => {
           <button 
             @click="submitRecharge"
             class="flex-1 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-medium rounded-xl hover:from-amber-600 hover:to-orange-600 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="rechargeLoading || getFinalRechargeAmount() < 100 || !rechargeSelectedMethod"
+            :disabled="rechargeLoading || getFinalRechargeAmount() < 100"
           >
             <span v-if="rechargeLoading">处理中...</span>
             <span v-else>💳 立即支付</span>
