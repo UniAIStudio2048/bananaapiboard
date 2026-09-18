@@ -8783,6 +8783,56 @@ async function parseHDJsonResponse(response, fallbackMessage) {
   throw new Error(trimmed || fallbackMessage)
 }
 
+const isDepthProcessing = ref(false)
+async function handleToolbarDepth() {
+  if (isDepthProcessing.value) return
+  isDepthProcessing.value = true
+  let context, nodeId
+  try {
+    let videoUrl = props.data.output?.url || normalizedVideoUrl.value
+    if (!videoUrl) throw new Error('没有可处理的视频')
+    const token = localStorage.getItem('token')
+    const headers = { ...getTenantHeaders(), 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+    const configResponse = await fetch(getApiUrl('/api/videos/depth/config'), { headers })
+    const config = await configResponse.json()
+    if (!configResponse.ok || !config.enabled) throw new Error(config.message || '视频深度提取未配置，请联系管理员')
+    if (/^(blob:|data:)/.test(videoUrl)) {
+      const blob = await (await fetch(videoUrl)).blob()
+      const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
+      if (!uploaded.url) throw new Error('视频上传失败')
+      videoUrl = uploaded.url
+    }
+    context = await ensureCanvasWorkflowForVideoSubmission(props.id)
+    const source = canvasStore.nodes.find(n => n.id === props.id)
+    const requestId = globalThis.crypto.randomUUID()
+    nodeId = `depth_node_${globalThis.crypto.randomUUID()}`
+    const node = { id: nodeId, type: 'video', position: { x: source.position.x + 500, y: source.position.y }, data: {
+      label: '视频深度提取', title: '视频深度提取', status: 'processing', progress: '正在提交深度提取...',
+      depthRequestId: requestId, depthExtracted: true, taskType: 'video', processingStartedAt: Date.now(), sourceNodeId: props.id,
+      output: { type: 'video', url: '' }
+    } }
+    const edge = { id: `edge_${globalThis.crypto.randomUUID()}`, source: props.id, target: nodeId, sourceHandle: 'output', targetHandle: 'input' }
+    await postWorkflowOps(context.workflowId, [{ op: 'add', target: 'node', payload: node }, { op: 'add', target: 'edge', payload: edge }])
+    canvasStore.addNode(node); canvasStore.addEdge(edge)
+    const response = await fetch(getApiUrl('/api/videos/depth/tasks'), { method: 'POST', headers,
+      body: JSON.stringify({ videoUrl, requestId, workflowId: context.workflowId, nodeId }) })
+    const result = await response.json()
+    if (!response.ok || !result.taskId) throw new Error(result.message || '深度提取提交失败')
+    const data = { taskId: result.taskId, taskType: 'video', progress: '深度提取中...', pointsCost: result.prepaid }
+    await patchWorkflowNode(context.workflowId, nodeId, { data })
+    canvasStore.updateNodeData(nodeId, data)
+    registerTask({ taskId: result.taskId, type: 'video', nodeId, tabId: context.currentTab.id, metadata: { sourceNodeId: props.id, workflowId: context.workflowId } })
+    showToast(`深度提取已提交，预扣 ${formatPoints(result.prepaid)} 积分`, 'success')
+  } catch (error) {
+    if (nodeId && context) {
+      const data = { status: 'error', progress: null, error: error.message }
+      await patchWorkflowNode(context.workflowId, nodeId, { data }).catch(() => {})
+      canvasStore.updateNodeData(nodeId, data)
+    }
+    showToast(error.message || '深度提取失败', 'error')
+  } finally { isDepthProcessing.value = false }
+}
+
 // 工具栏处理函数 - 高清放大（异步任务模式）
 async function handleToolbarHD() {
   console.log('[VideoNode] 工具栏：高清', props.id)
@@ -9527,6 +9577,10 @@ function handleToolbarPreview() {
         </svg>
         <span>{{ isHDProcessing ? '处理中...' : '高清' }}</span>
       </button>
+      <button class="toolbar-btn" title="视频深度提取" :disabled="isDepthProcessing" @mousedown.stop.prevent="handleToolbarDepth" @click.stop.prevent>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3L2 8l10 5 10-5-10-5zM2 12l10 5 10-5M2 16l10 5 10-5" /></svg>
+        <span>{{ isDepthProcessing ? '提交中...' : '深度提取' }}</span>
+      </button>
       <button class="toolbar-btn" title="解析" @mousedown.stop.prevent="handleToolbarAnalyze" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
@@ -9734,7 +9788,7 @@ function handleToolbarPreview() {
           <!-- 加载中状态 -->
           <div v-if="data.status === 'processing'" class="preview-loading">
             <div class="loading-spinner"></div>
-            <span class="loading-title">{{ data.taskType === 'video-hd' ? '高清处理中...' : '视频生成中...' }}</span>
+            <span class="loading-title">{{ data.depthExtracted ? '深度提取中...' : data.taskType === 'video-hd' ? '高清处理中...' : '视频生成中...' }}</span>
             <!-- 生成中即显示请求比例（AI 助手/手动生图提交的参数），全部生成完成后结果按实际比例展示 -->
             <span v-if="processingAspectRatio" class="loading-aspect-ratio">{{ processingAspectRatio }}</span>
             <span v-if="data.taskType !== 'video-hd'" class="progress-text">{{ processingProgressText(data) }}</span>

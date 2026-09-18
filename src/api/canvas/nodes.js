@@ -401,7 +401,8 @@ export async function getImageTaskStatus(taskId) {
  * 查询视频任务状态
  */
 export async function getVideoTaskStatus(taskId) {
-  const response = await fetch(getApiUrl(`/api/videos/task/${taskId}`), {
+  const taskPath = String(taskId).startsWith('depth_') ? `/api/videos/depth/tasks/${encodeURIComponent(taskId)}` : `/api/videos/task/${taskId}`
+  const response = await fetch(getApiUrl(taskPath), {
     cache: 'no-store',
     headers: getHeaders({ extra: { 'Cache-Control': 'no-cache' } })
   })
