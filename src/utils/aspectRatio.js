@@ -80,3 +80,25 @@ export async function resolveGenerationAspectRatio(selectedAspectRatio, firstIma
   if (selectedAspectRatio !== 'auto') return selectedAspectRatio
   return resolveAutoAspectRatio(firstImageSrc)
 }
+
+/** 图像节点智能比例：无图默认 3:4，有图只匹配当前模型菜单中可选的比例。 */
+export async function resolveImageNodeAspectRatio(firstImageSrc, availableRatios) {
+  const fallback = '3:4'
+  if (!firstImageSrc) return fallback
+
+  const values = new Set(availableRatios.map(option => typeof option === 'string' ? option : option.value))
+  const candidates = STANDARD_RATIOS.filter(option => values.has(option.value))
+  if (candidates.length === 0) return fallback
+
+  try {
+    const { width, height } = await getImageDimensions(firstImageSrc)
+    if (!(width > 0 && height > 0)) return fallback
+    const actualRatio = width / height
+    return candidates.reduce((closest, option) => (
+      Math.abs(actualRatio - option.ratio) < Math.abs(actualRatio - closest.ratio) ? option : closest
+    )).value
+  } catch (e) {
+    console.warn('[image-node-auto-ratio] 无法检测图片比例，使用默认 3:4:', e.message)
+    return fallback
+  }
+}

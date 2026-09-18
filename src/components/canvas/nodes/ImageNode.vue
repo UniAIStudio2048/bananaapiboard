@@ -26,7 +26,7 @@ import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { formatPoints } from '@/utils/format'
 import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
-import { resolveAutoAspectRatio } from '@/utils/aspectRatio'
+import { resolveImageNodeAspectRatio } from '@/utils/aspectRatio'
 import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
 import {
   formatVideoGenerationElapsed,
@@ -5454,68 +5454,17 @@ async function ensureAccessibleUrls(imageUrls) {
   return normalizeModelImageUrls(accessibleUrls).filter(isPreferredModelMediaUrl)
 }
 
-// 获取上游节点的实时图片数据（直接从 store 获取，确保数据最新）
+// computed 同步跟踪 store 数据和 imageOrder，生成请求与缩略图使用相同顺序。
 function getUpstreamImagesRealtime() {
-  const upstreamImages = []
-  const upstreamEdges = canvasStore.edges.filter(e => e.target === props.id)
-  
-  console.log('[ImageNode] getUpstreamImagesRealtime - 检查上游边数:', upstreamEdges.length)
-  
-  for (const edge of upstreamEdges) {
-    // 直接从 store 的 nodes 数组中获取最新数据
-    const sourceNode = canvasStore.nodes.find(n => n.id === edge.source)
-    if (!sourceNode) {
-      console.log('[ImageNode] 未找到上游节点:', edge.source)
-      continue
-    }
-    
-    console.log('[ImageNode] 检查上游节点:', {
-      id: sourceNode.id,
-      type: sourceNode.type,
-      hasOutput: !!sourceNode.data?.output,
-      outputUrls: sourceNode.data?.output?.urls,
-      sourceImages: sourceNode.data?.sourceImages
-    })
-    
-    // 源节点优先使用 sourceImages，与画布显示一致
-    if (sourceNode.data?.nodeRole === 'source' && sourceNode.data?.sourceImages?.length > 0) {
-      console.log('[ImageNode] 源节点从 sourceImages 获取图片:', sourceNode.data.sourceImages.length, '张')
-      upstreamImages.push(...sourceNode.data.sourceImages)
-    } else if (sourceNode.data?.output?.urls?.length > 0) {
-      console.log('[ImageNode] 从 output.urls 获取图片:', sourceNode.data.output.urls.length, '张')
-      upstreamImages.push(...sourceNode.data.output.urls)
-    } else if (sourceNode.data?.output?.url) {
-      console.log('[ImageNode] 从 output.url 获取图片')
-      upstreamImages.push(sourceNode.data.output.url)
-    } else if (sourceNode.data?.sourceImages?.length > 0) {
-      console.log('[ImageNode] 从 sourceImages 获取图片:', sourceNode.data.sourceImages.length, '张')
-      upstreamImages.push(...sourceNode.data.sourceImages)
-    } else {
-      console.log('[ImageNode] 上游节点没有可用的图片数据')
-    }
-  }
-  
-  console.log('[ImageNode] 实时获取上游图片总数:', upstreamImages.length)
-  return upstreamImages
+  return [...referenceImages.value]
 }
 
 // 单次生成请求
 // @param {string} finalPrompt - 最终提示词（包含预设提示词）
 // @param {string} userPrompt - 用户原始输入（不含预设提示词，用于历史记录显示）
 async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
-  // 直接从 store 获取上游节点的最新图片数据（确保数据实时性）
-  const currentReferenceImages = getUpstreamImagesRealtime()
-  
-  // 如果实时获取为空，尝试使用 computed 属性作为后备
-  const finalReferenceImages = currentReferenceImages.length > 0 
-    ? currentReferenceImages 
-    : referenceImages.value
-  
-  console.log('[ImageNode] ========== 开始生成 ==========')
-  console.log('[ImageNode] 实时获取的参考图:', currentReferenceImages.length, '张')
-  console.log('[ImageNode] computed 属性的参考图:', referenceImages.value.length, '张')
-  console.log('[ImageNode] 最终使用的参考图:', finalReferenceImages)
-  
+  const finalReferenceImages = getUpstreamImagesRealtime()
+
   // 仅对有严格大小要求的模型 API 类型做前端预压缩，其他类型传原图
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
   const currentApiType = currentModel?.apiType || ''
@@ -5526,7 +5475,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
   let resolvedAspectRatio = selectedAspectRatio.value
   if (resolvedAspectRatio === 'auto') {
     const firstImageSrc = imagesToProcess.length > 0 ? imagesToProcess[0] : null
-    resolvedAspectRatio = await resolveAutoAspectRatio(firstImageSrc)
+    resolvedAspectRatio = await resolveImageNodeAspectRatio(firstImageSrc, availableImageAspectRatios.value)
   }
 
   // 构建基础参数
@@ -5538,7 +5487,8 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     userPrompt: userPrompt || finalPrompt || '',
     model: selectedModel.value,
     aspectRatio: resolvedAspectRatio,
-    aspectRatioMode: selectedAspectRatio.value,
+    // 发送具体比例，避免后端再次按全量比例重算；节点仍保留 auto 选择。
+    aspectRatioMode: resolvedAspectRatio,
     count: 1, // 单次请求固定为1
     // 所有模型都传递 image_size 参数
     image_size: imageSize.value || '2K',
@@ -5560,6 +5510,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
   if (imagesToProcess.length > 0) {
     // 图生图模式：需要确保所有图片都是有效的 URL
     let imageUrls = []
+    const uploadedUrlBySource = new Map()
     
     // 分离不同类型的图片
     const base64Images = []
@@ -5592,6 +5543,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
         const uploadedUrls = await uploadBase64Images(base64Images)
         if (uploadedUrls && uploadedUrls.length > 0) {
           imageUrls.push(...uploadedUrls)
+          base64Images.forEach((src, index) => uploadedUrlBySource.set(src, uploadedUrls[index]))
           console.log('[ImageNode] base64 图片上传成功:', uploadedUrls.length, '张')
         }
       } catch (e) {
@@ -5613,6 +5565,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
           if (cachedServerUrl) {
             console.log('[ImageNode] 从映射表获取服务器 URL:', cachedServerUrl.substring(0, 60))
             imageUrls.push(cachedServerUrl)
+            uploadedUrlBySource.set(blobUrl, cachedServerUrl)
             processedCount++
             continue
           }
@@ -5627,6 +5580,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
           const urls = await uploadImages([file])
           if (urls && urls.length > 0) {
             imageUrls.push(urls[0])
+            uploadedUrlBySource.set(blobUrl, urls[0])
             // 保存到映射表
             blobToServerUrlMap.set(blobUrl, urls[0])
             processedCount++
@@ -5640,6 +5594,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
           if (fallbackUrl) {
             console.log('[ImageNode] 使用映射表中的服务器 URL:', fallbackUrl.substring(0, 60))
             imageUrls.push(fallbackUrl)
+            uploadedUrlBySource.set(blobUrl, fallbackUrl)
             processedCount++
             continue
           }
@@ -5649,6 +5604,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
           if (serverUrlFromNode) {
             console.log('[ImageNode] 从节点数据找到服务器 URL:', serverUrlFromNode.substring(0, 60))
             imageUrls.push(serverUrlFromNode)
+            uploadedUrlBySource.set(blobUrl, serverUrlFromNode)
             processedCount++
             continue
           }
@@ -5666,8 +5622,10 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
       }
     }
     
-    // 添加已有的 URL
-    imageUrls.push(...httpUrls)
+    // 上传转换后恢复输入顺序，避免按 base64/blob/HTTP 分组改变第一张参考图。
+    imageUrls = imagesToProcess
+      .map(src => uploadedUrlBySource.get(src) || (httpUrls.includes(src) ? src : null))
+      .filter(Boolean)
     
     // 验证最终的 URL 列表
     if (imageUrls.length === 0) {
