@@ -5,11 +5,20 @@ async function request(path, { signal, body, key, method = 'GET' } = {}) {
   const form = body instanceof FormData
   if (body && !form) headers['Content-Type'] = 'application/json'
   if (key) headers['Idempotency-Key'] = key
-  const timeout = AbortSignal.timeout(25000)
-  const response = await fetch(getApiUrl(`/api/checkout${path}`), { method, headers, signal: signal ? AbortSignal.any([signal, timeout]) : timeout, body: body ? (form ? body : JSON.stringify(body)) : undefined })
-  const data = await response.json()
-  if (!response.ok) throw new Error(data.message || data.error || '支付请求失败')
-  return data
+  const controller = new AbortController()
+  const abort = () => controller.abort()
+  if (signal?.aborted) abort()
+  else signal?.addEventListener('abort', abort, { once: true })
+  const timeout = setTimeout(abort, 25000)
+  try {
+    const response = await fetch(getApiUrl(`/api/checkout${path}`), { method, headers, signal: controller.signal, body: body ? (form ? body : JSON.stringify(body)) : undefined })
+    const data = await response.json()
+    if (!response.ok) throw new Error(data.message || data.error || '支付请求失败')
+    return data
+  } finally {
+    clearTimeout(timeout)
+    signal?.removeEventListener('abort', abort)
+  }
 }
 export const checkoutApi = {
   methods: async (kind, signal) => (await request(`/methods?kind=${encodeURIComponent(kind)}`, { signal })).methods,
