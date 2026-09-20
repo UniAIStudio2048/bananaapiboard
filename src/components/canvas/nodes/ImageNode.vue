@@ -1688,7 +1688,9 @@ const availableImageAspectRatios = computed(() => {
     (typeof ratio === 'string' ? ratio : ratio?.value) || 'auto',
     typeof ratio === 'string' ? '' : ratio?.label
   ]))
-  return aspectRatios
+  const configuredExtraRatios = ['9:21', '1:2', '2:1', '1:3', '3:1']
+    .map(value => ({ value, label: value }))
+  return [...aspectRatios, ...configuredExtraRatios]
     .filter(ratio => configuredLabels.has(ratio.value))
     .map(ratio => ({ ...ratio, label: configuredLabels.get(ratio.value) || ratio.label }))
 })
