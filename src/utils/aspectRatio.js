@@ -87,7 +87,15 @@ export async function resolveImageNodeAspectRatio(firstImageSrc, availableRatios
   if (!firstImageSrc) return fallback
 
   const values = new Set(availableRatios.map(option => typeof option === 'string' ? option : option.value))
-  const candidates = STANDARD_RATIOS.filter(option => values.has(option.value))
+  // 保持原标准比例的匹配顺序，并纳入菜单点亮的扩展比例。
+  const extraRatios = [...values]
+    .filter(value => /^\d+:\d+$/.test(value) && !STANDARD_RATIOS.some(option => option.value === value))
+    .map(value => {
+      const [width, height] = value.split(':').map(Number)
+      return { value, ratio: width / height }
+    })
+    .filter(option => Number.isFinite(option.ratio) && option.ratio > 0)
+  const candidates = [...STANDARD_RATIOS, ...extraRatios].filter(option => values.has(option.value))
   if (candidates.length === 0) return fallback
 
   try {

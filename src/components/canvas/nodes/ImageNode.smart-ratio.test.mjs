@@ -112,3 +112,13 @@ test('failed dimension detection falls back to 3:4 and explicit ratio stays unch
   selectedAspectRatio.value = '1:1'
   assert.equal((await send('test')).aspect_ratio, '1:1')
 })
+
+test('all four extended manual ratios reach the generation API unchanged', async t => {
+  const { send, selectedAspectRatio } = createHarness(t)
+  for (const value of ['1:4', '4:1', '1:8', '8:1']) {
+    selectedAspectRatio.value = value
+    const body = await send('test')
+    assert.equal(body.aspect_ratio, value)
+    assert.equal(body.aspect_ratio_mode, value)
+  }
+})

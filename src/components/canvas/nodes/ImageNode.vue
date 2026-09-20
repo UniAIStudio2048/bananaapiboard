@@ -27,7 +27,7 @@ import { formatPoints } from '@/utils/format'
 import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
 import { resolveImageNodeAspectRatio } from '@/utils/aspectRatio'
-import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders } from '@/config/tenant'
+import { getApiUrl, getModelDisplayName, isModelEnabled, getAvailableImageModels, getTenantHeaders, getTenantConfigVersion } from '@/config/tenant'
 import {
   formatVideoGenerationElapsed,
   getVideoGenerationElapsedSeconds
@@ -1429,6 +1429,7 @@ const hasReferenceImages = computed(() => {
 
 // 可用选项 - 从配置动态获取，支持新增模型自动同步，根据是否有参考图片过滤
 const models = computed(() => {
+  getTenantConfigVersion()
   // 只有真正有图片输入时才是图生图模式，文本输入仍然是文生图模式
   const currentMode = hasImageInput.value ? 'i2i' : 't2i'
   return getAvailableImageModels(currentMode)
@@ -1666,7 +1667,7 @@ const showCameraControlOption = computed(() => {
 })
 
 const aspectRatios = [
-  { value: 'auto', label: 'Auto (自动)' },
+  { value: 'auto', label: '智能比例', displayLabel: '智能比例' },
   { value: '16:9', label: '16:9 横屏' },
   { value: '1:1', label: '1:1 方形' },
   { value: '9:16', label: '9:16 竖屏' },
@@ -1688,7 +1689,7 @@ const availableImageAspectRatios = computed(() => {
     (typeof ratio === 'string' ? ratio : ratio?.value) || 'auto',
     typeof ratio === 'string' ? '' : ratio?.label
   ]))
-  const configuredExtraRatios = ['9:21', '1:2', '2:1', '1:3', '3:1']
+  const configuredExtraRatios = ['9:21', '1:2', '2:1', '1:3', '3:1', '1:4', '4:1', '1:8', '8:1']
     .map(value => ({ value, label: value }))
   return [...aspectRatios, ...configuredExtraRatios]
     .filter(ratio => configuredLabels.has(ratio.value))

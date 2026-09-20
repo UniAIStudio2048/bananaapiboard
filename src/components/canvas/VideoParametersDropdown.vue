@@ -404,6 +404,10 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
 .video-aspect-ratio-icon.ratio-4-5 { width: 14px; height: 17px; }
 .video-aspect-ratio-icon.ratio-5-4 { width: 17px; height: 14px; }
 .video-aspect-ratio-icon.ratio-9-21 { width: 10px; height: 22px; }
+.video-aspect-ratio-icon.ratio-1-4 { width: 6px; height: 24px; }
+.video-aspect-ratio-icon.ratio-4-1 { width: 24px; height: 6px; }
+.video-aspect-ratio-icon.ratio-1-8 { width: 3px; height: 24px; }
+.video-aspect-ratio-icon.ratio-8-1 { width: 24px; height: 3px; }
 .video-aspect-ratio-icon.ratio-21-9 { width: 22px; height: 10px; }
 
 .video-resolution-grid,
