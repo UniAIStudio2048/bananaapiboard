@@ -432,7 +432,9 @@ export async function getDigitalHumanTaskStatus(taskId) {
  * 查询视频高清放大任务状态
  */
 export async function getVideoHdTaskStatus(taskId) {
-  const response = await fetch(getApiUrl(`/api/videos/hd-upscale/task/${taskId}`), {
+  const taskPath = String(taskId).startsWith('upscale_') ? `/api/videos/upscale/tasks/${encodeURIComponent(taskId)}` : `/api/videos/hd-upscale/task/${taskId}`
+  const response = await fetch(getApiUrl(taskPath), {
+    cache: 'no-store',
     headers: getHeaders()
   })
   const data = await parseApiResponse(response, '查询高清任务状态失败：后端没有返回 JSON')

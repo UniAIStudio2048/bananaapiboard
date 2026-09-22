@@ -1,6 +1,7 @@
 <script setup>
 import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import SeedanceReviewButton from '../SeedanceReviewButton.vue'
+import VideoUpscaleButton from '../VideoUpscaleButton.vue'
 defineOptions({
   inheritAttrs: false
 })
@@ -9559,13 +9560,14 @@ function handleToolbarPreview() {
     <!-- 视频工具栏（选中且有视频时显示）- 与 ImageNode 保持一致 -->
     <div v-show="showToolbar" class="video-toolbar">
       <SeedanceReviewButton :node-id="id" :data="data" asset-type="Video" />
+      <VideoUpscaleButton :node-id="id" :video-url="data.output?.url || normalizedVideoUrl" :ensure-workflow="ensureCanvasWorkflowForVideoSubmission" @legacy="handleToolbarHD" v-slot="{ open, busy }">
       <button 
         class="toolbar-btn" 
         :class="{ 'processing': isHDProcessing }"
         title="高清放大" 
-        @mousedown.stop.prevent="handleToolbarHD"
-        @click.stop.prevent
-        :disabled="isHDProcessing"
+        @mousedown.stop.prevent
+        @click.stop.prevent="open"
+        :disabled="isHDProcessing || busy"
       >
         <svg v-if="!isHDProcessing" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="18" height="18" rx="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -9577,6 +9579,7 @@ function handleToolbarPreview() {
         </svg>
         <span>{{ isHDProcessing ? '处理中...' : '高清' }}</span>
       </button>
+      </VideoUpscaleButton>
       <button class="toolbar-btn" title="视频深度提取" :disabled="isDepthProcessing" @mousedown.stop.prevent="handleToolbarDepth" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3L2 8l10 5 10-5-10-5zM2 12l10 5 10-5M2 16l10 5 10-5" /></svg>
         <span>{{ isDepthProcessing ? '提交中...' : '深度提取' }}</span>
