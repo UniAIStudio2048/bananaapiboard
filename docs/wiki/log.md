@@ -2,12 +2,14 @@
 type: log
 title: 用户前端知识库变更日志
 tags: [bananaapiboard, canvas, wiki]
-timestamp: 2026-09-23
+timestamp: 2026-09-24
 ---
 
 # 变更日志
 
 ## 2026-09-24
+
+- 新增 [大画布视频封面回退](canvas-video-cover-fallback.md)：记录可见节点限流截帧、成功图片持久化和远程验证限制。
 
 - 更新 [画布历史记录与资产筛选栏布局](canvas-history-filters-layout.md)：撤回搜索宽度限制，搜索框与分类标签统一高度，资产放大视图使用紧凑筛选栏。
 

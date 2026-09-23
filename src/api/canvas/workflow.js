@@ -440,11 +440,12 @@ export async function uploadCanvasMedia(file, type = 'image', retryOptions = {})
   return uploadCanvasFile(file, type, retryOptions)
 }
 
-export async function extractVideoFrame({ videoUrl, time = 0, mode = 'time', nodeId = '' }) {
+export async function extractVideoFrame({ videoUrl, time = 0, mode = 'time', nodeId = '', signal }) {
   const response = await fetch(getApiUrl(`/api/videos/extract-frame`), {
     method: 'POST',
     credentials: 'include',
     headers: getAuthHeaders(),
+    signal,
     body: JSON.stringify({ videoUrl, time, mode, nodeId })
   })
 

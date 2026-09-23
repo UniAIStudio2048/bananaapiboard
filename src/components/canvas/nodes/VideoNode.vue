@@ -24,7 +24,7 @@ import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
 import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
-import { saveWorkflow, uploadCanvasMedia, getWorkflowNodesBatch, patchWorkflowNode, postWorkflowOps } from '@/api/canvas/workflow'
+import { saveWorkflow, uploadCanvasMedia, extractVideoFrame, getWorkflowNodesBatch, patchWorkflowNode, postWorkflowOps } from '@/api/canvas/workflow'
 import { uploadCanvasDocument } from '@/api/canvas/direct-upload'
 import { createDigitalHumanLipsync, createDigitalHumanVideo, getDigitalHumanChannels } from '@/api/canvas/digital-humans'
 import { registerTask, subscribeTask, getTasksByNodeId, removeCompletedTask } from '@/stores/canvas/backgroundTaskManager'
@@ -36,6 +36,7 @@ import {
 import { useI18n } from '@/i18n'
 import { showAlert, showInsufficientPointsDialog, showToast } from '@/composables/useCanvasDialog'
 import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl, onCanvasImageError, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { requestCanvasVideoPoster } from '@/utils/canvasVideoPosterQueue'
 import { isModelReferenceMediaUrl, isPreferredModelMediaUrl, normalizeModelImageUrl, normalizeModelImageUrls } from '@/utils/canvasModelMedia'
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
@@ -3030,6 +3031,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  posterAbortController?.abort()
   document.removeEventListener('click', handleModelDropdownClickOutside)
   document.removeEventListener('mousedown', handleConfigPanelOutsideMouseDown)
   
@@ -3093,7 +3095,10 @@ const SUBTITLE_ERASE_POLL_ATTEMPTS = 1500
 
 // poster 仅在有明确封面图时才设置；COS ci-process=snapshot 截帧服务不稳定（502），
 // 失败的 poster 会导致 <video> 显示黑屏而非首帧
+const recoveredVideoPosterUrl = ref('')
+const recoveredVideoPosterSource = ref('')
 const videoPosterUrl = computed(() => {
+  if (recoveredVideoPosterUrl.value) return recoveredVideoPosterUrl.value
   const explicitPoster =
     props.data.output?.cover_url ||
     props.data.output?.coverUrl ||
@@ -3137,8 +3142,12 @@ const canvasVideoToolSources = computed(() => {
 })
 const isVideoPreviewActive = ref(false)
 const videoPosterFailed = ref(false)
+const serverPosterFailed = ref(false)
+const serverPosterAttemptedUrl = ref('')
+let posterAbortController = null
+const needsVideoPoster = computed(() => shouldRenderVideoOutput.value && (!videoPosterUrl.value || videoPosterFailed.value))
 const shouldFallbackToVideoFrame = computed(() => {
-  return shouldRenderVideoOutput.value && (!videoPosterUrl.value || videoPosterFailed.value)
+  return needsVideoPoster.value && serverPosterFailed.value
 })
 const shouldMountVideoElement = computed(() => {
   return shouldRenderVideoOutput.value &&
@@ -3150,6 +3159,43 @@ const videoPreloadMode = computed(() => shouldFallbackToVideoFrame.value ? 'auto
 watch(videoPosterUrl, () => {
   videoPosterFailed.value = false
 })
+
+watch(normalizedVideoUrl, () => {
+  posterAbortController?.abort()
+  posterAbortController = null
+  recoveredVideoPosterUrl.value = ''
+  recoveredVideoPosterSource.value = ''
+  serverPosterAttemptedUrl.value = ''
+  serverPosterFailed.value = false
+})
+
+watch([isNodeVisible, needsVideoPoster, normalizedVideoUrl], ([visible, needsPoster]) => {
+  if (!visible) {
+    posterAbortController?.abort()
+    posterAbortController = null
+    serverPosterAttemptedUrl.value = ''
+    return
+  }
+  const sourceUrl = props.data.output?.url
+  if (!visible || !needsPoster || !sourceUrl || serverPosterAttemptedUrl.value === sourceUrl) return
+  serverPosterAttemptedUrl.value = sourceUrl
+  const controller = new AbortController()
+  posterAbortController = controller
+  requestCanvasVideoPoster(signal => extractVideoFrame({ videoUrl: sourceUrl, time: 0.3, nodeId: props.id, signal }), controller.signal)
+    .then(result => {
+      if (posterAbortController !== controller || props.data.output?.url !== sourceUrl) return
+      recoveredVideoPosterSource.value = result.url
+      recoveredVideoPosterUrl.value = toSameOriginUrl(result.url)
+    })
+    .catch(error => {
+      if (posterAbortController !== controller || props.data.output?.url !== sourceUrl || error?.name === 'AbortError') return
+      console.warn('[VideoNode] 服务端视频封面提取失败:', error?.message || error)
+      serverPosterFailed.value = true
+    })
+    .finally(() => {
+      if (posterAbortController === controller) posterAbortController = null
+    })
+}, { immediate: true })
 
 function handleVideoPosterError(event) {
   // 先尝试用原图重试（视频封面常因 ci-process 缩略参数失败）
@@ -3164,6 +3210,7 @@ function handleVideoPosterError(event) {
     }
   }
   videoPosterFailed.value = true
+  if (recoveredVideoPosterUrl.value) serverPosterFailed.value = true
 }
 
 const previewDevicePixelRatio = computed(() => {
@@ -8251,6 +8298,16 @@ function applyDetectedVideoDimensions(width, height) {
 function handleVideoPosterLoad(event) {
   const image = event?.target
   applyDetectedVideoDimensions(image?.naturalWidth, image?.naturalHeight)
+  const thumbnailUrl = recoveredVideoPosterSource.value
+  if (!thumbnailUrl || props.data?.readonly || props.data.output?.cover_url === thumbnailUrl) return
+  const output = { ...props.data.output, cover_url: thumbnailUrl, thumbnailUrl }
+  canvasStore.updateNodeData(props.id, { output })
+  const workflowId = canvasStore.getCurrentTab?.()?.workflowId
+  if (workflowId && !props.data?.readonly) {
+    patchWorkflowNode(workflowId, props.id, { data: { output } }).catch(error => {
+      console.warn('[VideoNode] 视频封面写入工作流失败:', error?.message || error)
+    })
+  }
 }
 
 watch(availableAspectRatios, (ratios) => {
@@ -9760,7 +9817,7 @@ function handleToolbarPreview() {
             :src="videoPosterUrl"
             class="video-poster-output"
             alt="视频封面"
-            loading="lazy"
+            loading="eager"
             decoding="async"
             @load="handleVideoPosterLoad"
             @error="handleVideoPosterError"

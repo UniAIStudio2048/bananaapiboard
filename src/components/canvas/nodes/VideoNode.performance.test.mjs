@@ -36,6 +36,11 @@ assert.match(
   'VideoNode should allow video previews to fall back to the video first frame when no poster exists'
 )
 
+assert.match(source, /requestCanvasVideoPoster\(/, 'VideoNode should request a server cover for videos without a usable poster')
+assert.match(source, /const output = \{ \.\.\.props\.data\.output, cover_url: thumbnailUrl, thumbnailUrl \}[\s\S]*canvasStore\.updateNodeData\(props\.id, \{ output \}\)/, 'VideoNode should save a recovered cover ahead of a broken old cover')
+assert.match(source, /shouldFallbackToVideoFrame[\s\S]*serverPosterFailed\.value/, 'VideoNode should wait for the cover request before mounting bulk video fallbacks')
+assert.match(source, /class="video-poster-output"[\s\S]*loading="eager"/, 'visible video node posters should load immediately at low canvas zoom')
+
 assert.match(
   source,
   /const videoPosterFailed = ref\(false\)/,

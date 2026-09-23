@@ -3,10 +3,12 @@ type: index
 title: 用户前端知识库索引
 description: 可复用的画布交互与渠道集成结论。
 tags: [bananaapiboard, canvas, wiki]
-timestamp: 2026-09-23
+timestamp: 2026-09-24
 ---
 
 # 用户前端知识库索引
+
+- [大画布视频封面回退](canvas-video-cover-fallback.md)：缺失或失效封面走限流服务端截帧，验证加载后写回节点。
 
 - [画布历史记录与资产筛选栏布局](canvas-history-filters-layout.md)：放大视图同排展示空间、分类和限宽搜索，窄屏保留可用宽度。
 
