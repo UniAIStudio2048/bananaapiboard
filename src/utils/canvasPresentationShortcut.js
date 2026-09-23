@@ -3,6 +3,7 @@ const DOUBLE_PRESS_MS = 320
 export function createCanvasPresentationShortcut({
   isClean,
   toggleEdges,
+  showEdges,
   enterClean,
   exitClean,
   now = () => Date.now(),
@@ -24,19 +25,20 @@ export function createCanvasPresentationShortcut({
       if (lastPressAt !== null && pressedAt - lastPressAt <= DOUBLE_PRESS_MS) {
         clearPending()
         if (isClean()) exitClean()
-        else enterClean()
+        else {
+          showEdges()
+          enterClean()
+        }
         return
       }
 
       clearPending()
       lastPressAt = pressedAt
-      if (!isClean()) {
-        pendingTimer = schedule(() => {
-          pendingTimer = null
-          lastPressAt = null
-          toggleEdges()
-        }, DOUBLE_PRESS_MS)
-      }
+      pendingTimer = schedule(() => {
+        pendingTimer = null
+        lastPressAt = null
+        toggleEdges()
+      }, DOUBLE_PRESS_MS)
     },
     escape() {
       clearPending()

@@ -2855,6 +2855,9 @@ function exitCleanCanvasMode() {
 const presentationShortcut = createCanvasPresentationShortcut({
   isClean: () => cleanCanvasMode.value,
   toggleEdges: toggleEdgesHidden,
+  showEdges: () => {
+    if (edgesHidden.value) applyCanvasEdgeStyle(lastVisibleEdgeStyle.value)
+  },
   enterClean: enterCleanCanvasMode,
   exitClean: exitCleanCanvasMode
 })
