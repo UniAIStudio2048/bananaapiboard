@@ -8785,6 +8785,19 @@ async function parseHDJsonResponse(response, fallbackMessage) {
 }
 
 const isDepthProcessing = ref(false)
+const depthPriceHint = ref('视频深度提取')
+async function refreshDepthPriceHint() {
+  try {
+    const response = await fetch(getApiUrl('/api/videos/depth/config'), {
+      headers: { ...getTenantHeaders(), Authorization: `Bearer ${localStorage.getItem('token')}` }, signal: AbortSignal.timeout(10000)
+    })
+    const config = await response.json()
+    if (!response.ok || !config.enabled) { depthPriceHint.value = '视频深度提取未配置，请联系管理员'; return }
+    depthPriceHint.value = config.billing_mode === 'fixed'
+      ? `视频深度提取 · ${formatPoints(config.points_cost)} 积分/次，失败全退`
+      : `视频深度提取 · ${formatPoints(config.points_per_second)} 积分/秒，按实际时长结算`
+  } catch { depthPriceHint.value = '视频深度提取 · 费用暂不可用' }
+}
 async function handleToolbarDepth() {
   if (isDepthProcessing.value) return
   isDepthProcessing.value = true
@@ -9580,7 +9593,7 @@ function handleToolbarPreview() {
         <span>{{ isHDProcessing ? '处理中...' : '高清' }}</span>
       </button>
       </VideoUpscaleButton>
-      <button class="toolbar-btn" title="视频深度提取" :disabled="isDepthProcessing" @mousedown.stop.prevent="handleToolbarDepth" @click.stop.prevent>
+      <button class="toolbar-btn" :title="depthPriceHint" :disabled="isDepthProcessing" @mouseenter="refreshDepthPriceHint" @focus="refreshDepthPriceHint" @mousedown.stop.prevent="handleToolbarDepth" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3L2 8l10 5 10-5-10-5zM2 12l10 5 10-5M2 16l10 5 10-5" /></svg>
         <span>{{ isDepthProcessing ? '提交中...' : '深度提取' }}</span>
       </button>
