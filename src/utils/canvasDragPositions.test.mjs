@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { getDraggedNodeFinalPositions } from './canvasDragPositions.js'
+import { getDraggedNodeFinalPositions, getDraggedNodeDropPosition } from './canvasDragPositions.js'
 
 function moveNodes(nodes, draggedNodeId, finalPosition) {
   const draggedNode = nodes.find(node => node.id === draggedNodeId)
@@ -45,5 +45,20 @@ test('snap correction is applied equally to every dragged node', () => {
       'text-1': { x: 120, y: 100 },
       'image-1': { x: 280, y: 160 }
     }
+  )
+})
+
+test('grid snap waits until drop and keeps alignment guides ahead of the grid', () => {
+  assert.deepEqual(
+    getDraggedNodeDropPosition({ x: 113.4, y: 87.2 }, { x: null, y: null }, true),
+    { x: 120, y: 80 }
+  )
+  assert.deepEqual(
+    getDraggedNodeDropPosition({ x: 113.4, y: 87.2 }, { x: 117, y: null }, true),
+    { x: 117, y: 80 }
+  )
+  assert.deepEqual(
+    getDraggedNodeDropPosition({ x: 113.4, y: 87.2 }, { x: null, y: null }, false),
+    { x: 113.4, y: 87.2 }
   )
 })

@@ -18,6 +18,7 @@ import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
 import { generateImageFromText, generateImageFromImage, pollTaskStatus, uploadImages, deductCropPoints, removeImageBackground } from '@/api/canvas/nodes'
 import { getHistory } from '@/api/canvas/history'
+import { getCanvasNodeDisplayName, getCanvasNodeDownloadName } from '@/utils/canvasDirectory'
 import { getAsset } from '@/api/canvas/assets'
 import { extractVideoFrame, uploadCanvasMedia } from '@/api/canvas/workflow'
 import SeedanceReviewButton from '../SeedanceReviewButton.vue'
@@ -108,6 +109,7 @@ const isHeygenDigitalHumanReference = computed(() => {
 const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
+const openReferencePicker = inject('openReferencePicker', () => {})
 const uploadManager = useUploadManager()
 const teamStore = useTeamStore()
 const userInfo = inject('userInfo')
@@ -3831,7 +3833,8 @@ async function handleToolbarDownload() {
   }
   
   isDownloading = true
-  const filename = `image_${props.id || Date.now()}.png`
+  const previewNode = showPreviewModal.value && canvasStore.nodes.find(node => node.id === previewNodeId.value)
+  const filename = getCanvasNodeDownloadName(previewNode || { type: 'image', data: props.data }, 'png')
   showToast('正在下载图片...', 'info')
   
   try {
@@ -3982,8 +3985,8 @@ async function handleAddToAssets() {
   try {
     const { saveAsset } = await import('@/api/canvas/assets')
     
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const fileName = `画布图片_${timestamp}`
+    const previewNode = canvasStore.nodes.find(node => node.id === previewNodeId.value)
+    const fileName = getCanvasNodeDisplayName(previewNode || { type: 'image', data: props.data })
     
     await saveAsset({
       type: 'image',
@@ -8240,8 +8243,8 @@ async function handleDrop(event) {
         @drop="handleRefDrop"
       >
         <div class="panel-frames-header">
-          <span class="panel-frames-label">参考图片</span>
-          <span class="panel-frames-hint">拖拽图片到此处 · 拖动调整顺序</span>
+          <button type="button" class="panel-frames-label" title="从画布或资产管理选择参考" @click.stop="openReferencePicker(id)">＋参考</button>
+          <span class="panel-frames-hint">参考图片 · 拖拽图片到此处 · 拖动调整顺序</span>
         </div>
         <div class="panel-frames-list">
           <div
@@ -10096,6 +10099,8 @@ async function handleDrop(event) {
   padding: 4px 10px;
   background: var(--canvas-bg-tertiary, #2a2a2a);
   border-radius: 4px;
+  border: 0;
+  cursor: pointer;
 }
 
 .panel-frames-hint {

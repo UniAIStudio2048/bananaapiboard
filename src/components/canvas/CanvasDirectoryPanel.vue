@@ -28,7 +28,8 @@ const props = defineProps({
   nodes: { type: Array, default: () => [] },
   selectedNodeId: { type: String, default: null },
   selectedNodeIds: { type: Array, default: () => [] },
-  workflowKey: { type: String, default: '' }
+  workflowKey: { type: String, default: '' },
+  referenceTargetNodeId: { type: String, default: null }
 })
 
 const emit = defineEmits([
@@ -58,7 +59,18 @@ const showHoverPreview = ref(false)
 let showHoverTimer = null
 let hideHoverTimer = null
 
-const directory = computed(() => buildCanvasDirectory(props.nodes, { search: searchQuery.value }))
+const directory = computed(() => {
+  const result = buildCanvasDirectory(props.nodes, { search: searchQuery.value })
+  if (!props.referenceTargetNodeId) return result
+  const canReference = row => row.id !== props.referenceTargetNodeId &&
+    ['image', 'video', 'audio'].includes(row.mediaKind)
+  const root = result.root.filter(canReference)
+  const folders = result.folders.map(folder => ({
+    ...folder,
+    children: folder.children.filter(canReference)
+  })).filter(folder => folder.children.length > 0)
+  return { root, folders, total: root.length + folders.reduce((count, folder) => count + folder.children.length, 0) }
+})
 const visibleGroupIds = computed(() => new Set(
   props.nodes.filter(node => node?.type === 'group').map(node => node.id)
 ))

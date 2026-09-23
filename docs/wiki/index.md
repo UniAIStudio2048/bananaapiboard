@@ -3,10 +3,18 @@ type: index
 title: 用户前端知识库索引
 description: 可复用的画布交互与渠道集成结论。
 tags: [bananaapiboard, canvas, wiki]
-timestamp: 2026-09-14
+timestamp: 2026-09-23
 ---
 
 # 用户前端知识库索引
+
+- [画布历史记录与资产筛选栏布局](canvas-history-filters-layout.md)：放大视图同排展示空间、分类和限宽搜索，窄屏保留可用宽度。
+
+- [画布放大后的节点拖动与网格吸附](canvas-node-drag-zoom.md)：拖动时连续移动，释放时按设置吸附。
+
+- [画布深夜模式背景与网格颜色](canvas-dark-grid-colors.md)：画布背景、网格点与白昼模式配色来源。
+
+- [画布多选媒体下载](canvas-batch-media-download.md)：右键入口、媒体筛选与下载路径。
 
 - [R2 视频播放与源文件下载](r2-video-playback.md)：Stream/R2 HLS 播放切换、失败回退和下载一致性验证。
 

@@ -16,7 +16,8 @@ import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } f
 import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled, isByteforCharacterLibraryEnabled, isDigitalHumanLibraryEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
-import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { getWorkflowNodesBatch, uploadCanvasMedia } from '@/api/canvas/workflow'
+import { useCanvasStore } from '@/stores/canvas'
 import { Images, LayoutDashboard, Maximize2, Minimize2, SlidersHorizontal, X } from '@lucide/vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import SeedanceCharacterPanel from './SeedanceCharacterPanel.vue'
@@ -34,18 +35,22 @@ import {
 
 const { t, currentLanguage } = useI18n()
 const teamStore = useTeamStore()
+const canvasStore = useCanvasStore()
 
 const props = defineProps({
   visible: Boolean,
   nodes: { type: Array, default: () => [] },
   selectedNodeId: { type: String, default: null },
   selectedNodeIds: { type: Array, default: () => [] },
-  workflowKey: { type: String, default: '' }
+  workflowKey: { type: String, default: '' },
+  workflowId: { type: [String, Number], default: null },
+  referenceTargetNodeId: { type: String, default: null }
 })
 
 const emit = defineEmits([
   'close',
   'insert-asset',
+  'select-reference-asset',
   'select-locate',
   'locate',
   'rename',
@@ -184,6 +189,7 @@ const allFileTypes = [
 ]
 const fileTypes = computed(() =>
   allFileTypes.filter(ft => {
+    if (props.referenceTargetNodeId) return ['all', 'image', 'video', 'audio'].includes(ft.key)
     if (ft.key === 'seedance-character') return seedanceFeaturesEnabled.value
     if (ft.key === 'sora-character') return soraCharacterLibraryEnabled.value
     if (ft.key === 'bytefor-character') return byteforCharacterLibraryEnabled.value
@@ -236,12 +242,15 @@ const tagCounts = computed(() => {
 
 // 筛选后的资产
 const filteredAssets = computed(() => {
-  return getVisibleAssetPanelAssets(assets.value, {
+  const visible = getVisibleAssetPanelAssets(assets.value, {
     ...assetVisibilityContext.value,
     selectedType: selectedType.value,
     selectedTag: selectedTag.value,
     searchQuery: searchQuery.value
   })
+  return props.referenceTargetNodeId
+    ? visible.filter(asset => ['image', 'video', 'audio'].includes(asset.type) && asset.url)
+    : visible
 })
 
 const displayedAssets = computed(() => filteredAssets.value.slice(0, displayCount.value))
@@ -788,6 +797,10 @@ function cancelEditName() {
 
 // 点击资产 - Sora 角色单击复制 ID，其他资产打开预览
 function handleAssetClick(e, asset) {
+  if (props.referenceTargetNodeId) {
+    emit('select-reference-asset', asset)
+    return
+  }
   // Sora 角色：单击复制角色 ID（仅当角色创建成功时）
   if (asset.type === 'sora-character') {
     const status = getCharacterStatus(asset)
@@ -814,6 +827,7 @@ function handleAssetClick(e, asset) {
 
 // 双击资产 - 打开全屏预览（Sora 角色也支持）
 function handleAssetDoubleClick(asset) {
+  if (props.referenceTargetNodeId) return
   previewAsset.value = asset
   showPreview.value = true
 }
@@ -1550,6 +1564,28 @@ function closeTagManager() {
 
 // ========== 生命周期 ==========
 
+let directoryLoadToken = 0
+watch(() => [props.visible, props.workflowId, props.workflowKey, props.nodes], async () => {
+  const token = ++directoryLoadToken
+  if (!props.visible || !props.workflowId) return
+  const workflowId = props.workflowId
+  const nodeIds = props.nodes.filter(node => node?.data?._shellLoading).map(node => node.id)
+  for (let i = 0; i < nodeIds.length; i += 50) {
+    try {
+      const result = await getWorkflowNodesBatch(workflowId, nodeIds.slice(i, i + 50))
+      if (token !== directoryLoadToken || !props.visible || props.workflowId !== workflowId) return
+      for (const node of result.nodes || []) {
+        if (props.nodes.find(item => item.id === node.id)?.data?._shellLoading) {
+          canvasStore.applyIncrementalNode(node)
+        }
+      }
+    } catch (error) {
+      console.warn('[AssetPanel] 画布节点名称加载失败:', error)
+      return
+    }
+  }
+})
+
 watch(() => props.visible, async (visible) => {
   if (visible) {
     activePanelView.value = 'canvas'
@@ -1566,6 +1602,13 @@ watch(() => props.visible, async (visible) => {
     isFullscreen.value = false
     stopTeamSync()
   }
+})
+
+watch(() => props.referenceTargetNodeId, nodeId => {
+  if (!nodeId) return
+  selectedType.value = 'all'
+  selectedTag.value = 'all'
+  searchQuery.value = ''
 })
 
 function setActivePanelView(view) {
@@ -1708,9 +1751,12 @@ onUnmounted(() => {
           </button>
         </div>
 
+        <p v-if="referenceTargetNodeId" class="reference-picker-hint">单击画布节点或资产，添加到当前节点的参考区域</p>
+
         <CanvasDirectoryPanel
           v-if="activePanelView === 'canvas'"
           :nodes="nodes"
+          :reference-target-node-id="referenceTargetNodeId"
           :selected-node-id="selectedNodeId"
           :selected-node-ids="selectedNodeIds"
           :workflow-key="workflowKey"
@@ -1723,7 +1769,7 @@ onUnmounted(() => {
         />
 
         <div v-show="activePanelView === 'assets'" class="asset-library-view">
-        
+        <div class="asset-filters">
         <!-- 空间切换器 -->
         <SpaceSwitcher 
           v-model="spaceFilter" 
@@ -1744,6 +1790,7 @@ onUnmounted(() => {
               <button 
                 class="type-btn"
                 :class="{ active: selectedType === ft.key }"
+                :title="ft.labelKey ? t(ft.labelKey) : ft.label"
                 @click="selectedType = ft.key"
               >
                 <span class="type-icon">{{ ft.icon }}</span>
@@ -1777,6 +1824,7 @@ onUnmounted(() => {
               <button 
                 class="type-btn"
                 :class="{ active: selectedType === ft.key }"
+                :title="ft.labelKey ? t(ft.labelKey) : ft.label"
                 @click="selectedType = ft.key"
               >
                 <span class="type-icon">{{ ft.icon }}</span>
@@ -1823,6 +1871,7 @@ onUnmounted(() => {
               v-else
               class="type-btn"
               :class="{ active: selectedType === ft.key }"
+              :title="ft.labelKey ? t(ft.labelKey) : ft.label"
               @click="selectedType = ft.key"
             >
               <span class="type-icon">{{ ft.icon }}</span>
@@ -1845,6 +1894,7 @@ onUnmounted(() => {
             class="search-input"
           />
           <span v-if="searchQuery" class="search-clear" @click="searchQuery = ''">✕</span>
+        </div>
         </div>
 
         <!-- 资产列表 -->
@@ -2261,6 +2311,13 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.reference-picker-hint {
+  margin: 0;
+  padding: 8px 14px;
+  color: var(--canvas-text-secondary, #aaa);
+  font-size: 12px;
+}
+
 /* 侧边栏容器 - 不阻挡拖拽 */
 .asset-panel-container {
   position: fixed;
@@ -2317,6 +2374,88 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   flex-direction: column;
+}
+
+.asset-filters {
+  display: contents;
+}
+
+.asset-panel.fullscreen .asset-filters {
+  display: grid;
+  grid-template-columns: 178px minmax(0, 1fr);
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--canvas-border-subtle);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 3;
+}
+
+.asset-panel.fullscreen .asset-filters .type-filter {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  padding: 0;
+  border: 0;
+}
+
+.asset-panel.fullscreen .asset-filters .type-btn,
+.asset-panel.fullscreen .asset-filters .search-bar {
+  box-sizing: border-box;
+  height: 32px;
+}
+
+.asset-panel.fullscreen .asset-filters .type-btn {
+  padding: 6px 8px;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.asset-panel.fullscreen .asset-filters .search-bar {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  margin: 0;
+  padding: 0 12px;
+}
+
+.asset-panel.fullscreen .asset-filters .search-input {
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+}
+
+@media (min-width: 1600px) {
+  .asset-panel.fullscreen .asset-filters {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .asset-panel.fullscreen .asset-filters :deep(.space-switcher-dropdown) {
+    flex: 0 0 178px;
+  }
+
+  .asset-panel.fullscreen .asset-filters .type-filter {
+    flex: 0 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
+
+  .asset-panel.fullscreen .asset-filters .type-icon {
+    display: none;
+  }
+
+  .asset-panel.fullscreen .asset-filters .type-label {
+    max-width: 70px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .asset-panel.fullscreen .asset-filters .search-bar {
+    flex: 1 1 220px;
+  }
 }
 
 .asset-panel-tabs {

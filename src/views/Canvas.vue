@@ -13,6 +13,7 @@ import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { loadWorkflow as loadWorkflowFromServer } from '@/api/canvas/workflow'
 import { useCanvasRealtimeSync } from '@/composables/useCanvasRealtimeSync'
+import { useControlGroupCollapse } from '@/composables/useControlGroupCollapse'
 import CanvasBoard from '@/components/canvas/CanvasBoard.vue'
 import CanvasToolbar from '@/components/canvas/CanvasToolbar.vue'
 import CanvasEmptyState from '@/components/canvas/CanvasEmptyState.vue'
@@ -81,8 +82,11 @@ import {
   resolvePromptInputFixedScalePreference
 } from '@/utils/canvasPromptInputScale'
 import { buildOrganizationSignature } from '@/utils/canvasOrganization'
-import { getCanvasNodeMedia } from '@/utils/canvasDirectory'
+import { getCanvasNodeDownloadName, getCanvasNodeMedia } from '@/utils/canvasDirectory'
+import { getSelectedMediaNodeIds } from '@/utils/canvasBatchDownload'
+import { findCanvasReferenceAssetNode, isCanvasReferenceSource } from '@/utils/canvasReferenceSelection'
 import { createCanvasOrganizationPreviewController } from '@/utils/canvasOrganizationPreview'
+import { createCanvasPresentationShortcut } from '@/utils/canvasPresentationShortcut'
 import { normalizeWorkflowShareMode } from '@/utils/workflowShare'
 import {
   CANVAS_GRID_SNAP_STORAGE_KEY,
@@ -168,6 +172,21 @@ const me = ref(null)
 const loading = ref(true)
 const canvasReady = ref(false) // 画布是否准备好渲染（等待转场动画完成）
 
+const {
+  pinned: topControlsPinned,
+  expanded: topControlsExpanded,
+  toggle: toggleTopControls,
+  enter: hoverTopControls,
+  leave: leaveTopControls
+} = useControlGroupCollapse()
+const {
+  pinned: bottomControlsPinned,
+  expanded: bottomControlsExpanded,
+  toggle: toggleBottomControls,
+  enter: hoverBottomControls,
+  leave: leaveBottomControls
+} = useControlGroupCollapse()
+
 // 模板面板
 const showTemplates = ref(false)
 
@@ -211,6 +230,11 @@ const workflowPanelRef = ref(null)
 
 // 资产面板
 const showAssetPanel = ref(false)
+const referenceTargetNodeId = ref(null)
+
+watch(() => canvasStore.activeTabId, () => {
+  referenceTargetNodeId.value = null
+})
 
 // 历史记录面板
 const showHistoryPanel = ref(false)
@@ -277,6 +301,7 @@ const lastVisibleEdgeStyle = ref(resolveEdgeRestoreStyle(
   localStorage.getItem(CANVAS_LAST_EDGE_STYLE_STORAGE_KEY)
 ))
 const edgesHidden = computed(() => selectedEdgeStyle.value === 'hidden')
+const cleanCanvasMode = ref(false)
 const showZoomMenu = ref(false)
 const zoomInput = ref('100')
 const organizationPreview = ref(null)
@@ -685,16 +710,54 @@ provide('openWorkflowPanel', openWorkflowPanel)
 
 // 切换资产面板（打开/关闭）
 function openAssetPanel() {
+  referenceTargetNodeId.value = null
   toggleLeftPanel('asset')
+}
+
+function openReferencePicker(nodeId) {
+  if (!canvasStore.nodes.some(node => node.id === nodeId)) return
+  referenceTargetNodeId.value = nodeId
+  closeLeftPanels()
+  showAssetPanel.value = true
 }
 
 // 关闭资产面板
 function closeAssetPanel() {
   showAssetPanel.value = false
+  referenceTargetNodeId.value = null
+}
+
+function connectReferenceSource(source) {
+  const targetId = referenceTargetNodeId.value
+  if (!targetId || !isCanvasReferenceSource(source) || source.id === targetId ||
+      !canvasStore.nodes.some(node => node.id === targetId)) return
+  canvasStore.addEdge({ source: source.id, target: targetId })
+  canvasStore.selectNode(targetId)
+  closeAssetPanel()
+  autoSaveWorkflow({ force: true, reason: 'reference-picker' })
+}
+
+function handleAssetPanelNodeSelect(nodeId) {
+  if (!referenceTargetNodeId.value) {
+    handleDirectorySelectLocate(nodeId)
+    return
+  }
+  connectReferenceSource(canvasStore.nodes.find(node => node.id === nodeId))
+}
+
+function handleReferenceAssetSelect(asset) {
+  const target = canvasStore.nodes.find(node => node.id === referenceTargetNodeId.value)
+  if (!target || !['image', 'video', 'audio'].includes(asset?.type) || !asset.url) return
+  const existing = findCanvasReferenceAssetNode(canvasStore.nodes, asset)
+  const source = existing || handleAssetInsert(asset, {
+    x: target.position.x - 360,
+    y: target.position.y + canvasStore.edges.filter(edge => edge.target === target.id).length * 90
+  })
+  connectReferenceSource(source)
 }
 
 // 资产插入到画布
-function handleAssetInsert(asset) {
+function handleAssetInsert(asset, referencePosition = null) {
   console.log('[Canvas] 插入资产:', asset)
   
   // 计算当前画布视口中心偏左的位置
@@ -807,15 +870,16 @@ function handleAssetInsert(asset) {
       break
   }
   
-  canvasStore.addNode({
+  return canvasStore.addNode({
     type: nodeType,
-    position,
+    position: referencePosition || position,
     data: nodeData
   })
 }
 
 // 提供打开资产面板函数给子组件
 provide('openAssetPanel', openAssetPanel)
+provide('openReferencePicker', openReferencePicker)
 
 // 切换历史记录面板（打开/关闭）
 function openHistoryPanel() {
@@ -2779,6 +2843,22 @@ function toggleEdgesHidden() {
   applyCanvasEdgeStyle('hidden')
 }
 
+function enterCleanCanvasMode() {
+  showAIAssistant.value = false
+  cleanCanvasMode.value = true
+}
+
+function exitCleanCanvasMode() {
+  cleanCanvasMode.value = false
+}
+
+const presentationShortcut = createCanvasPresentationShortcut({
+  isClean: () => cleanCanvasMode.value,
+  toggleEdges: toggleEdgesHidden,
+  enterClean: enterCleanCanvasMode,
+  exitClean: exitCleanCanvasMode
+})
+
 function handleCanvasEdgeStyleChanged(event) {
   const style = event.detail?.style
   if (!style) return
@@ -2953,6 +3033,27 @@ async function handleKeyDown(event) {
                     target.tagName === 'TEXTAREA' || 
                     target.isContentEditable ||
                     target.closest('[contenteditable="true"]')
+
+  if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey &&
+      event.key.toLowerCase() === 'b' && !isEditableShortcutTarget(target)) {
+    event.preventDefault()
+    if (!event.repeat) presentationShortcut.press()
+    return
+  }
+
+  if (!event.repeat && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey &&
+      event.key.toLowerCase() === 'm' && !isEditableShortcutTarget(target)) {
+    event.preventDefault()
+    toggleCanvasMiniMap()
+    return
+  }
+
+  if (event.key === 'Escape' && cleanCanvasMode.value) {
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    presentationShortcut.escape()
+    return
+  }
 
   if (!event.repeat && event.shiftKey && event.altKey && event.key.toLowerCase() === 'f') {
     if (isEditableShortcutTarget(event.target)) return
@@ -3188,9 +3289,7 @@ async function downloadNodeFile(nodeId) {
     return false
   }
 
-  const rawName = node.data?.title || node.data?.label || `${media.kind}_${nodeId}`
-  const safeName = String(rawName).replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').slice(0, 80) || media.kind
-  const fileName = `${safeName}.${media.extension}`
+  const fileName = getCanvasNodeDownloadName(node, media.extension)
 
   if (media.kind === 'text') {
     const blobUrl = URL.createObjectURL(new Blob([media.text], { type: 'text/plain;charset=utf-8' }))
@@ -3229,6 +3328,24 @@ async function downloadNodeFile(nodeId) {
 
 function downloadSelectedNodeFile() {
   return downloadNodeFile(canvasStore.selectedNodeId)
+}
+
+async function downloadSelectedMedia() {
+  const nodeIds = getSelectedMediaNodeIds(
+    canvasStore.nodes,
+    canvasStore.selectedNodeIds,
+    canvasStore.selectedNodeId
+  )
+  let started = 0
+  for (const [index, nodeId] of nodeIds.entries()) {
+    if (await downloadNodeFile(nodeId)) started++
+    if (index < nodeIds.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+  }
+  if (started < nodeIds.length) {
+    displayToast(`已开始下载 ${started} 个媒体文件，${nodeIds.length - started} 个下载失败`, 'warning')
+  }
 }
 
 // 处理解散编组
@@ -3692,6 +3809,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  presentationShortcut.dispose()
   cancelAllCanvasUploads()
   uploadManager.cancelAllRetries()
   keepOrganizedCanvas()
@@ -3739,7 +3857,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="canvas-page" :class="{ 'is-transitioning': isTransitioning }">
+  <div class="canvas-page" :class="{ 'is-transitioning': isTransitioning, 'is-clean-canvas': cleanCanvasMode }">
     <!-- 转场遮罩 -->
     <Transition name="page-transition">
       <div v-if="isTransitioning" class="transition-overlay">
@@ -3893,14 +4011,28 @@ onUnmounted(() => {
       </Transition>
 
       <!-- 底部左侧控制区域 -->
-      <div class="canvas-bottom-left-controls">
+      <div class="canvas-bottom-left-controls" :class="{ 'is-collapsed': !bottomControlsExpanded }" @mouseleave="leaveBottomControls">
+        <button
+          type="button"
+          class="canvas-control-btn canvas-bottom-collapse-btn"
+          :aria-label="bottomControlsPinned ? '收起左下角工具' : '展开左下角工具'"
+          :aria-expanded="bottomControlsExpanded"
+          :data-tooltip="bottomControlsPinned ? '收起左下角工具' : '点击固定展开，悬停临时展开'"
+          @mouseenter="hoverBottomControls"
+          @click="toggleBottomControls"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline :points="bottomControlsPinned ? '15 18 9 12 15 6' : '9 18 15 12 9 6'" />
+          </svg>
+        </button>
+        <div class="canvas-bottom-left-content" :aria-hidden="!bottomControlsExpanded" :inert="!bottomControlsExpanded">
         <button
           type="button"
           class="canvas-control-btn canvas-asset-toggle-btn"
           @click="openAssetPanel"
           @mousedown.stop
           @touchstart.stop
-          title="资产管理"
+          data-tooltip="资产管理"
           aria-label="资产管理"
         >
           <FolderOpen aria-hidden="true" />
@@ -3913,7 +4045,7 @@ onUnmounted(() => {
           @click="requestCanvasOrganization"
           @mousedown.stop
           @touchstart.stop
-          title="整理画布 Shift+Alt+F"
+          data-tooltip="整理画布 Shift+Alt+F"
           aria-label="整理画布"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -3932,7 +4064,8 @@ onUnmounted(() => {
           @click="toggleCanvasMiniMap"
           @mousedown.stop
           @touchstart.stop
-          title="地图"
+          data-tooltip="小地图（M）· 鼠标悬停快速定位画布"
+          :aria-label="showCanvasMiniMap ? '关闭小地图' : '打开小地图'"
         >
           <svg class="map-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 17s5-4.35 5-9a5 5 0 0 0-10 0c0 4.65 5 9 5 9Z"/>
@@ -3947,7 +4080,8 @@ onUnmounted(() => {
           class="canvas-control-btn canvas-mode-switch-btn"
           @click="toggleInteractionMode"
           @mousedown.stop
-          :title="interactionMode === 'comfyui' ? t('canvas.switchToInfiniteCanvas') : t('canvas.switchToComfyui')"
+          :data-tooltip="interactionMode === 'comfyui' ? t('canvas.switchToInfiniteCanvas') : t('canvas.switchToComfyui')"
+          :aria-label="interactionMode === 'comfyui' ? t('canvas.switchToInfiniteCanvas') : t('canvas.switchToComfyui')"
         >
           <svg v-if="interactionMode === 'comfyui'" class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M3 12h4l3-9 4 18 3-9h4"/>
@@ -3965,7 +4099,7 @@ onUnmounted(() => {
           @click="toggleEdgesHidden"
           @mousedown.stop
           @touchstart.stop
-          :title="edgesHidden ? '显示节点连线' : '隐藏节点连线'"
+          :data-tooltip="`${edgesHidden ? '显示' : '隐藏'}节点连线：Ctrl+B；纯净模式：快速按两次 Ctrl+B（Esc 退出）`"
           :aria-label="edgesHidden ? '显示节点连线' : '隐藏节点连线'"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -3983,7 +4117,7 @@ onUnmounted(() => {
           @click="toggleGridSnap"
           @mousedown.stop
           @touchstart.stop
-          :title="gridSnapEnabled ? '关闭节点网格吸附' : '开启节点网格吸附'"
+          :data-tooltip="gridSnapEnabled ? '关闭节点网格吸附' : '开启节点网格吸附'"
           :aria-label="gridSnapEnabled ? '关闭节点网格吸附' : '开启节点网格吸附'"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -4000,6 +4134,7 @@ onUnmounted(() => {
             class="canvas-zoom-trigger"
             :aria-expanded="showZoomMenu"
             aria-haspopup="menu"
+            data-tooltip="缩放画布"
             @click="toggleZoomMenu"
           >{{ Math.round(canvasStore.viewport.zoom * 100) }}%</button>
 
@@ -4026,15 +4161,18 @@ onUnmounted(() => {
             <button type="button" role="menuitem" @click="setZoomPreset(500)">缩放至500%</button>
           </div>
         </div>
+        </div>
       </div>
       
       <!-- 右上角控制区域 -->
       <div 
         v-if="!isCanvasFullscreenOverlayOpen"
         class="canvas-top-right-controls" 
-        :class="{ 'panel-open': showAIAssistant }"
+        :class="{ 'panel-open': showAIAssistant, 'is-collapsed': !topControlsExpanded }"
         :style="showAIAssistant ? { right: (aiPanelWidth + 24) + 'px' } : {}"
+        @mouseleave="leaveTopControls"
       >
+        <div class="canvas-top-right-content" :aria-hidden="!topControlsExpanded" :inert="!topControlsExpanded">
         <!-- 空间切换 -->
         <CanvasSpaceSwitcher />
 
@@ -4120,6 +4258,20 @@ onUnmounted(() => {
             <path d="M7 15h10"/>
           </svg>
         </button>
+        </div>
+        <button
+          type="button"
+          class="canvas-icon-btn canvas-top-collapse-btn"
+          :aria-label="topControlsPinned ? '收起右上角功能' : '展开右上角功能'"
+          :aria-expanded="topControlsExpanded"
+          :title="topControlsPinned ? '收起右上角功能' : '点击固定展开，悬停临时展开'"
+          @mouseenter="hoverTopControls"
+          @click="toggleTopControls"
+        >
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline :points="topControlsPinned ? '9 18 15 12 9 6' : '15 18 9 12 15 6'" />
+          </svg>
+        </button>
       </div>
 
       
@@ -4175,6 +4327,9 @@ onUnmounted(() => {
                     <li><kbd>Ctrl+V</kbd> {{ t('canvas.pasteNode') }}</li>
                     <li><kbd>Ctrl+A</kbd> {{ t('canvas.selectAllNodes') }}</li>
                     <li><kbd>Ctrl+G</kbd> {{ t('canvas.groupNodes') }}</li>
+                    <li><kbd>Ctrl+B</kbd> 隐藏/显示连线</li>
+                    <li><kbd>Ctrl+B ×2</kbd> 进入/退出纯净模式；<kbd>Escape</kbd> 退出</li>
+                    <li><kbd>M</kbd> 打开/关闭小地图；鼠标悬停快速定位画布</li>
                     <li><kbd>Delete</kbd> / <kbd>Backspace</kbd> {{ t('canvas.deleteSelected') }}</li>
                     <li><kbd>Escape</kbd> {{ t('canvas.closeDialog') }}</li>
                     <li><kbd>Ctrl+Enter</kbd> {{ t('canvas.startGenerate') }}</li>
@@ -4226,6 +4381,7 @@ onUnmounted(() => {
         @upload="handleCanvasUpload"
         @add-node="handleCanvasAddNode"
         @group="handleCanvasGroup"
+        @download-selected-media="downloadSelectedMedia"
         @paste-clipboard="handlePasteClipboard"
       />
 
@@ -4266,13 +4422,16 @@ onUnmounted(() => {
       <!-- 资产面板 -->
       <AssetPanel
         :visible="showAssetPanel"
+        :reference-target-node-id="referenceTargetNodeId"
         :nodes="canvasStore.nodes"
         :selected-node-id="canvasStore.selectedNodeId"
         :selected-node-ids="canvasStore.selectedNodeIds"
         :workflow-key="canvasStore.activeTabId || ''"
+        :workflow-id="canvasStore.workflowTabs.find(tab => tab.id === canvasStore.activeTabId)?.workflowId || canvasStore.workflowMeta?.id"
         @close="closeAssetPanel"
         @insert-asset="handleAssetInsert"
-        @select-locate="handleDirectorySelectLocate"
+        @select-locate="handleAssetPanelNodeSelect"
+        @select-reference-asset="handleReferenceAssetSelect"
         @locate="handleDirectoryLocate"
         @rename="handleDirectoryRename"
         @duplicate="handleDirectoryDuplicate"
@@ -4450,6 +4609,161 @@ onUnmounted(() => {
 
 .canvas-page.is-transitioning {
   pointer-events: none;
+}
+
+.canvas-bottom-left-controls [data-tooltip] {
+  position: relative;
+}
+
+.canvas-bottom-left-controls [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  z-index: 1000;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: 320px;
+  padding: 8px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  background: rgba(20, 20, 24, 0.96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  color: #fff;
+  font-size: 18px;
+  line-height: 1.4;
+  font-weight: 500;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+}
+
+.canvas-bottom-left-controls [data-tooltip]:is(:hover, :focus-visible)::after {
+  opacity: 1;
+  visibility: visible;
+}
+
+.canvas-bottom-left-controls .canvas-mode-switch-btn::after,
+.canvas-bottom-left-controls .canvas-edge-toggle-btn::after,
+.canvas-bottom-left-controls .canvas-grid-snap-btn::after,
+.canvas-bottom-left-controls .canvas-zoom-trigger::after {
+  left: auto;
+  right: 0;
+}
+
+.canvas-bottom-left-controls .canvas-zoom-trigger[aria-expanded='true']::after {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* 纯净模式按控件所在边缘退场，节点和画布保持原位。 */
+.canvas-page .mode-switch-wrapper,
+.canvas-container > :is(
+  .canvas-team-share-banner,
+  .tabs-container,
+  .canvas-toolbar,
+  .canvas-empty-state,
+  .canvas-bottom-logo,
+  .canvas-bottom-left-controls,
+  .canvas-top-right-controls,
+  .ai-assistant-trigger,
+  .workflow-panel-container,
+  .asset-panel-container,
+  .history-panel-wrapper
+),
+.canvas-container :deep(.canvas-workflow-minimap),
+.canvas-container :deep(.canvas-minimap-overview) {
+  translate: 0 0;
+  transition: translate 460ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease, filter 360ms ease, visibility 0s, right 250ms ease, transform 300ms ease, box-shadow 300ms ease;
+}
+
+.canvas-page.is-clean-canvas .mode-switch-wrapper,
+.canvas-page.is-clean-canvas .canvas-container > :is(
+  .canvas-team-share-banner,
+  .tabs-container,
+  .canvas-toolbar,
+  .canvas-empty-state,
+  .canvas-bottom-logo,
+  .canvas-bottom-left-controls,
+  .canvas-top-right-controls,
+  .ai-assistant-trigger,
+  .workflow-panel-container,
+  .asset-panel-container,
+  .history-panel-wrapper
+),
+.canvas-page.is-clean-canvas .canvas-container :deep(.canvas-workflow-minimap),
+.canvas-page.is-clean-canvas .canvas-container :deep(.canvas-minimap-overview) {
+  translate: var(--clean-shift-x, 0px) var(--clean-shift-y, -72px);
+  opacity: 0;
+  filter: blur(8px);
+  visibility: hidden;
+  pointer-events: none;
+  transition: translate 460ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease, filter 360ms ease, visibility 0s 460ms, right 250ms ease, transform 300ms ease, box-shadow 300ms ease;
+}
+
+.canvas-container > .canvas-toolbar,
+.canvas-container > .workflow-panel-container,
+.canvas-container > .asset-panel-container,
+.canvas-container > .history-panel-wrapper {
+  --clean-shift-x: -88px;
+  --clean-shift-y: 0px;
+}
+
+.canvas-container > .canvas-empty-state {
+  --clean-shift-y: 0px;
+}
+
+.canvas-container > .canvas-top-right-controls {
+  --clean-shift-x: 88px;
+  --clean-shift-y: 0px;
+}
+
+.canvas-container > .canvas-bottom-left-controls,
+.canvas-container > .canvas-bottom-logo,
+.canvas-container > .ai-assistant-trigger,
+.canvas-container :deep(.canvas-workflow-minimap),
+.canvas-container :deep(.canvas-minimap-overview) {
+  --clean-shift-x: 0px;
+  --clean-shift-y: 88px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-page .mode-switch-wrapper,
+  .canvas-container > :is(
+    .canvas-team-share-banner,
+    .tabs-container,
+    .canvas-toolbar,
+    .canvas-empty-state,
+    .canvas-bottom-logo,
+    .canvas-bottom-left-controls,
+    .canvas-top-right-controls,
+    .ai-assistant-trigger,
+    .workflow-panel-container,
+    .asset-panel-container,
+    .history-panel-wrapper
+  ),
+  .canvas-container :deep(.canvas-workflow-minimap),
+  .canvas-container :deep(.canvas-minimap-overview),
+  .canvas-page.is-clean-canvas .mode-switch-wrapper,
+  .canvas-page.is-clean-canvas .canvas-container > :is(
+    .canvas-team-share-banner,
+    .tabs-container,
+    .canvas-toolbar,
+    .canvas-empty-state,
+    .canvas-bottom-logo,
+    .canvas-bottom-left-controls,
+    .canvas-top-right-controls,
+    .ai-assistant-trigger,
+    .workflow-panel-container,
+    .asset-panel-container,
+    .history-panel-wrapper
+  ),
+  .canvas-page.is-clean-canvas .canvas-container :deep(.canvas-workflow-minimap),
+  .canvas-page.is-clean-canvas .canvas-container :deep(.canvas-minimap-overview) {
+    transition: none;
+  }
 }
 
 /* 标签容器 - 左上角，在模式切换按钮右侧 */
@@ -4870,7 +5184,48 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: var(--canvas-top-control-height);
+  height: var(--canvas-top-control-height);
   transition: right 0.25s ease;
+}
+
+.canvas-top-right-content {
+  position: absolute;
+  top: 0;
+  right: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  max-width: calc(100vw - 100px);
+  height: 100%;
+  padding-right: 8px;
+  box-sizing: content-box;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+}
+
+.canvas-top-right-controls.is-collapsed .canvas-top-right-content {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(18px);
+}
+
+.canvas-top-collapse-btn {
+  flex: 0 0 var(--canvas-top-control-height);
+}
+
+.canvas-top-collapse-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-top-right-content {
+    transition: none;
+  }
 }
 
 .canvas-top-right-controls :deep(.space-trigger),
@@ -4931,6 +5286,37 @@ onUnmounted(() => {
 
   .canvas-top-right-controls > * {
     flex: 0 0 auto;
+  }
+}
+
+@media (orientation: portrait) and (max-width: 900px) {
+  .canvas-top-right-controls {
+    left: auto;
+    max-width: none;
+    overflow: visible;
+  }
+
+  .canvas-top-right-content {
+    max-width: calc(100vw - 100px);
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .canvas-top-right-controls {
+    left: auto;
+    right: 12px;
+    max-width: none;
+    justify-content: flex-end;
+    overflow: visible;
+    padding-bottom: 0;
+  }
+
+  .canvas-top-right-content {
+    max-width: calc(100vw - 114px);
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 }
 

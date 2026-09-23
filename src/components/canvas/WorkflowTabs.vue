@@ -25,6 +25,30 @@ const emit = defineEmits(['switch', 'close', 'new', 'save', 'rename'])
 
 const canvasStore = useCanvasStore()
 
+// 收起只影响当前画布的标签栏展示，不改变工作流状态
+const isPinnedOpen = ref(true)
+const isHoverOpen = ref(false)
+const isExpanded = computed(() => props.tabs.length < 2 || isPinnedOpen.value || isHoverOpen.value)
+
+function toggleTabsPanel() {
+  if (isPinnedOpen.value) {
+    isPinnedOpen.value = false
+    isHoverOpen.value = false
+    showMoreMenu.value = false
+  } else {
+    isPinnedOpen.value = true
+  }
+}
+
+function handleTabsHover() {
+  if (!isPinnedOpen.value) isHoverOpen.value = true
+}
+
+function handleTabsLeave() {
+  isHoverOpen.value = false
+  if (!isPinnedOpen.value) showMoreMenu.value = false
+}
+
 // 更多按钮的引用
 const moreTabsBtn = ref(null)
 
@@ -354,7 +378,22 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="workflow-tabs">
+  <div class="workflow-tabs" :class="{ 'has-collapse': tabs.length >= 2, 'is-expanded': isExpanded }" @mouseleave="handleTabsLeave">
+    <button
+      v-if="tabs.length >= 2"
+      type="button"
+      class="tabs-collapse-btn"
+      :aria-label="isPinnedOpen ? '收起工作流' : '展开工作流'"
+      :aria-expanded="isExpanded"
+      :title="isPinnedOpen ? '收起工作流' : '点击固定展开，悬停临时展开'"
+      @mouseenter="handleTabsHover"
+      @click="toggleTabsPanel"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <polyline :points="isPinnedOpen ? '15 18 9 12 15 6' : '9 18 15 12 9 6'" />
+      </svg>
+    </button>
+    <div class="tabs-panel" :aria-hidden="!isExpanded && tabs.length >= 2" :inert="!isExpanded && tabs.length >= 2">
     <!-- 标签列表 -->
     <div class="tabs-list">
       <div
@@ -493,6 +532,7 @@ onUnmounted(() => {
         <line x1="5" y1="12" x2="19" y2="12"/>
       </svg>
     </button>
+    </div>
     
     <!-- 关闭确认弹窗 -->
     <Transition name="fade">
@@ -521,6 +561,82 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   max-width: calc(100vw - 200px);
+}
+
+.tabs-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workflow-tabs.has-collapse {
+  position: relative;
+  width: 44px;
+  box-sizing: border-box;
+}
+
+.workflow-tabs.has-collapse.is-expanded {
+  border-radius: 12px 0 0 12px;
+}
+
+.tabs-collapse-btn {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+}
+
+.tabs-collapse-btn:hover,
+.tabs-collapse-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.tabs-collapse-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.workflow-tabs.has-collapse .tabs-panel {
+  position: absolute;
+  top: -1px;
+  left: calc(100% - 1px);
+  width: max-content;
+  max-width: calc(100vw - 154px);
+  height: calc(100% + 2px);
+  box-sizing: border-box;
+  padding: 3px 8px 3px 4px;
+  background: rgba(20, 20, 20, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left: 0;
+  border-radius: 0 12px 12px 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-18px);
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+}
+
+.workflow-tabs.has-collapse.is-expanded .tabs-panel {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-tabs.has-collapse .tabs-panel {
+    transition: none;
+  }
 }
 
 .tabs-list {
@@ -890,6 +1006,23 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.95) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+:root.canvas-theme-light .workflow-tabs.has-collapse .tabs-panel {
+  background: rgba(255, 255, 255, 0.95);
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+:root.canvas-theme-light .workflow-tabs .tabs-collapse-btn {
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(0, 0, 0, 0.55);
+}
+
+:root.canvas-theme-light .workflow-tabs .tabs-collapse-btn:hover,
+:root.canvas-theme-light .workflow-tabs .tabs-collapse-btn:focus-visible {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.8);
 }
 
 :root.canvas-theme-light .workflow-tabs .tab-item {

@@ -20,6 +20,7 @@ import { getSmartImageUrl } from '@/utils/cloudMediaUrl'
 import { deductCropPoints } from '@/api/canvas/nodes'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { startStreamDownload } from '@/api/client'
+import { getCanvasNodeDisplayName, getCanvasNodeDownloadName } from '@/utils/canvasDirectory'
 import { showToast } from '@/composables/useCanvasDialog'
 
 const props = defineProps({
@@ -803,7 +804,7 @@ async function handleDownload() {
     return
   }
   
-  const filename = `image_${props.imageNode?.id || Date.now()}.png`
+  const filename = getCanvasNodeDownloadName(props.imageNode, 'png')
   showToast('正在下载图片...', 'info')
   
   try {
@@ -922,8 +923,7 @@ async function handleAddToAssets() {
     const { saveAsset } = await import('@/api/canvas/assets')
     
     // 生成文件名
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
-    const fileName = `画布图片_${timestamp}`
+    const fileName = getCanvasNodeDisplayName(props.imageNode)
     
     await saveAsset({
       type: 'image',

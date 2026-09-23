@@ -10,6 +10,7 @@ import SeedanceCharacterSelector from '../SeedanceCharacterSelector.vue'
 import { smartDownload } from '@/api/client'
 import { getAsset as getVolcengineAsset } from '@/api/canvas/volcengine-assets'
 import { buildSeedanceCharacterData, getSeedanceMediaType, getSeedanceMediaFileInfo } from '@/utils/seedanceMedia'
+import { getCanvasNodeDownloadName } from '@/utils/canvasDirectory'
 
 const LONG_PRESS_DURATION = 300
 
@@ -188,10 +189,9 @@ const imageStyle = computed(() => ({
 }))
 
 function getCharacterDownloadFilename() {
-  const rawName = props.data?.assetName || props.id || 'seedance-character'
-  const safeName = String(rawName).trim().replace(/[\\/:*?"<>|]+/g, '_') || 'seedance-character'
+  const nodeName = { type: 'seedance-character', data: props.data }
   const { extension } = getSeedanceMediaFileInfo('', mediaType.value, props.data?.assetUrl || '')
-  return `${safeName}.${extension}`
+  return getCanvasNodeDownloadName(nodeName, extension)
 }
 
 function openSelector() {

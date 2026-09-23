@@ -6,7 +6,7 @@
 /* CSS 变量定义 - 深色主题（默认） */
 :root {
   /* 背景色 - 深色渐变 */
-  --canvas-bg-primary: #0a0a0a;
+  --canvas-bg-primary: #141414;
   --canvas-bg-secondary: #141414;
   --canvas-bg-tertiary: #1a1a1a;
   --canvas-bg-elevated: #242424;
@@ -15,6 +15,7 @@
   --canvas-border-subtle: #2a2a2a;
   --canvas-border-default: #3a3a3a;
   --canvas-border-active: #4a4a4a;
+  --canvas-grid-color: #474747;
 
   /* 文字色 */
   --canvas-text-primary: #ffffff;
@@ -66,6 +67,7 @@
   --canvas-border-subtle: #e7e5e4;
   --canvas-border-default: #d6d3d1;
   --canvas-border-active: #a8a29e;
+  --canvas-grid-color: #b8b4af;
 
   /* 文字色 - 深灰色文字，避免纯黑 */
   --canvas-text-primary: #1c1917;
@@ -445,7 +447,7 @@ body:has(.canvas-page) *::-webkit-scrollbar-corner,
 
 /* 网格点样式 */
 .canvas-container .vue-flow__background pattern circle {
-  fill: var(--canvas-border-subtle);
+  fill: var(--canvas-grid-color);
 }
 
 /* ========================================
@@ -1299,6 +1301,8 @@ body:has(.canvas-page) *::-webkit-scrollbar-corner,
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 36px;
+  height: 36px;
   z-index: 100;
   pointer-events: none;
   transform: scale(var(--canvas-bottom-left-scale));
@@ -1307,6 +1311,43 @@ body:has(.canvas-page) *::-webkit-scrollbar-corner,
 
 .canvas-bottom-left-controls > * {
   pointer-events: auto;
+}
+
+.canvas-bottom-left-content {
+  position: absolute;
+  left: 100%;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: max-content;
+  height: 36px;
+  padding-left: 8px;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+}
+
+.canvas-bottom-left-controls.is-collapsed .canvas-bottom-left-content {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(-18px);
+}
+
+.canvas-bottom-collapse-btn {
+  flex: 0 0 36px;
+}
+
+.canvas-bottom-collapse-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .canvas-bottom-left-content {
+    transition: none;
+  }
 }
 
 .canvas-control-btn {
@@ -1781,16 +1822,17 @@ body:has(.canvas-page) *::-webkit-scrollbar-corner,
   
   .canvas-bottom-left-controls {
     left: 12px;
-    right: 12px;
+    right: auto;
     bottom: 12px;
-    max-width: calc(100vw - 24px);
+    width: 34px;
+    height: 34px;
     gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
   }
 
-  .canvas-bottom-left-controls::-webkit-scrollbar {
-    display: none;
+  .canvas-bottom-left-content {
+    height: 34px;
+    gap: 6px;
+    padding-left: 6px;
   }
 
   .canvas-control-btn {

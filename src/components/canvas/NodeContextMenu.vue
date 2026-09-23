@@ -20,6 +20,7 @@ import { getSeedanceCharacterNodeLayout } from '@/utils/seedanceCharacterLayout'
 import { buildVideoQuickActionNode, VIDEO_QUICK_ACTION_TYPES } from '@/utils/canvasVideoQuickActions'
 import { createDefaultDirectorStudioData, DIRECTOR_STUDIO_NODE_TYPE } from '@/utils/directorStudioState'
 import { getCanvasMediaTaskIds } from '@/utils/canvasMediaTaskIds'
+import { getCanvasNodeDisplayName, getCanvasNodeDownloadName } from '@/utils/canvasDirectory'
 import { resolveSeedanceMediaUrl } from '@/api/canvas/seedance-media-upload'
 import { buildSeedanceCharacterData } from '@/utils/seedanceMedia'
 
@@ -513,7 +514,7 @@ function closeFullscreenPreview() {
 async function downloadVideo() {
   if (!videoUrl.value) return
   
-  const filename = `video_${Date.now()}.mp4`
+  const filename = getCanvasNodeDownloadName(props.node, 'mp4')
   
   try {
     const { startStreamDownload } = await import('@/api/client')
@@ -543,7 +544,7 @@ function dataUrlToBlob(dataUrl) {
 async function downloadImage() {
   if (!imageUrl.value) return
   
-  const filename = `image_${Date.now()}.png`
+  const filename = getCanvasNodeDownloadName(props.node, 'png')
   
   try {
     // 获取原始图片 URL（去除缩略图参数），确保下载原图
@@ -659,21 +660,13 @@ async function addToMyAssets() {
   if (!canAddToAssets.value || isAddingAsset.value) return
 
   const type = assetType.value
-  const now = new Date()
-  const timeStr = now.toLocaleString('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-
   // 获取当前空间参数
   const spaceParams = teamStore.getSpaceParams('current')
   
   // 构建资产数据
   const assetData = {
     type,
-    name: `${assetTypeName.value}_${timeStr}`,
+    name: getCanvasNodeDisplayName(props.node),
     source_node_id: props.node?.id,
     source: 'canvas',
     tags: [assetTypeName.value, t('canvas.contextMenu.canvasGenerated')],
@@ -686,9 +679,6 @@ async function addToMyAssets() {
   let contentUrl = ''
   if (type === 'text') {
     assetData.content = textContent.value
-    // 使用内容前30个字符作为名称
-    const shortContent = textContent.value.slice(0, 30).replace(/\n/g, ' ')
-    assetData.name = shortContent + (textContent.value.length > 30 ? '...' : '')
   } else if (type === 'image') {
     contentUrl = imageUrl.value
   } else if (type === 'video') {

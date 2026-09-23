@@ -28,6 +28,7 @@ const dragState = ref(null)
 const waveformBars = Array.from({ length: 72 }, (_, index) => 18 + ((index * 17 + index % 5 * 9) % 54))
 const maxDuration = computed(() => loadedDuration.value || props.duration || 0)
 const clipDuration = computed(() => Math.max(0, endTime.value - startTime.value))
+const previewTime = computed(() => Math.max(0, Math.min(clipDuration.value, currentTime.value - startTime.value)))
 const canSubmit = computed(() => props.audioUrl && clipDuration.value > 0)
 const selectionStyle = computed(() => {
   const duration = maxDuration.value || 1
@@ -57,11 +58,29 @@ function handleLoadedMetadata() {
 function handleTimeUpdate() {
   if (!audioRef.value) return
   currentTime.value = audioRef.value.currentTime
-  if (isPlaying.value && audioRef.value.currentTime >= endTime.value) {
-    audioRef.value.pause()
-    audioRef.value.currentTime = startTime.value
-    isPlaying.value = false
+  if (isPlaying.value && audioRef.value.currentTime >= endTime.value) stopPreview()
+}
+
+let previewFrame = 0
+
+function stopPreview() {
+  audioRef.value?.pause()
+  if (audioRef.value) audioRef.value.currentTime = startTime.value
+  currentTime.value = startTime.value
+  isPlaying.value = false
+  cancelAnimationFrame(previewFrame)
+  previewFrame = 0
+}
+
+function followPreviewRange() {
+  if (!isPlaying.value || !audioRef.value) return
+  if (audioRef.value.currentTime >= endTime.value) {
+    stopPreview()
+    return
   }
+  if (audioRef.value.currentTime < startTime.value) audioRef.value.currentTime = startTime.value
+  currentTime.value = audioRef.value.currentTime
+  previewFrame = requestAnimationFrame(followPreviewRange)
 }
 
 function togglePlay() {
@@ -69,13 +88,17 @@ function togglePlay() {
   if (isPlaying.value) {
     audioRef.value.pause()
     isPlaying.value = false
+    cancelAnimationFrame(previewFrame)
+    previewFrame = 0
     return
   }
   audioRef.value.currentTime = startTime.value
+  currentTime.value = startTime.value
   audioRef.value.volume = Math.min(1, Math.max(0, volume.value))
   audioRef.value.playbackRate = speed.value
   audioRef.value.play()
   isPlaying.value = true
+  previewFrame = requestAnimationFrame(followPreviewRange)
 }
 
 function getPointerTime(event) {
@@ -132,7 +155,10 @@ function handleSubmit() {
   })
 }
 
-onUnmounted(stopSelectionDrag)
+onUnmounted(() => {
+  stopSelectionDrag()
+  cancelAnimationFrame(previewFrame)
+})
 </script>
 
 <template>
@@ -161,7 +187,7 @@ onUnmounted(stopSelectionDrag)
       </div>
 
       <div class="audio-status">
-        <span>{{ formatTime(currentTime) }} / {{ formatTime(maxDuration) }}</span>
+        <span>{{ formatTime(previewTime) }} / {{ formatTime(clipDuration) }}</span>
         <button class="play-btn" :title="isPlaying ? '暂停' : '播放截取片段'" @click="togglePlay">
           <svg v-if="isPlaying" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
           <svg v-else viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>

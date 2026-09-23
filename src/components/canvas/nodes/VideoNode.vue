@@ -40,6 +40,7 @@ import { isModelReferenceMediaUrl, isPreferredModelMediaUrl, normalizeModelImage
 import { buildCanvasSubmitFingerprint, createCanvasDuplicateSubmitGuard } from '@/utils/canvasDuplicateSubmitGuard'
 import { buildPromptSafetyDialog, isPromptSafetyBlockedError } from '@/utils/promptSafetyError'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
+import { getCanvasNodeDownloadName } from '@/utils/canvasDirectory'
 import { fetchVideoTaskStatus, isVideoHdTask } from '@/utils/videoTaskStatus'
 import { applyOrderedMediaReplacements } from '@/utils/videoReferenceOrdering'
 import { useImageHoverPreview } from '@/composables/useImageHoverPreview'
@@ -135,6 +136,7 @@ const videoNodeRootRef = ref(null)
 const { isVisible: isNodeVisible } = useNodeVisibility(videoNodeRootRef)
 
 const canvasStore = useCanvasStore()
+const openReferencePicker = inject('openReferencePicker', () => {})
 const uploadManager = useUploadManager()
 const userInfo = inject('userInfo')
 const isCanvasViewportMoving = inject('isCanvasViewportMoving', ref(false))
@@ -9550,7 +9552,7 @@ async function handleToolbarDownload() {
   let videoUrl = props.data.output?.url
   if (!videoUrl) return
   
-  const filename = `video_${props.id || Date.now()}.mp4`
+  const filename = getCanvasNodeDownloadName({ type: 'video', data: props.data }, 'mp4')
   
   console.log('[VideoNode] 开始下载:', { url: videoUrl.substring(0, 60), filename })
   
@@ -10017,8 +10019,8 @@ function handleToolbarPreview() {
         @drop="handleFrameDrop"
       >
         <div class="panel-frames-header">
-          <span class="panel-frames-label">{{ hasReferenceAudios ? '参考视频/图片/音频' : hasReferenceVideos ? '参考视频/图片' : '参考图片' }}</span>
-          <span class="panel-frames-hint">拖拽图片/视频/音频到此处 · 拖动调整顺序</span>
+          <button type="button" class="panel-frames-label" title="从画布或资产管理选择参考" @click.stop="openReferencePicker(id)">＋参考</button>
+          <span class="panel-frames-hint">{{ hasReferenceAudios ? '参考视频/图片/音频' : hasReferenceVideos ? '参考视频/图片' : '参考图片' }} · 拖拽素材到此处 · 拖动调整顺序</span>
         </div>
         <div class="panel-frames-list">
           <!-- 参考视频（来自上游视频节点）- 点击插入 @视频 标记 -->
@@ -11773,6 +11775,8 @@ function handleToolbarPreview() {
   padding: 4px 10px;
   background: var(--canvas-bg-tertiary, #2a2a2a);
   border-radius: 4px;
+  border: 0;
+  cursor: pointer;
 }
 
 .panel-frames-hint {

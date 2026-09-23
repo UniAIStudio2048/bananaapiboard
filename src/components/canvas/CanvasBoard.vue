@@ -66,8 +66,9 @@ import {
   runCanvasFit
 } from '@/utils/canvasOrganization'
 import { getMovedGroupChildPositions, getNodeDropGroupId } from '@/utils/canvasGroupMovement'
-import { getDraggedNodeFinalPositions } from '@/utils/canvasDragPositions'
+import { getDraggedNodeFinalPositions, getDraggedNodeDropPosition } from '@/utils/canvasDragPositions'
 import { projectCanvasRenderState } from '@/utils/canvasRenderProjection.js'
+import { getMiniMapPointerPosition } from '@/utils/canvasMiniMapPointer.js'
 
 // 导入自定义节点组件
 import { canConnect } from '@/config/canvas/nodeTypes'
@@ -479,6 +480,26 @@ function handleMiniMapClick({ position }) {
   markViewportMoving()
 }
 
+let miniMapHoverFrame = null
+let miniMapHoverPosition = null
+
+function handleMiniMapPointerMove(event) {
+  if (event.pointerType !== 'mouse' || event.buttons !== 0 || !showCanvasMiniMap.value) return
+  const miniMap = event.target?.closest?.('.canvas-workflow-minimap, .canvas-minimap-overview')
+  const svg = miniMap?.querySelector('svg')
+  if (!svg?.contains(event.target)) return
+
+  miniMapHoverPosition = getMiniMapPointerPosition(svg, event.clientX, event.clientY)
+  if (!miniMapHoverPosition || miniMapHoverFrame !== null) return
+  miniMapHoverFrame = requestAnimationFrame(() => {
+    miniMapHoverFrame = null
+    if (showCanvasMiniMap.value && miniMapHoverPosition) {
+      handleMiniMapClick({ position: miniMapHoverPosition })
+    }
+    miniMapHoverPosition = null
+  })
+}
+
 function getMiniMapNodeClass(node) {
   if (node?.type === 'group') return 'is-group'
   if (node?.data?.groupId) return 'is-grouped'
@@ -811,10 +832,11 @@ onNodeDragStop((event) => {
   }
   
   // 计算最终位置
-  const finalPosition = {
-    x: snapX !== null ? snapX : currentX,
-    y: snapY !== null ? snapY : currentY
-  }
+  const finalPosition = getDraggedNodeDropPosition(
+    { x: currentX, y: currentY },
+    { x: snapX, y: snapY },
+    props.gridSnapEnabled
+  )
   
   // Vue Flow 会同时移动所有选中节点，结束时必须一次性写回整组选区。
   // 对齐吸附产生的偏移也统一应用，避免节点间相对位置发生变化。
@@ -1533,6 +1555,19 @@ onPaneContextMenu((event) => {
 // 处理节点右键（保留节点右键菜单功能）
 onNodeContextMenu((event) => {
   event.event.preventDefault()
+  const selectedIds = getSelectedNodes.value.map(node => node.id)
+  if (selectedIds.length > 1 && selectedIds.includes(event.node.id)) {
+    canvasStore.setSelectedNodeIds(selectedIds)
+    canvasStore.closeNodeSelector()
+    const flowPosition = screenToFlowPosition({ x: event.event.clientX, y: event.event.clientY })
+    canvasStore.openCanvasContextMenu({
+      x: event.event.clientX,
+      y: event.event.clientY,
+      flowX: flowPosition.x,
+      flowY: flowPosition.y
+    })
+    return
+  }
   canvasStore.closeCanvasContextMenu()
   canvasStore.openContextMenu(
     { x: event.event.clientX, y: event.event.clientY },
@@ -3959,6 +3994,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (miniMapHoverFrame !== null) cancelAnimationFrame(miniMapHoverFrame)
   // 移除键盘事件监听
   document.removeEventListener('keydown', handleKeyDown)
   document.removeEventListener('keyup', handleKeyUp)
@@ -4038,10 +4074,12 @@ onUnmounted(() => {
       'edges-hidden': isEdgeHidden,
       'selection-cursor': interactionMode === 'infinite-canvas' || isSelectionModifierPressed,
       'pan-ready': isSpacePressed,
-      'is-panning': isPanning
+      'is-panning': isPanning,
+      'is-node-dragging': isDraggingNode
     }"
     :data-zoom-level="canvasZoomLevel"
     :style="canvasPromptPanelScaleStyle"
+    @pointermove="handleMiniMapPointerMove"
     @dblclick="handleDoubleClick"
     @mousedown.middle.prevent
     @dragenter="handleFileDragEnter"
@@ -4058,6 +4096,7 @@ onUnmounted(() => {
       </div>
     </div>
     
+    <!-- 网格只在拖拽结束时吸附，避免放大后逐格跳动。 -->
     <VueFlow
       :nodes="renderedFlowNodes"
       :edges="renderedFlowEdges"
@@ -4066,8 +4105,7 @@ onUnmounted(() => {
       :default-edge-options="defaultEdgeOptions"
       :min-zoom="0.1"
       :max-zoom="5"
-      :snap-to-grid="gridSnapEnabled"
-      :snap-grid="[20, 20]"
+      :snap-to-grid="false"
       :connection-mode="'loose'"
       :only-render-visible-elements="false"
       :pan-on-drag="panOnDragConfig"
@@ -4094,7 +4132,7 @@ onUnmounted(() => {
         :variant="'dots'" 
         :gap="20" 
         :size="1"
-        pattern-color="#2a2a2a"
+        pattern-color="var(--canvas-grid-color)"
       />
 
       <!-- 拖拽连线可视化 -->
@@ -4239,6 +4277,23 @@ onUnmounted(() => {
   width: 100%;
   height: 100%;
   overscroll-behavior: contain;
+}
+
+.canvas-board.is-node-dragging :deep(.image-toolbar),
+.canvas-board.is-node-dragging :deep(.video-toolbar),
+.canvas-board.is-node-dragging :deep(.audio-toolbar),
+.canvas-board.is-node-dragging :deep(.format-toolbar),
+.canvas-board.is-node-dragging :deep(.storyboard-toolbar),
+.canvas-board.is-node-dragging :deep(.group-toolbar),
+.canvas-board.is-node-dragging :deep(.config-panel),
+.canvas-board.is-node-dragging :deep(.llm-config-panel) {
+  display: none !important;
+}
+
+/* 放大后的提示词面板会 Teleport 到 body。 */
+:global(body:has(.canvas-board.is-node-dragging) > .config-panel-expanded),
+:global(body:has(.canvas-board.is-node-dragging) > .llm-config-panel-expanded) {
+  display: none !important;
 }
 
 .canvas-board :deep(.vue-flow__pane),

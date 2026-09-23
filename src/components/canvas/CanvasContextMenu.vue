@@ -11,6 +11,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { resolveCanvasMenuPastePosition } from '@/utils/canvasClipboardPaste'
+import { getSelectedMediaNodeIds } from '@/utils/canvasBatchDownload'
 
 const props = defineProps({
   position: {
@@ -19,7 +20,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'upload', 'add-node', 'group', 'paste-clipboard'])
+const emit = defineEmits(['close', 'upload', 'add-node', 'group', 'paste-clipboard', 'download-selected-media'])
 const canvasStore = useCanvasStore()
 
 const menuRef = ref(null)
@@ -82,6 +83,12 @@ const selectedCount = computed(() => {
 // 是否有多选节点（至少2个，可以编组）
 const hasMultipleSelectedNodes = computed(() => selectedCount.value >= 2)
 
+const hasDownloadableMedia = computed(() => getSelectedMediaNodeIds(
+  canvasStore.nodes,
+  canvasStore.selectedNodeIds,
+  canvasStore.selectedNodeId
+).length > 0)
+
 // 上传图片
 function handleUploadImage() {
   emit('upload', 'image')
@@ -118,6 +125,11 @@ function handleCopy() {
   if (canvasStore.selectedNodeIds.length > 0 || canvasStore.selectedNodeId) {
     canvasStore.copySelectedNodes()
   }
+  emit('close')
+}
+
+function handleDownloadSelectedMedia() {
+  emit('download-selected-media')
   emit('close')
 }
 
@@ -231,6 +243,14 @@ function handleMenuClick(event) {
         <span class="icon">📋</span>
         复制选中
         <span class="shortcut">Ctrl+C</span>
+      </div>
+      <div
+        class="canvas-context-menu-item"
+        :class="{ disabled: !hasDownloadableMedia }"
+        @click="hasDownloadableMedia && handleDownloadSelectedMedia()"
+      >
+        <span class="icon">⬇️</span>
+        下载选中媒体
       </div>
       <div 
         class="canvas-context-menu-item"

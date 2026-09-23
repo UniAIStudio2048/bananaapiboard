@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   buildCanvasDirectory,
   getCanvasNodeDisplayName,
+  getCanvasNodeDownloadName,
   getCanvasNodeMedia,
   isCanvasDirectoryMoveAllowed
 } from './canvasDirectory.js'
@@ -22,6 +23,13 @@ test('derives visible group folders and root nodes in canvas order', () => {
   assert.equal(result.total, 2)
 })
 
+test('uses the visible node name for a safe download filename', () => {
+  assert.equal(getCanvasNodeDownloadName({ type: 'video', data: { label: '最终/片段:01', title: '旧名称' } }, 'mp4'), '最终_片段_01.mp4')
+  assert.equal(getCanvasNodeDownloadName({ type: 'audio', data: { label: '   ', title: '旁白' } }, 'wav'), '旁白.wav')
+  assert.equal(getCanvasNodeDownloadName({ type: 'preview-output', data: { label: '旧标签', title: '预览成片' } }, 'png'), '预览成片.png')
+  assert.equal(getCanvasNodeDownloadName({ type: 'seedance-character', data: { assetName: '小明', title: '旧标题' } }, 'mp4'), '小明.mp4')
+})
+
 test('keeps a node with a stale group id visible at root and filters by child name', () => {
   const nodes = [
     { id: 'stale', type: 'image', position: { x: 0, y: 0 }, data: { title: 'Poster', groupId: 'missing' } },
@@ -35,6 +43,10 @@ test('keeps a node with a stale group id visible at root and filters by child na
 
 test('normalizes names and resolves downloadable media', () => {
   assert.equal(getCanvasNodeDisplayName({ type: 'image', data: { title: ' Hero ' } }), 'Hero')
+  assert.equal(getCanvasNodeDisplayName({ type: 'image', data: { label: '最终成片', title: '旧名称' } }), '最终成片')
+  assert.equal(buildCanvasDirectory([
+    { id: 'named', type: 'image', data: { label: '海报定稿', title: '旧名称', imageUrl: 'poster.png' } }
+  ]).root[0].name, '海报定稿')
   assert.deepEqual(
     getCanvasNodeMedia({ id: 'v', type: 'video', data: { output: { type: 'video', url: '/clip.mp4' } } }),
     { kind: 'video', url: '/clip.mp4', previewUrl: '/clip.mp4', extension: 'mp4' }
@@ -44,6 +56,10 @@ test('normalizes names and resolves downloadable media', () => {
     { kind: 'text', text: 'hello', previewUrl: null, extension: 'txt' }
   )
   assert.equal(getCanvasNodeMedia({ id: 'empty', type: 'llm', data: {} }), null)
+  assert.deepEqual(
+    getCanvasNodeMedia({ id: 'preview', type: 'preview-output', data: { inheritedData: { type: 'image', urls: ['/final.png'] } } }),
+    { kind: 'image', url: '/final.png', previewUrl: '/final.png', extension: 'png' }
+  )
 })
 
 test('directory rows retain original media URLs for hover previews', () => {

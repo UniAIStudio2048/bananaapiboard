@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { getMiniMapPointerPosition } from '@/utils/canvasMiniMapPointer.js'
 
 const props = defineProps({
   items: { type: Array, default: () => [] },
@@ -63,13 +64,8 @@ function nodeClass(item) {
 }
 
 function handleClick(event) {
-  const svg = event.currentTarget
-  const rect = svg.getBoundingClientRect()
-  if (!rect.width || !rect.height) return
-  const bounds = contentBounds.value
-  const x = bounds.left + ((event.clientX - rect.left) / rect.width) * bounds.width
-  const y = bounds.top + ((event.clientY - rect.top) / rect.height) * bounds.height
-  emit('click', { position: { x, y } })
+  const position = getMiniMapPointerPosition(event.currentTarget, event.clientX, event.clientY)
+  if (position) emit('click', { position })
 }
 </script>
 

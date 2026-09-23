@@ -20,6 +20,7 @@ import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { config, getTenantHeaders, getAvailableMusicModels, getAvailableAudioModels, refreshBrandConfig } from '@/config/tenant'
 import { showAlert, showConfirm, showInsufficientPointsDialog } from '@/composables/useCanvasDialog'
 import { formatPoints } from '@/utils/format'
+import { getCanvasNodeDownloadName } from '@/utils/canvasDirectory'
 import { formatVideoGenerationElapsed, getVideoGenerationElapsedSeconds } from '@/utils/videoGenerationProgress.js'
 import { calculateAudioPointsCost } from '@/utils/audioPricing'
 import { getUserNodeRate } from '@/utils/userGroupRate'
@@ -2038,9 +2039,9 @@ async function handleToolbarDownload() {
   const url = audioUrl.value
   if (!url) return
   
-  // 生成文件名
-  const fileName = props.data?.title || props.data?.fileName || `audio_${Date.now()}`
-  const filename = fileName.endsWith('.mp3') || fileName.endsWith('.wav') ? fileName : `${fileName}.mp3`
+  const extension = /\.(mp3|wav|ogg|m4a)(?:[?#]|$)/i.exec(url)?.[1]?.toLowerCase() ||
+    /\.(mp3|wav|ogg|m4a)$/i.exec(props.data?.fileName || '')?.[1]?.toLowerCase() || 'mp3'
+  const filename = getCanvasNodeDownloadName({ type: 'audio', data: props.data }, extension)
   
   try {
     if (url.startsWith('data:')) {

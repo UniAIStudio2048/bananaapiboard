@@ -373,8 +373,8 @@ onUnmounted(() => {
         title="双击编辑组名"
       >{{ groupName }}</span>
 
-      <!-- 编组工具栏（选中或悬停时显示） -->
-      <div v-if="(selected || isHovered) && !isEditing && !props.data?.readonly" class="group-toolbar">
+      <!-- 编组工具栏（选中时显示） -->
+      <div v-if="selected && !isEditing && !props.data?.readonly" class="group-toolbar">
         <button
           class="toolbar-btn execute-btn"
           :class="{ 'is-running': isExecuting }"

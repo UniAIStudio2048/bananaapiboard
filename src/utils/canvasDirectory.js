@@ -54,13 +54,38 @@ export function getCanvasNodeTypeLabel(node) {
 
 export function getCanvasNodeDisplayName(node) {
   const data = node?.data || {}
-  return cleanString(data.groupName) || cleanString(data.title) || cleanString(data.label) ||
+  return (node?.type === 'group' ? cleanString(data.groupName) : '') ||
+    (node?.type === 'preview-output' ? cleanString(data.title) : '') ||
+    cleanString(data.label) ||
+    (node?.type === 'seedance-character' || node?.type === 'bytefor-character' ? cleanString(data.assetName) : '') ||
+    cleanString(data.title) ||
     getCanvasNodeTypeLabel(node)
+}
+
+export function getCanvasNodeDownloadName(node, extension) {
+  const base = getCanvasNodeDisplayName(node)
+    .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+    .replace(/[. ]+$/g, '')
+    .slice(0, 80) || getCanvasNodeTypeLabel(node)
+  const suffix = `.${extension}`
+  return `${base.toLowerCase().endsWith(suffix.toLowerCase()) ? base.slice(0, -suffix.length) : base}${suffix}`
 }
 
 export function getCanvasNodeMedia(node) {
   const data = node?.data || {}
   const type = node?.type || ''
+  if (type === 'preview-output') {
+    const inherited = data.inheritedData || {}
+    const url = inherited.type === 'image' ? inherited.urls?.[0] : inherited.type === 'video' ? inherited.url : ''
+    if (cleanString(url)) {
+      return {
+        kind: inherited.type,
+        url,
+        previewUrl: url,
+        extension: getUrlExtension(url, inherited.type === 'video' ? 'mp4' : 'png')
+      }
+    }
+  }
   const imageUrl = data.sourceImages?.[0] || data.output?.urls?.[0] || data.images?.[0] ||
     data.imageUrl || data.generatedImage
   const videoUrl = data.output?.url || data.videoUrl || data.video

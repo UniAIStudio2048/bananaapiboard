@@ -6,6 +6,7 @@ import { computed, onMounted, nextTick } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getTenantHeaders } from '@/config/tenant'
+import { getCanvasNodeDownloadName } from '@/utils/canvasDirectory'
 
 const props = defineProps({
   id: String,
@@ -71,10 +72,10 @@ async function download() {
   
   if (contentType.value === 'image' && inheritedData.value?.urls?.length) {
     mediaUrl = inheritedData.value.urls[0]
-    fileName = `image_${props.id || Date.now()}.png`
+    fileName = getCanvasNodeDownloadName({ type: 'preview-output', data: props.data }, 'png')
   } else if (contentType.value === 'video' && inheritedData.value?.url) {
     mediaUrl = inheritedData.value.url
-    fileName = `video_${props.id || Date.now()}.mp4`
+    fileName = getCanvasNodeDownloadName({ type: 'preview-output', data: props.data }, 'mp4')
   }
   
   if (!mediaUrl) return
@@ -246,4 +247,3 @@ function fullscreen() {
   transform: translateY(-50%) !important;
 }
 </style>
-

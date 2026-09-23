@@ -1852,13 +1852,6 @@ onUnmounted(() => {
           </div>
         </div>
         
-        <!-- 空间切换器 -->
-        <SpaceSwitcher 
-          v-model="spaceFilter" 
-          @change="handleSpaceChange"
-          :compact="!isFullscreen"
-        />
-        
         <!-- 批量操作栏（选择模式下显示） -->
         <div v-if="isSelectMode" class="batch-action-bar">
           <div class="select-info">
@@ -1891,34 +1884,44 @@ onUnmounted(() => {
           </button>
         </div>
 
-        <!-- 文件类型筛选 -->
-        <div class="type-filter">
-          <button 
-            v-for="ft in fileTypes" 
-            :key="ft.key"
-            class="type-btn"
-            :class="{ active: selectedType === ft.key }"
-            @click="selectedType = ft.key"
-          >
-            <span class="type-icon">{{ ft.icon }}</span>
-            <span class="type-label">{{ t(ft.labelKey) }}</span>
-            <span class="type-count">{{ historyStats[ft.key] || 0 }}</span>
-          </button>
-        </div>
+        <div class="history-filters">
+          <div class="space-control">
+            <SpaceSwitcher
+              v-model="spaceFilter"
+              @change="handleSpaceChange"
+              compact
+            />
+          </div>
 
-        <!-- 搜索栏 -->
-        <div class="search-bar">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="11" cy="11" r="8"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input 
-            v-model="searchQuery"
-            type="text" 
-            :placeholder="t('canvas.historyPanel.searchPlaceholder')"
-            class="search-input"
-          />
-          <span v-if="searchQuery" class="search-clear" @click="searchQuery = ''">✕</span>
+          <!-- 文件类型筛选 -->
+          <div class="type-filter">
+            <button
+              v-for="ft in fileTypes"
+              :key="ft.key"
+              class="type-btn"
+              :class="{ active: selectedType === ft.key }"
+              @click="selectedType = ft.key"
+            >
+              <span class="type-icon">{{ ft.icon }}</span>
+              <span class="type-label">{{ t(ft.labelKey) }}</span>
+              <span class="type-count">{{ historyStats[ft.key] || 0 }}</span>
+            </button>
+          </div>
+
+          <!-- 搜索栏 -->
+          <div class="search-bar">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"/>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input
+              v-model="searchQuery"
+              type="text"
+              :placeholder="t('canvas.historyPanel.searchPlaceholder')"
+              class="search-input"
+            />
+            <span v-if="searchQuery" class="search-clear" @click="searchQuery = ''">✕</span>
+          </div>
         </div>
 
         <!-- 历史记录列表 - 虚拟滚动 -->
@@ -2608,15 +2611,45 @@ onUnmounted(() => {
   color: var(--canvas-text-primary);
 }
 
+/* 筛选工具栏 */
+.history-filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--canvas-border-subtle);
+  flex-shrink: 0;
+}
+
+.space-control {
+  flex: 0 0 178px;
+  min-width: 0;
+}
+
+.space-control :deep(.dropdown-wrapper) {
+  width: 138px;
+}
+
+.space-control :deep(.dropdown-trigger) {
+  width: 100%;
+  min-width: 0;
+}
+
 /* 文件类型筛选 */
 .type-filter {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  padding: 12px 12px;
+  padding: 0;
+  min-width: 0;
   overflow-x: hidden;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  flex-shrink: 0;
+  scrollbar-width: none;
+  flex: 0 1 auto;
+}
+
+.history-panel.fullscreen .type-filter {
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 
 /* 隐藏滚动条但保留滚动功能 */
@@ -2638,7 +2671,7 @@ onUnmounted(() => {
   cursor: pointer;
   transition: all 0.2s;
   white-space: nowrap;
-  flex: 1 1 96px;
+  flex: 0 0 auto;
   min-width: 0;
 }
 
@@ -2676,12 +2709,30 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 12px 20px;
-  padding: 10px 14px;
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   transition: all 0.2s;
+}
+
+.history-panel.fullscreen .type-btn,
+.history-panel.fullscreen .search-bar {
+  box-sizing: border-box;
+  height: 32px;
+}
+
+.history-panel.fullscreen .search-bar {
+  padding-block: 0;
+}
+
+.history-panel.fullscreen .search-input {
+  height: 100%;
+  min-height: 0;
+  padding: 0;
 }
 
 .search-bar:focus-within {
@@ -2696,6 +2747,7 @@ onUnmounted(() => {
 
 .search-input {
   flex: 1;
+  min-width: 0;
   background: transparent;
   border: none;
   outline: none;
@@ -2716,6 +2768,52 @@ onUnmounted(() => {
 
 .search-clear:hover {
   color: rgba(255, 255, 255, 0.7);
+}
+
+.history-panel:not(.fullscreen) .history-filters {
+  display: grid;
+  grid-template-columns: 178px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.history-panel:not(.fullscreen) .type-filter {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  width: 100%;
+}
+
+.history-panel:not(.fullscreen) .type-btn {
+  flex: 1 1 0;
+}
+
+.history-panel:not(.fullscreen) .search-bar {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+@media (max-width: 900px) {
+  .history-panel.fullscreen .history-filters {
+    display: grid;
+    grid-template-columns: 178px minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .history-panel.fullscreen .type-filter {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+    flex-wrap: wrap;
+    overflow-x: hidden;
+  }
+
+  .history-panel.fullscreen .type-btn {
+    flex: 1 1 0;
+  }
+
+  .history-panel.fullscreen .search-bar {
+    grid-column: 2;
+    grid-row: 1;
+  }
 }
 
 /* 历史记录列表 */
@@ -3932,6 +4030,10 @@ onUnmounted(() => {
 }
 
 /* 文件类型筛选 */
+:root.canvas-theme-light .history-panel .history-filters {
+  border-bottom-color: var(--canvas-border-subtle) !important;
+}
+
 :root.canvas-theme-light .history-panel .type-filter {
   border-bottom-color: rgba(0, 0, 0, 0.04) !important;
 }

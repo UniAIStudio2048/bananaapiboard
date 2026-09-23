@@ -64,6 +64,7 @@ const props = defineProps({
 const emit = defineEmits(['updateNodeInternals'])
 
 const canvasStore = useCanvasStore()
+const openReferencePicker = inject('openReferencePicker', () => {})
 const duplicateSubmitGuard = createCanvasDuplicateSubmitGuard()
 const userInfo = inject('userInfo')
 const canvasPromptInputScale = inject('canvasPromptInputScale', computed(() => ({ enabled: false, style: {} })))
@@ -3543,9 +3544,9 @@ onUnmounted(() => {
       <!-- 参考媒体区域（视频/图片/音频/混合） -->
       <div class="reference-section">
         <div class="reference-header">
-          <span class="reference-label">{{ referenceLabel }}</span>
+          <button type="button" class="reference-label" title="从画布或资产管理选择参考" @click.stop="openReferencePicker(id)">＋参考</button>
           <span class="reference-hint">
-            {{ referenceMediaList.length > 0 ? `点击插入引用 · 拖动调整顺序 · 共${totalMediaCount}${upstreamMediaType === 'image' ? '张' : '个'}` : '连接图片、视频或音频节点作为参考' }}
+            {{ referenceMediaList.length > 0 ? `${referenceLabel} · 点击插入引用 · 拖动调整顺序 · 共${totalMediaCount}${upstreamMediaType === 'image' ? '张' : '个'}` : '连接图片、视频或音频节点作为参考' }}
           </span>
         </div>
         <div class="reference-images">
@@ -4865,6 +4866,7 @@ onUnmounted(() => {
   font-size: 13px;
   color: var(--canvas-text-primary, #fff);
   white-space: nowrap;
+  cursor: pointer;
 }
 
 .reference-hint {

@@ -17,3 +17,8 @@ test('node drag stop persists every Vue Flow dragged node as one position batch'
   )
   assert.doesNotMatch(dragStopHandler[0], /canvasStore\.updateNodePosition\(node\.id, finalPosition\)/)
 })
+
+test('node follows the pointer between grid lines and snaps only on drop', () => {
+  assert.match(source, /:snap-to-grid="false"/)
+  assert.match(source, /getDraggedNodeDropPosition\(/)
+})

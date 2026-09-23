@@ -2,10 +2,26 @@
 type: log
 title: 用户前端知识库变更日志
 tags: [bananaapiboard, canvas, wiki]
-timestamp: 2026-09-14
+timestamp: 2026-09-23
 ---
 
 # 变更日志
+
+## 2026-09-24
+
+- 更新 [画布历史记录与资产筛选栏布局](canvas-history-filters-layout.md)：撤回搜索宽度限制，搜索框与分类标签统一高度，资产放大视图使用紧凑筛选栏。
+
+- 新增 [画布历史记录与资产筛选栏布局](canvas-history-filters-layout.md)：压缩历史记录全屏筛选区高度；侧栏和窄屏采用两行，相关测试与前端构建通过。
+
+## 2026-09-23
+
+- 新增 [画布放大后的节点拖动与网格吸附](canvas-node-drag-zoom.md)：记录高缩放下逐帧网格取整导致的跳位，以及释放时吸附的行为。
+
+- 调整 [画布深夜模式背景与网格颜色](canvas-dark-grid-colors.md)：白昼模式网格点加深，以便在浅色画布上清晰显示同样的点阵。
+
+- 新增 [画布深夜模式背景与网格颜色](canvas-dark-grid-colors.md)：记录深夜模式背景和网格点的新色值及白昼模式配色。
+
+- 新增 [画布多选媒体下载](canvas-batch-media-download.md)：记录多选菜单入口、媒体范围和既有下载流程。
 
 ## 2026-09-14
 

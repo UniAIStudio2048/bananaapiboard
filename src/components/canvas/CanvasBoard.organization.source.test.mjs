@@ -7,7 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(join(__dirname, 'CanvasBoard.vue'), 'utf8')
 
 assert.match(source, /gridSnapEnabled:\s*\{[\s\S]*?type:\s*Boolean,[\s\S]*?default:\s*true/)
-assert.match(source, /:snap-to-grid="gridSnapEnabled"/)
+assert.match(source, /:snap-to-grid="false"/)
 assert.match(source, /import\s*\{[\s\S]*organizeCanvasNodes[\s\S]*\}\s*from\s*['"]@\/utils\/canvasOrganization['"]/)
 assert.match(source, /async\s+function\s+organizeCanvas\s*\(/)
 assert.match(source, /if\s*\(canvasStore\.nodes\.length\s*===\s*0\)\s*return/)
