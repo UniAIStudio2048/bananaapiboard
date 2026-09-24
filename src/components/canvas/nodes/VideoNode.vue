@@ -1476,8 +1476,8 @@ const isSeedancePrePaidBilling = computed(() => {
   if (!isSeedance2Model.value) return false
   // video_edit 模式后端永远预扣 10s（videos.legacy.txt:581-585），基于 mode 即时判定，不依赖 watch 异步修正 duration
   if (selectedSeedance2Mode.value === 'video_edit') return true
-  // multimodal_ref 等其他模式：duration 已被修正为 '-1'，或 constraints 标记为预扣模式
-  return String(selectedDuration.value) === '-1' || seedance25ModeConstraints.value?.duration === -1
+  // 多模态参考仅选择自动时长时预扣；固定时长按用户选择计费。
+  return String(selectedDuration.value) === '-1'
 })
 
 const seedance25ModeConstraints = computed(() => (
@@ -4221,7 +4221,7 @@ const basePointsCost = computed(() => {
 
   if (isSeedance2Model.value) {
     // video_edit / multimodal_ref 自动时长占位符 '-1'，与后端预扣 10s 对齐（videos.legacy.txt:585）
-    const isSeedancePrePaidMode = selectedSeedance2Mode.value === 'video_edit' || seedance25ModeConstraints.value?.duration === -1
+    const isSeedancePrePaidMode = selectedSeedance2Mode.value === 'video_edit'
     const seedanceBillingDuration = (String(selectedDuration.value) === '-1' || isSeedancePrePaidMode) ? 10 : selectedDuration.value
     // 优先 resolutionPricing（9000「输出分辨率显示配置」配的字段，与后端 getEnabledVideoResolutionPricing × costPerSecond×duration 一致）
     const resolutionPricing = currentModelConfig.value?.resolutionPricing

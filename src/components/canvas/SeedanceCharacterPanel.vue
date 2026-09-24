@@ -270,17 +270,17 @@ async function loadAssets() {
             if (realStatus === 'Active' && volcAsset.URL) allAssets.value[idx].URL = volcAsset.URL
           }
           if (asset._canvasId) {
-            const updates = { metadata: { assetId: asset.Id, groupId: asset.GroupId, status: realStatus, assetType: asset.AssetType } }
+            const updates = { metadata: { ...asset.metadata, assetId: asset.Id, groupId: asset.GroupId, status: realStatus, assetType: asset.AssetType } }
             if (realStatus === 'Active' && volcAsset.URL) updates.thumbnail_url = volcAsset.URL
             updateAsset(asset._canvasId, updates).catch(() => {})
           }
         }
         if (realStatus === 'Processing') {
-          startPolling(asset.Id, asset.GroupId, asset.URL, asset.Name, asset._canvasId)
+          startPolling(asset.Id, asset.GroupId, asset.metadata?.originalUrl || asset.URL, asset.Name, asset._canvasId, asset.metadata?.providerType)
         }
       } catch {
         if (asset.Status === 'Processing') {
-          startPolling(asset.Id, asset.GroupId, asset.URL, asset.Name, asset._canvasId)
+          startPolling(asset.Id, asset.GroupId, asset.metadata?.originalUrl || asset.URL, asset.Name, asset._canvasId, asset.metadata?.providerType)
         }
       }
     }
@@ -595,6 +595,8 @@ async function handleFileUpload(event) {
             thumbnail_url: url,
             metadata: {
               assetId,
+              providerType: requestedProviderType.value || activeProvider.value,
+              originalUrl: url,
               faceCode: isSeedanceOpenApiProProvider.value ? faceCode : undefined,
               groupId: targetGroupId,
               status,
@@ -622,11 +624,11 @@ async function handleFileUpload(event) {
   }
 }
 
-function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
+function startPolling(assetId, groupId, imageUrl, name, canvasAssetId, providerType = requestedProviderType.value || activeProvider.value) {
   const { promise, cancel } = pollAssetStatus(assetId, {
     interval: 5000,
     timeout: 2700000,
-    providerType: requestedProviderType.value,
+    providerType,
     groupId,
     onStatusChange(status) {
       const idx = allAssets.value.findIndex(a => (a.Id || a.id) === assetId)
@@ -640,7 +642,9 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
     delete pollers.value[assetId]
     const finalMetadata = {
       assetId: asset.Id,
-      groupId: asset.GroupId || groupId,
+      providerType,
+      originalUrl: imageUrl,
+      groupId: providerType === 'ctyun_asset' ? groupId : (asset.GroupId || groupId),
       status: asset.Status,
       assetType: asset.AssetType,
       projectName: asset.ProjectName,
@@ -677,7 +681,7 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
         assetId: asset.Id,
         assetUri: `asset://${asset.Id}`,
         assetUrl: asset.URL || imageUrl,
-        groupId: asset.GroupId || groupId,
+        groupId: providerType === 'ctyun_asset' ? groupId : (asset.GroupId || groupId),
         assetName: asset.Name || name,
         status: 'Active',
         assetType: asset.AssetType || 'Image'
@@ -689,7 +693,7 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId) {
     if (canvasAssetId) {
       const isTimeout = err.message === '轮询超时'
       updateAsset(canvasAssetId, {
-        metadata: { assetId, groupId, status: isTimeout ? 'Processing' : 'Failed', assetType: 'Image' }
+        metadata: { assetId, groupId, providerType, originalUrl: imageUrl, status: isTimeout ? 'Processing' : 'Failed', assetType: 'Image' }
       }).catch(() => {})
     }
     loadAssets()

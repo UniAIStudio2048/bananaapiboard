@@ -57,7 +57,7 @@ function toPositiveNumber(value) {
 }
 
 // 与后端 isSeedance25Model 对齐：兼容第三方渠道自定义模型名（dreamina-seedance-2-5-*、seedance_2_5_pro、seedance2.5 等）
-const SEEDANCE25_MODEL_PATTERN = /seedance[-_\s]?2[-._\s]?5(?!\d)/i
+const SEEDANCE25_MODEL_PATTERN = /(?:seedance[-_\s]?2[-._\s]?5(?!\d)|^cdance2\.5-0807$)/i
 
 export function isSeedance25Model(modelConfig = {}) {
   const values = typeof modelConfig === 'object'
