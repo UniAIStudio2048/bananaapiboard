@@ -1802,8 +1802,8 @@ async function handleLLMGenerate() {
       }
 
       const result = processedImages.length > 0
-        ? await chatWithLLMStream({ ...apiParams, timeoutMs: 300000 })
-        : await chatWithLLM(apiParams)
+        ? await chatWithLLMStream({ ...apiParams, timeoutMs: 480000 })
+        : await chatWithLLM({ ...apiParams, timeoutMs: 480000 })
       
       canvasStore.updateNodeData(targetNodeId, {
         status: 'success',

@@ -16,6 +16,6 @@ test('text node uses the CDN-safe stream only for media LLM submissions', () => 
   assert.match(textNodeSource, /import \{[^}]*chatWithLLMStream[^}]*\} from '@\/api\/canvas\/llm'/s)
   assert.match(
     textNodeSource,
-    /processedImages\.length > 0\s*\? await chatWithLLMStream\(\{ \.\.\.apiParams, timeoutMs: 300000 \}\)\s*:\s*await chatWithLLM\(apiParams\)/
+    /processedImages\.length > 0\s*\? await chatWithLLMStream\(\{ \.\.\.apiParams, timeoutMs: 480000 \}\)\s*:\s*await chatWithLLM\(\{ \.\.\.apiParams, timeoutMs: 480000 \}\)/
   )
 })

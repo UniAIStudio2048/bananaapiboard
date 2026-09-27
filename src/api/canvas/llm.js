@@ -80,6 +80,7 @@ export async function getLLMConfig() {
  * @returns {Promise<{success: boolean, result: string, cost: number, balance: Object}>}
  */
 export async function chatWithLLM(params) {
+  const { timeoutMs, ...requestParams } = params
   const teamStore = useTeamStore()
   const spaceParams = teamStore.getSpaceParams('current')
   
@@ -87,10 +88,11 @@ export async function chatWithLLM(params) {
     method: 'POST',
     headers: getHeaders({ json: true }),
     body: JSON.stringify({
-      ...params,
+      ...requestParams,
       spaceType: spaceParams.spaceType,
       ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
-    })
+    }),
+    timeoutMs
   })
   
   if (!response.ok) {
