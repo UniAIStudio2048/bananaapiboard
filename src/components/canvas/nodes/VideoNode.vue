@@ -8339,44 +8339,7 @@ function handleVideoLoaded(event) {
     })
   }
   
-  // 检测视频比例，如果是竖屏自动调整为 9:16
-  if (video.videoWidth && video.videoHeight) {
-    const isPortrait = video.videoHeight > video.videoWidth
-    const currentRatio = props.data.aspectRatio || selectedAspectRatio.value
-    
-    // 如果视频是竖屏但当前比例是横屏，自动切换
-    if (isPortrait && currentRatio === '16:9' && availableAspectRatios.value.some(ratio => ratio.value === '9:16')) {
-      console.log('[VideoNode] 检测到竖屏视频，自动切换为 9:16 比例')
-      selectedAspectRatio.value = '9:16'
-      // 调整节点尺寸为竖屏比例（保持宽度，调整高度）
-      const portraitWidth = 280
-      const portraitHeight = 498 // 约 9:16 比例
-      nodeWidth.value = portraitWidth
-      nodeHeight.value = portraitHeight
-      // 更新节点数据
-      canvasStore.updateNodeData(props.id, {
-        aspectRatio: '9:16',
-        width: portraitWidth,
-        height: portraitHeight
-      })
-    }
-    // 如果视频是横屏但当前比例是竖屏，自动切换
-    else if (!isPortrait && currentRatio === '9:16' && availableAspectRatios.value.some(ratio => ratio.value === '16:9')) {
-      console.log('[VideoNode] 检测到横屏视频，自动切换为 16:9 比例')
-      selectedAspectRatio.value = '16:9'
-      // 调整节点尺寸为横屏比例
-      const landscapeWidth = 420
-      const landscapeHeight = 280
-      nodeWidth.value = landscapeWidth
-      nodeHeight.value = landscapeHeight
-      // 更新节点数据
-      canvasStore.updateNodeData(props.id, {
-        aspectRatio: '16:9',
-        width: landscapeWidth,
-        height: landscapeHeight
-      })
-    }
-  }
+  // 视频尺寸由 applyDetectedVideoDimensions 保存；旧结果加载不能覆盖下一次生成的比例选择。
   
   // 如果是角色节点（裁剪视频），设置到裁剪起始位置
   if (props.data?.isCharacterNode && props.data?.clipStartTime !== undefined) {
