@@ -317,6 +317,31 @@ test('Wan3 exposes the six documented generation modes', () => {
   )
 })
 
+test('Wan3 keeps the selected pricing configuration when actualModel names overlap', () => {
+  for (const name of ['wan3.0-video', 'wan3.0-video-prime', 'wan3.0-video-copy']) {
+    const modelConfig = { apiType: 'wan3', name, actualModel: 'wan3.0-video' }
+    assert.equal(resolveVideoRequestModel(modelConfig, name), name)
+
+    const entries = buildVideoGenerationFormEntries({
+      modelConfig,
+      model: name,
+      prompt: '一只小猫',
+      aspectRatio: '16:9',
+      duration: '4',
+      mode: 'text'
+    })
+    assert.equal(entries.get('model'), name)
+    assert.equal(entries.get('duration'), '4')
+  }
+})
+
+test('Wan3 leaves channel-specific upstream model selection to the backend', () => {
+  assert.equal(resolveVideoRequestModel({
+    apiType: 'wan3',
+    actualModel: 'wan3.0-video-prime'
+  }, 'tenant-prime-video'), 'tenant-prime-video')
+})
+
 test('RouterBee Wan3 exposes its own four URL-based generation modes', () => {
   assert.deepEqual(
     ROUTERBEE_WAN3_MODES.map(mode => mode.value),
