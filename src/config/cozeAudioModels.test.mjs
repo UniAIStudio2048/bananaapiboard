@@ -64,3 +64,17 @@ test('attaches custom icons and orders models by configured audio groups', () =>
   assert.equal(models[0].groupLogo, '🎙️')
   assert.equal(models[0].icon, 'C')
 })
+
+test('publishes both RunningHub music modes at fixed cost without credentials', () => {
+  const models = normalizeAudioModels(['single', 'custom'].map(mode => ({
+    name: `rh-${mode}`, apiType: 'runninghub-audio', capability: 'music', actualModel: `rhart-audio/suno-v5.5/${mode}`,
+    pointsCost: 14, pricingMode: 'fixed', apiKey: 'never-publish', enabled: true
+  })))
+  assert.equal(models.length, 2)
+  for (const model of models) {
+    assert.equal(model.provider, 'runninghub')
+    assert.equal(model.pointsCost, 14)
+    assert.equal(model.pricingMode, 'fixed')
+    assert.equal(Object.hasOwn(model, 'apiKey'), false)
+  }
+})

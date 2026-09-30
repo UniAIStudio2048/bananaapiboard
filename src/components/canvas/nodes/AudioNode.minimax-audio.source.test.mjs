@@ -33,7 +33,7 @@ test('Fish Audio allows an optional voice for synchronous TTS and preserves its 
   assert.match(source, /isFishAudio\.value && audioCapability\.value === 'voice_design'[\s\S]*?return 150/)
   assert.match(source, /isFishAudio\.value && audioCapability\.value === 'tts'[\s\S]*?return 50000/)
   assert.match(source, /body\.voice_id = selectedVoicePreset\.value\.sourceVoice/)
-  assert.match(source, /audioProvider: isMiniMaxAudio\.value \? 'minimax' : isFishAudio\.value \? 'fish' : 'coze'/)
+  assert.match(source, /audioProvider: isRunningHubAudio\.value \? 'runninghub' : isMiniMaxAudio\.value \? 'minimax' : isFishAudio\.value \? 'fish' : 'coze'/)
 })
 
 test('MiniMax TTS exposes pause and Chinese paralinguistic insertion controls only for that provider', () => {

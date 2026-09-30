@@ -23,6 +23,7 @@ import { formatPoints } from '@/utils/format'
 import { getCanvasNodeDownloadName } from '@/utils/canvasDirectory'
 import { formatVideoGenerationElapsed, getVideoGenerationElapsedSeconds } from '@/utils/videoGenerationProgress.js'
 import { calculateAudioPointsCost } from '@/utils/audioPricing'
+import { buildRunningHubMusicInput } from '@/utils/runningHubMusic'
 import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
@@ -129,6 +130,7 @@ const title = ref(props.data.title || '')
 const tags = ref(props.data.tags || '')
 const negativeTags = ref(props.data.negativeTags || '')
 const makeInstrumental = ref(props.data.makeInstrumental || false)
+const runninghubWebhookUrl = ref(props.data.runninghubWebhookUrl || '')
 const isGeneratingMusic = ref(false)
 const voiceDialect = ref(props.data.voiceDialect || '')
 const voiceAgeGender = ref(props.data.voiceAgeGender || '')
@@ -256,6 +258,18 @@ const currentMusicModelConfig = computed(() => {
 })
 const isMiniMaxAudio = computed(() => currentMusicModelConfig.value?.provider === 'minimax')
 const isFishAudio = computed(() => currentMusicModelConfig.value?.provider === 'fish')
+const isRunningHubAudio = computed(() => currentMusicModelConfig.value?.apiType === 'runninghub-audio')
+const isRunningHubCustom = computed(() => currentMusicModelConfig.value?.actualModel?.endsWith('/custom'))
+const runninghubInputError = computed(() => {
+  if (!isRunningHubAudio.value) return ''
+  try {
+    buildRunningHubMusicInput(currentMusicModelConfig.value, {
+      prompt: musicPrompt.value, title: title.value, tags: tags.value,
+      makeInstrumental: makeInstrumental.value, webhookUrl: runninghubWebhookUrl.value
+    })
+    return ''
+  } catch (error) { return error.message }
+})
 const audioCapability = computed(() => currentMusicModelConfig.value?.kind === 'audio-model' ? currentMusicModelConfig.value.capability : null)
 const voiceClonePointsCost = computed(() => {
   const raw = currentMusicModelConfig.value?.voiceClonePointsCost
@@ -295,6 +309,7 @@ const voiceCloneReadingTexts = computed(() => {
   return texts.length ? texts : DEFAULT_VOICE_CLONE_READING_TEXTS
 })
 const audioPromptPlaceholder = computed(() => {
+  if (isRunningHubAudio.value) return isRunningHubCustom.value ? '输入完整歌词，支持 [Verse] [Chorus] [Bridge]（最多 5000 字符）' : '描述歌曲的风格、情绪或场景（最多 400 字符）'
   if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 500 字）'
   if (isMiniMaxAudio.value && audioCapability.value === 'tts') return '输入需要合成的文案（最多 50000 字）'
   if (isFishAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 150 字，可选）'
@@ -305,6 +320,7 @@ const audioPromptPlaceholder = computed(() => {
   return '描述您想要的音乐。'
 })
 const audioPromptLimit = computed(() => {
+  if (isRunningHubAudio.value) return isRunningHubCustom.value ? 5000 : 400
   if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return 500
   if (isMiniMaxAudio.value && audioCapability.value === 'tts') return 50000
   if (isFishAudio.value && audioCapability.value === 'voice_design') return 150
@@ -312,6 +328,7 @@ const audioPromptLimit = computed(() => {
   return 4100
 })
 const canGenerateCurrentAudio = computed(() => {
+  if (isRunningHubAudio.value) return !runninghubInputError.value
   if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') {
     return !!musicPrompt.value.trim() && !!voiceDesignStyle.value.trim() && musicPrompt.value.length <= audioPromptLimit.value
   }
@@ -351,13 +368,17 @@ function formatModelSuccessRate(modelName) {
 // 音乐生成积分消耗（生成2首歌）
 const musicPointsCost = computed(() => {
   const cost = currentMusicModelConfig.value?.pointsCost || 20
-  const base = (isMiniMaxAudio.value || isFishAudio.value) && audioCapability.value === 'voice_design'
+  const base = isRunningHubAudio.value
+    ? Number(currentMusicModelConfig.value?.pointsCost) || 0
+    : (isMiniMaxAudio.value || isFishAudio.value) && audioCapability.value === 'voice_design'
     ? cost
     : (audioCapability.value
         ? calculateAudioPointsCost(cost, musicPrompt.value)
         : cost * 2)
   // 用户分组倍率：音频预估积分应用 rate_audio，与后端实际扣费保持一致
-  return Math.round(base * getUserNodeRate('audio'))
+  return isRunningHubAudio.value
+    ? Math.round(base * getUserNodeRate('audio') * 100) / 100
+    : Math.round(base * getUserNodeRate('audio'))
 })
 
 function formatAudioErrorMessage(message) {
@@ -455,6 +476,10 @@ watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, m
     })
   }
 )
+
+watch(runninghubWebhookUrl, value => {
+  canvasStore.updateNodeData(props.id, { runninghubWebhookUrl: value })
+})
 
 // 切换模型下拉框
 function toggleMusicModelDropdown(event) {
@@ -780,7 +805,8 @@ async function handleGenerateMusic() {
 
 async function handleGenerateCozeAudio() {
   if (!canGenerateCurrentAudio.value) {
-    const message = isMiniMaxAudio.value && audioCapability.value === 'voice_design'
+    const message = isRunningHubAudio.value ? runninghubInputError.value
+      : isMiniMaxAudio.value && audioCapability.value === 'voice_design'
       ? '请填写音色描述和试听文案'
       : isFishAudio.value && audioCapability.value === 'voice_design'
         ? '请填写音色描述'
@@ -804,7 +830,10 @@ async function handleGenerateCozeAudio() {
     : null
   const targetNodeId = targetNode?.id || props.id
   isGeneratingMusic.value = true
-  canvasStore.updateNodeData(targetNodeId, { status: 'processing', processingStartedAt: Date.now(), error: null, output: null, audioUrl: null })
+  canvasStore.updateNodeData(targetNodeId, {
+    status: 'processing', processingStartedAt: Date.now(), error: null, output: null, audioUrl: null,
+    ...(isRunningHubAudio.value ? { audioData: null, runninghubMusicResults: [] } : {})
+  })
   try {
     const spaceParams = teamStore.getSpaceParams('current')
     const body = {
@@ -812,7 +841,12 @@ async function handleGenerateCozeAudio() {
       spaceType: spaceParams.spaceType,
       ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
     }
-    if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') {
+    if (isRunningHubAudio.value) {
+      Object.assign(body, buildRunningHubMusicInput(currentMusicModelConfig.value, {
+        prompt: musicPrompt.value, title: title.value, tags: tags.value,
+        makeInstrumental: makeInstrumental.value, webhookUrl: runninghubWebhookUrl.value
+      }))
+    } else if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') {
       body.prompt = voiceDesignStyle.value
       body.preview_text = musicPrompt.value
     } else if (isMiniMaxAudio.value && audioCapability.value === 'tts') {
@@ -847,7 +881,7 @@ async function handleGenerateCozeAudio() {
       taskType: 'audio-generation',
       status: 'processing',
       processingStartedAt: Date.now(),
-      audioProvider: isMiniMaxAudio.value ? 'minimax' : isFishAudio.value ? 'fish' : 'coze',
+      audioProvider: isRunningHubAudio.value ? 'runninghub' : isMiniMaxAudio.value ? 'minimax' : isFishAudio.value ? 'fish' : 'coze',
       audioModel: selectedMusicModel.value,
       audioCapability: audioCapability.value,
       canSaveDesignedVoice: false,
@@ -879,6 +913,7 @@ async function pollCozeAudioStatus(nodeId, taskId) {
       status: 'success',
       audioUrl: url,
       audioData: url,
+      ...(generatedNodeData.audioProvider === 'runninghub' ? { runninghubMusicResults: data.results || [] } : {}),
       voiceId: data.voice_id || null,
       audioProvider: generatedNodeData.audioProvider || currentMusicModelConfig.value?.provider || 'coze',
       audioModel: generatedNodeData.audioModel || selectedMusicModel.value,
@@ -896,6 +931,14 @@ async function pollCozeAudioStatus(nodeId, taskId) {
   } catch (error) {
     setTimeout(() => pollCozeAudioStatus(nodeId, taskId), 3000)
   }
+}
+
+function selectRunningHubMusicResult(result) {
+  if (!result?.audio_url) return
+  canvasStore.updateNodeData(props.id, {
+    audioUrl: result.audio_url, audioData: result.audio_url,
+    output: { ...props.data.output, type: 'audio', url: result.audio_url, title: result.title }
+  })
 }
 
 const isSavingDesignedVoice = ref(false)
@@ -2791,6 +2834,27 @@ function handleSpeedEditorClickOutside(event) {
           </button>
         </div>
         
+        <div v-if="isRunningHubAudio" class="advanced-options">
+          <div class="option-row vertical">
+            <span class="option-label">歌曲标题{{ isRunningHubCustom ? '（必填）' : '（选填）' }}</span>
+            <input v-model="title" type="text" maxlength="80" class="option-input" :placeholder="isRunningHubCustom ? '输入歌曲标题，最多 80 字符' : '留空自动生成标题'" />
+          </div>
+          <div v-if="isRunningHubCustom" class="option-row vertical">
+            <span class="option-label">音乐风格（必填，最多 1000 字符）</span>
+            <input v-model="tags" type="text" maxlength="1000" class="option-input" placeholder="pop, acoustic, cinematic, female vocal" />
+          </div>
+          <div v-else class="option-row">
+            <span class="option-label">纯音乐（不含人声）</span>
+            <label class="toggle-switch"><input type="checkbox" v-model="makeInstrumental" /><span class="toggle-slider"></span></label>
+          </div>
+          <div v-if="props.data.runninghubMusicResults?.length > 1" class="option-row vertical">
+            <span class="option-label">返回曲目</span>
+            <div class="mode-tabs">
+              <button v-for="(result, resultIndex) in props.data.runninghubMusicResults" :key="result.task_id" type="button" :title="result.title" :class="['mode-tab', { active: props.data.audioUrl === result.audio_url }]" @click="selectRunningHubMusicResult(result)">曲目 {{ resultIndex + 1 }}</button>
+            </div>
+          </div>
+        </div>
+
         <!-- 展开/收起按钮 -->
         <button class="collapse-trigger" @click="showAdvancedOptions = !showAdvancedOptions">
           <span class="collapse-icon" :class="{ 'expanded': showAdvancedOptions }">∧</span>
@@ -2799,7 +2863,13 @@ function handleSpeedEditorClickOutside(event) {
         
         <!-- 高级选项 -->
         <Transition name="slide-down">
-          <div v-if="showAdvancedOptions && !audioCapability" class="advanced-options">
+          <div v-if="showAdvancedOptions && isRunningHubAudio" class="advanced-options">
+            <div class="option-row vertical">
+              <span class="option-label">Webhook 回调地址（选填）</span>
+              <input v-model="runninghubWebhookUrl" type="url" class="option-input" placeholder="https://example.com/webhook" />
+            </div>
+          </div>
+          <div v-else-if="showAdvancedOptions && !audioCapability" class="advanced-options">
             <!-- 纯音乐开关 -->
             <div class="option-row">
               <span class="option-label">纯音乐</span>
