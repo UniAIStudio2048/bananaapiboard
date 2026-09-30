@@ -28,6 +28,7 @@ const invitationsLoading = ref(false)
 
 // 当前用户ID（从外部注入）
 let currentUserId = null
+let sessionVersion = 0
 
 // ==================== 计算属性 ====================
 
@@ -60,6 +61,10 @@ const pendingInvitationsCount = computed(() => pendingInvitations.value.length)
  * 设置当前用户ID
  */
 function setCurrentUserId(userId) {
+  if (currentUserId !== userId) {
+    if (currentUserId !== null) reset()
+    else sessionVersion++
+  }
   currentUserId = userId
 }
 
@@ -67,17 +72,20 @@ function setCurrentUserId(userId) {
  * 加载用户的所有团队
  */
 async function loadMyTeams() {
+  const version = sessionVersion
   try {
     loading.value = true
     const data = await api.get('/api/teams')
+    if (version !== sessionVersion) return
     if (data.success) {
       myTeams.value = data.teams || []
     }
   } catch (error) {
+    if (version !== sessionVersion) return
     console.error('[TeamStore] 加载团队列表失败:', error)
     myTeams.value = []
   } finally {
-    loading.value = false
+    if (version === sessionVersion) loading.value = false
   }
 }
 
@@ -85,17 +93,20 @@ async function loadMyTeams() {
  * 加载待处理的邀请
  */
 async function loadPendingInvitations() {
+  const version = sessionVersion
   try {
     invitationsLoading.value = true
     const data = await api.get('/api/teams/invitations')
+    if (version !== sessionVersion) return
     if (data.success) {
       pendingInvitations.value = data.invitations || []
     }
   } catch (error) {
+    if (version !== sessionVersion) return
     console.error('[TeamStore] 加载邀请列表失败:', error)
     pendingInvitations.value = []
   } finally {
-    invitationsLoading.value = false
+    if (version === sessionVersion) invitationsLoading.value = false
   }
 }
 
@@ -103,12 +114,15 @@ async function loadPendingInvitations() {
  * 加载团队成员
  */
 async function loadTeamMembers(teamId) {
+  const version = sessionVersion
   try {
     const data = await api.get(`/api/teams/${teamId}/members`)
+    if (version !== sessionVersion) return
     if (data.success) {
       teamMembers.value = data.members || []
     }
   } catch (error) {
+    if (version !== sessionVersion) return
     console.error('[TeamStore] 加载团队成员失败:', error)
     teamMembers.value = []
   }
@@ -157,6 +171,7 @@ function switchToPersonalSpace() {
  * 切换到团队空间
  */
 async function switchToTeam(teamId) {
+  const version = sessionVersion
   const team = myTeams.value.find(t => t.id === teamId)
   if (!team) {
     console.error('[TeamStore] 团队不存在:', teamId)
@@ -169,6 +184,7 @@ async function switchToTeam(teamId) {
   
   // 加载团队成员
   await loadTeamMembers(teamId)
+  if (version !== sessionVersion) return false
   
   // 保存到 localStorage（绑定用户ID）
   saveSpaceState('team', teamId)
@@ -188,6 +204,7 @@ async function switchToTeam(teamId) {
  * - 团队不存在则切换回个人空间
  */
 async function restoreSpaceState() {
+  const version = sessionVersion
   // 读取用户专属的空间状态
   const savedSpaceType = localStorage.getItem(getUserSpaceKey('spaceType'))
   const savedTeamId = localStorage.getItem(getUserSpaceKey('teamId'))
@@ -206,12 +223,14 @@ async function restoreSpaceState() {
   if (spaceType === 'team' && teamId) {
     // 先加载团队列表
     await loadMyTeams()
+    if (version !== sessionVersion) return
     
     // 检查团队是否还存在（用户可能已被移除或团队已解散）
     const team = myTeams.value.find(t => t.id === teamId)
     if (team) {
       // 团队存在，恢复到该团队空间
       await switchToTeam(teamId)
+      if (version !== sessionVersion) return
       console.log('[TeamStore] 已恢复到团队空间:', team.name)
     } else {
       // 团队不存在，切换回个人空间
@@ -223,6 +242,7 @@ async function restoreSpaceState() {
     switchToPersonalSpace()
     await loadMyTeams()
   }
+  if (version !== sessionVersion) return
   
   // 加载邀请
   await loadPendingInvitations()
@@ -553,6 +573,7 @@ function getAllSpaces() {
  * @param {boolean} clearStorage - 是否清除 localStorage 中的空间记忆（默认不清除，保留记忆功能）
  */
 function reset(clearStorage = false) {
+  sessionVersion++
   // 如果需要清除存储，先在清除 currentUserId 之前执行
   if (clearStorage && currentUserId) {
     localStorage.removeItem(getUserSpaceKey('spaceType'))
@@ -572,6 +593,12 @@ function reset(clearStorage = false) {
   // 清理旧版本的全局状态
   localStorage.removeItem('currentSpaceType')
   localStorage.removeItem('currentTeamId')
+}
+
+// 模块状态跨页面保留，必须在会话结束或替换时同步清理。
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth-session-cleared', () => reset())
+  window.addEventListener('auth-session-updated', () => reset())
 }
 
 // ==================== 导出 ====================

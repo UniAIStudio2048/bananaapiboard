@@ -1,6 +1,13 @@
 import { ref } from 'vue'
 
 const canvasSpaceFilter = ref(null)
+let needsSessionRestore = false
+
+if (typeof window !== 'undefined') {
+  const invalidateSessionFilter = () => { needsSessionRestore = true }
+  window.addEventListener('auth-session-cleared', invalidateSessionFilter)
+  window.addEventListener('auth-session-updated', invalidateSessionFilter)
+}
 
 export function getCurrentSpaceFilter(teamStore) {
   if (teamStore.globalSpaceType.value === 'team' && teamStore.globalTeamId.value) {
@@ -10,8 +17,9 @@ export function getCurrentSpaceFilter(teamStore) {
 }
 
 export function useCanvasSpaceFilter(teamStore) {
-  if (!canvasSpaceFilter.value) {
+  if (needsSessionRestore || !canvasSpaceFilter.value) {
     canvasSpaceFilter.value = getCurrentSpaceFilter(teamStore)
+    needsSessionRestore = false
   }
   return canvasSpaceFilter
 }

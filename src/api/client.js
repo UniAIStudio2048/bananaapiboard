@@ -50,6 +50,9 @@ export function clearAuthSession() {
   localStorage.removeItem('avatar')
   localStorage.removeItem('user_id')
   localStorage.removeItem('userId')
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('auth-session-cleared'))
+  }
 }
 
 // 获取带租户标识的请求头
