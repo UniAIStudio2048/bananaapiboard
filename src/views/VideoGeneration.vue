@@ -8,7 +8,7 @@ import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/utils/cloudMediaUrl'
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
-import { calculateVideoResolutionPrice, getEnabledVideoResolutionOptions } from '@/utils/videoResolutionPricing'
+import { calculateVideoResolutionPrice, resolveVideoResolutionPricing, getEnabledVideoResolutionOptions } from '@/utils/videoResolutionPricing'
 import { calculateSeedanceResolutionCost } from '@/utils/seedanceResolutionPricing'
 import { normalizePromptLineEndings } from '@/utils/promptText'
 import { pickConfiguredSubmode } from '@/utils/videoSubmodeDefaults'
@@ -335,12 +335,14 @@ const isSeedanceModel = computed(() => {
 const isAtlasCloudVideoModel = computed(() => String(currentModelConfig.value?.apiType || '').startsWith('atlascloud-video'))
 const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3' || isAtlasCloudVideoModel.value)
 const isReferenceVideoModel = computed(() => isSeedanceModel.value || isMinimaxH3Model.value)
-const isWan3Model = computed(() => ['wan3', 'routerbee-wan3', 'atlascloud-wan3'].includes(currentModelConfig.value?.apiType))
+const isWan3Model = computed(() => ['wan3', 'routerbee-wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType))
 
 function getWan3Limit(name, maximum) {
   const configured = Number((currentModelConfig.value?.routerbeeConfig || currentModelConfig.value?.wan3Config)?.[name])
   return Number.isFinite(configured) && configured >= 0 ? Math.min(configured, maximum) : maximum
 }
+
+const wan3AvailableModes = computed(() => ['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType) ? WAN3_MODES.filter(mode => !['file', 'link'].includes(mode.value)) : WAN3_MODES)
 
 const wan3MaxRefImages = computed(() => getWan3Limit('maxImages', 10))
 const wan3MaxRefVideos = computed(() => getWan3Limit('maxVideos', 5))
@@ -478,10 +480,20 @@ const totalPoints = computed(() => {
 })
 
 const currentPointsCost = computed(() => {
+  if (['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType)) {
+    const pricing = resolveVideoResolutionPricing(currentModelConfig.value.resolutionPricing, resolution.value)
+    if (pricing) {
+      const inputSeconds = wan3Mode.value === 'multimodal_ref'
+        ? seedanceRefVideoPreviews.value.reduce((sum, item) => sum + (Number(item.duration) || 0), 0)
+        : 0
+      const billedInput = currentModelConfig.value.apiType === 'siray-wan3' ? Math.min(5, inputSeconds) : Math.ceil(inputSeconds)
+      return Math.round(pricing.costPerSecond * (Number(wan3Duration.value) + billedInput) * 100) / 100
+    }
+  }
   const configuredResolutionPrice = calculateVideoResolutionPrice(
     currentModelConfig.value?.resolutionPricing,
     resolution.value,
-    isReferenceVideoModel.value ? seedanceDuration.value : isWan3Model.value ? wan3Duration.value : duration.value
+    isReferenceVideoModel.value ? seedanceDuration.value : isWan3Model.value ? Number(wan3Duration.value) : duration.value
   )
   if (configuredResolutionPrice !== null) return configuredResolutionPrice
 
@@ -708,14 +720,14 @@ watch(model, (newModel) => {
     if (!seedanceAvailableModes.value.some(m => m.value === seedanceMode.value)) {
       seedanceMode.value = getFirstAvailableMode(defaultMode, seedanceAvailableModes.value)
     }
-  } else if (['wan3', 'routerbee-wan3', 'atlascloud-wan3'].includes(modelConfig?.apiType)) {
+  } else if (['wan3', 'routerbee-wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(modelConfig?.apiType)) {
     const wan3Config = modelConfig.routerbeeConfig || modelConfig.wan3Config || {}
     wan3Duration.value = Number(wan3Config.duration || durations[0] || 5)
     wan3GenerateAudio.value = wan3Config.audio !== false
     wan3PromptExtend.value = wan3Config.promptExtend !== false
     wan3Watermark.value = wan3Config.watermark === true
     wan3Seed.value = ''
-    if (!WAN3_MODES.some(item => item.value === wan3Mode.value)) {
+    if (!wan3AvailableModes.value.some(item => item.value === wan3Mode.value)) {
       wan3Mode.value = 'text2video'
     }
   }
@@ -3361,7 +3373,7 @@ onUnmounted(() => {
                 <div v-show="wan3ModeOpen" class="px-3 py-2.5 border-t border-amber-200 dark:border-amber-900/60">
                   <div class="flex flex-wrap gap-1.5">
                     <button
-                      v-for="item in WAN3_MODES"
+                      v-for="item in wan3AvailableModes"
                       :key="item.value"
                       type="button"
                       @click="wan3Mode = item.value"

@@ -142,7 +142,8 @@ export function resolveVideoRequestModel(modelConfig, modelValue) {
   const apiType = modelConfig?.apiType || ''
   if (!apiType || apiType === 'openai') return modelValue
   if (apiType === 'bytefor') return modelValue
-  if (apiType === 'wan3') return modelValue
+  if (apiType === 'siray-wan3') return modelValue
+  if (apiType === 'wan3' || apiType === 'wavespeed-wan3') return modelValue
   if (apiType === 'fdai-video' || apiType.startsWith('fdai-video:')) return modelValue
   if (apiType === 'minimax-h3' || apiType === 'atlascloud-wan3' || apiType.startsWith('atlascloud-video')) return modelValue
   if (apiType === 'seedance-2.5') return modelValue

@@ -1571,7 +1571,7 @@ const currentMinimaxH3ModeConfig = computed(() => {
 })
 
 // Wan 3.0 模式选择
-const isWan3Model = computed(() => ['wan3', 'atlascloud-wan3'].includes(currentModelConfig.value?.apiType))
+const isWan3Model = computed(() => ['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType))
 const isRouterBeeWan3Model = computed(() => currentModelConfig.value?.apiType === 'routerbee-wan3')
 const selectedWan3Mode = ref(props.data.wan3Mode || 'text2video')
 
@@ -3753,7 +3753,7 @@ const activeVideoModeSelector = computed(() => {
       key: 'wan3',
       label: '万相 3.0 模式',
       value: selectedWan3Mode.value,
-      options: WAN3_MODES
+      options: ['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType) ? WAN3_MODES.filter(mode => !['file', 'link'].includes(mode.value)) : WAN3_MODES
     }
   }
 
@@ -4154,14 +4154,32 @@ const wanAnimateCostPerSecond = computed(() => {
   return raw * getUserNodeRate('video')
 })
 
+const waveSpeedReferenceVideoDuration = computed(() => {
+  if (!['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType) || selectedWan3Mode.value !== 'multimodal_ref') return 0
+  const seconds = referenceVideos.value.reduce((total, url) => {
+    const node = canvasStore.nodes.find(item => item.data?.videoUrl === url || item.data?.output?.url === url || item.data?.sourceVideo === url)
+    return total + (Number(node?.data?.videoDuration || node?.data?.duration || node?.data?.output?.duration) || 0)
+  }, 0)
+  return currentModelConfig.value?.apiType === 'siray-wan3' ? Math.min(5, seconds) : seconds
+})
+
 // 积分消耗计算（从模型配置中读取）
 const basePointsCost = computed(() => {
   let cost = 1
 
+  if (['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType)) {
+    const pricing = resolveVideoResolutionPricing(currentModelConfig.value.resolutionPricing, genericVideoResolution.value)
+    if (pricing) {
+      const inputSeconds = currentModelConfig.value.apiType === 'siray-wan3'
+        ? waveSpeedReferenceVideoDuration.value : Math.ceil(waveSpeedReferenceVideoDuration.value)
+      const seconds = Number(selectedDuration.value) + inputSeconds
+      return Math.round(pricing.costPerSecond * seconds * 100) / 100
+    }
+  }
   const genericResolutionPrice = calculateVideoResolutionPrice(
     currentModelConfig.value?.resolutionPricing,
     genericVideoResolution.value,
-    selectedDuration.value
+    Number(selectedDuration.value) + Math.ceil(waveSpeedReferenceVideoDuration.value)
   )
   if (genericResolutionPrice !== null) {
     // 通用分辨率按秒计费同样应用视频输入倍率（与服务端计费保持一致）
@@ -4351,11 +4369,12 @@ const basePointsCost = computed(() => {
   return cost
 })
 
-// 用户分组倍率：视频预估积分应用 rate_video，与后端实际扣费保持一致（取整到整数积分）。
+// 用户分组倍率：WaveSpeed 与 Siray 保留两位小数，其他模型沿用整数积分。
 const pointsCost = computed(() => {
   const base = basePointsCost.value
   const rate = getUserNodeRate('video')
   const scaled = base * rate
+  if (['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType)) return Math.round(scaled * 100) / 100
   return Math.round(scaled)
 })
 
@@ -4848,7 +4867,7 @@ watch(selectedModel, () => {
     console.log('[VideoNode] 切换到 Wan 模型，模式重置为', selectedWanMode.value)
   }
 
-  if (['wan3', 'atlascloud-wan3'].includes(modelConfig?.apiType)) {
+  if (['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(modelConfig?.apiType)) {
     const configuredMode = modelConfig?.wan3Config?.defaultMode
     selectedWan3Mode.value = WAN3_MODES.some(mode => mode.value === configuredMode)
       ? configuredMode
@@ -4858,12 +4877,12 @@ watch(selectedModel, () => {
 })
 
 watch(currentModelConfig, modelConfig => {
-  if (!['wan3', 'atlascloud-wan3'].includes(modelConfig?.apiType)) return
+  if (!['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(modelConfig?.apiType)) return
   const configuredMode = modelConfig.wan3Config?.defaultMode
   selectedWan3Mode.value = pickInitialSubmode(
     props.data.wan3Mode,
     configuredMode,
-    WAN3_MODES,
+    ['wavespeed-wan3', 'siray-wan3'].includes(modelConfig.apiType) ? WAN3_MODES.filter(mode => !['file', 'link'].includes(mode.value)) : WAN3_MODES,
     'text2video'
   )
 }, { immediate: true })
@@ -5901,13 +5920,17 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     }
   }
 
-  if (['wan3', 'atlascloud-wan3'].includes(capturedState.apiType)) {
+  if (['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(capturedState.apiType)) {
     const wan3Mode = capturedState.wan3Mode || selectedWan3Mode.value
     const wan3Config = currentModelConfig.value?.wan3Config || {}
     const maxImages = Math.min(10, Math.max(0, Number(wan3Config.maxImages) || 10))
     const maxVideos = Math.min(5, Math.max(0, Number(wan3Config.maxVideos) || 5))
     const maxAudios = Math.min(5, Math.max(0, Number(wan3Config.maxAudios) || 5))
     formData.append('seedance_mode', wan3Mode)
+    if (capturedState.apiType === 'wavespeed-wan3') {
+      formData.append('wan3_audio', wan3Config.audio === false ? 'false' : 'true')
+      formData.append('wan3_prompt_extend', wan3Config.promptExtend === true ? 'true' : 'false')
+    }
 
     if (wan3Mode === 'image2video_first') {
       if (finalImages.length > 0) formData.append('first_frame_image', finalImages[0])
@@ -10173,7 +10196,7 @@ function handleToolbarPreview() {
       
       <!-- 模式标签 + 提示词输入 -->
       <div class="prompt-section">
-        <div v-if="isWan3Model" class="wan3-attachment-toolbar" @mousedown.stop @click.stop>
+        <div v-if="isWan3Model && !['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig?.apiType)" class="wan3-attachment-toolbar" @mousedown.stop @click.stop>
           <input
             ref="wan3FileInputRef"
             type="file"

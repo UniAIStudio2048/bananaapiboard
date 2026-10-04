@@ -24,7 +24,7 @@ test('video model config merges Wan3 defaults from enabled channels', () => {
 test('Wan3 node initialization preserves saved mode while applying configured default to new nodes', () => {
   assert.match(
     videoNodeSource,
-    /selectedWan3Mode\.value\s*=\s*pickInitialSubmode\(\s*props\.data\.wan3Mode,\s*configuredMode,\s*WAN3_MODES,\s*'text2video'\s*\)/s,
+    /selectedWan3Mode\.value\s*=\s*pickInitialSubmode\(\s*props\.data\.wan3Mode,\s*configuredMode,\s*(?:\['wavespeed-wan3', 'siray-wan3'\]\.includes\(modelConfig\.apiType\) \? WAN3_MODES\.filter\(mode => !\['file', 'link'\]\.includes\(mode\.value\)\) : )?WAN3_MODES,\s*'text2video'\s*\)/s,
     'Wan3 initialization must prefer saved node mode and otherwise use the configured default'
   )
 })
