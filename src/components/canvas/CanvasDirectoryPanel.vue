@@ -1,22 +1,30 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
+  Check,
   ChevronDown,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   Copy,
   Download,
   FileText,
   Folder,
   Image,
+  LayoutGrid,
+  List,
   LocateFixed,
   MoreHorizontal,
   Music,
   Pencil,
   Search,
+  Sparkles,
   Video,
   Workflow
 } from '@lucide/vue'
 import { useI18n } from '@/i18n'
+import { useCanvasStore } from '@/stores/canvas'
+import PublishWorkDialog from '@/components/community/PublishWorkDialog.vue'
 import {
   buildCanvasDirectory,
   isCanvasDirectoryMoveAllowed
@@ -42,9 +50,17 @@ const emit = defineEmits([
 ])
 
 const { t } = useI18n()
+const canvasStore = useCanvasStore()
 const panelRef = ref(null)
+const displaySettingsRef = ref(null)
+const nodeMenuRef = ref(null)
 const renameInputRef = ref(null)
 const searchQuery = ref('')
+const displayMode = ref('grid')
+const showDisplaySettings = ref(false)
+const showPublishDialog = ref(false)
+const publishContext = ref({})
+const nodeMenuPosition = ref({ left: 0, top: 0 })
 const expandedFolderIds = ref(new Set())
 const knownFolderIds = ref(new Set())
 const openMenuId = ref(null)
@@ -79,12 +95,19 @@ const selectedIds = computed(() => new Set([
   ...(props.selectedNodeId ? [props.selectedNodeId] : [])
 ]))
 const draggedNode = computed(() => props.nodes.find(node => node.id === draggedNodeId.value) || null)
+const menuRow = computed(() => [
+  ...directory.value.root,
+  ...directory.value.folders.flatMap(folder => folder.children)
+].find(row => row.id === openMenuId.value) || null)
 
 watch(() => props.workflowKey, () => {
   searchQuery.value = ''
   expandedFolderIds.value = new Set()
   knownFolderIds.value = new Set()
   openMenuId.value = null
+  showDisplaySettings.value = false
+  showPublishDialog.value = false
+  publishContext.value = {}
   editingId.value = null
   editingValue.value = ''
   draggedNodeId.value = null
@@ -117,6 +140,22 @@ function toggleFolder(folderId) {
   if (next.has(folderId)) next.delete(folderId)
   else next.add(folderId)
   expandedFolderIds.value = next
+}
+
+function setDisplayMode(mode) {
+  displayMode.value = mode
+  showDisplaySettings.value = false
+  openMenuId.value = null
+  closeHoverPreview()
+}
+
+function setAllFoldersExpanded(expanded) {
+  expandedFolderIds.value = new Set(expanded
+    ? props.nodes.filter(node => node?.type === 'group').map(node => node.id)
+    : [])
+  showDisplaySettings.value = false
+  openMenuId.value = null
+  closeHoverPreview()
 }
 
 function getRowIcon(type) {
@@ -246,8 +285,20 @@ function locateRow(nodeId) {
   emit('locate', nodeId)
 }
 
-function toggleMenu(nodeId) {
+function toggleMenu(nodeId, event) {
+  closeHoverPreview()
+  showDisplaySettings.value = false
   openMenuId.value = openMenuId.value === nodeId ? null : nodeId
+  if (!openMenuId.value || !event?.currentTarget) return
+  const rect = event.currentTarget.getBoundingClientRect()
+  const width = 180
+  const height = 170
+  nodeMenuPosition.value = {
+    left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+    top: Math.max(8, rect.bottom + height < window.innerHeight
+      ? rect.bottom + 4
+      : rect.top - height - 4)
+  }
 }
 
 function setRenameInputRef(element) {
@@ -288,6 +339,23 @@ function downloadRow(nodeId) {
   emit('download', nodeId)
 }
 
+function addToInspiration(row) {
+  if (!row?.mediaUrl || !['image', 'video'].includes(row.mediaKind) ||
+    !props.nodes.some(node => node.id === row.id)) return
+  const tab = canvasStore.getCurrentTab()
+  publishContext.value = {
+    workflowId: String(tab?.workflowId || canvasStore.workflowMeta?.id || ''),
+    workflowName: row.name,
+    projectId: canvasStore.workflowMeta?.project_id || '',
+    initialMediaUrl: row.mediaUrl,
+    initialMediaType: row.mediaKind,
+    initialCoverUrl: row.mediaKind === 'image' ? row.mediaUrl : getRowPreviewUrl(row)
+  }
+  openMenuId.value = null
+  closeHoverPreview()
+  showPublishDialog.value = true
+}
+
 function startDrag(event, nodeId) {
   const node = props.nodes.find(item => item.id === nodeId)
   if (!node || node.type === 'group') return
@@ -322,8 +390,11 @@ function clearDrag() {
 }
 
 function handleDocumentPointerDown(event) {
-  if (!panelRef.value?.contains(event.target)) {
+  if (!displaySettingsRef.value?.contains(event.target)) showDisplaySettings.value = false
+  if (!nodeMenuRef.value?.contains(event.target) && !event.target.closest('.directory-menu, .directory-more-button')) {
     openMenuId.value = null
+  }
+  if (!panelRef.value?.contains(event.target)) {
     cancelRename()
   }
 }
@@ -336,10 +407,43 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section ref="panelRef" class="canvas-directory-panel" @keydown.escape="openMenuId = null; cancelRename(); clearDrag()">
+  <section ref="panelRef" class="canvas-directory-panel" :class="{ 'directory-grid': displayMode === 'grid' }" @keydown.escape="openMenuId = null; showDisplaySettings = false; cancelRename(); clearDrag()">
     <div class="directory-heading">
       <span>{{ t('canvas.assetPanel.directory.title') }}</span>
-      <span class="directory-count">{{ directory.total }}</span>
+      <div ref="displaySettingsRef" class="directory-display-settings">
+        <button
+          class="directory-icon-button directory-display-button"
+          type="button"
+          :aria-label="t('canvas.assetPanel.directory.displaySettings')"
+          :title="t('canvas.assetPanel.directory.displaySettings')"
+          aria-haspopup="menu"
+          :aria-expanded="showDisplaySettings"
+          @click="openMenuId = null; closeHoverPreview(); showDisplaySettings = !showDisplaySettings"
+        >
+          <component :is="displayMode === 'grid' ? LayoutGrid : List" :size="16" aria-hidden="true" />
+        </button>
+        <div v-if="showDisplaySettings" class="directory-menu directory-display-menu" role="menu">
+          <button type="button" role="menuitemradio" :aria-checked="displayMode === 'list'" @click="setDisplayMode('list')">
+            <List :size="15" aria-hidden="true" />
+            <span>{{ t('canvas.assetPanel.directory.listView') }}</span>
+            <Check v-if="displayMode === 'list'" :size="15" aria-hidden="true" />
+          </button>
+          <button type="button" role="menuitemradio" :aria-checked="displayMode === 'grid'" @click="setDisplayMode('grid')">
+            <LayoutGrid :size="15" aria-hidden="true" />
+            <span>{{ t('canvas.assetPanel.directory.gridView') }}</span>
+            <Check v-if="displayMode === 'grid'" :size="15" aria-hidden="true" />
+          </button>
+          <div class="directory-menu-divider" role="separator" />
+          <button type="button" role="menuitem" @click="setAllFoldersExpanded(true)">
+            <ChevronsUpDown :size="15" aria-hidden="true" />
+            {{ t('canvas.assetPanel.directory.expandAll') }}
+          </button>
+          <button type="button" role="menuitem" @click="setAllFoldersExpanded(false)">
+            <ChevronsDownUp :size="15" aria-hidden="true" />
+            {{ t('canvas.assetPanel.directory.collapseAll') }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <label class="directory-search">
@@ -356,6 +460,7 @@ onUnmounted(() => {
       class="directory-list"
       :class="{ 'directory-drop-active': dropTargetId === 'root' }"
       @scroll="closeHoverPreview"
+      @scroll.capture="openMenuId = null"
       @dragover.self="setDropTarget($event, null)"
       @drop.self="dropNode($event, null)"
     >
@@ -414,7 +519,9 @@ onUnmounted(() => {
             type="button"
             :aria-label="t('common.more')"
             :title="t('common.more')"
-            @click.stop="toggleMenu(folder.id)"
+            :aria-expanded="openMenuId === folder.id"
+            aria-haspopup="menu"
+            @click.stop="toggleMenu(folder.id, $event)"
           >
             <MoreHorizontal :size="16" aria-hidden="true" />
           </button>
@@ -457,6 +564,7 @@ onUnmounted(() => {
                   v-if="getRowPreviewUrl(row)"
                   :src="getRowPreviewUrl(row)"
                   alt=""
+                  loading="lazy"
                   @error="handleRowPreviewError(row)"
                 />
                 <span v-if="row.mediaKind === 'video' && getRowPreviewUrl(row)" class="directory-video-play-icon" aria-hidden="true">▶</span>
@@ -479,7 +587,9 @@ onUnmounted(() => {
               type="button"
               :aria-label="t('common.more')"
               :title="t('common.more')"
-              @click.stop="toggleMenu(row.id)"
+              :aria-expanded="openMenuId === row.id"
+              aria-haspopup="menu"
+              @click.stop="toggleMenu(row.id, $event)"
             >
               <MoreHorizontal :size="16" aria-hidden="true" />
             </button>
@@ -492,24 +602,11 @@ onUnmounted(() => {
             >
               <LocateFixed :size="15" aria-hidden="true" />
             </button>
-            <div v-if="openMenuId === row.id" class="directory-menu" @click.stop>
-              <button type="button" @click="startRename(row)">
-                <Pencil :size="15" aria-hidden="true" />
-                {{ t('canvas.assetPanel.directory.rename') }}
-              </button>
-              <button type="button" @click="duplicateRow(row.id)">
-                <Copy :size="15" aria-hidden="true" />
-                {{ t('canvas.assetPanel.directory.duplicate') }}
-              </button>
-              <button type="button" :disabled="!row.downloadable" @click="downloadRow(row.id)">
-                <Download :size="15" aria-hidden="true" />
-                {{ t('canvas.assetPanel.directory.download') }}
-              </button>
-            </div>
           </div>
         </div>
       </div>
 
+      <div class="directory-root-nodes">
       <div
         v-for="row in directory.root"
         :key="row.id"
@@ -530,6 +627,7 @@ onUnmounted(() => {
               v-if="getRowPreviewUrl(row)"
               :src="getRowPreviewUrl(row)"
               alt=""
+              loading="lazy"
               @error="handleRowPreviewError(row)"
             />
             <span v-if="row.mediaKind === 'video' && getRowPreviewUrl(row)" class="directory-video-play-icon" aria-hidden="true">▶</span>
@@ -552,7 +650,9 @@ onUnmounted(() => {
           type="button"
           :aria-label="t('common.more')"
           :title="t('common.more')"
-          @click.stop="toggleMenu(row.id)"
+          :aria-expanded="openMenuId === row.id"
+          aria-haspopup="menu"
+          @click.stop="toggleMenu(row.id, $event)"
         >
           <MoreHorizontal :size="16" aria-hidden="true" />
         </button>
@@ -565,20 +665,7 @@ onUnmounted(() => {
         >
           <LocateFixed :size="15" aria-hidden="true" />
         </button>
-        <div v-if="openMenuId === row.id" class="directory-menu" @click.stop>
-          <button type="button" @click="startRename(row)">
-            <Pencil :size="15" aria-hidden="true" />
-            {{ t('canvas.assetPanel.directory.rename') }}
-          </button>
-          <button type="button" @click="duplicateRow(row.id)">
-            <Copy :size="15" aria-hidden="true" />
-            {{ t('canvas.assetPanel.directory.duplicate') }}
-          </button>
-          <button type="button" :disabled="!row.downloadable" @click="downloadRow(row.id)">
-            <Download :size="15" aria-hidden="true" />
-            {{ t('canvas.assetPanel.directory.download') }}
-          </button>
-        </div>
+      </div>
       </div>
     </div>
 
@@ -587,6 +674,39 @@ onUnmounted(() => {
     </footer>
   </section>
 
+  <Teleport to="body">
+    <div
+      v-if="menuRow"
+      ref="nodeMenuRef"
+      class="directory-menu directory-node-menu"
+      :style="{ left: `${nodeMenuPosition.left}px`, top: `${nodeMenuPosition.top}px` }"
+      role="menu"
+      @keydown.escape.stop="openMenuId = null"
+    >
+      <button type="button" role="menuitem" @click="startRename(menuRow)">
+        <Pencil :size="15" aria-hidden="true" />
+        {{ t('canvas.assetPanel.directory.rename') }}
+      </button>
+      <button type="button" role="menuitem" @click="duplicateRow(menuRow.id)">
+        <Copy :size="15" aria-hidden="true" />
+        {{ t('canvas.assetPanel.directory.duplicate') }}
+      </button>
+      <button type="button" role="menuitem" :disabled="!menuRow.downloadable" @click="downloadRow(menuRow.id)">
+        <Download :size="15" aria-hidden="true" />
+        {{ t('canvas.assetPanel.directory.download') }}
+      </button>
+      <button
+        type="button"
+        role="menuitem"
+        :disabled="!menuRow.mediaUrl || !['image', 'video'].includes(menuRow.mediaKind)"
+        @click="addToInspiration(menuRow)"
+      >
+        <Sparkles :size="15" aria-hidden="true" />
+        {{ t('canvas.assetPanel.directory.addToInspiration') }}
+      </button>
+    </div>
+  </Teleport>
+
   <AssetHoverPreview
     :visible="showHoverPreview"
     :asset="hoverAsset"
@@ -594,6 +714,8 @@ onUnmounted(() => {
     @mouseenter="cancelHoverPreviewClose"
     @mouseleave="scheduleHoverPreviewClose"
   />
+
+  <PublishWorkDialog v-model="showPublishDialog" v-bind="publishContext" />
 </template>
 
 <style scoped>
@@ -617,6 +739,34 @@ onUnmounted(() => {
 .directory-heading {
   padding: 12px 14px 8px;
   font-weight: 600;
+}
+
+.directory-display-settings {
+  position: relative;
+}
+
+.directory-menu.directory-display-menu {
+  top: 32px;
+  right: 0;
+  width: 180px;
+}
+
+.directory-display-menu span {
+  flex: 1;
+  text-align: left;
+}
+
+.directory-menu-divider {
+  height: 1px;
+  margin: 4px;
+  background: #40444d;
+}
+
+.directory-menu.directory-node-menu {
+  position: fixed;
+  right: auto;
+  z-index: 10000000;
+  width: 180px;
 }
 
 .directory-count {
@@ -890,6 +1040,90 @@ onUnmounted(() => {
   padding: 0 12px;
 }
 
+.directory-grid .directory-root-nodes,
+.directory-grid .directory-folder-children {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 12px 6px;
+  margin: 0;
+  border: 0;
+  padding: 8px 2px 14px;
+}
+
+.directory-grid .directory-node-row {
+  display: block;
+  min-width: 0;
+  border-radius: 9px;
+}
+
+.directory-grid .directory-node-row .directory-row-main {
+  width: 100%;
+  height: auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  padding: 4px;
+}
+
+.directory-grid .directory-thumbnail {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  box-sizing: border-box;
+  border-radius: 9px;
+}
+
+.directory-grid .directory-thumbnail > svg {
+  width: 26px;
+  height: 26px;
+}
+
+.directory-grid .directory-node-row .directory-row-label {
+  width: 100%;
+  line-height: 18px;
+  text-align: center;
+}
+
+.directory-grid .directory-indent,
+.directory-grid .directory-node-row .directory-locate-button {
+  display: none;
+}
+
+.directory-grid .directory-more-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.directory-grid .directory-node-row .directory-more-button {
+  opacity: 0;
+  color: #fff;
+  background: rgba(24, 26, 30, 0.8);
+  border-radius: 7px;
+}
+
+.directory-grid .directory-folder-row .directory-more-button {
+  position: static;
+}
+
+.directory-grid .directory-node-row:hover .directory-more-button,
+.directory-grid .directory-node-row:focus-within .directory-more-button,
+.directory-grid .directory-node-row .directory-more-button[aria-expanded="true"] {
+  opacity: 1;
+}
+
+button:focus-visible {
+  outline: 2px solid #8b9ab5;
+  outline-offset: 2px;
+}
+
+@media (hover: none) {
+  .directory-more-button,
+  .directory-grid .directory-node-row .directory-more-button {
+    opacity: 1;
+  }
+}
+
 @media (max-width: 640px) {
   .directory-row {
     grid-template-columns: minmax(0, 1fr) 34px 34px;
@@ -960,6 +1194,10 @@ onUnmounted(() => {
 
 :root.canvas-theme-light .directory-menu button:hover:not(:disabled) {
   background: #edf1f6;
+}
+
+:root.canvas-theme-light .directory-menu-divider {
+  background: #d3d9e2;
 }
 
 :root.canvas-theme-light .directory-rename-input {
