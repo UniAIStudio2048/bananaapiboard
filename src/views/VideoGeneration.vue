@@ -649,7 +649,7 @@ const getModelName = (modelKey) => {
 
 function formatPointsTitle() {
   if (!me.value) return ''
-  return `套餐积分：${formatPoints(me.value.package_points || 0)} | 永久积分：${formatPoints(me.value.points || 0)}`
+  return `分配积分：${formatPoints(me.value.subuser_points || 0)} | 套餐积分：${formatPoints(me.value.package_points || 0)} | 永久积分：${formatPoints(me.value.points || 0)}`
 }
 
 // 监听模型变化，更新时长和方向选项

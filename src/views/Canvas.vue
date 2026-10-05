@@ -424,7 +424,7 @@ async function confirmSwitchToSimpleMode() {
 // 计算用户积分总和（团队空间时为 团队积分 + 套餐积分 + 永久积分；个人空间时 team_points 为 0，等价于套餐 + 永久）
 const totalPoints = computed(() => {
   if (!me.value) return '0'
-  return sumPoints(me.value.team_points, me.value.package_points, me.value.points)
+  return sumPoints(me.value.team_points, me.value.subuser_points, me.value.package_points, me.value.points)
 })
 
 // 🔧 监控节点数量，防止内存溢出 + 大画布性能优化（静默处理，不打扰用户）

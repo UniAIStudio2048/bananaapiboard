@@ -2505,6 +2505,7 @@ onUnmounted(() => {
           </div>
         </div>
 
+        <div v-if="me?.is_subuser" class="card p-6 border border-emerald-200 dark:border-emerald-700"><p class="font-semibold">主用户分配积分</p><p class="text-3xl font-bold text-emerald-600 mt-3">{{ formatPoints(me.subuser_points || 0) }}</p><p class="text-sm mt-2">优先用于消费；到期或回收只影响未消费的分配积分。</p></div>
         <!-- 永久积分 -->
         <div class="card p-6 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-2 border-purple-200 dark:border-purple-700">
           <div class="flex items-center space-x-3 mb-4">
@@ -3605,7 +3606,7 @@ onUnmounted(() => {
           </div>
 
           <!-- 积分转让卡片 -->
-          <div class="card p-6 mb-6 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border-2 border-emerald-200 dark:border-emerald-700">
+          <div v-if="!me?.is_subuser" class="card p-6 mb-6 bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border-2 border-emerald-200 dark:border-emerald-700">
             <div class="flex items-center justify-between mb-6">
               <h3 class="text-xl font-bold text-emerald-900 dark:text-emerald-100 flex items-center">
                 <span class="mr-2">💸</span>
@@ -3790,7 +3791,7 @@ onUnmounted(() => {
                           :class="(item.points_type === 'package') ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300' : 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'"
                           class="px-2 py-0.5 rounded text-xs font-medium"
                         >
-                          {{ (item.points_type === 'package') ? '套餐' : '永久' }}
+                          {{ item.points_type === 'subuser' ? '分配' : item.points_type === 'team' ? '团队' : item.points_type === 'package' ? '套餐' : '永久' }}
                         </span>
                       </div>
                       <p class="text-sm text-slate-500 dark:text-slate-400">

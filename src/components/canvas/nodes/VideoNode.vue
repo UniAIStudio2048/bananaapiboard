@@ -1542,7 +1542,7 @@ const currentSeedance2ModeConfig = computed(() => {
 
 // MiniMax H3 官方直连（minimax-h3）模式选择
 const isAtlasCloudVideoModel = computed(() => String(currentModelConfig.value?.apiType || '').startsWith('atlascloud-video'))
-const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3' || isAtlasCloudVideoModel.value)
+const isMinimaxH3Model = computed(() => ['minimax-h3', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType) || isAtlasCloudVideoModel.value)
 
 const selectedMinimaxH3Mode = ref(props.data.minimaxH3Mode || '')
 const minimaxH3Resolution = ref(props.data.minimaxH3Resolution || '')
@@ -4167,7 +4167,7 @@ const waveSpeedReferenceVideoDuration = computed(() => {
 const basePointsCost = computed(() => {
   let cost = 1
 
-  if (['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType)) {
+  if (['wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType)) {
     const pricing = resolveVideoResolutionPricing(currentModelConfig.value.resolutionPricing, genericVideoResolution.value)
     if (pricing) {
       const inputSeconds = currentModelConfig.value.apiType === 'siray-wan3'
@@ -4374,7 +4374,7 @@ const pointsCost = computed(() => {
   const base = basePointsCost.value
   const rate = getUserNodeRate('video')
   const scaled = base * rate
-  if (['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType)) return Math.round(scaled * 100) / 100
+  if (['wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType)) return Math.round(scaled * 100) / 100
   return Math.round(scaled)
 })
 
@@ -5508,7 +5508,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   formData.append('canvas_workflow_id', workflowId)
   
   // VEO 模型：使用实际的模型名称
-  if (capturedState.apiType === 'atlascloud-wan3' || String(capturedState.apiType || '').startsWith('atlascloud-video')) {
+  if (capturedState.apiType === 'rh-h3-enhanced' || capturedState.apiType === 'atlascloud-wan3' || String(capturedState.apiType || '').startsWith('atlascloud-video')) {
     formData.append('model', capturedState.model)
   } else if (isVeoModel.value) {
     formData.append('model', veoActualModel.value)

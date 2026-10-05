@@ -12,11 +12,17 @@ import {
 } from '@/api/group'
 
 const router = useRouter()
+const canAllocate = ref(false)
+onMounted(async () => {
+  const { getMe } = await import('@/api/client')
+  const user = await getMe(true)
+  canAllocate.value = Boolean(user && !user.is_subuser)
+})
 
 const billingPolicies = [
-  { value: 'legacy', label: '默认规则', note: '套餐积分优先，之后使用永久积分' },
+  { value: 'legacy', label: '默认规则', note: '先用主用户分配积分，再用套餐和永久积分' },
   { value: 'team_only', label: '仅团队积分', note: '团队空间内只能使用分配的团队积分' },
-  { value: 'team_first', label: '团队优先', note: '先用团队积分，再用套餐和永久积分' }
+  { value: 'team_first', label: '团队优先', note: '先用团队积分，再按个人积分顺序消费' }
 ]
 
 const teams = ref([])
@@ -447,7 +453,7 @@ onMounted(loadTeams)
                       <td class="px-4 py-3">{{ formatDate(member.nearest_expires_at) }}</td>
                       <td class="px-4 py-3">
                         <div class="flex justify-end gap-2">
-                          <button type="button" class="rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700" @click="openAllocation(member)">分配</button>
+                          <button v-if="canAllocate" type="button" class="rounded-md bg-primary-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-primary-700" @click="openAllocation(member)">分配</button>
                           <button type="button" class="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="openLedger(member)">流水</button>
                           <button type="button" class="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs hover:bg-slate-50 dark:border-dark-600 dark:hover:bg-dark-700" @click="openRevokeMemberCredits(member)">部分收回</button>
                           <button type="button" class="rounded-md border border-red-200 px-2.5 py-1.5 text-xs text-red-600 hover:bg-red-50 dark:border-red-900/50 dark:hover:bg-red-900/20" @click="revokeMember(member)">全部收回</button>

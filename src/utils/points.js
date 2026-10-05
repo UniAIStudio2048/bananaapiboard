@@ -12,5 +12,5 @@ export function getEffectivePackagePoints(user) {
 
 export function getTotalUserPoints(user) {
   if (!user) return 0
-  return getEffectivePackagePoints(user) + toPointsNumber(user.points)
+  return getEffectivePackagePoints(user) + toPointsNumber(user.points) + toPointsNumber(user.subuser_points)
 }

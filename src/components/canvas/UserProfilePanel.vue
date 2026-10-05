@@ -52,7 +52,7 @@ const totalTeamBalance = computed(() => {
   const team = parseFloat(props.userInfo?.team_points) || 0
   const pkg = parseFloat(props.userInfo?.package_points) || 0
   const perm = parseFloat(props.userInfo?.points) || 0
-  return team + pkg + perm
+  return team + pkg + perm + (Number(props.userInfo?.subuser_points) || 0)
 })
 
 // 数据
@@ -1558,6 +1558,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             </div>
           </div>
 
+          <RouterLink v-if="userInfo && !userInfo.is_subuser" to="/subuser" class="block p-3 text-emerald-500">子用户管理</RouterLink>
           <!-- 快捷数据 -->
           <div class="quick-stats">
             <div class="stat-item">
@@ -1575,6 +1576,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <span class="stat-value">{{ currencySymbol }}{{ formatBalance(userInfo?.balance || 0) }}</span>
               <span class="stat-label">{{ t('user.balance') }}</span>
             </div>
+            <div v-if="userInfo?.is_subuser" class="stat-item"><span class="stat-value">{{ formatPoints(userInfo?.subuser_points || 0) }}</span><span class="stat-label">主用户分配积分</span></div>
             <!-- 团队积分（仅团队空间显示，只读） -->
             <div v-if="teamStore.globalSpaceType.value === 'team'" class="stat-item">
               <span class="stat-icon" v-html="icons.team"></span>
@@ -1935,7 +1937,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                   <div class="ledger-info">
                     <div class="ledger-header-row">
                       <span class="ledger-type">{{ getLedgerTypeText(item.type) }}</span>
-                      <span class="ledger-points-type">{{ (item.points_type === 'package') ? '套餐' : '永久' }}</span>
+                      <span class="ledger-points-type">{{ item.points_type === 'subuser' ? '分配' : item.points_type === 'team' ? '团队' : item.points_type === 'package' ? '套餐' : '永久' }}</span>
                     </div>
                     <span class="ledger-time">{{ formatTime(item.ts) }}</span>
                     <span v-if="item.task_id" class="ledger-desc">任务ID：{{ item.task_id }}</span>

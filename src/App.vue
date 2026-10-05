@@ -322,6 +322,7 @@ const isIcpFooterVisible = computed(() => {
               <span class="hidden xl:inline">灵感中心</span>
             </RouterLink>
 
+            <RouterLink v-if="me && !me.is_subuser" to="/subuser" class="nav-link flex items-center"><span class="hidden xl:inline">子用户管理</span><span class="xl:hidden">子用户</span></RouterLink>
             <!-- 购买套餐入口 -->
             <RouterLink
               v-show="me"
@@ -344,6 +345,7 @@ const isIcpFooterVisible = computed(() => {
             
             <!-- 积分和余额显示 -->
             <div v-if="me" class="ml-0.5 lg:ml-1 flex items-center gap-1 shrink-0 flex-nowrap">
+              <div v-if="me.is_subuser" class="px-2 py-1.5 bg-emerald-600 rounded-full text-white text-sm whitespace-nowrap" title="主用户分配积分">分配 {{ formatPoints(me.subuser_points || 0) }}</div>
               <!-- 套餐积分 -->
               <div class="px-2 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="t('user.packagePointsDesc')">
                 <span class="mr-1">💎</span>
@@ -523,6 +525,7 @@ const isIcpFooterVisible = computed(() => {
             <span class="align-middle">灵感中心</span>
           </RouterLink>
 
+          <RouterLink v-if="me && !me.is_subuser" to="/subuser" class="block nav-link" @click="isMenuOpen = false">子用户管理</RouterLink>
           <!-- 移动端购买套餐入口 -->
           <RouterLink
             v-if="me"

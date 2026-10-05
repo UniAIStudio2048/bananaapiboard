@@ -56,6 +56,7 @@ const router = createRouter({
       component: WorkflowShare,
       meta: { title: '工作流分享', requiresAuth: false, noindex: true, referrer: 'no-referrer' }
     },
+    { path: '/subuser', name: 'subusers', component: () => import('@/views/Subusers.vue'), meta: { title: '子用户管理', requiresAuth: true } },
     {
       path: '/group',
       name: 'groupCredits',
