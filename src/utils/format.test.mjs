@@ -32,6 +32,14 @@ test('sumPoints 团队空间 = 团队积分 + 套餐 + 永久', () => {
   assert.equal(sumPoints('300', '100.5', 50.25), '450.75')
 })
 
+test('sumPoints includes allocated subuser points without changing the three-argument contract', () => {
+  assert.equal(sumPoints(0, 0, '407834.12', 0), '407834.12')
+  assert.equal(sumPoints('300.25', '100.5', '50.25', '12.34'), '463.34')
+  assert.equal(sumPoints(0, 0, 0, '12.34'), '12.34')
+  assert.equal(sumPoints(0, 100, 50, undefined), '150')
+  assert.equal(sumPoints(0, 100, 50, 'abc'), '150')
+})
+
 test('sumPoints 全部为空时返回 0', () => {
   assert.equal(sumPoints(), '0')
   assert.equal(sumPoints(undefined, undefined, undefined), '0')

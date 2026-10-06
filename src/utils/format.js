@@ -21,18 +21,20 @@ export function formatPoints(points) {
 }
 
 /**
- * 汇总当前空间的可用积分（团队积分 + 套餐积分 + 永久积分）并格式化
- * 个人空间时 teamPoints 为 0，结果等价于套餐 + 永久
+ * 汇总当前空间的可用积分（团队积分 + 套餐积分 + 永久积分 + 子用户分配积分）并格式化
+ * 个人空间时 teamPoints 为 0
  * @param {number|string} teamPoints - 团队积分
  * @param {number|string} packagePoints - 套餐积分
  * @param {number|string} permanentPoints - 永久积分
+ * @param {number|string} subuserPoints - 子用户分配积分
  * @returns {string} 格式化后的积分字符串
  */
-export function sumPoints(teamPoints, packagePoints, permanentPoints) {
+export function sumPoints(teamPoints, packagePoints, permanentPoints, subuserPoints = 0) {
   const team = parseFloat(teamPoints) || 0
   const pkg = parseFloat(packagePoints) || 0
   const perm = parseFloat(permanentPoints) || 0
-  return formatPoints(team + pkg + perm)
+  const subuser = parseFloat(subuserPoints) || 0
+  return formatPoints(team + pkg + perm + subuser)
 }
 
 /**
