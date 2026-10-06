@@ -8,6 +8,8 @@ defineOptions({
  * 底部配置面板集成在节点内，紧贴节点卡片
  */
 import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from 'vue'
+import { waitForVideoAnalysisTask } from '@/api/canvas/video-analysis'
+import { formatVideoGenerationElapsed, getVideoGenerationElapsedSeconds } from '@/utils/videoGenerationProgress.js'
 import DOMPurify from 'dompurify'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
@@ -579,6 +581,27 @@ const selectedModel = ref(props.data?.model || 'gemini-2.5-pro')
 const selectedPreset = ref(props.data?.selectedPreset || '') // 选中的功能预设
 const selectedLanguage = ref(props.data?.language || 'zh') // 选中的语言
 const isGenerating = ref(false)
+const analysisTimeNow = ref(Date.now())
+const analysisElapsedText = computed(() => props.data.processingStartedAt && (props.data.analysisRequestId || props.data.analysisTaskId)
+  ? formatVideoGenerationElapsed(getVideoGenerationElapsedSeconds(props.data, props.data.processingCompletedAt || analysisTimeNow.value))
+  : '')
+watch(() => props.data.status === 'processing' && !!(props.data.analysisRequestId || props.data.analysisTaskId), (running, _, onCleanup) => {
+  if (!running) return
+  analysisTimeNow.value = Date.now()
+  const timer = setInterval(() => { analysisTimeNow.value = Date.now() }, 1000)
+  onCleanup(() => clearInterval(timer))
+}, { immediate: true })
+// Restored processing nodes query the durable task instead of depending on the original request.
+watch(() => props.data.status === 'processing' ? props.data.analysisTaskId : null, async (taskId, _, onCleanup) => {
+  if (!taskId) return
+  const controller = new AbortController()
+  onCleanup(() => controller.abort())
+  try {
+    await waitForVideoAnalysisTask(taskId, { signal: controller.signal, onUpdate: state => {
+      if (state.node?.id === props.id && !controller.signal.aborted) canvasStore.applyIncrementalNode(state.node)
+    } })
+  } catch { /* A transport failure does not change the persisted task; refresh can resume it. */ }
+}, { immediate: true })
 const showModelDropdown = ref(false)
 const showPresetDropdown = ref(false) // 功能预设下拉菜单
 const showLanguageDropdown = ref(false) // 语言下拉菜单
@@ -3384,12 +3407,15 @@ onUnmounted(() => {
           <!-- 错误状态 -->
           <div v-if="props.data.status === 'error'" class="text-node-error">
             <div class="error-icon">!</div>
-            <div class="error-text">{{ props.data.error || '生成失败' }}</div>
-            <button class="retry-btn" @click.stop="handleLLMGenerate">重试</button>
+            <div class="error-text">{{ props.data.error || (props.data.analysisTaskId || props.data.analysisRequestId ? '解析失败' : '生成失败') }}</div>
+            <p v-if="props.data.analysisTaskId || props.data.analysisRequestId" class="text-sm text-gray-400">请在源视频节点重新解析</p>
+            <button v-else class="retry-btn" @click.stop="handleLLMGenerate">重试</button>
+            <span v-if="analysisElapsedText" class="analysis-duration">解析用时 {{ analysisElapsedText }}</span>
           </div>
           
           <!-- LLM 响应显示（生成中或已完成） -->
           <div v-else-if="props.data.llmResponse" class="text-node-llm-response" :class="{ 'is-streaming': isGenerating || props.data.status === 'processing' }" @wheel.stop>
+            <div v-if="analysisElapsedText" class="analysis-duration">解析用时 {{ analysisElapsedText }}</div>
             <div class="llm-response-content">
               {{ props.data.llmResponse }}
               <span v-if="isGenerating || props.data.status === 'processing'" class="streaming-cursor">▊</span>
@@ -3398,7 +3424,8 @@ onUnmounted(() => {
           
           <!-- 加载中状态（还没有任何内容时） -->
           <div v-else-if="isGenerating || props.data.status === 'processing'" class="text-node-loading">
-            <span class="processing-text">正在生成...</span>
+            <span class="processing-text">{{ props.data.processingText || '正在生成...' }}</span>
+            <span v-if="analysisElapsedText" class="analysis-duration">已用时 {{ analysisElapsedText }}</span>
           </div>
           
           <!-- 有内容且非编辑模式：显示文本内容 -->
@@ -4243,6 +4270,8 @@ onUnmounted(() => {
 .text-node-loading {
   padding: 60px 20px;
   display: flex;
+  flex-direction: column;
+  gap: 12px;
   align-items: center;
   justify-content: center;
   flex: 1;
@@ -4254,6 +4283,12 @@ onUnmounted(() => {
   font-weight: 500;
   color: var(--canvas-text-secondary, #888);
   letter-spacing: 2px;
+}
+
+.analysis-duration {
+  font-size: 12px;
+  color: var(--canvas-text-secondary, #888);
+  font-variant-numeric: tabular-nums;
 }
 
 /* LLM 响应内容 */

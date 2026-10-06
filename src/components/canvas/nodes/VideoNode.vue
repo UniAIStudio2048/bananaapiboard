@@ -110,6 +110,8 @@ import {
   WAN_MODES
 } from '@/utils/videoGenerationMode'
 import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
+import VideoAnalysisDialog from '@/components/canvas/VideoAnalysisDialog.vue'
+import { analyzeVideoNode } from '@/api/canvas/video-analysis'
 import { createSubtitleEraseTask, exportVideoTimeline, getSubtitleEraseConfig, getSubtitleEraseTask, separateVideoAudio } from '@/api/canvas/video-tools'
 import { smartDownload } from '@/api/client'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
@@ -9171,9 +9173,88 @@ function createHDResultNode(outputUrl, pointsCost) {
 
 // 注：高清任务由 backgroundTaskManager 统一管理，组件卸载后任务继续在后台运行
 
+const showAnalysisDialog = ref(false)
+const isVideoAnalyzing = ref(false)
 function handleToolbarAnalyze() {
-  console.log('[VideoNode] 工具栏：解析', props.id)
-  // 待开发功能
+  if (!isVideoAnalyzing.value) showAnalysisDialog.value = true
+}
+async function confirmVideoAnalysis(modelId) {
+  if (isVideoAnalyzing.value) return
+  showAnalysisDialog.value = false
+  isVideoAnalyzing.value = true
+  let tabId, workflowId, analysisNode, analysisEdge, persistence, accepted = false
+  try {
+    const tab = canvasStore.getCurrentTab?.()
+    const source = canvasStore.nodes.find(node => node.id === props.id)
+    if (!tab?.id || !source) throw new Error('当前画布不可用')
+    tabId = tab.id
+    const requestId = crypto.randomUUID()
+    analysisNode = {
+      id: `analysis_${requestId}`, type: 'text-input',
+      position: { x: source.position.x + (Number(source.data.width) || 420) + 120, y: source.position.y },
+      data: { label: '视频解析', title: '视频解析', width: 520, height: 340, text: '', llmResponse: '', status: 'processing', processingText: '正在解析...', processingStartedAt: Date.now(), processingCompletedAt: null, analysisRequestId: requestId, analysisTaskId: null, sourceNodeId: props.id }
+    }
+    analysisEdge = { id: `analysis_edge_${requestId}`, source: props.id, target: analysisNode.id, sourceHandle: 'output', targetHandle: 'input' }
+    canvasStore.closeNodeSelector()
+    canvasStore.addNode(analysisNode)
+    canvasStore.addEdge(analysisEdge)
+    await nextTick()
+    const existingWorkflowId = tab.workflowId
+    const context = existingWorkflowId ? { workflowId: existingWorkflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
+    workflowId = context.workflowId
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    // Persist the visible placeholder while source preparation runs, using the same IDs as the task.
+    if (existingWorkflowId) persistence = postWorkflowOps(workflowId, [{ op: 'add', target: 'node', payload: analysisNode }, { op: 'add', target: 'edge', payload: analysisEdge }])
+    const [loaded] = await Promise.all([getWorkflowNodesBatch(workflowId, [props.id]), persistence])
+    let remote = loaded.nodes?.find(node => node.id === props.id)
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    const localUrl = props.data.output?.url || normalizedVideoUrl.value
+    let videoUrl = /^(blob:|data:)/.test(localUrl || '') ? localUrl : remote?.data.output?.url || remote?.data.videoUrl || remote?.data.url || localUrl
+    if (!videoUrl) throw new Error('没有可解析的视频')
+    if (/^(blob:|data:)/.test(videoUrl)) {
+      const blob = await (await fetch(videoUrl)).blob()
+      const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
+      if (!uploaded.url) throw new Error('视频上传失败')
+      videoUrl = uploaded.url
+      if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+      remote = (await getWorkflowNodesBatch(context.workflowId, [props.id])).nodes?.find(node => node.id === props.id)
+    }
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    if (!remote) {
+      await postWorkflowOps(context.workflowId, [{ op: 'add', target: 'node', payload: {
+        ...source, data: { ...source.data, output: { ...source.data.output, type: 'video', url: videoUrl } }
+      } }])
+      remote = (await getWorkflowNodesBatch(context.workflowId, [props.id])).nodes?.find(node => node.id === props.id)
+      if (!remote) throw new Error('源视频节点保存失败')
+    } else if ((remote.data.output?.url || remote.data.videoUrl || remote.data.url) !== videoUrl) {
+      await patchWorkflowNode(context.workflowId, props.id, {
+        data: { output: { ...remote.data.output, type: 'video', url: videoUrl } }
+      }, remote.version)
+      remote = (await getWorkflowNodesBatch(context.workflowId, [props.id])).nodes?.find(node => node.id === props.id)
+      if (!remote) throw new Error('源视频节点不存在')
+    }
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    canvasStore.applyIncrementalNode(remote)
+    const applyAnalysisState = state => {
+      if (state.taskId) accepted = true
+      if (canvasStore.getCurrentTab?.()?.id !== tabId) return
+      if (!canvasStore.nodes.some(node => node.id === state.node.id)) return
+      canvasStore.applyIncrementalNode(state.node)
+    }
+    const result = await analyzeVideoNode({ workflowId, sourceNodeId: props.id, requestId, modelId, resultNodeId: analysisNode.id, resultEdgeId: analysisEdge.id, startedAt: analysisNode.data.processingStartedAt }, { onUpdate: applyAnalysisState })
+    applyAnalysisState(result)
+    window.dispatchEvent(new CustomEvent('user-info-updated'))
+    showToast(`视频解析成功，消耗 ${formatPoints(result.cost)} 积分`, 'success')
+  } catch (error) {
+    if (analysisNode && !accepted) {
+      const data = { status: 'error', processingText: null, error: error.message || '视频解析失败', processingCompletedAt: Date.now() }
+      if (canvasStore.getCurrentTab?.()?.id === tabId) canvasStore.updateNodeData(analysisNode.id, data)
+      await persistence?.catch(() => {})
+      if (workflowId) await patchWorkflowNode(workflowId, analysisNode.id, { data }).catch(() => {})
+    }
+    showToast(error.message || '视频解析失败', 'error')
+  }
+  finally { isVideoAnalyzing.value = false }
 }
 
 function handleToolbarCreateCharacter() {
@@ -9701,14 +9782,14 @@ function handleToolbarPreview() {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3L2 8l10 5 10-5-10-5zM2 12l10 5 10-5M2 16l10 5 10-5" /></svg>
         <span>{{ isDepthProcessing ? '提交中...' : '深度提取' }}</span>
       </button>
-      <button class="toolbar-btn" title="解析" @mousedown.stop.prevent="handleToolbarAnalyze" @click.stop.prevent>
+      <button class="toolbar-btn" title="解析" :disabled="isVideoAnalyzing" :aria-busy="isVideoAnalyzing" @mousedown.stop.prevent @click.stop.prevent="handleToolbarAnalyze">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <rect x="3" y="3" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
           <rect x="14" y="3" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
           <rect x="3" y="14" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
           <rect x="14" y="14" width="7" height="7" rx="1" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
-        <span>解析</span>
+        <span>{{ isVideoAnalyzing ? '解析中…' : '解析' }}</span>
       </button>
       <button v-if="showCreateCharacterToolbarAction" class="toolbar-btn" title="角色创建" @mousedown.stop.prevent="handleToolbarCreateCharacter" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -11134,6 +11215,7 @@ function handleToolbarPreview() {
       </template>
     </div>
     </Teleport>
+    <VideoAnalysisDialog v-if="showAnalysisDialog" @close="showAnalysisDialog = false" @confirm="confirmVideoAnalysis" />
   </div>
 </template>
 
