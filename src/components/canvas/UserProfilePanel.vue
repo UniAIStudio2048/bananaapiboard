@@ -4,12 +4,14 @@ import { openCheckout } from '@/utils/openCheckout'
  * UserProfilePanel.vue - 画布模式个人中心浮动面板
  * 点击左侧工具栏的P按钮时弹出
  */
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, inject, nextTick } from 'vue'
 import PhoneBinding from '@/components/auth/PhoneBinding.vue'
 import { useRouter } from 'vue-router'
 import { redeemVoucher as redeemVoucherApi, updateUserPreferences, clearAuthSession } from '@/api/client'
 import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
+import { getPermanentUserPoints } from '@/utils/points'
+import { getPointsLedgerTypeText } from '@/utils/pointsLedger'
 import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
@@ -23,6 +25,7 @@ const { t } = useI18n()
 const { formatMoney, symbol: currencySymbol, unitLabel: currencyUnitLabel } = useCurrencyDisplay()
 const teamStore = useTeamStore()
 const canvasStore = useCanvasStore()
+const openAccountAction = inject('openAccountAction')
 
 const props = defineProps({
   visible: {
@@ -62,7 +65,47 @@ const ledgerPageSize = ref(20)
 const ledgerTotal = ref(0)
 const ledgerTotalPages = ref(1)
 const ledgerLoading = ref(false)
-const ledgerPageSizeOptions = [10, 20, 50]
+const ledgerError = ref('')
+let ledgerRequestId = 0
+const ledgerPageSizeOptions = [20, 50, 100]
+const showLedgerDetails = ref(false)
+const ledgerDialog = ref(null)
+let ledgerOpener = null
+
+watch(showLedgerDetails, async visible => {
+  if (visible) {
+    ledgerOpener = document.activeElement
+    await nextTick()
+    ledgerDialog.value?.focus()
+  } else {
+    await nextTick()
+    if (ledgerOpener?.isConnected) ledgerOpener.focus()
+  }
+})
+
+watch(() => props.visible, visible => {
+  if (!visible) showLedgerDetails.value = false
+})
+
+function handleLedgerDialogKeydown(event) {
+  event.stopPropagation()
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    showLedgerDetails.value = false
+  } else if (event.key === 'Tab') {
+    const controls = ledgerDialog.value?.querySelectorAll('button:not(:disabled), select:not(:disabled)')
+    if (!controls?.length) return
+    const first = controls[0]
+    const last = controls[controls.length - 1]
+    if (event.shiftKey && (document.activeElement === first || document.activeElement === ledgerDialog.value)) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === ledgerDialog.value)) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+}
 const packages = ref([])
 const activePackage = ref(null) // 用户当前活跃套餐
 const invite = ref({ invite_code: '', uses: [] })
@@ -398,30 +441,40 @@ watch(activeMenu, (val) => {
 
 async function loadLedger() {
   if (!token) return
+  const requestId = ++ledgerRequestId
   ledgerLoading.value = true
+  ledgerError.value = ''
+  ledger.value = []
   try {
     const headers = { ...getTenantHeaders(), Authorization: `Bearer ${token}` }
     const ledgerRes = await fetch(getApiUrl(`/api/user/points?page=${ledgerPage.value}&pageSize=${ledgerPageSize.value}`), { headers })
-    if (ledgerRes.ok) {
+    if (!ledgerRes.ok) throw new Error('ledger_load_failed')
+    if (requestId === ledgerRequestId) {
       const data = await ledgerRes.json()
+      if (requestId !== ledgerRequestId) return
       ledger.value = Array.isArray(data) ? data : (data.records || data.ledger || [])
       ledgerTotal.value = Number(data.total || ledger.value.length || 0)
       ledgerPage.value = Number(data.page || ledgerPage.value || 1)
       ledgerPageSize.value = Number(data.pageSize || ledgerPageSize.value || 20)
       ledgerTotalPages.value = Math.max(1, Number(data.totalPages || Math.ceil(ledgerTotal.value / ledgerPageSize.value) || 1))
     }
+  } catch {
+    if (requestId === ledgerRequestId) ledgerError.value = '积分记录加载失败，请重试'
   } finally {
-    ledgerLoading.value = false
+    if (requestId === ledgerRequestId) ledgerLoading.value = false
   }
 }
 
 function changeLedgerPageSize(event) {
-  ledgerPageSize.value = Number(event.target.value) || 20
+  if (ledgerLoading.value) return
+  const size = Number(event.target.value)
+  ledgerPageSize.value = ledgerPageSizeOptions.includes(size) ? size : 20
   ledgerPage.value = 1
   loadLedger()
 }
 
 function goLedgerPage(page) {
+  if (ledgerLoading.value || !Number.isFinite(page)) return
   const nextPage = Math.min(Math.max(1, page), ledgerTotalPages.value)
   if (nextPage === ledgerPage.value) return
   ledgerPage.value = nextPage
@@ -1466,26 +1519,7 @@ function getLedgerIconType(type) {
 
 // 获取积分类型文字
 function getLedgerTypeText(type) {
-  // 尝试从 pointsType 中查找翻译
-  const pointsTypeKey = `pointsType.${type}`
-  const pointsTypeText = t(pointsTypeKey)
-  
-  // 如果找到翻译（不是key本身），返回翻译
-  if (pointsTypeText !== pointsTypeKey) {
-    return pointsTypeText
-  }
-  
-  // 否则尝试从 user.ledgerType 中查找翻译
-  const ledgerTypeKey = `user.ledgerType.${type}`
-  const ledgerTypeText = t(ledgerTypeKey)
-  
-  // 如果找到翻译（不是key本身），返回翻译
-  if (ledgerTypeText !== ledgerTypeKey) {
-    return ledgerTypeText
-  }
-  
-  // 都没找到，返回原始type
-  return type
+  return getPointsLedgerTypeText(type, t)
 }
 
 const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.value : []))
@@ -1494,7 +1528,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 <template>
   <Teleport to="body">
     <Transition name="panel">
-      <div v-if="visible" class="profile-panel-overlay" @click.self="closePanel">
+      <div v-if="visible" class="profile-panel-overlay" :inert="showLedgerDetails || undefined" @click.self="closePanel">
         <div 
           class="profile-panel"
           :style="{ left: `${position.x}px`, top: `${position.y}px` }"
@@ -1558,25 +1592,28 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             </div>
           </div>
 
-          <RouterLink v-if="userInfo && !userInfo.is_subuser" to="/subuser" class="block p-3 text-emerald-500">子用户管理</RouterLink>
+          <RouterLink v-if="userInfo && !userInfo.is_subuser && userInfo.has_subusers" to="/subuser" class="block p-3 text-emerald-500">子用户管理</RouterLink>
           <!-- 快捷数据 -->
           <div class="quick-stats">
-            <div class="stat-item">
+            <button type="button" class="stat-item stat-action" @click="openAccountAction('convert'); closePanel()">
               <span class="stat-icon" v-html="icons.diamond"></span>
-              <span class="stat-value">{{ formatPoints(userInfo?.points || 0) }}</span>
+              <span class="stat-value">{{ formatPoints(getPermanentUserPoints(userInfo)) }}</span>
               <span class="stat-label">{{ t('user.permanentPoints') }}</span>
-            </div>
-            <div class="stat-item">
+              <span v-if="userInfo?.is_subuser" class="col-span-2 text-xs text-gray-500" title="分配部分按有效期使用，未消费部分可由主用户回收">其中分配 {{ formatPoints(userInfo.subuser_points || 0) }}</span>
+            </button>
+            <button type="button" class="stat-item stat-action" @click="openAccountAction('packages'); closePanel()">
               <span class="stat-icon" v-html="icons.star"></span>
               <span class="stat-value">{{ formatPoints(userInfo?.package_points || 0) }}</span>
               <span class="stat-label">{{ t('user.packagePoints') }}</span>
-            </div>
-            <div class="stat-item">
+            </button>
+            <div class="stat-item balance-stat" :class="{ 'full-width': teamStore.globalSpaceType.value !== 'team' }">
               <span class="stat-icon" v-html="icons.coin"></span>
-              <span class="stat-value">{{ currencySymbol }}{{ formatBalance(userInfo?.balance || 0) }}</span>
+              <div class="stat-value balance-actions">
+                <button type="button" class="recharge-entry-btn" @click="openAccountAction('recharge'); closePanel()">{{ t('user.recharge') }}</button>
+                <span>{{ currencySymbol }}{{ formatBalance(userInfo?.balance || 0) }}</span>
+              </div>
               <span class="stat-label">{{ t('user.balance') }}</span>
             </div>
-            <div v-if="userInfo?.is_subuser" class="stat-item"><span class="stat-value">{{ formatPoints(userInfo?.subuser_points || 0) }}</span><span class="stat-label">主用户分配积分</span></div>
             <!-- 团队积分（仅团队空间显示，只读） -->
             <div v-if="teamStore.globalSpaceType.value === 'team'" class="stat-item">
               <span class="stat-icon" v-html="icons.team"></span>
@@ -1597,6 +1634,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               v-for="item in menuItems" 
               :key="item.id"
               :class="['nav-item', { active: activeMenu === item.id }]"
+              :title="item.label"
               @click="activeMenu = item.id"
             >
               <span class="nav-icon" v-html="icons[item.icon]"></span>
@@ -1656,6 +1694,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 
             <!-- 账户管理 -->
             <div v-else-if="activeMenu === 'profile'" class="content-section">
+              <RouterLink v-if="userInfo && !userInfo.is_subuser" to="/subuser" class="block mb-4 text-emerald-500">创建子用户</RouterLink>
               <h4 class="section-title">{{ t('user.basicInfo') }}</h4>
               <div class="form-group">
                 <label>{{ t('user.username') }}</label>
@@ -1906,12 +1945,12 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <!-- 余额划转 -->
               <div class="transfer-section">
                 <h4 class="section-title">{{ t('user.balanceToPoints') }}</h4>
-                <p class="transfer-hint">{{ t('user.exchangeRateHint', { rate: exchangeRate, unit: currencyUnitLabel.value }) }}</p>
+                <p class="transfer-hint">{{ t('user.exchangeRateHint', { rate: exchangeRate, unit: currencyUnitLabel, symbol: currencySymbol }) }}</p>
                 <div class="transfer-form">
                   <input 
                     v-model="transferAmount" 
                     type="number" 
-                    :placeholder="t('user.enterTransferAmount', { unit: currencyUnitLabel.value, symbol: currencySymbol.value })" 
+                    :placeholder="t('user.enterTransferAmount', { unit: currencyUnitLabel, symbol: currencySymbol })"
                     min="1"
                   />
                   <button class="btn-primary" @click="submitTransfer" :disabled="transferLoading">
@@ -1922,14 +1961,20 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 
               <div class="ledger-header">
                 <h4 class="section-title">{{ t('user.pointsRecord') }}</h4>
-                <div class="ledger-controls">
-                  <span class="ledger-total">共 {{ ledgerTotal }} 条</span>
-                  <select class="ledger-page-size" :value="ledgerPageSize" @change="changeLedgerPageSize">
-                    <option v-for="size in ledgerPageSizeOptions" :key="size" :value="size">{{ size }} 条/页</option>
-                  </select>
-                </div>
+                <span class="ledger-total" :title="`共 ${ledgerTotal} 条记录`">共{{ ledgerTotal }}条</span>
+                <select class="ledger-page-size" aria-label="积分记录每页条数" :value="ledgerPageSize" :disabled="ledgerLoading" @change="changeLedgerPageSize">
+                  <option v-for="size in ledgerPageSizeOptions" :key="size" :value="size">{{ size }}条/页</option>
+                </select>
+                <button class="ledger-expand-btn" @click="showLedgerDetails = true">
+                  查看详情
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M15 3h6v6M21 3l-7 7M9 21H3v-6M3 21l7-7"/></svg>
+                </button>
               </div>
               <div v-if="ledgerLoading" class="empty-hint">加载中...</div>
+              <div v-else-if="ledgerError" class="ledger-error" role="alert">
+                {{ ledgerError }}
+                <button class="ledger-page-btn" @click="loadLedger">重新加载</button>
+              </div>
               <div v-else-if="!Array.isArray(ledger) || ledger.length === 0" class="empty-hint">{{ t('user.noRecord') }}</div>
               <div v-else class="ledger-list">
                 <div v-for="item in ledgerDisplayItems" :key="item.id || `${item.ts}-${item.type}-${item.value}`" class="ledger-item">
@@ -2267,7 +2312,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             
             <!-- 自定义金额 -->
             <div class="form-section">
-              <label class="form-label">{{ t('user.customAmountHint', { unit: currencyUnitLabel.value }) }}</label>
+              <label class="form-label">{{ t('user.customAmountHint', { unit: currencyUnitLabel, symbol: currencySymbol }) }}</label>
               <input 
                 v-model="rechargeCustomAmount" 
                 type="number" 
@@ -2343,6 +2388,73 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
     </Transition>
   </Teleport>
   
+  <Teleport to="body">
+    <Transition name="purchase-modal">
+      <div v-if="visible && showLedgerDetails" class="ledger-details-overlay" @click.self="showLedgerDetails = false" @wheel.stop>
+        <div
+          ref="ledgerDialog"
+          class="ledger-details-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="ledger-details-title"
+          tabindex="-1"
+          @keydown="handleLedgerDialogKeydown"
+        >
+          <header class="ledger-details-header">
+            <div>
+              <h3 id="ledger-details-title">积分记录详情</h3>
+              <p>查看积分的收入、支出与完整说明</p>
+            </div>
+            <button class="ledger-details-close" aria-label="关闭积分记录详情" @click="showLedgerDetails = false">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </header>
+          <div class="ledger-details-toolbar">
+            <span>共 <strong>{{ ledgerTotal }}</strong> 条记录<span class="ledger-details-sort"> · 按时间从新到旧</span></span>
+            <label class="ledger-controls">
+              每页显示
+              <select class="ledger-page-size" :value="ledgerPageSize" :disabled="ledgerLoading" @change="changeLedgerPageSize">
+                <option v-for="size in ledgerPageSizeOptions" :key="size" :value="size">{{ size }} 条</option>
+              </select>
+            </label>
+          </div>
+          <div class="ledger-details-body" :aria-busy="ledgerLoading">
+            <div v-if="ledgerLoading" class="ledger-details-state" role="status">正在加载积分记录...</div>
+            <div v-else-if="ledgerError" class="ledger-details-state ledger-error" role="alert">
+              <span>{{ ledgerError }}</span>
+              <button class="ledger-page-btn" @click="loadLedger">重新加载</button>
+            </div>
+            <div v-else-if="!ledgerDisplayItems.length" class="ledger-details-state">{{ t('user.noRecord') }}</div>
+            <table v-else class="ledger-details-table">
+              <thead><tr><th scope="col">时间</th><th scope="col">类型</th><th scope="col">积分来源</th><th scope="col">积分变动</th><th scope="col">详细说明</th></tr></thead>
+              <tbody>
+                <tr v-for="item in ledgerDisplayItems" :key="item.id || `${item.ts}-${item.type}-${item.value}`">
+                  <td data-label="时间" class="ledger-details-time">{{ formatTime(item.ts) }}</td>
+                  <td data-label="类型" class="ledger-details-type">{{ getLedgerTypeText(item.type) }}</td>
+                  <td data-label="积分来源"><span class="ledger-points-type">{{ item.points_type === 'subuser' ? '分配' : item.points_type === 'team' ? '团队' : item.points_type === 'package' ? '套餐' : '永久' }}</span></td>
+                  <td data-label="积分变动" :class="['ledger-amount', item.value > 0 ? 'positive' : 'negative']">{{ item.value > 0 ? '+' : '' }}{{ formatPoints(item.value) }}</td>
+                  <td data-label="详细说明" class="ledger-details-description">
+                    <div>{{ item.memo || '—' }}</div>
+                    <div v-if="item.task_id" class="ledger-details-task">任务编号：{{ item.task_id }}</div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <footer class="ledger-details-footer">
+            <span class="ledger-page-info">第 {{ ledgerPage }} / {{ ledgerTotalPages }} 页</span>
+            <div class="ledger-pagination">
+              <button class="ledger-page-btn" :disabled="ledgerPage <= 1 || ledgerLoading" @click="goLedgerPage(1)">首页</button>
+              <button class="ledger-page-btn" :disabled="ledgerPage <= 1 || ledgerLoading" @click="goLedgerPage(ledgerPage - 1)">上一页</button>
+              <button class="ledger-page-btn" :disabled="ledgerPage >= ledgerTotalPages || ledgerLoading" @click="goLedgerPage(ledgerPage + 1)">下一页</button>
+              <button class="ledger-page-btn" :disabled="ledgerPage >= ledgerTotalPages || ledgerLoading" @click="goLedgerPage(ledgerTotalPages)">末页</button>
+            </div>
+          </footer>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
   <!-- 套餐购买大弹窗（独立Teleport确保最高层级） -->
   <Teleport to="body">
     <Transition name="purchase-modal">
@@ -2824,65 +2936,150 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 
 /* 快捷数据 */
 .quick-stats {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   padding: 16px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
 }
 
-.stat-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+.quick-stats .stat-item {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
-  gap: 4px;
-  padding: 12px 8px;
+  gap: 8px;
+  padding: 12px;
   background: rgba(255, 255, 255, 0.05);
   border-radius: 12px;
 }
 
-.stat-icon {
-  width: 20px;
-  height: 20px;
+.quick-stats .stat-action {
+  border: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.quick-stats .stat-action:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.quick-stats .stat-action:focus-visible,
+.quick-stats .recharge-entry-btn:focus-visible {
+  outline: 2px solid var(--canvas-text-primary);
+  outline-offset: 2px;
+}
+
+.quick-stats .balance-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.quick-stats .balance-actions > span {
+  min-width: 0;
+}
+
+.quick-stats .recharge-entry-btn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--canvas-text-primary);
+  color: var(--canvas-bg-primary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.quick-stats .recharge-entry-btn:hover {
+  opacity: 0.85;
+}
+
+.quick-stats .stat-icon {
+  grid-column: 1;
+  grid-row: 1;
+  width: 18px;
+  height: 18px;
   color: rgba(255, 255, 255, 0.6);
 }
 
-.stat-icon :deep(svg) {
+.quick-stats .stat-icon :deep(svg) {
   width: 100%;
   height: 100%;
 }
 
-.stat-value {
-  font-size: 16px;
+.quick-stats .stat-value {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+  font-size: 20px;
+  line-height: 1.2;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
   color: #fff;
 }
 
-.stat-label {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.4);
+.quick-stats .stat-label {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.quick-stats .full-width,
+.quick-stats .total-balance {
+  grid-column: 1 / -1;
+  grid-template-columns: 18px minmax(0, 1fr) minmax(0, 1.25fr);
+}
+
+.quick-stats .full-width .stat-value,
+.quick-stats .total-balance .stat-value {
+  grid-column: 3;
+  grid-row: 1;
+  text-align: right;
+}
+
+.quick-stats .total-balance {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.quick-stats .balance-stat.full-width {
+  grid-template-columns: 18px auto minmax(0, 1fr);
 }
 
 /* 导航菜单 */
 .panel-nav {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 12px 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 24px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .nav-item {
+  min-width: 0;
+  min-height: 40px;
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 10px 6px;
   border: 1px solid transparent;
   background: transparent;
   color: rgba(255, 255, 255, 0.55);
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
   font-size: 13px;
   font-weight: 450;
 }
@@ -2901,6 +3098,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 .nav-icon {
   width: 16px;
   height: 16px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2909,6 +3107,14 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 .nav-icon :deep(svg) {
   width: 100%;
   height: 100%;
+}
+
+.nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
 }
 
 /* 内容区域 */
@@ -3407,15 +3613,283 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 
 /* 积分记录 */
 .ledger-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 74px auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 6px;
   margin-bottom: 12px;
 }
 
 .ledger-header .section-title {
   margin-bottom: 0;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.ledger-header .ledger-total {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-header .ledger-page-size {
+  width: 100%;
+  height: 30px;
+  padding: 0 18px 0 6px;
+  background-position: right 4px center;
+  background-size: 12px 12px;
+  font-size: 11px;
+}
+
+.ledger-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ledger-expand-btn svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.ledger-error {
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 0;
+  color: #ef4444;
+  font-size: 13px;
+}
+
+.ledger-details-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100010;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+}
+
+.ledger-details-modal {
+  --ledger-surface: #1c1c1e;
+  --ledger-text: #f4f4f5;
+  --ledger-muted: #a1a1aa;
+  --ledger-border: rgba(255, 255, 255, 0.1);
+  --ledger-secondary: #27272a;
+  --ledger-hover: rgba(255, 255, 255, 0.04);
+  display: flex;
+  flex-direction: column;
+  width: min(1040px, 100%);
+  height: min(780px, calc(100dvh - 48px));
+  overflow: hidden;
+  border: 1px solid var(--ledger-border);
+  border-radius: 20px;
+  background: var(--ledger-surface);
+  color: var(--ledger-text);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.3);
+  outline: none;
+}
+
+.ledger-details-header,
+.ledger-details-toolbar,
+.ledger-details-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 auto;
+  gap: 16px;
+  padding: 20px 24px;
+}
+
+.ledger-details-header h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.ledger-details-header p {
+  margin: 0;
+  color: var(--ledger-muted);
+  font-size: 13px;
+}
+
+.ledger-details-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--ledger-border);
+  border-radius: 10px;
+  background: var(--ledger-secondary);
+  color: var(--ledger-muted);
+  cursor: pointer;
+}
+
+.ledger-details-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.ledger-details-toolbar {
+  padding-top: 14px;
+  padding-bottom: 14px;
+  border-top: 1px solid var(--ledger-border);
+  border-bottom: 1px solid var(--ledger-border);
+  color: var(--ledger-muted);
+  font-size: 13px;
+}
+
+.ledger-details-toolbar strong {
+  color: var(--ledger-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-details-modal .ledger-controls,
+.ledger-details-modal .ledger-page-info {
+  color: var(--ledger-muted);
+}
+
+.ledger-details-modal .ledger-page-size,
+.ledger-details-modal .ledger-page-btn {
+  border-color: var(--ledger-border);
+  background: var(--ledger-secondary);
+  color: var(--ledger-text);
+  color-scheme: dark;
+  font-size: 12px;
+}
+
+.ledger-details-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.ledger-details-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  min-height: 240px;
+  color: var(--ledger-muted);
+  font-size: 14px;
+}
+
+.ledger-details-state.ledger-error {
+  color: #ef4444;
+}
+
+.ledger-details-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.ledger-details-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--ledger-surface);
+  color: var(--ledger-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ledger-details-table th,
+.ledger-details-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--ledger-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+}
+
+.ledger-details-table th:first-child,
+.ledger-details-table td:first-child {
+  padding-left: 24px;
+}
+
+.ledger-details-table th:nth-child(1) { width: 20%; }
+.ledger-details-table th:nth-child(2) { width: 17%; }
+.ledger-details-table th:nth-child(3) { width: 11%; }
+.ledger-details-table th:nth-child(4) { width: 13%; }
+.ledger-details-table th:nth-child(5) { width: 39%; }
+.ledger-details-table tbody tr:hover { background: var(--ledger-hover); }
+.ledger-details-time { color: var(--ledger-muted); font-size: 12px; }
+.ledger-details-type { font-weight: 500; }
+.ledger-details-task { margin-top: 6px; color: var(--ledger-muted); font-size: 12px; }
+.ledger-details-table .ledger-amount { font-size: 14px; font-variant-numeric: tabular-nums; }
+.ledger-details-modal .ledger-points-type { background: var(--ledger-secondary); color: var(--ledger-muted); }
+.ledger-details-footer { border-top: 1px solid var(--ledger-border); padding-top: 16px; padding-bottom: 16px; }
+.ledger-details-footer .ledger-pagination { margin-top: 0; gap: 8px; }
+
+.ledger-expand-btn:hover,
+.ledger-details-modal button:not(:disabled):hover {
+  filter: brightness(1.2);
+}
+
+.ledger-expand-btn:focus-visible,
+.ledger-details-modal button:focus-visible,
+.ledger-details-modal select:focus-visible {
+  outline: 2px solid #a78bfa;
+  outline-offset: 3px;
+}
+
+:root.canvas-theme-light .ledger-details-modal {
+  --ledger-surface: #fff;
+  --ledger-text: #27272a;
+  --ledger-muted: #62626e;
+  --ledger-border: #e4e4e7;
+  --ledger-secondary: #f4f4f5;
+  --ledger-hover: #fafafa;
+}
+
+:root.canvas-theme-light .ledger-details-modal .ledger-page-size {
+  color-scheme: light;
+}
+
+:root.canvas-theme-light .ledger-details-modal .ledger-amount.positive { color: #059669; }
+:root.canvas-theme-light .ledger-details-modal .ledger-amount.negative { color: #dc2626; }
+:root.canvas-theme-light .profile-panel .ledger-expand-btn { border-color: #e4e4e7; background: #f4f4f5; color: #3f3f46; }
+
+@media (max-width: 640px) {
+  .ledger-details-overlay { padding: 12px; }
+  .ledger-details-modal { height: calc(100dvh - 24px); border-radius: 16px; }
+  .ledger-details-header, .ledger-details-toolbar, .ledger-details-footer { padding: 16px; gap: 10px; }
+  .ledger-details-header h3 { font-size: 18px; }
+  .ledger-details-sort { display: none; }
+  .ledger-details-table thead { display: none; }
+  .ledger-details-table tbody { display: block; padding: 0 16px; }
+  .ledger-details-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--ledger-border); }
+  .ledger-details-table td, .ledger-details-table td:first-child { display: block; padding: 0; border: 0; min-width: 0; }
+  .ledger-details-table td::before { display: block; margin-bottom: 4px; content: attr(data-label); color: var(--ledger-muted); font-size: 11px; font-weight: 400; }
+  .ledger-details-time, .ledger-details-description { grid-column: 1 / -1; }
+  .ledger-details-footer { flex-wrap: wrap; }
+  .ledger-details-footer .ledger-pagination { width: 100%; }
+  .ledger-details-footer .ledger-page-btn { flex: 1; min-width: 0; }
 }
 
 .ledger-controls {
@@ -5380,6 +5854,14 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 }
 
 /* 响应式 */
+@media (max-width: 400px) {
+  .panel-nav .nav-item {
+    gap: 4px;
+    padding: 10px 4px;
+    font-size: 12px;
+  }
+}
+
 @media (max-width: 640px) {
   .purchase-modal-overlay {
     padding: 20px;
@@ -5899,8 +6381,8 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 
 .nav-badge {
   position: absolute;
-  top: 4px;
-  right: 8px;
+  top: -6px;
+  right: -4px;
   background: #EF4444;
   color: white;
   font-size: 10px;
@@ -7740,6 +8222,10 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 
 :root.canvas-theme-light .profile-panel .stat-item {
   background: rgba(0, 0, 0, 0.03) !important;
+}
+
+:root.canvas-theme-light .profile-panel .stat-action:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
 }
 
 :root.canvas-theme-light .profile-panel .stat-icon {

@@ -86,3 +86,10 @@ export function exportVideoTimeline(payload) {
     body: payload
   })
 }
+
+export function separateVideoAudio(payload) {
+  return videoToolFetch('/api/video-tools/audio-separate', {
+    method: 'POST',
+    body: payload
+  })
+}

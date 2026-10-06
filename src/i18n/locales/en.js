@@ -1165,7 +1165,26 @@ export default {
       sora_character_cost_package: 'Sora Character Creation',
       subtitle_erase: 'Subtitle Erase',
       subtitle_erase_package: 'Subtitle Erase',
-      audio_generation: 'Audio Generation'
+      audio_generation: 'Audio Generation',
+      subuser_allocate_out: 'Points Allocated to Subuser',
+      subuser_allocate: 'Allocated Points Received',
+      subuser_return: 'Subuser Points Returned',
+      subuser_revoke: 'Allocated Points Reclaimed',
+      subuser_expire: 'Expired Allocation Reclaimed',
+      subuser_refund: 'Allocated Points Refunded',
+      subuser_cancel_refund: 'Subuser Task Cancellation Refund',
+      admin_grant: 'Admin Points Gift',
+      community_purchase: 'Community Work Purchase',
+      video_recovery_refund: 'Video Recovery Refund',
+      video_duration_refund: 'Video Duration Refund',
+      video_hd_upscale_refund: 'HD Video Upscale Refund',
+      subtitle_erase_refund: 'Subtitle Erase Refund',
+      wan_animate_refund: 'Character Animation Refund',
+      seedance25_edit_refund: 'Video Edit Refund',
+      digital_human_settlement_refund: 'Digital Human Settlement Refund',
+      agent_skill_refund: 'Assistant Skill Refund',
+      agent_skill_recovery_refund: 'Assistant Skill Recovery Refund',
+      other: 'Points Change'
     }
   },
 

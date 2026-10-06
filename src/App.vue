@@ -10,6 +10,7 @@ import NotificationBar from '@/components/NotificationBar.vue'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 import IconSet from '@/components/common/IconSet.vue'
 import { formatPoints } from '@/utils/format'
+import { getPermanentUserPoints } from '@/utils/points'
 import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
 import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
@@ -322,7 +323,7 @@ const isIcpFooterVisible = computed(() => {
               <span class="hidden xl:inline">灵感中心</span>
             </RouterLink>
 
-            <RouterLink v-if="me && !me.is_subuser" to="/subuser" class="nav-link flex items-center"><span class="hidden xl:inline">子用户管理</span><span class="xl:hidden">子用户</span></RouterLink>
+            <RouterLink v-if="me && !me.is_subuser && me.has_subusers" to="/subuser" class="nav-link flex items-center"><span class="hidden xl:inline">子用户管理</span><span class="xl:hidden">子用户</span></RouterLink>
             <!-- 购买套餐入口 -->
             <RouterLink
               v-show="me"
@@ -345,16 +346,15 @@ const isIcpFooterVisible = computed(() => {
             
             <!-- 积分和余额显示 -->
             <div v-if="me" class="ml-0.5 lg:ml-1 flex items-center gap-1 shrink-0 flex-nowrap">
-              <div v-if="me.is_subuser" class="px-2 py-1.5 bg-emerald-600 rounded-full text-white text-sm whitespace-nowrap" title="主用户分配积分">分配 {{ formatPoints(me.subuser_points || 0) }}</div>
               <!-- 套餐积分 -->
               <div class="px-2 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="t('user.packagePointsDesc')">
                 <span class="mr-1">💎</span>
                 {{ formatPoints(me.package_points) }} <span class="hidden xl:inline">{{ t('user.points') }}</span>
               </div>
               <!-- 永久积分 -->
-              <div class="px-2 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="t('user.permanentPointsDesc')">
+              <div class="px-2 py-1.5 bg-gradient-to-r from-purple-500 to-purple-600 rounded-full text-white text-sm font-medium shadow-lg hover:shadow-xl transition-shadow whitespace-nowrap shrink-0" :title="me.is_subuser ? '其中分配 ' + formatPoints(me.subuser_points || 0) + '；分配部分按有效期使用，未消费部分可由主用户回收' : t('user.permanentPointsDesc')">
                 <span class="mr-1">⭐</span>
-                {{ formatPoints(me.points) }} <span class="hidden xl:inline">{{ t('user.points') }}</span>
+                {{ formatPoints(getPermanentUserPoints(me)) }} <span class="hidden xl:inline">{{ t('user.points') }}</span>
               </div>
               <!-- 余额 -->
               <div class="px-2 py-1.5 bg-gradient-to-r from-green-500 to-green-600 rounded-full text-white text-sm font-medium shadow-lg whitespace-nowrap shrink-0">
@@ -525,7 +525,7 @@ const isIcpFooterVisible = computed(() => {
             <span class="align-middle">灵感中心</span>
           </RouterLink>
 
-          <RouterLink v-if="me && !me.is_subuser" to="/subuser" class="block nav-link" @click="isMenuOpen = false">子用户管理</RouterLink>
+          <RouterLink v-if="me && !me.is_subuser && me.has_subusers" to="/subuser" class="block nav-link" @click="isMenuOpen = false">子用户管理</RouterLink>
           <!-- 移动端购买套餐入口 -->
           <RouterLink
             v-if="me"
@@ -562,10 +562,10 @@ const isIcpFooterVisible = computed(() => {
             <div class="px-3 py-2 bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg text-white text-sm font-medium shadow-lg">
               <div class="flex items-center justify-between">
                 <span><span class="mr-1">⭐</span>{{ t('user.permanentPoints') }}</span>
-                <span class="font-bold">{{ formatPoints(me.points) }}</span>
+                <span class="font-bold">{{ formatPoints(getPermanentUserPoints(me)) }}</span>
               </div>
               <div class="text-xs opacity-90 mt-1">
-                {{ t('user.permanentPointsDesc') }}
+                {{ me.is_subuser ? '其中分配 ' + formatPoints(me.subuser_points || 0) + '；分配部分按有效期使用，未消费部分可由主用户回收' : t('user.permanentPointsDesc') }}
               </div>
             </div>
             <div class="px-3 py-2 bg-gradient-to-r from-green-500 to-green-600 rounded-lg text-white text-sm font-medium shadow-lg">

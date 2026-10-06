@@ -2322,7 +2322,7 @@ onUnmounted(() => {
 .asset-panel-container {
   position: fixed;
   top: 40px;
-  left: 90px;
+  left: 0;
   bottom: 40px;
   z-index: 200;
   pointer-events: none; /* 让拖拽可以穿透 */
@@ -3674,7 +3674,7 @@ onUnmounted(() => {
 /* 响应式 */
 @media (max-width: 900px) {
   .asset-panel-container {
-    left: 20px;
+    left: 0;
     right: 20px;
     top: 20px;
     bottom: 20px;
@@ -3682,7 +3682,7 @@ onUnmounted(() => {
   
   .asset-panel {
     width: 100%;
-    max-width: 680px;
+    max-width: min(680px, 100%);
     max-height: calc(100vh - 40px);
   }
   

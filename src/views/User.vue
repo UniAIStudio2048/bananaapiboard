@@ -16,7 +16,8 @@ import { getHistoryImageDisplayUrl, makeHistoryImagePlaceholder } from '@/utils/
 import { getHistoryAspectRatioStyle } from '@/utils/historyAspectRatio'
 import { getHistoryImageDownloadFilename, getHistoryImageShortcutAction } from '@/utils/historyImageDownload'
 import { buildHistoryMediaDetails, enrichHistoryMediaDetails } from '@/utils/historyMediaDetails'
-import { toPointsNumber, getEffectivePackagePoints, getTotalUserPoints } from '@/utils/points'
+import { toPointsNumber, getEffectivePackagePoints, getTotalUserPoints, getPermanentUserPoints } from '@/utils/points'
+import { getPointsLedgerTypeText } from '@/utils/pointsLedger'
 import { normalizePointsSources, getPointsSourcesMaxTotal } from '@/utils/pointsSources'
 import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 
@@ -27,26 +28,7 @@ const route = useRoute()
 
 // 获取交易类型文字（使用i18n翻译）
 const getTransactionTypeText = (type) => {
-  // 尝试从 pointsType 中查找翻译
-  const pointsTypeKey = `pointsType.${type}`
-  const pointsTypeText = t(pointsTypeKey)
-  
-  // 如果找到翻译（不是key本身），返回翻译
-  if (pointsTypeText !== pointsTypeKey) {
-    return pointsTypeText
-  }
-  
-  // 否则尝试从 user.ledgerType 中查找翻译
-  const ledgerTypeKey = `user.ledgerType.${type}`
-  const ledgerTypeText = t(ledgerTypeKey)
-  
-  // 如果找到翻译（不是key本身），返回翻译
-  if (ledgerTypeText !== ledgerTypeKey) {
-    return ledgerTypeText
-  }
-  
-  // 都没找到，返回原始type
-  return type
+  return getPointsLedgerTypeText(type, t)
 }
 
 const token = localStorage.getItem('token')
@@ -2505,7 +2487,6 @@ onUnmounted(() => {
           </div>
         </div>
 
-        <div v-if="me?.is_subuser" class="card p-6 border border-emerald-200 dark:border-emerald-700"><p class="font-semibold">主用户分配积分</p><p class="text-3xl font-bold text-emerald-600 mt-3">{{ formatPoints(me.subuser_points || 0) }}</p><p class="text-sm mt-2">优先用于消费；到期或回收只影响未消费的分配积分。</p></div>
         <!-- 永久积分 -->
         <div class="card p-6 bg-gradient-to-br from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 border-2 border-purple-200 dark:border-purple-700">
           <div class="flex items-center space-x-3 mb-4">
@@ -2514,7 +2495,7 @@ onUnmounted(() => {
             </div>
             <div>
               <p class="text-sm font-medium text-slate-600 dark:text-slate-400">永久积分</p>
-              <p class="text-xs text-purple-600 dark:text-purple-400">永不过期</p>
+              <p class="text-xs text-purple-600 dark:text-purple-400">{{ me.is_subuser ? '含主用户分配积分' : '永不过期' }}</p>
             </div>
           </div>
           
@@ -2530,8 +2511,9 @@ onUnmounted(() => {
             <div class="border-t-2 border-blue-200 dark:border-blue-700 pt-3">
               <div class="flex items-center justify-between">
                 <span class="text-base font-semibold text-blue-700 dark:text-blue-300 flex-shrink-0">当前余额</span>
-                <span class="text-3xl font-bold text-blue-600 dark:text-blue-400 truncate min-w-0 ml-2 text-right" :title="formatPoints(toPointsNumber(me?.points))">{{ formatPoints(toPointsNumber(me?.points)) }}</span>
+                <span class="text-3xl font-bold text-blue-600 dark:text-blue-400 truncate min-w-0 ml-2 text-right" :title="formatPoints(getPermanentUserPoints(me))">{{ formatPoints(getPermanentUserPoints(me)) }}</span>
               </div>
+              <p v-if="me.is_subuser" class="text-xs text-slate-500 dark:text-slate-400 mt-2">其中分配 {{ formatPoints(me.subuser_points || 0) }}，按分配有效期使用；未消费部分可由主用户回收。</p>
             </div>
           </div>
         </div>
@@ -3544,8 +3526,9 @@ onUnmounted(() => {
               <div class="space-y-3 min-w-0">
                 <div class="flex justify-between items-center gap-2 min-w-0">
                   <span class="text-sm text-blue-700 dark:text-blue-300 flex-shrink-0">当前余额</span>
-                  <span class="text-2xl font-bold text-blue-900 dark:text-blue-100 truncate min-w-0 text-right" :title="formatPoints(toPointsNumber(me?.points))">{{ formatPoints(toPointsNumber(me?.points)) }}</span>
+                  <span class="text-2xl font-bold text-blue-900 dark:text-blue-100 truncate min-w-0 text-right" :title="formatPoints(getPermanentUserPoints(me))">{{ formatPoints(getPermanentUserPoints(me)) }}</span>
                 </div>
+                <p v-if="me.is_subuser" class="text-xs text-blue-700 dark:text-blue-300">其中分配 {{ formatPoints(me.subuser_points || 0) }}，按分配有效期使用；未消费部分可由主用户回收。</p>
                 <div class="flex justify-between items-center gap-2 min-w-0">
                   <span class="text-sm text-blue-700 dark:text-blue-300 flex-shrink-0">累计获得</span>
                   <span class="text-lg font-semibold text-green-600 dark:text-green-400 truncate min-w-0 text-right" :title="'+' + formatPoints(toPointsNumber(pointsStats.permanent.earned))">+{{ formatPoints(toPointsNumber(pointsStats.permanent.earned)) }}</span>
@@ -4396,6 +4379,7 @@ onUnmounted(() => {
         <div class="p-6">
           <!-- 个人资料 -->
           <div v-if="settingsTab === 'profile'" class="space-y-4">
+            <RouterLink v-if="me && !me.is_subuser" to="/subuser" class="block text-primary-600 hover:text-primary-700">创建子用户</RouterLink>
             <div>
               <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                 用户名

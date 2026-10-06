@@ -278,6 +278,7 @@ const skillsMarketAnchor = ref(null)
 
 // 套餐购买弹窗
 const showPackageModal = ref(false)
+const packageModalRef = ref(null)
 
 // 工单系统
 const showTicketDrawer = ref(false)
@@ -582,6 +583,7 @@ const imageToolbarPosition = computed(() => {
 
 // 提供用户信息给子组件
 provide('userInfo', me)
+provide('openAccountAction', openAccountAction)
 
 // 提供交互模式给子组件
 provide('interactionMode', interactionMode)
@@ -3500,6 +3502,13 @@ async function saveCanvasThemePreference(theme) {
   }
 }
 
+// 个人中心快捷入口复用购物车内的功能卡片
+function openAccountAction(action) {
+  if (action === 'convert') packageModalRef.value?.openConvertModal()
+  else if (action === 'recharge') packageModalRef.value?.openRechargeModal()
+  else openPackageModal()
+}
+
 // 打开套餐购买弹窗
 function openPackageModal() {
   showPackageModal.value = true
@@ -3980,6 +3989,9 @@ onUnmounted(() => {
       
       <!-- 左侧工具栏 -->
       <CanvasToolbar
+        :class="{ 'is-asset-panel-open': showAssetPanel }"
+        :aria-hidden="showAssetPanel || cleanCanvasMode"
+        :inert="showAssetPanel || cleanCanvasMode"
         @open-save-dialog="openSaveDialog"
         @open-share="openShareWorkflow"
       />
@@ -4564,6 +4576,7 @@ onUnmounted(() => {
 
     <!-- 套餐购买弹窗 -->
     <PackageModal
+      ref="packageModalRef"
       :visible="showPackageModal"
       @close="closePackageModal"
       @purchase-success="handlePurchaseSuccess"
@@ -4682,6 +4695,7 @@ onUnmounted(() => {
   transition: translate 460ms cubic-bezier(0.22, 1, 0.36, 1), opacity 360ms ease, filter 360ms ease, visibility 0s, right 250ms ease, transform 300ms ease, box-shadow 300ms ease;
 }
 
+.canvas-container > .canvas-toolbar.is-asset-panel-open,
 .canvas-page.is-clean-canvas .mode-switch-wrapper,
 .canvas-page.is-clean-canvas .canvas-container > :is(
   .canvas-team-share-banner,
@@ -4749,6 +4763,7 @@ onUnmounted(() => {
   ),
   .canvas-container :deep(.canvas-workflow-minimap),
   .canvas-container :deep(.canvas-minimap-overview),
+  .canvas-container > .canvas-toolbar.is-asset-panel-open,
   .canvas-page.is-clean-canvas .mode-switch-wrapper,
   .canvas-page.is-clean-canvas .canvas-container > :is(
     .canvas-team-share-banner,

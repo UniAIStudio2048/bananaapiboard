@@ -110,7 +110,7 @@ import {
   WAN_MODES
 } from '@/utils/videoGenerationMode'
 import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
-import { createSubtitleEraseTask, exportVideoTimeline, getSubtitleEraseConfig, getSubtitleEraseTask } from '@/api/canvas/video-tools'
+import { createSubtitleEraseTask, exportVideoTimeline, getSubtitleEraseConfig, getSubtitleEraseTask, separateVideoAudio } from '@/api/canvas/video-tools'
 import { smartDownload } from '@/api/client'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
 import CanvasNodeImage from '@/components/canvas/CanvasNodeImage.vue'
@@ -8829,6 +8829,65 @@ async function parseHDJsonResponse(response, fallbackMessage) {
   throw new Error(trimmed || fallbackMessage)
 }
 
+const isAudioSeparating = ref(false)
+
+async function handleToolbarAudioSeparate() {
+  if (isAudioSeparating.value) return
+  isAudioSeparating.value = true
+  try {
+    const tab = canvasStore.getCurrentTab?.()
+    const source = canvasStore.nodes.find(node => node.id === props.id)
+    if (!tab?.id || !source) throw new Error('当前画布不可用')
+    const tabId = tab.id
+    const position = { ...source.position }
+    const width = Number(source.data?.width) || nodeWidth.value || 420
+    const height = Number(source.data?.height) || nodeHeight.value || 280
+    let videoUrl = props.data.output?.url || normalizedVideoUrl.value
+    if (!videoUrl) throw new Error('没有可处理的视频')
+    if (/^(blob:|data:)/.test(videoUrl)) {
+      const blob = await (await fetch(videoUrl)).blob()
+      const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
+      if (!uploaded.url) throw new Error('视频上传失败')
+      videoUrl = uploaded.url
+    }
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    const context = tab.workflowId ? { workflowId: tab.workflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
+    if (canvasStore.getCurrentTab?.()?.id !== tabId) throw new Error('画布已切换，请重新操作')
+    const result = await separateVideoAudio({ videoUrl })
+    if (!result?.audioUrl || !result?.videoUrl) throw new Error('音频分离未返回完整结果')
+    const x = position.x + width + 120
+    const audio = {
+      id: `audio_split_${globalThis.crypto.randomUUID()}`, type: 'audio', position: { x, y: position.y },
+      data: {
+        label: '分离音频', title: '分离音频', status: 'success', width: 420, height: 280,
+        audioUrl: result.audioUrl, output: { type: 'audio', url: result.audioUrl }, duration: result.duration
+      }
+    }
+    const video = {
+      id: `video_split_${globalThis.crypto.randomUUID()}`, type: 'video', position: { x, y: position.y + 280 + 100 },
+      data: {
+        label: '无声视频', title: '无声视频', status: 'success', width, height,
+        output: { type: 'video', url: result.videoUrl }, duration: result.duration,
+        videoWidth: result.width, videoHeight: result.height
+      }
+    }
+    await postWorkflowOps(context.workflowId, [
+      { op: 'add', target: 'node', payload: audio },
+      { op: 'add', target: 'node', payload: video }
+    ])
+    if (canvasStore.getCurrentTab?.()?.id === tabId) {
+      canvasStore.closeNodeSelector()
+      canvasStore.addNode(audio)
+      canvasStore.addNode(video)
+    }
+    showToast('音频分离成功', 'success')
+  } catch (error) {
+    showToast(error.message || '音频分离失败', 'error')
+  } finally {
+    isAudioSeparating.value = false
+  }
+}
+
 const isDepthProcessing = ref(false)
 const depthPriceHint = ref('视频深度提取')
 async function refreshDepthPriceHint() {
@@ -9658,6 +9717,16 @@ function handleToolbarPreview() {
           <path d="M16 3l2 2-2 2" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
         <span>角色创建</span>
+      </button>
+      <button class="toolbar-btn" title="音频分离" :disabled="isAudioSeparating" :aria-busy="isAudioSeparating" @mousedown.stop.prevent @click.stop.prevent="handleToolbarAudioSeparate">
+        <svg v-if="!isAudioSeparating" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M9 18V5l12-2v13M9 9l12-2" stroke-linecap="round" stroke-linejoin="round"/>
+          <ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="18" cy="16" rx="3" ry="3"/>
+        </svg>
+        <svg v-else class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10" stroke-linecap="round"/>
+        </svg>
+        <span>{{ isAudioSeparating ? '分离中...' : '音频分离' }}</span>
       </button>
       <button class="toolbar-btn" title="关键帧" @mousedown.stop.prevent="handleToolbarKeyframe" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">

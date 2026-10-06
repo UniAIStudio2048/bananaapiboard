@@ -10,6 +10,11 @@ export function getEffectivePackagePoints(user) {
   return toPointsNumber(user.package_points)
 }
 
+// 永久积分卡片包含当前可用的分配余额；账务来源仍分别保存。
+export function getPermanentUserPoints(user) {
+  return toPointsNumber(user?.points) + toPointsNumber(user?.subuser_points)
+}
+
 export function getTotalUserPoints(user) {
   if (!user) return 0
   return getEffectivePackagePoints(user) + toPointsNumber(user.points) + toPointsNumber(user.subuser_points)

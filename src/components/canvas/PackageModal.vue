@@ -225,6 +225,7 @@ function closePurchaseModal() {
 
 // 打开充值弹窗
 async function openRechargeModal() {
+  if (!props.visible) await loadPackages()
   showRechargeModal.value = true
   rechargeAmount.value = null
   customAmount.value = ''
@@ -392,7 +393,8 @@ const convertCalculatedPoints = computed(() => {
   return Math.floor(yuan * convertExchangeRate.value)
 })
 
-function openConvertModal() {
+async function openConvertModal() {
+  if (!props.visible) await loadPackages()
   convertAmount.value = ''
   convertError.value = ''
   convertSuccess.value = ''
@@ -658,12 +660,14 @@ watch(() => props.visible, (newVal) => {
     loadPackages()
   }
 })
+
+defineExpose({ openConvertModal, openRechargeModal })
 </script>
 
 <template>
   <Transition name="modal-fade">
-    <div v-if="visible" class="package-modal-overlay" @click.self="close">
-      <div class="package-modal-container">
+    <div v-if="visible || showConvertModal || showRechargeModal" class="package-modal-overlay" :class="{ 'account-action-overlay': !visible }" @click.self="close">
+      <div v-if="visible" class="package-modal-container">
         <!-- 头部 -->
         <div class="package-modal-header">
           <div class="header-left">
@@ -1423,6 +1427,11 @@ watch(() => props.visible, (newVal) => {
 }
 
 /* 弹窗容器 */
+.package-modal-overlay.account-action-overlay {
+  background: transparent;
+  backdrop-filter: none;
+}
+
 .package-modal-container {
   background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
   border: 1px solid #2a2a2a;
