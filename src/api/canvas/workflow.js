@@ -108,6 +108,7 @@ export async function saveWorkflow(workflowData) {
     throw new Error(data.error || '保存失败')
   }
   
+  await syncSavedWorkflowVersions(data)
   return data
 }
 
