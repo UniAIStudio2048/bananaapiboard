@@ -3126,16 +3126,18 @@ const videoToolInitialSource = computed(() => {
     id: props.id,
     name: props.data.title || props.data.label || '视频',
     url,
+    thumbnailUrl: videoPosterUrl.value,
     duration: Number(props.data.duration) || Number(props.data.output?.duration) || 10
   }
 })
 const canvasVideoToolSources = computed(() => {
   const sources = canvasStore.nodes
-    .filter(node => node?.data?.output?.url)
+    .filter(node => node?.data?.output?.url && (node.type === 'video' || node.type === 'video-input' || node.data.output.type === 'video'))
     .map(node => ({
       id: node.id,
       name: node.data.title || node.data.label || '视频',
       url: node.data.output.url,
+      thumbnailUrl: node.data.output.thumbnailUrl || node.data.output.thumbnail_url || node.data.output.cover_url || node.data.output.coverUrl || node.data.thumbnailUrl || node.data.thumbnail_url || node.data.cover_url || node.data.coverUrl,
       duration: Number(node.data.duration) || Number(node.data.output?.duration) || 10
     }))
   const current = videoToolInitialSource.value

@@ -117,11 +117,11 @@ onMounted(load)
 
 <template>
   <section class="subuser-panel" :class="{ 'admin-panel': parentId }">
-    <header class="heading"><div><h1>子用户管理</h1><p>为子用户分配积分，管理账号和使用等级。</p></div><button class="primary" :disabled="busy || forbidden || status === 'deleted'" @click="open('create')">创建子用户</button></header>
+    <header class="heading"><div><h1>子用户管理</h1><p>为子用户分配积分，管理账号和使用等级。</p></div><button class="primary" :disabled="loading || busy || forbidden || summary.can_create === false || status === 'deleted'" @click="open('create')">创建子用户</button></header>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
     <p v-if="notice" class="notice" role="status">{{ notice }}</p>
     <div class="overview">
-      <div><span>子用户</span><strong>{{ summary.current_count || 0 }}</strong><small>累计创建 {{ summary.cumulative_count || 0 }}</small></div>
+      <div><span>子用户</span><strong>{{ summary.current_count || 0 }}</strong><small>累计创建 {{ summary.cumulative_count || 0 }}</small><small v-if="summary.effective_limit != null">上限 {{ summary.effective_limit === -1 ? '不限' : summary.effective_limit }}{{ summary.can_create === false ? ' · 已达上限' : '' }}</small></div>
       <div><span>可分配永久积分</span><strong>{{ points(summary.permanent_points) }}</strong><small>分配时从主用户扣除</small></div>
       <div><span>分配剩余额</span><strong>{{ points(summary.remaining) }}</strong><small>仅收回未消费部分</small></div>
       <div><span>净消费积分</span><strong>{{ points(summary.consumed) }}</strong><small>已扣除退还的积分</small></div>

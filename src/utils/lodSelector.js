@@ -3,7 +3,7 @@
  *
  * 策略：
  *   - blob/data URI 由调用方处理
- *   - preferLowQuality（pan/zoom 移动中）→ 最小档位 384，保证滑动流畅
+ *   - preferLowQuality（pan/zoom 移动中）→ 最小档位 128，保证滑动流畅
  *   - displayWidth = nodeWidth × zoom × devicePixelRatio
  *   - displayWidth >= ORIGINAL_THRESHOLD（1920）→ 返回 0，表示用原图（避免模糊）
  *   - 其余按 PREVIEW_WIDTHS 选最小覆盖档位
@@ -13,8 +13,8 @@
  *   - 0：直接使用原图
  */
 
-export const MIN_CANVAS_PREVIEW_WIDTH = 384
-export const PREVIEW_WIDTHS = Object.freeze([384, 768, 1280, 1920])
+export const MIN_CANVAS_PREVIEW_WIDTH = 128
+export const PREVIEW_WIDTHS = Object.freeze([128, 192, 256, 384, 768, 1280, 1920])
 export const ORIGINAL_THRESHOLD = 1920
 
 export function selectLodWidth({ zoom = 1, nodeWidth = 400, devicePixelRatio = 1, preferLowQuality = false } = {}) {

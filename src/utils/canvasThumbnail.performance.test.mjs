@@ -10,14 +10,14 @@ const lodSource = readFileSync(join(__dirname, 'lodSelector.js'), 'utf8')
 // LOD 档位策略迁移至 lodSelector.js（纯函数，可独立单元测试）
 assert.match(
   lodSource,
-  /export const MIN_CANVAS_PREVIEW_WIDTH = 384/,
-  'Canvas thumbnails should start at 384 tier for large boards (lots of nodes scenario)'
+  /export const MIN_CANVAS_PREVIEW_WIDTH = 128/,
+  'Canvas thumbnails should start at 128 tier for large board overviews'
 )
 
 assert.match(
   lodSource,
-  /export const PREVIEW_WIDTHS = Object\.freeze\(\[384, 768, 1280, 1920\]\)/,
-  'LOD tiers must cover from very small (384) up to near-screen-size (1920) for clarity'
+  /export const PREVIEW_WIDTHS = Object\.freeze\(\[128, 192, 256, 384, 768, 1280, 1920\]\)/,
+  'LOD tiers must cover small overview previews up to near-screen-size (1920)'
 )
 
 assert.match(

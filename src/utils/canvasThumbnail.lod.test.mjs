@@ -4,8 +4,8 @@ import { selectLodWidth, PREVIEW_WIDTHS, ORIGINAL_THRESHOLD, MIN_CANVAS_PREVIEW_
 // 1) 画布缩小，节点很小（远视图）→ 最小档位
 assert.equal(
   selectLodWidth({ zoom: 0.3, nodeWidth: 380, devicePixelRatio: 1 }),
-  384,
-  'displayWidth=114 → 384 档位 (画布很多节点时，压缩力度大没事)'
+  128,
+  'displayWidth=114 → 128 档位'
 )
 
 // 2) 节点中等大小 → 768 档位
@@ -57,7 +57,7 @@ assert.equal(
 assert.equal(
   selectLodWidth({ zoom: 5, nodeWidth: 400, preferLowQuality: true }),
   MIN_CANVAS_PREVIEW_WIDTH,
-  'preferLowQuality 强制 384 档位用作低质量占位'
+  'preferLowQuality 强制 128 档位用作低质量占位'
 )
 
 // 8) 边界值：恰好覆盖某档位
@@ -70,8 +70,8 @@ assert.equal(
 // 9) 档位常量校验：确保未来不会被无意修改
 assert.deepEqual(
   PREVIEW_WIDTHS,
-  [384, 768, 1280, 1920],
-  'LOD 档位策略：384/768/1280/1920，超出走原图'
+  [128, 192, 256, 384, 768, 1280, 1920],
+  'LOD 档位策略：128/192/256/384/768/1280/1920，超出走原图'
 )
 assert.equal(ORIGINAL_THRESHOLD, 1920, '节点屏幕显示宽度阈值 1920')
 

@@ -86,7 +86,16 @@ export function getHighQualityCanvasPreviewUrl(url, opts = {}) {
   const targetWidth = selectLodWidth(opts)
   // selectLodWidth 返回 0 表示节点接近屏幕大小，直接用原图避免模糊
   if (targetWidth === 0) return url
-  return getCanvasThumbnailUrl(url, targetWidth)
+  return getCanvasWebpThumbnailUrl(url, targetWidth)
+}
+
+/** 画布显示专用：云端预览使用 WebP，保留 GIF 动画和已有图片处理参数。 */
+export function getCanvasWebpThumbnailUrl(url, width = 160) {
+  if (!url || /\.gif(?:[?#]|$)/i.test(url)) return url
+  const thumbnail = getCanvasThumbnailUrl(url, width)
+  if (thumbnail === url || url.includes('/api/images/file/')) return thumbnail
+  if (isQiniuCdn(url)) return `${thumbnail}/format/webp/q/80`
+  return `${thumbnail}/format/webp/quality/80`
 }
 
 /**

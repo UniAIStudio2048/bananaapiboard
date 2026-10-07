@@ -29,7 +29,7 @@ import {
   buildCanvasDirectory,
   isCanvasDirectoryMoveAllowed
 } from '@/utils/canvasDirectory'
-import { getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
+import { getCanvasWebpThumbnailUrl, getVideoPosterUrl, toSameOriginUrl } from '@/utils/canvasThumbnail'
 import AssetHoverPreview from './AssetHoverPreview.vue'
 
 const props = defineProps({
@@ -69,6 +69,7 @@ const editingValue = ref('')
 const draggedNodeId = ref(null)
 const dropTargetId = ref(null)
 const failedPreviewKeys = ref(new Set())
+const originalPreviewKeys = ref(new Set())
 const hoverAsset = ref(null)
 const hoverAnchorRect = ref(null)
 const showHoverPreview = ref(false)
@@ -113,6 +114,7 @@ watch(() => props.workflowKey, () => {
   draggedNodeId.value = null
   dropTargetId.value = null
   failedPreviewKeys.value = new Set()
+  originalPreviewKeys.value = new Set()
   closeHoverPreview()
 })
 
@@ -186,15 +188,26 @@ function getPreviewKey(row) {
 function getRowPreviewUrl(row) {
   if (!row?.previewUrl || failedPreviewKeys.value.has(getPreviewKey(row))) return ''
   const previewUrl = toSameOriginUrl(row.previewUrl)
-  if (row.mediaKind === 'image') return previewUrl
+  if (row.mediaKind === 'image') {
+    if (originalPreviewKeys.value.has(getPreviewKey(row))) return toSameOriginUrl(row.mediaUrl || row.previewUrl)
+    // 本地缩略接口输出 JPEG，目录保留原图以免透明图片失去 alpha。
+    if (previewUrl.includes('/api/images/file/')) return previewUrl
+    return getCanvasWebpThumbnailUrl(previewUrl, 160)
+  }
   if (row.mediaKind !== 'video') return ''
   if (isImagePreviewUrl(previewUrl)) return previewUrl
   return getVideoPosterUrl(previewUrl, 160) || ''
 }
 
 function handleRowPreviewError(row) {
+  const key = getPreviewKey(row)
+  const originalUrl = toSameOriginUrl(row.mediaUrl || row.previewUrl)
+  if (row.mediaKind === 'image' && !originalPreviewKeys.value.has(key) && getRowPreviewUrl(row) !== originalUrl) {
+    originalPreviewKeys.value = new Set([...originalPreviewKeys.value, key])
+    return
+  }
   const next = new Set(failedPreviewKeys.value)
-  next.add(getPreviewKey(row))
+  next.add(key)
   failedPreviewKeys.value = next
 }
 

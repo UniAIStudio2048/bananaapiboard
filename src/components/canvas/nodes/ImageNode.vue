@@ -1932,31 +1932,13 @@ const seedanceQuickBadgeText = computed(() => seedanceQuickAssetStatus.value ===
 // 全景 VR 预览状态
 const showPanoramaPreview = ref(false)
 const isPanoramaCandidate = ref(false)
-let panoramaDimensionRequestId = 0
-
-async function detectPanoramaImage(url) {
-  const requestId = ++panoramaDimensionRequestId
-  isPanoramaCandidate.value = false
-  if (!url) return
-
-  try {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    const loadUrl = getSmartImageUrl(url)
-    await new Promise((resolve, reject) => {
-      img.onload = resolve
-      img.onerror = reject
-      img.src = loadUrl
-    })
-    if (requestId !== panoramaDimensionRequestId) return
+function detectPanoramaImage(event, imageUrl) {
+  // 复用已显示预览的尺寸，不为全景资格检测额外下载原图。
+  const img = event?.target
+  if (img && imageUrl === currentImageUrl.value) {
     isPanoramaCandidate.value = isPanoramaVrSupportedRatio(img.naturalWidth, img.naturalHeight)
-    img.src = ''
-  } catch (error) {
-    if (requestId === panoramaDimensionRequestId) {
-      console.warn('[ImageNode] 全景图尺寸检测失败:', error)
-      isPanoramaCandidate.value = false
-    }
   }
+  scheduleNodeInternalsUpdate()
 }
 
 function openPanoramaPreview() {
@@ -4159,9 +4141,9 @@ watch(() => sourceImages.value[0], () => {
   sourceImageLoadFailed.value = false
 })
 
-watch(currentImageUrl, (url) => {
-  detectPanoramaImage(url)
-}, { immediate: true })
+watch(currentImageUrl, () => {
+  isPanoramaCandidate.value = false
+})
 
 const VIDEO_NODE_TYPES = [
   'video', 'video-input', 'video-gen',
@@ -8015,7 +7997,7 @@ async function handleDrop(event) {
               decoding="async"
               fetchpriority="low"
               @error="handleSourceImageError"
-              @load="scheduleNodeInternalsUpdate"
+              @load="detectPanoramaImage($event, sourceImages[0])"
             />
             <div v-else class="image-placeholder" />
           </div>
@@ -8112,7 +8094,7 @@ async function handleDrop(event) {
                   fetchpriority="low"
                   :auto-fallback="false"
                   @error="handleOutputImageError($event, img, index)"
-                  @load="scheduleNodeInternalsUpdate"
+                  @load="detectPanoramaImage($event, img)"
                 />
                 <div v-else class="image-placeholder preview-image" />
               </template>

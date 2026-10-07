@@ -10,7 +10,7 @@
       <button v-for="source in normalizedCanvasVideos" :key="source.id" type="button" class="video-source-rail__item" draggable="true" @dragstart="handleDragStart($event, source)" @click="$emit('add-source', source)">
         <span class="video-source-rail__thumb">
           <img v-if="source.thumbnailUrl" :src="displayMediaUrl(source.thumbnailUrl)" alt="" loading="lazy" />
-          <video v-else :src="displayMediaUrl(source.url) + '#t=0.1'" muted playsinline preload="metadata" />
+          <span v-else class="video-source-rail__placeholder" aria-hidden="true">▶</span>
         </span>
         <span class="video-source-rail__name">{{ source.name }}</span>
       </button>
@@ -29,7 +29,7 @@
       <button v-for="source in historyVideos" :key="source.id" type="button" class="video-source-rail__item" draggable="true" @dragstart="handleDragStart($event, source)" @click="$emit('add-source', source)">
         <span class="video-source-rail__thumb">
           <img v-if="source.thumbnailUrl" :src="displayMediaUrl(source.thumbnailUrl)" alt="" loading="lazy" />
-          <video v-else :src="displayMediaUrl(source.url) + '#t=0.1'" muted playsinline preload="metadata" />
+          <span v-else class="video-source-rail__placeholder" aria-hidden="true">▶</span>
         </span>
         <span class="video-source-rail__name">{{ source.name }}</span>
       </button>
@@ -64,19 +64,10 @@ const historyVideos = ref([])
 const historyLoading = ref(false)
 const uploadStatus = ref('选择本地视频上传')
 
-const canvasVideosList = ref([])
-
-watch(() => props.canvasVideos, async (videos) => {
-  const sources = videos.map((item, index) => normalizeSource(item, `canvas-${index}`)).filter(Boolean)
-  canvasVideosList.value = sources
-  for (const s of sources) {
-    if (s._needsProbe) {
-      await probeAndUpdateDuration(s)
-    }
-  }
-}, { immediate: true })
-
-const normalizedCanvasVideos = computed(() => canvasVideosList.value)
+// 素材列表只展示封面；时长由选中后的主预览确认，避免占满媒体连接。
+const normalizedCanvasVideos = computed(() => props.canvasVideos
+  .map((item, index) => normalizeSource(item, `canvas-${index}`))
+  .filter(Boolean))
 
 function displayMediaUrl(url) {
   return getMediaUrl(url)
@@ -119,15 +110,8 @@ function normalizeSource(item, fallbackId) {
     name: item.name || item.title || item.prompt || `视频 ${fallbackId}`,
     url,
     thumbnailUrl: item.thumbnailUrl || item.thumbnail_url || item.cover_url || item.output?.thumbnailUrl || item.output?.thumbnail_url || item.data?.output?.thumbnailUrl || item.data?.output?.thumbnail_url,
-    duration: metaDuration || 10,
-    _needsProbe: !metaDuration
+    duration: metaDuration || 10
   }
-}
-
-async function probeAndUpdateDuration(source) {
-  if (!source?._needsProbe && source?.duration > 0) return
-  const dur = await probeVideoDuration(source.url)
-  if (dur > 0) source.duration = dur
 }
 
 async function handleUpload(event) {
@@ -182,11 +166,6 @@ async function loadHistoryVideos() {
     const result = await getHistory({ type: 'video', limit: 50 })
     const sources = (result.history || []).map((item, index) => normalizeSource(item, `history-${index}`)).filter(Boolean)
     historyVideos.value = sources
-    for (const s of sources) {
-      if (s._needsProbe) {
-        await probeAndUpdateDuration(s)
-      }
-    }
   } finally {
     historyLoading.value = false
   }
@@ -281,12 +260,20 @@ watch(activeTab, tab => {
   background: #050505;
 }
 
-.video-source-rail__thumb img,
-.video-source-rail__thumb video {
+.video-source-rail__thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.video-source-rail__placeholder {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: #71717a;
+  font-size: 24px;
 }
 
 .video-source-rail__name {
