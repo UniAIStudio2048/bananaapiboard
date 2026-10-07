@@ -31,25 +31,16 @@ export async function getStorageQuota() {
     credentials: 'include',
     headers: getAuthHeaders()
   })
-  
+
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.error || '获取配额失败')
   }
-  
+
   return response.json()
 }
 
-/**
- * 保存工作流（接受已序列化的 JSON 字符串，避免主线程重复 stringify）
- *
- * 主要给 Web Worker 化的 autosave 路径使用：autoSave 在 worker 内做完
- * JSON.stringify 后直接传字符串过来，省一次同步序列化。
- */
-export async function saveWorkflowRaw(jsonBody) {
-  if (typeof jsonBody !== 'string') {
-    throw new TypeError('saveWorkflowRaw 要求 jsonBody 为字符串')
-  }
+async function requestWorkflowSave(jsonBody) {
   const response = await fetch(getApiUrl(`/api/canvas/workflows`), {
     method: 'POST',
     credentials: 'include',
@@ -69,7 +60,50 @@ export async function saveWorkflowRaw(jsonBody) {
   } catch (e) {
     throw new Error(`服务器响应格式错误: ${text.substring(0, 100)}`)
   }
-  if (!response.ok) throw new Error(data.error || '保存失败')
+  if (!response.ok) {
+    const err = new Error(data.error || '保存失败')
+    err.code = data.code
+    err.status = response.status
+    err.nodeVersions = data.node_versions || null
+    throw err
+  }
+  return data
+}
+
+/**
+ * 保存请求统一入口：version_conflict 时用服务端返回的当前节点版本
+ * 刷新保存基线并重试一次（视频完成回写等服务端版本提升会让本地基线过期）。
+ */
+async function saveWorkflowWithConflictRetry(jsonBody) {
+  try {
+    return await requestWorkflowSave(jsonBody)
+  } catch (error) {
+    if (error.code === 'version_conflict' && error.nodeVersions) {
+      await syncSavedWorkflowVersions({ workflow: { node_versions: error.nodeVersions } })
+      let merged
+      try {
+        merged = JSON.parse(jsonBody)
+      } catch (parseError) {
+        throw error
+      }
+      merged.baseNodeVersions = error.nodeVersions
+      return await requestWorkflowSave(JSON.stringify(merged))
+    }
+    throw error
+  }
+}
+
+/**
+ * 保存工作流（接受已序列化的 JSON 字符串，避免主线程重复 stringify）
+ *
+ * 主要给 Web Worker 化的 autosave 路径使用：autoSave 在 worker 内做完
+ * JSON.stringify 后直接传字符串过来，省一次同步序列化。
+ */
+export async function saveWorkflowRaw(jsonBody) {
+  if (typeof jsonBody !== 'string') {
+    throw new TypeError('saveWorkflowRaw 要求 jsonBody 为字符串')
+  }
+  const data = await saveWorkflowWithConflictRetry(jsonBody)
   await syncSavedWorkflowVersions(data)
   return data
 }
@@ -78,36 +112,7 @@ export async function saveWorkflowRaw(jsonBody) {
  * 保存工作流
  */
 export async function saveWorkflow(workflowData) {
-  const response = await fetch(getApiUrl(`/api/canvas/workflows`), {
-    method: 'POST',
-    credentials: 'include',
-    headers: getAuthHeaders(),
-    body: JSON.stringify(workflowData)
-  })
-  
-  // 获取响应文本
-  const text = await response.text()
-  
-  // 如果响应为空
-  if (!text) {
-    if (!response.ok) {
-      throw new Error(`保存失败 (HTTP ${response.status})`)
-    }
-    return { success: true }
-  }
-  
-  // 解析JSON
-  let data
-  try {
-    data = JSON.parse(text)
-  } catch (e) {
-    throw new Error(`服务器响应格式错误: ${text.substring(0, 100)}`)
-  }
-  
-  if (!response.ok) {
-    throw new Error(data.error || '保存失败')
-  }
-  
+  const data = await saveWorkflowWithConflictRetry(JSON.stringify(workflowData))
   await syncSavedWorkflowVersions(data)
   return data
 }
