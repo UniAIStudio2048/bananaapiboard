@@ -3,6 +3,7 @@ import { openCheckout } from '@/utils/openCheckout'
 import { ref, computed, onMounted, watch } from 'vue'
 import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
+import { getPackageDiscounts } from '@/utils/packageDiscounts'
 import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 import { useI18n } from '@/i18n'
 
@@ -839,6 +840,12 @@ defineExpose({ openConvertModal, openRechargeModal })
                     <polyline points="20 6 9 17 4 12"/>
                   </svg>
                   <span>有效期: {{ pkg.duration_days }}天</span>
+                </div>
+                <div v-for="discount in getPackageDiscounts(pkg)" :key="discount.type" class="feature-item">
+                  <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                  <span>{{ discount.text }}</span>
                 </div>
               </div>
 

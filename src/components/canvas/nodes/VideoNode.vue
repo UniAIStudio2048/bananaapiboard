@@ -3244,7 +3244,7 @@ const contentStyle = computed(() => {
   }
 })
 
-// 视频容器样式（优先使用选择的比例；未选择时使用视频实际比例）
+// 已有视频按实际比例预览；选择的比例只用于下一次生成。
 const videoWrapperStyle = computed(() => {
   const configuredRatio = availableAspectRatios.value.length > 0
     ? props.data.aspectRatio || selectedAspectRatio.value
@@ -3254,7 +3254,7 @@ const videoWrapperStyle = computed(() => {
     : detectedVideoDimensions.value
       ? `${detectedVideoDimensions.value.width}:${detectedVideoDimensions.value.height}`
       : ''
-  const ratio = configuredRatio || detectedRatio || '16:9'
+  const ratio = detectedRatio || configuredRatio || '16:9'
   const parsed = parseAspectRatioValue(ratio)
   return parsed
     ? { aspectRatio: `${parsed.width} / ${parsed.height}` }
@@ -6110,7 +6110,7 @@ function getCurrentNodeDisplayHeight(currentNode) {
   const configuredRatio = availableAspectRatios.value.length > 0
     ? currentNode.data?.aspectRatio || selectedAspectRatio.value
     : ''
-  const ratio = parseAspectRatioValue(configuredRatio || detectedRatio || '16:9')
+  const ratio = parseAspectRatioValue(detectedRatio || configuredRatio || '16:9')
   const ratioMediaHeight = ratio
     ? displayWidth * (ratio.height / ratio.width)
     : 0
@@ -8304,8 +8304,28 @@ function applyDetectedVideoDimensions(width, height) {
   if (Number(props.data.videoWidth) !== videoWidth) updates.videoWidth = videoWidth
   if (Number(props.data.videoHeight) !== videoHeight) updates.videoHeight = videoHeight
 
-  // 未选择比例时，以视频实际尺寸作为节点比例，避免竖屏视频被放进 16:9 容器产生黑边。
-  if (!configuredRatio) {
+  // 导入时只识别一次，后续加载不能覆盖用户为下一次生成选择的比例。
+  if (props.data.detectAspectRatio) {
+    let closestRatio = null
+    let closestDistance = Infinity
+    for (const option of availableAspectRatios.value) {
+      const parsed = parseAspectRatioValue(option.value)
+      if (!parsed) continue
+      const distance = Math.abs(parsed.width / parsed.height - videoWidth / videoHeight)
+      if (distance < closestDistance) {
+        closestRatio = option.value
+        closestDistance = distance
+      }
+    }
+    if (closestRatio) {
+      selectedAspectRatio.value = closestRatio
+      updates.aspectRatio = closestRatio
+    }
+    updates.detectAspectRatio = false
+  }
+
+  // 导入节点和无比例选项的节点按实际尺寸调整；预览不受生成比例限制。
+  if (props.data.detectAspectRatio || !configuredRatio) {
     const targetWidth = videoHeight > videoWidth ? 280 : 420
     const targetHeight = Math.round(targetWidth * videoHeight / videoWidth)
     const dimensionsChanged = nodeWidth.value !== targetWidth || nodeHeight.value !== targetHeight
@@ -8319,6 +8339,12 @@ function applyDetectedVideoDimensions(width, height) {
 
   if (Object.keys(updates).length > 0) {
     canvasStore.updateNodeData(props.id, updates)
+    const workflowId = canvasStore.getCurrentTab?.()?.workflowId
+    if (updates.detectAspectRatio === false && workflowId && !props.data?.readonly) {
+      patchWorkflowNode(workflowId, props.id, { data: updates }).catch(error => {
+        console.warn('[VideoNode] 视频比例写入工作流失败:', error?.message || error)
+      })
+    }
   }
 }
 
@@ -9972,7 +9998,7 @@ function handleToolbarPreview() {
             webkit-playsinline
             x5-video-player-type="h5"
             x5-playsinline
-            @loadeddata="handleVideoLoaded"
+            @loadedmetadata="handleVideoLoaded"
             @canplay="handleVideoCanPlay"
             @timeupdate="handleVideoTimeUpdate"
             @error="handleVideoError"
@@ -10748,6 +10774,7 @@ function handleToolbarPreview() {
             <VideoParametersDropdown
               :aspect-ratios="availableAspectRatios"
               v-model:aspect-ratio="selectedAspectRatio"
+              @update:aspect-ratio="data.detectAspectRatio && canvasStore.updateNodeData(id, { detectAspectRatio: false })"
               :resolution-options="videoParameterResolutionOptions"
               v-model:resolution="selectedVideoParameterResolution"
               :duration-options="durations"

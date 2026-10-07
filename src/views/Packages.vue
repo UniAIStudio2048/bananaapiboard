@@ -123,6 +123,12 @@
               </svg>
               <span class="text-slate-700 dark:text-slate-300">{{ pkg.duration_days }} 天有效期</span>
             </div>
+            <div v-for="discount in getPackageDiscounts(pkg)" :key="discount.type" class="flex items-center gap-2">
+              <svg class="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span class="text-slate-700 dark:text-slate-300">{{ discount.text }}</span>
+            </div>
           </div>
 
           <!-- 购买按钮 -->
@@ -675,6 +681,7 @@ import { useRouter } from 'vue-router'
 import { redeemVoucher, getMe } from '@/api/client'
 import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
+import { getPackageDiscounts } from '@/utils/packageDiscounts'
 import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 
 const router = useRouter()

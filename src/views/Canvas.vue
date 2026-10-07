@@ -813,6 +813,7 @@ function handleAssetInsert(asset, referencePosition = null) {
         // VideoNode 使用 output.url 显示视频
         // 设置 status 为 success 触发视频预览显示
         status: 'success',
+        detectAspectRatio: true,
         output: {
           type: 'video',
           url: asset.url
@@ -935,6 +936,7 @@ function handleHistoryApply(historyItem) {
         title: historyItem.name || t('canvas.historyPanel.videoResult'),
         label: historyItem.name || t('canvas.nodes.video'),
         status: 'success',
+        detectAspectRatio: true,
         output: {
           type: 'video',
           url: historyItem.url,

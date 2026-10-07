@@ -3335,6 +3335,7 @@ function handleClipboardFiles(files, positionOverride) {
         data: {
           title: fileName,
           status: 'success',
+          detectAspectRatio: true,
           output: { type: 'video', url: blobUrl },
           isUploading: true
         }
@@ -3503,6 +3504,7 @@ async function handleFileDrop(event) {
               title: att.name || '视频',
               label: att.name || '视频',
               status: 'success',
+              detectAspectRatio: true,
               output: {
                 type: 'video',
                 url: att.url
@@ -3578,6 +3580,7 @@ async function handleFileDrop(event) {
                 title: asset.name || '视频资产',
                 label: asset.name || '视频',
                 status: 'success',
+                detectAspectRatio: true,
                 output: {
                   type: 'video',
                   url: asset.url,
@@ -3639,6 +3642,7 @@ async function handleFileDrop(event) {
                 title: characterName,
                 label: `${characterName}\n@${characterUsername}`,
                 status: 'success',
+                detectAspectRatio: true,
                 output: {
                   type: 'video',
                   url: asset.url
@@ -3734,6 +3738,7 @@ async function handleFileDrop(event) {
           data: {
             title: file.name || '视频',
             status: 'success',
+            detectAspectRatio: true,
             output: {
               type: 'video',
               url: blobUrl
