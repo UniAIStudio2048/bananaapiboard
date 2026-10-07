@@ -45,19 +45,27 @@ for (const [name, path, key] of entries) {
 }
 
 for (const [path, key] of [['./canvas/UserProfilePanel.vue', 'userInfo'], ['../views/User.vue', 'me']]) {
-  test(`${path}账户管理保留主用户首次创建入口，子用户隐藏`, async () => {
-    const createLinks = links(baseParse(template(path))).filter(source => source.includes('创建子用户'))
-    assert.equal(createLinks.length, 1)
-    for (const isSubuser of [false, true]) {
-      const html = await render(createLinks[0], { [key]: { is_subuser: isSubuser } })
-      assert.equal(html.includes('href="/subuser"'), !isSubuser)
-    }
-  })
+  for (const [label, user, visible] of [
+    ['未登录', null, false],
+    ['没有子用户', { is_subuser: false, has_subusers: false }, false],
+    ['已删除全部子用户但有创建历史', { is_subuser: false, has_subusers: false, cumulative_count: 1 }, false],
+    ['旧接口缺少子用户状态', { is_subuser: false }, false],
+    ['已有子用户', { is_subuser: false, has_subusers: true }, true],
+    ['子用户', { is_subuser: true, has_subusers: true }, false]
+  ]) {
+    test(`${path}账户管理入口：${label}`, async () => {
+      const createLinks = links(baseParse(template(path))).filter(source => source.includes('创建子用户'))
+      assert.equal(createLinks.length, 1)
+      const html = await render(createLinks[0], { [key]: user })
+      assert.equal(html.includes('href="/subuser"'), visible)
+    })
+  }
 }
 
 for (const [label, me, loading, allowed] of [
   ['加载中不显示创建按钮', null, true, false],
-  ['主用户可首次创建', { is_subuser: false }, false, true],
+  ['无子用户主用户可从隐藏地址首次创建', { is_subuser: false, has_subusers: false }, false, true],
+  ['已有子用户主用户可从隐藏地址管理', { is_subuser: false, has_subusers: true }, false, true],
   ['子用户直达也无法创建', { is_subuser: true }, false, false],
   ['未登录无法创建', null, false, false]
 ]) {

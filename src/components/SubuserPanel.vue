@@ -5,6 +5,8 @@ const props = defineProps({ request: { type: Function, required: true }, parentI
 const base = computed(() => props.parentId ? `/api/admin/users/${encodeURIComponent(props.parentId)}/subusers` : '/api/subusers')
 const users = ref([])
 const summary = ref({})
+const historySettings = ref(null)
+const historySettingsBusy = ref(false)
 const loading = ref(false)
 const busy = ref(false)
 const error = ref('')
@@ -112,7 +114,22 @@ async function retryDeletion(user) {
   busy.value = true
   try { await props.request(`${base.value}/${user.id}/retry-deletion`, { method: 'POST' }); await load() } catch (e) { notifyError(e) } finally { busy.value = false }
 }
+async function loadHistorySettings() {
+  historySettingsBusy.value = true
+  try { historySettings.value = await props.request(`${base.value}/history-settings`) } catch (e) { notifyError(e) } finally { historySettingsBusy.value = false }
+}
+async function toggleHistoryDeletion() {
+  if (!historySettings.value || historySettingsBusy.value) return
+  historySettingsBusy.value = true
+  error.value = ''
+  notice.value = ''
+  try {
+    historySettings.value = await props.request(`${base.value}/history-settings`, { method: 'PATCH', body: { history_delete_disabled: !historySettings.value.history_delete_disabled } })
+    notice.value = historySettings.value.history_delete_disabled ? '已禁止子用户删除历史记录' : '已允许子用户删除历史记录'
+  } catch (e) { notifyError(e) } finally { historySettingsBusy.value = false }
+}
 onMounted(load)
+onMounted(loadHistorySettings)
 </script>
 
 <template>
@@ -126,6 +143,10 @@ onMounted(load)
       <div><span>分配剩余额</span><strong>{{ points(summary.remaining) }}</strong><small>仅收回未消费部分</small></div>
       <div><span>净消费积分</span><strong>{{ points(summary.consumed) }}</strong><small>已扣除退还的积分</small></div>
     </div>
+    <section class="history-settings" aria-labelledby="history-settings-title">
+      <div><h2 id="history-settings-title">禁止子用户删除历史记录</h2><p id="history-settings-description">开启后，所有子用户的图片、视频、音频及工作流历史将隐藏删除入口；关闭后恢复正常删除。</p></div>
+      <button type="button" class="history-switch" :class="{ enabled: historySettings?.history_delete_disabled }" role="switch" :aria-checked="!!historySettings?.history_delete_disabled" aria-labelledby="history-settings-title" aria-describedby="history-settings-description" :disabled="!historySettings || historySettingsBusy || forbidden" @click="toggleHistoryDeletion"><span></span></button>
+    </section>
     <form class="filters" @submit.prevent="page = 1; load()"><input v-model="search" aria-label="搜索子用户" placeholder="搜索用户名或邮箱" /><select v-model="status" aria-label="账号状态" @change="page = 1; load()"><option value="">全部账号</option><option value="active">正常</option><option value="disabled">已封禁</option><option value="deleted">已删除 / 结算中</option></select><button :disabled="loading">查询</button></form>
     <div class="table-wrap"><table><thead><tr><th>账号</th><th>状态</th><th>等级来源</th><th>分配积分</th><th>自有积分</th><th>操作</th></tr></thead><tbody>
       <tr v-if="loading"><td colspan="6" class="empty">正在加载…</td></tr>
@@ -156,4 +177,5 @@ onMounted(load)
 <style scoped>
 .subuser-panel{--panel:#fff;--border:#e2e8f0;--muted:#64748b;max-width:1440px;margin:auto;padding:24px;color:#0f172a;font-size:14px}.heading{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}.heading h1{font-size:26px;font-weight:700}.heading h2,.dialog h2{font-size:20px;font-weight:650}p,small{color:var(--muted)}p{margin:8px 0;line-height:1.6}small{display:block;font-size:12px;margin-top:4px}button,input,select{font:inherit;border:1px solid var(--border);border-radius:8px;padding:9px 12px;background:var(--panel);color:inherit}button{cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}button:hover:enabled{border-color:#10b981}.primary{background:#047857;color:white;border-color:#047857}.danger{color:#dc2626}.primary.danger{background:#b91c1c;color:white;border-color:#b91c1c}.overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:16px;margin:24px 0}.overview>div{background:var(--panel);border:1px solid var(--border);padding:20px;border-radius:12px}.overview span{color:var(--muted)}.overview strong{display:block;font-size:28px;margin:8px 0}.filters{display:flex;gap:10px;margin-bottom:16px}.filters input{flex:1;min-width:0}.table-wrap{overflow:auto;border:1px solid var(--border);border-radius:12px;background:var(--panel)}table{width:100%;border-collapse:collapse;text-align:left;white-space:nowrap}th,td{padding:14px 16px;border-bottom:1px solid var(--border);vertical-align:top}th{font-weight:500;color:var(--muted);background:rgba(128,128,128,.04)}.actions{white-space:normal;min-width:260px;max-width:330px}.actions button,.details td button{padding:4px 7px;margin:2px;font-size:12px}.badge{color:#047857;background:#d1fae5;border-radius:20px;padding:3px 8px;font-size:12px}.blocked{color:#92400e;background:#fef3c7}.empty{text-align:center;padding:48px}.pagination{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:16px}.error{padding:12px;background:#fee2e2;color:#991b1b;border-radius:8px}.notice{padding:12px;background:#d1fae5;color:#065f46;border-radius:8px}.details{margin-top:32px;border-top:1px solid var(--border);padding-top:24px}.details h3{font-weight:600;margin:24px 0 12px}.overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:20px}.dialog{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:24px;width:480px;max-width:100%;max-height:90vh;overflow:auto;box-shadow:0 20px 60px #0003}.dialog label{display:block;font-weight:500;margin-top:16px}.dialog input,.dialog select{display:block;width:100%;margin-top:6px}.dialog .checkbox{display:flex;align-items:center;gap:8px}.checkbox input{width:auto;margin:0}.dialog-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:24px}@media(max-width:700px){.subuser-panel{padding:16px}.overview{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.overview>div{padding:14px}.overview strong{font-size:23px}.filters{flex-wrap:wrap}.filters input{flex-basis:100%}.heading h1{font-size:22px}}:global(.dark) .subuser-panel,:global(.canvas-theme-dark) .subuser-panel{--panel:#172033;--border:#334155;--muted:#94a3b8;color:#e2e8f0}
 .admin-panel{--panel:#172033;--border:#334155;--muted:#94a3b8;color:#e2e8f0}
+.history-settings{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 20px;margin-bottom:20px;border:1px solid var(--border);border-radius:12px;background:var(--panel)}.history-settings h2{font-weight:600}.history-settings p{margin:6px 0 0;font-size:13px}.history-switch{flex-shrink:0;width:44px;height:26px;padding:3px;border:0;border-radius:20px;background:#94a3b8;transition:background .15s}.history-switch.enabled{background:#047857}.history-switch span{display:block;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .15s}.history-switch.enabled span{transform:translateX(18px)}.history-switch:focus-visible{outline:2px solid #10b981;outline-offset:3px}
 </style>

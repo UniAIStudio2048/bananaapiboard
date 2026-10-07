@@ -1103,7 +1103,13 @@ async function quickSaveWorkflow() {
   }
   
   // 检查是否有内容
-  const workflowData = canvasStore.exportWorkflow()
+  let workflowData
+  try {
+    workflowData = canvasStore.exportWorkflowForSave()
+  } catch (error) {
+    displayToast(`保存失败：${error.message || '未知错误'}`, 'warning', 3000)
+    return false
+  }
   if (!workflowData.nodes || workflowData.nodes.length === 0) {
     displayToast('画布为空，无需保存', 'warning', 2000)
     return false
@@ -2072,6 +2078,8 @@ function buildExitSavePayload(state) {
     nodes: state.cleanedData.nodes,
     edges: state.cleanedData.edges,
     viewport: state.cleanedData.viewport,
+    baseNodeVersions: state.cleanedData.baseNodeVersions,
+    clientTabId: state.cleanedData.clientTabId,
     uploadToCloud: false,
     isBeforeUnload: true,
     spaceType: spaceParams.spaceType,
@@ -4429,6 +4437,7 @@ onUnmounted(() => {
       <WorkflowPanel
         ref="workflowPanelRef"
         :visible="showWorkflowPanel"
+        :can-delete-history="!!me && me.can_delete_history !== false"
         @close="closeWorkflowPanel"
         @load="handleWorkflowLoaded"
         @new="handleWorkflowNew"
@@ -4457,6 +4466,7 @@ onUnmounted(() => {
       <!-- 历史记录面板 -->
       <HistoryPanel
         :visible="showHistoryPanel"
+        :can-delete-history="!!me && me.can_delete_history !== false"
         @close="closeHistoryPanel"
         @apply-history="handleHistoryApply"
       />

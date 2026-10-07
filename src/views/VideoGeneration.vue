@@ -4267,7 +4267,7 @@ onUnmounted(() => {
                     <span class="mr-1">⬇️</span>
                     下载
                   </button>
-                  <button 
+                  <button v-if="me && me.can_delete_history !== false"
                     class="w-10 h-8 rounded-lg bg-gray-200 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700 transition-colors flex items-center justify-center"
                     @click="deleteHistory(item)"
                     title="删除"

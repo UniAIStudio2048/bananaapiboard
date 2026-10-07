@@ -3066,7 +3066,7 @@ onUnmounted(() => {
                     >
                       🔄
                     </button>
-                    <button 
+                    <button v-if="me && me.can_delete_history !== false"
                       @click.stop="deleteHistoryImage(h)"
                       class="w-7 h-7 bg-red-500/80 hover:bg-red-600 backdrop-blur-sm text-white rounded-lg flex items-center justify-center transition-all transform hover:scale-105 shadow-md"
                       title="删除失败记录"
@@ -3097,7 +3097,7 @@ onUnmounted(() => {
                         🔄
                       </button>
                       <!-- 删除按钮 -->
-                      <button 
+                      <button v-if="me && me.can_delete_history !== false"
                         @click.stop="deleteHistoryImage(h)"
                         class="w-7 h-7 flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-all hover:scale-105"
                         title="删除记录"
@@ -3195,7 +3195,7 @@ onUnmounted(() => {
                       🖼️
                     </button>
                     <!-- 快速删除 -->
-                    <button 
+                    <button v-if="me && me.can_delete_history !== false"
                       @click.stop="deleteHistoryImage(h)"
                       class="w-7 h-7 bg-red-500/80 hover:bg-red-600 backdrop-blur-sm text-white rounded-lg flex items-center justify-center transition-all transform hover:scale-105 shadow-md"
                       title="删除记录"
@@ -3260,7 +3260,7 @@ onUnmounted(() => {
                         💾
                       </button>
                       <!-- 删除按钮 -->
-                      <button 
+                      <button v-if="me && me.can_delete_history !== false"
                         @click.stop="deleteHistoryImage(h)"
                         class="w-7 h-7 flex items-center justify-center bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition-all hover:scale-105"
                         title="删除记录"

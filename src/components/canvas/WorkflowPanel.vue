@@ -32,7 +32,8 @@ const { t } = useI18n()
 const teamStore = useTeamStore()
 
 const props = defineProps({
-  visible: Boolean
+  visible: Boolean,
+  canDeleteHistory: { type: Boolean, default: true }
 })
 
 const emit = defineEmits(['close', 'load', 'new'])
@@ -1624,7 +1625,7 @@ defineExpose({
                 <span>{{ t('canvas.historyWorkflows') }}</span>
                 <span class="column-count">{{ historyWorkflows.length }}</span>
                 <button
-                  v-if="historyWorkflows.length > 0"
+                  v-if="canDeleteHistory && historyWorkflows.length > 0"
                   class="clear-history-btn"
                   @click="clearHistoryConfirm = true"
                   :title="t('canvas.clearHistory')"
@@ -1682,6 +1683,7 @@ defineExpose({
 
                       <div class="item-actions">
                         <button
+                          v-if="canDeleteHistory"
                           class="action-btn delete-btn"
                           @click.stop="confirmDelete($event, workflow, true)"
                           :title="t('common.delete')"

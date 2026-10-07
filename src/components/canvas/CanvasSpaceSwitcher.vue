@@ -11,6 +11,7 @@ import { useTeamStore } from '@/stores/team'
 import { useCanvasStore } from '@/stores/canvas'
 import { useI18n } from '@/i18n'
 import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
+import { sanitizeWorkflowForSave } from '@/utils/workflowSaveSanitizer'
 import { saveSpaceWorkflowSession, getSpaceWorkflowSessionAsync } from '@/stores/canvas/workflowAutoSave'
 
 const { t } = useI18n()
@@ -85,9 +86,9 @@ async function saveAllTabsAndReset() {
 
     try {
       const isActive = tab.id === canvasStore.activeTabId
-      const exported = isActive ? canvasStore.exportWorkflowForSave() : null
-      const tabNodes = isActive ? toRaw(exported.nodes) : toRaw(tab.nodes)
-      const tabEdges = isActive ? toRaw(exported.edges) : toRaw(tab.edges)
+      const exported = isActive ? canvasStore.exportWorkflowForSave() : sanitizeWorkflowForSave({ nodes: toRaw(tab.nodes), edges: toRaw(tab.edges), viewport: tab.viewport })
+      const tabNodes = exported.nodes
+      const tabEdges = exported.edges
       const tabViewport = isActive ? { ...canvasStore.viewport } : tab.viewport
 
       if (!tabNodes || tabNodes.length === 0) continue
@@ -106,6 +107,8 @@ async function saveAllTabsAndReset() {
       if (tab.workflowId) {
         await saveWorkflow({
           id: tab.workflowId,
+          baseNodeVersions: tab.savedNodeVersions ?? undefined,
+          clientTabId: tab.id,
           name: tab.name,
           uploadToCloud: false,
           spaceType,
@@ -119,6 +122,7 @@ async function saveAllTabsAndReset() {
           name: tab.name || `草稿_${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
           uploadToCloud: false,
           isDraft: true,
+          clientTabId: tab.id,
           spaceType,
           teamId: spaceTeamId,
           nodes: tabNodes,

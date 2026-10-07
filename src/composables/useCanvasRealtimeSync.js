@@ -124,9 +124,9 @@ export function useCanvasRealtimeSync(options = {}) {
           // edge ops 在后续 Phase 接入
         }
       },
-      onNodePatched: (nodeId, node /* , version, fromClient */) => {
+      onNodePatched: (nodeId, node, version /* , fromClient */) => {
         if (!nodeId || !node) return
-        applyRemoteNode({ ...node, id: nodeId })
+        applyRemoteNode({ ...node, id: nodeId, version: version || node.version })
       },
       onResync: () => { resyncFromManifest() }
     })

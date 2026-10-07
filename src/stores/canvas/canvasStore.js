@@ -1944,9 +1944,14 @@ export const useCanvasStore = defineStore('canvas', () => {
     if (!node || !node.id) return
     const target = nodes.value.find(n => n.id === node.id)
     if (!target) return
+    if (Number.isSafeInteger(node.version) && Number.isSafeInteger(target.version) && node.version < target.version) return
     const incomingData = node.data || {}
     const wasShell = target.data?._shellLoading
-    const localData = target.data || {}
+    const localData = { ...(target.data || {}) }
+    if (localData._mediaLoading && localData._originalMedia) {
+      localData.sourceImages = localData._originalMedia.sourceImages || localData.sourceImages || []
+      localData.output = localData._originalMedia.output || localData.output
+    }
 
     // 关键保护：远端 stale 数据不应覆盖本地刚完成的生成结果。
     // 场景：
@@ -1997,8 +2002,15 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
 
     delete mergedData._shellLoading
+    delete mergedData._mediaLoading
+    delete mergedData._originalMedia
     if (typeof Object.assign === 'function') {
       target.data = mergedData
+    }
+    if (Number.isSafeInteger(node.version) && node.version > 0) {
+      target.version = Math.max(node.version, target.version || 0)
+      const currentTab = getCurrentTab()
+      if (currentTab?.savedNodeVersions) currentTab.savedNodeVersions[node.id] = target.version
     }
     if (wasShell) {
       // Shell -> Full 切换时把节点缓存到 LRU
@@ -2032,11 +2044,29 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 用于手动保存/自动保存到服务器前的数据清理
    */
   function exportWorkflowForSave() {
-    return sanitizeWorkflowForSave({
+    const currentTab = getCurrentTab()
+    return { ...sanitizeWorkflowForSave({
       nodes: nodes.value,
       edges: edges.value,
       viewport: viewport.value
-    })
+    }), clientTabId: currentTab?.id, baseNodeVersions: currentTab?.savedNodeVersions ?? undefined }
+  }
+
+  function captureNodeVersions(nodeList) {
+    return Object.fromEntries((nodeList || []).map(node => [node.id, Number(node.version) || 1]))
+  }
+
+  function applyWorkflowSaveVersions(workflow) {
+    if (!workflow?.node_versions) return
+    const tab = workflowTabs.value.find(item => item.workflowId === workflow.id ||
+      (item.id === workflow.client_tab_id && (!item.workflowId || item.workflowId === workflow.id)))
+    if (!tab) return
+    const previous = tab.savedNodeVersions || {}
+    tab.savedNodeVersions = Object.fromEntries(Object.entries(workflow.node_versions)
+      .map(([id, version]) => [id, Math.max(version, previous[id] || 0)]))
+    for (const node of [...(tab.nodes || []), ...(tab.id === activeTabId.value ? nodes.value : [])]) {
+      if (tab.savedNodeVersions[node.id]) node.version = tab.savedNodeVersions[node.id]
+    }
   }
   
   // ========== 多标签操作 ==========
@@ -2101,6 +2131,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       description: workflow?.description || '',
       workflowId: workflow?.id || null,
       workflowUid: workflow?.workflow_uid || null,
+      savedNodeVersions: workflow?.id ? captureNodeVersions(rawNodes) : null,
       // 已保存工作流：记录其所属空间，切换标签时同步全局空间，保证生成任务写入对应 image/video 历史
       workflowSpaceType: workflow?.id ? (workflow.space_type === 'team' ? 'team' : 'personal') : null,
       workflowTeamId: workflow?.id && workflow.space_type === 'team' ? workflow.team_id : null,
@@ -2279,6 +2310,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       currentTab.hasChanges = false
       if (workflowId) {
         currentTab.workflowId = workflowId
+        currentTab.savedNodeVersions ??= captureNodeVersions(nodes.value)
       }
       if (workflowUid) {
         currentTab.workflowUid = workflowUid
@@ -2298,7 +2330,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       const existingTab = workflowTabs.value.find(t => t.workflowId === workflow.id)
       if (existingTab) {
         // 用服务器最新数据更新已有标签，避免加载旧/损坏的缓存数据
-        if (workflow.nodes && workflow.nodes.length > 0) {
+        if (Array.isArray(workflow.nodes)) {
           const freshNodes = createSkeletonNodes(workflow.nodes)
           const freshNodeIds = new Set(freshNodes.map(n => n.id))
           const freshEdges = workflow.edges
@@ -2306,6 +2338,7 @@ export const useCanvasStore = defineStore('canvas', () => {
             : []
           existingTab.nodes = freshNodes
           existingTab.edges = freshEdges
+          existingTab.savedNodeVersions = captureNodeVersions(workflow.nodes)
           if (workflow.viewport) {
             existingTab.viewport = workflow.viewport
           }
@@ -2377,6 +2410,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         name: tab.name,
         workflowId: tab.workflowId,
         workflowUid: tab.workflowUid,
+        savedNodeVersions: tab.savedNodeVersions ? { ...tab.savedNodeVersions } : null,
         description: tab.description || '',
         workflowSpaceType: tab.workflowSpaceType,
         workflowTeamId: tab.workflowTeamId,
@@ -2414,6 +2448,7 @@ export const useCanvasStore = defineStore('canvas', () => {
         description: tab.description || '',
         workflowId: tab.workflowId || null,
         workflowUid: tab.workflowUid || null,
+        savedNodeVersions: tab.savedNodeVersions ? { ...tab.savedNodeVersions } : null,
         workflowSpaceType: tab.workflowSpaceType || null,
         workflowTeamId: tab.workflowTeamId || null,
         nodes: tabNodes,
@@ -3164,6 +3199,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     touchNodeCache,
     exportWorkflow,
     exportWorkflowForSave,
+    applyWorkflowSaveVersions,
     
     // 多标签操作
     workflowTabs,

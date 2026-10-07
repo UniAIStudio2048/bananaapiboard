@@ -74,6 +74,7 @@ test('node_patched -> applyIncrementalNode', () => {
   assert.equal(store.applied.length, 1)
   assert.equal(store.applied[0].id, 'n9')
   assert.equal(store.applied[0].data.foo, 1)
+  assert.equal(store.applied[0].version, 5)
 })
 
 test('ops update 转换为 applyIncrementalNode, delete 调用 removeNode', () => {

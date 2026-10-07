@@ -1694,7 +1694,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 
             <!-- 账户管理 -->
             <div v-else-if="activeMenu === 'profile'" class="content-section">
-              <RouterLink v-if="userInfo && !userInfo.is_subuser" to="/subuser" class="block mb-4 text-emerald-500">创建子用户</RouterLink>
+              <RouterLink v-if="userInfo && !userInfo.is_subuser && userInfo.has_subusers" to="/subuser" class="block mb-4 text-emerald-500">创建子用户</RouterLink>
               <h4 class="section-title">{{ t('user.basicInfo') }}</h4>
               <div class="form-group">
                 <label>{{ t('user.username') }}</label>

@@ -41,7 +41,8 @@ const { t, currentLanguage } = useI18n()
 const teamStore = useTeamStore()
 
 const props = defineProps({
-  visible: Boolean
+  visible: Boolean,
+  canDeleteHistory: { type: Boolean, default: true }
 })
 
 const emit = defineEmits(['close', 'apply-history'])
@@ -2100,6 +2101,7 @@ onUnmounted(() => {
                       </svg>
                     </button>
                     <button
+                      v-if="canDeleteHistory"
                       class="overlay-delete"
                       @click.stop="handleDelete($event, item)"
                       :title="t('common.delete')"
@@ -2186,7 +2188,7 @@ onUnmounted(() => {
           <span>复制到空间</span>
         </div>
         <div class="context-menu-divider"></div>
-        <div class="context-menu-item danger" @click="handleDelete(null, contextMenuItem)">
+        <div v-if="canDeleteHistory" class="context-menu-item danger" @click="handleDelete(null, contextMenuItem)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="3 6 5 6 21 6"/>
             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
@@ -2335,7 +2337,7 @@ onUnmounted(() => {
                 </svg>
                 {{ t('common.download') }}
               </button>
-              <button class="action-btn delete-btn" @click="handleDelete(null, previewItem)">
+              <button v-if="canDeleteHistory" class="action-btn delete-btn" @click="handleDelete(null, previewItem)">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <polyline points="3 6 5 6 21 6"/>
                   <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>

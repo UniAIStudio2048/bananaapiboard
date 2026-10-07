@@ -3130,7 +3130,7 @@ onUnmounted(() => {
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
                         </svg>
                       </a>
-                      <button
+                      <button v-if="me && me.can_delete_history !== false"
                         @click.stop="deleteImage(image.id)"
                         class="p-2 bg-red-500/80 backdrop-blur rounded-lg hover:bg-red-600 transition-colors"
                         title="删除"
@@ -3473,7 +3473,7 @@ onUnmounted(() => {
                       >
                         ⬇️ 下载
                       </button>
-                      <button
+                      <button v-if="me && me.can_delete_history !== false"
                         @click="deleteVideo(video.id)"
                         class="px-3 py-2 bg-red-600 hover:bg-red-700 text-white text-xs rounded-lg transition-colors"
                         title="删除视频"
@@ -4379,7 +4379,7 @@ onUnmounted(() => {
         <div class="p-6">
           <!-- 个人资料 -->
           <div v-if="settingsTab === 'profile'" class="space-y-4">
-            <RouterLink v-if="me && !me.is_subuser" to="/subuser" class="block text-primary-600 hover:text-primary-700">创建子用户</RouterLink>
+            <RouterLink v-if="me && !me.is_subuser && me.has_subusers" to="/subuser" class="block text-primary-600 hover:text-primary-700">创建子用户</RouterLink>
             <div>
               <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                 用户名

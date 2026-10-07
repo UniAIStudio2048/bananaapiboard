@@ -70,10 +70,13 @@ async function loadTargetProjects() {
     const space = selectedSpace.value
     const result = await getProjectList({ spaceType: space.type, teamId: space.teamId })
     projects.value = (result.data || []).filter(project => (
-      String(project.id) !== String(props.currentProjectId)
+      isCopy.value || String(project.id) !== String(props.currentProjectId)
     ))
+    const currentProject = isCopy.value
+      ? projects.value.find(project => String(project.id) === String(props.currentProjectId))
+      : null
     const defaultProject = projects.value.find(project => project.is_default)
-    selectedProjectId.value = String(defaultProject?.id || projects.value[0]?.id || '')
+    selectedProjectId.value = String(currentProject?.id || defaultProject?.id || projects.value[0]?.id || '')
   } catch (e) {
     error.value = e.message || '加载目标项目失败'
   } finally {

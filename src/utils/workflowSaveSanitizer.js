@@ -146,12 +146,20 @@ function sanitizeDirectorStudioProject(project) {
 }
 
 export function sanitizeWorkflowNodeForSave(node) {
+  if (node.data?._shellLoading) throw new Error('画布节点尚未加载完整，请稍后再保存。')
   const cleanedNode = removeEmptyRuntimeStyle(copyWithoutKeys(node, NODE_RUNTIME_KEYS))
   if (!cleanedNode.data) {
     return sanitizeInlineValue(cleanedNode)
   }
 
   const data = sanitizeInlineValue(cleanedNode.data) || {}
+  if (data._mediaLoading && data._originalMedia) {
+    data.sourceImages = data._originalMedia.sourceImages || data.sourceImages || []
+    data.output = data._originalMedia.output || data.output
+  }
+  delete data._originalMedia
+  delete data._mediaLoading
+  delete data._shellLoading
 
   if (Array.isArray(data.sourceImages)) {
     data.sourceImages = persistentUrlList(data.sourceImages)

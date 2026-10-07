@@ -16,6 +16,12 @@ function getAuthHeaders() {
   }
 }
 
+async function syncSavedWorkflowVersions(data) {
+  if (!data?.workflow?.node_versions) return
+  const { useCanvasStore } = await import('@/stores/canvas/canvasStore')
+  useCanvasStore().applyWorkflowSaveVersions(data.workflow)
+}
+
 /**
  * 获取用户存储配额
  */
@@ -64,6 +70,7 @@ export async function saveWorkflowRaw(jsonBody) {
     throw new Error(`服务器响应格式错误: ${text.substring(0, 100)}`)
   }
   if (!response.ok) throw new Error(data.error || '保存失败')
+  await syncSavedWorkflowVersions(data)
   return data
 }
 

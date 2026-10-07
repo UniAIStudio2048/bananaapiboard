@@ -403,6 +403,7 @@ function buildSessionPayload(session) {
       description: tab.description || '',
       workflowId: tab.workflowId || null,
       workflowUid: tab.workflowUid || null,
+      savedNodeVersions: tab.savedNodeVersions ? { ...tab.savedNodeVersions } : null,
       workflowSpaceType: tab.workflowSpaceType || null,
       workflowTeamId: tab.workflowTeamId || null,
       nodes: cleanedNodes,
