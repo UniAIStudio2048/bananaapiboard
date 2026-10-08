@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { parse } from '@babel/parser'
+import { prepareWorkflowSaveBody } from '../../utils/workflowMediaUpload.js'
 
 const source = readFileSync(new URL('./workflow.js', import.meta.url), 'utf8')
 const ast = parse(source, { sourceType: 'module' })
@@ -11,10 +12,11 @@ function harness(ok = true) {
   const workflow = { id: 'wf-a', client_tab_id: 'tab-a', node_versions: { media: 8 } }
   const context = {
     getApiUrl: path => path, getAuthHeaders: () => ({}),
+    prepareWorkflowSaveBody, uploadCanvasFile: async () => { throw new Error('unexpected upload') },
     useCanvasStore: () => ({ applyWorkflowSaveVersions: value => applied.push(value) }),
     fetch: async () => ({ ok, text: async () => JSON.stringify(ok ? { workflow } : { error: '画布内容已更新', code: 'version_conflict' }) })
   }
-  for (const name of ['syncSavedWorkflowVersions', 'saveWorkflowRaw', 'saveWorkflow']) {
+  for (const name of ['requestWorkflowSave', 'saveWorkflowWithConflictRetry', 'syncSavedWorkflowVersions', 'saveWorkflowRaw', 'saveWorkflow']) {
     const node = ast.program.body.map(item => item.declaration || item).find(item => item.type === 'FunctionDeclaration' && item.id?.name === name)
     if (!node) continue
     // The Vite-only store import is provided by the test context; execute the actual API body.

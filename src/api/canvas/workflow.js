@@ -3,6 +3,7 @@
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { uploadCanvasFile } from './direct-upload.js'
+import { prepareWorkflowSaveBody } from '@/utils/workflowMediaUpload.js'
 
 /**
  * 获取带认证的请求头（包含用户token和租户信息）
@@ -61,8 +62,8 @@ async function requestWorkflowSave(jsonBody) {
     throw new Error(`服务器响应格式错误: ${text.substring(0, 100)}`)
   }
   if (!response.ok) {
-    const err = new Error(data.error || '保存失败')
-    err.code = data.code
+    const err = new Error(data.message || data.error || '保存失败')
+    err.code = data.code || data.error
     err.status = response.status
     err.nodeVersions = data.node_versions || null
     throw err
@@ -75,6 +76,7 @@ async function requestWorkflowSave(jsonBody) {
  * 刷新保存基线并重试一次（视频完成回写等服务端版本提升会让本地基线过期）。
  */
 async function saveWorkflowWithConflictRetry(jsonBody) {
+  jsonBody = await prepareWorkflowSaveBody(jsonBody, uploadCanvasFile)
   try {
     return await requestWorkflowSave(jsonBody)
   } catch (error) {

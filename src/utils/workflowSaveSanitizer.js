@@ -29,6 +29,7 @@ const INLINE_DATA_FIELDS = new Set([
   'previewData',
   'originalData',
   'audioData',
+  'videoData',
   'data'
 ])
 
@@ -50,7 +51,8 @@ export function isTransientWorkflowUrl(value) {
 
 function sanitizeInlineValue(value, key = null, seen = new WeakSet()) {
   if (typeof value === 'string') {
-    if (INLINE_DATA_FIELDS.has(key) && (value.length > 1000 || isTransientWorkflowUrl(value))) {
+    if (INLINE_DATA_FIELDS.has(key) && (key !== 'data' || value.length > 1000 || isTransientWorkflowUrl(value)) &&
+        !/^(https?:\/\/|\/api\/|\/storage\/)/i.test(value)) {
       return undefined
     }
     return isTransientWorkflowUrl(value) ? null : value
@@ -58,6 +60,12 @@ function sanitizeInlineValue(value, key = null, seen = new WeakSet()) {
 
   if (!value || typeof value !== 'object') {
     return value
+  }
+
+  if (ArrayBuffer.isView(value) || value instanceof ArrayBuffer ||
+      (typeof Blob !== 'undefined' && value instanceof Blob) ||
+      (value.type === 'Buffer' && Array.isArray(value.data))) {
+    return undefined
   }
 
   if (seen.has(value)) {
