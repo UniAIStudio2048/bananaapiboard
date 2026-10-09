@@ -2073,10 +2073,14 @@ watch(() => [props.data.width, props.data.height], ([width, height]) => {
   if (height && height !== nodeHeight.value) nodeHeight.value = height
 }, { immediate: true })
 
-// 上游图像节点连接时，自动切换预设为"图片反推"
+// 仅未设置过预设的新节点可自动使用"图片反推"，保留用户已选预设（包括通用对话）
 // autoPreset 标记仅在新建连接时由 propagateData 设置，加载已保存工作流时不会有
 function tryApplyAutoPreset() {
   if (props.data.autoPreset !== 'image-describe') return false
+  if (selectedPreset.value || Object.hasOwn(props.data, 'selectedPreset')) {
+    canvasStore.updateNodeData(props.id, { autoPreset: null })
+    return false
+  }
   const llmPresets = llmConfig.value.presets
   if (!llmPresets || llmPresets.length === 0) return false
 

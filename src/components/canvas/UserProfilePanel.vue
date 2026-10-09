@@ -11,7 +11,7 @@ import { redeemVoucher as redeemVoucherApi, updateUserPreferences, clearAuthSess
 import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { getPermanentUserPoints } from '@/utils/points'
-import { getPointsLedgerTypeText } from '@/utils/pointsLedger'
+import { getPointsLedgerTypeText, getPointsLedgerGenerationDetailsText } from '@/utils/pointsLedger'
 import { useCurrencyDisplay } from '@/utils/currencyDisplay'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
@@ -1987,6 +1987,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                     <span class="ledger-time">{{ formatTime(item.ts) }}</span>
                     <span v-if="item.task_id" class="ledger-desc">任务ID：{{ item.task_id }}</span>
                     <span v-if="item.memo" class="ledger-desc">{{ item.memo }}</span>
+                    <span v-if="getPointsLedgerGenerationDetailsText(item)" class="ledger-desc">{{ getPointsLedgerGenerationDetailsText(item) }}</span>
                   </div>
                   <span :class="['ledger-amount', item.value > 0 ? 'positive' : 'negative']">
                     {{ item.value > 0 ? '+' : '' }}{{ formatPoints(item.value) }}
@@ -2435,6 +2436,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                   <td data-label="积分变动" :class="['ledger-amount', item.value > 0 ? 'positive' : 'negative']">{{ item.value > 0 ? '+' : '' }}{{ formatPoints(item.value) }}</td>
                   <td data-label="详细说明" class="ledger-details-description">
                     <div>{{ item.memo || '—' }}</div>
+                    <div v-if="getPointsLedgerGenerationDetailsText(item)" class="ledger-details-params">{{ getPointsLedgerGenerationDetailsText(item) }}</div>
                     <div v-if="item.task_id" class="ledger-details-task">任务编号：{{ item.task_id }}</div>
                   </td>
                 </tr>
@@ -3840,6 +3842,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 .ledger-details-table tbody tr:hover { background: var(--ledger-hover); }
 .ledger-details-time { color: var(--ledger-muted); font-size: 12px; }
 .ledger-details-type { font-weight: 500; }
+.ledger-details-params { margin-top: 6px; color: var(--ledger-muted); font-size: 12px; }
 .ledger-details-task { margin-top: 6px; color: var(--ledger-muted); font-size: 12px; }
 .ledger-details-table .ledger-amount { font-size: 14px; font-variant-numeric: tabular-nums; }
 .ledger-details-modal .ledger-points-type { background: var(--ledger-secondary); color: var(--ledger-muted); }

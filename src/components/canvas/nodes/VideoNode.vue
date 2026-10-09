@@ -5504,6 +5504,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   // 构建请求数据
   const formData = new FormData()
   formData.append('prompt', finalPrompt || '根据图片生成视频')
+  if (capturedState.ledgerVideoMode) formData.append('ledger_video_mode', capturedState.ledgerVideoMode)
   formData.append('client_submission_id', submission.submissionId)
   formData.append('canvas_node_id', nodeId)
   if (currentTab?.id) {
@@ -7097,6 +7098,10 @@ async function handleGenerate(options = {}) {
   // 快照当前状态，供后台任务使用
   const capturedState = {
     nodeId: props.id,
+    ledgerVideoMode: [
+      activeVideoModeSelector.value?.options.find(option => option.value === activeVideoModeSelector.value.value)?.label,
+      activeVideoSubmodeSelector.value?.options.find(option => option.value === activeVideoSubmodeSelector.value.value)?.label
+    ].filter(Boolean).join(' / ') || (generationMode.value === 'image' ? '图生视频' : '文生视频'),
     model: selectedModel.value,
     referenceVideos: [...referenceVideos.value],
     referenceAudios: [...referenceAudios.value],

@@ -7,7 +7,7 @@ import { useCommunityStore } from '@/stores/community'
 import { publishWork, getPlatformFeeRate, getUploadConfig } from '@/api/community'
 import { getWorkflowList } from '@/api/canvas/workflow'
 import { getProjectList } from '@/api/canvas/project'
-import { uploadImages } from '@/api/client'
+import { uploadCanvasFile } from '@/api/canvas/direct-upload'
 import { compressImage } from '@/utils/imageCompress'
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { useI18n } from '@/i18n'
@@ -61,78 +61,31 @@ async function uploadWorkMedia(file, { onProgress, timeout = 120000 } = {}) {
     throw new Error('请上传图片或视频文件')
   }
 
-  if (mediaType === 'image') {
-    return uploadImages([file], { onProgress, timeout })
-  }
-
-  const formData = new FormData()
-  formData.append('file', file)
-  const token = localStorage.getItem('token')
-
-  if (onProgress) {
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
-      xhr.open('POST', getApiUrl('/api/videos/upload'))
-
-      const headers = getTenantHeaders()
-      Object.entries(headers).forEach(([k, v]) => xhr.setRequestHeader(k, v))
-      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
-
-      xhr.timeout = timeout
-      xhr.ontimeout = () => reject(new Error('upload_timeout'))
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          onProgress({ loaded: e.loaded, total: e.total, percent: Math.round(e.loaded / e.total * 100) })
-        }
-      }
-
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const j = JSON.parse(xhr.responseText)
-            const url = j.url || j.urls?.[0]
-            resolve(url ? [url] : [])
-          } catch {
-            reject(new Error('parse_error'))
-          }
-        } else {
-          reject(new Error('upload_failed'))
-        }
-      }
-
-      xhr.onerror = () => reject(new Error('upload_failed'))
-      xhr.send(formData)
-    })
-  }
-
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeout)
-
   try {
-    const response = await fetch(getApiUrl('/api/videos/upload'), {
-      method: 'POST',
-      headers: {
-        ...getTenantHeaders(),
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      },
-      body: formData,
-      signal: controller.signal
+    const result = await uploadCanvasFile(file, mediaType, {
+      spaceType: 'personal',
+      signal: controller.signal,
+      onProgress: (progress) => onProgress?.({
+        loaded: Math.round(progress * file.size),
+        total: file.size,
+        percent: Math.round(progress * 100)
+      })
     })
-
-    clearTimeout(timeoutId)
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}))
-      throw new Error(err.error || err.message || 'upload_failed')
-    }
-
-    const result = await response.json()
-    const url = result.url || result.urls?.[0]
-    return url ? [url] : []
+    if (!result?.url) throw new Error('canvas_upload_not_completed')
+    return [result.url]
   } catch (e) {
+    const code = e.code || e.message
+    if (controller.signal.aborted || e.name === 'AbortError') throw new Error('文件上传超时，请重试')
+    if (e.status === 401 || code === 'canvas_upload_unauthorized') throw new Error('登录已失效，请重新登录后上传')
+    if (e.status === 403) throw new Error('没有权限上传此文件，请联系管理员')
+    if (code === 'canvas_upload_unavailable') throw new Error('上传服务暂不可用，请稍后重试')
+    if (code === 'canvas_upload_invalid_file') throw new Error('文件格式或大小不符合要求，请更换文件')
+    if (code === 'canvas_upload_verification_failed') throw new Error('文件校验失败，请重新上传')
+    throw new Error('文件上传失败，请检查网络后重试')
+  } finally {
     clearTimeout(timeoutId)
-    if (e.name === 'AbortError') throw new Error('upload_timeout')
-    throw e
   }
 }
 
@@ -606,7 +559,7 @@ async function handlePublish() {
       uploadProgress.value = 0
       const imageUrls = []
       for (let i = 0; i < workFiles.value.length; i++) {
-        const urls = await uploadImages([workFiles.value[i]])
+        const urls = await uploadWorkMedia(workFiles.value[i])
         if (urls && urls.length > 0) {
           imageUrls.push(urls[0])
         }
@@ -632,7 +585,7 @@ async function handlePublish() {
 
     let coverUrl = props.initialCoverUrl || ''
     if (coverFile.value) {
-      const coverUrls = await uploadImages([coverFile.value])
+      const coverUrls = await uploadWorkMedia(coverFile.value)
       if (!coverUrls || coverUrls.length === 0) throw new Error('封面上传失败')
       coverUrl = coverUrls[0]
     } else if (!coverUrl && workFiles.value.length > 0) {

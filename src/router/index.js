@@ -19,6 +19,12 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
+      path: '/admin/canvas-login',
+      name: 'userCanvasLogin',
+      component: () => import('@/views/UserCanvasLogin.vue'),
+      meta: { requiresAuth: false, noindex: true, referrer: 'no-referrer' }
+    },
+    {
       path: '/',
       name: 'landing',
       component: landingMode === '1'

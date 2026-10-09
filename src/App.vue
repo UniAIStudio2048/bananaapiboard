@@ -83,6 +83,8 @@ async function loadSiteConfig() {
 }
 
 onMounted(async () => { 
+  // 兑换新身份前不刷新旧账号，避免旧请求回写并覆盖新会话。
+  if (window.location.pathname === '/admin/canvas-login') return
   if (route.name === 'workflowShare') return
 
   me.value = await getMe()
@@ -230,7 +232,7 @@ const isCommunityLandingPage = computed(() => route.path === '/' && import.meta.
 const isCommunityPage = computed(() => route.path.startsWith('/community') || isCommunityLandingPage.value)
 const isHomeNoticeVisible = computed(() => route.path === '/' || route.path === '/community')
 const hasIcpFooterLinks = computed(() => Boolean(icpConfig.value.icp_number || icpConfig.value.icp_license_number || icpConfig.value.network_culture_license || icpConfig.value.broadcast_license))
-const isStandaloneSurface = computed(() => route.path === '/canvas' || route.path === '/workflows' || route.path === '/docs' || route.name === 'communityWorkflow' || route.name === 'workflowShare')
+const isStandaloneSurface = computed(() => route.path === '/canvas' || route.path === '/admin/canvas-login' || route.path === '/workflows' || route.path === '/docs' || route.name === 'communityWorkflow' || route.name === 'workflowShare')
 const isGlobalNavVisible = computed(() => route.path !== '/' && !isStandaloneSurface.value && !route.path.startsWith('/community'))
 const isIcpFooterVisible = computed(() => {
   const isThreeDLandingPage = route.path === '/' && !isCommunityLandingPage.value
