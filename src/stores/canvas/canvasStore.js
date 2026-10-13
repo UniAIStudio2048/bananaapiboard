@@ -3137,6 +3137,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     NODE_CRITICAL_THRESHOLD,
     
     // 剪贴板操作
+    clipboard,
     copySelectedNodes,
     pasteNodes,
     duplicateNodeWithIncomingEdges,

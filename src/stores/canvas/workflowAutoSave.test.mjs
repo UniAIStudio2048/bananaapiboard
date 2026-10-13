@@ -21,6 +21,10 @@ globalThis.localStorage = {
   }
 }
 
+// Recovery now requires an identified account.
+storage.set('user_id', 'test-user')
+const HISTORY_KEY = 'workflow_auto_saves:test-user'
+
 const session = {
   tabs: [
     {
@@ -132,7 +136,7 @@ assert.deepEqual(
 )
 
 const now = Date.now()
-storage.set('workflow_auto_saves', JSON.stringify([
+storage.set(HISTORY_KEY, JSON.stringify([
   {
     id: 'history-old-format',
     name: '旧格式历史',
@@ -159,7 +163,7 @@ assert.equal(updatedHistory[0].description, '新的历史描述')
 
 assert.equal(updateWorkflowHistoryDescription('missing-history', '不会写入'), false)
 
-storage.set('workflow_auto_saves', JSON.stringify([
+storage.set(HISTORY_KEY, JSON.stringify([
   {
     id: 'history-within-retention',
     name: '14天内历史',
@@ -193,7 +197,7 @@ storage.set('workflow_tab_session', JSON.stringify({
     }
   ],
   activeTabId: 'tab-within-retention',
-  userId: null,
+  userId: 'test-user',
   savedAt: now - 14 * 24 * 60 * 60 * 1000
 }))
 
@@ -201,7 +205,7 @@ const retainedSession = getWorkflowSession()
 assert.equal(retainedSession.tabs.length, 1)
 assert.equal(retainedSession.activeTabId, 'tab-within-retention')
 
-storage.delete('workflow_auto_saves')
+storage.delete(HISTORY_KEY)
 assert.equal(saveWorkflowToHistory({
   name: '带描述的自动保存',
   description: '自动保存时保留的描述',

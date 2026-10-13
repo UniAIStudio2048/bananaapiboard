@@ -1488,9 +1488,12 @@ async function saveCurrentWorkflowSessionAsync() {
 }
 
 async function tryAutoRestoreWorkflowSession() {
+  const sessionToken = localStorage.getItem('token')
+  if (!sessionToken) return false
   try {
     // 🔧 异步读取：同时兼顾 localStorage 内联会话与 IndexedDB 大会话
     const session = await getWorkflowSessionAsync()
+    if (localStorage.getItem('token') !== sessionToken) return false
     if (!session?.tabs?.length) {
       return false
     }
@@ -1549,6 +1552,8 @@ function tryAutoRestoreRecentWorkflow() {
 
 // 🔧 服务器恢复回退：本地会话/历史都失效时，从上次活动的已保存工作流加载（userId 隔离）
 async function tryRestoreFromServerPointer() {
+  const sessionToken = localStorage.getItem('token')
+  if (!sessionToken) return false
   try {
     const pointer = getLastActiveWorkflowPointer()
     if (!pointer?.workflowId) {
@@ -1562,6 +1567,7 @@ async function tryRestoreFromServerPointer() {
 
     console.log('[Canvas] 本地恢复失败，尝试从服务器加载上次工作流:', pointer.workflowId)
     const result = await loadWorkflowFromServer(pointer.workflowId)
+    if (localStorage.getItem('token') !== sessionToken) return false
     if (result?.workflow) {
       canvasStore.openWorkflowInNewTab(result.workflow)
       console.log('[Canvas] 已从服务器恢复工作流:', result.workflow.name)

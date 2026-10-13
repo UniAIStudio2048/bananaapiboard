@@ -14,6 +14,7 @@ import { getPermanentUserPoints } from '@/utils/points'
 import { useI18n } from '@/i18n'
 import { useCanvasStore } from '@/stores/canvas'
 import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
+import { bindCanvasAuthSession } from '@/stores/canvas/canvasAuthSession'
 
 const { t, currentLanguage } = useI18n()
 
@@ -22,6 +23,7 @@ const { formatMoney } = useCurrencyDisplay()
 const route = useRoute()
 const router = useRouter()
 const canvasStore = useCanvasStore()
+onUnmounted(bindCanvasAuthSession(canvasStore))
 const isMenuOpen = ref(false)
 const isUserMenuOpen = ref(false)
 const isGenerateMenuOpen = ref(false) // 生成菜单下拉状态

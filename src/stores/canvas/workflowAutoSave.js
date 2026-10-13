@@ -101,17 +101,22 @@ async function readSessionFromIndexedDB(key = SESSION_IDB_KEY) {
 
 function getCurrentUserId() {
   try {
-    const directId = localStorage.getItem('user_id') || localStorage.getItem('userId')
-    if (directId) return String(directId)
-
     const user = JSON.parse(localStorage.getItem('user') || 'null')
     if (user?.id !== undefined && user?.id !== null) {
       return String(user.id)
     }
+    const directId = localStorage.getItem('user_id') || localStorage.getItem('userId')
+    if (directId) return String(directId)
   } catch (error) {
     // 无法读取用户信息时按未登录处理，避免影响普通清理逻辑。
   }
   return null
+}
+
+// 旧全局历史没有账号归属，不能迁移给下一位登录用户。
+function getHistoryStorageKey() {
+  const userId = getCurrentUserId()
+  return userId ? `${STORAGE_KEY}:${encodeURIComponent(userId)}` : null
 }
 
 function parseStoredJson(value, fallback) {
@@ -314,6 +319,8 @@ function cleanNodeData(nodes) {
  * 🔧 安全地保存到 localStorage，处理容量溢出
  */
 function saveToLocalStorage(history) {
+  const storageKey = getHistoryStorageKey()
+  if (!storageKey) return false
   try {
     const jsonData = JSON.stringify(history)
     
@@ -330,7 +337,7 @@ function saveToLocalStorage(history) {
       }
     }
     
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(history))
+    localStorage.setItem(storageKey, JSON.stringify(history))
     return true
   } catch (e) {
     // 处理 QuotaExceededError
@@ -340,13 +347,13 @@ function saveToLocalStorage(history) {
       // 删除一半记录后重试
       const reducedHistory = history.slice(0, Math.max(1, Math.floor(history.length / 2)))
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(reducedHistory))
+        localStorage.setItem(storageKey, JSON.stringify(reducedHistory))
         console.log('[WorkflowAutoSave] 清理后保存成功，剩余记录数:', reducedHistory.length)
         return true
       } catch (e2) {
         console.error('[WorkflowAutoSave] 清理后仍无法保存，清空所有历史')
         try {
-          localStorage.removeItem(STORAGE_KEY)
+          localStorage.removeItem(storageKey)
         } catch (e3) {
           // 忽略
         }
@@ -363,7 +370,9 @@ function saveToLocalStorage(history) {
  */
 export function getWorkflowHistory() {
   try {
-    const data = localStorage.getItem(STORAGE_KEY)
+    const storageKey = getHistoryStorageKey()
+    if (!storageKey) return []
+    const data = localStorage.getItem(storageKey)
     if (!data) return []
     
     const history = JSON.parse(data)
@@ -534,7 +543,7 @@ function validateSessionRecord(session) {
     return null
   }
   const currentUserId = getCurrentUserId()
-  if (currentUserId && session.userId !== currentUserId) {
+  if (!currentUserId || session.userId !== currentUserId) {
     return null
   }
   if (Date.now() - (session.savedAt || 0) > SESSION_RESTORE_DURATION) {
@@ -579,6 +588,8 @@ export function getWorkflowSession() {
  * 返回较新（savedAt 大）的有效会话。供页面恢复链使用。
  */
 export async function getWorkflowSessionAsync() {
+  const userId = getCurrentUserId()
+  if (!userId) return null
   let lsSession = null
   let isPointer = false
 
@@ -604,6 +615,7 @@ export async function getWorkflowSessionAsync() {
   if (isPointer || !lsSession) {
     idbSession = validateSessionRecord(await readSessionFromIndexedDB())
   }
+  if (getCurrentUserId() !== userId) return null
 
   if (lsSession && idbSession) {
     return (idbSession.savedAt || 0) > (lsSession.savedAt || 0) ? idbSession : lsSession
@@ -643,7 +655,7 @@ export function getLastActiveWorkflowPointer() {
     if (!pointer || !pointer.workflowId) return null
 
     const currentUserId = getCurrentUserId()
-    if (currentUserId && pointer.userId !== currentUserId) return null
+    if (!currentUserId || pointer.userId !== currentUserId) return null
     if (Date.now() - (pointer.savedAt || 0) > SESSION_RESTORE_DURATION) {
       localStorage.removeItem(LAST_ACTIVE_WORKFLOW_KEY)
       return null
@@ -659,6 +671,8 @@ export function getLastActiveWorkflowPointer() {
  * @param {Object} workflow - 工作流数据 { name, nodes, edges, viewport, tabId, workflowId }
  */
 export function saveWorkflowToHistory(workflow) {
+  const userId = getCurrentUserId()
+  if (!userId) return false
   if (!workflow || !workflow.nodes || workflow.nodes.length === 0) {
     return false
   }
@@ -686,6 +700,7 @@ export function saveWorkflowToHistory(workflow) {
     // 创建历史记录（使用清理后的数据）
     const historyItem = {
       id: historyId,
+      userId,
       name: workflow.name || '未命名工作流',
       description: workflow.description || '',
       tabId: workflow.tabId || null,
@@ -797,7 +812,9 @@ export function updateWorkflowHistoryDescription(historyId, description) {
  */
 export function clearWorkflowHistory() {
   try {
-    localStorage.removeItem(STORAGE_KEY)
+    const storageKey = getHistoryStorageKey()
+    if (!storageKey) return false
+    localStorage.removeItem(storageKey)
     console.log('[WorkflowAutoSave] 已清空所有历史记录')
     return true
   } catch (error) {
@@ -911,7 +928,8 @@ export function getHistoryCount() {
  */
 export function getStorageStats() {
   try {
-    const data = localStorage.getItem(STORAGE_KEY)
+    const storageKey = getHistoryStorageKey()
+    const data = storageKey ? localStorage.getItem(storageKey) : null
     const size = data ? data.length : 0
     const history = data ? JSON.parse(data) : []
     
@@ -1034,6 +1052,8 @@ export function getSpaceWorkflowSession(spaceKey) {
  */
 export async function getSpaceWorkflowSessionAsync(spaceKey) {
   if (!spaceKey) return null
+  const userId = getCurrentUserId()
+  if (!userId) return null
   const storageKey = spaceSessionStorageKey(spaceKey)
 
   let lsSession = null
@@ -1061,6 +1081,7 @@ export async function getSpaceWorkflowSessionAsync(spaceKey) {
   if (isPointer || !lsSession) {
     idbSession = validateSessionRecord(await readSessionFromIndexedDB(spaceKey))
   }
+  if (getCurrentUserId() !== userId) return null
 
   if (lsSession && idbSession) {
     return (idbSession.savedAt || 0) > (lsSession.savedAt || 0) ? idbSession : lsSession
