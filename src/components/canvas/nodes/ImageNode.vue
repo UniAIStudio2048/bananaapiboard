@@ -4316,7 +4316,9 @@ const referenceMediaList = computed(() => {
 
 function updatePromptMentionBindings(bindings) {
   promptMentionBindings.value = bindings || {}
+  // 与提示词一起提交，避免 Vue Flow 先回传绑定更新中的旧 prompt，覆盖本次插入。
   canvasStore.updateNodeData(props.id, {
+    prompt: promptText.value,
     promptMentionBindings: promptMentionBindings.value
   })
 }

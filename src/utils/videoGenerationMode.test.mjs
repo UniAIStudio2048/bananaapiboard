@@ -310,10 +310,10 @@ test('Wan video models use text defaults and keep animate mix out of core wan2.7
   )
 })
 
-test('Wan3 exposes the six documented generation modes', () => {
+test('Wan3 exposes the eight documented generation modes', () => {
   assert.deepEqual(
     WAN3_MODES.map(mode => mode.value),
-    ['text2video', 'image2video_first', 'image2video_first_last', 'multimodal_ref', 'file', 'link']
+    ['text2video', 'image2video_first', 'image2video_first_last', 'multimodal_ref', 'video_edit', 'video_extend', 'file', 'link']
   )
 })
 

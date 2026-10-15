@@ -14,7 +14,7 @@ const selectorEnd = source.indexOf('\nconst activeVideoSubmodeSelector', selecto
 const wan3Flag = source.match(/const isWan3Model = computed\([^\n]+/)[0]
 
 test('Wan3 dropdown uses API type and tenant default with arbitrary model names', async () => {
-  for (const [apiType, savedMode] of ['wan3', 'wavespeed-wan3', 'siray-wan3'].flatMap(apiType => [undefined, 'invalid', 'image2video_first'].map(mode => [apiType, mode]))) {
+  for (const [apiType, savedMode] of ['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].flatMap(apiType => [undefined, 'invalid', 'image2video_first', 'video_edit', 'video_extend'].map(mode => [apiType, mode]))) {
     const scope = effectScope()
     const modelConfig = ref({ value: 'custom-video-name', apiType, wan3Config: { defaultMode: 'multimodal_ref' } })
     const selectedWan3Mode = ref(savedMode || 'text2video')
@@ -29,11 +29,14 @@ test('Wan3 dropdown uses API type and tenant default with arbitrary model names'
       const selector = scope.run(() => runInNewContext(
         `${wan3Flag}\n${source.slice(watcherStart, watcherEnd)}\n${source.slice(selectorStart, selectorEnd)}\nactiveVideoModeSelector`, sandbox
       ))
-      assert.equal(selectedWan3Mode.value, savedMode === 'image2video_first' ? savedMode : 'multimodal_ref')
+      const expectedMode = savedMode === 'image2video_first' || (apiType === 'wan3' && ['video_edit', 'video_extend'].includes(savedMode)) ? savedMode : 'multimodal_ref'
+      assert.equal(selectedWan3Mode.value, expectedMode)
       assert.equal(selector.value.key, 'wan3')
+      assert.equal(selector.value.options.some(option => option.value === 'video_edit'), apiType === 'wan3')
+      assert.equal(selector.value.options.some(option => option.value === 'video_extend'), apiType === 'wan3')
       if (['wavespeed-wan3', 'siray-wan3'].includes(apiType)) assert.deepEqual(Array.from(selector.value.options, option => option.value), ['text2video', 'image2video_first', 'image2video_first_last', 'multimodal_ref'])
       assert.equal(selector.value.options.find(option => option.value === selector.value.value).label,
-        savedMode === 'image2video_first' ? '首帧' : '多模态参考')
+        WAN3_MODES.find(option => option.value === expectedMode).label)
       modelConfig.value = { value: 'wan3.0-video', apiType: 'unrelated' }
       await nextTick()
       assert.equal(selector.value, null)

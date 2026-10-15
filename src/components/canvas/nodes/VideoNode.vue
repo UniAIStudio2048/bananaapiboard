@@ -829,7 +829,9 @@ const referenceMediaList = computed(() => {
 
 function updatePromptMentionBindings(bindings) {
   promptMentionBindings.value = bindings || {}
+  // 与提示词一起提交，避免 Vue Flow 先回传绑定更新中的旧 prompt，覆盖本次插入。
   canvasStore.updateNodeData(props.id, {
+    prompt: promptText.value,
     promptMentionBindings: promptMentionBindings.value
   })
 }
@@ -3757,7 +3759,8 @@ const activeVideoModeSelector = computed(() => {
       key: 'wan3',
       label: '万相 3.0 模式',
       value: selectedWan3Mode.value,
-      options: ['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType) ? WAN3_MODES.filter(mode => !['file', 'link'].includes(mode.value)) : WAN3_MODES
+      options: WAN3_MODES.filter(mode => (!mode.apiType || mode.apiType === currentModelConfig.value?.apiType) &&
+        (!['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType) || !['file', 'link'].includes(mode.value)))
     }
   }
 
@@ -4873,7 +4876,7 @@ watch(selectedModel, () => {
 
   if (['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(modelConfig?.apiType)) {
     const configuredMode = modelConfig?.wan3Config?.defaultMode
-    selectedWan3Mode.value = WAN3_MODES.some(mode => mode.value === configuredMode)
+    selectedWan3Mode.value = WAN3_MODES.some(mode => mode.value === configuredMode && (!mode.apiType || mode.apiType === modelConfig.apiType))
       ? configuredMode
       : 'text2video'
     console.log('[VideoNode] 切换到 Wan3 模型，模式重置为', selectedWan3Mode.value)
@@ -4886,7 +4889,8 @@ watch(currentModelConfig, modelConfig => {
   selectedWan3Mode.value = pickInitialSubmode(
     props.data.wan3Mode,
     configuredMode,
-    ['wavespeed-wan3', 'siray-wan3'].includes(modelConfig.apiType) ? WAN3_MODES.filter(mode => !['file', 'link'].includes(mode.value)) : WAN3_MODES,
+    WAN3_MODES.filter(mode => (!mode.apiType || mode.apiType === modelConfig.apiType) &&
+      (!['wavespeed-wan3', 'siray-wan3'].includes(modelConfig.apiType) || !['file', 'link'].includes(mode.value))),
     'text2video'
   )
 }, { immediate: true })
@@ -5942,7 +5946,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     } else if (wan3Mode === 'image2video_first_last') {
       if (finalImages.length > 0) formData.append('first_frame_image', finalImages[0])
       if (finalImages.length > 1) formData.append('last_frame_image', finalImages[1])
-    } else if (wan3Mode === 'multimodal_ref') {
+    } else if (['multimodal_ref', 'video_edit', 'video_extend'].includes(wan3Mode)) {
       if (finalImages.length > 0) {
         formData.append('reference_images', JSON.stringify(finalImages.slice(0, maxImages)))
       }
@@ -6963,9 +6967,13 @@ async function handleGenerate(options = {}) {
         await showAlert('万相 3.0 首尾帧模式需要且仅支持 2 张图片', '首尾帧数量不正确')
         return
       }
-    } else if (wan3Mode === 'multimodal_ref') {
+    } else if (['multimodal_ref', 'video_edit', 'video_extend'].includes(wan3Mode)) {
       if (wan3FileUrl || wan3LinkUrl) {
         await showAlert('万相 3.0 文件或网页链接不能与首尾帧、参考素材同时使用', '输入冲突')
+        return
+      }
+      if (['video_edit', 'video_extend'].includes(wan3Mode) && referenceVideoCount === 0) {
+        await showAlert(`万相 3.0 ${wan3Mode === 'video_edit' ? '视频编辑' : '视频延长'}至少需要一段参考视频`, '缺少参考视频')
         return
       }
       const wan3Config = currentModelConfig.value?.wan3Config || {}
@@ -10472,7 +10480,7 @@ function handleToolbarPreview() {
             contenteditable="true"
             role="textbox"
             aria-multiline="true"
-            :data-placeholder="hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : supportsMediaTags ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(Ctrl+Enter 生成，Enter 换行)'"
+            :data-placeholder="currentModelConfig?.apiType === 'wan3' && selectedWan3Mode === 'video_edit' ? '连接参考视频，描述要修改的内容\n例：将人物的衣服改成红色，其他部分保持不变' : currentModelConfig?.apiType === 'wan3' && selectedWan3Mode === 'video_extend' ? '连接参考视频，描述延续的内容，可指定向前或向后延长\n例：向后延长，人物转身走向远处' : hasUpstreamText ? '可选：添加额外的提示词（将与上下文合并）' : supportsMediaTags ? '输入提示词，点击上方素材插入引用\n例：参考使用@视频中女孩的动作，让@图片1的女孩动起来' : '描述你想要生成的内容，并在下方调整生成参数。(Ctrl+Enter 生成，Enter 换行)'"
             @keydown="handleKeyDown"
             @beforeinput="handlePromptBeforeInput"
             @input="handlePromptInput"
