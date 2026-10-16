@@ -22,7 +22,7 @@ import { useTeamStore } from '@/stores/team'
 import { formatPoints } from '@/utils/format'
 import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
-import { getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
+import { config as tenantConfig, getTenantConfigVersion, getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
 import { saveWorkflow, uploadCanvasMedia, extractVideoFrame, getWorkflowNodesBatch, patchWorkflowNode, postWorkflowOps } from '@/api/canvas/workflow'
 import { uploadCanvasDocument } from '@/api/canvas/direct-upload'
@@ -1713,6 +1713,35 @@ const currentWanModeConfig = computed(() => {
 })
 
 // Seedance 高级选项显示控制
+const savingAutoReview = ref(false)
+const assetReviewProvider = computed(() => {
+  getTenantConfigVersion()
+  return tenantConfig.video_models?.find(model => model.name === selectedModel.value)?.assetReviewProvider || ''
+})
+const autoReviewMaterials = computed(() => {
+  return Boolean(assetReviewProvider.value) && props.data?.autoReviewMaterials?.[selectedModel.value] !== false
+})
+
+async function setAutoReviewMaterials(event) {
+  const enabled = event.target.checked
+  event.target.checked = autoReviewMaterials.value
+  if (savingAutoReview.value) return
+  savingAutoReview.value = true
+  const tabId = canvasStore.getCurrentTab?.()?.id
+  const model = selectedModel.value
+  try {
+    const { workflowId } = await ensureCanvasWorkflowForVideoSubmission(props.id)
+    const settings = { ...(props.data?.autoReviewMaterials || {}), [model]: enabled }
+    const result = await patchWorkflowNode(workflowId, props.id, { data: { autoReviewMaterials: settings } })
+    if (canvasStore.getCurrentTab?.()?.id === tabId) {
+      canvasStore.updateNodeData(props.id, { autoReviewMaterials: settings }, { silent: true })
+      canvasStore.applyWorkflowSaveVersions({ id: workflowId, node_versions: { [props.id]: result.version } })
+    }
+  } catch (error) {
+    showToast(error.message || '自动校验设置保存失败', 'error')
+  } finally { savingAutoReview.value = false }
+}
+
 const showSeedanceAdvancedOptions = ref(false)
 
 // Seedance 音频相关选项
@@ -5507,6 +5536,16 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   
   // 构建请求数据
   const formData = new FormData()
+  if (capturedState.autoReviewMaterials !== undefined) {
+    formData.append('auto_review_materials', String(capturedState.autoReviewMaterials))
+    if (capturedState.autoReviewMaterials) {
+      formData.append('auto_review_inputs', JSON.stringify({
+        images: finalImages,
+        videos: capturedState.referenceVideos || [],
+        audios: capturedState.referenceAudios || []
+      }))
+    }
+  }
   formData.append('prompt', finalPrompt || '根据图片生成视频')
   if (capturedState.ledgerVideoMode) formData.append('ledger_video_mode', capturedState.ledgerVideoMode)
   formData.append('client_submission_id', submission.submissionId)
@@ -7105,6 +7144,7 @@ async function handleGenerate(options = {}) {
   
   // 快照当前状态，供后台任务使用
   const capturedState = {
+    autoReviewMaterials: autoReviewMaterials.value,
     nodeId: props.id,
     ledgerVideoMode: [
       activeVideoModeSelector.value?.options.find(option => option.value === activeVideoModeSelector.value.value)?.label,
@@ -11048,6 +11088,25 @@ function handleToolbarPreview() {
         </Transition>
       </template>
       
+      <details v-if="assetReviewProvider" class="asset-review-settings nodrag nowheel">
+        <summary class="sora2-collapse-trigger" @keydown.stop @keyup.stop>
+          <span>高级设置</span>
+          <svg class="sora2-collapse-icon" aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 5 7 7-7 7" />
+          </svg>
+        </summary>
+        <div class="sora2-advanced-options seedance-advanced">
+          <div class="sora2-option-row">
+            <span class="sora2-option-label" title="生成前校验连入的图片、视频和音频；生成完成后 5 分钟内可复用，之后重新校验。">自动校验素材 ⓘ</span>
+            <label class="sora2-toggle-switch">
+              <input type="checkbox" aria-label="自动校验素材" :checked="autoReviewMaterials" :disabled="savingAutoReview || isGenerating || assetReviewProvider !== 'volcengine'" @change="setAutoReviewMaterials" />
+              <span class="sora2-toggle-slider"></span>
+            </label>
+          </div>
+          <div v-if="assetReviewProvider !== 'volcengine'" class="seedance-sound-hint">已绑定素材渠道，自动校验待接通</div>
+        </div>
+      </details>
+
       <!-- Seedance 1.5 高级选项 - 声音生成（2.0 默认含声音，无需开关） -->
       <template v-if="isSeedanceModel && !isSeedance2Model">
         <!-- 展开/收起按钮 -->
@@ -14747,6 +14806,20 @@ function handleToolbarPreview() {
 
 .sora2-collapse-icon.expanded {
   transform: rotate(180deg);
+}
+
+.asset-review-settings > summary {
+  justify-content: flex-start;
+  padding: 12px 16px;
+  list-style: none;
+}
+
+.asset-review-settings > summary::-webkit-details-marker {
+  display: none;
+}
+
+.asset-review-settings[open] .sora2-collapse-icon {
+  transform: rotate(90deg);
 }
 
 /* 高级选项容器 */
