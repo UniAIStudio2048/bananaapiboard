@@ -89,6 +89,7 @@ import {
   validateSeedanceModeInputs
 } from '@/utils/seedanceMediaValidation'
 import {
+  isSeedance25Model,
   getSeedance25ModeConstraints,
   resolveSeedance2Limits,
   validateSeedance25ModePrompt,
@@ -1453,6 +1454,10 @@ const seedance2Limits = computed(() => resolveSeedance2Limits(currentModelConfig
 // Seedance 2.0 模式选择
 const selectedSeedance2Mode = ref(props.data.seedance2Mode || 'text2video')
 const seedanceResolution = ref(props.data.seedanceResolution || '720p')
+const supportsSeedanceDraft = computed(() => currentModelConfig.value?.apiType === 'seedance-2.5' ||
+  (currentModelConfig.value?.apiType === 'seedance-2.0' && isSeedance25Model(currentModelConfig.value)))
+const seedanceDraftEnabled = computed(() => supportsSeedanceDraft.value && props.data.seedanceDraftEnabled === true)
+const savingSeedanceDraft = ref(false)
 let didInitializeSeedance2Mode = Boolean(props.data.seedance2Mode)
 
 // Seedance 2.5 编辑模式：每秒积分单价
@@ -2485,6 +2490,7 @@ const seedanceResolutionOptions = computed(() => {
 })
 
 const videoParameterResolutionOptions = computed(() => {
+  if (seedanceDraftEnabled.value) return [{ value: '480p', label: '480P' }]
   if (genericVideoResolutionOptions.value.length > 0) return genericVideoResolutionOptions.value
   if (isSeedance2Model.value) return seedanceResolutionOptions.value
   if (isMinimaxH3Model.value) return minimaxH3ResolutionOptions.value.map(value => ({ value: value.value, label: value.label }))
@@ -5490,6 +5496,25 @@ async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
 }
 
 // 单次生成请求
+async function sendSeedanceDraftFinalRequest(taskId, submission) {
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(getApiUrl('/api/videos/generate'), {
+      method: 'POST',
+      headers: { ...getTenantHeaders(), 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ seedance_draft_task_id: taskId, client_submission_id: submission.submissionId,
+        canvas_node_id: submission.nodeId, canvas_workflow_id: submission.workflowId, canvas_tab_id: submission.tabId })
+    })
+    const data = await response.json()
+    if (!response.ok) throw Object.assign(new Error(data.message || '生成正片失败'), { payload: data })
+    return { data, submissionId: submission.submissionId }
+  } catch (error) {
+    error.clientSubmissionId = submission.submissionId
+    if (!error.payload) error.isVideoSubmissionNetworkError = true
+    throw error
+  }
+}
+
 async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedState = {}) {
   const token = localStorage.getItem('token')
   const { currentTab, workflowId } = await ensureCanvasWorkflowForVideoSubmission(nodeId)
@@ -5506,6 +5531,10 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       source: 'canvas-video-node'
     }
   })
+
+  if (capturedState.seedanceDraftTaskId) {
+    return sendSeedanceDraftFinalRequest(capturedState.seedanceDraftTaskId, { ...submission, nodeId, workflowId, tabId: currentTab?.id })
+  }
 
   if (capturedState.isHeygenMode) {
     try {
@@ -5536,6 +5565,7 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
   
   // 构建请求数据
   const formData = new FormData()
+  if (capturedState.seedanceDraft) formData.append('seedance_draft', 'true')
   if (capturedState.autoReviewMaterials !== undefined) {
     formData.append('auto_review_materials', String(capturedState.autoReviewMaterials))
     if (capturedState.autoReviewMaterials) {
@@ -6229,6 +6259,7 @@ async function executeNodeGeneration(nodeId, finalPrompt, finalImages, taskIndex
       status: 'processing',
       progress: '排队中...',
       processingStartedAt: Date.now(),
+      seedanceDraft: capturedState.seedanceDraft === true,
       taskId: null,
       soraTaskId: null,
       safetyError: null,
@@ -6722,6 +6753,67 @@ async function processGenerationInBackground(targetNodeId, allNodeIds, finalProm
 }
 
 // 开始生成（点击后立即响应，重操作全部后台执行）
+const seedanceDraftQuote = ref(null)
+const seedanceDraftQuoteError = ref('')
+const generatingSeedanceFinal = ref(false)
+const currentSeedanceDraftTaskId = computed(() => props.data.seedanceDraft === true && props.data.status === 'success'
+  ? (props.data.taskId || props.data.soraTaskId || '') : '')
+
+watch([seedanceDraftEnabled, genericVideoResolution, seedanceResolution], () => {
+  if (seedanceDraftEnabled.value && (genericVideoResolution.value !== '480p' || seedanceResolution.value !== '480p')) syncGenericVideoResolution('480p')
+}, { immediate: true })
+
+watch(currentSeedanceDraftTaskId, async taskId => {
+  seedanceDraftQuote.value = null
+  seedanceDraftQuoteError.value = ''
+  if (!taskId || props.data.readonly) return
+  try {
+    const token = localStorage.getItem('token')
+    const response = await fetch(getApiUrl(`/api/videos/task/${encodeURIComponent(taskId)}/draft-quote`), {
+      headers: { ...getTenantHeaders(), ...(token ? { Authorization: `Bearer ${token}` } : {}) }
+    })
+    const quote = await response.json()
+    if (!response.ok) throw new Error(quote.message || '无法获取正片价格')
+    if (currentSeedanceDraftTaskId.value === taskId) seedanceDraftQuote.value = quote
+  } catch (error) {
+    if (currentSeedanceDraftTaskId.value === taskId) seedanceDraftQuoteError.value = error.message
+  }
+}, { immediate: true })
+
+async function setSeedanceDraftEnabled(event) {
+  const enabled = event.target.checked
+  event.target.checked = seedanceDraftEnabled.value
+  if (savingSeedanceDraft.value || isGenerating.value) return
+  savingSeedanceDraft.value = true
+  const tabId = canvasStore.getCurrentTab()?.id
+  try {
+    const { workflowId } = await ensureCanvasWorkflowForVideoSubmission(props.id)
+    const data = { seedanceDraftEnabled: enabled, ...(enabled ? { seedanceResolution: '480p', videoResolution: '480p' } : {}) }
+    const result = await patchWorkflowNode(workflowId, props.id, { data })
+    if (canvasStore.getCurrentTab()?.id === tabId) {
+      canvasStore.updateNodeData(props.id, data, { silent: true })
+      canvasStore.applyWorkflowSaveVersions({ id: workflowId, node_versions: { [props.id]: result.version } })
+      if (enabled) syncGenericVideoResolution('480p')
+    }
+  } catch (error) { showToast(error.message || '样片设置保存失败', 'error') }
+  finally { savingSeedanceDraft.value = false }
+}
+
+async function handleSeedanceDraftFinal() {
+  const quote = seedanceDraftQuote.value
+  if (!quote || generatingSeedanceFinal.value || props.data.readonly) return
+  if (Date.now() >= quote.expires_at) { showToast('样片已超过 7 天，请重新生成样片', 'error'); return }
+  if (userPoints.value < quote.points_cost) { await showInsufficientPointsDialog(quote.points_cost, userPoints.value, 1); return }
+  generatingSeedanceFinal.value = true
+  try {
+    const nodeId = createNewOutputNode()
+    if (!nodeId) throw new Error('无法创建正片节点')
+    canvasStore.updateNodeData(nodeId, { model: quote.model, duration: String(quote.duration), seedanceResolution: '1080p', videoResolution: '1080p', seedanceDraftEnabled: false, seedanceDraft: false, seedanceDraftSourceTaskId: quote.task_id })
+    await executeNodeGeneration(nodeId, props.data.prompt || '', [], 0, { model: quote.model, seedanceDraftTaskId: quote.task_id })
+  } catch (error) { showToast(error.message || '生成正片失败', 'error') }
+  finally { generatingSeedanceFinal.value = false }
+}
+
 async function handleGenerate(options = {}) {
   const { retry = false } = options
   if (isGenerating.value) return
@@ -7114,6 +7206,7 @@ async function handleGenerate(options = {}) {
       referenceVideos: referenceVideos.value,
       referenceAudios: referenceAudios.value,
       seedanceMode: isSeedance2Model.value ? selectedSeedance2Mode.value : '',
+      seedanceDraft: seedanceDraftEnabled.value,
       minimaxH3Mode: isMinimaxH3Model.value ? (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) : '',
       wan3Mode: isWan3Model.value ? selectedWan3Mode.value : '',
       wan3File: isWan3Model.value ? wan3File.value : null,
@@ -7144,6 +7237,7 @@ async function handleGenerate(options = {}) {
   
   // 快照当前状态，供后台任务使用
   const capturedState = {
+    seedanceDraft: seedanceDraftEnabled.value,
     autoReviewMaterials: autoReviewMaterials.value,
     nodeId: props.id,
     ledgerVideoMode: [
@@ -10056,6 +10150,18 @@ function handleToolbarPreview() {
             @timeupdate="handleVideoTimeUpdate"
             @error="handleVideoError"
           ></video>
+          <button
+            v-if="currentSeedanceDraftTaskId && !data.readonly"
+            class="seedance-draft-final-button nodrag nopan"
+            :disabled="generatingSeedanceFinal || !seedanceDraftQuote"
+            :title="seedanceDraftQuoteError || '复用样片生成 1080P 正片，按 1080P 价格单独扣费'"
+            @pointerdown.stop
+            @click.stop="handleSeedanceDraftFinal"
+          >
+            {{ generatingSeedanceFinal ? '提交中…' : '生成正片 1080P' }}
+            <span v-if="seedanceDraftQuote">⚡ {{ seedanceDraftQuote.points_cost }}</span>
+            <span v-else>{{ seedanceDraftQuoteError ? '暂不可用' : '获取价格…' }}</span>
+          </button>
           <!-- 播放指示器已移除：首帧不显示播放按钮 -->
           <div class="video-overlay-actions">
             <button class="overlay-action-btn" @click.stop="openFullscreenPreview" title="全屏预览">
@@ -11088,6 +11194,13 @@ function handleToolbarPreview() {
         </Transition>
       </template>
       
+      <div v-if="supportsSeedanceDraft" class="sora2-option-row nodrag nowheel">
+        <span class="sora2-option-label">样片模式 <span class="seedance-sound-hint">480P · 生成后可转 1080P 正片</span></span>
+        <label class="sora2-toggle-switch">
+          <input type="checkbox" aria-label="样片模式" :checked="seedanceDraftEnabled" :disabled="savingSeedanceDraft || isGenerating" @change="setSeedanceDraftEnabled" />
+          <span class="sora2-toggle-slider"></span>
+        </label>
+      </div>
       <details v-if="assetReviewProvider" class="asset-review-settings nodrag nowheel">
         <summary class="sora2-collapse-trigger" @keydown.stop @keyup.stop>
           <span>高级设置</span>
@@ -11321,6 +11434,27 @@ function handleToolbarPreview() {
 </template>
 
 <style scoped>
+.seedance-draft-final-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: #fff;
+  color: #171717;
+  font-size: 12px;
+  cursor: pointer;
+}
+.seedance-draft-final-button span { color: #737373; }
+.seedance-draft-final-button:hover { background: #f5f5f5; }
+.seedance-draft-final-button:disabled { opacity: 0.65; cursor: default; }
+.seedance-draft-final-button:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px; }
+.seedance-draft-final-button + .video-overlay-actions { top: auto; bottom: 12px; }
 .video-node {
   position: relative;
   display: flex;
