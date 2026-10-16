@@ -40,8 +40,10 @@ const loadingQuota = ref(false)
 // 项目选择
 const projects = ref([])
 const selectedProjectId = ref('')
+const loadingProjects = ref(false)
 const showQuickCreate = ref(false)
 const quickProjectName = ref('')
+let projectLoadVersion = 0
 
 // 当前工作流ID（如果是更新）
 const currentWorkflowId = ref(null)
@@ -77,15 +79,28 @@ const dataSizeStatus = computed(() => {
 
 // 监听对话框打开
 watch(() => props.visible, async (visible) => {
+  const loadVersion = ++projectLoadVersion
   if (visible) {
     showPublishDialog.value = false
     // 🔧 重置状态
     isSaving.value = false
     saveError.value = ''
     lastSaveError.value = ''
+    projects.value = []
+    selectedProjectId.value = canvasStore.workflowMeta?.project_id || ''
+    showQuickCreate.value = false
+    quickProjectName.value = ''
+    loadingProjects.value = true
+
+    const workflowMeta = canvasStore.workflowMeta
+    currentWorkflowId.value = workflowMeta?.id || null
+    const currentTab = canvasStore.workflowTabs.find(t => t.id === canvasStore.activeTabId)
+    workflowName.value = workflowMeta?.name || currentTab?.name || ''
+    workflowDescription.value = workflowMeta?.description || ''
 
     // 加载配额信息
     await loadQuota()
+    if (loadVersion !== projectLoadVersion) return
 
     // 加载项目列表
     try {
@@ -93,32 +108,19 @@ watch(() => props.visible, async (visible) => {
         spaceType: teamStore.globalSpaceType.value,
         teamId: teamStore.globalTeamId.value
       })
+      if (loadVersion !== projectLoadVersion) return
       projects.value = result.data || []
-      // 如果有当前工作流的 project_id，选中它
-      if (canvasStore.workflowMeta?.project_id) {
-        selectedProjectId.value = canvasStore.workflowMeta.project_id
-      } else if (projects.value.length > 0) {
-        const defaultProj = projects.value.find(p => p.is_default)
-        if (defaultProj) selectedProjectId.value = defaultProj.id
+      // 从指定项目创建或打开的工作流保留归属；其他新工作流选默认项目。
+      if (!selectedProjectId.value) {
+        selectedProjectId.value = projects.value.find(p => Number(p.is_default) === 1)?.id || ''
       }
     } catch (e) {
       console.error('[SaveWorkflow] 加载项目列表失败:', e)
-    }
-
-    // 如果有当前工作流ID，加载名称和描述
-    const workflowMeta = canvasStore.workflowMeta
-    if (workflowMeta) {
-      currentWorkflowId.value = workflowMeta.id
-      workflowName.value = workflowMeta.name || ''
-      workflowDescription.value = workflowMeta.description || ''
-    } else {
-      currentWorkflowId.value = null
-      // 从当前标签获取已重命名的名称
-      const currentTab = canvasStore.workflowTabs.find(t => t.id === canvasStore.activeTabId)
-      workflowName.value = currentTab?.name || ''
-      workflowDescription.value = ''
+    } finally {
+      if (loadVersion === projectLoadVersion) loadingProjects.value = false
     }
   } else {
+    loadingProjects.value = false
     showPublishDialog.value = false
   }
 })
@@ -138,23 +140,30 @@ async function loadQuota() {
 
 // 快速创建项目
 async function handleQuickCreateProject() {
-  if (!quickProjectName.value.trim()) return
+  if (!quickProjectName.value.trim() || loadingProjects.value || isSaving.value) return
+  const loadVersion = projectLoadVersion
+  loadingProjects.value = true
   try {
     const result = await createProject({
       name: quickProjectName.value.trim(),
       spaceType: teamStore.globalSpaceType.value,
       teamId: teamStore.globalTeamId.value
     })
+    if (loadVersion !== projectLoadVersion) return
+    selectedProjectId.value = result.data.id
+    projects.value.push({ ...result.data, name: quickProjectName.value.trim() })
+    showQuickCreate.value = false
+    quickProjectName.value = ''
     const listResult = await getProjectList({
       spaceType: teamStore.globalSpaceType.value,
       teamId: teamStore.globalTeamId.value
     })
+    if (loadVersion !== projectLoadVersion) return
     projects.value = listResult.data || []
-    selectedProjectId.value = result.data.id
-    showQuickCreate.value = false
-    quickProjectName.value = ''
   } catch (e) {
     console.error('[SaveWorkflow] 创建项目失败:', e)
+  } finally {
+    if (loadVersion === projectLoadVersion) loadingProjects.value = false
   }
 }
 
@@ -414,7 +423,7 @@ function saveLocalBackup(workflowData, name) {
 // 保存工作流 - 🔧 优化：立即关闭对话框，后台异步处理
 async function handleSave() {
   // 🔧 防止重复提交
-  if (isSaving.value) {
+  if (isSaving.value || loadingProjects.value) {
     return
   }
 
@@ -665,20 +674,20 @@ function handlePublishToCommunity() {
             <div class="form-group">
               <label class="form-label">所属项目</label>
               <div class="project-select-row">
-                <select v-model="selectedProjectId" class="form-select">
+                <select v-model="selectedProjectId" class="form-select" :disabled="loadingProjects || isSaving">
                   <option v-for="p in projects" :key="p.id" :value="p.id">
-                    {{ p.name }}{{ p.is_default ? ' (默认)' : '' }}
+                    {{ p.name }}{{ Number(p.is_default) === 1 ? ' (默认)' : '' }}
                   </option>
                 </select>
-                <button type="button" class="quick-create-btn" @click="showQuickCreate = !showQuickCreate" title="新建项目">
+                <button type="button" class="quick-create-btn" @click="showQuickCreate = !showQuickCreate" title="新建项目" :disabled="loadingProjects || isSaving">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
                   </svg>
                 </button>
               </div>
               <div v-if="showQuickCreate" class="quick-create-form">
-                <input v-model="quickProjectName" placeholder="输入项目名称" class="form-input" @keyup.enter="handleQuickCreateProject" />
-                <button type="button" class="quick-create-confirm" @click="handleQuickCreateProject">创建</button>
+                <input v-model="quickProjectName" placeholder="输入项目名称" class="form-input" @keydown.enter.prevent="handleQuickCreateProject" />
+                <button type="button" class="quick-create-confirm" @click="handleQuickCreateProject" :disabled="loadingProjects || isSaving">创建</button>
               </div>
             </div>
 
@@ -744,7 +753,7 @@ function handlePublishToCommunity() {
               type="button"
               class="btn btn-primary"
               @click="handleSave"
-              :disabled="isSaving || !workflowName.trim()"
+              :disabled="isSaving || loadingProjects || !workflowName.trim()"
             >
               {{ saveButtonText }}
             </button>

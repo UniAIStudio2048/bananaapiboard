@@ -3050,15 +3050,19 @@ function isEditableShortcutTarget(target) {
 async function handleKeyDown(event) {
   // 检查是否在输入框或可编辑区域中
   const target = event.target
-  const isInInput = target.tagName === 'INPUT' || 
-                    target.tagName === 'TEXTAREA' || 
-                    target.isContentEditable ||
-                    target.closest('[contenteditable="true"]')
+  const isInInput = isEditableShortcutTarget(target)
 
   if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey &&
       event.key.toLowerCase() === 'b' && !isEditableShortcutTarget(target)) {
     event.preventDefault()
     if (!event.repeat) presentationShortcut.press()
+    return
+  }
+
+  if (!event.repeat && !event.isComposing && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey &&
+      event.key.toLowerCase() === 'c' && !isInInput) {
+    event.preventDefault()
+    toggleInteractionMode()
     return
   }
 
@@ -4111,8 +4115,9 @@ onUnmounted(() => {
           class="canvas-control-btn canvas-mode-switch-btn"
           @click="toggleInteractionMode"
           @mousedown.stop
-          :data-tooltip="interactionMode === 'comfyui' ? t('canvas.switchToInfiniteCanvas') : t('canvas.switchToComfyui')"
+          :data-tooltip="`${interactionMode === 'comfyui' ? t('canvas.switchToInfiniteCanvas') : t('canvas.switchToComfyui')}（C）`"
           :aria-label="interactionMode === 'comfyui' ? t('canvas.switchToInfiniteCanvas') : t('canvas.switchToComfyui')"
+          aria-keyshortcuts="C"
         >
           <svg v-if="interactionMode === 'comfyui'" class="mode-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M3 12h4l3-9 4 18 3-9h4"/>
@@ -4315,37 +4320,47 @@ onUnmounted(() => {
           </div>
           <div class="canvas-help-body">
             <div class="help-columns">
-              <div class="help-section">
-                <h4>🖱️ {{ t('canvas.mouseOperations') }}
-                  <span class="help-mode-badge">{{ interactionMode === 'comfyui' ? t('canvas.comfyuiModeShort') : t('canvas.infiniteCanvasModeShort') }}</span>
-                </h4>
-                <!-- ComfyUI 模式 -->
-                <ul v-if="interactionMode === 'comfyui'">
-                  <li><kbd>{{ t('canvas.leftDrag') }}</kbd> {{ t('canvas.leftDragDesc') }}</li>
-                  <li><kbd>{{ t('canvas.rightClick') }}</kbd> {{ t('canvas.rightClickDesc') }}</li>
-                  <li><kbd>{{ t('canvas.ctrlDrag') }}</kbd> {{ t('canvas.ctrlDragDesc') }}</li>
-                  <li><kbd>{{ t('canvas.spaceDrag') }}</kbd> {{ t('canvas.spaceDragDesc') }}</li>
-                  <li><kbd>{{ t('canvas.leftClick') }}</kbd> {{ t('canvas.leftClickDesc') }}</li>
-                  <li><kbd>{{ t('canvas.doubleClickBlank') }}</kbd> {{ t('canvas.doubleClickBlankDesc') }}</li>
-                  <li><kbd>{{ t('canvas.scrollUp') }}</kbd> {{ t('canvas.scrollUpDesc') }}</li>
-                  <li><kbd>{{ t('canvas.scrollDown') }}</kbd> {{ t('canvas.scrollDownDesc') }}</li>
-                  <li><kbd>{{ t('canvas.shiftScroll') }}</kbd> {{ t('canvas.shiftScrollDesc') }}</li>
-                  <li><kbd>{{ t('canvas.ctrlScroll') }}</kbd> {{ t('canvas.ctrlScrollDesc') }}</li>
-                  <li><kbd>{{ t('canvas.middleDrag') }}</kbd> {{ t('canvas.middleDragDesc') }}</li>
-                </ul>
-                <!-- 无限画布模式 -->
-                <ul v-else>
-                  <li><kbd>{{ t('canvas.leftDrag') }}</kbd> {{ t('canvas.infiniteLeftDragDesc') }}</li>
-                  <li><kbd>{{ t('canvas.rightClick') }}</kbd> {{ t('canvas.rightClickDesc') }}</li>
-                  <li><kbd>{{ t('canvas.spaceDrag') }}</kbd> {{ t('canvas.spaceDragDesc') }}</li>
-                  <li><kbd>{{ t('canvas.leftClick') }}</kbd> {{ t('canvas.leftClickDesc') }}</li>
-                  <li><kbd>{{ t('canvas.doubleClickBlank') }}</kbd> {{ t('canvas.doubleClickBlankDesc') }}</li>
-                  <li><kbd>{{ t('canvas.scrollUp') }}</kbd> {{ t('canvas.infiniteScrollDesc') }}</li>
-                  <li><kbd>{{ t('canvas.scrollDown') }}</kbd> {{ t('canvas.infiniteScrollDesc') }}</li>
-                  <li><kbd>{{ t('canvas.shiftScroll') }}</kbd> {{ t('canvas.shiftScrollDesc') }}</li>
-                  <li><kbd>{{ t('canvas.ctrlScroll') }}</kbd> {{ t('canvas.infiniteCtrlScrollDesc') }}</li>
-                  <li><kbd>{{ t('canvas.middleDrag') }}</kbd> {{ t('canvas.middleDragDesc') }}</li>
-                </ul>
+              <div class="help-column-left">
+                <div class="help-section">
+                  <h4>🖱️ {{ t('canvas.mouseOperations') }}
+                    <span class="help-mode-badge">{{ interactionMode === 'comfyui' ? t('canvas.comfyuiModeShort') : t('canvas.infiniteCanvasModeShort') }}</span>
+                  </h4>
+                  <!-- ComfyUI 模式 -->
+                  <ul v-if="interactionMode === 'comfyui'">
+                    <li><kbd>{{ t('canvas.leftDrag') }}</kbd> {{ t('canvas.leftDragDesc') }}</li>
+                    <li><kbd>{{ t('canvas.rightClick') }}</kbd> {{ t('canvas.rightClickDesc') }}</li>
+                    <li><kbd>{{ t('canvas.ctrlDrag') }}</kbd> {{ t('canvas.ctrlDragDesc') }}</li>
+                    <li><kbd>{{ t('canvas.spaceDrag') }}</kbd> {{ t('canvas.spaceDragDesc') }}</li>
+                    <li><kbd>{{ t('canvas.leftClick') }}</kbd> {{ t('canvas.leftClickDesc') }}</li>
+                    <li><kbd>{{ t('canvas.doubleClickBlank') }}</kbd> {{ t('canvas.doubleClickBlankDesc') }}</li>
+                    <li><kbd>{{ t('canvas.scrollUp') }}</kbd> {{ t('canvas.scrollUpDesc') }}</li>
+                    <li><kbd>{{ t('canvas.scrollDown') }}</kbd> {{ t('canvas.scrollDownDesc') }}</li>
+                    <li><kbd>{{ t('canvas.shiftScroll') }}</kbd> {{ t('canvas.shiftScrollDesc') }}</li>
+                    <li><kbd>{{ t('canvas.ctrlScroll') }}</kbd> {{ t('canvas.ctrlScrollDesc') }}</li>
+                    <li><kbd>{{ t('canvas.middleDrag') }}</kbd> {{ t('canvas.middleDragDesc') }}</li>
+                  </ul>
+                  <!-- 无限画布模式 -->
+                  <ul v-else>
+                    <li><kbd>{{ t('canvas.leftDrag') }}</kbd> {{ t('canvas.infiniteLeftDragDesc') }}</li>
+                    <li><kbd>{{ t('canvas.rightClick') }}</kbd> {{ t('canvas.rightClickDesc') }}</li>
+                    <li><kbd>{{ t('canvas.spaceDrag') }}</kbd> {{ t('canvas.spaceDragDesc') }}</li>
+                    <li><kbd>{{ t('canvas.leftClick') }}</kbd> {{ t('canvas.leftClickDesc') }}</li>
+                    <li><kbd>{{ t('canvas.doubleClickBlank') }}</kbd> {{ t('canvas.doubleClickBlankDesc') }}</li>
+                    <li><kbd>{{ t('canvas.scrollUp') }}</kbd> {{ t('canvas.infiniteScrollDesc') }}</li>
+                    <li><kbd>{{ t('canvas.scrollDown') }}</kbd> {{ t('canvas.infiniteScrollDesc') }}</li>
+                    <li><kbd>{{ t('canvas.shiftScroll') }}</kbd> {{ t('canvas.shiftScrollDesc') }}</li>
+                    <li><kbd>{{ t('canvas.ctrlScroll') }}</kbd> {{ t('canvas.infiniteCtrlScrollDesc') }}</li>
+                    <li><kbd>{{ t('canvas.middleDrag') }}</kbd> {{ t('canvas.middleDragDesc') }}</li>
+                  </ul>
+                </div>
+                <div class="help-section">
+                  <h4>📌 {{ t('canvas.nodeOperations') }}</h4>
+                  <ul>
+                    <li>{{ t('canvas.dragConnection') }}</li>
+                    <li>{{ t('canvas.rightClickNode') }}</li>
+                    <li>{{ t('canvas.clickPlus') }}</li>
+                  </ul>
+                </div>
               </div>
               <div class="help-column-right">
                 <div class="help-section">
@@ -4359,7 +4374,8 @@ onUnmounted(() => {
                     <li><kbd>Ctrl+A</kbd> {{ t('canvas.selectAllNodes') }}</li>
                     <li><kbd>Ctrl+G</kbd> {{ t('canvas.groupNodes') }}</li>
                     <li><kbd>Ctrl+B</kbd> 隐藏/显示连线</li>
-                    <li><kbd>Ctrl+B ×2</kbd> 进入/退出纯净模式；<kbd>Escape</kbd> 退出</li>
+                    <li><kbd>Ctrl+B</kbd> 快速连按两次：进入/退出纯净模式；<kbd>Escape</kbd> 退出</li>
+                    <li><kbd>C</kbd> 切换无限画布 / ComfyUI 模式</li>
                     <li><kbd>M</kbd> 打开/关闭小地图；鼠标悬停快速定位画布</li>
                     <li><kbd>Delete</kbd> / <kbd>Backspace</kbd> {{ t('canvas.deleteSelected') }}</li>
                     <li><kbd>Escape</kbd> {{ t('canvas.closeDialog') }}</li>
@@ -4370,14 +4386,6 @@ onUnmounted(() => {
                     <li><kbd>T</kbd> {{ t('canvas.createTextNode') || '在下游创建文本节点' }}</li>
                     <li><kbd>A</kbd> {{ t('canvas.createAudioNode') || '在下游创建音频节点' }}</li>
                     <li><kbd>D</kbd> {{ t('canvas.downloadNodeFile') || '下载选中节点的文件' }}</li>
-                  </ul>
-                </div>
-                <div class="help-section">
-                  <h4>📌 {{ t('canvas.nodeOperations') }}</h4>
-                  <ul>
-                    <li>{{ t('canvas.dragConnection') }}</li>
-                    <li>{{ t('canvas.rightClickNode') }}</li>
-                    <li>{{ t('canvas.clickPlus') }}</li>
                   </ul>
                 </div>
               </div>
@@ -5043,6 +5051,8 @@ onUnmounted(() => {
   left: 0;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
+  padding: 12px;
   background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(8px);
   display: flex;
@@ -5055,10 +5065,8 @@ onUnmounted(() => {
   background: var(--canvas-bg-secondary);
   border: 1px solid var(--canvas-border-default);
   border-radius: var(--canvas-radius-lg);
-  width: 90%;
-  max-width: 860px;
-  max-height: 85vh;
-  overflow-y: auto;
+  width: min(100%, 1000px);
+  font-size: clamp(11px, 1.65dvh, 13px);
   box-shadow: var(--canvas-shadow-lg);
 }
 
@@ -5066,7 +5074,7 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 24px;
+  padding: 12px 20px;
   border-bottom: 1px solid var(--canvas-border-default);
 }
 
@@ -5095,24 +5103,22 @@ onUnmounted(() => {
 }
 
 .canvas-help-body {
-  padding: 24px;
+  padding: 16px 20px;
 }
 
 .help-columns {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 32px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 24px;
 }
 
-@media (max-width: 640px) {
-  .help-columns {
-    grid-template-columns: 1fr;
-    gap: 24px;
-  }
+.help-column-left,
+.help-column-right {
+  min-width: 0;
 }
 
 .help-section {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .help-section:last-child {
@@ -5120,17 +5126,18 @@ onUnmounted(() => {
 }
 
 .help-section h4 {
-  margin: 0 0 12px;
-  font-size: 14px;
+  margin: 0 0 8px;
+  font-size: 1.08em;
   font-weight: 600;
   color: var(--canvas-text-primary);
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
 
 .help-mode-badge {
-  font-size: 10px;
+  font-size: 0.75em;
   font-weight: 500;
   padding: 2px 8px;
   border-radius: 4px;
@@ -5146,13 +5153,11 @@ onUnmounted(() => {
 }
 
 .help-section li {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 7px 0;
+  padding: clamp(2px, 0.45dvh, 5px) 0;
   color: var(--canvas-text-secondary);
-  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  break-inside: avoid;
   border-bottom: 1px solid var(--canvas-border-subtle);
 }
 
@@ -5162,8 +5167,11 @@ onUnmounted(() => {
 
 .help-section kbd {
   display: inline-block;
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 2px 6px;
+  margin-inline-end: 4px;
+  font-size: 0.9em;
+  line-height: 1.4;
+  white-space: nowrap;
   font-family: 'SF Mono', Monaco, Consolas, monospace;
   color: var(--canvas-text-primary);
   background: var(--canvas-bg-elevated);
@@ -5174,6 +5182,135 @@ onUnmounted(() => {
 
 .help-section strong {
   color: var(--canvas-text-primary);
+}
+
+/* 较矮的横屏增加快捷键分栏，节点操作仍紧跟鼠标操作。 */
+@media (min-width: 700px) and (max-height: 740px) {
+  .canvas-help-content {
+    width: min(100%, 1280px);
+  }
+
+  .help-columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+
+  .help-column-right ul {
+    columns: 2;
+    column-gap: 24px;
+  }
+}
+
+@media (max-width: 600px) {
+  .canvas-help-modal {
+    padding: 8px;
+  }
+
+  .canvas-help-content {
+    font-size: clamp(9px, 1.65dvh, 12px);
+  }
+
+  .canvas-help-header {
+    padding: 6px 10px;
+  }
+
+  .canvas-help-header h3 {
+    font-size: 15px;
+  }
+
+  .canvas-help-body {
+    padding: 10px;
+  }
+
+  .help-columns {
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+    gap: 10px;
+  }
+
+  .help-section li {
+    padding: 2px 0;
+    line-height: 1.35;
+  }
+
+  .help-section kbd {
+    padding: 1px 3px;
+    margin-inline-end: 2px;
+  }
+}
+
+@media (max-height: 600px) and (orientation: landscape) {
+  .canvas-help-modal {
+    padding: 8px;
+  }
+
+  .canvas-help-content {
+    width: 100%;
+    font-size: clamp(8px, 2.4dvh, 10px);
+  }
+
+  .canvas-help-header {
+    padding: 4px 12px;
+  }
+
+  .canvas-help-header h3 {
+    font-size: 15px;
+  }
+
+  .canvas-help-body {
+    padding: 8px 12px;
+  }
+
+  .help-columns {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 16px;
+  }
+
+  .help-column-right ul {
+    columns: 2;
+    column-gap: 16px;
+  }
+
+  .help-section {
+    margin-bottom: 8px;
+  }
+
+  .help-section h4 {
+    margin-bottom: 4px;
+  }
+
+  .help-section li {
+    padding: 1px 0;
+    line-height: 1.3;
+  }
+
+  .help-section kbd {
+    padding: 1px 3px;
+    margin-inline-end: 2px;
+  }
+}
+
+/* 小屏仍保留全部说明，优先压缩行间留白。 */
+@media (max-width: 380px) and (max-height: 700px),
+       (orientation: landscape) and (max-height: 350px) {
+  .canvas-help-header {
+    padding-block: 2px;
+  }
+
+  .canvas-help-body {
+    padding-block: 4px;
+  }
+
+  .help-section {
+    margin-bottom: 4px;
+  }
+
+  .help-section li {
+    padding: 0;
+    line-height: 1.25;
+  }
+
+  .help-section kbd {
+    padding-block: 0;
+  }
 }
 
 /* 右上角控制区域 */
@@ -5600,6 +5737,16 @@ onUnmounted(() => {
 }
 
 /* 购物车按钮特殊效果 */
+.canvas-cart-btn,
+.canvas-cart-btn:hover {
+  color: var(--canvas-accent-success);
+}
+
+:root.canvas-theme-light .canvas-cart-btn,
+:root.canvas-theme-light .canvas-cart-btn:hover {
+  color: #b8860b;
+}
+
 .canvas-cart-btn:hover {
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.24);
 }
