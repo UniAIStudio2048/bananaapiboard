@@ -219,6 +219,8 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
           </div>
         </section>
 
+        <slot name="before-duration" />
+
         <section v-if="showDuration && durationOptions.length > 0" class="video-parameters-section">
           <h3>生成时长</h3>
           <div v-if="durationOptions.length <= 6" class="video-duration-option-grid">
@@ -313,9 +315,7 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
   top: calc(100% + 8px);
   left: 0;
   width: min(360px, calc(100vw - 32px));
-  max-height: min(480px, calc(100vh - 80px));
   padding: 18px 20px;
-  overflow-y: auto;
   background: #252525;
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 18px;

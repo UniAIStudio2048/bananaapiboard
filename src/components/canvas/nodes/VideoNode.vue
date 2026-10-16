@@ -2490,7 +2490,6 @@ const seedanceResolutionOptions = computed(() => {
 })
 
 const videoParameterResolutionOptions = computed(() => {
-  if (seedanceDraftEnabled.value) return [{ value: '480p', label: '480P' }]
   if (genericVideoResolutionOptions.value.length > 0) return genericVideoResolutionOptions.value
   if (isSeedance2Model.value) return seedanceResolutionOptions.value
   if (isMinimaxH3Model.value) return minimaxH3ResolutionOptions.value.map(value => ({ value: value.value, label: value.label }))
@@ -2520,6 +2519,10 @@ const selectedVideoParameterResolution = computed({
   },
   set(value) {
     if (!videoParameterResolutionOptions.value.some(option => option.value === value)) return
+    if (supportsSeedanceDraft.value) {
+      void setSeedanceDraftEnabled(seedanceDraftEnabled.value && value === '480p', value)
+      return
+    }
     if (genericVideoResolutionOptions.value.length > 0) syncGenericVideoResolution(value)
     else if (isSeedance2Model.value) seedanceResolution.value = value
     else if (isMinimaxH3Model.value) minimaxH3Resolution.value = value
@@ -6759,10 +6762,6 @@ const generatingSeedanceFinal = ref(false)
 const currentSeedanceDraftTaskId = computed(() => props.data.seedanceDraft === true && props.data.status === 'success'
   ? (props.data.taskId || props.data.soraTaskId || '') : '')
 
-watch([seedanceDraftEnabled, genericVideoResolution, seedanceResolution], () => {
-  if (seedanceDraftEnabled.value && (genericVideoResolution.value !== '480p' || seedanceResolution.value !== '480p')) syncGenericVideoResolution('480p')
-}, { immediate: true })
-
 watch(currentSeedanceDraftTaskId, async taskId => {
   seedanceDraftQuote.value = null
   seedanceDraftQuoteError.value = ''
@@ -6780,20 +6779,19 @@ watch(currentSeedanceDraftTaskId, async taskId => {
   }
 }, { immediate: true })
 
-async function setSeedanceDraftEnabled(event) {
-  const enabled = event.target.checked
-  event.target.checked = seedanceDraftEnabled.value
-  if (savingSeedanceDraft.value || isGenerating.value) return
+async function setSeedanceDraftEnabled(enabled, resolution = selectedVideoParameterResolution.value) {
+  if (!supportsSeedanceDraft.value || props.data.readonly || savingSeedanceDraft.value || isGenerating.value) return
+  if (enabled && resolution !== '480p') return
   savingSeedanceDraft.value = true
   const tabId = canvasStore.getCurrentTab()?.id
   try {
     const { workflowId } = await ensureCanvasWorkflowForVideoSubmission(props.id)
-    const data = { seedanceDraftEnabled: enabled, ...(enabled ? { seedanceResolution: '480p', videoResolution: '480p' } : {}) }
+    const data = { seedanceDraftEnabled: enabled, seedanceResolution: resolution, videoResolution: resolution }
     const result = await patchWorkflowNode(workflowId, props.id, { data })
     if (canvasStore.getCurrentTab()?.id === tabId) {
       canvasStore.updateNodeData(props.id, data, { silent: true })
-      canvasStore.applyWorkflowSaveVersions({ id: workflowId, node_versions: { [props.id]: result.version } })
-      if (enabled) syncGenericVideoResolution('480p')
+      canvasStore.applyWorkflowSaveVersions({ id: workflowId, node_versions: { ...canvasStore.getCurrentTab().savedNodeVersions, [props.id]: result.version } })
+      syncGenericVideoResolution(resolution)
     }
   } catch (error) { showToast(error.message || '样片设置保存失败', 'error') }
   finally { savingSeedanceDraft.value = false }
@@ -10940,7 +10938,17 @@ function handleToolbarPreview() {
               :duration="selectedDuration"
               @update:duration="selectVideoDuration"
               :show-duration="showVideoParameterDuration"
-            />
+            >
+              <template #before-duration>
+                <section v-if="supportsSeedanceDraft" class="video-parameters-section seedance-draft-card">
+                  <h3>样片模式</h3>
+                  <div class="seedance-draft-options" role="group" aria-label="样片模式">
+                    <button type="button" :class="{ active: seedanceDraftEnabled }" :aria-pressed="seedanceDraftEnabled" :disabled="selectedVideoParameterResolution !== '480p' || savingSeedanceDraft || isGenerating" :title="selectedVideoParameterResolution !== '480p' ? '请选择 480P 后开启样片模式' : ''" @click="setSeedanceDraftEnabled(true)">开启</button>
+                    <button type="button" :class="{ active: !seedanceDraftEnabled }" :aria-pressed="!seedanceDraftEnabled" :disabled="savingSeedanceDraft || isGenerating" @click="setSeedanceDraftEnabled(false)">关闭</button>
+                  </div>
+                </section>
+              </template>
+            </VideoParametersDropdown>
           </div>
 
           <!-- Vidu 错峰模式开关 -->
@@ -11194,13 +11202,6 @@ function handleToolbarPreview() {
         </Transition>
       </template>
       
-      <div v-if="supportsSeedanceDraft" class="sora2-option-row nodrag nowheel">
-        <span class="sora2-option-label">样片模式 <span class="seedance-sound-hint">480P · 生成后可转 1080P 正片</span></span>
-        <label class="sora2-toggle-switch">
-          <input type="checkbox" aria-label="样片模式" :checked="seedanceDraftEnabled" :disabled="savingSeedanceDraft || isGenerating" @change="setSeedanceDraftEnabled" />
-          <span class="sora2-toggle-slider"></span>
-        </label>
-      </div>
       <details v-if="assetReviewProvider" class="asset-review-settings nodrag nowheel">
         <summary class="sora2-collapse-trigger" @keydown.stop @keyup.stop>
           <span>高级设置</span>
@@ -11434,6 +11435,56 @@ function handleToolbarPreview() {
 </template>
 
 <style scoped>
+.seedance-draft-card {
+  margin: 16px 0;
+}
+
+.seedance-draft-card h3 {
+  margin: 0 0 9px;
+  color: rgba(255, 255, 255, 0.57);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.seedance-draft-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.seedance-draft-options button {
+  min-height: 42px;
+  padding: 6px 10px;
+  color: rgba(255, 255, 255, 0.58);
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.seedance-draft-options button:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.seedance-draft-options button.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.92);
+}
+
+.seedance-draft-options button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.seedance-draft-options button:focus-visible {
+  outline: 2px solid #2587d9;
+  outline-offset: 2px;
+}
+
 .seedance-draft-final-button {
   position: absolute;
   top: 10px;
@@ -14129,6 +14180,23 @@ function handleToolbarPreview() {
 
 <!-- 白昼模式样式（非 scoped） -->
 <style>
+html.canvas-theme-light .seedance-draft-card h3,
+html.canvas-theme-light .seedance-draft-options button {
+  color: rgba(0, 0, 0, 0.56);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+html.canvas-theme-light .seedance-draft-options button:hover {
+  color: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+html.canvas-theme-light .seedance-draft-options button.active {
+  color: rgba(0, 0, 0, 0.92);
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.78);
+}
+
 /* ========================================
    VideoNode 白昼模式样式适配
    ======================================== */
