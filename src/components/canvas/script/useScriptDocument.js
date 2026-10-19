@@ -134,9 +134,11 @@ export function useScriptDocument(nodeId) {
   async function attachAssetPicture(asset, url, existingNodeId) {
     await flush()
     const parent = store.nodes.find(n => n.id === nodeId)
-    let node = store.nodes.find(n => n.id === existingNodeId)
+    // A canvas/library selection creates an asset instance in this script's
+    // input lane; never move an unrelated source node or reuse a right output.
+    let node = store.nodes.find(n => n.id === existingNodeId && n.data.scriptNodeId === nodeId && n.data.scriptMediaKind === 'asset')
     if (!node) {
-      node = { id: `image_${crypto.randomUUID()}`, type: 'image', position: getScriptResultPositions(parent, store.nodes, 1)[0], data: { title: asset.name, status: 'success', output: { type: 'image', url }, imageUrl: url, scriptNodeId: nodeId } }
+      node = { id: `image_${crypto.randomUUID()}`, type: 'image', position: getScriptResultPositions(parent, store.nodes, 1, 'asset')[0], data: { title: asset.name, status: 'success', output: { type: 'image', url }, imageUrl: url, scriptNodeId: nodeId, scriptMediaKind: 'asset' } }
       await connectNode(node, true)
     } else if (!store.edges.some(e => e.source === node.id && e.target === nodeId)) {
       await persistCanvasNode(node)
@@ -208,7 +210,7 @@ export function useScriptDocument(nodeId) {
     try {
       await flush()
       const parent = store.nodes.find(n => n.id === nodeId)
-      const positions = getScriptResultPositions(parent, store.nodes, items.length)
+      const positions = getScriptResultPositions(parent, store.nodes, items.length, kind)
       for (let i = 0; i < items.length && !stopMedia; i++) {
         assertContext()
         const item = items[i], record = kind === 'asset' ? document.value.assets.find(a => a.id === item.id) : document.value.shots.find(s => s.id === item.id)
@@ -219,7 +221,7 @@ export function useScriptDocument(nodeId) {
         if (record[urlKey]) continue
         try {
           if (!node || !node.data.taskId || node.data.status === 'error') {
-            node = { id: `${mediaType}_${crypto.randomUUID()}`, type: mediaType, position: positions[i], data: { title: item.name, prompt: item.prompt, model: options.model, selectedModel: options.model, imageSize: options.size, aspectRatio: options.aspectRatio, duration: options.duration || record.duration, status: 'idle', scriptNodeId: nodeId } }
+            node = { id: `${mediaType}_${crypto.randomUUID()}`, type: mediaType, position: positions[i], data: { title: item.name, prompt: item.prompt, model: options.model, selectedModel: options.model, imageSize: options.size, aspectRatio: options.aspectRatio, duration: options.duration || record.duration, status: 'idle', scriptNodeId: nodeId, scriptMediaKind: kind } }
             await connectNode(node, kind === 'asset'); newNodes.push(node.id)
             record[nodeKey] = node.id
             await save()
