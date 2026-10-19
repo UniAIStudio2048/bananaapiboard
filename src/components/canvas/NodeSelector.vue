@@ -393,7 +393,7 @@ function selectNodeType(type) {
   }
   
   // 准备节点初始数据
-  const nodeData = {}
+  const nodeData = type === 'video-breakdown' ? { title: '逐帧拉片', width: 340, height: 500, breakdownDimensions: ['shots', 'motions', 'audio'], status: 'idle' } : {}
   
   // 检查是否是 LLM 预设类型，如果是，转换为文本节点 + 预设
   let actualNodeType = type

@@ -1,4 +1,5 @@
 <script setup>
+import BreakdownReferenceDetails from '../BreakdownReferenceDetails.vue'
 import SeedanceReviewButton from '../SeedanceReviewButton.vue'
 defineOptions({
   inheritAttrs: false
@@ -2179,6 +2180,7 @@ function handleSpeedEditorClickOutside(event) {
     @dragover="handleDragOver"
     @drop="handleDrop"
   >
+    <BreakdownReferenceDetails v-if="data.breakdown" :reference="data.breakdown" />
     <!-- 音频工具栏（选中且有音频时显示）- 与 ImageNode 保持一致 -->
     <div v-show="showToolbar && !props.data?.readonly" class="audio-toolbar">
       <SeedanceReviewButton :node-id="id" :data="data" asset-type="Audio" />
@@ -2362,7 +2364,8 @@ function handleSpeedEditorClickOutside(event) {
           <!-- 音频可视化区域 -->
           <div class="audio-visual" title="点击跳转播放进度" @click="handleProgressClick">
             <div class="audio-wave">
-              <span v-for="i in 43" :key="i" :class="{ active: isPlaying }"></span>
+              <template v-if="data.breakdown?.waveform?.length"><span v-for="(peak, i) in data.breakdown.waveform" :key="i" :style="{ height: Math.max(3, peak * 86) + 'px' }"></span></template>
+              <template v-else><span v-for="i in 43" :key="i" :class="{ active: isPlaying }"></span></template>
             </div>
             <div class="audio-playhead" :style="{ left: progressPercent + '%' }"></div>
           </div>

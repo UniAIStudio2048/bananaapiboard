@@ -1,4 +1,5 @@
 <script setup>
+import BreakdownReferenceDetails from '../BreakdownReferenceDetails.vue'
 import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import SeedanceReviewButton from '../SeedanceReviewButton.vue'
 import VideoUpscaleButton from '../VideoUpscaleButton.vue'
@@ -9928,6 +9929,7 @@ function handleToolbarPreview() {
 
 <template>
   <div ref="videoNodeRootRef" :class="nodeClass" @contextmenu="handleContextMenu">
+    <BreakdownReferenceDetails v-if="data.breakdown" :reference="data.breakdown" />
     <!-- 视频工具栏（选中且有视频时显示）- 与 ImageNode 保持一致 -->
     <div v-show="showToolbar" class="video-toolbar">
       <SeedanceReviewButton :node-id="id" :data="data" asset-type="Video" />

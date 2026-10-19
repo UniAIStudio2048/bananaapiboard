@@ -12,6 +12,7 @@ export const NODE_TYPES = {
   AUDIO_INPUT: 'audio-input',
   DIGITAL_HUMAN: 'digital-human',
   DIRECTOR_STUDIO: 'director-studio',
+  VIDEO_BREAKDOWN: 'video-breakdown',
   
   // 生成类
   TEXT_TO_IMAGE: 'text-to-image',
@@ -57,6 +58,10 @@ export const NODE_TYPES = {
 // 节点类型配置 - 黑白灰简洁风格图标
 // 注意：label 和 description 使用 i18n 翻译键
 export const NODE_TYPE_CONFIG = {
+  [NODE_TYPES.VIDEO_BREAKDOWN]: {
+    label: '逐帧拉片', description: '拆解视频分镜、动态与音乐参考', icon: 'video',
+    category: 'input', hasInput: true, hasOutput: true, inputType: 'video', outputType: 'group', consumesPoints: true
+  },
   [NODE_TYPES.TEXT_INPUT]: {
     label: 'canvas.nodeConfig.textInput.label',
     description: 'canvas.nodeConfig.textInput.desc',
@@ -658,6 +663,10 @@ export const CONNECTION_RULES = {
   ]
 }
 
+for (const type of ['video', 'video-input', 'video-gen', 'text-to-video', 'image-to-video']) {
+  CONNECTION_RULES[type] = [...(CONNECTION_RULES[type] || []), NODE_TYPES.VIDEO_BREAKDOWN]
+}
+
 // 节点分类
 export const NODE_CATEGORIES = {
   input: {
@@ -667,7 +676,8 @@ export const NODE_CATEGORIES = {
       NODE_TYPES.IMAGE_INPUT,
       NODE_TYPES.VIDEO_INPUT,
       NODE_TYPES.AUDIO_INPUT,
-      NODE_TYPES.DIRECTOR_STUDIO
+      NODE_TYPES.DIRECTOR_STUDIO,
+      NODE_TYPES.VIDEO_BREAKDOWN
     ]
   },
   generate: {
@@ -713,6 +723,7 @@ export function getDownstreamOptions(sourceType) {
 
 // 上游连接规则（某节点类型可以接收哪些类型作为输入）
 export const UPSTREAM_RULES = {
+  [NODE_TYPES.VIDEO_BREAKDOWN]: [NODE_TYPES.VIDEO_INPUT],
   // 文本节点：可以接收其他文本、图片、音频、视频作为输入参考（对话流）
   [NODE_TYPES.TEXT_INPUT]: [
     NODE_TYPES.TEXT_INPUT,       // 其他文本作为上下文

@@ -9,6 +9,7 @@
  * - 显示编组名称，双击可直接编辑
  */
 import { ref, computed, onUnmounted, nextTick, watch } from 'vue'
+import { Handle, Position } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { cancelGroupSchedule, createGroupSchedule, listGroupSchedules } from '@/api/canvas/groupSchedule'
 import GroupScheduleDialog from '@/components/canvas/GroupScheduleDialog.vue'
@@ -353,6 +354,7 @@ onUnmounted(() => {
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
   >
+    <Handle v-if="data.breakdownTaskId" id="breakdown-input" type="target" :position="Position.Left" :connectable="false" />
     <!-- 编组标题 + 工具栏（顶部） -->
     <div class="group-header">
       <!-- 编辑模式 -->

@@ -38,6 +38,7 @@ function closeToolbarPanels() {
 
 // 节点类型列表 - 黑白灰简洁风格
 const nodeTypes = computed(() => [
+  { type: 'video-breakdown', icon: '▤', label: '逐帧拉片', tag: null, description: '分镜 · 动态 · 音乐' },
   {
     type: 'text-input',
     icon: 'Aa',

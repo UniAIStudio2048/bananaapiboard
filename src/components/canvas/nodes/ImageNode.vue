@@ -1,4 +1,5 @@
 <script setup>
+import BreakdownReferenceDetails from '../BreakdownReferenceDetails.vue'
 defineOptions({
   inheritAttrs: false
 })
@@ -7488,6 +7489,7 @@ async function handleDrop(event) {
 
 <template>
   <div ref="nodeRef" :class="nodeClass" @contextmenu="handleContextMenu">
+    <BreakdownReferenceDetails v-if="data.breakdown" :reference="data.breakdown" />
     <!-- 隐藏的文件上传 input -->
     <input 
       ref="fileInputRef"
