@@ -117,7 +117,17 @@ async function poll(taskId, context) {
     if (state.node) store.applyIncrementalNode(state.node)
     progress.value = state.progress || ''
     if (state.status === 'completed') {
-      mergeBreakdownResult(store, state.result)
+      const restore = state.node && state.node.data?.status !== 'success'
+      // A stale canvas save can overwrite the node after the task has committed.
+      // Restore from the task result using the current canvas version for saving.
+      const result = restore ? { ...state.result, node: { ...state.result.node, version: state.node.version } } : state.result
+      mergeBreakdownResult(store, result)
+      if (restore) {
+        const tab = store.getCurrentTab()
+        const space = tab.workflowSpaceType ? { spaceType: tab.workflowSpaceType, teamId: tab.workflowTeamId } : teamStore.getSpaceParams('current')
+        await saveWorkflow({ id: context.workflowId, name: tab.name, uploadToCloud: false, ...space, ...store.exportWorkflowForSave() })
+        assertTab(context.tabId)
+      }
       active.value = false; error.value = ''; progress.value = '分析完成'
       window.dispatchEvent(new CustomEvent('user-info-updated'))
       return
@@ -167,7 +177,7 @@ onMounted(() => {
     .then(value => { config.value = value })
     .catch(e => { if (!alive.signal.aborted) error.value = e.message })
   const tab = store.getCurrentTab?.()
-  if (props.data.breakdownTaskId && tab?.workflowId && props.data.status === 'processing') {
+  if (props.data.breakdownTaskId && tab?.workflowId && ['processing', 'error'].includes(props.data.status)) {
     active.value = true
     poll(props.data.breakdownTaskId, { tabId: tab.id, workflowId: tab.workflowId })
   }
@@ -195,7 +205,7 @@ onUnmounted(() => { alive.abort(); clearTimeout(timer) })
     <p v-if="statusText" class="progress" role="status">{{ statusText }}</p>
     <p v-if="error || data.error" class="error" role="alert">{{ error || data.error }}</p>
     <div v-if="summary" class="summary">{{ summary.shots }} 张分镜 · {{ summary.motions }} 段动态 · {{ summary.audio }} 段音频</div>
-    <p v-for="notice in data.breakdownNotices || []" :key="notice" class="notice">{{ notice }}</p>
+    <p v-for="notice in (data.breakdownNotices || []).filter(text => !text.startsWith('音频按分镜截取原视频音轨'))" :key="notice" class="notice">{{ notice }}</p>
     <button class="start nodrag nopan" :disabled="readonly || busy || !sourceUrl || !dimensions.length || !config?.enabled" @click="start()">{{ busy ? (uploading ? '上传中…' : '分析中…') : '开始拉片' }}<span v-if="!busy && estimatedCost !== null"> · {{ estimatedCost }} 积分</span></button>
     <button v-if="data.status === 'error' && data.breakdownTaskId" class="retry nodrag nopan" :disabled="busy || readonly" @click="start(true)">重试未完成的分析</button>
     <p v-if="config?.enabled" class="price-note">{{ config.billing_mode === 'per_second' ? `${config.points_per_second} 积分/秒，以实际时长结算` : `${config.points_cost} 积分/次` }} · 成功后扣费</p>
