@@ -7,6 +7,7 @@ import { generateImageFromText, generateImageFromImage, generateVideoFromText, g
 import { classifyBackgroundTaskStatus } from '@/stores/canvas/backgroundTaskStatus'
 import { getTaskMediaUrl } from '@/utils/canvasTaskResult'
 import { blankScript, completion, newShot } from '@/utils/scriptDocument'
+import { getScriptResultPositions } from '@/utils/scriptResultLayout'
 
 export function useScriptDocument(nodeId) {
   const store = useCanvasStore(), teams = useTeamStore()
@@ -135,8 +136,7 @@ export function useScriptDocument(nodeId) {
     const parent = store.nodes.find(n => n.id === nodeId)
     let node = store.nodes.find(n => n.id === existingNodeId)
     if (!node) {
-      const index = document.value.assets.indexOf(asset)
-      node = { id: `image_${crypto.randomUUID()}`, type: 'image', position: { x: parent.position.x + 600 + (index % 4) * 440, y: parent.position.y + Math.floor(index / 4) * 440 }, data: { title: asset.name, status: 'success', output: { type: 'image', url }, imageUrl: url, scriptNodeId: nodeId } }
+      node = { id: `image_${crypto.randomUUID()}`, type: 'image', position: getScriptResultPositions(parent, store.nodes, 1)[0], data: { title: asset.name, status: 'success', output: { type: 'image', url }, imageUrl: url, scriptNodeId: nodeId } }
       await connectNode(node, true)
     } else if (!store.edges.some(e => e.source === node.id && e.target === nodeId)) {
       await persistCanvasNode(node)
@@ -208,6 +208,7 @@ export function useScriptDocument(nodeId) {
     try {
       await flush()
       const parent = store.nodes.find(n => n.id === nodeId)
+      const positions = getScriptResultPositions(parent, store.nodes, items.length)
       for (let i = 0; i < items.length && !stopMedia; i++) {
         assertContext()
         const item = items[i], record = kind === 'asset' ? document.value.assets.find(a => a.id === item.id) : document.value.shots.find(s => s.id === item.id)
@@ -218,7 +219,7 @@ export function useScriptDocument(nodeId) {
         if (record[urlKey]) continue
         try {
           if (!node || !node.data.taskId || node.data.status === 'error') {
-            node = { id: `${mediaType}_${crypto.randomUUID()}`, type: mediaType, position: { x: parent.position.x + 600 + (i % 4) * 440, y: parent.position.y + Math.floor(i / 4) * 440 }, data: { title: item.name, prompt: item.prompt, model: options.model, selectedModel: options.model, imageSize: options.size, aspectRatio: options.aspectRatio, duration: options.duration || record.duration, status: 'idle', scriptNodeId: nodeId } }
+            node = { id: `${mediaType}_${crypto.randomUUID()}`, type: mediaType, position: positions[i], data: { title: item.name, prompt: item.prompt, model: options.model, selectedModel: options.model, imageSize: options.size, aspectRatio: options.aspectRatio, duration: options.duration || record.duration, status: 'idle', scriptNodeId: nodeId } }
             await connectNode(node, kind === 'asset'); newNodes.push(node.id)
             record[nodeKey] = node.id
             await save()
