@@ -85,6 +85,7 @@ import StoryboardNode from './nodes/StoryboardNode.vue'
 import SeedanceCharacterNode from './nodes/SeedanceCharacterNode.vue'
 import DirectorStudioNode from './nodes/DirectorStudioNode.vue'
 import VideoBreakdownNode from './nodes/VideoBreakdownNode.vue'
+import ScriptNode from './nodes/ScriptNode.vue'
 import CanvasMiniMapOverview from './CanvasMiniMapOverview.vue'
 
 // 🚀 节点虚拟化：HOC + 控制器
@@ -544,6 +545,7 @@ const nodeTypes = {
   'bytefor-character': V(SeedanceCharacterNode),  // Bytefor角色节点
   'director-studio': V(DirectorStudioNode),
   'video-breakdown': V(VideoBreakdownNode),
+  'script': V(ScriptNode),
   'storyboard': V(StoryboardNode)    // 分镜格子节点
 }
 

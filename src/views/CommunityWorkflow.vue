@@ -28,6 +28,7 @@ import CharacterCardNode from '@/components/canvas/nodes/CharacterCardNode.vue'
 import StoryboardNode from '@/components/canvas/nodes/StoryboardNode.vue'
 import SeedanceCharacterNode from '@/components/canvas/nodes/SeedanceCharacterNode.vue'
 import DirectorStudioNode from '@/components/canvas/nodes/DirectorStudioNode.vue'
+import ScriptNode from '@/components/canvas/nodes/ScriptNode.vue'
 
 import '@vue-flow/core/dist/style.css'
 import '@vue-flow/core/dist/theme-default.css'
@@ -61,6 +62,7 @@ const projectInfo = ref(null)
 
 // 自定义节点类型映射
 const nodeTypes = {
+  'script': markRaw(ScriptNode),
   'text-input': markRaw(TextNode),
   'image-input': markRaw(ImageNode),
   'video-input': markRaw(VideoNode),

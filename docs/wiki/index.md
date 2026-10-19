@@ -24,3 +24,5 @@ timestamp: 2026-09-24
 - [MiniMax 视频模型展示、AtlasCloud 手动模式与禁用规则、请求身份和构建验证](minimax-video-model-mapping.md)
 
 相关记录见 [变更日志](log.md)。
+
+- [新版脚本节点](script-node.md)：独立三步脚本流程、持久化、LLM配置及验收边界。

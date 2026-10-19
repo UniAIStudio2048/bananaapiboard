@@ -45,3 +45,7 @@ timestamp: 2026-09-24
 - 新增 [Seedance 快捷角色审核反馈](seedance-quick-review-feedback.md)：记录图像节点快捷审核的终态兼容、超时反馈与节点状态规则。
 
 返回 [索引](index.md)。
+
+## 2026-10-20
+
+- 纳入[新版脚本节点](script-node.md)开发结论与验证范围。保留真实数据库和上游模型未联调的明确记录。

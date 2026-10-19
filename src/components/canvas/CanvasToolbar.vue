@@ -38,6 +38,7 @@ function closeToolbarPanels() {
 
 // 节点类型列表 - 黑白灰简洁风格
 const nodeTypes = computed(() => [
+  { type: 'script', icon: '▤', label: '脚本', tag: 'NEW', description: '剧本 · 资产 · 分镜' },
   { type: 'video-breakdown', icon: '▤', label: '逐帧拉片', tag: null, description: '分镜 · 动态 · 音乐' },
   {
     type: 'text-input',
@@ -114,7 +115,7 @@ function createNode(nodeType) {
   canvasStore.addNode({
     type: nodeType,
     position,
-    data: {}
+    data: nodeType === 'script' ? { title: '脚本', width: 380, height: 320 } : {}
   })
   
   showNodePanel.value = false
