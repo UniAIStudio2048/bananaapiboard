@@ -123,39 +123,20 @@ export function createCanvasDirectUploader({
     return requirePayload(payload)
   }
 
-  const putDirect = async (url, headers, body, signal, options = {}) => {
-    try {
-      const response = await directFetch(url, {
-        method: 'PUT',
-        headers: headers || {},
-        body,
-        signal,
-        credentials: 'omit'
-      })
-      if (!response || response.ok === false) {
-        throw uploadError('canvas_upload_direct_put_failed', { status: response?.status })
-      }
-      const etag = getEtag(response.headers)
-      if (!etag) throw uploadError('canvas_upload_missing_etag')
-      return etag
-    } catch (error) {
-      // 直传被网络层拦截（如 Chrome PNA）时，回退到后端代理上传。
-      // 后端端点内部完成会话，返回占位 etag；后续 complete 幂等成功。
-      if (options.proxyFallback && isProxyFallbackNetworkError(error)) {
-        try {
-          await apiFetch(`/api/canvas/uploads/${options.uploadId}/proxy`, {
-            method: 'POST',
-            body,
-            rawBody: true,
-            signal
-          })
-          return 'proxy'
-        } catch (proxyError) {
-          throw error
-        }
-      }
-      throw error
+  const putDirect = async (url, headers, body, signal) => {
+    const response = await directFetch(url, {
+      method: 'PUT',
+      headers: headers || {},
+      body,
+      signal,
+      credentials: 'omit'
+    })
+    if (!response || response.ok === false) {
+      throw uploadError('canvas_upload_direct_put_failed', { status: response?.status })
     }
+    const etag = getEtag(response.headers)
+    if (!etag) throw uploadError('canvas_upload_missing_etag')
+    return etag
   }
 
   const complete = async (uploadId, body, signal) => {
@@ -184,14 +165,23 @@ export function createCanvasDirectUploader({
     let recoverConflict = false
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        // 重试耗尽仍未成功时，若仍是网络层失败（如 PNA 拦截），回退到后端代理上传
-        etag = await putDirect(upload.upload_url, upload.headers, file, options.signal, {
-          uploadId: upload.id,
-          proxyFallback: attempt === maxRetries
-        })
+        etag = await putDirect(upload.upload_url, upload.headers, file, options.signal)
         break
       } catch (error) {
         if (abortError(error, options.signal)) throw error
+        // 代理端点已完成会话与资产落库，直接采用其结果，避免再次 complete
+        // 的网络失败将已成功的上传误报为失败；代理错误也应保留真实原因。
+        if (attempt === maxRetries && isProxyFallbackNetworkError(error)) {
+          const payload = requirePayload(await readPayload(await apiFetch(`/api/canvas/uploads/${upload.id}/proxy`, {
+            method: 'POST',
+            body: file,
+            rawBody: true,
+            signal: options.signal
+          })))
+          const result = normalizeResult(payload)
+          options.onProgress?.(1)
+          return result
+        }
         if (attempt > 0 && error?.status === 409) {
           recoverConflict = true
           break
