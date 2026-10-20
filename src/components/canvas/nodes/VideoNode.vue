@@ -1724,8 +1724,10 @@ const assetReviewProvider = computed(() => {
   getTenantConfigVersion()
   return tenantConfig.video_models?.find(model => model.name === selectedModel.value)?.assetReviewProvider || ''
 })
+// 火山官方与星辰素材资产均已接通自动校验（Seedance 2.0 / 2.5），其余渠道仍待接通
+const autoReviewConnected = computed(() => ['volcengine', 'stars_asset'].includes(assetReviewProvider.value))
 const autoReviewMaterials = computed(() => {
-  return Boolean(assetReviewProvider.value) && props.data?.autoReviewMaterials?.[selectedModel.value] !== false
+  return autoReviewConnected.value && props.data?.autoReviewMaterials?.[selectedModel.value] !== false
 })
 
 async function setAutoReviewMaterials(event) {
@@ -11215,11 +11217,11 @@ function handleToolbarPreview() {
           <div class="sora2-option-row">
             <span class="sora2-option-label" title="生成前校验连入的图片、视频和音频；生成完成后 5 分钟内可复用，之后重新校验。">自动校验素材 ⓘ</span>
             <label class="sora2-toggle-switch">
-              <input type="checkbox" aria-label="自动校验素材" :checked="autoReviewMaterials" :disabled="savingAutoReview || isGenerating || assetReviewProvider !== 'volcengine'" @change="setAutoReviewMaterials" />
+              <input type="checkbox" aria-label="自动校验素材" :checked="autoReviewMaterials" :disabled="savingAutoReview || isGenerating || !autoReviewConnected" @change="setAutoReviewMaterials" />
               <span class="sora2-toggle-slider"></span>
             </label>
           </div>
-          <div v-if="assetReviewProvider !== 'volcengine'" class="seedance-sound-hint">已绑定素材渠道，自动校验待接通</div>
+          <div v-if="assetReviewProvider && !autoReviewConnected" class="seedance-sound-hint">已绑定素材渠道，自动校验待接通</div>
         </div>
       </details>
 
