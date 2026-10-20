@@ -31,11 +31,7 @@ const workflow = computed(() => shareData.value?.workflow || null)
 const nodes = computed(() => normalizeWorkflowShareNodes(workflow.value?.nodes || []))
 const edges = computed(() => normalizeWorkflowShareEdges(workflow.value?.edges || []))
 const viewport = computed(() => workflow.value?.viewport || { x: 0, y: 0, zoom: 1 })
-const warnings = computed(() => shareData.value?.warnings || [])
 const canClone = computed(() => Boolean(shareData.value?.canClone && shareData.value?.mode === 'clone'))
-const showWarnings = computed(() => {
-  return warnings.value.length > 0 || (shareData.value?.mode === 'clone' && shareData.value?.canClone === false)
-})
 const nodeTypes = { 'workflow-share-node': markRaw(WorkflowShareNode) }
 
 function getErrorMessage(error) {
@@ -229,14 +225,6 @@ onBeforeUnmount(restoreShareMeta)
         </div>
       </section>
 
-      <section v-if="showWarnings" class="workflow-share-warnings" aria-live="polite">
-        <strong>只读保护提示</strong>
-        <ul>
-          <li v-for="warning in warnings" :key="warning">{{ warning }}</li>
-          <li v-if="shareData.mode === 'clone' && !shareData.canClone && warnings.length === 0">当前分享包含无法安全克隆的内容，仅支持只读预览。</li>
-        </ul>
-      </section>
-
       <section class="workflow-share-flow-shell" aria-label="工作流只读画布">
         <VueFlow
           id="workflow-share-preview"
@@ -287,9 +275,6 @@ onBeforeUnmount(restoreShareMeta)
 .workflow-share-description { max-width: 900px; margin: 0; color: #d4d4d4; font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
 .workflow-share-description-muted { color: #737373; }
 .workflow-share-counts { display: flex; flex-shrink: 0; gap: 12px; color: #737373; font-size: 11px; white-space: nowrap; }
-.workflow-share-warnings { position: relative; z-index: 2; display: grid; gap: 5px; margin: 14px 22px 0; padding: 11px 13px; color: #fde68a; background: rgba(120, 83, 0, 0.2); border: 1px solid rgba(250, 204, 21, 0.22); border-radius: 9px; font-size: 12px; line-height: 1.5; }
-.workflow-share-warnings strong { font-size: 12px; }
-.workflow-share-warnings ul { display: grid; gap: 3px; margin: 0; padding-left: 18px; }
 .workflow-share-flow-shell { position: fixed; inset: 68px 0 0; }
 .workflow-share-flow { width: 100%; height: 100%; background: #0d0d0d; }
 .workflow-share-clone-error { position: fixed; right: 22px; bottom: 20px; z-index: 5; max-width: min(360px, calc(100vw - 44px)); margin: 0; padding: 11px 13px; color: #fecaca; background: rgba(127, 29, 29, 0.9); border: 1px solid rgba(248, 113, 113, 0.35); border-radius: 9px; font-size: 12px; }
