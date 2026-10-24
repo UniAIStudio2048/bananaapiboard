@@ -2757,7 +2757,7 @@ function handlePickNode(nodeId) {
 function handleCanvasUpload(type) {
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = type === 'image' ? 'image/*' : 'video/*'
+  input.accept = type === 'image' ? 'image/*' : type === 'video' ? 'video/*' : 'audio/*'
   input.multiple = type === 'image'
 
   input.onchange = (e) => {
@@ -4359,6 +4359,8 @@ onUnmounted(() => {
                     <li>{{ t('canvas.dragConnection') }}</li>
                     <li>{{ t('canvas.rightClickNode') }}</li>
                     <li>{{ t('canvas.clickPlus') }}</li>
+                    <li><kbd>Shift+左键拖动节点/+号</kbd> 将节点的全部连线迁移到目标节点</li>
+                    <li><kbd>Ctrl+左键拖动节点/+号</kbd> 复制节点的全部连线到目标节点</li>
                   </ul>
                 </div>
               </div>

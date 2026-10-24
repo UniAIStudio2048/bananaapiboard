@@ -10863,7 +10863,6 @@ function handleToolbarPreview() {
                 class="video-mode-dropdown-panel"
                 :class="{ 'dropdown-up': videoModeDropdownDirection === 'up' }"
               >
-                <div class="video-mode-dropdown-title">{{ activeVideoModeSelector.label }}</div>
                 <button
                   v-for="option in activeVideoModeSelector.options"
                   :key="option.value"
@@ -10911,7 +10910,6 @@ function handleToolbarPreview() {
                 class="video-mode-dropdown-panel"
                 :class="{ 'dropdown-up': videoModeDropdownDirection === 'up' }"
               >
-                <div class="video-mode-dropdown-title">{{ activeVideoSubmodeSelector.label }}</div>
                 <button
                   v-for="option in activeVideoSubmodeSelector.options"
                   :key="option.value"

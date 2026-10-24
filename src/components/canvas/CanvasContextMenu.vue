@@ -3,7 +3,7 @@
  * CanvasContextMenu.vue - 画布右键菜单（空白区域）
  * 
  * 功能：
- * - 上传图片/视频
+ * - 上传图片/视频/音频
  * - 添加节点
  * - 撤销/重做
  * - 复制/粘贴节点
@@ -98,6 +98,12 @@ function handleUploadImage() {
 // 上传视频
 function handleUploadVideo() {
   emit('upload', 'video')
+  emit('close')
+}
+
+// 上传音频
+function handleUploadAudio() {
+  emit('upload', 'audio')
   emit('close')
 }
 
@@ -283,6 +289,11 @@ function handleMenuClick(event) {
       <div class="canvas-context-menu-item" @click="handleUploadVideo">
         <span class="icon">🎬</span>
         上传视频
+        <span class="shortcut"></span>
+      </div>
+      <div class="canvas-context-menu-item" @click="handleUploadAudio">
+        <span class="icon">🎵</span>
+        上传音频
         <span class="shortcut"></span>
       </div>
       <div class="canvas-context-menu-item" @click="handlePasteFromClipboard">

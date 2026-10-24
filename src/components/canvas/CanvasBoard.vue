@@ -252,6 +252,8 @@ let touchState = null
 let touchConnectionLongPressTimer = null
 let touchLongPressTimer = null
 let globalTouchListenersAttached = false
+let connectionTransferState = null
+const connectionTransferPreview = ref(null)
 
 provide('isCanvasViewportMoving', isViewportMoving)
 
@@ -1819,6 +1821,105 @@ function handleKeyUp(event) {
   }
 }
 
+function getConnectionTransferNodeId(target) {
+  const nodeElement = target?.closest?.('.vue-flow__node')
+  return nodeElement?.getAttribute?.('data-id') || null
+}
+
+function isConnectionTransferInteractiveTarget(target) {
+  // 节点两侧的“+”号是连线入口，修饰键拖拽必须优先由迁移/复制手势接管。
+  if (target?.closest?.('.node-add-btn')) return false
+  return !!target?.closest?.(
+    'input, textarea, select, button, [contenteditable="true"], .vue-flow__handle'
+  )
+}
+
+function buildConnectionTransferPath(start, end) {
+  const viewport = getViewport()
+  const startScreen = flowPositionToScreenPosition(start, viewport)
+  const endScreen = flowPositionToScreenPosition(end, viewport)
+  const dx = Math.abs(endScreen.x - startScreen.x)
+  const controlOffset = Math.max(50, dx * 0.5)
+  return `M ${startScreen.x} ${startScreen.y} C ${startScreen.x + controlOffset} ${startScreen.y}, ${endScreen.x - controlOffset} ${endScreen.y}, ${endScreen.x} ${endScreen.y}`
+}
+
+const connectionTransferPreviewPaths = computed(() => {
+  const preview = connectionTransferPreview.value
+  if (!preview?.sourceNodeId || !preview.flowPosition) return []
+
+  return canvasStore.edges
+    .filter(edge => edge.source === preview.sourceNodeId || edge.target === preview.sourceNodeId)
+    .filter(edge => edge.source !== preview.sourceNodeId || edge.target !== preview.sourceNodeId)
+    .map(edge => {
+      const start = edge.source === preview.sourceNodeId
+        ? preview.flowPosition
+        : getHandlePosition(edge.source, 'output')
+      const end = edge.target === preview.sourceNodeId
+        ? preview.flowPosition
+        : getHandlePosition(edge.target, 'input')
+      return {
+        id: edge.id || `${edge.source}-${edge.target}`,
+        path: buildConnectionTransferPath(start, end)
+      }
+    })
+})
+
+function handleConnectionTransferMouseDown(event) {
+  if (event.button !== 0 || !canvasBoardRef.value?.contains(event.target)) return
+  if ((!event.shiftKey && !(event.ctrlKey || event.metaKey)) || isConnectionTransferInteractiveTarget(event.target)) return
+
+  const sourceNodeId = getConnectionTransferNodeId(event.target)
+  if (!sourceNodeId) return
+  if (!canvasStore.edges.some(edge => edge.source === sourceNodeId || edge.target === sourceNodeId)) return
+
+  connectionTransferState = {
+    sourceNodeId,
+    targetNodeId: null,
+    mode: event.shiftKey ? 'move' : 'copy',
+    flowPosition: screenToFlowPosition({ x: event.clientX, y: event.clientY })
+  }
+  connectionTransferPreview.value = {
+    sourceNodeId,
+    mode: connectionTransferState.mode,
+    flowPosition: connectionTransferState.flowPosition
+  }
+  event.preventDefault()
+  event.stopPropagation()
+  document.body.style.cursor = connectionTransferState.mode === 'copy' ? 'copy' : 'grabbing'
+  document.addEventListener('mousemove', handleConnectionTransferMouseMove, { capture: true })
+  document.addEventListener('mouseup', handleConnectionTransferMouseUp, { capture: true })
+}
+
+function handleConnectionTransferMouseMove(event) {
+  if (!connectionTransferState) return
+  event.preventDefault()
+  event.stopPropagation()
+  const flowPosition = screenToFlowPosition({ x: event.clientX, y: event.clientY })
+  connectionTransferState.targetNodeId = getConnectionTransferNodeId(document.elementFromPoint(event.clientX, event.clientY))
+  connectionTransferState.flowPosition = flowPosition
+  connectionTransferPreview.value = {
+    ...connectionTransferPreview.value,
+    flowPosition
+  }
+}
+
+function handleConnectionTransferMouseUp(event) {
+  if (!connectionTransferState) return
+  event.preventDefault()
+  event.stopPropagation()
+
+  const { sourceNodeId, targetNodeId, mode } = connectionTransferState
+  if (targetNodeId && targetNodeId !== sourceNodeId) {
+    canvasStore.transferNodeConnections(sourceNodeId, targetNodeId, mode)
+  }
+
+  connectionTransferState = null
+  connectionTransferPreview.value = null
+  document.body.style.cursor = isSpacePressed.value ? 'grab' : 'default'
+  document.removeEventListener('mousemove', handleConnectionTransferMouseMove, { capture: true })
+  document.removeEventListener('mouseup', handleConnectionTransferMouseUp, { capture: true })
+}
+
 // 鼠标按下事件（用于空格+拖动平移 / 鼠标中键平移 / 右键拖动平移）
 function handleMouseDown(event) {
   // 空格键 + 左键：平移画布
@@ -3036,6 +3137,7 @@ const connectionFlowLayers = computed(() => {
 })
 
 const activeFlowPaths = ref([])
+const canvasEdgeFlowPaths = ref([])
 let activeFlowPathsRafId = null
 let activeFlowPathsFollowupRafId = null
 
@@ -3079,17 +3181,40 @@ function readActiveEdgePaths() {
   activeFlowPaths.value = paths
 }
 
+function readCanvasEdgePaths() {
+  if (isEdgeHidden.value || shouldDisableEdgeAnimation.value) {
+    canvasEdgeFlowPaths.value = []
+    return
+  }
+
+  const el = vueFlowRef.value?.$el || vueFlowRef.value
+  if (!el) {
+    canvasEdgeFlowPaths.value = []
+    return
+  }
+
+  const vp = getViewport()
+  const paths = []
+  for (const edgePath of el.querySelectorAll('.vue-flow__edge-path')) {
+    const d = edgePath.getAttribute('d')
+    if (d) paths.push(transformSvgPath(d, vp))
+  }
+  canvasEdgeFlowPaths.value = paths
+}
+
 function scheduleActiveEdgePathsRead() {
   if (activeFlowPathsRafId) return
 
   activeFlowPathsRafId = requestAnimationFrame(() => {
     activeFlowPathsRafId = null
     readActiveEdgePaths()
+    readCanvasEdgePaths()
 
     if (!activeFlowPathsFollowupRafId) {
       activeFlowPathsFollowupRafId = requestAnimationFrame(() => {
         activeFlowPathsFollowupRafId = null
         readActiveEdgePaths()
+        readCanvasEdgePaths()
       })
     }
   })
@@ -3983,6 +4108,7 @@ onMounted(() => {
   window.addEventListener('canvas-edge-style-change', handleEdgeStyleChange)
   
   // 添加鼠标事件监听（用于空格+拖动平移）
+  document.addEventListener('mousedown', handleConnectionTransferMouseDown, { capture: true })
   document.addEventListener('mousedown', handleMouseDown)
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', handleMouseUp)
@@ -4015,6 +4141,9 @@ onUnmounted(() => {
   window.removeEventListener('canvas-edge-style-change', handleEdgeStyleChange)
   
   // 移除鼠标事件监听
+  document.removeEventListener('mousedown', handleConnectionTransferMouseDown, { capture: true })
+  document.removeEventListener('mousemove', handleConnectionTransferMouseMove, { capture: true })
+  document.removeEventListener('mouseup', handleConnectionTransferMouseUp, { capture: true })
   document.removeEventListener('mousedown', handleMouseDown)
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
@@ -4157,6 +4286,24 @@ onUnmounted(() => {
           />
         </svg>
       </template>
+
+      <!-- 修饰键迁移/复制连线预览：松开在空白处时仅清除预览，不修改真实连线。 -->
+      <template v-if="connectionTransferPreviewPaths.length > 0">
+        <svg class="connection-transfer-preview connection-guide-line">
+          <path
+            v-for="(path, i) in connectionTransferPreviewPaths"
+            :key="`${path.id}-${i}`"
+            :d="path.path"
+            class="connection-transfer-preview-base"
+          />
+          <path
+            v-for="(path, i) in connectionTransferPreviewPaths"
+            :key="`flow-${path.id}-${i}`"
+            :d="path.path"
+            class="connection-transfer-preview-path"
+          />
+        </svg>
+      </template>
       
       <!-- 待连接虚拟连线（选择器打开时显示） -->
       <template v-if="showPendingConnection">
@@ -4183,6 +4330,24 @@ onUnmounted(() => {
               class="connection-flow"
               :style="{ strokeDasharray: layer.dasharray, opacity: layer.opacity, animationDelay: layer.delay }"
             />
+          </template>
+
+          <!-- 普通连线的双层流动效果：白色底线 + 荧光蓝流动线。 -->
+          <template v-if="canvasEdgeFlowPaths.length > 0">
+            <svg class="canvas-edge-flow connection-guide-line">
+              <path
+                v-for="(edgePath, ei) in canvasEdgeFlowPaths"
+                :key="`canvas-edge-base-${ei}`"
+                :d="edgePath"
+                class="canvas-edge-flow-base"
+              />
+              <path
+                v-for="(edgePath, ei) in canvasEdgeFlowPaths"
+                :key="`canvas-edge-flow-${ei}`"
+                :d="edgePath"
+                class="canvas-edge-flow-path"
+              />
+            </svg>
           </template>
         </svg>
       </template>
@@ -4358,6 +4523,46 @@ onUnmounted(() => {
   outline: none;
 }
 
+    /* 节点悬停超过 1 秒后，在两侧 + 按钮附近显示连线迁移/复制提示。 */
+    .canvas-board :deep(.vue-flow__node .node-add-btn)::after {
+      content: "Shift + 左键拖动：迁移全部连线\A Ctrl + 左键拖动：复制全部连线";
+      position: absolute;
+      left: 50%;
+      bottom: calc(100% + 10px);
+      transform: translateX(-50%);
+      width: max-content;
+      max-width: 240px;
+      padding: 7px 10px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 7px;
+      background: rgba(20, 22, 28, 0.96);
+      color: #f3f4f6;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.5;
+      text-align: left;
+      white-space: pre;
+      pointer-events: none;
+      opacity: 0;
+      visibility: hidden;
+      z-index: 30;
+      box-shadow: 0 5px 16px rgba(0, 0, 0, 0.32);
+      transition: opacity 0.15s ease, visibility 0s linear 0s;
+    }
+
+    .canvas-board :deep(.vue-flow__node:hover .node-add-btn)::after {
+      opacity: 1;
+      visibility: visible;
+      transition-delay: 1s;
+    }
+
+    :root.canvas-theme-light .canvas-board :deep(.vue-flow__node .node-add-btn)::after {
+      border-color: rgba(0, 0, 0, 0.14);
+      background: rgba(255, 255, 255, 0.98);
+      color: #1f2937;
+      box-shadow: 0 5px 16px rgba(0, 0, 0, 0.14);
+    }
+
 .canvas-board :deep(.canvas-workflow-minimap) {
   bottom: 72px;
   left: 24px;
@@ -4496,6 +4701,52 @@ onUnmounted(() => {
 .active-edge-flow {
   z-index: 0;
 }
+
+.canvas-edge-flow {
+  z-index: 0;
+}
+
+.canvas-edge-flow-base {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.72);
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  opacity: 0.82;
+}
+
+.canvas-edge-flow-path {
+  fill: none;
+  stroke: #22d3ee;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-dasharray: 18 10;
+  opacity: 0.92;
+  filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.65));
+  animation: connectionGlowFlow 2.8s linear infinite;
+}
+
+    .connection-transfer-preview {
+      z-index: 1001;
+    }
+
+    .connection-transfer-preview-path {
+      fill: none;
+      stroke: #22d3ee;
+      stroke-width: 2.2;
+      stroke-linecap: round;
+      stroke-dasharray: 18 10;
+      opacity: 0.95;
+      filter: drop-shadow(0 0 4px rgba(34, 211, 238, 0.72));
+      animation: connectionGlowFlow 2.8s linear infinite;
+    }
+
+    .connection-transfer-preview-base {
+      fill: none;
+      stroke: rgba(255, 255, 255, 0.86);
+      stroke-width: 2.8;
+      stroke-linecap: round;
+      opacity: 0.9;
+    }
 
 /* 连线悬停剪刀删除按钮（VueFlow 插槽内，容器坐标系） */
 .edge-hover-delete-btn {

@@ -24,6 +24,7 @@ import {
   resolveVisibleGroupGeometryNodes
 } from '@/utils/canvasBatchLayout'
 import { resolveMultiConnectExtraSourceIds } from '@/utils/canvasMultiConnect'
+import { planNodeConnectionTransfer } from '@/utils/canvasConnectionTransfer'
 
 function cloneNodeDataValue(value) {
   if (value === undefined) return undefined
@@ -683,6 +684,43 @@ export const useCanvasStore = defineStore('canvas', () => {
           updateNodeData(edge.target, { images: nextImages })
         }
       }
+    }
+  }
+
+  /**
+   * 将节点的全部输入、输出连线迁移或复制到另一个节点。
+   * @param {string} sourceNodeId 原节点 ID
+   * @param {string} targetNodeId 目标节点 ID
+   * @param {'move'|'copy'} mode Shift 为 move，Ctrl 为 copy
+   * @returns {{ changed: boolean, mode: string, removed: number, added: number }}
+   */
+  function transferNodeConnections(sourceNodeId, targetNodeId, mode = 'move') {
+    const sourceNode = nodes.value.find(node => node.id === sourceNodeId)
+    const targetNode = nodes.value.find(node => node.id === targetNodeId)
+    if (!sourceNode || !targetNode || sourceNodeId === targetNodeId) {
+      return { changed: false, mode, removed: 0, added: 0 }
+    }
+
+    const plan = planNodeConnectionTransfer({
+      edges: edges.value,
+      sourceNodeId,
+      targetNodeId,
+      mode
+    })
+    if (plan.removeEdgeIds.length === 0 && plan.addEdges.length === 0) {
+      return { changed: false, mode, removed: 0, added: 0 }
+    }
+
+    saveHistory({ force: true })
+    for (const edgeId of plan.removeEdgeIds) removeEdge(edgeId)
+    for (const edge of plan.addEdges) addEdge(edge)
+    markCurrentTabChanged()
+
+    return {
+      changed: true,
+      mode,
+      removed: plan.removeEdgeIds.length,
+      added: plan.addEdges.length
     }
   }
 
@@ -3120,6 +3158,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 连线操作
     addEdge,
     removeEdge,
+    transferNodeConnections,
     disconnectNodeInputs,
     disconnectNodeHandle,
     swapCellEdges,

@@ -40,6 +40,20 @@ test('video mode selector reuses existing mode state and available option lists'
   assert.doesNotMatch(source, /v-for="opt in wanAnimateModeOptions"[\s\S]*class="sd2-mode-btn"/)
 })
 
+test('mode dropdowns show supported options without a model mode type heading', () => {
+  const mainPanelStart = source.indexOf(`v-if="videoModeDropdownOpen === 'main'"`)
+  const subPanelStart = source.indexOf(`v-if="videoModeDropdownOpen === 'sub'"`)
+  assert.ok(mainPanelStart >= 0, 'main mode dropdown should exist')
+  assert.ok(subPanelStart > mainPanelStart, 'sub mode dropdown should follow the main dropdown')
+
+  const mainPanel = source.slice(mainPanelStart, source.indexOf('</Transition>', mainPanelStart))
+  const subPanel = source.slice(subPanelStart, source.indexOf('</Transition>', subPanelStart))
+  assert.doesNotMatch(mainPanel, /video-mode-dropdown-title/)
+  assert.doesNotMatch(subPanel, /video-mode-dropdown-title/)
+  assert.match(mainPanel, /v-for="option in activeVideoModeSelector\.options"/)
+  assert.match(subPanel, /v-for="option in activeVideoSubmodeSelector\.options"/)
+})
+
 test('DashScope Wan3 exposes and persists its mode selector used for submissions', () => {
   assert.match(source, /WAN3_MODES/)
   assert.match(source, /const isWan3Model = computed\(\(\) => \['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'\]\.includes\(currentModelConfig\.value\?\.apiType\)\)/)

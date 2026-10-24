@@ -1643,6 +1643,16 @@ const progressPercent = computed(() => {
   return (currentTime.value / duration.value) * 100
 })
 
+// 按当前播放倍率显示用户实际感知的播放时间。
+const effectiveCurrentTime = computed(() => {
+  const rate = Number(playbackRate.value)
+  return rate > 0 ? currentTime.value / rate : currentTime.value
+})
+const effectiveDuration = computed(() => {
+  const rate = Number(playbackRate.value)
+  return rate > 0 ? duration.value / rate : duration.value
+})
+
 // 同步 label 变化
 watch(() => props.data.label, (newLabel) => {
   if (newLabel !== undefined && newLabel !== localLabel.value) {
@@ -2132,26 +2142,43 @@ function handleToolbarPreview() {
   openFullscreenPreview()
 }
 
-// 打开变速面板：调整期间不改变当前播放速度，确认后才写入节点数据。
+// 打开变速面板：滑块/数值输入会即时应用播放速度。
 function toggleSpeedEditor(event) {
   event.stopPropagation()
   pendingPlaybackRate.value = playbackRate.value
   showSpeedEditor.value = !showSpeedEditor.value
 }
 
-function applyPlaybackRate() {
-  const rate = Math.max(0.1, Math.min(4, Number(pendingPlaybackRate.value) || 1))
+function normalizePlaybackRate(value, fallback = null) {
+  if (value === '' || value === null || value === undefined) return fallback
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) return fallback
+  return Math.max(0.1, Math.min(4, numericValue))
+}
+
+function updatePlaybackRate(value) {
+  const rate = normalizePlaybackRate(value)
+  if (rate === null) return
+
   playbackRate.value = rate
   pendingPlaybackRate.value = rate
-  showSpeedEditor.value = false
-  
+
   // 更新音频元素的播放速度
   if (audioRef.value) {
     audioRef.value.playbackRate = rate
   }
-  
+
   // 保存到节点数据
   canvasStore.updateNodeData(props.id, { playbackRate: rate })
+}
+
+function handlePlaybackRateInput(event) {
+  updatePlaybackRate(event?.target?.value)
+}
+
+function applyPlaybackRate() {
+  updatePlaybackRate(normalizePlaybackRate(pendingPlaybackRate.value, 1))
+  showSpeedEditor.value = false
 }
 
 // 监听编组整组执行触发
@@ -2220,9 +2247,9 @@ function handleSpeedEditorClickOutside(event) {
     <div v-if="showToolbar && showSpeedEditor && !props.data?.readonly" class="speed-editor nodrag" @mousedown.stop @pointerdown.stop @click.stop>
       <button class="speed-editor-cancel" @click="showSpeedEditor = false">×　变速</button>
       <span class="speed-boundary">0.1x</span>
-      <input v-model.number="pendingPlaybackRate" class="speed-slider" type="range" min="0.1" max="4" step="0.05" aria-label="播放速度" />
+      <input v-model.number="pendingPlaybackRate" class="speed-slider" type="range" min="0.1" max="4" step="0.05" aria-label="播放速度" @input="handlePlaybackRateInput" />
       <span class="speed-boundary">4.0x</span>
-      <input v-model.number="pendingPlaybackRate" class="speed-number" type="number" min="0.1" max="4" step="0.05" aria-label="播放速度数值" />
+      <input v-model.number="pendingPlaybackRate" class="speed-number" type="number" min="0.1" max="4" step="0.05" aria-label="播放速度数值" @input="handlePlaybackRateInput" />
       <button class="speed-editor-apply" title="应用变速" @click="applyPlaybackRate">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 20V4m0 0L5 11m7-7l7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -2374,7 +2401,7 @@ function handleSpeedEditorClickOutside(event) {
           <div class="audio-controls">
             <!-- 时间显示 -->
             <div class="time-display">
-              {{ formatTime(currentTime) }} / {{ formatTime(duration) }}
+              {{ formatTime(effectiveCurrentTime) }} / {{ formatTime(effectiveDuration) }}
             </div>
 
             <button class="play-btn" @click="togglePlay">
