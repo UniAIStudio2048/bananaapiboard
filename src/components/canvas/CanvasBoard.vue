@@ -4523,7 +4523,7 @@ onUnmounted(() => {
   outline: none;
 }
 
-    /* 节点悬停超过 1 秒后，在两侧 + 按钮附近显示连线迁移/复制提示。 */
+    /* 悬停两侧 + 按钮超过 1 秒后显示连线迁移/复制提示。 */
     .canvas-board :deep(.vue-flow__node .node-add-btn)::after {
       content: "Shift + 左键拖动：迁移全部连线\A Ctrl + 左键拖动：复制全部连线";
       position: absolute;
@@ -4550,7 +4550,7 @@ onUnmounted(() => {
       transition: opacity 0.15s ease, visibility 0s linear 0s;
     }
 
-    .canvas-board :deep(.vue-flow__node:hover .node-add-btn)::after {
+    .canvas-board :deep(.vue-flow__node .node-add-btn:hover)::after {
       opacity: 1;
       visibility: visible;
       transition-delay: 1s;

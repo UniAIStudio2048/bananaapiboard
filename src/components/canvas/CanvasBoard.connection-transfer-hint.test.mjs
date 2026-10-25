@@ -7,8 +7,9 @@ import { fileURLToPath } from 'node:url'
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const source = readFileSync(join(__dirname, 'CanvasBoard.vue'), 'utf8')
 
-test('node connection buttons show transfer shortcuts after a one-second hover delay', () => {
-  assert.match(source, /\.canvas-board :deep\(\.vue-flow__node:hover \.node-add-btn\)::after/)
+test('connection transfer shortcuts only show when hovering the plus button', () => {
+  assert.match(source, /\.canvas-board :deep\(\.vue-flow__node \.node-add-btn:hover\)::after/)
+  assert.doesNotMatch(source, /\.canvas-board :deep\(\.vue-flow__node:hover \.node-add-btn\)::after/)
   assert.match(source, /transition-delay:\s*1s/)
   assert.match(source, /Shift \+ 左键拖动：迁移全部连线/)
   assert.match(source, /Ctrl \+ 左键拖动：复制全部连线/)
