@@ -260,9 +260,10 @@ const currentMusicModelConfig = computed(() => {
 const isMiniMaxAudio = computed(() => currentMusicModelConfig.value?.provider === 'minimax')
 const isFishAudio = computed(() => currentMusicModelConfig.value?.provider === 'fish')
 const isRunningHubAudio = computed(() => currentMusicModelConfig.value?.apiType === 'runninghub-audio')
+const isRunningHubMusic = computed(() => isRunningHubAudio.value && (!audioCapability.value || audioCapability.value === 'music'))
 const isRunningHubCustom = computed(() => currentMusicModelConfig.value?.actualModel?.endsWith('/custom'))
 const runninghubInputError = computed(() => {
-  if (!isRunningHubAudio.value) return ''
+  if (!isRunningHubMusic.value) return ''
   try {
     buildRunningHubMusicInput(currentMusicModelConfig.value, {
       prompt: musicPrompt.value, title: title.value, tags: tags.value,
@@ -310,7 +311,9 @@ const voiceCloneReadingTexts = computed(() => {
   return texts.length ? texts : DEFAULT_VOICE_CLONE_READING_TEXTS
 })
 const audioPromptPlaceholder = computed(() => {
-  if (isRunningHubAudio.value) return isRunningHubCustom.value ? '输入完整歌词，支持 [Verse] [Chorus] [Bridge]（最多 5000 字符）' : '描述歌曲的风格、情绪或场景（最多 400 字符）'
+  if (isRunningHubMusic.value) return isRunningHubCustom.value ? '输入完整歌词，支持 [Verse] [Chorus] [Bridge]（最多 5000 字符）' : '描述歌曲的风格、情绪或场景（最多 400 字符）'
+  if (isRunningHubAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 500 字）'
+  if (isRunningHubAudio.value && (audioCapability.value === 'voice_clone' || audioCapability.value === 'tts')) return '输入需要合成的文案'
   if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 500 字）'
   if (isMiniMaxAudio.value && audioCapability.value === 'tts') return '输入需要合成的文案（最多 50000 字）'
   if (isFishAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 150 字，可选）'
@@ -321,7 +324,8 @@ const audioPromptPlaceholder = computed(() => {
   return '描述您想要的音乐。'
 })
 const audioPromptLimit = computed(() => {
-  if (isRunningHubAudio.value) return isRunningHubCustom.value ? 5000 : 400
+  if (isRunningHubMusic.value) return isRunningHubCustom.value ? 5000 : 400
+  if (isRunningHubAudio.value) return 500
   if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return 500
   if (isMiniMaxAudio.value && audioCapability.value === 'tts') return 50000
   if (isFishAudio.value && audioCapability.value === 'voice_design') return 150
@@ -329,7 +333,10 @@ const audioPromptLimit = computed(() => {
   return 4100
 })
 const canGenerateCurrentAudio = computed(() => {
-  if (isRunningHubAudio.value) return !runninghubInputError.value
+  if (isRunningHubMusic.value) return !runninghubInputError.value
+  if (isRunningHubAudio.value && audioCapability.value === 'voice_design') return !!musicPrompt.value.trim() && !!voiceDesignStyle.value.trim() && musicPrompt.value.length <= audioPromptLimit.value
+  if (isRunningHubAudio.value && audioCapability.value === 'voice_clone') return !!musicPrompt.value.trim() && !!inheritedAudioUrl.value
+  if (isRunningHubAudio.value && audioCapability.value === 'tts') return !!musicPrompt.value.trim() && !!(inheritedAudioUrl.value || selectedVoicePreset.value?.previewUrl)
   if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') {
     return !!musicPrompt.value.trim() && !!voiceDesignStyle.value.trim() && musicPrompt.value.length <= audioPromptLimit.value
   }
@@ -806,7 +813,7 @@ async function handleGenerateMusic() {
 
 async function handleGenerateCozeAudio() {
   if (!canGenerateCurrentAudio.value) {
-    const message = isRunningHubAudio.value ? runninghubInputError.value
+    const message = isRunningHubMusic.value ? runninghubInputError.value
       : isMiniMaxAudio.value && audioCapability.value === 'voice_design'
       ? '请填写音色描述和试听文案'
       : isFishAudio.value && audioCapability.value === 'voice_design'
@@ -842,11 +849,22 @@ async function handleGenerateCozeAudio() {
       spaceType: spaceParams.spaceType,
       ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
     }
-    if (isRunningHubAudio.value) {
+    if (isRunningHubMusic.value) {
       Object.assign(body, buildRunningHubMusicInput(currentMusicModelConfig.value, {
         prompt: musicPrompt.value, title: title.value, tags: tags.value,
         makeInstrumental: makeInstrumental.value, webhookUrl: runninghubWebhookUrl.value
       }))
+    } else if (isRunningHubAudio.value && audioCapability.value === 'voice_design') {
+      body.prompt = musicPrompt.value
+      body.preview_text = musicPrompt.value
+      body.style = voiceDesignStyle.value
+    } else if (isRunningHubAudio.value && audioCapability.value === 'voice_clone') {
+      body.prompt = musicPrompt.value
+      body.style = voiceDesignStyle.value
+      body.reference_audio_url = inheritedAudioUrl.value
+    } else if (isRunningHubAudio.value && audioCapability.value === 'tts') {
+      body.text = musicPrompt.value
+      body.reference_audio_url = inheritedAudioUrl.value || selectedVoicePreset.value?.previewUrl || ''
     } else if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') {
       body.prompt = voiceDesignStyle.value
       body.preview_text = musicPrompt.value
@@ -919,7 +937,7 @@ async function pollCozeAudioStatus(nodeId, taskId) {
       audioProvider: generatedNodeData.audioProvider || currentMusicModelConfig.value?.provider || 'coze',
       audioModel: generatedNodeData.audioModel || selectedMusicModel.value,
       audioCapability: generatedNodeData.audioCapability || audioCapability.value,
-      canSaveDesignedVoice: ['minimax', 'fish'].includes(generatedNodeData.audioProvider) && generatedNodeData.audioCapability === 'voice_design',
+      canSaveDesignedVoice: ['minimax', 'fish', 'runninghub'].includes(generatedNodeData.audioProvider) && generatedNodeData.audioCapability === 'voice_design',
       designedVoiceSaved: false,
       output: {
         type: 'audio',
@@ -2864,7 +2882,7 @@ function handleSpeedEditorClickOutside(event) {
           </button>
         </div>
         
-        <div v-if="isRunningHubAudio" class="advanced-options">
+        <div v-if="isRunningHubMusic" class="advanced-options">
           <div class="option-row vertical">
             <span class="option-label">歌曲标题{{ isRunningHubCustom ? '（必填）' : '（选填）' }}</span>
             <input v-model="title" type="text" maxlength="80" class="option-input" :placeholder="isRunningHubCustom ? '输入歌曲标题，最多 80 字符' : '留空自动生成标题'" />
@@ -2893,7 +2911,7 @@ function handleSpeedEditorClickOutside(event) {
         
         <!-- 高级选项 -->
         <Transition name="slide-down">
-          <div v-if="showAdvancedOptions && isRunningHubAudio" class="advanced-options">
+          <div v-if="showAdvancedOptions && isRunningHubMusic" class="advanced-options">
             <div class="option-row vertical">
               <span class="option-label">Webhook 回调地址（选填）</span>
               <input v-model="runninghubWebhookUrl" type="url" class="option-input" placeholder="https://example.com/webhook" />

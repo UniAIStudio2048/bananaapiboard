@@ -28,6 +28,8 @@ export function normalizeAudioModels(models = [], groups = []) {
       provider: model.apiType === 'runninghub-audio' ? 'runninghub' : model.apiType === 'minimax-audio' ? 'minimax' : model.apiType === 'fish-audio' ? 'fish' : 'coze',
       pricingMode: model.apiType === 'runninghub-audio' ? 'fixed' : model.pricingMode,
       actualModel: model.actualModel || '',
+      nodeInfoList: Array.isArray(model.nodeInfoList) ? model.nodeInfoList : [],
+      runninghubAppId: model.runninghubAppId || '',
       voiceClonePointsCost: model.voiceClonePointsCost === null || model.voiceClonePointsCost === undefined || model.voiceClonePointsCost === ''
         ? null
         : Math.max(0, Number(model.voiceClonePointsCost) || 0),
