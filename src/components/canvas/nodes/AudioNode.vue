@@ -237,6 +237,7 @@ const voiceDesignStyle = computed(() => [
   voiceCustomDescription.value.trim()
 ].filter(Boolean).join('，'))
 const voiceStyleTriggerLabel = computed(() => voiceAgeGender.value ? `${voiceAgeGender.value}音色` : '音色')
+const voiceStylePanelTitle = computed(() => audioCapability.value === 'voice_clone' ? '声音特征' : '音色设计')
 const voicePresetTriggerLabel = computed(() => selectedVoicePreset.value?.name || '选择音色')
 
 // 模型下拉框状态
@@ -354,7 +355,7 @@ const canGenerateCurrentAudio = computed(() => {
 })
 
 watch(audioCapability, (capability) => {
-  if (capability !== 'voice_design') {
+  if (!['voice_design', 'voice_clone'].includes(capability)) {
     isVoiceStyleDropdownOpen.value = false
   }
 })
@@ -2788,7 +2789,7 @@ function handleSpeedEditorClickOutside(event) {
           </div>
 
           <div
-            v-if="audioCapability === 'voice_design'"
+            v-if="audioCapability === 'voice_design' || audioCapability === 'voice_clone'"
             ref="voiceStyleSelectorRef"
             class="voice-style-selector"
             @mousedown.stop
@@ -2806,7 +2807,7 @@ function handleSpeedEditorClickOutside(event) {
                 @wheel.stop
               >
                 <div class="voice-style-dropdown-title">
-                  <span>音色设计</span>
+                  <span>{{ voiceStylePanelTitle }}</span>
                   <button type="button" class="voice-style-reset-all" @click="resetVoiceDesignStyle">重置全部</button>
                 </div>
                 <div class="voice-style-flat-grid">
