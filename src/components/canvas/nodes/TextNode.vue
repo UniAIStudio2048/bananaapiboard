@@ -1129,6 +1129,14 @@ function applyCustomOrder(items, customOrder) {
   return ordered
 }
 
+// 上游节点仍然连接时，媒体 URL 可能因重新上传或重新生成而变化。
+// 使用节点和当前媒体槽位作为引用 key，避免 URL 变化被误判为断开连接。
+function getReferenceMediaKey(type, url, index, sourceNodeId) {
+  return sourceNodeId
+    ? `${type}:node:${sourceNodeId}:${index}`
+    : getMediaMentionKey({ type, url })
+}
+
 function buildMediaItems(type, urls) {
   const labelPrefix = MEDIA_LABEL_PREFIX[type] || ''
   return (urls || []).map((url, i) => ({
@@ -1136,7 +1144,12 @@ function buildMediaItems(type, urls) {
     index: i + 1,
     url,
     label: `${labelPrefix}${i + 1}`,
-    key: getMediaMentionKey({ type, url }),
+    key: getReferenceMediaKey(
+      type,
+      url,
+      i + 1,
+      upstreamNodes.value.find(node => nodeContainsReferenceMedia(node, { type, url }))?.id
+    ),
     ...(type === 'video' ? { thumbnailUrl: getUpstreamVideoThumbnail(url) } : {})
   }))
 }
@@ -1480,7 +1493,8 @@ watch(
   () => referenceMediaList.value.map(item => `${item.key}:${item.label}`).join('|'),
   () => {
     syncPromptMentionsWithMedia()
-  }
+  },
+  { immediate: true }
 )
 
 /**

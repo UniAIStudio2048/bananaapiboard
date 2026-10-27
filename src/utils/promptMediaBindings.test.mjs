@@ -89,3 +89,45 @@ test('renames bound prompt mentions after media reorder', () => {
     'image:b.png': { type: 'image', label: '图片1' }
   })
 })
+
+test('keeps a mention bound when the upstream media URL changes but its stable key stays', () => {
+  const original = {
+    type: 'image',
+    index: 1,
+    label: '图片1',
+    url: 'old.png',
+    key: 'image:node:source-1:1'
+  }
+  const replaced = {
+    ...original,
+    url: 'new.png'
+  }
+  const bindings = bindMediaMention({}, original)
+
+  const result = syncPromptMediaMentions('请参考@图片1', bindings, [replaced])
+
+  assert.equal(result.text, '请参考@图片1')
+  assert.deepEqual(result.bindings, {
+    'image:node:source-1:1': { type: 'image', label: '图片1' }
+  })
+})
+
+test('migrates a legacy URL binding to the stable key before a later media replacement', () => {
+  const legacyBindings = {
+    'image:old.png': { type: 'image', label: '图片1' }
+  }
+  const current = {
+    type: 'image',
+    index: 1,
+    label: '图片1',
+    url: 'old.png',
+    key: 'image:node:source-1:1'
+  }
+
+  const result = syncPromptMediaMentions('请参考@图片1', legacyBindings, [current])
+
+  assert.equal(result.text, '请参考@图片1')
+  assert.deepEqual(result.bindings, {
+    'image:node:source-1:1': { type: 'image', label: '图片1' }
+  })
+})

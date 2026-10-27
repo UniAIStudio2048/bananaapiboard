@@ -795,35 +795,64 @@ const supportsMediaTags = computed(() => true)
 /**
  * 收集所有参考素材（带编号），用于点击插入 @标记
  */
+// 上游节点仍然连接时，媒体 URL 可能因重新上传或重新生成而变化。
+// 使用节点和当前媒体槽位作为引用 key，避免 URL 变化被误判为断开连接。
+function getReferenceMediaKey(type, url, index, sourceNodeId) {
+  return sourceNodeId
+    ? `${type}:node:${sourceNodeId}:${index}`
+    : getMediaMentionKey({ type, url })
+}
+
+function findUpstreamNodeByAudioUrl(url) {
+  const upstreamEdges = canvasStore.edgesByTarget.get(props.id) || []
+  const nodeIndex = canvasStore.nodesById
+
+  for (const edge of upstreamEdges) {
+    const node = nodeIndex.get(edge.source)
+    if (!node?.data) continue
+    const audioUrl = node.type === 'seedance-character' && getSeedanceMediaType(node.data) === 'audio'
+      ? node.data.assetUrl
+      : AUDIO_NODE_TYPES.includes(node.type)
+        ? node.data.output?.url || node.data.audioUrl || node.data.audioData
+        : ''
+    if (audioUrl === url) return node
+  }
+
+  return null
+}
+
 const referenceMediaList = computed(() => {
   const list = []
   referenceVideos.value.forEach((url, i) => {
+    const sourceNode = findUpstreamNodeByVideoUrl(url)
     list.push({
       type: 'video',
       index: i + 1,
       url,
       label: `视频${i + 1}`,
-      key: getMediaMentionKey({ type: 'video', url }),
+      key: getReferenceMediaKey('video', url, i + 1, sourceNode?.id),
       thumbnailUrl: getReferenceVideoThumbnail(url)
     })
   })
   referenceImages.value.forEach((url, i) => {
+    const sourceNode = findUpstreamNodeByImageUrl(url)
     list.push({
       type: 'image',
       index: i + 1,
       url,
       label: `图片${i + 1}`,
-      key: getMediaMentionKey({ type: 'image', url }),
+      key: getReferenceMediaKey('image', url, i + 1, sourceNode?.id),
       thumbnailUrl: getReferenceImageThumbnail(url)
     })
   })
   referenceAudios.value.forEach((url, i) => {
+    const sourceNode = findUpstreamNodeByAudioUrl(url)
     list.push({
       type: 'audio',
       index: i + 1,
       url,
       label: `音频${i + 1}`,
-      key: getMediaMentionKey({ type: 'audio', url })
+      key: getReferenceMediaKey('audio', url, i + 1, sourceNode?.id)
     })
   })
   return list
@@ -4994,7 +5023,8 @@ watch(
   () => referenceMediaList.value.map(item => `${item.key}:${item.label}`).join('|'),
   () => {
     syncPromptMentionsWithMedia()
-  }
+  },
+  { immediate: true }
 )
 
 // 监听节点选中状态，选中时恢复正确的文本框高度

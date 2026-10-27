@@ -4291,25 +4291,35 @@ function handleReferenceVideoPreviewError(url) {
   failedReferenceVideoPreviewUrls.value = new Set([...failedReferenceVideoPreviewUrls.value, url])
 }
 
+// 上游节点仍然连接时，媒体 URL 可能因重新上传或重新生成而变化。
+// 使用节点和当前媒体槽位作为引用 key，避免 URL 变化被误判为断开连接。
+function getReferenceMediaKey(type, url, index, sourceNodeId) {
+  return sourceNodeId
+    ? `${type}:node:${sourceNodeId}:${index}`
+    : getMediaMentionKey({ type, url })
+}
+
 const referenceMediaList = computed(() => {
   const list = []
   referenceVideos.value.forEach((url, i) => {
+    const sourceNode = findUpstreamNodeByVideoUrl(url)
     list.push({
       type: 'video',
       index: i + 1,
       url,
       label: `视频${i + 1}`,
-      key: getMediaMentionKey({ type: 'video', url }),
+      key: getReferenceMediaKey('video', url, i + 1, sourceNode?.id),
       thumbnailUrl: getReferenceVideoThumbnail(url)
     })
   })
   referenceImages.value.forEach((url, i) => {
+    const sourceNode = findUpstreamNodeByImageUrl(url)
     list.push({
       type: 'image',
       index: i + 1,
       url,
       label: `图片${i + 1}`,
-      key: getMediaMentionKey({ type: 'image', url })
+      key: getReferenceMediaKey('image', url, i + 1, sourceNode?.id)
     })
   })
   return list
@@ -6531,7 +6541,8 @@ watch(
   () => referenceMediaList.value.map(item => `${item.key}:${item.label}`).join('|'),
   () => {
     syncPromptMentionsWithMedia()
-  }
+  },
+  { immediate: true }
 )
 
 // 文本框拖动自动滚动功能

@@ -83,6 +83,8 @@ export function syncPromptMediaMentions(text, bindings = {}, mediaItems = []) {
   }
 
   const mediaByKey = new Map(mediaItems.map(item => [item.key || getMediaMentionKey(item), item]))
+  // 兼容旧工作流：历史绑定使用 type:URL 作为 key，当前节点可能已经升级为稳定 key。
+  const mediaByLegacyKey = new Map(mediaItems.map(item => [getMediaMentionKey(item), item]))
   const mediaByTypeIndex = new Map(mediaItems.map(item => [`${item.type}:${item.index}`, item]))
   const nextBindings = {}
 
@@ -93,7 +95,7 @@ export function syncPromptMediaMentions(text, bindings = {}, mediaItems = []) {
       return value?.type === type && normalizeMediaMentionLabel(value?.label) === oldLabel
     })
     const media = boundEntry
-      ? mediaByKey.get(boundEntry[0])
+      ? mediaByKey.get(boundEntry[0]) || mediaByLegacyKey.get(boundEntry[0])
       : mediaByTypeIndex.get(`${type}:${Number(rawIndex || 1)}`)
 
     if (!media) return ''
