@@ -3,10 +3,12 @@ type: index
 title: 用户前端知识库索引
 description: 可复用的画布交互与渠道集成结论。
 tags: [bananaapiboard, canvas, wiki]
-timestamp: 2026-09-24
+timestamp: 2026-10-27
 ---
 
 # 用户前端知识库索引
+
+- [画布外部剪贴板粘贴](canvas-external-clipboard-paste.md)：接收外部图片文件和纯文本，在画布鼠标位置创建对应节点并保留节点剪贴板行为。
 
 - [大画布视频封面回退](canvas-video-cover-fallback.md)：缺失或失效封面走限流服务端截帧，验证加载后写回节点。
 

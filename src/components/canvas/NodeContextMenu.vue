@@ -9,7 +9,7 @@ import { useCanvasStore } from '@/stores/canvas'
 import IconSet from '@/components/common/IconSet.vue'
 import { useTeamStore } from '@/stores/team'
 import { getDownstreamOptions, NODE_TYPES } from '@/config/canvas/nodeTypes'
-import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled, isByteforCharacterLibraryEnabled, isDigitalHumanLibraryEnabled, getAvailableVideoModels } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, isSeedanceFeaturesEnabled, getSeedanceCharacterLibraryName, isByteforCharacterLibraryEnabled, isDigitalHumanLibraryEnabled, getAvailableVideoModels } from '@/config/tenant'
 import { saveAsset } from '@/api/canvas/assets'
 import { createDigitalHuman, getDigitalHumanChannels } from '@/api/canvas/digital-humans'
 import { uploadImages } from '@/api/canvas/nodes'
@@ -798,6 +798,7 @@ const canSendToAssistant = computed(() => {
 })
 
 const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
+const seedanceCharacterLibraryName = computed(() => getSeedanceCharacterLibraryName())
 const byteforCharacterLibraryEnabled = computed(() => isByteforCharacterLibraryEnabled())
 const digitalHumanLibraryEnabled = computed(() => isDigitalHumanLibraryEnabled())
 const isCreatingDigitalHuman = ref(false)
@@ -1281,7 +1282,7 @@ function handleMenuClick(event) {
         @click="openSeedanceDialog"
       >
         <span class="icon">👥</span>
-        创建 Seedance 2.0 角色
+        创建 {{ seedanceCharacterLibraryName }} 2.0 角色
       </div>
 
       <!-- 创建 Bytefor 角色 -->
@@ -1357,7 +1358,7 @@ function handleMenuClick(event) {
     <div v-if="showSeedanceDialog" class="seedance-dialog-overlay" @click="closeSeedanceDialog">
       <div class="seedance-dialog" @click.stop>
         <div class="seedance-dialog-header">
-          <span class="seedance-dialog-title">{{ isByteforProvider ? '创建 Bytefor 角色' : '创建 Seedance 2.0 角色' }}</span>
+          <span class="seedance-dialog-title">{{ isByteforProvider ? '创建 Bytefor 角色' : `创建 ${seedanceCharacterLibraryName} 2.0 角色` }}</span>
           <button class="seedance-dialog-close" @click="closeSeedanceDialog">✕</button>
         </div>
         

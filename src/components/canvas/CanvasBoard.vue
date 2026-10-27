@@ -27,7 +27,7 @@
  * - Ctrl+Z：撤销
  * - Ctrl+Y：重做
  * - Ctrl+C：复制节点
- * - Ctrl+V：粘贴节点
+ * - Ctrl+V：粘贴节点或外部图片/文本
  * - Ctrl+A：全选节点
  * - Ctrl+G：编组选中的节点
  */
@@ -46,6 +46,7 @@ import {
 } from '@/utils/canvasConnectionPosition'
 import {
   getClipboardFiles,
+  getClipboardText,
   isScreenPointInsideRect,
   resolveCanvasPasteScreenPosition,
   resolveCanvasPasteSource
@@ -3395,7 +3396,7 @@ function readFileAsBase64(file) {
 }
 
 /**
- * 处理 paste 事件 —— 系统剪贴板含图片/文件时优先粘贴系统内容；
+ * 处理 paste 事件 —— 系统剪贴板含图片/文件/文本时优先粘贴系统内容；
  * 否则粘贴最后复制的画布节点。
  */
 function handlePaste(event) {
@@ -3416,6 +3417,12 @@ function handlePaste(event) {
     return
   }
 
+  if (pasteSource === 'system-text') {
+    event.preventDefault()
+    handleClipboardText(getClipboardText(clipboardData))
+    return
+  }
+
   if (pasteSource === 'nodes') {
     event.preventDefault()
     const pastePosition = screenToFlowPosition(getCanvasPasteScreenPosition())
@@ -3424,6 +3431,20 @@ function handlePaste(event) {
   }
 
   event.preventDefault()
+}
+
+function handleClipboardText(text, positionOverride) {
+  if (!text || !text.trim()) return
+
+  const position = positionOverride || screenToFlowPosition(getCanvasPasteScreenPosition())
+  canvasStore.addNode({
+    type: 'text-input',
+    position,
+    data: {
+      title: '文本',
+      text
+    }
+  })
 }
 
 /**

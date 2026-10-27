@@ -14,7 +14,7 @@ import {
 } from '@/api/canvas/volcengine-assets'
 import { saveAsset, getAssets, updateAsset, deleteAsset as deleteLocalAsset } from '@/api/canvas/assets'
 import { uploadImages } from '@/api/canvas/nodes'
-import { getApiUrl } from '@/config/tenant'
+import { getApiUrl, getSeedanceCharacterLibraryName } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { smartDownload } from '@/api/client'
 import { matchesSeedanceCharacterAssetSearch } from '@/utils/seedanceCharacterAssetSearch'
@@ -24,6 +24,7 @@ import { useTeamStore } from '@/stores/team'
 import { getCachedAssets, cacheAssets, invalidateAssetCache } from '@/utils/assetCache'
 
 const teamStore = useTeamStore()
+const seedanceCharacterLibraryName = computed(() => getSeedanceCharacterLibraryName())
 
 const props = defineProps({
   selectedGroupId: {
@@ -1413,7 +1414,7 @@ onUnmounted(() => {
                   <circle cx="16" cy="11" r="2.5" stroke="currentColor" stroke-width="1.5"/>
                   <path d="M8 16c1-1.5 3-2.5 5-2.5s4 1 5 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                 </svg>
-                {{ t('canvas.seedanceCharacterLib') }}
+                {{ `${seedanceCharacterLibraryName}角色库` }}
                 <span class="fullscreen-count">{{ t('canvas.characterCount', { count: fullscreenFilteredAssets.length }) }}</span>
               </h3>
               <div class="fullscreen-toolbar">

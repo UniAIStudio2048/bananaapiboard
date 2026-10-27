@@ -2,7 +2,7 @@
 type: log
 title: 用户前端知识库变更日志
 tags: [bananaapiboard, canvas, wiki]
-timestamp: 2026-09-24
+timestamp: 2026-10-27
 ---
 
 # 变更日志
@@ -45,6 +45,10 @@ timestamp: 2026-09-24
 - 新增 [Seedance 快捷角色审核反馈](seedance-quick-review-feedback.md)：记录图像节点快捷审核的终态兼容、超时反馈与节点状态规则。
 
 返回 [索引](index.md)。
+
+## 2026-10-27
+
+- 新增[画布外部剪贴板粘贴](canvas-external-clipboard-paste.md)：外部纯文本创建 `text-input` 节点，图片等媒体继续使用系统文件粘贴上传，相关回归测试和 Vite 构建通过。
 
 ## 2026-10-20
 

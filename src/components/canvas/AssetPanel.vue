@@ -13,7 +13,7 @@ import { getAssetPanelStats, getAssetPanelTagCounts, getAssetPanelUserTags, getV
 import { preloadImages } from '@/utils/imageCache'
 import { toSameOriginUrl } from '@/utils/canvasThumbnail'
 import { listAssetGroups, listAssets as listSeedanceAssets, deleteAssetGroup } from '@/api/canvas/volcengine-assets'
-import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, isSoraCharacterLibraryEnabled, isByteforCharacterLibraryEnabled, isDigitalHumanLibraryEnabled } from '@/config/tenant'
+import { getApiUrl, getMediaUrl, getTenantHeaders, isSeedanceFeaturesEnabled, getSeedanceCharacterLibraryName, isSoraCharacterLibraryEnabled, isByteforCharacterLibraryEnabled, isDigitalHumanLibraryEnabled } from '@/config/tenant'
 import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { getWorkflowNodesBatch, uploadCanvasMedia } from '@/api/canvas/workflow'
@@ -162,6 +162,7 @@ let teamSyncTimer = null
 const lastSyncId = ref(null) // 记录最新一条记录的ID
 
 const seedanceFeaturesEnabled = computed(() => isSeedanceFeaturesEnabled())
+const seedanceCharacterLibraryName = computed(() => getSeedanceCharacterLibraryName())
 const soraCharacterLibraryEnabled = computed(() => isSoraCharacterLibraryEnabled())
 const byteforCharacterLibraryEnabled = computed(() => isByteforCharacterLibraryEnabled())
 const digitalHumanLibraryEnabled = computed(() => isDigitalHumanLibraryEnabled())
@@ -201,7 +202,9 @@ const fileTypes = computed(() =>
 const fileTypeLabels = computed(() =>
   fileTypes.value.map(ft => ({
     ...ft,
-    label: ft.labelKey ? t(ft.labelKey) : ft.label
+    label: ft.key === 'seedance-character'
+      ? `${seedanceCharacterLibraryName.value}角色库`
+      : (ft.labelKey ? t(ft.labelKey) : ft.label)
   }))
 )
 
@@ -1824,11 +1827,11 @@ onUnmounted(() => {
               <button 
                 class="type-btn"
                 :class="{ active: selectedType === ft.key }"
-                :title="ft.labelKey ? t(ft.labelKey) : ft.label"
+                :title="`${seedanceCharacterLibraryName}角色库`"
                 @click="selectedType = ft.key"
               >
                 <span class="type-icon">{{ ft.icon }}</span>
-                <span class="type-label">{{ ft.labelKey ? t(ft.labelKey) : ft.label }}</span>
+                <span class="type-label">{{ `${seedanceCharacterLibraryName}角色库` }}</span>
                 <span class="type-count">{{ seedanceAssetCount }}</span>
               </button>
               <div 

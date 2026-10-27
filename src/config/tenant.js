@@ -155,6 +155,7 @@ const envConfig = {
 // 当前运行时配置（可动态更新）
 let runtimeConfig = { ...envConfig }
 runtimeConfig.enableDigitalHumanLibrary = false
+runtimeConfig.seedanceCharacterLibraryName = 'Seedance'
 const tenantConfigVersion = shallowRef(0)
 
 function bumpTenantConfigVersion() {
@@ -577,6 +578,9 @@ export async function loadBrandConfig(forceReload = false) {
       }
       console.log('[tenant] Seedance 功能开关:', runtimeConfig.enableSeedanceFeatures)
 
+      runtimeConfig.seedanceCharacterLibraryName = String(data.seedanceCharacterLibraryName || 'Seedance').trim() || 'Seedance'
+      console.log('[tenant] Seedance 角色库名称:', runtimeConfig.seedanceCharacterLibraryName)
+
       // 更新 Sora 角色库开关
       if (data.enableSoraCharacterLibrary !== undefined) {
         runtimeConfig.enableSoraCharacterLibrary = data.enableSoraCharacterLibrary
@@ -760,6 +764,7 @@ export async function loadRemoteConfig() {
         },
         features: runtimeConfig.features,
         enableDigitalHumanLibrary: data.enableDigitalHumanLibrary === true,
+        seedanceCharacterLibraryName: String(data.seedanceCharacterLibraryName || 'Seedance').trim() || 'Seedance',
         rechargeLimits: runtimeConfig.rechargeLimits || normalizeRechargeLimits()
       }
       bumpTenantConfigVersion()
@@ -813,6 +818,7 @@ try {
     audio_model_groups: savedTenantConfig?.audio_model_groups || [],
     modelEntitlements: savedTenantConfig?.modelEntitlements || { image: {}, video: {} },
     enableDigitalHumanLibrary: savedTenantConfig?.enableDigitalHumanLibrary === true,
+    seedanceCharacterLibraryName: String(savedTenantConfig?.seedanceCharacterLibraryName || 'Seedance').trim() || 'Seedance',
     rechargeLimits: normalizeRechargeLimits(savedTenantConfig?.rechargeLimits)
   }
   
@@ -854,6 +860,12 @@ export const getSoraCharacterConfig = () => config.soraCharacterConfig || { poin
 
 // 检查 Seedance 角色功能是否启用
 export const isSeedanceFeaturesEnabled = () => config.enableSeedanceFeatures !== false
+
+// 获取租户自定义的 Seedance 角色库名称前缀
+export const getSeedanceCharacterLibraryName = () => {
+  const name = String(config.seedanceCharacterLibraryName || '').trim()
+  return name || 'Seedance'
+}
 
 // 检查 Sora 角色库是否启用
 export const isSoraCharacterLibraryEnabled = () => config.enableSoraCharacterLibrary !== false

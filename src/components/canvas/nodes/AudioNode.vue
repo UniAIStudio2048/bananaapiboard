@@ -14,7 +14,7 @@ defineOptions({
  * - 右侧(+)：输出连接
  * - 快捷创建：通过右侧输出端口连接到目标节点
  */
-import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, inject, onMounted, onUnmounted } from 'vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
@@ -24,7 +24,7 @@ import { formatPoints } from '@/utils/format'
 import { getCanvasNodeDownloadName } from '@/utils/canvasDirectory'
 import { formatVideoGenerationElapsed, getVideoGenerationElapsedSeconds } from '@/utils/videoGenerationProgress.js'
 import { calculateAudioPointsCost } from '@/utils/audioPricing'
-import { buildRunningHubMusicInput } from '@/utils/runningHubMusic'
+import { buildRunningHubMusicInput, RUNNINGHUB_SUNO6_OPERATIONS } from '@/utils/runningHubMusic'
 import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
@@ -132,6 +132,15 @@ const tags = ref(props.data.tags || '')
 const negativeTags = ref(props.data.negativeTags || '')
 const makeInstrumental = ref(props.data.makeInstrumental || false)
 const runninghubWebhookUrl = ref(props.data.runninghubWebhookUrl || '')
+const sunoV6Params = reactive({
+  operation: props.data.sunoV6Operation || 'single', sourceTaskId: props.data.sourceTaskId || '', sourceTaskIds: props.data.sourceTaskIds || '',
+  audioUrl: props.data.audioUrlInput || '', audioUrls: props.data.audioUrls || '', audioIndex: props.data.audioIndex || '', audioIndexes: props.data.audioIndexes || '',
+  startS: props.data.startS || '', endS: props.data.endS || '', continueAt: props.data.continueAt || '', infillLyrics: props.data.infillLyrics || '',
+  soundType: props.data.soundType || '', bpm: props.data.bpm || '', musicalKey: props.data.musicalKey || '', version: props.data.version || '',
+  customModelId: props.data.customModelId || '', custom: props.data.custom ?? '', instrumental: props.data.instrumental ?? '', gptDescription: props.data.gptDescription || '', audioFormat: props.data.audioFormat || '',
+  styleWeight: props.data.styleWeight ?? '', weirdness: props.data.weirdness ?? '', audioWeight: props.data.audioWeight ?? '', vocalGender: props.data.vocalGender || '',
+  variety: props.data.variety || '', maxMode: props.data.maxMode || false, autoLyrics: props.data.autoLyrics || false, personaId: props.data.personaId || '', duration: props.data.duration || ''
+})
 const isGeneratingMusic = ref(false)
 const voiceDialect = ref(props.data.voiceDialect || '')
 const voiceAgeGender = ref(props.data.voiceAgeGender || '')
@@ -262,13 +271,15 @@ const isMiniMaxAudio = computed(() => currentMusicModelConfig.value?.provider ==
 const isFishAudio = computed(() => currentMusicModelConfig.value?.provider === 'fish')
 const isRunningHubAudio = computed(() => currentMusicModelConfig.value?.apiType === 'runninghub-audio')
 const isRunningHubMusic = computed(() => isRunningHubAudio.value && (!audioCapability.value || audioCapability.value === 'music'))
+const isRunningHubSuno6 = computed(() => isRunningHubMusic.value && (currentMusicModelConfig.value?.sunoV6 || String(currentMusicModelConfig.value?.actualModel || '').includes('suno-v6')))
+const sunoV6Operation = computed(() => RUNNINGHUB_SUNO6_OPERATIONS.find(item => item.id === sunoV6Params.operation) || RUNNINGHUB_SUNO6_OPERATIONS[0])
 const isRunningHubCustom = computed(() => currentMusicModelConfig.value?.actualModel?.endsWith('/custom'))
 const runninghubInputError = computed(() => {
   if (!isRunningHubMusic.value) return ''
   try {
     buildRunningHubMusicInput(currentMusicModelConfig.value, {
       prompt: musicPrompt.value, title: title.value, tags: tags.value,
-      makeInstrumental: makeInstrumental.value, webhookUrl: runninghubWebhookUrl.value
+      makeInstrumental: makeInstrumental.value, webhookUrl: runninghubWebhookUrl.value, ...sunoV6Params
     })
     return ''
   } catch (error) { return error.message }
@@ -312,6 +323,7 @@ const voiceCloneReadingTexts = computed(() => {
   return texts.length ? texts : DEFAULT_VOICE_CLONE_READING_TEXTS
 })
 const audioPromptPlaceholder = computed(() => {
+  if (isRunningHubSuno6.value) return ['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation) ? '输入完整歌词，支持 [Verse] [Chorus] [Bridge]（最多 5000 字符）' : sunoV6Params.operation === 'sounds' ? '描述要生成的音效（最多 3000 字符）' : '描述歌曲的风格、情绪或场景（最多 3000 字符）'
   if (isRunningHubMusic.value) return isRunningHubCustom.value ? '输入完整歌词，支持 [Verse] [Chorus] [Bridge]（最多 5000 字符）' : '描述歌曲的风格、情绪或场景（最多 400 字符）'
   if (isRunningHubAudio.value && audioCapability.value === 'voice_design') return '输入试听文案（不超过 500 字）'
   if (isRunningHubAudio.value && (audioCapability.value === 'voice_clone' || audioCapability.value === 'tts')) return '输入需要合成的文案'
@@ -325,6 +337,7 @@ const audioPromptPlaceholder = computed(() => {
   return '描述您想要的音乐。'
 })
 const audioPromptLimit = computed(() => {
+  if (isRunningHubSuno6.value) return ['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation) ? 5000 : 3000
   if (isRunningHubMusic.value) return isRunningHubCustom.value ? 5000 : 400
   if (isRunningHubAudio.value) return 500
   if (isMiniMaxAudio.value && audioCapability.value === 'voice_design') return 500
@@ -377,6 +390,14 @@ function formatModelSuccessRate(modelName) {
 // 音乐生成积分消耗（生成2首歌）
 const musicPointsCost = computed(() => {
   const cost = currentMusicModelConfig.value?.pointsCost || 20
+  if (isRunningHubSuno6.value) {
+    const usd = Number(sunoV6Operation.value?.usd)
+    const rate = Number(currentMusicModelConfig.value?.usdToCny) || 6.6681
+    const base = Number.isFinite(usd) ? Math.ceil(usd * rate * 15) : Number(cost)
+    const maxable = ['custom', 'wild-custom', 'mini-custom', 'inspo', 'upload-cover', 'extend', 'cover', 'upload-extend', 'add-instrumental', 'add-vocals', 'replace-section', 'add-stem', 'mashup', 'sample'].includes(sunoV6Params.operation)
+    const priced = maxable && (sunoV6Params.maxMode === true || sunoV6Params.maxMode === 'true') ? base * 2 : base
+    return Math.round(priced * getUserNodeRate('audio') * 100) / 100
+  }
   const base = isRunningHubAudio.value
     ? Number(currentMusicModelConfig.value?.pointsCost) || 0
     : (isMiniMaxAudio.value || isFishAudio.value) && audioCapability.value === 'voice_design'
@@ -489,6 +510,18 @@ watch([selectedMusicModel, customMode, musicPrompt, title, tags, negativeTags, m
 watch(runninghubWebhookUrl, value => {
   canvasStore.updateNodeData(props.id, { runninghubWebhookUrl: value })
 })
+
+watch(sunoV6Params, value => {
+  canvasStore.updateNodeData(props.id, {
+    sunoV6Operation: value.operation, sourceTaskId: value.sourceTaskId, sourceTaskIds: value.sourceTaskIds,
+    audioUrlInput: value.audioUrl, audioUrls: value.audioUrls, audioIndex: value.audioIndex, audioIndexes: value.audioIndexes,
+    startS: value.startS, endS: value.endS, continueAt: value.continueAt, infillLyrics: value.infillLyrics,
+    soundType: value.soundType, bpm: value.bpm, musicalKey: value.musicalKey, version: value.version, customModelId: value.customModelId, custom: value.custom, instrumental: value.instrumental,
+    gptDescription: value.gptDescription, audioFormat: value.audioFormat, styleWeight: value.styleWeight, weirdness: value.weirdness,
+    audioWeight: value.audioWeight, vocalGender: value.vocalGender, variety: value.variety, maxMode: value.maxMode, autoLyrics: value.autoLyrics,
+    personaId: value.personaId, duration: value.duration
+  })
+}, { deep: true })
 
 // 切换模型下拉框
 function toggleMusicModelDropdown(event) {
@@ -853,7 +886,7 @@ async function handleGenerateCozeAudio() {
     if (isRunningHubMusic.value) {
       Object.assign(body, buildRunningHubMusicInput(currentMusicModelConfig.value, {
         prompt: musicPrompt.value, title: title.value, tags: tags.value,
-        makeInstrumental: makeInstrumental.value, webhookUrl: runninghubWebhookUrl.value
+        makeInstrumental: makeInstrumental.value, webhookUrl: runninghubWebhookUrl.value, ...sunoV6Params
       }))
     } else if (isRunningHubAudio.value && audioCapability.value === 'voice_design') {
       body.prompt = musicPrompt.value
@@ -2883,7 +2916,40 @@ function handleSpeedEditorClickOutside(event) {
           </button>
         </div>
         
-        <div v-if="isRunningHubMusic" class="advanced-options">
+        <div v-if="isRunningHubSuno6" class="advanced-options">
+          <div class="option-row vertical">
+            <span class="option-label">Suno v6 功能</span>
+            <select v-model="sunoV6Params.operation" class="option-input">
+              <option v-for="operation in RUNNINGHUB_SUNO6_OPERATIONS" :key="operation.id" :value="operation.id">{{ operation.label }}</option>
+            </select>
+            <span class="option-hint">{{ sunoV6Operation.path }} · {{ sunoV6Operation.id === 'sounds' ? '生成音效' : '生成音乐或处理已有音乐' }}</span>
+          </div>
+          <div v-if="['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation)" class="option-row vertical">
+            <span class="option-label">歌曲标题与音乐风格</span>
+            <input v-model="title" type="text" maxlength="80" class="option-input" placeholder="歌曲标题（最多 80 字符）" />
+            <input v-model="tags" type="text" maxlength="1000" class="option-input" placeholder="音乐风格（最多 1000 字符）" />
+          </div>
+          <div v-if="['inspo'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">参考音频 URL（1–4 个，逗号分隔）</span><input v-model="sunoV6Params.audioUrls" class="option-input" placeholder="https://...mp3, https://...wav" /></div>
+          <div v-if="['upload', 'upload-cover', 'upload-extend'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">源音频 URL</span><input v-model="sunoV6Params.audioUrl" class="option-input" placeholder="https://...mp3" /></div>
+          <div v-if="['extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'replace-section', 'sample'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">源任务 ID</span><input v-model="sunoV6Params.sourceTaskId" class="option-input" placeholder="RunningHub taskId" /></div>
+          <div v-if="['extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'replace-section', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.audioIndex" type="number" min="1" max="20" class="option-input" placeholder="曲目序号（默认 1）" /></div>
+          <div v-if="['mashup'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">两个源任务 ID（逗号分隔）</span><input v-model="sunoV6Params.sourceTaskIds" class="option-input" placeholder="taskId1, taskId2" /></div>
+          <div v-if="sunoV6Params.operation === 'mashup'" class="option-row"><input v-model="sunoV6Params.audioIndexes" class="option-input" placeholder="曲目序号（如 1,1，可选）" /><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.instrumental" /><span class="toggle-slider"></span></label><span class="option-label">纯音乐</span></div>
+          <div v-if="['replace-section', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.startS" class="option-input" placeholder="起点秒数" /><input v-model="sunoV6Params.endS" class="option-input" placeholder="终点秒数" /></div>
+          <div v-if="sunoV6Params.operation === 'replace-section'" class="option-row vertical"><span class="option-label">替换歌词（可选，最多 5000 字符）</span><textarea v-model="sunoV6Params.infillLyrics" maxlength="5000" class="option-input" rows="3" placeholder="输入要替换分区的新歌词"></textarea></div>
+          <div v-if="['upload-extend', 'extend'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">续写起点（秒）</span><input v-model="sunoV6Params.continueAt" type="number" min="1" :max="sunoV6Params.operation === 'extend' ? 3600 : 479" class="option-input" /></div>
+          <div v-if="sunoV6Params.operation === 'upload-cover'" class="option-row"><select v-model="sunoV6Params.custom" class="option-input"><option value="">翻唱模式（自动判断）</option><option value="true">自定义歌词</option><option value="false">灵感描述</option></select><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.instrumental" /><span class="toggle-slider"></span></label><span class="option-label">纯音乐</span></div>
+          <div v-if="['upload-cover', 'extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'mashup', 'sample'].includes(sunoV6Params.operation)" class="option-row vertical"><span class="option-label">灵感描述（可选；灵感模式使用）</span><input v-model="sunoV6Params.gptDescription" maxlength="3000" class="option-input" placeholder="描述希望的编曲、人声和情绪" /></div>
+          <div v-if="sunoV6Params.operation === 'sounds'" class="option-row"><input v-model="sunoV6Params.bpm" type="number" min="1" max="300" class="option-input" placeholder="BPM（可选）" /><select v-model="sunoV6Params.soundType" class="option-input"><option value="">音效类型</option><option value="one-shot">单次</option><option value="loop">循环</option></select><input v-model="sunoV6Params.musicalKey" class="option-input" placeholder="调式（如 C#m）" /></div>
+          <div v-if="sunoV6Params.operation !== 'upload'" class="option-row"><select v-model="sunoV6Params.version" class="option-input"><option value="">版本（默认 v6）</option><option value="v6">v6</option><option value="v6-wild">v6-wild</option><option value="v6-mini">v6-mini</option></select><select v-model="sunoV6Params.audioFormat" class="option-input"><option value="">格式（默认 mp3）</option><option value="mp3">mp3</option><option value="m4a">m4a</option><option value="wav">wav</option></select><select v-if="sunoV6Params.operation !== 'sounds'" v-model="sunoV6Params.variety" class="option-input"><option value="">变化幅度</option><option value="off">off</option><option value="normal">normal</option><option value="high">high</option><option value="extra">extra</option><option value="max">max</option></select></div>
+          <div v-if="['custom', 'wild-custom', 'mini-custom', 'inspo', 'upload-cover', 'extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'mashup', 'upload-extend', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.styleWeight" type="number" min="0" max="1" step="0.01" class="option-input" placeholder="风格权重 0–1" /><input v-model="sunoV6Params.weirdness" type="number" min="0" max="1" step="0.01" class="option-input" placeholder="创意权重 0–1" /><input v-model="sunoV6Params.audioWeight" type="number" min="0" max="1" step="0.01" class="option-input" placeholder="音频权重 0–1" /></div>
+          <div v-if="['custom', 'wild-custom', 'mini-custom', 'upload-cover', 'extend', 'cover', 'upload-extend', 'sample'].includes(sunoV6Params.operation)" class="option-row"><input v-model="sunoV6Params.customModelId" class="option-input" placeholder="自定义模型 ID（与版本/Persona 互斥）" /><input v-model="sunoV6Params.personaId" class="option-input" placeholder="Persona ID" /><input v-model="sunoV6Params.duration" type="number" min="10" max="360" class="option-input" placeholder="目标时长（秒）" /></div>
+          <div v-if="['custom', 'wild-custom', 'mini-custom', 'upload-cover', 'extend', 'cover', 'add-instrumental', 'add-vocals', 'add-stem', 'mashup', 'sample'].includes(sunoV6Params.operation)" class="option-row"><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.autoLyrics" /><span class="toggle-slider"></span></label><span class="option-label">创意改写歌词</span><select v-model="sunoV6Params.vocalGender" class="option-input"><option value="">人声性别</option><option value="m">男声</option><option value="f">女声</option><option value="Male">Male</option><option value="Female">Female</option></select></div>
+          <div v-if="['custom', 'wild-custom', 'mini-custom', 'inspo', 'upload-cover', 'extend', 'cover', 'upload-extend', 'add-instrumental', 'add-vocals', 'replace-section', 'add-stem', 'mashup', 'sample'].includes(sunoV6Params.operation)" class="option-row"><label v-if="['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation)" class="toggle-switch"><input type="checkbox" v-model="makeInstrumental" /><span class="toggle-slider"></span></label><span v-if="['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation)" class="option-label">纯音乐</span><label class="toggle-switch"><input type="checkbox" v-model="sunoV6Params.maxMode" /><span class="toggle-slider"></span></label><span class="option-label">Max 模式（双倍积分）</span></div>
+          <div v-if="props.data.runninghubMusicResults?.length > 1" class="option-row vertical"><span class="option-label">返回曲目</span><div class="mode-tabs"><button v-for="(result, resultIndex) in props.data.runninghubMusicResults" :key="result.task_id" type="button" :title="result.title" :class="['mode-tab', { active: props.data.audioUrl === result.audio_url }]" @click="selectRunningHubMusicResult(result)">曲目 {{ resultIndex + 1 }}</button></div></div>
+        </div>
+
+        <div v-else-if="isRunningHubMusic" class="advanced-options">
           <div class="option-row vertical">
             <span class="option-label">歌曲标题{{ isRunningHubCustom ? '（必填）' : '（选填）' }}</span>
             <input v-model="title" type="text" maxlength="80" class="option-input" :placeholder="isRunningHubCustom ? '输入歌曲标题，最多 80 字符' : '留空自动生成标题'" />

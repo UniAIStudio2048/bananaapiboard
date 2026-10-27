@@ -15,6 +15,17 @@ export function getClipboardFiles(clipboardData) {
   return files
 }
 
+export function getClipboardText(clipboardData) {
+  if (!clipboardData || typeof clipboardData.getData !== 'function') return ''
+
+  try {
+    const text = clipboardData.getData('text/plain')
+    return typeof text === 'string' && text.trim() ? text : ''
+  } catch {
+    return ''
+  }
+}
+
 export function resolveCanvasPasteSource({ hasNodeClipboard, clipboardData }) {
   if (hasNodeClipboard) {
     return 'nodes'
@@ -22,6 +33,10 @@ export function resolveCanvasPasteSource({ hasNodeClipboard, clipboardData }) {
 
   if (getClipboardFiles(clipboardData).length > 0) {
     return 'system-files'
+  }
+
+  if (getClipboardText(clipboardData)) {
+    return 'system-text'
   }
 
   return 'none'

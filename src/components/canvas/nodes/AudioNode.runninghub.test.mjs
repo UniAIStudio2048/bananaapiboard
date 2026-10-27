@@ -14,8 +14,8 @@ for (const mode of ['single', 'custom']) {
     const updates = []
     const sandbox = {
       props: { id: 'audio-1', data: {} }, canGenerateCurrentAudio: reference(true), userPoints: reference(100), musicPointsCost: reference(14),
-      isGeneratingMusic: reference(false), isRunningHubAudio: reference(true), isMiniMaxAudio: reference(false), isFishAudio: reference(false),
-      audioCapability: reference('music'), selectedMusicModel: reference(`rh-${mode}`), currentMusicModelConfig: reference({ actualModel: `rhart-audio/suno-v5.5/${mode}` }),
+      isGeneratingMusic: reference(false), isRunningHubAudio: reference(true), isRunningHubMusic: reference(true), isMiniMaxAudio: reference(false), isFishAudio: reference(false),
+      audioCapability: reference('music'), isRunningHubSuno6: reference(false), sunoV6Params: {}, selectedMusicModel: reference(`rh-${mode}`), currentMusicModelConfig: reference({ actualModel: `rhart-audio/suno-v5.5/${mode}` }),
       musicPrompt: reference('夜空的星光'), title: reference('夜航'), tags: reference('pop,cinematic'), makeInstrumental: reference(true),
       runninghubWebhookUrl: reference('https://example.com/hook'), buildRunningHubMusicInput,
       teamStore: { getSpaceParams: () => ({ spaceType: 'team', teamId: 'team-1' }) },
@@ -41,10 +41,19 @@ for (const mode of ['single', 'custom']) {
 test('actual AudioNode estimate stays at 14 points even for 5000 lyrics characters', () => {
   const expression = source.slice(source.indexOf('const musicPointsCost = computed('), source.indexOf('function formatAudioErrorMessage('))
   const sandbox = { computed: getter => ({ get value() { return getter() } }), currentMusicModelConfig: reference({ pointsCost: 14 }),
-    isRunningHubAudio: reference(true), isMiniMaxAudio: reference(false), isFishAudio: reference(false), audioCapability: reference('music'),
+    isRunningHubAudio: reference(true), isRunningHubSuno6: reference(false), sunoV6Operation: reference({ usd: 0.08 }), sunoV6Params: {}, isMiniMaxAudio: reference(false), isFishAudio: reference(false), audioCapability: reference('music'),
     musicPrompt: reference('x'.repeat(5000)), getUserNodeRate: () => 1, calculateAudioPointsCost }
   vm.runInNewContext(`${expression}\nglobalThis.cost = musicPointsCost.value`, sandbox)
   assert.equal(sandbox.cost, 14)
+})
+
+test('actual AudioNode does not charge Max mode for Suno operations without documented Max support', () => {
+  const expression = source.slice(source.indexOf('const musicPointsCost = computed('), source.indexOf('function formatAudioErrorMessage('))
+  const sandbox = { computed: getter => ({ get value() { return getter() } }), currentMusicModelConfig: reference({ pointsCost: 9, usdToCny: 6.6681 }),
+    isRunningHubAudio: reference(true), isRunningHubSuno6: reference(true), sunoV6Operation: reference({ id: 'single', usd: 0.08 }), sunoV6Params: { operation: 'single', maxMode: true }, isMiniMaxAudio: reference(false), isFishAudio: reference(false), audioCapability: reference('music'),
+    musicPrompt: reference('一句话成曲'), getUserNodeRate: () => 1, calculateAudioPointsCost }
+  vm.runInNewContext(`${expression}\nglobalThis.cost = musicPointsCost.value`, sandbox)
+  assert.equal(sandbox.cost, 9)
 })
 
 test('actual audio polling persists both RunningHub alternatives and the primary playable URL', async () => {

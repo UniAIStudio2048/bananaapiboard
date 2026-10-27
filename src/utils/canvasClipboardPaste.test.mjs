@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import {
   getClipboardFiles,
+  getClipboardText,
   resolveCanvasMenuPastePosition,
   resolveCanvasPasteScreenPosition,
   resolveCanvasPasteSource
@@ -32,6 +33,18 @@ assert.deepEqual(
 )
 
 assert.equal(
+  getClipboardText({ getData: type => type === 'text/plain' ? '  pasted prompt  ' : '' }),
+  '  pasted prompt  ',
+  'reads plain text from the system clipboard'
+)
+
+assert.equal(
+  getClipboardText({ getData: () => '   ' }),
+  '',
+  'ignores whitespace-only clipboard text'
+)
+
+assert.equal(
   resolveCanvasPasteSource({ hasNodeClipboard: true, clipboardData: { files: [screenshot] } }),
   'nodes',
   'copied canvas nodes win over stale system clipboard files'
@@ -47,6 +60,15 @@ assert.equal(
   resolveCanvasPasteSource({ hasNodeClipboard: false, clipboardData: { files: [screenshot] } }),
   'system-files',
   'system files paste without node clipboard'
+)
+
+assert.equal(
+  resolveCanvasPasteSource({
+    hasNodeClipboard: false,
+    clipboardData: { files: [], getData: () => 'external prompt' }
+  }),
+  'system-text',
+  'system text paste without node clipboard'
 )
 
 assert.equal(
