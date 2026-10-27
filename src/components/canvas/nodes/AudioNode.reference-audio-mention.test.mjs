@@ -20,10 +20,17 @@ test('reference audio mention can be inserted and rendered as an audio tag chip'
   assert.match(source, /<PromptMediaTag[\s\S]*onAudioHoverStart/)
 })
 
-test('audio prompt colors use the same canvas theme tokens as image and video prompts', () => {
+test('audio prompt placeholder is readable in the dark canvas theme', () => {
   assert.match(source, /\.prompt-textarea\s*\{[\s\S]*color:\s*var\(--canvas-text-primary, #fff\);/)
-  assert.match(source, /\.prompt-textarea\.is-empty:empty::before\s*\{[\s\S]*color:\s*var\(--canvas-text-placeholder, #4a4a4a\);/)
+  assert.match(source, /\.prompt-textarea\.is-empty:empty::before\s*\{[\s\S]*color:\s*#ffffff;/)
   assert.match(source, /\.prompt-area\s*\{[\s\S]*border-bottom:\s*1px solid var\(--canvas-border-subtle, #2a2a2a\);/)
+})
+
+test('audio option hints are readable in both canvas themes', () => {
+  assert.match(source, /<span class="option-hint">\{\{ sunoV6Operation\.id === 'sounds' \? '生成音效' : '生成音乐或处理已有音乐' \}\}<\/span>/)
+  assert.doesNotMatch(source, /sunoV6Operation\.path \}\} ·/)
+  assert.match(source, /\.option-hint\s*\{[\s\S]*color:\s*#ffffff;/)
+  assert.match(source, /:root\.canvas-theme-light \.audio-node \.option-hint,[\s\S]*:root\.canvas-theme-light \.audio-config-panel \.option-hint\s*\{[\s\S]*color:\s*#57534e;/)
 })
 
 test('audio input handle shares the node wrapper coordinate system with the left add button', () => {

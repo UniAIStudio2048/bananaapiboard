@@ -1965,9 +1965,15 @@ function updateNodeFromTask(task) {
           status: 'success',
           progress: null,
           taskId: task.taskId,
+          audioUrl,
+          audioData: audioUrl,
           output: {
+            ...(node.data.output || {}),
             type: 'audio',
-            url: audioUrl
+            url: audioUrl,
+            ...(Number.isFinite(Number(result.duration)) && Number(result.duration) > 0
+              ? { duration: Number(result.duration) }
+              : {})
           }
         })
         console.log(`[Canvas] 音频编辑任务完成，节点 ${task.nodeId} 已更新`)

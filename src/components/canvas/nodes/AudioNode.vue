@@ -1609,14 +1609,18 @@ function handleBackgroundTaskComplete(event) {
 
   const outputUrl = task.result?.audio_url || task.result?.outputUrl || task.result?.url
   if (outputUrl) {
+    const isSpeedEdit = task.metadata?.operation === 'speed'
+    const outputDuration = Number(task.result?.duration)
     canvasStore.updateNodeData(props.id, {
       status: 'success',
       progress: null,
       audioUrl: outputUrl,
       audioData: outputUrl,
+      ...(isSpeedEdit ? { playbackRate: 1 } : {}),
       output: {
         type: 'audio',
         url: outputUrl,
+        ...(Number.isFinite(outputDuration) && outputDuration > 0 ? { duration: outputDuration } : {}),
         sourceUrl: task.metadata?.sourceUrl
       }
     })
@@ -1637,8 +1641,12 @@ function handleBackgroundTaskFailed(event) {
   canvasStore.updateNodeData(props.id, {
     status: 'error',
     progress: null,
+    ...(task.metadata?.operation === 'speed' ? { playbackRate: 1 } : {}),
     error: formatAudioErrorMessage(task.error || '音频处理失败')
   })
+  if (task.metadata?.operation === 'speed' && audioRef.value) {
+    audioRef.value.playbackRate = 1
+  }
   removeCompletedTask(taskId)
 }
 
@@ -2205,7 +2213,7 @@ function normalizePlaybackRate(value, fallback = null) {
   if (value === '' || value === null || value === undefined) return fallback
   const numericValue = Number(value)
   if (!Number.isFinite(numericValue)) return fallback
-  return Math.max(0.1, Math.min(4, numericValue))
+  return Math.max(0.5, Math.min(2, numericValue))
 }
 
 function updatePlaybackRate(value) {
@@ -2228,9 +2236,59 @@ function handlePlaybackRateInput(event) {
   updatePlaybackRate(event?.target?.value)
 }
 
-function applyPlaybackRate() {
-  updatePlaybackRate(normalizePlaybackRate(pendingPlaybackRate.value, 1))
+async function applyPlaybackRate() {
+  const rate = normalizePlaybackRate(pendingPlaybackRate.value, 1)
+  updatePlaybackRate(rate)
   showSpeedEditor.value = false
+
+  if (rate === 1) return
+  const sourceUrl = audioUrl.value
+  const sourceDuration = Number(duration.value || props.data?.audioDuration)
+  if (!sourceUrl || sourceUrl.startsWith('blob:')) {
+    updatePlaybackRate(1)
+    await showAlert('音频仍在上传中，请稍后再应用变速', '提示')
+    return
+  }
+  if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
+    updatePlaybackRate(1)
+    await showAlert('音频时长尚未读取完成，请稍后再试', '提示')
+    return
+  }
+
+  try {
+    const result = await submitAudioEdit({
+      audioUrl: sourceUrl,
+      startTime: 0,
+      endTime: sourceDuration,
+      speed: rate,
+      format: 'mp3'
+    })
+    const taskId = result.taskId || result.task_id
+    if (!taskId) throw new Error('未获取到音频变速任务ID')
+    canvasStore.updateNodeData(props.id, {
+      status: 'processing',
+      progress: '变速处理中...',
+      taskId,
+      taskType: 'audio-edit'
+    })
+    registerTask({
+      taskId,
+      type: 'audio-edit',
+      nodeId: props.id,
+      tabId: canvasStore.getCurrentTab()?.id,
+      metadata: {
+        operation: 'speed',
+        sourceNodeId: props.id,
+        sourceUrl,
+        playbackRate: rate
+      }
+    })
+  } catch (error) {
+    console.error('[AudioNode] 音频变速提交失败:', error)
+    canvasStore.updateNodeData(props.id, { playbackRate: 1 })
+    if (audioRef.value) audioRef.value.playbackRate = 1
+    await showAlert(formatAudioErrorMessage(error.message || '音频变速任务提交失败'), '错误')
+  }
 }
 
 // 监听编组整组执行触发
@@ -2298,10 +2356,10 @@ function handleSpeedEditorClickOutside(event) {
 
     <div v-if="showToolbar && showSpeedEditor && !props.data?.readonly" class="speed-editor nodrag" @mousedown.stop @pointerdown.stop @click.stop>
       <button class="speed-editor-cancel" @click="showSpeedEditor = false">×　变速</button>
-      <span class="speed-boundary">0.1x</span>
-      <input v-model.number="pendingPlaybackRate" class="speed-slider" type="range" min="0.1" max="4" step="0.05" aria-label="播放速度" @input="handlePlaybackRateInput" />
-      <span class="speed-boundary">4.0x</span>
-      <input v-model.number="pendingPlaybackRate" class="speed-number" type="number" min="0.1" max="4" step="0.05" aria-label="播放速度数值" @input="handlePlaybackRateInput" />
+      <span class="speed-boundary">0.5x</span>
+      <input v-model.number="pendingPlaybackRate" class="speed-slider" type="range" min="0.5" max="2" step="0.05" aria-label="播放速度" @input="handlePlaybackRateInput" />
+      <span class="speed-boundary">2.0x</span>
+      <input v-model.number="pendingPlaybackRate" class="speed-number" type="number" min="0.5" max="2" step="0.05" aria-label="播放速度数值" @input="handlePlaybackRateInput" />
       <button class="speed-editor-apply" title="应用变速" @click="applyPlaybackRate">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 20V4m0 0L5 11m7-7l7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
@@ -2922,7 +2980,7 @@ function handleSpeedEditorClickOutside(event) {
             <select v-model="sunoV6Params.operation" class="option-input">
               <option v-for="operation in RUNNINGHUB_SUNO6_OPERATIONS" :key="operation.id" :value="operation.id">{{ operation.label }}</option>
             </select>
-            <span class="option-hint">{{ sunoV6Operation.path }} · {{ sunoV6Operation.id === 'sounds' ? '生成音效' : '生成音乐或处理已有音乐' }}</span>
+            <span class="option-hint">{{ sunoV6Operation.id === 'sounds' ? '生成音效' : '生成音乐或处理已有音乐' }}</span>
           </div>
           <div v-if="['custom', 'wild-custom', 'mini-custom'].includes(sunoV6Params.operation)" class="option-row vertical">
             <span class="option-label">歌曲标题与音乐风格</span>
@@ -4303,7 +4361,7 @@ function handleSpeedEditorClickOutside(event) {
   top: 8px;
   left: 10px;
   right: 10px;
-  color: var(--canvas-text-placeholder, #4a4a4a);
+  color: #ffffff;
   pointer-events: none;
   white-space: pre-wrap;
 }
@@ -5096,6 +5154,10 @@ function handleSpeedEditorClickOutside(event) {
   color: #888888;
 }
 
+.option-hint {
+  color: #ffffff;
+}
+
 .option-input {
   width: 100%;
   padding: 10px 12px;
@@ -5729,6 +5791,11 @@ function handleSpeedEditorClickOutside(event) {
 }
 
 :root.canvas-theme-light .audio-node .option-label {
+  color: #57534e;
+}
+
+:root.canvas-theme-light .audio-node .option-hint,
+:root.canvas-theme-light .audio-config-panel .option-hint {
   color: #57534e;
 }
 
