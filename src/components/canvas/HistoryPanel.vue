@@ -2,7 +2,7 @@
 /**
  * HistoryPanel.vue - 历史记录面板
  * 使用真正的虚拟滚动实现，只渲染可视区域的内容
- * 历史记录在服务器缓存15天，过期自动清理
+ * 历史记录的保留期限由租户设置
  * 支持放大预览（滚轮缩放、拖拽平移）、下载、删除
  * 支持右键菜单（加入资产、下载、添加到画布、预览、删除）
  * 支持直接拖拽到画布
@@ -1955,7 +1955,7 @@ onUnmounted(() => {
             <p v-if="historyList.length === 0">{{ t('canvas.historyPanel.noHistory') }}</p>
             <p v-else>{{ t('canvas.historyPanel.noMatch') }}</p>
             <p class="empty-hint">{{ t('canvas.historyPanel.autoSaveHint') }}</p>
-            <p class="empty-hint retention">仅保留最近15天的历史记录</p>
+            <p class="empty-hint retention">历史记录保留期限由管理员设置</p>
           </div>
 
           <!-- 虚拟滚动列表 -->
@@ -2136,7 +2136,7 @@ onUnmounted(() => {
               <line x1="12" y1="8" x2="12" y2="12"/>
               <line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
-            仅保留最近15天
+            历史记录保留期限由管理员设置
           </span>
         </div>
       </div>

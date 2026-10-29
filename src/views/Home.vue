@@ -3342,7 +3342,7 @@ onUnmounted(() => {
         <div class="p-3 border-t border-slate-200 dark:border-dark-600 bg-slate-50 dark:bg-dark-700/50">
           <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
             <span>共 {{ history.length }} 条{{ hasMoreHistory ? '+' : '' }}</span>
-            <span>保留15天</span>
+            <span>保留期限由管理员设置</span>
           </div>
         </div>
       </div>
