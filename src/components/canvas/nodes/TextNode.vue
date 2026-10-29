@@ -23,7 +23,7 @@ import { useI18n } from '@/i18n'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
 import { handlePromptWheel as handlePromptWheelEvent } from '@/utils/promptWheel'
-import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
+import { applyPromptEditorTextInput, capturePromptEditorSelection, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import { getElementCenterFlowPosition } from '@/utils/canvasConnectionPosition'
 import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { buildTextNodeLlmMessages } from '@/utils/textNodeLlmMessages'
@@ -607,6 +607,7 @@ const showPresetDropdown = ref(false) // 功能预设下拉菜单
 const showLanguageDropdown = ref(false) // 语言下拉菜单
 const showLeftMenu = ref(false) // 左侧快捷操作菜单显示状态
 const llmInputRef = ref(null)
+const promptSelectionBeforeReferenceClick = ref(null)
 const llmConfigPanelRef = ref(null)
 const llmControlsRef = ref(null)
 
@@ -1518,7 +1519,9 @@ function insertMediaTag(media) {
     return
   }
 
-  const { start, end } = getPromptEditorSelectionRange(editor)
+  const liveSelection = capturePromptEditorSelection(editor)
+  const { start, end } = liveSelection || promptSelectionBeforeReferenceClick.value || getPromptEditorSelectionRange(editor)
+  promptSelectionBeforeReferenceClick.value = null
   const currentText = serializePromptEditorContent(editor)
   if (currentText !== llmInputText.value) {
     llmInputText.value = currentText
@@ -1559,6 +1562,11 @@ function insertMediaTag(media) {
 
 function cleanOrphanedEditorTextNodes(editor) {
   removePromptEditorOrphanTextNodes(editor)
+}
+
+function handleReferenceMediaMouseDown(event) {
+  event.stopPropagation()
+  promptSelectionBeforeReferenceClick.value = capturePromptEditorSelection(llmInputRef.value)
 }
 
 function handleMediaMentionSelect(media) {
@@ -3616,7 +3624,7 @@ onUnmounted(() => {
             }"
             draggable="true"
             :title="`点击插入 @${media.label}`"
-            @mousedown.stop
+            @mousedown="handleReferenceMediaMouseDown"
             @click="insertMediaTag(media)"
             @dragstart="handleRefMediaDragStart($event, media.index - 1, media.type)"
             @dragover="handleRefMediaDragOver($event, media.index - 1, media.type)"

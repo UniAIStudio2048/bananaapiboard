@@ -33,3 +33,28 @@ test('text and video thumbnail insertion detect active @ query and use it for re
     )
   }
 })
+
+test('reference thumbnail clicks preserve the prompt caret before the browser clears selection', () => {
+  for (const [file, editorRef] of [
+    ['ImageNode.vue', 'promptTextareaRef'],
+    ['VideoNode.vue', 'promptTextareaRef'],
+    ['TextNode.vue', 'llmInputRef']
+  ]) {
+    const source = readNode(file)
+    assert.match(
+      source,
+      /capturePromptEditorSelection/,
+      `${file} should capture the contenteditable selection before thumbnail mousedown`
+    )
+    assert.match(
+      source,
+      /promptSelectionBeforeReferenceClick/,
+      `${file} should retain the selection while the thumbnail receives focus`
+    )
+    assert.match(
+      source,
+      new RegExp(`capturePromptEditorSelection\\(${editorRef}\\.value\\)`),
+      `${file} should capture selection from its prompt editor`
+    )
+  }
+})

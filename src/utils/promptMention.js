@@ -356,6 +356,21 @@ export function getPromptEditorSelectionRange(root) {
   return start <= end ? { start, end } : { start: end, end: start }
 }
 
+// 参考缩略图是可拖拽元素。点击它时浏览器会先把原生选区移出提示词编辑器，
+// 因此缩略图的 click 处理不能再从 window.getSelection() 读取光标。
+// 在 mousedown 阶段调用此函数可保存仍属于编辑器的选区，供后续插入使用。
+export function capturePromptEditorSelection(root) {
+  if (!root || typeof window === 'undefined') return null
+
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return null
+
+  const range = selection.getRangeAt(0)
+  if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null
+
+  return getPromptEditorSelectionRange(root)
+}
+
 function getPromptEditorDomPosition(root, index) {
   const targetIndex = Math.max(0, Number.isFinite(index) ? index : 0)
   let position = 0

@@ -59,7 +59,7 @@ import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
 import { handlePromptWheel as handlePromptWheelEvent } from '@/utils/promptWheel'
-import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
+import { applyPromptEditorTextInput, capturePromptEditorSelection, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import {
   bindMediaMention,
   getMediaMentionKey,
@@ -225,6 +225,7 @@ function getErrorHint(msg) {
 const promptText = ref(props.data.prompt || '')
 const promptEditorRenderKey = ref(0)
 const promptTextareaRef = ref(null) // 提示词输入框引用
+const promptSelectionBeforeReferenceClick = ref(null)
 const hasManualPromptTextareaSize = ref(false)
 const promptMentionBindings = ref(props.data.promptMentionBindings || {})
 const isDragOver = ref(false) // 拖拽悬停状态
@@ -7113,7 +7114,9 @@ function insertMediaTag(media) {
     return
   }
 
-  const { start, end } = getPromptEditorSelectionRange(editor)
+  const liveSelection = capturePromptEditorSelection(editor)
+  const { start, end } = liveSelection || promptSelectionBeforeReferenceClick.value || getPromptEditorSelectionRange(editor)
+  promptSelectionBeforeReferenceClick.value = null
   const currentText = serializePromptEditorContent(editor)
   if (currentText !== promptText.value) {
     promptText.value = currentText
@@ -7318,6 +7321,12 @@ function handleMentionSelect(media) {
 // ========== 参考图片拖拽排序 ==========
 function handleImageMouseDown(event) {
   event.stopPropagation()
+  promptSelectionBeforeReferenceClick.value = capturePromptEditorSelection(promptTextareaRef.value)
+}
+
+function handleReferenceMediaMouseDown(event) {
+  event.stopPropagation()
+  promptSelectionBeforeReferenceClick.value = capturePromptEditorSelection(promptTextareaRef.value)
 }
 
 function handleImageDragStart(event, index) {
@@ -8249,6 +8258,7 @@ async function handleDrop(event) {
             :key="'video-' + index"
             class="panel-frame-item panel-frame-video panel-frame-clickable"
             :title="`点击插入 @视频${index + 1}`"
+            @mousedown="handleReferenceMediaMouseDown"
             @click="insertMediaTag({ type: 'video', index: index + 1, label: `视频${index + 1}` })"
             @mouseenter="onVideoHoverStart(video, $event)"
             @mouseleave="onHoverEnd"

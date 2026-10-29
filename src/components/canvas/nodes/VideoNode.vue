@@ -50,7 +50,7 @@ import { useNodeVisibility } from '@/composables/useNodeVisibility'
 import { isTextareaResizeHandlePointer } from '@/utils/promptTextareaResize'
 import { createConfigPanelWheelZoom } from '@/utils/configPanelWheelZoom'
 import { handlePromptWheel as handlePromptWheelEvent } from '@/utils/promptWheel'
-import { applyPromptEditorTextInput, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isBrowserRenderableUrl, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, sanitizePromptEditorText, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
+import { applyPromptEditorTextInput, capturePromptEditorSelection, getActivePromptMentionRange, getMentionPopupPosition, getPromptMediaTagCaretIndex, getPromptEditorSelectionRange, hasPromptEditorOrphanTextNodes, isBrowserRenderableUrl, isPromptEditorSelectionAtMentionBoundary, removePromptEditorOrphanTextNodes, replacePromptEditorMentionText, restorePromptEditorSelection, sanitizePromptEditorText, serializePromptEditorContent, shouldDeferPromptEditorBoundaryBeforeInputForIme, snapPromptEditorCaretOutOfMention } from '@/utils/promptMention'
 import {
   bindMediaMention,
   escapePromptMediaMentions,
@@ -252,6 +252,7 @@ function getErrorHint(msg) {
 }
 const promptText = ref(sanitizePromptEditorText(props.data.prompt || ''))
 const promptTextareaRef = ref(null)
+const promptSelectionBeforeReferenceClick = ref(null)
 const promptEditorRenderKey = ref(0)
 const configPanelRef = ref(null)
 const isConfigPanelExpanded = ref(false)
@@ -971,7 +972,9 @@ function insertMediaTag(media) {
     return
   }
   
-  const { start, end } = getPromptEditorSelectionRange(editor)
+  const liveSelection = capturePromptEditorSelection(editor)
+  const { start, end } = liveSelection || promptSelectionBeforeReferenceClick.value || getPromptEditorSelectionRange(editor)
+  promptSelectionBeforeReferenceClick.value = null
   const currentText = serializePromptEditorContent(editor)
   if (currentText !== promptText.value) {
     promptText.value = currentText
@@ -8183,6 +8186,7 @@ function removeReferenceAudio(index) {
 // 注意：不能 preventDefault，否则会阻止浏览器的 draggable 拖拽启动
 function handleImageMouseDown(event) {
   event.stopPropagation()
+  promptSelectionBeforeReferenceClick.value = capturePromptEditorSelection(promptTextareaRef.value)
 }
 
 function handleImageDragStart(event, index) {
@@ -8235,6 +8239,7 @@ function handleImageDragEnd(event) {
 
 function handleVideoMouseDown(event) {
   event.stopPropagation()
+  promptSelectionBeforeReferenceClick.value = capturePromptEditorSelection(promptTextareaRef.value)
 }
 
 function handleVideoDragStart(event, index) {
@@ -8287,6 +8292,7 @@ function handleVideoDragEnd(event) {
 
 function handleAudioMouseDown(event) {
   event.stopPropagation()
+  promptSelectionBeforeReferenceClick.value = capturePromptEditorSelection(promptTextareaRef.value)
 }
 
 function handleAudioDragStart(event, index) {
