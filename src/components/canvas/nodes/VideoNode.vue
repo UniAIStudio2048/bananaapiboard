@@ -609,6 +609,7 @@ function autoResizeTextarea() {
 
   if (!hasManualPromptTextareaSize.value) {
     // 重置高度以获取正确的 scrollHeight
+    const scrollPosition = { scrollTop: textarea.scrollTop, scrollLeft: textarea.scrollLeft }
     textarea.style.height = 'auto'
 
     // 计算最小高度 (3行约63px) 和最大高度 (10行约210px)
@@ -617,6 +618,8 @@ function autoResizeTextarea() {
     const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
 
     textarea.style.height = newHeight + 'px'
+    textarea.scrollTop = scrollPosition.scrollTop
+    textarea.scrollLeft = scrollPosition.scrollLeft
   }
 
   syncPromptHighlightOverlayScroll()
@@ -667,6 +670,7 @@ function handlePromptBeforeInput(event) {
     data: event.data
   })
 
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
   event.preventDefault()
   promptText.value = next.text
   promptEditorRenderKey.value += 1
@@ -680,6 +684,8 @@ function handlePromptBeforeInput(event) {
       restorePromptEditorSelection(nextEditor, next.cursor, next.cursor)
       updatePromptOverlayCaret()
       autoResizeTextarea()
+      nextEditor.scrollTop = scrollPosition.scrollTop
+      nextEditor.scrollLeft = scrollPosition.scrollLeft
     }
   })
 }
@@ -715,6 +721,7 @@ function updatePromptMentionPopup(text, cursorIndex, editor) {
 function handlePromptInput(event) {
   if (isPromptInputComposing || event?.isComposing) return
   const editor = event.target
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
   const selectionRange = getPromptEditorSelectionRange(editor)
   const text = serializePromptEditorContent(editor)
   const wasNonEmpty = !!promptText.value
@@ -753,6 +760,8 @@ function handlePromptInput(event) {
       if (nextEditor) {
         nextEditor.focus()
         restorePromptEditorSelection(nextEditor, selectionRange.start, selectionRange.end)
+        nextEditor.scrollTop = scrollPosition.scrollTop
+        nextEditor.scrollLeft = scrollPosition.scrollLeft
         updatePromptOverlayCaret()
       }
     })
@@ -760,6 +769,8 @@ function handlePromptInput(event) {
     nextTick(() => {
       removePromptEditorOrphanTextNodes(editor)
       restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+      editor.scrollTop = scrollPosition.scrollTop
+      editor.scrollLeft = scrollPosition.scrollLeft
       updatePromptOverlayCaret()
     })
   }

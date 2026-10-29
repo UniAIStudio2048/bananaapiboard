@@ -1140,6 +1140,7 @@ function handleMusicCompositionEnd(event) {
 function handleMusicInput(event) {
   if (isMusicInputComposing || event?.isComposing) return
   const editor = event.target
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
   const selectionRange = getPromptEditorSelectionRange(editor)
   const text = serializePromptEditorContent(editor)
   const wasNonEmpty = !!musicPrompt.value
@@ -1170,12 +1171,16 @@ function handleMusicInput(event) {
       if (nextEditor) {
         nextEditor.focus()
         restorePromptEditorSelection(nextEditor, selectionRange.start, selectionRange.end)
+        nextEditor.scrollTop = scrollPosition.scrollTop
+        nextEditor.scrollLeft = scrollPosition.scrollLeft
       }
     })
   } else {
     nextTick(() => {
       removePromptEditorOrphanTextNodes(editor)
       restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+      editor.scrollTop = scrollPosition.scrollTop
+      editor.scrollLeft = scrollPosition.scrollLeft
     })
   }
 }
@@ -1284,6 +1289,7 @@ function autoResizeTextarea() {
   if (!textarea) return
   
   // 重置高度以获取正确的 scrollHeight
+  const scrollPosition = { scrollTop: textarea.scrollTop, scrollLeft: textarea.scrollLeft }
   textarea.style.height = 'auto'
   
   // 计算最小高度 (2行约48px) 和最大高度 (8行约200px)
@@ -1292,6 +1298,8 @@ function autoResizeTextarea() {
   const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
   
   textarea.style.height = newHeight + 'px'
+  textarea.scrollTop = scrollPosition.scrollTop
+  textarea.scrollLeft = scrollPosition.scrollLeft
 }
 
 function markPromptTextareaResizeIntent(event) {

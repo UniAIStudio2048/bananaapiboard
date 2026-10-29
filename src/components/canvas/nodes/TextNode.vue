@@ -214,11 +214,14 @@ function autoResizeLLMInput() {
   if (!textarea) return
 
   if (!hasManualLLMInputSize.value) {
+    const scrollPosition = { scrollTop: textarea.scrollTop, scrollLeft: textarea.scrollLeft }
     textarea.style.height = 'auto'
     const minHeight = 60
     const maxHeight = 200
     const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
     textarea.style.height = newHeight + 'px'
+    textarea.scrollTop = scrollPosition.scrollTop
+    textarea.scrollLeft = scrollPosition.scrollLeft
   }
 
   syncLLMHighlightOverlayScroll()
@@ -294,6 +297,7 @@ function handleLLMBeforeInput(event) {
     data: event.data
   })
 
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
   event.preventDefault()
   llmInputText.value = next.text
   llmInputRenderKey.value += 1
@@ -306,6 +310,8 @@ function handleLLMBeforeInput(event) {
       nextEditor.focus()
       restorePromptEditorSelection(nextEditor, next.cursor, next.cursor)
       autoResizeLLMInput()
+      nextEditor.scrollTop = scrollPosition.scrollTop
+      nextEditor.scrollLeft = scrollPosition.scrollLeft
     }
   })
 }
@@ -342,6 +348,7 @@ function handleLLMPaste(event) {
 function handleLLMInput(event) {
   if (isLLMInputComposing || event?.isComposing) return
   const editor = event.target
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
   const selectionRange = getPromptEditorSelectionRange(editor)
   const text = serializePromptEditorContent(editor)
   const wasNonEmpty = !!llmInputText.value
@@ -379,12 +386,16 @@ function handleLLMInput(event) {
       if (nextEditor) {
         nextEditor.focus()
         restorePromptEditorSelection(nextEditor, selectionRange.start, selectionRange.end)
+        nextEditor.scrollTop = scrollPosition.scrollTop
+        nextEditor.scrollLeft = scrollPosition.scrollLeft
       }
     })
   } else {
     nextTick(() => {
       cleanOrphanedEditorTextNodes(editor)
       restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+      editor.scrollTop = scrollPosition.scrollTop
+      editor.scrollLeft = scrollPosition.scrollLeft
     })
   }
   const cursorIndex = selectionRange.start

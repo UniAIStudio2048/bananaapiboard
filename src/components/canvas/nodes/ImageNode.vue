@@ -6527,6 +6527,7 @@ function autoResizeTextarea() {
   if (!textarea) return
   
   // 重置高度以获取正确的 scrollHeight
+  const scrollPosition = { scrollTop: textarea.scrollTop, scrollLeft: textarea.scrollLeft }
   textarea.style.height = 'auto'
   
   // 计算最小高度 (4行约96px) 和最大高度 (8行约200px)
@@ -6535,6 +6536,8 @@ function autoResizeTextarea() {
   const newHeight = Math.max(minHeight, Math.min(textarea.scrollHeight, maxHeight))
   
   textarea.style.height = newHeight + 'px'
+  textarea.scrollTop = scrollPosition.scrollTop
+  textarea.scrollLeft = scrollPosition.scrollLeft
 }
 
 // 监听 promptText 变化，自动调整高度
@@ -7205,6 +7208,7 @@ function handlePromptBeforeInput(event) {
     data: event.data
   })
 
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
   event.preventDefault()
   promptText.value = next.text
   promptEditorRenderKey.value += 1
@@ -7216,6 +7220,8 @@ function handlePromptBeforeInput(event) {
       nextEditor.focus()
       restorePromptEditorSelection(nextEditor, next.cursor, next.cursor)
       autoResizeTextarea()
+      nextEditor.scrollTop = scrollPosition.scrollTop
+      nextEditor.scrollLeft = scrollPosition.scrollLeft
     }
   })
 }
@@ -7223,6 +7229,7 @@ function handlePromptBeforeInput(event) {
 function handlePromptInput(event) {
   if (isPromptInputComposing || event?.isComposing) return
   const editor = event.target
+  const scrollPosition = { scrollTop: editor.scrollTop, scrollLeft: editor.scrollLeft }
   const selectionRange = getPromptEditorSelectionRange(editor)
   const text = serializePromptEditorContent(editor)
   const wasNonEmpty = !!promptText.value
@@ -7259,12 +7266,16 @@ function handlePromptInput(event) {
       if (nextEditor) {
         nextEditor.focus()
         restorePromptEditorSelection(nextEditor, selectionRange.start, selectionRange.end)
+        nextEditor.scrollTop = scrollPosition.scrollTop
+        nextEditor.scrollLeft = scrollPosition.scrollLeft
       }
     })
   } else {
     nextTick(() => {
       removePromptEditorOrphanTextNodes(editor)
       restorePromptEditorSelection(editor, selectionRange.start, selectionRange.end)
+      editor.scrollTop = scrollPosition.scrollTop
+      editor.scrollLeft = scrollPosition.scrollLeft
     })
   }
 
