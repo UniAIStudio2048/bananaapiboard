@@ -3,8 +3,8 @@
  * NodeSelector.vue - 节点选择器面板
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { AudioLines, BrainCircuit, Clapperboard, Eraser, Expand, Eye, FileAudio, FileText, Film, Image, ImagePlus, Layers, LayoutGrid, Paintbrush, PanelRightClose, ScanText, Scissors, SearchX, Sparkles, Type, Upload, UserRound, UsersRound, WandSparkles } from '@lucide/vue'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
-import IconSet from '@/components/common/IconSet.vue'
 import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions } from '@/config/canvas/nodeTypes'
 import { useI18n } from '@/i18n'
 import { extractVideoFrame, uploadCanvasMedia } from '@/api/canvas/workflow'
@@ -34,6 +34,41 @@ const props = defineProps({
 const emit = defineEmits(['close'])
 const canvasStore = useCanvasStore()
 const uploadManager = useUploadManager()
+
+const nodeIcons = {
+  text: Type,
+  image: Image,
+  video: Film,
+  audio: AudioLines,
+  llm: BrainCircuit,
+  preview: Eye,
+  group: Layers,
+  director: Clapperboard,
+  storyboard: LayoutGrid,
+  'storyboard-grid': LayoutGrid,
+  'grid-preview': LayoutGrid,
+  'text-image': ImagePlus,
+  'image-edit': ImagePlus,
+  'text-video': Film,
+  'image-video': Film,
+  'image-describe': ScanText,
+  'video-describe': ScanText,
+  expand: Expand,
+  repaint: Paintbrush,
+  eraser: Eraser,
+  upscale: WandSparkles,
+  cutout: Scissors,
+  'image-expand': Expand,
+  'last-frame': PanelRightClose,
+  'video-edit': Film,
+  'video-extend': Film,
+  'audio-video': Film,
+  'audio-text': FileAudio,
+  'lip-sync': AudioLines,
+  'digital-human': UserRound,
+  'seedance-character': UsersRound,
+  script: FileText
+}
 
 // 文件上传输入框引用
 const fileInputRef = ref(null)
@@ -903,9 +938,10 @@ function formatFileSize(bytes) {
             :key="node.type"
             class="node-selector-item"
             :class="{ selected: selectedType === node.type }"
+            :title="node.description ? t(node.description) : ''"
             @click="selectNodeType(node.type)"
           >
-            <div class="node-selector-icon"><IconSet :name="node.icon" :size="16" /></div>
+            <component :is="nodeIcons[node.type] || nodeIcons[node.icon] || Sparkles" class="node-selector-icon" aria-hidden="true" />
             <div class="node-selector-info">
               <div class="node-selector-name">{{ node.label ? t(node.label) : '' }}</div>
               <div class="node-selector-desc" v-if="node.description">{{ node.description ? t(node.description) : '' }}</div>
@@ -921,9 +957,10 @@ function formatFileSize(bytes) {
             :key="node.type"
             class="node-selector-item"
             :class="{ selected: selectedType === node.type }"
+            :title="node.description ? t(node.description) : ''"
             @click="selectNodeType(node.type)"
           >
-            <div class="node-selector-icon"><IconSet :name="node.icon" :size="16" /></div>
+            <component :is="nodeIcons[node.type] || nodeIcons[node.icon] || Sparkles" class="node-selector-icon" aria-hidden="true" />
             <div class="node-selector-info">
               <div class="node-selector-name">{{ t(node.label) }}</div>
               <div class="node-selector-desc" v-if="node.description">{{ t(node.description) }}</div>
@@ -939,9 +976,10 @@ function formatFileSize(bytes) {
           :key="node.type"
           class="node-selector-item"
           :class="{ selected: selectedType === node.type }"
+          :title="node.description ? t(node.description) : ''"
           @click="selectNodeType(node.type)"
         >
-          <div class="node-selector-icon"><IconSet :name="node.icon" :size="16" /></div>
+          <component :is="nodeIcons[node.type] || nodeIcons[node.icon] || Sparkles" class="node-selector-icon" aria-hidden="true" />
           <div class="node-selector-info">
             <div class="node-selector-name">{{ t(node.label) }}</div>
             <div class="node-selector-desc" v-if="node.description">{{ t(node.description) }}</div>
@@ -952,7 +990,7 @@ function formatFileSize(bytes) {
     
     <!-- 无可用节点提示 -->
     <div v-else class="node-selector-empty">
-      <div class="empty-icon">○</div>
+      <SearchX class="empty-icon" :size="24" aria-hidden="true" />
       <div class="empty-text">{{ t('canvas.noNodeTypes') }}</div>
     </div>
     
@@ -960,22 +998,22 @@ function formatFileSize(bytes) {
     <template v-if="!triggerNode">
       <div class="node-selector-divider"></div>
       <div class="node-selector-title">功能节点</div>
-      <div v-if="isDigitalHumanLibraryEnabled()" class="node-selector-item" @click="selectNodeType(NODE_TYPES.DIGITAL_HUMAN)">
-        <div class="node-selector-icon"><IconSet :name="NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].icon" :size="16" /></div>
+      <div v-if="isDigitalHumanLibraryEnabled()" class="node-selector-item" @click="selectNodeType(NODE_TYPES.DIGITAL_HUMAN)" :title="t(NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].description)">
+        <UserRound class="node-selector-icon" aria-hidden="true" />
         <div class="node-selector-info">
           <div class="node-selector-name">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].label) }}</div>
           <div class="node-selector-desc">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.DIGITAL_HUMAN].description) }}</div>
         </div>
       </div>
-      <div v-if="isSeedanceFeaturesEnabled()" class="node-selector-item" @click="selectNodeType(NODE_TYPES.SEEDANCE_CHARACTER)">
-        <div class="node-selector-icon"><IconSet :name="NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].icon" :size="16" /></div>
+      <div v-if="isSeedanceFeaturesEnabled()" class="node-selector-item" @click="selectNodeType(NODE_TYPES.SEEDANCE_CHARACTER)" :title="t(NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].description)">
+        <UsersRound class="node-selector-icon" aria-hidden="true" />
         <div class="node-selector-info">
           <div class="node-selector-name">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].label) }}</div>
           <div class="node-selector-desc">{{ t(NODE_TYPE_CONFIG[NODE_TYPES.SEEDANCE_CHARACTER].description) }}</div>
         </div>
       </div>
-      <div class="node-selector-item" @click="createStoryboardGrid">
-        <div class="node-selector-icon">⊞</div>
+      <div class="node-selector-item" title="创建可拖拽排序的图片网格" @click="createStoryboardGrid">
+        <LayoutGrid class="node-selector-icon" aria-hidden="true" />
         <div class="node-selector-info">
           <div class="node-selector-name">分镜格子</div>
           <div class="node-selector-desc">创建可拖拽排序的图片网格</div>
@@ -988,7 +1026,7 @@ function formatFileSize(bytes) {
       <div class="node-selector-divider"></div>
       <div class="node-selector-title">{{ t('canvas.addResource') }}</div>
       <div class="node-selector-item" @click="handleUploadClick">
-        <div class="node-selector-icon">↑</div>
+        <Upload class="node-selector-icon" aria-hidden="true" />
         <div class="node-selector-info">
           <div class="node-selector-name">{{ t('common.upload') }}</div>
         </div>

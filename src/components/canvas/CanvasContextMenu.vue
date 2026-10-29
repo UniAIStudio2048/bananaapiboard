@@ -9,6 +9,7 @@
  * - 复制/粘贴节点
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
+import { AudioLines, ClipboardPaste, Copy, Download, Film, Group, Image, Plus, Redo2, Scan, Trash2, Undo2 } from '@lucide/vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { resolveCanvasMenuPastePosition } from '@/utils/canvasClipboardPaste'
 import { getSelectedMediaNodeIds } from '@/utils/canvasBatchDownload'
@@ -238,7 +239,7 @@ function handleMenuClick(event) {
         :class="{ disabled: selectedCount < 2 }"
         @click="handleGroup"
       >
-        <span class="icon">📦</span>
+        <Group class="icon" aria-hidden="true" />
         编组
         <span class="shortcut">Ctrl+G</span>
       </div>
@@ -246,7 +247,7 @@ function handleMenuClick(event) {
       <div class="canvas-context-menu-divider"></div>
       
       <div class="canvas-context-menu-item" @click="handleCopy">
-        <span class="icon">📋</span>
+        <Copy class="icon" aria-hidden="true" />
         复制选中
         <span class="shortcut">Ctrl+C</span>
       </div>
@@ -255,7 +256,7 @@ function handleMenuClick(event) {
         :class="{ disabled: !hasDownloadableMedia }"
         @click="hasDownloadableMedia && handleDownloadSelectedMedia()"
       >
-        <span class="icon">⬇️</span>
+        <Download class="icon" aria-hidden="true" />
         下载选中媒体
       </div>
       <div 
@@ -263,7 +264,7 @@ function handleMenuClick(event) {
         :class="{ disabled: !hasClipboard }"
         @click="handlePaste"
       >
-        <span class="icon">📄</span>
+        <ClipboardPaste class="icon" aria-hidden="true" />
         粘贴
         <span class="shortcut">Ctrl+V</span>
       </div>
@@ -271,7 +272,7 @@ function handleMenuClick(event) {
       <div class="canvas-context-menu-divider"></div>
       
       <div class="canvas-context-menu-item delete-item" @click="handleDeleteSelected">
-        <span class="icon">🗑️</span>
+        <Trash2 class="icon" aria-hidden="true" />
         删除选中
         <span class="shortcut">Delete</span>
       </div>
@@ -282,22 +283,22 @@ function handleMenuClick(event) {
       <!-- 上传 -->
       <div class="canvas-context-menu-title">上传资源</div>
       <div class="canvas-context-menu-item" @click="handleUploadImage">
-        <span class="icon">🖼️</span>
+        <Image class="icon" aria-hidden="true" />
         上传图片
         <span class="shortcut"></span>
       </div>
       <div class="canvas-context-menu-item" @click="handleUploadVideo">
-        <span class="icon">🎬</span>
+        <Film class="icon" aria-hidden="true" />
         上传视频
         <span class="shortcut"></span>
       </div>
       <div class="canvas-context-menu-item" @click="handleUploadAudio">
-        <span class="icon">🎵</span>
+        <AudioLines class="icon" aria-hidden="true" />
         上传音频
         <span class="shortcut"></span>
       </div>
       <div class="canvas-context-menu-item" @click="handlePasteFromClipboard">
-        <span class="icon">📋</span>
+        <ClipboardPaste class="icon" aria-hidden="true" />
         从剪贴板粘贴
         <span class="shortcut">{{ hasClipboard ? '' : 'Ctrl+V' }}</span>
       </div>
@@ -306,7 +307,7 @@ function handleMenuClick(event) {
 
       <!-- 添加节点 -->
       <div class="canvas-context-menu-item" @click="handleAddNode">
-        <span class="icon">➕</span>
+        <Plus class="icon" aria-hidden="true" />
         添加节点
         <span class="shortcut">双击</span>
       </div>
@@ -320,7 +321,7 @@ function handleMenuClick(event) {
         :class="{ disabled: !canUndo }"
         @click="canUndo && handleUndo()"
       >
-        <span class="icon">↩️</span>
+        <Undo2 class="icon" aria-hidden="true" />
         撤销
         <span class="shortcut">Ctrl+Z</span>
       </div>
@@ -329,7 +330,7 @@ function handleMenuClick(event) {
         :class="{ disabled: !canRedo }"
         @click="canRedo && handleRedo()"
       >
-        <span class="icon">↪️</span>
+        <Redo2 class="icon" aria-hidden="true" />
         重做
         <span class="shortcut">Ctrl+Y</span>
       </div>
@@ -341,7 +342,7 @@ function handleMenuClick(event) {
         :class="{ disabled: !hasSelectedNodes }"
         @click="hasSelectedNodes && handleCopy()"
       >
-        <span class="icon">📋</span>
+        <Copy class="icon" aria-hidden="true" />
         复制节点
         <span class="shortcut">Ctrl+C</span>
       </div>
@@ -350,7 +351,7 @@ function handleMenuClick(event) {
         :class="{ disabled: !hasClipboard }"
         @click="hasClipboard && handlePaste()"
       >
-        <span class="icon">📄</span>
+        <ClipboardPaste class="icon" aria-hidden="true" />
         粘贴节点
         <span class="shortcut">Ctrl+V</span>
       </div>
@@ -358,7 +359,7 @@ function handleMenuClick(event) {
       <div class="canvas-context-menu-divider"></div>
       
       <div class="canvas-context-menu-item" @click="handleSelectAll">
-        <span class="icon">⬜</span>
+        <Scan class="icon" aria-hidden="true" />
         全选
         <span class="shortcut">Ctrl+A</span>
       </div>
@@ -397,73 +398,81 @@ function handleMenuClick(event) {
 .canvas-context-menu {
   position: fixed;
   z-index: 1000;
-  min-width: 180px;
-  background: var(--canvas-bg-tertiary, #1a1a1a);
-  border: 1px solid var(--canvas-border-default, #3a3a3a);
+  box-sizing: border-box;
+  width: 224px;
+  max-width: calc(100vw - 20px);
+  max-height: calc(100vh - 20px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  background: #1b1b1b;
+  border: 1px solid #303030;
   border-radius: 12px;
-  padding: 8px 0;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .canvas-context-menu-title {
-  padding: 6px 16px;
+  padding: 8px 10px 5px;
   font-size: 11px;
-  color: var(--canvas-text-tertiary, #666);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  font-weight: 500;
+  color: #818181;
 }
 
 .canvas-context-menu-item {
   display: flex;
   align-items: center;
-  padding: 8px 16px;
+  min-height: 34px;
+  padding: 0 10px;
+  border-radius: 6px;
   cursor: pointer;
-  color: var(--canvas-text-secondary, #a0a0a0);
+  color: #dedede;
   font-size: 13px;
   transition: background 0.15s, color 0.15s;
 }
 
 .canvas-context-menu-item:hover:not(.disabled) {
-  background: var(--canvas-bg-elevated, #242424);
-  color: var(--canvas-text-primary, #fff);
+  background: #303030;
+  color: #fff;
 }
 
 .canvas-context-menu-item.disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .canvas-context-menu-item.delete-item {
-  color: #ef4444;
+  color: #dedede;
 }
 
 .canvas-context-menu-item.delete-item:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #dc2626;
+  background: #303030;
+  color: #fff;
 }
 
 .canvas-context-menu-item .icon {
-  width: 20px;
-  margin-right: 10px;
-  text-align: center;
-  font-size: 14px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin-right: 12px;
+  stroke-width: 1.75;
 }
 
 .canvas-context-menu-item .shortcut {
   margin-left: auto;
   font-size: 11px;
-  color: var(--canvas-text-tertiary, #666);
-  padding-left: 16px;
+  color: #858585;
+  padding-left: 12px;
+  white-space: nowrap;
 }
 
 .canvas-context-menu-divider {
   height: 1px;
-  background: var(--canvas-border-subtle, #2a2a2a);
-  margin: 6px 12px;
+  background: #303030;
+  margin: 5px 8px;
 }
 
 .canvas-context-menu-hint {
-  padding: 8px 16px;
+  padding: 3px 10px 6px;
   font-size: 11px;
   color: var(--canvas-text-tertiary, #888);
 }
@@ -472,20 +481,20 @@ function handleMenuClick(event) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 4px 0;
+  padding: 3px 0;
 }
 
 .hint-key {
   font-weight: 500;
-  color: var(--canvas-text-secondary, #aaa);
-  background: var(--canvas-bg-quaternary, #0a0a0a);
-  padding: 2px 6px;
+  color: #a5a5a5;
+  background: #242424;
+  padding: 2px 5px;
   border-radius: 4px;
   font-size: 10px;
 }
 
 .hint-desc {
-  color: var(--canvas-text-tertiary, #888);
+  color: #8d8d8d;
   font-size: 10px;
 }
 </style>
@@ -496,51 +505,51 @@ function handleMenuClick(event) {
    CanvasContextMenu 白昼模式样式适配
    ======================================== */
 :root.canvas-theme-light .canvas-context-menu {
-  background: rgba(255, 255, 255, 0.98);
-  border-color: rgba(0, 0, 0, 0.1);
+  background: #fff;
+  border-color: #dedede;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
 }
 
 :root.canvas-theme-light .canvas-context-menu-title {
-  color: #78716c;
+  color: #777;
 }
 
 :root.canvas-theme-light .canvas-context-menu-item {
-  color: #57534e;
+  color: #303030;
 }
 
 :root.canvas-theme-light .canvas-context-menu-item:hover:not(.disabled) {
-  background: rgba(0, 0, 0, 0.04);
-  color: #1c1917;
+  background: #f0f0f0;
+  color: #171717;
 }
 
 :root.canvas-theme-light .canvas-context-menu-item .shortcut {
-  color: #a8a29e;
+  color: #858585;
 }
 
 :root.canvas-theme-light .canvas-context-menu-divider {
-  background: rgba(0, 0, 0, 0.06);
+  background: #ededed;
 }
 
 :root.canvas-theme-light .canvas-context-menu-hint {
-  color: #78716c;
+  color: #777;
 }
 
 :root.canvas-theme-light .hint-key {
-  color: #57534e;
-  background: rgba(0, 0, 0, 0.05);
+  color: #656565;
+  background: #f2f2f2;
 }
 
 :root.canvas-theme-light .hint-desc {
-  color: #a8a29e;
+  color: #858585;
 }
 
 :root.canvas-theme-light .canvas-context-menu-item.delete-item {
-  color: #dc2626;
+  color: #303030;
 }
 
 :root.canvas-theme-light .canvas-context-menu-item.delete-item:hover {
-  background: rgba(220, 38, 38, 0.08);
-  color: #b91c1c;
+  background: #f0f0f0;
+  color: #171717;
 }
 </style>
