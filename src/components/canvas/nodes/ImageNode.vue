@@ -4263,6 +4263,24 @@ function findUpstreamNodeByVideoUrl(url) {
   return null
 }
 
+function findUpstreamNodeByImageUrl(url) {
+  const upstreamEdges = canvasStore.edgesByTarget.get(props.id) || []
+  const nodeIndex = canvasStore.nodesById
+
+  for (const edge of upstreamEdges) {
+    const node = nodeIndex.get(edge.source)
+    if (!node?.data || VIDEO_NODE_TYPES.includes(node.type)) continue
+
+    if (node.data.sourceImages?.includes(url) ||
+        node.data.output?.url === url ||
+        node.data.output?.urls?.includes(url)) {
+      return node
+    }
+  }
+
+  return null
+}
+
 function getReferenceVideoThumbnail(url) {
   const sourceNode = findUpstreamNodeByVideoUrl(url)
   if (!sourceNode?.data) return ''
