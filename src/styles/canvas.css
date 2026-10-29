@@ -1077,6 +1077,11 @@ body:has(.canvas-page) *::-webkit-scrollbar-corner,
   z-index: 10 !important;
 }
 
+/* 配置面板会从节点底部溢出；提高其宿主节点层级，避免被重叠节点拦截缩略图点击。 */
+.canvas-board .vue-flow__node:not([data-type="group"]):has(.config-panel) {
+  z-index: 1000 !important;
+}
+
 /* 社区只读预览专用：让编组节点回到可见层级（普通节点仍在编组之上） */
 .community-workflow-preview-flow .vue-flow__node[data-type="group"],
 .community-workflow-preview-flow .vue-flow__node.vue-flow__node-group {
