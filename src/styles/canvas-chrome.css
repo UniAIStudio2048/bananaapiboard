@@ -1,0 +1,505 @@
+/* 画布外框与面板沿用右键菜单的中性视觉语言。 */
+:root {
+  --canvas-chrome-surface: #1b1b1b;
+  --canvas-chrome-hover: #303030;
+  --canvas-chrome-border: #303030;
+  --canvas-chrome-text: #dedede;
+  --canvas-chrome-muted: #999;
+  --canvas-chrome-strong: #fff;
+  --canvas-chrome-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+:root.canvas-theme-light {
+  --canvas-chrome-surface: #fff;
+  --canvas-chrome-hover: #f1f1f1;
+  --canvas-chrome-border: #e3e3e3;
+  --canvas-chrome-text: #333;
+  --canvas-chrome-muted: #737373;
+  --canvas-chrome-strong: #171717;
+  --canvas-chrome-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.canvas-page,
+.canvas-panel,
+.skills-panel,
+.asset-preview-modal,
+.history-preview-modal,
+.add-character-modal {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+/* 顶部与底部控件 */
+:root:root .canvas-page .mode-switch-icon,
+:root:root .canvas-page .canvas-icon-btn:not(.canvas-skills-btn):not(.canvas-cart-btn),
+:root:root .canvas-page .canvas-points-display,
+:root:root .canvas-page .canvas-control-btn,
+:root:root .canvas-page .canvas-zoom-trigger,
+:root:root .canvas-page .ai-assistant-trigger,
+:root:root .canvas-page .canvas-top-right-controls :is(.space-trigger, .canvas-notification-trigger, .canvas-support-trigger, .ticket-btn, .lang-trigger) {
+  background: var(--canvas-chrome-surface) !important;
+  border-color: var(--canvas-chrome-border) !important;
+  color: var(--canvas-chrome-text) !important;
+  box-shadow: var(--canvas-chrome-shadow) !important;
+}
+:root:root .canvas-page .mode-switch-btn:hover .mode-switch-icon,
+:root:root .canvas-page .canvas-icon-btn:not(.canvas-skills-btn):not(.canvas-cart-btn):hover,
+:root:root .canvas-page .canvas-control-btn:hover,
+:root:root .canvas-page .canvas-control-btn.active,
+:root:root .canvas-page .canvas-zoom-trigger:hover,
+:root:root .canvas-page .canvas-zoom-trigger[aria-expanded='true'],
+:root:root .canvas-page .ai-assistant-trigger:hover,
+:root:root .canvas-page .ai-assistant-trigger.active,
+:root:root .canvas-page .canvas-top-right-controls :is(.space-trigger, .canvas-notification-trigger, .canvas-support-trigger, .ticket-btn, .lang-trigger):hover {
+  background: var(--canvas-chrome-hover) !important;
+  color: var(--canvas-chrome-strong) !important;
+}
+:root:root .canvas-page .canvas-points-display :is(.points-icon, .points-value) {
+  color: inherit !important;
+  filter: none;
+  text-shadow: none;
+}
+:root:root .canvas-page .canvas-bottom-left-controls [data-tooltip]::after {
+  background: var(--canvas-chrome-surface) !important;
+  border-color: var(--canvas-chrome-border) !important;
+  color: var(--canvas-chrome-text) !important;
+  box-shadow: var(--canvas-chrome-shadow) !important;
+  font-size: 13px !important;
+}
+:root:root .canvas-page .canvas-zoom-menu,
+:root:root .canvas-page .mode-dropdown,
+:root:root .canvas-page .workflow-tabs,
+:root:root .canvas-page .workflow-tabs.has-collapse .tabs-panel {
+  background: var(--canvas-chrome-surface) !important;
+  border-color: var(--canvas-chrome-border) !important;
+  box-shadow: var(--canvas-chrome-shadow);
+}
+:root:root .canvas-page .canvas-zoom-menu { border-radius: 12px; padding: 6px; }
+:root:root .canvas-page .canvas-zoom-menu button { min-height: 34px; border-radius: 6px; font-size: 13px; }
+:root:root .canvas-page .canvas-zoom-menu button:hover { background: var(--canvas-chrome-hover); }
+
+/* 左侧工具栏及节点菜单 */
+:root:root .canvas-page .canvas-toolbar,
+:root:root .canvas-page .canvas-toolbar .node-panel {
+  background: var(--canvas-chrome-surface) !important;
+  border: 1px solid var(--canvas-chrome-border) !important;
+  border-radius: 12px;
+  box-shadow: var(--canvas-chrome-shadow) !important;
+}
+:root:root .canvas-page .canvas-toolbar .node-panel { width: 280px; padding: 6px; }
+:root:root .canvas-page .canvas-toolbar .node-panel-title {
+  padding: 8px 10px 5px;
+  margin: 0;
+  color: var(--canvas-chrome-muted) !important;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+:root:root .canvas-page .canvas-toolbar .node-list { gap: 0; }
+:root:root .canvas-page .canvas-toolbar .node-item {
+  min-height: 34px;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: 6px;
+}
+:root:root .canvas-page .canvas-toolbar .node-item:hover { background: var(--canvas-chrome-hover) !important; }
+:root:root .canvas-page .canvas-toolbar .node-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  padding: 0;
+  border: 0 !important;
+  border-radius: 0;
+  background: transparent !important;
+  color: var(--canvas-chrome-text) !important;
+  stroke-width: 1.75;
+}
+:root:root .canvas-page .canvas-toolbar .node-label { color: var(--canvas-chrome-text) !important; font-size: 13px; }
+:root:root .canvas-page .canvas-toolbar .node-desc { color: var(--canvas-chrome-muted) !important; font-size: 11px; }
+:root:root .canvas-page .canvas-toolbar .node-tag {
+  background: var(--canvas-chrome-hover) !important;
+  color: var(--canvas-chrome-muted) !important;
+  font-size: 10px;
+}
+:root:root .canvas-page .canvas-toolbar .node-panel-divider { background: var(--canvas-chrome-border) !important; margin: 6px 0; }
+
+/* 资产、工作流、历史和 Skills 面板 */
+:root:root:root .canvas-panel,
+:root:root:root .skills-panel {
+  background: var(--canvas-chrome-surface) !important;
+  border-color: var(--canvas-chrome-border) !important;
+  box-shadow: var(--canvas-chrome-shadow) !important;
+}
+:root:root:root .canvas-panel :is(.panel-header, .panel-tabs, .asset-panel-tabs, .history-filters, .asset-tag-bar-bottom),
+:root:root:root .skills-panel :is(.skills-panel-header, .skills-panel-footer) {
+  border-color: var(--canvas-chrome-border) !important;
+}
+:root:root:root .asset-panel :is(.type-btn.active, .tag-chip.active, .add-character-btn),
+:root:root:root .history-panel :is(.header-btn.active, .type-btn.active, .batch-download-btn, .batch-copy-btn),
+:root:root:root .workflow-panel :is(.tab-btn.active, .category-btn.active),
+:root:root:root .skills-panel .skills-install-tabs button.active {
+  background: var(--canvas-chrome-hover) !important;
+  border-color: var(--canvas-chrome-border) !important;
+  color: var(--canvas-chrome-strong) !important;
+  box-shadow: none !important;
+}
+:root:root:root .asset-panel :is(.type-btn.active .type-count, .add-character-btn .btn-icon),
+:root:root:root .history-panel .type-btn.active .type-count {
+  color: inherit !important;
+  background: transparent !important;
+}
+:root:root:root .asset-panel .tag-manage-btn,
+:root:root:root .history-panel .header-btn.active { color: var(--canvas-chrome-text) !important; border-color: var(--canvas-chrome-border) !important; }
+:root:root:root .history-panel .batch-action-bar,
+:root:root:root .asset-panel .asset-tag-bar-bottom { background: var(--canvas-chrome-surface) !important; }
+:root:root:root .asset-panel .audio-preview:not(.audio-unavailable),
+:root:root:root .asset-panel :is(.character-preview, .character-placeholder) { background: var(--canvas-chrome-hover) !important; }
+:root:root:root .asset-panel .audio-wave span { background: var(--canvas-chrome-muted) !important; }
+:root:root:root .asset-preview-modal .apply-btn,
+:root:root:root .add-character-modal .submit-btn {
+  background: var(--canvas-chrome-hover) !important;
+  border: 1px solid var(--canvas-chrome-border) !important;
+  color: var(--canvas-chrome-strong) !important;
+  box-shadow: none !important;
+}
+
+:root:root:root .asset-panel .header-title svg,
+:root:root:root .asset-panel .tag-chip.active .tag-count,
+:root:root:root .asset-panel .tag-manage-btn:hover {
+  color: var(--canvas-chrome-text) !important;
+  border-color: var(--canvas-chrome-border) !important;
+}
+:root:root:root .asset-panel .tag-chip.active .tag-count { background: var(--canvas-chrome-surface) !important; }
+:root:root:root .history-panel .card-placeholder { background: var(--canvas-chrome-hover) !important; }
+
+:root:root:root :is(.asset-panel, .history-panel) .type-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  stroke-width: 1.75;
+}
+:root:root:root .asset-panel .tip svg,
+:root:root .canvas-page :is(.canvas-help-header h3, .help-section h4) svg {
+  vertical-align: -2px;
+  stroke-width: 1.75;
+}
+
+:root:root:root .profile-panel {
+  background: var(--canvas-chrome-surface) !important;
+  border-color: var(--canvas-chrome-border) !important;
+  border-radius: 12px;
+  box-shadow: var(--canvas-chrome-shadow) !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+:root:root:root .profile-panel :is(.user-avatar, .points-section, .user-level) {
+  background: var(--canvas-chrome-hover) !important;
+  border-color: var(--canvas-chrome-border) !important;
+  color: var(--canvas-chrome-text) !important;
+}
+:root:root:root .profile-panel .space-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  stroke-width: 1.75;
+}
+
+/* 个人中心：保持可点击区域的同时压缩图标和留白。 */
+:root:root:root .profile-panel .panel-header { gap: 10px; padding: 14px 16px; }
+:root:root:root .profile-panel .user-avatar { width: 36px; height: 36px; font-size: 16px; }
+:root:root:root .profile-panel .user-name { font-size: 15px; margin-bottom: 2px; }
+:root:root:root .profile-panel .user-email { font-size: 12px; }
+:root:root:root .profile-panel .space-switcher-section { padding: 8px 16px; }
+:root:root:root .profile-panel .current-space { min-height: 36px; padding: 6px 10px; box-sizing: border-box; }
+:root:root:root .profile-panel .current-space .space-name { font-size: 13px; }
+:root:root:root .profile-panel .space-dropdown { left: 16px; right: 16px; }
+:root:root:root .profile-panel .space-option { min-height: 36px; padding: 8px 10px; box-sizing: border-box; }
+:root:root:root .profile-panel .quick-stats { gap: 6px; padding: 10px 16px; }
+:root:root:root .profile-panel .quick-stats .stat-item { gap: 5px 7px; padding: 8px 10px; border-radius: 8px; }
+:root:root:root .profile-panel .stat-icon { width: 14px; height: 14px; }
+:root:root:root .profile-panel .stat-icon svg { width: 14px; height: 14px; }
+:root:root:root .profile-panel .quick-stats .stat-value { font-size: 16px; }
+:root:root:root .profile-panel .panel-nav { gap: 4px; padding: 8px 16px; }
+:root:root:root .profile-panel .nav-item { min-height: 36px; gap: 6px; padding: 6px 8px; }
+:root:root:root .profile-panel .nav-icon,
+:root:root:root .profile-panel .nav-icon svg { width: 15px; height: 15px; }
+:root:root:root .profile-panel .panel-content { min-height: 0; padding: 12px 16px; }
+:root:root:root .profile-panel .checkin-card { padding: 10px 12px; margin-bottom: 10px; border-radius: 8px; }
+:root:root:root .profile-panel .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-bottom: 10px; }
+:root:root:root .profile-panel .quick-actions .action-btn {
+  min-height: 40px;
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+:root:root:root .profile-panel .action-icon { width: 16px; height: 16px; flex: 0 0 16px; }
+:root:root:root .profile-panel .action-icon svg { width: 16px; height: 16px; }
+:root:root:root .profile-panel .package-status { gap: 8px; padding: 8px 10px; }
+:root:root:root .profile-panel :is(.space-icon, .dropdown-arrow) { color: var(--canvas-chrome-muted) !important; }
+:root:root:root .profile-panel :is(.nav-item.active, .action-btn.primary, .package-status, .package-badge),
+:root:root:root .profile-panel .checkin-btn:not(.disabled) {
+  background: var(--canvas-chrome-hover) !important;
+  border-color: var(--canvas-chrome-border) !important;
+  color: var(--canvas-chrome-strong) !important;
+}
+
+/* 个人中心放大时以导航栏与内容区并排显示。 */
+:root:root:root .profile-panel .profile-expand-btn {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: var(--canvas-chrome-muted);
+  background: transparent;
+  cursor: pointer;
+}
+:root:root:root .profile-panel .profile-expand-btn:hover {
+  background: var(--canvas-chrome-hover);
+  color: var(--canvas-chrome-strong);
+}
+:root:root:root .profile-panel :is(.profile-expand-btn, .panel-header .close-btn):focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+:root:root:root .profile-panel .panel-header .close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+:root:root:root .profile-panel-overlay.is-expanded { background: rgba(0, 0, 0, 0.55); }
+:root:root:root .profile-panel.is-expanded {
+  inset: 0;
+  margin: auto;
+  width: min(960px, calc(100vw - 32px));
+  height: min(820px, calc(100dvh - 32px));
+  max-height: none;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'header header'
+    'space content'
+    'subuser content'
+    'stats content'
+    'nav content'
+    'footer content';
+}
+:root:root:root .profile-panel.is-expanded > .panel-header { grid-area: header; }
+:root:root:root .profile-panel.is-expanded > .space-switcher-section { grid-area: space; }
+:root:root:root .profile-panel.is-expanded > .profile-subuser-link { grid-area: subuser; }
+:root:root:root .profile-panel.is-expanded > .quick-stats { grid-area: stats; }
+:root:root:root .profile-panel.is-expanded > .panel-nav {
+  grid-area: nav;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  overflow-y: auto;
+  min-height: 0;
+}
+:root:root:root .profile-panel.is-expanded > .panel-content {
+  grid-area: content;
+  min-width: 0;
+  min-height: 0;
+  padding: 20px 24px;
+  border-left: 1px solid var(--canvas-chrome-border);
+}
+:root:root:root .profile-panel.is-expanded > .panel-footer { grid-area: footer; padding: 12px 16px; }
+:root:root:root .profile-panel.is-expanded .content-section { max-width: 680px; margin: 0 auto; }
+:root:root:root .profile-panel.is-expanded .quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (max-width: 700px) {
+  :root:root:root .profile-panel.is-expanded {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  :root:root:root .profile-panel.is-expanded > :is(.panel-header, .space-switcher-section, .profile-subuser-link, .quick-stats, .panel-nav, .panel-footer) { flex-shrink: 0; }
+  :root:root:root .profile-panel.is-expanded > .panel-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+  :root:root:root .profile-panel.is-expanded > .panel-content { flex: 0 0 auto; overflow: visible; padding: 12px 16px; border-left: 0; }
+}
+:root:root:root .profile-panel.is-expanded .panel-content,
+:root:root:root .profile-panel.is-expanded .panel-content * { box-sizing: border-box; }
+:root:root:root .profile-panel .profile-subuser-link {
+  display: block;
+  padding: 8px 16px;
+  color: var(--canvas-chrome-text);
+  font-size: 13px;
+  text-decoration: none;
+}
+:root:root:root .profile-panel .profile-subuser-link:hover { background: var(--canvas-chrome-hover); }
+
+/* 账户资料、安全设置与团队空间使用统一的分组卡片。 */
+:root { --profile-card-bg: #202020; --profile-field-bg: #171717; }
+:root.canvas-theme-light { --profile-card-bg: #fafafa; --profile-field-bg: #fff; }
+:root:root:root .profile-panel :is(.account-section, .teams-section) { min-width: 0; }
+:root:root:root .profile-panel .account-section { display: grid; gap: 12px; }
+:root:root:root .profile-panel .account-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--canvas-chrome-border);
+  border-radius: 10px;
+  background: var(--profile-card-bg);
+}
+:root:root:root .profile-panel .account-card-heading,
+:root:root:root .profile-panel .team-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--canvas-chrome-strong);
+}
+:root:root:root .profile-panel .account-card-heading { margin-bottom: 16px; }
+:root:root:root .profile-panel .account-card-heading .section-title,
+:root:root:root .profile-panel .team-section-heading { margin: 0; color: var(--canvas-chrome-strong) !important; font-size: 14px; }
+:root:root:root .profile-panel .account-heading-icon,
+:root:root:root .profile-panel .team-empty-icon,
+:root:root:root .profile-panel .invitation-info .team-avatar {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--canvas-chrome-border);
+  border-radius: 8px;
+  background: var(--canvas-chrome-hover);
+  color: var(--canvas-chrome-text);
+}
+:root:root:root .profile-panel .account-fields { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+:root:root:root .profile-panel .account-section .form-group { min-width: 0; margin: 0; }
+:root:root:root .profile-panel .account-section .form-group label { display: block; margin-bottom: 6px; color: var(--canvas-chrome-muted) !important; font-size: 12px; }
+:root:root:root .profile-panel .account-section :is(input, textarea) {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--canvas-chrome-border) !important;
+  border-radius: 8px;
+  background: var(--profile-field-bg) !important;
+  color: var(--canvas-chrome-strong) !important;
+  font-size: 13px;
+}
+:root:root:root .profile-panel .account-section :is(input, textarea):focus {
+  outline: 2px solid var(--canvas-chrome-muted);
+  outline-offset: 1px;
+}
+:root:root:root .profile-panel .account-section .phone-binding {
+  --phone-surface: var(--profile-field-bg);
+  --phone-border: var(--canvas-chrome-border);
+  --phone-text: var(--canvas-chrome-strong);
+  --phone-muted: var(--canvas-chrome-muted);
+  --phone-input: var(--profile-field-bg);
+  --phone-accent: var(--canvas-chrome-text);
+  --phone-accent-bg: var(--canvas-chrome-hover);
+  --phone-primary: var(--canvas-chrome-strong);
+  --phone-primary-text: var(--canvas-chrome-surface);
+  margin: 16px 0 0;
+  padding: 12px;
+  border-radius: 8px;
+}
+:root:root:root .profile-panel .account-card-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+:root:root:root .profile-panel .account-section .btn-primary,
+:root:root:root .profile-panel .teams-section :is(.btn-create-team, .btn-accept, .btn-reject, .btn-team-action) {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid var(--canvas-chrome-border) !important;
+  border-radius: 7px;
+  background: var(--canvas-chrome-hover) !important;
+  color: var(--canvas-chrome-strong) !important;
+  font-size: 12px;
+  box-shadow: none;
+}
+:root:root:root .profile-panel .account-section .btn-primary:hover:not(:disabled),
+:root:root:root .profile-panel .teams-section :is(.btn-create-team, .btn-accept, .btn-reject, .btn-team-action):hover { filter: brightness(1.13); }
+:root:root:root .profile-panel .account-subuser-link {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  padding: 7px 10px;
+  border: 1px solid var(--canvas-chrome-border);
+  border-radius: 7px;
+  color: var(--canvas-chrome-text);
+  font-size: 12px;
+  text-decoration: none;
+}
+:root:root:root .profile-panel .teams-section :is(.invitations-section, .my-teams-section) {
+  padding: 16px;
+  border: 1px solid var(--canvas-chrome-border);
+  border-radius: 10px;
+  background: var(--profile-card-bg);
+}
+:root:root:root .profile-panel .teams-section .invitations-section { margin-bottom: 12px; }
+:root:root:root .profile-panel .teams-section .section-header { gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+:root:root:root .profile-panel .teams-section .team-count {
+  padding: 2px 6px;
+  border-radius: 5px;
+  background: var(--canvas-chrome-hover);
+  color: var(--canvas-chrome-muted);
+  font-size: 11px;
+}
+:root:root:root .profile-panel .teams-section .empty-teams {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 30px 12px;
+  border: 1px dashed var(--canvas-chrome-border);
+  border-radius: 8px;
+  color: var(--canvas-chrome-text) !important;
+}
+:root:root:root .profile-panel .teams-section .empty-teams p { margin: 0; }
+:root:root:root .profile-panel .teams-section .empty-teams .hint { color: var(--canvas-chrome-muted) !important; }
+:root:root:root .profile-panel .teams-section :is(.team-card, .invitation-card) {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--canvas-chrome-border) !important;
+  border-radius: 8px;
+  background: var(--profile-field-bg) !important;
+}
+:root:root:root .profile-panel .teams-section .team-card.active { border-color: var(--canvas-chrome-muted) !important; }
+:root:root:root .profile-panel .teams-section :is(.team-name, .team-name-row .team-name) { color: var(--canvas-chrome-strong) !important; }
+:root:root:root .profile-panel .teams-section :is(.team-meta, .inviter-info, .invite-message) { color: var(--canvas-chrome-muted) !important; }
+:root:root:root .profile-panel .teams-section :is(.team-avatar-large, .role-tag) {
+  background: var(--canvas-chrome-hover) !important;
+  border-color: var(--canvas-chrome-border) !important;
+  color: var(--canvas-chrome-text) !important;
+}
+:root:root:root .profile-panel .teams-section .team-card-actions { flex-wrap: wrap; border-color: var(--canvas-chrome-border) !important; }
+:root:root:root .profile-panel .teams-section .btn-team-action.danger:hover { color: #e66b6b !important; }
+:root:root:root .profile-panel .teams-section .invitation-card { flex-wrap: wrap; }
+@media (min-width: 701px) {
+  :root:root:root .profile-panel.is-expanded .account-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  :root:root:root .profile-panel.is-expanded .account-field-wide { grid-column: 1 / -1; }
+}
+/* 团队操作弹窗与团队空间沿用相同的中性色。 */
+:root:root:root .team-modal {
+  box-sizing: border-box;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  border-color: var(--canvas-chrome-border) !important;
+  border-radius: 12px;
+  background: var(--canvas-chrome-surface) !important;
+  box-shadow: var(--canvas-chrome-shadow);
+  color: var(--canvas-chrome-text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+:root:root:root .team-modal :is(.modal-header, .modal-footer) { border-color: var(--canvas-chrome-border) !important; }
+:root:root:root .team-modal :is(.modal-header h3, .form-group label) { color: var(--canvas-chrome-text) !important; }
+:root:root:root .team-modal :is(input, textarea, select) {
+  box-sizing: border-box;
+  border-color: var(--canvas-chrome-border) !important;
+  background: var(--profile-field-bg) !important;
+  color: var(--canvas-chrome-strong) !important;
+}
+:root:root:root .team-modal :is(input, textarea, select):focus-visible { outline: 2px solid var(--canvas-chrome-muted); outline-offset: 1px; }
+:root:root:root .team-modal :is(.btn-cancel, .btn-confirm) {
+  border: 1px solid var(--canvas-chrome-border) !important;
+  background: var(--canvas-chrome-hover) !important;
+  color: var(--canvas-chrome-strong) !important;
+}

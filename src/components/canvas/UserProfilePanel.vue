@@ -5,6 +5,7 @@ import { openCheckout } from '@/utils/openCheckout'
  * 点击左侧工具栏的P按钮时弹出
  */
 import { ref, computed, watch, onMounted, inject, nextTick } from 'vue'
+import { ChevronLeft, LockKeyhole, Mail, Maximize2, Minimize2, Plus, UserRound, UsersRound } from '@lucide/vue'
 import PhoneBinding from '@/components/auth/PhoneBinding.vue'
 import { useRouter } from 'vue-router'
 import { redeemVoucher as redeemVoucherApi, updateUserPreferences, clearAuthSession } from '@/api/client'
@@ -49,6 +50,11 @@ const token = localStorage.getItem('token')
 
 // 当前激活的菜单
 const activeMenu = ref('home')
+const isProfileExpanded = ref(false)
+
+watch(() => props.visible, visible => {
+  if (!visible) isProfileExpanded.value = false
+})
 
 // 团队空间余额总计 = 团队积分 + 套餐积分 + 永久积分
 const totalTeamBalance = computed(() => {
@@ -1528,10 +1534,14 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
 <template>
   <Teleport to="body">
     <Transition name="panel">
-      <div v-if="visible" class="profile-panel-overlay" :inert="showLedgerDetails || undefined" @click.self="closePanel">
+      <div v-if="visible" class="profile-panel-overlay" :class="{ 'is-expanded': isProfileExpanded }" :inert="showLedgerDetails || undefined" @click.self="closePanel">
         <div 
           class="profile-panel"
-          :style="{ left: `${position.x}px`, top: `${position.y}px` }"
+          :class="{ 'is-expanded': isProfileExpanded }"
+          :style="isProfileExpanded ? {} : { left: `${position.x}px`, top: `${position.y}px` }"
+          :role="isProfileExpanded ? 'dialog' : undefined"
+          :aria-label="isProfileExpanded ? '个人中心' : undefined"
+          @keydown.esc.stop="isProfileExpanded ? isProfileExpanded = false : closePanel()"
         >
           <!-- 用户信息头部 -->
           <div class="panel-header">
@@ -1542,13 +1552,26 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <h3 class="user-name">{{ userInfo?.username || t('common.user') }}</h3>
               <p class="user-email">{{ userInfo?.email || t('user.noEmail') }}</p>
             </div>
-            <button class="close-btn" @click="closePanel">×</button>
+            <button
+              type="button"
+              class="profile-expand-btn"
+              :aria-label="isProfileExpanded ? '还原个人中心' : '放大个人中心'"
+              :title="isProfileExpanded ? '还原个人中心' : '放大个人中心'"
+              :aria-expanded="isProfileExpanded"
+              @click="isProfileExpanded = !isProfileExpanded"
+            >
+              <Minimize2 v-if="isProfileExpanded" :size="16" aria-hidden="true" />
+              <Maximize2 v-else :size="16" aria-hidden="true" />
+            </button>
+            <button type="button" class="close-btn" aria-label="收起个人中心" title="收起个人中心" @click="closePanel">
+              <ChevronLeft :size="18" aria-hidden="true" />
+            </button>
           </div>
           
           <!-- 空间切换器 -->
           <div class="space-switcher-section">
             <div class="current-space" @click="showSpaceDropdown = !showSpaceDropdown">
-              <span class="space-icon">{{ teamStore.currentSpaceIcon.value }}</span>
+              <component :is="teamStore.globalSpaceType.value === 'personal' ? UserRound : UsersRound" class="space-icon" aria-hidden="true" />
               <span class="space-name">{{ teamStore.currentSpaceLabel.value }}</span>
               <span class="dropdown-arrow">▼</span>
             </div>
@@ -1558,7 +1581,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 :class="{ active: teamStore.globalSpaceType.value === 'personal' }"
                 @click="selectSpace('personal')"
               >
-                <span class="space-icon">👤</span>
+                <UserRound class="space-icon" aria-hidden="true" />
                 <span>{{ t('team.personalSpace') }}</span>
                 <span v-if="teamStore.globalSpaceType.value === 'personal'" class="check-mark">✓</span>
               </div>
@@ -1570,14 +1593,14 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 :class="{ active: teamStore.globalTeamId.value === team.id }"
                 @click="selectSpace('team', team.id)"
               >
-                <span class="space-icon">👥</span>
+                <UsersRound class="space-icon" aria-hidden="true" />
                 <span class="team-name">{{ team.name }}</span>
                 <span class="team-meta">{{ team.member_count }}人 · {{ getRoleLabel(team.my_role) }}</span>
                 <span v-if="teamStore.globalTeamId.value === team.id" class="check-mark">✓</span>
               </div>
               <div class="space-divider"></div>
               <div class="space-option create-team" @click="openCreateTeamModal">
-                <span class="space-icon">➕</span>
+                <Plus class="space-icon" aria-hidden="true" />
                 <span>{{ t('team.createTeamSpace') }}</span>
               </div>
               <div 
@@ -1585,14 +1608,14 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                 class="space-option invitations"
                 @click="activeMenu = 'teams'; showSpaceDropdown = false"
               >
-                <span class="space-icon">📨</span>
+                <Mail class="space-icon" aria-hidden="true" />
                 <span>邀请通知</span>
                 <span class="invite-badge">{{ teamStore.pendingInvitationsCount.value }}</span>
               </div>
             </div>
           </div>
 
-          <RouterLink v-if="userInfo && !userInfo.is_subuser && userInfo.has_subusers" to="/subuser" class="block p-3 text-emerald-500">子用户管理</RouterLink>
+          <RouterLink v-if="userInfo && !userInfo.is_subuser && userInfo.has_subusers" to="/subuser" class="profile-subuser-link block p-3 text-emerald-500">子用户管理</RouterLink>
           <!-- 快捷数据 -->
           <div class="quick-stats">
             <button type="button" class="stat-item stat-action" @click="openAccountAction('convert'); closePanel()">
@@ -1693,42 +1716,62 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
             </div>
 
             <!-- 账户管理 -->
-            <div v-else-if="activeMenu === 'profile'" class="content-section">
-              <RouterLink v-if="userInfo && !userInfo.is_subuser && userInfo.has_subusers" to="/subuser" class="block mb-4 text-emerald-500">创建子用户</RouterLink>
-              <h4 class="section-title">{{ t('user.basicInfo') }}</h4>
-              <div class="form-group">
-                <label>{{ t('user.username') }}</label>
-                <input v-model="profileForm.username" type="text" :placeholder="t('user.enterUsername')" maxlength="30" />
-              </div>
-              <div class="form-group">
-                <label>{{ t('user.email') }}</label>
-                <input v-model="profileForm.email" type="email" :placeholder="t('user.enterEmail')" />
-              </div>
-              <PhoneBinding @updated="emit('update')" />
-              <div class="form-group">
-                <label>{{ t('user.bio') }}</label>
-                <textarea v-model="profileForm.bio" :placeholder="t('user.enterBio')" maxlength="200" rows="2"></textarea>
-              </div>
-              <button class="btn-primary" @click="saveProfile" :disabled="saveLoading">
-                {{ saveLoading ? t('common.saving') : t('user.saveProfile') }}
-              </button>
+            <div v-else-if="activeMenu === 'profile'" class="content-section account-section">
+              <RouterLink v-if="userInfo && !userInfo.is_subuser && userInfo.has_subusers" to="/subuser" class="account-subuser-link">
+                <UsersRound :size="15" aria-hidden="true" /> 创建子用户
+              </RouterLink>
+              <section class="account-card account-profile-card">
+                <div class="account-card-heading">
+                  <span class="account-heading-icon"><UserRound :size="16" aria-hidden="true" /></span>
+                  <h4 class="section-title">{{ t('user.basicInfo') }}</h4>
+                </div>
+                <div class="account-fields">
+                  <div class="form-group">
+                    <label for="account-username">{{ t('user.username') }}</label>
+                    <input id="account-username" v-model="profileForm.username" type="text" :placeholder="t('user.enterUsername')" maxlength="30" />
+                  </div>
+                  <div class="form-group">
+                    <label for="account-email">{{ t('user.email') }}</label>
+                    <input id="account-email" v-model="profileForm.email" type="email" :placeholder="t('user.enterEmail')" />
+                  </div>
+                  <div class="form-group account-field-wide">
+                    <label for="account-bio">{{ t('user.bio') }}</label>
+                    <textarea id="account-bio" v-model="profileForm.bio" :placeholder="t('user.enterBio')" maxlength="200" rows="2"></textarea>
+                  </div>
+                </div>
+                <PhoneBinding @updated="emit('update')" />
+                <div class="account-card-actions">
+                  <button class="btn-primary" @click="saveProfile" :disabled="saveLoading">
+                    {{ saveLoading ? t('common.saving') : t('user.saveProfile') }}
+                  </button>
+                </div>
+              </section>
 
-              <h4 class="section-title" style="margin-top: 24px;">{{ t('user.changePassword') }}</h4>
-              <div class="form-group">
-                <label>{{ t('user.oldPassword') }}</label>
-                <input v-model="passwordForm.oldPassword" type="password" :placeholder="t('user.enterOldPassword')" />
-              </div>
-              <div class="form-group">
-                <label>{{ t('user.newPassword') }}</label>
-                <input v-model="passwordForm.newPassword" type="password" :placeholder="t('user.enterNewPassword')" />
-              </div>
-              <div class="form-group">
-                <label>{{ t('user.confirmPassword') }}</label>
-                <input v-model="passwordForm.confirmPassword" type="password" :placeholder="t('user.enterConfirmPassword')" />
-              </div>
-              <button class="btn-primary" @click="changePassword" :disabled="saveLoading">
-                {{ t('user.changePassword') }}
-              </button>
+              <section class="account-card account-security-card">
+                <div class="account-card-heading">
+                  <span class="account-heading-icon"><LockKeyhole :size="16" aria-hidden="true" /></span>
+                  <h4 class="section-title">{{ t('user.changePassword') }}</h4>
+                </div>
+                <div class="account-fields">
+                  <div class="form-group account-field-wide">
+                    <label for="account-old-password">{{ t('user.oldPassword') }}</label>
+                    <input id="account-old-password" v-model="passwordForm.oldPassword" type="password" :placeholder="t('user.enterOldPassword')" />
+                  </div>
+                  <div class="form-group">
+                    <label for="account-new-password">{{ t('user.newPassword') }}</label>
+                    <input id="account-new-password" v-model="passwordForm.newPassword" type="password" :placeholder="t('user.enterNewPassword')" />
+                  </div>
+                  <div class="form-group">
+                    <label for="account-confirm-password">{{ t('user.confirmPassword') }}</label>
+                    <input id="account-confirm-password" v-model="passwordForm.confirmPassword" type="password" :placeholder="t('user.enterConfirmPassword')" />
+                  </div>
+                </div>
+                <div class="account-card-actions">
+                  <button class="btn-primary" @click="changePassword" :disabled="saveLoading">
+                    {{ t('user.changePassword') }}
+                  </button>
+                </div>
+              </section>
             </div>
 
             <!-- 团队空间管理 -->
@@ -1736,7 +1779,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <!-- 待处理邀请 -->
               <div v-if="teamStore.pendingInvitations.value.length > 0" class="invitations-section">
                 <h4 class="section-title">
-                  📨 待处理邀请 ({{ teamStore.pendingInvitations.value.length }})
+                  <Mail :size="16" aria-hidden="true" /> 待处理邀请 ({{ teamStore.pendingInvitations.value.length }})
                 </h4>
                 <div class="invitation-list">
                   <div 
@@ -1745,7 +1788,7 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                     class="invitation-card"
                   >
                     <div class="invitation-info">
-                      <div class="team-avatar">👥</div>
+                      <div class="team-avatar"><UsersRound :size="16" aria-hidden="true" /></div>
                       <div class="invitation-details">
                         <div class="team-name">{{ invite.team_name }}</div>
                         <div class="inviter-info">{{ invite.inviter_username }} 邀请您加入</div>
@@ -1763,13 +1806,14 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
               <!-- 我的团队 -->
               <div class="my-teams-section">
                 <div class="section-header">
-                  <h4 class="section-title">👥 我的团队 ({{ teamStore.myTeams.value.length }})</h4>
+                  <h4 class="section-title team-section-heading"><UsersRound :size="16" aria-hidden="true" /> 我的团队 <span class="team-count">{{ teamStore.myTeams.value.length }}</span></h4>
                   <button class="btn-create-team" @click="openCreateTeamModal">
-                    <span>➕</span> 创建团队
+                    <Plus :size="15" aria-hidden="true" /> 创建团队
                   </button>
                 </div>
                 
                 <div v-if="teamStore.myTeams.value.length === 0" class="empty-teams">
+                  <span class="team-empty-icon"><UsersRound :size="20" aria-hidden="true" /></span>
                   <p>您还没有加入任何团队</p>
                   <p class="hint">创建团队或接受邀请来开始协作</p>
                 </div>

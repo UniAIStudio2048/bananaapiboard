@@ -15,7 +15,7 @@
  * - 视频缩略图节流: 限制同时提取数量
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
-import { History, Maximize2, Minimize2, SquareCheck, X } from '@lucide/vue'
+import { AudioLines, Film, History, Image, LayoutGrid, Maximize2, Minimize2, SquareCheck, X } from '@lucide/vue'
 import { getHistory, getHistoryDetail, deleteHistory } from '@/api/canvas/history'
 import { saveAsset } from '@/api/canvas/assets'
 import { extractVideoFrame } from '@/api/canvas/workflow'
@@ -149,6 +149,8 @@ const savingAsset = ref(false)
 const showCopyDialog = ref(false)
 const copyItems = ref([])
 const batchCopying = ref(false)
+
+const fileTypeIcons = { all: LayoutGrid, image: Image, video: Film, audio: AudioLines }
 
 // 文件类型
 const fileTypes = [
@@ -1903,7 +1905,7 @@ onUnmounted(() => {
               :class="{ active: selectedType === ft.key }"
               @click="selectedType = ft.key"
             >
-              <span class="type-icon">{{ ft.icon }}</span>
+              <component :is="fileTypeIcons[ft.key]" class="type-icon" aria-hidden="true" />
               <span class="type-label">{{ t(ft.labelKey) }}</span>
               <span class="type-count">{{ historyStats[ft.key] || 0 }}</span>
             </button>

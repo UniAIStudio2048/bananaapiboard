@@ -18,7 +18,7 @@ import { useI18n } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { getWorkflowNodesBatch, uploadCanvasMedia } from '@/api/canvas/workflow'
 import { useCanvasStore } from '@/stores/canvas'
-import { Images, LayoutDashboard, Maximize2, Minimize2, SlidersHorizontal, X } from '@lucide/vue'
+import { AudioLines, Film, FolderUp, Image, Images, LayoutDashboard, LayoutGrid, Lightbulb, Maximize2, Minimize2, SlidersHorizontal, Type, UserRound, UsersRound, X } from '@lucide/vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import SeedanceCharacterPanel from './SeedanceCharacterPanel.vue'
 import DigitalHumanPanel from './DigitalHumanPanel.vue'
@@ -175,6 +175,8 @@ const assetVisibilityContext = computed(() => ({
   seedanceActiveProvider: seedanceActiveProvider.value,
   seedanceActiveGroupIds: seedanceActiveGroupIds.value
 }))
+
+const fileTypeIcons = { all: LayoutGrid, text: Type, image: Image, video: Film, audio: AudioLines, 'digital-human': UserRound, 'sora-character': UserRound, 'seedance-character': UsersRound, 'bytefor-character': UserRound }
 
 // 文件类型 - 存储翻译键，在模板中实时翻译
 const allFileTypes = [
@@ -1796,7 +1798,7 @@ onUnmounted(() => {
                 :title="ft.labelKey ? t(ft.labelKey) : ft.label"
                 @click="selectedType = ft.key"
               >
-                <span class="type-icon">{{ ft.icon }}</span>
+                <component :is="fileTypeIcons[ft.key]" class="type-icon" aria-hidden="true" />
                 <span class="type-label">{{ ft.labelKey ? t(ft.labelKey) : ft.label }}</span>
                 <span class="type-count">{{ assetStats[ft.key] || 0 }}</span>
               </button>
@@ -1830,7 +1832,7 @@ onUnmounted(() => {
                 :title="`${seedanceCharacterLibraryName}角色库`"
                 @click="selectedType = ft.key"
               >
-                <span class="type-icon">{{ ft.icon }}</span>
+                <component :is="fileTypeIcons[ft.key]" class="type-icon" aria-hidden="true" />
                 <span class="type-label">{{ `${seedanceCharacterLibraryName}角色库` }}</span>
                 <span class="type-count">{{ seedanceAssetCount }}</span>
               </button>
@@ -1877,7 +1879,7 @@ onUnmounted(() => {
               :title="ft.labelKey ? t(ft.labelKey) : ft.label"
               @click="selectedType = ft.key"
             >
-              <span class="type-icon">{{ ft.icon }}</span>
+              <component :is="fileTypeIcons[ft.key]" class="type-icon" aria-hidden="true" />
               <span class="type-label">{{ ft.labelKey ? t(ft.labelKey) : ft.label }}</span>
               <span class="type-count">{{ assetStats[ft.key] || 0 }}</span>
             </button>
@@ -2000,7 +2002,7 @@ onUnmounted(() => {
 
         <!-- 底部提示 -->
         <div class="panel-footer">
-          <span class="tip">💡 {{ t('canvas.assetPanel.footerTip') }}</span>
+          <span class="tip"><Lightbulb :size="14" aria-hidden="true" /> {{ t('canvas.assetPanel.footerTip') }}</span>
         </div>
 
         <!-- 右键菜单 -->
@@ -2107,7 +2109,7 @@ onUnmounted(() => {
           <div v-if="showAddCharacterModal" class="add-character-overlay" @click.self="closeAddCharacterModal">
             <div class="add-character-modal">
               <div class="add-character-header">
-                <h3>👤 添加外部角色</h3>
+                <h3><UserRound :size="16" aria-hidden="true" /> 添加外部角色</h3>
                 <button class="close-btn small" @click="closeAddCharacterModal">✕</button>
               </div>
               
@@ -2131,7 +2133,7 @@ onUnmounted(() => {
                       :disabled="addCharacterLoading"
                     />
                     <div v-if="!addCharacterForm.filePreview" class="upload-placeholder">
-                      <div class="upload-icon">📁</div>
+                      <div class="upload-icon"><FolderUp :size="24" aria-hidden="true" /></div>
                       <div class="upload-text">点击上传角色图片或视频</div>
                       <div class="upload-hint">视频不超过3秒</div>
                     </div>
@@ -3350,7 +3352,7 @@ onUnmounted(() => {
 }
 
 .asset-card.type-sora-character:not(.asset-card-v2)::after {
-  content: '📋 点击复制@ID';
+  content: '点击复制@ID';
   position: absolute;
   top: 8px;
   left: 8px;

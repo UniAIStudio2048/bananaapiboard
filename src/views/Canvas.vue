@@ -46,7 +46,7 @@ import TicketDrawer from '@/components/ticket/TicketDrawer.vue'
 import TicketList from '@/components/ticket/TicketList.vue'
 import TicketDetail from '@/components/ticket/TicketDetail.vue'
 import CreateTicketForm from '@/components/ticket/CreateTicketForm.vue'
-import { FolderOpen, Sparkles } from '@lucide/vue'
+import { FolderOpen, Keyboard, MousePointer2, Pin, Sparkles } from '@lucide/vue'
 import { useI18n } from '@/i18n'
 import {
   startAutoSave as startHistoryAutoSave,
@@ -104,6 +104,7 @@ import { cancelAllCanvasUploads } from '@/api/canvas/direct-upload.js'
 
 // 导入画布样式
 import '@/styles/canvas.css'
+import '@/styles/canvas-chrome.css'
 
 const { t } = useI18n()
 
@@ -4322,14 +4323,14 @@ onUnmounted(() => {
       <div v-if="showHelp" class="canvas-help-modal" @click.self="showHelp = false">
         <div class="canvas-help-content">
           <div class="canvas-help-header">
-            <h3>🎨 {{ t('canvas.helpGuide') }}</h3>
+            <h3><Keyboard :size="16" aria-hidden="true" /> {{ t('canvas.helpGuide') }}</h3>
             <button class="canvas-help-close" @click="showHelp = false">×</button>
           </div>
           <div class="canvas-help-body">
             <div class="help-columns">
               <div class="help-column-left">
                 <div class="help-section">
-                  <h4>🖱️ {{ t('canvas.mouseOperations') }}
+                  <h4><MousePointer2 :size="15" aria-hidden="true" /> {{ t('canvas.mouseOperations') }}
                     <span class="help-mode-badge">{{ interactionMode === 'comfyui' ? t('canvas.comfyuiModeShort') : t('canvas.infiniteCanvasModeShort') }}</span>
                   </h4>
                   <!-- ComfyUI 模式 -->
@@ -4361,7 +4362,7 @@ onUnmounted(() => {
                   </ul>
                 </div>
                 <div class="help-section">
-                  <h4>📌 {{ t('canvas.nodeOperations') }}</h4>
+                  <h4><Pin :size="15" aria-hidden="true" /> {{ t('canvas.nodeOperations') }}</h4>
                   <ul>
                     <li>{{ t('canvas.dragConnection') }}</li>
                     <li>{{ t('canvas.rightClickNode') }}</li>

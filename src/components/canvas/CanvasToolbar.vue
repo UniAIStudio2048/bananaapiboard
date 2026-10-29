@@ -8,7 +8,16 @@ import { useCanvasStore } from '@/stores/canvas'
 import UserProfilePanel from './UserProfilePanel.vue'
 import { useI18n } from '@/i18n'
 import { getTotalUserPoints } from '@/utils/points'
-import { FolderOpen, History, Save } from '@lucide/vue'
+import { AudioLines, FileText, Film, FolderOpen, History, Image, Save, Type, Upload } from '@lucide/vue'
+
+const toolbarNodeIcons = {
+  script: FileText,
+  'video-breakdown': Film,
+  'text-input': Type,
+  'image-input': Image,
+  'video-input': Film,
+  'audio-input': AudioLines
+}
 
 const { t } = useI18n()
 const router = useRouter()
@@ -253,7 +262,7 @@ async function handleUserUpdate() {
             class="node-item"
             @click="createNode(node.type)"
           >
-            <div class="node-icon">{{ node.icon }}</div>
+            <component :is="toolbarNodeIcons[node.type]" class="node-icon" aria-hidden="true" />
             <div class="node-info">
               <div class="node-header">
                 <span class="node-label">{{ node.label }}</span>
@@ -269,7 +278,7 @@ async function handleUserUpdate() {
         
         <!-- 上传选项 -->
         <div class="node-item" @click="handleUpload">
-          <div class="node-icon">↑</div>
+          <Upload class="node-icon" aria-hidden="true" />
           <div class="node-info">
             <div class="node-label">{{ t('common.upload') }}</div>
           </div>
