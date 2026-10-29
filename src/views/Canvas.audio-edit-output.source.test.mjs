@@ -9,4 +9,5 @@ test('Canvas persists the processed audio URL in all node output fields', () => 
   assert.match(audioEditBranch, /audioUrl,/)
   assert.match(audioEditBranch, /audioData: audioUrl/)
   assert.match(audioEditBranch, /url: audioUrl/)
+  assert.match(audioEditBranch, /task\.metadata\?\.operation === 'speed'\s*\?\s*\{ playbackRate: 1 \}/)
 })

@@ -1967,6 +1967,7 @@ function updateNodeFromTask(task) {
           taskId: task.taskId,
           audioUrl,
           audioData: audioUrl,
+          ...(task.metadata?.operation === 'speed' ? { playbackRate: 1 } : {}),
           output: {
             ...(node.data.output || {}),
             type: 'audio',

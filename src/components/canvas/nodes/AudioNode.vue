@@ -1421,6 +1421,15 @@ let volumeIndicatorTimer = null
 const playbackRate = ref(props.data.playbackRate || 1)
 const pendingPlaybackRate = ref(playbackRate.value)
 const showSpeedEditor = ref(false)
+const downloadAfterSpeedTask = ref(null)
+const speedDownloadStarting = ref(false)
+
+watch(() => props.data.playbackRate, (value) => {
+  const rate = Number(value) || 1
+  playbackRate.value = rate
+  pendingPlaybackRate.value = rate
+  if (audioRef.value) audioRef.value.playbackRate = rate
+})
 
 // 拖拽状态
 const isDragOver = ref(false)
@@ -1611,6 +1620,11 @@ function handleBackgroundTaskComplete(event) {
   if (outputUrl) {
     const isSpeedEdit = task.metadata?.operation === 'speed'
     const outputDuration = Number(task.result?.duration)
+    if (isSpeedEdit) {
+      playbackRate.value = 1
+      pendingPlaybackRate.value = 1
+      if (audioRef.value) audioRef.value.playbackRate = 1
+    }
     canvasStore.updateNodeData(props.id, {
       status: 'success',
       progress: null,
@@ -1624,7 +1638,12 @@ function handleBackgroundTaskComplete(event) {
         sourceUrl: task.metadata?.sourceUrl
       }
     })
+    if (isSpeedEdit && downloadAfterSpeedTask.value === taskId) {
+      downloadAfterSpeedTask.value = null
+      downloadAudioFile(outputUrl)
+    }
   } else {
+    if (downloadAfterSpeedTask.value === taskId) downloadAfterSpeedTask.value = null
     canvasStore.updateNodeData(props.id, {
       status: 'error',
       progress: null,
@@ -1638,6 +1657,11 @@ function handleBackgroundTaskFailed(event) {
   const { taskId, task } = event.detail
   if (task.nodeId !== props.id || task.type !== 'audio-edit') return
 
+  if (downloadAfterSpeedTask.value === taskId) downloadAfterSpeedTask.value = null
+  if (task.metadata?.operation === 'speed') {
+    playbackRate.value = 1
+    pendingPlaybackRate.value = 1
+  }
   canvasStore.updateNodeData(props.id, {
     status: 'error',
     progress: null,
@@ -2150,7 +2174,34 @@ function handleResizeEnd() {
 
 // 走 startStreamDownload：浏览器原生下载栏（带进度），点击立即响应
 async function handleToolbarDownload() {
-  const url = audioUrl.value
+  if (speedDownloadStarting.value || downloadAfterSpeedTask.value) return
+
+  const speedTask = getTasksByNodeId(props.id).find(task =>
+    task.type === 'audio-edit' && task.metadata?.operation === 'speed' &&
+    (task.status === 'pending' || task.status === 'processing')
+  )
+  if (speedTask) {
+    downloadAfterSpeedTask.value = speedTask.taskId
+    return
+  }
+  if (props.data?.status === 'processing' && props.data?.taskType === 'audio-edit') {
+    await showAlert('音频处理尚未完成，请稍后下载', '提示')
+    return
+  }
+  if (normalizePlaybackRate(playbackRate.value, 1) !== 1) {
+    speedDownloadStarting.value = true
+    try {
+      await applyPlaybackRate(true)
+    } finally {
+      speedDownloadStarting.value = false
+    }
+    return
+  }
+
+  await downloadAudioFile(audioUrl.value)
+}
+
+async function downloadAudioFile(url) {
   if (!url) return
   
   const extension = /\.(mp3|wav|ogg|m4a)(?:[?#]|$)/i.exec(url)?.[1]?.toLowerCase() ||
@@ -2182,7 +2233,7 @@ async function handleToolbarDownload() {
 
     const { startStreamDownload } = await import('@/api/client')
     startStreamDownload(url, filename)
-    console.log('[AudioNode] 已开始下载原音频:', filename)
+    console.log('[AudioNode] 已开始下载音频:', filename)
   } catch (error) {
     console.error('[AudioNode] 下载失败:', error)
   }
@@ -2236,7 +2287,7 @@ function handlePlaybackRateInput(event) {
   updatePlaybackRate(event?.target?.value)
 }
 
-async function applyPlaybackRate() {
+async function applyPlaybackRate(downloadOnComplete = false) {
   const rate = normalizePlaybackRate(pendingPlaybackRate.value, 1)
   updatePlaybackRate(rate)
   showSpeedEditor.value = false
@@ -2265,6 +2316,7 @@ async function applyPlaybackRate() {
     })
     const taskId = result.taskId || result.task_id
     if (!taskId) throw new Error('未获取到音频变速任务ID')
+    if (downloadOnComplete) downloadAfterSpeedTask.value = taskId
     canvasStore.updateNodeData(props.id, {
       status: 'processing',
       progress: '变速处理中...',
@@ -2285,8 +2337,8 @@ async function applyPlaybackRate() {
     })
   } catch (error) {
     console.error('[AudioNode] 音频变速提交失败:', error)
-    canvasStore.updateNodeData(props.id, { playbackRate: 1 })
-    if (audioRef.value) audioRef.value.playbackRate = 1
+    downloadAfterSpeedTask.value = null
+    updatePlaybackRate(1)
     await showAlert(formatAudioErrorMessage(error.message || '音频变速任务提交失败'), '错误')
   }
 }
@@ -2342,7 +2394,7 @@ function handleSpeedEditorClickOutside(event) {
       <div class="toolbar-divider"></div>
       
       <!-- 下载按钮 -->
-      <button class="toolbar-btn icon-only" title="下载" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
+      <button class="toolbar-btn icon-only" :title="downloadAfterSpeedTask || speedDownloadStarting ? '正在处理音频，完成后自动下载' : '下载'" :disabled="!!downloadAfterSpeedTask || speedDownloadStarting" @mousedown.stop.prevent="handleToolbarDownload" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
@@ -2360,7 +2412,7 @@ function handleSpeedEditorClickOutside(event) {
       <input v-model.number="pendingPlaybackRate" class="speed-slider" type="range" min="0.5" max="2" step="0.05" aria-label="播放速度" @input="handlePlaybackRateInput" />
       <span class="speed-boundary">2.0x</span>
       <input v-model.number="pendingPlaybackRate" class="speed-number" type="number" min="0.5" max="2" step="0.05" aria-label="播放速度数值" @input="handlePlaybackRateInput" />
-      <button class="speed-editor-apply" title="应用变速" @click="applyPlaybackRate">
+      <button class="speed-editor-apply" title="应用变速" @click="applyPlaybackRate()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 20V4m0 0L5 11m7-7l7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </div>
