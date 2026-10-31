@@ -1,6 +1,7 @@
 <script setup>
 import { openCheckout } from '@/utils/openCheckout'
 import { ref, computed, onMounted, watch } from 'vue'
+import { ArrowRight, ArrowRightLeft, ArrowUpRight, Check, CheckCircle2, CircleAlert, Clock3, Coins, Info, Layers, LoaderCircle, PackageOpen, Plus, ShoppingCart, Wallet, X } from '@lucide/vue'
 import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints } from '@/utils/format'
 import { getPackageDiscounts } from '@/utils/packageDiscounts'
@@ -668,198 +669,105 @@ defineExpose({ openConvertModal, openRechargeModal })
 <template>
   <Transition name="modal-fade">
     <div v-if="visible || showConvertModal || showRechargeModal" class="package-modal-overlay" :class="{ 'account-action-overlay': !visible }" @click.self="close">
-      <div v-if="visible" class="package-modal-container">
-        <!-- 头部 -->
+      <div v-if="visible" class="package-modal-container" role="dialog" aria-modal="true" aria-labelledby="package-modal-title">
         <div class="package-modal-header">
           <div class="header-left">
-            <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="9" cy="21" r="1"/>
-              <circle cx="20" cy="21" r="1"/>
-              <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-            </svg>
-            <h2 class="header-title">{{ t('packages.purchaseTitle') }}</h2>
+            <span class="header-icon-wrap"><ShoppingCart class="header-icon" aria-hidden="true" /></span>
+            <div>
+              <h2 id="package-modal-title" class="header-title">{{ t('packages.purchaseTitle') }}</h2>
+              <p class="header-subtitle">{{ t('packages.purchaseSubtitle') }}</p>
+            </div>
           </div>
-          <button class="close-btn" @click="close">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="18" y1="6" x2="6" y2="18"/>
-              <line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </button>
+          <button type="button" class="close-btn" :aria-label="t('common.close')" @click="close"><X aria-hidden="true" /></button>
         </div>
 
-        <!-- 可滚动的内容区域 -->
         <div class="package-modal-body">
-          <!-- 当前套餐信息 -->
           <div v-if="activePackage" class="active-package-banner">
-            <div class="banner-content">
-              <div class="banner-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                  <polyline points="22 4 12 14.01 9 11.01"/>
-                </svg>
-              </div>
-              <div class="banner-info">
-                <div class="banner-label">当前套餐</div>
-                <div class="banner-name">{{ activePackage.package_name }}</div>
-              </div>
-              <div class="banner-stats">
-                <div class="stat-item">
-                  <div class="stat-label">并发</div>
-                  <div class="stat-value">{{ activePackage.concurrent_limit }}</div>
-                </div>
-                <div class="stat-divider"></div>
-                <div class="stat-item">
-                  <div class="stat-label">剩余</div>
-                  <div class="stat-value">{{ formatRemainingTime(activePackage.expires_at) }}</div>
-                </div>
-              </div>
+            <CheckCircle2 class="banner-icon" aria-hidden="true" />
+            <div class="banner-info">
+              <span class="banner-label">{{ t('packages.currentPlan') }}</span>
+              <strong class="banner-name">{{ activePackage.package_name }}</strong>
+            </div>
+            <div class="banner-stats">
+              <span>并发 <strong>{{ activePackage.concurrent_limit }}</strong></span>
+              <span>剩余 <strong>{{ formatRemainingTime(activePackage.expires_at) }}</strong></span>
             </div>
           </div>
 
-          <!-- 积分与余额信息区 -->
-          <div class="assets-section">
-            <!-- 第一行：套餐积分 + 永久积分 -->
+          <section class="assets-section" :aria-label="t('packages.pointsOverview')">
             <div class="assets-row">
               <div class="asset-card">
-                <div class="asset-icon package-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                  </svg>
-                </div>
-                <div class="asset-info">
+                <div class="asset-heading">
+                  <span class="asset-icon"><Layers aria-hidden="true" /></span>
                   <span class="asset-label">{{ t('user.packagePoints') }}</span>
-                  <span class="asset-value">{{ formatPoints(user?.package_points || 0) }}</span>
-                  <span class="asset-hint">{{ t('packages.expiresWithPackage') }}</span>
+                </div>
+                <div class="asset-value">{{ formatPoints(user?.package_points || 0) }}</div>
+                <div class="asset-footer"><span class="asset-hint">{{ t('packages.expiresWithPackage') }}</span></div>
+              </div>
+              <div class="asset-card">
+                <div class="asset-heading">
+                  <span class="asset-icon"><Coins aria-hidden="true" /></span>
+                  <span class="asset-label">{{ t('user.permanentPoints') }}</span>
+                </div>
+                <div class="asset-value">{{ formatPoints(user?.points || 0) }}</div>
+                <div class="asset-footer">
+                  <span class="asset-hint">{{ t('packages.neverExpires') }}</span>
+                  <button type="button" class="asset-action-btn" @click.stop="openTransferPointsModal"><ArrowUpRight aria-hidden="true" />{{ t('packages.transfer') }}</button>
                 </div>
               </div>
               <div class="asset-card">
-                <div class="asset-icon permanent-icon">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                  </svg>
+                <div class="asset-heading">
+                  <span class="asset-icon"><Wallet aria-hidden="true" /></span>
+                  <span class="asset-label">{{ t('packages.accountBalance') }}</span>
                 </div>
-                <div class="asset-info">
-                  <span class="asset-label">{{ t('user.permanentPoints') }}</span>
-                  <span class="asset-value permanent">{{ formatPoints(user?.points || 0) }}</span>
-                  <span class="asset-hint">{{ t('packages.neverExpires') }}</span>
+                <div class="asset-value">{{ formatMoney(user?.balance || 0) }}</div>
+                <div class="asset-footer balance-actions">
+                  <button type="button" class="asset-action-btn" @click.stop="openConvertModal"><ArrowRightLeft aria-hidden="true" />{{ t('packages.convertToPoints') }}</button>
+                  <button type="button" class="recharge-entry-btn" @click.stop.prevent="openRechargeModal"><Plus aria-hidden="true" />{{ t('packages.rechargeBtn') }}</button>
                 </div>
-                <button type="button" class="asset-action-btn transfer-btn" @click.stop="openTransferPointsModal">
-                  {{ t('packages.transfer') }}
-                </button>
               </div>
             </div>
+            <p class="convert-hint"><Info aria-hidden="true" /><span>{{ t('packages.convertHint') }}</span></p>
+          </section>
 
-            <!-- 第二行：余额 + 操作按钮 -->
-            <div class="balance-banner">
-              <div class="balance-content">
-                <svg class="balance-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="1" y="4" width="22" height="16" rx="2" ry="2"/>
-                  <line x1="1" y1="10" x2="23" y2="10"/>
-                </svg>
-                <span class="balance-label">{{ t('packages.accountBalance') }}</span>
-                <span class="balance-value">{{ formatMoney(user?.balance || 0) }}</span>
-              </div>
-              <div class="balance-actions">
-                <button type="button" class="asset-action-btn convert-btn" @click.stop="openConvertModal">
-                  {{ t('packages.convertToPoints') }}
-                </button>
-                <button type="button" class="recharge-entry-btn" @click.stop.prevent="openRechargeModal">
-                  {{ t('packages.rechargeBtn') }}
-                </button>
-              </div>
-            </div>
-            <div class="convert-hint">{{ t('packages.convertHint') }}</div>
+          <div v-if="error" class="error-banner" role="alert"><CircleAlert class="error-icon" aria-hidden="true" /><span>{{ error }}</span></div>
+
+          <div class="plans-heading">
+            <h3>{{ t('packages.choosePlan') }}</h3>
+            <span>{{ t('packages.choosePlanHint') }}</span>
           </div>
-
-          <!-- 错误提示 -->
-          <div v-if="error" class="error-banner">
-            <svg class="error-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-            <span>{{ error }}</span>
-          </div>
-
-          <!-- 套餐列表 -->
-          <div v-if="loading" class="loading-state">
-            <div class="loading-spinner"></div>
+          <div v-if="loading" class="loading-state" role="status">
+            <LoaderCircle class="loading-spinner" aria-hidden="true" />
             <p>{{ t('packages.loadingPackages') }}</p>
           </div>
-
           <div v-else-if="packages.length === 0" class="empty-state">
-            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
+            <PackageOpen class="empty-icon" aria-hidden="true" />
             <p>{{ t('packages.noPackages') }}</p>
           </div>
-
           <div v-else class="packages-grid">
-            <div
-              v-for="pkg in packages"
-              :key="pkg.id"
-              class="package-card"
-              :class="{ 'is-active': activePackage && activePackage.package_id === pkg.id }"
-            >
-              <!-- 推荐标签 -->
-              <div v-if="pkg.type === 'monthly'" class="package-badge">推荐</div>
-
-              <!-- 套餐类型 -->
-              <div class="package-type">{{ getPackageTypeLabel(pkg.type) }}</div>
-
-              <!-- 套餐名称 -->
-              <div class="package-name">{{ pkg.name }}</div>
-
-              <!-- 套餐描述 -->
-              <div class="package-description">{{ pkg.description }}</div>
-
-              <!-- 价格 -->
+            <div v-for="pkg in packages" :key="pkg.id" class="package-card" :class="{ 'is-active': activePackage && activePackage.package_id === pkg.id }">
+              <div class="package-card-heading">
+                <span class="package-type">{{ getPackageTypeLabel(pkg.type) }}</span>
+                <span v-if="pkg.type === 'monthly'" class="package-badge">{{ t('packages.recommended') }}</span>
+              </div>
+              <h4 class="package-name">{{ pkg.name }}</h4>
+              <p class="package-description">{{ pkg.description }}</p>
               <div class="package-price">
                 <span class="price-symbol">{{ currencySymbol }}</span>
                 <span class="price-value">{{ (pkg.price / 100).toFixed(0) }}</span>
               </div>
-
-              <!-- 特性列表 -->
               <div class="package-features">
-                <div class="feature-item">
-                  <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                  <span>到账积分: {{ formatPoints(pkg.points) }}积分（过期清零）</span>
-                </div>
-                <div class="feature-item">
-                  <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                  <span>并发限制: {{ pkg.concurrent_limit }}</span>
-                </div>
-                <div class="feature-item">
-                  <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                  <span>有效期: {{ pkg.duration_days }}天</span>
-                </div>
-                <div v-for="discount in getPackageDiscounts(pkg)" :key="discount.type" class="feature-item">
-                  <svg class="feature-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                  <span>{{ discount.text }}</span>
-                </div>
+                <div class="feature-item"><Coins class="feature-icon" aria-hidden="true" /><span>到账积分：<strong>{{ formatPoints(pkg.points) }}</strong> <span class="feature-note">（过期清零）</span></span></div>
+                <div class="feature-item"><Layers class="feature-icon" aria-hidden="true" /><span>并发限制：<strong>{{ pkg.concurrent_limit }}</strong></span></div>
+                <div class="feature-item"><Clock3 class="feature-icon" aria-hidden="true" /><span>有效期：<strong>{{ pkg.duration_days }}</strong> 天</span></div>
+                <div v-for="discount in getPackageDiscounts(pkg)" :key="discount.type" class="feature-item"><Check class="feature-icon" aria-hidden="true" /><span>{{ discount.text }}</span></div>
               </div>
-
-              <!-- 购买按钮 -->
-              <button
-                class="purchase-btn"
-                :class="{ 'is-current': isCurrentPackage(pkg.type) }"
-                :disabled="isDowngrade(pkg.type) && !isCurrentPackage(pkg.type)"
-                @click="purchasePackage(pkg)"
-              >
+              <button type="button" class="purchase-btn" :class="{ 'is-current': isCurrentPackage(pkg.type) }" :disabled="isDowngrade(pkg.type) && !isCurrentPackage(pkg.type)" @click="purchasePackage(pkg)">
                 <span v-if="isCurrentPackage(pkg.type)">{{ t('packages.renewNow') }}</span>
                 <span v-else-if="isDowngrade(pkg.type)">{{ t('packages.cannotDowngrade') }}</span>
                 <span v-else-if="canUpgrade(pkg.type)">{{ t('packages.upgradePackage') }}</span>
                 <span v-else>{{ t('packages.buyNow') }}</span>
+                <ArrowRight v-if="!isDowngrade(pkg.type)" aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -1417,68 +1325,6 @@ defineExpose({ openConvertModal, openRechargeModal })
 </template>
 
 <style scoped>
-/* 弹窗遮罩 */
-.package-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  padding: 20px;
-}
-
-/* 弹窗容器 */
-.package-modal-overlay.account-action-overlay {
-  background: transparent;
-  backdrop-filter: none;
-}
-
-.package-modal-container {
-  background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
-  border: 1px solid #2a2a2a;
-  border-radius: 16px;
-  width: 100%;
-  max-width: 1200px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
-}
-
-/* 头部 */
-.package-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px 32px;
-  border-bottom: 1px solid #2a2a2a;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-icon {
-  width: 24px;
-  height: 24px;
-  color: #ffffff;
-}
-
-.header-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #ffffff;
-  margin: 0;
-}
-
 .close-btn {
   width: 36px;
   height: 36px;
@@ -1504,400 +1350,6 @@ defineExpose({ openConvertModal, openRechargeModal })
   height: 18px;
 }
 
-/* 当前套餐横幅 */
-.active-package-banner {
-  margin: 24px 32px;
-  padding: 20px;
-  background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
-  border: 1px solid #3a3a3a;
-  border-radius: 12px;
-}
-
-.banner-content {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.banner-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.banner-icon svg {
-  width: 24px;
-  height: 24px;
-  color: #1a1a1a;
-}
-
-.banner-info {
-  flex: 1;
-}
-
-.banner-label {
-  font-size: 12px;
-  color: #888888;
-  margin-bottom: 4px;
-}
-
-.banner-name {
-  font-size: 18px;
-  font-weight: 600;
-  color: #ffffff;
-}
-
-.banner-stats {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.stat-item {
-  text-align: center;
-}
-
-.stat-label {
-  font-size: 11px;
-  color: #888888;
-  margin-bottom: 4px;
-}
-
-.stat-value {
-  font-size: 16px;
-  font-weight: 600;
-  color: #ffffff;
-}
-
-.stat-divider {
-  width: 1px;
-  height: 32px;
-  background: #3a3a3a;
-}
-
-/* 余额横幅 */
-.balance-banner {
-  margin: 0 32px 0;
-  padding: 16px 20px;
-  background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
-  border: 1px solid #3a3a3a;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.convert-hint {
-  margin: 4px 32px 24px;
-  font-size: 12px;
-  color: #888888;
-  text-align: right;
-}
-
-.balance-content {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.balance-icon {
-  width: 20px;
-  height: 20px;
-  color: #ffffff;
-}
-
-.balance-label {
-  font-size: 14px;
-  color: #888888;
-}
-
-.balance-value {
-  font-size: 20px;
-  font-weight: 600;
-  color: #ffffff;
-}
-
-.recharge-entry-btn {
-  padding: 6px 14px;
-  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
-  border: none;
-  border-radius: 6px;
-  color: #1a1a1a;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 10;
-}
-
-.recharge-entry-btn:hover {
-  background: linear-gradient(135deg, #e0e0e0 0%, #c0c0c0 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
-}
-
-/* 错误横幅 */
-.error-banner {
-  margin: 0 32px 24px;
-  padding: 12px 16px;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #ef4444;
-  font-size: 14px;
-}
-
-.error-icon {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-}
-
-/* 弹窗主体 */
-.package-modal-body {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 16px 32px 32px;
-  /* 优化滚动体验 */
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
-
-.package-modal-body::-webkit-scrollbar {
-  width: 6px;
-}
-
-.package-modal-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.package-modal-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-.package-modal-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* 加载状态 */
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  gap: 16px;
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid #2a2a2a;
-  border-top-color: #ffffff;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.loading-state p {
-  color: #888888;
-  font-size: 14px;
-}
-
-/* 空状态 */
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  gap: 16px;
-}
-
-.empty-icon {
-  width: 48px;
-  height: 48px;
-  color: #3a3a3a;
-}
-
-.empty-state p {
-  color: #888888;
-  font-size: 14px;
-}
-
-/* 套餐网格 */
-.packages-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 20px;
-  padding-top: 12px;
-  overflow: visible;
-}
-
-/* 套餐卡片 */
-.package-card {
-  position: relative;
-  background: linear-gradient(180deg, #1f1f1f 0%, #1a1a1a 100%);
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
-  padding: 24px;
-  transition: all 0.3s ease;
-  overflow: visible;
-}
-
-.package-card:hover {
-  border-color: #3a3a3a;
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-}
-
-.package-card.is-active {
-  border-color: #ffffff;
-  background: linear-gradient(180deg, #2a2a2a 0%, #1f1f1f 100%);
-}
-
-/* 推荐标签 */
-.package-badge {
-  position: absolute;
-  top: -10px;
-  right: 20px;
-  padding: 4px 12px;
-  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
-  color: #1a1a1a;
-  font-size: 11px;
-  font-weight: 600;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-/* 套餐类型 */
-.package-type {
-  font-size: 12px;
-  color: #888888;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
-}
-
-/* 套餐名称 */
-.package-name {
-  font-size: 20px;
-  font-weight: 600;
-  color: #ffffff;
-  margin-bottom: 8px;
-}
-
-/* 套餐描述 */
-.package-description {
-  font-size: 13px;
-  color: #888888;
-  margin-bottom: 16px;
-  min-height: 36px;
-}
-
-/* 价格 */
-.package-price {
-  display: flex;
-  align-items: baseline;
-  margin-bottom: 20px;
-}
-
-.price-symbol {
-  font-size: 20px;
-  color: #ffffff;
-  margin-right: 4px;
-}
-
-.price-value {
-  font-size: 36px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-/* 特性列表 */
-.package-features {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-.feature-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: #cccccc;
-}
-
-.feature-icon {
-  width: 16px;
-  height: 16px;
-  color: #ffffff;
-  flex-shrink: 0;
-}
-
-/* 购买按钮 */
-.purchase-btn {
-  width: 100%;
-  padding: 12px;
-  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
-  border: none;
-  border-radius: 8px;
-  color: #1a1a1a;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.purchase-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #e0e0e0 0%, #c0c0c0 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
-}
-
-.purchase-btn:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.purchase-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.package-card.is-active .purchase-btn {
-  background: linear-gradient(135deg, #ffffff 0%, #e0e0e0 100%);
-  color: #1a1a1a;
-}
-
-.purchase-btn.is-current {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: #ffffff;
-}
-
-.purchase-btn.is-current:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
-}
-
 /* 弹窗动画 */
 .modal-fade-enter-active,
 .modal-fade-leave-active {
@@ -1914,66 +1366,7 @@ defineExpose({ openConvertModal, openRechargeModal })
   transform: scale(0.95) translateY(20px);
 }
 
-/* 滚动条样式 */
-.package-modal-body::-webkit-scrollbar {
-  width: 8px;
-}
-
-.package-modal-body::-webkit-scrollbar-track {
-  background: #1a1a1a;
-  border-radius: 4px;
-}
-
-.package-modal-body::-webkit-scrollbar-thumb {
-  background: #3a3a3a;
-  border-radius: 4px;
-}
-
-.package-modal-body::-webkit-scrollbar-thumb:hover {
-  background: #4a4a4a;
-}
-
 /* 响应式 */
-@media (max-width: 768px) {
-  .package-modal-container {
-    max-width: 100%;
-    max-height: 100vh;
-    border-radius: 0;
-  }
-
-  .package-modal-header {
-    padding: 20px;
-  }
-
-  .active-package-banner,
-  .balance-banner,
-  .error-banner {
-    margin-left: 20px;
-    margin-right: 20px;
-  }
-
-  .convert-hint {
-    margin-left: 20px;
-    margin-right: 20px;
-  }
-
-  .package-modal-body {
-    padding: 0 20px 20px;
-  }
-
-  .packages-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .banner-content {
-    flex-wrap: wrap;
-  }
-
-  .banner-stats {
-    width: 100%;
-    justify-content: space-around;
-  }
-}
 
 /* ========== 购买确认模态框样式 ========== */
 .purchase-modal-overlay {
@@ -2252,10 +1645,6 @@ defineExpose({ openConvertModal, openRechargeModal })
 .balance-hint {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.35);
-}
-
-.price-value {
-  font-weight: 500;
 }
 
 /* 应付金额 */
@@ -2733,43 +2122,6 @@ defineExpose({ openConvertModal, openRechargeModal })
 
 /* 矮屏幕适配 - 确保支付按钮可见 */
 @media (max-height: 700px) {
-  .package-modal-container {
-    max-height: calc(100vh - 40px);
-  }
-  
-  .package-modal-header {
-    padding: 16px 24px;
-  }
-  
-  .header-title {
-    font-size: 18px;
-  }
-  
-  .package-modal-body {
-    padding: 0 24px 24px;
-  }
-  
-  .active-package-banner,
-  .balance-banner {
-    padding: 14px 18px;
-    margin-bottom: 16px;
-  }
-  
-  .packages-grid {
-    gap: 14px;
-  }
-  
-  .package-card {
-    padding: 18px;
-  }
-  
-  .package-name {
-    font-size: 16px;
-  }
-  
-  .package-description {
-    font-size: 12px;
-  }
   
   .package-price-display {
     font-size: 22px;
@@ -2788,26 +2140,6 @@ defineExpose({ openConvertModal, openRechargeModal })
 }
 
 @media (max-height: 550px) {
-  .package-modal-container {
-    max-height: 100vh;
-    border-radius: 12px;
-  }
-  
-  .package-modal-header {
-    padding: 12px 20px;
-  }
-  
-  .package-modal-body {
-    padding: 0 16px 16px;
-  }
-  
-  .packages-grid {
-    gap: 10px;
-  }
-  
-  .package-card {
-    padding: 14px;
-  }
   
   .package-price-display {
     font-size: 20px;
@@ -2823,144 +2155,29 @@ defineExpose({ openConvertModal, openRechargeModal })
     padding: 16px;
     gap: 14px;
   }
-  
+
   .benefits-grid {
     gap: 10px;
   }
-  
+
   .benefit-item {
     padding: 10px;
   }
-  
+
   .price-summary {
     padding: 14px;
   }
-  
+
   .purchase-modal-footer {
     padding: 16px;
     gap: 10px;
   }
-  
+
   .btn-cancel,
   .btn-confirm {
     padding: 10px 20px;
     font-size: 14px;
   }
-}
-
-/* ========== 积分与余额信息区 ========== */
-.assets-section {
-  margin: 0 32px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.assets-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.asset-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
-  background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%);
-  border: 1px solid #3a3a3a;
-  border-radius: 12px;
-  position: relative;
-}
-
-.asset-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.asset-icon svg {
-  width: 18px;
-  height: 18px;
-}
-
-.asset-icon.package-icon {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.asset-icon.permanent-icon {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.asset-info {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  flex: 1;
-  min-width: 0;
-}
-
-.asset-label {
-  font-size: 11px;
-  color: #888888;
-}
-
-.asset-value {
-  font-size: 18px;
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1.2;
-}
-
-.asset-value.permanent {
-  color: #ffffff;
-}
-
-.asset-hint {
-  font-size: 10px;
-  color: #666666;
-}
-
-.asset-action-btn {
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  white-space: nowrap;
-  flex-shrink: 0;
-  border: none;
-}
-
-.asset-action-btn.transfer-btn {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.asset-action-btn.transfer-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.asset-action-btn.convert-btn {
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.asset-action-btn.convert-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-}
-
-.balance-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
 }
 
 /* ========== 划转弹窗样式 ========== */
@@ -3526,6 +2743,209 @@ defineExpose({ openConvertModal, openRechargeModal })
     font-size: 14px;
   }
 }
+
+/* 套餐购买：使用画布主题变量统一昼夜模式。 */
+.package-modal-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 24px;
+  background: rgba(0, 0, 0, .55);
+  backdrop-filter: blur(6px);
+}
+.package-modal-overlay.account-action-overlay { background: transparent; backdrop-filter: none; }
+.package-modal-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1040px;
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+  border: 1px solid var(--canvas-border-default);
+  border-radius: 16px;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
+  box-shadow: var(--canvas-shadow-lg);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.package-modal-header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--canvas-border-subtle);
+}
+.header-left { display: flex; flex: 1; align-items: center; gap: 12px; min-width: 0; }
+.header-left > div { min-width: 0; }
+.header-icon-wrap {
+  display: grid;
+  flex: 0 0 36px;
+  place-items: center;
+  height: 36px;
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: 10px;
+  background: var(--canvas-bg-secondary);
+}
+.header-icon { width: 18px; height: 18px; stroke-width: 1.75; }
+.header-title { margin: 0; color: var(--canvas-text-primary); font-size: 18px; font-weight: 600; line-height: 1.4; }
+.header-subtitle { margin: 3px 0 0; color: var(--canvas-text-secondary); font-size: 12px; }
+.package-modal-container .close-btn {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-color: var(--canvas-border-subtle);
+  background: transparent;
+  color: var(--canvas-text-secondary);
+}
+.package-modal-container .close-btn:hover { background: var(--canvas-bg-secondary); border-color: var(--canvas-border-active); color: var(--canvas-text-primary); }
+.package-modal-container .close-btn svg { width: 16px; height: 16px; stroke-width: 1.75; }
+.package-modal-body { flex: 1; min-height: 0; padding: 20px 24px 24px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--canvas-scrollbar-thumb) transparent; }
+.package-modal-body::-webkit-scrollbar { width: 6px; }
+.package-modal-body::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--canvas-scrollbar-thumb); }
+.package-modal-body::-webkit-scrollbar-thumb:hover { background: var(--canvas-scrollbar-thumb-hover); }
+.active-package-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: 10px;
+  background: var(--canvas-bg-secondary);
+}
+.banner-icon { width: 20px; height: 20px; flex-shrink: 0; color: var(--canvas-text-secondary); stroke-width: 1.75; }
+.banner-info { display: flex; flex: 1; align-items: baseline; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.banner-label, .banner-stats { color: var(--canvas-text-secondary); font-size: 12px; }
+.banner-name { color: var(--canvas-text-primary); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.banner-stats { display: flex; flex-wrap: wrap; gap: 16px; }
+.banner-stats strong { margin-left: 4px; color: var(--canvas-text-primary); font-weight: 500; }
+.assets-section { margin: 0 0 24px; }
+.assets-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.asset-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 16px; border: 1px solid var(--canvas-border-subtle); border-radius: 12px; background: var(--canvas-bg-secondary); }
+.asset-heading { display: flex; align-items: center; gap: 8px; }
+.asset-icon { display: grid; place-items: center; width: 28px; height: 28px; flex-shrink: 0; border: 1px solid var(--canvas-border-subtle); border-radius: 8px; background: var(--canvas-bg-tertiary); color: var(--canvas-text-secondary); }
+.asset-icon svg { width: 16px; height: 16px; stroke-width: 1.75; }
+.asset-label { color: var(--canvas-text-secondary); font-size: 12px; }
+.asset-value { color: var(--canvas-text-primary); font-size: 24px; font-weight: 600; line-height: 1.25; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.asset-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; min-height: 30px; margin-top: auto; }
+.asset-hint { color: var(--canvas-text-secondary); font-size: 12px; }
+.balance-actions { justify-content: flex-start; }
+.asset-action-btn, .recharge-entry-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 5px 9px;
+  border: 1px solid var(--canvas-border-default);
+  border-radius: 6px;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  cursor: pointer;
+}
+.asset-action-btn svg, .recharge-entry-btn svg { width: 13px; height: 13px; stroke-width: 1.75; flex-shrink: 0; }
+.asset-action-btn:hover { background: var(--canvas-bg-secondary); border-color: var(--canvas-border-active); }
+.recharge-entry-btn { background: var(--canvas-text-primary); border-color: var(--canvas-text-primary); color: var(--canvas-bg-primary); }
+.recharge-entry-btn:hover { opacity: .85; }
+.convert-hint { display: flex; align-items: flex-start; gap: 7px; margin: 10px 0 0; color: var(--canvas-text-secondary); font-size: 12px; line-height: 1.6; }
+.convert-hint svg { width: 14px; height: 14px; margin-top: 2px; flex-shrink: 0; stroke-width: 1.75; }
+.plans-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.plans-heading h3 { margin: 0; color: var(--canvas-text-primary); font-size: 14px; font-weight: 600; }
+.plans-heading > span { color: var(--canvas-text-secondary); font-size: 12px; }
+.packages-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.package-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: 12px;
+  background: var(--canvas-bg-tertiary);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.package-card:hover { border-color: var(--canvas-border-active); box-shadow: var(--canvas-shadow-sm); }
+.package-card.is-active { border-color: var(--canvas-text-secondary); }
+.package-card-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 22px; margin-bottom: 8px; }
+.package-type { color: var(--canvas-text-secondary); font-size: 12px; }
+.package-badge { padding: 2px 7px; border: 1px solid var(--canvas-border-default); border-radius: 5px; background: var(--canvas-bg-secondary); color: var(--canvas-text-primary); font-size: 11px; font-weight: 500; }
+.package-name { margin: 0 0 6px; color: var(--canvas-text-primary); font-size: 16px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; }
+.package-description { min-height: 36px; margin: 0; color: var(--canvas-text-secondary); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.package-price { display: flex; align-items: baseline; gap: 3px; margin: 16px 0; color: var(--canvas-text-primary); font-variant-numeric: tabular-nums; }
+.price-symbol { font-size: 16px; font-weight: 500; }
+.price-value { font-size: 32px; font-weight: 600; line-height: 1.2; }
+.package-features { display: flex; flex-direction: column; gap: 9px; margin-bottom: 20px; padding-top: 14px; border-top: 1px solid var(--canvas-border-subtle); }
+.feature-item { display: flex; align-items: flex-start; gap: 8px; color: var(--canvas-text-secondary); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.feature-icon { width: 15px; height: 15px; flex-shrink: 0; margin-top: 2px; color: var(--canvas-text-secondary); stroke-width: 1.75; }
+.feature-item strong { color: var(--canvas-text-primary); font-weight: 500; }
+.feature-note { font-size: 12px; }
+.purchase-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  margin-top: auto;
+  padding: 8px 12px;
+  border: 1px solid var(--canvas-text-primary);
+  border-radius: 8px;
+  background: var(--canvas-text-primary);
+  color: var(--canvas-bg-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 18px;
+  cursor: pointer;
+}
+.purchase-btn svg { width: 14px; height: 14px; stroke-width: 1.75; }
+.purchase-btn:hover:not(:disabled) { opacity: .85; }
+.purchase-btn.is-current { border-color: var(--canvas-border-default); background: var(--canvas-bg-secondary); color: var(--canvas-text-primary); }
+.purchase-btn:disabled { border-color: var(--canvas-border-subtle); background: var(--canvas-bg-secondary); color: var(--canvas-text-secondary); opacity: .55; cursor: not-allowed; }
+.package-modal-container button:focus-visible { outline: 2px solid var(--canvas-text-secondary); outline-offset: 3px; }
+.error-banner { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 16px; padding: 10px 12px; border: 1px solid var(--canvas-accent-error); border-radius: 8px; color: var(--canvas-accent-error); font-size: 12px; overflow-wrap: anywhere; }
+.error-icon { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; }
+.loading-state, .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 200px; padding: 40px 20px; color: var(--canvas-text-secondary); }
+.loading-state p, .empty-state p { margin: 0; font-size: 13px; }
+.loading-spinner { width: 24px; height: 24px; stroke-width: 1.75; animation: spin .8s linear infinite; }
+.empty-icon { width: 32px; height: 32px; stroke-width: 1.5; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (max-width: 900px) {
+  .packages-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .asset-card { padding: 12px; }
+  .asset-footer { align-items: flex-start; }
+}
+@media (max-width: 600px) {
+  .package-modal-overlay { padding: 12px; }
+  .package-modal-container { max-height: calc(100dvh - 24px); border-radius: 12px; }
+  .package-modal-header { padding: 16px; }
+  .package-modal-body { padding: 16px; }
+  .header-title { font-size: 16px; }
+  .header-subtitle { font-size: 12px; }
+  .assets-row, .packages-grid { grid-template-columns: 1fr; }
+  .asset-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 12px; }
+  .asset-value { text-align: right; font-size: 22px; }
+  .asset-footer { grid-column: 1 / -1; min-height: 0; }
+  .balance-actions { justify-content: flex-end; }
+  .active-package-banner { flex-wrap: wrap; padding: 12px; }
+  .banner-stats { width: 100%; padding-left: 32px; }
+  .plans-heading { align-items: flex-start; flex-direction: column; }
+}
+@media (max-height: 600px) {
+  .package-modal-overlay { padding: 12px; }
+  .package-modal-container { max-height: calc(100dvh - 24px); }
+  .package-modal-header { padding-top: 12px; padding-bottom: 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .loading-spinner { animation: none; } .package-card { transition: none; } }
+
 </style>
 
 <!-- 白昼模式样式（非 scoped） -->
@@ -3900,35 +3320,6 @@ defineExpose({ openConvertModal, openRechargeModal })
   cursor: not-allowed;
 }
 
-/* ========================================
-   PackageModal 白昼模式样式适配
-   ======================================== */
-
-/* 主遮罩层 */
-html.canvas-theme-light.canvas-theme-light .package-modal-overlay.package-modal-overlay {
-  background: rgba(0, 0, 0, 0.4) !important;
-}
-
-/* 主容器 */
-html.canvas-theme-light.canvas-theme-light .package-modal-container {
-  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
-  border-color: rgba(0, 0, 0, 0.1) !important;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.15) !important;
-}
-
-/* 头部 */
-html.canvas-theme-light.canvas-theme-light .package-modal-header {
-  border-bottom-color: rgba(0, 0, 0, 0.08) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .header-icon {
-  color: #1c1917 !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .header-title {
-  color: #1c1917 !important;
-}
-
 html.canvas-theme-light.canvas-theme-light .close-btn {
   border-color: rgba(0, 0, 0, 0.1) !important;
   color: rgba(0, 0, 0, 0.5) !important;
@@ -3938,175 +3329,6 @@ html.canvas-theme-light.canvas-theme-light .close-btn:hover {
   background: rgba(0, 0, 0, 0.05) !important;
   border-color: rgba(0, 0, 0, 0.15) !important;
   color: #1c1917 !important;
-}
-
-/* 当前套餐横幅 */
-html.canvas-theme-light.canvas-theme-light .active-package-banner {
-  background: rgba(0, 0, 0, 0.03) !important;
-  border-color: rgba(0, 0, 0, 0.1) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .banner-icon {
-  background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .banner-icon svg {
-  color: #fff !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .banner-label {
-  color: rgba(0, 0, 0, 0.5) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .banner-name {
-  color: #1c1917 !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .stat-label {
-  color: rgba(0, 0, 0, 0.5) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .stat-value {
-  color: #1c1917 !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .stat-divider {
-  background: rgba(0, 0, 0, 0.1) !important;
-}
-
-/* 余额横幅 */
-html.canvas-theme-light.canvas-theme-light .balance-banner {
-  background: rgba(0, 0, 0, 0.03) !important;
-  border-color: rgba(0, 0, 0, 0.08) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .balance-icon {
-  color: #1c1917 !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .balance-label {
-  color: rgba(0, 0, 0, 0.55) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .balance-value {
-  color: #1c1917 !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .convert-hint {
-  color: rgba(0, 0, 0, 0.45) !important;
-}
-
-/* 错误横幅 */
-html.canvas-theme-light.canvas-theme-light .error-banner {
-  background: rgba(239, 68, 68, 0.08) !important;
-  border-color: rgba(239, 68, 68, 0.2) !important;
-  color: #dc2626 !important;
-}
-
-/* 弹窗主体 */
-html.canvas-theme-light.canvas-theme-light .package-modal-body {
-  scrollbar-color: rgba(0, 0, 0, 0.15) transparent !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .package-modal-body::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.02) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .package-modal-body::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.12) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .package-modal-body::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2) !important;
-}
-
-/* 加载状态 */
-html.canvas-theme-light.canvas-theme-light .loading-spinner {
-  border-color: rgba(0, 0, 0, 0.1) !important;
-  border-top-color: #1c1917 !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .loading-state p {
-  color: rgba(0, 0, 0, 0.5) !important;
-}
-
-/* 空状态 */
-html.canvas-theme-light.canvas-theme-light .empty-icon {
-  color: rgba(0, 0, 0, 0.2) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .empty-state p {
-  color: rgba(0, 0, 0, 0.5) !important;
-}
-
-/* 套餐卡片 */
-html.canvas-theme-light.canvas-theme-light .package-card {
-  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%) !important;
-  border-color: rgba(0, 0, 0, 0.1) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .package-card:hover {
-  border-color: rgba(0, 0, 0, 0.15) !important;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .package-card.is-active {
-  border-color: #1c1917 !important;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02) 0%, #ffffff 100%) !important;
-}
-
-/* 推荐标签 */
-html.canvas-theme-light.canvas-theme-light .package-badge {
-  background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
-  color: #fff !important;
-}
-
-/* 套餐信息 */
-html.canvas-theme-light.canvas-theme-light .package-type {
-  color: rgba(0, 0, 0, 0.45) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .package-name {
-  color: #1c1917 !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .package-description {
-  color: rgba(0, 0, 0, 0.55) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .price-symbol,
-html.canvas-theme-light.canvas-theme-light .price-value {
-  color: #1c1917 !important;
-}
-
-/* 特性列表 */
-html.canvas-theme-light.canvas-theme-light .feature-item {
-  color: rgba(0, 0, 0, 0.7) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .feature-icon {
-  color: #57534e !important;
-}
-
-/* 购买按钮 */
-html.canvas-theme-light.canvas-theme-light .purchase-btn {
-  background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%) !important;
-  color: #fff !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .purchase-btn:hover:not(:disabled) {
-  background: linear-gradient(135deg, #1d4ed8 0%, #4338ca 100%) !important;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .purchase-btn.is-current {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
-  color: #fff !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .purchase-btn.is-current:hover {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%) !important;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3) !important;
 }
 
 /* ========== 购买确认弹窗 ========== */
@@ -4425,18 +3647,6 @@ html.canvas-theme-light.canvas-theme-light .waiting-btn-ghost:hover {
   color: rgba(0, 0, 0, 0.7) !important;
 }
 
-/* ========== 充值按钮白昼模式 ========== */
-html.canvas-theme-light.canvas-theme-light .recharge-entry-btn {
-  background: linear-gradient(135deg, #1c1917 0%, #44403c 100%) !important;
-  color: #ffffff !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .recharge-entry-btn:hover {
-  background: linear-gradient(135deg, #292524 0%, #57534e 100%) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
-}
-
 /* ========== 充值弹窗白昼模式 ========== */
 html.canvas-theme-light.canvas-theme-light .recharge-modal-overlay {
   background: rgba(0, 0, 0, 0.5) !important;
@@ -4601,46 +3811,6 @@ html.canvas-theme-light.canvas-theme-light .confirm-recharge-btn {
 html.canvas-theme-light.canvas-theme-light .confirm-recharge-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #292524 0%, #57534e 100%) !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2) !important;
-}
-
-/* ========== 积分资产区白昼模式 ========== */
-html.canvas-theme-light.canvas-theme-light .asset-card {
-  background: rgba(0, 0, 0, 0.02) !important;
-  border-color: rgba(0, 0, 0, 0.08) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .asset-label {
-  color: rgba(0, 0, 0, 0.5) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .asset-value {
-  color: #1c1917 !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .asset-value.permanent {
-  color: #1c1917 !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .asset-hint {
-  color: rgba(0, 0, 0, 0.4) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .asset-action-btn.transfer-btn {
-  background: rgba(0, 0, 0, 0.06) !important;
-  color: #57534e !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .asset-action-btn.transfer-btn:hover {
-  background: rgba(0, 0, 0, 0.1) !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .asset-action-btn.convert-btn {
-  background: rgba(0, 0, 0, 0.06) !important;
-  color: #57534e !important;
-}
-
-html.canvas-theme-light.canvas-theme-light .asset-action-btn.convert-btn:hover {
-  background: rgba(0, 0, 0, 0.1) !important;
 }
 
 /* ========== 划转/转让弹窗白昼模式 ========== */

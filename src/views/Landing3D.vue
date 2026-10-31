@@ -152,6 +152,7 @@
             <div class="toggle-indicator" :style="{ transform: authMode === 'register' ? 'translateX(100%)' : 'translateX(0)' }"></div>
           </div>
 
+          <WechatLoginButton v-if="authMode === 'login' && !resetMode" />
           <!-- 密码重置标题 -->
           <div v-if="resetMode && !phoneFormMode" class="reset-header">
             <h3 class="reset-title">🔑 重置密码</h3>
@@ -357,6 +358,7 @@
 
 <script setup>
 import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
+import WechatLoginButton from '@/components/auth/WechatLoginButton.vue'
 import PhoneCountrySelect from '@/components/auth/PhoneCountrySelect.vue'
 import { useSmsAuth } from '@/composables/useSmsAuth'
 import { watch, ref, computed, onMounted, onUnmounted } from 'vue'

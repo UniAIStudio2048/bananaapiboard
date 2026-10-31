@@ -913,7 +913,7 @@ export default {
       imageToImage: '图生图',
       imageToVideo: '图生视频',
       changeBackground: '图片换背景',
-      firstFrameVideo: '首帧图生视频',
+      firstFrameVideo: '首帧生成视频',
       prompt: '提示词',
       refImage: '参考图',
       uploadFailed: '图片上传失败，请重试',
@@ -929,9 +929,10 @@ export default {
     },
     // 视频节点快捷操作
     videoNode: {
+      uploadVideo: '上传视频',
       textToVideo: '文生视频',
       imageToVideo: '图生视频',
-      keyframesToVideo: '首尾帧生视频',
+      keyframesToVideo: '首尾帧生成视频',
       motionImitation: '动作模仿',
       videoExtend: '视频延长',
       videoLoop: '视频循环',
@@ -966,11 +967,11 @@ export default {
     },
     // 文本节点快捷操作
     textNode: {
-      try: '尝试：',
-      writeContent: '自己编写内容',
-      textToVideo: '文字生视频',
+      try: '从这里开始',
+      writeContent: '编写文本',
+      textToVideo: '文生视频',
       imageDescribePrompt: '图片反推提示词',
-      textToMusic: '文字生音乐',
+      textToMusic: '文生音乐',
       promptEnhance: '提示词润色',
       imageReverse: '图片反推',
       videoReverse: '视频反推',
@@ -1196,6 +1197,9 @@ export default {
 
   // 套餐
   packages: {
+    purchaseSubtitle: '选择适合你的创作计划',
+    choosePlan: '选择套餐',
+    choosePlanHint: '按使用频率选择，灵活安排创作',
     title: '购买套餐',
     currentPlan: '当前套餐',
     noPlan: '暂无套餐',

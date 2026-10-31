@@ -239,6 +239,15 @@ watch(() => canvasStore.activeTabId, () => {
 
 // 历史记录面板
 const showHistoryPanel = ref(false)
+const historyPickerPosition = ref(null)
+
+watch(showHistoryPanel, visible => {
+  if (!visible) historyPickerPosition.value = null
+})
+
+watch(() => canvasStore.activeTabId, () => {
+  if (historyPickerPosition.value) closeHistoryPanel()
+})
 
 function closeLeftPanels() {
   showTemplates.value = false
@@ -895,8 +904,31 @@ function closeHistoryPanel() {
   showHistoryPanel.value = false
 }
 
+function openHistoryPicker(flowPosition = null) {
+  closeLeftPanels()
+  const { x, y, zoom = 1 } = canvasStore.viewport
+  historyPickerPosition.value = flowPosition ? { ...flowPosition } : {
+    x: (window.innerWidth / 2 - x) / zoom - 200,
+    y: (window.innerHeight / 2 - y) / zoom - 100
+  }
+  showHistoryPanel.value = true
+}
+
+async function handleHistorySelection(items) {
+  if (!historyPickerPosition.value || !items.length) return
+  const position = { ...historyPickerPosition.value }
+  items.forEach((item, index) => {
+    handleHistoryApply({ ...item, workflow_snapshot: null }, {
+      x: position.x + index * 460,
+      y: position.y
+    })
+  })
+  closeHistoryPanel()
+  await autoSaveWorkflow({ force: true, reason: 'history-picker' })
+}
+
 // 历史记录应用到画布（同时加载工作流节点）
-function handleHistoryApply(historyItem) {
+function handleHistoryApply(historyItem, insertPosition = null) {
   console.log('[Canvas] 应用历史记录:', historyItem)
   
   // 计算当前画布视口中心偏左的位置
@@ -908,7 +940,7 @@ function handleHistoryApply(historyItem) {
   const screenCenterY = window.innerHeight / 2
   
   // 将屏幕坐标转换为画布坐标，并偏左200px
-  const position = {
+  const position = insertPosition || {
     x: (screenCenterX - viewport.x) / zoom - 200,
     y: (screenCenterY - viewport.y) / zoom - 100
   }
@@ -1325,7 +1357,7 @@ async function autoSaveWorkflow(options = {}) {
       console.log(`[Canvas] 自动保存成功（更新, reason=${reason}）:`, currentTab.name)
     } else {
       // 🔧 新建工作流：创建草稿保存
-      if (workflowData.nodes.length >= 2) {
+      if (workflowData.nodes.length >= 2 || reason === 'history-picker') {
         const payload = {
           name: currentTab.name || `草稿_${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,
           uploadToCloud: false,
@@ -4410,6 +4442,7 @@ onUnmounted(() => {
         :position="canvasStore.nodeSelectorPosition"
         :trigger="canvasStore.nodeSelectorTrigger"
         :trigger-node-id="canvasStore.triggerNodeId"
+        @select-history="openHistoryPicker"
         @close="canvasStore.closeNodeSelector()"
       />
       
@@ -4429,6 +4462,7 @@ onUnmounted(() => {
         @close="canvasStore.closeCanvasContextMenu()"
         @upload="handleCanvasUpload"
         @add-node="handleCanvasAddNode"
+        @select-history="openHistoryPicker"
         @group="handleCanvasGroup"
         @download-selected-media="downloadSelectedMedia"
         @paste-clipboard="handlePasteClipboard"
@@ -4492,9 +4526,11 @@ onUnmounted(() => {
       <!-- 历史记录面板 -->
       <HistoryPanel
         :visible="showHistoryPanel"
+        :selection-mode="historyPickerPosition !== null"
         :can-delete-history="!!me && me.can_delete_history !== false"
         @close="closeHistoryPanel"
         @apply-history="handleHistoryApply"
+        @select-history="handleHistorySelection"
       />
       
       <!-- 编组工具栏 -->

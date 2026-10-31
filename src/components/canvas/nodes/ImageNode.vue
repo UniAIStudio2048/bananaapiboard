@@ -13,6 +13,7 @@ defineOptions({
  * - 选中输出节点时：底部弹出配置面板
  */
 import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { Upload, ImagePlus, Film, Layers, PanelsTopLeft, ChevronRight } from '@lucide/vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
@@ -4461,11 +4462,11 @@ const userPoints = computed(() => {
 
 // 快捷操作 - 初始状态显示 - 使用翻译键
 const quickActions = [
-  { icon: '↑', labelKey: 'canvas.imageNode.uploadImage', action: () => triggerUpload('upload-image') },
-  { icon: '↑', labelKey: 'canvas.imageNode.imageToImage', action: () => triggerUpload('image-to-image') },
-  { icon: '↑', labelKey: 'canvas.imageNode.imageToVideo', action: () => triggerUpload('image-to-video') },
-  { icon: '⊡', labelKey: 'canvas.imageNode.changeBackground', action: () => triggerUpload('change-background') },
-  { icon: '▷', labelKey: 'canvas.imageNode.firstFrameVideo', action: () => triggerUpload('first-frame-video') }
+  { icon: Upload, labelKey: 'canvas.imageNode.uploadImage', action: () => triggerUpload('upload-image') },
+  { icon: ImagePlus, labelKey: 'canvas.imageNode.imageToImage', action: () => triggerUpload('image-to-image') },
+  { icon: Film, labelKey: 'canvas.imageNode.imageToVideo', action: () => triggerUpload('image-to-video') },
+  { icon: Layers, labelKey: 'canvas.imageNode.changeBackground', action: () => triggerUpload('change-background') },
+  { icon: PanelsTopLeft, labelKey: 'canvas.imageNode.firstFrameVideo', action: () => triggerUpload('first-frame-video') }
 ]
 
 // 监听参数变化，保存到store
@@ -8182,17 +8183,24 @@ async function handleDrop(event) {
             </div>
             
             <!-- 空状态 - 快捷操作 -->
-            <div v-else class="empty-state">
-              <div class="hint-text">{{ t('canvas.textNode.try') }}</div>
-              <div 
+            <div v-else class="empty-state node-quick-start">
+              <div class="quick-start-heading">{{ t('canvas.textNode.try') }}</div>
+              <button
                 v-for="action in quickActions"
+                type="button"
                 :key="action.labelKey"
-                class="quick-action"
+                class="quick-action nodrag nopan"
+                @pointerdown.stop
+                @touchstart.stop
+                @touchmove.stop
+                @keydown.stop
+                @dblclick.stop
                 @click.stop="action.action"
               >
-                <span class="action-icon">{{ action.icon }}</span>
-                <span class="action-label">{{ t(action.labelKey) }}</span>
-              </div>
+                <span class="quick-start-icon"><component :is="action.icon" aria-hidden="true" /></span>
+                <span class="quick-start-label">{{ t(action.labelKey) }}</span>
+                <ChevronRight class="quick-start-arrow" aria-hidden="true" />
+              </button>
             </div>
           </div>
         </template>
@@ -9998,41 +10006,6 @@ async function handleDrop(event) {
 .ready-hint {
   color: var(--canvas-text-tertiary, #666);
   font-size: 12px;
-}
-
-/* 空状态 */
-.empty-state {
-  flex: 1;
-  padding: 8px;
-}
-
-.hint-text {
-  color: var(--canvas-text-tertiary, #666);
-  font-size: 13px;
-  margin-bottom: 12px;
-}
-
-.quick-action {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 8px;
-  color: var(--canvas-text-secondary, #a0a0a0);
-  font-size: 14px;
-  cursor: pointer;
-  border-radius: 8px;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.quick-action:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--canvas-text-primary, #fff);
-}
-
-.action-icon {
-  font-size: 16px;
-  width: 24px;
-  text-align: center;
 }
 
 /* ========== 底部配置面板 ========== */
@@ -12135,15 +12108,6 @@ async function handleDrop(event) {
   color: #f59e0b;
 }
 
-:root.canvas-theme-light .image-node .quick-action {
-  color: #57534e;
-}
-
-:root.canvas-theme-light .image-node .quick-action:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #1c1917;
-}
-
 :root.canvas-theme-light .image-node .config-panel {
   background: rgba(255, 255, 255, 0.98) !important;
   border-color: rgba(0, 0, 0, 0.1) !important;
@@ -12912,3 +12876,5 @@ async function handleDrop(event) {
 }
 
 </style>
+
+<style scoped src="../node-quick-actions.css"></style>

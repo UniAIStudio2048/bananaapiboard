@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs'
 import { parse } from '@vue/compiler-sfc'
 import { baseParse, compile } from '@vue/compiler-dom'
 import * as Vue from 'vue'
+import { Coins, Layers, Clock3, Check } from '@lucide/vue'
+
+const featureIcons = { Coins, Layers, Clock3, Check }
 
 async function discounts(pkg) {
   const { getPackageDiscounts } = await import('./packageDiscounts.js')
@@ -45,7 +48,7 @@ function renderFeatures(file, className, context) {
   const node = find(baseParse(descriptor.template.content))
   assert.ok(node, `missing feature list in ${file}`)
   const { code } = compile(node.loc.source, { mode: 'function' })
-  return new Function('Vue', code)(Vue)(context, [])
+  return new Function('Vue', code)({ ...Vue, resolveComponent: name => featureIcons[name] })(context, [])
 }
 
 function textContent(node) {
@@ -68,7 +71,7 @@ for (const [file, className] of [
     function iconCount(node) {
       if (Array.isArray(node)) return node.reduce((sum, child) => sum + iconCount(child), 0)
       if (!node || typeof node !== 'object') return 0
-      return (node.type === 'svg' ? 1 : 0) + iconCount(node.children)
+      return (node.type === 'svg' || Object.values(featureIcons).includes(node.type) ? 1 : 0) + iconCount(node.children)
     }
     assert.equal(iconCount(vnode), 6)
     pkg.generation_rates = { image: 1, video: 1, audio: 1 }

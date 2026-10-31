@@ -5,6 +5,7 @@
  */
 import { ref, watch, computed } from 'vue'
 import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
+import WechatLoginButton from '@/components/auth/WechatLoginButton.vue'
 import PhoneCountrySelect from '@/components/auth/PhoneCountrySelect.vue'
 import { useSmsAuth } from '@/composables/useSmsAuth'
 import { getTenantHeaders, getApiUrl } from '@/config/tenant'
@@ -424,6 +425,7 @@ function handleSmsAuthenticated() { emit('login-success'); close() }
             >注册</button>
           </div>
 
+          <WechatLoginButton v-if="mode === 'login' && !resetMode" />
           <div v-if="showSmsMethod" class="text-sm text-blue-400 mb-4">
             <button type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button>
           </div>

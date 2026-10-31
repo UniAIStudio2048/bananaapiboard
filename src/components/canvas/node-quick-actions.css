@@ -1,0 +1,86 @@
+/* Shared empty-state actions for text, image, video and audio nodes. */
+.node-quick-start {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.text-node-empty.node-quick-start { padding: 16px; }
+.node-quick-start .quick-start-heading {
+  margin: 0 0 8px;
+  padding: 0 8px;
+  color: var(--canvas-text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 20px;
+}
+.node-quick-start .quick-action {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--canvas-text-primary);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+.node-quick-start .quick-start-icon {
+  display: grid;
+  flex: 0 0 28px;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--canvas-text-secondary);
+}
+.node-quick-start .quick-start-icon svg { width: 16px; height: 16px; stroke-width: 1.75; }
+.node-quick-start .quick-start-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.node-quick-start .quick-start-arrow {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+  color: var(--canvas-text-secondary);
+  stroke-width: 1.75;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.node-quick-start .quick-action:hover,
+.node-quick-start .quick-action:focus-visible {
+  background: var(--canvas-bg-secondary);
+  border-color: var(--canvas-border-subtle);
+}
+.node-quick-start .quick-action:hover .quick-start-icon,
+.node-quick-start .quick-action:focus-visible .quick-start-icon { color: var(--canvas-text-primary); }
+.node-quick-start .quick-action:hover .quick-start-arrow,
+.node-quick-start .quick-action:focus-visible .quick-start-arrow { opacity: 1; }
+.node-quick-start .quick-action:focus-visible {
+  outline: 2px solid var(--canvas-text-secondary);
+  outline-offset: 1px;
+}
+.node-quick-start .quick-action:active { border-color: var(--canvas-border-active); }
+.node-quick-start .quick-start-note {
+  margin: 8px 8px 0;
+  color: var(--canvas-text-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+@media (prefers-reduced-motion: reduce) {
+  .node-quick-start .quick-action, .node-quick-start .quick-start-arrow { transition: none; }
+}

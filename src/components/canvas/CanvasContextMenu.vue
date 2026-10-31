@@ -9,7 +9,7 @@
  * - 复制/粘贴节点
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { AudioLines, ClipboardPaste, Copy, Download, Film, Group, Image, Plus, Redo2, Scan, Trash2, Undo2 } from '@lucide/vue'
+import { AudioLines, ClipboardPaste, Copy, Download, Film, Group, History, Image, Plus, Redo2, Scan, Trash2, Undo2 } from '@lucide/vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { resolveCanvasMenuPastePosition } from '@/utils/canvasClipboardPaste'
 import { getSelectedMediaNodeIds } from '@/utils/canvasBatchDownload'
@@ -21,7 +21,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'upload', 'add-node', 'group', 'paste-clipboard', 'download-selected-media'])
+const emit = defineEmits(['close', 'upload', 'add-node', 'group', 'paste-clipboard', 'download-selected-media', 'select-history'])
 const canvasStore = useCanvasStore()
 
 const menuRef = ref(null)
@@ -111,6 +111,11 @@ function handleUploadAudio() {
 // 添加节点（打开节点选择器）
 function handleAddNode() {
   emit('add-node', props.position)
+  emit('close')
+}
+
+function handleSelectHistory() {
+  emit('select-history', resolveCanvasMenuPastePosition(props.position))
   emit('close')
 }
 
@@ -297,6 +302,10 @@ function handleMenuClick(event) {
         上传音频
         <span class="shortcut"></span>
       </div>
+      <button type="button" class="canvas-context-menu-item history-menu-item" @click="handleSelectHistory">
+        <History class="icon" aria-hidden="true" />
+        从生成历史选择
+      </button>
       <div class="canvas-context-menu-item" @click="handlePasteFromClipboard">
         <ClipboardPaste class="icon" aria-hidden="true" />
         从剪贴板粘贴
@@ -428,6 +437,16 @@ function handleMenuClick(event) {
   color: #dedede;
   font-size: 13px;
   transition: background 0.15s, color 0.15s;
+}
+
+.history-menu-item {
+  width: 100%;
+  text-align: left;
+}
+
+.history-menu-item:focus-visible {
+  outline: 2px solid var(--canvas-text-primary);
+  outline-offset: -2px;
 }
 
 .canvas-context-menu-item:hover:not(.disabled) {

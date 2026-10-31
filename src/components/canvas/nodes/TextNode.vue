@@ -11,6 +11,7 @@ import { ref, computed, watch, nextTick, inject, onMounted, onUnmounted } from '
 import { waitForVideoAnalysisTask } from '@/api/canvas/video-analysis'
 import { formatVideoGenerationElapsed, getVideoGenerationElapsedSeconds } from '@/utils/videoGenerationProgress.js'
 import DOMPurify from 'dompurify'
+import { SquarePen, Film, ScanText, AudioLines, ChevronRight } from '@lucide/vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getLLMConfig, chatWithLLM, chatWithLLMStream, getUserLLMPresets, createUserLLMPreset, updateUserLLMPreset } from '@/api/canvas/llm'
@@ -2195,10 +2196,10 @@ function handleLabelKeyDown(event) {
 
 // 快捷操作 - 点击后创建对应的新节点（使用翻译键，在模板中翻译）
 const quickActions = [
-  { icon: '✎', labelKey: 'canvas.textNode.writeContent', action: () => handlePrepareEdit() },
-  { icon: '▶', labelKey: 'canvas.textNode.textToVideo', action: () => createNextNode('video-gen', t('canvas.textNode.videoGen')) },
-  { icon: 'A+', labelKey: 'canvas.textNode.imageDescribePrompt', action: () => handleImageDescribe() },
-  { icon: '♪', labelKey: 'canvas.textNode.textToMusic', action: () => createNextNode('audio', t('canvas.textNode.textToMusic')) }
+  { icon: SquarePen, labelKey: 'canvas.textNode.writeContent', action: () => handlePrepareEdit() },
+  { icon: Film, labelKey: 'canvas.textNode.textToVideo', action: () => createNextNode('video-gen', t('canvas.textNode.videoGen')) },
+  { icon: ScanText, labelKey: 'canvas.textNode.imageDescribePrompt', action: () => handleImageDescribe() },
+  { icon: AudioLines, labelKey: 'canvas.textNode.textToMusic', action: () => createNextNode('audio', t('canvas.textNode.textToMusic')) }
 ]
 
 // 格式工具栏按钮（使用翻译键，在模板中翻译）
@@ -3487,20 +3488,24 @@ onUnmounted(() => {
         </div>
         
           <!-- 空状态：显示快捷操作 -->
-          <div v-else class="text-node-empty">
-            <div class="text-node-hint">{{ t('canvas.textNode.try') }}</div>
-            <div 
+          <div v-else class="text-node-empty node-quick-start">
+            <div class="quick-start-heading">{{ t('canvas.textNode.try') }}</div>
+            <button
               v-for="action in quickActions"
+              type="button"
               :key="action.labelKey"
-              class="text-node-action quick-action nodrag"
+              class="text-node-action quick-action nodrag nopan"
               @pointerdown.stop
               @touchstart.stop
               @touchmove.stop
+              @keydown.stop
+              @dblclick.stop
               @click.stop="action.action"
             >
-              <span class="action-icon">{{ action.icon }}</span>
-              <span class="action-label">{{ t(action.labelKey) }}</span>
-            </div>
+              <span class="quick-start-icon"><component :is="action.icon" aria-hidden="true" /></span>
+              <span class="quick-start-label">{{ t(action.labelKey) }}</span>
+              <ChevronRight class="quick-start-arrow" aria-hidden="true" />
+            </button>
           </div>
         </template>
         
@@ -4438,50 +4443,6 @@ onUnmounted(() => {
 }
 
 /* 文本显示 - 已删除，使用 ready 状态替代 */
-
-/* 空状态提示 */
-.text-node-empty {
-  padding: 20px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.text-node-hint {
-  color: var(--canvas-text-tertiary, #666666);
-  font-size: 13px;
-  margin-bottom: 16px;
-}
-
-/* 快捷操作项 */
-.text-node-action {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 8px;
-  color: var(--canvas-text-secondary, #a0a0a0);
-  font-size: 14px;
-  cursor: pointer;
-  border-radius: 8px;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.text-node-action:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--canvas-text-primary, #ffffff);
-}
-
-.action-icon {
-  font-size: 16px;
-  width: 24px;
-  text-align: center;
-  opacity: 0.8;
-}
-
-.action-label {
-  flex: 1;
-}
 
 /* 连接端口 - 位置与+按钮对齐（但视觉隐藏） */
 .node-handle {
@@ -5758,11 +5719,11 @@ onUnmounted(() => {
 }
 
 /* 快捷操作 - 白昼模式 */
-:root.canvas-theme-light .text-node .quick-action {
+:root.canvas-theme-light .text-node .text-node-ready {
   color: #57534e;
 }
 
-:root.canvas-theme-light .text-node .quick-action:hover {
+:root.canvas-theme-light .text-node .text-node-ready:hover {
   background: rgba(0, 0, 0, 0.04);
   color: #1c1917;
 }
@@ -6082,3 +6043,5 @@ onUnmounted(() => {
   color: #2563eb;
 }
 </style>
+
+<style scoped src="../node-quick-actions.css"></style>

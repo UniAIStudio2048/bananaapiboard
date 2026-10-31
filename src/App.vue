@@ -86,7 +86,7 @@ async function loadSiteConfig() {
 
 onMounted(async () => { 
   // 兑换新身份前不刷新旧账号，避免旧请求回写并覆盖新会话。
-  if (window.location.pathname === '/admin/canvas-login') return
+  if (['/admin/canvas-login', '/wechat/callback'].includes(window.location.pathname)) return
   if (route.name === 'workflowShare') return
 
   me.value = await getMe()

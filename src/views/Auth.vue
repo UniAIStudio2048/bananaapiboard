@@ -1,6 +1,7 @@
 <script setup>
 import { watch, ref, onMounted, computed } from 'vue'
 import PhoneAuthForm from '@/components/auth/PhoneAuthForm.vue'
+import WechatLoginButton from '@/components/auth/WechatLoginButton.vue'
 import PhoneCountrySelect from '@/components/auth/PhoneCountrySelect.vue'
 import { useSmsAuth } from '@/composables/useSmsAuth'
 import { useRouter } from 'vue-router'
@@ -397,6 +398,7 @@ function handleSmsAuthenticated() {
           </p>
         </div>
 
+        <WechatLoginButton v-if="mode === 'login' && !resetMode" />
         <div v-if="showSmsMethod" class="text-sm text-blue-500 mb-4"><button type="button" @click="smsLogin = !smsLogin">{{ smsLogin ? (resetMode ? copy.emailRetrieve : copy.passwordLogin) : (resetMode ? copy.retrieve : copy.login) }}</button></div>
         <p v-if="policyError" role="alert">{{ copy.loadError }} <button type="button" @click="loadAuthPolicy">{{ copy.retry }}</button></p>
         <p v-if="policyLoading && mode === 'register'" role="status">{{ copy.loading }}</p>

@@ -16,6 +16,7 @@ defineOptions({
  * - 底部配置面板：选中时显示，包含提示词输入和生成参数
  */
 import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { Upload, Film, PanelsTopLeft, PersonStanding, ChevronRight } from '@lucide/vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
@@ -402,6 +403,7 @@ function hasModelStats(modelName) {
 const isDragOver = ref(false)
 const dragCounter = ref(0)
 const frameInputRef = ref(null)
+const sourceVideoInputRef = ref(null)
 
 // 图片列表拖拽排序状态
 const dragSortIndex = ref(-1)
@@ -1624,8 +1626,10 @@ const currentMinimaxH3ModeConfig = computed(() => {
 })
 
 // Wan 3.0 模式选择
-const isWan3Model = computed(() => ['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType))
+const isWan3Model = computed(() => ['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(currentModelConfig.value?.apiType))
 const isRouterBeeWan3Model = computed(() => currentModelConfig.value?.apiType === 'routerbee-wan3')
+const grsaiSeed = ref(props.data.grsaiSeed ?? '')
+watch(grsaiSeed, value => canvasStore.updateNodeData(props.id, { grsaiSeed: value }))
 const selectedWan3Mode = ref(props.data.wan3Mode || 'text2video')
 
 function normalizeRouterBeeWan3Mode(mode) {
@@ -3844,7 +3848,7 @@ const activeVideoModeSelector = computed(() => {
       label: '万相 3.0 模式',
       value: selectedWan3Mode.value,
       options: WAN3_MODES.filter(mode => (!mode.apiType || mode.apiType === currentModelConfig.value?.apiType) &&
-        (!['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType) || !['file', 'link'].includes(mode.value)))
+        (!['wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(currentModelConfig.value?.apiType) || !['file', 'link'].includes(mode.value)))
     }
   }
 
@@ -4535,23 +4539,28 @@ const modeLabel = computed(() => {
 
 // 快捷操作 - 使用翻译键
 const quickActions = [
+  {
+    icon: Upload,
+    labelKey: 'canvas.videoNode.uploadVideo',
+    action: () => sourceVideoInputRef.value?.click()
+  },
   { 
-    icon: '✎',
+    icon: Film,
     labelKey: 'canvas.videoNode.textToVideo', 
     action: () => handleTextToVideo()
   },
   { 
-    icon: '▢',
+    icon: Film,
     labelKey: 'canvas.videoNode.imageToVideo', 
     action: () => handleImageToVideo()
   },
   { 
-    icon: '▶',
+    icon: PanelsTopLeft,
     labelKey: 'canvas.videoNode.keyframesToVideo', 
     action: () => handleKeyframesToVideo()
   },
   { 
-    icon: '↑',
+    icon: PersonStanding,
     labelKey: 'canvas.videoNode.motionImitation', 
     action: () => handleMotionImitation()
   }
@@ -4958,7 +4967,7 @@ watch(selectedModel, () => {
     console.log('[VideoNode] 切换到 Wan 模型，模式重置为', selectedWanMode.value)
   }
 
-  if (['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(modelConfig?.apiType)) {
+  if (['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(modelConfig?.apiType)) {
     const configuredMode = modelConfig?.wan3Config?.defaultMode
     selectedWan3Mode.value = WAN3_MODES.some(mode => mode.value === configuredMode && (!mode.apiType || mode.apiType === modelConfig.apiType))
       ? configuredMode
@@ -4968,13 +4977,13 @@ watch(selectedModel, () => {
 })
 
 watch(currentModelConfig, modelConfig => {
-  if (!['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(modelConfig?.apiType)) return
+  if (!['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(modelConfig?.apiType)) return
   const configuredMode = modelConfig.wan3Config?.defaultMode
   selectedWan3Mode.value = pickInitialSubmode(
     props.data.wan3Mode,
     configuredMode,
     WAN3_MODES.filter(mode => (!mode.apiType || mode.apiType === modelConfig.apiType) &&
-      (!['wavespeed-wan3', 'siray-wan3'].includes(modelConfig.apiType) || !['file', 'link'].includes(mode.value))),
+      (!['wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(modelConfig.apiType) || !['file', 'link'].includes(mode.value))),
     'text2video'
   )
 }, { immediate: true })
@@ -6048,13 +6057,14 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
     }
   }
 
-  if (['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(capturedState.apiType)) {
+  if (['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(capturedState.apiType)) {
     const wan3Mode = capturedState.wan3Mode || selectedWan3Mode.value
     const wan3Config = currentModelConfig.value?.wan3Config || {}
     const maxImages = Math.min(10, Math.max(0, Number(wan3Config.maxImages) || 10))
-    const maxVideos = Math.min(5, Math.max(0, Number(wan3Config.maxVideos) || 5))
+    const maxVideos = capturedState.apiType === 'grsai-wan3' ? 0 : Math.min(5, Math.max(0, Number(wan3Config.maxVideos) || 5))
     const maxAudios = Math.min(5, Math.max(0, Number(wan3Config.maxAudios) || 5))
     formData.append('seedance_mode', wan3Mode)
+    if (capturedState.apiType === 'grsai-wan3' && capturedState.grsaiSeed !== '' && capturedState.grsaiSeed != null) formData.append('seed', String(capturedState.grsaiSeed))
     if (capturedState.apiType === 'wavespeed-wan3') {
       formData.append('wan3_audio', wan3Config.audio === false ? 'false' : 'true')
       formData.append('wan3_prompt_extend', wan3Config.promptExtend === true ? 'true' : 'false')
@@ -7154,7 +7164,7 @@ async function handleGenerate(options = {}) {
       }
       const wan3Config = currentModelConfig.value?.wan3Config || {}
       const maxImages = Math.min(10, Math.max(0, Number(wan3Config.maxImages) || 10))
-      const maxVideos = Math.min(5, Math.max(0, Number(wan3Config.maxVideos) || 5))
+      const maxVideos = currentModelConfig.value?.apiType === 'grsai-wan3' ? 0 : Math.min(5, Math.max(0, Number(wan3Config.maxVideos) || 5))
       const maxAudios = Math.min(5, Math.max(0, Number(wan3Config.maxAudios) || 5))
       if (finalImages.length === 0 && referenceVideoCount === 0 && referenceAudioCount === 0) {
         await showAlert('万相 3.0 多模态参考模式至少需要一个参考素材', '缺少参考素材')
@@ -7254,6 +7264,7 @@ async function handleGenerate(options = {}) {
       seedanceDraft: seedanceDraftEnabled.value,
       minimaxH3Mode: isMinimaxH3Model.value ? (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) : '',
       wan3Mode: isWan3Model.value ? selectedWan3Mode.value : '',
+      grsaiSeed: grsaiSeed.value,
       wan3File: isWan3Model.value ? wan3File.value : null,
       wan3Link: isWan3Model.value ? wan3Link.value : '',
       routerbeeWan3Mode: isRouterBeeWan3Model.value ? selectedRouterBeeWan3Mode.value : '',
@@ -7316,6 +7327,7 @@ async function handleGenerate(options = {}) {
     minimaxH3Resolution: isMinimaxH3Model.value ? minimaxH3Resolution.value : '',
     minimaxH3Mode: isMinimaxH3Model.value ? (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) : '',
     wan3Mode: isWan3Model.value ? selectedWan3Mode.value : '',
+    grsaiSeed: grsaiSeed.value,
     wan3File: isWan3Model.value ? wan3File.value : null,
     wan3Link: isWan3Model.value ? wan3Link.value : '',
     routerbeeWan3Mode: isRouterBeeWan3Model.value ? selectedRouterBeeWan3Mode.value : '',
@@ -7759,6 +7771,37 @@ async function uploadVideoFileAsync(file, blobUrl, nodeId) {
       error: error.message
     })
   }
+}
+
+// 上传本地视频到当前节点，复用现有媒体上传与持久化流程。
+async function handleSourceVideoChange(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file || props.data?.readonly || isGenerating.value) return
+  if (!file.type.startsWith('video/')) {
+    await showAlert('请选择视频文件', '提示')
+    return
+  }
+  if (file.size > 500 * 1024 * 1024) {
+    await showAlert('视频文件不能超过 500 MB', '提示')
+    return
+  }
+
+  const blobUrl = URL.createObjectURL(file)
+  canvasStore.updateNodeData(props.id, {
+    title: file.name,
+    nodeRole: 'source',
+    sourceVideo: blobUrl,
+    output: { type: 'video', url: blobUrl },
+    status: 'success',
+    isUploading: true,
+    uploadFailed: false,
+    uploadError: null,
+    uploadId: null,
+    assetId: null,
+    error: null
+  })
+  uploadVideoFileAsync(file, blobUrl, props.id)
 }
 
 // 触发文件选择并创建左侧图片节点
@@ -10289,17 +10332,24 @@ function handleToolbarPreview() {
           </div>
           
           <!-- 空状态 - 快捷操作 -->
-          <div v-else class="empty-state">
-            <div class="hint-text">{{ t('canvas.textNode.try') }}</div>
-            <div 
+          <div v-else class="empty-state node-quick-start">
+            <div class="quick-start-heading">{{ t('canvas.textNode.try') }}</div>
+            <button
               v-for="action in quickActions"
+              type="button"
               :key="action.labelKey"
-              class="quick-action"
+              class="quick-action nodrag nopan"
+              @pointerdown.stop
+              @touchstart.stop
+              @touchmove.stop
+              @keydown.stop
+              @dblclick.stop
               @click.stop="action.action"
             >
-              <span class="action-icon">{{ action.icon }}</span>
-              <span class="action-label">{{ t(action.labelKey) }}</span>
-            </div>
+              <span class="quick-start-icon"><component :is="action.icon" aria-hidden="true" /></span>
+              <span class="quick-start-label">{{ t(action.labelKey) }}</span>
+              <ChevronRight class="quick-start-arrow" aria-hidden="true" />
+            </button>
           </div>
         </div>
         
@@ -10338,6 +10388,14 @@ function handleToolbarPreview() {
       </button>
     </div>
     
+    <input
+      ref="sourceVideoInputRef"
+      type="file"
+      accept="video/*"
+      class="hidden-file-input"
+      @change="handleSourceVideoChange"
+    />
+
     <!-- 隐藏的文件上传 input（支持多选，支持图片、视频和音频） -->
     <input 
       ref="frameInputRef"
@@ -10582,7 +10640,7 @@ function handleToolbarPreview() {
       
       <!-- 模式标签 + 提示词输入 -->
       <div class="prompt-section">
-        <div v-if="isWan3Model && !['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig?.apiType)" class="wan3-attachment-toolbar" @mousedown.stop @click.stop>
+        <div v-if="isWan3Model && !['wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(currentModelConfig?.apiType)" class="wan3-attachment-toolbar" @mousedown.stop @click.stop>
           <input
             ref="wan3FileInputRef"
             type="file"
@@ -11405,6 +11463,13 @@ function handleToolbarPreview() {
         </div>
       </template>
 
+      <div v-if="currentModelConfig?.apiType === 'grsai-wan3'" class="sd2-mode-section">
+        <div class="sd2-mode-desc">多模态参考支持最多 10 张图片和 5 段音频；首尾帧与参考素材互斥。</div>
+        <label class="sd2-mode-desc">随机种子（可选）
+          <input v-model="grsaiSeed" type="number" step="1" placeholder="留空则随机" class="nodrag nowheel" style="width: 100%; color: inherit; background: transparent; border: 1px solid var(--canvas-border, #8884); border-radius: 6px; padding: 4px 6px;" @mousedown.stop @keydown.stop />
+        </label>
+      </div>
+
       <!-- RouterBee Wan 3.0 独立四模式提示 -->
       <template v-if="isRouterBeeWan3Model">
         <div class="sd2-mode-section">
@@ -12149,45 +12214,6 @@ function handleToolbarPreview() {
 .ready-hint {
   color: var(--canvas-text-tertiary, #666);
   font-size: 12px;
-}
-
-/* 空状态 */
-.empty-state {
-  flex: 1;
-  padding: 20px;
-}
-
-.hint-text {
-  color: var(--canvas-text-tertiary, #666666);
-  font-size: 13px;
-  margin-bottom: 16px;
-}
-
-.quick-action {
-  display: flex;
-  align-items: center;
-  padding: 12px 8px;
-  color: var(--canvas-text-secondary, #a0a0a0);
-  font-size: 14px;
-  cursor: pointer;
-  border-radius: 8px;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.quick-action:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--canvas-text-primary, #ffffff);
-}
-
-.action-icon {
-  font-size: 16px;
-  width: 24px;
-  text-align: center;
-  margin-right: 8px;
-}
-
-.action-label {
-  flex: 1;
 }
 
 /* 底部配置面板 - 扁平化设计，与图片节点对齐 */
@@ -14694,15 +14720,6 @@ html.canvas-theme-light .seedance-draft-options button.active {
   color: #a8a29e;
 }
 
-:root.canvas-theme-light .video-node .quick-action {
-  color: #57534e;
-}
-
-:root.canvas-theme-light .video-node .quick-action:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #1c1917;
-}
-
 :root.canvas-theme-light .video-node .quick-actions-title {
   color: #f59e0b;
 }
@@ -16371,3 +16388,5 @@ html.canvas-theme-light .seedance-draft-options button.active {
   cursor: not-allowed;
 }
 </style>
+
+<style scoped src="../node-quick-actions.css"></style>

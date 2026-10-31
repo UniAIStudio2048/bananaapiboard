@@ -3,7 +3,7 @@
  * NodeSelector.vue - 节点选择器面板
  */
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { AudioLines, BrainCircuit, Clapperboard, Eraser, Expand, Eye, FileAudio, FileText, Film, Image, ImagePlus, Layers, LayoutGrid, Paintbrush, PanelRightClose, ScanText, Scissors, SearchX, Sparkles, Type, Upload, UserRound, UsersRound, WandSparkles } from '@lucide/vue'
+import { AudioLines, BrainCircuit, Clapperboard, Eraser, Expand, Eye, FileAudio, FileText, Film, History, Image, ImagePlus, Layers, LayoutGrid, Paintbrush, PanelRightClose, ScanText, Scissors, SearchX, Sparkles, Type, Upload, UserRound, UsersRound, WandSparkles } from '@lucide/vue'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { NODE_TYPES, NODE_TYPE_CONFIG, NODE_CATEGORIES, getDownstreamOptions, getUpstreamOptions } from '@/config/canvas/nodeTypes'
 import { useI18n } from '@/i18n'
@@ -31,7 +31,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'select-history'])
 const canvasStore = useCanvasStore()
 const uploadManager = useUploadManager()
 
@@ -68,6 +68,11 @@ const nodeIcons = {
   'digital-human': UserRound,
   'seedance-character': UsersRound,
   script: FileText
+}
+
+function handleSelectHistory() {
+  emit('select-history', canvasStore.nodeSelectorFlowPosition)
+  emit('close')
 }
 
 // 文件上传输入框引用
@@ -1033,6 +1038,11 @@ function formatFileSize(bytes) {
       </div>
     </template>
     
+    <button v-if="!triggerNode" type="button" class="node-selector-item history-menu-item" @click="handleSelectHistory">
+      <History class="node-selector-icon" aria-hidden="true" />
+      <span class="node-selector-name">从生成历史选择</span>
+    </button>
+
     <!-- 隐藏的文件上传输入框 -->
     <input
       ref="fileInputRef"
@@ -1046,6 +1056,16 @@ function formatFileSize(bytes) {
 </template>
 
 <style scoped>
+.history-menu-item {
+  width: 100%;
+  text-align: left;
+}
+
+.history-menu-item:focus-visible {
+  outline: 2px solid var(--canvas-text-primary);
+  outline-offset: -2px;
+}
+
 /* 节点选择器样式已在 canvas.css 中定义 */
 
 /* 分类标题 */

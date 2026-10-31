@@ -924,6 +924,7 @@ export default {
     },
     // Video node quick actions
     videoNode: {
+      uploadVideo: 'Upload video',
       textToVideo: 'Text to Video',
       imageToVideo: 'Image to Video',
       keyframesToVideo: 'Keyframes to Video',
@@ -1190,6 +1191,9 @@ export default {
 
   // Packages
   packages: {
+    purchaseSubtitle: 'Choose a plan for your creative work',
+    choosePlan: 'Choose a plan',
+    choosePlanHint: 'Find a plan that fits how often you create',
     title: 'Buy Packages',
     currentPlan: 'Current Plan',
     noPlan: 'No Plan',

@@ -15,7 +15,7 @@
  * - 视频缩略图节流: 限制同时提取数量
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
-import { AudioLines, Film, History, Image, LayoutGrid, Maximize2, Minimize2, SquareCheck, X } from '@lucide/vue'
+import { AudioLines, Check, Film, History, Image, LayoutGrid, Maximize2, Minimize2, SquareCheck, X } from '@lucide/vue'
 import { getHistory, getHistoryDetail, deleteHistory } from '@/api/canvas/history'
 import { saveAsset } from '@/api/canvas/assets'
 import { extractVideoFrame } from '@/api/canvas/workflow'
@@ -42,10 +42,11 @@ const teamStore = useTeamStore()
 
 const props = defineProps({
   visible: Boolean,
+  selectionMode: Boolean,
   canDeleteHistory: { type: Boolean, default: true }
 })
 
-const emit = defineEmits(['close', 'apply-history'])
+const emit = defineEmits(['close', 'apply-history', 'select-history'])
 
 // ========== 状态 ==========
 const loading = ref(false)
@@ -60,6 +61,57 @@ const isFullscreen = ref(false)
 // 批量选择模式
 const isSelectMode = ref(false)
 const selectedItems = ref(new Set())
+const pickerItems = ref(new Map())
+const pickerCloseRef = ref(null)
+
+function isHistoryPickable(item) {
+  return !!item?.url && ['image', 'video', 'audio'].includes(item.type) &&
+    (!item.status || ['completed', 'success', 'succeeded'].includes(String(item.status).toLowerCase()))
+}
+
+function toggleHistoryPick(item) {
+  if (!isHistoryPickable(item)) return
+  const key = `${item.type}:${item.id}`
+  const next = new Map(pickerItems.value)
+  if (next.has(key)) next.delete(key)
+  else next.set(key, item)
+  pickerItems.value = next
+}
+
+function confirmHistorySelection() {
+  const items = historyList.value.filter(item =>
+    pickerItems.value.has(`${item.type}:${item.id}`) && isHistoryPickable(item)
+  )
+  if (items.length) emit('select-history', items)
+}
+
+watch([() => props.visible, () => props.selectionMode, spaceFilter], () => {
+  pickerItems.value = new Map()
+  if (props.visible && props.selectionMode) {
+    isSelectMode.value = false
+    nextTick(() => pickerCloseRef.value?.focus())
+  }
+})
+
+function handlePickerKeydown(event) {
+  if (!props.selectionMode) return
+  // 选择弹窗内的快捷键不应触发画布删除、粘贴等操作。
+  event.stopPropagation()
+  if (event.key === 'Escape') emit('close')
+  if (event.key === 'Tab') {
+    const controls = [...event.currentTarget.querySelectorAll('button:not(:disabled), input, [tabindex="0"]')]
+      .filter(element => element.getClientRects().length)
+    const first = controls[0]
+    const last = controls.at(-1)
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last?.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first?.focus()
+    }
+  }
+}
 
 // 滚动容器引用
 const scrollContainerRef = ref(null)
@@ -1819,18 +1871,25 @@ onUnmounted(() => {
     <div 
       v-if="visible" 
       class="history-panel-wrapper"
-      :class="{ fullscreen: isFullscreen }"
+      :class="{ fullscreen: isFullscreen || selectionMode, 'history-picker': selectionMode }"
+      @click.self="selectionMode && $emit('close')"
+      @keydown="handlePickerKeydown"
     >
-      <div class="history-panel canvas-panel" :class="{ fullscreen: isFullscreen }">
+      <div class="history-panel canvas-panel" :class="{ fullscreen: isFullscreen || selectionMode }"
+        :role="selectionMode ? 'dialog' : undefined"
+        :aria-modal="selectionMode ? 'true' : undefined"
+        :aria-label="selectionMode ? '从生成历史选择' : undefined"
+      >
         <!-- 头部 -->
         <div class="panel-header">
           <div class="header-title">
             <History :size="20" aria-hidden="true" />
-            <span>{{ t('canvas.historyPanel.title') }}</span>
+            <span>{{ selectionMode ? '从生成历史选择' : t('canvas.historyPanel.title') }}</span>
           </div>
           <div class="header-actions">
             <!-- 批量选择按钮 -->
             <button
+              v-if="!selectionMode"
               class="header-btn"
               :class="{ active: isSelectMode }"
               @click="toggleSelectMode"
@@ -1840,6 +1899,7 @@ onUnmounted(() => {
             </button>
             <!-- 全屏展开按钮 -->
             <button
+              v-if="!selectionMode"
               class="header-btn"
               :class="{ active: isFullscreen }"
               @click="toggleFullscreen"
@@ -1849,14 +1909,14 @@ onUnmounted(() => {
               <Minimize2 v-else :size="18" aria-hidden="true" />
             </button>
             <!-- 关闭按钮 -->
-            <button class="close-btn" @click="$emit('close')">
+            <button ref="pickerCloseRef" class="close-btn" aria-label="关闭历史记录" @click="$emit('close')">
               <X :size="18" aria-hidden="true" />
             </button>
           </div>
         </div>
         
         <!-- 批量操作栏（选择模式下显示） -->
-        <div v-if="isSelectMode" class="batch-action-bar">
+        <div v-if="isSelectMode && !selectionMode" class="batch-action-bar">
           <div class="select-info">
             <button class="select-all-btn" @click="toggleSelectAll">
               {{ selectedItems.size === filteredHistory.length ? '取消全选' : '全选' }}
@@ -1974,23 +2034,34 @@ onUnmounted(() => {
               >
                 <div
                   v-for="item in colItems"
-                  :key="item.id"
+                  :key="`${item.type}:${item.id}`"
                   class="history-card"
                   :class="[
                     `type-${item.type}`,
                     { 'portrait-video': item.type === 'video' && isPortraitVideo(item) },
-                    { 'selected': isSelectMode && isItemSelected(item) }
+                    { 'selected': selectionMode ? pickerItems.has(`${item.type}:${item.id}`) : isSelectMode && isItemSelected(item) },
+                    { 'picker-unavailable': selectionMode && !isHistoryPickable(item) }
                   ]"
                   :style="getHistoryCardAspectStyle(item)"
-                  draggable="true"
-                  @click="isSelectMode ? toggleSelectItem(item, $event) : handleHistoryClick(item)"
-                  @contextmenu="handleContextMenu($event, item)"
+                  :draggable="!selectionMode"
+                  :role="selectionMode ? 'checkbox' : undefined"
+                  :tabindex="selectionMode && isHistoryPickable(item) ? 0 : undefined"
+                  :aria-checked="selectionMode ? pickerItems.has(`${item.type}:${item.id}`) : undefined"
+                  :aria-disabled="selectionMode ? !isHistoryPickable(item) : undefined"
+                  :aria-label="selectionMode ? (item.name || item.type) : undefined"
+                  @keydown.space.prevent="selectionMode && toggleHistoryPick(item)"
+                  @keydown.enter.prevent="selectionMode && toggleHistoryPick(item)"
+                  @click="selectionMode ? toggleHistoryPick(item) : isSelectMode ? toggleSelectItem(item, $event) : handleHistoryClick(item)"
+                  @contextmenu.prevent="!selectionMode && handleContextMenu($event, item)"
                   @dragstart="handleDragStart($event, item)"
                   @dragend="handleDragEnd"
                 >
+                  <div v-if="selectionMode" class="picker-checkbox" :class="{ checked: pickerItems.has(`${item.type}:${item.id}`) }" aria-hidden="true">
+                    <Check v-if="pickerItems.has(`${item.type}:${item.id}`)" :size="14" />
+                  </div>
                   <!-- 批量选择复选框 -->
                   <div 
-                    v-if="isSelectMode" 
+                    v-if="isSelectMode && !selectionMode"
                     class="select-checkbox"
                     :class="{ checked: isItemSelected(item) }"
                     @click.stop="toggleSelectItem(item, $event)"
@@ -2089,7 +2160,7 @@ onUnmounted(() => {
                       </div>
                     </div>
                   </div>
-                  <div class="history-card-actions">
+                  <div v-if="!selectionMode" class="history-card-actions">
                     <button
                       v-if="item.prompt"
                       class="overlay-copy-prompt"
@@ -2128,7 +2199,16 @@ onUnmounted(() => {
         </div>
 
         <!-- 底部统计 -->
-        <div class="panel-footer">
+        <div v-if="selectionMode" class="picker-footer">
+          <span>已选择 {{ pickerItems.size }} 项</span>
+          <div class="picker-footer-actions">
+            <button type="button" @click="$emit('close')">取消</button>
+            <button type="button" class="picker-confirm" :disabled="pickerItems.size === 0" @click="confirmHistorySelection">
+              添加到画布
+            </button>
+          </div>
+        </div>
+        <div v-else class="panel-footer">
           <span class="stats">{{ historyStats.all }} {{ t('canvas.historyPanel.items') }}</span>
           <span class="retention-tip">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2397,6 +2477,82 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.history-panel-wrapper.history-picker {
+  inset: 0;
+  padding: 24px;
+}
+
+.history-picker .history-panel {
+  width: min(900px, 100%);
+  height: min(800px, 100%);
+  color: var(--canvas-text-primary);
+}
+
+.history-picker .history-panel .history-card.selected {
+  box-shadow: 0 0 0 2px var(--canvas-text-primary);
+}
+
+.history-picker .history-panel .history-card.selected::after {
+  background: var(--canvas-text-primary);
+  opacity: 0.2;
+}
+
+.history-picker .picker-unavailable {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.picker-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--canvas-border-default);
+  border-radius: 5px;
+  background: var(--canvas-bg-secondary);
+}
+
+.picker-checkbox.checked,
+.picker-footer .picker-confirm {
+  color: var(--canvas-bg-primary);
+  background: var(--canvas-text-primary);
+  border-color: var(--canvas-text-primary);
+}
+
+.picker-footer,
+.picker-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.picker-footer {
+  justify-content: space-between;
+  flex-shrink: 0;
+  padding: 14px 20px;
+  border-top: 1px solid var(--canvas-border-subtle);
+  font-size: 13px;
+}
+
+.picker-footer button {
+  border: 1px solid var(--canvas-border-default);
+  border-radius: 7px;
+  padding: 8px 14px;
+  color: var(--canvas-text-primary);
+  background: var(--canvas-bg-secondary);
+}
+
+.picker-footer button:hover:not(:disabled) { opacity: 0.8; }
+.picker-footer button:disabled { opacity: 0.4; cursor: not-allowed; }
+.history-picker :is(button, .history-card):focus-visible {
+  outline: 2px solid var(--canvas-text-primary);
+  outline-offset: 3px;
+}
+
 /* 侧边栏容器 - 无遮罩，不阻挡画布操作 */
 .history-panel-wrapper {
   position: fixed;

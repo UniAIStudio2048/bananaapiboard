@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted, inject, unref } from 'vue'
 import { Handle, Position } from '@vue-flow/core'
+import { AudioLines, Check, Film, LoaderCircle, PanelsTopLeft, Play, RotateCcw, Upload } from '@lucide/vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { saveWorkflow, uploadCanvasMedia, postWorkflowOps, patchWorkflowNode, getWorkflowNodesBatch } from '@/api/canvas/workflow'
@@ -187,32 +188,224 @@ onUnmounted(() => { alive.abort(); clearTimeout(timer) })
 </script>
 
 <template>
-  <section class="breakdown-node" :class="{ selected }" aria-label="逐帧拉片">
-    <header><span class="film-icon">▤</span><strong>逐帧拉片</strong><span class="badge">视频分析</span></header>
+  <section class="breakdown-node" :class="{ selected }" :aria-busy="busy" aria-label="逐帧拉片">
+    <header class="node-header">
+      <Film class="icon" aria-hidden="true" />
+      <strong>逐帧拉片</strong>
+      <span class="badge">视频分析</span>
+    </header>
     <Handle id="input" type="target" :position="Position.Left" :connectable="!readonly && !busy" />
-    <div class="source-caption"><span>视频素材</span><span v-if="videoMetadata">{{ formatBreakdownTime(videoMetadata.duration) }} · {{ videoMetadata.width }}×{{ videoMetadata.height }}</span></div>
-    <div v-if="sourceUrl" class="preview nodrag nopan">
-      <video :src="sourceUrl" controls preload="metadata" @loadedmetadata="readMetadata" />
-      <button v-if="!readonly" class="replace" :disabled="busy" @click="uploadInput.click()">替换素材</button>
+
+    <div class="node-body">
+      <div class="section-label">
+        <span>视频素材</span>
+        <span v-if="videoMetadata" class="metadata">{{ formatBreakdownTime(videoMetadata.duration) }} · {{ videoMetadata.width }}×{{ videoMetadata.height }}</span>
+      </div>
+      <div v-if="sourceUrl" class="preview nodrag nopan">
+        <video :src="sourceUrl" controls preload="metadata" @loadedmetadata="readMetadata" />
+        <button v-if="!readonly" type="button" class="replace" :disabled="busy" @click="uploadInput.click()">
+          <Upload class="icon" aria-hidden="true" />替换素材
+        </button>
+      </div>
+      <button v-else type="button" class="empty nodrag nopan" :disabled="readonly || busy" @click="uploadInput.click()">
+        <span class="upload-icon"><LoaderCircle v-if="uploading" class="icon spinning" aria-hidden="true" /><Upload v-else class="icon" aria-hidden="true" /></span>
+        <span class="upload-title">{{ uploading ? '上传中…' : '上传视频' }}</span>
+        <span class="upload-hint">或从左侧连接视频节点</span>
+        <span class="upload-limit">最大 500 MB</span>
+      </button>
+      <input ref="uploadInput" class="hidden-input" type="file" accept="video/*" @change="upload">
+
+      <div class="section-label dimension-label"><span>拆解维度</span><span class="section-hint">多选</span></div>
+      <div class="dimensions nodrag nopan" role="group" aria-label="拆解维度">
+        <button v-for="item in [{key:'shots',label:'分镜',icon:PanelsTopLeft},{key:'motions',label:'动态',icon:Play},{key:'audio',label:'音乐',icon:AudioLines}]" :key="item.key" type="button" :class="{ chosen: dimensions.includes(item.key) }" :aria-pressed="dimensions.includes(item.key)" :disabled="busy || readonly" @click="toggleDimension(item.key)">
+          <component :is="item.icon" class="icon" aria-hidden="true" />
+          <span>{{ item.label }}</span>
+          <Check class="check-icon" :class="{ unchecked: !dimensions.includes(item.key) }" aria-hidden="true" />
+        </button>
+      </div>
+      <select v-if="config?.models?.length > 1" class="model-select nodrag nopan" aria-label="拉片模型" :value="modelId" :disabled="busy || readonly" @change="persistSettings({breakdownModelId:$event.target.value})"><option v-for="model in config.models" :key="model.id" :value="model.id">{{ model.name }}</option></select>
+      <p v-if="config?.enabled === false" class="notice">租户尚未启用逐帧拉片</p>
+      <p v-if="!dimensions.length" class="notice">请至少选择一个拆解维度</p>
+      <p v-if="statusText" class="progress" role="status">
+        <LoaderCircle v-if="busy" class="icon spinning" aria-hidden="true" />
+        <Check v-else-if="summary" class="icon" aria-hidden="true" />
+        <span>{{ statusText }}</span>
+      </p>
+      <p v-if="error || data.error" class="error" role="alert">{{ error || data.error }}</p>
+      <div v-if="summary" class="summary" aria-label="拆解结果">
+        <span><strong>{{ summary.shots ?? 0 }}</strong>张分镜</span>
+        <span><strong>{{ summary.motions ?? 0 }}</strong>段动态</span>
+        <span><strong>{{ summary.audio ?? 0 }}</strong>段音频</span>
+      </div>
+      <p v-for="notice in (data.breakdownNotices || []).filter(text => !text.startsWith('音频按分镜截取原视频音轨'))" :key="notice" class="notice">{{ notice }}</p>
     </div>
-    <button v-else class="empty nodrag nopan" :disabled="readonly || busy" @click="uploadInput.click()"><span>＋</span>{{ uploading ? '上传中…' : '上传视频后开始' }}<small>或从左侧连接视频节点</small></button>
-    <input ref="uploadInput" class="hidden-input" type="file" accept="video/*" @change="upload">
-    <div class="dimension-label">拆解维度</div>
-    <div class="dimensions nodrag nopan"><button v-for="item in [{key:'shots',label:'分镜',icon:'▧'},{key:'motions',label:'动态',icon:'▷'},{key:'audio',label:'音乐',icon:'♫'}]" :key="item.key" :class="{ chosen: dimensions.includes(item.key) }" :aria-pressed="dimensions.includes(item.key)" :disabled="busy || readonly" @click="toggleDimension(item.key)">{{ item.icon }} {{ item.label }}</button></div>
-    <select v-if="config?.models?.length > 1" class="model-select nodrag nopan" aria-label="拉片模型" :value="modelId" :disabled="busy || readonly" @change="persistSettings({breakdownModelId:$event.target.value})"><option v-for="model in config.models" :key="model.id" :value="model.id">{{ model.name }}</option></select>
-    <p v-if="config?.enabled === false" class="notice">租户尚未启用逐帧拉片</p>
-    <p v-if="!dimensions.length" class="notice">请至少选择一个拆解维度</p>
-    <p v-if="statusText" class="progress" role="status">{{ statusText }}</p>
-    <p v-if="error || data.error" class="error" role="alert">{{ error || data.error }}</p>
-    <div v-if="summary" class="summary">{{ summary.shots }} 张分镜 · {{ summary.motions }} 段动态 · {{ summary.audio }} 段音频</div>
-    <p v-for="notice in (data.breakdownNotices || []).filter(text => !text.startsWith('音频按分镜截取原视频音轨'))" :key="notice" class="notice">{{ notice }}</p>
-    <button class="start nodrag nopan" :disabled="readonly || busy || !sourceUrl || !dimensions.length || !config?.enabled" @click="start()">{{ busy ? (uploading ? '上传中…' : '分析中…') : '开始拉片' }}<span v-if="!busy && estimatedCost !== null"> · {{ estimatedCost }} 积分</span></button>
-    <button v-if="data.status === 'error' && data.breakdownTaskId" class="retry nodrag nopan" :disabled="busy || readonly" @click="start(true)">重试未完成的分析</button>
-    <p v-if="config?.enabled" class="price-note">{{ config.billing_mode === 'per_second' ? `${config.points_per_second} 积分/秒，以实际时长结算` : `${config.points_cost} 积分/次` }} · 成功后扣费</p>
+
+    <footer class="node-footer">
+      <button type="button" class="start nodrag nopan" :disabled="readonly || busy || !sourceUrl || !dimensions.length || !config?.enabled" @click="start()">
+        <LoaderCircle v-if="busy" class="icon spinning" aria-hidden="true" /><Play v-else class="icon" aria-hidden="true" />
+        <span>{{ busy ? (uploading ? '上传中…' : '分析中…') : '开始拉片' }}</span>
+        <span v-if="!busy && estimatedCost !== null" class="cost">{{ estimatedCost }} 积分</span>
+      </button>
+      <button v-if="data.status === 'error' && data.breakdownTaskId" type="button" class="retry nodrag nopan" :disabled="busy || readonly" @click="start(true)"><RotateCcw class="icon" aria-hidden="true" />重试未完成的分析</button>
+      <p v-if="config?.enabled" class="price-note">{{ config.billing_mode === 'per_second' ? `${config.points_per_second} 积分/秒，以实际时长结算` : `${config.points_cost} 积分/次` }} · 成功后扣费</p>
+    </footer>
     <Handle id="output" type="source" :position="Position.Right" :connectable="false" />
   </section>
 </template>
 
 <style scoped>
-.breakdown-node{width:340px;padding:16px;border:1px solid var(--canvas-border,#3b3b3b);border-radius:16px;background:var(--canvas-node-bg,#252525);color:var(--canvas-text,#eee);box-shadow:0 6px 20px #0002;font-size:12px}.breakdown-node.selected{border-color:#74b7cc;box-shadow:0 0 0 1px #74b7cc}header{display:flex;align-items:center;gap:8px;margin-bottom:20px}header strong{font-size:15px}.film-icon{font-size:20px}.badge{font-size:10px;color:#93c5d5;background:#23414c;padding:3px 7px;border-radius:5px}.source-caption{display:flex;justify-content:space-between;color:#a5a5a5;margin-bottom:8px;font-size:11px}.preview{position:relative;border-radius:10px;overflow:hidden;background:#151515}.preview video{display:block;width:100%;max-height:300px;object-fit:contain}.replace{position:absolute;right:8px;top:8px;border:0;border-radius:7px;background:#222c;color:#eee;padding:6px 9px;cursor:pointer}.empty{width:100%;height:180px;border:1px dashed #555;border-radius:10px;background:#ffffff03;color:#aaa;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;cursor:pointer}.empty>span{font-size:25px}.empty small{font-size:11px;color:#777}.hidden-input{display:none}.dimension-label{color:#aaa;margin:18px 0 9px}.dimensions{display:flex;gap:8px}.dimensions button{flex:1;border:1px solid #4b4b4b;border-radius:20px;padding:8px 0;background:transparent;color:#aaa;cursor:pointer}.dimensions button.chosen{background:#234651;border-color:#366675;color:#a8d6e2}.start{width:100%;margin-top:16px;padding:10px;border:0;border-radius:9px;background:#f4f4f4;color:#202020;font-weight:600;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}.error{color:#fca5a5;line-height:1.5;overflow-wrap:anywhere;margin:10px 0}.notice,.price-note{font-size:11px;color:#a3a3a3;line-height:1.5;margin:8px 0 0}.price-note{text-align:center}.progress{margin:12px 0 0;color:#93c5d5}.summary{margin-top:12px;color:#b4dbb9}.retry{width:100%;border:1px solid #555;background:transparent;border-radius:8px;color:inherit;padding:8px;margin-top:8px;cursor:pointer}.model-select{width:100%;margin-top:12px;background:#333;color:#eee;border:1px solid #555;border-radius:6px;padding:6px}
+.breakdown-node {
+  width: 340px;
+  border: 1px solid var(--canvas-border-default);
+  border-radius: 12px;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
+  box-shadow: var(--canvas-shadow-md);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.breakdown-node.selected {
+  border-color: var(--canvas-text-secondary);
+  box-shadow: 0 0 0 1px var(--canvas-text-secondary), var(--canvas-shadow-md);
+}
+.node-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--canvas-border-subtle);
+}
+.node-header strong { font-size: 13px; font-weight: 600; }
+.icon { width: 16px; height: 16px; flex-shrink: 0; stroke-width: 1.75; }
+.badge {
+  padding: 1px 6px;
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: 4px;
+  background: var(--canvas-bg-secondary);
+  color: var(--canvas-text-secondary);
+  font-size: 10px;
+  font-weight: 400;
+}
+.node-body { padding: 14px 16px 16px; }
+.section-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.metadata, .section-hint { color: var(--canvas-text-secondary); font-size: 11px; font-weight: 400; }
+.metadata { font-variant-numeric: tabular-nums; }
+.preview { position: relative; border-radius: 8px; overflow: hidden; background: var(--canvas-bg-primary); }
+.preview video { display: block; width: 100%; max-height: 300px; object-fit: contain; }
+.replace {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid var(--canvas-border-default);
+  border-radius: 6px;
+  background: var(--canvas-bg-secondary);
+  color: var(--canvas-text-primary);
+  font-size: 11px;
+  box-shadow: var(--canvas-shadow-sm);
+}
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px dashed var(--canvas-border-default);
+  border-radius: 8px;
+  background: var(--canvas-bg-secondary);
+  color: var(--canvas-text-secondary);
+}
+.upload-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-bottom: 3px;
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: 8px;
+  background: var(--canvas-bg-tertiary);
+}
+.upload-title { color: var(--canvas-text-primary); font-size: 13px; font-weight: 500; }
+.upload-hint, .upload-limit { font-size: 11px; }
+.upload-limit { margin-top: 3px; }
+.hidden-input { display: none; }
+.dimension-label { margin-top: 16px; }
+.dimensions { display: flex; gap: 6px; }
+.dimensions button {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px;
+  border: 1px solid var(--canvas-border-subtle);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--canvas-text-secondary);
+  font-size: 12px;
+}
+.dimensions button.chosen {
+  border-color: var(--canvas-border-active);
+  background: var(--canvas-bg-secondary);
+  color: var(--canvas-text-primary);
+}
+.check-icon { width: 12px; height: 12px; flex-shrink: 0; stroke-width: 2; }
+.check-icon.unchecked { visibility: hidden; }
+.node-footer { padding: 12px 16px; border-top: 1px solid var(--canvas-border-subtle); }
+.start, .retry {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.start { background: var(--canvas-text-primary); color: var(--canvas-bg-primary); }
+.start:not(:disabled):hover { opacity: .85; }
+.start:disabled { opacity: 1; background: var(--canvas-bg-secondary); color: var(--canvas-text-secondary); border-color: var(--canvas-border-subtle); }
+.cost { padding-left: 8px; border-left: 1px solid currentColor; font-size: 11px; font-variant-numeric: tabular-nums; }
+.retry { margin-top: 8px; border-color: var(--canvas-border-default); background: transparent; color: var(--canvas-text-primary); }
+button { cursor: pointer; }
+button:disabled, select:disabled { opacity: .55; cursor: not-allowed; }
+.empty:not(:disabled):hover, .replace:not(:disabled):hover, .retry:not(:disabled):hover, .dimensions button:not(:disabled):hover {
+  border-color: var(--canvas-text-secondary);
+  background: var(--canvas-bg-elevated);
+  color: var(--canvas-text-primary);
+}
+button:focus-visible, select:focus-visible { outline: 2px solid var(--canvas-text-primary); outline-offset: 3px; }
+.notice, .price-note { margin: 10px 0 0; color: var(--canvas-text-secondary); font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.price-note { margin-top: 8px; text-align: center; }
+.progress { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0 0; color: var(--canvas-text-secondary); font-size: 12px; overflow-wrap: anywhere; }
+.progress .icon { margin-top: 1px; }
+.error { margin: 12px 0 0; color: var(--canvas-accent-error); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 12px; padding: 10px 0; border: 1px solid var(--canvas-border-subtle); border-radius: 8px; background: var(--canvas-bg-secondary); }
+.summary span { display: flex; flex-direction: column; align-items: center; gap: 2px; color: var(--canvas-text-secondary); font-size: 11px; }
+.summary span + span { border-left: 1px solid var(--canvas-border-subtle); }
+.summary strong { color: var(--canvas-text-primary); font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.model-select { width: 100%; margin-top: 12px; padding: 8px; border: 1px solid var(--canvas-border-default); border-radius: 8px; background: var(--canvas-bg-secondary); color: var(--canvas-text-primary); font-size: 12px; }
+.breakdown-node :deep(.vue-flow__handle) { background: var(--canvas-bg-tertiary); border-color: var(--canvas-text-secondary); }
+.spinning { animation: breakdown-spin 1s linear infinite; }
+@keyframes breakdown-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinning { animation: none; } }
 </style>

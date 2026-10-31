@@ -56,7 +56,7 @@ test('mode dropdowns show supported options without a model mode type heading', 
 
 test('DashScope Wan3 exposes and persists its mode selector used for submissions', () => {
   assert.match(source, /WAN3_MODES/)
-  assert.match(source, /const isWan3Model = computed\(\(\) => \['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'\]\.includes\(currentModelConfig\.value\?\.apiType\)\)/)
+  assert.match(source, /const isWan3Model = computed\(\(\) => \['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3', 'grsai-wan3'\]\.includes\(currentModelConfig\.value\?\.apiType\)\)/)
   assert.match(source, /const selectedWan3Mode = ref\(props\.data\.wan3Mode \|\| 'text2video'\)/)
   assert.match(source, /if \(isWan3Model\.value\) \{[\s\S]*?key: 'wan3',[\s\S]*?value: selectedWan3Mode\.value,[\s\S]*?options: WAN3_MODES/)
   assert.match(source, /case 'wan3':[\s\S]*?selectedWan3Mode\.value = value/)

@@ -5,7 +5,7 @@ import { runInNewContext } from 'node:vm'
 import { ref } from 'vue'
 
 const source = readFileSync(new URL('./VideoNode.vue', import.meta.url), 'utf8')
-const start = source.indexOf("  if (['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(capturedState.apiType))")
+const start = source.indexOf("  if (['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(capturedState.apiType))")
 const end = source.indexOf("    console.log('[VideoNode] 万相 3.0 模式:', wan3Mode)", start) + "    console.log('[VideoNode] 万相 3.0 模式:', wan3Mode)\n  }".length
 
 for (const mode of ['video_edit', 'video_extend']) {

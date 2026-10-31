@@ -15,6 +15,7 @@ defineOptions({
  * - 快捷创建：通过右侧输出端口连接到目标节点
  */
 import { ref, reactive, computed, watch, nextTick, inject, onMounted, onUnmounted } from 'vue'
+import { Upload, ChevronRight } from '@lucide/vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
@@ -1791,8 +1792,8 @@ function triggerUpload() {
 
 const quickActions = [
   {
-    icon: '↑',
-    label: '上传本地音频',
+    icon: Upload,
+    label: '上传音频',
     action: () => triggerUpload()
   }
 ]
@@ -2643,17 +2644,25 @@ function handleSpeedEditorClickOutside(event) {
         
         <!-- 无音频时显示空状态 -->
         <div v-else class="node-content">
-          <div class="empty-state">
-            <div class="hint-text">尝试：</div>
-            <div 
+          <div class="empty-state node-quick-start">
+            <div class="quick-start-heading">从这里开始</div>
+            <button
               v-for="action in quickActions"
+              type="button"
               :key="action.label"
-              class="quick-action"
+              class="quick-action nodrag nopan"
+              @pointerdown.stop
+              @touchstart.stop
+              @touchmove.stop
+              @keydown.stop
+              @dblclick.stop
               @click.stop="action.action"
             >
-              <span class="action-icon">{{ action.icon }}</span>
-              <span class="action-label">{{ action.label }}</span>
-            </div>
+              <span class="quick-start-icon"><component :is="action.icon" aria-hidden="true" /></span>
+              <span class="quick-start-label">{{ action.label }}</span>
+              <ChevronRight class="quick-start-arrow" aria-hidden="true" />
+            </button>
+            <p class="quick-start-note">从本地选择音频文件</p>
           </div>
         </div>
         
@@ -3512,12 +3521,6 @@ function handleSpeedEditorClickOutside(event) {
   font-size: 11px;
 }
 
-/* 空状态（与 VideoNode 统一） */
-.empty-state {
-  flex: 1;
-  padding: 20px;
-}
-
 /* 错误/数据丢失状态 */
 .error-state {
   flex: 1;
@@ -3568,39 +3571,6 @@ function handleSpeedEditorClickOutside(event) {
 .upload-progress .processing-text {
   color: var(--canvas-accent-audio, #a855f7);
   font-size: 14px;
-}
-
-.hint-text {
-  color: var(--canvas-text-tertiary, #666666);
-  font-size: 13px;
-  margin-bottom: 16px;
-}
-
-.quick-action {
-  display: flex;
-  align-items: center;
-  padding: 12px 8px;
-  color: var(--canvas-text-secondary, #a0a0a0);
-  font-size: 14px;
-  cursor: pointer;
-  border-radius: 8px;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.quick-action:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--canvas-text-primary, #ffffff);
-}
-
-.action-icon {
-  font-size: 16px;
-  width: 24px;
-  text-align: center;
-  margin-right: 8px;
-}
-
-.action-label {
-  flex: 1;
 }
 
 /* 生成中状态 */
@@ -6078,3 +6048,5 @@ function handleSpeedEditorClickOutside(event) {
   border: 1px solid rgba(0, 0, 0, 0.08) !important;
 }
 </style>
+
+<style scoped src="../node-quick-actions.css"></style>

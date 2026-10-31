@@ -335,17 +335,17 @@ const isSeedanceModel = computed(() => {
 const isAtlasCloudVideoModel = computed(() => String(currentModelConfig.value?.apiType || '').startsWith('atlascloud-video'))
 const isMinimaxH3Model = computed(() => currentModelConfig.value?.apiType === 'minimax-h3' || isAtlasCloudVideoModel.value)
 const isReferenceVideoModel = computed(() => isSeedanceModel.value || isMinimaxH3Model.value)
-const isWan3Model = computed(() => ['wan3', 'routerbee-wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType))
+const isWan3Model = computed(() => ['wan3', 'routerbee-wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(currentModelConfig.value?.apiType))
 
 function getWan3Limit(name, maximum) {
   const configured = Number((currentModelConfig.value?.routerbeeConfig || currentModelConfig.value?.wan3Config)?.[name])
   return Number.isFinite(configured) && configured >= 0 ? Math.min(configured, maximum) : maximum
 }
 
-const wan3AvailableModes = computed(() => ['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType) ? WAN3_MODES.filter(mode => !['file', 'link'].includes(mode.value)) : WAN3_MODES)
+const wan3AvailableModes = computed(() => ['wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(currentModelConfig.value?.apiType) ? WAN3_MODES.filter(mode => !mode.apiType && !['file', 'link'].includes(mode.value)) : WAN3_MODES)
 
 const wan3MaxRefImages = computed(() => getWan3Limit('maxImages', 10))
-const wan3MaxRefVideos = computed(() => getWan3Limit('maxVideos', 5))
+const wan3MaxRefVideos = computed(() => currentModelConfig.value?.apiType === 'grsai-wan3' ? 0 : getWan3Limit('maxVideos', 5))
 const wan3MaxRefAudios = computed(() => getWan3Limit('maxAudios', 5))
 
 // Seedance 可用的模式（从模型配置的 seedanceConfig.supportedModes 读取）
@@ -720,7 +720,7 @@ watch(model, (newModel) => {
     if (!seedanceAvailableModes.value.some(m => m.value === seedanceMode.value)) {
       seedanceMode.value = getFirstAvailableMode(defaultMode, seedanceAvailableModes.value)
     }
-  } else if (['wan3', 'routerbee-wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3'].includes(modelConfig?.apiType)) {
+  } else if (['wan3', 'routerbee-wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(modelConfig?.apiType)) {
     const wan3Config = modelConfig.routerbeeConfig || modelConfig.wan3Config || {}
     wan3Duration.value = Number(wan3Config.duration || durations[0] || 5)
     wan3GenerateAudio.value = wan3Config.audio !== false
@@ -3431,7 +3431,7 @@ onUnmounted(() => {
                   <input ref="seedanceRefImageInputRef" type="file" accept="image/jpeg,image/png,image/bmp,image/webp" multiple @change="handleSeedanceRefImages" class="hidden" />
                 </div>
 
-                <div>
+                <div v-if="wan3MaxRefVideos > 0">
                   <div class="flex items-center justify-between mb-1.5"><label class="text-xs font-semibold text-slate-600 dark:text-slate-400">📹 参考视频</label><span class="text-xs text-slate-500">{{ seedanceRefVideos.length + seedanceRefVideoUrls.length }} / {{ wan3MaxRefVideos }} 个</span></div>
                   <div class="flex gap-1.5"><input v-model="seedanceRefVideoUrl" type="url" placeholder="粘贴公开 MP4/MOV URL" class="input text-xs py-1.5" @keydown.enter.prevent="addSeedanceRefVideoUrl" /><button type="button" @click="addSeedanceRefVideoUrl" class="px-2 py-1.5 text-xs rounded-lg bg-amber-700 text-white hover:bg-amber-600">添加</button></div>
                   <div v-for="(item, index) in seedanceRefVideoPreviews" :key="`wan3-video-${index}`" class="flex items-center gap-2 mt-1.5 rounded border border-slate-200 dark:border-dark-600 px-2 py-1.5 text-xs"><span class="flex-1 truncate">{{ item.name }} · {{ item.duration.toFixed(1) }}s</span><button type="button" @click="removeSeedanceRefVideo(index)" class="text-red-500">移除</button></div>
@@ -3469,9 +3469,9 @@ onUnmounted(() => {
                   <span class="text-xs text-slate-500">{{ wan3AdvancedOpen ? '收起' : '展开' }}</span>
                 </button>
                 <div v-show="wan3AdvancedOpen" class="px-3 py-3 border-t border-slate-200 dark:border-dark-600 space-y-2.5">
-                  <label class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">生成音频</span><input v-model="wan3GenerateAudio" type="checkbox" class="rounded accent-amber-600" /></label>
-                  <label class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">智能扩写提示词</span><input v-model="wan3PromptExtend" type="checkbox" class="rounded accent-amber-600" /></label>
-                  <label class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">添加水印</span><input v-model="wan3Watermark" type="checkbox" class="rounded accent-amber-600" /></label>
+                  <label v-if="currentModelConfig?.apiType !== 'grsai-wan3'" class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">生成音频</span><input v-model="wan3GenerateAudio" type="checkbox" class="rounded accent-amber-600" /></label>
+                  <label v-if="currentModelConfig?.apiType !== 'grsai-wan3'" class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">智能扩写提示词</span><input v-model="wan3PromptExtend" type="checkbox" class="rounded accent-amber-600" /></label>
+                  <label v-if="currentModelConfig?.apiType !== 'grsai-wan3'" class="flex items-center justify-between cursor-pointer"><span class="text-xs text-slate-600 dark:text-slate-400">添加水印</span><input v-model="wan3Watermark" type="checkbox" class="rounded accent-amber-600" /></label>
                   <div><label class="text-xs text-slate-600 dark:text-slate-400 block mb-1">随机种子（可选，0–2147483647）</label><input v-model="wan3Seed" inputmode="numeric" class="input text-xs py-1.5" placeholder="留空则随机" /></div>
                 </div>
               </div>

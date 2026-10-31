@@ -19,6 +19,12 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
+      path: '/wechat/callback',
+      name: 'wechatCallback',
+      component: () => import('@/views/WechatCallback.vue'),
+      meta: { requiresAuth: false, noindex: true, referrer: 'no-referrer' }
+    },
+    {
       path: '/admin/canvas-login',
       name: 'userCanvasLogin',
       component: () => import('@/views/UserCanvasLogin.vue'),

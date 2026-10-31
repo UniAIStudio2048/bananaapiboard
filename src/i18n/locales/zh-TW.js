@@ -501,7 +501,7 @@ export default {
       imageToImage: '圖生圖',
       imageToVideo: '圖生影片',
       changeBackground: '圖片換背景',
-      firstFrameVideo: '首幀圖生影片',
+      firstFrameVideo: '首幀生成影片',
       prompt: '提示詞',
       refImage: '參考圖',
       uploadFailed: '圖片上傳失敗，請重試',
@@ -517,9 +517,10 @@ export default {
     },
     // 影片節點快捷操作
     videoNode: {
+      uploadVideo: '上傳影片',
       textToVideo: '文生影片',
       imageToVideo: '圖生影片',
-      keyframesToVideo: '首尾幀生影片',
+      keyframesToVideo: '首尾幀生成影片',
       motionImitation: '動作模仿',
       videoExtend: '影片延長',
       videoLoop: '影片循環',
@@ -549,11 +550,11 @@ export default {
     },
     // 文字節點快捷操作
     textNode: {
-      try: '嘗試：',
-      writeContent: '自己編寫內容',
-      textToVideo: '文字生影片',
+      try: '從這裡開始',
+      writeContent: '編寫文字',
+      textToVideo: '文生影片',
       imageDescribePrompt: '圖片反推提示詞',
-      textToMusic: '文字生音樂',
+      textToMusic: '文生音樂',
       promptEnhance: '提示詞潤色',
       imageReverse: '圖片反推',
       videoReverse: '影片反推',
@@ -619,6 +620,9 @@ export default {
 
   // 套餐
   packages: {
+    purchaseSubtitle: '選擇適合你的創作計畫',
+    choosePlan: '選擇方案',
+    choosePlanHint: '依使用頻率選擇，靈活安排創作',
     title: '購買套餐',
     currentPlan: '目前套餐',
     noPlan: '暫無套餐',

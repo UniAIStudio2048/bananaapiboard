@@ -29,12 +29,14 @@ test('text node empty quick actions consume tablet touch events before canvas no
 
   const actionIndex = source.indexOf('v-for="action in quickActions"')
   assert.ok(actionIndex >= 0, 'Expected TextNode quick action markup')
-  const tagStart = source.lastIndexOf('<div', actionIndex)
+  const tagStart = source.lastIndexOf('<button', actionIndex)
   const tagEnd = source.indexOf('\n            >', actionIndex)
-  assert.ok(tagStart >= 0 && tagEnd > actionIndex, 'Expected TextNode quick action opening tag')
+  assert.ok(tagStart >= 0 && tagEnd > actionIndex, 'Expected native quick action button')
   const quickAction = source.slice(tagStart, tagEnd)
 
-  assert.match(quickAction, /class="text-node-action quick-action nodrag"/)
+  assert.match(quickAction, /class="text-node-action quick-action nodrag nopan"/)
+  assert.match(quickAction, /type="button"/)
+  assert.match(quickAction, /@keydown\.stop/)
   assert.match(quickAction, /@pointerdown\.stop/)
   assert.match(quickAction, /@touchstart\.stop/)
   assert.match(quickAction, /@touchmove\.stop/)
