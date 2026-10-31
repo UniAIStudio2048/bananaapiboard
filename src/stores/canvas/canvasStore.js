@@ -3215,6 +3215,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     isDraggingConnection,
     dragConnectionSource,
     dragConnectionPosition,
+    dragConnectionStartPosition,
     preventSelectorClose,
     startDragConnection,
     updateDragConnectionPosition,

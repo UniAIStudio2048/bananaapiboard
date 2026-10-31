@@ -732,10 +732,10 @@ onConnectEnd((event) => {
       justOpenedSelectorFromConnection.value = true
       
       // 创建待连接信息（用于渲染虚拟连线）
+      // 原生 handle 拖拽不经过 startDragConnection，不设 sourcePosition，渲染时回退到 getHandlePosition
       const pendingConn = {
         sourceNodeId: startInfo.nodeId,
         sourceHandleId: startInfo.handleId || 'output',
-        sourcePosition: canvasStore.dragConnectionStartPosition,
         targetPosition: flowPos
       }
       
