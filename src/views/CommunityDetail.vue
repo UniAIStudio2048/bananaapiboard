@@ -410,11 +410,11 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onBeforeUnmount, defineAsyncComponent } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useCommunityStore } from '@/stores/community'
 import { getWorkDetail, getWorks, toggleLike as apiToggleLike, toggleFavorite as apiToggleFavorite, getProjectWorkflows, getCommunityUserProfile } from '@/api/community'
-import WorkflowPreviewModal from '@/components/community/WorkflowPreviewModal.vue'
+const WorkflowPreviewModal = defineAsyncComponent(() => import('@/components/community/WorkflowPreviewModal.vue'))
 import FollowButton from '@/components/community/FollowButton.vue'
 import LoginModal from '@/components/community/LoginModal.vue'
 

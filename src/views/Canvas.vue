@@ -97,7 +97,7 @@ import {
   writeEdgeRestoreStyle
 } from '@/utils/canvasControlPreferences'
 // 🔧 画布诊断工具 - 用于调试画布强制重新加载问题
-import { initCanvasDiagnostic, printCanvasDiagnosticReport } from '@/utils/canvasDiagnostic'
+import { initCanvasDiagnostic, printCanvasDiagnosticReport, shouldEnableCanvasDiagnostic, stopCanvasStateMonitor } from '@/utils/canvasDiagnostic'
 import { createCanvasFpsMonitor } from '@/utils/canvasFpsMonitor'
 import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import { cancelAllCanvasUploads } from '@/api/canvas/direct-upload.js'
@@ -3741,7 +3741,10 @@ watch(() => me.value?.preferences?.canvas?.edgeStyle, (style) => {
 onMounted(async () => {
   // 🔧 初始化画布诊断工具 - 用于调试画布强制重新加载问题
   // 在浏览器控制台运行 printCanvasDiagnosticReport() 查看诊断报告
-  initCanvasDiagnostic(canvasStore)
+  // 仅开发环境或 URL 带 ?debug 时启用
+  if (shouldEnableCanvasDiagnostic()) {
+    initCanvasDiagnostic(canvasStore)
+  }
 
   // 🚀 启动画布 FPS 自适应监控（连续低帧自动降一档，恢复后自动升回 baseline）
   startCanvasFpsMonitor()
@@ -3881,6 +3884,7 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  stopCanvasStateMonitor()
   presentationShortcut.dispose()
   cancelAllCanvasUploads()
   uploadManager.cancelAllRetries()

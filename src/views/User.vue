@@ -5,7 +5,7 @@ import { streamVideo as vStreamVideo } from '@/directives/streamVideo'
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from '@/i18n'
-import { redeemVoucher } from '@/api/client'
+import { redeemVoucher, invalidateMeCache } from '@/api/client'
 import { getMyWorks, getMyPurchases, getMyIncome, deleteWork, toggleWorkVisibility } from '@/api/community'
 import { buildStreamDownloadPath } from '@/api/downloadRouting'
 import CachedImage from '@/components/CachedImage.vue'
@@ -1049,6 +1049,7 @@ async function saveProfile() {
       throw new Error(data.error || 'update_failed')
     }
     
+    invalidateMeCache()
     const updated = await res.json()
     me.value = { ...me.value, ...updated }
     showToast('个人资料更新成功！', 'success')
@@ -2339,9 +2340,6 @@ onMounted(async () => {
   }
   
   // 监听主题变化
-  const handleThemeChange = () => {
-    currentTheme.value = getTheme()
-  }
   window.addEventListener('storage', handleThemeChange)
   window.addEventListener('theme-changed', handleThemeChange)
   
@@ -2352,6 +2350,11 @@ onMounted(async () => {
   window.addEventListener('user-info-updated', handleUserInfoUpdated)
   window.addEventListener('keydown', handleImagePreviewShortcut)
 })
+
+// 处理主题变化
+function handleThemeChange() {
+  currentTheme.value = getTheme()
+}
 
 // 处理用户信息更新
 async function handleUserInfoUpdated() {
@@ -2365,6 +2368,8 @@ onUnmounted(() => {
   window.removeEventListener('open-voucher-modal', openVoucherModal)
   window.removeEventListener('user-info-updated', handleUserInfoUpdated)
   window.removeEventListener('keydown', handleImagePreviewShortcut)
+  window.removeEventListener('storage', handleThemeChange)
+  window.removeEventListener('theme-changed', handleThemeChange)
 })
 </script>
 

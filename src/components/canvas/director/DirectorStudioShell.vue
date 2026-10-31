@@ -1,6 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import DirectorStudioScene from './DirectorStudioScene.vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue'
 import DirectorStudioToolbar from './DirectorStudioToolbar.vue'
 import DirectorStudioProjectPanel from './DirectorStudioProjectPanel.vue'
 import DirectorStudioItemList from './DirectorStudioItemList.vue'
@@ -35,6 +34,8 @@ import {
   resolveDirectorStudioActionPosePreset,
   resolveDirectorStudioInteractionPosePreset
 } from '@/config/canvas/directorStudioPresetCatalog.js'
+
+const DirectorStudioScene = defineAsyncComponent(() => import('./DirectorStudioScene.vue'))
 
 const props = defineProps({
   sourceNodeId: { type: String, required: true },

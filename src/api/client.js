@@ -1,6 +1,7 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { logApiRequest, logApiResponse, logApiError, logAuth, logUserAction } from '@/utils/logger'
 import { createPromptSafetyError } from '@/utils/promptSafetyError'
+import { createInflightRequestCache } from '@/utils/inflightRequestCache'
 import {
   buildDirectCdnDownloadUrl,
   buildMediaProxyDownloadPath,
@@ -38,12 +39,15 @@ export function persistAuthSession(token, user = null) {
     localStorage.removeItem('userId')
   }
 
+  if (token !== previousToken) invalidateMeCache()
+
   if (token && token !== previousToken && typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('auth-session-updated'))
   }
 }
 
 export function clearAuthSession() {
+  invalidateMeCache()
   localStorage.removeItem('token')
   localStorage.removeItem('user')
   localStorage.removeItem('username')
@@ -463,29 +467,64 @@ export function startStreamDownload(url, filename) {
   triggerUrlDownload(getApiUrl(buildStreamDownloadPath(cleanUrl, correctedFilename)), correctedFilename)
 }
 
-export async function getMe(forceRefresh = false, { teamId } = {}) {
-  const token = localStorage.getItem('token')
-  if (!token) return null
+// /api/user/me 请求去重：并发调用合并为一次请求，成功结果短缓存 2 秒
+// 登录/登出/token 变化/资料更新时调用 invalidateMeCache() 失效
+const ME_CACHE_TTL = 2000
+const meRequestCache = createInflightRequestCache({ ttl: ME_CACHE_TTL })
+
+export function invalidateMeCache() {
+  meRequestCache.invalidate()
+}
+
+async function requestMe(url, forceRefresh) {
+  // 添加超时控制，防止请求卡住
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000) // 10秒超时
 
   try {
-    // 添加超时控制，防止请求卡住
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 10000) // 10秒超时
-
-    // 构建查询参数
-    const params = new URLSearchParams()
-    if (forceRefresh) params.append('_t', String(Date.now()))
-    if (teamId) params.append('teamId', teamId)
-    const query = params.toString()
-    const url = getApiUrl(`/api/user/me${query ? '?' + query : ''}`)
-
     const r = await fetch(url, {
       headers: getHeaders(),
       signal: controller.signal,
       cache: forceRefresh ? 'no-store' : 'default' // 强制刷新时禁用缓存
     })
 
+    if (!r.ok) return { ok: false, status: r.status, text: '' }
+    // 保留原始文本，各调用方各自解析，避免共享同一个可变对象
+    return { ok: true, status: r.status, text: await r.text() }
+  } finally {
     clearTimeout(timeoutId)
+  }
+}
+
+// 按 token + teamId 合并请求；forceRefresh 跳过短缓存与进行中的请求
+function requestMeShared(path, { forceRefresh = false, teamId } = {}) {
+  const token = localStorage.getItem('token')
+  if (!token) return Promise.resolve(null)
+  return meRequestCache.run(`${token}|${teamId || ''}`, () => requestMe(getApiUrl(path), forceRefresh), {
+    skipCache: forceRefresh,
+    shouldCache: (res) => res?.ok === true
+  })
+}
+
+/**
+ * 共享的 /api/user/me 请求（供路由守卫使用，与 getMe() 合并）
+ * @returns {Promise<{ ok: boolean, status: number, text: string } | null>} 无 token 时返回 null
+ */
+export function fetchMeShared() {
+  return requestMeShared('/api/user/me')
+}
+
+export async function getMe(forceRefresh = false, { teamId } = {}) {
+  const token = localStorage.getItem('token')
+  if (!token) return null
+
+  try {
+    // 构建查询参数
+    const params = new URLSearchParams()
+    if (forceRefresh) params.append('_t', String(Date.now()))
+    if (teamId) params.append('teamId', teamId)
+    const query = params.toString()
+    const r = await requestMeShared(`/api/user/me${query ? '?' + query : ''}`, { forceRefresh, teamId })
 
     if (!r.ok) {
       if (r.status === 401) {
@@ -493,7 +532,7 @@ export async function getMe(forceRefresh = false, { teamId } = {}) {
       }
       return null
     }
-    const data = await r.json()
+    const data = JSON.parse(r.text)
     persistAuthSession(token, data)
     return data
   } catch (e) {
@@ -522,6 +561,7 @@ export async function updateUserPreferences(preferences) {
       return null
     }
 
+    invalidateMeCache()
     const data = await r.json()
     return data
   } catch (e) {
@@ -546,6 +586,7 @@ export async function redeemVoucher(code) {
     throw error
   }
   
+  invalidateMeCache()
   return data
 }
 

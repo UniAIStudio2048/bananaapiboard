@@ -322,7 +322,7 @@ function saveToLocalStorage(history) {
   const storageKey = getHistoryStorageKey()
   if (!storageKey) return false
   try {
-    const jsonData = JSON.stringify(history)
+    let jsonData = JSON.stringify(history)
     
     // 检查总大小
     if (jsonData.length > MAX_TOTAL_STORAGE_SIZE) {
@@ -330,14 +330,15 @@ function saveToLocalStorage(history) {
       // 逐步删除旧记录直到大小合适
       while (history.length > 1) {
         history.pop()
-        const newJson = JSON.stringify(history)
-        if (newJson.length <= MAX_TOTAL_STORAGE_SIZE) {
+        jsonData = JSON.stringify(history)
+        if (jsonData.length <= MAX_TOTAL_STORAGE_SIZE) {
           break
         }
       }
     }
     
-    localStorage.setItem(storageKey, JSON.stringify(history))
+    // 复用已序列化的结果，避免重复 JSON.stringify
+    localStorage.setItem(storageKey, jsonData)
     return true
   } catch (e) {
     // 处理 QuotaExceededError

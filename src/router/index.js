@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getBrand } from '@/config/tenant'
-import Home from '@/views/Home.vue'
+const Home = () => import('@/views/Home.vue')
 const User = () => import('@/views/User.vue')
 const Packages = () => import('@/views/Packages.vue')
 const VideoGeneration = () => import('@/views/VideoGeneration.vue')
@@ -193,22 +193,17 @@ router.beforeEach(async (to, from, next) => {
     
     // 仅在首次进入认证页面时验证 token
     try {
-      const { getTenantHeaders, getApiUrl } = await import('@/config/tenant')
-      const response = await fetch(getApiUrl('/api/user/me'), {
-        headers: {
-          ...getTenantHeaders(),
-          'Authorization': `Bearer ${token}`
-        }
-      })
+      // 与 getMe 共用同一个 /api/user/me 请求（并发合并 + 短缓存）
+      const { fetchMeShared, clearAuthSession } = await import('@/api/client')
+      const response = await fetchMeShared()
       
-      if (response.status === 401) {
+      if (response?.status === 401) {
         console.log('[Router] Token 已失效(401)，清除登录状态')
-        const { clearAuthSession } = await import('@/api/client')
         clearAuthSession()
         localStorage.removeItem('userMode')
         return next({ path: '/', query: { redirect: to.fullPath } })
       }
-      if (!response.ok) {
+      if (response && !response.ok) {
         console.warn('[Router] 验证请求返回', response.status, '，但非401，允许通过')
       }
     } catch (error) {

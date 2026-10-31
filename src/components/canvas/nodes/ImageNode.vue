@@ -12,7 +12,7 @@ defineOptions({
  * - 点击"图生图"：触发上传，上传后当前节点变成图片预览，自动创建右侧输出节点
  * - 选中输出节点时：底部弹出配置面板
  */
-import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick, defineAsyncComponent } from 'vue'
 import { Upload, ImagePlus, Film, Layers, PanelsTopLeft, ChevronRight } from '@lucide/vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
@@ -41,8 +41,8 @@ import { getImagePresets, incrementPresetUseCount, createImagePreset, updateImag
 import ImagePresetDialog from '../dialogs/ImagePresetDialog.vue'
 import ImagePresetManager from '../dialogs/ImagePresetManager.vue'
 import ImageCropper from '../ImageCropper.vue'
-import Camera3DPanel from '../Camera3DPanel.vue'
-import Pose3DViewer from '../Pose3DViewer.vue'
+const Camera3DPanel = defineAsyncComponent(() => import('../Camera3DPanel.vue'))
+const Pose3DViewer = defineAsyncComponent(() => import('../Pose3DViewer.vue'))
 import CameraControlPanel from '../CameraControlPanel.vue'
 import { generateCameraPrompt } from '@/config/canvas/cameraDatabase'
 import { getHighQualityCanvasPreviewUrl, getOriginalImageUrl, getVideoPosterUrl, onCanvasImageError, toSameOriginUrl } from '@/utils/canvasThumbnail'
@@ -80,7 +80,7 @@ import PromptMediaTag from '../PromptMediaTag.vue'
 import PromptTranslateButton from '../PromptTranslateButton.vue'
 import VideoParametersDropdown from '../VideoParametersDropdown.vue'
 import CanvasNodeImage from '../CanvasNodeImage.vue'
-import PanoramaPreviewModal from '../PanoramaPreviewModal.vue'
+const PanoramaPreviewModal = defineAsyncComponent(() => import('../PanoramaPreviewModal.vue'))
 import ModelIcon from '../../common/ModelIcon.vue'
 import { smartDownload } from '@/api/client'
 
@@ -2282,6 +2282,7 @@ const multianglePointsCost = ref(0) // 多角度生成积分消耗
 
 // 3D 姿态分析状态
 const showPose3DViewer = ref(false)
+const pose3DViewerMounted = ref(false) // 首次打开后才挂载，之后保持挂载
 
 // 预设背景颜色
 const cutoutBgPresets = [
@@ -3515,6 +3516,7 @@ function handleCameraClose() {
 // ========== 3D 姿态分析 ==========
 function handleToolbarPose3D() {
   console.log('[ImageNode] 工具栏：姿态分析', props.id)
+  pose3DViewerMounted.value = true
   showPose3DViewer.value = true
 }
 
@@ -7903,6 +7905,7 @@ async function handleDrop(event) {
     
     <!-- 3D 姿态分析面板 -->
     <Pose3DViewer
+      v-if="pose3DViewerMounted"
       :visible="showPose3DViewer"
       :image-url="currentImageUrl"
       @close="handlePose3DClose"

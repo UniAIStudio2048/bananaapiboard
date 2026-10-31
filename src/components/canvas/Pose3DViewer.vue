@@ -738,7 +738,7 @@ watch(() => props.visible, (visible) => {
       }
     })
   }
-})
+}, { immediate: true }) // 按需挂载时可能以 visible=true 首次挂载
 
 watch(() => props.imageUrl, (newUrl) => {
   if (newUrl && props.visible) {
@@ -751,7 +751,9 @@ watch(() => props.imageUrl, (newUrl) => {
 onMounted(() => {
   if (props.visible) {
     nextTick(() => {
-      initThreeJS()
+      if (!scene) {
+        initThreeJS()
+      }
     })
   }
 })

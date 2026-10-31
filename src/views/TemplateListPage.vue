@@ -142,13 +142,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { clearAuthSession } from '@/api/client'
 import { useCommunityStore } from '@/stores/community'
 import { getTemplates } from '@/api/community'
 import { getBrand, loadBrandConfig } from '@/config/tenant'
-import WorkflowPreviewModal from '@/components/community/WorkflowPreviewModal.vue'
+const WorkflowPreviewModal = defineAsyncComponent(() => import('@/components/community/WorkflowPreviewModal.vue'))
 import LoginModal from '@/components/community/LoginModal.vue'
 
 const router = useRouter()

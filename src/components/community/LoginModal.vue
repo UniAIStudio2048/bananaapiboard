@@ -127,7 +127,7 @@ watch(() => props.modelValue, (v) => {
     loadSettings()
     loadEmailConfig()
   }
-})
+}, { immediate: true }) // 支持按需挂载时以打开状态首次挂载
 
 // 加载注册设置
 async function loadSettings() {

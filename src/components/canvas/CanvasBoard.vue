@@ -192,8 +192,10 @@ function handleEdgeStyleChange(event) {
   })
 }
 
-// 记录最后的鼠标位置（用于粘贴）
-const lastMousePosition = ref(null)
+// 记录最后的鼠标位置（用于粘贴）；mousemove 高频写入，使用非响应式变量
+let lastMousePosition = null
+// 画布容器 rect 缓存（mousemove 判断用），由 ResizeObserver / window resize 失效
+let cachedCanvasBoardRect = null
 
 // 选中的节点ID列表（用于批量删除）
 const selectedNodeIds = ref([])
@@ -321,6 +323,7 @@ function markViewportMoving() {
 }
 
 function updateCanvasBoardSize() {
+  cachedCanvasBoardRect = null
   const rect = canvasBoardRef.value?.getBoundingClientRect?.()
   const width = Math.round(rect?.width || 0)
   const height = Math.round(rect?.height || 0)
@@ -1602,16 +1605,25 @@ function getCanvasBoardRect() {
   return canvasBoardRef.value?.getBoundingClientRect?.() || null
 }
 
+function getCachedCanvasBoardRect() {
+  if (!cachedCanvasBoardRect) cachedCanvasBoardRect = getCanvasBoardRect()
+  return cachedCanvasBoardRect
+}
+
+function invalidateCanvasBoardRect() {
+  cachedCanvasBoardRect = null
+}
+
 function rememberCanvasMousePosition(event) {
   const screenPosition = { x: event.clientX, y: event.clientY }
-  if (isScreenPointInsideRect(screenPosition, getCanvasBoardRect())) {
-    lastMousePosition.value = screenPosition
+  if (isScreenPointInsideRect(screenPosition, getCachedCanvasBoardRect())) {
+    lastMousePosition = screenPosition
   }
 }
 
 function getCanvasPasteScreenPosition() {
   return resolveCanvasPasteScreenPosition({
-    lastMousePosition: lastMousePosition.value,
+    lastMousePosition,
     canvasRect: getCanvasBoardRect()
   })
 }
@@ -4133,6 +4145,8 @@ onMounted(() => {
   document.addEventListener('mousedown', handleMouseDown)
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', handleMouseUp)
+  window.addEventListener('resize', invalidateCanvasBoardRect)
+  window.addEventListener('scroll', invalidateCanvasBoardRect, { capture: true, passive: true })
   
   // 添加滚轮事件监听（以鼠标位置为中心缩放）
   window.addEventListener('wheel', handleGlobalWheel, { passive: false, capture: true })
@@ -4167,6 +4181,8 @@ onUnmounted(() => {
   document.removeEventListener('mouseup', handleConnectionTransferMouseUp, { capture: true })
   document.removeEventListener('mousedown', handleMouseDown)
   document.removeEventListener('mousemove', handleMouseMove)
+  window.removeEventListener('resize', invalidateCanvasBoardRect)
+  window.removeEventListener('scroll', invalidateCanvasBoardRect, { capture: true })
   document.removeEventListener('mouseup', handleMouseUp)
   
   // 恢复光标样式

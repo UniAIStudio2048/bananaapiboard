@@ -8,7 +8,7 @@ import { ref, computed, watch, onMounted, inject, nextTick } from 'vue'
 import { ChevronLeft, LockKeyhole, Mail, Maximize2, Minimize2, Plus, UserRound, UsersRound } from '@lucide/vue'
 import PhoneBinding from '@/components/auth/PhoneBinding.vue'
 import { useRouter } from 'vue-router'
-import { redeemVoucher as redeemVoucherApi, updateUserPreferences, clearAuthSession } from '@/api/client'
+import { redeemVoucher as redeemVoucherApi, updateUserPreferences, clearAuthSession, invalidateMeCache } from '@/api/client'
 import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { getPermanentUserPoints } from '@/utils/points'
@@ -1025,6 +1025,7 @@ async function saveProfile() {
       body: JSON.stringify(profileForm.value)
     })
     if (res.ok) {
+      invalidateMeCache()
       emit('update')
       showAlert(t('user.profileSaved'), `✓ ${t('common.success')}`)
     } else {

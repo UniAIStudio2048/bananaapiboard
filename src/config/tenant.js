@@ -371,6 +371,10 @@ function applyModelEntitlements(models, type) {
     .filter(Boolean)
 }
 
+// 进行中的模型权益请求（按 token 复用，避免并发重复拉取）
+let modelEntitlementsRequest = null
+let modelEntitlementsRequestToken = null
+
 export async function loadModelEntitlements() {
   const token = localStorage.getItem('token')
   if (!token) {
@@ -379,6 +383,21 @@ export async function loadModelEntitlements() {
     return runtimeConfig.modelEntitlements
   }
 
+  if (modelEntitlementsRequest && modelEntitlementsRequestToken === token) {
+    return modelEntitlementsRequest
+  }
+  const request = fetchModelEntitlements(token).finally(() => {
+    if (modelEntitlementsRequest === request) {
+      modelEntitlementsRequest = null
+      modelEntitlementsRequestToken = null
+    }
+  })
+  modelEntitlementsRequest = request
+  modelEntitlementsRequestToken = token
+  return request
+}
+
+async function fetchModelEntitlements(token) {
   try {
     const response = await fetch(getApiUrl('/api/user/model-entitlements'), {
       headers: {
@@ -433,6 +452,12 @@ export function updateRuntimeConfig(newConfig) {
   console.log('[tenant] 运行时配置已更新:', runtimeConfig)
 }
 
+// 进行中的品牌配置网络请求（并发调用复用，forceReload 时同样复用）
+let brandConfigRequest = null
+// 最近一次品牌配置网络拉取成功的时间；forceReload 在该时间 5 秒内直接复用刚拉取的结果
+let brandConfigLastFetchedAt = 0
+const BRAND_CONFIG_FORCE_FRESH_MS = 5000
+
 // 从后端 API 加载品牌配置（公开接口，无需认证）
 export async function loadBrandConfig(forceReload = false) {
   try {
@@ -455,7 +480,31 @@ export async function loadBrandConfig(forceReload = false) {
         }
       }
     }
-    
+  } catch (e) {
+    console.error('[tenant] 加载品牌配置失败:', e)
+    return runtimeConfig.brand
+  }
+
+  if (
+    forceReload &&
+    !brandConfigRequest &&
+    brandConfigLastFetchedAt &&
+    Date.now() - brandConfigLastFetchedAt < BRAND_CONFIG_FORCE_FRESH_MS
+  ) {
+    console.log('[tenant] 品牌配置刚刚拉取过，复用最新结果')
+    return runtimeConfig.brand
+  }
+
+  if (!brandConfigRequest) {
+    brandConfigRequest = fetchBrandConfig().finally(() => {
+      brandConfigRequest = null
+    })
+  }
+  return brandConfigRequest
+}
+
+async function fetchBrandConfig() {
+  try {
     console.log('[tenant] 从后端加载品牌配置...')
     
     // 先尝试从 localStorage 获取租户信息
@@ -626,6 +675,7 @@ export async function loadBrandConfig(forceReload = false) {
       // 应用favicon
       applyFavicon(runtimeConfig.brand.favicon)
       
+      brandConfigLastFetchedAt = Date.now()
       return runtimeConfig.brand
     } else {
       console.warn('[tenant] 品牌配置加载失败，使用默认配置')

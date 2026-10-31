@@ -17,6 +17,8 @@ import { classifyPollingError } from './backgroundTaskErrorPolicy.js'
 
 const STORAGE_KEY = 'canvas_background_tasks'
 const POLL_INTERVAL = 3000  // 3秒轮询一次
+const HIDDEN_POLL_EVERY_TICKS = 4  // 页面隐藏时每 4 个 tick 轮询一次（≈12秒）
+const SAVE_DEBOUNCE_MS = 500  // localStorage 写入合并窗口
 const MAX_TASK_AGE = 24 * 60 * 60 * 1000  // 任务最大存活时间：24小时
 const IMAGE_POLL_TIMEOUT = 8 * 60 * 1000  // 图片任务前端轮询超时：8分钟
 const VIDEO_POLL_TIMEOUT = 40 * 60 * 1000  // 视频任务前端轮询超时：40分钟（与后端 VIDEO_TASK_TIMEOUT_MS 对齐）
@@ -48,6 +50,8 @@ const NO_CHARGE_TASK_TYPES = new Set([
 let tasks = new Map()
 let pollingTimers = new Map()
 let taskCallbacks = new Map()
+let pollRunners = new Map()  // taskId -> 本轮询周期的立即轮询函数（带 in-flight 保护）
+let saveTasksTimer = null
 
 // vite 开发模式 HMR 状态保留：模块热重载时这三个 Map 会被重新初始化为空，
 // 导致正在轮询的任务丢失、完成事件不再广播、画布节点不渲染(必须刷新页面才显示)。
@@ -57,11 +61,13 @@ if (import.meta.hot) {
     tasks = import.meta.hot.data.tasks || tasks
     pollingTimers = import.meta.hot.data.pollingTimers || pollingTimers
     taskCallbacks = import.meta.hot.data.taskCallbacks || taskCallbacks
+    pollRunners = import.meta.hot.data.pollRunners || pollRunners
   }
   import.meta.hot.dispose((data) => {
     data.tasks = tasks
     data.pollingTimers = pollingTimers
     data.taskCallbacks = taskCallbacks
+    data.pollRunners = pollRunners
   })
 }
 
@@ -107,9 +113,21 @@ function loadTasksFromStorage() {
 }
 
 /**
- * 保存任务到 localStorage
+ * 保存任务到 localStorage（500ms 内的多次调用合并为一次写入）
  */
 function saveTasksToStorage() {
+  if (saveTasksTimer) return
+  saveTasksTimer = setTimeout(flushTasksToStorage, SAVE_DEBOUNCE_MS)
+}
+
+/**
+ * 立即写入任务到 localStorage
+ */
+function flushTasksToStorage() {
+  if (saveTasksTimer) {
+    clearTimeout(saveTasksTimer)
+    saveTasksTimer = null
+  }
   try {
     const tasksArray = Array.from(tasks.values())
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tasksArray))
@@ -414,12 +432,36 @@ function startPolling(taskId) {
     }
   }
   
+  // 上一次请求未返回时跳过，避免同一任务请求堆积
+  let inFlight = false
+  const runPoll = async () => {
+    if (inFlight) return
+    inFlight = true
+    try {
+      await poll()
+    } finally {
+      inFlight = false
+    }
+  }
+
+  // 页面隐藏时降频：每 HIDDEN_POLL_EVERY_TICKS 个 tick 才轮询一次
+  let hiddenTicks = 0
+  const tick = () => {
+    if (typeof document !== 'undefined' && document.hidden) {
+      hiddenTicks += 1
+      if (hiddenTicks < HIDDEN_POLL_EVERY_TICKS) return
+    }
+    hiddenTicks = 0
+    runPoll()
+  }
+
   // 立即执行一次
-  poll()
+  runPoll()
   
   // 设置定时器
-  const timer = setInterval(poll, POLL_INTERVAL)
+  const timer = setInterval(tick, POLL_INTERVAL)
   pollingTimers.set(taskId, timer)
+  pollRunners.set(taskId, runPoll)
 }
 
 /**
@@ -430,6 +472,7 @@ function stopPolling(taskId) {
   if (timer) {
     clearInterval(timer)
     pollingTimers.delete(taskId)
+    pollRunners.delete(taskId)
   }
 }
 
@@ -618,6 +661,7 @@ export function stopAllPolling() {
     clearInterval(timer)
   }
   pollingTimers.clear()
+  pollRunners.clear()
 }
 
 /**
@@ -672,8 +716,19 @@ async function fetchGroupTaskUrls(groupTaskIds) {
 // 页面卸载前保存状态并停止轮询
 if (typeof window !== 'undefined') {
   window.addEventListener('beforeunload', () => {
-    saveTasksToStorage()
+    flushTasksToStorage()
     stopAllPolling()  // 🔧 确保停止所有轮询定时器
+  })
+  window.addEventListener('pagehide', flushTasksToStorage)
+}
+
+// 回到前台时立即轮询一次所有进行中的任务
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return
+    for (const runPoll of pollRunners.values()) {
+      runPoll()
+    }
   })
 }
 

@@ -89,17 +89,23 @@ onMounted(async () => {
   if (['/admin/canvas-login', '/wechat/callback'].includes(window.location.pathname)) return
   if (route.name === 'workflowShare') return
 
-  me.value = await getMe()
-  await Promise.all([loadInviteCode(), loadSiteConfig()])
-  
-  // 加载并更新品牌配置
-  try {
-    const brand = await loadBrandConfig(true)  // 强制重新加载
-    brandConfig.value = brand
-    console.log('[App] 品牌配置已更新:', brand.name, brand.logo)
-  } catch (e) {
-    console.error('[App] 品牌配置加载失败:', e)
-  }
+  // 用户信息、邀请码/站点配置、品牌配置互不依赖，并行加载（各自处理错误）
+  const meTask = getMe().then((user) => { me.value = user })
+  await Promise.all([
+    meTask,
+    loadInviteCode(),
+    loadSiteConfig(),
+    (async () => {
+      // 加载并更新品牌配置
+      try {
+        const brand = await loadBrandConfig(true)  // 强制重新加载
+        brandConfig.value = brand
+        console.log('[App] 品牌配置已更新:', brand.name, brand.logo)
+      } catch (e) {
+        console.error('[App] 品牌配置加载失败:', e)
+      }
+    })()
+  ])
   
   // 点击外部关闭下拉菜单
   document.addEventListener('click', closeMenus)

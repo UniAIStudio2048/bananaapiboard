@@ -182,13 +182,13 @@
     </section>
 
     <!-- 登录弹窗 -->
-    <LoginModal v-model="communityStore.showLoginModal" @login-success="onLoginSuccess" />
+    <LoginModal v-if="loginModalMounted" v-model="communityStore.showLoginModal" @login-success="onLoginSuccess" />
 
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, defineAsyncComponent } from 'vue'
 import { useRouter } from 'vue-router'
 import { clearAuthSession } from '@/api/client'
 import { useCommunityStore } from '@/stores/community'
@@ -196,13 +196,19 @@ import { getWorks, toggleLike, toggleFavorite } from '@/api/community'
 import { getBrand, loadBrandConfig } from '@/config/tenant'
 import BannerCarousel from '@/components/community/BannerCarousel.vue'
 import WorkCard from '@/components/community/WorkCard.vue'
-import LoginModal from '@/components/community/LoginModal.vue'
+const LoginModal = defineAsyncComponent(() => import('@/components/community/LoginModal.vue'))
 import CreationEntry from '@/components/community/CreationEntry.vue'
 import TemplateGallery from '@/components/community/TemplateGallery.vue'
 import HorizontalScrollRow from '@/components/community/HorizontalScrollRow.vue'
 
 const router = useRouter()
 const communityStore = useCommunityStore()
+
+// 登录弹窗首次打开后才挂载，之后保持挂载（所有入口均通过 communityStore.showLoginModal 打开）
+const loginModalMounted = ref(communityStore.showLoginModal)
+watch(() => communityStore.showLoginModal, (visible) => {
+  if (visible) loginModalMounted.value = true
+})
 
 // 模拟数据生成
 const mockNames = [

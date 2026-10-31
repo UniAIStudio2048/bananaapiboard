@@ -4,6 +4,7 @@
  * 包含社区作品浏览、点赞、发布、购买、Fork 等接口
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
+import { invalidateMeCache } from '@/api/client'
 
 // 获取带租户标识的请求头
 function getHeaders(options = {}) {
@@ -275,8 +276,10 @@ export function getUploadConfig() {
 // ==================== 用户资料编辑 ====================
 
 /** 更新用户资料（头像、简介） */
-export function updateUserProfile(data) {
-  return request('/api/user/profile', { method: 'PUT', body: data })
+export async function updateUserProfile(data) {
+  const result = await request('/api/user/profile', { method: 'PUT', body: data })
+  invalidateMeCache()
+  return result
 }
 
 /** 上传用户头像 */
@@ -299,6 +302,7 @@ export async function uploadAvatar(file) {
     try { err.data = await r.json(); err.message = err.data.message || 'upload_failed' } catch {}
     throw err
   }
+  invalidateMeCache()
   return r.json()
 }
 

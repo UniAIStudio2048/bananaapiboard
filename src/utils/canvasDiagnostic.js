@@ -15,7 +15,18 @@
 
 let diagnosticEnabled = false
 let diagnosticLogs = []
+let canvasStateTimer = null
 const MAX_LOGS = 100
+
+// 仅在开发环境或 URL 带 ?debug 时启用诊断（避免生产环境包裹 fetch/localStorage 的额外开销）
+export function shouldEnableCanvasDiagnostic() {
+  if (import.meta.env?.DEV) return true
+  try {
+    return new URLSearchParams(window.location.search).has('debug')
+  } catch {
+    return false
+  }
+}
 
 // 日志记录函数
 function logDiagnostic(type, message, data = {}) {
@@ -184,8 +195,9 @@ function checkIfPageWasReloaded() {
 
 // 监控 VueFlow 和画布状态
 function monitorCanvasState(canvasStore) {
+  stopCanvasStateMonitor()
   // 定期记录画布状态
-  setInterval(() => {
+  canvasStateTimer = setInterval(() => {
     if (!diagnosticEnabled) return
     
     const nodeCount = canvasStore.nodes?.length || 0
@@ -198,6 +210,14 @@ function monitorCanvasState(canvasStore) {
       localStorageUsage: checkLocalStorageUsage()
     })
   }, 60000) // 每分钟记录一次
+}
+
+// 停止画布状态定时快照（画布卸载时调用）
+export function stopCanvasStateMonitor() {
+  if (canvasStateTimer) {
+    clearInterval(canvasStateTimer)
+    canvasStateTimer = null
+  }
 }
 
 // 监控视频任务轮询
@@ -261,6 +281,10 @@ function monitorVideoTaskPolling() {
 export function initCanvasDiagnostic(canvasStore = null) {
   if (diagnosticEnabled) {
     console.log('[CanvasDiagnostic] 诊断工具已经初始化')
+    // 画布重新挂载时恢复状态快照定时器
+    if (canvasStore && !canvasStateTimer) {
+      monitorCanvasState(canvasStore)
+    }
     return
   }
   
@@ -341,6 +365,7 @@ if (typeof window !== 'undefined') {
 
 export default {
   initCanvasDiagnostic,
+  stopCanvasStateMonitor,
   getCanvasDiagnosticLogs,
   printCanvasDiagnosticReport,
   checkLocalStorageUsage,
