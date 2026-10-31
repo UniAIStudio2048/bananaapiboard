@@ -56,6 +56,16 @@ function getAuthHeaders() {
 
 const MAX_HISTORY_PAGES = 20
 
+export async function getHistoryRetention() {
+  const response = await fetch(getApiUrl('/api/history/retention'), {
+    credentials: 'include', headers: getAuthHeaders(), cache: 'no-store'
+  })
+  if (!response.ok) throw new Error('获取历史记录保留期限失败')
+  const { retentionDays } = await response.json()
+  if (!Number.isSafeInteger(retentionDays) || retentionDays < 0) throw new Error('历史记录保留期限无效')
+  return retentionDays
+}
+
 function getHistoryPageLimit(limit) {
   const parsed = Number.parseInt(limit, 10)
   if (!Number.isFinite(parsed) || parsed <= 0) return 50

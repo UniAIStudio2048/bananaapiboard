@@ -1,3 +1,5 @@
+import { getSeedanceRecyclingStatus } from './seedanceAssetRecycling.js'
+
 export function getSeedanceMediaType(data = {}) {
   const value = String(data?.assetType || data?.AssetType || 'Image').toLowerCase()
   return value === 'video' || value === 'audio' ? value : 'image'
@@ -23,7 +25,9 @@ export function mapLocalSeedanceAsset(asset) {
     URL: metadata.assetUrl || asset.thumbnail_url || (/^(https?:|\/)/.test(asset.url || '') ? asset.url : ''),
     ThumbnailURL: metadata.thumbnailUrl || asset.thumbnail_url || '',
     AssetUri: metadata.assetUri || asset.url,
-    Status: metadata.status || 'Active',
+    Status: getSeedanceRecyclingStatus(metadata),
+    recyclingManaged: metadata.recyclingManaged === true,
+    expiresAt: metadata.expiresAt,
     GroupId: metadata.groupId,
     AssetType: metadata.assetType || 'Image',
     providerType: metadata.providerType,
@@ -45,6 +49,8 @@ export function buildSeedanceCharacterData(asset) {
     groupId: asset.GroupId,
     assetName: asset.Name,
     status: asset.Status,
+    recyclingManaged: asset.recyclingManaged === true,
+    expiresAt: asset.expiresAt,
     assetType,
     providerType: asset.providerType,
     thumbnailUrl,

@@ -6,7 +6,7 @@ import { parse } from '@babel/parser'
 import { getSeedanceMediaType } from '../../../utils/seedanceMedia.js'
 import { getSeedanceQuickAsset, getSeedanceQuickAssetStatus } from '../../../utils/seedanceQuickAsset.js'
 import { applyOrderedMediaReplacements } from '../../../utils/videoReferenceOrdering.js'
-import { normalizeAssetReviewStatus } from '../../../utils/assetReviewStatus.js'
+import { isSeedanceAssetReusable } from '../../../utils/seedanceAssetRecycling.js'
 
 const source = parseVue(readFileSync(new URL('./VideoNode.vue', import.meta.url), 'utf8')).descriptor.scriptSetup.content
 const names = new Set(['IMAGE_NODE_TYPES', 'VIDEO_NODE_TYPES', 'AUDIO_NODE_TYPES', 'referenceImages', 'referenceVideos', 'referenceAudios', 'getSeedanceCharacterPreviewUrl', 'collectNodeMediaUrls', 'collectSeedanceMediaReplacements', 'getUpstreamData'])
@@ -16,8 +16,8 @@ const code = statements.map(statement => source.slice(statement.start, statement
 function harness(nodes, data = {}) {
   const canvasStore = { nodes, edges: nodes.map(node => ({ source: node.id, target: 'target' })) }
   const computed = callback => ({ get value() { return callback() } })
-  return new Function('canvasStore', 'props', 'computed', 'getSeedanceMediaType', 'getSeedanceQuickAsset', 'getSeedanceQuickAssetStatus', 'normalizeAssetReviewStatus', 'isBrowserRenderableUrl', 'console', `const isHeygenModelSelected = { value: false }; ${code}; return { referenceImages, referenceVideos, referenceAudios, collectSeedanceMediaReplacements, getUpstreamData }`)(
-    canvasStore, { id: 'target', data }, computed, getSeedanceMediaType, getSeedanceQuickAsset, getSeedanceQuickAssetStatus, normalizeAssetReviewStatus, url => /^https?:\/\//.test(url || ''), { log() {} }
+  return new Function('canvasStore', 'props', 'computed', 'getSeedanceMediaType', 'getSeedanceQuickAsset', 'getSeedanceQuickAssetStatus', 'isSeedanceAssetReusable', 'isBrowserRenderableUrl', 'console', `const isHeygenModelSelected = { value: false }; ${code}; return { referenceImages, referenceVideos, referenceAudios, collectSeedanceMediaReplacements, getUpstreamData }`)(
+    canvasStore, { id: 'target', data }, computed, getSeedanceMediaType, getSeedanceQuickAsset, getSeedanceQuickAssetStatus, isSeedanceAssetReusable, url => /^https?:\/\//.test(url || ''), { log() {} }
   )
 }
 
@@ -75,4 +75,13 @@ test('provider success status variants remain usable as reviewed role assets', (
     node.data.status = status
     assert.equal(harness([node]).collectSeedanceMediaReplacements('target', { mediaType: 'video' }).length, 1)
   }
+})
+
+
+test('only recycling-managed expired role assets reach backend re-review', () => {
+  const node = character('expired', 'Image', 'https://cdn.example/original.png')
+  node.data.status = 'Expired'
+  assert.deepEqual(harness([node]).collectSeedanceMediaReplacements('target'), [])
+  node.data.recyclingManaged = true
+  assert.equal(harness([node]).collectSeedanceMediaReplacements('target')[0].replacementUrl, 'asset://expired')
 })

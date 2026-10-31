@@ -5,6 +5,7 @@
  */
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import QRCode from 'qrcode'
+import { isSeedanceAssetReusable, getSeedanceRecyclingStatus } from '@/utils/seedanceAssetRecycling'
 import {
   createAssetGroup, listAssetGroups, updateAssetGroup, deleteAssetGroup,
   createAsset, listAssets as listVolcAssets, pollAssetStatus, getAsset,
@@ -181,7 +182,9 @@ function processAssetData(canvasAssets) {
         ThumbnailURL: meta.thumbnailUrl || a.thumbnail_url || '',
         providerType: meta.providerType || activeProvider.value,
         Duration: meta.duration,
-        Status: a.Status || meta.status || 'Active',
+        Status: getSeedanceRecyclingStatus({ ...meta, Status: a.Status || meta.status || 'Active' }),
+        recyclingManaged: meta.recyclingManaged === true,
+        expiresAt: meta.expiresAt,
         GroupId: a.GroupId || meta.groupId,
         FaceCode: faceCode,
         assetId,
@@ -558,7 +561,7 @@ async function handleFileUpload(event) {
   const files = event.target.files
   if (!files?.length) return
 
-  const targetGroupId = props.selectedGroupId || groups.value[0]?.Id
+  let targetGroupId = props.selectedGroupId || groups.value[0]?.Id
   if (!targetGroupId) {
     errorMessage.value = '请先创建一个角色组'
     return
@@ -584,6 +587,11 @@ async function handleFileUpload(event) {
       })
       const asset = result.asset || result
       const assetId = asset.Id || asset.id
+      if (activeProvider.value === 'volcengine' && asset.GroupId && asset.GroupId !== targetGroupId) {
+        targetGroupId = asset.GroupId
+        emit('clear-group')
+        await loadGroups()
+      }
       if (assetId) {
         let canvasAssetId = null
         const faceCode = asset.FaceCode || asset.faceCode || assetId
@@ -645,8 +653,11 @@ function startPolling(assetId, groupId, imageUrl, name, canvasAssetId, providerT
       assetId: asset.Id,
       providerType,
       originalUrl: imageUrl,
+      recyclingApprovedAt: asset.recyclingApprovedAt,
       groupId: providerType === 'ctyun_asset' ? groupId : (asset.GroupId || groupId),
       status: asset.Status,
+      recyclingManaged: asset.recyclingManaged === true,
+      expiresAt: asset.expiresAt,
       assetType: asset.AssetType,
       projectName: asset.ProjectName,
       createTime: asset.CreateTime,
@@ -714,6 +725,8 @@ function handleAssetDragStart(e, asset) {
     groupId: asset.GroupId,
     assetName: asset.Name,
     status: asset.Status,
+    recyclingManaged: asset.recyclingManaged === true,
+    expiresAt: asset.expiresAt,
     assetType: asset.AssetType,
     faceCode: asset.FaceCode || asset.faceCode
   }
@@ -754,6 +767,8 @@ function handleAddToCanvas() {
     groupId: asset.GroupId,
     assetName: asset.Name,
     status: asset.Status,
+    recyclingManaged: asset.recyclingManaged === true,
+    expiresAt: asset.expiresAt,
     assetType: asset.AssetType,
     faceCode: asset.FaceCode || asset.faceCode
   })
@@ -1109,12 +1124,12 @@ onUnmounted(() => {
         :key="asset.Id"
         class="asset-card"
         :class="{
-          'is-active': asset.Status === 'Active',
+          'is-active': isSeedanceAssetReusable(asset),
           'is-processing': asset.Status === 'Processing',
           'is-failed': asset.Status === 'Failed'
         }"
-        :draggable="asset.Status === 'Active'"
-        @dragstart="asset.Status === 'Active' && handleAssetDragStart($event, asset)"
+        :draggable="isSeedanceAssetReusable(asset)"
+        @dragstart="isSeedanceAssetReusable(asset) && handleAssetDragStart($event, asset)"
         @click="copyAssetUri(asset)"
         @contextmenu="handleContextMenu($event, asset)"
       >
@@ -1136,6 +1151,7 @@ onUnmounted(() => {
           </div>
 
           <!-- Failed 覆盖层 -->
+          <div v-if="asset.Status === 'Expired'" class="status-overlay"><span>已过期 · 引用时自动审核</span></div>
           <div v-if="asset.Status === 'Failed'" class="status-overlay failed-overlay">
             <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
               <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.2"/>
@@ -1145,7 +1161,7 @@ onUnmounted(() => {
           </div>
 
           <!-- hover 复制提示 -->
-          <div v-if="asset.Status === 'Active'" class="copy-hint">
+          <div v-if="isSeedanceAssetReusable(asset)" class="copy-hint">
             <template v-if="copiedAssetId === asset.Id">
               <svg viewBox="0 0 16 16" fill="none" width="11" height="11">
                 <path d="M3 8.5l3 3 7-7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1299,20 +1315,20 @@ onUnmounted(() => {
           :style="{ left: contextMenuPosition.x + 'px', top: contextMenuPosition.y + 'px' }"
           @click.stop
         >
-          <button v-if="contextMenuAsset?.Status === 'Active'" class="context-menu-item" @click="handleAddToCanvas">
+          <button v-if="isSeedanceAssetReusable(contextMenuAsset)" class="context-menu-item" @click="handleAddToCanvas">
             <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
               <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             </svg>
             添加到画布
           </button>
-          <button v-if="contextMenuAsset?.Status === 'Active'" class="context-menu-item" @click="copyAssetUri(contextMenuAsset); closeContextMenu()">
+          <button v-if="isSeedanceAssetReusable(contextMenuAsset)" class="context-menu-item" @click="copyAssetUri(contextMenuAsset); closeContextMenu()">
             <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
               <rect x="5" y="5" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
               <path d="M11 3H4.5A1.5 1.5 0 0 0 3 4.5V11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
             </svg>
             复制 URI
           </button>
-          <button v-if="contextMenuAsset?.Status === 'Active' && contextMenuAsset?.URL" class="context-menu-item" @click="handleDownloadAsset(contextMenuAsset)">
+          <button v-if="isSeedanceAssetReusable(contextMenuAsset) && contextMenuAsset?.URL" class="context-menu-item" @click="handleDownloadAsset(contextMenuAsset)">
             <svg viewBox="0 0 16 16" fill="none" width="14" height="14">
               <path d="M3 11.5v1A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5v-1M8 2.5v7M5.5 7.5 8 10l2.5-2.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
@@ -1504,12 +1520,12 @@ onUnmounted(() => {
                 :key="asset.Id"
                 class="fullscreen-card"
                 :class="{
-                  'is-active': asset.Status === 'Active',
+                  'is-active': isSeedanceAssetReusable(asset),
                   'is-processing': asset.Status === 'Processing',
                   'is-failed': asset.Status === 'Failed'
                 }"
-                :draggable="asset.Status === 'Active'"
-                @dragstart="asset.Status === 'Active' && handleAssetDragStart($event, asset)"
+                :draggable="isSeedanceAssetReusable(asset)"
+                @dragstart="isSeedanceAssetReusable(asset) && handleAssetDragStart($event, asset)"
                 @click="copyAssetUri(asset)"
                 @contextmenu="handleContextMenu($event, asset)"
                 @dblclick.stop="startRename(asset)"
@@ -1526,6 +1542,7 @@ onUnmounted(() => {
                     <div class="spinner-sm"></div>
                     <span>处理中</span>
                   </div>
+                  <div v-if="asset.Status === 'Expired'" class="status-overlay"><span>已过期 · 引用时自动审核</span></div>
                   <div v-if="asset.Status === 'Failed'" class="status-overlay failed-overlay">
                     <svg viewBox="0 0 16 16" fill="none" width="16" height="16">
                       <path d="M8 5v3M8 10h.01" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -1533,8 +1550,8 @@ onUnmounted(() => {
                     </svg>
                     <span>失败</span>
                   </div>
-                  <div v-if="asset.Status === 'Active' && copiedAssetId === asset.Id" class="copy-hint show">已复制 URI</div>
-                  <div v-else-if="asset.Status === 'Active'" class="copy-hint">点击复制 URI</div>
+                  <div v-if="isSeedanceAssetReusable(asset) && copiedAssetId === asset.Id" class="copy-hint show">已复制 URI</div>
+                  <div v-else-if="isSeedanceAssetReusable(asset)" class="copy-hint">点击复制 URI</div>
                 </div>
                 <div class="fullscreen-card-info">
                   <input

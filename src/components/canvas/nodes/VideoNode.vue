@@ -67,7 +67,7 @@ import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
 import { getSeedanceQuickAsset, getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
 import { getSeedanceMediaType } from '@/utils/seedanceMedia'
-import { normalizeAssetReviewStatus } from '@/utils/assetReviewStatus'
+import { isSeedanceAssetReusable } from '@/utils/seedanceAssetRecycling'
 import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import {
   applyVideoInputMultiplier,
@@ -3535,7 +3535,7 @@ function collectSeedanceMediaReplacements(nodeId, { includeCharacters = true, in
 
     if (includeCharacters && sourceNode.type === 'seedance-character') {
       if (getSeedanceMediaType(sourceNode.data) !== mediaType) continue
-      if (sourceNode.data.status && normalizeAssetReviewStatus(sourceNode.data.status) !== 'Active') continue
+      if (sourceNode.data.status && !isSeedanceAssetReusable(sourceNode.data)) continue
       const id = sourceNode.data?.assetId
       const replacementUrl = (sourceNode.data?.assetUri && String(sourceNode.data.assetUri).trim()) ||
         (id != null && String(id).trim() !== '' ? `asset://${id}` : '')

@@ -8,7 +8,7 @@ import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { listAssetGroups } from '@/api/canvas/volcengine-assets'
 import { getAssets } from '@/api/canvas/assets'
 import { getSeedanceMediaType, mapLocalSeedanceAsset } from '@/utils/seedanceMedia'
-import { normalizeAssetReviewStatus } from '@/utils/assetReviewStatus'
+import { isSeedanceAssetReusable } from '@/utils/seedanceAssetRecycling'
 const props = defineProps({
   visible: Boolean,
   currentAssetId: String
@@ -25,7 +25,7 @@ const selectedAsset = ref(null)
 const allLocalAssets = ref([])
 const selectedMediaType = ref('all')
 const mediaTabs = [{ type: 'all', label: '全部' }, { type: 'image', label: '图片' }, { type: 'video', label: '视频' }, { type: 'audio', label: '音频' }]
-const availableAssets = computed(() => assets.value.filter(asset => normalizeAssetReviewStatus(asset.Status) === 'Active'))
+const availableAssets = computed(() => assets.value.filter(asset => isSeedanceAssetReusable(asset)))
 
 // 只显示 Active 资产
 const activeAssets = computed(() =>
@@ -69,7 +69,7 @@ async function loadAllLocalAssets() {
 
 function updateGroupCounts() {
   for (const group of groups.value) {
-    group._assetCount = allLocalAssets.value.filter(asset => asset.GroupId === group.Id && normalizeAssetReviewStatus(asset.Status) === 'Active').length
+    group._assetCount = allLocalAssets.value.filter(asset => asset.GroupId === group.Id && isSeedanceAssetReusable(asset)).length
   }
 }
 

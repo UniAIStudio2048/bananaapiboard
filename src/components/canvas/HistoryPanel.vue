@@ -16,7 +16,7 @@
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
 import { AudioLines, Check, Film, History, Image, LayoutGrid, Maximize2, Minimize2, SquareCheck, X } from '@lucide/vue'
-import { getHistory, getHistoryDetail, deleteHistory } from '@/api/canvas/history'
+import { getHistory, getHistoryDetail, deleteHistory, getHistoryRetention } from '@/api/canvas/history'
 import { saveAsset } from '@/api/canvas/assets'
 import { extractVideoFrame } from '@/api/canvas/workflow'
 import { getTenantHeaders, getMediaUrl, getApiUrl } from '@/config/tenant'
@@ -54,6 +54,17 @@ const historyList = shallowRef([]) // 使用 shallowRef 优化大数组
 const selectedType = ref('all') // all | image | video | audio
 const searchQuery = ref('')
 const spaceFilter = useCanvasSpaceFilter(teamStore)
+const retentionDays = ref(null)
+const retentionHint = computed(() => retentionDays.value === null
+  ? ''
+  : retentionDays.value === 0 ? '历史记录永久保留' : `历史记录保留 ${retentionDays.value} 天`)
+
+watch(() => props.visible, async (visible) => {
+  if (!visible) return
+  retentionDays.value = null
+  try { retentionDays.value = await getHistoryRetention() }
+  catch (error) { console.warn('[HistoryPanel] 获取保留期限失败:', error) }
+}, { immediate: true })
 
 // 全屏模式
 const isFullscreen = ref(false)
@@ -2015,7 +2026,7 @@ onUnmounted(() => {
             <p v-if="historyList.length === 0">{{ t('canvas.historyPanel.noHistory') }}</p>
             <p v-else>{{ t('canvas.historyPanel.noMatch') }}</p>
             <p class="empty-hint">{{ t('canvas.historyPanel.autoSaveHint') }}</p>
-            <p class="empty-hint retention">历史记录保留期限由管理员设置</p>
+            <p v-if="retentionHint" class="empty-hint retention">{{ retentionHint }}</p>
           </div>
 
           <!-- 虚拟滚动列表 -->
@@ -2210,13 +2221,13 @@ onUnmounted(() => {
         </div>
         <div v-else class="panel-footer">
           <span class="stats">{{ historyStats.all }} {{ t('canvas.historyPanel.items') }}</span>
-          <span class="retention-tip">
+          <span v-if="retentionHint" class="retention-tip">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <line x1="12" y1="8" x2="12" y2="12"/>
               <line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
-            历史记录保留期限由管理员设置
+            {{ retentionHint }}
           </span>
         </div>
       </div>
