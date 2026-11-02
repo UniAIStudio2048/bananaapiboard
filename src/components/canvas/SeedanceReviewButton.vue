@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onClickOutside } from '@vueuse/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { isSeedanceFeaturesEnabled } from '@/config/tenant'
@@ -18,10 +19,11 @@ const submitting = ref(false)
 const providers = ref([])
 const selectedProvider = ref('')
 const loadingProviders = ref(false)
-const status = computed(() => {
-  const savedProvider = props.data?.seedanceQuickAsset?.providerType
-  return selectedProvider.value && savedProvider && savedProvider !== selectedProvider.value ? null : getSeedanceQuickAssetStatus(props.data)
-})
+const reviewControl = ref(null)
+const reviewButton = ref(null)
+const menuOpen = ref(false)
+onClickOutside(reviewControl, () => { menuOpen.value = false })
+const status = computed(() => getSeedanceQuickAssetStatus(props.data))
 
 async function loadProviders() {
   loadingProviders.value = true
@@ -67,24 +69,51 @@ async function submit() {
   try { await controller.submit() } finally { submitting.value = false }
 }
 
+function providerDisabled(providerId) {
+  const savedProvider = props.data?.seedanceQuickAsset?.providerType
+  return submitting.value || loadingProviders.value || (providerId === savedProvider && (status.value === 'approved' || (status.value === 'processing' && !queryFailed.value)))
+}
+
+async function handleReviewClick() {
+  if (submitting.value || loadingProviders.value) return
+  if (providers.value.length > 1) {
+    menuOpen.value = !menuOpen.value
+    return
+  }
+  if (!providerDisabled(selectedProvider.value)) await submit()
+}
+
+async function submitToProvider(providerId) {
+  if (providerDisabled(providerId) || !providers.value.some(provider => provider.id === providerId)) return
+  selectedProvider.value = providerId
+  menuOpen.value = false
+  reviewButton.value?.focus()
+  await submit()
+}
+
+function closeMenu() {
+  menuOpen.value = false
+  reviewButton.value?.focus()
+}
+
 watch(() => props.data?.seedanceQuickAsset?.assetId, () => controller.resume(), { immediate: true })
 onMounted(() => { if (enabled.value) loadProviders().catch(() => {}) })
 onUnmounted(() => controller.dispose())
 </script>
 
 <template>
-  <span v-if="enabled" class="seedance-review-control nodrag" @mousedown.stop>
-  <select v-if="providers.length > 1" v-model="selectedProvider" class="seedance-review-provider nodrag nowheel" aria-label="素材审核渠道" :disabled="submitting || loadingProviders" @click.stop @keydown.stop @wheel.stop>
-    <option v-for="provider in providers" :key="provider.id" :value="provider.id">{{ provider.label }}</option>
-  </select>
+  <span v-if="enabled" ref="reviewControl" class="seedance-review-control nodrag" @mousedown.stop @keydown.stop @keydown.esc.prevent="closeMenu" @focusout="!reviewControl?.contains($event.relatedTarget) && (menuOpen = false)">
   <button
-    v-if="enabled"
+    ref="reviewButton"
+    type="button"
     class="toolbar-btn seedance-review-btn nodrag"
     :class="{ active: status === 'approved', 'is-failed': status === 'failed' || queryFailed }"
-    :disabled="submitting || loadingProviders || (status === 'processing' && !queryFailed) || status === 'approved'"
+    :disabled="submitting || loadingProviders || (providers.length <= 1 && providerDisabled(selectedProvider))"
+    :aria-haspopup="providers.length > 1 ? 'menu' : undefined"
+    :aria-expanded="providers.length > 1 ? menuOpen : undefined"
     :title="data?.seedanceQuickAsset?.error || '提交 Seedance 素材审核，审核通过后可连接 Seedance 视频节点使用'"
     @mousedown.stop.prevent
-    @click.stop.prevent="submit"
+    @click.stop.prevent="handleReviewClick"
   >
     <svg v-if="submitting || (status === 'processing' && !queryFailed)" class="animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <circle cx="12" cy="12" r="10" stroke-opacity="0.25" />
@@ -94,19 +123,34 @@ onUnmounted(() => controller.dispose())
       <path d="M12 3l7 4v5c0 4.2-2.8 7.5-7 9-4.2-1.5-7-4.8-7-9V7l7-4z" stroke-linecap="round" stroke-linejoin="round" />
       <path d="M9 12l2 2 4-5" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
-    <span>{{ buttonText }}</span>
+    <span>{{ providers.length > 1 && !submitting ? '过审' : buttonText }}</span>
+    <svg v-if="providers.length > 1" class="review-dropdown-arrow" :class="{ open: menuOpen }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+      <path d="m6 9 6 6 6-6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
   </button>
+  <span v-if="menuOpen && providers.length > 1" class="seedance-review-menu nowheel" role="menu" aria-label="素材审核渠道" @click.stop @wheel.stop>
+    <button v-for="provider in providers" :key="provider.id" type="button" role="menuitem" class="seedance-review-menu-item" :disabled="providerDisabled(provider.id)" @click.stop.prevent="submitToProvider(provider.id)">
+      <span>{{ provider.label }}</span>
+      <span v-if="provider.id === data?.seedanceQuickAsset?.providerType" class="review-provider-status">{{ buttonText }}</span>
+    </button>
+  </span>
   </span>
 </template>
 
 <style scoped>
-.seedance-review-control { display: inline-flex; align-items: center; }
-.seedance-review-provider { max-width: 140px; padding: 5px 4px; border: 1px solid var(--canvas-border-default); border-radius: 6px; background: var(--canvas-bg-secondary); color: var(--canvas-text-primary); font-size: 12px; }
-.seedance-review-btn { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: none; background: transparent; color: #86efac; font-size: 12px; white-space: nowrap; cursor: pointer; }
-.seedance-review-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
-.seedance-review-btn:hover { color: var(--canvas-text-primary); background: var(--canvas-bg-hover); }
-.seedance-review-btn.active { color: #86efac; }
-.seedance-review-btn.is-failed { color: #fca5a5; }
+.seedance-review-control { position: relative; display: inline-flex; align-items: center; }
+.seedance-review-btn { display: flex; align-items: center; gap: 4px; padding: 6px 10px; border: none; border-radius: 6px; background: transparent; color: var(--canvas-text-secondary); font-size: 12px; white-space: nowrap; cursor: pointer; }
+.seedance-review-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
+.seedance-review-btn:hover { color: var(--canvas-text-primary); background: var(--canvas-bg-tertiary); }
+.seedance-review-btn.active { color: var(--canvas-accent-success); }
+.seedance-review-btn.is-failed { color: var(--canvas-accent-error); }
 .seedance-review-btn:disabled { cursor: default; }
-.seedance-review-btn:focus-visible { outline: 2px solid var(--canvas-accent-primary); outline-offset: 2px; }
+.seedance-review-btn .review-dropdown-arrow { width: 12px; height: 12px; opacity: 0.7; transition: transform 0.15s ease; }
+.review-dropdown-arrow.open { transform: rotate(180deg); }
+.seedance-review-menu { position: absolute; top: calc(100% + 8px); left: 0; z-index: 9999; display: flex; flex-direction: column; gap: 2px; min-width: 180px; padding: 6px; border: 1px solid var(--canvas-border-default); border-radius: 12px; background: var(--canvas-bg-elevated); box-shadow: var(--canvas-shadow-lg); }
+.seedance-review-menu-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; padding: 8px 10px; border: none; border-radius: 8px; background: transparent; color: var(--canvas-text-secondary); font-size: 12px; white-space: nowrap; text-align: left; cursor: pointer; }
+.seedance-review-menu-item:hover:not(:disabled) { color: var(--canvas-text-primary); background: var(--canvas-bg-tertiary); }
+.seedance-review-menu-item:disabled { opacity: 0.6; cursor: default; }
+.review-provider-status { font-size: 11px; color: var(--canvas-text-tertiary); }
+.seedance-review-btn:focus-visible, .seedance-review-menu-item:focus-visible { outline: 2px solid var(--canvas-accent-primary); outline-offset: 2px; }
 </style>

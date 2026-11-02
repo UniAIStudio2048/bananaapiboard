@@ -9,6 +9,8 @@ timestamp: 2026-11-03
 
 ## 2026-11-03
 
+- 更新 [Seedance 快捷角色审核反馈](seedance-quick-review-feedback.md)：将图片、视频、音频的独立渠道选择框统一收进“过审”按钮菜单，点选即提交，保持画布主题样式及原渠道状态；34 项定向测试、Chromium 明暗主题组件交互及生产构建通过，线上 7 项页面/静态资源 SHA256 一致；记录 GitNexus 索引刷新失败的验证限制。
+
 - 更新 [Seedance 快捷角色审核反馈](seedance-quick-review-feedback.md)：记录 bananahub.cc 画布 HTML、入口与画布分块已发布核验，星辰/天枢均启用且可连接；保留用户已保存的开关偏好。
 
 ## 2026-11-02
