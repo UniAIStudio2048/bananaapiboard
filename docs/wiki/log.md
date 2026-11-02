@@ -2,14 +2,19 @@
 type: log
 title: 用户前端知识库变更日志
 tags: [bananaapiboard, canvas, wiki]
-timestamp: 2026-10-27
+timestamp: 2026-11-03
 ---
 
 # 变更日志
 
+## 2026-11-03
+
+- 更新 [Seedance 快捷角色审核反馈](seedance-quick-review-feedback.md)：记录 bananahub.cc 画布 HTML、入口与画布分块已发布核验，星辰/天枢均启用且可连接；保留用户已保存的开关偏好。
+
 ## 2026-11-02
 
 - 更新 [Seedance 快捷角色审核反馈](seedance-quick-review-feedback.md)：以共享媒体审核按钮替代过期的图像专属入口说明，纳入多渠道选择、请求隔离、天枢自动过审与用户偏好持久化规则及验证边界。
+- 新增[画布历史选择与音频卡片](canvas-history-media-cards.md)：修复选择模式沿用两列导致图片过大；音频加入波形、播放和进度控制。30 项定向回归、构建与隔离浏览器交互通过；既有模型显示测试仍有旧模板断言失败，未修改真实租户或部署生产。
 
 ## 2026-09-24
 

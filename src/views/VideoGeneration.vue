@@ -480,6 +480,10 @@ const totalPoints = computed(() => {
 })
 
 const currentPointsCost = computed(() => {
+  if (currentModelConfig.value?.apiType === 'heizhu-video') {
+    const pricing = resolveVideoResolutionPricing(currentModelConfig.value.resolutionPricing, resolution.value)
+    if (pricing) return Math.round(pricing.costPerSecond * Number(duration.value) * 100) / 100
+  }
   if (['wavespeed-wan3', 'siray-wan3'].includes(currentModelConfig.value?.apiType)) {
     const pricing = resolveVideoResolutionPricing(currentModelConfig.value.resolutionPricing, resolution.value)
     if (pricing) {

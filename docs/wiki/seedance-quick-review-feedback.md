@@ -3,7 +3,7 @@ type: behavior
 title: Seedance 快捷角色审核反馈
 description: 媒体节点的多渠道快捷审核与自动过审用户偏好。
 tags: [canvas, seedance, asset-review, tokenhub]
-timestamp: 2026-11-02
+timestamp: 2026-11-03
 ---
 
 # Seedance 快捷角色审核反馈
@@ -48,6 +48,12 @@ timestamp: 2026-11-02
 ## 验证边界
 
 - 审核控制器、组件渲染、偏好持久化、渠道请求隔离及既有素材回归通过；Vue 模板渲染验证覆盖单渠道无下拉和多渠道选择。
-- 用户前端 `npm run build` 通过。未执行线上浏览器联调或真实上游审核。
+- 用户前端 `npm run build` 通过。未执行线上浏览器交互联调或真实上游创建审核任务。
+
+## bananahub.cc 发布状态（2026-11-03）
+
+- Nginx 直接提供用户前端 `dist`；`https://bananahub.cc/canvas` 的 HTML、入口资源以及 `Canvas` / `canvas` 分块与本次构建逐项比对一致。
+- 后端已重启，素材渠道同时启用星辰和天枢；公开品牌配置已返回天枢 2.0 / 2.5 的正确审核绑定，两个上游素材渠道只读连接测试均通过。
+- 未批量修改用户偏好，已有关闭选择继续保留；未设置偏好的模型按默认开启规则执行。
 
 返回 [索引](index.md)，查看 [变更日志](log.md)。
