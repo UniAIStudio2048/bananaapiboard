@@ -15,6 +15,7 @@
  * - 视频缩略图节流: 限制同时提取数量
  */
 import { ref, computed, watch, onMounted, onUnmounted, nextTick, shallowRef } from 'vue'
+import { useElementSize } from '@vueuse/core'
 import { AudioLines, Check, Film, History, Image, LayoutGrid, Maximize2, Minimize2, SquareCheck, X } from '@lucide/vue'
 import { getHistory, getHistoryDetail, deleteHistory, getHistoryRetention } from '@/api/canvas/history'
 import { saveAsset } from '@/api/canvas/assets'
@@ -29,6 +30,7 @@ import { getCosProxyUrl, isCosCdn, isVideoUrl as isVideoMediaFile } from '@/util
 import { getHistoryAspectRatioStyle, normalizeHistoryAspectRatio } from '@/utils/historyAspectRatio'
 import { buildHistoryMediaDetails, enrichHistoryMediaDetails } from '@/utils/historyMediaDetails'
 import CachedImage from '@/components/CachedImage.vue'
+import HistoryAudioCard from './HistoryAudioCard.vue'
 import SpaceSwitcher from './SpaceSwitcher.vue'
 import CopyToSpaceDialog from './CopyToSpaceDialog.vue'
 import {
@@ -126,6 +128,7 @@ function handlePickerKeydown(event) {
 
 // 滚动容器引用
 const scrollContainerRef = ref(null)
+const { width: historyListWidth } = useElementSize(scrollContainerRef)
 let scrollRAF = null
 let pendingScrollTop = 0
 
@@ -257,8 +260,8 @@ const hasMoreToRender = computed(() => {
 })
 
 // ========== 瀑布流计算 ==========
-// 全屏模式下的列数
-const columnCount = computed(() => isFullscreen.value ? 6 : 2)
+// 两种入口共用实际容器宽度，避免选择弹窗沿用侧栏两列后放大缩略图。
+const columnCount = computed(() => Math.min(6, Math.max(1, Math.floor(historyListWidth.value / 220))))
 
 // 动态生成列数据（按估算高度自动分配到最短列）
 const columnItems = computed(() => {
@@ -440,12 +443,14 @@ function _isHistoryPrefixEqual(freshPrefix, currentList) {
 }
 
 function getHistoryCardAspectStyle(item) {
+  if (item.type === 'audio') return { aspectRatio: 'auto' }
   const fallback = item.type === 'video' ? '16 / 9' : item.type === 'audio' ? '1 / 1' : '1 / 1'
   const raw = item.aspect_ratio || item.aspectRatio || (item.type === 'video' ? videoAspectRatios.value[item.id] : null)
   return { aspectRatio: normalizeHistoryAspectRatio(raw, fallback) }
 }
 
 function estimateItemWeight(item) {
+  if (item.type === 'audio') return 0.85
   const raw = item.aspect_ratio || item.aspectRatio || (item.type === 'video' ? videoAspectRatios.value[item.id] : null)
   const ratioText = normalizeHistoryAspectRatio(raw, item.type === 'video' ? '16 / 9' : '1 / 1')
   const parsed = ratioText.includes('/') ? ratioText.split('/').map(part => Number.parseFloat(part.trim())) : [Number.parseFloat(ratioText), 1]
@@ -2036,7 +2041,7 @@ onUnmounted(() => {
           >
             <div 
               class="waterfall-grid"
-              :class="{ 'fullscreen-grid': isFullscreen }"
+              :class="{ 'fullscreen-grid': isFullscreen || selectionMode }"
             >
               <div 
                 v-for="(colItems, colIndex) in columnItems"
@@ -2129,21 +2134,12 @@ onUnmounted(() => {
                   
                   <!-- 音频预览 -->
                   <template v-else-if="item.type === 'audio'">
-                    <CachedImage 
-                      v-if="getPreviewContent(item)" 
-                      :src="getPreviewContent(item)" 
-                      :alt="item.name || item.title"
-                      img-class="card-image"
-                      wrapper-class="card-media"
-                      loading="lazy"
+                    <HistoryAudioCard
+                      :src="toSameOriginUrl(item.url)"
+                      :title="item.title || item.name"
+                      :duration="Number(item.duration) || 0"
+                      :active="!showPreview"
                     />
-                    <div v-else class="card-placeholder audio">
-                      <span class="placeholder-icon">♪</span>
-                    </div>
-                    <!-- 音频标题覆盖层 -->
-                    <div v-if="item.title || item.name" class="audio-title-overlay">
-                      <span class="audio-title">{{ item.title || item.name }}</span>
-                    </div>
                   </template>
                   
                   <!-- 其他类型占位符 -->
@@ -2156,7 +2152,7 @@ onUnmounted(() => {
                   <div v-if="item.type === 'video'" class="video-badge">▶</div>
 
                   <!-- 悬停信息遮罩 -->
-                  <div class="hover-overlay">
+                  <div v-if="item.type !== 'audio'" class="hover-overlay">
                     <div class="overlay-content">
                       <div class="overlay-model" v-if="getHistoryModelDisplayName(item)">{{ getHistoryModelDisplayName(item) }}</div>
                       <div class="overlay-prompt-full" v-if="item.prompt">{{ item.prompt }}</div>
@@ -2494,8 +2490,6 @@ onUnmounted(() => {
 }
 
 .history-picker .history-panel {
-  width: min(900px, 100%);
-  height: min(800px, 100%);
   color: var(--canvas-text-primary);
 }
 
@@ -3286,46 +3280,6 @@ onUnmounted(() => {
 
 .card-placeholder.video {
   background: linear-gradient(135deg, #3d1a5f 0%, #1a1a1c 100%);
-}
-
-.card-placeholder.audio {
-  background: linear-gradient(135deg, #1a5f3d 0%, #1a1a1c 100%);
-}
-
-/* 音频标题覆盖层 */
-.audio-title-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background: linear-gradient(transparent, rgba(0, 0, 0, 0.85));
-  padding: 24px 8px 8px;
-  pointer-events: none;
-}
-
-.audio-title {
-  display: block;
-  font-size: 11px;
-  font-weight: 500;
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* 音频卡片小图标 */
-.history-card:has(> .audio-title-overlay)::before {
-  content: '♪';
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(0, 0, 0, 0.4);
-  padding: 2px 6px;
-  border-radius: 4px;
-  z-index: 2;
 }
 
 /* 竖屏视频的占位符 */
@@ -4350,26 +4304,12 @@ onUnmounted(() => {
   background: linear-gradient(135deg, #ece0f0 0%, #e4d8e8 100%) !important;
 }
 
-:root.canvas-theme-light .history-panel .card-placeholder.audio {
-  background: linear-gradient(135deg, #e0f0e8 0%, #d8e8e0 100%) !important;
-}
-
 :root.canvas-theme-light .history-panel .placeholder-icon {
   color: rgba(0, 0, 0, 0.3) !important;
 }
 
 :root.canvas-theme-light .history-panel .placeholder-text {
   color: rgba(0, 0, 0, 0.35) !important;
-}
-
-/* 音频标题覆盖层 */
-:root.canvas-theme-light .history-panel .audio-title-overlay {
-  background: linear-gradient(transparent, rgba(255, 255, 255, 0.95)) !important;
-}
-
-:root.canvas-theme-light .history-panel .audio-title {
-  color: #1c1917 !important;
-  text-shadow: none !important;
 }
 
 /* 视频标识 */

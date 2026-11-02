@@ -6,7 +6,7 @@ const source = readFileSync(new URL('./VideoNode.vue', import.meta.url), 'utf8')
 
 test('按秒计费时画布显示每秒积分而不是预扣总积分', () => {
   assert.match(source, /const perSecondBillingCostPerSecond = computed/)
-  assert.match(source, /v-else-if="isPerSecondBilling"[\s\S]*formatPoints\(perSecondBillingCostPerSecond\)\s*\}\}\s*积分\/s/)
+  assert.match(source, /v-else-if="isPerSecondBilling"[\s\S]*formatVideoNodePoints\(perSecondBillingCostPerSecond\)\s*\}\}\s*积分\/s/)
 })
 
 test('按秒计费默认不自动选择固定时长', () => {

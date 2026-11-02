@@ -22,6 +22,7 @@ import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
 import { formatPoints } from '@/utils/format'
+import { formatVideoNodePoints } from '@/utils/canvasVideoPointsDisplay'
 import { getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
 import { config as tenantConfig, getTenantConfigVersion, getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
@@ -2415,6 +2416,8 @@ const aspectRatios = [
   { value: '1:1', label: '1:1 方形' },
   { value: '3:4', label: '3:4' },
   { value: '4:3', label: '4:3' },
+  { value: '3:2', label: '3:2' },
+  { value: '2:3', label: '2:3' },
   { value: '21:9', label: '21:9 超宽' }
 ]
 
@@ -4262,7 +4265,7 @@ const waveSpeedReferenceVideoDuration = computed(() => {
 const basePointsCost = computed(() => {
   let cost = 1
 
-  if (['wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType)) {
+  if (['heizhu-video', 'wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType)) {
     const pricing = resolveVideoResolutionPricing(currentModelConfig.value.resolutionPricing, genericVideoResolution.value)
     if (pricing) {
       const inputSeconds = currentModelConfig.value.apiType === 'siray-wan3'
@@ -4464,12 +4467,12 @@ const basePointsCost = computed(() => {
   return cost
 })
 
-// 用户分组倍率：WaveSpeed 与 Siray 保留两位小数，其他模型沿用整数积分。
+// 用户分组倍率：支持小数计费的渠道保留两位小数，显示精度由格式化函数单独处理。
 const pointsCost = computed(() => {
   const base = basePointsCost.value
   const rate = getUserNodeRate('video')
   const scaled = base * rate
-  if (['wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType)) return Math.round(scaled * 100) / 100
+  if (['heizhu-video', 'wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType)) return Math.round(scaled * 100) / 100
   return Math.round(scaled)
 })
 
@@ -4483,13 +4486,13 @@ const klingOfficialSelectedDurationTotalCost = computed(() => {
 
 const klingOfficialSelectedDurationCostText = computed(() => {
   // Keep this in script because templates unwrap refs before property access.
-  return selectedDuration.value ? `${selectedDuration.value}s = ${formatPoints(klingOfficialSelectedDurationTotalCost.value)}积分` : ''
+  return selectedDuration.value ? `${selectedDuration.value}s = ${formatVideoNodePoints(klingOfficialSelectedDurationTotalCost.value)}积分` : ''
 })
 
 // RunningHub 全能视频 V3.1：按所选秒数实时计算总消耗（不展示单秒价格）
 const runningHubV31CostText = computed(() => {
   if (!isRunningHubAiAppVideoV31Model.value || !selectedDuration.value) return ''
-  return `${formatPoints(pointsCost.value * selectedCount.value)}积分`
+  return `${formatVideoNodePoints(pointsCost.value * selectedCount.value)}积分`
 })
 
 // 按秒计费模型在画布上展示单秒价格；pointsCost 仍保留为提交时的预扣总积分。
@@ -11087,31 +11090,31 @@ function handleToolbarPreview() {
           <!-- 积分消耗显示 -->
           <span class="points-cost-display">
             <template v-if="isHeygenMode">
-              {{ heygenPointsPerSecond > 0 ? `${formatPoints(heygenPointsPerSecond)}积分/秒 · 预计${formatPoints(heygenPointsCost)}积分` : 'HeyGen 渠道计费' }}
+              {{ heygenPointsPerSecond > 0 ? `${formatVideoNodePoints(heygenPointsPerSecond)}积分/秒 · 预计${formatVideoNodePoints(heygenPointsCost)}积分` : 'HeyGen 渠道计费' }}
             </template>
             <template v-else-if="isKlingMotionControl">
-              {{ formatPoints(motionCostPerSecond) }}积分/s
+              {{ formatVideoNodePoints(motionCostPerSecond) }}积分/s
             </template>
             <template v-else-if="isWanModel && selectedWanMode === 'animate_mix'">
-              {{ formatPoints(wanAnimateCostPerSecond) }}积分/s
+              {{ formatVideoNodePoints(wanAnimateCostPerSecond) }}积分/s
             </template>
             <template v-else-if="isRunningHubAiAppVideoV31Model">
               {{ runningHubV31CostText }}
             </template>
             <template v-else-if="isSeedance2Model && isSeedancePrePaidBilling && seedanceCostPerSecond > 0">
-              {{ formatPoints(pointsCost * selectedCount) }}积分
+              {{ formatVideoNodePoints(pointsCost * selectedCount) }}积分
               <span v-if="shouldApplyVideoInputMultiplier" class="points-multiplier-chip">
                 {{ formatVideoInputMultiplier(videoInputMultiplier) }}
               </span>
             </template>
             <template v-else-if="isPerSecondBilling">
-              {{ formatPoints(perSecondBillingCostPerSecond) }}积分/s
+              {{ formatVideoNodePoints(perSecondBillingCostPerSecond) }}积分/s
             </template>
             <template v-else-if="isKlingOfficialDurationModel(currentModelConfig)">
               {{ klingOfficialSelectedDurationCostText }}
             </template>
             <template v-else>
-              {{ formatPoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}
+              {{ formatVideoNodePoints(pointsCost * selectedCount) }} {{ t('imageGen.points') }}
               <span v-if="shouldApplyVideoInputMultiplier" class="points-multiplier-chip">
                 {{ formatVideoInputMultiplier(videoInputMultiplier) }}
               </span>

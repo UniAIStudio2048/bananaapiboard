@@ -30,7 +30,7 @@ test('画布 RunningHub 视频成本预估使用固定积分、倍率与每秒�
 test('画布 RunningHub V3.1 计费按所选秒数实时显示计算后的总消耗', () => {
   assert.match(source, /const runningHubV31CostText = computed\(/)
   assert.match(source, /isRunningHubAiAppVideoV31Model\.value \|\| !selectedDuration\.value/)
-  assert.match(source, /return `\$\{formatPoints\(pointsCost\.value \* selectedCount\.value\)\}积分`/)
+  assert.match(source, /return `\$\{formatVideoNodePoints\(pointsCost\.value \* selectedCount\.value\)\}积分`/)
   assert.match(source, /<template v-else-if="isRunningHubAiAppVideoV31Model">/)
   assert.match(source, /\{\{ runningHubV31CostText \}\}/)
 })
