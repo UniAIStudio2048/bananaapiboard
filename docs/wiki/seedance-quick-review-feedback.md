@@ -1,17 +1,19 @@
 ---
 type: behavior
 title: Seedance 快捷角色审核反馈
-description: 图像节点快捷角色审核的状态、超时和用户反馈约定。
-tags: [canvas, image-node, seedance, asset-review]
-timestamp: 2026-08-24
+description: 媒体节点的多渠道快捷审核与自动过审用户偏好。
+tags: [canvas, seedance, asset-review, tokenhub]
+timestamp: 2026-11-02
 ---
 
 # Seedance 快捷角色审核反馈
 
 ## 入口与调用链
 
-- 图像节点工具栏的“过审”按钮由 `ImageNode.vue` 的 `handleQuickSeedanceReview` 处理。
-- 它先请求活动素材渠道，再创建快捷角色资产，最后通过 `pollAssetStatus` 查询审核结果。
+- 图片、视频、音频节点工具栏共用 `SeedanceReviewButton.vue` 和 `createSeedanceReviewController`。
+- 它先通过 `/api/volcengine-asset/providers` 读取当前租户已启用且支持该媒体类型的渠道；多个渠道显示下拉框，一个渠道直接使用，无可用渠道时报错。
+- 渠道请求只合并相同租户及用户正在进行的请求，完成后释放，不缓存开关结果。
+- 已审核或审核中的素材改选另一渠道时允许重新提交；轮询保留创建时的渠道身份。
 - 节点数据中的 `seedanceQuickAsset` 保存审核状态、资产 URI、有效期和失败原因。
 
 ## 状态约定
@@ -32,9 +34,20 @@ timestamp: 2026-08-24
 
 ## 相关源码
 
-- `src/components/canvas/nodes/ImageNode.vue`
-- `src/api/canvas/volcengine-assets.js`
-- `src/utils/assetReviewStatus.js`
-- `src/utils/seedanceQuickAsset.js`
+- [共享审核按钮](../../src/components/canvas/SeedanceReviewButton.vue)、[控制器](../../src/utils/seedanceReviewController.js)
+- [审核 API](../../src/api/canvas/volcengine-assets.js)
+- [审核状态](../../src/utils/assetReviewStatus.js)、[快捷资产状态](../../src/utils/seedanceQuickAsset.js)
+
+## 自动过审偏好
+
+- 视频节点绑定官方、星辰或天枢素材渠道时，底部“高级设置”的自动校验素材默认开启，涵盖连线中的图片、视频和音频。
+- 开关通过 `/api/user/preferences` 立即写入 `preferences.canvas.autoReviewMaterials[model]`，服务端成功后更新界面；写入失败保留原值。
+- 用户偏好优先于旧节点的 `data.autoReviewMaterials[model]`，新建节点及重新登录后沿用该模型的用户偏好；未设置的模型默认开启。
+- [偏好规则](../../src/utils/seedanceAutoReview.js)、[视频节点及持久化测试](../../src/components/canvas/nodes/VideoNode.auto-review.test.mjs)
+
+## 验证边界
+
+- 审核控制器、组件渲染、偏好持久化、渠道请求隔离及既有素材回归通过；Vue 模板渲染验证覆盖单渠道无下拉和多渠道选择。
+- 用户前端 `npm run build` 通过。未执行线上浏览器联调或真实上游审核。
 
 返回 [索引](index.md)，查看 [变更日志](log.md)。

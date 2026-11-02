@@ -67,6 +67,8 @@ import { persistNodePromptDraft } from '@/utils/canvasPromptDraft'
 import { pickConfiguredSubmode, pickInitialSubmode } from '@/utils/videoSubmodeDefaults'
 import { getSeedanceQuickAsset, getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
 import { getSeedanceMediaType } from '@/utils/seedanceMedia'
+import { getAutoReviewMaterials, isAutoReviewConnected } from '@/utils/seedanceAutoReview'
+import { updateUserPreferences } from '@/api/client'
 import { isSeedanceAssetReusable } from '@/utils/seedanceAssetRecycling'
 import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import {
@@ -1771,10 +1773,10 @@ const assetReviewProvider = computed(() => {
   getTenantConfigVersion()
   return tenantConfig.video_models?.find(model => model.name === selectedModel.value)?.assetReviewProvider || ''
 })
-// 火山官方与星辰素材资产均已接通自动校验（Seedance 2.0 / 2.5），其余渠道仍待接通
-const autoReviewConnected = computed(() => ['volcengine', 'stars_asset'].includes(assetReviewProvider.value))
+// 已接通渠道默认自动过审，用户偏好优先于旧节点设置。
+const autoReviewConnected = computed(() => isAutoReviewConnected(assetReviewProvider.value))
 const autoReviewMaterials = computed(() => {
-  return autoReviewConnected.value && props.data?.autoReviewMaterials?.[selectedModel.value] !== false
+  return getAutoReviewMaterials(assetReviewProvider.value, selectedModel.value, props.data?.autoReviewMaterials, userInfo?.value?.preferences)
 })
 
 async function setAutoReviewMaterials(event) {
@@ -1782,16 +1784,16 @@ async function setAutoReviewMaterials(event) {
   event.target.checked = autoReviewMaterials.value
   if (savingAutoReview.value) return
   savingAutoReview.value = true
-  const tabId = canvasStore.getCurrentTab?.()?.id
   const model = selectedModel.value
   try {
-    const { workflowId } = await ensureCanvasWorkflowForVideoSubmission(props.id)
-    const settings = { ...(props.data?.autoReviewMaterials || {}), [model]: enabled }
-    const result = await patchWorkflowNode(workflowId, props.id, { data: { autoReviewMaterials: settings } })
-    if (canvasStore.getCurrentTab?.()?.id === tabId) {
-      canvasStore.updateNodeData(props.id, { autoReviewMaterials: settings }, { silent: true })
-      canvasStore.applyWorkflowSaveVersions({ id: workflowId, node_versions: { [props.id]: result.version } })
+    const preferences = userInfo?.value?.preferences || {}
+    const updatedPreferences = {
+      ...preferences,
+      canvas: { ...preferences.canvas, autoReviewMaterials: { ...preferences.canvas?.autoReviewMaterials, [model]: enabled } }
     }
+    const result = await updateUserPreferences(updatedPreferences)
+    if (!result?.success) throw new Error('自动过审设置保存失败，请重试')
+    if (userInfo?.value) userInfo.value.preferences = updatedPreferences
   } catch (error) {
     showToast(error.message || '自动校验设置保存失败', 'error')
   } finally { savingAutoReview.value = false }

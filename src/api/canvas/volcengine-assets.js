@@ -67,6 +67,23 @@ async function parseAssetResponse(response, fallbackMessage) {
 
 // ========== 角色组 ==========
 
+const providerOptionsRequests = new Map()
+
+export async function getAssetReviewProviders() {
+  // 同批挂载的媒体节点共用进行中的请求，响应完成后重新读取，避免缓存渠道开关。
+  const url = getApiUrl('/api/volcengine-asset/providers')
+  const headers = getAuthHeaders()
+  const key = JSON.stringify([url, headers])
+  if (!providerOptionsRequests.has(key)) {
+    const pending = fetchAssetApi(url, {
+      credentials: 'include', headers
+    }).then(response => parseAssetResponse(response, '获取素材渠道失败'))
+      .finally(() => { providerOptionsRequests.delete(key) })
+    providerOptionsRequests.set(key, pending)
+  }
+  return providerOptionsRequests.get(key)
+}
+
 /**
  * 创建角色组
  * @param {Object} data - { Name, Description, spaceType, teamId }

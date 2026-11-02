@@ -2,6 +2,23 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createSeedanceReviewController } from './seedanceReviewController.js'
 
+test('selecting another provider submits a new review even when the same media is already approved', async () => {
+  const state = setup({ getProvider: async () => 'tokenhub_asset' })
+  state.setData({ seedanceQuickAsset: { assetId: 'old-official', providerType: 'volcengine', sourceUrl: 'https://cdn.example/movie.mp4', status: 'Active' } })
+  await state.controller.submit()
+  assert.equal(state.calls.filter(call => call.URL).length, 1)
+  assert.equal(state.calls[0].providerType, 'tokenhub_asset')
+  state.controller.dispose()
+})
+
+test('switching provider during a running review starts a review on the selected provider', async () => {
+  const state = setup({ getProvider: async () => 'tokenhub_asset' })
+  state.setData({ seedanceQuickAsset: { assetId: 'old-review', providerType: 'volcengine', sourceUrl: 'https://cdn.example/movie.mp4', status: 'Processing' } })
+  await state.controller.submit()
+  assert.equal(state.calls[0].providerType, 'tokenhub_asset')
+  state.controller.dispose()
+})
+
 function setup(overrides = {}) {
   let data = { sourceVideo: 'https://cdn.example/movie.mp4' }
   let sourceUrl = data.sourceVideo

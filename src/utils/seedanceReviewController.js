@@ -46,17 +46,18 @@ export function createSeedanceReviewController({ getData, getSourceUrl, assetTyp
     if (submitting || disposed) return
     const sourceUrl = getSourceUrl()
     if (!sourceUrl) return notify('未找到素材', 'warning')
-    const existing = getData()?.seedanceQuickAsset
-    const sameSource = existing && (!existing.sourceUrl || existing.sourceUrl === sourceUrl)
-    const expired = existing?.expiresAt && new Date(existing.expiresAt).getTime() <= Date.now()
-    if (sameSource && !expired && normalizeAssetReviewStatus(existing.status) === 'Active') return
-    if (sameSource && !expired && existing.assetId && normalizeAssetReviewStatus(existing.status) === 'Processing') {
-      resume()
-      return
-    }
     submitting = true
     try {
       const providerType = await getProvider()
+      const existing = getData()?.seedanceQuickAsset
+      const sameSource = existing && (!existing.sourceUrl || existing.sourceUrl === sourceUrl)
+      const sameProvider = !existing?.providerType || existing.providerType === providerType
+      const expired = existing?.expiresAt && new Date(existing.expiresAt).getTime() <= Date.now()
+      if (sameSource && sameProvider && !expired && normalizeAssetReviewStatus(existing.status) === 'Active') return
+      if (sameSource && sameProvider && !expired && existing.assetId && normalizeAssetReviewStatus(existing.status) === 'Processing') {
+        resume()
+        return
+      }
       if (assetType !== 'Image' && ['seedance_openapi_pro', 'bytefor'].includes(providerType)) throw new Error('当前素材渠道仅支持图片角色，不支持视频或音频')
       const url = await resolveUrl(sourceUrl)
       if (!isCurrent(sourceUrl)) return

@@ -1,10 +1,10 @@
 <script setup>
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useCanvasStore } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { isSeedanceFeaturesEnabled } from '@/config/tenant'
 import { showToast } from '@/composables/useCanvasDialog'
-import { createQuickSeedanceCharacterAsset, listAssetGroups, pollAssetStatus } from '@/api/canvas/volcengine-assets'
+import { createQuickSeedanceCharacterAsset, getAssetReviewProviders, pollAssetStatus } from '@/api/canvas/volcengine-assets'
 import { resolveSeedanceMediaUrl } from '@/api/canvas/seedance-media-upload'
 import { getSeedanceSourceUrl } from '@/utils/seedanceMedia'
 import { getSeedanceQuickAssetStatus } from '@/utils/seedanceQuickAsset'
@@ -15,7 +15,33 @@ const canvasStore = useCanvasStore()
 const teamStore = useTeamStore()
 const enabled = computed(() => isSeedanceFeaturesEnabled())
 const submitting = ref(false)
-const status = computed(() => getSeedanceQuickAssetStatus(props.data))
+const providers = ref([])
+const selectedProvider = ref('')
+const loadingProviders = ref(false)
+const status = computed(() => {
+  const savedProvider = props.data?.seedanceQuickAsset?.providerType
+  return selectedProvider.value && savedProvider && savedProvider !== selectedProvider.value ? null : getSeedanceQuickAssetStatus(props.data)
+})
+
+async function loadProviders() {
+  loadingProviders.value = true
+  try {
+    const result = await getAssetReviewProviders()
+    providers.value = (result.enabledProviders || []).filter(provider => provider.assetTypes.includes(props.assetType))
+    if (!providers.value.some(provider => provider.id === selectedProvider.value)) {
+      const savedProvider = props.data?.seedanceQuickAsset?.providerType
+      selectedProvider.value = [savedProvider, result.activeProvider].find(id => providers.value.some(provider => provider.id === id)) || providers.value[0]?.id || ''
+    }
+  } finally { loadingProviders.value = false }
+}
+
+async function getProvider() {
+  const selected = selectedProvider.value
+  await loadProviders()
+  if (selected && !providers.value.some(provider => provider.id === selected)) throw new Error('所选素材渠道已停用，请重新选择')
+  if (!selectedProvider.value) throw new Error('暂无支持此素材的启用渠道，请联系管理员配置')
+  return selectedProvider.value
+}
 const queryFailed = computed(() => status.value === 'processing' && !!props.data?.seedanceQuickAsset?.error)
 const buttonText = computed(() => {
   if (submitting.value) return '提交中'
@@ -29,7 +55,7 @@ const controller = createSeedanceReviewController({
   nodeId: props.nodeId,
   update: partial => canvasStore.updateNodeData(props.nodeId, { seedanceQuickAsset: { ...props.data?.seedanceQuickAsset, ...partial } }),
   resolveUrl: url => resolveSeedanceMediaUrl(url, props.assetType),
-  getProvider: async () => (await listAssetGroups({ pageSize: 1 })).activeProvider || '',
+  getProvider,
   create: body => createQuickSeedanceCharacterAsset({ ...body, ...teamStore.getSpaceParams('current') }),
   poll: pollAssetStatus,
   notify: showToast
@@ -42,15 +68,20 @@ async function submit() {
 }
 
 watch(() => props.data?.seedanceQuickAsset?.assetId, () => controller.resume(), { immediate: true })
+onMounted(() => { if (enabled.value) loadProviders().catch(() => {}) })
 onUnmounted(() => controller.dispose())
 </script>
 
 <template>
+  <span v-if="enabled" class="seedance-review-control nodrag" @mousedown.stop>
+  <select v-if="providers.length > 1" v-model="selectedProvider" class="seedance-review-provider nodrag nowheel" aria-label="素材审核渠道" :disabled="submitting || loadingProviders" @click.stop @keydown.stop @wheel.stop>
+    <option v-for="provider in providers" :key="provider.id" :value="provider.id">{{ provider.label }}</option>
+  </select>
   <button
     v-if="enabled"
     class="toolbar-btn seedance-review-btn nodrag"
     :class="{ active: status === 'approved', 'is-failed': status === 'failed' || queryFailed }"
-    :disabled="submitting || (status === 'processing' && !queryFailed) || status === 'approved'"
+    :disabled="submitting || loadingProviders || (status === 'processing' && !queryFailed) || status === 'approved'"
     :title="data?.seedanceQuickAsset?.error || '提交 Seedance 素材审核，审核通过后可连接 Seedance 视频节点使用'"
     @mousedown.stop.prevent
     @click.stop.prevent="submit"
@@ -65,9 +96,12 @@ onUnmounted(() => controller.dispose())
     </svg>
     <span>{{ buttonText }}</span>
   </button>
+  </span>
 </template>
 
 <style scoped>
+.seedance-review-control { display: inline-flex; align-items: center; }
+.seedance-review-provider { max-width: 140px; padding: 5px 4px; border: 1px solid var(--canvas-border-default); border-radius: 6px; background: var(--canvas-bg-secondary); color: var(--canvas-text-primary); font-size: 12px; }
 .seedance-review-btn { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: none; background: transparent; color: #86efac; font-size: 12px; white-space: nowrap; cursor: pointer; }
 .seedance-review-btn svg { width: 18px; height: 18px; flex-shrink: 0; }
 .seedance-review-btn:hover { color: var(--canvas-text-primary); background: var(--canvas-bg-hover); }
