@@ -121,6 +121,6 @@ onBeforeUnmount(() => { disposed = true; dispose?.(); unbind?.() })
 </script>
 
 <style scoped>
-.editor-save-status { position: fixed; bottom: 8px; right: 16px; z-index: 1900; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--canvas-border, #3f3f46); background: var(--canvas-bg, #18181b); color: var(--canvas-text, #d4d4d8); font-size: 12px; }
+.editor-save-status { position: fixed; bottom: 8px; right: 16px; z-index: 10400; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--canvas-border, #3f3f46); background: var(--canvas-bg, #18181b); color: var(--canvas-text, #d4d4d8); font-size: 12px; }
 .editor-save-status button { margin-left: 12px; text-decoration: underline; }
 </style>

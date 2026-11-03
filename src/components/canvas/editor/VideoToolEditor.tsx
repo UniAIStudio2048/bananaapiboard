@@ -1086,7 +1086,7 @@ export function VideoToolEditor({ resource, sourceUrl, initialMode, onClose, onC
    {operation === 'edit' && !exportOpen && error && <p role="alert" className="px-3 pb-2 text-xs text-red-300">{error}</p>}
    {operation === 'edit' && !exportOpen && job && <p role="status" className="px-3 pb-2 text-xs">{labels[job.state]}{job.error_code ? ` · ${job.error_code}` : ''}</p>}
    {coverOpen && <CoverSelector baseBlend={clip?.blend_mode} baseEffects={clip?.effects} effects={previewEffects} background={backgroundColor} mediaType={clip?.media_type} cover={cover} playhead={playhead} duration={timelineDuration} fps={projectFPS} currentUrl={currentUrl} sourceTime={time} transform={animatedTransform} aspect={previewAspect} tail={!clip||tailTime!==undefined} videos={videoLayers.map(visibleVideo)} images={imageLayers.map(visibleImage)} text={textLayers.map(visibleText)} urls={urls} library={ctx.library} source={ctx.api.source} project={ctx.project} onSeek={seekTimeline} onConfirm={value=>{setCover(value);closeCover()}} onCancel={closeCover} onError={setError} />}
-   {operation === 'edit' ? <MediaModal open={exportOpen} title="导出设置" width="min(860px, calc(100vw - 32px))" className="[--mf-brand:#d4d4d4] [&_.ant-modal-body]:max-h-[calc(100vh-160px)] [&_.ant-modal-body]:overflow-y-auto" zIndex={1600} footer={null} onCancel={()=>setExportOpen(false)}>{exportContent}</MediaModal> : exportContent}
+   {operation === 'edit' ? <MediaModal open={exportOpen} title="导出设置" width="min(860px, calc(100vw - 32px))" className="[--mf-brand:#d4d4d4] [&_.ant-modal-body]:max-h-[calc(100vh-160px)] [&_.ant-modal-body]:overflow-y-auto" zIndex={10100} footer={null} onCancel={()=>setExportOpen(false)}>{exportContent}</MediaModal> : exportContent}
   </div>
  </MediaModal>
 }

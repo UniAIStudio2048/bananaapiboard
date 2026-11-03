@@ -9,7 +9,7 @@ export function MediaButton({ variant, children, className = '', ...props }: any
   return <button type="button" className={`rounded-md border border-white/15 px-3 py-1.5 text-xs hover:bg-white/10 focus-visible:outline focus-visible:outline-2 disabled:opacity-40 ${variant === 'primary' ? 'bg-zinc-100 text-zinc-900 hover:bg-white' : ''} ${className}`} {...props}>{children}</button>
 }
 
-export function MediaModal({ open, title, children, onCancel, closable = true, className = '', width, zIndex = 1500 }: any) {
+export function MediaModal({ open, title, children, onCancel, closable = true, className = '', width, zIndex = 10000 }: any) {
   const root = useRef<HTMLDivElement>(null)
   const cancel = useRef(onCancel)
   cancel.current = onCancel
@@ -73,6 +73,6 @@ export function MediaPopover({ open, onOpenChange, content, children, trigger = 
       onClick: (event: any) => { children.props.onClick?.(event); if (!contextMenu) { position(event); set(!shown) } },
       onContextMenu: (event: any) => { children.props.onContextMenu?.(event); if (contextMenu) { event.preventDefault(); event.stopPropagation(); setAnchor({ x: event.clientX, y: event.clientY }); set(true) } }
     })}
-    {shown && createPortal(<div ref={popup} data-editor-popover className="banana-video-editor fixed z-[1700] max-h-[70vh] overflow-auto rounded-lg border border-white/15 bg-zinc-900 p-1 text-zinc-100 shadow-lg" style={{ left: anchor.x, top: anchor.y }} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()}>{content}</div>, document.body)}
+    {shown && createPortal(<div ref={popup} data-editor-popover className="banana-video-editor fixed z-[10200] max-h-[70vh] overflow-auto rounded-lg border border-white/15 bg-zinc-900 p-1 text-zinc-100 shadow-lg" style={{ left: anchor.x, top: anchor.y }} onClick={event => event.stopPropagation()} onPointerDown={event => event.stopPropagation()}>{content}</div>, document.body)}
   </span>
 }

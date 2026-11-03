@@ -38,7 +38,7 @@ export function CoverSelector({ cover, playhead, duration, fps, currentUrl, medi
   setUploading(true)
   try {const ok=await library.uploadAsset(file),id=library.getSnapshot().upload.resource_uuid;if(!ok||!id)throw new Error();setResource(id)} catch {setLocalError('E7009 封面上传失败')} finally {setUploading(false)}
  }
- return <MediaModal open title="封面选择" width={560} zIndex={1800} footer={null} mask={{closable:false}} onCancel={()=>{if(!uploading)onCancel()}}>
+ return <MediaModal open title="封面选择" width={560} zIndex={10300} footer={null} mask={{closable:false}} onCancel={()=>{if(!uploading)onCancel()}}>
   <div className="grid gap-4 text-sm text-zinc-100">
    {localError && <p role="alert" className="text-red-300">{localError}</p>}
    <div role="tablist" aria-label="封面来源" className="flex gap-2"><button role="tab" aria-selected={tab==='frame'} type="button" className={`rounded px-3 py-2 ${tab==='frame'?'bg-[var(--mf-brand)]/20 text-[var(--mf-brand)]':'bg-white/5'}`} onClick={()=>setTab('frame')}>视频帧</button><button role="tab" aria-selected={tab==='local'} type="button" className={`rounded px-3 py-2 ${tab==='local'?'bg-[var(--mf-brand)]/20 text-[var(--mf-brand)]':'bg-white/5'}`} onClick={()=>setTab('local')}>本地</button></div>
