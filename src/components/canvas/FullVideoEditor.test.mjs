@@ -3,26 +3,31 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { parse } from '@babel/parser'
+import { webcrypto } from 'node:crypto'
 import { createVideoEditDraftWriter } from '../../utils/videoEditDraftWriter.js'
+import { bindAccountEditorStorage, editorStorage } from './editor/storage.js'
 
 const file = readFileSync(new URL('./FullVideoEditor.vue', import.meta.url), 'utf8')
 const script = file.match(/<script setup>([\s\S]*?)<\/script>/)[1]
-const body = parse(script, { sourceType: 'module' }).program.body.filter(node => node.type !== 'ImportDeclaration').map(node => script.slice(node.start, node.end)).join('\n')
+const body = parse(script, { sourceType: 'module' }).program.body.filter(node => node.type !== 'ImportDeclaration').map(node => script.slice(node.start, node.end)).join('\n').replace("import('./editor/mount')", 'mountModule()')
 function fixture(props = {}) {
   let mounted, unmount, current = { id: 'tab-a', workflowId: 'wf-a', savedNodeVersions: { source: 3, other: 2 } }, resolveUpload
-  const calls = { bind: 0, saved: 0, added: [] }
+  const calls = { bind: 0, saved: 0, added: [], preferences: [], closed: 0 }
   const store = {
     getCurrentTab: () => current, nodes: [{ id: 'source', position: { x: 0, y: 0 } }],
     addNode(node) { calls.added.push(node) },
     applyWorkflowSaveVersions(workflow) { current.savedNodeVersions = { ...workflow.node_versions } }
   }
-  const state = runInNewContext(`${body}\n;({ status, error, createResult, setActiveTab: value => { activeTab = value } })`, {
+  const state = runInNewContext(`${body}\n;({ status, error, createResult, close, retrySave, setActiveTab: value => { activeTab = value } })`, {
     ref: value => ({ value }), onMounted: callback => { mounted = callback }, onBeforeUnmount: callback => { unmount = callback },
-    defineProps: () => ({ nodeId: 'source', initialSource: { url: '/video.mp4' }, saveDraft: async () => {}, ...props }), defineEmits: () => () => {},
+    defineProps: () => ({ nodeId: 'source', initialSource: { url: '/video.mp4' }, loadDraft: async () => null, saveDraft: async () => {}, ...props }), defineEmits: () => () => { calls.closed++ },
     useCanvasStore: () => store, createVideoEditDraftWriter,
-    bindEditorStorage: () => { calls.bind++; return () => {} },
+    bindAccountEditorStorage: (...args) => { calls.bind++; return bindAccountEditorStorage(...args) },
+    createBananaEditorApi: () => ({ preferences: async () => ({ namespace: 'a'.repeat(64), values: {} }), config: async () => ({}), async savePreferences(values) { if (calls.failPreferences) throw new Error('preferences unavailable'); calls.preferences.push(values) } }),
+    createBananaEditorLibrary: () => ({}), getMediaUrl: value => value,
+    mountModule: async () => ({ mountVideoEditor(_host, options) { calls.options = options; return () => {} } }), TextEncoder,
     uploadCanvasMedia: () => new Promise(resolve => { resolveUpload = resolve }), postWorkflowOps: async () => { calls.saved++ },
-    crypto: { randomUUID: () => 'result-id' }, window: { dispatchEvent() {} }, CustomEvent: class {}
+    crypto: { randomUUID: () => 'result-id', subtle: webcrypto.subtle }, window: { dispatchEvent() {} }, CustomEvent: class {}
   })
   return { state, calls, get tab() { return current }, activate() { state.setActiveTab({ ...current }) }, mount: () => mounted(), unmount: () => unmount(), switchTab() { current = { id: 'tab-b', workflowId: 'wf-b' } }, finishUpload() { resolveUpload({ url: '/export.mp4' }) } }
 }
@@ -34,6 +39,23 @@ test('加载草稿时关闭编辑器，不在卸载后绑定存储或更新错�
   h.unmount(); resolveDraft(null); await pending
   assert.equal(h.calls.bind, 0)
   assert.equal(h.state.error.value, '')
+})
+
+test('桥接使用认证账号共享预设及剪贴板，偏好保存失败时保留编辑器并允许重试', async () => {
+  const h = fixture()
+  await h.mount()
+  assert.equal(h.calls.options.clipboardNamespace, 'a'.repeat(64))
+  assert.equal(h.calls.options.preferenceNamespace, `media-canvas-preferences:v1:${'a'.repeat(64)}`)
+  h.calls.failPreferences = true
+  editorStorage.setItem(`media-video-timeline-preferences:v1:${h.calls.options.preferenceNamespace}`, '3')
+  await h.state.close()
+  assert.equal(h.calls.closed, 0)
+  assert.match(h.state.error.value, /preferences unavailable/)
+  h.calls.failPreferences = false
+  await h.state.retrySave(); await h.state.close()
+  assert.deepEqual(h.calls.preferences, [{ timeline: '3' }])
+  assert.equal(h.calls.closed, 1)
+  h.unmount()
 })
 
 test('加载期间切换画布会中止挂载，不绑定到切换后的画布', async () => {

@@ -16,7 +16,7 @@ import { postWorkflowOps, uploadCanvasMedia } from '@/api/canvas/workflow'
 import { getMediaUrl } from '@/config/tenant'
 import { createVideoEditDraftWriter } from '@/utils/videoEditDraftWriter'
 import { createBananaEditorApi, createBananaEditorLibrary } from './editor/banana-adapter'
-import { bindEditorStorage } from './editor/storage'
+import { bindAccountEditorStorage } from './editor/storage'
 import './editor/theme.css'
 
 const props = defineProps({ nodeId: String, initialSource: Object, loadDraft: Function, saveDraft: Function })
@@ -27,9 +27,9 @@ const loadFailed = ref(false)
 const status = ref('saved')
 const error = ref('')
 const store = useCanvasStore()
-let dispose, unbind, activeTab
+let dispose, unbind, activeTab, api
 let disposed = false
-const writer = createVideoEditDraftWriter(value => props.saveDraft(value), (state, failure) => {
+const writer = createVideoEditDraftWriter(value => value.editorPreferences ? api.savePreferences(value.editorPreferences) : props.saveDraft(value), (state, failure) => {
   status.value = state
   error.value = failure?.message || ''
 })
@@ -67,7 +67,8 @@ async function createResult(request) {
 onMounted(async () => {
   const tabId = store.getCurrentTab()?.id
   try {
-    const saved = await props.loadDraft()
+    api = createBananaEditorApi()
+    const [saved, preferences] = await Promise.all([props.loadDraft(), api.preferences()])
     if (disposed) return
     if (store.getCurrentTab()?.id !== tabId) throw new Error('画布已切换，请重新打开剪辑')
     activeTab = { ...store.getCurrentTab() }
@@ -83,7 +84,7 @@ onMounted(async () => {
     if (!storage[draftKey] && saved?.clips?.length) {
       storage[draftKey] = JSON.stringify({ clips: saved.clips.map(clip => ({ resource_uuid: clip.url, start: clip.startTime, end: clip.endTime, rate: clip.playbackRate || 1, volume_db: clip.volumeDb || 0 })) })
     }
-    unbind = bindEditorStorage(storage, values => writer.save({ version: 2, sourceUrl: resource, editorStorage: values }), writer.flush)
+    unbind = bindAccountEditorStorage(storage, preferences, values => writer.save({ version: 2, sourceUrl: resource, editorStorage: values }), values => writer.save({ editorPreferences: values }), writer.flush)
     const sources = { video: [], audio: [], image: [] }
     for (const node of store.nodes) {
       const kind = node.type
@@ -91,12 +92,11 @@ onMounted(async () => {
       const url = output?.url || (typeof output === 'string' ? output : '')
       if (sources[kind] && url) sources[kind].push({ resource: url, name: node.data?.title || node.data?.label || kind })
     }
-    const api = createBananaEditorApi()
     const [config, { mountVideoEditor }] = await Promise.all([api.config(), import('./editor/mount')])
     if (disposed) return
     if (store.getCurrentTab()?.id !== tabId) throw new Error('画布已切换，请重新打开剪辑')
     dispose = mountVideoEditor(host.value, {
-      api, project, clipboardNamespace: identity, preferenceNamespace: `media-canvas-preferences:v1:${identity}`,
+      api, project, clipboardNamespace: preferences.namespace, preferenceNamespace: `media-canvas-preferences:v1:${preferences.namespace}`,
       sources: sources.video, audioSources: sources.audio, imageSources: sources.image,
       config, readOnly: false, library: createBananaEditorLibrary()
     }, { resource, sourceUrl: getMediaUrl(resource), onClose: close, onCreate: createResult })

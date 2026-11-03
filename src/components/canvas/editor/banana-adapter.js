@@ -26,6 +26,8 @@ export function createBananaEditorApi() {
     },
     async checkProjectAccess() { /* Access is enforced by the versioned workflow and job APIs. */ },
     config: () => request('/config'),
+    preferences: () => request('/preferences'),
+    savePreferences: values => request('/preferences', 'PUT', { values }),
     quote: (project, input) => request('/quotes', 'POST', { ...input, project, ...useTeamStore().getSpaceParams('current') }),
     submit: (_project, id) => request(`/jobs/${encodeURIComponent(id)}`, 'POST'),
     get: (_project, id) => request(`/jobs/${encodeURIComponent(id)}`),
