@@ -58,6 +58,27 @@ test('桥接使用认证账号共享预设及剪贴板，偏好保存失败时�
   h.unmount()
 })
 
+test('升级账号命名空间时保留旧节点草稿和未完成字幕任务，旧片段格式也使用编辑器实际读取的键', async () => {
+  const hash = Buffer.from(await webcrypto.subtle.digest('SHA-256', new TextEncoder().encode('wf-a:source'))).toString('hex')
+  const oldKey = `media-video-draft:wf-a:/video.mp4:identity:${hash}`
+  const key = `media-video-draft:wf-a:/video.mp4:identity:${'a'.repeat(64)}`
+  const draft = JSON.stringify({ clips: [{ resource_uuid: '/video.mp4', start: 2, end: 3, rate: 1, volume_db: 0 }], exportTitle: '旧剪辑' })
+  const oldPresetKey = `media-video-text-presets:v1:media-canvas-preferences:v1:${hash}`
+  const saved = []
+  const h = fixture({ loadDraft: async () => ({ editorStorage: { [oldKey]: draft, [oldKey + ':subtitle']: 'pending-job', [oldPresetKey]: '[]' } }), saveDraft: async value => saved.push(value) })
+  await h.mount(); await editorStorage.flush()
+  assert.equal(editorStorage.getItem(key), draft)
+  assert.equal(editorStorage.getItem(key + ':subtitle'), 'pending-job')
+  assert.equal(editorStorage.getItem(oldKey), null)
+  assert.equal(saved.at(-1).editorStorage[key], draft)
+  assert.equal(saved.at(-1).editorStorage[oldPresetKey], undefined)
+  h.unmount()
+  const legacy = fixture({ loadDraft: async () => ({ clips: [{ url: '/video.mp4', startTime: 2, endTime: 3, playbackRate: 1, volumeDb: 0 }] }) })
+  await legacy.mount()
+  assert.equal(JSON.parse(editorStorage.getItem(key)).clips[0].start, 2)
+  legacy.unmount()
+})
+
 test('加载期间切换画布会中止挂载，不绑定到切换后的画布', async () => {
   let resolveDraft
   const h = fixture({ loadDraft: () => new Promise(resolve => { resolveDraft = resolve }) })

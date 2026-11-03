@@ -79,11 +79,20 @@ onMounted(async () => {
     if (store.getCurrentTab()?.id !== tabId) throw new Error('画布已切换，请重新打开剪辑')
     const identity = [...new Uint8Array(hash)].map(value => value.toString(16).padStart(2, '0')).join('')
     const project = activeTab.workflowId
-    const draftKey = `media-video-draft:${project}:${resource}:identity:${identity}`
-    const storage = saved?.editorStorage || {}
+    const previousKey = `media-video-draft:${project}:${resource}:identity:${identity}`
+    const draftKey = `media-video-draft:${project}:${resource}:identity:${preferences.namespace}`
+    const storage = { ...saved?.editorStorage }
+    let migrated = false
+    for (const key of Object.keys(storage)) {
+      if (key !== previousKey && !key.startsWith(`${previousKey}:`)) continue
+      const nextKey = `${draftKey}${key.slice(previousKey.length)}`
+      if (!(nextKey in storage)) storage[nextKey] = storage[key]
+      if (key !== nextKey) { delete storage[key]; migrated = true }
+    }
     if (!storage[draftKey] && saved?.clips?.length) {
       storage[draftKey] = JSON.stringify({ clips: saved.clips.map(clip => ({ resource_uuid: clip.url, start: clip.startTime, end: clip.endTime, rate: clip.playbackRate || 1, volume_db: clip.volumeDb || 0 })) })
     }
+    if (migrated) writer.save({ version: 2, sourceUrl: resource, editorStorage: storage })
     unbind = bindAccountEditorStorage(storage, preferences, values => writer.save({ version: 2, sourceUrl: resource, editorStorage: values }), values => writer.save({ editorPreferences: values }), writer.flush)
     const sources = { video: [], audio: [], image: [] }
     for (const node of store.nodes) {
