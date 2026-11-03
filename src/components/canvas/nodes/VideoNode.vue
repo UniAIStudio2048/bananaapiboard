@@ -116,6 +116,7 @@ import {
   WAN_MODES
 } from '@/utils/videoGenerationMode'
 import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
+import FullVideoEditor from '@/components/canvas/FullVideoEditor.vue'
 import VideoAnalysisDialog from '@/components/canvas/VideoAnalysisDialog.vue'
 import { analyzeVideoNode } from '@/api/canvas/video-analysis'
 import { createSubtitleEraseTask, exportVideoTimeline, getSubtitleEraseConfig, getSubtitleEraseTask, separateVideoAudio } from '@/api/canvas/video-tools'
@@ -8867,10 +8868,12 @@ async function loadVideoEditDraft() {
 
 async function saveVideoEditDraft(draft) {
   const context = videoEditContext
-  if (!context || canvasStore.getCurrentTab?.()?.id !== context.tabId) throw new Error('画布已切换，请重新打开剪辑')
+  const tab = canvasStore.getCurrentTab?.()
+  if (!context || tab?.id !== context.tabId) throw new Error('画布已切换，请重新打开剪辑')
   if (draft.sourceUrl !== context.sourceUrl || videoToolInitialSource.value?.url !== context.sourceUrl) throw new Error('源视频已变化，请重新打开剪辑')
   const result = await patchWorkflowNode(context.workflowId, props.id, { data: { videoEditDraft: draft } }, context.version)
   context.version = result.version
+  canvasStore.applyWorkflowSaveVersions({ id: context.workflowId, node_versions: { ...tab.savedNodeVersions, [props.id]: result.version } })
   if (canvasStore.getCurrentTab?.()?.id === context.tabId) {
     canvasStore.updateNodeData(props.id, { videoEditDraft: draft, _baseVersion: result.version }, { silent: true })
   }
@@ -10450,8 +10453,16 @@ function handleToolbarPreview() {
       @confirm="handleConfirmKeyframes"
     />
 
+    <FullVideoEditor
+      v-if="showVideoToolModal && videoToolInitialMode === 'edit'"
+      :node-id="id"
+      :initial-source="videoToolInitialSource"
+      :load-draft="loadVideoEditDraft"
+      :save-draft="saveVideoEditDraft"
+      @close="showVideoToolModal = false"
+    />
     <VideoToolModal
-      v-if="showVideoToolModal"
+      v-if="showVideoToolModal && videoToolInitialMode !== 'edit'"
       :initial-mode="videoToolInitialMode"
       :initial-source="videoToolInitialSource"
       :canvas-videos="canvasVideoToolSources"
