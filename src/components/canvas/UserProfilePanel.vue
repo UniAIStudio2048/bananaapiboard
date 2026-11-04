@@ -9,7 +9,7 @@ import { ChevronLeft, LockKeyhole, Mail, Maximize2, Minimize2, Plus, UserRound, 
 import PhoneBinding from '@/components/auth/PhoneBinding.vue'
 import { useRouter } from 'vue-router'
 import { redeemVoucher as redeemVoucherApi, updateUserPreferences, clearAuthSession, invalidateMeCache } from '@/api/client'
-import { getTenantHeaders, getApiUrl, getRechargeLimits } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, getRechargeLimits, useTenantConfigVersion, isInviteRewardAfterFirstPayment } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { getPermanentUserPoints } from '@/utils/points'
 import { getPointsLedgerTypeText, getPointsLedgerGenerationDetailsText } from '@/utils/pointsLedger'
@@ -118,6 +118,8 @@ const invite = ref({ invite_code: '', uses: [] })
 const checkinStatus = ref({ enabled: true, reward: 1, hasCheckedInToday: false, consecutiveDays: 0 })
 const loading = ref(false)
 const appSettings = ref({}) // 租户配置（包含邀请奖励积分等）
+const tenantConfigVersion = useTenantConfigVersion()
+const inviteRewardAfterFirstPayment = computed(() => { void tenantConfigVersion.value; return isInviteRewardAfterFirstPayment() })
 const isCheckinEnabled = computed(() => appSettings.value.checkin_enabled !== false && checkinStatus.value.enabled !== false)
 
 // 套餐悬浮提示状态
@@ -2193,17 +2195,19 @@ const ledgerDisplayItems = computed(() => (Array.isArray(ledger.value) ? ledger.
                   <span class="stat-num">{{ invite.uses?.length || 0 }}</span>
                   <span class="stat-label">{{ t('user.invited') }}</span>
                 </div>
-                <div class="stat">
-                  <span class="stat-num">{{ (invite.uses?.length || 0) * (appSettings.inviter_bonus || 10) }}</span>
-                  <span class="stat-label">{{ t('user.earnedPoints') }}</span>
-                </div>
               </div>
 
               <div class="invite-tips">
                 <h5>{{ t('user.inviteRules') }}</h5>
                 <ul>
-                  <li>每邀请一位好友注册，您获得 {{ formatPoints(appSettings.inviter_bonus || 10) }} 积分</li>
-                  <li>被邀请人也可获得 {{ formatPoints(appSettings.invitee_bonus || 5) }} 积分奖励</li>
+                  <template v-if="inviteRewardAfterFirstPayment">
+                    <li>好友完成首次充值后，您获得 {{ formatPoints(appSettings.inviter_bonus || 10) }} 积分</li>
+                    <li>好友首次充值后也可获得 {{ formatPoints(appSettings.invitee_bonus || 5) }} 积分奖励</li>
+                  </template>
+                  <template v-else>
+                    <li>每邀请一位好友注册，您获得 {{ formatPoints(appSettings.inviter_bonus || 10) }} 积分</li>
+                    <li>被邀请人也可获得 {{ formatPoints(appSettings.invitee_bonus || 5) }} 积分奖励</li>
+                  </template>
                   <li>{{ t('user.inviteRule3') }}</li>
                 </ul>
               </div>

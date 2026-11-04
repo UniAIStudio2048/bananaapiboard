@@ -661,6 +661,10 @@ async function fetchBrandConfig() {
         runtimeConfig.enableCanvasLogo = true
       }
       console.log('[tenant] 画布底部Logo开关:', runtimeConfig.enableCanvasLogo)
+
+      // 更新注册来源采集与邀请奖励首充后发放开关
+      runtimeConfig.signupSourceEnabled = data.signupSourceEnabled === true
+      runtimeConfig.inviteRewardAfterFirstPayment = data.inviteRewardAfterFirstPayment === true
       bumpTenantConfigVersion()
       
       // 保存到本地存储
@@ -928,6 +932,12 @@ export const isDigitalHumanLibraryEnabled = () => config.enableDigitalHumanLibra
 
 // 检查画布底部 Logo 是否启用
 export const isCanvasLogoEnabled = () => config.enableCanvasLogo !== false
+
+// 检查注册页是否显示「你从哪里知道我们」来源选填项
+export const isSignupSourceEnabled = () => config.signupSourceEnabled === true
+
+// 检查邀请奖励是否在被邀请人首次付款后才发放
+export const isInviteRewardAfterFirstPayment = () => config.inviteRewardAfterFirstPayment === true
 
 // 获取模型显示名称（如果自定义了则返回自定义名称，否则返回默认名称）
 export const getModelDisplayName = (modelKey, type = 'image') => {
