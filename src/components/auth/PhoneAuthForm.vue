@@ -4,11 +4,16 @@ import PhoneVerificationFields from './PhoneVerificationFields.vue'
 import { smsRequest, completeSmsAuthentication } from '@/api/sms'
 import { useSmsCopy } from '@/composables/useSmsAuth'
 import { smsErrorText } from '@/utils/smsCopy'
+import { SIGNUP_SOURCE_LABEL, SIGNUP_SOURCE_OPTIONS, initialSignupSourceChoice, resolveSignupSource } from '@/utils/signupSource'
+import { useTenantConfigVersion, isSignupSourceEnabled } from '@/config/tenant'
 const props=defineProps({mode:{type:String,required:true},policy:{type:Object,required:true},inviteCode:{type:String,default:''},requireInviteCode:Boolean})
 const emit=defineEmits(['authenticated','back','retrieve'])
 const copy=useSmsCopy()
 const verification=ref({phone:'',country:'CN',code:'',request_id:''})
 const username=ref(''),password=ref(''),confirm=ref(''),invite=ref(props.inviteCode),busy=ref(false),error=ref(''),done=ref(false)
+const signupSource=ref(initialSignupSourceChoice())
+const tenantConfigVersion=useTenantConfigVersion()
+const showSignupSource=computed(()=>{void tenantConfigVersion.value;return isSignupSourceEnabled()})
 const countries=computed(()=>props.policy.sms?.[props.mode]||[])
 watch(()=>props.mode,()=>{verification.value={phone:'',country:'CN',code:'',request_id:''};password.value='';confirm.value='';error.value='';done.value=false})
 watch(()=>props.inviteCode,value=>invite.value=value)
@@ -21,7 +26,7 @@ async function submit(){
   try{
     const body={...verification.value}
     const path=props.mode==='register'?'/api/auth/register':props.mode==='retrieve'?'/api/auth/sms-retrieve':'/api/auth/sms-login'
-    if(props.mode==='register')Object.assign(body,{username:username.value,password:password.value,invite_code:invite.value})
+    if(props.mode==='register'){Object.assign(body,{username:username.value,password:password.value,invite_code:invite.value});const source=showSignupSource.value?resolveSignupSource(signupSource.value):'';if(source)body.signup_source=source}
     if(props.mode==='retrieve')body.new_password=password.value
     const result=await smsRequest(path,body)
     if(props.mode==='retrieve'){done.value=true;password.value='';confirm.value=''}
@@ -37,6 +42,7 @@ async function submit(){
       <PhoneVerificationFields v-model="verification" :purpose="mode" :countries="countries" :busy="busy" />
       <template v-if="mode!=='login'"><label>{{ mode==='retrieve'?copy.newPassword:copy.password }}<input v-model="password" :placeholder="copy.passwordPlaceholder" type="password" autocomplete="new-password" minlength="6" maxlength="256" required :disabled="busy" /></label><label>{{ copy.confirm }}<input v-model="confirm" :placeholder="copy.confirmPlaceholder" type="password" autocomplete="new-password" required :disabled="busy" /></label></template>
       <label v-if="mode==='register'">{{ copy.invite }}{{ requireInviteCode?' *':'' }}<input v-model="invite" :placeholder="requireInviteCode ? copy.inviteRequired : copy.invitePlaceholder" maxlength="12" :required="requireInviteCode" :disabled="busy" /></label>
+      <label v-if="mode==='register'&&showSignupSource">{{ SIGNUP_SOURCE_LABEL }}<select v-model="signupSource" :disabled="busy"><option value="">请选择</option><option v-for="option in SIGNUP_SOURCE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option></select></label>
       <p v-if="error" role="alert" class="sms-error">{{ error }}</p>
       <button type="submit" class="primary" :disabled="busy">{{ busy?copy.submitting:mode==='register'?copy.register:mode==='retrieve'?copy.reset:copy.login }}</button>
     </template>
@@ -51,7 +57,7 @@ async function submit(){
   </form>
 </template>
 <style scoped>
-.phone-auth{display:grid;gap:14px;color:inherit}label{display:grid;gap:6px;font-size:14px}input{box-sizing:border-box;width:100%;padding:10px 12px;border:1px solid #64748b80;border-radius:8px;background:var(--sms-input-bg,#ffffff10);color:inherit}button{padding:10px;border-radius:8px;color:inherit}button.primary{background:#2563eb;color:white;font-weight:600}button:disabled{opacity:.5;cursor:not-allowed}input:focus-visible,button:focus-visible{outline:2px solid #60a5fa;outline-offset:2px}.sms-error{color:#ef4444}p{margin:0;font-size:14px}
+.phone-auth{display:grid;gap:14px;color:inherit}label{display:grid;gap:6px;font-size:14px}input,select{box-sizing:border-box;width:100%;padding:10px 12px;border:1px solid #64748b80;border-radius:8px;background:var(--sms-input-bg,#ffffff10);color:inherit}button{padding:10px;border-radius:8px;color:inherit}button.primary{background:#2563eb;color:white;font-weight:600}button:disabled{opacity:.5;cursor:not-allowed}select option{color:#0f172a;background:#fff}input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid #60a5fa;outline-offset:2px}.sms-error{color:#ef4444}p{margin:0;font-size:14px}
 .phone-auth-actions{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 20px;padding-top:4px;border-top:1px solid #64748b33}
 .phone-auth-link{min-height:36px;max-width:100%;padding:6px 0;font-size:13px;font-weight:400;line-height:20px;text-align:start;color:color-mix(in srgb,currentColor 65%,transparent);transition:color .15s}
 .phone-auth-link:hover,.phone-auth-link:focus-visible{color:inherit}
