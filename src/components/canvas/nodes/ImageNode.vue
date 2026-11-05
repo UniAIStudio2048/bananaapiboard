@@ -453,6 +453,25 @@ const selectedAspectRatio = ref(props.data.aspectRatio || 'auto')
 const selectedCount = ref(props.data.count || 1)
 const imageSize = ref(props.data.imageSize || '4K') // 尺寸选项（仅 nano-banana-2）
 const selectedQuality = ref(props.data.quality || 'medium')
+const IMAGE_OUTPUT_FORMAT_STORAGE_KEY = 'canvas:gpt-image-2.6:output-format'
+const imageOutputFormatOptions = [
+  { value: 'png', label: 'PNG' },
+  { value: 'gif', label: 'GIF' }
+]
+
+function normalizeImageOutputFormat(value) {
+  return imageOutputFormatOptions.some(option => option.value === value) ? value : 'png'
+}
+
+function readImageOutputFormatPreference() {
+  try {
+    return normalizeImageOutputFormat(localStorage.getItem(IMAGE_OUTPUT_FORMAT_STORAGE_KEY))
+  } catch {
+    return 'png'
+  }
+}
+
+const selectedOutputFormat = ref(normalizeImageOutputFormat(props.data.outputFormat || readImageOutputFormatPreference()))
 const enableGroupGeneration = ref(props.data.enableGroupGeneration || false) // 组图生成开关
 const maxGroupImages = ref(Math.max(2, Math.min(10, props.data.maxGroupImages || 3))) // 最大组图数量（限制在2-10之间，默认3）
 const enableWebSearch = ref(props.data.enableWebSearch !== undefined ? props.data.enableWebSearch : true) // 联网搜索开关（默认开启）
@@ -1474,6 +1493,19 @@ const modelLookupList = computed(() => {
   ]
 })
 
+function isGptImage26ModelConfig(model) {
+  const modelText = [model?.value, model?.name, model?.actualModel]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return /(^|[^a-z0-9])gpt-image-2\.6(?:$|[^a-z0-9])/.test(modelText)
+}
+
+const isGptImage26Model = computed(() => {
+  const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
+  return isGptImage26ModelConfig(currentModel) || isGptImage26ModelConfig({ value: selectedModel.value })
+})
+
 // 判断当前模型是否是 wan2.7 系列（通义万相）
 const isWan27Model = computed(() => {
   const currentModel = modelLookupList.value.find(m => m.value === selectedModel.value)
@@ -1658,7 +1690,7 @@ const imageParameterQualityOptions = computed(() => {
 })
 
 const hasImageParameterMenu = computed(() => {
-  return availableImageAspectRatios.value.length > 0 || showResolutionOption.value || (showQualityOption.value && imageParameterQualityOptions.value.length > 0)
+  return availableImageAspectRatios.value.length > 0 || showResolutionOption.value || (showQualityOption.value && imageParameterQualityOptions.value.length > 0) || isGptImage26Model.value
 })
 
 // 是否显示预设选项（MJ模型时隐藏，因为不起作用）
@@ -1738,6 +1770,19 @@ watch([selectedModel, imageSizes, availableImageAspectRatios, imageParameterQual
     selectedQuality.value = availableQualities.find(option => option.value === currentModel?.defaultQuality)?.value || availableQualities[0].value
   }
 }, { immediate: true })
+
+watch(selectedOutputFormat, value => {
+  const normalized = normalizeImageOutputFormat(value)
+  if (value !== normalized) {
+    selectedOutputFormat.value = normalized
+    return
+  }
+  try {
+    localStorage.setItem(IMAGE_OUTPUT_FORMAT_STORAGE_KEY, normalized)
+  } catch {
+    // 浏览器禁用本地存储时仍保留当前节点内存状态。
+  }
+})
 
 // 计算单次积分消耗（不考虑组图和批次）
 const basePointsCost = computed(() => {
@@ -4472,8 +4517,8 @@ const quickActions = [
 ]
 
 // 监听参数变化，保存到store
-watch([selectedModel, selectedResolution, selectedAspectRatio, selectedCount, promptText, imageSize, selectedQuality, botType],
-  ([model, resolution, aspectRatio, count, prompt, size, quality, bot]) => {
+watch([selectedModel, selectedResolution, selectedAspectRatio, selectedCount, promptText, imageSize, selectedQuality, selectedOutputFormat, botType],
+  ([model, resolution, aspectRatio, count, prompt, size, quality, outputFormat, bot]) => {
     canvasStore.updateNodeData(props.id, {
       model,
       resolution,
@@ -4482,6 +4527,7 @@ watch([selectedModel, selectedResolution, selectedAspectRatio, selectedCount, pr
       prompt,
       imageSize: size,
       quality,
+      outputFormat,
       botType: bot
     })
   }
@@ -5516,6 +5562,7 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
     // 所有模型都传递 image_size 参数
     image_size: imageSize.value || '2K',
     quality: isPixmaxImage2Model.value ? selectedQuality.value : 'high',
+    ...(isGptImage26Model.value ? { outputFormat: selectedOutputFormat.value } : {}),
     // MJ 模型的 botType 参数（写实/动漫）
     ...(isMJModel.value && { botType: botType.value }),
     // Seedream 组图生成参数
@@ -5719,6 +5766,7 @@ function createStackedOutputNodes(count, basePosition) {
         model: selectedModel.value,
         aspectRatio: selectedAspectRatio.value,
         imageSize: imageSize.value,
+        outputFormat: selectedOutputFormat.value,
         referenceImages: referenceImages.value
       }
     })
@@ -8492,6 +8540,8 @@ async function handleDrop(event) {
               v-model:resolution="imageSize"
               :quality-options="imageParameterQualityOptions"
               v-model:quality="selectedQuality"
+              :output-format-options="isGptImage26Model ? imageOutputFormatOptions : []"
+              v-model:output-format="selectedOutputFormat"
               resolution-first
             />
           </div>
