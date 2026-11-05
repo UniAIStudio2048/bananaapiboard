@@ -339,6 +339,17 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
   }
 
+  // 异步请求结束时用户可能已切到其他标签，此时当前 nodes 中没有该节点，需写回发起请求的标签。
+  function updateNodeDataForTab(tabId, nodeId, data) {
+    const tab = tabId !== activeTabId.value ? workflowTabs.value.find(item => item.id === tabId) : null
+    if (!tab) return updateNodeData(nodeId, data)
+    const node = tab.nodes?.find(item => item.id === nodeId)
+    if (node) {
+      node.data = mergeNodeData(node.data, data)
+      tab.hasChanges = true
+    }
+  }
+
   function commitMediaUpload({ nodeId, blobUrl, uploaded, mediaType, tabId = null }) {
     const target = resolveMediaUploadCommitTarget({
       nodes: nodes.value,
@@ -3142,6 +3153,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     // 节点操作
     addNode,
     updateNodeData,
+    updateNodeDataForTab,
     commitMediaUpload,
     markMediaUploadFailed,
     findInactiveWorkflowTabNode,

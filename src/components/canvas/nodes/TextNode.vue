@@ -16,6 +16,7 @@ import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
 import { getLLMConfig, chatWithLLM, chatWithLLMStream, getUserLLMPresets, createUserLLMPreset, updateUserLLMPreset } from '@/api/canvas/llm'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
+import { isOrphanedTextNodeLlmRequest, TEXT_NODE_LLM_INTERRUPTED_ERROR, trackTextNodeLlmRequest } from '@/utils/textNodeLlmRequests'
 import { formatPoints } from '@/utils/format'
 import { getTotalUserPoints } from '@/utils/points'
 import { getAssets } from '@/api/canvas/assets'
@@ -1764,7 +1765,11 @@ async function handleLLMGenerate() {
   }
   
   isGenerating.value = true
-  
+  // 生成期间用户可能切换标签，结果必须写回发起请求的标签。
+  const requestTabId = canvasStore.activeTabId
+  let targetNodeId = props.id
+  let releaseLlmRequest = null
+
   try {
     // 构建消息列表，包含上游内容和当前节点内容作为上下文。
     // 有参考媒体且底部输入为空时，节点正文就是本轮用户提示词。
@@ -1795,8 +1800,9 @@ async function handleLLMGenerate() {
     const targetNode = props.data.status === 'processing'
       ? canvasStore.duplicateNodeWithIncomingEdges(props.id, { offset: { x: 40, y: 40 } })
       : null
-    const targetNodeId = targetNode?.id || props.id
-    
+    targetNodeId = targetNode?.id || props.id
+    releaseLlmRequest = trackTextNodeLlmRequest(targetNodeId)
+
     // 如果有上游图片/视频，处理 URL
     let processedImages = []
     if (totalMediaCount.value > 0) {
@@ -1826,7 +1832,7 @@ async function handleLLMGenerate() {
       }
     }
     
-    canvasStore.updateNodeData(targetNodeId, {
+    canvasStore.updateNodeDataForTab(requestTabId, targetNodeId, {
       text: llmInputText.value,
       status: 'processing',
       output: null,
@@ -1862,7 +1868,7 @@ async function handleLLMGenerate() {
         ? await chatWithLLMStream({ ...apiParams, timeoutMs: 480000 })
         : await chatWithLLM({ ...apiParams, timeoutMs: 480000 })
       
-      canvasStore.updateNodeData(targetNodeId, {
+      canvasStore.updateNodeDataForTab(requestTabId, targetNodeId, {
         status: 'success',
         output: {
           type: 'text',
@@ -1877,14 +1883,14 @@ async function handleLLMGenerate() {
       console.error('[TextNode] LLM 对话失败:', llmError)
       if (isPromptSafetyBlockedError(llmError)) {
         const dialog = buildPromptSafetyDialog(llmError)
-        canvasStore.updateNodeData(targetNodeId, {
+        canvasStore.updateNodeDataForTab(requestTabId, targetNodeId, {
           status: 'error',
           error: dialog.message
         })
         await showAlert(dialog.message, dialog.title, dialog.detail)
         return
       }
-      canvasStore.updateNodeData(targetNodeId, {
+      canvasStore.updateNodeDataForTab(requestTabId, targetNodeId, {
         status: 'error',
         error: llmError.message || 'LLM 对话失败'
       })
@@ -1901,7 +1907,7 @@ async function handleLLMGenerate() {
     console.error('[TextNode] LLM 对话失败:', error)
     if (isPromptSafetyBlockedError(error)) {
       const dialog = buildPromptSafetyDialog(error)
-      canvasStore.updateNodeData(props.id, {
+      canvasStore.updateNodeDataForTab(requestTabId, targetNodeId, {
         status: 'error',
         error: dialog.message
       })
@@ -1909,12 +1915,14 @@ async function handleLLMGenerate() {
       isGenerating.value = false
       return
     }
-    canvasStore.updateNodeData(props.id, {
+    canvasStore.updateNodeDataForTab(requestTabId, targetNodeId, {
       status: 'error',
       error: error.message || 'LLM 对话失败'
     })
     alert(error.message || 'LLM 对话失败，请重试')
     isGenerating.value = false
+  } finally {
+    releaseLlmRequest?.()
   }
 }
 
@@ -3290,6 +3298,9 @@ function handleConfigPanelOutsideMouseDown(event) {
 
 // 组件挂载时加载 LLM 配置和用户预设
 onMounted(() => {
+  if (isOrphanedTextNodeLlmRequest(props.id, props.data)) {
+    canvasStore.updateNodeData(props.id, { status: 'error', error: TEXT_NODE_LLM_INTERRUPTED_ERROR })
+  }
   loadLLMConfig()
   loadUserPresets()
   document.addEventListener('mousedown', handleConfigPanelOutsideMouseDown)
