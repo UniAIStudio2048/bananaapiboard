@@ -80,15 +80,37 @@ for (const imageSize of ['1K', '2K', '4K']) {
   }
 }
 
-test('gpt-image-2.6 sends the selected GIF output format', async () => {
+for (const [mode, references] of [
+  ['text-to-image', []],
+  ['image-to-image', ['https://cdn.example/reference.png']]
+]) {
+  test(`gpt-image-2.6 ${mode} sends the GIF output format and prompt instruction`, async () => {
+    const harness = createHarness({
+      imageSize: '1K',
+      references,
+      model: 'gpt-image-2.6',
+      outputFormat: 'gif',
+      isGptImage26: true
+    })
+    await harness.send('draw a cup')
+    assert.equal(harness.requests[0].body.model, 'gpt-image-2.6')
+    assert.equal(harness.requests[0].body.output_format, 'gif')
+    assert.equal(
+      harness.requests[0].body.prompt,
+      'draw a cup\nPlease return an animated GIF.'
+    )
+  })
+}
+
+test('gpt-image-2.6 PNG keeps the prompt unchanged', async () => {
   const harness = createHarness({
     imageSize: '1K',
     references: [],
     model: 'gpt-image-2.6',
-    outputFormat: 'gif',
+    outputFormat: 'png',
     isGptImage26: true
   })
   await harness.send('draw a cup')
-  assert.equal(harness.requests[0].body.model, 'gpt-image-2.6')
-  assert.equal(harness.requests[0].body.output_format, 'gif')
+  assert.equal(harness.requests[0].body.output_format, 'png')
+  assert.equal(harness.requests[0].body.prompt, 'draw a cup')
 })

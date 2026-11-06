@@ -5551,8 +5551,12 @@ async function sendImageGenerateRequest(finalPrompt, userPrompt = null) {
   const selectedTenantPresetId = selectedPreset.value.startsWith('tenant-')
     ? (availablePresets.value.find(p => p.id === selectedPreset.value)?._rawId || props.data?.selectedPresetRawId || '')
     : ''
+  const basePrompt = finalPrompt || '保持原图风格'
+  const requestPrompt = isGptImage26Model.value && selectedOutputFormat.value === 'gif'
+    ? `${basePrompt}\nPlease return an animated GIF.`
+    : basePrompt
   const baseParams = {
-    prompt: finalPrompt || '保持原图风格',
+    prompt: requestPrompt,
     userPrompt: userPrompt || finalPrompt || '',
     model: selectedModel.value,
     aspectRatio: resolvedAspectRatio,
