@@ -16,7 +16,7 @@ defineOptions({
  * - 底部配置面板：选中时显示，包含提示词输入和生成参数
  */
 import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { Upload, Film, PanelsTopLeft, PersonStanding, ChevronRight } from '@lucide/vue'
+import { Upload, Film, PanelsTopLeft, PersonStanding, ChevronRight, Scissors, X, Crop, ArrowUp, Loader2, ArrowLeftRight, Library } from '@lucide/vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
@@ -119,9 +119,13 @@ import VideoToolModal from '@/components/canvas/VideoToolModal.vue'
 import FullVideoEditor from '@/components/canvas/FullVideoEditor.vue'
 import VideoAnalysisDialog from '@/components/canvas/VideoAnalysisDialog.vue'
 import { analyzeVideoNode } from '@/api/canvas/video-analysis'
-import { createSubtitleEraseTask, exportVideoTimeline, getSubtitleEraseConfig, getSubtitleEraseTask, separateVideoAudio } from '@/api/canvas/video-tools'
+import { createSubtitleEraseTask, cropVideoFrame, exportVideoTimeline, getSubtitleEraseConfig, getSubtitleEraseTask, separateVideoAudio } from '@/api/canvas/video-tools'
 import { smartDownload } from '@/api/client'
 import VideoClipEditor from '@/components/canvas/VideoClipEditor.vue'
+import VideoSegmentClipBar from '@/components/canvas/VideoSegmentClipBar.vue'
+import VideoFrameCropOverlay from '@/components/canvas/VideoFrameCropOverlay.vue'
+import VideoPlaybackControls from '@/components/canvas/VideoPlaybackControls.vue'
+import VideoReplacementPicker from '@/components/canvas/VideoReplacementPicker.vue'
 import CanvasNodeImage from '@/components/canvas/CanvasNodeImage.vue'
 import KeyframeEditor from '@/components/canvas/KeyframeEditor.vue'
 import { formatVideoNodeAsyncErrorMessage, formatVideoNodeErrorMessage, isSeedanceVideoModel, isVideoNodeNetworkError } from './video-error-message.js'
@@ -408,6 +412,17 @@ const isDragOver = ref(false)
 const dragCounter = ref(0)
 const frameInputRef = ref(null)
 const sourceVideoInputRef = ref(null)
+const replacementVideoInputRef = ref(null)
+const showVideoReplaceMenu = ref(false)
+const showVideoReplacementPicker = ref(false)
+const videoReplacementBusy = ref(false)
+
+const videoReplacementSpaceParams = computed(() => {
+  const tab = canvasStore.getCurrentTab?.()
+  return tab?.workflowSpaceType
+    ? { spaceType: tab.workflowSpaceType, teamId: tab.workflowSpaceType === 'team' ? tab.workflowTeamId : null }
+    : teamStore.getSpaceParams('current')
+})
 
 // 图片列表拖拽排序状态
 const dragSortIndex = ref(-1)
@@ -2983,6 +2998,7 @@ function handleCanvasDragStart() {
   isVideoPreviewActive.value = false
   // 暂停视频播放以提升拖拽性能
   const video = videoPlayerRef.value
+  if (video && Number.isFinite(video.currentTime)) videoPreviewTime.value = video.currentTime
   if (video && !video.paused) {
     video.pause()
   }
@@ -3188,6 +3204,11 @@ const VIDEO_TOOL_MODAL_MODES = {
 }
 const showVideoToolModal = ref(false)
 const videoToolInitialMode = ref('subtitle')
+const showSegmentClip = ref(false)
+const segmentClipSubmitting = ref(false)
+const showFrameCrop = ref(false)
+const frameCropSubmitting = ref(false)
+const frameCropSelection = ref(null)
 const SUBTITLE_ERASE_POLL_INTERVAL_MS = 2000
 const SUBTITLE_ERASE_POLL_ATTEMPTS = 1500
 
@@ -3241,6 +3262,7 @@ const canvasVideoToolSources = computed(() => {
   return sources
 })
 const isVideoPreviewActive = ref(false)
+const videoPreviewTime = ref(null)
 const videoPosterFailed = ref(false)
 const serverPosterFailed = ref(false)
 const serverPosterAttemptedUrl = ref('')
@@ -3261,6 +3283,7 @@ watch(videoPosterUrl, () => {
 })
 
 watch(normalizedVideoUrl, () => {
+  videoPreviewTime.value = null
   posterAbortController?.abort()
   posterAbortController = null
   recoveredVideoPosterUrl.value = ''
@@ -7526,9 +7549,84 @@ async function pollVideoTask(taskId, isOffPeak = false, taskCreatedAt = null) {
   poll()
 }
 
-// 重新生成
-function handleRegenerate() {
-  handleGenerate({ retry: true })
+async function replaceVideoOutput(selection) {
+  if (videoReplacementBusy.value || props.data?.readonly || isGenerating.value) return
+  const tab = canvasStore.getCurrentTab?.()
+  const originalUrl = props.data.output?.url
+  if (!tab?.id || !originalUrl) return
+  const tabId = tab.id
+  videoReplacementBusy.value = true
+  try {
+    let url = selection?.url
+    let assetId = selection?.source === 'asset' ? selection.id : null
+    if (selection?.source === 'local') {
+      const file = selection.file
+      if (!file?.type?.startsWith('video/')) throw new Error('请选择视频文件')
+      if (file.size > 500 * 1024 * 1024) throw new Error('视频文件不能超过 500 MB')
+      const uploaded = await uploadCanvasMedia(file, 'video', { nodeId: props.id, tabId })
+      url = uploaded?.url
+      assetId = uploaded?.assetId || null
+    }
+    if (typeof url !== 'string' || !url.trim() || /^(blob:|data:)/.test(url)) throw new Error('视频素材地址无效')
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== originalUrl) throw new Error('画布或源视频已变化，请重新选择')
+    let context = tab.workflowId ? { workflowId: tab.workflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== originalUrl) throw new Error('画布或源视频已变化，请重新选择')
+    let saved = await getWorkflowNodesBatch(context.workflowId, [props.id])
+    if (!saved.nodes?.some(node => node.id === props.id)) {
+      context = await ensureCanvasWorkflowForVideoSubmission(props.id)
+      saved = await getWorkflowNodesBatch(context.workflowId, [props.id])
+    }
+    const savedNode = saved.nodes?.find(node => node.id === props.id)
+    if (!savedNode) throw new Error('视频节点保存失败，请重试')
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== originalUrl) throw new Error('画布或源视频已变化，请重新选择')
+    const savedUrl = savedNode.data?.output?.url
+    if (savedUrl && savedUrl !== originalUrl && !/^(blob:|data:)/.test(originalUrl)) throw new Error('视频节点已在其他位置更新，请刷新画布后重试')
+    const poster = selection?.thumbnail_url || selection?.thumbnailUrl || selection?.cover_url || selection?.coverUrl || null
+    const duration = Number(selection?.duration) > 0 ? Number(selection.duration) : null
+    const data = {
+      sourceVideo: url, videoUrl: url,
+      output: { type: 'video', url, ...(poster ? { thumbnail_url: poster, thumbnailUrl: poster } : {}) },
+      cover_url: null, coverUrl: null, thumbnail_url: poster, thumbnailUrl: poster,
+      videoWidth: Number(selection?.width) || null, videoHeight: Number(selection?.height) || null,
+      videoDuration: duration, duration,
+      status: 'success', progress: null, error: null,
+      isUploading: false, uploadFailed: false, uploadError: null, uploadId: null, assetId,
+      fromHistory: selection?.source === 'history', historyId: selection?.source === 'history' ? selection.id : null,
+      fromAsset: selection?.source === 'asset', assetUri: null, seedanceQuickAsset: null,
+      seedanceDraft: false, taskId: null, soraTaskId: null, _failedTaskId: null,
+      videoEditDraft: null, isCharacterNode: false, clipStartTime: null, clipEndTime: null
+    }
+    const result = await patchWorkflowNode(context.workflowId, props.id, { data }, savedNode.version)
+    if (canvasStore.getCurrentTab?.()?.id === tabId && props.data.output?.url === originalUrl) {
+      canvasStore.commitMediaUpload?.({ nodeId: props.id, tabId, blobUrl: originalUrl, uploaded: { url, assetId, status: 'completed' }, mediaType: 'video' })
+      canvasStore.updateNodeData(props.id, data, { silent: true, skipStoryboardBindingSync: true })
+      for (const edge of canvasStore.edges.filter(edge => edge.source === props.id)) {
+        canvasStore.propagateData(edge.source, edge.target, edge.targetHandle)
+      }
+      showVideoReplacementPicker.value = false
+      showToast('视频素材已替换', 'success')
+    } else if (canvasStore.getCurrentTab?.()?.id !== tabId && tab.nodes?.find(node => node.id === props.id)?.data?.output?.url === originalUrl) {
+      canvasStore.commitMediaUpload?.({ nodeId: props.id, tabId, blobUrl: originalUrl, uploaded: { url, assetId, status: 'completed' }, mediaType: 'video' })
+      canvasStore.updateNodeDataForTab?.(tabId, props.id, data)
+    }
+    if (result?.version) {
+      canvasStore.applyWorkflowSaveVersions?.({ id: context.workflowId, node_versions: { ...tab.savedNodeVersions, [props.id]: result.version } })
+    }
+  } catch (error) {
+    showToast(error?.message || '视频素材替换失败', 'error')
+  } finally {
+    videoReplacementBusy.value = false
+  }
+}
+
+function handleReplacementVideoFile(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (file) replaceVideoOutput({ source: 'local', file })
+}
+
+function handleVideoReplaceMenuFocusout(event) {
+  if (!event.currentTarget.contains(event.relatedTarget)) showVideoReplaceMenu.value = false
 }
 
 // 处理键盘事件
@@ -8525,6 +8623,11 @@ function handleAddRightClick(event) {
 
 // 视频播放器引用
 const videoPlayerRef = ref(null)
+const videoOutputWrapperRef = ref(null)
+const fullscreenVideoRef = ref(null)
+const isVideoHovered = ref(false)
+const isVideoMuted = ref(false)
+const frameCaptureBusy = ref(false)
 const detectedVideoDimensions = ref(null)
 
 // 全屏预览状态
@@ -8638,8 +8741,10 @@ function handleVideoLoaded(event) {
   
   // 视频尺寸由 applyDetectedVideoDimensions 保存；旧结果加载不能覆盖下一次生成的比例选择。
   
-  // 如果是角色节点（裁剪视频），设置到裁剪起始位置
-  if (props.data?.isCharacterNode && props.data?.clipStartTime !== undefined) {
+  // 恢复播放器卸载前的位置；首次播放角色节点时从裁剪起点开始。
+  if (videoPreviewTime.value !== null) {
+    video.currentTime = videoPreviewTime.value
+  } else if (props.data?.isCharacterNode && props.data?.clipStartTime !== undefined) {
     video.currentTime = props.data.clipStartTime
   } else if (video.currentTime === 0) {
     // 普通视频设置到第一帧
@@ -8672,6 +8777,7 @@ function handleVideoTimeUpdate(event) {
       video.currentTime = props.data.clipStartTime || 0
     }
   }
+  if (Number.isFinite(video.currentTime)) videoPreviewTime.value = video.currentTime
 }
 
 // 视频加载错误处理 - 自动重新获取最新视频URL
@@ -8744,13 +8850,20 @@ function activateVideoPreview(options = {}) {
   if (isCanvasMediaMoving.value && !force) return
 
   isVideoPreviewActive.value = true
-  nextTick(() => handleVideoMouseEnter())
+  nextTick(() => {
+    if (isVideoPreviewActive.value && (isVideoHovered.value || force)) handleVideoMouseEnter()
+  })
 }
 
 // 处理视频包装器点击 - 确保节点被选中
 function handleVideoWrapperClick(event) {
   // 如果点击的是视频播放器本身（而不是工具栏按钮），选中节点
   if (event.target.tagName === 'VIDEO' || event.target.classList.contains('video-output-wrapper')) {
+    const video = videoPlayerRef.value
+    if (video?.dataset.autoplayMuted === 'true') {
+      video.muted = false
+      delete video.dataset.autoplayMuted
+    }
     // 确保节点被选中
     canvasStore.selectNode(props.id)
     // 激活视频预览
@@ -8761,28 +8874,48 @@ function handleVideoWrapperClick(event) {
 function handleVideoMouseEnter() {
   const video = videoPlayerRef.value
   if (video && video.paused) {
-    // 生产环境可能没有用户手势，先静音播放以兼容浏览器自动播放策略。
-    video.muted = true
-    video.defaultMuted = true
+    if (!video.dataset.volumeInitialized) {
+      video.volume = 0.5
+      video.dataset.volumeInitialized = 'true'
+    }
     video.play().catch(err => {
-      console.log('[VideoNode] 悬停自动播放失败:', err.message)
+      if (err.name !== 'NotAllowedError' || videoPlayerRef.value !== video || !isVideoPreviewActive.value) {
+        console.log('[VideoNode] 悬停自动播放失败:', err.message)
+        return
+      }
+      if (!video.muted) video.dataset.autoplayMuted = 'true'
+      video.muted = true
+      video.play().catch(error => console.log('[VideoNode] 悬停自动播放失败:', error.message))
     })
   }
 }
 
-// 鼠标离开视频区域 - 暂停并回到起始位置
-function handleVideoMouseLeave() {
+function handleVideoVolumeWheel(event) {
   const video = videoPlayerRef.value
-  if (video && !video.paused) {
-    video.pause()
-    // 如果是角色节点，回到裁剪起始位置；否则回到第一帧
-    if (props.data?.isCharacterNode && props.data?.clipStartTime !== undefined) {
-      video.currentTime = props.data.clipStartTime
-    } else {
-      video.currentTime = 0.1
-    }
+  if (!video || !event.deltaY) return
+  event.preventDefault()
+  event.stopPropagation()
+  const currentVolume = video.muted && video.dataset.autoplayMuted !== 'true' ? 0 : video.volume
+  const nextVolume = Math.max(0, Math.min(100, Math.round(currentVolume * 100) + (event.deltaY < 0 ? 5 : -5)))
+  delete video.dataset.autoplayMuted
+  video.volume = nextVolume / 100
+  video.muted = nextVolume === 0
+}
+
+function handleVideoVolumeChange(event) {
+  if (event.target === videoPlayerRef.value) isVideoMuted.value = event.target.muted
+}
+
+// 鼠标离开视频区域时保留播放器，以显示暂停的画面。
+function handleVideoMouseLeave() {
+  if (showSegmentClip.value) return
+  const video = videoPlayerRef.value
+  if (video) {
+    if (!video.paused) video.pause()
+    if (Number.isFinite(video.currentTime)) videoPreviewTime.value = video.currentTime
+  } else {
+    isVideoPreviewActive.value = false
   }
-  isVideoPreviewActive.value = false
 }
 
 // 打开全屏预览
@@ -8844,7 +8977,122 @@ watch(showToolbar, (visible) => {
   refreshSubtitleEraseToolbarAvailability()
 }, { immediate: true })
 
+watch(showToolbar, visible => { if (!visible && showSegmentClip.value) closeSegmentClip() })
+watch(normalizedVideoUrl, () => { if (showSegmentClip.value) closeSegmentClip() })
+watch(showToolbar, visible => { if (!visible && showFrameCrop.value) closeFrameCrop() })
+watch(normalizedVideoUrl, () => { if (showFrameCrop.value) closeFrameCrop() })
+
+function openFrameCrop() {
+  if (!hasOutput.value || frameCropSubmitting.value) return
+  frameCropSelection.value = null
+  showFrameCrop.value = true
+  isVideoPreviewActive.value = true
+  nextTick(() => videoPlayerRef.value?.pause())
+}
+
+function closeFrameCrop() {
+  showFrameCrop.value = false
+  videoPlayerRef.value?.pause()
+  isVideoPreviewActive.value = false
+}
+
+async function confirmFrameCrop() {
+  if (!frameCropSelection.value || frameCropSubmitting.value) return
+  const crop = { ...frameCropSelection.value }
+  frameCropSubmitting.value = true
+  let workflowId, nodeId, tabId
+  try {
+    const tab = canvasStore.getCurrentTab?.()
+    const source = canvasStore.nodes.find(node => node.id === props.id)
+    const sourceUrl = props.data.output?.url
+    if (!tab?.id || !source || !sourceUrl) throw new Error('当前视频不可用')
+    tabId = tab.id
+    let videoUrl = sourceUrl
+    if (/^(blob:|data:)/.test(videoUrl)) {
+      const blob = await (await fetch(videoUrl)).blob()
+      const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
+      if (!uploaded.url) throw new Error('视频上传失败')
+      videoUrl = uploaded.url
+    }
+    let context = tab.workflowId ? { workflowId: tab.workflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
+    if (tab.workflowId) {
+      const savedNodes = await getWorkflowNodesBatch(context.workflowId, [props.id])
+      if (!savedNodes.nodes?.some(node => node.id === props.id)) context = await ensureCanvasWorkflowForVideoSubmission(props.id)
+    }
+    workflowId = context.workflowId
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== sourceUrl) throw new Error('画布或源视频已变化，请重新裁切')
+    nodeId = `video_crop_${globalThis.crypto.randomUUID()}`
+    const node = {
+      id: nodeId, type: 'video',
+      position: { x: source.position.x + (Number(source.data?.width) || 420) + 120, y: source.position.y },
+      data: { label: '画面裁切', title: '画面裁切', status: 'processing', progress: '画面裁切中...', processingStartedAt: Date.now(), sourceNodeId: props.id, videoToolMode: 'frame-crop', output: { type: 'video', url: '' } }
+    }
+    const edge = { id: `edge_${globalThis.crypto.randomUUID()}`, source: props.id, target: nodeId, sourceHandle: 'output', targetHandle: 'input' }
+    await postWorkflowOps(workflowId, [{ op: 'add', target: 'node', payload: node }, { op: 'add', target: 'edge', payload: edge }])
+    if (canvasStore.getCurrentTab?.()?.id === tabId) { canvasStore.addNode(node); canvasStore.addEdge(edge) }
+    closeFrameCrop()
+    const result = await cropVideoFrame({ videoUrl, crop })
+    if (!result?.url) throw new Error('裁切未返回视频地址')
+    const data = { status: 'success', progress: null, output: { type: 'video', url: result.url }, videoWidth: result.width, videoHeight: result.height, duration: result.duration }
+    await patchWorkflowNode(workflowId, nodeId, { data })
+    if (canvasStore.getCurrentTab?.()?.id === tabId) canvasStore.updateNodeData(nodeId, data)
+    window.dispatchEvent(new CustomEvent('canvas-history-invalidate', { detail: { type: 'video', phase: 'tool-completed', sourceNodeId: props.id, nodeId } }))
+  } catch (error) {
+    if (workflowId && nodeId) {
+      const data = { status: 'error', progress: null, error: error.message || '画面裁切失败' }
+      await patchWorkflowNode(workflowId, nodeId, { data }).catch(() => {})
+      if (canvasStore.getCurrentTab?.()?.id === tabId) canvasStore.updateNodeData(nodeId, data)
+    }
+    showToast(error.message || '画面裁切失败', 'error')
+  } finally { frameCropSubmitting.value = false }
+}
+
 const showCreateCharacterToolbarAction = computed(() => isSoraCharacterLibraryEnabled())
+
+async function handleCaptureVideoFrame({ mode, time, duration }) {
+  if (frameCaptureBusy.value || props.data?.readonly) return
+  frameCaptureBusy.value = true
+  try {
+    const tab = canvasStore.getCurrentTab?.()
+    const source = canvasStore.nodes.find(node => node.id === props.id)
+    const sourceUrl = props.data.output?.url
+    if (!tab?.id || !source || !sourceUrl) throw new Error('当前视频不可用')
+    const tabId = tab.id
+    let videoUrl = sourceUrl
+    if (/^(blob:|data:)/.test(videoUrl)) {
+      const blob = await (await fetch(videoUrl)).blob()
+      const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
+      if (!uploaded.url) throw new Error('视频上传失败')
+      videoUrl = uploaded.url
+    }
+    const context = tab.workflowId ? { workflowId: tab.workflowId } : await ensureCanvasWorkflowForVideoSubmission(props.id)
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== sourceUrl) throw new Error('画布或源视频已变化，请重新截取')
+    const captureTime = mode === 'first' ? 0 : mode === 'last' ? Math.max(0, Number(duration) - 0.12) : Math.max(0, Number(time) || 0)
+    const result = await extractVideoFrame({ videoUrl, time: captureTime, mode: mode === 'last' ? 'last' : 'time', nodeId: props.id })
+    if (canvasStore.getCurrentTab?.()?.id !== tabId || props.data.output?.url !== sourceUrl) throw new Error('画布或源视频已变化，请重新截取')
+    const label = mode === 'first' ? '视频首帧' : mode === 'last' ? '视频尾帧' : '视频当前帧'
+    const nodeId = `video_frame_${globalThis.crypto.randomUUID()}`
+    const node = {
+      id: nodeId,
+      type: 'image',
+      position: { x: source.position.x + (Number(source.data?.width) || 420) + 120, y: source.position.y },
+      data: { label, title: label, status: 'success', sourceImages: [result.url], output: { type: 'image', url: result.url, urls: [result.url] }, extractedFrameTime: result.time }
+    }
+    const edge = { id: `edge_${globalThis.crypto.randomUUID()}`, source: props.id, target: nodeId, sourceHandle: 'output', targetHandle: 'input' }
+    await postWorkflowOps(context.workflowId, [
+      { op: 'add', target: 'node', payload: node },
+      { op: 'add', target: 'edge', payload: edge }
+    ])
+    if (canvasStore.getCurrentTab?.()?.id === tabId) {
+      canvasStore.addNode(node)
+      canvasStore.addEdge(edge)
+    }
+  } catch (error) {
+    showToast(error?.message || '视频帧截取失败', 'error')
+  } finally {
+    frameCaptureBusy.value = false
+  }
+}
 
 let videoEditContext = null
 
@@ -8904,7 +9152,7 @@ async function exportEditedClipToCanvas(payload) {
     canvasStore.addEdge(edge)
   }
   try {
-    const result = await exportVideoTimeline({ clips: payload.clips })
+    const result = await exportVideoTimeline({ clips: payload.clips, ...(payload.operation === 'segment' ? { operation: 'segment' } : {}) })
     const url = result?.url || result?.video_url || result?.videoUrl || result?.resultUrl || result?.output?.url
     if (!url) throw new Error('导出未返回视频地址')
     const data = { status: 'success', progress: null, output: { type: 'video', url }, duration: payload.clips[0].duration }
@@ -8913,10 +9161,52 @@ async function exportEditedClipToCanvas(payload) {
     window.dispatchEvent(new CustomEvent('canvas-history-invalidate', { detail: { type: 'video', phase: 'tool-completed', sourceNodeId: props.id, nodeId } }))
     return url
   } catch (error) {
-    const data = { status: 'failed', progress: null, error: error.message || '片段导出失败' }
+    const data = { status: payload.operation === 'segment' ? 'error' : 'failed', progress: null, error: error.message || '片段导出失败' }
     await patchWorkflowNode(context.workflowId, nodeId, { data }).catch(() => {})
     if (canvasStore.getCurrentTab?.()?.id === context.tabId) canvasStore.updateNodeData(nodeId, data)
     throw error
+  }
+}
+
+function openSegmentClip() {
+  if (!hasOutput.value) return
+  showSegmentClip.value = true
+  isVideoPreviewActive.value = true
+  nextTick(() => videoPlayerRef.value?.pause())
+}
+
+function closeSegmentClip() {
+  showSegmentClip.value = false
+  videoPlayerRef.value?.pause()
+  isVideoPreviewActive.value = false
+}
+
+async function confirmSegmentClip(range) {
+  const sourceUrl = videoToolInitialSource.value?.url
+  if (!sourceUrl || segmentClipSubmitting.value) return
+  const duration = Math.round((range.end - range.start) * 1000) / 1000
+  if (duration <= 0 || duration > 300) {
+    showToast('截取片段时长不能超过5分钟', 'warning')
+    return
+  }
+  segmentClipSubmitting.value = true
+  try {
+    let url = sourceUrl
+    if (/^(blob:|data:)/.test(url)) {
+      const blob = await (await fetch(url)).blob()
+      const uploaded = await uploadCanvasMedia(new File([blob], 'video.mp4', { type: blob.type || 'video/mp4' }), 'video')
+      if (!uploaded.url) throw new Error('视频上传失败')
+      url = uploaded.url
+    }
+    await loadVideoEditDraft()
+    if (videoToolInitialSource.value?.url !== sourceUrl) throw new Error('源视频已变化，请重新打开截取')
+    const exporting = exportEditedClipToCanvas({ operation: 'segment', clips: [{ url, startTime: range.start, endTime: range.end, duration }] })
+    closeSegmentClip()
+    await exporting
+  } catch (error) {
+    showToast(error?.message || '片段截取失败', 'error')
+  } finally {
+    segmentClipSubmitting.value = false
   }
 }
 
@@ -10025,13 +10315,32 @@ function handleToolbarPreview() {
   if (!normalizedVideoUrl.value) return
   openFullscreenPreview()
 }
+
+function toggleFullscreenPlayback() {
+  const video = fullscreenVideoRef.value
+  if (!video) return
+  if (video.paused || video.ended) video.play().catch(() => {})
+  else video.pause()
+}
 </script>
 
 <template>
   <div ref="videoNodeRootRef" :class="nodeClass" @contextmenu="handleContextMenu">
     <BreakdownReferenceDetails v-if="data.breakdown" :reference="data.breakdown" />
     <!-- 视频工具栏（选中且有视频时显示）- 与 ImageNode 保持一致 -->
-    <div v-show="showToolbar" class="video-toolbar">
+    <Teleport to="body">
+      <VideoSegmentClipBar
+        v-if="showSegmentClip && showToolbar"
+        :anchor-element="videoOutputWrapperRef"
+        :video-element="videoPlayerRef"
+        :video-url="normalizedVideoUrl"
+        :poster-url="videoPosterUrl"
+        :busy="segmentClipSubmitting"
+        @cancel="closeSegmentClip"
+        @confirm="confirmSegmentClip"
+      />
+    </Teleport>
+    <div v-show="showToolbar && !showSegmentClip && !showFrameCrop" class="video-toolbar">
       <SeedanceReviewButton :node-id="id" :data="data" asset-type="Video" />
       <VideoUpscaleButton :node-id="id" :video-url="data.output?.url || normalizedVideoUrl" :ensure-workflow="ensureCanvasWorkflowForVideoSubmission" @legacy="handleToolbarHD" v-slot="{ open, busy }">
       <button 
@@ -10093,6 +10402,14 @@ function handleToolbarPreview() {
           <circle cx="12" cy="12" r="2" fill="currentColor"/>
         </svg>
         <span>关键帧</span>
+      </button>
+      <button class="toolbar-btn" title="片段截取" @mousedown.stop.prevent="openSegmentClip" @click.stop.prevent>
+        <Scissors :size="16" />
+        <span>片段截取</span>
+      </button>
+      <button class="toolbar-btn" title="画面裁切" :disabled="frameCropSubmitting" @mousedown.stop.prevent="openFrameCrop" @click.stop.prevent>
+        <Crop :size="16" />
+        <span>画面裁切</span>
       </button>
       <button class="toolbar-btn" title="剪辑" @mousedown.stop.prevent="openVideoToolModal('edit')" @click.stop.prevent>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
@@ -10216,12 +10533,14 @@ function handleToolbarPreview() {
         <!-- 视频输出预览（无边框设计，悬停自动播放） -->
         <div
           v-if="shouldRenderVideoOutput && isNodeVisible"
+          ref="videoOutputWrapperRef"
           class="video-output-wrapper"
           :style="videoWrapperStyle"
-          @mouseenter="activateVideoPreview"
+          @mouseenter="isVideoHovered = true; if (!showFrameCrop && !showSegmentClip) activateVideoPreview()"
           @canvas-directory-play="activateVideoPreview({ force: true })"
-          @mouseleave="handleVideoMouseLeave"
+          @mouseleave="isVideoHovered = false; if (!showFrameCrop) handleVideoMouseLeave()"
           @click="handleVideoWrapperClick"
+          @wheel="handleVideoVolumeWheel"
         >
           <img
             v-if="videoPosterUrl && !videoPosterFailed"
@@ -10238,7 +10557,7 @@ function handleToolbarPreview() {
             ref="videoPlayerRef"
             :src="normalizedVideoUrl" v-stream-video="normalizedVideoUrl"
             :preload="videoPreloadMode"
-            muted
+            :muted="isVideoMuted"
             :loop="!data?.isCharacterNode"
             class="video-player-output"
             playsinline
@@ -10248,8 +10567,25 @@ function handleToolbarPreview() {
             @loadedmetadata="handleVideoLoaded"
             @canplay="handleVideoCanPlay"
             @timeupdate="handleVideoTimeUpdate"
+            @volumechange="handleVideoVolumeChange"
             @error="handleVideoError"
           ></video>
+          <VideoFrameCropOverlay
+            v-if="showFrameCrop && showToolbar"
+            :video-element="videoPlayerRef"
+            :busy="frameCropSubmitting"
+            @change="frameCropSelection = $event"
+            @cancel="closeFrameCrop"
+            @confirm="confirmFrameCrop"
+          />
+          <VideoPlaybackControls
+            v-if="videoPlayerRef && !showFrameCrop"
+            :video-element="videoPlayerRef"
+            :keyboard-active="isVideoHovered && !showSegmentClip && !isFullscreenPreview && !showVideoToolModal && !showClipEditor && !showKeyframeEditor && !showVideoReplacementPicker"
+            :allow-capture="!data.readonly"
+            :capture-busy="frameCaptureBusy"
+            @capture="handleCaptureVideoFrame"
+          />
           <button
             v-if="currentSeedanceDraftTaskId && !data.readonly"
             class="seedance-draft-final-button nodrag nopan"
@@ -10263,15 +10599,21 @@ function handleToolbarPreview() {
             <span v-else>{{ seedanceDraftQuoteError ? '暂不可用' : '获取价格…' }}</span>
           </button>
           <!-- 播放指示器已移除：首帧不显示播放按钮 -->
-          <div class="video-overlay-actions">
+          <div v-if="!showFrameCrop" class="video-overlay-actions">
             <button class="overlay-action-btn" @click.stop="openFullscreenPreview" title="全屏预览">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
               </svg>
             </button>
-            <button class="overlay-action-btn" @click.stop="handleRegenerate" title="重新生成">
-              ⟲
-            </button>
+            <div v-if="!data.readonly" class="video-replace-anchor nodrag nopan" @mousedown.stop @focusout="handleVideoReplaceMenuFocusout" @keydown.esc.stop.prevent="showVideoReplaceMenu = false">
+              <button type="button" class="overlay-action-btn" title="替换素材" aria-label="替换素材" :aria-expanded="showVideoReplaceMenu" :disabled="videoReplacementBusy || isGenerating || data.status === 'processing'" @click.stop="showVideoReplaceMenu = !showVideoReplaceMenu">
+                <ArrowLeftRight :size="16" />
+              </button>
+              <div v-if="showVideoReplaceMenu" class="video-replace-menu" role="menu" @click.stop>
+                <button type="button" role="menuitem" @click.stop="showVideoReplaceMenu = false; replacementVideoInputRef?.click()"><Upload :size="16" />本地上传</button>
+                <button type="button" role="menuitem" @click.stop="showVideoReplaceMenu = false; showVideoReplacementPicker = true"><Library :size="16" />选择素材</button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -10375,6 +10717,12 @@ function handleToolbarPreview() {
           @mousedown="handleResizeStart('corner', $event)"
         ></div>
       </div>
+
+      <div v-if="showFrameCrop && showToolbar" class="frame-crop-controls nodrag nopan" @pointerdown.stop @click.stop @wheel.stop>
+        <button type="button" class="frame-crop-cancel" title="退出裁剪" aria-label="退出裁剪" :disabled="frameCropSubmitting" @click="closeFrameCrop"><X :size="18" /></button>
+        <span class="frame-crop-size">{{ frameCropSelection ? `${frameCropSelection.width} × ${frameCropSelection.height}` : '视频加载中…' }}</span>
+        <button type="button" class="frame-crop-confirm" title="生成裁剪" aria-label="生成裁剪" :disabled="!frameCropSelection || frameCropSubmitting" @click="confirmFrameCrop"><Loader2 v-if="frameCropSubmitting" :size="18" class="animate-spin" /><ArrowUp v-else :size="18" /></button>
+      </div>
       
       <!-- 右侧输出端口 -->
       <Handle
@@ -10403,6 +10751,20 @@ function handleToolbarPreview() {
       class="hidden-file-input"
       @change="handleSourceVideoChange"
     />
+    <input
+      ref="replacementVideoInputRef"
+      type="file"
+      accept="video/*"
+      class="hidden-file-input"
+      @change="handleReplacementVideoFile"
+    />
+    <VideoReplacementPicker
+      v-if="showVideoReplacementPicker"
+      :space-params="videoReplacementSpaceParams"
+      :busy="videoReplacementBusy"
+      @close="showVideoReplacementPicker = false"
+      @select="replaceVideoOutput"
+    />
 
     <!-- 隐藏的文件上传 input（支持多选，支持图片、视频和音频） -->
     <input 
@@ -10416,20 +10778,31 @@ function handleToolbarPreview() {
     
     <!-- 全屏预览模态框 -->
     <Teleport to="body">
-      <div v-if="isFullscreenPreview" class="fullscreen-preview-overlay" @click="closeFullscreenPreview">
-        <div class="fullscreen-preview-container" @click.stop>
+      <div v-if="isFullscreenPreview" class="fullscreen-preview-overlay">
+        <div class="fullscreen-preview-header">
+          <span>{{ data.title || data.label || '视频' }}</span>
+          <button class="fullscreen-close-btn" aria-label="关闭预览" title="关闭（Esc）" @click="closeFullscreenPreview">
+            <X :size="20" />
+          </button>
+        </div>
+        <div class="fullscreen-preview-container">
           <video 
+            ref="fullscreenVideoRef"
             :src="normalizedVideoUrl" v-stream-video="normalizedVideoUrl"
-            controls 
             autoplay
             preload="metadata"
             playsinline
             webkit-playsinline
             class="fullscreen-video"
+            @click="toggleFullscreenPlayback"
           ></video>
-          <button class="fullscreen-close-btn" @click="closeFullscreenPreview">
-            ✕
-          </button>
+          <VideoPlaybackControls
+            v-if="fullscreenVideoRef"
+            :video-element="fullscreenVideoRef"
+            :keyboard-active="true"
+            fullscreen
+            @close="closeFullscreenPreview"
+          />
         </div>
       </div>
     </Teleport>
@@ -10479,6 +10852,7 @@ function handleToolbarPreview() {
     <Teleport to="body" :disabled="!isConfigPanelExpanded">
     <div
       v-if="isSoloSelected"
+      v-show="!showFrameCrop && !showSegmentClip"
       ref="configPanelRef"
       class="config-panel"
       :class="{
@@ -11693,6 +12067,41 @@ function handleToolbarPreview() {
   align-items: center;
 }
 
+.frame-crop-controls {
+  position: absolute;
+  top: calc(100% + 16px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 210px;
+  padding: 8px;
+  border: 1px solid var(--canvas-border-default);
+  border-radius: 14px;
+  background: var(--canvas-bg-elevated);
+  box-shadow: var(--canvas-shadow-md);
+  color: var(--canvas-text-primary);
+}
+.frame-crop-cancel, .frame-crop-confirm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.frame-crop-cancel { background: transparent; color: var(--canvas-text-secondary); }
+.frame-crop-cancel:hover { background: var(--canvas-border-subtle); color: var(--canvas-text-primary); }
+.frame-crop-size { flex: 1; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.frame-crop-confirm { background: var(--canvas-text-primary); color: var(--canvas-bg-primary); }
+.frame-crop-confirm:disabled, .frame-crop-cancel:disabled { opacity: .45; cursor: not-allowed; }
+.frame-crop-cancel:focus-visible, .frame-crop-confirm:focus-visible { outline: 2px solid var(--canvas-text-primary); outline-offset: 2px; }
+
 /* 节点卡片 */
 .node-card {
   background: var(--canvas-bg-tertiary, #1a1a1a);
@@ -12115,6 +12524,19 @@ function handleToolbarPreview() {
   backface-visibility: hidden;
 }
 
+.video-output-wrapper :deep(.video-playback-controls) {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.video-output-wrapper:hover :deep(.video-playback-controls),
+.video-output-wrapper:focus-within :deep(.video-playback-controls),
+.video-node.selected .video-output-wrapper :deep(.video-playback-controls) {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* 播放指示器已移除 */
 
 /* 悬浮操作按钮 */
@@ -12129,9 +12551,41 @@ function handleToolbarPreview() {
   z-index: 20;
 }
 
-.video-output-wrapper:hover .video-overlay-actions {
+.video-output-wrapper:hover .video-overlay-actions,
+.video-overlay-actions:focus-within {
   opacity: 1;
 }
+
+.video-replace-anchor { position: relative; }
+.video-replace-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  width: 148px;
+  padding: 5px;
+  border: 1px solid var(--canvas-border-default, #3a3a3a);
+  border-radius: 10px;
+  background: var(--canvas-bg-elevated, #242424);
+  box-shadow: var(--canvas-shadow-md);
+}
+.video-replace-menu button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--canvas-text-primary, #fff);
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.video-replace-menu button:hover, .video-replace-menu button:focus-visible { background: var(--canvas-border-subtle, #2a2a2a); }
+.video-replace-menu button:focus-visible, .video-replace-anchor > button:focus-visible { outline: 2px solid var(--canvas-text-primary, #fff); outline-offset: 2px; }
+.video-replace-anchor > button:disabled { opacity: .45; cursor: not-allowed; }
 
 .overlay-action-btn {
   width: 36px;
@@ -14099,10 +14553,9 @@ function handleToolbarPreview() {
 .fullscreen-preview-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.95);
+  background: #000;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
   z-index: 10000;
   animation: fadeIn 0.2s ease;
 }
@@ -14114,52 +14567,45 @@ function handleToolbarPreview() {
 
 .fullscreen-preview-container {
   position: relative;
-  max-width: 90vw;
-  max-height: 90vh;
-  animation: scaleIn 0.25s ease;
+  flex: 1;
+  min-height: 0;
 }
 
-@keyframes scaleIn {
-  from { 
-    opacity: 0;
-    transform: scale(0.9);
-  }
-  to { 
-    opacity: 1;
-    transform: scale(1);
-  }
+.fullscreen-preview-header {
+  display: flex;
+  flex: 0 0 56px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  color: #f7f7f7;
+  background: #111;
+  border-bottom: 1px solid #252525;
+  font-size: 14px;
 }
 
 .fullscreen-video {
-  max-width: 90vw;
-  max-height: 90vh;
-  border-radius: 12px;
-  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.6);
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   background: #000;
 }
 
 .fullscreen-close-btn {
-  position: absolute;
-  top: -48px;
-  right: 0;
-  width: 40px;
-  height: 40px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  width: 32px;
+  height: 32px;
+  background: transparent;
+  border: 0;
   border-radius: 50%;
-  color: white;
-  font-size: 20px;
+  color: #aaa;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s ease, transform 0.2s ease;
+  transition: background-color 0.2s ease;
 }
 
-.fullscreen-close-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  transform: scale(1.1);
-}
+.fullscreen-close-btn:hover, .fullscreen-close-btn:focus-visible { background: rgba(255, 255, 255, 0.12); color: #fff; }
 
 /* 两栏厂商+模型布局 */
 .model-dropdown-list.vendor-layout {

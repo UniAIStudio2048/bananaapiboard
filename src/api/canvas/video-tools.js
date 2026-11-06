@@ -93,3 +93,10 @@ export function separateVideoAudio(payload) {
     body: payload
   })
 }
+
+export function cropVideoFrame(payload) {
+  return videoToolFetch('/api/video-tools/frame-crop', {
+    method: 'POST',
+    body: payload
+  })
+}

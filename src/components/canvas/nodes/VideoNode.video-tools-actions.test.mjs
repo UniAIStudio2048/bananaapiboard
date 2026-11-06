@@ -21,7 +21,7 @@ for (const label of ['剪辑', '字幕擦除']) {
   assert.match(source, new RegExp(label), `VideoNode should render ${label}`)
 }
 
-const toolbarBlock = source.match(/<div v-show="showToolbar" class="video-toolbar">[\s\S]*?<\/div>\s*\n\s*<!-- 节点标签 -->/)
+const toolbarBlock = source.match(/<div v-show="showToolbar[^"]*" class="video-toolbar">[\s\S]*?<\/div>\s*\n\s*<!-- 节点标签 -->/)
 assert.ok(toolbarBlock, 'VideoNode should keep video actions inside the node toolbar block')
 assert.match(toolbarBlock[0], /title="剪辑"|title='剪辑'/, 'VideoNode should expose edit action in the node toolbar')
 assert.match(toolbarBlock[0], /title="字幕擦除"|title='字幕擦除'/, 'VideoNode should expose subtitle erase action in the node toolbar')
