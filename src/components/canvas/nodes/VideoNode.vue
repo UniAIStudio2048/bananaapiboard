@@ -2499,12 +2499,14 @@ const vendorGroups = computed(() => {
 })
 
 // 当前选中的厂商（默认选第一个厂商）
-const selectedVendor = ref('')
+const selectedVendor = ref(null)
 
 // 当前厂商下的模型列表
 const currentVendorModels = computed(() => {
   if (vendorGroups.value.length <= 1) return models.value
-  const vendor = selectedVendor.value || vendorGroups.value[0]?.name || ''
+  const vendor = selectedVendor.value !== null
+    ? selectedVendor.value
+    : (vendorGroups.value[0]?.name || '')
   const group = vendorGroups.value.find(g => g.name === vendor)
   return group ? group.models : models.value
 })

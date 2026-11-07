@@ -13,14 +13,16 @@ test('拖拽两端限制在视频内并保留至少一秒', () => {
   assert.deepEqual(resizeClipRange(range, 10, 'start', 5.9), { start: 5, end: 6 })
   assert.deepEqual(resizeClipRange(range, 10, 'end', 20), { start: 2, end: 10 })
   assert.deepEqual(resizeClipRange(range, 10, 'end', 2.1), { start: 2, end: 3 })
-  assert.deepEqual(resizeClipRange(range, 10, 'start', 3.46, true), { start: 3.46, end: 6 })
+  assert.deepEqual(resizeClipRange(range, 10, 'start', 3.46, true), { start: 3, end: 6 })
   assert.deepEqual(resizeClipRange({ start: 0, end: 0.7 }, 0.7, 'start', 0.5), { start: 0, end: 0.7 })
 })
 
-test('启用吸附时仅靠近整数秒的边缘吸附，并可整体移动选区', () => {
+test('启用吸附时边缘始终对齐整数秒，并可整体移动选区', () => {
   const range = { start: 2, end: 6 }
   assert.deepEqual(resizeClipRange(range, 10, 'start', 2.94, true), { start: 3, end: 6 })
+  assert.deepEqual(resizeClipRange(range, 10, 'start', 3.46, true), { start: 3, end: 6 })
   assert.deepEqual(resizeClipRange(range, 10, 'end', 6.06, true), { start: 2, end: 6 })
+  assert.deepEqual(resizeClipRange(range, 10, 'end', 6.46, true), { start: 2, end: 6 })
   assert.deepEqual(resizeClipRange(range, 10, 'end', 6.06, false), { start: 2, end: 6.06 })
   assert.deepEqual(moveClipRange({ start: 2.2, end: 5.4 }, 10, 0.74, true), { start: 3, end: 6.2 })
   assert.deepEqual(moveClipRange({ start: 2.2, end: 5.4 }, 10, 0.74, false), { start: 2.94, end: 6.14 })

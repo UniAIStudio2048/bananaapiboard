@@ -10,7 +10,7 @@ export function resizeClipRange(range, duration, edge, time, snap = false) {
   const length = Math.max(0, Number(duration) || 0)
   const minimum = Math.min(1, length)
   const nearest = Math.round(time)
-  const target = snap && Math.abs(time - nearest) <= 0.1 ? nearest : time
+  const target = snap ? nearest : time
   if (edge === 'start') {
     return { start: round(clamp(target, 0, Math.max(0, range.end - minimum))), end: range.end }
   }

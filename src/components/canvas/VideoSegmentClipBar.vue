@@ -118,6 +118,18 @@ function togglePlay() {
   video.play().catch(() => {})
 }
 
+function toggleSnap() {
+  snap.value = !snap.value
+  if (!snap.value || duration.value < 1) return
+  const maxWholeSecond = Math.floor(duration.value)
+  const minimum = 1
+  const maxStart = Math.max(0, maxWholeSecond - minimum)
+  const start = Math.max(0, Math.min(maxStart, Math.round(range.value.start)))
+  const end = Math.max(start + minimum, Math.min(maxWholeSecond, Math.round(range.value.end)))
+  range.value = { start, end }
+  if (video) seek(start)
+}
+
 function timeAt(clientX) {
   const rect = track.value?.getBoundingClientRect()
   if (!rect?.width) return 0
@@ -147,7 +159,8 @@ function handleKey(event) {
   if (event.key === 'Shift') shiftPressed.value = true
   const target = event.target
   if (target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName)) return
-  if ((event.key === 'Enter' || event.key === ' ') && target?.closest?.('button')) return
+  const isSpaceKey = event.key === ' ' || event.key === 'Space' || event.key === 'Spacebar' || event.code === 'Space'
+  if ((event.key === 'Enter' || isSpaceKey) && target?.closest?.('button')) return
   if (event.key === 'Escape') {
     event.preventDefault(); event.stopPropagation(); if (!props.busy) emit('cancel'); return
   }
@@ -155,7 +168,7 @@ function handleKey(event) {
   if (event.key === 'Enter') {
     event.preventDefault(); event.stopPropagation(); emit('confirm', { ...range.value }); return
   }
-  if (event.key === ' ') {
+  if (isSpaceKey) {
     event.preventDefault(); event.stopPropagation(); togglePlay(); return
   }
   if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'i', 'I', 'o', 'O'].includes(event.key)) return
@@ -284,7 +297,7 @@ onUnmounted(() => {
         <div class="clip-handle end" :style="{ left: endPercent + '%' }" role="slider" title="拖动设置结束时间" aria-label="截取结束时间" :aria-valuenow="range.end" :aria-valuemin="range.start" :aria-valuemax="duration" tabindex="0" @pointerdown.stop.prevent="startDrag($event, 'end')"><span></span></div>
         <div class="playhead" :style="{ left: playheadPercent + '%' }"></div>
       </div>
-      <button type="button" class="clip-icon" :class="{ active: snap }" :data-tooltip="snap ? '关闭整数秒吸附' : '开启整数秒吸附'" :aria-label="snap ? '关闭整数秒吸附' : '开启整数秒吸附'" :aria-pressed="snap" :disabled="!ready" @click="snap = !snap"><span class="toggle-symbol" :class="{ 'is-off': !snap }"><Magnet :size="18" /></span></button>
+      <button type="button" class="clip-icon" :class="{ active: snap }" :data-tooltip="snap ? '关闭整数秒吸附' : '开启整数秒吸附'" :aria-label="snap ? '关闭整数秒吸附' : '开启整数秒吸附'" :aria-pressed="snap" :disabled="!ready" @click="toggleSnap"><span class="toggle-symbol" :class="{ 'is-off': !snap }"><Magnet :size="18" /></span></button>
       <button type="button" class="clip-icon tooltip-right" :class="{ active: loop }" :data-tooltip="loop ? '关闭选区循环播放' : '开启选区循环播放'" :aria-label="loop ? '关闭选区循环播放' : '开启选区循环播放'" :aria-pressed="loop" :disabled="!ready" @click="loop = !loop"><span class="toggle-symbol" :class="{ 'is-off': !loop }"><Repeat :size="18" /></span></button>
       <button type="button" class="clip-confirm tooltip-right" data-tooltip="确认截取" aria-label="确认截取" :disabled="!ready" @click="emit('confirm', { ...range })"><Loader2 v-if="busy" :size="20" class="spin" /><Check v-else :size="20" /></button>
     </div>

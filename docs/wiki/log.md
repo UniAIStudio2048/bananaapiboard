@@ -11,6 +11,7 @@ timestamp: 2026-11-03
 
 - 新增 [画布视频工具栏交互稳定性](canvas-video-toolbar-interaction.md)：修复视频节点片段截取与画面裁切点击后操作层因 Vue Flow 指针事件和 `showToolbar` 短暂变化而闪退的问题，记录回归测试、构建和 Chromium 热加载验证。
 - 更新 [画布视频工具栏交互稳定性](canvas-video-toolbar-interaction.md)：画面裁切底部控制条新增六个快捷比例选项，按当前选区中心调整裁切框，不提供智能/自适应比例。
+- 更新 [画布视频工具栏交互稳定性](canvas-video-toolbar-interaction.md)：片段截取开启整数秒吸附后统一按整数秒归一和拖拽，空格键兼容 `Space`/`code: Space` 播放暂停。
 
 ## 2026-11-03
 

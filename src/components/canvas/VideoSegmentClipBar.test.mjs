@@ -26,6 +26,38 @@ test('焦点在按钮时 Enter 和空格保留按钮的原生键盘操作', () =
   assert.deepEqual(actions, [])
 })
 
+test('空格键事件使用 Space 或 code 标识时都能切换播放', () => {
+  const actions = []
+  const handle = getFunction('handleKey', {
+    shiftPressed: { value: false }, props: { busy: false }, ready: { value: true },
+    range: { value: { start: 0, end: 2 } }, duration: { value: 10 }, video: null,
+    emit() {}, togglePlay: () => actions.push('play')
+  })
+  for (const keyEvent of [{ key: 'Space' }, { key: 'Unidentified', code: 'Space' }]) {
+    const event = {
+      ...keyEvent,
+      target: { tagName: 'DIV' },
+      preventDefault() { actions.push('prevent') },
+      stopPropagation() {}
+    }
+    handle(event)
+  }
+  assert.deepEqual(actions, ['prevent', 'play', 'prevent', 'play'])
+})
+
+test('开启整数秒吸附时先把当前选区边界归一到整数秒', () => {
+  const context = {
+    snap: { value: false },
+    duration: { value: 35.91 },
+    range: { value: { start: 0.34, end: 11.97 } },
+    video: null
+  }
+  getFunction('toggleSnap', context)()
+  assert.equal(context.snap.value, true)
+  assert.equal(context.range.value.start, 0)
+  assert.equal(context.range.value.end, 12)
+})
+
 test('选区循环关闭时可从选区外继续播放，开启时回到选区', () => {
   const actions = []
   const video = { currentTime: 8, paused: true, play() { actions.push('play'); return Promise.resolve() } }
