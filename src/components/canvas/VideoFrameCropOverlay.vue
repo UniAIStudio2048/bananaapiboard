@@ -1,8 +1,12 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { frameCropPixels, initialFrameCrop, moveFrameCrop, resizeFrameCrop } from '@/utils/videoFrameCrop'
+import { frameCropPixels, initialFrameCrop, moveFrameCrop, resizeFrameCrop, setFrameCropAspectRatio } from '@/utils/videoFrameCrop'
 
-const props = defineProps({ videoElement: { type: Object, default: null }, busy: { type: Boolean, default: false } })
+const props = defineProps({
+  videoElement: { type: Object, default: null },
+  busy: { type: Boolean, default: false },
+  aspectRatio: { type: String, default: '' }
+})
 const emit = defineEmits(['change', 'cancel', 'confirm'])
 const surface = ref(null)
 const crop = ref(initialFrameCrop())
@@ -38,6 +42,15 @@ function bindVideo(element) {
 
 watch(() => props.videoElement, bindVideo, { immediate: true })
 watch(pixels, value => emit('change', value), { immediate: true })
+
+function applyAspectRatio(value) {
+  const [width, height] = String(value || '').split(':').map(Number)
+  if (!ready.value || !width || !height) return
+  crop.value = setFrameCropAspectRatio(crop.value, width / height, dimensions.value.width, dimensions.value.height)
+}
+
+watch(() => props.aspectRatio, applyAspectRatio)
+watch(dimensions, () => applyAspectRatio(props.aspectRatio))
 
 function startDrag(event, edge = 'move') {
   if (!ready.value || props.busy) return

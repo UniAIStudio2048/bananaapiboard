@@ -592,6 +592,9 @@ function handleModelDropdownClickOutside(event) {
   if (!videoModeDropdown) {
     videoModeDropdownOpen.value = null
   }
+  if (!event.target?.closest?.('.frame-crop-ratio-selector')) {
+    frameCropRatioMenuOpen.value = false
+  }
 }
 
 function toggleVideoModeDropdown(key, event) {
@@ -3209,6 +3212,17 @@ const segmentClipSubmitting = ref(false)
 const showFrameCrop = ref(false)
 const frameCropSubmitting = ref(false)
 const frameCropSelection = ref(null)
+const frameCropAspectRatio = ref('')
+const frameCropRatioMenuOpen = ref(false)
+const frameCropRatioDirection = ref('up')
+const frameCropRatioOptions = [
+  { value: '16:9', label: '16:9' },
+  { value: '9:16', label: '9:16' },
+  { value: '1:1', label: '1:1' },
+  { value: '3:4', label: '3:4' },
+  { value: '4:3', label: '4:3' },
+  { value: '21:9', label: '21:9' }
+]
 const SUBTITLE_ERASE_POLL_INTERVAL_MS = 2000
 const SUBTITLE_ERASE_POLL_ATTEMPTS = 1500
 
@@ -8977,21 +8991,37 @@ watch(showToolbar, (visible) => {
   refreshSubtitleEraseToolbarAvailability()
 }, { immediate: true })
 
-watch(showToolbar, visible => { if (!visible && showSegmentClip.value) closeSegmentClip() })
 watch(normalizedVideoUrl, () => { if (showSegmentClip.value) closeSegmentClip() })
-watch(showToolbar, visible => { if (!visible && showFrameCrop.value) closeFrameCrop() })
 watch(normalizedVideoUrl, () => { if (showFrameCrop.value) closeFrameCrop() })
 
 function openFrameCrop() {
   if (!hasOutput.value || frameCropSubmitting.value) return
   frameCropSelection.value = null
+  frameCropAspectRatio.value = ''
+  frameCropRatioMenuOpen.value = false
   showFrameCrop.value = true
   isVideoPreviewActive.value = true
   nextTick(() => videoPlayerRef.value?.pause())
 }
 
+function toggleFrameCropRatioMenu(event) {
+  event.stopPropagation()
+  const trigger = event.currentTarget?.closest('.frame-crop-ratio-selector')
+  const rect = trigger?.getBoundingClientRect()
+  const dropdownHeight = 180
+  frameCropRatioDirection.value = rect && rect.top > dropdownHeight && rect.bottom + dropdownHeight > window.innerHeight ? 'up' : 'down'
+  frameCropRatioMenuOpen.value = !frameCropRatioMenuOpen.value
+}
+
+function selectFrameCropAspectRatio(value) {
+  frameCropAspectRatio.value = value
+  frameCropRatioMenuOpen.value = false
+}
+
 function closeFrameCrop() {
   showFrameCrop.value = false
+  frameCropAspectRatio.value = ''
+  frameCropRatioMenuOpen.value = false
   videoPlayerRef.value?.pause()
   isVideoPreviewActive.value = false
 }
@@ -10330,7 +10360,7 @@ function toggleFullscreenPlayback() {
     <!-- 视频工具栏（选中且有视频时显示）- 与 ImageNode 保持一致 -->
     <Teleport to="body">
       <VideoSegmentClipBar
-        v-if="showSegmentClip && showToolbar"
+        v-if="showSegmentClip"
         :anchor-element="videoOutputWrapperRef"
         :video-element="videoPlayerRef"
         :video-url="normalizedVideoUrl"
@@ -10340,7 +10370,7 @@ function toggleFullscreenPlayback() {
         @confirm="confirmSegmentClip"
       />
     </Teleport>
-    <div v-show="showToolbar && !showSegmentClip && !showFrameCrop" class="video-toolbar">
+    <div v-show="showToolbar && !showSegmentClip && !showFrameCrop" class="video-toolbar nodrag nopan nowheel" @pointerdown.stop @mousedown.stop>
       <SeedanceReviewButton :node-id="id" :data="data" asset-type="Video" />
       <VideoUpscaleButton :node-id="id" :video-url="data.output?.url || normalizedVideoUrl" :ensure-workflow="ensureCanvasWorkflowForVideoSubmission" @legacy="handleToolbarHD" v-slot="{ open, busy }">
       <button 
@@ -10571,9 +10601,10 @@ function toggleFullscreenPlayback() {
             @error="handleVideoError"
           ></video>
           <VideoFrameCropOverlay
-            v-if="showFrameCrop && showToolbar"
+            v-if="showFrameCrop"
             :video-element="videoPlayerRef"
             :busy="frameCropSubmitting"
+            :aspect-ratio="frameCropAspectRatio"
             @change="frameCropSelection = $event"
             @cancel="closeFrameCrop"
             @confirm="confirmFrameCrop"
@@ -10718,8 +10749,32 @@ function toggleFullscreenPlayback() {
         ></div>
       </div>
 
-      <div v-if="showFrameCrop && showToolbar" class="frame-crop-controls nodrag nopan" @pointerdown.stop @click.stop @wheel.stop>
+      <div v-if="showFrameCrop" class="frame-crop-controls nodrag nopan" @pointerdown.stop @mousedown.stop @click.stop @wheel.stop>
         <button type="button" class="frame-crop-cancel" title="退出裁剪" aria-label="退出裁剪" :disabled="frameCropSubmitting" @click="closeFrameCrop"><X :size="18" /></button>
+        <div class="frame-crop-ratio-selector">
+          <button type="button" class="frame-crop-ratio-trigger" :aria-expanded="frameCropRatioMenuOpen" aria-haspopup="menu" title="选择裁切比例" @click.stop="toggleFrameCropRatioMenu">
+            <span class="frame-crop-ratio-icon" :class="`ratio-icon-${frameCropAspectRatio ? frameCropAspectRatio.replace(':', '-') : 'default'}`" aria-hidden="true"></span>
+            <span class="frame-crop-ratio-value">{{ frameCropAspectRatio || '比例' }}</span>
+            <span class="frame-crop-ratio-arrow" :class="{ 'arrow-up': frameCropRatioMenuOpen }" aria-hidden="true">⌃</span>
+          </button>
+          <Transition name="dropdown-fade">
+            <div v-if="frameCropRatioMenuOpen" class="frame-crop-ratio-menu" :class="{ 'dropdown-up': frameCropRatioDirection === 'up' }" role="menu" @click.stop @wheel.stop>
+              <div class="frame-crop-ratio-title">比例</div>
+              <button
+                v-for="option in frameCropRatioOptions"
+                :key="option.value"
+                type="button"
+                class="frame-crop-ratio-option"
+                :class="{ active: frameCropAspectRatio === option.value }"
+                role="menuitem"
+                @click.stop="selectFrameCropAspectRatio(option.value)"
+              >
+                <span class="frame-crop-ratio-option-icon" :class="`ratio-icon-${option.value.replace(':', '-')}`" aria-hidden="true"></span>
+                <span>{{ option.label }}</span>
+              </button>
+            </div>
+          </Transition>
+        </div>
         <span class="frame-crop-size">{{ frameCropSelection ? `${frameCropSelection.width} × ${frameCropSelection.height}` : '视频加载中…' }}</span>
         <button type="button" class="frame-crop-confirm" title="生成裁剪" aria-label="生成裁剪" :disabled="!frameCropSelection || frameCropSubmitting" @click="confirmFrameCrop"><Loader2 v-if="frameCropSubmitting" :size="18" class="animate-spin" /><ArrowUp v-else :size="18" /></button>
       </div>
@@ -12084,6 +12139,66 @@ function toggleFullscreenPlayback() {
   box-shadow: var(--canvas-shadow-md);
   color: var(--canvas-text-primary);
 }
+.frame-crop-ratio-selector { position: relative; flex: 0 0 auto; }
+.frame-crop-ratio-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 76px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--canvas-border-default);
+  border-radius: 8px;
+  background: var(--canvas-bg-tertiary);
+  color: var(--canvas-text-primary);
+  cursor: pointer;
+  font-size: 12px;
+}
+.frame-crop-ratio-trigger:hover { background: var(--canvas-border-subtle); }
+.frame-crop-ratio-value { white-space: nowrap; }
+.frame-crop-ratio-arrow { color: var(--canvas-text-secondary); font-size: 11px; line-height: 1; transform: rotate(180deg); transition: transform .18s ease; }
+.frame-crop-ratio-arrow.arrow-up { transform: rotate(0deg); }
+.frame-crop-ratio-icon, .frame-crop-ratio-option-icon { position: relative; display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: 0 0 auto; color: currentColor; }
+.frame-crop-ratio-icon::before, .frame-crop-ratio-option-icon::before { content: ''; display: block; border: 1.5px solid currentColor; border-radius: 2px; }
+.frame-crop-ratio-icon::before { width: 11px; height: 13px; }
+.frame-crop-ratio-icon.ratio-icon-default::before { width: 12px; height: 12px; border-style: dashed; }
+.frame-crop-ratio-icon.ratio-icon-16-9::before, .frame-crop-ratio-icon.ratio-icon-21-9::before, .frame-crop-ratio-option-icon.ratio-icon-16-9::before, .frame-crop-ratio-option-icon.ratio-icon-21-9::before { width: 15px; height: 9px; }
+.frame-crop-ratio-icon.ratio-icon-9-16::before, .frame-crop-ratio-icon.ratio-icon-3-4::before, .frame-crop-ratio-option-icon.ratio-icon-9-16::before, .frame-crop-ratio-option-icon.ratio-icon-3-4::before { width: 9px; height: 14px; }
+.frame-crop-ratio-icon.ratio-icon-1-1::before, .frame-crop-ratio-option-icon.ratio-icon-1-1::before { width: 12px; height: 12px; }
+.frame-crop-ratio-icon.ratio-icon-4-3::before, .frame-crop-ratio-option-icon.ratio-icon-4-3::before { width: 14px; height: 11px; }
+.frame-crop-ratio-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(54px, 1fr));
+  gap: 6px;
+  min-width: 208px;
+  padding: 9px;
+  transform: translateX(-50%);
+  background: var(--canvas-bg-elevated);
+  border: 1px solid var(--canvas-border-default);
+  border-radius: 12px;
+  box-shadow: var(--canvas-shadow-md);
+  z-index: 1100;
+}
+.frame-crop-ratio-menu.dropdown-down { top: calc(100% + 8px); bottom: auto; }
+.frame-crop-ratio-title { grid-column: 1 / -1; padding: 2px 4px 4px; color: var(--canvas-text-secondary); font-size: 11px; font-weight: 600; }
+.frame-crop-ratio-option {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 38px;
+  padding: 5px 4px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--canvas-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+}
+.frame-crop-ratio-option:hover, .frame-crop-ratio-option.active { border-color: var(--canvas-border-default); background: var(--canvas-border-subtle); color: var(--canvas-text-primary); }
 .frame-crop-cancel, .frame-crop-confirm {
   display: flex;
   align-items: center;

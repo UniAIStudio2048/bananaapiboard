@@ -9,6 +9,29 @@ export function moveFrameCrop(crop, dx, dy) {
   return { ...crop, x: clean(clamp(crop.x + dx, 0, 1 - crop.width)), y: clean(clamp(crop.y + dy, 0, 1 - crop.height)) }
 }
 
+export function setFrameCropAspectRatio(crop, ratio, videoWidth, videoHeight) {
+  if (!Number.isFinite(ratio) || ratio <= 0 || videoWidth < 1 || videoHeight < 1) return { ...crop }
+
+  const normalizedRatio = ratio * videoHeight / videoWidth
+  const maxWidth = clamp(crop.width, 0, 1)
+  const maxHeight = clamp(crop.height, 0, 1)
+  if (!normalizedRatio || !maxWidth || !maxHeight) return { ...crop }
+
+  let width = maxWidth
+  let height = maxHeight
+  if (width / height > normalizedRatio) width = height * normalizedRatio
+  else height = width / normalizedRatio
+
+  const centerX = crop.x + crop.width / 2
+  const centerY = crop.y + crop.height / 2
+  return {
+    x: clean(clamp(centerX - width / 2, 0, 1 - width)),
+    y: clean(clamp(centerY - height / 2, 0, 1 - height)),
+    width: clean(width),
+    height: clean(height)
+  }
+}
+
 export function resizeFrameCrop(crop, edge, dx, dy, width, height) {
   const minWidth = Math.min(1, 16 / width)
   const minHeight = Math.min(1, 16 / height)

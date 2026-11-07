@@ -59,9 +59,17 @@ test('frame crop saves a source node missing from the stored workflow before con
 
 test('exiting frame crop stops the preview and closes the selection', () => {
   let paused = 0
-  const context = { showFrameCrop: { value: true }, isVideoPreviewActive: { value: true }, videoPlayerRef: { value: { pause() { paused++ } } } }
+  const context = {
+    showFrameCrop: { value: true },
+    frameCropAspectRatio: { value: '16:9' },
+    frameCropRatioMenuOpen: { value: true },
+    isVideoPreviewActive: { value: true },
+    videoPlayerRef: { value: { pause() { paused++ } } }
+  }
   getFunction('closeFrameCrop', context)()
   assert.equal(paused, 1)
   assert.equal(context.showFrameCrop.value, false)
+  assert.equal(context.frameCropAspectRatio.value, '')
+  assert.equal(context.frameCropRatioMenuOpen.value, false)
   assert.equal(context.isVideoPreviewActive.value, false)
 })

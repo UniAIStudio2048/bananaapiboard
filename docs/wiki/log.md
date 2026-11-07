@@ -7,6 +7,11 @@ timestamp: 2026-11-03
 
 # 变更日志
 
+## 2026-11-07
+
+- 新增 [画布视频工具栏交互稳定性](canvas-video-toolbar-interaction.md)：修复视频节点片段截取与画面裁切点击后操作层因 Vue Flow 指针事件和 `showToolbar` 短暂变化而闪退的问题，记录回归测试、构建和 Chromium 热加载验证。
+- 更新 [画布视频工具栏交互稳定性](canvas-video-toolbar-interaction.md)：画面裁切底部控制条新增六个快捷比例选项，按当前选区中心调整裁切框，不提供智能/自适应比例。
+
 ## 2026-11-03
 
 - 更新 [Seedance 快捷角色审核反馈](seedance-quick-review-feedback.md)：将图片、视频、音频的独立渠道选择框统一收进“过审”按钮菜单，点选即提交，保持画布主题样式及原渠道状态；34 项定向测试、Chromium 明暗主题组件交互及生产构建通过，线上 7 项页面/静态资源 SHA256 一致；记录 GitNexus 索引刷新失败的验证限制。

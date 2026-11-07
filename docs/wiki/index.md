@@ -8,6 +8,8 @@ timestamp: 2026-11-03
 
 # 用户前端知识库索引
 
+- [画布视频工具栏交互稳定性](canvas-video-toolbar-interaction.md)：视频节点片段截取与画面裁切的指针事件隔离及活动操作层生命周期。
+
 - [画布历史选择与音频卡片](canvas-history-media-cards.md)：右键选择与展开历史共用紧凑瀑布流，音频使用节点风格的可试听波形卡片。
 
 - [画布外部剪贴板粘贴](canvas-external-clipboard-paste.md)：接收外部图片文件和纯文本，在画布鼠标位置创建对应节点并保留节点剪贴板行为。

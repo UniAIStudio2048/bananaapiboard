@@ -4,8 +4,20 @@ import assert from 'node:assert/strict'
 import {
   formatVideoNodeAsyncErrorMessage,
   formatVideoNodeErrorMessage,
-  isSeedanceVideoModel
+  isSeedanceVideoModel,
+  sanitizeVideoNodeMessage
 } from './video-error-message.js'
+
+test('filters provider and model names from user-facing video messages', () => {
+  assert.equal(
+    sanitizeVideoNodeMessage('万相 3.0 首尾帧不能与参考素材同时使用（wan3.0 / seedance2.5，火山引擎）'),
+    '首尾帧不能与参考素材同时使用'
+  )
+  assert.equal(
+    formatVideoNodeErrorMessage('万相 3.0 首尾帧不能与参考素材同时使用'),
+    '首尾帧不能与参考素材同时使用'
+  )
+})
 
 test('formats upstream ant duration errors as concise Chinese text', () => {
   const result = formatVideoNodeErrorMessage(
