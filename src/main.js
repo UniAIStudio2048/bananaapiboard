@@ -14,6 +14,7 @@ import { initTheme } from './utils/theme'
 import { initLogger, logPageView } from './utils/logger'
 import { loadBrandConfig, getBrand } from './config/tenant'
 import { clearAuthSession } from './api/client'
+import { captureSignupSource } from './utils/signupSource'
 
 // 🔧 防止 Vite HMR 失败时自动全页刷新（开发模式）
 // 当 HMR 无法热更新某个模块时，Vite 默认会 reload 整个页面
@@ -27,6 +28,9 @@ if (import.meta.hot) {
 
 // 在应用启动前初始化主题，确保默认是浅色模式
 initTheme()
+
+// 记录首次访问的注册来源（utm_source / from / src）
+captureSignupSource()
 
 // 初始化前端日志系统（暂时禁用，避免CORS错误）
 initLogger({ enabled: false })

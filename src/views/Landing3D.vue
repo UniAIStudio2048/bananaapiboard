@@ -269,6 +269,12 @@
             <div v-if="authMode === 'register'" class="form-group">
               <input v-model="inviteCode" type="text" class="form-input" :placeholder="t('auth.inviteCode')" />
             </div>
+            <div v-if="authMode === 'register' && showSignupSource" class="form-group">
+              <select v-model="signupSource" class="form-input signup-source-select" :aria-label="SIGNUP_SOURCE_LABEL">
+                <option value="">{{ SIGNUP_SOURCE_LABEL }}</option>
+                <option v-for="option in SIGNUP_SOURCE_OPTIONS" :key="option.value" :value="option.value">{{ option.label }}</option>
+              </select>
+            </div>
             <div v-if="authError" class="error-message">{{ authError }}</div>
             <button type="submit" class="submit-btn" :disabled="authLoading">
               <span v-if="authLoading" class="loading-spinner"></span>
@@ -364,12 +370,13 @@ import { useSmsAuth } from '@/composables/useSmsAuth'
 import { watch, ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import * as THREE from 'three'
-import { getTenantHeaders, getApiUrl } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, useTenantConfigVersion, isSignupSourceEnabled } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
 import { getMe } from '@/api/client'
 import { useI18n } from '@/i18n'
 import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
 import { normalizeEmailWhitelist } from '@/utils/emailWhitelist'
+import { SIGNUP_SOURCE_LABEL, SIGNUP_SOURCE_OPTIONS, initialSignupSourceChoice, resolveSignupSource } from '@/utils/signupSource'
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue'
 
 const { t } = useI18n()
@@ -396,6 +403,9 @@ const authMode = ref('login')
 const account = ref('')
 const password = ref('')
 const inviteCode = ref('')
+const signupSource = ref(initialSignupSourceChoice())
+const tenantConfigVersion = useTenantConfigVersion()
+const showSignupSource = computed(() => { void tenantConfigVersion.value; return isSignupSourceEnabled() })
 const authLoading = ref(false)
 const authError = ref('')
 const selectedMode = ref('canvas')
@@ -734,13 +744,15 @@ const submitAuth = async () => {
   authLoading.value = true
   try {
     const url = getApiUrl(authMode.value === 'register' ? '/api/auth/register' : '/api/auth/login')
+    const source = showSignupSource.value ? resolveSignupSource(signupSource.value) : ''
     const payload = authMode.value === 'register'
       ? { 
           username: account.value, 
           email: email, 
           password: password.value, 
           ...(inviteCode.value ? { invite_code: inviteCode.value } : {}),
-          ...(emailCode.value ? { email_code: emailCode.value } : {})
+          ...(emailCode.value ? { email_code: emailCode.value } : {}),
+          ...(source ? { signup_source: source } : {})
         }
       : { username: account.value, email: account.value, password: password.value, country: loginCountry.value }
     const r = await fetch(url, { method: 'POST', headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -2252,6 +2264,11 @@ function handleSmsAuthenticated() { showLoginModal.value = false; showModeModal.
   background: rgba(255, 255, 255, 0.08) !important;
   color: #ffffff !important;
   font-weight: 500;
+}
+
+.signup-source-select option {
+  background: rgba(20, 20, 40, 0.98);
+  color: #ffffff;
 }
 
 .email-suffix option {

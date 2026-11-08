@@ -78,7 +78,8 @@ export async function generateImageFromText(params) {
     maxGroupImages = 3,
     webSearch,
     quality,
-    imagePresetId
+    imagePresetId,
+    outputFormat
   } = params
   
   // 优先使用 image_size，否则使用 size（向后兼容）
@@ -102,6 +103,10 @@ export async function generateImageFromText(params) {
     maxGroupImages,
     spaceType: spaceParams.spaceType,
     ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
+  }
+
+  if (outputFormat) {
+    body.output_format = outputFormat
   }
 
   if (quality && quality !== 'auto') {
@@ -171,7 +176,8 @@ export async function generateImageFromImage(params) {
     quality,
     enableGroupGeneration = false,
     maxGroupImages = 3,
-    imagePresetId
+    imagePresetId,
+    outputFormat
   } = params
   
   const prompt = normalizePromptLineEndings(rawPrompt)
@@ -193,6 +199,10 @@ export async function generateImageFromImage(params) {
     response_format: 'url',
     spaceType: spaceParams.spaceType,
     ...(spaceParams.teamId ? { teamId: spaceParams.teamId } : {})
+  }
+
+  if (outputFormat) {
+    body.output_format = outputFormat
   }
 
   if (quality && quality !== 'auto') {

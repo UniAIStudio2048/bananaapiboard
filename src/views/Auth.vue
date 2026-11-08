@@ -5,10 +5,11 @@ import WechatLoginButton from '@/components/auth/WechatLoginButton.vue'
 import PhoneCountrySelect from '@/components/auth/PhoneCountrySelect.vue'
 import { useSmsAuth } from '@/composables/useSmsAuth'
 import { useRouter } from 'vue-router'
-import { getTenantHeaders, getApiUrl } from '@/config/tenant'
+import { getTenantHeaders, getApiUrl, useTenantConfigVersion, isSignupSourceEnabled, isInviteRewardAfterFirstPayment } from '@/config/tenant'
 import { persistAuthSession } from '@/api/client'
 import { clearWorkflowSession } from '@/stores/canvas/workflowAutoSave'
 import { normalizeEmailWhitelist } from '@/utils/emailWhitelist'
+import { SIGNUP_SOURCE_LABEL, SIGNUP_SOURCE_OPTIONS, initialSignupSourceChoice, resolveSignupSource } from '@/utils/signupSource'
 
 const router = useRouter()
 const params = new URLSearchParams(location.search)
@@ -16,6 +17,10 @@ const inviteCodeFromUrl = params.get('invite') || params.get('code') || ''
 // 如果 URL 中有邀请码，默认显示注册页面
 const mode = ref(inviteCodeFromUrl ? 'register' : 'login')
 const inviteCode = ref(inviteCodeFromUrl) // 改为响应式，可以手动输入
+const signupSource = ref(initialSignupSourceChoice())
+const tenantConfigVersion = useTenantConfigVersion()
+const showSignupSource = computed(() => { void tenantConfigVersion.value; return isSignupSourceEnabled() })
+const inviteRewardAfterFirstPayment = computed(() => { void tenantConfigVersion.value; return isInviteRewardAfterFirstPayment() })
 const account = ref('')
 const password = ref('')
 const loading = ref(false)
@@ -113,7 +118,9 @@ const inviteRewardText = computed(() => {
   const inviter = inviteRewards.value.inviter_bonus
   const invitee = inviteRewards.value.invitee_bonus
   if (inviter === 0 && invitee === 0) return ''
-  return `邀请人获得${inviter}积分，被邀请人获得${invitee}积分`
+  return inviteRewardAfterFirstPayment.value
+    ? `被邀请人完成首次充值后，邀请人获得${inviter}积分，被邀请人获得${invitee}积分`
+    : `邀请人获得${inviter}积分，被邀请人获得${invitee}积分`
 })
 
 // 构建完整邮箱地址
@@ -286,13 +293,15 @@ async function submit() {
   loading.value = true
   try {
     const url = getApiUrl(mode.value === 'register' ? '/api/auth/register' : '/api/auth/login')
+    const source = showSignupSource.value ? resolveSignupSource(signupSource.value) : ''
     const payload = mode.value === 'register'
       ? { 
           username: account.value, 
           email: email, 
           password: password.value, 
           ...(inviteCode.value ? { invite_code: inviteCode.value } : {}),
-          ...(emailCode.value ? { email_code: emailCode.value } : {})
+          ...(emailCode.value ? { email_code: emailCode.value } : {}),
+          ...(source ? { signup_source: source } : {})
         }
       : { username: account.value, email: account.value, password: password.value, country: loginCountry.value }
     const r = await fetch(url, { method: 'POST', headers: { ...getTenantHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -564,8 +573,24 @@ function handleSmsAuthenticated() {
               ⚠️ 该租户已开启邀请码注册，必须填写有效的邀请码
             </p>
             <p v-else-if="inviteRewardText" class="mt-2 text-xs text-slate-500 dark:text-slate-400">
-              💡 填写邀请码即可获得奖励：{{ inviteRewardText }}
+              💡 填写邀请码{{ inviteRewardAfterFirstPayment ? '可' : '即可' }}获得奖励：{{ inviteRewardText }}
             </p>
+          </div>
+
+          <!-- 注册来源（仅注册时显示） -->
+          <div v-if="mode === 'register' && !resetMode && showSignupSource">
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              {{ SIGNUP_SOURCE_LABEL }}
+            </label>
+            <select
+              v-model="signupSource"
+              class="input bg-white dark:bg-dark-700 text-slate-900 dark:text-slate-100"
+            >
+              <option value="">请选择</option>
+              <option v-for="option in SIGNUP_SOURCE_OPTIONS" :key="option.value" :value="option.value">
+                {{ option.label }}
+              </option>
+            </select>
           </div>
 
           <!-- 提交按钮 -->

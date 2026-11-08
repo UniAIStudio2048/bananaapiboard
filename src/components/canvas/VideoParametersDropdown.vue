@@ -26,6 +26,14 @@ const props = defineProps({
     type: String,
     default: ''
   },
+  outputFormatOptions: {
+    type: Array,
+    default: () => []
+  },
+  outputFormat: {
+    type: String,
+    default: ''
+  },
   resolutionFirst: Boolean,
   durationOptions: {
     type: Array,
@@ -42,6 +50,7 @@ const emit = defineEmits([
   'update:aspectRatio',
   'update:resolution',
   'update:quality',
+  'update:outputFormat',
   'update:duration'
 ])
 
@@ -61,6 +70,10 @@ const currentQuality = computed(() => {
   return props.qualityOptions.find(option => option.value === props.quality)
 })
 
+const currentOutputFormat = computed(() => {
+  return props.outputFormatOptions.find(option => option.value === props.outputFormat)
+})
+
 const currentDuration = computed(() => {
   return props.durationOptions.find(option => String(option.value) === String(props.duration))
 })
@@ -73,6 +86,9 @@ const triggerLabel = computed(() => {
   }
   if (currentResolution.value?.label || currentResolution.value?.value) {
     values.push(currentResolution.value.label || currentResolution.value.value)
+  }
+  if (currentOutputFormat.value?.label || currentOutputFormat.value?.value) {
+    values.push(currentOutputFormat.value.label || currentOutputFormat.value.value)
   }
   if (props.showDuration && (currentDuration.value?.label || currentDuration.value?.value)) {
     values.push(currentDuration.value.label || `${currentDuration.value.value}s`)
@@ -111,6 +127,10 @@ function selectResolution(value) {
 
 function selectQuality(value) {
   emit('update:quality', value)
+}
+
+function selectOutputFormat(value) {
+  emit('update:outputFormat', value)
 }
 
 function selectDuration(value) {
@@ -213,6 +233,22 @@ onUnmounted(() => document.removeEventListener('mousedown', handleDocumentMouseD
               class="video-resolution-option"
               :class="{ active: option.value === resolution }"
               @click="selectResolution(option.value)"
+            >
+              {{ option.label || option.value }}
+            </button>
+          </div>
+        </section>
+
+        <section v-if="outputFormatOptions.length > 0" class="video-parameters-section">
+          <h3>返回类型</h3>
+          <div class="video-quality-grid">
+            <button
+              v-for="option in outputFormatOptions"
+              :key="option.value"
+              type="button"
+              class="video-quality-option"
+              :class="{ active: option.value === outputFormat }"
+              @click="selectOutputFormat(option.value)"
             >
               {{ option.label || option.value }}
             </button>

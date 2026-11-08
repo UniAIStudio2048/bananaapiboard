@@ -1,5 +1,7 @@
 import { withNoChargeNotice } from '../../../utils/mediaTaskBillingMessage.js'
 
+const FORBIDDEN_MODEL_TERMS = /万相\s*3(?:\.0)?|wan\s*3(?:[._-]?0)(?:[-_][a-z0-9.-]+)*|seedance\s*[-_]?2(?:[._-]?(?:0|5))(?:[-_][a-z0-9.-]+)*|火山引擎/gi
+
 export function isSeedanceVideoModel(model) {
   if (!model || typeof model !== 'string') return false
   return model.toLowerCase().includes('seedance')
@@ -12,6 +14,17 @@ function maybeWithNoChargeNotice(message, includeNoChargeNotice) {
 function extractRequestId(message) {
   const match = String(message || '').match(/\brequest id:\s*([a-z0-9-]+)/i)
   return match?.[1] || ''
+}
+
+export function sanitizeVideoNodeMessage(message) {
+  if (!message || typeof message !== 'string') return message || ''
+  return message
+    .replace(FORBIDDEN_MODEL_TERMS, '')
+    .replace(/([（(])\s*(?:[/／,，;；|]\s*)+/g, '$1')
+    .replace(/\s*(?:[/／,，;；|]\s*)+([）)])/g, '$1')
+    .replace(/（\s*）|\(\s*\)/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
 }
 
 export function isVideoNodeNetworkError(message) {
@@ -95,7 +108,10 @@ export function formatVideoNodeErrorMessage(message, options = {}) {
     return maybeWithNoChargeNotice('参考音频格式不受当前渠道支持，请改用常见的 MP3 或 WAV 后重试。', includeNoChargeNotice)
   }
 
-  return maybeWithNoChargeNotice(trimmed.replace(/\s*request id:\s*[a-z0-9-]+\s*$/i, '').trim(), includeNoChargeNotice)
+  return maybeWithNoChargeNotice(
+    sanitizeVideoNodeMessage(trimmed.replace(/\s*request id:\s*[a-z0-9-]+\s*$/i, '').trim()),
+    includeNoChargeNotice
+  )
 }
 
 export function formatVideoNodeAsyncErrorMessage(message, model, options = {}) {
@@ -110,7 +126,10 @@ export function formatVideoNodeAsyncErrorMessage(message, model, options = {}) {
     if (seedanceMessage) {
       return maybeWithNoChargeNotice(seedanceMessage, includeNoChargeNotice)
     }
-    return maybeWithNoChargeNotice(typeof message === 'string' && message.trim() ? message.trim() : '生成失败', includeNoChargeNotice)
+    return maybeWithNoChargeNotice(
+      sanitizeVideoNodeMessage(typeof message === 'string' && message.trim() ? message.trim() : '生成失败'),
+      includeNoChargeNotice
+    )
   }
 
   return formatVideoNodeErrorMessage(message, options)

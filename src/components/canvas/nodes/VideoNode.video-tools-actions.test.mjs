@@ -21,8 +21,13 @@ for (const label of ['剪辑', '字幕擦除']) {
   assert.match(source, new RegExp(label), `VideoNode should render ${label}`)
 }
 
-const toolbarBlock = source.match(/<div v-show="showToolbar" class="video-toolbar">[\s\S]*?<\/div>\s*\n\s*<!-- 节点标签 -->/)
+const toolbarBlock = source.match(/<div v-show="showToolbar[^"]*" class="video-toolbar[^\"]*"[^>]*>[\s\S]*?<\/div>\s*\n\s*<!-- 节点标签 -->/)
 assert.ok(toolbarBlock, 'VideoNode should keep video actions inside the node toolbar block')
+assert.match(
+  source,
+  /<div v-show="showToolbar && !showSegmentClip && !showFrameCrop" class="video-toolbar nodrag nopan nowheel" @pointerdown\.stop @mousedown\.stop>/,
+  'Video toolbar pointer events must not start Vue Flow drag or pan'
+)
 assert.match(toolbarBlock[0], /title="剪辑"|title='剪辑'/, 'VideoNode should expose edit action in the node toolbar')
 assert.match(toolbarBlock[0], /title="字幕擦除"|title='字幕擦除'/, 'VideoNode should expose subtitle erase action in the node toolbar')
 assert.match(toolbarBlock[0], /<button\s+v-if=["']showSubtitleEraseToolbarAction["'][\s\S]*title=["']字幕擦除["']/, 'VideoNode should hide the subtitle erase toolbar button when the master switch is disabled')
@@ -32,6 +37,16 @@ assert.doesNotMatch(source, /\.video-tool-actions\b/, 'VideoNode should not keep
 assert.match(source, /@completed="handleVideoToolCompleted"|@completed='handleVideoToolCompleted'/, 'VideoNode should handle video tool completion')
 assert.match(source, /import\s+\{[^}]*createSubtitleEraseTask[^}]*\}\s+from\s+['"]@\/api\/canvas\/video-tools['"]/, 'VideoNode should own background subtitle task creation after the modal closes')
 assert.match(source, /function\s+handleVideoToolCompleted/, 'VideoNode should define completion handler')
+assert.match(source, /<VideoSegmentClipBar\s+v-if="showSegmentClip"/, 'Segment clip UI should stay mounted while the clip session is active')
+assert.match(source, /<VideoFrameCropOverlay\s+v-if="showFrameCrop"/, 'Frame crop UI should stay mounted while the crop session is active')
+assert.match(source, /:aspect-ratio="frameCropAspectRatio"/, 'Frame crop overlay should receive the selected quick ratio')
+for (const ratio of ['16:9', '9:16', '1:1', '3:4', '4:3', '21:9']) {
+  assert.match(source, new RegExp(`value: '${ratio}'`), `Frame crop ratio menu should include ${ratio}`)
+}
+assert.doesNotMatch(source, /frameCropRatioOptions[\s\S]*?value:\s*['"](?:auto|adaptive|智能)/, 'Frame crop ratio menu should not include a smart ratio option')
+assert.match(source, /<div v-if="showFrameCrop" class="frame-crop-controls nodrag nopan"/, 'Frame crop controls should not disappear when toolbar selection briefly changes')
+assert.doesNotMatch(source, /watch\(showToolbar, visible => \{ if \(!visible && showSegmentClip\.value\) closeSegmentClip\(\) \}\)/, 'Toolbar visibility must not cancel an active segment clip session')
+assert.doesNotMatch(source, /watch\(showToolbar, visible => \{ if \(!visible && showFrameCrop\.value\) closeFrameCrop\(\) \}\)/, 'Toolbar visibility must not cancel an active frame crop session')
 assert.match(source, /canvasStore\.addNode\(\{[\s\S]*type:\s*'video'[\s\S]*output:\s*\{[\s\S]*type:\s*'video'[\s\S]*url/s, 'VideoNode should add a video output node with output url')
 assert.match(source, /canvasStore\.addEdge\(\{[\s\S]*source:\s*props\.id[\s\S]*target:\s*newNodeId/s, 'VideoNode should connect the source video node to the result node')
 assert.match(source, /canvas-history-invalidate/, 'VideoNode should invalidate canvas history after creating a result node')

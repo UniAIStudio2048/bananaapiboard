@@ -1,0 +1,36 @@
+.banana-video-editor { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; font-size: 13px; --mf-brand: #d4d4d4; }
+.banana-video-editor button:focus-visible, .banana-video-editor input:focus-visible, .banana-video-editor select:focus-visible { outline: 2px solid var(--mf-brand); outline-offset: 2px; }
+:root.canvas-theme-light .banana-video-editor { --mf-brand: #52525b; color: var(--canvas-text-primary, #27272a); color-scheme: light; }
+:root.canvas-theme-light .banana-video-editor[data-editor-popover] { background-color: var(--canvas-bg-panel, #fafafa); border-color: var(--canvas-border, #d4d4d8); }
+:root.canvas-theme-light .banana-video-editor [class*="bg-[#0d0d0d]"],
+:root.canvas-theme-light .banana-video-editor [class~="bg-zinc-900"],
+:root.canvas-theme-light .banana-video-editor [class~="bg-[#1a1a1a]"],
+:root.canvas-theme-light .banana-video-editor [class~="bg-[#262626]"] { background-color: var(--canvas-bg-panel, #fafafa) !important; }
+:root.canvas-theme-light .banana-video-editor [class~="bg-[#1d1d1d]"],
+:root.canvas-theme-light .banana-video-editor [class~="bg-[#1e1e1e]"],
+:root.canvas-theme-light .banana-video-editor [class~="bg-[#303030]"] { background-color: var(--canvas-bg-secondary, #f4f4f5); }
+:root.canvas-theme-light .banana-video-editor [class~="bg-[#2a2a2a]"],
+:root.canvas-theme-light .banana-video-editor [class~="bg-white/15"],
+:root.canvas-theme-light .banana-video-editor button[class~="bg-black"] { background-color: #e4e4e7; }
+:root.canvas-theme-light .banana-video-editor [class*="border-[#"],
+:root.canvas-theme-light .banana-video-editor [class*="border-white/"],
+:root.canvas-theme-light .banana-video-editor select,
+:root.canvas-theme-light .banana-video-editor input { border-color: var(--canvas-border, #d4d4d8); }
+:root.canvas-theme-light .banana-video-editor [class~="text-zinc-100"],
+:root.canvas-theme-light .banana-video-editor [class~="text-zinc-200"],
+:root.canvas-theme-light .banana-video-editor [class~="text-zinc-300"],
+:root.canvas-theme-light .banana-video-editor [class~="text-white"],
+:root.canvas-theme-light .banana-video-editor [class~="text-[#dedede]"],
+:root.canvas-theme-light .banana-video-editor [class~="text-[#d9d9d9]"] { color: var(--canvas-text-primary, #27272a); }
+:root.canvas-theme-light .banana-video-editor [class~="text-zinc-400"],
+:root.canvas-theme-light .banana-video-editor [class~="text-[#999]"],
+:root.canvas-theme-light .banana-video-editor [class~="text-[#a3a3a3]"] { color: var(--canvas-text-secondary, #71717a); }
+:root.canvas-theme-light .banana-video-editor button[class*="hover:bg-white/"]:hover,
+:root.canvas-theme-light .banana-video-editor label[class*="hover:bg-[#222]"]:hover { background-color: #e4e4e7; }
+:root.canvas-theme-light .banana-video-editor button[class*="hover:text-white"]:hover { color: #18181b; }
+:root.canvas-theme-light .banana-video-editor select,
+:root.canvas-theme-light .banana-video-editor input[type="number"],
+:root.canvas-theme-light .banana-video-editor input[type="text"],
+:root.canvas-theme-light .banana-video-editor textarea { color: #27272a; background-color: #fff; }
+:root.canvas-theme-light .banana-video-editor .flowx-media-ant-modal-container { background-color: var(--canvas-bg-primary, #f4f4f5) !important; }
+:root.canvas-theme-light .banana-video-editor select[aria-label="画面比例"] { color: #27272a !important; border-color: #a1a1aa !important; }

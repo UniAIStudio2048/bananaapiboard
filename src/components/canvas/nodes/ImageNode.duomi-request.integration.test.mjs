@@ -12,13 +12,13 @@ function section(source, startMarker, endMarker) {
   return source.slice(start, end).replace(/^export /, '')
 }
 
-function createHarness({ imageSize, references }) {
+function createHarness({ imageSize, references, model = 'gpt-image-2.5-flare', outputFormat = 'png', isGptImage26 = false }) {
   const requests = []
   const dependencies = {
     console: { log() {}, warn() {}, error() {} },
     referenceImages: { value: references },
-    modelLookupList: { value: [{ value: 'gpt-image-2.5-flare', apiType: 'duomi-image' }] },
-    selectedModel: { value: 'gpt-image-2.5-flare' },
+    modelLookupList: { value: [{ value: model, apiType: isGptImage26 ? 'openai-generate' : 'duomi-image' }] },
+    selectedModel: { value: model },
     normalizeModelImageUrls: urls => urls,
     compressImagesIfNeeded: async urls => urls,
     selectedAspectRatio: { value: '1:1' },
@@ -27,6 +27,8 @@ function createHarness({ imageSize, references }) {
     imageSize: { value: imageSize },
     selectedQuality: { value: 'high' },
     isPixmaxImage2Model: { value: false },
+    selectedOutputFormat: { value: outputFormat },
+    isGptImage26Model: { value: isGptImage26 },
     isMJModel: { value: false },
     enableGroupGeneration: { value: false },
     maxGroupImages: { value: 1 },
@@ -77,3 +79,38 @@ for (const imageSize of ['1K', '2K', '4K']) {
     })
   }
 }
+
+for (const [mode, references] of [
+  ['text-to-image', []],
+  ['image-to-image', ['https://cdn.example/reference.png']]
+]) {
+  test(`gpt-image-2.6 ${mode} sends the GIF output format and prompt instruction`, async () => {
+    const harness = createHarness({
+      imageSize: '1K',
+      references,
+      model: 'gpt-image-2.6',
+      outputFormat: 'gif',
+      isGptImage26: true
+    })
+    await harness.send('draw a cup')
+    assert.equal(harness.requests[0].body.model, 'gpt-image-2.6')
+    assert.equal(harness.requests[0].body.output_format, 'gif')
+    assert.equal(
+      harness.requests[0].body.prompt,
+      'draw a cup\nPlease return an animated GIF.'
+    )
+  })
+}
+
+test('gpt-image-2.6 PNG keeps the prompt unchanged', async () => {
+  const harness = createHarness({
+    imageSize: '1K',
+    references: [],
+    model: 'gpt-image-2.6',
+    outputFormat: 'png',
+    isGptImage26: true
+  })
+  await harness.send('draw a cup')
+  assert.equal(harness.requests[0].body.output_format, 'png')
+  assert.equal(harness.requests[0].body.prompt, 'draw a cup')
+})

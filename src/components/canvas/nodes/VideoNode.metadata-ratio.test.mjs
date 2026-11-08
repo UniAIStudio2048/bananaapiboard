@@ -28,6 +28,7 @@ function createNode(aspectRatio, extraData = {}, ratios = ['16:9', '9:16', '1:1'
     nodeWidth: ref(420),
     nodeHeight: ref(280),
     normalizedVideoUrl: ref(props.data.output.url),
+    videoPreviewTime: ref(null),
     console: { log() {} },
     canvasStore: { updateNodeData(id, patch) {
       assert.equal(id, props.id)

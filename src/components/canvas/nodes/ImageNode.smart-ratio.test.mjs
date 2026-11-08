@@ -47,6 +47,7 @@ function createHarness(t, images = []) {
     compressImagesIfNeeded: async urls => urls,
     selectedPreset: { value: '' }, availablePresets: { value: [] },
     imageSize: { value: '2K' }, selectedQuality: { value: 'high' },
+    selectedOutputFormat: { value: 'png' }, isGptImage26Model: { value: false },
     isPixmaxImage2Model: { value: false }, isMJModel: { value: false },
     enableGroupGeneration: { value: false }, maxGroupImages: { value: 1 },
     isSeedream50LiteModel: { value: false }, imageParameterQualityOptions: { value: [] },

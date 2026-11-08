@@ -10,7 +10,7 @@ import { getMyWorks, getMyPurchases, getMyIncome, deleteWork, toggleWorkVisibili
 import { buildStreamDownloadPath } from '@/api/downloadRouting'
 import CachedImage from '@/components/CachedImage.vue'
 import { getTheme, setTheme, toggleTheme as toggleThemeUtil, themes } from '@/utils/theme'
-import { getTenantHeaders, getModelDisplayName, getApiUrl, getMediaUrl, getRechargeLimits } from '@/config/tenant'
+import { getTenantHeaders, getModelDisplayName, getApiUrl, getMediaUrl, getRechargeLimits, useTenantConfigVersion, isInviteRewardAfterFirstPayment } from '@/config/tenant'
 import { formatPoints, formatBalance } from '@/utils/format'
 import { getHistoryImageDisplayUrl, makeHistoryImagePlaceholder } from '@/utils/historyImageDisplay'
 import { getHistoryAspectRatioStyle } from '@/utils/historyAspectRatio'
@@ -25,6 +25,8 @@ const { t } = useI18n()
 const { formatMoney, symbol: currencySymbol, unitLabel: currencyUnitLabel } = useCurrencyDisplay()
 
 const route = useRoute()
+const tenantConfigVersion = useTenantConfigVersion()
+const inviteRewardAfterFirstPayment = computed(() => { void tenantConfigVersion.value; return isInviteRewardAfterFirstPayment() })
 
 // 获取交易类型文字（使用i18n翻译）
 const getTransactionTypeText = (type) => {
@@ -3954,7 +3956,7 @@ onUnmounted(() => {
                   <h4 class="font-semibold text-slate-900 dark:text-slate-100 mb-2">💡 邀请奖励规则</h4>
                   <ul class="text-sm text-slate-700 dark:text-slate-300 space-y-1">
                     <li>• 好友使用你的邀请码注册</li>
-                    <li>• 你和好友都可获得积分奖励</li>
+                    <li>• {{ inviteRewardAfterFirstPayment ? '好友完成首次充值后，你和好友都可获得积分奖励' : '你和好友都可获得积分奖励' }}</li>
                     <li>• 邀请越多，奖励越多</li>
                   </ul>
                 </div>

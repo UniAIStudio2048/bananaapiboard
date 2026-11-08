@@ -9,5 +9,5 @@ test('directory playback keeps hover playback compatible with canvas interaction
   assert.match(source, /const force = options\?\.force === true/)
   assert.match(source, /if \(isCanvasMediaMoving\.value && !force\) return/)
   assert.match(source, /@canvas-directory-play="activateVideoPreview\(\{ force: true \}\)"/)
-  assert.match(source, /nextTick\(\(\) => handleVideoMouseEnter\(\)\)/)
+  assert.match(source, /if \(isVideoPreviewActive\.value && \(isVideoHovered\.value \|\| force\)\) handleVideoMouseEnter\(\)/)
 })
