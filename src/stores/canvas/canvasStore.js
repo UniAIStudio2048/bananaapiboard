@@ -765,6 +765,13 @@ export const useCanvasStore = defineStore('canvas', () => {
     incrementalWriter = writer || null
   }
 
+  async function flushIncrementalWriter() {
+    if (!incrementalWriter || typeof incrementalWriter.flush !== 'function') {
+      return { skipped: true, reason: 'writer_unavailable' }
+    }
+    return incrementalWriter.flush()
+  }
+
   /**
    * 将节点的全部输入、输出连线迁移或复制到另一个节点。
    * @param {string} sourceNodeId 原节点 ID
@@ -3370,6 +3377,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     markCollaborationStale,
     acknowledgeIncrementalResults,
     setIncrementalWriter,
+    flushIncrementalWriter,
     
     // 多标签操作
     workflowTabs,

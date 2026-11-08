@@ -5574,6 +5574,17 @@ async function ensureCanvasWorkflowForVideoSubmission(nodeId) {
         teamId: currentTab.workflowSpaceType === 'team' ? currentTab.workflowTeamId : null
       }
     : teamStore.getSpaceParams('current')
+  if (currentTab.workflowId && currentSpace.spaceType === 'team') {
+    const flushResult = await canvasStore.flushIncrementalWriter?.()
+    if (flushResult?.ok === false || flushResult?.paused) {
+      throw new Error('协作版本已变化，请刷新工作流后再提交视频生成任务')
+    }
+    return {
+      currentTab: canvasStore.getCurrentTab?.() || currentTab,
+      workflowId: currentTab.workflowId
+    }
+  }
+
   const result = await saveWorkflow({
     ...(currentTab.workflowId ? { id: currentTab.workflowId } : {}),
     name: currentTab.name || `草稿_${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`,

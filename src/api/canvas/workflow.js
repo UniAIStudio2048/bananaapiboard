@@ -34,6 +34,17 @@ function getCanvasClientId() {
   }
 }
 
+export function normalizeLoadedWorkflow(workflow) {
+  if (!workflow || typeof workflow !== 'object') return workflow
+  const collabRevision = workflow.collabRevision ?? workflow.collab_revision
+  const collabEpoch = workflow.collabEpoch ?? workflow.collab_epoch
+  return {
+    ...workflow,
+    ...(collabRevision != null ? { collabRevision: Number(collabRevision) || 0 } : {}),
+    ...(collabEpoch ? { collabEpoch: String(collabEpoch) } : {})
+  }
+}
+
 async function syncSavedWorkflowVersions(data) {
   if (!data?.workflow?.node_versions && data?.workflow?.collab_revision == null && !data?.workflow?.collab_epoch) return
   const { useCanvasStore } = await import('@/stores/canvas/canvasStore')
@@ -188,7 +199,9 @@ export async function loadWorkflow(workflowId) {
     throw new Error(error.error || '加载失败')
   }
   
-  return response.json()
+  const data = await response.json()
+  if (data?.workflow) data.workflow = normalizeLoadedWorkflow(data.workflow)
+  return data
 }
 
 /**
