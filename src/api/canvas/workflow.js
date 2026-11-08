@@ -109,12 +109,44 @@ async function requestWorkflowSave(jsonBody) {
 }
 
 /**
- * 保存请求统一入口：冲突直接返回，禁止用旧完整快照刷新版本后重试。
+ * 保存请求统一入口：旧版完整保存遇到服务端媒体回写造成的版本冲突时，
+ * 使用服务端返回的节点基线重试一次。协作协议的完整快照不能这样重试，
+ * 否则会把其他成员已提交的节点覆盖掉。
  */
 async function saveWorkflowWithConflictRetry(jsonBody) {
-  jsonBody = await prepareWorkflowSaveBody(jsonBody, uploadCanvasFile)
-  // 协作协议下不能用服务端新版本号重试旧完整快照，否则会把其他成员新增的节点删掉。
-  return await requestWorkflowSave(jsonBody)
+  const preparedBody = await prepareWorkflowSaveBody(jsonBody, uploadCanvasFile)
+  let requestBody = preparedBody
+  try {
+    const parsedBody = JSON.parse(preparedBody)
+    if (parsedBody.spaceType === 'team' && parsedBody.protocolVersion == null) {
+      requestBody = JSON.stringify({
+        ...parsedBody,
+        protocolVersion: 2,
+        baseRevision: Number.isSafeInteger(Number(parsedBody.baseRevision)) && Number(parsedBody.baseRevision) >= 0
+          ? Number(parsedBody.baseRevision)
+          : 0
+      })
+    }
+  } catch {
+    // 保留原始请求体，让服务端返回格式错误。
+  }
+  try {
+    return await requestWorkflowSave(requestBody)
+  } catch (error) {
+    if (error.code !== 'version_conflict' || !error.nodeVersions) throw error
+
+    let parsedBody
+    try {
+      parsedBody = JSON.parse(requestBody)
+    } catch {
+      throw error
+    }
+    if (parsedBody.protocolVersion === 2) throw error
+
+    await syncSavedWorkflowVersions({ workflow: { node_versions: error.nodeVersions } })
+    parsedBody.baseNodeVersions = error.nodeVersions
+    return await requestWorkflowSave(JSON.stringify(parsedBody))
+  }
 }
 
 /**

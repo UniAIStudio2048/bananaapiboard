@@ -41,6 +41,26 @@ test('full-save baseline includes deleted nodes rather than inferring deletion f
   assert.equal(saved.clientTabId, 'tab-a')
 })
 
+test('personal workflows keep the legacy full-save protocol', () => {
+  const h = harness()
+  h.workflowTabs.value[0].workflowSpaceType = 'personal'
+  const saved = h.exportWorkflowForSave()
+  assert.equal(saved.protocolVersion, undefined)
+  assert.equal(saved.baseRevision, undefined)
+  assert.equal(saved.collabEpoch, undefined)
+})
+
+test('team workflows include the collaboration protocol metadata', () => {
+  const h = harness()
+  h.workflowTabs.value[0].workflowSpaceType = 'team'
+  h.workflowTabs.value[0].collabRevision = 4
+  h.workflowTabs.value[0].collabEpoch = 'epoch-1'
+  const saved = h.exportWorkflowForSave()
+  assert.equal(saved.protocolVersion, 2)
+  assert.equal(saved.baseRevision, 4)
+  assert.equal(saved.collabEpoch, 'epoch-1')
+})
+
 test('save acknowledgment updates the originating tab even after switching tabs', () => {
   const h = harness()
   h.activeTabId.value = 'tab-b'

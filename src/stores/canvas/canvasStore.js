@@ -2174,7 +2174,7 @@ export const useCanvasStore = defineStore('canvas', () => {
    */
   function exportWorkflowForSave() {
     const currentTab = getCurrentTab()
-    const collaborationWorkflow = currentTab?.workflowSpaceType === 'team' || Boolean(currentTab?.workflowId)
+    const collaborationWorkflow = currentTab?.workflowSpaceType === 'team'
     return { ...sanitizeWorkflowForSave({
       nodes: nodes.value,
       edges: edges.value,

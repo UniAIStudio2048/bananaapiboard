@@ -105,10 +105,22 @@ async function saveAllTabsAndReset() {
       const { saveWorkflow } = await import('@/api/canvas/workflow')
 
       if (tab.workflowId) {
+        const baseNodeVersions = tab.savedNodeVersions || (spaceType === 'team'
+          ? Object.fromEntries(tabNodes.map(node => [node.id, Number(node.version) || 1]))
+          : undefined)
+        const collaboration = spaceType === 'team'
+          ? {
+              protocolVersion: 2,
+              baseRevision: Number(tab.collabRevision) || 0,
+              collabEpoch: tab.collabEpoch || undefined,
+              baseNodeVersions
+            }
+          : {}
         await saveWorkflow({
           id: tab.workflowId,
-          baseNodeVersions: tab.savedNodeVersions ?? undefined,
+          baseNodeVersions,
           clientTabId: tab.id,
+          ...collaboration,
           name: tab.name,
           uploadToCloud: false,
           spaceType,

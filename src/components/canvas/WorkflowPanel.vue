@@ -911,15 +911,24 @@ async function persistSavedWorkflowDescription(workflow) {
 
     const description = workflow.description || ''
     fullWorkflow.description = description
+    const spaceType = workflow.space_type || fullWorkflow.space_type
+    const isTeamWorkflow = spaceType === 'team'
+    const nodes = fullWorkflow.nodes || []
     await saveWorkflow({
       id: workflow.id,
       name: fullWorkflow.name || workflow.name,
       description,
       uploadToCloud: false,
-      spaceType: workflow.space_type || fullWorkflow.space_type,
+      spaceType,
       teamId: workflow.team_id || fullWorkflow.team_id,
       project_id: workflow.project_id || fullWorkflow.project_id,
-      nodes: fullWorkflow.nodes || [],
+      ...(isTeamWorkflow ? {
+        protocolVersion: 2,
+        baseRevision: Number(fullWorkflow.collab_revision) || 0,
+        collabEpoch: fullWorkflow.collab_epoch || undefined,
+        baseNodeVersions: Object.fromEntries(nodes.map(node => [node.id, Number(node.version) || 1]))
+      } : {}),
+      nodes,
       edges: fullWorkflow.edges || [],
       viewport: fullWorkflow.viewport || { x: 0, y: 0, zoom: 1 },
       thumbnail: fullWorkflow.thumbnail || null
