@@ -7,14 +7,25 @@ import { prepareWorkflowSaveBody } from '../../utils/workflowMediaUpload.js'
 
 const source = readFileSync(new URL('./workflow.js', import.meta.url), 'utf8')
 const ast = parse(source, { sourceType: 'module' })
-function harness(ok = true) {
+function harness(ok = true, conflictNodeVersions = null) {
   const applied = []
+  const requests = []
   const workflow = { id: 'wf-a', client_tab_id: 'tab-a', node_versions: { media: 8 } }
   const context = {
     getApiUrl: path => path, getAuthHeaders: () => ({}),
     prepareWorkflowSaveBody, uploadCanvasFile: async () => { throw new Error('unexpected upload') },
     useCanvasStore: () => ({ applyWorkflowSaveVersions: value => applied.push(value) }),
-    fetch: async () => ({ ok, text: async () => JSON.stringify(ok ? { workflow } : { error: '画布内容已更新', code: 'version_conflict' }) })
+    fetch: async (_url, init = {}) => {
+      requests.push(JSON.parse(init.body))
+      const isRetry = requests.length > 1
+      const responseOk = ok || isRetry
+      return {
+        ok: responseOk,
+        text: async () => JSON.stringify(responseOk
+          ? { workflow }
+          : { error: '画布内容已更新', code: 'version_conflict', node_versions: conflictNodeVersions })
+      }
+    }
   }
   for (const name of ['requestWorkflowSave', 'saveWorkflowWithConflictRetry', 'syncSavedWorkflowVersions', 'saveWorkflowRaw', 'saveWorkflow']) {
     const node = ast.program.body.map(item => item.declaration || item).find(item => item.type === 'FunctionDeclaration' && item.id?.name === name)
@@ -23,7 +34,7 @@ function harness(ok = true) {
     const body = source.slice(node.start, node.end).replace("const { useCanvasStore } = await import('@/stores/canvas/canvasStore')", '')
     context[name] = runInNewContext(`(${body})`, context)
   }
-  return { context, applied, workflow }
+  return { context, applied, workflow, requests }
 }
 
 test('successful raw autosave synchronizes the returned node versions before resolving', async () => {
@@ -45,8 +56,36 @@ test('successful manual save synchronizes versions so a subsequent save uses the
   assert.deepEqual(JSON.parse(JSON.stringify(h.applied)), [h.workflow])
 })
 
+test('team saves without explicit protocol metadata are upgraded by the client API', async () => {
+  const h = harness()
+  await h.context.saveWorkflow({ id: 'team-wf', spaceType: 'team', nodes: [] })
+  assert.equal(h.requests[0].protocolVersion, 2)
+  assert.equal(h.requests[0].baseRevision, 0)
+})
+
 test('a rejected manual save does not advance the node baseline', async () => {
   const h = harness(false)
   await assert.rejects(h.context.saveWorkflow({ id: 'wf-a' }), /画布内容已更新/)
+  assert.deepEqual(h.applied, [])
+})
+
+test('a legacy save retries once with the server node baseline', async () => {
+  const h = harness(false, { media: 8 })
+  await h.context.saveWorkflow({ id: 'wf-a', baseNodeVersions: { media: 7 } })
+  assert.equal(h.requests.length, 2)
+  assert.deepEqual(h.requests[1].baseNodeVersions, { media: 8 })
+  assert.deepEqual(JSON.parse(JSON.stringify(h.applied)), [
+    { node_versions: { media: 8 } },
+    h.workflow
+  ])
+})
+
+test('a collaborative save does not retry a stale full snapshot', async () => {
+  const h = harness(false, { media: 8 })
+  await assert.rejects(
+    h.context.saveWorkflow({ id: 'wf-a', protocolVersion: 2, baseRevision: 3 }),
+    /画布内容已更新/
+  )
+  assert.equal(h.requests.length, 1)
   assert.deepEqual(h.applied, [])
 })

@@ -54,3 +54,22 @@ test('space switching also restores media when saving an inactive workflow tab',
   assert.equal('_originalMedia' in saved[0].nodes[0].data, false)
   assert.deepEqual(saved[0].baseNodeVersions, tab.savedNodeVersions)
 })
+
+test('space switching carries collaboration metadata for inactive team workflows', async () => {
+  const saved = []
+  const tab = {
+    id: 'team-tab', workflowId: 'team-wf', name: 'team', hasChanges: true,
+    workflowSpaceType: 'team', workflowTeamId: 'team-1', collabRevision: 6, collabEpoch: 'epoch-1',
+    nodes: [{ id: 'node', version: 3, data: {} }], edges: [], viewport: {}, savedNodeVersions: { node: 3 }
+  }
+  const context = {
+    canvasStore: { workflowTabs: [tab], activeTabId: 'active', exportWorkflowSession: () => ({}), closeAllTabs() {} },
+    teamStore: { getSpaceParams: () => ({ spaceType: 'personal' }) }, spaceKeyOf: () => 'personal',
+    saveSpaceWorkflowSession() {}, sanitizeWorkflowForSave, toRaw: value => value,
+    findBlockingCanvasUploads: () => [], saveWorkflow: async value => saved.push(value), console: { warn() {} }
+  }
+  assert.equal(await loadFunction('../components/canvas/CanvasSpaceSwitcher.vue', 'saveAllTabsAndReset', context)(), true)
+  assert.equal(saved[0].protocolVersion, 2)
+  assert.equal(saved[0].baseRevision, 6)
+  assert.equal(saved[0].collabEpoch, 'epoch-1')
+})

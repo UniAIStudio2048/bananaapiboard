@@ -7,6 +7,10 @@ timestamp: 2026-11-03
 
 # 变更日志
 
+## 2026-11-08
+
+- 新增 [画布工作流保存协议兼容性](canvas-workflow-save-compatibility.md)：修复个人旧工作流因服务端媒体回写导致的版本冲突，补齐非活动团队标签和描述保存的协作元数据，并记录协作快照禁止自动重试的边界。
+
 ## 2026-11-07
 
 - 新增 [画布视频工具栏交互稳定性](canvas-video-toolbar-interaction.md)：修复视频节点片段截取与画面裁切点击后操作层因 Vue Flow 指针事件和 `showToolbar` 短暂变化而闪退的问题，记录回归测试、构建和 Chromium 热加载验证。

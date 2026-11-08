@@ -32,3 +32,5 @@ timestamp: 2026-11-03
 相关记录见 [变更日志](log.md)。
 
 - [新版脚本节点](script-node.md)：独立三步脚本流程、持久化、LLM配置及验收边界。
+
+- [画布工作流保存协议兼容性](canvas-workflow-save-compatibility.md)：个人旧工作流版本冲突恢复、团队协作保存元数据与重试边界。
