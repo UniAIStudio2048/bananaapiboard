@@ -14,7 +14,7 @@ import DOMPurify from 'dompurify'
 import { SquarePen, Film, ScanText, AudioLines, ChevronRight } from '@lucide/vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore } from '@/stores/canvas'
-import { getLLMConfig, chatWithLLM, chatWithLLMStream, getUserLLMPresets, createUserLLMPreset, updateUserLLMPreset } from '@/api/canvas/llm'
+import { getLLMConfig, chatWithLLMStream, getUserLLMPresets, createUserLLMPreset, updateUserLLMPreset } from '@/api/canvas/llm'
 import { uploadCanvasMedia } from '@/api/canvas/workflow'
 import { isOrphanedTextNodeLlmRequest, TEXT_NODE_LLM_INTERRUPTED_ERROR, trackTextNodeLlmRequest } from '@/utils/textNodeLlmRequests'
 import { formatPoints } from '@/utils/format'
@@ -1840,7 +1840,7 @@ async function handleLLMGenerate() {
       llmResponse: '' // 清空之前的响应
     })
     
-    // 使用非流式模式调用 LLM API（避免流式输出导致的状态闪烁问题）
+    // 所有文本节点请求都走 SSE：服务端会在上游长时间无响应时发送心跳，避免生产 CDN 断开连接。
     try {
       // 准备API参数
       const apiParams = {
@@ -1848,7 +1848,7 @@ async function handleLLMGenerate() {
         model: selectedModel.value,
         language: selectedLanguage.value || 'zh',
         images: processedImages.length > 0 ? processedImages : undefined,
-        stream: false // 禁用流式输出
+        stream: true
       }
 
       // 处理预设类型
@@ -1864,9 +1864,7 @@ async function handleLLMGenerate() {
         apiParams.preset = selectedPreset.value
       }
 
-      const result = processedImages.length > 0
-        ? await chatWithLLMStream({ ...apiParams, timeoutMs: 480000 })
-        : await chatWithLLM({ ...apiParams, timeoutMs: 480000 })
+      const result = await chatWithLLMStream({ ...apiParams, timeoutMs: 480000 })
       
       canvasStore.updateNodeDataForTab(requestTabId, targetNodeId, {
         status: 'success',

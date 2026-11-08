@@ -12,10 +12,11 @@ test('canvas LLM stream returns the final structured result and surfaces SSE err
   assert.match(apiSource, /return finalResult \|\| \{ success: true, result: fullText \}/)
 })
 
-test('text node uses the CDN-safe stream only for media LLM submissions', () => {
+test('text node uses the CDN-safe stream for every LLM submission', () => {
   assert.match(textNodeSource, /import \{[^}]*chatWithLLMStream[^}]*\} from '@\/api\/canvas\/llm'/s)
   assert.match(
     textNodeSource,
-    /processedImages\.length > 0\s*\? await chatWithLLMStream\(\{ \.\.\.apiParams, timeoutMs: 480000 \}\)\s*:\s*await chatWithLLM\(\{ \.\.\.apiParams, timeoutMs: 480000 \}\)/
+    /await chatWithLLMStream\(\{ \.\.\.apiParams, timeoutMs: 480000 \}\)/
   )
+  assert.doesNotMatch(textNodeSource, /processedImages\.length > 0\s*\? await chatWithLLMStream/)
 })
