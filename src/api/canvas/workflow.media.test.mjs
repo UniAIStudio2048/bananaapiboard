@@ -31,7 +31,7 @@ function harness({ uploadFails = false, responseError = null, conflictOnce = fal
       return { ok: !responseError, status: responseError ? 413 : 200, text: async () => JSON.stringify(responseError || { success: true }) }
     }
   }
-  for (const name of ['requestWorkflowSave', 'saveWorkflowWithConflictRetry', 'assertWorkflowWritable', 'noteLeaseRejection', 'holdsWorkflowLease', 'rebaseConflictingNodes']) {
+  for (const name of ['requestWorkflowSave', 'saveWorkflowWithConflictRetry', 'assertWorkflowWritable', 'noteLeaseRejection', 'holdsWorkflowLease', 'rebaseConflictingNodes', 'flushIncrementalWritesBeforeSave']) {
     const node = ast.program.body.find(item => item.type === 'FunctionDeclaration' && item.id.name === name)
     context[name] = runInNewContext(`(${source.slice(node.start, node.end)})`, context)
   }

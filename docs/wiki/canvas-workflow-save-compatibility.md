@@ -31,6 +31,7 @@ timestamp: 2026-11-08
 
 - 收到 `version_conflict` 且响应包含 `node_versions` 时，只拉取版本变化的节点，用服务端写回字段（`output`、`status`、`progress`、`error`、`audioUrl`、`audioData`、`scriptDocument`、`scriptSummary`）覆盖本地，其余字段保留本地修改，再按服务端基线重试一次。
 - `protocolVersion: 2` 的协作快照仅在持有编辑权时才这样重试；未持有时冲突必须重新加载。
+- 个人工作流同时走增量写入与整份保存：增量写入确认的节点版本同步到 `savedNodeVersions`；整份保存前先 flush 增量写入；冲突按每次返回的最新基线最多重试 3 次（2026-11-08 线上 706020456707 提交视频时增量写入在重试间隙推进版本导致二次冲突）。
 - 本地开发：[vite.config.js](../../vite.config.js) 代理 `/ws`，否则实时推送连不上（线上由 Nginx 转发）。
 
 ## 验证

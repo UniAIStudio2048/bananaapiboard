@@ -8,7 +8,8 @@ import { prepareWorkflowSaveBody } from '../../utils/workflowMediaUpload.js'
 const source = readFileSync(new URL('./workflow.js', import.meta.url), 'utf8')
 const ast = parse(source, { sourceType: 'module' })
 function harness(ok = true, conflictNodeVersions = null, options = {}) {
-  const { lease = {}, serverNodes = [], errorBody = null } = options
+  const { lease = {}, serverNodes = [], errorBody = null, conflicts = null } = options
+  const flushes = []
   const applied = []
   const requests = []
   const requestHeaders = []
@@ -21,7 +22,8 @@ function harness(ok = true, conflictNodeVersions = null, options = {}) {
     prepareWorkflowSaveBody, uploadCanvasFile: async () => { throw new Error('unexpected upload') },
     useCanvasStore: () => ({
       applyWorkflowSaveVersions: value => applied.push(value),
-      applyIncrementalNode: (node, opts) => remoteApplied.push({ node, opts })
+      applyIncrementalNode: (node, opts) => remoteApplied.push({ node, opts }),
+      flushIncrementalWriter: async () => { flushes.push(requests.length) }
     }),
     canvasEditLease: {
       isReadonly: () => Boolean(lease.readonly),
@@ -37,25 +39,26 @@ function harness(ok = true, conflictNodeVersions = null, options = {}) {
       requests.push(JSON.parse(init.body))
       requestHeaders.push(init.headers || {})
       const isRetry = requests.length > 1
-      const responseOk = ok || isRetry
+      const responseOk = conflicts ? requests.length > conflicts.length : (ok || isRetry)
+      const versions = conflicts ? conflicts[requests.length - 1] : conflictNodeVersions
       return {
         ok: responseOk,
         status: responseOk ? 200 : 409,
         text: async () => JSON.stringify(responseOk
           ? { workflow }
-          : (errorBody || { error: '画布内容已更新', code: 'version_conflict', node_versions: conflictNodeVersions }))
+          : (errorBody || { error: '画布内容已更新', code: 'version_conflict', node_versions: versions }))
       }
     }
   }
   for (const name of ['requestWorkflowSave', 'saveWorkflowWithConflictRetry', 'syncSavedWorkflowVersions', 'saveWorkflowRaw', 'saveWorkflow',
-    'assertWorkflowWritable', 'noteLeaseRejection', 'holdsWorkflowLease', 'rebaseConflictingNodes']) {
+    'assertWorkflowWritable', 'noteLeaseRejection', 'holdsWorkflowLease', 'rebaseConflictingNodes', 'flushIncrementalWritesBeforeSave']) {
     const node = ast.program.body.map(item => item.declaration || item).find(item => item.type === 'FunctionDeclaration' && item.id?.name === name)
     if (!node) continue
     // The Vite-only store import is provided by the test context; execute the actual API body.
     const body = source.slice(node.start, node.end).replace("const { useCanvasStore } = await import('@/stores/canvas/canvasStore')", '')
     context[name] = runInNewContext(`(${body})`, context)
   }
-  return { context, applied, workflow, requests, requestHeaders, batchCalls, marks, remoteApplied }
+  return { context, applied, workflow, requests, requestHeaders, batchCalls, marks, remoteApplied, flushes }
 }
 
 test('successful raw autosave synchronizes the returned node versions before resolving', async () => {
@@ -158,4 +161,24 @@ test('团队协作快照在持有编辑权时允许按服务端基线重试', as
   await h.context.saveWorkflow({ id: 'wf-a', protocolVersion: 2, baseRevision: 3, baseNodeVersions: { media: 7 } })
   assert.equal(h.requests.length, 2)
   assert.deepEqual(h.requests[1].baseNodeVersions, { media: 8 })
+})
+
+test('增量写入在冲突重试期间继续推进版本时，按每次返回的最新基线最多重试 3 次', async () => {
+  const h = harness(false, null, { conflicts: [{ media: 8 }, { media: 9 }] })
+  await h.context.saveWorkflow({ id: 'wf-a', baseNodeVersions: { media: 7 }, nodes: [] })
+  assert.equal(h.requests.length, 3)
+  assert.deepEqual(h.requests[1].baseNodeVersions, { media: 8 })
+  assert.deepEqual(h.requests[2].baseNodeVersions, { media: 9 })
+})
+
+test('连续冲突超过重试上限时抛出冲突错误', async () => {
+  const h = harness(false, null, { conflicts: [{ media: 8 }, { media: 9 }, { media: 10 }, { media: 11 }] })
+  await assert.rejects(h.context.saveWorkflow({ id: 'wf-a', baseNodeVersions: { media: 7 }, nodes: [] }), err => err.code === 'version_conflict')
+  assert.equal(h.requests.length, 4)
+})
+
+test('已保存工作流整份保存前先发完排队中的增量写入', async () => {
+  const h = harness()
+  await h.context.saveWorkflow({ id: 'wf-a', nodes: [] })
+  assert.deepEqual(h.flushes, [0], '必须在第一次保存请求之前 flush')
 })

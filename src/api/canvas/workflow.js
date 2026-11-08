@@ -197,24 +197,40 @@ async function saveWorkflowWithConflictRetry(jsonBody) {
   } catch {
     // 保留原始请求体，让服务端返回格式错误。
   }
-  try {
-    return await requestWorkflowSave(requestBody, workflowId)
-  } catch (error) {
-    if (error.code !== 'version_conflict' || !error.nodeVersions) throw error
-
-    let parsedBody
+  if (workflowId) await flushIncrementalWritesBeforeSave()
+  // 增量写入与服务端写回会在重试间隙继续推进节点版本：每次按服务端返回的最新基线重试，最多 3 次
+  const MAX_CONFLICT_RETRIES = 3
+  let parsedBody = null
+  for (let attempt = 0; ; attempt++) {
     try {
-      parsedBody = JSON.parse(requestBody)
-    } catch {
-      throw error
-    }
-    // 协作快照仅在持有编辑权（单一写入方）时才允许按服务端基线重试
-    if (parsedBody.protocolVersion === 2 && !holdsWorkflowLease(workflowId)) throw error
+      return await requestWorkflowSave(parsedBody ? JSON.stringify(parsedBody) : requestBody, workflowId)
+    } catch (error) {
+      if (error.code !== 'version_conflict' || !error.nodeVersions || attempt >= MAX_CONFLICT_RETRIES) throw error
 
-    await rebaseConflictingNodes(parsedBody, error.nodeVersions)
-    await syncSavedWorkflowVersions({ workflow: { node_versions: error.nodeVersions } })
-    parsedBody.baseNodeVersions = error.nodeVersions
-    return await requestWorkflowSave(JSON.stringify(parsedBody), workflowId)
+      if (!parsedBody) {
+        try {
+          parsedBody = JSON.parse(requestBody)
+        } catch {
+          throw error
+        }
+      }
+      // 协作快照仅在持有编辑权（单一写入方）时才允许按服务端基线重试
+      if (parsedBody.protocolVersion === 2 && !holdsWorkflowLease(workflowId)) throw error
+
+      await rebaseConflictingNodes(parsedBody, error.nodeVersions)
+      await syncSavedWorkflowVersions({ workflow: { node_versions: error.nodeVersions } })
+      parsedBody.baseNodeVersions = error.nodeVersions
+    }
+  }
+}
+
+/** 整份保存前发完排队中的增量写入，避免保存期间增量写入推进节点版本造成冲突 */
+async function flushIncrementalWritesBeforeSave() {
+  try {
+    const { useCanvasStore } = await import('@/stores/canvas/canvasStore')
+    await useCanvasStore().flushIncrementalWriter?.()
+  } catch {
+    // 非 Vue/测试环境或写入暂停时不阻断整份保存
   }
 }
 

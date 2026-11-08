@@ -765,6 +765,10 @@ export const useCanvasStore = defineStore('canvas', () => {
       }
       if (target && Number.isFinite(Number(result.version))) {
         target.version = Number(result.version)
+        // 整份保存的节点基线同步推进：本地数据已包含这次增量写入，否则下一次整份保存会误判冲突
+        if (result.nodeId && currentTab?.savedNodeVersions) {
+          currentTab.savedNodeVersions[result.nodeId] = Number(result.version)
+        }
         if (target.data) delete target.data.__collabDirty
         delete target.__collabDirty
       }

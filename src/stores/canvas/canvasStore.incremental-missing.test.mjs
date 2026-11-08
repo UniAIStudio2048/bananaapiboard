@@ -20,7 +20,7 @@ function findFunction(name, node) {
 
 function harness() {
   const enqueued = []
-  const tab = { id: 'tab-a', workflowId: 'wf-a', collabRevision: 1 }
+  const tab = { id: 'tab-a', workflowId: 'wf-a', collabRevision: 1, savedNodeVersions: { ghost: 3, n2: 1 } }
   const context = {
     nodes: { value: [{ id: 'ghost', type: 'image', position: { x: 1, y: 2 }, version: 3, data: { prompt: 'local', __collabDirty: true } }] },
     edges: { value: [{ id: 'ghost-edge', source: 'ghost', target: 'n2', version: 2, __collabDirty: true }] },
@@ -55,4 +55,12 @@ test('本地也已不存在的节点不补发', () => {
   const h = harness()
   h.context.acknowledgeIncrementalResults([{ target: 'node', op: 'update', nodeId: 'gone', missing: true }], 2)
   assert.equal(h.enqueued.length, 0)
+})
+
+test('增量写入确认的节点版本同步到整份保存基线，避免下一次整份保存冲突', () => {
+  const h = harness()
+  h.context.acknowledgeIncrementalResults([{ target: 'node', op: 'update', nodeId: 'ghost', version: 5 }], 3)
+  assert.equal(h.tab.savedNodeVersions.ghost, 5)
+  assert.equal(h.context.nodes.value[0].version, 5)
+  assert.equal(h.tab.savedNodeVersions.n2, 1)
 })
