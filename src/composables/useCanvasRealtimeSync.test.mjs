@@ -208,3 +208,30 @@ test('disconnect 后再 connect 重建 socket', () => {
   sync.connect()
   assert.equal(count, 2)
 })
+
+test('租约：socket 使用传入的会话 clientId，并带 workflowId 转发租约消息', () => {
+  const store = makeFakeStore()
+  let captured = null
+  const got = []
+  const factory = (opts) => { captured = opts; return { connect() {}, disconnect() {} } }
+  useCanvasRealtimeSync({
+    getWorkflowId: () => 'wf-1',
+    store,
+    api: makeFakeApi({ nodeIndex: [] }),
+    socketFactory: factory,
+    clientId: 'sess-1',
+    onLeaseChanged: (id, p) => got.push(['lease', id, p]),
+    onHandoverRequest: (id, p) => got.push(['handover', id, p]),
+    onWorkflowSaved: (id, p) => got.push(['saved', id, p])
+  })
+  assert.equal(captured.clientId, 'sess-1')
+  captured.onLeaseChanged({ token: 2 })
+  captured.onHandoverRequest({ requester: { device: 'B' } })
+  captured.onWorkflowSaved({ version: 3 })
+  captured.onHello({ lease: { device: 'A' } })
+  assert.deepEqual(got, [
+    ['lease', 'wf-1', { token: 2 }],
+    ['handover', 'wf-1', { requester: { device: 'B' } }],
+    ['saved', 'wf-1', { version: 3 }]
+  ])
+})

@@ -119,11 +119,23 @@ export function useCanvasRealtimeSync(options = {}) {
     }
   }
 
+  // 编辑租约消息带上 workflowId 转给调用方（socket 只服务一个工作流）
+  const forwardLease = name => payload => {
+    if (typeof options[name] === 'function') options[name](workflowIdForSocket, payload || {})
+  }
+  let workflowIdForSocket = null
+
   function buildSocket(workflowId) {
+    workflowIdForSocket = workflowId
     return socketFactory({
       workflowId,
       baseUrl: options.baseUrl,
+      // clientId 即编辑租约 sessionId：服务端据此续期租约、定向发送交接请求并抑制回声
+      clientId: options.clientId,
       lastRevision: collabRevision,
+      onLeaseChanged: forwardLease('onLeaseChanged'),
+      onHandoverRequest: forwardLease('onHandoverRequest'),
+      onWorkflowSaved: forwardLease('onWorkflowSaved'),
       onStateChange: (st) => {
         connectionState.value = st
         if (typeof options.onStateChange === 'function') options.onStateChange(st)

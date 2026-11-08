@@ -4,6 +4,7 @@
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { uploadCanvasFile } from './direct-upload.js'
 import { prepareWorkflowSaveBody } from '@/utils/workflowMediaUpload.js'
+import { canvasEditLease, getCanvasSessionId } from './editLease.js'
 
 /**
  * 获取带认证的请求头（包含用户token和租户信息）
@@ -17,20 +18,66 @@ function getAuthHeaders() {
   }
 }
 
+// 标签页级编辑会话标识，与编辑租约、WebSocket clientId 共用
 function getCanvasClientId() {
-  try {
-    const key = 'canvas_collab_client_id'
-    const storage = typeof sessionStorage !== 'undefined' ? sessionStorage : localStorage
-    let id = storage.getItem(key)
-    if (!id) {
-      id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-        ? crypto.randomUUID()
-        : `canvas-${Date.now()}-${Math.random().toString(36).slice(2)}`
-      storage.setItem(key, id)
+  return getCanvasSessionId()
+}
+
+/** 只读会话（他人持有编辑权）不发写入请求 */
+function assertWorkflowWritable(workflowId) {
+  if (workflowId && canvasEditLease.isReadonly(workflowId)) {
+    const err = new Error('工作流正在其他会话中编辑，当前为只读')
+    err.code = 'edit_lease_readonly'
+    err.status = 409
+    throw err
+  }
+}
+
+/** 服务端以租约冲突拒绝写入时切为只读，并记录当前持有者 */
+function noteLeaseRejection(workflowId, err) {
+  if (workflowId && (err?.code === 'edit_lease_lost' || err?.code === 'edit_lease_held')) {
+    canvasEditLease.markLost(workflowId, err.holder || null, err.code)
+  }
+}
+
+function holdsWorkflowLease(workflowId) {
+  return Boolean(workflowId) && canvasEditLease.getState(workflowId)?.mode === 'editor'
+}
+
+/**
+ * 版本冲突时以服务端为准合并写回字段：持有编辑权时另一个写入方只可能是服务端写回
+ * （视频/技能/脚本结果），因此只用服务端的结果字段覆盖本地，其余字段保留本地修改。
+ */
+async function rebaseConflictingNodes(body, serverVersions) {
+  const SERVER_OWNED_FIELDS = ['output', 'status', 'progress', 'error', 'audioUrl', 'audioData', 'scriptDocument', 'scriptSummary']
+  const base = body.baseNodeVersions || {}
+  const ids = (body.nodes || [])
+    .map(node => node?.id)
+    .filter(id => id && serverVersions[id] != null && serverVersions[id] !== base[id])
+  if (!body.id || ids.length === 0) return
+  const serverNodes = []
+  for (let i = 0; i < ids.length; i += 50) {
+    const result = await getWorkflowNodesBatch(body.id, ids.slice(i, i + 50))
+    serverNodes.push(...(result?.nodes || []))
+  }
+  const patches = new Map()
+  for (const node of serverNodes) {
+    const data = {}
+    for (const field of SERVER_OWNED_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(node?.data || {}, field)) data[field] = node.data[field]
     }
-    return id
+    if (Object.keys(data).length > 0) patches.set(node.id, { id: node.id, version: node.version, data })
+  }
+  if (patches.size === 0) return
+  body.nodes = body.nodes.map(node => patches.has(node.id)
+    ? { ...node, data: { ...(node.data || {}), ...patches.get(node.id).data } }
+    : node)
+  try {
+    const { useCanvasStore } = await import('@/stores/canvas/canvasStore')
+    const store = useCanvasStore()
+    for (const patch of patches.values()) store.applyIncrementalNode?.(patch, { remote: true })
   } catch {
-    return `canvas-${Date.now()}`
+    // 非 Vue/测试环境不需要同步画布状态
   }
 }
 
@@ -89,11 +136,11 @@ export async function getStorageQuota() {
   return response.json()
 }
 
-async function requestWorkflowSave(jsonBody) {
+async function requestWorkflowSave(jsonBody, workflowId = null) {
   const response = await fetch(getApiUrl(`/api/canvas/workflows`), {
     method: 'POST',
     credentials: 'include',
-    headers: getAuthHeaders(),
+    headers: { ...getAuthHeaders(), ...(workflowId ? canvasEditLease.getLeaseHeaders(workflowId) : {}) },
     body: jsonBody
   })
 
@@ -114,6 +161,8 @@ async function requestWorkflowSave(jsonBody) {
     err.code = data.code || data.error
     err.status = response.status
     err.nodeVersions = data.node_versions || null
+    err.holder = data.holder || null
+    noteLeaseRejection(workflowId, err)
     throw err
   }
   return data
@@ -125,6 +174,13 @@ async function requestWorkflowSave(jsonBody) {
  * 否则会把其他成员已提交的节点覆盖掉。
  */
 async function saveWorkflowWithConflictRetry(jsonBody) {
+  let workflowId = null
+  try {
+    workflowId = JSON.parse(jsonBody)?.id || null
+  } catch {
+    // 格式错误交给服务端返回
+  }
+  assertWorkflowWritable(workflowId)
   const preparedBody = await prepareWorkflowSaveBody(jsonBody, uploadCanvasFile)
   let requestBody = preparedBody
   try {
@@ -142,7 +198,7 @@ async function saveWorkflowWithConflictRetry(jsonBody) {
     // 保留原始请求体，让服务端返回格式错误。
   }
   try {
-    return await requestWorkflowSave(requestBody)
+    return await requestWorkflowSave(requestBody, workflowId)
   } catch (error) {
     if (error.code !== 'version_conflict' || !error.nodeVersions) throw error
 
@@ -152,11 +208,13 @@ async function saveWorkflowWithConflictRetry(jsonBody) {
     } catch {
       throw error
     }
-    if (parsedBody.protocolVersion === 2) throw error
+    // 协作快照仅在持有编辑权（单一写入方）时才允许按服务端基线重试
+    if (parsedBody.protocolVersion === 2 && !holdsWorkflowLease(workflowId)) throw error
 
+    await rebaseConflictingNodes(parsedBody, error.nodeVersions)
     await syncSavedWorkflowVersions({ workflow: { node_versions: error.nodeVersions } })
     parsedBody.baseNodeVersions = error.nodeVersions
-    return await requestWorkflowSave(JSON.stringify(parsedBody))
+    return await requestWorkflowSave(JSON.stringify(parsedBody), workflowId)
   }
 }
 
@@ -280,10 +338,11 @@ export async function patchWorkflowNode(workflowId, nodeId, patch, baseVersion, 
     baseVersion,
     ...collab
   }
+  assertWorkflowWritable(workflowId)
   const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/nodes/${encodeURIComponent(nodeId)}`), {
     method: 'PATCH',
     credentials: 'include',
-    headers: { ...getAuthHeaders(), 'X-Canvas-Client-Id': collab.clientId },
+    headers: { ...getAuthHeaders(), ...canvasEditLease.getLeaseHeaders(workflowId), 'X-Canvas-Client-Id': collab.clientId },
     body: JSON.stringify(body)
   })
   if (response.status === 409) {
@@ -294,6 +353,8 @@ export async function patchWorkflowNode(workflowId, nodeId, patch, baseVersion, 
     err.currentVersion = body.currentVersion
     err.currentRevision = body.currentRevision
     err.currentEpoch = body.currentEpoch
+    err.holder = body.holder || null
+    noteLeaseRejection(workflowId, err)
     throw err
   }
   if (!response.ok) {
@@ -322,10 +383,11 @@ export async function postWorkflowOps(workflowId, ops, collaboration = {}) {
     ...op,
     opId: op.opId || op.op_id || op._id || `op:${workflowId}:${Date.now()}:${index}:${Math.random().toString(36).slice(2)}`
   }))
+  assertWorkflowWritable(workflowId)
   const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/ops`), {
     method: 'POST',
     credentials: 'include',
-    headers: { ...getAuthHeaders(), 'X-Canvas-Client-Id': collab.clientId },
+    headers: { ...getAuthHeaders(), ...canvasEditLease.getLeaseHeaders(workflowId), 'X-Canvas-Client-Id': collab.clientId },
     body: JSON.stringify({ ops: normalizedOps, ...collab })
   })
   if (!response.ok) {
@@ -334,6 +396,9 @@ export async function postWorkflowOps(workflowId, ops, collaboration = {}) {
     const err = new Error(body.error || `批量 ops 失败 (HTTP ${response.status})`)
     err.status = response.status
     err.body = body
+    err.code = body.code
+    err.holder = body.holder || null
+    noteLeaseRejection(workflowId, err)
     throw err
   }
   const data = await response.json()

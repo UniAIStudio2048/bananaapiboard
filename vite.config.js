@@ -71,6 +71,13 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           secure: false
         },
+        // 画布工作流实时同步与编辑租约推送（WebSocket）
+        '/ws': {
+          target: apiTarget,
+          changeOrigin: true,
+          secure: false,
+          ws: true
+        },
         // 租户管理后台代理 - 不重写路径，因为 tenant-manager 使用 base: '/tenant-manager/'
         '/tenant-manager': {
           target: 'http://localhost:9000',

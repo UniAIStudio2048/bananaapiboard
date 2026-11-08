@@ -279,3 +279,30 @@ test('sendAck: 在 open 状态下发送 ack 消息', () => {
   assert.equal(decoded.payload.version, 42)
   s.disconnect()
 })
+
+test('租约消息：lease_changed / handover_request / workflow_saved 分发到对应回调', () => {
+  const got = []
+  const s = createWorkflowSocket({
+    workflowId: 'wf-1',
+    baseUrl: 'ws://x',
+    getToken: () => 't',
+    clientId: 'cli-1',
+    WebSocketImpl: FakeWebSocket,
+    autoReconnect: false,
+    onLeaseChanged: payload => got.push(['lease', payload]),
+    onHandoverRequest: payload => got.push(['handover', payload]),
+    onWorkflowSaved: payload => got.push(['saved', payload])
+  })
+  s.connect()
+  const ws = FakeWebSocket.instances[0]
+  ws._open()
+  ws._msg({ type: 'lease_changed', payload: { workflowId: 'wf-1', token: 3, holder: { device: 'A' } } })
+  ws._msg({ type: 'handover_request', payload: { workflowId: 'wf-1', requester: { device: 'B' } } })
+  ws._msg({ type: 'workflow_saved', payload: { workflowId: 'wf-1', version: 9 } })
+  assert.deepEqual(got, [
+    ['lease', { workflowId: 'wf-1', token: 3, holder: { device: 'A' } }],
+    ['handover', { workflowId: 'wf-1', requester: { device: 'B' } }],
+    ['saved', { workflowId: 'wf-1', version: 9 }]
+  ])
+  s.disconnect()
+})

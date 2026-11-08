@@ -16,6 +16,8 @@ function harness({ uploadFails = false, responseError = null, conflictOnce = fal
   const context = {
     prepareWorkflowSaveBody, getApiUrl: path => path, getAuthHeaders: () => ({}),
     syncSavedWorkflowVersions: async () => {},
+    canvasEditLease: { isReadonly: () => false, getState: () => null, getLeaseHeaders: () => ({}), markLost: () => {} },
+    getWorkflowNodesBatch: async () => ({ nodes: [] }),
     uploadCanvasFile: async (file, type, options) => {
       uploads.push({ file, type, options })
       if (uploadFails) throw new Error('storage unavailable')
@@ -29,7 +31,7 @@ function harness({ uploadFails = false, responseError = null, conflictOnce = fal
       return { ok: !responseError, status: responseError ? 413 : 200, text: async () => JSON.stringify(responseError || { success: true }) }
     }
   }
-  for (const name of ['requestWorkflowSave', 'saveWorkflowWithConflictRetry']) {
+  for (const name of ['requestWorkflowSave', 'saveWorkflowWithConflictRetry', 'assertWorkflowWritable', 'noteLeaseRejection', 'holdsWorkflowLease', 'rebaseConflictingNodes']) {
     const node = ast.program.body.find(item => item.type === 'FunctionDeclaration' && item.id.name === name)
     context[name] = runInNewContext(`(${source.slice(node.start, node.end)})`, context)
   }

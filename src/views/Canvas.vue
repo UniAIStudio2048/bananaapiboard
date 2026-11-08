@@ -13,6 +13,9 @@ import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { loadWorkflow as loadWorkflowFromServer } from '@/api/canvas/workflow'
 import { useCanvasRealtimeSync } from '@/composables/useCanvasRealtimeSync'
+import { useCanvasEditLease } from '@/composables/useCanvasEditLease'
+import { canvasEditLease, getCanvasSessionId } from '@/api/canvas/editLease'
+import CanvasEditLeaseBanner from '@/components/canvas/CanvasEditLeaseBanner.vue'
 import { createIncrementalWriter, WriterStorage } from '@/stores/canvas/incrementalWriter'
 import { postWorkflowOps } from '@/api/canvas/workflow'
 import { useControlGroupCollapse } from '@/composables/useControlGroupCollapse'
@@ -145,12 +148,55 @@ function collectImageTaskOutputUrls(result) {
   return urls
 }
 
+// 编辑租约：同一工作流同一时间只有一个标签页可编辑，其他会话只读并可抢占
+function getCurrentLeaseWorkflowId() {
+  return canvasStore.getCurrentTab()?.workflowId || null
+}
+
+// 从服务端重新加载工作流到已打开的标签页（抢占成功、或只读时编辑方已保存），保留当前视口
+async function reloadLeaseWorkflow(workflowId) {
+  const tab = canvasStore.workflowTabs.find(item => item.workflowId === workflowId)
+  if (!tab || tab.id !== canvasStore.activeTabId) return
+  const result = await loadWorkflowFromServer(workflowId)
+  if (!result?.workflow || getCurrentLeaseWorkflowId() !== workflowId) return
+  tab.viewport = { ...canvasStore.viewport }
+  canvasStore.openWorkflowInNewTab({ ...result.workflow, viewport: undefined })
+  tab.hasChanges = false
+}
+
+const editLease = useCanvasEditLease({
+  lease: canvasEditLease,
+  getOpenWorkflowIds: () => canvasStore.workflowTabs.map(tab => tab.workflowId).filter(Boolean),
+  getCurrentWorkflowId: getCurrentLeaseWorkflowId,
+  // 交接前把当前修改写入服务端：团队工作流刷新增量写入，个人工作流强制整份保存
+  saveBeforeYield: async (workflowId) => {
+    if (getCurrentLeaseWorkflowId() === workflowId) await autoSaveWorkflow({ force: true, reason: 'handover' })
+    else await collaborationWriter.flush()
+  },
+  reloadWorkflow: reloadLeaseWorkflow,
+  onKicked: (workflowId, holder) => {
+    if (getCurrentLeaseWorkflowId() !== workflowId) return
+    const device = holder?.device || '另一台设备'
+    displayToast(`已在 ${device} 继续编辑，当前画布切换为只读`, 'warning', 5000)
+  }
+})
+const isEditReadonly = editLease.isReadonly
+
+// 转为只读时清空选择，关闭依赖选中节点的面板
+watch(isEditReadonly, (readonly) => {
+  if (readonly) canvasStore.clearSelection?.()
+})
+
 // Phase 3.2：WebSocket 实时同步（opt-in，跟随 workflowMeta.id 自动连接/断开）
 // 失败时只在 console 提示，不影响主流程。
 try {
   useCanvasRealtimeSync({
     store: canvasStore,
     getWorkflowId: () => (canvasStore.workflowMeta && canvasStore.workflowMeta.id) || null,
+    clientId: getCanvasSessionId(),
+    onLeaseChanged: (workflowId, payload) => editLease.handleLeaseChanged(workflowId, payload),
+    onHandoverRequest: (workflowId) => editLease.handleHandoverRequest(workflowId),
+    onWorkflowSaved: (workflowId) => editLease.handleWorkflowSaved(workflowId),
     onStateChange: (st) => {
       if (st === 'reconnecting') console.warn('[CanvasWS] 正在重连…')
     },
@@ -171,7 +217,7 @@ const collaborationWriter = createIncrementalWriter({
       const tab = canvasStore.getCurrentTab()
       return {
         protocolVersion: 2,
-        clientId: tab?.id || undefined,
+        clientId: getCanvasSessionId(),
         baseRevision: Number(tab?.collabRevision) || 0,
         collabEpoch: tab?.collabEpoch || undefined
       }
@@ -183,6 +229,11 @@ const collaborationWriter = createIncrementalWriter({
       )
     },
     onError: (err) => {
+      // 编辑权已转移或只读：由编辑租约提示条说明，不再提示协作版本冲突
+      if (['edit_lease_lost', 'edit_lease_held', 'edit_lease_readonly'].includes(err?.body?.code || err?.code)) {
+        console.warn('[CanvasCollab] 增量写入暂停（编辑权不在本会话）:', err?.message || err)
+        return
+      }
       if (err?.status === 409 || ['workflow_revision_conflict', 'workflow_epoch_conflict', 'version_conflict'].includes(err?.body?.code || err?.code)) {
         canvasStore.markCollaborationStale?.(err?.body?.code || err?.code || 'conflict')
         displayToast('协作版本已变化，请刷新工作流后继续编辑', 'warning', 5000)
@@ -1330,6 +1381,11 @@ async function autoSaveWorkflow(options = {}) {
     return
   }
 
+  // 只读（工作流正在其他会话编辑）时不保存
+  if (currentTab.workflowId && canvasEditLease.isReadonly(currentTab.workflowId)) {
+    return
+  }
+
   if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges).length > 0) {
     console.log('[Canvas] 自动保存跳过：素材仍在上传，请等待完成后重试')
     return
@@ -2193,6 +2249,7 @@ function sendBeaconExitSave(payload) {
       ...payload,
       _headers: {
         ...headers,
+        ...canvasEditLease.getLeaseHeaders(payload.id),
         Authorization: token ? `Bearer ${token}` : undefined
       }
     })], { type: 'application/json' })
@@ -2213,6 +2270,7 @@ function sendBeaconExitSave(payload) {
 
 async function persistCurrentWorkflowOnExit(reason = 'exit', options = {}) {
   const state = saveCanvasExitState(reason)
+  if (state.currentTab?.workflowId && canvasEditLease.isReadonly(state.currentTab.workflowId)) return false
   if (findBlockingCanvasUploads(canvasStore.nodes, canvasStore.edges).length > 0) {
     console.log(`[Canvas] ${reason} 跳过服务器保存：素材仍在上传，请等待完成后重试`)
     return false
@@ -3151,6 +3209,16 @@ async function handleKeyDown(event) {
   const target = event.target
   const isInInput = isEditableShortcutTarget(target)
 
+  // 只读：屏蔽会修改画布的快捷键（删除、粘贴、剪切、撤销重做、复制节点、编组、保存）
+  if (isEditReadonly.value && !isInInput) {
+    const key = event.key.toLowerCase()
+    if (key === 'delete' || key === 'backspace' ||
+        ((event.ctrlKey || event.metaKey) && ['v', 'x', 'z', 'y', 'd', 'g', 's'].includes(key))) {
+      event.preventDefault()
+      return
+    }
+  }
+
   if (event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey &&
       event.key.toLowerCase() === 'b' && !isEditableShortcutTarget(target)) {
     event.preventDefault()
@@ -4067,6 +4135,14 @@ onUnmounted(() => {
         </div>
       </Transition>
 
+      <!-- 编辑租约只读提示条 -->
+      <CanvasEditLeaseBanner
+        :state="editLease.currentState.value"
+        :is-team="canvasStore.getCurrentTab()?.workflowSpaceType === 'team'"
+        :busy="editLease.takingOver.value"
+        @takeover="editLease.takeover()"
+      />
+
       <!-- 画布选择模式提示条 -->
       <Transition name="pick-banner">
         <div v-if="canvasPickMode" class="canvas-pick-banner">
@@ -4091,6 +4167,7 @@ onUnmounted(() => {
         :key="'canvas-board-' + canvasReady"
         :pick-mode="canvasPickMode"
         :grid-snap-enabled="gridSnapEnabled"
+        :edit-readonly="isEditReadonly"
         @dblclick="handleCanvasDoubleClick"
         @pane-click="handlePaneClick"
         @pick-node="handlePickNode"
@@ -4113,8 +4190,8 @@ onUnmounted(() => {
       <!-- 左侧工具栏 -->
       <CanvasToolbar
         :class="{ 'is-asset-panel-open': showAssetPanel }"
-        :aria-hidden="showAssetPanel || cleanCanvasMode"
-        :inert="showAssetPanel || cleanCanvasMode"
+        :aria-hidden="showAssetPanel || cleanCanvasMode || isEditReadonly"
+        :inert="showAssetPanel || cleanCanvasMode || isEditReadonly"
         @open-save-dialog="openSaveDialog"
         @open-share="openShareWorkflow"
       />

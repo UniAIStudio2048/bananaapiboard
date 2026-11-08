@@ -15,13 +15,25 @@ timestamp: 2026-11-08
 - [WorkflowPanel](../../src/components/canvas/WorkflowPanel.vue) 修改已保存工作流描述时，团队工作流同样携带协作元数据，避免被服务端当作旧客户端。
 - [workflow API](../../src/api/canvas/workflow.js) 对遗漏协议字段的新建团队保存请求补齐 `protocolVersion: 2` 和初始 `baseRevision`。
 
-## 旧工作流冲突恢复
+## 编辑租约
 
-- [workflow API](../../src/api/canvas/workflow.js) 收到 `version_conflict` 且响应包含 `node_versions` 时，只对非协作协议的完整快照刷新节点基线并重试一次。
-- `protocolVersion: 2` 的协作快照不自动重试；发生冲突时必须重新加载，防止旧快照覆盖其他成员的节点。
+同一工作流同一时间只有一个标签页可编辑（服务端设计见 [编辑租约](../../../bananaapiserver/docs/wiki/canvas-workflow-edit-lease.md)）。
+
+- [canvasEditLease](../../src/utils/canvasEditLease.js) 维护每个工作流的 `editor` / `readonly` / `pending` / `released` / `unknown` 状态；会话标识复用 `sessionStorage` 的 `canvas_collab_client_id`。
+- [workflow API](../../src/api/canvas/workflow.js) 是唯一拦截点：整份保存、`patchWorkflowNode`、`postWorkflowOps` 都携带 `X-Canvas-Session-Id` 与（编辑者的）`X-Canvas-Lease-Token`；只读时直接抛出 `edit_lease_readonly` 不发请求；服务端返回 `edit_lease_lost` / `edit_lease_held` 时切为只读。
+- [useCanvasEditLease](../../src/composables/useCanvasEditLease.js) 为每个已打开的工作流标签页获取租约（切换画布标签不释放），每 20 秒心跳，页面关闭时释放；收到交接请求先保存再让出；抢占成功或只读时编辑方保存后重新加载并保留视口。
+- 只读界面：[CanvasBoard](../../src/components/canvas/CanvasBoard.vue) 的 `editReadonly` 禁止拖拽、连线、选择、双击新建、右键、粘贴和拖入文件；左侧工具栏 `inert`；[CanvasEditLeaseBanner](../../src/components/canvas/CanvasEditLeaseBanner.vue) 显示持有者并提供抢占。
+- 租约接口不可用（例如后端未升级）时状态为 `unknown`，按旧协议保存。
+
+## 冲突恢复
+
+- 收到 `version_conflict` 且响应包含 `node_versions` 时，只拉取版本变化的节点，用服务端写回字段（`output`、`status`、`progress`、`error`、`audioUrl`、`audioData`、`scriptDocument`、`scriptSummary`）覆盖本地，其余字段保留本地修改，再按服务端基线重试一次。
+- `protocolVersion: 2` 的协作快照仅在持有编辑权时才这样重试；未持有时冲突必须重新加载。
+- 本地开发：[vite.config.js](../../vite.config.js) 代理 `/ws`，否则实时推送连不上（线上由 Nginx 转发）。
 
 ## 验证
 
+- `node --test src/utils/canvasEditLease.test.mjs src/composables/useCanvasEditLease.test.mjs`
 - `node src/api/canvas/workflow.save-versions.test.mjs`
 - `node src/stores/canvas/canvasStore.save-versions.test.mjs`
 - `node src/utils/workflowSaveEntrypoints.test.mjs`

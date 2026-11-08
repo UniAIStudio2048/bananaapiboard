@@ -102,6 +102,11 @@ const props = defineProps({
   gridSnapEnabled: {
     type: Boolean,
     default: true
+  },
+  // 编辑租约只读：工作流正在其他会话编辑，仅允许平移/缩放查看
+  editReadonly: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -2780,11 +2785,17 @@ function handleEdgesChange(changes) {
 
 // 处理双击
 function handleDoubleClick(event) {
+  if (props.editReadonly) return
   emit('dblclick', event)
 }
 
 // 处理原生右键事件（作为备用）
 function handleNativeContextMenu(event) {
+  if (props.editReadonly) {
+    event.preventDefault()
+    rightDragSuppressContextMenu.value = false
+    return
+  }
   // 右键拖动平移后，抑制菜单弹出
   if (rightDragSuppressContextMenu.value) {
     event.preventDefault()
@@ -3416,6 +3427,7 @@ function handlePaste(event) {
   if (isTextInputEventTarget(target)) {
     return
   }
+  if (props.editReadonly) return
 
   const clipboardData = event.clipboardData
   const pasteSource = resolveCanvasPasteSource({
@@ -3548,7 +3560,8 @@ function getFileCategory(file) {
 function handleFileDragEnter(event) {
   event.preventDefault()
   event.stopPropagation()
-  
+  if (props.editReadonly) return
+
   // 检查是否拖拽的是文件
   if (event.dataTransfer?.types?.includes('Files')) {
     fileDragCounter.value++
@@ -3592,6 +3605,7 @@ async function handleFileDrop(event) {
   
   isFileDragOver.value = false
   fileDragCounter.value = 0
+  if (props.editReadonly) return
   
   // 获取放置位置的画布坐标
   const container = canvasBoardRef.value
@@ -4250,7 +4264,8 @@ onUnmounted(() => {
       'selection-cursor': interactionMode === 'infinite-canvas' || isSelectionModifierPressed,
       'pan-ready': isSpacePressed,
       'is-panning': isPanning,
-      'is-node-dragging': isDraggingNode
+      'is-node-dragging': isDraggingNode,
+      'is-edit-readonly': editReadonly
     }"
     :data-zoom-level="canvasZoomLevel"
     :style="canvasPromptPanelScaleStyle"
@@ -4284,8 +4299,8 @@ onUnmounted(() => {
       :connection-mode="'loose'"
       :only-render-visible-elements="false"
       :pan-on-drag="panOnDragConfig"
-      :selection-on-drag="true"
-      :select-nodes-on-drag="true"
+      :selection-on-drag="!editReadonly"
+      :select-nodes-on-drag="!editReadonly"
       :selection-key-code="isSpacePressed ? false : selectionKeyCodeConfig"
       :selection-mode="SelectionMode.Full"
       :pan-on-scroll="false"
@@ -4295,8 +4310,10 @@ onUnmounted(() => {
       :delete-key-code="null"
       :prevent-scrolling="true"
       :elevate-nodes-on-select="false"
-      :nodes-draggable="true"
-      :edges-selectable="true"
+      :nodes-draggable="!editReadonly"
+      :nodes-connectable="!editReadonly"
+      :elements-selectable="!editReadonly"
+      :edges-selectable="!editReadonly"
       :multi-selection-key-code="'Control'"
       @viewport-change="handleViewportChange"
       @selection-change="handleSelectionChange"
@@ -4484,6 +4501,13 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* 编辑租约只读：节点与连线不响应指针，画布仍可平移缩放 */
+.canvas-board.is-edit-readonly :deep(.vue-flow__node),
+.canvas-board.is-edit-readonly :deep(.vue-flow__edge),
+.canvas-board.is-edit-readonly :deep(.vue-flow__handle) {
+  pointer-events: none;
+}
+
 .canvas-board {
   width: 100%;
   height: 100%;

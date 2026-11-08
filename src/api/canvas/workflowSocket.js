@@ -211,6 +211,20 @@ export function createWorkflowSocket(opts = {}) {
           lastRevision = Math.max(lastRevision, Number(msg.payload.collabRevision))
         }
         break
+      case 'lease_changed':
+      case 'handover_request':
+      case 'workflow_saved': {
+        // 编辑租约：持有者变化 / 抢占方请求交接（只发给持有者）/ 整份保存后通知只读方刷新
+        const handler = {
+          lease_changed: opts.onLeaseChanged,
+          handover_request: opts.onHandoverRequest,
+          workflow_saved: opts.onWorkflowSaved
+        }[msg.type]
+        if (typeof handler === 'function') {
+          try { handler(msg.payload || {}) } catch (e) { emitError(e) }
+        }
+        break
+      }
       case 'pong':
         // 心跳响应，仅用于刷新接收超时
         break
