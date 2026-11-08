@@ -753,6 +753,16 @@ export const useCanvasStore = defineStore('canvas', () => {
       const target = result?.nodeId
         ? nodes.value.find(item => item.id === result.nodeId)
         : result?.edgeId ? edges.value.find(item => item.id === result.edgeId) : null
+      // 持有编辑权时服务端发现节点/连线缺失（此前的 add 丢失）：用本地完整数据补发 add
+      if (result?.missing) {
+        if (target) {
+          const payload = { ...target, ...(target.data ? { data: { ...target.data } } : {}) }
+          delete payload.__collabDirty
+          if (payload.data) delete payload.data.__collabDirty
+          incrementalWriter?.enqueue?.({ op: 'add', target: result.nodeId ? 'node' : 'edge', payload })
+        }
+        continue
+      }
       if (target && Number.isFinite(Number(result.version))) {
         target.version = Number(result.version)
         if (target.data) delete target.data.__collabDirty

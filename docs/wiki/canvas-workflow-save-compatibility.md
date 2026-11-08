@@ -24,6 +24,8 @@ timestamp: 2026-11-08
 - [useCanvasEditLease](../../src/composables/useCanvasEditLease.js) 为每个已打开的工作流标签页获取租约（切换画布标签不释放），每 20 秒心跳，页面关闭时释放；收到交接请求先保存再让出；抢占成功或只读时编辑方保存后重新加载并保留视口。
 - 只读界面：[CanvasBoard](../../src/components/canvas/CanvasBoard.vue) 的 `editReadonly` 禁止拖拽、连线、选择、双击新建、右键、粘贴和拖入文件；左侧工具栏 `inert`；[CanvasEditLeaseBanner](../../src/components/canvas/CanvasEditLeaseBanner.vue) 显示持有者并提供抢占。
 - 租约接口不可用（例如后端未升级）时状态为 `unknown`，按旧协议保存。
+- 服务端返回 `missing: true`（节点/连线在增量表中缺失）时，[canvasStore](../../src/stores/canvas/canvasStore.js) 的 `acknowledgeIncrementalResults` 用本地完整数据补发 add。
+- 生产环境由 Nginx 提供 `dist` 静态文件：拉取代码后必须重新构建前端，并为 `/ws/` 配置 WebSocket 转发到后端。
 
 ## 冲突恢复
 
