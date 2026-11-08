@@ -409,7 +409,7 @@ const musicPointsCost = computed(() => {
   // 用户分组倍率：音频预估积分应用 rate_audio，与后端实际扣费保持一致
   return isRunningHubAudio.value
     ? Math.round(base * getUserNodeRate('audio') * 100) / 100
-    : Math.round(base * getUserNodeRate('audio'))
+    : Math.round(base * getUserNodeRate('audio') * 100) / 100
 })
 
 function formatAudioErrorMessage(message) {

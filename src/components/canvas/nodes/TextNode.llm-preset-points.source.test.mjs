@@ -16,3 +16,11 @@ test('Text node uses the selected tenant preset cost for display and balance che
   assert.match(costBlock, /calculateLLMCost\(model\?\.pointsCost, templateExtra\)/)
   assert.match(source, /userPoints\.value < currentModelCost\.value/)
 })
+
+test('Text node keeps fractional model and preset costs after applying the text rate', () => {
+  const costStart = source.indexOf('// 当前 LLM 调用积分消耗')
+  const costEnd = source.indexOf('const formattedModelCost', costStart)
+  const costBlock = source.slice(costStart, costEnd)
+
+  assert.match(costBlock, /Math\.round\(calculateLLMCost\(model\?\.pointsCost, templateExtra\) \* getUserNodeRate\('text'\) \* 100\) \/ 100/)
+})

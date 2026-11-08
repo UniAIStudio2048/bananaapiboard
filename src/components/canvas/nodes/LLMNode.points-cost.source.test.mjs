@@ -13,3 +13,7 @@ test('LLM node uses the tenant preset points cost for its balance check', () => 
   assert.match(source, /calculateLLMCost\(/)
   assert.match(source, /configuredModelPointsCost\.value/)
 })
+
+test('LLM node keeps fractional costs after applying the text rate', () => {
+  assert.match(source, /Math\.round\(base \* getUserNodeRate\('text'\) \* 100\) \/ 100/)
+})

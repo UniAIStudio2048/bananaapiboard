@@ -4417,13 +4417,13 @@ const basePointsCost = computed(() => {
     const configuredFixedCost = currentModelConfig.value?.resolutionFixedCosts?.[resolution]
     const fixedCost = Number(configuredFixedCost)
     if (configuredFixedCost !== undefined && configuredFixedCost !== null && String(configuredFixedCost).trim() !== '' && Number.isFinite(fixedCost) && fixedCost >= 0) {
-      return Math.round(fixedCost)
+      return Math.round(fixedCost * 100) / 100
     }
     const defaultMultipliers = { '720p': 1, '1080p': 1.5, '4k': 2 }
     const multiplier = Number(currentModelConfig.value?.resolutionMultipliers?.[resolution] ?? defaultMultipliers[resolution] ?? 1)
     const costPerSecond = Number(currentModelConfig.value?.costPerSecond) || 1
     const duration = Number(selectedDuration.value) || 4
-    return Math.round(duration * costPerSecond * multiplier)
+    return Math.round(duration * costPerSecond * multiplier * 100) / 100
   }
 
   if (isPerSecondBilling.value) {
@@ -4465,7 +4465,7 @@ const basePointsCost = computed(() => {
     const h3Res = minimaxH3Resolution.value || h3Cfg.resolution || '2K'
     const h3PerSecond = Number(h3Cfg.resolutionCosts?.[h3Res])
       || Number(currentModelConfig.value.costPerSecond) || 15
-    let h3Cost = Math.round(h3PerSecond * (Number(selectedDuration.value) || 5))
+    let h3Cost = Math.round(h3PerSecond * (Number(selectedDuration.value) || 5) * 100) / 100
     if (shouldApplyVideoInputMultiplier.value) {
       h3Cost = applyVideoInputMultiplier(h3Cost, videoInputMultiplier.value)
     }
@@ -4515,7 +4515,7 @@ const pointsCost = computed(() => {
   const rate = getUserNodeRate('video')
   const scaled = base * rate
   if (['heizhu-video', 'wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType)) return Math.round(scaled * 100) / 100
-  return Math.round(scaled)
+  return Math.round(scaled * 100) / 100
 })
 
 const klingOfficialSelectedDurationCost = computed(() => {

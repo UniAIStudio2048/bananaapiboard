@@ -28,3 +28,8 @@ test('image generation passes only tenant preset raw id and estimate includes pr
   assert.match(source, /return roundPoints\(\(basePointsCost\.value\s*\+\s*presetPointsCost\)\s*\*\s*outputCount\s*\*\s*getUserNodeRate\('image'\)\)/)
   assert.match(source, /const totalCost\s*=\s*currentPointsCost\.value/)
 })
+
+test('image generation keeps fractional costs in the canvas display', () => {
+  assert.match(source, /return roundPoints\(\(basePointsCost\.value\s*\+\s*presetPointsCost\)\s*\*\s*outputCount\s*\*\s*getUserNodeRate\('image'\)\)/)
+  assert.match(source, /formatPoints\(currentPointsCost\)/)
+})

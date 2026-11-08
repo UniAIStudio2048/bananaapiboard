@@ -866,7 +866,7 @@ const currentModelCost = computed(() => {
   const model = availableModels.value.find(m => m.value === selectedModel.value)
   const templateExtra = preset && Number.isFinite(presetCost) && presetCost >= 0 ? presetCost : 0
   // 用户分组倍率：文本预估积分应用 rate_text，与后端实际扣费保持一致
-  return Math.round(calculateLLMCost(model?.pointsCost, templateExtra) * getUserNodeRate('text'))
+  return Math.round(calculateLLMCost(model?.pointsCost, templateExtra) * getUserNodeRate('text') * 100) / 100
 })
 
 // 格式化积分显示

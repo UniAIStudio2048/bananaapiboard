@@ -47,6 +47,15 @@ test('actual AudioNode estimate stays at 14 points even for 5000 lyrics characte
   assert.equal(sandbox.cost, 14)
 })
 
+test('actual AudioNode estimate keeps fractional non-RunningHub costs', () => {
+  const expression = source.slice(source.indexOf('const musicPointsCost = computed('), source.indexOf('function formatAudioErrorMessage('))
+  const sandbox = { computed: getter => ({ get value() { return getter() } }), currentMusicModelConfig: reference({ pointsCost: 0.1, provider: 'other' }),
+    isRunningHubAudio: reference(false), isRunningHubSuno6: reference(false), sunoV6Operation: reference({ usd: 0.08 }), sunoV6Params: {}, isMiniMaxAudio: reference(false), isFishAudio: reference(false), audioCapability: reference('music'),
+    musicPrompt: reference('一句话成曲'), getUserNodeRate: () => 1, calculateAudioPointsCost: () => 0.1 }
+  vm.runInNewContext(`${expression}\nglobalThis.cost = musicPointsCost.value`, sandbox)
+  assert.equal(sandbox.cost, 0.1)
+})
+
 test('actual AudioNode does not charge Max mode for Suno operations without documented Max support', () => {
   const expression = source.slice(source.indexOf('const musicPointsCost = computed('), source.indexOf('function formatAudioErrorMessage('))
   const sandbox = { computed: getter => ({ get value() { return getter() } }), currentMusicModelConfig: reference({ pointsCost: 9, usdToCny: 6.6681 }),

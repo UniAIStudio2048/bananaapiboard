@@ -140,7 +140,7 @@ const pointsCost = computed(() => {
     getLLMCost(typeConfig.value.action)
   )
   // 用户分组倍率：文本预估积分应用 rate_text，与后端实际扣费保持一致
-  return Math.round(base * getUserNodeRate('text'))
+  return Math.round(base * getUserNodeRate('text') * 100) / 100
 })
 
 // 格式化积分显示
