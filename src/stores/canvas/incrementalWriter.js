@@ -158,6 +158,8 @@ export function createIncrementalWriter({
   const backoffBase = options.backoffBaseMs ?? DEFAULT_BACKOFF_BASE_MS
   const onFlushResult = typeof options.onFlushResult === 'function' ? options.onFlushResult : null
   const onError = typeof options.onError === 'function' ? options.onError : null
+  const collaboration = options.collaboration || null
+  const allowOfflineReplay = options.allowOfflineReplay !== false
   const isOnline = typeof options.isOnline === 'function'
     ? options.isOnline
     : () => (typeof navigator === 'undefined' ? true : navigator.onLine !== false)
@@ -192,8 +194,12 @@ export function createIncrementalWriter({
    */
   function enqueue(op) {
     if (!op || !op.op || !op.target) return
+    const opId = genId()
+    const workflowId = getWorkflowId()
     queue.push({
-      _id: genId(),
+      _id: opId,
+      opId,
+      _workflowId: workflowId || null,
       op: op.op,
       target: op.target,
       id: op.id,
@@ -214,16 +220,24 @@ export function createIncrementalWriter({
 
     flushing = true
     try {
-      const wfId = getWorkflowId()
+      const wfId = queue[0]?._workflowId || getWorkflowId()
       if (!wfId) return { skipped: true, reason: 'no_workflow' }
 
       // 先 coalesce 当前队列
-      const coalesced = coalesceOps(queue)
+      const currentQueue = queue.filter(item => !item._workflowId || item._workflowId === wfId)
+      const otherQueue = queue.filter(item => item._workflowId && item._workflowId !== wfId)
+      const coalesced = coalesceOps(currentQueue)
       const batch = coalesced.slice(0, maxBatch)
       const leftover = coalesced.slice(maxBatch)
-      queue = leftover
+      queue = [...otherQueue, ...leftover]
 
       if (!isOnline()) {
+        if (!allowOfflineReplay) {
+          queue = []
+          const error = new Error('协作连接已断开，已暂停提交，请恢复连接后重新加载工作流。')
+          if (onError) onError(error)
+          return { offline: true, persisted: 0, paused: true }
+        }
         // 离线 -> 全部落 IndexedDB
         const persisted = await storage.load(wfId)
         await storage.save(wfId, persisted.concat(batch, leftover))
@@ -238,6 +252,10 @@ export function createIncrementalWriter({
         if (leftover.length > 0) scheduleFlush()
         return { ok: true, count: batch.length }
       } else {
+        if (!allowOfflineReplay) {
+          if (onError) onError(result.error)
+          return { ok: false, persistedToStorage: false, paused: true, count: batch.length }
+        }
         // 重试耗尽 -> 落 IndexedDB
         try {
           const persisted = await storage.load(wfId)
@@ -257,10 +275,12 @@ export function createIncrementalWriter({
     let lastErr
     for (let i = 0; i <= maxRetry; i++) {
       try {
-        const response = await api.postWorkflowOps(workflowId, ops)
+        const metadata = typeof collaboration === 'function' ? collaboration() : collaboration
+        const response = await api.postWorkflowOps(workflowId, ops, metadata || {})
         return { success: true, response }
       } catch (err) {
         lastErr = err
+        if (err?.status === 409 || ['workflow_revision_conflict', 'workflow_epoch_conflict', 'version_conflict', 'resync_required'].includes(err?.body?.code || err?.code)) break
         if (i >= maxRetry) break
         const wait = backoffBase * Math.pow(2, i) + Math.random() * 200
         await new Promise(r => setTimeout(r, wait))
@@ -273,6 +293,7 @@ export function createIncrementalWriter({
    * 回放 IndexedDB 中尚未发送成功的 ops。
    */
   async function replayPersisted() {
+    if (!allowOfflineReplay) return { replayed: 0, paused: true }
     const wfId = getWorkflowId()
     if (!wfId) return { replayed: 0 }
     let persisted = []

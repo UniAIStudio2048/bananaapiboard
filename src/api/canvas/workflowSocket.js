@@ -46,6 +46,7 @@ function getDefaultBaseUrl() {
  * @param {(ops, fromClient) => void} [opts.onOps]          收到 type=ops 时回调
  * @param {(nodeId, node, version, fromClient) => void} [opts.onNodePatched]
  * @param {(payload) => void} [opts.onHello]                收到 hello 时回调（带 workflowVersion）
+ * @param {(payload) => void} [opts.onResyncRequired]       服务端无法补齐操作时回调
  * @param {() => void} [opts.onResync]    重连成功后回调，提示上层对比 manifest 补齐
  * @param {(state) => void} [opts.onStateChange]            'connecting'|'open'|'closed'|'reconnecting'
  * @param {(err) => void} [opts.onError]
@@ -88,6 +89,7 @@ export function createWorkflowSocket(opts = {}) {
   let receiveDeadlineTimer = null
   let reconnectTimer = null
   let hasOpenedOnce = false
+  let lastRevision = Math.max(0, Number(opts.lastRevision) || 0)
   let state = 'closed'
 
   function emitState(next) {
@@ -170,19 +172,43 @@ export function createWorkflowSocket(opts = {}) {
         if (typeof opts.onHello === 'function') {
           try { opts.onHello(msg.payload || {}) } catch (e) { emitError(e) }
         }
+        sendRaw({
+          type: 'resume',
+          payload: {
+            lastRevision,
+            collabEpoch: msg.payload?.collabEpoch || null,
+            clientId
+          }
+        })
         break
       case 'ops':
         if (typeof opts.onOps === 'function') {
           const payload = msg.payload || {}
-          try { opts.onOps(payload.ops || [], payload.fromClient || null) }
+          const incoming = Array.isArray(payload.ops) ? payload.ops : []
+          for (const op of incoming) {
+            if (Number.isFinite(Number(op?.revision))) lastRevision = Math.max(lastRevision, Number(op.revision))
+          }
+          try { opts.onOps(incoming, payload.fromClient || null, payload) }
           catch (e) { emitError(e) }
+          sendRaw({ type: 'ack', payload: { revision: lastRevision } })
         }
         break
       case 'node_patched':
         if (typeof opts.onNodePatched === 'function') {
           const p = msg.payload || {}
-          try { opts.onNodePatched(p.nodeId, p.node, p.version, p.fromClient || null) }
+          if (Number.isFinite(Number(p.collabRevision))) lastRevision = Math.max(lastRevision, Number(p.collabRevision))
+          try { opts.onNodePatched(p.nodeId, p.node, p.version, p.fromClient || null, p) }
           catch (e) { emitError(e) }
+        }
+        break
+      case 'resync_required':
+        if (typeof opts.onResyncRequired === 'function') {
+          try { opts.onResyncRequired(msg.payload || {}) } catch (e) { emitError(e) }
+        }
+        break
+      case 'resume_ack':
+        if (Number.isFinite(Number(msg.payload?.collabRevision))) {
+          lastRevision = Math.max(lastRevision, Number(msg.payload.collabRevision))
         }
         break
       case 'pong':
@@ -267,11 +293,16 @@ export function createWorkflowSocket(opts = {}) {
       emitState('closed')
     },
     sendAck(version) { return sendRaw({ type: 'ack', payload: { version } }) },
+    sendResume(revision = lastRevision, collabEpoch = null) {
+      lastRevision = Math.max(0, Number(revision) || 0)
+      return sendRaw({ type: 'resume', payload: { lastRevision, collabEpoch, clientId } })
+    },
     /** 测试钩子 */
     __test__: {
       get ws() { return ws },
       get backoffMs() { return backoffMs },
       get reconnectAttempt() { return reconnectAttempt },
+      get lastRevision() { return lastRevision },
       simulateMessage(payload) {
         if (ws && typeof ws.onmessage === 'function') {
           ws.onmessage({ data: typeof payload === 'string' ? payload : JSON.stringify(payload) })

@@ -143,6 +143,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   const workflowTabs = ref([]) // 工作流标签列表 [{ id, name, workflowId, nodes, edges, viewport, hasChanges }]
   const activeTabId = ref(null) // 当前活动标签ID
   const maxTabs = 10 // 最大标签数量
+  let incrementalWriter = null
   
   // ========== 计算属性 ==========
   const selectedNode = computed(() => {
@@ -277,6 +278,10 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
     
     nodes.value.push(newNode)
+    newNode.data = { ...(newNode.data || {}), __collabDirty: true }
+    const persistedNode = { ...newNode, data: { ...newNode.data } }
+    delete persistedNode.data.__collabDirty
+    incrementalWriter?.enqueue?.({ op: 'add', target: 'node', payload: persistedNode })
     
     // 如果是从另一个节点创建的，自动添加连线
     const multiConnectPrimarySourceId = triggerNodeId.value // 多选批量连线的主源 = 触发节点
@@ -329,12 +334,15 @@ export const useCanvasStore = defineStore('canvas', () => {
   function updateNodeData(nodeId, data, options = {}) {
     const node = nodes.value.find(n => n.id === nodeId)
     if (node) {
+      const baseVersion = Number(node.version) || 1
       node.data = mergeNodeData(node.data, data)
+      node.data.__collabDirty = true
       if (!options.skipStoryboardBindingSync) {
         syncOutgoingStoryboardBindings(nodeId)
       }
       if (!options.silent) {
         markCurrentTabChanged()
+        incrementalWriter?.enqueue?.({ op: 'update', target: 'node', id: nodeId, baseVersion, payload: { id: nodeId, data } })
       }
     }
   }
@@ -432,7 +440,10 @@ export const useCanvasStore = defineStore('canvas', () => {
   function updateNodePosition(nodeId, position) {
     const node = nodes.value.find(n => n.id === nodeId)
     if (node) {
+      const baseVersion = Number(node.version) || 1
       node.position = position
+      node.data = { ...(node.data || {}), __collabDirty: true }
+      incrementalWriter?.enqueue?.({ op: 'update', target: 'node', id: nodeId, baseVersion, payload: { id: nodeId, position } })
     }
   }
 
@@ -543,9 +554,17 @@ export const useCanvasStore = defineStore('canvas', () => {
   /**
    * 删除节点
    */
-  function removeNode(nodeId) {
-    saveHistory({ force: true })
-    markCurrentTabChanged()
+  function removeNode(nodeId, options = {}) {
+    const node = nodes.value.find(n => n.id === nodeId)
+    if (node && options.remote && node.data?.__collabDirty) {
+      markCollaborationStale('remote_delete_conflict')
+      return
+    }
+    if (node && !options.remote) incrementalWriter?.enqueue?.({ op: 'delete', target: 'node', id: nodeId, baseVersion: Number(node.version) || 1, payload: { id: nodeId } })
+    if (!options.remote) {
+      saveHistory({ force: true })
+      markCurrentTabChanged()
+    }
     cancelCanvasUpload(nodeId, activeTabId.value)
     useUploadManager().cancelNodeRetries(nodeId, activeTabId.value)
     markNodeGenerationSubmissionsDeleted(nodeId, { tabId: activeTabId.value })
@@ -554,7 +573,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     const edgesToRemove = edges.value.filter(
       e => e.source === nodeId || e.target === nodeId
     )
-    edgesToRemove.forEach(e => removeEdge(e.id))
+    edgesToRemove.forEach(e => removeEdge(e.id, options))
     
     nodes.value = nodes.value.filter(n => n.id !== nodeId)
     
@@ -614,7 +633,7 @@ export const useCanvasStore = defineStore('canvas', () => {
   /**
    * 添加连线
    */
-  function addEdge(edge) {
+  function addEdge(edge, options = {}) {
     const newEdge = {
       id: edge.id || (
         (edge.targetHandle && edge.targetHandle.startsWith('input-'))
@@ -638,7 +657,7 @@ export const useCanvasStore = defineStore('canvas', () => {
       const oldCellEdges = edges.value.filter(e =>
         e.target === newEdge.target && e.targetHandle === newEdge.targetHandle
       )
-      oldCellEdges.forEach(e => removeEdge(e.id))
+      oldCellEdges.forEach(e => removeEdge(e.id, options))
     }
     
     // 检查是否已存在（同 source/target/handle 的重复边）
@@ -651,9 +670,13 @@ export const useCanvasStore = defineStore('canvas', () => {
     
     if (!exists) {
       edges.value.push(newEdge)
+      if (!options.remote) {
+        newEdge.__collabDirty = true
+        incrementalWriter?.enqueue?.({ op: 'add', target: 'edge', payload: { ...newEdge, __collabDirty: undefined } })
+      }
       
-      // 自动传递数据（包含 Storyboard 格子级替换）
-      propagateData(edge.source, edge.target, newEdge.targetHandle)
+      // 自动传递数据（包含 Storyboard 格子级替换）；远端操作已包含服务端状态，不能再次回写。
+      if (!options.remote) propagateData(edge.source, edge.target, newEdge.targetHandle)
     }
     
     return newEdge
@@ -662,9 +685,14 @@ export const useCanvasStore = defineStore('canvas', () => {
   /**
    * 删除连线
    */
-  function removeEdge(edgeId) {
+  function removeEdge(edgeId, options = {}) {
     // 在删除前查找边的信息，用于清理 Storyboard 格子图片
     const edge = edges.value.find(e => e.id === edgeId)
+    if (edge && options.remote && edge.__collabDirty) {
+      markCollaborationStale('remote_edge_delete_conflict')
+      return
+    }
+    if (edge && !options.remote) incrementalWriter?.enqueue?.({ op: 'delete', target: 'edge', id: edgeId, baseVersion: Number(edge.version) || 1, payload: { id: edgeId } })
 
     // 先从数组中移除该边
     edges.value = edges.value.filter(e => e.id !== edgeId)
@@ -678,13 +706,52 @@ export const useCanvasStore = defineStore('canvas', () => {
         const hasReplacementEdge = edges.value.some(e =>
           e.target === edge.target && e.targetHandle === edge.targetHandle
         )
-        if (removedCellIndex !== null && !hasReplacementEdge && targetNode.data.images[removedCellIndex]) {
+        if (!options.remote && removedCellIndex !== null && !hasReplacementEdge && targetNode.data.images[removedCellIndex]) {
           const nextImages = [...targetNode.data.images]
           nextImages[removedCellIndex] = null
           updateNodeData(edge.target, { images: nextImages })
         }
       }
     }
+  }
+
+  function updateEdge(edgeId, patch = {}, options = {}) {
+    const edge = edges.value.find(item => item.id === edgeId)
+    if (!edge) return null
+    const baseVersion = Number(edge.version) || 1
+    Object.assign(edge, patch)
+    if (!options.remote) edge.__collabDirty = true
+    if (!options.remote) {
+      incrementalWriter?.enqueue?.({
+        op: 'update',
+        target: 'edge',
+        id: edgeId,
+        baseVersion,
+        payload: { id: edgeId, ...patch }
+      })
+    }
+    return edge
+  }
+
+  function acknowledgeIncrementalResults(results = [], collabRevision) {
+    const currentTab = getCurrentTab()
+    if (currentTab && Number.isFinite(Number(collabRevision))) {
+      currentTab.collabRevision = Math.max(Number(currentTab.collabRevision) || 0, Number(collabRevision))
+    }
+    for (const result of Array.isArray(results) ? results : []) {
+      const target = result?.nodeId
+        ? nodes.value.find(item => item.id === result.nodeId)
+        : result?.edgeId ? edges.value.find(item => item.id === result.edgeId) : null
+      if (target && Number.isFinite(Number(result.version))) {
+        target.version = Number(result.version)
+        if (target.data) delete target.data.__collabDirty
+        delete target.__collabDirty
+      }
+    }
+  }
+
+  function setIncrementalWriter(writer) {
+    incrementalWriter = writer || null
   }
 
   /**
@@ -1978,10 +2045,18 @@ export const useCanvasStore = defineStore('canvas', () => {
    * 由外部 incrementalLoader 在拉到节点 data 时回调；也支持手动从缓存补齐。
    * 不会覆盖已经被用户编辑过（_dirty）的字段。
    */
-  function applyIncrementalNode(node) {
+  function applyIncrementalNode(node, options = {}) {
     if (!node || !node.id) return
     const target = nodes.value.find(n => n.id === node.id)
-    if (!target) return
+    if (!target) {
+      nodes.value.push({ ...node, data: { ...(node.data || {}) } })
+      return
+    }
+    if (options.remote && target.data?.__collabDirty) {
+      const currentTab = getCurrentTab()
+      if (currentTab) currentTab.collabStale = true
+      return
+    }
     if (Number.isSafeInteger(node.version) && Number.isSafeInteger(target.version) && node.version < target.version) return
     const incomingData = node.data || {}
     const wasShell = target.data?._shellLoading
@@ -2042,6 +2117,11 @@ export const useCanvasStore = defineStore('canvas', () => {
     delete mergedData._shellLoading
     delete mergedData._mediaLoading
     delete mergedData._originalMedia
+    delete mergedData.__collabDirty
+    if (node.position && typeof node.position === 'object') {
+      target.position = { ...(target.position || {}), ...node.position }
+    }
+    if (node.type) target.type = node.type
     if (typeof Object.assign === 'function') {
       target.data = mergedData
     }
@@ -2083,11 +2163,18 @@ export const useCanvasStore = defineStore('canvas', () => {
    */
   function exportWorkflowForSave() {
     const currentTab = getCurrentTab()
+    const collaborationWorkflow = currentTab?.workflowSpaceType === 'team' || Boolean(currentTab?.workflowId)
     return { ...sanitizeWorkflowForSave({
       nodes: nodes.value,
       edges: edges.value,
       viewport: viewport.value
-    }), clientTabId: currentTab?.id, baseNodeVersions: currentTab?.savedNodeVersions ?? undefined }
+    }),
+    clientTabId: currentTab?.id,
+    clientId: currentTab?.id,
+    protocolVersion: collaborationWorkflow ? 2 : undefined,
+    baseRevision: collaborationWorkflow ? (Number(currentTab?.collabRevision) || 0) : undefined,
+    collabEpoch: collaborationWorkflow ? (currentTab?.collabEpoch || undefined) : undefined,
+    baseNodeVersions: currentTab?.savedNodeVersions ?? undefined }
   }
 
   function captureNodeVersions(nodeList) {
@@ -2170,6 +2257,8 @@ export const useCanvasStore = defineStore('canvas', () => {
       workflowId: workflow?.id || null,
       workflowUid: workflow?.workflow_uid || null,
       savedNodeVersions: workflow?.id ? captureNodeVersions(rawNodes) : null,
+      collabRevision: workflow?.id ? (Number(workflow.collabRevision) || 0) : 0,
+      collabEpoch: workflow?.id ? (workflow.collabEpoch || null) : null,
       // 已保存工作流：记录其所属空间，切换标签时同步全局空间，保证生成任务写入对应 image/video 历史
       workflowSpaceType: workflow?.id ? (workflow.space_type === 'team' ? 'team' : 'personal') : null,
       workflowTeamId: workflow?.id && workflow.space_type === 'team' ? workflow.team_id : null,
@@ -2359,6 +2448,23 @@ export const useCanvasStore = defineStore('canvas', () => {
       }
     }
   }
+
+  function setCollaborationState({ collabRevision, collabEpoch } = {}) {
+    const currentTab = workflowTabs.value.find(item => item.id === activeTabId.value)
+    if (!currentTab) return
+    if (Number.isFinite(Number(collabRevision))) {
+      currentTab.collabRevision = Math.max(Number(currentTab.collabRevision) || 0, Number(collabRevision))
+    }
+    if (collabEpoch) currentTab.collabEpoch = String(collabEpoch)
+  }
+
+  function markCollaborationStale(reason = 'conflict') {
+    const currentTab = getCurrentTab()
+    if (currentTab) {
+      currentTab.collabStale = true
+      currentTab.collabStaleReason = reason
+    }
+  }
   
   /**
    * 在新标签中打开工作流
@@ -2377,6 +2483,8 @@ export const useCanvasStore = defineStore('canvas', () => {
           existingTab.nodes = freshNodes
           existingTab.edges = freshEdges
           existingTab.savedNodeVersions = captureNodeVersions(workflow.nodes)
+          existingTab.collabRevision = Number(workflow.collabRevision) || existingTab.collabRevision || 0
+          existingTab.collabEpoch = workflow.collabEpoch || existingTab.collabEpoch || null
           if (workflow.viewport) {
             existingTab.viewport = workflow.viewport
           }
@@ -2449,6 +2557,8 @@ export const useCanvasStore = defineStore('canvas', () => {
         workflowId: tab.workflowId,
         workflowUid: tab.workflowUid,
         savedNodeVersions: tab.savedNodeVersions ? { ...tab.savedNodeVersions } : null,
+        collabRevision: Number(tab.collabRevision) || 0,
+        collabEpoch: tab.collabEpoch || null,
         description: tab.description || '',
         workflowSpaceType: tab.workflowSpaceType,
         workflowTeamId: tab.workflowTeamId,
@@ -2487,6 +2597,8 @@ export const useCanvasStore = defineStore('canvas', () => {
         workflowId: tab.workflowId || null,
         workflowUid: tab.workflowUid || null,
         savedNodeVersions: tab.savedNodeVersions ? { ...tab.savedNodeVersions } : null,
+        collabRevision: Number(tab.collabRevision) || 0,
+        collabEpoch: tab.collabEpoch || null,
         workflowSpaceType: tab.workflowSpaceType || null,
         workflowTeamId: tab.workflowTeamId || null,
         nodes: tabNodes,
@@ -3156,6 +3268,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     clearSelection,
     
     // 连线操作
+    updateEdge,
     addEdge,
     removeEdge,
     transferNodeConnections,
@@ -3241,6 +3354,10 @@ export const useCanvasStore = defineStore('canvas', () => {
     exportWorkflow,
     exportWorkflowForSave,
     applyWorkflowSaveVersions,
+    setCollaborationState,
+    markCollaborationStale,
+    acknowledgeIncrementalResults,
+    setIncrementalWriter,
     
     // 多标签操作
     workflowTabs,

@@ -17,10 +17,47 @@ function getAuthHeaders() {
   }
 }
 
+function getCanvasClientId() {
+  try {
+    const key = 'canvas_collab_client_id'
+    const storage = typeof sessionStorage !== 'undefined' ? sessionStorage : localStorage
+    let id = storage.getItem(key)
+    if (!id) {
+      id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : `canvas-${Date.now()}-${Math.random().toString(36).slice(2)}`
+      storage.setItem(key, id)
+    }
+    return id
+  } catch {
+    return `canvas-${Date.now()}`
+  }
+}
+
 async function syncSavedWorkflowVersions(data) {
-  if (!data?.workflow?.node_versions) return
+  if (!data?.workflow?.node_versions && data?.workflow?.collab_revision == null && !data?.workflow?.collab_epoch) return
   const { useCanvasStore } = await import('@/stores/canvas/canvasStore')
-  useCanvasStore().applyWorkflowSaveVersions(data.workflow)
+  const store = useCanvasStore()
+  if (data?.workflow?.node_versions) store.applyWorkflowSaveVersions(data.workflow)
+  if (typeof store.setCollaborationState === 'function') {
+    store.setCollaborationState({
+      collabRevision: data.workflow.collab_revision,
+      collabEpoch: data.workflow.collab_epoch
+    })
+  }
+}
+
+async function syncCollaborationResponse(data) {
+  if (data?.collabRevision == null && !data?.collabEpoch) return
+  try {
+    const { useCanvasStore } = await import('@/stores/canvas/canvasStore')
+    useCanvasStore().setCollaborationState?.({
+      collabRevision: data.collabRevision,
+      collabEpoch: data.collabEpoch
+    })
+  } catch {
+    // 非 Vue/测试环境不需要同步 Pinia 状态。
+  }
 }
 
 /**
@@ -72,27 +109,12 @@ async function requestWorkflowSave(jsonBody) {
 }
 
 /**
- * 保存请求统一入口：version_conflict 时用服务端返回的当前节点版本
- * 刷新保存基线并重试一次（视频完成回写等服务端版本提升会让本地基线过期）。
+ * 保存请求统一入口：冲突直接返回，禁止用旧完整快照刷新版本后重试。
  */
 async function saveWorkflowWithConflictRetry(jsonBody) {
   jsonBody = await prepareWorkflowSaveBody(jsonBody, uploadCanvasFile)
-  try {
-    return await requestWorkflowSave(jsonBody)
-  } catch (error) {
-    if (error.code === 'version_conflict' && error.nodeVersions) {
-      await syncSavedWorkflowVersions({ workflow: { node_versions: error.nodeVersions } })
-      let merged
-      try {
-        merged = JSON.parse(jsonBody)
-      } catch (parseError) {
-        throw error
-      }
-      merged.baseNodeVersions = error.nodeVersions
-      return await requestWorkflowSave(JSON.stringify(merged))
-    }
-    throw error
-  }
+  // 协作协议下不能用服务端新版本号重试旧完整快照，否则会把其他成员新增的节点删掉。
+  return await requestWorkflowSave(jsonBody)
 }
 
 /**
@@ -180,22 +202,53 @@ export async function getWorkflowNodesBatch(workflowId, nodeIds) {
   return response.json()
 }
 
+/** 获取指定 revision 之后的协作操作。 */
+export async function getWorkflowOps(workflowId, afterRevision = 0) {
+  const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/ops?afterRevision=${encodeURIComponent(afterRevision)}`), {
+    method: 'GET',
+    credentials: 'include',
+    headers: getAuthHeaders()
+  })
+  if (!response.ok) {
+    let err = {}
+    try { err = await response.json() } catch {}
+    const error = new Error(err.error || `获取协作操作失败 (HTTP ${response.status})`)
+    error.code = err.code
+    error.status = response.status
+    throw error
+  }
+  return response.json()
+}
+
 /**
  * Phase 2.4 — 增量更新单节点（带乐观锁）
  */
-export async function patchWorkflowNode(workflowId, nodeId, patch, baseVersion) {
+export async function patchWorkflowNode(workflowId, nodeId, patch, baseVersion, collaboration = {}) {
+  const collab = {
+    protocolVersion: 2,
+    clientId: collaboration.clientId || getCanvasClientId(),
+    opId: collaboration.opId || `patch:${workflowId}:${nodeId}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+    ...collaboration
+  }
+  const body = {
+    patch,
+    baseVersion,
+    ...collab
+  }
   const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/nodes/${encodeURIComponent(nodeId)}`), {
     method: 'PATCH',
     credentials: 'include',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ patch, baseVersion })
+    headers: { ...getAuthHeaders(), 'X-Canvas-Client-Id': collab.clientId },
+    body: JSON.stringify(body)
   })
   if (response.status === 409) {
     let body = {}
     try { body = await response.json() } catch {}
     const err = new Error(body.error || '节点版本冲突')
-    err.code = 'VERSION_CONFLICT'
+    err.code = body.code || 'VERSION_CONFLICT'
     err.currentVersion = body.currentVersion
+    err.currentRevision = body.currentRevision
+    err.currentEpoch = body.currentEpoch
     throw err
   }
   if (!response.ok) {
@@ -203,21 +256,32 @@ export async function patchWorkflowNode(workflowId, nodeId, patch, baseVersion) 
     try { body = await response.json() } catch {}
     throw new Error(body.error || `更新节点失败 (HTTP ${response.status})`)
   }
-  return response.json()
+  const data = await response.json()
+  await syncCollaborationResponse(data)
+  return data
 }
 
 /**
  * Phase 2.5 — 批量提交 ops（事务执行 + 返回新 version）
  */
-export async function postWorkflowOps(workflowId, ops) {
+export async function postWorkflowOps(workflowId, ops, collaboration = {}) {
   if (!Array.isArray(ops) || ops.length === 0) {
     return { workflowId, applied: [], results: [] }
   }
+  const collab = {
+    protocolVersion: 2,
+    clientId: collaboration.clientId || getCanvasClientId(),
+    ...collaboration
+  }
+  const normalizedOps = ops.map((op, index) => ({
+    ...op,
+    opId: op.opId || op.op_id || op._id || `op:${workflowId}:${Date.now()}:${index}:${Math.random().toString(36).slice(2)}`
+  }))
   const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/ops`), {
     method: 'POST',
     credentials: 'include',
-    headers: getAuthHeaders(),
-    body: JSON.stringify({ ops })
+    headers: { ...getAuthHeaders(), 'X-Canvas-Client-Id': collab.clientId },
+    body: JSON.stringify({ ops: normalizedOps, ...collab })
   })
   if (!response.ok) {
     let body = {}
@@ -227,7 +291,9 @@ export async function postWorkflowOps(workflowId, ops) {
     err.body = body
     throw err
   }
-  return response.json()
+  const data = await response.json()
+  await syncCollaborationResponse(data)
+  return data
 }
 
 /**

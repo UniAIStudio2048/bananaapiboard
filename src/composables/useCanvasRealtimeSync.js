@@ -54,10 +54,13 @@ export function useCanvasRealtimeSync(options = {}) {
   const lastError = ref(null)
   let socket = null
   let currentWorkflowId = null
+  const seenOpIds = new Set()
+  let collabRevision = 0
+  let collabEpoch = null
 
   function applyRemoteNode(node) {
     if (!node || !node.id) return
-    try { store.applyIncrementalNode(node) } catch (err) { lastError.value = err }
+    try { store.applyIncrementalNode(node, { remote: true }) } catch (err) { lastError.value = err }
   }
 
   async function resyncFromManifest() {
@@ -65,6 +68,11 @@ export function useCanvasRealtimeSync(options = {}) {
     if (!wfId) return
     try {
       const manifest = await api.getWorkflowManifest(wfId)
+      collabRevision = Math.max(collabRevision, Number(manifest?.collabRevision) || 0)
+      collabEpoch = manifest?.collabEpoch || collabEpoch
+      if (typeof store.setCollaborationState === 'function') {
+        store.setCollaborationState({ collabRevision, collabEpoch })
+      }
       const nodeIndex = (manifest && manifest.nodeIndex) || []
       const localNodes = store.nodes || []
       const localById = new Map()
@@ -95,10 +103,27 @@ export function useCanvasRealtimeSync(options = {}) {
     }
   }
 
+  async function primeCollaborationState() {
+    const wfId = currentWorkflowId
+    if (!wfId) return
+    try {
+      const manifest = await api.getWorkflowManifest(wfId)
+      collabRevision = Math.max(collabRevision, Number(manifest?.collabRevision) || 0)
+      collabEpoch = manifest?.collabEpoch || collabEpoch
+      if (typeof store.setCollaborationState === 'function') {
+        store.setCollaborationState({ collabRevision, collabEpoch })
+      }
+    } catch (err) {
+      lastError.value = err
+      if (typeof options.onError === 'function') options.onError(err)
+    }
+  }
+
   function buildSocket(workflowId) {
     return socketFactory({
       workflowId,
       baseUrl: options.baseUrl,
+      lastRevision: collabRevision,
       onStateChange: (st) => {
         connectionState.value = st
         if (typeof options.onStateChange === 'function') options.onStateChange(st)
@@ -107,26 +132,56 @@ export function useCanvasRealtimeSync(options = {}) {
         lastError.value = err
         if (typeof options.onError === 'function') options.onError(err)
       },
-      onHello: () => { /* 首次问候不做事，节点初始内容由 incrementalLoader 拉 */ },
-      onOps: (ops /* , fromClient */) => {
+      onHello: (payload = {}) => {
+        if (collabEpoch && payload.collabEpoch && collabEpoch !== payload.collabEpoch) {
+          store.markCollaborationStale?.('workflow_epoch_conflict')
+        }
+        collabRevision = Math.max(collabRevision, Number(payload.collabRevision) || 0)
+        collabEpoch = payload.collabEpoch || collabEpoch
+        if (typeof store.setCollaborationState === 'function') {
+          store.setCollaborationState({ collabRevision, collabEpoch })
+        }
+      },
+      onOps: (ops, _fromClient, metadata = {}) => {
         // ops 服务端已抑制回声；这里仅消费远端事件
         if (!Array.isArray(ops)) return
+        if (Number.isFinite(Number(metadata.collabRevision))) {
+          collabRevision = Math.max(collabRevision, Number(metadata.collabRevision))
+          store.setCollaborationState?.({ collabRevision, collabEpoch: metadata.collabEpoch || collabEpoch })
+        }
         for (const op of ops) {
           if (!op || !op.target) continue
+          const opId = op.opId || op.op_id || op._id
+          if (opId && seenOpIds.has(opId)) continue
+          if (opId) seenOpIds.add(opId)
+          if (Number.isFinite(Number(op.revision))) collabRevision = Math.max(collabRevision, Number(op.revision))
           if (op.target === 'node') {
             const payload = op.payload || {}
             if (op.op === 'delete') {
-              try { store.removeNode && store.removeNode(payload.nodeId || payload.id) } catch {}
+              try { store.removeNode && store.removeNode(payload.nodeId || payload.id, { remote: true }) } catch {}
             } else if (payload && (payload.id || payload.nodeId)) {
               applyRemoteNode({ id: payload.id || payload.nodeId, ...payload })
             }
+          } else if (op.target === 'edge') {
+            try {
+              if (op.op === 'delete') store.removeEdge && store.removeEdge(payload.edgeId || payload.id, { remote: true })
+              else if (op.op === 'add') store.addEdge && store.addEdge(payload, { remote: true })
+              else if (op.op === 'update') store.updateEdge && store.updateEdge(payload.id || payload.edgeId, payload, { remote: true })
+            } catch (err) { lastError.value = err }
           }
-          // edge ops 在后续 Phase 接入
         }
       },
       onNodePatched: (nodeId, node, version /* , fromClient */) => {
         if (!nodeId || !node) return
         applyRemoteNode({ ...node, id: nodeId, version: version || node.version })
+      },
+      onResyncRequired: (payload = {}) => {
+        if (collabEpoch && payload.collabEpoch && collabEpoch !== payload.collabEpoch) {
+          store.markCollaborationStale?.('workflow_epoch_conflict')
+        }
+        collabRevision = Number(payload.collabRevision) || collabRevision
+        collabEpoch = payload.collabEpoch || collabEpoch
+        resyncFromManifest()
       },
       onResync: () => { resyncFromManifest() }
     })
@@ -138,8 +193,11 @@ export function useCanvasRealtimeSync(options = {}) {
     if (socket && currentWorkflowId === wfId) return
     if (socket) socket.disconnect()
     currentWorkflowId = wfId
+    seenOpIds.clear()
     socket = buildSocket(wfId)
     socket.connect()
+    // 首次连接只读取 revision/epoch；节点内容由现有 loader 或 hello/resume 补同步。
+    primeCollaborationState()
   }
 
   function disconnect() {

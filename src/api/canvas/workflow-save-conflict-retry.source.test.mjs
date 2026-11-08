@@ -17,19 +17,11 @@ test('save failures expose server error code and node versions for conflict reco
   )
 })
 
-test('version conflicts refresh the save baseline and retry once', () => {
+test('version conflicts are surfaced without retrying a stale full snapshot', () => {
   const retry = source.match(/async function saveWorkflowWithConflictRetry[\s\S]*?\n\}/)
   assert.ok(retry, 'a conflict-retry wrapper should exist')
-  assert.match(
-    retry[0],
-    /error\.code === 'version_conflict' && error\.nodeVersions/,
-    'retry must be gated on server-reported version conflicts with fresh versions'
-  )
-  assert.match(
-    retry[0],
-    /merged\.baseNodeVersions = error\.nodeVersions/,
-    'retry must replace the stale baseline with the server versions'
-  )
+  assert.doesNotMatch(retry[0], /merged\.baseNodeVersions = error\.nodeVersions/)
+  assert.match(retry[0], /return await requestWorkflowSave\(jsonBody\)/)
   assert.match(
     source,
     /saveWorkflowWithConflictRetry\(jsonBody\)/,

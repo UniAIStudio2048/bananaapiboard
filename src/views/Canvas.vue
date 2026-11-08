@@ -13,6 +13,8 @@ import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useTeamStore } from '@/stores/team'
 import { loadWorkflow as loadWorkflowFromServer } from '@/api/canvas/workflow'
 import { useCanvasRealtimeSync } from '@/composables/useCanvasRealtimeSync'
+import { createIncrementalWriter, WriterStorage } from '@/stores/canvas/incrementalWriter'
+import { postWorkflowOps } from '@/api/canvas/workflow'
 import { useControlGroupCollapse } from '@/composables/useControlGroupCollapse'
 import CanvasBoard from '@/components/canvas/CanvasBoard.vue'
 import CanvasToolbar from '@/components/canvas/CanvasToolbar.vue'
@@ -157,6 +159,44 @@ try {
 } catch (wsErr) {
   console.warn('[Canvas] WebSocket 同步未启用:', wsErr.message)
 }
+
+// 团队协作工作流使用节点/连线增量写入；完整快照仅保留为显式兼容保存。
+const collaborationWriter = createIncrementalWriter({
+  api: { postWorkflowOps },
+  storage: new WriterStorage(),
+  workflowIdRef: () => canvasStore.getCurrentTab()?.workflowId || null,
+  options: {
+    allowOfflineReplay: false,
+    collaboration: () => {
+      const tab = canvasStore.getCurrentTab()
+      return {
+        protocolVersion: 2,
+        clientId: tab?.id || undefined,
+        baseRevision: Number(tab?.collabRevision) || 0,
+        collabEpoch: tab?.collabEpoch || undefined
+      }
+    },
+    onFlushResult: ({ response } = {}) => {
+      canvasStore.acknowledgeIncrementalResults?.(
+        response?.results,
+        response?.collabRevision
+      )
+    },
+    onError: (err) => {
+      if (err?.status === 409 || ['workflow_revision_conflict', 'workflow_epoch_conflict', 'version_conflict'].includes(err?.body?.code || err?.code)) {
+        canvasStore.markCollaborationStale?.(err?.body?.code || err?.code || 'conflict')
+        displayToast('协作版本已变化，请刷新工作流后继续编辑', 'warning', 5000)
+      }
+      console.warn('[CanvasCollab] 增量写入暂停:', err?.message || err)
+    }
+  }
+})
+canvasStore.setIncrementalWriter(collaborationWriter)
+onUnmounted(() => {
+  collaborationWriter.flush().catch(() => {})
+  collaborationWriter.dispose()
+  canvasStore.setIncrementalWriter(null)
+})
 
 // 画布底部Logo状态
 const brandConfig = computed(() => getBrand())
@@ -1316,6 +1356,14 @@ async function autoSaveWorkflow(options = {}) {
   if (!workflowData.nodes || workflowData.nodes.length === 0) {
     return
   }
+
+  // 团队工作流的服务端写入只走增量协议；自动保存仅保留本地恢复快照，
+  // 避免旧的完整节点集合覆盖其他成员刚提交的节点。
+  if (currentTab.workflowId && currentTab.workflowSpaceType === 'team') {
+    saveCurrentWorkflowSession()
+    await collaborationWriter.flush()
+    return
+  }
   
   // 如果是已保存的工作流且没有变更，跳过
   if (currentTab.workflowId && !currentTab.hasChanges && !force) {
@@ -2171,6 +2219,17 @@ async function persistCurrentWorkflowOnExit(reason = 'exit', options = {}) {
   }
   const payload = buildExitSavePayload(state)
   if (!payload) return false
+
+  if (state.currentTab?.workflowId && state.currentTab.workflowSpaceType === 'team') {
+    try {
+      await collaborationWriter.flush()
+      saveCurrentWorkflowSession()
+      return true
+    } catch (error) {
+      console.warn(`[Canvas] ${reason} 团队协作增量提交失败，已保留本地恢复:`, error?.message || error)
+      return false
+    }
+  }
 
   const persistKey = `${payload.id}:${state.currentTab?.hasChanges}:${payload.nodes.length}:${payload.edges?.length || 0}`
   if (exitPersistInFlight && lastExitPersistKey === persistKey) {

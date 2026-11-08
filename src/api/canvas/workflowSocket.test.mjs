@@ -101,6 +101,7 @@ test('onOps / onNodePatched / onHello 正确解码消息', () => {
   const ws = FakeWebSocket.instances[0]
   ws._open()
   ws._msg({ type: 'hello', payload: { workflowId: 'wf-1', version: 3 } })
+  assert.equal(JSON.parse(ws.sent.at(-1)).type, 'resume')
   ws._msg({ type: 'ops', payload: { ops: [{ op: 'add', target: 'node' }], fromClient: 'X' } })
   ws._msg({ type: 'node_patched', payload: { nodeId: 'n1', node: { id: 'n1' }, version: 8, fromClient: 'Y' } })
 
