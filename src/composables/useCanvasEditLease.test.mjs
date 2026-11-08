@@ -158,3 +158,25 @@ test('定时心跳续期；pagehide 释放所有打开的工作流', async () =>
   env.listeners.pagehide()
   assert.deepEqual(lease.calls.filter(c => c[0] === 'release').map(c => c[1]), ['wf-1', 'wf-2'])
 })
+
+test('从“已释放”重新获得编辑权（如页面重新可见）时同步最新内容', async () => {
+  const lease = makeLease()
+  const { env, log } = setup({ lease })
+  await flush()
+  lease.states['wf-1'] = { mode: 'released' }
+  lease.results.acquire['wf-1'] = { mode: 'editor', token: 7 }
+  env.listeners['doc:visibilitychange']()
+  await flush()
+  assert.deepEqual(log, [['reload', 'wf-1']])
+})
+
+test('租约接口不可用（unknown）后恢复编辑权不重新加载，避免丢弃本地未保存修改', async () => {
+  const lease = makeLease()
+  const { env, log } = setup({ lease })
+  await flush()
+  lease.states['wf-1'] = { mode: 'unknown' }
+  lease.results.acquire['wf-1'] = { mode: 'editor', token: 7 }
+  env.listeners['doc:visibilitychange']()
+  await flush()
+  assert.deepEqual(log, [])
+})

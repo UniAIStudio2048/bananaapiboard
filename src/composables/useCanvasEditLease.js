@@ -65,9 +65,10 @@ export function useCanvasEditLease({
     const state = lease.getState(id)
     if (state?.mode === 'editor' || state?.mode === 'pending') return
     if (state?.mode === 'readonly' || state?.mode === 'released' || state?.mode === 'unknown') {
-      const wasReadonly = state.mode === 'readonly'
+      // 只读或已释放期间其他会话可能已编辑：重新获得编辑权后同步最新内容，避免旧画布被自动保存覆盖
+      const mayBeStale = state.mode === 'readonly' || state.mode === 'released'
       const result = await lease.acquire(id)
-      if (result.mode === 'editor' && wasReadonly) {
+      if (result.mode === 'editor' && mayBeStale) {
         await reload(id)
         return
       }

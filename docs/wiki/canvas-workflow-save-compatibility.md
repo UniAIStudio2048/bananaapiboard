@@ -21,7 +21,7 @@ timestamp: 2026-11-08
 
 - [canvasEditLease](../../src/utils/canvasEditLease.js) 维护每个工作流的 `editor` / `readonly` / `pending` / `released` / `unknown` 状态；会话标识复用 `sessionStorage` 的 `canvas_collab_client_id`。
 - [workflow API](../../src/api/canvas/workflow.js) 是唯一拦截点：整份保存、`patchWorkflowNode`、`postWorkflowOps` 都携带 `X-Canvas-Session-Id` 与（编辑者的）`X-Canvas-Lease-Token`；只读时直接抛出 `edit_lease_readonly` 不发请求；服务端返回 `edit_lease_lost` / `edit_lease_held` 时切为只读。
-- [useCanvasEditLease](../../src/composables/useCanvasEditLease.js) 为每个已打开的工作流标签页获取租约（切换画布标签不释放），每 20 秒心跳，页面关闭时释放；收到交接请求先保存再让出；抢占成功或只读时编辑方保存后重新加载并保留视口。
+- [useCanvasEditLease](../../src/composables/useCanvasEditLease.js) 为每个已打开的工作流标签页获取租约（切换画布标签不释放），每 20 秒心跳，页面关闭时释放；收到交接请求先保存再让出；抢占成功、从只读或已释放重新获得编辑权、只读时编辑方保存后，都从服务端（增量表优先）重新加载并保留视口。
 - 只读界面：[CanvasBoard](../../src/components/canvas/CanvasBoard.vue) 的 `editReadonly` 禁止拖拽、连线、选择、双击新建、右键、粘贴和拖入文件；左侧工具栏 `inert`；[CanvasEditLeaseBanner](../../src/components/canvas/CanvasEditLeaseBanner.vue) 显示持有者并提供抢占。
 - 租约接口不可用（例如后端未升级）时状态为 `unknown`，按旧协议保存。
 - 服务端返回 `missing: true`（节点/连线在增量表中缺失）时，[canvasStore](../../src/stores/canvas/canvasStore.js) 的 `acknowledgeIncrementalResults` 用本地完整数据补发 add。
