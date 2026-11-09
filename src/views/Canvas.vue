@@ -331,10 +331,24 @@ watch(() => canvasStore.activeTabId, () => {
 // 历史记录面板
 const showHistoryPanel = ref(false)
 const historyPickerPosition = ref(null)
+// 元素编辑等组件从历史图库选一张图片时的回调
+let historyImagePickHandler = null
 
 watch(showHistoryPanel, visible => {
-  if (!visible) historyPickerPosition.value = null
+  if (!visible) {
+    historyPickerPosition.value = null
+    historyImagePickHandler = null
+  }
 })
+
+function handlePickHistoryImage(event) {
+  const onSelect = event.detail?.onSelect
+  if (typeof onSelect !== 'function') return
+  closeLeftPanels()
+  historyImagePickHandler = onSelect
+  historyPickerPosition.value = { x: 0, y: 0 }
+  showHistoryPanel.value = true
+}
 
 watch(() => canvasStore.activeTabId, () => {
   if (historyPickerPosition.value) closeHistoryPanel()
@@ -1007,6 +1021,13 @@ function openHistoryPicker(flowPosition = null) {
 
 async function handleHistorySelection(items) {
   if (!historyPickerPosition.value || !items.length) return
+  if (historyImagePickHandler) {
+    const onSelect = historyImagePickHandler
+    const image = items.find(item => item.type === 'image' && item.url)
+    closeHistoryPanel()
+    if (image) onSelect(image)
+    return
+  }
   const position = { ...historyPickerPosition.value }
   items.forEach((item, index) => {
     handleHistoryApply({ ...item, workflow_snapshot: null }, {
@@ -3990,6 +4011,7 @@ onMounted(async () => {
   document.addEventListener('keydown', handleKeyDown)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   window.addEventListener('canvas-edge-style-change', handleCanvasEdgeStyleChanged)
+  window.addEventListener('canvas:pick-history-image', handlePickHistoryImage)
   
   // 延迟设置画布就绪状态，确保转场动画完成后再渲染 VueFlow
   // 这解决了转场动画与 VueFlow 初始化冲突导致画布卡住的问题
@@ -4021,6 +4043,7 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeyDown)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   window.removeEventListener('canvas-edge-style-change', handleCanvasEdgeStyleChanged)
+  window.removeEventListener('canvas:pick-history-image', handlePickHistoryImage)
   window.removeEventListener('beforeunload', handleBeforeUnload)
   window.removeEventListener('pagehide', handlePageHide)
   document.removeEventListener('visibilitychange', handleVisibilityChange)

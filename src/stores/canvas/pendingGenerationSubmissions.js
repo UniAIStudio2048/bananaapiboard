@@ -228,10 +228,10 @@ export async function recoverPendingCanvasVideoSubmissions({
   now = Date.now
 } = {}) {
   if (!canvasStore || typeof fetchSubmissionStatus !== 'function') {
-    return { checked: 0, recovered: 0, completed: 0, failed: 0, notFound: 0, skippedDeleted: 0, missingNode: 0, errors: 0 }
+    return { checked: 0, recovered: 0, completed: 0, failed: 0, notFound: 0, skippedDeleted: 0, superseded: 0, missingNode: 0, errors: 0 }
   }
 
-  const result = { checked: 0, recovered: 0, completed: 0, failed: 0, notFound: 0, skippedDeleted: 0, missingNode: 0, errors: 0 }
+  const result = { checked: 0, recovered: 0, completed: 0, failed: 0, notFound: 0, skippedDeleted: 0, superseded: 0, missingNode: 0, errors: 0 }
   const submissions = getPendingGenerationSubmissions({ type: 'video', includeDeleted: true, now })
 
   for (const submission of submissions) {
@@ -248,6 +248,13 @@ export async function recoverPendingCanvasVideoSubmissions({
         status: 'waiting-node'
       }), now)
       result.missingNode += 1
+      continue
+    }
+
+    // 节点在这条提交之后又发起了新的生成：旧提交的结果不能覆盖本次生成（否则"生成中"会跳回旧视频）
+    if (Number(target.node?.data?.processingStartedAt) > Number(submission.createdAt)) {
+      removeGenerationSubmission(submission.submissionId, { now })
+      result.superseded += 1
       continue
     }
 

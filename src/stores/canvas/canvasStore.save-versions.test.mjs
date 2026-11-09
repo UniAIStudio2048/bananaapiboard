@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { parse } from '@babel/parser'
 import { sanitizeWorkflowForSave } from '../../utils/workflowSaveSanitizer.js'
+import { isStaleTaskResultForInFlightNode, TASK_RESULT_FIELDS } from '../../utils/canvasTaskResultGuard.js'
 
 const source = readFileSync(new URL('./canvasStore.js', import.meta.url), 'utf8')
 const ast = parse(source, { sourceType: 'module' })
@@ -22,7 +23,7 @@ function harness() {
   const workflowTabs = { value: [{ id: 'tab-a', workflowId: 'wf-a', savedNodeVersions: { media: 7, removed: 4 }, nodes: [{ id: 'media', version: 7, data: { output: { url: 'https://example.com/result.png' } } }] }, { id: 'tab-b', workflowId: 'wf-b', savedNodeVersions: { other: 2 }, nodes: [{ id: 'other', version: 2, data: {} }] }] }
   const context = {
     workflowTabs, activeTabId: { value: 'tab-a' }, nodes: { value: structuredClone(workflowTabs.value[0].nodes) },
-    edges: { value: [] }, viewport: { value: {} }, sanitizeWorkflowForSave,
+    edges: { value: [] }, viewport: { value: {} }, sanitizeWorkflowForSave, isStaleTaskResultForInFlightNode, TASK_RESULT_FIELDS,
     getCurrentTab: () => workflowTabs.value.find(tab => tab.id === context.activeTabId.value), console: { warn() {} },
     createSkeletonNodes: nodes => structuredClone(nodes), cleanEdges: edges => edges,
     switchToTab: id => { context.activeTabId.value = id; context.nodes.value = structuredClone(workflowTabs.value.find(tab => tab.id === id).nodes) }
@@ -122,6 +123,30 @@ test('a late older media event cannot replace a newer result while retaining its
   const saved = h.exportWorkflowForSave()
   assert.equal(saved.nodes[0].data.output.url, 'https://example.com/latest.mp4')
   assert.equal(saved.baseNodeVersions.media, 9)
+})
+
+test('a remote node still carrying the previous task result cannot revert a node being regenerated', () => {
+  const h = harness()
+  h.nodes.value[0].data = { prompt: 'p', status: 'processing', processingStartedAt: 2000, taskId: null, output: null }
+  h.applyIncrementalNode({ id: 'media', version: 8, data: {
+    prompt: 'p', status: 'success', progress: null, taskId: 'cgt-old', processingStartedAt: 1000,
+    output: { type: 'video', url: 'https://example.com/old.mp4' }
+  } }, { remote: true })
+  const data = h.nodes.value[0].data
+  assert.equal(data.status, 'processing')
+  assert.equal(data.output, null)
+  assert.equal(data.processingStartedAt, 2000)
+  assert.equal(h.nodes.value[0].version, 8, 'version still advances so the next full save does not conflict')
+})
+
+test('a remote result of the current generation still completes the node', () => {
+  const h = harness()
+  h.nodes.value[0].data = { status: 'processing', processingStartedAt: 2000, taskId: 'cgt-new', output: null }
+  h.applyIncrementalNode({ id: 'media', version: 8, data: {
+    status: 'success', taskId: 'cgt-new', processingStartedAt: 2000, output: { type: 'video', url: 'https://example.com/new.mp4' }
+  } }, { remote: true })
+  assert.equal(h.nodes.value[0].data.status, 'success')
+  assert.equal(h.nodes.value[0].data.output.url, 'https://example.com/new.mp4')
 })
 
 test('reopening an authoritative empty workflow also clears the old tab nodes', () => {

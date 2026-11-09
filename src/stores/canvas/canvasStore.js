@@ -8,6 +8,7 @@ import { useVueFlow } from '@vue-flow/core'
 import { t } from '@/i18n'
 import { useTeamStore } from '@/stores/team'
 import { sanitizeWorkflowForSave } from '@/utils/workflowSaveSanitizer'
+import { isStaleTaskResultForInFlightNode, TASK_RESULT_FIELDS } from '@/utils/canvasTaskResultGuard'
 import { syncPastedNodeSelection } from '@/utils/canvasPasteSelection'
 import { sanitizeNodesForHistoryRestore } from './historyRestore'
 import { createOpHistory } from './opHistory'
@@ -2090,7 +2091,16 @@ export const useCanvasStore = defineStore('canvas', () => {
       return
     }
     if (Number.isSafeInteger(node.version) && Number.isSafeInteger(target.version) && node.version < target.version) return
-    const incomingData = node.data || {}
+    let incomingData = node.data || {}
+    // 节点已重新提交生成，远端带回的仍是上一次任务的结果：丢弃结果字段，避免"生成中"跳回旧视频。
+    // 只判断带任务标识的完整节点；不带这些字段的局部补丁保持原合并行为。
+    const carriesTaskIdentity = ['processingStartedAt', 'taskId', 'soraTaskId']
+      .some(field => Object.prototype.hasOwnProperty.call(incomingData, field))
+    if (carriesTaskIdentity && isStaleTaskResultForInFlightNode(target.data, incomingData)) {
+      incomingData = { ...incomingData }
+      for (const field of TASK_RESULT_FIELDS) delete incomingData[field]
+      console.warn(`[Canvas Store] applyIncrementalNode: 忽略上一次任务的结果，保留本次生成状态 (nodeId=${node.id})`)
+    }
     const wasShell = target.data?._shellLoading
     const localData = { ...(target.data || {}) }
     if (localData._mediaLoading && localData._originalMedia) {

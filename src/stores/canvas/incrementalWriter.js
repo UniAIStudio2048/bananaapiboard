@@ -168,6 +168,7 @@ export function createIncrementalWriter({
   let queue = []
   let timer = null
   let flushing = false
+  let inFlight = null
 
   function getWorkflowId() {
     if (typeof workflowIdRef === 'function') return workflowIdRef()
@@ -210,9 +211,21 @@ export function createIncrementalWriter({
     scheduleFlush()
   }
 
-  /** 立即 flush（如：用户主动保存 / 切 tab） */
+  /**
+   * 立即 flush（如：用户主动保存 / 切 tab）。
+   * 已有批次在发送时等它完成，再把期间新排队的 op 发出去：整份保存前的 flush 必须真正落库，
+   * 否则高延迟下新状态（如视频重新生成的 processing）留在队列里，保存冲突时会被服务端旧结果覆盖。
+   */
   async function flush() {
-    if (flushing) return { skipped: true, reason: 'in_flight' }
+    if (inFlight) {
+      const previous = await inFlight.catch(() => null)
+      return queue.length > 0 ? flush() : (previous || { skipped: true, reason: 'in_flight' })
+    }
+    inFlight = flushQueue().finally(() => { inFlight = null })
+    return inFlight
+  }
+
+  async function flushQueue() {
     if (queue.length === 0) {
       // 看看 IndexedDB 里有没有上次失败的，趁机回放
       return await replayPersisted()

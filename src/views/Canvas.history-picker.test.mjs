@@ -61,6 +61,7 @@ test('history imports preserve result data, insert at the requested position and
   const context = {
     console: { log() {} }, window: { innerWidth: 1200, innerHeight: 800 }, t: key => key,
     historyPickerPosition: { value: { x: 123, y: 456 } },
+    historyImagePickHandler: null,
     canvasStore: { viewport: { x: -50, y: -100, zoom: 2 }, addNode: node => { added.push(node); return node } },
     closeHistoryPanel: () => { closed = true },
     autoSaveWorkflow: async options => saved.push(options)
@@ -122,4 +123,21 @@ test('empty confirmation and stale confirmation after closing do not insert or s
   await select([])
   context.historyPickerPosition.value = null
   await select([{ id: 1, type: 'image', url: '/image.png' }])
+})
+
+test('a history image pick request returns the chosen image instead of inserting nodes', async () => {
+  let picked = null
+  let closed = false
+  const context = {
+    historyPickerPosition: { value: { x: 0, y: 0 } },
+    historyImagePickHandler: item => { picked = item },
+    closeHistoryPanel: () => { closed = true },
+    handleHistoryApply: () => { throw new Error('should not insert') },
+    autoSaveWorkflow: async () => { throw new Error('should not save') }
+  }
+  const select = loadFunction(canvas, 'handleHistorySelection', context)
+  await select([{ id: 2, type: 'video', url: '/v.mp4' }, { id: 3, type: 'image', url: '/ref.png' }])
+  assert.equal(closed, true)
+  assert.deepEqual(picked, { id: 3, type: 'image', url: '/ref.png' })
+  assert.match(canvas, /window\.addEventListener\('canvas:pick-history-image', handlePickHistoryImage\)/)
 })

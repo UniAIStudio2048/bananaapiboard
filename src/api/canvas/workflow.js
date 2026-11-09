@@ -5,6 +5,7 @@ import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { uploadCanvasFile } from './direct-upload.js'
 import { prepareWorkflowSaveBody } from '@/utils/workflowMediaUpload.js'
 import { canvasEditLease, getCanvasSessionId } from './editLease.js'
+import { isStaleTaskResultForInFlightNode } from '@/utils/canvasTaskResultGuard.js'
 
 /**
  * 获取带认证的请求头（包含用户token和租户信息）
@@ -60,8 +61,11 @@ async function rebaseConflictingNodes(body, serverVersions) {
     const result = await getWorkflowNodesBatch(body.id, ids.slice(i, i + 50))
     serverNodes.push(...(result?.nodes || []))
   }
+  const localById = new Map((body.nodes || []).map(node => [node?.id, node]))
   const patches = new Map()
   for (const node of serverNodes) {
+    // 本地已重新提交生成而服务端仍是上一次任务的结果（增量写入尚未落库）：保留本地，避免节点跳回旧视频
+    if (isStaleTaskResultForInFlightNode(localById.get(node?.id)?.data, node?.data)) continue
     const data = {}
     for (const field of SERVER_OWNED_FIELDS) {
       if (Object.prototype.hasOwnProperty.call(node?.data || {}, field)) data[field] = node.data[field]

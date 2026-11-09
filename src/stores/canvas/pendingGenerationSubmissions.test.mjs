@@ -244,3 +244,43 @@ test('writes completed recovered video output without starting another poller', 
   })
   assert.equal(getPendingGenerationSubmissions({ type: 'video' }).length, 0)
 })
+
+test('a leftover submission from an earlier generation does not overwrite the node being regenerated', async () => {
+  const old = createPendingGenerationSubmission({ type: 'video', nodeId: 'node-video-1', tabId: 'tab-a', now: () => 1000 })
+  markSubmissionTaskCreated(old.submissionId, 'cgt-old', { now: () => 1000 })
+
+  const result = await recoverPendingCanvasVideoSubmissions({
+    canvasStore: {
+      activeTabId: 'tab-a',
+      nodes: [{ id: 'node-video-1', type: 'video', data: { status: 'processing', processingStartedAt: 5000, taskId: null } }],
+      updateNodeData() {
+        throw new Error('stale submission must not update the regenerated node')
+      }
+    },
+    fetchSubmissionStatus: async () => ({ task_id: 'cgt-old', status: 'SUCCESS', video_url: 'https://cdn.example/old.mp4' }),
+    ensureTaskPolling() {
+      throw new Error('stale submission must not start polling')
+    },
+    now: () => 6000
+  })
+
+  assert.equal(result.superseded, 1)
+  assert.equal(result.completed, 0)
+  assert.equal(getPendingGenerationSubmissions({ type: 'video', now: () => 6000 }).length, 0)
+})
+
+test('the submission of the current generation is still recovered', async () => {
+  createPendingGenerationSubmission({ type: 'video', nodeId: 'node-video-1', tabId: 'tab-a', now: () => 5100 })
+  const patches = []
+  const result = await recoverPendingCanvasVideoSubmissions({
+    canvasStore: {
+      activeTabId: 'tab-a',
+      nodes: [{ id: 'node-video-1', type: 'video', data: { status: 'processing', processingStartedAt: 5000 } }],
+      updateNodeData(nodeId, patch) { patches.push(patch) }
+    },
+    fetchSubmissionStatus: async () => ({ task_id: 'cgt-new', status: 'SUCCESS', video_url: 'https://cdn.example/new.mp4' }),
+    now: () => 6000
+  })
+  assert.equal(result.completed, 1)
+  assert.equal(patches[0].output.url, 'https://cdn.example/new.mp4')
+})

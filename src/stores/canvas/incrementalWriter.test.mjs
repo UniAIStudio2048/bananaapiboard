@@ -216,4 +216,38 @@ function makeApi({ failTimes = 0, captureCalls = true } = {}) {
   assert.equal(api.calls, 2)
 }
 
+// ---------- 显式 flush 遇到进行中的批次：等它完成后把新排队的 op 也发出去 ----------
+{
+  const storage = makeStorage()
+  let resolveFirst
+  const sent = []
+  const api = {
+    postWorkflowOps: (wfId, ops) => {
+      sent.push(ops.map(o => o.id))
+      return new Promise(resolve => {
+        const done = () => resolve({ applied: ops.map(o => o._id), results: [] })
+        if (sent.length === 1) resolveFirst = done
+        else done()
+      })
+    }
+  }
+  const w = createIncrementalWriter({
+    api, storage,
+    workflowIdRef: () => 'wf-8',
+    options: { debounceMs: 10_000 }
+  })
+  w.enqueue({ op: 'update', target: 'node', id: 'prompt-edit', payload: {} })
+  const first = w.flush()
+  // 提交生成：节点设为 processing 后整份保存前 flush
+  w.enqueue({ op: 'update', target: 'node', id: 'processing', payload: {} })
+  const beforeSave = w.flush()
+  await sleep(5)
+  resolveFirst()
+  const result = await beforeSave
+  await first
+  assert.deepEqual(sent, [['prompt-edit'], ['processing']], '保存前的 flush 必须把排队中的 processing 写入发出去')
+  assert.equal(result.ok, true)
+  w.dispose()
+}
+
 console.log('incrementalWriter unit tests passed')

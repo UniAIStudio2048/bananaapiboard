@@ -3,7 +3,7 @@ type: guide
 title: 画布工作流保存协议兼容性
 description: 记录个人旧工作流版本冲突恢复与团队协作保存元数据的边界。
 tags: [bananaapiboard, canvas, workflow, collaboration]
-timestamp: 2026-11-08
+timestamp: 2026-11-09
 ---
 
 # 画布工作流保存协议兼容性
@@ -32,6 +32,8 @@ timestamp: 2026-11-08
 - 收到 `version_conflict` 且响应包含 `node_versions` 时，只拉取版本变化的节点，用服务端写回字段（`output`、`status`、`progress`、`error`、`audioUrl`、`audioData`、`scriptDocument`、`scriptSummary`）覆盖本地，其余字段保留本地修改，再按服务端基线重试一次。
 - `protocolVersion: 2` 的协作快照仅在持有编辑权时才这样重试；未持有时冲突必须重新加载。
 - 个人工作流同时走增量写入与整份保存：增量写入确认的节点版本同步到 `savedNodeVersions`；整份保存前先 flush 增量写入；冲突按每次返回的最新基线最多重试 3 次（2026-11-08 线上 706020456707 提交视频时增量写入在重试间隙推进版本导致二次冲突）。
+- 旧任务结果不覆盖重新生成（2026-11-09 海外站视频节点“生成中”跳回旧视频）：[canvasTaskResultGuard](../../src/utils/canvasTaskResultGuard.js) 以本地 `processingStartedAt`（保存与提交前写入）判断，服务端终态结果开始时间更早或缺失、且不是同一 `taskId` 时视为旧任务。冲突重试跳过这类节点，`applyIncrementalNode` 丢弃其结果字段（仍推进版本），[视频提交恢复](../../src/stores/canvas/pendingGenerationSubmissions.js) 丢弃创建时间早于节点本次开始时间的残留提交记录。
+- [incrementalWriter](../../src/stores/canvas/incrementalWriter.js) 的 `flush()` 遇到进行中的批次时等待其完成并发出期间新排队的写入，保证整份保存前的 flush 真正落库。
 - 本地开发：[vite.config.js](../../vite.config.js) 代理 `/ws`，否则实时推送连不上（线上由 Nginx 转发）。
 
 ## 验证
@@ -39,6 +41,8 @@ timestamp: 2026-11-08
 - `node --test src/utils/canvasEditLease.test.mjs src/composables/useCanvasEditLease.test.mjs`
 - `node src/api/canvas/workflow.save-versions.test.mjs`
 - `node src/stores/canvas/canvasStore.save-versions.test.mjs`
+- `node --test src/utils/canvasTaskResultGuard.test.mjs src/stores/canvas/pendingGenerationSubmissions.test.mjs`
+- `node src/stores/canvas/incrementalWriter.test.mjs`
 - `node src/utils/workflowSaveEntrypoints.test.mjs`
 - `npm run build`
 

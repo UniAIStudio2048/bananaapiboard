@@ -13,7 +13,7 @@ defineOptions({
  * - 选中输出节点时：底部弹出配置面板
  */
 import { ref, computed, inject, watch, onMounted, onUnmounted, nextTick, defineAsyncComponent } from 'vue'
-import { Upload, ImagePlus, Film, Layers, PanelsTopLeft, ChevronRight } from '@lucide/vue'
+import { Upload, ImagePlus, Film, Layers, PanelsTopLeft, ChevronRight, SquareMousePointer } from '@lucide/vue'
 import { Handle, Position, useVueFlow } from '@vue-flow/core'
 import { useCanvasStore, useUploadManager } from '@/stores/canvas'
 import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
@@ -80,6 +80,10 @@ import PromptMediaTag from '../PromptMediaTag.vue'
 import PromptTranslateButton from '../PromptTranslateButton.vue'
 import VideoParametersDropdown from '../VideoParametersDropdown.vue'
 import CanvasNodeImage from '../CanvasNodeImage.vue'
+import ElementEditOverlay from '../ElementEditOverlay.vue'
+import { buildElementEditRequest } from '@/utils/canvasElementEditGeometry.js'
+import { getElementEditConfig } from '@/api/canvas/elementEdit.js'
+import { findClosestAspectRatio } from '@/utils/aspectRatio.js'
 const PanoramaPreviewModal = defineAsyncComponent(() => import('../PanoramaPreviewModal.vue'))
 import ModelIcon from '../../common/ModelIcon.vue'
 import { smartDownload } from '@/api/client'
@@ -376,6 +380,10 @@ const dragOverIndex = ref(-1)
 // 图片编辑器状态
 const showImageEditor = ref(false)
 const editorInitialTool = ref('')
+const showElementEditOverlay = ref(false)
+const elementEditBusy = ref(false)
+const elementEditError = ref('')
+const elementEditConfiguredModel = ref('')
 
 // 🚀 性能优化：画布拖拽状态（用于降低渲染质量）
 const isCanvasDragging = ref(false)
@@ -2034,6 +2042,174 @@ function enterEditMode(tool) {
   // 调用 canvasStore 进入编辑模式
   canvasStore.enterEditMode(props.id, tool)
   console.log('[ImageNode] 进入编辑模式，工具:', tool)
+}
+
+function handleToolbarElementEdit() {
+  if (!currentImageUrl.value) {
+    showToast('没有可编辑的图片', 'error')
+    return
+  }
+  showImageEditMenu.value = false
+  elementEditError.value = ''
+  showElementEditOverlay.value = true
+  // 每次打开都读取租户后台「高级设置 → 元素编辑」中的默认生图模型
+  getElementEditConfig()
+    .then(config => { elementEditConfiguredModel.value = String(config?.defaultImageModel || '') })
+    .catch(error => console.warn('[ImageNode] 元素编辑配置加载失败，使用自动选择:', error.message))
+}
+
+// 元素编辑层贴合的图片显示框（屏幕坐标）
+function getElementEditAnchorRect() {
+  const root = nodeRef.value
+  if (!root) return null
+  const image = root.querySelector('.source-image-preview img, .preview-images img')
+  return (image || root.querySelector('.source-image-preview, .preview-images'))?.getBoundingClientRect() || null
+}
+
+// 元素编辑默认生图模型：优先租户后台配置；未配置或不可用时自动选择 Seedream 5 系列，再依次回退。
+const elementEditModel = computed(() => {
+  getTenantConfigVersion()
+  const candidates = getAvailableImageModels('i2i') || []
+  const text = model => [model?.value, model?.name, model?.label, model?.actualModel].filter(Boolean).join(' ').toLowerCase()
+  return candidates.find(model => elementEditConfiguredModel.value && model.value === elementEditConfiguredModel.value && !model.modeFallback)
+    || candidates.find(model => /seedream[-_. ]?5|即梦\s*5/.test(text(model)) && /pro/.test(text(model)))
+    || candidates.find(model => /seedream[-_. ]?5|即梦\s*5/.test(text(model)))
+    || candidates.find(model => /seedream|即梦/.test(text(model)))
+    || candidates.find(model => model.value === selectedModel.value)
+    || candidates[0]
+    || null
+})
+
+const elementEditImageSize = computed(() => {
+  const model = elementEditModel.value
+  const pointsCost = model?.pointsCost
+  if (!(model?.hasResolutionPricing || (pointsCost && typeof pointsCost === 'object'))) return '2K'
+  const sizes = getAvailableImageResolutionOptions(model).map(option => option.value)
+  return sizes.includes('2K') ? '2K' : (sizes[0] || '2K')
+})
+
+const elementEditPointsCost = computed(() => {
+  const model = elementEditModel.value
+  if (!model) return ''
+  const pointsCost = model.pointsCost
+  const base = model.hasResolutionPricing || (pointsCost && typeof pointsCost === 'object')
+    ? getImageResolutionCost(model, elementEditImageSize.value)
+    : (typeof pointsCost === 'number' ? pointsCost : 1)
+  return formatPoints(roundPoints(base * getUserNodeRate('image')))
+})
+
+async function uploadElementEditReference(file) {
+  const urls = await uploadImages([file])
+  return urls?.[0] || ''
+}
+
+async function resolveElementEditSourceUrl() {
+  let imageUrl = currentImageUrl.value
+  if (!imageUrl) throw new Error('没有可编辑的图片')
+  if (imageUrl.startsWith('blob:') || imageUrl.startsWith('data:')) {
+    const response = await fetch(imageUrl)
+    const blob = await response.blob()
+    const urls = await uploadImages([new File([blob], `element_edit_${Date.now()}.png`, { type: blob.type || 'image/png' })])
+    if (!urls?.[0]) throw new Error('原图上传失败')
+    return urls[0]
+  }
+  if (needsReupload(imageUrl)) return reuploadToCloud(imageUrl)
+  if (imageUrl.startsWith('/api/')) return getApiUrl(imageUrl)
+  return imageUrl
+}
+
+function createElementEditProcessingNode(model, prompt, elementEditPrompt) {
+  const currentNode = canvasStore.nodes.find(node => node.id === props.id)
+  if (!currentNode) return null
+  const nodeId = `element_edit_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+  const sourceTitle = String(props.data?.title || props.data?.label || '').trim() || '图片'
+  const title = `${sourceTitle}--元素编辑`
+  canvasStore.addNode({
+    id: nodeId,
+    type: 'image',
+    position: { x: currentNode.position.x + (nodeWidth.value || 380) + 100, y: currentNode.position.y },
+    data: {
+      label: title,
+      title,
+      status: 'processing',
+      processingStartedAt: Date.now(),
+      progress: '元素编辑生成中...',
+      taskType: 'image',
+      sourceType: 'element-edit',
+      sourceNodeId: props.id,
+      model,
+      prompt,
+      elementEditPrompt
+    }
+  })
+  canvasStore.addEdge({
+    id: `edge-${props.id}-${nodeId}-${Date.now()}`,
+    source: props.id,
+    target: nodeId,
+    sourceHandle: 'output',
+    targetHandle: 'input',
+    type: 'smoothstep'
+  })
+  return nodeId
+}
+
+async function handleElementEditGenerate(payload) {
+  if (elementEditBusy.value) return
+  const model = elementEditModel.value?.value
+  if (!model) {
+    elementEditError.value = '暂无可用的图生图模型'
+    return
+  }
+  const edits = Array.isArray(payload?.edits) ? payload.edits : []
+  if (!edits.length) return
+  elementEditBusy.value = true
+  elementEditError.value = ''
+  let resultNodeId = null
+  try {
+    const sourceUrl = await resolveElementEditSourceUrl()
+    const { images, prompt } = buildElementEditRequest(edits, sourceUrl)
+    const natural = payload?.natural
+    const aspectRatio = natural?.width > 0 && natural?.height > 0 ? findClosestAspectRatio(natural.width, natural.height) : 'auto'
+    const userPrompt = edits.map(edit => edit.prompt).filter(Boolean).join('；') || '元素编辑'
+    resultNodeId = createElementEditProcessingNode(model, userPrompt, prompt)
+    if (!resultNodeId) throw new Error('无法创建结果节点')
+    const result = await generateImageFromImage({
+      prompt,
+      userPrompt,
+      images,
+      model,
+      image_size: elementEditImageSize.value,
+      aspectRatio,
+      aspectRatioMode: aspectRatio,
+      count: 1
+    })
+    canvasStore.updateNodeData(resultNodeId, { sourceImages: images, imageSize: elementEditImageSize.value, aspectRatio })
+    const taskId = result.task_id || result.id
+    if (taskId) {
+      registerTask({
+        taskId,
+        type: 'image',
+        nodeId: resultNodeId,
+        tabId: canvasStore.getCurrentTab()?.id,
+        metadata: { prompt: userPrompt, model, sourceType: 'element-edit' }
+      })
+      canvasStore.updateNodeData(resultNodeId, { taskId, taskType: 'image' })
+    } else if (result.url) {
+      canvasStore.updateNodeData(resultNodeId, { status: 'success', progress: null, output: { type: 'image', url: result.url, urls: [result.url] } })
+      invalidateCanvasHistory()
+    } else {
+      throw new Error('未获取到生成结果')
+    }
+    showElementEditOverlay.value = false
+    canvasStore.selectNode?.(resultNodeId)
+    showToast('元素编辑任务已提交', 'success')
+  } catch (error) {
+    const message = error.message || '生成失败，请重试'
+    if (resultNodeId) canvasStore.updateNodeData(resultNodeId, { status: 'error', progress: null, error: message })
+    elementEditError.value = message
+  } finally {
+    elementEditBusy.value = false
+  }
 }
 
 function handleToolbarRepaint() {
@@ -7615,7 +7791,17 @@ async function handleDrop(event) {
     />
     
     <!-- 图片工具栏（高清为左侧第一项） -->
-    <div v-show="showToolbar" class="image-toolbar">
+    <div v-show="showToolbar && !showElementEditOverlay" class="image-toolbar">
+      <button
+        class="toolbar-btn"
+        title="元素编辑"
+        @mousedown.stop.prevent="handleToolbarElementEdit"
+        @click.stop.prevent
+      >
+        <SquareMousePointer :size="16" :stroke-width="1.5" />
+        <span>元素编辑</span>
+      </button>
+      <div class="toolbar-divider"></div>
       <button
         class="toolbar-btn toolbar-btn-hd"
         :class="{ 'is-processing': isImageHDProcessing }"
@@ -7924,6 +8110,18 @@ async function handleDrop(event) {
         </svg>
       </button>
     </div>
+
+    <ElementEditOverlay
+      :visible="showElementEditOverlay"
+      :image-url="currentImageUrl || ''"
+      :get-anchor-rect="getElementEditAnchorRect"
+      :points-cost="elementEditPointsCost"
+      :busy="elementEditBusy"
+      :submit-error="elementEditError"
+      :upload-reference="uploadElementEditReference"
+      @close="showElementEditOverlay = false"
+      @generate="handleElementEditGenerate"
+    />
 
     <div v-if="showSeedanceQuickBadge" class="seedance-review-badge" :class="{ expired: seedanceQuickAssetStatus === 'expired' }">
       {{ seedanceQuickBadgeText }}

@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { parse } from '@babel/parser'
 import { prepareWorkflowSaveBody } from '../../utils/workflowMediaUpload.js'
+import { isStaleTaskResultForInFlightNode } from '../../utils/canvasTaskResultGuard.js'
 
 const source = readFileSync(new URL('./workflow.js', import.meta.url), 'utf8')
 const ast = parse(source, { sourceType: 'module' })
@@ -19,7 +20,7 @@ function harness(ok = true, conflictNodeVersions = null, options = {}) {
   const workflow = { id: 'wf-a', client_tab_id: 'tab-a', node_versions: { media: 8 } }
   const context = {
     getApiUrl: path => path, getAuthHeaders: () => ({}),
-    prepareWorkflowSaveBody, uploadCanvasFile: async () => { throw new Error('unexpected upload') },
+    prepareWorkflowSaveBody, isStaleTaskResultForInFlightNode, uploadCanvasFile: async () => { throw new Error('unexpected upload') },
     useCanvasStore: () => ({
       applyWorkflowSaveVersions: value => applied.push(value),
       applyIncrementalNode: (node, opts) => remoteApplied.push({ node, opts }),
@@ -154,6 +155,41 @@ test('版本冲突重试只拉取冲突节点，服务端写回字段覆盖本�
   assert.deepEqual(h.requests[1].baseNodeVersions, { video: 5, text: 2 })
   assert.equal(h.remoteApplied.length, 1)
   assert.deepEqual(JSON.parse(JSON.stringify(h.remoteApplied[0].node.data)), { output: { url: 'https://cdn/v.mp4' }, status: 'success', progress: null })
+})
+
+test('版本冲突时服务端仍是上一次任务的成功结果，不覆盖本地正在重新生成的节点', async () => {
+  const serverNodes = [{ id: 'video', version: 5, data: {
+    prompt: '旧提示词', status: 'success', progress: null, taskId: 'cgt-old', processingStartedAt: 1000,
+    output: { type: 'video', url: 'https://cdn/old.mp4' }
+  } }]
+  const h = harness(false, { video: 5 }, { serverNodes })
+  await h.context.saveWorkflow({
+    id: 'wf-a',
+    baseNodeVersions: { video: 4 },
+    nodes: [{ id: 'video', data: { prompt: '新提示词', status: 'processing', processingStartedAt: 2000, taskId: null, output: null } }]
+  })
+  const retried = h.requests[1].nodes.find(node => node.id === 'video')
+  assert.equal(retried.data.status, 'processing')
+  assert.equal(retried.data.output, null)
+  assert.equal(h.remoteApplied.length, 0, '旧结果不能回写到本地画布')
+  assert.deepEqual(h.requests[1].baseNodeVersions, { video: 5 })
+})
+
+test('版本冲突时服务端已写回本次生成的结果，照常合并到本地', async () => {
+  const serverNodes = [{ id: 'video', version: 5, data: {
+    status: 'success', progress: null, taskId: 'cgt-new', processingStartedAt: 2000,
+    output: { type: 'video', url: 'https://cdn/new.mp4' }
+  } }]
+  const h = harness(false, { video: 5 }, { serverNodes })
+  await h.context.saveWorkflow({
+    id: 'wf-a',
+    baseNodeVersions: { video: 4 },
+    nodes: [{ id: 'video', data: { status: 'processing', processingStartedAt: 2000, taskId: 'cgt-new', output: null } }]
+  })
+  const retried = h.requests[1].nodes.find(node => node.id === 'video')
+  assert.equal(retried.data.status, 'success')
+  assert.equal(retried.data.output.url, 'https://cdn/new.mp4')
+  assert.equal(h.remoteApplied.length, 1)
 })
 
 test('团队协作快照在持有编辑权时允许按服务端基线重试', async () => {
