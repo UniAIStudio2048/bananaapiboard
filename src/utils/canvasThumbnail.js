@@ -14,7 +14,17 @@
  */
 
 import { getApiUrl } from '@/config/tenant'
-import { getCloudVideoPosterUrl, getCosProxyUrl, getSmartImageUrl, isCosCdn, isQiniuCdn, isVideoUrl } from './cloudMediaUrl.js'
+import {
+  getCloudVideoPosterUrl,
+  getCosProxyUrl,
+  getOriginalCloudflareImageUrl,
+  getCloudflareImageTransformUrl,
+  getSmartImageUrl,
+  isCloudflareImageTransformUrl,
+  isCosCdn,
+  isQiniuCdn,
+  isVideoUrl
+} from './cloudMediaUrl.js'
 import { selectLodWidth, MIN_CANVAS_PREVIEW_WIDTH, PREVIEW_WIDTHS, ORIGINAL_THRESHOLD } from './lodSelector.js'
 
 const DEFAULT_THUMB_WIDTH = 1024
@@ -94,6 +104,9 @@ export function getCanvasWebpThumbnailUrl(url, width = 160) {
   if (!url || /\.gif(?:[?#]|$)/i.test(url)) return url
   const thumbnail = getCanvasThumbnailUrl(url, width)
   if (thumbnail === url || url.includes('/api/images/file/')) return thumbnail
+  if (isCloudflareImageTransformUrl(thumbnail)) {
+    return getCloudflareImageTransformUrl(thumbnail, width, { format: 'webp', quality: 80 })
+  }
   if (isQiniuCdn(url)) return `${thumbnail}/format/webp/q/80`
   return `${thumbnail}/format/webp/quality/80`
 }
@@ -112,6 +125,11 @@ export function getCanvasThumbnailUrl(url, width = DEFAULT_THUMB_WIDTH) {
   if (url.includes('/api/images/file/')) {
     const sep = url.includes('?') ? '&' : '?'
     return `${url}${sep}preview=true&w=${width}`
+  }
+
+  // Cloudflare Image Transform：仅调整已有 R2 变换 URL 的宽度，视频不进入此分支。
+  if (isCloudflareImageTransformUrl(url) && !isVideoUrl(url)) {
+    return getCloudflareImageTransformUrl(url, width)
   }
 
   // COS CDN 图片走数据万象缩略图（后端 cos-storage.js 已在用相同协议）。
@@ -179,6 +197,11 @@ export function getOriginalImageUrl(url) {
     } catch {
       return url.replace(/[?&]preview=true/g, '').replace(/[?&]w=\d+/g, '')
     }
+  }
+
+  // Cloudflare Image Transform：恢复源对象路径，下载时由后端签名原图。
+  if (isCloudflareImageTransformUrl(url)) {
+    return getOriginalCloudflareImageUrl(url)
   }
 
   // COS CDN：去掉 imageMogr2 参数

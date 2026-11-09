@@ -21,6 +21,9 @@ export function getSmartImageUrl(url) {
   // 同源直连
   try { if (new URL(url).host === window.location.host) return url } catch (_) {}
 
+  // Cloudflare Image Transform URL 已经由代理域名生成，直接读取即可。
+  if (isCloudflareImageTransformUrl(url)) return url
+
   // 新画布资产已在上传阶段完成 COS/CORS 校验，始终绕过应用服务器直读 CDN。
   if (isCanvasDirectCdnUrl(url)) return url
 
@@ -58,11 +61,77 @@ export function isCosCdn(url) {
          lower.includes('.tencentcos.cn')
 }
 
+const CLOUDFLARE_IMAGE_TRANSFORM_MARKER = '/cdn-cgi/image/'
+
+function normalizeTransformWidth(width) {
+  const parsed = Number(width)
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 10000 ? parsed : 400
+}
+
+function normalizeTransformQuality(quality) {
+  const parsed = Number(quality)
+  return Number.isInteger(parsed) && parsed >= 1 && parsed <= 100 ? parsed : 80
+}
+
+/** 判断 URL 是否已经是 Cloudflare Image Transform 地址。 */
+export function isCloudflareImageTransformUrl(url) {
+  if (!url || typeof url !== 'string') return false
+  try {
+    const parsed = new URL(url, 'http://localhost')
+    return parsed.pathname.startsWith(CLOUDFLARE_IMAGE_TRANSFORM_MARKER)
+  } catch {
+    return false
+  }
+}
+
+/** 为已有 Cloudflare 变换 URL 替换稳定的缩略图参数。 */
+export function getCloudflareImageTransformUrl(url, width = 400, { quality = 80, format = 'auto', fit = 'scale-down' } = {}) {
+  if (!isCloudflareImageTransformUrl(url)) return url
+  const isRelative = url.startsWith('/')
+  let parsed
+  try {
+    parsed = new URL(url, 'http://localhost')
+  } catch {
+    return url
+  }
+  const transformedPath = parsed.pathname.slice(CLOUDFLARE_IMAGE_TRANSFORM_MARKER.length)
+  const separator = transformedPath.indexOf('/')
+  if (separator <= 0 || separator === transformedPath.length - 1) return url
+  const safeFormat = ['auto', 'webp', 'avif', 'jpeg', 'jpg', 'png'].includes(String(format)) ? String(format) : 'auto'
+  const safeFit = ['scale-down', 'contain', 'cover', 'crop', 'pad'].includes(String(fit)) ? String(fit) : 'scale-down'
+  const options = [
+    `width=${normalizeTransformWidth(width)}`,
+    `fit=${safeFit}`,
+    `format=${safeFormat}`,
+    `quality=${normalizeTransformQuality(quality)}`
+  ].join(',')
+  parsed.pathname = `${CLOUDFLARE_IMAGE_TRANSFORM_MARKER}${options}/${transformedPath.slice(separator + 1)}`
+  return isRelative ? `${parsed.pathname}${parsed.search}${parsed.hash}` : parsed.toString()
+}
+
+/** 去除 Cloudflare 变换路径，恢复同一 R2 对象的原图 URL。 */
+export function getOriginalCloudflareImageUrl(url) {
+  if (!isCloudflareImageTransformUrl(url)) return url
+  const isRelative = url.startsWith('/')
+  let parsed
+  try {
+    parsed = new URL(url, 'http://localhost')
+  } catch {
+    return url
+  }
+  const transformedPath = parsed.pathname.slice(CLOUDFLARE_IMAGE_TRANSFORM_MARKER.length)
+  const separator = transformedPath.indexOf('/')
+  if (separator <= 0 || separator === transformedPath.length - 1) return url
+  parsed.pathname = `/${transformedPath.slice(separator + 1)}`
+  return isRelative ? `${parsed.pathname}${parsed.search}${parsed.hash}` : parsed.toString()
+}
+
 export function isCanvasDirectCdnUrl(url) {
   try {
     const parsed = new URL(url)
     return (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
-      parsed.pathname.startsWith('/canvas/')
+      (parsed.pathname.startsWith('/canvas/') ||
+        (parsed.pathname.startsWith(CLOUDFLARE_IMAGE_TRANSFORM_MARKER) && parsed.pathname.includes('/canvas/')))
   } catch {
     return false
   }

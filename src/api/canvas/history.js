@@ -5,6 +5,7 @@
  */
 import { getApiUrl, getTenantHeaders } from '@/config/tenant'
 import { normalizeImageHistoryItem } from '@/utils/imageHistoryPrompt'
+import { getCloudflareImageTransformUrl, isCloudflareImageTransformUrl } from '@/utils/cloudMediaUrl'
 
 function isVideoUrl(url) {
   if (!url) return false
@@ -17,6 +18,11 @@ function isVideoUrl(url) {
 function generateThumbnailUrl(url) {
   if (!url) return url
   const lower = url.toLowerCase()
+
+  // R2 图片已经是 Cloudflare 变换地址时，按历史列表尺寸重写参数。
+  if (isCloudflareImageTransformUrl(url) && !isVideoUrl(url)) {
+    return getCloudflareImageTransformUrl(url, 200, { format: 'webp', quality: 80 })
+  }
 
   // COS CDN → 数据万象缩略图
   if ((lower.includes('filescos.nananobanana.cn') ||

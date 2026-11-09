@@ -16,6 +16,7 @@ const thumbnailSource = readFileSync(new URL('./canvasThumbnail.js', import.meta
   .replace("'./lodSelector.js'", JSON.stringify(new URL('./lodSelector.js', import.meta.url).href))
 const thumbnail = await import(moduleUrl(thumbnailSource))
 const image = 'https://filescos.nananobanana.cn/canvas/test/transparent.png'
+const r2Image = 'https://files.example.com/cdn-cgi/image/width=1024,fit=scale-down,format=auto,quality=80/canvas/test/transparent.png'
 
 test('11% canvas overview uses a 128px preview, including DPR 2', () => {
   assert.equal(selectLodWidth({ zoom: 0.11, nodeWidth: 380, devicePixelRatio: 1 }), 128)
@@ -40,6 +41,18 @@ test('lightweight previews preserve proxy bucket identity and use the matching C
     '/api/cos-proxy/test/a.png?bid=old-bucket&imageMogr2/thumbnail/160x/format/webp/quality/80')
   assert.equal(thumbnail.getCanvasWebpThumbnailUrl('https://files.nananobanana.cn/a.png', 160),
     'https://files.nananobanana.cn/a.png?imageView2/2/w/160/format/webp/q/80')
+})
+
+test('Cloudflare R2 previews resize existing transforms and restore the original for downloads', () => {
+  assert.equal(
+    thumbnail.getCanvasThumbnailUrl(r2Image, 600),
+    'https://files.example.com/cdn-cgi/image/width=600,fit=scale-down,format=auto,quality=80/canvas/test/transparent.png'
+  )
+  assert.equal(
+    thumbnail.getCanvasWebpThumbnailUrl(r2Image, 160),
+    'https://files.example.com/cdn-cgi/image/width=160,fit=scale-down,format=webp,quality=80/canvas/test/transparent.png'
+  )
+  assert.equal(thumbnail.getOriginalImageUrl(r2Image), 'https://files.example.com/canvas/test/transparent.png')
 })
 
 test('GIF, explicit image processing, third-party and local temporary URLs remain compatible', () => {

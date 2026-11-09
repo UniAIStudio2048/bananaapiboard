@@ -25,6 +25,7 @@ timestamp: 2026-11-03
 - [画布多选媒体下载](canvas-batch-media-download.md)：右键入口、媒体筛选与下载路径。
 
 - [R2 视频播放与源文件下载](r2-video-playback.md)：Stream/R2 HLS 播放切换、失败回退和下载一致性验证。
+- [用户端 R2 图片预览](r2-image-transform.md)：Cloudflare 图片变换的历史/画布 LOD、原图还原和 COS 隔离。
 
 - [Seedance 快捷角色审核反馈](seedance-quick-review-feedback.md)：图片/视频/音频“过审”按钮内的渠道菜单、天枢自动过审和数据库用户偏好。
 - [MiniMax 视频模型展示、AtlasCloud 手动模式与禁用规则、请求身份和构建验证](minimax-video-model-mapping.md)
