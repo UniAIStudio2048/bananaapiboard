@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { resolveVideoResolutionPricing } from './videoResolutionPricing.js'
 import { formatVideoNodePoints } from './canvasVideoPointsDisplay.js'
+import { applyNodeRateToPoints } from './userGroupRate.js'
 
 test('video node deduction display keeps up to two fractional digits', () => {
   for (const [value, expected] of [[12.85, '12.85'], [2.142, '2.14'], [10, '10'], [0, '0'], [1.25, '1.25'], [0.1, '0.1'], [null, '0'], [NaN, '0']]) assert.equal(formatVideoNodePoints(value), expected)
@@ -21,7 +22,7 @@ test('GK canvas estimate preserves per-second precision and group-rate precision
   const rateMarker = 'const pointsCost = computed(() => {'
   const rateStart = source.indexOf(rateMarker) + rateMarker.length
   const rateBody = source.slice(rateStart, source.indexOf('\n})', rateStart))
-  const cost = runInNewContext(`(() => {${rateBody}})()`, { ...refs, basePointsCost: { value: base }, getUserNodeRate: () => 1 })
+  const cost = runInNewContext(`(() => {${rateBody}})()`, { ...refs, basePointsCost: { value: base }, getUserNodeRate: () => 1, applyNodeRateToPoints, userGroupRateVersion: { value: 0 } })
   assert.equal(cost, 12.85)
   assert.equal(formatVideoNodePoints(cost), '12.85')
 })

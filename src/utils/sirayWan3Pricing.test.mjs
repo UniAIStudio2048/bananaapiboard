@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { resolveVideoResolutionPricing, calculateVideoResolutionPrice } from './videoResolutionPricing.js'
+import { applyNodeRateToPoints } from './userGroupRate.js'
 
 test('canvas and generation page preserve Siray fractional input seconds and five-second cap', () => {
   for (const [file, name, endMarker] of [
@@ -27,6 +28,6 @@ test('canvas final estimate keeps fractional Siray points after applying the use
   const marker = 'const pointsCost = computed(() => {'
   const start = source.indexOf(marker) + marker.length
   const body = source.slice(start, source.indexOf('\n})', start))
-  const context = { currentModelConfig: { value: { apiType: 'siray-wan3' } }, basePointsCost: { value: 47.25 }, getUserNodeRate: () => 1 }
+  const context = { currentModelConfig: { value: { apiType: 'siray-wan3' } }, basePointsCost: { value: 47.25 }, getUserNodeRate: () => 1, applyNodeRateToPoints, userGroupRateVersion: { value: 0 } }
   assert.equal(runInNewContext(`(() => {${body}})()`, context), 47.25)
 })

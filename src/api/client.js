@@ -31,6 +31,8 @@ export function persistAuthSession(token, user = null) {
     localStorage.setItem('avatar', user.avatar || '')
     localStorage.setItem('user_id', user.id || '')
     localStorage.setItem('userId', user.id || '')
+    // 用户分组（套餐折扣）倍率随用户信息更新，通知画布节点重新计算预估积分
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('auth-user-updated'))
   } else {
     localStorage.removeItem('user')
     localStorage.removeItem('username')

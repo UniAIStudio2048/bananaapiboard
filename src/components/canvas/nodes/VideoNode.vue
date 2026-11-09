@@ -23,7 +23,7 @@ import { useModelStatsStore } from '@/stores/canvas/modelStatsStore'
 import { useTeamStore } from '@/stores/team'
 import { formatPoints } from '@/utils/format'
 import { formatVideoNodePoints } from '@/utils/canvasVideoPointsDisplay'
-import { getUserNodeRate } from '@/utils/userGroupRate'
+import { applyNodeRateToPoints, getUserNodeRate } from '@/utils/userGroupRate'
 import { getTotalUserPoints } from '@/utils/points'
 import { config as tenantConfig, getTenantConfigVersion, getTenantHeaders, isModelEnabled, getModelDisplayName, getApiUrl, getAvailableVideoModels, isSoraCharacterLibraryEnabled } from '@/config/tenant'
 import { uploadImages, getVideoHdTaskStatus, getVideoTaskStatus } from '@/api/canvas/nodes'
@@ -75,6 +75,7 @@ import { findBlockingCanvasUploads } from '@/utils/canvasUploadGuard'
 import {
   applyVideoInputMultiplier,
   formatVideoInputMultiplier,
+  resolveBilledReferenceVideoCount,
   resolveVideoInputMultiplier
 } from '@/utils/videoInputMultiplier'
 import {
@@ -3138,6 +3139,7 @@ onMounted(() => {
   // 🚀 性能优化：监听画布拖拽事件
   window.addEventListener('canvas-drag-start', handleCanvasDragStart)
   window.addEventListener('canvas-drag-end', handleCanvasDragEnd)
+  window.addEventListener('auth-user-updated', handleAuthUserUpdated)
   
   // 检查是否有已完成的后台任务需要恢复
   checkAndRestoreBackgroundTasks()
@@ -3160,6 +3162,7 @@ onUnmounted(() => {
   window.removeEventListener('background-task-progress', handleBackgroundTaskProgress)
   window.removeEventListener('background-task-network-error', handleBackgroundTaskNetworkError)
   window.removeEventListener('background-task-network-recovered', handleBackgroundTaskNetworkRecovered)
+  window.removeEventListener('auth-user-updated', handleAuthUserUpdated)
   
   // 🚀 性能优化：移除画布拖拽事件监听
   window.removeEventListener('canvas-drag-start', handleCanvasDragStart)
@@ -3677,18 +3680,37 @@ const isSeedanceVideoInputMultiplierModel = computed(() => {
   return isSeedanceSd2VideoModel(currentModelConfig.value) && apiType !== 'happyhorse'
 })
 
+// 计费用视频个数：与提交时实际写入 reference_videos 的个数一致（后端按此判断倍率与取档）
+const billedReferenceVideoCount = computed(() => {
+  const apiType = currentModelConfig.value?.apiType
+  const mode = isWan3Model.value
+    ? selectedWan3Mode.value
+    : apiType === 'routerbee-wan3'
+      ? selectedRouterBeeWan3Mode.value
+      : isWanModel.value ? selectedWanMode.value : ''
+  return resolveBilledReferenceVideoCount({
+    config: currentModelConfig.value,
+    mode,
+    referenceVideoCount: referenceVideos.value.length
+  })
+})
+
 // 当前实际输入视频个数对应的分档倍率（与后端 resolveVideoInputMultiplier 一致）
 const videoInputMultiplier = computed(() => {
-  return resolveVideoInputMultiplier(currentModelConfig.value, referenceVideos.value.length)
+  return resolveVideoInputMultiplier(currentModelConfig.value, billedReferenceVideoCount.value)
 })
+
+// 按输入时长 / 固定价单独计费的渠道，后端不应用视频输入倍率（shouldApplyGenericVideoInputMultiplier）
+const VIDEO_INPUT_MULTIPLIER_EXCLUDED_API_TYPES = ['heizhu-video', 'wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced', 'runninghub-ai-app-video', 'runninghub-ai-app-video-v31']
 
 // 是否对当前生成应用视频输入倍率：
 // - 配置了新字段 videoInputMultipliers 时，任意模型都按输入视频个数分档；
 // - 仅有旧字段（seedanceConfig/minimaxConfig/顶层 videoInputMultiplier）时，
 //   仅 seedance / minimax H3 生效（与后端旧逻辑一致）。
 const shouldApplyVideoInputMultiplier = computed(() => {
-  if (!hasReferenceVideos.value) return false
+  if (billedReferenceVideoCount.value <= 0) return false
   if (videoInputMultiplier.value <= 1) return false
+  if (VIDEO_INPUT_MULTIPLIER_EXCLUDED_API_TYPES.includes(currentModelConfig.value?.apiType)) return false
   if (Array.isArray(currentModelConfig.value?.videoInputMultipliers)) return true
   return isSeedanceVideoInputMultiplierModel.value || isMinimaxH3Model.value
 })
@@ -4441,7 +4463,7 @@ const basePointsCost = computed(() => {
 
   if (isWanModel.value && currentModelConfig.value.hasDurationPricing && typeof modelPointsCost === 'object') {
     cost = modelPointsCost[String(wanBillingDuration.value)] || modelPointsCost[wanBillingDuration.value] || modelPointsCost['5'] || 20
-    return cost
+    return shouldApplyVideoInputMultiplier.value ? applyVideoInputMultiplier(cost, videoInputMultiplier.value) : cost
   }
 
   // MiniMax 海螺官方直连：按分辨率+时长计费（与 9000 后台显示的 resolutionCosts 一致，未配置时回退 pointsCost）
@@ -4510,12 +4532,16 @@ const basePointsCost = computed(() => {
 })
 
 // 用户分组倍率：支持小数计费的渠道保留两位小数，显示精度由格式化函数单独处理。
+// 用户分组（套餐折扣）倍率存于 localStorage，非响应式；用户信息更新后递增版本号触发重新计算
+const userGroupRateVersion = ref(0)
+function handleAuthUserUpdated() {
+  userGroupRateVersion.value += 1
+}
+
+// 与后端 applyNodeRate 舍入一致：倍率规范到两位小数，结果按 roundPoints 保留两位小数。
 const pointsCost = computed(() => {
-  const base = basePointsCost.value
-  const rate = getUserNodeRate('video')
-  const scaled = base * rate
-  if (['heizhu-video', 'wavespeed-wan3', 'siray-wan3', 'rh-h3-enhanced'].includes(currentModelConfig.value?.apiType)) return Math.round(scaled * 100) / 100
-  return Math.round(scaled * 100) / 100
+  void userGroupRateVersion.value
+  return applyNodeRateToPoints(basePointsCost.value, getUserNodeRate('video'))
 })
 
 const klingOfficialSelectedDurationCost = computed(() => {

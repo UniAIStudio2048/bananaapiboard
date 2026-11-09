@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { computed, ref } from 'vue'
+import { applyNodeRateToPoints } from '../../../utils/userGroupRate.js'
 const source = readFileSync(new URL('./VideoNode.vue', import.meta.url), 'utf8')
 
 test('RH H3 uses the three-mode H3 menu and retains the tenant model for billing', () => {
@@ -30,6 +31,6 @@ test('shared display billing preserves exact fractional points at each resolutio
 test('final points display retains decimals after user-group pricing', () => {
   const start = source.indexOf('const pointsCost = computed(() => {')
   const end = source.indexOf('\nconst klingOfficialSelectedDurationCost', start)
-  const actual = runInNewContext(source.slice(start, end) + '; pointsCost.value', { computed, basePointsCost: ref(10.8), currentModelConfig: ref({ apiType: 'rh-h3-enhanced' }), getUserNodeRate: () => 1 })
+  const actual = runInNewContext(source.slice(start, end) + '; pointsCost.value', { computed, basePointsCost: ref(10.8), currentModelConfig: ref({ apiType: 'rh-h3-enhanced' }), getUserNodeRate: () => 1, applyNodeRateToPoints, userGroupRateVersion: ref(0) })
   assert.equal(actual, 10.8)
 })

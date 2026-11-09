@@ -34,3 +34,11 @@ export function applyUserNodeRate(cost, nodeType = 'image') {
   if (!Number.isFinite(base)) return base
   return base * getUserNodeRate(nodeType)
 }
+
+// 与后端 applyNodeRate 一致：倍率先规范到两位小数（非法回退 1.0），结果按 roundPoints 保留两位小数
+export function applyNodeRateToPoints(cost, rate) {
+  const n = Number(rate)
+  const safeRate = Number.isFinite(n) && n > 0 ? Math.round((n + Number.EPSILON) * 100) / 100 : 1.0
+  const base = Number(cost) || 0
+  return Math.round((base * safeRate + Number.EPSILON) * 100) / 100
+}

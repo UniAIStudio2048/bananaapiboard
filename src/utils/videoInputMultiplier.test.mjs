@@ -4,7 +4,8 @@ import assert from 'node:assert/strict'
 import {
   resolveVideoInputMultiplier,
   applyVideoInputMultiplier,
-  formatVideoInputMultiplier
+  formatVideoInputMultiplier,
+  resolveBilledReferenceVideoCount
 } from './videoInputMultiplier.js'
 
 // 1~10 档：下标 = 输入视频个数 - 1
@@ -95,10 +96,13 @@ test('resolveVideoInputMultiplier 0 / 负 / 非法 count 归一为 1（不乘）
   assert.equal(resolveVideoInputMultiplier(tenTierConfig, null), 1)
 })
 
-test('applyVideoInputMultiplier 应用倍率并四舍五入到整数积分', () => {
+test('applyVideoInputMultiplier 应用倍率并与后端 roundPoints 一致保留两位小数', () => {
   assert.equal(applyVideoInputMultiplier(100, 1), 100)
   assert.equal(applyVideoInputMultiplier(100, 1.5), 150)
-  assert.equal(applyVideoInputMultiplier(13, 1.5), 20) // 19.5 -> 20
+  assert.equal(applyVideoInputMultiplier(13, 1.5), 19.5) // 后端 roundPoints(13 × 1.5) = 19.5
+  assert.equal(applyVideoInputMultiplier(2470, 1.5), 3705)
+  assert.equal(applyVideoInputMultiplier(166.65, 1.25), 208.31)
+  assert.equal(applyVideoInputMultiplier(1.005, 1), 1.01) // 与后端 Number.EPSILON 舍入一致
   assert.equal(applyVideoInputMultiplier(100, 6), 600)
   // 倍率非法时按 1 处理
   assert.equal(applyVideoInputMultiplier(100, 0), 100)
@@ -110,4 +114,34 @@ test('formatVideoInputMultiplier 格式化倍率角标文本', () => {
   assert.equal(formatVideoInputMultiplier(6), '6x')
   assert.equal(formatVideoInputMultiplier(0), '1x')
   assert.equal(formatVideoInputMultiplier(NaN), '1x')
+})
+
+test('resolveBilledReferenceVideoCount：万相 3.0 仅参考/编辑/延长模式提交视频，并受 maxVideos 限制', () => {
+  const config = { apiType: 'wan3', wan3Config: {} }
+  assert.equal(resolveBilledReferenceVideoCount({ config, mode: 'multimodal_ref', referenceVideoCount: 1 }), 1)
+  assert.equal(resolveBilledReferenceVideoCount({ config, mode: 'video_edit', referenceVideoCount: 2 }), 2)
+  assert.equal(resolveBilledReferenceVideoCount({ config, mode: 'video_extend', referenceVideoCount: 1 }), 1)
+  assert.equal(resolveBilledReferenceVideoCount({ config, mode: 'multimodal_ref', referenceVideoCount: 8 }), 5)
+  assert.equal(resolveBilledReferenceVideoCount({ config: { apiType: 'wan3', wan3Config: { maxVideos: 2 } }, mode: 'multimodal_ref', referenceVideoCount: 3 }), 2)
+  // 首帧/首尾帧/文生模式不提交视频，后端不乘倍率
+  assert.equal(resolveBilledReferenceVideoCount({ config, mode: 'image2video_first', referenceVideoCount: 1 }), 0)
+  assert.equal(resolveBilledReferenceVideoCount({ config, mode: 'text2video', referenceVideoCount: 1 }), 0)
+  // grsai-wan3 不提交参考视频
+  assert.equal(resolveBilledReferenceVideoCount({ config: { apiType: 'grsai-wan3' }, mode: 'multimodal_ref', referenceVideoCount: 1 }), 0)
+})
+
+test('resolveBilledReferenceVideoCount：RouterBee 万相 / Wan 按提交规则计数，其他模型取上游视频数', () => {
+  assert.equal(resolveBilledReferenceVideoCount({ config: { apiType: 'routerbee-wan3' }, mode: 'multimodal_ref', referenceVideoCount: 7 }), 5)
+  assert.equal(resolveBilledReferenceVideoCount({ config: { apiType: 'routerbee-wan3' }, mode: 'image2video', referenceVideoCount: 1 }), 0)
+  assert.equal(resolveBilledReferenceVideoCount({ config: { apiType: 'wan' }, mode: 'r2v', referenceVideoCount: 6 }), 5)
+  assert.equal(resolveBilledReferenceVideoCount({ config: { apiType: 'wan' }, mode: 'videoedit', referenceVideoCount: 3 }), 1)
+  assert.equal(resolveBilledReferenceVideoCount({ config: { apiType: 'wan' }, mode: 't2v', referenceVideoCount: 1 }), 0)
+  assert.equal(resolveBilledReferenceVideoCount({ config: { apiType: 'seedance-2.0' }, mode: 'multimodal_ref', referenceVideoCount: 2 }), 2)
+  assert.equal(resolveBilledReferenceVideoCount({ config: {}, referenceVideoCount: undefined }), 0)
+})
+
+test('画布 XIP5.0-PRO 场景：显示值与后端扣费一致（19s × 130 × 1.5）', () => {
+  const config = { apiType: 'wan3', videoInputMultipliers: [1.5, 2, 3, 4, 5, 6, 7, 8, 9, 10] }
+  const count = resolveBilledReferenceVideoCount({ config, mode: 'multimodal_ref', referenceVideoCount: 1 })
+  assert.equal(applyVideoInputMultiplier(130 * 19, resolveVideoInputMultiplier(config, count)), 3705)
 })

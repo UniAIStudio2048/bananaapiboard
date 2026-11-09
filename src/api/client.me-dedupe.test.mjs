@@ -130,3 +130,19 @@ test('401 is shared with the guard but not cached', async () => {
   await getMe()
   assert.equal(fetchCalls.length, 2)
 })
+
+test('persistAuthSession 写入用户信息后广播 auth-user-updated，供画布刷新分组/套餐倍率预估', () => {
+  reset()
+  const events = []
+  const originalDispatch = globalThis.window.dispatchEvent
+  globalThis.window.dispatchEvent = event => { events.push(event.type) }
+  try {
+    persistAuthSession('token-a', { id: 1, username: 'alice', user_group: { rate_video: 0.8 } })
+    assert.ok(events.includes('auth-user-updated'))
+    events.length = 0
+    persistAuthSession('token-a', null)
+    assert.ok(!events.includes('auth-user-updated'))
+  } finally {
+    globalThis.window.dispatchEvent = originalDispatch
+  }
+})

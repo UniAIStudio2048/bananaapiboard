@@ -36,17 +36,53 @@ export function resolveVideoInputMultiplier(config = {}, count = 0) {
 }
 
 /**
- * 应用视频输入倍率：与后端 roundPoints(pointsCost * multiplier) 一致，四舍五入到整数积分。
+ * 应用视频输入倍率：与后端 roundPoints(pointsCost * multiplier) 一致，四舍五入保留两位小数。
  *
  * @param {number} cost - 基础积分
  * @param {number} multiplier - 倍率（来自 resolveVideoInputMultiplier）
- * @returns {number} 倍率后积分（整数）
+ * @returns {number} 倍率后积分（两位小数）
  */
 export function applyVideoInputMultiplier(cost, multiplier) {
   const baseCost = Number(cost) || 0
   const m = Number(multiplier)
   const normalizedMultiplier = Number.isFinite(m) && m > 0 ? m : 1
-  return Math.round(baseCost * normalizedMultiplier)
+  return Math.round((baseCost * normalizedMultiplier + Number.EPSILON) * 100) / 100
+}
+
+const WAN3_VIDEO_REFERENCE_MODES = ['multimodal_ref', 'video_edit', 'video_extend']
+const WAN3_API_TYPES = ['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3', 'grsai-wan3']
+
+function clampMaxVideos(value) {
+  return Math.min(5, Math.max(0, Number(value) || 5))
+}
+
+/**
+ * 计费用的参考视频个数：与 VideoNode 提交时实际写入 reference_videos 的个数一致，
+ * 后端按该个数（countReferenceVideos）判断是否应用视频输入倍率及取档。
+ *
+ * @param {object} params
+ * @param {object} params.config - 当前模型配置
+ * @param {string} params.mode - 当前模型的生成模式（wan3Mode / routerbeeWan3Mode / wanMode）
+ * @param {number} params.referenceVideoCount - 上游连接的视频个数
+ * @returns {number}
+ */
+export function resolveBilledReferenceVideoCount({ config, mode, referenceVideoCount } = {}) {
+  const count = Math.max(0, Math.floor(Number(referenceVideoCount) || 0))
+  const apiType = config?.apiType
+  if (WAN3_API_TYPES.includes(apiType)) {
+    if (!WAN3_VIDEO_REFERENCE_MODES.includes(mode)) return 0
+    const maxVideos = apiType === 'grsai-wan3' ? 0 : clampMaxVideos(config?.wan3Config?.maxVideos)
+    return Math.min(count, maxVideos)
+  }
+  if (apiType === 'routerbee-wan3') {
+    return mode === 'multimodal_ref' ? Math.min(count, clampMaxVideos(config?.routerbeeConfig?.maxVideos)) : 0
+  }
+  if (apiType === 'wan') {
+    if (mode === 'r2v') return Math.min(count, 5)
+    if (mode === 'videoedit' || mode === 'animate_mix') return Math.min(count, 1)
+    return 0
+  }
+  return count
 }
 
 /**

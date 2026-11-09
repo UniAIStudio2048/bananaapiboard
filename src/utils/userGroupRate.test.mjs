@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { getUserNodeRate, applyUserNodeRate } from './userGroupRate.js'
+import { getUserNodeRate, applyUserNodeRate, applyNodeRateToPoints } from './userGroupRate.js'
 
 // Node 环境没有 localStorage，提供最小 mock
 function setLocalUser(user) {
@@ -52,4 +52,16 @@ test('非法倍率或无效 nodeType 回退 1.0', () => {
   assert.equal(getUserNodeRate('video'), 1.0)
   assert.equal(getUserNodeRate('audio'), 1.0)
   assert.equal(getUserNodeRate('unknown'), 1.0)
+})
+
+test('applyNodeRateToPoints 与后端 applyNodeRate 一致：倍率保留两位小数、结果两位小数四舍五入', () => {
+  assert.equal(applyNodeRateToPoints(3705, 1), 3705)
+  assert.equal(applyNodeRateToPoints(3705, 0.85), 3149.25)
+  assert.equal(applyNodeRateToPoints(208.31, 0.77), 160.4)
+  // 倍率先规范到两位小数（0.855 → 0.86），与后端 normalizeRate 一致
+  assert.equal(applyNodeRateToPoints(100, 0.855), 86)
+  // 非法倍率按 1.0
+  assert.equal(applyNodeRateToPoints(100, 0), 100)
+  assert.equal(applyNodeRateToPoints(100, 'abc'), 100)
+  assert.equal(applyNodeRateToPoints(1.005, 1), 1.01)
 })

@@ -5,7 +5,8 @@ import test from 'node:test'
 const source = fs.readFileSync(new URL('./VideoNode.vue', import.meta.url), 'utf8')
 
 test('画布 MiniMax H3 读取统一视频输入倍率并提供应用判定', () => {
-  assert.match(source, /const videoInputMultiplier = computed\(\(\) => \{[\s\S]*?resolveVideoInputMultiplier\(currentModelConfig\.value, referenceVideos\.value\.length\)/)
+  assert.match(source, /const videoInputMultiplier = computed\(\(\) => \{[\s\S]*?resolveVideoInputMultiplier\(currentModelConfig\.value, billedReferenceVideoCount\.value\)/)
+  assert.match(source, /const billedReferenceVideoCount = computed\(\(\) => \{[\s\S]*?referenceVideoCount: referenceVideos\.value\.length/)
   assert.match(source, /const shouldApplyVideoInputMultiplier = computed\(\(\) => \{[\s\S]*?videoInputMultiplier\.value <= 1[\s\S]*?isSeedanceVideoInputMultiplierModel\.value \|\| isMinimaxH3Model\.value/)
 })
 
