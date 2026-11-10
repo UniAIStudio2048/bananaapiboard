@@ -68,10 +68,12 @@ export function useCanvasRealtimeSync(options = {}) {
     if (!wfId) return
     try {
       const manifest = await api.getWorkflowManifest(wfId)
+      // 拉取期间已切到其他工作流：丢弃迟到的 manifest，避免写入其他工作流的协作状态与节点
+      if (wfId !== currentWorkflowId) return
       collabRevision = Math.max(collabRevision, Number(manifest?.collabRevision) || 0)
       collabEpoch = manifest?.collabEpoch || collabEpoch
       if (typeof store.setCollaborationState === 'function') {
-        store.setCollaborationState({ collabRevision, collabEpoch })
+        store.setCollaborationState({ workflowId: wfId, collabRevision, collabEpoch })
       }
       const nodeIndex = (manifest && manifest.nodeIndex) || []
       const localNodes = store.nodes || []
@@ -108,10 +110,11 @@ export function useCanvasRealtimeSync(options = {}) {
     if (!wfId) return
     try {
       const manifest = await api.getWorkflowManifest(wfId)
+      if (wfId !== currentWorkflowId) return
       collabRevision = Math.max(collabRevision, Number(manifest?.collabRevision) || 0)
       collabEpoch = manifest?.collabEpoch || collabEpoch
       if (typeof store.setCollaborationState === 'function') {
-        store.setCollaborationState({ collabRevision, collabEpoch })
+        store.setCollaborationState({ workflowId: wfId, collabRevision, collabEpoch })
       }
     } catch (err) {
       lastError.value = err
@@ -145,21 +148,22 @@ export function useCanvasRealtimeSync(options = {}) {
         if (typeof options.onError === 'function') options.onError(err)
       },
       onHello: (payload = {}) => {
+        if (workflowId !== currentWorkflowId) return
         if (collabEpoch && payload.collabEpoch && collabEpoch !== payload.collabEpoch) {
           store.markCollaborationStale?.('workflow_epoch_conflict')
         }
         collabRevision = Math.max(collabRevision, Number(payload.collabRevision) || 0)
         collabEpoch = payload.collabEpoch || collabEpoch
         if (typeof store.setCollaborationState === 'function') {
-          store.setCollaborationState({ collabRevision, collabEpoch })
+          store.setCollaborationState({ workflowId, collabRevision, collabEpoch })
         }
       },
       onOps: (ops, _fromClient, metadata = {}) => {
         // ops 服务端已抑制回声；这里仅消费远端事件
-        if (!Array.isArray(ops)) return
+        if (!Array.isArray(ops) || workflowId !== currentWorkflowId) return
         if (Number.isFinite(Number(metadata.collabRevision))) {
           collabRevision = Math.max(collabRevision, Number(metadata.collabRevision))
-          store.setCollaborationState?.({ collabRevision, collabEpoch: metadata.collabEpoch || collabEpoch })
+          store.setCollaborationState?.({ workflowId, collabRevision, collabEpoch: metadata.collabEpoch || collabEpoch })
         }
         for (const op of ops) {
           if (!op || !op.target) continue
@@ -188,6 +192,7 @@ export function useCanvasRealtimeSync(options = {}) {
         applyRemoteNode({ ...node, id: nodeId, version: version || node.version })
       },
       onResyncRequired: (payload = {}) => {
+        if (workflowId !== currentWorkflowId) return
         if (collabEpoch && payload.collabEpoch && collabEpoch !== payload.collabEpoch) {
           store.markCollaborationStale?.('workflow_epoch_conflict')
         }
@@ -204,6 +209,11 @@ export function useCanvasRealtimeSync(options = {}) {
     if (!wfId) return
     if (socket && currentWorkflowId === wfId) return
     if (socket) socket.disconnect()
+    // 协作 revision/epoch 属于单个工作流：切换时清零，避免与新工作流比较误判 epoch 冲突或抬高 revision
+    if (currentWorkflowId !== wfId) {
+      collabRevision = 0
+      collabEpoch = null
+    }
     currentWorkflowId = wfId
     seenOpIds.clear()
     socket = buildSocket(wfId)

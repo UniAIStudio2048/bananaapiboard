@@ -2491,8 +2491,11 @@ export const useCanvasStore = defineStore('canvas', () => {
     }
   }
 
-  function setCollaborationState({ collabRevision, collabEpoch } = {}) {
-    const currentTab = workflowTabs.value.find(item => item.id === activeTabId.value)
+  // workflowId：响应所属工作流。异步响应可能在切换标签后才返回，必须写回对应标签，不能写入当前激活的其他标签
+  function setCollaborationState({ workflowId, collabRevision, collabEpoch } = {}) {
+    const currentTab = workflowId
+      ? workflowTabs.value.find(item => item.workflowId === workflowId)
+      : workflowTabs.value.find(item => item.id === activeTabId.value)
     if (!currentTab) return
     if (Number.isFinite(Number(collabRevision))) {
       currentTab.collabRevision = Math.max(Number(currentTab.collabRevision) || 0, Number(collabRevision))

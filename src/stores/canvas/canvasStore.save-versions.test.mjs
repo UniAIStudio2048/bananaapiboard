@@ -28,7 +28,7 @@ function harness() {
     createSkeletonNodes: nodes => structuredClone(nodes), cleanEdges: edges => edges,
     switchToTab: id => { context.activeTabId.value = id; context.nodes.value = structuredClone(workflowTabs.value.find(tab => tab.id === id).nodes) }
   }
-  for (const name of ['captureNodeVersions', 'exportWorkflowForSave', 'applyWorkflowSaveVersions', 'markCurrentTabSaved', 'applyIncrementalNode', 'openWorkflowInNewTab']) {
+  for (const name of ['captureNodeVersions', 'exportWorkflowForSave', 'applyWorkflowSaveVersions', 'markCurrentTabSaved', 'applyIncrementalNode', 'openWorkflowInNewTab', 'setCollaborationState']) {
     const fn = findFunction(name, ast)
     if (fn) context[name] = runInNewContext(`(${source.slice(fn.start, fn.end)})`, context)
   }
@@ -155,4 +155,21 @@ test('reopening an authoritative empty workflow also clears the old tab nodes', 
   const saved = h.exportWorkflowForSave()
   assert.deepEqual(saved.nodes, [])
   assert.deepEqual(JSON.parse(JSON.stringify(saved.baseNodeVersions)), {})
+})
+
+test('协作状态按工作流写入对应标签，不污染当前激活的其他标签', () => {
+  const h = harness()
+  h.workflowTabs.value[0].collabEpoch = 'epoch-a'
+  h.workflowTabs.value[0].collabRevision = 10
+  h.workflowTabs.value[1].collabEpoch = 'epoch-b'
+  h.workflowTabs.value[1].collabRevision = 2
+  // 工作流 A 的保存响应在切到 B 之后才返回
+  h.activeTabId.value = 'tab-b'
+  h.setCollaborationState({ workflowId: 'wf-a', collabRevision: 11, collabEpoch: 'epoch-a' })
+  assert.equal(h.workflowTabs.value[1].collabEpoch, 'epoch-b')
+  assert.equal(h.workflowTabs.value[1].collabRevision, 2)
+  assert.equal(h.workflowTabs.value[0].collabRevision, 11)
+  // 已关闭工作流的迟到响应直接忽略
+  h.setCollaborationState({ workflowId: 'wf-closed', collabRevision: 99, collabEpoch: 'epoch-x' })
+  assert.equal(h.workflowTabs.value[1].collabEpoch, 'epoch-b')
 })

@@ -103,17 +103,19 @@ async function syncSavedWorkflowVersions(data) {
   if (data?.workflow?.node_versions) store.applyWorkflowSaveVersions(data.workflow)
   if (typeof store.setCollaborationState === 'function') {
     store.setCollaborationState({
+      workflowId: data.workflow.id,
       collabRevision: data.workflow.collab_revision,
       collabEpoch: data.workflow.collab_epoch
     })
   }
 }
 
-async function syncCollaborationResponse(data) {
+async function syncCollaborationResponse(data, workflowId) {
   if (data?.collabRevision == null && !data?.collabEpoch) return
   try {
     const { useCanvasStore } = await import('@/stores/canvas/canvasStore')
     useCanvasStore().setCollaborationState?.({
+      workflowId: data.workflowId || workflowId,
       collabRevision: data.collabRevision,
       collabEpoch: data.collabEpoch
     })
@@ -385,7 +387,7 @@ export async function patchWorkflowNode(workflowId, nodeId, patch, baseVersion, 
     throw new Error(body.error || `更新节点失败 (HTTP ${response.status})`)
   }
   const data = await response.json()
-  await syncCollaborationResponse(data)
+  await syncCollaborationResponse(data, workflowId)
   return data
 }
 
@@ -425,7 +427,7 @@ export async function postWorkflowOps(workflowId, ops, collaboration = {}) {
     throw err
   }
   const data = await response.json()
-  await syncCollaborationResponse(data)
+  await syncCollaborationResponse(data, workflowId)
   return data
 }
 

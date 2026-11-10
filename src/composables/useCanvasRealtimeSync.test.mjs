@@ -235,3 +235,37 @@ test('租约：socket 使用传入的会话 clientId，并带 workflowId 转发�
     ['saved', 'wf-1', { version: 3 }]
   ])
 })
+
+test('切换工作流：不沿用上一个工作流的 epoch/revision，协作状态写入对应工作流', async () => {
+  const states = []
+  let stale = 0
+  const store = {
+    ...makeFakeStore(),
+    setCollaborationState(state) { states.push(state) },
+    markCollaborationStale() { stale += 1 }
+  }
+  let wfId = 'wf-1'
+  const sockets = []
+  const factory = (opts) => { sockets.push(opts); return { connect() {}, disconnect() {} } }
+  const manifests = { 'wf-1': { collabRevision: 50, collabEpoch: 'epoch-1' }, 'wf-2': { collabRevision: 3, collabEpoch: 'epoch-2' } }
+  const sync = useCanvasRealtimeSync({
+    getWorkflowId: () => wfId,
+    store,
+    api: { async getWorkflowManifest(id) { return manifests[id] }, async getWorkflowNodesBatch() { return { nodes: [] } } },
+    socketFactory: factory
+  })
+  sockets[0].onHello({ collabRevision: 50, collabEpoch: 'epoch-1' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  wfId = 'wf-2'
+  sync.connect()
+  sockets[1].onHello({ collabRevision: 3, collabEpoch: 'epoch-2' })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  assert.equal(stale, 0, '新工作流的 hello 不应与上一个工作流的 epoch 比较')
+  const wf2 = states.filter(s => s.workflowId === 'wf-2')
+  assert.ok(wf2.length > 0)
+  for (const s of wf2) {
+    assert.equal(s.collabEpoch, 'epoch-2')
+    assert.equal(s.collabRevision, 3)
+  }
+  assert.ok(states.every(s => s.workflowId), '协作状态必须指明所属工作流')
+})
