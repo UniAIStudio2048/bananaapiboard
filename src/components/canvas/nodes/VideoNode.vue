@@ -6926,7 +6926,10 @@ async function setSeedanceDraftEnabled(enabled, resolution = selectedVideoParame
   try {
     const { workflowId } = await ensureCanvasWorkflowForVideoSubmission(props.id)
     const data = { seedanceDraftEnabled: enabled, seedanceResolution: resolution, videoResolution: resolution }
-    const result = await patchWorkflowNode(workflowId, props.id, { data })
+    const node = canvasStore.nodes?.find(item => item.id === props.id)
+    const baseVersion = Number(node?.version) || Number(canvasStore.getCurrentTab()?.savedNodeVersions?.[props.id]) || Number(props.data?._baseVersion)
+    if (!Number.isSafeInteger(baseVersion) || baseVersion < 1) throw new Error('节点版本未就绪，请刷新画布后重试')
+    const result = await patchWorkflowNode(workflowId, props.id, { data }, baseVersion)
     if (canvasStore.getCurrentTab()?.id === tabId) {
       canvasStore.updateNodeData(props.id, data, { silent: true })
       canvasStore.applyWorkflowSaveVersions({ id: workflowId, node_versions: { ...canvasStore.getCurrentTab().savedNodeVersions, [props.id]: result.version } })

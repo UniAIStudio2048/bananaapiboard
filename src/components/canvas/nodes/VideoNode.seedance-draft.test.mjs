@@ -24,11 +24,15 @@ test('failed final submission preserves identity for existing recovery and displ
   await assert.rejects(submit('source', { submissionId: 'submit' }), error => error.message === '积分不足' && error.clientSubmissionId === 'submit')
 })
 
-function getDraftSettings({ fail = false, resolution = '480p', enabled = false } = {}) {
+function getDraftSettings({ fail = false, resolution = '480p', enabled = false, version = 1 } = {}) {
   const calls = []
+  const patchBaseVersions = []
   const props = { id: 'node', data: { seedanceDraftEnabled: enabled } }
   const savingSeedanceDraft = { value: false }
   const selectedVideoParameterResolution = { value: resolution }
+  const nodes = [{ id: 'node', version, data: props.data }]
+  const tab = { id: 'tab', savedNodeVersions: { other: 7, node: version } }
+  let serverVersion = version
   const bindings = {
     props,
     savingSeedanceDraft,
@@ -37,15 +41,22 @@ function getDraftSettings({ fail = false, resolution = '480p', enabled = false }
     supportsSeedanceDraft: { value: true },
     isGenerating: { value: false },
     canvasStore: {
-      getCurrentTab: () => ({ id: 'tab', savedNodeVersions: { other: 7, node: 1 } }),
+      getCurrentTab: () => tab,
+      nodes,
       updateNodeData: (id, data) => { calls.push(['local', data]); Object.assign(props.data, data) },
-      applyWorkflowSaveVersions: data => calls.push(['version', data])
+      applyWorkflowSaveVersions: data => {
+        calls.push(['version', data])
+        tab.savedNodeVersions = { ...tab.savedNodeVersions, ...(data?.node_versions || {}) }
+        for (const node of nodes) node.version = tab.savedNodeVersions[node.id] || node.version
+      }
     },
     ensureCanvasWorkflowForVideoSubmission: async () => ({ workflowId: 'workflow' }),
-    patchWorkflowNode: async (workflowId, nodeId, patch) => {
+    patchWorkflowNode: async (workflowId, nodeId, patch, baseVersion) => {
       calls.push(['persist', patch.data])
+      patchBaseVersions.push(baseVersion)
       if (fail) throw new Error('save failed')
-      return { version: 2 }
+      serverVersion += 1
+      return { version: serverVersion }
     },
     syncGenericVideoResolution: value => { selectedVideoParameterResolution.value = value },
     showToast: message => calls.push(['error', message])
@@ -53,7 +64,7 @@ function getDraftSettings({ fail = false, resolution = '480p', enabled = false }
   const start = source.indexOf('async function setSeedanceDraftEnabled(')
   const end = source.indexOf('\nasync function handleSeedanceDraftFinal', start)
   const set = new Function(...Object.keys(bindings), `${source.slice(start, end)}; return setSeedanceDraftEnabled`)(...Object.values(bindings))
-  return { set, calls, props, bindings }
+  return { set, calls, props, bindings, patchBaseVersions }
 }
 
 test('draft on/off selections persist before updating the node and retain 480p', async () => {
@@ -74,6 +85,13 @@ test('switching away from 480p persists resolution and disables draft together',
   await state.set(false, '1080p')
   assert.deepEqual(state.calls[0], ['persist', { seedanceDraftEnabled: false, seedanceResolution: '1080p', videoResolution: '1080p' }])
   assert.equal(state.bindings.selectedVideoParameterResolution.value, '1080p')
+})
+
+test('draft mode and resolution changes use the latest server node version', async () => {
+  const state = getDraftSettings({ version: 4 })
+  await state.set(true)
+  await state.set(false, '720p')
+  assert.deepEqual(state.patchBaseVersions, [4, 5])
 })
 
 test('failed draft setting save leaves the original selection unchanged', async () => {
