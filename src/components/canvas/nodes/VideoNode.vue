@@ -9540,7 +9540,7 @@ async function refreshDepthPriceHint() {
 async function handleToolbarDepth() {
   if (isDepthProcessing.value) return
   isDepthProcessing.value = true
-  let context, nodeId
+  let context, nodeId, nodeVersion = 1
   try {
     let videoUrl = props.data.output?.url || normalizedVideoUrl.value
     if (!videoUrl) throw new Error('没有可处理的视频')
@@ -9565,22 +9565,30 @@ async function handleToolbarDepth() {
       output: { type: 'video', url: '' }
     } }
     const edge = { id: `edge_${globalThis.crypto.randomUUID()}`, source: props.id, target: nodeId, sourceHandle: 'output', targetHandle: 'input' }
-    await postWorkflowOps(context.workflowId, [{ op: 'add', target: 'node', payload: node }, { op: 'add', target: 'edge', payload: edge }])
+    const opsResult = await postWorkflowOps(context.workflowId, [{ op: 'add', target: 'node', payload: node }, { op: 'add', target: 'edge', payload: edge }])
+    nodeVersion = Number(opsResult?.results?.find(item => item.target === 'node' && item.nodeId === nodeId)?.version) || 1
     canvasStore.addNode(node); canvasStore.addEdge(edge)
+    canvasStore.applyWorkflowSaveVersions?.({ id: context.workflowId, node_versions: { ...(canvasStore.getCurrentTab?.()?.savedNodeVersions || {}), [nodeId]: nodeVersion } })
     const response = await fetch(getApiUrl('/api/videos/depth/tasks'), { method: 'POST', headers,
       body: JSON.stringify({ videoUrl, requestId, workflowId: context.workflowId, nodeId }) })
     const result = await response.json()
     if (!response.ok || !result.taskId) throw new Error(result.message || '深度提取提交失败')
     const data = { taskId: result.taskId, taskType: 'video', progress: '深度提取中...', pointsCost: result.prepaid }
-    await patchWorkflowNode(context.workflowId, nodeId, { data })
-    canvasStore.updateNodeData(nodeId, data)
+    const patched = await patchWorkflowNode(context.workflowId, nodeId, { data }, nodeVersion)
+    nodeVersion = Number(patched?.version) || nodeVersion
+    canvasStore.applyWorkflowSaveVersions?.({ id: context.workflowId, node_versions: { ...(canvasStore.getCurrentTab?.()?.savedNodeVersions || {}), [nodeId]: nodeVersion } })
+    canvasStore.updateNodeData(nodeId, data, { silent: true })
     registerTask({ taskId: result.taskId, type: 'video', nodeId, tabId: context.currentTab.id, metadata: { sourceNodeId: props.id, workflowId: context.workflowId } })
     showToast(`深度提取已提交，预扣 ${formatPoints(result.prepaid)} 积分`, 'success')
   } catch (error) {
     if (nodeId && context) {
       const data = { status: 'error', progress: null, error: error.message }
-      await patchWorkflowNode(context.workflowId, nodeId, { data }).catch(() => {})
-      canvasStore.updateNodeData(nodeId, data)
+      const errorPatch = await patchWorkflowNode(context.workflowId, nodeId, { data }, nodeVersion).catch(() => null)
+      if (errorPatch?.version) {
+        nodeVersion = Number(errorPatch.version) || nodeVersion
+        canvasStore.applyWorkflowSaveVersions?.({ id: context.workflowId, node_versions: { ...(canvasStore.getCurrentTab?.()?.savedNodeVersions || {}), [nodeId]: nodeVersion } })
+      }
+      canvasStore.updateNodeData(nodeId, data, { silent: true })
     }
     showToast(error.message || '深度提取失败', 'error')
   } finally { isDepthProcessing.value = false }
