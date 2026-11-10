@@ -1650,10 +1650,13 @@ const currentMinimaxH3ModeConfig = computed(() => {
 
 // Wan 3.0 模式选择
 const isWan3Model = computed(() => ['wan3', 'atlascloud-wan3', 'wavespeed-wan3', 'siray-wan3', 'grsai-wan3'].includes(currentModelConfig.value?.apiType))
+const isOfficialWan3Model = computed(() => currentModelConfig.value?.apiType === 'wan3')
 const isRouterBeeWan3Model = computed(() => currentModelConfig.value?.apiType === 'routerbee-wan3')
 const grsaiSeed = ref(props.data.grsaiSeed ?? '')
 watch(grsaiSeed, value => canvasStore.updateNodeData(props.id, { grsaiSeed: value }))
 const selectedWan3Mode = ref(props.data.wan3Mode || 'text2video')
+const wan3PromptExtend = ref(props.data.wan3PromptExtend === true)
+const showWan3AdvancedOptions = ref(false)
 
 function normalizeRouterBeeWan3Mode(mode) {
   if (mode === 'image2video_first') return 'image2video'
@@ -4911,6 +4914,10 @@ watch([selectedModel, selectedAspectRatio, selectedDuration, selectedKlingOffici
   { deep: true }
 )
 
+watch(wan3PromptExtend, value => {
+  canvasStore.updateNodeData(props.id, { wan3PromptExtend: value === true })
+})
+
 watch(selectedWan3Mode, wan3Mode => {
   if (wan3Mode === 'file') wan3Link.value = ''
   if (wan3Mode === 'link') wan3File.value = null
@@ -6152,6 +6159,9 @@ async function sendGenerateRequest(nodeId, finalPrompt, finalImages, capturedSta
       formData.append('wan3_audio', wan3Config.audio === false ? 'false' : 'true')
       formData.append('wan3_prompt_extend', wan3Config.promptExtend === true ? 'true' : 'false')
     }
+    if (capturedState.apiType === 'wan3') {
+      formData.append('wan3_prompt_extend', capturedState.wan3PromptExtend === true ? 'true' : 'false')
+    }
 
     if (wan3Mode === 'image2video_first') {
       if (finalImages.length > 0) formData.append('first_frame_image', finalImages[0])
@@ -7350,6 +7360,7 @@ async function handleGenerate(options = {}) {
       seedanceDraft: seedanceDraftEnabled.value,
       minimaxH3Mode: isMinimaxH3Model.value ? (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) : '',
       wan3Mode: isWan3Model.value ? selectedWan3Mode.value : '',
+      wan3PromptExtend: isOfficialWan3Model.value ? wan3PromptExtend.value : false,
       grsaiSeed: grsaiSeed.value,
       wan3File: isWan3Model.value ? wan3File.value : null,
       wan3Link: isWan3Model.value ? wan3Link.value : '',
@@ -7413,6 +7424,7 @@ async function handleGenerate(options = {}) {
     minimaxH3Resolution: isMinimaxH3Model.value ? minimaxH3Resolution.value : '',
     minimaxH3Mode: isMinimaxH3Model.value ? (selectedMinimaxH3Mode.value || minimaxH3DefaultMode.value) : '',
     wan3Mode: isWan3Model.value ? selectedWan3Mode.value : '',
+    wan3PromptExtend: isOfficialWan3Model.value ? wan3PromptExtend.value : false,
     grsaiSeed: grsaiSeed.value,
     wan3File: isWan3Model.value ? wan3File.value : null,
     wan3Link: isWan3Model.value ? wan3Link.value : '',
@@ -11851,6 +11863,29 @@ function toggleFullscreenPlayback() {
         </Transition>
       </template>
       
+      <!-- 官方万相 3.0 高级选项 -->
+      <template v-if="isOfficialWan3Model">
+        <button class="sora2-collapse-trigger" @click="showWan3AdvancedOptions = !showWan3AdvancedOptions">
+          <span class="sora2-collapse-icon" :class="{ 'expanded': showWan3AdvancedOptions }">∧</span>
+          <span>{{ showWan3AdvancedOptions ? '收起' : '扩展' }}</span>
+        </button>
+
+        <Transition name="slide-down">
+          <div v-if="showWan3AdvancedOptions" class="sora2-advanced-options seedance-advanced">
+            <div class="sora2-option-row">
+              <span class="sora2-option-label">智能扩写提示词</span>
+              <label class="sora2-toggle-switch">
+                <input type="checkbox" v-model="wan3PromptExtend" />
+                <span class="sora2-toggle-slider"></span>
+              </label>
+            </div>
+            <div class="seedance-sound-hint">
+              开启后由万相自动扩写提示词，默认关闭。
+            </div>
+          </div>
+        </Transition>
+      </template>
+
       <!-- Vidu 图生视频模式选择 -->
       <template v-if="isViduModel && referenceImages.length > 0">
         <div class="vidu-mode-section">

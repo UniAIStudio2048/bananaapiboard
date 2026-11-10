@@ -258,7 +258,7 @@ const wan3ModeOpen = ref(true)
 const wan3AdvancedOpen = ref(false)
 const wan3Duration = ref(5)
 const wan3GenerateAudio = ref(true)
-const wan3PromptExtend = ref(true)
+const wan3PromptExtend = ref(false)
 const wan3Watermark = ref(false)
 const wan3Seed = ref('')
 const wan3File = ref(null)
@@ -728,7 +728,7 @@ watch(model, (newModel) => {
     const wan3Config = modelConfig.routerbeeConfig || modelConfig.wan3Config || {}
     wan3Duration.value = Number(wan3Config.duration || durations[0] || 5)
     wan3GenerateAudio.value = wan3Config.audio !== false
-    wan3PromptExtend.value = wan3Config.promptExtend !== false
+    wan3PromptExtend.value = wan3Config.promptExtend === true
     wan3Watermark.value = wan3Config.watermark === true
     wan3Seed.value = ''
     if (!wan3AvailableModes.value.some(item => item.value === wan3Mode.value)) {
