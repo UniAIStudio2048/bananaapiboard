@@ -199,6 +199,7 @@ const CACHE_DURATION = 5 * 60 * 1000 // 缓存有效期 5 分钟
 const TEAM_SYNC_INTERVAL = 30000 // 团队空间同步间隔 30 秒
 let teamSyncTimer = null
 const lastSyncId = ref(null) // 记录最新一条记录的ID，用于检测新数据
+let historyRevision = 0
 
 function updateContainerHeight() {
   // 旧虚拟滚动实现遗留的尺寸同步入口，当前瀑布流布局不需要额外计算
@@ -379,6 +380,7 @@ async function loadHistory(forceRefresh = false) {
       maxPages: 1,
       cacheResult: false
     })
+    if (!freshData) return
     // 精确比较，避免数据相同时替换数组引用导致图片跳闪
     if (!_isHistoryEqual(freshData, historyList.value)) {
       historyList.value = freshData
@@ -396,6 +398,7 @@ async function loadHistory(forceRefresh = false) {
 // 从服务器获取历史数据并缓存
 async function _fetchFromServer(spaceParams, spaceType, teamId, options = {}) {
   const normalizedOptions = typeof options === 'boolean' ? { noCache: options } : (options || {})
+  const requestRevision = historyRevision
   const {
     noCache = false,
     maxPages,
@@ -407,6 +410,7 @@ async function _fetchFromServer(spaceParams, spaceType, teamId, options = {}) {
     ...(maxPages ? { maxPages } : {})
   }
   const result = await getHistory(query)
+  if (requestRevision !== historyRevision) return null
   const freshData = result.history || []
   console.log('[HistoryPanel] 从服务器加载:', freshData.length, '条')
   
@@ -463,6 +467,7 @@ function estimateItemWeight(item) {
 async function _refreshHistoryInBackground(spaceParams, spaceType, teamId, options = {}) {
   try {
     const freshData = await _fetchFromServer(spaceParams, spaceType, teamId, options)
+    if (!freshData) return
     if (!_isHistoryEqual(freshData, historyList.value)) {
       historyList.value = freshData
       dataCached.value = true
@@ -755,11 +760,14 @@ async function confirmDelete() {
   showDeleteConfirm.value = false
   
   try {
+    historyRevision += 1
     await deleteHistory(item.id, item.type)
     historyList.value = historyList.value.filter(h => h.id !== item.id)
     
     // 🔥 使 IndexedDB 缓存失效
-    invalidateCache(item.type).catch(() => {})
+    await invalidateCache(item.type)
+    dataCached.value = false
+    lastLoadTime.value = 0
     
     // 如果在预览模式下删除了当前预览的项，关闭预览
     if (previewItem.value && previewItem.value.id === item.id) {
@@ -1828,6 +1836,7 @@ function handleGlobalClick(e) {
 let resizeObserver = null
 
 function handleCanvasHistoryInvalidate() {
+  historyRevision += 1
   dataCached.value = false
   invalidateCache('all').catch(() => {})
   refreshOpenHistorySilently()
