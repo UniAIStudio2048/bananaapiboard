@@ -1968,9 +1968,10 @@ export const useCanvasStore = defineStore('canvas', () => {
         const node = nodesWithMedia[i]
         const targetNode = nodes.value.find(n => n.id === node.id)
         if (targetNode && node.data._originalMedia) {
+          const isRegenerating = ['processing', 'pending'].includes(String(targetNode.data?.status || '').toLowerCase())
           Object.assign(targetNode.data, {
             sourceImages: node.data._originalMedia.sourceImages || [],
-            output: node.data._originalMedia.output || targetNode.data.output,
+            ...(!isRegenerating ? { output: node.data._originalMedia.output || targetNode.data.output } : {}),
             _mediaLoading: false
           })
           delete targetNode.data._originalMedia
@@ -2105,7 +2106,8 @@ export const useCanvasStore = defineStore('canvas', () => {
     const localData = { ...(target.data || {}) }
     if (localData._mediaLoading && localData._originalMedia) {
       localData.sourceImages = localData._originalMedia.sourceImages || localData.sourceImages || []
-      localData.output = localData._originalMedia.output || localData.output
+      const isRegenerating = ['processing', 'pending'].includes(String(localData.status || '').toLowerCase())
+      if (!isRegenerating) localData.output = localData._originalMedia.output || localData.output
     }
 
     // 关键保护：远端 stale 数据不应覆盖本地刚完成的生成结果。

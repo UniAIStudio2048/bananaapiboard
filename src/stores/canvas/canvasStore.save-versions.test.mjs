@@ -25,10 +25,11 @@ function harness() {
     workflowTabs, activeTabId: { value: 'tab-a' }, nodes: { value: structuredClone(workflowTabs.value[0].nodes) },
     edges: { value: [] }, viewport: { value: {} }, sanitizeWorkflowForSave, isStaleTaskResultForInFlightNode, TASK_RESULT_FIELDS,
     getCurrentTab: () => workflowTabs.value.find(tab => tab.id === context.activeTabId.value), console: { warn() {} },
+    requestAnimationFrame: callback => callback(), setTimeout: callback => callback(),
     createSkeletonNodes: nodes => structuredClone(nodes), cleanEdges: edges => edges,
     switchToTab: id => { context.activeTabId.value = id; context.nodes.value = structuredClone(workflowTabs.value.find(tab => tab.id === id).nodes) }
   }
-  for (const name of ['captureNodeVersions', 'exportWorkflowForSave', 'applyWorkflowSaveVersions', 'markCurrentTabSaved', 'applyIncrementalNode', 'openWorkflowInNewTab', 'setCollaborationState']) {
+  for (const name of ['captureNodeVersions', 'exportWorkflowForSave', 'applyWorkflowSaveVersions', 'markCurrentTabSaved', 'applyIncrementalNode', 'asyncRestoreMedia', 'openWorkflowInNewTab', 'setCollaborationState']) {
     const fn = findFunction(name, ast)
     if (fn) context[name] = runInNewContext(`(${source.slice(fn.start, fn.end)})`, context)
   }
@@ -114,6 +115,51 @@ test('a completion during media loading replaces the original output without los
   assert.equal(saved.nodes[0].data.output.url, 'https://example.com/completed.mp4')
   assert.deepEqual(saved.nodes[0].data.sourceImages, ['https://example.com/source.png'])
   assert.equal(saved.baseNodeVersions.media, 8)
+})
+
+test('incremental sync cannot restore stale media after the node starts regenerating', () => {
+  const h = harness()
+  h.nodes.value[0].data = {
+    status: 'processing', processingStartedAt: 2000, taskId: null, output: { type: 'video', url: null, urls: [] },
+    sourceImages: [], _mediaLoading: true,
+    _originalMedia: { sourceImages: ['https://example.com/source.png'], output: { url: 'https://example.com/old.mp4' } }
+  }
+  h.applyIncrementalNode({ id: 'media', version: 8, data: { progress: '正在提交任务...' } }, { remote: true })
+  const data = h.nodes.value[0].data
+  assert.equal(data.status, 'processing')
+  assert.equal(data.output?.url, null)
+  assert.deepEqual(data.sourceImages, ['https://example.com/source.png'])
+  assert.equal('_mediaLoading' in data, false)
+  assert.equal('_originalMedia' in data, false)
+})
+
+test('async media restore cannot resurrect the previous output while regenerating', () => {
+  const h = harness()
+  h.nodes.value[0].data = {
+    status: 'processing', processingStartedAt: 2000, taskId: null, output: { type: 'video', url: null, urls: [] },
+    sourceImages: [], _mediaLoading: true,
+    _originalMedia: { sourceImages: ['https://example.com/source.png'], output: { url: 'https://example.com/old.mp4' } }
+  }
+  h.asyncRestoreMedia()
+  const data = h.nodes.value[0].data
+  assert.equal(data.status, 'processing')
+  assert.equal(data.output?.url, null)
+  assert.deepEqual(data.sourceImages, ['https://example.com/source.png'])
+  assert.equal(data._mediaLoading, false)
+  assert.equal('_originalMedia' in data, false)
+})
+
+test('async media restore still restores output for a node that is not regenerating', () => {
+  const h = harness()
+  h.nodes.value[0].data = {
+    status: 'success', output: null, sourceImages: [], _mediaLoading: true,
+    _originalMedia: { sourceImages: ['https://example.com/source.png'], output: { url: 'https://example.com/result.mp4' } }
+  }
+  h.asyncRestoreMedia()
+  const data = h.nodes.value[0].data
+  assert.equal(data.output.url, 'https://example.com/result.mp4')
+  assert.deepEqual(data.sourceImages, ['https://example.com/source.png'])
+  assert.equal(data._mediaLoading, false)
 })
 
 test('a late older media event cannot replace a newer result while retaining its newer baseline', () => {
