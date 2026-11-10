@@ -165,10 +165,19 @@ export function createEditLeaseClient({ request, getSessionId, getBeaconAuth = (
     return false
   }
 
-  /** 保存被服务端拒绝（edit_lease_lost / edit_lease_held）时切为只读 */
-  function markLost(workflowId, holder = null, code = 'edit_lease_lost') {
-    if (!workflowId) return
+  /**
+   * 保存被服务端拒绝（edit_lease_lost / edit_lease_held）时切为只读。
+   * sentToken 为被拒请求携带的令牌（未带为 null）：获取/抢占进行中，或请求发出后本会话已换到新令牌时，
+   * 该拒绝来自过期请求，忽略，避免刚抢占成功又被迟到的 409 打回只读。
+   * @returns {boolean} 是否切为只读
+   */
+  function markLost(workflowId, holder = null, code = 'edit_lease_lost', sentToken) {
+    if (!workflowId) return false
+    const state = getState(workflowId)
+    if (state?.mode === 'pending') return false
+    if (sentToken !== undefined && state?.mode === 'editor' && String(state.token) !== String(sentToken ?? '')) return false
     setState(workflowId, { mode: 'readonly', holder, reason: code === 'edit_lease_held' ? 'held' : 'taken' })
+    return true
   }
 
   return {

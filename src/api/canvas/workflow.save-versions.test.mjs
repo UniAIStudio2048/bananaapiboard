@@ -133,7 +133,7 @@ test('服务端以 edit_lease_lost 拒绝时记录持有者并切为只读，不
   const h = harness(false, null, { lease: { editor: true }, errorBody: { error: '编辑权已转移', code: 'edit_lease_lost', holder } })
   await assert.rejects(h.context.saveWorkflow({ id: 'wf-a', nodes: [] }), err => err.code === 'edit_lease_lost')
   assert.equal(h.requests.length, 1)
-  assert.deepEqual(JSON.parse(JSON.stringify(h.marks)), [['wf-a', holder, 'edit_lease_lost']])
+  assert.deepEqual(JSON.parse(JSON.stringify(h.marks)), [['wf-a', holder, 'edit_lease_lost', '4']])
 })
 
 test('版本冲突重试只拉取冲突节点，服务端写回字段覆盖本地，其余字段保留本地修改', async () => {

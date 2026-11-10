@@ -35,9 +35,9 @@ function assertWorkflowWritable(workflowId) {
 }
 
 /** 服务端以租约冲突拒绝写入时切为只读，并记录当前持有者 */
-function noteLeaseRejection(workflowId, err) {
+function noteLeaseRejection(workflowId, err, leaseHeaders = {}) {
   if (workflowId && (err?.code === 'edit_lease_lost' || err?.code === 'edit_lease_held')) {
-    canvasEditLease.markLost(workflowId, err.holder || null, err.code)
+    canvasEditLease.markLost(workflowId, err.holder || null, err.code, leaseHeaders['X-Canvas-Lease-Token'] ?? null)
   }
 }
 
@@ -141,10 +141,11 @@ export async function getStorageQuota() {
 }
 
 async function requestWorkflowSave(jsonBody, workflowId = null) {
+  const leaseHeaders = workflowId ? canvasEditLease.getLeaseHeaders(workflowId) : {}
   const response = await fetch(getApiUrl(`/api/canvas/workflows`), {
     method: 'POST',
     credentials: 'include',
-    headers: { ...getAuthHeaders(), ...(workflowId ? canvasEditLease.getLeaseHeaders(workflowId) : {}) },
+    headers: { ...getAuthHeaders(), ...leaseHeaders },
     body: jsonBody
   })
 
@@ -166,7 +167,7 @@ async function requestWorkflowSave(jsonBody, workflowId = null) {
     err.status = response.status
     err.nodeVersions = data.node_versions || null
     err.holder = data.holder || null
-    noteLeaseRejection(workflowId, err)
+    noteLeaseRejection(workflowId, err, leaseHeaders)
     throw err
   }
   return data
@@ -359,10 +360,11 @@ export async function patchWorkflowNode(workflowId, nodeId, patch, baseVersion, 
     ...collab
   }
   assertWorkflowWritable(workflowId)
+  const leaseHeaders = canvasEditLease.getLeaseHeaders(workflowId)
   const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/nodes/${encodeURIComponent(nodeId)}`), {
     method: 'PATCH',
     credentials: 'include',
-    headers: { ...getAuthHeaders(), ...canvasEditLease.getLeaseHeaders(workflowId), 'X-Canvas-Client-Id': collab.clientId },
+    headers: { ...getAuthHeaders(), ...leaseHeaders, 'X-Canvas-Client-Id': collab.clientId },
     body: JSON.stringify(body)
   })
   if (response.status === 409) {
@@ -374,7 +376,7 @@ export async function patchWorkflowNode(workflowId, nodeId, patch, baseVersion, 
     err.currentRevision = body.currentRevision
     err.currentEpoch = body.currentEpoch
     err.holder = body.holder || null
-    noteLeaseRejection(workflowId, err)
+    noteLeaseRejection(workflowId, err, leaseHeaders)
     throw err
   }
   if (!response.ok) {
@@ -404,10 +406,11 @@ export async function postWorkflowOps(workflowId, ops, collaboration = {}) {
     opId: op.opId || op.op_id || op._id || `op:${workflowId}:${Date.now()}:${index}:${Math.random().toString(36).slice(2)}`
   }))
   assertWorkflowWritable(workflowId)
+  const leaseHeaders = canvasEditLease.getLeaseHeaders(workflowId)
   const response = await fetch(getApiUrl(`/api/canvas/workflows/${workflowId}/ops`), {
     method: 'POST',
     credentials: 'include',
-    headers: { ...getAuthHeaders(), ...canvasEditLease.getLeaseHeaders(workflowId), 'X-Canvas-Client-Id': collab.clientId },
+    headers: { ...getAuthHeaders(), ...leaseHeaders, 'X-Canvas-Client-Id': collab.clientId },
     body: JSON.stringify({ ops: normalizedOps, ...collab })
   })
   if (!response.ok) {
@@ -418,7 +421,7 @@ export async function postWorkflowOps(workflowId, ops, collaboration = {}) {
     err.body = body
     err.code = body.code
     err.holder = body.holder || null
-    noteLeaseRejection(workflowId, err)
+    noteLeaseRejection(workflowId, err, leaseHeaders)
     throw err
   }
   const data = await response.json()

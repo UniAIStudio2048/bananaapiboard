@@ -114,6 +114,31 @@ test('markLost：保存被拒（编辑权已转移）时切为只读', () => {
   assert.equal(client.getState('wf-2').reason, 'held')
 })
 
+test('markLost：迟到的旧请求拒绝不覆盖已获得的编辑权', async () => {
+  const { client } = makeClient({ '/lease/takeover': { ok: true, status: 200, data: { mode: 'editor', token: 7 } } })
+  await client.takeover('wf-1')
+  // 抢占前未带令牌发出的写入在抢占完成后才返回 409
+  assert.equal(client.markLost('wf-1', { device: 'Chrome · Windows' }, 'edit_lease_held', null), false)
+  assert.equal(client.getState('wf-1').mode, 'editor')
+  // 携带旧令牌的写入被拒同样忽略
+  assert.equal(client.markLost('wf-1', null, 'edit_lease_lost', 6), false)
+  assert.equal(client.getState('wf-1').mode, 'editor')
+  // 携带当前令牌的写入被拒：确实失去编辑权
+  assert.equal(client.markLost('wf-1', null, 'edit_lease_lost', 7), true)
+  assert.equal(client.getState('wf-1').mode, 'readonly')
+})
+
+test('markLost：获取或抢占进行中时忽略，以接口结果为准', async () => {
+  let resolveTakeover
+  const { client } = makeClient({ '/lease/takeover': () => new Promise(resolve => { resolveTakeover = resolve }) })
+  const pending = client.takeover('wf-1')
+  assert.equal(client.getState('wf-1').mode, 'pending')
+  assert.equal(client.markLost('wf-1', { device: 'X' }, 'edit_lease_held', null), false)
+  resolveTakeover({ ok: true, status: 200, data: { mode: 'editor', token: 3 } })
+  await pending
+  assert.equal(client.getState('wf-1').mode, 'editor')
+})
+
 test('yield 与 release：带会话与令牌；release 使用 keepalive 并在 body 携带鉴权', async () => {
   const { client, calls } = makeClient({ '/lease/acquire': { ok: true, status: 200, data: { mode: 'editor', token: 11 } } })
   await client.acquire('wf-1')
