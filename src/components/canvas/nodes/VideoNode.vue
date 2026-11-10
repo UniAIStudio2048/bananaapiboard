@@ -3191,11 +3191,12 @@ const resizeStart = ref({ x: 0, y: 0, width: 0, height: 0 })
 let resizeRafId = null
 
 // 节点样式类
+const isGenerationInProgress = computed(() => ['processing', 'pending'].includes(String(props.data?.status || '').toLowerCase()))
 const nodeClass = computed(() => ({
   'canvas-node': true,
   'video-node': true,
   'selected': props.selected,
-  'processing': props.data.status === 'processing',
+  'processing': isGenerationInProgress.value,
   'success': props.data.status === 'success',
   'error': props.data.status === 'error',
   'resizing': isResizing.value,
@@ -3203,7 +3204,7 @@ const nodeClass = computed(() => ({
 }))
 
 // 是否有输出
-const hasOutput = computed(() => !!props.data.output?.url)
+const hasOutput = computed(() => !isGenerationInProgress.value && !!props.data.output?.url)
 const shouldRenderVideoOutput = computed(() => hasOutput.value && !readonlyPreviewVideoFailed.value)
 const readonlyPreviewVideoFailed = ref(false)
 const VIDEO_TOOL_MODAL_MODES = {
