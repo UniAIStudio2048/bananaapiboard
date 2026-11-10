@@ -175,6 +175,23 @@ test('版本冲突时服务端仍是上一次任务的成功结果，不覆盖�
   assert.deepEqual(h.requests[1].baseNodeVersions, { video: 5 })
 })
 
+test('复制粘贴出的节点重新生成：服务端仍是 idle + 旧视频时不回跳', async () => {
+  const serverNodes = [{ id: 'pasted', version: 2, data: {
+    status: 'idle', progress: null, taskId: null, processingStartedAt: 1000,
+    output: { type: 'video', url: 'https://cdn/old.mp4' }
+  } }]
+  const h = harness(false, { pasted: 2 }, { serverNodes })
+  await h.context.saveWorkflow({
+    id: 'wf-a',
+    baseNodeVersions: { pasted: 1 },
+    nodes: [{ id: 'pasted', data: { status: 'processing', processingStartedAt: 2000, taskId: null, output: null } }]
+  })
+  const retried = h.requests[1].nodes.find(node => node.id === 'pasted')
+  assert.equal(retried.data.status, 'processing')
+  assert.equal(retried.data.output, null)
+  assert.equal(h.remoteApplied.length, 0)
+})
+
 test('版本冲突时服务端已写回本次生成的结果，照常合并到本地', async () => {
   const serverNodes = [{ id: 'video', version: 5, data: {
     status: 'success', progress: null, taskId: 'cgt-new', processingStartedAt: 2000,

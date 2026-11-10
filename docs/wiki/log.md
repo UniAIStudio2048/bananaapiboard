@@ -7,6 +7,10 @@ timestamp: 2026-11-03
 
 # 变更日志
 
+## 2026-11-10
+
+- 修复复制粘贴的视频节点重新生成后仍跳回旧视频：粘贴节点在服务端是 `idle` + 旧视频，[canvasTaskResultGuard](../../src/utils/canvasTaskResultGuard.js) 改为不论状态，只要开始时间早于本次生成且不是同一任务就不覆盖本地。见 [画布工作流保存协议兼容性](canvas-workflow-save-compatibility.md)。
+
 ## 2026-11-09
 
 - 修复视频节点“生成中”偶发跳回旧视频（海外站高延迟下常见）：冲突重试、远端节点合并、视频提交恢复不再用上一次任务的结果覆盖正在重新生成的节点；增量写入 flush 遇到进行中批次时等待并发出新排队的写入。见 [画布工作流保存协议兼容性](canvas-workflow-save-compatibility.md)。

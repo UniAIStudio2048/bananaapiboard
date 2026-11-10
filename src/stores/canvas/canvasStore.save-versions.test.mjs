@@ -139,6 +139,17 @@ test('a remote node still carrying the previous task result cannot revert a node
   assert.equal(h.nodes.value[0].version, 8, 'version still advances so the next full save does not conflict')
 })
 
+test('a pasted node pushed back as idle with its copied video cannot revert the regeneration', () => {
+  const h = harness()
+  h.nodes.value[0].data = { prompt: 'p', status: 'processing', processingStartedAt: 2000, taskId: null, output: null }
+  h.applyIncrementalNode({ id: 'media', version: 8, data: {
+    prompt: 'p', status: 'idle', progress: null, taskId: null, processingStartedAt: 1000,
+    output: { type: 'video', url: 'https://example.com/old.mp4' }
+  } }, { remote: true })
+  assert.equal(h.nodes.value[0].data.status, 'processing')
+  assert.equal(h.nodes.value[0].data.output, null)
+})
+
 test('a remote result of the current generation still completes the node', () => {
   const h = harness()
   h.nodes.value[0].data = { status: 'processing', processingStartedAt: 2000, taskId: 'cgt-new', output: null }
