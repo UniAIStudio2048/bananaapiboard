@@ -125,9 +125,13 @@ export default defineConfig(({ mode }) => {
       },
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vue-vendor': ['vue', 'vue-router'],
-            'ui-vendor': ['@vue-flow/core', '@vue-flow/background', '@vue-flow/controls', '@vue-flow/minimap'],
+          manualChunks(id) {
+            if (id.includes('/node_modules/@vue-flow/')) return 'ui-vendor'
+            if (
+              id.includes('/node_modules/vue/') ||
+              id.includes('/node_modules/vue-router/') ||
+              id.includes('/node_modules/@vue/')
+            ) return 'vue-vendor'
           }
         }
       }
