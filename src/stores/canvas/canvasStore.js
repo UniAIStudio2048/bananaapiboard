@@ -88,6 +88,10 @@ export const useCanvasStore = defineStore('canvas', () => {
   const isHistoryAction = ref(false) // 是否正在执行历史操作（防止重复记录）
   let lastHistorySaveTime = 0      // 🔧 上次保存历史的时间（节流用）
   const HISTORY_THROTTLE_MS = 500  // 🔧 历史保存最小间隔（毫秒）- 增加到500ms减少内存压力
+  const HISTORY_TRANSIENT_NODE_KEYS = [
+    'dimensions', 'computedPosition', 'handleBounds', 'initialized',
+    'isParent', 'dragging', 'resizing', 'selected', 'events'
+  ]
 
   function syncHistoryRefs() {
     if (historyStack.value.length !== opHistory.length) {
@@ -1052,6 +1056,8 @@ export const useCanvasStore = defineStore('canvas', () => {
    */
   function cleanNodeForHistory(node) {
     const cleaned = { ...node }
+    // Vue Flow 运行时字段（选中、拖动、测量）不是用户操作，不进入撤销历史
+    for (const key of HISTORY_TRANSIENT_NODE_KEYS) delete cleaned[key]
     if (cleaned.data) {
       cleaned.data = { ...cleaned.data }
       // 移除可能很大的 base64 图片数据，只保留 URL 引用
@@ -1120,44 +1126,45 @@ export const useCanvasStore = defineStore('canvas', () => {
       effectiveMaxHistory = 15  // 30-50 节点：保留 15 条
     }
     
-    // 🔧 清理节点数据，移除大型 base64 减少内存
-    const cleanedNodes = nodes.value.map(n => cleanNodeForHistory(toRaw(n)))
-
-    // 🚀 使用 JSON 深拷贝（Vue Proxy 对象与 structuredClone 不兼容）
-    const state = {
-      nodes: JSON.parse(JSON.stringify(cleanedNodes)),
-      edges: JSON.parse(JSON.stringify(toRaw(edges.value)))
-    }
-
-    // 🚀 走 op-based 历史栈：只存 diff
-    opHistory.record(state)
+    // 🔧 清理节点数据（移除大型 base64），🚀 JSON 深拷贝后走 op-based 历史栈：只存 diff
+    opHistory.record(buildHistorySnapshot())
     opHistory.trim(effectiveMaxHistory)
     syncHistoryRefs()
   }
 
-  function cancelLatestHistory() {
+  function buildHistorySnapshot() {
     const cleanedNodes = nodes.value.map(node => cleanNodeForHistory(toRaw(node)))
-    const state = {
+    return {
       nodes: JSON.parse(JSON.stringify(cleanedNodes)),
       edges: JSON.parse(JSON.stringify(toRaw(edges.value)))
     }
-    const cancelled = opHistory.cancelLatest(state)
+  }
+
+  function cancelLatestHistory() {
+    const cancelled = opHistory.cancelLatest(buildHistorySnapshot())
     syncHistoryRefs()
     return cancelled
   }
-  
+
+  function applyHistoryState(state) {
+    const restoredNodes = sanitizeNodesForHistoryRestore(state.nodes)
+    nodes.value = restoredNodes
+    edges.value = state.edges
+    syncNodeGroupsFromVisibleNodes()
+    // 以实际恢复后的状态作为新基线，避免清洗差异在下次撤销时变成一步"空撤销"
+    return { nodes: restoredNodes, edges: state.edges }
+  }
+
   /**
    * 撤销（op-based）
+   * 历史是在改动之前保存的，撤销时把当前画面传入，最近一次改动会先单独入栈，
+   * 保证每次 Ctrl+Z 只撤销一步。
    */
   function undo() {
-    if (!opHistory.canUndo) return
+    if (isHistoryAction.value) return
 
     isHistoryAction.value = true
-    opHistory.undo(state => {
-      nodes.value = sanitizeNodesForHistoryRestore(state.nodes)
-      edges.value = state.edges
-      syncNodeGroupsFromVisibleNodes()
-    })
+    opHistory.undo(applyHistoryState, buildHistorySnapshot())
     syncHistoryRefs()
     isHistoryAction.value = false
   }
@@ -1169,11 +1176,7 @@ export const useCanvasStore = defineStore('canvas', () => {
     if (!opHistory.canRedo) return
 
     isHistoryAction.value = true
-    opHistory.redo(state => {
-      nodes.value = sanitizeNodesForHistoryRestore(state.nodes)
-      edges.value = state.edges
-      syncNodeGroupsFromVisibleNodes()
-    })
+    opHistory.redo(applyHistoryState)
     syncHistoryRefs()
     isHistoryAction.value = false
   }

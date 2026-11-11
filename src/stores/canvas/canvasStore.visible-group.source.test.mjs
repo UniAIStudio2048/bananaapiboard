@@ -77,8 +77,14 @@ test('undo and redo rebuild redundant group metadata from visible group nodes', 
     storeSource.indexOf('function trimHistory(')
   )
 
-  assert.match(undoSource, /syncNodeGroupsFromVisibleNodes\(\)/)
-  assert.match(redoSource, /syncNodeGroupsFromVisibleNodes\(\)/)
+  const applySource = storeSource.slice(
+    storeSource.indexOf('function applyHistoryState('),
+    storeSource.indexOf('function undo()')
+  )
+
+  assert.match(applySource, /syncNodeGroupsFromVisibleNodes\(\)/)
+  assert.match(undoSource, /opHistory\.undo\(applyHistoryState/)
+  assert.match(redoSource, /opHistory\.redo\(applyHistoryState\)/)
 })
 
 test('directory moves update both visible group membership records atomically', () => {

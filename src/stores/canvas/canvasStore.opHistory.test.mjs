@@ -20,6 +20,20 @@ assert.match(storeSrc, /opHistory\.clear\(\)/, 'clearHistory 必须调用 opHist
 assert.match(storeSrc, /opHistory\.trim\(/, 'trimHistory 必须调用 opHistory.trim')
 assert.match(storeSrc, /cancelLatestHistory,/, 'canvasStore 必须暴露取消最新历史操作')
 
+// 历史在改动前保存：撤销必须传入当前画面，让最近一次改动单独成为一步
+assert.match(
+  storeSrc,
+  /opHistory\.undo\(applyHistoryState,\s*buildHistorySnapshot\(\)\)/,
+  'undo 必须把当前画面快照传给 opHistory.undo，保证 Ctrl+Z 只撤销一步'
+)
+// 选中/拖动/测量等 Vue Flow 运行时字段不能进入历史，否则点选节点也会成为一步撤销
+assert.match(storeSrc, /const HISTORY_TRANSIENT_NODE_KEYS = \[[^\]]*'selected'[^\]]*\]/s, '历史快照必须剔除 selected')
+assert.match(
+  storeSrc,
+  /function cleanNodeForHistory\(node\) \{[\s\S]*?HISTORY_TRANSIENT_NODE_KEYS/,
+  'cleanNodeForHistory 必须剔除 Vue Flow 运行时字段'
+)
+
 // canUndo 必须是 >= 0（op-based 语义）
 assert.match(
   storeSrc,

@@ -184,4 +184,74 @@ function snap(nodes, edges = []) {
   assert.deepEqual(current, restoredWithFreshData)
 }
 
+// --- 改动前保存历史（store 的实际用法）：每次 Ctrl+Z 只撤销一步 ---
+{
+  const s0 = snap([{ id: 'a', x: 0 }])
+  const s1 = snap([{ id: 'a', x: 0 }, { id: 'b', x: 1 }])
+  const s2 = snap([{ id: 'a', x: 0 }, { id: 'b', x: 1 }, { id: 'c', x: 2 }])
+  const s3 = snap([{ id: 'a', x: 0 }, { id: 'b', x: 1 }, { id: 'c', x: 2 }, { id: 'd', x: 3 }])
+  const history = createOpHistory()
+  history.record(s0) // 打开画布建立基线
+  history.record(s0) // 操作 A 前保存 → s1
+  history.record(s1) // 操作 B 前保存 → s2
+  history.record(s2) // 操作 C 前保存 → s3
+
+  let current = s3
+  const apply = state => { current = state }
+  history.undo(apply, current)
+  assert.deepEqual(current, s2, '第一次撤销只能撤掉最后一步 C')
+  history.undo(apply, current)
+  assert.deepEqual(current, s1, '第二次撤销撤掉 B')
+  history.undo(apply, current)
+  assert.deepEqual(current, s0, '第三次撤销撤掉 A')
+  assert.equal(history.canUndo, false)
+
+  history.redo(apply)
+  history.redo(apply)
+  history.redo(apply)
+  assert.deepEqual(current, s3, '重做必须能恢复到最后一步 C')
+}
+
+// --- 未入栈的改动（如拖动）单独作为一步撤销 ---
+{
+  const history = createOpHistory()
+  history.record(snap([{ id: 'a', x: 0 }]))
+  history.record(snap([{ id: 'a', x: 0 }, { id: 'b', x: 1 }])) // 添加 b 后的下一次保存
+  let current = snap([{ id: 'a', x: 50 }, { id: 'b', x: 1 }]) // 拖动 a，未保存历史
+  history.undo(state => { current = state }, current)
+  assert.deepEqual(current, snap([{ id: 'a', x: 0 }, { id: 'b', x: 1 }]), '只撤销拖动，不连带撤销添加 b')
+}
+
+// --- 撤销后无新改动时不截断重做栈 ---
+{
+  const history = createOpHistory()
+  history.record(snap([{ id: 'a', x: 0 }]))
+  history.record(snap([{ id: 'a', x: 1 }]))
+  history.record(snap([{ id: 'a', x: 2 }]))
+  let current = snap([{ id: 'a', x: 2 }])
+  history.undo(state => { current = state }, current)
+  history.undo(state => { current = state }, current)
+  assert.equal(current.nodes[0].x, 0)
+  assert.equal(history.canRedo, true, '连续撤销不应丢失重做路径')
+}
+
+// --- applyState 返回实际应用的状态时作为新基线，避免出现"空撤销" ---
+{
+  const history = createOpHistory()
+  history.record(snap([{ id: 'a', status: 'idle' }]))
+  history.record(snap([{ id: 'a', status: 'processing' }]))
+  history.record(snap([{ id: 'a', status: 'processing' }, { id: 'b' }]))
+  let current = snap([{ id: 'a', status: 'processing' }, { id: 'b' }])
+  const sanitizeApply = state => {
+    current = { ...state, nodes: state.nodes.map(n => (n.status === 'processing' ? { ...n, status: 'idle' } : n)) }
+    return current
+  }
+  history.undo(sanitizeApply, current)
+  assert.deepEqual(current.nodes.map(n => n.id), ['a'])
+  const lengthBefore = history.length
+  history.undo(sanitizeApply, current)
+  assert.equal(history.length, lengthBefore, '恢复时的清洗差异不应被当作新的一步')
+  assert.equal(history.canUndo, false)
+}
+
 console.log('opHistory unit tests passed')

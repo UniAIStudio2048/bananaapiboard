@@ -168,12 +168,14 @@ export function createOpHistory({ maxSize = 50, baseline = null } = {}) {
     }
   }
 
-  function undo(applyState) {
+  // 调用方在改动"之前"保存历史，最近一次改动尚未入栈；撤销前先把它记成独立的一步
+  function undo(applyState, currentState) {
+    if (currentState && base) record(currentState)
     if (index < 0 || !base) return false
     const diff = stack[index]
     const newState = applyDiff(base, diff, 'backward')
-    applyState(newState)
-    base = deepClone(newState)
+    const applied = applyState(newState)
+    base = deepClone(applied || newState)
     index--
     return true
   }
@@ -182,8 +184,8 @@ export function createOpHistory({ maxSize = 50, baseline = null } = {}) {
     if (index >= stack.length - 1 || !base) return false
     const nextDiff = stack[index + 1]
     const newState = applyDiff(base, nextDiff, 'forward')
-    applyState(newState)
-    base = deepClone(newState)
+    const applied = applyState(newState)
+    base = deepClone(applied || newState)
     index++
     return true
   }
